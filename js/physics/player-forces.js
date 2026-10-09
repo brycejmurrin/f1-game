@@ -290,16 +290,47 @@ const PlayerForces = (function () {
             Math.max((PC.COAST_YAW_HI || 1.1) - (PC.COAST_YAW_LO || 0.65), 1e-3),
           0, 1)
       : 0;
+    // Speed-scaled yaw damp (local): identity at ≤50 m/s, smoothstep to
+    // 1+EXTRA by 65 m/s. Step-steer overshoot grew with speed (8%→19% from
+    // 50→83 m/s at lock 0.5) because YAW_DAMP alone has no speed term; this
+    // keeps the 220–300 km/h band near 8–12% without slowing ≤50 m/s turn-in
+    // or touching COAST_YAW_*/the speed equation.
+    const SPEED_YAW_LO = 50, SPEED_YAW_HI = 65, SPEED_YAW_EXTRA = 5;
+    const _syT = clamp((vAbs - SPEED_YAW_LO) / (SPEED_YAW_HI - SPEED_YAW_LO), 0, 1);
+    const speedYawDamp = 1 + SPEED_YAW_EXTRA * _syT * _syT * (3 - 2 * _syT);
     const brakeYawDamp = 1 + 1.4 * clamp(-(c.axEstSm ?? 0) / BRAKE, 0, 1) + coastYaw;
-    const rdot = (af * Fyf * cosD - ar * Fyr) / kz2 - YAW_DAMP * brakeYawDamp * (c.yawRateCur || 0);
-    c.vLat = clamp((c.vLat || 0) + (ay - c.speed * (c.yawRateCur || 0)) * dt, -40, 40);
+    const rdot = (af * Fyf * cosD - ar * Fyr) / kz2 - YAW_DAMP * brakeYawDamp * speedYawDamp * (c.yawRateCur || 0);
+    // Capture body-frame state for the longitudinal couple BEFORE yaw/vLat
+    // integrate, so this PR does not change those equations (#1196 yaw damp
+    // stays bit-identical; low-speed yaw flip-flop is a separate follow-up).
+    const vLat0 = c.vLat || 0;
+    const r0 = c.yawRateCur || 0;
+    const u0 = c.speed;
+    c.vLat = clamp(vLat0 + (ay - u0 * r0) * dt, -40, 40);
     // ...and a SLIDING tyre still has friction where the slip model fades out (sp): with both
     // forces scaled to zero near a standstill, a spun or shunted stopped car skated sideways at
     // constant speed into the wall (2.000 -> 1.999 m/s over 4 s, measured). Coulomb bleed only.
     if (sp < 1 && c.vLat) c.vLat = Math.sign(c.vLat) * Math.max(0, Math.abs(c.vLat) - muBase * (1 - sp) * dt);
-    c.yawRateCur = clamp((c.yawRateCur || 0) + rdot * dt, -4, 4);
+    c.yawRateCur = clamp(r0 + rdot * dt, -4, 4);
     // Increasing head = CCW / left; +yaw rate = nose right, so SUBTRACT.
     c.head -= c.yawRateCur * dt;
+    // Lateral→longitudinal coupling (planar bicycle, per unit mass).
+    // Body ˙u = Fx/m − Fyf·sin(δ) + v·r. Drive/brake/drag already landed in
+    // game.js; add the missing front-tyre steer projection and Coriolis terms
+    // here. Fyf is already accel units. Skip below COUPLE_V_MIN so low-speed
+    // explicit Euler does not NaN or reverse through zero.
+    const COUPLE_V_MIN = 3;
+    if (vAbs >= COUPLE_V_MIN) {
+      const couple = vLat0 * r0 - Fyf * Math.sin(delta);
+      if (Number.isFinite(couple)) {
+        // Clamp through standstill via u0 (pre-couple speed), not c.speed </> 0 —
+        // those sign tests are vstd-lint allowlisted sites; do not add new ones.
+        let u1 = u0 + couple * dt;
+        if (u0 > 0) u1 = Math.max(0, u1);
+        else if (u0 < 0) u1 = Math.min(0, u1);
+        c.speed = u1;
+      }
+    }
   }
 
   return { create, tyreSat };

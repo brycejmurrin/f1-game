@@ -22,6 +22,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
+import { commitTreeId } from "../lib/work-tree-id.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const REPO = "brycejmurrin/f1-game";
@@ -106,18 +107,32 @@ export function shaPrefixMatch(tip, stamped) {
   return a.startsWith(b) || b.startsWith(a);
 }
 
-/** Local evidence: suite log terminal passed AND stamp SHA matches tip. */
-export function localVerdict(tipSha, { stampPath = LOCAL_STAMP, logPath = LOCAL_LOG, read = fs.readFileSync, exists = fs.existsSync } = {}) {
+/** Local evidence: suite log terminal passed AND the stamp matches the tip.
+ *  A stamp written since 2026-10-09 carries `tree=<hash>`: the tree the suite
+ *  MEASURED (possibly a dirty working tree). It matches when that hash is the
+ *  tip commit's tree, i.e. exactly what was verified is what was committed;
+ *  HEAD at start or end says nothing about it (ledger M36). A legacy stamp
+ *  (a bare sha) still matches by sha. */
+export function localVerdict(tipSha, { stampPath = LOCAL_STAMP, logPath = LOCAL_LOG, read = fs.readFileSync, exists = fs.existsSync, treeOf = commitTreeId } = {}) {
   if (!tipSha || !/^[0-9a-f]{7,40}$/i.test(tipSha)) {
     return { state: "none", evidence: "invalid tip sha for local stamp", code: 1 };
   }
   if (!exists(stampPath)) {
     return { state: "none", evidence: `no local stamp (${path.relative(ROOT, stampPath)}); run tooling-fast full suite`, code: 1 };
   }
-  let stamped = "";
-  try { stamped = String(read(stampPath, "utf8")).trim().split(/\s+/)[0] || ""; }
-  catch { return { state: "none", evidence: "unreadable local stamp", code: 1 }; }
-  if (!shaPrefixMatch(tipSha, stamped)) {
+  let stamped = "", stampTree = "";
+  try {
+    const text = String(read(stampPath, "utf8")).trim();
+    stamped = text.split(/\s+/)[0] || "";
+    stampTree = (text.match(/\btree=([0-9a-f]{40,64})\b/) || [])[1] || "";
+  } catch { return { state: "none", evidence: "unreadable local stamp", code: 1 }; }
+  if (stampTree) {
+    const tipTree = treeOf(tipSha);
+    if (!tipTree) return { state: "none", evidence: `cannot resolve the tree of ${tipSha.slice(0, 7)} in this clone`, code: 1 };
+    if (tipTree !== stampTree) {
+      return { state: "failed", evidence: `the suite measured tree ${stampTree.slice(0, 7)}, tip ${tipSha.slice(0, 7)} is tree ${tipTree.slice(0, 7)} — HEAD moved or the verified edits are not what was committed; re-run tooling-fast on this tip`, code: 1 };
+    }
+  } else if (!shaPrefixMatch(tipSha, stamped)) {
     return { state: "failed", evidence: `local stamp ${stamped.slice(0, 7)} ≠ tip ${tipSha.slice(0, 7)} — re-run tooling-fast on this tip`, code: 1 };
   }
   if (!exists(logPath)) {
@@ -126,10 +141,16 @@ export function localVerdict(tipSha, { stampPath = LOCAL_STAMP, logPath = LOCAL_
   let log = "";
   try { log = String(read(logPath, "utf8")); }
   catch { return { state: "none", evidence: "unreadable tooling-fast-suite.log", code: 1 }; }
-  let last = null;
+  let last = null, logTree = "";
   for (const line of log.split("\n")) {
     const m = line.match(/=\s*run (passed|failed)\b/);
     if (m) last = m[1];
+    const t = line.match(/=\s*tree ([0-9a-f]{40,64})\b/);
+    if (t) logTree = t[1];
+  }
+  // Every subset run overwrites the suite log; the stamp and the log must be the same run.
+  if (stampTree && logTree !== stampTree) {
+    return { state: "none", evidence: "tooling-fast-suite.log is from a different run than the stamp (tree differs or missing) — re-run the full suite", code: 1 };
   }
   if (last === "passed") {
     return { state: "passed", evidence: `local tooling-fast passed on ${stamped.slice(0, 7)}`, code: 0 };
@@ -188,11 +209,13 @@ export function evaluate({ sha, localOnly = false, request = api, localOpts } = 
   return { ...remote, sha, source: "ci" };
 }
 
-/** Write LOCAL_STAMP for HEAD after a green full suite (called from tooling-fast). */
-export function stampReadySha(sha, { stampPath = LOCAL_STAMP, write = fs.writeFileSync, mkdir = fs.mkdirSync } = {}) {
+/** Write LOCAL_STAMP after a green full suite (called from tooling-fast): the
+ *  head the run STARTED on, plus `tree` — the hash of the tree it measured. */
+export function stampReadySha(sha, { tree = "", stampPath = LOCAL_STAMP, write = fs.writeFileSync, mkdir = fs.mkdirSync } = {}) {
   if (!sha || !/^[0-9a-f]{7,40}$/i.test(sha)) return false;
+  if (tree && !/^[0-9a-f]{40,64}$/i.test(tree)) return false;
   mkdir(path.dirname(stampPath), { recursive: true });
-  write(stampPath, sha.trim() + "\n");
+  write(stampPath, sha.trim() + (tree ? ` tree=${tree}` : "") + "\n");
   return true;
 }
 

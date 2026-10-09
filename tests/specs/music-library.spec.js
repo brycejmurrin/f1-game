@@ -324,6 +324,9 @@ test("an installed music backend receives every music call", async ({ page, page
   expect(await page.evaluate(() => GameAudio.musicBackend() === window.__stub)).toBe(true);
 
   const result = await page.evaluate(() => {
+    // Async music startup can land after installStubBackend() cleared the log on
+    // a loaded CI shard — drain before asserting the four deliberate calls.
+    window.__mb.calls.length = 0;
     GameAudio.startMusic();
     GameAudio.stopMusic();
     const skipped = GameAudio.skipTrack();
@@ -355,6 +358,17 @@ test("the built-in playlist is silent under a backend and comes back when it goe
   expect(await page.evaluate(() => GameAudio.currentTrackId())).toBe("builtin:song2");
 
   await installStubBackend(page);
+
+  // Async setMusicBackend / built-in teardown can land after installStubBackend()
+  // cleared the log on a loaded CI shard — wait for quiescence, then drain (sibling test).
+  let priorCalls = null;
+  await expect.poll(async () => {
+    const snap = await page.evaluate(() => window.__mb.calls.join("\0"));
+    if (priorCalls === snap) return true;
+    priorCalls = snap;
+    return false;
+  }, { timeout: 10000 }).toBe(true);
+  await page.evaluate(() => { window.__mb.calls.length = 0; });
 
   const underBackend = await page.evaluate(() => {
     GameAudio.startMusic();

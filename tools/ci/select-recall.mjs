@@ -94,6 +94,8 @@ export function replay(changed, budgetMin = 15) {
     oversize: (cut.oversize || []).map((s) => s.file),
     // Overflow is a RUN too: a routed spec packed into an extra budgeted shard.
     overflow: (cut.overflow || []).flat().map((s) => s.file),
+    // So is the spill leg (2026-10-07): overflow-full leftovers in `spill-<k>` jobs.
+    spill: (cut.spill || []).map((s) => s.file),
     // The over-budget pool is a RUN as well (2026-10-04): a routed spec that
     // declares >= the gate's per-test timeout gets an `overbudget-<k>` job.
     overBudgetRun: (cut.overBudgetRun || []).map((s) => s.file),
@@ -110,7 +112,8 @@ export function recall(cases = CASES) {
   return cases.map((c) => {
     const r = replay(c.changed);
     const hit = r.selected.includes(c.catches) || (r.oversize || []).includes(c.catches)
-      || (r.overflow || []).includes(c.catches) || (r.overBudgetRun || []).includes(c.catches);
+      || (r.overflow || []).includes(c.catches) || (r.spill || []).includes(c.catches)
+      || (r.overBudgetRun || []).includes(c.catches);
     // A case is "reported" when the selector either picked the catching spec or
     // said plainly that it could not help (infra) / could not afford it. Silence
     // is the only real failure: a selection that omits the spec with no word.

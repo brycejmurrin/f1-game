@@ -115,6 +115,14 @@ test("COLOUR-ONLY is confined to its declared allow-list", async () => {
     "fuel/high_octane",
     "fuel/biofuel",
     "fuel/race_blend",
+    // 2026 open rims: coverVanes no longer builds a dish without visual.cover.
+    // These tyre options only differed from their baseline by coverVanes count
+    // (+ band recolour / thin bandWidth). Geometry still reaches the builder
+    // for band/shoulder/grooves elsewhere; these four are band-colour only now.
+    "tyres/compound_c4",
+    "tyres/hard",
+    "tyres/slick_track",
+    "tyres/sprint_soft",
   ];
   assert.deepEqual((await of("COLOUR-ONLY")).sort(), [...ALLOWED].sort(),
     "a COLOUR-ONLY option appeared or disappeared — if it is new, its geometry " +

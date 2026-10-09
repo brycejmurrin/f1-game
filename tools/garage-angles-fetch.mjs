@@ -112,7 +112,7 @@ export async function fetchPack(opts = {}) {
   if (/^[0-9a-f]{40}$/i.test(wantIn)) {
     wantSha = wantIn.toLowerCase();
   } else if (opts.resolve !== false && token) {
-    const r = resolveCommitSha(wantIn, { token });
+    const r = await resolveCommitSha(wantIn, { token });
     if (r.error) return { error: r.error, code: 3 };
     wantSha = r.sha;
   } else {
@@ -120,7 +120,20 @@ export async function fetchPack(opts = {}) {
     if (full) wantSha = full;
   }
 
-  const listed = listPackArtifacts({ token, artifacts: opts.artifacts });
+  // Exact pack name first (?name=); page only when nearest-ancestor is needed.
+  let listed;
+  if (opts.artifacts) {
+    listed = await listPackArtifacts({ artifacts: opts.artifacts });
+  } else {
+    let exactName = null;
+    try { exactName = artifactName(wantSha); } catch { /* fall through */ }
+    if (exactName) {
+      const named = await listPackArtifacts({ token, name: exactName });
+      if (named.error) return { error: named.error, code: 3 };
+      if (named.length) listed = named;
+    }
+    if (!listed) listed = await listPackArtifacts({ token });
+  }
   if (listed.error) return { error: listed.error, code: 3 };
   const packs = listed;
   if (!packs.length) {
@@ -131,7 +144,7 @@ export async function fetchPack(opts = {}) {
   const needCompare = !packs.some((p) => wantSha.startsWith(p.sha) || p.sha.startsWith(wantSha));
   if (needCompare && token && !opts.compares) {
     for (const p of packs) {
-      const c = compareCommits(p.sha, wantSha, { token });
+      const c = await compareCommits(p.sha, wantSha, { token });
       if (!c.error) compares[p.sha] = c;
     }
   }
@@ -142,7 +155,7 @@ export async function fetchPack(opts = {}) {
 
   let compare = picked.compare;
   if (!picked.exact && !compare && token) {
-    const c = compareCommits(picked.pack.sha, wantSha, { token });
+    const c = await compareCommits(picked.pack.sha, wantSha, { token });
     if (!c.error) compare = c;
   }
 

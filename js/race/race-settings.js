@@ -554,8 +554,15 @@ const RaceSettings = (function () {
         // it: the sheet stays up while the renderer finishes a shader warm.
         const sheet = $("race-settings");
         const netLobby = G.netLobby;
-        if (netRoom) {
+        // Sync-dismiss :modal. TopModal's MutationObserver close is a later task;
+        // without this, #loading stays under the dialog for the whole long task.
+        const dismissSheet = () => {
+          if (!sheet) return;
           sheet.hidden = true;
+          try { if (sheet.open && typeof sheet.close === "function") sheet.close(); } catch (_) { /* already closed */ }
+        };
+        if (netRoom) {
+          dismissSheet();
           $("vsfriend").hidden = false;
           netLobby.roomChanged("race");
           return;
@@ -572,12 +579,12 @@ const RaceSettings = (function () {
         // that ends on a grid earns the loading screen — and it is the route that
         // pays ~1.1 s of synchronous track build, which the screen covers.
         if ((isChampionship() && SeasonCal.qualiNext(season) && !qualiResults()) ||
-            (!isChampionship() && gridFromQuali() && !qualiResults())) { sheet.hidden = true; openQuali(); }
+            (!isChampionship() && gridFromQuali() && !qualiResults())) { dismissSheet(); openQuali(); }
         else if (raceIntro) {
           // As every other raceIntro caller does: it hides the title first, so a throw here left no screen at all.
-          try { raceIntro(startRace, sheet, $("rs-go")); } catch (e) { Log.warn("game", "pre-race screen failed — starting straight away", e); sheet.hidden = true; startRace(); }
+          try { raceIntro(startRace, sheet, $("rs-go")); } catch (e) { Log.warn("game", "pre-race screen failed — starting straight away", e); dismissSheet(); startRace(); }
         }
-        else { sheet.hidden = true; startRace(); }
+        else { dismissSheet(); startRace(); }
       };
     }
 

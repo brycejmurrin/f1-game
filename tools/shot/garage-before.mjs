@@ -179,37 +179,121 @@ export function writeManifest(dir, { sha, timestamp } = {}) {
   return manifest;
 }
 
-export function githubApi(method, pathQs, { token, raw = false } = {}) {
-  const auth = token || githubToken();
-  if (!auth) return { error: NO_TOKEN_HINT };
-  const args = ["-sS", "-L", "--max-time", "60", "-K", "-", "-w", "\n%{http_code}", "-X", method,
-    "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28",
-    `https://api.github.com/repos/${REPO}/${pathQs}`];
-  const r = spawnSync("curl", args, {
-    encoding: "utf8",
-    input: `header = "Authorization: Bearer ${auth}"\n`,
-    maxBuffer: 64 << 20,
-  });
-  if (r.status !== 0) return { error: (r.stderr || "curl failed").trim() };
-  const lines = (r.stdout || "").split("\n");
-  const code = Number(lines.pop());
-  const text = lines.join("\n");
-  if (code < 200 || code > 299) return { error: `HTTP ${code} ${text.slice(0, 240)}`, code };
-  if (raw || !text.trim()) return { code, text };
-  try { return { code, json: JSON.parse(text) }; } catch { return { code, text }; }
+/** Bounded retries for GitHub REST hiccups (5xx / 429 / network). Injectable under test. */
+export const GITHUB_API_MAX_ATTEMPTS = 4;
+export const GITHUB_API_BASE_DELAY_MS = 1000;
+
+let _githubFetch = (...args) => globalThis.fetch(...args);
+let _githubDelay = (ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
+let _githubRandom = Math.random;
+
+/**
+ * Test hooks: zero delay, mock fetch, deterministic jitter.
+ * Pass `delay: 0` or `delay: async () => {}` for instant retries; omit / null to restore defaults.
+ */
+export function setGithubApiTestHooks({ fetch, delay, random } = {}) {
+  _githubFetch = fetch == null ? (...args) => globalThis.fetch(...args) : fetch;
+  if (delay == null) {
+    _githubDelay = (ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
+  } else if (typeof delay === "function") {
+    _githubDelay = delay;
+  } else {
+    const fixed = Number(delay) || 0;
+    _githubDelay = () => (fixed > 0 ? new Promise((r) => setTimeout(r, fixed)) : Promise.resolve());
+  }
+  _githubRandom = random == null ? Math.random : random;
 }
 
-export function listPackArtifacts({ token, artifacts } = {}) {
+function isRetryableStatus(code) {
+  return code === 429 || (code >= 500 && code <= 599);
+}
+
+function isRetryableNetworkError(err) {
+  if (!err) return false;
+  const code = err.code || err.cause?.code;
+  if (code === "ECONNRESET" || code === "ETIMEDOUT" || code === "ENOTFOUND" || code === "EAI_AGAIN") {
+    return true;
+  }
+  const msg = String(err.message || err);
+  return /fetch failed|network|ECONNRESET|ETIMEDOUT|socket/i.test(msg);
+}
+
+function retryDelayMs(attempt, retryAfter) {
+  if (retryAfter != null && retryAfter !== "") {
+    const asNum = Number(retryAfter);
+    if (Number.isFinite(asNum) && asNum >= 0) return Math.min(asNum * 1000, 30_000);
+    const when = Date.parse(retryAfter);
+    if (Number.isFinite(when)) return Math.min(Math.max(0, when - Date.now()), 30_000);
+  }
+  const base = Math.min(GITHUB_API_BASE_DELAY_MS * (2 ** (attempt - 1)), 8_000);
+  return base + Math.floor(_githubRandom() * base * 0.25);
+}
+
+export async function githubApi(method, pathQs, { token, raw = false } = {}) {
+  const auth = token || githubToken();
+  if (!auth) return { error: NO_TOKEN_HINT };
+  const url = `https://api.github.com/repos/${REPO}/${pathQs}`;
+  const headers = {
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    Authorization: `Bearer ${auth}`,
+  };
+  let lastErr = null;
+  for (let attempt = 1; attempt <= GITHUB_API_MAX_ATTEMPTS; attempt++) {
+    let res;
+    try {
+      res = await _githubFetch(url, { method, headers, signal: AbortSignal.timeout(60_000) });
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryableNetworkError(err) || attempt === GITHUB_API_MAX_ATTEMPTS) {
+        return { error: String(err.message || err).trim() || "fetch failed" };
+      }
+      const wait = retryDelayMs(attempt, null);
+      console.error(`garage-before githubApi: retry ${attempt}/${GITHUB_API_MAX_ATTEMPTS} after network ${err.code || err.message} in ${wait}ms`);
+      await _githubDelay(wait);
+      continue;
+    }
+    const code = res.status;
+    const text = await res.text();
+    if (code >= 200 && code <= 299) {
+      if (raw || !text.trim()) return { code, text };
+      try { return { code, json: JSON.parse(text) }; } catch { return { code, text }; }
+    }
+    if (isRetryableStatus(code) && attempt < GITHUB_API_MAX_ATTEMPTS) {
+      const wait = retryDelayMs(attempt, res.headers.get("retry-after"));
+      console.error(`garage-before githubApi: retry ${attempt}/${GITHUB_API_MAX_ATTEMPTS} after HTTP ${code} in ${wait}ms`);
+      await _githubDelay(wait);
+      lastErr = { code, text };
+      continue;
+    }
+    return { error: `HTTP ${code} ${text.slice(0, 240)}`, code };
+  }
+  if (lastErr?.code) return { error: `HTTP ${lastErr.code} ${(lastErr.text || "").slice(0, 240)}`, code: lastErr.code };
+  return { error: String(lastErr?.message || lastErr || "githubApi failed").trim() };
+}
+
+/**
+ * List garage-before-* pack artifacts.
+ * When `name` is set, uses the API's exact `?name=` filter (pack names are
+ * `garage-before-<sha>`, exact). Otherwise pages (≤10×100) for nearest-ancestor.
+ */
+export async function listPackArtifacts({ token, artifacts, name } = {}) {
   if (artifacts) {
     return (artifacts || []).map(normalizePack).filter(Boolean);
   }
+  if (name) {
+    const qs = `actions/artifacts?per_page=100&name=${encodeURIComponent(name)}`;
+    const r = await githubApi("GET", qs, { token });
+    if (r.error) return { error: r.error, code: r.code };
+    return (r.json?.artifacts || []).map(normalizePack).filter(Boolean);
+  }
   const out = [];
   for (let page = 1; page <= 10; page++) {
-    const r = githubApi("GET", `actions/artifacts?per_page=100&page=${page}`, { token });
-    if (r.error) return { error: r.error };
-    const batch = (r.json?.artifacts || []).map(normalizePack).filter(Boolean);
-    out.push(...batch);
-    if ((r.json?.artifacts || []).length < 100) break;
+    const r = await githubApi("GET", `actions/artifacts?per_page=100&page=${page}`, { token });
+    if (r.error) return { error: r.error, code: r.code };
+    const raw = r.json?.artifacts || [];
+    out.push(...raw.map(normalizePack).filter(Boolean));
+    if (raw.length < 100) break;
   }
   return out;
 }
@@ -221,16 +305,16 @@ function normalizePack(a) {
   return { id: a.id, name: a.name, sha, created_at: a.created_at, size_in_bytes: a.size_in_bytes, expired: false };
 }
 
-export function resolveCommitSha(ref, { token } = {}) {
-  const r = githubApi("GET", `commits/${encodeURIComponent(ref)}`, { token });
-  if (r.error) return { error: r.error };
+export async function resolveCommitSha(ref, { token } = {}) {
+  const r = await githubApi("GET", `commits/${encodeURIComponent(ref)}`, { token });
+  if (r.error) return { error: r.error, code: r.code };
   const sha = r.json?.sha;
   return sha ? { sha } : { error: `no sha for ref ${ref}` };
 }
 
-export function compareCommits(base, head, { token } = {}) {
-  const r = githubApi("GET", `compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`, { token });
-  if (r.error) return { error: r.error };
+export async function compareCommits(base, head, { token } = {}) {
+  const r = await githubApi("GET", `compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`, { token });
+  if (r.error) return { error: r.error, code: r.code };
   const files = (r.json?.files || []).map((f) => f.filename);
   return {
     status: r.json.status,
@@ -280,7 +364,7 @@ async function planMain(argv) {
   let sha = headSha;
   if (event !== "workflow_run" || !sha) {
     if (token) {
-      const r = resolveCommitSha(inputRef, { token });
+      const r = await resolveCommitSha(inputRef, { token });
       if (r.error) { console.error("garage-before --plan: " + r.error); return 3; }
       sha = r.sha;
     } else {
@@ -289,16 +373,31 @@ async function planMain(argv) {
       if (g.status !== 0 || !sha) { console.error("garage-before --plan: cannot resolve " + inputRef); return 3; }
     }
   }
-  const listed = listPackArtifacts({ token, artifacts: loadArtifactsFlag(argv) });
-  if (listed.error) { console.error("garage-before --plan: " + listed.error); return 3; }
-  const packs = listed;
+  const override = loadArtifactsFlag(argv);
+  let packs;
+  if (override) {
+    packs = await listPackArtifacts({ artifacts: override });
+  } else {
+    // Pack names are exact (`garage-before-<sha>`); prefer ?name= over paging all artifacts.
+    let exactName = null;
+    try { exactName = artifactName(sha); } catch { /* short/odd sha — fall through to paging */ }
+    if (exactName) {
+      const named = await listPackArtifacts({ token, name: exactName });
+      if (named.error) { console.error("garage-before --plan: " + named.error); return 3; }
+      if (named.length) packs = named;
+    }
+    if (!packs) {
+      packs = await listPackArtifacts({ token });
+      if (packs.error) { console.error("garage-before --plan: " + packs.error); return 3; }
+    }
+  }
   const exact = packs.find((p) => sha.startsWith(p.sha) || p.sha.startsWith(sha));
   let last = null;
   let watched = [];
   if (!exact && packs.length && token) {
     const compares = {};
     for (const p of packs) {
-      const c = compareCommits(p.sha, sha, { token });
+      const c = await compareCommits(p.sha, sha, { token });
       if (!c.error) compares[p.sha] = c;
     }
     const picked = pickNearestPack(sha, packs, compares);

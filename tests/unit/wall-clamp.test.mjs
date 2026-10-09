@@ -8,9 +8,10 @@
  *   - HUMAN WRITEBACK. When xPinned, px/pz are rebuilt from (s, x) via
  *     worldFromTrack — the sacred conditional inverse of trackFrom.
  *   - OFF-WALL DECAY. Inside the limits, human wallT decays by dt.
- *   - isPlayer FX GATE. Street shake/SFX/vibrate/rumble fire only for the
- *     local player — a VS FRIEND is c.human too (setCarRole), so gating on
- *     human alone shakes the wrong screen (ship fix ad915f8ea).
+ *   - isPlayer FX GATE. Street shake/vibrate/rumble fire only for the local
+ *     player; barrier SFX on every circuit with throttled grind re-arm.
+ *     A VS FRIEND is c.human too (setCarRole) — gating on human alone shakes
+ *     the wrong screen (ship fix ad915f8ea).
  *
  * Run: node --test tests/unit/wall-clamp.test.mjs
  */
@@ -24,6 +25,22 @@ import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DT = 1 / 60;
+const WALL_SFX_REARM = 0.35;
+
+/** Mirrors game.js collideT decay after WallClamp.apply each tick. */
+function decayCollideT(c, dt) {
+  c.collideT = Math.max(0, c.collideT - dt);
+}
+
+/** Nose into +x wall (rel < 0 → noseIn at incidence > 0.12). */
+function noseInCar(over = {}) {
+  return {
+    s: 10, x: 8, human: true, isPlayer: true, speed: 40,
+    vLat: 0, head: -0.4, wasOnWall: false, wallT: 0, wallHits: 0, collideT: 0,
+    px: 0, pz: 0,
+    ...over,
+  };
+}
 
 function load(hooks = {}) {
   const ctx = vm.createContext({
@@ -176,6 +193,87 @@ test("street wall FX gates on isPlayer (VS FRIEND is human, not local)", () => {
   assert.ok(rumbles.length >= 1, "local player street scrape rumbles");
   assert.equal(rumbles[0][2], "handles", "pad-haptics v2 channels wall rumble to handles");
   assert.ok(audioHits >= 1, "local player street scrape plays collision");
+});
+
+test("permanent circuit: local player nose-in plays barrier SFX (not street-gated)", () => {
+  let audioHits = 0;
+  const { WallClamp } = load({ onCollision: () => { audioHits++; } });
+  const c = noseInCar();
+  WallClamp.apply(c, baseCtx({ soundOn: true }));
+  assert.equal(c.wasOnWall, true);
+  assert.ok(audioHits >= 1, "street:false must still call GameAudio.collision");
+});
+
+test("wall grind: throttled scrape re-arm while moving (not one per frame)", () => {
+  const REARM = WALL_SFX_REARM;
+  const frames = 60;
+  const dt = DT;
+  let audioHits = 0;
+  const { WallClamp } = load({ onCollision: () => { audioHits++; } });
+  const ctx = baseCtx({ soundOn: true });
+  const c = noseInCar({ speed: 25 });
+  for (let i = 0; i < frames; i++) {
+    c.x = 8;
+    WallClamp.apply(c, { ...ctx, dt });
+    decayCollideT(c, dt);
+  }
+  const maxCalls = Math.ceil((frames * dt) / REARM) + 1;
+  assert.ok(audioHits > 1, "grind must re-arm scrape, not one-shot");
+  assert.ok(audioHits <= maxCalls, `throttled: ${audioHits} calls, cap ${maxCalls}`);
+  assert.ok(audioHits < frames, "must not fire every frame");
+});
+
+test("wall grind: call count stable across frame rate (same wall time)", () => {
+  const REARM = WALL_SFX_REARM;
+  const duration = 1;
+  function grindCount(frames, dt) {
+    let hits = 0;
+    const { WallClamp } = load({ onCollision: () => { hits++; } });
+    const ctx = baseCtx({ soundOn: true, dt });
+    const c = noseInCar({ speed: 30 });
+    for (let i = 0; i < frames; i++) {
+      c.x = 8;
+      WallClamp.apply(c, { ...ctx, dt });
+      decayCollideT(c, dt);
+    }
+    return hits;
+  }
+  const at60 = grindCount(60, 1 / 60);
+  const at30 = grindCount(30, 1 / 30);
+  assert.ok(at60 > 1 && at30 > 1);
+  assert.ok(Math.abs(at60 - at30) <= 1, `60fps=${at60} vs 30fps=${at30} should match re-arm, not dt`);
+  const maxCalls = Math.ceil(duration / REARM) + 1;
+  assert.ok(at60 <= maxCalls && at30 <= maxCalls);
+});
+
+test("barrier SFX: non-player and low incidence stay silent", () => {
+  let audioHits = 0;
+  const { WallClamp } = load({ onCollision: () => { audioHits++; } });
+  const onStreet = { soundOn: true, track: { ...baseCtx().track, street: true } };
+  const ai = noseInCar({ isPlayer: false, human: true });
+  WallClamp.apply(ai, baseCtx(onStreet));
+  assert.equal(audioHits, 0, "non-player");
+  const graze = noseInCar({ head: -0.02 });
+  WallClamp.apply(graze, baseCtx({ soundOn: true }));
+  assert.equal(audioHits, 0, "incidence <= 0.12");
+  WallClamp.apply(noseInCar(), baseCtx(onStreet));
+  assert.equal(audioHits, 1, "street player still one hit");
+});
+
+test("stationary pinned to wall: no scrape re-arm", () => {
+  let audioHits = 0;
+  const { WallClamp } = load({ onCollision: () => { audioHits++; } });
+  const ctx = baseCtx({ soundOn: true });
+  const c = noseInCar({ speed: 0.5 });
+  WallClamp.apply(c, ctx);
+  const afterFirst = audioHits;
+  assert.ok(afterFirst >= 1, "first pin may still scrape");
+  for (let i = 0; i < 59; i++) {
+    c.x = 8;
+    WallClamp.apply(c, ctx);
+    decayCollideT(c, ctx.dt);
+  }
+  assert.equal(audioHits, afterFirst, "stopped car must not re-arm");
 });
 
 // verify-physics #16: game.js called WallClamp.apply(c, { …, addShake(d){…} })

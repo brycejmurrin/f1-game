@@ -29,7 +29,8 @@ import { createRequire } from "node:module";
 import { pick, stripSpecOwner } from "./pick-tests.mjs";
 import { MEASURED, capacity, declaredTests, specSecPerTest, timings } from "./select-budget.mjs";
 import { loadDb, TIMINGS_FILE } from "./spec-timings.mjs";
-import { isTwinned, twinOf } from "./twinned-specs.mjs";
+import { ADAPTED, ADAPTED_RUNNER, isTwinned, twinOf } from "./twinned-specs.mjs";
+import { changedPaths } from "../lib/changed-files.mjs";
 import { changeKind } from "./change-kind.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
 import * as espree from "espree";
@@ -142,7 +143,13 @@ export function specsOf(scriptNames, scripts) {
 // budgeted set, packed with the rest by measured time (shards(), below). Bounded,
 // so a helper edit that touches 59 specs cannot fan out into 59 runners — the
 // rest are named as skipped, which is the honesty contract this file has always had.
-export const MAX_OVERSIZE_SHARDS = 3;
+// Raised to 4 (2026-10-07): terrain-over-road billed at its real 56 tests
+// (select-budget.mjs auditTracks()) is ~767 s, so on a wide diff it takes an
+// oversize slot beside hud-layout and career — at 3, props-over-road (416 s,
+// too big for overflow) spilled to skipped and dropped=1 red the verdict on
+// the #1180 tip's plan (`--since 2f50ad2c`). 4 carries all four. The unit
+// test still bounds this at 4.
+export const MAX_OVERSIZE_SHARDS = 4;
 // A ROUTED spec that loses the budget to smaller ones is not dropped either: up
 // to this many TARGET_SHARD_SEC jobs' worth of them ride as OVERFLOW, which
 // shards() packs with everything else. Before this, "SKIPPED (over budget)"
@@ -170,6 +177,16 @@ export const MAX_OVERSIZE_SHARDS = 3;
 // hud-layout took the leftover; 11 carries both. A sibling 9→12 raise on
 // 7cf57c60d is superseded: routing shrink makes 12 unnecessary.
 export const MAX_OVERFLOW_SHARDS = 11;
+// SPILL, NOT SKIP (2026-10-07, PR #1204). When the overflow room is full a
+// leftover used to land in `skipped`: the selected-failed hoist plus the
+// bot/spec-timings overlay filled all 11 overflow jobs and dev-tools.spec.js
+// (56 tests) ran nowhere, so the verdict went red on a spec that passes
+// (remote-group run 37665046433 on 5f2e64b82: 74/74). Leftovers now ride a
+// bounded SPILL leg of this many TARGET_SHARD_SEC jobs' worth, packed into
+// their own `spill-<k>` jobs and logged with a SPILL line. Only what the spill
+// cannot carry is left in `skipped`, and that is reported as an ERROR (never
+// a quiet skip): it runs nowhere and the verdict reds on it.
+export const MAX_SPILL_SHARDS = 2;
 // ROUTED DECLARED-SLOW SPECS RUN TOO (2026-10-04). A spec that declares a
 // per-test timeout >= the gate's 180 s and is merely ROUTED (rank 3) used to
 // land in overBudgetSpecs and never run on any PR or train: 41 of them on
@@ -375,7 +392,7 @@ export function measuredCheap(file, db = timings()) {
  *  cuts where the fallback says (7.5 s/test since 2026-09-29, the llvmpipe
  *  p75). `db` pins the timing history (tests pass an empty one). */
 export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflowShards = MAX_OVERFLOW_SHARDS,
-  overBudgetShards = MAX_OVER_BUDGET_SHARDS, staleFirst = false } = {}) {
+  overBudgetShards = MAX_OVER_BUDGET_SHARDS, spillShards = MAX_SPILL_SHARDS, staleFirst = false } = {}) {
   const m = { ...MEASURED, ...SELECTED_GATE };
   const cap = capacity(budgetMin, 1, m);
   const allowanceSec = cap.budgetSec - cap.perFailureSec + m.secPerTest;
@@ -562,6 +579,21 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
     skipped.length = 0;
     skipped.push(...keep);
   }
+  // THE SPILL LEG (MAX_SPILL_SHARDS, above): what overflow and the oversize
+  // promotion could not place, up to `spillShards` jobs' worth, in the same
+  // order. Solo-class declarations never spill (the over-budget pool owns them).
+  const spill = [];
+  {
+    let room = spillShards * TARGET_SHARD_SEC;
+    const keep = [];
+    for (const r of skipped) {
+      const sec = r.sec != null ? r.sec : Math.round(expectedSec(r, db));
+      if ((r.ownTimeoutSec || 0) < SOLO_OWN_TIMEOUT_SEC && sec <= room) { spill.push(r); room -= sec; }
+      else keep.push(r);
+    }
+    skipped.length = 0;
+    skipped.push(...keep);
+  }
   // THE OVER-BUDGET POOL: up to `overBudgetShards` jobs' worth of expected
   // seconds, in the same order as the budgeted cut. A spec whose own expected
   // run exceeds a job is still admitted while room lasts — shards() splits it
@@ -576,7 +608,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
       overBudgetSpecs.push({ file: r.file, tests: r.tests, ownTimeoutSec: r.ownTimeoutSec });
     }
   }
-  return { selected, skipped, unreachable, oversize: oversizeRun, overflow, overBudgetRun, overBudgetSpecs, coveredByFixedGates, coveredByManualOptIn, coveredByVmTwin,
+  return { selected, skipped, unreachable, oversize: oversizeRun, overflow, spill, overBudgetRun, overBudgetSpecs, coveredByFixedGates, coveredByManualOptIn, coveredByVmTwin,
     unreadable,
     testsSelected: used, testsFit: cap.tests, secSelected: Math.round(usedSec), secFit: Math.round(allowanceSec), cap };
 }
@@ -611,7 +643,8 @@ export function shards(r, db = timings()) {
   const items = [];
   const cost = (x) => (x.sec != null ? x.sec : expectedSec(x, db));
   for (const s of [...(r.selected || []).map((x) => ({ ...x, budgeted: true })), ...(r.oversize || []), ...(r.overflow || []),
-                   ...(r.overBudgetRun || []).map((x) => ({ ...x, pool: true }))]) {
+                   ...(r.overBudgetRun || []).map((x) => ({ ...x, pool: true })),
+                   ...(r.spill || []).map((x) => ({ ...x, pool: "spill" }))]) {
     const sec = cost(s);
     const perTest = Math.max(SELECTED_GATE.perTestTimeoutSec, s.ownTimeoutSec || 0);
     const base = path.basename(s.file, ".spec.js");
@@ -642,13 +675,13 @@ export function shards(r, db = timings()) {
       continue;
     }
     const solo = /menu-baseline/.test(s.file) || (s.ownTimeoutSec || 0) >= SOLO_OWN_TIMEOUT_SEC;
-    items.push({ solo, budgeted: !!s.budgeted, pool: !!s.pool, name: `oversize-${base}`,
+    items.push({ solo, budgeted: !!s.budgeted, pool: s.pool || false, name: `oversize-${base}`,
       files: [s.file], shard: "", tests: s.tests, sec, perTest, workers: 1 });
   }
   const bins = [];
   for (const it of items.filter((x) => x.solo)) bins.push({ ...it, items: [it] });
-  // First-fit-decreasing, the over-budget pool in bins of its own.
-  for (const pool of [false, true]) {
+  // First-fit-decreasing, the over-budget pool and the spill in bins of their own.
+  for (const pool of [false, true, "spill"]) {
     const packable = items.filter((x) => !x.solo && x.pool === pool).sort((a, b) => b.sec - a.sec);
     const open = [];
     for (const it of packable) {
@@ -658,12 +691,13 @@ export function shards(r, db = timings()) {
       open.push(fresh); bins.push(fresh);
     }
   }
-  let k = 0, sel = 0, ob = 0;
+  let k = 0, sel = 0, ob = 0, sp = 0;
   const out = bins.map((b) => {
     const files = b.items.flatMap((x) => x.files);
     const budgeted = b.items.some((x) => x.budgeted);
     const name = b.solo ? b.name
       : budgeted ? `selected-${++sel}`
+      : b.pool === "spill" ? `spill-${++sp}`
       : b.pool ? `overbudget-${++ob}`
       : b.items.length === 1 ? b.items[0].name : `packed-${++k}`;
     const perTest = Math.max(...b.items.map((x) => x.perTest));
@@ -816,6 +850,19 @@ const foundationIds = () => fs.readdirSync(path.join(ROOT, "tests/specs")).filte
 export function circuitsOf(file, seen = new Set()) {
   if (seen.has(file)) return new Set();
   seen.add(file);
+  // The ADAPTED runner names no circuit: it spawns one child per ADAPTED spec,
+  // so it builds the UNION of theirs (cota-foundation.spec.js -> cota, monza).
+  // Read as an empty set, a `cota` diff made node-plan skip test:vm-page and
+  // the circuit's own foundation spec ran nowhere on the PR (ledger L9).
+  if (file === ADAPTED_RUNNER) {
+    const ids = new Set();
+    for (const spec of Object.keys(ADAPTED)) {
+      const sub = circuitsOf(spec);
+      if (sub === null) return null;
+      for (const id of sub) ids.add(id);
+    }
+    return ids;
+  }
   let text;
   try { text = fs.readFileSync(path.join(ROOT, file), "utf8"); } catch { return null; }   // unreadable: assume everything
   if (WHOLE_ROSTER.some((re) => re.test(text))) return null;
@@ -1054,8 +1101,7 @@ export function dropBootFallback(groups) {
 export const DEFAULT_BUDGET_MIN = 10;
 
 export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
-  const changed = execFileSync("git", ["diff", "--name-only", changedRef], { cwd: ROOT, encoding: "utf8" })
-    .split("\n").filter(Boolean);
+  const changed = changedPaths([changedRef]);   // rename SOURCES too (ledger M36)
   const g = pick(changed);   // Map: group -> reasons (pick-tests' native shape)
   // An edited spec already runs first, alone (changedSpecs, rank 0); its
   // group-mates are not this diff's business (pick-tests SPEC_OWNER_REASON).
@@ -1169,7 +1215,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   for (const s of r.unreachable) console.error(
     `UNREACHABLE (declares ${s.tests} tests, over the whole ${r.secFit} s budget — this gate can ` +
     `NEVER run it): ${s.file}`);
-  for (const s of r.skipped) console.error(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
+  for (const s of r.spill || []) console.error(
+    `SPILL (overflow full; runs in a spill job, ${MAX_SPILL_SHARDS} x ${TARGET_SHARD_SEC} s max): ${s.file} (${s.tests} tests)`);
+  for (const s of r.skipped) console.error(
+    `ERROR: NOT RUN ANYWHERE (overflow and spill are both full — the verdict reds on this): ${s.file} (${s.tests} tests)`);
   for (const s of r.overBudgetRun || []) console.error(
     `OVER-BUDGET POOL (routed; declares ${s.ownTimeoutSec}s/test, runs in an overbudget job): ${s.file} (${s.tests} tests)`);
   for (const s of r.oversize) console.error(
@@ -1184,5 +1233,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   for (const s of r.selected) console.log(s.file);
   for (const s of r.oversize) console.log(s.file);
   for (const s of r.overflow || []) console.log(s.file);
+  for (const s of r.spill || []) console.log(s.file);
   for (const s of r.overBudgetRun || []) console.log(s.file);
 }

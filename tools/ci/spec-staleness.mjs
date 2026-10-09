@@ -100,7 +100,7 @@ for (const c of commits) {
   // 78 and branded abudhabi-foundation (selected 180 times) and menu-baseline
   // (99) as unreachable. A type mismatch that silently answers "never" is the
   // worst shape of bug for a tool whose whole output is "never".
-  const ran = [...new Set([...(r.selected || []), ...(r.oversize || []), ...(r.overflow || []).flat(), ...(r.overBudgetRun || [])]
+  const ran = [...new Set([...(r.selected || []), ...(r.oversize || []), ...(r.overflow || []).flat(), ...(r.spill || []), ...(r.overBudgetRun || [])]
     .map((e) => (typeof e === "string" ? e : e && e.file)).filter(Boolean))];
   for (const f of ran) if (!lastRun.has(f)) lastRun.set(f, { ...c, how: "run" });
   for (const bucket of ["skipped", "unreachable", "coveredByFixedGates", "coveredByVmTwin"]) {

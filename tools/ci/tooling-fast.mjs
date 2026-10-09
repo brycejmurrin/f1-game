@@ -42,6 +42,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { workTreeId } from "../lib/work-tree-id.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const LOGDIR = path.join(ROOT, "artifacts/logs");
@@ -78,6 +79,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/all-lights-fill.test.mjs",
   // The pack's wildcard environment fills in only what the palette did not author;
   // an exact <track>|<tod> key still overrides. VM-executed atmosphere.js, ~0.1 s.
+  "tests/unit/always-lamp-floor.test.mjs",
   "tests/unit/ambient-env-override.test.mjs",
   // The PRE-RACE ANNOUNCER: the derived script, and the Daniel-first voice
   // ladder on the platforms that do not have Daniel.
@@ -111,9 +113,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Barrier run-off lateral teleports (ledger 2026-09-26): synthetic cliff / featherBarrierEnds + fleet caps (monza/spa/bahrain/silverstone/monaco maxOver < 3). Pure helper + a few track-build-vm builds, ~6 s.
   "tests/unit/barrier-runoff-jumps.test.mjs",
   "tests/unit/base-green.test.mjs",
+  "tests/unit/bash-guard-hardening.test.mjs",
   "tests/unit/behind-ship.test.mjs",
   // BitmapDecode worker (js/workers/*): Blob to ImageBitmap off the page thread.
   "tests/unit/bitmap-decode-worker.test.mjs",
+  "tests/unit/blip-voice-pool.test.mjs",
   // Pure-VM physics/career suites added 2026-09-22 (the coverage census's
   // zero-reference module and the two thin spots): each under a second.
   "tests/unit/body-attitude.test.mjs",
@@ -166,6 +170,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/cdmcp-measure.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
   "tests/unit/change-kind.test.mjs",
+  "tests/unit/changed-files.test.mjs",
   // resolveChromium finds Playwright's headless shell when the full archive
   // was never unpacked — the cloud-agent / MCP bootstrap path.
   "tests/unit/chromium-shell.test.mjs",
@@ -206,6 +211,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // 4 MB outside assets/: a June burst left ~750 MB in history. ~0.1 s.
   "tests/unit/committed-images.test.mjs",
   "tests/unit/component-inventory.test.mjs",
+  "tests/unit/conflict-cure.test.mjs",
   "tests/unit/contact-geometry.test.mjs",
   // coverage-merge is the only consumer of the raw V8 lists a flagged run
   // writes (APEX_JS_COVERAGE=1 / NODE_V8_COVERAGE); a url shape that stops
@@ -232,6 +238,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/daily-challenge.test.mjs",
   "tests/unit/damage.test.mjs",
   "tests/unit/data-api-status.test.mjs",
+  "tests/unit/data-hub-layout.test.mjs",
   "tests/unit/data-hub-offline.test.mjs",
   // The shared session picker against a late answer (FIFO stub F1API, ~0.1 s).
   "tests/unit/data-hub-picker.test.mjs",
@@ -303,6 +310,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // heights[]; sanitize pads missing heights to flat zeros. Pure VM, ~0.05 s.
   "tests/unit/elev-presets.test.mjs",
   "tests/unit/elevation-smoothness.test.mjs",
+  // Engine rpm for net/replay puppets and finish coast (game.js updateCar early-outs). ~15 s.
+  "tests/unit/engine-revs-replay-vm.test.mjs",
   // ...and the race engineer's ladder: it ADVISES and never arms a stop,
   // graining and blistering say different things (one heals, one does not),
   // the axle call names an end of the car, and it does not nag. ~0.1 s.
@@ -316,6 +325,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The tail DESIGN picks (fin shape / tail style / fin badge / spine logo):
   // Car3D outline maths and the atlas painter, headless, ~0.5 s.
   "tests/unit/fin-design.test.mjs",
+  "tests/unit/finish-coast-rev-vm.test.mjs",
   "tests/unit/fixture-consumer-audit.test.mjs",
   "tests/unit/flags.test.mjs",
   // The flaky policy behind APEX_FAIL_ON_FLAKY=1: quarantine rows are a ledger
@@ -374,6 +384,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // driving-model gate runs here in seconds rather than in a browser job.
   "tests/unit/game-vm.test.mjs",
   "tests/unit/garage-arrival.test.mjs",
+  // Garage before GitHub API: retry on 5xx/429/network + ?name= filter (mocked fetch).
+  "tests/unit/garage-before-api.test.mjs",
   // Garage before pack: recipe, MANIFEST, fetch --help / no-pack, workflow is
   // not Car shot. Pure + spawn, no network / Chromium.
   "tests/unit/garage-before.test.mjs",
@@ -390,6 +402,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-sign-occlusion.test.mjs",
   "tests/unit/gen-arch-table.test.mjs",
   "tests/unit/generated-docs.test.mjs",
+  "tests/unit/geometry-paths-baseline.test.mjs",
   "tests/unit/gfx-backend-canary.test.mjs",
   "tests/unit/gfx-debug-overlay.test.mjs",
   "tests/unit/ghost-share.test.mjs",
@@ -409,12 +422,18 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // insertAdjacentHTML writes a constant or is in the reasoned allowlist
   // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
   "tests/unit/html-sink-lint.test.mjs",
+  "tests/unit/hud-control-clearance.test.mjs",
   "tests/unit/hud-elements.test.mjs",
   "tests/unit/hud-feel.test.mjs",
+  // fitHud zTop/#minimap zoom idempotence (Pages compact mm flip).
+  "tests/unit/hud-fit-idempotent.test.mjs",
   "tests/unit/hud-helmet-placement.test.mjs",
   "tests/unit/hud-inputs.test.mjs",
   "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
+  // Portrait phone bottom cluster: TYRES stays in the column (landscape-only
+  // dock anchor), fitHud caps --hud-z-bot vs AERO/OT, tip clash shapes.
+  "tests/unit/hud-portrait-cluster.test.mjs",
   "tests/unit/hud-readouts.test.mjs",
   "tests/unit/hud-relative.test.mjs",
   "tests/unit/hud-strategy.test.mjs",
@@ -424,8 +443,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/import-models-workflow.test.mjs",
   "tests/unit/import-models.test.mjs",
   "tests/unit/incident-gate.test.mjs",
+  "tests/unit/incident-rpm.test.mjs",
   "tests/unit/input-ghost.test.mjs",
   "tests/unit/key-binds.test.mjs",
+  "tests/unit/keyboard-first-audio-vm.test.mjs",
   "tests/unit/lamp-bake.test.mjs",
   "tests/unit/lamp-chunks.test.mjs",
   "tests/unit/lamp-density.test.mjs",
@@ -446,12 +467,15 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/legends.test.mjs",
   "tests/unit/lexical-window-guard.test.mjs",
   "tests/unit/light-grid.test.mjs",
+  "tests/unit/light-presets-knob-range.test.mjs",
   "tests/unit/light-presets.test.mjs",
   "tests/unit/light-store-cond-layer.test.mjs",
   "tests/unit/light-store-copy.test.mjs",
+  "tests/unit/light-store-perchunk-pin.test.mjs",
   "tests/unit/lighting-campaign.test.mjs",
   "tests/unit/lighting-reapply.test.mjs",
   "tests/unit/lighting-rebuild.test.mjs",
+  "tests/unit/lighting-tuner-reset-weather.test.mjs",
   "tests/unit/lighting-tuner-sweep.test.mjs",
   // GATE GAP (2026-09-10): these three garage files and the three steering
   // files below sat in test:garage-unit / test:steering-unit, which ran in NO
@@ -503,6 +527,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/mobile-sync-web.test.mjs",
   "tests/unit/model-pack-format.test.mjs",
   "tests/unit/move-tree.test.mjs",
+  "tests/unit/net-audio-revs-vm.test.mjs",
   "tests/unit/nightly-group.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
   "tests/unit/node-plan.test.mjs",
@@ -563,6 +588,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The branch-prune rule behind prune-branches.yml: merged-only, never an
   // open PR's head, claims on age; pure fixtures, under a second.
   "tests/unit/prune-branches.test.mjs",
+  "tests/unit/pu-harvest-audio.test.mjs",
   "tests/unit/quick-validate.test.mjs",
   "tests/unit/race-control.test.mjs",
   "tests/unit/race-entry-profile.test.mjs",
@@ -573,6 +599,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the player is watching. ~0.1 s.
   "tests/unit/race-radio.test.mjs",
   "tests/unit/race-session-fixes.test.mjs",
+  "tests/unit/race-session-lazy.test.mjs",
   // Race Settings CUSTOM preset + WEEKEND · QUALIFYING FIRST header, plus
   // Season SETUP scroll/chip pins (layer on #1082 chrome).
   "tests/unit/race-setup-sheets.test.mjs",
@@ -669,6 +696,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ~1 s — and it belongs in the edit loop because the file it guards is
   // rewritten by a tool, so drift shows up as a commit nobody meant to make.
   "tests/unit/spec-timings.test.mjs",
+  // Lateral→longitudinal bicycle couple (v·r − Fyf·sin δ) in player-forces:
+  // straight coast bit-identical to tip; held-steer coast matches couple
+  // within tol; COUPLE_V_MIN=3; yaw damp untouched. createGame once, ~2.5 s.
+  "tests/unit/speed-coupling.test.mjs",
   "tests/unit/sporting-regs.test.mjs",
   // The start gantry's five lamps follow the countdown: one additive glow per
   // lit lamp, on the gantry nearest the line, out at green. VM, ~0.1 s.
@@ -679,10 +710,15 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // must still rise >1.05× (player-dynamics shape) but stay ≤1.25× in 0.75 s
   // at 45 m/s / lock 0.8. createGame once, ~2.5 s.
   "tests/unit/steer-feel-lift-off.test.mjs",
+  // Hairpin lock hold: lockTaper = 1 for vs≤15, blend 15–30, raw ≥30 so
+  // ≥60 m/s stays bit-identical to the old hyperbolic taper. Source + VM, ~3 s.
+  "tests/unit/steer-lock-taper.test.mjs",
   // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
   // lands exactly on its FEEL level, or clicking RELAX reads CUSTOM. Stated
   // in comments and checked by nothing until it drifted for a week. ~0.05 s.
   "tests/unit/steer-presets.test.mjs",
+  // STEER LOCK slider: notch 7 = 0.35 rad after #1206 lockTaper hold. Source pin, ~0 s.
+  "tests/unit/steer-tuning-lock.test.mjs",
   "tests/unit/storage-key-prefix.test.mjs",
   "tests/unit/store-cross-tab.test.mjs",
   // ...and its sibling: the PREFIX is not the whole contract. Two features
@@ -710,8 +746,13 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // blur/reset belongs in the edit loop rather than in a browser group.
   "tests/unit/throttle-latch.test.mjs",
   "tests/unit/title-art.test.mjs",
+  "tests/unit/title-home-scene-prepaint.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
   "tests/unit/tlx-chunked-lifecycle.test.mjs",
+  // A throw in one TLX subsystem costs that subsystem only: the car/lamp shadow
+  // pass no longer clears the SUN flag; a retired post chain is rebuilt at the
+  // next realloc and a post-only death keeps the bound label.
+  "tests/unit/tlx-fail-scope.test.mjs",
   // TLX's instanced cull reuses its resident pack by surviving CELL SET
   // (InstCells, GLX/WGX parity); lifts the real cullInstances/updateInstances.
   "tests/unit/tlx-inst-cells.test.mjs",
@@ -773,6 +814,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Wrap-aware arc buckets vs the O(n) updateCar traffic / slipstream / OT-ahead
   // walks (collide.js helper). Seeded 22-car old-vs-new characterization, no browser.
   "tests/unit/traffic-arc-buckets.test.mjs",
+  "tests/unit/tree-counts-catch.test.mjs",
   "tests/unit/trim-comments.test.mjs",
   // TUMFTM racetrack-database CSV → designer envelope (tools/track/tumftm-import.mjs).
   // Synthetic fixture only — no network, no LGPL geometry in the tree. ~1 s.
@@ -785,7 +827,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // is a usable strategy range, the thermal layer warms/grains/blisters, and
   // the axle shares average to 1. Pure numbers in a VM, ~0.25 s.
   "tests/unit/tyre-model.test.mjs",
+  // Front peak slip abscissa (CURVE_PEAK_X_F): 6–9° at CS_FRONT, rear path frozen.
+  "tests/unit/tyre-peak-slip.test.mjs",
   "tests/unit/ui-experience.test.mjs",
+  // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
+  // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
+  "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/ui-journey-career.test.mjs",
   "tests/unit/ui-journey-race.test.mjs",
@@ -818,6 +865,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ...and XRPlan / XROpts (task 20): pure path selection table + bootPick
   // never writes apex26.gfxBackend. ~0.1 s.
   "tests/unit/xr-plan.test.mjs",
+  // Speed-scaled yaw damp (local SPEED_YAW_* in player-forces): step-steer
+  // overshoot ≤12% at 61.1 m/s / ≤14% at 83.3 m/s; ≤50 m/s and lift-off
+  // unchanged. createGame once, ~2.5 s.
+  "tests/unit/yaw-damp-speed.test.mjs",
   // @gen-test-groups:end
 ]);
 
@@ -934,6 +985,16 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
     lines.push(line);
   };
 
+  // The ready stamp names the tree this run MEASURED (tools/lib/work-tree-id.mjs),
+  // not HEAD read afterwards: the edit loop runs the suite on a dirty tree, and
+  // a stamp of HEAD blessed a committed tip the suite never saw (ledger M36).
+  // Only a full suite stamps, so only a full suite pays for the tree hash.
+  const rel = (f) => (path.isAbsolute(f) ? path.relative(ROOT, f) : f).replace(/\\/g, "/");
+  const ran = new Set(files.map(rel));
+  const fullSuite = ran.size === TOOLING_FAST_FILES.length && TOOLING_FAST_FILES.every((f) => ran.has(f));
+  const startHead = fullSuite ? spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).stdout.trim() : "";
+  const startTree = fullSuite ? workTreeId(ROOT) : null;
+
   const suiteStart = Date.now();
   const startedAt = new Date(suiteStart).toISOString();
   emit(`suite start at=${startedAt} files=${files.length} concurrency=${jobs} ${loadavgLine()}`);
@@ -1049,24 +1110,28 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   const ok = failed === 0;
   emit(`suite end at=${new Date().toISOString()} duration=${fmtDur(suiteDur)} ` +
     `passed=${passed} failed=${failed} ${loadavgLine()}`);
+  // The tree must be the same before and after the run: an edit made while
+  // the suite ran (the edit hook blocks only a live BROWSER run) means the
+  // verdict is about neither tree.
+  const endTree = fullSuite && startTree ? workTreeId(ROOT) : null;
+  const stampTree = ok && fullSuite && startTree && startTree === endTree ? startTree : null;
+  if (stampTree) emit(`= tree ${stampTree} head ${startHead}`);
   emit(`= run ${ok ? "passed" : "failed"} (${passed} passed, ${failed} failed)`);
   for (const [s, fn] of Object.entries(onSig)) process.off(s, fn);
 
   fs.writeFileSync(logPath, lines.join("\n") + "\n");
-  // Full-suite green → stamp HEAD for ready-gate.mjs (draft→ready must not
-  // flip without tooling-fast evidence; #1111 designer-canvas). Subset / shard
-  // runs and failures leave any prior stamp alone so a partial re-run cannot
-  // bless a tip that never passed the full suite. Compare as a set: longest-
-  // first reorders `files` before this point.
-  const rel = (f) => (path.isAbsolute(f) ? path.relative(ROOT, f) : f).replace(/\\/g, "/");
-  const ran = new Set(files.map(rel));
-  const fullSuite = ran.size === TOOLING_FAST_FILES.length
-    && TOOLING_FAST_FILES.every((f) => ran.has(f));
-  if (ok && fullSuite) {
+  // Full-suite green on an UNCHANGED tree → stamp it for ready-gate.mjs
+  // (draft→ready must not flip without tooling-fast evidence; #1111
+  // designer-canvas). The stamp is the START head plus the tree hash the suite
+  // measured; ready-gate compares that hash with the tip commit's tree, and
+  // the `= tree` line above ties the log to the same run. Subset / shard runs
+  // and failures leave any prior stamp alone so a partial re-run cannot bless
+  // a tip that never passed the full suite. (`ran` is a set: longest-first
+  // reorders `files`.)
+  if (stampTree) {
     try {
       const { stampReadySha } = await import("./ready-gate.mjs");
-      const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" });
-      if (head.status === 0) stampReadySha(head.stdout.trim());
+      if (startHead) stampReadySha(startHead, { tree: stampTree });
     } catch (_) { /* stamp is advisory for ready-gate; never fail the suite */ }
   }
   // Every run teaches the next one: the passing files' durations go to the

@@ -310,9 +310,9 @@ body:has(dialog[open]) #save-warning { display: none; }
   border-right: none;
 }
 /* Keep the section strip touchable without letting zoom spend most of a short
-   phone's reading height on chips. Text still scales; the hit floor is 44px. */
+   phone's reading height on chips. Text still scales; hit floor follows --tap-paint. */
 #howtoplay-inner[data-density="compact"] #htp-contents a {
-  min-height: max(calc(44px / var(--sheet-scale, var(--ui-scale))), 1lh);
+  min-height: max(var(--tap-paint), 1lh);
   padding-block: calc(var(--gap) * 0.1);
 }
 #howtoplay-inner[data-density="compact"] > .sheet-head,

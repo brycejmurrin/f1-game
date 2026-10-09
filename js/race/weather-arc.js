@@ -132,8 +132,16 @@ const WeatherArc = (function () {
       arc = null;
     }
     /** The flag, or a quit to the menu: an arc that outlived the race would
-     *  become the next race's starting weather. */
-    function endSession() { arc = null; endChangeable(); }
+     *  become the next race's starting weather. Restoring the chip's pick also
+     *  re-lights for it (a CUT apply, which drops an in-flight fade) and hides
+     *  the rain: the fade is ticked only in a race, so otherwise the results and
+     *  the menu kept the arc's last sky until the next flyby. */
+    function endSession() {
+      arc = null;
+      const restored = base != null && G.raceWeather !== base;
+      endChangeable();
+      if (restored && G.track) { Particles.rainShow(false); G.applyRaceSettings(); }
+    }
 
     // ── Dynamic weather progression ─────────────────────────────────────────
     // The arc walks the dry↔wet↔rain ladder stage by stage over its duration,
@@ -148,10 +156,11 @@ const WeatherArc = (function () {
       return arc;
     }
     function tick(dt) {
-      // Road wetness tracks the physics value every tick (and under headless),
-      // so shaders cannot keep a stale or preset-pinned sheen that disagrees
-      // with grip (look=drive / continuous trackWetness).
-      syncWetness(dt);
+      // render() is the ONE producer of frame.wetness (it feeds the shaders at
+      // the frame rate); the physics tick only stands in for it when no render
+      // runs (headless look=drive), else the lag integrated twice per frame and
+      // ramped at ~2x the 0.8/s that frame.rain uses.
+      if (G.headlessMode) syncWetness(dt);
       if (!arc) return;
       arc.t += dt;
       const f = Math.min(1, arc.t / arc.dur);
