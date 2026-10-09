@@ -28,6 +28,21 @@
 # counts only when its jobs show the sweeps job actually ran and passed; a
 # jobs lookup that fails is, as everywhere here, "run the gate".
 #
+# A RUN THAT CONCLUDED SUCCESS IS NOT PROOF THE GATE RAN (2026-10-07). The
+# `CI` aggregator passes a SKIPPED job, so a pages.yml run that reused an
+# earlier pass (ci skipped) or ran smoke only still concludes success, and a
+# later tree-equal merge would chain onto it. Every candidate, of every
+# event, now counts only when its jobs show the gate itself ran and passed:
+# `CI`, `Per-circuit geometry sweeps`, `Selected specs (verdict)` and every
+# `Smoke` shard (at least one) all concluded success — not failure,
+# cancelled or skipped. The old exact-SHA "ship fast tier => smoke only"
+# shortcut (#1075) is gone for the same reason: Pages run 3112
+# (37689226760) deployed 61e0a6442 on a fast tier whose smoke, sweeps and
+# full selection never ran, right after dispatch 3110 (37687308660) FAILED
+# the full gate on that same tree (oversize-menu-baseline). A fast tier is
+# still remembered as fast_run (its tree-only jobs are reused) and nothing
+# more; ship_only is always false.
+#
 # A pull_request run tests GitHub's merge ref, not the PR head. That is still
 # sound here: this only reuses such a run when merging the base into the head
 # produced the head's own tree, so the earlier, older base merged into it the
@@ -64,6 +79,24 @@ FAST_RUN=""
 SHIP_ONLY="false"
 verdict() { printf 'reuse=%s\nsource=%s\nrun=%s\nfast_run=%s\nship_only=%s\n' "$1" "$2" "$3" "$FAST_RUN" "${4:-$SHIP_ONLY}"; }
 tree_of() { git rev-parse --verify -q "$1^{tree}" 2>/dev/null; }
+# gate_ran <run-id>: prints `yes` only when the run's jobs show the full gate
+# ran and passed (see the header). Paginated: a full gate's selected matrix
+# can push the job list past one page. Any lookup failure prints nothing.
+gate_ran() {
+  gh api "repos/$REPO/actions/runs/$1/jobs?per_page=100" --paginate 2>/dev/null | node -e '
+    let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
+      let jobs = [];
+      try {
+        for (const page of s.split(/(?=\{"total_count")/)) if (page.trim()) jobs.push(...(JSON.parse(page).jobs || []));
+      } catch (_) { return; }
+      const rows = jobs.map((j) => ({ name: String(j.name || "").replace(/^ci \/ /, ""), conclusion: j.conclusion }));
+      const ok = (name) => rows.some((r) => r.name === name && r.conclusion === "success")
+        && !rows.some((r) => r.name === name && r.conclusion !== "success");
+      const smoke = rows.filter((r) => r.name.startsWith("Smoke ("));
+      if (ok("CI") && ok("Per-circuit geometry sweeps") && ok("Selected specs (verdict)")
+          && smoke.length > 0 && smoke.every((r) => r.conclusion === "success")) process.stdout.write("yes");
+    });' || true
+}
 
 TREE="$(tree_of "$SHA")" || { say "::warning::$SHA is not in this checkout; running the full gate"; verdict false "" ""; exit 0; }
 
@@ -103,7 +136,7 @@ for c in $candidates; do
       // A push run is a full gate only OFF the deploy branch (there it is the fast
       // tier). merge_group is the merge-queue gate (full tier; Bryce enables the
       // queue later). A deploy-branch push is remembered as FAST_RUN, and if it
-      // is THIS commit we reuse it as ship_only (Pages smoke, no 28-job re-gate).
+      // is THIS commit it is passed on as fast_run only, never as a gate.
       const fullPush = (r) => r.event === "push" && deployBranch !== "" && r.head_branch !== deployBranch;
       const mergeGroup = (r) => r.event === "merge_group";
       const gate = (r) => r.status === "completed" && r.conclusion === "success" && String(r.id) !== self && (
@@ -113,18 +146,11 @@ for c in $candidates; do
     });')"
   while read -r id path event url; do
     [ -n "$id" ] || continue
-    if [ "$event" = merge_group ]; then
-      say "REUSING the gate: $c already passed $path $event (merge_group)"
-      verdict true "$c" "$url" false
-      exit 0
-    fi
-    if [ "$event" = pull_request ]; then
-      full="$(gh api "repos/$REPO/actions/runs/$id/jobs?per_page=100" 2>/dev/null | node -e '
-        let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
-          let jobs = []; try { jobs = JSON.parse(s).jobs || []; } catch (_) {}
-          if (jobs.some((j) => j.name === "Per-circuit geometry sweeps" && j.conclusion === "success")) process.stdout.write("yes");
-        });')" || full=""
-      if [ "$full" != yes ]; then say "run $id is a pull_request run whose sweeps did not run (a draft PR: fast tier) — not a gate"; continue; fi
+    # Concluded success is not enough: the gate jobs must have RUN and passed
+    # (a draft PR's fast tier, a smoke-only or reused Pages run all skip them).
+    if [ "$(gate_ran "$id")" != yes ]; then
+      say "run $id ($path $event) concluded success but its gate jobs (CI, sweeps, selected verdict, smoke) did not all run and pass — not a gate"
+      continue
     fi
     say "REUSING the gate: $c already passed $path $event"
     verdict true "$c" "$url" false
@@ -135,15 +161,12 @@ EOF_HITS
   say "no successful gate run recorded for $c"
 done
 
-# Exact-SHA ship fast tier: skip the 28-job Pages re-gate; pages.yml may still
-# run a 1-shard smoke. Do not reuse a parent's fast tier as the publish gate —
-# only GITHUB_SHA itself (candidates lists it first).
+# No completed gate on this tree: run it. A green fast tier on THIS exact sha
+# is passed along as fast_run (its tree-only jobs are reused by ci.yml's
+# `fast_tier_run`), never as a reason to skip smoke, sweeps or selection.
 if [ -n "$FAST_RUN" ]; then
-  say "REUSING ship fast-tier run $FAST_RUN on $SHA (Pages smoke only; no full gate)"
-  SHIP_ONLY=true
-  verdict true "$SHA" "$FAST_RUN" true
-  exit 0
+  say "no reusable gate for $SHA; running the gate (reusing only fast-tier run $FAST_RUN's tree-only jobs)"
+else
+  say "no reusable gate for $SHA; running the full gate"
 fi
-
-say "no reusable gate for $SHA; waiting (no 28-job Pages re-gate)"
 verdict false "" "" false

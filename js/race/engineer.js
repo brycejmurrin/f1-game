@@ -18,7 +18,7 @@
  * this is rules, not physics. It reads the `G` façade and writes nothing but
  * announcements; no car field is assigned outside its own `_eng` bag.
  */
-const RaceEngineer = (function () {
+var RaceEngineer = (function () {
   "use strict";
 
   const clamp = M4.clamp;

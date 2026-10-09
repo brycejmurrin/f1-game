@@ -53,7 +53,14 @@
    THAT rather than by --hud-scale: the compensation has to use the number the
    element is actually zoomed by, or a capped band double-counts its notch. */
 .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #hud-damage, #hud-mirror,
-#lights, #announce { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
+#lights, #announce {
+  --hud-z: var(--hud-z-top, var(--hud-scale));
+  zoom: var(--hud-z);
+  /* zoom must track --hud-z-top in the same frame. Default transition:all
+     (even at reduced-motion 0.01ms) left the map's live CSS zoom a frame
+     behind the published cap under CI load → fitHud flipped caps. */
+  transition-property: opacity, color, background-color, box-shadow, filter, text-shadow;
+}
 /* THE CAM AND PAUSE BUTTONS FOLLOW HUD SIZE TOO — by size, not by `zoom`,
    because they are tap targets: --hud-btn-z is the top band's zoom floored at
    1, so HUD SIZE can grow them beside the timing tower but never shrink them
@@ -748,6 +755,34 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   }
   /* Helmet touch: the PLAN row under TYRES read as a plate on GEAR (390×844). */
   body[data-hl-set="helmet"]:not(.desktop) #hud-plan:not(:empty) { display: none; }
+  /* BOTTOM CLUSTER vs SIDE COLUMNS. Portrait keeps the ladder buttons
+     position:fixed; the landscape #hud-dock flex bar never sizes the
+     cluster. TYRES parks ABOVE the centred stack (absolute, out of flow)
+     so PLAN cannot sit on the gear numeral AND the stack does not rise
+     into INPUTS (in-flow TYRES did — buttons @150%). fitHud caps
+     --hud-z-bot so GEAR fits between the columns (390×844 @150%:
+     gearbox×AERO). Landscape / desktop untouched. */
+  body:not(.desktop) #hud-tyre {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(100% + 4px);
+    margin: 0;
+    width: min(130px, 42vw);
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  body:not(.desktop) #hud-gearbox,
+  body:not(.desktop) #hud-energy {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  body:not(.desktop) #hud-gear {
+    font-size: min(58px, 14vw);
+  }
+  body:not(.desktop) #hud-tach {
+    width: min(132px, 100%);
+  }
 }
 /* REAR-VIEW MIRROR. An empty frame: js/render/shared/mirror-pass.js measures
    this box every half second and the renderer paints the mirror camera into
@@ -908,6 +943,22 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
 }
+/* …BUT NEVER ON GEOMETRY fitHud MEASURES. A duration on the initial
+   `transition-property: all` animates `zoom` and every var()-driven size too,
+   so under MOTION: REDUCED the dock's zoom and the buttons' --tap / --hold
+   trailed the --hud-z-dock fitHud had just written by a frame. The next fit
+   divided that STALE rect by the NEW published zoom (#dock-right "85px" tall
+   where 236 is true), read a cap above BUTTON SIZE and dropped it: BOOST / OT /
+   AERO painted uncapped up the right edge — onto #hud-sectors, the timing
+   tower and beside CAM / PAUSE, AERO off the top in the 844x390 survey (NEW-8)
+   — and --dock-r-w was taken off the same stale BOOST edge. The top band got
+   this fix first (`transition-property` on the --hud-z-top group above); the
+   dock, the bottom band and the two top-right buttons are measured the same
+   way. Paint-only properties keep their 0.01ms, so nothing that was instant
+   starts moving. */
+:root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, #pausebtn, #btn-cam) {
+  transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
+}
 /* The flag clears the DROPPED strip, so it tracks the same measured edge: 70px
    below it is the clearance the old pair of literals (62 / 132) encoded. */
 :root[data-gap-drop] #hud-flag {
@@ -928,12 +979,14 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
      this element's own units. Dividing only --sat left the two drifting apart at
      any non-default HUD SIZE. Desktop is unchanged at 56; touch moves to 64. */
   top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z));
-  /* STAND OFF THE RIGHT DOCK on touch STEER (touch + buttons). Same --dock-r-w
+  /* STAND OFF THE RIGHT DOCK on every phone STEER mode. Same --dock-r-w
      clearance #hud-limits / #hud-damage take; those chips sit lower. BOOST /
      OT / AERO share the right column and at HUD/BTN SIZE 130–150% (short
      landscape) the sector strip sat under BOOST until sectors consumed
-     --dock-r-w on steer-touch and steer-buttons (2026-10-05 survey, 2026-10-07
-     buttons fix). fitHud publishes --dock-r-w whenever the dock has a box. */
+     --dock-r-w on steer-touch and steer-buttons (2026-10-05 / 2026-10-07) and
+     on tilt (game.js never adds a tilt body class — only touch/buttons — so
+     the phone rule is body:not(.desktop)). fitHud publishes --dock-r-w
+     whenever the dock has a box; desktop stays 0. */
   right: calc(10px + var(--sar) / var(--hud-z));
   background: rgb(8 8 14 / calc(0.72 * var(--hud-panel-a-eff)));
   border-radius: var(--r-sm);
@@ -949,8 +1002,7 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    fills it on the first HUD tick. Until then padding + background left a junk
    gap under the pause column (same class of bug as empty .hud-gaps above). */
 #hud-sectors:empty { display: none; }
-body.steer-touch #hud-sectors,
-body.steer-buttons #hud-sectors {
+body:not(.desktop) #hud-sectors {
   right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
 }
 .sec-row { display: flex; gap: calc(var(--gap) * 0.5); align-items: baseline; border-left: 3px solid transparent; padding-left: calc(var(--gap) / 2); margin-left: calc(var(--gap) / -2); }
@@ -1148,8 +1200,23 @@ body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-
    beside-the-mirror and top-row slots outweigh this. Desktop (.desktop:
    empty docks) is untouched. */
 body:not(.desktop) #announce {
-  min-width: min(200px, calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
+  /* min-width must not exceed the lane: a bare 200px floor outgrew a tight
+     --announce-lane-w and painted over #hud-sectors (oversize CI workers=2). */
+  min-width: 0;
   max-width: min(440px, calc(72 * var(--vwzh)), calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
+  width: min(100%, max-content, calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
+}
+/* Collapsed dock lane (js/ui/hud.js announceLane): flex min-content from
+   #announce-num kept a painted box at width:0; hide the card so it cannot
+   clash with #hud-sectors after a large --dock-r-w (oversize CI workers=2). */
+#announce[data-lane-collapsed] {
+  width: 0 !important;
+  max-width: 0 !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  overflow: hidden !important;
+  visibility: hidden;
 }
 body:not(.desktop):not(.hud-radio-top):not(.hud-mirror-side) #announce {
   left: calc(var(--announce-lane-x) / var(--hud-z));
@@ -1909,6 +1976,11 @@ body:not(.desktop) #hud-rel:not([data-hl-user]) {
   top: calc(var(--hud-left-h, 152px) + 8px);
   max-width: min(240px, 46vw);
   line-height: 1.2;
+  /* Without the left-dock anchor (engines that lack CSS Anchor Positioning),
+     keep the card from eating the whole column at HUD 150% — five rows used
+     to paint over the steer arrows / BRAKE (2026-10-07 survey, up to ~6k px²). */
+  max-height: min(42svh, 11.5em);
+  overflow: hidden;
 }
 body:not(.desktop) #hud-strat {
   top: calc(var(--hud-left-h, 152px) + 8px);
@@ -1926,58 +1998,85 @@ body:not(.desktop):has(#hud-rel:not([hidden])) #hud-strat:not([data-hl-user]) {
   left: calc(168px + var(--sal) / var(--hud-z));
 }
 body:not(.desktop) #hud-inputs:not([data-hl-user]) {
+  /* Same containing block as #hud-sectors / #hud-limits: position-anchor on an
+     absolute child of #hud could resolve before --dock-r-w lands and paint the
+     trace over the steer column (844×390 cockpit, INPUTS opt-in). */
+  position: fixed;
   left: auto;
-  right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
+  /* Cap the dock standoff: at HUD/BTN 150% the wrap-reverse right dock can
+     measure ~480px wide, and adding the full --dock-r-w shoved this trace
+     onto the LEFT steer arrows (844×390). A small floor (BOOST column
+     width-ish) keeps a gap from the pedals without crossing RELATIVE. */
+  right: calc(10px + var(--sar) / var(--hud-z) + min(var(--dock-r-w, 0px), 128px));
   bottom: auto;
   /* Same shape as #hud-limits: clear PAUSE/CAM via (8px + tap-hud + 4px + sat)
      then drop by --hud-sec-h. Omitting tap-hud + 4px put the trace ~44px into
      S1–S3 at touch --tap 52 (12 − 56 = −44 at z=1). --hud-sec-h is top-band
      units; at phone sizes bot/top zooms meet so it still clears the box. */
   top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
+  max-width: min(120px, 22vw);
+  max-height: min(18svh, 4.2em);
+  overflow: hidden;
 }
-/* TOUCH TYRES: out of the centred bottom stack (it sat under GEAR / ERS, on
-   the car) to the left column, sitting on top of the left dock (the steer
-   group, whatever the STEERING INPUT sized it to, wherever DOCK EDIT dragged
-   it). CSS anchor positioning, because the dock's height is per input mode and
-   no fixed offset can know it; #hud-dock is the containing block of both (the
-   touch .hud-bottom is a static flex child). An engine without anchor
-   positioning keeps TYRES in the stack, as before. A placed TYRES still moves
-   from here (MOVE & SIZE `translate`). */
+body:not(.desktop) #hud-inputs:not([data-hl-user]) #hud-inputs-cv {
+  width: 84px;
+  height: 32px;
+}
+/* DESKTOP: the default left + bottom:22svh home grew into SPEED & GEAR at
+   HUD SIZE 150% (chase 1280×720 survey). Park under the sector column like
+   the touch home — right + top from the pause/sectors stack — so the bottom
+   band stays the driver's. A placed chip (data-hl-user) keeps its offset. */
+body.desktop #hud-inputs:not([data-hl-user]) {
+  left: auto;
+  right: calc(10px + var(--sar) / var(--hud-z));
+  bottom: auto;
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
+}
+/* TOUCH TYRES (LANDSCAPE): out of the centred bottom stack (it sat under
+   GEAR / ERS, on the car) to the left column, sitting on top of the left dock
+   (the steer group, whatever the STEERING INPUT sized it to, wherever DOCK
+   EDIT dragged it). CSS anchor positioning, because the dock's height is per
+   input mode and no fixed offset can know it; #hud-dock is the containing
+   block of both (the touch .hud-bottom is a static flex child). An engine
+   without anchor positioning keeps TYRES in the stack, as before. A placed
+   TYRES still moves from here (MOVE & SIZE `translate`).
+   PORTRAIT keeps TYRES in the column stack: the ladder buttons are
+   position:fixed (not flex items that size #dock-left), so the same anchor
+   resolved to a collapsed dock and painted TYRES + #hud-plan on the gear
+   numeral (390×844 / 360×740 @150%, HUD Desk 2026-10-07). */
 @supports (anchor-name: --a) {
-  body:not(.desktop) #dock-left { anchor-name: --apex-dock-left; }
-  body:not(.desktop) #hud-tyre {
-    position: absolute;
-    position-anchor: --apex-dock-left;
-    left: anchor(left);
-    bottom: calc(anchor(top) + var(--gap));
-    margin: 0;
+  @media (orientation: landscape) {
+    body:not(.desktop) #dock-left { anchor-name: --apex-dock-left; }
+    body:not(.desktop) #hud-tyre {
+      position: absolute;
+      position-anchor: --apex-dock-left;
+      left: anchor(left);
+      bottom: calc(anchor(top) + var(--gap));
+      margin: 0;
+    }
+    /* HELMET touch: ERS rides the same left dock column as TYRES, stacked above
+       it — not centred with y:-37 over the wheel (mid-visor float, 2026-10-07). */
+    body[data-hl-set="helmet"]:not(.desktop) #hud-tyre { anchor-name: --apex-hud-tyre; }
+    body[data-hl-set="helmet"]:not(.desktop) #hud-energy {
+      position: absolute;
+      position-anchor: --apex-hud-tyre;
+      left: anchor(left);
+      bottom: calc(anchor(top) + var(--gap));
+      margin: 0;
+    }
   }
-  /* HELMET touch: ERS rides the same left dock column as TYRES, stacked above
-     it — not centred with y:-37 over the wheel (mid-visor float, 2026-10-07). */
-  body[data-hl-set="helmet"]:not(.desktop) #hud-tyre { anchor-name: --apex-hud-tyre; }
-  body[data-hl-set="helmet"]:not(.desktop) #hud-energy {
-    position: absolute;
-    position-anchor: --apex-hud-tyre;
-    left: anchor(left);
-    bottom: calc(anchor(top) + var(--gap));
-    margin: 0;
-  }
-  /* TOUCH SECTORS ↔ RIGHT DOCK. Same CSS Anchor Positioning pattern as TYRES
-     on the left dock (Modern Web Guidance css-layout §5: tether floating
-     chrome to its trigger, do not guess offsets). steer-touch and
-     steer-buttons: #hud-sectors is fixed and zoomed (--hud-z), so anchor()
-     is divided like --sar; max() keeps the measured --dock-r-w floor when the
-     engine's inset is smaller. */
-  body.steer-touch #dock-right,
-  body.steer-buttons #dock-right { anchor-name: --apex-dock-right; }
-  body.steer-touch #hud-sectors,
-  body.steer-buttons #hud-sectors {
-    position-anchor: --apex-dock-right;
-    right: max(
-      calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px)),
-      calc((anchor(left) + var(--gap)) / var(--hud-z))
-    );
-  }
+  /* TOUCH SECTORS ↔ RIGHT DOCK: no CSS anchor here. --dock-r-w is the
+     painted inset from the leftmost right-dock control (fitHud), so the
+     phone right: rule already clears BOOST. Do NOT max() with
+     anchor(left): wrap-reverse #dock-right can leave the box left edge
+     past the content, and that max shoved #hud-sectors into #announce
+     (Pages gate notched-landscape buttons, trains 37597421040 /
+     37605440474; culprit #1191). TYRES still uses the left-dock anchor
+     in landscape only (above). */
+  /* RELATIVE / INPUTS: do NOT set position-anchor here. `left: auto` on
+     INPUTS then resolved against the dock and dumped the trace onto the
+     steer arrows (844×390 buttons 150%). Height caps stay on the home
+     rules; HudRelative fitRows() slides/caps RELATIVE off the left pedals. */
 }
 :root:root[data-appearance-peek="hud"] :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: visible; }
 } /* @layer hud */

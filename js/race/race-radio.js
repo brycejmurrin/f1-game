@@ -34,7 +34,7 @@
  * READ-ONLY on the sim: it reads the G façade and writes nothing but announce()
  * calls and its own settings, so it can never move a car (docs/PHYSICS.md).
  */
-const RaceRadio = (function () {
+var RaceRadio = (function () {
   "use strict";
 
   const CHAT = Object.freeze(["off", "key", "normal", "chatty"]);
