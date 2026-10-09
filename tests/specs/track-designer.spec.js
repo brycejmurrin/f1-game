@@ -399,6 +399,51 @@ test.describe("Track designer", () => {
     // POINT m stepper appears once a control point is selected in ELEVATION.
     await page.evaluate(() => TrackDesigner.setNodeHeight(0, (TrackDesigner.state().design.heights[0] || 0) + 0.25));
     await expect(page.locator("#trackdesigner .td-row", { hasText: "POINT m" })).toBeVisible();
+    // RANGE is a selection-only gesture shared by the profile and map.
+    await page.getByRole("button", { name: "Clear point selection", exact: true }).click();
+    await page.locator('[data-selection-mode="range"]').click();
+    const baseline = await page.evaluate(() => TrackDesigner.state());
+    const fracs = await page.evaluate(() => {
+      const p = TrackDesigner.state().design.pts, c = [0];
+      for (let i = 0; i < p.length; i++) c.push(c[i] + Math.hypot(p[(i + 1) % p.length][0] - p[i][0], p[(i + 1) % p.length][1] - p[i][1]));
+      return [c[3] / c[p.length], c[10] / c[p.length]];
+    });
+    const pb = await strip.boundingBox(), y = pb.y + pb.height / 2;
+    await page.mouse.move(pb.x + fracs[0] * pb.width, y);
+    await page.mouse.down();
+    await page.mouse.move(pb.x + fracs[1] * pb.width, y - 20, { steps: 8 });
+    await page.mouse.up();
+    const selected = await page.evaluate(() => TrackDesigner.state());
+    expect([selected.sel, selected.span]).toEqual([3, 10]);
+    expect(selected.design.heights).toEqual(baseline.design.heights);
+    expect(selected.undo).toBe(baseline.undo);
+    await expect(strip).toHaveAttribute("aria-label", /Span 4–11/);
+    await page.locator('[data-selection-mode="point"]').click();
+    expect((await page.evaluate(() => TrackDesigner.state())).span).toBe(10);
+    const input = page.getByRole("spinbutton", { name: "Selected point height in metres" });
+    await input.fill(String(baseline.design.heights[3] + 1));
+    await input.press("Enter");
+    const edited = await page.evaluate(() => TrackDesigner.state());
+    expect(edited.undo).toBe(baseline.undo + 1);
+    for (let i = 0; i < edited.design.heights.length; i++) expect(edited.design.heights[i]).toBe(baseline.design.heights[i] + (i >= 3 && i <= 10 ? 1 : 0));
+    await page.getByRole("button", { name: "UNDO", exact: true }).click();
+    expect(await page.evaluate(() => TrackDesigner.state().design.heights)).toEqual(baseline.design.heights);
+    await page.getByRole("button", { name: "FIT VIEW", exact: true }).click();
+    await page.locator('[data-selection-mode="range"]').click();
+    const mapPoints = await page.evaluate(() => {
+      const p = TrackDesigner.state().design.pts, r = document.querySelector('.td-stage > canvas:not([data-role="profile"])').getBoundingClientRect();
+      const xs = p.map((v) => v[0]), zs = p.map((v) => v[1]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+      const scale = Math.min(Math.round(r.width) / Math.max(60, x1 - x0), Math.round(r.height) / Math.max(60, z1 - z0)) * 0.82;
+      return [2, 7].map((i) => ({ x: r.x + Math.round(r.width) / 2 + (p[i][0] - (x0 + x1) / 2) * scale, y: r.y + Math.round(r.height) / 2 + (p[i][1] - (z0 + z1) / 2) * scale }));
+    });
+    await page.mouse.move(mapPoints[0].x, mapPoints[0].y);
+    await page.mouse.down();
+    await page.mouse.move(mapPoints[1].x, mapPoints[1].y, { steps: 8 });
+    await page.mouse.up();
+    expect(await page.evaluate(() => { const s = TrackDesigner.state(); return [s.sel, s.span]; })).toEqual([2, 7]);
+    await expect(strip).toHaveAttribute("aria-label", /Span 3–8/);
+    expect(await page.evaluate(() => TrackDesigner.state().design.pts)).toEqual(baseline.design.pts);
   });
 
   test("FIX ALL turns a deliberately short loop green and SAVE enables", async ({ page }) => {

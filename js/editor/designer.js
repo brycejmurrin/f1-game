@@ -37,8 +37,8 @@ const TrackDesigner = (function () {
       { n: 7, title: "Race and share", text: "SAVE, then RACE or TIME TRIAL (or TEST HERE from a point). SHARE copies a link; CARD / EXPORT / IMPORT move a circuit as a picture or file." },
     ]),
     GESTURES: Object.freeze([
-      { input: "Touch", text: "Tap a point to select · SELECT END then tap a second for a SPAN · drag a selected point or span to move · tap the road to add / double-tap to delete · press and hold for DELETE / START HERE · pinch to zoom, drag empty space to pan · on the elevation strip, tap then drag vertically (≥44 px)." },
-      { input: "Mouse", text: "Click a point to select · drag past a short threshold to move it (a SPAN moves as a group) · click the road to add one · double-click to delete · wheel to zoom, drag empty space to pan · shift-click a second point to select the span between them." },
+      { input: "Touch", text: "Tap a point to select · RANGE then tap or drag to an end point on either view for a SPAN · drag a selected point or span to move · tap the road to add / double-tap to delete · press and hold for DELETE / START HERE · pinch to zoom, drag empty space to pan · on the elevation strip, tap then drag vertically (≥44 px)." },
+      { input: "Mouse", text: "Click a point to select · RANGE drag selects a section without moving it · POINT drag past a short threshold moves it (a SPAN moves as a group) · click the road to add one · double-click to delete · wheel to zoom, drag empty space to pan · shift-click a second point to select the span between them." },
       { input: "Keyboard", text: "Tab / [ ] cycle points · arrows nudge the selected point or SPAN 1 m (10 m with Shift) · Delete removes the anchor · Enter stamps · Esc deselects · Ctrl/⌘Z undo · Shift+Ctrl/⌘Z redo · on the elevation strip, Up/Down set height (whole SPAN when one is selected)." },
       { input: "Gamepad", text: "The d-pad and A work every button and chip. With a point or SPAN selected, the d-pad nudges it on the canvas; B lets go of the selection, and B again closes the designer." },
     ]),
@@ -51,7 +51,7 @@ const TrackDesigner = (function () {
   const ui = {};                       // named nodes, built once
   let design = null, verdict = null, sel = -1, span = -1, tool = "select", mode = "edit";
   // spanArm: next pick sets the span end (touch-friendly stand-in for shift-tap).
-  let spanArm = false;
+  let spanArm = false, selectionMode = "point", selectionPanel = null, heightStep = 1;
   let params = { L: 200, R: 60, deg: 90, dir: 1 };
   // propKind: the scenery-mode props palette selection (TrackDesignerProps.KINDS).
   let propKind = "stand", scenery = null;
@@ -108,7 +108,7 @@ const TrackDesigner = (function () {
   function setCoached() { const st = gstore(); try { if (st) st.set(COACH_KEY, true); } catch (e) { Log.warn("track", "designer: coach flag not stored: " + (e && e.message)); } }
   /** The active tool's one-line instruction (the stage hint, the rail copy, the status line on a change). */
   function toolHint() {
-    if (mode === "elevation") return "ELEVATION: tap a grip to select · drag vertically · shift-tap (or SELECT END) a second for a SPAN · Flat / Rolling / Hilly · bank a turn (BANK °) · KERB / BERMS";
+    if (mode === "elevation") return "ELEVATION: POINT or RANGE on either view · drag height or enter metres · zoom for precise picks";
     if (mode === "scenery") return "SCENERY: find a theme · choose an atmosphere · select a point to place scenery";
     if (mode === "test") return "TEST: fix red CHECKS, then RACE, TIME TRIAL, or TEST HERE from a selected point";
     if (mode === "draw" || tool === "draw") return "DRAW: draw one closed loop in a single stroke — it closes and smooths itself";
@@ -421,9 +421,52 @@ const TrackDesigner = (function () {
     refreshControls();
     return true;
   }
+  function selectRange(i, j) {
+    if (!design || !Number.isInteger(i)) return false;
+    const n = design.pts.length;
+    sel = i < 0 ? -1 : Math.min(i, n - 1);
+    const end = Number.isInteger(j) && j >= 0 ? Math.min(j, n - 1) : -1;
+    span = sel >= 0 && end !== sel ? end : -1;
+    spanArm = false;
+    if (cv) cv.setSelection(sel, span);
+    refreshControls();
+    return true;
+  }
+  function setSelectionMode(value) {
+    selectionMode = value === "range" ? "range" : "point";
+    spanArm = false;
+    if (tool !== "select") setTool("select");
+    if (cv) cv.setSelection(sel, span);
+    refreshControls();
+    return selectionMode;
+  }
+  function focusSelection() {
+    if (!design || sel < 0) return false;
+    const c = cumArc(design.pts), f = c[sel] / (c[design.pts.length] || 1);
+    if (cv && verdict && verdict.tr) cv.focusAt(f * verdict.tr.total);
+    if (prof && prof.zoom) prof.zoom(4);
+    return true;
+  }
+  function profileView(action) {
+    if (!prof) return false;
+    if (action === "fit") prof.fit();
+    else if (action === "left" || action === "right") prof.pan(action === "left" ? -0.4 : 0.4);
+    else prof.zoom(action === "in" ? 2 : 0.5);
+    return true;
+  }
+  function adjustElevation(action) {
+    if (!design || sel < 0 || !["level", "smooth", "zero"].includes(action)) return false;
+    const src = design.heights, next = src.slice(), n = src.length, group = TrackShape.spanIndices(sel, span, n);
+    for (const [k, i] of group.entries()) {
+      if (action === "smooth" && group.length > 1 && group.length < n && (k === 0 || k === group.length - 1)) continue;
+      next[i] = elevH(action === "zero" ? 0 : action === "level" ? src[sel] : (src[(i - 1 + n) % n] + 2 * src[i] + src[(i + 1) % n]) / 4);
+    }
+    return setHeights(next, sel);
+  }
   /** Arm the next tap as the span end (touch-friendly group select). */
   function armSpanEnd() {
     if (!design || sel < 0) { message("Select a start point first, then SELECT END", true); return false; }
+    selectionMode = "point";
     spanArm = !spanArm;
     if (spanArm) message("Tap the end point for the SPAN (group move · elevate · replace)");
     refreshControls();
@@ -535,6 +578,7 @@ const TrackDesigner = (function () {
   function setTool(name) {
     const was = tool;
     tool = TOOLS.some((t) => t[0] === name) ? name : "select";
+    if (tool !== "select") selectionMode = "point";
     // Stamp / draw chips also switch mode so the rail stays coherent.
     if (tool === "draw" && mode !== "draw") mode = "draw";
     else if (tool !== "draw" && (mode === "draw" || mode === "elevation" || mode === "scenery" || mode === "test")) mode = "edit";
@@ -703,12 +747,15 @@ const TrackDesigner = (function () {
     root.append(body, foot);
 
     cv = DesignerCanvas.create(canvas, {
+      rangeSelect: () => selectionMode === "range" && (mode === "edit" || mode === "elevation"),
+      extendSelection: () => spanArm,
       onBegin: () => {},
       onChange: (pts, kind) => { commit(Object.assign({}, design, { pts }), kind); },
       onSelect: (i, j) => {
         sel = Number.isInteger(i) ? i : -1;
         span = (sel >= 0 && Number.isInteger(j) && j !== sel) ? j : -1;
         if (sel < 0) { span = -1; spanArm = false; }
+        if (span >= 0) spanArm = false;
         refreshControls();
       },
       onPick: (i, ev) => {
@@ -811,15 +858,24 @@ const TrackDesigner = (function () {
     ui.ctx.hidden = false;
   }
   function hideCtx() { ctxAt = -1; if (ui.ctx) ui.ctx.hidden = true; }
-  function stepper(label, get, set, step, fmt) {
+  function stepper(label, get, set, step, fmt, editable) {
     const row = el("div", "td-row");
     const lab = el("span", "", label);
-    const minus = btn("−", "sel-chip", () => set(get() - step));
-    const val = el("span", "td-num", fmt ? fmt(get()) : String(get()));
-    const plus = btn("+", "sel-chip", () => set(get() + step));
+    const delta = () => typeof step === "function" ? step() : step;
+    const minus = btn("−", "sel-chip", () => set(get() - delta()));
+    const val = el(editable ? "input" : "span", editable ? "td-input td-num" : "td-num", editable ? "" : fmt ? fmt(get()) : String(get()));
+    if (editable) {
+      val.type = "number"; val.step = "0.25"; val.min = String(-CustomTracks.LIMITS.rise); val.max = String(CustomTracks.LIMITS.rise);
+      val.setAttribute("aria-label", "Selected point height in metres");
+      const applyValue = () => { if (val.value.trim() && Number.isFinite(+val.value)) set(+val.value); val.value = String(get()); };
+      val.addEventListener("change", applyValue);
+      val.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); applyValue(); } });
+    }
+    const plus = btn("+", "sel-chip", () => set(get() + delta()));
     minus.setAttribute("aria-label", label + " down"); plus.setAttribute("aria-label", label + " up");
     row.append(lab, minus, val, plus);
-    row._refresh = () => { val.textContent = fmt ? fmt(get()) : String(get()); };
+    row._label = lab;
+    row._refresh = () => { if (editable) { if (document.activeElement !== val) val.value = String(get()); } else val.textContent = fmt ? fmt(get()) : String(get()); };
     return row;
   }
   function buildDesignPane(pane) {
@@ -913,12 +969,22 @@ const TrackDesigner = (function () {
       b.dataset.elev = name;
       ui.elevPresets.appendChild(b);
     }
-    ui.elevHint = el("div", "td-hint", "Tap a grip to select (height stays) · drag vertically · SELECT END / shift-tap a SPAN to raise a group · POINT m · Flat / Rolling / Hilly");
+    ui.elevHint = el("div", "td-hint", "Pick a point anywhere in its profile column. Drag vertically to change height, or enter metres below. RANGE selects a whole section on either view.");
     ui.elevNode = stepper("POINT m", () => {
       if (!design || sel < 0 || !design.heights) return 0;
       return design.heights[sel] || 0;
-    }, (v) => setNodeHeight(sel, v), 1, (v) => (v > 0 ? "+" : "") + v);
-    ui.elevGroup.append(ui.elevPresets, ui.elevHint, ui.elevNode);
+    }, (v) => setNodeHeight(sel, v), () => heightStep, null, true);
+    const steps = el("div", "td-chips"); steps.setAttribute("aria-label", "Elevation adjustment step");
+    for (const v of [0.25, 1, 5]) {
+      const b = btn(v + " m STEP", "sel-chip", () => { heightStep = v; for (const c of steps.children) { const on = +c.dataset.heightStep === v; c.classList.toggle("active", on); c.setAttribute("aria-pressed", String(on)); } });
+      b.dataset.heightStep = String(v); b.setAttribute("aria-pressed", String(v === heightStep)); b.classList.toggle("active", v === heightStep); steps.appendChild(b);
+    }
+    ui.elevActions = el("div", "td-chips");
+    for (const [id, text] of [["level", "LEVEL"], ["smooth", "SMOOTH"], ["zero", "ZERO"]]) {
+      const b = btn(text, "sel-chip", () => adjustElevation(id)); b.dataset.heightAction = id;
+      b.title = id === "level" ? "Set selected points to the first point's height" : id === "smooth" ? "Soften selected heights; keep range endpoints" : "Set selected heights to zero"; ui.elevActions.appendChild(b);
+    }
+    ui.elevGroup.append(ui.elevHint, steps, ui.elevNode, ui.elevActions, el("div", "td-label", "WHOLE CIRCUIT PRESETS"), ui.elevPresets);
     // Banking + kerbs (E+F) and berms (G): elevation mode owns the road cross-section.
     ui.bankGroup = group("BANKING & KERBS");
     ui.bankGroup.setAttribute("data-role", "bank-kerbs");
@@ -958,7 +1024,8 @@ const TrackDesigner = (function () {
     ui.load = btn("LOAD", "sel-chip", () => loadFrom(ui.code.value));
     loadRow.appendChild(ui.load);
     sharing.append(ui.code, loadRow);
-    pane.append(tools, ui.shape, ui.elevGroup, ui.bankGroup, theme, circuit, issues, sharing);
+    selectionPanel = DesignerSelection.create({ el, btn, group, onSelect: selectRange, onMode: setSelectionMode, onCycle: cyclePoint, onFocus: focusSelection, onView: profileView });
+    pane.append(selectionPanel.root, tools, ui.shape, ui.elevGroup, ui.bankGroup, theme, circuit, issues, sharing);
     buildInsight(pane, circuit, actions, sharing);
     buildAuthoring();
     buildDesigned(circuit);
@@ -1077,14 +1144,16 @@ const TrackDesigner = (function () {
       ui.shapeLabel.textContent = "2 CORNERS";
     }
     if (scenery) scenery.refresh({ design, sel, propKind });
+    if (selectionPanel) selectionPanel.refresh({ design, sel, span, mode, selectionMode });
+    if (ui.elevActions) for (const b of ui.elevActions.children) b.disabled = sel < 0;
     if (document.activeElement !== ui.name) ui.name.value = design.name;
     if (ui.country) ui.country.value = design.country || "";
     ui.width._refresh();
     if (ui.undo) ui.undo.disabled = !undo.length;
     if (ui.redo) ui.redo.disabled = !redo.length;
     ui.start.disabled = ui.del.disabled = !(sel >= 0);
-    if (ui.prevPt) ui.prevPt.disabled = !(design && design.pts && design.pts.length);
-    if (ui.nextPt) ui.nextPt.disabled = !(design && design.pts && design.pts.length);
+    if (ui.prevPt) { ui.prevPt.disabled = !design.pts.length; ui.prevPt.hidden = mode === "edit" || showElev; }
+    if (ui.nextPt) { ui.nextPt.disabled = !design.pts.length; ui.nextPt.hidden = mode === "edit" || showElev; }
     if (ui.spanEnd) {
       ui.spanEnd.disabled = !(sel >= 0);
       ui.spanEnd.classList.toggle("active", !!spanArm);
@@ -1288,7 +1357,7 @@ const TrackDesigner = (function () {
   /** For tests and the agent: a plain snapshot of what the screen shows. */
   function state() {
     return {
-      open: openFlag, tool, mode, sel, span, spanArm: !!spanArm, pending: !!previewT, propKind,
+      open: openFlag, tool, mode, sel, span, selectionMode, spanArm: !!spanArm, pending: !!previewT, propKind,
       design: design ? copy(design) : null,
       ok: !!(verdict && verdict.ok), red: verdict ? verdict.red : null, amber: verdict ? verdict.amber : null,
       issues: verdict ? verdict.issues.map((i) => i.code + ":" + i.level) : [],
@@ -1589,6 +1658,8 @@ const TrackDesigner = (function () {
     // Under the main canvas, above stats — always mounted (CSS keeps it on phone).
     stage.insertBefore(ui.profile, ui.stats);
     prof = DesignerProfile.create(ui.profile, {
+      rangeSelect: () => selectionMode === "range",
+      extendSelection: () => spanArm,
       onChange: (i, h, live, all) => {
         if (live) return;
         if (Array.isArray(all)) setHeights(all, i);
@@ -1598,6 +1669,7 @@ const TrackDesigner = (function () {
         if (i >= 0) {
           sel = i;
           span = (Number.isInteger(j) && j !== i) ? j : -1;
+          if (span >= 0) spanArm = false;
           if (cv) cv.setSelection(sel, span);
         } else {
           sel = -1; span = -1;
@@ -1678,7 +1750,7 @@ const TrackDesigner = (function () {
     let at = null;
     if (tr && sel >= 0 && sel < pts.length) { const c = cumArc(pts); at = c[sel] / (c[pts.length] || 1) * tr.total; }
     prof.setCursor(at);
-    if (sel >= 0 && mode === "elevation") {
+    if (prof.setSelection || sel >= 0) {
       if (prof.setSelection) prof.setSelection(sel, span);
       else prof.select(sel);
     }
@@ -2027,7 +2099,7 @@ const TrackDesigner = (function () {
     return true;
   }
 
-  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, armSpanEnd, undo: doUndo, redo: doRedo, setTheme, setLook, setAtmosphere, setPropKind, placeProp, removeProp, removePropAt, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, setHeights, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
+  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, armSpanEnd, undo: doUndo, redo: doRedo, setTheme, setLook, setAtmosphere, setPropKind, placeProp, removeProp, removePropAt, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, setHeights, selectRange, setSelectionMode, adjustElevation, profileView, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
     selectCorner, toggleHeat, trackOfTheDay, startFrom, toggleStartFrom,
     designed, useCandidate, moreLikeThis,
     setSpanWidth, setCornerBank, setKerbStyle, setBerms };

@@ -13,7 +13,7 @@ import vm from "node:vm";
 import { bootEditor, read, plain } from "../helpers/editor-vm.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
-const SCREEN_FILES = ["js/ui/dom.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/designer.js"];
+const SCREEN_FILES = ["js/ui/dom.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/designer.js"];
 
 function bootScreen(stored = {}) {
   const vmx = bootEditor(stored);
@@ -790,9 +790,9 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   const b = bootScreen();
   openGreen(b);
   const rail = b.root.querySelector(".td-rail"), stage = b.root.querySelector(".td-stage");
-  const hint = rail.querySelector(".td-hint"), stageHint = stage.querySelector(".td-hint");
+  const toolsGroup = panes(b)[0].children.find((g) => g.children.some((c) => c.children && c.children.some((t) => t.dataset && t.dataset.tool)));
+  const hint = toolsGroup.querySelector(".td-hint"), stageHint = stage.querySelector(".td-hint");
   assert.ok(hint && stageHint && hint !== stageHint);
-  const toolsGroup = panes(b)[0].children.find((g) => g.children.includes(hint));
   assert.ok(toolsGroup && toolsGroup.children.some((c) => c.classList.contains("td-chips") && c.children.every((t) => t.dataset.tool)), "the hint sits in the TOOLS group");
   assert.match(hint.textContent, /^SELECT: tap a point/);
   // css/editor.css: the phone rules hide only the stage's copy; the rail's stays.
@@ -825,7 +825,7 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   const labels = () => panes(b)[0].children.map((g) => (g.children[0] && g.children[0].classList.contains("td-label") ? g.children[0] : walk(g).find((e) => e.classList.contains("td-label")))).filter(Boolean).map((l) => l.textContent);
   // MODE + numbered groups; ELEVATION / BANKING & KERBS / LOOK stay in the DOM (mode toggles visibility).
   // #1039: 2 CORNERS stays in the rail so numbering never skips 1 → 3.
-  assert.deepEqual(labels().slice(0, 6), ["1 SHAPE", "2 CORNERS", "ELEVATION", "BANKING & KERBS", "SCENERY", "4 DETAILS"]);
+  assert.deepEqual(labels().slice(0, 7), ["SELECT POINTS", "1 SHAPE", "2 CORNERS", "ELEVATION", "BANKING & KERBS", "SCENERY", "4 DETAILS"]);
   assert.ok(labels().includes("5 CHECKS"));
   const shapeG = panes(b)[0].children.find((g) => g.children[0] && g.children[0].textContent === "2 CORNERS");
   assert.ok(shapeG && !shapeG.hidden, "2 CORNERS group stays visible under EDIT/SELECT");
@@ -1836,4 +1836,53 @@ test("SELECT END arms a touch-friendly span; stamp REPLACE uses it; group elev o
   for (let i = 5; i <= 9; i++) assert.equal(hs[i], (i - 5) + 3, "point " + i);
   assert.equal(hs[0], 0, "outside the span stays flat");
   assert.deepEqual([b.D.state().sel, b.D.state().span], [5, 9], "span selection survives group elev");
+});
+
+test("selection controls synchronize both views; elevation edits keep the range and undo once", () => {
+  const b = bootScreen(); openGreen(b);
+  const before = b.D.state(), n = before.design.pts.length;
+  b.D.setMode("elevation");
+  b.D.setSelectionMode("range");
+  b.D.selectRange(2, 5);
+  const strip = b.root.querySelector('canvas[data-role="profile"]');
+  assert.match(strip.getAttribute("aria-label"), /Span 3–6 \(4 points\)/);
+  assert.equal(b.D.state().undo, before.undo, "selection stays outside history");
+  const height = walk(b.root).find((e) => e.getAttribute("aria-label") === "Selected point height in metres");
+  b.D.setSelectionMode("point");
+  assert.equal(b.D.state().span, 5, "switching to height dragging retains the group");
+  height.value = "3.25";
+  b.dom.dispatch(height, { type: "keydown", key: "Enter", preventDefault() {} });
+  const raised = b.D.state();
+  assert.equal(raised.undo, before.undo + 1);
+  assert.deepEqual([raised.sel, raised.span], [2, 5]);
+  for (let i = 0; i < n; i++) assert.equal(raised.design.heights[i], i >= 2 && i <= 5 ? 3.25 : 0);
+  b.D.undo();
+  assert.deepEqual(b.D.state().design.heights, before.design.heights);
+  assert.doesNotMatch(strip.getAttribute("aria-label"), /Span 3–6/, "undo clears selection on both views");
+  b.D.selectRange(n - 2, 1);
+  b.D.setNodeHeight(n - 2, 2);
+  const wrap = b.D.state().design.heights;
+  for (let i = 0; i < n; i++) assert.equal(wrap[i], i >= n - 2 || i <= 1 ? 2 : 0, "wrapped range follows driving order");
+  b.D.selectRange(-1);
+  assert.equal(b.D.adjustElevation("zero"), false, "empty selection cannot edit the whole track");
+  b.D.close();
+});
+
+test("level, smooth and zero affect only selected heights and retain smooth endpoints", () => {
+  const b = bootScreen(); openGreen(b);
+  const n = b.D.state().design.pts.length, hs = new Array(n).fill(0);
+  hs[2] = 2; hs[3] = 10; hs[4] = 2; hs[5] = 4;
+  b.D.setHeights(hs); b.D.selectRange(2, 5);
+  let undo = b.D.state().undo;
+  assert.equal(b.D.adjustElevation("smooth"), true);
+  let out = b.D.state();
+  assert.equal(out.undo, undo + 1);
+  assert.deepEqual(plain(out.design.heights.slice(2, 6)), [2, 6, 4.5, 4]);
+  assert.equal(out.design.heights[1], 0); assert.equal(out.design.heights[6], 0);
+  assert.equal(b.D.adjustElevation("level"), true);
+  assert.deepEqual(plain(b.D.state().design.heights.slice(2, 6)), [2, 2, 2, 2]);
+  assert.equal(b.D.adjustElevation("zero"), true);
+  assert.ok(b.D.state().design.heights.every((h) => h === 0));
+  assert.equal(b.D.adjustElevation("zero"), false, "no-op does not add undo");
+  b.D.close();
 });

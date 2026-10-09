@@ -101,7 +101,7 @@
 /* label · − · value · + : the two keys are --tap-sm squares (paired micro-toggles) */
 .td-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--tap-sm) minmax(3em, 4em) var(--tap-sm);
+  grid-template-columns: minmax(0, 1fr) max(var(--tap-sm), var(--tap-paint)) minmax(3em, 4em) max(var(--tap-sm), var(--tap-paint));
   align-items: center;
   gap: calc(var(--gap) / 2);
   width: 100%; max-width: 100%; min-width: 0;
@@ -363,6 +363,11 @@
   height: max(72px, calc(var(--chip-h) * 2.8));
   min-height: 72px;
 }
+/* Tall portrait phones need usable picking space on BOTH views. */
+@media (max-width: 760px) and (min-height: 740px) and (orientation: portrait) {
+  #trackdesigner[data-mode="elevation"] .td-body { grid-template-rows: auto minmax(0, 1.35fr) minmax(0, 1fr); }
+  #trackdesigner[data-mode="elevation"] .td-stage > canvas[data-role="profile"] { height: max(72px, calc(var(--chip-h) * 2.2)); }
+}
 /* Banking & kerbs group (elevation mode): keep chip rows from crowding. */
 #trackdesigner[data-mode="elevation"] .td-group[data-role="bank-kerbs"] .td-chips {
   margin-top: calc(var(--gap) / 4);
@@ -392,12 +397,13 @@
 #trackdesigner [data-role="mode-bar"] .sel-chip {
   flex: 1 0 auto;
   justify-content: center;
-  padding-inline: calc(var(--gap) / 3);
+  padding-inline: calc(var(--gap) / 6);
   border-color: transparent;
   border-radius: 0;
   border-bottom: 2px solid var(--plate-line);
   background: none;
   font-size: var(--fs-micro);
+  font-family: var(--font-hud);
   font-weight: 700;
 }
 #trackdesigner [data-role="mode-bar"] .sel-chip.active { border-bottom-color: var(--red); color: var(--text); }
@@ -432,6 +438,20 @@
 #trackdesigner [data-role="themes"][hidden],
 #trackdesigner [data-role="themes"] > [hidden],
 #trackdesigner [data-role="scenery"] [hidden] { display: none; }
+
+#trackdesigner [data-role="selection"][hidden],
+#trackdesigner [data-role="selection"] [hidden] { display: none; }
+#trackdesigner [data-role="selection"] .td-hint { display: block; line-height: 1.4; }
+#trackdesigner [data-role="point-picker"] { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; }
+#trackdesigner [data-role="point-picker"] input,
+#trackdesigner [data-role="range-end"] input { width: 100%; min-width: 0; box-sizing: border-box; }
+#trackdesigner [data-role="range-end"] { display: grid; grid-template-columns: 1fr 1fr; align-items: center; }
+#trackdesigner .td-row input.td-num { min-width: 0; width: 100%; padding-inline: 0; box-sizing: border-box; }
+#trackdesigner [data-role="profile-view"] .td-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#trackdesigner [data-role="profile-view"] button { padding-inline: calc(var(--gap) / 3); }
+@media (min-width: 761px) and (min-height: 600px) {
+  #trackdesigner[data-mode="elevation"] .td-stage > canvas[data-role="profile"] { height: calc(var(--chip-h) * 4.5); }
+}
 
 @container (max-width: 320px) {
   #trackdesigner .td-row:has([data-look]) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
