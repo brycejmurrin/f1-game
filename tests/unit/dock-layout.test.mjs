@@ -19,7 +19,14 @@ function loadDock() {
     document: { documentElement: {} },
     getComputedStyle() { return { getPropertyValue() { return "0"; } }; },
   };
-  vm.runInNewContext(SRC.replace(/^const\b/gm, "var"), ctx);
+  vm.createContext(ctx);
+  // The real CssZoom (window.CssZoom IIFE) — dock-layout reads the dock's own zoom through it.
+  ctx.document.createElement = () => ({ style: {}, getBoundingClientRect: () => ({ width: 200 }) });
+  ctx.document.documentElement.appendChild = () => {};
+  ctx.document.documentElement.removeChild = () => {};
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/css-zoom.js"), "utf8"), ctx);
+  ctx.CssZoom = ctx.window.CssZoom;
+  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx);
   return ctx.DockLayout;
 }
 const DL = loadDock();
@@ -84,6 +91,21 @@ test("apply writes translate for a non-zero offset and clears at identity", () =
   left.style.transform = "translate(1px, 1px)";
   DL.apply("buttons", bag, { L: left, R: right });
   assert.equal(left.style.transform, "");
+});
+
+// Bug hunt 2 H16: the dock carries its own CSS `zoom` (>= 1 on touch layouts), and a
+// transform inside a zoomed element is scaled by that zoom, so a translate written in
+// viewport px moved the dock zoom x the finger. apply() divides by the element's zoom.
+test("apply divides the translate by the dock's own CSS zoom", () => {
+  const plain = dockEl(), zoomed = dockEl();
+  zoomed.currentCSSZoom = 2;
+  const bag = DL.normalize({});
+  bag.buttons.L = { x: 0.25, y: 0.1 };   // pad 400x800 -> 100px right, 80px up in the viewport
+  DL.apply("buttons", bag, { L: plain, R: zoomed });
+  bag.buttons.R = { x: 0.25, y: 0.1 };
+  DL.apply("buttons", bag, { L: plain, R: zoomed });
+  assert.equal(plain.style.transform, "translate(100.0px, -80.0px)");
+  assert.equal(zoomed.style.transform, "translate(-50.0px, -40.0px)", "zoom 2 halves both axes");
 });
 
 test("switching scheme applies that scheme's offsets only", () => {
