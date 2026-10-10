@@ -26,6 +26,9 @@
  *     dropped, sub-step remainder included — which carries, not drops.
  *   - WAITING FOR PLAYERS: the card re-shows every 3 s while a room waits for
  *     its shared start, and each re-show was a fresh squelch and voice line.
+ *   - RESUME COUNTDOWN (2026-10-10, a behaviour change): RESUME restarted the
+ *     sim on the frame it was tapped, mid-corner at race speed. A solo race
+ *     now holds ~1.2 s on the start plate (3, 2, 1); a net race does not.
  *
  * Run: node --test tests/unit/race-flow-fixes-vm.test.mjs
  */
@@ -296,4 +299,50 @@ test("startRaceBody aborts to the menu when the race-session bundle failed to lo
   assert.match(body, /const sessionOk = await ensureRaceSession\(\);/);
   assert.match(body, /if \(!sessionOk\) \{ loadingScreen\.stop\(\); quitToMenu\(\); announce\("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"\); return false; \}/);
   assert.ok(body.indexOf("if (!sessionOk)") < body.indexOf("await ensureAudio()"), "the abort comes before anything starts the race");
+});
+
+test("RESUME holds a solo race ~1.2 s on the start plate, a pause cancels it, and a net race resumes at once", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G, $ = (id) => g.sandbox.document.getElementById(id), lights = $("lights");
+    g.apex.headless(true);
+    assert.equal(G.state, "race");
+    let t = g.sandbox.performance.now() + 1000;
+    const run = (s) => { for (let i = 0; i < Math.round(s * 60); i++) g.pumpFrame(t += 1000 / 60); };
+    // setPaused stamps lastFrame from the real clock, as a browser's next rAF stamp
+    // follows it; re-base the pumped clock there or the first frame is a 0.25 s gap.
+    const resume = () => { $("pm-resume").onclick(); t = g.sandbox.performance.now(); };
+    run(0.2);
+    $("pausebtn").onclick(); run(0.1); resume();
+    assert.equal(G.paused, false);
+    let t0 = G.raceT;
+    run(0.5);
+    assert.equal(G.raceT, t0, "no physics step in the first 0.5 s after RESUME");
+    assert.equal(lights.hidden, false, "the start plate carries the count");
+    assert.equal(lights.dataset.count, "2", "3, 2, 1 at 0.4 s a beat");
+    // A second pause mid-count cancels it cleanly; the next RESUME counts from 3 again.
+    $("pausebtn").onclick();
+    assert.equal(lights.hidden, true, "pausing drops the plate");
+    run(0.1); resume();
+    assert.equal(lights.dataset.count, "3");
+    // RECOVER CAR (PR #1385's pause tile) is setPaused(false) and then the R-key edge:
+    // the hold keeps that edge for its first live frame instead of clearing it as a pause does.
+    const p = G.player, rescued = p.rescueLastT;
+    vm.runInContext('Input.remoteEvent("recover")', g.ctx);
+    run(1.1);
+    assert.equal(G.raceT, t0, "still held at 1.1 s");
+    run(0.3);
+    assert.ok(G.raceT > t0, `the sim runs again after the count (raceT ${G.raceT} vs ${t0})`);
+    assert.equal(lights.hidden, true, "the plate clears at the end of the count");
+    assert.notEqual(p.rescueLastT, rescued, "a RECOVER pressed during the count lands when it ends");
+    // A NETWORKED race runs on under the card and never holds.
+    const active = G.netPlay.active;
+    G.netPlay.active = () => true;
+    try {
+      $("pausebtn").onclick(); resume();
+      t0 = G.raceT;
+      run(0.2);
+      assert.ok(G.raceT > t0, "a net race steps at once after RESUME");
+    } finally { G.netPlay.active = active; }
+  } finally { g.close(); }
 });

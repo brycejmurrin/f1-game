@@ -201,7 +201,7 @@ test("hidden mirror preparation keeps the handoff up until its main present", ()
 test("race-entry ticks pump input and network while holding physics and governor", () => {
   const source = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   const start = source.indexOf("function tickBody(now) {");
-  const end = source.indexOf("  if (paused && !netPlay.active())", start);
+  const end = source.indexOf("  if ((paused || UiExperience.resumeHolding(dt)) && !netPlay.active())", start);
   const calls = [];
   let preparing = true, warming = false;
   const ctx = {

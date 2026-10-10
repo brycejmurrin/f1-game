@@ -23,7 +23,45 @@ const UiExperience = (function () {
     parts.push("LAP " + Math.max(1, G.timeTrial ? (p.lap || 1) : Math.min(p.lap || 1, G.lapsTarget)) + (G.timeTrial ? "" : " / " + G.lapsTarget));
     if (G.practice) parts.push("PRACTICE");
     if (G.netPlay && G.netPlay.active()) parts.push("ONLINE · RACE CONTINUES");
-    return { title: t.name || t.id, detail: parts.join(" · ") };
+    // A career round's brief stays on the pause card with whether it is on
+    // target (js/career/experience.js): before 2026-10-10 the player saw it on
+    // the hub and next on the results sheet, and nothing in between.
+    const objective = typeof CareerExperience !== "undefined" ? CareerExperience.objectiveStatus(G) : "";
+    return { title: t.name || t.id, detail: parts.join(" · "), objective };
+  }
+
+  /* RESUME COUNTDOWN. RESUME used to restart physics on the frame it was
+     tapped, so a phone player came back mid-corner at race speed with the
+     thumb still lifting off the button — or, after an app switch, with TILT
+     off its calibrated angle. A solo race now holds RESUME_S on the start
+     plate (3, 2, 1 — G.handoverCount, the jump-in's count, no node of its own)
+     before the sim runs again. js/game.js arms it from setPaused (solo, racing,
+     not WATCH, not RESTART; a pause disarms it) and asks resumeHolding(dt) at
+     its paused gate, which also renders through the hold. QUIT or RESTART
+     during it leaves "race", and their own resets own the plate. Never under
+     automation (navigator.webdriver), the blur pause's exemption, so browser
+     specs keep their resume timing. */
+  const RESUME_S = 1.2, BEATS = 3;
+  let resumeG = null, resumeT = 0, resumeShown = null;
+  function resumePlate(v) {
+    if (v === resumeShown) return;
+    resumeShown = v;
+    if (resumeG && resumeG.handoverCount) resumeG.handoverCount(v);
+  }
+  function resumeArm(G, on) {
+    const was = resumeT > 0;
+    resumeG = G;
+    resumeT = on && !(typeof navigator !== "undefined" && navigator.webdriver) ? RESUME_S : 0;
+    if (resumeT > 0) resumePlate(BEATS);
+    else if (was) resumePlate(null);
+  }
+  function resumeHolding(dt) {
+    if (!(resumeT > 0)) return false;
+    if (!resumeG || resumeG.state !== "race") { resumeT = 0; resumeShown = null; return false; }
+    resumeT -= dt;
+    if (resumeT <= 0) { resumeT = 0; resumePlate(null); return false; }
+    resumePlate(Math.ceil(resumeT / (RESUME_S / BEATS)));
+    return true;
   }
 
   /* textContent on #mb-photo used to wipe the .mb-sub ("CAPTURE & BACKGROUNDS")
@@ -217,6 +255,7 @@ const UiExperience = (function () {
       deps.coach.paint();
       const info = raceBrief(G);
       context.replaceChildren(node("strong", info.title), node("span", info.detail));
+      if (info.objective) context.appendChild(node("small", info.objective));
       const strategy = $("pm-pit-estimate");
       const next = $("pm-pit-help");
       if (next && G.tyres.on()) context.appendChild(node("small", next.textContent.split("Drive into")[0]));
@@ -517,6 +556,6 @@ const UiExperience = (function () {
         $("game").style.visibility = ""; const soft = $("game-soft"); if (soft) soft.style.visibility = ""; },
       state: () => ({ home, painted, failure, scene: scene(), world: world.state() }) };
   }
-  return { create, raceBrief, openPhoto, homeVariation, isPracticePick, leavePracticePick };
+  return { create, raceBrief, openPhoto, homeVariation, isPracticePick, leavePracticePick, resumeArm, resumeHolding };
 })();
 Object.freeze(UiExperience);
