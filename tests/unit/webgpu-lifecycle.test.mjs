@@ -2871,6 +2871,9 @@ test("WGX per-chunk lamp table: freeing a track's meshes rewinds the allocator i
     drawBindGroup: null, drawRing: new Float32Array(64 * 8), identInstanceBuf: null, bindLitVerts() {}, drawGeom() {},
     frameViewProj: null, frameNL: 0, frameLights: null, fcPlanes: [], framePerChunk: 1, frameRoadChunkLamps: 1,
     CHUNK_IDX_CAP: 16384, chunkIdxSBO: {}, device: { queue: { writeBuffer: (...a) => writes.push(a) } },
+    // freeChunkedMesh routes GPU buffers through core.freeBuf (retire-while-
+    // recording); this suite only asserts the lamp-table cursor rewind.
+    freeBuf() {},
   };
   // 400 lamps along a line; each "mesh" is 120 chunks of 20 m cells beside it, so every chunk binds a few lamps.
   const lamps = new Float32Array(400 * 15);

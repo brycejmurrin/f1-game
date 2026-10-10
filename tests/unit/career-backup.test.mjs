@@ -84,7 +84,14 @@ function loadHarness(options = {}) {
       LIST: [team],
       isReal: (t) => !!t && !t.custom && !t.legends,
     },
-    Tracks: { LIST: [{ id: "a" }], SEASON: [{ id: "a" }], seasonIndex: () => 0 },
+    // SEASON needs enough rounds that a restored season.round (SEC2-1 / C8 use
+    // 3–4) is still in range — SeasonCal.load() resume()s then save()s, and a
+    // single-circuit calendar restarts any round > 1 back to 0.
+    Tracks: {
+      LIST: Array.from({ length: 24 }, (_, i) => ({ id: "t" + i })),
+      SEASON: Array.from({ length: 24 }, (_, i) => ({ id: "t" + i })),
+      seasonIndex: () => 0,
+    },
     Parts: { CATALOG: [], getFactorySetup: () => ({}), getCost: () => 0, setLegality() {} },
     DriverRatings: {
       get: () => ({ pace: 50, craft: 50, awareness: 50, consistency: 50, experience: 50 }),
