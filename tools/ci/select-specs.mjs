@@ -33,6 +33,7 @@ import { ADAPTED, ADAPTED_RUNNER, isTwinned, twinOf } from "./twinned-specs.mjs"
 import { changedPaths } from "../lib/changed-files.mjs";
 import { changeKind } from "./change-kind.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
+import { loadQuarantine } from "../../tests/helpers/flaky-policy.mjs";
 import * as espree from "espree";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -284,11 +285,16 @@ export const MAX_FAILURES = 3;
 // fixed gate's own critical path (vm-a, ~6 min), so the selection is rarely
 // the last job to finish.
 export const TARGET_SHARD_SEC = 360;
-// Passing selected legs should finish in about 10 minutes of runner time
-// (career shards were 27-34 min because shardCapMin priced three 540 s
-// timeouts). The kill timer is a ceiling for a passing run plus setup, not
-// "every test times out". --max-failures still stops a red early.
-export const MAX_SELECTED_JOB_MIN = 10;
+// The kill timer's CEILING: what shardCapMin may grant a packed leg. Passing
+// legs still finish in about 10 minutes of runner time (career shards were
+// 27-34 min when shardCapMin priced three 540 s timeouts); the ceiling is room
+// for a slow runner, not "every test times out" — --max-failures still stops a
+// red early. It was 10 until 2026-10-10 (R3-CI-HEALTH-6), which gave a leg
+// packed to TARGET_SHARD_SEC only ~1.6x its work: ship 37996125261 selected-5
+// was killed at 9.7 min after `+ pass 101/104` (561 s of passing tests against
+// 360 s billed) and 38020479662 selected-2 at 10.3 min after 85/87, both runs
+// then `cancelled`. 18 holds 2x a full leg's work plus setup and wrap-up.
+export const MAX_SELECTED_JOB_MIN = 18;
 // Fat UI files (career*, hud-layout) cannot use Playwright --shard (it
 // splits GROUPS). One job, 2 workers. PR #1075 run 37446472987: career
 // 27/37 passed then cancelled at 9 min (~39 s/test); career-season 15/36
@@ -296,8 +302,12 @@ export const MAX_SELECTED_JOB_MIN = 10;
 // so billed seconds are a lie; floor the plan and the kill timer here.
 export const FAT_UI_SEC_PER_TEST = 45;
 export const FAT_UI_SELECTED_JOB_MIN = 18;
-// Over-budget / high-timeout specs (career, hud-layout): Playwright --shard
-// so each leg has this many tests, not one 30-minute packed file.
+// Over-budget / high-timeout specs with NO CI measurement: Playwright --shard
+// so each leg has this many tests, not one 30-minute packed file. A spec with
+// a measured median is split by its measured TIME instead (shards(),
+// R3-CI-HEALTH-3): new-hooks declares 540 s a test and runs ~6, and this
+// count rule made seven 46 s jobs of it — 20 of the 30 legs of ship run
+// 38041862767 ran under 2 min of tests, each paying setup and a queue slot.
 export const MAX_TESTS_PER_JOB = 8;
 // Specs that declare this much (or more) per test NEVER share a selected job.
 // terrain-over-road still declares 1500 s for an all-circuits walk (props-
@@ -411,22 +421,28 @@ export function megaSoloFlags(args) {
   return out;
 }
 
-// Minutes a job may take before the runner kills it: twice its expected work
-// (runner variance), plus MAX_FAILURES timeouts at the slowest per-test
-// timeout in it, plus setup (npm ci + chromium + Mesa) and margin. A ceiling,
-// not the spend: a passing run never approaches it. A killed job reads as
-// "0 failures", which this file's history shows hiding a dead deploy, so the
-// cap is derived from the plan, never guessed.
-export const shardCapMin = (expectedSec, _perTestSec = SELECTED_GATE.perTestTimeoutSec, maxMin = MAX_SELECTED_JOB_MIN) => {
-  const setupMin = 3;
-  // Wrap-up (junit upload) + Mesa apt variance. PR #1109 image-grade-visual
-  // 1of2: 5/5 passed in 379 s after 113 s Mesa; the 8 min cap (workMin 5 +
-  // setup 3) killed the job during artifact upload. PR #1113 tlx-probes 1of3
-  // billed 6 tests / 6 min then mega-peel dropped --shard and ran all 17.
-  const wrapMin = 2; // selected wrap-up headroom (PR #1109/#1113/#1114)
+// Minutes a job may take before the runner kills it: TWICE its expected work
+// (runner variance — 561 s of passing tests ran in a leg billed 360 s), plus
+// one per-test timeout at the slowest timeout in it (one more per retry, on a
+// quarantine leg) so a single hung test fails by its own timeout instead of
+// killing the job, plus setup (npm ci + chromium + Mesa) and wrap-up — under
+// `maxMin`. A ceiling, not the spend: a passing run never approaches it. A
+// killed job reads as "0 failures", which this file's history shows hiding a
+// dead deploy, so the cap is derived from the plan, never guessed. Until
+// 2026-10-10 it was work + 5 min under a 10 min ceiling, i.e. ~1.6x for a full
+// leg, while this comment promised 2x (R3-CI-HEALTH-6).
+export const SELECTED_SETUP_MIN = 3;
+// Wrap-up (junit upload) + Mesa apt variance. PR #1109 image-grade-visual
+// 1of2: 5/5 passed in 379 s after 113 s Mesa; the 8 min cap (workMin 5 +
+// setup 3) killed the job during artifact upload. PR #1113 tlx-probes 1of3
+// billed 6 tests / 6 min then mega-peel dropped --shard and ran all 17.
+export const SELECTED_WRAP_MIN = 2; // selected wrap-up headroom (PR #1109/#1113/#1114)
+export const shardCapMin = (expectedSec, perTestSec = SELECTED_GATE.perTestTimeoutSec, maxMin = MAX_SELECTED_JOB_MIN, retries = 0) => {
   const workMin = Math.ceil(Math.max(0, expectedSec) / 60);
-  return Math.min(maxMin, Math.max(6, workMin + setupMin + wrapMin));
+  const timeoutMin = Math.ceil(Math.max(0, perTestSec) / 60) * (1 + Math.max(0, retries));
+  return Math.min(maxMin, Math.max(6, 2 * workMin + timeoutMin + SELECTED_SETUP_MIN + SELECTED_WRAP_MIN));
 };
+
 
 /** Seconds one row of the plan is expected to take: its tests at the spec's
  *  own measured rate, or the fallback (select-budget's MEASURED). */
@@ -720,7 +736,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
  *  cache key (two "Unable to reserve cache") and uploaded three artifacts
  *  called `spec-timings-junit-selected-selected`. Budgeted bins are now
  *  `selected-<i>`, and a final pass suffixes any repeat. */
-export function shards(r, db = timings()) {
+export function shards(r, db = timings(), quarantine = loadQuarantine()) {
   const items = [];
   const cost = (x) => (x.sec != null ? x.sec : expectedSec(x, db));
   for (const s of [...(r.selected || []).map((x) => ({ ...x, budgeted: true })), ...(r.oversize || []), ...(r.overflow || []),
@@ -730,9 +746,19 @@ export function shards(r, db = timings()) {
     const perTest = Math.max(SELECTED_GATE.perTestTimeoutSec, s.ownTimeoutSec || 0);
     const base = path.basename(s.file, ".spec.js");
     const nTime = Math.max(1, Math.ceil(sec / TARGET_SHARD_SEC));
-    const nTests = (s.ownTimeoutSec || 0) >= SELECTED_GATE.perTestTimeoutSec
-      ? Math.max(1, Math.ceil(s.tests / MAX_TESTS_PER_JOB))
-      : 1;
+    // A spec that DECLARES the gate's per-test timeout or more is split by its
+    // MEASURED time when CI has measured it (R3-CI-HEALTH-3): legs of at most
+    // TARGET_SHARD_SEC, each killed no sooner than 2x its work plus one of the
+    // spec's own declared timeouts (shardCapMin, up to the ceiling). By test
+    // count (MAX_TESTS_PER_JOB) only when its cost is the fallback guess.
+    const declaredSlow = (s.ownTimeoutSec || 0) >= SELECTED_GATE.perTestTimeoutSec;
+    const measured = specSecPerTest(s.file, db).source === "measured";
+    const nTests = declaredSlow && !measured ? Math.max(1, Math.ceil(s.tests / MAX_TESTS_PER_JOB)) : 1;
+    // A QUARANTINED spec (tests/data/flaky-quarantine.json) runs in a leg of
+    // its own with one retry (R3-CI-HEALTH-4): the gate is otherwise
+    // --retries=0, so a quarantined flake could never pass on retry and the
+    // quarantine was inert here. Nothing else ever shares that retry.
+    const retries = quarantine.has(s.file) ? 1 : 0;
     // Pages 37420997285 job oversize-career-1of5: Playwright --shard splits
     // TEST GROUPS, not tests. A default-mode describe is one group, so shard
     // 1/5 of career.spec.js ran ~101 tests (~22 min) while 2–5 finished in
@@ -744,20 +770,20 @@ export function shards(r, db = timings()) {
       const secFat = Math.max(sec / workers, (s.tests * FAT_UI_SEC_PER_TEST) / workers);
       items.push({ solo: true, name: `oversize-${base}`, files: [s.file], shard: "",
         tests: s.tests, sec: Math.max(1, secFat), perTest, workers,
-        maxCapMin: FAT_UI_SELECTED_JOB_MIN });
+        maxCapMin: FAT_UI_SELECTED_JOB_MIN, retries });
       continue;
     }
     const n = Math.max(nTime, nTests);
     if (n > 1) {
       for (let i = 1; i <= n; i++) {
         items.push({ solo: true, name: `oversize-${base}-${i}of${n}`, files: [s.file], shard: `${i}/${n}`,
-          tests: Math.ceil(s.tests / n), sec: sec / n, perTest, workers: 1 });
+          tests: Math.ceil(s.tests / n), sec: sec / n, perTest, workers: 1, retries });
       }
       continue;
     }
-    const solo = !!s.capacityFallback || /menu-baseline/.test(s.file) || (s.ownTimeoutSec || 0) >= SOLO_OWN_TIMEOUT_SEC;
+    const solo = !!s.capacityFallback || /menu-baseline/.test(s.file) || (s.ownTimeoutSec || 0) >= SOLO_OWN_TIMEOUT_SEC || retries > 0;
     items.push({ solo, budgeted: !!s.budgeted, pool: s.pool || false, name: `oversize-${base}`,
-      files: [s.file], shard: "", tests: s.tests, sec, perTest, workers: 1 });
+      files: [s.file], shard: "", tests: s.tests, sec, perTest, workers: 1, retries });
   }
   const bins = [];
   for (const it of items.filter((x) => x.solo)) bins.push({ ...it, items: [it] });
@@ -785,9 +811,11 @@ export function shards(r, db = timings()) {
     const sec = Math.round(b.sec);
     const workers = Math.max(1, ...b.items.map((x) => x.workers || 1));
     const maxCapMin = Math.max(MAX_SELECTED_JOB_MIN, ...b.items.map((x) => x.maxCapMin || MAX_SELECTED_JOB_MIN));
+    // ci.yml passes it as --retries: 1 only on a quarantined spec's own leg.
+    const retries = Math.max(0, ...b.items.map((x) => x.retries || 0));
     return { name, specs: files.join(" "), shard: b.solo ? b.shard : "",
-      tests: b.items.reduce((n, x) => n + x.tests, 0), sec, perTest, workers,
-      timeout: shardCapMin(sec, perTest, maxCapMin),
+      tests: b.items.reduce((n, x) => n + x.tests, 0), sec, perTest, workers, retries,
+      timeout: shardCapMin(sec, perTest, maxCapMin, retries),
       // APEX_CIRCUITS for the job: empty = every circuit (see select()).
       circuits: (r.circuits || []).join(",") };
   });

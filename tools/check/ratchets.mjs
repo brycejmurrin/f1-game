@@ -137,10 +137,26 @@ export async function measure(data = load()) {
   return rows;
 }
 
-export function verdict(rows) {
+/** Is a LOOSE ceiling (value BELOW it by more than its slack) advisory here?
+ *  (R3-CI-HEALTH-1 follow-up, 2026-10-10.) Two green PRs that each remove one
+ *  raw colour both write rawColor 338 -> 337; git merges the identical hunks
+ *  cleanly, the merged tip measures 336, and a slack-0 entry then turned the
+ *  DEPLOY TIP red on an improvement (ship runs 38042136314 / 38044675617) —
+ *  holding the release train for an hour, on a push no author can `--update`
+ *  from. So below-ceiling is advisory on every GitHub event but
+ *  `pull_request` (push, schedule, the Pages call — whose event is the
+ *  caller's — and dispatch), and stays fatal on a PR, where the author can
+ *  lower it, and locally, where nothing sets GITHUB_EVENT_NAME (the commit
+ *  hook lowers it on the way through). OVER a ceiling is fatal everywhere. */
+export function looseAdvisory(env = process.env) {
+  const ev = env.GITHUB_EVENT_NAME || "";
+  return ev !== "" && ev !== "pull_request";
+}
+
+export function verdict(rows, { looseAdvisory: advisory = false } = {}) {
   const over = rows.filter((r) => r.over > 0);
   const loose = rows.filter((r) => !r.missing && r.slack > r.slackMax);
-  return { ok: over.length === 0 && loose.length === 0, over, loose, rows };
+  return { ok: over.length === 0 && (advisory || loose.length === 0), over, loose, looseAdvisory: advisory, rows };
 }
 
 export function updateReceipt(rows, { lowerOnly = false } = {}) {
@@ -346,14 +362,19 @@ async function main() {
     return;
   }
   let v;
-  try { v = verdict(await measure()); }
+  try { v = verdict(await measure(), { looseAdvisory: looseAdvisory() }); }
   catch (e) { console.error(`ratchets: ${e.message}`); process.exitCode = 2; return; }
   if (argv.includes("--json")) { console.log(JSON.stringify(v, null, 2)); process.exitCode = v.ok ? 0 : 1; return; }
   // A tree metric's number says something drifted; --offenders says WHERE, which
   // is the half a bare count cannot carry.
   const where = (r) => (r.tree ? " — breakdown: node tools/check/tree-counts.mjs --offenders" : "");
   for (const r of v.over) console.log(`OVER   ${r.file} ${r.metric}: ${r.value} > ceiling ${r.ceiling} (+${r.over}) — extract, or raise it deliberately and say why in the commit${where(r)}`);
-  for (const r of v.loose) console.log(`LOOSE  ${r.file} ${r.metric}: ${r.value} but ceiling ${r.ceiling} (slack ${r.slack} > ${r.slackMax}) — lower it: node tools/check/ratchets.mjs --update`);
+  for (const r of v.loose) {
+    const msg = `LOOSE  ${r.file} ${r.metric}: ${r.value} but ceiling ${r.ceiling} (slack ${r.slack} > ${r.slackMax}) — lower it: node tools/check/ratchets.mjs --update`
+      + (v.looseAdvisory ? ` (advisory on ${process.env.GITHUB_EVENT_NAME}: an improvement; the PR run is the gate)` : "");
+    console.log(v.looseAdvisory && process.env.GITHUB_ACTIONS === "true"
+      ? `::warning file=tests/data/ratchets.json,title=ratchet loose::${msg}` : msg);
+  }
   if (v.ok) {
     const d = load();
     console.log(`ratchets: ${v.rows.length} metrics on ${Object.keys(d.files).length} files + ${Object.keys(d.tree || {}).length} tree-wide, all at or under their ceilings`);
