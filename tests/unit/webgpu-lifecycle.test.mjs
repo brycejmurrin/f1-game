@@ -2849,3 +2849,49 @@ test("WGX PCSS blocker: r32float, the full 16-texel footprint min, read with tex
   assert.match(blk, /for \(var y = 0; y < 4; y\+\+\)[\s\S]*for \(var x = 0; x < 4; x\+\+\)/);
   assert.match(blk, /m = min\(m, textureLoad\(depthTex, min\(base \+ vec2<i32>\(x, y\), dims - vec2<i32>\(1\)\), 0\)\);/);
 });
+
+// 08-F2: the per-chunk lamp table cursor only ever advanced. wgx.js resets it when the lamp SET moves, but
+// frame.allLights is one reused buffer, so every night track build appended ~2.6-3.4k entries (measured on
+// vegas/singapore/monaco/bahrain/jeddah: 13.0k-15.0k after five builds) until the 16384-entry buffer overflowed and
+// terrain/road/props fell back to the nearest-48 global set. Freeing the last mesh that holds a segment rewinds it.
+test("WGX per-chunk lamp table: freeing a track's meshes rewinds the allocator instead of leaking it (08-F2)", async () => {
+  const ctx = vm.createContext({ window: {}, Float32Array, Uint32Array, Float64Array, Math, WeakMap, Map, Array, Object, Number,
+    GPUBufferUsage: {} });
+  seedLog(ctx);
+  const run = (src, tail) => vm.runInContext(`${src.replace(/^const\b/gm, "var")}\n${tail || ""}`, ctx);
+  run(LIGHT_BUDGET_SOURCE); run(FRUSTUM_SOURCE);
+  run(await readFile(new URL("js/render/shared/lamp-chunks.js", ROOT), "utf8"));
+  run(WGX_CHUNKED_SOURCE);
+  const writes = [];
+  const core = {
+    litPass: { setBindGroup() {} }, litOpts: () => ({ surfaceId: 0 }), allocDrawSlot: () => 0, writeDraw() {}, setPipe() {},
+    litPipeline: () => null, setBG0() {}, activeFrameBG: null, dynOff: [0], DRAW_STRIDE: 256, DRAW_F32_STRIDE: 64,
+    drawBindGroup: null, drawRing: new Float32Array(64 * 8), identInstanceBuf: null, bindLitVerts() {}, drawGeom() {},
+    frameViewProj: null, frameNL: 0, frameLights: null, fcPlanes: [], framePerChunk: 1, frameRoadChunkLamps: 1,
+    CHUNK_IDX_CAP: 16384, chunkIdxSBO: {}, device: { queue: { writeBuffer: (...a) => writes.push(a) } },
+  };
+  // 400 lamps along a line; each "mesh" is 120 chunks of 20 m cells beside it, so every chunk binds a few lamps.
+  const lamps = new Float32Array(400 * 15);
+  for (let i = 0; i < 400; i++) { const o = i * 15; lamps[o] = i * 18; lamps[o + 1] = 6; lamps[o + 2] = 0; lamps[o + 6] = 30; }
+  core.frameAllLights = lamps;
+  const chunkSet = () => Array.from({ length: 120 }, (_, i) => ({ min: [i * 60, 0, -10], max: [i * 60 + 60, 4, 10], count: 3, firstIndex: 0 }));
+  const API = vm.runInContext("WGXChunked", ctx).init(core);
+  const track = () => Array.from({ length: 4 }, () => ({ vbuf: {}, chunks: chunkSet() }));   // props, terrain, road, glass
+  const drawAll = (t) => t.forEach((m) => API.drawChunked(m, new Float32Array(16), {}));
+  const freeAll = (t) => t.forEach((m) => API.freeChunkedMesh(Object.assign(m, { vbuf: null })));
+  const t1 = track();
+  drawAll(t1);
+  const one = API.ciCursor;
+  assert.ok(one > 1000, "a night track appends a real table (got " + one + ")");
+  // Another mesh still live: a partial free must not rewind under it.
+  const keep = t1.slice(2), drop = t1.slice(0, 2);
+  freeAll(drop);
+  assert.equal(API.ciCursor, one, "frees while meshes are still live keep their regions");
+  freeAll(keep);
+  assert.equal(API.ciCursor, 0, "the last free rewinds");
+  for (let i = 0; i < 12; i++) { const t = track(); drawAll(t); freeAll(t); }
+  assert.equal(API.ciCursor, 0);
+  const t2 = track(); drawAll(t2);
+  assert.equal(API.ciCursor, one, "the next track starts from zero, not from the sum of its predecessors");
+  assert.ok(API.ciCursor < core.CHUNK_IDX_CAP, "no table ever overflowed");
+});

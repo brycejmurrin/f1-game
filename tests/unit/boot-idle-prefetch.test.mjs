@@ -17,7 +17,8 @@ test("raceAssets schedules scenery on microtask and LAZY_RACE on idle", () => {
   assert.match(src, /else setTimeout\(fn, Math\.min\(ms, 800\)\)/, "Safari timer fallback");
   assert.match(src, /function raceAssets\(\)/, "sync scheduler (not async await on critical path)");
   assert.match(src, /queueMicrotask\(kickScenery\)/, "scenery on microtask (game-vm rIC is a no-op)");
-  assert.match(src, /scheduleIdle\(\(\) => \{\s*if \(window\.LightPresets\) return/, "lights on idle");
+  assert.match(src, /scheduleIdle\(\(\) => \{ ensureLightPresets\(\); \}, 2500\)/, "lights on idle");
+  assert.match(src, /function ensureLightPresets\(\) \{\s*if \(window\.LightPresets\) return/, "idle lights fetch is a no-op once the presets are resident");
   assert.doesNotMatch(src, /ensureCircuit\(deps\.getContext\(\)\.trackIdx\);\s*ensureScenery/,
     "no redundant ensureCircuit kick beside ensureScenery");
   assert.match(src, /TrackBuildClient\.idleWarm/, "build worker warm from raceAssets");

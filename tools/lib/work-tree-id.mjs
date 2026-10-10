@@ -35,6 +35,15 @@ export function workTreeId(cwd = ROOT, run = spawnSync) {
   const tmp = `${real}.tree-id-${process.pid}`;
   try {
     fs.copyFileSync(real, tmp);
+    // KEEP THE REAL INDEX'S MTIME ON THE COPY. git decides "racily clean" (an
+    // entry whose mtime is not older than the index file's, so a same-size
+    // rewrite in the same timestamp tick would look unchanged) by comparing each
+    // entry with the INDEX FILE's mtime, and copyFileSync gives the copy a fresh
+    // one: every entry then looked safely older, git trusted its stat cache and
+    // `add -A` returned the PREVIOUS tree for a same-size edit (a ready-gate test
+    // flaked on CI this way). The original's mtime keeps exactly the entries
+    // git itself would re-hash, at the cost of re-hashing only those.
+    try { const st = fs.statSync(real); fs.utimesSync(tmp, st.atimeMs / 1000, st.mtimeMs / 1000); } catch { fs.utimesSync(tmp, 0, 0); }
     const env = { GIT_INDEX_FILE: tmp };
     if (git(["add", "-A", "--", "."], env).status !== 0) return null;
     const w = git(["write-tree"], env);

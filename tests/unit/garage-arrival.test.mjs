@@ -78,7 +78,12 @@ test('reduce-motion Start Race plays the drive-out at the tuner\'s own pace: no 
   const out = cam.slice(cam.indexOf('function startDriveOut()'), cam.indexOf('function driveOutLeft()'));
   assert.ok(!/reducedMotion\(\)/.test(out), 'startDriveOut reads no motion flag: reduce plays the same drive-out');
   assert.match(out, /const play = Object\.assign\(\{\}, cfg, \{ enabled: true \}\);\s*driveOut = \{ t: 0, cfg: play \};\s*return Math\.round\(GarageArrival\.OUT_DURATION \* 1000 \/ play\.speed\);/, 'wall ms at cfg.speed');
-  assert.match(out, /if \(!cfg\.enabled\) return 0;/, 'only the tuner can turn it off');
+  assert.match(out, /if \(!cfg\.enabled\) return 0;/, 'only the tuner can turn it off for a player');
+  // Player pace: speed 1 (the default) → OUT_DURATION, ~7.6 s, never trimmed.
+  assert.ok(Math.abs(Arrival.OUT_DURATION * 1000 / Arrival.settings(null).speed - 7600) <= 400, 'the default drive-out is the tuned ~7.6 s');
+  // Automation (the harness) skips it through the ONE shared gate, nothing else.
+  assert.match(out, /if \(typeof LoadingScreen !== "undefined" && LoadingScreen\.isAutomation && LoadingScreen\.isAutomation\(\)\) return 0;/, 'harness launches skip the drive-out via LoadingScreen.isAutomation');
+  assert.ok(!/webdriver/.test(out), 'no scattered navigator.webdriver check: the shared gate decides');
 });
 
 test('studio drive-out (poseOut): shutter opens first, then parked beat, then nose first out', () => {
