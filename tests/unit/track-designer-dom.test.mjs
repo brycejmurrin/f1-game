@@ -1492,6 +1492,8 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   Object.assign(b.G, {
     state: "menu", player: null, track: null, timeTrial: false, seasonMode: true,
     startRace: async () => { calls.push(["startRace", b.G.trackIdx, b.G.timeTrial, b.G.seasonMode, b.D.isOpen()]); b.G.state = "count"; b.G.track = tr; b.G.player = Object.assign({}, grid); },
+    // The pre-race screen every solo start plays (card, flyby): it runs the start itself, later.
+    raceIntro: (go) => { calls.push(["raceIntro"]); Promise.resolve().then(go); },
     goRolling: () => { calls.push(["goRolling"]); if (b.G.state !== "count") return false; b.G.state = "race"; return true; },
     snapGameCam: () => calls.push(["snap"]), refreshHud: () => calls.push(["hud"]),
     quitToMenu: () => { calls.push(["quit"]); b.G.state = "menu"; b.C.consumeTrackHash(); },
@@ -1514,7 +1516,7 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.equal(await b.D.testHere(), true);
   const id = b.D.state().library[0];
   assert.ok(id && b.D.state().design.originId === id, "saved first");
-  assert.deepEqual(plain(calls), [["startRace", b.Tracks.LIST.findIndex((t) => t.id === id), true, false, false], ["snap"], ["hud"], ["goRolling"]], "trackIdx + time trial + gp flow, closed, then the drop and the green");
+  assert.deepEqual(plain(calls), [["raceIntro"], ["startRace", b.Tracks.LIST.findIndex((t) => t.id === id), true, false, false], ["snap"], ["hud"], ["goRolling"]], "trackIdx + time trial + gp flow, closed, the pre-race screen, then the drop and the green");
   assert.equal(b.G.state, "race");
   // Within 20 m of the control's built s (the nearest node of the same engine build).
   const p0 = d.pts[12];
@@ -1540,6 +1542,21 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.equal(b.D.isOpen(), true);
   assert.equal(b.D.state().sel, 12, "the selected point is back");
   assert.equal(msgText(b), "Back from the test drive");
+  // A headless or hidden page has no frames for the card: the quick path, as raceIntro's other callers take.
+  calls.length = 0; b.G.headlessMode = true; b.G.state = "menu";
+  hooks.onPick(12, { shiftKey: false });
+  assert.equal(await b.D.testHere(), true);
+  assert.deepEqual(plain(calls.map((c) => c[0])), ["startRace", "snap", "hud", "goRolling"], "headless: straight to the start, no pre-race screen");
+  b.G.headlessMode = false;
+  assert.equal(await b.C.consumeTrackHash(), true, "back on the designer for the next scenario");
+  // A raceIntro that throws before the card: the start still happens (the title is already hidden).
+  calls.length = 0; b.G.state = "menu";
+  const intro = b.G.raceIntro; b.G.raceIntro = () => { calls.push(["raceIntro"]); throw new Error("no card"); };
+  hooks.onPick(12, { shiftKey: false });
+  assert.equal(await b.D.testHere(), true);
+  assert.deepEqual(plain(calls.map((c) => c[0])), ["raceIntro", "startRace", "snap", "hud", "goRolling"]);
+  b.G.raceIntro = intro;
+  assert.equal(await b.C.consumeTrackHash(), true);
   // A start that never reaches the lights: out through quitToMenu, back with the reason.
   calls.length = 0;
   b.G.startRace = async () => { calls.push(["startRace"]); };
@@ -1547,7 +1564,7 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   hooks.onPick(12, { shiftKey: false });
   assert.equal(await b.D.testHere(), false);
   await new Promise((r) => setTimeout(r, 0));
-  assert.deepEqual(plain(calls), [["startRace"], ["quit"]], "never a frozen race");
+  assert.deepEqual(plain(calls), [["raceIntro"], ["startRace"], ["quit"]], "never a frozen race");
   assert.equal(b.D.isOpen(), true);
   assert.match(msgText(b), /could not start/);
   // A red design is refused before anything moves.
