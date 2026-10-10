@@ -1930,3 +1930,16 @@ test("level, smooth and zero affect only selected heights and retain smooth endp
   assert.equal(b.D.adjustElevation("zero"), false, "no-op does not add undo");
   b.D.close();
 });
+
+test("an autosaved draft of an oversize loop is rejected on open instead of freezing the tab (13-F1)", () => {
+  const pts = [];
+  for (let i = 0; i < 40; i++) pts.push(i % 2 ? [-9000 + (i % 7) * 100, 9000 - i * 10] : [9000 - (i % 5) * 100, -9000 + i * 10]);
+  const b = bootScreen({ customTrackDraft: { name: "HOSTILE", seed: 7, theme: "parkland", baseHW: 7, pts } });
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open();
+  const st = b.D.state();
+  assert.ok(st.design && st.design.name !== "HOSTILE", "the oversize draft was not restored");
+  const per = st.design.pts.reduce((s, p, i) => { const q = st.design.pts[(i + 1) % st.design.pts.length]; return s + Math.hypot(q[0] - p[0], q[1] - p[1]); }, 0);
+  assert.ok(per <= b.C.LIMITS.loopMaxLoose, "the opened design is a sane loop: " + Math.round(per) + " m");
+}
+);
