@@ -351,6 +351,20 @@ test("LiveRegion: a HUD line pushed back by a flag never supersedes a newer queu
   assert.equal(step(), "P4", "after the flag the reader hears the current position");
 });
 
+// Bug hunt 2 F11: MAX_Q's comment says a burst drops its "least urgent, OLDEST lines", but the
+// queue is sorted newest-last within a priority and queue.pop() dropped the NEWEST. For a
+// reader that is backwards (the stale-line rule already prefers the current news), so the
+// oldest of the lowest priority goes.
+test("LiveRegion: a burst past MAX_Q drops the least urgent, OLDEST line (not the newest)", () => {
+  const { L } = loadRegion();
+  L.say("R0", "radio");                              // written (beat) - owns the region
+  for (const t of ["R1", "R2", "R3", "R4", "R5"]) L.say(t, "radio");
+  assert.deepEqual([...L.state().queued], ["radio:R2", "radio:R3", "radio:R4", "radio:R5"], "R1, the oldest, was dropped");
+  L.say("H1", "hud");                                // lower priority than every queued radio line...
+  assert.ok(!L.state().queued.includes("hud:H1"), "...so it is the one dropped, not a radio line");
+  assert.deepEqual([...L.state().queued], ["radio:R2", "radio:R3", "radio:R4", "radio:R5"]);
+});
+
 test("hud.js: the flag and the radio go through the one writer", () => {
   const hud = read("js/ui/hud.js"), game = read("js/game.js"), ro = read("js/ui/hud-readouts.js");
   const sel = read("js/ui/select-screen.js");   // the SESSION ONLY warning, the fourth voice

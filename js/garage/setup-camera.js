@@ -489,7 +489,11 @@ const _garageCtx = {
   sponsor: null, career: false, round: 0, spin: false, achievements: null,
   sceneNow: 0, ambient: true, studio: false, unlimited: false,
 };
-let _winsCacheN = -1, _winsCacheV = 0;
+let _winsCacheRef = null, _winsCacheN = -1, _winsCacheV = 0;
+// Career.sponsor() and CareerExperience.garageMetadata() (state() + totals) were
+// re-derived on EVERY garage frame; they only move with a save write (store.rev),
+// a different career/results array, a new result or history row, or a round.
+let _cmRev = -1, _cmC = null, _cmN = -1, _cmH = -1, _cmRound = -1, _cmSponsor = null, _cmAch = null;
 function garageCtx(asSetup = false) {
   const c = Career.inCareer() ? Career.data() : null, h = home.active && !asSetup;
   const t = c ? (Career.calendar ? Career.calendar() : Tracks.SEASON)[c.season.round % (Career.calendar ? Career.calendar() : Tracks.SEASON).length]
@@ -502,21 +506,29 @@ function garageCtx(asSetup = false) {
     : (G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && !!(t && t.night)));
   if (c) {
     const n = c.results.length;
-    if (n !== _winsCacheN) {
+    // Keyed on the array too: another slot with the same result count kept the
+    // previous slot's win tally on the wall.
+    if (n !== _winsCacheN || c.results !== _winsCacheRef) {
       let w = 0;
       for (let i = 0; i < n; i++) if (c.results[i].p === 1) w++;
-      _winsCacheN = n; _winsCacheV = w;
+      _winsCacheRef = c.results; _winsCacheN = n; _winsCacheV = w;
     }
     ctx.wins = _winsCacheV;
     ctx.last = n ? c.results[n - 1] : null;
-    ctx.sponsor = Career.sponsor();
+    const hn = Array.isArray(c.history) ? c.history.length : 0;
+    if (G.store.rev !== _cmRev || c !== _cmC || n !== _cmN || hn !== _cmH || c.season.round !== _cmRound) {
+      _cmRev = G.store.rev; _cmC = c; _cmN = n; _cmH = hn; _cmRound = c.season.round;
+      _cmSponsor = Career.sponsor();
+      _cmAch = typeof CareerExperience !== "undefined" ? CareerExperience.garageMetadata() : null;
+    }
+    ctx.sponsor = _cmSponsor;
     ctx.career = true;
     ctx.round = c.season.round;
   } else {
     ctx.wins = 0; ctx.last = null; ctx.sponsor = null; ctx.career = false; ctx.round = 0;
   }
   ctx.spin = setupPreviewSpin;
-  ctx.achievements = typeof CareerExperience !== "undefined" ? CareerExperience.garageMetadata() : null;
+  ctx.achievements = c ? _cmAch : typeof CareerExperience !== "undefined" ? CareerExperience.garageMetadata() : null;
   ctx.sceneNow = asSetup ? ambientClock.value : garageNow();
   ctx.ambient = !reducedMotion() && (!h || home.moving);
   ctx.studio = !!(h && home.mode === "studio");
