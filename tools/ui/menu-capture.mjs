@@ -78,7 +78,7 @@ function expandScreens(screens, circuitsAxis) {
   return expanded;
 }
 
-async function bootPage(page, base, { hideGame = true, scale = null, timeout = 90000 } = {}) {
+export async function bootPage(page, base, { hideGame = true, scale = null, timeout = 90000 } = {}) {
   await page.goto(base, { waitUntil: "domcontentloaded", timeout });
   await page.waitForFunction(() => window.__apex && window.__apex.race, null, {
     polling: 100,
@@ -95,25 +95,38 @@ async function bootPage(page, base, { hideGame = true, scale = null, timeout = 9
   page.setDefaultTimeout(12000);
 }
 
-async function resetToTitle(page, base, hideGame) {
+export async function resetToTitle(page, base, hideGame) {
   await page.evaluate((ids) => {
     for (const id of ids) {
       const el = document.getElementById(id);
       if (el) el.hidden = true;
     }
+    // iOS Add-to-Home tip sits over title buttons on touch UAs; dismiss for harness clicks.
+    const tip = document.getElementById("ios-install");
+    if (tip) tip.hidden = true;
+    const chip = document.getElementById("install-chip");
+    if (chip) chip.hidden = true;
     const ov = document.getElementById("overlay");
     if (ov) {
       ov.hidden = false;
       ov.style.removeProperty("display");
     }
-    document.body.classList.remove("in-race");
+    // Match layout-audit: route body classes survive `hidden=true` on panels and
+    // gate #hud / title hit-testing (photo-mode, lt-open, …).
+    document.body.classList.remove(
+      "in-race", "lt-open", "photo-mode", "photo-studio-open",
+      "pc-nopanel", "pc-uihidden", "rotate-help-open", "manual");
   }, OVERLAY_IDS);
   await page.waitForTimeout(200);
+  // Sized AND hittable (layout-audit 2026-09-30): a covering layer leaves #mb-race
+  // full-sized but inert — size-only checks passed and every later click timed out.
   const titleUsable = await page.evaluate(() => {
     const b = document.getElementById("mb-race");
     if (!b) return false;
     const r = b.getBoundingClientRect();
-    return r.width > 1 && r.height > 1;
+    if (!(r.width > 1 && r.height > 1)) return false;
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return !!hit && (hit === b || b.contains(hit)) && !b.closest("[inert]");
   });
   if (!titleUsable) {
     await page.goto(base, { waitUntil: "domcontentloaded" });
@@ -124,12 +137,16 @@ async function resetToTitle(page, base, hideGame) {
         const g = document.querySelector("#game");
         if (g) g.style.visibility = "hidden";
       }
+      const tip = document.getElementById("ios-install");
+      if (tip) tip.hidden = true;
+      const chip = document.getElementById("install-chip");
+      if (chip) chip.hidden = true;
     }, hideGame);
     await page.waitForTimeout(300);
   }
 }
 
-async function waitScreenReady(page, screen) {
+export async function waitScreenReady(page, screen) {
   await page.waitForFunction(menuReady, screen.root, { polling: 100, timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(150);
   if (screen.id.split("#")[0] === "select") {
@@ -137,7 +154,7 @@ async function waitScreenReady(page, screen) {
   }
 }
 
-async function applyInsets(page, insets) {
+export async function applyInsets(page, insets) {
   if (!insets) return;
   await page.evaluate((i) => {
     const d = document.documentElement.style;

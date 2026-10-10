@@ -671,3 +671,143 @@ test("shotTimeoutMs: 60 s up to 1280x800, 180 s for a 1920x1080 frame", () => {
   assert.equal(shotTimeoutMs(1920, 1080), 180000);
   assert.equal(shotTimeoutMs(2560, 1440), 180000);
 });
+
+// ── hud-mock.mjs / apex_hud_mock: the HUD on black, mocked widgets ─────────
+test("hud-mock: the default plan is phone landscape × 5 cams × shipped / all-on, and BUTTON SIZE only on touch", async () => {
+  const { planCells } = await import("../../tools/shot/hud-mock.mjs");
+  const { makeFlags } = await import("../../tools/lib/cli-args.mjs");
+  const KNOWN = ["--devices", "--cams", "--hud-scale", "--ui-scale", "--btn-scale", "--sets", "--preset", "--matrix", "--track"];
+  const plan = (argv) => planCells(makeFlags(argv, KNOWN));
+  const d = plan([]);
+  assert.equal(d.length, 10);
+  assert.ok(d.every((c) => c.device === "phone-landscape-844x390"));
+  assert.deepEqual([...d.find((c) => c.id.endsWith("-shipped")).off].sort(), ["inputs", "rel", "strat"]);
+  assert.deepEqual(d.find((c) => c.id.endsWith("-all-on")).off, []);
+  const mixed = plan(["--devices", "desktop-1280,phone-se-667x375", "--cams", "cockpit", "--sets", "all-on", "--btn-scale", "300"]);
+  assert.equal(mixed.find((c) => c.device === "desktop-1280").btnScale, null, "no BUTTON SIZE on a desktop");
+  assert.equal(mixed.find((c) => c.device === "phone-se-667x375").btnScale, 300);
+  assert.throws(() => plan(["--devices", "nope"]), /unknown nope/);
+});
+
+test("MCP: apex_hud_mock is a pinned browser wrap with bounded arrays, a job by default, and a mock result with links", () => {
+  const list = JSON.parse(spawnSync(process.execPath, [MCP, "list-tools"], { cwd: ROOT, encoding: "utf8" }).stdout);
+  const t = list.find((x) => x.name === "apex_hud_mock");
+  assert.ok(t);
+  assert.deepEqual(t.inputSchema.properties.devices.items.enum, Object.keys(M.DEVICES));
+  assert.deepEqual(t.inputSchema.properties.cams.items.enum, [...M.CAMS]);
+  assert.deepEqual([t.inputSchema.properties.hudScale.items.minimum, t.inputSchema.properties.hudScale.items.maximum], [40, 200]);
+  assert.match(t.description, /^Browser \(lock first\)/);
+  assert.match(read("docs/AGENT-SURFACE.md"), /\| `apex_hud_mock` \| `shot\/hud-mock\.mjs` \| browser \| survey-ui-matrix \|/);
+  const dry = JSON.parse(mcp("apex_hud_mock", { dryRun: true, devices: ["phone-se-667x375"], cams: ["cockpit", "chase"], hudScale: [70, 200] }).stdout);
+  assert.equal(dry.ok, true);
+  assert.ok(dry.argv[1].endsWith("tools/shot/hud-mock.mjs"));
+  for (const f of ["--json", "--out"]) assert.ok(dry.argv.includes(f), f);
+  assert.deepEqual(dry.argv.slice(dry.argv.indexOf("--cams"), dry.argv.indexOf("--cams") + 2), ["--cams", "cockpit,chase"]);
+  assert.equal(JSON.parse(mcp("apex_hud_mock", { dryRun: true, hudScale: [999] }).stdout).error, "bad_args");
+  const r = JSON.parse(mcp("apex_hud_mock", { async: false }, { APEX_MCP_MOCK: "1" }).stdout);
+  assert.equal(r.ok, true);
+  assert.equal(r.tool, "apex_hud_mock");
+  assert.match(r.sheet, /sheet\.jpg$/);
+  assert.equal(r.cells[0].overlaps[0].pair, "damage+inputs");
+});
+
+// ── tools/lib/ui-mock-core.mjs + tools/ui/menu-mock.mjs (pure parts) ────────
+import os from "node:os";
+import * as Core from "../../tools/lib/ui-mock-core.mjs";
+import * as MM from "../../tools/ui/menu-mock.mjs";
+
+test("ui-mock-core: cellKey ignores key order, and moves with the tool, the tree and every cell field", () => {
+  const k = Core.cellKey("t", "tree1", { a: 1, b: { x: 1, y: 2 } });
+  assert.equal(k, Core.cellKey("t", "tree1", { b: { y: 2, x: 1 }, a: 1 }));
+  assert.notEqual(k, Core.cellKey("u", "tree1", { a: 1, b: { x: 1, y: 2 } }));
+  assert.notEqual(k, Core.cellKey("t", "tree2", { a: 1, b: { x: 1, y: 2 } }));
+  assert.notEqual(k, Core.cellKey("t", "tree1", { a: 1, b: { x: 1, y: 3 } }));
+});
+
+test("ui-mock-core: inputsHash follows js/css/index.html content and nothing else", () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), "uimock-"));
+  fs.mkdirSync(path.join(d, "js")); fs.mkdirSync(path.join(d, "css")); fs.mkdirSync(path.join(d, "docs"));
+  fs.writeFileSync(path.join(d, "index.html"), "<html>"); fs.writeFileSync(path.join(d, "js", "a.js"), "1"); fs.writeFileSync(path.join(d, "css", "a.css"), "a{}");
+  const h1 = Core.inputsHash(d);
+  fs.writeFileSync(path.join(d, "docs", "x.md"), "ignored"); fs.writeFileSync(path.join(d, "js", "readme.txt"), "ignored");
+  assert.equal(Core.inputsHash(d), h1, "docs and non-code files do not invalidate the cache");
+  fs.writeFileSync(path.join(d, "css", "a.css"), "a{color:red}");
+  assert.notEqual(Core.inputsHash(d), h1, "a css edit does");
+  fs.rmSync(path.join(d, "index.html"));
+  assert.equal(Core.inputsHash(d), null, "no index.html: no evidence, no cache");
+});
+
+test("ui-mock-core: cellCache round-trips a row and its image; a null tree hash or enabled:false never hits", () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), "uimock-"));
+  const img = path.join(d, "src.jpg"); fs.writeFileSync(img, "JPEGDATA");
+  const c = Core.cellCache(path.join(d, "cache"), "t", "tree1");
+  const key = c.key({ a: 1 });
+  assert.equal(c.get(key), null);
+  c.put(key, { id: "x", n: 2 }, img);
+  const hit = c.get(key);
+  assert.equal(hit.row.n, 2);
+  assert.equal(fs.readFileSync(hit.file, "utf8"), "JPEGDATA");
+  const other = Core.cellCache(path.join(d, "cache"), "t", "tree2");
+  assert.equal(other.get(other.key({ a: 1 })), null, "the same cell on another tree misses");
+  assert.equal(Core.cellCache(path.join(d, "cache"), "t", "tree1", { enabled: false }).get(key), null);
+  assert.equal(Core.cellCache(path.join(d, "cache"), "t", null).get(key), null);
+});
+
+test("ui-mock-core: sheetArgs tiles labelled files, and is null for nothing", () => {
+  assert.equal(Core.sheetArgs([], "o.jpg"), null);
+  const a = Core.sheetArgs([{ id: "a", file: "/x/a.png" }, { id: "b", file: "/x/b.png" }], "o.jpg");
+  assert.deepEqual(a.slice(0, 6), ["-label", "a", "/x/a.png", "-label", "b", "/x/b.png"]);
+  assert.equal(a.at(-1), "o.jpg");
+});
+
+test("menu-mock: planMenuCells orders race-bound screens last, groups by pointer shape, and refuses unknown ids", () => {
+  const cells = MM.planMenuCells("title,pause,select,photostudio", "ios-iphone-landscape-844,desktop-1280x800");
+  assert.equal(cells.length, 8);
+  assert.deepEqual(cells.filter((c) => c.viewport === "ios-iphone-landscape-844").map((c) => c.screen),
+    ["title", "select", "photostudio", "pause"], "mode/race screens after title clicks");
+  assert.ok(MM.planMenuCells("*", "desktop-1280x800").length > 20, "'*' is every catalogued screen");
+  assert.throws(() => MM.planMenuCells("nope", "desktop-1280x800"), /--screens: unknown nope/);
+  assert.throws(() => MM.planMenuCells("title", "nope"), /--viewports: unknown nope/);
+  assert.equal(MM.groupKey({ hasTouch: true, isMobile: true }), "touch-mobile");
+  assert.equal(MM.groupKey({}), "pointer-desktop");
+  assert.ok(MM.DEFAULT_SCREENS.split(",").every((id) => MM.planMenuCells(id, MM.DEFAULT_VIEWPORTS).length === 1), "every default screen id exists");
+});
+
+test("menu-mock: OVERLAY_IDS includes photo-studio + loading so a * sweep can reset the title", async () => {
+  const { OVERLAY_IDS } = await import("../../tools/ui/menu-screens.mjs");
+  assert.ok(OVERLAY_IDS.includes("photo-studio"), "photo-studio covers #mb-race after a photostudio cell");
+  assert.ok(OVERLAY_IDS.includes("loading"), "loading cover also sits above the title");
+});
+
+test("menu-mock: leaveToMenu dismisses ios-install and photo-studio-open", () => {
+  const hidden = {};
+  const bodyClasses = new Set(["photo-studio-open", "lt-open"]);
+  const els = {
+    "ios-install": { get hidden() { return !!hidden["ios-install"]; }, set hidden(v) { hidden["ios-install"] = !!v; } },
+    "install-chip": { get hidden() { return !!hidden["install-chip"]; }, set hidden(v) { hidden["install-chip"] = !!v; } },
+    "photo-studio": { hidden: true },
+    "lighting": { hidden: true },
+    "camtune": { hidden: true },
+    "flyby": { hidden: true },
+    "quali": { hidden: true },
+    "race-settings": { hidden: true },
+  };
+  const sandbox = {
+    window: { __apex: { info: () => ({ state: "menu", raceGrid: "grid" }) }, __mmGrid: "grid" },
+    document: {
+      getElementById: (id) => els[id] || null,
+      body: { classList: { remove: (...xs) => xs.forEach((c) => bodyClasses.delete(c)) } },
+    },
+  };
+  vm.runInNewContext(`(${MM.leaveToMenu.toString()})()`, sandbox);
+  assert.equal(els["ios-install"].hidden, true);
+  assert.equal(els["install-chip"].hidden, true);
+  assert.equal(bodyClasses.has("photo-studio-open"), false);
+  assert.equal(bodyClasses.has("lt-open"), false);
+});
+
+test("menu-mock --list needs no browser", () => {
+  const r = spawnSync(process.execPath, [path.join(ROOT, "tools/ui/menu-mock.mjs"), "--list", "--screens=title", "--viewports=desktop-1280x800"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /title__desktop-1280x800\n\[menu-mock\] 1 cells/);
+});

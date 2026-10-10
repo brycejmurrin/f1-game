@@ -37,6 +37,17 @@ export const DEVICES = Object.freeze({
   // Lead-only shapes (the static audit's short landscapes); not matrix axes.
   "phone-short-734x343": { w: 734, h: 343, touch: true, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
   "phone-640x360": { w: 640, h: 360, touch: true, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
+  // Real phone and tablet shapes the matrices never had (2026-10-10 adaptability survey): named
+  // cells and --device only, not matrix axes. iPhone SE (no notch), a 20:9 Android, an iPhone Pro
+  // Max (59px notch), the 844x390 phone with its notch on ONE side (landscape-left: the right edge
+  // is clean), an iPad mini portrait, a 1366 laptop and an ultrawide.
+  "phone-se-667x375": { w: 667, h: 375, touch: true, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
+  "phone-android-740x360": { w: 740, h: 360, touch: true, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
+  "phone-max-932x430": { w: 932, h: 430, touch: true, ins: { sal: 59, sar: 59, sat: 0, sab: 21 } },
+  "phone-landscape-left-844x390": { w: 844, h: 390, touch: true, ins: { sal: 47, sar: 0, sat: 0, sab: 21 } },
+  "tablet-portrait-820x1180": { w: 820, h: 1180, touch: true, ins: { sal: 0, sar: 0, sat: 24, sab: 20 } },
+  "laptop-1366": { w: 1366, h: 768, touch: false, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
+  "ultrawide-2560": { w: 2560, h: 1080, touch: false, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
 });
 // The device AXIS of every generated matrix; the lead shapes are named cells.
 export const MATRIX_DEVICES = Object.freeze(["desktop-1280", "desktop-1920", "phone-landscape-844x390",
