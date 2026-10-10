@@ -233,3 +233,22 @@ test("commit receives a current() check that goes false after cancel()", async (
   entry.cancel();
   assert.equal(seen(), false, "false once cancel() bumps the generation");
 });
+
+test("a restart that finds the season finished tears the race chrome down to the title (it set state 'menu' alone)", async () => {
+  const { document } = g.sandbox;
+  g.G.quitToMenu(); select("monza");
+  await g.G.startRace();
+  assert.equal(g.G.state, "count");
+  assert.equal(g.G.els.hud.hidden, false, "the race HUD is up");
+  assert.ok(document.body.classList.contains("in-race"));
+  g.G.seasonMode = true;
+  g.G.season = { round: g.sandbox.SeasonCal.rounds(), stage: "race" };   // a completed season: readable, never raceable
+  assert.equal(await g.G.startRace(), false);
+  assert.equal(g.G.state, "menu");
+  assert.equal(g.G.els.hud.hidden, true, "no HUD over the menu");
+  assert.equal(g.G.els.lights.hidden, true);
+  assert.equal(g.G.els.pausebtn.hidden, true);
+  assert.equal(document.body.classList.contains("in-race"), false, "no in-race class");
+  assert.equal(g.G.els.overlay.hidden, false, "the title is up");
+  g.G.quitToMenu();
+});
