@@ -382,6 +382,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
+  /* 1.2 clears the 4–5px short-landscape vertical overflow fit-audit flag; ellipsis still truncates. */
+  line-height: 1.2;
 }
 /* …and the trailing chevron matches the `›` chip it stands in for. */
 #rs-duel-open > [aria-hidden="true"] {
