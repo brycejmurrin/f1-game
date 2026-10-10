@@ -223,6 +223,9 @@ export async function autoRaise({ maxRaise = 40, dryRun = false, data = load() }
 
 /** The ceiling of a raw entry (a bare number or {ceiling, slack}). */
 const ceilingOf = (raw) => (typeof raw === "number" ? raw : raw.ceiling);
+/** An entry's slack when it SETS one (a tightened rule), else null (the default,
+ *  which scales with the ceiling and is not a choice anybody made). */
+const explicitSlack = (raw) => (typeof raw === "object" && raw && typeof raw.slack === "number" ? raw.slack : null);
 
 /** Every ceiling that differs between two ratchets.json documents, as rows
  *  {file, metric, base, now, delta, kind: "raise"|"lower"|"new"|"gone"}.
@@ -235,6 +238,11 @@ export function diffRatchets(base, current) {
       if (!bagBase || !(metric in bagBase)) { rows.push({ file, metric, base: null, now, delta: null, kind: "new" }); continue; }
       const b = ceilingOf(bagBase[metric]);
       if (now !== b) rows.push({ file, metric, base: b, now, delta: now - b, kind: now > b ? "raise" : "lower" });
+      // A loosened slack is a raise in disguise: `{ceiling: 3, slack: 0}` is exact equality
+      // ("shrink-only"), and rewriting it as `3` hands back the default 60 lines of room (15-F10).
+      const sb = explicitSlack(bagBase[metric]), sn = explicitSlack(raw);
+      // (a base slack that was the default cannot be loosened; a ceiling that moves rescales it)
+      if (sb !== null && (sn === null || sn > sb)) rows.push({ file, metric, base: sb, now: sn, delta: sn === null ? null : sn - sb, kind: "loosen" });
     }
     for (const metric of Object.keys(bagBase || {})) if (!bagNow || !(metric in bagNow))
       rows.push({ file, metric, base: ceilingOf(bagBase[metric]), now: null, delta: null, kind: "gone" });
@@ -254,7 +262,9 @@ export function loadAt(ref) {
   return JSON.parse(out);
 }
 
-/** `--base <ref>`: every ceiling that moved since <ref>. Raises are warnings
+/** `--base <ref>`: every ceiling that moved since <ref>. A loosened slack, or a
+ *  deleted entry whose file still exists, blocks like a raise past the absorb
+ *  (15-F10). Raises are warnings
  *  (GitHub `::warning::` annotations on CI, plain lines elsewhere); a raise
  *  past `maxRaise` — the commit hook's own absorb, so only APEX_SKIP_GUARDS
  *  could have produced it — fails. Returns the exit code. */
@@ -276,7 +286,20 @@ export function compareToBase(ref, { maxRaise = 40, current = load(), print = co
       print(gh ? `::${over && !advisory ? "error" : "warning"} file=tests/data/ratchets.json,title=ratchet raised::${msg}` : msg);
     } else if (r.kind === "lower") print(`LOWER  ${where}: ${r.base} -> ${r.now} (${r.delta})`);
     else if (r.kind === "new") print(`NEW    ${where}: ${r.now}`);
-    else print(`GONE   ${where}: was ${r.base}`);
+    else if (r.kind === "loosen") {
+      blocked++;
+      const msg = `LOOSEN ${where}: slack ${r.base} -> ${r.now ?? "default"} — a ratchet that tightened its own slack was widened; this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : "");
+      print(gh ? `::${advisory ? "warning" : "error"} file=tests/data/ratchets.json,title=ratchet loosened::${msg}` : msg);
+    } else {
+      // A deleted entry for a file/metric that still exists removes a guard; one whose
+      // file is gone (or a whole tree metric dropped with its tool) is a normal cleanup.
+      const guardRemoved = r.file === "(tree)" || fs.existsSync(path.join(ROOT, r.file));
+      if (guardRemoved) {
+        blocked++;
+        const msg = `GONE   ${where}: was ${r.base} — the entry was deleted but ${r.file === "(tree)" ? "it is a tree metric" : "the file still exists"}; this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : "");
+        print(gh ? `::${advisory ? "warning" : "error"} file=tests/data/ratchets.json,title=ratchet removed::${msg}` : msg);
+      } else print(`GONE   ${where}: was ${r.base}`);
+    }
   }
   const raises = rows.filter((r) => r.kind === "raise").length;
   print(`ratchets --base ${ref}: ${rows.length} ceiling(s) moved (${raises} raised, ${rows.filter((r) => r.kind === "lower").length} lowered, ${rows.filter((r) => r.kind === "new").length} new, ${rows.filter((r) => r.kind === "gone").length} gone)` + (blocked ? ` — ${blocked} past the ${maxRaise}-line absorb${advisory ? " (advisory)" : ""}` : ""));

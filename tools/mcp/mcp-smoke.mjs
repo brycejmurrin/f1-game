@@ -11,6 +11,12 @@
  *   node tools/mcp/mcp-smoke.mjs
  *   node tools/mcp/mcp-smoke.mjs --dry-run
  *   ./tools/mcp/apex-tools-mcp.sh smoke
+ *   node tools/mcp/mcp-smoke.mjs --real [--only=a,b] [--timeout=120] [--no-write]
+ *
+ * --real runs every TREE tool (readOnlyHint, plus apex_graph_parity) for real with
+ * minimal args through `apex-tools-mcp.mjs call`; one verdict row per tool, exit 1
+ * on ok:false, or ok:true with out:null, no dryRun and no other result keys/stdout. Skips browser tools, the job
+ * start/cancel pair and the slow apex_verify_change_fast.
  *
  * Not an apex_* tool (avoids catalog churn). Never wraps test-bg.
  */
@@ -105,16 +111,82 @@ function parseApexStatus(step) {
   }
 }
 
+/** Minimal valid args per tree tool (the unit test's MIN_ARGS, kept cheap). */
+export const REAL_ARGS = {
+  apex_select_specs: { since: "HEAD~1" },
+  apex_graph_parity: { base: "HEAD", id: "monza" },
+  apex_frame_report: { track: "monza" },
+  apex_car_audit: { check: "ladder" },
+  apex_track_audit: { track: "monza" },
+  apex_unit_test: { file: "tests/unit/a11y-pwa-pass.test.mjs" },
+};
+export const REAL_SKIP = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast"]);
+
+/** Tree tools of a list-tools catalog: read-only tree tools plus apex_graph_parity, minus the skips. */
+export function realTools(catalog) {
+  return catalog
+    .filter((t) => (t.annotations?.readOnlyHint === true || t.name === "apex_graph_parity") && !REAL_SKIP.has(t.name))
+    .map((t) => t.name);
+}
+
+/** One verdict from a call body: ok:true needs a non-null out (or dryRun / a stated reason). */
+export function judgeReal(body, status) {
+  if (!body || typeof body !== "object") return { pass: false, why: `unparseable reply (exit ${status})` };
+  if (body.ok !== true) return { pass: false, why: `ok:${body.ok} ${body.error || ""} ${body.message || ""}`.trim() };
+  if (body.out != null) return { pass: true, why: "out present" };
+  if (body.dryRun) return { pass: true, why: "dryRun" };
+  // Some tools report in their own keys (status: lock/testBg; unit_test: stdout; job_status: jobs). Any
+  // key beyond the CLI boilerplate, or a non-empty stdout, is a stated result; a bare envelope is not.
+  const BOILER = new Set(["ok", "exit", "argv", "env", "durationMs", "stderr", "hint", "next", "stdout"]);
+  const own = Object.keys(body).filter((k) => !BOILER.has(k) && k !== "out" && body[k] != null);
+  if (own.length) return { pass: true, why: `result in ${own.slice(0, 3).join(",")}` };
+  if (typeof body.stdout === "string" && body.stdout.trim()) return { pass: true, why: "stdout present" };
+  return { pass: false, why: "ok:true but out:null and no result keys" };
+}
+
+function realRun(argv) {
+  const only = (argv.find((a) => a.startsWith("--only=")) || "").slice(7).split(",").filter(Boolean);
+  const timeoutS = Number((argv.find((a) => a.startsWith("--timeout=")) || "").slice(10)) || 120;
+  const mcp = path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs");
+  const lt = spawnSync(process.execPath, [mcp, "list-tools"], { encoding: "utf8", cwd: ROOT, timeout: 20000, maxBuffer: 16e6 });
+  let names;
+  try { names = realTools(JSON.parse(lt.stdout)); } catch { process.stderr.write("mcp-smoke --real: list-tools unparseable\n"); return 1; }
+  if (only.length) names = names.filter((n) => only.includes(n));
+  const rows = [];
+  for (const name of names) {
+    const args = REAL_ARGS[name] || {};
+    const t0 = Date.now();
+    const r = spawnSync(process.execPath, [mcp, "call", name, JSON.stringify(args)], {
+      encoding: "utf8", cwd: ROOT, timeout: timeoutS * 1000, maxBuffer: 32e6,
+    });
+    let body = null;
+    try { body = JSON.parse(r.stdout); } catch { /* judged below */ }
+    const v = r.error && r.error.code === "ETIMEDOUT" ? { pass: false, why: `timeout ${timeoutS}s` } : judgeReal(body, r.status);
+    rows.push({ tool: name, args, pass: v.pass, why: v.why, ms: Date.now() - t0 });
+    process.stdout.write(`${v.pass ? "PASS" : "FAIL"} ${name.padEnd(28)} ${String(Date.now() - t0).padStart(6)}ms  ${v.why}\n`);
+  }
+  const failed = rows.filter((x) => !x.pass);
+  process.stdout.write(`mcp-smoke --real ${failed.length ? "FAIL" : "ok"}: ${rows.length - failed.length}/${rows.length} tree tools\n`);
+  if (!argv.includes("--no-write")) {
+    fs.mkdirSync(path.dirname(OUT), { recursive: true });
+    fs.writeFileSync(OUT.replace(/\.json$/, "-real.json"), JSON.stringify({ ok: !failed.length, rows }, null, 2) + "\n");
+  }
+  return failed.length ? 1 : 0;
+}
+
 function help() {
   process.stdout.write(`mcp-smoke — repo shell wrappers (apex-tools + chrome-devtools are MCP-attached; the rest are CLI only)
 
 Usage:
   node tools/mcp/mcp-smoke.mjs [--dry-run] [--json]
+  node tools/mcp/mcp-smoke.mjs --real [--only=a,b] [--timeout=120] [--no-write]
   ./tools/mcp/apex-tools-mcp.sh smoke [--dry-run]
 
 Pokes apex-tools (apex_status), probe help + mock list-tools, chrome-devtools
 status, playwright status, tinyfish help. No Chromium. Missing TinyFish key /
 chrome clone warn. Exit 0 when apex-tools answers. Writes artifacts/logs/mcp-smoke.json.
+
+--real runs each tree apex_* tool for real (minimal args); exit 1 on ok:false / out:null.
 
 Never wraps test-bg. playwright status only (never run).
 `);
@@ -125,6 +197,7 @@ function main(argv) {
   if (argv.includes("--help") || argv.includes("-h") || argv.includes("help")) {
     return help();
   }
+  if (argv.includes("--real")) return realRun(argv);
   const dryRun = argv.includes("--dry-run");
   const jsonOnly = argv.includes("--json") || dryRun;
   const plan = smokePlan();

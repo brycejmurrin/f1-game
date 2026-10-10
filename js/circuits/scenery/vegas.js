@@ -541,7 +541,7 @@
       // Campanile beside the hotel, not inside it: the twin's second slab spans lateral 69-106 and
       // 3-17 m along (75 m tall), so the tower stands ~31 m further along, clear of both slabs.
       tower(K(sl(0.495)), -1, 82, 16, 62, { col: [0.62, 0.48, 0.36], seg: 6, cap: true, capCol: [1.0, 0.82, 0.20], mast: true });
-      place(K(sl(0.49)), -1, 14, [28, 1.8, 8], [1.0, 0.85, 0.25]);
+      place(K(sl(0.49)), -1, 14, [8, 1.8, 28], [1.0, 0.85, 0.25]);
 
       // Wheel plane lateral 127-137: clear of the screen building (38-68) and of Strip tower j=1 (68-96).
       ferrisWheel(K(sl(0.55)), -1, 132, 65);
@@ -584,8 +584,8 @@
           for (const off of [-28, -14, 0, 14, 28])
             seat.cyl(stage, vadd(vadd(a.c, a.t, off), a.r, -20), 1.15, 16, IVORY, 8, b);
         }, { required: true });
-        place(K(sl(0.62)), 1, 16, [44, 2.4, 8], [1.0, 0.88, 0.30]);
-        place(K(sl(0.62)), 1, 14, [50, 1.2, 10], [0.95, 0.75, 0.15]);
+        place(K(sl(0.62)), 1, 16, [8, 2.4, 44], [1.0, 0.88, 0.30]);
+        place(K(sl(0.62)), 1, 14, [10, 1.2, 50], [0.95, 0.75, 0.15], 0.3);   // deeper foot: not coplanar with the strip above
       }
 
       // Bellagio + fountain lake — long elegant box + blue reflective pool.
@@ -609,7 +609,8 @@
           // Crown neon band — keep proud of the roof slab (no coplanar fight).
           addBox(stage, vadd(a.c, a.u, 75.2), [18, 2.0, 56], [1.0, 0.82, 0.35], b);
         }, { required: true });
-        place(K(sl(0.68)), 1, 18, [95, 2.0, 12], [1.0, 0.75, 0.20]);
+        // Forecourt apron between the kerb and the lake-edge posts (lateral 4-14): [depth, h, length].
+        place(K(sl(0.68)), 1, 9, [10, 2.0, 95], [1.0, 0.75, 0.20]);
         // Lake-edge balustrade posts (no shore groundPatch — was flat-coplanar
         // with the existing pool-strip / apron decals).
         for (let i = 0; i < 6; i++) {

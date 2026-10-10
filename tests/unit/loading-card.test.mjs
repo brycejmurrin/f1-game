@@ -288,6 +288,26 @@ test("a harness-driven launch (navigator.webdriver) keeps the 700 ms card and ha
   assert.equal(player.els.loading.dataset.phase, "run", "a player under REDUCED still gets the flyby (#1290)");
 });
 
+test("isAutomation is the one intro gate: navigator.webdriver, unless ?fullIntro=1 or window.__apexFullIntro opts back into player pace", () => {
+  const gate = (nav, extra = {}) => {
+    const sb = { Math, JSON, Object, Array, Number, String, isFinite, Date, console, ...extra };
+    if (nav !== undefined) sb.navigator = nav;
+    sb.window = sb;
+    vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb, { filename: "js/ui/loading-screen.js" });
+    return sb;
+  };
+  assert.equal(gate(undefined).LoadingScreen.isAutomation(), false, "no navigator: a player");
+  assert.equal(gate({ webdriver: false }).LoadingScreen.isAutomation(), false, "a player's browser");
+  assert.equal(gate({ webdriver: true }).LoadingScreen.isAutomation(), true, "a harness");
+  assert.equal(gate({ webdriver: true }, { location: { search: "?fullIntro=1" } }).LoadingScreen.isAutomation(), false, "?fullIntro=1 forces player pace");
+  assert.equal(gate({ webdriver: true }, { location: { search: "?fullIntro=0" } }).LoadingScreen.isAutomation(), true);
+  const sb = gate({ webdriver: true });
+  sb.__apexFullIntro = true;
+  assert.equal(sb.LoadingScreen.isAutomation(), false, "window.__apexFullIntro forces player pace (garage-out-before-card.spec)");
+  const src = read("js/ui/loading-screen.js");
+  assert.equal((src.match(/navigator\.webdriver\s*[!=]==/g) || []).length, 1, "one webdriver read in loading-screen.js: isAutomation");
+});
+
 test("a skip of the GARAGE leave is not a verdict on the flyby: the streak counts flyby skips only", () => {
   const src = fs.readFileSync(path.join(ROOT, "js/ui/loading-screen.js"), "utf8");
   const note = src.slice(src.indexOf("function noteFlyby("), src.indexOf("const MAP_W"));

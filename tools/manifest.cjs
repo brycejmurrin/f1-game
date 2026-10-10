@@ -982,6 +982,7 @@ const LAZY_EDITOR = [
   "js/editor/insight.js",     // TrackInsight: TURNS bands, speed profile, passing zones, FIA Grade 1 ambers, TRACK OF THE DAY, START FROM
   "js/editor/fixes.js",       // TrackFixes: one-click remedies for the validator's issues (start, length, spacing, smoothing, bridge, clearance)
   "js/editor/codec.js",       // TrackCodec: APXT1 share code, #track= fragment, file envelope
+  "js/editor/scenery-preview.js", // DesignerSceneryPreview: live overhead footprints from theme recipes
   "js/editor/canvas.js",      // DesignerCanvas: the 2D drawing surface (pointer / wheel / keys → callbacks)
   "js/editor/elev-presets.js", // ElevPresets: Flat / Rolling / Hilly → per-node heights[] (no DOM)
   "js/editor/profile.js",     // DesignerProfile: the elevation strip under the canvas (per-node height grips → callbacks)
@@ -993,7 +994,7 @@ const LAZY_EDITOR = [
 // same meaning HARD_EDGES carries for FULL, derived so it cannot drift from the
 // roster; designer.js (the screen) must follow every other editor module.
 // elev-presets is pure (optional CustomTracks.LIMITS at call time) — no shape edge.
-const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js" && f !== "js/editor/elev-presets.js" && f !== "js/editor/scenery-panel.js" && f !== "js/editor/selection-panel.js" && f !== "js/editor/designer.js")
+const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/scenery-preview.js" && f !== "js/editor/codec.js" && f !== "js/editor/elev-presets.js" && f !== "js/editor/scenery-panel.js" && f !== "js/editor/selection-panel.js" && f !== "js/editor/designer.js")
   .map((f) => ["js/editor/shape.js", f])
   .concat(LAZY_EDITOR.filter((f) => f !== "js/editor/designer.js").map((f) => [f, "js/editor/designer.js"]));
 

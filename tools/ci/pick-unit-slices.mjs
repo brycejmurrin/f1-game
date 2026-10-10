@@ -199,7 +199,15 @@ export function classifyUnitFile(f, owners, groupsJson = null) {
  *  only the circuits whose *-foundation spec is ADAPTED (a scenery edit cannot
  *  move a lap-distance or wall-scrub read). Unknown .js under js/circuits ->
  *  page (fail safe). Returns the reason, or "" when no rule applies. */
-const PAGE_SOURCES = [/^js\/race\/pit-lane\.js$/, /^js\/race\/race-control\.js$/, /^js\/track\/core\/space\.js$/];
+const PAGE_SOURCES = [
+  /^js\/race\/pit-lane\.js$/, /^js\/race\/race-control\.js$/,
+  // 15-F1 (2026-10-10): the other files the ADAPTED specs assert. The VM boots the
+  // whole manifest, so these are the ones a spec reads by name: logging.spec ->
+  // core/log.js; projection.spec -> spline.js; pit-lane.spec -> pit.js / line.js /
+  // space.js; physics-fixes + autopilot -> js/physics/**; agent-drive-bench -> js/agent/**.
+  /^js\/core\/log\.js$/, /^js\/track\/core\/(space|spline|pit|line)\.js$/,
+  /^js\/physics\//, /^js\/agent\//,
+];
 export function adaptedSourceWhy(f) {
   if (PAGE_SOURCES.some((re) => re.test(f))) return `source of an ADAPTED spec (vm-page runs it): ${f}`;
   if (!/^js\/circuits\/.+\.js$/.test(f)) return "";

@@ -8,18 +8,27 @@
 const TrackDesignerProps = (function () {
   "use strict";
   // Order is the codec kind index — never reorder; append only.
-  const KINDS = Object.freeze(["stand", "gantry", "trees", "water", "flood", "billboard", "palms", "hedge"]);
+  const KINDS = Object.freeze(["stand", "gantry", "trees", "water", "flood", "billboard", "palms", "hedge", "pines", "bushes", "marshal", "camera"]);
   const LABELS = Object.freeze({
     stand: "STAND", gantry: "GANTRY", trees: "TREES",
     water: "WATER", flood: "FLOOD", billboard: "BOARD", palms: "PALMS", hedge: "HEDGE",
+    pines: "PINES", bushes: "BUSHES", marshal: "MARSHAL", camera: "CAMERA",
   });
   // Per-kind and total caps: custom tracks stay under the fleet prop budget.
-  const CAPS = Object.freeze({ stand: 4, gantry: 4, trees: 6, water: 2, flood: 2, billboard: 8, palms: 6, hedge: 6 });
+  const CAPS = Object.freeze({ stand: 4, gantry: 4, trees: 6, water: 2, flood: 2, billboard: 8, palms: 6, hedge: 6, pines: 6, bushes: 6, marshal: 4, camera: 4 });
   const TOTAL = 16;
   const DEFAULT_GAP = Object.freeze({
-    stand: 18, gantry: 0, trees: 34, water: 40, flood: 28, billboard: 9, palms: 24, hedge: 12,
+    stand: 18, gantry: 0, trees: 34, water: 40, flood: 28, billboard: 9, palms: 24, hedge: 12, pines: 28, bushes: 16, marshal: 14, camera: 20,
   });
-  const MIN_GAP = Object.freeze({ stand: 14, gantry: 0, trees: 20, water: 24, flood: 18, billboard: 6, palms: 16, hedge: 8 });
+  const MIN_GAP = Object.freeze({ stand: 14, gantry: 0, trees: 20, water: 24, flood: 18, billboard: 6, palms: 16, hedge: 8, pines: 20, bushes: 10, marshal: 10, camera: 14 });
+  const DESCRIPTIONS = Object.freeze({
+    stand: "A 70 m grandstand for spectators.", gantry: "An overhead gantry spanning the road.",
+    trees: "A short belt of mixed woodland.", water: "A large trackside pond; allow plenty of space.",
+    flood: "A 24 m floodlight mast for night circuits.", billboard: "A colourful trackside sponsor board.",
+    palms: "Three palms, spaced 12 m apart.", hedge: "A 48 m clipped hedge along the track.",
+    pines: "Three tall pines, spaced 14 m apart.", bushes: "Five low shrubs, spaced 6 m apart.",
+    marshal: "A marshal shelter with a track-facing signal panel.", camera: "A 12 m broadcast camera tower.",
+  });
   const GAP_MAX = 120;
   const BOARD_COLS = Object.freeze([
     [0.86, 0.12, 0.10], [0.10, 0.28, 0.66], [0.96, 0.78, 0.10],
@@ -221,11 +230,28 @@ const TrackDesignerProps = (function () {
       api.hedge(p.s - half, p.s + half, side, Math.max(MIN_GAP.hedge, gap), 1.8, [0.22, 0.38, 0.18]);
       return true;
     }
+    if (p.kind === "pines" || p.kind === "bushes") {
+      const pines = p.kind === "pines", emit = pines ? api.pine : api.bush;
+      if (!emit) return false;
+      const step = (pines ? 14 : 6) / Math.max(1, sv.total || 5000), radius = pines ? 1 : 2;
+      for (let j = -radius; j <= radius; j++) {
+        const at = K(p.s + j * step), dist = Math.max(MIN_GAP[p.kind], gap);
+        if (pines) emit(at, side, dist, 14, [0.16, 0.30, 0.20]);
+        else emit(at, side, dist, [0.28, 0.42, 0.20]);
+      }
+      return true;
+    }
+    if (p.kind === "marshal" || p.kind === "camera") {
+      const emit = p.kind === "marshal" ? api.marshalPost : api.cameraTower;
+      if (!emit) return false;
+      emit(k, side, Math.max(MIN_GAP[p.kind], gap), p.kind === "marshal" ? { style: "hut" } : { h: 12, style: "scaffold" });
+      return true;
+    }
     return false;
   }
 
   return {
-    KINDS, LABELS, CAPS, TOTAL, DEFAULT_GAP, MIN_GAP,
+    KINDS, LABELS, CAPS, TOTAL, DEFAULT_GAP, MIN_GAP, DESCRIPTIONS,
     has, sanitize, counts, canPlace, place, placeBatch, updateAt, removeAt, removeLast, pointFrac, dress,
   };
 })();
