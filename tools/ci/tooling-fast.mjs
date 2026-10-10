@@ -400,9 +400,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a wall quad. Two shipped cut-off wordmarks and one never-visible live
   // trace were each found by a screenshot; this puts them in the edit loop.
   "tests/unit/garage-sign-occlusion.test.mjs",
-  // The garage LIVE atlas on a LAZY_CIRCUIT stub: paintLive skips the map instead of
-  // throwing, and ctxKey re-keys on hydration. VM, ~0.3 s.
-  "tests/unit/scene-live.test.mjs",
   "tests/unit/gen-arch-table.test.mjs",
   "tests/unit/generated-docs.test.mjs",
   "tests/unit/geometry-paths-baseline.test.mjs",
@@ -653,6 +650,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/road-lut-frame.test.mjs",
   "tests/unit/save-migrate.test.mjs",
   "tests/unit/scale-defaults.test.mjs",
+  // The garage LIVE atlas on a LAZY_CIRCUIT stub: paintLive skips the map instead of
+  // throwing, and ctxKey re-keys on hydration. VM, ~0.3 s.
+  "tests/unit/scene-live.test.mjs",
   "tests/unit/scenery-api-contract.test.mjs",
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
