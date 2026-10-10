@@ -417,7 +417,10 @@ const SceneryCity = (function () {
       blockAt(k, side, gap, d / 2);   // solid: stop the car before the façade
       massAdd(p.c, w, d, b);          // claim the ground so later masses yield
     };
-    const neonTower = (k, side, dist, w, h, d, neon, kind, tone, neonAmt) => {
+    // neonTowerBody returns early from a dozen refused sections with out._mat still
+    // METAL; the wrapper resets it on every path so the next emitter is untextured.
+    const neonTower = (...args) => { neonTowerBody(...args); out._mat = 0; };
+    const neonTowerBody = (k, side, dist, w, h, d, neon, kind, tone, neonAmt) => {
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       const reach = Math.max(w, d);   // used below for cylinder/dome/drum radii
       // Footprint guard: test the tower's FULL oriented w×d footprint against the

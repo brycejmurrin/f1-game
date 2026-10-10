@@ -683,6 +683,10 @@ var GameAudio = (function () {
   // (IDLE 0.5 x PITCH 0.6) the rate must stay over 0.05, which the old 1st gear
   // already broke (0.045) where no check looked.
   const RATE_IDLE = 0.17, RATE_SPAN = 0.5115;
+  // ONE rate curve for the player and for a rival (before PITCH, boost and the
+  // maker's trim). Rivals had their own (0.25 + 0.45*rev), the pre-RATE_IDLE
+  // numbers: an identical car idled 6-9 semitones above your own.
+  function baseRate(revC) { return RATE_IDLE * tune.idle + revC * RATE_SPAN * tune.revRange; }
   // Absolute playbackRate jump that is a gear discontinuity, not a rev climb.
   // A 1→3 skip at ~16 m/s moves ~0.13 → ~0.54; the 0.035 s setTargetAtTime
   // tau held the idle rate across the shift frame and took 0.10–0.15 s to
@@ -918,7 +922,9 @@ var GameAudio = (function () {
           v.start = () => src.start(0, off);
           v.stop = (t) => src.stop(t);
           v.setPitch = (t, rev01, mul) => {
-            const rate = (0.25 + rev01 * 0.45) * mul;
+            // mul carries Doppler, the slot's detune and THEIR maker's trim; the curve and
+            // the PITCH/IDLE/REV RANGE trims are the player's own, so the same car sounds the same.
+            const rate = baseRate(Math.pow(rev01, tune.curve)) * tune.pitch * mul;
             if (Math.abs((src.playbackRate._apexRate ?? -1) - rate) > 0.002) {
               src.playbackRate.setTargetAtTime(rate, t, 0.06);
               src.playbackRate._apexRate = rate;
@@ -1181,6 +1187,10 @@ var GameAudio = (function () {
     stopAt(windSrc, t0 + 0.35);
     stopAt(lfo, t0 + 0.35);
     stopAt(skidSrc, t0 + 0.35);
+    // Disconnecting skidLfo (the `dead` list) is not stopping it: a started,
+    // never-stopped oscillator stays in the context's active-source set, one more
+    // per pause/resume, tab hide/show or race restart.
+    stopAt(skidLfo, t0 + 0.35);
     const deadSub = (engC && engC._apexSubGain) || null;   // synth sub-osc gain
     engA = engB = engC = null;
     whineOsc = null;
@@ -1282,7 +1292,7 @@ var GameAudio = (function () {
     // starting at the Web Audio default of 1.0).
     {
       const g = (typeof gear === "number" && isFinite(gear)) ? Math.max(1, Math.min(8, Math.round(gear))) : 8;
-      const rate = (RATE_IDLE * tune.idle + revC * RATE_SPAN * tune.revRange) * (1 + 0.04 * b * tune.boostPitch) * voice.rateTrim * tune.pitch * (1 + 0.05 * revFlare);   // idle ~0.14x .. limiter ~0.71x on the shipped voice, the same in every gear
+      const rate = baseRate(revC) * (1 + 0.04 * b * tune.boostPitch) * voice.rateTrim * tune.pitch * (1 + 0.05 * revFlare);   // idle ~0.14x .. limiter ~0.71x on the shipped voice, the same in every gear
       const gearChanged = typeof gear === "number" && isFinite(gear) && isFinite(lastGearSeen) && g !== lastGearSeen;
       if (usingSamples) {
         // rateTrim is a CONSTANT per-manufacturer offset: pitch stays monotonic

@@ -7,15 +7,24 @@ const CareerExperience = (function () {
     const node = Dom.el(tag); node.setAttribute("data-career-part", name); return node;
   }
 
+  // Cumulative, from c.tally: c.history is only the last HISTORY_MAX seasons.
+  // A career without one (a hand-built object) sums what history it has.
   function totals(c) {
     const history = c && Array.isArray(c.history) ? c.history : [];
     const results = c && Array.isArray(c.results) ? c.results : [];
-    return {
-      wins: results.filter((r) => r.p === 1).length + history.reduce((n, h) => n + (h.wins || 0), 0),
-      podiums: results.filter((r) => r.p > 0 && r.p <= 3).length + history.reduce((n, h) => n + (h.podiums || 0), 0),
+    const tally = c && c.tally && typeof c.tally === "object" ? c.tally : {
+      seasons: history.length,
+      wins: history.reduce((n, h) => n + (h.wins || 0), 0),
+      podiums: history.reduce((n, h) => n + (h.podiums || 0), 0),
       titles: history.filter((h) => h.pos === 1).length,
-      teamTitles: history.filter((h) => h.cPos === 1).length,
-      seasons: history.length + (c ? 1 : 0),
+      cTitles: history.filter((h) => h.cPos === 1).length,
+    };
+    return {
+      wins: results.filter((r) => r.p === 1).length + tally.wins,
+      podiums: results.filter((r) => r.p > 0 && r.p <= 3).length + tally.podiums,
+      titles: tally.titles,
+      teamTitles: tally.cTitles,
+      seasons: tally.seasons + (c ? 1 : 0),
     };
   }
 

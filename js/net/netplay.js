@@ -56,7 +56,9 @@ const NetPlay = (function () {
     out.head = Number.isFinite(_head) ? Math.atan2(Math.sin(_head), Math.cos(_head)) : 0;
     out.x = Number.isFinite(_x) ? Math.min(Math.max(_x, -X_LIMIT), X_LIMIT) : 0;
     out.speed = Number.isFinite(_sp) ? Math.min(Math.max(_sp, -SPEED_LIMIT), SPEED_LIMIT) : 0;
-    out.gear = st.gear;
+    // 4 bits on the wire (0-15) but the box has GEARS: gearHi(g) is undefined past
+    // it, and a hostile or corrupt packet gave car-mesh a NaN rpm on a live car.
+    out.gear = Math.min((typeof PhysicsConsts !== "undefined" && PhysicsConsts.GEARS) || 8, Math.max(1, st.gear | 0));
     out.deploying = !!st.deploying;
     out.offroad = !!st.offroad;
     out.onKerb = !!st.onKerb;
@@ -265,13 +267,22 @@ const NetPlay = (function () {
         }),
       }, extra || null);
     }
+    // ONE scrub for every car that returns to the local AI. While net-owned it
+    // skipped updateCar, so its lapTime never ran and its first line crossing
+    // would time the REMAINDER of a lap as a whole one (a ~19 s "fastest lap"
+    // for a rival that left); dnfAt/dnfWhy were planned when it was an AI car and
+    // would retire it on the very next frame ("RIVAL DISCONNECTED" + instant DNF).
+    function scrubForHandBack(car) {
+      car._nOk = false;
+      car.dnfAt = null; car.dnfWhy = null;
+      car.incidentInvalidLap = true; car.lapTime = 0; car._secT0 = null;
+    }
     // A silent rival goes to the local AI; its packets bring it back.
     function goLocal(r) {
       r.stale = true;
       if (!r.hostAi) G.setCarRole(r.car, false, false);
-      r.car._nOk = false; r.car.netInput = null;
-      r.car.dnfAt = null; r.car.dnfWhy = null;   // as handBackToAI: no instant DNF off an old plan
-      r.car.incidentInvalidLap = true; r.car.lapTime = 0; r.car._secT0 = null;
+      r.car.netInput = null;
+      scrubForHandBack(r.car);
     }
     function goWire(r) {
       r.stale = false;
@@ -554,7 +565,7 @@ const NetPlay = (function () {
           // naming a dropped wire id. Nothing told them it was gone, so their
           // slot stayed net-owned — updateCar never simulated it and the car
           // sat frozen on the track for the rest of the race. Say so.
-          if (carFor != null) broadcast(EV.LEFT, { wire: carFor, why: why || "peer_closed" });
+          if (carFor != null) { leftWires.set(carFor, why || "peer_closed"); broadcast(EV.LEFT, { wire: carFor, why: why || "peer_closed" }); }
           // Still worth asking: a slotless peer leaving can be the one the
           // arm deadline was waiting on.
           if (armDeadline && allArmed()) nameTheMoment();
@@ -633,6 +644,10 @@ const NetPlay = (function () {
             // still building its circuit: the skipped-countdown bug the
             // comment below nameTheMoment() records.
             if (!peerCar.has(id)) return;
+            // A guest still building when a rival left never bound a LEFT handler (the lobby's reads
+            // `from`, this one `wire`): it seats the leaver as a human nobody will move. ARMED means
+            // its handler is bound now, so tell it again.
+            if (!armedPeers.has(id)) for (const [wire, why] of leftWires) { try { s.sendEvent(EV.LEFT, { wire, why }); } catch (e) { /* a dead session is its own close */ } }
             armedPeers.add(id);
             if (armDeadline && allArmed()) nameTheMoment();
             // LATE ARMED: a guest still inside `await G.startRace()` when the
@@ -738,24 +753,14 @@ const NetPlay = (function () {
       if (id == null) {
         // Whole session over: the host's AI poses stop coming, the local AI
         // resumes every car from where it was last posed.
-        for (const r of aiRemotes.values()) { r.car._nOk = false; r.car.dnfAt = null; r.car.dnfWhy = null; }
+        for (const r of aiRemotes.values()) scrubForHandBack(r.car);
         aiRemotes.clear();
       }
       const gone = id == null ? remoteList() : [remotes.get(id)].filter(Boolean);
       for (const r of gone) {
         G.setCarRole(r.car, false, false);
         r.car.netInput = null;
-        r.car._nOk = false;
-        // The slot was an AI car when reliability drew its DNF plan and the
-        // owns() skip only shielded it while networked: handed back with
-        // prog past dnfAt, it retired on the very next frame — "RIVAL
-        // DISCONNECTED" and an instant DNF. A returned rival races on.
-        r.car.dnfAt = null; r.car.dnfWhy = null;
-        // While net-owned the car skipped updateCar, so its lapTime never ran:
-        // the AI's first crossing after a handback timed the REMAINING part of
-        // the lap as a whole one — a 25 s "fastest lap" for a rival that had
-        // left, and the badge denied to the player who set the real one.
-        r.car.incidentInvalidLap = true; r.car.lapTime = 0; r.car._secT0 = null;
+        scrubForHandBack(r.car);   // a returned rival races on: no instant DNF, no bogus lap
         remotes.delete(G.wireId(r.car));
       }
       if (reason && gone.length && G.announce) {
@@ -879,7 +884,7 @@ const NetPlay = (function () {
       lastPublish = -Infinity; lastStrategy = -Infinity;
       lastPhaseA = lastPhaseB = lastPhaseC = null;
       lastReason = null;
-      armedPeers.clear();
+      armedPeers.clear(); leftWires.clear();
       armDeadline = 0;
       armedSentAt = -Infinity;
       startSeen = false;
@@ -933,6 +938,7 @@ const NetPlay = (function () {
     let startSeen = false;
     let named = null;                     // host: the START already sent ({at, hold}), for late ARMEDs
     const armedPeers = new Set();
+    const leftWires = new Map();          // host: wire id -> reason, for every rival that left this race
     const allArmed = () => armedPeers.size >= Math.max(1, remotes.size);
 
     // CLAMP THE WIRE MOMENT TOO. `atPeerMs` is peer-supplied and reaches
@@ -1064,7 +1070,7 @@ const NetPlay = (function () {
       // a past-dated netStart behind and the NEXT solo race lit all five
       // lamps in one frame and skipped its countdown entirely.
       G.netStart = null;
-      armedPeers.clear();
+      armedPeers.clear(); leftWires.clear();
       startSeen = false;
       runOnStop(reason);
       return true;
@@ -1144,7 +1150,10 @@ const NetPlay = (function () {
         // still building its circuit); a host AI car the host never names (a
         // grid the two screens disagree on) is the local AI's after STALE_MS.
         if (r.heardAt == null) r.heardAt = now;
-        const quiet = (r.hostAi || r.everHeard) && now - r.heardAt > STALE_MS;
+        // …but not for ever: a human that is gone (its LEFT reached nobody, this guest still building)
+        // would hold finishDelay to the 360 s/lap cap. Past the same bound as the start's own backstop
+        // it is the local AI's, and a packet still brings it back.
+        const quiet = now - r.heardAt > (r.hostAi || r.everHeard ? STALE_MS : HOLD_MAX_MS);
         if (quiet !== r.stale) { if (quiet) goLocal(r); else goWire(r); }
         if (r.stale) continue;
         // Per-remote scratch (the ._smp precedent): poseRemote copies fields
@@ -1174,17 +1183,26 @@ const NetPlay = (function () {
             phaseC = localCar && localCar.pitArmed;
       const phaseChanged = phaseA !== lastPhaseA || phaseB !== lastPhaseB || phaseC !== lastPhaseC;
       if (localCar && G.track && G.track.def && (now - lastStrategy >= 1000 || phaseChanged)) {
+        // MODEL (a guest supplying its race epoch) and start() reset lastStrategy to -Infinity: only
+        // THEN does a terminal state need resending. On the 1 s cadence it cost one reliable event per
+        // retired car per guest for the rest of the race, filling a frozen guest's EVENT_INBOX_CAP.
+        const peerArrived = lastStrategy === -Infinity;
         lastStrategy = now; lastPhaseA = phaseA; lastPhaseB = phaseB; lastPhaseC = phaseC;
         broadcastStrategy(strategyState(localCar, G.wireId(localCar), G.track.def.id));
         // Resend the host's terminal AI state with the existing reliable sync.
-        // A guest may bind its race handlers after the original retirement;
-        // MODEL resets lastStrategy when that guest supplies its race epoch.
-        if (role === "host") for (const c of G.cars || []) {
+        // A guest may bind its race handlers after the original retirement.
+        if (role === "host" && peerArrived) for (const c of G.cars || []) {
           if (!c.local && !c.human && c.retired) reportLap({ lap: c.lap, code: c.code,
             driverId: c.driverId, retired: c.dnf || "mechanical", invalid: true });
         }
       }
-      if (localCar && now - lastPublish >= PUBLISH_MS) {
+      // A HIDDEN TAB PUBLISHES NOTHING. platform-session keeps pumping tick() at
+      // 500 ms so pings hold the session open, but physics runs from rAF only:
+      // the pose is frozen while its speed is still 70+ m/s, so peers solved
+      // contact against a ghost and never saw the silence that hands the car to
+      // their local AI. Silent, they do; goWire resumes it when this tab returns.
+      const hidden = typeof document !== "undefined" && !!document && document.hidden === true;
+      if (localCar && !hidden && now - lastPublish >= PUBLISH_MS) {
         // A FIXED 20 Hz, whatever the frame rate. `lastPublish = now` dropped
         // the phase remainder every time: 50 ms is three 60 Hz frames and a
         // bit, so the rate alternated 15-20 Hz, sat at 15 Hz at 30 fps and
