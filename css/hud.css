@@ -784,6 +784,13 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   body:not(.desktop) #hud-tach {
     width: min(132px, 100%);
   }
+  /* Shipped touch offsets are a translate (helmet energy y:-6 is -6svh, 51px
+     on this screen). On a portrait chase that translate is still painted and
+     pulls ERS up through SPEED, and the tyre's y:-2 walks it off the top
+     (393×852 @200%, tyre y=-38). Portrait places TYRES with bottom:100% and
+     the column with flow; the translate fights both. A placed chip
+     (data-hl-user) keeps its move. */
+  body:not(.desktop) :is(#hud-energy, #hud-tyre):not([data-hl-user]) { translate: none; }
 }
 /* REAR-VIEW MIRROR. An empty frame: js/render/shared/mirror-pass.js measures
    this box every half second and the renderer paints the mirror camera into
@@ -955,11 +962,15 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    — and --dock-r-w was taken off the same stale BOOST edge. The top band got
    this fix first (`transition-property` on the --hud-z-top group above); the
    dock, the bottom band and the two top-right buttons are measured the same
-   way. RELATIVE also resets left/max-height inside syncPhoneFit: a transition
-   returns its previous rectangle until the next frame, even at 0.01ms.
-   Paint-only properties keep their 0.01ms, so nothing that was instant
-   starts moving. */
-:root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, #pausebtn, #btn-cam, #hud-rel) {
+   way. The band's children do not inherit that list — #hud-energy kept
+   transition-property:all, so leaving the helmet (its -6svh translate)
+   started a transition that a paused clock (freeze / reduced-motion)
+   held at the old offset and the bar stayed through SPEED. `.hud-bottom *`
+   is in the list for that. RELATIVE also resets left/max-height inside
+   syncPhoneFit: a transition returns its previous rectangle until the next
+   frame, even at 0.01ms. Paint-only properties keep their 0.01ms, so
+   nothing that was instant starts moving. */
+:root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, .hud-bottom *, #pausebtn, #btn-cam, #hud-rel) {
   transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
 }
 /* The flag clears the DROPPED strip, so it tracks the same measured edge: 70px
@@ -2080,16 +2091,13 @@ body.desktop #hud-inputs:not([data-hl-user]) {
       bottom: calc(anchor(top) + var(--gap));
       margin: 0;
     }
-    /* HELMET touch: ERS rides the same left dock column as TYRES, stacked above
-       it — not centred with y:-37 over the wheel (mid-visor float, 2026-10-07). */
-    body[data-hl-set="helmet"]:not(.desktop) #hud-tyre { anchor-name: --apex-hud-tyre; }
-    body[data-hl-set="helmet"]:not(.desktop) #hud-energy {
-      position: absolute;
-      position-anchor: --apex-hud-tyre;
-      left: anchor(left);
-      bottom: calc(anchor(top) + var(--gap));
-      margin: 0;
-    }
+    /* HELMET ERS stays in the cluster grid. Anchoring it to the tyre failed:
+       the tyre follows #hud-energy in the tree, anchor() does not resolve a
+       later sibling, and the bar fell back onto the gear plate (852×393
+       helmet, the whole bar). The shipped y:-6 translate would also make the
+       tyre an invalid anchor. Drop that translate so the dock anchor on
+       TYRES is the only shift. */
+    body[data-hl-set="helmet"]:not(.desktop) #hud-tyre[data-hl] { translate: none; }
   }
   /* TOUCH SECTORS ↔ RIGHT DOCK: no CSS anchor here. --dock-r-w is the
      painted inset from the leftmost right-dock control (fitHud), so the

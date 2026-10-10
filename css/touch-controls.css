@@ -581,12 +581,12 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   .hud-bottom {
     position: static; transform: none; left: auto; right: auto; bottom: auto;
     display: grid;
-    grid-template-columns: auto auto auto;
+    grid-template-columns: max-content max-content max-content;
     grid-template-areas:
       "gear speed  ot"
       "gear energy aero";
-    align-items: center; justify-items: center;
-    gap: calc(var(--gap) * 0.25) calc(var(--gap) * 2 / 3);
+    align-items: start; justify-items: center;
+    gap: var(--gap) calc(var(--gap) * 2 / 3);
     min-width: 0;                  /* may shrink before it pushes a dock */
     pointer-events: none;
   }
@@ -594,9 +594,19 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      each one is pure added height. */
   #hud-ot { grid-area: ot; margin: 0; }
   #hud-aero { grid-area: aero; margin: 0; }
-  #hud-gearbox { grid-area: gear; margin: 0; align-self: stretch; justify-content: center; }
-  #hud-speed { grid-area: speed; }
-  #hud-energy { grid-area: energy; margin: 0; }
+  #hud-gearbox { grid-area: gear; margin: 0; align-self: stretch; justify-content: center; min-width: max-content; }
+  /* SPEED's line box was taller than the row the spanning gear left it, so the
+     glyph painted through the whole ERS bar (852×393 chase: speed × energy
+     65×15, the bar's full height). line-height 1 + an explicit min-height
+     makes the row hold the digits; end/start pins each to its own edge of
+     that row instead of centring one into the other. */
+  #hud-speed { grid-area: speed; line-height: 1; min-height: 1em; align-self: end; }
+  #hud-energy { grid-area: energy; margin: 0; align-self: start; min-width: max-content; }
+  /* Helmet's shipped energy offset is a -6svh translate (393px tall → 24px).
+     It stays on after the camera leaves the visor — chase has no data-hl and
+     still paints 0 -23.58px, so the bar climbs through SPEED (852×393 chase
+     and HUD 200%). Helmet keeps the offset; a placed chip keeps its move. */
+  body:not(.desktop):not([data-hl-set="helmet"]) #hud-energy:not([data-hl-user]) { translate: none; }
   /* The AERO chip's text is a live COUNTDOWN — "AERO 240m", "NO AERO ZONE" —
      so it changes width every frame. Wrapping it to two lines made the whole
      cluster jump a row taller and back as the car approached a zone. */
@@ -622,7 +632,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
          enough to read a quarter-full at a glance and no longer. Stretched to
          300px it was the widest thing in the cluster, which made the least
          urgent readout the most prominent one. */
-      grid-template-columns: auto auto minmax(140px, 190px) auto auto;
+      grid-template-columns: max-content max-content minmax(80px, 190px) max-content max-content;
       grid-template-areas: "gear speed energy ot aero";
       gap: 0 20px;
     }
@@ -632,7 +642,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     }
     body.desktop #hud-gear { font-size: 58px; min-width: 44px; }
     body.desktop #hud-tach { width: 172px; height: 18px; }
-    body.desktop #hud-energy { width: auto; justify-self: stretch; height: 18px; }
+    body.desktop #hud-energy { width: auto; justify-self: stretch; height: 18px; min-width: 0; }
     body.desktop #hud-speed { font-size: 42px; }
     body.desktop .hud-unit { font-size: var(--fs-micro); margin-left: calc(var(--gap) / 3); }
     body.desktop #hud-ot, body.desktop #hud-aero { font-size: 15px; padding: calc(var(--gap) * 2 / 3) calc(var(--gap) * 7 / 6); }
@@ -692,7 +702,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      back — and it comes back as a tap target off the top of the screen, not as
      anything that looks like a width problem. */
   body.steer-buttons .hud-bottom {
-    grid-template-columns: auto auto;
+    grid-template-columns: max-content max-content;
     grid-template-areas:
       "gear speed"
       "gear energy"
