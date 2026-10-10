@@ -596,6 +596,38 @@ function radioTopSlot(root, bcast) {
   hStyle(root, "--radio-top-w", ((right - RADIO_TOP_GAP - x) / as).toFixed(1) + "px");
   hStyle(root, "--radio-top-h", (t.height / as).toFixed(1) + "px");
 }
+// THE PAINTED GUARANTEE, one function for every caller: fitHud runs it last, invalidateFit right
+// after its own radioTopSlot (which alone could relight hud-radio-top over the tower until the next
+// fit tick repaired it).
+function radioPaintedCollapse(root) {
+  // Painted guarantee: if the card still rects onto S3 or the tower, collapse
+  // the hanging lane and drop the top slot. Do NOT call radioTopSlot again —
+  // that re-ran announceLane, cleared data-lane-collapsed when a gap reopened,
+  // and re-lit hud-radio-top, so the same-key clash path forced a full fit
+  // every tick. Under selected-2 load that left #minimap.currentCSSZoom on a
+  // stale cap while --hud-z-top moved (compact mmCss 142 ≠ 110).
+  const annPaint = typeof document !== "undefined" ? document.getElementById("announce") : null;
+  if (annPaint && !annPaint.hidden) {
+    const a = annPaint.getBoundingClientRect();
+    const hit = (el) => {
+      if (!el || el.hidden) return false;
+      const r = el.getBoundingClientRect();
+      return !!(a.width > 0 && r.width > 0
+        && r.left < a.right - 0.5 && a.left < r.right - 0.5
+        && r.top < a.bottom - 0.5 && a.top < r.bottom - 0.5);
+    };
+    const tower = _hudTop || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
+    if (hit(els.hudSectors) || hit(tower)) {
+      hToggle(document.body, "hud-radio-top", false);
+      const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();
+      hStyle(root, "--announce-lane-x", (salPx + RADIO_TOP_GAP).toFixed(1) + "px");
+      hStyle(root, "--announce-lane-shift", "0%");
+      hStyle(root, "--announce-lane-w", "0px");
+      if (annPaint.toggleAttribute) annPaint.toggleAttribute("data-lane-collapsed", true);
+      void annPaint.offsetHeight;
+    }
+  }
+}
 // THE MIRROR AS PAINTED, for the centre column under it. The flag and the
 // radio card clear the mirror through --mir-bot (css/hud.css), which is built
 // from the mirror's SHIPPED box — so a mirror MOVE & SIZE grew (s150) or moved
@@ -886,7 +918,15 @@ function fitHud() {
   const scR = els.hudSectors ? layoutRect(els.hudSectors) : null;
   const mz = zoomDiv(els.minimap, zTopPub), sz = zoomDiv(els.hudSectors, zTopPub);
   const salM = mmR && mmR.width ? Math.max(0, mmR.left - 10 * mz) : null;
-  const sarM = scR && scR.width ? Math.max(0, window.innerWidth - scR.right - 10 * sz) : null;
+  // THE RIGHT INSET IS THE TOKEN WHEN IT IS READABLE. On touch #hud-sectors is pushed inboard by
+  // --dock-r-w (css/hud.css), so its right edge is the notch inset PLUS the dock stand-off: reading
+  // that as the inset charged the right half ~210 px it does not owe and fit the tower to 0.575 on a
+  // 844x390 phone (8 px POS/LAP/TIME text), and hiding the plate (SECTORS off) jumped the band back to
+  // ~1.0. --sar is a registered length on a device (announceLane reads it the same way); where it is
+  // not readable (a bare engine, the unit fixtures: "env(...)") the plate's own edge is still measured.
+  let sarTok = null;
+  try { const v = parseFloat(getComputedStyle(root).getPropertyValue("--sar")); if (Number.isFinite(v) && v >= 0) sarTok = v; } catch (_) { /* mini-dom / detached root */ }
+  const sarM = sarTok != null ? sarTok : (scR && scR.width ? Math.max(0, window.innerWidth - scR.right - 10 * sz) : null);
   const sal = salM != null ? salM : (sarM != null ? sarM : 0);
   const sar = sarM != null ? sarM : (salM != null ? salM : 0);
   // WITH the gap strip and WITHOUT it. When the band fits at the player's own
@@ -1372,33 +1412,7 @@ function fitHud() {
   if (els.hudSectors) void els.hudSectors.offsetHeight;
   radioTopSlot(root, bcast);
   announceLane(root);
-  // Painted guarantee: if the card still rects onto S3 or the tower, collapse
-  // the hanging lane and drop the top slot. Do NOT call radioTopSlot again —
-  // that re-ran announceLane, cleared data-lane-collapsed when a gap reopened,
-  // and re-lit hud-radio-top, so the same-key clash path forced a full fit
-  // every tick. Under selected-2 load that left #minimap.currentCSSZoom on a
-  // stale cap while --hud-z-top moved (compact mmCss 142 ≠ 110).
-  const annPaint = typeof document !== "undefined" ? document.getElementById("announce") : null;
-  if (annPaint && !annPaint.hidden) {
-    const a = annPaint.getBoundingClientRect();
-    const hit = (el) => {
-      if (!el || el.hidden) return false;
-      const r = el.getBoundingClientRect();
-      return !!(a.width > 0 && r.width > 0
-        && r.left < a.right - 0.5 && a.left < r.right - 0.5
-        && r.top < a.bottom - 0.5 && a.top < r.bottom - 0.5);
-    };
-    const tower = _hudTop || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
-    if (hit(els.hudSectors) || hit(tower)) {
-      hToggle(document.body, "hud-radio-top", false);
-      const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();
-      hStyle(root, "--announce-lane-x", (salPx + RADIO_TOP_GAP).toFixed(1) + "px");
-      hStyle(root, "--announce-lane-shift", "0%");
-      hStyle(root, "--announce-lane-w", "0px");
-      if (annPaint.toggleAttribute) annPaint.toggleAttribute("data-lane-collapsed", true);
-      void annPaint.offsetHeight;
-    }
-  }
+  radioPaintedCollapse(root);   // terminal: nothing after it may re-run radioTopSlot (hud-metrics-layout.test)
   mirrorClear(root);
   if (els.minimap) void els.minimap.offsetHeight;
 }
@@ -2205,6 +2219,7 @@ function invalidateFit() {
   const root = document.documentElement;
   hStyle(root, "--hud-fit-stamp", "");
   radioTopSlot(root, document.body.classList.contains("hud-prof-broadcast"));
+  radioPaintedCollapse(root);   // a collapse the fit just made must survive this re-pick
   mirrorClear(root);
 }
 _invalidateFit = invalidateFit;

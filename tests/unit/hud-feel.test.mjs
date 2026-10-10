@@ -921,6 +921,32 @@ test("a moved / resized tower, map, sector box or gearbox leaves every fit cap w
   assert.notDeepEqual(c.refit(), cBase, "un-marked painted rects move the caps — the fixture can see the defect");
 });
 
+/** The fit with the safe-area token readable (as on a device, where --sar is a registered length)
+ *  and the sector plate's left edge moved by `shift` px — what a touch dock stand-off does to it. */
+function topZoomWithPlateShift(shift, sarPx) {
+  const h = fitHarness();
+  const gcs = h.sb.getComputedStyle;
+  h.sb.getComputedStyle = (el) => { const r = gcs(el); return Object.assign({}, r, { getPropertyValue: (k) => (k === "--sar" ? sarPx + "px" : r.getPropertyValue(k)) }); };
+  const R = h.els.hudSectors._rect;
+  h.els.hudSectors._rect = { left: R.left - shift, top: R.top, right: R.right - shift, bottom: R.bottom, width: R.width, height: R.height };
+  return +h.refit()["--hud-z-top"];
+}
+
+test("the safe-area inset comes from --sar, never from the sector plate's right edge (touch dock stand-off)", () => {
+  // On touch #hud-sectors is pushed inboard by --dock-r-w (css/hud.css), so its right edge is the inset
+  // PLUS the dock: reading it as the notch inset charged the band ~210 px it does not owe and fit the
+  // tower to 0.575 on a 390 px phone (8 px text). The plate moving inboard must not move the fit.
+  const edge = topZoomWithPlateShift(0, 10), docked = topZoomWithPlateShift(150, 10);
+  assert.ok(edge > 0.4, "the fixture's band is not on the floor (" + edge + ")");
+  assert.equal(docked, edge, "a plate standing off the dock fits the same band as one at the edge");
+  // Hiding the plate entirely (MINIMAL) already read the other side's inset; the token makes it the same answer.
+  const gone = fitHarness();
+  const gcs = gone.sb.getComputedStyle;
+  gone.sb.getComputedStyle = (el) => { const r = gcs(el); return Object.assign({}, r, { getPropertyValue: (k) => (k === "--sar" ? "10px" : r.getPropertyValue(k)) }); };
+  gone.els.hudSectors._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+  assert.ok(+gone.refit()["--hud-z-top"] >= edge - 1e-9, "removing the plate never needs MORE room");
+});
+
 test("an empty timing tower still fits the bottom band and writes the dock cap", () => {
   const full = fitHarness().snap();
   const h = fitHarness({ emptyTower: true }), got = h.snap();
