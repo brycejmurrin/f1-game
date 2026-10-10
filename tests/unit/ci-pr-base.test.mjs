@@ -53,7 +53,89 @@ test("every workflow step that diffs a pull request resolves its base through th
   assert.match(job("sweeps", "ship-filter"), CALL, "the geometry sweeps filter");
   assert.match(job("renderer-filter", "renderer-macos"), CALL, "the renderer filter");
   assert.match(job("node-suites", "sweeps-parts"), /BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "the node-suites plan step");
+  // 15-F3: the two steps #1292 missed. xr-filter's regex names ci.yml, so a stale base re-ran the VR job.
+  assert.match(job("xr-filter", "xr"), CALL, "the xr filter");
+  assert.match(job("unit-plan", "node-suites"), /BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "the unit-plan step");
   assert.match(docs, /PR_BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "docs-guards' prose check");
   assert.match(resolver, /\[ "\$EVENT" = pull_request \] && BEFORE="\$\(bash "\$\(dirname "\$0"\)\/ci-pr-base\.sh" "\$BEFORE"\)"/,
     "the selected gate's resolver");
+});
+
+test("Structural guards ignores ship ceiling raises but still rejects a PR raise", () => {
+  // Run the actual workflow shell and ratchet CLI on a GitHub-shaped merge.
+  // A stale event base must not attribute ship's +100 raise to a scenery PR.
+  const shell = ci.match(/- name: Ratchet ceilings vs the base[\s\S]*?        run: \|\n((?:          .*\n)+)/)?.[1]
+    .replace(/^          /gm, "");
+  assert.ok(shell, "the Structural guards ratchet shell is present");
+  const scratch = path.join(ROOT, "scratch");
+  fs.mkdirSync(scratch, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(scratch, "ci-ratchet-base-"));
+  const g = (...args) => cp.execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
+  const ceiling = (lines) => fs.writeFileSync(path.join(dir, "tests/data/ratchets.json"),
+    JSON.stringify({ files: { "js/game.js": { lines } } }) + "\n");
+  const commit = (message) => { g("add", "-A"); g("commit", "-qm", message); };
+  const run = (base, event = "pull_request", mode = "") => cp.spawnSync("bash", ["-e", "-c", shell], {
+    cwd: dir, encoding: "utf8", env: { ...process.env, RATCHET_BASE: base, RATCHET_MODE: mode, EVENT: event },
+  });
+  try {
+    g("init", "-q", "-b", "main"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    for (const file of ["tools/ci/ci-pr-base.sh", "tools/check/ratchets.mjs"]) {
+      fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+      fs.copyFileSync(path.join(ROOT, file), path.join(dir, file));
+    }
+    fs.mkdirSync(path.join(dir, "tests/data"), { recursive: true });
+    ceiling(100); commit("original ship ceiling");
+    const staleBase = g("rev-parse", "HEAD");
+    g("checkout", "-qb", "scenery");
+    fs.writeFileSync(path.join(dir, "scenery"), "one circuit change\n"); commit("scenery only");
+    g("checkout", "-q", "main"); ceiling(200); commit("ship ceiling moved");
+    const baseTip = g("rev-parse", "HEAD");
+    g("merge", "-q", "--no-ff", "-m", "synthetic PR merge", "scenery");
+    let result = run(staleBase);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, new RegExp(`ratchet base: ${baseTip}`));
+    assert.match(result.stdout, /0 ceiling\(s\) moved/);
+    // Pushes keep their explicit previous SHA and existing advisory behavior.
+    result = run(staleBase, "push", "--advisory");
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /100 -> 200 \(\+100\)/);
+    assert.match(result.stdout, /advisory/);
+    // A PR-owned raise remains fatal even though the stale base is normalized.
+    ceiling(250);
+    result = run(staleBase);
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stdout, /200 -> 250 \(\+50\)/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("15-F5: a green draft run is reused only while the base branch has not moved since it started", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "reuse-draft-"));
+  try {
+    // A stub `gh`: the runs list carries one green pull_request ci.yml run; the commit lookup prints the base tip's date.
+    fs.writeFileSync(path.join(dir, "gh"), [
+      "#!/usr/bin/env bash",
+      'case "$2" in',
+      '  repos/o/r/actions/runs*) printf \'{"workflow_runs":[{"id":77,"status":"completed","conclusion":"success","path":".github/workflows/ci.yml","event":"pull_request","run_started_at":"2026-10-10T10:00:00Z"}]}\' ;;',
+      '  repos/o/r/commits/*) printf \'%s\\n\' "$STUB_TIP_DATE" ;;',
+      '  *) exit 1 ;;',
+      "esac",
+    ].join("\n"), { mode: 0o755 });
+    const reuse = (tipDate, extra = {}) => cp.spawnSync("bash", [path.join(ROOT, "tools/ci/reuse-draft-fast.sh")], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", GITHUB_EVENT_ACTION: "ready_for_review",
+        PR_HEAD_SHA: "a".repeat(40), PR_BASE_REF: "ship", GITHUB_RUN_ID: "1", STUB_TIP_DATE: tipDate, ...extra },
+    });
+    const r1 = reuse("2026-10-10T09:00:00Z");
+    assert.match(r1.stdout, /reuse=true/, r1.stderr);
+    assert.match(r1.stdout, /run=77/);
+    const r2 = reuse("2026-10-10T11:30:00Z");
+    assert.match(r2.stdout, /reuse=false/, "the base took a commit after the draft run started: the merge-dependent checks must re-run");
+    assert.match(r2.stderr, /moved/);
+    // No base ref, or an unreadable tip date, is not "same": fail safe.
+    assert.match(reuse("2026-10-10T09:00:00Z", { PR_BASE_REF: "" }).stdout, /reuse=false/);
+    assert.match(reuse("").stdout, /reuse=false/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  assert.match(ci, /PR_BASE_REF: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/, "the reuse-draft job passes the base ref");
 });

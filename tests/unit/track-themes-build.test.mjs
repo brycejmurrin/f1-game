@@ -104,6 +104,25 @@ function longDesign(ctx, seed, theme, targetL = 6950) {
   assert.ok(v.stats.lengthM > 6700 && v.stats.lengthM <= V.LIMITS.lenMax, `${theme}: built ${v.stats.lengthM} m, near the ${V.LIMITS.lenMax} m cap`);
   return d;
 }
+
+test("authored nature and venue objects survive sharing and add real scenery without build warnings", { timeout: 300000 }, async () => {
+  const { Tracks, ctx } = boot();
+  for (const kind of ["palms", "hedge", "pines", "bushes", "marshal", "camera"]) {
+    const design = designFor(ctx, 7, "blossom");
+    const bare = verifyDef(Tracks, customDef(Tracks, design), { quiet: true });
+    design.props = [0.2, 0.45, 0.7].flatMap((s) => [-1, 1].map((side) => ({ kind, s, side, gap: 24 }))).slice(0, ctx.TrackDesignerProps.CAPS[kind]);
+    const back = await ctx.TrackCodec.decode(await ctx.TrackCodec.encode(design));
+    assert.equal(back.ok, true);
+    assert.equal(back.design.props.length, ctx.TrackDesignerProps.CAPS[kind]);
+    const before = Tracks._vmConsole.length;
+    const built = verifyDef(Tracks, customDef(Tracks, back.design), { quiet: true });
+    // Pines and marshal shelters use instance batches, not the flat props mesh.
+    const added = kind === "pines" || kind === "marshal" ? built.inst > bare.inst : built.props > bare.props;
+    assert.ok(added, `${kind}: authored geometry grows (vertices ${bare.props} → ${built.props}, instances ${bare.inst} → ${built.inst})`);
+    assert.ok(built.props < PROP_VERT_CAP);
+    assert.deepEqual(Tracks._vmConsole.slice(before).filter((l) => /custom (?:prop|scenery).*failed/.test(l)), []);
+  }
+});
 /** The def as CustomTracks.toRaw builds it once it hands the DESIGN to
  *  TrackThemes.defFields (the length-scaled fields): the theme's fields re-applied with the design. */
 function scaledDef(ctx, design) {

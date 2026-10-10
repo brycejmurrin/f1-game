@@ -378,7 +378,7 @@ test("the data-hub DAG orders every tab module before hub.js", () => {
 // it is last and every module points at it. Derived like the data hub's.
 test("the track-designer DAG orders shape.js before every module that destructures it, and the screen last", () => {
   const SHAPE = "js/editor/shape.js", CODEC = "js/editor/codec.js", ELEV = "js/editor/elev-presets.js", SCREEN = "js/editor/designer.js";
-  const pure = new Set([SHAPE, CODEC, ELEV, SCREEN]);
+  const pure = new Set([SHAPE, CODEC, ELEV, SCREEN, "js/editor/scenery-preview.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js"]);
   assert.equal(MANIFEST.LAZY_EDITOR[0], SHAPE, "shape.js evaluates first");
   assert.equal(MANIFEST.LAZY_EDITOR[MANIFEST.LAZY_EDITOR.length - 1], SCREEN, "the screen evaluates last");
   const shapeEdges = MANIFEST.LAZY_EDITOR.filter((f) => !pure.has(f)).map((f) => [SHAPE, f]);

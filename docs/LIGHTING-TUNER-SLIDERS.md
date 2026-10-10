@@ -563,8 +563,8 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
 | `alwaysLampFloor` | ALWAYS-ON LAMP FLOOR | 0 … 0.687 | 0 | — | ✓ | frame-lights.js×2 |
-| `twilightFloor` | TWILIGHT FLOOR | 0 … 1 | 0.3 | — | ✓ | game.js×2 |
-| `twilightRamp` | TWILIGHT RAMP | 0.4 … 6 | 6 | — | ✓ | game.js×2 |
+| `twilightFloor` | TWILIGHT FLOOR | 0 … 1 | 0.3 | — | ✓ | game.js×2, atmosphere.js |
+| `twilightRamp` | TWILIGHT RAMP | 0.4 … 6 | 6 | — | ✓ | game.js×2, atmosphere.js |
 | `twilightWarm` | TWILIGHT WARMTH | 0 … 2.5 | 1 | — | ✓ | game.js×2 |
 | `lampWarmup` | LAMP WARM-UP | 0 … 2.5 | 1 | — | ✓ | frame-lights.js×2 |
 | `lampWarmupDim` | WARM-UP DIP | 0 … 0.9 | 0.3 | — |   | frame-lights.js×2 |
@@ -588,7 +588,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `neonBoost` | NEON & LENS BLOOM | 0 … 1.5 | 0.6 | `uBloomBoost` | ✓ | glx.js×2 |
 | `cityGlowMul` | CITY SKYGLOW | 0 … 2.75 | 1 | — | ✓ | atmosphere.js×2 |
 | `cityGlowWarm` | SKYGLOW WARMTH | -5 … 3.3 | 0 | — | ✓ | atmosphere.js |
-| `cityGlowTint` | SKYGLOW ON AMBIENT | 0 … 0.7 | 0.28 | — |   | game.js×2 |
+| `cityGlowTint` | SKYGLOW ON AMBIENT | 0 … 0.7 | 0.28 | — | ✓ | game.js×2 |
 | `bloomMul` | BLOOM AMOUNT | 0 … 2.5 | 1 | — | ✓ | game.js, setup-camera.js |
 | `bloomSpread` | BLOOM SPREAD | 0.25 … 2.125 | 1 | `uSpread` | ✓ | — |
 | `threshOff` | BLOOM THRESHOLD | -0.57 … 0.4 | 0 | — |   | game.js, setup-camera.js |
@@ -670,14 +670,14 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `sunDiscSize` | SUN DISC SIZE | 0.06 … 2.405 | 1 | `uSunDiscSize` | ✓ | game.js×2, glx.js×2 |
 | `sunCorona` | SUN CORONA RING | 0 … 2.5 | 1 | `uSunCorona` | ✓ | game.js×2, glx.js×2 |
 | `sunSquash` | SUN HORIZON SQUASH | 0 … 2.5 | 1 | `uSunSquash` | ✓ | game.js×2, glx.js×2 |
-| `starSize` | STAR SIZE | 0.2 … 2.2 | 1 | `uStarSize` |   | game.js×2, glx.js×2 |
+| `starSize` | STAR SIZE | 0.2 … 2.2 | 1 | `uStarSize` | ✓ | game.js×2, glx.js×2 |
 | `starTwinkle` | STAR TWINKLE | 0 … 4 | 1 | `uStarTwinkle` |   | game.js×2, glx.js×2 |
 | `moonDiscSize` | MOON DISC SIZE | 0.06 … 2.405 | 1 | `uMoonDiscSize` |   | game.js×2, glx.js×2 |
 | `moonHalo` | MOON HALO SPREAD | 0 … 2.5 | 1 | `uMoonHalo` |   | game.js×2, glx.js×2 |
 | `cityGlowReach` | CITY GLOW REACH | 0.04 … 2.44 | 1 | `uCityGlowReach` | ✓ | game.js×2, glx.js×2 |
 | `cloudDef` | CLOUD DEFINITION | 0 … 1.2 | 1 | `uCloudDef` |   | game.js×2, glx.js×2 |
 | `skyColorSat` | SKY COLOUR SATURATION | 0 … 2.5 | 1 | — | ✓ | atmosphere.js×2 |
-| `wetness` | WETNESS | -0.05 … 1 | -0.05 | — |   | apex.js, game.js×9, weather-arc.js×5, glx.js×2 |
+| `wetness` | WETNESS | -0.05 … 1 | -0.05 | — |   | apex.js, game.js×9, weather-arc.js×6, glx.js×2 |
 | `rainCount` | RAIN INTENSITY | 20 … 1000 | 360 | — | ✓ | particles.js×3 |
 | `rainStreak` | RAIN STREAK LEN | 0.04 … 2.44 | 1 | — | ✓ | particles.js×2 |
 | `rainSpeed` | RAIN FALL SPEED | 0.04 … 2.44 | 1 | — | ✓ | particles.js×4 |

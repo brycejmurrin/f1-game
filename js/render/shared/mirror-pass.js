@@ -97,6 +97,7 @@ const MirrorPass = (function () {
     const _P = [0, 0, 0], _F = [0, 0, 1], _R = [1, 0, 0], _U = [0, 1, 0];
     // Canvas fractions [x, y, w, h], top-left origin, of the #hud-mirror frame.
     let _rect = null, _measureAt = -Infinity, _shown = false, _frame = 0, _cars = 0, _drawn = 0;
+    let _run = 0;   // consecutive FULL passes drawn since the last interruption: the freeze cadence (b._mirMats is only current inside a run)
     let _el = null, _canvas = null, _dead = false, _lastW = 0, _lastH = 0;
     // COLLAPSED: tapped away this session. Not persisted — the next page load
     // shows the mirror the setting asks for — and cleared by the MIRROR key.
@@ -479,6 +480,7 @@ const MirrorPass = (function () {
         _pipMeasureAt = -Infinity;
       }
       if (!want) {
+        _run = 0;   // hidden/toggled: the recorded instance pack ages, so the next full pass must refresh it
         if (pip) { renderPip(frame, frameSky, night, wet, floodEmit); return; }
         if (g && g.mirrorRect) g.mirrorRect(null);
         return;
@@ -569,8 +571,12 @@ const MirrorPass = (function () {
       frame.mirrorLite = _q.lite;
       // Audit #8: on full, reuse last mirror instance pack every other drawn
       // frame (cars still redraw). First drawn frame always refreshes.
+      // The cadence counts the current RUN of full passes, not every pass ever drawn: a lite/hidden/failed interval
+      // leaves b._mirMats from before it, and a global parity could freeze the first full pass onto that old pack.
+      // _run is zeroed here and only advanced after a pass that drew, so a throw or a refused begin also resets it.
       const ie = _q.instEvery || 1;
-      const freezeInst = !_q.lite && ie > 1 && _drawn > 0 && (_drawn % ie) !== 0;
+      const run = _run; _run = 0;
+      const freezeInst = !_q.lite && ie > 1 && run > 0 && (run % ie) !== 0;
       frame.mirrorFreezeInstanced = freezeInst;
       if (freezeInst) _instFreezeSkips++; else if (!_q.lite) _instRefresh++;
       frame.tune = Object.assign(_mirTune, sv.tune || null, MIRROR_TUNE);
@@ -590,6 +596,7 @@ const MirrorPass = (function () {
           drawCars(wet, night, _q.reach, centre, skip);
           g.drawSky(frameSky);   // opaque first, then sky (gfx.js)
           _drawn++;
+          _run = _q.lite ? 0 : run + 1;
         }
       } finally {
         try { if (began) g.mirrorEnd(); }

@@ -25,6 +25,12 @@
     barrierGap: 1.0,
     dressingExclusions: [
       { kinds: ["city", "foliage"], s0: 0.36, s1: 0.47 },
+      // Windows are AUTHORED-frame like the row above (TrackSpace.sceneryRange adds
+      // _sceneryShift 0.8433); scenery/vegas.js sl(f) = f + 0.1567 is that same map.
+      // Hand-built Strip canyon, RACING 0.485-0.815 -> authored 0.642-0.972:
+      { kinds: ["city", "foliage"], s0: 0.642, s1: 0.972 },
+      // Sphere / Koval, RACING 0.22-0.34 -> authored 0.377-0.497 (overlaps the 0.36-0.47 row):
+      { kinds: ["city", "foliage"], s0: 0.377, s1: 0.497 },
       { kind: "lamps", s0: 0.27, s1: 0.36, side: -1 },
       { kind: "lamps", s0: 0.65, s1: 0.71, side: 1 },
     ],
@@ -58,11 +64,11 @@
     sectors: [0.3, 0.62],
     turns: [0.0513, 0.0653, 0.0868, 0.0928, 0.1093, 0.2588, 0.3003, 0.3328, 0.3398, 0.3638, 0.4383, 0.4913, 0.5223, 0.8388, 0.8443, 0.8558, 0.9898],
     barrier: { a: [0.97, 0.84, 0.12], b: [0.10, 0.10, 0.12], c: [0.85, 0.12, 0.48], night: [0.28, 0.10, 0.32], tyre: [0.97, 0.84, 0.12] },  // casino gold/black + neon magenta
-    furniture: { tree: "palm",  fol: [0.22, 0.42, 0.18], lamp: "arm",   lc: [1.0, 0.86, 0.55] },
+    furniture: { tree: "none",  fol: [0.22, 0.42, 0.18], lamp: "arm",   lc: [1.0, 0.86, 0.55] },
     kit: { marshal: "hut",       rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "scaffold",  hoarding: "led" },
     standSet: ["darkSteel", "scaffold", "alu"],
     // cityStyle: neon / dayPal name TrackSceneryData.NC / .DC colours
-    cityStyle: { neon: ["mag", "gold", "red", "cyan", "violet", "pink", "orange"], bias: 0.62, fh: [18, 50], bh: [44, 78],
+    cityStyle: { neon: ["mag", "gold", "red", "cyan", "violet", "pink", "orange"], bias: 0.62, fh: [6, 10], bh: [8, 16],
                  kinds: ["setback", "tiered", "podium", "slab", "twin", "jenga", "dome", "fin", "ziggurat", "drum"], neonKinds: ["screen", "clad", "antenna"], tone: null,
                  dayPal: ["charcoal", "graphite", "concrete", "darkglass", "steel", "bluglass", "gold", "bronze", "sand"] },
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,

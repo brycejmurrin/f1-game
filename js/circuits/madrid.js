@@ -34,24 +34,27 @@
     // exhibition-hall pit straight and the banked bullring sector); the old
     // road-overlap risk is handled by the guarded emitters, not exclusions.
     //
-    // The two rules below (s 0.15-0.55, 0.83-0.95) are a later, separate cut:
-    // tests/specs/new-hooks.spec.js's prop-vertex budget measured day 621,075 /
-    // night 968,561 against 250,000 — not a duplicate-layer bug like
-    // Singapore's (CI-3), just this generic layer covering ~74% of a 5.5 km
-    // lap at its normal density. Unlike Singapore's cityFront(), the generic
-    // city here has no per-circuit along()-step to widen (js/track/tracks.js's
-    // every(18)/every(26) is shared by 14 other circuits), so the only
-    // Madrid-local lever is exclusion. Cuts lap coverage to ~22%, kept where
-    // it was already theme-matched — flanking the two landmark precincts
-    // above — rather than spread thin lap-wide. See the budget comment in
+    // The city rule below is a later, separate cut: tests/specs/new-hooks.spec.js's
+    // prop-vertex budget measured day 621,075 / night 968,561 against 250,000 —
+    // not a duplicate-layer bug like Singapore's (CI-3), just this generic layer
+    // covering ~74% of a 5.5 km lap at its normal density. Unlike Singapore's
+    // cityFront(), the generic city here has no per-circuit along()-step to widen
+    // (js/track/tracks.js's every(18)/every(26) is shared by 14 other circuits),
+    // so the only Madrid-local lever is exclusion. It now covers the WHOLE lap
+    // (an earlier cut left s 0.06-0.15 / 0.55-0.68 alive; the Valdebebas pass
+    // removed those too): the generic city generators never run on Madrid, so
+    // def.cityStyle's heights are inert and the only mid-rise is the bespoke
+    // urbanBlock frontage in scenery/madrid.js. See the budget comment in
     // tests/specs/new-hooks.spec.js for the measured before/after and why 250,000
-    // was never reachable (even zero city buildings floors near 435,000, on
-    // the required bespoke landmarks alone).
+    // was never reachable (even zero city buildings floors near 435,000, on the
+    // required bespoke landmarks alone).
     dressingExclusions: [
+      { kinds: ["city"], s0: 0, s1: 1 },
+      // city is already cut lap-wide above; it is repeated in the two
+      // precinct zones so each zone states its full kind set (the
+      // new-hooks Madrid foundation spec pins these two zones).
       { kinds: ["city", "foliage"], s0: 0.95, s1: 0.06 },
       { kinds: ["city", "foliage", "lighting"], s0: 0.68, s1: 0.83 },
-      { kinds: ["city"], s0: 0.15, s1: 0.55 },
-      { kinds: ["city"], s0: 0.83, s1: 0.95 },
     ],
     pal: {
       zenith: [0.30, 0.58, 0.90],
@@ -78,6 +81,7 @@
     standSet: ["crimson", "sandstone", "steel"],  // the file hardcodes these at its own call sites
     // IFEMA / Castilian campus: white / glass / steel / stone (not ochre brick canyon)
     // cityStyle: neon / dayPal name TrackSceneryData.NC / .DC colours
+    // (inert while the full-lap "city" exclusion above stands; values as shipped)
     cityStyle: { neon: ["red", "gold", "white", "cyan", "violet"], bias: 0.28, fh: [14, 38], bh: [30, 70],
                  kinds: ["setback", "slab", "cylinder", "podium", "spire", "dome", "chevron", "arch"], neonKinds: ["clad", "antenna"], tone: { n: [0.16, 0.16, 0.18], d: [0.64, 0.63, 0.66] },
                  dayPal: ["white", "bluglass", "steel", "stone", "paleblue", "concrete", "darkglass", "cream"] },

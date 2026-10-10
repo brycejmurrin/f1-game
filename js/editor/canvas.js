@@ -32,6 +32,7 @@ const DesignerCanvas = (function () {
     spd0: "#f0f921", spd1: "#fca636", spd2: "#e16462", spd3: "#b12a90", spd4: "#6a00a8",
   });
   const SPD = [COL.spd0, COL.spd1, COL.spd2, COL.spd3, COL.spd4];
+  const HEIGHT = ["#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"]; // viridis: low → high
   const SPD_EDGES = [40, 55, 70, 85];   // m/s: < 40 · < 55 · < 70 · < 85 · ≥ 85
   const spdBucket = (v) => { let b = 0; while (b < SPD_EDGES.length && v >= SPD_EDGES[b]) b++; return b; };
   const LABEL_FONT = "11px system-ui, sans-serif";
@@ -51,11 +52,12 @@ const DesignerCanvas = (function () {
     let base = [];                   // the design's control loop (read-only here)
     let work = null;                 // a drag's copy, until it is committed
     let built = null;                // TrackValidate's centreline { px, pz, n, hw, total }
+    let scenery = null, sceneryOn = false, sceneryKey = "", sceneryTrack = null;
     let stale = false;               // the built road no longer matches the loop being dragged
     let issues = [];
     let sel = -1, span = -1, hover = -1, tool = "select";
     let scale = 0.1, cx = 0, cz = 0, fitted = false;
-    let mode = "none", dragI = -1, inserted = false, moved = false, start = null, path = null;
+    let mode = "none", dragI = -1, inserted = false, moved = false, start = null, path = null, rangeAnchor = -1;
     // Group drag: when a SPAN is selected, moving any member translates the whole
     // group by the same delta (origins snapshotted at beginDrag).
     let dragGroup = null, dragOrigins = null, drag0 = null;
@@ -78,7 +80,7 @@ const DesignerCanvas = (function () {
     let preview = null;              // setTool's ghost: (i) → { pts: [[x, z]…] } | null
     let ghost = null, ghostKey = null; // its last answer, and the (fn, anchor, loop) it answered
     let last = null;                 // the pointer's latest canvas-relative position
-    let heat = null;                 // setHeat's per-node speed (m/s), or null
+    let heat = null, heatKind = "speed", heatLow = 0, heatHigh = 0; // built-node speed or height
 
     // ── view ────────────────────────────────────────────────────────────────
     const toSX = (x) => (x - cx) * scale + W / 2;
@@ -260,11 +262,16 @@ const DesignerCanvas = (function () {
       if (tool === "draw") { mode = "draw"; path = [[toWX(p.x), toWZ(p.y)]]; render(); return; }
       const i = hitHandle(p.x, p.y);
       if (i >= 0) {
+        if (hooks.rangeSelect && hooks.rangeSelect()) {
+          rangeAnchor = sel >= 0 && span < 0 ? sel : i;
+          sel = rangeAnchor; span = i === sel ? -1 : i;
+          mode = "range"; taps = []; tellSelect(); render(); return;
+        }
         // Select first — never move on down. A later deliberate drag (threshold /
         // already-selected / short touch hold) promotes this press into a move.
         // Shift (or span-end arm): keep the anchor so onPick can set the span end.
         taps[taps.length - 1] = { kind: "pick", i };
-        const shift = !!ev.shiftKey;
+        const shift = !!(ev.shiftKey || (hooks.extendSelection && hooks.extendSelection()));
         const wasSel = sel === i || isInSpan(i);
         if (!shift) {
           if (wasSel && isInSpan(i)) {
@@ -304,6 +311,13 @@ const DesignerCanvas = (function () {
       pointers.set(ev.pointerId, p); last = p;
       if (hold && hold.id === ev.pointerId && Math.hypot(p.x - start.x, p.y - start.y) > HOLD_PX) cancelHold();
       if (mode === "held") return;
+      if (mode === "range") {
+        const i = hitHandle(p.x, p.y);
+        if (i >= 0 && (sel !== rangeAnchor || span !== (i === rangeAnchor ? -1 : i))) {
+          sel = rangeAnchor; span = i === sel ? -1 : i; tellSelect(); render();
+        }
+        return;
+      }
       if (mode === "pinch" && pointers.size >= 2) {
         const [a, b] = [...pointers.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
@@ -478,14 +492,22 @@ const DesignerCanvas = (function () {
       g.moveTo(toSX(R[0][0]), toSY(R[0][1]));
       for (let k = n - 1; k >= 0; k--) { const p = R[k]; g.lineTo(toSX(p[0]), toSY(p[1])); }
       g.closePath();
-      g.fillStyle = stale ? COL.roadStale : COL.road;
+      g.fillStyle = stale ? COL.roadStale : sceneryOn ? "#50545a" : COL.road;
       g.fill("evenodd");
-      if (heat && !stale && heat.length === n) heatFill(L, R, n);
+      if (heatReady()) heatFill(L, R, n);
       g.strokeStyle = COL.edge; g.lineWidth = 1; g.stroke();
+      // Subtle red/white kerbs make the live overhead road legible at lap scale.
+      if (sceneryOn && !stale) for (const edge of [L, R]) {
+        g.lineWidth = Math.max(1, scale * 1.5);
+        for (let k = 0; k < n; k += 3) {
+          const j = (k + 3) % n; g.strokeStyle = k % 6 ? "#d84438" : "#e4e4d9";
+          g.beginPath(); g.moveTo(toSX(edge[k][0]), toSY(edge[k][1])); g.lineTo(toSX(edge[j][0]), toSY(edge[j][1])); g.stroke();
+        }
+      }
       // centre line
       g.beginPath();
       for (let k = 0; k < n; k++) k ? g.lineTo(toSX(px[k]), toSY(pz[k])) : g.moveTo(toSX(px[k]), toSY(pz[k]));
-      g.closePath(); g.strokeStyle = COL.centre; g.lineWidth = 1; g.setLineDash([6, 8]); g.stroke(); g.setLineDash([]);
+      g.closePath(); g.strokeStyle = COL.centre; g.lineWidth = 1; g.setLineDash([6, 8]); if (!sceneryOn) g.stroke(); g.setLineDash([]);
       // start / finish line + direction arrow
       const w0 = (hw[0] || 7), tx = px[1 % n] - px[0], tz = pz[1 % n] - pz[0], tl = Math.hypot(tx, tz) || 1;
       g.strokeStyle = COL.start; g.lineWidth = 3;
@@ -497,11 +519,13 @@ const DesignerCanvas = (function () {
       g.lineTo(toSX(ax - tx / tl * 8 / Math.max(0.3, scale) + tz / tl * 5 / Math.max(0.3, scale)), toSY(az - tz / tl * 8 / Math.max(0.3, scale) - tx / tl * 5 / Math.max(0.3, scale)));
       g.closePath(); g.fill();
     }
-    // SPEED: one polygon per run of nodes in the same speed bucket (the wrap
+    const heatReady = () => heat && built && !stale && heat.length === built.n;
+    // One polygon per run of nodes in the same speed bucket (the wrap
     // merged), each one node wider than its run so no hairline shows between.
     function heatFill(L, R, n) {
-      const b = new Uint8Array(n);
-      for (let k = 0; k < n; k++) b[k] = spdBucket(heat[k]);
+      const b = new Uint8Array(n), palette = heatKind === "elevation" ? HEIGHT : SPD;
+      for (let k = 0; k < n; k++) b[k] = heatKind === "elevation"
+        ? (heatHigh - heatLow < 0.01 ? 2 : Math.min(4, Math.floor((heat[k] - heatLow) / (heatHigh - heatLow) * 5))) : spdBucket(heat[k]);
       let k0 = 0;
       while (k0 < n && b[k0] === b[(k0 - 1 + n) % n]) k0++;
       if (k0 === n) {                                   // one bucket all the way round: the whole ring
@@ -509,7 +533,7 @@ const DesignerCanvas = (function () {
         for (let k = 0; k < n; k++) k ? g.lineTo(toSX(L[k][0]), toSY(L[k][1])) : g.moveTo(toSX(L[k][0]), toSY(L[k][1]));
         g.closePath(); g.moveTo(toSX(R[0][0]), toSY(R[0][1]));
         for (let k = n - 1; k >= 0; k--) g.lineTo(toSX(R[k][0]), toSY(R[k][1]));
-        g.closePath(); g.fillStyle = SPD[b[0]]; g.fill("evenodd");
+        g.closePath(); g.fillStyle = palette[b[0]]; g.fill("evenodd");
         return;
       }
       for (let done = 0; done < n;) {
@@ -519,17 +543,20 @@ const DesignerCanvas = (function () {
         g.beginPath();
         for (let d = 0; d <= len; d++) { const p = L[(start + d) % n]; d ? g.lineTo(toSX(p[0]), toSY(p[1])) : g.moveTo(toSX(p[0]), toSY(p[1])); }
         for (let d = len; d >= 0; d--) { const p = R[(start + d) % n]; g.lineTo(toSX(p[0]), toSY(p[1])); }
-        g.closePath(); g.fillStyle = SPD[c]; g.fill();
+        g.closePath(); g.fillStyle = palette[c]; g.fill();
         done += len;
       }
     }
     function heatLegend() {
-      if (!heat || !built) return;
+      if (!heatReady()) return;
+      const elevation = heatKind === "elevation", palette = elevation ? HEIGHT : SPD;
+      const flat = elevation && heatHigh - heatLow < 0.01;
+      const label = elevation ? (flat ? "FLAT · " + heatLow.toFixed(1) + " m" : "LOW " + heatLow.toFixed(1) + " → HIGH " + heatHigh.toFixed(1) + " m") : "SLOW → FAST";
       const sw = 14, y = H - 22;
       g.font = LABEL_FONT; g.textBaseline = "middle";
-      g.fillStyle = COL.chipBg; g.fillRect(4, y - 4, 5 * sw + 92, sw + 8);
-      for (let i = 0; i < 5; i++) { g.fillStyle = SPD[i]; g.fillRect(8 + i * sw, y, sw - 2, sw); }
-      g.fillStyle = COL.chipText; g.fillText("SLOW → FAST", 14 + 5 * sw, y + sw / 2);
+      g.fillStyle = COL.chipBg; g.fillRect(4, y - 4, 5 * sw + g.measureText(label).width + 18, sw + 8);
+      for (let i = 0; i < 5; i++) { g.fillStyle = palette[flat ? 2 : i]; g.fillRect(8 + i * sw, y, sw - 2, sw); }
+      g.fillStyle = COL.chipText; g.fillText(label, 14 + 5 * sw, y + sw / 2);
     }
     function markers() {
       if (!built || !built.n || stale) return;
@@ -550,7 +577,7 @@ const DesignerCanvas = (function () {
       if (!N) return;
       g.beginPath();
       for (let i = 0; i < N; i++) i ? g.lineTo(toSX(pts[i][0]), toSY(pts[i][1])) : g.moveTo(toSX(pts[i][0]), toSY(pts[i][1]));
-      g.closePath(); g.strokeStyle = COL.ctrl; g.lineWidth = 1; g.setLineDash([3, 5]); g.stroke(); g.setLineDash([]);
+      g.closePath(); g.strokeStyle = COL.ctrl; g.lineWidth = 1; g.setLineDash([3, 5]); if (!sceneryOn) g.stroke(); g.setLineDash([]);
       if (span >= 0 && sel >= 0 && span !== sel) {
         g.beginPath();
         let i = sel; g.moveTo(toSX(pts[i][0]), toSY(pts[i][1]));
@@ -564,7 +591,7 @@ const DesignerCanvas = (function () {
         if (sx < -20 || sy < -20 || sx > W + 20 || sy > H + 20) continue;
         const inGroup = groupOn && S.inSpan(i, sel, span, N);
         const isSel = i === sel || inGroup || (i === dragI && mode === "drag") || (press && press.i === i);
-        const r = (isSel ? 7 : i === hover ? 6 : 4.5) * (touch ? 1.5 : 1);
+        const r = (isSel ? 7 : i === hover ? 6 : sceneryOn ? Math.min(2, Math.max(1, scale * 6)) : 4.5) * (touch ? 1.5 : 1);
         // Soft hit halo under a finger so the ≥44 px target reads on the map.
         if (touch && (isSel || i === hover)) {
           g.beginPath(); g.arc(sx, sy, HIT_TOUCH / 2, 0, Math.PI * 2);
@@ -648,7 +675,11 @@ const DesignerCanvas = (function () {
       if (canvas.dataset && canvas.dataset.arrows !== arrows) canvas.dataset.arrows = arrows;
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
       g.clearRect(0, 0, W, H);
-      grid(); road(); markers(); ghostLine(); controls(); drawing(); chipLabel(); heatLegend();
+      if (sceneryOn && scenery) DesignerSceneryPreview.draw(g, scenery, view(), "ground");
+      else grid();
+      road();
+      if (sceneryOn && scenery && !stale) DesignerSceneryPreview.draw(g, scenery, view(), "objects");
+      markers(); ghostLine(); controls(); drawing(); chipLabel(); heatLegend();
     }
 
     // ── api ─────────────────────────────────────────────────────────────────
@@ -658,8 +689,28 @@ const DesignerCanvas = (function () {
       // brings is still the old loop, so a moved drag stays stale.
       setBuilt(tr) { built = tr && tr.n ? tr : null; if (!(mode === "drag" && moved)) stale = false; render(); },
       setIssues(list) { issues = Array.isArray(list) ? list : []; render(); },
+      setScenery(design, on) {
+        sceneryOn = !!on && typeof DesignerSceneryPreview !== "undefined";
+        if (sceneryOn) {
+          const key = JSON.stringify([design.theme, design.look, design.props, design.seed]);
+          if (key !== sceneryKey || sceneryTrack !== built) {
+            scenery = DesignerSceneryPreview.plan(design, built); sceneryKey = key; sceneryTrack = built;
+          }
+        }
+        if (canvas.dataset) canvas.dataset.mapView = sceneryOn ? "scenery" : "outline";
+        render();
+      },
       /** SPEED: per-node speeds (m/s, the built road's n) paint the road; null clears. */
-      setHeat(v) { heat = v && v.length ? v : null; render(); },
+      setHeat(v, kind) {
+        heatKind = kind === "elevation" ? kind : "speed";
+        heat = v && v.length ? v : null; heatLow = Infinity; heatHigh = -Infinity;
+        if (heat) for (const value of heat) {
+          if (!Number.isFinite(value)) { heat = null; break; }
+          heatLow = Math.min(heatLow, value); heatHigh = Math.max(heatHigh, value);
+        }
+        if (canvas.dataset) canvas.dataset.heatMap = heat ? heatKind : "off";
+        render();
+      },
       setSelection(i, j) { ghostKey = null; sel = Number.isInteger(i) ? i : -1; span = Number.isInteger(j) ? j : -1; render(); },
       /** previewFn (optional): (pointIndex) → { pts: [[x, z]…] } | null, world
        *  coords — drawn as the dashed ghost of what the tool would stamp there.
