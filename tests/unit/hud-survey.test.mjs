@@ -13,7 +13,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { analyzeOverlap, controlClash, probeHudElements, rectHit } from "../../tools/lib/hud-geometry.mjs";
 import * as M from "../../tools/lib/hud-survey-matrix.mjs";
-import { applyCell, chromiumArgs, hudFitState, parseArgs, probeWithTransients, runExtras } from "../../tools/shot/hud-survey.mjs";
+import { applyCell, applySurveyExtras, chromiumArgs, hudFitState, parseArgs, probeWithTransients, runExtras } from "../../tools/shot/hud-survey.mjs";
 import { analyzeSamples, parseArgs as parseLive, summarize } from "../../tools/shot/hud-live-sample.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -137,6 +137,54 @@ test("probeWithTransients forces the radio card / limits / flag on, probes, and 
   assert.equal(ann.hidden, true);
   assert.equal(lim.hidden, true);
   assert.equal(ann.innerHTML, "<x>", "restored");
+});
+
+test("applySurveyExtras fills radio / flag / damage and collapses mirror, then invalidateFit", () => {
+  const clicks = [];
+  const fits = [];
+  const ann = { id: "announce", hidden: true, _r: [0, 0, 100, 20] };
+  const flag = { id: "hud-flag", hidden: true, textContent: "", className: "", _r: [0, 0, 40, 16] };
+  const dmg = { id: "hud-damage", hidden: true, _r: [0, 0, 40, 20] };
+  const mir = { id: "hud-mirror", hidden: false, click: () => clicks.push("mirror"), _r: [0, 0, 200, 60] };
+  const ctx = fakeDom([
+    ann, flag, dmg, mir,
+    { id: "announce-who", textContent: "", _r: [0, 0, 1, 1] },
+    { id: "announce-text", textContent: "", _r: [0, 0, 1, 1] },
+    { id: "announce-num", textContent: "", _r: [0, 0, 1, 1] },
+  ], { globals: {
+    window: {
+      __apex: { damage: () => ({ fwL: 0.5, fwR: 0, rw: 0, floor: 0, knock: false, worst: 0.5, shown: true }) },
+      GameHud: { invalidateFit: () => fits.push(1) },
+    },
+    HudDamage: { paint: (el, st, show) => { el.hidden = !show; el._st = st; return show; } },
+  } });
+  const cell = { radio: true, flag: "yellow", damage: 0.5, mirror: "chip" };
+  const out = JSON.parse(JSON.stringify(vm.runInContext(
+    `(${applySurveyExtras.toString()})(${JSON.stringify(cell)})`, ctx)));
+  assert.equal(out.radio, true);
+  assert.equal(ann.hidden, false);
+  assert.equal(out.flag, true);
+  assert.equal(flag.hidden, false);
+  assert.match(flag.textContent, /YELLOW/);
+  assert.equal(out.damage, true);
+  assert.equal(dmg.hidden, false);
+  assert.deepEqual(clicks, ["mirror"]);
+  assert.equal(fits.length, 1, "invalidateFit runs so radioTopSlot / announceLane see the forces");
+});
+
+test("CLI --radio / --flag / --damage / --mirror chip normalize into a one-cell plan", () => {
+  const p = parseArgs(["--device", "phone-landscape-844x390", "--cam", "cockpit", "--radio",
+    "--flag", "yellow", "--damage", "0.5", "--mirror", "chip", "--name", "phase0-forces"]);
+  assert.equal(p.cells.length, 1);
+  const c = p.cells[0];
+  assert.equal(c.radio, true);
+  assert.equal(c.flag, "yellow");
+  assert.equal(c.damage, 0.5);
+  assert.equal(c.mirror, "chip");
+  assert.equal(M.expectedVisibility(c, { desktop: false, cockpitCam: true }).announce.want, true);
+  assert.equal(M.expectedVisibility(c, { desktop: false, cockpitCam: true }).flag.want, true);
+  assert.equal(M.expectedVisibility(c, { desktop: false, cockpitCam: true }).damage.want, true);
+  assert.equal(M.expectedVisibility(c, { desktop: false, cockpitCam: true })["hud-mirror-chip"].want, true);
 });
 
 test("applyCell resets every live knob, in order, and reports a failing knob instead of throwing", () => {
@@ -294,7 +342,8 @@ test("expected-visible rules", () => {
   assert.equal(E({ device: "phone-landscape-844x390", cam: "cockpit" }, { desktop: false, cockpitCam: true }).ot.want, false);
   assert.equal(E({ device: "phone-landscape-844x390", cam: "cockpit", preset: "clean" }, { desktop: false, cockpitCam: true }).ot.want, true,
     "CLEAN places OT, so it escapes the touch-cockpit hide");
-  assert.equal(E({ device: "phone-landscape-844x390", cam: "cockpit" }, { desktop: false, cockpitCam: true }).speed.want, true, "phone cockpit keeps speed");
+  assert.equal(E({ device: "phone-landscape-844x390", cam: "cockpit" }, { desktop: false, cockpitCam: true }).speed.want, false,
+    "phone cockpit hides floating speed (css/track-detail.css body.cockpit-cam #hud-speed — was a false-positive missing finding)");
   // A wheel with no LCD (CLASSIC / NONE) drops body.cockpit-cam, but the strip
   // still paints at the cockpit offsets: the touch hide follows the layout set.
   const classic = E({ device: "phone-landscape-844x390", cam: "cockpit" }, { desktop: false, cockpitCam: false });

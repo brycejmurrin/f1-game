@@ -596,6 +596,30 @@ function radioTopSlot(root, bcast) {
   hStyle(root, "--radio-top-w", ((right - RADIO_TOP_GAP - x) / as).toFixed(1) + "px");
   hStyle(root, "--radio-top-h", (t.height / as).toFixed(1) + "px");
 }
+/** Drop hud-radio-top when the painted card still hits S3 or the tower.
+ *  Shared by fitHud and invalidateFit so a re-slot cannot relight the class
+ *  after a collapse the fit just made (hud-metrics-layout.test). */
+function radioPaintedCollapse(root) {
+  const annPaint = typeof document !== "undefined" ? document.getElementById("announce") : null;
+  if (!annPaint || annPaint.hidden) return;
+  const a = annPaint.getBoundingClientRect();
+  const hit = (el) => {
+    if (!el || el.hidden) return false;
+    const r = el.getBoundingClientRect();
+    return !!(a.width > 0 && r.width > 0
+      && r.left < a.right - 0.5 && a.left < r.right - 0.5
+      && r.top < a.bottom - 0.5 && a.top < r.bottom - 0.5);
+  };
+  const tower = _hudTop || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
+  if (!(hit(els.hudSectors) || hit(tower))) return;
+  hToggle(document.body, "hud-radio-top", false);
+  const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();
+  hStyle(root, "--announce-lane-x", (salPx + RADIO_TOP_GAP).toFixed(1) + "px");
+  hStyle(root, "--announce-lane-shift", "0%");
+  hStyle(root, "--announce-lane-w", "0px");
+  if (annPaint.toggleAttribute) annPaint.toggleAttribute("data-lane-collapsed", true);
+  void annPaint.offsetHeight;
+}
 // THE MIRROR AS PAINTED, for the centre column under it. The flag and the
 // radio card clear the mirror through --mir-bot (css/hud.css), which is built
 // from the mirror's SHIPPED box — so a mirror MOVE & SIZE grew (s150) or moved
@@ -884,9 +908,17 @@ function fitHud() {
   // whose notch is symmetric in landscape and never worse than 0.
   const mmR = els.minimap ? layoutRect(els.minimap) : null;
   const scR = els.hudSectors ? layoutRect(els.hudSectors) : null;
-  const mz = zoomDiv(els.minimap, zTopPub), sz = zoomDiv(els.hudSectors, zTopPub);
+  const mz = zoomDiv(els.minimap, zTopPub);
   const salM = mmR && mmR.width ? Math.max(0, mmR.left - 10 * mz) : null;
-  const sarM = scR && scR.width ? Math.max(0, window.innerWidth - scR.right - 10 * sz) : null;
+  // RIGHT INSET FROM --sar, NEVER FROM THE SECTOR BOX. On touch the plate's
+  // right edge already includes --dock-r-w (css/hud.css), so
+  // innerWidth - scR.right read ≈257 instead of the notch's ≈47 and
+  // --hud-z-top fitted to 0.575 (8 px tower text on 844×390). Guarded on the
+  // box having a WIDTH so a hidden anchor cannot invent a viewport-wide inset
+  // (MINIMAL / broadcast-cam — the 0.4-floor poison this block used to catch).
+  let sarEnv = 0;
+  try { sarEnv = parseFloat(getComputedStyle(root).getPropertyValue("--sar")) || 0; } catch (_) { /* */ }
+  const sarM = scR && scR.width ? Math.max(0, sarEnv) : null;
   const sal = salM != null ? salM : (sarM != null ? sarM : 0);
   const sar = sarM != null ? sarM : (salM != null ? salM : 0);
   // WITH the gap strip and WITHOUT it. When the band fits at the player's own
@@ -895,7 +927,14 @@ function fitHud() {
   // every notched phone. Only when it does not fit even without the strip
   // does the cap actually bite.
   const leftN = (map ? 10 + map : 0) + FIT_AIR;
-  const right = wide(els.hudSectors, zTopPub) + 10 + FIT_AIR;
+  // Charge the sector plate against the centred tower ONLY while they share
+  // a row. On a phone the plate hangs under PAUSE/CAM (top ≈ 64) below a
+  // tower that ends ≈ 56, so the horizontal clash this term guards does not
+  // exist — charging it anyway was the other half of the 0.575 zoom fit.
+  const tR0 = _hudTop ? layoutRect(_hudTop) : null;
+  const sectorsInTowerRow = !!(scR && scR.width && tR0 && tR0.height
+    && scR.top < tR0.bottom + FIT_AIR);
+  const right = sectorsInTowerRow ? (wide(els.hudSectors, zTopPub) + 10 + FIT_AIR) : 0;
   // WHERE IS THE TOWER? The model below splits the viewport at the centre and
   // charges each half its own cluster plus HALF the band — which is only true
   // while `.hud-top` is `left: 50%; translateX(-50%)`. The BROADCAST profile
@@ -1008,6 +1047,18 @@ function fitHud() {
   // the chip's own zoom units, it is 0 exactly when the box is gone.
   const secH = tall(els.hudSectors, zTopPub);
   hStyle(root, "--hud-sec-h", secH.toFixed(1) + "px");
+  // TRACK LIMITS / INPUTS measured heights for the right-column stack. INPUTS
+  // steps below a visible limits chip by --hud-limits-h (not a literal 2.6em);
+  // the inputs width feeds the centre-line dock cap so a HUD-150 paint (158 px)
+  // is reserved, not the max-width 120 px that under-cleared OT.
+  const limEl = els.hudLimits;
+  const limH = limEl && !limEl.hidden ? tall(limEl, zTopPub) : 0;
+  if (limH > 0) hStyle(root, "--hud-limits-h", limH.toFixed(1) + "px");
+  else if (root.style && root.style.removeProperty) root.style.removeProperty("--hud-limits-h");
+  const inpEl = typeof document !== "undefined" ? document.getElementById("hud-inputs") : null;
+  const inpW = inpEl && !inpEl.hidden ? wide(inpEl, zBotPub) : 0;
+  if (inpW > 0) hStyle(root, "--hud-inputs-w", inpW.toFixed(1) + "px");
+  else if (root.style && root.style.removeProperty) root.style.removeProperty("--hud-inputs-w");
   const chromeZ = zoomDiv(_hudTop || els.minimap, zTopPub) || scale || 1;
   // THE RIGHT DOCK'S WIDTH — BUT ONLY WHEN THE CHIP ACTUALLY REACHES IT.
   // Standing off unconditionally dragged a top-right chip halfway across the
@@ -1207,9 +1258,16 @@ function fitHud() {
   // own slider — css/overlays.css), which defaults to --hud-scale and is only
   // inline once the player has moved it. Comparing the dock's cap against the
   // wrong slider would either pin a cap that fits or drop one that does not.
+  // Touch floor ≈ 10/14 so --fs-micro (14 px) stays ≥ 10 px painted when the
+  // top band still has to cap. Desktop keeps the long-standing 0.4 floor
+  // (hud-fit-idempotent pins "no flip to 0.4" from a lagging currentCSSZoom).
+  const TOP_FLOOR = document.body.classList.contains("desktop") ? 0.4 : (10 / 14);
   const set = (prop, cap, base) => {
     if (cap >= base) root.style.removeProperty(prop);   // fits: the player's number, untouched
-    else root.style.setProperty(prop, String(Math.max(0.4, Math.round(cap * 1000) / 1000)));
+    else {
+      const floor = prop === "--hud-z-top" ? TOP_FLOOR : 0.4;
+      root.style.setProperty(prop, String(Math.max(floor, Math.round(cap * 1000) / 1000)));
+    }
   };
   set("--hud-z-top", capTop, scale);
   set("--hud-z-bot", capBot, scale);
@@ -1378,27 +1436,7 @@ function fitHud() {
   // and re-lit hud-radio-top, so the same-key clash path forced a full fit
   // every tick. Under selected-2 load that left #minimap.currentCSSZoom on a
   // stale cap while --hud-z-top moved (compact mmCss 142 ≠ 110).
-  const annPaint = typeof document !== "undefined" ? document.getElementById("announce") : null;
-  if (annPaint && !annPaint.hidden) {
-    const a = annPaint.getBoundingClientRect();
-    const hit = (el) => {
-      if (!el || el.hidden) return false;
-      const r = el.getBoundingClientRect();
-      return !!(a.width > 0 && r.width > 0
-        && r.left < a.right - 0.5 && a.left < r.right - 0.5
-        && r.top < a.bottom - 0.5 && a.top < r.bottom - 0.5);
-    };
-    const tower = _hudTop || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
-    if (hit(els.hudSectors) || hit(tower)) {
-      hToggle(document.body, "hud-radio-top", false);
-      const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();
-      hStyle(root, "--announce-lane-x", (salPx + RADIO_TOP_GAP).toFixed(1) + "px");
-      hStyle(root, "--announce-lane-shift", "0%");
-      hStyle(root, "--announce-lane-w", "0px");
-      if (annPaint.toggleAttribute) annPaint.toggleAttribute("data-lane-collapsed", true);
-      void annPaint.offsetHeight;
-    }
-  }
+  radioPaintedCollapse(root);
   mirrorClear(root);
   if (els.minimap) void els.minimap.offsetHeight;
 }
@@ -2204,7 +2242,10 @@ function invalidateFit() {
   if (!_hudTop || document.body.classList.contains("hud-hidden")) return;
   const root = document.documentElement;
   hStyle(root, "--hud-fit-stamp", "");
+  // Same painted-clash gate as fitHud: radioTopSlot alone can relight
+  // hud-radio-top after a collapse the previous fit just made.
   radioTopSlot(root, document.body.classList.contains("hud-prof-broadcast"));
+  radioPaintedCollapse(root);
   mirrorClear(root);
 }
 _invalidateFit = invalidateFit;

@@ -72,7 +72,9 @@ export const ENUMS = Object.freeze({
   layout: ["auto", "full", "timing", "driver", "compact"],
   map: ["on", "auto", "off"],
   gaps: ["on", "auto", "off"],
-  mirror: ["auto", "on", "off"],
+  // "chip" = MIRROR ON then collapse to #hud-mirror-chip (a tap on the frame).
+  mirror: ["auto", "on", "off", "chip"],
+  flag: ["off", "yellow", "vsc", "sc"],
   presetSet: ["cam", "both"],
   presetProf: ["shown", "standard", "minimal", "broadcast"],
   theme: ["dark", "light"],
@@ -109,6 +111,9 @@ export const DEFAULT_CELL = Object.freeze({
   device: "desktop-1280", track: "monza", cam: "chase", profile: "standard", layout: "full", map: "on", gaps: "on",
   mirror: "auto", preset: "shipped", presetSet: "cam", presetProf: "shown", theme: "dark", cvd: "off", contrast: "off", textSize: "normal",
   hudScale: null, uiScale: null, btnScale: null, tyres: "on", hud: "on", tod: "day", steer: "default", profileLive: "none", off: Object.freeze([]),
+  // Survey forces (Phase 0): radio card / caution flag / damage chip through
+  // real fit ticks — see tools/shot/hud-survey.mjs applySurveyExtras.
+  radio: false, flag: "off", damage: null,
 });
 export const BOOT_KNOBS = Object.freeze(["device", "track", "profile", "layout", "steer"]);
 
@@ -180,6 +185,17 @@ export function normalizeCell(raw, base = DEFAULT_CELL) {
         if (typeof n !== "number" || !Number.isFinite(n) || n < lo || n > hi) bad(`${k} must be ${lo}..${hi} (percent) or null`);
         c[k] = n;
       }
+    } else if (k === "radio") {
+      if (v === true || v === "true" || v === "on" || v === 1) c.radio = true;
+      else if (v === false || v === "false" || v === "off" || v === 0) c.radio = false;
+      else bad(`radio must be true/false (got ${JSON.stringify(v)})`);
+    } else if (k === "damage") {
+      if (v === null || v === "off" || v === "false") c.damage = null;
+      else {
+        const n = typeof v === "string" && /^\d+(\.\d+)?$/.test(v) ? Number(v) : v;
+        if (typeof n !== "number" || !Number.isFinite(n) || n < 0 || n > 1) bad(`damage must be 0..1 (got ${JSON.stringify(v)})`);
+        c.damage = n;
+      }
     } else if (k === "off") {
       const list = typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : v;
       if (!Array.isArray(list) || list.length > 14) bad("off must be a list of HudElements ids");
@@ -215,7 +231,7 @@ export function cellId(c) {
   if (c.name) return c.name;
   const parts = [short[c.device] || c.device, c.cam];
   if (c.track !== DEFAULT_CELL.track) parts.push(c.track);
-  for (const k of ["profile", "layout", "map", "gaps", "mirror", "theme", "cvd", "contrast", "textSize", "tyres", "hud", "tod", "steer", "profileLive"]) {
+  for (const k of ["profile", "layout", "map", "gaps", "mirror", "theme", "cvd", "contrast", "textSize", "tyres", "hud", "tod", "steer", "profileLive", "flag"]) {
     if (c[k] !== DEFAULT_CELL[k]) parts.push(`${k}-${c[k]}`);
   }
   if (typeof c.preset === "object") parts.push("offsets-" + hash6(JSON.stringify(c.preset)));
@@ -224,6 +240,8 @@ export function cellId(c) {
   if (c.presetProf !== "shown") parts.push("into-" + c.presetProf);
   for (const k of ["hudScale", "uiScale", "btnScale"]) if (c[k] != null) parts.push(k.replace("Scale", "") + c[k]);
   if (c.off && c.off.length) parts.push("off-" + c.off.join("."));
+  if (c.radio) parts.push("radio");
+  if (c.damage != null) parts.push("dmg" + String(c.damage).replace(".", "_"));
   return parts.join("-").replace(/[^a-z0-9._-]/gi, "_");
 }
 export const bootKey = (c) => BOOT_KNOBS.map((k) => c[k]).join("|");
@@ -674,7 +692,6 @@ export function expectedVisibility(cell, ctx = {}) {
   // only the wheel LCD's gear / speed hide. HELMET is its own set, the visor:
   // on touch it leaves out OT / AERO and BRAKE BIAS only.
   const cockpitSet = COCKPIT_LAYOUT_IDS.includes(cam), helmetSet = HELMET_LAYOUT_IDS.includes(cam);
-  const big = dev.w >= 900 && dev.h >= 600;
   const prof = cell.profileLive && cell.profileLive !== "none" ? cell.profileLive : cell.profile;
   const minimal = prof === "minimal", broadcast = prof === "broadcast";
   const lay = cell.layout;
@@ -705,8 +722,11 @@ export function expectedVisibility(cell, ctx = {}) {
   if (minimal || lay === "driver" || lay === "compact") want("sectors", false, "sectors drop under MINIMAL / DRIVER / COMPACT");
   else camRule("sectors", !(bcam && !broadcast), "a broadcast camera hides sectors outside the BROADCAST profile");
   camRule("gearbox", !(cockpitCam || bcam), "the wheel LCD (cockpit-cam) and broadcast cameras hide SPEED & GEAR; a helmet (the visor) paints the chip on every device");
-  camRule("speed", !((cockpitCam && big) || (broadcast && bcam)),
-    "cockpit-cam hides the floating speed only at >= 900x600; BROADCAST + broadcast cam hides .hud-bottom");
+  // css/track-detail.css: body.cockpit-cam #hud-speed { display: none } — every
+  // size, not only ≥900×600 (the old expected-visible rule was a false positive
+  // "missing" finding on phoneL-cockpit).
+  camRule("speed", !(cockpitCam || (broadcast && bcam)),
+    "cockpit-cam always hides the floating speed (wheel LCD); BROADCAST + broadcast cam hides .hud-bottom");
   for (const k of ["energy", "ot", "aero"]) {
     if (minimal || lay === "timing" || lay === "compact") want(k, false, "dropped by MINIMAL / TIMING / COMPACT");
     else camRule(k, !(bcam || (cockpitSet && !desktop && !placed.has(k)) || (helmetSet && k !== "energy" && !desktop && !placed.has(k))),
@@ -720,6 +740,14 @@ export function expectedVisibility(cell, ctx = {}) {
     "BROADCAST + broadcast cam hides .hud-bottom; touch cockpit hides it unless MOVE & SIZE placed it (css/track-detail.css)");
   if (cell.mirror === "off") want("mirror", false, "MIRROR: OFF");
   else if (cell.mirror === "on") camRule("mirror", true, "MIRROR: ON");
+  else if (cell.mirror === "chip") {
+    camRule("mirror", false, "MIRROR chip: frame collapsed to #hud-mirror-chip");
+    want("hud-mirror-chip", true, "MIRROR chip: the collapse chip is up");
+  }
+  // Survey forces: radio / flag / damage through real fit ticks (applySurveyExtras).
+  if (cell.radio) want("announce", true, "--radio: card filled for fit + measure");
+  if (cell.flag && cell.flag !== "off") want("flag", true, `--flag ${cell.flag}: caution chip forced on`);
+  if (cell.damage != null && cell.damage > 0) want("damage", true, `--damage ${cell.damage}: chip past Damage.SHOW`);
   // HudElements: an element switched OFF must be gone — and only that one,
   // which the rules above already assert for everything else.
   for (const id of cell.off || []) want(ELEMENT_TOGGLES[id], false, `HudElements: ${id} OFF (css/hud.css data-hud-hide)`);
@@ -931,7 +959,7 @@ export function selfTest(analyze = analyzeOverlap) {
   const cock = expectedVisibility(normalizeCell({ cam: "cockpit" }), { desktop: true, cockpitCam: true });
   check("desktop cockpit expects OT/AERO, not gearbox", cock.ot.want && cock.aero.want && cock.gearbox.want === false);
   const pc = expectedVisibility(normalizeCell({ cam: "cockpit", device: "phone-landscape-844x390" }), { desktop: false, cockpitCam: true });
-  check("touch cockpit hides OT unless placed", pc.ot.want === false && pc.speed.want === true);
+  check("touch cockpit hides OT and floating speed", pc.ot.want === false && pc.speed.want === false);
   check("touch cockpit hides TYRES unless placed", pc.tyre.want === false && cock.tyre.want === true);
   const offGear = expectedVisibility(normalizeCell({ off: ["gear"] }), { desktop: true });
   check("HudElements gear OFF hides the gearbox only", offGear.gearbox.want === false && offGear.speed.want === true);

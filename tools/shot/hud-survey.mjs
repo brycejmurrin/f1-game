@@ -25,7 +25,9 @@
 //   --preset (name or inline JSON offsets) --preset-set cam|both
 //   --preset-prof shown|standard|minimal|broadcast (the HUD style written) --theme --cvd
 //   --contrast --text-size --hud-scale --ui-scale --btn-scale --tyres --hud
-//   --tod --steer --profile-live --off <HudElements ids,…> --name. --url is NOT supported: local tree only.
+//   --tod --steer --profile-live --off <HudElements ids,…> --name
+//   --radio (card through real fit ticks) --flag yellow|vsc|sc --damage 0..1
+//   --mirror chip (collapse to #hud-mirror-chip). --url is NOT supported: local tree only.
 //
 // HOW A CELL IS MADE. Cells are grouped by BOOT KEY: device (viewport), track
 // (one race build per page) and the store keys js/game.js reads once at eval
@@ -78,9 +80,11 @@ const require = createRequire(import.meta.url);
 const CELL_FLAGS = { "--device": "device", "--cam": "cam", "--profile": "profile", "--layout": "layout", "--map": "map",
   "--gaps": "gaps", "--mirror": "mirror", "--preset": "preset", "--preset-set": "presetSet", "--preset-prof": "presetProf", "--theme": "theme",
   "--cvd": "cvd", "--contrast": "contrast", "--text-size": "textSize", "--hud-scale": "hudScale", "--ui-scale": "uiScale",
-  "--btn-scale": "btnScale", "--tyres": "tyres", "--hud": "hud", "--tod": "tod", "--steer": "steer", "--profile-live": "profileLive", "--off": "off", "--name": "name" };
+  "--btn-scale": "btnScale", "--tyres": "tyres", "--hud": "hud", "--tod": "tod", "--steer": "steer", "--profile-live": "profileLive",
+  "--off": "off", "--name": "name", "--flag": "flag", "--damage": "damage" };
 export const KNOWN_FLAGS = ["--matrix", "--track", "--frac", "--only", "--shard", "--out", "--no-shots", "--backend", "--gl",
-  "--min-font", "--wait", "--json", "--list", "--plan", "--self-test", "--merge", "--url", "--help", ...Object.keys(CELL_FLAGS)];
+  "--min-font", "--wait", "--json", "--list", "--plan", "--self-test", "--merge", "--url", "--help", "--radio",
+  ...Object.keys(CELL_FLAGS)];
 
 const insideOutput = (p) => ["artifacts", "scratch"].some((d) => {
   const rel = path.relative(path.join(ROOT, d), p);
@@ -126,6 +130,7 @@ export function parseArgs(argv, { now = new Date(), readFile = (p) => fs.readFil
     }
     one[k] = v;
   }
+  if (F.has("--radio")) one.radio = true;
   let expanded;
   try {
     if (Object.keys(one).length) {
@@ -197,7 +202,11 @@ export function applyCell(c) {
   step("tyres", () => a.tyres({ level: c.tyres === "off" ? "off" : "real" }));
   step("map", () => row("pm-hudmap", c.map));
   step("gaps", () => row("pm-hudgaps", c.gaps));
-  step("mirror", () => { try { row("pm-hudmirror", c.mirror); } catch (e) { a.mirror(c.mirror); } });
+  // "chip" is survey-only: turn the frame ON, then applySurveyExtras collapses it.
+  step("mirror", () => {
+    const mode = c.mirror === "chip" ? "on" : c.mirror;
+    try { row("pm-hudmirror", mode); } catch (e) { a.mirror(mode); }
+  });
   step("elements", () => {
     for (const [id] of HudElements.ELEMENTS) HudElements.set(id, true);
     for (const id of c.off || []) HudElements.set(id, false);
@@ -235,6 +244,56 @@ export function applyCell(c) {
     },
     ctx: { desktop: body.contains("desktop"), cockpitCam: body.contains("cockpit-cam"), bcam: body.contains("hud-bcam") },
   };
+}
+
+/** Survey forces that must survive real fit ticks (Phase 0): radio card,
+ *  caution flag, damage chip, mirror collapsed to its chip. Called AFTER the
+ *  measure jump so updateHud cannot immediately undo them; ends with
+ *  GameHud.invalidateFit so radioTopSlot / announceLane / painted-clash run. */
+export function applySurveyExtras(c) {
+  const out = { radio: false, flag: false, damage: false, mirrorChip: false };
+  if (c.radio) {
+    const who = document.getElementById("announce-who");
+    const text = document.getElementById("announce-text");
+    const num = document.getElementById("announce-num");
+    const a = document.getElementById("announce");
+    if (who) who.textContent = "VERSTAPPEN · RADIO · 33";
+    if (text) text.textContent = "CAUTION — CHEAPER STOP, ABOUT 23s LOST";
+    if (num) num.textContent = "33";
+    if (a) { a.hidden = false; out.radio = true; }
+  }
+  if (c.flag && c.flag !== "off") {
+    const el = document.getElementById("hud-flag");
+    if (el) {
+      const map = { yellow: ["YELLOW S2", "flag-yellow"], vsc: ["VSC", "flag-vsc"], sc: ["SAFETY CAR", "flag-sc"] };
+      const [txt, cls] = map[c.flag] || map.yellow;
+      el.hidden = false;
+      el.textContent = txt;
+      el.className = cls;
+      out.flag = true;
+    }
+  }
+  if (c.damage != null && c.damage > 0) {
+    const a = window.__apex;
+    if (a && a.damage) {
+      a.damage(null, { long: 1, lat: -0.3, sev: +c.damage });
+      const st = a.damage();
+      const el = document.getElementById("hud-damage");
+      if (el && st && typeof HudDamage !== "undefined" && HudDamage.paint) {
+        HudDamage.paint(el, st, true);
+        out.damage = !el.hidden;
+      }
+    }
+  }
+  if (c.mirror === "chip") {
+    const m = document.getElementById("hud-mirror");
+    if (m && !m.hidden) { m.click(); out.mirrorChip = true; }
+  }
+  try {
+    const gh = window.GameHud;
+    if (gh && gh.invalidateFit) gh.invalidateFit();
+  } catch { /* old tree */ }
+  return out;
 }
 
 /** Force the transient readouts on with their widest text, probe, restore —
@@ -412,6 +471,12 @@ async function runGroup(browser, group, plan, log) {
           const a = window.__apex;
           a.freeze(false); a.jump(frac, 60, 0); if (a.step) a.step(1 / 60, 2); a.freeze(true);
         }, plan.frac);
+        // Phase 0 survey forces AFTER the jump (updateHud would undo a pre-jump
+        // flag) then invalidateFit so the radio card / lane see them.
+        if (cell.radio || (cell.flag && cell.flag !== "off") || (cell.damage != null && cell.damage > 0) || cell.mirror === "chip") {
+          await page.evaluate(applySurveyExtras, cell);
+          await cdpShot(page, null);
+        }
         await cdpShot(page, null);
         if (plan.shots) {
           const file = path.join(plan.out, "shots", `${cell.id}.png`);

@@ -248,6 +248,57 @@ Prefix: `node tools/shot/hud-survey.mjs --device phone-landscape-844x390
 
 Items 1–4 and 6 are Phase 3/4 inputs; the allocator replaces the literals.
 
+## Quick-matrix survey, 2026-10-10 (after PR #1301's commits)
+
+`node tools/shot/hud-survey.mjs --matrix quick` (13 cells, every HUD piece on,
+monza @ 0.18): 56 findings — 21 overlap, 34 tinyText, 1 missing (the `speed`
+false positive). Output `artifacts/hud-survey/quick-2026-10-10/`.
+
+- **phoneL-cockpit: 0 overlaps** (the lane and INPUTS fixes hold); all its
+  findings are the 7.9 px text from the top-band zoom fit (Phase 0) and the
+  `speed` false positive.
+- **LIMITS × INPUTS in 12 of 13 cells** (desktop 1280 chase / cockpit / visor
+  / light / deutan / hud70 / hud150 / every preset, phone chase, portrait):
+  both chips hang under the sector box at `--hud-sec-h + 12px` (INPUTS) and
+  `+ 15px` (LIMITS), so the moment a track-limits strike shows they paint one
+  over the other (2.7k px² at 1280×720, 5.7k at HUD 150). This is the first
+  concrete item for Phase 3 and small enough to fix ahead of it: INPUTS steps
+  below the limits chip while `#hud-limits` is visible (measured height, not
+  `2.6em`), or the allocator publishes both tops.
+- **flag × announce** on `phoneL-chase` and `chase-hud150`: the caution flag
+  over the radio card in the survey's forced transient pass. The CSS caution
+  step (`+ 38px`) depends on `:has(#hud-flag:not([hidden]))`, which should
+  hold; the forced pass fills text without a fit tick, so treat as a survey
+  blind spot until Phase 0 item 2 lets the card go through real ticks, then
+  re-measure before changing CSS.
+- **chase-preset-big: tower × gaps chip** (desktop 1280, MOVE & SIZE "big"):
+  the enlarged tower reaches the gaps chip by 24×22 px — a preset clamp gap,
+  Phase 7's column metadata (the chip belongs to the left column).
+- **chase-preset-corners: sectors × INPUTS and LIMITS × INPUTS**: the
+  "corners" preset moves the sector box onto the right column stack — Phase 3.
+- `chase-hud70`: every readout at 9.8 px (the 70 % HUD size is the owner's
+  choice; the floor question in Phase 0 B applies).
+
+## Gap cells, 2026-10-10 (six one-cell runs the matrices never cover)
+
+`node tools/shot/hud-survey.mjs --device phone-landscape-844x390 …`, output
+`artifacts/hud-survey/gaps-2026-10-10/<cell>/`:
+
+| cell | flags | overlaps | note |
+|---|---|---|---|
+| cockpit-shipped | `--cam cockpit --off rel,strat,inputs` | 0 | the shipped default (opt-ins off) is clean; 8 tinyText (zoom fit) |
+| cockpit-hud130 | `--cam cockpit --hud-scale 130` | 0 | clean |
+| cockpit-hud150-btn150 | `--cam cockpit --hud-scale 150 --btn-scale 150` | 1 | INPUTS [444,184 158×54] × OT by 9×54 px: the centre-line cap subtracts 120 px in zoomed units, but at HUD 150 the trace paints 158 px wide — the cap should subtract the trace's PAINTED width (its own box, or `120px * var(--hud-z)` in screen terms); Phase 3 input, or a one-line follow-up |
+| cockpit-buttons | `--cam cockpit --steer buttons --off strat,inputs` | 0 | clean |
+| cockpit-tilt | `--cam cockpit --steer tilt` | 5 | tower × gaps chip (59×18 px — the chip sits in the tower's row at tilt's dock zoom) and RELATIVE × STRATEGY (78×54 px — the literal 168 px sidestep is too small at this zoom; adaptability gap 1) |
+| helmet-shipped | `--cam helmet --off rel,strat,inputs` | 1 | gearbox × energy (106×15 px) in the helmet touch bottom strip (HELMET_TOUCH offsets; bottom band — outside the allocator's scope, own fix) |
+
+Takeaways: the two fixes in #1301 hold across sizes and steer modes; the
+remaining phone clashes are the ones the plan already names (literal
+sidesteps in the left column, the top-band zoom fit, the right-column stack)
+plus two new small ones: the INPUTS cap in zoomed units and the helmet
+gear/ERS strip.
+
 ## Order of work (revised)
 
 0. Top-band zoom fix (Fix A) + `invalidateFit` relight fix + survey flags for
@@ -257,3 +308,19 @@ Items 1–4 and 6 are Phase 3/4 inputs; the allocator replaces the literals.
    allocator (fixes INPUTS zoom mix, DAMAGE × INPUTS, reserved LIMITS slot).
 4. Left column allocator (fixes the 168 px sidestep).  5. `rightDockInset()`.
 6. Centre-band top.  7. Column metadata.
+
+## Phase 0 landed (2026-10-10)
+
+Branch `cursor/hud-phase0-zoom-59af`:
+
+1. **Top-band zoom (Fix A):** `sar` from `--sar` (not `scR.right`); sector width
+   charged only when `scR.top < tower.bottom + FIT_AIR`; touch `--hud-z-top`
+   floor `10/14` so `--fs-micro` stays ≥ 10 px.
+2. **`invalidateFit`:** routes through `radioPaintedCollapse` (same painted-clash
+   gate as `fitHud`); pinned in `hud-metrics-layout.test.mjs`.
+3. **INPUTS:** centre-line cap uses `--hud-inputs-w` (painted); steps below a
+   visible `#hud-limits` by `--hud-limits-h`.
+4. **Survey:** `--radio`, `--flag yellow|vsc|sc`, `--damage 0..1`, `--mirror chip`;
+   `applySurveyExtras` runs after the measure jump + `invalidateFit`. Speed
+   expected-visible: `cockpit-cam` always hides `#hud-speed` (false positive fixed).
+

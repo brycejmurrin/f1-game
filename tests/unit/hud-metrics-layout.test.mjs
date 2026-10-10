@@ -76,11 +76,17 @@ test("MINIMAL drops widgets, and a hidden anchor cannot poison the fit", () => {
   for (const sel of ["#hud-sectors", "#hud-box-best", "#hud-energy", "#hud-ot", "#hud-aero", "#hud-bb"])
     assert.match(css, new RegExp("body\\.hud-prof-minimal " + sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   // The inset reads are guarded on the rect having a WIDTH, and each falls back
-  // to the other side rather than to a viewport-wide number.
+  // to the other side rather than to a viewport-wide number. The RIGHT inset is
+  // --sar (never scR.right: that includes --dock-r-w on touch and fitted the
+  // top band to 0.575). The sector WIDTH is charged only while it shares the
+  // tower's rows (scR.top < tR.bottom + FIT_AIR).
   assert.match(hud, /mmR && mmR\.width \? Math\.max\(0, mmR\.left - 10 \* mz\) : null/);
-  assert.match(hud, /scR && scR\.width \? Math\.max\(0, window\.innerWidth - scR\.right - 10 \* sz\) : null/);
+  assert.match(hud, /scR && scR\.width \? Math\.max\(0, sarEnv\) : null/);
+  assert.match(hud, /getPropertyValue\("--sar"\)/);
+  assert.match(hud, /sectorsInTowerRow/);
   assert.match(hud, /const sal = salM != null \? salM : \(sarM != null \? sarM : 0\);/);
   assert.match(hud, /const sar = sarM != null \? sarM : \(salM != null \? salM : 0\);/);
+  assert.match(hud, /TOP_FLOOR|10 \/ 14/, "touch top-band floor keeps --fs-micro ≥ 10 px");
 });
 
 // THE TWO MEASURED OFFSETS THE HUD CHROME HANGS OFF. Both replaced a literal
@@ -130,10 +136,16 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   // Painted announce collapse must be terminal in the fit: a trailing
   // radioTopSlot re-lit hud-radio-top and cleared data-lane-collapsed.
   const fitBody = hud.slice(hud.indexOf("function fitHud"), hud.indexOf("\nfunction ", hud.indexOf("function fitHud") + 1));
-  const paintCollapse = fitBody.indexOf('toggleAttribute("data-lane-collapsed", true)');
-  assert.ok(paintCollapse > 0, "fitHud paints data-lane-collapsed on a hit");
-  assert.equal(fitBody.indexOf("radioTopSlot(", paintCollapse), -1,
+  assert.match(fitBody, /radioPaintedCollapse\(root\)/, "fitHud routes through the shared painted-clash collapse");
+  assert.equal(fitBody.indexOf("radioTopSlot(", fitBody.indexOf("radioPaintedCollapse")), -1,
     "no radioTopSlot after painted announce collapse (undoes the collapse)");
+  // invalidateFit must use the same gate — radioTopSlot alone relit the class.
+  const inv = hud.slice(hud.indexOf("function invalidateFit"), hud.indexOf("\nfunction ", hud.indexOf("function invalidateFit") + 1));
+  assert.match(inv, /radioTopSlot\(/);
+  assert.match(inv, /radioPaintedCollapse\(root\)/,
+    "invalidateFit must collapse a painted clash, not only re-slot");
+  assert.ok(inv.indexOf("radioPaintedCollapse") > inv.indexOf("radioTopSlot"),
+    "collapse runs after the slot pick inside invalidateFit");
 });
 
 test("HUD layout options live in a full-width pause submenu", () => {
