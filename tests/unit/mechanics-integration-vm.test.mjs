@@ -606,3 +606,49 @@ test("ERS recovery needs the car moving: holding the brake or coasting at a stan
   assert.ok(p.energy > 0.3, "braking from speed recovers energy: " + p.energy);
   g.G._testInput = null;
 });
+
+// ---- Rolling-start hand-over (R1: 01-F1, 03-F3) --------------------------------------------------------
+// The AI never advances c.head, so the car took the wheel facing the heading it was DROPPED with: 93 deg off the
+// road at Silverstone, wall within 15 steps. Drive the real game VM through the run-up and read the heading the
+// step the player gets the wheel.
+async function handoverErrDeg(game) {
+  game.G.daily.stop(); game.G.timeTrial = true; game.G.raceWeather = "dry";
+  await game.G.startRace();
+  const p = game.G.player, Tr = vm.runInContext("Tracks", game.ctx);
+  game.step(1);
+  assert.equal(p.human, false, "armed: the AI drives the run-up");
+  for (let i = 0; i < 900; i++) {
+    const was = p.human;
+    game.step(1);
+    if (!was && p.human) {
+      const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+      Tr.sample(game.G.track, p.s, smp);
+      const err = (p.head - Math.atan2(smp.t[0], smp.t[2])) * 180 / Math.PI;
+      return { err: ((err + 540) % 360) - 180, vLat: p.vLat, yawRateCur: p.yawRateCur };
+    }
+  }
+  assert.fail("the hand-over never happened");
+}
+test("flying-start hand-over: the car takes the wheel pointing along the road (Silverstone bends; Monza control)", async () => {
+  const mz = await handoverErrDeg(g);
+  assert.ok(Math.abs(mz.err) < 2, "straight run-up control: " + mz.err);
+  const sv = await createGame({ track: "silverstone" });
+  try {
+    const r = await handoverErrDeg(sv);
+    assert.ok(Math.abs(r.err) < 2, "silverstone hand-over heading is " + r.err.toFixed(1) + " deg off the tangent");
+    assert.equal(r.vLat, 0); assert.equal(r.yawRateCur, 0);
+  } finally { sv.close(); }
+});
+
+test("flying-start: a session quit mid-countdown does not stop the next time trial arming its rolling start", async () => {
+  g.G.daily.stop(); g.G.timeTrial = false; g.G.raceWeather = "dry";
+  await g.G.startRace();          // a GP: the gantry countdown, which FlyingStart.update() sees in "count"
+  g.step(1);
+  assert.equal(g.G.state, "count");
+  g.G.quitToMenu();               // update() never runs in the menu, so only stop() can forget "count"
+  g.G.timeTrial = true;
+  await g.G.startRace();
+  g.step(1);
+  assert.equal(g.G.flyingStart.active(), true, "the next session's first countdown frame is a new start");
+  assert.equal(g.G.player.human, false);
+});
