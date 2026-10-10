@@ -1410,6 +1410,74 @@ test("a job's reported log is the file holding its output, and status tails it",
   } finally { fs.rmSync(fake, { recursive: true, force: true }); }
 });
 
+// 2026-10-09: a one-shot `call` parent dies before a job's exit handler runs, so a later apex_job_status (another
+// process, disk manifest only) used to read the verdict off the log's last line: a plain-text CLI that exited 0 was
+// "failed". The sh wrapper now leaves the real exit code beside the log. And a finished result over the cap
+// (hud_survey: ~150 KB of cells) keeps its headline keys instead of blowing the client's reply limit.
+test("job exit code survives the parent (disk-only status) and a huge result is capped", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const fake = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-jobs-test-"));
+  try {
+    fs.mkdirSync(path.join(fake, "tools", "track"), { recursive: true });
+    fs.writeFileSync(path.join(fake, "tools/track/verify-track.cjs"),
+      'const big = Array.from({ length: 4000 }, (_, i) => ({ cell: "c" + i, pad: "x".repeat(20) }));\n'
+      + 'console.log(JSON.stringify({ ok: true, counts: { total: 4000 }, cells: big }));\n');
+    fs.writeFileSync(path.join(fake, "tools/track/graph-parity.cjs"), 'console.log("all within caps - exit 0");\n');
+    fs.writeFileSync(path.join(fake, "tools/track/float-audit.cjs"), 'console.log("nope"); process.exit(3);\n');
+    const toolResult = (body, { isError = false } = {}) => ({ content: [{ type: "text", text: JSON.stringify(body) }], ...(isError || body.ok === false ? { isError: true } : {}) });
+    const refuse = (error, message, fix) => toolResult({ ok: false, error, message, fix });
+    const mk = () => createExtras({ ROOT: fake, toolResult, refuse, acquireLock: () => null, releaseLock() {}, occupancyRefuse: () => null,
+      assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
+    const body = (r) => JSON.parse(r.content[0].text);
+    const first = mk();
+    const settle = async (x, jobId) => {
+      for (let i = 0; i < 200; i++) {
+        const b = body(x.handlers.apex_job_status({ jobId }));
+        if (b.state !== "running") return b;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      throw new Error(`job ${jobId} never finished`);
+    };
+    const ok = body(first.handlers.apex_job_start({ kind: "graph_parity_all", base: "HEAD" }));
+    const bad = body(first.handlers.apex_job_start({ kind: "float_all" }));
+    await settle(first, ok.jobId); await settle(first, bad.jobId);
+    const big = body(first.handlers.apex_job_start({ kind: "verify_all" }));   // two jobs at a time
+    await settle(first, big.jobId);
+    const dir = path.join(fake, "artifacts/logs/apex-jobs");
+    assert.equal(fs.readFileSync(path.join(dir, `${ok.jobId}.exit`), "utf8"), "0");
+    assert.equal(fs.readFileSync(path.join(dir, `${bad.jobId}.exit`), "utf8"), "3");
+
+    // The parent "died" with the manifest still running: a fresh process judges by the exit file, not the log.
+    for (const id of [ok.jobId, bad.jobId]) {
+      const f = path.join(dir, `${id}.json`);
+      const m = JSON.parse(fs.readFileSync(f, "utf8"));
+      Object.assign(m, { state: "running", exit: null, pid: 2 ** 22 + 1, ended: null });
+      fs.writeFileSync(f, JSON.stringify(m));
+    }
+    const second = mk();
+    const okS = body(second.handlers.apex_job_status({ jobId: ok.jobId }));
+    assert.equal(okS.state, "done", "plain-text last line, exit 0: done");
+    assert.equal(okS.exit, 0);
+    assert.equal(body(second.handlers.apex_job_status({ jobId: bad.jobId })).exit, 3);
+    const bigS = body(second.handlers.apex_job_status({ jobId: big.jobId }));
+    assert.equal(bigS.out.truncated, true, "over the cap");
+    assert.deepEqual(bigS.out.counts, { total: 4000 }, "headline keys survive");
+    assert.ok(bigS.out.keys.includes("cells") && !("cells" in bigS.out), "the big array is named, not returned");
+    assert.ok(JSON.stringify(bigS).length < 40000, `status reply stays small (${JSON.stringify(bigS).length})`);
+  } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
+
+// 2026-10-09: the async survey job carried only preset/fracs/tod/count, so cams (and cam/az/el/dist/h/side/hud/shots)
+// vanished: {cams:[orbit,eye]} came back orbit-only. shot-survey.mjs takes the rest as --plan-json.
+test("shot-survey --plan-json carries cams into the plan", () => {
+  const run = (...extra) => JSON.parse(spawnSync(process.execPath, [path.join(ROOT, "tools/shot/shot-survey.mjs"),
+    "--tracks", "monza", "--preset", "custom", "--fracs", "0.1", "--dry-run", ...extra], { encoding: "utf8", cwd: ROOT }).stdout);
+  assert.equal(run().shotsPerTrack, 1);
+  const two = run("--plan-json", JSON.stringify({ cams: ["orbit", "eye"] }));
+  assert.deepEqual(two.shots.map((x) => x.cam), ["orbit", "eye"]);
+});
+
 // 2026-10-07 (#1192): apex_hud_shot / apex_hud_survey outlast the host's
 // ~60–120 s MCP call, so they default to hud_* jobs. Those kinds run only the
 // argv the server built and pinned — never one a JSON caller supplies.

@@ -173,6 +173,12 @@ export function createExtras(ctx) {
   }
   /** One boot, N shots, optional contact panel + index.html (apex_shot_survey / apex_track op survey).
    *  Multi-track / long estimates default to apex_job_start kind shot_survey (async jobId). */
+  /** The plan options shot-survey.mjs has no flag for; the async job carries them as --plan-json. */
+  const pickPlanArgs = (a) => {
+    const o = {};
+    for (const k of ["cam", "cams", "az", "el", "dist", "h", "side", "hud", "shots", "cols", "sheetName"]) if (a[k] != null) o[k] = a[k];
+    return o;
+  };
   async function handleShotSurvey(args = {}) {
     let tracks;
     try {
@@ -225,6 +231,7 @@ export function createExtras(ctx) {
         tod: args.tod,
         count: args.count,
         fracs: args.fracs,
+        planArgs: pickPlanArgs(args),
       });
     }
 
@@ -363,7 +370,7 @@ export function createExtras(ctx) {
     } else if (op === "track") {
       try { cmd.track = needTrack(args.track); } catch (e) { return e.refuse; }
     } else if (op === "sheet") {
-      cmd.sheet = args.name || "sheet";
+      cmd.sheet = args.name || args.sheetName || "sheet";
       if (args.cols != null) cmd.cols = Number(args.cols);
     } else if (op === "diff") {
       if (!Array.isArray(args.diff) || args.diff.length !== 2) return refuse("bad_args", "diff needs two shot names", 'Pass {"op":"diff","diff":["a","b"]}.');
@@ -428,6 +435,7 @@ export function createExtras(ctx) {
           ...(a.tod ? ["--tod", String(a.tod)] : []),
           ...(a.count != null ? ["--count", String(a.count)] : []),
           ...(Array.isArray(a.fracs) && a.fracs.length ? ["--fracs", a.fracs.join(",")] : []),
+          ...(a.planArgs && Object.keys(a.planArgs).length ? ["--plan-json", JSON.stringify(a.planArgs)] : []),
         );
         return { browser: true, argv };
       }
@@ -476,7 +484,11 @@ export function createExtras(ctx) {
     }
   }
   const tail = (file, n = 40) => {
-    try { const t = fs.readFileSync(file, "utf8").split("\n"); return t.slice(-n - 1).join("\n").trim(); } catch { return ""; }
+    try {
+      const t = fs.readFileSync(file, "utf8").split("\n").slice(-n - 1).join("\n").trim();
+      // one line can be a whole result (hud_survey prints its JSON on one): the tail is for progress, so cap its bytes
+      return t.length > 4000 ? `…${t.slice(-4000)}` : t;
+    } catch { return ""; }
   };
   /** One-shot `call` must not SIGKILL durable jobs on exit — they outlive the CLI. */
   const callCli = process.argv[2] === "call";
@@ -490,6 +502,7 @@ export function createExtras(ctx) {
       }, null, 2) + "\n");
     } catch (e) { log(`job manifest write failed: ${e.message}`); }
   };
+  const exitFileFor = (log) => log.replace(/\.log$/, ".exit");
   const pidAlive = (pid) => {
     if (!pid) return false;
     try { process.kill(pid, 0); return true; } catch { return false; }
@@ -497,9 +510,13 @@ export function createExtras(ctx) {
   const refreshDiskJob = (meta) => {
     if (!meta || meta.state !== "running") return meta;
     if (pidAlive(meta.pid)) return meta;
-    // Parent may have exited before the child's exit handler ran — infer from log.
+    // Parent may have exited before the child's exit handler ran: the sh wrapper left the real code beside the log.
     let exit = meta.exit;
     try {
+      const code = Number(fs.readFileSync(exitFileFor(path.join(ROOT, meta.log)), "utf8"));
+      if (Number.isInteger(code)) exit = code;
+    } catch { /* no exit file: a job from before the wrapper, or the sh itself was killed */ }
+    if (exit == null) try {
       const text = fs.readFileSync(path.join(ROOT, meta.log), "utf8");
       const last = text.trim().split("\n").filter(Boolean).pop() || "";
       if (/"ok"\s*:\s*true/.test(last)) exit = 0;
@@ -522,6 +539,21 @@ export function createExtras(ctx) {
       return fs.readdirSync(JOB_DIR).filter((f) => f.endsWith(".json")).map((f) => loadDiskJob(f.slice(0, -5))).filter(Boolean);
     } catch { return []; }
   };
+  /** A finished survey's parsed result can run past 100 KB (hud_survey: every cell); a client then drops the whole reply.
+   *  Over the cap, keep the headline keys and point at the log, which still holds all of it. */
+  const JOB_OUT_CAP = 20000;
+  const capJobOut = (out, logRel) => {
+    let bytes = 0;
+    try { bytes = JSON.stringify(out).length; } catch { return out; }
+    if (bytes <= JOB_OUT_CAP) return out;
+    const o = typeof out === "object" && out ? out : {};
+    const small = {};
+    for (const [k, val] of Object.entries(o)) {
+      let n = 0; try { n = JSON.stringify(val).length; } catch { /* */ }
+      if (n <= 2000) small[k] = val;
+    }
+    return { truncated: true, bytes, keys: Object.keys(o), ...small, hint: `full result: ${logRel} (jq on the log); per-cell data is in the report named above` };
+  };
   const jobView = (j, full = false) => {
     // log = the CLI's stdout, where every job CLI reports; stderr beside it.
     // (Until 2026-10-05 log named the stderr file, which stayed 0 bytes for
@@ -534,7 +566,12 @@ export function createExtras(ctx) {
       const logAbs = path.join(ROOT, logRel);
       const errAbs = errRel ? path.join(ROOT, errRel) : "";
       v.tail = [tail(logAbs, 30), errAbs ? tail(errAbs, 20) : ""].filter(Boolean).join("\n--- stderr ---\n");
-      if (j.state !== "running") { try { const o = ctx.splitOut(fs.readFileSync(logAbs, "utf8")); if (o.out != null) v.out = o.out; } catch { /* no log */ } }
+      if (j.state !== "running") {
+        try {
+          const o = ctx.splitOut(fs.readFileSync(logAbs, "utf8"));
+          if (o.out != null) v.out = capJobOut(o.out, logRel);
+        } catch { /* no log */ }
+      }
     }
     return v;
   };
@@ -555,7 +592,11 @@ export function createExtras(ctx) {
     const log = path.join(JOB_DIR, `${id}.log`), err = path.join(JOB_DIR, `${id}.err`);
     const logFd = fs.openSync(log, "w"), errFd = fs.openSync(err, "w");
     const env = plan.env ? { ...process.env, ...plan.env } : process.env;
-    const child = spawn(plan.argv[0], plan.argv.slice(1), { cwd: ROOT, detached: true, env, stdio: ["ignore", logFd, errFd] });
+    // sh records the child's real exit code beside the log: a one-shot `call` parent dies before the exit handler below
+    // runs, and refreshDiskJob would otherwise have to guess the verdict from the log's last line.
+    const exitFile = exitFileFor(log);
+    const child = spawn("/bin/sh", ["-c", '"$@"; c=$?; printf %s "$c" > "$APEX_JOB_EXIT_FILE"; exit $c', "sh", ...plan.argv],
+      { cwd: ROOT, detached: true, env: { ...env, APEX_JOB_EXIT_FILE: exitFile }, stdio: ["ignore", logFd, errFd] });
     fs.closeSync(logFd); fs.closeSync(errFd);
     try { child.unref(); } catch { /* */ }
     const j = { id, kind, argv: plan.argv, browser: plan.browser, child, pid: child.pid, state: "running", exit: null, started: Date.now(), ended: null, log, err };
