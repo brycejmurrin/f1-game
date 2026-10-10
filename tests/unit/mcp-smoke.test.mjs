@@ -116,3 +116,24 @@ test("tracked source never embeds a TinyFish key", () => {
   assert.ok(!src.includes("sk-" + "tinyfish-"));
   assert.match(src, /TINYFISH_API_KEY/);
 });
+
+test("smoke --real: tree tools only, judged on ok + a result, exit 0 in mock mode", async () => {
+  const { realTools, judgeReal, REAL_SKIP } = await import("../../tools/mcp/mcp-smoke.mjs");
+  const lt = spawnSync(process.execPath, [path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs"), "list-tools"], {
+    encoding: "utf8", cwd: ROOT, env: { ...process.env, APEX_MCP_MOCK: "1" }, timeout: 15000, maxBuffer: 16e6,
+  });
+  const names = realTools(JSON.parse(lt.stdout));
+  assert.ok(names.includes("apex_status") && names.includes("apex_pick_tests"));
+  for (const n of ["apex_shot", "apex_eval", "apex_track", "apex_garage", "apex_hud_shot", ...REAL_SKIP]) assert.ok(!names.includes(n), `${n} is not a real-smoke tool`);
+  assert.equal(judgeReal({ ok: true, out: { a: 1 } }).pass, true);
+  assert.equal(judgeReal({ ok: true, out: null }).pass, false, "ok:true with nothing to show is a fail");
+  assert.equal(judgeReal({ ok: true, exit: 0, argv: [], out: null }).pass, false);
+  assert.equal(judgeReal({ ok: true, out: null, dryRun: true }).pass, true);
+  assert.equal(judgeReal({ ok: true, jobs: [], total: 0 }).pass, true, "a tool's own result keys count");
+  assert.equal(judgeReal({ ok: false, error: "x" }).pass, false);
+  const r = run(["--real", "--no-write", "--only=apex_status,apex_pick_tests"], { APEX_MCP_MOCK: "1" });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.stdout, /PASS apex_status/);
+  assert.match(r.stdout, /PASS apex_pick_tests/);
+  assert.match(r.stdout, /mcp-smoke --real ok: 2\/2/);
+});

@@ -84,6 +84,7 @@ var FlyingStart = (function () {
       if (handover.t > 0) return;
       const c = handover.c;
       G.setCarRole(c, true, true);
+      RealRace.seatOnRoad(G.track, c);   // c.head is still the DROP heading: the AI never advances it
       c.launch = null; c.launchOn = false;
       if (typeof Input !== "undefined" && Input.calibrate) Input.calibrate();   // the gantry's first lamp did this; there is no gantry now
       count("GO"); goHold = GO_HOLD_S;
@@ -91,19 +92,22 @@ var FlyingStart = (function () {
       handover = null;
     }
 
-    function stop() {
-      if (handover && handover.c) G.setCarRole(handover.c, true, true);
+    function release() {
+      if (handover && handover.c) { G.setCarRole(handover.c, true, true); RealRace.seatOnRoad(G.track, handover.c); }
       if (handover || goHold > 0) count(null);
       handover = null; goHold = 0;
     }
+    /** The session is over (quitToMenu) or the wheel is wanted now (__apex.go): hand it back and forget the
+     *  last state, so the NEXT session's first countdown frame is a new start (update() never runs in the menu). */
+    function stop() { release(); lastState = null; }
 
     /** Every frame, every state (next to realRace.update in js/game.js). */
     function update(dt) {
       const st = G.state, entered = st !== lastState;
       lastState = st;
-      if (st === "menu" || st === "results") { if (handover || goHold > 0) stop(); return; }
+      if (st === "menu" || st === "results") { if (handover || goHold > 0) release(); return; }
       // Entering the countdown is a new start, whatever came before it (RESTART goes race -> count).
-      if (st === "count" && entered) { stop(); if (wanted()) arm(); return; }
+      if (st === "count" && entered) { release(); if (wanted()) arm(); return; }
       if (st === "race") tick(dt);
     }
 

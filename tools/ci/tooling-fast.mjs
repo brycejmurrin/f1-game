@@ -101,6 +101,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/audio-recovery.test.mjs",
   "tests/unit/audio-sample-upgrade.test.mjs",
   "tests/unit/audio-tune.test.mjs",
+  "tests/unit/audit-circuit.test.mjs",
   "tests/unit/backend-surface-parity.test.mjs",
   "tests/unit/badges.test.mjs",
   "tests/unit/bahrain-grandstand-rake.test.mjs",
@@ -650,6 +651,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/road-lut-frame.test.mjs",
   "tests/unit/save-migrate.test.mjs",
   "tests/unit/scale-defaults.test.mjs",
+  // The garage LIVE atlas on a LAZY_CIRCUIT stub: paintLive skips the map instead of
+  // throwing, and ctxKey re-keys on hydration. VM, ~0.3 s.
+  "tests/unit/scene-live.test.mjs",
   "tests/unit/scenery-api-contract.test.mjs",
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
@@ -667,6 +671,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/session-status.test.mjs",
   "tests/unit/settings-defaults.test.mjs",
   "tests/unit/settings-export.test.mjs",
+  "tests/unit/settings-tabs.test.mjs",
   // R19 guards. Both belong in the EDIT LOOP rather than a slow topical group:
   // each re-derives a fact the source depends on (which livery fields move a
   // vertex; that js/track/ reads the build's NIGHT, not the def's), so they are

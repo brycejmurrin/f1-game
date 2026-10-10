@@ -341,6 +341,19 @@ const RealRace = (function () {
     return clamp(open * corr, MUL_MIN, MUL_MAX);
   }
 
+  /** The wheel changes hands (FlyingStart, RealRace.tickHandover): the AI never advances `c.head` (only the human
+   *  integrator does), so the car would take the wheel facing the heading it was DROPPED with, up to ~90 deg off the
+   *  road after the run-up's bends. Re-seed the pose from the road at the car's CURRENT s/x. */
+  function seatOnRoad(track, c) {
+    const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+    Tracks.sample(track, c.s, smp);
+    const rl = Math.hypot(smp.r[0], smp.r[2]) || 1;
+    c.px = smp.p[0] + smp.r[0] / rl * c.x; c.pz = smp.p[2] + smp.r[2] / rl * c.x;
+    c.head = Math.atan2(smp.t[0], smp.t[2]);
+    c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevHead = c.head; c.rPrevYawVis = 0;
+    c.vLat = 0; c.yawRateCur = 0; c.yawVis = 0;
+  }
+
   let live = null;   // the instance game.js created — the hub and the dev hooks reach it through the statics below
 
   /** The speed the AI would carry at `s` — a mid-race drop-in without a real trace starts at FULL speed
@@ -763,6 +776,7 @@ const RealRace = (function () {
       if (handover.t > 0) return;
       const c = handover.c;
       G.setCarRole(c, true, true);
+      seatOnRoad(G.track, c);
       c.launch = null; c.launchOn = false;
       count("GO"); goHold = GO_HOLD_S;
       if (G.announce) G.announce("YOU HAVE CONTROL", 1.5, "race");
@@ -845,6 +859,6 @@ const RealRace = (function () {
   const status = () => (live ? live.status() : { active: false });
   const replay = () => (live ? live.replay : null);   // the replay's controls (follow / setSpeed / seek / skip) for page probes
 
-  return { create, launch, status, replay, realLapFor, simLapFor, paceTable, cumTable, planFor, dnfAtFor, cautionsFor, mapField, fieldAt, situation, properName, paceMul, dropSpeed, COMPOUND, KP, MUL_MIN, MUL_MAX };
+  return { create, launch, status, replay, realLapFor, simLapFor, paceTable, cumTable, planFor, dnfAtFor, cautionsFor, mapField, fieldAt, situation, properName, paceMul, dropSpeed, seatOnRoad, COMPOUND, KP, MUL_MIN, MUL_MAX };
 })();
 Object.freeze(RealRace);
