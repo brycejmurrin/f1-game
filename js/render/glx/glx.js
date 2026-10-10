@@ -1644,15 +1644,8 @@ const GLXBackend = (function () {
     // (the tier-3 far-plane cap), the probe keeps that tighter value. A cullDist of
     // 0 means "no cull", so it is treated as unbounded rather than as zero.
     frame.cullDist = _envSvCull > 0 ? Math.min(_envSvCull, ENV_CULL_M) : ENV_CULL_M;
-    // _envActive goes up only here, with its undo beside it: a throw in begin() used to leave it set (the caller's
-    // envFaceEnd never runs for a begin that threw), so every later main begin() drew into the 64px probe face.
-    _envActive = true;   // begin() → env FBO + 64px viewport; env unit → dummy cube
-    try { begin(frame); }
-    catch (e) {
-      _envActive = false;
-      _envFrame.viewProj = _envSvVP; _envFrame.eye = _envSvEye; _envFrame.cullDist = _envSvCull; _envFrame = null;
-      throw e;
-    }
+    _envActive = true;   // begin() → env FBO + 64px viewport; env unit → dummy cube. Raised HERE, undone if begin() throws (envFaceEnd never runs then)
+    try { begin(frame); } catch (e) { _envActive = false; _envFrame.viewProj = _envSvVP; _envFrame.eye = _envSvEye; _envFrame.cullDist = _envSvCull; _envFrame = null; throw e; }
     return _envInvVP;
   }
   function envFaceEnd(face) {
@@ -1691,8 +1684,7 @@ const GLXBackend = (function () {
   function mirrorBegin(frame, w, h) {
     if (!gl || ctxGone() || !PST || _envActive) return false;
     if (!PST.mirror.begin(Math.max(16, Math.min(1024, w | 0)), Math.max(8, Math.min(512, h | 0)))) return false;
-    // begin() binds the mirror FBO while mirror.active(). The caller only ends a pass whose mirrorBegin RETURNED, so
-    // a throw here must put the flag down itself, or the next MAIN begin() renders into the mirror target.
+    // begin() binds the mirror FBO while mirror.active(); the caller ends only a pass whose mirrorBegin RETURNED, so a throw lowers the flag here
     try { begin(frame); } catch (e) { PST.mirror.abort(); bindOutputViewport(); throw e; }
     return true;
   }
