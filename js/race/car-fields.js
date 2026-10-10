@@ -27,6 +27,8 @@
  * Re-derive the table with scratch/b13/disc.cjs-style probe: run a race for ~1500
  * frames and list Object.keys(car) minus the spawn keys, in first-seen order.
  * tests/unit/car-fields-vm.test.mjs fails when a plain race adds a key not listed.
+ * Not Object.freeze'd: that test swaps `predeclare` for a no-op to prove the check
+ * discriminates (a test seam, listed under `mutable` in tests/data/frozen-globals.json).
  */
 const CarFields = (function () {
   "use strict";

@@ -141,6 +141,26 @@ test("MIXED plan duration finishes inside a short race; a host plan is not recap
   assert.equal(armed.dur, 400, "lobby/host seconds stay as agreed");
 });
 
+// G.endWeatherSession is the agent's race()/tt() pre-start call: it restores the
+// chip's weather like endSession, but a plan set for the race about to start
+// (a host's, a test's) survives it — a MIXED race() with wxArcPlan {to:"fog"}
+// armed the seed's target instead (race-settings-vm on 2026-10-10).
+test("endSession(true) restores the chip's weather but keeps the plan; endSession() drops it", () => {
+  const { G, wa } = boot();
+  G.track = { total: 5800 }; G.netPlay = { active: () => false };
+  wa.changeable = true;
+  wa.plan = { to: "fog", dur: 200 };
+  assert.equal(wa.startChangeable().to, "fog");
+  G.raceWeather = "wet";   // the arc walked off dry
+  wa.endSession(true);
+  assert.equal(G.raceWeather, "dry", "the chip's pick is back");
+  assert.equal(wa.arc, null, "the half-walked arc is dropped");
+  assert.deepEqual({ ...wa.plan }, { to: "fog", dur: 200 }, "the plan for the next start survives");
+  assert.equal(wa.startChangeable().to, "fog", "and the next start arms it");
+  wa.endSession();
+  assert.equal(wa.plan, null, "the flag / a quit to the menu still forgets a solo plan");
+});
+
 test("source guard: MIXED plans go through capPlanDur; host wxArc.dur does not", () => {
   const src = read("js/race/weather-arc.js");
   assert.match(src, /function capPlanDur\(dur\)/);
