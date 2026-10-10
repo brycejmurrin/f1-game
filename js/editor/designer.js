@@ -2106,14 +2106,22 @@ const TrackDesigner = (function () {
   function textW(g, t) { const m = g.measureText(t); return m && m.width > 0 ? m.width : t.length * 6.6; }
   /** Wrap a share URL for the 640×360 card: keep `#track=` intact (never
    *  `…#trac` / `k=…`), put the host on its own line when the path is long,
-   *  and cap at three lines. Live apex8 cards broke mid-word under wrapChars. */
+   *  and cap at three lines. Live apex8 cards broke mid-word under wrapChars.
+   *  A link that does not fit is NOT cut mid-code (a prefix of a share code
+   *  decodes to nothing, yet read as a link): the host and `#track=…` stand
+   *  for it and the full link rides SHARE / the share text. */
   function wrapUrl(g, url, w) {
+    const lines = wrapUrlAll(g, url, w);
+    if (lines.length <= 3) return lines;
+    return [url.indexOf("#track=") < 0 ? lines[0] + "…" : lines[0], "#track=…", "full link: SHARE"];
+  }
+  function wrapUrlAll(g, url, w) {
     const at = url.indexOf("#track=");
     if (at < 0) {
       const lines = []; let cur = "";
       for (const ch of url) { if (cur && textW(g, cur + ch) > w) { lines.push(cur); cur = ""; } cur += ch; }
       if (cur) lines.push(cur);
-      return lines.slice(0, 3);
+      return lines;
     }
     let head = url.slice(0, at);
     const code = url.slice(at + 7);                       // after "#track="
@@ -2136,7 +2144,7 @@ const TrackDesigner = (function () {
       }
       if (cur) lines.push(cur);
     }
-    return lines.slice(0, 3);
+    return lines;
   }
   /** The 640×360 track card: the outline in the left 360², name, facts, theme,
    *  the game's mark and the share link in the right column. { canvas, url, name } | null. */

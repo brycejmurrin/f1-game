@@ -1420,6 +1420,21 @@ function recordingCanvas(b, texts, canvases) {
 }
 const SHORT_LOOP = () => { const pts = []; for (let i = 0; i < 36; i++) { const t = i / 36 * Math.PI * 2; pts.push([Math.round(300 * Math.cos(t) * 4) / 4, Math.round(200 * Math.sin(t) * 4) / 4]); } return pts; };
 
+test("CARD: a share link too long for the card is not cut mid-code; the card points at SHARE instead", async () => {
+  const b = bootScreen();
+  const texts = [], canvases = [];
+  openGreen(b, 11);
+  recordingCanvas(b, texts, canvases);
+  b.ctx.File = File;
+  b.ctx.navigator = { canShare: () => true, share: async () => {} };
+  await b.D.shareCard();
+  const code = b.D.state().lastCode;
+  assert.ok(b.CD.shareUrl(code).length > 400, "a real code is far longer than the card's link column");
+  const lines = texts.slice(texts.indexOf("APEX 26 · TRACK DESIGNER") + 1);
+  assert.equal(lines.some((t) => t.length > 6 && code.includes(t.replace(/…$/, ""))), false, "no fragment of the code on the card: " + lines.join(" | "));
+  assert.ok(lines.includes("#track=…") && lines.includes("full link: SHARE"), lines.join(" | "));
+});
+
 test("CARD: a 640×360 PNG to the share sheet when canShare({files}) allows, else NativeDownload, else <a download>; a dismissed sheet is silent; red refuses", async () => {
   const b = bootScreen();
   const texts = [], canvases = [], shared = [], native = [], anchors = [];
