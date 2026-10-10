@@ -783,6 +783,13 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   body:not(.desktop) #hud-tach {
     width: min(132px, 100%);
   }
+  /* Shipped touch offsets are a translate (helmet energy y:-6 is -6svh, 51px
+     on this screen). On a portrait chase that translate is still painted and
+     pulls ERS up through SPEED, and the tyre's y:-2 walks it off the top
+     (393×852 @200%, tyre y=-38). Portrait places TYRES with bottom:100% and
+     the column with flow; the translate fights both. A placed chip
+     (data-hl-user) keeps its move. */
+  body:not(.desktop) :is(#hud-energy, #hud-tyre):not([data-hl-user]) { translate: none; }
 }
 /* REAR-VIEW MIRROR. An empty frame: js/render/shared/mirror-pass.js measures
    this box every half second and the renderer paints the mirror camera into
@@ -954,9 +961,13 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    — and --dock-r-w was taken off the same stale BOOST edge. The top band got
    this fix first (`transition-property` on the --hud-z-top group above); the
    dock, the bottom band and the two top-right buttons are measured the same
-   way. Paint-only properties keep their 0.01ms, so nothing that was instant
-   starts moving. */
-:root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, #pausebtn, #btn-cam) {
+   way. The band's children do not inherit that list — #hud-energy kept
+   transition-property:all, so leaving the helmet (its -6svh translate)
+   started a transition that a paused clock (freeze / reduced-motion)
+   held at the old offset and the bar stayed through SPEED. `.hud-bottom *`
+   is in the list for that. Paint-only properties keep their 0.01ms, so
+   nothing that was instant starts moving. */
+:root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, .hud-bottom *, #pausebtn, #btn-cam) {
   transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
 }
 /* The flag clears the DROPPED strip, so it tracks the same measured edge: 70px
@@ -1221,6 +1232,17 @@ body:not(.desktop) #announce {
 body:not(.desktop):not(.hud-radio-top):not(.hud-mirror-side) #announce {
   left: calc(var(--announce-lane-x) / var(--hud-z));
   transform: translateX(var(--announce-lane-shift, -50%));
+}
+/* No published lane (portrait: the ladder buttons are position:fixed, so the
+   docks stay empty and announceLane clears the vars). An invalid var()
+   UNSETS left — it does not fall through to the centred rule — and the
+   translateX(-50%) then parks the card half off the left edge (393×852
+   radio, x=-27). data-announce-lane is set only while the vars exist.
+   On #announce, not body: body.className is the fitHud key, and a class
+   toggled inside the fit made the next pass publish a different --dock-r-w. */
+body:not(.desktop):not(.hud-radio-top):not(.hud-mirror-side) #announce:not([data-announce-lane]) {
+  left: 50%;
+  transform: translateX(-50%);
 }
 /* The plate. Italic is the racing number's own convention, not emphasis. */
 #announce-num {
@@ -2025,11 +2047,14 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
      other anchor here. */
   right: calc(10px + var(--sar) / var(--hud-z) + min(var(--dock-r-w, 0px), calc(50vw / var(--hud-z) - 10px - var(--sar) / var(--hud-z) - 120px)));
   bottom: auto;
-  /* Same shape as #hud-limits: clear PAUSE/CAM via (8px + tap-hud + 4px + sat)
-     then drop by --hud-sec-h. Omitting tap-hud + 4px put the trace ~44px into
-     S1–S3 at touch --tap 52 (12 − 56 = −44 at z=1). --hud-sec-h is top-band
-     units; at phone sizes bot/top zooms meet so it still clears the box. */
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
+  /* --hud-sec-h is the sector box in TOP-band units (fitHud divides by
+     --hud-z-top). This trace zooms by --hud-z-bot. Adding the length raw
+     made the screen gap (secH+12)*zBot instead of secH*zTop: too low into
+     SPEED when the bottom band is larger (852×393 extras, zBot 1.4) and too
+     high into S1–S3 when the bottom band is capped under the top
+     (1280×720 extras @150%). Multiply by the top zoom, then divide the
+     whole inset by this element's zoom so the painted gap stays ~16px. */
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat) + var(--hud-sec-h, 4.8em) * var(--hud-z-top, var(--hud-scale, 1)) + 16px) / var(--hud-z));
   max-width: min(120px, 22vw);
   max-height: min(18svh, 4.2em);
   overflow: hidden;
@@ -2046,7 +2071,14 @@ body.desktop #hud-inputs:not([data-hl-user]) {
   left: auto;
   right: calc(10px + var(--sar) / var(--hud-z));
   bottom: auto;
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat) + var(--hud-sec-h, 4.8em) * var(--hud-z-top, var(--hud-scale, 1)) + 16px) / var(--hud-z));
+}
+/* TRACK LIMITS hangs in the same column, one chip lower (its own top is
+   secH+15px in the TOP zoom). While that chip is on screen the trace steps
+   under it; hidden (the shipped state, until a strike) the sector gap above
+   is the home. 2.6em is the chip's line, the same reserve RELATIVE uses. */
+:root:has(#hud-limits:not([hidden])) #hud-inputs:not([data-hl-user]) {
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat) + (var(--hud-sec-h, 4.8em) + 15px + 2.6em) * var(--hud-z-top, var(--hud-scale, 1)) + 16px) / var(--hud-z));
 }
 /* TOUCH TYRES (LANDSCAPE): out of the centred bottom stack (it sat under
    GEAR / ERS, on the car) to the left column, sitting on top of the left dock
@@ -2070,16 +2102,13 @@ body.desktop #hud-inputs:not([data-hl-user]) {
       bottom: calc(anchor(top) + var(--gap));
       margin: 0;
     }
-    /* HELMET touch: ERS rides the same left dock column as TYRES, stacked above
-       it — not centred with y:-37 over the wheel (mid-visor float, 2026-10-07). */
-    body[data-hl-set="helmet"]:not(.desktop) #hud-tyre { anchor-name: --apex-hud-tyre; }
-    body[data-hl-set="helmet"]:not(.desktop) #hud-energy {
-      position: absolute;
-      position-anchor: --apex-hud-tyre;
-      left: anchor(left);
-      bottom: calc(anchor(top) + var(--gap));
-      margin: 0;
-    }
+    /* HELMET ERS stays in the cluster grid. Anchoring it to the tyre failed:
+       the tyre follows #hud-energy in the tree, anchor() does not resolve a
+       later sibling, and the bar fell back onto the gear plate (852×393
+       helmet, the whole bar). The shipped y:-6 translate would also make the
+       tyre an invalid anchor. Drop that translate so the dock anchor on
+       TYRES is the only shift. */
+    body[data-hl-set="helmet"]:not(.desktop) #hud-tyre[data-hl] { translate: none; }
   }
   /* TOUCH SECTORS ↔ RIGHT DOCK: no CSS anchor here. --dock-r-w is the
      painted inset from the leftmost right-dock control (fitHud), so the

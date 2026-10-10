@@ -562,7 +562,12 @@ function announceLane(root) {
     root.style.removeProperty("--announce-lane-w");
   }
   const annEl = typeof document !== "undefined" ? document.getElementById("announce") : null;
-  if (annEl && annEl.toggleAttribute) annEl.toggleAttribute("data-lane-collapsed", !!collapsed);
+  if (annEl && annEl.toggleAttribute) {
+    annEl.toggleAttribute("data-lane-collapsed", !!collapsed);
+    // Vars-exist bit. Not a body class: body.className is the fit key, and
+    // toggling it inside this fit made the next pass rewrite --dock-r-w.
+    annEl.toggleAttribute("data-announce-lane", !!(on || collapsed));
+  }
 }
 function radioTopSlot(root, bcast) {
   const t = !bcast && _hudTop ? _hudTop.getBoundingClientRect() : null;
@@ -1201,6 +1206,28 @@ function fitHud() {
   // forever and re-measuring them every tick is the cost the backoff exists
   // to avoid.
   if (!dockH && !document.body.classList.contains("desktop")) retry = true;
+  // PORTRAIT height cap, OUTSIDE the dock block: the ladder buttons are
+  // position:fixed, so dockH is 0 and the block above never runs. The tyre
+  // rides one box above the column and the column's bottom:112px is zoomed,
+  // so HUD 200% put the tyre through CAM and ERS through AERO (393×852).
+  if (!document.body.classList.contains("desktop") && _hudBottom
+      && window.matchMedia && window.matchMedia("(orientation: portrait)").matches) {
+    const zNowP = zoomDiv(_hudBottom, zBotPub) || 1;
+    const stackR = _hudBottom.getBoundingClientRect();
+    if (stackR.height) {
+      let ceilY = FIT_AIR;
+      for (const el of [els.btnCam, els.pausebtn]) {
+        if (!el || el.hidden) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width && r.height) ceilY = Math.max(ceilY, r.bottom + FIT_AIR);
+      }
+      let sabPx = 0;
+      try { sabPx = parseFloat(getComputedStyle(root).getPropertyValue("--sab")) || 0; } catch (_) { /* */ }
+      const avail = window.innerHeight - sabPx - ceilY;
+      const denom = 112 + stackR.height / zNowP + 48;
+      if (avail > 0 && denom > 0) capBot = Math.min(capBot, avail / denom);
+    }
+  }
   if (retry) { if (++_fitRetry <= 30) _fitKey = ""; } else _fitRetry = 0;
   // EACH CAP IS COMPARED AGAINST THE SLIDER THAT DRIVES IT. The readout bands
   // ride --hud-scale; the touch dock rides --hud-btn-scale (BUTTON SIZE, its
