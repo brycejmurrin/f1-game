@@ -41,6 +41,20 @@ node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run
 # for the catalog without launching.
 ```
 
+## Fastest look at the RACE HUD layout: `tools/shot/hud-mock.mjs` (~1 s a shot)
+
+The HUD on BLACK with every widget mocked (radio card, flag, limits chip, damage), a labelled box per
+element (readouts cyan, taps yellow, overlapping pairs RED), report.json + index.md + sheet.jpg. One race
+boot per pointer type (~37 s), then DOM-only cells: 48 shots in 143 s. Use it FIRST to see a layout or
+to before/after a CSS change; use hud-survey (below) when the 3D frame behind matters (occlusion).
+
+```sh
+node tools/shot/hud-mock.mjs                                              # phone 844x390: 5 cams x shipped/all-on
+node tools/shot/hud-mock.mjs --devices phone-se-667x375,phone-max-932x430 --cams cockpit,chase --hud-scale 70,200
+node tools/shot/hud-mock.mjs --matrix scratch/cells.json                  # hud-survey cell schema
+```
+Approximate by design: the mirror frame follows its own show rule (no rendered frame, no side placement).
+
 ## Fast path for the RACE HUD: `apex_hud_survey` / `tools/shot/hud-survey.mjs`
 
 The menus above are `layout-audit`; the in-race HUD (devices × cameras × MOVE &
