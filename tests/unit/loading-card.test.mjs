@@ -942,9 +942,12 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
   assert.match(intro, /announce\("PREPARATION FAILED/, "a warm timeout recovers to the menu with a visible message");
   assert.match(intro, /if \(!built && menuWorld\(\) && introWarm\(go\)\) return;/, "raceIntro routes a built world with a pending warm through it");
   assert.match(intro, /function startRaceCovered\(\) \{\s*if \(!loadingScreen\.phase\(\)\) loadingScreen\.building\(loadingInfo\(\)\);\s*return startRace\(\);/);
-  for (const [name, re] of [["qualifying's GRID", /session = "race";\s*startRaceCovered\(\);/],
-    ["qualifying's DRIVE", /session = "quali";\s*startRaceCovered\(\);/],
-    ["a season's NEXT RACE", /openQuali\(\);\s*else startRaceCovered\(\);/]]) assert.match(game, re, `${name} starts under the card`);
+  // These three sheet routes play the garage drive-out before the card (bug-hunt 3.14): startRaceFromSheet,
+  // which falls back to startRaceCovered for a headless/hidden/net page. One-offs stay quick restarts.
+  for (const [name, re] of [["qualifying's GRID", /session = "race";\s*startRaceFromSheet\(\);/],
+    ["qualifying's DRIVE", /session = "quali";\s*startRaceFromSheet\(\);/],
+    ["a season's NEXT RACE", /openQuali\(\);\s*else if \(isChampionship\(\)\) startRaceFromSheet\(\);\s*\/\/[^\n]*\n\s*else startRaceCovered\(\);/]]) assert.match(game, re, `${name} starts under the card`);
+  assert.match(game, /function startRaceFromSheet\(\) \{\s*if \(headlessMode \|\| document\.hidden \|\| netPlay\.active\(\) \|\| qualiNet\.hasArmed\(\)\) return startRaceCovered\(\);/, "the covered start stays the fallback");
   // The build path plans the flyby for the length it will run (a real race's read).
   const build = game.slice(game.indexOf("function introBuild(go)"), game.indexOf("function introWarm(go)"));
   assert.match(build, /const info0 = loadingInfo\(\);/);
