@@ -685,9 +685,10 @@ test.describe("dragged touch docks", () => {
           ? { l: r.left, t: r.top, r: r.right, b: r.bottom } : null;
       };
       const sec = document.getElementById("hud-sectors");
-      const docks = [...document.getElementById("dock-right").children].map(box).filter(Boolean);
+      const docks = [...document.getElementById("dock-right").children, ...document.getElementById("dock-left").children].map(box).filter(Boolean);
       return {
         W: window.innerWidth, sec: box(sec), dropped: !!(sec && sec.hasAttribute("data-col-drop")),
+        secLeft: document.documentElement.hasAttribute("data-sectors-left"), map: box(document.getElementById("minimap")),
         boost: box(document.getElementById("btn-boost")), lights: box(document.getElementById("lights")),
         tower: box(document.querySelector(".hud-top")), docks,
         dockRW: document.documentElement.style.getPropertyValue("--dock-r-w"),
@@ -699,10 +700,13 @@ test.describe("dragged touch docks", () => {
     expect(out.dropped, "the plate is shown " + d).toBe(false);
     expect(out.sec, "the plate is laid out " + d).not.toBeNull();
     const hit = (a, b) => !!(a && b && a.l < b.r - 0.5 && b.l < a.r - 0.5 && a.t < b.b - 0.5 && b.t < a.b - 0.5);
-    // Home column: the plate stays in the right half, under the pause / cam buttons.
-    expect((out.sec.l + out.sec.r) / 2, "S1-S3 stay in the right column " + d).toBeGreaterThan(out.W / 2);
+    // Home column: on touch landscape S1-S3 lead the LEFT column under the map (js/ui/hud.js
+    // data-sectors-left), so dragging the docks inboard must not move them anywhere else.
+    expect(out.secLeft, "touch landscape puts S1-S3 in the left column " + d).toBe(true);
+    expect((out.sec.l + out.sec.r) / 2, "S1-S3 stay in the left column " + d).toBeLessThan(out.W / 2);
+    if (out.map) expect(out.sec.t, "under the map " + d).toBeGreaterThanOrEqual(out.map.b - 0.5);
     expect(hit(out.sec, out.boost), "BOOST clears the plate " + d).toBe(false);
-    for (const g of out.docks) expect(hit(out.sec, g), "no right-dock group on the plate " + d).toBe(false);
+    for (const g of out.docks) expect(hit(out.sec, g), "no dock group (either side) on the plate " + d).toBe(false);
     expect(hit(out.sec, out.lights), "the plate clears the start lights " + d).toBe(false);
     expect(hit(out.sec, out.tower), "and the timing tower " + d).toBe(false);
   });
