@@ -22,6 +22,7 @@
 // on the same platform CI uses, and review the diff rather than accepting it.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { waitGarageSheet } from "../helpers/garage-sheet.js";
+import { freeBuildOff } from "../helpers/shared-page.js";
 
 const SHAPES = [
   ["phone-landscape", { width: 844, height: 390 }],
@@ -46,6 +47,10 @@ const SCREENS = [
     // #carsetup unhides before buildSetup fills tabs (openSetup two-rAF
     // yield, #1024). Click ENGINE after the identity settle — hiding
     // #game on desktop remounts the pair sheet back to TEAM.
+    await waitGarageSheet(page);
+    // GarageDefaults / unlimitedBudget can leave FREE BUILD ON; the golden
+    // is the budgeted sheet (ci run 38049517942 phone-landscape flake).
+    await freeBuildOff(page);
     await waitGarageSheet(page);
   }],
 ];
