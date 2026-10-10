@@ -259,14 +259,16 @@ test.describe("garage-out before race/session card", () => {
 
   test("season NEXT RACE with qualifying off: garage-out before the card", async ({ page }) => {
     test.setTimeout(BOOT_MS + 480_000);
-    await setMotion(page, true);
     // Round 1 starts from RACE SETTINGS (already covered); the route under test is the results screen's NEXT ROUND.
+    // The fixture page starts on about:blank, so seed storage with an init script and NAVIGATE (a reload of
+    // about:blank never loads the game).
     await page.addInitScript(() => {
       localStorage.setItem("apex26.seasonCfg", JSON.stringify({ quali: false }));
       localStorage.setItem("apex26.reliability", JSON.stringify("off"));
     });
-    await page.reload();
+    await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await setMotion(page, true);
     await clickId(page, "mb-season");
     await clickId(page, "sel-go");
     await page.waitForFunction(() => {
