@@ -26,7 +26,7 @@ Clockwise; s=0.0 at start/finish on the main straight.
 | 0.04 | both | close | Senna S (T1–2) chicane — angled wall boxes, red/white kerb slabs |
 | 0.10 | L | mid | Olympic Basin rowing lake — wide flat teal plane behind low wall |
 | 0.15 | both | mid | Parkland trees — clusters of green cube canopies on brown trunk boxes |
-| 0.25 | R | far | Casino de Montréal (Expo pavilion) — ~30 m pale finned mass, not a glass tower |
+| 0.274 | R | 47–143 m | **Casino de Montréal** (`montreal-casino`, required) — 4 stacked pale tiers ~44 m with glint prisms + gold Quebec annex; built on dry ground (the river `waterBand` starts at s≈0.3125). Approach plaza cue at s 0.255 |
 | 0.30 | L | far | **Biosphère** (`montreal-biosphere`) — 76 m Ø / 62 m high geodesic dome on Île Sainte-Hélène |
 | 0.38 | L | far | Montreal skyline across river — distant grey tower boxes of varied height |
 | 0.45 | R | close | Casino corner (T8–9) + footbridge — grey box spanning over the track |
@@ -49,7 +49,10 @@ Clockwise; s=0.0 at start/finish on the main straight.
 - Keep the whole island dead flat; use wall proximity and chicane kerbs, not elevation, for drama.
 - Dot green cube-canopy trees and grass strips between walls to sell the island-park setting.
 - Make the **Wall of Champions** a tall pale hero wall at s≈0.955–0.99 R with a Québec-blue painted panel (no glyphs).
-- Casino = short Expo pavilion (~25–35 m) with vertical fins — not a glass skyscraper. Fins must sit clear of the façade (flatCoplanar).
+- Casino = Expo 67 French-pavilion mass, built as a stepped 4-tier stack ~44 m tall (supersedes the earlier ~25–35 m note: a 30 m mass vanishes at the 95 m gap this site needs; height is a styling choice, unverified against the real pavilion) — not a glass skyscraper. Glint prisms must sit clear of the façade (flatCoplanar).
+  Placement: the footprint (plinth 72 x 58 m + 21 x 36 m annex) cannot fit the 70 m terrain ribbon, so it stands at s 0.274, gap 95 m, mostly on
+  the grass floor (its inboard edge touches the ribbon); nothing may stand on the `montreal-river-*` water bands (s 5/16–11/16 on this side). Verified headless: a 3 m grid over the footprint hits 0 water-mesh samples.
+  Evidence: Wikipedia places the casino on Île Notre-Dame beside the Olympic Basin; the exact bearing/distance is UNVERIFIED (the def's OSM trace is the circuit only, no building footprint).
 - Background skyline (distant grey tower boxes) and the Biosphère hemisphere across the water give the island scale and identity.
 
 ## Wave 6 — sourced vs uncertain (2026-09-29)
@@ -87,7 +90,7 @@ venue, not a normal paddock landscape:
 ## Outcome
 
 Built required landmarks: `montreal-hairpin-grandstands`, `montreal-wall-of-champions-stand`,
-`montreal-biosphere`, plus earlier `montreal-calder-trois-disques`, `montreal-habitat67`,
+`montreal-biosphere`, `montreal-casino`, plus earlier `montreal-calder-trois-disques`, `montreal-habitat67`,
 and the casino footbridge pair.
 
 **Calder's *Trois disques* (1967)** — commissioned for Expo 67, formally

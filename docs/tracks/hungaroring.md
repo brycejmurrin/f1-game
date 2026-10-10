@@ -25,7 +25,7 @@ climbs through the middle sector before rolling home.
 | 0.02 | L | near | Pit wall + garage row: thin white box strip with red kerb trim |
 | 0.07 | R | mid | T1 / Pit Exit cluster — covered cantilever stand on the outside braking zone (oversteer48 Pit Exit 1/2 + T1; Pit Exit 2 not a separate mass — vertex budget) |
 | 0.090–0.098 | R | near | Pit Exit 1 uncovered bleacher (oversteer48: no roof), positive rake |
-| 0.08 | R | far | Small lake/pond in the valley floor: flat dark blue-green box below banking |
+| 0.08 | R | far | Dry-grass colour patch (40 x 32 m, 0.14 m skin) on the valley floor below T1 banking; no infield water |
 | 0.12 | L | mid | Grass amphitheatre hill, sun-bleached green, dotted dark tree-cube clumps |
 | 0.18 | R | mid | Low grandstand bleacher: pale tiered box facing the slow complex |
 | 0.30 | L | far | Tree line mass: cluster of dark green cubes along ridge |
@@ -45,7 +45,7 @@ Famously twisty and slow with very few overtaking spots — pole and clean air d
 ## 6. Modelling notes
 - Sell the AMPHITHEATRE: line nearly the whole lap with stepped green banking boxes so the track sits in a bowl of grass.
 - Use dry yellow-green grass, not vivid lawn — it reads as hot Hungarian summer.
-- Make Turn 1 dramatic with a clear DOWN drop and tall banking + a small dark lake box in the basin.
+- Make Turn 1 dramatic with a clear DOWN drop, tall banking, and dry grass in the basin floor.
 - Cluster dark-green tree cubes along ridge lines for a low forested horizon.
 - Anchor s=0 with the long modern pit slab (L) facing the deep covered grandstand (R).
 - Keep palette warm and slightly hazy; fade far hills toward the fog tint for depth.
