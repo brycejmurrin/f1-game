@@ -363,3 +363,43 @@ was wrong.
 - **Verdict back to SAFE once CI is green.** The check: once #1346 has ship
   merged in, `menu-baseline.spec.js` must pass. A different pixel count there
   would mean the cap really does change the phone garage.
+
+## Addendum 3: #1375 (size ratchets) and #1394 (hud-pins)
+
+These are simulated merges on ship `184507f` plus #1375 `63130b8` and #1394
+`d4840ef`, measured with `tools/check/ratchets.mjs` and
+`node --test tests/unit/hud-pins.test.mjs`. Both PRs merge cleanly with ship.
+
+| on top of ship + #1375 + #1394 | hud.js codeLines / lines | hud.css codeLines / lines | ratchets | hud-pins |
+|---|---|---|---|---|
+| nothing else | under the 1330 / 2246 ceilings | under the 1917 / 2109 ceilings | pass | 2 pass, 3 todo |
+| + #1366 | 1345 / 2281 (+15 / +35) | 1926 / 2120 (+9 / +11) | **OVER** | 2 pass, 3 todo |
+| + #1351 | 1348 / 2268 (+18 / +22) | 1924 / 2117 (+7 / +8) | **OVER** | 2 pass, 3 todo |
+| + #1366 + #1351 | 1363 / 2303 (+33 / +57) | 1933 / 2128 (+16 / +19) | **OVER** | 2 pass, 3 todo |
+
+**New unsafe pairs: #1375×#1366 and #1375×#1351, in either order.**
+
+- **If #1375 lands first,** each HUD PR's merge ref goes over its ceiling
+  and fails Structural guards.
+- **If either HUD PR lands first,** #1375's ceilings sit below the merged
+  tree, so #1375 itself goes red.
+- **Cheapest order:** land #1366 and #1351 first. Then re-measure #1375's
+  ceilings on that tree (`node tools/check/ratchets.mjs --update`, with the
+  reason in the commit) and land #1375 last.
+  - The alternative makes each HUD PR delete 15–33 code lines that the
+    allocator then rewrites anyway.
+  - If #1375 must land first, each HUD PR needs a stated raise in its own
+    diff instead.
+- **#1394 is safe in any order.** The two live pins pass on every combination,
+  including both HUD PRs. The three `todo` pins (F-01, F-02, F-06) name the
+  allocator branch and post-#1366 work as their fixes. When those land, each
+  `todo` must flip to a real assertion in the same PR.
+- **The ship-wide red** `physics-baseline-provenance.test.mjs` (baseline
+  blessed at `b4df4321d`, not an ancestor of ship) is unrelated to every HUD
+  change here. It will show on every PR's guards until ship fixes it, so it
+  is not a verdict on these.
+
+**Merge order, revised:** #1346, #1366 and #1351 (any order once each is
+green) → #1394 (any time) → #1375, re-measured on the merged tree → close
+#1316 → the allocator, as a draft PR against #1375's ceilings, paying for its
+growth or raising them with a stated reason.
