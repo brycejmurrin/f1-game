@@ -484,3 +484,25 @@ Read from the branch with `git show`, plus a simulated merge on ship + #1375 +
 **Verdict, allocator: SAFE-AFTER #1351** and after #1375 is re-measured or the
 allocator states its own raise. **#1404: SAFE-AFTER the allocator**, with its
 own stated raise.
+
+## Addendum 7: ship `33ea003` (late 2026-10-10)
+
+- **#1346 merged.** #1366 merged earlier. #1375, #1383, #1386, #1387 and #1395
+  have landed on ship since addendum 6.
+- **Ship's own tip is red on the HUD size ratchet,** exactly the order
+  problem addendum 3 predicted: #1375 landed with ceilings equal to ship's
+  size and no re-measure, then #1386 and #1387 landed over them without their
+  raises. `ratchets.mjs` on ship: hud.js +48 code / +96 lines over
+  (1393 / 2377 against 1345 / 2281), hud.css +27 / +30 over (1953 / 2150
+  against 1926 / 2120). Structural guards fail on ship (CI run 38062352465).
+  A re-measure is already claimed (`cursor/ratchet-hud-remeasure-c533`,
+  `ratchets.mjs --update`).
+- **#1351 (`bdf4cff`):** CI on its head is green and it merges cleanly with
+  ship. On a merge with ship it adds hud.js +22 code / +22 lines and hud.css
+  +7 / +8 more over the same ceilings, so it inherits ship's red guard until
+  the re-measure lands. Verdict stays SAFE; land it after the re-measure.
+- **Allocator (`c730579`):** conflicts with ship in `js/ui/hud.js` again
+  (ship's #1395 / #1386 / #1387 / #1383 touched it). #1404 is stacked on it.
+  Sync only after the re-measure lands, so the sync is done once.
+- **#1316** is still open, still conflicting, still superseded; its survey
+  hunks (addendum 5) are still unported.
