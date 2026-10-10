@@ -1986,13 +1986,13 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   // unset (0px) with no mirror, so the own slot is what shows.
   assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #announce', "top"), "max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 6px), calc(var(--mir-bot, 0px) + 8px))",
     "compact radio cards sit right under the timing row, like every other density");
-  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce', "top"), "calc(max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 34px)",
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce', "top"), "calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px)",
     "…and step below the flag chip while a caution shows, never on top of it");
-  assert.equal(decl(css("css/hud.css"), ':root[data-gap-drop] :where(body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden]))) #announce', "top"), "calc(max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px), calc(var(--mir-bot, 0px) + 8px)) + 34px)",
-    "gap-drop lowers the flag — announce steps from that edge, not the undropped 72px slot");
-  assert.equal(decl(css("css/hud.css"), "body:not(.desktop):has(#hud-limits:not([hidden])) #hud-inputs:not([data-hl-user])", "top"),
+  assert.equal(decl(css("css/hud.css"), ":root[data-gap-drop] #announce", "--flag-slot-top"), "calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px)",
+    "gap-drop raises --flag-slot-top so announce steps from the dropped flag edge");
+  assert.equal(decl(css("css/hud.css"), "body:not(.desktop) #hud-inputs:not([data-hl-user])", "top"),
     "calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + 1.75em + 8px)",
-    "phone INPUTS clear a visible #hud-limits chip in the sector column");
+    "phone INPUTS park below the #hud-limits slot in the sector column");
   assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #hud-flag', "top"), "max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px))");
   assert.equal(decl(css("css/career.css"), '#quali .sheet[data-density="compact"] #q-foot', "display"), "grid");
   assert.equal(decl(css("css/career.css"), '#quali.q-done .sheet[data-density="compact"] #q-foot #q-go', "grid-column"), "1 / -1");
