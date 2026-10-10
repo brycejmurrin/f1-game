@@ -1302,3 +1302,15 @@ test("a same-URL worker installs a new generation and blocks old-shell lazy inje
   assert.equal(ctx.u.state().ready, 321, "UPDATE READY names the actual cache generation, not URL320");
   ctx.u.stop();
 });
+
+// bug-hunt 2.10: index.html's broken-install repair swept `caches.keys()` whole. github.io is
+// a shared origin, so that deleted other projects' Cache Storage. It must delete apex26-* only.
+test("the broken-install repair deletes only apex26- caches", async () => {
+  const html = await readFile(new URL("../../index.html", import.meta.url), "utf8");
+  const at = html.indexOf("caches.keys()");
+  assert.ok(at > 0, "the repair still enumerates caches");
+  const body = html.slice(at, html.indexOf("fetch(el.src", at));
+  const filter = body.indexOf('indexOf("apex26-") === 0');
+  const del = body.indexOf("caches.delete");
+  assert.ok(filter > 0 && del > filter, "names are filtered to the apex26- prefix before any delete");
+});
