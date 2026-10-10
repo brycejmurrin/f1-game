@@ -128,6 +128,27 @@ test("the defaults are the keys the game always had", () => {
   assert.equal(Input.keysAreDefault(), true);
 });
 
+test("the pause card's RECOVER CAR raises the same edge R raises (hunt3 7-F3)", () => {
+  // Touch had no path to recoverPressed: only R, the pad and the paired phone.
+  const { Input, key } = boot();
+  key("KeyR", true); key("KeyR", false);
+  assert.equal(Input.consumeRecover(), true, "R: the baseline edge");
+  assert.equal(typeof Input.requestRecover, "function", "Input exposes the touch path");
+  Input.requestRecover();
+  assert.equal(Input.consumeRecover(), true, "RECOVER CAR raises it");
+  assert.equal(Input.consumeRecover(), false, "an edge: consumed once");
+  Input.requestRecover();
+  Input.clearEdges();
+  assert.equal(Input.consumeRecover(), false, "clearEdges drops it like R's (paused frames, lights-out)");
+  // The pause card's RACE TOOLS tray gets the tile (built in game.js, as
+  // replay-buf.js builds REPLAY, so the shell's node count holds).
+  const shell = read("index.html");
+  assert.match(shell, /<nav id="pm-quick-doors"[\s\S]*?<details id="pm-checkpoint">/, "the tray and its REWIND tile exist");
+  const game = read("js/game.js");
+  assert.match(game, /\$\("pm-quick-doors"\)\.insertBefore\(Object\.assign\(document\.createElement\("button"\), \{ id: "pm-recover", type: "button", textContent: "RECOVER CAR", onclick: \(\) => \{ setPaused\(false\); Input\.requestRecover\(\); \} \}\), \$\("pm-checkpoint"\)\)/,
+    "RECOVER CAR resumes, then raises the edge game.js's consumeRecover gate reads");
+});
+
 test("a rebind moves the action to the new key and the old key stops answering", () => {
   const { Input, key } = boot();
   key("Space", true); assert.equal(Input.consumeBoostToggle(), true, "Space boosts by default");
@@ -368,7 +389,8 @@ test("Input.activeInputSource follows real activity, not connected-device presen
 // A DOM just deep enough for KeyBinds.create: elements by id with hidden,
 // textContent and children; createElement for the rows.
 // `disk`, when given, backs the store (reads and writes land in it).
-function bootUi(desktop, helpSlots = {}, disk = null) {
+// `pre(sb)` adds globals the module reads at create() time (SettingsNav).
+function bootUi(desktop, helpSlots = {}, disk = null, pre = null) {
   const { Input, key, sb, fire } = boot();
   const nodes = {};
   const mk = (tag = "div") => {
@@ -392,6 +414,7 @@ function bootUi(desktop, helpSlots = {}, disk = null) {
   sb.addEventListener = (t, f) => { (winListeners[t] ||= []).push(f); };
   sb.removeEventListener = (t, f) => { const l = winListeners[t] || []; const i = l.indexOf(f); if (i >= 0) l.splice(i, 1); };
   sb.GameAudio = null;
+  if (pre) pre(sb);
   sb.setTimeout = (f) => { f(); return 0; };   // the reveal defers past the dispatch; here it just runs
   vm.runInContext(read("js/ui/key-binds.js"), sb.__ctx || (sb.__ctx = vm.createContext(sb)), { filename: "js/ui/key-binds.js" });
   const KeyBinds = vm.runInContext("KeyBinds", sb.__ctx);
@@ -550,6 +573,29 @@ test("the wheel wizard drops a stored rest offset when the steering axis moves",
   assert.equal(disk.padAxes.steer, 1, "the wizard finished");
   assert.equal(Input.padRest(), 0, "the old axis's offset is not carried over");
   assert.equal(disk.padRest, 0, "…and not stored");
+});
+
+test("leaving the CONTROLS page aborts the wheel wizard via SettingsNav.onLeave (hunt3 1b-F1)", () => {
+  // SettingsNav.onLeave shipped (#1309/#1320) with no subscriber: BACK from
+  // CONTROLS left the wizard zeroing the pad and waiting to save padAxes.
+  let leave = null;
+  const { Input, $, fire, sb } = bootUi(true, {}, {}, (g) => { g.SettingsNav = { onLeave: (fn) => { leave = fn; } }; });
+  assert.equal(typeof leave, "function", "key-binds subscribes to the page-leave hook");
+  const { press } = fakePad(sb, fire);
+  $("pm-pad-wheel").onclick();
+  assert.equal($("pm-pad-wheel").textContent, "CANCEL");
+  leave("display");
+  assert.equal($("pm-pad-wheel").textContent, "CANCEL", "another page hiding is not the CONTROLS page");
+  leave("controls");
+  assert.equal($("pm-pad-wheel").textContent, "SET UP A WHEEL", "BACK from CONTROLS stops the wizard");
+  press(7, 1);
+  Input.poll();
+  assert.equal(Input.debugState().pad.throttle, true, "the pad drives again");
+});
+
+test("without SettingsNav.onLeave KeyBinds.create still boots", () => {
+  assert.doesNotThrow(() => bootUi(true, {}, {}, (g) => { g.SettingsNav = {}; }));
+  assert.doesNotThrow(() => bootUi(true));
 });
 
 test("CONTROLLER RESET clears wheel axes and stick rest, not only the button map", () => {
