@@ -10,7 +10,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
-import { bootEditor, read, plain } from "../helpers/editor-vm.mjs";
+import { bootEditor, read, plain, ellipse, design } from "../helpers/editor-vm.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
 const SCREEN_FILES = ["js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/designer.js"];
@@ -1981,6 +1981,105 @@ test("SELECT END arms a touch-friendly span; stamp REPLACE uses it; group elev o
   for (let i = 5; i <= 9; i++) assert.equal(hs[i], (i - 5) + 3, "point " + i);
   assert.equal(hs[0], 0, "outside the span stays flat");
   assert.deepEqual([b.D.state().sel, b.D.state().span], [5, 9], "span selection survives group elev");
+});
+
+// ── stale design state must not leak into a NEW loop ────────────────────────
+const hilly = (b, extra) => b.C.sanitize(design(Object.assign({
+  pts: ellipse(36, 800, 500),
+  heights: ellipse(36).map((_, i) => Math.round(30 * Math.sin(i / 3) * 4) / 4),
+  elevations: [{ s: 0.5, halfM: 400, rise: 25 }],
+}, extra)));
+
+test("RANDOMISE · TRACK OF THE DAY · FAST judge a candidate against the look only, never the old loop's elevations", async () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root }); b.D.open();
+  // A hilly start used to fail 12/12: the old heights were applied to the new loop (a grade RED).
+  b.D.load(hilly(b), "import");
+  assert.equal(b.D.randomise(101), true, "RANDOMISE finds a clean loop after an ELEVATION edit");
+  // "The same circuit for everyone": a flat start and a hilly start roll the same day's loop.
+  const day = "2026-10-09";
+  b.D.load(b.C.sanitize(design({ pts: ellipse(36, 800, 500) })), "import");
+  assert.equal(b.D.trackOfTheDay(day), true);
+  const flat = plain(b.D.state().design);
+  b.D.load(hilly(b), "import");
+  assert.equal(b.D.trackOfTheDay(day), true);
+  const rolled = plain(b.D.state().design);
+  assert.deepEqual(rolled.pts, flat.pts, "same pts from a hilly start as from a flat one");
+  assert.equal(rolled.seed, flat.seed);
+  b.D.load(hilly(b), "import");
+  assert.equal(await b.D.designed("FAST", 4242), true);
+  assert.equal(b.D.state().candidates.length, 4, "FAST fills four cards from a hilly start");
+});
+
+test("every action that starts a new loop clears the old loop's zones, bridges, turns and props", async () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root }); b.D.open();
+  const stale = () => b.C.sanitize(design({
+    pts: ellipse(36, 800, 500),
+    hwZones: [{ s0: 0.2, s1: 0.3, hw: 5.5, ease: 0.02 }],
+    bankZones: [{ frac: 0.4, angleDeg: 6, widthM: 120 }],
+    elevations: [{ s: 0.5, halfM: 300, rise: 6 }],
+    bridges: [{ s: 0.8, halfM: 160, rise: 8 }],
+    turns: [0.1, 0.4, 0.7],
+    props: [{ kind: "stand", s: 0.3, side: 1, gap: 18 }],
+  }));
+  const clean = (what) => {
+    const d = b.D.state().design;
+    assert.deepEqual(plain([d.hwZones, d.bankZones, d.elevations, d.bridges, d.turns]), [[], [], [], [], []], what + ": zone lists empty");
+    assert.equal(d.props, undefined, what + ": no authored props");
+  };
+  b.D.load(stale(), "import"); assert.ok(b.D.state().design.props.length === 1, "the fixture carries a prop");
+  assert.equal(b.D.randomise(101), true); clean("RANDOMISE");
+  const path = [];
+  for (let i = 0; i < 160; i++) { const t = i / 160 * Math.PI * 2; path.push([Math.cos(t) * 700, Math.sin(t) * 420 + 60 * Math.sin(3 * t)]); }
+  b.D.load(stale(), "import");
+  assert.equal(b.D.freehand(path), true); clean("DRAW");
+  b.D.load(stale(), "import");
+  assert.equal(await b.D.designed("FAST", 4242), true);
+  b.D.load(stale(), "import");   // the cards survive a load; USE swaps only the loop
+  assert.equal(b.D.useCandidate(0), true); clean("USE");
+  b.D.load(stale(), "import");
+  assert.equal(b.D.startFrom("monza"), true); clean("START FROM");
+});
+
+test("REVERSE keeps each authored prop on the same bank (its side is relative to the travel direction)", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root }); b.D.open();
+  const pts = ellipse(36, 800, 500), N = pts.length, i = 10;
+  const s = b.ctx.TrackDesignerProps.pointFrac(pts, i);
+  b.D.load(b.C.sanitize(design({ pts, props: [{ kind: "stand", s, side: 1, gap: 18 }, { kind: "billboard", s: b.ctx.TrackDesignerProps.pointFrac(pts, 20), side: -1, gap: 12 }] })), "import");
+  // A prop's world offset: side × the right-hand normal of the travel direction at its node.
+  const before = plain(b.D.state().design);
+  const at = (d, kind, k) => { const p = d.props.find((x) => x.kind === kind), P = d.pts, a = P[(k - 1 + N) % N], c = P[(k + 1) % N], tx = c[0] - a[0], tz = c[1] - a[1], m = Math.hypot(tx, tz); return [p.side * tz / m, p.side * -tx / m]; };
+  assert.equal(b.D.reverse(), true);
+  const after = plain(b.D.state().design);
+  // Point k of the old loop is point N − k on the reversed loop (point 0 stays).
+  for (const [kind, k] of [["stand", 10], ["billboard", 20]]) {
+    const o = at(before, kind, k), r = at(after, kind, N - k);
+    assert.ok(o[0] * r[0] + o[1] * r[1] > 0.99, kind + " stays on the same bank after REVERSE: " + o + " vs " + r);
+  }
+  assert.deepEqual(after.props.map((p) => p.kind + p.side).sort(), ["billboard1", "stand-1"], "the stored side is flipped with the travel direction");
+  // START HERE moves the line, not the travel direction: sides stay as they are.
+  const sides = after.props.map((p) => p.kind + p.side).sort();
+  assert.equal(b.D.setStart(5), true);
+  assert.deepEqual(b.D.state().design.props.map((p) => p.kind + p.side).sort(), sides, "START HERE leaves prop sides alone");
+});
+
+test("an inserted point takes the heights of its neighbours, not 0 m (no notch mid-hill)", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root }); b.D.open();
+  const pts = ellipse(36, 800, 500);
+  const heights = pts.map((_, i) => (i === 10 || i === 11 ? 10 : 0));
+  b.D.load(b.C.sanitize(design({ pts, heights })), "import");
+  const d = plain(b.D.state().design);
+  // A shape stamped after point 10 inserts new points between the two 10 m points.
+  b.D.setTool("straight");
+  assert.equal(b.D.applyStamp(10, 10), true);
+  const h = plain(b.D.state().design.heights), P = plain(b.D.state().design.pts);
+  assert.equal(h.length, P.length);
+  const k10 = P.findIndex((p) => p[0] === d.pts[10][0] && p[1] === d.pts[10][1]);
+  assert.equal(h[k10], 10, "the kept point keeps its height");
+  assert.ok(h[k10 + 1] > 0, "the point inserted after a 10 m point is not a 0 m notch: " + h.slice(k10, k10 + 4));
 });
 
 test("selection controls synchronize both views; elevation edits keep the range and undo once", () => {

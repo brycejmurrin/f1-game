@@ -777,9 +777,11 @@ function create(G) {
         const b = el("button", `cr-teamtile${draft.hire === a.code ? " active" : ""}`);
         b.setAttribute("aria-pressed", draft.hire === a.code ? "true" : "false");
         const sw = el("span", "cr-teamtile-sw");
-        // Their pace, from the same deterministic tier fallback the grid will use,
-        // so the number on the tile is the number you get.
-        const r = DriverRatings.get(a.code, a.tier);
+        // Their pace, asked the way the race asks (driverSkill passes the TEAM's
+        // tier, a custom team's is 2; DriverRatings.HIRES makes the answer the
+        // same whatever tier), so the number on the tile is the number you get.
+        const custom = teamById("custom");
+        const r = DriverRatings.get(a.code, custom ? custom.tier : 2);
         sw.style.background = G.cssCol([0.2 + r.pace / 200, 0.5, 0.9 - r.pace / 300]);
         b.append(sw, el("span", "cr-teamtile-name", a.name),
           el("span", "cr-teamtile-meta",
@@ -1388,32 +1390,29 @@ function create(G) {
   function openOffers() { Log.info("ui", "CareerUI.openOffers"); buildOffers(); $("career-offers").hidden = false; }
   function closeOffers() { Log.info("ui", "CareerUI.closeOffers"); $("career-offers").hidden = true; }
 
-  // DERIVED on demand, never stored. A totals block on the save would be another
-  // rung on the migration ladder for numbers that are a sum over data already
-  // there — and a total written once is a total that goes stale, which no
-  // migration can put right after the fact.
+  // Sums over the cumulative c.tally, NOT the history archive: the archive keeps
+  // only the last HISTORY_MAX seasons, so a total read off it stopped climbing
+  // at "11 seasons · 10 titles". Best finish and the teams list still come from
+  // the archive, which is all that is kept of them.
   function careerTotals() {
     const c = Career.data();
     const hist = (c && c.history) || [];
     const live = (c && c.results) || [];
     const me = c ? GameStore.seasonDriverId(c.team, c.seat) : "";
+    // migrateCareer / start() always give a loaded career its tally.
+    const tally = (c && c.tally) || { seasons: 0, wins: 0, podiums: 0, titles: 0, cTitles: 0, pts: 0 };
     const t = {
       // The year in progress counts: you are living a season, not waiting for one.
-      seasons: hist.length + 1,
-      starts: hist.length * Career.roundsTotal() + live.length,
-      wins: live.filter((r) => r.p === 1).length,
-      podiums: live.filter((r) => r.p <= 3).length,
-      points: (c && c.season.pts[me]) || 0,
-      titles: 0, cTitles: 0,
+      seasons: tally.seasons + 1,
+      starts: tally.seasons * Career.roundsTotal() + live.length,
+      wins: tally.wins + live.filter((r) => r.p === 1).length,
+      podiums: tally.podiums + live.filter((r) => r.p <= 3).length,
+      points: tally.pts + ((c && c.season.pts[me]) || 0),
+      titles: tally.titles, cTitles: tally.cTitles,
       best: 0, bestYear: 0,
       teams: [],
     };
     for (const h of hist) {
-      t.wins += h.wins || 0;
-      t.podiums += h.podiums || 0;
-      t.points += h.pts || 0;
-      if (h.pos === 1) t.titles++;
-      if (h.cPos === 1) t.cTitles++;
       if (h.pos && (!t.best || h.pos < t.best)) { t.best = h.pos; t.bestYear = h.year; }
       if (t.teams.indexOf(h.team) < 0) t.teams.push(h.team);
     }

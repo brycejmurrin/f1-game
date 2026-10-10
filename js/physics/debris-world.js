@@ -334,7 +334,7 @@ function prime() {
   if (_enabled && _loadState === 0) _load();   // a race beat the deferred boot kick
   if (!_active || !track || !cars || !cars.length) return false;
   if (world && (_worldTrack !== track || _mirrors.length !== cars.length)) destroyWorld();
-  if (!world) buildWorld(track, cars);
+  if (!world && !_buildWorldSafe(track, cars)) return false;
   return !!world;
 }
 
@@ -373,6 +373,19 @@ function capFor() {
 function marbleCapFor() { return (G.gfx && G.gfx.mobileTier) ? MARBLE_CAP_MOBILE : MARBLE_CAP_DESKTOP; }
 function furnCapFor() { return (G.gfx && G.gfx.mobileTier) ? FURN_CAP_MOBILE : FURN_CAP_DESKTOP; }
 
+// The one Rapier chain that had no catch (step()'s trap below and _load's
+// both do): a throw from the trimesh/collider build would reject race entry
+// through prime(), or throw out of update() every frame until LoopHealth goes
+// fatal. Optional debris must never cost the player the race — degrade it off.
+function _buildWorldSafe(track, cars) {
+  try { buildWorld(track, cars); return true; }
+  catch (e) {
+    try { Log.warn("game", "[debris] world build failed — debris disabled", e); } catch (_e) { /* Log absent in isolated VM */ }
+    _active = false;
+    try { destroyWorld(); } catch (_e) { /* half-built world: nothing more to free */ }
+    return false;
+  }
+}
 function buildWorld(track, cars) {
   world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   world.timestep = FIXED_DT;
@@ -796,7 +809,7 @@ function step(dt) {
   if (!track || !cars || !cars.length) { _queue.length = 0; return; }
   // Track or field change → rebuild the whole world (deterministic order).
   if (world && (_worldTrack !== track || _mirrors.length !== cars.length)) destroyWorld();
-  if (!world) buildWorld(track, cars);
+  if (!world && !_buildWorldSafe(track, cars)) return;
   if (world.timestep !== dt) world.timestep = dt;
   // Queue or dynamic cars → straight to the solve, no pool scans at all.
   // Otherwise scan pools/furniture ONCE and share the verdicts with
@@ -828,6 +841,7 @@ function step(dt) {
     // body has no setNextKinematic* semantics). IncidentSim reads it back instead.
     if (_dynCars.has(i)) continue;
     const c = cars[i], m = _mirrors[i];
+    if (!Number.isFinite(c.s) || !Number.isFinite(c.x)) continue;   // a NaN pose must not reach wasm
     mirrorPose(track, c);
     m.setNextKinematicTranslation(_v);
     m.setNextKinematicRotation(_q);

@@ -11,7 +11,7 @@
  *
  * Run: node --test tests/unit/pit-lane-vm.test.mjs   (~10 s, one boot)
  */
-import { test, before, after } from "node:test";
+import { test, before, after, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
@@ -530,4 +530,38 @@ test("WORK ON CAR is offered only on the jacks, and the stop pays for it", async
   assert.equal(pits.canWork(stub("lane", 0)), false, "not while rolling down the lane");
   assert.equal(pits.canWork(stub("box", 0)), false, "not once the hold has run out");
   assert.equal(pits.canWork({ pitState: "box", pitT: 2 }), false, "and never for a car that is not yours");
+});
+
+// bug-hunt 7.4 — appended last on purpose (see the comment above: a serviced
+// car's release does not unwind cleanly between tests; this one stops no car).
+describe("a stale AI pit arm is cancelled (bug-hunt 7.4)", () => {
+  async function armedAi() {
+    await fresh();
+    const c = g.G.cars.find((k) => !k.human);
+    assert.ok(c, "the field has an AI car");
+    c.pitState = "none"; c.pitArmed = true; c.pitCommitted = false;
+    return c;
+  }
+  test("armed on the final lap: the arm is cleared", async () => {
+    const c = await armedAi();
+    c.lap = g.G.lapsTarget;
+    g.G.pits.update(c, 1 / 60);
+    assert.equal(c.pitArmed, false, "no stop pays on the last lap");
+    assert.equal(c.pitState, "none");
+  });
+  test("armed with the leader already flagged: the arm is cleared", async () => {
+    const c = await armedAi();
+    c.lap = 1;
+    const lead = g.G.cars.find((k) => k !== c);
+    lead.finished = true; lead.lap = g.G.lapsTarget + 1;
+    g.G.pits.update(c, 1 / 60);
+    lead.finished = false;
+    assert.equal(c.pitArmed, false, "the flag is out: nobody comes in");
+  });
+  test("armed mid-race: the arm stands", async () => {
+    const c = await armedAi();
+    c.lap = 1;
+    g.G.pits.update(c, 1 / 60);
+    assert.equal(c.pitArmed, true, "an AI that missed its entry comes in next time round");
+  });
 });

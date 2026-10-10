@@ -1331,8 +1331,15 @@ body:has(.screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
   color: color-mix(in oklab, var(--text) 62%, transparent);
   display: block; white-space: nowrap;
 }
+/* Value width is pinned to STRAIGHT MODE (the longer of the two strings).
+   Without a floor, CORNER MODE shrunk the chip ~12px and the bar jumped on
+   every toggle (MCP garage-next pack, 844 and 1440). 13ch under-shot once
+   letter-spacing is on (~3px left); 14ch clears STRAIGHT at fs-micro and the
+   1000px fs-2 bump. flex 0 0 auto keeps the floor; ellipsis is only a safety
+   net under extreme UI scale. */
 .cs-aero-val {
-  flex: 0 1 auto; min-width: 0;
+  flex: 0 0 auto;
+  min-width: 14ch;
   font-size: var(--fs-micro); font-weight: 800; font-style: italic; letter-spacing: var(--ls-3);
   color: var(--text);
   display: block; white-space: nowrap;
