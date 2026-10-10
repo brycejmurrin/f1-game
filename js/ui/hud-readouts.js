@@ -1,6 +1,7 @@
 /* Apex 26 — the race HUD's derived readouts, kept out of js/ui/hud.js.
    Pure helpers plus two small stateful pieces GameHud owns one of each:
      lapsApart   — a gap of a lap or more reads "+1L", not ~90 s of distance ÷ speed
+     gapDecimals / fmtGapSec / fmtGap — shared gap spelling (2 dp under ~10 s)
      energy      — the ERS store as MJ (PhysicsConsts.ES_MJ) and deploy/harvest state
      bbText      — the brake-bias chip ("BB 56%")
      blueFlag    — a car a lap up closing on the player (the AI's own letPassCase test)
@@ -21,6 +22,35 @@ const HudReadouts = (function () {
   /** "▲ BEA +1L" / short "▲ +1L" — the lapped spelling of the gap chip. */
   function lapGapText(arrow, code, n, short) {
     return short ? arrow + " +" + n + "L" : arrow + " " + code + " +" + n + "L";
+  }
+
+  // GAP DECIMALS. 2026 Overtake unlocks inside ~1.0 s, so every race HUD
+  // profile needs hundredths near that threshold (0.94 vs 1.04). Under ~10 s
+  // the chip / REL / tower share two decimals; above that, standard and
+  // minimal drop to one (same character count as "9.94" → "10.4") while
+  // broadcast keeps TV-style hundredths. Lap-down stays "+1L" (lapGapText).
+  const GAP_FINE_LT = 9.95;
+  /** Decimal places for a gap of `sec` seconds on HUD profile `profile`. */
+  function gapDecimals(profile, sec) {
+    const p = profile || "standard";
+    if (p === "broadcast") return 2;
+    const a = Math.abs(+sec);
+    if (Number.isFinite(a) && a < GAP_FINE_LT) return 2;
+    return 1;
+  }
+  /** Unsigned magnitude for the gap chip: "0.94", "10.4" — no sign, no "s". */
+  function fmtGapSec(sec, profile) {
+    const a = Math.abs(+sec);
+    if (!Number.isFinite(a)) return "--";
+    return a.toFixed(gapDecimals(profile, a));
+  }
+  /** Signed REL/tower form: "-0.94" ahead, "+0.94" behind; "99+" past ~100 s. */
+  function fmtGap(sec, ahead, profile) {
+    const a = Math.abs(+sec);
+    const sign = ahead ? "-" : "+";
+    if (!Number.isFinite(a)) return sign + "--";
+    if (a >= 99.5) return sign + "99+";
+    return sign + a.toFixed(gapDecimals(profile, a));
   }
 
   const esMJ = () => (typeof PhysicsConsts !== "undefined" && PhysicsConsts && PhysicsConsts.ES_MJ) || 4;
@@ -202,7 +232,8 @@ const HudReadouts = (function () {
     return { tick, reset };
   }
 
-  return { lapsApart, lapGapText, ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S,
+  return { lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap, GAP_FINE_LT,
+    ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S,
     spdUnits, spdUnit, spdPlate, KPH_PER_MPH };
 })();
 Object.freeze(HudReadouts);

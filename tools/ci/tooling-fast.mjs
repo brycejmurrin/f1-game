@@ -427,6 +427,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-feel.test.mjs",
   // fitHud zTop/#minimap zoom idempotence (Pages compact mm flip).
   "tests/unit/hud-fit-idempotent.test.mjs",
+  "tests/unit/hud-gap-decimals.test.mjs",
   "tests/unit/hud-helmet-placement.test.mjs",
   "tests/unit/hud-inputs.test.mjs",
   "tests/unit/hud-layout.test.mjs",
