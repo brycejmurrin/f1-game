@@ -773,7 +773,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
    dock, and the instrument cluster inside it; the docks keep their buttons. */
 body.hud-hidden.desktop #hud,
 body.hud-hidden #hud > :not(#hud-dock),
-body.hud-hidden #hud-dock > .hud-bottom,
+body.hud-hidden #hud-dock > .hud-bottom { display: none !important; }
 body.hud-hidden #lights,
 body.hud-hidden #announce,
 body.hud-hidden #campicker,
