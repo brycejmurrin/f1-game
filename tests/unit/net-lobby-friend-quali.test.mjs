@@ -47,7 +47,7 @@ async function hostUp(startRace) {
   peerSays("hello", { team: "bravo", driver: 1 }); await sleep(80);
   peerSays("ready", { ready: true }); await sleep(80);
   lobby.setReady(true); await sleep(80);
-  return { G, lobby };
+  return { G, lobby, peerSays };
 }
 
 for (const [name, startRace] of [
@@ -162,4 +162,50 @@ test("a roster peer with no string team is not a rival to wait for (bug-hunt 8.5
   assert.equal(q.waiting(), true, "the real rival still gates the grid");
   q.onPeerQuali({ driverId: "bravo:1", t: 70 });
   assert.equal(q.waiting(), false, "…and once they have posted, nothing malformed keeps it locked");
+});
+
+// bug-hunt 2 follow-ups: a guest's BACK from the quali sheet, and the host-side relay cap.
+test("a guest that backs out of friend quali releases the host's wait on its lap", async () => {
+  const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));
+  const laps = [];
+  G.onPeerQuali = (q) => laps.push(q);
+  try {
+    assert.equal(lobby.startFromRoom(), true);
+    assert.equal(lobby.qualifying(), true);
+    peerSays("qabort", null); await sleep(30);
+    assert.equal(laps.length, 1, "the host's sheet hears it");
+    assert.equal(laps[0].driverId, "bravo:1");
+    assert.equal(laps[0].t, Infinity, "no time: the wait clears, the rival grids last");
+    assert.equal(laps[0].noTime, true);
+  } finally { lobby.cancel(); }
+});
+
+test("a qabort outside friend quali does nothing", async () => {
+  const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));
+  const laps = [];
+  G.onPeerQuali = (q) => laps.push(q);
+  try {
+    peerSays("qabort", null); await sleep(30);          // still in the room
+    assert.equal(laps.length, 0);
+  } finally { lobby.cancel(); }
+});
+
+test("the host drops a guest's QUALI/QLIVE flood past a small per-second cap", async () => {
+  const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));
+  let live = 0, driven = 0;
+  G.onPeerQualiLive = () => { live++; };
+  G.onPeerQuali = () => { driven++; };
+  try {
+    assert.equal(lobby.startFromRoom(), true);
+    // ~2.5 per second is what a real client sends (quali-net.js reportLive: 400 ms).
+    for (let i = 0; i < 3; i++) peerSays("qlive", { driverId: "bravo:1", t: 5 + i, frac: 0.1 });
+    await sleep(120);
+    assert.equal(live, 3, "a real client's rate passes untouched");
+    for (let i = 0; i < 200; i++) peerSays("qlive", { driverId: "bravo:1", t: 9, frac: 0.2 });
+    await sleep(120);
+    assert.ok(live <= 12, "a flood is capped (got " + live + ")");
+    for (let i = 0; i < 50; i++) peerSays("quali", { driverId: "bravo:1", t: 80 });
+    await sleep(120);
+    assert.ok(driven < 50, "a QUALI flood is capped too (got " + driven + ")");
+  } finally { lobby.cancel(); }
 });
