@@ -595,9 +595,9 @@ function radioLane(root, list) {
   const t = towerRect();
   const W = window.innerWidth, H = window.innerHeight || 0;
   const y0 = t ? t.bottom : 0, mid = W / 2;
-  const under = (id) => { const o = obs(id); return o ? o.rect.bottom : 0; };
-  // Under a caution the card steps below the flag chip too (css/hud.css: the caution rules).
-  const bandTop = Math.max(y0, under("mirror"), under("mirrorChip"), under("flag")) + RADIO_TOP_GAP, bandBot = bandTop + LANE_ROWS;
+  // The card's rows start under the centre band (tower, mirror, chip) — and under a caution below the
+  // flag chip too (css/hud.css: the caution rules) — wherever each sits: the lane spans the screen.
+  const bandTop = centreBandTop(true, true) + RADIO_TOP_GAP, bandBot = bandTop + LANE_ROWS;
   const sal = cssPx(root, "--sal"), sar = cssPx(root, "--sar");
   let left = sal, right = W - sar, any = false;
   const clip = (r, counts) => {
@@ -786,6 +786,27 @@ function mirrorClear(root) {
   const r = m ? m.rect : null, cx = window.innerWidth / 2;
   const b = r && r.left < cx + MIR_COL && r.right > cx - MIR_COL ? r.bottom : 0;
   hStyle(root, "--mir-paint-b", b.toFixed(1) + "px");
+  hStyle(root, "--centre-band-top", centreBandTop(false, false).toFixed(1) + "px");
+}
+// ONE MEASURED CENTRE-BAND TOP. What the centre column hangs under — the mirror frame, its chip or the
+// timing tower, as PAINTED (MOVE & SIZE included) — was re-derived three ways: css/hud.css rebuilt the
+// mirror's size for --mir-bot, the chip's top from --hud-top-h, and the lane measured its own. Now one
+// function: `withFlag` adds the caution / blue flag while it shows (the radio card hangs under it, the
+// flag itself does not), `span` takes every piece wherever it sits (the hanging lane runs the width of
+// the screen) instead of only those crossing the centre column (MIR_COL). Published as
+// --centre-band-top (screen px, no flag): css/hud.css folds it into --mir-bot with a max(), so the flag
+// and the centred card clear it in every state — the --mir-bot formulas stay as the pre-fit fallback.
+// Nothing whose box it reads depends on it, so it cannot feed back.
+function centreBandTop(withFlag, span) {
+  const cx = window.innerWidth / 2;
+  const crosses = (r) => span || (r.left < cx + MIR_COL && r.right > cx - MIR_COL);
+  const t = towerRect();
+  let b = t && (span || (t.width && crosses(t))) ? t.bottom : 0;
+  for (const id of withFlag ? ["mirror", "mirrorChip", "flag"] : ["mirror", "mirrorChip"]) {
+    const o = obs(id);
+    if (o && crosses(o.rect)) b = Math.max(b, o.rect.bottom);
+  }
+  return b;
 }
 /** Conservative rect overlap — same 0.5 px slack as hud-layout.spec.js probes. */
 function _hudRectsHit(a, b) {

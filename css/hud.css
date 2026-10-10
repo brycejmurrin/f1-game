@@ -838,10 +838,14 @@ body.hud-prof-broadcast #hud-mirror { top: calc(8px + var(--sat) / var(--hud-z))
 /* --mir-paint-b is the frame AS PAINTED (js/ui/hud.js mirrorClear, screen px,
    0 unless it crosses this centre column): MOVE & SIZE can grow or lower the
    mirror past its shipped box, and the max() follows it down, never up. */
+/* --centre-band-top (js/ui/hud.js centreBandTop, SCREEN px) is the centre column's measured top — the
+   mirror frame, its chip or the timing tower, as painted — so it is the floor of --mir-bot in every
+   state, mirror or none; the formulas are the pre-fit fallback and never lift the edge above it. */
+:is(#announce, #hud-flag) { --mir-bot: calc(var(--centre-band-top, 0px) / var(--hud-z)); }
 body.hud-mirror-on :is(#announce, #hud-flag) {
   --mir-top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 8px);
   --mir-bot: max(calc(var(--mir-top) + clamp(120px, min(calc(18 * var(--vwzh)), calc(36svh / var(--hud-z))), 300px) * 2 / 7),
-    calc(var(--mir-paint-b, 0px) / var(--hud-z)));
+    calc(var(--mir-paint-b, 0px) / var(--hud-z)), calc(var(--centre-band-top, 0px) / var(--hud-z)));
 }
 body.hud-prof-broadcast.hud-mirror-on :is(#announce, #hud-flag) { --mir-top: calc(8px + var(--sat) / var(--hud-z)); }
 /* THE RADIO CARD'S SLOT IS ONE ATTRIBUTE. js/ui/hud.js placeRadio() picks it
@@ -893,10 +897,10 @@ body[data-radio-slot="top"] #announce-body {
 }
 /* The chip is unzoomed (screen px): its bottom edge divided into this zoom. */
 body:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-flag) {
-  --mir-bot: calc((var(--sat) + (16px + var(--hud-top-h, 54px)) * var(--hud-z-top, var(--hud-scale)) + var(--tap)) / var(--hud-z));
+  --mir-bot: max(calc((var(--sat) + (16px + var(--hud-top-h, 54px)) * var(--hud-z-top, var(--hud-scale)) + var(--tap)) / var(--hud-z)), calc(var(--centre-band-top, 0px) / var(--hud-z)));
 }
 body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-flag) {
-  --mir-bot: calc((8px + var(--sat) + var(--tap)) / var(--hud-z));
+  --mir-bot: max(calc((8px + var(--sat) + var(--tap)) / var(--hud-z)), calc(var(--centre-band-top, 0px) / var(--hud-z)));
 }
 #hud-flag {
   position: absolute; top: max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)); left: 50%; transform: translateX(-50%);

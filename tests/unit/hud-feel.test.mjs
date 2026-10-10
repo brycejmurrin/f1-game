@@ -1467,6 +1467,39 @@ test("the mirror's PAINTED bottom is published for the centre column (MOVE & SIZ
     /^max\([\s\S]*var\(--mir-paint-b, 0px\) \/ var\(--hud-z\)/, "--mir-bot folds the painted frame in with a max()");
 });
 
+test("one measured centre-band top: the tower, the mirror or its chip as painted, read by the flag, the card and the lane", () => {
+  const h = fitHarness(), cb = () => h.root.style.getPropertyValue("--centre-band-top");
+  const R = (left, top, w, hh) => ({ left, top, right: left + w, bottom: top + hh, width: w, height: hh });
+  assert.equal(cb(), "62.0px", "no mirror: the tower's bottom (250,8 300x54)");
+  const s0 = cb(); h.refit(); h.refit();
+  assert.equal(cb(), s0, "stable over two more fits");
+  const mir = h.dom.byId("hud-mirror");
+  mir._rect = R(330, 70, 140, 40);
+  h.dom.body.classList.add("hud-mirror-on");
+  h.refit();
+  assert.equal(cb(), "110.0px", "the mirror frame under the tower");
+  mir._rect = R(660, 70, 130, 40);
+  h.refit();
+  assert.equal(cb(), "62.0px", "a mirror moved out of the centre column frees it");
+  mir.hidden = true;
+  const chip = h.dom.byId("hud-mirror-chip"); chip._rect = R(370, 66, 60, 44);
+  h.refit();
+  assert.equal(cb(), "110.0px", "the collapsed mirror's chip, as painted");
+  // The flag is NOT in the published band (the flag hangs under it) …
+  const flag = h.els.flag; flag.hidden = false; flag._rect = R(350, 118, 100, 24);
+  h.refit();
+  assert.equal(cb(), "110.0px", "the flag hangs under the band; it is not part of it");
+  flag.hidden = true; flag._rect = R(0, 0, 0, 0); chip._rect = R(0, 0, 0, 0);
+  const css = read("css/hud.css");
+  assert.match(css, /:is\(#announce, #hud-flag\) \{ --mir-bot: calc\(var\(--centre-band-top, 0px\) \/ var\(--hud-z\)\); \}/,
+    "the measured band is --mir-bot's floor in every state");
+  const rules = cssRules(css);
+  for (const sel of ["body.hud-mirror-on :is(#announce, #hud-flag)", "body:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-flag)"])
+    assert.match(decl(rules, sel, "--mir-bot") || "", /^max\([\s\S]*calc\(var\(--centre-band-top, 0px\) \/ var\(--hud-z\)\)\)$/, sel);
+  // … but the lane's rows start under it (the source: one function, the flag added for the card).
+  assert.match(read("js/ui/hud.js"), /const bandTop = centreBandTop\(true, true\) \+ RADIO_TOP_GAP/);
+});
+
 test("a moved (data-hl) piece that unhides after the fit re-runs it, so HudLayout.fit can clamp it", () => {
   const h = fitHarness();
   let fits = 0;
