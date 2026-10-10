@@ -292,9 +292,9 @@ test("expected-visible rules", () => {
   assert.equal(E({ layout: "compact" }).tyre.want, false);
   assert.equal(E({ tyres: "off" }).tyre.want, false);
   assert.equal(E({ device: "phone-landscape-844x390", cam: "cockpit" }, { desktop: false, cockpitCam: true }).ot.want, false);
-  assert.equal(E({ device: "phone-landscape-844x390", cam: "cockpit", preset: "clean" }, { desktop: false, cockpitCam: true }).ot.want, true,
-    "CLEAN places OT, so it escapes the touch-cockpit hide");
-  assert.equal(E({ device: "phone-landscape-844x390", cam: "cockpit" }, { desktop: false, cockpitCam: true }).speed.want, true, "phone cockpit keeps speed");
+  assert.equal(E({ device: "phone-landscape-844x390", cam: "cockpit", preset: "clean" }, { desktop: false, cockpitCam: true }).ot.want, false,
+    "CLEAN moves OT but a NAMED preset sets no data-hl-user on the chips a touch cockpit holds (hud-layout.js TOUCH_PRESET_HOLD): still hidden");
+  assert.equal(E({ device: "phone-landscape-844x390", cam: "cockpit" }, { desktop: false, cockpitCam: true }).speed.want, false, "phone cockpit hides the floating speed too (css/track-detail.css: body.cockpit-cam #hud-speed at every size)");
   // A wheel with no LCD (CLASSIC / NONE) drops body.cockpit-cam, but the strip
   // still paints at the cockpit offsets: the touch hide follows the layout set.
   const classic = E({ device: "phone-landscape-844x390", cam: "cockpit" }, { desktop: false, cockpitCam: false });
@@ -670,4 +670,64 @@ test("shotTimeoutMs: 60 s up to 1280x800, 180 s for a 1920x1080 frame", () => {
   for (const [w, h] of [[390, 844], [844, 390], [640, 360], [1180, 820], [1280, 800]]) assert.equal(shotTimeoutMs(w, h), 60000, `${w}x${h}`);
   assert.equal(shotTimeoutMs(1920, 1080), 180000);
   assert.equal(shotTimeoutMs(2560, 1440), 180000);
+});
+
+// ── hud-mock.mjs / apex_hud_mock: the HUD on black, mocked widgets ─────────
+test("hud-mock: the default plan is phone landscape × 5 cams × shipped / all-on, and BUTTON SIZE only on touch", async () => {
+  const { planCells } = await import("../../tools/shot/hud-mock.mjs");
+  const { makeFlags } = await import("../../tools/lib/cli-args.mjs");
+  const KNOWN = ["--devices", "--cams", "--hud-scale", "--ui-scale", "--btn-scale", "--sets", "--preset", "--matrix", "--track"];
+  const plan = (argv) => planCells(makeFlags(argv, KNOWN));
+  const d = plan([]);
+  assert.equal(d.length, 10);
+  assert.ok(d.every((c) => c.device === "phone-landscape-844x390"));
+  assert.deepEqual([...d.find((c) => c.id.endsWith("-shipped")).off].sort(), ["inputs", "rel", "strat"]);
+  assert.deepEqual(d.find((c) => c.id.endsWith("-all-on")).off, []);
+  const mixed = plan(["--devices", "desktop-1280,phone-se-667x375", "--cams", "cockpit", "--sets", "all-on", "--btn-scale", "300"]);
+  assert.equal(mixed.find((c) => c.device === "desktop-1280").btnScale, null, "no BUTTON SIZE on a desktop");
+  assert.equal(mixed.find((c) => c.device === "phone-se-667x375").btnScale, 300);
+  assert.throws(() => plan(["--devices", "nope"]), /unknown nope/);
+});
+
+test("MCP: apex_hud_mock is a pinned browser wrap with bounded arrays, a job by default, and a mock result with links", () => {
+  const list = JSON.parse(spawnSync(process.execPath, [MCP, "list-tools"], { cwd: ROOT, encoding: "utf8" }).stdout);
+  const t = list.find((x) => x.name === "apex_hud_mock");
+  assert.ok(t);
+  assert.deepEqual(t.inputSchema.properties.devices.items.enum, Object.keys(M.DEVICES));
+  assert.deepEqual(t.inputSchema.properties.cams.items.enum, [...M.CAMS]);
+  assert.deepEqual([t.inputSchema.properties.hudScale.items.minimum, t.inputSchema.properties.hudScale.items.maximum], [40, 200]);
+  assert.match(t.description, /^Browser \(lock first\)/);
+  assert.match(read("docs/AGENT-SURFACE.md"), /\| `apex_hud_mock` \| `shot\/hud-mock\.mjs` \| browser \| survey-ui-matrix \|/);
+  const dry = JSON.parse(mcp("apex_hud_mock", { dryRun: true, devices: ["phone-se-667x375"], cams: ["cockpit", "chase"], hudScale: [70, 200] }).stdout);
+  assert.equal(dry.ok, true);
+  assert.ok(dry.argv[1].endsWith("tools/shot/hud-mock.mjs"));
+  for (const f of ["--json", "--out"]) assert.ok(dry.argv.includes(f), f);
+  assert.deepEqual(dry.argv.slice(dry.argv.indexOf("--cams"), dry.argv.indexOf("--cams") + 2), ["--cams", "cockpit,chase"]);
+  assert.equal(JSON.parse(mcp("apex_hud_mock", { dryRun: true, hudScale: [999] }).stdout).error, "bad_args");
+  const r = JSON.parse(mcp("apex_hud_mock", { async: false }, { APEX_MCP_MOCK: "1" }).stdout);
+  assert.equal(r.ok, true);
+  assert.equal(r.tool, "apex_hud_mock");
+  assert.match(r.sheet, /sheet\.jpg$/);
+  assert.equal(r.cells[0].overlaps[0].pair, "damage+inputs");
+});
+
+// Expected-visible false positives salvaged from PR #1316 (closed) and the phone sweep (2026-10-10).
+test("expectedVisibility: a touch cockpit never expects the floating SPEED, nor chips a NAMED preset holds", () => {
+  const css = read("css/track-detail.css");
+  assert.match(css, /body\.cockpit-cam #hud-speed[^{]*\{[^}]*display:\s*none/, "the CSS hides SPEED on cockpit-cam at every size");
+  for (const device of ["phone-landscape-844x390", "phone-se-667x375", "desktop-1280"]) {
+    const e = M.expectedVisibility(M.normalizeCell({ device, cam: "cockpit" }), { cockpitCam: true, desktop: !M.DEVICES[device].touch });
+    assert.equal(e.speed.want, false, device + ": cockpit-cam hides the floating speed");
+  }
+  // TOUCH_PRESET_HOLD lockstep with js/ui/hud-layout.js.
+  const src = read("js/ui/hud-layout.js");
+  for (const [set, ids] of Object.entries(M.TOUCH_PRESET_HOLD)) {
+    const m = new RegExp(set + ":\\s*\\{([^}]*)\\}").exec(src.slice(src.indexOf("TOUCH_PRESET_HOLD")));
+    assert.ok(m, set + " in TOUCH_PRESET_HOLD");
+    assert.deepEqual(m[1].match(/\w+(?=:)/g).sort(), Object.keys(ids).sort(), set + " holds the same chips");
+  }
+  const clean = M.expectedVisibility(M.normalizeCell({ device: "phone-landscape-844x390", cam: "cockpit", preset: "clean" }), { cockpitCam: true, desktop: false });
+  for (const id of ["ot", "aero"]) assert.equal(clean[id].want, false, "CLEAN does not place " + id + " in a touch cockpit (no data-hl-user)");
+  const inline = M.expectedVisibility(M.normalizeCell({ device: "phone-landscape-844x390", cam: "cockpit", preset: { ot: { x: 10 } } }), { cockpitCam: true, desktop: false });
+  assert.equal(inline.ot.want, true, "inline offsets ARE a placement: the chip shows");
 });
