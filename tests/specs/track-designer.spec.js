@@ -166,6 +166,7 @@ test.describe("Track designer", () => {
     // Theme / LOOK chips live in SCENERY mode (MODE tabs, slice B).
     await page.evaluate(() => TrackDesigner.setMode("scenery"));
     await page.locator('#trackdesigner [data-theme="winter"]').click();
+    await page.getByRole("tab", { name: "ATMOSPHERE", exact: true }).click();
     await page.locator('#trackdesigner [data-look="time:night"]').click();
     await page.locator('#trackdesigner [data-look="crowd:packed"]').click();
     await expect(page.locator('#trackdesigner [data-look="time:night"]')).toHaveAttribute("aria-pressed", "true");
@@ -196,13 +197,35 @@ test.describe("Track designer", () => {
     await page.getByRole("searchbox", { name: "Find a scenery theme" }).fill("no matching scenery");
     await expect(page.locator('#trackdesigner [data-role="theme-results"]')).toContainText("No themes found");
     await page.getByRole("button", { name: "Clear theme search and filters" }).click();
-    await expect(page.locator('#trackdesigner [data-theme]:not([hidden])')).toHaveCount(25);
+    await expect(page.locator('#trackdesigner [data-theme]:not([hidden])')).toHaveCount(27);
+    await page.locator('#trackdesigner [data-theme="blossom"]').click();
     const u0 = await page.evaluate(() => TrackDesigner.state().undo);
+    await page.getByRole("tab", { name: "ATMOSPHERE", exact: true }).click();
     await page.locator('#trackdesigner [data-preset="golden"]').click();
     expect(await page.evaluate(() => TrackDesigner.state().undo)).toBe(u0 + 1);
     await page.getByRole("button", { name: "UNDO", exact: true }).click();
     expect(await page.evaluate(() => TrackDesigner.state().design.look)).toBeUndefined();
     await page.locator('#trackdesigner [data-preset="race"]').click();
+    await page.getByRole("tab", { name: /^OBJECTS/ }).click();
+    await page.locator('#trackdesigner [data-prop="hedge"]').click();
+    await page.locator('#trackdesigner [data-placement-mode="range"]').click();
+    for (const [name, value] of [["Scenery start point number", "3"], ["Scenery end point number", "10"], ["Scenery positions along section", "2"]]) {
+      const input = page.getByRole("spinbutton", { name, exact: true }); await input.fill(value); await input.press("Enter");
+    }
+    await page.locator('#trackdesigner [data-side="0"]').click();
+    const batchUndo = await page.evaluate(() => TrackDesigner.state().undo);
+    await page.getByRole("button", { name: "Place objects along the selected section", exact: true }).click();
+    expect(await page.evaluate(() => TrackDesigner.state().design.props.map((p) => p.side))).toEqual([-1, 1, -1, 1]);
+    expect(await page.evaluate(() => TrackDesigner.state().undo)).toBe(batchUndo + 1);
+    await page.getByRole("button", { name: "Edit placed hedge 1", exact: true }).click();
+    await page.getByRole("spinbutton", { name: "Placed object roadside gap in metres", exact: true }).fill("24");
+    await page.locator('[data-role="prop-editor"]').getByRole("button", { name: "APPLY", exact: true }).click();
+    expect(await page.evaluate(() => TrackDesigner.state().design.props[0].gap)).toBe(24);
+    await page.getByRole("button", { name: "UNDO", exact: true }).click();
+    await page.getByRole("button", { name: "UNDO", exact: true }).click();
+    expect(await page.evaluate(() => TrackDesigner.state().design.props)).toBeUndefined();
+    await page.locator('#trackdesigner [data-placement-mode="point"]').click();
+    await page.locator('#trackdesigner [data-prop="stand"]').click();
     await page.locator('#trackdesigner [data-side="-1"]').click();
     await page.getByRole("button", { name: "ROADSIDE GAP m up", exact: true }).click();
     await page.evaluate(() => {

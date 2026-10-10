@@ -425,10 +425,10 @@
 #trackdesigner [data-role="theme-filters"] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 #trackdesigner [data-role="theme-filters"] .sel-chip { justify-content: center; }
 #trackdesigner [data-role="theme-results"] { min-height: 1.4em; }
-#trackdesigner [data-role="look-presets"] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#trackdesigner [data-role="look-presets"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 #trackdesigner [data-role="look-presets"] .sel-chip { justify-content: center; white-space: normal; text-align: center; }
-#trackdesigner .td-row:has([data-look]) { display: grid; grid-template-columns: minmax(6.5em, 1.5fr) repeat(4, minmax(0, 1fr)); }
-#trackdesigner .td-row:has([data-look]) > span { color: var(--dim); }
+#trackdesigner .td-row:has([data-look]) { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+#trackdesigner .td-row:has([data-look]) > span { color: var(--dim); grid-column: 1 / -1; }
 #trackdesigner .td-row:has([data-look]) .sel-chip { min-width: 0; min-height: var(--chip-h); }
 #trackdesigner [data-role="prop-side"] { align-items: center; }
 #trackdesigner [data-role="prop-side"] > span { flex: 1; }
@@ -438,6 +438,24 @@
 #trackdesigner [data-role="themes"][hidden],
 #trackdesigner [data-role="themes"] > [hidden],
 #trackdesigner [data-role="scenery"] [hidden] { display: none; }
+#trackdesigner [data-role="scenery-sections"] { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+#trackdesigner [data-role="scenery"] > .td-label,
+#trackdesigner [data-role="scenery"] [role="tabpanel"] > .td-label { display: none; }
+#trackdesigner [data-role="scenery-sections"] .sel-chip { min-width: 0; padding-inline: calc(var(--gap) / 3); font-family: var(--font-hud); justify-content: center; }
+#trackdesigner [data-role="scenery"] [role="tabpanel"] { margin-top: 0; }
+#trackdesigner .td-chips[data-role="props"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#trackdesigner [data-role="props"] .sel-chip { justify-content: space-between; }
+#trackdesigner [data-role="placement-mode"] { display: grid; grid-template-columns: 1fr 1fr; }
+#trackdesigner [data-role="scenery-fields"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--gap) / 2); }
+#trackdesigner [data-role="scenery-field"] { display: flex; flex-direction: column; gap: calc(var(--gap) / 3); min-width: 0; }
+#trackdesigner [data-role="scenery-field"] .td-input { width: 100%; min-width: 0; box-sizing: border-box; }
+#trackdesigner [data-role="prop-editor"] { padding: calc(var(--gap) / 2); border: 1px solid var(--plate-line); border-radius: var(--r-md); background: var(--surf-1); }
+#trackdesigner [data-role="placed-props"] .td-issue { display: grid; grid-template-columns: 1fr auto; }
+#trackdesigner [data-role="placed-props"] .td-issue > span { grid-column: 1 / -1; }
+@media (max-width: 760px) and (orientation: portrait) {
+  #trackdesigner [data-role="scenery"] [data-role="theme-blurb"] { display: none; }
+  #trackdesigner [data-role="theme-summary"] { padding-bottom: 0; }
+}
 
 #trackdesigner [data-role="selection"][hidden],
 #trackdesigner [data-role="selection"] [hidden] { display: none; }
