@@ -153,8 +153,10 @@ never a looser pattern or `| tail` on a live log.
 
 Use `--session <unique-id>` with `who-is-on-it.mjs --claim/--release` on hosts
 without a Claude session variable; do not share a `nosession` identity.
-Prefer `subscribe_github_ci` + `subscribe_github_pr` (cursor-subscriptions MCP);
-never write the fake name `subscribe_pr_activity`. If those or Monitor/send_later
+Prefer the host's subscription tools: `subscribe_github_ci` + `subscribe_github_pr`
+(Cursor, cursor-subscriptions MCP) or `subscribe_pr_activity` (Claude Code,
+claude-code-remote MCP; skill `session-comms`) — never the other host's names.
+If those or Monitor/send_later
 are absent, run the watcher as one owned background command with a log, read
 events while doing independent work, and at most one `ci-watch --sha <sha>
 --once` at a checkpoint (no shell-poll loops while subscribed). Record missing

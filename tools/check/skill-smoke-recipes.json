@@ -810,6 +810,87 @@
         }
       ],
       "evidenceScope": "Only the frozen offline scenery API contract; excludes campaign execution, real-world accuracy, browser and hardware verification"
+    },
+    {
+      "skill": "ci-watch",
+      "task": "Exercise suggest: FOREIGN-ARM",
+      "fixture": "tests/unit/pr-board.test.mjs",
+      "pattern": "suggest:\\ FOREIGN-ARM",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "session-comms",
+      "task": "Exercise session-comms skill pins the message formats",
+      "fixture": "tests/unit/pr-board.test.mjs",
+      "pattern": "session-comms\\ skill\\ pins",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "pr-owner",
+      "task": "Exercise pr-owner skill pins the loop",
+      "fixture": "tests/unit/pr-board.test.mjs",
+      "pattern": "pr-owner\\ skill\\ pins",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
     }
   ]
 }

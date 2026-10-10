@@ -2,7 +2,7 @@
 
 Markdown agents with YAML frontmatter under `.claude/agents/`. Claude Code and
 Cursor both load this path (Cursor also accepts `.cursor/agents/`; we keep the
-single Claude tree to avoid drift). Six agents (`ci-red-triage` added
+single Claude tree to avoid drift). Seven agents (`ci-watcher` added 2026-10-10; `ci-red-triage` added
 2026-09-22; seven until 2026-09:
 `worktree-regression-check` folded into **verify-agent** `--base`, and
 `doc-drift-auditor` into the `total-audit` workflow's `docs-ref` / `docs-idx`
@@ -16,6 +16,7 @@ lenses — `.claude/workflows/README.md`).
 | **physics-contract-auditor** | Read-only `vstd-lint` + `Tracks.curvature` column classification (AI-only / assist-gated / broadcast / surface). No Playwright. |
 | **bloat-auditor** | Read-only agent-bloat / simplify pass. `bloat-scan.mjs` + one assigned scope; returns `BLOAT` rows. No edits, no Playwright, no chrome-start. Parent applies one carve via **slim-bloat**. |
 | **ci-red-triage** | A red `ci.yml` / `pages.yml` run: reads the failed jobs' logs and junit, names the exact test title, assertion and lane, says whether the base was already red, and returns the AGENTS.md status line. Read-only; never re-runs anything locally. |
+| **ci-watcher** | The PR board for CI Watch: runs `tools/ci/pr-board.mjs --json` + `ready-full-cap.mjs` and returns every open PR's ARM / READY / SYNC / FIX / FOREIGN-ARM / WAIT / NONE with the exact GitHub MCP call per action. Read-only (Bash, Read, Grep, Glob); never mutates or merges. Protocol: skill `ci-watch`. |
 
 **Token routing:** prefer these over attaching fat skills. Deploy/version →
 `deploy-research` (not full `mcp-probe`). Pre-push verify → `verify-agent`;
@@ -23,7 +24,7 @@ same-red on tip → `verify-agent --base <ref>`. One circuit →
 `track-surveyor`. Stale prose → the `total-audit` workflow (`docs-ref` /
 `docs-idx` lenses), not a bespoke agent. Curvature / PACE semantics →
 `physics-contract-auditor`. Fat skill / extract / dead code → `bloat-auditor`
-(parent applies via **slim-bloat**). A red Actions run → `ci-red-triage`. Parent keeps edits, cache bump, and deploy FF.
+(parent applies via **slim-bloat**). A red Actions run → `ci-red-triage`. The open-PR board → `ci-watcher` (acted on per skill `ci-watch`). Parent keeps edits, cache bump, and deploy FF.
 
 **One prohibition line, not five blocks.** Every agent body ends with:
 "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no
@@ -43,7 +44,7 @@ and `background: true` keeps a Claude Code agent off the foreground;
 `readonly: true` and `is_background: true` are the Cursor equivalents
 (`https://cursor.com/docs/subagents`). `model:` is a TIER, pinned by
 `tests/unit/skill-progressive.test.mjs`: `haiku` for scan-and-report agents
-(verify-agent, deploy-research, bloat-auditor), `sonnet` for log triage
+(verify-agent, deploy-research, bloat-auditor, ci-watcher), `sonnet` for log triage
 (ci-red-triage), `inherit` where the job is judgement (physics-contract-auditor,
 track-surveyor). Every agent carries `maxTurns`; the two that run repeatedly
 carry `memory: project` (`.claude/agent-memory/<name>/MEMORY.md`, tracked, one
