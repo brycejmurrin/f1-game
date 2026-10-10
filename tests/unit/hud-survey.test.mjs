@@ -13,7 +13,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { analyzeOverlap, controlClash, probeHudElements, rectHit } from "../../tools/lib/hud-geometry.mjs";
 import * as M from "../../tools/lib/hud-survey-matrix.mjs";
-import { applyCell, chromiumArgs, hudFitState, parseArgs, probeWithTransients, runExtras } from "../../tools/shot/hud-survey.mjs";
+import { applyCell, chromiumArgs, hudFitState, parseArgs, probeWithTransients, runExtras, shotTimeoutMs } from "../../tools/shot/hud-survey.mjs";
 import { analyzeSamples, parseArgs as parseLive, summarize } from "../../tools/shot/hud-live-sample.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -662,4 +662,12 @@ test("hud-live-sample: the CLI refuses a bad device before it launches anything,
   const help = spawnSync(process.execPath, [CLI2, "--help"], { cwd: ROOT, encoding: "utf8", timeout: 30000 });
   assert.equal(help.status, 0);
   assert.match(help.stdout + help.stderr, /UNFROZEN/);
+});
+
+// 2026-10-10: lead10-announce-s150-1920 failed a flat 60 s CDP capture cap twice on an idle box under SwiftShader (200 s
+// cells) and passed under llvmpipe. A 1920x1080 frame gets a longer cap; every phone / 1280-wide cell keeps 60 s.
+test("shotTimeoutMs: 60 s up to 1280x800, 180 s for a 1920x1080 frame", () => {
+  for (const [w, h] of [[390, 844], [844, 390], [640, 360], [1180, 820], [1280, 800]]) assert.equal(shotTimeoutMs(w, h), 60000, `${w}x${h}`);
+  assert.equal(shotTimeoutMs(1920, 1080), 180000);
+  assert.equal(shotTimeoutMs(2560, 1440), 180000);
 });

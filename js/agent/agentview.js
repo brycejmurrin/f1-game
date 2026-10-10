@@ -558,12 +558,14 @@ const AgentView = (function () {
       const p = G.player, out = [], L = G.track.total;
       for (const c of G.cars) {
         if (c.isPlayer) continue;
-        // ON THE ROAD, not in the standings: prog is cumulative, so a lapped car
-        // 10 m ahead read as 5767 m behind and "clear". Wrap to the nearest
-        // lap for the physical gap; the standing goes in lapsAhead.
+        // ON THE ROAD, not in the standings: prog is cumulative. Standing is the
+        // lap counter (a first-lap pack can sit |prog| > L/2 apart while every
+        // car still reads lap:0 — nearest-wrap then invented lapsAhead:1 with
+        // rel:"behind"). Road gap is prog minus that standing, so a lapped car
+        // 10 m ahead stays ahead with lapsAhead:-1 (agent-hooks-vm).
         const raw = c.prog - p.prog;
-        let gap = raw - Math.round(raw / L) * L;  // + = ahead of us, |gap| <= L/2
-        const lapsAhead = Math.round((raw - gap) / L);
+        const lapsAhead = (c.lap || 0) - (p.lap || 0);
+        let gap = raw - lapsAhead * L;  // + = ahead of us on the road
         const ahead = gap >= 0;
         const gapM = Math.abs(gap);
         const lateralM = (c.x || 0) - (p.x || 0);

@@ -49,6 +49,7 @@ var RaceEngineer = (function () {
   // is shared with flags, penalties and the caution, and an engineer that talks
   // over a red flag is worse than one that says nothing.
   const QUIET_S = 9;
+  const EST_S = 0.25;   // how long senseInto reuses pits.estimate()
   // …and no single line is said twice for the SAME STATE (stateOf below): a
   // 45 s per-line timer re-said every steady-state line ("MANAGE THE TYRES",
   // "CHEAPER STOP") about twice a lap for a whole stint or caution. A line
@@ -206,7 +207,7 @@ var RaceEngineer = (function () {
     }
 
     /** Build the pure state `callFor` reads, from one car (a fresh object). */
-    function senseOf(c) { return senseInto(c, {}); }
+    function senseOf(c) { return senseInto(c, {}, 0); }
     // update() reads it every step and lets go before the next: one scratch.
     // NOT throttled onto a clock: callFor's level calls (tread, box, cheap
     // stop) and the per-tick b.stops/b.undercut latches read it per step.
@@ -215,7 +216,7 @@ var RaceEngineer = (function () {
       for (let i = 0; i < cars.length; i++) { const o = cars[i]; if (o.finished && !o.retired) return true; }
       return false;
     }
-    function senseInto(c, out) {
+    function senseInto(c, out, dt) {
       const tyres = G.tyres;
       if (!tyres || !tyres.on() || !c || !c.tyre || c.retired || c.finished) return null;
       const b = bag(c);
@@ -234,7 +235,12 @@ var RaceEngineer = (function () {
       // the advice the player gets and the call the field makes cannot diverge.
       const wantTread = TyreModel.treadFor(G.raceWeather, G.trackWetness ? G.trackWetness() : undefined);
       const cautionLvl = G.cautionLevel ? G.cautionLevel() : 0;   // per step: the allocation-free read
-      const pit = G.pits && G.pits.estimate(c);
+      // The estimate is a fresh object plus a scan of the field: re-read it on a
+      // 0.25 s clock, not every physics step (it is advice with a tilde, and a
+      // quarter-second old costs nothing). No dt (senseOf) = always fresh.
+      let pit;
+      if (dt > 0 && b.estT > 0 && "est" in b) { b.estT -= dt; pit = b.est; }
+      else { pit = G.pits && G.pits.estimate(c); b.est = pit; b.estT = EST_S; }
       const armed = !!c.pitArmed || (c.pitState && c.pitState !== "none");
       // …nor to one on the LAST lap (a qualifying lap is lapsTarget 1): a stop
       // there costs a place for nothing, and "BOX FOR WETS" with the flag in
@@ -370,7 +376,7 @@ var RaceEngineer = (function () {
     /** One tick for ONE car — the local player only; nobody else has a banner. */
     function update(c, dt) {
       if (!c || !c.local || !(dt > 0) || G.paused) return "";   // VS FRIEND ticks under pause: no call on the pause menu (a wear step waits for resume)
-      const s = senseInto(c, _sense);
+      const s = senseInto(c, _sense, dt);
       if (!s) return "";
       const b = bag(c);
       b.t = Math.max(0, b.t - dt);
