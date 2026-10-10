@@ -216,6 +216,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `home-world.js` | `HomeWorld` | tag | Home's prepared circuit: camera ownership and a bounded render budget only. |
 | `photo-studio.js` | `PhotoStudio` | tag | Photo Studio captures only the renderer, then composes a cropped image. |
 | `experience.js` | `UiExperience` | tag | connected menu doors, race context and bounded live garage home. |
+| `share-code.js` | `ShareCode` | tag | ShareCode: pasteable APX envelopes for setup / livery / daily (+ #share=). |
 | `title-menu.js` | `TitleMenu` | tag | TITLE MENU retention doors: career summary, direct Continue, and today's Daily Challenge. |
 | `title-flow.js` | `TitleFlow` | tag | TitleFlow: title-menu session entry and shared ghost links. |
 | `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |

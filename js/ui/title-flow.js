@@ -47,25 +47,68 @@ async function consumeGhostHash() {
   // …and so does one landing over any other layer (results / quali sheet, the RACE loading plate, the career hub, an open
   // picker): it would flip flow/session to a time trial under that screen. Only the title itself takes the link.
   const top = els.overlay.hidden ? null : UiLayers.top();
-  if (els.overlay.hidden || (top && top.id !== "overlay")) { Log.info("game", "ghost link deferred: title not live"); return null; }
-  const shared = await GhostShare.consumeHash({ valid: () => !UiLayers.inRace() && !els.overlay.hidden,
+  if (els.overlay.hidden || (top && top.id !== "overlay")) {
+    Log.info("game", "ghost link deferred: title not live");
+    // BACK to the title (the covering layer or #overlay toggles hidden/open) re-reads the held link, not only
+    // quitToMenu (6-F4). One-shot; a re-defer re-arms it on whatever layer is then on top.
+    if (typeof MutationObserver === "function" && /(?:^#|&)(?:ghost|share)=/.test(location.hash) && !els.overlay._apexLinkWatch) {
+      const watch = els.overlay._apexLinkWatch = new MutationObserver(() => {
+        watch.disconnect(); els.overlay._apexLinkWatch = null; setTimeout(consumeGhostHash, 0);
+      });
+      for (const el of [els.overlay, top]) if (el) watch.observe(el, { attributes: true, attributeFilter: ["hidden", "open"] });
+    }
+    return null;
+  }
+  const titleLive = () => !UiLayers.inRace() && !els.overlay.hidden;
+  const shared = await GhostShare.consumeHash({ valid: titleLive,
     notify: (message, result) => G.announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
   });
-  if (!shared || !shared.ok) return shared;
-  G.flow = "gp"; G.session = "tt";
-  const today = DailyChallenge.dayKey();
-  if (shared.day && shared.day === today) {
-    G.daily.select(shared.day);
-  } else {
-    G.daily.stop();
-    restoreFreePlaySelection();
-    const idx = Tracks.LIST.findIndex((entry) => entry.id === shared.track);
-    if (idx < 0) return shared;   // decode already guards this; retain a safe no-op
-    G.trackIdx = idx;
+  if (shared && shared.ok) {
+    G.flow = "gp"; G.session = "tt";
+    const today = DailyChallenge.dayKey();
+    if (shared.day && shared.day === today) {
+      G.daily.select(shared.day);
+    } else {
+      G.daily.stop();
+      restoreFreePlaySelection();
+      const idx = Tracks.LIST.findIndex((entry) => entry.id === shared.track);
+      if (idx < 0) return shared;   // decode already guards this; retain a safe no-op
+      G.trackIdx = idx;
+    }
+    G.buildSelect();
+    vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
+    G.scheduleFlybyTrack(true);
   }
-  G.buildSelect();
-  vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
-  G.scheduleFlybyTrack(true);
+  // Setup / livery / daily envelopes on #share= — stage only, never startRace.
+  // Inlined (not a sibling fn) so ghost-share.test.mjs can extract this body alone.
+  if (typeof ShareCode !== "undefined" && titleLive()) {
+    const started = { n: 0 };
+    await ShareCode.consumeHash({
+      valid: titleLive,
+      apply: (decoded) => ShareCode.apply(decoded, {
+        store: G.store,
+        startRace: () => { started.n++; },
+        selectTeam: (teamId) => {
+          const ti = Teams.LIST.findIndex((t) => t.id === teamId);
+          if (ti >= 0) G.teamIdx = ti;
+        },
+        openGarage: (from) => { if (G.openGarage) G.openGarage(from || "share"); },
+        openDaily: (decoded) => {
+          G.flow = "gp"; G.session = "tt";
+          const today = DailyChallenge.dayKey();
+          if (decoded.day === today) G.daily.select(decoded.day);
+          else G.daily.select(today);
+          G.buildSelect();
+          vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
+          G.scheduleFlybyTrack(true);
+        },
+      }),
+      notify: (message, result) => {
+        if (started.n) Log.warn("game", "share apply tried startRace — ignored");
+        G.announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning");
+      },
+    });
+  }
   return shared;
 }
 consumeGhostHash();

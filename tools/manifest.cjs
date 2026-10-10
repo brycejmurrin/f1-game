@@ -377,6 +377,7 @@ const FULL = [
   "js/ui/home-world.js",
   "js/ui/photo-studio.js",
   "js/ui/experience.js",
+  "js/ui/share-code.js", // ShareCode: APXS/APXL/APXD envelopes + #share= (player-a11y slice 4)
   "js/ui/title-menu.js",
   "js/ui/title-flow.js", // TitleFlow: main-menu race, season, career and ghost entry
   "js/race/quali-net.js",
