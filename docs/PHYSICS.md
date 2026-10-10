@@ -690,7 +690,7 @@ other or me." Measured with `tools/check/ai-tactics.mjs` (before/after in
   cap is load-bearing: an uncapped 0.54 m/m crossing at Monza's first
   chicane cost the AI field 1.6 % of lap time).
 - **The compound is the strategy** (`AiDrive.tyreClass` / `tyrePace`) — **while
-  TYRE WEAR is off**, which is the shipped default. Each AI car draws a class for
+  TYRE WEAR is off** (the fixtures' setting; the shipped default is `real`, below). Each AI car draws a class for
   the race distance (sprints on softs, long races mixed): a soft starts +0.4% and
   degrades 0.12%/lap, a medium 0 and 0.07%, a hard −0.4% and 0.04%, capped at
   −2.5%. Soft- and hard-starters cross at lap 10, inside the 10- and 25-lap races
@@ -963,10 +963,11 @@ corner-speed model showed no such gap. Dry pace is untouched by construction.
 **`js/physics/tyre-model.js` (`TyreModel`) wears the tyre, and
 `js/race/pit-lane.js` (`PitLane`) lets you do something about it.** Both are
 gated on the TYRE WEAR race setting (`off` / `light` / `real`), which **ships
-`off`** — and `off` is a *true* no-op: `gripMul`, `tractionMul` and the two fuel
-multipliers all return exactly 1, so
-`tests/specs/physics-characterization.spec.js` is untouched until somebody turns
-it on. `js/race/reliability.js` ships off for the same reason.
+`real`** (`js/data/settings-defaults.js`). `off` is still a *true* no-op:
+`gripMul`, `tractionMul` and the two fuel multipliers all return exactly 1, so
+`tests/specs/physics-characterization.spec.js` and the game-vm fixtures pin
+`off` and measure the driving model rather than the wear default.
+`js/race/reliability.js` ships off.
 
 - **Life is a fraction of the SCHEDULED distance, not a lap count.** Real
   degradation over a 25-lap stint accumulates ~1.5 s against a ~21 s pit loss,

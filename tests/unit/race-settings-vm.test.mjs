@@ -1,15 +1,15 @@
 /* race-settings-vm.test.mjs — RACE SETTINGS lap ladder as BEHAVIOUR in the
  * game-vm harness (tools/lib/game-vm.cjs runs the real game.js on an inert DOM).
  *
- * FULL moves with the circuit (def.gpLaps, derived from the GP distance: Monaco
- * 79, Spa 44, Silverstone 52), so a lap count picked on one circuit can sit OFF
- * the ladder on the next — above full (79 at Spa) or BELOW it (52 (FULL) at
+ * FULL moves with the circuit (def.gpLaps, derived from the GP distance or the
+ * def's override: Monaco 78, Spa 44, Silverstone 52), so a lap count picked on
+ * one circuit can sit OFF the ladder on the next — above full (78 at Spa) or BELOW it (52 (FULL) at
  * Monaco). The old clamp only handled "above": a Silverstone full race opened
  * Monaco's sheet with no LAPS chip lit (setup-screens audit 2026-09-02, finding
  * 11). Outside a championship an off-ladder value snaps to this circuit's FULL —
  * a full race stays a full race. A CHAMPIONSHIP's format distance (SEASON SETUP's
  * 57 LAPS) is the exception: it is CLAMPED to a shorter circuit's FULL and keeps
- * its own chip below FULL, never raised (ed11e6108, 74fe2d599 — it became 79 at
+ * its own chip below FULL, never raised (ed11e6108, 74fe2d599 — it became FULL at
  * Monaco).
  *
  * Run: node --test tests/unit/race-settings-vm.test.mjs   (npm run test:game-vm)

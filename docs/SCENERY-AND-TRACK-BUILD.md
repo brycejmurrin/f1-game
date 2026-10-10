@@ -190,7 +190,7 @@ Pre-fix mid-span displacement was Imola ~1.8 km / Spa ~277 m (`docs/BUGS.md`
 S1). Engine-internal `ctx.along` (walls/fences) was always single-shift.
 
 `bakedModel` also remaps correctly (dedicated `(id,k,side)` wrapper). Residual
-`_sceneryShift` on ~13 circuits is frame debt (S3), not a double-apply bug.
+`_sceneryShift` on ~14 circuits is frame debt (S3), not a double-apply bug.
 Full rules: `.claude/skills/scenery-dress/references/rules.md`.
 
 ---
@@ -303,7 +303,7 @@ copy — a field omitted from the mapper is silently `undefined`).
 See [BUGS.md](BUGS.md) §Scenery for the shortlist. Headline traps:
 
 1. **`along()` double-shift** — FIXED 2026-09-24 (`sceneryNodeToAuthored`);
-   residual large `_sceneryShift` on ~13 circuits remains frame debt (S3).
+   residual large `_sceneryShift` on ~14 circuits remains frame debt (S3).
 2. **`furniture.tree: "pine"`** — FIXED (fir + `canopyR` keep-out); unknown
    species still fall through silently (`circuit-vocab.test.mjs`).
 3. **Silent vocab fallbacks** — unknown kit/stand/tree words never throw.

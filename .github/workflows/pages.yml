@@ -192,7 +192,7 @@ jobs:
       # selection + the parts census (base-diffed, not tree-only) and reuses
       # the rest — see ci.yml's `fast_tier_run` input. ship_only is the
       # exact-SHA ship-green path: skip those jobs entirely and run smoke only.
-      fast_tier_run: ${{ needs.verdict.outputs.ship_only == 'true' && '' || needs.verdict.outputs.fast_run }}
+      fast_tier_run: ${{ needs.verdict.outputs.ship_only != 'true' && needs.verdict.outputs.fast_run || '' }}
       smoke_only: ${{ needs.verdict.outputs.ship_only == 'true' }}
     # ONE TRAIN AT A TIME (rule 1 above). One group per branch, no cancel: a
     # running gate finishes, the next tick waits, a later tick replaces the

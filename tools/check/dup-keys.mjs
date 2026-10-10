@@ -27,12 +27,16 @@
 //   node tools/check/dup-keys.mjs            # scan, exit 1 on any hit
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import * as espree from "espree";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-// The vendored three.js island is not ours to police.
-const SKIP = new Set(["three", "node_modules"]);
+// Skipped by PATH, never by directory name (2026-10-10, DK1): the skip used to
+// be the basename "three", which exempted js/render/three/ — the default TLX
+// renderer, our own code — while the vendored three.js island sits in
+// vendor/three-*/, outside ROOTS anyway. Only node_modules is exempt anywhere.
+const SKIP_NAMES = new Set(["node_modules"]);
+export const SKIP_PATHS = new Set([]);
 
 const PARSE = { ecmaVersion: "latest", loc: true, range: false };
 
@@ -44,7 +48,9 @@ export function scanFile(src, file) {
   for (const sourceType of ["module", "script"]) {
     try { ast = espree.parse(src, { ...PARSE, sourceType }); break; } catch { /* try the other */ }
   }
-  if (!ast) return [];   // unparseable is not this tool's business to report
+  // A file neither mode parses was checked by nothing: report it (DK1), or a
+  // syntax slip silently exempts the whole file from the duplicate-key scan.
+  if (!ast) return [{ file, line: 1, key: "<unparseable>", first: 1, parseError: true }];
   const out = [];
   const seen = new Set();
   (function walk(node) {
@@ -78,11 +84,12 @@ export function scanFile(src, file) {
   return out;
 }
 
-function walkDir(dir, acc = []) {
+export function walkDir(dir, acc = [], root = ROOT) {
   for (const e of readdirSync(dir)) {
-    if (SKIP.has(e)) continue;
+    if (SKIP_NAMES.has(e)) continue;
     const p = path.join(dir, e);
-    if (statSync(p).isDirectory()) walkDir(p, acc);
+    if (SKIP_PATHS.has(path.relative(root, p).split(path.sep).join("/"))) continue;
+    if (statSync(p).isDirectory()) walkDir(p, acc, root);
     else if (/\.(m|c)?js$/.test(e)) acc.push(p);
   }
   return acc;
@@ -91,16 +98,25 @@ function walkDir(dir, acc = []) {
 // js/ is where the hazard has actually bitten — twice, in the same file — but
 // the same silent merge can happen in any object literal, so the scan is the
 // whole tree the repo owns.
-const ROOTS = ["js", "tools", "tests"];
-const hits = [];
-for (const r of ROOTS)
-  for (const f of walkDir(path.join(ROOT, r)))
-    hits.push(...scanFile(readFileSync(f, "utf8"), path.relative(ROOT, f)));
+export const ROOTS = ["js", "tools", "tests"];
 
-if (hits.length) {
-  for (const h of hits)
-    console.error(`${h.file}:${h.line} duplicate key \`${h.key}\` in one object literal — the one at line ${h.first} is dead`);
-  console.error(`\n${hits.length} duplicate key(s). Merge the two into ONE, keeping both sides' fields.`);
-  process.exit(1);
+export function scanTree(root = ROOT, roots = ROOTS) {
+  const hits = [];
+  for (const r of roots)
+    for (const f of walkDir(path.join(root, r), [], root))
+      hits.push(...scanFile(readFileSync(f, "utf8"), path.relative(root, f)));
+  return hits;
 }
-console.log(`dup-keys: no duplicate object keys in ${ROOTS.join("/, ")}/`);
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const hits = scanTree();
+  if (hits.length) {
+    for (const h of hits)
+      console.error(h.parseError
+        ? `${h.file}: could not be parsed as a module or a script — no duplicate-key check ran on it`
+        : `${h.file}:${h.line} duplicate key \`${h.key}\` in one object literal — the one at line ${h.first} is dead`);
+    console.error(`\n${hits.length} finding(s). Merge duplicate keys into ONE, keeping both sides' fields.`);
+    process.exit(1);
+  }
+  console.log(`dup-keys: no duplicate object keys in ${ROOTS.join("/, ")}/`);
+}
