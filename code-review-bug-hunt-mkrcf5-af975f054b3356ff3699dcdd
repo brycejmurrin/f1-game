@@ -1,1 +1,1 @@
-1791577846	Claude	bug-hunt 2026-10-09: js/game.js race-flow + governor fixes (batch 3/4), lazy-bundles, editor, ui/input — session claude/code-review-bug-hunt-mkrcf5  [claude/code-review-bug-hunt-mkrcf5; session af975f054b3356ff3699dcdd]
+1791602957	Claude	bug-hunt 2 + launch unification: js/game.js launch routes (startRaceFromSheet callers), race-settings.js, real-race.js, daily-challenge.js; worktree branches cursor/bughunt2-* only; no push to ship; do not duplicate  [claude/code-review-bug-hunt-mkrcf5; session af975f054b3356ff3699dcdd]
