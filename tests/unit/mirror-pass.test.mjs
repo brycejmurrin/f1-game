@@ -731,10 +731,13 @@ test("a frozen mirror frame replays the MIRROR pass's pack, never the main camer
     drawInstanced() {},
     makeFrustumPlanes: (vp) => ({ tag: vp[0] }),
     // The cull packs ONE matrix whose first lane names the camera that culled it.
-    cullInstances(b, planes) { b.visible = 1; b.packMatrices[0] = planes.tag; },
-    updateInstances(b, mats, n) { updates.push({ tag: mats[0], n }); },
+    cullInstances(b, planes) {
+      b.visible = 1; b.packMatrices[0] = planes.tag;
+      if (b.packColors) { b.packColors[0] = planes.tag; b.packColors[1] = 0.2; b.packColors[2] = 0.3; }
+    },
+    updateInstances(b, mats, n, cols) { updates.push({ tag: mats[0], n, col: cols && cols[0] }); },
   };
-  const b = { visible: 0, packMatrices: new Float32Array(16 * 4) };
+  const b = { visible: 0, packMatrices: new Float32Array(16 * 4), packColors: new Float32Array(12) };
   const track = { meshes: { propBatches: [b] } };
   const MIRROR = 2, MAIN = 1;
   const mirrorFrame = (freeze) => ({ viewProj: [MIRROR], mirrorLite: false, mirrorFreezeInstanced: freeze });
@@ -742,8 +745,9 @@ test("a frozen mirror frame replays the MIRROR pass's pack, never the main camer
   run(mirrorFrame(false), gfx, track, [], {}, false);   // frame 1: mirror refreshes its pack
   run(mainFrame(), gfx, track, [], {}, false);          //          then the main camera culls
   assert.equal(b._mirMats[0], MIRROR, "the main pass must not overwrite the mirror's recorded pack");
+  assert.equal(b._mirCols[0], MIRROR, "per-instance colours are frozen with the matrices");
   run(mirrorFrame(true), gfx, track, [], {}, false);    // frame 2: the mirror is frozen
-  assert.deepEqual(updates, [{ tag: MIRROR, n: 1 }], "the frozen frame replays the mirror pass's pack");
+  assert.deepEqual(updates, [{ tag: MIRROR, n: 1, col: MIRROR }], "the frozen frame replays mats+colours");
   // A main pass alone records nothing (no per-frame memcpy with the mirror off).
   const solo = { visible: 0, packMatrices: new Float32Array(16) };
   run(mainFrame(), gfx, { meshes: { propBatches: [solo] } }, [], {}, false);
