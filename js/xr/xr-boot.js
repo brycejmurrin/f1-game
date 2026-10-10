@@ -8,6 +8,10 @@
 
 const XrBoot = (function () {
   const LS_XR_PENDING = "apex26.xrEnterPending";
+  // The 2D renderer pick ensureXrBackend overrode: {gfxBackend, tlxForceGL}, null
+  // = unset. Restored by the boot that consumed the pin (R3-PERSISTENCE-2).
+  const LS_XR_PREV = "apex26.xrPrevBackend";
+  const PIN_KEYS = ["gfxBackend", "tlxForceGL"];
 
   let _loopByXr = false;
   let _tickBody = null;
@@ -56,11 +60,19 @@ const XrBoot = (function () {
   /**
    * If the active backend cannot attach, pin TLX + forceWebGL and reload once
    * (design: backend switch via setting; flat players who never click are
-   * untouched). Returns { ok, reloading?, message? }.
+   * untouched). The pin is for THAT boot only: the player's own pick is
+   * stashed and mountUi() puts it back once the renderer has booted, so after
+   * the headset session a GLX / WebGPU player is not left on TLX-WebGL2
+   * forever. Returns { ok, reloading?, message? }.
    */
   function ensureXrBackend() {
     if (canAttach()) return { ok: true };
     try {
+      if (localStorage.getItem(LS_XR_PREV) === null) {   // a second click must not stash the pin itself
+        const prev = {};
+        for (const k of PIN_KEYS) prev[k] = localStorage.getItem("apex26." + k);
+        localStorage.setItem(LS_XR_PREV, JSON.stringify(prev));
+      }
       localStorage.setItem("apex26.gfxBackend", "three");
       localStorage.setItem("apex26.tlxForceGL", "1");
       localStorage.setItem(LS_XR_PENDING, "1");
@@ -69,6 +81,25 @@ const XrBoot = (function () {
     }
     try { location.reload(); } catch (_) { /* */ }
     return { ok: false, reloading: true };
+  }
+
+  // Called after the renderer booted (it read the pin already): the 2D pick goes back.
+  function restorePinnedBackend() {
+    try {
+      const raw = localStorage.getItem(LS_XR_PREV);
+      if (raw === null) return false;
+      let prev = null;
+      try { prev = JSON.parse(raw); } catch (_) { /* corrupt stash: drop it */ }
+      if (prev && typeof prev === "object") {
+        for (const k of PIN_KEYS) {
+          const v = prev[k];
+          if (typeof v === "string") localStorage.setItem("apex26." + k, v);
+          else localStorage.removeItem("apex26." + k);
+        }
+      }
+      localStorage.removeItem(LS_XR_PREV);
+      return true;
+    } catch (_) { return false; }
   }
 
   function consumePendingEnter() {
@@ -199,6 +230,16 @@ const XrBoot = (function () {
         if (_loopByXr && typeof _tickBody === "function") _tickBody(time);
       },
     });
+    // The headset's system menu (visible-blurred / hidden) or taking it off (end)
+    // leaves the DOCUMENT visible, so platform-session's visibilitychange pause
+    // never fires; blurred, the runtime stops delivering input and the car ran
+    // on its last injected sample (R3-STATES-2). Drop the remote sample and take
+    // the game's pause path; api.pause decides eligibility (race/count, no net).
+    if (typeof XrSession.on === "function") XrSession.on((ev, d) => {
+      if (!(ev === "end" || (ev === "visibility" && d && d.state !== "visible"))) return;
+      if (ev !== "end" && typeof Input !== "undefined" && Input.remoteLost) { try { Input.remoteLost(); } catch (_) { /* */ } }
+      if (api && typeof api.pause === "function") { try { api.pause(ev === "end" ? "xr-end" : "xr-hidden"); } catch (_) { /* */ } }
+    });
     _bound = true;
   }
 
@@ -239,6 +280,7 @@ const XrBoot = (function () {
   }
 
   function mountUi() {
+    restorePinnedBackend();
     if (typeof window !== "undefined") {
       window.__apexXr = {
         diag: () => diag(),
@@ -263,9 +305,11 @@ const XrBoot = (function () {
 
   /**
    * After camEye/camTgt are known: publish the seated anchor and, when
-   * presenting, overwrite frame matrices with the left eye and return the
-   * full eye list for presentXR. Returns null when not in XR.
+   * presenting, overwrite frame matrices with the left eye (viewProj: the
+   * union cull frustum of every drawn eye) and return the full eye list for
+   * presentXR. Returns null when not in XR.
    */
+  const _cullVP = new Float32Array(16), _cullEyes = [];
   function applyEyes(frame, camEye, camTgt, camUp) {
     if (!comfort() || typeof XrSession === "undefined" || typeof XrRig === "undefined") return null;
     const fwd = [
@@ -281,7 +325,18 @@ const XrBoot = (function () {
     if (!eyes || !eyes.length) return null;
     const e0 = eyes[0];
     if (frame && e0) {
-      if (e0.viewProj) frame.viewProj = e0.viewProj;
+      // frame.viewProj is only the CULL frustum here (TLX begin's _frameVP chunk
+      // cull, drawWorldMeshes' prop batches, the car cull); each eye renders with
+      // its own matrices in presentXR. One eye's planes miss the other's outer
+      // wedge, so cull with the union of the drawn eyes (R3-RENDER-3).
+      let drawn = 0;
+      for (let i = 0; i < eyes.length; i++) {
+        const vp = eyes[i].viewport;
+        if (!vp || (vp.width > 0 && vp.height > 0)) _cullEyes[drawn++] = eyes[i];
+      }
+      _cullEyes.length = drawn;
+      if (drawn > 1 && XrRig.unionViewProjTo && XrRig.unionViewProjTo(_cullVP, _cullEyes)) frame.viewProj = _cullVP;
+      else if (e0.viewProj) frame.viewProj = e0.viewProj;
       if (e0.proj) frame.proj = e0.proj;
       if (e0.invProj) frame.invProj = e0.invProj;
       if (e0.invViewProj) frame.invViewProj = e0.invViewProj;
@@ -329,11 +384,11 @@ const XrBoot = (function () {
 
   return {
     bind, mountUi, ensureXr, wantXrBundle, comfort, camComfort, loopByXr, isBound, canAttach,
-    ensureXrBackend, applyEyes, present, afterTick, chainWindowRaf,
+    ensureXrBackend, restorePinnedBackend, applyEyes, present, afterTick, chainWindowRaf,
     findCockpit, diag, setFoveation, saveAndForceCockpit, restoreSavedCam,
     // Test / UI helpers
     setCamMode: (...a) => setCamTransient(...a),
-    LS_XR_PENDING,
+    LS_XR_PENDING, LS_XR_PREV,
   };
 })();
 Object.freeze(XrBoot);

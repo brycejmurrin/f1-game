@@ -3473,9 +3473,8 @@ test("the instanced prop shadow cast carries no frame-parity gate", () => {
 
 test("TLX instanced shadows consume the light-frustum packed slice", () => {
   const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const at = src.indexOf("function castShadowInstanced");
-  assert.notEqual(at, -1, "TLX castShadowInstanced moved");
-  assert.match(src.slice(at, at + 350), /castInstanced\(batch,\s*count\)/,
+  // fnBody, not a 350-char window: the wrapper now lends the shadow pack first (R3-RENDER-6).
+  assert.match(fnBody(src, "castShadowInstanced"), /castInstanced\(batch,\s*count\)/,
     "TLX wrapper must forward game.js's culled count");
   const shadow = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const castAt = shadow.indexOf("function castInstanced");
@@ -6113,6 +6112,54 @@ test("SAVE SCREENSHOT on headed GLX reads only a live frame and never saves a bl
   const glx = read("js/render/glx/glx.js");
   assert.match(glx, /if \(_frameWaiters\.length\) _frameWaiters\.splice\(0\)\.forEach/, "present() wakes frame waiters");
   assert.match(glx, /if \(!_softPresent\) return arguments\[1\] === "frame" \? _awaitFrame\(/);
+});
+
+// R3-RENDER-2: the M15 "frame" mode existed in glx.js only. TLX (the default
+// backend) answered awaitSoftPresent(1500, "frame") with an already-resolved
+// promise, so a HEADED TLX player's SAVE SCREENSHOT read #game a task after its
+// present — the cleared, unpreserved buffer — and said SAVED
+// (scratch/hunt3-render/shot-headed.mjs). TLX's own waiter, extracted and run.
+test("SAVE SCREENSHOT on headed TLX reads #game inside the presenting task, and says NO LIVE FRAME when paused (R3-RENDER-2)", async () => {
+  const fn = span(read("js/perf/renderer-picker.js"), "function saveScreenshot()", "function ensureAdvHost()", "saveScreenshot");
+  const tlx = read("js/render/three/tlx.js");
+  const waiters = span(tlx, "const _frameWaiters = [];", "// Layout/CSS size follows", "TLX frame waiters");
+  const early = /awaitSoftPresent\(timeoutMs\) \{\s*(if \(!_softBlit\)[^\n]*)/.exec(tlx);
+  assert.ok(early, "TLX awaitSoftPresent's headed branch");
+  const wake = /if \(painted && _frameWaiters\.length\)[^\n]*/.exec(tlx);
+  assert.ok(wake, "TLX present() wakes the frame waiters");
+  const run = async (presents) => {
+    const button = { textContent: "SAVE SCREENSHOT" };
+    const calls = { read: [], saved: 0 };
+    const timers = [];
+    let inPresent = false;
+    const ctx = vm.createContext({
+      document: { getElementById: (id) => id === "pm-save-shot" ? button : id === "game" ? { toDataURL: () => { calls.read.push(inPresent ? "present-task" : "later-task"); return "data:image/png;base64,AQID"; } } : null,
+        createElement: () => ({ click() { calls.saved++; } }) },
+      NativeDownload: { viable: () => false }, readBackend: () => "three",
+      setTimeout: (f, ms) => { timers.push({ f, ms }); return timers.length; }, clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].f = null; },
+    });
+    vm.runInContext(waiters + "\nlet _softBlit = false, _softBlitGen = 0, painted = true;"
+      + "\nvar GLX = { softPresent: () => _softBlit, awaitSoftPresent: function (timeoutMs) { " + early[1] + " } };"
+      + "\nthis.present = function () { " + wake[0] + " };\n" + fn + "\nsaveScreenshot();", ctx);
+    for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+    if (presents) {
+      inPresent = true;
+      ctx.present();
+      for (let i = 0; i < 20; i++) await Promise.resolve();   // the presenting task's microtasks
+      inPresent = false;
+    } else {
+      for (const t of timers.filter((t) => t.ms === 1500)) if (t.f) t.f();   // nothing presented in 1.5 s
+    }
+    for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
+    return { button, calls };
+  };
+  const live = await run(true);
+  assert.deepEqual(live.calls.read, ["present-task"], "the canvas is read before the compositor clears it");
+  assert.match(live.button.textContent, /SAVED$/);
+  const paused = await run(false);
+  assert.deepEqual(paused.calls.read, [], "no present: the cleared #game is never read");
+  assert.equal(paused.calls.saved, 0);
+  assert.match(paused.button.textContent, /NO LIVE FRAME$/);
 });
 
 // M16: SHD.lampIdx is a slot of the FORWARD frame.lights; the mirror re-ranks its own list.

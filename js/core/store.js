@@ -493,16 +493,48 @@ const GameStore = (function () {
 
   const TT_BOARD_MAX = 10;
   // CLASSES are capped too. A context is a whole stringified car config (ghost.js
-  // config(), ~550 chars stored in every entry), and career progression mints a
+  // config(), ~550 chars; once per class on disk since v2), and career mints a
   // new one each round (tierV moves with tdev), so an uncapped board filled the
   // quota with no player intent — and the failed write raised the permanent
   // SESSION ONLY banner. Keep the class holding the circuit record (the select
   // screen reads board[0].t as "best across setups": a plain LRU would silently
   // regress it), the class being written, and the most recently driven rest.
   const TT_CLASS_MAX = 6;
-  function ttBoard(trackId, context) {
+  // ONE CONTEXT PER CLASS ON DISK. A v1 board was an array whose every lap
+  // carried its ~520-char context: 77 % of a full board was that string
+  // repeated. v2 is {v:2, classes:[ctx…], laps:[{t,teamId,code,name,ts,c}]}
+  // with `c` indexing classes (absent = the unversioned legacy class). Both
+  // shapes read; the next write stores v2. Callers only ever see v1 rows.
+  function ttRead(trackId) {
     const b = store.get("ttlb." + trackId, []);
-    return Array.isArray(b) ? b.filter(e => e && Number.isFinite(e.t) && e.t > 0 && (context === undefined || (e.context || null) === context)) : [];
+    let laps = [];
+    if (Array.isArray(b)) laps = b;
+    else if (b && b.v === 2 && Array.isArray(b.laps)) {
+      const cls = Array.isArray(b.classes) ? b.classes : [];
+      laps = b.laps.map(e => {
+        if (!e || typeof e !== "object") return null;
+        const o = {};
+        for (const k of Object.keys(e)) if (k !== "c") o[k] = e[k];
+        if (Number.isInteger(e.c) && cls[e.c]) o.context = cls[e.c];
+        return o;
+      });
+    }
+    return laps.filter(e => e && Number.isFinite(e.t) && e.t > 0);
+  }
+  function ttWrite(trackId, laps) {
+    const classes = [], at = new Map();
+    store.set("ttlb." + trackId, { v: 2, classes, laps: laps.map(e => {
+      const o = {};
+      for (const k of Object.keys(e)) if (k !== "context") o[k] = e[k];
+      if (e.context) {
+        if (!at.has(e.context)) { at.set(e.context, classes.length); classes.push(e.context); }
+        o.c = at.get(e.context);
+      }
+      return o;
+    }) });
+  }
+  function ttBoard(trackId, context) {
+    return ttRead(trackId).filter(e => context === undefined || (e.context || null) === context);
   }
   function ttBoardAdd(trackId, entry) {
     if (!isFinite(entry.t) || entry.t <= 0) return ttBoard(trackId);
@@ -520,7 +552,7 @@ const GameStore = (function () {
       for (const k of rest.slice(0, TT_CLASS_MAX - keep.size)) keep.add(k);
       kept = kept.filter(e => keep.has(e.context || null));
     }
-    store.set("ttlb." + trackId, kept);
+    ttWrite(trackId, kept);
     return kept;
   }
 

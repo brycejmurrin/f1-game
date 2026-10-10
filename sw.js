@@ -511,6 +511,18 @@ async function precacheAssetLists() {
   const shellHeaders = {};
   try { shell.headers.forEach((v, k) => { shellHeaders[k] = v; }); } catch (_) { /* header-less test double */ }
   const shellResponse = () => new Response(html, { status: 200, headers: shellHeaders });
+  // The deploy's lazy-file content hashes (tools/ci/bump-cache.mjs writes them
+  // into the staged shell; R3-PHONE-8): each lazy file is seeded under the key
+  // ScriptLoader.url() asks for. No block (a dev server, the committed shell) →
+  // every lazy key stays `?v=<build>`, as before.
+  const lazyV = new Map();
+  try {
+    const block = html.match(/<script type="application\/json" id="apex-lazy-v">([\s\S]*?)<\/script>/);
+    const parsed = block ? JSON.parse(block[1]) : null;
+    if (parsed && typeof parsed === "object") {
+      for (const [k, v] of Object.entries(parsed)) if (typeof v === "string" && /^[0-9a-f]{12}$/.test(v)) lazyV.set(k, v);
+    }
+  } catch (_) { /* malformed: build-keyed */ }
   const re = /<(script|link)\b[^>]*>/gi;
   let m;
   while ((m = re.exec(html))) {
@@ -534,7 +546,7 @@ async function precacheAssetLists() {
   for (const u of [...essential]) {
     if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);
   }
-  return { essential: Array.from(essential), optional: Array.from(optional), shellResponse };
+  return { essential: Array.from(essential), optional: Array.from(optional), shellResponse, lazyV };
 }
 
 // Precache reads THROUGH the HTTP cache, deliberately. Both lists hold only
@@ -555,6 +567,28 @@ async function cacheRequiredAsset(cache, url) {
   const res = await fetch(url, mutable ? { cache: "no-store" } : undefined);
   if (!res || !res.ok) throw new Error("Unable to precache essential asset: " + url);
   await cache.put(url, res);
+}
+
+// A CONTENT-HASHED KEY ANOTHER GENERATION ALREADY HOLDS IS NOT DOWNLOADED AGAIN.
+// `?v=<12 hex>` names the bytes, so the copy an older apex26-* cache keeps for
+// that exact URL is this deploy's file — once its digest says so: a cache-first
+// miss can file a NEWER deploy's body under an old key (Pages ignores the
+// query), so the bytes are checked against the key before they are trusted.
+// Every lazy file a deploy did not change then costs a CacheStorage copy, not
+// the network (R3-PHONE-8: ~1.9 MB gzip per deploy on a returning phone).
+async function reuseHashed(cache, url) {
+  const want = /\?v=([0-9a-f]{12})$/.exec(url);
+  const subtle = typeof crypto !== "undefined" && crypto && crypto.subtle;
+  if (!want || !subtle) return false;
+  try {
+    const old = await caches.match(url);
+    if (!old || !old.ok) return false;
+    const body = await old.arrayBuffer();
+    const hex = Array.from(new Uint8Array(await subtle.digest("SHA-256", body)), (b) => b.toString(16).padStart(2, "0")).join("");
+    if (hex.slice(0, 12) !== want[1]) return false;
+    await cache.put(url, new Response(body, { status: 200, headers: old.headers }));
+    return true;
+  } catch (_) { return false; }   // the network path below still runs
 }
 
 async function cacheOptionalAsset(cache, url) {
@@ -602,9 +636,12 @@ self.addEventListener("install", (event) => {
     // So its deferred files are ESSENTIAL, stamped as loadBackendScripts asks.
     const isGlx = (u) => /^js\/render\/glx\//.test(u);
     const isShell = (u) => u === "./" || u === "index.html";
-    const required = urls.essential.filter((u) => !isShell(u)).concat(urls.optional.filter(isGlx).map((u) => u + "?v=" + build));
+    // A lazy file's key: its content hash from the shell's map, else the build.
+    const lazyV = urls.lazyV || new Map();
+    const stampKey = (u) => u + "?v=" + (lazyV.get(u) || build);
+    const required = urls.essential.filter((u) => !isShell(u)).concat(urls.optional.filter(isGlx).map(stampKey));
     await Promise.all(["./", "index.html"].map((u) => cache.put(u, urls.shellResponse())));
-    await pooled(required, 6, (u) => cacheRequiredAsset(cache, u));
+    await pooled(required, 6, async (u) => { if (!(await reuseHashed(cache, u))) await cacheRequiredAsset(cache, u); });
     await cache.put(INSTALL_COMPLETE_URL, new Response("complete"));
     invalidateCacheOrder();   // a marker is a rank input (computeCacheOrder)
     // The DEFERRED backends are the one group in `optional` that is NOT pinned
@@ -623,9 +660,11 @@ self.addEventListener("install", (event) => {
     // race payload (light-presets + the per-circuit scenery closures) too.
     // Stamp regex covers ScriptLoader injects: DEFERRED + LAZY_* incl. js/race/
     // (LAZY_RACE_SESSION) and js/workers/ (bitmap-decode). Keep both path classes.
+    // The stamp is the deploy's CONTENT HASH where the shell's map names one
+    // (stampKey above), so an unchanged file keeps its key across deploys.
     const stamped = urls.optional.map((u) =>
       /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-ui\.js$|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/build-worker\.js$|^js\/workers\//.test(u)
-        ? u + "?v=" + build : u).filter((u) => {
+        ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX went in `required` above; WGX is runtime-only (opt-in).
           return !isGlx(bare) && !isRuntimeOnlyOptional(bare);
@@ -643,7 +682,7 @@ self.addEventListener("install", (event) => {
     let optionalMissed = 0, firstMissed = "";
     for (const pool of [critical, background]) {
       await pooled(pool, 4, async (u) => {
-        if (!(await cacheOptionalAsset(cache, u)) && !optionalMissed++) firstMissed = u;
+        if (!(await reuseHashed(cache, u)) && !(await cacheOptionalAsset(cache, u)) && !optionalMissed++) firstMissed = u;
       });
     }
     if (optionalMissed) swLog("warn", "precache: " + optionalMissed + " of " + stamped.length + " optional assets not cached (first: " + firstMissed + ")");
@@ -677,6 +716,32 @@ self.addEventListener("activate", (event) => {
   })().catch((e) => { swLog("warn", "activate failed: " + errMsg(e)); throw e; }));
 });
 
+// THE GENERATION THIS WORKER SERVES IS A LOCAL FACT. The page asks it before
+// every lazy load() (update-check.js prepareLazyLoad), and answering it with a
+// NETWORK version.json read made every load wait out the page's 1.5 s timer on
+// lie-fi (requests that hang while navigator.onLine is true) or a slow link —
+// four one-file loads at a cold RACE! took 6 s. So: the name this worker
+// already knows, else the newest SETTLED apex26-* generation (the one
+// matchPreferCurrent serves first while the name is unknown), and only with
+// nothing local does the network read get GENERATION_NET_MS before the answer
+// is "unknown" (0: the page falls back to the registration URL's build).
+const GENERATION_NET_MS = 300;
+async function localGeneration() {
+  if (_cacheNameKnown) return cacheBuild(_cacheNameKnown);
+  let best = 0;
+  for (const n of await caches.keys()) {
+    const b = cacheBuild(n);
+    if (b > best && await caches.match(INSTALL_SETTLED_URL, { cacheName: n })) best = b;
+  }
+  return best;
+}
+async function servedGeneration() {
+  try { const local = await localGeneration(); if (local > 0) return local; } catch (_) { /* unreadable: ask the network */ }
+  let timer = null;
+  const late = new Promise((resolve) => { timer = setTimeout(() => resolve(0), GENERATION_NET_MS); });
+  try { return await Promise.race([currentCacheName().then(cacheBuild, () => 0), late]); }
+  finally { clearTimeout(timer); }
+}
 // Reply on the transferred port, so a page can bind the answer to the exact
 // controller it queried. scriptURL's ?v= is only the registration URL: browser
 // updates can execute new bytes at that SAME URL.
@@ -685,8 +750,7 @@ self.addEventListener("message", (event) => {
   if (!event.data || event.data.type !== "apex-cache-generation" || !port) return;
   event.waitUntil((async () => {
     try {
-      const name = await currentCacheName();
-      port.postMessage({ type: "apex-cache-generation", build: cacheBuild(name) });
+      port.postMessage({ type: "apex-cache-generation", build: (await servedGeneration()) || 0 });
     } catch (_) { port.postMessage({ type: "apex-cache-generation", build: 0 }); }
     finally { port.close(); }
   })());

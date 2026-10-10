@@ -2,6 +2,29 @@
    Contract: docs/ARCHITECTURE.md. */
 const ScriptLoader = (function () {
 "use strict";
+// THE URL OF A LAZY FILE (R3-PHONE-8). The deploy (tools/ci/bump-cache.mjs)
+// writes a `path -> content hash` map into the staged shell as
+// <script type="application/json" id="apex-lazy-v">, so a lazy file keeps its
+// URL — and its HTTP-cache and SW entries — across every deploy that did not
+// change it. `?v=<build>` changed every one of ~200 URLs per deploy. No map (the
+// committed shell, a dev server) or no entry → the build, as before; sw.js's
+// install stamp makes the same choice from the same block.
+let _lazyV;
+function lazyVersions() {
+  if (_lazyV !== undefined) return _lazyV;
+  _lazyV = null;
+  try {
+    const el = typeof document !== "undefined" && document.getElementById && document.getElementById("apex-lazy-v");
+    const m = el ? JSON.parse(el.textContent) : null;
+    if (m && typeof m === "object") _lazyV = m;
+  } catch (_) { /* a malformed map: build-keyed URLs */ }
+  return _lazyV;
+}
+function url(src) {
+  const m = lazyVersions();
+  const h = m && Object.prototype.hasOwnProperty.call(m, src) ? m[src] : null;
+  return src + "?v=" + (typeof h === "string" && /^[0-9a-f]{12}$/.test(h) ? h : ((typeof window !== "undefined" && window.__APEX_BUILD) || 0));
+}
 function create() {
 const BACKEND_EDGES = ApexRoster.DEFERRED_EDGES;
 function loadBackendScripts(files, edges, opts) {
@@ -28,7 +51,7 @@ function loadBackendScripts(files, edges, opts) {
       return;
     }
     const el = document.createElement("script");
-    el.src = src + "?v=" + (window.__APEX_BUILD || 0);
+    el.src = url(src);
     el.crossOrigin = "anonymous";
     // MARKED so index.html's broken-install repair (sweeps every SW cache and
     // reloads) leaves it alone: that repair is right for a shell tag the CDN
@@ -70,6 +93,6 @@ function loadBackendScripts(files, edges, opts) {
 
 return { load: loadBackendScripts };
 }
-  return { create };
+  return { create, url };
 })();
 Object.freeze(ScriptLoader);

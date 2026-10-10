@@ -107,7 +107,7 @@ test("the shadow cull (upload:false) neither consults nor disturbs the key", () 
   // Shadow frustum over the SAME set as the camera: still packs (the shadow
   // path must never take the camera's hit — its pack lives in another mesh).
   assert.equal(cullInstances(batch, slab(0.1, 36.2), { upload: false }), 4);
-  assert.equal(batch.packMatrices[12], 5, "shadow pack written");
+  assert.equal(batch._shadowPack[12], 5, "shadow pack written");   // R3-RENDER-6: its own pack, not the camera's
   assert.deepEqual(writes, [4]);
   // The camera moves over its own set: still a hit — imesh holds its pack.
   assert.equal(cullInstances(batch, slab(-0.4, 35.6)), 4);

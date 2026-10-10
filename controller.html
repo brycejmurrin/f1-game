@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-oj95njyYh1RoLSfmbeiPmEuGPqZvJ3EZr/vVlnOy5Fw=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-JY14wcU45C4f+AF3fi2l34ox75l3uDY+5v6zn0c4mhw=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-/nMr0RVelkQVEn0hG3/BMTYeww47jd8tB24DlEaj840=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-JY14wcU45C4f+AF3fi2l34ox75l3uDY+5v6zn0c4mhw=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <!-- Same generation marker as index.html: sw.js reads it before caching a navigation (a page with
      no marker is cached unconditionally, one with a stale marker is skipped). Stamped by the deploy. -->
@@ -22,7 +22,8 @@
 // THE PLAYER'S LOOK, before first paint: the same apex26.* settings
 // js/ui/appearance-opts.js applies on the game (THEME, MENU ACCENT, TEXT SIZE,
 // CONTRAST), read straight from storage — this page loads no settings code.
-// A phone that has never opened the game gets the game's defaults.
+// A phone that has never opened the game gets the game's defaults (LARGE text,
+// HIGH contrast, the ember accent — appearance-opts.js; phone-pad.test.mjs pins the parity).
 (function () {
   try {
     var get = function (k, d) {
@@ -31,13 +32,13 @@
       try { return JSON.parse(raw); } catch (e) { return d; }
     };
     var el = document.documentElement;
-    var theme = get("uiTheme", "dark"), accent = get("menuAccent", "brand"), hex = String(get("menuAccentHex", "") || "");
+    var theme = get("uiTheme", "dark"), accent = get("menuAccent", "ember"), hex = String(get("menuAccentHex", "") || "");
     if (/^(dark|light|system)$/.test(theme)) el.dataset.uiTheme = theme;
     if (/^(ember|amber|cyan|violet|lime|team)$/.test(accent)) el.dataset.menuAccent = accent;
     else if (accent === "custom" && /^#[0-9a-f]{6}$/i.test(hex)) el.style.setProperty("--red", hex);
-    var size = get("textSize", "normal");
+    var size = get("textSize", "large");
     if (size === "large" || size === "larger") el.dataset.textSize = size;
-    if (get("uiContrast", "off") === "high") el.dataset.uiContrast = "high";
+    if (get("uiContrast", "high") === "high") el.dataset.uiContrast = "high";
   } catch (e) { /* storage blocked: the defaults stand */ }
 })();
 </script>
@@ -152,8 +153,9 @@
   .pedal::before { content: ""; position: absolute; inset: 14px; border-radius: 18px; border: 1px dashed var(--card-line); }
   .pedal::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 0; transition: height 80ms; }
   .pedal.on { color: var(--fg); }
-  #gas.on { border-color: var(--ok); }   #gas.on::after { height: 100%; background: rgba(94,240,138,.16); }
-  #brake.on { border-color: var(--bad); } #brake.on::after { height: 100%; background: rgba(255,77,77,.16); }
+  /* --travel: the pedal's live level (phone-pad.js hold): full on the touch, easing as the thumb slides up. */
+  #gas.on { border-color: var(--ok); }   #gas.on::after { height: calc(var(--travel, 1) * 100%); background: rgba(94,240,138,.16); }
+  #brake.on { border-color: var(--bad); } #brake.on::after { height: calc(var(--travel, 1) * 100%); background: rgba(255,77,77,.16); }
   /* CONTROL MODES from the dash (PhonePad.paintHud → body classes): what the
      game drives itself the wheel does not offer. Gears AUTO: no paddles, the
      pedal takes the whole grip. Throttle AUTO: the GAS zone is an inert plate

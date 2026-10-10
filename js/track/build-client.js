@@ -1,8 +1,8 @@
 /* Apex 26 — the page side of the track build Worker (js/track/build-worker.js).
    Ships ON by default when Worker exists and the device reports more than one
    logical core (apex26.buildWorker "1"/"0" still forces on/off). spawn() runs
-   when RACE SETTINGS opens (or idleWarm on the title) so the worker parses the
-   build modules before RACE!; build() posts one circuit and resolves the
+   on the first posted build (or idleWarm on the title, agent surface only — see
+   idleWarm); build() posts one circuit and resolves the
    worker's answer; replay() turns its recorded uploads into real gfx calls on
    the main thread and rebuilds what could not cross (the surface sampler, the
    def, the gfx handle). Any failure answers null and the caller builds in
@@ -20,7 +20,7 @@
 const TrackBuildClient = (function () {
   "use strict";
   const KEY = "apex26.buildWorker";
-  let _w = null, _ready = null, _seq = 0;
+  let _w = null, _ready = null, _readyOk = null, _seq = 0;
   const _pending = new Map();
 
   // Explicit "1"/"0" wins; unset → ON when a Worker exists and there is a spare
@@ -57,7 +57,10 @@ const TrackBuildClient = (function () {
     if (document.readyState === "complete") initUI();
     else document.addEventListener("DOMContentLoaded", initUI, { once: true });
   }
-  const url = (f) => new URL(f + "?v=" + (window.__APEX_BUILD || 0), location.href).href;
+  // ScriptLoader.url: the deploy's content-hash key for a lazy file (the same
+  // URL the page and the SW precache use), else `?v=<build>`.
+  const url = (f) => new URL(typeof ScriptLoader !== "undefined" && ScriptLoader.url ? ScriptLoader.url(f)
+    : f + "?v=" + (window.__APEX_BUILD || 0), location.href).href;
   // Every build module is a page <script>: import it by the page's OWN src (its
   // deploy-time content hash), so the worker's fetch is a cache hit, not a
   // second download under a ?v= key nothing seeded.
@@ -74,15 +77,24 @@ const TrackBuildClient = (function () {
     for (const p of _pending.values()) p.resolve(null);
     _pending.clear();
     try { if (_w) _w.terminate(); } catch (_) { /* already gone */ }
-    _w = null; _ready = null;
+    // Settle the readiness a post() may be awaiting: dropped during init (the
+    // settings row turned off, an error) it hung that build — and `_last`
+    // deduped every later same-key build onto it — for the session.
+    if (_readyOk) _readyOk(false);
+    _w = null; _ready = null; _readyOk = null;
     Log.warn("track", "build worker off: " + why);
   }
 
-  // Idle warm: parse TRACK_VM in the worker while the title is quiet so the
-  // first RACE! does not pay importScripts on the critical path. No-op when
-  // the opt-in flag is off. LazyBundles.raceAssets() calls this after boot.
-  function idleWarm() {
+  // Idle warm: parse TRACK_VM in the worker while the title is quiet. Only for
+  // the AGENT SURFACE (LazyBundles.raceAssets passes wantAgentSurface()): no
+  // player flow posts a build from the menu (loadTrackStepped uses the worker
+  // for in-session switches only, PR #1175), so warming at every title cost a
+  // phone a second JS heap and ~1.3 MB of parse for nothing (R3-ASYNC-2). A
+  // player's worker is spawned by the first build that is actually posted
+  // (post → spawn). Safe to call bare: it then only reports the readiness.
+  function idleWarm(agentSurface) {
     if (!enabled()) return null;
+    if (!agentSurface) return _ready;
     const kick = () => { try { spawn(); } catch (_) { /* best-effort */ } };
     if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 3000 });
     else setTimeout(kick, 500);
@@ -98,6 +110,7 @@ const TrackBuildClient = (function () {
     try { _w = new Worker(url("js/track/build-worker.js")); } catch (e) { drop("spawn " + e.message); return null; }
     let ok;
     const worker = _w, ready = _ready = new Promise((res) => { ok = res; });
+    _readyOk = ok;
     const failed = (why) => { if (_w === worker) { ok(false); drop(why); } };
     worker.onmessage = (e) => {
       if (_w !== worker) return;

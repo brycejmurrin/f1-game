@@ -574,6 +574,22 @@ test("the fastest-lap point pays +1 to a top-ten finisher only, and never on a s
   assert.equal(wk.pts.d0, 8 + 25 + 1);
 });
 
+test("under the CLASSIC table the fastest-lap point pays only inside the scoring six", () => {
+  // `i < 10` was the 2019–2024 rule because the top ten WERE the points; SEASON
+  // SETUP combines CLASSIC (10-6-4-3-2-1) with the FL point, and a P8 car
+  // scored a championship point from a non-scoring position.
+  const { S } = load({ seasonCfg: { flPoint: true, points: "classic" } });
+  S.engage("season");
+  assert.deepEqual(S.pointsTable(), S.CLASSIC_POINTS);
+  const season = S.blank();
+  S.award(season, field(12), "d7");                  // P8 set the fastest lap
+  assert.equal(season.pts.d7 || 0, 0, "P8 scores nothing under the classic table");
+  assert.equal(season.lastFl, undefined, "no recipient this round");
+  S.award(season, field(12), "d5");                  // P6 still scores it
+  assert.equal(season.pts.d5, 1 + 1 + 1);
+  assert.equal(season.lastFl, "d5");
+});
+
 test("a retired fastest-lap setter earns nothing, and a career never pays the point", () => {
   const { S } = load({ seasonCfg: { flPoint: true } });
   S.engage("season");

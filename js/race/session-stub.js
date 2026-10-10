@@ -72,6 +72,10 @@ var PitLane = {
     serviceCar: function () {}, boxSquare: () => false, boxThroughFor: () => -1,
     cueM: 0, boxCueM: 0, moveM: 0, boxTol: 0, squareByM: 0, squareLat: 0,
     servedS: 0, mergeS: 0,
+    // hud.js (tyre chip every frame, minimap cue) and the driving-coach pit
+    // picker; tests/unit/session-stub-surface.test.mjs derives these from call sites.
+    commitFrac: () => 0, toEntry: () => -1,
+    choices: () => [], ownedTyres: () => [], pickFor: () => null, selectNext: () => false,
   }),
   zoneOf: () => null, inWindow: () => false, throughM: () => 0,
   ENTRY_M: 0, EXIT_M: 0, BOX_M: 0, LIMIT_FRAC: 0, BOX_S: 0, PIT_SIDE: 1,

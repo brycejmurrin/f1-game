@@ -1146,6 +1146,11 @@ const LiveryTex = (function () {
   function markChanged() { for (const cb of markReady) { try { cb(); } catch { /* one bad listener must not block the rest */ } } }
 
   const logoGen = Object.create(null);   // per team: the newest setTeamLogo call; an older decode finishing late is ignored
+  // An upload is redrawn to <= 384 px (custom-team.js CUSTOM_LOGO_MAX), but an
+  // IMPORTED customLogo is gated by byte length only: a 43 KB PNG can declare
+  // 16384² (1 GiB RGBA), decoded on every boot. onload has the header size and
+  // no pixels yet; the first drawImage is the full decode — refuse it before.
+  const LOGO_MAX_PX = 1024 * 1024;
   function setTeamLogo(id, src) {
     const gen = logoGen[id] = (logoGen[id] || 0) + 1;
     if (!src) { delete LOGOS[id]; markChanged(); return; }
@@ -1153,6 +1158,7 @@ const LiveryTex = (function () {
     const img = new Image();
     img.onload = () => {
       if (logoGen[id] !== gen) return;   // CLEARed or replaced while this one decoded: never reinstall the stale emblem
+      if (img.naturalWidth * img.naturalHeight > LOGO_MAX_PX) { img.onerror(); return; }
       img._avg = avgColour(img);
       LOGOS[id] = img;
       markChanged();

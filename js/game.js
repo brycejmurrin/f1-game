@@ -1911,7 +1911,7 @@ function redFlagRestart() {
     c.incidentInvalidLap = true;   // a lap with a red flag in it is not a timed lap
   });
   seedPlayerPose();
-  restartPending = true;
+  restartPending = true; replayBuf.breakTimeline();   // same clock, every car teleported: a scrub must not blend track position into the grid box
   setState("count", "red-flag-restart"); countT = 0; lightsLit = 0; startHold = 0;
   els.lights.hidden = false;
   for (const l of els.lights.children) l.classList.remove("on");
@@ -2430,7 +2430,7 @@ function scheduleFlybyTrack(settle) {
       // tap on the picker or RACE SETTINGS is answered mid-build, and RACE! finds the
       // world built sooner. The warms (menuFinish) still wait for idle: they block.
       if (!(await loadTrackStepped(want, current))) return;
-      _menuGate.ready = key; _menuGate.track = track;
+      _menuGate.ready = key; _menuGate.track = track; if (!$("race-settings").hidden) raceSettings.repaintPlan();   // the stint bar waited for THIS circuit's pit complex
       // Its own slice, like each car below: the pit-sign atlas is a 1024^2 canvas.
       await menuSlice();
       if (current() && track.meshes && track.meshes.pitSignTex && typeof gfx.uploadTexture === "function")
@@ -4122,7 +4122,7 @@ function drivingLineApi(trk) {
     _dlApi.sample = (s, out) => Tracks.sample(trk, s, out);
     _dlApi.curvature = (s) => Tracks.curvature(trk, s);   // wraps s itself
     _dlApi.lineAt = trk.line ? (s) => TrackLine.at(trk, s) : null;   // the baked racing line the AI drives
-    _dlApi.latMax = PhysicsConsts.LAT_MAX; _dlApi.brake = PhysicsConsts.BRAKE; _dlApi.accel = PhysicsConsts.ACCEL;
+    _dlApi.latMax = PhysicsConsts.LAT_MAX; _dlApi.brake = PhysicsConsts.BRAKE; _dlApi.accel = aTop();
     _dlApi.vTop = vTop(); _dlApi.grip = 1; DrivingLine.reset();
   }
   return _dlApi;
@@ -4233,21 +4233,24 @@ function armConfirm(btn, armedText, action) {
 // falls off the next screen. So this asks the DOM which layers exist: `.screen`
 // is what every full-screen menu and modal is marked with; #overlay (the
 // title screen) and the two tuner panels predate the class and are named
-// individually.
+// individually. closeRaceSheets() is that sweep for EVERY race→menu edge (quit,
+// RESUME, the quali sheet): their hand lists each missed one — SETTINGS with a
+// key capture armed, STANDINGS, HOW TO PLAY, the pit garage — over the title.
+// #loading is its owner's (loadingScreen.stop() clears its timer as well).
+function closeRaceSheets() {
+  if (keyBinds) keyBinds.disarmAll();   // closeSettings()' non-DOM half: an armed key/pad capture or the wheel wizard
+  for (const el of document.querySelectorAll(".screen")) if (el.id !== "loading") el.hidden = true;
+  for (const id of ["pm-settings-index", "advanced", "audioset", "lighting", "camtune", "flyby"]) { const el = $(id); if (el) el.hidden = true; }
+  setupCam.cancelArrival(); setupPreviewOn = false; pitWorkSpec = null; garageReturn = "select";   // the garage turntable draws over what comes next, and a "pit" DONE runs closePitWork()
+}
 function clearMenuScreens() {
   cancelIntro();
   // Disarm the loading screen BEFORE the sweep hides it: it holds a pending
   // timer that would otherwise fire its build callback into a running race.
   loadingScreen.stop();
   FlybySeq.cancelWarm();   // and the flyby's unplanned shots: they would only stall the countdown
-  for (const el of document.querySelectorAll(".screen")) el.hidden = true;
-  for (const id of ["overlay", "lighting", "camtune", "flyby"]) { const el = $(id); if (el) el.hidden = true; }
-  // The garage's 3D turntable keeps rendering while #carsetup is up; a race
-  // starting under it must stop that, or the preview draws over the track.
-  setupPreviewOn = false;
-  // Nothing to go back TO any more — the room this came from is now a race.
-  raceSettings.setNetRoom(false);
-  garageReturn = "select";
+  closeRaceSheets(); els.overlay.hidden = true;
+  raceSettings.setNetRoom(false);   // nothing to go back TO any more: the room this came from is now a race
 }
 
 // The mql is only the CHANGE TRIGGER; ACTIVE is read off computed display so
@@ -4315,7 +4318,7 @@ function quitToMenu() {
   setHudUserHidden(false);   // clear clean-screen mode on exit
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
-  els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true; announceT = 0; _annPri = 0; _annFloor = 0; _annQueue.length = 0;   // the announce drain has no state gate: a queued race message re-showed itself over the title screen
+  closeRaceSheets(); els.announce.hidden = true; announceT = 0; _annPri = 0; _annFloor = 0; _annQueue.length = 0;   // the announce drain has no state gate: a queued race message re-showed itself over the title screen
   // ...and the RADIO around that card. Its bed was stopped only by RadioVoice's
   // #announce observer, which is the VOICE's teardown and does not exist at all
   // on a browser with no speechSynthesis — so quitting mid-transmission left the
@@ -4325,9 +4328,7 @@ function quitToMenu() {
   // it; update() never reaches raceRadio after state=menu. halt() cuts every channel.
   radioVoice.halt();
   GameAudio.radioStingStop();
-  $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
-  $("race-settings").hidden = true;
   Particles.rainShow(false);
   // (#soundbtn returns with #overlay above — no write needed.)
   showTouchControls(false);
@@ -8609,6 +8610,7 @@ function openQualiBody(fresh, netDone) {
   // screen it would still say "results". No race is running while the sheet is
   // up, so both paths say the same thing.
   setState("menu", "quali-sheet");
+  closeRaceSheets(); els.hud.hidden = true;   // from the results (NEXT ROUND) the dead race's HUD stayed up under the sheet
   quali.clear();
   qualiNet.arm(netDone);   // armed from the ARG: a caller's write lands before this line
   loadTrack(trackIdx);
@@ -8905,8 +8907,7 @@ function setPaused(p, why) {
   }
   els.pausemenu.hidden = !p;
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());
-  // never leave an overlay up after resume
-  if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
+  if (!p) closeRaceSheets();   // never leave an overlay up after resume
   if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt(); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); }   // rotate-block / photo hide the card in this task, so the #pausemenu observer never sees it (#988's garage was the same miss)
   // Music + rain too, as startRaceBody does: SOUND turned ON under the pause card defers
   // all of it here (js/audio/panel.js). Rain is SFX (same bus as the engine) and
@@ -9118,7 +9119,8 @@ audioPanel.init();
 function scheduleGfxResize() { if (scheduleGfxResize._raf) return; const raf = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (fn) => setTimeout(fn, 0); scheduleGfxResize._raf = raf(() => { scheduleGfxResize._raf = 0; gfx.resize(); }); } window.addEventListener("resize", scheduleGfxResize);
 lastFrame = performance.now();
 XrBoot.bind({ gfx, tickBody, windowTick: tick, getCamMode: () => camMode,
-  setCamMode: (i, opts) => { if (typeof setCamMode === "function") setCamMode(i, opts); } });
+  setCamMode: (i, opts) => { if (typeof setCamMode === "function") setCamMode(i, opts); },
+  pause: (why) => { if (!netPlay.active()) setPaused(true, why); } });   // headset menu / session end: the document stays visible, so no visibilitychange pause
 XrBoot.mountUi();
 XrBoot.afterTick(tick);
 

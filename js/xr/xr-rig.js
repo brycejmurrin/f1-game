@@ -124,6 +124,72 @@ const XrRig = (function () {
     return out;
   }
 
+  // Scratch for unionViewProjTo (per frame: no alloc).
+  const _uM = M4.ident(), _uW = M4.ident(), _uP = M4.ident();
+  const _uC = [];   // [x, y, z] per frustum corner, eye 0 view space
+
+  /**
+   * ONE cull frustum containing every eye's — three.js WebXRManager's
+   * setProjectionFromUnion, fitted to corners. WebXR eye projections are
+   * asymmetric (outer half-angle ~10 deg wider than inner), so culling with eye
+   * 0's planes dropped the wedge only the right eye sees (R3-RENDER-3: 11 % of
+   * its prop triangles at Monaco). In eye 0's view basis the apex sits behind
+   * the eyes where the outer side planes meet; every eye's near/far corners
+   * then bound the tangents, so the result is conservative for canted views
+   * too. Writes the union viewProj into `out`; false (out untouched) when an
+   * eye is not a finite-near perspective.
+   */
+  function unionViewProjTo(out, eyes) {
+    const v0 = eyes[0].view;
+    let nC = 0, lt = Infinity, rt = -Infinity, xl = Infinity, xr = -Infinity, ys = 0, zs = -Infinity;
+    for (let i = 0; i < eyes.length; i++) {
+      const P = eyes[i].proj;
+      if (!P || !(P[0] > 0) || !(P[5] > 0) || Math.abs(P[11] + 1) > 1e-6) return false;
+      const n = P[14] / (P[10] - 1), fr = P[14] / (P[10] + 1);
+      if (!(n > 0)) return false;
+      const f = fr > n && Number.isFinite(fr) ? fr : 1e5;   // infinite far: past any world
+      const tl = (P[8] - 1) / P[0], tr = (P[8] + 1) / P[0], tb = (P[9] - 1) / P[5], tt = (P[9] + 1) / P[5];
+      if (tl < lt) lt = tl;
+      if (tr > rt) rt = tr;
+      M4.mulTo(_uM, v0, invertRigidTo(_uW, eyes[i].view));   // eye i view -> eye 0 view
+      const ex = _uM[12];
+      if (ex < xl) xl = ex;
+      if (ex > xr) xr = ex;
+      ys += _uM[13]; if (_uM[14] > zs) zs = _uM[14];
+      for (let k = 0; k < 8; k++) {
+        const d = k < 4 ? n : f, x = (k & 1 ? tr : tl) * d, y = (k & 2 ? tt : tb) * d;
+        const c = _uC[nC] || (_uC[nC] = [0, 0, 0]);
+        c[0] = _uM[0] * x + _uM[4] * y - _uM[8] * d + _uM[12];
+        c[1] = _uM[1] * x + _uM[5] * y - _uM[9] * d + _uM[13];
+        c[2] = _uM[2] * x + _uM[6] * y - _uM[10] * d + _uM[14];
+        nC++;
+      }
+    }
+    if (!(rt > lt)) return false;
+    const zOff = (xr - xl) / (rt - lt);
+    const ax = xl - lt * zOff, ay = ys / eyes.length, az = zs + zOff;
+    let mnx = Infinity, mxx = -Infinity, mny = Infinity, mxy = -Infinity, near = Infinity, far = 0;
+    for (let k = 0; k < nC; k++) {
+      const c = _uC[k], d = az - c[2];
+      if (!(d > 1e-6)) return false;
+      const tx = (c[0] - ax) / d, ty = (c[1] - ay) / d;
+      if (tx < mnx) mnx = tx;
+      if (tx > mxx) mxx = tx;
+      if (ty < mny) mny = ty;
+      if (ty > mxy) mxy = ty;
+      if (d < near) near = d;
+      if (d > far) far = d;
+    }
+    for (let i = 0; i < 16; i++) _uP[i] = 0;
+    _uP[0] = 2 / (mxx - mnx); _uP[8] = (mxx + mnx) / (mxx - mnx);
+    _uP[5] = 2 / (mxy - mny); _uP[9] = (mxy + mny) / (mxy - mny);
+    _uP[10] = -(far + near) / (far - near); _uP[11] = -1; _uP[14] = -2 * far * near / (far - near);
+    for (let i = 0; i < 16; i++) _uW[i] = v0[i];
+    _uW[12] -= ax; _uW[13] -= ay; _uW[14] -= az;   // T(-apex) * view0
+    M4.mulTo(out, _uP, _uW);
+    return true;
+  }
+
   /**
    * Origin of the seated space expressed in the BASE reference space.
    * getOffsetReferenceSpace applies this transform's inverse to viewer poses:
@@ -153,6 +219,7 @@ const XrRig = (function () {
 
   return {
     composeEye,
+    unionViewProjTo,
     worldFromAnchorTo,
     invertRigidTo,
     recenterOffsetFromPose,

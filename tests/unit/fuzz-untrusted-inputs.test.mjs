@@ -18,7 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { fuzz, mutate, findBadLiveValues, makeRng } from "../helpers/seeded-fuzz.mjs";
+import { fuzz, mutate, findBadLiveValues, makeRng, HOSTILE_ROW_VALUES } from "../helpers/seeded-fuzz.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
@@ -486,6 +486,109 @@ test("TrackCodec.decode and CustomTracks.sanitize never throw or leak NaN (N=200
     assert.deepEqual(bad, [], `decoded design carries NaN/undefined: ${JSON.stringify(bad)}`);
     assert.ok(r.design.pts.length >= 8 && r.design.pts.length <= 200);
   });
+});
+
+// ── DataRealRace.build (Data Hub RACE IT: an OpenF1 race body) ────────────
+// The bodies come from OpenF1 over HTTPS, but one bad upstream row is still a
+// row: a fractional or huge `lap_number` / `number_of_laps` became the length
+// of a per-driver array (R3-HOSTILE-1: 2.5 threw, 3e6 built a 3M-lap race, 1e9
+// OOMed the process). The race must build, with a lap count a GP can have.
+function bootRealRace() {
+  const ctx = vm.createContext({ console, Log: { debug() {}, info() {}, warn() {}, error() {} },
+    localStorage: { getItem() { return null; }, setItem() {}, removeItem() {}, key() { return null; }, length: 0 } });
+  vm.runInContext(read("js/data/real-race-tab.js") + "\nthis.R = DataRealRace;", ctx, { filename: "real-race-tab.js" });
+  return ctx.R;
+}
+function assertSaneLaps(label, script) {
+  assert.ok(Number.isInteger(script.laps) && script.laps >= 0 && script.laps <= 100, `${label}: laps=${script.laps}`);
+  for (const d of script.drivers) {
+    assert.equal(d.laps.length, script.laps, `${label}: #${d.num} laps array`);
+    assert.ok(Number.isInteger(d.lapsDone) && d.lapsDone >= 0 && d.lapsDone <= script.laps, `${label}: #${d.num} lapsDone=${d.lapsDone}`);
+  }
+}
+
+test("DataRealRace.build: a fractional or huge lap count builds a bounded race, never throws", () => {
+  const R = bootRealRace();
+  const base = (laps, result) => ({ session: { date_start: "2026-04-01T12:00:00Z", circuit_short_name: "Baku" },
+    drivers: [{ driver_number: 1, name_acronym: "AAA", team_name: "X" }], laps, result: result || [] });
+  const lap = (n) => [{ driver_number: 1, lap_number: n, lap_duration: 90, date_start: "2026-04-01T12:00:00Z" },
+                      { driver_number: 1, lap_number: 1, lap_duration: 91, date_start: "2026-04-01T11:58:30Z" }];
+  for (const [label, raw] of [
+    ["lap_number 2.5", base(lap(2.5))],
+    ["number_of_laps '57.5'", base(lap(1), [{ driver_number: 1, number_of_laps: "57.5", position: 1 }])],
+    ["lap_number 3e6", base(lap(3e6))],
+    ["lap_number 5e9", base(lap(5e9))],
+    ["lap_number 1e9", base(lap(1e9))],
+    ["number_of_laps 1e9", base(lap(1), [{ driver_number: 1, number_of_laps: 1e9, position: 1 }])],
+  ]) {
+    let s;
+    try { s = R.build(raw, () => null, []); }
+    catch (err) { assert.fail(`${label}: build threw ${(err && err.message) || err}`); }
+    assertSaneLaps(label, s);
+    assert.equal(s.laps, 1, `${label}: the bad row is dropped, the good lap 1 stays`);
+  }
+});
+
+test("DataRealRace.build survives one hostile field in the Baku fixture (seeded, N=200)", async () => {
+  const R = bootRealRace();
+  const fx = JSON.parse(read("tests/fixtures/openf1-baku-2026-race.json"));
+  const real = R.build(structuredClone(fx), () => null, []);
+  const keys = Object.keys(fx).filter((k) => Array.isArray(fx[k]) && fx[k].length);
+  // Half the trials hit a lap-count column (the one that sizes arrays), half any field.
+  const LAP_FIELDS = [["laps", "lap_number"], ["result", "number_of_laps"], ["pits", "lap_number"], ["stints", "lap_start"], ["stints", "lap_end"]];
+  await fuzz("DataRealRace.build", "realrace-row-v1", 200, async (rng) => {
+    let k, f;
+    if (rng.bool()) [k, f] = rng.pick(LAP_FIELDS);
+    else { k = rng.pick(keys); f = rng.pick(Object.keys(fx[k][0] || { x: 0 })); }
+    const i = rng.int(fx[k].length), v = rng.pick(HOSTILE_ROW_VALUES);
+    const rows = fx[k].slice(); rows[i] = Object.assign({}, rows[i], { [f]: v });
+    const raw = Object.assign({}, fx, { [k]: rows });
+    let s;
+    try { s = R.build(raw, () => null, []); }
+    catch (err) { assert.fail(`build threw ${(err && err.message) || err} for ${k}[${i}].${f}=${JSON.stringify(v)}`); }
+    assertSaneLaps(`${k}[${i}].${f}=${JSON.stringify(v)}`, s);
+    assert.ok(s.laps <= real.laps, `${k}[${i}].${f}=${JSON.stringify(v)} grew the race to ${s.laps} laps (real ${real.laps})`);
+  });
+});
+
+// ── LiveryTex.setTeamLogo (a stored customLogo, decoded at every boot) ─────
+// An imported garage/career file stores `customLogo` by byte size only; a
+// 43 KB PNG can declare 16384² (1 GiB RGBA). The emblem must be refused on its
+// header size, before avgColour's drawImage forces the full decode
+// (R3-HOSTILE-4). Stubbed Image: onload carries natural dims, no pixels.
+test("LiveryTex.setTeamLogo refuses a decompression-bomb emblem before any draw", () => {
+  const made = [], draws = [];
+  class FakeImage { constructor() { made.push(this); } }
+  const document = { createElement: () => ({ getContext: () => ({
+    drawImage: (img, ...a) => draws.push([img.naturalWidth, img.naturalHeight, ...a]),
+    getImageData: (x, y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4).fill(200) }) }) }) };
+  const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, Uint8ClampedArray, JSON, Number, String, Boolean,
+                isFinite, isNaN, Map, Set, WeakMap, Image: FakeImage, document };
+  ctx.globalThis = ctx;
+  vm.createContext(ctx);
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js",
+                   "js/car/livery-graphics.js", "js/car/liverytex.js"])
+    vm.runInContext(read(f), ctx, { filename: f });
+  const LT = vm.runInContext("LiveryTex", ctx);
+  let marks = 0;
+  LT.onMarkChange(() => { marks++; });
+
+  LT.setTeamLogo("custom", "data:image/png;base64,ok");
+  Object.assign(made[0], { naturalWidth: 384, naturalHeight: 200, width: 384, height: 200 });
+  made[0].onload();
+  assert.equal(LT.LOGOS.custom, made[0], "an upload-sized emblem installs");
+  assert.equal(draws.length, 1, "…and is sampled once by avgColour");
+
+  for (const [w, h] of [[16384, 16384], [32767, 32767], [1, 1 << 22]]) {
+    const before = draws.length, m0 = marks;
+    LT.setTeamLogo("custom", "data:image/png;base64,bomb");
+    const img = made[made.length - 1];
+    Object.assign(img, { naturalWidth: w, naturalHeight: h, width: w, height: h });
+    img.onload();
+    assert.equal(draws.length, before, `${w}x${h}: never drawn (a draw is the full decode)`);
+    assert.equal(LT.LOGOS.custom, undefined, `${w}x${h}: refused, and the previous emblem dropped like onerror`);
+    assert.equal(marks, m0 + 1, `${w}x${h}: the caches are told`);
+  }
 });
 
 // ── Wall-clock budget across the whole file ────────────────────────────────

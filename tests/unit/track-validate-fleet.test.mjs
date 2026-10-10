@@ -198,3 +198,26 @@ test("judge: the crossing list is capped (bug-hunt 6.2)", () => {
   assert.ok(rows > 0 && rows <= 64, `${rows} crossing rows`);
   assert.ok(j.stats.crossings <= 64);
 });
+
+test("check: every point stacked on one spot is a RED build error in < 1 s, banked or not (R3-NUMERICS-3)", () => {
+  const { V, Tracks, ctx } = bootEditor();
+  // A zero-length loop: total = 0 → ds = 0, and bankingProfile's smoothing
+  // window round(12 / ds) was Infinity — the build never returned (a bank zone
+  // is what reaches bankingProfile), and the autosaved draft re-hung every designer open.
+  const pts = Array.from({ length: 8 }, () => [120, -40]);
+  for (const extra of [{ bankZones: [{ frac: 0.5, angleDeg: 10, widthM: 100 }] }, {}]) {
+    const t0 = Date.now();
+    const v = V.check(design(Object.assign({ pts }, extra)));
+    const ms = Date.now() - t0;
+    assert.ok(ms < 1000, `answered in ${ms} ms`);
+    assert.equal(v.ok, false);
+    assert.equal(v.tr, null, "nothing is built over a zero-length loop");
+    assert.ok(v.issues.some((i) => i.code === "build" && i.level === "red" && /degenerate loop/.test(i.msg)), JSON.stringify(v.issues));
+  }
+  // The engine's own door, and the banking profile defends itself too.
+  const def = V.previewDef(design({ pts, bankZones: [{ frac: 0.5, angleDeg: 10, widthM: 100 }] }));
+  assert.throws(() => Tracks.buildCenterline(def, { line: false }), /degenerate loop/);
+  const t0 = Date.now();
+  assert.equal(ctx.TrackMesh.bankingProfile({ def, n: 200, total: 0 }), null, "ds = 0: no profile");
+  assert.ok(Date.now() - t0 < 1000);
+});

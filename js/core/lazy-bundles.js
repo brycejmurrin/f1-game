@@ -263,7 +263,8 @@ function prefetchAudio() {
   if (typeof document === "undefined" || !document.createElement) return;
   for (let i = 0; i < AUDIO_FILES.length; i++) {
     const src = AUDIO_FILES[i];
-    const href = src + "?v=" + (window.__APEX_BUILD || 0);
+    // The key inject() will ask for (content hash when deployed), so the prefetch is the hit.
+    const href = typeof ScriptLoader !== "undefined" && ScriptLoader.url ? ScriptLoader.url(src) : src + "?v=" + (window.__APEX_BUILD || 0);
     if (document.querySelector && document.querySelector('link[rel="prefetch"][href="' + href + '"]')) continue;
     const el = document.createElement("link");
     el.rel = "prefetch";
@@ -415,10 +416,11 @@ function raceAssets() {
     // Selected circuit (persisted trackIdx / default): most likely RACE! and
     // the __apex no-track fallback — fetch scenery (and its path payload) here.
     ensureScenery(deps.getContext().trackIdx);
-    // Opt-in build worker: parse TRACK_VM off the main thread while the menu
-    // idles so RACE! does not pay worker importScripts on the critical path.
+    // Build worker: warmed at the title for the AGENT SURFACE only (its
+    // __apex.race() track switches are what post builds); a player's worker is
+    // spawned by the first build actually posted (R3-ASYNC-2, build-client.js).
     if (typeof TrackBuildClient !== "undefined" && TrackBuildClient.idleWarm) {
-      try { TrackBuildClient.idleWarm(); } catch (_) { /* warm is best-effort */ }
+      try { TrackBuildClient.idleWarm(wantAgentSurface()); } catch (_) { /* warm is best-effort */ }
     }
   };
   if (typeof queueMicrotask === "function") queueMicrotask(kickScenery);

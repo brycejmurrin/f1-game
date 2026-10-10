@@ -187,8 +187,12 @@ const MirrorPass = (function () {
     // behind full-screen. Never for performance (QUALITY scales it instead);
     // AUTO alone skips a SOFTWARE renderer, where a second world pass is
     // seconds a frame (and every CI run would pay it in the cockpit default).
+    // An immersive XR session: presentXR drops the post chain that composites the
+    // mirror, and #hud-mirror is not in the headset — the pass would be a whole
+    // world render (+25 % of the stereo pair's prop triangles) nobody sees.
+    const xrOn = () => typeof XrBoot !== "undefined" && !!XrBoot.comfort && XrBoot.comfort();
     function wanted(preparing) {
-      if (mode === "off") return false;
+      if (mode === "off" || xrOn()) return false;
       if (bcOn()) return false;   // a WATCH: the TV picture has no mirror (T-CAM is one of the director's shots); the PiP owns the target
       const g = G.gfx;
       if (!g || typeof g.mirrorBegin !== "function") return false;
@@ -206,7 +210,7 @@ const MirrorPass = (function () {
     // The PiP is wanted: a WATCH with a subject still running, the race, no debug
     // camera, the HUD up; AUTO skips a software renderer (a second world pass).
     function pipWanted() {
-      if (pipMode === "off" || !_sub || _sub.retired || !bcOn()) return false;
+      if (pipMode === "off" || !_sub || _sub.retired || !bcOn() || xrOn()) return false;
       const g = G.gfx;
       if (!g || typeof g.mirrorBegin !== "function" || _dead) return false;
       if (G.state !== "race" || !G.track || G.dbgCam) return false;

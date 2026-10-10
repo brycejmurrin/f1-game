@@ -26,6 +26,11 @@
  * long as everyone agrees what the value IS. A key written as a number in one
  * module and a string in another is the defect, every time.
  *
+ * ONE KEY, TWO SHAPES (R3-PERSISTENCE-4). `apex26.ttlb.<track>` changed shape —
+ * a v1 array repeating each lap's ~520-char class context became a v2 object
+ * that stores each context once — so the last tests here pin that both shapes
+ * read the same rows, that no lap is lost on the first v2 write, and the size.
+ *
  * Run: node --test tests/unit/store-key-types.test.mjs
  */
 import { test } from "node:test";
@@ -33,7 +38,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 import * as espree from "espree";
+import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -162,4 +169,60 @@ test("the scanner resolves an aliased key, which is how the defect hid", () => {
     assert.deepEqual(got.map((w) => `${w.how}:${w.key}:${w.type}`),
                      ["set:brakeCue:string", "set:brakeCue:number"]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ── the time-trial board: v1 → v2 (R3-PERSISTENCE-4) ────────────────────────
+function loadStore(seed = {}) {
+  const disk = new Map(Object.entries(seed));
+  const sb = {
+    Math, JSON, Object, Array, String, Number, Map, Set, isNaN, isFinite, console,
+    localStorage: { getItem: (k) => (disk.has(k) ? disk.get(k) : null), setItem: (k, v) => { disk.set(k, String(v)); }, removeItem: (k) => { disk.delete(k); } },
+    Log: { warn() {}, info() {} }, Teams: { LIST: [] },
+  };
+  sb.window = sb; sb.addEventListener = () => {};
+  const ctx = vm.createContext(sb);
+  seedSaveMigrate(ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/store.js"), "utf8"), ctx, { filename: "js/core/store.js" });
+  return { GameStore: vm.runInContext("GameStore", ctx), disk };
+}
+const host = (v) => JSON.parse(JSON.stringify(v));
+// A class key the size of a real one (p6: monza's SessionRecords.current() is 516 chars).
+const ctxOf = (i) => JSON.stringify({ physics: 7, circuit: "monza", layout: [1, 1200, 5793], car: ["mclaren", i, {}],
+  tune: [0.84, 0, 0.94, 1.15, 0, 2.4, 0.29, 41.7, 3.6, 1, 0.58, 0] }).padEnd(516, "~");
+
+test("TT board: a v1 array reads the same rows per class, and the first v2 write loses no lap", () => {
+  const v1 = [];
+  for (let i = 0; i < 12; i++) v1.push({ t: 80 + i, teamId: "mclaren", code: "NOR", name: "Lando Norris", ts: i, context: ctxOf(i % 3) });
+  v1.push({ t: 79, teamId: "ferrari", code: "LEC", name: "Charles Leclerc", ts: 99 });   // an unversioned legacy lap
+  v1.sort((a, z) => a.t - z.t);
+  const { GameStore, disk } = loadStore({ "apex26.ttlb.monza": JSON.stringify(v1) });
+  const want = (c) => v1.filter((e) => (e.context || null) === c);
+  for (const c of [ctxOf(0), ctxOf(1), ctxOf(2), null]) assert.deepEqual(host(GameStore.ttBoard("monza", c)), want(c));
+  assert.deepEqual(host(GameStore.ttBoard("monza")), v1, "the all-classes board");
+
+  const lap = { t: 85.5, teamId: "mclaren", code: "NOR", name: "Lando Norris", ts: 100, context: ctxOf(1) };
+  GameStore.ttBoardAdd("monza", lap);
+  const stored = JSON.parse(disk.get("apex26.ttlb.monza"));
+  assert.equal(stored.v, 2, "written as v2");
+  assert.equal(stored.classes.length, 3, "each context once");
+  const all = [...v1, lap].sort((a, z) => a.t - z.t);
+  assert.deepEqual(host(GameStore.ttBoard("monza")), all, "every v1 lap survives the migration");
+  for (const c of [ctxOf(0), ctxOf(1), ctxOf(2), null]) assert.deepEqual(host(GameStore.ttBoard("monza", c)), all.filter((e) => (e.context || null) === c));
+});
+
+test("TT board: a full board (10 laps x 6 classes of 516-char contexts) stays under 15 KiB", (t) => {
+  const { GameStore, disk } = loadStore();
+  for (let i = 0; i < 60; i++)
+    GameStore.ttBoardAdd("monza", { t: 80 + i / 10, teamId: "mclaren", code: "NOR", name: "Lando Norris", ts: 1e12 + i, context: ctxOf(i % 6) });
+  const chars = disk.get("apex26.ttlb.monza").length;
+  assert.equal(GameStore.ttBoard("monza").length, 60);
+  for (let c = 0; c < 6; c++) assert.equal(GameStore.ttBoard("monza", ctxOf(c)).length, 10);
+  t.diagnostic(`full board: ${chars} chars`);
+  assert.ok(chars < 15 * 1024, `the board is ${chars} chars (v1 was ~39 KiB)`);
+});
+
+test("TT board: junk in a v2 blob is dropped, not thrown on", () => {
+  const { GameStore } = loadStore({ "apex26.ttlb.monza": JSON.stringify({ v: 2, classes: ["a"], laps: [null, 3, { t: -1 }, { t: 90, c: 7 }, { t: 88, c: 0 }] }) });
+  assert.deepEqual(host(GameStore.ttBoard("monza")), [{ t: 90 }, { t: 88, context: "a" }], "an out-of-range class reads as the legacy class");
+  assert.deepEqual(host(GameStore.ttBoard("spa")), []);
 });

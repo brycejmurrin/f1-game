@@ -177,6 +177,11 @@ let _lampWarmT0 = -1e9;        // wall-clock (s) when the floods last switched O
 let _lampLastT = -1e9;         // last frame we copied lights — a gap means the floods were off
 // A gap while the tab was HIDDEN (rAF stops) is not a switch-on: no re-warmup.
 let _lampHid = false;
+// A gap with no RENDER either is not a switch-on: a plain PAUSE (tickBody's
+// paused branch renders nothing), a hidden tab, or a long hitch (render dt is
+// clamped to 1/20 s a frame) all stop frame.time — the floods never went off.
+// Lamps that were unlit while frames kept rendering moved it (R3-RENDER-5).
+let _lampLastRT = -1e9, _lampTrack = null;
 if (typeof document !== "undefined" && document.addEventListener)
   document.addEventListener("visibilitychange", () => { if (document.hidden) _lampHid = true; });
 // Per-lamp hash cache, keyed by the stable source offset (the sin-hash was
@@ -596,9 +601,14 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // lamp on its own stagger. A >1 s gap since the last copy means the floods
   // were off, so this frame is a fresh switch-on. Per-frame copy only — the
   // baked track records are never touched.
-  if (tNow - _lampLastT > 1.0) { if (!_lampHid) _lampWarmT0 = tNow; _S_MAIN.rankSrc = null; }
+  const rt = Number.isFinite(frame.time) ? frame.time : null;
+  if (tNow - _lampLastT > 1.0) {
+    const lit = rt === null || track !== _lampTrack || !(rt - _lampLastRT <= 1.0);   // a new world, or render ran dark
+    if (!_lampHid && lit) _lampWarmT0 = tNow;
+    _S_MAIN.rankSrc = null;
+  }
   _lampHid = false;
-  _lampLastT = tNow;
+  _lampLastT = tNow; _lampLastRT = rt === null ? -1e9 : rt; _lampTrack = track;
   // Skip sin/hash work when intensity would be unchanged: flicker knob at 0 and
   // warmup fully settled (or warmup knob 0 = instant). Max warmDur is 8×knob.
   const flick = LT.lampFlicker || 0;

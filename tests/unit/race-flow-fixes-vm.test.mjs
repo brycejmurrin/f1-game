@@ -26,6 +26,12 @@
  *     dropped, sub-step remainder included — which carries, not drops.
  *   - WAITING FOR PLAYERS: the card re-shows every 3 s while a room waits for
  *     its shared start, and each re-show was a fresh squelch and voice line.
+
+ *   - LEAVING THE RACE (hunt 3, R3-STATES-1/3/4): QUIT over the pit-stop
+ *     garage left #carsetup, its turntable and a "RETURN TO RACE" DONE on the
+ *     title; the portrait blocker's EXIT left SETTINGS (key capture armed),
+ *     STANDINGS or HOW TO PLAY up; NEXT ROUND's qualifying sheet kept the dead
+ *     race's HUD; a red-flag re-grid stayed one replay timeline (149 m blend).
  *
  * Run: node --test tests/unit/race-flow-fixes-vm.test.mjs
  */
@@ -33,6 +39,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import vm from "node:vm";
+import fs from "node:fs";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -227,5 +234,90 @@ test("WAITING FOR PLAYERS squelches and speaks on its first show, not on every 3
     assert.equal(g.sandbox.document.getElementById("announce").hidden, false, "the card is still up");
     assert.match(g.sandbox.document.getElementById("announce-text").textContent, /WAITING FOR PLAYERS/);
     assert.equal(g.sandbox.__stings, 1, "one squelch for the wait, not one per refresh");
+  } finally { g.close(); }
+});
+
+// The VM DOM has no markup, so its querySelectorAll(".screen") is empty and
+// closeRaceSheets()' sweep would be inert: hand it the shell's own `.screen` list.
+const SCREEN_IDS = [...fs.readFileSync(new URL("../../index.html", import.meta.url), "utf8").matchAll(/<[a-z]+\b[^>]*>/g)]
+  .map((m) => m[0]).filter((t) => /\bclass="[^"]*\bscreen\b/.test(t)).map((t) => (/\bid="([^"]+)"/.exec(t) || [])[1]).filter(Boolean);
+function withScreens(g) {
+  const doc = g.sandbox.document, qsa = doc.querySelectorAll;
+  doc.querySelectorAll = (sel) => (sel === ".screen" ? SCREEN_IDS.map((id) => doc.getElementById(id)) : qsa(sel));
+  return doc;
+}
+test("the shell marks every pause-reachable sheet .screen (the sweep's contract)", () => {
+  for (const id of ["pausemenu", "pmsettings", "standings", "howtoplay", "track-detail", "quali", "results", "race-settings", "carsetup"])
+    assert.ok(SCREEN_IDS.includes(id), "#" + id + " is a .screen");
+  assert.ok(SCREEN_IDS.includes("loading"), "#loading is one too — closeRaceSheets leaves it to loadingScreen.stop()");
+});
+
+test("QUIT over the pit-stop garage closes it: no turntable, no stale RETURN TO RACE on the title", async () => {
+  const g = await createGame({ carMeshes: false, track: "monza" });
+  try {
+    const doc = withScreens(g), $ = (id) => doc.getElementById(id), G = g.G;
+    g.step(30);
+    G.paused = true; G.openGarage("pit"); g.flushTimers();   // openPitWork()'s two writes (it is gated on a car stopped in its box)
+    assert.equal($("cs-done").textContent, "RETURN TO RACE");
+    assert.equal(G.setupPreviewOn, true);
+    $("pm-quit").click(); g.flushTimers();   // the pause card a hidden tab stacks over the garage
+    assert.equal(G.state, "menu");
+    assert.equal($("carsetup").hidden, true, "#carsetup goes with the race");
+    assert.equal(G.setupPreviewOn, false, "the garage turntable no longer draws over the title");
+    // The "pit" return path went too: DONE on that stale screen ran closePitWork()
+    // in state "menu" (a dead race's player, the engine restarted).
+    $("race-settings").hidden = true;
+    $("cs-done").click(); g.flushTimers();
+    assert.equal($("race-settings").hidden, false, "DONE takes the picker path (garageReturn reset), not RETURN TO RACE");
+  } finally { g.close(); }
+});
+
+for (const sheet of ["pm-settings", "pm-standings", "pm-howto"]) {
+  test(`the portrait blocker's EXIT under ${sheet.slice(3).toUpperCase()} leaves no race sheet over the title`, async () => {
+    const g = await createGame({ carMeshes: false, track: "monza" });
+    try {
+      const doc = withScreens(g), $ = (id) => doc.getElementById(id), G = g.G;
+      for (const id of SCREEN_IDS) $(id).hidden = true;   // the shell's start: every sheet down
+      g.step(20); $("pausebtn").click();
+      $(sheet).click();
+      const open = { "pm-settings": "pmsettings", "pm-standings": "standings", "pm-howto": "howtoplay" }[sheet];
+      assert.equal($(open).hidden, false, "#" + open + " is up");
+      $("rotate-exit").click(); g.flushTimers();   // reachable over a sheet: only the pause CARD hides the blocker
+      assert.equal(G.state, "menu");
+      assert.equal($("overlay").hidden, false);
+      for (const id of ["pmsettings", "standings", "howtoplay", "pausemenu", "results", "race-settings"])
+        assert.equal($(id).hidden, true, "#" + id + " closed by the quit");
+    } finally { g.close(); }
+  });
+}
+
+test("NEXT ROUND's qualifying sheet hides the finished race's HUD", async () => {
+  const g = await createGame({ carMeshes: false, track: "monza" });
+  try {
+    const doc = withScreens(g), $ = (id) => doc.getElementById(id), G = g.G;
+    g.apex.go(); g.step(10); g.apex.finishRace();
+    assert.equal(G.state, "results");
+    assert.equal($("hud").hidden, false, "the results keep the race HUD");
+    G.openQualiForNet(null);   // openQuali → openQualiBody, the transition res-next makes in a season
+    await g.settle(() => G.session === "quali" && G.state === "menu" && !$("quali").hidden, 3000);
+    assert.equal($("quali").hidden, false, "the sheet is up");
+    assert.equal($("results").hidden, true);
+    assert.equal($("hud").hidden, true, "no dead HUD under the menu-state sheet");
+  } finally { g.close(); }
+});
+
+test("a red-flag restart breaks the instant-replay timeline (the re-grid is a teleport, not motion)", async () => {
+  const g = await createGame({ carMeshes: false, track: "monza" });
+  try {
+    const G = g.G, rb = G.replayBuf;
+    let breaks = 0;
+    const real = rb.breakTimeline;
+    assert.equal(typeof real, "function", "ReplayBuf has the explicit break");
+    rb.breakTimeline = (...a) => { breaks++; return real.apply(rb, a); };
+    g.apex.setInput({ throttle: true });
+    for (let i = 0; i < 100; i++) { g.step(2); rb.onTick(G.raceT, G.cars, G.state); }   // the ring samples from tick(), which step() bypasses
+    assert.equal(breaks, 0);
+    assert.equal(g.apex.redFlag().state, "count");
+    assert.equal(breaks, 1, "redFlagRestart() marks the break before the next sample");
   } finally { g.close(); }
 });

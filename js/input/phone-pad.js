@@ -46,6 +46,8 @@ const PhonePad = (function () {
   // long list is walked with a thumb held down, not tapped twenty times.
   const NAV_REPEAT = Object.freeze({ navUp: 1, navDown: 1, navLeft: 1, navRight: 1 });
   const REPEAT_DELAY_MS = 380, REPEAT_RATE_MS = 110;
+  // Pedal ease, px of thumb slide: js/input/hold-buttons.js's PEDAL_* numbers.
+  const PEDAL_DEAD_PX = 12, PEDAL_TRAVEL_PX = 90, PEDAL_MIN = 0.12;
   // Dash flag bits (desktop → phone).
   const DASH = Object.freeze({ boost: 1, otArmed: 2, otActive: 4, xArmed: 8, xOpen: 16,
     retired: 32, timeTrial: 64, paused: 128, redline: 256,
@@ -250,14 +252,14 @@ const PhonePad = (function () {
         if (nav) ring.sync();
       }
     });
-    const onClose = () => {
+    const onClose = (why) => {
       if (closed) return;
       closed = true;
       if (ring) ring.stop();
       if (raf) { try { cancelAnimationFrame(raf); } catch (e) { /* no rAF here */ } raf = 0; }
       input.remoteLost();
       input.setRemoteHaptics(null);
-      if (opts.onClose) { try { opts.onClose(); } catch (e) { /* caller's problem */ } }
+      if (opts.onClose) { try { opts.onClose(why); } catch (e) { /* caller's problem */ } }
     };
     transport.onClose(onClose);
 
@@ -296,6 +298,7 @@ const PhonePad = (function () {
 
   // ── desktop: the whole pairing flow, with signalling ─────────────────────
   // ui: { say(text, isError), qr(url, code) — null hides it, linked(), lost(),
+  //       relinking() — a linked phone dropped and the room is open again for it,
   //       hud() — the dash sampler handed to link() }.
   // Returns the controller: cancel(), state().
   function host(ui, deps) {
@@ -315,8 +318,17 @@ const PhonePad = (function () {
     const qr = (url, code) => { if (ui.qr) { try { ui.qr(url, code); } catch (e) { /* ui's problem */ } } };
     let phase = "idle";          // idle | preparing | waiting | connecting | linked | lost | cancelled | failed
     let transport = null, room = null, active = null;
-    const token = { cancelled: false };
+    let token = { cancelled: false };
     let code = null;
+    // RE-LINK (R3-PHONE-3): a linked phone whose WIRE died (a lock, a call, a dead
+    // signal — any close but the phone's own "peer" goodbye) gets the SAME code
+    // hosted again for the room's own lifetime (nostr HOST_TIMEOUT_MS), and the
+    // phone dials it again by itself. A private relay's one mailbox is not reusable.
+    let relink = false;
+    function failed(msg) {
+      phase = "failed"; say(msg, true);
+      if (relink) { relink = false; Log.info("input", "phone pad re-link gave up"); if (ui.lost) { try { ui.lost(); } catch (e) { /* ui's problem */ } } }
+    }
 
     function dropRoom() {
       token.cancelled = true;
@@ -334,18 +346,19 @@ const PhonePad = (function () {
       Log.info("input", "phone pad cancelled");
     }
 
-    (async () => {
+    const open = async () => {
       try {
         phase = "preparing";
-        say("Preparing… (this can take a few seconds)");
+        token = { cancelled: false };
+        say(relink ? "Phone link lost — waiting for it to reconnect…" : "Preparing… (this can take a few seconds)");
         await deps.prefetchIce();
         if (phase !== "preparing") return;
         transport = deps.rtc({ role: "host", name: "pad" });
-        if (!transport) { phase = "failed"; say("WebRTC is unavailable in this browser.", true); return; }
+        if (!transport) { failed("WebRTC is unavailable in this browser."); return; }
         const invite = await deps.createInvite(transport, { pad: PROTO });
         if (phase !== "preparing") return;
-        if (!invite.ok) { phase = "failed"; say(invite.message || "Could not prepare the pairing.", true); return; }
-        code = deps.makeCode();
+        if (!invite.ok) { failed(invite.message || "Could not prepare the pairing."); return; }
+        if (!relink) code = deps.makeCode();
         const url = padUrl(code, null, deps.usingPrivateRelay() ? deps.relayUrl() : null);
         phase = "waiting";
         qr(url, code);
@@ -357,7 +370,7 @@ const PhonePad = (function () {
           onFail: (r) => {
             if (!r || r.error === "cancelled" || r.error === "stopped" || !["waiting", "connecting"].includes(phase)) return;
             if (r.advisory) { say(r.message, true); return; }
-            phase = "failed"; say(r.message || "The room service went away — try again.", true);
+            failed(r.message || "The room service went away — try again.");
           },
           mintOffer: async () => null,     // one phone; a second scan gets nothing
           onJoiner: async (_who, answer) => {
@@ -371,19 +384,27 @@ const PhonePad = (function () {
             active = link(transport, {
               hud: ui.hud || null,
               onOpen: () => {
-                phase = "linked";
+                phase = "linked"; relink = false;
                 dropRoom();
                 qr(null, null);
                 say("Phone connected — tilt to steer. RECALIBRATE TILT levels it.");
                 Log.info("input", "phone pad linked");
                 if (ui.linked) { try { ui.linked(); } catch (e) { /* ui's problem */ } }
               },
-              onClose: () => {
+              onClose: (why) => {
                 if (phase === "cancelled") return;
-                phase = "lost";
+                const wasLinked = phase === "linked";
                 // A link that died before it opened (ICE failed) still holds
                 // the room's relay sockets; nothing will use them now.
                 dropRoom();
+                if (wasLinked && why !== "peer" && !deps.usingPrivateRelay()) {
+                  relink = true; active = null; transport = null;
+                  Log.info("input", "phone pad dropped (" + why + ") — hosting " + code + " again");
+                  if (ui.relinking) { try { ui.relinking(); } catch (e) { /* ui's problem */ } }
+                  open();
+                  return;
+                }
+                phase = "lost";
                 say("Phone disconnected — press STEER THIS GAME WITH A PHONE for a new code.", true);
                 Log.info("input", "phone pad lost");
                 if (ui.lost) { try { ui.lost(); } catch (e) { /* ui's problem */ } }
@@ -410,19 +431,20 @@ const PhonePad = (function () {
           return;
         }
         if (!sub || !sub.ok) {
-          if (phase === "waiting") { phase = "failed"; say((sub && sub.message) || "Could not open a room — check the connection.", true); }
+          if (phase === "waiting") failed((sub && sub.message) || "Could not open a room — check the connection.");
           return;
         }
         room = sub;
       } catch (e) {
         Log.warn("input", "phone pad host failed: " + ((e && e.message) || e));
         if (phase !== "cancelled") {
-          phase = "failed"; dropRoom();
+          dropRoom();
           if (transport) { try { transport.close(); } catch (_) { /* failed startup */ } transport = null; }
-          say("Pairing failed — try again.", true);
+          failed("Pairing failed — try again.");
         }
       }
-    })();
+    };
+    open();
 
     return { cancel, state: () => ({ phase, code, stats: active ? active.stats() : null }) };
   }
@@ -615,22 +637,29 @@ const PhonePad = (function () {
       return true;
     }
     // A held control: pointer down = on, up/cancel/leave = off. Pedals carry a
-    // travel (0..1 along the pedal's height) so a gentle brake is possible.
+    // travel (0..1) so a gentle brake is possible: STAMP THEN EASE, the game's
+    // own touch pedals' gesture (js/input/hold-buttons.js wireHold) — a touch
+    // anywhere on the pedal is full travel, and sliding the thumb UP from where
+    // it landed eases it off. An absolute "height on the pedal" mapping gave a
+    // thumb aimed at the label of a ~150 px pedal half a brake (R3-PHONE-2).
     const releases = [];
     const releaseAll = () => { for (const r of releases) r(); };
     function hold(el, on, off, travel) {
       if (!el) return;
       const ids = new Set();
-      releases.push(() => { if (!ids.size) return; ids.clear(); el.classList.remove("on"); off(); });
+      const anchors = new Map();   // pointerId -> clientY at touch-down
+      const level = (v) => { if (el.style && el.style.setProperty) el.style.setProperty("--travel", v.toFixed(2)); on(v); };
+      releases.push(() => { if (!ids.size) return; ids.clear(); anchors.clear(); el.classList.remove("on"); off(); });
       const down = (e) => {
         ids.add(e.pointerId);
         try { el.setPointerCapture(e.pointerId); } catch (err) { /* not a pointer target */ }
         el.classList.add("on");
-        on(travel ? travelOf(el, e) : 1);
+        if (travel) { anchors.set(e.pointerId, e.clientY); level(1); } else on(1);
         e.preventDefault();
       };
-      const move = (e) => { if (travel && ids.has(e.pointerId)) on(travelOf(el, e)); };
+      const move = (e) => { if (travel && anchors.has(e.pointerId)) level(travelOf(anchors.get(e.pointerId), e.clientY)); };
       const up = (e) => {
+        anchors.delete(e.pointerId);
         if (!ids.delete(e.pointerId)) return;
         if (!ids.size) { el.classList.remove("on"); off(); }
       };
@@ -653,11 +682,12 @@ const PhonePad = (function () {
       document.addEventListener("touchcancel", allUp, true);
       document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
     }
-    function travelOf(el, e) {
-      const r = el.getBoundingClientRect();
-      if (!r.height) return 1;
-      // Bottom of the pedal is 1, the top edge ~0.3: a thumb never rests at zero.
-      return Math.max(0.3, Math.min(1, (e.clientY - r.top) / r.height));
+    // hold-buttons.js's numbers: 12 px of slop (a thumb tremor is not a lift),
+    // then 90 px of travel to the light end, never quite zero (sliding off is
+    // not releasing). Moving DOWN past the landing point stays full.
+    function travelOf(anchorY, y) {
+      const up = Math.max(0, anchorY - y - PEDAL_DEAD_PX);
+      return Math.max(PEDAL_MIN, Math.min(1, 1 - up / PEDAL_TRAVEL_PX));
     }
     const push = () => { if (session) session.sample(true); };
     hold(dom.gas, (v) => { thr = v; push(); }, () => { thr = 0; push(); }, true);
@@ -802,7 +832,19 @@ const PhonePad = (function () {
     }
 
     let connecting = false, attempt = null;
+    // RE-DIAL (R3-PHONE-3): a link whose wire died (this phone slept, took a
+    // call, lost signal — anything but the game's own "peer" goodbye) dials
+    // the same code once more as soon as the page is in front of the player;
+    // the game hosts that code again for two minutes (host() re-link).
+    let redial = null;
+    function redialNow() {
+      if (!redial || connecting || session || (typeof document !== "undefined" && document.visibilityState === "hidden")) return;
+      const c = redial; redial = null;
+      connect(c);
+    }
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", redialNow);
     function cancel() {
+      redial = null;
       const old = attempt; attempt = null;
       if (old) old.cancelled = true;
       connecting = false;
@@ -827,8 +869,9 @@ const PhonePad = (function () {
       connecting = true;
       const owner = attempt = { cancelled: false, transport: null };
       if (dom.connect) dom.connect.disabled = true;
-      // The sensor prompt rides the CONNECT tap: iOS shows it only inside a gesture.
-      const sensor = await requestSensor();
+      // The sensor prompt rides the CONNECT tap: iOS shows it only inside a gesture
+      // (a re-dial is outside one, and its listener is still on from the first link).
+      const sensor = sensorOn || await requestSensor();
       if (attempt !== owner) return { ok: false, error: "cancelled" };
       if (!sensor) say("No motion sensor here — the pedals and buttons still work.", true);
       else say("Looking for the game…");
@@ -871,15 +914,21 @@ const PhonePad = (function () {
             if (dom.body) dom.body.classList.add("linked");
             if (opts.onOpen) opts.onOpen();
           },
-          onClose: () => {
+          onClose: (why) => {
             if (attempt !== owner) return;
             attempt = null; owner.cancelled = true; connecting = false;
             session = null;
             dropWake(); releaseAll();
             if (dom.body) dom.body.classList.remove("linked");
             if (dom.connect) dom.connect.disabled = false;
-            say("Disconnected — the game closed the link. Pair again from its Settings.", true);
+            // WHICH END DIED: "peer" is the game's own goodbye (UNPAIR, its tab
+            // closed); any other reason is this end's wire (rtc failed/disconnected).
+            // A private relay's one mailbox is not hosted again, so no re-dial there.
+            const wire = !!why && why !== "peer", again = wire && !deps.privateRelay();
+            say(!wire ? "Disconnected — the game closed the link. Pair again from its Settings."
+              : "Link lost — this phone slept, took a call or lost signal. " + (again ? "Reconnecting…" : "Pair again from the game's Settings."), true);
             if (opts.onClose) opts.onClose();
+            if (again) { redial = code; redialNow(); }
           },
         });
         if (attempt !== owner) { active.close(); return { ok: false, error: "cancelled" }; }

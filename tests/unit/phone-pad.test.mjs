@@ -675,11 +675,28 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   assert.deepEqual(seen, ["swap:ABC234", "accept:OFFER"], "the code is normalised, the offer answered");
   assert.ok(ctl.state().linked && dom.body.classes.has("linked"), "the wheel shows once the channel is open");
   const frame = () => { clock.t += STEP; ctl.pump(); link.pump(); desk.Input.steer(); };
-  // GAS: a thumb two-thirds down the zone is two-thirds travel; lifting it is zero.
-  dom.gas.dispatch("pointerdown", { clientY: 100 + 200 * (2 / 3) });
+  // GAS: STAMP THEN EASE, the game's own touch pedals' gesture (hold-buttons.js wireHold).
+  // RE-PINNED DELIBERATELY (R3-PHONE-2): this used to assert "a thumb 2/3 down the zone is
+  // 2/3 travel" — an absolute mapping that gave a thumb aimed at a ~150 px pedal's label half
+  // a brake while the pedal painted full (scratch/hunt3-phone/pad-pedal-travel.mjs: brk 0.30–0.50
+  // in the upper half before, 1.00 everywhere after). Now a touch ANYWHERE is full travel, and a
+  // slide up from the landing point eases it: 12 px slop, then 90 px to the 0.12 floor.
+  dom.gas.dispatch("pointerdown", { clientY: 100 + 200 * 0.1 });   // the pedal's top edge
   for (let i = 0; i < 3; i++) frame();
   assert.ok(desk.Input.throttle(), "GAS reaches throttle()");
-  assert.ok(Math.abs(desk.Input.throttleLevel() - 2 / 3) < 0.02, `travel ${desk.Input.throttleLevel()}`);
+  assert.equal(desk.Input.throttleLevel(), 1, "a stamp near the top edge is full travel, not 0.3");
+  assert.equal(dom.gas.style["--travel"], "1.00", "the fill shows the travel it sends");
+  dom.gas.dispatch("pointermove", { clientY: 100 + 200 * 0.1 - 45 });   // slid 45 px up
+  for (let i = 0; i < 3; i++) frame();
+  const eased = 1 - (45 - 12) / 90;
+  assert.ok(Math.abs(desk.Input.throttleLevel() - eased) < 0.02, `eased to ~${eased.toFixed(2)}, got ${desk.Input.throttleLevel()}`);
+  assert.equal(dom.gas.style["--travel"], eased.toFixed(2));
+  dom.gas.dispatch("pointermove", { clientY: 100 + 200 * 0.1 + 60 });   // back down past the landing point: full again
+  for (let i = 0; i < 3; i++) frame();
+  assert.equal(desk.Input.throttleLevel(), 1);
+  dom.gas.dispatch("pointermove", { clientY: -500 });   // dragged far off the top: the floor, not a release
+  for (let i = 0; i < 3; i++) frame();
+  assert.ok(desk.Input.throttle() && Math.abs(desk.Input.throttleLevel() - 0.12) < 0.02, `floor ${desk.Input.throttleLevel()}`);
   assert.ok(dom.gas.classes.has("on"));
   dom.gas.dispatch("pointerup", {});
   for (let i = 0; i < 3; i++) frame();
@@ -845,6 +862,45 @@ test("host(): an unreadable answer goes back to waiting; a room that will not op
   lostEarly.padEnd.close(); await settle();
   assert.equal(lostEarly.ctl.state().phase, "lost");
   assert.equal(lostEarly.room.stopped, 1, "a lost link drops the room's relay sockets");
+});
+
+test("host(): a linked phone whose WIRE dies is hosted again on the SAME code; the phone's own goodbye is final (R3-PHONE-3)", async () => {
+  // A fresh loopback per hosting, as a fresh RTCPeerConnection per attempt.
+  const pairs = [];
+  let minted = 0;
+  const rtc = () => { const p = NetTransport.loopback({ latencyMs: 1, rnd: NetTransport.seededRnd(9 + pairs.length) }); p[0].pump(0); p[1].pump(0); pairs.push(p); return p[1]; };
+  // ICE failing on both ends (a locked phone, a call): a close that is NOT the phone's "peer" goodbye.
+  const drop = ([padEnd, hostEnd], why) => { padEnd.status = hostEnd.status = "closed"; hostEnd._emit("close", why); padEnd._emit("close", why); };
+  const h = hostHarness({ rtc, makeCode: () => { minted++; return "ABC234"; } });
+  h.ui.relinkN = 0; h.ui.relinking = () => h.ui.relinkN++;
+  await settle();
+  await h.room.onJoiner(null, "ANSWER"); await settle();
+  assert.equal(h.ctl.state().phase, "linked");
+  drop(pairs[0], "failed"); await settle();
+  assert.equal(h.Input.remoteActive(), false, "the dead phone stops steering at once");
+  assert.equal(h.ctl.state().phase, "waiting", "the room is open again, not lost");
+  assert.equal(h.ctl.state().code, "ABC234"); assert.equal(minted, 1, "the SAME code: no new QR to scan");
+  assert.equal(pairs.length, 2, "on a fresh transport");
+  assert.equal(h.ui.relinkN, 1); assert.equal(h.ui.lostN, 0, "the page is not told to re-pair");
+  await h.room.onJoiner(null, "ANSWER-2"); await settle();
+  assert.equal(h.ctl.state().phase, "linked"); assert.equal(h.ui.linkedN, 2, "the same phone is back on");
+  // The phone closing its own page is a goodbye ("peer" on the desktop): final, as before.
+  pairs[1][0].close(); await settle();
+  assert.equal(h.ctl.state().phase, "lost"); assert.equal(h.ui.lostN, 1);
+  assert.match(h.ui.said.at(-1), /^!Phone disconnected/);
+  assert.equal(pairs.length, 2, "no room hosted again after a goodbye");
+
+  // A re-link nobody answers ends when the room does (nostr HOST_TIMEOUT_MS): lost() once.
+  pairs.length = 0;
+  const g = hostHarness({ rtc });
+  await settle(); await g.room.onJoiner(null, "ANSWER"); await settle();
+  drop(pairs[0], "disconnected"); await settle();
+  assert.equal(g.ctl.state().phase, "waiting");
+  g.room.onFail({ error: "timeout", message: "Nobody joined." });
+  assert.equal(g.ctl.state().phase, "failed"); assert.equal(g.ui.lostN, 1, "the page restores its camera and button");
+  assert.match(g.ui.said.at(-1), /^!Nobody joined/);
+  g.ctl.cancel();
+  assert.equal(pairs[1][1].status, "closed", "cancel closes the re-link's transport too");
 });
 
 test("a phone with no motion sensor is pedals and buttons only: it never blocks the local steering", () => {
@@ -1015,6 +1071,39 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   const game = read("js/ui/platform-session.js");
   assert.match(game, /hud: phonePadDash/, "game.js hands the dash sampler to PhonePad.host");
   assert.match(game, /function phonePadDash\(\)[\s\S]*G\.dashKph\(p\.speed\)[\s\S]*G\.cautionLevel\(\)/, "the sampler reads the HUD's own fields");
+});
+
+test("controller.html's pre-paint look gives a fresh phone the GAME's defaults (R3-PHONE-7)", () => {
+  // The game's defaults, read from the module that applies them: an unsaved key is
+  // store.get(K_*, <default>) in js/ui/appearance-opts.js.
+  const app = read("js/ui/appearance-opts.js");
+  const def = (k) => (app.match(new RegExp(`store\\.get\\(${k},\\s*"(\\w+)"\\)`)) || [])[1];
+  const game = { uiTheme: def("K_THEME"), menuAccent: def("K_MENU"), textSize: def("K_TEXT"), uiContrast: def("K_CONTRAST") };
+  assert.deepEqual(game, { uiTheme: "dark", menuAccent: "ember", textSize: "large", uiContrast: "high" }, "appearance-opts defaults moved: update controller.html with them");
+  // controller.html's first inline script, run against a phone that never saved a look.
+  const page = read("controller.html");
+  const script = page.match(/<script>\s*(\/\/ THE PLAYER'S LOOK[\s\S]*?)<\/script>/)[1];
+  const run = (saved) => {
+    const el = { dataset: {}, style: { setProperty() {} } };
+    vm.runInNewContext(script, { JSON, document: { documentElement: el },
+      localStorage: { getItem: (k) => (k in saved ? JSON.stringify(saved[k]) : null) } });
+    return el.dataset;
+  };
+  // The page writes no data-text-size for "normal" and no data-ui-contrast unless "high", like appearance-opts.
+  assert.deepEqual({ ...run({}) }, { uiTheme: "dark", menuAccent: "ember", textSize: "large", uiContrast: "high" },
+    "a phone with nothing saved wears LARGE text, HIGH contrast and the ember accent, as the game does");
+  assert.deepEqual({ ...run({ "apex26.textSize": "normal", "apex26.uiContrast": "off", "apex26.menuAccent": "cyan" }) },
+    { uiTheme: "dark", menuAccent: "cyan" }, "a saved choice still wins over the defaults");
+});
+
+test("the Android shell holds a permission for every device API the web code calls (R3-ARCHITECTURE-12)", () => {
+  const mf = read("mobile/android/app/src/main/AndroidManifest.xml");
+  const perms = new Set([...mf.matchAll(/<uses-permission android:name="android\.permission\.(\w+)"/g)].map((m) => m[1]));
+  // The WebView services navigator.vibrate through the app: without VIBRATE every haptic is silent.
+  const js = ["js/input/haptics.js", "js/input/phone-pad.js"].map(read).join("\n");
+  assert.match(js, /navigator\.vibrate/, "the web code vibrates");
+  assert.ok(perms.has("VIBRATE"), "AndroidManifest.xml declares android.permission.VIBRATE");
+  assert.ok(perms.has("CAMERA"), "and CAMERA for the in-page QR reader (js/net/scan.js)");
 });
 
 test('host cancellation wins over a late answer, successful or rejected', async () => {
@@ -1299,7 +1388,7 @@ function wakePad(over = {}) {
     return { releases: 0, addEventListener(_t, fn) { onRelease = fn; },
       release() { this.releases++; return Promise.resolve(); }, signal() { if (onRelease) onRelease(); } };
   };
-  return { ctl, dom, requests, transports, lock, fire: (t) => { for (const fn of events[t] || []) fn(); } };
+  return { ctl, dom, requests, transports, lock, doc: sb.document, fire: (t) => { for (const fn of events[t] || []) fn(); } };
 }
 
 test("phone wake lock is released on pairing failure, including acquisition arriving after failure", async () => {
@@ -1343,6 +1432,38 @@ test("page exit cancels pending pairing; its late lock and answer cannot affect 
   assert.equal(stale.releases, 1); assert.equal(current.releases, 0);
   assert.equal(h.ctl.state().linked, true);
   h.ctl.cancel(); assert.equal(current.releases, 1);
+});
+
+test("the phone names which end died and re-dials the same code after its own wire drops (R3-PHONE-3)", async () => {
+  const wires = [], swaps = [];
+  const h = wakePad({
+    rtc: () => {
+      let onClose;
+      const t = { status: "open", send: () => true, pump() {}, onMessage() {}, onOpen() {}, onClose(f) { onClose = f; },
+        close() { t.fail("local"); }, fail(why) { if (t.status === "closed") return; t.status = "closed"; if (onClose) onClose(why); } };
+      wires.push(t); return t;
+    },
+    swap: async (o) => { swaps.push(o.code); return { ok: true }; },
+  });
+  await h.ctl.connect("ABC234");
+  assert.equal(h.ctl.state().linked, true);
+  // This phone's wire failed (it slept / took a call): it says so, and dials again at once.
+  wires[0].fail("failed"); await settle();
+  assert.deepEqual(swaps, ["ABC234", "ABC234"], "the same code, no rescan");
+  assert.equal(h.ctl.state().linked, true, "back on the game");
+  // Dropped while the page is hidden: it waits until the player is back in front of it.
+  h.doc.visibilityState = "hidden";
+  wires[1].fail("disconnected"); await settle();
+  assert.match(h.dom.status.textContent, /^Link lost — this phone slept, took a call or lost signal\. Reconnecting…$/);
+  assert.equal(swaps.length, 2, "no dial while hidden"); assert.equal(h.ctl.state().linked, false);
+  h.doc.visibilityState = "visible"; h.fire("visibilitychange"); await settle();
+  assert.equal(swaps.length, 3); assert.equal(h.ctl.state().linked, true);
+  // The game's own goodbye ("peer"): it is named, and nothing re-dials.
+  wires[2].fail("peer"); await settle();
+  assert.match(h.dom.status.textContent, /the game closed the link/);
+  h.fire("visibilitychange"); await settle();
+  assert.equal(swaps.length, 3); assert.equal(h.ctl.state().linked, false);
+  h.ctl.cancel();
 });
 
 test("a refused wake lock does not block pairing or reacquisition on visibility return", async () => {

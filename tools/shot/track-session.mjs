@@ -22,7 +22,7 @@
 // line it prints is {"ready":true,…}; stdin EOF closes the browser. Usage:
 //   node tools/shot/track-session.mjs --serve --track spa --out artifacts/track-session
 import { mkdirSync, existsSync } from "node:fs";
-import { join, resolve, basename } from "node:path";
+import { join, resolve, basename, relative, isAbsolute, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
@@ -126,7 +126,8 @@ const pngOf = (ref) => {
   const s = shots.find((x) => x.name === ref);
   if (s) return s.png;
   const p = resolve(outDir, String(ref));
-  if (!p.startsWith(outDir) || !existsSync(p)) throw new Error(`unknown shot ${ref}`);
+  const rel = relative(outDir, p);   // not startsWith(outDir): a sibling "<outDir>-x/…" shares the prefix
+  if (!rel || rel === ".." || rel.startsWith(".." + sep) || isAbsolute(rel) || !existsSync(p)) throw new Error(`unknown shot ${ref}`);
   return p;
 };
 

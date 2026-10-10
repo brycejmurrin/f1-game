@@ -458,7 +458,8 @@ function award(season, order, fastestId, run) {
   const scoring = stage(season);
   const table = payTable(scoring === "sprint" ? SPRINT_POINTS : pointsTable(), scoring, run);
   // The 2019–2024 fastest-lap point: one point, Grand Prix leg only, and only
-  // to a driver classified inside the top ten. Season format only (fmtActive):
+  // to a driver classified inside the top ten — inside the PAYING places when
+  // the table is shorter (CLASSIC pays six). Season format only (fmtActive):
   // a career keeps the table it always paid. `lastFl` (cleared above) names
   // this round's recipient for the results sheet.
   const fl = scoring !== "sprint" && fmtActive() && rulesConfig().flPoint && fastestId != null && shortFrac(run) >= 0.5;
@@ -474,7 +475,7 @@ function award(season, order, fastestId, run) {
     // flag earns it) but skips a classified retirement.
     const classified = c.classified != null ? !!c.classified : !c.retired;   // endRace sets it: a DNF past 90 % of the winner's laps is classified (FIA 2026 SR B2.5.5(b))
     let pts = classified ? (table[i] || 0) : 0;
-    if (fl && classified && !c.retired && c.driverId === fastestId && i < 10) { pts += 1; season.lastFl = fastestId; }
+    if (fl && classified && !c.retired && c.driverId === fastestId && i < Math.min(10, table.length)) { pts += 1; season.lastFl = fastestId; }
     const row = rp[c.driverId] || (rp[c.driverId] = []);
     row[season.round] = (row[season.round] || 0) + pts;
     season.pts[c.driverId] = (season.pts[c.driverId] || 0) + pts;

@@ -39,6 +39,38 @@ const Quali = (function () {
   // pole sits just ahead of a good driven lap.
   const QUALI_TRIM = 0.75;
 
+  // ...BUT ONLY AT PACE 1, which is where it was fitted (R3-RACE-INTEGRITY-1). The
+  // trim throttles the straight-line cap, and how much of a lap that cap governs
+  // moves with OVERALL SPEED: corners are absolute (sqrt(latMax/k)), the cap and
+  // ACCEL are pace-scaled. Model lap / the same AI car's driven lap, medians:
+  //
+  //     PACE        0.44    1.0    1.34
+  //     monza      1.215  0.994  0.936     (a free pole at 0.44: TT gold
+  //     monaco     1.058  0.904  0.933      needed 244 s, the AI drove 186 s)
+  //
+  // The missing term is the car's own drag curve: updateCar pulls
+  // ACCEL·PACE·(1 - v/vmax), so the distance a car needs to near its top speed
+  // grows with PACE, while this model pulled a flat ACCEL right up to the cap.
+  // So the PACE-1 calibration stays the ANCHOR and the pace dependence comes from
+  // a model that carries that curve (no straight trim; the car runs to its own
+  // free pace) — paceLap() below: lap(PACE) = trimmed lap at PACE 1 ·
+  // shape(PACE) / shape(1). PACE 1 is today's model to the bit.
+  //
+  // Fitted (grid search against each AI car's first clean racing lap, VM,
+  // AI-only field) over monza, monaco, spa, silverstone, hungaroring, suzuka
+  // and bahrain at PACE 0.44 / 0.7 / 1.34; model/driven relative to that
+  // circuit's own PACE-1 value:
+  //
+  //     shape            worst     (monza 0.44 / 1.34, monaco 0.44 / 1.34)
+  //     none (trim only)  26.2 %   1.222 / 0.942, 1.170 / 1.032
+  //     CORNER 1.0         5.3 %
+  //     CORNER 1.1         3.0 %   1.000 / 0.993, 0.972 / 1.030
+  //
+  // CORNER scales the flat corner cap for what it leaves out (the AI's
+  // downforce and kerb use); an explicit aero term fitted worse than it.
+  // tests/unit/quali-pace-parity-vm.test.mjs holds the result.
+  const PACE_CORNER = 1.1;
+
   const EXEC_SPREAD = 0.012;
 
   // Time-trial MEDALS as multiples of the reference pole (referencePole below):
@@ -81,7 +113,9 @@ const Quali = (function () {
       return G.seasonMode ? "season" : "gp";
     }
 
-    function lapTime(track, vCap, grip) {
+    // `shape` (paceLap only): { pace, free, corner } — integrate at that PACE
+    // with the car's drag curve to `free` and corner caps scaled by `corner`.
+    function lapTime(track, vCap, grip, shape) {
       const n = track.n, total = track.total;
       const m = Math.max(8, Math.floor(n / STEP));
       const ds = total / m;
@@ -90,8 +124,9 @@ const Quali = (function () {
       // which IS pace-scaled, so a bare ACCEL had the modelled field reaching a
       // halved cap at undiminished pace-5 acceleration — simulated times that
       // drifted away from driven ones the moment the pace slider left 5.
-      const accel = G.aTop() * grip;
+      const accel = (shape ? G.aTop() / paceNow() * shape.pace : G.aTop()) * grip;
       const brake = G.BRAKE * grip;
+      const vFree = shape ? shape.free : 0, cornerK = shape ? shape.corner : 1;
 
       // 1. cornering limit at each sample. The |curvature| samples are pure
       // track geometry — cached across the ~22 per-car calls of one sheet
@@ -113,13 +148,14 @@ const Quali = (function () {
       const v = new Float64Array(m);
       for (let i = 0; i < m; i++) {
         const k = _kCache[i];
-        v[i] = k > 1e-5 ? Math.min(vCap, Math.sqrt(latMax / k)) : vCap;
+        v[i] = k > 1e-5 ? Math.min(vCap, Math.sqrt(latMax / k) * cornerK) : vCap;
       }
 
       for (let pass = 0; pass < 2; pass++)
         for (let i = 0; i < m; i++) {
           const j = (i + 1) % m;
-          const reach = Math.sqrt(v[i] * v[i] + 2 * accel * ds);
+          const a = vFree ? accel * Math.max(0.02, 1 - v[i] / vFree) : accel;
+          const reach = Math.sqrt(v[i] * v[i] + 2 * a * ds);
           if (v[j] > reach) v[j] = reach;
         }
 
@@ -140,10 +176,29 @@ const Quali = (function () {
       return t;
     }
 
-    function capFor(c) {
+    // max(PACE, 0.05), read through vTop() (= VMAX · that) like every pace read.
+    // A stub without VMAX (unit VMs) reads as PACE 1: today's model.
+    function paceNow() { const vm = PhysicsConsts.VMAX; return vm > 0 ? G.vTop() / vm : 1; }
+
+    // A car's free pace (the AI's own top speed) at the current PACE.
+    function freeFor(tierV, skill) {
       const dd = PhysicsConsts.DIFF[G.difficulty] || PhysicsConsts.DIFF.normal;
-      return G.vTop() * c.tierV * c.skill * dd.ai * QUALI_TRIM;
+      return G.vTop() * tierV * skill * dd.ai;
     }
+    function capFor(c) { return freeFor(c.tierV, c.skill) * QUALI_TRIM; }
+
+    // The flying lap of a car whose free pace is `free`: the QUALI_TRIM lap at
+    // PACE 1, carried to the current PACE by the shape model (see PACE_CORNER).
+    function paceLap(track, free, grip) {
+      const p = paceNow();
+      const free1 = free / p;
+      // The anchor: today's trimmed model, evaluated at PACE 1.
+      const anchor = lapTime(track, free1 * QUALI_TRIM, grip, { pace: 1, free: 0, corner: 1 });
+      if (p === 1) return anchor;
+      const shape = (q) => lapTime(track, free1 * q, grip, { pace: q, free: free1 * q, corner: PACE_CORNER });
+      return anchor * shape(p) / shape(1);
+    }
+    function carLap(c, track, grip) { return paceLap(track, freeFor(c.tierV, c.skill), grip); }
 
     // The reference POLE a time-trial medal is measured against: a top-rated
     // driver (skill 1) in the tier-0 car on a flying lap — the same model
@@ -152,8 +207,7 @@ const Quali = (function () {
     function referencePole() {
       const track = G.track;
       if (!track || !track.n) return 0;
-      const dd = PhysicsConsts.DIFF[G.difficulty] || PhysicsConsts.DIFF.normal;
-      return lapTime(track, G.vTop() * Teams.TIER_V[0] * dd.ai * QUALI_TRIM, G.gripMult());
+      return paceLap(track, freeFor(Teams.TIER_V[0], 1), G.gripMult());
     }
 
     // One car's qualifying lap. Deterministic for a given (seed, round, car).
@@ -166,9 +220,8 @@ const Quali = (function () {
     // grid, and two players on the same seed never agreed. Career.hash is exported
     // for exactly this substitution — js/race/reliability.js already does it.
     function simLap(c, track, grip, round, seed) {
-      const cap = capFor(c);
       // A FLYING lap, like the player's (js/race/flying-start.js): no standing start to charge.
-      const base = lapTime(track, cap, grip);
+      const base = carLap(c, track, grip);
       const r = DriverRatings.get(c.code, c.tier, Career.devFor(c.team && c.team.id, c.seat));
       const spread = EXEC_SPREAD * (1 - r.consistency / 100);
       const draw = Career.hash(seed, round, "quali", c.driverId || c.code) - 0.5;
@@ -402,7 +455,7 @@ const Quali = (function () {
       return classification ? classification.map(({ car, ...row }) => row) : null;
     }
 
-    return { simulate, preview, order, results, rows, clear, begin, forgetOrder, lapTime, capFor, referencePole };
+    return { simulate, preview, order, results, rows, clear, begin, forgetOrder, lapTime, capFor, carLap, referencePole };
   }
 
   return { create, STEP, QUALI_TRIM, EXEC_SPREAD, MEDALS, MEDAL_RANK, medalFor };

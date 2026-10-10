@@ -12,9 +12,9 @@
       "lines": 3625
     },
     "js/game.js": {
-      "codeLines": 4965,
+      "codeLines": 4968,
       "gMembers": 288,
-      "lines": 9179,
+      "lines": 9181,
       "topLets": 155
     },
     "js/lighting/presets.js": {
@@ -27,7 +27,7 @@
       "lines": 2910
     },
     "js/track/tracks.js": {
-      "lines": 743
+      "lines": 748
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 2
@@ -51,7 +51,7 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 337,
+      "ceiling": 336,
       "slack": 0
     },
     "rawColorDistinct": {
@@ -63,7 +63,7 @@
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2159,
+      "ceiling": 2160,
       "slack": 25
     },
     "subFloorFontSize": {

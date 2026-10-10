@@ -314,6 +314,72 @@ test("a grid over 22 cars (MY TEAM / LEGENDS) records instead of resetting every
   }
 });
 
+test("a red-flag re-grid (same clock, same cars) is a timeline break: two segments, never blended across", () => {
+  // R3-STATES-3: redFlagRestart() teleports every car to its grid box with
+  // raceT unchanged, so neither time heuristic fired and at() slid the field
+  // 149 m through the scenery in one 1/30 s sample (p9-redflag-replay.cjs).
+  const R = boot(), field = cars(2), api = R.create({ cars: field, netPlay: { active: () => false } });
+  api.breakTimeline();   // an empty ring has nothing to break: no-op
+  const dt = 1 / R.HZ, kA = R.HZ * 2 - 1, T = (k) => k / R.HZ;   // k / HZ: the slot gate's own FP-exact spacing
+  for (let i = 0; i <= kA; i++) {
+    for (const c of field) { c.px += 1; c.speed = 30; }
+    api.sample(T(i), field);
+  }
+  const tA = T(kA), a = field.map((c) => ({ px: c.px, pz: c.pz }));
+  // Re-grid: car 0 jumps 149 m; car 1 was 5 m from its box — under any jump gate,
+  // so only the explicit break keeps it from blending.
+  field[0].px += 149; field[1].px -= 5; field[0].speed = field[1].speed = 0;
+  api.breakTimeline();
+  assert.equal(api.sample(T(kA + 0.4), field), false, "same slot: nothing written, the break stays pending");
+  const b = field.map((c) => ({ px: c.px, pz: c.pz }));
+  assert.equal(api.sample(T(kA + 1), field), true);
+  for (let i = 2; i <= R.HZ; i++) { for (const c of field) c.px += 0.5; api.sample(T(kA + i), field); }
+  assert.equal(api.window().frames, R.HZ * 3, "both segments are kept — a break is not a clear");
+  for (const [u, want] of [[0.1, a], [0.49, a], [0.51, b], [0.9, b]]) {
+    const snap = api.at(T(kA + u));
+    for (let c = 0; c < 2; c++) {
+      assert.equal(snap.cars[c].px, want[c].px, `u=${u} car ${c}: the nearer real sample, no blend`);
+      assert.equal(snap.cars[c].pz, want[c].pz);
+    }
+  }
+  // Inside each segment the ring still interpolates.
+  assert.ok(Math.abs(api.at(T(kA - 0.5)).cars[0].px - (a[0].px - 0.5)) < 1e-4, "segment A blends");
+  assert.ok(Math.abs(api.at(T(kA + 1.5)).cars[1].px - (b[1].px + 0.25)) < 1e-4, "segment B blends");
+  // clear() drops a pending break with the history.
+  api.breakTimeline(); api.clear();
+  field[0].px = 0; api.sample(100, field); field[0].px = 1; api.sample(100 + dt, field);
+  assert.ok(Math.abs(api.at(100 + dt / 2).cars[0].px - 0.5) < 1e-4, "a fresh ring starts unbroken");
+});
+
+test("one car's teleport (RECOVER / rescue) snaps without clearing; fast or stalled driving still blends", () => {
+  // The heuristic is per car and render-only: a RECOVER after a crash must not
+  // wipe the crash from the ring, and a frame-loop stall at speed must not read
+  // as a teleport (the allowance grows with recorded speed × sample gap).
+  const R = boot(), field = cars(2), api = R.create({ cars: field, netPlay: { active: () => false } });
+  const dt = 1 / R.HZ;
+  for (let i = 0; i < R.HZ; i++) {
+    field[0].px += 3; field[0].speed = 90;   // ~90 m/s
+    field[1].px += 1; field[1].speed = 30;
+    api.sample(i / R.HZ, field);
+  }
+  api.pushTag("contact", 0.5, 1);
+  const t = (R.HZ - 1) / R.HZ, x1 = field[1].px, z1 = field[1].pz;
+  // Car 1 is rescued 60 m sideways (back to x = 0); car 0 drives 3 m.
+  field[0].px += 3; field[1].pz += 60;
+  api.sample(1, field);   // = t + dt
+  const mid = api.at(t + dt * 0.25);
+  assert.equal(mid.cars[1].pz, z1, "the rescued car shows its last real pose, not a slide through the run-off");
+  assert.equal(mid.cars[1].px, x1);
+  assert.equal(api.at(t + dt * 0.75).cars[1].pz, z1 + 60, "past half-way it shows the recovered pose");
+  assert.ok(Math.abs(mid.cars[0].px - (field[0].px - 2.25)) < 1e-4, "the other car still blends");
+  assert.equal(api.window().frames, R.HZ + 1, "no clear"); assert.equal(api.lastTag().kind, "contact");
+  // A 1 s stall at 90 m/s covers 90 m between samples — real motion, not a teleport.
+  const t2 = 2, x0 = field[0].px;
+  field[0].px += 90;
+  api.sample(t2, field);
+  assert.ok(Math.abs(api.at(t2 - 0.5).cars[0].px - (x0 + 45)) < 1e-3, "a stalled sample gap at speed blends");
+});
+
 async function bootSoloRaceForScrubAudio() {
   let fa = null;
   const g = await createGame({ carMeshes: false, onSandbox: (sb) => { fa = installFakeAudio(sb); } });

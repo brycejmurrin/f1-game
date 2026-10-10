@@ -127,3 +127,49 @@ test("importmap and precache targets are real files", () => {
     assert.ok(fs.existsSync(path.join(ROOT, rel)), `importmap "${spec}" points at a missing ${rel}`);
   }
 });
+
+// R3-PHONE-8: the lazy files (DEFERRED backends, circuits, scenery, LAZY_*) have
+// no tag, so they were requested as `?v=<build>` — every deploy a new URL for
+// ~200 files whether or not they changed. The stamp writes a content-hash map
+// into the staged shell; ScriptLoader.url() and sw.js key on it.
+test("the stamp maps every staged lazy file to its content hash; one changed file changes one key", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { createHash } = await import("node:crypto");
+  const tmpRoot = path.join(ROOT, "artifacts", "tmp");
+  fs.mkdirSync(tmpRoot, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(tmpRoot, "lazyv-"));
+  const bump = (...a) => spawnSync("node", ["tools/ci/bump-cache.mjs", ...a, "--root", dir], { cwd: ROOT, encoding: "utf8" });
+  const put = (rel, body) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), body); };
+  const mapOf = () => {
+    const m = fs.readFileSync(path.join(dir, "index.html"), "utf8").match(/<script type="application\/json" id="apex-lazy-v">([\s\S]*?)<\/script>/g);
+    assert.equal(m && m.length, 1, "exactly one map block");
+    return JSON.parse(m[0].replace(/^<script[^>]*>|<\/script>$/g, ""));
+  };
+  const lazy = ["js/circuits/monza.js", "js/circuits/scenery/monza.js", "js/render/glx/glx.js", "js/track/build-worker.js"];
+  try {
+    for (const rel of lazy) put(rel, `// ${rel}\n`);
+    put("js/workers/bitmap-decode-worker.js", "// its client still keys by build\n");
+    put("js/game.js", "// shell tag\n");
+    put("index.html", `<head>\n<meta name="apex-build" content="7">\n<script src="js/game.js?v=dev"></script>\n</head>\n`);
+    put("version.json", `{ "build": 7 }\n`);
+    assert.equal(bump("--apply", "--at", "4100", "--json").status, 0);
+    const first = mapOf();
+    assert.deepEqual(Object.keys(first).sort(), [...lazy].sort(), "every lazy file the root holds, nothing else");
+    for (const rel of lazy) {
+      assert.equal(first[rel], createHash("sha256").update(fs.readFileSync(path.join(dir, rel))).digest("hex").slice(0, 12), rel);
+    }
+    assert.equal(bump("--check").status, 0, "the staged copy verifies, map included");
+
+    put("js/circuits/monza.js", "// monza, edited\n");
+    assert.equal(bump("--check").status, 1, "a stale map entry fails the staged check");
+    assert.equal(bump("--apply", "--at", "4101", "--json").status, 0);
+    const second = mapOf();
+    assert.deepEqual(Object.keys(second).filter((k) => second[k] !== first[k]), ["js/circuits/monza.js"],
+      "two stagings differ in exactly the changed file's key");
+    assert.equal(bump("--check").status, 0);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("the repo shell carries no lazy map (it is stamped at deploy only)", () => {
+  assert.doesNotMatch(html, /id="apex-lazy-v"/);
+});

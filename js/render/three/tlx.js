@@ -297,6 +297,15 @@ const TLX = (function () {
       let _unstridePool = null;
       let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
       const _softPresentWaiters = [];
+      // awaitSoftPresent(ms, "frame") on a headed canvas (GLX's M15 contract): no
+      // preserveDrawingBuffer, so SAVE SCREENSHOT must read in the task that
+      // presented. Woken from inside present(); "stale" when none came (paused).
+      const _frameWaiters = [];
+      const _awaitFrame = (ms) => new Promise((resolve) => {
+        const w = () => { clearTimeout(t); resolve("frame"); };
+        const t = setTimeout(() => { const i = _frameWaiters.indexOf(w); if (i >= 0) _frameWaiters.splice(i, 1); resolve("stale"); }, ms);
+        _frameWaiters.push(w);
+      });
       // Layout/CSS size follows the VISIBLE canvas. Soft-present is a sibling
       // 2D overlay — never getContext("2d") on #game (one context type per
       // canvas for life; three's WebGPU configure is lazy on first present).
@@ -1733,8 +1742,11 @@ const TLX = (function () {
         // NOT writing _cullPlanes on a hit is load-bearing: it must keep
         // describing the frustum that physically wrote imesh.
         if (useKey && InstCells.sameKey(batch, ks, kN)) { batch.visible = batch._cullN; return batch._cullN; }
-        const src = batch.srcMatrices, dst = batch.packMatrices;
-        const sc = batch.srcColors, dc = batch.packColors;
+        // A shadow cull packs into its OWN array, as GLX/WGX (_shadowPackFor):
+        // packMatrices is the camera pack that a cell-key hit leaves standing and
+        // drawWorldMeshes' mirror recorder copies (R3-RENDER-6). Casters read no colour.
+        const src = batch.srcMatrices, dst = shadow ? (batch._shadowPack || (batch._shadowPack = new Float32Array(src.length))) : batch.packMatrices;
+        const sc = batch.srcColors, dc = shadow ? null : batch.packColors;
         let n = 0;
         for (let ci = 0, cn = useKey ? kN : cs.length; ci < cn; ci++) {
           const c = useKey ? cs[ks[ci]] : cs[ci];
@@ -1756,12 +1768,12 @@ const TLX = (function () {
           }
         }
         // upload:false — CPU pack only. The sun/lamp shadow path copies
-        // packMatrices into a SECOND InstancedMesh (tlx-shadow castInstanced);
+        // _shadowPack into a SECOND InstancedMesh (castShadowInstanced);
         // writing the lit imesh here was a full setMatrixAt walk discarded
         // when the camera cull overwrote it later in the same frame.
         // Do not touch _cullPlanes: that cache means "this pack is on the
         // GPU", and we did not upload.
-        if (opts && opts.upload === false) return n;
+        if (opts && opts.upload === false) { batch._shadowFresh = true; return n; }
         // visible is the CAMERA count the lit draw reads; a shadow cull's n must
         // not overwrite it (GLX/WGX: the camera count survives the shadow cull).
         batch.visible = n;
@@ -1806,8 +1818,13 @@ const TLX = (function () {
       }
 
       function castShadowInstanced(batch, count) {
-        if (skipBatches()) return;
-        if (shadowSys && shadowSys.castInstanced) shadowSys.castInstanced(batch, count);
+        // tlx-shadow reads packMatrices for a culled cast: lend it the pack the
+        // shadow cull just wrote (only that one — a stale pack never leaks).
+        const sh = count !== undefined && batch && batch._shadowFresh ? batch._shadowPack : null, cam = sh && batch.packMatrices;
+        if (batch) batch._shadowFresh = false;
+        if (skipBatches() || !shadowSys || !shadowSys.castInstanced) return;
+        if (sh) batch.packMatrices = sh;
+        try { shadowSys.castInstanced(batch, count); } finally { if (sh) batch.packMatrices = cam; }
       }
 
       function _showInstanced(rec, order) {
@@ -3828,7 +3845,7 @@ const TLX = (function () {
           });
         },
         awaitSoftPresent(timeoutMs) {
-          if (!_softBlit) return Promise.resolve(_softBlitGen);
+          if (!_softBlit) return arguments[1] === "frame" ? _awaitFrame(timeoutMs != null ? timeoutMs : 8000) : Promise.resolve(_softBlitGen);
           if (!_displayCtx) return Promise.reject(new Error("no display ctx"));
           const start = _softBlitGen;
           const ms = timeoutMs != null ? timeoutMs : 15000;
@@ -4508,6 +4525,7 @@ const TLX = (function () {
           }
           _presentN++;
           _presentMs += (_presentAcc - _presentMs) * 0.1; _presentAcc = 0;
+          if (painted && _frameWaiters.length) _frameWaiters.splice(0).forEach((w) => w());
           // AUTO SELF-HEAL: a WebGPU device that rejects work early is a
           // device that is drawing part of the scene, and nothing above can
           // see that — a rejected lit pipeline throws nothing on the JS side,

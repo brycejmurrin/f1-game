@@ -27,7 +27,7 @@ import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
-function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, throwInWorld = false, mobile = false, boxes = {}, docks = {}, bc = false, pipMode, clock = { t: 0 } } = {}) {
+function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, throwInWorld = false, mobile = false, boxes = {}, docks = {}, bc = false, pipMode, clock = { t: 0 }, xr = null } = {}) {
   const writes = { cls: 0, prop: 0 };   // <body> class toggles and custom-property writes
   const stored = {};
   if (mode) stored.hudMirror = mode;
@@ -58,6 +58,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
     Input: { consumeMirror: () => { const v = mirrorPressed; mirrorPressed = false; return v; }, lookingBack: () => false },
     PerfGov: { tier: () => tier },
     performance: { now: () => clock.t },
+    ...(xr ? { XrBoot: { comfort: () => xr.on } } : {}),
     GameCams: { vantage: (_t, m, s, x, spd) => { vant.push({ m, s, x, spd }); pooled.eye[0] = 0; pooled.eye[1] = 4; pooled.eye[2] = s - 12;
       pooled.tgt[0] = 0; pooled.tgt[1] = 1; pooled.tgt[2] = s + 20; return pooled; } },
     CamModes: { CAM_MODES: [{ id: "chase" }, { id: "far" }, { id: "drift" }, { id: "cockpit" }, { id: "helmet" }] },
@@ -482,6 +483,28 @@ test("standDown (the GARAGE preview frame) hides the mirror and clears the compo
   b.render();
   assert.equal(b.mp.state().shown, true, "the next race frame shows it again");
   assert.equal(b.frameEl.hidden, false);
+});
+
+// R3-RENDER-4: presentXR drops the post chain that composites the mirror, and the
+// DOM frame is not in the headset — the pass was a whole world render per frame
+// (+25 % of the stereo pair's prop triangles, scratch/hunt3-render/xr-mirror.cjs).
+test("an immersive XR session stands the mirror and the PiP down; EXIT VR brings the mirror back", () => {
+  const xr = { on: true };
+  const b = boot({ mode: "on", cam: "cockpit", xr });
+  for (let i = 0; i < 4; i++) b.render();
+  assert.equal(b.calls.filter((c) => c[0] === "begin").length, 0, "no mirror pass while presenting");
+  assert.equal(b.mp.state().shown, false);
+  assert.equal(b.frameEl.hidden, true);
+  assert.ok(b.calls.filter((c) => c[0] === "rect").every((c) => c[1] === null), "and no composite rect");
+  xr.on = false;
+  b.render();
+  assert.equal(b.calls.filter((c) => c[0] === "begin").length, 1, "the flat game draws it again");
+  assert.equal(b.mp.state().shown, true);
+  const pip = boot({ bc: true, pipMode: "on", cam: "chase", xr: { on: true } });
+  const sub = { s: 400, team: "s", code: "HAM" };
+  pip.G.cars.push(sub); pip.mp.setSubject(sub, "chase"); pip.render();
+  assert.equal(pip.mp.state().pip.shown, false, "no broadcast PiP pass in the headset either");
+  assert.equal(pip.calls.filter((c) => c[0] === "begin").length, 0);
 });
 
 test("race preparation lets the main warm run first, then draws the actual hidden rear view at its real size", async () => {

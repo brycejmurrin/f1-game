@@ -92,7 +92,7 @@ test("raceAssets microtask kicks scenery/worker; idle injects lights", async () 
 
 test("TrackBuildClient.idleWarm no-ops when build worker is off", () => {
   const src = read("js/track/build-client.js");
-  assert.match(src, /function idleWarm\(\)/);
+  assert.match(src, /function idleWarm\(agentSurface\)/);   // R3-ASYNC-2: spawns only for the agent surface
   assert.match(src, /if \(!enabled\(\)\) return null/);
   assert.match(src, /requestIdleCallback\(kick, \{ timeout: 3000 \}\)/);
   const main = vm.createContext({

@@ -30,6 +30,10 @@ const DataRealRace = (function () {
   const DISTANCES = [1, 0.5, 0.2, 0.1];   // FULL, half, a fifth, a tenth of the real distance
 
   const num = (v) => (typeof v === "number" && isFinite(v) ? v : (v != null && v !== "" && isFinite(+v) ? +v : null));
+  // A lap index sizes per-driver arrays: one fractional or huge upstream row threw
+  // (`Invalid array length`) or allocated millions of slots per driver (1e9 OOMed).
+  const MAX_GP_LAPS = 100;   // a modern GP runs 44-78 laps (Monaco 78); headroom, not a real race
+  const lapNo = (v) => { const n = num(v); return Number.isInteger(n) && n >= 1 && n <= MAX_GP_LAPS ? n : null; };
   const arr = (v) => (Array.isArray(v) ? v : []);
 
   // ── The script builder (pure; tests/unit/real-race-script.test.mjs) ──────
@@ -147,8 +151,8 @@ const DataRealRace = (function () {
     const s = raw.session || {};
     const laps = arr(raw.laps);
     let totalLaps = 0;
-    for (const l of laps) { const n = num(l && l.lap_number); if (n > totalLaps) totalLaps = n; }
-    for (const r of arr(raw.result)) { const n = num(r && r.number_of_laps); if (n > totalLaps) totalLaps = n; }
+    for (const l of laps) { const n = lapNo(l && l.lap_number); if (n > totalLaps) totalLaps = n; }
+    for (const r of arr(raw.result)) { const n = lapNo(r && r.number_of_laps); if (n > totalLaps) totalLaps = n; }
     const grid = gridFor(raw.positions);
     const byNum = {};
     for (const d of arr(raw.drivers)) {
@@ -161,7 +165,7 @@ const DataRealRace = (function () {
     }
     for (const l of laps) {
       const d = byNum[num(l && l.driver_number)];
-      const n = num(l && l.lap_number);
+      const n = lapNo(l && l.lap_number);
       if (!d || !(n >= 1) || n > totalLaps) continue;
       d.laps[n - 1] = num(l.lap_duration);
     }
@@ -178,7 +182,7 @@ const DataRealRace = (function () {
     for (const d of drivers0(byNum)) d.lapStart = new Array(totalLaps).fill(null);
     for (const l of laps) {
       const d = byNum[num(l && l.driver_number)];
-      const n = num(l && l.lap_number);
+      const n = lapNo(l && l.lap_number);
       if (d && n >= 1 && n <= totalLaps) d.lapStart[n - 1] = secs(l.date_start);
     }
     for (const p of arr(raw.pits)) {
@@ -190,7 +194,7 @@ const DataRealRace = (function () {
       const d = byNum[num(r && r.driver_number)];
       if (!d) continue;
       d.pos = num(r.position);
-      d.lapsDone = num(r.number_of_laps) || 0;
+      d.lapsDone = lapNo(r.number_of_laps) || 0;
       d.dnf = !!(r.dnf || r.dns || r.dsq) || d.pos == null;
       d.dsq = !!r.dsq; d.dns = !!r.dns;
     }
@@ -272,7 +276,7 @@ const DataRealRace = (function () {
     for (const d of arr(drivers)) if (d && d.dnf && d.num != null) ends[d.num] = (d.lapsDone | 0) + 1;
     const starts = {};   // num -> [lap start ms by lap]
     for (const l of arr(laps)) {
-      const n = num(l && l.driver_number), k = num(l && l.lap_number), t = Date.parse(l && l.date_start || "");
+      const n = num(l && l.driver_number), k = lapNo(l && l.lap_number), t = Date.parse(l && l.date_start || "");   // a 1e9 index would make lapOf walk 1e9 slots
       if (n == null || !(k >= 1) || !isFinite(t)) continue;
       (starts[n] = starts[n] || [])[k] = t;
     }
