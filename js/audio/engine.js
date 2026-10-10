@@ -1254,7 +1254,17 @@ var GameAudio = (function () {
     // Defaults to neutral (full grip, no braking, on tarmac, dry) when absent.
     const ph = physics || {};
     const slip01 = clamp01(1 - (ph.slip != null ? ph.slip : 1)); // 0=grip 1=full slide
-    const brakeFrac = clamp01(-(ph.ax || 0) / 60);              // 60 m/s² ≈ full BRAKE
+    // BRAKING is measured against the model's own full pedal, PhysicsConsts.BRAKE (22 m/s², absolute: it does
+    // not ride PACE). A full stop settles at about -21.7, so the old 60 m/s² read peaked at 36 %. The PEDAL says
+    // whether the car is braking at all when the feed has it — a lift decelerates too (~6 m/s² of drag and engine
+    // braking) and that is the overrun's, not the discs'; a feed with no pedal reads braking past half the brake.
+    const brakeFull = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.BRAKE) || 22;
+    const onBrakes = ph.brake != null ? ph.brake > 0.08 : -(ph.ax || 0) > brakeFull * 0.5;
+    const brakeFrac = onBrakes ? clamp01(-(ph.ax || 0) / brakeFull) : 0;
+    // PULLING on the STANDARD scale: the throttle side of ax carries the PACE factor (ACCEL * PACE * …), so the
+    // feed passes aStd(ax) and the load and wastegate gates below compare that, not the raw m/s², to their
+    // numbers — else they never fire at a low OVERALL SPEED. A feed without it reads its ax as standard.
+    const pull = Math.max(0, ph.axStd != null ? ph.axStd : (ph.ax || 0));
     const onKerb = !!ph.onKerb;
     const wet = !!ph.wet;
 
@@ -1348,13 +1358,13 @@ var GameAudio = (function () {
     const slipLoad  = slip01 * 0.12;          // up to +12% filter open under slide
     const brakeLoad = brakeFrac * 0.08;        // up to +8% under hard braking
     const kerbLoad  = onKerb ? 0.04 : 0;      // small gain bump over a kerb
-    // LOAD: longitudinal acceleration (ph.ax; ~12 m/s² is a full-throttle
-    // launch) opens the lowpass and lifts the level, so a car PULLING reads
-    // brighter and fuller than one coasting at the same rev. Zero at ax <= 0,
-    // which is every rev sweep the audio check runs, so the pitch and
-    // centroid-vs-rev pins are untouched; the check's coast-vs-pull pair
+    // LOAD: longitudinal acceleration (`pull`, standard scale; PhysicsConsts.ACCEL,
+    // 7 m/s², is a full-throttle launch) opens the lowpass and lifts the level, so
+    // a car PULLING reads brighter and fuller than one coasting at the same rev.
+    // Zero at ax <= 0, which is every rev sweep the audio check runs, so the pitch
+    // and centroid-vs-rev pins are untouched; the check's coast-vs-pull pair
     // asserts the brightening.
-    const loadLift  = clamp01((ph.ax || 0) / 12);
+    const loadLift  = clamp01(pull / ((typeof PhysicsConsts !== "undefined" && PhysicsConsts.ACCEL) || 7));
 
     // The shape caps (11 k / 7.2 k) bound the REV-DRIVEN part; the trims then
     // scale it, and the FINAL value is what has to stay in range. The other way
@@ -1483,15 +1493,17 @@ var GameAudio = (function () {
     }
 
     // OVERRUN. Lifting at revs is the one engine state that sounded exactly like
-    // coasting: loadLift is clamp01(ax/12), so it is ZERO the moment you come
+    // coasting: loadLift is clamp01(pull/ACCEL), so it is ZERO the moment you come
     // off the throttle and nothing else in the mix noticed. A real engine on a
     // closed throttle at speed pops and crackles as unburnt fuel lights in the
     // hot exhaust, and it is the cue that tells you the car ahead has lifted.
     //
-    // Gated away from BRAKING: hard braking is its own sound and already has
-    // brakeLoad, and stacking crackle on top of it just makes noise. The window
-    // is a gentle-to-moderate lift with the engine still spinning.
-    const lifting = rev > 0.35 && s > 0.12 && (ph.ax || 0) < -0.5 && (ph.ax || 0) > -22;
+    // Gated away from BRAKING (onBrakes: the pedal): hard braking is its own sound
+    // and already has brakeLoad, and stacking crackle on top of it just makes
+    // noise. The old gate was a decel literal (ax > -22) that a full pedal (-21.7)
+    // sat inside, so it crackled through every braking zone. The window is a
+    // lift with the engine still spinning.
+    const lifting = rev > 0.35 && s > 0.12 && (ph.ax || 0) < -0.5 && !onBrakes;
     if (lifting && layers.overrun) {
       if (t >= overrunT) {
         // Irregular ON PURPOSE — evenly spaced pops read as a machine gun, not
@@ -1606,14 +1618,14 @@ var GameAudio = (function () {
     aimParam(windFilter.frequency, 450 + s * 1450 + rough * 260, t, 0.12, 1e-4);
 
     // BRAKES (see startEngine). Level follows how hard the car is stopping
-    // (brakeFrac: 60 m/s² is the full pedal) and how fast it is going — the
+    // (brakeFrac: PhysicsConsts.BRAKE is the full pedal) and how fast it is going — the
     // same deceleration is a roar at 300 km/h and a scuff at 50. The centre
     // climbs with speed and with pedal, so a stamp from top speed opens up
     // and a trail into the apex settles down; a wet disc is a touch quieter
     // and duller. Off the brakes it is exactly 0 through aimGain, so a
     // straight costs nothing per frame.
     if (brakeGain) {
-      // `> 0`, not a bare product: clamp01(-(0)/60) is -0, and a -0 target
+      // `> 0`, not a bare product: clamp01(-(0)/brakeFull) is -0, and a -0 target
       // is a real value to aimGain and a different one to Object.is.
       const brk = brakeFrac > 0 ? brakeFrac * Math.min(1, 0.25 + s) : 0;
       aimGain(brakeGain, (layers.brakes && brk > 0) ? brk * (0.020 + 0.050 * s) * (wet ? 0.8 : 1) * tune.brakes : 0, t, 0.06);
@@ -1632,10 +1644,10 @@ var GameAudio = (function () {
     // read a real pull at revs) rather than by rev alone, so a blip in the
     // pits cannot fire it, and it fires ONCE per lift: the counter resets the
     // moment the throttle closes, and re-arms only through another pull. It
-    // is the turbo's sound, so the TURBO trim and switch own it.
-    const ax = ph.ax || 0;
-    if (ax > 5 && rev > 0.45) pullT += dt;
-    else if (ax < 0.5) {
+    // is the turbo's sound, so the TURBO trim and switch own it. `pull` is on
+    // the standard scale (aStd), so the 5 m/s² arm means the same at any PACE.
+    if (pull > 5 && rev > 0.45) pullT += dt;
+    else if (pull < 0.5) {
       if (pullT > 0.5 && layers.whine && s > 0.1) {
         wasteFired++;
         const k = (0.4 + 0.6 * rev) * voice.whineLvl * tune.whine;

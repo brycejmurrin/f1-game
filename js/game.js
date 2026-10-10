@@ -4597,7 +4597,7 @@ function update(dt) {
   // for values only the last step's survive. carSfx keeps every step (edges).
   if (soundOn && player && _audioParamStep) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
-    _engArg.slip = player.slipFactor ?? 1; _engArg.ax = player.axEstSm ?? 0;
+    _engArg.slip = player.slipFactor ?? 1; _engArg.ax = player.axEstSm ?? 0; _engArg.axStd = aStd(_engArg.ax);   // braking stays absolute; the pull rides PACE
     _engArg.onKerb = !!player.onKerb; _engArg.wet = isWetRoad(); _engArg.tow = player.towing || 0;
     // ERS state for the deploy whine: continuous, charge-scaled, part-flavoured.
     _engArg.deploy = player.deploying ? 1 : 0; _engArg.energy = player.energy ?? 1;
@@ -4700,8 +4700,8 @@ function updateCar(c, dt, ranked) {
   // IDLE_RPM all race. rpmFor is pure — the owner's own gear at the posed speed.
   if (netPlay.owns(c)) { c.rpm = rpmFor(c.gear || 1, Math.max(0, c.speed || 0)); c._prevS = c.s; return; }
   // A REAL REPLAY puppet: posed from the real positions (js/race/real-replay.js). Its gear is
-  // the tacho's coarse 2/4/6/8 band, so the note follows the speed's natural gear instead.
-  if (realRace.owns(c)) { const v = Math.max(0, c.speed || 0); c.rpm = rpmFor(naturalGear(v), v); c._prevS = c.s; return; }
+  // the tacho's coarse 2/4/6/8 band, so the note follows the speed's natural gear instead — at the transport's rate (2×–8×).
+  if (realRace.owns(c)) { const v = Math.max(0, c.speed || 0) * (c.replayRate || 1); c.rpm = rpmFor(naturalGear(v), v); c._prevS = c.s; return; }
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
   const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
