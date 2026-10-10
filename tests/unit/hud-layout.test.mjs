@@ -512,6 +512,38 @@ test("fit clamps a size-only piece on its own, not as one block with every other
   assert.equal(ctx.HudLayout.get("tower", "other").s, 200, "stored size unchanged");
 });
 
+// Bug hunt 2 H17: clearControls rewrote --hl-x/--hl-y from the STORED offset plus only its
+// own nudge, so the edge-clamp fit() had just applied was thrown away the moment a touch
+// button forced a nudge, and the chip landed back off screen.
+test("clearControls keeps fit()'s edge-clamp correction when it nudges off a touch button", () => {
+  const W = 1000, H = 600;
+  const props = {}, attrs = { "data-hl": "" };
+  const rel = {
+    style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; }, getPropertyValue(k) { return props[k] || ""; } },
+    setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
+    // 100 wide at 800 + --hl-x vw: stored +30vw is 204 px past the right edge before the clamp.
+    getBoundingClientRect() { const x = 800 + parseFloat(props["--hl-x"] || 0) / 100 * W; return { left: x, right: x + 100, top: 500, bottom: 530, width: 100, height: 30 }; },
+  };
+  const btn = { hidden: false, classList: { contains: () => false },
+    getBoundingClientRect: () => ({ left: 900, right: 1000, top: 400, bottom: 540, width: 100, height: 140 }) };
+  const blank = { style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" }, setAttribute() {}, removeAttribute() {}, hasAttribute: () => false };
+  const written = { hudLayout: { v: 3, standard: { cockpit: {}, other: { rel: { x: 30, y: 0, s: 100 } } } } };
+  const ctx = {
+    console, window: { innerWidth: W, innerHeight: H },
+    document: { readyState: "complete", getElementById: () => null, addEventListener() {}, body: { classList: { contains: () => false } },
+      querySelectorAll: () => [btn],
+      querySelector: (sel) => (sel === "#hud-rel" ? rel : blank) },
+    GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+  ctx.HudLayout.fit();
+  const r = rel.getBoundingClientRect();
+  assert.ok(r.right <= W - 4 + 1e-6, "still on screen after the nudge: " + r.right);
+  assert.ok(r.right <= btn.getBoundingClientRect().left + 1e-6, "and clear of the button");
+  assert.equal(ctx.HudLayout.get("rel", "other").x, 30, "stored offset unchanged");
+});
+
 // ---- per-style layouts, camera groups, hidden reasons, live origin ----------
 // A harness with a body (classes + data-hud-hide), #hud (hidden = not racing),
 // :root attributes and an optional GameHud.
