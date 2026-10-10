@@ -1024,3 +1024,27 @@ test("observe reuses one answer: f is the latest facts, ev only this tick's even
   const none = facts.observe({ cars: G.cars, track: G.track }, 0.1);   // no player: no facts
   assert.equal(none.f, null); assert.equal(none.ev.length, 0);
 });
+
+// THE FIELD IS RANKED AT 10 Hz, not every physics step (hunt3 5-F3): the sort,
+// the pair walk and the battles ran 60 times a second for a radio that speaks
+// every few seconds. A quiet second of 60 steps sorts at most ceil(60/6) times.
+test("observe ranks the field at 10 Hz, not every physics step", () => {
+  const rctx = vm.createContext({});
+  vm.runInContext(readFileSync(join(ROOT, "js/race/race-facts.js"), "utf8"), rctx, { filename: "js/race/race-facts.js" });
+  const sorts = { n: 0 };
+  rctx.__sorts = sorts;
+  vm.runInContext("(() => { const s = Array.prototype.sort; Array.prototype.sort = function (cmp) { if (cmp && cmp.name === 'byRace') __sorts.n++; return s.call(this, cmp); }; })()", rctx);
+  const facts = vm.runInContext("RaceFacts", rctx).create();
+  const cars = [];
+  for (let i = 0; i < 22; i++) cars.push(car("C" + i, 4000 - i * 150, 70, i === 10 ? { isPlayer: true } : {}));
+  const G = { state: "race", raceT: 5, cars, player: cars[10], track: { total: LAP }, cautionLevel: () => 0 };
+  facts.observe(G, 1 / 60);   // first sight (and the start) rank at once
+  sorts.n = 0;
+  for (let i = 0; i < 60; i++) {
+    G.raceT += 1 / 60;
+    for (const c of cars) c.prog += c.speed / 60;
+    const { f } = facts.observe(G, 1 / 60);
+    assert.equal(f.t, G.raceT, "f is returned every step, its clock current");
+  }
+  assert.ok(sorts.n > 0 && sorts.n <= Math.ceil(60 / 6), `ranked ${sorts.n} times in 60 steps`);
+});

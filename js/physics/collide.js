@@ -274,6 +274,7 @@ const Collide = (() => {
     let track = null, player = null, netPlay = null;   // bound at resolveCollisions entry
     let motion = new WeakMap(), motionTrack = null, motionTime = -1;
     let sweepGeneration = 0;
+    const _swP = [];   // sweepContacts: motion.get(ranked[i]), read ONCE per car per step
     const geom = {}, swept = {}, impulse = {}, bodyA = {}, bodyB = {};
     function deltaS(d) { const L = track.total; return ((d + L / 2) % L + L) % L - L / 2; }
     // Cache only within this sweep; contact responses invalidate both cars.
@@ -345,14 +346,18 @@ const Collide = (() => {
       // The rotation test is on the WRAPPED angle: yawVis lives in (-π, π], so
       // a car turning through ±π (spun, facing back up the road) read as a
       // ~2π "rotation" and its swept contact was skipped every such step.
+      // ONE motion lookup per car, not one per pair (231 WeakMap gets a step
+      // before the arc reject); nothing below sets or deletes an entry.
+      _swP.length = ranked.length;
+      for (let i = 0; i < ranked.length; i++) _swP[i] = motion.get(ranked[i]);
       for (let i = 0; i < ranked.length; i++) {
-        const a = ranked[i], pa = motion.get(a);
+        const a = ranked[i], pa = _swP[i];
         if (!pa || ownsPose(a) || incidentSim.owns(a) || netPlay.owns(a)) continue;
         sweepMotion(a, pa, dt);
         if (!pa.sweepEligible) continue;
         const da = pa.sweepD, xa = pa.sweepX, reachA = LCAR_MAX + Math.abs(da) + 1;
         for (let k = i + 1; k < ranked.length; k++) {
-          const b = ranked[k], pb = motion.get(b);
+          const b = ranked[k], pb = _swP[k];
           if (!pb) continue;
           // FAR APART on the arc, decided before the ownership calls and
           // sweepMotion (each pair paid both, 231 pairs a step). A pair that

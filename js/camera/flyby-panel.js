@@ -199,8 +199,11 @@ function shotErrors(list) {
         poseErrors(p).forEach((e) => bad.push(at + " " + k + "[" + j + "] " + e));
       });
     }
+    // In the slider's range, not merely finite: the flyby skips the race
+    // camera's FOV cap, so a saved fov of 0 reached the projection as fovY 0.
     if (!Array.isArray(s.fov) || s.fov.length !== 2 ||
         !s.fov.every((n) => typeof n === "number" && isFinite(n))) bad.push(at + " fov must be [from, to] numbers");
+    else if (!s.fov.every((n) => n >= FOV.min && n <= FOV.max)) bad.push(at + " fov must be from " + FOV.min + " to " + FOV.max + ", not " + JSON.stringify(s.fov));
   });
   return bad;
 }

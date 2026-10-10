@@ -185,6 +185,16 @@ test("a present pose field must be a finite number inside its slider range", () 
   assert.equal(poison((p) => { delete p.x; }).length, 0, "an absent field is a default, not an error");
 });
 
+// hunt3 6-F5: a saved fov of [0, 0] passed (finite) and the flyby, which skips
+// the race camera's FOV cap, projected with fovY 0.
+test("a shot's fov must sit inside the FOV slider's range", () => {
+  const fov = (v) => { const l = goodList(); l[0].fov = v; return [...FP.shotErrors(l)]; };
+  assert.equal(fov([FP.FOV.min, FP.FOV.max]).length, 0, "both ends of the slider are playable");
+  assert.match(fov([0, 0])[0] || "", /fov must be from 15 to 90/, "fov 0 is named");
+  assert.equal(fov([40, 1e6]).length, 1, "far above the slider");
+  assert.equal(fov([-40, 40]).length, 1, "negative");
+});
+
 test("n and rank must name a corner, a slot and a landmark", () => {
   const one = (pose) => { const l = goodList(); l[0].look[0] = pose; return [...FP.shotErrors(l)].length; };
   assert.equal(one({ at: "corner", n: "slowest" }), 0);

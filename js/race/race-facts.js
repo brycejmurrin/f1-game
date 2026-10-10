@@ -28,6 +28,7 @@ var RaceFacts = (function () {
   const NET_GRACE_S = 0.5;   // VS FRIEND: a remote car is drawn ~100 ms + latency behind
   const PAIR_SPAN = 2;       // each car is compared with the next two in order
   const BATTLE_GAP = 0.8;    // seconds — two cars this close are a fight
+  const RANK_S = 0.1;        // rank / pairs / battles at 10 Hz (checkpoints stay per step)
 
   const inPits = (c) => !!(c && c.pitState && c.pitState !== "none");
 
@@ -43,6 +44,7 @@ var RaceFacts = (function () {
     let pos = 0, pendPos = 0, pendT = 0;
     let grid = null, started = false, caution = 0, playerHits = 0, playerSev = 0;
     let leadLap = 0;               // the highest lap any leader has started (the leaderLap edge)
+    let rankAcc = 0, primed = false; // seconds since the last full pass; f filled once
 
     function reset() {
       t = 0; lapLen = 0; cars = null; nextId = 1; pairVisit = 0;
@@ -50,7 +52,7 @@ var RaceFacts = (function () {
       order = []; fastest = { time: Infinity, car: null };
       pitEndT = -1e9;   // last race's pit exit must not mute this race's pace calls
       pos = 0; pendPos = 0; pendT = 0; grid = null; started = false; caution = 0; playerHits = 0; playerSev = 0;
-      leadLap = 0;
+      leadLap = 0; rankAcc = 0; primed = false;
     }
 
     function bag(c) {
@@ -92,7 +94,7 @@ var RaceFacts = (function () {
       const s = st.get(c);
       return c.finished && s && s.finProg != null ? s.finProg : (c.prog || 0);
     };
-    // PER PHYSICS STEP (race-radio ticks this every step): the ranking fills
+    // EVERY RANK_S (race-radio ticks observe every step): the ranking fills
     // the one `order` array in place with a hoisted comparator, pair / battle
     // keys are integers. Pair records mark their last visit rather than
     // rebuilding a membership Set each step; battle / shoved Sets are reused.
@@ -204,6 +206,23 @@ var RaceFacts = (function () {
       if (allIn)
         for (const c of cars) { const s = bag(c); if (s.finDue != null) { s.finDue = null; finishers.push(c); } }
 
+      // THE REST AT 10 Hz. Ranking, pairs and battles every physics step bought
+      // nothing — a pass must HOLD for a second, and gaps move only at a
+      // checkpoint — so they run every RANK_S on the accumulated dt (the hold
+      // timers integrate it, so a hold is as long as before). Any step with an
+      // edge to report (an event above, a re-grid, the start, a caution, a hit,
+      // a pit-lane change) runs it at once, so those events are spoken with
+      // fresh facts. The cost: a held pass / place lands up to RANK_S late, and
+      // a retire / mistake / pitIn `pos` reads a ranking up to RANK_S old.
+      rankAcc += dt;
+      const lvl = G.cautionLevel ? G.cautionLevel() | 0 : 0;
+      if (!(rankAcc >= RANK_S - 1e-9 || !primed || ev.length || finishers.length || regrid || lvl !== caution ||
+          (p.hits | 0) > playerHits || inPits(p) !== _f.pitting || (!started && G.state === "race" && t > 0))) {
+        _f.t = t; _f.energy = p.energy == null ? null : p.energy;
+        _out.f = _f;
+        return _out;
+      }
+      dt = rankAcc; rankAcc = 0; primed = true;
       order = rank(cars);
       // The finish position is the flagged car's place in the ranking — after
       // ranking, so a car that just took the flag is placed by it.
@@ -259,9 +278,8 @@ var RaceFacts = (function () {
       } else { pendPos = 0; pendT = 0; }
 
       // ── flags and contact ───────────────────────────────────────────────
-      // cautionLevel(), not cautionInfo(): this runs every physics step, and
-      // info() builds an 11-field object (with a toFixed string) to read one int.
-      const lvl = G.cautionLevel ? G.cautionLevel() | 0 : 0;
+      // cautionLevel() (read above), not cautionInfo(): it is read every physics
+      // step, and info() builds an 11-field object (with a toFixed string) to read one int.
       // A lap under the safety car or VSC is not pace either: every gap closes.
       if (lvl !== caution) { ev.push({ type: "caution", level: lvl, prev: caution }); caution = lvl; hist.clear(); }
       const hits = p.hits | 0;
