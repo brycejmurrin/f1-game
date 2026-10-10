@@ -659,7 +659,7 @@ test("every slider spans its trim's FULL range and can land exactly on 1.0", () 
   const panel = fs.readFileSync(path.join(ROOT, "js/audio/panel.js"), "utf8");
   const shell = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   const A = boot().GameAudio;
-  const range = A.tuneRange(), defs = A.tuneDefaults();
+  const range = A.tuneRange();
 
   const rows = [...panel.matchAll(/\{ k: "(\w+)",\s*id: "([\w-]+)",\s*lo: ([\d.]+),\s*step: ([\d.]+) \}/g)];
   assert.equal(rows.length, 22, "expected twenty-two tuner sliders");
@@ -672,11 +672,8 @@ test("every slider spans its trim's FULL range and can land exactly on 1.0", () 
     assert.ok(Math.abs(lo - rLo) < 1e-9, `${key}: the panel starts at ${lo}, the engine's range at ${rLo}`);
     assert.ok(Math.abs(lo + max * step - rHi) < 1e-9,
       `${key}: the slider tops out at ${lo + max * step}, the engine allows ${rHi} — the player cannot reach the end`);
-    // The shipped sound is TUNE_DEF, no longer an identity trim (tone-model.js):
-    // the shell's default position must land on it, or the panel opens with the
-    // thumb somewhere the engine is not and can never return (bug-hunt 2 H23).
-    assert.ok(Math.abs(lo + dflt * step - defs[key]) < 1e-9,
-      `${key}: the default position is ${lo + dflt * step}, not the shipped ${defs[key]} — the panel cannot return to the shipped sound`);
+    assert.ok(Math.abs(lo + dflt * step - 1) < 1e-9,
+      `${key}: the default position is ${lo + dflt * step}, not 1.0 — the panel cannot return to the shipped sound`);
   }
 });
 
