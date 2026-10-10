@@ -591,10 +591,11 @@ const DesignerCanvas = (function () {
       }
       const touch = ptype === "touch";
       const groupOn = span >= 0 && sel >= 0 && span !== sel;
+      const group = groupOn ? new Set(S.spanIndices(sel, span, N)) : null;   // one walk, not one per handle
       for (let i = 0; i < N; i++) {
         const sx = toSX(pts[i][0]), sy = toSY(pts[i][1]);
         if (sx < -20 || sy < -20 || sx > W + 20 || sy > H + 20) continue;
-        const inGroup = groupOn && S.inSpan(i, sel, span, N);
+        const inGroup = groupOn && group.has(i);
         const isSel = i === sel || inGroup || (i === dragI && mode === "drag") || (press && press.i === i);
         const r = (isSel ? 7 : i === hover ? 6 : sceneryOn ? Math.min(2, Math.max(1, scale * 6)) : 4.5) * (touch ? 1.5 : 1);
         // Soft hit halo under a finger so the ≥44 px target reads on the map.
