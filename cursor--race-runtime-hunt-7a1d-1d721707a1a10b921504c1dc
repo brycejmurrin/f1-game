@@ -1,1 +1,0 @@
-1791629131	Claude	race-runtime hunt fixes: setPaused/quitToMenu pit garage, intro hidden-time clock, spotter idle (js/game.js, js/ui/loading-screen.js, js/audio/announcer.js, js/race/spotter.js)  [cursor/race-runtime-hunt-7a1d; session 1d721707a1a10b921504c1dc]
