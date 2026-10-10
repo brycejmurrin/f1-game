@@ -56,6 +56,7 @@
     "tests/unit/audio-recovery.test.mjs",
     "tests/unit/audio-sample-upgrade.test.mjs",
     "tests/unit/audio-tune.test.mjs",
+    "tests/unit/audit-circuit.test.mjs",
     "tests/unit/backend-surface-parity.test.mjs",
     "tests/unit/badges.test.mjs",
     "tests/unit/bahrain-grandstand-rake.test.mjs",
@@ -1443,7 +1444,6 @@
     },
     "test:sweeps": {
       "files": [
-        "tests/unit/audit-circuit.test.mjs",
         "tests/unit/baked-model-road-guard.test.mjs",
         "tests/unit/build-steps.test.mjs",
         "tests/unit/build-worker.test.mjs",

@@ -101,6 +101,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/audio-recovery.test.mjs",
   "tests/unit/audio-sample-upgrade.test.mjs",
   "tests/unit/audio-tune.test.mjs",
+  "tests/unit/audit-circuit.test.mjs",
   "tests/unit/backend-surface-parity.test.mjs",
   "tests/unit/badges.test.mjs",
   "tests/unit/bahrain-grandstand-rake.test.mjs",

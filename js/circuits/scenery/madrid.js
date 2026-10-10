@@ -48,7 +48,7 @@
         if (bearing !== undefined) {
           // TRUE COMPASS BEARING from the lap centroid, keeping the anchor's own
           // distance from it and its height/basis. World frame: +X west, +Z north
-          // (fuji.js:208), so bearing b is (x, z) = (-sin b, cos b).
+          // (the Fuji compass pattern in scenery/fuji.js), so bearing b is (x, z) = (-sin b, cos b).
           const { cx, cz } = lapBounds(), d = Math.hypot(a.c[0] - cx, a.c[2] - cz), b = bearing * Math.PI / 180;
           a = { c: [cx - Math.sin(b) * d, a.c[1], cz + Math.cos(b) * d], r: a.r, u: a.u, t: a.t };
         }
