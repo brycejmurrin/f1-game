@@ -29,7 +29,8 @@ import { createRequire } from "node:module";
 import { pick, stripSpecOwner } from "./pick-tests.mjs";
 import { MEASURED, capacity, declaredTests, specSecPerTest, timings } from "./select-budget.mjs";
 import { loadDb, TIMINGS_FILE } from "./spec-timings.mjs";
-import { isTwinned, twinOf } from "./twinned-specs.mjs";
+import { ADAPTED, ADAPTED_RUNNER, isTwinned, twinOf } from "./twinned-specs.mjs";
+import { changedPaths } from "../lib/changed-files.mjs";
 import { changeKind } from "./change-kind.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
 import * as espree from "espree";
@@ -849,6 +850,19 @@ const foundationIds = () => fs.readdirSync(path.join(ROOT, "tests/specs")).filte
 export function circuitsOf(file, seen = new Set()) {
   if (seen.has(file)) return new Set();
   seen.add(file);
+  // The ADAPTED runner names no circuit: it spawns one child per ADAPTED spec,
+  // so it builds the UNION of theirs (cota-foundation.spec.js -> cota, monza).
+  // Read as an empty set, a `cota` diff made node-plan skip test:vm-page and
+  // the circuit's own foundation spec ran nowhere on the PR (ledger L9).
+  if (file === ADAPTED_RUNNER) {
+    const ids = new Set();
+    for (const spec of Object.keys(ADAPTED)) {
+      const sub = circuitsOf(spec);
+      if (sub === null) return null;
+      for (const id of sub) ids.add(id);
+    }
+    return ids;
+  }
   let text;
   try { text = fs.readFileSync(path.join(ROOT, file), "utf8"); } catch { return null; }   // unreadable: assume everything
   if (WHOLE_ROSTER.some((re) => re.test(text))) return null;
@@ -1087,8 +1101,7 @@ export function dropBootFallback(groups) {
 export const DEFAULT_BUDGET_MIN = 10;
 
 export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
-  const changed = execFileSync("git", ["diff", "--name-only", changedRef], { cwd: ROOT, encoding: "utf8" })
-    .split("\n").filter(Boolean);
+  const changed = changedPaths([changedRef]);   // rename SOURCES too (ledger M36)
   const g = pick(changed);   // Map: group -> reasons (pick-tests' native shape)
   // An edited spec already runs first, alone (changedSpecs, rank 0); its
   // group-mates are not this diff's business (pick-tests SPEC_OWNER_REASON).

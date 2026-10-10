@@ -172,3 +172,15 @@ test("an ADAPTED spec edit schedules the page slice; a plain spec edit does not 
   const plain = new Set(pick(["tests/specs/hud-mirror.spec.js"]).slices.keys());
   assert.deepEqual([...plain], ["guards"]);
 });
+
+test("L9: the SOURCE an ADAPTED spec asserts schedules the page slice (2026-10-09)", () => {
+  // select-specs drops the browser copy as VM-covered; vm-page is the only
+  // place it runs. Before this, a cota / pit-lane / space.js diff ran it nowhere.
+  const slices = (f) => new Set(pick([f]).slices.keys());
+  for (const f of ["js/circuits/cota.js", "js/circuits/imola.js", "js/circuits/albert_park.js",
+    "js/circuits/scenery/cota.js", "js/race/pit-lane.js", "js/race/race-control.js", "js/track/core/space.js"])
+    assert.ok(slices(f).has("page"), `${f} must schedule page: ${[...slices(f)].join(",")}`);
+  // Circuits and scenery no ADAPTED spec reads keep the cheap plan.
+  assert.ok(!slices("js/circuits/dijon.js").has("page"));
+  assert.ok(!slices("js/circuits/scenery/monaco.js").has("page"));
+});

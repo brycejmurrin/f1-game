@@ -1207,3 +1207,11 @@ test("post-edit.sh no longer tells authors to declare > 180 s to escape the gate
   assert.match(step, /overBudgetRun/, "the CI step names the specs the over-budget pool runs");
   assert.match(step, /::warning::DROPPED/, "a dropped spec is an annotation on the PR");
 });
+
+test("L9: circuitsOf(the ADAPTED runner) is the union of its specs' circuits (2026-10-09)", async () => {
+  const { ADAPTED, ADAPTED_RUNNER } = await import("../../tools/ci/twinned-specs.mjs");
+  const want = new Set();
+  for (const spec of Object.keys(ADAPTED)) for (const id of circuitsOf(spec) || []) want.add(id);
+  assert.ok(want.has("cota"));
+  assert.deepEqual([...circuitsOf(ADAPTED_RUNNER)].sort(), [...want].sort());
+});

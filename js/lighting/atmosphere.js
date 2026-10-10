@@ -58,7 +58,13 @@ let _wx = null;   // { from, to, t, dur, last } while a fade is in flight
 let _hold = false;   // true while a blended re-apply resolves LT (holds the lamp set)
 const _pick = (o, keys) => { const r = {}; for (const k of keys) { const v = o[k]; r[k] = Array.isArray(v) ? v.slice() : v; } return r; };
 const _snapLt = () => { const r = {}; for (const d of TUNE_DEFS) if (typeof LT[d.id] === "number") r[d.id] = LT[d.id]; return r; };
-const _snapWx = () => ({ frame: _pick(G.frame, WX_FRAME), sky: _pick(G.frameSky, WX_SKY), lt: _snapLt() });
+// A strike spikes frame.ambient*/exposure IN PLACE (game.js lightning block) on top of
+// G._ltBase, so mid-strike the fade's SOURCE look is that base, not the spiked frame.
+function _snapWx() {
+  const f = _pick(G.frame, WX_FRAME), b = G._ltFlash > 0 && G._ltBase;
+  if (b) { f.ambientSky = b.ambientSky.slice(); f.ambientGround = b.ambientGround.slice(); f.exposure = b.exposure; }
+  return { frame: f, sky: _pick(G.frameSky, WX_SKY), lt: _snapLt() };
+}
 const _mixv = (a, b, s) => {
   if (b == null) return a; if (a == null) return b;
   if (Array.isArray(b)) return b.map((v, i) => a[i] + (v - a[i]) * s);
@@ -557,7 +563,7 @@ function floodEmit(sunY) {
   const night = tod === "night" || (tod === "default" && !!(G.track && G.track.def && G.track.def.night));
   if (sunY == null) sunY = night ? -1 : 1;
   return Math.min(1, LT.floodEmitMul * (night ? 0.78
-    : (tod === "dusk" || tod === "dawn") ? Math.min(0.70, 0.05 + 0.58 * Math.max(0.30, clamp(1 - sunY * 6, 0, 1)))
+    : (tod === "dusk" || tod === "dawn") ? Math.min(0.70, 0.05 + 0.58 * Math.max(LT.twilightFloor ?? 0.30, clamp(1 - sunY * (LT.twilightRamp ?? 6), 0, 1)))
     : 0));
 }
 

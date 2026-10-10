@@ -330,3 +330,16 @@ test("the car studio passes every livery field the game does", () => {
   assert.match(fn, /for \(const f of Liveries\.FIELDS\) o\[f\] = /, "resolveLiv copies Liveries.FIELDS");
   assert.doesNotMatch(fn, /stripe: l\.stripe \|\| null/, "no hand-copied field list");
 });
+
+// M26: MY TEAM's livery goes through Teams.sanitizeCustom; its enum pills index plain tables (finOf, NUM_FONTS,
+// FINISH_SURFACE), so "constructor" must never survive and, with those tables loaded, only real ids do.
+test("sanitizeCustom keeps only real finShape / numFont / finish ids", () => {
+  const T = M.Teams;
+  const run = (livery) => JSON.parse(JSON.stringify(T.sanitizeCustom({ livery }).livery));
+  const bad = run({ finShape: "constructor", numFont: "__proto__", finish: "toString" });
+  for (const k of ["finShape", "numFont", "finish"]) assert.equal(Object.hasOwn(bad, k), false, k + " dropped");
+  const unknown = run({ finShape: "no-such-fin", numFont: "no-such-font", finish: "no-such-finish" });
+  for (const k of ["finShape", "numFont", "finish"]) assert.equal(Object.hasOwn(unknown, k), false, k + " not a real id");
+  const good = run({ finShape: M.Car3D.FIN_SHAPE_IDS[0], numFont: M.LiveryTex.NUM_FONT_IDS[0], finish: "gloss" });
+  assert.deepEqual(Object.keys(good).sort(), ["finShape", "finish", "numFont"], "real ids pass");
+});
