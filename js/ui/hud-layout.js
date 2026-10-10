@@ -569,12 +569,17 @@ const HudLayout = (function () {
   const READOUTS = ["damage", "rel", "strat", "inputs"];   // css/hud.css hides all four on the same classes
   /** body[data-*] presence (mode-switch sets data-helmet-cam / data-wheel-lcd). */
   const bodyAttr = (n) => !!(doc && doc.body && doc.body.hasAttribute && doc.body.hasAttribute(n));
+  // Data Hub WATCH / HIGHLIGHTS (css/hud.css). Hard: a placed chip does not
+  // bring the driving HUD back. "tower" here is the POS/LAP band (.hud-top),
+  // not #bc-tower. Announce stays (its own soft rule below).
+  const REPLAY_HUD = ["tower", "map", "gaps", "sectors", "limits", "flag", "mirror"]
+    .concat(BOTTOM, READOUTS);
+  const replayOn = (h) => h("bc-on") || h("watch-controls-on");
   const HIDE_RULES = Object.freeze([
+    [REPLAY_HUD, replayOn, "a real-race watch keeps the driving HUD off"],
     [["map"], (h) => h("hud-hide-map"), "MAP is off for this camera or style (DISPLAY › HUD › MAP)"],
     [["gaps"], (h) => h("hud-hide-gaps"), "GAPS is off for this style (DISPLAY › HUD › GAPS)"],
     [BOTTOM, (h) => h("hud-prof-broadcast") && h("hud-bcam"), "BROADCAST style on a TV camera keeps the frame clean"],
-    [["sectors", "tyre", "limits"], (h) => h("bc-on"), "the broadcast replay shows its own timing"],
-    [READOUTS, (h) => h("bc-on"), "the broadcast replay keeps the frame clean"],
     [CHIPS.concat(["bb", "sectors"], READOUTS), (h) => h("hud-prof-minimal"), "MINIMAL style"],
     [CHIPS.concat(["bb"]), (h) => h("hud-met-timing"), "LAYOUT is TIMING"],
     [CHIPS.concat(["bb", "sectors", "tyre"]), (h) => h("hud-met-compact"), "LAYOUT is COMPACT"],

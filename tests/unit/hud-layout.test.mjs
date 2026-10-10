@@ -703,6 +703,31 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     assert.equal(h({ classes: ["bc-on", "desktop"], live: false }).hiddenReason(id).soft, false, id + " in a broadcast replay");
     assert.equal(h({ classes: ["desktop"], live: false }).hiddenReason(id), null, id + " shown on desktop");
   }
+  // Data Hub WATCH / HIGHLIGHTS: the driving HUD stays off (tower + PiP +
+  // replay bar are the picture). Announce still appears with a race message.
+  const replayOff = ["tower", "map", "gaps", "sectors", "limits", "flag", "mirror", "gearbox", "speed", "energy", "tyre", "ot", "aero", "bb", "damage", "rel", "strat", "inputs"];
+  for (const id of replayOff) {
+    for (const cls of ["bc-on", "watch-controls-on"]) {
+      const why = h({ classes: [cls, "desktop"], live: false }).hiddenReason(id);
+      assert.equal(why && why.soft, false, id + " stays off under " + cls);
+      assert.match(why.reason, /driving HUD/, id + " under " + cls);
+    }
+  }
+  assert.equal(h({ classes: ["bc-on", "desktop"], live: false }).hiddenReason("announce").soft, true, "commentary still shows in a watch");
+  const hides = (src, cls, id) => new RegExp(
+    "body\\." + cls + "[\\s\\S]{0,160}" + id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[\\s\\S]{0,80}\\{[^}]*display:\\s*none !important"
+  ).test(src);
+  for (const id of ["#hud-dock", "#hud-speed", "#hud-flag", "#hud-mirror", ".touchbtn", "#minimap", ".hud-top"]) {
+    assert.equal(hides(css, "bc-on", id), true, "bc-on hides " + id);
+  }
+  for (const id of ["#bc-tower", "#bc-pip", "#announce", "#pausebtn", "#btn-cam"]) {
+    assert.equal(hides(css, "bc-on", id), false, "bc-on keeps " + id);
+  }
+  const wt = fs.readFileSync(path.join(ROOT, "css/watch-transport.css"), "utf8");
+  assert.doesNotMatch(wt, /#hud-dock \{ visibility: hidden/, "the dock is not merely visibility-hidden");
+  for (const id of ["#hud-dock", "#hud-speed", "#hud-flag", ".touchbtn"]) {
+    assert.equal(hides(wt, "watch-controls-on", id), true, "replay bar hides " + id);
+  }
   // Live: a drawn element is never marked, whatever the classes say.
   const L = load3({ classes: ["hud-prof-minimal"], live: true });
   const ot = L.els["#hud-ot"] || (L.els["#hud-ot"] = fakeEl());

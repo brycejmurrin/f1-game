@@ -42,7 +42,15 @@
 .watch-transport [data-wt="caption"] { display: flex; justify-content: space-between; gap: var(--gap); color: var(--dim); font-size: var(--fs-micro); }
 .watch-transport [data-wt="event"] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .watch-transport [data-wt="director"] { flex-shrink: 0; }
-body.watch-controls-on #hud-dock { visibility: hidden; }
+/* Same driving-HUD hide as body.bc-on in css/hud.css, for a replay whose
+   tower did not build. display:none, so a placed chip cannot show through.
+   Split so no selector prelude reads as a broken comment. */
+body.watch-controls-on :is(.hud-top, .hud-gaps, .hud-bottom, #minimap, #hud-dock) { display: none !important; }
+body.watch-controls-on :is(#hud-gearbox, #hud-speed, #hud-energy, #hud-tyre, #hud-pit, #hud-work) { display: none !important; }
+body.watch-controls-on :is(#hud-ot, #hud-aero, #hud-bb, #hud-sectors, #hud-limits) { display: none !important; }
+body.watch-controls-on :is(#hud-damage, #hud-flag, #hud-mirror, #hud-mirror-chip) { display: none !important; }
+body.watch-controls-on :is(#hud-rel, #hud-strat, #hud-inputs, .touchbtn, #campicker) { display: none !important; }
+body.watch-controls-on[data-helmet-cam] #hud::before { content: none; }
 body.watch-controls-on #bc-tower {
   max-height: calc(100svh - 180px - var(--sat) - var(--sab));
   overflow-y: auto; overflow-x: hidden;
