@@ -56,7 +56,7 @@ function load() {
           drivers: [{ name: "A", code: "AAA", num: 1 }, { name: "B", code: "BBB", num: 2 }] },
       ],
     },
-    Parts: { getFactorySetup: () => ({}) },
+    Parts: { getFactorySetup: () => ({}), getCost: () => 1000, CATALOG: [] },
     Tracks: { LIST: [], SEASON: [] },
     // Flat, so the rival pick is deterministic and the market stays parked.
     DriverRatings: {
@@ -151,4 +151,41 @@ test("an ordinary expiring hire can still accept the renewal offer", () => {
   assert.equal(c.roster[0].code, pending.code);
   assert.equal(c.roster[0].salary, pending.ask);
   assert.equal(Career.hirePending(), null);
+});
+
+test("the career record outlives the HISTORY_MAX archive (12 titles stay 12 titles)", () => {
+  const Career = load();
+  Career.start({ flavour: "driver", teamId: "haas", seed: 5, seat: 0, slot: 0 });
+  Career.engage(true);
+  const c = Career.data();
+  const me = c.team + ":" + c.seat;
+  const YEARS = Career.HISTORY_MAX + 2;
+  for (let y = 0; y < YEARS; y++) {
+    c.season.round = 24;
+    c.season.pts[me] = 9999;                       // champion every year
+    c.results = [{ r: 0, p: 1, pts: 25 }, { r: 1, p: 2, pts: 18 }];
+    c.deal.left = 3;                               // no winter offers to answer
+    Career.rollover();
+  }
+  assert.equal(c.history.length, Career.HISTORY_MAX, "the screen's archive is still trimmed");
+  const slot = Career.slots("driver")[0];
+  assert.equal(slot.seasons, YEARS + 1, "the slot card counts every year, plus the one in progress");
+  assert.equal(slot.titles, YEARS);
+  assert.equal(slot.wins, YEARS, "one win a season, none of them lost to the trim");
+  assert.equal(Career.state().seasons, YEARS, "state() reports closed seasons");
+  assert.equal(Career.tallyOf(c).podiums, YEARS * 2);
+});
+
+test("a career saved before the tally existed counts from the history it still has", () => {
+  const Career = load();
+  Career.start({ flavour: "driver", teamId: "haas", seed: 5, seat: 0, slot: 0 });
+  Career.engage(true);
+  const c = Career.data();
+  delete c.tally;                                  // the pre-tally shape (identity migrate in this harness)
+  c.history = [{ year: 2026, pos: 1, wins: 3, podiums: 5 }, { year: 2027, pos: 4, wins: 0, podiums: 1 }];
+  assert.equal(Career.slots("driver")[0].seasons, 3);
+  assert.equal(Career.slots("driver")[0].titles, 1);
+  c.season.round = 24;
+  Career.rollover();
+  assert.equal(c.tally.seasons, 3, "rollover derives from the history it has, then adds the closing year");
 });

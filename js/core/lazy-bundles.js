@@ -16,23 +16,63 @@ const RACE_FILES = ApexRoster.LAZY_RACE;
 const RACE_SESSION_FILES = ApexRoster.LAZY_RACE_SESSION || [];
 const RACE_SESSION_EDGES = ApexRoster.LAZY_RACE_SESSION_EDGES || [];
 let raceSessionLoad = null;
+// Every module of the group has its own stub (session-stub.js, all `_stub:true`),
+// so "this file landed" is "its global is no longer the stub". Probing ONE global
+// (PitLane) called a group whose later file failed complete: the retry saw the
+// real PitLane, loaded nothing, and the race ran on stub engineer / radio.
+const RACE_SESSION_READY = {
+  "js/race/reliability.js": () => typeof Reliability !== "undefined" && !!Reliability && !Reliability._stub,
+  "js/race/damage.js": () => typeof Damage !== "undefined" && !!Damage && !Damage._stub,
+  "js/race/duel.js": () => typeof Duel !== "undefined" && !!Duel && !Duel._stub,
+  "js/race/session-records.js": () => typeof SessionRecords !== "undefined" && !!SessionRecords && !SessionRecords._stub,
+  "js/race/pit-lane.js": () => typeof PitLane !== "undefined" && !!PitLane && !PitLane._stub,
+  "js/race/engineer.js": () => typeof RaceEngineer !== "undefined" && !!RaceEngineer && !RaceEngineer._stub,
+  "js/race/radio-lines.js": () => typeof RadioLines !== "undefined" && !!RadioLines && !RadioLines._stub,
+  "js/race/race-facts.js": () => typeof RaceFacts !== "undefined" && !!RaceFacts && !RaceFacts._stub,
+  "js/race/spotter.js": () => typeof Spotter !== "undefined" && !!Spotter && !Spotter._stub,
+  "js/race/race-radio.js": () => typeof RaceRadio !== "undefined" && !!RaceRadio && !RaceRadio._stub,
+  "js/race/start-lights.js": () => typeof StartLights !== "undefined" && !!StartLights && !StartLights._stub,
+  "js/race/marshal-panels.js": () => typeof MarshalPanels !== "undefined" && !!MarshalPanels && !MarshalPanels._stub,
+  "js/race/flying-start.js": () => typeof FlyingStart !== "undefined" && !!FlyingStart && !FlyingStart._stub,
+};
+// Files that evaluated for real, kept across a failed attempt (the dataScriptsLoaded
+// idiom): a retry loads only the rest. The hook runs once, on the transition to complete.
+const raceSessionLoaded = new Set();
+let raceSessionHooked = false;
 function raceSessionReady() {
-  return typeof PitLane !== "undefined" && PitLane && !PitLane._stub;
+  return RACE_SESSION_FILES.every((f) => raceSessionLoaded.has(f));
 }
 function ensureRaceSession() {
   if (raceSessionLoad) return raceSessionLoad;
   if (!RACE_SESSION_FILES.length) return Promise.resolve(false);
-  if (raceSessionReady()) {
+  // Real before THIS loader ran anything (an eager shell / a spec that evaluated
+  // the group itself): nothing to fetch and nobody to notify.
+  if (!raceSessionLoaded.size && RACE_SESSION_READY["js/race/pit-lane.js"]()) {
     raceSessionLoad = Promise.resolve(true);
     return raceSessionLoad;
   }
-  raceSessionLoad = loadBackendScripts(RACE_SESSION_FILES, RACE_SESSION_EDGES, { strict: true }).then((ok) => {
+  raceSessionLoad = loadBackendScripts(RACE_SESSION_FILES, RACE_SESSION_EDGES, {
+    strict: true, loaded: raceSessionLoaded,
+    ready: (src) => !RACE_SESSION_READY[src] || RACE_SESSION_READY[src](),
+  }).then((ok) => {
     if (!ok || !raceSessionReady()) {
       Log.warn("race", "the race-session bundle did not load");
       raceSessionLoad = null;
       return false;
     }
-    if (typeof deps.onRaceSessionReady === "function") deps.onRaceSessionReady();
+    if (!raceSessionHooked) {
+      // The hook is app code (it rebuilds the session modules' instances): a throw
+      // here would latch a REJECTED memo and RACE! would fail until reload. Count
+      // it as fired only once it returns, so the next call retries it.
+      try {
+        if (typeof deps.onRaceSessionReady === "function") deps.onRaceSessionReady();
+        raceSessionHooked = true;
+      } catch (e) {
+        Log.error("race", "the race-session ready hook threw: " + (e && e.message));
+        raceSessionLoad = null;
+        return false;
+      }
+    }
     return true;
   });
   return raceSessionLoad;
@@ -111,19 +151,40 @@ function sceneryModels(def) {
   const fn = def && (def.scenery || (window.TrackScenery && window.TrackScenery[def.id]));
   return Assets.modelsReady(0, fn ? String(fn) : "");
 }
-function ensureScenery(idx) {
+// One fetch of the closure, shared by every caller in flight. The loader RESOLVES
+// false on an error (offline, a CDN 404, a refused stale-build request), so the
+// answer is read back from the registry, never from the loader's result.
+function fetchScenery(id) {
+  let p = _sceneryLoads.get(id);
+  if (!p) {
+    p = loadBackendScripts([SCENERY_DIR + "/" + id + ".js"], [])
+      .catch((e) => { Log.warn("track", "scenery fetch threw: " + id + ": " + (e && e.message)); })
+      .then(() => { _sceneryLoads.delete(id); });
+    _sceneryLoads.set(id, p);
+  }
+  return p;
+}
+// Resolves true once the closure is resident, false when it is not: the caller
+// can tell, because Tracks.build() of a circuit whose closure never landed is a
+// bare world that the rebuild guard (id, night, grid) then keeps for the
+// session. It does not throw — a bare world is playable, a rejection at the
+// title is the red overlay. ONE fetch per ask, no in-call retry: a failed
+// script is a completed request (the track has fallback scenery, and
+// session-entry-vm holds the request to prove a start survives it); the next
+// ask fetches again, so nothing is negatively cached.
+async function ensureScenery(idx) {
   // Path payload before scenery: Tracks.build / buildCenterline need def.path.
-  return ensureCircuit(idx).then(() => {
-    const def = Tracks.LIST[idx];
-    const models = () => sceneryModels(def);
-    if (!def || def.scenery || sceneryResident(def.id)) return models().then(() => {});   // def.scenery: an inline closure (a custom circuit) — nothing to fetch
-    let p = _sceneryLoads.get(def.id);
-    if (!p) {
-      p = loadBackendScripts([SCENERY_DIR + "/" + def.id + ".js"], []).then(() => { _sceneryLoads.delete(def.id); });
-      _sceneryLoads.set(def.id, p);
+  await ensureCircuit(idx);
+  const def = Tracks.LIST[idx];
+  if (def && !def.scenery && !sceneryResident(def.id)) {   // def.scenery: an inline closure (a custom circuit) — nothing to fetch
+    await fetchScenery(def.id);
+    if (!sceneryResident(def.id)) {
+      Log.warn("track", "scenery closure did not load: " + def.id + " — the world builds bare");
+      return false;
     }
-    return p.then(models).then(() => {});
-  });
+  }
+  await sceneryModels(def);
+  return true;
 }
 // LAZY_DATA (tools/manifest.cjs). The Jolpica/OpenF1 hub — 154 KB behind ONE
 // menu button, which a session that never opens DATA runs no byte of. Unlike
@@ -174,7 +235,14 @@ function ensureDataHub() {
       dataHubLoad = null;
       return false;
     }
-    DataHub.init(els.datahub);
+    try { DataHub.init(els.datahub); }
+    catch (e) {
+      // Post-load app code must not latch a rejected memo: DATA would stay dead
+      // until reload. Null it so the next tap retries.
+      Log.error("data", "the data hub failed to start: " + (e && e.message));
+      dataHubLoad = null;
+      return false;
+    }
     return true;
   });
   return dataHubLoad;
@@ -189,10 +257,36 @@ function ensureDataHub() {
 const NET_FILES = ApexRoster.LAZY_NET;
 const NET_EDGES = ApexRoster.LAZY_NET_EDGES;
 let netLoad = null;
+// Every net file declares a script-level `const`, so re-injecting one that already
+// evaluated throws "Identifier has already been declared" (13 SyntaxErrors and the
+// red overlay on a VS FRIEND retry). Same cure as the data hub: remember what
+// landed, and only START a dependent once its predecessors really evaluated.
+const netScriptsLoaded = new Set();
+const NET_READY = {
+  "js/net/bytes.js": () => typeof NetBytes !== "undefined",
+  "js/net/nostr.js": () => typeof NetNostr !== "undefined",
+  "js/net/rendezvous.js": () => typeof NetRendezvous !== "undefined",
+  "js/net/sdp.js": () => typeof NetSdp !== "undefined",
+  "js/net/qr.js": () => typeof NetQr !== "undefined",
+  "js/net/scan.js": () => typeof NetScan !== "undefined",
+  "js/net/transport.js": () => typeof NetTransport !== "undefined",
+  "js/net/handshake.js": () => typeof NetHandshake !== "undefined",
+  "js/net/lobby-codes.js": () => typeof LobbyCodes !== "undefined",
+  "js/net/snapshot.js": () => typeof NetSnapshot !== "undefined",
+  "js/net/session.js": () => typeof NetSession !== "undefined",
+  "js/net/netplay.js": () => typeof NetPlay !== "undefined",
+  "js/net/lobby.js": () => typeof NetLobby !== "undefined",
+  "js/input/phone-pad.js": () => typeof PhonePad !== "undefined",
+};
 function ensureNet() {
   if (netLoad) return netLoad;
-  netLoad = loadBackendScripts(NET_FILES, NET_EDGES).then(() => {
-    if (typeof NetPlay === "undefined" || typeof NetLobby === "undefined") {
+  netLoad = loadBackendScripts(NET_FILES, NET_EDGES, {
+    strict: true, loaded: netScriptsLoaded,
+    ready: (src) => !NET_READY[src] || NET_READY[src](),
+  }).then((complete) => {
+    // A failed group may leave a binding in its temporal dead zone, where even
+    // typeof throws: only probe the globals after a complete load.
+    if (!complete || typeof NetPlay === "undefined" || typeof NetLobby === "undefined") {
       // inject() resolves on error, so this is the only place a miss shows.
       // Keep the stubs (the game stays playable solo) and null the memo so a
       // second attempt can succeed rather than latching for the session.
@@ -200,10 +294,16 @@ function ensureNet() {
       netLoad = null;
       return false;
     }
-    const netLobby = deps.createNetwork();
-    // The real lobby binds #vsfriend here — the boot position the stub's inert
-    // wire() stood in for. Once, because ensureNet() memoises on the promise.
-    netLobby.wire();
+    try {
+      const netLobby = deps.createNetwork();
+      // The real lobby binds #vsfriend here — the boot position the stub's inert
+      // wire() stood in for. Once, because ensureNet() memoises on the promise.
+      netLobby.wire();
+    } catch (e) {
+      Log.error("net", "the multiplayer lobby failed to start: " + (e && e.message));
+      netLoad = null;
+      return false;
+    }
     return true;
   });
   return netLoad;
@@ -222,6 +322,36 @@ let audioLoad = null;
 // master and levels (the setters clamp to 0..1) as soon as the engine lands.
 let audioRestored = false;
 let audioStub = null;   // the title stub, captured before reinjection replaces it
+// Which files landed (the raceSessionLoaded idiom): GameAudio turns real the moment
+// engine.js evaluates, so testing that one global called a group whose panel.js /
+// announcer.js failed complete, and the retry never loaded them. A file counts as
+// landed when its global is defined and no longer the title stub's value.
+const audioScriptsLoaded = new Set();
+let audioHooked = false;
+let audioStubVals = null;
+const AUDIO_GLOBAL = {
+  "js/audio/signal.js": () => typeof GameAudioSignal !== "undefined" ? GameAudioSignal : undefined,
+  "js/audio/soundtrack.js": () => typeof GameAudioSoundtrack !== "undefined" ? GameAudioSoundtrack : undefined,
+  "js/audio/radio-fx.js": () => typeof GameAudioRadioFx !== "undefined" ? GameAudioRadioFx : undefined,
+  "js/audio/tone-model.js": () => typeof GameAudioToneModel !== "undefined" ? GameAudioToneModel : undefined,
+  "js/audio/engine.js": () => typeof GameAudio !== "undefined" ? GameAudio : undefined,
+  "js/audio/music-lib.js": () => window.MusicLib,
+  "js/audio/spotify.js": () => window.SpotifyMusic,
+  "js/audio/rivals.js": () => typeof RivalAudio !== "undefined" ? RivalAudio : undefined,
+  "js/audio/car-sfx.js": () => typeof CarSfx !== "undefined" ? CarSfx : undefined,
+  "js/audio/voice-pack.js": () => typeof VoicePack !== "undefined" ? VoicePack : undefined,
+  "js/audio/radio-voice.js": () => typeof RadioVoice !== "undefined" ? RadioVoice : undefined,
+  "js/audio/announcer-recorded.js": () => typeof RecordedAnnouncer !== "undefined" ? RecordedAnnouncer : undefined,
+  "js/audio/announcer.js": () => typeof Announcer !== "undefined" ? Announcer : undefined,
+  "js/audio/panel.js": () => typeof AudioPanel !== "undefined" ? AudioPanel : undefined,
+  "js/audio/driving-cues.js": () => typeof DrivingCues !== "undefined" ? DrivingCues : undefined,
+};
+function audioFileLanded(src) {
+  const read = AUDIO_GLOBAL[src];
+  if (!read) return true;   // a file the table does not know: onload is all there is
+  const v = read();
+  return v !== undefined && v !== null && !v._stub && v !== (audioStubVals && audioStubVals[src]);
+}
 // game-vm stubs requestIdleCallback as a no-op (tools/lib/game-vm.cjs) and has
 // no frame pump. Deferrals that must complete for VM tests skip under that UA
 // (same mark startRaceBody uses) so ensureAudio still resolves deterministically.
@@ -304,11 +434,17 @@ function restoreOnEngine() {
 function ensureAudio() {
   if (audioLoad) return audioLoad;
   if (!AUDIO_FILES.length) return Promise.resolve(false);
-  if (typeof GameAudio !== "undefined" && GameAudio && !GameAudio._stub) {
+  // Real before THIS loader ran anything (a spec / eager shell evaluated it):
+  // nothing to fetch and no hook to run, as before.
+  if (!audioScriptsLoaded.size && typeof GameAudio !== "undefined" && GameAudio && !GameAudio._stub) {
     audioLoad = Promise.resolve(true);
     return audioLoad;
   }
-  audioStub = typeof GameAudio !== "undefined" ? GameAudio : null;
+  if (!audioStubVals) {   // once: a retry must not mistake a half-loaded real module for the stub
+    audioStub = typeof GameAudio !== "undefined" ? GameAudio : null;
+    audioStubVals = {};
+    for (const f of AUDIO_FILES) if (AUDIO_GLOBAL[f]) audioStubVals[f] = AUDIO_GLOBAL[f]();
+  }
   // Approach (b): yield AFTER the title tap so the menu transition paints
   // before LAZY_AUDIO script eval lands on the main thread, then yield again
   // before onAudioReady (panel DOM). restoreOnEngine still runs from each
@@ -317,14 +453,28 @@ function ensureAudio() {
   // fully ready engine when this promise resolves.
   audioLoad = (async () => {
     await audioYieldToMain("paint");
-    const ok = await loadBackendScripts(AUDIO_FILES, AUDIO_EDGES, { ready: restoreOnEngine });
-    if (!ok || typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) {
+    const ok = await loadBackendScripts(AUDIO_FILES, AUDIO_EDGES, {
+      loaded: audioScriptsLoaded,
+      ready: (src) => { restoreOnEngine(); return audioFileLanded(src); },
+    });
+    if (!ok || AUDIO_FILES.some((f) => !audioScriptsLoaded.has(f)) || typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) {
       Log.warn("audio", "the audio bundle did not load — sound stays silent");
       audioLoad = null;
       return false;
     }
+    if (audioHooked) return true;
+    // onAudioReady is counted as fired only once it returns: a throw (it rebuilds
+    // panel / voice / announcer instances) clears the memo so the next call
+    // retries it, instead of latching a rejection.
     await audioYieldToMain("task");
-    if (typeof deps.onAudioReady === "function") deps.onAudioReady();
+    if (typeof deps.onAudioReady === "function") try {
+      deps.onAudioReady();
+    } catch (e) {
+      Log.error("audio", "the audio ready hook threw: " + (e && e.message));
+      audioLoad = null;
+      return false;
+    }
+    audioHooked = true;
     return true;
   })();
   return audioLoad;
@@ -343,6 +493,9 @@ function wantAgentSurface() {
 // ask for it later. Memoised on the in-flight promise (the ensureScenery /
 // ensureDataHub idiom): boot and a METRICS toggle must never fetch it twice.
 let _agentLoad = null;
+// Files that evaluated, kept across a failed attempt so a retry never re-injects a
+// script-level const (the dataScriptsLoaded idiom).
+const agentScriptsLoaded = new Set();
 function loadAgentSurface() {
   if (!_agentLoad) _agentLoad = (async () => {
     // js/net comes WITH the agent surface. apex.js reads NetTransport /
@@ -351,9 +504,15 @@ function loadAgentSurface() {
     // got __apex without the real net would fail on the multiplayer hooks
     // instead of on anything this change is about. Awaited BEFORE apex.js so
     // ApexApi.create(G) sees the real objects through the G getters.
-    await ensureNet();
-    await loadBackendScripts(AGENT_FILES, AGENT_EDGES);
+    const netOk = await ensureNet();
+    const agentOk = await loadBackendScripts(AGENT_FILES, AGENT_EDGES, { loaded: agentScriptsLoaded });
     deps.bindAgent();
+    // Memoised on the promise, but a FAILED load must not latch for the session:
+    // METRICS / the flyby panel ask again on their next open.
+    if (netOk === false || !agentOk) {
+      Log.warn("game", "the agent surface did not fully load — a later ask retries");
+      _agentLoad = null;
+    }
   })();
   return _agentLoad;
 }
@@ -414,7 +573,12 @@ function raceAssets() {
   const kickScenery = () => {
     // Selected circuit (persisted trackIdx / default): most likely RACE! and
     // the __apex no-track fallback — fetch scenery (and its path payload) here.
-    ensureScenery(deps.getContext().trackIdx);
+    // Best-effort: ensureCircuit REJECTS when the payload cannot load (offline,
+    // a CDN 404, a stale tab), and an unguarded rejection here paints the red
+    // overlay on the title. startRace / openQuali re-ask and handle their own.
+    ensureScenery(deps.getContext().trackIdx).catch((e) => {
+      Log.warn("track", "scenery prefetch failed: " + (e && e.message));
+    });
     // Opt-in build worker: parse TRACK_VM off the main thread while the menu
     // idles so RACE! does not pay worker importScripts on the critical path.
     if (typeof TrackBuildClient !== "undefined" && TrackBuildClient.idleWarm) {

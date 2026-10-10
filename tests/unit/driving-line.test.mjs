@@ -227,6 +227,30 @@ test("the BRAKING CUE is the ribbon's own colour ramp as a number, and silent on
   assert.ok(DL.cue(api.vTop, sMid) > 0.9, "the same speed mid-corner is a full cue");
 });
 
+test("the BRAKING CUE still works with the line hidden: cue() builds the profile draw() never did", () => {
+  const DL = load();
+  const api = stadium();
+  const gfx = { drawDrivingLine() { throw new Error("an OFF line must not reach the backend"); } };
+  DL.setMode("off");
+  // game.js hands the circuit to draw() every frame and to nothing else; with the
+  // line OFF it returns before building, which silenced the BRAKE CUE slider.
+  assert.equal(DL.draw(gfx, api, 70), false);
+  assert.equal(DL._cache().verts, null, "OFF still draws and builds nothing for the ribbon");
+  const sMid = api.straight + api.arc / 2;
+  const u = DL.cue(90, sMid);
+  assert.notEqual(u, null, "the cue has a profile to be over");
+  assert.equal(u, 1, "90 m/s mid-corner is far over the line's pace");
+  assert.equal(DL.cue(api.vTop, api.straight / 2), 0, "and silent on the straight");
+  // A new circuit is rebuilt for, not served from the old one's profile.
+  const other = { ...stadium({ straight: 300 }), id: "other" };
+  DL.draw(gfx, other, 70);
+  DL.cue(50, 10);
+  assert.equal(DL._cache().id, "other");
+  // reset() forgets the circuit: no stale profile after a track unload.
+  DL.reset();
+  assert.equal(DL.cue(90, 10), null);
+});
+
 test("with a baked racing line the ribbon follows IT, easing to the centre where the line has no opinion", () => {
   const DL = load();
   const api = stadium();

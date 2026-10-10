@@ -455,7 +455,10 @@ const HudLayout = (function () {
       if (!el || !el.hasAttribute("data-hl")) continue;
       let r = el.getBoundingClientRect();
       if (!(r.width && r.height)) continue;
-      let dx = 0, dy = 0;
+      // Seed from what fit()'s edge clamp already painted, so the nudge adds to it instead of replacing it.
+      const px = el.style.getPropertyValue ? parseFloat(el.style.getPropertyValue("--hl-x")) : NaN;
+      const py = el.style.getPropertyValue ? parseFloat(el.style.getPropertyValue("--hl-y")) : NaN;
+      let dx = isFinite(px) ? (px - e.x) * W / 100 : 0, dy = isFinite(py) ? (py - e.y) * H / 100 : 0;
       for (let n = 0; n < 4; n++) {
         let hit = null;
         for (let i = 0; i < btns.length; i++) {

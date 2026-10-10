@@ -168,6 +168,47 @@ test("a good blob validates", () => {
   assert.deepEqual(bakeValidate(shipped), [], "the shipped sequence passes the rules the editor enforces");
 });
 
+test("the panel's pose-number rules accept the shipped DEFAULT, fields it leaves out included", () => {
+  const src = read("js/camera/flyby-seq.js");
+  const m = src.match(/^ {2}const DEFAULT = \[[\s\S]*?^ {2}\];/m);
+  const shipped = vm.runInNewContext("(" + m[0].replace(/^ {2}const DEFAULT = /, "").replace(/;$/, "") + ")");
+  assert.deepEqual([...FP.shotErrors(shipped)], [], "a `centre` pose with no `y` is solve()'s default, not an error");
+});
+
+test("a present pose field must be a finite number inside its slider range", () => {
+  const poison = (mut) => { const l = goodList(); mut(l[0].eye[0]); return [...FP.shotErrors(l)]; };
+  assert.match(poison((p) => { p.x = "abc"; })[0], /eye\[0\] x must be a number/, "x: \"abc\" is named");
+  assert.equal(poison((p) => { p.y = null; }).length, 1, "y: null");
+  assert.equal(poison((p) => { p.off = NaN; }).length, 1, "NaN");
+  assert.equal(poison((p) => { p.off = 1e9; }).length, 1, "far outside ARC OFFSET's range");
+  assert.equal(poison((p) => { p.x = Infinity; }).length, 1, "Infinity");
+  assert.equal(poison((p) => { delete p.x; }).length, 0, "an absent field is a default, not an error");
+});
+
+test("n and rank must name a corner, a slot and a landmark", () => {
+  const one = (pose) => { const l = goodList(); l[0].look[0] = pose; return [...FP.shotErrors(l)].length; };
+  assert.equal(one({ at: "corner", n: "slowest" }), 0);
+  assert.equal(one({ at: "corner", n: 7 }), 0);
+  assert.equal(one({ at: "corner", n: "bogus" }), 1);
+  assert.equal(one({ at: "corner", n: -5 }), 1);
+  assert.equal(one({ at: "slot", n: "player" }), 0);
+  assert.equal(one({ at: "slot", n: 4 }), 0);
+  assert.equal(one({ at: "slot", n: -3 }), 1);
+  assert.equal(one({ at: "landmark", rank: 2 }), 0);
+  assert.equal(one({ at: "landmark", rank: 99 }), 1);
+  assert.equal(one({ at: "landmark", rank: "0" }), 1);
+});
+
+test("loadSaved() refuses a damaged file instead of flying non-finite frames", () => {
+  for (const mut of [(p) => { p.x = "abc"; }, (p) => { p.y = null; }]) {
+    const l = FP.normaliseDurs(goodList());
+    mut(l[0].eye[0]);
+    const { panel, warned } = panelWith(FP.savedForm(l));
+    assert.equal(panel.loadSaved(), null, "the shipped sequence plays instead");
+    assert.match(warned.join("\n"), /unusable/);
+  }
+});
+
 test("a DELTA-named blob is refused, with the reason", () => {
   const blob = FP.toBlob(FP.normaliseDurs(goodList())).replace("window.FlybyShots", "window.FlybyEdits");
   assert.throws(() => parseBlob(blob), (e) => {

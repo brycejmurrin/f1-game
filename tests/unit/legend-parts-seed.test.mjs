@@ -33,6 +33,7 @@ function boot(sel = { teamIdx: 0, driverIdx: 0 }) {
   const saved = {};
   const store = {
     get: (k, d) => (k in saved ? saved[k] : d),
+    getStored: (k) => (Object.hasOwn(saved, k) ? saved[k] : undefined),
     set: (k, v) => { saved[k] = v; },
   };
   const Teams = { LIST: [{ id: "mclaren" }] };
@@ -51,6 +52,9 @@ function boot(sel = { teamIdx: 0, driverIdx: 0 }) {
 
 test("an empty sheet is seeded with the picked legend's period car", () => {
   const { ct, Legends, store } = boot();
+  const fallback = { engine: "fallback" };
+  assert.equal(store.get("parts.legends", fallback), fallback, "get can supply a fallback");
+  assert.equal(store.getStored("parts.legends"), undefined, "a fallback is not a stored player sheet");
   ct.syncLegendsTeam(2);                       // roster index 2 — Fangio
   const want = Legends.parts(Legends.LIST[2].id);
   assert.deepEqual(store.get("parts.legends", null), want);

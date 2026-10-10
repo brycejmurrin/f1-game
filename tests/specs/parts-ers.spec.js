@@ -31,10 +31,14 @@ async function load(page) {
 
 // Hold BOOST at a given speed for a fixed time and report the energy spent and
 // the ground gained, against an identical run with BOOST off.
+// Throttle is required: deploy (and its drain) zero when !onThrottle || braking
+// so a held BOOST through a lift no longer spends energy for no thrust
+// (game.js electric-deploy block). setBoost alone is not enough.
 async function boostRun(page, speed, { boost }) {
   return page.evaluate(async ({ speed, boost }) => {
     window.__apex.setEnergy(1);
     window.__apex.jump(0.5, speed, 0);
+    window.__apex.setInput({ throttle: true, brake: false, steer: 0 });
     window.__apex.step(1 / 60, 2);
     // BOOST is an edge-triggered toggle, so setInput cannot express it.
     window.__apex.setBoost(!!boost);
@@ -44,6 +48,7 @@ async function boostRun(page, speed, { boost }) {
     window.__apex.step(1 / 60, 90);
     const after = window.__apex.timing().energy;
     window.__apex.setBoost(false);
+    window.__apex.clearInput();
     return { spent: before - after, gained: window.__apex.probe().s - s0, before, after };
   }, { speed, boost });
 }
@@ -96,6 +101,7 @@ test.describe("ERS deploy — BOOST costs energy wherever it pushes", () => {
       for (const v of [20, 40, 55, 70, 90]) {
         window.__apex.setEnergy(1);
         window.__apex.jump(0.5, v, 0);
+        window.__apex.setInput({ throttle: true, brake: false, steer: 0 });
         window.__apex.step(1 / 60, 2);
         window.__apex.setBoost(true);
         window.__apex.step(1 / 60, 1);
@@ -103,6 +109,7 @@ test.describe("ERS deploy — BOOST costs energy wherever it pushes", () => {
         window.__apex.step(1 / 60, 60);
         const spent = before - window.__apex.timing().energy;
         window.__apex.setBoost(false);
+        window.__apex.clearInput();
         if (spent <= 0.02) out.push(`${v}m/s:${spent.toFixed(4)}`);
       }
       return out;

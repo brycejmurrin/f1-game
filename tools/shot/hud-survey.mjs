@@ -335,6 +335,13 @@ const round = (recs) => recs.map((r) => {
   return o;
 });
 
+/** How long one CDP capture may take. Software GL (SwiftShader) paints a 1920x1080 frame several times slower than a phone
+ *  frame: lead10-announce-s150-1920 failed the old flat 60 s cap on an idle box twice (2026-10-10) and passed under llvmpipe, so
+ *  the cap scales with the pixel count. Phones and 1280-wide desktops keep 60 s. */
+export function shotTimeoutMs(w, h) {
+  return w * h > 1.5e6 ? 180000 : 60000;
+}
+
 async function cdpShot(page, file) {
   // CDP directly, not page.screenshot(): Playwright's path waits on
   // document.fonts.ready, which hung GHA smoke shards (probe-page.mjs).
@@ -344,9 +351,11 @@ async function cdpShot(page, file) {
   try {
     const opts = { format: "png", captureBeyondViewport: false };
     if (!file) opts.clip = { x: 0, y: 0, width: 1, height: 1, scale: 1 };
+    const vp = page.viewportSize() || { width: 0, height: 0 };
+    const cap = shotTimeoutMs(vp.width, vp.height);
     const { data } = await Promise.race([
       session.send("Page.captureScreenshot", opts),
-      sleep(60000).then(() => { throw new Error("CDP captureScreenshot timed out after 60 s"); }),
+      sleep(cap).then(() => { throw new Error(`CDP captureScreenshot timed out after ${cap / 1000} s at ${vp.width}x${vp.height} (software GL; --gl llvmpipe is faster)`); }),
     ]);
     if (file) fs.writeFileSync(file, Buffer.from(data, "base64"));
   } finally { try { await session.detach(); } catch { /* closed */ } }
