@@ -731,3 +731,52 @@ test("mountUi on a flat session does not fetch LAZY_XR", () => {
   ctx.XrBoot.bind({ gfx: {}, tickBody() {}, windowTick() {}, getCamMode() { return 0; }, setCamMode() {} });
   assert.equal(ctx.XrBoot.isBound(), false);
 });
+
+// 14-XR: wantXrBundle was `!!navigator.xr`, which is true on every Chrome / Edge
+// desktop with no headset, so each of them fetched the ~42 KB LAZY_XR bundle (and
+// mounted an ENTER VR button that could only fail). It now asks isSessionSupported
+// ("immersive-vr") first and only a definite "no" skips the fetch.
+async function mountWith({ xr, ls = {} }) {
+  const loads = [];
+  const store = new Map(Object.entries(ls));
+  const ctx = vm.createContext({
+    console,
+    Log: { warn() {}, info() {} },
+    window: {},
+    document: { body: {} },
+    localStorage: { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) },
+    navigator: xr === undefined ? {} : { xr },
+    ApexRoster: { LAZY_XR: ["js/xr/x.js"], LAZY_XR_EDGES: [] },
+    ScriptLoader: { create: () => ({ load: async (files) => { loads.push(files.slice()); return true; }, }) },
+    setTimeout: (fn) => setImmediate(fn),   // the probe's cap fires on the next turn
+    clearTimeout() {},
+  });
+  vm.runInContext(read("js/xr/xr-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: "xr-boot.js" });
+  ctx.XrBoot.mountUi();
+  for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r));
+  return loads;
+}
+
+test("XrBoot.mountUi: a desktop browser with navigator.xr but no headset never fetches the XR bundle", async () => {
+  assert.deepEqual(await mountWith({ xr: { isSessionSupported: async (m) => { assert.equal(m, "immersive-vr"); return false; } } }), []);
+});
+
+test("XrBoot.mountUi: a headset (isSessionSupported true) fetches it", async () => {
+  assert.equal((await mountWith({ xr: { isSessionSupported: async () => true } })).length, 1);
+});
+
+test("XrBoot.mountUi: a probe that throws, rejects or hangs keeps the old answer (fetch)", async () => {
+  assert.equal((await mountWith({ xr: { isSessionSupported() { throw new Error("SecurityError"); } } })).length, 1);
+  assert.equal((await mountWith({ xr: { isSessionSupported: () => Promise.reject(new Error("x")) } })).length, 1);
+  assert.equal((await mountWith({ xr: { isSessionSupported: () => new Promise(() => {}) } })).length, 1, "past the cap");
+  assert.equal((await mountWith({ xr: {} })).length, 1, "no isSessionSupported at all");
+});
+
+test("XrBoot.mountUi: no navigator.xr fetches nothing; an armed VR mode or a pending enter fetches without probing", async () => {
+  assert.deepEqual(await mountWith({ xr: undefined }), []);
+  let probed = 0;
+  const xr = { isSessionSupported: async () => { probed++; return false; } };
+  assert.equal((await mountWith({ xr, ls: { "apex26.xr": "1" } })).length, 1);
+  assert.equal((await mountWith({ xr, ls: { "apex26.xrEnterPending": "1" } })).length, 1);
+  assert.equal(probed, 0);
+});
