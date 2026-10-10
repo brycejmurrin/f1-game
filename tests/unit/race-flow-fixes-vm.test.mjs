@@ -297,3 +297,46 @@ test("startRaceBody aborts to the menu when the race-session bundle failed to lo
   assert.match(body, /if \(!sessionOk\) \{ loadingScreen\.stop\(\); quitToMenu\(\); announce\("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"\); return false; \}/);
   assert.ok(body.indexOf("if (!sessionOk)") < body.indexOf("await ensureAudio()"), "the abort comes before anything starts the race");
 });
+
+async function finishedPlayerWithRunner() {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  const a = g.apex, G = g.G;
+  a.headless(true);
+  await a.race("monza", "default", "dry", { laps: 3 });
+  a.go(); g.step(60);
+  const L = G.track.total, P = G.player;
+  const ai = G.cars.filter((c) => !c.human);
+  for (const c of ai.slice(1)) a.retire(G.cars.indexOf(c));
+  const slow = ai[0];
+  slow.lap = 2; slow.s = L * 0.1; slow.prog = 2 * L + L * 0.1; slow.speed = 20; slow.x = 0; slow.dnfAt = null;
+  a.jump((L - 40) / L, 80, 0); P.lap = 3; P.prog = 3 * L - 40;
+  a.setInput({ throttle: true, steer: 0 });
+  for (let i = 0; i < 60 * 20; i++) g.step(1);
+  return { g, G, P, slow, pauseBtn: (id) => g.sandbox.document.getElementById(id) };
+}
+
+test("POST-FINISH (solo): the player's flag does not end the race while an AI is still running; SKIP settles it", async () => {
+  const { g, G, P, slow, pauseBtn } = await finishedPlayerWithRunner();
+  try {
+    assert.equal(P.finished, true, "the player took the flag");
+    assert.equal(slow.finished, false, "the AI is nowhere near its line");
+    assert.equal(G.state, "race", "the race waits for the field instead of ending 2.2 s after the player");
+    G.els.pausebtn.onclick();
+    assert.equal(pauseBtn("pm-skip-results").hidden, false, "the pause card offers SKIP TO RESULTS while the field finishes");
+    pauseBtn("pm-skip-results").onclick();
+    assert.equal(G.state, "results", "SKIP calls endRace now");
+    assert.equal(slow.finished, false, "the runner is classified by progress, as before");
+  } finally { g.close(); }
+});
+
+test("POST-FINISH (solo): QUIT TO MENU after the flag settles the result first", async () => {
+  const { g, G, P, pauseBtn } = await finishedPlayerWithRunner();
+  try {
+    assert.equal(G.state, "race");
+    assert.ok(!P.finPos, "not classified yet");
+    G.els.pausebtn.onclick();
+    pauseBtn("pm-quit").onclick();
+    assert.equal(P.finPos, 1, "endRace ran before the session was dropped: the career/season settlement is not lost");
+    assert.equal(G.state, "menu");
+  } finally { g.close(); }
+});

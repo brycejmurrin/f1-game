@@ -9,15 +9,22 @@ const RaceControl = (function () {
   // AI-only harnesses retain the old "shortly after the winner" behaviour.
   // `raceT0`: where the clock started — a Data Hub JUMP IN seeds it to the real
   // race's time at the lap you join, which alone could pass the cap at once.
-  function finishDelay(cars, raceT, lapsTarget, raceT0) {
+  // SOLO (`post = { solo, since }`, game.js owns the bag): the player being done
+  // does not end the race while an AI is still on track — the field takes the
+  // flag at its next crossings and the result is a real classification, not a
+  // progress snapshot. Bounded by POST_FINISH_CAP s of race time from the
+  // player's finish (`since`); then endRace classifies as before.
+  // Net, TT, quali and the AI-only harnesses pass no `post` and keep the rules below.
+  const POST_FINISH_CAP = 75;
+  function finishDelay(cars, raceT, lapsTarget, raceT0, post) {
     const ran = raceT - (raceT0 > 0 ? raceT0 : 0);
-    let anyHuman = false, allHumansDone = true, anyFinished = false, running = false, pend = 0;
+    let anyHuman = false, humanHome = false, allHumansDone = true, anyFinished = false, running = false, pend = 0;
     for (const c of cars || []) {
       if (!c) continue;
       if (c.finished) { anyFinished = true; if (!c.retired) pend = Math.max(pend, (c.finishT || 0) + (c.penalty || 0)); }
       else if (!c.retired) running = true;
       if (!c.human) continue;
-      anyHuman = true;
+      anyHuman = true; if (c.finished && !c.retired) humanHome = true;
       if (!c.finished && !c.retired) allHumansDone = false;
     }
     // A time penalty is served on the CLOCK (classification sorts finishers by
@@ -28,6 +35,8 @@ const RaceControl = (function () {
     // running" — behind, on a result it had won. Bounded by the penalty
     // itself; the hard cap below still wins.
     if (running && raceT < pend && ran <= 360 * lapsTarget) return 0;
+    if (post) { if (!(anyHuman && allHumansDone)) post.since = -1; else if (post.since < 0) post.since = raceT; }
+    if (anyHuman && allHumansDone && post && post.solo && running && humanHome) return raceT - post.since < POST_FINISH_CAP ? 0 : 0.1;
     if (anyHuman && allHumansDone) return 2.2;
     if (!anyHuman && anyFinished) return 3.5;
     if (ran > 360 * lapsTarget) return 0.1;
@@ -592,6 +601,6 @@ const RaceControl = (function () {
     return Infinity;
   }
 
-  return { create, finishDelay, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
+  return { create, finishDelay, POST_FINISH_CAP, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
 })();
 Object.freeze(RaceControl);

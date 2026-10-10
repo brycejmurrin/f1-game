@@ -737,6 +737,7 @@ let gridPreOrdered = false;   // set by gridUp(); read by js/net/netplay.js — 
 let builtGridSlots = null;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0, netGreen = null;
+const postFinish = { solo: false, since: -1 };   // RaceControl.finishDelay's post-finish wait (solo race only)
 // Countdown setGridIdle opts — reused every frame (was a fresh {} on the
 // countdown return path, ~60 allocs/s until lights-out).
 const _gridIdleOpts = { soundOn: false, wet: false, step: true };
@@ -2750,7 +2751,7 @@ async function startRaceBody() {
   // qualifying is one flying lap — losing the car to a gearbox there would end
   // the session with nothing to show and no race to have lost it in.
   if (session === "race") { raceIndex++; armReliability(cars); }
-  resultT = 0;
+  resultT = 0; postFinish.since = -1;
   camRoll = 0; camSlipSm = 0;
   shake = 0; hitStop = 0; _thunderT = -1; announce._waitAt = NaN;   // a crash's shake, a queued thunder or the WAITING card's quiet window from the last session must not reach this grid
   // player can be null (roster/team resolution miss) — don't let startRace throw.
@@ -4551,7 +4552,8 @@ function update(dt) {
   // countdown while somebody is still driving. The hard time cap remains the
   // bounded escape hatch for an unfinished or stale participant.
   if (resultT === 0) {
-    resultT = RaceControl.finishDelay(cars, raceT, lapsTarget, realRace.raceT0());
+    postFinish.solo = session === "race" && !netPlay.active() && !realRace.status().watch;
+    resultT = RaceControl.finishDelay(cars, raceT, lapsTarget, realRace.raceT0(), postFinish);
     // A GUEST holding the host's classification is done once ITS car is: its
     // view of the host's car can lag or disagree (a finish still in flight, a
     // pose lost to extrapolation), and waiting on that view meant the host's
@@ -8899,7 +8901,7 @@ function setPaused(p, why) {
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
-  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt(); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); }   // rotate-block / photo hide the card in this task, so the #pausemenu observer never sees it (#988's garage was the same miss)
+  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt(); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); $("pm-skip-results").hidden = !postFinishWait(); }   // rotate-block / photo hide the card in this task, so the #pausemenu observer never sees it (#988's garage was the same miss)
   // Music + rain too, as startRaceBody does: SOUND turned ON under the pause card defers
   // all of it here (js/audio/panel.js). Rain is SFX (same bus as the engine) and
   // must not hiss over a frozen race; both starts are no-ops when already playing.
@@ -8907,6 +8909,11 @@ function setPaused(p, why) {
   lastFrame = performance.now(); syncRotateBlocker(false);   // the pause card yields to an active rotate blocker on EVERY entry
 }
 els.pausebtn.onclick = () => setPaused(true);
+// SKIP TO RESULTS: the player is home and the solo field is still finishing (RaceControl.finishDelay waits for it).
+const postFinishWait = () => state === "race" && postFinish.solo && postFinish.since >= 0;
+function skipToResults() { if (!postFinishWait()) return false; resultT = 0; endRace(); return true; }
+$("pm-skip-results").onclick = () => skipToResults();
+addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.repeat && !paused && postFinishWait() && !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test((e.target && e.target.tagName) || "")) skipToResults(); });
 els.workBtn.onclick = openPitWork;
 
 // ---- Hide-HUD (clean-screen) mode ----
@@ -8943,7 +8950,7 @@ const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false);
 $("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); startRace(); };
-$("pm-quit").onclick = () => quitToMenu();
+$("pm-quit").onclick = () => { skipToResults(); quitToMenu(); };   // a finished player's result is settled before the session is dropped
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 
 platformSession.paintBuild();

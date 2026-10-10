@@ -17,6 +17,13 @@ const { createGame, settle } = require("../../tools/lib/game-vm.cjs");
 let g = null;
 after(() => { if (g) g.close(); });
 
+// SKIP TO RESULTS from the pause card, as a player who is done and does not want to wait for the field.
+function skipPostFinish(g) {
+  if (g.G.state !== "race") return;
+  g.G.els.pausebtn.onclick();
+  g.sandbox.document.getElementById("pm-skip-results").onclick();
+}
+
 test("a lapped car that takes the flag is classified behind a lead-lap car still running", async () => {
   g = await createGame({ track: "monza", carMeshes: false });
   const a = g.apex, G = g.G;
@@ -59,6 +66,7 @@ test("a car that retires past 90 % of the winner's laps is classified and scores
     place(run, L - 3000, 9, 70);                                     // still running a lap down
     a.setInput({ throttle: true, steer: 0 });
     for (let i = 0; i < 60 * 12 && G.state === "race"; i++) g2.step(1);
+    skipPostFinish(g2);   // the field would otherwise be waited for (RaceControl.POST_FINISH_CAP); this asserts the runners-at-the-flag path
     assert.equal(G.state, "results");
     assert.equal(late.classified, true, "9 of 10 laps is classified");
     assert.equal(early.classified, false, "4 of 10 is not");
@@ -180,6 +188,7 @@ test("a car still RUNNING below 90 % of the winner's laps is not classified, and
     place(near, L - 3000, 9, 70);                                       // running on lap 9: 9 at its flag = floor(0.9 * 10)
     a.setInput({ throttle: true, steer: 0 });
     for (let i = 0; i < 60 * 12 && G.state === "race"; i++) g4.step(1);
+    skipPostFinish(g4);   // the field would otherwise be waited for (RaceControl.POST_FINISH_CAP); this asserts the runners-at-the-flag path
     assert.equal(G.state, "results");
     assert.equal(slow.classified, false, "5 of 10 laps, running or not, is not classified");
     assert.equal(near.classified, true, "a runner at exactly 90 % is");

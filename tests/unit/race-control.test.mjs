@@ -822,3 +822,27 @@ test("settleLineStep with no or one entry never sorts, and the comparator is not
   const body = src.slice(src.indexOf("function settleLineStep"), src.indexOf("function endLineStep"));
   assert.ok(!/=>/.test(body), "settleLineStep must not allocate an arrow comparator per call");
 });
+
+test("SOLO: a finished player waits for the AI still running, bounded by the post-finish cap", () => {
+  const { finishDelay, POST_FINISH_CAP } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  assert.equal(POST_FINISH_CAP, 75);
+  const you = { human: true, finished: true, retired: false, finishT: 100 };
+  const ai = { human: false, finished: false, retired: false };
+  const solo = { solo: true, since: -1 };
+  assert.equal(finishDelay([you, ai], 101, 3, 0, solo), 0, "an AI still on track: keep counting, no 2.2 s countdown");
+  assert.equal(solo.since, 101, "the wait is timed from the first tick the player was done");
+  assert.equal(finishDelay([you, ai], 101 + 74, 3, 0, solo), 0, "still inside the cap");
+  assert.equal(finishDelay([you, ai], 101 + 75, 3, 0, solo), 0.1, "the cap ends it: endRace classifies the runners by progress");
+  assert.equal(finishDelay([you, { ...ai, finished: true, finishT: 110 }], 111, 3, 0, { solo: true, since: -1 }), 2.2,
+    "the whole field home: today's 2.2 s");
+  assert.equal(finishDelay([you, { ...ai, retired: true }], 101, 3, 0, { solo: true, since: -1 }), 2.2, "a retired AI is not waited for");
+  assert.equal(finishDelay([you, ai], 101, 3), 2.2, "no options (net, TT, quali, harnesses): today's behaviour");
+  assert.equal(finishDelay([you, ai], 101, 3, 0, { solo: false, since: -1 }), 2.2, "net keeps the host rules");
+});
+
+test("SOLO: the wait clock restarts when the player is no longer done (a new race, a red-flag restart)", () => {
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const solo = { solo: true, since: 50 };
+  finishDelay([{ human: true, finished: false, retired: false }, { human: false, finished: false, retired: false }], 10, 3, 0, solo);
+  assert.equal(solo.since, -1);
+});
