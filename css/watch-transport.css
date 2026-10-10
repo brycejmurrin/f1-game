@@ -50,6 +50,7 @@ body.watch-controls-on :is(#hud-gearbox, #hud-speed, #hud-energy, #hud-tyre, #hu
 body.watch-controls-on :is(#hud-ot, #hud-aero, #hud-bb, #hud-sectors, #hud-limits) { display: none !important; }
 body.watch-controls-on :is(#hud-damage, #hud-flag, #hud-mirror, #hud-mirror-chip) { display: none !important; }
 body.watch-controls-on :is(#hud-rel, #hud-strat, #hud-inputs, .touchbtn, #campicker) { display: none !important; }
+body.watch-controls-on :is(#btn-cam, #announce, #lights) { display: none !important; }
 body.watch-controls-on[data-helmet-cam] #hud::before { content: none; }
 body.watch-controls-on #bc-tower {
   max-height: calc(100svh - 180px - var(--sat) - var(--sab));

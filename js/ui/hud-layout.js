@@ -571,8 +571,8 @@ const HudLayout = (function () {
   const bodyAttr = (n) => !!(doc && doc.body && doc.body.hasAttribute && doc.body.hasAttribute(n));
   // Data Hub WATCH / HIGHLIGHTS (css/hud.css). Hard: a placed chip does not
   // bring the driving HUD back. "tower" here is the POS/LAP band (.hud-top),
-  // not #bc-tower. Announce stays (its own soft rule below).
-  const REPLAY_HUD = ["tower", "map", "gaps", "sectors", "limits", "flag", "mirror"]
+  // not #bc-tower. The radio card stands down with the rest of the HUD.
+  const REPLAY_HUD = ["tower", "map", "gaps", "sectors", "limits", "flag", "mirror", "announce"]
     .concat(BOTTOM, READOUTS);
   const replayOn = (h) => h("bc-on") || h("watch-controls-on");
   const HIDE_RULES = Object.freeze([
