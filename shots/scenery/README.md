@@ -6,3 +6,6 @@
 - 1365-miami-0-park.png / 1365-miami-0.66-park.png — Miami (#1365 head) cockpit view at the start line and at frac 0.66: turnpike deck, stadium neon top, teal wall on the left.
 - tecpro-miami-0.675-orbit.png — Miami tecpro wall (TEAL, def tyre kit = tecpro): teal slabs with dark top strip, as designed.
 - tecpro-cota-0.635-orbit.png, tecpro-cota-az90.png, tecpro-cota-az270.png — Cota T12 hairpin (wall tyreWall(0.61,0.66,+1,6,YELLOW)). The wall segment on the outside reads as a DARK slab, not yellow, in all three. Unresolved (see message).
+- cota-wall-far-az90.png — Cota T12 hairpin, orbit 0.635 az90 dist 40 el14: the outside of the hairpin shows two dark slab segments, no yellow.
+- cota-magenta-az90.png — same frame with the T12 wall's top strip recoloured magenta in a scratch copy: IDENTICAL image (no magenta). The page's batch list did contain the magenta cap batch (x70), so the edit applied; the wall is not visible in the main pass.
+- cota-noprops-az90.png — same frame with the props mesh hidden (meshToggle({props:true})): the dark slabs disappear (they are props-mesh geometry), and block-shaped shadows remain on the dirt ring where the instanced tecpro walls should stand, while no yellow body is visible in the lit frame.
