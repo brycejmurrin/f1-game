@@ -97,6 +97,15 @@ try {
     });
   };
   await settle();
+  // WHICH rasteriser answered, on the verdict line: SwiftShader may not draw cota's instanced tecpro
+  // batches at all while llvmpipe does (docs/notes/COTA-TECPRO-SOFTWARE-GL.md), so a result without it is unreadable.
+  out.glRenderer = await page.evaluate(() => {
+    try {
+      const gl = document.createElement("canvas").getContext("webgl2"), e = gl.getExtension("WEBGL_debug_renderer_info");
+      return String(e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    } catch (_) { return "unknown"; }
+  });
+  out.software = /swiftshader|llvmpipe|software|lavapipe/i.test(out.glRenderer);
 
   // A + B: mesh state, then submitted-ness via renderer.info.
   const probeMesh = () => page.evaluate(({ verts, count }) => {
@@ -138,8 +147,48 @@ try {
   await setLayer(true); await settle();
   out.submit = { on: onI, off: offI, dTris: onI.tris - offI.tris, dCalls: onI.calls - offI.calls };
   // false only when the renderer demonstrably ran a frame for each reading; otherwise unknown.
+  out.submit.expectTris = out.mesh.count * (out.verts / 2); out.submit.wholeSubmit = out.submit.dTris === out.submit.expectTris;
   out.submitted = out.submit.dTris > 0 && out.submit.dCalls > 0 ? true
     : (offI.frame > onI.frame ? false : null);
+
+  // --dump: every tecpro-family instanced mesh side by side (cap vs stack bodies), state + a
+  // per-mesh layer toggle on the SAME frame. dTris must equal 24 x visible when the mesh is
+  // submitted whole (48 verts = 24 tris/instance); anything else is named, not assumed.
+  if (argv.includes("--dump")) {
+    const metas = await page.evaluate((match) => {
+      const fam = match.split("|")[1] || match, sc = window.__bvpScene, list = [];
+      const bs = window.__apex.trackGraph().batches({ instancedOnly: true }).batches.filter((b) => b.model.includes(fam));
+      sc.traverse((o) => {
+        if (!o.isInstancedMesh || !o.userData.tlxInstCap) return;
+        const b = bs.find((x) => x.count === o.userData.tlxInstCap && x.verts === o.geometry.attributes.position.count && !list.some((l) => l.model === x.model));
+        if (!b) return;
+        const mat = Array.isArray(o.material) ? o.material[0] : o.material, tint = o.geometry.attributes.instanceTint, ta = tint && tint.array;
+        let mn = [9, 9, 9], mx = [-9, -9, -9], sm = [0, 0, 0];
+        for (let i = 0; ta && i < o.count; i++) for (let k = 0; k < 3; k++) { const v = ta[i * 3 + k]; mn[k] = Math.min(mn[k], v); mx[k] = Math.max(mx[k], v); sm[k] += v; }
+        const col = o.geometry.attributes.color, c0 = col ? Array.from(col.array.slice(0, 3)) : null;
+        o.userData.__bvpId = list.length;
+        list.push({ id: list.length, model: b.model, cap: b.count, verts: b.verts, count: o.count, visible: o.visible, renderOrder: o.renderOrder,
+          tlxEmissive: o.userData.tlxEmissive, tlxAlpha: o.userData.tlxAlpha, matUuid: mat.uuid, matType: mat.type,
+          vertexColors: mat.vertexColors, defines: mat.defines || null, hasColorAttr: !!col, colorAttrFirstVertex: c0,
+          tint: ta ? { min: mn, max: mx, mean: sm.map((v) => v / Math.max(1, o.count)) } : null, hasInstanceColor: !!o.instanceColor,
+          attrs: Object.keys(o.geometry.attributes) });
+      });
+      window.__bvpMeshes = []; sc.traverse((o) => { if (o.userData && o.userData.__bvpId !== undefined) window.__bvpMeshes[o.userData.__bvpId] = o; });
+      return list;
+    }, match);
+    for (const m of metas) {
+      await page.evaluate((id) => window.__bvpMeshes[id].layers.disable(0), m.id); await settle();
+      const off = await info(); await settle(); const off2 = await info();
+      await page.evaluate((id) => window.__bvpMeshes[id].layers.enable(0), m.id); await settle();
+      const on = await info(); await settle(); const on2 = await info();
+      // renderer.info is per-frame and the frame-to-frame total moves by other draws (measured: a constant
+      // 18090-tri swing on cota/miami with the sim frozen), so a delta only counts when the repeat agrees.
+      m.stable = off.tris === off2.tris && on.tris === on2.tris;
+      m.dTris = on.tris - off.tris; m.expectTris = m.count * (m.verts / 2); m.wholeSubmit = m.stable ? m.dTris === m.expectTris : null;
+    }
+    const sameMat = {}; for (const m of metas) (sameMat[m.matUuid] = sameMat[m.matUuid] || []).push(m.model);
+    out.dump = { meshes: metas, sharedMaterials: sameMat };
+  }
 
   // C: projected AABB of the instances (all of them; the camera frames a stretch).
   const rect = await page.evaluate(({ VW, VH }) => {
@@ -209,5 +258,5 @@ try {
 }
 if (jsonOut) writeFileSync(jsonOut, JSON.stringify(out, null, 2));
 console.log(JSON.stringify(out, null, 2));
-console.log(`= batch ${track} ${match} submitted=${out.submitted ?? "?"} litVisible=${out.litVisible ?? "null"}${out.error ? " error=" + out.error : ""}`);
+console.log(`= batch ${track} ${match} gl="${out.glRenderer ?? "?"}"${out.software ? " SOFTWARE-not-hardware" : ""} submitted=${out.submitted ?? "?"} litVisible=${out.litVisible ?? "null"}${out.error ? " error=" + out.error : ""}`);
 process.exit(code);
