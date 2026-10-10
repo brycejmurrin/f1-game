@@ -1,1 +1,1 @@
-1791618439	Cursor Agent	COORD: pin fix pushed hunt2 #1324-1331; media sync tooling-fast --jobs=3 then push; next sync #1323/#1322 via sync-pr; no AM/merge  [sync-pr-cursor-bughunt-media-88f2; session f6ea4b08a162ee1c7624484a]
+1791618719	Cursor Agent	COORD: hunt2 pin 525k pushed; game#1322+race-phys#1323 ship-synced (pushed); media tooling-fast --jobs=3 then push; no AM/merge  [sync-pr-cursor-bughunt-media-88f2; session f6ea4b08a162ee1c7624484a]
