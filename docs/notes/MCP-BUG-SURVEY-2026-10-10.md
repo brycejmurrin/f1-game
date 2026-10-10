@@ -49,6 +49,6 @@ Likely wrap/arc signing in the agent world pack — needs a focused agent-view r
 ## Fixed in follow-up on this branch
 - **B2** — `tools/shot/shot.mjs` echoes the free-cam id (`orbit`/…) on `frame.camera.mode` when `dbgCamActive`.
 - **B4** — MCP aliases `image` ↔ `inlineImage` across `apex_hud_shot` / `apex_ui_shot` / `apex_shot`.
-- **B1** — compact-wide live Home: `#menu-buttons` inline pad clears CAREER skew tip; under-brand rooms `justify-content:flex-start` so `.btn-ico` is not clipped.
-- **B3** — `#announce` caution step follows `data-gap-drop` flag edge; phone `#hud-inputs` clears a visible `#hud-limits`.
-- **B5** — `world().rivals[].lapsAhead` is lap-counter standing (`c.lap - p.lap`); road `gap` is `prog` minus that standing (keeps lapped-ahead contract).
+- **B1** — compact-wide live Home: `#menu-buttons` inline pad clears CAREER skew tip; under-brand rooms `justify-content:flex-start` so `.btn-ico` is not clipped. Re-verify: `apex_ui_fit` title @ ios-iphone-landscape / -844 → `clipped: 0`.
+- **B3** — `#announce` uses `--flag-slot-top` (gap-drop aware); phone `#hud-inputs` parks under the limits slot. Re-verify: `apex_hud_shot` phoneL-chase → 0 findings (announce y141 > flag b135; inputs y186 > limits b156).
+- **B5** — `world().rivals[].lapsAhead` is lap-counter standing (`c.lap - p.lap`); road `gap` is `prog` minus that standing (keeps lapped-ahead contract). Re-verify: spa `world` same-lap pack → `lapsAhead: 0`, `rel: "ahead"`.
