@@ -6260,11 +6260,10 @@ function updateCar(c, dt, ranked) {
   c._prevS = c.s;
 }
 
-// Put the player back on the racing line at its CURRENT progress, facing forward
-// at a modest speed — for recovering from a spin, a beached off-track moment, or
-// being pinned to a wall. Progress (s/prog/lap) is preserved; only the lateral
-// position, heading and slip are reset, and a little speed restored.
+// Put the player back on the racing line at its CURRENT progress, facing forward at a modest speed — for a spin, a
+// beach or a wall. Progress is kept; lateral position, heading and slip reset. In TT/QUALI the lap is DELETED (no free re-centre).
 function rescuePlayer(c) {
+  if (c.human && (isTimeTrial() || isQuali())) { c.incidentInvalidLap = true; if (c.isPlayer && isQuali()) c.qualiCut = true; }   // as a track-limits cut
   // A live incident takeover would re-impose the Rapier pose over this rescue
   // (same authority rule as __apex.jump) — hand the car back first.
   incidentSim.release(c);

@@ -652,3 +652,18 @@ test("flying-start: a session quit mid-countdown does not stop the next time tri
   assert.equal(g.G.flyingStart.active(), true, "the next session's first countdown frame is a new start");
   assert.equal(g.G.player.human, false);
 });
+
+// 01-F2 (hunt2, decided): RECOVER / the auto-rescue is a free, speed-preserving re-centre, so in TT and QUALI it deletes the lap.
+test("rescuePlayer deletes the lap in time trial and qualifying, not in a race and not for an AI car", async () => {
+  await tt();
+  const p = g.G.player;
+  const flags = (c) => ({ inv: !!c.incidentInvalidLap, cut: !!c.qualiCut });
+  const run = (c, session) => { g.G.session = session; c.incidentInvalidLap = false; c.qualiCut = false; g.G.rescuePlayer(c); return flags(c); };
+  try {
+    assert.deepEqual(run(p, "tt"), { inv: true, cut: false }, "time trial: the lap is invalid (no quali sheet to cut)");
+    assert.deepEqual(run(p, "quali"), { inv: true, cut: true }, "qualifying: invalid AND no time on the sheet");
+    assert.deepEqual(run(p, "race"), { inv: false, cut: false }, "a race has no lap-validity concept to add");
+    p.human = false;   // the AI's role (a time trial has no rivals to borrow)
+    assert.deepEqual(run(p, "tt"), { inv: false, cut: false }, "an AI car's rescue never touches lap validity");
+  } finally { p.human = true; g.G.session = "race"; }
+});
