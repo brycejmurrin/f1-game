@@ -513,6 +513,26 @@ test('BACKMARKERS counts cars cleared and scores the TIME, not the racecraft', (
   assert.match(d.text, /cleared 3 of 3 in [\d.]+s/);
 });
 
+test('BACKMARKERS never scores a FASTER car that merely crosses the half-lap wrap', () => {
+  // gapTo() wraps at half a lap: a quicker car 148 m "ahead" that drifts to 152 m reads as 148 m
+  // "behind" in one frame. Only cars that pass the arming filter (slower than us) are candidates.
+  const f = fixture();
+  const slow = (prog) => ({ prog, x: 0, retired: false, _vmaxNow: 60, code: 'BAK' });
+  const t1 = slow(10), t2 = slow(20);
+  const quick = { prog: 148, x: 0, retired: false, _vmaxNow: 90, code: 'FST' };
+  f.G.cars = [t1, t2, quick, f.c];
+  f.c.prog = 0; f.c._vmaxNow = 70; f.c.x = 0;
+  f.api.update(f.c);
+  assert.equal(f.api.startDrill('backmarkers'), true);
+  f.tick({}, 0.4);                 // the quick car is seen "ahead" across the wrap
+  quick.prog = 152;                // ...and now "behind"
+  f.tick({}, 0.4);
+  for (let p = 2; p <= 30; p += 2) f.tick({ prog: p }, 0.4);   // two genuine backmarkers cleared
+  const s = f.api.summary();
+  assert.equal(s.lastDrill, null, 'two of three cleared is not a finished drill');
+  assert.ok(s.drill && !s.drill.done, 'still running');
+});
+
 test('BACKMARKERS refuses when nothing ahead is actually slower', () => {
   const f = fixture();
   const peer = { prog: 10, x: 0, retired: false, _vmaxNow: 70 };
