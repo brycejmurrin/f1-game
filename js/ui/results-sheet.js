@@ -445,6 +445,12 @@ function buildTTResults() {
   // personal-best path exactly as before.
   const guestGhost = GhostShare.hasGuest();
   const replayGhost = guestGhost ? GhostShare : Ghost;
+  if (guestGhost) {
+    const note = document.createElement("p");
+    note.className = "res-row";
+    note.textContent = GhostShare.contextNotice(GhostShare.guest().context, G.records.key());
+    els.resultsTable.appendChild(note);
+  }
   if ((guestGhost || Ghost.hasGhost()) && isFinite(best)) {
     const ghostBest = replayGhost.bestTime();
     if (isFinite(ghostBest)) {

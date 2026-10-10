@@ -40,7 +40,7 @@ async function consumeGhostHash() {
   // A ghost link landing MID-RACE waits, fragment intact, for the menu (quitToMenu re-reads it) — as #353's invite link does.
   if (UiLayers.inRace()) { Log.info("game", "ghost link deferred: racing"); return null; }
   const shared = await GhostShare.consumeHash({ valid: () => !UiLayers.inRace(),
-    notify: (message, result) => G.announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
+    notify: (message, result) => { if (!result || !result.ok) G.announce(message, 4, "warning"); },
   });
   if (!shared || !shared.ok) return shared;
   G.flow = "gp"; G.session = "tt";
@@ -57,6 +57,15 @@ async function consumeGhostHash() {
   G.buildSelect();
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   G.scheduleFlybyTrack(true);
+  // The previous session's player/weatherArc belong to its built scene, not
+  // this new selection. Setup and circuit geometry wait for session start.
+  const context = {
+    physics: typeof PhysicsConsts !== "undefined" ? PhysicsConsts.REVISION : undefined,
+    tune: typeof SessionRecords !== "undefined" ? SessionRecords.PHYS.map(k => G[k]) : undefined,
+    controls: G.recordControls ? G.recordControls() : undefined,
+    weather: G.raceWeather, tod: G.raceTimeOfDay, tyreWear: G.raceTyreWear, difficulty: G.difficulty,
+  };
+  G.announce("Rival ghost loaded — " + shared.track.toUpperCase() + ". " + GhostShare.contextNotice(shared.context, context), 7, "info");
   return shared;
 }
 consumeGhostHash();

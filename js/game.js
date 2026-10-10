@@ -3279,6 +3279,7 @@ const G = {
   get paused() { return paused; }, set paused(v) { paused = v; },
   get raceLaps() { return raceLaps; }, set raceLaps(v) { raceLaps = v; },
   get raceT() { return raceT; }, set raceT(v) { raceT = v; },
+  get resultT() { return resultT; }, set resultT(v) { resultT = v; },
   // The RENDER clock (sky/cloud drift, FLAG cloth wave). It accumulates real
   // frame dt, so its value depends on how many frames happened to render — which
   // makes any pixel comparison across runs non-deterministic. Exposed so a

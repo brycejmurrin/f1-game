@@ -202,11 +202,12 @@ window.CamModes = (function () {
       b.setAttribute("aria-expanded", "false");
       let holdT = 0;
       let held = false;
+      let released = false;
       b.addEventListener("pointerdown", () => {
-        held = false;
+        held = false; released = false;
         holdT = setTimeout(() => { held = true; camPicker.show(); }, HOLD_MS);
       });
-      b.addEventListener("pointerup", () => clearTimeout(holdT));
+      b.addEventListener("pointerup", () => { clearTimeout(holdT); released = true; });
       b.addEventListener("pointerleave", () => clearTimeout(holdT));
       // A cancelled touch is not a long press. iOS cancels touches routinely
       // (edge swipe, notification, gesture arbitration) and a touch pointer
@@ -214,7 +215,9 @@ window.CamModes = (function () {
       // opened the picker mid-corner and `held` then ate the next genuine tap.
       const cancelHold = () => { clearTimeout(holdT); held = false; };
       b.addEventListener("pointercancel", cancelHold);
-      b.addEventListener("lostpointercapture", cancelHold);
+      // Touch implicitly releases capture AFTER pointerup and BEFORE click.
+      // Preserve the consumed long press through that normal release.
+      b.addEventListener("lostpointercapture", () => { if (!released) cancelHold(); });
       b.addEventListener("contextmenu", (e) => { e.preventDefault(); camPicker.show(); });
       b.onclick = () => {
         if (held) { held = false; return; }

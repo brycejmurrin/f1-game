@@ -489,6 +489,7 @@ const DrivingCoach = (function () {
       // THE CLOCK COMES BACK TOO. Without it the cars are 10 s younger and the
       // race is not, so every gap, delta and lap projection reads wrong.
       if (Number.isFinite(w.raceT)) G.raceT = w.raceT;
+      G.resultT = 0; // Recompute finish eligibility from the restored field next tick.
       if (Number.isFinite(w.sectorIdx)) G.sectorIdx = w.sectorIdx;
       if (Number.isFinite(w.sectorStartT)) G.sectorStartT = w.sectorStartT;
       if (w.sectorBests) G.sectorBests = w.sectorBests.slice();

@@ -283,6 +283,14 @@ the designer with the same point selected.
 - **SHARE CODE → LOAD** takes a pasted link or code.
 - **EXPORT** saves the circuit as a small `.apextrack.json` file; **IMPORT**
   loads one back (up to 64 KB).
+- **MY CIRCUITS → EXPORT ALL** backs up every saved circuit in one
+  `.apextracks.json` collection. The unsaved working draft is not included.
+- **MY CIRCUITS → IMPORT LIBRARY** merges a collection (up to 1536 KB).
+  Every circuit is checked before anything is added. Invalid entries, unsupported
+  versions, conflicting content IDs, or a merged total above 24 cancel the
+  entire import. Identical circuits are skipped, preserving your local names;
+  the result reports added and skipped counts. Your working draft stays open
+  unchanged. If storage is unavailable, keep the exported backup before reloading.
 
 ## Cheat sheet
 

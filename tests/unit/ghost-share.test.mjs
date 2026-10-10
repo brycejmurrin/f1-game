@@ -265,7 +265,7 @@ test("starting a race during ghost decoding preserves the link until returning t
   assert.equal(h.location.hash, "");
 });
 
-function resultsHarness({ ghost = null, guest = false } = {}) {
+function resultsHarness({ ghost = null, guest = false, recordedContext = null, sessionContext = null } = {}) {
   const dom = makeDom();
   const Ghost = {
     hasGhost: () => !!ghost,
@@ -277,6 +277,8 @@ function resultsHarness({ ghost = null, guest = false } = {}) {
   };
   const GhostShare = {
     hasGuest: () => guest,
+    guest: () => ({ context: recordedContext }),
+    contextNotice: harness().GhostShare.contextNotice,
     bestTime: () => guest ? 79 : Infinity,
     encode: async () => ({ ok: true, code: "APXG1.p.code", url: "https://example.test/#ghost=APXG1.p.code" }),
     fileExport: () => ({ ok: true, name: "lap.apexghost.json", text: "{}" }),
@@ -309,7 +311,7 @@ function resultsHarness({ ghost = null, guest = false } = {}) {
     player: { best: 80 },
     ttNewRecord: false,
     ttSessionTs: 0,
-    records: { board: () => [], key: () => null },
+    records: { board: () => [], key: () => sessionContext },
     referencePole: () => 0,
     teamById: () => null,
     cssCol: () => "#fff",
@@ -337,6 +339,66 @@ test("time-trial results identify a loaded guest as the rival ghost", () => {
   const row = h.dom.byId("results-table").children.find((child) =>
     child.children && child.children.some((part) => part.textContent === "RIVAL GHOST"));
   assert.ok(row, "the delta row names the guest rival instead of the player's PB");
+  assert.ok(h.dom.byId("results-table").children.some(child => /Rival settings are unavailable/.test(child.textContent)));
+});
+
+const lapContext = () => ({ physics: 7, tune: [0.84, 0], difficulty: "normal", tyreWear: true,
+  weather: "dry", weatherPlan: null, tod: "day", car: ["haas", 4, { brakes: 1, engine: 2 }],
+  controls: { steer: "keyboard", assist: 0 }, layout: [1, 500, 5793] });
+
+test("rival context compares actual weather, setup, model and controls independent of object key order", () => {
+  const { GhostShare } = harness();
+  const recorded = lapContext(), current = lapContext();
+  current.car[2] = { engine: 2, brakes: 1 };
+  assert.equal(GhostShare.contextNotice(JSON.stringify(recorded), current), "Rival settings match this session.");
+  current.weather = "wet"; current.car[0] = "mclaren"; current.physics = 8; current.controls.assist = 1;
+  assert.equal(GhostShare.contextNotice(JSON.stringify(recorded), current),
+    "Rival settings differ: weather, car setup, driving model, controls.");
+  assert.equal(recorded.weather, "dry", "comparison does not mutate the imported settings");
+});
+
+test("older and partial ghost contexts never claim full compatibility", () => {
+  const { GhostShare } = harness();
+  for (const context of [null, "standard", "{}", "[]", "{broken"]) {
+    assert.equal(GhostShare.contextNotice(context, lapContext()), "Rival settings are unavailable to compare.");
+  }
+  const selected = lapContext(); delete selected.car; delete selected.layout;
+  assert.equal(GhostShare.contextNotice(JSON.stringify(lapContext()), selected),
+    "Compared rival settings match. Not yet compared: car setup, circuit version.");
+  let deep = {}; for (let i = 0; i < 30; i++) deep = { deep };
+  assert.equal(GhostShare.contextNotice({ ...lapContext(), controls: deep }, lapContext()),
+    "Rival settings are unavailable to compare.");
+});
+
+test("TT results keep the guest comparison visible beside its delta", () => {
+  const current = lapContext(); current.car[0] = "mclaren";
+  const h = resultsHarness({ guest: true, recordedContext: JSON.stringify(lapContext()), sessionContext: JSON.stringify(current) });
+  assert.ok(h.dom.byId("results-table").children.some(child => child.textContent === "Rival settings differ: car setup."));
+});
+
+test("starting TT compares the built car once per rival and session configuration", () => {
+  const { GhostShare } = harness(), notices = [];
+  const G = { player: { team: { id: "haas" }, tierV: 4, mods: {}, aeroLoad: 1, ersDeploy: 1,
+    ersRegen: 1, tread: "soft", brakeBias: 0.6, rollBalance: 0.5 },
+    track: { def: { id: "monza" }, n: 500, total: 5793 }, store: { rev: 0 },
+    recordControls: () => ({ steer: "keyboard" }), raceWeather: "dry", raceTyreWear: true,
+    difficulty: "normal", raceTimeOfDay: "day", announce: message => notices.push(message) };
+  const ctx = vm.createContext({ G, GhostShare, PhysicsConsts: { REVISION: 7 },
+    Ghost: { contextKey: JSON.stringify, setTrack() {} }, GameStore: { ttBoard: () => [] } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-records.js"), "utf8"), ctx);
+  const records = ctx.SessionRecords.create(G);
+  const recorded = records.config(); recorded.car[0] = "mclaren";
+  GhostShare.installGuest({ ghost: fixture, track: "monza", context: JSON.stringify(recorded) });
+  records.begin(); records.begin();
+  assert.equal(notices.length, 1);
+  assert.match(notices[0], /Rival settings differ: car setup/);
+  G.raceWeather = "wet";
+  records.begin();
+  assert.equal(notices.length, 2);
+  assert.match(notices[1], /weather, car setup/);
+  GhostShare.installGuest({ ghost: fixture, track: "spa", context: JSON.stringify(recorded) });
+  records.begin();
+  assert.equal(notices.length, 2, "a rival for another circuit is not compared");
 });
 
 test("Phase 1 wires sharing into load order, results, boot/hashchange, HUD, and world replay", () => {

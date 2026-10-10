@@ -55,6 +55,26 @@ function fixture({ realInsights = false } = {}) {
 const braking = { brakeDemand: 1, throttleDemand: 1, axEstSm: -21.7, axFrac: .64, steerAngle: .1 };   // full brake, dry: the measured plateau
 const rear = { rearUtil: .97, frontUtil: .6, slipRear: .12 };
 
+test('checkpoint retry clears an armed finish countdown before racing resumes', () => {
+  const { coach, G, c, ctx } = fixture();
+  Object.assign(c, { isPlayer: true, finished: false, retired: false, lap: 2, s: 800, prog: 1800 });
+  G.cars = [c]; G.raceT = 100; G.resultT = 0;
+  assert.equal(coach.mark(), true);
+  Object.assign(c, { finished: true, finishT: 110, lap: 3, s: 5, prog: 2005 });
+  G.raceT = 110; G.resultT = 2.1;
+  assert.equal(coach.retry(), true);
+  assert.equal(c.finished, false);
+  assert.equal(G.raceT, 100);
+  assert.equal(G.resultT, 0);
+  vm.runInContext(readFileSync(new URL('../../js/race/race-control.js', import.meta.url), 'utf8'), ctx);
+  const control = vm.runInContext('RaceControl', ctx);
+  assert.equal(control.finishDelay(G.cars, G.raceT, 2, 0), 0, 'restored field does not rearm results');
+  const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
+  const binding = game.match(/get resultT\(\) \{[^\n]+/)[0];
+  const clock = vm.runInNewContext('let resultT = 2.1; const G = {' + binding + '}; G.resultT = 0; resultT;');
+  assert.equal(clock, 0, 'the facade clears the actual game countdown, not a detached property');
+});
+
 test('trace export attaches its anchor so the native document download listener sees the click', async () => {
   const { ctx, nodes } = fixture();
   let attached = false, clicked = false, exported;

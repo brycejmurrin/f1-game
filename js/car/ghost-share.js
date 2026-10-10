@@ -232,6 +232,47 @@ const GhostShare = (function () {
     return current == null || current === guestSlot.track;
   }
 
+  // Context is optional on older links. Compare only recorded values with
+  // settings actually available now; the menu has no built car/layout yet.
+  function contextNotice(recorded, current) {
+    const unavailable = "Rival settings are unavailable to compare.";
+    try {
+      const parse = v => typeof v === "string" ? JSON.parse(v) : v;
+      const a = parse(recorded), b = parse(current);
+      if (!a || !b || typeof a !== "object" || typeof b !== "object") return unavailable;
+      const stable = (v, depth = 0) => {
+        if (depth > 16) throw new Error("context depth");
+        return Array.isArray(v) ? v.map(x => stable(x, depth + 1)) : v && typeof v === "object"
+          ? Object.fromEntries(Object.keys(v).sort().map(k => [k, stable(v[k], depth + 1)])) : v;
+      };
+      const groups = [
+        ["weather", ["weather", "weatherPlan", "tod"]],
+        ["car setup", ["car"]],
+        ["driving model", ["physics", "tune", "difficulty", "tyreWear"]],
+        ["controls", ["controls"]],
+        ["circuit version", ["layout"]],
+      ];
+      const differences = [], unknown = [];
+      let compared = 0;
+      for (const [label, keys] of groups) {
+        let missing = false, differs = false;
+        for (const k of keys) {
+          if (a[k] === undefined || b[k] === undefined || (k !== "weatherPlan" && (a[k] === null || b[k] === null))) {
+            missing = true; continue;
+          }
+          compared++;
+          if (JSON.stringify(stable(a[k])) !== JSON.stringify(stable(b[k]))) differs = true;
+        }
+        if (differs) differences.push(label);
+        else if (missing) unknown.push(label);
+      }
+      if (!compared) return unavailable;
+      const message = differences.length ? "Rival settings differ: " + differences.join(", ") + "."
+        : unknown.length ? "Compared rival settings match." : "Rival settings match this session.";
+      return message + (unknown.length ? " Not yet compared: " + unknown.join(", ") + "." : "");
+    } catch (_) { return unavailable; }
+  }
+
   function findFloorIndex(values, value) {
     let lo = 0, hi = values.length - 1;
     if (value <= values[0]) return 0;
@@ -316,7 +357,7 @@ const GhostShare = (function () {
 
   return {
     MAGIC, encode, decode, fileExport, installGuest, clearGuest, guest, hasGuest,
-    bestTime, at, timeAt, consumeHash, withoutGhost,
+    bestTime, at, timeAt, consumeHash, withoutGhost, contextNotice,
   };
 })();
 Object.freeze(GhostShare);

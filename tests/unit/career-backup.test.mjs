@@ -696,12 +696,110 @@ test("IMPORT confirmation keeps the reviewed revision and previews backup destin
   await ui.selectBackup(envelope);
   assert.equal(ui.G.$("cr-left").querySelector('[data-cr-act="import"]').textContent, "IMPORT?");
   const preview = ui.G.$("cr-left").querySelectorAll(".cr-note").map((n) => n.textContent).join(" ");
-  assert.match(preview, /Driver career · 2027 · 2 rounds completed · Destination slot 2/);
+  assert.match(preview, /Driver career · Destination slot 2/);
+  assert.match(preview, /Current: 2026 · Haas · 1 rounds completed/);
+  assert.match(preview, /Backup: 2027 · Haas · 2 rounds completed/);
+  assert.equal(h.store.get("career.driver.1").money, 100, "review does not apply the backup");
   h.disk.set("apex26.career.driver.1", JSON.stringify(save({ money: 200 })));
   h.foreign("apex26.career.driver.1");
   ui.clickImport();
   assert.equal(ui.notices.at(-1), "SAVE CONFLICT — IMPORT REFUSED");
   assert.equal(JSON.parse(h.disk.get("apex26.career.driver.1")).money, 200);
+});
+
+test("backup preview follows mode/extras scope and explains shared identity without writing", () => {
+  const h = deviceA();
+  const envelope = JSON.parse(JSON.stringify(h.CareerBackup.build()));
+  envelope.badges = { earned: ["a"] };
+  envelope.daily = { days: {} };
+  envelope.records = { laps: 1 };
+  const before = JSON.stringify([...h.disk]);
+  const first = h.CareerBackup.preview(envelope, { focusFlavour: "driver" });
+  assert.equal(first.slots.length, 0);
+  assert.ok(first.extras.some(s => s.includes("Licence badges")));
+  assert.ok(!first.extras.some(s => s.includes("identity")));
+  const second = h.CareerBackup.preview(envelope, { flavours: ["myteam"], includeProgressExtras: false });
+  assert.equal(second.slots.length, 1);
+  assert.equal(second.extras.length, 1);
+  assert.match(second.extras[0], /Shared MY TEAM identity: replace .* for all MY TEAM slots/);
+  assert.equal(h.CareerBackup.preview(envelope, { includeExtras: false }).extras.length, 0);
+  assert.equal(JSON.stringify([...h.disk]), before);
+});
+
+test("slot and extras quota failures preserve session success but never claim confirmed saving", async () => {
+  for (const failedKey of ["career.driver.1", "badges", "daily.v1", "records", "season"]) {
+    const h = loadHarness();
+    const envelope = { format: h.CareerBackup.FORMAT,
+      slots: [{ flavour: "driver", i: 1, data: save({ money: 50 }) }],
+      badges: { earned: ["a"] }, daily: { days: {} }, records: { laps: 1 }, season: { round: 1 } };
+    const put = h.ctx.localStorage.setItem;
+    h.ctx.localStorage.setItem = (k, v) => {
+      if (k === "apex26." + failedKey) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+      put(k, v);
+    };
+    const result = h.CareerBackup.apply(envelope, { focusFlavour: "driver" });
+    assert.equal(result.ok, true, failedKey);
+    assert.equal(result.durable, false, failedKey);
+    assert.equal(result.failed, 1, failedKey);
+    assert.equal(result.issues[0].key, failedKey);
+    assert.equal(h.store.get("career.driver.1").money, 50);
+    assert.equal(h.disk.has("apex26." + failedKey), false);
+    const ui = bootBackupUi(h);
+    await ui.selectBackup(envelope);
+    ui.clickImport();
+    assert.match(ui.notices.at(-1), /RESTORED FOR THIS SESSION — SAVE NOT CONFIRMED; KEEP YOUR BACKUP/);
+  }
+});
+
+test("a rejected extra after slot restoration reports partial application", async () => {
+  const h = loadHarness();
+  const write = h.store.write;
+  h.store.write = function (key, value, options) {
+    return key === "badges" ? { ok: false, durable: false, reason: "refused" } : write.call(this, key, value, options);
+  };
+  const envelope = { format: h.CareerBackup.FORMAT,
+    slots: [{ flavour: "driver", i: 1, data: save({ money: 75 }) }], badges: { earned: ["a"] } };
+  const ui = bootBackupUi(h);
+  await ui.selectBackup(envelope);
+  ui.clickImport();
+  assert.equal(h.store.get("career.driver.1").money, 75);
+  assert.equal(h.store.get("badges", null), null);
+  assert.equal(ui.notices.at(-1), "RESTORE INCOMPLETE — SOME DATA APPLIED; KEEP YOUR BACKUP");
+});
+
+test("MY TEAM identity writes contribute to the restore durability outcome", () => {
+  const envelope = JSON.parse(JSON.stringify(deviceA().CareerBackup.build()));
+  const h = loadHarness(), put = h.ctx.localStorage.setItem;
+  h.ctx.localStorage.setItem = (k, v) => {
+    if (k === "apex26.customTeam") throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+    put(k, v);
+  };
+  const result = h.CareerBackup.apply(envelope, { focusFlavour: "myteam" });
+  assert.equal(result.ok, true);
+  assert.equal(result.durable, false);
+  assert.equal(result.issues[0].key, "customTeam");
+  assert.equal(h.store.get("customTeam").name, "Murrin GP");
+  assert.equal(h.disk.has("apex26.customTeam"), false);
+});
+
+test("the other-mode preview names the incoming team and retains an earlier saving warning", async () => {
+  const a = deviceA(); a.store.set("career.driver.1", save());
+  const envelope = JSON.parse(JSON.stringify(a.CareerBackup.build()));
+  const h = loadHarness(), put = h.ctx.localStorage.setItem;
+  h.ctx.localStorage.setItem = (k, v) => {
+    if (k === "apex26.career.driver.1") throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+    put(k, v);
+  };
+  const ui = bootBackupUi(h);
+  await ui.selectBackup(envelope);
+  ui.clickImport();
+  const notes = ui.G.$("cr-left").querySelectorAll(".cr-note").map(n => n.textContent).join(" ");
+  assert.match(notes, /press ALL MODES\? to apply/);
+  assert.match(notes, /Backup: 2026 · Murrin GP/);
+  h.ctx.localStorage.setItem = put;
+  ui.clickImport();
+  assert.match(ui.notices.at(-1), /SAVE NOT CONFIRMED; KEEP YOUR BACKUP/);
+  assert.equal(h.store.get("career.myteam.0").money, 5150);
 });
 
 for (const focus of ["driver", "myteam"]) {

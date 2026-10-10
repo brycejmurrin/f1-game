@@ -11,6 +11,27 @@ import { galleryPath } from "../helpers/output-paths.js";
 const PORTRAIT  = { width: 390, height: 844 };
 const LANDSCAPE = { width: 844, height: 390 };
 
+test("CAM touch long-press keeps the picker open after normal capture release", async ({ page, context }) => {
+  await page.setViewportSize(LANDSCAPE);
+  await page.goto("/");
+  await waitReady(page);
+  await page.evaluate(() => { window.__apex.headless(true); window.__apex.race("bahrain"); });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => window.__apex.go());
+  const cam = page.locator("#btn-cam");
+  await expect(cam).toBeVisible();
+  const box = await cam.boundingBox();
+  expect(box).not.toBeNull();
+  const cdp = await context.newCDPSession(page);
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }] });
+  await page.waitForFunction(() => document.getElementById("campicker")?.hidden === false, null, { polling: 100, timeout: 5000 });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await expect(page.locator("#campicker")).toBeVisible();
+  await page.locator('#campicker [data-idx="1"]').click();
+  await expect(cam).toHaveText("FAR");
+  await expect(page.locator("#campicker")).toBeHidden();
+});
+
 // Shipped TEXT SIZE large / HOME SCENE photo change the select strip's tile
 // width, so tablet 768px can leave row 8's snap target at 0 (CI Expected >0,
 // Received 0). Pin the previous look so this file stays a touch-scroll
