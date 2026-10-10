@@ -53,6 +53,9 @@ test("every workflow step that diffs a pull request resolves its base through th
   assert.match(job("sweeps", "ship-filter"), CALL, "the geometry sweeps filter");
   assert.match(job("renderer-filter", "renderer-macos"), CALL, "the renderer filter");
   assert.match(job("node-suites", "sweeps-parts"), /BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "the node-suites plan step");
+  // 15-F3: the two steps #1292 missed. xr-filter's regex names ci.yml, so a stale base re-ran the VR job.
+  assert.match(job("xr-filter", "xr"), CALL, "the xr filter");
+  assert.match(job("unit-plan", "node-suites"), /BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "the unit-plan step");
   assert.match(docs, /PR_BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "docs-guards' prose check");
   assert.match(resolver, /\[ "\$EVENT" = pull_request \] && BEFORE="\$\(bash "\$\(dirname "\$0"\)\/ci-pr-base\.sh" "\$BEFORE"\)"/,
     "the selected gate's resolver");

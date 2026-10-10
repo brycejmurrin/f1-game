@@ -518,7 +518,9 @@ jobs:
           if [ "$CALLED" = "true" ]; then
             BASE="${LIVE_BEFORE:-}"
           elif [ "$EVENT" = "pull_request" ]; then
-            BASE="${PR_BASE:-}"
+            # The test commit's first parent, not the event's base.sha, which lags
+            # one sync behind (tools/ci/ci-pr-base.sh; 15-F3, 2026-10-10).
+            BASE="$(bash tools/ci/ci-pr-base.sh "${PR_BASE:-}")"
           elif [ "$EVENT" = "push" ]; then
             if [ "$(bash tools/ci/base-green.sh "${PUSH_BEFORE:-}")" = green ]; then
               BASE="${PUSH_BEFORE:-}"
@@ -1887,6 +1889,11 @@ jobs:
             push|pull_request) ;;
             *) run_all "event is '$EVENT' (dispatch forces the suite)" ;;
           esac
+          # A PR diffs against the test commit's first parent (ci-pr-base.sh): the
+          # event's base.sha lags one sync behind it, and this filter's regex names
+          # ci.yml, so a stale base re-ran the 25-minute VR job on every ready PR
+          # whose base had taken a ci.yml merge since (15-F3, 2026-10-10).
+          [ "$EVENT" = pull_request ] && BEFORE="$(bash tools/ci/ci-pr-base.sh "${BEFORE:-}")"
           case "${BEFORE:-}" in
             ""|0000000000000000000000000000000000000000) run_all "no before-sha (new branch, first push)" ;;
           esac
