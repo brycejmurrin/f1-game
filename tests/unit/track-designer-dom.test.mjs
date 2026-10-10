@@ -1956,3 +1956,41 @@ test("level, smooth and zero affect only selected heights and retain smooth endp
   assert.equal(b.D.adjustElevation("zero"), false, "no-op does not add undo");
   b.D.close();
 });
+
+test("an autosaved draft of an oversize loop is rejected on open instead of freezing the tab (13-F1)", () => {
+  const pts = [];
+  for (let i = 0; i < 40; i++) pts.push(i % 2 ? [-9000 + (i % 7) * 100, 9000 - i * 10] : [9000 - (i % 5) * 100, -9000 + i * 10]);
+  const b = bootScreen({ customTrackDraft: { name: "HOSTILE", seed: 7, theme: "parkland", baseHW: 7, pts } });
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open();
+  const st = b.D.state();
+  assert.ok(st.design && st.design.name !== "HOSTILE", "the oversize draft was not restored");
+  const per = st.design.pts.reduce((s, p, i) => { const q = st.design.pts[(i + 1) % st.design.pts.length]; return s + Math.hypot(q[0] - p[0], q[1] - p[1]); }, 0);
+  assert.ok(per <= b.C.LIMITS.loopMaxLoose, "the opened design is a sane loop: " + Math.round(per) + " m");
+}
+);
+
+test("DELETE POINT 0 and a stamp over the start line keep every surviving point's own height (13-F2)", () => {
+  const b = bootScreen();
+  const green = openGreen(b);
+  assert.equal(b.D.applyElevPreset("hilly"), true);
+  const d0 = plain(b.D.state().design);
+  assert.ok(d0.heights.filter(Boolean).length > 10, "the hilly preset left real heights to misalign");
+  const key = (p) => p[0] + "," + p[1];
+  const bad = (before, after) => {
+    const m = new Map(before.pts.map((p, i) => [key(p), before.heights[i]]));
+    return after.pts.filter((p, i) => m.has(key(p)) && m.get(key(p)) !== after.heights[i]).length;
+  };
+  assert.equal(b.D.deletePoint(0), true);
+  const d1 = plain(b.D.state().design);
+  assert.notDeepEqual(d1.pts[0], d0.pts[0], "the start point itself was deleted");
+  assert.equal(bad(d0, d1), 0, "DELETE POINT 0: no survivor carries its neighbour's height");
+  b.D.undo();
+  const N = b.D.state().design.pts.length, before = plain(b.D.state().design);
+  b.D.setTool("corner");
+  assert.equal(b.D.applyStamp(N - 2, 2, "corner"), true, "a stamp whose span wraps the start line");
+  const after = plain(b.D.state().design);
+  assert.ok(after.pts.filter((p) => before.pts.some((q) => key(q) === key(p))).length > 20, "plenty of shared points to check");
+  assert.equal(bad(before, after), 0, "wrapping stamp: heights stay keyed to their points");
+  assert.equal(green.pts.length > 0, true);
+});
