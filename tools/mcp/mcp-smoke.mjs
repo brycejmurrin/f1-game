@@ -11,7 +11,7 @@
  *   node tools/mcp/mcp-smoke.mjs
  *   node tools/mcp/mcp-smoke.mjs --dry-run
  *   ./tools/mcp/apex-tools-mcp.sh smoke
- *   node tools/mcp/mcp-smoke.mjs --real [--only=a,b] [--timeout=120] [--no-write]
+ *   node tools/mcp/mcp-smoke.mjs --real [--browser] [--only=a,b] [--timeout=120] [--no-write]
  *
  * --real runs every TREE tool (readOnlyHint, plus apex_graph_parity) for real with
  * minimal args through `apex-tools-mcp.mjs call`; one verdict row per tool, exit 1
@@ -120,6 +120,12 @@ export const REAL_ARGS = {
   apex_track_audit: { track: "monza" },
   apex_unit_test: { file: "tests/unit/a11y-pwa-pass.test.mjs" },
 };
+/** Opt-in (--browser): one cheap call per browser path, run ONE AT A TIME (each takes the browser lock itself). */
+export const BROWSER_CHECKS = [
+  ["apex_ui_fit", { screen: "title" }],
+  ["apex_ui_shot", { screen: "title", image: false }],
+  ["apex_eval", { track: "monza", expr: "1+1" }],
+];
 export const REAL_SKIP = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast"]);
 
 /** Tree tools of a list-tools catalog: read-only tree tools plus apex_graph_parity, minus the skips. */
@@ -153,8 +159,15 @@ function realRun(argv) {
   try { names = realTools(JSON.parse(lt.stdout)); } catch { process.stderr.write("mcp-smoke --real: list-tools unparseable\n"); return 1; }
   if (only.length) names = names.filter((n) => only.includes(n));
   const rows = [];
-  for (const name of names) {
-    const args = REAL_ARGS[name] || {};
+  const calls = names.map((n) => [n, REAL_ARGS[n] || {}]);
+  if (argv.includes("--browser")) {
+    // A browser call under load measures the box, not the tool (AGENTS.md rule 8): refuse rather than report noise.
+    let load = 0; try { load = Number(fs.readFileSync("/proc/loadavg", "utf8").split(" ")[0]); } catch { /* not linux */ }
+    if (load >= 3 && process.env.APEX_MCP_MOCK !== "1") { process.stderr.write(`mcp-smoke --real --browser: loadavg ${load} >= 3, refusing to time a browser call on a busy box\n`); return 1; }
+    if (!only.length) calls.push(...BROWSER_CHECKS);
+    else calls.push(...BROWSER_CHECKS.filter(([n]) => only.includes(n)));
+  }
+  for (const [name, args] of calls) {
     const t0 = Date.now();
     const r = spawnSync(process.execPath, [mcp, "call", name, JSON.stringify(args)], {
       encoding: "utf8", cwd: ROOT, timeout: timeoutS * 1000, maxBuffer: 32e6,
@@ -166,7 +179,7 @@ function realRun(argv) {
     process.stdout.write(`${v.pass ? "PASS" : "FAIL"} ${name.padEnd(28)} ${String(Date.now() - t0).padStart(6)}ms  ${v.why}\n`);
   }
   const failed = rows.filter((x) => !x.pass);
-  process.stdout.write(`mcp-smoke --real ${failed.length ? "FAIL" : "ok"}: ${rows.length - failed.length}/${rows.length} tree tools\n`);
+  process.stdout.write(`mcp-smoke --real ${failed.length ? "FAIL" : "ok"}: ${rows.length - failed.length}/${rows.length} ${argv.includes("--browser") ? "tools (tree + browser)" : "tree tools"}\n`);
   if (!argv.includes("--no-write")) {
     fs.mkdirSync(path.dirname(OUT), { recursive: true });
     fs.writeFileSync(OUT.replace(/\.json$/, "-real.json"), JSON.stringify({ ok: !failed.length, rows }, null, 2) + "\n");
@@ -179,7 +192,7 @@ function help() {
 
 Usage:
   node tools/mcp/mcp-smoke.mjs [--dry-run] [--json]
-  node tools/mcp/mcp-smoke.mjs --real [--only=a,b] [--timeout=120] [--no-write]
+  node tools/mcp/mcp-smoke.mjs --real [--browser] [--only=a,b] [--timeout=120] [--no-write]
   ./tools/mcp/apex-tools-mcp.sh smoke [--dry-run]
 
 Pokes apex-tools (apex_status), probe help + mock list-tools, chrome-devtools
