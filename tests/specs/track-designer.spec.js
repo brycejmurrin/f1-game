@@ -207,23 +207,32 @@ test.describe("Track designer", () => {
     expect(await page.evaluate(() => TrackDesigner.state().design.look)).toBeUndefined();
     await page.locator('#trackdesigner [data-preset="race"]').click();
     await page.getByRole("tab", { name: /^OBJECTS/ }).click();
-    await page.locator('#trackdesigner [data-prop="hedge"]').click();
+    await page.locator('[data-object-category="nature"]').click();
+    await expect(page.locator('[data-prop="marshal"]')).toBeHidden();
+    await page.locator('#trackdesigner [data-prop="pines"]').click();
     await page.locator('#trackdesigner [data-placement-mode="range"]').click();
     for (const [name, value] of [["Scenery start point number", "3"], ["Scenery end point number", "10"], ["Scenery positions along section", "2"]]) {
       const input = page.getByRole("spinbutton", { name, exact: true }); await input.fill(value); await input.press("Enter");
     }
+    const roadsideGap = page.getByRole("spinbutton", { name: "Roadside gap in metres", exact: true });
+    await roadsideGap.fill("32"); await roadsideGap.press("Enter");
+    await page.getByRole("button", { name: "Swap scenery section start and end", exact: true }).click();
+    expect(await page.evaluate(() => [TrackDesigner.state().sel, TrackDesigner.state().span])).toEqual([9, 2]);
     await page.locator('#trackdesigner [data-side="0"]').click();
     const batchUndo = await page.evaluate(() => TrackDesigner.state().undo);
     await page.getByRole("button", { name: "Place objects along the selected section", exact: true }).click();
     expect(await page.evaluate(() => TrackDesigner.state().design.props.map((p) => p.side))).toEqual([-1, 1, -1, 1]);
     expect(await page.evaluate(() => TrackDesigner.state().undo)).toBe(batchUndo + 1);
-    await page.getByRole("button", { name: "Edit placed hedge 1", exact: true }).click();
+    await page.getByRole("button", { name: "Edit placed pines 1", exact: true }).click();
     await page.getByRole("spinbutton", { name: "Placed object roadside gap in metres", exact: true }).fill("24");
     await page.locator('[data-role="prop-editor"]').getByRole("button", { name: "APPLY", exact: true }).click();
     expect(await page.evaluate(() => TrackDesigner.state().design.props[0].gap)).toBe(24);
     await page.getByRole("button", { name: "UNDO", exact: true }).click();
     await page.getByRole("button", { name: "UNDO", exact: true }).click();
     expect(await page.evaluate(() => TrackDesigner.state().design.props)).toBeUndefined();
+    await page.locator('[data-object-category="venue"]').click();
+    await expect(page.locator('[data-prop="pines"]')).toBeHidden();
+    await expect(page.locator('[data-prop="camera"]')).toBeVisible();
     await page.locator('#trackdesigner [data-placement-mode="point"]').click();
     await page.locator('#trackdesigner [data-prop="stand"]').click();
     await page.locator('#trackdesigner [data-side="-1"]').click();

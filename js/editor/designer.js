@@ -187,11 +187,13 @@ const TrackDesigner = (function () {
    *  the unchanged tail walked back (a stamp may thin the tail with RDP, so its
    *  survivors are a subsequence) — and a zone between two anchors keeps its
    *  share of that stretch. When the start point itself changed there is no
-   *  anchor and the fractions stand. */
+   *  anchor and the fractions stand — but heights are keyed by control-point
+   *  identity (coordinates), not arc fraction, so they are remapped regardless. */
   function remapZones(d, oldPts, newPts) {
     const N = oldPts.length, M = newPts.length;
     const same = (p, q) => p[0] === q[0] && p[1] === q[1];
-    if (!N || !M || !same(oldPts[0], newPts[0])) return Object.assign({}, d, { heights: remapHeights(d, oldPts, newPts) });
+    if (!N || !M) return d;
+    if (!same(oldPts[0], newPts[0])) return Object.assign({}, d, { heights: remapHeights(d, oldPts, newPts) });
     const head = [[0, 0]];
     let i = 1, j = 1;
     while (i < N && j < M && same(oldPts[i], newPts[j])) head.push([i++, j++]);

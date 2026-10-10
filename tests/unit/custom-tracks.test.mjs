@@ -406,3 +406,23 @@ test("collection import refuses distinct geometry with a colliding content hash"
   assert.equal(result.reason, "collision"); assert.equal(result.index, 1);
   assert.equal(writes.length, 0); assert.equal(C.list().length, 0);
 });
+
+test("sanitize refuses a loop thousands of km long (13-F1): strict above loopMax, loose above loopMaxLoose", () => {
+  const { C } = boot();
+  const star = (R) => {   // 40 points zig-zagging corner to corner at radius R
+    const pts = [];
+    for (let i = 0; i < 40; i++) pts.push(i % 2 ? [-R + (i % 7) * 100, R - i * 10] : [R - (i % 5) * 100, -R + i * 10]);
+    return pts;
+  };
+  assert.ok(C.LIMITS.loopMax > 7000 && C.LIMITS.loopMaxLoose >= C.LIMITS.loopMax, "the ceiling clears the 7 km lap cap");
+  assert.equal(C.sanitize(design({ pts: star(9000) })), null, "a ~990 km zig-zag is refused");
+  assert.equal(C.sanitize(design({ pts: star(9000) }), { loose: true }), null, "…also as a draft");
+  assert.ok(C.sanitize(design()), "a sound 4 km circuit still passes");
+  // A loop sized to land between 14 km and 20 km: scale an ellipse by perimeter.
+  const e = (k) => ellipse(36, 760 * k, 480 * k);
+  const per = (pts) => pts.reduce((s, p, i) => s + Math.hypot(pts[(i + 1) % pts.length][0] - p[0], pts[(i + 1) % pts.length][1] - p[1]), 0);
+  let k = 1; while (per(e(k)) < 16000) k += 0.25;
+  assert.ok(per(e(k)) > C.LIMITS.loopMax && per(e(k)) < C.LIMITS.loopMaxLoose);
+  assert.equal(C.sanitize(design({ pts: e(k) })), null, "over loopMax: refused for storage");
+  assert.ok(C.sanitize(design({ pts: e(k) }), { loose: true }), "…but a red work-in-progress draft restores");
+});

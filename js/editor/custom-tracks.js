@@ -27,6 +27,14 @@ const CustomTracks = (function () {
     // registered as raceable with curvature NaN), and a control polygon no
     // shorter than this (validate.js's lap floor is 2.5 km on the BUILT road).
     spacing: 8, loopMin: 1000,
+    // ...and no longer than this. validate.js caps the BUILT lap at lenMax 7 km, and
+    // the control polygon (chords cut the corners) runs a little longer than the
+    // road it makes, so 2x that cap is generous for a sound design. Without a
+    // ceiling a share code / import / autosaved draft of a 2,000 km star made
+    // validate.check build and scan a half-million-node centreline on open (7 s,
+    // 388 MB). The loose ceiling lets a red work-in-progress draft restore while
+    // still refusing the tab-freezing ones.
+    loopMax: 14000, loopMaxLoose: 20000,
   });
   // Road-edge styles the designer authors (mesh.js buildKerbs). Default flat
   // matches the engine's historic ribbon so older saves keep their look + id.
@@ -150,6 +158,13 @@ const CustomTracks = (function () {
   }
   function idOf(it) { return "custom-" + ("00000000" + Hash32.fnv1a(canonical(it)).toString(16)).slice(-8); }
 
+  /** Control-polygon perimeter (m, the closing chord included). O(points): no
+   *  centreline is built, so it is safe to ask of hostile input. */
+  function polyLength(pts) {
+    let C = 0;
+    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; C += Math.hypot(b[0] - a[0], b[1] - a[1]); }
+    return C;
+  }
   /** Control-polygon perimeter (the closing chord included), or -1 when two
    *  consecutive points sit closer than LIMITS.spacing. */
   function loopLength(pts) {
@@ -171,8 +186,11 @@ const CustomTracks = (function () {
     if (!raw || typeof raw !== "object") return null;
     const pts = sanitizePts(raw.pts);
     if (!pts) return null;
-    const L = loopLength(pts);
-    if (!(opts && opts.loose) && L < LIMITS.loopMin) return null;
+    const loose = !!(opts && opts.loose);
+    const L = loopLength(pts), perimeter = polyLength(pts);
+    if (!loose && L < LIMITS.loopMin) return null;
+    // Before anything walks this design: a loop thousands of km long is refused here.
+    if (perimeter > (loose ? LIMITS.loopMaxLoose : LIMITS.loopMax)) return null;
     const heights = sanitizeHeights(pts, raw.heights);
     const it = {
       name: sanitizeName(raw.name),

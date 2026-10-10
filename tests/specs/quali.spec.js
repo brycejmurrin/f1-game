@@ -378,6 +378,9 @@ test.describe("QUALIFYING LAP: a one-off race can qualify", () => {
     await toSettings(page);
     await openField(page);
     await pickGrid(page, 0);
+    // This checks the launch state, not pixels. Software rasterization otherwise
+    // competes with car-asset warmup and can consume the entire startup window.
+    await page.evaluate(() => window.__apex.headless(true));
     await page.locator("#rs-go").click();
     await page.waitForFunction(() => ["count", "race"].includes(window.__apex.info().state), null, { polling: 100, timeout: 60_000 });
     // No qualifying session was staged, and the flow is a plain race.
