@@ -491,17 +491,29 @@ const RADIO_TOP_MIN = 96, RADIO_TOP_GAP = 8;
 // and left fell back to 50% with transform none — card left-edge at centre,
 // hud-layout CI: #announce+btn-boost at x426 on 852). #hud-sectors sits in
 // that same hanging band on touch (small-landscape: #hud-sectors+#announce)
-// so it ends the strip too; the map and the gaps chip start it even when they
-// still sit in the tower's row (r.bottom <= tower.bottom), because a dropped
+// so it ends the strip too; the map and the gaps chip start it when a dropped
 // or low strip shares the hanging card's rows (hud-layout: .hud-gaps+#announce).
 // They do not count as a dock, so empty docks (desktop) still unpublish the
-// lane. TILT's tap column lives on the bottom edge, so the band is the rest
-// of the viewport. Run again after this tick's gap strings (updateHud): fitHud
+// lane. Run again after this tick's gap strings (updateHud): fitHud
 // saw the previous spelling, and hud-layout probes on that same tick.
+// ONLY CHROME IN THE CARD'S OWN ROWS CLIPS IT. The hanging card starts under
+// the mirror (its chip, or the tower when neither shows) and is a few lines
+// tall (LANE_ROWS). Clipping the lane to every dock group wherever it sat —
+// the steer buttons and TILT's pedals on the bottom edge — and to the map and
+// gaps even when they ended above the card pinned the card at the steer
+// column's right edge, mid-view over the cars ahead (phone report 2026-10-10,
+// cockpit 932x430: #announce at x≈227 under the halo, 160px above the buttons
+// it was clearing). A dock group still PUBLISHES the lane from anywhere in the
+// viewport (desktop's empty docks never do); it bounds the lane only from the
+// card's rows, as the map, the gaps chip and the opt-in readouts do.
+const LANE_ROWS = 96;
 function announceLane(root) {
   const t = _hudTop ? _hudTop.getBoundingClientRect() : null;
   const W = window.innerWidth, H = window.innerHeight || 0;
   const y0 = t ? t.bottom : 0, mid = W / 2;
+  const under = (el) => { if (!el || el.hidden || !el.getBoundingClientRect) return 0; const r = el.getBoundingClientRect(); return r.width && r.height ? r.bottom : 0; };
+  // Under a caution the card steps below the flag chip too (css/hud.css: the caution rules).
+  const bandTop = Math.max(y0, under(document.getElementById("hud-mirror")), under(document.getElementById("hud-mirror-chip")), under(els.flag)) + RADIO_TOP_GAP, bandBot = bandTop + LANE_ROWS;
   let sal = 0, sar = 0;
   if (typeof getComputedStyle === "function" && root) {
     try {
@@ -511,10 +523,10 @@ function announceLane(root) {
     } catch (_) { /* mini-dom / detached root */ }
   }
   let left = sal, right = W - sar, any = false;
-  const clip = (r, counts, always) => {
+  const clip = (r, counts) => {
     if (!r || !r.width || !r.height) return;
-    if (!always && (r.top >= H || r.bottom <= y0)) return;
-    if (counts) any = true;
+    if (counts && r.top < H && r.bottom > y0) any = true;   // a lit dock publishes the lane from anywhere below the tower
+    if (r.top >= bandBot || r.bottom <= bandTop) return;    // but only the card's rows bound it
     if ((r.left + r.right) / 2 >= mid) right = Math.min(right, r.left);
     else left = Math.max(left, r.right);
   };
@@ -530,9 +542,15 @@ function announceLane(root) {
   // still clear the lane vars (CSS falls back to centred). Phone docks set
   // `any` via the group loop above.
   if (secR && secR.width && secR.height) right = Math.min(right, secR.left);
-  clip(els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null, false, true);
+  clip(els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null, false);
   const gaps = document.querySelector(".hud-gaps");
-  clip(gaps && !gaps.hidden ? gaps.getBoundingClientRect() : null, false, true);
+  clip(gaps && !gaps.hidden ? gaps.getBoundingClientRect() : null, false);
+  // The opt-in readouts (MOVE & SIZE places them) and the track-limits chip: a
+  // STRATEGY box in the left column and the INPUTS trace under the sector box
+  // share the card's rows on a phone.
+  for (const el of [document.getElementById("hud-rel"), document.getElementById("hud-strat"), document.getElementById("hud-inputs"), document.getElementById("hud-damage"), els.hudLimits]) {
+    if (el && !el.hidden && el.getBoundingClientRect) clip(el.getBoundingClientRect(), false);
+  }
   const x = left + RADIO_TOP_GAP, w = right - RADIO_TOP_GAP - x;
   const on = any && w > 0;
   const collapsed = !on && any && secR && secR.width;

@@ -1051,3 +1051,42 @@ test("an empty saved calendar retains the existing lossy-read protection", () =>
   assert.equal(writes("season"), 0);
   assert.equal(stored.get("season").config.trackIds.length, 0);
 });
+
+// bug-hunt 1.6: `season !== copy` is also true when resume() fell back to a
+// rebuilt blank season (a round past the calendar), which marked that season
+// lossy and refused every later save with "unknown circuit" although the build
+// knew every circuit. Lossy comes from unknown ids only.
+test("a season rebuilt blank because its round is out of range is NOT lossy (bug-hunt 1.6)", () => {
+  for (const raw of [
+    { round: 99, pts: { d0: 5 }, teamPts: {}, driverCodes: {}, config: { trackIds: ["monza", "monaco"] } },
+    { round: 99, pts: {}, teamPts: {}, driverCodes: {} },
+    { round: -3, pts: {}, teamPts: {}, driverCodes: {}, config: { trackIds: ["monza", "monaco"] } },
+  ]) {
+    const { S, writes } = load({ season: raw });
+    S.engage("season");
+    const season = S.load();
+    assert.equal(S.lastLoadLossy(), false, "every id is known: the fallback is a clean season");
+    assert.equal(S.save(season).reason, null, "later saves are not refused");
+    assert.ok(writes("season") >= 1);
+  }
+  // ...while an unknown id on the same out-of-range season stays lossy.
+  const bad = load({ season: { round: 99, pts: {}, teamPts: {}, driverCodes: {}, config: { trackIds: ["monza", "nosuch"] } } });
+  bad.S.engage("season");
+  const s = bad.S.load();
+  assert.equal(bad.S.lastLoadLossy(), true);
+  assert.equal(bad.S.save(s).reason, "unknown circuit");
+});
+
+// bug-hunt 1.3: netPts looped `round` times; an imported 1e9 froze the tab.
+test("netPts is bounded by the stored per-round row, not by season.round (bug-hunt 1.3)", () => {
+  const { S } = load({ seasonCfg: { drop: 2 } });
+  S.engage("season");
+  const hostile = { round: 2e7, pts: { d0: 40 }, roundPts: { d0: [25, 10, 5] }, config: { drop: 2, trackIds: ["monza", "monaco", "imola"] } };
+  const t0 = Date.now();
+  const n = S.netPts(hostile, "d0");
+  assert.ok(Date.now() - t0 < 200, "netPts must not loop season.round times");
+  assert.equal(n, 25, "keep = 3 - 2 = 1 round: the best one");
+  // a row shorter than keep never produces NaN
+  const short = { round: 2e7, pts: { d0: 3 }, roundPts: { d0: [3] }, config: { drop: 1, trackIds: ["a", "b", "c", "d"] } };
+  assert.equal(S.netPts(short, "d0"), 3);
+});

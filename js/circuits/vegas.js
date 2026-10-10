@@ -42,11 +42,11 @@
     terrainMat: "SAND",
     pal: { horizon: [0.28, 0.12, 0.32], zenith: [0.08, 0.04, 0.14], sunColor: [0.65, 0.50, 0.88], ambientSky: [0.42, 0.28, 0.50], ambientGround: [0.50, 0.25, 0.38], fogColor: [0.22, 0.10, 0.26], fogDensity: 0.0030, sunDir: [0.75, 0.20, 0.12], runoff: [0.30, 0.29, 0.28], grass: [0.38, 0.33, 0.26] },
     elevations: [{ s: 0.2075, halfM: 130, rise: -1.2 }],
-    hwZones: [
-      { s0: 0.2164, s1: 0.2374, hw: 6.2, ease: 0.012 },  // arc 0.400-0.432 T7
-      { s0: 0.3139, s1: 0.4596, hw: 6.1, ease: 0.012 },  // arc 0.478-0.532 T9-T10
-      { s0: 0.5623, s1: 0.6186, hw: 6.3, ease: 0.012 },  // arc 0.665-0.695 T13
-      { s0: 0.8221, s1: 0.8832, hw: 6.3, ease: 0.012 },  // arc 0.985-0.012 T17
+    hwZones: [   // s0/s1 are CONTROL-INDEX fractions (def.js applyHwZones); "racing arc" = where the narrowed nodes really sit
+      { s0: 0.2164, s1: 0.2374, hw: 6.2, ease: 0.012 },  // racing arc 0.256-0.263 T7
+      { s0: 0.3139, s1: 0.4596, hw: 6.1, ease: 0.012 },  // racing arc 0.324-0.367 T9-T10
+      { s0: 0.5623, s1: 0.6186, hw: 6.3, ease: 0.012 },  // racing arc 0.510-0.532 T13
+      { s0: 0.8221, s1: 0.8832, hw: 6.3, ease: 0.012 },  // racing arc 0.835-0.852 T17
     ],
     // Public roads, so crown rather than banking: 2.5-3° on the sweeps only.
     bankZones: [
@@ -61,7 +61,7 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    sectors: [0.3, 0.62],
+    sectors: [0.291, 0.62],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.3, 0.62])
     turns: [0.0513, 0.0653, 0.0868, 0.0928, 0.1093, 0.2588, 0.3003, 0.3328, 0.3398, 0.3638, 0.4383, 0.4913, 0.5223, 0.8388, 0.8443, 0.8558, 0.9898],
     barrier: { a: [0.97, 0.84, 0.12], b: [0.10, 0.10, 0.12], c: [0.85, 0.12, 0.48], night: [0.28, 0.10, 0.32], tyre: [0.97, 0.84, 0.12] },  // casino gold/black + neon magenta
     furniture: { tree: "none",  fol: [0.22, 0.42, 0.18], lamp: "arm",   lc: [1.0, 0.86, 0.55] },

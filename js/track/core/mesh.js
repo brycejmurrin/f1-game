@@ -698,15 +698,31 @@ const TrackMesh = (function () {
       // o·dot(r[k+1]-r[k], t) < -|dP| (turn radius < |o|); its quads then fold
       // back over the neighbouring strip. On the fold side only, pull the verge
       // columns (0/1 or 12/13) in to 0.85 of the fold limit of either
-      // neighbouring span, never inside w: the running surface (2..11) is untouched.
+      // neighbouring span, never inside w. RUNNING SURFACE too: where that limit is
+      // itself inside w (a centreline kink tighter than the half-width: korea,
+      // bahrain, buddh, shanghai — verify-track's "centreline" row), the fold-side
+      // edge columns (2..4 / 9..11) and the verge pull in to it (floor 0.4 m, outside
+      // the ±0.35 centre columns), so the inside edge narrows instead of inverting.
+      // Visual only: the (s, x) road model and the driving boundary still read hw.
       for (let sp = 0; sp < 2; sp++) {
         const ka = sp ? k : (k - 1 + n) % n, kb = sp ? (k + 1) % n : k;
         const dx = px[kb] - px[ka], dz = pz[kb] - pz[ka], L = __M.hypot(dx, dz) || 1;
-        const drt = ((track.rx[kb] - track.rx[ka]) * dx + (track.rz[kb] - track.rz[ka]) * dz) / L;
-        if (__M.abs(drt) < 1e-6) continue;
-        const lim = __M.max(w, 0.85 * L / __M.abs(drt));
-        const v0 = drt > 0 ? 0 : 12, sg = drt > 0 ? -1 : 1;   // fold side: o·drt < 0
-        for (let v = v0; v < v0 + 2; v++) if (__M.abs(offs[v]) > lim) offs[v] = sg * lim;
+        const drx = track.rx[kb] - track.rx[ka], drz = track.rz[kb] - track.rz[ka];
+        // Two readings of "along": the chord (the quad's own edge) and the span's
+        // start-node tangent (what verify-track's roadGeoChecks tests); a tight
+        // turn folds under the second first.
+        for (let pass = 0; pass < 2; pass++) {
+          const ux = pass ? track.tx[ka] : dx / L, uz = pass ? track.tz[ka] : dz / L;
+          const D = dx * ux + dz * uz, drt = drx * ux + drz * uz;
+          if (__M.abs(drt) < 1e-6 || D <= 0) continue;
+          const limRun = 0.85 * D / __M.abs(drt), lim = __M.max(w, limRun);
+          const v0 = drt > 0 ? 0 : 12, sg = drt > 0 ? -1 : 1;   // fold side: o·drt < 0
+          for (let v = v0; v < v0 + 2; v++) if (__M.abs(offs[v]) > lim) offs[v] = sg * lim;
+          if (limRun < w) {
+            const lr = __M.max(0.4, limRun), r0 = drt > 0 ? 0 : 9, r1 = drt > 0 ? 5 : 14;
+            for (let v = r0; v < r1; v++) if (__M.abs(offs[v]) > lr) offs[v] = sg * lr;
+          }
+        }
       }
       const rise = [-0.05, -0.02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.02, -0.05];
       for (let v = 0; v < V; v++) {
@@ -1475,7 +1491,12 @@ const TrackMesh = (function () {
       // Each strip [lon0, lon1] x [lat0, lat1] in the box's own frame, laid on
       // the lane by pitPaint (on it, above it, facing up).
       const strip = (lon0, lon1, lat0, lat1, col) => pitPaint(track, out, s, lon0, lon1, lat0, lat1, lat0, lat1, col, uu);
-      const wi = sd * (smp.hw + o.corrOut + 0.3), wo = sd * (smp.hw + o.workOut - 0.3);
+      // Bay circuits paint the working lane; a bay-less complex (jeddah, jerez,
+      // mont_tremblant) has none — the stop IS in the fast lane (TrackPit.at()
+      // workCentre), so the box is painted across it, not on the apron past the wall.
+      const lane = p.hasBays === false;
+      const wi = sd * (smp.hw + (lane ? o.fastIn * p.v[k] + 0.15 : o.corrOut + 0.3));
+      const wo = sd * (smp.hw + (lane ? o.fastOut * p.w[k] - 0.15 : o.workOut - 0.3));
       const x0 = Math.min(wi, wo), x1 = Math.max(wi, wo);
       const boxLen = p.row.boxLen, paint = 0.16;
       const outer = sd > 0 ? x1 : x0;

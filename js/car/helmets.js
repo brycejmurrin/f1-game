@@ -328,7 +328,7 @@ const Helmets = (function () {
   // it sits beside the hand-designed ones without looking generated.
   const WHEEL = [C.red, C.blue, C.yellow, C.white, C.green, C.violet, C.orange, C.cyan, C.pink, C.lime, C.teal, C.crimson];
   const pick = (n, off) => WHEEL[(((n * 7 + off * 5) % WHEEL.length) + WHEEL.length) % WHEEL.length];
-  function generated(num) {
+  function generated(num, name) {
     const n = Math.abs(num | 0);
     const base = pick(n, 0), mark = pick(n + 3, 1), trim = pick(n + 7, 2);
     const zones = [[z.cap(0.24, mark), ...centre(10, trim)],
@@ -346,7 +346,17 @@ const Helmets = (function () {
        Antonelli's tricolore became three greys). Six steps around a
        twelve-entry wheel is the opposite hue, so it cannot equal `base`. */
     const alt = WHEEL[(((n * 7) % WHEEL.length) + WHEEL.length + WHEEL.length / 2) % WHEEL.length];
-    return { name: "#" + n, base, alt, visor: C.black, zones, generated: true };
+    return { name: name || "#" + n, base, alt, visor: C.black, zones, generated: true };
+  }
+
+  /* A STRING KEY AS A NUMBER, for a head that belongs to a person rather than a
+     seat: a legend's code ("FAN"). A race number is not stable across eras (ten
+     legends carry the neutral 1, which is Norris's lid on the 2026 grid), so the
+     legend and custom teams key on this instead. FNV-1a, folded to 31 bits. */
+  function keyNum(key) {
+    let h = 2166136261;
+    for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+    return (h >>> 1);
   }
 
   /* The design for a race number. `teamC` is the car's own primary paint. Six
@@ -357,8 +367,10 @@ const Helmets = (function () {
      base toward white or black instead, which turned Leclerc salmon and
      Antonelli's tricolore into three greys on grey. */
   const near = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) < 0.30;
-  function designFor(num, teamC) {
-    const d = (num != null && DESIGNS[num]) || generated(num == null ? 0 : num);
+  function designFor(num, teamC, key) {
+    // `key` (a legend code) is never a 2026 driver's design, whatever its number.
+    const d = (key != null && generated(keyNum(String(key)), String(key))) ||
+              (num != null && DESIGNS[num]) || generated(num == null ? 0 : num);
     if (!teamC || !d.alt || !near(d.base, teamC)) return d;
     return { name: d.name, base: d.alt, visor: d.visor, zones: d.zones, generated: d.generated, shifted: true };
   }
@@ -813,7 +825,7 @@ const Helmets = (function () {
     return out;
   }
 
-  return { DESIGNS, COLORS: C, designFor, painter, shell, isVisor, generated, ZONES, SHAPE, pointAt, build, buildAero, surfAt,
+  return { DESIGNS, COLORS: C, designFor, painter, shell, isVisor, generated, keyNum, ZONES, SHAPE, pointAt, build, buildAero, surfAt,
            RINGS, SLICES, FIELD_RINGS, FIELD_SLICES, ringT, MAX_SPLIT };   // the tessellation, so previews/tests can name both detail levels
 })();
 Object.freeze(Helmets);

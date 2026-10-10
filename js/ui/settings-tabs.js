@@ -16,6 +16,14 @@ const SettingsNav = (function () {
     files: "BACKUP & RESTORE",
   };
   let live = null;
+  // Subscribers told when a page is hidden by show()/back() (the CONTROLS wheel
+  // wizard disarms itself here). Module-level so a subscriber needs no instance.
+  const leaveFns = [];
+  function fireLeave(id) {
+    for (const fn of leaveFns) {
+      try { fn(id); } catch (e) { Log.warn("game", "SettingsNav.onLeave handler failed: " + (e && e.message)); }
+    }
+  }
 
   // Each page's panel element, looked up by its own literal id (dynamicIdReads
   // ratchet: getElementById must never take a computed argument).
@@ -71,13 +79,20 @@ const SettingsNav = (function () {
       return quietFocus(firstIn(pages[id]));
     }
 
-    function show(want, focus, after) {
+    // audioTried: undefined = not yet, "ok" / "failed" = the lazy bundle already
+    // answered once for this open. Never gate twice: a failed ensureAudio leaves
+    // the stub resident, so re-gating would retry forever. (Ship #1320 used a
+    // boolean `ensured` flag; keep the richer "failed" → offline note path.)
+    function show(want, focus, after, audioTried) {
       const id = TITLES[want] ? want : "home";
       // LAZY_AUDIO: same gate as the audio door — SettingRow must wire before
-      // #audioset is revealed (programmatic show("audio") included).
-      if (id === "audio" && typeof AudioPanel !== "undefined" && typeof AudioPanel._ensure === "function"
+      // #audioset is revealed (programmatic show("audio") included). The door
+      // click goes through here too, so it asks the bundle exactly once.
+      if (id === "audio" && !audioTried && typeof AudioPanel !== "undefined" && typeof AudioPanel._ensure === "function"
           && (typeof GameAudio === "undefined" || GameAudio._stub)) {
-        AudioPanel._ensure().then(() => show(want, focus, after));
+        let asked;
+        try { asked = Promise.resolve(AudioPanel._ensure()); } catch (_) { asked = Promise.resolve(false); }
+        asked.then((ok) => ok, () => false).then((ok) => show(want, focus, after, ok === false ? "failed" : "ok"));
         return;
       }
       const index = document.getElementById("pm-settings-index");
@@ -110,6 +125,7 @@ const SettingsNav = (function () {
         const active = document.activeElement;
         originDoor = active && index.contains && index.contains(active) ? active : null;
       }
+      if (current !== "home" && current !== id) fireLeave(current);
       current = id;
       const title = document.getElementById("dlg-settings");
       if (title) title.textContent = TITLES[id];
@@ -126,6 +142,7 @@ const SettingsNav = (function () {
         SettingsExport.ensureMounted();
       }
       Log.info("game", `SettingsNav.show ${id}`);
+      if (id === "audio") audioNote(pages.audio, audioTried === "failed");
       // A callback may disable/reflow controls (KeyBinds and audio do this),
       // so run it before resolving the page's focus target.
       if (typeof after === "function") after();
@@ -133,6 +150,21 @@ const SettingsNav = (function () {
       const body = document.getElementById("pm-settings-body");
       if (body) body.scrollTop = 0;
       if (window.ScrollFade) ScrollFade.refresh();
+    }
+
+    // The audio bundle could not load (offline / UPDATE READY): the page still
+    // reveals with the stub engine, so say why the sliders are silent.
+    function audioNote(panel, failed) {
+      let n = document.getElementById("audioset-offline");
+      if (!failed && !n) return;
+      if (!n) {
+        if (!panel || typeof document.createElement !== "function") return;
+        n = document.createElement("p");
+        n.id = "audioset-offline"; n.className = "adv-help"; n.setAttribute("role", "status");
+        panel.insertBefore(n, panel.firstChild);
+      }
+      n.textContent = "AUDIO ENGINE DID NOT LOAD — CHECK YOUR CONNECTION OR RELOAD";
+      n.hidden = !failed;
     }
 
     function back() {
@@ -155,14 +187,10 @@ const SettingsNav = (function () {
     };
     for (const [id, door] of Object.entries(doors)) if (door) door.onclick = () => {
       originDoor = door;
-      const go = () => show(id, true, () => { if (onSelect) onSelect(id); });
       // LAZY_AUDIO: MUSIC & SOUND's SettingRows demote the static ‹ › chevrons.
-      // Reveal only after ensureAudio so MenuNav.items matches a wired panel
-      // (otherwise arrow-walk marks ~12 chevrons missed — menu-traversal).
-      if (id === "audio" && typeof AudioPanel !== "undefined" && typeof AudioPanel._ensure === "function"
-          && (typeof GameAudio === "undefined" || GameAudio._stub)) {
-        AudioPanel._ensure().then(go);
-      } else go();
+      // show() reveals audio only after ensureAudio so MenuNav.items matches a
+      // wired panel (otherwise arrow-walk marks ~12 chevrons missed — menu-traversal).
+      show(id, true, () => { if (onSelect) onSelect(id); });
     };
     // Every open starts at the door index. Do not steal focus here: the dialog
     // seam owns focus when it opens, and its opener should remain authoritative.
@@ -181,6 +209,7 @@ const SettingsNav = (function () {
   return {
     create,
     show: (id, focus) => { if (live) live.show(id, focus); },
+    onLeave: (fn) => { if (typeof fn === "function") leaveFns.push(fn); },
   };
 })();
 Object.freeze(SettingsNav);

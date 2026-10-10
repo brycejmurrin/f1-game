@@ -385,7 +385,18 @@ test("serve stdout is JSON-RPC only (no log lines)", () => {
 });
 
 const LOCK = path.join(ROOT, "scratch", "apex-browser.lock");
-const TEST_BG = path.join(ROOT, "artifacts", "logs", "test-bg.json");
+// A private test-bg registry per test (TS1): these tests used to overwrite the REAL
+// artifacts/logs/test-bg.json and restore it afterwards, which loses a live run's
+// update in that window and, when the per-file timeout SIGKILLs the file, leaves
+// the fake in place and hides the real run from --status/--wait/--stop.
+function withFakeRegistry(state, fn) {
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "fake-test-bg-"));
+  const file = path.join(dir, "test-bg.json");
+  fs.writeFileSync(file, JSON.stringify(state));
+  try { return fn({ APEX_TEST_BG_STATE: file }); }
+  finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
 
 test("playwright occupancy matches `playwright test` tokens, not MCP JSON", async () => {
   const { classifyPlaywrightLine, scanPlaywrightLines } = await import("../../tools/ci/playwright-occupancy.mjs");
@@ -740,22 +751,12 @@ test("week-2 dryRun steals a stale lock (dead PID)", () => {
 });
 
 test("week-2 dryRun refuses playwright_live from test-bg.json (no Chromium)", () => {
-  fs.mkdirSync(path.dirname(TEST_BG), { recursive: true });
-  let prev = null;
-  if (fs.existsSync(TEST_BG)) prev = fs.readFileSync(TEST_BG, "utf8");
-  fs.writeFileSync(TEST_BG, JSON.stringify({ mode: "test", runs: [{ pid: process.pid, group: "tiny" }] }));
-  try {
-    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "" });
+  withFakeRegistry({ mode: "test", runs: [{ pid: process.pid, group: "tiny" }] }, (reg) => {
+    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "", ...reg });
     assert.equal(r.status, 1, r.stderr);
     const body = JSON.parse(r.stdout);
     assert.equal(body.error, "playwright_live");
-  } finally {
-    if (prev == null) {
-      try { fs.unlinkSync(TEST_BG); } catch { /* ignore */ }
-    } else {
-      fs.writeFileSync(TEST_BG, prev);
-    }
-  }
+  });
 });
 
 test("an IDLE host Playwright MCP server is reported, not occupancy; its launched browser is", () => {
@@ -779,27 +780,18 @@ test("an IDLE host Playwright MCP server is reported, not occupancy; its launche
 });
 
 test("a live Node-only test-bg group does not impersonate Playwright", () => {
-  fs.mkdirSync(path.dirname(TEST_BG), { recursive: true });
-  let prev = null;
-  if (fs.existsSync(TEST_BG)) prev = fs.readFileSync(TEST_BG, "utf8");
-  fs.writeFileSync(TEST_BG, JSON.stringify({
+  withFakeRegistry({
     mode: "sequential",
     runs: [{ pid: process.pid, group: "tooling-fast", browser: false }],
-  }));
-  try {
+  }, (reg) => {
     const r = callCli("apex_shot", { track: "monza", dryRun: true }, {
       APEX_MCP_MOCK: "0",
       APEX_MCP_PS: "1 bash\n",
+      ...reg,
     });
     assert.equal(r.status, 0, r.stderr + r.stdout);
     assert.equal(JSON.parse(r.stdout).ok, true);
-  } finally {
-    if (prev == null) {
-      try { fs.unlinkSync(TEST_BG); } catch { /* ignore */ }
-    } else {
-      fs.writeFileSync(TEST_BG, prev);
-    }
-  }
+  });
 });
 
 test("week-2 dryRun refuses chrome_daemon_up when /healthz answers", async () => {
@@ -1299,7 +1291,9 @@ test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and re
   bad("apex_track", { op: "shot", frac: 2 });
   bad("apex_track", { op: "shot" }, "track_not_open");
   ok("apex_job_start", { kind: "survey_track", track: "monza", oblique: true }, /survey-track\.mjs","monza","--oblique/);
-  ok("apex_job_start", { kind: "ui_matrix", screens: "settings,garage", viewports: "ios-*", scale: "100,130" }, /--screens=settings,garage","--viewports=ios-\*","--scale=100,130/);
+  const matrix = ok("apex_job_start", { kind: "ui_matrix", screens: "settings,garage", viewports: "ios-*", scale: "100,130" }, /--screens=settings,garage","--viewports=ios-\*","--scale=100,130/);
+  assert.equal(typeof matrix.estimateMs, "number", "ui_matrix dryRun names estimateMs (hud_survey-style)");
+  assert.ok(matrix.estimateMs > 0 && matrix.cells >= 2, `ui_matrix cells/estimate: ${JSON.stringify(matrix)}`);
   ok("apex_job_start", { kind: "flicker_gate", site: "a,b" }, /"--site","a","--site","b"/);
   ok("apex_job_start", { kind: "livery_contrast", team: "ferrari" }, /--team=ferrari/);
   bad("apex_job_start", { kind: "rm_rf" });
@@ -1307,7 +1301,7 @@ test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and re
   bad("apex_job_start", { kind: "survey_track", track: "nope" });
   bad("apex_job_status", { jobId: "missing" }, "unknown_job");
   bad("apex_job_cancel", { jobId: "missing" }, "unknown_job");
-  ok("apex_ui_fit", { screen: "settings", scale: 130 }, /--screens=settings","--viewports=ios-iphone-landscape","--jobs=1","--scale=130/);
+  ok("apex_ui_fit", { screen: "settings", scale: 130 }, /--screens=settings","--viewports=ios-iphone-landscape","--jobs=1","--json","--scale=130/);
   bad("apex_ui_fit", { screen: "--all" });
   bad("apex_ui_fit", { screen: "settings", scale: 500 });
   ok("apex_ui_shot", { screen: "garage", viewport: "desktop-1440x900" }, /--screen=garage","--viewport=desktop-1440x900/);
@@ -1410,6 +1404,74 @@ test("a job's reported log is the file holding its output, and status tails it",
   } finally { fs.rmSync(fake, { recursive: true, force: true }); }
 });
 
+// 2026-10-09: a one-shot `call` parent dies before a job's exit handler runs, so a later apex_job_status (another
+// process, disk manifest only) used to read the verdict off the log's last line: a plain-text CLI that exited 0 was
+// "failed". The sh wrapper now leaves the real exit code beside the log. And a finished result over the cap
+// (hud_survey: ~150 KB of cells) keeps its headline keys instead of blowing the client's reply limit.
+test("job exit code survives the parent (disk-only status) and a huge result is capped", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const fake = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-jobs-test-"));
+  try {
+    fs.mkdirSync(path.join(fake, "tools", "track"), { recursive: true });
+    fs.writeFileSync(path.join(fake, "tools/track/verify-track.cjs"),
+      'const big = Array.from({ length: 4000 }, (_, i) => ({ cell: "c" + i, pad: "x".repeat(20) }));\n'
+      + 'console.log(JSON.stringify({ ok: true, counts: { total: 4000 }, cells: big }));\n');
+    fs.writeFileSync(path.join(fake, "tools/track/graph-parity.cjs"), 'console.log("all within caps - exit 0");\n');
+    fs.writeFileSync(path.join(fake, "tools/track/float-audit.cjs"), 'console.log("nope"); process.exit(3);\n');
+    const toolResult = (body, { isError = false } = {}) => ({ content: [{ type: "text", text: JSON.stringify(body) }], ...(isError || body.ok === false ? { isError: true } : {}) });
+    const refuse = (error, message, fix) => toolResult({ ok: false, error, message, fix });
+    const mk = () => createExtras({ ROOT: fake, toolResult, refuse, acquireLock: () => null, releaseLock() {}, occupancyRefuse: () => null,
+      assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
+    const body = (r) => JSON.parse(r.content[0].text);
+    const first = mk();
+    const settle = async (x, jobId) => {
+      for (let i = 0; i < 200; i++) {
+        const b = body(x.handlers.apex_job_status({ jobId }));
+        if (b.state !== "running") return b;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      throw new Error(`job ${jobId} never finished`);
+    };
+    const ok = body(first.handlers.apex_job_start({ kind: "graph_parity_all", base: "HEAD" }));
+    const bad = body(first.handlers.apex_job_start({ kind: "float_all" }));
+    await settle(first, ok.jobId); await settle(first, bad.jobId);
+    const big = body(first.handlers.apex_job_start({ kind: "verify_all" }));   // two jobs at a time
+    await settle(first, big.jobId);
+    const dir = path.join(fake, "artifacts/logs/apex-jobs");
+    assert.equal(fs.readFileSync(path.join(dir, `${ok.jobId}.exit`), "utf8"), "0");
+    assert.equal(fs.readFileSync(path.join(dir, `${bad.jobId}.exit`), "utf8"), "3");
+
+    // The parent "died" with the manifest still running: a fresh process judges by the exit file, not the log.
+    for (const id of [ok.jobId, bad.jobId]) {
+      const f = path.join(dir, `${id}.json`);
+      const m = JSON.parse(fs.readFileSync(f, "utf8"));
+      Object.assign(m, { state: "running", exit: null, pid: 2 ** 22 + 1, ended: null });
+      fs.writeFileSync(f, JSON.stringify(m));
+    }
+    const second = mk();
+    const okS = body(second.handlers.apex_job_status({ jobId: ok.jobId }));
+    assert.equal(okS.state, "done", "plain-text last line, exit 0: done");
+    assert.equal(okS.exit, 0);
+    assert.equal(body(second.handlers.apex_job_status({ jobId: bad.jobId })).exit, 3);
+    const bigS = body(second.handlers.apex_job_status({ jobId: big.jobId }));
+    assert.equal(bigS.out.truncated, true, "over the cap");
+    assert.deepEqual(bigS.out.counts, { total: 4000 }, "headline keys survive");
+    assert.ok(bigS.out.keys.includes("cells") && !("cells" in bigS.out), "the big array is named, not returned");
+    assert.ok(JSON.stringify(bigS).length < 40000, `status reply stays small (${JSON.stringify(bigS).length})`);
+  } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
+
+// 2026-10-09: the async survey job carried only preset/fracs/tod/count, so cams (and cam/az/el/dist/h/side/hud/shots)
+// vanished: {cams:[orbit,eye]} came back orbit-only. shot-survey.mjs takes the rest as --plan-json.
+test("shot-survey --plan-json carries cams into the plan", () => {
+  const run = (...extra) => JSON.parse(spawnSync(process.execPath, [path.join(ROOT, "tools/shot/shot-survey.mjs"),
+    "--tracks", "monza", "--preset", "custom", "--fracs", "0.1", "--dry-run", ...extra], { encoding: "utf8", cwd: ROOT }).stdout);
+  assert.equal(run().shotsPerTrack, 1);
+  const two = run("--plan-json", JSON.stringify({ cams: ["orbit", "eye"] }));
+  assert.deepEqual(two.shots.map((x) => x.cam), ["orbit", "eye"]);
+});
+
 // 2026-10-07 (#1192): apex_hud_shot / apex_hud_survey outlast the host's
 // ~60–120 s MCP call, so they default to hud_* jobs. Those kinds run only the
 // argv the server built and pinned — never one a JSON caller supplies.
@@ -1489,4 +1551,140 @@ test("apex-eval: the shapeOf helper it injects into the page parses (named fn ex
   new Function("window", SHAPE)(win);
   assert.equal(typeof win.__shape, "function");
   assert.equal(win.__shape([1, 2]).startsWith("Array(2)"), true);
+});
+
+// 2026-10-10: a tool must say what it needs. Ten first calls in one session came back bad_args with no way forward
+// ("arguments must match one of the advertised types", "tool needs file"); the survey dropped `cams` and still said ok.
+// These keep every tool answerable to a minimal valid call, and every refusal self-explaining.
+const MIN_ARGS = {
+  apex_unit_test: { file: "tests/unit/a11y-pwa-pass.test.mjs" },
+  apex_select_specs: { since: "HEAD~1" },
+  apex_graph_parity: { base: "HEAD~1", id: "monza" },
+  apex_frame_report: { track: "monza" },
+  apex_shot_survey: { track: "monza" },
+  apex_car_audit: { check: "ladder" },
+  apex_ui_fit: { screen: "title" },
+  apex_ui_shot: { screen: "title" },
+  apex_job_start: { kind: "verify_all" },
+};
+const callTools = (calls) => {
+  const out = rpc([
+    { jsonrpc: "2.0", id: 0, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "1" } } },
+    { jsonrpc: "2.0", method: "notifications/initialized" },
+    ...calls.map(([name, args], i) => ({ jsonrpc: "2.0", id: i + 1, method: "tools/call", params: { name, arguments: args } })),
+  ]);
+  return calls.map((_, i) => {
+    const r = out.find((m) => m.id === i + 1);
+    assert.ok(r && r.result, `no reply for ${calls[i][0]}`);
+    return { isError: !!r.result.isError, body: JSON.parse(r.result.content[0].text) };
+  });
+};
+
+test("every tool answers a minimal valid call (mock): ok, not a bad_args refusal", () => {
+  const tools = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }]).find((m) => m.id === 1).result.tools;
+  assert.ok(tools.length >= 28, `catalog has ${tools.length} tools`);
+  const skip = new Set(["apex_job_cancel", "apex_garage", "apex_track"]);   // need a prior job / a live session
+  const calls = tools.filter((t) => !skip.has(t.name)).map((t) => {
+    const args = { ...(MIN_ARGS[t.name] || {}) };
+    for (const k of t.inputSchema.required || []) if (!(k in args)) args[k] = t.inputSchema.properties[k].enum?.[0] ?? "x";
+    return [t.name, args];
+  });
+  const res = callTools(calls);
+  const bad = res.map((r, i) => [calls[i][0], r]).filter(([, r]) => r.body.error === "bad_args");
+  assert.deepEqual(bad.map(([n, r]) => `${n}: ${r.body.message}`), [], "a minimal valid call must not be refused as bad_args");
+});
+
+test("bad_args names the way forward: required hint, did-you-mean, valid keys, got-type", () => {
+  const [needs, anyOf, key, en, type] = callTools([
+    ["apex_unit_test", {}],
+    ["apex_graph_parity", {}],
+    ["apex_shot", { track: "monza", fracc: 0.1 }],
+    ["apex_shot", { track: "monza", cam: "orbt" }],
+    ["apex_shot", { track: "monza", frac: "x" }],
+  ]).map((r) => r.body);
+  assert.match(needs.fix, /Pass "file": string/, "required key: what to pass");
+  assert.match(anyOf.message, /id or all:true/, "anyOf: the alternatives, not 'one of the advertised types'");
+  assert.match(anyOf.fix, /Required: base/);
+  assert.match(key.fix, /Did you mean "frac"\?.*Valid: track, frac, cam/, "unknown key: nearest + the valid list");
+  assert.match(en.fix, /Did you mean "orbit"\?/);
+  assert.match(type.message, /frac must be number, got string/);
+});
+
+test("apex_ui_fit / apex_ui_shot refuse an id the audit does not know instead of ok:true, out:null", () => {
+  const [menu, typo, vp] = callTools([
+    ["apex_ui_fit", { screen: "menu" }],
+    ["apex_ui_shot", { screen: "settngs" }],
+    ["apex_ui_fit", { screen: "settings", viewport: "phone-landscape-844x390" }],
+  ]).map((r) => r.body);
+  for (const b of [menu, typo, vp]) { assert.equal(b.ok, false); assert.equal(b.error, "bad_args"); }
+  assert.match(typo.fix, /Did you mean settings\?/);
+  assert.match(vp.fix, /ios-iphone-landscape-844/, "the phone-landscape id is in the list");
+});
+
+test("apex_hud_shot aliases layout-audit viewport ids and did-you-means a near miss", () => {
+  const aliased = callTools([["apex_hud_shot", { device: "ios-iphone-landscape-844", dryRun: true }]])[0].body;
+  assert.equal(aliased.ok, true, JSON.stringify(aliased));
+  assert.match(JSON.stringify(aliased.argv), /phone-landscape-844x390/, "alias rewrites before the CLI");
+  const miss = callTools([["apex_hud_shot", { device: "phone-landscape-844", dryRun: true }]])[0].body;
+  assert.equal(miss.ok, false);
+  assert.equal(miss.error, "bad_args");
+  assert.match(miss.fix, /Did you mean "phone-landscape-844x390"\?/, miss.fix);
+});
+
+test("apex_job_status {} is bounded: newest first, limit, state filter, total", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const fake = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-jobs-test-"));
+  try {
+    const dir = path.join(fake, "artifacts/logs/apex-jobs");
+    fs.mkdirSync(dir, { recursive: true });
+    for (let i = 1; i <= 5; i++) {
+      fs.writeFileSync(path.join(dir, `float_all-t${i}.json`), JSON.stringify({ id: `float_all-t${i}`, kind: "float_all", state: i % 2 ? "done" : "failed", exit: i % 2 ? 0 : 1,
+        started: 1000 * i, ended: Date.now() - 5, argv: [], log: `artifacts/logs/apex-jobs/float_all-t${i}.log`, stderr: "" }));   // recent: older than 7 days is pruned
+    }
+    const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
+    const x = createExtras({ ROOT: fake, toolResult, refuse: (e, m, f) => toolResult({ ok: false, error: e, message: m, fix: f }), acquireLock: () => null, releaseLock() {},
+      occupancyRefuse: () => null, assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
+    const list = (a) => JSON.parse(x.handlers.apex_job_status(a).content[0].text);
+    const two = list({ limit: 2 });
+    assert.deepEqual(two.jobs.map((j) => j.jobId), ["float_all-t5", "float_all-t4"], "newest first");
+    assert.equal(two.total, 5);
+    assert.match(two.hint, /3 older job\(s\) not shown/);
+    const failed = list({ state: "failed" });
+    assert.deepEqual(failed.jobs.map((j) => j.jobId), ["float_all-t4", "float_all-t2"]);
+    assert.equal(failed.hint, undefined, "nothing hidden, no hint");
+  } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
+
+test("apex_job_status {} prunes manifests older than 7 days and re-judges a pre-.exit failed job whose log says ok:true", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const fake = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-jobs-test-"));
+  try {
+    const rel = "artifacts/logs/apex-jobs";
+    const dir = path.join(fake, rel);
+    fs.mkdirSync(dir, { recursive: true });
+    const now = Date.now();
+    const mk = (id, state, ended, logText, exitText) => {
+      fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, kind: "float_all", state, exit: state === "done" ? 0 : 1, started: ended - 10, ended, argv: [], log: `${rel}/${id}.log`, stderr: `${rel}/${id}.err` }));
+      fs.writeFileSync(path.join(dir, `${id}.log`), logText);
+      fs.writeFileSync(path.join(dir, `${id}.err`), "");
+      if (exitText != null) fs.writeFileSync(path.join(dir, `${id}.exit`), exitText);
+    };
+    const old = now - 8 * 86400000;
+    mk("old-done", "done", old, "{}", "0");
+    mk("old-failed", "failed", old, "{}", "1");
+    mk("stale-failed", "failed", now - 1000, 'noise\n{"ok": true, "n": 3}\n');   // no .exit, log says ok:true
+    mk("real-failed", "failed", now - 2000, '{"ok": false}\n');                   // no .exit, log says ok:false
+    mk("exit-failed", "failed", now - 3000, '{"ok": true}\n', "1");               // has .exit: trust it
+    const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
+    const x = createExtras({ ROOT: fake, toolResult, refuse: (e, m, f) => toolResult({ ok: false, error: e, message: m, fix: f }), acquireLock: () => null, releaseLock() {},
+      occupancyRefuse: () => null, assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
+    const res = JSON.parse(x.handlers.apex_job_status({}).content[0].text);
+    const state = Object.fromEntries(res.jobs.map((j) => [j.jobId, j.state]));
+    assert.deepEqual(state, { "stale-failed": "done", "real-failed": "failed", "exit-failed": "failed" });
+    assert.equal(res.total, 3);
+    assert.deepEqual(fs.readdirSync(dir).filter((f) => f.startsWith("old-")), [], "json, log, err and exit of an expired job are all gone");
+    assert.ok(fs.existsSync(path.join(dir, "real-failed.log")), "recent jobs keep their files");
+  } finally { fs.rmSync(fake, { recursive: true, force: true }); }
 });

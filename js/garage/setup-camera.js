@@ -453,7 +453,8 @@ function garageSeat() {
 // pair when a second driver is hired.
 function previewKey() {
   const team = Teams.LIST[G.teamIdx], seat = garageSeat();
-  return team.id + ":" + partsVisualKey(team.id) + ":" + (seat && seat.num);
+  // Ten legends share num 1, so the player's Legends slot keys on the code too.
+  return team.id + ":" + partsVisualKey(team.id) + ":" + (seat && seat.num) + (team.legends && seat ? ":" + seat.code : "");
 }
 function getSetupPreviewMesh() {
   const team = Teams.LIST[G.teamIdx];
@@ -468,6 +469,7 @@ function getSetupPreviewMesh() {
       livery: liv,
       teamId: team.id,   // per-team chassis style shows in the setup turntable too
       num: seat && seat.num,
+      helmetKey: team.legends && seat ? seat.code : undefined,   // the legend's own lid, not a shared #1
       parts: Parts.getVisualTiers(getTeamParts(team.id), team),
     }));
     _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
@@ -485,7 +487,7 @@ function getSetupPreviewMesh() {
 const _garageCtx = {
   track: null, weather: null, tod: null, night: false, wins: 0, last: null,
   sponsor: null, career: false, round: 0, spin: false, achievements: null,
-  sceneNow: 0, ambient: true, studio: false,
+  sceneNow: 0, ambient: true, studio: false, unlimited: false,
 };
 let _winsCacheN = -1, _winsCacheV = 0;
 function garageCtx(asSetup = false) {
@@ -518,6 +520,7 @@ function garageCtx(asSetup = false) {
   ctx.sceneNow = asSetup ? ambientClock.value : garageNow();
   ctx.ambient = !reducedMotion() && (!h || home.moving);
   ctx.studio = !!(h && home.mode === "studio");
+  ctx.unlimited = !!G.unlimitedBudget;   // the wall BUDGET board reads FREE BUILD, like the DOM sheet
   return ctx;
 }
 function captureCamera() {

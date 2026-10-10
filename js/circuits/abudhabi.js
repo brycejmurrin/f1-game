@@ -44,7 +44,7 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    sectors: [0.32, 0.68],
+    sectors: [0.32, 0.658],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.32, 0.68])
     turns: [0.0515, 0.0975, 0.2440, 0.2510, 0.4800, 0.4920, 0.6695, 0.6795, 0.7080, 0.7530, 0.7780, 0.8040, 0.8250, 0.8470, 0.9035, 0.9460],
     // Yas Marina: teal / magenta / amber accents on pale rails
     barrier: { a: [0.90, 0.92, 0.94], b: [0.00, 0.72, 0.68], c: [0.92, 0.18, 0.55], night: [0.10, 0.18, 0.22], tyre: [1.00, 0.62, 0.18] },

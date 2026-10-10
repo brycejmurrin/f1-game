@@ -291,3 +291,20 @@ test("transformSceneryApi along hands authored-frame k via sceneryNodeToAuthored
   assert.match(chunk, /api\.every\(m, \(kEng\) => fn\(TrackSpace\.sceneryNodeToAuthored\(def, kEng, n\)\)\)/,
     "every's callback k must be authored-frame before pine/marshalPost shift again");
 });
+
+test("tyreWall tecpro/airfence model keys carry the colours their bodies are drawn in", () => {
+  // The tecpro/airfence body is painted `cap`, its top strip `tyre`; the stack key
+  // named only `tyre` and the cap key only `cap`, so the first wall paint was
+  // reused by every later wall of the circuit (Austin red, yellow and blue walls
+  // all drew red).
+  const Tracks = buildContext();
+  const keys = (id) => [...Tracks.build(Tracks.LIST.find((d) => d.id === id)).graph.models.keys()]
+    .filter((k) => k.startsWith("tyre-"));
+  for (const [id, style, caps] of [["cota", "tecpro", 3], ["abudhabi", "airfence", 3], ["qatar", "airfence", 2]]) {
+    const k = keys(id).filter((x) => x.includes(`|${style}|`));
+    const stacks = k.filter((x) => x.startsWith("tyre-stack|")), tops = k.filter((x) => x.startsWith("tyre-cap|"));
+    assert.equal(stacks.length, caps, `${id}: one ${style} body per cap colour: ${stacks.join(" ; ")}`);
+    assert.equal(tops.length, 1, `${id}: one shared top strip (one tyre colour): ${tops.join(" ; ")}`);
+    assert.ok(stacks.every((x) => x.split("|").length === 4), `${id}: the body key names tyre AND cap`);
+  }
+});

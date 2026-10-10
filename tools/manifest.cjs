@@ -28,9 +28,10 @@
 //    puts). FULL ∪ DEFERRED ∪ LAZY_AGENT must cover js/**/*.js.
 //  - The circuit tags ("@circuits") stay in their curated order — that
 //    order IS Tracks.LIST, which is the track-picker order (NOT the real F1
-//    calendar). Tracks.SEASON is the `classic: false` prefix of that list, so
-//    the 24 season circuits MUST stay first; a stored apex26.track is a
-//    positional index, so do not sort or reorder them.
+//    calendar). Tracks.SEASON is `LIST.filter((t) => !t.classic)` — a filter, not
+//    a prefix (zandvoort and imola are `classic: true` inside the first 24;
+//    istanbul and portimao are season circuits listed among the classics); a
+//    stored apex26.track is a positional index, so do not sort or reorder them.
 //  - The generated js/track/circuit-elevations.js (tools/gen/bake-elevation.mjs)
 //    slots immediately BEFORE js/track/tracks.js, in FULL and in TRACK_VM.
 //    It shipped 2026-09-14; it was a forward reference until then.
@@ -40,9 +41,10 @@
 "use strict";
 
 // Curated circuit order (== Tracks.LIST == picker order; NOT the real
-// calendar). Tracks.SEASON = the 24 non-classic ids in this order; the retired
-// circuits below carry `classic: true` and are appended, never interleaved —
-// a stored apex26.track is a positional index into this list.
+// calendar). Tracks.SEASON = the 24 non-classic ids in this order (a filter of
+// the list, not a prefix: a few `classic: true` ids sit among the first 24 and
+// two season ids sit below) — a stored apex26.track is a positional index into
+// this list, so new ids are appended, never interleaved.
 // ONE id per line (section order is load-bearing — never alpha-sort). Two PRs
 // appending different classics used to collide on the same multi-id line.
 const CIRCUITS = [
@@ -70,7 +72,7 @@ const CIRCUITS = [
   "mexico",
   "qatar",
   "abudhabi",
-  // ── retired / off-calendar (classic: true) ──
+  // ── appended circuits (mostly retired / off-calendar, classic: true) ──
   "hockenheim",
   "nurburgring",
   "catalunya",
@@ -983,6 +985,7 @@ const LAZY_EDITOR = [
   "js/editor/insight.js",     // TrackInsight: TURNS bands, speed profile, passing zones, FIA Grade 1 ambers, TRACK OF THE DAY, START FROM
   "js/editor/fixes.js",       // TrackFixes: one-click remedies for the validator's issues (start, length, spacing, smoothing, bridge, clearance)
   "js/editor/codec.js",       // TrackCodec: APXT1 share code, #track= fragment, file envelope
+  "js/editor/scenery-preview.js", // DesignerSceneryPreview: live overhead footprints from theme recipes
   "js/editor/canvas.js",      // DesignerCanvas: the 2D drawing surface (pointer / wheel / keys → callbacks)
   "js/editor/elev-presets.js", // ElevPresets: Flat / Rolling / Hilly → per-node heights[] (no DOM)
   "js/editor/profile.js",     // DesignerProfile: the elevation strip under the canvas (per-node height grips → callbacks)
@@ -994,7 +997,7 @@ const LAZY_EDITOR = [
 // same meaning HARD_EDGES carries for FULL, derived so it cannot drift from the
 // roster; designer.js (the screen) must follow every other editor module.
 // elev-presets is pure (optional CustomTracks.LIMITS at call time) — no shape edge.
-const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/codec.js" && f !== "js/editor/elev-presets.js" && f !== "js/editor/scenery-panel.js" && f !== "js/editor/selection-panel.js" && f !== "js/editor/designer.js")
+const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/scenery-preview.js" && f !== "js/editor/codec.js" && f !== "js/editor/elev-presets.js" && f !== "js/editor/scenery-panel.js" && f !== "js/editor/selection-panel.js" && f !== "js/editor/designer.js")
   .map((f) => ["js/editor/shape.js", f])
   .concat(LAZY_EDITOR.filter((f) => f !== "js/editor/designer.js").map((f) => [f, "js/editor/designer.js"]));
 

@@ -6093,6 +6093,15 @@ test("PCSS blocker: 32-bit float and the min over the whole 4x4 source footprint
   assert.equal(d, 16);
 });
 
+// M15b: pause + SETTINGS must keep presenting so SAVE SCREENSHOT can get a live frame
+// (headed GLX has no preserved buffer; without this the button only said NO LIVE FRAME).
+test("paused race keeps presenting while SETTINGS is open (SAVE SCREENSHOT)", () => {
+  const src = read("js/game.js");
+  const gate = src.slice(src.indexOf("if (paused && !netPlay.active())"), src.indexOf("replayBuf.onTick(raceT, cars, state)"));
+  assert.match(gate, /!els\.pmsettings\.hidden/,
+    "SETTINGS open during pause must call render() so headed GLX SAVE SCREENSHOT sees a frame");
+});
+
 // M15: headed GLX has no #game-soft and no preserved drawing buffer, so #game.toDataURL()
 // after an await returned the cleared buffer: a black PNG reported SAVED. The picker now
 // asks GLX for a frame that resolves from inside present() and reports NO LIVE FRAME
@@ -6134,4 +6143,93 @@ test("the GLX mirror pass runs with the lamp shadow off — the forward slot nam
   assert.match(glx, /LampBake\.shadowCol\(frame, _lampOn \? SHD\.lampIdx \| 0 : -1, _bakeShScr\)/);
   const chunked = read("js/render/glx/chunked.js");
   assert.match(chunked, /SH\.lampArmed && SH\.lampIdx >= 0 && F\.lights && !core\.post\.mirror\.active\(\)/);
+});
+
+// 07-F4: GLX raised the mirror / env-probe "active" flag BEFORE begin(), and the caller only ends a pass whose
+// begin RETURNED, so a throw inside begin() left every later MAIN begin() rendering into the mirror / probe target.
+test("GLX mirrorBegin / envFaceBegin put their active flag down when begin() throws (07-F4)", () => {
+  const h = bootGlx();
+  const G = h.GLX;
+  const lastFbo = () => h.calls.filter((c) => c[0] === "bindFramebuffer").at(-1)[1][1];
+  const boom = () => { const f = h.frame(); Object.defineProperty(f, "fogColor", { get() { throw new Error("begin boom"); } }); return f; };
+  // The healthy passes tell us which framebuffer objects are the mirror's and the probe's.
+  assert.equal(G.mirrorBegin(h.frame(), 64, 16), true);
+  const mirFbo = lastFbo();
+  G.mirrorEnd();
+  G.envFaceBegin(0, [0, 1, 0], h.frame());
+  const envFbo = lastFbo();
+  G.envFaceEnd(0);
+  assert.ok(mirFbo && mirFbo.fbo && envFbo && envFbo.fbo && mirFbo !== envFbo);
+  const rendersBefore = G.mirrorState().renders;
+
+  const f1 = boom();
+  assert.throws(() => G.mirrorBegin(f1, 64, 16), /begin boom/);
+  G.begin(h.frame());
+  assert.notEqual(lastFbo(), mirFbo, "the main pass after a throwing mirrorBegin does not draw into the mirror target");
+  assert.equal(G.mirrorState().renders, rendersBefore, "an aborted pass is not counted as a rendered mirror frame");
+
+  const f2 = boom();
+  const vp = f2.viewProj, eye = f2.eye;
+  assert.throws(() => G.envFaceBegin(1, [0, 1, 0], f2), /begin boom/);
+  assert.equal(f2.viewProj, vp, "the caller's view-projection is handed back");
+  assert.equal(f2.eye, eye);
+  G.begin(h.frame());
+  assert.notEqual(lastFbo(), envFbo, "the main pass after a throwing envFaceBegin does not draw into the probe face");
+  assert.equal(G.mirrorBegin(h.frame(), 64, 16), true, "the mirror is not wedged behind a stuck probe flag");
+  G.mirrorEnd();
+});
+
+// 08-F3: render() asked the backend for its full backendState() (TLX: ~50 fields, a meshPool walk, ~1 KB of garbage)
+// every frame to read one boolean. Every backend now carries a cheap ctxLost(); backendState() is only the fallback.
+test("game.js gfxContextLost reads the cheap ctxLost() accessor, not backendState() (08-F3)", () => {
+  const game = read("js/game.js");
+  const fn = span(game, "function gfxContextLost()", "function render(dt)", "gfxContextLost");
+  const run = (gfx) => vm.runInContext(fn + "\ngfxContextLost();", vm.createContext({ gfx }));
+  let built = 0;
+  const bs = () => { built++; return { ctxLost: true }; };
+  assert.equal(run({ ctxLost: () => false, backendState: bs }), false);
+  assert.equal(run({ ctxLost: () => true, backendState: bs }), true);
+  assert.equal(built, 0, "the diagnostic snapshot is never built when ctxLost() exists");
+  assert.equal(run({ backendState: bs }), true, "a backend without the accessor still answers through backendState()");
+  assert.equal(run({}), false);
+  assert.equal(run(null), false);
+  assert.equal(run({ ctxLost() { throw new Error("x"); } }), false, "a throwing accessor reads as not lost");
+  // Each backend exposes it, and it reads the same flag its backendState reports.
+  assert.match(read("js/render/glx/glx.js"), /ctxLost: \(\) => _ctxLost,/);
+  assert.match(read("js/render/webgpu/wgx.js"), /ctxLost: \(\) => !!_lost,/);
+  const tlx = read("js/render/three/tlx.js");
+  assert.match(tlx, /ctxLost\(\) \{ return !!_deviceLost; \},/, "the __tlx object");
+  assert.match(tlx, /ctxLost\(\) \{\s*const t = this && this\.__tlx;\s*return !!\(t && typeof t\.ctxLost === "function" && t\.ctxLost\(\)\);/, "the façade that game.js sees");
+});
+
+// 14-F1: window.__apex is NULL on the shipped build (game.js declares it null, only dev surfaces fill it), so
+// `typeof __apex !== "undefined" && __apex.diag` passed (typeof null is "object") then threw into the catch and
+// COPY DIAG always said NO DIAG. A player now gets playerDiag(); the dev surface still wins when it exists.
+test("COPY DIAG copies a real payload when __apex is null, and prefers __apex.diag when present (14-F1)", async () => {
+  const src = read("js/perf/renderer-picker.js");
+  // copyDiag plus whatever player-side helper sits above it (the base had none: the failure there is behavioural).
+  const fn = span(src, src.includes("function playerDiag()") ? "function playerDiag()" : "function copyDiag(", "function initReset()", "copyDiag");
+  const run = async (apex) => {
+    const btn = { textContent: "COPY DIAG" };
+    const written = [];
+    const ctx = vm.createContext({
+      __apex: apex, btn, window: {},navigator: { userAgent: "UA" },
+      GLX: { backendState: () => ({ api: "webgl2" }) }, Log: { records: () => [{ level: "warn", msg: "w" }] },
+      ApexClipboard: { write: (t) => { written.push(t); return Promise.resolve(true); } },
+      liveBackend: () => "three", unavailableDiagnostics: () => JSON.stringify({ renderer: { stored: null } }),
+      setTimeout() {},
+    });
+    vm.runInContext(fn + "\ncopyDiag(btn);", ctx);
+    for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
+    return { btn, written };
+  };
+  const player = await run(null);
+  assert.equal(player.written.length, 1, "a null __apex no longer ends in NO DIAG");
+  const got = JSON.parse(player.written[0]);
+  assert.equal(got.backend, "three");
+  assert.equal(got.backendState.api, "webgl2");
+  assert.equal(got.log[0].level, "warn");
+  assert.match(player.btn.textContent, /COPIED$/);
+  const dev = await run({ diag: (o) => ({ dev: true, download: o.download }) });
+  assert.deepEqual(JSON.parse(dev.written[0]), { dev: true, download: false }, "the dev surface still wins");
 });

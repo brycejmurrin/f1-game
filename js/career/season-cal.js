@@ -310,8 +310,13 @@ function load() {
   // but NOT for a season this build could not read whole: a circuit id it does
   // not know (a stale cached shell, a renamed circuit) shrank the calendar, and
   // writing that back erased the circuit for good, or blanked a finished season.
-  const lossy = !!raw && (season !== copy || (rawIds != null &&
-    (season.config.trackIds.length !== rawIds.length || knownIds(rawIds).length !== rawIds.length)));
+  // LOSSY MEANS AN UNKNOWN CIRCUIT ID, nothing else. `season !== copy` is also
+  // true when resume() fell back to restart() for a round out of range, and that
+  // clean rebuilt season was then refused by every later save ("unknown circuit")
+  // although this build knew every id. A collapsed duplicate only counts when the
+  // save was repaired in place (the restart() config is not the stored one).
+  const lossy = !!raw && rawIds != null && (knownIds(rawIds).length !== rawIds.length
+    || (season === copy && season.config.trackIds.length !== rawIds.length));
   lastLossy = lossy;   // boot's migrate-and-save reads it: never write a lossy read back
   // Nor the race that follows: endRace's SeasonCal.save would persist the shrunk
   // calendar and erase the unknown circuit for good. A build that knows every id
@@ -528,11 +533,14 @@ function netPts(season, id) {
   const played = (season.round || 0) + (sprintMid(c, season) ? 1 : 0);
   const keep = Math.max(1, (c.trackIds ? c.trackIds.length : rounds()) - drop);
   if (played <= keep || !row.length) return gross;
+  // Bounded by the stored row, not by `played`: an imported season.round of 1e9
+  // made this push a billion entries. Rounds past the row scored nothing (0), so
+  // they only matter when fewer than `keep` real results exist: `|| 0` covers it.
   const vals = [];
-  for (let r = 0; r < played; r++) vals.push(row[r] || 0);
+  for (let r = 0, n = Math.min(played, row.length); r < n; r++) vals.push(row[r] || 0);
   vals.sort((x, y) => y - x);
   let sum = 0;
-  for (let i = 0; i < keep; i++) sum += vals[i];
+  for (let i = 0; i < keep; i++) sum += vals[i] || 0;
   return sum;
 }
 

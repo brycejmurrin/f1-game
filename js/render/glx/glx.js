@@ -1325,9 +1325,13 @@ const GLXBackend = (function () {
     // arrays) is INVALID_OPERATION with either set.
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    // A throwing upload (closed ImageBitmap, tainted canvas) must not strand the flags or the texture.
+    try { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); }
+    catch (e) { gl.deleteTexture(tex); throw e; }
+    finally {
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    }
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -1610,7 +1614,6 @@ const GLXBackend = (function () {
     // reflection this check was written to fix. Returning null here makes
     // game.js skip the probe, which is what "disabled" has to mean.
     if (!envTex) { envInit(); if (_envDisabled || !envTex || !envFBO) return null; }
-    _envActive = true;   // begin() → env FBO + 64px viewport; env unit → dummy cube
     const F = ENV_FACES[face];
     _envTgt[0] = eye[0] + F[0][0]; _envTgt[1] = eye[1] + F[0][1]; _envTgt[2] = eye[2] + F[0][2];
     M4.lookAtTo(_envView, eye, _envTgt, F[1]);
@@ -1645,7 +1648,8 @@ const GLXBackend = (function () {
     // (the tier-3 far-plane cap), the probe keeps that tighter value. A cullDist of
     // 0 means "no cull", so it is treated as unbounded rather than as zero.
     frame.cullDist = _envSvCull > 0 ? Math.min(_envSvCull, ENV_CULL_M) : ENV_CULL_M;
-    begin(frame);
+    _envActive = true;   // begin() → env FBO + 64px viewport; env unit → dummy cube. Raised HERE, undone if begin() throws (envFaceEnd never runs then)
+    try { begin(frame); } catch (e) { _envActive = false; _envFrame.viewProj = _envSvVP; _envFrame.eye = _envSvEye; _envFrame.cullDist = _envSvCull; _envFrame = null; throw e; }
     return _envInvVP;
   }
   function envFaceEnd(face) {
@@ -1684,7 +1688,8 @@ const GLXBackend = (function () {
   function mirrorBegin(frame, w, h) {
     if (!gl || ctxGone() || !PST || _envActive) return false;
     if (!PST.mirror.begin(Math.max(16, Math.min(1024, w | 0)), Math.max(8, Math.min(512, h | 0)))) return false;
-    begin(frame);   // binds the mirror FBO while mirror.active()
+    // begin() binds the mirror FBO while mirror.active(); the caller ends only a pass whose mirrorBegin RETURNED, so a throw lowers the flag here
+    try { begin(frame); } catch (e) { PST.mirror.abort(); bindOutputViewport(); throw e; }
     return true;
   }
   function mirrorEnd() {
@@ -2363,7 +2368,7 @@ const GLXBackend = (function () {
   // either snapshot standing would let a later cullInstances hit its cache and
   // draw this pack as though it were that frustum's. Pinned by
   // tests/unit/gfx-backend-canary.test.mjs.
-  function updateInstances(batch, matrices, n) {
+  function updateInstances(batch, matrices, n, colors) {
     if (ctxGone() || !batch || !batch.ibo) return 0;
     const cap = batch.instances | 0;
     const v = Math.max(0, Math.min(cap, n | 0));
@@ -2373,6 +2378,12 @@ const GLXBackend = (function () {
     if (v > 0) {
       gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, matrices, 0, v * 16);
+      // Optional colours: frozen-mirror restores the mirror pass's pack; DebrisWorld omits them.
+      const cols = colors || batch.packColors;
+      if (cols && batch.cbo) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, batch.cbo);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, cols, 0, v * 3);
+      }
     }
     return v;
   }
@@ -2824,6 +2835,7 @@ const GLXBackend = (function () {
     // carries the three.js decision tree, WGX the rung). Read by the GOV
     // panel and __apex.diag().env so a phone screenshot names the API and
     // the first GPU error — the evidence a "see-through car" report lacked.
+    ctxLost: () => _ctxLost,   // cheap per-frame read for game.js gfxContextLost (backendState allocates)
     backendState: () => ({
       api: "webgl2", isMobile: IS_MOBILE, mobileTier: MOBILE_TIER,
       gpuErrors: _glErrors, gpuFirstError: _glFirstError || null,

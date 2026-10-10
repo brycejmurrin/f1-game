@@ -135,7 +135,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // dropped one severe cone×cyl pair; measured, not assumed.
 // portimao 51 -> 44 (2026-09-24): SRTM Algarve bake + hillside escarpment
 // ground-seat; mid-sector terrace split cleared floaters and six severe spots.
-// brands_hatch 31→34, hungaroring 1→2, jerez 16→17, mont_tremblant 38→52,
+// brands_hatch 31→34, hungaroring 2→1 (#1311 re-key), jerez 16→17, mont_tremblant 38→52,
 // zolder 39→46; singapore 6→5, spa 11→8, imola 9→8 (2026-10-01):
 // transformSceneryApi wraps every() to authored-frame k (same as along), so
 // pine/marshalPost/backdrop no longer double-shift. Caps follow the measured
@@ -144,6 +144,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // 2026-10-04: Spa retains the shared elevation/registration cap of 7.
 // All seven severe locations match shared default 4f71c2b; the woodland
 // pass reduces total >=0.5m spots from 13 to 12 without adding a severe spot.
+// 2026-10-10 round-2 bug hunt (#1309): sepang 2 -> 1 and bahrain 1 -> 0 — the hwZone
+// re-key (Sepang's final hairpin) and the hairpin fold clamp moved the road off
+// two props that used to clip it. Lowered to the measured tree.
 
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "clip-baseline.json"), "utf8"),

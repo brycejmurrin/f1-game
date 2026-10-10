@@ -154,3 +154,14 @@ export function judge(score, { maxFrac = DEFAULTS.maxFrac } = {}) {
   if (score.fight.frac > maxFrac) reasons.push(`fight: ${(score.fight.frac * 100).toFixed(3)}% of the frame flips in both moves (ceiling ${(maxFrac * 100).toFixed(3)}%)`);
   return { ok: reasons.length === 0, reasons };
 }
+
+/**
+ * The sites whose two identical still frames (A, A2) were not pixel-equal, worst first. `stillExact` is one boolean;
+ * this says WHERE (a first-site warm-up and a live clock look different: one site vs every site) and by how much.
+ * results: flicker-gate site rows → [{ id, diffPx, maxDelta }]
+ */
+export function inexactSites(results) {
+  return results.filter((r) => r.still && r.still.diffPx > 0)
+    .map((r) => ({ id: r.id, diffPx: r.still.diffPx, maxDelta: r.still.maxDelta }))
+    .sort((p, q) => q.diffPx - p.diffPx);
+}

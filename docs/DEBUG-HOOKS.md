@@ -487,6 +487,23 @@ bodywork. RIVAL LOCK / PIT WALL / DRONE use a softer outer damp; DRONE also
 smooths its tether inside `js/camera/extra-rigs.js`, and `camComfort()` /
 reduce-motion further softens look-ahead and blend rate.
 
+### `pitCamAuto(on?) → boolean`
+Read or set the opt-in auto-cut onto PIT WALL around pit entry and exit
+(`js/camera/extra-rigs.js`; persisted as `apex26.pitCamAuto`, default OFF). No
+argument reads the flag; a boolean sets it and returns the stored value. Returns
+`false` when the extra-rigs module is absent. It changes only which camera you
+look through, never car state.
+
+### `carOrbit(idx?, az?, el?, dist?, h?, opts?) → {eye, target, fov, carIdx, speed} | false`
+A free orbit around one car, for walk-around shots. `idx` 0 (or an unknown index)
+means the player; `az` is degrees around the car (0 = behind, 180 = head-on, the
+default), `el` degrees of elevation clamped to -30..85 (default 14), `dist` metres
+(default 25), `h` the look-at height above the road (default 1.0); `opts.fov`
+(default 55, clamped 1..170), `opts.far`, `opts.fog`. The eye is kept 1.2 m above
+the ground. It sets `G.dbgCam` (call `snapCam()` or take the frame to see it) and
+returns `false` with no track or cars. AI cars carry no world position, so the
+hook rebuilds XZ from `(s, x)` on the centreline; the player uses its real pose.
+
 ### `previewCam(mode, frac, speed, lat) → {eye, target, fov, mode} | false`
 Set the debug free-cam to EXACTLY how the in-game camera `mode` would frame the
 car at lap-fraction `frac` (`speed` m/s, default 60; `lat` m off centre, default
@@ -1302,6 +1319,15 @@ so `__apex.logs({ns:"game"})` has the history without the console being buried.
 ```js
 __apex.persistState()   // { ok: true, broken: null, keys: 34, rev: 12, foreign: 0 }
 ```
+
+### `logs(filter?) → [record, …]`
+The retained `Log` ring buffer (500 entries), newest last — read it rather than
+scraping console text. `filter` is `{ns, level, since, limit}`: `ns` keeps one
+namespace, `level` (`error|warn|info|debug|trace`) keeps that severity and
+more severe, `since` keeps records whose `id` is greater (so a poller asks only
+for what it has not seen), `limit` keeps the last N. The buffer's own threshold
+(`logLevel()`) decides what is retained in the first place. Returns `[]` when
+`Log` is absent.
 
 ### `logLevel(spec?, persist?) → {console, buffer, consoleNs, bufferNs}`
 Read or move the two `Log` thresholds (see **Logging** in `AGENTS.md`). They are
@@ -2277,6 +2303,24 @@ whichever car that number happens to name locally. Without it the id is the
 first rival's real `wire`. There is no fallback to `status.remoteId` (a
 `cars[]` index, not a wire id); if no remote has a wire, the hook returns
 `{ ok: false, error: "no_wire" }`.
+
+### `lobby(o?) → {available, role, statusText, connected, guests, pending, wire, profile, shown}`
+The VS FRIEND lobby's state in one read. `{available:false}` without a lobby.
+`lobby({open:true})` opens it, `lobby({cancel:true})` cancels a handshake in
+flight. `shown` is whether the `#vsfriend` screen is visible; `guests` is how
+many peers are actually in, `pending` whether a handshake is in flight, `wire`
+the transport counters.
+
+### `lobbyRoom() → {open, role, selfReady, peerReady, peer, peers} | null`
+The waiting room's state (`null` with no lobby). `open` is whether the room step
+is showing; `peerReady` is the host's knowledge that every guest said READY,
+which lags the guest pressing the button by a real round trip — poll it.
+
+### `lobbyHost() → Promise<{ok, code?, error?}>`
+Open the lobby and create a host invite; resolves `{ok:false, error:"no_lobby"}`
+with no lobby, or the lobby's own failure (`no_transport`, a cancelled result).
+It calls the lobby's `open()`, which clears the peer maps, so a second invite for
+a further guest is `lobbyInviteAnother()`, never `lobbyHost()` again.
 
 ### `lobbyInviteAnother() → Promise<{ok, code} | {ok:false, error}>`
 Mint a FURTHER invite without disturbing the room — host only, and refused
@@ -3497,6 +3541,13 @@ geometry use `__apex.trackGeometry()`, which needs `Tracks.setKeepGeometry(true)
 before the build and returns megabytes of floats — a file to analyse with code,
 never something to read into context.
 
+### `trackGeometry(keep?) → {road, terrain, props, glass, water} | null`
+The raw geometry buffers of the active track. A boolean argument first sets
+`Tracks.setKeepGeometry(keep)`, which only affects builds that START afterwards,
+so call `trackGeometry(true)` BEFORE `race()`/`tt()`. Returns `null` when no
+track is built or the buffers were not kept. Megabytes of floats: write them to
+a file and analyse with code, never read them into context.
+
 `detail: "sections"` adds a corner-by-corner walk of the lap:
 
 ```json
@@ -4237,8 +4288,8 @@ can see forty numbers and still can't tell it's about to miss a braking point."
 
 ### 2. What the codebase can answer today
 
-`window.__apex` exposes ~182 hooks. `obs()`
-(`js/agent/apex.js:1064`) is already a better observation than most published
+`window.__apex` exposes ~220 hooks (the generated index above has the exact count). `obs()`
+(`js/agent/apex.js`) is already a better observation than most published
 game-agent wrappers: egocentric signed wall clearances, lateral offset,
 look-ahead scan, combined-slip state, applied-input echo, reward components.
 
@@ -4246,24 +4297,24 @@ The gaps, in order of how much they hurt:
 
 #### 2.1 Scenery is not queryable at all — the one true data gap
 
-`buildProps()` returns only three vertex buffers (`js/track/tracks.js:1723`).
+`buildProps()` (`js/track/scenery/build-props.js`) returns only three vertex buffers.
 The rich placement data that exists *during* the build — the `barSegs`
 footprint list, the `barGrid` spatial hash, the `mass` occupancy grid — are
 function-local and garbage-collected on return. Raw geometry is nulled on
 upload too (`js/render/glx/chunked.js:86,112`) unless
 `Tracks.setKeepGeometry(true)` was called *before* the build
-(`js/track/tracks.js:1996`).
+(`Tracks.setKeepGeometry`, `js/track/tracks.js`).
 
 What survives:
 
 | Structure | Where | What it gives |
 |---|---|---|
-| `track.lampPosts` | `js/track/tracks.js:1659` | **The only semantic prop registry.** `{k, side, x, y, z, kind}` per lamp (street post or flood bank) |
-| `track.barL` / `barR` | `js/track/tracks.js:499` | Per-node lateral barrier limit. No kind, no height |
+| `track.lampPosts` | `js/track/scenery/build-props.js` | **The only semantic prop registry.** `{k, side, x, y, z, kind}` per lamp (street post or flood bank) |
+| `track.barL` / `barR` | `js/track/core/spline.js` (`wallAt`) | Per-node lateral barrier limit. No kind, no height |
 | `track.kerbL` / `kerbR` | `js/track/core/mesh.js:152` | Which side has a kerb, per node |
 | `track.meshes.props.chunks[]` | `js/render/glx/chunked.js:136` | 72 m XZ cells with AABBs — anonymous mixed geometry |
-| `track.modelDiagnostics.emitted` | `js/track/tracks.js:392` | An inventory **with no positions**, composites only |
-| `track.terrainGeo` | `js/track/tracks.js:201` | Retained unconditionally; `Tracks.terrainY()` raycasts it |
+| `track.modelDiagnostics.emitted` | `js/track/scenery/build-props.js` | An inventory **with no positions**, composites only |
+| `track.terrainGeo` | `js/track/tracks.js` (`track.terrainGeo`) | Retained unconditionally; `Tracks.terrainY()` raycasts it |
 
 An agent cannot answer "is there a grandstand on my left", "what building is
 that", "are there trees here". This is the only thing on the list that is
@@ -4283,7 +4334,7 @@ no name, no entry/apex/exit, no braking reference.
 
 #### 2.3 Look-ahead horizon is distance-scaled, not time-scaled
 
-`obs().scan` is hardcoded to `[10, 30, 60]` m (`js/agent/apex.js:1081`). At
+`obs().scan` is hardcoded to `[10, 30, 60]` m (`scanDists` in `obs()`, `js/agent/apex.js`). At
 50 m/s that is 1.2 s of warning; at 10 m/s it is 6 s. Backwards. GT Sophy
 samples ~6 seconds of travel — the span scales with velocity.
 
@@ -4298,7 +4349,7 @@ adding opponent *orientation* measurably improved overtaking.
 #### 2.5 No world position for AI cars
 
 `cars()`/`carAt()`/`fieldState()` return Frenet `(s, x, prog)` only.
-`carOrbit()` has to reconstruct world XZ itself (`js/agent/apex.js:558`)
+`carOrbit()` has to reconstruct world XZ itself (see `carOrbit` in `js/agent/apex.js`)
 because AI cars don't carry `px/pz`. Only the player has world coordinates
 (`wsInfo()`).
 
@@ -4355,13 +4406,13 @@ hierarchical (reason at ~1 Hz, act at 60 Hz) or asynchronous.
 real-time problem into a turn-based one. That trio is a bigger asset than any
 observation-format tweak.
 
-**P9 — Consolidate the toolbelt; keep the dev console.** ~182 hooks is a good
+**P9 — Consolidate the toolbelt; keep the dev console.** ~220 hooks is a good
 debug console and a poor agent interface — tool schemas alone can eat 20–40%
 of context. Expose ~6 composed tools; leave `__apex` untouched underneath.
 
 **P10 — Code as an escape hatch.** CodeAct reports up to +20% success and ~30%
 fewer steps for executable code over JSON actions. One `eval` tool over
-`__apex` turns ~182 hooks into one tool and lets the agent write filters we
+`__apex` turns ~220 hooks into one tool and lets the agent write filters we
 didn't anticipate. <https://arxiv.org/abs/2402.01030>
 
 ### 4. The design
@@ -4431,7 +4482,7 @@ Two pieces, independently useful.
 
 **3a. Prop registry (requires a build-path change).** One
 `track.props.push({kind, id, center, size, side, k})` at the guarded-emitter
-choke point (`js/track/tracks.js:402-490`). Cap it and record composites and
+choke point (where `modelDiagnostics` is recorded, `js/track/scenery/build-props.js`). Cap it and record composites and
 named `place()`/`building()`/`grandstand()` calls — *not* every window pane;
 street circuits emit up to ~5 M verts.
 
@@ -4464,6 +4515,11 @@ driving code executes at 60 Hz.
 
 #### Layer 5 — the toolbelt
 
+> **Design sketch, partly unbuilt.** The shipped MCP toolbelt is `tools/mcp/apex-tools-mcp.mjs` (28 tools, map in
+> `docs/AGENT-SURFACE.md`). `apex_world`, `apex_act`, `apex_reset` and `apex_scene` below were never built; the nearest
+> shipped tools are `apex_agent` (the `tools/shot/agent.mjs` command surface) and `apex_eval`. `apex_track` and
+> `apex_eval` exist.
+
 | Tool | Composes |
 |---|---|
 | `apex_world({detail, since})` | `obs` + `timing` + `fieldState` + `sectorState` |
@@ -4471,7 +4527,7 @@ driving code executes at 60 Hz.
 | `apex_reset({track, frac, speed, weather, tod})` | `race` / `reset` / `jump` |
 | `apex_track({what})` | `corners` / `trackProfile` / `wallStats` / markings |
 | `apex_scene({radius \| visible})` | prop registry + frustum query |
-| `apex_eval({js})` | escape hatch over the full ~182 hooks |
+| `apex_eval({js})` | escape hatch over the full ~220 hooks |
 
 `__apex` itself stays exactly as it is. This is a layer, not a replacement.
 
@@ -4737,7 +4793,7 @@ and interpreting "3" as seven metres needs no shape recognition at all.
 
 The clarifying frame, arrived at late: agent view is not "a driving observation"
 — it is the **text-native mirror of the whole `__apex` debug toolkit**.
-Everything a developer inspects with the ~182 hooks and screenshots, an agent
+Everything a developer inspects with the ~220 hooks and screenshots, an agent
 should do in text. That reframes the surface into three kinds of thing:
 
 1. **Curated calls that COMPOSE and render** the spatial/visual questions a dev

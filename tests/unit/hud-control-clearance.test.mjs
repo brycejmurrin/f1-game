@@ -68,8 +68,9 @@ test("CSS: #hud-inputs clears the right dock on touch and the gear box on deskto
     /body:not\(\.desktop\) #hud-inputs:not\(\[data-hl-user\]\)\s*\{[^}]*position:\s*fixed/,
     "touch INPUTS uses fixed layout like sectors");
   assert.match(CSS,
-    /min\(var\(--dock-r-w, 0px\), 128px\)/,
-    "touch INPUTS caps --dock-r-w so a wrapped dock cannot shove it left");
+    /min\(var\(--dock-r-w, 0px\), calc\(50vw \/ var\(--hud-z\) - 10px - var\(--sar\) \/ var\(--hud-z\) - 120px\)\)/,
+    "touch INPUTS caps --dock-r-w at the centre line less its own width: off BOOST at 100% (a flat 128px was short of the dock) and off the left steer arrows at 150%");
+  assert.ok(!/min\(var\(--dock-r-w, 0px\), 128px\)/.test(CSS), "the flat 128px cap is gone");
   assert.match(CSS,
     /#hud-inputs:not\(\[data-hl-user\]\)[\s\S]*?max-height:\s*min\(18svh/,
     "touch INPUTS height-caps so it cannot grow into BOOST");

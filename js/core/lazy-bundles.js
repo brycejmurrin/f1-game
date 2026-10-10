@@ -8,7 +8,7 @@ const { els, loadBackendScripts } = deps;
 // github.io skip this; tests and localhost inject.
 const AGENT_FILES = ApexRoster.LAZY_AGENT;
 const AGENT_EDGES = ApexRoster.LAZY_EDGES;
-// LAZY_RACE — lighting presets, fetched before the first race.
+// LAZY_RACE — lighting presets, fetched at idle and again at a race start if that failed.
 const RACE_FILES = ApexRoster.LAZY_RACE;
 // LAZY_RACE_SESSION — pit / radio / coach / reliability (~320 KB). Title boots
 // the stub; startRace awaits ensureRaceSession(); idle also prefetches so RACE!
@@ -86,6 +86,7 @@ function circuitResident(def) {
   return !!(typeof Tracks !== "undefined" && Tracks.circuitPayloadResident && Tracks.circuitPayloadResident(def));
 }
 function ensureCircuit(idx) {
+  if (lightFailed) ensureLightPresets();   // a race start (or a circuit pick) after a failed presets fetch: try again
   const def = Tracks.LIST[idx];
   if (!def || circuitResident(def) || def.custom) return Promise.resolve();
   let p = _circuitLoads.get(def.id);
@@ -538,6 +539,26 @@ async function bootAgentSurface() {
 // build is a different physics world; tools/lib/game-vm.cjs §raceAssets).
 // LAZY_RACE lighting (~361 KB) stays on real idle so it does not fight title
 // paint for the wire. ensureScenery already awaits ensureCircuit.
+// ONE fetch of the presets in flight, and a failed one is forgotten: the loader
+// RESOLVES false on an error (offline, a refused stale-build request), so the
+// answer is read back from window.LightPresets. Without this the single idle
+// attempt below was the only one — one dropped request meant default lighting
+// for every race of the session. ensureCircuit re-asks at the next race start
+// after a failure (the circuit fetch's own pattern); until one has failed, the
+// boot path stays the idle prefetch alone.
+let lightLoad = null, lightFailed = false;
+function ensureLightPresets() {
+  if (window.LightPresets) return Promise.resolve(true);
+  if (lightLoad) return lightLoad;
+  lightLoad = loadBackendScripts(RACE_FILES, []).catch(() => false).then(() => {
+    lightLoad = null;
+    lightFailed = !window.LightPresets;
+    if (lightFailed) { Log.warn("game", "the lighting presets did not load — the next race start asks again"); return false; }
+    deps.applyLightTuneIfReady();
+    return true;
+  });
+  return lightLoad;
+}
 function scheduleIdle(fn, timeoutMs) {
   const ms = timeoutMs != null ? timeoutMs : 2000;
   if (typeof requestIdleCallback === "function") requestIdleCallback(fn, { timeout: ms });
@@ -566,12 +587,7 @@ function raceAssets() {
   };
   if (typeof queueMicrotask === "function") queueMicrotask(kickScenery);
   else Promise.resolve().then(kickScenery);
-  scheduleIdle(() => {
-    if (window.LightPresets) return;
-    loadBackendScripts(RACE_FILES, []).then(() => {
-      if (window.LightPresets) deps.applyLightTuneIfReady();
-    });
-  }, 2500);
+  scheduleIdle(() => { ensureLightPresets(); }, 2500);
   // Prefetch the session stub's real modules on idle so startRace's await is
   // usually a no-op. Do not put them on the title paint path (microtask).
   scheduleIdle(() => { ensureRaceSession(); }, 2800);
