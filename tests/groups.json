@@ -1443,6 +1443,7 @@
     },
     "test:sweeps": {
       "files": [
+        "tests/unit/audit-circuit.test.mjs",
         "tests/unit/baked-model-road-guard.test.mjs",
         "tests/unit/build-steps.test.mjs",
         "tests/unit/build-worker.test.mjs",
