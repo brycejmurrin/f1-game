@@ -761,15 +761,49 @@ test("ui-mock-core: sheetArgs tiles labelled files, and is null for nothing", ()
 });
 
 test("menu-mock: planMenuCells orders race-bound screens last, groups by pointer shape, and refuses unknown ids", () => {
-  const cells = MM.planMenuCells("title,pause,select", "ios-iphone-landscape-844,desktop-1280x800");
-  assert.equal(cells.length, 6);
-  assert.deepEqual(cells.filter((c) => c.viewport === "ios-iphone-landscape-844").map((c) => c.screen), ["title", "select", "pause"]);
+  const cells = MM.planMenuCells("title,pause,select,photostudio", "ios-iphone-landscape-844,desktop-1280x800");
+  assert.equal(cells.length, 8);
+  assert.deepEqual(cells.filter((c) => c.viewport === "ios-iphone-landscape-844").map((c) => c.screen),
+    ["title", "select", "photostudio", "pause"], "mode/race screens after title clicks");
   assert.ok(MM.planMenuCells("*", "desktop-1280x800").length > 20, "'*' is every catalogued screen");
   assert.throws(() => MM.planMenuCells("nope", "desktop-1280x800"), /--screens: unknown nope/);
   assert.throws(() => MM.planMenuCells("title", "nope"), /--viewports: unknown nope/);
   assert.equal(MM.groupKey({ hasTouch: true, isMobile: true }), "touch-mobile");
   assert.equal(MM.groupKey({}), "pointer-desktop");
   assert.ok(MM.DEFAULT_SCREENS.split(",").every((id) => MM.planMenuCells(id, MM.DEFAULT_VIEWPORTS).length === 1), "every default screen id exists");
+});
+
+test("menu-mock: OVERLAY_IDS includes photo-studio + loading so a * sweep can reset the title", async () => {
+  const { OVERLAY_IDS } = await import("../../tools/ui/menu-screens.mjs");
+  assert.ok(OVERLAY_IDS.includes("photo-studio"), "photo-studio covers #mb-race after a photostudio cell");
+  assert.ok(OVERLAY_IDS.includes("loading"), "loading cover also sits above the title");
+});
+
+test("menu-mock: leaveToMenu dismisses ios-install and photo-studio-open", () => {
+  const hidden = {};
+  const bodyClasses = new Set(["photo-studio-open", "lt-open"]);
+  const els = {
+    "ios-install": { get hidden() { return !!hidden["ios-install"]; }, set hidden(v) { hidden["ios-install"] = !!v; } },
+    "install-chip": { get hidden() { return !!hidden["install-chip"]; }, set hidden(v) { hidden["install-chip"] = !!v; } },
+    "photo-studio": { hidden: true },
+    "lighting": { hidden: true },
+    "camtune": { hidden: true },
+    "flyby": { hidden: true },
+    "quali": { hidden: true },
+    "race-settings": { hidden: true },
+  };
+  const sandbox = {
+    window: { __apex: { info: () => ({ state: "menu", raceGrid: "grid" }) }, __mmGrid: "grid" },
+    document: {
+      getElementById: (id) => els[id] || null,
+      body: { classList: { remove: (...xs) => xs.forEach((c) => bodyClasses.delete(c)) } },
+    },
+  };
+  vm.runInNewContext(`(${MM.leaveToMenu.toString()})()`, sandbox);
+  assert.equal(els["ios-install"].hidden, true);
+  assert.equal(els["install-chip"].hidden, true);
+  assert.equal(bodyClasses.has("photo-studio-open"), false);
+  assert.equal(bodyClasses.has("lt-open"), false);
 });
 
 test("menu-mock --list needs no browser", () => {

@@ -146,12 +146,12 @@ export const SCREENS = [
       await p.click("#rs-duel-open");
       await p.waitForSelector("#duel-picker:not([hidden])", { timeout: 15000 }); } },
   { id: "results", name: "Results", root: "#results", open: async (p) => {
-      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.evaluate(async () => { await window.__apex.race("monza", null, null, { grid: window.__mmGrid || "tier" }); });
       await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
       await p.evaluate(() => { window.__apex.go(); window.__apex.setLap(3); window.__apex.finishRace(); });
       await p.waitForSelector("#results:not([hidden])", { timeout: 20000 }); } },
   { id: "pause", name: "Pause menu", root: "#pausemenu", open: async (p) => {
-      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.evaluate(async () => { await window.__apex.race("monza", null, null, { grid: window.__mmGrid || "tier" }); });
       await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
       await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
       await p.evaluate(() => { document.getElementById("pausemenu").hidden = false; });
@@ -212,7 +212,7 @@ export const SCREENS = [
   { id: "standings", name: "Championship standings", root: "#standings", open: async (p) => {
       // #mb-standings is hidden until a season exists; the pause menu's copy is
       // always reachable, and it is the same screen.
-      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.evaluate(async () => { await window.__apex.race("monza", null, null, { grid: window.__mmGrid || "tier" }); });
       await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
       await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40);
         document.getElementById("pausemenu").hidden = false; });
@@ -321,7 +321,7 @@ export const SCREENS = [
       await p.waitForTimeout(1500); } },
 
   { id: "lightingtuner", name: "Lighting tuner", root: "#lighting", open: async (p) => {
-      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.evaluate(async () => { await window.__apex.race("monza", null, null, { grid: window.__mmGrid || "tier" }); });
       await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
       await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
       // Open SETTINGS through the app's own door (pause -> SETTINGS), not by
@@ -344,7 +344,7 @@ export const SCREENS = [
       await p.waitForTimeout(400); } },
 
   { id: "cameratuner", name: "Camera tuner", root: "#camtune", open: async (p) => {
-      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.evaluate(async () => { await window.__apex.race("monza", null, null, { grid: window.__mmGrid || "tier" }); });
       await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
       await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
       // Open SETTINGS through the app's own door (pause -> SETTINGS), not by
@@ -373,7 +373,7 @@ export const SCREENS = [
   // anchor picker each), which makes it the worst case for the short-viewport
   // scroll rung rather than a duplicate of the camera tuner's cell.
   { id: "flybyeditor", name: "Flyby shot editor", root: "#flyby", open: async (p) => {
-      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.evaluate(async () => { await window.__apex.race("monza", null, null, { grid: window.__mmGrid || "tier" }); });
       await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000, polling: 100 });
       await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
       await p.evaluate(() => { document.getElementById("pausemenu").hidden = false; });
@@ -417,7 +417,7 @@ export const SCREENS = [
   // trap the skip counting documents.
   { id: "lightingtunerfly", name: "Lighting tuner — free camera", root: "#lighting",
     open: async (p) => {
-      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.evaluate(async () => { await window.__apex.race("monza", null, null, { grid: window.__mmGrid || "tier" }); });
       await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
       await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
       await p.evaluate(() => { document.getElementById("pausemenu").hidden = false; });
@@ -442,7 +442,7 @@ export const SCREENS = [
   // the cell above; only the measured root differs.
   { id: "photocontrols", name: "Free camera — photo controls", root: "#photo-controls",
     open: async (p) => {
-      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.evaluate(async () => { await window.__apex.race("monza", null, null, { grid: window.__mmGrid || "tier" }); });
       await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
       await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
       await p.evaluate(() => { document.getElementById("pausemenu").hidden = false; });
@@ -478,7 +478,7 @@ export const SCREENS = [
   // the same screen carrying a championship table after a season round. The
   // second is taller by ten rows and was never measured.
   { id: "resultsseason", name: "Results — season round", root: "#results", open: async (p) => {
-      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.evaluate(async () => { await window.__apex.race("monza", null, null, { grid: window.__mmGrid || "tier" }); });
       await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
       await p.evaluate(() => { window.__apex.career({ teamId: "haas", seat: 1, seed: 42 }); });
       await p.evaluate(() => { window.__apex.go(); window.__apex.setLap(3); window.__apex.finishRace(); });
@@ -499,7 +499,7 @@ export const SCREENS = [
   // corrupts its neighbours.
   ...[["touch", "touch steering"], ["buttons", "button steering"]].map(([mode, label]) => ({
     id: "hud" + mode, name: "In-race HUD — " + label, root: "#hud", open: async (p) => {
-      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.evaluate(async () => { await window.__apex.race("monza", null, null, { grid: window.__mmGrid || "tier" }); });
       await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
       await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 45); });
       // #pm-steer is a setting row (‹ TILT | BUTTONS | TOUCH ›): pick in its select.
@@ -523,7 +523,7 @@ export const SCREENS = [
       // MANUAL moves the gearbox into the right thumb column and pushes BOOST/OT
       // /AERO elsewhere — a different control stack, not a restyle of the same
       // one, and it is the arrangement most likely to collide on a short screen.
-      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.evaluate(async () => { await window.__apex.race("monza", null, null, { grid: window.__mmGrid || "tier" }); });
       await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
       await p.evaluate(() => { document.body.classList.add("manual");
         window.__apex.go(); window.__apex.jump(0.2, 45); window.__apex.snapCam(); });
@@ -535,6 +535,12 @@ export const OVERLAY_IDS = [
   "career-guide", "teampicker", "race-settings", "quali", "standings", "results", "customize",
   "season-setup", "howtoplay", "advanced", "pmsettings", "pausemenu", "datahub", "trackdesigner", "track-detail", "vsfriend",
   "audioset", "spotifypanel", "lighting", "camtune", "flyby", "photo-controls",
+  // Photo Studio is its own full-screen layer (not under photo-controls). Leaving it
+  // open after a photostudio cell made every later menu-mock click time out on a
+  // full-sized #mb-race (elementFromPoint hit #photo-studio instead), 2026-10-10.
+  "photo-studio",
+  // Pre-race loading cover also sits above the title and is not a sheet.
+  "loading",
   // A modal <dialog> left open keeps the whole page inert: the next cell's
   // click on #mb-race times out on a button that measures perfectly visible
   // (quali SKIPPED behind duelpicker in every sweep, 2026-09-30).
