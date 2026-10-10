@@ -282,6 +282,36 @@ test("full quality freezes instanced packs every other drawn frame (audit #8)", 
   assert.ok(lite.calls.filter((c) => c[0] === "world").every((c) => c[3] === false));
 });
 
+// 07-F3: the freeze cadence used the lifetime count of drawn passes, so after a hidden/lite interval a 50 % chance
+// said "freeze" on the first full pass and replayed the pack recorded before it. The cadence counts the current run.
+test("the first full pass after a hidden or lite interval always refreshes the instance pack (07-F3)", () => {
+  const flags = (h) => h.calls.filter((c) => c[0] === "world").map((c) => c[3]);
+  // Hidden: three full passes leave the global parity odd (the next would freeze); toggling the mirror off/on must reset it.
+  const h = boot({ mode: "on", tier: 0 });
+  for (let i = 0; i < 3; i++) h.render();
+  assert.deepEqual(flags(h), [false, true, false]);
+  h.calls.length = 0;
+  h.mp.setMode("off"); h.render();
+  h.mp.setMode("on"); h.render();
+  assert.deepEqual(flags(h), [false], "back from hidden: refresh, never a freeze onto the old pack");
+  h.render();
+  assert.deepEqual(flags(h), [false, true], "and the alternation resumes from there");
+  // Lite: the governor drops the mirror to lite and recovers (each rung change waits out a 90-frame dwell).
+  const g = boot({ mode: "on", tier: 0 });
+  for (let i = 0; i < 3; i++) g.render();
+  g.setTier(1);
+  for (let i = 0; i < 100; i++) g.render();
+  assert.equal(g.mp.state().quality, "lite");
+  g.setTier(0);
+  for (let i = 0; i < 89; i++) g.render();
+  assert.equal(g.mp.state().quality, "lite", "still inside the recovery dwell");
+  g.calls.length = 0;
+  g.render();
+  assert.equal(g.mp.state().quality, "full");
+  g.render();
+  assert.deepEqual(flags(g), [false, true], "first full pass refreshes, the next freezes");
+});
+
 test("a tap collapses the mirror to a chip for the session; a tap on the chip brings it back", () => {
   const h = boot({ mode: "on", mobile: true });
   h.render();
