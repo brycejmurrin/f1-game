@@ -502,11 +502,11 @@ function bootCanvas() {
   const canvas = b.dom.document.createElement("canvas");
   const fills = [];
   canvas.getContext = () => new Proxy({}, { get: (t, k) => (k === "fill" ? () => fills.push(t.fillStyle) : k in t ? t[k] : () => {}), set: (t, k, v) => { t[k] = v; return true; } });
-  const ev = { changes: [], picks: [], deletes: [] };
+  const ev = { changes: [], picks: [], deletes: [], limits: [] };
   let cv = null;
   cv = b.DC.create(canvas, {
     onChange: (pts, kind) => { ev.changes.push({ pts, kind }); cv.setPoints(pts); },
-    onPick: (i) => ev.picks.push(i), onDelete: (i) => ev.deletes.push(i), onSelect: () => {},
+    onPick: (i) => ev.picks.push(i), onDelete: (i) => ev.deletes.push(i), onSelect: () => {}, onLimit: (w) => ev.limits.push(w),
   });
   const pts = [];
   for (let i = 0; i < 24; i++) { const t = i / 24 * Math.PI * 2; pts.push([Math.round(300 * Math.cos(t) * 4) / 4, Math.round(200 * Math.sin(t) * 4) / 4]); }
@@ -548,6 +548,22 @@ test("DesignerCanvas: double-tap deletes only under SELECT and only the handle b
   h.tap(mid); h.tap(mid); h.fire("dblclick", mid);
   assert.equal(h.ev.changes.filter((c) => c.kind === "insert").length, 1);
   assert.deepEqual(h.ev.deletes, [6], "the inserted point is not deleted by the same double-tap");
+});
+
+test("DesignerCanvas: a tap on the road at the point cap inserts nothing and says so (bug-hunt H10)", () => {
+  const h = bootCanvas();
+  // 200 points in four tight clusters, so the long edges between them are far from every handle.
+  const max = h.b.C.LIMITS.ptsMax, ring = [], corners = [[-1000, -700], [1000, -700], [1000, 700], [-1000, 700]];
+  for (const c of corners) for (let i = 0; i < max / 4; i++) ring.push([c[0] + i * 0.25, c[1]]);
+  h.cv.setPoints(ring); h.cv.fit();
+  const edge = [(ring[49][0] + ring[50][0]) / 2, (ring[49][1] + ring[50][1]) / 2];
+  h.tap(h.scr(edge));
+  assert.equal(h.ev.changes.filter((c) => c.kind === "insert").length, 0, "the 201st point is refused (validate.js and the registry both red it)");
+  assert.deepEqual(h.ev.limits, ["points"], "the screen is told, so it can say why");
+  h.cv.setPoints(ring.slice(0, max - 1)); h.cv.fit();
+  h.tap(h.scr(edge));
+  assert.equal(h.ev.changes.filter((c) => c.kind === "insert").length, 1, "one under the cap still inserts");
+  assert.match(read("js/editor/designer.js"), /onLimit: \(\) => message\(CustomTracks\.LIMITS\.ptsMax[^\n]*, true\)/, "the screen words the refusal as a warning");
 });
 
 test("DesignerCanvas: a drag stops at the storage bounds; a preview landing mid-drag keeps the road stale", () => {

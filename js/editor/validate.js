@@ -122,7 +122,8 @@ const TrackValidate = (function () {
     // The registry refused it even as a work in progress (a point off the
     // ±10 km map, a malformed point): nothing can be built, saved or raced —
     // never "All checks pass".
-    if (pts.length >= LIMITS.ptsMin && !built) add("bounds", "red", "This loop cannot be built — keep every point inside the ±10 km map", { fix: "bounds" });
+    // (More than ptsMax points is refused too, but "Too many points" above already says so.)
+    if (pts.length >= LIMITS.ptsMin && pts.length <= LIMITS.ptsMax && !built) add("bounds", "red", "This loop cannot be built — keep every point inside the ±10 km map", { fix: "bounds" });
     if (built && built.error) add("build", "red", "The engine could not build this loop: " + built.error);
     const tr = built && built.tr;
     const j = tr ? judge(tr, design, built.def) : { issues: [], stats: emptyStats(), turns: [] };

@@ -396,3 +396,13 @@ test("SPIRAL: a spiralled CORNER builds at its radius (±5 %, R 30–300) and th
   }
   console.log("SPIRAL 80 m on a 120° corner:\n  " + rows.join("\n  "));
 });
+
+test("validate: 201 control points read 'Too many points', not the ±10 km 'bounds' refusal (bug-hunt H10)", () => {
+  const { V } = bootEditor();
+  const v = V.check(design({ pts: ellipse(201) }));
+  const codes = v.issues.map((i) => i.code + ":" + i.level);
+  assert.ok(v.issues.some((i) => i.code === "points" && i.level === "red" && /^Too many points/.test(i.msg)), "the cap is named: " + codes);
+  assert.ok(!v.issues.some((i) => i.code === "bounds"), "…and the loop is not blamed on the map bounds: " + codes);
+  assert.equal(v.ok, false);
+  assert.ok(V.check(design({ pts: [[0, 0], [20000, 0], [0, 20000], [-9000, 0], [0, -9000], [900, 900], [-900, 900], [900, -900]] })).issues.some((i) => i.code === "bounds"), "a real off-map point still says bounds");
+});
