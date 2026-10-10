@@ -404,3 +404,17 @@ branch). Both PRs merge cleanly with ship.
 green) → #1394 (any time) → #1375, re-measured on the merged tree → close
 #1316 → the allocator, as a draft PR against #1375's ceilings, paying for its
 growth or raising them with a stated reason.
+
+## Addendum 4: #1366 merged (`325100c`, 12:40Z)
+
+- **#1375 is FIX-FIRST.** On ship + #1375 it is now over its own ceilings,
+  exactly as predicted: hud.js +15 code lines / +35 lines, hud.css +9 / +11.
+  Re-measure the ceilings on ship (`ratchets.mjs --update`, with the reason)
+  before it lands. #1351 then adds hud.js +18 / +22 and hud.css +7 / +8, so
+  land #1351 first or the re-measure has to happen again.
+- **#1351 (`bdf4cff`):** still merges cleanly. SAFE once CI is green.
+- **#1346 (`5a2ded8`):** merges cleanly. SAFE once CI is green.
+- **#1316:** conflicts in five files, and its Phase 0 has now shipped as #1366.
+  Close it.
+- **Allocator (`868a050`):** conflicts with ship in hud.css, hud.js and three
+  HUD unit tests. It must sync onto #1366's merge before it opens as a PR.
