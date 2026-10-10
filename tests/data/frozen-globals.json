@@ -192,6 +192,7 @@
   "GLTF",
   "GameAudio",
   "Input",
-  "LampChunks"
+  "LampChunks",
+  "CarFields"
  ]
 }

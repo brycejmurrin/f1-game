@@ -10,6 +10,8 @@ const DailyChallenge = (function () {
   const WEATHER = ["dry", "dry", "overcast", "wet", "rain", "fog"];
   const TOD = ["default", "dawn", "day", "dusk", "night"];
 
+  const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+
   // Hash32 primitives only — never Career.hash: a career seed must not move the daily plan.
   function pick(day, field, n) { return Hash32.mix(Hash32.fnv1a("daily:" + day + ":" + field)) % n; }
 
@@ -47,7 +49,7 @@ const DailyChallenge = (function () {
       const st = d.streak && typeof d.streak === "object" ? d.streak : {};
       return { days, streak: { count: Number.isInteger(st.count) ? st.count : 0, last: typeof st.last === "string" ? st.last : null } };
     }
-    function today() { return data().days[dayKey()] || null; }
+    function today() { const e = data().days[dayKey()]; return isObj(e) ? e : null; }
 
     // Stage the plan as a TIME TRIAL without starting it. The circuit picker
     // uses this so DAILY follows the same select → NEXT → RACE SETTINGS → RACE!
@@ -89,16 +91,18 @@ const DailyChallenge = (function () {
       if (!active || !(lapTime > 0) || !Number.isFinite(lapTime)) return null;
       const d = data();
       const day = active.day;
-      const e = d.days[day] || (d.days[day] = { best: null, laps: 0 });
-      e.laps++;
+      // A restored backup is only checked to be an object: any entry may be a number, a string or an array.
+      const e = isObj(d.days[day]) ? d.days[day] : (d.days[day] = { best: null, laps: 0 });
+      const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+      e.laps = (num(e.laps) || 0) + 1;
       if (context != null) {
-        if (!e.classes || typeof e.classes !== "object" || Array.isArray(e.classes)) e.classes = {};
-        const cls = e.classes[context] || { best: null, laps: 0 };
-        cls.laps++;
-        if (cls.best == null || lapTime < cls.best) cls.best = +lapTime.toFixed(3);
+        if (!isObj(e.classes)) e.classes = {};
+        const cls = isObj(e.classes[context]) ? e.classes[context] : { best: null, laps: 0 };
+        cls.laps = (num(cls.laps) || 0) + 1;
+        if (num(cls.best) == null || lapTime < cls.best) cls.best = +lapTime.toFixed(3);
         e.classes[context] = cls;
       }
-      if (e.best == null || lapTime < e.best) e.best = +lapTime.toFixed(3);
+      if (num(e.best) == null || lapTime < e.best) e.best = +lapTime.toFixed(3);
       // Streak: consecutive UTC days with at least one lap. Only a NEWER day
       // moves it (ISO dates compare as strings): a tab left on yesterday's plan
       // past midnight, today already played elsewhere, reset it to 1.

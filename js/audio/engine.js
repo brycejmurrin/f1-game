@@ -251,10 +251,16 @@ var GameAudio = (function () {
   let rebuildTries = 0;
   let lastFailedResume = 0;
   let deviceRebuildTimer = null;
-  let deviceRebuildPending = false;
+  let deviceRebuildTimerWhy = "";
+  let deviceRebuildPending = "";    // why a request waits (hidden tab / no gesture yet); "" = none
   let deviceRebuildBusy = false;
+  let deviceRebuildStamps = [];     // Date.now() of recent device-driven rebuilds (the cap below)
   let ctxSampleRate = 0;
   const DEVICE_REBUILD_DEBOUNCE_MS = 280;
+  // A context that will not unlock (iOS refusing outside a gesture) comes back
+  // "suspended" and every rebuild re-arms the next one: unbounded, that loop
+  // closes and recreates a context every ~280 ms for as long as the page is up.
+  const DEVICE_REBUILD_MAX = 3, DEVICE_REBUILD_WINDOW_MS = 30000;
   let resumeMusic = false;
   let resumeEngine = false;
   let resumeRain = false;
@@ -303,14 +309,18 @@ var GameAudio = (function () {
    * (radioVoice clips) each latch independently: say()/stopVoice always pairs
    * setRadioDuck(false) on a card replace, and that must not lift the music
    * under a spotter call still finishing its remaining() lead — nor the reverse
-   * when a spotter clip ends while an engineer line is still on air. */
-  let radioDuckHold = false;
+   * when a spotter clip ends while an engineer line is still on air.
+   * THE RADIO HOLD IS PER SOURCE TOO: the engineer, every WATCH clip and the
+   * real-replay fallback pass their own id (default "radio" = the engineer), so
+   * one of them letting go cannot lift the music under another still on air. */
+  const radioDuckHolds = new Set();
   let spotterDuckHold = false;
   function applyMusicDuck() {
-    return soundtrackRadioDuck(radioDuckHold || spotterDuckHold);
+    return soundtrackRadioDuck(radioDuckHolds.size > 0 || spotterDuckHold);
   }
-  function setRadioDuck(on) {
-    radioDuckHold = !!on;
+  function setRadioDuck(on, src) {
+    const id = src == null ? "radio" : String(src);
+    if (on) radioDuckHolds.add(id); else radioDuckHolds.delete(id);
     return applyMusicDuck();
   }
   function setSpotterDuck(on) {
@@ -347,7 +357,13 @@ var GameAudio = (function () {
       if (ctx.state === "running" && ctxSampleRate && ctx.sampleRate !== ctxSampleRate) {
         scheduleOutputDeviceRebuild("sampleRate");
       }
-      if (ctx.state === "running") ctxSampleRate = ctx.sampleRate;
+      if (ctx.state === "running") {
+        ctxSampleRate = ctx.sampleRate;
+        // A quick hide -> show: the context came back before the rebuild the
+        // "suspended" event armed. Healthy, so nothing to rebuild.
+        if (deviceRebuildTimer && staleStateRebuild(deviceRebuildTimerWhy)) { clearTimeout(deviceRebuildTimer); deviceRebuildTimer = null; }
+        if (staleStateRebuild(deviceRebuildPending)) deviceRebuildPending = "";
+      }
       if (!document.hidden && (ctx.state === "interrupted" || ctx.state === "suspended")) {
         scheduleOutputDeviceRebuild("state-" + ctx.state);
       }
@@ -438,9 +454,27 @@ var GameAudio = (function () {
     } catch (e) { return false; }
   }
 
+  // A state-* request is about a context that was not running; one that has
+  // since resumed needs no rebuild (the hide -> show race: suspend()'s statechange
+  // lands after the page is visible again). devicechange / sampleRate still do.
+  function staleStateRebuild(why) {
+    return typeof why === "string" && why.startsWith("state-") && !!ctx && ctx.state === "running";
+  }
+
+  // A state-* request while hidden is our own suspend() (onVisibility), never a
+  // fault: only a device change is worth remembering for the show.
+  function deferWhileHidden(why) {
+    if (!String(why).startsWith("state-")) deviceRebuildPending = why;
+  }
+
   function scheduleOutputDeviceRebuild(why) {
-    if (!ctx || document.hidden || deviceRebuildBusy) return;
+    if (!ctx || deviceRebuildBusy) return;
+    // HIDDEN: remember it. The rebuild must wait for the tab (a hidden tab cannot
+    // be unlocked), but dropping the request lost a headset swap made while
+    // backgrounded for good — onVisibility's show branch picks this up.
+    if (document.hidden) { deferWhileHidden(why); return; }
     if (deviceRebuildTimer) clearTimeout(deviceRebuildTimer);
+    deviceRebuildTimerWhy = why;
     deviceRebuildTimer = setTimeout(() => {
       deviceRebuildTimer = null;
       requestOutputDeviceRebuild(why);
@@ -448,9 +482,11 @@ var GameAudio = (function () {
   }
 
   function requestOutputDeviceRebuild(why) {
-    if (!ctx || document.hidden || deviceRebuildBusy) return;
+    if (!ctx || deviceRebuildBusy) return;
+    if (staleStateRebuild(why)) return;
+    if (document.hidden) { deferWhileHidden(why); return; }
     if (!stickyUserActivation()) {
-      deviceRebuildPending = true;
+      deviceRebuildPending = why;
       Log.debug("audio", "output-device rebuild deferred (" + why + ") until the next gesture");
       return;
     }
@@ -459,7 +495,15 @@ var GameAudio = (function () {
 
   function performOutputDeviceRebuild(why) {
     if (!ctx || document.hidden || deviceRebuildBusy) return;
-    deviceRebuildPending = false;
+    if (staleStateRebuild(why)) { deviceRebuildPending = ""; return; }
+    deviceRebuildPending = "";
+    const t = Date.now();
+    deviceRebuildStamps = deviceRebuildStamps.filter((s) => t - s < DEVICE_REBUILD_WINDOW_MS);
+    if (deviceRebuildStamps.length >= DEVICE_REBUILD_MAX) {
+      Log.warn("audio", "output-device rebuild after " + why + " skipped: " + DEVICE_REBUILD_MAX + " rebuilds in " + (DEVICE_REBUILD_WINDOW_MS / 1000) + " s already");
+      return;
+    }
+    deviceRebuildStamps.push(t);
     deviceRebuildBusy = true;
     Log.info("audio", "rebuilding AudioContext after " + why);
     try { rebuildCtx(); } finally { deviceRebuildBusy = false; }
@@ -518,9 +562,8 @@ var GameAudio = (function () {
   function resumeIfNeeded(gestureEv) {
     if (!ctx) return;
     const isGesture = !!gestureEv;
-    if (isGesture && deviceRebuildPending) {
-      deviceRebuildPending = false;
-      performOutputDeviceRebuild("deferred-gesture");
+    if (isGesture && deviceRebuildPending && !staleStateRebuild(deviceRebuildPending)) {
+      performOutputDeviceRebuild(String(deviceRebuildPending).startsWith("state-") ? deviceRebuildPending : "deferred-gesture");
       return;
     }
     if (ctx.state === "running") {
@@ -585,8 +628,11 @@ var GameAudio = (function () {
     radio.resetContext();
     // Old radioVoice onended/stop never fire on a closed context — drop both
     // holds so a mid-clip rebuild cannot leave the music stuck under a ghost.
-    radioDuckHold = false;
+    radioDuckHolds.clear();
     spotterDuckHold = false;
+    // Timestamps from the closed context's clock: revFlare's decay would read a
+    // dt against the new (near-0) clock, and limSince would hold the cut open.
+    revFlare = 0; revFlareT = 0; limSince = null;
     signal.resetContext();
     dbgAnalyser = null;    // ctx-bound; stopEngine() nulls it but this path inlines its own
                             // teardown, so without this a stale analyser on the closed ctx would
@@ -632,6 +678,10 @@ var GameAudio = (function () {
         }
       } catch (_) { /* a context mid-teardown must not break the hide path */ }
     } else {
+      // A devicechange / sampleRate request that arrived while hidden (see
+      // scheduleOutputDeviceRebuild): the tab is back, so serve it now, before
+      // the music / engine restarts below land on the context it would replace.
+      if (deviceRebuildPending && !staleStateRebuild(deviceRebuildPending)) requestOutputDeviceRebuild(deviceRebuildPending);
       resumeIfNeeded();
       if (resumeMusic) startMusic(soundtrack.lastTrack()); // restarts re-synced to the clock
       if (resumeEngine) startEngine();
@@ -700,8 +750,12 @@ var GameAudio = (function () {
 
   function now() { return ctx ? ctx.currentTime : 0; }
 
+  let keepFade = false;   // set only by the sample upgrade in setEngine: its stopEngine() fade must play out
   function startEngineBody() {
-    flushDying();   // kill the fading previous graph before building another
+    // Kill the fading previous graph before building another — except for the
+    // sample upgrade, whose 0.35 s synth fade IS the crossfade (queueDying's own
+    // 450 ms timer buries it).
+    if (!keepFade) flushDying();
     if (sfxOk()) noisePool();   // existing one-shot buffer, prepared before green
 
     // shared lowpass + master gain for the engine core (samples or synth).
@@ -1244,7 +1298,11 @@ var GameAudio = (function () {
     // and startEngine() re-reads samplesReady, so the swap is one crossfade
     // at the moment the samples arrive — never a per-frame flip.
     // Upgrade once when the sample (or the worklet behind it) arrives mid-race.
-    if (samplesReady && engBuf && !usingSamples) { stopEngine(); startEngine(); }
+    if (samplesReady && engBuf && !usingSamples) {
+      stopEngine();
+      keepFade = true;
+      try { startEngine(); } finally { keepFade = false; }
+    }
     const rev = clamp01(rev01 || 0);
     const s = clamp01(typeof speed01 === "number" ? speed01 : (rev01 || 0));
     const b = clamp01(typeof boost01 === "number" ? boost01 : (boost01 ? 1 : 0));

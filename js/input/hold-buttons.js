@@ -111,6 +111,7 @@ const InputHoldButtons = (function () {
       const live = new Map();                     // pointerId -> visible at pointerdown
       holdBtns.push({ ids, apply, level, anchors, el, live });
       el.addEventListener("pointerdown", e => {
+        if (e.pointerType === "mouse" && e.button !== 0) return;   // a right-click opens a context menu and may never send pointerup
         try { el.setPointerCapture(e.pointerId); } catch (_) { /* pointer already gone (cancelled between down and here); the button still works uncaptured */ }
         e.preventDefault();
         // Only the FIRST contact is a press edge: THROTTLE = LATCH toggles on every
@@ -158,7 +159,7 @@ const InputHoldButtons = (function () {
     function wireTap(id, fire) {
       const el = document.getElementById(id);
       if (!el) return;
-      el.addEventListener("pointerdown", function () { fire(); });
+      el.addEventListener("pointerdown", function (e) { if (e && e.pointerType === "mouse" && e.button !== 0) return; fire(); });
     }
 
     return { wireHold, wireTap, holdReleasePointer, holdReleaseAll, holdTargetGone, lostCaptureShouldRelease,

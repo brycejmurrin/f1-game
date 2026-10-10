@@ -523,10 +523,10 @@ test("CALIBRATE STICK is stored and applied on the next boot; a garbage value is
   const pa = fakePad(a.sb, a.fire);
   pa.pad.axes[0] = 0.08;
   a.$("pm-pad-calib").onclick();
-  assert.ok(Math.abs(disk.padRest - 0.08) < 1e-9, "the offset was stored: " + disk.padRest);
+  assert.ok(Math.abs(disk.padRest["Xbox Wireless Controller"] - 0.08) < 1e-9, "the offset was stored per pad id: " + JSON.stringify(disk.padRest));
   const b = bootUi(true, {}, { padRest: disk.padRest });
-  assert.ok(Math.abs(b.Input.padRest() - 0.08) < 1e-9, "a fresh boot loads it");
   const pb = fakePad(b.sb, b.fire);
+  assert.ok(Math.abs(b.Input.padRest() - 0.08) < 1e-9, "a fresh boot loads it for that pad");
   pb.pad.axes[0] = 0.08; b.Input.poll();
   assert.equal(b.Input.debugState().pad.steer, 0, "a stick resting at 0.08 steers nothing");
   const c = bootUi(true, {}, {});
@@ -571,7 +571,7 @@ test("CONTROLLER RESET clears wheel axes and stick rest, not only the button map
   // Calibrate on the wizard's steer axis (1), not axis 0.
   pad.axes = [0, 0.08, 0, 0];
   $("pm-pad-calib").onclick();
-  assert.ok(Math.abs(disk.padRest - 0.08) < 1e-9, "rest offset stored: " + disk.padRest);
+  assert.ok(Math.abs(disk.padRest["Xbox Wireless Controller"] - 0.08) < 1e-9, "rest offset stored: " + JSON.stringify(disk.padRest));
   assert.equal($("pm-pad-reset").disabled, false, "RESET stays live with a rest offset");
 
   Input.setPadBinding("boost", 0, 11);
@@ -893,4 +893,252 @@ test("a Cmd/Ctrl chord never latches a driving key (macOS sends no key-up for it
   assert.equal(s().right, false);
   press("KeyP", { metaKey: false });
   assert.equal(paused, 1, "pause is handled above the chord gate");
+});
+
+// ---- round 2 input hunt: I-01 / I-02 / I-05 / I-06 / I-08 / I-09 + nintendo A/B ---------------
+
+const rawPad = (extra) => Object.assign({ connected: true, mapping: "standard", id: "Xbox Wireless Controller", index: 0, axes: [0, 0, 0, 0],
+  buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) }, extra);
+const setBtn = (pad, i, down) => { pad.buttons[i] = { pressed: down, value: down ? 1 : 0 }; };
+// A stable menu layer + a focused control, so the pad's menu walk is observable.
+function menuRig() {
+  const r = boot();
+  let t = 0; r.sb.performance.now = () => t;
+  r.tick = () => { t += 16; r.Input.poll(); };
+  const layer = { id: "overlay", contains: () => true };
+  r.sb.MenuNav = { activeLayer: () => layer, FOCUSABLE: "button" };
+  r.sb.UiLayers.top = () => layer;
+  r.navOpen.on = true;
+  r.clicks = 0;
+  r.sb.document.activeElement = { tagName: "BUTTON", disabled: false, matches: () => true, click() { r.clicks++; } };
+  return r;
+}
+
+test("I-01: a mapping-\"\" pad (wheel) resting at -1 on axes 1-3 does not walk the menu", () => {
+  const { Input, sb, fire, dispatched, tick } = menuRig();
+  const pad = rawPad({ mapping: "", id: "Logitech G29 Driving Force Racing Wheel", axes: [0, -1, -1, -1] });
+  sb.navigator.getGamepads = () => [pad];
+  fire("gamepadconnected", { gamepad: pad });
+  tick(); dispatched.length = 0;
+  for (let f = 0; f < 120; f++) tick();
+  assert.deepEqual(dispatched.map((e) => e.key), [], "pedals at rest are not sticks");
+  // Its d-pad numbering is the maker's: buttons 12-15 navigate nothing.
+  setBtn(pad, 13, true); tick(); setBtn(pad, 13, false); tick();
+  assert.deepEqual(dispatched.map((e) => e.key), [], "button 13 on a wheel is not D-pad down");
+  // The steering axis the wheel reports does navigate left/right.
+  pad.axes[0] = 0.9; tick();
+  assert.deepEqual(dispatched.map((e) => e.key), ["ArrowRight"], "the steer axis moves along a row");
+});
+
+test("I-01: a mapping-\"\" pad's buttons 14/15 do not steer; a standard pad's still do", () => {
+  const { Input, sb, fire } = boot();
+  let t = 0; sb.performance.now = () => t;
+  const pad = rawPad({ mapping: "" , id: "Generic HID wheel" });
+  sb.navigator.getGamepads = () => [pad];
+  fire("gamepadconnected", { gamepad: pad });
+  setBtn(pad, 14, true);
+  for (let i = 0; i < 30; i++) { t += 16; Input.poll(); }
+  assert.equal(Input.debugState().pad.steer, 0, "an unknown button 14 does not slam full lock");
+  const std = rawPad({ id: "Pad Std" });
+  sb.navigator.getGamepads = () => [std];
+  fire("gamepadconnected", { gamepad: std });
+  setBtn(std, 14, true);
+  for (let i = 0; i < 30; i++) { t += 16; Input.poll(); }
+  assert.ok(Input.debugState().pad.steer < 0, "control: the standard d-pad left steers");
+});
+
+test("I-01: a wheel's bound paddles navigate up/down in a menu", () => {
+  const { Input, sb, fire, dispatched, tick } = menuRig();
+  const pad = rawPad({ mapping: "", id: "Wheel", axes: [0, -1, -1, -1] });
+  sb.navigator.getGamepads = () => [pad];
+  fire("gamepadconnected", { gamepad: pad });
+  tick(); dispatched.length = 0;
+  const [down] = plain(Input.getPadMap().shiftUp).filter((b) => b != null);
+  setBtn(pad, down, true); tick();
+  assert.deepEqual(dispatched.map((e) => e.key), ["ArrowDown"], "the shift-up paddle is DOWN");
+});
+
+test("I-02: CALIBRATE STICK is kept per pad; another centred pad steers 0", () => {
+  const { Input, sb, fire } = boot();
+  const A = rawPad({ id: "Pad A", index: 0, axes: [0.2, 0, 0, 0] });
+  const B = rawPad({ id: "Pad B", index: 1 });
+  sb.navigator.getGamepads = () => [A];
+  fire("gamepadconnected", { gamepad: A });
+  Input.poll();
+  assert.equal(Input.calibratePad(), true);
+  Input.poll();
+  assert.equal(Input.debugState().pad.steer, 0, "pad A is calibrated");
+  assert.deepEqual(plain(Input.padRestStore()), { "Pad A": 0.2 });
+  sb.navigator.getGamepads = () => [B];
+  fire("gamepadconnected", { gamepad: B });
+  Input.poll();
+  assert.equal(Input.debugState().pad.steer, 0, "a different centred pad does not inherit A's pull");
+  assert.equal(Input.padRest(), 0);
+  sb.navigator.getGamepads = () => [A];
+  Input.poll();
+  assert.equal(Input.debugState().pad.steer, 0, "…and A keeps its own offset");
+  assert.ok(Math.abs(Input.padRest() - 0.2) < 1e-9);
+});
+
+test("I-02: a stored per-pad map loads; the old scalar goes to the first pad that drives", () => {
+  const { Input, sb, fire } = boot();
+  Input.setPadRest({ "Pad A": 0.2, "Pad C": 9, "Pad D": "x" });
+  assert.deepEqual(plain(Input.padRestStore()), { "Pad A": 0.2 }, "junk entries are dropped");
+  const B = rawPad({ id: "Pad B" });
+  sb.navigator.getGamepads = () => [B];
+  fire("gamepadconnected", { gamepad: B });
+  Input.poll();
+  assert.equal(Input.padRest(), 0, "an unlisted pad has no offset");
+  // Legacy scalar (apex26.padRest saved before per-pad offsets).
+  Input.setPadRest(0.2);
+  assert.equal(Input.padRestStore(), 0.2, "kept as a number until a pad claims it");
+  const A = rawPad({ id: "Pad A", index: 1, axes: [0.2, 0, 0, 0] });
+  sb.navigator.getGamepads = () => [A];
+  fire("gamepadconnected", { gamepad: A });
+  Input.poll();
+  assert.equal(Input.debugState().pad.steer, 0, "the pad driving at boot owns the old offset");
+  assert.deepEqual(plain(Input.padRestStore()), { "Pad A": 0.2 });
+  sb.navigator.getGamepads = () => [B];
+  Input.poll();
+  assert.equal(Input.debugState().pad.steer, 0);
+  assert.equal(Input.padRest(), 0, "and the second pad does not inherit it");
+});
+
+test("I-05: a set-up wheel is linear with no dead zone by default; the DEAD ZONE row still overrides", () => {
+  const { Input, sb, fire } = boot();
+  Input.setSteerExpo(2.4);
+  const pad = rawPad({ mapping: "", id: "Wheel", axes: [0, -1, -1, -1] });
+  sb.navigator.getGamepads = () => [pad];
+  fire("gamepadconnected", { gamepad: pad });
+  Input.setPadAxisMap({ steer: 0, throttle: 2, brake: 3 });
+  const road = () => { Input.poll(); return Math.pow(Math.abs(Input.steer()), 2.4); };   // game.js raises the command to STEER_EXPO
+  pad.axes[0] = 0.03;
+  assert.ok(Math.abs(road() - 0.03) < 1e-6, "3 % of rotation is 3 % of lock, not swallowed by a 5 % dead zone");
+  pad.axes[0] = 0.1;
+  assert.ok(Math.abs(road() - 0.1) < 1e-6, "linear: 10 % of rotation is 10 % of lock");
+  Input.setPadDeadzone(0.1);
+  pad.axes[0] = 0.08;
+  assert.equal(road(), 0, "a DEAD ZONE the player chose still applies");
+  // Control: a standard pad keeps the thumbstick shaping.
+  const std = rawPad({ id: "Pad Std", axes: [0.03, 0, 0, 0] });
+  sb.navigator.getGamepads = () => [std];
+  fire("gamepadconnected", { gamepad: std });
+  Input.setPadDeadzone(0.05);
+  assert.equal(road(), 0, "a stick's 5 % dead zone is unchanged");
+});
+
+test("I-06: a pedal with a measured rest/far reads (raw - rest)/(far - rest); a brake on the throttle's axis is refused", () => {
+  const { Input, sb, fire } = boot();
+  const pad = rawPad({ mapping: "", id: "Wheel", axes: [0, 0, 0, 0] });
+  sb.navigator.getGamepads = () => [pad];
+  fire("gamepadconnected", { gamepad: pad });
+  Input.setPadAxisMap({ steer: 0, throttle: 1, brake: 2, throttleRest: 0, throttleFar: 1, brakeRest: -1, brakeFar: 1 });
+  pad.axes[1] = 0.3; Input.poll();
+  pad.axes[1] = 0; Input.poll();
+  assert.equal(Input.throttleLevel(), 0, "a pedal resting at 0 reads 0, not 50 %");
+  pad.axes[1] = 1; Input.poll();
+  assert.equal(Input.throttleLevel(), 1);
+  pad.axes[1] = 0.56; Input.poll();
+  assert.ok(Math.abs(Input.throttleLevel() - (0.56 - 0.12) / 0.88) < 1e-9);
+  const m = Input.getPadAxisMap();
+  assert.deepEqual([m.throttleRest, m.throttleFar, m.brakeRest, m.brakeFar], [0, 1, -1, 1], "the travel ends round-trip");
+  const same = Input.setPadAxisMap({ steer: 0, throttle: 2, brake: 2, brakeRest: 0, brakeFar: 1 });
+  assert.equal(same.throttle, 2);
+  assert.equal(same.brake, null, "one axis cannot be both pedals");
+  assert.equal(same.brakeFar, null);
+});
+
+test("I-06: the wheel wizard persists each pedal's rest and far; a brake press on the throttle's axis is refused with a message", () => {
+  const disk = {};
+  const { Input, $, fire, sb } = bootUi(true, {}, disk);
+  const pad = rawPad({ mapping: "", id: "Wheel", axes: [0, 0, 0, -1] });
+  sb.navigator.getGamepads = () => [pad];
+  fire("gamepadconnected", { gamepad: pad });
+  Input.poll();
+  $("pm-pad-wheel").onclick();
+  pad.axes[0] = -1; Input.poll();        // steer
+  pad.axes[0] = 0; Input.poll();
+  pad.axes[1] = 0.5; Input.poll();       // throttle captured at 50 % travel on an axis resting at 0
+  pad.axes[1] = 1; Input.poll();         // …and pressed on to its far end (tracked after the capture)
+  pad.axes[1] = 0; Input.poll();         // released: this is NOT a brake
+  assert.match($("pm-pad-calib-note").textContent || "", /THROTTLE's axis/, "the same-axis press is refused with a message");
+  assert.equal($("pm-pad-wheel").textContent, "CANCEL", "the wizard is still waiting for the brake");
+  pad.axes[3] = 1; Input.poll();         // brake on its own axis
+  assert.equal($("pm-pad-wheel").textContent, "SET UP A WHEEL", "finished");
+  assert.equal(disk.padAxes.throttle, 1);
+  assert.equal(disk.padAxes.brake, 3);
+  assert.equal(disk.padAxes.throttleRest, 0);
+  assert.equal(disk.padAxes.throttleFar, 1);
+  assert.equal(disk.padAxes.brakeRest, -1);
+  assert.equal(disk.padAxes.brakeFar, 1);
+});
+
+test("I-08: a spare pad unplugging does not turn the driving pad's held buttons into fresh presses", () => {
+  const { Input, sb, fire } = boot();
+  const A = rawPad({ id: "Pad A", index: 0 });
+  const B = rawPad({ id: "Pad B", index: 1 });
+  sb.navigator.getGamepads = () => [A, B];
+  fire("gamepadconnected", { gamepad: A });
+  Input.poll();
+  setBtn(A, 2, true);                    // boost toggle, held
+  Input.poll();
+  assert.equal(Input.consumeBoostToggle(), true, "the press toggled once");
+  Input.poll();
+  assert.equal(Input.consumeBoostToggle(), false, "held, not re-pressed");
+  B.connected = false;
+  sb.navigator.getGamepads = () => [A, B];
+  fire("gamepaddisconnected", { gamepad: B });
+  Input.poll();
+  assert.equal(Input.consumeBoostToggle(), false, "the held button is not a new press after B left");
+  // `still` honours .connected: with only a dead slot left, the pad is gone.
+  A.connected = false;
+  fire("gamepaddisconnected", { gamepad: A });
+  assert.equal(Input.padPresent(), false);
+});
+
+test("nintendo label mode confirms on the physical A (standard index 1) and backs on B (index 0)", () => {
+  const { Input, sb, fire, dispatched, tick, clicks } = (() => { const r = menuRig(); return r; })();
+  Input.setPadLabelMode("nintendo");
+  const pad = rawPad({ id: "Pro Controller" });
+  sb.navigator.getGamepads = () => [pad];
+  fire("gamepadconnected", { gamepad: pad });
+  tick(); dispatched.length = 0;
+  let r = { clicks: 0 };
+  sb.document.activeElement.click = () => { r.clicks++; };
+  setBtn(pad, 0, true); tick(); setBtn(pad, 0, false); tick();
+  assert.equal(r.clicks, 0, "bottom button is BACK on a Nintendo pad");
+  assert.deepEqual(dispatched.map((e) => e.key), ["Escape"]);
+  dispatched.length = 0;
+  setBtn(pad, 1, true); tick(); setBtn(pad, 1, false); tick();
+  assert.equal(r.clicks, 1, "the right button (physical A) confirms");
+  assert.deepEqual(dispatched.map((e) => e.key), []);
+  Input.setPadLabelMode("xbox");
+  setBtn(pad, 0, true); tick(); setBtn(pad, 0, false); tick();
+  assert.equal(r.clicks, 2, "control: Xbox labels keep A = index 0");
+});
+
+test("I-09: a right/middle mouse button neither presses a hold button nor fires a tap; touch and left mouse do", () => {
+  const ctx = vm.createContext({ Math, Set, Map, Object, Array, document: null });
+  vm.runInContext(read("js/input/hold-buttons.js"), ctx, { filename: "js/input/hold-buttons.js" });
+  const InputHoldButtons = vm.runInContext("InputHoldButtons", ctx);
+  const els = {};
+  ctx.document = { getElementById: (id) => (els[id] ||= { l: {}, addEventListener(t, f) { this.l[t] = f; }, setPointerCapture() {} }) };
+  const hb = InputHoldButtons.create({ clamp: (v, a, b) => Math.min(b, Math.max(a, v)), beforeReleaseAll() {} });
+  let held = false, taps = 0;
+  hb.wireHold("gas", (v) => { held = v; });
+  hb.wireTap("boost", () => { taps++; });
+  const down = (id, e) => els[id].l.pointerdown(Object.assign({ pointerId: 1, preventDefault() {} }, e));
+  down("gas", { pointerType: "mouse", button: 2 });
+  assert.equal(held, false, "right-click does not hold");
+  down("boost", { pointerType: "mouse", button: 2 });
+  down("boost", { pointerType: "mouse", button: 1 });
+  assert.equal(taps, 0);
+  down("gas", { pointerType: "mouse", button: 0 });
+  assert.equal(held, true, "left mouse holds");
+  els.gas.l.pointerup({ pointerId: 1 });
+  assert.equal(held, false);
+  down("gas", { pointerType: "touch", button: 0 });
+  assert.equal(held, true, "touch holds");
+  down("boost", { pointerType: "touch", button: 0 });
+  assert.equal(taps, 1);
 });

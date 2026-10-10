@@ -142,13 +142,15 @@ const WeatherArc = (function () {
       if (a) Log.info("game", "changeable " + G.raceWeather + " -> " + p.to + " over " + p.dur + " s");
       return a;
     }
-    function endChangeable() {
+    function endChangeable(keepPlan) {
       if (base != null && G.raceWeather !== base) G.raceWeather = base;   // the chip's pick, not where the arc ended
       base = null;
       // The plan is the HOST's for the duration of one networked race. Keeping it
       // afterwards made a guest's later SOLO changeable races replay that host's
-      // {to, dur} instead of deriving their own from the seed.
-      if (!G.netPlay.active()) plan = null;
+      // {to, dur} instead of deriving their own from the seed. `keepPlan` is the
+      // agent's race()/tt(): a start follows at once, and a plan set for THAT
+      // race (a host's, a test's) must reach startChangeable like restoreBase().
+      if (!keepPlan && !G.netPlay.active()) plan = null;
     }
     /** startRace's re-arm, from INSIDE a running race (pm-restart): restore the
      *  chip's pick and drop the half-walked arc, but KEEP the plan — a host's
@@ -164,10 +166,10 @@ const WeatherArc = (function () {
      *  re-lights for it (a CUT apply, which drops an in-flight fade) and hides
      *  the rain: the fade is ticked only in a race, so otherwise the results and
      *  the menu kept the arc's last sky until the next flyby. */
-    function endSession() {
+    function endSession(keepPlan) {
       arc = null;
       const restored = base != null && G.raceWeather !== base;
-      endChangeable();
+      endChangeable(keepPlan);
       if (restored && G.track) { Particles.rainShow(false); G.applyRaceSettings(); }
     }
 

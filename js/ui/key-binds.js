@@ -384,7 +384,7 @@ function create(G) {
       if (Input.calibratePad()) {
         // Stored: the hint promises the offset applies "from then on", and it
         // used to be lost on the next reload (loaded back below).
-        store.set("padRest", Input.padRest());
+        store.set("padRest", Input.padRestStore ? Input.padRestStore() : Input.padRest());
         say(`Centre captured (offset ${(Input.padRest() * 100).toFixed(1)}%). If the car still pulls, raise DEAD ZONE a point or two.`);
         tick();
         // Rest offset is part of controllerIsDefault — enable RESET without a
@@ -430,9 +430,9 @@ function create(G) {
       // on; carried onto a different steering axis it would steer the car on
       // its own, and it is stored, so across reloads too. Drop it.
       const was = Input.getPadAxisMap();
-      if (Input.setPadRest && (was.steer !== map.steer || was.steerInvert !== map.steerInvert)) {
-        Input.setPadRest(0);
-        store.set("padRest", 0);
+      if (Input.clearPadRest && (was.steer !== map.steer || was.steerInvert !== map.steerInvert)) {
+        Input.clearPadRest();   // this pad's offset only; other pads keep theirs
+        store.set("padRest", Input.padRestStore());
       }
       Input.setPadAxisMap(map);
       store.set("padAxes", Input.getPadAxisMap());
@@ -451,19 +451,38 @@ function create(G) {
       if (!Input.padPresent()) { say("No wheel or controller detected. Turn the wheel or press a button on it first."); return; }
       running = true;
       wheelBtn.textContent = "CANCEL";
-      const map = Object.assign(Input.getPadAxisMap(), { throttle: null, brake: null });
+      const map = Object.assign(Input.getPadAxisMap(), { throttle: null, brake: null,
+        throttleRest: null, throttleFar: null, brakeRest: null, brakeFar: null });
+      const ext = {};   // pedal -> the live {rest, far} Input keeps tracking after the capture
       let i = 0;
-      const step = () => {
+      const step = (note) => {
         if (!running) return;
-        if (i >= STEPS.length) { finish(map, "Wheel set up. Steering, throttle and brake are mapped to the axes you moved."); return; }
-        say(STEPS[i].ask);
+        if (i >= STEPS.length) {
+          for (const k of ["throttle", "brake"]) {
+            const e = ext[k];
+            if (e && Math.abs(e.far - e.rest) >= 0.3) { map[k + "Rest"] = Math.round(e.rest * 1000) / 1000; map[k + "Far"] = Math.round(e.far * 1000) / 1000; }
+          }
+          finish(map, "Wheel set up. Steering, throttle and brake are mapped to the axes you moved.");
+          return;
+        }
+        say(typeof note === "string" ? note : STEPS[i].ask);
         // Axes already chosen are off the table: the wheel is still springing back
         // from the steering step when the pedal steps snapshot their rest.
-        const taken = STEPS.slice(0, i).map((s) => map[s.key]).filter((a) => a != null);
-        Input.beginAxisCapture((axis, dir) => {
+        // The brake step leaves the throttle's axis listening on purpose: a combined
+        // pedal axis is rejected with a message below instead of going silent.
+        const taken = STEPS.slice(0, i).filter((s) => s.key !== "throttle" || STEPS[i].key !== "brake")
+          .map((s) => map[s.key]).filter((a) => a != null);
+        Input.beginAxisCapture((axis, dir, info) => {
           if (!running) return;
           const st = STEPS[i];
+          // A combined pedal axis moves with BOTH pedals: it cannot be two controls.
+          if (st.key === "brake" && axis === map.throttle) {
+            clearTimeout(stepTimer);
+            stepTimer = setTimeout(() => step("That moved the THROTTLE's axis. Letting go of the throttle? Press the BRAKE pedal now. If brake and throttle share one axis, switch the wheel to separate pedals."), 600);
+            return;
+          }
           map[st.key] = axis;
+          if (info && st.key !== "steer") ext[st.key] = info;
           // The steering sign is whatever the wheel reports for LEFT; we asked
           // for left, so a POSITIVE reading means this wheel is inverted.
           if (st.key === "steer") map.steerInvert = dir > 0 ? -1 : 1;

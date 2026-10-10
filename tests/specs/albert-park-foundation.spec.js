@@ -22,7 +22,7 @@ import { test, expect } from "../helpers/fixtures.js";
 async function albertParkDiag(racePage) {
   test.setTimeout(300_000);
   await racePage.evaluate(() => window.__apex.race("albert_park", "day", "dry"));
-  await racePage.waitForFunction(() => window.__apex.info().track === "albert_park");
+  await racePage.waitForFunction(() => window.__apex.info().track === "albert_park", null, { polling: 100 });
   return racePage.evaluate(() => {
     const models = window.__apex.modelDiagnostics();
     const geometry = window.__apex.geometryDiagnostics();

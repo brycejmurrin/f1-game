@@ -43,7 +43,7 @@ function boot({ stored = "three", gfxCreate, loadBackend, xrDetect } = {}) {
     loadBackendScripts: loadBackend || (async (files) => { calls.push(...files); }),
   });
   const fire = (ms) => { for (const t of timers) if (t.live && t.ms === ms) { t.live = false; t.fn(); } };
-  return { rb, ls, warns, calls, fire };
+  return { rb, ls, warns, calls, fire, timers };
 }
 
 test("a Gfx.create() that never settles resolves start() with GLX, canary left armed", async () => {
@@ -88,4 +88,9 @@ test("steps that settle in time are untouched and leave no live timer", async ()
   assert.equal(r.bound, true);
   assert.equal(r.gfx.api, "three");
   assert.deepEqual(h.warns, []);
+  // A leaked 8 s timer would fire later and strike a healthy backend (or keep the page alive).
+  // (The ms=0 timer is the deliberate one-shot kick (setTimeout(kick, 0)) in renderer-boot.js, not a cap.)
+  const caps = h.timers.filter((t) => t.ms >= 1000);
+  assert.ok(caps.length > 0, "premise: the caps were armed");
+  assert.deepEqual(caps.filter((t) => t.live).map((t) => t.ms), [], "every cap was cleared on success");
 });

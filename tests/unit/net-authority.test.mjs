@@ -354,6 +354,20 @@ test("lobby relay hook sees only sender-bound, normalized qualifying events", ()
   ]);
 });
 
+test("QUALI / QLIVE are rate-limited per connection before the host relays them", () => {
+  const s = fakeSession();
+  let now = 0;
+  const accepted = [];
+  NetPlay.bindQuali(s, () => true, {}, (type) => accepted.push(type), () => now);
+  for (let i = 0; i < 40; i++) s.deliver("qlive", { driverId: "bravo:1", t: i, frac: 0.1 });
+  for (let i = 0; i < 40; i++) s.deliver("quali", { driverId: "bravo:1", t: 60 + i });
+  assert.equal(accepted.filter((x) => x === "qlive").length, 5, "a QLIVE flood is cut at the window cap");
+  assert.equal(accepted.filter((x) => x === "quali").length, 5, "windows are per kind: a QLIVE flood does not starve QUALI");
+  now = 1500;
+  s.deliver("qlive", { driverId: "bravo:1", t: 1, frac: 0.2 });
+  assert.equal(accepted.filter((x) => x === "qlive").length, 6, "the window rolls");
+});
+
 // ---- QUALI t is COERCED and BOUNDED at one site (NetPlay.validQuali) -------
 // Both receivers used to gate on a bare `d.t > 0`, which "70" and `true` pass;
 // the value was stored as sent and quali-model.js threw on `.toFixed`. The
@@ -755,6 +769,72 @@ test("QualiNet: a peer entry never replaces the local player's time; NO TIME is 
   assert.equal(m.get("chase:0"), 70);
 });
 
+function qualiGateHarness({ role = "host", rivals = ["beta:0"] } = {}) {
+  const QualiNet = eval(src("js/race/quali-net.js") + ";QualiNet");
+  const player = { driverId: "alpha:0", lastLap: 0, best: Infinity };
+  const btn = { disabled: false, textContent: "" };
+  let t = 1000;
+  const timers = [];
+  const reported = [];
+  const lobby = { roomState: () => ({ role, peers: [] }), abortQuali() {}, reportQuali: (id, tt) => { reported.push([id, tt]); return true; } };
+  const q = QualiNet.create({
+    $: () => btn, fmtTime: String, isQuali: () => false, getPlayer: () => player, getCars: () => [],
+    openQuali: () => {}, applyPeerQuali: () => {},
+    getNetPlay: () => ({ rivalDriverIds: () => rivals }), getNetLobby: () => lobby,
+    now: () => t,
+    setTimeout: (fn, ms) => { timers.push({ fn, at: t + ms }); return timers.length; },
+    clearTimeout: (h) => { if (timers[h - 1]) timers[h - 1].fn = null; },
+  });
+  const advance = (ms) => {
+    t += ms;
+    for (const k of timers) if (k.fn && k.at <= t) { const f = k.fn; k.fn = null; f(); }
+  };
+  return { q, btn, advance, reported };
+}
+
+test("QualiNet (NP-2): a silent rival cannot hold the gate past the cap", () => {
+  const { q, btn, advance } = qualiGateHarness({ role: "guest" });
+  q.arm(() => {});
+  q.refreshQualiGate();
+  assert.equal(q.waiting(), true, "held while the rival has no time");
+  assert.equal(btn.disabled, true);
+  advance(30000);
+  assert.equal(q.waiting(), true, "a guest has no override before the cap");
+  assert.equal(btn.disabled, true);
+  advance(31000);   // timers re-evaluate the gate with no event arriving
+  assert.equal(q.waiting(), false, "the cap opens the gate");
+  assert.equal(btn.disabled, false, "the button is re-enabled by the timer, not only by an event");
+  assert.match(btn.textContent, /TO THE GRID/);
+  // The seat is gridded as NO TIME-less (absent from driven()), never as a fake lap.
+  assert.equal(q.driven(80).has("beta:0"), false);
+});
+
+test("QualiNet (NP-2): the host can START ANYWAY early; a rival's lap still ends the wait", () => {
+  const { q, btn, advance } = qualiGateHarness({ role: "host" });
+  q.arm(() => {});
+  q.refreshQualiGate();
+  advance(5000);
+  assert.equal(q.waiting(), true);
+  assert.equal(q.canForce(), false, "too early");
+  advance(11000);
+  assert.equal(q.canForce(), true);
+  assert.equal(q.waiting(), false, "host's q-go proceeds");
+  assert.equal(btn.disabled, false);
+  assert.equal(btn.textContent, "START ANYWAY");
+  // A fresh arm() starts a new wait clock.
+  q.arm(() => {});
+  assert.equal(q.waiting(), true);
+  q.onPeerQuali({ driverId: "beta:0", t: 75 });
+  assert.equal(q.waiting(), false, "the lap arrived");
+});
+
+test("QualiNet (NP-2): BACK before driving tells the room NO TIME", () => {
+  const { q, reported } = qualiGateHarness({ role: "guest" });
+  q.arm(() => {});
+  q.resetOnBackWithAbort();
+  assert.deepEqual(reported, [["alpha:0", Infinity]]);
+});
+
 // ── round 8: session-scoped state and the arming population ─────────────────
 
 test("stop() clears the armed start — a quit mid-countdown must not leak into the next race", () => {
@@ -768,6 +848,17 @@ test("stop() clears the armed start — a quit mid-countdown must not leak into 
   assert.ok(G.netStart, "precondition: the guest armed the start");
   net.stop("local");
   assert.equal(G.netStart, null, "stop() must clear the armed start with the session");
+});
+
+test("a duplicate START after lights-out does not re-arm a past instant (NP-6)", () => {
+  const { G, s } = started("guest");
+  s.deliver("start", { at: 12345, hold: 1.0 });
+  assert.ok(G.netStart, "precondition: armed");
+  s.deliver("start", { at: 12345, hold: 1.0 });
+  assert.ok(G.netStart, "a duplicate before lights-out is harmless");
+  G.netStart = null;   // game.js: the countdown consumed it at lights-out
+  s.deliver("start", { at: 12345, hold: 1.0 });
+  assert.equal(G.netStart, null, "consumed means consumed");
 });
 
 test("a peer WITHOUT a grid slot cannot arm the start", () => {
@@ -1090,6 +1181,38 @@ test("the host relays every other guest's car in ONE aged datagram per guest, ea
     assert.deepEqual(relays[0].cars.map((c) => c.id).sort(), [1, 2, 3].filter((i) => i !== own),
       `guest ${name}: every OTHER guest, never its own car`);
     assert.equal(got.length, 2, `guest ${name}: the host's own car + ONE relay (was 1 + 2)`);
+  }
+  net.stop();
+});
+
+test("the host stops relaying a rival that has gone quiet instead of stamping its frozen pose fresh (NP-5)", () => {
+  const G = poseG(4);
+  const net = NetPlay.create(G);
+  const ss = { a: stateSession(), b: stateSession(), c: stateSession() };
+  assert.equal(net.start({ role: "host", session: ss.a,
+    sessions: Object.entries(ss).map(([id, session]) => ({ id, session })),
+    peers: [{ id: "a" }, { id: "b" }, { id: "c" }] }).ok, true);
+  const relayedIds = (s) => s.states.filter((p) => p && p.type === NetSnapshot.TYPE_AGED).flatMap((p) => p.cars.map((c) => c.id));
+  let t = 10_000;
+  for (let k = 0; k < 12; k++, t += 50) {
+    ss.a.feed(t - 30, 1, lapPose(100 + k), t - 10);
+    ss.b.feed(t - 70, 2, lapPose(200 + k), t - 10);
+    ss.c.feed(t - 50, 3, lapPose(300 + k), t - 10);
+    G.netNow = t; net.tick(t);
+  }
+  // c goes silent; a and b keep talking. 1 s later (< STALE_MS 2 s) c is not yet
+  // handed to the local AI, but its frozen pose must not ride the relay.
+  const last = t;
+  for (let k = 0; k < 24; k++, t += 50) {
+    ss.a.feed(t - 30, 1, lapPose(120 + k), t - 10);
+    ss.b.feed(t - 70, 2, lapPose(220 + k), t - 10);
+    for (const s of Object.values(ss)) s.states.length = 0;
+    G.netNow = t; net.tick(t);
+    if (t - last >= 700) {
+      assert.ok(t - last < 2000);
+      assert.deepEqual(relayedIds(ss.a), [2], "a hears b, never the silent c");
+      assert.deepEqual(relayedIds(ss.b), [1], "b hears a, never the silent c");
+    }
   }
   net.stop();
 });

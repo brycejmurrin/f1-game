@@ -47,8 +47,11 @@ const CareerExperience = (function () {
     }));
   }
 
+  // The calendar the career STAMPED at its season start (Career.calendar), else the shipped one.
+  function seasonCal() { return typeof Career !== "undefined" && Career.calendar ? Career.calendar() : Tracks.SEASON; }
+
   function raceBrief(G, c, st, team) {
-    const el = Dom.el, t = Tracks.SEASON[c.season.round];
+    const el = Dom.el, t = seasonCal()[c.season.round];
     const card = el("section", "cr-card cr-nextrace");
     card.id = "cr-nextrace";
     if (!t) return card;
@@ -81,11 +84,12 @@ const CareerExperience = (function () {
     story.setAttribute("aria-label", "Your season story");
     if (team) story.style.setProperty("--career-team", G.cssCol(team.color));
     story.appendChild(el("h3", "sel-label", c.year + " SEASON STORY"));
-    const completed = Math.min(c.season.round, Tracks.SEASON.length);
-    story.appendChild(el("p", "cr-note", completed + " of " + Tracks.SEASON.length + " rounds complete"));
+    const cal = seasonCal();
+    const completed = Math.min(c.season.round, cal.length);
+    story.appendChild(el("p", "cr-note", completed + " of " + cal.length + " rounds complete"));
     const rail = part("ol", "calendar");
     rail.setAttribute("aria-label", "Season calendar and results");
-    for (const item of calendar(c, Tracks.SEASON)) {
+    for (const item of calendar(c, cal)) {
       const tile = el("li");
       tile.dataset.stage = item.state;
       if (item.state === "next") tile.setAttribute("aria-current", "step");

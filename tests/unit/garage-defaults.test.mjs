@@ -18,6 +18,7 @@ import { createRequire } from "node:module";
 import { check, readDefaults, isGarageKey } from "../../tools/gen/garage-defaults.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
@@ -270,18 +271,16 @@ test("getStored answers what the player wrote, never a shipped default", () => {
   assert.deepEqual(JSON.parse(JSON.stringify(store.getStored("parts.legends"))), { engine: "mine" });
 });
 
-test("the shipped garage is usable: every parts build fits Parts.BUDGET, or FREE BUILD ships on", () => {
-  // The click gate in js/garage/setup-sheet.js rejects any swap whose total ends
-  // over cap — downgrades included — so a shipped build over budget has zero
-  // clickable rows. 8 of 11 teams shipped that way until unlimitedBudget did too.
+// Parts + Teams in a VM (shared by the tripwire and the setup-sheet gate test).
+function loadPartsVm() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, String, JSON, isFinite, Map, Set });
   seedLog(ctx);
   ctx.window = ctx;
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
-  const { Teams, Parts } = vm.runInContext("({ Teams, Parts })", ctx);
-  const { GameStore, GarageDefaults } = load();
-  const free = GameStore.store.get("unlimitedBudget", false) === true;
+  return { ctx, ...vm.runInContext("({ Teams, Parts, M4 })", ctx) };
+}
+const overBudgetBuilds = (Teams, Parts, GarageDefaults) => {
   const over = [];
   let checked = 0;
   for (const k of GarageDefaults.keys()) {
@@ -290,11 +289,79 @@ test("the shipped garage is usable: every parts build fits Parts.BUDGET, or FREE
     if (!team) continue;
     checked++;
     const cost = Parts.getCost(GarageDefaults.get(k), team);
-    if (cost > Parts.BUDGET) over.push(`${team.id}: ${cost} > ${Parts.BUDGET}`);
+    if (cost > Parts.BUDGET) over.push({ team, key: k, cost });
   }
+  return { over, checked };
+};
+
+// TRIPWIRE, not a guard: it passes whenever FREE BUILD ships on (the current
+// default), so it only goes red if someone turns FREE BUILD off while the
+// shipped builds are still over cap. The gate that makes an over-cap build
+// usable (or not) is pinned by the setup-sheet test below.
+test("tripwire: shipped parts builds over Parts.BUDGET are only tolerated while FREE BUILD ships on", () => {
+  const { Teams, Parts } = loadPartsVm();
+  const { GameStore, GarageDefaults } = load();
+  const free = GameStore.store.get("unlimitedBudget", false) === true;
+  const { over, checked } = overBudgetBuilds(Teams, Parts, GarageDefaults);
   assert.ok(checked >= 10, `expected a build per team, saw ${checked}`);
   assert.ok(over.length === 0 || free,
-    "shipped builds over budget while FREE BUILD is off — no row would be clickable:\n" + over.join("\n"));
+    "shipped builds over budget while FREE BUILD is off — no row would be clickable:\n"
+    + over.map((o) => `${o.team.id}: ${o.cost} > ${Parts.BUDGET}`).join("\n"));
+});
+
+test("setup sheet: a swap on an over-cap shipped build is accepted only while G.unlimitedBudget", () => {
+  // js/garage/setup-sheet.js rejects any swap whose total ends over cap —
+  // downgrades included — unless unlimited. With the shipped builds over cap,
+  // FREE BUILD is what makes a single row clickable.
+  const { ctx, Teams, Parts } = loadPartsVm();
+  const { GarageDefaults } = load();
+  const { over } = overBudgetBuilds(Teams, Parts, GarageDefaults);
+  assert.ok(over.length > 0, "the premise: at least one shipped build is over the cap");
+  const { team, key } = over[0];
+  const run = (unlimitedBudget) => {
+    const dom = makeDom();
+    const saved = [];
+    const build = JSON.parse(JSON.stringify(GarageDefaults.get(key)));
+    const catId = Parts.CATALOG.find((c) => c.options.length > 1
+      && c.options.some((o) => o.id !== build[c.id] && Parts.isOptionAvailable(o, team))).id;
+    const cat = Parts.CATALOG.find((c) => c.id === catId);
+    const G = {
+      $: (id) => dom.byId(id), els: { select: dom.byId("select"), overlay: dom.byId("overlay") },
+      cssCol: () => "#fff", store: { get: (k, d) => (k === "garageTab" ? catId : d), set() {} },
+      arrToHex: () => "#112233", hexToArr: () => [0.1, 0.2, 0.3],
+      getTeamParts: () => build, saveTeamParts: (id, p) => saved.push([id, p[catId]]),
+      getLiveryId: () => "default", saveLiveryId() {},
+      getCustomLiveries: () => [], setCustomLiveries() {}, getLiveries: () => [], invalidateDecalTextures: null,
+      teamIdx: Teams.LIST.indexOf(team), driverIdx: 0, soundOn: false, careerOwned: () => false, unlimitedBudget,
+      peerSeats: () => [], teamSwatch: () => dom.document.createElement("span"),
+      setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, _spMeshKey: "", setupPreviewOn: false,
+    };
+    Object.assign(ctx, {
+      document: Object.assign(Object.create(dom.document), { createTextNode: (t) => { const n = dom.document.createElement("span"); n.textContent = String(t); return n; } }),
+      addEventListener() {}, removeEventListener() {}, setTimeout: () => 0, clearTimeout() {},
+      MutationObserver: class { observe() {} },
+      GameAudio: { uiTick() {}, uiSelect() {}, uiReject() {}, init() {} }, ScrollFade: { refresh() {} },
+      Car3D: { FINISH_SURFACE: { satin: {}, chrome: {} } },
+      GarageExperience: { partSummary: () => () => {}, statsOf: (t) => t.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 } },
+      SetupTune: { FIELDS: [], RANGE: {}, get: () => ({ rideR: 60, rideF: 25, brakeBias: 56 }), set() {}, reset() {}, isDefault: () => true, mods: () => null, rake: () => 0 },
+      LiveryTex: { NUM_FONT_IDS: ["default", "block"], SPONSOR_PACK_IDS: ["default", "clean"] },
+      PhysicsConsts: ctx.PhysicsConsts || { WET_GRIP: { rain: [1, 1.2, 1.4] } },
+    });
+    const SetupUI = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/garage/setup-sheet.js"), "utf8").replace(/^const\b/gm, "var")
+      + "\n;SetupUI", ctx, { filename: "js/garage/setup-sheet.js" });
+    const ui = SetupUI.create(G);
+    ui.openSetup();
+    const rows = dom.byId("cs-options").querySelectorAll(".cs-opt")
+      .filter((r) => r.getAttribute("aria-pressed") === "false");
+    assert.ok(rows.length > 0, "the active category lists swappable options");
+    const startLen = saved.length;
+    for (const r of rows) r.onclick();
+    return { clicked: rows.length, accepted: saved.length - startLen, cat };
+  };
+  const capped = run(false), free = run(true);
+  // Every swap that ends under cap is legal when capped; on a build this far over, none is.
+  assert.equal(capped.accepted, 0, "capped: an over-cap build accepts no swap, downgrade or not");
+  assert.equal(free.accepted, free.clicked, "G.unlimitedBudget: every swap is accepted");
 });
 
 test("a fresh install fields the first legend in his own period car, not the shipped build", async () => {
@@ -328,3 +395,4 @@ test("a shipped setup sheet is the team's WORKS sheet: a fresh install does not 
     assert.equal(S.isDefault(id), true, `${k} must equal SetupTune.defaults("${id}")`);
   }
 });
+

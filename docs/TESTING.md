@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 550+ `node --test` unit suites
+120+ root Playwright spec files (`tests/specs/*.spec.js`) + 600+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1782,7 +1782,6 @@ what it covers.
 | `overtake-mode.test.mjs` | the 2026 OVERTAKE rule (`js/race/overtake-mode.js`, B7.2.3(c)) in a VM: 0.5 MJ = 0.125 of the 4 MJ battery unit, the wrap-safe detection-line crossing, earn under 1 s / grant at the timing line / lapse unspent, recross neither re-grants nor strips, a full allowance lasts `otTimeFor` s, the human toggle vs the AI run-out; plus RaceControl LOW GRIP (off + one note) and the Safety Car QUEUE fractions (B5.13) |
 | `sporting-regs.test.mjs` | the 2026 Sporting Regulations the PLAYER is held to (`js/race/sporting-regs.js`), in a VM: the two-dry-compound verdict at the flag (B6.3.6 — DSQ, or +30 s after an unresumed red; a wet set lifts it; a retirement is not judged), the give-back window for a place gained under the SC/VSC (B5.12.2(c)/B5.13.2(c): given back in time is nothing, kept is +10/+20/+30 s; retired, finished and pitting cars are fair game, and re-passing a car that passed you is not an offence), and the championship-order grid (B2.5.4(a); round 1 falls back to the default) |
 | `season-cal.test.mjs` | the SEASON calendar/format model in a VM — config normalisation, the calendar presets, and the TWO-GATE rule the whole design rests on: the calendar follows the player outside a career, but the FORMAT (distance, sprint, points table, qualifying) follows it ONLY in a season, so a one-off Grand Prix cannot inherit a season's sprint distance. Also the weekend stage machine: a sprint scores 8-7-6… without advancing the round, the Grand Prix closes it, and the two legs draw retirements on different keys. Constructors rank by `rankTeams` (points, team countback, tier, id) on every table; a standalone season stamps and saves its own luck seed (`luckSeed`) so a reload cannot re-roll it |
-| `season-setup-chrome.test.mjs` | `#season-setup` chrome pins (source only): `color-scheme` dark/light, paired `#ss-cal`/`#ss-pool` thin `--plate-line` thumbs with ScrollFade double-bar suppressed, stacked `#ss-body` as the sole themed scroller, `#ss-presets` as `chip-row balanced-row` with a quarter-row `--balance-basis` so FULL…REVERSE never orphans REVERSE, and foot clearance padding on both shapes |
 | `race-setup-sheets.test.mjs` | Race Settings CUSTOM preset + `WEEKEND · QUALIFYING FIRST` header (`matchPreset` / `sheetTitle` / paint lights `#rs-preset-custom`), plus Season SETUP scroll/chip pins layered on #1082 chrome (`css/race-setup.css` + `season-ui.js`) |
 | `career-seat-rollover.test.mjs` | MY TEAM is always SEAT 0 in a VM — `driverOverride()` maps a custom team's seat 0 to you and seat 1 to the hire, but the NEW CAREER draft starts at seat 1 (right for a DRIVER career) and the MY TEAM path never put it back, so every such save raced the player's car under the HIRED driver's name, code and number while the AI ran the driver they had just named; the driver-career case still honours the seat the player picked |
 | `career-regulations.test.mjs` | The regulation era ruleset that gives car development a second act — an optimal capped build is finished in 2.6-3.7 seasons and a career is unbounded. Pins that the opening era restricts nothing (so the first build is never interrupted), that a ban takes the dearest options and never a cost-0 fallback, that no era leaves a category with nothing legal, and above all that a ban MOVES THE AI's FACTORY BUILD — a rule reaching only the player would be a punishment, not a reset — including that the factory cache cannot serve a pre-era car |
@@ -1965,7 +1964,7 @@ what it covers.
 
 ---
 
-### Round-2 bug hunt (2026-10-10)
+### Round-2 bug hunt (2026-10-10) — ship (#1289)
 
 | Spec | What it covers |
 |---|---|
@@ -1987,6 +1986,20 @@ what it covers.
 | `title-flow.test.mjs` | VS FRIEND writes flow/selection and opens the lobby only after the net bundle lands, and announces a refused load. |
 | `tlx-round2.test.mjs` | TLX round 2: the dead post chain retries from `begin()` on a timer, `shadowStr` is 0 when the sun pass failed, `DPR_CAP` keys on `mobileTier`, the shadow caster owns a geometry clone, `releaseGeometry` queues while warming, true-LRU material eviction, the pack `DataArrayTexture` drops its CPU copy, `window.renderer` is gated behind `?three-devtools=1`. |
 | `tools-a12-guards.test.mjs` | Tooling guards: dup-keys scans `js/render/three/`, `stage.mjs` / `garage-angles` refuse an unsafe `--out`, wait-polling-lint parses script files, generators reject unknown flags, the Chromium cache key carries the runner image, `pages.yml` `fast_tier_run` expression. |
+
+### Round-2 bug hunt, train B (2026-10-10)
+
+| Spec | What it covers |
+|---|---|
+| `career-round2.test.mjs` | The career save carries its calendar (`season.calIds`) and remaps the round when `Tracks.SEASON` changes; a `beatRival` offer signs the rival it showed; `weakerSeat` is read before the team moves; the sitting hire cannot be re-signed at the base ask; reputation lands before market value; podium counts guard `p > 0`; NEW CAREER accepts number 1; a null-team slot does not throw; the hub/briefing names the circuit `trackIndex()` loads. |
+| `select-screen-fixes.test.mjs` | Re-tapping the ACTIVE team tile keeps the seat (and a Legends build); unstarring the active circuit under the FAVOURITES filter keeps the selection until another circuit is picked. |
+| `telemetry-view-resize.test.mjs` | A DPR change under unchanged boxes refits the telemetry map canvas (`ratioChanged` read before the chart branch mutates it). |
+| `watch-transport-scrub.test.mjs` | WATCH scrub `input` events coalesce to one seek per animation frame; `change` seeks at once; `stop()` drops a pending seek. |
+| `wgx-free-retire.test.mjs` | WGX: `freeMesh` / `freeChunkedMesh` / `freeInstancedBatch` retire buffers through `_retiredBufs` while an encoder or the pending shadow encoder is live, destroy at once outside a frame; the swapchain self-test pops its validation scope before its first `await` so an abandoned test never swallows frame errors. |
+| `car-fields-vm.test.mjs` | `CarFields.predeclare` sets the 68 late-added car fields to `undefined` at spawn (never 0): every key present after `makeCars`, identical key order and one hidden class across all cars, sim hash identical with and without, the manifest loads it before game.js (game-vm). |
+| `game-round2-vm.test.mjs` | game.js round 2 (game-vm): BOOST does not deploy or drain in the pit lane, Overtake is not earned in the lane, the lightning bleach restores when the gate closes mid-flash, the ghost car draw waits for lap 1, world-fixed camera rigs are not dragged by the car-frame damper, quitToMenu restores `cars` from `qualiField` and forgets a one-off GP's quali order, a failed quali prepare cancels the lobby, startRace re-applies the landscape lock and attaches the gyro, a transient motion refusal does not claim a switch, pm-calib takes its zero after 300 ms, a refused data/WATCH bundle is announced, a STANDARD daily is prepared once the race session lands, `record()` tolerates a malformed day entry. |
+| `pace-arming-vm.test.mjs` | `otArmed` and `xArmed` arm at the same `vStd` at pace 0.5, 1 and 1.3 (PACE invariance of the arming gates; goes red when a gate reads a raw `c.speed`). |
+
 
 ## See also
 

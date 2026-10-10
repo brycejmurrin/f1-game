@@ -200,9 +200,10 @@ const WGXChunked = (function () {
       // render in the gap. If the next road never produces a LUT the stale
       // pointer never gets overwritten at all.
       if (m.attrBG && m.attrBG === core.roadLutBG) { core.setRoadLutBG(null); core.setRoadLutReady(false); }
-      if (m.vbuf) m.vbuf.destroy();
-      if (m.ibuf) m.ibuf.destroy();
-      if (m.sbuf) m.sbuf.destroy();
+      // core.freeBuf retires instead of destroying while a frame is recording.
+      core.freeBuf(m.vbuf);
+      core.freeBuf(m.ibuf);
+      core.freeBuf(m.sbuf);
       // The `!== m.vbuf` guards below now skip EVERY road chunk, not just the
       // head: the ribbon shares one buffer, which the m.vbuf.destroy() above
       // already freed. Still exactly one destroy per buffer, but the guard's
@@ -211,9 +212,9 @@ const WGXChunked = (function () {
       if (m.chunks) {
         for (let i = 0; i < m.chunks.length; i++) {
           const c = m.chunks[i];
-          try { if (c.ibuf && c.ibuf !== m.ibuf) c.ibuf.destroy(); } catch (_) { /* already destroyed */ }
-          try { if (c.vbuf && c.vbuf !== m.vbuf) c.vbuf.destroy(); } catch (_) { /* already destroyed */ }
-          try { if (c.sbuf && c.sbuf !== m.sbuf) c.sbuf.destroy(); } catch (_) { /* already destroyed */ }
+          if (c.ibuf !== m.ibuf) core.freeBuf(c.ibuf);
+          if (c.vbuf !== m.vbuf) core.freeBuf(c.vbuf);
+          if (c.sbuf !== m.sbuf) core.freeBuf(c.sbuf);
         }
       }
     }

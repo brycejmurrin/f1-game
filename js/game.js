@@ -94,6 +94,7 @@ const lazyBundles = LazyBundles.create({
     startLights = StartLights.create(G);
     marshalPanels = MarshalPanels.create(G);
     records = SessionRecords.create(G);
+    if (G.daily.isActive() && G.daily.current().class === "standard") records.prepareDaily();   // a STANDARD daily picked before this bundle landed was prepared by the stub (a no-op): every lap would be refused
     raceRadio = RaceRadio.create(G);
     flyingStart = FlyingStart.create(G, {
       realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.status().active),
@@ -1786,6 +1787,7 @@ function makeCars() {
         // around it (never accumulating into ±0.85), and every re-grid restores it.
         lane, lanePref: lane,
       });
+      if (typeof CarFields !== "undefined") CarFields.predeclare(cars[cars.length - 1]);   // the late-added fields as `undefined`: ONE hidden class from frame 0 (js/race/car-fields.js)
     });
   });
   player = cars.find((c) => c.isPlayer) || null;   // find() yields undefined; G.player's contract is CarState | null
@@ -2503,6 +2505,7 @@ function isFloodActiveSession() {
 // takes a second-plus to converge, during which a broken projection renders the
 // cockpit bodywork as a black box across the frame at the start ("clips until I
 // throttle past the start"). Shared by startRace() and __apex.snapCam().
+// `paint` truthy renders one frame AND clears headless mode (UA-9: snapCam(true) re-enables rendering).
 function snapGameCam(paint) {
   if (!player || !track) return;
   const bankCam = Tracks.banking(track, player.s, player.x, _bankScratch, true);  // smooth lift: match render()
@@ -2844,6 +2847,10 @@ function startRace() {
   }
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
+  // Launches that bypass RACE! (Data Hub, Daily) never ran its gesture work: the gyro was never attached, and
+  // quitToMenu dropped the landscape lock while the page stayed fullscreen (no fullscreenchange to re-apply it).
+  if (steerMode === "tilt" && !enableTilt.asked && !Input.gyroSeen) enableTilt();
+  if (document.fullscreenElement) Input.lockLandscape();
   const key = entrySettings(), idx = trackIdx;
   const request = RaceEntryProfile.runSession(sessionEntry, key, () => Promise.all([ensureScenery(idx), DebrisWorld.ready()]),
     (current) => startRaceBody(current), () => key === entrySettings(),
@@ -3040,13 +3047,13 @@ function endRace(forcedOrder) {
   if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
   careerSettlement = null;   // whatever the last career round paid is not this race's news
   // The only human RETIRED and the race ended early (RaceControl.finishDelay
-  // counts a retired human as done). Every AI whose reliability failure was
-  // already drawn would have met it before the flag, so it retires now rather
-  // than scoring from a mid-race snapshot. Solo only: a networked field is the
-  // host's classification.
+  // counts a retired human as done). An AI whose drawn failure it had already
+  // PASSED (checkRetirements' own test) retires now; one that never reached its
+  // dnfAt stays a runner. Solo only: a networked field is the host's classification.
   if (!netPlay.active() && !cars.some((c) => c.human && c.finished)) {
+    const dist = Math.max(1, lapsTarget * track.total);
     for (const c of cars) {
-      if (c.human || c.finished || c.retired || c.dnfAt == null) continue;
+      if (c.human || c.finished || c.retired || c.dnfAt == null || (c.prog - (c._progGift || 0)) / dist < c.dnfAt) continue;
       c.retired = true; c.dnf = c.dnfWhy || "mechanical"; c.dnfAt = null;
     }
   }
@@ -3531,6 +3538,7 @@ const G = {
   set wxArcPlan(v) { wxArc.plan = v && typeof v === "object" ? { to: v.to, dur: v.dur } : null; },
   openGarageFrom: (from) => openGarage(from),
   startWeatherArc: (from, to, dur) => wxArc.startArc(from, to, dur),
+  endWeatherSession: () => wxArc.endSession(true),   // the agent's race()/tt(): a start follows, so a plan set for it stays (race-settings-vm)
   startRace, update, wrapS, quitToMenu,
   raceIntro,   // the pre-race screen, for a launch that is not RACE! (js/race/real-race.js: the Data Hub's JUMP IN)
 };
@@ -4285,10 +4293,13 @@ function quitToMenu() {
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   sessionEntry.cancel();
   qualiSheet.close();
-  _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
   if (announcer.stop) announcer.stop();   // results commentary must not outlive the race
   shake = 0; hitStop = 0;
   PerfGov.sentinelArm(false); netPlay.stop("local"); hideCamPicker(); Input.unlockLandscape();   // inactive: forgets a stale disconnect reason
+  if (typeof ExtraRigs !== "undefined" && ExtraRigs.resetAuto) ExtraRigs.resetAuto();   // the auto-cut state is the race's, not the menu's
+  if (qualiField) { cars = qualiField; qualiField = null; }   // a mid-quali quit: the 1-car trim is not the menu's field
+  const forgetGp = !isChampionship() && !!season && season.qualiMode === "gp";   // read before setFlow: a one-off weekend ends here (RACE AGAIN never passes)
+  _ltBase = null; _ltFlash = 0;   // the lightning's saved race base is not the menu's
   mirrorPass.cancelPreparation();
   closeLightTuner(false); _ltNextT = 0; _thunderT = -1;   // a queued strike or thunder is not the menu's either
   closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
@@ -4334,7 +4345,7 @@ function quitToMenu() {
   // next thing the player presses. The championship SAVES are untouched — what
   // makes the CONTINUE buttons appear is `season`/`career`, not the mode.
   setFlow("gp"); session = "race";
-  quali.clear();   // memory only — persist stays until award/abort so CONTINUE keeps the grid
+  quali.clear(forgetGp);   // memory only — persist stays until award/abort so CONTINUE keeps the grid (a one-off GP's own order is forgotten)
   qualiNet.clearPeers();
   // Title QUIT leaves the session: cancel() tears RTC down; q-back keeps abortQuali().
   qualiNet.hasArmed() ? qualiNet.resetOnQuitWithCancel() : qualiNet.resetSoft();
@@ -4860,8 +4871,10 @@ function updateCar(c, dt, ranked) {
     _aiBoost.ersDeploy = c.ersDeploy; _aiBoost.ersRegen = c.ersRegen;
     aiWantsBoost = AiDrive.wantBoost(_aiBoost);
   }
-  const wantBoost = (c.human ? c.boostOn : aiWantsBoost)
-    || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
+  // The pit limiter holds the car from the entry line to the exit (pits.held): no BOOST drain in the lane either.
+  const pitHeld = pits.held(c);
+  const wantBoost = !pitHeld && ((c.human ? c.boostOn : aiWantsBoost)
+    || c.otT > 0);   // OVERTAKE deploys on its own — even with BOOST toggled off
   // OVERTAKE IS FREE. Its push does not come out of the battery, so an OT burst
   // costs nothing, fires on a flat ERS, and never competes with BOOST for charge.
   // It is already rationed by its own 0.5 MJ allowance per earned lap, which is what
@@ -4901,8 +4914,7 @@ function updateCar(c, dt, ranked) {
   // at every OVERALL SPEED setting (vstd-invariant A13). Never while the pit
   // limiter holds the car (pits.held: entry line to exit) — a queue in the lane
   // is inside OT_GAP (docs/research/PIT-NEXT-STEPS-2026-09.md §4e).
-  const pitHeld = pits.held(c);
-  OvertakeMode.lines(c, track, gapAhead, otOpen);
+  OvertakeMode.lines(c, track, gapAhead, otOpen && !pitHeld);   // no detection-line EARN in the lane either
   const otGate = otEnabled() && !c.finished && !pitHeld, otFast = vStd(c.speed) > OT_MIN_SPEED;
   OvertakeMode.arm(c, otGate, otFast);
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
@@ -6915,8 +6927,9 @@ function render(dt) {
   const aP = _camAP, aN = _camAN;   // pooled, filled in place
   aP[0] = camAncX === null ? 0 : camAncX; aP[2] = camAncZ;
   aN[0] = ancX === null ? 0 : ancX; aN[2] = ancZ;
+  const fixedEye = camId === "trackside" || camId === "pitwall";   // CAM-1: a world-fixed eye damped in the car's frame is dragged v/lambda (8 m at 80 m/s) down-track
   for (let i = 0; i < 3; i++) {
-    camEye[i] = aN[i] + damp(camEye[i] - aP[i], eyeT[i] - aN[i], lE, dt);
+    camEye[i] = fixedEye ? damp(camEye[i], eyeT[i], lE, dt) : aN[i] + damp(camEye[i] - aP[i], eyeT[i] - aN[i], lE, dt);
     camTgt[i] = aN[i] + damp(camTgt[i] - aP[i], tgtT[i] - aN[i], lT, dt);
   }
   camAncX = ancX; camAncZ = ancZ;
@@ -7252,7 +7265,10 @@ function render(dt) {
     // so without this the flash froze >0 and frameSky.lightning (set uncondition-
     // ally each frame) kept the sky partially bleached until the next storm.
     _ltFlash *= Math.exp(-(LT.lightningDecay != null ? LT.lightningDecay : 8) * dt);
-    if (_ltFlash < 0.001) _ltFlash = 0;
+    if (_ltFlash < 0.001) {   // the gate closed MID-flash (dry, LIGHTNING 0): the spiked ambient/exposure is not the base
+      _ltFlash = 0;
+      if (_ltBase) { for (let i = 0; i < 3; i++) { frame.ambientSky[i] = _ltBase.ambientSky[i]; frame.ambientGround[i] = _ltBase.ambientGround[i]; } frame.exposure = _ltBase.exposure; }
+    }
   }
   // Lamps: EVERY track has them (see buildTrackLights); they're fed to the
   // shader whenever the scene is dark enough to read them — night, dusk, or dawn
@@ -7955,7 +7971,7 @@ function render(dt) {
   // Ghost car (time trial): replay best-lap position as a bright emissive silhouette
   if (isTimeTrial() && player && (state === "race" || state === "count")) {
     const replayGhost = GhostShare.hasGuest() ? GhostShare : Ghost;
-    const g = replayGhost.at(player.lapTime);
+    const g = (player.lap | 0) >= 1 ? replayGhost.at(player.lapTime) : null;   // S4: lap 0 is the run-up, off the lap clock (the HUD delta and dot gate the same way)
     // Skip the ghost while it overlaps the player — at the lap start it sits on
     // your exact grid position, and in the cockpit/onboard cams its bodywork
     // fills the camera as a black box until you pull away ("starts dark, clears
@@ -8380,9 +8396,11 @@ function paintSteer() {
     : "TILT leans the phone. BUTTONS adds on-screen arrows. TOUCH drags a finger on the track.";
 }
 
-function enableTilt() {
+function enableTilt() {   // enableTilt.asked: it ran (startRace asks once more only when nothing did)
   // Must run inside a user gesture for the iOS permission prompt.
+  enableTilt.asked = true;
   Input.requestGyro().then((ok) => {
+    if (!ok && !Input.gyroHardDenied) enableTilt.asked = false;   // a transient rejection: the next launch may ask again
     if (ok) {
       Input.calibrate();
       // GRANTED IS NOT READING. A device with no motion sensor (a touch laptop, a
@@ -8404,7 +8422,7 @@ function enableTilt() {
     }
     paintSteer();
     if (ok && Input.tiltActive()) els.audiostate.textContent = "tilt steering ready";   // the title line only: not worth a card every race
-    else tiltSay(Input.gyroDenied ? "motion access denied — switched to buttons" : "");
+    else tiltSay(Input.gyroHardDenied ? "motion access denied — switched to buttons" : Input.gyroDenied ? "tap again to allow motion access" : "");   // transient: nothing switched
   });
 }
 // #audiostate is a TITLE-screen line, invisible from RACE!/lobby/pause — a steering
@@ -8449,11 +8467,13 @@ const { openTimeTrial, consumeGhostHash, openCareer, openCareerSlots, refreshCar
 });
 $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("standings-close").onclick = () => { $("standings").hidden = true; };
+// A refused or offline bundle says so: the tap sound already played, a silent door reads as broken.
+const openDataHub = (tab) => ensureDataHub().then((ok) => { if (ok) DataHub.open(tab); else announce("COULD NOT LOAD — CHECK YOUR CONNECTION OR RELOAD", 4, "warning"); });
 $("mb-data").onclick = () => {
   // The click sound fires immediately — the bundle is one network round trip
   // on a cold tap and the button must not feel dead while it lands.
   if (soundOn) GameAudio.uiSelect();
-  ensureDataHub().then((ok) => { if (ok) DataHub.open(); });
+  openDataHub();
 };
 CustomTracks.create(G, { load: loadBackendScripts, door: $("mb-designer") });   // TRACK DESIGNER door (LAZY_EDITOR) + the saved-circuit registry
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
@@ -8528,7 +8548,7 @@ uiExperience = UiExperience.create(G, { setupCam, coach, openPhoto: openExperien
   prepareTrack: scheduleFlybyTrack, trackReady: menuWorld, trackKey: () => menuKey(trackIdx), updateTrackPhoto: updatePhotoCam,
   captureTrackCamera: () => ({ eye: camEye.slice(), tgt: camTgt.slice(), fov: camFov }),
   restoreTrackCamera: (v) => { if (v) { camEye.splice(0, 3, ...v.eye); camTgt.splice(0, 3, ...v.tgt); camFov = v.fov; } },
-  openWatch: () => ensureDataHub().then((ok) => { if (ok) DataHub.open("race"); }),
+  openWatch: () => openDataHub("race"),
   openSettingsPage: (page, fold) => { openSettings(); settingsNav.show(page, true); const f = fold && $(fold); if (f) { if (f.tagName === "DETAILS") f.open = true; else if (f.parentElement.tagName === "DETAILS") f.parentElement.open = true; f.scrollIntoView({ block: "start" }); f.focus(); } },
 });
 AppearanceStudio.attach({ previewScene: (s) => uiExperience.previewScene(s), openPhoto: () => openExperiencePhoto(state === "menu" ? "home" : "race"), openDisplay: () => settingsNav.show("display", true),
@@ -8592,7 +8612,7 @@ function openQuali(fresh, netDone) {
   // that lands during the scenery load must survive to the sheet.
   return sessionEntry.begin("quali", key, () => { qualiNet.clearPeers(); return ensureScenery(idx); },
     () => openQualiBody(fresh, netDone), () => key === entrySettings() + "|" + !!fresh,
-    (e) => { if (e) Log.error("game", "openQuali failed", e); qualiSheet.close(); quitToMenu(); })
+    (e) => { if (e) Log.error("game", "openQuali failed", e); qualiSheet.close(); if (netDone) qualiNet.arm(netDone); quitToMenu(); })   // armed so the quit cancels the lobby (friendQualifying would gate every later quali save)
     .catch((e) => Log.debug("game", "openQuali rejected (handled by onFail): " + (e && e.message || e))); // menu callers fire and forget; recovery above already landed the failure
 }
 function openQualiBody(fresh, netDone) {
@@ -8984,7 +9004,8 @@ SettingRow.wire("pm-mirror", { values: SettingRow.labels(["off", "on"]),
   write: (v) => { mirrorControls = v === "on"; store.set("mirrorControls", mirrorControls); applyMirrorControls(); } });
 platformSession.wireInstall();
 applyMirrorControls();
-$("pm-calib").onclick = () => { Input.calibrate(); setPaused(false, "recalibrate"); };
+// The zero is taken a beat after the tap (thumb off the glass, phone settled), still behind the pause card.
+$("pm-calib").onclick = () => { setTimeout(() => { Input.calibrate(); setPaused(false, "recalibrate"); }, 300); };
 platformSession.wirePhone();
 keyBinds = KeyBinds.create(G);   // the KEYBOARD rows: rebindable driving keys (js/ui/key-binds.js)
 SettingsExport.create(G);   // SETTINGS FILE: download preferences as JSON (js/ui/settings-export.js)

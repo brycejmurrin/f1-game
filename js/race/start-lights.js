@@ -68,9 +68,11 @@ var StartLights = (function () {
     function lampsFor(track) {
       if (!track) return null;
       if (_lampsBy.has(track)) return _lampsBy.get(track);
-      _lampsBy.set(track, null);
       const a = anchorFor(track);
-      if (!a) return null;
+      // A miss is remembered only once the props list exists to have been searched: a call before
+      // the build populates it (props.list not there yet) is transient, and a memoised null would
+      // leave this track's countdown dark for the whole session.
+      if (!a) { if (track.props && track.props.list) _lampsBy.set(track, null); return null; }
       // Tangent from the neighbouring nodes; right = tangent rotated to +x-of-travel.
       const tl = Math.hypot(a.tx, a.tz) || 1, tx = a.tx / tl, tz = a.tz / tl;
       const rx = -tz, rz = tx;

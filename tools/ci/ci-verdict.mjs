@@ -15,6 +15,9 @@
  * Without the deferral, CI would stay red even after the gate's own verdict
  * passed. When selected-verdict failed, that row already fails the aggregator.
  *
+ * It also fails when it was handed nothing: NEEDS unset / empty / `{}` exits 2,
+ * and a payload with no `success` at all (everything skipped) fails with exit 1.
+ *
  *   node tools/ci/ci-verdict.mjs                 # reads NEEDS env (toJSON(needs))
  *   node tools/ci/ci-verdict.mjs --json          # print {ok,bad} instead of exit
  */
@@ -37,8 +40,13 @@ export function verdict(needs, opts = {}) {
   const bad = [];
   const skipped = [];
   const passed = [];
-  if (!needs || typeof needs !== "object") {
+  if (!needs || typeof needs !== "object" || Array.isArray(needs)) {
     return { ok: false, bad: ["needs payload missing"], skipped, passed };
+  }
+  // An aggregator handed NOTHING must not read as green: a dropped `env: NEEDS:`
+  // line or a renamed key would otherwise pass every PR.
+  if (Object.keys(needs).length === 0) {
+    return { ok: false, bad: ["needs payload empty — no job results to judge"], skipped, passed };
   }
   for (const [name, row] of Object.entries(needs)) {
     const result = row && typeof row === "object" ? String(row.result || "") : "";
@@ -67,15 +75,30 @@ export function verdict(needs, opts = {}) {
     else if (result === "failure" || result === "cancelled") bad.push(`${name}: ${result}`);
     else bad.push(`${name}: unknown result ${JSON.stringify(result)}`);
   }
+  // Skipped-only is not green either: when every needed job was skipped (a
+  // workflow whose gates all hung off one input) nothing was actually checked.
+  // (A named core set is deliberately NOT required: a smoke_only dispatch runs
+  // only `smoke`, a fast-tier run skips `guards`/`unit-plan` by design.)
+  if (bad.length === 0 && passed.length === 0) {
+    bad.push("no needed job succeeded — every result was skipped or advisory, so nothing was verified");
+  }
   return { ok: bad.length === 0, bad, skipped, passed };
 }
 
 function main(argv = process.argv.slice(2)) {
   let needs;
+  if (!process.env.NEEDS || !process.env.NEEDS.trim()) {
+    console.error("::error::ci-verdict: NEEDS is unset or empty — the workflow did not hand over toJSON(needs)");
+    process.exit(2);
+  }
   try {
-    needs = JSON.parse(process.env.NEEDS || "{}");
+    needs = JSON.parse(process.env.NEEDS);
   } catch (e) {
     console.error(`::error::ci-verdict: NEEDS is not JSON (${e.message})`);
+    process.exit(2);
+  }
+  if (!needs || typeof needs !== "object" || !Object.keys(needs).length) {
+    console.error("::error::ci-verdict: NEEDS holds no job results");
     process.exit(2);
   }
   const v = verdict(needs);

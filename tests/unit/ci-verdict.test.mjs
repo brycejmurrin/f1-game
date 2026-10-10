@@ -76,3 +76,34 @@ test("CLI exits 0 on all-success NEEDS and 1 on failure", () => {
   assert.equal(run({ guards: { result: "success" } }), 0);
   assert.equal(run({ guards: { result: "failure" } }), 1);
 });
+
+// CV1 — an aggregator handed nothing must not read as green.
+test("an empty needs payload, or one with no success at all, fails", () => {
+  assert.equal(verdict({}).ok, false);
+  assert.match(verdict({}).bad[0], /empty/);
+  assert.equal(verdict(null).ok, false);
+  assert.equal(verdict([]).ok, false);
+  const allSkipped = verdict({ guards: { result: "skipped" }, smoke: { result: "skipped" }, "selected-verdict": { result: "skipped" } });
+  assert.equal(allSkipped.ok, false);
+  assert.match(allSkipped.bad[0], /no needed job succeeded/);
+  // advisory success is not verification either
+  assert.equal(verdict({ "baseline-trial": { result: "success" } }).ok, false);
+  // one real success among skips is still fine (path-filtered jobs)
+  assert.equal(verdict({ guards: { result: "success" }, smoke: { result: "skipped" } }).ok, true);
+});
+
+test("CLI exits 2 when NEEDS is unset, empty or {} and 1 when everything was skipped", () => {
+  const run = (env) => {
+    const e = { ...process.env, ...env };
+    if (env.NEEDS === undefined) delete e.NEEDS;
+    try {
+      execFileSync("node", ["tools/ci/ci-verdict.mjs", "--json"], { cwd: ROOT, encoding: "utf8", env: e, stdio: "pipe" });
+      return 0;
+    } catch (err) { return err.status; }
+  };
+  assert.equal(run({}), 2, "NEEDS unset");
+  assert.equal(run({ NEEDS: "" }), 2, "NEEDS empty");
+  assert.equal(run({ NEEDS: "{}" }), 2, "NEEDS {}");
+  assert.equal(run({ NEEDS: JSON.stringify({ guards: { result: "skipped" }, smoke: { result: "skipped" } }) }), 1, "all skipped");
+  assert.equal(run({ NEEDS: JSON.stringify({ guards: { result: "success" } }) }), 0);
+});

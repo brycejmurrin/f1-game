@@ -740,12 +740,18 @@ const AgentView = (function () {
     const DEAD_ABS = 0.25;      // absolute deadband
     const DEAD_REL = 0.02;      // ...or 2% of the value, whichever is larger
 
-    function sameEnough(a, b) {
+    // Fractions and unit-range gauges span 0..1 (or 0..2): a quarter-unit deadband would hold
+    // back a quarter of their whole range, so they get a tight absolute tolerance of their own.
+    const DEAD_TIGHT = 0.005;
+    const TIGHT_KEYS = { frac: 1, energy: 1, flap: 1, slipFactor: 1, gripMult: 1 };
+
+    function sameEnough(a, b, key) {
       if (typeof a !== "number" || typeof b !== "number") return a === b;
+      if (key && TIGHT_KEYS[key] === 1) return Math.abs(a - b) <= DEAD_TIGHT;
       return Math.abs(a - b) <= Math.max(DEAD_ABS, Math.abs(a) * DEAD_REL);
     }
 
-    function deltaOf(prev, next) {
+    function deltaOf(prev, next, key) {
       if (prev === undefined) return next;
       if (Array.isArray(next) || Array.isArray(prev)) {
         if (Array.isArray(prev) && Array.isArray(next) && prev.length === next.length) {
@@ -760,12 +766,12 @@ const AgentView = (function () {
         const out = {};
         let changed = false;
         for (const k of Object.keys(next)) {
-          const d = deltaOf(prev[k], next[k]);
+          const d = deltaOf(prev[k], next[k], k);
           if (d !== undefined) { out[k] = d; changed = true; }
         }
         return changed ? out : undefined;
       }
-      return sameEnough(prev, next) ? undefined : next;
+      return sameEnough(prev, next, key) ? undefined : next;
     }
 
     // A DELTA CANNOT SAY "THIS KEY IS GONE". deltaOf walks Object.keys(NEXT), so
@@ -829,7 +835,11 @@ const AgentView = (function () {
       while (headErr > Math.PI) headErr -= 2 * Math.PI;
       while (headErr < -Math.PI) headErr += 2 * Math.PI;
 
-      const ranked = G.cars.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog);
+      // Running cars by progress, then the retired ones (apex.js raceOrder): a retired player is
+      // classified behind the field, not "P0" (timing / field / obs read the same order).
+      const byProg = (a, b) => b.prog - a.prog;
+      const ranked = G.cars.filter((c) => !c.retired).sort(byProg)
+        .concat(G.cars.filter((c) => c.retired).sort(byProg));
       const pos = ranked.findIndex((c) => c.isPlayer) + 1;
 
       // The friction ellipse's longitudinal axis is weather-scaled, exactly as in
@@ -1895,6 +1905,8 @@ const AgentView = (function () {
       const nSamples = clamp(o.samples | 0 || 12, 2, 60);
       const sampleEvery = Math.max(1, Math.floor(ticks / nSamples));
 
+      // A TT / quali run-up would ignore the rollout's input for 3 s: end it, as act() does.
+      if (G.flyingStart && G.flyingStart.active()) G.flyingStart.stop();
       // Promote out of the countdown, exactly as act() does, so physics advances.
       if (G.state === "count") {
         G.state = "race"; G.raceT = 0;

@@ -1146,7 +1146,7 @@ it lands.
 | `js/editor/validate.js` | `straightRun` (TrackPit's `PIT_K` walk from the start line) + the built `curv` LUT in `judge` | **broadcast-only** | the track designer's validator: judges a design's BUILT centreline for the editor's issue list (radius, kink, fold, start straights, lap estimate) and the picker's baked turns, read once per edit in a menu — the race that follows builds its own LUT and no car reads these numbers |
 | `js/track/core/mesh.js` | findCorners, bankingProfile, banked-corner pick; `buildRoad` racing-line wear band (reads `track.line`, the line LUT TrackLine.bake derived from curv) | **surface** | build-time road-geometry decisions baked into the mesh — road shape itself; the wear band is vertex COLOUR along the baked line, a picture on the asphalt no car reads |
 | `js/track/tracks.js` | build LUT bake | **surface** | the producer itself (centreline curv[] bake) |
-| `js/track/scenery/build-props.js` | signboard side pick, pit-pass curvature | **surface** | static scenery placement (`TrackBuildProps.build`) |
+| `js/track/scenery/build-props.js` | signboard side pick, pit-pass curvature, braking-zone lamp placement | **surface** | static scenery placement (`TrackBuildProps.build`) |
 
 A module that consumes only REPORTS other code already produced is not in this
 table, because it has no curvature site to classify — the first-run coach marks

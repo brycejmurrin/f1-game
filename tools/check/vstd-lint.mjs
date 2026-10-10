@@ -33,7 +33,7 @@
 //         within a line of the others.
 //
 // THE RULE, in one sentence: a `.speed` read compared with < <= > >= against a
-// numeric literal is a violation unless the speed is wrapped in `vStd(...)`.
+// numeric literal or an UPPER_SNAKE constant is a violation unless the speed is wrapped in `vStd(...)`.
 //
 // Not every hit is a bug — a force, a divide-by-zero floor, a sign test and the
 // reverse crawl are all legitimately absolute. Those live in ALLOWED in
@@ -122,9 +122,15 @@ const SPEED = /\.speed\b/g;
 // were actually opened earlier in this statement — so `Math.abs(c.speed) > 8`,
 // `(c.speed || 0) > 8` and `(a.speed - b.speed) > 0.5` all reach the operator.
 const DEFAULTED = /^\s*\|\|\s*0/;
-const CMP_NUM = /^(>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)(?![\w.])/;
+// A threshold is a numeric literal OR an UPPER_SNAKE constant (`OT_MIN_SPEED`,
+// `X_MIN_SPEED`, `GRASS_V`): a named constant is the same absolute m/s number
+// with a label on it, and `c.speed > OT_MIN_SPEED` read raw (the A13 shape) went
+// unseen while only digits were matched. A constant that is a SCALE-aware
+// quantity (`REVERSE_MAX`, a flat -5 m/s) is approved in ALLOWED like a literal.
+const THRESHOLD = String.raw`(-?\d+(?:\.\d+)?(?![\w.])|[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+(?![\w$.]))`;
+const CMP_NUM = new RegExp(String.raw`^(>=|<=|>|<)\s*` + THRESHOLD);
 // Literal-first order: `15 < c.speed`.
-const NUM_CMP = /(-?\d+(?:\.\d+)?)\s*(>=|<=|>|<)\s*(?:Math\.(?:abs|max|min)\(\s*)?[A-Za-z_$][\w$.]*$/;
+const NUM_CMP = new RegExp(THRESHOLD + String.raw`\s*(>=|<=|>|<)\s*(?:Math\.(?:abs|max|min)\(\s*)?[A-Za-z_$][\w$.]*$`);
 // Already normalised: `vStd(c.speed)` / `vStd(Math.abs(c.speed))`.
 const VSTD_WRAP = /vStd\(\s*(?:Math\.(?:abs|max|min)\(\s*)?[A-Za-z_$][\w$.]*$/;
 // The property chain the `.speed` hangs off, walking back from it.

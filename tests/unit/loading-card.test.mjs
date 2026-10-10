@@ -923,6 +923,12 @@ test("metaRows: a circuit gets its facts; a real race joined mid-race gets the l
   assert.deepEqual(metaRows({ track, laps: 51, weather: "dry", tod: "day", real }, 20), [
     ["LAP", "40 / 51"], ["RUNNING", "P5 · +3.3s"], ["TYRE", "MEDIUM · 8 LAPS"], ["STOPS", "2 (L31, L36)"], ["LEADER", "RUS"], ["OUT", "6"],
     ["WEATHER", "DRY"], ["TIME", "DAY"]]);
+  // No gap to show (0 / null): "P5", never a dangling "P5 · ".
+  for (const gap of [{ s: 0, lapsDown: 0 }, null, undefined]) {
+    const r = metaRows({ track, laps: 51, weather: "dry", tod: "day", real: { ...real, story: { ...story, you: { ...story.you, gap } } } }, 20);
+    assert.deepEqual(r[1], ["RUNNING", "P5"], "empty gap: " + JSON.stringify(gap));
+  }
+  assert.deepEqual(metaRows({ track, laps: 51, weather: "dry", tod: "day", real: { ...real, story: { ...story, you: { ...story.you, gap: { s: 0, lapsDown: 2 } } } } }, 20)[1], ["RUNNING", "P5 · +2 LAPS"]);
   const sc = { ...story, cautions: [{ kind: "safety car", from: 31, to: 32, now: true }], you: { ...story.you, pos: 1, stops: [] } };
   const rows = metaRows({ track, weather: "dry", tod: "day", real: { ...real, story: sc, watch: true } });
   assert.deepEqual(rows.slice(1, 4), [["FOLLOWING", "P1"], ["TYRE", "MEDIUM · 8 LAPS"], ["STOPS", "NONE"]]);

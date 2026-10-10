@@ -84,7 +84,14 @@ function loadHarness(options = {}) {
       LIST: [team],
       isReal: (t) => !!t && !t.custom && !t.legends,
     },
-    Tracks: { LIST: [{ id: "a" }], SEASON: [{ id: "a" }], seasonIndex: () => 0 },
+    // SEASON needs enough rounds that a restored season.round (SEC2-1 / C8 use
+    // 3–4) is still in range — SeasonCal.load() resume()s then save()s, and a
+    // single-circuit calendar restarts any round > 1 back to 0.
+    Tracks: {
+      LIST: Array.from({ length: 24 }, (_, i) => ({ id: "t" + i })),
+      SEASON: Array.from({ length: 24 }, (_, i) => ({ id: "t" + i })),
+      seasonIndex: () => 0,
+    },
     Parts: { CATALOG: [], getFactorySetup: () => ({}), getCost: () => 0, setLegality() {} },
     DriverRatings: {
       get: () => ({ pace: 50, craft: 50, awareness: 50, consistency: 50, experience: 50 }),
@@ -953,4 +960,97 @@ test("real cached store preserves an unknown season through boot and menu loads"
   assert.equal(h.SeasonCal.save(menu).ok, false);
   assert.equal(h.disk.get("apex26.season"), raw);
   assert.deepEqual(Array.from(h.store.get("season").config.trackIds), ["a", "missing"]);
+});
+
+// SEC2-1 (round 2): season / badges / daily / records were written after only an
+// isObj() check, so a legal file could carry a 4 MB junk key into the 5 MB quota.
+function envWith(extras) {
+  const h0 = loadHarness();
+  h0.disk.set("apex26.career.driver.0", JSON.stringify(save({ money: 5 })));
+  h0.Career.load();
+  return Object.assign(h0.CareerBackup.build(), extras);
+}
+const bytesOf = (h, k) => (h.disk.has(k) ? h.disk.get(k).length : 0);
+
+test("SEC2-1: an oversized extra is refused before anything is written", () => {
+  const junk = "A".repeat(300 * 1024);
+  for (const k of ["season", "badges", "daily", "records"]) {
+    const h = loadHarness();
+    const env = envWith({ [k]: k === "badges" ? { got: { a: 1 }, junk } : { round: 1, junk } });
+    const r = h.CareerBackup.apply(env, {});
+    assert.equal(r.ok, false, k);
+    assert.equal(r.reason, k + "-too-large");
+    assert.equal(h.disk.has("apex26." + (k === "daily" ? "daily.v1" : k)), false, k + " must not be written");
+  }
+});
+
+test("SEC2-1: an extra with an own __proto__ key is refused", () => {
+  for (const [k, text] of [
+    ["season", '{"round":0,"pts":{"__proto__":{"p":1}}}'],
+    ["badges", '{"got":{"__proto__":1}}'],
+    ["daily", '{"days":{"2026-01-01":{"__proto__":{"best":1}}}}'],
+    ["records", '{"a":{"__proto__":{"x":1}}}'],
+    ["season", '{"__proto__":{"round":9}}'],
+  ]) {
+    const h = loadHarness();
+    const env = envWith({ [k]: JSON.parse(text) });
+    const r = h.CareerBackup.apply(env, {});
+    assert.equal(r.ok, false, text);
+    assert.equal(r.reason, k + "-hostile");
+  }
+});
+
+test("SEC2-1: each extra is rebuilt from its allowlist — junk keys and bad values never reach the store", () => {
+  const h = loadHarness();
+  const env = envWith({
+    season: { round: 3, pts: { "haas:0": 25, "x y": 9, bad: "NaN-ish", neg: -4 }, teamPts: { haas: 25 }, driverCodes: { "haas:0": "AAAAAAAAAAAAAAAA" },
+      finishes: { "haas:0": [1, "x", null] }, roundPts: { "haas:0": [25, -1] }, junk: "zzz", stage: "evil", seed: "7" },
+    badges: { v: 9, got: { first_win: 50, "bad id!": 5, pole: "soon", neg: -1 }, junk: [1] },
+    daily: { days: { "2026-09-21": { best: "fast", laps: "many", junk: 1 }, "not-a-day": { best: 1 }, "2026-09-22": { best: 70.5, laps: 2 } },
+      streak: { count: "9", last: 5 }, junk: 1 },
+    records: { monza: { t: 80, deep: { a: { b: { c: { d: 1 } } } } }, bad: Infinity },
+  });
+  assert.equal(h.CareerBackup.apply(env, {}).ok, true);
+  const season = JSON.parse(h.disk.get("apex26.season"));
+  assert.equal(season.round, 3);
+  assert.deepEqual(season.pts, { "haas:0": 25 });
+  assert.equal("junk" in season, false);
+  assert.equal("stage" in season, false, "only stage:'race' survives");
+  assert.equal("seed" in season, false, "a non-integer seed is dropped");
+  assert.equal(season.driverCodes["haas:0"].length, 12);
+  assert.deepEqual(season.finishes["haas:0"], [1, 0, 0]);
+  const badges = JSON.parse(h.disk.get("apex26.badges"));
+  assert.deepEqual(badges.got, { first_win: 50 });
+  assert.equal("junk" in badges, false);
+  const daily = JSON.parse(h.disk.get("apex26.daily.v1"));
+  assert.deepEqual(Object.keys(daily.days).sort(), ["2026-09-21", "2026-09-22"]);
+  assert.deepEqual(daily.days["2026-09-21"], { best: null, laps: 0 });
+  assert.equal("streak" in daily, false, "a streak with a non-integer count is dropped");
+  assert.equal("junk" in daily, false);
+  const rec = JSON.parse(h.disk.get("apex26.records"));
+  assert.equal(rec.monza.t, 80);
+  assert.equal("bad" in rec, false);
+  assert.equal("b" in rec.monza.deep.a, false, "depth is bounded");
+});
+
+test("SEC2-1: a legitimate backup's extras stay under the per-extra cap", () => {
+  const h = loadHarness();
+  const days = {};
+  for (let d = 1; d <= 28; d++) days["2026-09-" + String(d).padStart(2, "0")] = { best: 70 + d, laps: d, classes: { standard: { best: 70 + d, laps: d } } };
+  const env = envWith({ daily: { days, streak: { count: 5, last: "2026-09-28" } } });
+  assert.equal(h.CareerBackup.apply(env, {}).ok, true);
+  assert.ok(bytesOf(h, "apex26.daily.v1") < 256 * 1024);
+  assert.equal(Object.keys(JSON.parse(h.disk.get("apex26.daily.v1")).days).length, 28);
+});
+
+// C8 (round 2): the import bumps the season key under SeasonCal's armed revision.
+test("C8: a restored standalone season re-arms SeasonCal, so its next save is not a conflict", () => {
+  const h = loadHarness();
+  h.disk.set("apex26.season", JSON.stringify({ round: 0, pts: {}, teamPts: {}, driverCodes: {} }));
+  const stale = h.SeasonCal.load();
+  const env = envWith({ season: { round: 4, pts: { "haas:0": 40 }, teamPts: {}, driverCodes: {} } });
+  assert.equal(h.CareerBackup.apply(env, {}).ok, true);
+  assert.equal(JSON.parse(h.disk.get("apex26.season")).round, 4);
+  const res = h.SeasonCal.save(stale);
+  assert.notEqual(res.reason, "conflict", "SeasonCal still holds the pre-import revision");
 });
