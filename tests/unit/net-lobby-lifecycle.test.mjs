@@ -1499,11 +1499,16 @@ test("an empty CONNECT tap during invite preparation does not cancel the host's 
 });
 
 // bug-hunt 2 H30: the lobby is hidden while the quali sheet is the screen.
-async function guestInQuali(extra = {}) {
+async function guestInQuali(extra = {}, sheetUp) {
   const ctx = closableHarness(extra);
   const { h, made } = ctx;
   h.G.raceQuali = true;
   h.G.openQualiForNet = (done) => { h.G._qualiDone = done; };
+  if (sheetUp !== undefined) {
+    // game.js openQuali: resolves once the sheet is up OR once its onFail has run quitToMenu (sheet closed).
+    h.elements.set("quali", { id: "quali", hidden: !sheetUp, focus() {}, setAttribute() {}, removeAttribute() {} });
+    h.G.openQualiForNet = (done) => { h.G._qualiDone = done; return Promise.resolve(); };
+  }
   h.lobby.open();
   await h.lobby.join();
   h.lobby.watchForOpen();
@@ -1560,5 +1565,32 @@ test("the screen wake lock survives the lobby closing for friend quali and drops
     h.G.netPlay = { start: () => ({ ok: true }), hostStart() {} };
     await h.G._qualiDone();
     assert.equal(sentinels[0].releases, 1, "the race start's close() releases it");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a guest's BACK from the quali sheet tells the host", async () => {
+  const { h, made } = await guestInQuali();
+  try {
+    h.lobby.abortQuali();
+    assert.ok(made[0].sent.some((m) => m.t === "qabort"), "the host is told this guest left the sheet");
+    assert.equal(h.lobby.qualifying(), false);
+  } finally { h.lobby.cancel(); }
+});
+
+test("a failed quali prepare (sheet never opens) cancels the lobby so persistOrder is not gated for the page session", async () => {
+  const { h } = await guestInQuali({}, false);
+  try {
+    await new Promise((r) => setImmediate(r));
+    assert.equal(h.lobby.qualifying(), false, "friendQualifying is cleared");
+    assert.equal(h.lobby.status().guests, 0, "…and the room is torn down, as a quit would");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a quali sheet that did open keeps the room armed", async () => {
+  const { h } = await guestInQuali({}, true);
+  try {
+    await new Promise((r) => setImmediate(r));
+    assert.equal(h.lobby.qualifying(), true);
+    assert.equal(h.lobby.status().guests, 1);
   } finally { h.lobby.cancel(); }
 });
