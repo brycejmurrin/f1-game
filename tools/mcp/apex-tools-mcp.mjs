@@ -534,7 +534,7 @@ const CATALOG = [
         livery: { type: "string", description: "Catalog livery id." },
         design: { type: "object", description: "Liveries.FIELDS values (+ part.<cat>, driver, light.<knob>)." },
         base: { type: "string", description: "Catalog livery the design paints over." },
-        frame: { description: "Station / alias / view name, or {view|station|cam, az, el, dist, target, lamp, zoom, pan, eye, look, clamp, crop}." },
+        frame: { description: "Station / alias / view name, or {view|station|cam, az, el, dist, target, lamp, zoom, pan, eye, look, clamp, crop}. az / el are RADIANS (el is clamped to the orbit's pitch range), dist is metres." },
         name: { type: "string", description: "Output name for op shot (default: the tool's own name)." },
         diff: { type: "array", items: { type: "string" }, description: "Two shot names or PNG paths → Δ fraction + overlay." },
         sheet: { type: "string", description: "Contact-sheet name for op sheet." },
@@ -831,7 +831,7 @@ const CATALOG = [
       additionalProperties: false,
       properties: {
         screen: { type: "string", description: "layout-audit screen id (title, select, garage, settings, …)." },
-        viewport: { type: "string", description: "Default ios-iphone-landscape." },
+        viewport: { type: "string", description: "Default ios-iphone-landscape. Ids: `node tools/ui/layout-audit.mjs --list` (a phone at 844x390 is ios-iphone-landscape-844)." },
         scale: { type: "number", minimum: 40, maximum: 200, description: "Interface size %, default 100." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
@@ -849,8 +849,8 @@ const CATALOG = [
       type: "object",
       additionalProperties: false,
       properties: {
-        screen: { type: "string" },
-        viewport: { type: "string" },
+        screen: { type: "string", description: "A screen id from `node tools/ui/layout-audit.mjs --list` (title, select, garage, settings, …)." },
+        viewport: { type: "string", description: "Default ios-iphone-landscape; ids from the same --list (a phone at 844x390 is ios-iphone-landscape-844)." },
         image: { type: "boolean", description: "Attach a JPEG thumbnail (default true)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
@@ -1949,8 +1949,17 @@ async function handleGarage(args = {}) {
     return refuse("bad_args", String(e.message || e), "See the apex_garage inputSchema.");
   }
   if (op === "close") {
+    const g = garage;
     const why = garageClose("close");
-    return toolResult({ ok: true, op, ...(why || { closed: false, reason: "not open" }) });
+    // The child still owns its browser while it shuts down and holds the browser lock until it exits: wait for that, so
+    // the next browser tool does not hit lock_held (a software-GL Chromium took ~30 s). A slow child is reported, not waited on forever.
+    let settled = true;
+    if (g) {
+      const deadline = Date.now() + 60000;
+      while (!g.exited && Date.now() < deadline) await new Promise((r) => setTimeout(r, 250));
+      settled = !!g.exited;
+    }
+    return toolResult({ ok: true, op, ...(why || { closed: false, reason: "not open" }), ...(why ? { settled } : {}) });
   }
   if (!garage) return refuse("garage_not_open", "no garage session", 'Call apex_garage with {"op":"open","team":"ferrari"} first.');
   const cmd = garageCommand(op, args);
