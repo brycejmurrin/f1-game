@@ -5,9 +5,17 @@
 const QualiNet = (function () {
   "use strict";
 
+  // How long a player who has driven waits for a silent rival before TO THE GRID
+  // opens WITHOUT them. A rival who stays in the room but never posts (AFK, tab
+  // asleep) would otherwise hold the sheet forever: BACK only shakes while waiting.
+  const WAIT_MS = 90000;
+
   function create(hooks) {
     const { $, fmtTime, isQuali, getPlayer, getCars, openQuali, applyPeerQuali,
       getNetPlay, getNetLobby } = hooks;
+    const now = hooks.now || (() => performance.now());
+    const setTimer = hooks.setTimer || ((f, ms) => setTimeout(f, ms));
+    const clearTimer = hooks.clearTimer || ((h) => clearTimeout(h));
 
     // driverId -> seconds, one entry per rival who has driven.
     let qualiPeers = new Map();
@@ -16,6 +24,9 @@ const QualiNet = (function () {
     let qualiLiveAt = 0;
     let qualiNetDone = null;
     let qualiHadRivals = false;
+    let iDone = false;          // the player has a result on the sheet: the wait is theirs now
+    let waitSince = 0, waitTimer = null, waitExpired = false;
+    const droppedIds = new Set();   // rivals the wait gave up on (graded no-time until they post)
 
     function rivalDriverIds() {
       const netPlay = getNetPlay();
@@ -59,14 +70,39 @@ const QualiNet = (function () {
       return rivals.some((id) => !(qualiPeers.get(id) > 0));
     }
 
+    function stopWait() {
+      if (waitTimer != null) clearTimer(waitTimer);
+      waitTimer = null; waitSince = 0;
+    }
+
+    // Bounded wait: the clock runs only while the player has a result AND a rival is
+    // outstanding. At the bound every outstanding rival is graded NO TIME, exactly as a
+    // guest's abort does (Infinity = drove, no valid lap), and the sheet is regraded.
+    function expireWait() {
+      stopWait();
+      waitExpired = true;
+      for (const id of rivalDriverIds()) {
+        if (!(qualiPeers.get(id) > 0)) { qualiPeers.set(id, Infinity); droppedIds.add(id); }
+      }
+      const player = getPlayer();
+      const mine = player && player.lastLap > 0 ? player.lastLap
+        : (player && player.best < Infinity ? player.best : 0);
+      if (isQuali()) applyPeerQuali(mine);
+    }
+
     function refreshQualiGate() {
       const b = $("q-go");
+      if (iDone && waiting()) {
+        if (!waitSince) { waitSince = now(); waitTimer = setTimer(refreshQualiGate, WAIT_MS + 50); }
+        else if (now() - waitSince >= WAIT_MS) expireWait();
+      } else if (waitSince) stopWait();
       if (!b) return;
       const w = waiting();
       b.disabled = w;
       if (!w) {
-        b.textContent = (qualiNetDone && qualiHadRivals && !rivalDriverIds().length)
-          ? "RIVAL LEFT — TO THE GRID" : "TO THE GRID";
+        b.textContent = droppedIds.size ? "TO THE GRID WITHOUT THEM"
+          : (qualiNetDone && qualiHadRivals && !rivalDriverIds().length)
+            ? "RIVAL LEFT — TO THE GRID" : "TO THE GRID";
         return;
       }
       const rivals = rivalDriverIds();
@@ -109,7 +145,10 @@ const QualiNet = (function () {
       // quali-model.js and a string or boolean there throws mid-sheet.
       const t = d ? Number(d.t) : NaN;
       // Infinity = NO TIME (validQuali's noTime marker): drove, no valid lap.
-      if (d && d.driverId != null && (t === Infinity || (Number.isFinite(t) && t > 0))) qualiPeers.set(d.driverId, t);
+      if (d && d.driverId != null && (t === Infinity || (Number.isFinite(t) && t > 0))) {
+        qualiPeers.set(d.driverId, t);
+        if (Number.isFinite(t)) droppedIds.delete(d.driverId);   // a late real lap beats the timeout's no-time
+      }
       if (!isQuali()) return;
       const player = getPlayer();
       const mine = player && player.lastLap > 0 ? player.lastLap
@@ -131,11 +170,20 @@ const QualiNet = (function () {
       qualiNetDone = netDone || null;
       qualiLive.clear();
       qualiHadRivals = false;
+      resetWait();
     }
+
+    function resetWait() { stopWait(); iDone = false; waitExpired = false; droppedIds.clear(); }
+    /** The player's own session is run (q-done): the bounded wait starts from here. */
+    function markDone() { iDone = true; }
+    const timedOut = () => waitExpired;
+    /** BACK/Escape may leave the sheet once the wait has been given up on. */
+    const canLeave = () => waitExpired;
 
     function clearPeers() { qualiPeers.clear(); }
 
     function resetSoft() {
+      resetWait();
       qualiNetDone = null;
       qualiLive.clear();
       qualiHadRivals = false;
@@ -151,6 +199,7 @@ const QualiNet = (function () {
 
     function resetOnQuitWithCancel() {
       const netLobby = getNetLobby();
+      resetWait();
       qualiNetDone = null;
       qualiHadRivals = false;
       qualiLive.clear();
@@ -159,6 +208,7 @@ const QualiNet = (function () {
 
     function resetOnBackWithAbort() {
       const netLobby = getNetLobby();
+      resetWait();
       qualiNetDone = null;
       qualiHadRivals = false;
       qualiPeers.clear();
@@ -172,9 +222,10 @@ const QualiNet = (function () {
       onPeerQuali, onPeerQualiLive, openQualiForNet, refreshQualiGate,
       reportLive, reportQuali, driven, waiting, arm, clearPeers, resetSoft,
       hasArmed, takeGoCallback, resetOnQuitWithCancel, resetOnBackWithAbort,
+      markDone, timedOut, canLeave, WAIT_MS,
     };
   }
 
-  return { create };
+  return { create, WAIT_MS };
 })();
 Object.freeze(QualiNet);

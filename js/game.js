@@ -3033,6 +3033,7 @@ function endRace(forcedOrder) {
     quali.simulate(qualiNet.driven(myLap > 0 ? myLap : player.qualiCut ? Infinity : 0));
     if (!(myLap > 0)) reportModelQuali();   // no valid lap: the rival still needs OUR time, or their sheet waits forever
     $("quali").classList.add("q-done");   // the session is run: only TO THE GRID now
+    qualiNet.markDone(); $("q-back").textContent = "MENU";
     qualiSheet.open(quali.rows());
     qualiNet.refreshQualiGate();
     return;
@@ -8607,6 +8608,7 @@ function openQualiBody(fresh, netDone) {
   makeCars();
   if (fresh) quali.simulate(0); else quali.begin();
   $("quali").classList.remove("q-done");
+  $("q-back").textContent = "BACK"; delete $("q-back").dataset.armed; $("quali").toggleAttribute("data-net", !!netDone);   // friend quali: BACK stays on the foot after the session, as MENU
   loadingScreen.stop();
   qualiSheet.open(quali.rows());
   qualiNet.refreshQualiGate();   // the gate's state is only knowable once netDone is armed
@@ -8637,6 +8639,7 @@ $("q-sim").onclick = () => {
   quali.simulate(qualiNet.driven(player && player.qualiCut ? Infinity : 0));   // a deleted lap is not traded for the model's
   reportModelQuali();
   $("quali").classList.add("q-done");
+  qualiNet.markDone(); $("q-back").textContent = "MENU";
   qualiSheet.build(quali.rows());
   qualiNet.refreshQualiGate();
   // .q-done hides SIMULATE itself, which held focus; the next step is the grid.
@@ -8672,6 +8675,12 @@ $("q-back").onclick = () => {
   // the sheet, leaving is TO THE GRID's job — but a SILENT dead key read as
   // broken, so point the player at the door instead of ignoring them.
   if ($("quali").classList.contains("q-done")) {
+    // FRIEND quali: MENU is the way out of a rival who never posts. One press
+    // arms it (a stray Escape must not drop a result the friend is waiting on);
+    // the second, or any press once the wait timed out, leaves via quitToMenu(),
+    // which cancels the lobby while the gate is armed.
+    if (qualiNet.hasArmed() && (qualiNet.canLeave() || $("q-back").dataset.armed)) { if (soundOn) GameAudio.uiSelect(); delete $("q-back").dataset.armed; quitToMenu(); return; }
+    if (qualiNet.hasArmed()) { $("q-back").dataset.armed = "1"; $("q-back").textContent = "PRESS AGAIN TO LEAVE"; }
     if (soundOn) GameAudio.uiTick();
     const go = $("q-go");
     if (go) {
