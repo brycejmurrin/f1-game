@@ -625,7 +625,10 @@ export function createExtras(ctx) {
       const fromDisk = listDiskJobs();
       const merged = new Map(fromDisk.map((j) => [j.id, j]));
       for (const j of jobs.values()) merged.set(j.id, j);
-      return toolResult({ ok: true, jobs: [...merged.values()].map((j) => jobView(j)) });
+      // Newest first and bounded: a long-lived checkout accumulates every job ever started (dozens of manifests).
+      const all = [...merged.values()].filter((j) => !args.state || j.state === args.state).sort((a, b) => (b.started || 0) - (a.started || 0));
+      const limit = Math.min(Number(args.limit) || 20, 200);
+      return toolResult({ ok: true, jobs: all.slice(0, limit).map((j) => jobView(j)), total: all.length, ...(all.length > limit ? { hint: `${all.length - limit} older job(s) not shown; pass limit (max 200) or state.` } : {}) });
     }
     const id = String(args.jobId);
     const j = jobs.get(id) || loadDiskJob(id);
@@ -660,15 +663,34 @@ export function createExtras(ctx) {
   });
 
   // ── apex_ui_fit / apex_ui_shot: one screen × viewport ─────────────────────
-  const uiArgs = (a) => {
+  // The real catalogs (tools/ui/menu-screens.mjs): an id the audit does not know used to come back ok:true with out:null.
+  let uiCatalogP = null;
+  const uiCatalog = () => (uiCatalogP ||= import("../ui/menu-screens.mjs")
+    .then((m) => ({ screens: m.listScreenIds(), viewports: m.VIEWPORTS.map((v) => v[0]) }))
+    .catch(() => null));   // a catalog that will not load must not block the tool: fall back to the shape check alone
+  const unknownId = (kind, id, ids) => {
+    const dist = (a, b) => {   // Levenshtein, small strings
+      const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+      for (let j = 1; j <= b.length; j++) d[0][j] = j;
+      for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      return d[a.length][b.length];
+    };
+    const best = ids.map((x) => [x, dist(id, x)]).sort((p, q) => p[1] - q[1])[0];
+    const near = ids.find((x) => x.startsWith(id)) || (best && best[1] <= 2 ? best[0] : null);
+    return refuse("bad_args", `unknown ${kind} ${id}`, `${near ? `Did you mean ${near}? ` : ""}Valid ${kind}s: ${ids.join(", ")}.`);
+  };
+  const uiArgs = async (a) => {
     const screen = String(a.screen || "");
     if (!/^[a-z][a-z0-9-]{1,40}$/.test(screen)) throw Object.assign(new Error("screen"), { refuse: refuse("bad_args", "screen must be a layout-audit screen id", "`node tools/ui/layout-audit.mjs --list` prints them (title, select, garage, settings, …).") });
     const viewport = String(a.viewport || "ios-iphone-landscape");
     if (!/^[a-z0-9-]{3,60}$/.test(viewport)) throw Object.assign(new Error("viewport"), { refuse: refuse("bad_args", "viewport must be a layout-audit viewport id", "e.g. ios-iphone-landscape, desktop-1440x900.") });
+    const cat = await uiCatalog();
+    if (cat && !cat.screens.includes(screen)) throw Object.assign(new Error("screen"), { refuse: unknownId("screen", screen, cat.screens) });
+    if (cat && !cat.viewports.includes(viewport)) throw Object.assign(new Error("viewport"), { refuse: unknownId("viewport", viewport, cat.viewports) });
     return { screen, viewport };
   };
   async function uiFit(args, { signal }) {
-    let u; try { u = uiArgs(args); } catch (e) { return e.refuse; }
+    let u; try { u = await uiArgs(args); } catch (e) { return e.refuse; }
     const scale = args.scale == null ? null : Number(args.scale);
     if (scale != null && !(scale >= 40 && scale <= 200)) return refuse("bad_args", "scale must be 40..200 (%)", "Interface size, e.g. 100 or 130.");
     const argv = nodeArgv("ui/layout-audit.mjs", `--screens=${u.screen}`, `--viewports=${u.viewport}`, "--jobs=1", ...(scale ? [`--scale=${scale}`] : []));
@@ -682,13 +704,14 @@ export function createExtras(ctx) {
       let rows = [];
       try { rows = JSON.parse(fs.readFileSync(path.join(ROOT, "artifacts", "layout-audit", "audit.json"), "utf8")).rows || []; } catch { /* report text only */ }
       const row = rows.find((x) => x.screen === u.screen && x.viewport === u.viewport) || null;
+      if (!row) return refuse("no_result", `layout-audit wrote no row for ${u.screen} x ${u.viewport}`, "The audit ran but produced nothing for this cell (a screen that is skipped at this viewport, or an audit error): see stderr, or apex_ui_shot for the raw capture.");
       const problems = row ? ["clipped", "offscreen", "smallTaps", "tinyTaps", "truncated", "underHardware", "starved", "deepScroll", "errors"]
         .filter((k) => Array.isArray(row[k]) && row[k].length).map((k) => ({ kind: k, n: row[k].length })) : null;
       return rewrap(r, { stdout: b.stdout.split("\n").filter((l) => l.startsWith(u.screen)).join("\n"), out: row && { ...row, problems, clean: problems.length === 0 } });
     } finally { releaseLock(); }
   }
   async function uiShot(args, { signal }) {
-    let u; try { u = uiArgs(args); } catch (e) { return e.refuse; }
+    let u; try { u = await uiArgs(args); } catch (e) { return e.refuse; }
     const outDir = path.join(ROOT, "artifacts", "ui-shots");
     const argv = nodeArgv("ui/layout-audit.mjs", `--screen=${u.screen}`, `--viewport=${u.viewport}`, `--out=${outDir}`, "--force");
     if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv });
