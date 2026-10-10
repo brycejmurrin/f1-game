@@ -1299,7 +1299,9 @@ test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and re
   bad("apex_track", { op: "shot", frac: 2 });
   bad("apex_track", { op: "shot" }, "track_not_open");
   ok("apex_job_start", { kind: "survey_track", track: "monza", oblique: true }, /survey-track\.mjs","monza","--oblique/);
-  ok("apex_job_start", { kind: "ui_matrix", screens: "settings,garage", viewports: "ios-*", scale: "100,130" }, /--screens=settings,garage","--viewports=ios-\*","--scale=100,130/);
+  const matrix = ok("apex_job_start", { kind: "ui_matrix", screens: "settings,garage", viewports: "ios-*", scale: "100,130" }, /--screens=settings,garage","--viewports=ios-\*","--scale=100,130/);
+  assert.equal(typeof matrix.estimateMs, "number", "ui_matrix dryRun names estimateMs (hud_survey-style)");
+  assert.ok(matrix.estimateMs > 0 && matrix.cells >= 2, `ui_matrix cells/estimate: ${JSON.stringify(matrix)}`);
   ok("apex_job_start", { kind: "flicker_gate", site: "a,b" }, /"--site","a","--site","b"/);
   ok("apex_job_start", { kind: "livery_contrast", team: "ferrari" }, /--team=ferrari/);
   bad("apex_job_start", { kind: "rm_rf" });
@@ -1307,7 +1309,7 @@ test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and re
   bad("apex_job_start", { kind: "survey_track", track: "nope" });
   bad("apex_job_status", { jobId: "missing" }, "unknown_job");
   bad("apex_job_cancel", { jobId: "missing" }, "unknown_job");
-  ok("apex_ui_fit", { screen: "settings", scale: 130 }, /--screens=settings","--viewports=ios-iphone-landscape","--jobs=1","--scale=130/);
+  ok("apex_ui_fit", { screen: "settings", scale: 130 }, /--screens=settings","--viewports=ios-iphone-landscape","--jobs=1","--json","--scale=130/);
   bad("apex_ui_fit", { screen: "--all" });
   bad("apex_ui_fit", { screen: "settings", scale: 500 });
   ok("apex_ui_shot", { screen: "garage", viewport: "desktop-1440x900" }, /--screen=garage","--viewport=desktop-1440x900/);
@@ -1625,6 +1627,16 @@ test("apex_ui_fit / apex_ui_shot refuse an id the audit does not know instead of
   for (const b of [menu, typo, vp]) { assert.equal(b.ok, false); assert.equal(b.error, "bad_args"); }
   assert.match(typo.fix, /Did you mean settings\?/);
   assert.match(vp.fix, /ios-iphone-landscape-844/, "the phone-landscape id is in the list");
+});
+
+test("apex_hud_shot aliases layout-audit viewport ids and did-you-means a near miss", () => {
+  const aliased = callTools([["apex_hud_shot", { device: "ios-iphone-landscape-844", dryRun: true }]])[0].body;
+  assert.equal(aliased.ok, true, JSON.stringify(aliased));
+  assert.match(JSON.stringify(aliased.argv), /phone-landscape-844x390/, "alias rewrites before the CLI");
+  const miss = callTools([["apex_hud_shot", { device: "phone-landscape-844", dryRun: true }]])[0].body;
+  assert.equal(miss.ok, false);
+  assert.equal(miss.error, "bad_args");
+  assert.match(miss.fix, /Did you mean "phone-landscape-844x390"\?/, miss.fix);
 });
 
 test("apex_job_status {} is bounded: newest first, limit, state filter, total", async () => {

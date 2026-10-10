@@ -2598,12 +2598,16 @@ const LiveryTex = (function () {
       });
     } else if (spineSide === "shoulder") {
       // Upper-third shelf only; lower flank stays cover/body. Explicit sideTint
-      // or saddleTint is a pick and is never re-derived — same as saddleFill /
-      // rake sideTint. Unset derives against the flank.
+      // is a pick and is never re-derived. saddleTint is a pick too, EXCEPT
+      // where the flank under the shelf is itself painted saddleFlankC (saddle
+      // top or saddleWrap): then a saddleTint that does not clear it is the
+      // shelf on its own colour (Ferrari/Audi, 1.00:1) and re-picks, like band.
+      const onSaddleFlank = spineLogo !== "wrap" && saddleFlankC != null &&
+        (spineLogo === "saddle" || coverBind === "saddleWrap");
       let shoulderC;
       if (colors.sideTint) {
         shoulderC = colors.sideTint;
-      } else if (colors.saddleTint) {
+      } else if (colors.saddleTint && !(onSaddleFlank && contrast(colors.saddleTint, flankBg) < BAND_ON_COVER)) {
         shoulderC = colors.saddleTint;
       } else {
         shoulderC = pickOn(
