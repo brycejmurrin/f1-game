@@ -227,14 +227,17 @@ non-career, silently breaking every seeded determinism spec and visual baseline.
 
 `SKILL_BASE`/`SKILL_SPAN` are fitted so the grid-mean pace (84) lands on **0.968** —
 the true mean of the old clamped roll — so giving every driver a rating does not
-quietly make the whole field faster. The spread is ~2.7% against `TIER_V`'s ~5.8%
-across tiers: the car still dominates, as it does in the sport.
+quietly make the whole field faster. `TIER_V` and the driver spread were compressed
+together on 2026-10-06 (#1112): tier 0 to tier 4 is now ~1.05% (~0.26% a step) and the
+driver spread (`SKILL_SPAN`, 0.0232 × pace/100) stays below it, so the car still dominates.
 
 ## Team development
 
 `team.stats` and `TIER_V` are never mutated. `career.tdev[teamId]` is an additive
-delta in stat points (±8 → ±2% pace, a little over one `TIER_V` step), folded into
-one new per-car field baked in `makeCars()`:
+delta in stat points (±8 → ±2% pace via `TDEV_TO_PACE`, ~7.7 of the compressed `TIER_V`
+steps — about twice the whole tier ladder; that multiplier was not compressed with the
+ladder, and the number is a balance call), folded into one new per-car field baked in
+`makeCars()`:
 
 ```js
 tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? buildPace(savedParts, factoryParts) : 1),   // paceMult() is exactly 1 outside career; the mate factor is MY TEAM's second car (below)

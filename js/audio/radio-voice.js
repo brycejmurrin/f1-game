@@ -99,6 +99,7 @@ var RadioVoice = (function () {
   // outright (see voicesFor), so what is left is a local engine's startup —
   // tens of milliseconds — and this covers it with room.
   const LEAD_RESERVE_S = 0.25;
+  const SPOTTER_DECODE_LEAD_S = 0.6;   // lead behind a spotter clip whose decode has not settled (remaining() = Infinity)
   const WORDS_PER_S = 2.4;   // deliberately SLOW: under-estimating speech is the safe direction
   // Tokens that must keep their capitals. Everything else is lowercased before
   // speaking, because several engines spell a short all-caps token letter by
@@ -403,8 +404,11 @@ var RadioVoice = (function () {
       const on = kind === "comm" ? !!(G.announcer && G.announcer.enabled && G.announcer.enabled()) : enabled;
       // A spotter call on the air finishes first: the line waits it out as part
       // of its lead, and pays for the wait out of the card's budget like the cue.
+      // remaining() is Infinity while the clip still decodes (end unknown): a
+      // bounded lead, not -Infinity of budget, or the engineer / penalty line is
+      // dropped as "too-long" with no retry.
       const hold = pack ? pack.remaining("spotter") : 0;
-      if (hold > 0) lead = Math.max(+lead || 0, hold + 0.08);
+      if (hold > 0) lead = Math.max(+lead || 0, Number.isFinite(hold) ? hold + 0.08 : SPOTTER_DECODE_LEAD_S);
       const p = plan({ msg, life, kind, lead, enabled: on, soundOn: !!G.soundOn, state: G.state, preRace: !!preRace, api: true, volume, tune });
       last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs, leadMs: p.leadMs, secs: p.secs || 0 };
       // A card that will not be spoken still REPLACES the one on screen: its

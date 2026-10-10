@@ -107,7 +107,7 @@ const SPEC = [
   { k: "lookCareer", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js CAREER (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
   { k: "lookGarage", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js GARAGE (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
   { k: "lookPopups", lane: "json", group: "appearance", def: null, src: "js/ui/screen-looks.js POPUPS (null = shipped; else {knob: value} for the knobs off their defaults — ScreenLooks.normalize validates)" },
-  { k: "resMode", lane: "json", group: "display", def: (G) => (G && G.gfx && G.gfx.isMobile) ? "low" : "auto", src: "js/ui/scale.js (LOW on a touch device)", perDevice: true },
+  { k: "resMode", lane: "json", group: "display", def: (G) => (typeof UiScale !== "undefined" && UiScale.defaultResMode ? UiScale.defaultResMode() : (G.gfx.isMobile ? "low" : "auto")), src: "js/ui/scale.js (LOW on a touch device)", perDevice: true },
   { k: "spatialUpscale", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 §6–7; OFF by default)" },
   { k: "occlusionCull", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js OCCLUSION row + GLX hardware depth queries (js/render/glx/chunked.js; GLX only, OFF by default)" },
   { k: "buildWorker", lane: "raw", group: "display", def: "1", src: "js/track/build-client.js BUILD IN BACKGROUND (unset = ON when multi-core; \"0\"/\"1\" force)", oneOf: ["0", "1"] },
@@ -167,7 +167,7 @@ const SPEC = [
   { k: "padSaturation", lane: "json", group: "driving", def: 0, src: "js/input/steer-tuning.js (percent short of the rim that is full lock)" },
   { k: "padLabels", lane: "json", group: "driving", def: "auto", src: "js/ui/key-binds.js (Xbox/PlayStation/Nintendo button names)" },
   { k: "padAxes", lane: "json", group: "driving", def: null, src: "js/ui/key-binds.js wheel wizard (axis indices + signs)" },
-  { k: "padRest", lane: "json", group: "driving", def: 0, src: "js/ui/key-binds.js CALIBRATE STICK (steer-axis rest offset, |v| <= 0.5; 0 = uncalibrated)" },
+  { k: "padRest", lane: "json", group: "driving", def: 0, src: "js/ui/key-binds.js CALIBRATE STICK (steer-axis rest offset per pad: {[padId]: v}, |v| <= 0.5; a legacy scalar is adopted by the first pad that drives; 0 = uncalibrated)" },
   { k: "aeroMode", lane: "json", group: "driving", def: "manual", src: "js/game.js" },
   { k: "drivingLine", lane: "json", group: "driving", def: "full", oneOf: ["off", "corner", "full"], src: "js/game.js" },
   // DRIVING LINE prefs (js/ui/driving-line-opts.js) — separate from the mode
@@ -438,7 +438,12 @@ const clamp01 = (a) => a.slice(0, 3).map((n) => Math.min(1, Math.max(0, n)));
 // (later career saves then fail) and the LIVERY tab paints one canvas swatch per row.
 const GARAGE_MAX_BYTES = 1024 * 1024;   // the file, before JSON.parse; a real garage is a few KB (customLogo caps at 400 kB)
 const GARAGE_STR_MAX = 64;              // ids, names, enum pills
-const GARAGE_LIVERIES_MAX = 32;         // per team (the garage UI has no cap of its own)
+// PER TEAM. The garage UI has no cap of its own, so neither does the import: the file-size gate above is the bound
+// (a livery row is never under ~48 bytes, so 1 MB cannot hold more than this). Rows that fail the shape check are
+// counted and reported by applyGarage (droppedLiveries), never lost quietly.
+const GARAGE_LIVERIES_MAX = Math.floor(GARAGE_MAX_BYTES / 48);
+const SETTINGS_MAX_BYTES = 1024 * 1024; // LOAD SETTINGS: a real file is tens of KB; refused before f.text()
+const CAREER_BAG_KEYS_MAX = 16;         // 6 slots + the live pointer are all a real file holds
 const GARAGE_KEYS_MAX = 64;             // fields per livery / entries per parts sheet
 // ENUM-TYPED FIELDS INDEX PLAIN OBJECTS (Car3D finOf / FINISH_SURFACE, LiveryTex NUM_FONTS), so a
 // kept "constructor" resolves to an inherited function and throws in every build of that team.
@@ -540,14 +545,17 @@ function garageValue(k, v) {
 function applyGarage(file) {
   if (!file || file.format !== GARAGE_FORMAT) return { ok: false, reason: `not an ${GARAGE_FORMAT} file`, applied: 0, skipped: 0 };
   const g = file.garage || {};
-  let applied = 0, skipped = 0, failed = 0;
+  let applied = 0, skipped = 0, failed = 0, droppedLiveries = 0;
   for (const k of Object.keys(g)) {
     if (!isGarageKey(k)) { skipped++; continue; }
     const v = garageValue(k, g[k]);
     if (v === undefined) { skipped++; continue; }
+    if (k.indexOf("livery.custom.") === 0 && Array.isArray(g[k])) droppedLiveries += g[k].length - v.length;
     try { if (GameStore.store.set(k, v) !== false) applied++; else failed++; } catch (_) { failed++; }
   }
-  return { ok: true, applied, skipped, failed, reason: null };
+  const res = { ok: true, applied, skipped, failed, reason: null };
+  if (droppedLiveries) { res.droppedLiveries = droppedLiveries; Log.warn("ui", "garage file: livery rows failed the shape check", { droppedLiveries }); }
+  return res;
 }
 // RESET TO THE SHIPPED GARAGE. Fresh installs never need this — GameStore.get
 // already answers from GarageDefaults on a miss — but a player who diverged
@@ -648,6 +656,7 @@ function applyCareer(file, revisions) {
   if (!file || file.format !== CAREER_FORMAT) return refused(`not an ${CAREER_FORMAT} file`);
   const bag = file.careers;
   if (!bag || typeof bag !== "object" || Array.isArray(bag)) return refused("invalid careers");
+  if (Object.keys(bag).length > CAREER_BAG_KEYS_MAX) return refused("too many careers");
   if (typeof CareerBackup === "undefined") return refused("career backup unavailable");
   const slots = [];
   let skipped = 0, liveSlot;
@@ -803,7 +812,7 @@ function create(G) {
         // once at boot (the backend pick, the grid, every tuner's first
         // paint), so re-reading them without one would leave the page showing
         // a mix of old and new.
-        b.textContent = `${label} — ${r.applied} APPLIED, RELOADING…`;
+        b.textContent = `${label} — ${r.applied} APPLIED${r.droppedLiveries ? `, ${r.droppedLiveries} LIVERIES SKIPPED` : ""}, RELOADING…`;
         reloading = true; b.disabled = true;
         setTimeout(() => { try { location.reload(); } catch (_) { /* file:// */ } }, 600);
       }, maxBytes);
@@ -833,7 +842,7 @@ function create(G) {
         () => collect("all", G), () => `apex26-settings-all-${stamp()}.json`),
       loadBtn("pm-settings-load", "LOAD SETTINGS FILE",
         "Read an apex26-settings file back in. Only allowlisted keys are written; the garage, career and accounts are never touched.",
-        (obj) => applySettings(obj, G), "SETTINGS"),
+        (obj) => applySettings(obj, G), "SETTINGS", null, SETTINGS_MAX_BYTES),
       note);
   }
 
@@ -900,7 +909,8 @@ function create(G) {
         collectCareer, () => `apex26-career-${stamp()}.json`),
       loadBtn("cr-career-load", "LOAD CAREER FILE",
         "Read an apex26-career file back in. Only career slots are written; settings and the garage are never touched.",
-        applyCareer, "CAREER SAVES", careerRevisions));
+        applyCareer, "CAREER SAVES", careerRevisions,
+        typeof CareerBackup !== "undefined" ? CareerBackup.MAX_BYTES : 5 * 1024 * 1024));
     const protection = document.createElement("button");
     protection.type = "button";
     protection.textContent = "PROTECT LOCAL SAVES";

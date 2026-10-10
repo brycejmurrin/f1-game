@@ -40,6 +40,7 @@ const seededRnd = (seed) => {
 // Two peers whose clocks disagree by `skew` ms, on a link with `latency` ms
 // each way. Driving both from one virtual clock keeps every assertion exact.
 function pair({ latency = 50, skew = 0, jitter = 0, loss = 0, seed = 1 } = {}) {
+  let skewNow = skew;   // mutable: setSkew() steps B's clock mid-run (an OS suspend)
   const [ta, tb] = NetTransport.loopback({ latencyMs: latency, jitterMs: jitter, loss, rnd: seededRnd(seed) });
   const a = NetSession.create({ transport: ta, pingEveryMs: 100 });
   const b = NetSession.create({ transport: tb, pingEveryMs: 100 });
@@ -55,10 +56,13 @@ function pair({ latency = 50, skew = 0, jitter = 0, loss = 0, seed = 1 } = {}) {
       for (let i = 0; i < ms; i += step) {
         t += step;
         a.pump(t);
-        b.pump(t + skew);
+        b.pump(t + skewNow);
       }
       return t;
     },
+    // The wire does not care that B's local clock stepped: shift B's loopback
+    // epoch with it so wire time (what the link models) stays continuous.
+    setSkew(v) { tb._epoch += v - skewNow; skewNow = v; },
     now: () => t,
   };
 }
@@ -73,6 +77,31 @@ test("clock offset is recovered across peers with unrelated clocks", () => {
   assert.ok(p.b.synced(), "B should have a clock sample");
   assert.ok(Math.abs(p.a.offset() - 10000) < 5, `A's offset should be ~+10000, got ${p.a.offset()}`);
   assert.ok(Math.abs(p.b.offset() + 10000) < 5, `B's offset should be ~-10000, got ${p.b.offset()}`);
+});
+
+test("a clock STEP on one peer is followed in seconds, not after the whole sample window (NP-3)", () => {
+  // B's monotonic clock loses 3 s (suspend with the RTC link surviving). Every
+  // new, correct sample has an equal-or-higher RTT than the pre-step best, so a
+  // count-window lowest-RTT pick kept the stale offset for ~19.65 s: the rival
+  // then lands 3 s in the (past|future) and is dropped / frozen.
+  const p = pair({ latency: 50, skew: 5000 });
+  p.advance(3000);
+  assert.ok(Math.abs(p.a.offset() - 5000) < 5, `precondition: synced at +5000, got ${p.a.offset()}`);
+  p.setSkew(2000);
+  let followedAt = -1;
+  const t0 = p.now();
+  for (let i = 0; i < 20000 && followedAt < 0; i += 50) {
+    p.advance(50);
+    if (Math.abs(p.a.offset() - 2000) < 20) followedAt = p.now() - t0;
+  }
+  assert.ok(followedAt >= 0 && followedAt <= 2000, `offset must follow the step within 2 s, took ${followedAt} ms`);
+  assert.ok(Math.abs(p.b.offset() + 2000) < 20, `B follows too, got ${p.b.offset()}`);
+});
+
+test("jitter spikes are NOT mistaken for a clock step", () => {
+  const p = pair({ latency: 50, jitter: 40, skew: 3000, seed: 7 });
+  p.advance(8000);
+  assert.ok(Math.abs(p.a.offset() - 3000) < 25, `offset holds under jitter, got ${p.a.offset()}`);
 });
 
 test("round-trip time is measured, and the one-way lag is half of it", () => {

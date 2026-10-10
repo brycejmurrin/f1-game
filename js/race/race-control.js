@@ -157,7 +157,9 @@ const RaceControl = (function () {
   // and a runner completes lap at its flag. With no finisher (the only human
   // retired) the leader on the road is the reference. Sets c.classified for
   // every car (SeasonCal.award, career settlement, the sheet's NC); the
-  // unclassified — runners and retirements alike — follow by distance.
+  // unclassified — runners, retirements and flagged finishers a lap or more
+  // short alike (a finisher missing from `order` had finPos 0) — follow by
+  // laps, then distance.
   function classify(cars, fin, run, out) {
     const lapsAt = (c) => (c.lap || 0) + (c.finished ? 0 : 1);
     const done = (c) => (c.retired ? (c.lap || 0) - 1 : lapsAt(c) - 1);
@@ -167,7 +169,8 @@ const RaceControl = (function () {
     for (const c of cars) c.classified = !c.dsq && (winDone > 0 ? done(c) >= cut : !c.retired);
     const all = fin.concat(run, out);
     return all.filter((c) => c.classified).sort((a, b) => lapsAt(b) - lapsAt(a))
-      .concat(run.concat(out).filter((c) => !c.classified && !c.dsq).sort((a, b) => (b.prog || 0) - (a.prog || 0)));
+      .concat(fin.concat(run, out).filter((c) => !c.classified && !c.dsq)
+        .sort((a, b) => (lapsAt(b) - lapsAt(a)) || ((b.prog || 0) - (a.prog || 0))));
   }
 
   // A RACE THAT NEVER SAW THE FLAG (the only human retired, or the time cap):

@@ -65,6 +65,25 @@ test("a wait with NO declared timeout is not flagged — it is honest", () => {
   assert.deepEqual(sites, []);
 });
 
+test("under tests/specs an option-less wait IS flagged (rAF-starved on a rendering page)", () => {
+  // albert-park-foundation.spec.js (the track-ready gate) sat 160 s on CI inside a wait that declared nothing.
+  const src = `await page.waitForFunction(() => window.x === 1);`;
+  const spec = lintSource(src, "tests/specs/smoke.spec.js").sites;
+  assert.equal(spec.length, 1);
+  assert.equal(spec[0].kind, "no-options");
+  assert.deepEqual(lintSource(`await page.waitForFunction(() => window.x === 1, null, { polling: 100 });`,
+    "tests/specs/smoke.spec.js").sites, []);
+  assert.deepEqual(lintSource(src, "tools/check/vstd-lint.mjs").sites, [], "outside tests/specs the option-less wait stays honest");
+  // The one documented exemption: a menu page with no game loop.
+  assert.deepEqual(lintSource(src, "tests/specs/data-lifecycle.spec.js").sites, []);
+});
+
+test("no spec under tests/specs carries an option-less waitForFunction", () => {
+  const bad = lintAll().filter((r) => r.file.startsWith("tests/specs/"))
+    .flatMap((r) => r.sites.filter((x) => x.kind === "no-options").map((x) => `${r.file}:${x.line}`));
+  assert.deepEqual(bad, [], "add `null, { polling: 100 }` — the four foundation/time-trial sites were the proof");
+});
+
 test("waitForSelector and locator.waitFor are NOT exposed to this", () => {
   // They are driven by the DOM mutation observer rather than by rAF, so their
   // timeouts fire normally. Flagging them would be noise, and a lint with

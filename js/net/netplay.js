@@ -13,6 +13,11 @@ const NetPlay = (function () {
   // race session itself tolerates RACE_GRACE_MS of silence before the car is
   // the AI's for good. A transport that CLOSES still ends the peer at once.
   const STALE_MS = 2000;
+  // The host relays a human rival's pose only while its newest packet is this
+  // fresh. Past it the pose is sample()'s 250 ms-capped extrapolation of a car
+  // that has stopped talking, and stamping that "now" (presentedAt keeps
+  // advancing) made every guest's predict() run a parked car at full speed.
+  const RELAY_FRESH_MS = 500;
   const RACE_GRACE_MS = 25000;
 
   const EV = {
@@ -164,8 +169,22 @@ const NetPlay = (function () {
   // caller's sender binding — the lobby keys it on the HELLO profile filed
   // under the connection, NetPlay on the remote car it seated — because the
   // two phases hold different truths about who a connection speaks for.
-  function bindQuali(s, ownsDriver, G, onAccepted) {
+  // PER-CONNECTION RATE LIMIT, one rolling window per kind: the host relays every
+  // accepted entry to all other guests, so an unlimited sender is an amplifier.
+  // A legitimate peer sends a QLIVE every 400 ms and one QUALI per driven lap.
+  const QUALI_RATE = 5, QUALI_WINDOW_MS = 1000;
+  function bindQuali(s, ownsDriver, G, onAccepted, clock) {
+    const nowMs = clock || (() => performance.now());
+    const quTimes = [], qlTimes = [];
+    const underRate = (times) => {
+      const now = nowMs();
+      while (times.length && now - times[0] > QUALI_WINDOW_MS) times.shift();
+      if (times.length >= QUALI_RATE) return false;
+      times.push(now);
+      return true;
+    };
     s.onEvent(EV.QUALI, (d) => {
+      if (!underRate(quTimes)) return;
       const q = validQuali(d);
       if (q && ownsDriver(q)) {
         if (G.onPeerQuali) G.onPeerQuali(q);
@@ -173,6 +192,7 @@ const NetPlay = (function () {
       }
     });
     s.onEvent(EV.QLIVE, (d) => {
+      if (!underRate(qlTimes)) return;
       const q = validQualiLive(d);
       if (q && ownsDriver(q)) {
         if (G.onPeerQualiLive) G.onPeerQualiLive(q);
@@ -631,7 +651,10 @@ const NetPlay = (function () {
           // on the grid forever with no lamps and no way out. The __apex twin
           // (js/agent/apex.js netStartArm) already defaults it; the wire needs
           // the same, plus a range — a hostile 1e9 hold is the same hang.
-          if (name === EV.START && d && d.at != null && !ownsRaceControl()) {
+          // ONE START per race: once the countdown has consumed it (startSeen,
+          // netStart null) a duplicate — the host answers every late ARMED with
+          // the named moment — must not re-arm a past instant.
+          if (name === EV.START && d && d.at != null && !ownsRaceControl() && !(startSeen && !G.netStart)) {
             const h = Number(d.hold);
             armStart(d.at, Number.isFinite(h) ? Math.min(2, Math.max(0, h)) : 0.5);
           }
@@ -1231,6 +1254,7 @@ const NetPlay = (function () {
           if (sessions.size > 1) for (const r of remotes.values()) {
             const id = G.wireId(r.car), at = r.interp.presentedAt ? r.interp.presentedAt() : now;
             if (r.stale || id < 0 || !Number.isFinite(at)) continue;   // nothing posed yet: nothing to relay
+            if (r.heardAt != null && now - r.heardAt > RELAY_FRESH_MS) continue;   // silent: not a frozen pose with a fresh stamp
             _relay.push({ id, car: r.car, at });
           }
           if (withAi) for (const c of G.cars || []) {

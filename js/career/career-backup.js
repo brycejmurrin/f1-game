@@ -227,6 +227,11 @@ const CareerBackup = (function () {
     if (raw.badges != null && !isObj(raw.badges)) return { ok: false, reason: "badges-not-object" };
     if (raw.daily != null && !isObj(raw.daily)) return { ok: false, reason: "daily-not-object" };
     if (raw.records != null && !isObj(raw.records)) return { ok: false, reason: "records-not-object" };
+    for (const k of EXTRA_KEYS) {
+      if (raw[k] == null) continue;
+      const c = cleanExtra(k, raw[k]);
+      if (!c.ok) return { ok: false, reason: c.reason };
+    }
     // Malformed VALUES inside myTeam are dropped per key at apply, not fatal.
     if (raw.myTeam != null && !isObj(raw.myTeam)) return { ok: false, reason: "myteam-not-object" };
     // Ghosts must never ride along — refuse a file that smuggles them in.
@@ -234,6 +239,153 @@ const CareerBackup = (function () {
       return { ok: false, reason: "ghosts-forbidden" };
     }
     return { ok: true, envelope: raw };
+  }
+
+  // THE OPTIONAL EXTRAS ARE UNTRUSTED. validate() only proved they were objects, and
+  // apply() wrote them to storage as given: a 4 MB `junk` key rode a legal file into
+  // the 5 MB quota, and `season` came back through SeasonCal.resume(), which keeps
+  // every key it does not know. Each extra now goes through an allowlist cleaner
+  // that rebuilds it from the fields its reader uses, bounded in size, and a payload
+  // that is oversized or carries an own `__proto__` key is refused outright.
+  const EXTRA_MAX = 256 * 1024;      // serialised bytes, per extra (the file cap is 5 MB for ALL of it)
+  const EXTRA_KEYS = Object.freeze(["season", "badges", "daily", "records"]);
+  const DAY_RE = /^\d{4}-\d\d-\d\d$/;
+  const ID_RE = /^[A-Za-z0-9_.:-]{1,48}$/;
+  function own(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+  function hostile() { const e = new Error("hostile"); e.hostile = true; return e; }
+  // Every object the cleaners walk goes through here: an own "__proto__" (what
+  // JSON.parse makes of that key) is the signature of a prototype-pollution attempt.
+  function plain(o) {
+    if (!isObj(o)) return null;
+    if (own(o, "__proto__")) throw hostile();
+    return o;
+  }
+  function num(v, lo, hi) { return typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi ? v : null; }
+  function idMap(raw, max, take) {
+    const out = {};
+    const src = plain(raw);
+    if (!src) return out;
+    let n = 0;
+    for (const id of Object.keys(src)) {
+      if (n >= max) break;
+      if (!ID_RE.test(id)) continue;
+      const v = take(src[id]);
+      if (v === undefined) continue;
+      out[id] = v;
+      n++;
+    }
+    return out;
+  }
+  function numArr(raw, max) {
+    if (!Array.isArray(raw)) return undefined;
+    const out = [];
+    for (let i = 0; i < Math.min(raw.length, max); i++) out.push(num(raw[i], 0, 1e6) || 0);
+    return out;
+  }
+  function cleanSeasonConfig(raw) {
+    const c = plain(raw);
+    if (!c) return undefined;
+    const ids = (a) => (Array.isArray(a) ? a.filter((id, i) => typeof id === "string" && ID_RE.test(id) && a.indexOf(id) === i).slice(0, 64) : []);
+    return {
+      trackIds: ids(c.trackIds),
+      quali: c.quali !== false,
+      sprint: c.sprint === true ? true : c.sprint === "rounds" ? "rounds" : false,
+      sprintIds: ids(c.sprintIds),
+      laps: num(c.laps, 1, 200) | 0 || 3,
+      points: c.points === "classic" ? "classic" : "modern",
+      flPoint: c.flPoint === true,
+      drop: num(c.drop, 0, 5) | 0,
+    };
+  }
+  function cleanSeason(raw) {
+    const r = plain(raw);
+    const out = {
+      round: Number.isInteger(r.round) && r.round >= 0 && r.round <= 200 ? r.round : 0,
+      pts: idMap(r.pts, 120, (v) => { const n = num(v, 0, 1e6); return n == null ? undefined : n; }),
+      teamPts: idMap(r.teamPts, 40, (v) => { const n = num(v, 0, 1e6); return n == null ? undefined : n; }),
+      driverCodes: idMap(r.driverCodes, 120, (v) => (typeof v === "string" ? v.slice(0, 12) : undefined)),
+      finishes: idMap(r.finishes, 120, (v) => numArr(v, 30)),
+      roundPts: idMap(r.roundPts, 120, (v) => numArr(v, 64)),
+    };
+    const cfg = cleanSeasonConfig(r.config);
+    if (cfg) out.config = cfg;
+    if (r.stage === "race") out.stage = "race";
+    if (typeof r.lastFl === "string" && ID_RE.test(r.lastFl)) out.lastFl = r.lastFl;
+    if (Number.isInteger(r.seed) && r.seed > 0 && r.seed <= 0xFFFFFFFF) out.seed = r.seed;
+    return out;
+  }
+  function cleanBadges(raw) {
+    const r = plain(raw);
+    return { v: 1, got: idMap(r.got, 200, (v) => { const n = num(v, 1, 8.64e15); return n == null ? undefined : n; }) };
+  }
+  function cleanBest(v) { const n = num(v, 0, 1e6); return n && n > 0 ? n : null; }
+  function cleanDayEntry(raw, nested) {
+    const e = plain(raw);
+    if (!e) return undefined;
+    const out = {};
+    if (own(e, "best")) out.best = cleanBest(e.best);
+    if (own(e, "laps")) out.laps = num(e.laps, 0, 1e6) | 0;
+    if (!nested && isObj(e.classes)) {
+      out.classes = idMap(e.classes, 8, (v) => cleanDayEntry(v, true));
+    }
+    return out;
+  }
+  function cleanDaily(raw) {
+    const r = plain(raw);
+    const out = {};
+    if (isObj(r.days)) {
+      const src = plain(r.days);
+      const days = {};
+      // The newest 120 days: the reader keeps a window and never asks for more.
+      for (const day of Object.keys(src).filter((k) => DAY_RE.test(k)).sort().slice(-120)) {
+        const e = cleanDayEntry(src[day], false);
+        if (e) days[day] = e;
+      }
+      out.days = days;
+    }
+    const st = isObj(r.streak) ? plain(r.streak) : null;
+    if (st && Number.isInteger(st.count) && st.count >= 0 && st.count <= 1e5 && typeof st.last === "string" && DAY_RE.test(st.last)) {
+      out.streak = { count: st.count, last: st.last };
+    }
+    return out;
+  }
+  // The records book has no schema yet (a pass-through key): plain data only,
+  // bounded in depth, width and string length.
+  function cleanPlain(v, depth) {
+    if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+    if (typeof v === "boolean") return v;
+    if (typeof v === "string") return v.slice(0, 64);
+    if (depth >= 4) return undefined;
+    if (Array.isArray(v)) {
+      return v.slice(0, 64).map((x) => cleanPlain(x, depth + 1)).filter((x) => x !== undefined);
+    }
+    if (!isObj(v)) return undefined;
+    plain(v);
+    const out = {};
+    let n = 0;
+    for (const k of Object.keys(v)) {
+      if (n >= 128) break;
+      if (k.length > 40) continue;
+      const c = cleanPlain(v[k], depth + 1);
+      if (c === undefined) continue;
+      out[k] = c;
+      n++;
+    }
+    return out;
+  }
+  const CLEANERS = { season: cleanSeason, badges: cleanBadges, daily: cleanDaily, records: (r) => cleanPlain(plain(r), 0) };
+  // { ok, value } or { ok:false, reason }. Oversized is judged on the INCOMING
+  // payload (the junk key is what costs the quota), and again on what is kept.
+  function cleanExtra(name, raw) {
+    try {
+      if (JSON.stringify(raw).length > EXTRA_MAX) return { ok: false, reason: name + "-too-large" };
+      const value = CLEANERS[name](raw);
+      if (JSON.stringify(value).length > EXTRA_MAX) return { ok: false, reason: name + "-too-large" };
+      return { ok: true, value: value };
+    } catch (e) {
+      if (e && e.hostile) return { ok: false, reason: name + "-hostile" };
+      return { ok: false, reason: name + "-invalid" };
+    }
   }
 
   function revisionOf(f, i) {
@@ -447,23 +599,24 @@ const CareerBackup = (function () {
       if (!selectionWritten) failed++;
     }
     const identity = [];
+    let seasonWritten = false;
     // The second mode confirmation must not replay already-restored global progress.
     // MY TEAM identity still accompanies its slot on that confirmation.
     const progressExtras = o.includeExtras !== false && o.includeProgressExtras !== false;
     if (s && typeof s.write === "function") {
-      if (envelope.season != null && isObj(envelope.season) && progressExtras
-          && !seasonAhead(s.get("season", null), envelope.season)) {
-        s.write("season", envelope.season);
+      // validate() proved every extra cleans; what is written is the cleaned copy.
+      const extra = (k) => (envelope[k] != null && isObj(envelope[k]) && progressExtras ? cleanExtra(k, envelope[k]).value : null);
+      const season = extra("season");
+      if (season && !seasonAhead(s.get("season", null), season)) {
+        s.write("season", season);
+        seasonWritten = true;
       }
-      if (envelope.badges != null && isObj(envelope.badges) && progressExtras) {
-        s.write("badges", mergeBadges(s.get("badges", null), envelope.badges));
-      }
-      if (envelope.daily != null && isObj(envelope.daily) && progressExtras) {
-        s.write("daily.v1", mergeDaily(s.get("daily.v1", null), envelope.daily));
-      }
-      if (envelope.records != null && isObj(envelope.records) && progressExtras) {
-        s.write("records", mergeRecords(s.get("records", null), envelope.records));
-      }
+      const badges = extra("badges");
+      if (badges) s.write("badges", mergeBadges(s.get("badges", null), badges));
+      const daily = extra("daily");
+      if (daily) s.write("daily.v1", mergeDaily(s.get("daily.v1", null), daily));
+      const records = extra("records");
+      if (records) s.write("records", mergeRecords(s.get("records", null), records));
       // Identity only with a MY TEAM slot actually written; a key the backup
       // lacks (or carries malformed) leaves the local value alone.
       if (isObj(envelope.myTeam) && o.includeExtras !== false
@@ -486,6 +639,12 @@ const CareerBackup = (function () {
     }
 
     if (typeof Career !== "undefined" && Career && Career.load) Career.load({ persist: false });
+    // The write above bumped the season key's revision under SeasonCal's armed one,
+    // so its next save() read as a conflict and the title kept showing the old
+    // championship until something re-entered SEASON. Re-arm it from the store.
+    if (seasonWritten && typeof SeasonCal !== "undefined" && SeasonCal && SeasonCal.load) {
+      try { SeasonCal.load(); } catch (e) { log("warn", "career backup: SeasonCal.load failed: " + ((e && e.message) || e)); }
+    }
     log("info", "career backup imported " + written.length + " slot(s)");
     return {
       ok: true,

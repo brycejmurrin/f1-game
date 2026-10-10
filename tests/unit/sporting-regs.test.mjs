@@ -194,6 +194,20 @@ test("game.js hands the pass watch its stricken-car predicate", () => {
   assert.match(def, /vTop\(\) \* 0\.05/, "a car all but stopped on track may be passed");
 });
 
+test("a passed car that then pits or takes the flag drops the standing debt: no penalty", () => {
+  for (const [label, hit] of [["pits", (o) => { o.pitState = "enter"; }], ["finishes", (o) => { o.finished = true; }]]) {
+    const w = R.createPassWatch(5), f = field(1);
+    w.tick(f.p, f.all, 3, DT);
+    f.p.prog = 115;                               // past r0 under the SC
+    assert.equal(w.tick(f.p, f.all, 3, DT).type, "warn", label);
+    run(w, f, 3, 1);
+    hit(f.rivals[0]);                             // the give-back is now impossible
+    const evs = run(w, f, 3, 10);
+    assert.ok(!evs.some((x) => x.type === "penalty"), `${label}: ${JSON.stringify(evs)}`);
+    assert.equal(w.info().owed, 0, label);
+  }
+});
+
 test("the player in the pit lane, or already flagged, gains nothing it must give back", () => {
   const w = R.createPassWatch(5), f = field(1);
   w.tick(f.p, f.all, 3, DT);

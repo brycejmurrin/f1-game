@@ -822,3 +822,20 @@ test("settleLineStep with no or one entry never sorts, and the comparator is not
   const body = src.slice(src.indexOf("function settleLineStep"), src.indexOf("function endLineStep"));
   assert.ok(!/=>/.test(body), "settleLineStep must not allocate an arrow comparator per call");
 });
+
+test("classify(): a flagged finisher below 90 % of the winner's laps stays in the order, ahead of slower unclassified cars", () => {
+  const RC = load(null);
+  const mk = (id, lap, prog, o = {}) => Object.assign({ id, lap, prog }, o);
+  const win = mk("W", 11, 11000, { finished: true });
+  const nc = mk("NC", 8, 8000, { finished: true });      // 7 done of 10: below the floor of 9
+  const nc2 = mk("NC2", 8, 7500, { finished: true });
+  const run = mk("R", 4, 4000);
+  const out = mk("O", 3, 3000, { retired: true });
+  const cars = [win, nc, nc2, run, out];
+  const order = RC.classify(cars, [win, nc, nc2], [run], [out]);
+  assert.equal(order.length, cars.length, "no car vanishes from the classification");
+  assert.equal(order[0], win);
+  assert.equal(nc.classified, false);
+  assert.deepEqual(order.map((c) => c.id), ["W", "NC", "NC2", "R", "O"],
+    "unclassified follow by laps (flagged finishers first), then distance");
+});

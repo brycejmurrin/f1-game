@@ -189,19 +189,25 @@ function paintHudDelta(player, timeTrial) {
   // jumped sideways. With no number yet the box keeps its place, invisible
   // (data-pending -> visibility: hidden, css/hud.css).
   hHidden(box, false);
-  const ghostT = ref ? ref.timeAt(player.s) : null;
+  // S4: before the first line crossing lapTime is the run-up clock (about 5.5 s
+  // of it on a flying start), not the lap the ghost was recorded on.
+  const ghostT = ref && (!ghost || (player.lap | 0) >= 1) ? ref.timeAt(player.s) : null;
   if (ghostT == null || !(player.lapTime >= 0)) {
     hData(box, "pending", "");
     return;
   }
   hData(box, "pending", null);
   const delta = player.lapTime - ghostT;
-  const sign = delta >= 0 ? "+" : "";
-  hText(n, sign + delta.toFixed(3));
+  hText(n, signedFixed(delta));
   hData(box, "sign", delta <= 0 ? "fast" : "slow");
   // Practice / TT: the gaps strip already says GHOST — keep DELTA as the
   // glanceable centre-top number. Race: same chip, quieter label stays DELTA.
   void timeTrial;
+}
+// The sign comes from the ROUNDED value: -0.0003 painted "-0.000" (R2-06).
+function signedFixed(v) {
+  const t = v.toFixed(3);
+  return +t === 0 ? "+0.000" : (v > 0 ? "+" : "") + t;
 }
 function buildSecRows() {
   // Sector labels carry no identity colour: .sec-lbl inherits the row's ink.
@@ -331,11 +337,11 @@ function gapForm() {
 // A LAP OR MORE IS LAPS, NOT SECONDS. distance ÷ the player's speed is a fair
 // stand-in for a few hundred metres; for a car a lap up it read "+76.2s" — a
 // number no timing screen would show, and one that moved with the player's
-// throttle. A whole lap apart spells "+1L" (HudReadouts.lapsApart), and the
+// throttle. A whole lap apart spells "+1L" / "-1L" (HudReadouts.lapsApart), and the
 // slot's EMA restarts so the seconds do not glide in from a lap's worth.
 function gapText(slot, gap, arrow, o, dist, vFloor) {
   const n = _ro && G.track ? _ro.lapsApart(dist, G.track.total) : 0;
-  if (n) { _gapWho[slot] = null; return _ro.lapGapText(arrow, o.code, n, gap === _gapFormShort); }
+  if (n) { _gapWho[slot] = null; return _ro.lapGapText(arrow, o.code, slot ? -n : n, gap === _gapFormShort); }
   return gap(arrow, o.code, gapSec(slot, o, dist / vFloor));
 }
 // Hoisted: gapForm runs every HUD tick — returning fresh arrows was 2 closures
@@ -344,7 +350,8 @@ const _gapFormShort = (arrow, code, t) => arrow + " " + t;
 // NO SIGN: the arrow IS the direction. A "+" on the AHEAD chip contradicted
 // RELATIVE (js/ui/hud-relative.js), where ahead is "-" — the same car read
 // "+1.2s" in one box and "-1.2" in the other. Whole laps keep RELATIVE's own
-// spelling ("+1L" = a lap up), so the two never disagree.
+// spelling (slot 0 "+nL" = a lap up, slot 1 "-nL" = a lap down), so the two
+// never disagree.
 const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + "s";
 
 // THE HUD FITS ITSELF TO THE VIEWPORT.
@@ -549,6 +556,21 @@ function announceLane(root) {
   }
   const annEl = typeof document !== "undefined" ? document.getElementById("announce") : null;
   if (annEl && annEl.toggleAttribute) annEl.toggleAttribute("data-lane-collapsed", !!collapsed);
+}
+// PERF-2: updateHud re-clips the lane at ~10 Hz, and each pass reads ~6 layout
+// rects + a computed style after the tick's text writes. Memo on the same
+// layout-free facts the fit key reads (viewport, body classes, the fit key, every
+// clipper's hidden flag, the gap strings' length) with fitHud's 3 s backstop.
+let _laneKey = "", _laneWait = 0;
+function announceLaneTick(root, force) {
+  let k = window.innerWidth + "x" + window.innerHeight + "|" + _fitKey + "|" + document.body.className + "|"
+    + (els.hudSectors && els.hudSectors.hidden ? "s" : "S") + (els.minimap && els.minimap.hidden ? "m" : "M")
+    + (els.gapA ? (els.gapA.textContent || "").length : 0) + "." + (els.gapB ? (els.gapB.textContent || "").length : 0);
+  for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) k += g.hidden ? "h" : "v";
+  // A forced refresh (jump / camera / probes) re-clips: it measures on the same tick.
+  if (!force && k === _laneKey && --_laneWait > 0) return;
+  _laneKey = k; _laneWait = 30;
+  announceLane(root);
 }
 function radioTopSlot(root, bcast) {
   const t = !bcast && _hudTop ? _hudTop.getBoundingClientRect() : null;
@@ -1398,6 +1420,7 @@ function fitHud() {
       void annPaint.offsetHeight;
     }
   }
+  _laneKey = "";   // the guarantee above may have rewritten the lane: re-clip once next tick
   mirrorClear(root);
   if (els.minimap) void els.minimap.offsetHeight;
 }
@@ -1765,11 +1788,10 @@ function updateHud(force, dtMs) {
     // no field rivals — show the shared rival (or personal best) delta
     const ghost = replayGhost();
     if (GhostShare.hasGuest() || Ghost.hasGhost()) {
-      const ghostT = ghost.timeAt(player.s);
+      const ghostT = (player.lap | 0) >= 1 ? ghost.timeAt(player.s) : null;   // S4: not off the run-up clock
       if (ghostT !== null) {
         const delta = player.lapTime - ghostT;
-        const sign = delta >= 0 ? "+" : "";
-        hText(els.gapA, (GhostShare.hasGuest() ? "RIVAL GHOST " : "GHOST ") + sign + delta.toFixed(3) + "s");
+        hText(els.gapA, (GhostShare.hasGuest() ? "RIVAL GHOST " : "GHOST ") + signedFixed(delta) + "s");
         hStyle(els.gapA, "color", delta <= 0 ? "var(--faster)" : "var(--slower)");
       } else {
         hText(els.gapA, player.lastLap ? "LAST " + G.fmtTime(player.lastLap) : "");
@@ -1815,7 +1837,7 @@ function updateHud(force, dtMs) {
   // hText writes the live gap, so the card that hud-layout.spec.js measures
   // on the SAME tick (jump → wait --hud-top-h → probe, no 10 Hz wait) sat on
   // .hud-gaps on notched-landscape tilt/touch. Re-clip from the box as painted.
-  announceLane(document.documentElement);
+  announceLaneTick(document.documentElement, force);
   paintHudDelta(player, timeTrial);
   if (typeof HudRelative !== "undefined") HudRelative.tick(G, player);   // opt-in RELATIVE box (js/ui/hud-relative.js)
   if (typeof HudStrategy !== "undefined") HudStrategy.tick(G, player);   // opt-in STRATEGY panel (js/ui/hud-strategy.js)
@@ -2107,7 +2129,7 @@ function drawMinimap() {
   }
   // ghost replay marker (time trial): shared rival first, otherwise your PB
   const ghost = replayGhost();
-  if (timeTrial && (GhostShare.hasGuest() || Ghost.hasGhost())) {
+  if (timeTrial && (player.lap | 0) >= 1 && (GhostShare.hasGuest() || Ghost.hasGhost())) {   // S4
     const gh = ghost.at(player.lapTime);
     if (gh) {
       const gp = at(gh.s);   // a persisted ghost is stored input: never trust its s

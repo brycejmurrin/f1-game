@@ -484,7 +484,7 @@ const _garageCtx = {
 let _winsCacheN = -1, _winsCacheV = 0;
 function garageCtx(asSetup = false) {
   const c = Career.inCareer() ? Career.data() : null, h = home.active && !asSetup;
-  const t = c ? Tracks.SEASON[c.season.round % Tracks.SEASON.length]
+  const t = c ? (Career.calendar ? Career.calendar() : Tracks.SEASON)[c.season.round % (Career.calendar ? Career.calendar() : Tracks.SEASON).length]
           : (G.seasonMode && G.season) ? SeasonCal.track(G.season.round) : Tracks.LIST[G.trackIdx];
   const ctx = _garageCtx;
   ctx.track = t;

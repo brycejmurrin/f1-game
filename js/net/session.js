@@ -26,6 +26,13 @@ const NetSession = (function () {
     // offset STEPPED by up to ~15 ms, a metre of rival at speed, ~20 times a
     // minute on a jittery link. 40 is 20 s — clocks drift microseconds in that.
     clockSamples: 40,
+    // A sample older than this stops competing: a lowest-RTT pick on COUNT alone
+    // kept a stale offset for the whole 20 s window after the peer's monotonic
+    // clock stepped (OS suspend), measured 19.65 s to follow a 3 s step.
+    clockMaxAgeMs: 10000,
+    // This many consecutive fresh samples all disagreeing with the best by more
+    // than their combined RTT is a clock STEP, not jitter: restart from them.
+    clockStepRun: 3,
   };
 
   function encodePing(id, t0) {
@@ -89,15 +96,25 @@ const NetSession = (function () {
     let heldState = null;
 
     const MAX_PLAUSIBLE_RTT_MS = 4000;
-    function addSample(rtt, offset) {
+    let stepRun = [];                  // fresh samples that disagree with `best`
+    function addSample(rtt, offset, now) {
       // Both halves are wire-derived. rtt was guarded from the start; offset
       // was not, and it is the one that converts every peer timestamp into
       // local time — a single NaN-bearing PONG becomes `best.offset` and
       // poisons the conversion for the whole session.
       if (!(rtt >= 0) || rtt > MAX_PLAUSIBLE_RTT_MS) return;
       if (!Number.isFinite(offset)) return;
-      samples.push({ rtt, offset });
+      const sample = { rtt, offset, at: now };
+      // An offset error is bounded by half of each exchange's round trip, so a
+      // disagreement past both RTTs (+ slack) cannot be queuing noise.
+      if (best && Math.abs(offset - best.offset) > rtt + best.rtt + 50) {
+        if (stepRun.length && Math.abs(offset - stepRun[0].offset) > rtt + stepRun[0].rtt + 50) stepRun = [];
+        stepRun.push(sample);
+        if (stepRun.length >= cfg.clockStepRun) { samples = []; stepRun.forEach((x) => samples.push(x)); stepRun = []; }
+      } else stepRun = [];
+      if (!samples.includes(sample)) samples.push(sample);
       if (samples.length > cfg.clockSamples) samples.shift();
+      if (Number.isFinite(now)) samples = samples.filter((x) => !(now - x.at > cfg.clockMaxAgeMs));
       // Lowest RTT wins: it is the exchange least distorted by queuing.
       best = samples.reduce((a, b) => (a && a.rtt <= b.rtt ? a : b), null);
     }
@@ -137,7 +154,7 @@ const NetSession = (function () {
         const hold = Number.isFinite(t2raw) && t2raw >= t1 ? Math.min(t2raw - t1, MAX_PLAUSIBLE_RTT_MS) : 0;
         const t2 = t1 + hold;
         const roundTrip = now - t0 - hold;
-        addSample(roundTrip, ((t1 - t0) + (t2 - now)) / 2);   // hold 0: t1 − (t0 + rtt/2), as before
+        addSample(roundTrip, ((t1 - t0) + (t2 - now)) / 2, now);   // hold 0: t1 − (t0 + rtt/2), as before
         if (synced() && heldState) {
           const held = heldState;
           heldState = null;
@@ -219,6 +236,14 @@ const NetSession = (function () {
       const hidden = typeof document !== "undefined" && !!document.hidden;
       if (!hidden && gap > cfg.stallForgiveMs && lastHeardAt != null) lastHeardAt += gap;
       if (!hidden && gap > cfg.stallForgiveMs && firstPumpAt != null) firstPumpAt += gap;
+      // Our OWN clock went backwards (a suspend that stopped it): re-base the
+      // stamps taken on it, or the next ping waits out the lost time and the
+      // peer is not heard to be silent for that much longer.
+      if (gap < 0) {
+        lastPingAt = -Infinity;
+        if (lastHeardAt != null) lastHeardAt += gap;
+        if (firstPumpAt != null) firstPumpAt += gap;
+      }
       lastNow = now;
       if (firstPumpAt == null && transport.status !== "connecting") firstPumpAt = now;
       if (transport.pump) transport.pump(now);

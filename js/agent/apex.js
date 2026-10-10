@@ -1,4 +1,4 @@
-/* Apex 26 — the window.__apex dev/test API for js/game.js (~180 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… */
+/* Apex 26 — the window.__apex dev/test API for js/game.js (~220 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… */
 const ApexApi = (function () {
   "use strict";
 
@@ -166,29 +166,13 @@ function simCareerRound() {
   grid.sort((a, b) => a.key - b.key);
   const order = grid.map((g) => g.car);
 
-  // The championship award, exactly as endRace() does it — settleRound() reads
-  // the standings it leaves behind, so a shortcut here would settle against a
-  // season that never happened. settleRound() persists itself; do NOT save
-  // beforehand or a crash mid-settle leaves a half-written championship on disk.
-  order.forEach((car, i) => {
-    const pts = car.retired ? 0 : (Teams.POINTS[i] || 0);   // a DNF scores nothing
-    car.finPos = i + 1;
-    season.pts[car.driverId] = (season.pts[car.driverId] || 0) + pts;
-    season.driverCodes[car.driverId] = car.code;
-    season.teamPts[car.team.id] = (season.teamPts[car.team.id] || 0) + pts;
-    // AND THE COUNTBACK HISTOGRAM. Career.driverStandings() ranks through
-    // SeasonCal.rank, whose tie-break reads season.finishes; with it empty a
-    // points tie falls through to a STRING compare on driver id, so a season
-    // closed out through careerSim could crown a different champion than the
-    // same season raced.
-    if (!car.retired) {
-      const f = season.finishes || (season.finishes = {});
-      const row = f[car.driverId] || (f[car.driverId] = []);
-      row[i] = (row[i] || 0) + 1;
-    }
-  });
-  season.round++;
-  const settled = Career.settleRound(order, G.player);
+  // The championship award, exactly as endRace() does it: Career.scoreRound stages
+  // SeasonCal.award on a detached copy (pay table, classification, countback),
+  // settles the economy, and rolls the whole career back if the save is
+  // refused — so a conflicted slot can never advance the calendar without a
+  // results row. It persists itself; do NOT save beforehand.
+  order.forEach((car, i) => { car.finPos = i + 1; });
+  const settled = Career.scoreRound(order, G.player, null, null);
   if (!settled) return null;
   return Object.assign({ round: round + 1, podium: order.slice(0, 3).map((c) => c.code) }, settled);
 }
@@ -695,6 +679,9 @@ const api = {
   // light when `lamp: "none"` started being honoured and the masts went away.
   nodeAt(frac, opts) {
     if (!G.track) return null;
+    if (!Number.isFinite(+frac) || frac === null || frac === "") {
+      return { ok: false, error: "bad_argument", message: "nodeAt(frac) needs a finite fraction of the lap (0-1)", fix: "pass e.g. nodeAt(0.45)" };
+    }
     const raw = ((Math.round(frac * G.track.n) % G.track.n) + G.track.n) % G.track.n;
     const k = opts && opts.scenery && typeof TrackSpace !== "undefined" && TrackSpace
       ? TrackSpace.sceneryNode(G.track.def, raw, G.track.n)
@@ -1437,6 +1424,9 @@ const api = {
     G.seasonMode = false;
     G.timeTrial = false;
     G.raceLaps = (opts && opts.laps > 0) ? (opts.laps | 0) : GAME_LAPS;
+    // End the previous session's weather arc FIRST: startRace's restoreBase() puts a live MIXED
+    // race's chip weather back over whatever is set below (every in-game exit does this).
+    if (G.endWeatherSession) G.endWeatherSession();
     G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog") ? weather : "dry";
     G.raceTimeOfDay = timeOfDay || "default";
     if (opts && opts.grid != null) G.raceGrid = opts.grid;   // the game's setter validates the name
@@ -1459,6 +1449,7 @@ const api = {
     G.seasonMode = false;
     G.timeTrial = true;
     G.raceLaps = TT_LAPS;
+    if (G.endWeatherSession) G.endWeatherSession();   // see race(): restoreBase would undo the weather below
     G.raceWeather = "dry";
     G.raceTimeOfDay = timeOfDay || "default";
     return settled(startRace(), { track: Tracks.LIST[i].id, timeTrial: true });
@@ -2082,7 +2073,7 @@ const api = {
   obs() {
     if (!G.player || G.player.px == null || !G.track) return null;
     Tracks.sample(G.track, G.player.s, smp);
-    const axFrac = Math.min(1, Math.abs(G.player.axEstSm ?? 0) / (LONG_GRIP * gripMult()));
+    const axFrac = G.player.axFrac ?? Math.min(1, Math.abs(G.player.axEstSm ?? 0) / (LONG_GRIP * gripMult()));   // the stored value first, exactly as physState() reads it
     const slipFactor = Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
     const slip = Math.atan2(G.player.vLat || 0, Math.max(1, G.player.speed));
     const kNow = Tracks.curvature(G.track, G.player.s);
@@ -2192,6 +2183,9 @@ const api = {
 
   act(input, dt, n) {
     if (!G.track || !G.player) return null;
+    // TT / quali: the AI drives a 3 s run-up and ignores `input` until it hands over; an agent steps
+    // for the wheel, so end it now (go() does the same), in the countdown or already rolling.
+    if (G.flyingStart && G.flyingStart.active()) G.flyingStart.stop();
     // auto-enter race state so physics advances even if called during countdown
     if (G.state === "count") {
       G.state = "race"; G.raceT = 0;
@@ -2868,6 +2862,7 @@ const api = {
     // failure every episode of one seed — a car retired in episode 1 is not
     // still parked in episode 2, and a planned failure recurs deterministically.
     if (G.session === "race") G.armReliability(G.cars);
+    if (G.flyingStart) G.flyingStart.stop();   // an armed TT / quali run-up must not outlive the episode reset
     G.state = "race"; G.raceT = 0;
     resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade

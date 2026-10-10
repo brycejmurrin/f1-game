@@ -249,6 +249,32 @@ const ALLOWED = [
     // literal would have meant a second approval for the same physics.
     why: "standstill test — a standing start must begin from rest, which carries no PACE term",
   },
+  // ── named absolute constants (the UPPER_SNAKE form of the same rule) ──
+  {
+    file: "js/game.js", expr: "c.speed > REVERSE_MAX",
+    code: "const axEstTarget = braking ? (c.speed > 0 ? -brakeDecel : (c.speed > REVERSE_MAX ? -REVERSE_ACCEL * surfaceMu : 0))",
+    why: "the reverse-crawl limit: REVERSE_MAX is a flat -5 m/s, deliberately not PACE-scaled",
+  },
+  {
+    file: "js/game.js", expr: "c.speed < GRASS_V",
+    code: "function beachedAt(c) { return c.offroad && c.speed < GRASS_V * 0.6 * Math.max(PACE, 0.05) + 1.5 * Math.max(PACE, 0.05); }",
+    why: "already PACE-scaled by hand (the A5 repair): GRASS_V is a pace-1 number and the bound multiplies it by max(PACE, 0.05) to clear the pace-scaled grass-drag floor",
+  },
+  {
+    file: "js/physics/debris-world.js", expr: "(m.speed || 0) < MARBLE_MIN_SPEED",
+    code: "if ((m.speed || 0) < MARBLE_MIN_SPEED) return;",
+    why: "a debris MARBLE's own ground speed (8 m/s, 'no marbles when crawling') — world-space emission, not a car-envelope fraction",
+  },
+  {
+    file: "js/physics/wall-clamp.js", expr: "Math.abs(c.speed) >= WALL_SCRAPE_SPEED",
+    code: "const grindScrape = c.wasOnWall && Math.abs(c.speed) >= WALL_SCRAPE_SPEED;",
+    why: "standstill floor (2 m/s) — a car stopped against the barrier stays quiet at every pace",
+  },
+  {
+    file: "js/race/real-replay.js", expr: "run.speed <= SPOKEN_RATE_MAX",
+    code: "if (rr && rr.replayEvent && rr.commentates && rr.commentates() && run.speed <= SPOKEN_RATE_MAX) {",
+    why: "not a car speed at all: run.speed is the replay playback RATE (1x, 2x), above which the commentator cannot keep up",
+  },
 ];
 
 // ── open findings ─────────────────────────────────────────────────────────────
@@ -296,9 +322,22 @@ test("sees through Math.abs / a || 0 default / a wrapping paren", () => {
   assert.deepEqual(scan("if (ds < -0.03 &&\n    c.speed >\n    15) f();"), ["c.speed > 15"]);
 });
 
-test("does not flag a named constant, a division, or a shift", () => {
-  assert.deepEqual(scan("if (c.speed > OT_MIN_SPEED) f();"), []);
-  assert.deepEqual(scan("if (c.speed > X_MIN_SPEED) f();"), []);
+test("flags a raw speed against an UPPER_SNAKE constant — the A13 shape with the number hidden behind a name", () => {
+  // `vStd(c.speed) > OT_MIN_SPEED` was fine; the same line WITHOUT vStd compares a raw
+  // ground speed to a pace-5-scale number and used to pass because only digits matched.
+  assert.deepEqual(scan("if (c.speed > OT_MIN_SPEED) f();"), ["c.speed > OT_MIN_SPEED"]);
+  assert.deepEqual(scan("c.xArmed = !braking && c.speed > X_MIN_SPEED;"), ["c.speed > X_MIN_SPEED"]);
+  assert.deepEqual(scan("if (Math.abs(c.speed) >= GRASS_V) f();"), ["Math.abs(c.speed) >= GRASS_V"]);
+  assert.deepEqual(scan("if (OT_MIN_SPEED < c.speed) f();"), ["OT_MIN_SPEED < c.speed"]);
+  // ...and the wrapped forms stay clean.
+  assert.deepEqual(scan("if (vStd(c.speed) > OT_MIN_SPEED) f();"), []);
+  assert.deepEqual(scan("if (vStd(c.speed) > X_MIN_SPEED) f();"), []);
+});
+
+test("does not flag a division, a shift, a lowercase identifier or a single-word constant", () => {
+  assert.deepEqual(scan("if (c.speed > limit) f();"), []);
+  assert.deepEqual(scan("if (c.speed > MAX) f();"), []);
+  assert.deepEqual(scan("if (c.speed > OT_MIN_SPEED.value) f();"), []);
   assert.deepEqual(scan("const spN = clamp(c.speed / vTop(), 0, 1);"), []);
   assert.deepEqual(scan("const n = c.speed >> 2;"), []);
   assert.deepEqual(scan("const f = (c) => c.speed;"), []);

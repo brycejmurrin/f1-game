@@ -1313,6 +1313,7 @@ const WGX = (function () {
         MAX_DRAWS, DRAW_STRIDE, DRAW_F32_STRIDE, CHUNK_IDX_CAP, LAMP_MASK_ALL,
         VERTEX_FLOATS, VERTEX_STRIDE,
         toF32, createMesh,
+        freeBuf: _freeBuf,
         get mkBuffer() { return _mkBuffer; },
         get interleave() { return _interleave; },
         get expandPull() { return _expandPull; },
@@ -3159,13 +3160,23 @@ const WGX = (function () {
       }
     }
 
+    // Free a GPU buffer without ever pulling it out from under a recorded frame.
+    // While a main encoder or the pending shadow encoder is live, a draw/cast
+    // recorded earlier this frame may still reference it and the submit would
+    // be dropped whole; retire it (_retireFlush destroys after the submit),
+    // exactly as freeTexture does. Outside a frame there is no such reference.
+    function _freeBuf(b) {
+      if (!b) return;
+      if (encoder || (SHD && SHD.pendingEnc)) _retiredBufs.push(b);
+      else { try { b.destroy(); } catch (_) { /* already destroyed */ } }
+    }
     function freeMesh(m) {
       if (!m) return;
       // Road-LUT owner (createMesh road path): destroy the LUT sbuf and, if
       // the global bind group still points at it, clear that too — binding a
       // destroyed buffer is a per-draw validation error.
       if (m.lutSbuf) {
-        try { m.lutSbuf.destroy(); } catch (_) { /* already destroyed */ }
+        _freeBuf(m.lutSbuf);
         if (m.lutAttrBG && m.lutAttrBG === _roadLutBG) { _roadLutBG = null; _roadLutReady = false; }
         m.lutSbuf = null;
       }
@@ -3173,9 +3184,9 @@ const WGX = (function () {
         for (let i = 0; i < m.pieces.length; i++) freeMesh(m.pieces[i]);
         return;
       }
-      if (m.vbuf) m.vbuf.destroy();
-      if (m.sbuf) m.sbuf.destroy();
-      if (m.ibuf) m.ibuf.destroy();
+      _freeBuf(m.vbuf);
+      _freeBuf(m.sbuf);
+      _freeBuf(m.ibuf);
     }
     function freeTexture(t) {
       if (!t) return;
@@ -5073,8 +5084,8 @@ const WGX = (function () {
     }
     function freeInstancedBatch(batch) {
       if (!batch) return;
-      if (batch.instBuf && batch.instBuf !== identInstanceBuf) try { batch.instBuf.destroy(); } catch (_) { /* already destroyed */ }
-      if (batch.shadowInstBuf) { try { batch.shadowInstBuf.destroy(); } catch (_) { /* already destroyed */ } batch.shadowInstBuf = null; }
+      if (batch.instBuf && batch.instBuf !== identInstanceBuf) _freeBuf(batch.instBuf);
+      if (batch.shadowInstBuf) { _freeBuf(batch.shadowInstBuf); batch.shadowInstBuf = null; }
       batch._shadowPacked = null;
       freeMesh(batch);
     }
@@ -5462,6 +5473,19 @@ const WGX = (function () {
       let buf = null, src = null, reason = null;
       const scoped = typeof device.pushErrorScope === "function" &&
                      typeof device.popErrorScope === "function";
+      // The scope covers the SYNCHRONOUS recording + submit + mapAsync call only,
+      // and is popped (verdict promise taken) BEFORE the first await. This test is
+      // raced against PRESENT_TEST_MS and abandoned, not cancelled, so a scope held
+      // across `await mapAsync` stays on top of the device stack while the frames
+      // run: it would swallow their validation errors (uncapturederror never
+      // fires, the runtime _gpuErrors ladder goes deaf) and, if mapAsync never
+      // settles, never pop at all.
+      let gpuErrP = null;
+      const popScope = function () {
+        if (!scoped || gpuErrP) return;
+        gpuErrP = device.popErrorScope();
+        gpuErrP.catch(function () { /* awaited below; an abandoned test must not leak a rejection */ });
+      };
       if (scoped) device.pushErrorScope("validation");
       try {
         let tex;
@@ -5499,7 +5523,9 @@ const WGX = (function () {
           { buffer: buf, bytesPerRow: 256, rowsPerImage: 4 },
           [4, 4, 1]);
         device.queue.submit([enc.finish()]);
-        await buf.mapAsync(GPUMapMode.READ);
+        const mapP = buf.mapAsync(GPUMapMode.READ);
+        popScope();
+        await mapP;
         const px = new Uint8Array(buf.getMappedRange().slice(0, 4));
         buf.unmap();
         if (!(px[0] > 8 || px[1] > 8 || px[2] > 8)) reason = "swapchain smoke test rendered black";
@@ -5507,9 +5533,10 @@ const WGX = (function () {
         if (!(e && e._skip))
           reason = "swapchain smoke test threw: " + (((e && e.message) || String(e)).slice(0, 200));
       }
+      popScope();   // throw / skip paths that never reached the pop above
       let gpuErr = null;
-      if (scoped) {
-        gpuErr = await device.popErrorScope();
+      if (gpuErrP) {
+        gpuErr = await gpuErrP;
         // Swapchain textures often lack COPY_SRC — readback is best-effort only.
       }
       try { if (buf) buf.destroy(); } catch (_) { /* smoke-test temps already invalid */ }

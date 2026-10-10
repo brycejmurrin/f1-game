@@ -158,7 +158,7 @@ function create(G) {
     if (s.used) {
       const who = s.flavour === "myteam" ? s.teamName : `${s.code} · ${s.teamName}`;
       open.append(
-        el("span", "cr-slot-who", who.toUpperCase()),
+        el("span", "cr-slot-who", String(who).toUpperCase()),   // a team:null slot has no name
         el("span", "cr-slot-meta",
           `${s.year} · round ${Math.min(s.round + 1, s.rounds)} of ${s.rounds}`
           + ` · ${s.money.toLocaleString()} cr`),
@@ -389,7 +389,7 @@ function create(G) {
       + "the best car on the grid.",
     ]));
     out.push(guideSection("POINTS AND THE SEASON", [
-      ["Rounds in a season", String(Tracks.SEASON.length)],
+      ["Rounds in a season", String(Career.roundsTotal ? Career.roundsTotal() : Tracks.SEASON.length)],
       [`Points, P1 down to P${Teams.POINTS.length}`, Teams.POINTS.join(" · ")],
       "Two championships run at once: the DRIVERS', which is you, and the "
       + "CONSTRUCTORS', which is both of your team's cars added together.",
@@ -870,7 +870,7 @@ function create(G) {
     const team = teamById(c.team);
     $("cr-title").textContent = `CAREER ${c.year}`;
     $("cr-sub").textContent = `${c.flavour === "myteam" ? "TEAM PRINCIPAL" : c.driver.code}`
-      + ` · ${team ? team.name.toUpperCase() : c.team.toUpperCase()}`;
+      + ` · ${team ? team.name.toUpperCase() : String(c.team == null ? "" : c.team).toUpperCase()}`;
     if (team) $("cr-sub").style.color = G.cssCol(team.color2 || team.color);
 
     if (Career.conflicted()) {
@@ -895,7 +895,8 @@ function create(G) {
     const midSeason = !st.hire && !st.offers && !Career.seasonDone();
     if (midSeason) {
       left.appendChild(head("NEXT RACE"));
-      const t = Tracks.SEASON[c.season.round];
+      const cal = Career.calendar ? Career.calendar() : Tracks.SEASON;
+      const t = cal[c.season.round];
       const nr = typeof CareerExperience !== "undefined" ? CareerExperience.raceBrief(G, c, st, team)
         : el("div", "cr-card cr-nextrace");
       nr.id = "cr-nextrace";
@@ -1176,8 +1177,9 @@ function create(G) {
         "Close out the year to see where you finished."));
     } else {
       const upcoming = [];
-      for (let i = c.season.round + 1; i < Math.min(c.season.round + 5, Tracks.SEASON.length); i++)
-        upcoming.push({ n: i + 1, t: Tracks.SEASON[i] });
+      const cal = Career.calendar ? Career.calendar() : Tracks.SEASON;
+      for (let i = c.season.round + 1; i < Math.min(c.season.round + 5, cal.length); i++)
+        upcoming.push({ n: i + 1, t: cal[i] });
       if (upcoming.length) {
         right.appendChild(head("UPCOMING"));
         for (const u of upcoming) {

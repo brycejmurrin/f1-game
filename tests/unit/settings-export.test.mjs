@@ -657,11 +657,20 @@ test("M26: an enum pill that names an Object.prototype member is dropped, not st
   assert.deepEqual(kept[0].stripe, [1, 1, 1], "its colours are untouched");
 });
 
-test("M26: a team keeps at most 32 liveries", () => {
-  const list = Array.from({ length: 33 }, (_, i) => sound("custom_" + i));
+test("M26: the 32-livery cap is gone — the garage has none, the file-size gate is the bound", () => {
+  const list = Array.from({ length: 500 }, (_, i) => sound("custom_" + i));
   const kept = garageLiveries(boot(), list);
-  assert.equal(kept.length, 32);
-  assert.equal(kept.some((l) => l.id === "custom_32"), false, "the 33rd is dropped");
+  assert.equal(kept.length, 500, "33+ liveries survive");
+  assert.equal(kept[499].id, "custom_499");
+});
+
+test("a garage file reports the livery rows it could not keep, never drops them quietly", () => {
+  const b = boot();
+  const list = [sound("a"), { id: "bad", c1: [1, 0], c2: [0, 0, 1] }, sound("b"), null, sound("c")];
+  const r = b.loadGarage({ format: "apex26-garage-v1", garage: { "livery.custom.mclaren": list } });
+  assert.equal(r.droppedLiveries, 2);
+  assert.equal(JSON.parse(b.disk.get("apex26.livery.custom.mclaren")).length, 3);
+  assert.equal(b.loadGarage({ format: "apex26-garage-v1", garage: { "livery.custom.mclaren": [sound("a")] } }).droppedLiveries, undefined, "a clean file adds no field");
 });
 
 test("M26: a livery id longer than 64 characters is dropped", () => {
@@ -1067,4 +1076,52 @@ test("BUILD IN BACKGROUND: a pause > SETTINGS row on the key the build worker re
   assert.match(client, /else document\.addEventListener\("DOMContentLoaded", initUI/, "wired after js/ui/setting-row.js has loaded");
   const reg = fs.readFileSync(path.join(root, "js/ui/settings-export.js"), "utf8");
   assert.match(reg, /\{ k: "buildWorker", lane: "raw", group: "display", def: "1",/, "exported and imported with the other settings, default ON");
+});
+
+// ── round 2: SEC2-2 (file caps), M6 (resMode default) ────────────────────────
+test("M6: the SPEC resMode default is UiScale.defaultResMode() when scale.js ships it", () => {
+  const stored = { "apex26.resMode": JSON.stringify("low") };
+  // A desktop UA whose primary pointer is coarse: the REAL default is LOW, isMobile says otherwise.
+  const withHook = boot({ mobile: false, disk: stored, globals: { UiScale: { defaultResMode: () => "low" } } });
+  assert.equal(withHook.collect("changes").changed.length, 0, "choosing the real default is not a change");
+  const without = boot({ mobile: false, disk: stored });
+  assert.equal(without.collect("changes").changed.length, 1, "no hook: today's isMobile expression");
+  const phoneHook = boot({ mobile: true, disk: { "apex26.resMode": JSON.stringify("auto") }, globals: { UiScale: { defaultResMode: () => "auto" } } });
+  assert.equal(phoneHook.collect("changes").changed.length, 0, "an Android phone with a fine pointer defaults to AUTO");
+});
+
+function pickerFile(b, button, file) {
+  button.click(); button.click();
+  const picker = b.dom.document.querySelector("input");
+  picker.files = [file]; picker.onchange();
+}
+
+test("SEC2-2: LOAD SETTINGS / CAREER FILE refuse an oversized file before reading it", async () => {
+  const b = bootImportUI({ career: true, globals: { CareerBackup: { MAX_BYTES: 5 * 1024 * 1024, revisionOf: () => 0 } } });
+  const row = b.SettingsExport.careerRow();
+  const careerBtn = row.children[1];
+  assert.equal(careerBtn.id, "cr-career-load");
+  let read = 0;
+  const big = (size) => ({ size, text: () => { read++; return Promise.resolve("{}"); } });
+  pickerFile(b, b.button, big(2 * 1024 * 1024));
+  assert.equal(read, 0, "settings: 2 MB is never read");
+  assert.match(b.button.textContent, /NOT A JSON FILE/);
+  pickerFile(b, careerBtn, big(5 * 1024 * 1024 + 1));
+  assert.equal(read, 0, "career: past CareerBackup.MAX_BYTES is never read");
+  assert.match(careerBtn.textContent, /NOT A JSON FILE/);
+  pickerFile(b, b.button, big(1000));
+  await new Promise(setImmediate);
+  assert.equal(read, 1, "a normal-sized file still reads");
+});
+
+test("SEC2-2: a career file with more than 16 bag keys is refused", () => {
+  const b = boot({ career: true });
+  const careers = {};
+  for (let i = 0; i < 17; i++) careers["junk" + i] = i;
+  const r = b.loadCareer({ format: "apex26-career-v1", careers });
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /too many/);
+  const ok = {};
+  for (let i = 0; i < 16; i++) ok["junk" + i] = i;
+  assert.equal(b.loadCareer({ format: "apex26-career-v1", careers: ok }).ok, true, "16 keys is within the cap (all skipped as non-career)");
 });

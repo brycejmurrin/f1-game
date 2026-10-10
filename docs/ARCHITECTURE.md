@@ -283,6 +283,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `daily-challenge.js` | `DailyChallenge` | tag | DAILY CHALLENGE: one time-trial plan per UTC day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a… |
 | `quali-net.js` | `QualiNet` | tag | FRIEND-RACE QUALIFYING: wait for every rival's lap before gridding up. |
 | `race-settings.js` | `RaceSettings` | tag | RACE SETTINGS sheet: lap ladder, weather, grid rule, GO/cancel. |
+| `car-fields.js` | `CarFields` | tag | CAR FIELDS: pre-declare the fields a car only gains once the frame loop is running. makeCars() (js/game.js) spawns a car with ~176 own fields. |
 | `reliability.js` | `Reliability` | LAZY_RACE_SESSION | RELIABILITY: whether a car reaches the flag at all. |
 | `damage.js` | `Damage` | LAZY_RACE_SESSION | DAMAGE: a per-car damage READOUT derived from the impacts the game already resolves (car-to-car contact through game.js collideFx, barrier strikes through… |
 | `duel.js` | `Duel` | LAZY_RACE_SESSION | DUEL: a practice race against ONE rival with his rating lifted. |
@@ -545,7 +546,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `agentview-raster.js` | `AgentRaster` | LAZY_AGENT | AgentRaster: the text rasterisers behind the agent view's ONE optional composition aid, render({what}). frame() renders the camera view as a depth-sor… |
 | `agentview.js` | `AgentView` | LAZY_AGENT | AgentView: the agent-facing JSON view of the running game. __apex is a dev console: ~180 flat hooks, each answering one narrow question, most of them … |
-| `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~180 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
+| `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~220 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
 
 **`js/circuits/`**
 

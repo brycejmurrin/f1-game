@@ -79,7 +79,7 @@ const installSceneryHook = ({ id, replace }) => {
 test("shared scenery kits are bound and Silverstone diagnostics stay finite", async ({ page }) => {
   await page.addInitScript(installSceneryHook, { id: "silverstone", replace: true });
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race);
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100 });
 
   await page.evaluate(() => {
     window.__sceneryKitContract = null;

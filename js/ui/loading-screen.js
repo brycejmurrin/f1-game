@@ -95,7 +95,7 @@ const LoadingScreen = (function () {
       const y = S.you, flag = (S.cautions || []).find((c) => c.now);
       const rows = [
         ["LAP", S.lap + " / " + S.realLaps],
-        [info.real.watch ? "FOLLOWING" : "RUNNING", y && y.running ? "P" + y.pos + (y.pos > 1 ? " · " + gapStr(y.gap) : "") : y ? "OUT" : "—"],
+        [info.real.watch ? "FOLLOWING" : "RUNNING", y && y.running ? "P" + y.pos + (y.pos > 1 && gapStr(y.gap) ? " · " + gapStr(y.gap) : "") : y ? "OUT" : "—"],
         ["TYRE", y && y.tyre ? (TYRE[y.tyre.compound] || y.tyre.compound.toUpperCase()) + " · " + y.tyre.age + (y.tyre.age === 1 ? " LAP" : " LAPS") : "—"],
         ["STOPS", y ? (y.stops && y.stops.length ? y.stops.length + " (L" + y.stops.join(", L") + ")" : "NONE") : "—"],
         ["LEADER", S.leader ? S.leader.code : "—"],

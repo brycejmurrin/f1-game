@@ -508,6 +508,10 @@ interface GameCtx {
    *  __apex.camState().lens; the object is reused every frame. */
   readonly lens: { near: number; far: number; fovY: number; fog: number | null; cull: number; cine: boolean };
   raceWeather: Weather;
+  /** Ends the live weather session (the arc owner's endSession): __apex.race()/tt()
+   *  call it before setting raceWeather so a MIXED race's chip never overrides the
+   *  requested weather. */
+  readonly endWeatherSession: () => void;
   sectorBests: [number, number, number];
   readonly fieldSectorBests: [number, number, number];
   sectorIdx: number;

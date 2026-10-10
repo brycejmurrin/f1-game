@@ -20,9 +20,11 @@ const BUDGET_MULT = [1.0, 1.15, 1.35, 1.6];
 const BUDGET_UPGRADE = [2500, 5000, 9000];   // cost to reach level 1 / 2 / 3
 
 // Team development is stat points converted to a pace multiplier here: ±8 points
-// is ±2%, a little over one TIER_V step (0.988 → 0.973 is 1.5%), so a team can
-// climb or fall a tier over a few seasons without `team.tier` ever changing
-// (it drives the grid sort, the mesh presets and the colours).
+// is ±2%. TIER_V was compressed on 2026-10-06 (#1112) to ~1.05% from tier 0 to
+// tier 4 (~0.26% a step), so a fully developed team gains about 7.7 tier steps —
+// twice the whole ladder — over a few seasons without `team.tier` ever changing
+// (it drives the grid sort, the mesh presets and the colours). The multiplier was
+// left at its pre-compression value on purpose: the number is a balance call.
 const TDEV_MAX = 8;
 const TDEV_TO_PACE = 0.0025;
 
@@ -167,7 +169,7 @@ if (store.subscribe) store.subscribe((change) => {
     careerConflict = true;
     return;
   }
-  career = change.clear ? null : readSlot(slotFlavour, slotIdx);
+  career = change.clear ? null : adoptCalendar(readSlot(slotFlavour, slotIdx));
   armRevision();
 });
 
@@ -186,6 +188,7 @@ function load(options) {
         const c = readSlot(f, i);
         if (c) { slotFlavour = f; slotIdx = i; career = c; setLive({ migration: true }); break outer; }
       }
+  adoptCalendar(career);
   armRevision();
   // migrateCareer() is pure (it must not write, or reading a slot would rewrite
   // the key it was migrated FROM), so persisting the climbed shape is this
@@ -242,8 +245,8 @@ function slotInfo(c, f, i) {
   return {
     flavour: f, i, used: true, year: c.year,
     live: f === slotFlavour && i === slotIdx,
-    round: c.season.round, rounds: Tracks.SEASON.length,
-    team: c.team, teamName: team ? team.name : c.team,
+    round: c.season.round, rounds: calendarOf(c).length,
+    team: c.team, teamName: team ? team.name : (c.team == null ? "" : String(c.team)),
     code: c.driver ? c.driver.code : "", name: c.driver ? c.driver.name : "",
     money: c.money, rep: c.rep,
     seasons: tally.seasons + 1,
@@ -276,7 +279,7 @@ function useSlot(flavour, i) {
   slotFlavour = f;
   slotIdx = n;
   setLive();
-  career = readSlot(f, n);
+  career = adoptCalendar(readSlot(f, n));
   armRevision();
   applyRegs();      // a different save can be a different era
   return career;
@@ -361,7 +364,7 @@ function start(opts) {
     driver: {
       name: (o.name || "Your Name").slice(0, 22),
       code: (o.code || "YOU").toUpperCase().slice(0, 3),
-      num: clamp(o.num | 0 || 99, 2, 99),
+      num: clamp(o.num | 0 || 99, 1, 99),
     },
     money: START_MONEY[flavour],
     rep: START_REP[flavour],
@@ -387,6 +390,7 @@ function start(opts) {
     career.roster = [rosterEntry(hired, 1)];
   }
   career.year0 = YEAR0;
+  stampCalendar(career.season);
   career.amb = ambIdx(o.amb);
   applyRegs();
   career.deal = newDeal(team, 1);
@@ -517,6 +521,9 @@ const GOAL_ORDER = GOAL_BASE.concat(["beatRival"]);
 // Own keys only: a persisted "constructor" / "__proto__" resolved to Object's
 // function and the first `.label(...)` threw.
 function goalKind(type) { return Object.hasOwn(GOAL_KINDS, type) ? GOAL_KINDS[type] : GOAL_KINDS.champPos; }
+// The kind NAME to store: an offer's type comes from a save (or an import), and a
+// hostile one ("constructor") must not be copied into the signed deal.
+function goalTypeOk(type) { return Object.hasOwn(GOAL_KINDS, type) ? type : "champPos"; }
 // Drawn from the career seed and the YEAR, so a career is not the same promise
 // five seasons running and a reload cannot reroll it.
 // A FOURTH KIND MUST NOT RE-PROMISE THE OTHER THREE. This was
@@ -574,6 +581,10 @@ function codeOfSeat(id) {
 // a backmarker is no promise and the championship leader is not a contract, it
 // is a wish. Your own garage is excluded — that is beatMate's job, and a
 // contract that quietly duplicated it would read as two goals and settle as one.
+// "Your own garage" is the garage the contract is FOR — the OFFERED team — and the
+// player is rated at that team's tier: a move offer used to name a rival from the
+// pool of the team being LEFT, then sign a different one (and often the new
+// team-mate) once career.team had moved.
 //
 // AMBITION MOVES THE RIVAL, not a threshold. champPos shifts its target position
 // by AMBITION.delta; here the same delta walks the ranked list, so ambitious
@@ -581,7 +592,9 @@ function codeOfSeat(id) {
 // One lever, no second balance number invented for this kind.
 function rivalSeatFor(team, amb) {
   if (!career) return "";
-  const pool = gridSeats().filter((s) => s.team.id !== career.team);
+  const forId = team && team.id ? team.id : career.team;
+  const tier = team && Number.isFinite(team.tier) ? team.tier : null;
+  const pool = gridSeats().filter((s) => s.team.id !== forId && !isPlayerSeat(s));
   if (!pool.length) return "";
   // overall(), not ratingOf(): ratingOf returns the five-axis OBJECT, so
   // comparing two of them is NaN and the sort silently keeps grid order. This is
@@ -590,7 +603,8 @@ function rivalSeatFor(team, amb) {
   const rate = (s) => DriverRatings.overall(ratingOf(s));
   pool.sort((a, b) => rate(b) - rate(a));
   const meSeat = gridSeats().find(isPlayerSeat);
-  const mine = meSeat ? rate(meSeat) : 0;
+  const mine = meSeat ? DriverRatings.overall(DriverRatings.get(
+    meSeat.driver.code, tier != null ? tier : meSeat.team.tier, career.dev[meSeat.id])) : 0;
   // Insertion point: how many of the pool are quicker than you.
   const at = pool.filter((s) => rate(s) > mine).length;
   const i = clamp(at + AMBITION[ambIdx(amb)].delta, 0, pool.length - 1);
@@ -615,8 +629,10 @@ function setAmbition(i) {
     // rollover() draws the offers BEFORE `career.year++`, so a re-stamp that
     // re-derived the kind read a different year than the draw did and turned a
     // beatMate seat into a champPos one between looking and signing.
-    if (t && o.goal) o.goal = { type: o.goal.type,
-                                value: goalKind(o.goal.type).value(t, career.amb) };
+    if (t && o.goal) {
+      const type = goalTypeOk(o.goal.type);
+      o.goal = { type, value: goalKind(type).value(t, career.amb) };
+    }
   }
   save();
   return career.amb;
@@ -893,7 +909,7 @@ function sponsorAt(round) {
   // The LAST window of a season is cut at the finale (rollover clears the
   // books): uncut it runs past it in ~78 % of seasons and can never pay.
   // A cut window asks — and pays — pro rata to the rounds it actually has.
-  const rounds = Tracks.SEASON ? Tracks.SEASON.length : 0;   // 0: no calendar known, leave the window whole
+  const rounds = calendarOf(career).length;   // 0: no calendar known, leave the window whole
   const window = rounds > 0 ? Math.max(1, Math.min(kind.window, rounds - start)) : kind.window;
   const part = window / kind.window;
   const full = kind.value(team);
@@ -1173,6 +1189,9 @@ function scoreRound(order, player, fastestId, run) {   // run: RaceControl.short
     lastSave = { ok: false, durable: false, reason: "conflict" };
     return null;
   }
+  // Rows are stamped with the round just RACED (season.round - 1 once award() has run), so a
+  // row AT the live round exists only in a corrupt save; a re-score of the finished round is
+  // refused by settleRound's own check, and a race-stage gate in endRace keeps it unreachable.
   if (career.results.some((row) => row.r === career.season.round)) return null;
   const original = JSON.parse(JSON.stringify(career));
   const seasonRef = career.season;
@@ -1395,7 +1414,9 @@ function renewHire(years) {
 function hireDriver(code, years) {
   if (!career || careerConflict || career.flavour !== "myteam") return false;
   const hire = career.roster && career.roster[0];
-  if (hire && hire.pending && hire.pending.kind === "left" && hire.code === code) return false;
+  // The sitting hire is renewHire()'s: re-signing here paid the base ask instead of
+  // the renewal figure and wiped their development.
+  if (hire && hire.code === code) return false;
   const agent = FREE_AGENTS.find((x) => x.code === code);
   if (!agent) return false;
   career.roster = [rosterEntry(agent, clamp(years | 0 || 1, 1, 3))];
@@ -1457,8 +1478,12 @@ function acceptOffer(i) {
   if (!team) return null;
   if (team.id !== career.team) {
     const oldId = seasonDriverId(career.team, career.seat);
+    // BEFORE career.team moves: seatDriver() answers "the player" for (career.team,
+    // career.seat), so after the move the old seat INDEX at the new team read as the
+    // player's placeholder rating and the wrong AI driver was displaced.
+    const seat = weakerSeat(team);
     career.team = team.id;
-    career.seat = weakerSeat(team);
+    career.seat = seat;
     // DEVELOPMENT FOLLOWS THE DRIVER (docs/CAREER.md), as swapSeats() does: it is
     // keyed by seat, and a move must not leave the player's growth in the old
     // seat for the AI who takes it — nor hand the player the displaced driver's.
@@ -1498,13 +1523,17 @@ function acceptOffer(i) {
   // Only the TARGET is recomputed, because a move re-seats you (weakerSeat
   // above) and expectedFinish() reads career.rep, so the offer's stored value
   // can be stale in a way its kind cannot.
-  const kind = o.goal && o.goal.type ? o.goal.type : "champPos";
+  const kind = goalTypeOk(o.goal && o.goal.type);
+  // A RIVAL IS A NAME, not a number: it was chosen against the OFFERED team at the
+  // draw and is printed on the button, so it is kept verbatim (the pool is not
+  // re-ranked from the seat the player now holds).
+  const keepValue = kind === "beatRival" && typeof o.goal.value === "string" && o.goal.value;
   career.deal = {
     team: team.id, seat: career.seat,
     years: o.years, left: o.years, salary: Number.isFinite(Number(o.salary)) ? Number(o.salary) : 0,
     bonusPt: bonusPtFor(team),
     ambition: amb,
-    goal: { type: kind, value: goalKind(kind).value(team, amb) },
+    goal: { type: kind, value: keepValue || goalKind(kind).value(team, amb) },
   };
   career.offers = [];
   save();
@@ -1555,7 +1584,7 @@ function rollover() {
     cPos: myTeam ? myTeam.pos : tStand.length, cPts: myTeam ? myTeam.pts : 0,
     champion: champ ? (career.season.driverCodes[champ.id] || codeOf(champ.id)) : "",
     wins: career.results.filter((r) => r.p === 1).length,
-    podiums: career.results.filter((r) => r.p <= 3).length,
+    podiums: career.results.filter((r) => r.p > 0 && r.p <= 3).length,
     // The season's race craft, rounded, or null for a year raced before it
     // existed. Read straight after this by rolloverDrivers, which develops the
     // player's craft axis from it; `career.results` is cleared further down.
@@ -1578,7 +1607,10 @@ function rollover() {
   rolloverTeams(tStand);
   rolloverMarket();
 
-  let mv = marketValue(dStand);
+  // The market value is read AFTER the goal's reputation moves below: it used to be
+  // snapshotted first, so a missed goal cost this winter's offers at once while a
+  // met one only paid out next year. `mvPenalty` is the miss's extra cut.
+  let mvPenalty = 0;
   // THE CONTRACT'S SEASON GOAL, RESOLVED. Met is worth reputation; missed costs
   // reputation AND market value, so next winter's offers come from further down
   // the offerBar() ladder the hub shows all season. No money either way:
@@ -1604,7 +1636,7 @@ function rollover() {
     // the picker happens to show now — career.amb is the pick for the NEXT deal.
     const A = AMBITION[ambitionOf(career.deal)];
     career.rep = clamp(career.rep + (met ? A.rep : -A.rep), 0, 100);
-    if (!met) mv = Math.max(0, mv - A.mv);
+    if (!met) mvPenalty = A.mv;
     // Transient, like career.moves: drawn once on the end-of-season sheet, absent
     // on an older save (the sheet skips the line), so no CAREER_V rung is owed.
     career.goalResult = { value: career.deal.goal.value, pos: entry.pos, met,
@@ -1614,6 +1646,7 @@ function rollover() {
   } else {
     career.goalResult = null;
   }
+  const mv = Math.max(0, marketValue(dStand) - mvPenalty);
   if (career.flavour !== "myteam" && career.deal && career.deal.left > 0) career.deal.left--;
   rolloverHire(dStand);
   // A CONTRACT THAT RUNS IS A CONTRACT: offers are drawn only in the winter the
@@ -1649,6 +1682,7 @@ function rollover() {
   s.roundPts = {}; delete s.lastFl;
   delete s.stage; delete s.sprintOrder; delete s.qualiOrder; delete s.qualiTrack; delete s.qualiMode;
   delete s.startedRound;   // markWeekendStarted's stamp: kept, it locked the same round's brief next year
+  stampCalendar(s);        // a new season adopts the calendar this build ships
   career.results = [];
   career.obj = null;
   career.objPick = null;
@@ -1658,17 +1692,89 @@ function rollover() {
            offers: career.offers, history: career.history, moves: career.moves };
 }
 
+// THE SEASON'S CALENDAR IS STAMPED, because the save holds only `season.round` (an
+// index) and Tracks.SEASON is whatever this build ships: a circuit added, a
+// `classic` flip or a reorder between two visits made the next race the wrong
+// circuit (one skipped, or the one just raced again) and moved the finale.
+// start() and rollover() stamp the ids; every reader below resolves them. The
+// standalone Season does the same with `config.trackIds` + resume()'s remap.
+function calIdsNow() {
+  const ids = (Tracks.SEASON || []).map((t) => t && t.id);
+  return ids.length && ids.every((id) => typeof id === "string") ? ids : null;   // null: a stub catalogue without ids
+}
+function stampCalendar(season) {
+  const ids = calIdsNow();
+  if (ids) season.calIds = ids; else delete season.calIds;
+}
+// The tracks this career's season is raced on, in order. Tracks.SEASON itself when
+// the save carries no stamp (or the stamp cannot be resolved), so nothing else moves.
+let calMemo = null;
+function calendarOf(c) {
+  const all = Tracks.SEASON || [];
+  const ids = c && c.season && c.season.calIds;
+  if (!Array.isArray(ids) || !ids.length) return all;
+  const list = Tracks.LIST || [];
+  if (calMemo && calMemo.ids === ids && calMemo.list === list && calMemo.n === list.length) return calMemo.cal;
+  const byId = new Map(list.map((t) => [t.id, t]));
+  const cal = ids.map((id) => byId.get(id)).filter(Boolean);
+  const out = cal.length === ids.length ? cal : all;
+  calMemo = { ids, list, n: list.length, cal: out };
+  return out;
+}
+const CAL_MAX = 64;
+// A loaded save's stamp, made safe to race. An unstamped (older) save adopts the
+// calendar now in force. A stamp naming a circuit this build no longer ships
+// shrinks, and `round` is read as "the circuits already raced that still exist",
+// exactly SeasonCal.resume's remap — with the per-round tallies riding along.
+function adoptCalendar(c) {
+  const s = c && c.season;
+  if (!s || typeof s !== "object") return c;
+  const ids = s.calIds;
+  if (!Array.isArray(ids) || !ids.length || ids.length > CAL_MAX ||
+      ids.some((id) => typeof id !== "string") || new Set(ids).size !== ids.length) {
+    stampCalendar(s);
+    return c;
+  }
+  const known = new Set((Tracks.LIST || []).map((t) => t && t.id));
+  if (!known.size || ids.every((id) => known.has(id))) return c;
+  const keep = ids.filter((id) => known.has(id));
+  if (!keep.length) { stampCalendar(s); return c; }
+  const done = Number.isInteger(s.round) ? Math.min(Math.max(s.round, 0), ids.length) : 0;
+  const to = [];                       // old round -> new round, or -1 (dropped)
+  let n = 0;
+  ids.forEach((id, i) => { to[i] = known.has(id) ? n++ : -1; });
+  s.round = ids.slice(0, done).filter((id) => known.has(id)).length;
+  s.calIds = keep;
+  if (s.roundPts && typeof s.roundPts === "object") {
+    for (const id of Object.keys(s.roundPts)) {
+      const row = [];
+      (Array.isArray(s.roundPts[id]) ? s.roundPts[id] : []).forEach((v, r) => { if (to[r] >= 0) row[to[r]] = v; });
+      s.roundPts[id] = row;
+    }
+  }
+  if (Array.isArray(c.results)) {
+    c.results = c.results.filter((r) => r && to[r.r] >= 0);
+    c.results.forEach((r) => { r.r = to[r.r]; });
+  }
+  c.objPick = null;                    // keyed by the old round
+  delete s.startedRound;
+  return c;
+}
+
 function round() { return career ? career.season.round : 0; }
-function roundsTotal() { return Tracks.SEASON.length; }
-function seasonDone() { return career ? career.season.round >= Tracks.SEASON.length : false; }
+function roundsTotal() { return calendarOf(career).length; }
+function seasonDone() { return career ? career.season.round >= calendarOf(career).length : false; }
+function calendar() { return calendarOf(career); }
 // LIST index of the round about to be raced. Once the calendar is exhausted
 // (`seasonDone`), clamp to the LAST valid round — callers (openCareer / #res-next
 // → scheduleFlybyTrack → loadTrack) must never see -1, which crashes on `def.night`.
 function trackIndex() {
-  const n = Tracks.SEASON.length;
+  const cal = calendarOf(career);
+  const n = cal.length;
   if (!n) return -1;
   const r = career ? career.season.round : 0;
-  return Tracks.seasonIndex(Math.min(Math.max(0, r), n - 1));
+  const i = Math.min(Math.max(0, r), n - 1);
+  return cal === Tracks.SEASON ? Tracks.seasonIndex(i) : Tracks.LIST.indexOf(cal[i]);
 }
 
 // A compact snapshot for the HUD, the hub header and __apex.careerState().
@@ -1677,7 +1783,7 @@ function state() {
   const team = teamOf(career.team);
   return {
     flavour: career.flavour, year: career.year,
-    round: career.season.round, rounds: Tracks.SEASON.length,
+    round: career.season.round, rounds: calendarOf(career).length,
     team: career.team, teamName: team ? team.name : career.team,
     money: career.money, rep: career.rep,
     budget: budget(), budgetLvl: career.budgetLvl,
@@ -1733,7 +1839,7 @@ return {
   objective, objectiveFor, objectiveLabel, prizeFor, settleRound, scoreRound, worksCost, budgetCap,
   OBJ_CHOICES, objectiveChoices, objectivePick, chooseObjective, objectiveLocked, markWeekendStarted,
   driverStandings, teamStandings, rollover, offers, acceptOffer, marketValue, offerBar,
-  round, roundsTotal, seasonDone, trackIndex, tallyOf,
+  round, roundsTotal, seasonDone, trackIndex, calendar, tallyOf,
 };
 })();
 Object.freeze(Career);

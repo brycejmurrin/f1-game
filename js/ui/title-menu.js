@@ -9,6 +9,7 @@ const TitleMenu = (function () {
     function refresh() {
       const btn = $("mb-career");
       const c = Career.data() || Career.load();
+      const cal = Career.calendar ? Career.calendar() : Tracks.SEASON;   // the stamped season, not whatever this build ships
       const used = Career.slots().filter((s) => s.used).length;
       if (btn) {
         const label = btn.querySelector(".mb-label");
@@ -19,8 +20,8 @@ const TitleMenu = (function () {
           else {
             const team = Teams.LIST.find((t) => t.id === c.team);
             const who = c.flavour === "myteam" ? "MY TEAM" : (c.driver ? c.driver.code : "YOU");
-            sub.textContent = who + " · " + (team ? team.name : c.team).toUpperCase()
-              + " · " + c.year + " R" + Math.min(c.season.round + 1, Tracks.SEASON.length)
+            sub.textContent = who + " · " + String(team ? team.name : c.team).toUpperCase()
+              + " · " + c.year + " R" + Math.min(c.season.round + 1, cal.length)
               + (used > 1 ? "  ·  " + used + " SAVED" : "");
           }
           btn.setAttribute("aria-label", "Career modes — " + sub.textContent);
@@ -31,8 +32,8 @@ const TitleMenu = (function () {
       if (cont && contSub) {
         cont.hidden = !c;
         if (c) {
-          const next = Tracks.SEASON[Math.min(c.season.round, Tracks.SEASON.length - 1)];
-          contSub.textContent = c.year + " · ROUND " + Math.min(c.season.round + 1, Tracks.SEASON.length)
+          const next = cal[Math.min(c.season.round, cal.length - 1)];
+          contSub.textContent = c.year + " · ROUND " + Math.min(c.season.round + 1, cal.length)
             + (next ? " · " + next.name : "");
           cont.setAttribute("aria-label", "Continue — " + contSub.textContent);   // starts with the visible "CONTINUE"
         }

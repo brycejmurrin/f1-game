@@ -2,7 +2,7 @@
 "use strict";
 
 const InputPadMenu = (function () {
-  function create({ btnDown, btnEdge, nowMs, getPadAxisMap, padRest = () => 0 }) {
+  function create({ btnDown, btnEdge, nowMs, getPadAxisMap, padRest = () => 0, padButtons = () => [], padBrand = () => "xbox" }) {
     const PAD_NAV_DEADZONE = 0.22; // menu sticks only — larger so a resting stick does not creep
 
     let padNavDir = null;           // held direction while a menu is open, or null
@@ -87,13 +87,30 @@ const InputPadMenu = (function () {
     }
 
     function padNavDirOf(pad) {
+      const axisMap = getPadAxisMap();
+      const std = pad.mapping == null || pad.mapping === "standard";
+      // Buttons 12-15 and axes 2/3 are the d-pad and the right stick ONLY on the
+      // W3C standard layout. A wheel, flight stick or generic pad (mapping "")
+      // numbers them as its maker pleased — a pedal resting at -1 on axis 1-3
+      // held "up" forever. Such a device navigates by the steering axis the
+      // player set up (left/right) and the paddles they bound (shift down/up).
+      if (!std) {
+        const sx = axisMap.steer;
+        const ax = pad.axes || [];
+        if (Number.isInteger(sx) && sx >= 0 && sx < ax.length) {
+          const x = ((ax[sx] || 0) * axisMap.steerInvert - padRest()) * axisMap.steerInvert;
+          if (Math.abs(x) >= PAD_NAV_DEADZONE) return x < 0 ? "left" : "right";
+        }
+        if ((padButtons("shiftDown") || []).some((b) => b != null && btnDown(pad, b))) return "up";
+        if ((padButtons("shiftUp") || []).some((b) => b != null && btnDown(pad, b))) return "down";
+        return null;
+      }
       if (btnDown(pad, 12)) return "up";
       if (btnDown(pad, 13)) return "down";
       if (btnDown(pad, 14)) return "left";
       if (btnDown(pad, 15)) return "right";
       // A wheel's pedals rest at -1: read as a stick they held a direction and
       // scrolled the menu on their own. The mapped pedal axes are not sticks.
-      const axisMap = getPadAxisMap();
       const ped = (i) => i === axisMap.throttle || i === axisMap.brake;
       const ax = (pad.axes || []).map((v, i) => (ped(i) ? 0 : v));
       // CALIBRATE STICK lets a worn pad rest anywhere up to ±0.5 on the steer
@@ -197,9 +214,12 @@ const InputPadMenu = (function () {
         padNavSeeded = false;
       }
       const dir = padNavDirOf(pad);
+      // Nintendo's confirm is the physical A, which the standard mapping numbers 1.
+      const nin = padBrand(pad) === "nintendo";
+      const okBtn = nin ? 1 : 0, backBtn = nin ? 0 : 1;
       if (!padNavSeeded) {
         padNavSeeded = true;
-        if (!dir && !btnEdge(pad, 0)) padSeedFocus();
+        if (!dir && !btnEdge(pad, okBtn)) padSeedFocus();
       }
       if (dir) {
         const now = nowMs();
@@ -216,10 +236,12 @@ const InputPadMenu = (function () {
       }
       if (btnEdge(pad, 6)) padDispatchKey("PageUp");
       if (btnEdge(pad, 7)) padDispatchKey("PageDown");
-      if (btnEdge(pad, 4)) padDispatchKey("ArrowLeft");
-      if (btnEdge(pad, 5)) padDispatchKey("ArrowRight");
-      if (btnEdge(pad, 0)) padActivate();
-      if (btnEdge(pad, 1)) padEscape();
+      if (pad.mapping == null || pad.mapping === "standard") {   // a wheel's 4/5 are its paddles: they navigate above
+        if (btnEdge(pad, 4)) padDispatchKey("ArrowLeft");
+        if (btnEdge(pad, 5)) padDispatchKey("ArrowRight");
+      }
+      if (btnEdge(pad, okBtn)) padActivate();
+      if (btnEdge(pad, backBtn)) padEscape();
     }
 
     function remoteNav(dir) {

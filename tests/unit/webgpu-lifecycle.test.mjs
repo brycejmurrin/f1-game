@@ -2476,7 +2476,7 @@ test("freeMesh owns the road-LUT storage buffer and clears the global bind group
   assert.match(WGX_SOURCE, /lutSbuf: lut && lut\.sbuf/, "createMesh attaches LUT ownership to the returned mesh");
 });
 
-test("freeChunkedMesh clears the road-LUT bind group its own sbuf.destroy() invalidates", () => {
+test("freeChunkedMesh clears the road-LUT bind group its own core.freeBuf(m.sbuf) invalidates", () => {
   // The chunked twin of the test above, and it was MISSED when that one landed.
   // createChunkedMesh's road path calls rememberRoadLut(lut) and then returns
   // `sbuf: lut.sbuf, attrBG: lut.attrBG` — so the chunked mesh OWNS the buffer
@@ -2491,7 +2491,9 @@ test("freeChunkedMesh clears the road-LUT bind group its own sbuf.destroy() inva
   // After the GLX-seam peel the clear goes through core.setRoadLutBG(null).
   const free = WGX_CHUNKED_SOURCE.match(/function freeChunkedMesh\(m\)[\s\S]*?\n    \}/);
   assert.ok(free, "freeChunkedMesh exists");
-  assert.match(free[0], /m\.sbuf\.destroy\(\)/, "it destroys the shared storage buffer");
+  // core.freeBuf destroys at once outside a frame and retires through
+  // _retiredBufs while an encoder is live (wgx-free-retire.test.mjs).
+  assert.match(free[0], /core\.freeBuf\(m\.sbuf\)/, "it frees the shared storage buffer");
   assert.match(free[0], /(?:_roadLutBG = null|setRoadLutBG\(null\))/,
     "and must drop the global bind group built over that buffer");
   assert.match(free[0], /(?:_roadLutReady = false|setRoadLutReady\(false\))/,
@@ -2499,11 +2501,11 @@ test("freeChunkedMesh clears the road-LUT bind group its own sbuf.destroy() inva
   // The clear must precede the destroy in source order for the same reason
   // freeMesh does it that way: nothing may observe the global between the two.
   // ORDER CHECKS RUN ON COMMENT-STRIPPED SOURCE. The comment above the clear
-  // names m.sbuf.destroy() in prose, so a raw indexOf finds the PROSE first and
+  // names the free in prose, so a raw indexOf finds the PROSE first and
   // reports the wrong order — this assertion failed that way on its first run.
   const body = free[0].replace(/^[ \t]*\/\/.*$/gm, "");
   const clearAt = Math.max(body.indexOf("_roadLutBG = null"), body.indexOf("setRoadLutBG(null)"));
-  assert.ok(clearAt >= 0 && clearAt < body.indexOf("m.sbuf.destroy()"),
+  assert.ok(clearAt >= 0 && clearAt < body.indexOf("core.freeBuf(m.sbuf)"),
     "clear the global before destroying the buffer it points at");
   assert.match(WGX_CHUNKED_SOURCE, /sbuf: lut\.sbuf, attrBG: lut\.attrBG/,
     "createChunkedMesh really does hand the LUT buffer to the mesh");

@@ -58,6 +58,18 @@ const hasKey = (obj, name) =>
     ((p.key.type === "Identifier" && p.key.name === name) ||
      (p.key.type === "Literal" && p.key.value === name)));
 
+// A wait with NO options object inherits both the test budget AND Playwright's
+// default polling: 'raf'. Honest about the bound, but on a RENDERING page the
+// rAF-starved predicate is only re-evaluated once per frame, so a gate that
+// should resolve in ~1 s took 160 s on CI (albert-park-foundation, 2026-10).
+// Under tests/specs every such wait must therefore say `null, { polling: 100 }`.
+// Exempt: specs whose page never runs the game loop (the predicate is a bare
+// `typeof Global` over injected scripts), listed with the reason.
+const OPTIONLESS_OK = new Map([
+  ["tests/specs/data-lifecycle.spec.js", "menu page with injected data scripts: no game loop, so raf polling is not starved"],
+]);
+const isSpec = (file) => /^tests\/specs\//.test(String(file).replace(/\\/g, "/"));
+
 export function lintSource(src, file = "<src>") {
   let ast;
   try {
@@ -86,10 +98,13 @@ export function lintSource(src, file = "<src>") {
     }
     const timeout = hasKey(opts, "timeout");
     const polling = hasKey(opts, "polling");
-    // A wait with NO declared timeout inherits the test budget and is honest
-    // about it. The defect is a declared bound that cannot fire.
+    // Outside tests/specs, a wait with NO declared timeout inherits the test budget
+    // and is honest about it; the defect there is a declared bound that cannot fire.
+    // Under tests/specs an option-less wait is flagged too (see OPTIONLESS_OK).
     if (timeout && !polling) {
       sites.push({ line: n.loc.start.line, method: n.callee.property.name, kind: "missing-polling" });
+    } else if (!opts && isSpec(file) && !OPTIONLESS_OK.has(String(file).replace(/\\/g, "/"))) {
+      sites.push({ line: n.loc.start.line, method: n.callee.property.name, kind: "no-options" });
     }
   });
   return { file, sites };
@@ -136,7 +151,7 @@ export function count(root = ROOT) {
 function main() {
   const rows = lintAll();
   const n = rows.reduce((a, r) => a + r.sites.length, 0);
-  console.log(`waitForFunction calls with misplaced options or timeout without polling: ${n}`);
+  console.log(`waitForFunction calls with misplaced options, timeout without polling, or (tests/specs) no options: ${n}`);
   for (const r of rows.sort((a, b) => b.sites.length - a.sites.length)) {
     if (r.parseError) { console.log(`  PARSE ${r.file}: ${r.parseError}`); continue; }
     console.log(`  ${String(r.sites.length).padStart(3)}  ${r.file}`);

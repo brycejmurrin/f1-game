@@ -200,3 +200,9 @@ test("preset chips are a balanced-row with a quarter-row basis (no REVERSE orpha
   assert.equal(decl(rules, "#ss-presets > .sel-chip", "max-width"), "calc(25% - var(--gap) * 0.75)",
     "long labels (2026 REAL) must not expand past a quarter-row");
 });
+
+// Moved from the deleted season-setup-chrome.test.mjs (its other four tests duplicated the ones above).
+test(".track-row:hover is gated on (hover: hover) and (pointer: fine)", () => {
+  const r = ruleFor(raceCss(), ".track-row:hover", "background");
+  assert.ok(r && r.context.some((c) => /hover:\s*hover/.test(c) && /pointer:\s*fine/.test(c)));
+});

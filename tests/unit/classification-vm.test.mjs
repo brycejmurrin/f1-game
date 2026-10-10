@@ -188,6 +188,38 @@ test("a car still RUNNING below 90 % of the winner's laps is not classified, and
   } finally { g4.close(); }
 });
 
+test("a finisher two laps down is still in `order` with a finPos, after every classified car", async () => {
+  // classify() dropped `fin` from the unclassified tail: a flagged car below 90 %
+  // of the winner's laps had finPos 0 (career pos 0 -> objectives "met"; a guest
+  // saw a verdict one short of the field). Bug hunt round 2 #1.
+  const g5 = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = g5.apex, G = g5.G;
+    a.headless(true);
+    await a.race("monza", "default", "dry", { laps: 10 });
+    a.go(); g5.step(60);
+    const L = G.track.total, P = G.player;
+    const ai = G.cars.filter((c) => !c.human);
+    const [B, C, D] = ai;
+    for (const c of ai.slice(3)) a.retire(G.cars.indexOf(c));
+    const place = (c, s, lap, v) => { c.lap = lap; c.s = s; c.prog = lap * L - (L - s); c.speed = v; c.x = 0; };
+    a.jump((L - 40) / L, 80, 0); P.lap = 10; P.prog = 10 * L - 40;   // the player wins: 10 laps
+    place(B, L - 100, 9, 75);                                          // a lap down, flags at its next crossing
+    place(C, L - 120, 7, 75);                                          // 8 at its flag: below the 9-lap floor
+    place(D, L - 3000, 9, 70);
+    a.setInput({ throttle: true, steer: 0 });
+    for (let i = 0; i < 60 * 40 && G.state === "race"; i++) g5.step(1);
+    assert.equal(G.state, "results");
+    assert.equal(C.finished, true, "the lapped car really took the flag");
+    assert.equal(C.classified, false);
+    assert.ok(C.finPos > 0, `finPos ${C.finPos}`);
+    // finPos is the index in endRace's `order` + 1: all places distinct and 1..N means order.length === cars.length.
+    assert.equal(new Set(G.cars.map((c) => c.finPos)).size, G.cars.length, "every car has its own place");
+    assert.ok(G.cars.every((c) => c.finPos > 0 && c.finPos <= G.cars.length), "no finPos 0");
+    for (const c of G.cars) if (c.classified) assert.ok(c.finPos < C.finPos, `classified ${c.driverId} P${c.finPos} ahead of NC P${C.finPos}`);
+  } finally { g5.close(); }
+});
+
 test("a championship round ended by the human's retirement pays the shortened-race scale, not the full table", async () => {
   // FIA SR Art. 6.5: the only human retiring ends the race (finishDelay), and
   // SeasonCal.award paid 25-18-15 from a lap-1 snapshot (bug hunt 2026-10-05 G1).

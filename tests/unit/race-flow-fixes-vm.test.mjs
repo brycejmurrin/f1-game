@@ -13,8 +13,8 @@
  *     peaked at ~0.7 s and decayed — a beached AI was never rescued. It now
  *     shares the player's beachedAt() test.
  *   - HUMAN DNF: the only human retiring ends the race 2.2 s later
- *     (RaceControl.finishDelay, by design); an AI whose reliability failure was
- *     already drawn used to be classified — and scored — from that snapshot.
+ *     (RaceControl.finishDelay, by design); an AI that had already PASSED its
+ *     drawn failure retires with it, one that never reached it stays a runner.
  *   - LIGHTS (review 2026-10-04): RECOVER or a shift tapped on the grid stayed
  *     latched and fired on the first green frame — a free re-place at rescue
  *     speed, or 2nd gear with no drive. Input.clearDriveEdges() at lights-out.
@@ -101,20 +101,23 @@ test("finishers coast home at the floor and never collide with each other", asyn
   } finally { g.close(); }
 });
 
-test("the only human retiring retires every AI whose failure was already drawn", async () => {
+test("the only human retiring retires only the AI it had already PASSED the failure point of", async () => {
   const g = await createGame({ track: "monza" });
   try {
     const G = g.G;
     g.apex.setInput({ throttle: true, steer: 0 });   // the player must cross the line for a distance-keyed DNF to fire
     g.step(60 * 5);
     const ai = G.cars.filter((c) => !c.human && !c.retired);
-    const doomed = ai[3];
-    doomed.dnfAt = 0.99; doomed.dnfWhy = "gearbox";   // drawn, but beyond where the race now stops
+    const unreached = ai[3], passed = ai[4];
+    unreached.dnfAt = 0.99; unreached.dnfWhy = "gearbox";   // drawn, but never reached: the race stops far short of it
+    passed.dnfAt = 0.00001; passed.dnfWhy = "hydraulics";   // already behind the car
     G.player.dnfAt = 0.0001; G.player.dnfWhy = "engine";
     for (let i = 0; i < 60 * 10 && G.state === "race"; i++) g.step(1);
     assert.equal(G.state, "results", "the race ends once its only human is out");
-    assert.equal(doomed.retired, true, "a drawn failure is met, not scored past");
-    assert.equal(doomed.dnf, "gearbox");
+    assert.equal(passed.retired, true, "a failure the car had passed is met, not scored past");
+    assert.equal(passed.dnf, "hydraulics");
+    assert.equal(unreached.retired, false, "a failure it never reached is not invented at the flag (round-2 rules #2)");
+    assert.equal(unreached.dnf, null);
   } finally { g.close(); }
 });
 

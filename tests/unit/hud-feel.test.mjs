@@ -1066,7 +1066,7 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
   h.tick();
   assert.equal(laneLeft(), "318.0px", "a wider gaps chip re-clips the lane on the same HUD tick");
   const src = read("js/ui/hud.js");
-  assert.ok(src.indexOf("announceLane(document.documentElement)") > src.indexOf("hText(els.gapA"),
+  assert.ok(src.indexOf("announceLaneTick(document.documentElement, force)") > src.indexOf("hText(els.gapA"),
     "announceLane runs after this tick's gap strings, not only inside fitHud");
   for (const g of [...h.dom.byId("dock-left").children, ...h.dom.byId("dock-right").children]) g._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
   h.refit();

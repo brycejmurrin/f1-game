@@ -35,6 +35,9 @@ test("lapsApart / lapGapText: a lap or more is laps", () => {
   assert.equal(R.lapsApart(6000, 0), 0);
   assert.equal(R.lapGapText("▲", "BEA", 1, false), "▲ BEA +1L");
   assert.equal(R.lapGapText("▼", "BEA", 2, true), "▼ +2L");
+  // SIGNED (R2-07): a car a lap DOWN spells "-nL", exactly as HudRelative.lapText does.
+  assert.equal(R.lapGapText("▼", "BEA", -1, false), "▼ BEA -1L");
+  assert.equal(R.lapGapText("▼", "BEA", -3, true), "▼ -3L");
 });
 
 test("energy: MJ of the 4 MJ store, deploy/harvest as glyph and words", () => {
@@ -146,7 +149,7 @@ test("source: display-only — no Tracks / curvature / racing line, no car write
 });
 
 // ── hud.js wiring, on the mini-dom harness (the hud-feel shape) ──────────────
-function boot() {
+function boot(opts = {}) {
   const dom = makeDom();
   const rawCreate = dom.document.createElement;
   dom.document.createElement = (tag) => { const el = rawCreate(tag); if (String(tag).toLowerCase() === "canvas") el.getContext = () => new Proxy({}, { get: () => () => {}, set: () => true }); return el; };
@@ -162,6 +165,7 @@ function boot() {
     TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"] },
     setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout: () => {},
     performance: { now: () => 1000 },
+    ...(opts.sandbox || {}),
   };
   sb.window = sb;
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: "js/ui/live-region.js" });
@@ -177,7 +181,7 @@ function boot() {
     flag: $("hud-flag"), minimap: $("minimap"), gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
     announceLive: $("announce-live"),
   };
-  els.minimap.getContext = () => new Proxy({}, { get: () => () => {}, set: () => true });
+  els.minimap.getContext = () => opts.mm || new Proxy({}, { get: () => () => {}, set: () => true });
   const mk = (o) => ({ team: { id: "t1", color: [1, 0, 0] }, lap: 1, lapTime: 12, best: Infinity, speed: 50, energy: 0.5, gear: 3, rpm: 5000,
     otT: 0, otE: 0, aeroX: 0, s: 10, prog: 10, retired: false, ...o });
   const player = mk({ code: "YOU", rank: 2, brakeBias: 0.565 });
@@ -411,4 +415,79 @@ test("hud.js: resetRace clears the chips' carried state — team bar, tow, pit w
   assert.equal(els.gapA.dataset.tow, undefined);
   assert.equal(els.gapA.dataset.pit, undefined);
   assert.equal(els.gapA.style.color || "", "", "and no time-trial ghost tint survives into a race");
+});
+
+// ── round 2 (B6): R2-06 signed deltas, R2-07 lap-down spelling, S4 run-up clock, PERF-2 lane memo ──
+test("R2-07: the chip behind a car a lap DOWN says -1L, REL's own spelling for it", () => {
+  const { els, rival, player, G, tick } = boot();
+  const rel = { Math, Number, Object, Array, Infinity, isFinite };
+  vm.runInNewContext(src("js/ui/hud-relative.js") + "; this.HudRelative = HudRelative;", rel, { filename: "js/ui/hud-relative.js" });
+  const back = { ...player, code: "BEA", rank: 3, prog: player.prog - 1300, s: 0 };
+  G.cars = [rival, player, back]; G.ranked = [rival, player, back];
+  tick();
+  assert.equal(els.gapA.textContent, "▲ BEA +1L", "a car a lap up (slot 0)");
+  assert.equal(els.gapB.textContent, "▼ BEA -1L", "a car a lap down (slot 1)");
+  assert.equal(els.gapB.textContent.split(" ").pop(), rel.HudRelative.lapText(-1), "chip and REL agree for a lap down");
+  assert.equal(els.gapA.textContent.split(" ").pop(), rel.HudRelative.lapText(1), "and for a lap up");
+});
+
+test("R2-06: a delta that ROUNDS to zero never paints -0.000", () => {
+  for (const [off, want] of [[0.0003, "+0.000"], [-0.0003, "+0.000"], [0, "+0.000"], [0.0006, "-0.001"], [-0.0006, "+0.001"], [0.5, "-0.500"]]) {
+    const { $, player, sb, tick } = boot();
+    sb.Ghost.hasGhost = () => true;
+    sb.Ghost.timeAt = () => player.lapTime + off;   // ghost AHEAD by `off`: delta = -off
+    tick();
+    assert.equal($("hud-delta-n").textContent, want, "delta " + (-off));
+  }
+});
+
+test("R2-06: the TT ghost chip takes its sign from the rounded value too", () => {
+  for (const [d, want] of [[-0.0003, "GHOST +0.000s"], [0.0003, "GHOST +0.000s"], [-0.25, "GHOST -0.250s"], [0.25, "GHOST +0.250s"]]) {
+    const { els, player, G, sb, tick } = boot();
+    G.timeTrial = true; G.cars = [player]; G.ranked = [player];
+    sb.Ghost.hasGhost = () => true;
+    sb.Ghost.timeAt = () => player.lapTime - d;
+    tick();
+    assert.equal(els.gapA.textContent, want, "delta " + d);
+  }
+});
+
+test("S4: before the first line crossing the ghost chip, delta and minimap dot do not run off the run-up clock", () => {
+  const arcs = [];
+  const mm = new Proxy({}, { get: (_, k) => (...a) => { if (k === "arc") arcs.push(a[2]); }, set: () => true });
+  const { $, els, player, G, sb, tick } = boot({ mm });
+  G.timeTrial = true; G.cars = [player]; G.ranked = [player];
+  sb.Ghost.hasGhost = () => true;
+  sb.Ghost.timeAt = () => 0;
+  sb.Ghost.at = () => ({ s: 500, x: 0 });
+  const ghostDots = () => arcs.filter((r) => r === 3.4).length;
+  player.lap = 0; player.lapTime = 5.5; player.lastLap = 0; player.s = 940;   // flying-start run-up
+  tick();
+  assert.equal(els.gapA.textContent, "", "no GHOST -75.000s while the player sits before the line");
+  assert.equal(ghostDots(), 0, "no ghost dot off the run-up clock");
+  assert.equal($("hud-delta").dataset.pending, "", "DELTA stays pending");
+  player.lap = 1; player.lapTime = 0.4; player.s = 20;
+  tick();
+  assert.match(els.gapA.textContent, /^GHOST [+-]\d/, "lap 1: the chip is live");
+  assert.ok(ghostDots() >= 1, "lap 1: the ghost dot is drawn");
+  assert.notEqual($("hud-delta").dataset.pending, "");
+});
+
+test("PERF-2: a steady tick does not re-run announceLane's layout reads; a changed key does", () => {
+  let cs = 0;
+  const { rival, player, hud, sb } = boot({ sandbox: { getComputedStyle: () => { cs++; return { getPropertyValue: () => "" }; } } });
+  const nat = () => hud.updateHud(false, 100);   // a natural 10 Hz tick (the forced path always re-clips: jump / probes)
+  for (let i = 0; i < 4; i++) nat();   // fit settles, the lane is clipped once
+  cs = 0;
+  for (let i = 0; i < 10; i++) nat();
+  assert.equal(cs, 0, "steady ticks: no getComputedStyle / rect pass from the lane");
+  rival.prog = player.prog + 100;       // the gap string changes length: "+1L" -> "2.00s"
+  nat();
+  assert.equal(cs, 1, "a changed gap string re-clips the lane once");
+  cs = 0;
+  sb.innerWidth = 900; nat();
+  assert.ok(cs >= 1, "a resized viewport re-clips it");
+  cs = 0;
+  hud.updateHud(true);
+  assert.equal(cs, 1, "a forced refresh always re-clips");
 });

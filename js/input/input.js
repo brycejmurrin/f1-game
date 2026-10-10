@@ -96,9 +96,15 @@ const Input = (function () {
      hardware. The shape that works is a SMALL dead zone, a rest-offset
      captured per pad (calibratePad), and a SATURATION so a stick that can no
      longer reach 1.0 can still reach full lock. */
-  let padDeadzone = 0.05;      // inner: centre slop, ignored then re-scaled
+  const PAD_DZ_DEFAULT = 0.05;
+  let padDeadzone = PAD_DZ_DEFAULT;  // inner: centre slop, ignored then re-scaled
   let padSaturation = 0;       // outer: deflection treated as full lock
-  let padRestOffset = 0;       // captured resting position (drift compensation)
+  let padRestOffset = 0;       // the DRIVING pad's captured resting position (drift compensation)
+  // Rest offsets are PER DEVICE (pad id): one pad's drift must not pull another.
+  // padRestLegacy is the pre-per-pad scalar, handed to the first pad that drives.
+  const padRestMap = new Map();
+  let padRestLegacy = null;
+  let padIsWheel = false;      // the driving pad is a set-up wheel (non-standard mapping, saved axis map)
   const touches = new Map();
   let touchSeq = 0;
   let touchSteer = 0;      // the winning touch's drag, -1..1
@@ -582,6 +588,8 @@ const Input = (function () {
      snapshotted on first sight. The answer comes from whichever device moved,
      and that movement is also USE (notePadUse), so the wheel drives after. */
   const AXIS_CAPTURE_MOVE = 0.45;
+  const AXIS_EXT_MS = 1500;
+  let axisExt = null;            // {key, axis, rest, far, until} of the last captured axis
   function snapshotRests(pads, into) {
     for (let i = 0; pads && i < pads.length; i++) {
       const p = pads[i];
@@ -603,7 +611,7 @@ const Input = (function () {
   function pollAxisCapture(pads) {
     if (!axisCaptureCb || !pads) return;
     if (!axisCaptureRest) { axisCaptureRest = snapshotRests(pads, new Map()); return; }
-    let best = -1, bestI = -1, bestRest = 0, bestV = 0;
+    let best = -1, bestI = -1, bestRest = 0, bestV = 0, bestKey = "";
     for (let j = 0; j < pads.length; j++) {
       const p = pads[j];
       if (!p || !p.connected) continue;
@@ -614,13 +622,16 @@ const Input = (function () {
         if (axisCaptureSkip.has(i)) continue;
         const rest = typeof rests[i] === "number" ? rests[i] : 0;
         const d = Math.abs((axes[i] || 0) - rest);
-        if (d > best) { best = d; bestI = i; bestRest = rest; bestV = axes[i] || 0; }
+        if (d > best) { best = d; bestI = i; bestRest = rest; bestV = axes[i] || 0; bestKey = padKey(p, j); }
       }
     }
     if (bestI < 0 || best < AXIS_CAPTURE_MOVE) return;
     const cb = axisCaptureCb;
     axisCaptureCb = null; axisCaptureRest = null;
-    cb(bestI, Math.sign(bestV - bestRest) || 1);
+    // The capture fires at 45 % travel; the third argument keeps tracking the axis's
+    // far end for AXIS_EXT_MS so the wizard can read the full pedal travel.
+    axisExt = { key: bestKey, axis: bestI, rest: bestRest, far: bestV, until: nowMs() + AXIS_EXT_MS };
+    cb(bestI, Math.sign(bestV - bestRest) || 1, axisExt);
   }
   function setPadAxisMap(saved) {
     padAxisMap = Object.assign({}, PAD_AXIS_DEF);
@@ -632,6 +643,11 @@ const Input = (function () {
       for (const k of ["steerInvert", "pedalInvert"]) {
         if (saved[k] === -1 || saved[k] === 1) padAxisMap[k] = saved[k];
       }
+      for (const k of ["throttleRest", "throttleFar", "brakeRest", "brakeFar"]) {
+        if (typeof saved[k] === "number" && Math.abs(saved[k]) <= 1.5) padAxisMap[k] = saved[k];
+      }
+      // One axis cannot be both pedals: a combined axis reads brake AND throttle at rest.
+      if (padAxisMap.brake != null && padAxisMap.brake === padAxisMap.throttle) padAxisMap.brake = padAxisMap.brakeRest = padAxisMap.brakeFar = null;
     }
     return getPadAxisMap();
   }
@@ -643,6 +659,14 @@ const Input = (function () {
      is the honest answer to stick drift: a worn potentiometer's wiper no longer
      reads zero at centre, and the alternative — one big dead zone for everyone
      — makes every good pad worse to spare one bad one. */
+  const padIdOf = (p) => String((p && p.id) || "").slice(0, 120);
+  const restOk = (v) => typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= 0.5;
+  function restFor(p) {
+    if (!p) return 0;
+    const id = padIdOf(p);
+    if (padRestLegacy !== null) { if (!padRestMap.has(id)) padRestMap.set(id, padRestLegacy); padRestLegacy = null; }
+    return padRestMap.get(id) || 0;
+  }
   function calibratePad() {
     const pad = activePad();
     if (!pad || !pad.axes) return false;
@@ -650,17 +674,38 @@ const Input = (function () {
     // A stick genuinely held over cannot be a rest position; refuse rather than
     // bake a permanent offset that steers the car on its own.
     if (Math.abs(v) > 0.5) return false;
+    padRestLegacy = null;
+    if (v) padRestMap.set(padIdOf(pad), v); else padRestMap.delete(padIdOf(pad));
     padRestOffset = v;
     try { Log.info("input", `pad calibrated, rest offset ${v.toFixed(3)}`); } catch (_) { /* Log absent */ }
     return true;
   }
-  function padRest() { return padRestOffset; }
-  // The persisted half: KeyBinds stores the offset as apex26.padRest and hands
-  // it back here at boot. Anything but a finite number inside calibratePad's own
-  // ±0.5 refusal bound is not a rest position, so it is ignored (0).
+  // The driving pad's offset (before any pad is seen, a pending legacy scalar).
+  function padRest() {
+    const p = activePad();
+    return p ? restFor(p) : (padRestLegacy !== null ? padRestLegacy : padRestOffset);
+  }
+  // Forget the driving pad's offset only (the wheel wizard moved its steering axis).
+  function clearPadRest() {
+    const p = activePad();
+    if (p) padRestMap.delete(padIdOf(p));
+    padRestLegacy = null; padRestOffset = 0;
+  }
+  // What KeyBinds persists as apex26.padRest: {[padId]: offset}, 0 when none.
+  function padRestStore() {
+    if (padRestLegacy !== null) return padRestLegacy;
+    return padRestMap.size ? Object.fromEntries(padRestMap) : 0;
+  }
+  // The persisted half, handed back at boot: a number (the old single offset) or
+  // a {[padId]: offset} map. Anything but a finite number inside calibratePad's
+  // own ±0.5 refusal bound is not a rest position, so it is ignored (0).
   function setPadRest(v) {
-    padRestOffset = (typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= 0.5) ? v : 0;
-    return padRestOffset;
+    padRestMap.clear(); padRestLegacy = null; padRestOffset = 0;
+    if (restOk(v)) { if (v) padRestLegacy = v; }
+    else if (v && typeof v === "object" && !Array.isArray(v)) {
+      for (const k of Object.keys(v).slice(0, 16)) if (restOk(v[k]) && v[k]) padRestMap.set(k.slice(0, 120), v[k]);
+    }
+    return padRestLegacy !== null ? padRestLegacy : 0;   // no claim here: the pad that DRIVES takes a legacy scalar
   }
   /* AXIS MAP — the wheel story. A G29/G923/T300/Fanatec enumerates as a
      Gamepad with `mapping: ""`, because the only standard layout the spec
@@ -671,7 +716,8 @@ const Input = (function () {
      `beginAxisCapture` below is the wizard's one primitive.
      `steerInvert` exists because half the wheels on the market report the
      opposite sign, and a game that cannot be told so is unusable on them. */
-  const PAD_AXIS_DEF = { steer: 0, steerInvert: 1, throttle: null, brake: null, pedalInvert: 1 };
+  const PAD_AXIS_DEF = { steer: 0, steerInvert: 1, throttle: null, brake: null, pedalInvert: 1,
+    throttleRest: null, throttleFar: null, brakeRest: null, brakeFar: null };   // pedal travel ends, measured by the wizard
   let padAxisMap = Object.assign({}, PAD_AXIS_DEF);
   let axisCaptureCb = null;      // armed while the wizard waits for a moved axis
   let axisCaptureSkip = new Set(); // axes the wizard already assigned; capture ignores them
@@ -703,9 +749,12 @@ const Input = (function () {
     const d = raw - padRestOffset;
     const v = clamp(d >= 0 ? d / (1 - padRestOffset) : d / (1 + padRestOffset), -1, 1);
     const a = Math.abs(v);
-    if (a <= padDeadzone) return 0;
-    const span = Math.max(0.05, 1 - padDeadzone - padSaturation);
-    return clamp(Math.sign(v) * (a - padDeadzone) / span, -1, 1);
+    // A set-up wheel is a full-range axis, not a thumbstick: 5 % of 900 degrees
+    // is ~22 of dead rotation. It defaults to none; a DEAD ZONE row change wins.
+    const dz = padIsWheel && padDeadzone === PAD_DZ_DEFAULT ? 0 : padDeadzone;
+    if (a <= dz) return 0;
+    const span = Math.max(0.05, 1 - dz - padSaturation);
+    return clamp(Math.sign(v) * (a - dz) / span, -1, 1);
   }
   // A wheel's pedal axis rests at -1 and travels to +1 (the common convention),
   // so map it to 0..1. Unmapped pedals return 0 and the trigger path wins.
@@ -719,6 +768,10 @@ const Input = (function () {
     const raw = readPadAxis(axes, i);
     if (raw !== 0) padPedalSeen[which] = true;
     if (!padPedalSeen[which]) return 0;
+    // The wizard's measured travel ends (a pedal that rests at 0, or a
+    // combined-looking axis, is not the -1..+1 the fallback assumes).
+    const rest = padAxisMap[which + "Rest"], far = padAxisMap[which + "Far"];
+    if (rest != null && far != null && Math.abs(far - rest) >= 0.3) return clamp((raw - rest) / (far - rest), 0, 1);
     const v = raw * padAxisMap.pedalInvert;
     return clamp((v + 1) / 2, 0, 1);
   }
@@ -737,7 +790,9 @@ const Input = (function () {
     // LAST PRESS WINS — same contract as keyboardSteer / buttonSteering.
     // Worn pads and some maps briefly report both left+right; right−left
     // cancelled to centre and the ramp unwound mid-corner.
-    const left = btnDown(pad, 14), right = btnDown(pad, 15);
+    // 14/15 are the d-pad only on the standard layout; a wheel's are its own buttons.
+    const dp = padStd(pad);
+    const left = dp && btnDown(pad, 14), right = dp && btnDown(pad, 15);
     if (left && !padDpadLeftHeld) padDpadLeftSeq = ++padDpadSeq;
     if (right && !padDpadRightHeld) padDpadRightSeq = ++padDpadSeq;
     padDpadLeftHeld = left; padDpadRightHeld = right;
@@ -1115,6 +1170,9 @@ const Input = (function () {
      https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/timestamp */
   const PAD_WAKE = 0.3;
   const padUse = new Map();    // padKey -> { axes, btn, usedAt }
+  // The W3C standard layout (d-pad on 12-15, right stick on 2/3). Gamepad.mapping is
+  // always a string in a browser; a missing one is a bare harness pad, read as standard.
+  const padStd = (p) => p.mapping == null || p.mapping === "standard";
   function padKey(p, slot) { return (Number.isInteger(p.index) ? p.index : slot) + ":" + p.id; }
   function notePadUse(pads, t) {
     if (!pads) return;
@@ -1248,6 +1306,7 @@ const Input = (function () {
       padDpadVal = 0; padDpadT = 0;
       padDpadLeftHeld = padDpadRightHeld = false;
       padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
+      padIsWheel = false;
       if (padPrevButtons.length) padPrevButtons.length = 0;
       padPrevKey = null;
       padPrevByIndex.clear();
@@ -1267,6 +1326,12 @@ const Input = (function () {
       for (let i = 0; i < nb; i++) padPrevButtons[i] = btnDown(pad, i);
     }
     padPrevKey = key;
+    padRestOffset = restFor(pad);
+    padIsWheel = !padStd(pad) && !padAxesAreDefault();
+    if (axisExt && key === axisExt.key && nowMs() <= axisExt.until) {
+      const ev = readPadAxis(pad.axes || [], axisExt.axis);
+      if (Math.abs(ev - axisExt.rest) > Math.abs(axisExt.far - axisExt.rest)) axisExt.far = ev;
+    }
     // The indices below are the W3C "standard" layout and nothing here remaps.
     // A pad the browser could not map reports mapping "" and shuffles them —
     // log it once so a "throttle is on LB" report has its cause on record.
@@ -1375,7 +1440,8 @@ const Input = (function () {
     for (let i = 0; i < n; i++) padPrevButtons[i] = btnDown(pad, i);
   }
 
-  const padMenu = InputPadMenu.create({ btnDown, btnEdge, nowMs, getPadAxisMap: () => padAxisMap, padRest: () => padRestOffset });
+  const padMenu = InputPadMenu.create({ btnDown, btnEdge, nowMs, getPadAxisMap: () => padAxisMap, padRest: () => padRestOffset,
+    padButtons: (id) => bindings.padButtons(id), padBrand: (p) => bindings.padBrand(p) });
 
   // A connected pad only "wins" steering when its stick is actually deflected,
   // so an idle controller never overrides tilt / touch / on-screen buttons.
@@ -1434,7 +1500,8 @@ const Input = (function () {
     return 1 - analogSpeedMix * (1 - ANALOG_SPEED_FLOOR) * (v / (v + ref));
   }
   function analogShape(v, src) {
-    const t = analogTrim[src] || 1;
+    // "wheel": the pad trim on a LINEAR base (cancel STEER_EXPO), so a set-up wheel is 1:1 by default.
+    const t = (analogTrim[src === "wheel" ? "pad" : src] || 1) / (src === "wheel" ? steerExpo : 1);
     const shaped = t === 1 ? v : Math.sign(v) * Math.pow(Math.abs(v), t);
     return clamp(shaped * analogSpeedGain(), -1, 1);
   }
@@ -1448,7 +1515,7 @@ const Input = (function () {
     if (keyLeft || keyRight || Math.abs(k) > 0.001) return k;
     // The d-pad half of padSteer is digital and already ramped — it must not
     // also be curved and speed-scaled as if it were a deflection.
-    if (padSteerActive()) return padSteerAnalog ? analogShape(padSteer, "pad") : padSteer;
+    if (padSteerActive()) return padSteerAnalog ? analogShape(padSteer, padIsWheel ? "wheel" : "pad") : padSteer;
     // A paired phone WITH a sensor: the tilt pipeline fed by remoteSample,
     // whatever the local mode. Pedals-only phones fall through to it.
     if (remoteSteers()) return remStick ? analogShape(remSteer, "pad") : analogShape(tiltSteering(), "tilt");
@@ -1927,14 +1994,16 @@ const Input = (function () {
       // Another pad (a wheel + a controller, a hub re-enumerating) may still be
       // there: read the live list instead of assuming the last one just left.
       let still = false;
-      try { const gps = navigator.getGamepads ? navigator.getGamepads() : []; for (let i = 0; i < gps.length; i++) if (gps[i] && gps[i].index !== (e.gamepad && e.gamepad.index)) still = true; } catch (_) { /* no API */ }
+      try { const gps = navigator.getGamepads ? navigator.getGamepads() : []; for (let i = 0; i < gps.length; i++) if (gps[i] && gps[i].connected && gps[i].index !== (e.gamepad && e.gamepad.index)) still = true; } catch (_) { /* no API */ }
       padConnected = still; padSteer = 0; padThrottle = padBrake = false;
       padThrottleVal = padBrakeVal = 0;
       padSteerAnalog = false; padLookBack = false;
       padDpadVal = 0; padDpadT = 0;
       padDpadLeftHeld = padDpadRightHeld = false;
       padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
-      padPrevButtons.length = 0;
+      // Only the ACTIVE pad's edge baseline: a spare pad leaving must not turn
+      // every button still held on the driving pad into a fresh press.
+      if (e.gamepad && padPrevByIndex.get(e.gamepad.index) === padPrevButtons) padPrevButtons.length = 0;
       if (e.gamepad) padPrevByIndex.delete(e.gamepad.index);
       padMenu.reset();
       try { Log.info("input", `gamepad disconnected ${padLogId(e)}`); }
@@ -2146,7 +2215,7 @@ const Input = (function () {
     throttleLatched: () => throttleLatch && throttleLatched,
     primeHaptics,
     setPadLabelMode, padLabelMode: padLabelModeOf,
-    setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padRest, setPadRest,
+    setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padRest, setPadRest, clearPadRest, padRestStore,
     touchControlsNeeded,
     pickPad,
     onPointerKindChange,
