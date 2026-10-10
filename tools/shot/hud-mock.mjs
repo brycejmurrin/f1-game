@@ -102,6 +102,7 @@ function mockWidgets(opt) {
       if (who) who.textContent = "VERSTAPPEN · RADIO";
       if (text) text.textContent = "Box this lap — CAUTION, cheaper stop, about 23s lost";
       if (num) num.textContent = "33";
+      ann.dataset.kind = "box";   // a PIT CALL: the kind that must never be cut short (an info line may clamp)
       ann.hidden = false;
     }
     const lim = $("hud-limits");   // forced only on a tree without __apex.strikes (the real strike shows it otherwise)
