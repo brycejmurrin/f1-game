@@ -1,0 +1,1 @@
+1791618132	Cursor Agent	Fix MCP survey B1/B3/B5: OWNED css for title menu (#menu-buttons/#mb-career), css/hud.css + js/ui/hud.js for flag/announce+limits/inputs phone overlaps, js/agent for world lapsAhead. FORBIDDEN garage silverstone. Do not enable auto-merge or merge.  [cursor/mcp-bug-survey-71a3; session c45a897aca35e48b98e3fb17]
