@@ -405,8 +405,7 @@ html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #ov
   overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
   /* Above brand so zoomed secondary keeps DATA HUB hittable; empty cells pass clicks through. */
   touch-action: pan-y; z-index: 2; background: transparent;
-  /* Block pad was too tight on the inline axis: CAREER's skewX tip painted
-     1px past overflow-x:hidden (layout-audit ios-iphone-landscape). */
+  /* Inline pad: CAREER skewX tip past overflow-x:hidden (B1). */
   padding-block: calc(var(--gap) * 0.5);
   padding-inline: var(--gap);
   pointer-events: none;
@@ -433,8 +432,7 @@ html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #ov
 /* One line per room: column wrap was clipping DESIGNER / PLAY under --tap.
    0.72× micro + zero tracking fits TRACK DESIGNER; overflow hidden kills 200% sideways scroll. */
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
-  /* flex-start keeps .btn-ico on the leading edge — center + overflow:hidden
-     clipped DATA/DESIGNER/SETTINGS icons on 844×390 (MCP survey B1). */
+  /* Leading-edge icons: center+overflow clipped .btn-ico (B1). */
   display: inline-flex; flex-direction: row; justify-content: flex-start; align-items: center;
   gap: calc(var(--gap) / 8); min-height: var(--tap-paint); height: 100%; max-height: 100%;
   padding: 0 calc(var(--gap) / 8) 0 calc(var(--gap) / 4); font-size: calc(var(--fs-micro) * 0.72);
