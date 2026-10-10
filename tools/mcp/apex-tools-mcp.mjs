@@ -1089,7 +1089,8 @@ function describeSchema(spec) {
   const range = spec.minimum != null || spec.maximum != null ? ` ${spec.minimum ?? ""}..${spec.maximum ?? ""}` : "";
   return `${t}${range}${spec.description ? `, ${spec.description.split(/(?<=\.)\s/)[0].replace(/\.$/, "").slice(0, 100)}` : ""}`;
 }
-/** The valid key nearest a mistyped one: a shared prefix, containment, or one edit away. */
+/** The valid key nearest a mistyped one: a shared prefix, containment, one edit, or ≥2 token overlaps
+ *  (layout-audit `ios-iphone-landscape-844` ↔ HUD `phone-landscape-844x390`). */
 function nearestKey(key, keys) {
   const k = key.toLowerCase();
   const edit1 = (a, b) => {
@@ -1097,9 +1098,37 @@ function nearestKey(key, keys) {
     let i = 0; while (i < a.length && i < b.length && a[i] === b[i]) i++;
     return a.slice(i + 1) === b.slice(i + 1) || a.slice(i) === b.slice(i + 1) || a.slice(i + 1) === b.slice(i);
   };
-  return keys.find((c) => c.toLowerCase() === k)
+  const tokens = (s) => s.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 3);
+  const hit = keys.find((c) => c.toLowerCase() === k)
     || keys.find((c) => edit1(k, c.toLowerCase()))
-    || keys.find((c) => c.length > 2 && (c.toLowerCase().includes(k) || k.includes(c.toLowerCase()))) || null;
+    || keys.find((c) => c.length > 2 && (c.toLowerCase().includes(k) || k.includes(c.toLowerCase())));
+  if (hit) return hit;
+  const kt = tokens(key);
+  let best = null, bestScore = 0;
+  for (const c of keys) {
+    const ct = tokens(c);
+    const score = kt.filter((t) => ct.some((u) => u.includes(t) || t.includes(u))).length;
+    if (score > bestScore) { bestScore = score; best = c; }
+  }
+  return bestScore >= 2 ? best : null;
+}
+/** layout-audit viewport ids → HUD survey device ids (apex_hud_shot / survey). */
+const HUD_DEVICE_ALIASES = Object.freeze({
+  "ios-iphone-landscape-844": "phone-landscape-844x390",
+  "ios-iphone-landscape": "phone-landscape-844x390",
+  "ios-iphone-landscape-safari": "phone-short-734x343",
+  "ios-iphone-portrait": "phone-portrait-390x844",
+  "desktop-1280x800": "desktop-1280",
+  "desktop-1440x900": "desktop-1280",
+  "desktop-1920x1080": "desktop-1920",
+  "desktop-windowed-1920x937": "desktop-1920",
+  "ios-ipad-landscape": "tablet-1180x820",
+  "ios-ipad-portrait": "tablet-1180x820",
+});
+function aliasHudDevice(args) {
+  if (!args || typeof args.device !== "string") return args;
+  const mapped = HUD_DEVICE_ALIASES[args.device];
+  return mapped && mapped !== args.device ? { ...args, device: mapped } : args;
 }
 function validateValue(value, schema, label) {
   if (schema.anyOf) {
@@ -1115,8 +1144,11 @@ function validateValue(value, schema, label) {
     : typeof value === type);
   if (!validType) badArgs(`${label} must be ${type}, got ${jsType(value)}`, schema.description || undefined);
   if (schema.enum && !schema.enum.includes(value)) {
-    const near = typeof value === "string" ? nearestKey(value, schema.enum.map(String)) : null;
-    badArgs(`${label} must be one of ${schema.enum.join(", ")}`, near ? `Did you mean "${near}"?` : undefined);
+    const ids = schema.enum.map(String);
+    const near = typeof value === "string" ? nearestKey(value, ids) : null;
+    const listed = ids.length <= 12 ? ids.join(", ") : `${ids.slice(0, 10).join(", ")}, … (${ids.length} in all)`;
+    badArgs(`${label} must be one of ${ids.join(", ")}`,
+      near ? `Did you mean "${near}"?` : `Valid: ${listed}.`);
   }
   if (typeof value === "number") {
     if (!Number.isFinite(value)) badArgs(`${label} must be finite`);
@@ -2045,6 +2077,9 @@ function dispatch(name, args = {}, { signal = null } = {}) {
       "list-tools for the apex_* catalog.",
     );
   }
+
+  // layout-audit viewport ids are accepted and rewritten to HUD device ids before schema enum checks.
+  if (name === "apex_hud_shot" || name === "apex_hud_survey") args = aliasHudDevice(args);
 
   try { validateArgs(known, args); }
   catch (e) { return e.refuse || refuse("bad_args", String(e.message || e), "See the tool inputSchema."); }
