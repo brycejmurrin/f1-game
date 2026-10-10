@@ -264,9 +264,17 @@ const TyreModel = (function () {
   // instead of straddling a range the way LOAD_REF must. Divided AFTER the
   // clamp, exactly as humanLoad does, so the two paths stay the same shape.
   const LOAD_AI_REF = 1.23;
+  // An AI car's SIGNED longitudinal accel. `accSm` is engine pull only: written
+  // on the throttle branch, never below 0 and stale under the brake, so the
+  // model never saw an AI car brake (Monza VM: accSm min 0, axle tilt pinned
+  // at AXLE_REST). `corridorAccel` (game.js) is the observed accel, braking
+  // and grass included; accSm stays the fallback for a car without one.
+  // Measured 2026-10-10, Monza 22 cars, 80 s: mean aiLoad 0.852 -> 0.866 (+1.6 %),
+  // inside the calendar spread LOAD_AI_REF was fitted to, so it stands.
+  function aiLong(c) { return fin(c.corridorAccel, fin(c.accSm, 0)); }
   function aiLoad(c, aTop) {
     const cons = clamp(fin(c.consistency, 0.75), 0, 1);
-    const lng = clamp(fin(Math.abs(fin(c.accSm, 0)) / Math.max(1, aTop), 0), 0, 1);
+    const lng = clamp(fin(Math.abs(aiLong(c)) / Math.max(1, aTop), 0), 0, 1);
     return clamp(LOAD_AI_BASE + LOAD_AI_STYLE * (1 - cons) + LOAD_AI_LONG * lng * lng
       + (c.offroad ? W_OFF : 0), LOAD_MIN, LOAD_MAX) / LOAD_AI_REF;
   }
@@ -326,7 +334,7 @@ const TyreModel = (function () {
   /** Signed longitudinal effort: -1 full braking .. +1 full traction. */
   function longSigned(c, aTop) {
     if (c.human) return ((c.axEstSm || 0) < 0 ? -1 : 1) * clamp(fin(c.axFrac, 0), 0, 1);
-    return clamp(fin(fin(c.accSm, 0) / Math.max(1, aTop), 0), -1, 1);
+    return clamp(fin(aiLong(c) / Math.max(1, aTop), 0), -1, 1);
   }
   /** [frontShare, rearShare] for this tick. Averages to exactly 1, by construction. */
   function axleShare(c, aTop) {

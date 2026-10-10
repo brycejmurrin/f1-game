@@ -160,10 +160,13 @@ test("a stop is not an auto-rescue: held in the box under throttle, the car stay
     const throttle = p.state === "box" || (!near && ps.speed < 5);
     a.setInput({ steer: Math.max(-1, Math.min(1, (lx - ps.x) * 0.5)), throttle, brake: near && p.state !== "out" && p.state !== "box" && ps.speed > 0.2 });
     a.step(1 / 60, 1);
+    // BOOST left on in the box spends nothing (physics hunt 2026-10-10: it drained 0.8 -> 0.29 over the hold).
+    if (p.state === "box" && !boxed) { a.setEnergy(0.8); a.setBoost(true); }
+    if (p.state === "box" && boxed) assert.ok(g.G.player.energy >= 0.8 && !g.G.player.deploying, `BOOST drained in the box (${g.G.player.energy.toFixed(3)})`);
     if (p.state === "box") { boxed = true; if (xAtBox == null) xAtBox = ps.x; assert.ok(Math.abs(ps.x - xAtBox) < 0.5, `teleported mid-stop (x ${xAtBox.toFixed(2)} → ${ps.x.toFixed(2)})`); }
     if (p.state === "out") break;
   }
-  a.clearInput();
+  a.clearInput(); a.setBoost(false);
   assert.ok(boxed, "reached the box");
   assert.equal(a.pit().state, "out", "serviced");
   assert.equal(a.pit().stops, 1);
@@ -451,6 +454,23 @@ test("a car on the lane's own tarmac commits, and the limiter comes on", async (
   assert.equal(p.inLaneLat, true);
 });
 
+test("BOOST does nothing under the limiter: no thrust past the limit, no drain (physics hunt 2026-10-10)", async () => {
+  const a = await fresh();
+  a.jump(0.985, 40, 0);
+  const drv = a.pit().driveX;
+  a.jump(0.985, 40, drv); a.aim(0);
+  drive(a, 1.5, drv);
+  assert.equal(a.pit().state, "lane", "committed and limited");
+  a.setEnergy(0.8); a.setBoost(true);
+  let deployed = 0;
+  for (let i = 0; i < 120; i++) { drive(a, 1 / 60, drv); if (g.G.player.deploying) deployed++; }
+  const e = g.G.player.energy;
+  a.setBoost(false);
+  // Before the gate: 0.8 -> 0.0 in 3.45 s at the limit (VM, Bahrain).
+  assert.equal(deployed, 0, "deployed under the limiter");
+  assert.ok(e >= 0.8, `BOOST drained at the limiter (${e.toFixed(3)})`);
+});
+
 test("WORK ON CAR is offered only on the jacks, and the stop pays for it", async () => {
   // Asked: a button, while pitting, that opens the GARAGE to change parts or
   // the set-up. The gate is the whole safety property — it opens a MENU, so it
@@ -564,4 +584,28 @@ describe("a stale AI pit arm is cancelled (bug-hunt 7.4)", () => {
     g.G.pits.update(c, 1 / 60);
     assert.equal(c.pitArmed, true, "an AI that missed its entry comes in next time round");
   });
+});
+
+// Physics hunt 2026-10-10: the AI deployed BOOST under a caution cap, where the
+// push only hits the cap (Monza VM, before: 14 % of AI ticks deploying under VSC,
+// 9 % under SC). Stops no car, so it can sit after the describe above.
+test("no AI car deploys BOOST under a VSC cap — only a free OVERTAKE push may", async () => {
+  await g.race(ID, "day", "dry", { laps: 5 });
+  const a = g.apex; a.go(); a.setPhysics({ pace: 1, drift: 0 }); a.caution(true);
+  for (let i = 0; i < 60 * 15; i++) a.step(1 / 60, 1);
+  g.G.holdCaution(2, "test");
+  for (let i = 0; i < 30; i++) a.step(1 / 60, 1);   // the hold reaches every car
+  let boost = 0, ticks = 0;
+  const otBefore = new Map();
+  for (let i = 0; i < 60 * 6; i++) {
+    for (const c of g.G.cars) otBefore.set(c, c.otT > 0);
+    a.step(1 / 60, 1);
+    // An OVERTAKE push that ran out this very tick still deployed on it: free, and allowed.
+    for (const c of g.G.cars) if (!c.human && !c.retired) { ticks++; if (c.deploying && !(c.otT > 0) && !otBefore.get(c)) boost++; }
+  }
+  const lvl = g.G.cautionLevel();
+  g.G.holdCaution(0);
+  assert.equal(lvl, 2, "the VSC was flying");
+  assert.ok(ticks > 0);
+  assert.equal(boost, 0, `${boost} of ${ticks} AI ticks deployed BOOST under the VSC`);
 });

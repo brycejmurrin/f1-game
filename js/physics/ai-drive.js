@@ -347,8 +347,9 @@ const AiDrive = (function () {
     const kAhead = Math.abs(ctx.kAhead60 || 0);
     const straight = kAhead < 0.006;
     if (!straight) return false;
-    const catching = !!(ctx.towCar && ctx.towGap < 28 && (ctx.speed || 0) >= (ctx.towSpeed || 0) - 1);
-    const defending = !!(ctx.chaser && ctx.chaserGap < 14 && (ctx.chaserSpeed || 0) > (ctx.speed || 0) - 2);
+    const vs = (ctx.vTop > 0 ? ctx.vTop : 72) / 72;   // closing rates ride the pace scale (as otFireRate)
+    const catching = !!(ctx.towCar && ctx.towGap < 28 && (ctx.speed || 0) >= (ctx.towSpeed || 0) - 1 * vs);
+    const defending = !!(ctx.chaser && ctx.chaserGap < 14 && (ctx.chaserSpeed || 0) > (ctx.speed || 0) - 2 * vs);
     const hs = houseStyle(ctx.team, ctx.seat, ctx.stats);
     const dep = ctx.ersDeploy != null ? ctx.ersDeploy : 0.5;
     const regen = ctx.ersRegen != null ? ctx.ersRegen : 0.5;
@@ -444,7 +445,9 @@ const AiDrive = (function () {
     const hold = houseStyle(ctx.team, ctx.seat, ctx.stats).hold;
     if (hold) vLim *= 1 - hold * 0.025;
     // Craft late-brake when attacking with room: allow a few % over the limit.
-    const attacking = !!(ctx.blocker && ctx.blockerGap < 16 && (ctx.speed || 0) > (ctx.blockerSpeed || 0) - 1);
+    // The 1 m/s closing band rides the pace scale (vTop()/VMAX is the clamped pace V was built from).
+    const vsB = Math.max(0.05, ctx.pace === undefined ? 1 : ctx.pace);
+    const attacking = !!(ctx.blocker && ctx.blockerGap < 16 && (ctx.speed || 0) > (ctx.blockerSpeed || 0) - vsB);
     const room = Math.max(ctx.roomL || 0, ctx.roomR || 0);
     if (attacking && room > 1.6) {
       vLim *= lerp(1.0, 1.07, t.craft) * houseMulCtx(ctx, 0.99, 1.03, "attack");
@@ -1416,7 +1419,9 @@ const AiDrive = (function () {
     if (Math.abs(kA) > 0.004) {
       coverSide = -Math.sign(kA);
     } else {
-      const ox = ctx.other && Number.isFinite(ctx.other.x) ? ctx.other.x : 0;
+      // The tick snapshot first (update order must not decide the cover), live x as the fallback.
+      const o = ctx.other;
+      const ox = o ? (Number.isFinite(o._snapX) ? o._snapX : Number.isFinite(o.x) ? o.x : 0) : 0;
       const dx = ox - (ctx.x || 0);
       const kT = ctx.kTurn || 0;
       if (Math.abs(dx) >= 0.35) coverSide = dx > 0 ? 1 : -1;

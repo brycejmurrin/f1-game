@@ -550,6 +550,19 @@ test("braking wears the FRONT, traction wears the REAR", () => {
   assert.ok(drive[1] > drive[0] + 0.5, `traction did not load the rear: ${drive}`);
 });
 
+// Physics hunt 2026-10-10: an AI car's accSm is engine pull only (never < 0,
+// stale under the brake), so the AI never tilted its wear onto the fronts —
+// Monza VM, 22 cars over 80 s: accSm min 0, axle tilt max exactly AXLE_REST.
+// The observed corridorAccel carries the braking.
+test("an AI car braking (corridorAccel < 0) loads its FRONT, and its load sees the stop", () => {
+  const stale = { human: false, accSm: 2, corridorAccel: -20, consistency: 0.75 };
+  const [f, r] = T.axleShare(stale, 7);
+  assert.ok(f > r + 0.5, `AI braking did not load the front: ${f} / ${r}`);
+  assert.ok(T.aiLoad(stale, 7) > T.aiLoad({ ...stale, corridorAccel: 2 }, 7), "a full stop scores more load than a part-throttle run");
+  // No corridorAccel (a bare stub): accSm is still read, unchanged.
+  assert.equal(T.axleShare({ human: false, accSm: 7 }, 7)[0], T.axleShare({ human: false, accSm: 7, corridorAccel: undefined }, 7)[0]);
+});
+
 test("a forward brake bias moves wear onto the front, a rearward one off it", () => {
   const at = (bb) => T.axleShare({ human: true, axEstSm: -5, axFrac: 1, brakeBias: bb }, 7)[0];
   assert.ok(at(0.62) > at(T.BB_REF), "more front bias did not wear the fronts harder");

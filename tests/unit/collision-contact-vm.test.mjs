@@ -128,6 +128,30 @@ test("a rear-end is a bump: the closing speed is gone after one frame of contact
   assert.ok(p.speed < 50, "the player kept every m/s through a bump");
 });
 
+// Physics hunt 2026-10-10: the AI traffic scan skipped finished cars outright,
+// so a running AI ran into a finisher coasting past the line at the floor.
+// Measured before (AI at 25 m/s, finisher 30 m ahead): first contact at 1.28 s,
+// 102 contact ticks in 3 s, the AI shoved down to 9.3 m/s behind it.
+test("a finisher coasting past the line is a blocker to the AI behind, never a tow", async () => {
+  const A = g.apex;
+  await straight(0, -5);   // the player parked out of the lane
+  const [b, f] = A.rivals([{ dProg: 100, dx: 1, speed: 25 }, { dProg: 130, dx: 1, speed: 13 }]);
+  const cb = g.G.cars[b], cf = g.G.cars[f];
+  cf.finished = true; cf._coastHeld = true;
+  A.act({ steer: 0, throttle: false, brake: true }, DT, 1);
+  const Collide = vm.runInContext("Collide", g.ctx);
+  const s = Collide.scanTraffic(cb, g.G.track.total, 30, 60, 2.8, false, 9, 9);
+  assert.equal(s.blocker, cf, "the finisher is the blocker");
+  assert.notEqual(s.towCar, cf, "a coasting finisher gives no tow");
+  let contact = 0;
+  for (let i = 0; i < 180; i++) {
+    A.act({ steer: 0, throttle: false, brake: true }, DT, 1);
+    if (cb.contactT > 0) contact++;
+  }
+  A.headless(false);
+  assert.equal(contact, 0, `the AI ran into the finisher (${contact} contact ticks)`);
+});
+
 /* ── the contact NORMAL is extent-scaled, not raw least penetration ────────
  *
  * Pure arithmetic — no boot. pairContact's classification is a function of
