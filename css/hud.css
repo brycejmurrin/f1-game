@@ -1242,6 +1242,13 @@ body[data-radio-slot="collapsed"] #announce {
   left: calc(var(--announce-lane-x) / var(--hud-z));
   transform: translateX(var(--announce-lane-shift, -50%));
 }
+/* …in the rows the lane was cleared for: under the tower, the mirror or its chip, the flag AND the
+   map's bottom edge (--announce-lane-y, screen px). With the band starting at the tower the map only
+   clipped it from the side, and the card painted over the bottom of the minimap (HUD audit
+   2026-10-10). The doubled id outranks the density and caution tops, which stay this slot's pre-fit
+   fallback. */
+body[data-radio-slot="lane"] #announce#announce,
+body[data-radio-slot="collapsed"] #announce#announce { top: calc(var(--announce-lane-y) / var(--hud-z)); }
 /* The plate. Italic is the racing number's own convention, not emphasis. */
 #announce-num {
   flex: 0 0 auto;

@@ -599,14 +599,19 @@ function cssPx(root, name) {
   if (typeof getComputedStyle !== "function" || !root) return 0;
   try { return parseFloat(getComputedStyle(root).getPropertyValue(name)) || 0; } catch (_) { return 0; }   // mini-dom / detached root
 }
-// The hanging lane as a DECISION (placeRadio writes it): { on, collapsed, x, w } in screen px.
+// The hanging lane as a DECISION (placeRadio writes it): { on, collapsed, x, y, w } in screen px.
 function radioLane(root, list) {
   const t = towerRect();
   const W = window.innerWidth, H = window.innerHeight || 0;
   const y0 = t ? t.bottom : 0, mid = W / 2;
   // The card's rows start under the centre band (tower, mirror, chip) — and under a caution below the
-  // flag chip too (css/hud.css: the caution rules) — wherever each sits: the lane spans the screen.
-  const bandTop = centreBandTop(true, true) + RADIO_TOP_GAP, bandBot = bandTop + LANE_ROWS;
+  // flag chip too — wherever each sits: the lane spans the screen. AND UNDER THE MAP'S BOTTOM EDGE: a
+  // band that started at the tower's bottom let the map clip it only from the side, so a collapse (or a
+  // lane the map had ended) pinned the card at sal + 8 over the bottom of the minimap, painted full
+  // width (HUD audit 2026-10-10, survey sheets at 844x390 / 932x430). The lane's top is published
+  // (--announce-lane-y) so the card sits in the rows it was cleared for.
+  const mapO = obs("map");
+  const bandTop = Math.max(centreBandTop(true, true), mapO ? mapO.rect.bottom : 0) + RADIO_TOP_GAP, bandBot = bandTop + LANE_ROWS;
   const sal = cssPx(root, "--sal"), sar = cssPx(root, "--sar");
   let left = sal, right = W - sar, any = false;
   const clip = (r, counts) => {
@@ -631,12 +636,15 @@ function radioLane(root, list) {
   // track-limits chip: a STRATEGY box in the left column and the INPUTS trace under
   // the sector box share the card's rows on a phone.
   for (const id of ["map", "gaps", "rel", "strat", "inputs", "damage", "limits"]) { const o = obs(id); if (o) clip(o.rect, false); }
+  // …and the bottom cluster where it reaches the card's rows (a touch landscape parks TYRES on top of
+  // the left dock — under the map, where the lane now hangs).
+  for (const o of list) if (o.column === "bottom") clip(o.rect, false);
   const x = left + RADIO_TOP_GAP, w = right - RADIO_TOP_GAP - x;
   const on = any && w > 0;
   // Collapsed: phone docks lit but S3 ate the gap (large --dock-r-w). The left pin + zero width
   // collapse the card; clearing the vars instead restored left:50% and dropped the radio onto the
   // sector plate (oversize CI: #hud-sectors+#announce).
-  return { on, collapsed: !on && any && !!secR, x, w };
+  return { on, collapsed: !on && any && !!secR, x, y: bandTop, w };
 }
 // The top-row strip as a decision: { x, y, w, h } in screen px, or null where no card fits.
 function radioTop(bcast, list) {
@@ -722,9 +730,9 @@ function radioSide(list) {
 const RADIO_VARS = {
   top: ["--radio-top-x", "--radio-top-y", "--radio-top-w", "--radio-top-h"],
   side: ["--mir-side-x", "--mir-side-w"],
-  lane: ["--announce-lane-x", "--announce-lane-shift", "--announce-lane-w"],
+  lane: ["--announce-lane-x", "--announce-lane-y", "--announce-lane-shift", "--announce-lane-w"],
 };
-let _radioSlot = "", _radioPaintSeq = -1, _fitSeq = 0;
+let _radioSlot = "", _radioPaintSeq = -1, _radioPlaceSeq = -1, _fitSeq = 0;
 function writeRadio(root, slot, top, side, lane) {
   const body = document.body;
   hAttr(body, "data-radio-slot", slot);
@@ -745,6 +753,7 @@ function writeRadio(root, slot, top, side, lane) {
   } else for (const p of RADIO_VARS.side) hUnset(root, p);
   if (slot === "lane" || slot === "collapsed") {
     hStyle(root, "--announce-lane-x", lane.x.toFixed(1) + "px");
+    hStyle(root, "--announce-lane-y", lane.y.toFixed(1) + "px");
     hStyle(root, "--announce-lane-shift", "0%");
     hStyle(root, "--announce-lane-w", slot === "lane" ? lane.w.toFixed(1) + "px" : "0px");
   } else for (const p of RADIO_VARS.lane) hUnset(root, p);
@@ -753,26 +762,32 @@ function writeRadio(root, slot, top, side, lane) {
   if (annEl && annEl.toggleAttribute) annEl.toggleAttribute("data-lane-collapsed", slot === "collapsed");
   _radioSlot = slot;
 }
-/** Place the radio card. `tick`: the per-tick re-place after this tick's gap strings (updateHud) —
- *  only a lane / collapsed / centred card can move then (the gap strip bounds the lane); a top-row or
- *  beside-the-mirror card, and a painted collapse latched this fit, hold until the next placement. */
+/** Place the radio card — the slot's ONE owner. `tick`: the per-tick re-place after this tick's gap
+ *  strings (updateHud): only a lane / centred card can move then (the gap strip bounds the lane); a
+ *  top-row or beside-the-mirror card holds, and so does ANY collapse this fit made — the post-gap-strings
+ *  call used to re-open in the same tick the lane fitHud had just collapsed (HUD audit F-06). A tick may
+ *  narrow or collapse a lane, never reopen one; the next full fit (key change — the gap text length is
+ *  in it — or the 3 s re-measure) judges afresh. */
 function placeRadio(root, bcast, list, tick) {
   if (!list) list = obsCollect();
-  if (tick && (_radioSlot === "top" || _radioSlot === "side" || (_radioSlot === "collapsed" && _radioPaintSeq === _fitSeq))) return _radioSlot;
+  if (tick && (_radioSlot === "top" || _radioSlot === "side" || (_radioSlot === "collapsed" && (_radioPlaceSeq === _fitSeq || _radioPaintSeq === _fitSeq)))) return _radioSlot;
   const top = tick ? null : radioTop(bcast, list);
   const side = top || tick ? null : radioSide(list);
   const lane = top || side ? null : radioLane(root, list);
   const slot = top ? "top" : side ? "side" : lane.on ? "lane" : lane.collapsed ? "collapsed" : "centre";
   writeRadio(root, slot, top, side, lane);
   if (tick) return slot;
-  // The painted guarantee (above): the tower and the plate do not move when the card does, so the
-  // list collected for this placement still holds them.
+  _radioPlaceSeq = _fitSeq;
+  // The painted guarantee (above): the tower, the plate and the MAP (its whole box, bottom edge
+  // included, in every slot) do not move when the card does, so the list collected for this placement
+  // still holds them. A collapse pins the card in the lane's own cleared rows, never at sal + 8.
   const annPaint = els.announce || document.getElementById("announce");
   if (annPaint && !annPaint.hidden && annPaint.getBoundingClientRect) {
     const a = annPaint.getBoundingClientRect();
     const hit = (id) => { const o = obs(id); return !!(o && _hudRectsHit(a, o.rect)); };
-    if (hit("sectors") || hit("tower")) {
-      writeRadio(root, "collapsed", null, null, { x: cssPx(root, "--sal") + RADIO_TOP_GAP, w: 0 });
+    if (hit("sectors") || hit("tower") || hit("map")) {
+      const at = lane || radioLane(root, list);
+      writeRadio(root, "collapsed", null, null, { x: at.x, y: at.y, w: 0 });
       _radioPaintSeq = _fitSeq;
       void annPaint.offsetHeight;
     }

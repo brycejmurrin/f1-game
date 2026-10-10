@@ -329,6 +329,13 @@ cells) is still to run.
 | `91a43606a4` | review | bottom cluster in the list; column factors skip placed pieces; a slid RELATIVE is judged where painted. |
 | `c3a2951e14` | dock drag | the stand-off counts only dock groups that meet the column (x AND y); the plate narrows / drops at the centre chrome (start lights now listed, transient). New `hud-layout.spec` case "dragged touch docks". |
 
+Follow-up (HUD audit 2026-10-10, §Screenshot cross-check + F-06): the lane's band now starts under
+the map's bottom edge as well as the tower / mirror / chip / flag, its top is published
+(`--announce-lane-y`, read by the lane and collapsed slots ahead of the density / caution tops), the
+painted guarantee collapses a card that meets the map in any slot (pinned at the lane's own x / y,
+never `sal + 8`), the bottom cluster clips the lane, and a collapse a fit made holds through
+updateHud's post-gap-strings re-place. New `hud-layout.spec` case "radio card vs minimap".
+
 Not done: the four caution `:has()` steps for the card under the flag stay
 (one is pinned by `ui-improve-pass.test.mjs`); they read the `hud-radio-top` /
 `hud-mirror-side` aliases, which the resolver keeps in step with
