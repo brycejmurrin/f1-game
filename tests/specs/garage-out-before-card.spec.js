@@ -155,6 +155,17 @@ async function setMotion(page, on) {
 test.describe("garage-out before race/session card", () => {
   test.use({ viewport: { width: 1280, height: 720 } });
 
+  // PLAYER PACE UNDER THE HARNESS: navigator.webdriver skips the garage drive-out
+  // and the flyby (LoadingScreen.isAutomation) so other specs reach the grid inside
+  // BOOT_MS. This file is what proves the player's sequence (7.6 s drive-out, then
+  // card), so it opts back in through the gate's own flag, before and after any
+  // navigation, and keeps its >6 s assertion.
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => { window.__apexFullIntro = true; });
+    await page.evaluate(() => { window.__apexFullIntro = true; });
+    expect(await page.evaluate(() => LoadingScreen.isAutomation()), "fullIntro opt-in must turn the automation gate off").toBe(false);
+  });
+
   // Start Race leaves state === "menu" under the loading/garage plate, so
   // shared-page toMenu() only hides .screen nodes and never runs quitToMenu /
   // cancelIntro — the next sharedTest on the worker (parts-ers) then hits a

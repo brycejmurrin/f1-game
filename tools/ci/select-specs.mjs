@@ -999,6 +999,11 @@ export const SOURCE_AFFECTED = [
   [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career.spec.js"],
   [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career-season.spec.js"],
   [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career-hub.spec.js"],
+  // THE START RACE INTRO (garage drive-out + card): quali.spec and steering.spec
+  // launch races through it (#mb-race → rs-go) and wait BOOT_MS for the grid.
+  // A ui/car route never picked them, so #1290 shipped red there (Browser group
+  // input 38015514694, Pages 38016755004); real-race owns the JUMP IN card.
+  ...["quali", "steering", "real-race"].map((s) => [/^js\/(ui\/loading-screen|garage\/(setup-camera|arrival))\.js$/, `tests/specs/${s}.spec.js`]),
 ];
 export function specsAffectedBySource(changed, root = ROOT) {
   const hit = new Set();

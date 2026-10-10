@@ -29,10 +29,20 @@ const LoadingScreen = (function () {
   // came too late); not lower, or grid-mine's window (~12% of it) drops under
   // RADIO_MIN_S and the radio check never plays. Skippable with any pointer or key.
   const FLY_MS = 20000;
-  /** A harness-driven page (navigator.webdriver). Not a motion flag: a player's
-   *  reduced-motion setting still gets the card, the flyby and the announcer. */
-  function automated() {
-    try { return typeof navigator !== "undefined" && !!navigator && navigator.webdriver === true; } catch (_) { return false; }
+  /** THE ONE AUTOMATION GATE for every intro shortcut: the 700 ms card instead of
+   *  the flyby + announcer (run(), below) and no garage drive-out
+   *  (js/garage/setup-camera.js startDriveOut). A harness-driven page
+   *  (navigator.webdriver: Playwright, the Chrome MCP) unless it opts back into
+   *  player pace with ?fullIntro=1 or window.__apexFullIntro = true (the
+   *  garage-out-before-card spec does, to keep the 7.6 s drive-out covered).
+   *  Not a motion flag: a player's reduced-motion setting still gets it all. */
+  function isAutomation() {
+    try {
+      if (typeof navigator === "undefined" || !navigator || navigator.webdriver !== true) return false;
+      if (typeof window !== "undefined" && window && window.__apexFullIntro === true) return false;
+      if (typeof location !== "undefined" && location && /[?&]fullIntro=1(?:&|$)/.test(location.search || "")) return false;
+      return true;
+    } catch (_) { return false; }
   }
   // With nothing to fly over, just long enough for the card's fade to land
   // before the build takes the main thread.
@@ -658,8 +668,8 @@ const LoadingScreen = (function () {
       // hands off to the grid promptly instead of sitting through a 20-60 s flyby and
       // read on software GL (#1290 dropped the reduce-motion card the e2e suite's
       // pinned reducedMotion relied on, and the quali/real-race specs timed out). The
-      // garage leave before it still plays at the tuner's pace on every path.
-      const fly = !!info.hasWorld && !automated();
+      // garage drive-out before it is skipped through the same gate (isAutomation).
+      const fly = !!info.hasWorld && !isAutomation();
       addEventListener("pointerdown", onSkip, true);
       addEventListener("keydown", onSkip, true);
       padHeld.clear();
@@ -880,7 +890,7 @@ const LoadingScreen = (function () {
     };
   }
 
-  return { create, FLY_MS, SHORT_FLY_MS, FLY_MAX_MS, SKIP_GRACE_MS, SKIP_STREAK, flyMsFor, metaRows, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars,
+  return { create, isAutomation, FLY_MS, SHORT_FLY_MS, FLY_MAX_MS, SKIP_GRACE_MS, SKIP_STREAK, flyMsFor, metaRows, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars,
     gridLayout, gridField, gridColour, gridInk, isGridShot, GRID_ROW_MIN };
 })();
 Object.freeze(LoadingScreen);
