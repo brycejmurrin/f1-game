@@ -21,7 +21,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { parseBlob, readBlob, blobName, validateShots as bakeValidate, shotErrors as bakeShotErrors, bake, render, DEFAULT_RE, parseLiteral }
+import { parseBlob, readBlob, blobName, validateShots as bakeValidate, shotErrors as bakeShotErrors, FOV as bakeFov, bake, render, DEFAULT_RE, parseLiteral }
   from "../../tools/gen/bake-flyby.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -496,9 +496,14 @@ test("the structural half agrees too — what a PREVIEW is held to", () => {
   const cases = [
     goodList().map((s) => ({ ...s, dur: s.dur * 3 })),      // loose sum: playable
     (() => { const l = goodList(); l[0].fov = [40]; return l; })(),
+    (() => { const l = goodList(); l[0].fov = [0, 40]; return l; })(),      // under the slider
+    (() => { const l = goodList(); l[1].fov = [40, 120]; return l; })(),    // over it
+    (() => { const l = goodList(); l[0].fov = [FP.FOV.min, FP.FOV.max]; return l; })(),   // both ends play
     (() => { const l = goodList(); l[1].look = [{ at: "start" }]; return l; })(),
     [],
   ];
+  assert.deepEqual({ min: bakeFov.min, max: bakeFov.max }, { min: FP.FOV.min, max: FP.FOV.max },
+    "the bake's FOV range mirrors the panel's slider");
   for (const list of cases) {
     assert.deepEqual([...FP.shotErrors(list)], bakeShotErrors(list),
       "tools/shot/flyby.mjs --shots uses the bake's copy; the panel's saved list uses its own");

@@ -310,7 +310,7 @@ are held by the session that owns them. Rows marked fixed-in-#NNNN are in this s
 2026-10-09**, except the last line, which has no owner yet.
 
 - M19 replay — `clear()` zeroes `prevStatus`, so every retired/finished car re-tags as a fresh event after a timeline discard. `js/camera/replay-buf.js:81` · low
-- M20 net — wire `gear` (0-15) unclamped; gear 9-15 makes `rpmFor` NaN for that rival. `js/net/netplay.js:59,396` · low
+- M20 net — wire `gear` (0-15) unclamped; gear 9-15 makes `rpmFor` NaN for that rival. `js/net/netplay.js:59,396` · low · **fixed in #1289**
 - M21 net — `EVENT_CRITICAL` omits `quali`/`settings`; a lost QUALI on a backed-up reliable channel wrecks the grid. `js/net/transport.js:454,622` · low
 - M24 data hub — switching tabs does not abort the previous tab's OpenF1 requests. `js/data/hub.js:300`, `js/data/telemetry.js:357` · low-med · **fixed in #1284**
 - M27 car — daily "standard" class builds the player mesh from SAVED parts under the FACTORY cache key; `visualSetup` is stamped once. `js/game.js:1611,1635`, `js/car/car-draw.js:24-31,915` · low
