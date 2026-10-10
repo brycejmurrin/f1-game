@@ -6115,3 +6115,35 @@ test("the GLX mirror pass runs with the lamp shadow off — the forward slot nam
   const chunked = read("js/render/glx/chunked.js");
   assert.match(chunked, /SH\.lampArmed && SH\.lampIdx >= 0 && F\.lights && !core\.post\.mirror\.active\(\)/);
 });
+
+// 14-F1: window.__apex is NULL on the shipped build (game.js declares it null, only dev surfaces fill it), so
+// `typeof __apex !== "undefined" && __apex.diag` passed (typeof null is "object") then threw into the catch and
+// COPY DIAG always said NO DIAG. A player now gets playerDiag(); the dev surface still wins when it exists.
+test("COPY DIAG copies a real payload when __apex is null, and prefers __apex.diag when present (14-F1)", async () => {
+  const src = read("js/perf/renderer-picker.js");
+  // copyDiag plus whatever player-side helper sits above it (the base had none: the failure there is behavioural).
+  const fn = span(src, src.includes("function playerDiag()") ? "function playerDiag()" : "function copyDiag(", "function initReset()", "copyDiag");
+  const run = async (apex) => {
+    const btn = { textContent: "COPY DIAG" };
+    const written = [];
+    const ctx = vm.createContext({
+      __apex: apex, btn, window: {},navigator: { userAgent: "UA" },
+      GLX: { backendState: () => ({ api: "webgl2" }) }, Log: { records: () => [{ level: "warn", msg: "w" }] },
+      ApexClipboard: { write: (t) => { written.push(t); return Promise.resolve(true); } },
+      liveBackend: () => "three", unavailableDiagnostics: () => JSON.stringify({ renderer: { stored: null } }),
+      setTimeout() {},
+    });
+    vm.runInContext(fn + "\ncopyDiag(btn);", ctx);
+    for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
+    return { btn, written };
+  };
+  const player = await run(null);
+  assert.equal(player.written.length, 1, "a null __apex no longer ends in NO DIAG");
+  const got = JSON.parse(player.written[0]);
+  assert.equal(got.backend, "three");
+  assert.equal(got.backendState.api, "webgl2");
+  assert.equal(got.log[0].level, "warn");
+  assert.match(player.btn.textContent, /COPIED$/);
+  const dev = await run({ diag: (o) => ({ dev: true, download: o.download }) });
+  assert.deepEqual(JSON.parse(dev.written[0]), { dev: true, download: false }, "the dev surface still wins");
+});
