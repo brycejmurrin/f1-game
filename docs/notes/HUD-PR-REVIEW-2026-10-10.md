@@ -318,3 +318,36 @@ only through ship drift). S = semantic overlap. O = order dependence.
   `HudLayout.ELEMENTS`, and an edit to `hud-layout.spec.js`. It still
   conflicts with ship on the same three files. The order stands: it lands
   after #1366 and #1351.
+
+## Addendum 2: ship `184507f`
+
+- **#1366 (`7e8cf4a`) synced as asked.**
+  - It keeps ship's `--flag-slot-top`.
+  - Its `body[data-gap-drop]` rules and the `gapForm` body mirror are gone.
+  - The converted `#hud-inputs` top with `--inputs-below-limits` is kept, and
+    #1345's `+1.75em + 8px` line is gone.
+  - It merges cleanly with ship. CI is running.
+  - **Verdict: SAFE** once CI is green.
+- **#1351 (`bdf4cff`) is trimmed.**
+  - The INPUTS-top hunks, the `data-announce-lane` hunk and the hud-inputs
+    test change are gone. What remains is the translate / reduced-motion fixes,
+    the helmet anchor removal, the grid tracks and the portrait `capBot`.
+  - It merges cleanly with ship and with #1366, in either order.
+  - In a simulated merge of ship + #1366 + #1351 (`20fc2c4`), `#hud-inputs`
+    has one `top` formula (the touch and desktop homes, both #1366's), and
+    693/693 HUD and CSS unit tests pass (`hud-*.test.mjs` plus every unit file
+    that reads hud.css, touch-controls.css or hud.js).
+  - The helmet guard pins the intent (no `position-anchor` on helmet ERS) plus
+    the one rule that replaces it.
+  - **Verdict: SAFE** once CI is green; it no longer depends on #1366's order.
+  - Still open, as a non-blocking follow-up: measure the `max-content` grid
+    at 667×375 with steer buttons @150%, and at 360×740.
+- **#1346 (`7ab5147`) is red again, on a phone-landscape screenshot.**
+  - `menu-baseline.spec.js` "menu identity — phone-landscape › garage looks
+    like itself" differs from `garage-phone-landscape.png` by 16,983 px (6%).
+    The desktop garage cell passes (run 38049517942, job 114207292353).
+  - The cap is on `.sheet` under compact density, so this is the visible
+    effect of the cap on the phone garage. It is not a flake.
+  - The owner has to show the new look is intended and re-baseline it, or fix
+    the cap so the phone garage paints as before.
+  - **Verdict: FIX-FIRST.** It is still independent of the HUD PRs.
