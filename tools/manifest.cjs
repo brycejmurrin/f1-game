@@ -378,6 +378,7 @@ const FULL = [
   "js/ui/photo-studio.js",
   "js/ui/experience.js",
   "js/ui/title-menu.js",
+  "js/ui/deep-link.js",  // DeepLink: manifest shortcut ?go= doors, clicked once the title is live
   "js/ui/title-flow.js", // TitleFlow: main-menu race, season, career and ghost entry
   "js/race/quali-net.js",
   "js/race/race-settings.js",

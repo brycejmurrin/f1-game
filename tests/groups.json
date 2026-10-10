@@ -223,6 +223,7 @@
     "// empty state, on mini-dom with the real Dom.el. ~0.1 s.",
     "tests/unit/data-standings.test.mjs",
     "tests/unit/debris-step-skip.test.mjs",
+    "tests/unit/deep-link.test.mjs",
     "// ...and a third of the same family: two widgets keyed on ONE sign convention",
     "// were painted opposite colours. Neither half is wrong alone, so only a test",
     "// comparing the PAIR can see it. Pure text, well under a second.",

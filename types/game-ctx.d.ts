@@ -900,4 +900,5 @@ declare const RaceInsights: GameModuleFactory;
 
 declare const PlatformSession: GameModuleFactory;
 
+declare const DeepLink: GameModuleFactory;
 declare const TitleFlow: GameModuleFactory;
