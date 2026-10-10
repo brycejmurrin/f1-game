@@ -532,6 +532,40 @@ test("WORK ON CAR is offered only on the jacks, and the stop pays for it", async
   assert.equal(pits.canWork({ pitState: "box", pitT: 2 }), false, "and never for a car that is not yours");
 });
 
+// bug-hunt 7.4 — appended last on purpose (see the comment above: a serviced
+// car's release does not unwind cleanly between tests; this one stops no car).
+describe("a stale AI pit arm is cancelled (bug-hunt 7.4)", () => {
+  async function armedAi() {
+    await fresh();
+    const c = g.G.cars.find((k) => !k.human);
+    assert.ok(c, "the field has an AI car");
+    c.pitState = "none"; c.pitArmed = true; c.pitCommitted = false;
+    return c;
+  }
+  test("armed on the final lap: the arm is cleared", async () => {
+    const c = await armedAi();
+    c.lap = g.G.lapsTarget;
+    g.G.pits.update(c, 1 / 60);
+    assert.equal(c.pitArmed, false, "no stop pays on the last lap");
+    assert.equal(c.pitState, "none");
+  });
+  test("armed with the leader already flagged: the arm is cleared", async () => {
+    const c = await armedAi();
+    c.lap = 1;
+    const lead = g.G.cars.find((k) => k !== c);
+    lead.finished = true; lead.lap = g.G.lapsTarget + 1;
+    g.G.pits.update(c, 1 / 60);
+    lead.finished = false;
+    assert.equal(c.pitArmed, false, "the flag is out: nobody comes in");
+  });
+  test("armed mid-race: the arm stands", async () => {
+    const c = await armedAi();
+    c.lap = 1;
+    g.G.pits.update(c, 1 / 60);
+    assert.equal(c.pitArmed, true, "an AI that missed its entry comes in next time round");
+  });
+});
+
 // ---- bug-hunt 2026-10-09 7.3 (W5 game) — its own game, so the load-bearing order above is untouched ----
 describe("per-frame pit uniforms are pooled (bug-hunt 4.3a)", () => {
   test("laneUniform() / boxUniform() hand back the same array each frame, with the live numbers in it", async () => {
@@ -570,36 +604,5 @@ describe("retirement clears the pit state", () => {
       g2.step(5);
       assert.equal(c.pitState, "none", "and PitLane.update (which skips a retirement) cannot leave it set");
     } finally { g2.close(); }
-// bug-hunt 7.4 — appended last on purpose (see the comment above: a serviced
-// car's release does not unwind cleanly between tests; this one stops no car).
-describe("a stale AI pit arm is cancelled (bug-hunt 7.4)", () => {
-  async function armedAi() {
-    await fresh();
-    const c = g.G.cars.find((k) => !k.human);
-    assert.ok(c, "the field has an AI car");
-    c.pitState = "none"; c.pitArmed = true; c.pitCommitted = false;
-    return c;
-  }
-  test("armed on the final lap: the arm is cleared", async () => {
-    const c = await armedAi();
-    c.lap = g.G.lapsTarget;
-    g.G.pits.update(c, 1 / 60);
-    assert.equal(c.pitArmed, false, "no stop pays on the last lap");
-    assert.equal(c.pitState, "none");
-  });
-  test("armed with the leader already flagged: the arm is cleared", async () => {
-    const c = await armedAi();
-    c.lap = 1;
-    const lead = g.G.cars.find((k) => k !== c);
-    lead.finished = true; lead.lap = g.G.lapsTarget + 1;
-    g.G.pits.update(c, 1 / 60);
-    lead.finished = false;
-    assert.equal(c.pitArmed, false, "the flag is out: nobody comes in");
-  });
-  test("armed mid-race: the arm stands", async () => {
-    const c = await armedAi();
-    c.lap = 1;
-    g.G.pits.update(c, 1 / 60);
-    assert.equal(c.pitArmed, true, "an AI that missed its entry comes in next time round");
   });
 });
