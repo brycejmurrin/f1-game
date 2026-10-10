@@ -544,6 +544,13 @@ const NetLobby = (function () {
         renderRoom();
       });
       made.onEvent(NetPlay.EV.GO, () => { if (role === "guest") beginRace(); });
+      // A guest that left the quali sheet never reaches finishStart on its own; the host's qgo is its GO.
+      made.onEvent(QGO, () => {
+        if (role !== "guest" || !qualiAborted) return;
+        qualiAborted = false;
+        close();
+        finishStart();
+      });
       // Lobby-phase LEFT (the race phase's carries `wire`, handled by NetPlay):
       // the host saying another guest's connection closed. Only the host may
       // say it, and only about a relayed profile — never this connection's own.
@@ -624,6 +631,8 @@ const NetLobby = (function () {
     const HELLO_RATE = 5, EVENT_WINDOW_MS = 1000;   // per connection, per event
     const QUALI_RATE = 12;                          // QUALI + QLIVE together, per connection
     const QABORT = "qabort";   // guest→host "left quali sheet" (lobby-local until netplay owns it)
+    const QGO = "qgo";         // host→guest "quali is over, I am starting the race" (additive: old clients ignore the type)
+    let qualiAborted = false;  // this guest backed out of friend quali and is waiting in the room for the host
     const _peers = new Map();
     const _ready = new Map();
     const _verify = new Map();   // connection id -> 4-letter code from both DTLS fingerprints
@@ -1217,6 +1226,7 @@ const NetLobby = (function () {
       // different AI fields on the two screens. Re-setting the seed resets the
       // stream only (simSeed keeps _simSeed, which luckSeed reads).
       G.seed = G.seed;
+      qualiAborted = false;
       if (G.raceQuali && G.openQualiForNet) {
         friendQualifying = true;
         say("Qualifying…");
@@ -1271,6 +1281,7 @@ const NetLobby = (function () {
         // same exit, or netPlay.start/hostStart would run over the menu and strand a netStart.
         if (outcome === false || (outcome && outcome.kind === "canceled")) { friendQualifying = false; close(); return; }
         if (!sessions.size) { friendQualifying = false; clearInterval(pumpTimer); pumpTimer = null; close(); return; }
+        if (role === "host") broadcast(QGO, null);   // guests that backed out of quali are waiting for this
       } catch (e) {
         say("Could not start the race: " + (e && e.message), true);
         friendQualifying = false;   // keep the room and its message up, but stop gating quali saves
@@ -1899,7 +1910,7 @@ const NetLobby = (function () {
     // race-settings return here instead of starting a solo GP.
     function abortQuali() {
       friendQualifying = false;
-      if (role === "guest") broadcast(QABORT, null);   // host waits on every rival
+      if (role === "guest") { qualiAborted = true; broadcast(QABORT, null); }   // host waits on every rival
       if (G.setNetRoom) G.setNetRoom(true);
       const e = els();
       if (e.screen) e.screen.hidden = false;
@@ -1924,7 +1935,7 @@ const NetLobby = (function () {
     // Abandoning the lobby must tear the half-built connection down, or a
     // stale RTCPeerConnection sits there gathering candidates forever.
     function cancel() {
-      friendQualifying = false;
+      friendQualifying = false; qualiAborted = false;
       stopScan();
       stopCodeWait();
       codeReopen = null;
