@@ -184,8 +184,11 @@ test.describe("garage-out before race/session card", () => {
     await toMenu(page).catch(() => {});
   });
 
+  // Keep the existing 45 s boot + 240 s sequence budget as a literal so the
+  // CI selector can account for these rendered cases instead of packing them
+  // as cheap tests. The runtime limit is unchanged.
   test("reduce-motion: short garage-out completes before session card", async ({ page }) => {
-    test.setTimeout(BOOT_MS + 240_000);
+    test.setTimeout(285_000);
     await setMotion(page, false);
     await openRaceSettings(page);
     const tl = await startRaceFromSettings(page);
@@ -201,7 +204,7 @@ test.describe("garage-out before race/session card", () => {
   });
 
   test("view-transition / Home vt race: garage-out before flyby card", async ({ page }) => {
-    test.setTimeout(BOOT_MS + 240_000);
+    test.setTimeout(285_000);
     await setMotion(page, true);
     await openRaceSettings(page);
     const tl = await startRaceFromSettings(page);
@@ -209,7 +212,7 @@ test.describe("garage-out before race/session card", () => {
   });
 
   test("quick start (warm race-settings): garage-out before card", async ({ page }) => {
-    test.setTimeout(BOOT_MS + 240_000);
+    test.setTimeout(285_000);
     await setMotion(page, true);
     await openRaceSettings(page);
     await page.waitForFunction(() => {

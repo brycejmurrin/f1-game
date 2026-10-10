@@ -329,12 +329,8 @@ function gapForm() {
     if (drop) root.dataset.gapDrop = "1";
     else delete root.dataset.gapDrop;
   }
-  // MIRRORED ONTO <body> for the radio card: css/hud.css cannot write `:root … body`, and the card's
-  // caution step (below the flag chip) must follow the chip down when a dropped strip pushes it down.
-  if (drop !== document.body.hasAttribute("data-gap-drop")) {
-    if (drop) document.body.setAttribute("data-gap-drop", "1");
-    else document.body.removeAttribute("data-gap-drop");
-  }
+  // The radio card's caution step follows the chip through `:root[data-gap-drop] #announce { --flag-slot-top }`
+  // (css/hud.css, #1345): no body mirror needed.
   return short ? _gapFormShort : _gapFormLong;
 }
 // A LAP OR MORE IS LAPS, NOT SECONDS. distance ÷ the player's speed is a fair
@@ -381,6 +377,10 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + "s";
 const FIT_AIR = 10;              // px of daylight required between two clusters
 const ROW_AIR = 2;               // px between the tower's bottom and the sector plate's top (touch)
 let _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
+// _fitStamped: a stamp is published and no clash has voided it since.
+// _fitClashRun: consecutive same-key ticks that re-opened the fit for a clash.
+let _fitStamped = false, _fitClashRun = 0;
+const FIT_CLASH_TRIES = 5;
 // Per moved piece: hidden, or visible + the LENGTH of its words. A moved piece's
 // width is part of what HudLayout.fit clamps, and the AERO chip's words change
 // all lap ("AERO 523m" counting down, AERO ZONE, STRAIGHT MODE, CORNER MODE):
@@ -473,21 +473,11 @@ function layoutRect(el) {
   }
   return { left, top, right: left + w, bottom: top + h, width: w, height: h };
 }
-// THE OBSTACLE LIST: every visible HUD piece, measured ONCE per stage of a fit.
-// The radio card's slot pickers, the mirror's centre-column edge, the painted
-// phone-clash check, the sector plate's dock inset and HudLayout.clearControls
-// each used to walk their own hand-picked set of getBoundingClientRect calls,
-// and each picked a different set (the side-of-mirror picker ignored the map,
-// the flag and the readouts; the top-row picker ignored the readouts). One
-// list, collected after the dock caps are written and re-collected after any
-// write that moves a piece (the dock inset, MOVE & SIZE's clamp, a sector
-// shrink), is what every consumer reads, so they all judge the same screen.
-// Entry: { id, el, rect (painted, screen px), kind: control | readout | chrome,
-// column: left | right | centre | top | bottom, group?: dock group, dock?: L|R }.
-// A hidden or unlaid-out piece is not in the list (it has no box to clear).
-// THE BOX IS THE PAINTED ONE: what a card must clear is where a piece IS, MOVE &
-// SIZE offset included. The fit's own budgets keep measuring layoutRect (the
-// un-moved layout), never this list.
+// THE OBSTACLE LIST: every visible HUD piece as painted, { id, el, rect, kind: control | readout |
+// chrome, column: left | right | centre | top | bottom, group?/dock?/tap? }, collected after the dock
+// caps and again after any write that moves a piece. The radio slot, the mirror's centre edge, the
+// phone-clash check, the dock inset, the column allocators and HudLayout.clearControls all read it.
+// A hidden, unlaid-out or dropped piece is not in it. Budgets keep measuring layoutRect, not this.
 let _obs = [], _obsBy = Object.create(null);
 function obsCollect() {
   const list = [], by = Object.create(null);
@@ -542,54 +532,24 @@ function obsCollect() {
   }
   // The individual tap targets (BOOST / OT / AERO, the pedals, the steer arrows): the dock groups above
   // carry most of them, but TILT parks BRAKE beside the map and the pedals are #btn-* siblings.
+  // BOOST and the pedals by id first (the phone-clash check names them; a page may not class them).
+  add("btn-boost", els.btnBoost || doc.getElementById("btn-boost"), "control", null, { tap: true });
+  add("btn-brake", els.btnBrake || doc.getElementById("btn-brake"), "control", null, { tap: true });
+  add("btn-throttle", els.btnThrottle || doc.getElementById("btn-throttle"), "control", null, { tap: true });
+  add("btn-steer-left", els.btnSteerLeft || doc.getElementById("btn-steer-left"), "control", null, { tap: true });
+  add("btn-steer-right", els.btnSteerRight || doc.getElementById("btn-steer-right"), "control", null, { tap: true });
   const taps = doc.querySelectorAll ? doc.querySelectorAll(".touchbtn") : [];
-  for (let i = 0; i < taps.length; i++) add(taps[i].id || "tap" + i, taps[i], "control", null, { tap: true });
+  for (let i = 0; i < taps.length; i++) { const id = taps[i].id || "tap" + i; if (!by[id]) add(id, taps[i], "control", null, { tap: true }); }
   _obs = list; _obsBy = by;
   return list;
 }
 /** The latest collected entry for `id`, or null (hidden / unlaid-out / not collected yet). */
 function obs(id) { return _obsBy[id] || null; }
-// THE RADIO CARD'S TOP-ROW SLOT: right of the timing tower, left of the cam /
-// pause buttons, in the tower's own row — off the road and clear of the mirror
-// under the tower (a phone report: the card beside the mirror still sat on the
-// view). The strip ends at whichever button shares the tower's rows. Published
-// in SCREEN px with body.hud-radio-top — css/hud.css divides by the card's own
-// zoom — and only where a shrunk card fits; otherwise the card keeps its slot
-// under the tower (beside the mirror, js/render/shared/mirror-pass.js, or
-// below it). Never in BROADCAST, whose tower is top-left and whose mirror
-// owns the top-centre.
-// THE TOUCH DOCKS BOUND IT TOO. A dock column reaches the tower's rows on a
-// landscape phone (the cockpit's right dock put BOOST at y 72 on 844x390), and
-// the card was published straight across it (survey 2026-10-04: #announce
-// [500,66 223x65] over #btn-boost [603,72]). Every dock group that shares the
-// card's rows and reaches past the slot's start ends the strip at its left
-// edge; one that already covers the start leaves no slot at all. Run after the
-// dock cap is written, so the groups are measured at the zoom they paint at.
+// THE TOP-ROW SLOT: right of the timing tower, in its own row, ending at the cam / pause button, the
+// sector plate or a dock group that shares those rows (BOOST at y 72 on an 844x390 cockpit; never in
+// BROADCAST). THE LANE: else the card hangs between the touch docks — only chrome in the card's own rows
+// (LANE_ROWS) bounds it; a dock lit anywhere publishes it (desktop's empty docks never do).
 const RADIO_TOP_MIN = 96, RADIO_TOP_GAP = 8;
-// THE DOCK LANE: where the top-row slot does not fit, the card hangs under the
-// tower. A long message at a centred max-width reached whichever dock sat
-// closer to the middle (tilt auto, 852×393: pedals on the left, BOOST on the
-// right — a symmetric half from the pedals still covered BOOST). --announce-lane-x
-// (screen px) / -shift / -w are that gap; css/hud.css divides x by this
-// element's --hud-z (a calc embedding var(--hud-z) on :root is invalid there
-// and left fell back to 50% with transform none — card left-edge at centre,
-// hud-layout CI: #announce+btn-boost at x426 on 852). #hud-sectors sits in
-// that same hanging band on touch (small-landscape: #hud-sectors+#announce)
-// so it ends the strip too; the map and the gaps chip start it when a dropped
-// or low strip shares the hanging card's rows (hud-layout: .hud-gaps+#announce).
-// They do not count as a dock, so empty docks (desktop) still unpublish the
-// lane. Run again after this tick's gap strings (updateHud): fitHud
-// saw the previous spelling, and hud-layout probes on that same tick.
-// ONLY CHROME IN THE CARD'S OWN ROWS CLIPS IT. The hanging card starts under
-// the mirror (its chip, or the tower when neither shows) and is a few lines
-// tall (LANE_ROWS). Clipping the lane to every dock group wherever it sat —
-// the steer buttons and TILT's pedals on the bottom edge — and to the map and
-// gaps even when they ended above the card pinned the card at the steer
-// column's right edge, mid-view over the cars ahead (phone report 2026-10-10,
-// cockpit 932x430: #announce at x≈227 under the halo, 160px above the buttons
-// it was clearing). A dock group still PUBLISHES the lane from anywhere in the
-// viewport (desktop's empty docks never do); it bounds the lane only from the
-// card's rows, as the map, the gaps chip and the opt-in readouts do.
 const LANE_ROWS = 96;
 function towerRect() {
   const o = obs("tower");
@@ -599,14 +559,16 @@ function cssPx(root, name) {
   if (typeof getComputedStyle !== "function" || !root) return 0;
   try { return parseFloat(getComputedStyle(root).getPropertyValue(name)) || 0; } catch (_) { return 0; }   // mini-dom / detached root
 }
-// The hanging lane as a DECISION (placeRadio writes it): { on, collapsed, x, w } in screen px.
+// The hanging lane as a DECISION (placeRadio writes it): { on, collapsed, x, y, w } in screen px.
 function radioLane(root, list) {
   const t = towerRect();
   const W = window.innerWidth, H = window.innerHeight || 0;
   const y0 = t ? t.bottom : 0, mid = W / 2;
-  // The card's rows start under the centre band (tower, mirror, chip) — and under a caution below the
-  // flag chip too (css/hud.css: the caution rules) — wherever each sits: the lane spans the screen.
-  const bandTop = centreBandTop(true, true) + RADIO_TOP_GAP, bandBot = bandTop + LANE_ROWS;
+  // The rows start under the centre band (tower, mirror, chip, a caution flag) AND the map's bottom: a
+  // band from the tower's bottom let the map clip it only from the side, and the card painted over the
+  // bottom of the minimap (HUD audit 2026-10-10). Its top is published as --announce-lane-y.
+  const mapO = obs("map");
+  const bandTop = Math.max(centreBandTop(true, true), mapO ? mapO.rect.bottom : 0) + RADIO_TOP_GAP, bandBot = bandTop + LANE_ROWS;
   const sal = cssPx(root, "--sal"), sar = cssPx(root, "--sar");
   let left = sal, right = W - sar, any = false;
   const clip = (r, counts) => {
@@ -633,12 +595,15 @@ function radioLane(root, list) {
   // track-limits chip: a STRATEGY box in the left column and the INPUTS trace under
   // the sector box share the card's rows on a phone.
   for (const id of ["map", "gaps", "rel", "strat", "inputs", "damage", "limits"]) { const o = obs(id); if (o) clip(o.rect, false); }
+  // …and the bottom cluster where it reaches the card's rows (a touch landscape parks TYRES on top of
+  // the left dock — under the map, where the lane now hangs).
+  for (const o of list) if (o.column === "bottom") clip(o.rect, false);
   const x = left + RADIO_TOP_GAP, w = right - RADIO_TOP_GAP - x;
   const on = any && w > 0;
   // Collapsed: phone docks lit but S3 ate the gap (large --dock-r-w). The left pin + zero width
   // collapse the card; clearing the vars instead restored left:50% and dropped the radio onto the
   // sector plate (oversize CI: #hud-sectors+#announce).
-  return { on, collapsed: !on && any && !!secR, x, w };
+  return { on, collapsed: !on && any && !!secR, x, y: bandTop, w };
 }
 // The top-row strip as a decision: { x, y, w, h } in screen px, or null where no card fits.
 function radioTop(bcast, list) {
@@ -663,19 +628,10 @@ function radioTop(bcast, list) {
   const w = right - RADIO_TOP_GAP - x;
   return w >= RADIO_TOP_MIN ? { x, y: t.top, w, h: t.height } : null;
 }
-// THE RADIO CARD BESIDE THE MIRROR, not under it. Right of the frame is the
-// widest free strip at that height on a landscape screen (the map and gap
-// readouts own the left, 844x390: ~280px right vs ~230px left). The strip
-// ends at the right column: the pause button's column always (the sector
-// box that hangs under it comes and goes, and is ~10px wider), the cam
-// button only where it shares the card's rows (BROADCAST, mirror at the
-// very top). Moved here from js/render/shared/mirror-pass.js, which picked
-// it on its own 500 ms clock against a shorter list: every tap target, dock
-// group and readout in the card's rows (the mirror's top down by the card's
-// own height, at least SIDE_ROWS) that reaches past the slot's start ends
-// the strip at its left edge — one that already covers the start leaves no
-// slot (the cockpit's BOOST at y 72 on 844x390; the INPUTS trace under the
-// sector box). The row is the mirror's own CSS top (--mir-top).
+// BESIDE THE MIRROR: right of the frame (the widest free strip at that height in landscape) up to the
+// pause column, the sector plate past the frame, the cam button in the card's rows, and any tap target,
+// dock group or readout in those rows (the mirror's top down by max(frame, SIDE_ROWS, the card)) that
+// reaches past the slot's start. The row is the mirror's own CSS top (--mir-top).
 const SIDE_MIN = 190, SIDE_GAP = 8, SIDE_ROWS = 96;
 function radioSide(list) {
   if (!document.body.classList.contains("hud-mirror-on")) return null;
@@ -701,32 +657,17 @@ function radioSide(list) {
   const w = right - SIDE_GAP - x;
   return w >= SIDE_MIN ? { x, w } : null;
 }
-// THE RADIO CARD'S SLOT, ONE RESOLVER. Three pickers used to choose it and none
-// knew what the others decided — radioTopSlot (here, in the fit), side()
-// (mirror-pass.js, on the mirror's 500 ms clock) and announceLane (three times
-// a tick) — with the winner encoded only in css/hud.css :not() chains. Now one
-// pass, in priority order, against the obstacle list: the TOP strip (right of
-// the tower) -> BESIDE the mirror -> the hanging LANE between the touch docks
-// -> COLLAPSED (docks lit, no gap) -> CENTRED (the shipped slot under the
-// tower / mirror: desktop, or no dock). It publishes body[data-radio-slot] and
-// ONLY that slot's vars — the others are removed, so a stale lane can never
-// size a top-row card — plus the two class aliases the specs and the survey
-// assert (hud-radio-top, hud-mirror-side). Everything is screen px; css/hud.css
-// divides by the card's own --hud-z.
-// THE PAINTED GUARANTEE is the resolver's last step on a full placement: if the
-// card as now laid out still rects onto S3 or the tower, it collapses. That
-// collapse is LATCHED for the rest of this fit (_radioPaintSeq): the per-tick
-// re-place after the gap strings must not reopen the lane over the plate (that
-// re-lit the card, the same-key clash path forced a full fit every tick, and
-// under selected-2 load #minimap.currentCSSZoom sat on a stale cap: compact
-// mmCss 142 ≠ 110). The next full fit (key change, or the 3 s re-measure)
-// judges afresh.
+// THE RADIO CARD'S SLOT, ONE RESOLVER (it replaced three pickers that never saw each other's answer,
+// with the winner encoded in :not() chains): top strip -> beside the mirror -> lane -> collapsed ->
+// centre, against the obstacle list. It writes body[data-radio-slot] and ONLY that slot's vars, plus the
+// aliases the specs assert (hud-radio-top, hud-mirror-side); screen px, divided by the card's --hud-z.
+// Its last step is the PAINTED GUARANTEE: a card that still meets S3, the tower or the map collapses.
 const RADIO_VARS = {
   top: ["--radio-top-x", "--radio-top-y", "--radio-top-w", "--radio-top-h"],
   side: ["--mir-side-x", "--mir-side-w"],
-  lane: ["--announce-lane-x", "--announce-lane-shift", "--announce-lane-w"],
+  lane: ["--announce-lane-x", "--announce-lane-y", "--announce-lane-shift", "--announce-lane-w"],
 };
-let _radioSlot = "", _radioPaintSeq = -1, _fitSeq = 0;
+let _radioSlot = "", _radioPaintSeq = -1, _radioPlaceSeq = -1, _fitSeq = 0;
 function writeRadio(root, slot, top, side, lane) {
   const body = document.body;
   hAttr(body, "data-radio-slot", slot);
@@ -747,6 +688,7 @@ function writeRadio(root, slot, top, side, lane) {
   } else for (const p of RADIO_VARS.side) hUnset(root, p);
   if (slot === "lane" || slot === "collapsed") {
     hStyle(root, "--announce-lane-x", lane.x.toFixed(1) + "px");
+    hStyle(root, "--announce-lane-y", lane.y.toFixed(1) + "px");
     hStyle(root, "--announce-lane-shift", "0%");
     hStyle(root, "--announce-lane-w", slot === "lane" ? lane.w.toFixed(1) + "px" : "0px");
   } else for (const p of RADIO_VARS.lane) hUnset(root, p);
@@ -755,26 +697,32 @@ function writeRadio(root, slot, top, side, lane) {
   if (annEl && annEl.toggleAttribute) annEl.toggleAttribute("data-lane-collapsed", slot === "collapsed");
   _radioSlot = slot;
 }
-/** Place the radio card. `tick`: the per-tick re-place after this tick's gap strings (updateHud) —
- *  only a lane / collapsed / centred card can move then (the gap strip bounds the lane); a top-row or
- *  beside-the-mirror card, and a painted collapse latched this fit, hold until the next placement. */
+/** Place the radio card — the slot's ONE owner. `tick`: the per-tick re-place after this tick's gap
+ *  strings (updateHud): only a lane / centred card can move then (the gap strip bounds the lane); a
+ *  top-row or beside-the-mirror card holds, and so does ANY collapse this fit made — the post-gap-strings
+ *  call used to re-open in the same tick the lane fitHud had just collapsed (HUD audit F-06). A tick may
+ *  narrow or collapse a lane, never reopen one; the next full fit (key change — the gap text length is
+ *  in it — or the 3 s re-measure) judges afresh. */
 function placeRadio(root, bcast, list, tick) {
   if (!list) list = obsCollect();
-  if (tick && (_radioSlot === "top" || _radioSlot === "side" || (_radioSlot === "collapsed" && _radioPaintSeq === _fitSeq))) return _radioSlot;
+  if (tick && (_radioSlot === "top" || _radioSlot === "side" || (_radioSlot === "collapsed" && (_radioPlaceSeq === _fitSeq || _radioPaintSeq === _fitSeq)))) return _radioSlot;
   const top = tick ? null : radioTop(bcast, list);
   const side = top || tick ? null : radioSide(list);
   const lane = top || side ? null : radioLane(root, list);
   const slot = top ? "top" : side ? "side" : lane.on ? "lane" : lane.collapsed ? "collapsed" : "centre";
   writeRadio(root, slot, top, side, lane);
   if (tick) return slot;
-  // The painted guarantee (above): the tower and the plate do not move when the card does, so the
-  // list collected for this placement still holds them.
+  _radioPlaceSeq = _fitSeq;
+  // The painted guarantee (above): the tower, the plate and the MAP (its whole box, bottom edge
+  // included, in every slot) do not move when the card does, so the list collected for this placement
+  // still holds them. A collapse pins the card in the lane's own cleared rows, never at sal + 8.
   const annPaint = els.announce || document.getElementById("announce");
   if (annPaint && !annPaint.hidden && annPaint.getBoundingClientRect) {
     const a = annPaint.getBoundingClientRect();
     const hit = (id) => { const o = obs(id); return !!(o && _hudRectsHit(a, o.rect)); };
-    if (hit("sectors") || hit("tower")) {
-      writeRadio(root, "collapsed", null, null, { x: cssPx(root, "--sal") + RADIO_TOP_GAP, w: 0 });
+    if (hit("sectors") || hit("tower") || hit("map")) {
+      const at = lane || radioLane(root, list);
+      writeRadio(root, "collapsed", null, null, { x: at.x, y: at.y, w: 0 });
       _radioPaintSeq = _fitSeq;
       void annPaint.offsetHeight;
     }
@@ -799,15 +747,9 @@ function mirrorClear(root) {
   hStyle(root, "--mir-paint-b", b.toFixed(1) + "px");
   hStyle(root, "--centre-band-top", centreBandTop(false, false).toFixed(1) + "px");
 }
-// ONE MEASURED CENTRE-BAND TOP. What the centre column hangs under — the mirror frame, its chip or the
-// timing tower, as PAINTED (MOVE & SIZE included) — was re-derived three ways: css/hud.css rebuilt the
-// mirror's size for --mir-bot, the chip's top from --hud-top-h, and the lane measured its own. Now one
-// function: `withFlag` adds the caution / blue flag while it shows (the radio card hangs under it, the
-// flag itself does not), `span` takes every piece wherever it sits (the hanging lane runs the width of
-// the screen) instead of only those crossing the centre column (MIR_COL). Published as
-// --centre-band-top (screen px, no flag): css/hud.css folds it into --mir-bot with a max(), so the flag
-// and the centred card clear it in every state — the --mir-bot formulas stay as the pre-fit fallback.
-// Nothing whose box it reads depends on it, so it cannot feed back.
+// ONE MEASURED CENTRE-BAND TOP: the tower, the mirror frame or its chip as painted (`withFlag` adds the
+// flag for the radio card; `span` counts pieces anywhere, for the full-width lane, instead of only those
+// crossing the centre column). Published as --centre-band-top (no flag): --mir-bot's floor in css/hud.css.
 function centreBandTop(withFlag, span) {
   const cx = window.innerWidth / 2;
   const crosses = (r) => span || (r.left < cx + MIR_COL && r.right > cx - MIR_COL);
@@ -847,18 +789,10 @@ function phonePaintedClash(list) {
   }
   return false;
 }
-// THE RIGHT COLUMN'S X, IN ONE FUNCTION. --dock-r-w is the stand-off every right-anchored readout
-// (sectors, LIMITS, DAMAGE, INPUTS) takes from the right dock: css/hud.css adds it to
-// `right: 10px + sar/z`, in the CHROME's zoom space (--hud-z-top) — so it is the dock's screen
-// reach over that zoom, never re-divided by the CSS. It used to be computed in four places with
-// three copies of this arithmetic; every writer now calls this.
-// Air is SCREEN px converted into the plate's zoom space (+AIR/z). Subtracting
-// AIR before dividing shrank the inset (tilt @150% S3×BOOST). Zoomed +8 was
-// only ~4px at z≈0.5 and failed CI workers=2. Keep 8px — more shoved S3 into
-// #announce before the radio lane could clip the card.
-// 8px under-cleared BOOST by ~2px at HUD 140% on CI (sectors r 590.7 vs
-// BOOST l 588.8). 12px screen air is still well below the midCap.
-// Capped at the centre line so S3 cannot walk past mid into #minimap / #announce.
+// THE RIGHT COLUMN'S X, IN ONE FUNCTION: --dock-r-w, in the chrome's zoom (--hud-z-top), is the stand-off
+// every right-anchored readout adds to `right: 10px + sar/z`. Air is SCREEN px over the zoom (+AIR/z;
+// 8 px under-cleared BOOST by ~2 px at HUD 140% on CI), capped at the centre line so S3 cannot walk past
+// mid into #minimap / #announce.
 const RIGHT_DOCK_AIR = 12;
 function rightDockInset(left, z, sarPx) {
   if (!Number.isFinite(left) || !(z > 0)) return 0;
@@ -867,22 +801,13 @@ function rightDockInset(left, z, sarPx) {
   const need = Math.max(0, (window.innerWidth - left) / z - 10 - sar / z + DOCK_AIR / z);
   return Math.min(need, midCap);
 }
-// THE COLUMNS ARE SIZED, NOT ONLY PLACED. The bands have zoom caps (--hud-z-top / -bot / -dock); the
-// two side columns get the same idea. When a column's stack does not fit its height — the next piece
-// would land on a control, a dock group, the bottom band or off the screen — its readouts scale down
-// together (--rcol-z / --lcol-z, a factor on each piece's own band zoom, published like --hud-z-top:
-// absent when 1) to a FLOOR that keeps --fs-micro text at COL_TEXT_MIN px or more on screen, and only
-// what still does not fit at that floor is dropped. PRIORITY is the stacking order — the order each
-// allocator lists its pieces in, highest first: right column LIMITS > DAMAGE > INPUTS (> desktop
-// RELATIVE), left column LIMITS > RELATIVE > STRATEGY — so the lowest-priority piece is the one left
-// without room.
-// SOLVED FROM INVARIANTS so it cannot hunt: each piece's size at factor 1 is its box over the factor
-// it is painted at (the published one — only where the engine paints zoom, as fitHud's own caps
-// measure), the factor is the largest one (to 0.001) whose layout drops no more than the floor's does
-// — weighed by priority: a dropped piece outweighs every piece below it, so a lower piece never keeps
-// a slot a higher one lost — found by bisection over pure arithmetic, and the other column's allocated
-// pieces are never an obstacle for the right one (the left column is placed after it, against it as
-// now stacked).
+// THE COLUMNS ARE SIZED, NOT ONLY PLACED. A side column whose stack does not fit scales its readouts
+// together (--rcol-z / --lcol-z, a factor on each piece's band zoom, absent when 1) down to a floor that
+// keeps --fs-micro text >= COL_TEXT_MIN px, and only then drops. PRIORITY is the stacking order (right:
+// LIMITS > DAMAGE > INPUTS > desktop RELATIVE; left: LIMITS > RELATIVE > STRATEGY), weighted so a
+// dropped piece outweighs every piece below it. Invariant-solved: sizes at factor 1 are the box over the
+// published factor (only where the engine paints zoom), the factor is the largest whose drop cost
+// matches the floor's (bisection), and the left column never obstructs the right (placed after it).
 const COL_TEXT_MIN = 10;
 /** The smallest column factor that keeps --fs-micro text >= COL_TEXT_MIN px in every band `zs` lists. */
 function colZoomFloor(root, zs) {
@@ -926,23 +851,12 @@ function colWrite(root, prefix, p, slot) {
 }
 const colUser = (el) => !!(el && el.hasAttribute && el.hasAttribute("data-hl-user"));
 const colRect = (x, y, w, h) => ({ left: x, top: y, right: x + w, bottom: y + h, width: w, height: h });
-// THE RIGHT COLUMN, STACKED BY MEASUREMENT. Under the pause / cam buttons the sector plate hangs, and
-// under it TRACK LIMITS, DAMAGE and INPUTS (and on desktop RELATIVE). Each used to sit at a fixed
-// offset from the plate (--hud-sec-h + 15px, + 2.6em, + 12px), so turning one on or off moved none of
-// its neighbours: a strike painted LIMITS over INPUTS in 12 of 13 quick-matrix cells, DAMAGE and
-// INPUTS shared a slot, and INPUTS mixed two zooms (its top was in the bottom band's units plus a
-// height measured in the top band's — 43 px of float under S3 at top 0.575 / bottom 1).
-// Now each piece's top is the bottom of whatever is visible above it plus RCOL_AIR, published as
-// --rcol-y-<id> in SCREEN px (each rule divides by the piece's own --hud-z, which is what retires the
-// zoom mix), so the column closes up and opens out as pieces come and go. The x is --dock-r-w
-// (rightDockInset) for every piece, converted into each piece's zoom by the CSS, so a column factor
-// never walks a piece onto the dock. A piece the player PLACED (data-hl-user) keeps its shipped anchor
-// (its var is removed: the CSS fallback is that anchor, which its stored offset is relative to) and the
-// rest step below it where it is painted. A hidden piece gets the slot it WOULD take, without taking
-// room, so a LIMITS strike shows in its place at once (the fit key re-stacks the rest on the next
-// tick, and updateHud re-stacks on the strike's own tick). A piece that would land on anything else in
-// the list — a dock group, a tap target, the bottom band — or off the screen first shrinks the column
-// (above), then is dropped.
+// THE RIGHT COLUMN, STACKED BY MEASUREMENT: under the plate, LIMITS -> DAMAGE -> INPUTS (-> desktop
+// RELATIVE, floor 38svh), each at the bottom of what is visible above it + RCOL_AIR, as --rcol-y-<id>
+// in screen px (each rule divides by its own zoom: no INPUTS zoom mix). Fixed offsets made a strike
+// paint LIMITS over INPUTS and DAMAGE share INPUTS' slot. x is --dock-r-w for all. A hidden piece keeps
+// its slot without taking room; a placed one (data-hl-user) keeps its shipped anchor (var removed) and
+// the rest step below it; one that would land on a control or off screen shrinks the column, then drops.
 const RCOL_AIR = 10;   // unzoomed px between stacked pieces (screen px = air * the piece's zoom)
 function placeRightColumn(root, scale) {
   const doc = document, body = doc.body, desk = body.classList.contains("desktop");
@@ -1003,23 +917,13 @@ function placeRightColumn(root, scale) {
   publishColZoom(root, "--rcol-z", k);
   for (const p of P) colWrite(root, "--rcol-", p, sol.out[p.id]);
 }
-// THE LEFT COLUMN, THE SAME WAY. Under the map and the gap strip (and the metrics panel when it is
-// parked left) come TRACK LIMITS (when fitHud crosses it left), RELATIVE (touch) and STRATEGY. They
-// used to share one fixed anchor (--hud-left-h + 8px) with literal steps: STRATEGY sidestepped by
-// 168 px whenever RELATIVE was on — RELATIVE's width is up to min(240px, 46vw), so at tilt's zoom the
-// two overlapped (78x54 px) — and both dropped a reserved 2.6em for a LIMITS chip that was hidden
-// until a strike, even with the LIMITS toggle off.
-// Each piece now takes the first free candidate, judged against the obstacle list (every control,
-// chrome and readout this allocator does not place, as painted, plus what it has placed):
-//   1. the main column, under whatever is visible above it (+ air);
-//   2. a second sub-column, beside a piece already placed, at that piece's top;
-// and if neither is free the column shrinks (above), then the piece is DROPPED (data-col-drop:
-// visibility hidden, so its box still measures and the decision cannot hunt; HudLayout's hiddenReason
-// says why) instead of painting over a control. RELATIVE sizes itself (HudRelative.fitRows trims its
-// outer rows above the left dock), so it always takes the main column and never drives the factor.
-// Published as --lcol-y-<id> / --lcol-x-<id> (x only in the sub-column) in SCREEN px; desktop
-// STRATEGY keeps 40svh as its floor. Placed pieces (data-hl-user) keep their shipped anchors (vars
-// removed) and are obstacles where they are painted, as on the right.
+// THE LEFT COLUMN, THE SAME WAY: LIMITS (crossed left) -> RELATIVE (touch) -> STRATEGY under the map /
+// gaps / broadcast tower / a left metrics panel. Each takes the first free candidate against the list —
+// the main column, else beside a placed piece at its top — else the column shrinks, else it is DROPPED
+// (data-col-drop: still laid out, so the next fit asks the same question). This replaced one shared
+// anchor with literal steps (a 168 px STRATEGY sidestep narrower than RELATIVE at tilt's zoom, a
+// reserved 2.6em for a hidden LIMITS chip). RELATIVE self-sizes (HudRelative.fitRows), so it always
+// takes the main column. --lcol-y-* / --lcol-x-* in screen px; desktop STRATEGY's floor is 40svh.
 const LCOL_AIR = 8;
 function placeLeftColumn(root, scale) {
   const doc = document, body = doc.body, desk = body.classList.contains("desktop");
@@ -1103,7 +1007,7 @@ function placeLeftColumn(root, scale) {
   for (const p of P) colWrite(root, "--lcol-", p, sol.out[p.id]);
 }
 /** Phone-only: after REL/sectors/announce land, re-fit rows and publish stamp. */
-function phoneFitStampSync(scale) {
+function phoneFitStampSync(scale, force) {
   if (document.body.classList.contains("desktop")) return;
   const root = document.documentElement;
   const DOCK_AIR = RIGHT_DOCK_AIR;
@@ -1154,10 +1058,17 @@ function phoneFitStampSync(scale) {
     bumpDock();
     shrinkSectors();
   }
+  // A custom property written on <html> invalidates style for the whole tree and
+  // wakes sheet-shape's watchScale observer, so the 10 Hz tick must not rewrite
+  // it while nothing changed. A new stamp means "a clash cleared" (or a probe
+  // asked via syncPhoneFit, whose waiters need a fresh value each call).
   if (!phonePaintedClash()) {
-    _fitClearSeq = (_fitClearSeq + 1) | 0;
-    hStyle(root, "--hud-fit-stamp", String(_fitClearSeq));
-  } else hStyle(root, "--hud-fit-stamp", "");
+    if (force || !_fitStamped) {
+      _fitClearSeq = (_fitClearSeq + 1) | 0;
+      hStyle(root, "--hud-fit-stamp", String(_fitClearSeq));
+      _fitStamped = true;
+    }
+  } else { hStyle(root, "--hud-fit-stamp", ""); _fitStamped = false; }
 }
 function fitHud() {
   // Cinematic HUD: OFF and "any open .screen" hide #hud via display:none.
@@ -1258,7 +1169,12 @@ function fitHud() {
       }
     }
     if (!clash && list && phonePaintedClash(list)) clash = true;
-    if (!clash) return;
+    if (!clash) { _fitClashRun = 0; return; }
+    // A clash the fit cannot resolve (REL x BRAKE when hud-relative's cap guard
+    // refuses, S3 x BOOST at high HUD SIZE) re-opened the full fit, up to 8
+    // passes of layout reads, on every 10 Hz tick. A few tries per key, then the
+    // 3 s cadence; a changed key (below) starts over.
+    if (++_fitClashRun > FIT_CLASH_TRIES) return;
     _fitWait = 0;
   }
   _hlEls = document.querySelectorAll ? document.querySelectorAll("[data-hl]") : [];
@@ -1266,7 +1182,8 @@ function fitHud() {
   // A CHANGED key (resize / hud-scale) re-fits at the next tick; the counter
   // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD
   // tick ≈ 3 s between forced layout reads while nothing changed.
-  _fitKey = key; _fitWait = 30; _fitSeq = (_fitSeq + 1) | 0;   // a full fit: placeRadio judges a painted collapse afresh
+  if (key !== _fitKey) _fitClashRun = 0;
+  _fitKey = key; _fitWait = 30; _fitSeq = (_fitSeq + 1) | 0;   // a full fit: placeRadio judges a collapse afresh
   // SINGLE SOURCE: the published band zooms, not el.currentCSSZoom.
   // Under load currentCSSZoom lags --hud-z-top by a frame (Pages
   // 37714419183: rect 87.11 = 110×zTop 0.792 while #minimap zoom read 0.704;
@@ -1489,21 +1406,9 @@ function fitHud() {
   // Same published divisor as wide() — do not re-read currentCSSZoom here.
   const topHPub = tall(_hudTop, zTopPub);
   hStyle(root, "--hud-top-h", topHPub.toFixed(1) + "px");
-  // THE RIGHT DOCK'S WIDTH, so right-anchored HUD chrome can stand off it.
-  // #hud-limits is `right: 10px` and sits BELOW #hud-sectors — which is exactly
-  // where the BOOST pedal is on a touch phone, so a track-limits warning painted
-  // over a tap target. Published in the chrome's own zoom space (the dock zooms
-  // by the RAW slider, the chrome by --hud-z-top) so the CSS can add it directly.
-  // The dock's SCREEN width over the CHROME's zoom: #hud-limits is inside the
-  // --hud-z-top group, so its `right:` needs the stand-off in that space, and
-  // the dock's own zoom (the raw slider) never enters it.
-  // THE SECTOR BOX'S HEIGHT, for the chip that hangs off its bottom edge.
-  // #hud-limits derived that offset from a hand-computed `4.8em` (three rows at
-  // line-height 1.6) — which is only the box's height while the box EXISTS. Every
-  // profile that hides it (MINIMAL, and a broadcast camera outside the broadcast
-  // profile) left the chip hanging in mid-air below an empty corner, reported
-  // from a phone as "LIMITS floats in the middle of the screen". Measured, in
-  // the chip's own zoom units, it is 0 exactly when the box is gone.
+  // THE SECTOR BOX'S HEIGHT, for the chip that hangs off its bottom edge (the first paint's fallback;
+  // placeRightColumn stacks the column by measurement). 0 exactly when the box is gone (MINIMAL, a
+  // broadcast camera outside the broadcast profile): a hand-computed 4.8em left LIMITS mid-air.
   const secH = tall(els.hudSectors, zTopPub);
   hStyle(root, "--hud-sec-h", secH.toFixed(1) + "px");
   const chromeZ = zoomDiv(_hudTop || els.minimap, zTopPub) || scale || 1;
@@ -1568,11 +1473,7 @@ function fitHud() {
     if (limLeft) root.dataset.limitsLeft = "1";
     else delete root.dataset.limitsLeft;
   }
-  // --dock-r-w is published AFTER the zoom caps below: publishing it here
-  // with the pre-cap chromeZ left the inset in z=1 space while #hud-sectors
-  // painted at the capped --hud-z-top (notched-landscape buttons: S3 on
-  // BOOST). #1191's max(anchor(left)) papered over that and then overshot
-  // into #announce.
+  // (--dock-r-w is published after the zoom caps below, in the capped chrome zoom.)
   // THE DOCK CAP IS ASKED OF FIXED LAYOUTS, NOT OF THE ONE ON SCREEN. A dock is
   // a wrap-reverse row, so its height depends on the zoom: at HUD 150% on a
   // 734x343 phone BUTTONS mode's right dock (pedals + BOOST/OT/AERO) wrapped
@@ -1742,19 +1643,11 @@ function fitHud() {
     const live = probe && probe.currentCSSZoom > 0 ? probe.currentCSSZoom : pub;
     return Math.min(pub, live);
   };
-  // THE DOCK COUNTS ONLY WHERE IT MEETS THE COLUMN — in x AND y. The stand-off used to be taken from the
-  // leftmost right-dock control wherever it sat, and the repair passes tested `plate.right > group.left`
-  // alone: with the docks DRAGGED inboard (SETTINGS › CONTROLS › dock layout, 844x390 touch) the right
-  // dock sat left of the sector plate's home, so --dock-r-w shoved S1-S3 to the centre cap, under the
-  // start lights, and BOOST ended up on the plate (shots/1360 btn1-dragged). Now only a right-dock group
-  // or a right-half BOOST that intersects the right column's HOME box — the plate's box with no
-  // stand-off (its right edge at the safe edge + 10 zoomed px), from its top to the screen's foot, plus
-  // DOCK_AIR — pushes the column; a dock dragged clear of it leaves S1-S3 at home. Every overlap test
-  // below is a real rect intersection.
-  // AND THE PLATE STOPS AT THE CENTRE CHROME: where the stand-off would carry it into the tower, the
-  // start lights, the mirror or the flag in its own rows, it keeps its right edge clear of the dock and
-  // narrows (max-width) to fit between the two; too narrow even for that (48 px) and it is DROPPED
-  // (data-col-drop, still laid out so the next fit measures the same box) rather than painted over either.
+  // THE DOCK COUNTS ONLY WHERE IT MEETS THE COLUMN, in x AND y: a right-dock group / right-half BOOST
+  // sets the stand-off only if it intersects the column's HOME box (the plate with no stand-off, its top
+  // to the screen's foot, plus DOCK_AIR), so docks dragged inboard leave S1-S3 home (shots/1360: x-only
+  // tests shoved the plate under the start lights). The plate also stops at the centre chrome in its
+  // rows: it narrows to fit (max-width), and under 48 px it is dropped (data-col-drop).
   const W = window.innerWidth || 0, Hh = window.innerHeight || 0;
   const sarPx = cssPx(root, "--sar");
   const DOCK_AIR = RIGHT_DOCK_AIR;
@@ -2696,6 +2589,7 @@ function invalidateFit() {
   if (!_hudTop || document.body.classList.contains("hud-hidden")) return;
   const root = document.documentElement;
   hStyle(root, "--hud-fit-stamp", "");
+  _fitStamped = false;
   // A full placement: the resolver's own painted check runs last, so a collapse it finds holds.
   placeRadio(root, document.body.classList.contains("hud-prof-broadcast"));
   mirrorClear(root);
@@ -2703,7 +2597,7 @@ function invalidateFit() {
 _invalidateFit = invalidateFit;
 function syncPhoneFit() {
   syncComputedRootVars();
-  phoneFitStampSync(+document.documentElement.style.getPropertyValue("--hud-scale") || _cssScale);
+  phoneFitStampSync(+document.documentElement.style.getPropertyValue("--hud-scale") || _cssScale, true);
   const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
   return !phonePaintedClash() && /^\d+$/.test(stamp);
 }

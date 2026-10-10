@@ -666,6 +666,41 @@ test.describe("tilt steer high HUD scale", () => {
   });
 });
 
+// THE RADIO CARD OVER THE MAP (HUD audit 2026-10-10, §Screenshot cross-check): in the chase survey
+// sheets with shipped settings the card sat at x = sal + 8 over the BOTTOM of the minimap, painted full
+// width — the lane's band started at the tower's bottom, so the map only clipped it from the side, and
+// updateHud's post-gap-strings call re-opened a lane fitHud had collapsed (F-06). js/ui/hud.js
+// placeRadio now starts the lane under the map's bottom and holds a collapse for the fit.
+test.describe("radio card vs minimap", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  test("chase, shipped settings, a radio message on: the card never meets #minimap", async ({ page }) => {
+    const v = { name: "phone-landscape", w: 844, h: 390, sal: 47, sar: 47, sat: 0, sab: 21 };
+    await race(page, "buttons", false, v, { cam: "chase" });   // race() shows the card with its longest tenant
+    await waitPhoneHudFitClearance(page);
+    const out = await page.evaluate(() => {
+      const box = (el) => {
+        if (!el || el.hidden) return null;
+        const r = el.getBoundingClientRect();
+        return r.width && r.height && getComputedStyle(el).visibility !== "hidden"
+          ? { l: r.left, t: r.top, r: r.right, b: r.bottom } : null;
+      };
+      const root = document.documentElement;
+      return {
+        card: box(document.getElementById("announce")), map: box(document.getElementById("minimap")),
+        slot: document.body.getAttribute("data-radio-slot"),
+        laneX: root.style.getPropertyValue("--announce-lane-x"), laneY: root.style.getPropertyValue("--announce-lane-y"),
+      };
+    });
+    const d = JSON.stringify(out);
+    expect(out.map, "the map is on in the shipped chase HUD " + d).not.toBeNull();
+    expect(out.slot, "the resolver placed the card " + d).toBeTruthy();
+    const hit = (a, b) => !!(a && b && a.l < b.r - 0.5 && b.l < a.r - 0.5 && a.t < b.b - 0.5 && b.t < a.b - 0.5);
+    // A collapsed card has no painted box (null): that is clear of the map too.
+    expect(hit(out.card, out.map), "the radio card does not meet the minimap " + d).toBe(false);
+  });
+});
+
 // DOCKS DRAGGED INBOARD (SETTINGS › CONTROLS dock layout). shots/1360 btn1-dragged (844x390 touch,
 // Monza): with both docks moved 20% in and 20% up, --dock-r-w was taken from the right dock's left edge
 // wherever it sat and the repair passes tested x alone, so S1-S3 slid under the start lights and BOOST

@@ -329,7 +329,58 @@ cells) is still to run.
 | `91a43606a4` | review | bottom cluster in the list; column factors skip placed pieces; a slid RELATIVE is judged where painted. |
 | `c3a2951e14` | dock drag | the stand-off counts only dock groups that meet the column (x AND y); the plate narrows / drops at the centre chrome (start lights now listed, transient). New `hud-layout.spec` case "dragged touch docks". |
 
-Not done: the four caution `:has()` steps for the card under the flag stay
-(one is pinned by `ui-improve-pass.test.mjs`); they read the `hud-radio-top` /
-`hud-mirror-side` aliases, which the resolver keeps in step with
-`data-radio-slot`.
+Follow-up (HUD audit 2026-10-10, §Screenshot cross-check + F-06): the lane's band now starts under
+the map's bottom edge as well as the tower / mirror / chip / flag, its top is published
+(`--announce-lane-y`, read by the lane and collapsed slots ahead of the density / caution tops), the
+painted guarantee collapses a card that meets the map in any slot (pinned at the lane's own x / y,
+never `sal + 8`), the bottom cluster clips the lane, and a collapse a fit made holds through
+updateHud's post-gap-strings re-place. New `hud-layout.spec` case "radio card vs minimap".
+
+## Allocator size
+
+Measured after the ship merge (`#1366` in) and a trim pass. `lines` / `codeLines` as
+`tools/check/ratchets.mjs` counts them:
+
+| file | ship | PR #1375 ceiling | this branch, before trim | after trim |
+|---|---|---|---|---|
+| `js/ui/hud.js` | 2281 / 1345 | 2246 / 1330 | 2698 / 1590 | **2557 / 1590** |
+| `css/hud.css` | 2120 / 1926 | 2109 / 1917 | 2150 / 1949 | **2101 / 1902** |
+
+What the trim did: it removed the comment blocks that described the replaced pickers
+(the top-row and dock-lane essays, the right-dock-width note), condensed every phase's own
+header, and cut the `#hud-limits` / `#hud-damage` / radio-slot / column-factor CSS notes to
+what the rule needs. The code those notes described was already gone: `announceLane`,
+`radioTopSlot`, `radioPaintedCollapse` and mirror-pass `side()`'s slot pick (Phase 2), the 168 px
+STRATEGY sidestep and the reserved limits-left 2.6em (Phase 4), the `body[data-gap-drop]` caution
+twins (ship). `css/hud.css` is now under #1375's ceiling.
+
+**The raise: `js/ui/hud.js` lines 2246 → 2557 (+311; +276 over ship), codeLines 1330 → 1590
+(+260; +245 over ship).** Per phase, in code lines, and why it cannot be smaller:
+
+- **Phase 1, the obstacle list, ~45.** One entry per HUD piece kind (tower, map, gaps, metrics,
+  sectors, LIMITS, DAMAGE, RELATIVE, STRATEGY, INPUTS, mirror, chip, flag, start lights, pause,
+  cam, bottom cluster, dock groups, BOOST / pedals / tap targets). It replaces 10+ scattered
+  `getBoundingClientRect` walks. Every later phase depends on it.
+- **Phase 2, the radio resolver, ~115.** Three slot geometries (top, side, lane), one writer and
+  the painted guarantee. It replaces ~95 lines of old pickers (here and in mirror-pass). The added
+  cost is that each slot's vars are removed when another slot wins, plus the per-fit collapse latch
+  (F-06).
+- **Phases 3–5, the column allocators and column sizing, ~145.** Two allocators, because the
+  columns differ: the right column is a pure stack anchored to the dock, the left one also has
+  side-by-side placement, a floor and RELATIVE sizing itself. They share the solver
+  (`colPiece` / `colWrite` / `bestColZoom` / `colZoomFloor`). Removing the fixed CSS offsets is
+  what makes the toggles move their neighbours; there is no cheaper invariant-solved form.
+- **Phase 6, the centre-band top, ~11.**
+- **The dock-drag fix, ~+15 net.** The stand-off now needs the column's home box, a real-intersection
+  helper and the start-lights narrowing / drop.
+- **Glue, ~10.** `colVisKey` (the column pieces' visibility goes in the fit key), `hUnset`, and the
+  strike-tick re-stack.
+
+To recover the rest, extract the allocator (Phases 1–6) into its own module (a `HudBands`
+IIFE with a `create(ctx)` API). That needs a `tools/manifest.cjs` entry and
+`gen-shell`, which is outside this branch's owned paths. Do that as the follow-up rather than
+golfing lines.
+
+Not done: ship's two caution `:has()` steps (written through `--flag-slot-top`; pinned by
+`ui-improve-pass.test.mjs`) still read the `hud-radio-top` / `hud-mirror-side` aliases, which
+the resolver keeps in step with `data-radio-slot`; the lane slot's measured top outranks them.

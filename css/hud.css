@@ -153,13 +153,14 @@
      while the map pushes the widget rightward, and the slot between them closes.
      The adaptive font cap below holds the widget to 84px wide at 100% and 121 at
      200%, and it clears everything through 150% (27px of slack at 1000x450,
-     19px at 1280x800). Past that the slot is gone — but so is the corner: at
-     1280x800 @200% `#minimap`'s right edge is 21px PAST `.hud-top`'s left edge,
-     i.e. the map and the POS row overlap each other with this widget removed
-     from the comparison entirely (same at 852x393). Nothing legible fits in the
-     61px left at 175%, so there is no CSS fix at that end and no point pursuing
-     one; docking below `.hud-top` does clear at every scale, and was tried, but
-     it breaks up the top-left cluster. */
+     19px at 1280x800). Past that the slot is gone — `data-gap-drop` (fitHud)
+     parks this strip under the tower. Uncapped geometry still has the map and
+     POS row clash (historic: 1280×800 @200% map right 21px past `.hud-top`
+     left; same class at 852×393). With today's shared top-band cap, 1280×720
+     @150–200% keeps ~12px map×tower slack at `--hud-z-top`≈1.46 (hud-survey
+     2026-10-10) — so there is no CSS one-liner that clears a remaining clash
+     without breaking the top-left cluster; docking under `.hud-top` was tried
+     and rejected for that reason. */
   top: calc(8px + var(--sat) / var(--hud-z));
   left: calc(146px + var(--sal) / var(--hud-z));
   /* ADAPTIVE SIZE. 12px is the base — below --fs-micro (14px, the token scale's
@@ -862,22 +863,11 @@ body.hud-mirror-on :is(#announce, #hud-flag) {
     calc(var(--mir-paint-b, 0px) / var(--hud-z)), calc(var(--centre-band-top, 0px) / var(--hud-z)));
 }
 body.hud-prof-broadcast.hud-mirror-on :is(#announce, #hud-flag) { --mir-top: calc(8px + var(--sat) / var(--hud-z)); }
-/* THE RADIO CARD'S SLOT IS ONE ATTRIBUTE. js/ui/hud.js placeRadio() picks it
-   once per placement, in priority order — top (right of the tower) > side
-   (beside the mirror) > lane (between the touch docks) > collapsed > centre —
-   and writes body[data-radio-slot] plus ONLY that slot's vars, in SCREEN px
-   (each rule divides by the card's own --hud-z). No attribute (the first
-   paint) or "centre" is the shipped slot under the tower / mirror below. The
-   classes body.hud-radio-top / .hud-mirror-side are the resolver's aliases for
-   "top" / "side" (the specs and the survey assert them; the caution steps
-   below still read them as their pre-fit fallback).
-   BESIDE THE MIRROR where there is room — the card shares the mirror's row
-   instead of stacking under it: the strip right of the frame up to the
-   cam/pause column, the right dock and any readout in the card's rows. The
-   row is the mirror's own CSS top (--mir-top). Outweighs the density/broadcast
-   tops; the flag stays under the mirror, the card beside it. Portrait / a big
-   HUD SIZE: no room, another slot. .hud-mirror-on as well: the mirror hidden
-   since the last placement leaves no --mir-top to sit at. */
+/* THE RADIO CARD'S SLOT IS ONE ATTRIBUTE: js/ui/hud.js placeRadio() writes body[data-radio-slot]
+   (top > side > lane > collapsed > centre) and only that slot's vars, in SCREEN px; no attribute or
+   "centre" is the shipped slot below. body.hud-radio-top / .hud-mirror-side are its aliases (the specs
+   assert them; the caution steps read them). BESIDE THE MIRROR: at the mirror's own top (--mir-top),
+   only while it shows. */
 body.hud-mirror-on[data-radio-slot="side"] #announce {
   top: var(--mir-top);
   left: calc(var(--mir-side-x) / var(--hud-z));
@@ -981,9 +971,11 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    — and --dock-r-w was taken off the same stale BOOST edge. The top band got
    this fix first (`transition-property` on the --hud-z-top group above); the
    dock, the bottom band and the two top-right buttons are measured the same
-   way. Paint-only properties keep their 0.01ms, so nothing that was instant
+   way. RELATIVE also resets left/max-height inside syncPhoneFit: a transition
+   returns its previous rectangle until the next frame, even at 0.01ms.
+   Paint-only properties keep their 0.01ms, so nothing that was instant
    starts moving. */
-:root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, #pausebtn, #btn-cam) {
+:root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, #pausebtn, #btn-cam, #hud-rel) {
   transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
 }
 /* The flag clears the DROPPED strip, so it tracks the same measured edge: 70px
@@ -1044,31 +1036,13 @@ body:not(.desktop) #hud-sectors {
 }
 #hud-limits {
   position: fixed;
-  /* DERIVED from #hud-sectors' own box, not guessed: that box is three .sec-row
-     children at line-height 1.6 (4.8em) plus its 5px top+bottom padding (10px),
-     in the same --fs-micro this element uses = 77.2px at default. The 4.9em this
-     shipped with is 68.6px, so the chip painted over the S3 row every time a
-     track-limits warning showed. Same lesson as #hud-sectors' own top above:
-     never pin HUD chrome to a constant a sibling's rendered height decides. */
-  /* --hud-sec-h is that box MEASURED (js/ui/hud.js), which the 4.8em could not
-     be: every profile that hides #hud-sectors — MINIMAL, and a broadcast camera
-     outside the broadcast profile — left this chip hanging 77px below an empty
-     corner. The var is 0 exactly when the box is gone, so the chip rides up
-     into the slot the sectors vacated. The em keeps the pre-fit paint honest. */
-  /* THE MEASURED SLOT (js/ui/hud.js placeRightColumn): --rcol-y-limits is the bottom of whatever is
-     visible above the chip, in SCREEN px; the fixed offset is only the first paint's fallback. */
+  /* THE MEASURED SLOT (js/ui/hud.js placeRightColumn, SCREEN px): the bottom of whatever is visible
+     above the chip. Fallback for the first paint: under the measured plate (--hud-sec-h, 0 when the
+     plate is gone; a guessed 4.9em once painted the chip over S3). */
   top: calc(var(--rcol-y-limits, calc(((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px) * var(--hud-z))) / var(--hud-z));
-  /* STAND OFF THE DOCK. This chip sits BELOW #hud-sectors, and on a touch phone
-     that row is the BOOST pedal — so a track-limits warning painted straight
-     over a tap target (reported from a phone). --dock-r-w is the right dock's
-     width in this element's own zoom space, published by fitHud; it is 0 on a
-     desktop body with no dock, so nothing there moves.
-     Why this was never caught: the chip is `hidden` until the player takes a
-     track-limits strike (cutWarn above zero — written without a leading dot on
-     purpose: tools/check/tree-counts.mjs counts class tokens by regex and reads
-     a dotted member in a COMMENT as one),
-     so in every spec fixture it has no box at all and contributes nothing to a
-     collision check — absence reading as a pass. */
+  /* STAND OFF THE DOCK (on a phone this row is BOOST's): --dock-r-w, converted from the chrome's
+     zoom into this element's (a column factor must not walk it onto the dock); 0 on desktop. The chip
+     is hidden until a strike, so no spec fixture ever saw it collide. */
   right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z));
   background: rgb(8 8 14 / calc(0.72 * var(--hud-panel-a-eff)));
   border-radius: var(--r-sm);
@@ -1122,13 +1096,13 @@ body[data-density="compact"] #announce {
    the card's other slot really applies: the beside-the-mirror rule also needs
    .hud-mirror-on, so a bare .hud-mirror-side used to cancel the step while the
    card stayed in the centre — the flag on the card, 844x390 (survey 2026-10-04). */
-body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
-body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
-/* A DROPPED GAP STRIP PUSHES THE FLAG CHIP DOWN (:root[data-gap-drop] #hud-flag: the tower's measured height
-   + 74px), so the card's caution step follows the chip, not the 100px / 72px slot — it sat 8px over the chip on
-   844x390 (survey 2026-10-10: flag x announce in every phone cell). body[data-gap-drop] mirrors the root flag. */
-body[data-gap-drop]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
-body[data-gap-drop][data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
+/* --flag-slot-top is declared on the main #announce rule (below). data-gap-drop
+   raises it to the dropped-strip edge so caution steps from the painted flag
+   (MCP survey B3 phoneL-chase). */
+body[data-density="compact"] #announce { --flag-slot-top: calc(72px + var(--sat) / var(--hud-z)); }
+:root[data-gap-drop] #announce { --flag-slot-top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px); }
+body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
+body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
 
 /* ---------- start lights ---------- */
 /* The gantry is driven purely by `els.lights.hidden = true/false` in
@@ -1202,6 +1176,8 @@ body[data-gap-drop][data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):
   overflow: hidden; clip-path: inset(50%); white-space: nowrap;
 }
 #announce {
+  /* Undropped flag home; gap-drop / compact override --flag-slot-top above. */
+  --flag-slot-top: calc(100px + var(--sat) / var(--hud-z));
   position: fixed;
   top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 10px), calc(var(--mir-bot, 0px) + 8px));
   left: 50%; transform: translateX(-50%);
@@ -1223,15 +1199,9 @@ body[data-gap-drop][data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):
   --radio-num: 26px;   /* a HUD digit readout: off the body type scale on purpose (css/tokens.css) */
 }
 /* ON TOUCH THE CARD STAYS IN THE DOCK LANE. --announce-lane-x / -shift / -w
-   (js/ui/hud.js placeRadio, slot "lane" / "collapsed") are the gap the dock
-   groups leave under the tower, already inset by --sal/--sar, in SCREEN px.
-   --hud-z lives on this element, so left divides here: a calc embedding
-   var(--hud-z) on :root is invalid at computed-value time and left fell back
-   while transform was none — the card's left edge sat at centre (hud-layout
-   CI: #announce+btn-boost at x426 on 852, broadcast+cockpit). Only the lane
-   slots read the left (rule below); every other slot finds the lane vars
-   removed, so the width cap here falls back to 9999px. Desktop (.desktop:
-   empty docks) never gets a lane. */
+   (placeRadio, slots "lane" / "collapsed") are the gap the dock groups leave, SCREEN px, divided
+   HERE by this element's --hud-z (a calc of var(--hud-z) on :root is invalid). Every other slot
+   finds them removed, so this cap falls back to 9999px. */
 body:not(.desktop) #announce {
   /* min-width must not exceed the lane: a bare 200px floor outgrew a tight
      --announce-lane-w and painted over #hud-sectors (oversize CI workers=2). */
@@ -1256,6 +1226,11 @@ body[data-radio-slot="collapsed"] #announce {
   left: calc(var(--announce-lane-x) / var(--hud-z));
   transform: translateX(var(--announce-lane-shift, -50%));
 }
+/* …in the rows the lane was cleared for, under the map's bottom too (--announce-lane-y; HUD audit
+   2026-10-10: the card painted over the minimap). The doubled id outranks the density / caution
+   tops; unset, it falls back to the flag's slot (--flag-slot-top). */
+body[data-radio-slot="lane"] #announce#announce,
+body[data-radio-slot="collapsed"] #announce#announce { top: calc(var(--announce-lane-y, calc(var(--flag-slot-top) * var(--hud-z))) / var(--hud-z)); }
 /* The plate. Italic is the racing number's own convention, not emphasis. */
 #announce-num {
   flex: 0 0 auto;
@@ -1909,8 +1884,7 @@ body[data-helmet-cam] #hud::before {
    shots, 2026-10-05). */
 #hud-damage {
   position: fixed;
-  /* Stacked by placeRightColumn (--rcol-y-damage, screen px) under LIMITS only while it shows, else
-     under the plate; the fixed slot below LIMITS' reserved one is the first paint's fallback. */
+  /* Stacked by placeRightColumn (--rcol-y-damage, screen px); the fixed slot is the first paint's. */
   top: calc(var(--rcol-y-damage, calc(((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + 2.6em) * var(--hud-z))) / var(--hud-z));
   right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z));
   display: flex;
@@ -1953,12 +1927,8 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
    box; nothing here animates, so REDUCE MOTION has nothing to take out (the
    trace itself swaps to still bars in JS). */
 #hud-rel, #hud-strat { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
-/* THE COLUMN FACTORS (js/ui/hud.js placeRightColumn / placeLeftColumn): when a side column's stack does
-   not fit its height its readouts scale down together — --rcol-z / --lcol-z multiply each piece's own
-   band zoom, absent (1) whenever everything fits — to a floor that keeps --fs-micro text at 10px or more,
-   before the lowest-priority piece is dropped. Every offset these pieces carry divides by this --hud-z,
-   and the dock stand-off converts from the chrome's zoom, so a factor moves nothing sideways. A piece
-   the player placed (data-hl-user) is outside the allocator, so a column factor never resizes it. */
+/* THE COLUMN FACTORS (js/ui/hud.js): --rcol-z / --lcol-z shrink a side column that does not fit (to a
+   10px --fs-micro floor) before a piece drops; absent when 1, never on a placed (data-hl-user) piece. */
 #hud-inputs { --hud-z: var(--hud-z-bot, var(--hud-scale)); zoom: var(--hud-z); }
 #hud-inputs:not([data-hl-user]) { --hud-z: calc(var(--hud-z-bot, var(--hud-scale)) * var(--rcol-z, 1)); }
 :is(#hud-limits, #hud-damage):not([data-hl-user]), body.desktop #hud-rel:not([data-hl-user]) { --hud-z: calc(var(--hud-z-top, var(--hud-scale)) * var(--rcol-z, 1)); }
@@ -2027,15 +1997,9 @@ body:has(.screen:not([hidden])) :is(#hud-rel, #hud-strat, #hud-inputs) { visibil
    (RELATIVE over BRAKE / OT, INPUTS over the steer arrows — the 2026-10-04
    HUD survey, 844x390 cockpit), so on a touch screen they stayed hidden until
    MOVE & SIZE placed them. RELATIVE now takes the left column under the
-   minimap, and STRATEGY follows it (a literal 144px drifted under the limits
-   chip when HUD SIZE or MAP size moved). Where each goes in that column is
-   js/ui/hud.js placeLeftColumn's (--lcol-y-* / --lcol-x-*, SCREEN px): under
-   what is visible above it, else beside it (STRATEGY beside RELATIVE on a
-   short phone — the literal 168px sidestep it replaces was narrower than
-   RELATIVE at tilt's zoom), else dropped; the --hud-left-h anchor is only the
-   first paint's fallback. INPUTS is a short trace under the sector box, stood
-   off the right dock. A placed chip (data-hl-user) keeps the offset the player
-   chose, from the fallback anchor. */
+   minimap, STRATEGY with it, placed by js/ui/hud.js placeLeftColumn (--lcol-y-* / --lcol-x-*,
+   SCREEN px: under, else beside, else dropped); --hud-left-h is the first paint's fallback and a
+   placed chip's anchor. INPUTS is a short trace under the sector box, stood off the right dock. */
 body:not(.desktop) #hud-rel:not([data-hl-user]) {
   left: calc(var(--lcol-x-rel, calc(10px * var(--hud-z) + var(--sal))) / var(--hud-z));
   right: auto;
@@ -2051,9 +2015,8 @@ body:not(.desktop) #hud-rel:not([data-hl-user]) {
 body:not(.desktop) #hud-strat {
   top: calc(var(--lcol-y-strat, calc((var(--hud-left-h, 152px) + 8px) * var(--hud-z))) / var(--hud-z));
 }
-/* A column piece with no free slot on this screen (placeLeftColumn): invisible, but still laid out so
-   the next fit measures the same box and asks the same question. The MOVE & SIZE fold (hiddenReason) names it;
-   MOVE & SIZE placing it (data-hl-user) takes it out of the allocator and shows it. */
+/* No free slot even at the column's floor: invisible but laid out (the next fit asks the same
+   question); the MOVE & SIZE fold says why, and placing the piece takes it out of the allocator. */
 :is(#hud-sectors, #hud-limits, #hud-damage, #hud-inputs, #hud-rel, #hud-strat)[data-col-drop] { visibility: hidden !important; }
 body:not(.desktop) #hud-inputs:not([data-hl-user]) {
   /* Same containing block as #hud-sectors / #hud-limits: position-anchor on an

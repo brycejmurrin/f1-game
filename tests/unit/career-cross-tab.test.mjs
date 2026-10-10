@@ -115,7 +115,8 @@ test("migrateCareer coerces a corrupt deal, budget level and results ledger", ()
   assert.equal(c.team, "haas");
   assert.equal(SaveMigrate.migrateCareer({ v: 1, deal: "gold", team: 7 }).deal, null,
     "a non-object deal is dropped rather than coerced field by field");
-  assert.equal(SaveMigrate.migrateCareer({ v: 1, team: 7 }).team, null);
+  assert.equal(SaveMigrate.migrateCareer({ v: 1, team: 7 }).team, "haas",
+    "a non-string team takes Career.start's default instead of null (the title menu upper-cases it at boot)");
 });
 
 test("year falls back to the first season for a missing, zero or junk value, and truncates a float", () => {

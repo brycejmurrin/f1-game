@@ -132,10 +132,14 @@ const MirrorPass = (function () {
     // moves. These four knobs are read off frame.tune by every backend's lit
     // upload (glx.js begin, wgx.js _writeFrame, tsl-lit updateFrame), so one
     // override on the mirror camera's frame reaches all three, and the main
-    // pass re-uploads its own. One object, refreshed from the live tune each
-    // pass (the LIGHTING tuner edits it in place) — no per-frame allocation.
+    // pass re-uploads its own. A VIEW, not a copy: the four overrides as own
+    // properties over the live tune as prototype, built once per source object,
+    // so every other knob reads through to the table the LIGHTING tuner edits in
+    // place. Copying all ~190 knobs (a dictionary-mode object) every mirror frame
+    // cost ~46 µs to change four. Every consumer reads named properties only —
+    // nothing enumerates frame.tune (no keys / for-in / JSON / Object.assign).
     const MIRROR_TUNE = { carSunGlint: 0, carSparkle: 0, windowSunFlash: 0, shadowStr: 0 };
-    const _mirTune = {};
+    let _mirTune = null, _mirTuneSrc;
 
     // The target for a frame of cssW x cssH CSS px: device pixels (DPR capped at
     // 2) x the rung's res x SS — independent of the governor's render scale, so
@@ -541,7 +545,11 @@ const MirrorPass = (function () {
       const freezeInst = !_q.lite && ie > 1 && run > 0 && (run % ie) !== 0;
       frame.mirrorFreezeInstanced = freezeInst;
       if (freezeInst) _instFreezeSkips++; else if (!_q.lite) _instRefresh++;
-      frame.tune = Object.assign(_mirTune, sv.tune || null, MIRROR_TUNE);
+      if (_mirTune === null || _mirTuneSrc !== sv.tune) {
+        _mirTuneSrc = sv.tune;
+        _mirTune = Object.assign(Object.create(sv.tune || null), MIRROR_TUNE);
+      }
+      frame.tune = _mirTune;
       frameSky.invViewProj = _invVP;
       // THE MIRROR'S OWN LAMPS (FrameLights.viewLights): frame.lights is culled
       // for the forward camera, which ranks lamps behind it last — the very

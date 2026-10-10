@@ -661,6 +661,19 @@ test("MOTION: REDUCED stops every HUD pulse, not only the OS query", () => {
   assert.match(readCssSource("css/overlays.css"), /:root\[data-motion="reduce"\] #hud-restore::after \{ animation: none; \}/);
 });
 
+test("MOTION: REDUCED keeps RELATIVE fit geometry out of transitions", () => {
+  const rules = cssRules(read("css/hud.css"));
+  const fit = rules.find((r) => r.selector.includes(':root[data-motion="reduce"]')
+    && /#hud-rel\b/.test(r.selector) && r.decls.has("transition-property"));
+  assert.ok(fit, "RELATIVE needs the geometry exemption: even a 0.01ms transition returns its old rect inside syncPhoneFit");
+  const properties = fit.decls.get("transition-property").split(",").map((p) => p.trim());
+  for (const geometry of ["all", "left", "top", "width", "height", "max-height", "zoom", "transform"]) {
+    assert.ok(!properties.includes(geometry), `${geometry} must land before the synchronous clearance probe`);
+  }
+  assert.ok(properties.includes("opacity") && properties.includes("color"), "paint transitions keep the reduced-motion backstop");
+  assert.ok(!fit.decls.has("zoom") && !fit.decls.has("--hud-z"), "the exemption does not change RELATIVE's band zoom");
+});
+
 function pitBoot(opts) {
   const b = boot(opts);
   b.G.track.pit = { entryRoadM: 1, sA: 10, sB: 30, sIn: 15 };
@@ -1227,12 +1240,18 @@ test("the safe-area inset comes from --sar, never from the sector plate's right 
 
 test("a dropped gap strip carries the radio card's caution step down with the flag chip", () => {
   const css = readCssSource("css/hud.css"), hud = read("js/ui/hud.js");
-  // The flag chip steps down under :root[data-gap-drop]; the card cannot reach `:root … body`, so the drop is mirrored onto body.
+  // The flag chip steps down under :root[data-gap-drop]; the card's caution step reads the same slot through
+  // --flag-slot-top, which the root flag raises (#1345) — ONE formula, no body mirror (the #1366 twins were
+  // dropped at the ship sync: HUD PR review 2026-10-10).
   assert.match(css, /:root\[data-gap-drop\] #hud-flag \{\s*top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 74px\)/);
-  assert.match(css, /body\[data-gap-drop\]:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 74px\)[^;]*\+ 38px\)/,
-    "the card sits 38px under the dropped flag chip");
-  assert.match(css, /body\[data-gap-drop\]\[data-density="compact"\]:not[^{]*#announce \{ top: calc\([^;]*\+ 34px\)/, "compact keeps its tighter step under the dropped chip");
-  assert.match(hud, /drop !== document\.body\.hasAttribute\("data-gap-drop"\)/, "gapForm mirrors the drop onto body, compared against the DOM like the root attribute");
+  assert.match(css, /:root\[data-gap-drop\] #announce \{ --flag-slot-top: calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 74px\); \}/,
+    "the dropped strip raises the card's flag slot to the chip's edge");
+  assert.match(css, /body:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 38px\); \}/,
+    "the card sits 38px under the flag slot, wherever the chip is");
+  assert.match(css, /body\[data-density="compact"\]:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 34px\); \}/,
+    "compact keeps its tighter step under the chip");
+  assert.doesNotMatch(css, /body\[data-gap-drop\]/, "no body[data-gap-drop] twin: the slot token is the one writer");
+  assert.doesNotMatch(hud, /body\.(setAttribute|removeAttribute|hasAttribute)\("data-gap-drop"/, "gapForm no longer mirrors the drop onto body");
 });
 
 test("an empty timing tower still fits the bottom band and writes the dock cap", () => {
@@ -1364,47 +1383,54 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
   h.els.hudSectors._rect = { left: 650, top: 130, right: 790, bottom: 202, width: 140, height: 72 };
   h.els.minimap._rect = { left: 10, top: 8, right: 220, bottom: 148, width: 210, height: 140 };
   h.refit();
-  assert.equal(laneLeft(), "228.0px", "the map starts the lane when it hangs under the tower");
+  // THE BAND STARTS UNDER THE MAP'S BOTTOM (HUD audit 2026-10-10): beside a map that only clipped the
+  // band from the side, a collapse pinned the card at sal + 8 over the bottom of the minimap. The card
+  // now hangs UNDER the map — in rows the map does not share — and its top is published.
+  assert.equal(h.root.style.getPropertyValue("--announce-lane-y"), "156.0px", "the lane's rows start 8 px under the map (148)");
+  assert.equal(laneLeft(), "158.0px", "under the map the left dock group starts the lane, not the map's right edge");
   const gapBox = h.dom.document.createElement("div"); gapBox.className = "hud-gaps";
   h.dom.body.appendChild(gapBox);
-  gapBox._rect = { left: 160, top: 8, right: 250, bottom: 30, width: 90, height: 22 }; // above tower.bottom=62
+  gapBox._rect = { left: 160, top: 62, right: 250, bottom: 84, width: 90, height: 22 }; // a dropped strip, above the band
   h.refit();
-  assert.equal(laneLeft(), "228.0px", "gaps in the tower row end above the card's rows: they do not start the hanging lane");
-  gapBox._rect = { left: 160, top: 62, right: 250, bottom: 84, width: 90, height: 22 }; // a DROPPED strip, into the card's rows
+  assert.equal(laneLeft(), "158.0px", "a strip that ends above the band does not start the lane");
+  gapBox._rect = { left: 160, top: 160, right: 250, bottom: 182, width: 90, height: 22 }; // in the card's rows
   h.refit();
-  assert.equal(laneLeft(), "258.0px", "a dropped gaps strip in the card's rows starts the hanging lane");
+  assert.equal(laneLeft(), "258.0px", "a gaps strip in the card's rows starts the hanging lane");
   // Same-tick growth: the spec measures after jump()'s updateHud, whose gap
   // strings land AFTER fitHud. Widening the box without changing the fit key
   // (text length / class / viewport) must still move the lane on this tick.
-  gapBox._rect = { left: 160, top: 62, right: 310, bottom: 84, width: 150, height: 22 };
+  gapBox._rect = { left: 160, top: 160, right: 310, bottom: 182, width: 150, height: 22 };
   h.tick();
   assert.equal(laneLeft(), "318.0px", "a wider gaps chip re-clips the lane on the same HUD tick");
   // An opt-in STRATEGY box in the left column shares the rows too (the phone's own layout).
   const strat = h.dom.document.createElement("div"); strat.id = "hud-strat"; h.dom.body.appendChild(strat);
-  strat._rect = { left: 10, top: 150, right: 330, bottom: 190, width: 320, height: 40 };
+  strat.setAttribute("data-hl-user", "");   // placed by the player: the left-column allocator leaves it where it is painted
+  strat._rect = { left: 10, top: 186, right: 330, bottom: 226, width: 320, height: 40 };
   h.refit();
   assert.equal(laneLeft(), "338.0px", "a readout in the card's rows starts the lane");
-  strat._rect = { left: 10, top: 180, right: 330, bottom: 220, width: 320, height: 40 };
+  strat._rect = { left: 10, top: 260, right: 330, bottom: 300, width: 320, height: 40 };
   h.refit();
-  assert.equal(laneLeft(), "318.0px", "one below them (band ends at tower.bottom + 8 + 96) does not");
+  assert.equal(laneLeft(), "318.0px", "one below them (band ends at its top + 96) does not");
   strat._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };   // the mini-dom keeps ids after removeChild: zero the box too
   h.dom.body.removeChild(strat);
-  // UNDER A CAUTION the card steps below the flag chip (css/hud.css), so the band
-  // starts under the flag: the dropped gaps strip at y 62..84 is above it now.
+  // UNDER A CAUTION the band starts under the flag chip when that hangs lower than the map: the gaps
+  // strip at 160..182 is above it then.
   if (h.els.flag) {
     h.els.flag.hidden = false;
-    h.els.flag._rect = { left: 350, top: 70, right: 450, bottom: 94, width: 100, height: 24 };
+    h.els.flag._rect = { left: 350, top: 150, right: 450, bottom: 174, width: 100, height: 24 };
     h.refit();
-    assert.equal(laneLeft(), "228.0px", "a visible flag lowers the band past a strip that ends above it (the map still starts the lane)");
+    assert.equal(h.root.style.getPropertyValue("--announce-lane-y"), "182.0px", "a visible flag below the map lowers the band");
+    assert.equal(laneLeft(), "158.0px", "past a strip that ends above it");
     h.els.flag.hidden = true; h.els.flag._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
     h.refit();
   }
   // INPUTS (opt-in, under the sector box on touch) ends the lane when it shares the rows.
   const inputs = h.dom.document.createElement("div"); inputs.id = "hud-inputs"; h.dom.body.appendChild(inputs);
-  inputs._rect = { left: 540, top: 120, right: 640, bottom: 156, width: 100, height: 36 };
+  inputs._rect = { left: 540, top: 170, right: 640, bottom: 206, width: 100, height: 36 };
   h.refit();
   assert.equal(lane(), (540 - 8 - 318).toFixed(1) + "px", "INPUTS in the card's rows ends the lane at its left edge");
   h.dom.body.removeChild(inputs);
+  inputs._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
   const src = read("js/ui/hud.js");
   assert.ok(src.indexOf("placeRadio(document.documentElement") > src.indexOf("hText(els.gapA"),
     "the lane is re-placed after this tick's gap strings, not only inside fitHud");
@@ -1515,6 +1541,62 @@ test("the top row outranks the side slot, and a painted collapse holds for the r
   assert.equal(radioSnap(h).slot, "lane", "the next full fit judges afresh");
 });
 
+/* HUD audit 2026-10-10 (§Screenshot cross-check): in the chase survey sheets (844x390, the left-notch
+ * sheet, 932x430) the card sat at x = sal + 8 over the BOTTOM of the minimap, full width — the lane's
+ * band started at the tower's bottom, so the map clipped it only from the side. */
+test("phone chase: the radio card never paints over the minimap's bottom — the lane and a collapse sit under it", () => {
+  const h = fitHarness();
+  const R = (left, top, w, hh) => ({ left, top, right: left + w, bottom: top + hh, width: w, height: hh });
+  const v = (k) => h.root.style.getPropertyValue(k);
+  const map = R(57, 8, 110, 110);   // the shipped corner: sal 47 + 10, 110 square (bottom 118)
+  h.els.minimap._rect = map;
+  h.dom.byId("pausebtn")._rect = R(600, 8, 44, 44);   // the top row is full: the card hangs in the lane
+  h.refit();
+  assert.equal(h.dom.body.getAttribute("data-radio-slot"), "lane");
+  const y = parseFloat(v("--announce-lane-y")), x = parseFloat(v("--announce-lane-x")), w = parseFloat(v("--announce-lane-w"));
+  assert.ok(y >= map.bottom + 8, `the lane starts under the map's bottom edge (${y} vs ${map.bottom})`);
+  const card = R(x, y, w, 96);
+  assert.ok(!(card.left < map.right && map.left < card.right && card.top < map.bottom && map.top < card.bottom), "the lane's box does not meet the map");
+  // A card that still PAINTS over the map's bottom (the survey's sal + 8 card) is collapsed, and the
+  // collapse pins it in the lane's own rows — never back at sal + 8 over the map.
+  const ann = h.dom.byId("announce");
+  ann.hidden = false; ann._rect = R(55, 100, 300, 60);
+  h.refit();
+  assert.equal(h.dom.body.getAttribute("data-radio-slot"), "collapsed", "painted onto the map: collapsed");
+  assert.ok(parseFloat(v("--announce-lane-y")) >= map.bottom + 8, "collapsed under the map");
+  assert.equal(v("--announce-lane-x"), x.toFixed(1) + "px", "at the lane's own x, not sal + 8");
+  ann._rect = R(0, 0, 0, 0); ann.hidden = true;
+  // Every slot judges the map: the top row's painted check too.
+  h.dom.byId("pausebtn")._rect = R(0, 0, 0, 0);
+  ann.hidden = false; ann._rect = R(100, 60, 200, 70);   // a top-row card that somehow lands on the map's corner
+  h.refit();
+  assert.equal(h.dom.body.getAttribute("data-radio-slot"), "collapsed", "a top-row card painted on the map collapses too");
+  ann._rect = R(0, 0, 0, 0); ann.hidden = true;
+  const css = read("css/hud.css");
+  assert.match(css, /body\[data-radio-slot="lane"\] #announce#announce,\s*body\[data-radio-slot="collapsed"\] #announce#announce \{ top: calc\(var\(--announce-lane-y, calc\(var\(--flag-slot-top\) \* var\(--hud-z\)\)\) \/ var\(--hud-z\)\); \}/,
+    "the card sits in the lane's rows, outranking the density / caution tops");
+});
+
+test("a lane collapse fitHud made survives updateHud's post-gap-strings re-place (HUD audit F-06)", () => {
+  const h = fitHarness();
+  const R = (left, top, w, hh) => ({ left, top, right: left + w, bottom: top + hh, width: w, height: hh });
+  h.dom.byId("pausebtn")._rect = R(600, 8, 44, 44);   // no top row
+  // A sector plate shoved into the band's rows left of the lane's start: no gap — collapsed.
+  h.els.hudSectors._rect = R(100, 160, 140, 80);
+  h.refit();
+  assert.equal(h.dom.body.getAttribute("data-radio-slot"), "collapsed");
+  const s = radioSnap(h);
+  // Within the same fit the plate moves back (the next layout read, a gap string): a re-measure WOULD
+  // reopen the lane, but the fit key has not changed — the tick's re-place must not undo the collapse.
+  h.els.hudSectors._rect = R(650, 130, 140, 72);
+  h.tick();
+  assert.deepEqual(radioSnap(h), s, "still collapsed, same vars, after the tick's re-place");
+  assert.ok(h.dom.byId("announce").hasAttribute("data-lane-collapsed"));
+  // The next FULL fit judges afresh.
+  h.refit();
+  assert.equal(h.dom.body.getAttribute("data-radio-slot"), "lane", "a full fit reopens it");
+});
+
 test("MOVE & SIZE on the tower re-derives the radio card's slot at invalidateFit, not a tick later", () => {
   const h = fitHarness(), x = () => h.root.style.getPropertyValue("--radio-top-x");
   assert.equal(x(), "558.0px", "the shipped tower ends at 550");
@@ -1574,7 +1656,7 @@ test("one measured centre-band top: the tower, the mirror or its chip as painted
   for (const sel of ["body.hud-mirror-on :is(#announce, #hud-flag)", "body:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-flag)"])
     assert.match(decl(rules, sel, "--mir-bot") || "", /^max\([\s\S]*calc\(var\(--centre-band-top, 0px\) \/ var\(--hud-z\)\)\)$/, sel);
   // … but the lane's rows start under it (the source: one function, the flag added for the card).
-  assert.match(read("js/ui/hud.js"), /const bandTop = centreBandTop\(true, true\) \+ RADIO_TOP_GAP/);
+  assert.match(read("js/ui/hud.js"), /const bandTop = Math\.max\(centreBandTop\(true, true\), mapO \? mapO\.rect\.bottom : 0\) \+ RADIO_TOP_GAP/);
 });
 
 test("a moved (data-hl) piece that unhides after the fit re-runs it, so HudLayout.fit can clamp it", () => {
@@ -1621,7 +1703,7 @@ test("a moved (data-hl) piece whose words change width re-fits on the next tick,
 test("the caution step-aside needs the card's other slot to really apply; TEXT LARGER grows the ERS bar", () => {
   const rules = cssRules(read("css/hud.css"));
   const caution = rules.filter((r) => /:has\(#hud-flag:not\(\[hidden\]\)\) #announce$/.test(r.selector));
-  assert.equal(caution.length, 4, "base and compact caution rules, each with its dropped-gap-strip twin (body[data-gap-drop])");
+  assert.equal(caution.length, 2, "base and compact caution rules — the dropped-gap-strip case rides --flag-slot-top, not a twin rule");
   for (const r of caution) assert.match(r.selector, /:not\(\.hud-mirror-on\.hud-mirror-side\)/, r.selector);
   const tok = read("css/tokens.css");
   for (const size of ["large", "larger"]) {

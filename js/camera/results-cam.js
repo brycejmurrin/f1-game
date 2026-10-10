@@ -25,6 +25,7 @@ const ResultsCam = (function () {
     return {
       px: player && player.px, pz: player && player.pz,
       head: player && player.head, py: player && player.py,
+      noLook: true,   // the player's look-back / glance never steers the cut
     };
   }
 

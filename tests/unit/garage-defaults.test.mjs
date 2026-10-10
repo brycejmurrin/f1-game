@@ -17,6 +17,7 @@ import vm from "node:vm";
 import { createRequire } from "node:module";
 import { check, readDefaults, isGarageKey } from "../../tools/gen/garage-defaults.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
@@ -71,10 +72,14 @@ test("the store answers from GarageDefaults on a miss, not the call-site literal
   const store = GameStore.store;
   assert.equal(store.get("team", 99), GarageDefaults.get("team"));
   assert.equal(store.get("driver", 99), GarageDefaults.get("driver"));
-  assert.deepEqual(store.get("parts.mercedes", {}), GarageDefaults.get("parts.mercedes"));
+  // Compared as data: get() hands out a COPY of an object default (see the
+  // mutation test below), and the sandbox's JSON is the host's, so the copy's
+  // prototype is not the VM literal's.
+  const data = (v) => JSON.parse(JSON.stringify(v));
+  assert.deepEqual(data(store.get("parts.mercedes", {})), data(GarageDefaults.get("parts.mercedes")));
   assert.equal(store.get("livery.haas", "default"), GarageDefaults.get("livery.haas"));
-  assert.deepEqual(store.get("livery.custom.williams", []), GarageDefaults.get("livery.custom.williams"));
-  assert.deepEqual(store.get("setup.mercedes", {}), GarageDefaults.get("setup.mercedes"));
+  assert.deepEqual(data(store.get("livery.custom.williams", [])), data(GarageDefaults.get("livery.custom.williams")));
+  assert.deepEqual(data(store.get("setup.mercedes", {})), data(GarageDefaults.get("setup.mercedes")));
 });
 
 test("an empty written parts sheet is a HIT, not a GarageDefaults miss", () => {
@@ -239,6 +244,67 @@ test("pinFactorySeat lives on factory-seat.js, not the fixtures re-export", () =
     const src = fs.readFileSync(path.join(ROOT, `tests/specs/${spec}.spec.js`), "utf8");
     assert.match(src, /from "\.\.\/helpers\/factory-seat\.js"/, spec);
   }
+});
+
+test("a caller that edits what get() returned cannot rewrite the shipped default", () => {
+  const { GameStore, GarageDefaults } = load();
+  const store = GameStore.store;
+  const before = JSON.stringify(GarageDefaults.get("parts.ferrari"));
+  const p = store.get("parts.ferrari");
+  assert.notEqual(p, GarageDefaults.get("parts.ferrari"), "get() must hand out a copy");
+  p.engine = "PLAYER_EDIT";   // setup-sheet.js mutates the build it read, in place
+  assert.equal(JSON.stringify(GarageDefaults.get("parts.ferrari")), before);
+  assert.equal(store.get("parts.ferrari").engine, GarageDefaults.get("parts.ferrari").engine,
+    "the next miss still answers the shipped build");
+  const fresh = JSON.parse(before);
+  assert.deepEqual(JSON.parse(JSON.stringify(store.get("parts.ferrari"))), fresh);
+});
+
+test("getStored answers what the player wrote, never a shipped default", () => {
+  const { GameStore, GarageDefaults } = load();
+  const store = GameStore.store;
+  assert.ok(GarageDefaults.has("parts.legends"));
+  assert.ok(store.get("parts.legends", null), "get() sees the shipped build");
+  assert.equal(store.getStored("parts.legends"), undefined, "…but nothing was ever stored");
+  store.set("parts.legends", { engine: "mine" });
+  assert.deepEqual(JSON.parse(JSON.stringify(store.getStored("parts.legends"))), { engine: "mine" });
+});
+
+test("the shipped garage is usable: every parts build fits Parts.BUDGET, or FREE BUILD ships on", () => {
+  // The click gate in js/garage/setup-sheet.js rejects any swap whose total ends
+  // over cap — downgrades included — so a shipped build over budget has zero
+  // clickable rows. 8 of 11 teams shipped that way until unlimitedBudget did too.
+  const ctx = vm.createContext({ Math, console, Object, Array, Number, String, JSON, isFinite, Map, Set });
+  seedLog(ctx);
+  ctx.window = ctx;
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js"])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+  const { Teams, Parts } = vm.runInContext("({ Teams, Parts })", ctx);
+  const { GameStore, GarageDefaults } = load();
+  const free = GameStore.store.get("unlimitedBudget", false) === true;
+  const over = [];
+  let checked = 0;
+  for (const k of GarageDefaults.keys()) {
+    if (!k.startsWith("parts.")) continue;
+    const team = Teams.LIST.find((t) => t.id === k.slice("parts.".length));
+    if (!team) continue;
+    checked++;
+    const cost = Parts.getCost(GarageDefaults.get(k), team);
+    if (cost > Parts.BUDGET) over.push(`${team.id}: ${cost} > ${Parts.BUDGET}`);
+  }
+  assert.ok(checked >= 10, `expected a build per team, saw ${checked}`);
+  assert.ok(over.length === 0 || free,
+    "shipped builds over budget while FREE BUILD is off — no row would be clickable:\n" + over.join("\n"));
+});
+
+test("a fresh install fields the first legend in his own period car, not the shipped build", async () => {
+  const { createGame } = require("../../tools/lib/game-vm.cjs");
+  const g = await createGame({});
+  try {
+    const { Legends } = g.ctx;
+    const want = JSON.parse(JSON.stringify(Legends.parts(Legends.LIST[0].id)));
+    assert.deepEqual(JSON.parse(JSON.stringify(g.G.getTeamParts("legends"))), want);
+  } finally { g.close(); }
 });
 
 test("a shipped setup sheet is the team's WORKS sheet: a fresh install does not read TUNED", () => {

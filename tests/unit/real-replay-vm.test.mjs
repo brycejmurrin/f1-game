@@ -928,3 +928,81 @@ test("WATCH transport: no aria-pressed on PLAY, and a focused, playing timeline 
   assert.equal(seek.getAttribute("aria-valuetext"), "0:13 of 1:40", "focus elsewhere: it follows the clock");
   ui.stop();
 });
+
+test("WATCH broadcast: the running order's speeds are the cars' own, whatever the replay rate (battles()/PiP/director read them)", () => {
+  // pose() scales c.speed by the replay rate (engine pitch), but Broadcast.battles() divides a progress
+  // gap by that speed to get SECONDS: at 8x the same two cars must read the same battle as at 1x.
+  const grab = (rate) => {
+    let seen = null;
+    const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
+      Log: { info() {}, warn() {}, debug() {} },
+      CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "heli" }] },
+      Broadcast: { create: () => new Proxy({}, { get: (_t, k) => (k === "tick" ? (_dt, st) => { seen = st; } : () => ({})) }) },
+      Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } } });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8"), ctx);
+    const R = vm.runInContext("RealReplay", ctx);
+    const a = { code: "RUS" }, b = { code: "LEC" }, da = { code: "RUS", num: 63, pos: 1, lapStart: [0] }, db = { code: "LEC", num: 16, pos: 2, lapStart: [0] };
+    const G = { track: { total: 100000 }, cars: [a, b], state: "race", camMode: 0, followCar: (c) => { G.player = c; }, snapGameCam() {}, setCamMode() {} };
+    const replay = R.create(G);
+    assert.equal(replay.start({ script: { drivers: [da, db] }, traces: { frame: "track", cars: { 63: line(0, 50, 0, 0, 60), 16: line(-20, 50, 0, 0, 60) } },
+      seats: new Map([[a, da], [b, db]]), startLap: 1, camera: "heli", rate }), true);
+    replay.seek(10);
+    replay.tick(0);
+    const rows = JSON.parse(JSON.stringify(seen.running().map((r) => ({ key: r.key.code, prog: r.prog, speed: r.speed }))));
+    replay.stop();
+    const B = vm.runInContext("(function(){" + fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8") + ";return Broadcast;})()", vm.createContext({}));
+    return { rows, fights: JSON.parse(JSON.stringify(B.battles(rows))) };
+  };
+  const one = grab(1), eight = grab(8);
+  assert.equal(one.rows.length, 2);
+  assert.ok(Math.abs(one.rows[0].speed - 50) < 0.01, "1x: the trace's own speed " + one.rows[0].speed);
+  assert.deepEqual(eight.rows.map((r) => r.speed), one.rows.map((r) => r.speed), "8x reports the same speeds as 1x");
+  assert.equal(one.fights.length, 1, "20 m at 50 m/s is a battle");
+  assert.deepEqual(eight.fights, one.fights, "the same two cars give the same battles at rate 1 and rate 8");
+});
+
+// The replay puppets' engines are voiced from c.speed / c.rpm (game.js updateCar: realRace.owns -> rpmFor(naturalGear(v), v);
+// a retired car returns before that line and keeps whatever c.rpm it last had).
+function audioHarness() {
+  const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
+    Log: { info() {}, warn() {}, debug() {} }, PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 },
+    CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "heli" }] },
+    Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8"), ctx);
+  const R = vm.runInContext("RealReplay", ctx);
+  const a = { code: "RUS", rpm: 12000 }, b = { code: "LEC", rpm: 12000 };
+  const da = { code: "RUS", num: 63, pos: 1, lapStart: [0] }, db = { code: "LEC", num: 16, pos: 2, lapStart: [0] };
+  const G = { track: { total: 100000 }, cars: [a, b], state: "race", camMode: 0, followCar: (c) => { G.player = c; }, snapGameCam() {}, setCamMode() {} };
+  const replay = R.create(G);
+  assert.equal(replay.start({ script: { drivers: [da, db] }, traces: { frame: "track", cars: { 63: line(0, 50, 0, 0, 60), 16: line(-20, 50, 0, 0, 20) } },
+    seats: new Map([[a, da], [b, db]]), startLap: 1, camera: "heli" }), true);
+  return { replay, a, b, G };
+}
+
+test("WATCH transport pause hands the audio a stopped car, and playing again brings the speed back", () => {
+  const { replay, a, b } = audioHarness();
+  replay.seek(10); replay.tick(0.1);
+  assert.ok(a.speed > 49 && b.speed > 49, "running: " + a.speed);
+  replay.setPaused(true);
+  replay.tick(0.1);
+  assert.equal(a.speed, 0, "paused: the engine voice and rival feed read a standing car");
+  assert.equal(b.speed, 0);
+  replay.setPaused(false);
+  replay.tick(0.1);
+  assert.ok(a.speed > 49 && b.speed > 49, "playing again: " + a.speed);
+  replay.stop();
+});
+
+test("WATCH a car whose trace has ended drops to idle revs instead of keeping its last rpm", () => {
+  const { replay, a, b } = audioHarness();
+  replay.seek(10); replay.tick(0.1);
+  assert.equal(b.retired, false);
+  b.rpm = 14000;   // game.js left it here on the last running step
+  replay.seek(40);   // LEC's data ended at 20 s
+  replay.tick(0.1);
+  assert.equal(b.retired, true);
+  assert.equal(b.speed, 0);
+  assert.equal(b.rpm, 5000, "parked at idle: game.js never recomputes rpm for a retired car");
+  assert.equal(a.rpm, 12000, "a running car's revs are game.js's to set");
+  replay.stop();
+});
