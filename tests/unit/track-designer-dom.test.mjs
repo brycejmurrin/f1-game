@@ -391,6 +391,23 @@ test("open({design}), EDIT and IMPORT never drop unsaved work: UNDO brings it ba
   assert.equal(b2.D.state().design.theme, "harbour");
 });
 
+test("UNDO inside one design keeps its name and library link (setName and SAVE sit outside the history)", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open(); b.D.randomise(7); b.D.preview();
+  b.D.setTheme("alpine");                       // an undoable edit, taken before the rename
+  b.D.setName("Renamed Loop");
+  assert.equal(b.D.undo(), true);
+  assert.equal(b.D.state().design.theme !== "alpine", true, "the edit was undone");
+  assert.equal(b.D.state().design.name, b.C.sanitizeName("Renamed Loop"), "…but not the rename");
+  b.D.preview(); assert.equal(b.D.save().ok, true);
+  const n = b.C.list().length, id = b.D.state().design.originId;
+  b.D.redo(); b.D.undo();                       // walk back across the SAVE
+  assert.equal(b.D.state().design.originId, id, "the library link survives UNDO");
+  b.D.preview(); assert.equal(b.D.save().ok, true);
+  assert.equal(b.C.list().length, n, "SAVE replaces the circuit instead of adding a copy");
+});
+
 test("a share link while the screen is open keeps the return focus; EDIT → SAVE replaces the circuit; a full library names its limit", async () => {
   const b = bootScreen();
   const door = b.dom.byId("mb-designer"); door.tagName = "BUTTON";

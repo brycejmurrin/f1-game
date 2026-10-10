@@ -71,6 +71,7 @@ const TrackDesigner = (function () {
   let G = null, custom = null, root = null, built = false, openFlag = false, returnFocus = null;
   let cv = null, canvas = null;
   const ui = {};                       // named nodes, built once
+  let lineage = 0;   // which loaded design a history entry belongs to (restore)
   let design = null, verdict = null, sel = -1, span = -1, tool = "select", mode = "edit";
   // spanArm: next pick sets the span end (touch-friendly stand-in for shift-tap).
   let spanArm = false, selectionMode = "point", selectionPanel = null, heightStep = 1;
@@ -554,8 +555,20 @@ const TrackDesigner = (function () {
     refreshControls();
     return spanArm;
   }
-  function doUndo() { if (!undo.length) return false; redo.push(snapshot()); design = ensureHeights(JSON.parse(undo.pop())); sel = -1; span = -1; nudge = null; afterChange("undo"); return true; }
-  function doRedo() { if (!redo.length) return false; undo.push(snapshot()); design = ensureHeights(JSON.parse(redo.pop())); sel = -1; span = -1; nudge = null; afterChange("redo"); return true; }
+  /** Restore a history entry. Name and library link (id / originId) are not
+   *  undoable edits — setName and SAVE write them outside commit() — so inside
+   *  one loaded design they stay as they are; an entry from ANOTHER design (the
+   *  stash load() keeps) brings its own back (`lin` marks which design it was). */
+  function restore(snap) {
+    const was = design, next = ensureHeights(JSON.parse(snap));
+    if (was && next.lin === was.lin) {
+      next.name = was.name;
+      for (const k of ["id", "originId"]) { if (was[k] === undefined) delete next[k]; else next[k] = was[k]; }
+    }
+    design = next; sel = -1; span = -1; nudge = null;
+  }
+  function doUndo() { if (!undo.length) return false; redo.push(snapshot()); restore(undo.pop()); afterChange("undo"); return true; }
+  function doRedo() { if (!redo.length) return false; undo.push(snapshot()); restore(redo.pop()); afterChange("redo"); return true; }
   function setTheme(id) {
     if (!TrackThemes.has(id) || id === design.theme) return false;
     commit(Object.assign({}, design, { theme: id }), "theme");
@@ -714,6 +727,7 @@ const TrackDesigner = (function () {
     const kept = stash();
     if (!kept) { undo.length = 0; redo.length = 0; }
     design = copy(item);
+    design.lin = ++lineage;
     for (const k of ["hwZones", "bankZones", "elevations", "bridges", "turns"]) if (!Array.isArray(design[k])) design[k] = [];
     ensureHeights(design);   // old saves without heights → flat zeros
     if (origin) design.originId = origin; else delete design.originId;
