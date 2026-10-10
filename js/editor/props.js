@@ -2,23 +2,24 @@
    tracks (slice H). Themes stay primary; this is a small authored list the
    designer palette writes into design.props and TrackThemes.sceneryFor dresses
    through the existing scenery api (grandstandEx, gantry, forestEdge,
-   waterSurface, floodMast, billboard) — no second scenery system, no kit
+   waterSurface, floodMast, billboard, palm, hedge) — no second scenery system, no kit
    rewrites. Caps keep custom circuits cheap. FULL boot (before custom-tracks)
    so sanitize + dress run at sync()/share without waiting for LAZY_EDITOR. */
 const TrackDesignerProps = (function () {
   "use strict";
   // Order is the codec kind index — never reorder; append only.
-  const KINDS = Object.freeze(["stand", "gantry", "trees", "water", "flood", "billboard"]);
+  const KINDS = Object.freeze(["stand", "gantry", "trees", "water", "flood", "billboard", "palms", "hedge"]);
   const LABELS = Object.freeze({
     stand: "STAND", gantry: "GANTRY", trees: "TREES",
-    water: "WATER", flood: "FLOOD", billboard: "BOARD",
+    water: "WATER", flood: "FLOOD", billboard: "BOARD", palms: "PALMS", hedge: "HEDGE",
   });
   // Per-kind and total caps: custom tracks stay under the fleet prop budget.
-  const CAPS = Object.freeze({ stand: 4, gantry: 4, trees: 6, water: 2, flood: 2, billboard: 8 });
+  const CAPS = Object.freeze({ stand: 4, gantry: 4, trees: 6, water: 2, flood: 2, billboard: 8, palms: 6, hedge: 6 });
   const TOTAL = 16;
   const DEFAULT_GAP = Object.freeze({
-    stand: 18, gantry: 0, trees: 34, water: 40, flood: 28, billboard: 9,
+    stand: 18, gantry: 0, trees: 34, water: 40, flood: 28, billboard: 9, palms: 24, hedge: 12,
   });
+  const MIN_GAP = Object.freeze({ stand: 14, gantry: 0, trees: 20, water: 24, flood: 18, billboard: 6, palms: 16, hedge: 8 });
   const GAP_MAX = 120;
   const BOARD_COLS = Object.freeze([
     [0.86, 0.12, 0.10], [0.10, 0.28, 0.66], [0.96, 0.78, 0.10],
@@ -102,6 +103,37 @@ const TrackDesignerProps = (function () {
     return sanitize(next) || next;
   }
 
+  /** An entire placement operation succeeds or refuses; no half-filled rows. */
+  function placeBatch(list, kind, opts) {
+    if (!has(kind) || !opts || !Number.isFinite(opts.start)) return null;
+    const count = opts.count == null ? 1 : opts.count;
+    if (!Number.isInteger(count) || count < 1 || count > 8) return null;
+    const sides = kind === "gantry" ? [1] : opts.side === 0 ? [-1, 1] : [sideOf(opts.side)];
+    const c = counts(list), size = count * sides.length;
+    if (c.total + size > TOTAL || c[kind] + size > CAPS[kind]) return null;
+    let distance = 0;
+    if (count > 1) {
+      if (!Number.isFinite(opts.end)) return null;
+      distance = ((opts.end - opts.start) % 1 + 1) % 1;
+      if (distance < 1e-6) return null;
+    }
+    const next = Array.isArray(list) ? list.slice() : [];
+    for (let i = 0; i < count; i++) for (const side of sides) {
+      next.push({ kind, s: opts.start + (count > 1 ? distance * i / (count - 1) : 0), side, gap: Math.max(MIN_GAP[kind], gapOf(kind, opts.gap)) });
+    }
+    return sanitize(next);
+  }
+
+  function updateAt(list, i, patch) {
+    if (!Array.isArray(list) || !Number.isInteger(i) || !list[i] || !patch) return null;
+    const old = list[i], s = patch.s == null ? old.s : frac(patch.s);
+    if (s == null || (patch.gap != null && !Number.isFinite(patch.gap))) return null;
+    const prop = { kind: old.kind, s, side: patch.side == null ? old.side : sideOf(patch.side), gap: Math.max(MIN_GAP[old.kind], gapOf(old.kind, patch.gap == null ? old.gap : patch.gap)) };
+    if (old.kind === "gantry") { prop.side = 1; prop.gap = 0; }
+    if (JSON.stringify(prop) === JSON.stringify(old)) return null;
+    const next = list.slice(); next[i] = prop; return next;
+  }
+
   /** Remove by index; returns the new list (possibly empty → []). */
   function removeAt(list, i) {
     if (!Array.isArray(list) || i < 0 || i >= list.length) return list ? list.slice() : [];
@@ -177,12 +209,24 @@ const TrackDesignerProps = (function () {
       api.billboard(k, side, Math.max(6, gap), 10, 4.2, col);
       return true;
     }
+    if (p.kind === "palms") {
+      if (!api.palm) return false;
+      const step = 12 / Math.max(1, sv.total || 5000);
+      for (const offset of [-1, 0, 1]) api.palm(K(p.s + offset * step), side, Math.max(MIN_GAP.palms, gap), 11, [0.18, 0.42, 0.20]);
+      return true;
+    }
+    if (p.kind === "hedge") {
+      if (!api.hedge) return false;
+      const half = 24 / Math.max(1, sv.total || 5000);
+      api.hedge(p.s - half, p.s + half, side, Math.max(MIN_GAP.hedge, gap), 1.8, [0.22, 0.38, 0.18]);
+      return true;
+    }
     return false;
   }
 
   return {
-    KINDS, LABELS, CAPS, TOTAL, DEFAULT_GAP,
-    has, sanitize, counts, canPlace, place, removeAt, removeLast, pointFrac, dress,
+    KINDS, LABELS, CAPS, TOTAL, DEFAULT_GAP, MIN_GAP,
+    has, sanitize, counts, canPlace, place, placeBatch, updateAt, removeAt, removeLast, pointFrac, dress,
   };
 })();
 Object.freeze(TrackDesignerProps);
