@@ -1,1 +1,1 @@
-1791638718	Cursor Agent	HUD adapt-resize stacked on #1404; tip 3720280e7; 0/18 hud-mock overlaps  [cursor/hud-mock-shots-2d01; session 7f39eed63c8adb2bec7a8f9f]
+1791644441	Cursor Agent	sync #1416 onto ship for paused-WATCH vm-b2 fix; fix #1425 css/hud selectors for source-integrity  [cursor/hud-mock-shots-2d01; session 7f39eed63c8adb2bec7a8f9f]
