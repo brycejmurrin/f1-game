@@ -1631,6 +1631,15 @@ test("apex_hud_shot aliases layout-audit viewport ids and did-you-means a near m
   assert.match(miss.fix, /Did you mean "phone-landscape-844x390"\?/, miss.fix);
 });
 
+test("image and inlineImage are aliases across shot / ui_shot / hud_shot", () => {
+  const hud = callTools([["apex_hud_shot", { image: true, dryRun: true }]])[0].body;
+  assert.equal(hud.ok, true, `hud image→inlineImage: ${JSON.stringify(hud)}`);
+  const ui = callTools([["apex_ui_shot", { screen: "title", inlineImage: true, dryRun: true }]])[0].body;
+  assert.equal(ui.ok, true, `ui_shot inlineImage→image: ${JSON.stringify(ui)}`);
+  const shot = callTools([["apex_shot", { track: "monza", inlineImage: false, dryRun: true }]])[0].body;
+  assert.equal(shot.ok, true, `shot inlineImage→image: ${JSON.stringify(shot)}`);
+});
+
 test("apex_job_status {} is bounded: newest first, limit, state filter, total", async () => {
   const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
   const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");

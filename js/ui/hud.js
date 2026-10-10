@@ -566,12 +566,7 @@ function announceLane(root) {
     root.style.removeProperty("--announce-lane-w");
   }
   const annEl = typeof document !== "undefined" ? document.getElementById("announce") : null;
-  if (annEl && annEl.toggleAttribute) {
-    annEl.toggleAttribute("data-lane-collapsed", !!collapsed);
-    // Vars-exist bit. Not a body class: body.className is the fit key, and
-    // toggling it inside this fit made the next pass rewrite --dock-r-w.
-    annEl.toggleAttribute("data-announce-lane", !!(on || collapsed));
-  }
+  if (annEl && annEl.toggleAttribute) annEl.toggleAttribute("data-lane-collapsed", !!collapsed);
 }
 function radioTopSlot(root, bcast) {
   const t = !bcast && _hudTop ? _hudTop.getBoundingClientRect() : null;
