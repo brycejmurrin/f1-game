@@ -39,7 +39,12 @@ $("mb-tt").onclick = () => openTimeTrial(false);
 async function consumeGhostHash() {
   // A ghost link landing MID-RACE waits, fragment intact, for the menu (quitToMenu re-reads it) — as #353's invite link does.
   if (UiLayers.inRace()) { Log.info("game", "ghost link deferred: racing"); return null; }
-  const shared = await GhostShare.consumeHash({ valid: () => !UiLayers.inRace(),
+  // …and so does one landing over any other layer (results / quali sheet, the RACE loading plate, the career hub, an open
+  // picker): it would flip flow/session to a time trial under that screen. Only the title itself takes the link.
+  const top = els.overlay.hidden ? null : UiLayers.top();
+  if (els.overlay.hidden || (top && top.id !== "overlay")) { Log.info("game", "ghost link deferred: title not live"); return null; }
+  const titleLive = () => !UiLayers.inRace() && !els.overlay.hidden;
+  const shared = await GhostShare.consumeHash({ valid: titleLive,
     notify: (message, result) => G.announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
   });
   if (shared && shared.ok) {
@@ -60,10 +65,10 @@ async function consumeGhostHash() {
   }
   // Setup / livery / daily envelopes on #share= — stage only, never startRace.
   // Inlined (not a sibling fn) so ghost-share.test.mjs can extract this body alone.
-  if (typeof ShareCode !== "undefined" && !UiLayers.inRace()) {
+  if (typeof ShareCode !== "undefined" && titleLive()) {
     const started = { n: 0 };
     await ShareCode.consumeHash({
-      valid: () => !UiLayers.inRace(),
+      valid: titleLive,
       apply: (decoded) => ShareCode.apply(decoded, {
         store: G.store,
         startRace: () => { started.n++; },
