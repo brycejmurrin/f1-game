@@ -11,17 +11,54 @@
  * write <failure>/<error> into junit before the reporters finalise
  * (--max-failures stops gracefully). So:
  *   - selected cancelled|failure + junit failures  → hard fail
- *   - selected cancelled|failure + junit clean     → infra-retry (pass)
+ *   - selected cancelled|failure + junit clean, EVERY shard that reached its
+ *     run step left a junit with testcases         → infra-retry (pass)
+ *   - selected cancelled|failure + a shard that STARTED its run step (it
+ *     uploads a selected-started-* marker first) but left no readable junit
+ *     (cap kill, crash, spec import error, a failed artifact download)
+ *                                                   → hard fail (15-F2)
+ *   - a shard that never reached the run step (checkout / install died) has no
+ *     marker and stays infra noise.
  *   - selected success|skipped                    → existing rules
- * Must never treat cancel as green when junit names a failing spec.
+ * Must never treat cancel as green when junit names a failing spec — or when
+ * it cannot say that no test body died.
  *
- *   node tools/ci/selected-gate-verdict.mjs [--junit-root DIR]
- *     reads SELECT / SELECTED / GUARDS / DROPPED / CALLED / DRAFT from env
+ *   node tools/ci/selected-gate-verdict.mjs [--junit-root DIR] [--junit-in DIR] [--started-in DIR]
+ *     reads DOWNLOAD_FAILED (the artifact download steps' outcome) and SELECT / SELECTED / GUARDS / DROPPED / CALLED / DRAFT from env
  */
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { failedSpecsUnder } from "./junit-failed.mjs";
+import { failedSpecsUnder, unattributedFailuresFrom, testcaseCount } from "./junit-failed.mjs";
+
+const JUNIT_PREFIX = "spec-timings-junit-selected-";
+const STARTED_PREFIX = "selected-started-";
+
+/** Shard evidence from the two downloaded artifact roots (download-artifact
+ *  v8 puts each artifact in a folder named after it): which shards reached
+ *  their run step, and which of those left a junit with at least one testcase. */
+export function shardEvidence(junitIn, startedIn) {
+  const names = (root, prefix) => {
+    try { return fs.readdirSync(root).filter((d) => d.startsWith(prefix)).map((d) => d.slice(prefix.length)); } catch { return []; }
+  };
+  const junit = [];
+  for (const shard of names(junitIn, JUNIT_PREFIX)) {
+    const stack = [path.join(junitIn, JUNIT_PREFIX + shard)];
+    let cases = 0;
+    while (stack.length) {
+      const d = stack.pop();
+      let ents = [];
+      try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { continue; }
+      for (const e of ents) {
+        const f = path.join(d, e.name);
+        if (e.isDirectory()) stack.push(f);
+        else if (e.name === "junit.xml") cases += testcaseCount(fs.readFileSync(f, "utf8"));
+      }
+    }
+    if (cases > 0) junit.push(shard);
+  }
+  return { started: names(startedIn, STARTED_PREFIX), junit };
+}
 
 /**
  * @param {{
@@ -32,6 +69,7 @@ import { failedSpecsUnder } from "./junit-failed.mjs";
  *   called?: string,
  *   draft?: string,
  *   failedSpecs?: string[],
+ *   evidence?: { started: string[], junit: string[], downloadFailed?: boolean },
  * }} input
  * @returns {{ ok: boolean, reason: string, infraRetry: boolean, failedSpecs: string[] }}
  */
@@ -79,8 +117,28 @@ export function selectedGateVerdict(input) {
         failedSpecs,
       };
     }
-    // Clean junit (or no junit uploaded — a cap kill after pass writes none):
-    // infra noise, not an assertion red. See run 37493213168.
+    // Clean junit is infra noise, not an assertion red (run 37493213168). But
+    // "no failures" read from NO junit is not clean: a shard that started its
+    // run step and left no junit with testcases died mid-test (cap kill, crash,
+    // a spec that failed to load) and nothing else reports it (15-F2).
+    const ev = input.evidence;
+    if (!ev || ev.downloadFailed) {
+      return {
+        ok: false,
+        reason: `selected specs ${selected} and the shard junit could not be read (${ev ? "artifact download failed" : "no shard evidence"}) — cannot tell infra noise from a dead test body; re-run the job`,
+        infraRetry: false,
+        failedSpecs,
+      };
+    }
+    const dead = ev.started.filter((n) => !ev.junit.includes(n));
+    if (dead.length > 0) {
+      return {
+        ok: false,
+        reason: `selected specs ${selected}: shard(s) ${dead.join(", ")} reached the run step but left no junit with testcases (killed by the job cap, crashed, or a spec failed to load) — their specs may not have run`,
+        infraRetry: false,
+        failedSpecs,
+      };
+    }
     infraRetry = true;
     reason = `selected specs ${selected} with clean junit — infra-retry (not a fail)`;
   } else {
@@ -120,13 +178,18 @@ function main(argv = process.argv.slice(2)) {
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--junit-root") junitRoot = argv[++i] || "";
   }
+  let junitIn = "", startedIn = "";
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--junit-in") junitIn = argv[++i] || "";
+    if (argv[i] === "--started-in") startedIn = argv[++i] || "";
+  }
   let failedSpecs = [];
   if (junitRoot && fs.existsSync(junitRoot)) {
-    failedSpecs = failedSpecsUnder(junitRoot);
-  } else if (junitRoot) {
-    // Missing root is clean — cancelled shards often upload nothing.
-    failedSpecs = [];
+    // Spec-attributed failures AND failures that name no spec (a load or setup
+    // error has no classname) — both are a red.
+    failedSpecs = [...failedSpecsUnder(junitRoot), ...failedSpecsUnder(junitRoot, unattributedFailuresFrom)];
   }
+  const evidence = { ...shardEvidence(junitIn, startedIn), downloadFailed: process.env.DOWNLOAD_FAILED === "true" };
 
   const v = selectedGateVerdict({
     select: process.env.SELECT,
@@ -136,6 +199,7 @@ function main(argv = process.argv.slice(2)) {
     called: process.env.CALLED,
     draft: process.env.DRAFT,
     failedSpecs,
+    evidence,
   });
 
   console.log(`select=${process.env.SELECT} selected=${process.env.SELECTED} guards=${process.env.GUARDS} dropped=${process.env.DROPPED ?? "?"} called=${process.env.CALLED} draft=${process.env.DRAFT}`);

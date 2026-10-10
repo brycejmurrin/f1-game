@@ -6477,7 +6477,7 @@ window.LightPresets = {
     "bounceK": 0.3,
     "fogTint": 0.06,
     "lampFlicker": 0,
-    "lampRadiusMul": 1.9,
+    "lampRadiusMul": 0.9,
     "lampTemp": -0.792,
     "roadRough": 1.13,
     "ssrWetMul": 0.34,

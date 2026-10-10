@@ -3459,6 +3459,9 @@ const WGX = (function () {
       // records × the knob dimmer; no twilight ramp/flicker, GLX parity), so
       // the buffer is static until the next bake. A moved pair also resets
       // the chunkIdx segment allocator: every mesh re-appends on next draw.
+      // (frame.allLights is ONE reused buffer, so identity rarely moves: the
+      // allocator also rewinds in freeChunkedMesh when the last mesh holding a
+      // segment is freed — wgx-chunked.js — or each track build would leak.)
       // Re-upload when the SET changes (identity/knob) or when its VALUES change
       // (allLightsGen — flicker, warm-up, a LAMPS slider). The two are kept
       // apart deliberately: the segment allocator below may only be reset for
@@ -5023,12 +5026,16 @@ const WGX = (function () {
     // packed with. CLEARING BOTH CULL SNAPSHOTS IS LOAD-BEARING (same contract
     // as glx.js, pinned by gfx-backend-canary): bytes written here came from
     // no frustum, so a later cullInstances must never hit its cache on them.
-    function updateInstances(batch, matrices, n) {
+    function updateInstances(batch, matrices, n, colors) {
       if (_lost || !batch || !batch._instPacked || !batch.instBuf || batch.instBuf === identInstanceBuf) return 0;
       const v = Math.max(0, Math.min(batch.instances | 0, n | 0)), dst = batch._instPacked;
       for (let i = 0; i < v; i++) {
         const so = i * 16, d = i * 20;
         for (let k = 0; k < 16; k++) dst[d + k] = matrices[so + k];
+        // Optional colours (frozen-mirror). DebrisWorld omits them — colour lanes stay as packed.
+        if (colors) {
+          dst[d + 16] = colors[i * 3]; dst[d + 17] = colors[i * 3 + 1]; dst[d + 18] = colors[i * 3 + 2];
+        }
       }
       batch.visible = v;
       batch._cullPlanes = null;
@@ -5719,10 +5726,11 @@ const WGX = (function () {
       gpuFirstError: () => _gpuFirstMsg,
       // GLX/TLX parity: the backend's own account of the device for the GOV
       // panel and __apex.diag().env.
+      ctxLost: () => !!_lost,   // cheap per-frame read for game.js gfxContextLost (backendState allocates)
       backendState: () => ({
         api: "webgpu", lite: WGX_LITE, minimal: WGX_MINIMAL, softGpu: _softGpu,
         isMobile: IS_MOBILE, gpuErrors: _gpuErrors, gpuFirstError: _gpuFirstMsg,
-        lost: _lost, format,
+        lost: _lost, ctxLost: !!_lost, format,
       }),
 
       // Cull-test helpers (Frustum shared module; GLX parity surface).

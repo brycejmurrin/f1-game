@@ -45,7 +45,7 @@
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall, marshalPost, cameraTower, broadcastCompound,
         billboard, sponsorHoarding, gantry, motorhome, groundPatch,
-        place, ridge, circuitKit, modelGroup, vadd, addBox, addCyl, seat, MAT } = api;
+        place, ridge, circuitKit, modelGroup, vadd, addBox, addCyl, addFrustum, seat, MAT, lapBounds, pyMin } = api;
 
       // 1. PALETTE + LOCAL HELPERS
       //    Overcast English green: desaturated, cool, low contrast. Nothing
@@ -254,7 +254,6 @@
       forestEdge(0.050, 0.110, -1, 48, { col: LEAF_D });
       // --- behind the Hollywood-side bank: observation box, a service
       //     hardstanding with a marshal unit, then a deeper broadleaf rank.
-      hut(K(0.0663), -1, 27, CREAM);
       safeBox(K(0.072), -1, 30, [4.2, 3.0, 6], WALL_2);          // commentary box
       billboard(K(0.056), -1, 17, 7, 2.6, [0.66, 0.68, 0.66]);
       groundPatch(K(0.084), -1, 32, [16, 0.16, 44], GRAVEL);
@@ -380,10 +379,9 @@
       guardrail(0.310, 0.380, 1, 12, ARMCO);
       marshalPost(K(0.3342), 1, 13);
       for (let i = 0; i < 4; i++) specimen(K(0.330 + i * 0.016), 1, 46, 200 + i * 9);
-      // --- behind the viewing bank: a small terrace, the marshals' hut and a
+      // --- behind the viewing bank: a small terrace, a pit-side shed and a
       //     field boundary with a rank of hedgerow oaks beyond it.
       terrace(0.328, 0.356, 1, 32, { rows: 3, rise: 0.9, depth: 2.0, conc: CONCRETE });
-      hut(K(0.3342), 1, 28, CREAM);
       safeBox(K(0.350), 1, 32, [4.0, 2.8, 5], WALL_2);
       groundPatch(K(0.340), 1, 36, [20, 0.16, 56], ROUGH);
       hedge(0.306, 0.386, 1, 54, 2.1, HEDGE_L);
@@ -423,10 +421,9 @@
       guardrail(0.492, 0.556, -1, 12, ARMCO);
       marshalPost(K(0.5162), -1, 15);
       // --- deep wood: a third rank and scrub at the foot of it. No buildings,
-      //     by the brief; the only man-made thing here is the marshals' hut.
+      //     by the brief; the only man-made things here are the marshal post and the guardrail.
       rank(0.486, 0.562, -1, 64, 20, 1490, 10.0, 17.0);
       for (let i = 0; i < 7; i++) bush(K(0.494 + i * 0.010), -1, 30 + (i % 3) * 6, i % 2 ? LEAF_D : LEAF_B);
-      hut(K(0.5162), -1, 27, WALL_2);
 
       // 12. s 0.5713 +1 18 — McLEANS
       tyreWall(0.562, 0.584, 1, 12, TW_Y);
@@ -436,7 +433,6 @@
       guardrail(0.550, 0.600, 1, 12, ARMCO);
       // --- small standing bank with its own hut and a rough-grass apron, then
       //     hedgerow and parkland trees stepping back into the estate.
-      hut(K(0.5713), 1, 26, CREAM);
       safeBox(K(0.588), 1, 30, [3.6, 2.6, 5], WALL_2);
       groundPatch(K(0.574), 1, 34, [22, 0.16, 62], ROUGH);
       hedge(0.548, 0.606, 1, 56, 2.0, HEDGE_L);
@@ -482,7 +478,6 @@
       rank(0.644, 0.736, -1, 56, 22, 1710, 10.5, 17.5);
       for (let i = 0; i < 8; i++) bush(K(0.652 + i * 0.010), -1, 24 + (i % 3) * 5, i % 2 ? LEAF_D : LEAF_C);
       slopeRidge(K(0.700), -1, 62, 90, 22, 5.0, GRASS_D);
-      hut(K(0.6803), -1, 24, CREAM);
 
       // 14. s 0.7592 -1 12 — THE ESSES (spectator tunnel crossing)
       guardrail(0.735, 0.782, -1, 11, ARMCO);
@@ -515,7 +510,6 @@
       for (let i = 0; i < 3; i++) specimen(K(0.776 + i * 0.018), 1, 52, 400 + i * 15);
       // --- the rural tell: a brick farm building group well back behind the
       //     hedge, a field gate onto rough grazing, and hedgerow standards.
-      hut(K(0.7887), 1, 22, CREAM);
       building(K(0.802), 1, 74, 12, 5.2, 22, { col: BRICK, roof: ROOF_R });
       building(K(0.812), 1, 70, 10, 4.4, 16, { col: STEEL, roof: ROOF_D, flat: true });
       for (let i = 0; i < 4; i++) safeBox(K(0.784 + i * 0.006), 1, 66, [3.4, 2.4, 4.5], i % 2 ? ROUGH : GRASS_D);
@@ -551,7 +545,6 @@
       safeBox(K(0.970), 1, 17, [3.0, 3.4, 12], CONCRETE);
       building(K(0.978), 1, 26, 10, 4.6, 18, { col: BRICK, roof: ROOF_R });
       groundPatch(K(0.968), 1, 38, [22, 0.16, 54], TARMACISH);
-      hut(K(0.9437), 1, 20, CREAM);
       for (let i = 0; i < 4; i++)
         safeBox(K(0.932 + i * 0.013), -1, 44, [5.2, 3.2, 8], i % 2 ? TENT : CREAM);
       // Dropped the floating Goddards terrace (unsupported 1.83 m / 0.54 m);
@@ -613,8 +606,9 @@
       spectatorHill(0.660, 0.700, -1, 20, { h: 5.0, col: GRASS });
       spectatorHill(0.910, 0.935, -1, 28, { h: 5.5, col: GRASS });
 
-      // Continuous armco so the whole edge reads as a circuit, not a lane.
-      guardrail(0.0, 1.0, -1, 13.5, ARMCO);
+      // Continuous armco on the PUBLIC (+1) side so the whole edge reads as a
+      // circuit, not a lane. The side −1 lap-wide rail was dropped: the
+      // sectional −1 runs above already carry it, and the pair doubled up.
       guardrail(0.10, 0.93, 1, 14.5, ARMCO);
 
       // Posts on the eighths, skipping the ones already placed above.
@@ -623,6 +617,53 @@
         if (s > 0.30 && s < 0.40) continue;
         marshalPost(K(s), 1, 17);
       }
+      // ── RATCLIFFE-ON-SOAR, ENE HORIZON ────────────────────────────────────
+      // Donington Park (52.829° N, 1.376° W) → Ratcliffe station (52.861° N,
+      // 1.256° W): ~8.8 km on a TRUE COMPASS BEARING of 66.1° (OS/Wikipedia),
+      // NOT any road's outboard normal — the normal tracks the road's heading
+      // and points 150° away from the station at every node of this lap. Same
+      // pattern as scenery/fuji.js: +X is WEST and +Z is NORTH, so a bearing θ
+      // clockwise from north is (x, z) = (-sin θ, cos θ), measured from the
+      // lap centroid. Closed Sept 2024; cooling towers still standing,
+      // demolition not before 2029 (Uniper / East Midlands CCA, 2025).
+      // Distance is compressed to 3.4 km for the fog; the towers keep their
+      // REAL size and proportions (114 m high, 87 m base, 55 m crown, 8 in two
+      // rows of four on ~150 m centres; chimney 199 m), so they subtend ~2.6x
+      // the real angle — they read as cooling towers, not silos.
+      {
+        const RAT_BEARING = 66.1 * Math.PI / 180, RAT_DIST = 3400;
+        const rx = -Math.sin(RAT_BEARING), rz = Math.cos(RAT_BEARING);   // toward the station
+        const sx = -rz, sz = rx;                                       // across the sightline
+        const { cx, cz } = lapBounds();
+        const hx = cx + rx * RAT_DIST, hz = cz + rz * RAT_DIST;
+        const hg = terrainYAt(hx, hz);
+        const hubY = hg === null ? pyMin : hg;
+        const COOL = [0.60, 0.62, 0.64];
+        const CHIM = [0.54, 0.56, 0.58];
+        const UP = [[sx, 0, sz], [0, 1, 0], [rx, 0, rz]];
+        const at = (across, depth) => [hx + sx * across + rx * depth, hz + sz * across + rz * depth];
+        const floor = (x, z) => { const g = terrainYAt(x, z); return (g === null ? hubY : g) - 1; };
+        const TH = 114, TR0 = 43.5, TR_WAIST = 25, TR_TOP = 27.5;   // m; hyperbolic shell as two frusta
+        const CHIM_H = 199, CHIM_R0 = 11, CHIM_R1 = 6.5;
+        const CHIM_AT = [320, -60];
+        modelGroup("donington-ratcliffe-power", {
+          center: [at(31, 0)[0], hubY + 105, at(31, 0)[1]],
+          size: [604, 230, 244],
+          basis: UP,
+        }, (stage) => {
+          for (const across of [-225, -75, 75, 225]) {
+            for (const depth of [-75, 75]) {
+              const [x, z] = at(across, depth);
+              const y = floor(x, z);
+              addFrustum(stage, [x, y, z], TR0, TR_WAIST, TH * 0.46 + 1, COOL, 10, null);
+              addFrustum(stage, [x, y + TH * 0.46, z], TR_WAIST, TR_TOP, TH * 0.54 + 1, COOL, 10, null);
+            }
+          }
+          const [cxp, czp] = at(CHIM_AT[0], CHIM_AT[1]);
+          addFrustum(stage, [cxp, floor(cxp, czp), czp], CHIM_R0, CHIM_R1, CHIM_H + 1, CHIM, 10, null);
+        }, { required: true });
+      }
+
         // ---------------------------------------------------------------- FAR HORIZON
       // Without a horizon the road rises and falls through a pancake-flat plane
       // that meets the sky at a hard edge: the road moves and nothing behind it

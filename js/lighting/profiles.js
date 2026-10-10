@@ -309,8 +309,30 @@ const LightStore = (() => {
 
     function persist() { store.set("lightTune", profiles); }
 
+    // RESET and the "(N tuned)" label must see the SAME slots set() writes: the
+    // condition's own key, plus the "|dry" slot that holds the TOD_KEYED sun knobs
+    // whatever the weather. Only those ids leave the dry slot on a wet RESET —
+    // a dry-weather edit of any other knob is a different condition's edit.
+    function sunSlot(k) { const s = keyFor("sunElev", k); return s !== k ? s : null; }
+    function tuned() {
+      const k = key();
+      if (!k) return 0;
+      const s = sunSlot(k), p = s && profiles[s];
+      return Object.keys(profiles[k] || {}).length + (p ? [...TOD_KEYED].filter((id) => id in p).length : 0);
+    }
+    function reset() {
+      const k = key();
+      if (k) delete profiles[k];
+      const s = k && sunSlot(k);
+      if (s && profiles[s]) {
+        for (const id of TOD_KEYED) delete profiles[s][id];
+        if (!Object.keys(profiles[s]).length) delete profiles[s];
+      }
+      delete profiles["*"];
+    }
+
     const api = {
-      key, apply, set, persist, copyToTracks, restore,
+      key, apply, set, persist, copyToTracks, restore, tuned, reset,
       get profiles() { return profiles; },
       set profiles(v) { profiles = v || {}; },
     };
@@ -322,5 +344,8 @@ const LightStore = (() => {
   // this lazily (typeof-guarded) — a soft hook, not an eval-time edge.
   let _live = null;
   function reapply() { if (_live) _live.apply(); }
-  return { create, reapply };
+  // The tuner panel reaches the live store through these (no G member for them).
+  function reset() { if (_live) _live.reset(); }
+  function tuned() { return _live ? _live.tuned() : 0; }
+  return { create, reapply, reset, tuned };
 })();

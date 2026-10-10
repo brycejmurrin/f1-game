@@ -71,13 +71,19 @@ fi
 SCAN=$(printf '%s' "$CMD" | python3 -c '
 import re,sys
 s=sys.stdin.read()
-out=[];term=None
-for ln in s.split("\n"):
+out=[];term=None;keep=False;L=s.split("\n")
+for n,ln in enumerate(L):
     if term is not None:
         if ln.strip()==term: term=None
+        elif keep: out.append(ln)
         continue
-    m=re.search(r"<<-?\s*[\x27\"]?([A-Za-z_][A-Za-z0-9_]*)[\x27\"]?",ln)
-    if m: term=m.group(1)
+    m=re.search(r"(?<!<)<<(?!<)-?\s*[\x27\"]?([A-Za-z_][A-Za-z0-9_]*)[\x27\"]?",ln)
+    # a heredoc needs its closing line and is not a `$(( 1 << n ))` shift (2026-10-09)
+    if m and ln[:m.start()].count("((")<=ln[:m.start()].count("))") and any(x.strip()==m.group(1) for x in L[n+1:]):
+        term=m.group(1)
+        # a body a SHELL runs (bash <<EOF, cat <<EOF | bash) is commands, so it
+        # stays in SCAN: the commit fallback and the kill rules must see it (15-F6)
+        keep=bool(re.search(r"(^|[;&|(\s])(\S*/)?(sh|bash|dash|zsh|source|eval)(\s|$)",ln[:m.start()]) or re.search(r"\|\s*(\S*/)?(sh|bash|dash|zsh)(\s|$)",ln[m.end():]))
     out.append(ln)
 s="\n".join(out)
 res=[];i=0;n=len(s)
@@ -108,7 +114,9 @@ except Exception:
     print("")
 ')
 # Prefixes that carry the verb: wrappers, a shell -c, an absolute path.
-PRE='((sudo|env|exec|nice|nohup|command)[[:space:]]+)*((sh|bash|dash|zsh)[[:space:]]+-l?c[[:space:]]+)?((sudo|env|exec)[[:space:]]+)*(/[^[:space:]]*/)?'
+# 15-F7: `timeout 5 pkill -f chrome` and `xargs pkill -f` are the same kill (timeout,
+# xargs and their flags/duration are wrappers; setsid/doas/stdbuf likewise).
+PRE='((sudo|env|exec|nice|nohup|command|setsid|doas|stdbuf([[:space:]]+-[^[:space:]]+)*|timeout([[:space:]]+-[^[:space:]]+([[:space:]]+[0-9.]+[smhd]?)?)*[[:space:]]+[0-9.]+[smhd]?|xargs([[:space:]]+-[^[:space:]]+([[:space:]]+[0-9]+)?)*)[[:space:]]+)*((sh|bash|dash|zsh)[[:space:]]+-l?c[[:space:]]+)?((sudo|env|exec)[[:space:]]+)*(/[^[:space:]]*/)?'
 # THE TREE THE COMMIT LANDS IN, NOT THE SESSION'S. $CLAUDE_PROJECT_DIR names
 # the MAIN checkout, so a commit made from a LINKED WORKTREE read the main
 # tree's staged list, gated files the commit does not touch, and `--auto-raise`
@@ -129,7 +137,13 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 # "did not work" — walked straight past a guard whose whole point is that they
 # match the guard's own shell. `sudo`/`env` are hoisted for the same reason,
 # and since 2026-09-22 so are a shell `-c` and an absolute path ($PRE).
-if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}(pkill([[:space:]]+-[A-Za-z0-9]+)*[[:space:]]+(-[a-zA-Z]*f[a-zA-Z]*|--full)|killall)[[:space:]]" \
+#
+# 2026-10-09 (M36): the walk was `-[A-Za-z0-9]+` flags only, so `pkill -9f
+# node` (a digit before the f), `pkill -u root -f chrome` (a flag with an
+# argument) and `pkill --signal 9 -f chrome` (a long flag) walked past. Now ANY
+# non-separator words may precede the -f cluster: PKILL_F.
+PKILL_F='pkill([[:space:]]+[^[:space:];&|()]+)*[[:space:]]+(-[A-Za-z0-9]*f[A-Za-z0-9]*|--full)'
+if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}(${PKILL_F}([[:space:]]|\$)|killall[[:space:]])" \
    && printf '%s' "$SCAN" | grep -Eiq 'chrom|playwright|node|test-bg|npm'; then
   echo "BLOCKED: pkill -f / killall matches your own shell (its command line contains the pattern) and orphans Playwright's browsers. Stop a run with 'node tools/ci/test-bg.mjs --stop'; kill orphan Chrome by PID from a listed set: ps -eo pid,comm | awk '\$2==\"chrome\"{print \$1}'" >&2
   exit 2
@@ -142,7 +156,7 @@ fi
 # verb, exactly like the pkill rule above — a commit message or a doc that
 # QUOTES either form is prose, not an invocation. (This guard blocked its own
 # commit before the anchor went in.)
-PGREP_F='pgrep([[:space:]]+-[A-Za-z0-9]+)*[[:space:]]+(-[a-zA-Z]*f[a-zA-Z]*|--full)'
+PGREP_F='pgrep([[:space:]]+[^[:space:];&|()]+)*[[:space:]]+(-[A-Za-z0-9]*f[A-Za-z0-9]*|--full)'
 if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}(${PGREP_F}[^|]*\|[[:space:]]*xargs[^|]*kill|kill([[:space:]]+-[A-Za-z0-9]+)*[[:space:]]+\\\$\([[:space:]]*${PGREP_F})" \
    && printf '%s' "$SCAN" | grep -Eiq 'chrom|playwright|node|test-bg|npm'; then
   echo "BLOCKED: pgrep -f piped or substituted into kill orphans Playwright's browsers exactly as pkill -f does. Stop a run with 'node tools/ci/test-bg.mjs --stop'; kill orphan Chrome by PID from a listed set: ps -eo pid,comm | awk '\$2==\"chrome\"{print \$1}'" >&2
@@ -203,12 +217,20 @@ fi
 # `GIT_AUTHOR_NAME=x git commit` and `/usr/bin/git commit` all committed with
 # no guard run. shellparse.py tokenises the command as the shell will
 # (quotes, heredoc bodies, wrappers, `sh -c` bodies, VAR=value prefixes) and
-# returns every `git … commit` with its -a / pathspec / --dry-run reading. An
-# unparseable command (unbalanced quote) falls back to a broad regex on SCAN.
+# returns every `git … commit` with its -a / pathspec / --dry-run reading.
+# FAIL CLOSED (2026-10-09, L12): shellparse walks compound commands (if/then/
+# else/fi, while/for/do/done, { … }, subshells, lists) and prints `null` on text
+# it cannot tokenise; this block ran the regex fallback only for an empty or
+# `null` answer, but the parser answered `[]` for `if …; then git commit; fi`,
+# `{ git commit; }`, a line holding `$((1 << n))` and an unbalanced quote — all
+# real commits. Now the fallback also runs for `[]`: a broad regex on SCAN
+# (reserved words allowed before the verb) that, if it sees a commit the parser
+# did not, treats it as a real `-a` commit. A guard run on a false positive is
+# only 25 s; a commit that skips the guards is the failure being closed.
 HOOKDIR="$(cd "$(dirname "$0")" && pwd)"
 COMMIT_JSON=$(printf '%s' "$CMD" | python3 "$HOOKDIR/shellparse.py" commit 2>/dev/null)
-if [ -z "$COMMIT_JSON" ] || [ "$COMMIT_JSON" = "null" ]; then
-  if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+commit([[:space:]]|\$)"; then
+if [ -z "$COMMIT_JSON" ] || [ "$COMMIT_JSON" = "null" ] || [ "$COMMIT_JSON" = "[]" ]; then
+  if printf '%s' "$SCAN" | grep -Eq "(^|[;&|({\`][[:space:]]*)((if|then|else|elif|while|until|do|time|!)[[:space:]]+)*${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+commit([[:space:]]|\$)"; then
     COMMIT_JSON='[{"all":true,"paths":[],"include":false,"dry":false,"skip":false,"gitdir":null}]'
   else
     COMMIT_JSON='[]'
@@ -246,7 +268,7 @@ if [ "${C_RUN:-0}" = "1" ] && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUA
   # still run — and so is an empty staged list (`git commit -a`, or a pathspec
   # on the command line, stages at commit time, and nothing staged must never
   # read as "nothing to check").
-  STAGED=$(cd "$ROOT" && git diff --cached --name-only 2>/dev/null)
+  STAGED=$(cd "$ROOT" && git diff --cached --name-only --no-renames 2>/dev/null)   # --no-renames: a moved-out source file must show (M36)
   # A PATHSPEC COMMITS WHAT IT NAMES (2026-10-04): `git commit docs/a.md
   # js/game.js` with only docs/a.md staged used to take the docs-only path
   # and commit js/game.js unguarded. The named paths join the set judged.

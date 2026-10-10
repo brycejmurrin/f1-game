@@ -1081,6 +1081,11 @@ const TLX = (function () {
       // (three's setSize is a no-op under XRManager presenting; we likewise
       // must not fight the immersive layer's drawing-buffer size).
       let _xrActive = false;
+      // The post chain's factory, callable AGAIN: a one-off throw in present()
+      // retires the chain ("Post-only death") and the next render-target realloc
+      // rebuilds it (applyResize) — WGX's _swapTargets re-enables its chain the same way.
+      function buildPost() {
+      let post = null;   // shadows the session's `post`: the caller assigns the result
       try {
         if (window.TLXShaders && TLXShaders.postChain && TLXShaders.post && chunks) {
           post = TLXShaders.postChain(THREE, TSL,
@@ -1112,6 +1117,10 @@ const TLX = (function () {
         try { if (post && post.dispose) post.dispose(); } catch (_) { /* partial factory cleanup */ }
         post = null;
       }
+      return post;
+      }
+      post = buildPost();
+      let _postStrikes = 0, _postRebuild = false;   // post-only deaths so far; a rebuild is owed
 
       const ENV_SIZE = 64;
       const ENV_CULL_M = 150;
@@ -1618,10 +1627,11 @@ const TLX = (function () {
       // as its own render object (17 steady, 98 in a pileup). The cull snapshot
       // is cleared for the same reason as GLX/WGX: these bytes came from no
       // frustum, so a later cullInstances must not claim them.
-      function updateInstances(batch, matrices, n) {
+      function updateInstances(batch, matrices, n, colors) {
         if (!batch || !batch.imesh) return 0;
         const v = Math.max(0, Math.min(batch.instances | 0, n | 0));
-        _writeInstanceMatrices(batch.imesh, matrices, null, v);
+        // colours: frozen-mirror restores the mirror pack; DebrisWorld passes null (leave tint alone).
+        _writeInstanceMatrices(batch.imesh, matrices, colors || null, v);
         batch.visible = v;
         batch._cullPlanes = null;
         InstCells.invalidate(batch);
@@ -2601,8 +2611,10 @@ const TLX = (function () {
         // pipeline runs _getVertexFormat, which is `e.array.constructor` with
         // NO null guard in the shipped vendor build (three.webgpu.min.js,
         // r185). Both rungs therefore throw and the ladder lands on
-        // refuseTab() — which reloads onto GLX, so the player still gets a
-        // game, just never the unlit TLX degradation those rungs exist for.
+        // refuseTab() — which reloads onto GLX only for an explicit pin or a boot
+        // already on three WebGL2 (a WebGPU AUTO boot reloads onto three WebGL2),
+        // so the player still gets a game, just never the unlit TLX degradation
+        // those rungs exist for.
         // Verified by reading the vendored bytes, not reproduced at runtime.
         // Do not add rungs above refuseTab() expecting them to run here.
         if (now - _mirrorSweepAt < 2000) return;
@@ -2784,6 +2796,7 @@ const TLX = (function () {
             _displayCanvas.width = cwBuf;
             _displayCanvas.height = chBuf;
           }
+          if (_postRebuild && !post) { _postRebuild = false; post = buildPost(); }
           if (post) post.resize(rw, rh);
         }
       }
@@ -3584,6 +3597,7 @@ const TLX = (function () {
             _gpuLastOperation = "render-mirror";
             renderer.render(scene, mirCam);
             _mirRenders++;
+            _mirFails = 0;   // the cap means FOUR CONSECUTIVE failures: unrelated one-frame throws must not retire the mirror
           } catch (e) {
             // Never strand the frame; a mirror that cannot render stops being asked.
             if (++_mirFails >= 4) _mirDead = true;
@@ -3643,6 +3657,11 @@ const TLX = (function () {
         backendState() {
           const t = this && this.__tlx;
           return (t && typeof t.backendState === "function") ? t.backendState() : null;
+        },
+        // Cheap per-frame boolean (game.js gfxContextLost): backendState() builds a ~50-field object and walks meshPool.
+        ctxLost() {
+          const t = this && this.__tlx;
+          return !!(t && typeof t.ctxLost === "function" && t.ctxLost());
         },
         makeFrustumPlanes(viewProj, out) {
           return TLXShaders.makeFrustumPlanes(viewProj, out);
@@ -4273,11 +4292,13 @@ const TLX = (function () {
           // retried the SAME render unwrapped, so a compile error became the
           // crash. Every paint below stays inside try; the pick is never
           // written to webgl2 (session skip + reload if even classic dies).
-          const persistFail = (e) => {
+          // postOnly: the failure may be the post chain alone and the canvas repaint
+          // below still paints on TLX — then the session stays bound to three.
+          const persistFail = (e, postOnly) => {
             const reason = (e && e.message) || String(e);
             _lastFailure = { reason, at: Date.now() };
             try { localStorage.setItem("apex26.gfxTlxFail", reason); } catch (_) { /* blocked storage */ }
-            try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
+            if (!postOnly) try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
             try { if (!_presentWarned) { _presentWarned = true; Log.warn("gfx", "TLX: present failed —", e); } } catch (_) { /* Log absent in the node harness */ }
           };
           const paintCanvas = () => {
@@ -4329,6 +4350,7 @@ const TLX = (function () {
             _drawMatMode = mode;
             const deadPost = post;
             post = null;
+            _postRebuild = false;   // lit/fx go too: no chain to rebuild for
             _cancelSoftBlits();
             try { if (deadPost && deadPost.dispose) deadPost.dispose(); } catch (_) { /* best-effort degradation */ }
             sky = null;
@@ -4351,14 +4373,25 @@ const TLX = (function () {
               if (_instRegistry[i]) _instRegistry[i].material = instMat;
             }
           };
+          // The last rung: even rawUnlitMat throws. AUTO on three's WebGPU takes three WebGL2 next boot (tlxAutoGL, a
+          // different configuration). A boot that is ALREADY three WebGL2 (forceWebGL / _autoStayGL) or an explicit pin
+          // has nothing lower on TLX, so it binds GLX (gfxClaimFail): tlxAutoGL there reproduced the same boot for ever.
+          // The reload spends the shared ctxLostReloads budget (n <= 2, like the heal path below); past it the latch is
+          // still written for the player's own next reload, but nothing reloads on its own.
           const refuseTab = () => {
-            if (_glPin !== "0" && _glPin !== "1") {
-              try { sessionStorage.setItem("apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps trying WebGPU */ }
-            } else {
-              try { sessionStorage.setItem("apex26.gfxClaimFail", "1"); } catch (_) { /* this tab keeps trying */ }
-            }
+            const toGlx = _glPin === "0" || _glPin === "1" || forceWebGL || _autoStayGL;
+            try { sessionStorage.setItem(toGlx ? "apex26.gfxClaimFail" : "apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps its path */ }
             try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* skipClaim still blocks revert */ }
-            try { location.reload(); } catch (_) { /* harness: GLX attaches next real boot */ }
+            let n;
+            try {
+              n = (parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) + 1;
+              sessionStorage.setItem("apex26.ctxLostReloads", String(n));
+            } catch (_) { n = ++_sessLostN; }
+            if (n <= 2) { try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
+            try {
+              if (typeof window.__apexReportError === "function")
+                window.__apexReportError("gfx", new Error("The graphics renderer cannot draw on this device — reload to try again, or pick another RENDERER in settings."));
+            } catch (_) { /* shell card absent */ }
           };
           let painted = false;
           try {
@@ -4412,12 +4445,14 @@ const TLX = (function () {
               paintCanvas();
             }
             painted = true;
-          } catch (e) { persistFail(e); }
-          // Post-only death: same materials, canvas (the 1269 intent).
+          } catch (e) { persistFail(e, !!post); }
+          // Post-only death: same materials, canvas (the 1269 intent). The chain is
+          // rebuilt at the next render-target realloc (<= 3 times a session).
           if (!painted && post) {
             const deadPost = post;
             post = null;
             _cancelSoftBlits();
+            _postRebuild = ++_postStrikes <= 3;
             try { paintCanvas(); painted = true; } catch (e) { persistFail(e); }
             finally {
               try { if (deadPost.dispose) deadPost.dispose(); } catch (_) { /* device already dying */ }
@@ -4692,6 +4727,7 @@ const TLX = (function () {
           // Which three backend actually came up, and why — the one question a
           // "TLX looks wrong on my phone" report has to answer first, since the
           // WebGPU/WebGL2 choice is now device-dependent (see the pin above).
+          ctxLost() { return !!_deviceLost; },
           backendState() {
             return {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",

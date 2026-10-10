@@ -172,3 +172,27 @@ test("an ADAPTED spec edit schedules the page slice; a plain spec edit does not 
   const plain = new Set(pick(["tests/specs/hud-mirror.spec.js"]).slices.keys());
   assert.deepEqual([...plain], ["guards"]);
 });
+
+test("L9: the SOURCE an ADAPTED spec asserts schedules the page slice (2026-10-09)", () => {
+  // select-specs drops the browser copy as VM-covered; vm-page is the only
+  // place it runs. Before this, a cota / pit-lane / space.js diff ran it nowhere.
+  const slices = (f) => new Set(pick([f]).slices.keys());
+  for (const f of ["js/circuits/cota.js", "js/circuits/imola.js", "js/circuits/albert_park.js",
+    "js/circuits/scenery/cota.js", "js/race/pit-lane.js", "js/race/race-control.js", "js/track/core/space.js"])
+    assert.ok(slices(f).has("page"), `${f} must schedule page: ${[...slices(f)].join(",")}`);
+  // Circuits and scenery no ADAPTED spec reads keep the cheap plan.
+  assert.ok(!slices("js/circuits/dijon.js").has("page"));
+  assert.ok(!slices("js/circuits/scenery/monaco.js").has("page"));
+});
+
+test("15-F1: every other source an ADAPTED spec reads schedules the page slice (2026-10-10)", () => {
+  // #1288 listed three files; node-plan said "vm-page planned" for these while
+  // the page matrix row was needed:"false", so logging / projection / physics-fixes /
+  // autopilot / agent-drive-bench / pit-lane ran nowhere on a PR touching only them.
+  const slices = (f) => new Set(pick([f]).slices.keys());
+  for (const f of ["js/core/log.js", "js/track/core/spline.js", "js/track/core/pit.js", "js/track/core/line.js",
+    "js/physics/tyre-model.js", "js/physics/player-forces.js", "js/physics/consts.js", "js/agent/agentview.js"])
+    assert.ok(slices(f).has("page"), `${f} must schedule page: ${[...slices(f)].join(",")}`);
+  // An unrelated engine file keeps the cheap plan.
+  assert.ok(!slices("js/track/core/mesh.js").has("page"));
+});

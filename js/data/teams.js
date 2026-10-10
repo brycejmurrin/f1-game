@@ -325,6 +325,18 @@ const Teams = (function () {
       num: Math.min(99, Math.max(0, num)),
     };
   }
+  // Enum-typed livery fields index plain tables (Car3D finOf / FINISH_SURFACE, LiveryTex NUM_FONTS), so
+  // a kept "constructor" resolves to an inherited function and throws in every build. The three the garage
+  // offers as pills must be a real id when those tables are loaded (they load after this file; call time);
+  // any other string is refused only when it names an Object.prototype member.
+  function liveryEnumOk(k, v) {
+    if (typeof v !== "string" || v in Object.prototype) return false;
+    const ids = k === "finShape" ? (typeof Car3D !== "undefined" && Car3D.FIN_SHAPE_IDS)
+      : k === "numFont" ? (typeof LiveryTex !== "undefined" && LiveryTex.NUM_FONT_IDS)
+      : k === "finish" ? (typeof Car3D !== "undefined" && Car3D.FINISH_SURFACE && ["gloss"].concat(Object.keys(Car3D.FINISH_SURFACE)))
+      : null;
+    return !ids || ids.indexOf(v) >= 0;
+  }
   function sanitizeCustom(t) {
     const D = DEFAULT_CUSTOM;
     const src = isObj(t) ? t : {};
@@ -336,7 +348,8 @@ const Teams = (function () {
     // Livery values are ids (strings) and rgb triples; nothing nested.
     const livery = {};
     for (const [k, v] of Object.entries(isObj(src.livery) ? src.livery : D.livery)) {
-      if (typeof v === "string") { const s = cleanText(v, "", 32, false); if (s) livery[k] = s; }
+      if (k === "__proto__") continue;
+      if (typeof v === "string") { const s = cleanText(v, "", 32, false); if (s && liveryEnumOk(k, s)) livery[k] = s; }
       else if (Array.isArray(v) && v.length === 3 && v.every(fin)) livery[k] = cleanRgb(v, [0, 0, 0]);
     }
     return {
@@ -353,6 +366,6 @@ const Teams = (function () {
     };
   }
 
-  return { LIST, POINTS, TIER_V, DEFAULT_CUSTOM, isReal, sanitizeCustom };
+  return { LIST, POINTS, TIER_V, DEFAULT_CUSTOM, isReal, sanitizeCustom, liveryEnumOk };
 })();
 Object.freeze(Teams);

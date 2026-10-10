@@ -87,10 +87,13 @@ const LampChunks = (function () {
     return { lists, concat, offsets, counts, cap };
   }
 
-  // Cached bake. Keyed on the chunks array (WeakMap) plus lights ARRAY
-  // IDENTITY — the exact invalidation the per-chunk expandos used: rebuild:true
-  // tuner knobs null track._lights, the next build mints a new array, and the
-  // stale table falls out for free.
+  // Cached bake. Keyed on the chunks array (WeakMap) plus the lights set: the
+  // array IDENTITY and, because js/lighting/frame-lights.js refills ONE buffer
+  // in place (a rebuild:true tuner edit — POOL RADIUS, LAMP DENSITY — changes
+  // its length, positions and radii under the same identity), a snapshot of the
+  // four lanes the bake reads (x, y, z, radius). Colour moves every flicker
+  // frame and is not in the bake, so it never invalidates; the compare is
+  // O(lamps), microseconds against a 25-37 ms bake.
   //
   // The knob is deliberately NOT part of that key. The PER-CHUNK LAMPS
   // slider is `step: 0.001` over 0..1 (js/lighting/knobs.js), so it has 1000
@@ -103,13 +106,32 @@ const LampChunks = (function () {
   // singapore (docs/PERF-FINDINGS.md), paid per frame during a drag. The
   // slider's help text promises the table is "baked once per track".
   const _cache = new WeakMap();
+  // x, y, z, radius per lamp: the only lanes buildTable reads.
+  function _snap(lights) {
+    const n = (lights.length / 15) | 0, s = new Float64Array(n * 4);
+    for (let i = 0, o = 0, k = 0; i < n; i++, o += 15, k += 4) {
+      s[k] = lights[o]; s[k + 1] = lights[o + 1]; s[k + 2] = lights[o + 2]; s[k + 3] = lights[o + 6];
+    }
+    return s;
+  }
+  // NaN-safe: a lane that is NaN in both is unchanged.
+  function _moved(s, lights) {
+    const n = (lights.length / 15) | 0;
+    if (s.length !== n * 4) return true;
+    for (let i = 0, o = 0, k = 0; i < n; i++, o += 15, k += 4) {
+      const x = lights[o], y = lights[o + 1], z = lights[o + 2], r = lights[o + 6];
+      if ((s[k] !== x && (x === x || s[k] === s[k])) || (s[k + 1] !== y && (y === y || s[k + 1] === s[k + 1])) ||
+          (s[k + 2] !== z && (z === z || s[k + 2] === s[k + 2])) || (s[k + 3] !== r && (r === r || s[k + 3] === s[k + 3]))) return true;
+    }
+    return false;
+  }
   function resolve(lights, chunks, knob) {
     const cap = capFor(knob);
     let e = _cache.get(chunks);
-    if (!e || e.src !== lights) {
+    if (!e || e.src !== lights || _moved(e.snap, lights)) {
       // Bake at the FULL cap once; every narrower cap is a prefix of it.
       const full = buildTable(lights, chunks, CAP);
-      e = { src: lights, full, cap: CAP, table: full };
+      e = { src: lights, snap: _snap(lights), full, cap: CAP, table: full };
       _cache.set(chunks, e);
     }
     if (e.cap !== cap) { e.table = cap === CAP ? e.full : _reCap(e.full, cap); e.cap = cap; }

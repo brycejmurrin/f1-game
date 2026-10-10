@@ -29,7 +29,8 @@ import { createRequire } from "node:module";
 import { pick, stripSpecOwner } from "./pick-tests.mjs";
 import { MEASURED, capacity, declaredTests, specSecPerTest, timings } from "./select-budget.mjs";
 import { loadDb, TIMINGS_FILE } from "./spec-timings.mjs";
-import { isTwinned, twinOf } from "./twinned-specs.mjs";
+import { ADAPTED, ADAPTED_RUNNER, isTwinned, twinOf } from "./twinned-specs.mjs";
+import { changedPaths } from "../lib/changed-files.mjs";
 import { changeKind } from "./change-kind.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
 import * as espree from "espree";
@@ -78,27 +79,91 @@ export const MANUAL_OPT_IN_SPECS = new Set([
   "tests/specs/material-shimmer.spec.js",
 ]);
 
+/** Fold a numeric constant expression: literals, `+ - * /`, unary `-`, and a
+ *  top-level const identifier already in `env` (a Map name -> number). Null
+ *  when any part is not constant (15-F4: `BOOT_MS + 240_000`). */
+function foldNum(n, env) {
+  if (!n) return null;
+  if (n.type === "Literal") return typeof n.value === "number" ? n.value : null;
+  if (n.type === "Identifier") return env.has(n.name) ? env.get(n.name) : null;
+  if (n.type === "UnaryExpression" && (n.operator === "-" || n.operator === "+")) {
+    const v = foldNum(n.argument, env);
+    return v === null ? null : (n.operator === "-" ? -v : v);
+  }
+  if (n.type === "BinaryExpression") {
+    const a = foldNum(n.left, env), b = foldNum(n.right, env);
+    if (a === null || b === null) return null;
+    switch (n.operator) {
+      case "+": return a + b;
+      case "-": return a - b;
+      case "*": return a * b;
+      case "/": return b === 0 ? null : a / b;
+      default: return null;
+    }
+  }
+  return null;
+}
+
+/** name -> number for every top-level `const X = <constant expr>` (exported or
+ *  not) in a parsed module, plus the same from the relative modules it imports
+ *  (BOOT_MS lives in tests/helpers/fixtures.js). */
+function constEnv(ast, dir, depth = 0) {
+  const env = new Map();
+  if (depth < 3) {
+    for (const d of ast.body) {
+      if (d.type !== "ImportDeclaration" || !String(d.source.value).startsWith(".")) continue;
+      let sub;
+      try {
+        const f = path.resolve(dir, d.source.value);
+        sub = constEnv(espree.parse(fs.readFileSync(f, "utf8"), { ecmaVersion: "latest", sourceType: "module" }), path.dirname(f), depth + 1);
+      } catch { continue; }
+      for (const sp of d.specifiers) if (sp.type === "ImportSpecifier" && sub.has(sp.imported.name)) env.set(sp.local.name, sub.get(sp.imported.name));
+    }
+  }
+  for (const d of ast.body) {
+    const decl = d.type === "ExportNamedDeclaration" ? d.declaration : d;
+    if (decl?.type !== "VariableDeclaration" || decl.kind !== "const") continue;
+    for (const v of decl.declarations) {
+      if (v.id?.type !== "Identifier") continue;
+      const n = foldNum(v.init, env);
+      if (n !== null) env.set(v.id.name, n);
+    }
+  }
+  return env;
+}
+
 /** Largest test.setTimeout(N) a spec declares, in ms — 0 when none.
  *  THE COST MODEL'S BLIND SPOT, measured on CI run 31233088772: the selector
  *  billed every test at ~80 s, but 8 of the 10 specs it picked declare their
  *  own test.setTimeout of 180-420 s — which OVERRIDES the job's --timeout —
  *  so a "14-minute" selection signed up for 3-7 minutes per test and failed
  *  the job. A spec that reserves more than the selected gate's per-test budget
- *  cannot be billed at those rates and is excluded by name. */
+ *  cannot be billed at those rates and is excluded by name.
+ *
+ *  The argument is constant-folded (15-F4, 2026-10-10): `BOOT_MS + 240_000`
+ *  (garage-out-before-card, 285 s) read as 0 while only literals counted. An
+ *  argument that is NOT constant (a variable, a call) is unknown, and unknown
+ *  is billed as `test.slow()` — over the cap — never as free. */
 export function maxDeclaredTimeout(file) {
-  let ast;
+  let ast, env;
   try {
-    ast = espree.parse(fs.readFileSync(path.join(ROOT, file), "utf8"),
-      { ecmaVersion: "latest", sourceType: "module" });
+    const abs = path.join(ROOT, file);
+    ast = espree.parse(fs.readFileSync(abs, "utf8"), { ecmaVersion: "latest", sourceType: "module" });
+    env = constEnv(ast, path.dirname(abs));
   } catch { return 0; }
+  const UNKNOWN = 3 * SELECTED_GATE.perTestTimeoutSec * 1000;
   let max = 0;
+  const declared = (arg) => {
+    const v = foldNum(arg, env);
+    return v === null ? UNKNOWN : v;
+  };
   const walk = (x) => {
     if (!x || typeof x !== "object") return;
     if (Array.isArray(x)) return x.forEach(walk);
     if (x.type === "CallExpression" && x.callee?.type === "MemberExpression"
         && x.callee.object?.name === "test" && x.callee.property?.name === "setTimeout"
-        && x.arguments?.[0]?.type === "Literal" && typeof x.arguments[0].value === "number") {
-      max = Math.max(max, x.arguments[0].value);
+        && x.arguments?.[0]) {
+      max = Math.max(max, declared(x.arguments[0]));
     }
     // `test.describe.configure({ timeout })` reserves a budget the same way
     // test.setTimeout does (image-grade-visual 480 s, instanced-draw 420 s were
@@ -107,8 +172,7 @@ export function maxDeclaredTimeout(file) {
     if (x.type === "CallExpression" && x.callee?.type === "MemberExpression"
         && x.callee.property?.name === "configure" && x.arguments?.[0]?.type === "ObjectExpression") {
       for (const p of x.arguments[0].properties || []) {
-        if (p.key && (p.key.name === "timeout" || p.key.value === "timeout")
-            && p.value?.type === "Literal" && typeof p.value.value === "number") max = Math.max(max, p.value.value);
+        if (p.key && (p.key.name === "timeout" || p.key.value === "timeout") && p.value) max = Math.max(max, declared(p.value));
       }
     }
     if (x.type === "CallExpression" && x.callee?.type === "MemberExpression"
@@ -849,6 +913,19 @@ const foundationIds = () => fs.readdirSync(path.join(ROOT, "tests/specs")).filte
 export function circuitsOf(file, seen = new Set()) {
   if (seen.has(file)) return new Set();
   seen.add(file);
+  // The ADAPTED runner names no circuit: it spawns one child per ADAPTED spec,
+  // so it builds the UNION of theirs (cota-foundation.spec.js -> cota, monza).
+  // Read as an empty set, a `cota` diff made node-plan skip test:vm-page and
+  // the circuit's own foundation spec ran nowhere on the PR (ledger L9).
+  if (file === ADAPTED_RUNNER) {
+    const ids = new Set();
+    for (const spec of Object.keys(ADAPTED)) {
+      const sub = circuitsOf(spec);
+      if (sub === null) return null;
+      for (const id of sub) ids.add(id);
+    }
+    return ids;
+  }
   let text;
   try { text = fs.readFileSync(path.join(ROOT, file), "utf8"); } catch { return null; }   // unreadable: assume everything
   if (WHOLE_ROSTER.some((re) => re.test(text))) return null;
@@ -985,6 +1062,11 @@ export const SOURCE_AFFECTED = [
   [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career.spec.js"],
   [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career-season.spec.js"],
   [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career-hub.spec.js"],
+  // THE START RACE INTRO (garage drive-out + card): quali.spec and steering.spec
+  // launch races through it (#mb-race → rs-go) and wait BOOT_MS for the grid.
+  // A ui/car route never picked them, so #1290 shipped red there (Browser group
+  // input 38015514694, Pages 38016755004); real-race owns the JUMP IN card.
+  ...["quali", "steering", "real-race"].map((s) => [/^js\/(ui\/loading-screen|garage\/(setup-camera|arrival))\.js$/, `tests/specs/${s}.spec.js`]),
 ];
 export function specsAffectedBySource(changed, root = ROOT) {
   const hit = new Set();
@@ -1087,8 +1169,7 @@ export function dropBootFallback(groups) {
 export const DEFAULT_BUDGET_MIN = 10;
 
 export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
-  const changed = execFileSync("git", ["diff", "--name-only", changedRef], { cwd: ROOT, encoding: "utf8" })
-    .split("\n").filter(Boolean);
+  const changed = changedPaths([changedRef]);   // rename SOURCES too (ledger M36)
   const g = pick(changed);   // Map: group -> reasons (pick-tests' native shape)
   // An edited spec already runs first, alone (changedSpecs, rank 0); its
   // group-mates are not this diff's business (pick-tests SPEC_OWNER_REASON).
