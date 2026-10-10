@@ -758,8 +758,6 @@ test("XrBoot.ensureXr: a retry after a failed load injects only the files not ye
   assert.equal(await ctx.XrBoot.ensureXr(), true);
   assert.deepEqual(injected, ["xr1", "xr2", "xr2"], "the retry injects only the missing file");
 });
-<<<<<<< HEAD
-=======
 
 // 14-XR: wantXrBundle was `!!navigator.xr`, which is true on every Chrome / Edge
 // desktop with no headset, so each of them fetched the ~42 KB LAZY_XR bundle (and
@@ -809,4 +807,3 @@ test("XrBoot.mountUi: no navigator.xr fetches nothing; an armed VR mode or a pen
   assert.equal((await mountWith({ xr, ls: { "apex26.xrEnterPending": "1" } })).length, 1);
   assert.equal(probed, 0);
 });
->>>>>>> origin/claude/f1-game-project-26h3ng
