@@ -24,6 +24,7 @@
  */
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
+import vm from "node:vm";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -435,5 +436,22 @@ test("a faster AI completes a pass and the pair does not swap back", async () =>
     }
     assert.ok(doneAt != null && doneAt < 35, `the faster car never completed the pass (${doneAt})`);
     assert.equal(regained, null, `passed at ${doneAt && doneAt.toFixed(1)} s and swapped back at ${regained && regained.toFixed(1)} s`);
+  } finally { g2.close(); }
+});
+
+// 02-F1 (hunt2): a NETWORK-OWNED human returns from updateCar before the _vmaxNow stamp (and paceF / axEstSm), so
+// paceVmax(remote) was 0 and every AI judged him as having no pace. Model "never stamped" on a second game's player
+// (a human whose _vmaxNow is a no-op property), park it, and read the blockerVmax the AIs behind it are handed.
+test("a human whose pace is never stamped (a net-owned rival) still has a pace: paceVmax > 0", async () => {
+  const g2 = await createGame({ track: "monza" });
+  try {
+    await g2.race("monza"); g2.apex.go(); g2.apex.headless(true);
+    const p = g2.G.player;
+    Object.defineProperty(p, "_vmaxNow", { get() { return undefined; }, set() {}, configurable: true });
+    const AD = vm.runInContext("AiDrive", g2.ctx), seen = [], orig = AD.otWant;
+    AD.otWant = function (o) { if (o.other === p) seen.push(o.blockerVmax); return orig.apply(this, arguments); };
+    g2.step(900);
+    assert.ok(seen.length > 20, "AIs came up behind the parked human and judged him as a blocker: " + seen.length);
+    assert.ok(seen.every((v) => v > 0), "blockerVmax = paceVmax(remote human) is never 0: min " + Math.min(...seen));
   } finally { g2.close(); }
 });
