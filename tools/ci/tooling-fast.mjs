@@ -651,6 +651,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/road-lut-frame.test.mjs",
   "tests/unit/save-migrate.test.mjs",
   "tests/unit/scale-defaults.test.mjs",
+  // The garage LIVE atlas on a LAZY_CIRCUIT stub: paintLive skips the map instead of
+  // throwing, and ctxKey re-keys on hydration. VM, ~0.3 s.
+  "tests/unit/scene-live.test.mjs",
   "tests/unit/scenery-api-contract.test.mjs",
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/scenery-kits.test.mjs",

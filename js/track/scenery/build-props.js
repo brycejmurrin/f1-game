@@ -1553,7 +1553,8 @@ const TrackBuildProps = (function () {
       const pitOwned = (k, side) => pitKeep && side === pitSide && pitKeep[k] > 0;
       for (const side of [-1, 1]) {
         for (let k = 0; k < n; k += STEP) {
-          const kn = (k + STEP) % n, km = (k + 1) % n;
+          // The last panel closes on node 0 (odd n: a single-node span), never wraps past it onto node 1.
+          const kn = k + STEP >= n ? 0 : k + STEP, km = (k + 1) % n;
           if (pitOwned(k, side) || pitOwned(kn, side)) continue;
           const col = NIGHT ? bt.night : btSeq[Math.floor(k / (STEP * 3)) % 3];
           // Every panel is the same 0.4 x 1.1 m cross-section; only its length
@@ -1576,7 +1577,7 @@ const TrackBuildProps = (function () {
           const exm = px[km] + track.rx[km] * side * hw[km];
           const ezm = pz[km] + track.rz[km] * side * hw[km];
           const clearM = ((qx - exm) * track.rx[km] + (qz - ezm) * track.rz[km]) * side;
-          if (clearM < barrierOffset - 0.1) {
+          if (clearM < barrierOffset - 0.1 && km !== kn) {
             panel(k, km, col, side);
             panel(km, kn, col, side);
           } else {
