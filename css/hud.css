@@ -1237,13 +1237,25 @@ body[data-radio-slot="ticker"] #hud-flag {
   left: calc(var(--tick-flag-x) / var(--hud-z)) !important;
   transform: none !important;
 }
-/* At most two lines of message: the line's rows are budgeted for that (radioTicker TICK_ROWS). */
-body[data-radio-slot="ticker"] #announce-text {
+/* Info-only lines (comm / coach / practice / info) clamp to ONE line with an ellipsis; a pit call, a
+   penalty, a warning or race news is never cut (owner's requirements, 2026-10-10): it wraps. */
+body[data-radio-slot="ticker"] #announce:is([data-kind="comm"], [data-kind="coach"], [data-kind="practice"], [data-kind="info"]) #announce-text {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
   overflow: hidden;
+}
+/* While the band shows a flag or a message, the cockpit / helmet mirror frame (or its chip) and a
+   chase INPUTS trace that shares its rows step down under it (--tick-bottom, --tick-step-y: screen px). */
+body[data-radio-slot="ticker"]:has(#announce:not([hidden]), #hud-flag:not([hidden])) #hud-mirror {
+  top: calc(var(--tick-bottom) / var(--hud-z) + 6px) !important;
+}
+body[data-radio-slot="ticker"]:has(#announce:not([hidden]), #hud-flag:not([hidden])) #hud-mirror-chip {
+  top: calc(var(--tick-bottom) + 6px) !important;
+}
+body[data-radio-slot="ticker"]:has(#announce:not([hidden]), #hud-flag:not([hidden])) #hud-inputs[data-tick-step] {
+  top: calc(var(--tick-step-y) / var(--hud-z)) !important;
 }
 body[data-radio-slot="ticker"] #announce {
   top: calc(var(--tick-card-y, var(--tick-y)) / var(--hud-z)) !important;

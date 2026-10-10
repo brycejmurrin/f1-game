@@ -566,18 +566,22 @@ function cssPx(root, name) {
 // flag or without one. Both used to hang mid-screen over the track (owner, 2026-10-10: "messages in the
 // middle of the screen"). { y, flagX, x, w } in screen px, or null where the line is too narrow.
 const TICK_FLAG = 116, TICK_ROWS = 56, TICK_MIN = 160;
+// Pieces the band does not route around: itself, the tower above it, and what steps down under it.
+const TICK_YIELDS = { tower: 1, flag: 1, announce: 1, mirror: 1, mirrorChip: 1, inputs: 1 };
 function radioTicker(list, zTop) {
   const t = towerRect();
   if (!(t && t.width)) return null;
   const root = document.documentElement, W = window.innerWidth || 0, mid = W / 2;
-  const y = centreBandTop(false, false) + RADIO_TOP_GAP;
+  // Directly under the TOWER (owner's pick, 2026-10-10): a mirror frame / chip below it steps down under
+  // the band while it shows (css/hud.css), so neither bounds it here, and INPUTS steps down too (placeRadio).
+  const y = t.bottom + RADIO_TOP_GAP;
   const fl = obs("flag"), flagW = Math.max(fl ? fl.rect.width : 0, TICK_FLAG * zTop), flagH = fl ? fl.rect.height : 24 * zTop;
   // The clear band in rows [y, y + rows), edge to edge: the left column / gap chip end it on the left, the
   // right column, the docks and the pause / cam buttons on the right.
   const band = (rows) => {
     let x0 = cssPx(root, "--sal") + 10 * zTop, x1 = W - cssPx(root, "--sar") - 10 * zTop;
     for (const o of list) {
-      if (o.transient || o.id === "tower" || o.id === "flag" || o.id === "announce") continue;
+      if (o.transient || TICK_YIELDS[o.id]) continue;
       const r = o.rect;
       if (r.top >= y + rows || r.bottom <= y || r.right <= x0 || r.left >= x1) continue;
       if ((r.left + r.right) / 2 < mid) x0 = Math.max(x0, r.right + RADIO_TOP_GAP);
@@ -593,12 +597,12 @@ function radioTicker(list, zTop) {
   const cardH = Math.max(TICK_ROWS * zTop, annR && annR.height ? annR.height : 0);
   // ONE ROW: the flag, then the card beside it.
   const one = band(cardH)(0, flagW + RADIO_TOP_GAP + minCard);
-  if (one) { const x = one[0] + flagW + RADIO_TOP_GAP; return { y, cardY: y, flagX: one[0], x, w: one[1] - x }; }
+  if (one) { const x = one[0] + flagW + RADIO_TOP_GAP; return { y, cardY: y, flagX: one[0], x, w: one[1] - x, bottom: y + Math.max(cardH, flagH) }; }
   // TWO ROWS where the band is narrow (a cockpit's mirror frame pushes the line down beside DAMAGE and
   // BOOST): the flag, and the card directly under it at the band's width.
   const cardY = y + flagH + RADIO_TOP_GAP / 2;
   const two = band(cardH + flagH + RADIO_TOP_GAP / 2)(0, minCard);
-  return two ? { y, cardY, flagX: two[0], x: two[0], w: two[1] - two[0] } : null;
+  return two ? { y, cardY, flagX: two[0], x: two[0], w: two[1] - two[0], bottom: cardY + cardH } : null;
 }
 // The hanging lane as a DECISION (placeRadio writes it): { on, collapsed, x, y, w } in screen px.
 function radioLane(root, list) {
@@ -707,7 +711,7 @@ const RADIO_VARS = {
   top: ["--radio-top-x", "--radio-top-y", "--radio-top-w", "--radio-top-h"],
   side: ["--mir-side-x", "--mir-side-w"],
   lane: ["--announce-lane-x", "--announce-lane-y", "--announce-lane-shift", "--announce-lane-w"],
-  ticker: ["--tick-y", "--tick-card-y", "--tick-flag-x", "--tick-x", "--tick-w"],
+  ticker: ["--tick-y", "--tick-card-y", "--tick-flag-x", "--tick-x", "--tick-w", "--tick-bottom", "--tick-step-y"],
 };
 let _radioSlot = "", _radioPaintSeq = -1, _radioPlaceSeq = -1, _fitSeq = 0;
 function writeRadio(root, slot, top, side, lane, tick) {
@@ -740,6 +744,7 @@ function writeRadio(root, slot, top, side, lane, tick) {
     hStyle(root, "--tick-flag-x", tick.flagX.toFixed(1) + "px");
     hStyle(root, "--tick-x", tick.x.toFixed(1) + "px");
     hStyle(root, "--tick-w", tick.w.toFixed(1) + "px");
+    hStyle(root, "--tick-bottom", tick.bottom.toFixed(1) + "px");
   } else for (const p of RADIO_VARS.ticker) hUnset(root, p);
   // data-lane-collapsed hard-collapses the flex plate (min-content from #announce-num otherwise keeps a box).
   const annEl = els.announce || document.getElementById("announce");
@@ -764,6 +769,22 @@ function placeRadio(root, bcast, list, tick) {
   const slot = ticker ? "ticker" : top ? "top" : side ? "side" : lane.on ? "lane" : lane.collapsed ? "collapsed" : "centre";
   writeRadio(root, slot, top, side, lane, ticker);
   if (tick) return slot;
+  // INPUTS (chase, the right column's top) steps below the band when the two share rows and columns;
+  // css/hud.css applies it only while a flag or a message shows.
+  // Judged at its UN-stepped slot (--rcol-y-inputs): measured where a step painted it, it would clear the
+  // band and switch its own step off on the next pass.
+  const inpEl = document.getElementById("hud-inputs");
+  const ib = inpEl && !inpEl.hidden && inpEl.getBoundingClientRect ? inpEl.getBoundingClientRect() : null;
+  const iy = cssPx(root, "--rcol-y-inputs");
+  const inpR = ib && ib.width && iy ? colRect(ib.left, iy, ib.width, ib.height) : null;
+  const step = !!(ticker && inpR && _hudRectsHit(inpR, colRect(ticker.flagX, ticker.y, ticker.x + ticker.w - ticker.flagX, ticker.bottom - ticker.y)));
+  if (inpEl && inpEl.toggleAttribute) inpEl.toggleAttribute("data-tick-step", step);
+  if (step) {
+    // …and below the mirror frame too when that steps down under the band in the same columns (6 px air, css/hud.css).
+    const mir = document.body.classList.contains("hud-mirror-on") ? obs("mirror") : null;
+    const under = mir && mir.rect.left < inpR.right && mir.rect.right > inpR.left ? ticker.bottom + 6 + mir.rect.height : ticker.bottom;
+    hStyle(root, "--tick-step-y", (under + RCOL_AIR * zTop).toFixed(1) + "px");
+  }
   _radioPlaceSeq = _fitSeq;
   // The painted guarantee (above): the tower, the plate and the MAP (its whole box, bottom edge
   // included, in every slot) do not move when the card does, so the list collected for this placement
