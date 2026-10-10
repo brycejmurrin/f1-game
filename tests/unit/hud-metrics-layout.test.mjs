@@ -106,7 +106,8 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   // the map/strip edge, and the metrics panel when it is parked here. Both
   // widgets used to resolve to the same slot and the panel won, which the chip
   // being `hidden` until a real strike kept out of every fixture.
-  assert.match(css, /top: calc\(max\(var\(--hud-left-h, 112px\), var\(--hud-metrics-b, 0px\)\) \+ 8px\)/);
+  // (the first paint's fallback: the slot itself is allocated by placeLeftColumn, --lcol-y-limits)
+  assert.match(css, /top: calc\(var\(--lcol-y-limits, calc\(calc\(max\(var\(--hud-left-h, 112px\), var\(--hud-metrics-b, 0px\)\) \+ 8px\) \* var\(--hud-z\)\)\) \/ var\(--hud-z\)\)/);
   assert.match(hud, /(?:setProperty\(|hStyle\(root, )"--hud-left-h"/);
   assert.match(hud, /(?:setProperty\(|hStyle\(root, )"--hud-metrics-b"/);
   // ONE DIRECTION: the map decides where the panel goes, the panel decides

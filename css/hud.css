@@ -404,14 +404,17 @@ body.hud-prof-broadcast #announce { top: max(calc(14svh / var(--hud-z)), calc(va
    right dock, and the chip is no longer over it. */
 :root[data-limits-left] #hud-limits {
   right: auto;
-  left: calc(10px + var(--sal) / var(--hud-z));
   /* BELOW THE METRICS PANEL TOO, when that panel is in this column. Both
      widgets resolved to the same slot — the chip is only `hidden` until a
      track-limits strike, so in every fixture it has no box and the collision
      could not be seen; the player found it by running wide. --hud-metrics-b is
      the panel's measured bottom (0 when it is off or on the right), so this is
-     the lower of the two edges and nothing moves when the panel is absent. */
-  top: calc(max(var(--hud-left-h, 112px), var(--hud-metrics-b, 0px)) + 8px);
+     the lower of the two edges and nothing moves when the panel is absent.
+     That edge + 8px is the first paint's fallback; the slot is measured (js/ui/hud.js
+     placeLeftColumn, SCREEN px): under whatever the column holds, beside it (--lcol-x-limits)
+     where the main column has no room. */
+  top: calc(var(--lcol-y-limits, calc(calc(max(var(--hud-left-h, 112px), var(--hud-metrics-b, 0px)) + 8px) * var(--hud-z))) / var(--hud-z));
+  left: calc(var(--lcol-x-limits, calc(10px * var(--hud-z) + var(--sal))) / var(--hud-z));
 }
 
 /* ---------- LAYOUT (metrics) ----------
@@ -1960,8 +1963,9 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 #hud-rel > div[data-lap="up"] { color: var(--slower); }
 #hud-rel > div[data-lap="down"] { color: var(--edit-ink); }
 #hud-strat {
-  left: calc(10px + var(--sal) / var(--hud-z));
-  top: calc(40svh / var(--hud-z));
+  /* placeLeftColumn: desktop keeps 40svh as the floor it only pushes down from; touch rule below. */
+  left: calc(var(--lcol-x-strat, calc(10px * var(--hud-z) + var(--sal))) / var(--hud-z));
+  top: calc(var(--lcol-y-strat, 40svh) / var(--hud-z));
   border-left: 3px solid var(--dim);
   min-width: 15ch;
 }
@@ -1990,16 +1994,19 @@ body:has(.screen:not([hidden])) :is(#hud-rel, #hud-strat, #hud-inputs) { visibil
    (RELATIVE over BRAKE / OT, INPUTS over the steer arrows — the 2026-10-04
    HUD survey, 844x390 cockpit), so on a touch screen they stayed hidden until
    MOVE & SIZE placed them. RELATIVE now takes the left column under the
-   minimap, on the same --hud-left-h anchor as STRATEGY (a literal 144px
-   drifted under the limits chip when HUD SIZE or MAP size moved). While
-   RELATIVE is actually on, STRATEGY steps to its right — under it the card
-   lands on PLAN / the steer column (852×393, all three extras on). INPUTS is
-   a short trace under the sector box, stood off the right dock. A placed
-   chip (data-hl-user) keeps the offset the player chose. */
+   minimap, and STRATEGY follows it (a literal 144px drifted under the limits
+   chip when HUD SIZE or MAP size moved). Where each goes in that column is
+   js/ui/hud.js placeLeftColumn's (--lcol-y-* / --lcol-x-*, SCREEN px): under
+   what is visible above it, else beside it (STRATEGY beside RELATIVE on a
+   short phone — the literal 168px sidestep it replaces was narrower than
+   RELATIVE at tilt's zoom), else dropped; the --hud-left-h anchor is only the
+   first paint's fallback. INPUTS is a short trace under the sector box, stood
+   off the right dock. A placed chip (data-hl-user) keeps the offset the player
+   chose, from the fallback anchor. */
 body:not(.desktop) #hud-rel:not([data-hl-user]) {
-  left: calc(10px + var(--sal) / var(--hud-z));
+  left: calc(var(--lcol-x-rel, calc(10px * var(--hud-z) + var(--sal))) / var(--hud-z));
   right: auto;
-  top: calc(var(--hud-left-h, 152px) + 8px);
+  top: calc(var(--lcol-y-rel, calc((var(--hud-left-h, 152px) + 8px) * var(--hud-z))) / var(--hud-z));
   max-width: min(240px, 46vw);
   line-height: 1.2;
   /* Without the left-dock anchor (engines that lack CSS Anchor Positioning),
@@ -2009,20 +2016,12 @@ body:not(.desktop) #hud-rel:not([data-hl-user]) {
   overflow: hidden;
 }
 body:not(.desktop) #hud-strat {
-  top: calc(var(--hud-left-h, 152px) + 8px);
+  top: calc(var(--lcol-y-strat, calc((var(--hud-left-h, 152px) + 8px) * var(--hud-z))) / var(--hud-z));
 }
-/* limits-left is only set when a touch right-dock fills the sector column
-   (js/ui/hud.js fitHud); desktop docks stay empty, so this never moves the
-   desktop 40svh home. Must not write `:root … body` — source-integrity forbids
-   body/html as a descendant. RELATIVE shares the column, so it drops with
-   STRATEGY. */
-:root[data-limits-left] #hud-strat,
-:root[data-limits-left] #hud-rel:not([data-hl-user]) {
-  top: calc(max(var(--hud-left-h, 152px), var(--hud-metrics-b, 0px)) + 8px + 2.6em + 8px);
-}
-body:not(.desktop):has(#hud-rel:not([hidden])) #hud-strat:not([data-hl-user]) {
-  left: calc(168px + var(--sal) / var(--hud-z));
-}
+/* A column piece with no free slot on this screen (placeLeftColumn): invisible, but still laid out so
+   the next fit measures the same box and asks the same question. The MOVE & SIZE fold (hiddenReason) names it;
+   MOVE & SIZE placing it (data-hl-user) takes it out of the allocator and shows it. */
+:is(#hud-limits, #hud-rel, #hud-strat)[data-col-drop] { visibility: hidden !important; }
 body:not(.desktop) #hud-inputs:not([data-hl-user]) {
   /* Same containing block as #hud-sectors / #hud-limits: position-anchor on an
      absolute child of #hud could resolve before --dock-r-w lands and paint the

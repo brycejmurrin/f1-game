@@ -933,6 +933,9 @@ test("fitHud's obstacle list names every visible piece, with its kind and column
   put("hud-mirror", R(330, 70, 140, 40)); put("hud-flag", R(350, 120, 100, 24));
   put("pausebtn", R(746, 8, 44, 44)); put("btn-cam", R(660, 8, 80, 44));
   const boost = put("btn-boost", R(700, 250, 80, 80)); boost.className = "touchbtn";
+  // The left dock low enough that the left column has room for LIMITS, RELATIVE and STRATEGY (else the
+  // column allocator drops STRATEGY, and a dropped piece is no obstacle).
+  for (const el of [h.dom.byId("dock-left"), ...h.dom.byId("dock-left").children]) el._rect = R(0, 320, 150, 80);
   h.refit();
   const list = h.sb.GameHud.obstacles();
   const by = Object.fromEntries(list.map((o) => [o.id, o]));
@@ -1015,6 +1018,51 @@ test("the right column stacks LIMITS, DAMAGE and INPUTS under the plate by their
   assert.match(css, /top: calc\(var\(--rcol-y-damage, calc\(\([^;]*\) \* var\(--hud-z\)\)\) \/ var\(--hud-z\)\);/);
   assert.equal((css.match(/top: calc\(var\(--rcol-y-inputs, /g) || []).length, 2, "touch and desktop INPUTS read the measured slot");
   assert.match(css, /top: calc\(var\(--rcol-y-rel, 38svh\) \/ var\(--hud-z\)\);/, "desktop RELATIVE: 38svh is the floor the column pushes down from");
+});
+
+/* THE LEFT COLUMN (js/ui/hud.js placeLeftColumn): LIMITS (crossed left) -> RELATIVE -> STRATEGY under
+ * the map, each in the first free candidate (main column, then beside a placed piece), else dropped. */
+test("the left column stacks LIMITS and RELATIVE under the map and puts STRATEGY beside RELATIVE when the dock leaves no room under it", () => {
+  const h = fitHarness();
+  const R = (left, top, w, hh) => ({ left, top, right: left + w, bottom: top + hh, width: w, height: hh });
+  const dockL = h.dom.byId("dock-left");
+  for (const el of [dockL, ...dockL.children]) el._rect = R(0, 200, 100, 200);   // the steer column, 100 wide, from y 200
+  const lim = h.dom.byId("hud-limits"), rel = h.dom.byId("hud-rel"), strat = h.dom.byId("hud-strat");
+  lim._rect = R(650, 215, 80, 24); rel._rect = R(10, 160, 120, 60); strat._rect = R(10, 230, 130, 40);
+  h.refit();
+  assert.ok("limitsLeft" in h.root.dataset, "the fixture crosses LIMITS left");
+  const v = (k) => h.root.style.getPropertyValue(k);
+  const z = +v("--hud-z-top") || 1.5, air = 8 * z, x0 = 10 * z, px = (n) => n.toFixed(1) + "px";
+  const yl = 148 + air, yr = yl + 24 + air;   // the map (10,8 140x140) ends at 148
+  assert.equal(v("--lcol-y-limits"), px(yl), "LIMITS first, under the map");
+  assert.equal(v("--lcol-x-limits"), "", "in the main column (no x)");
+  assert.equal(v("--lcol-y-rel"), px(yr), "RELATIVE under the chip by its measured height, not a reserved 2.6em");
+  // STRATEGY under RELATIVE (y ~ yr + 60 + air) would sit on the steer column: it goes BESIDE RELATIVE,
+  // by RELATIVE's measured width — not a literal 168 px.
+  assert.equal(v("--lcol-y-strat"), px(yr), "STRATEGY at RELATIVE's top …");
+  assert.equal(v("--lcol-x-strat"), px(x0 + 120 + air), "… right of RELATIVE's own box");
+  assert.ok(!strat.hasAttribute("data-col-drop"));
+  const snap = () => ["limits", "rel", "strat"].flatMap((id) => [v("--lcol-y-" + id), v("--lcol-x-" + id)]);
+  const s = snap();
+  h.refit(); h.refit();
+  assert.deepEqual(snap(), s, "two more fits publish the same column");
+  // A wider steer column leaves no free slot: STRATEGY is DROPPED (laid out, invisible), never painted on it.
+  for (const el of [dockL, ...dockL.children]) el._rect = R(0, 200, 150, 200);
+  h.refit();
+  assert.ok(strat.hasAttribute("data-col-drop"), "no room anywhere: dropped");
+  assert.ok(!h.sb.GameHud.obstacles().some((o) => o.id === "strat"), "a dropped piece is no obstacle (the radio lane may use its rows)");
+  h.refit(); h.refit();
+  assert.ok(strat.hasAttribute("data-col-drop"), "and it stays dropped: its box still measures, so the question does not change");
+  // A piece the player PLACED keeps its shipped anchor; it is an obstacle where it is painted.
+  rel.setAttribute("data-hl-user", "");
+  h.refit();
+  assert.equal(v("--lcol-y-rel"), "", "a placed RELATIVE has no allocated slot");
+  rel.removeAttribute("data-hl-user");
+  // The shipped default (RELATIVE / STRATEGY off) reserves nothing: each hidden piece's slot is ready, taking no room.
+  rel.hidden = true; strat.hidden = true; lim.hidden = true;
+  h.refit();
+  assert.equal(v("--lcol-y-strat"), px(148 + air), "STRATEGY's slot is right under the map with nothing above it");
+  assert.ok(!strat.hasAttribute("data-col-drop"), "a hidden piece is never dropped");
 });
 
 test("the --dock-r-w stand-off is computed in exactly one function", () => {

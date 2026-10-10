@@ -500,6 +500,7 @@ function obsCollect() {
   }
   const add = (id, el, kind, column, extra) => {
     if (!el || el.hidden || !el.getBoundingClientRect) return;
+    if (el.hasAttribute && el.hasAttribute("data-col-drop")) return;   // dropped by a column allocator: painted invisible
     const r = el.getBoundingClientRect();
     if (!(r && r.width && r.height)) return;
     const o = { id, el, rect: r, kind, column: column || ((r.left + r.right) / 2 >= mid ? "right" : "left") };
@@ -887,6 +888,79 @@ function placeRightColumn(root, scale) {
       cursor = y + h;
     }
     hStyle(root, name, y.toFixed(1) + "px");
+  }
+}
+// THE LEFT COLUMN, THE SAME WAY. Under the map and the gap strip (and the metrics panel when it is
+// parked left) come TRACK LIMITS (when fitHud crosses it left), RELATIVE (touch) and STRATEGY. They
+// used to share one fixed anchor (--hud-left-h + 8px) with literal steps: STRATEGY sidestepped by
+// 168 px whenever RELATIVE was on — RELATIVE's width is up to min(240px, 46vw), so at tilt's zoom the
+// two overlapped (78x54 px) — and both dropped a reserved 2.6em for a LIMITS chip that was hidden
+// until a strike, even with the LIMITS toggle off.
+// Each piece now takes the first free candidate, judged against the obstacle list (every control,
+// chrome and readout this allocator does not place, as painted, plus what it has placed):
+//   1. the main column, under whatever is visible above it (+ air);
+//   2. a second sub-column, beside a piece already placed, at that piece's top;
+// and if neither is free it is DROPPED (data-col-drop: visibility hidden, so its box still measures
+// and the decision cannot hunt; HudLayout.hiddenReason says why) instead of painting over a control.
+// RELATIVE sizes itself (HudRelative.fitRows trims its outer rows above the left dock), so it always
+// takes the main column. Published as --lcol-y-<id> / --lcol-x-<id> (x only in the sub-column) in
+// SCREEN px; desktop STRATEGY keeps 40svh as its floor. Placed pieces (data-hl-user) keep their
+// shipped anchors (vars removed) and are obstacles where they are painted, as on the right.
+const LCOL_AIR = 8;
+function placeLeftColumn(root, scale) {
+  const doc = document, body = doc.body, desk = body.classList.contains("desktop");
+  const W = window.innerWidth || 0, H = window.innerHeight || 0;
+  const zTop = +root.style.getPropertyValue("--hud-z-top") || scale || 1;
+  const air = LCOL_AIR * zTop, x0 = cssPx(root, "--sal") + 10 * zTop;
+  const limLeft = !!(root.dataset && "limitsLeft" in root.dataset);
+  const pieces = [];
+  if (limLeft) pieces.push(["limits", els.hudLimits || doc.getElementById("hud-limits"), 0]);
+  if (!desk) pieces.push(["rel", doc.getElementById("hud-rel"), 0]);
+  pieces.push(["strat", doc.getElementById("hud-strat"), desk ? 0.40 * H : 0]);
+  const mine = { limits: limLeft, rel: !desk, strat: true };
+  const user = (el) => !!(el && el.hasAttribute && el.hasAttribute("data-hl-user"));
+  // The column starts under the map / gap strip (un-moved boxes), the broadcast tower, and the metrics panel when it is left.
+  let cursor = 0;
+  for (const id of ["map", "gaps"]) { const o = obs(id); if (o) cursor = Math.max(cursor, layoutRect(o.el).bottom); }
+  if (body.classList.contains("hud-prof-broadcast")) { const t = obs("tower"); if (t) cursor = Math.max(cursor, layoutRect(t.el).bottom); }
+  const gm = obs("metrics");
+  if (gm && gm.column === "left") cursor = Math.max(cursor, gm.rect.bottom);
+  // Obstacles: everything on screen but the pieces this pass places (a placed-by-the-player one stays).
+  const blocks = [];
+  for (const o of _obs) if (!(mine[o.id] && !user(o.el))) blocks.push(o.rect);
+  const placed = [];
+  const free = (x, y, w, h) => {
+    if (x < 0 || y < 0 || x + w > W - 4 || y + h > H - 4) return false;
+    const r = { left: x, top: y, right: x + w, bottom: y + h, width: w, height: h };
+    for (const b of blocks) if (_hudRectsHit(r, b)) return false;
+    for (const p of placed) if (_hudRectsHit(r, p)) return false;
+    return true;
+  };
+  for (const [id, el, floor] of pieces) {
+    const ny = "--lcol-y-" + id, nx = "--lcol-x-" + id;
+    if (!el || user(el)) { hUnset(root, ny); hUnset(root, nx); if (el && el.removeAttribute) el.removeAttribute("data-col-drop"); continue; }
+    // Measured off the element, not the list: a DROPPED piece is not an obstacle (obsCollect skips it),
+    // but its box still measures here, so the next fit asks the same question of the same size.
+    const box = !el.hidden && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+    const y1 = Math.max(cursor + air, floor);
+    if (!(box && box.width && box.height)) {   // hidden: its slot is ready, it takes no room
+      hStyle(root, ny, y1.toFixed(1) + "px"); hUnset(root, nx);
+      if (el.removeAttribute) el.removeAttribute("data-col-drop");
+      continue;
+    }
+    const r = layoutRect(el), w = r.width, h = r.height;
+    let at = null;
+    if (id === "rel" || free(x0, y1, w, h)) at = { x: x0, y: y1, main: true };
+    for (let i = placed.length - 1; !at && i >= 0; i--) {
+      const p = placed[i];
+      if (free(p.right + air, p.top, w, h)) at = { x: p.right + air, y: p.top, main: false };
+    }
+    if (el.toggleAttribute) el.toggleAttribute("data-col-drop", !at);
+    if (!at) { hStyle(root, ny, y1.toFixed(1) + "px"); hUnset(root, nx); continue; }
+    hStyle(root, ny, at.y.toFixed(1) + "px");
+    if (at.main) hUnset(root, nx); else hStyle(root, nx, at.x.toFixed(1) + "px");
+    placed.push({ left: at.x, top: at.y, right: at.x + w, bottom: at.y + h, width: w, height: h });
+    if (at.main) cursor = at.y + h;
   }
 }
 /** Phone-only: after REL/sectors/announce land, re-fit rows and publish stamp. */
@@ -1591,6 +1665,9 @@ function fitHud() {
   // radio card is then placed against the column as painted.
   list = obsCollect();
   placeRightColumn(root, scale);
+  if (els.hudSectors) void els.hudSectors.offsetHeight;
+  list = obsCollect();   // the left column judges its candidates against the right column as now stacked
+  placeLeftColumn(root, scale);
   if (els.hudSectors) void els.hudSectors.offsetHeight;
   list = obsCollect();
   placeRadio(root, bcast, list);   // the one radio-slot resolver; its painted check is its own last step

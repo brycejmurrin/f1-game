@@ -672,14 +672,16 @@ test("hiddenReason: classes name the reason; the live element has the last word"
   const css = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
   assert.match(css, /body:not\(\.desktop\) #hud-rel:not\(\[data-hl-user\]\)/);
   assert.doesNotMatch(css, /body:not\(\.desktop\) :is\(#hud-rel, #hud-inputs\):not\(\[data-hl-user\]\) \{ display: none; \}/);
-  assert.match(css, /body:not\(\.desktop\) #hud-strat \{[\s\S]*?top: calc\(var\(--hud-left-h, 152px\) \+ 8px\)/,
-    "touch STRATEGY sits under fitHud's measured left column (--hud-left-h), not a bare 152px");
-  assert.match(css, /body:not\(\.desktop\) #hud-rel:not\(\[data-hl-user\]\) \{[\s\S]*?top: calc\(var\(--hud-left-h, 152px\) \+ 8px\)/,
-    "touch RELATIVE uses the same measured left column");
-  assert.match(css, /:has\(#hud-rel:not\(\[hidden\]\)\) #hud-strat:not\(\[data-hl-user\]\)/,
-    "STRATEGY steps beside RELATIVE instead of stacking onto PLAN");
-  assert.match(css, /:root\[data-limits-left\] #hud-strat/,
-    "STRATEGY clears the left-mode TRACK LIMITS chip");
+  // The left column is ALLOCATED (js/ui/hud.js placeLeftColumn: --lcol-y-* / --lcol-x-*); fitHud's
+  // measured --hud-left-h anchor is the first paint's fallback, and the literal steps are gone.
+  assert.match(css, /body:not\(\.desktop\) #hud-strat \{[\s\S]*?top: calc\(var\(--lcol-y-strat, calc\(\(var\(--hud-left-h, 152px\) \+ 8px\) \* var\(--hud-z\)\)\) \/ var\(--hud-z\)\)/,
+    "touch STRATEGY sits in the allocated left column, falling back to the measured --hud-left-h, not a bare 152px");
+  assert.match(css, /body:not\(\.desktop\) #hud-rel:not\(\[data-hl-user\]\) \{[\s\S]*?top: calc\(var\(--lcol-y-rel, calc\(\(var\(--hud-left-h, 152px\) \+ 8px\) \* var\(--hud-z\)\)\) \/ var\(--hud-z\)\)/,
+    "touch RELATIVE uses the same allocated left column");
+  assert.doesNotMatch(css, /#hud-strat[^{]*\{[^}]*168px/, "no literal STRATEGY sidestep: the allocator puts it beside RELATIVE by RELATIVE's measured width");
+  assert.doesNotMatch(css, /:root\[data-limits-left\] #hud-strat/, "no reserved 2.6em for a LIMITS chip that is not showing");
+  assert.match(css, /:is\(#hud-limits, #hud-rel, #hud-strat\)\[data-col-drop\] \{ visibility: hidden !important; \}/,
+    "a piece with no free slot is dropped (still laid out), not painted over a control");
   assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*#dock-left \{ anchor-name: --apex-dock-left; \}[\s\S]*#hud-tyre \{[^}]*position-anchor: --apex-dock-left;[^}]*bottom: calc\(anchor\(top\)/,
     "touch TYRES sits on top of the left dock");
   assert.match(css, /body:not\(\.desktop\) #hud-sectors \{[\s\S]*?right:\s*calc\(10px \+ var\(--sar\) \/ var\(--hud-z\) \+ var\(--dock-r-w, 0px\)\)/,

@@ -589,6 +589,10 @@ const HudLayout = (function () {
   const replayOn = (h) => h("bc-on") || h("watch-controls-on");
   const HIDE_RULES = Object.freeze([
     [REPLAY_HUD, replayOn, "a real-race watch keeps the driving HUD off"],
+    // js/ui/hud.js placeLeftColumn: no free slot in its column on this screen (data-col-drop). A place
+    // (data-hl-user) takes it out of the allocator, so the sliders cure it.
+    [["limits", "rel", "strat"], (h, a, off, el) => !a && !!(el && el.hasAttribute && el.hasAttribute("data-col-drop")),
+      "no room in its column on this screen — move it to show it", true],
     [["map"], (h) => h("hud-hide-map"), "MAP is off for this camera or style (DISPLAY › HUD › MAP)"],
     [["gaps"], (h) => h("hud-hide-gaps"), "GAPS is off for this style (DISPLAY › HUD › GAPS)"],
     [BOTTOM, (h) => h("hud-prof-broadcast") && h("hud-bcam"), "BROADCAST style on a TV camera keeps the frame clean"],
@@ -623,6 +627,7 @@ const HudLayout = (function () {
   /** Live: is element `el` drawn? (hidden attribute, display none, zero box) */
   function drawn(el) {
     if (!el || el.hidden) return false;
+    if (el.hasAttribute && el.hasAttribute("data-col-drop")) return false;   // laid out but painted invisible (no room)
     if (typeof getComputedStyle === "function") {
       try { if (getComputedStyle(el).display === "none") return false; } catch (_) { /* a fake or detached node: fall through to the box */ }
     }
