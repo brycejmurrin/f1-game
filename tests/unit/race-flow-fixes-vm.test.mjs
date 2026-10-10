@@ -33,6 +33,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import vm from "node:vm";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
