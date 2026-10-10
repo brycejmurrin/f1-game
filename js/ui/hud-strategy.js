@@ -81,7 +81,7 @@ const HudStrategy = (function () {
     if (!doc || !player) return;
     if (!root && !build()) return;
     const tyres = G.tyres, pit = G.pits;
-    const race = G.state === "race" && !G.timeTrial && G.session !== "practice" && G.session !== "quali";
+    const race = G.state === "race" && !G.timeTrial && !G.practice && G.session !== "quali";   // PRACTICE is the G.practice flag on a race session, never G.session
     if (!isOn() || !race || !tyres || !tyres.on() || player.retired) { if (!root.hidden) root.hidden = true; return; }
     const b = doc.body;
     if (b && (b.classList.contains("hud-prof-minimal") || b.classList.contains("hud-bcam") || b.classList.contains("bc-on"))) return;

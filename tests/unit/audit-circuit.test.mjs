@@ -42,3 +42,13 @@ test("CHECKS.float on a real circuit: ok is exactly count <= cap", () => {
   assert.notEqual(res.floating, null, "float-audit produced JSON");
   assert.equal(res.ok, res.floating <= res.cap, `${id}: ${res.summary}`);
 });
+
+test("CHECKS.ground: a missing baseline row is cap 0, matching ground-audit --gate", () => {
+  // Hunt 2026-10-10: audit-circuit treated absent rows as "no cap" (always ok)
+  // while ground-audit --gate reads cap 0 — hungaroring flatCoplanar 1 slipped.
+  const src = fs.readFileSync(new URL("../../tools/track/audit-circuit.cjs", import.meta.url), "utf8");
+  const ground = src.slice(src.indexOf("ground(id)"), src.indexOf("function main"));
+  assert.match(ground, /cap 0/, "documents absent = 0");
+  assert.match(ground, /\?\s*base\[k\]\[id\]\s*:\s*0/, "ternary falls through to 0, not null");
+  assert.doesNotMatch(ground, /cap\s*!=\s*null\s*&&/, "must not skip the compare when the row is absent");
+});

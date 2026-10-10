@@ -68,6 +68,7 @@ function printHelp() {
   --shots / --dom                add PNG / structured DOM to geometry cells
   --screens=a,b / --viewports=   filter cells (wildcards: ios-*)
   --scale=100,130 / --circuits=  UI-scale and map-circuit axes
+  --json                         print this run's rows as one JSON object on stdout
   --jobs=N                       parallel viewports (default 3 geometry / 2 gallery)
 
   --gallery                      fast PNG+DOM only (no geometry probe)
@@ -108,6 +109,7 @@ function parseArgv(argv) {
     force: has("--force"),
     wantShots: has("--shots") || survey || gallery || !!screen,
     wantDom: has("--dom") || gallery || !!screen,
+    json: has("--json"),
     jobs: Number(arg("--jobs=") || String(jobsDefault)) || jobsDefault,
     screens: pickScreens(SCREENS, screenPat),
     viewports: pickViewports(VIEWPORTS, viewportPat || (gallery && !screen ? "ios-iphone-landscape,ios-iphone-portrait" : null)),
@@ -920,6 +922,16 @@ const bad = rows.filter((r) => !r.skipped && ((r.clipped || []).length || (r.off
 const deep = rows.filter((r) => !r.skipped && (r.deepScroll || []).length);
 console.log(`\n${rows.length} cells, ${bad.length} with something to look at, ` +
   `${skipped.length} skipped (nothing measured) -> ${path.relative(ROOT, OUT)}/index.html`);
+// One JSON document for MCP / scripts (apex_ui_fit): this run's rows only, not the merged history.
+if (opts.json) {
+  console.log(JSON.stringify({
+    ok: skipped.length === 0 && rows.length > 0,
+    outDir: path.relative(ROOT, OUT),
+    rows,
+    skipped: skipped.length,
+    bad: bad.length,
+  }));
+}
 if (deep.length) {
   // Amber, and tallied apart from the red count on purpose — see the probe.
   const worst = deep.flatMap((r) => (r.deepScroll || []).map((d) => ({ ...d, cell: `${r.screen} ${r.viewport}` })))
