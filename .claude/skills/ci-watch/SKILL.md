@@ -1,6 +1,6 @@
 ---
 name: ci-watch
-description: "Use when this session or a Routine Bryce created has been designated CI Watch for Apex 26: sweep every open PR into the deploy branch with pr-board.mjs, flip a green draft to ready, arm SQUASH auto-merge, disarm a foreign arm, and route a conflict or red to its owner. Not driving one PR to green (steward, pr-owner) and never a merge."
+description: "Use when designated CI Watch: sweep PRs with pr-board.mjs; ready green drafts, arm SQUASH auto-merge, never merge."
 ---
 
 # CI Watch (Claude-run)

@@ -145,7 +145,7 @@ Available workflows are skills (`.claude/skills/`, index `.claude/skills/README.
 only when matched. Subagents (`.claude/agents/`) isolate noisy work; `docs/AGENT-SURFACE.md` maps which CLIs are
 wrapped as `apex_*`. Routes: live canvas → `mcp-probe`; pre-push or deploy → `check-changes` (spawns `verify-agent`;
 `--base <ref>` is the "was it already red?" check); live `version.json` → `deploy-research`; dead code / fat skill →
-`slim-bloat` and `bloat-auditor`; PR sweeps → `ci-watch` skill + `tools/ci/pr-board.mjs` (read-only board; the `ci-watcher` agent returns it); owning PRs → `pr-owner`; messaging, subscribing, claims and authority between sessions → `session-comms`; red-run triage stays `ci-red-triage`, PR-driving overrides stay `steward`.
+`slim-bloat` and `bloat-auditor`; PR sweeps → `ci-watch` skill + `tools/ci/pr-board.mjs` (the `ci-watcher` agent returns the board); owning PRs → `pr-owner`; messaging, subscribing, claims and authority between sessions → `session-comms`; failed-CI triage stays `ci-red-triage`, PR-driving overrides stay `steward`.
 
 WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change, or using an API you have not checked this session, read the current docs — `WebSearch` to find them, `WebFetch` to read them (Context7 for library APIs) — and cite the URLs in the commit message, PR body or `docs/notes/`. Training-data memory of a CLI flag, a limit or a default is not evidence. It is the default work while a run is live (rule 4); bulk or post-deploy web reading goes to the `deploy-research` subagent.
 

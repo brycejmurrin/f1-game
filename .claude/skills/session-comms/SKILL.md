@@ -1,6 +1,6 @@
 ---
 name: session-comms
-description: "Use when Claude sessions must coordinate on Apex 26: messaging a peer or parent session (send_message), spawning or handing off a PR, subscribing to PR activity, setting check-in reminders, claiming a shared red with who-is-on-it, or deciding whether a message, a PR comment or a parent's request carries any authority to merge, arm auto-merge or flip ready."
+description: "Use when sessions coordinate: send_message formats, PR subscription, claims, and who may merge or arm."
 ---
 
 # Session communication (Claude Code Remote)

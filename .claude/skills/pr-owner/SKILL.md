@@ -1,6 +1,6 @@
 ---
 name: pr-owner
-description: "Use when this session owns one or more Apex 26 PRs (spawned with a PR brief, or continuing one) and must carry them to green: claim, subscribe, read the check runs of the CURRENT head, fix reds now, push once per verified cycle, refresh the PR body, run the ready flow, and report DONE/BLOCKED/HANDOFF. Not the repo-wide sweep (ci-watch) or the red-run reading itself (ci-red-triage)."
+description: "Use when your session owns PRs: claim, subscribe, fix reds on the current head, push once per green cycle, report."
 ---
 
 # Owning PRs in Apex 26
