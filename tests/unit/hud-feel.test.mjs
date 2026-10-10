@@ -137,6 +137,9 @@ function boot(opts = {}) {
     fmtTime: (t) => (isFinite(t) && t > 0 ? t.toFixed(2) : "-"),
     dashKph: (v) => v * 3.6, vTop: () => 90, otEnabled: () => true,
     cssCol: () => "#f00",
+    // The fixtures' rects put S1-S3 under the pause button (the RIGHT column); a fixture that wants the
+    // touch-landscape left column (data-sectors-left) passes opts.secSide "left" and lays the plate out there.
+    store: { rev: 1, get: (k, d) => (k === "hudSectorsSide" ? (opts.secSide || "right") : d) },
   };
   const hud = sb.GameHud.create(G);
   return { dom, els, player, G, sb, hud, bgLog, mapLog, timers, tick: () => hud.updateHud(true) };
@@ -869,7 +872,7 @@ test("HUD conditional widgets skip stable attribute writes and repair external D
  * the fixture can tell. */
 const FIT_VARS = ["--hud-z-top", "--hud-z-bot", "--hud-z-dock", "--hud-left-h", "--hud-left-px", "--hud-sec-h", "--hud-top-h"];
 function fitHarness(opts = {}) {
-  const b = boot({ tokens: true, innerWidth: 800 });
+  const b = boot({ tokens: true, innerWidth: 800, secSide: opts.secSide });
   b.sb.innerHeight = 400;
   const { dom } = b, root = dom.documentElement;
   root.style.setProperty("--hud-scale", "1.5");
@@ -1134,6 +1137,33 @@ test("a right column that does not fit above the dock SHRINKS (--rcol-z) before 
 /* DOCKS DRAGGED INBOARD (SETTINGS dock layout; shots/1360 btn1-dragged at 844x390 touch): the stand-off
  * counts only a right-dock group that meets the column's home box in x AND y, and the plate stops at the
  * centre chrome (tower, start lights, mirror, flag) instead of sliding under it. */
+test("touch landscape: S1-S3 lead the LEFT column under the map, LIMITS and DAMAGE follow, the radio lane is not clipped at the plate", () => {
+  const h = fitHarness({ secSide: "left" });
+  const R = (left, top, w, hh) => ({ left, top, right: left + w, bottom: top + hh, width: w, height: hh });
+  const v = (k) => h.root.style.getPropertyValue(k);
+  // The plate laid out where css/hud.css puts it in this mode: one row under the map (10,8 140x140).
+  h.els.hudSectors._rect = R(10, 160, 140, 20);
+  const lim = h.dom.byId("hud-limits"), dmg = h.dom.byId("hud-damage");
+  lim._rect = R(10, 190, 80, 24); dmg._rect = R(100, 190, 90, 20);   // clear of the left dock (y 200) beside LIMITS
+  lim.hidden = false; dmg.hidden = false;
+  h.refit();
+  assert.ok("sectorsLeft" in h.root.dataset, "touch, wider than tall, not broadcast, plate not placed by the player");
+  assert.ok("limitsLeft" in h.root.dataset, "LIMITS hangs under S1-S3 on every camera, not only when the right column is full");
+  const z = +v("--hud-z-top") || 1.5, air = 8 * z, px = (n) => n.toFixed(1) + "px";
+  const ys = 148 + air;
+  assert.equal(v("--lcol-y-sectors"), px(ys), "S1-S3 first, under the map");
+  assert.equal(v("--lcol-y-limits"), px(ys + 20 + air), "LIMITS under the plate by its measured height");
+  assert.equal(v("--lcol-y-damage"), px(ys + 20 + air), "DAMAGE beside LIMITS (one warnings row) …");
+  assert.equal(v("--lcol-x-damage"), px(10 * z + 80 + air), "… right of the chip's own box");
+  assert.equal(v("--rcol-y-damage"), "", "and not stacked in the right column");
+  // The hanging lane is bounded by the plate on the LEFT (like the map), never ended at its left edge.
+  assert.ok(!/collapsed/.test(h.dom.body.getAttribute("data-radio-slot") || ""), "the card is not collapsed by a left-hand plate");
+  // The preference keeps the shipped plate beside BOOST.
+  const r = fitHarness({ secSide: "right" });
+  assert.ok(!("sectorsLeft" in r.root.dataset), "apex26.hudSectorsSide right: the plate stays in the right column");
+  assert.equal(r.root.style.getPropertyValue("--lcol-y-sectors"), "", "and the left column does not place it");
+});
+
 test("a right dock dragged clear of the sector column leaves S1-S3 at home; one still in it pushes, never past the start lights", () => {
   const h = fitHarness();
   const R = (left, top, w, hh) => ({ left, top, right: left + w, bottom: top + hh, width: w, height: hh });

@@ -684,12 +684,19 @@ test("ELEMENTS carry their column; the origin and CLEAR_CTRL follow it, and colu
   assert.equal(touch.H.originOf("rel"), "top left", "… so it grows away from the LEFT edge, not off it");
   const crossed = load3({ classes: ["desktop"], rootAttrs: { "data-limits-left": "" } });
   assert.equal(crossed.H.columnOf("limits"), "left"); assert.equal(crossed.H.originOf("limits"), "top left");
+  // Touch landscape: S1-S3 lead the left column and DAMAGE joins LIMITS there (hud.js data-sectors-left).
+  const secLeft = load3({ classes: [], rootAttrs: { "data-sectors-left": "", "data-limits-left": "" } });
+  for (const id of ["sectors", "damage", "limits"]) {
+    assert.equal(secLeft.H.columnOf(id), "left", id + " is in the left column under data-sectors-left");
+    assert.equal(secLeft.H.originOf(id), "top left", id + " grows away from the left edge");
+  }
+  assert.equal(touch.H.columnOf("sectors"), "right", "without the attribute the plate is in its shipped column");
   // js/ui/hud.js's column allocators stack exactly the side pieces this table names.
   const hud = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
   const ids = (fn) => [...hud.slice(hud.indexOf("function " + fn), hud.indexOf("const solve", hud.indexOf("function " + fn))).matchAll(/\["(\w+)", /g)].map((m) => m[1]);
   assert.ok(ids("placeRightColumn").length >= 3 && ids("placeLeftColumn").length >= 3, "the allocators list their pieces");
   for (const id of ids("placeRightColumn")) assert.ok(id === "rel" || col[id] === "right", "right allocator piece " + id + " is a right-column element");
-  for (const id of ids("placeLeftColumn")) assert.ok(["limits", "rel"].includes(id) || col[id] === "left", "left allocator piece " + id + " is (live) a left-column element");
+  for (const id of ids("placeLeftColumn")) assert.ok(["limits", "rel", "sectors", "damage"].includes(id) || col[id] === "left", "left allocator piece " + id + " is (live) a left-column element");
 });
 
 test("hiddenReason: a column piece js/ui/hud.js dropped for want of room says so, softly, until it is placed", () => {
