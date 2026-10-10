@@ -14,7 +14,7 @@
 //   --hud-scale / --ui-scale / --btn-scale a,b (percent)  --sets shipped,all-on (which opt-ins are on)
 //   --preset clean|big|corners|… (MOVE & SIZE)  --matrix <file.json>  --no-boxes  --no-mock
 //   --out artifacts/hud-mock/<stamp>  --gl swiftshader|llvmpipe (default $APEX_GL or llvmpipe)
-//   --track monza  --frac 0.18  --list (cells, no browser)  --help
+//   --track monza  --frac 0.18  --list (cells, no browser)  --json (summary as the last stdout block)  --help
 //
 // WHY IT IS FAST. hud-survey.mjs paints a software 3D frame per cell; this tool
 // paints none after boot. It builds ONE race per pointer type (touch / desktop:
@@ -48,7 +48,7 @@ import { applyCell, chromiumArgs } from "./hud-survey.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const KNOWN = ["--devices", "--cams", "--hud-scale", "--ui-scale", "--btn-scale", "--sets", "--preset", "--matrix", "--no-boxes",
-  "--no-mock", "--out", "--gl", "--track", "--frac", "--list", "--help"];
+  "--no-mock", "--out", "--gl", "--track", "--frac", "--list", "--json", "--help"];
 const SETS = { "all-on": [], shipped: ["rel", "strat", "inputs"] };
 
 export function planCells(F) {
@@ -182,7 +182,7 @@ async function main() {
   const plan = { cells, track: F.flag("--track", "monza"), frac: Number(F.flag("--frac", "0.18")), boxes: !F.has("--no-boxes"), mock: !F.has("--no-mock"),
     gl: F.flag("--gl", process.env.APEX_GL === "swiftshader" ? "swiftshader" : "llvmpipe") };
   fs.mkdirSync(out, { recursive: true });
-  const log = (m) => console.log("[hud-mock] " + m);
+  const log = (m) => (F.has("--json") ? console.error : console.log)("[hud-mock] " + m);
   const targets = HUD_TARGETS.map((t) => ({ ...t }));
   const srv = await startStaticServer(ROOT);
   plan.url = srv.url;
@@ -252,6 +252,13 @@ async function main() {
     ? spawnSync("montage", [...rows.flatMap((r) => ["-label", r.id, path.join(ROOT, r.shot)]), "-tile", "3x", "-geometry", "560x+4+4", "-pointsize", "12",
       "-background", "#111", "-fill", "#eee", path.join(out, "sheet.jpg")], { timeout: 120000 }).status === 0 : false;
   log(`= hud-mock done: ${rows.length} shots in ${((Date.now() - t0) / 1000).toFixed(0)} s → ${path.relative(ROOT, out)}${sheet ? " (sheet.jpg)" : ""}`);
+  if (F.has("--json")) {
+    const rel = (f) => path.relative(ROOT, path.join(out, f));
+    console.log(JSON.stringify({ ok: rows.length === cells.length, out: path.relative(ROOT, out), report: rel("report.json"), index: rel("index.md"),
+      sheet: sheet ? rel("sheet.jpg") : null, durationMs: Date.now() - t0,
+      cells: rows.map((r) => ({ id: r.id, shot: r.shot, overlaps: r.overlaps, unsafe: r.unsafe, minFont: r.minFont, smallTaps: r.smallTaps,
+        errors: [...r.applyErrors, ...r.pageErrors] })) }));
+  }
 }
 
 let isEntry = false;

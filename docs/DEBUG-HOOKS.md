@@ -4511,7 +4511,7 @@ driving code executes at 60 Hz.
 
 #### Layer 5 — the toolbelt
 
-> **Design sketch, partly unbuilt.** The shipped MCP toolbelt is `tools/mcp/apex-tools-mcp.mjs` (28 tools, map in
+> **Design sketch, partly unbuilt.** The shipped MCP toolbelt is `tools/mcp/apex-tools-mcp.mjs` (29 tools, map in
 > `docs/AGENT-SURFACE.md`). `apex_world`, `apex_act`, `apex_reset` and `apex_scene` below were never built; the nearest
 > shipped tools are `apex_agent` (the `tools/shot/agent.mjs` command surface) and `apex_eval`. `apex_track` and
 > `apex_eval` exist.

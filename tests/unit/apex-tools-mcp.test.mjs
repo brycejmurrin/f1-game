@@ -170,6 +170,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_frame_report",
     "apex_garage",
     "apex_graph_parity",
+    "apex_hud_mock",
     "apex_hud_shot",
     "apex_hud_survey",
     "apex_job_cancel",
@@ -726,7 +727,7 @@ test("the HUD survey wraps are browser tools: a held lock refuses both", () => {
   fs.mkdirSync(path.dirname(LOCK), { recursive: true });
   fs.writeFileSync(LOCK, JSON.stringify({ pid: process.pid, tool: "test", since: Date.now() }));
   try {
-    for (const name of ["apex_hud_shot", "apex_hud_survey"]) {
+    for (const name of ["apex_hud_shot", "apex_hud_survey", "apex_hud_mock"]) {
       const r = callCli(name, { dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "" });
       assert.equal(r.status, 1, r.stderr);
       assert.equal(JSON.parse(r.stdout).error, "lock_held", name);

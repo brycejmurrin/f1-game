@@ -671,3 +671,42 @@ test("shotTimeoutMs: 60 s up to 1280x800, 180 s for a 1920x1080 frame", () => {
   assert.equal(shotTimeoutMs(1920, 1080), 180000);
   assert.equal(shotTimeoutMs(2560, 1440), 180000);
 });
+
+// ── hud-mock.mjs / apex_hud_mock: the HUD on black, mocked widgets ─────────
+test("hud-mock: the default plan is phone landscape × 5 cams × shipped / all-on, and BUTTON SIZE only on touch", async () => {
+  const { planCells } = await import("../../tools/shot/hud-mock.mjs");
+  const { makeFlags } = await import("../../tools/lib/cli-args.mjs");
+  const KNOWN = ["--devices", "--cams", "--hud-scale", "--ui-scale", "--btn-scale", "--sets", "--preset", "--matrix", "--track"];
+  const plan = (argv) => planCells(makeFlags(argv, KNOWN));
+  const d = plan([]);
+  assert.equal(d.length, 10);
+  assert.ok(d.every((c) => c.device === "phone-landscape-844x390"));
+  assert.deepEqual([...d.find((c) => c.id.endsWith("-shipped")).off].sort(), ["inputs", "rel", "strat"]);
+  assert.deepEqual(d.find((c) => c.id.endsWith("-all-on")).off, []);
+  const mixed = plan(["--devices", "desktop-1280,phone-se-667x375", "--cams", "cockpit", "--sets", "all-on", "--btn-scale", "300"]);
+  assert.equal(mixed.find((c) => c.device === "desktop-1280").btnScale, null, "no BUTTON SIZE on a desktop");
+  assert.equal(mixed.find((c) => c.device === "phone-se-667x375").btnScale, 300);
+  assert.throws(() => plan(["--devices", "nope"]), /unknown nope/);
+});
+
+test("MCP: apex_hud_mock is a pinned browser wrap with bounded arrays, a job by default, and a mock result with links", () => {
+  const list = JSON.parse(spawnSync(process.execPath, [MCP, "list-tools"], { cwd: ROOT, encoding: "utf8" }).stdout);
+  const t = list.find((x) => x.name === "apex_hud_mock");
+  assert.ok(t);
+  assert.deepEqual(t.inputSchema.properties.devices.items.enum, Object.keys(M.DEVICES));
+  assert.deepEqual(t.inputSchema.properties.cams.items.enum, [...M.CAMS]);
+  assert.deepEqual([t.inputSchema.properties.hudScale.items.minimum, t.inputSchema.properties.hudScale.items.maximum], [40, 200]);
+  assert.match(t.description, /^Browser \(lock first\)/);
+  assert.match(read("docs/AGENT-SURFACE.md"), /\| `apex_hud_mock` \| `shot\/hud-mock\.mjs` \| browser \| survey-ui-matrix \|/);
+  const dry = JSON.parse(mcp("apex_hud_mock", { dryRun: true, devices: ["phone-se-667x375"], cams: ["cockpit", "chase"], hudScale: [70, 200] }).stdout);
+  assert.equal(dry.ok, true);
+  assert.ok(dry.argv[1].endsWith("tools/shot/hud-mock.mjs"));
+  for (const f of ["--json", "--out"]) assert.ok(dry.argv.includes(f), f);
+  assert.deepEqual(dry.argv.slice(dry.argv.indexOf("--cams"), dry.argv.indexOf("--cams") + 2), ["--cams", "cockpit,chase"]);
+  assert.equal(JSON.parse(mcp("apex_hud_mock", { dryRun: true, hudScale: [999] }).stdout).error, "bad_args");
+  const r = JSON.parse(mcp("apex_hud_mock", { async: false }, { APEX_MCP_MOCK: "1" }).stdout);
+  assert.equal(r.ok, true);
+  assert.equal(r.tool, "apex_hud_mock");
+  assert.match(r.sheet, /sheet\.jpg$/);
+  assert.equal(r.cells[0].overlaps[0].pair, "damage+inputs");
+});
