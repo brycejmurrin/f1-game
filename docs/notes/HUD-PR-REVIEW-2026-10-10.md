@@ -277,3 +277,44 @@ only through ship drift). S = semantic overlap. O = order dependence.
   render-rule check in the PR body.
 - **#1345 (merged; session_014eQTGG1xiP85ngiYNdj9jL).** None. Its INPUTS line
   is replaced by #1366's during the sync; re-check phoneL-chase after.
+
+## Addendum: re-check against ship `107d232`
+
+- **#1360 has merged** (`05a7375`), which completes step 1. The other branches
+  conflict with ship on exactly the same files as before.
+- **#1351 is now at `aaf2f84`.** It merged a ship snapshot from before #1345
+  and rewrote the three guards: hud-inputs, hud-helmet-placement and the
+  cssClasses ratchet.
+  - **The guard rewrites are justified.** The helmet test now pins that ERS has
+    no `position-anchor` to the tyre, which is the right intent. The hud-inputs
+    test now pins the whole new `top:` string with an anchored regex: a
+    literal pin again, not a check of intent.
+  - **The asks are not done.** The INPUTS `top` hunks and the
+    `data-announce-lane` hunk are still in the branch.
+  - **It still conflicts with ship** in css/hud.css, on #1345's INPUTS line.
+    GitHub builds no merge ref for a conflicting PR, so this push started no CI
+    run (`ci-watch`: "no workflow run yet"). The guards have not been proven
+    green on CI.
+  - The order in the main table stands: sync after #1366 and drop the two
+    hunks.
+- **#1346 is now at `7ab5147`.** It fixed the red by changing the spec rather
+  than the CSS. The keyboard-inset wait now expects
+  `min(--sheet-scale, min(--ui-scale, 1.25))` when the page is compact and the
+  short media query matches.
+  - This restates the CSS inside the test. The 1.25 literal and the
+    media-query string are copies of `tokens.css` / `menus.css`, so the test
+    goes stale if either file changes.
+  - It also accepts a painted zoom below the scale classifyFit chose.
+  - It is not a wider tolerance (the 0.001 check is unchanged), so the PR can
+    go green. Still, putting the cap in SheetShape (where `--sheet-scale` is
+    written) remains the better fix: then the fit, the paint and the test agree
+    without the test copying CSS.
+  - **Verdict:** SAFE to land once CI is green; it is independent of the HUD
+    PRs. Moving the cap into SheetShape is now a follow-up, not a blocker.
+- **#1366 is unchanged** at `abafc38` and still CONFLICTING with ship. The sync
+  asks above still apply.
+- **The allocator has moved to `d7d394d`.** The new commits add side-column
+  zoom (`--rcol-z` / `--lcol-z`), `--centre-band-top`, column metadata in
+  `HudLayout.ELEMENTS`, and an edit to `hud-layout.spec.js`. It still
+  conflicts with ship on the same three files. The order stands: it lands
+  after #1366 and #1351.
