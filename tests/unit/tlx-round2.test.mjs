@@ -163,6 +163,70 @@ test("TLX-10: window.scene/camera/renderer/THREE only behind ?three-devtools=1",
   assert.match(read("tests/specs/track-switch-memory.spec.js"), /goto\("\/\?three-devtools=1"\)/, "the spec that reads window.renderer sets it");
 });
 
+// The real tsl-lit factory over the permissive stand-in, with uniform()/uniformArray() kept as plain
+// { value } holders so updateFrame's uploads can be read back. The shadow subsystem is a lamp-armed stub.
+function bootLit({ lampIdx = 2 } = {}) {
+  const ctx = vm.createContext({ window: {}, Log: { warn() {} }, Float32Array, Math, Array, Object, Number });
+  vm.runInContext(read("js/render/three/tsl-lit.js"), ctx);
+  const holder = (value) => ({ value, setGroup() { return this; } });
+  const TSL = new Proxy({}, { get: (t, k) => (k === "uniform" || k === "uniformArray" ? holder : mk()) });
+  const S = { enabled: true, carEnabled: false, lampEnabled: true, lampArmed: true, lampIdx, pcssEnabled: false,
+    lightVP: new Float32Array(16), carLightVP: new Float32Array(16), lampLightVP: new Float32Array(16) };
+  const shadow = { S, sunTex: {}, lampTex: {}, sunSize: 2048, lampSize: 512 };
+  const lit = ctx.window.TLXShaders.lit(THREE, TSL, { chunks: { hash21: mk(), vnoise: mk(), ignoise: mk() }, shadow, maxLights: 16 });
+  return { lit, U: lit.uniforms, S };
+}
+const litFrame = () => ({ sunDir: [0, 1, 0], sunColor: [1, 1, 1], lights: new Array(15 * 3).fill(0), tune: null });
+
+// 1b-F3 (hunt 3): SHD.S.lampIdx is a slot of the FORWARD frame.lights; the mirror re-ranks its own list
+// (FrameLights.viewLights), so it names another lamp there. GLX gated it in #1281 (glx.js _lampOn); TLX did not.
+test("1b-F3: the TLX mirror pass uploads the lamp shadow OFF; the main pass after it re-arms", () => {
+  const { lit, U } = bootLit({ lampIdx: 2 });
+  lit.updateFrame(litFrame(), true);   // tlx.js mirrorBegin
+  assert.equal(U.lampShadowOn.value, 0, "no forward-slot lamp shadow in the mirror's re-ranked list");
+  lit.updateFrame(litFrame());         // tlx.js begin (the main pass)
+  assert.equal(U.lampShadowOn.value, 1);
+  assert.equal(U.lampShadowIdx.value, 2);
+  const mb = TLX.slice(TLX.indexOf("mirrorBegin(frame, w, h) {"), TLX.indexOf("mirrorEnd() {"));
+  assert.match(mb, /lit\.updateFrame\(frame, true\)/, "mirrorBegin passes the mirror flag");
+});
+
+// 5-F5 (hunt 3): game.js calls gfx.resize() every rendered frame and begin()'s resizeNow() then cancels the
+// rAF it scheduled — one requestAnimationFrame + cancelAnimationFrame per frame for nothing.
+test("5-F5: while begin() drives the frame, resize() schedules no rAF; with no begin() it still does", () => {
+  const fnBody = (name) => {
+    const m = TLX.match(new RegExp(`function\\s+${name}\\s*\\(\\)\\s*\\{`));
+    let i = m.index + m[0].length, depth = 1;
+    const start = i;
+    for (; depth; i++) { if (TLX[i] === "{") depth++; else if (TLX[i] === "}") depth--; }
+    return TLX.slice(start, i - 1);
+  };
+  const decl = TLX.match(/let _resizeRaf = 0, _resizeNow = false[^;]*;/);
+  assert.ok(decl, "resize state moved");
+  const bi = TLX.indexOf("        begin(frame) {");
+  const beginHead = TLX.slice(bi, TLX.indexOf("\n", TLX.indexOf("resizeNow();", bi) + 13));
+  assert.match(beginHead, /resizeNow\(\);/);
+  const tail = beginHead.slice(beginHead.indexOf("resizeNow();"));
+  const sim = new Function("requestAnimationFrame", "cancelAnimationFrame", `"use strict";
+    ${decl[0]}
+    let _warmPending = null, applied = 0;
+    const cssSizeCache = { markDirty() {} };
+    function applyResize() { applied++; }
+    function resize() {${fnBody("resize")}}
+    function resizeNow() {${fnBody("resizeNow")}}
+    const begin = () => { ${tail.replace(/\/\/.*$/gm, "")} };
+    return { resize, begin, applied: () => applied };`);
+  const rafs = new Map(); let next = 0, scheduled = 0, cancelled = 0;
+  const t = sim((fn) => { scheduled++; rafs.set(++next, fn); return next; }, (id) => { cancelled++; rafs.delete(id); });
+  for (let f = 0; f < 10; f++) { t.resize(); t.begin(); }   // game.js render(): gfx.resize(), then gfx.begin()
+  assert.ok(scheduled <= 1, `rAFs scheduled over 10 drawn frames: ${scheduled}`);
+  assert.equal(t.applied(), 10, "begin() still applies the size every frame");
+  t.resize(); t.resize();                                     // a menu: no begin() any more
+  assert.equal(scheduled - cancelled, 1, "a resize with no begin() to own it still schedules one rAF");
+  for (const fn of rafs.values()) fn();
+  assert.equal(t.applied(), 11);
+});
+
 test("TLX-11: present()'s failure-ladder closures are hoisted; update ranges reuse one object per attribute", () => {
   const pi = TLX.indexOf("present(opts) {");
   const present = TLX.slice(pi, TLX.indexOf("__tlx: {", pi));
