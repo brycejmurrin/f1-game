@@ -34,7 +34,7 @@ const TrackDesigner = (function () {
       { n: 4, title: "Elevation", text: "Open ELEVATION to select points and adjust their height in metres. BANK ° tilts a turn; KERB chooses flat, sausage or rumble, and BERMS supports banked corners." },
       { n: 5, title: "Look", text: "Open SCENERY and choose a theme; LIVE SCENERY shows an overhead preview. Tune the atmosphere or place objects beside the road." },
       { n: 6, title: "Checks", text: "Open TEST and resolve red CHECKS before saving. Use FIX where a repair is available." },
-      { n: 7, title: "Race and share", text: "Name your circuit and SAVE, then RACE or TIME TRIAL. SHARE copies a link; EXPORT saves a backup file." },
+      { n: 7, title: "Race and share", text: "Name your circuit and SAVE, then RACE or TIME TRIAL. SHARE copies a link; CARD / EXPORT / IMPORT move one circuit; MY CIRCUITS → EXPORT ALL / IMPORT LIBRARY backs up the collection." },
     ]),
     TASKS: Object.freeze([
       { id: "selection", title: "Select several points", mode: "edit", steps: [
@@ -78,6 +78,7 @@ const TrackDesigner = (function () {
   // propKind: the scenery-mode props palette selection (TrackDesignerProps.KINDS).
   let propKind = "stand", scenery = null, sceneryView = false;
   const undo = [], redo = [];
+  let documentSerial = 0, documentId = 0;
   let previewT = 0, draftT = 0, confirmDel = null, msgT = 0;
   // savedSnap: the design as last loaded or saved — anything else is unsaved
   // work a load must not drop. nudge: the arrow-key run one undo entry covers.
@@ -296,7 +297,7 @@ const TrackDesigner = (function () {
 
   // ── state transitions ─────────────────────────────────────────────────────
   function snapshot() { return JSON.stringify(design); }
-  function pushUndo(snap) { undo.push(snap); if (undo.length > UNDO_CAP) undo.shift(); redo.length = 0; }
+  function pushUndo(snap) { undo.push({ snap, documentId }); if (undo.length > UNDO_CAP) undo.shift(); redo.length = 0; }
   const REMAP = /^(insert|delete|stamp:)/;
   /** Replace the design (geometry edits go through here so UNDO sees them). A
    *  run of arrow nudges on one point (or one span) inside NUDGE_MS is ONE entry. */
@@ -310,6 +311,7 @@ const TrackDesigner = (function () {
     next.pts = lattice(next.pts);
     if (REMAP.test(kind || "") && design && design.pts) next = remapZones(next, design.pts, next.pts);
     ensureHeights(next);
+    if (/^(draw|randomise|seed:)/.test(kind || "")) documentId = ++documentSerial;
     design = next;
     afterChange(kind);
     // First real edit dismisses the coach so SHAPE / mode chips stay usable.
@@ -554,8 +556,15 @@ const TrackDesigner = (function () {
     refreshControls();
     return spanArm;
   }
-  function doUndo() { if (!undo.length) return false; redo.push(snapshot()); design = ensureHeights(JSON.parse(undo.pop())); sel = -1; span = -1; nudge = null; afterChange("undo"); return true; }
-  function doRedo() { if (!redo.length) return false; undo.push(snapshot()); design = ensureHeights(JSON.parse(redo.pop())); sel = -1; span = -1; nudge = null; afterChange("redo"); return true; }
+  function restoreHistory(from, to, kind) {
+    if (!from.length) return false;
+    to.push({ snap: snapshot(), documentId });
+    const entry = from.pop(); documentId = entry.documentId;
+    design = ensureHeights(JSON.parse(entry.snap)); sel = -1; span = -1; nudge = null;
+    afterChange(kind); return true;
+  }
+  function doUndo() { return restoreHistory(undo, redo, "undo"); }
+  function doRedo() { return restoreHistory(redo, undo, "redo"); }
   function setTheme(id) {
     if (!TrackThemes.has(id) || id === design.theme) return false;
     commit(Object.assign({}, design, { theme: id }), "theme");
@@ -713,7 +722,7 @@ const TrackDesigner = (function () {
   function load(item, label, origin) {
     const kept = stash();
     if (!kept) { undo.length = 0; redo.length = 0; }
-    design = copy(item);
+    design = copy(item); documentId = ++documentSerial;
     for (const k of ["hwZones", "bankZones", "elevations", "bridges", "turns"]) if (!Array.isArray(design[k])) design[k] = [];
     ensureHeights(design);   // old saves without heights → flat zeros
     if (origin) design.originId = origin; else delete design.originId;
@@ -746,6 +755,13 @@ const TrackDesigner = (function () {
       message(r.reason === "full" ? "MY CIRCUITS is full (" + r.limit + " circuits) — delete one in MY CIRCUITS to " + (forRace ? "race" : "save") + " this design" : "Could not save this design", true);
       Log.warn("track", "designer save refused: " + r.reason);
       return r;
+    }
+    // Content is undoable; the library record it replaces follows each save.
+    for (const history of [undo, redo]) {
+      for (const entry of history) {
+        const old = JSON.parse(entry.snap);
+        if (entry.documentId === documentId || (design.originId && old.originId === design.originId)) { old.originId = r.id; entry.snap = JSON.stringify(old); }
+      }
     }
     design.id = r.id; design.originId = r.id;
     savedSnap = snapshot();
@@ -828,7 +844,12 @@ const TrackDesigner = (function () {
     ui.paneHow.setAttribute("aria-label", "How to build a circuit");
     rail.append(tabs, ui.paneDesign, ui.paneLib, ui.paneHow);
     buildDesignPane(ui.paneDesign);
-    ui.lib = el("div", "td-grid"); ui.paneLib.appendChild(ui.lib);
+    const libraryFiles = el("div", "td-chips"); libraryFiles.dataset.role = "library-files";
+    libraryFiles.append(btn("EXPORT ALL", "sel-chip", exportLibraryFile), btn("IMPORT LIBRARY", "sel-chip", () => ui.libraryFile.click()));
+    ui.libraryFile = el("input"); ui.libraryFile.type = "file"; ui.libraryFile.accept = ".json,application/json"; ui.libraryFile.hidden = true;
+    ui.libraryFile.setAttribute("aria-label", "Import a circuit library file");
+    ui.libraryFile.addEventListener("change", () => { const f = ui.libraryFile.files && ui.libraryFile.files[0]; ui.libraryFile.value = ""; if (f) importLibraryFile(f); });
+    ui.lib = el("div", "td-grid"); ui.paneLib.append(libraryFiles, ui.libraryFile, ui.lib);
     buildHowTo(ui.paneHow);
     body.append(ui.modeGroup, stage, rail);
     // foot
@@ -1205,6 +1226,30 @@ const TrackDesigner = (function () {
       return true;
     } catch (e) { message("Export failed: " + (e && e.message || e), true); return false; }
   }
+  async function exportLibraryFile() {
+    const data = custom.exportCollection();
+    try {
+      await saveFile(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), "apex26-circuits.apextracks.json");
+      message("Exported " + data.items.length + " saved circuits"); return true;
+    } catch (e) { message("Library export failed: " + (e && e.message || e), true); return false; }
+  }
+  function loadCollection(data) {
+    const r = custom.importCollection(data, TrackValidate.check);
+    if (!r.ok) {
+      const why = r.reason === "full" ? "MY CIRCUITS holds at most " + custom.LIMITS.items + " circuits — remove some before importing"
+        : r.reason === "invalid" || r.reason === "collision" ? "Circuit " + (r.index + 1) + " " + (r.reason === "collision" ? "has a conflicting content ID" : "failed validation")
+        : r.reason === "write" ? "Library storage write failed" : "Not a supported Apex 26 circuit library";
+      message(why + ". Nothing imported.", true); return false;
+    }
+    renderLibrary(); showPane("library");
+    message("Imported " + r.added + " circuits · " + r.skipped + " duplicates kept unchanged" + (r.durable ? "" : " · storage unavailable: export a backup before reloading"), !r.durable);
+    return true;
+  }
+  async function importLibraryFile(file) {
+    if (!file || !(file.size <= IMPORT_MAX * custom.LIMITS.items)) { message("Library file is too large (" + (IMPORT_MAX * custom.LIMITS.items >> 10) + " KB max)", true); return false; }
+    try { return loadCollection(JSON.parse(await file.text())); }
+    catch (_) { message("Could not read the library file. Nothing imported.", true); return false; }
+  }
   async function importFile(file) {
     // An exported circuit is a few KB; never read a large file into memory to find out it is not one.
     if (!file || !(file.size <= IMPORT_MAX)) { message("That file is too big to be an Apex 26 circuit (" + (IMPORT_MAX >> 10) + " KB max)", true); return false; }
@@ -1217,6 +1262,7 @@ const TrackDesigner = (function () {
     let code = null, raw = null;
     if (s[0] === "{") {
       let obj = null; try { obj = JSON.parse(s); } catch (_) { obj = null; }
+      if (obj && obj.format === custom.COLLECTION_FORMAT) return loadCollection(obj);
       const f = TrackCodec.fromFile(obj);
       if (!f) { message("Not an Apex 26 circuit file", true); return false; }
       if (f.code) code = f.code; else raw = f.design;
@@ -1846,7 +1892,7 @@ const TrackDesigner = (function () {
     const next = design.pts.map((_, k) => elevH(k < list.length ? list[k] : 0));
     let same = next.length === design.heights.length;
     if (same) for (let k = 0; k < next.length; k++) if (next[k] !== design.heights[k]) { same = false; break; }
-    if (Number.isInteger(anchor) && anchor >= 0 && anchor < design.pts.length) sel = anchor;
+    if (Number.isInteger(anchor) && anchor >= 0 && anchor < design.pts.length && !(hasSpan() && TrackShape.inSpan(anchor, sel, span, design.pts.length))) sel = anchor;
     if (same) {
       if (cv) cv.setSelection(sel, span);
       if (prof) { if (prof.setSelection) prof.setSelection(sel, span); else prof.select(sel); }
@@ -2269,6 +2315,7 @@ const TrackDesigner = (function () {
   return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, armSpanEnd, undo: doUndo, redo: doRedo, setTheme, setLook, setAtmosphere, setPropKind, placeProp, removeProp, removePropAt, editPropAt, copyPropAt, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, setHeights, selectRange, setSelectionMode, adjustElevation, profileView, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
     selectCorner, toggleHeat, toggleElevationHeat, trackOfTheDay, startFrom, toggleStartFrom,
     designed, useCandidate, moreLikeThis,
-    setSpanWidth, setCornerBank, setKerbStyle, setBerms };
+    setSpanWidth, setCornerBank, setKerbStyle, setBerms,
+    exportLibraryFile, importLibraryFile, loadCollection };
 })();
 Object.freeze(TrackDesigner);

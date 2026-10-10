@@ -384,6 +384,39 @@ const CustomTracks = (function () {
     return { ok: true, durable: !!(r && r.durable) };
   }
 
+  const COLLECTION_FORMAT = "apex26.tracks";
+  function exportCollection() { return { format: COLLECTION_FORMAT, v: 1, items: list() }; }
+  /** Preflight the entire collection before one write. Existing content wins
+   *  duplicates, including its label; a hash collision refuses the import.
+   *  The optional validator adds full editor raceability checks to registry checks. */
+  function importCollection(raw, validate) {
+    if (!raw || raw.format !== COLLECTION_FORMAT || raw.v !== 1 || !Array.isArray(raw.items)) return { ok: false, reason: "format" };
+    if (raw.items.length > LIMITS.items) return { ok: false, reason: "full", limit: LIMITS.items };
+    const items = list(), known = new Map(items.map((it) => [it.id, it]));
+    let added = 0, skipped = 0;
+    for (const [index, row] of raw.items.entries()) {
+      let it;
+      try {
+        it = sanitize(row);
+        // Bound engine work before validation, even with hostile coordinates.
+        if (!it || loopLength(it.pts) > 14000 || (validate && !validate(it).ok)) return { ok: false, reason: "invalid", index };
+        TrackDef.fromRaw(toRaw(it));
+      } catch (_) { return { ok: false, reason: "invalid", index }; }
+      const existing = known.get(it.id);
+      if (existing) {
+        if (canonical(existing) !== canonical(it)) return { ok: false, reason: "collision", index };
+        skipped++; continue;
+      }
+      known.set(it.id, it); items.push(it); added++;
+    }
+    if (items.length > LIMITS.items) return { ok: false, reason: "full", limit: LIMITS.items, needed: items.length };
+    if (!added) return { ok: true, added, skipped, durable: true };
+    const selected = selectedId(), result = write(items);
+    if (!result || !result.ok) return { ok: false, reason: "write" };
+    if (sync() >= 0 && selected) reselect(selected);
+    return { ok: true, added, skipped, durable: !!result.durable };
+  }
+
   /** Make a custom circuit the current selection (what the picker click does). */
   function select(id) {
     const idx = Tracks.LIST.findIndex((t) => t.id === id);
@@ -468,6 +501,6 @@ const CustomTracks = (function () {
 
   sync();   // at EVAL: before game.js resolves the stored trackId
 
-  return { KEY, DRAFT_KEY, DRAFT_PREV_KEY, LIMITS, KERB_STYLES, sanitize, sanitizeName, sanitizeCountry, sanitizeHeights, sanitizeKerbStyle, sanitizeBerms, idOf, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn };
+  return { COLLECTION_FORMAT, exportCollection, importCollection, KEY, DRAFT_KEY, DRAFT_PREV_KEY, LIMITS, KERB_STYLES, sanitize, sanitizeName, sanitizeCountry, sanitizeHeights, sanitizeKerbStyle, sanitizeBerms, idOf, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn };
 })();
 Object.freeze(CustomTracks);

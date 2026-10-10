@@ -509,14 +509,19 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
       watched[2][flag] = false;
     }
     assert.ok(watched[2].x > Tracks.wallAt(g.G.track, watched[2].s, 1), "the replay pit-lane pose lies beyond the local driving barrier");
-    const poses = () => watched.map((c) => ({ prog: c.prog, s: c.s, x: c.x, speed: c.speed, px: c.px, pz: c.pz,
+    // Pose fields the collider / RECOVER must not rewrite. Speed is intentionally
+    // zeroed while paused so engine/rival audio hear a standing car (real-replay
+    // tick); reposing resumes it from the trace — do not assert speed here.
+    const poses = () => watched.map((c) => ({ prog: c.prog, s: c.s, x: c.x, px: c.px, pz: c.pz,
       lap: c.lap, penalty: c.penalty, tyreWear: c.tyreWear }));
+    g.step(1);   // settle the seek's pose: a loaded runner may pump the camera frames above with no physics step, leaving the seek's speed on the puppet
     const before = poses();
     assert.equal(g.G.raceT, 0.1, "the replay seek synchronizes the game's HUD clock");
     vm.runInContext('Input.remoteEvent("recover")', g.ctx);   // the same action as keyboard R / gamepad RECOVER
     g.step(3);
     assert.equal(replay.status().T, 0.1, "the replay remains paused");
     assert.equal(g.G.raceT, 0.1, "ordinary simulation steps cannot advance the paused replay's HUD clock");
+    assert.ok(watched.every((c) => c.speed === 0), "paused WATCH stands the puppets for audio");
     assert.deepEqual(poses(), before, "neither the collider nor manual recovery may rewrite paused replay puppets");
 
     replay.follow("LEC");

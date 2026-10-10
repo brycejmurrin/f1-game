@@ -373,6 +373,37 @@ const CareerBackup = (function () {
     return isObj(local) ? Object.assign({}, incoming, local) : incoming;
   }
 
+  // Read-only summary of the same writes apply() will attempt. Empty backup
+  // rows preserve local slots; shared identity only travels with a MY TEAM save.
+  function preview(envelope, opts) {
+    const o = opts || {}, checked = validate(envelope);
+    if (!checked.ok) return checked;
+    const focus = o.focusFlavour != null ? flavourIn(o.focusFlavour) : null;
+    const allowed = o.flavours ? o.flavours.map(flavourIn)
+      : (focus && !o.otherFlavourConfirmed ? [focus] : FLAVOURS);
+    const slots = envelope.slots.filter(r => r.data != null && allowed.includes(flavourIn(r.flavour)))
+      .map(r => ({ flavour: flavourIn(r.flavour), i: slotIn(r.i),
+        current: readSlotRaw(flavourIn(r.flavour), slotIn(r.i)), incoming: r.data }));
+    const extras = [], s = store();
+    if (o.includeExtras !== false && o.includeProgressExtras !== false) {
+      if (envelope.season != null) extras.push(seasonAhead(s && s.get("season", null), envelope.season)
+        ? "Standalone season: keep newer local progress" : "Standalone season: restore backup progress");
+      if (envelope.badges != null) extras.push("Licence badges: combine earned badges");
+      if (envelope.daily != null) extras.push("Daily challenges: combine best laps and streaks");
+      if (envelope.records != null) extras.push("Records: add missing entries");
+    }
+    if (o.includeExtras !== false && slots.some(r => r.flavour === "myteam") && isObj(envelope.myTeam)) {
+      const labels = { customTeam: "team name, colours and roster", customLogo: "team logo",
+        "livery.custom.custom": "custom paint jobs", "livery.custom": "selected paint job" };
+      const keys = IDENTITY_KEYS.filter(k => {
+        const v = identityValue(k, envelope.myTeam[k]);
+        return v !== undefined && !(Array.isArray(v) && !v.length);
+      });
+      if (keys.length) extras.push("Shared MY TEAM identity: replace " + keys.map(k => labels[k]).join("; ") + " for all MY TEAM slots");
+    }
+    return { ok: true, slots, extras };
+  }
+
   function apply(envelope, opts) {
     const o = opts || {};
     const checked = validate(envelope, o.rawText);
@@ -395,6 +426,15 @@ const CareerBackup = (function () {
     const expected = o.expectedRevisions || {};
     const written = [];
     let failed = 0;
+    const issues = [], applied = [];
+    const recordWrite = (key, result) => {
+      if (result && result.ok !== false) applied.push(key);
+      if (!result || result.ok === false || result.durable === false) {
+        failed++;
+        issues.push({ key, reason: (result && result.reason) || "write-failed", rejected: !result || result.ok === false });
+      }
+      return result;
+    };
     const skipped = [];
 
     // Snapshot disk first so a mid-apply conflict can leave nothing half-done
@@ -435,7 +475,7 @@ const CareerBackup = (function () {
       if (!result.ok || result.reason === "conflict") {
         return { ok: false, reason: result.reason || "write-failed", slot: id, written: written };
       }
-      if (result.durable === false) failed++;
+      recordWrite(slotKey(step.f, step.i), result);
       written.push(id);
     }
 
@@ -443,8 +483,9 @@ const CareerBackup = (function () {
     // that revision above, before any slot writes; keep selection on failure.
     let selectionWritten = false;
     if (selected != null && s && !failed) {
-      selectionWritten = s.set("careerSlot", selected) !== false;
-      if (!selectionWritten) failed++;
+      const result = recordWrite("careerSlot", typeof s.write === "function" ? s.write("careerSlot", selected)
+        : { ok: true, durable: s.set("careerSlot", selected) !== false });
+      selectionWritten = !!result && result.ok !== false;
     }
     const identity = [];
     // The second mode confirmation must not replay already-restored global progress.
@@ -453,16 +494,16 @@ const CareerBackup = (function () {
     if (s && typeof s.write === "function") {
       if (envelope.season != null && isObj(envelope.season) && progressExtras
           && !seasonAhead(s.get("season", null), envelope.season)) {
-        s.write("season", envelope.season);
+        recordWrite("season", s.write("season", envelope.season));
       }
       if (envelope.badges != null && isObj(envelope.badges) && progressExtras) {
-        s.write("badges", mergeBadges(s.get("badges", null), envelope.badges));
+        recordWrite("badges", s.write("badges", mergeBadges(s.get("badges", null), envelope.badges)));
       }
       if (envelope.daily != null && isObj(envelope.daily) && progressExtras) {
-        s.write("daily.v1", mergeDaily(s.get("daily.v1", null), envelope.daily));
+        recordWrite("daily.v1", s.write("daily.v1", mergeDaily(s.get("daily.v1", null), envelope.daily)));
       }
       if (envelope.records != null && isObj(envelope.records) && progressExtras) {
-        s.write("records", mergeRecords(s.get("records", null), envelope.records));
+        recordWrite("records", s.write("records", mergeRecords(s.get("records", null), envelope.records)));
       }
       // Identity only with a MY TEAM slot actually written; a key the backup
       // lacks (or carries malformed) leaves the local value alone.
@@ -473,8 +514,8 @@ const CareerBackup = (function () {
           const v = identityValue(k, envelope.myTeam[k]);
           // An all-garbage livery list cleans to [] — that is not a restore.
           if (v === undefined || (Array.isArray(v) && !v.length)) continue;
-          s.write(k, v);
-          identity.push(k);
+          const result = recordWrite(k, s.write(k, v));
+          if (result && result.ok !== false) identity.push(k);
         }
         // custom-team.js re-syncs Teams.LIST / the logo only on a foreign
         // change (its own saves sync directly); this restore is one, announced
@@ -488,13 +529,16 @@ const CareerBackup = (function () {
     if (typeof Career !== "undefined" && Career && Career.load) Career.load({ persist: false });
     log("info", "career backup imported " + written.length + " slot(s)");
     return {
-      ok: true,
+      ok: !issues.some(r => r.rejected),
+      durable: failed === 0,
+      issues,
+      applied,
       written: written,
       failed: failed,
       selectionWritten: selectionWritten,
       skipped: skipped,
       identity: identity,
-      reason: null,
+      reason: issues.length ? issues[0].reason : null,
       needsConfirm: pendingOther,
     };
   }
@@ -523,6 +567,7 @@ const CareerBackup = (function () {
     exportAll: exportAll,
     validate: validate,
     apply: apply,
+    preview: preview,
     writeSlot: writeSlot,
     otherFlavourPending: otherFlavourPending,
     wipeAllSlots: wipeAllSlots,

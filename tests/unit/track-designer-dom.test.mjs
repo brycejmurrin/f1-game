@@ -2164,6 +2164,87 @@ test("level, smooth and zero affect only selected heights and retain smooth endp
   b.D.close();
 });
 
+test("deleting the start point retains every surviving point's elevation, with undo", () => {
+  const b = bootScreen(); const d = openGreen(b);
+  d.heights = d.pts.map((_, i) => i / 4);
+  b.D.load(d); b.D.deletePoint(0);
+  assert.deepEqual(plain(b.D.state().design.heights), d.heights.slice(1));
+  assert.deepEqual(plain(b.D.state().design.pts), d.pts.slice(1));
+  b.D.undo(); assert.deepEqual(plain(b.D.state().design.heights), d.heights);
+  b.D.close();
+});
+
+test("dragging an interior elevation grip keeps both ends of the selected span", () => {
+  const b = bootScreen(); const d = openGreen(b);
+  b.D.setMode("elevation"); b.D.selectRange(2, 8); b.D.setSelectionMode("point");
+  const strip = b.root.querySelector('canvas[data-role="profile"]');
+  const pts = d.pts, c = [0];
+  for (let i = 0; i < pts.length; i++) c.push(c[i] + Math.hypot(pts[(i + 1) % pts.length][0] - pts[i][0], pts[(i + 1) % pts.length][1] - pts[i][1]));
+  const x = c[5] / c[pts.length] * 640;
+  for (const [type, y] of [["pointerdown", 200], ["pointermove", 150], ["pointerup", 150]]) {
+    b.dom.dispatch(strip, { type, pointerId: 1, pointerType: "mouse", button: 0, clientX: x, clientY: y, preventDefault() {} });
+  }
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [2, 8]);
+  const h = b.D.state().design.heights;
+  assert.ok(h[5] > 0); assert.equal(h[2], h[5]); assert.equal(h[8], h[5]); assert.equal(h[1], 0);
+  b.D.close();
+});
+
+test("save after undo and redo replaces the current library record without duplicating", () => {
+  const b = bootScreen(); openGreen(b);
+  const first = b.D.save(); assert.equal(first.ok, true);
+  b.D.setWidth(6); b.D.preview(); const second = b.D.save();
+  assert.equal(second.ok, true); assert.notEqual(second.id, first.id);
+  b.D.undo(); b.D.preview(); const restored = b.D.save();
+  assert.equal(restored.id, first.id); assert.deepEqual(plain(b.D.state().library), [first.id]);
+  b.D.redo(); b.D.preview(); const redone = b.D.save();
+  assert.equal(redone.id, second.id); assert.deepEqual(plain(b.D.state().library), [second.id]);
+  b.D.close();
+});
+
+test("MY CIRCUITS collection controls import atomically and leave the working draft intact", async () => {
+  const b = bootScreen(); openGreen(b);
+  assert.deepEqual(walk(b.root).find((e) => e.dataset.role === "library-files").children.map((e) => e.textContent), ["EXPORT ALL", "IMPORT LIBRARY"]);
+  const draft = plain(b.D.state().design), envelope = { format: b.C.COLLECTION_FORMAT, v: 1, items: [draft] };
+  assert.equal(await b.D.importLibraryFile({ size: 1000, text: async () => JSON.stringify(envelope) }), true);
+  assert.match(msgText(b), /Imported 1 circuits/); assert.equal(b.C.list().length, 1);
+  assert.deepEqual(plain(b.D.state().design), draft);
+  b.ctx.Blob = Blob;
+  let exported;
+  b.ctx.NativeDownload = { viable: () => true, saveBlob: async (blob, name) => { exported = { name, data: JSON.parse(await blob.text()) }; } };
+  assert.equal(await b.D.exportLibraryFile(), true);
+  assert.equal(exported.name, "apex26-circuits.apextracks.json");
+  assert.equal(exported.data.format, b.C.COLLECTION_FORMAT); assert.equal(exported.data.items.length, 1);
+  assert.equal(await b.D.loadFrom(JSON.stringify(envelope)), true);
+  assert.match(msgText(b), /Imported 0 circuits.*1 duplicates/);
+  assert.equal(await b.D.importLibraryFile({ size: 1000, text: async () => JSON.stringify({ ...envelope, items: [draft, { pts: [] }] }) }), false);
+  assert.match(msgText(b), /Circuit 2 failed validation.*Nothing imported/); assert.equal(b.C.list().length, 1);
+  assert.equal(await b.D.importLibraryFile({ size: 2000000, text: async () => { throw new Error("must not read"); } }), false);
+  assert.match(msgText(b), /too large/);
+  b.ctx.GameStore.store.write = () => ({ ok: false, durable: false });
+  assert.equal(b.D.loadCollection({ ...envelope, items: [{ ...draft, seed: 17 }] }), false);
+  assert.match(msgText(b), /Library storage write failed.*Nothing imported/);
+  assert.equal(b.C.list().length, 1); assert.deepEqual(plain(b.D.state().design), draft);
+  b.D.close();
+});
+
+test("first-save history keeps its library identity without linking another imported document", () => {
+  const b = bootScreen(); openGreen(b);
+  b.D.setWidth(6); b.D.preview(); const first = b.D.save();
+  b.D.undo(); b.D.preview(); const restored = b.D.save();
+  assert.equal(restored.ok, true); assert.notEqual(restored.id, first.id);
+  assert.deepEqual(plain(b.D.state().library), [restored.id], "pre-first-save undo replaces, rather than adds");
+  b.D.setName("MY UNSAVED LABEL");
+  const imported = { ...b.D.state().design, seed: 876543, name: "OTHER DOCUMENT" };
+  b.D.load(imported, "import"); b.D.preview(); const other = b.D.save();
+  assert.equal(other.ok, true); assert.equal(b.C.list().length, 2);
+  b.D.undo(); b.D.preview(); const back = b.D.save();
+  assert.equal(back.id, restored.id); assert.equal(b.C.list().length, 2);
+  assert.equal(b.C.get(other.id).name, "OTHER DOCUMENT", "saving the restored document does not replace the imported one");
+  assert.equal(b.C.get(restored.id).name, "MY UNSAVED LABEL");
+  b.D.close();
+});
+
 test("an autosaved draft of an oversize loop is rejected on open instead of freezing the tab (13-F1)", () => {
   const pts = [];
   for (let i = 0; i < 40; i++) pts.push(i % 2 ? [-9000 + (i % 7) * 100, 9000 - i * 10] : [9000 - (i % 5) * 100, -9000 + i * 10]);

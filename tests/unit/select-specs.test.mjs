@@ -219,7 +219,13 @@ test("terrain and ordinary parts leftovers use only spare over-budget capacity (
   assert.equal(measuredCheap(terrain, db), true, "terrain remains eligible for the ordinary measured cut first");
   const full = plan(MAX_OVER_BUDGET_SHARDS);
   assert.equal(full.oversize.length, MAX_OVERSIZE_SHARDS);
-  assert.equal(full.spill.reduce((n, s) => n + s.sec, 0), 1091);
+  assert.deepEqual(full.spill.map((s) => s.file), leftovers.slice(0, 5).map(([file]) => file));
+  // Per-test rate rounding changes with the real specs' case counts. Assert
+  // the saturated capacity boundary, not a historical rounded total.
+  const spillSec = full.spill.reduce((n, s) => n + s.sec, 0);
+  const spillRoom = MAX_SPILL_SHARDS * TARGET_SHARD_SEC - spillSec;
+  assert.ok(spillRoom >= 0 && spillRoom < full.overBudgetRun.find((s) => s.file === terrain).sec,
+    "spill stays bounded and cannot carry terrain");
   assert.deepEqual(full.overBudgetRun.map((s) => s.file), [slow, terrain]);
   assert.deepEqual(full.skipped, []);
   assert.deepEqual(full.overBudgetSpecs, []);
@@ -302,8 +308,11 @@ test("a saturated wide plan runs props-over-road and parts-physics without displ
     { db, rank, spillShards, overBudgetShards });
   const old = plan(2, 0); // Disable the later spare-pool fallback to isolate the original spill defect.
   assert.equal(old.oversize.length, MAX_OVERSIZE_SHARDS, "all oversize slots are occupied");
-  assert.equal(old.spill.reduce((n, s) => n + s.sec, 0), 717);
+  assert.deepEqual(old.spill.map((s) => s.file), leftovers.slice(0, 4).map(([file]) => file));
   assert.deepEqual(old.skipped.map((s) => s.file), [props, parts], "reproduces both CI omissions");
+  const oldSpillRoom = 2 * TARGET_SHARD_SEC - old.spill.reduce((n, s) => n + s.sec, 0);
+  assert.ok(oldSpillRoom >= 0 && old.skipped.every((s) => s.sec > oldSpillRoom),
+    "the bounded old spill cannot carry either omitted suite");
   const fixed = plan(MAX_SPILL_SHARDS);
   assert.deepEqual(fixed.skipped, [], "no candidate is displaced into the dropped list");
   assert.deepEqual(fixed.overBudgetSpecs, []);

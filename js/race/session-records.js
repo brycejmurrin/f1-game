@@ -4,6 +4,7 @@ var SessionRecords = (function () {
   const PHYS = ["PACE", "DRIFT", "FRONT_GRIP", "PLAYER_GRIP", "ROAD_FOLLOW", "STEER_EXPO", "STEER_MAX_SLIP", "STEER_SPEED_REF", "WHEELBASE", "YAW_DAMP", "YAW_INERTIA", "raceLineAssist"];
   function create(G) {
     let key = null, revision = -1, spoiled = false, dailyRestore = null;
+    let comparedGuest = null, comparedKey = null;
     const STANDARD = { PACE: 0.84, DRIFT: 0, FRONT_GRIP: 0.94, PLAYER_GRIP: 1.15, ROAD_FOLLOW: 0,
       STEER_EXPO: 2.4, STEER_MAX_SLIP: 0.29, STEER_SPEED_REF: 41.7, WHEELBASE: 3.6, YAW_DAMP: 1, YAW_INERTIA: 0.58, raceLineAssist: 0 };
     function prepareDaily() {
@@ -44,6 +45,13 @@ var SessionRecords = (function () {
       }
       const b = GameStore.ttBoard(G.track.def.id, key);
       G.ttRecord = b.length ? b[0].t : Infinity;
+      if (typeof GhostShare !== "undefined" && GhostShare.hasGuest(G.track.def.id)) {
+        const guest = GhostShare.guest();
+        if (guest !== comparedGuest || key !== comparedKey) {
+          G.announce(GhostShare.contextNotice(guest.context, key), 6, "info");
+          comparedGuest = guest; comparedKey = key;
+        }
+      }
       return key;
     }
     // G.practice, not G.timeTrial. This was the reason checkpoints could not
