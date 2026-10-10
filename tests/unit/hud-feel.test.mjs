@@ -1158,6 +1158,11 @@ test("touch landscape: S1-S3 lead the LEFT column under the map, LIMITS and DAMA
   assert.equal(v("--rcol-y-damage"), "", "and not stacked in the right column");
   // The hanging lane is bounded by the plate on the LEFT (like the map), never ended at its left edge.
   assert.ok(!/collapsed/.test(h.dom.body.getAttribute("data-radio-slot") || ""), "the card is not collapsed by a left-hand plate");
+  // THE MESSAGE LINE: flag + radio card in one row right under the top-centre cluster (the tower ends at 62).
+  assert.equal(h.dom.body.getAttribute("data-radio-slot"), "ticker", "touch landscape: the message line, not a mid-screen card");
+  assert.equal(v("--tick-y"), px(62 + 8), "8 px under the timing tower");
+  const fx = parseFloat(v("--tick-flag-x")), cx = parseFloat(v("--tick-x")), cw = parseFloat(v("--tick-w"));
+  assert.ok(fx >= 148 && cx > fx && cx + cw <= 800, "the flag first, the card after it, clear of the map, inside the screen (" + [fx, cx, cw] + ")");
   // The preference keeps the shipped plate beside BOOST.
   const r = fitHarness({ secSide: "right" });
   assert.ok(!("sectorsLeft" in r.root.dataset), "apex26.hudSectorsSide right: the plate stays in the right column");

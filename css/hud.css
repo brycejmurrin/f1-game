@@ -1229,6 +1229,30 @@ body[data-radio-slot="collapsed"] #announce {
 /* …in the rows the lane was cleared for, under the map's bottom too (--announce-lane-y; HUD audit
    2026-10-10: the card painted over the minimap). The doubled id outranks the density / caution
    tops; unset, it falls back to the flag's slot (--flag-slot-top). */
+/* THE MESSAGE LINE (touch landscape, js/ui/hud.js radioTicker): the flag at the line's left end, the
+   card after it, both directly under the timing tower / mirror, in SCREEN px over each one's --hud-z.
+   !important: the caution :has() steps and the density tops outrank a doubled id here. */
+body[data-radio-slot="ticker"] #hud-flag {
+  top: calc(var(--tick-y) / var(--hud-z)) !important;
+  left: calc(var(--tick-flag-x) / var(--hud-z)) !important;
+  transform: none !important;
+}
+/* At most two lines of message: the line's rows are budgeted for that (radioTicker TICK_ROWS). */
+body[data-radio-slot="ticker"] #announce-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+body[data-radio-slot="ticker"] #announce {
+  top: calc(var(--tick-card-y, var(--tick-y)) / var(--hud-z)) !important;
+  left: calc(var(--tick-x) / var(--hud-z)) !important;
+  transform: none !important;
+  width: calc(var(--tick-w) / var(--hud-z)) !important;
+  max-width: calc(var(--tick-w) / var(--hud-z)) !important;
+  min-width: 0 !important;
+}
 body[data-radio-slot="lane"] #announce#announce,
 body[data-radio-slot="collapsed"] #announce#announce { top: calc(var(--announce-lane-y, calc(var(--flag-slot-top) * var(--hud-z))) / var(--hud-z)); }
 /* The plate. Italic is the racing number's own convention, not emphasis. */

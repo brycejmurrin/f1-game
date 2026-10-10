@@ -559,6 +559,47 @@ function cssPx(root, name) {
   if (typeof getComputedStyle !== "function" || !root) return 0;
   try { return parseFloat(getComputedStyle(root).getPropertyValue(name)) || 0; } catch (_) { return 0; }   // mini-dom / detached root
 }
+// THE MESSAGE LINE (touch landscape, :root[data-sectors-left]): the caution flag and the radio card share
+// ONE row directly under the top-centre cluster (the timing tower, or the mirror frame / chip under it):
+// the tower's width when the band there is clear, else the whole clear band between the left column /
+// gap chip and the right column / docks. The flag keeps a reserved slot at its left end, so the message lands in the same place with a
+// flag or without one. Both used to hang mid-screen over the track (owner, 2026-10-10: "messages in the
+// middle of the screen"). { y, flagX, x, w } in screen px, or null where the line is too narrow.
+const TICK_FLAG = 116, TICK_ROWS = 56, TICK_MIN = 160;
+function radioTicker(list, zTop) {
+  const t = towerRect();
+  if (!(t && t.width)) return null;
+  const root = document.documentElement, W = window.innerWidth || 0, mid = W / 2;
+  const y = centreBandTop(false, false) + RADIO_TOP_GAP;
+  const fl = obs("flag"), flagW = Math.max(fl ? fl.rect.width : 0, TICK_FLAG * zTop), flagH = fl ? fl.rect.height : 24 * zTop;
+  // The clear band in rows [y, y + rows), edge to edge: the left column / gap chip end it on the left, the
+  // right column, the docks and the pause / cam buttons on the right.
+  const band = (rows) => {
+    let x0 = cssPx(root, "--sal") + 10 * zTop, x1 = W - cssPx(root, "--sar") - 10 * zTop;
+    for (const o of list) {
+      if (o.transient || o.id === "tower" || o.id === "flag" || o.id === "announce") continue;
+      const r = o.rect;
+      if (r.top >= y + rows || r.bottom <= y || r.right <= x0 || r.left >= x1) continue;
+      if ((r.left + r.right) / 2 < mid) x0 = Math.max(x0, r.right + RADIO_TOP_GAP);
+      else x1 = Math.min(x1, r.left - RADIO_TOP_GAP);
+    }
+    // Under the tower when it fits there (the line reads as part of the timing block), else the whole band.
+    return (lo, need) => { let a = Math.max(x0, t.left), b = Math.min(x1, t.right); if (b - a < need) { a = x0; b = x1; } return b - a >= need ? [a, b] : null; };
+  };
+  const minCard = TICK_MIN * zTop;
+  // The card's rows: its painted height when it shows (two lines at most, css/hud.css), else the budget.
+  const ann = els.announce || document.getElementById("announce");
+  const annR = ann && !ann.hidden && ann.getBoundingClientRect ? ann.getBoundingClientRect() : null;
+  const cardH = Math.max(TICK_ROWS * zTop, annR && annR.height ? annR.height : 0);
+  // ONE ROW: the flag, then the card beside it.
+  const one = band(cardH)(0, flagW + RADIO_TOP_GAP + minCard);
+  if (one) { const x = one[0] + flagW + RADIO_TOP_GAP; return { y, cardY: y, flagX: one[0], x, w: one[1] - x }; }
+  // TWO ROWS where the band is narrow (a cockpit's mirror frame pushes the line down beside DAMAGE and
+  // BOOST): the flag, and the card directly under it at the band's width.
+  const cardY = y + flagH + RADIO_TOP_GAP / 2;
+  const two = band(cardH + flagH + RADIO_TOP_GAP / 2)(0, minCard);
+  return two ? { y, cardY, flagX: two[0], x: two[0], w: two[1] - two[0] } : null;
+}
 // The hanging lane as a DECISION (placeRadio writes it): { on, collapsed, x, y, w } in screen px.
 function radioLane(root, list) {
   const t = towerRect();
@@ -666,9 +707,10 @@ const RADIO_VARS = {
   top: ["--radio-top-x", "--radio-top-y", "--radio-top-w", "--radio-top-h"],
   side: ["--mir-side-x", "--mir-side-w"],
   lane: ["--announce-lane-x", "--announce-lane-y", "--announce-lane-shift", "--announce-lane-w"],
+  ticker: ["--tick-y", "--tick-card-y", "--tick-flag-x", "--tick-x", "--tick-w"],
 };
 let _radioSlot = "", _radioPaintSeq = -1, _radioPlaceSeq = -1, _fitSeq = 0;
-function writeRadio(root, slot, top, side, lane) {
+function writeRadio(root, slot, top, side, lane, tick) {
   const body = document.body;
   hAttr(body, "data-radio-slot", slot);
   hToggle(body, "hud-radio-top", slot === "top");      // aliases of data-radio-slot, kept for the specs / survey
@@ -692,6 +734,13 @@ function writeRadio(root, slot, top, side, lane) {
     hStyle(root, "--announce-lane-shift", "0%");
     hStyle(root, "--announce-lane-w", slot === "lane" ? lane.w.toFixed(1) + "px" : "0px");
   } else for (const p of RADIO_VARS.lane) hUnset(root, p);
+  if (slot === "ticker") {
+    hStyle(root, "--tick-y", tick.y.toFixed(1) + "px");
+    hStyle(root, "--tick-card-y", tick.cardY.toFixed(1) + "px");
+    hStyle(root, "--tick-flag-x", tick.flagX.toFixed(1) + "px");
+    hStyle(root, "--tick-x", tick.x.toFixed(1) + "px");
+    hStyle(root, "--tick-w", tick.w.toFixed(1) + "px");
+  } else for (const p of RADIO_VARS.ticker) hUnset(root, p);
   // data-lane-collapsed hard-collapses the flex plate (min-content from #announce-num otherwise keeps a box).
   const annEl = els.announce || document.getElementById("announce");
   if (annEl && annEl.toggleAttribute) annEl.toggleAttribute("data-lane-collapsed", slot === "collapsed");
@@ -705,12 +754,15 @@ function writeRadio(root, slot, top, side, lane) {
  *  in it — or the 3 s re-measure) judges afresh. */
 function placeRadio(root, bcast, list, tick) {
   if (!list) list = obsCollect();
-  if (tick && (_radioSlot === "top" || _radioSlot === "side" || (_radioSlot === "collapsed" && (_radioPlaceSeq === _fitSeq || _radioPaintSeq === _fitSeq)))) return _radioSlot;
-  const top = tick ? null : radioTop(bcast, list);
-  const side = top || tick ? null : radioSide(list);
-  const lane = top || side ? null : radioLane(root, list);
-  const slot = top ? "top" : side ? "side" : lane.on ? "lane" : lane.collapsed ? "collapsed" : "centre";
-  writeRadio(root, slot, top, side, lane);
+  if (tick && (_radioSlot === "top" || _radioSlot === "side" || _radioSlot === "ticker" || (_radioSlot === "collapsed" && (_radioPlaceSeq === _fitSeq || _radioPaintSeq === _fitSeq)))) return _radioSlot;
+  // Touch landscape: the message line under the top-centre cluster comes first (radioTicker).
+  const zTop = +root.style.getPropertyValue("--hud-z-top") || 1;
+  const ticker = !tick && !bcast && root.dataset && "sectorsLeft" in root.dataset ? radioTicker(list, zTop) : null;
+  const top = tick || ticker ? null : radioTop(bcast, list);
+  const side = top || tick || ticker ? null : radioSide(list);
+  const lane = top || side || ticker ? null : radioLane(root, list);
+  const slot = ticker ? "ticker" : top ? "top" : side ? "side" : lane.on ? "lane" : lane.collapsed ? "collapsed" : "centre";
+  writeRadio(root, slot, top, side, lane, ticker);
   if (tick) return slot;
   _radioPlaceSeq = _fitSeq;
   // The painted guarantee (above): the tower, the plate and the MAP (its whole box, bottom edge
