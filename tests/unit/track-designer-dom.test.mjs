@@ -1930,3 +1930,64 @@ test("level, smooth and zero affect only selected heights and retain smooth endp
   assert.equal(b.D.adjustElevation("zero"), false, "no-op does not add undo");
   b.D.close();
 });
+
+// ── bug-hunt 2 H8 / H9: a new loop is judged AND committed on a clean base ──
+/** The previous design's fraction-keyed edits, a wide road and two props: all of it belongs to the OLD loop. */
+function hillyBase(b) {
+  const d = openGreen(b);
+  b.D.load(Object.assign(d, plain(ZONES), { baseHW: 8 }));
+  b.D.setNodeHeight(3, 9);
+  b.D.cyclePoint(1); b.D.placeProp("stand");
+  assert.ok(b.D.state().design.props.length >= 1 && b.D.state().design.hwZones.length === 1, "the base carries the old loop's edits");
+  b.D.preview();   // settle the debounced preview: the spy must see candidates only
+}
+/** Every design TrackValidate.check is asked about, recorded (the screen reads the global at call time). */
+function spyCheck(b) {
+  const seen = [], orig = b.ctx.TrackValidate;
+  b.ctx.TrackValidate = Object.assign({}, orig, { check: (d) => { seen.push(plain({ baseHW: d.baseHW, hwZones: d.hwZones, bankZones: d.bankZones, elevations: d.elevations, bridges: d.bridges, heights: d.heights, props: d.props })); return orig.check(d); } });
+  return seen;
+}
+const CLEAN = (s) => s.baseHW === 7 && ["hwZones", "bankZones", "elevations", "bridges"].every((k) => !s[k] || !s[k].length) && (!s.heights || s.heights.every((h) => h === 0)) && !s.props;
+
+test("RANDOMISE judges candidates on a clean base: the same seed gives the same loop on a hilly and a flat base, and the fresh loop carries none of the old edits", () => {
+  const flat = bootScreen(), hilly = bootScreen();
+  openGreen(flat); hillyBase(hilly);
+  const seenHilly = spyCheck(hilly);
+  assert.equal(flat.D.randomise(11), true); assert.equal(hilly.D.randomise(11), true);
+  assert.deepEqual(plain(hilly.D.state().design.pts), plain(flat.D.state().design.pts), "TRACK OF THE DAY: a seed means one loop, whatever the player had open");
+  assert.ok(seenHilly.length >= 1 && seenHilly.every(CLEAN), "every candidate was judged flat: " + JSON.stringify(seenHilly.find((s) => !CLEAN(s))));
+  const d = hilly.D.state().design;
+  assert.deepEqual(plain([d.hwZones, d.bankZones, d.elevations, d.bridges, d.turns]), [[], [], [], [], []], "fraction-keyed edits of the old loop are gone");
+  assert.equal(d.props, undefined); assert.equal(d.baseHW, 7, "committed on the width it was judged on");
+  assert.ok(d.heights.every((h) => h === 0));
+});
+
+test("DESIGNED, USE and MORE LIKE THIS judge on a clean base and USE commits a fresh loop; DRAW and START FROM clear the old loop's edits", async () => {
+  const flat = bootScreen(), hilly = bootScreen();
+  openGreen(flat); hillyBase(hilly);
+  const seen = spyCheck(hilly);
+  assert.equal(await flat.D.designed("FAST", 21), true); assert.equal(await hilly.D.designed("FAST", 21), true);
+  assert.deepEqual(plain(hilly.D.state().candidates), plain(flat.D.state().candidates), "the same seeds give the same cards on either base");
+  assert.ok(seen.length >= 16 && seen.every(CLEAN), "designed(): every check was on the clean base: " + seen.length + " " + JSON.stringify(seen.find((s) => !CLEAN(s))));
+  seen.length = 0;
+  assert.equal(await hilly.D.moreLikeThis(0), true);
+  assert.ok(seen.length >= 1 && seen.every(CLEAN), "moreLikeThis(): every check was on the clean base");
+  assert.equal(hilly.D.useCandidate(0), true);
+  let d = hilly.D.state().design;
+  assert.deepEqual(plain([d.hwZones, d.bankZones, d.elevations, d.bridges, d.turns]), [[], [], [], [], []]);
+  assert.equal(d.props, undefined); assert.equal(d.baseHW, 7);
+  // START FROM keeps nothing of the old loop either (props were the one it kept).
+  hillyBase(hilly);
+  assert.equal(hilly.D.startFrom("monza"), true);
+  d = hilly.D.state().design;
+  assert.equal(d.props, undefined, "START FROM clears the old loop's props");
+  assert.deepEqual(plain([d.hwZones, d.bankZones, d.elevations, d.bridges]), [[], [], [], []]);
+  // DRAW
+  hillyBase(hilly);
+  const path = [];
+  for (let i = 0; i < 160; i++) { const t = i / 160 * Math.PI * 2; path.push([Math.cos(t) * 700, Math.sin(t) * 420 + 60 * Math.sin(3 * t)]); }
+  assert.equal(hilly.D.freehand(path), true);
+  d = hilly.D.state().design;
+  assert.deepEqual(plain([d.hwZones, d.bankZones, d.elevations, d.bridges, d.turns]), [[], [], [], [], []], "DRAW clears the old loop's zones and bridges");
+  assert.equal(d.props, undefined);
+});

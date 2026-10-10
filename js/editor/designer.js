@@ -95,6 +95,15 @@ const TrackDesigner = (function () {
   function flatHeights(pts) {
     return (Array.isArray(pts) ? pts : []).map(() => 0);
   }
+  /** A brand-new loop on `from`'s look (name, theme, kerbs, berms, seed unless `extra` sets it): everything keyed to
+   *  the OLD loop (arc-fraction zones, bridges, turns, elevations, heights, props) is dropped, and the width is the
+   *  default — the one RANDOMISE / DESIGNED judge on (cleanBase), so a seed means one loop whatever was open. */
+  function freshLoop(from, pts, extra) {
+    const d = Object.assign({}, from, { pts, heights: flatHeights(pts), hwZones: [], bankZones: [], elevations: [], bridges: [], turns: [], baseHW: blank().baseHW, originId: undefined }, extra);
+    delete d.props;
+    return d;
+  }
+  const cleanBase = () => freshLoop(design, []);
   function message(text, warn) {
     if (!ui.msg) return;
     ui.msg.textContent = text || "";
@@ -341,9 +350,7 @@ const TrackDesigner = (function () {
     p = startOnLongestStraight(p);
     sel = -1; span = -1;
     // A new loop: clear cosine elevations and authored props (stale fractions).
-    const drawn = Object.assign({}, design, { pts: p, heights: flatHeights(p), elevations: [], originId: undefined });
-    delete drawn.props;
-    commit(drawn, "draw");   // a new circuit: SAVE adds, never replaces
+    commit(freshLoop(design, p), "draw");   // a new circuit: SAVE adds, never replaces
     message("Loop drawn — drag the points to tune it");
     return true;
   }
@@ -358,12 +365,10 @@ const TrackDesigner = (function () {
   }
   function randomise(seed) {
     const s = Number.isFinite(seed) ? (seed >>> 0) : ((Math.imul(design.seed ^ (design.seed >>> 16), 0x45d9f3b) + 0x9e3779b9) >>> 0);
-    const base = Object.assign({}, design);
+    const base = cleanBase();   // the candidates are judged on what is committed: a new loop, none of the old one's edits
     const r = TrackRandom.generateValid(s, (pts) => TrackValidate.check(Object.assign({}, base, { pts })).ok, 12);
     sel = -1; span = -1;
-    const rolled = Object.assign({}, design, { pts: r.pts, heights: flatHeights(r.pts), elevations: [], seed: r.seed, originId: undefined });
-    delete rolled.props;
-    commit(rolled, "randomise");   // a new circuit, as DRAW
+    commit(freshLoop(design, r.pts, { seed: r.seed }), "randomise");   // a new circuit, as DRAW
     if (cv) cv.fit();
     message(r.ok ? "Randomised — seed " + r.seed : "No clean loop in 12 tries — RANDOMISE again or tune the points", !r.ok);
     return !!r.ok;
@@ -1477,10 +1482,7 @@ const TrackDesigner = (function () {
     try { f = I.fromCircuit(def); } catch (e) { Log.warn("track", "start from " + id + " failed: " + (e && e.message || e)); f = null; }
     if (!f || f.pts.length < CustomTracks.LIMITS.ptsMin) { message("Could not trace " + def.name, true); return false; }
     sel = -1; span = -1;
-    commit(Object.assign({}, design, {
-      pts: f.pts, heights: flatHeights(f.pts), baseHW: f.baseHW, seed: (Date.now() % 4294967296) >>> 0, originId: undefined, name: CustomTracks.sanitizeName(def.name + " REMIX"),
-      hwZones: [], bankZones: [], elevations: [], bridges: [], turns: [],
-    }), "seed:" + id);
+    commit(freshLoop(design, f.pts, { baseHW: f.baseHW, seed: (Date.now() % 4294967296) >>> 0, name: CustomTracks.sanitizeName(def.name + " REMIX") }), "seed:" + id);
     if (ui.name) ui.name.value = design.name;
     if (cv) cv.fit();
     if (ui.from) { ui.from.hidden = true; ui.fromBtn.setAttribute("aria-expanded", "false"); }
@@ -1835,7 +1837,7 @@ const TrackDesigner = (function () {
     const baseSeed = Number.isFinite(seed) ? seed >>> 0 : (Math.imul(s0 ^ (s0 >>> 13), 0x2c1b3c6d) + 0x6a09e667) >>> 0;
     candStyle = style;
     for (const st of DESIGN_STYLES) { const on = st === style; ui.styles[st].setAttribute("aria-pressed", on ? "true" : "false"); ui.styles[st].classList.toggle("active", on); }
-    const opts = { tries: 3, base: Object.assign({}, design), check: TrackValidate.check, score: I.rate };
+    const opts = { tries: 3, base: cleanBase(), check: TrackValidate.check, score: I.rate };
     const per = Math.ceil(DESIGN_N / DESIGN_SLICES), found = [];
     return runSliced("Designing " + DESIGN_N + " circuits…", DESIGN_SLICES, (k) => {
       for (let i = k * per; i < Math.min(DESIGN_N, (k + 1) * per); i++) found.push(TrackRandom.designOne(baseSeed, i, style, opts));
@@ -1851,7 +1853,7 @@ const TrackDesigner = (function () {
     const c = cands[i];
     if (!c || candBusy || !design) return false;
     sel = -1; span = -1;
-    commit(Object.assign({}, design, { pts: c.pts.map((p) => [p[0], p[1]]), heights: flatHeights(c.pts), elevations: [], seed: c.seed >>> 0, originId: undefined }), "randomise");
+    commit(freshLoop(design, c.pts.map((p) => [p[0], p[1]]), { seed: c.seed >>> 0 }), "randomise");
     if (cv) cv.fit();
     message("Design " + (i + 1) + " loaded — seed " + (c.seed >>> 0) + ", UNDO to go back");
     return true;
@@ -1861,7 +1863,7 @@ const TrackDesigner = (function () {
   function moreLikeThis(i) {
     const c = cands[i], I = insight();
     if (!c || candBusy || !I || !TrackRandom.mutate || !design) return Promise.resolve(false);
-    const style = candStyle || "MIXED", base = Object.assign({}, design), found = [];
+    const style = candStyle || "MIXED", base = cleanBase(), found = [];
     return runSliced("Designing 4 circuits like design " + (i + 1) + "…", 4, (j) => {
       const seed = Hash32.mix((c.seed + j) >>> 0);
       const m = TrackRandom.mutate(c.pts, seed, { check: (pts) => TrackValidate.check(Object.assign({}, base, { pts })) });
