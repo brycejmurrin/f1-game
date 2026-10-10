@@ -1,1 +1,1 @@
-1791637997	Cursor Agent	HUD adapt/resize: fix noisy all-on overlaps (damage+inputs) on ship tip; OWNED js/ui/hud.js css/hud.css; coordinate with band-allocator  [cursor/hud-mock-shots-2d01; session 7f39eed63c8adb2bec7a8f9f]
+1791638271	Cursor Agent	HUD adapt: invalidateFit re-stacks columns; radio collapses off bottom cluster; stacked on #1404  [cursor/hud-mock-shots-2d01; session 7f39eed63c8adb2bec7a8f9f]
