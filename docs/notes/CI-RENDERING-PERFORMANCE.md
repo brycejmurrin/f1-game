@@ -88,6 +88,8 @@ APEX_CHROME_ARGS="…lavapipe flags…" VK_ICD_FILENAMES=/usr/share/vulkan/icd.d
 
 ### llvmpipe for WebGL2 does not reproduce in this container (2026-09-16)
 
+> **Superseded 2026-10-10:** llvmpipe DOES run here under `xvfb-run` with `--use-gl=angle --use-angle=gl --ignore-gpu-blocklist` and WITHOUT `--enable-unsafe-webgpu` (which crashes the game page). Measured 2-4x faster than SwiftShader — see `SCREENSHOT-TOOLS-SPEEDUP-2026-10-10.md` §2.1. The table below is kept as the record of what was tried.
+
 Five separate launches, all resolving `WEBGL_debug_renderer_info` to
 `ANGLE (Google, ... SwiftShader Device ...)` or hanging outright — never to
 Mesa:
