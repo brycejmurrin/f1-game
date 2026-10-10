@@ -22,7 +22,7 @@ const DataTelemetry = (function () {
         leftPane.appendChild(buildPicker(function (meta) {
           renderTelemetryBody(meta, leftPane, rightPane);
           invalidateOther("telemetry");
-        }));
+        }, abortStaleLanes));
         wrap.appendChild(leftPane);
         wrap.appendChild(rightPane);
         renderTelemetryBody(sel.meta, leftPane, rightPane);
@@ -58,6 +58,7 @@ const DataTelemetry = (function () {
     function renderTelemetryBody(meta, leftPane, rightPane) {
       const myDriverGen = ++driverGen;
       ++telGen;
+      abortStaleLanes();   // a SESSION pick mid-COMPARE: sessionDrivers must not queue behind the old lanes
       if (meta) pruneTrayToMeeting(meta);   // drop lanes from a different circuit
       // Keep the picker (first child of leftPane); remove everything appended after it
       while (leftPane.children.length > 1) leftPane.removeChild(leftPane.lastChild);
@@ -239,6 +240,17 @@ const DataTelemetry = (function () {
 
     let telGen = 0;
     let telLanes = 0;                   // lane fetches in flight (loadTelemetrySet): what closeTelemPopup(true) aborts
+    // Changing GP / YEAR / SESSION inside TELEMETRY (M24 only covered LEAVING the tab):
+    // the lanes of a COMPARE still fetching sit ahead of the picker's next request
+    // in F1API's serialized OpenF1 lane, so the new driver list waited out tens of
+    // seconds of work nobody will render. telGen goes first so the lanes' rejections
+    // are ignored, not painted as a failed lap.
+    function abortStaleLanes() {
+      if (!telLanes) return false;
+      ++telGen;
+      F1API.cancelAll();
+      return true;
+    }
     let telView = null;                 // the live telemetry view (for animation cleanup)
     let telemPopup = null;              // the full-screen player popup <dialog>
     let telemReturnFocus = null;
