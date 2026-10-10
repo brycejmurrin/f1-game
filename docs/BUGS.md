@@ -76,8 +76,11 @@ ends the session 2.2 s after the last human crosses the line
 car still on track at the flag is the normal case, not a time-cap corner — from
 this fix on, most of the field scored 0 in an ordinary season race while the
 results sheet still printed their points. `award()` now classifies every
-non-retired car by position; only the fastest-lap point requires
-`c.finished`. The test asserts that instead.
+car by position (`c.classified`, set by `endRace` under the FIA 90 % rule, so a
+classified retirement past 90 % of the winner's laps also scores; an
+unclassified one does not), and the fastest-lap point no longer requires
+`c.finished` either — it needs `classified && !c.retired`, so a car still running at the
+flag may take it. The tests assert that instead (`tests/unit/season-cal.test.mjs`).
 
 ### B5 — Cross-tab + quota can overwrite a newer mirror-only save
 **Severity:** high · **Status:** FIXED here · **Confidence:** medium-high
@@ -178,7 +181,8 @@ known species.
 `transformSceneryApi` (build-props.js), dress, `HKSHIFT`, bakedModel path.
 
 **What:** Independent census of racing-forward leftovers with `|shift| > 0.01`:
-**13** circuits (not the earlier “15” prose). Measured on this tree (2026-09-24):
+**13** circuits (not the earlier “15” prose); re-measured 2026-10-10 with `node tools/track/rotate-markings.cjs --check`:
+**14**, because bahrain gained the field (`startFrac` 0, `sceneryStartFrac` 0.2250) after the first census. Table:
 
 | id | `_sceneryShift` | notes |
 |---|---|---|
@@ -195,8 +199,9 @@ known species.
 | abudhabi | 0.1015 | |
 | donington | 0.0973 | |
 | shanghai | 0.0895 | |
+| bahrain | 0.2703 | `sceneryStartFrac` 0.2250, `startFrac` 0 (added after the 2026-09-24 census) |
 
-Also still large but outside that 13 (intentional anchors / reverse-source):
+Also still large but outside those 14 (intentional anchors / reverse-source):
 monaco 0.938 (`sceneryCoordinates: "source"`, `sceneryStartFrac` 0.28);
 singapore 0.530 (`sceneryStartFrac` 0.5075, reverse).
 
@@ -279,7 +284,10 @@ consumer read them.
 
 ## Deliberately not listed as defects
 
-- Race-mode cut laps still set `c.best` / FL with +5 s pricing — product ladder.
+- Race-mode cut laps are no longer timed laps: a counted cut sets
+  `incidentInvalidLap` in every session (game.js, "A LAP WITH A COUNTED CUT IS
+  NOT A TIMED LAP"), so a cut lap cannot be `c.best` or FL; the +5 s ladder
+  still prices the classification — product ladder.
 - Pit-lane lap setting FL — matches real F1.
 - Prior 2026-09-22 FIXED batches — re-checked; still fixed.
 - S3 residual `_sceneryShift` — documented above; needs per-circuit probes.

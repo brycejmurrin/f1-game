@@ -217,3 +217,14 @@ test("PANEL OPACITY: the HUD plates read the effective token, and HIGH CONTRAST 
   assert.doesNotMatch(hud, /#hud-(ot|aero)[^{]*\{[^}]*hud-panel-a/);
   assert.match(read("js/ui/settings-export.js"), /k: "hudPanelOpacity", lane: "json", group: "display", def: null/);
 });
+
+test("UiScale.defaultResMode() answers from the primary pointer, without create(G)", () => {
+  const run = (matches, throws) => {
+    const ctx = vm.createContext({ window: { matchMedia: (q) => { if (throws) throw new Error("no mq"); assert.equal(q, "(pointer: coarse)"); return { matches }; } } });
+    return vm.runInContext(scaleJs + "\n;UiScale.defaultResMode()", ctx);
+  };
+  assert.equal(run(true), "low");
+  assert.equal(run(false), "auto");
+  assert.equal(run(false, true), "auto", "a throwing matchMedia is a pointer device");
+  assert.match(scaleJs, /store\.get\("resMode", defaultResMode\(\)\)/, "the live row reads the same helper SPEC consumes");
+});

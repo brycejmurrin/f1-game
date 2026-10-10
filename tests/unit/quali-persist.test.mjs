@@ -428,6 +428,52 @@ test("a player whose every lap was deleted (driven = Infinity) is NO TIME, last 
   for (const r of rows) if (!r.isPlayer) assert.ok(r.t < me.t);
 });
 
+// Round 2 (R2-02 / S5): the NO TIME row's t is the synthetic slowest+1. Lost on
+// reload, the sheet painted it as a real "+1.000" lap and DRIVEN.
+test("NO TIME survives persist -> restore", () => {
+  const season = { round: 0 };
+  const a = loadQuali({ season });
+  a.q.simulate(new Map([["p1", Infinity]]));
+  assert.equal(season.qualiOrder.find((e) => e.id === "p1").noTime, true);
+  assert.equal(season.qualiOrder.find((e) => e.id === "p2").noTime, undefined, "only the NO TIME row is flagged");
+  const b = loadQuali({ season });
+  b.q.begin();
+  const me = b.q.rows().find((r) => r.isPlayer);
+  assert.equal(me.noTime, true, "the restored row still reads NO TIME");
+  assert.equal(b.q.rows().find((r) => !r.isPlayer).noTime, undefined);
+});
+
+// S1: the order is the player's own weekend.
+test("a persisted order is refused once the player's team or driver changed", () => {
+  const season = { round: 0 };
+  const a = loadQuali({ season });
+  a.G.seasonMode = false;
+  a.q.simulate(new Map([["p1", 68.5]]));
+  assert.equal(season.qualiSeat, "p1|rb");
+  const same = loadQuali({ season });
+  same.G.seasonMode = false;
+  assert.ok(same.q.results(), "same seat: restored");
+  const team = loadQuali({ season, cars: [car("p1", "VER", "Verstappen", "me", true), car("p2", "HAM", "Hamilton", "rb", false)] });
+  team.G.seasonMode = false;
+  assert.equal(team.q.results(), null, "another team under the same driver must not read it");
+  assert.equal(team.q.order(team.G.cars), null);
+  const drv = loadQuali({ season, cars: [car("p1", "VER", "Verstappen", "rb", false), car("p2", "HAM", "Hamilton", "me", true)] });
+  drv.G.seasonMode = false;
+  assert.equal(drv.q.results(), null, "another driver seat must not read it");
+  delete season.qualiSeat;
+  const old = loadQuali({ season, cars: [car("p1", "VER", "Verstappen", "me", true), car("p2", "HAM", "Hamilton", "rb", false)] });
+  old.G.seasonMode = false;
+  assert.ok(old.q.results(), "an unstamped (older) persist is still accepted");
+});
+
+test("clear(true) forgets the seat stamp with the rest", () => {
+  const { q, G } = loadQuali({ season: { round: 0 } });
+  q.simulate(new Map([["p1", 70]]));
+  assert.ok(G.season.qualiSeat);
+  q.clear(true);
+  assert.equal(G.season.qualiSeat, undefined);
+});
+
 // ── THE ORDER BELONGS TO ITS MODE, not just its circuit ─────────────────────
 // Bug hunt 2026-09-27: a one-off GP and the standalone championship share ONE
 // season object, so a one-off GP's driven order at Monza passed the qualiTrack

@@ -15,7 +15,7 @@ const { $, els, cssCol, store, arrToHex, hexToArr,
 const CS_STATS = Parts.STAT_KEYS;
 const displayStat = Parts.displayStat;
 function renderStatBars(container, team) {
-  const stats = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
+  const stats = (typeof GarageExperience !== "undefined" ? GarageExperience.statsOf(team) : team.stats) || { speed: 85, accel: 85, cornering: 85, braking: 85 };
   const tune = typeof SetupTune !== "undefined" ? SetupTune.mods(team.id) : null;
   const mods = Parts.getMods(getTeamParts(team.id), team, tune);   // the bars move with the SETUP sheet too
   container.textContent = "";
@@ -331,7 +331,9 @@ function buildTeamOptions(optsEl, team) {
     else if (careerLocked) b.title = "Your seat is fixed by your active career contract";
     b.setAttribute("aria-pressed", i === G.driverIdx ? "true" : "false");
     b.dataset.csDriver = String(i);
-    b.textContent = `#${d.num} ${d.name}${taken ? "  · TAKEN" : ""}`;
+    // Legends park an unsourced number at 1 (select-screen driverLabel's rule): no "#1" there.
+    const num = team.legends && !(d.num > 1) ? "" : `#${d.num} `;
+    b.textContent = `${num}${d.name}${taken ? "  · TAKEN" : ""}`;
     b.onclick = () => {
       if (i === G.driverIdx) return;
       G.driverIdx = i; store.set("driver", i);
@@ -416,21 +418,28 @@ function buildSetup() {
   // Remap any saved exclusive option this team can't use onto its universal
   // equivalent (Parts._resolve's peer). Deleting fell through to DEFAULTS and
   // made a locked sig_rb_street photograph as medium instead of supersoft.
+  // Only the PERMANENT locks (supplier / team) remap: an era ban is read with the
+  // legality suspended (CareerAiDev.worksSetup's pattern), so opening the garage
+  // under a ban never deletes a fitted part that comes back when the era lapses.
   let partsChanged = false;
-  for (const cat of Parts.CATALOG) {
-    const selId = parts[cat.id];
-    if (selId) {
-      const opt = cat.options.find((o) => o.id === selId);
-      if (opt && !Parts.isOptionAvailable(opt, team)) {
-        const eq = opt.equivalent
-          && cat.options.find((o) => o.id === opt.equivalent
-            && Parts.isOptionAvailable(o, team));
-        if (eq) parts[cat.id] = eq.id;
-        else delete parts[cat.id];
-        partsChanged = true;
+  const legalFn = Parts.legality ? Parts.legality() : null, legalKey = legalFn ? Parts.legalityKey() : "";
+  if (legalFn) Parts.setLegality(null, "");
+  try {
+    for (const cat of Parts.CATALOG) {
+      const selId = parts[cat.id];
+      if (selId) {
+        const opt = cat.options.find((o) => o.id === selId);
+        if (opt && !Parts.isOptionAvailable(opt, team)) {
+          const eq = opt.equivalent
+            && cat.options.find((o) => o.id === opt.equivalent
+              && Parts.isOptionAvailable(o, team));
+          if (eq) parts[cat.id] = eq.id;
+          else delete parts[cat.id];
+          partsChanged = true;
+        }
       }
     }
-  }
+  } finally { if (legalFn) Parts.setLegality(legalFn, legalKey); }
   if (partsChanged) saveTeamParts(team.id, parts);
 
   const owned = G.careerOwned();
@@ -574,7 +583,7 @@ function buildSetup() {
     if (opt.wetTread) badges.push(opt.wetTread > 1 ? "WET" : "INTER");
     if (opt.tag) badges.push(opt.tag);
     if (opt.supplier || opt.suppliers) badges.push("SUPPLIER");
-    if (opt.team || opt.teams) badges.push("SIGNATURE");
+    if ((opt.team || opt.teams) && opt.tag !== "SIGNATURE") badges.push("SIGNATURE");   // the tag already says it
     if (!restricted && !opt.tag) badges.push("UNIVERSAL");
     if (factorySetup[activeCat.id] === opt.id) badges.push("FACTORY SETUP");
     if (badges.length) {

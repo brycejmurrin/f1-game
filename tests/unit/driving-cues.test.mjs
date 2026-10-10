@@ -342,3 +342,42 @@ test("audio driving cues stay silent during a real-race WATCH (same gate as the 
   assert.deepEqual(ctx._calls, [], "no corner calls while watching");
   assert.equal(curvatureCalls.length, 0, "watch path must not read curvature");
 });
+
+/* Bug-hunt 2 H11: under LAZY_AUDIO the real create() runs AFTER boot, so the
+ * #pm-audiocues row it injects was never reached by steer-tuning's boot-time
+ * oninput wiring and first paint — it showed 1/OFF and did nothing. */
+function fakeShell(saved) {
+  const byId = {};
+  const mk = (id) => (byId[id] = { id, value: "", textContent: "", oninput: null });
+  const host = {
+    insertBefore() { mk("pm-audiocues"); mk("pm-audiocues-v"); },
+  };
+  const row = { parentNode: host, nextSibling: null };
+  byId["pm-brakecue"] = { closest: () => row };
+  const store = {
+    data: { audioCues: saved }, writes: [],
+    get(k, d) { return k in store.data ? store.data[k] : d; },
+    set(k, v) { store.data[k] = v; store.writes.push([k, v]); },
+  };
+  const G = {
+    paused: false, state: "menu", soundOn: false, store,
+    $: (id) => byId[id] || null, player: null, track: null, vTop: () => 72,
+  };
+  return { G, byId, store };
+}
+test("injected AUDIO DRIVING CUES slider is painted from the store and wired (H11)", () => {
+  const ctx = load();
+  ctx.document = { createElement: () => ({ className: "", innerHTML: "" }) };
+  const { G, byId, store } = fakeShell(5);
+  ctx.DrivingCues.create(G);
+  assert.equal(String(byId["pm-audiocues"].value), "5", "first paint must show the saved level, not 1");
+  assert.equal(byId["pm-audiocues-v"].textContent, "CUES 5");
+  assert.equal(typeof byId["pm-audiocues"].oninput, "function", "injected slider must carry its own handler");
+  byId["pm-audiocues"].oninput({ target: { value: "8" } });
+  assert.deepEqual(store.writes.at(-1), ["audioCues", 8]);
+  assert.equal(ctx.DrivingCues.debug().level, 8, "the live level follows the slider");
+  assert.equal(byId["pm-audiocues-v"].textContent, "CUES 8");
+  byId["pm-audiocues"].oninput({ target: { value: "1" } });
+  assert.equal(byId["pm-audiocues-v"].textContent, "OFF");
+  assert.equal(ctx.DrivingCues.on(), false);
+});

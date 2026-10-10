@@ -710,13 +710,13 @@ if ($("pm-gripsteer")) $("pm-gripsteer").oninput = (e) => {
   $("pm-gripsteer-v").textContent = ((typeof GripSteer !== "undefined") && GripSteer.labelOf) ? GripSteer.labelOf(v) : (v <= 1 ? "OFF" : "GRIP " + v);
   clearPreset();
 };
-if ($("pm-audiocues")) $("pm-audiocues").oninput = (e) => {
-  const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("audioCues", v);
-  if ((typeof DrivingCues !== "undefined")) DrivingCues.setLevel(v);
-  $("pm-audiocues-v").textContent = ((typeof DrivingCues !== "undefined") && DrivingCues.labelOf)
-    ? DrivingCues.labelOf(v) : (v <= 1 ? "OFF" : "CUES " + v);
-  clearPreset();
-};
+// The AUDIO DRIVING CUES row is injected by js/audio/driving-cues.js, which under
+// LAZY_AUDIO runs after this boot wiring: the row stores, sets its level and paints
+// itself (its own oninput); this delegated listener only drops the preset chip.
+// It fires after the row's own handler, so the store already holds the new value.
+$("advanced-inner").addEventListener("input", (e) => {
+  if (e.target && e.target.id === "pm-audiocues") clearPresetFor("audioCues");
+});
 $("pm-help").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("drivingHelp", v);
   G.ROAD_FOLLOW = helpFromSlider(v); $("pm-help-v").textContent = v; clearPreset();

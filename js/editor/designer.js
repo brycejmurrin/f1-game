@@ -93,7 +93,7 @@ const TrackDesigner = (function () {
   const copy = (d) => JSON.parse(JSON.stringify(d));
   const lattice = (pts) => pts.map((p) => [Math.round(p[0] * 4) / 4, Math.round(p[1] * 4) / 4]);
   const fmtKm = (m) => (m / 1000).toFixed(2) + " km";
-  const fmtLap = (s) => { if (!(s > 0)) return "—"; const m = Math.floor(s / 60), r = s - m * 60; return m + ":" + (r < 10 ? "0" : "") + r.toFixed(1); };
+  const fmtLap = (s) => { if (!(s > 0)) return "—"; const ds = Math.round(s * 10), m = Math.floor(ds / 600), r = (ds - m * 600) / 10; return m + ":" + (r < 10 ? "0" : "") + r.toFixed(1); };   // round first: never "1:60.0"
   function blank() {
     // kerbStyle / berms omitted at defaults (flat + berms on) so content ids match older saves.
     return { name: "MY CIRCUIT", seed: (Date.now() % 4294967296) >>> 0, theme: TrackThemes.ORDER[0], baseHW: 7, pts: [], heights: [], hwZones: [], bankZones: [], elevations: [], bridges: [], turns: [], lengthM: 0 };
@@ -116,6 +116,25 @@ const TrackDesigner = (function () {
   }
   function flatHeights(pts) {
     return (Array.isArray(pts) ? pts : []).map(() => 0);
+  }
+  /** What a CANDIDATE loop is judged against: the look of the circuit (theme,
+   *  width, seed, kerbs, berms), never the old loop's heights / elevations /
+   *  bridges / zones — those belong to a road that is about to be replaced, and
+   *  a hill on an unrelated loop is a grade RED (RANDOMISE failed 12/12 after any
+   *  ELEVATION edit, and TRACK OF THE DAY gave a different circuit per player). */
+  function cleanBase(d) {
+    const out = {};
+    for (const key of ["theme", "baseHW", "seed", "look", "kerbStyle", "berms"]) if (d && d[key] !== undefined) out[key] = d[key];
+    return out;
+  }
+  /** A new loop on the same sheet (DRAW, RANDOMISE, USE, START FROM): the old
+   *  loop's zones, bridges, authored props and turn marks are arc fractions of a
+   *  road that is gone, so they would land at arbitrary places on this one. */
+  function freshLoop(d, pts, seed) {
+    const next = Object.assign({}, d, { pts, heights: flatHeights(pts), hwZones: [], bankZones: [], elevations: [], bridges: [], turns: [], originId: undefined });
+    if (seed !== undefined) next.seed = seed;
+    delete next.props;
+    return next;
   }
   function message(text, warn) {
     if (!ui.msg) return;
@@ -198,7 +217,12 @@ const TrackDesigner = (function () {
       elevations: each(d.elevations, pt("s")),
       bridges: each(d.bridges, pt("s")),
     };
-    if (Array.isArray(d.props)) out.props = each(d.props, pt("s"));
+    if (Array.isArray(d.props)) {
+      out.props = each(d.props, pt("s"));
+      // `side` is relative to the travel direction (+1 right): REVERSE turns the
+      // road round, so the same bank is now the other side.
+      if (flip) out.props = out.props.map((p) => Object.assign({}, p, { side: p.side < 0 ? 1 : -1 }));
+    }
     return out;
   }
   /** Apply zoneMap and drop an emptied props list (absent, like look defaults). */
@@ -246,16 +270,27 @@ const TrackDesigner = (function () {
     };
     return withZones(d, { heights: remapHeights(d, oldPts, newPts) }, at, false);
   }
-  /** Keep per-node heights on shared control points; new points start flat. */
+  /** Keep per-node heights on shared control points; a new point takes the
+   *  arc-weighted blend of the nearest kept heights either side (0 m would carve
+   *  a notch when it is inserted mid-hill). */
   function remapHeights(d, oldPts, newPts) {
     const oldH = Array.isArray(d.heights) ? d.heights : [];
     const idx = new Map();
     for (let i = 0; i < oldPts.length; i++) idx.set(oldPts[i][0] + "," + oldPts[i][1], i);
-    const next = new Array(newPts.length);
-    for (let j = 0; j < newPts.length; j++) {
+    const M = newPts.length, known = new Array(M);
+    for (let j = 0; j < M; j++) {
       const k = idx.get(newPts[j][0] + "," + newPts[j][1]);
-      next[j] = k != null && k < oldH.length && Number.isFinite(+oldH[k]) ? +oldH[k] : 0;
+      known[j] = k != null && k < oldH.length && Number.isFinite(+oldH[k]) ? +oldH[k] : null;
     }
+    const c = cumArc(newPts), L = c[M];
+    const next = known.map((v, j) => {
+      if (v != null || !known.some((u) => u != null)) return v != null ? v : 0;
+      let a = j, b = j;
+      while (known[a] == null) a = (a - 1 + M) % M;
+      while (known[b] == null) b = (b + 1) % M;
+      const back = (c[j] - c[a] + L) % L, fwd = (c[b] - c[j] + L) % L;
+      return back + fwd > 0 ? known[a] + (known[b] - known[a]) * back / (back + fwd) : known[a];
+    });
     return typeof ElevPresets !== "undefined" ? ElevPresets.sanitize(newPts, next) : next;
   }
 
@@ -372,10 +407,7 @@ const TrackDesigner = (function () {
     if (p.length > CustomTracks.LIMITS.ptsMax) p = S.rdp(p, 2);
     p = startOnLongestStraight(p);
     sel = -1; span = -1;
-    // A new loop: clear cosine elevations and authored props (stale fractions).
-    const drawn = Object.assign({}, design, { pts: p, heights: flatHeights(p), elevations: [], originId: undefined });
-    delete drawn.props;
-    commit(drawn, "draw");   // a new circuit: SAVE adds, never replaces
+    commit(freshLoop(design, p), "draw");   // a new circuit: SAVE adds, never replaces
     message("Loop drawn — drag the points to tune it");
     return true;
   }
@@ -390,12 +422,10 @@ const TrackDesigner = (function () {
   }
   function randomise(seed) {
     const s = Number.isFinite(seed) ? (seed >>> 0) : ((Math.imul(design.seed ^ (design.seed >>> 16), 0x45d9f3b) + 0x9e3779b9) >>> 0);
-    const base = Object.assign({}, design);
+    const base = cleanBase(design);
     const r = TrackRandom.generateValid(s, (pts) => TrackValidate.check(Object.assign({}, base, { pts })).ok, 12);
     sel = -1; span = -1;
-    const rolled = Object.assign({}, design, { pts: r.pts, heights: flatHeights(r.pts), elevations: [], seed: r.seed, originId: undefined });
-    delete rolled.props;
-    commit(rolled, "randomise");   // a new circuit, as DRAW
+    commit(freshLoop(design, r.pts, r.seed), "randomise");   // a new circuit, as DRAW
     if (cv) cv.fit();
     message(r.ok ? "Randomised — seed " + r.seed : "No clean loop in 12 tries — RANDOMISE again or tune the points", !r.ok);
     return !!r.ok;
@@ -824,6 +854,7 @@ const TrackDesigner = (function () {
       extendSelection: () => spanArm,
       onBegin: () => {},
       onChange: (pts, kind) => { commit(Object.assign({}, design, { pts }), kind); },
+      onLimit: () => message(CustomTracks.LIMITS.ptsMax + " points is the most a circuit holds — delete one first", true),
       onSelect: (i, j) => {
         sel = Number.isInteger(i) ? i : -1;
         span = (sel >= 0 && Number.isInteger(j) && j !== sel) ? j : -1;
@@ -1593,10 +1624,7 @@ const TrackDesigner = (function () {
     try { f = I.fromCircuit(def); } catch (e) { Log.warn("track", "start from " + id + " failed: " + (e && e.message || e)); f = null; }
     if (!f || f.pts.length < CustomTracks.LIMITS.ptsMin) { message("Could not trace " + def.name, true); return false; }
     sel = -1; span = -1;
-    commit(Object.assign({}, design, {
-      pts: f.pts, heights: flatHeights(f.pts), baseHW: f.baseHW, seed: (Date.now() % 4294967296) >>> 0, originId: undefined, name: CustomTracks.sanitizeName(def.name + " REMIX"),
-      hwZones: [], bankZones: [], elevations: [], bridges: [], turns: [],
-    }), "seed:" + id);
+    commit(Object.assign(freshLoop(design, f.pts, (Date.now() % 4294967296) >>> 0), { baseHW: f.baseHW, name: CustomTracks.sanitizeName(def.name + " REMIX") }), "seed:" + id);
     if (ui.name) ui.name.value = design.name;
     if (cv) cv.fit();
     if (ui.from) { ui.from.hidden = true; ui.fromBtn.setAttribute("aria-expanded", "false"); }
@@ -1951,7 +1979,7 @@ const TrackDesigner = (function () {
     const baseSeed = Number.isFinite(seed) ? seed >>> 0 : (Math.imul(s0 ^ (s0 >>> 13), 0x2c1b3c6d) + 0x6a09e667) >>> 0;
     candStyle = style;
     for (const st of DESIGN_STYLES) { const on = st === style; ui.styles[st].setAttribute("aria-pressed", on ? "true" : "false"); ui.styles[st].classList.toggle("active", on); }
-    const opts = { tries: 3, base: Object.assign({}, design), check: TrackValidate.check, score: I.rate };
+    const opts = { tries: 3, base: cleanBase(design), check: TrackValidate.check, score: I.rate };
     const per = Math.ceil(DESIGN_N / DESIGN_SLICES), found = [];
     return runSliced("Designing " + DESIGN_N + " circuits…", DESIGN_SLICES, (k) => {
       for (let i = k * per; i < Math.min(DESIGN_N, (k + 1) * per); i++) found.push(TrackRandom.designOne(baseSeed, i, style, opts));
@@ -1967,7 +1995,7 @@ const TrackDesigner = (function () {
     const c = cands[i];
     if (!c || candBusy || !design) return false;
     sel = -1; span = -1;
-    commit(Object.assign({}, design, { pts: c.pts.map((p) => [p[0], p[1]]), heights: flatHeights(c.pts), elevations: [], seed: c.seed >>> 0, originId: undefined }), "randomise");
+    commit(freshLoop(design, c.pts.map((p) => [p[0], p[1]]), c.seed >>> 0), "randomise");
     if (cv) cv.fit();
     message("Design " + (i + 1) + " loaded — seed " + (c.seed >>> 0) + ", UNDO to go back");
     return true;
@@ -1977,7 +2005,7 @@ const TrackDesigner = (function () {
   function moreLikeThis(i) {
     const c = cands[i], I = insight();
     if (!c || candBusy || !I || !TrackRandom.mutate || !design) return Promise.resolve(false);
-    const style = candStyle || "MIXED", base = Object.assign({}, design), found = [];
+    const style = candStyle || "MIXED", base = cleanBase(design), found = [];
     return runSliced("Designing 4 circuits like design " + (i + 1) + "…", 4, (j) => {
       const seed = Hash32.mix((c.seed + j) >>> 0);
       const m = TrackRandom.mutate(c.pts, seed, { check: (pts) => TrackValidate.check(Object.assign({}, base, { pts })) });
@@ -2180,6 +2208,17 @@ const TrackDesigner = (function () {
     p.rPrevPx = p.px; p.rPrevPz = p.pz; p.rPrevS = p.s; p.rPrevX = p.x; p.rPrevHead = p.head; p.rPrevYawVis = 0;
     return s;
   }
+  /** The solo start every other route plays: the pre-race screen (garage leave, card, flyby), which runs
+   *  startRace itself once the card is up. A headless or hidden page has no frames for it (raceIntro's other
+   *  callers take the same quick path) and a throw before the card starts the race anyway — the title is
+   *  already hidden. Resolves with startRace's own result; never when the player abandons the intro. */
+  function startViaIntro() {
+    if (typeof G.raceIntro !== "function" || G.headlessMode || document.hidden) return G.startRace();
+    return new Promise((resolve, reject) => {
+      const go = () => { try { resolve(G.startRace()); } catch (e) { reject(e); } };
+      try { G.raceIntro(go); } catch (e) { Log.warn("track", "test drive pre-race screen failed — starting straight away: " + (e && e.message || e)); go(); }
+    });
+  }
   /** TEST HERE: save, then a TIME TRIAL (startRaceBody clears practiceMode, so
    *  a time trial is the unscored session that survives it) with the car at
    *  rest on point i — the selected one by default — and green at once.
@@ -2197,7 +2236,7 @@ const TrackDesigner = (function () {
     G.trackIdx = idx; G.seasonMode = false; G.timeTrial = true;   // openTimeTrial's flow + session
     close();
     Log.info("track", "designer test drive on " + r.id + " from point " + (at + 1) + " (s " + Math.round(s) + " m)");
-    try { await G.startRace(); } catch (e) { Log.warn("track", "test drive start failed: " + (e && e.message || e)); }
+    try { await startViaIntro(); } catch (e) { Log.warn("track", "test drive start failed: " + (e && e.message || e)); }
     if (G.state === "count" && G.player && G.track && s >= 0) {
       placeAt(G.player, G.track, s);
       if (G.snapGameCam) G.snapGameCam();

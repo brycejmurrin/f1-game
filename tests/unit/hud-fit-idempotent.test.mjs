@@ -166,7 +166,7 @@ function bootFlipHarness() {
   });
 
   return {
-    SCALE, root, minimap, liveZ, pub, snap,
+    SCALE, W, H, R, $, root, minimap, liveZ, pub, snap,
     paintAt,
     invalidate() { sb.GameHud.invalidateFit(); },
     tick() { hud.updateHud(true); },
@@ -230,4 +230,61 @@ test("fitHud measures top-band intrinsics from the published --hud-z-top, not cu
   const css = read("css/hud.css");
   assert.match(css, /#minimap[\s\S]*?transition-property:/,
     "top-band zoom group must not transition zoom (default all desyncs under load)");
+});
+
+/** A painted S3 x BOOST clash the fit cannot resolve: BOOST on the right half,
+ *  the sectors plate hard over it, and no pass moves either rect. */
+function forceUnresolvableClash(h) {
+  const boost = h.$("btn-boost"), sectors = h.$("hud-sectors");
+  boost.hidden = false;
+  boost._rect = h.R(h.W - 100, 250, 80, 80);
+  sectors.hidden = false;
+  sectors._rect = h.R(h.W - 160, 240, 140, 72);
+  let reads = 0;
+  const raw = sectors.getBoundingClientRect;
+  sectors.getBoundingClientRect = () => { reads++; return raw(); };
+  return { boost, sectors, reads: () => reads };
+}
+
+test("fitHud: an unresolvable painted clash backs off to the 3 s cadence after a few tries", () => {
+  const h = bootFlipHarness();
+  const c = forceUnresolvableClash(h);
+  h.invalidate();
+  h.tick();   // key changed: the full fit, the first time this clash is seen
+  const perTick = [];
+  for (let i = 0; i < 40; i++) {
+    const before = c.reads();
+    h.tick();
+    perTick.push(c.reads() - before);
+  }
+  // Reads per tick = the tick's own baseline + (if it ran) the full fit's passes.
+  const tries = perTick.slice(0, 5), late = perTick.slice(8, 29);   // 29 < the 30-tick same-key window
+  assert.ok(Math.min(...tries) > 0, "the first ticks still try to resolve it: " + JSON.stringify(perTick));
+  const max = Math.max(...late);
+  assert.ok(max < Math.min(...tries),
+    "after the tries are spent a tick must not re-run the fit: " + JSON.stringify(perTick));
+  // A changed key (resize) starts the tries again.
+  const tryAgain = (() => { const b = c.reads(); h.invalidate(); h.tick(); return c.reads() - b; })();
+  assert.ok(tryAgain > max, "a key change re-fits at once: " + tryAgain + " vs " + max);
+});
+
+test("fitHud: --hud-fit-stamp is written once in steady state, and again after a clash clears", () => {
+  const h = bootFlipHarness();
+  const writes = [];
+  const raw = h.root.style.setProperty.bind(h.root.style);
+  h.root.style.setProperty = (k, v) => { if (k === "--hud-fit-stamp") writes.push(v); return raw(k, v); };
+  for (let i = 0; i < 20; i++) h.tick();
+  assert.ok(writes.length <= 1, "20 clash-free ticks wrote the stamp " + writes.length + " times: " + JSON.stringify(writes));
+  const stamp = h.root.style.getPropertyValue("--hud-fit-stamp");
+  assert.match(stamp, /^\d+$/, "a stamp is still published (the hud-layout spec waits on it)");
+  // A clash voids the stamp; its clearing publishes a NEW one.
+  const c = forceUnresolvableClash(h);
+  h.invalidate();
+  h.tick();
+  assert.equal(h.root.style.getPropertyValue("--hud-fit-stamp"), "", "a clash voids the stamp");
+  c.boost.hidden = true;
+  for (let i = 0; i < 5; i++) h.tick();
+  const after = h.root.style.getPropertyValue("--hud-fit-stamp");
+  assert.match(after, /^\d+$/);
+  assert.notEqual(after, stamp, "the stamp changes after a clash clears");
 });

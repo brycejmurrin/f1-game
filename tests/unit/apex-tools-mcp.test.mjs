@@ -385,7 +385,18 @@ test("serve stdout is JSON-RPC only (no log lines)", () => {
 });
 
 const LOCK = path.join(ROOT, "scratch", "apex-browser.lock");
-const TEST_BG = path.join(ROOT, "artifacts", "logs", "test-bg.json");
+// A private test-bg registry per test (TS1): these tests used to overwrite the REAL
+// artifacts/logs/test-bg.json and restore it afterwards, which loses a live run's
+// update in that window and, when the per-file timeout SIGKILLs the file, leaves
+// the fake in place and hides the real run from --status/--wait/--stop.
+function withFakeRegistry(state, fn) {
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "fake-test-bg-"));
+  const file = path.join(dir, "test-bg.json");
+  fs.writeFileSync(file, JSON.stringify(state));
+  try { return fn({ APEX_TEST_BG_STATE: file }); }
+  finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
 
 test("playwright occupancy matches `playwright test` tokens, not MCP JSON", async () => {
   const { classifyPlaywrightLine, scanPlaywrightLines } = await import("../../tools/ci/playwright-occupancy.mjs");
@@ -740,22 +751,12 @@ test("week-2 dryRun steals a stale lock (dead PID)", () => {
 });
 
 test("week-2 dryRun refuses playwright_live from test-bg.json (no Chromium)", () => {
-  fs.mkdirSync(path.dirname(TEST_BG), { recursive: true });
-  let prev = null;
-  if (fs.existsSync(TEST_BG)) prev = fs.readFileSync(TEST_BG, "utf8");
-  fs.writeFileSync(TEST_BG, JSON.stringify({ mode: "test", runs: [{ pid: process.pid, group: "tiny" }] }));
-  try {
-    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "" });
+  withFakeRegistry({ mode: "test", runs: [{ pid: process.pid, group: "tiny" }] }, (reg) => {
+    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "", ...reg });
     assert.equal(r.status, 1, r.stderr);
     const body = JSON.parse(r.stdout);
     assert.equal(body.error, "playwright_live");
-  } finally {
-    if (prev == null) {
-      try { fs.unlinkSync(TEST_BG); } catch { /* ignore */ }
-    } else {
-      fs.writeFileSync(TEST_BG, prev);
-    }
-  }
+  });
 });
 
 test("an IDLE host Playwright MCP server is reported, not occupancy; its launched browser is", () => {
@@ -779,27 +780,18 @@ test("an IDLE host Playwright MCP server is reported, not occupancy; its launche
 });
 
 test("a live Node-only test-bg group does not impersonate Playwright", () => {
-  fs.mkdirSync(path.dirname(TEST_BG), { recursive: true });
-  let prev = null;
-  if (fs.existsSync(TEST_BG)) prev = fs.readFileSync(TEST_BG, "utf8");
-  fs.writeFileSync(TEST_BG, JSON.stringify({
+  withFakeRegistry({
     mode: "sequential",
     runs: [{ pid: process.pid, group: "tooling-fast", browser: false }],
-  }));
-  try {
+  }, (reg) => {
     const r = callCli("apex_shot", { track: "monza", dryRun: true }, {
       APEX_MCP_MOCK: "0",
       APEX_MCP_PS: "1 bash\n",
+      ...reg,
     });
     assert.equal(r.status, 0, r.stderr + r.stdout);
     assert.equal(JSON.parse(r.stdout).ok, true);
-  } finally {
-    if (prev == null) {
-      try { fs.unlinkSync(TEST_BG); } catch { /* ignore */ }
-    } else {
-      fs.writeFileSync(TEST_BG, prev);
-    }
-  }
+  });
 });
 
 test("week-2 dryRun refuses chrome_daemon_up when /healthz answers", async () => {
@@ -1637,6 +1629,15 @@ test("apex_hud_shot aliases layout-audit viewport ids and did-you-means a near m
   assert.equal(miss.ok, false);
   assert.equal(miss.error, "bad_args");
   assert.match(miss.fix, /Did you mean "phone-landscape-844x390"\?/, miss.fix);
+});
+
+test("image and inlineImage are aliases across shot / ui_shot / hud_shot", () => {
+  const hud = callTools([["apex_hud_shot", { image: true, dryRun: true }]])[0].body;
+  assert.equal(hud.ok, true, `hud image→inlineImage: ${JSON.stringify(hud)}`);
+  const ui = callTools([["apex_ui_shot", { screen: "title", inlineImage: true, dryRun: true }]])[0].body;
+  assert.equal(ui.ok, true, `ui_shot inlineImage→image: ${JSON.stringify(ui)}`);
+  const shot = callTools([["apex_shot", { track: "monza", inlineImage: false, dryRun: true }]])[0].body;
+  assert.equal(shot.ok, true, `shot inlineImage→image: ${JSON.stringify(shot)}`);
 });
 
 test("apex_job_status {} is bounded: newest first, limit, state filter, total", async () => {

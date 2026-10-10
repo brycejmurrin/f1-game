@@ -47,7 +47,7 @@ function harness(opts = {}) {
     URL,
     location,
     history,
-    Tracks: { LIST: tracks.map((id) => ({ id })) },
+    Tracks: { LIST: tracks.map((id) => ({ id, lengthKm: opts.lengths && opts.lengths[id] })) },
     Ghost: { track: () => opts.currentTrack || "monza" },
   };
   Object.defineProperty(sandbox, "localStorage", {
@@ -132,7 +132,13 @@ test("a long lap still shares: the LINK's copy is thinned to fit, the file keeps
 
 test("fragment sharing softly refuses what no thinning fits, while retaining a file export", async () => {
   const { GhostShare } = harness({ plain: true });
-  const encoded = await GhostShare.encode(trace(80000, 130), { track: "monza" });
+  // The most a recorded lap holds (600 s at 20 Hz) with full-precision samples:
+  // even a 1/16 thinning is past the 14 KiB fragment. (80000 samples used here
+  // is not a lap any more: validGhost caps the count.)
+  const dense = trace(12000, 600);
+  dense.x = dense.x.map((_, i) => Math.sin(i * 1.618) * 40 + 0.123456789012);
+  dense.s = dense.s.map((_, i) => i * 3.7 + 0.123456789012 * (i % 7));
+  const encoded = await GhostShare.encode(dense, { track: "monza" });
   assert.equal(encoded.ok, false);
   assert.equal(encoded.reason, "too-large");
   assert.match(encoded.file.name, /\.apexghost\.json$/);
@@ -478,4 +484,59 @@ test("a thinned link keeps its time bound to the trace", async () => {
   const back = await GhostShare.decode(r.code);
   assert.equal(back.ok, true, "thinning keeps the last sample, so the time still binds and the hash matches");
   assert.equal(back.ghost.time, 135);
+});
+
+// SEC2-3 / CAR-4: `h` is an unkeyed hash the sender computes, so a crafted link
+// can carry any finite number. The guest is drawn at `smp.p + r * g.x`, so the
+// samples are bounded to what a recorded lap can hold, and `meta` (shown by the
+// results sheet) keeps only the keys session-records writes.
+test("a crafted ghost with absurd x, s, t or sample count is refused (CORRUPT)", async () => {
+  const { GhostShare } = harness({ plain: true });
+  const ok = trace(40, 90);
+  const body = (patch) => JSON.stringify({ ...JSON.parse(GhostShare.fileExport(ok, { track: "monza" }).text), ...patch });
+  const mutate = (key, i, v) => { const a = ok[key].slice(); a[i] = v; return { [key]: a }; };
+  assert.equal((await GhostShare.decode(body({}))).ok, true, "the untouched export decodes");
+  for (const [what, patch] of [
+    ["x = 1e308", mutate("x", 5, 1e308)],
+    ["x = 61 m", mutate("x", 5, 61)],
+    ["s = 1e6", mutate("s", 39, 1e6)],
+    ["s < 0", mutate("s", 0, -1)],
+  ]) {
+    const r = await GhostShare.decode(body(patch));   // no `h` change: an old / crafted link omits or recomputes it
+    const noHash = JSON.parse(body(patch)); delete noHash.h;
+    assert.equal(r.ok, false, what + " is refused");
+    assert.equal((await GhostShare.decode(JSON.stringify(noHash))).ok, false, what + " is refused without h too");
+  }
+  const edge = JSON.parse(body({})); edge.x[3] = -60; edge.x[4] = 60; delete edge.h;
+  assert.equal((await GhostShare.decode(JSON.stringify(edge))).ok, true, "|x| = 60 m (half-width + run-off) is still a lap");
+  const long = trace(13000, 650); const longBody = JSON.stringify({ ...JSON.parse(GhostShare.fileExport(trace(40, 90), { track: "monza" }).text), time: 650, t: long.t, s: long.s, x: long.x });
+  assert.equal((await GhostShare.decode(longBody)).ok, false, "a lap past 600 s / 12000 samples is refused");
+  assert.equal(GhostShare.fileExport({ ...ok, x: ok.x.map((v, i) => i === 5 ? 1e308 : v) }, { track: "monza" }).ok, false);
+});
+
+test("s is bounded by the circuit's own length when the circuit declares one", async () => {
+  const { GhostShare } = harness({ plain: true, lengths: { monza: 5.8 } });
+  const near = trace(40, 90);                         // s ends at 144 m
+  const raw = JSON.parse(GhostShare.fileExport(near, { track: "monza" }).text);
+  delete raw.h;
+  raw.s = raw.s.map((v, i) => i * 17400 / 39);        // 3 x 5.8 km
+  assert.equal((await GhostShare.decode(JSON.stringify(raw))).ok, true, "3 laps' worth of arc is the ceiling");
+  raw.s = raw.s.map((v) => v * 1.01);
+  assert.equal((await GhostShare.decode(JSON.stringify(raw))).ok, false, "past 3 x lengthKm is not this circuit's ghost");
+});
+
+test("shared ghost meta keeps only the whitelisted keys, strings <= 32 chars", async () => {
+  const { GhostShare } = harness({ plain: true });
+  const raw = JSON.parse(GhostShare.fileExport(trace(40, 90), { track: "monza" }).text);
+  raw.meta = JSON.parse('{"__proto__":{"p":1},"name":"<img src=x onerror=alert(1)>","medal":"gold","pole":71.5,' +
+    '"context":"' + "c".repeat(33) + '","weather":{"a":1},"pace":1,"difficulty":"hard"}');
+  delete raw.h;
+  const r = await GhostShare.decode(JSON.stringify(raw));
+  assert.equal(r.ok, true);
+  assert.deepEqual(Object.keys(r.meta).sort(), ["difficulty", "medal", "pace", "pole"]);
+  assert.deepEqual(Object.keys(r.ghost.meta).sort(), ["difficulty", "medal", "pace", "pole"]);
+  assert.equal(r.meta.medal, "gold");
+  assert.equal(({}).p, undefined, "no prototype pollution");
+  const out = GhostShare.fileExport({ ...trace(40, 90), meta: { medal: "gold", evil: "x" } }, { track: "monza" });
+  assert.deepEqual(Object.keys(out.envelope.meta), ["medal"], "an export carries the same whitelist");
 });

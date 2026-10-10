@@ -11,6 +11,7 @@ const NetNostr = (function () {
   // (apex-sha 3faf59d9 / build 14296). Not a relay event TTL.
   const JOIN_TIMEOUT_MS = 12000;
   const HOST_TIMEOUT_MS = 120000;
+  const REPLY_TIMEOUT_MS = 20000;   // guest: offer found -> answer published (build + ICE gather)
   const RELAY_CHECK_MS = 6000;
   const REPOST_MS = 5000;
   const MAX_HANDSHAKE_CHARS = 512 * 1024;
@@ -327,6 +328,13 @@ const NetNostr = (function () {
         // An offer, and we are the replying side.
         if (answering) return;
         answering = true;
+        // The 12 s JOIN window is for FINDING the offer (host re-posts every
+        // 5 s). Left running it also covered build-answer + ICE gather (up to
+        // 8 s with STUN blocked): a late offer lost the race, finish(expired)
+        // ran and this returned without publishing. Found it: reply gets its
+        // own deadline.
+        clearExpire();
+        const replyTimer = later(expire, REPLY_TIMEOUT_MS);
         let out = null;
         try { out = await reply(text); } catch (e) { out = null; }
         if (done) return;
@@ -336,10 +344,11 @@ const NetNostr = (function () {
           return;
         }
         await publish(out);
-        // Answer is on the wire: do not let JOIN_TIMEOUT kill the exchange
+        // Answer is on the wire: do not let any deadline kill the exchange
         // during the 5.2 s re-post window (a late find + answer used to land
         // past 12 s and codeJoin printed "Nobody answered…" while connected).
         clearExpire();
+        clearTimeout(replyTimer);
         // Publish it a few more times before leaving: a relay that dropped the
         // first copy must not cost the whole handshake, and this is cheap.
         let n = 0;
@@ -350,6 +359,13 @@ const NetNostr = (function () {
         later(() => { clearInterval(again); finish({ ok: true, payload: text }); }, 5200);
       };
       let answering = false;
+      const expire = () => finish({ ok: false, error: "expired",
+        // Also what a build on another NetRendezvous.PROTOCOL sees: its topics
+        // differ, so the two never meet — say what fixes that too. Lobby
+        // codeJoin already surfaces why.message; keep this actionable.
+        message: "Nobody answered that code. Check the six characters, or ask "
+               + "your friend for a fresh one — if it keeps happening, both "
+               + "reload the game and try a new code." });
       const inbox = createBoundedInbox(heard);
 
       // Guest: once answering, stop the looking tick — lobby onTick used to
@@ -364,14 +380,7 @@ const NetNostr = (function () {
 
       const repost = setInterval(() => { if (!done && current) publish(current); }, REPOST_MS);
 
-      expireTimer = later(() => finish({ ok: false, error: "expired",
-        // Also what a build on another NetRendezvous.PROTOCOL sees: its topics
-        // differ, so the two never meet — say what fixes that too. Lobby
-        // codeJoin already surfaces why.message; keep this actionable.
-        message: "Nobody answered that code. Check the six characters, or ask "
-               + "your friend for a fresh one — if it keeps happening, both "
-               + "reload the game and try a new code." }),
-        hosting ? HOST_TIMEOUT_MS : JOIN_TIMEOUT_MS);
+      expireTimer = later(expire, hosting ? HOST_TIMEOUT_MS : JOIN_TIMEOUT_MS);
 
       let opened = 0;
       // ONE SOCKET PER RELAY, REOPENED WHEN IT DIES. A phone host switches to

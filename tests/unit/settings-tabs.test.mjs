@@ -1,69 +1,68 @@
-/* settings-tabs.test.mjs — SettingsNav page stack (bug-hunt 2.1, 5.3 hook). */
-import test from "node:test";
+/* settings-tabs.test.mjs — SettingsNav's lazy MUSIC & SOUND gate + onLeave.
+ * M1 (round 2): AudioPanel._ensure() resolving false (UPDATE READY / offline)
+ * used to re-enter show() -> _ensure() forever and never reveal #audioset.
+ * Ship #1320 covered the same fail-loop with a boolean `ensured` flag; we keep
+ * the richer offline-note path and still pin onLeave from that suite. */
+import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import fs from "node:fs";
 import vm from "node:vm";
+import { makeDom } from "../helpers/mini-dom.mjs";
 
-const src = readFileSync(new URL("../../js/ui/settings-tabs.js", import.meta.url), "utf8");
+const source = fs.readFileSync(new URL("../../js/ui/settings-tabs.js", import.meta.url), "utf8").replace(/^const SettingsNav/m, "var SettingsNav");
+const tick = () => new Promise((r) => setTimeout(r, 0));
 
-// A jsdom-free DOM: every id resolves to a plain element with `hidden`, so show()
-// can flip pages; nothing is focusable (visible() is false without a parent chain).
-function harness(ensureResult) {
-  const els = new Map();
-  const el = (id) => {
-    if (!els.has(id)) els.set(id, { id, hidden: false, textContent: "", onclick: null, getAttribute: () => null, querySelector: () => null, contains: () => false });
-    return els.get(id);
-  };
+function boot({ ensure, stub = true, onSelect = () => {} }) {
+  const dom = makeDom();
+  const audio = dom.byId("audioset"); audio.hidden = true;
+  dom.byId("pm-audio"); dom.byId("pm-settings-index"); dom.byId("dlg-settings");
   const calls = { ensure: 0 };
-  const ctx = vm.createContext({
-    Log: { info() {}, warn() {} },
-    document: { getElementById: el, activeElement: null },
-    window: {},
-    GameAudio: { _stub: true },
-    // Past 20 calls the stub stops resolving, so an unfixed busy loop FAILS the count instead of starving the event loop.
-    AudioPanel: { _ensure() { calls.ensure++; return calls.ensure > 20 ? new Promise(() => {}) : Promise.resolve(ensureResult); } },
-  });
-  vm.runInContext(src + "\nglobalThis.SettingsNav = SettingsNav;", ctx);
-  return { ctx, el, calls };
+  const GameAudio = { _stub: stub };
+  const ctx = vm.createContext({ document: dom.document, window: {}, Log: { info() {}, warn() {} }, GameAudio,
+    AudioPanel: { _ensure: () => { calls.ensure++; return ensure(GameAudio); } } });
+  vm.runInContext(source, ctx);
+  const nav = ctx.SettingsNav.create(null, onSelect);
+  return { nav, dom, audio, calls, ctx };
 }
 
-const tick = () => new Promise((r) => setTimeout(r, 30));
-
-test("show('audio') terminates and reveals the page when the audio bundle cannot load", async () => {
-  const { ctx, el, calls } = harness(false);
-  const nav = ctx.SettingsNav.create(null, null);
-  nav.show("audio", false);
-  await tick();
-  assert.equal(calls.ensure, 1, "one load attempt, not a loop");
-  assert.equal(el("audioset").hidden, false, "the audio page is revealed on the stub");
-  assert.equal(el("pm-settings-index").hidden, true);
+test("MUSIC & SOUND: a bundle that fails to load is asked once per click and the page still reveals", async () => {
+  const { dom, audio, calls } = boot({ ensure: () => Promise.resolve(false) });
+  dom.byId("pm-audio").onclick();
+  await tick(); await tick(); await tick();
+  assert.equal(calls.ensure, 1, "no retry loop");
+  assert.equal(audio.hidden, false, "stub page revealed");
+  const note = dom.byId("audioset-offline");
+  assert.equal(note.hidden, false);
+  assert.match(note.textContent, /AUDIO ENGINE DID NOT LOAD/);
+  // A second tap asks again exactly once more.
+  dom.byId("pm-audio").onclick();
+  await tick(); await tick(); await tick();
+  assert.equal(calls.ensure, 2);
 });
 
-test("the audio door click also terminates when the bundle cannot load", async () => {
-  const { ctx, el, calls } = harness(false);
-  el("pm-audio");   // exists before create() so the door wires
-  ctx.SettingsNav.create(null, null);
-  el("pm-audio").onclick();
-  await tick();
-  assert.equal(calls.ensure, 1, "the door awaits _ensure once and then shows");
-  assert.equal(el("audioset").hidden, false);
-});
-
-test("a rejecting _ensure also reveals the page once", async () => {
-  const { ctx, el, calls } = harness(false);
-  ctx.AudioPanel._ensure = () => { calls.ensure++; return calls.ensure > 20 ? new Promise(() => {}) : Promise.reject(new Error("x")); };
-  const nav = ctx.SettingsNav.create(null, null);
+test("MUSIC & SOUND: a rejecting _ensure behaves like false, programmatic show() included", async () => {
+  const { nav, audio, calls } = boot({ ensure: () => Promise.reject(new Error("net")) });
   nav.show("audio", false);
-  await tick();
+  await tick(); await tick(); await tick();
   assert.equal(calls.ensure, 1);
-  assert.equal(el("audioset").hidden, false);
+  assert.equal(audio.hidden, false);
+});
+
+test("MUSIC & SOUND: a bundle that loads reveals the wired page without the offline note", async () => {
+  const sel = [];
+  const { dom, audio, calls } = boot({ ensure: (ga) => { ga._stub = false; return Promise.resolve(true); }, onSelect: (id) => sel.push(id) });
+  dom.byId("pm-audio").onclick();
+  await tick(); await tick(); await tick();
+  assert.equal(calls.ensure, 1);
+  assert.equal(audio.hidden, false);
+  assert.deepEqual(sel, ["audio"]);
+  assert.notEqual(dom.byId("audioset-offline").hidden, false);
 });
 
 test("onLeave(fn) is called with the page id when back() / show() hides a page", () => {
-  const { ctx } = harness(true);
+  const { nav, ctx } = boot({ ensure: () => Promise.resolve(true), stub: false });
   const left = [];
   ctx.SettingsNav.onLeave((id) => left.push(id));
-  const nav = ctx.SettingsNav.create(null, null);
   assert.deepEqual(left, [], "the initial show('home') leaves nothing");
   nav.show("controls", false);
   assert.deepEqual(left, [], "home is the index, not a page");

@@ -52,6 +52,25 @@ scale, so a ratio is its natural unit — which is also why the v2→v3 store re
 measures "nearest" in LOG space; in absolute pace the two fastest old settings
 collapse onto one new notch. See `docs/research/PHASE-C-SLIDER-DESIGN.md`.
 
+**Known absolute-speed exceptions (decided 2026-10-09, not changed).** Three
+terms still read raw numbers where the rule above would scale them; each was
+reviewed and left as tuning. (1) `DEPLOY_A` (3.0 m/s², `js/physics/consts.js`) is
+not scaled by `PACE`, so the ERS boost is stronger relative to the engine's accel
+at low OVERALL SPEED (about +86 % at pace 0.5, +43 % at 1). (2) After #1266 moved
+the front tyre peak to `CURVE_PEAK_X_F`, `pastF` and `frontUtil`
+(`js/physics/player-forces.js`) and GripSteer's `alphaPk` (`js/physics/grip-steer.js`)
+still use `CURVE_PEAK_X` (π/2), so `frontUtil` reads about 0.83 at the true peak;
+the scrub SFX, the coach tip and the rear haptic cue all reference it. (3) The AI
+closing-speed margins of 1/2/3 m/s and the 72 m mirror cap in
+`js/physics/ai-drive.js` are raw, where `queueBrake`, `otFireRate` and `passReach`
+are pace-scaled. (4) The speed-scaled yaw damp (`SPEED_YAW_LO`/`HI`, 50/65 m/s in
+`js/physics/player-forces.js`) compares the PACE-scaled world speed with raw
+literals; scaling it is bit-identical at pace 1 but moves three of the four
+characterization scenarios at the default slider (pace 0.84), so it stays as
+tuned (the verified patch is parked on `handover/bughunt-10.1-speedyawdamp`).
+None of these is a defect to chase; a new reader of any of them
+should treat the raw number as the intended tuning.
+
 **Lateral tyre curve** (`TyreModel.lateralCurve`, `js/physics/tyre-model.js`):
 each of the player's axles turns `x = cs·α/mu` into a normalised force —
 `sin(x)` up to the peak at `x = π/2` (slope 1 at the origin, so `CS_FRONT` /
@@ -690,7 +709,7 @@ other or me." Measured with `tools/check/ai-tactics.mjs` (before/after in
   cap is load-bearing: an uncapped 0.54 m/m crossing at Monza's first
   chicane cost the AI field 1.6 % of lap time).
 - **The compound is the strategy** (`AiDrive.tyreClass` / `tyrePace`) — **while
-  TYRE WEAR is off**, which is the shipped default. Each AI car draws a class for
+  TYRE WEAR is off** (the fixtures' setting; the shipped default is `real`, below). Each AI car draws a class for
   the race distance (sprints on softs, long races mixed): a soft starts +0.4% and
   degrades 0.12%/lap, a medium 0 and 0.07%, a hard −0.4% and 0.04%, capped at
   −2.5%. Soft- and hard-starters cross at lap 10, inside the 10- and 25-lap races
@@ -963,10 +982,11 @@ corner-speed model showed no such gap. Dry pace is untouched by construction.
 **`js/physics/tyre-model.js` (`TyreModel`) wears the tyre, and
 `js/race/pit-lane.js` (`PitLane`) lets you do something about it.** Both are
 gated on the TYRE WEAR race setting (`off` / `light` / `real`), which **ships
-`off`** — and `off` is a *true* no-op: `gripMul`, `tractionMul` and the two fuel
-multipliers all return exactly 1, so
-`tests/specs/physics-characterization.spec.js` is untouched until somebody turns
-it on. `js/race/reliability.js` ships off for the same reason.
+`real`** (`js/data/settings-defaults.js`). `off` is still a *true* no-op:
+`gripMul`, `tractionMul` and the two fuel multipliers all return exactly 1, so
+`tests/specs/physics-characterization.spec.js` and the game-vm fixtures pin
+`off` and measure the driving model rather than the wear default.
+`js/race/reliability.js` ships off.
 
 - **Life is a fraction of the SCHEDULED distance, not a lap count.** Real
   degradation over a 25-lap stint accumulates ~1.5 s against a ~21 s pit loss,

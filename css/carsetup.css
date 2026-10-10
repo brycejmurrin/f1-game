@@ -1186,10 +1186,12 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   z-index: 2;
   display: flex; flex-direction: column; align-items: stretch; gap: 6px;
 }
-/* The two top-level buttons. This row is all that shows at rest. */
+/* The two top-level buttons. This row is all that shows at rest.
+   align-items:center — CAMERA and ACTIVE AERO share one chip height; flex-end
+   used to drop the taller aero chip below the cam chip's baseline. */
 #cs-bar {
   pointer-events: auto;
-  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
   max-width: 100%;
 }
 /* The disclosure. Its lit state hangs off aria-expanded rather than the `active`
@@ -1292,17 +1294,20 @@ body:has(.screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
 #cs-aero-bar {
   pointer-events: auto;
   display: flex; align-items: stretch;
-  flex: 0 1 auto; width: max-content;
-  max-width: 100%; min-width: 0;
+  /* 0 0 auto with CAMERA's group: the bar wraps before either chip is crushed. */
+  flex: 0 0 auto; width: max-content;
+  max-width: 100%;
 }
 /* WRAPS INSIDE THE STACK, never past it. #cs-stack is capped at the room left
    of the panel. Wide / play-shape keep a one-line chip (menu-baseline garage
    goldens at 844 and 1440). Below 820px a row of shrinking spans lets
    ACTIVE AERO and CORNER MODE paint over each other (survey
-   garage_open_sunlight_narrow500) — drop the value under the label there. */
+   garage_open_sunlight_narrow500) — drop the value under the label there.
+   Chip chrome matches #cs-cam (flex 0 0 auto, align-items center, same pad/
+   gap/type) so the two top-level buttons read as one pair. */
 #cs-aero {
-  flex: 0 1 auto; min-width: 0; max-width: 100%; flex-wrap: nowrap;
-  display: flex; flex-direction: row; align-items: baseline; gap: 7px;
+  flex: 0 0 auto; max-width: 100%; flex-wrap: nowrap;
+  display: flex; flex-direction: row; align-items: center; gap: 6px;
   width: max-content; margin: 0;
   padding: 5px 10px; border-radius: var(--r-sm);
   background: var(--plate-opaque);
@@ -1318,16 +1323,26 @@ body:has(.screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
 @media (hover: hover) and (pointer: fine) {
   #cs-aero:hover { border-color: rgba(255,255,255,0.3); }
 }
+/* Label never shrinks away: flex 0 1 + overflow:ellipsis on BOTH spans used to
+   ellipsize "ACTIVE AERO" to nothing while CORNER/STRAIGHT MODE kept the room. */
 .cs-aero-lbl {
+  flex: 0 0 auto;
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
-  color: rgba(255,255,255,0.42);
-  display: block; white-space: nowrap; max-width: 100%; min-width: 0;
-  overflow: hidden; text-overflow: ellipsis;
+  color: color-mix(in oklab, var(--text) 62%, transparent);
+  display: block; white-space: nowrap;
 }
+/* Value width is pinned to STRAIGHT MODE (the longer of the two strings).
+   Without a floor, CORNER MODE shrunk the chip ~12px and the bar jumped on
+   every toggle (MCP garage-next pack, 844 and 1440). 13ch under-shot once
+   letter-spacing is on (~3px left); 14ch clears STRAIGHT at fs-micro and the
+   1000px fs-2 bump. flex 0 0 auto keeps the floor; ellipsis is only a safety
+   net under extreme UI scale. */
 .cs-aero-val {
+  flex: 0 0 auto;
+  min-width: 14ch;
   font-size: var(--fs-micro); font-weight: 800; font-style: italic; letter-spacing: var(--ls-3);
   color: var(--text);
-  display: block; white-space: nowrap; max-width: 100%; min-width: 0;
+  display: block; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
 }
 /* Lit state uses the same CYAN the in-race HUD chip uses for X-mode, so the
@@ -1338,7 +1353,7 @@ body:has(.screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
 @media (max-width: 1000px) {
   /* Touch-ish widths: keep padding/type bumps; height floor is --tap-min /
      --chip-h from the base + body:not(.desktop) rules, not a narrower 34. */
-  #cs-aero { padding: 6px 10px; gap: 5px; }
+  #cs-aero { padding: 6px 10px; gap: 6px; }
   .cs-aero-lbl { font-size: var(--fs-micro); letter-spacing: var(--ls-4); }
   .cs-aero-val { font-size: var(--fs-2); }
   #cs-cam { padding: 6px 10px; font-size: var(--fs-micro); }

@@ -84,7 +84,7 @@ var Spotter = (() => {
   }
 
   function create(G) {
-    let st = fresh(), lastCars = null, calls = 0, last = "", occupied = 0;
+    let st = fresh(), lastCars = null, occupied = 0;
     const on = () => G.store.get("spotter", false) !== false;
 
     // `quiet`: a REAL RACE WATCH (js/race/race-radio.js) — every car is a
@@ -125,11 +125,10 @@ var Spotter = (() => {
             return !!valid; } });
       };
       const key = step(st, occupied, dt, speak);
-      if (key) { calls++; last = key; }
       return key;
     }
 
-    return { update, occupied: () => occupied !== 0 || st.cur !== 0, debug: () => ({ on: on(), calls, last, cur: st.cur, occupied }) };
+    return { update, occupied: () => occupied !== 0 || st.cur !== 0 };
   }
 
   return Object.freeze({ create, step, occupancy, fresh, KEYS, OVERLAP_ARC, SIDE_MIN, SIDE_MAX, DEBOUNCE_S, CLEAR_S, STILL_S, GAP_S });

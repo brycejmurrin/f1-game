@@ -45,6 +45,7 @@ const Particles = (function () {
   // pool/flares/rain-cell are unchanged. Rain dirties on eye-cell / knob change
   // (not every falling step) so a parked wet session stops re-uploading.
   let _dirty = true, _lastPa = 0, _lastPb = 0;
+  let _rainAcc = 0;   // seconds since the last forced re-expand (parked-eye staleness cap)
   let _rainCellX = 0x7fffffff, _rainCellY = 0x7fffffff, _rainCellZ = 0x7fffffff;
   let _rainKnobKey = "";
   const RAIN_CELL_M = 2;
@@ -445,6 +446,7 @@ const Particles = (function () {
     _rainEyeOk = false;
     _dirty = true;
     _rainCellX = _rainCellY = _rainCellZ = 0x7fffffff;
+    _rainAcc = 0;
     _rainKnobKey = "";
     // The alpha batch must hold the pool AND the shower in ONE call (see draw()).
     const need = (MAX + count) * FLOATS_PER;
@@ -477,6 +479,11 @@ const Particles = (function () {
     } else { _camVel[0] = _camVel[1] = _camVel[2] = 0; }
     _rainEye[0] = eye[0]; _rainEye[1] = eye[1]; _rainEye[2] = eye[2];
     _rainEyeOk = true;
+    // Drops fall every update, so a parked eye (red-flag stop, pit box, finished
+    // car on the TV cam) must still re-expand: cap the staleness at ~30 Hz
+    // instead of freezing the streaks until the eye leaves its 2 m cell.
+    _rainAcc += dt;
+    if (_rainAcc >= 1 / 30) { _rainAcc -= 1 / 30; if (_rainAcc > 1 / 30) _rainAcc = 0; _dirty = true; }
     const LT = _lt();
     // Horizontal drift along WIND DIRECTION, as a fraction of the fall speed
     // (RAIN WIND 0.18 = a ~10° slant); the trees lean the same way.
