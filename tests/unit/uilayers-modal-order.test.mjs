@@ -188,9 +188,9 @@ function escHarness(modalIds) {
   context.globalThis = context;
   vm.createContext(context);
   vm.runInContext(read("js/ui/modal.js"), context);
-  const ev = () => {
+  const ev = (extra = {}) => {
     const e = { key: "Escape", defaultPrevented: false, stopped: false,
-      preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } };
+      preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; }, ...extra };
     context.window.TopModal.onEscape(e);
     return e;
   };
@@ -307,4 +307,90 @@ test("close and reopen moves a dialog above the previously latest opening", () =
   assert.equal(U.top().id, "pmsettings");
   U._nodes.get("teampicker").showModal();
   assert.equal(U.top().id, "pmsettings", "showModal on an already-modal dialog does not move it");
+});
+
+// ── A HELD Escape is one press ──────────────────────────────────────────────
+// The auto-repeat of the Escape that paused a race reached the pause menu's
+// data-esc-close door (pm-resume) and resumed it; from a Settings sub-page it
+// walked BACK → close → RESUME. onEscape swallows a repeat before any door.
+test("a repeated (held) Escape reaches no door and is consumed", () => {
+  const h = escHarness(["datahub"]);
+  const first = h.ev();
+  assert.equal(h.clicks(), 1, "the first press still goes through the door");
+  assert.equal(first.defaultPrevented, true);
+  const again = h.ev({ repeat: true });
+  assert.equal(h.clicks(), 1, "the auto-repeat pressed no door");
+  assert.equal(again.defaultPrevented, true, "…and is consumed, so the pause switch never sees it");
+  assert.equal(again.stopped, true);
+});
+
+// ── Closing a screen hands focus back to a NON-inert opener ─────────────────
+// sync() closed the dialog BEFORE syncMenuIsolation() lifted `inert` from the
+// title (#overlay): the platform's close() focus restore hit an inert opener
+// and focus fell to <body>. Same order bug in wireLayer for non-dialog layers.
+function isolationHarness(layerIsDialog) {
+  const doc = { activeElement: null };
+  const overlay = { id: "overlay", inert: false, hidden: false, setAttribute() {}, removeAttribute() {} };
+  // A fake focus() that honours `inert` the way the platform does: a no-op.
+  const opener = { id: "mb-garage", hidden: false, disabled: false, getAttribute: () => null,
+    focus() { if (!overlay.inert) doc.activeElement = opener; } };
+  const inner = { id: "inner-btn", hidden: false, disabled: false, getAttribute: () => null,
+    focus() { doc.activeElement = inner; } };
+  let mo = null;
+  const layer = {
+    id: "teampicker", hidden: true, open: false,
+    hasAttribute: () => true, getAttribute: () => null, addEventListener() {},
+    contains: (el) => el === layer || el === inner,
+    querySelector: (sel) => (sel === "[autofocus]" ? inner : null),
+    querySelectorAll: () => [inner],
+  };
+  if (layerIsDialog) {
+    layer.showModal = function () { this.open = true; inner.focus(); };
+    // Native close(): focus goes back to the element focused before showModal.
+    layer.close = function () { this.open = false; opener.focus(); };
+  }
+  const byId = { overlay, teampicker: layer };
+  const document = {
+    readyState: "loading", addEventListener() {},
+    get activeElement() { return doc.activeElement; },
+    body: { contains: (el) => el === opener || el === inner },
+    getElementById: (id) => byId[id] || null,
+    querySelectorAll: () => [], querySelector: () => null,
+  };
+  const context = {
+    window: { UiLayers: { LAYER_IDS: ["overlay", "teampicker"], top: () => null } },
+    WeakSet, WeakMap, queueMicrotask: () => {},
+    MutationObserver: class { constructor(fn) { mo = fn; } observe() {} },
+    document, Log: { info() {}, warn() {} },
+  };
+  context.globalThis = context;
+  vm.createContext(context);
+  vm.runInContext(read("js/ui/modal.js"), context);
+  return { doc, overlay, opener, inner, layer, TopModal: context.window.TopModal, fire: () => mo() };
+}
+
+test("closing a dialog lifts #overlay's inert BEFORE close(), so focus returns to the opener", () => {
+  const h = isolationHarness(true);
+  h.doc.activeElement = h.opener;
+  h.TopModal.wire(h.layer);              // hidden: nothing opens yet
+  h.layer.hidden = false; h.fire();      // open: showModal + isolate the title
+  assert.equal(h.layer.open, true);
+  assert.equal(h.overlay.inert, true, "the title is isolated while the sheet is up");
+  assert.equal(h.doc.activeElement, h.inner);
+  h.layer.hidden = true; h.fire();       // close
+  assert.equal(h.layer.open, false);
+  assert.equal(h.overlay.inert, false);
+  assert.equal(h.doc.activeElement, h.opener, "close() restored focus to a live (non-inert) opener, not <body>");
+});
+
+test("hiding a non-dialog layer lifts #overlay's inert BEFORE refocusing the opener", () => {
+  const h = isolationHarness(false);
+  h.doc.activeElement = h.opener;
+  h.TopModal.wireLayer(h.layer);
+  h.layer.hidden = false; h.fire();      // show: remembers the opener, lands inside
+  assert.equal(h.doc.activeElement, h.inner, "focus landed inside the layer");
+  assert.equal(h.overlay.inert, true, "isolation applies AFTER the opener was recorded");
+  h.layer.hidden = true; h.fire();       // hide
+  assert.equal(h.overlay.inert, false);
+  assert.equal(h.doc.activeElement, h.opener, "focus went back to the opener on the title");
 });

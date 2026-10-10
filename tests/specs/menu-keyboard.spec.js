@@ -644,6 +644,78 @@ test.describe("Escape is BACK", () => {
       pause: document.getElementById("pausemenu").hidden,
     }))).toEqual({ standings: true, pause: false });
   });
+
+  /* A HELD Escape is one press (js/ui/modal.js onEscape). Its auto-repeat
+     reached the pause menu's door (pm-resume) and resumed the race the first
+     press had just paused. Playwright marks a second keyboard.down() of a key
+     that is still down as repeat: true — the OS auto-repeat. */
+  test("a held Escape pauses the race and does not resume it", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => { try { return window.__apex.info().track === "monza"; } catch (_) { return false; } }, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => {
+      window.__apex.park(0.1);
+      const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
+      window.__apex.headless(true);
+    });
+    await page.keyboard.down("Escape");
+    await page.waitForFunction(() => document.getElementById("pausemenu").hidden === false, null, { polling: 100, timeout: 5_000 });
+    for (let i = 0; i < 4; i++) await page.keyboard.down("Escape");   // repeat: true
+    await page.keyboard.up("Escape");
+    expect(await page.evaluate(() => document.getElementById("pausemenu").hidden),
+      "the auto-repeat did not press RESUME").toBe(false);
+  });
+
+  // Escape with a query typed clears the QUERY; only an empty field goes BACK.
+  test("Escape in the circuit search clears it first, then closes the picker", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await openSelect(page);
+    const search = page.locator("#sel-track-search");
+    await search.focus();
+    await page.keyboard.type("spa");
+    await page.waitForFunction(() => [...document.querySelectorAll("#sel-tracks .track-row")].some((r) => r.hidden), null, { polling: 100, timeout: 5_000 });
+    await page.keyboard.press("Escape");
+    expect(await search.inputValue()).toBe("");
+    expect(await page.evaluate(() => ({
+      select: document.getElementById("select").hidden,
+      filtered: [...document.querySelectorAll("#sel-tracks .track-row")].filter((r) => r.hidden).length,
+    }))).toEqual({ select: false, filtered: 0 });
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.getElementById("select").hidden === true, null, { polling: 100, timeout: 5_000 });
+  });
+
+  /* Closing a dialog opened from the title hands focus back to its opener:
+     TopModal now lifts #overlay's `inert` BEFORE close(), so the platform's
+     focus restore is not refused and focus does not fall to <body>. */
+  test("closing How to Play with Escape returns focus to the title button that opened it", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await page.locator("#mb-help").focus();
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => document.getElementById("howtoplay").matches(":modal"), null, { polling: 100, timeout: 5_000 });
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.getElementById("howtoplay").hidden === true, null, { polling: 100, timeout: 5_000 });
+    await page.waitForFunction(() => document.activeElement && document.activeElement.id === "mb-help", null, { polling: 100, timeout: 5_000 });
+    expect(await page.evaluate(() => document.getElementById("overlay").inert)).toBe(false);
+  });
+
+  // The team picker opens on the current team, and a pick — which rebuilds the
+  // garage card that opened it — hands focus to the NEW card, not <body>.
+  test("the team picker focuses the current team and a pick returns focus to the garage card", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await page.locator("#mb-garage").click();
+    await page.locator("#carsetup").waitFor({ state: "visible" });
+    await page.locator('#cs-tabs [data-cs-cat="team"]').click();
+    await page.locator("#cs-team-card").focus();
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => document.getElementById("teampicker").matches(":modal"), null, { polling: 100, timeout: 5_000 });
+    await page.waitForFunction(() => document.activeElement && document.activeElement.matches("#sel-teams .team-tile.active"), null, { polling: 100, timeout: 5_000 });
+    await page.evaluate(() => [...document.querySelectorAll("#sel-teams .team-tile")].find((t) => !t.classList.contains("active")).focus());
+    await page.keyboard.press("Enter");                    // a real pick: buildSetup() rebuilds #cs-team-card
+    await page.waitForFunction(() => document.getElementById("teampicker").hidden === true, null, { polling: 100, timeout: 5_000 });
+    await page.waitForFunction(() => document.activeElement && document.activeElement.id === "cs-team-card", null, { polling: 100, timeout: 5_000 });
+    expect(await page.evaluate(() => document.activeElement.isConnected && document.activeElement !== document.body),
+      "focus sits on the live, rebuilt card").toBe(true);
+  });
 });
 
 // Selectors preserve DOM order; the native top layer follows opening order.
