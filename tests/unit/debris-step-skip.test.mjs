@@ -77,7 +77,7 @@ test("Rapier is not imported inside the boot burst; prime() starts it if a race 
   assert.match(create, /else setTimeout\(kick, \d+\)/, "Safari has no requestIdleCallback — a timer fallback is required");
   assert.match(extractFn(SRC, "prime"), /if \(_enabled && _loadState === 0\) _load\(\);/,
     "prime() must start the load when a race arrives before the deferred kick");
-  assert.match(extractFn(SRC, "step"), /if \(!world\) buildWorld\(track, cars\);/,
+  assert.match(extractFn(SRC, "step"), /if \(!world && !_buildWorldSafe\(track, cars\)\) return;/,
     "step() builds lazily, so a load that lands after prime still gets a world");
 });
 

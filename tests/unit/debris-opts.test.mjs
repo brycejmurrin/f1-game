@@ -116,3 +116,34 @@ test("it reaches nothing from game.js — the reason it is its own file", () => 
       `the module must not reference ${forbidden} — it needs only the store, SettingRow and DebrisWorld`);
   }
 });
+
+test("a Rapier build that throws degrades debris off instead of rejecting race entry (bug-hunt 7.2)", async () => {
+  // buildWorld() was the one Rapier chain with no catch: prime() sits on the
+  // race-entry path and step() on the per-frame one.
+  const src = fs.readFileSync(path.join(ROOT, "js/physics/debris-world.js"), "utf8")
+    .replace("import(RAPIER_URL)", "__importRapier()");
+  const chain = new Proxy({}, { get: (t, k) => (k === "then" ? undefined : () => chain) });
+  const rapier = { default: {
+    init: () => Promise.resolve(),
+    World: class { createRigidBody() { return {}; } createCollider() { throw new Error("wasm trap"); } free() {} },
+    EventQueue: class { free() {} },
+    RigidBodyDesc: chain, ColliderDesc: chain, TriMeshFlags: {}, ActiveEvents: {},
+  } };
+  const warns = [];
+  const G = { track: {}, cars: [{ s: 0, x: 0 }] };
+  const ctx = vm.createContext({
+    URL, document: {}, location: { href: "http://localhost/js/game.js" },
+    GameStore: { store: { raw: () => "1" } }, localStorage: { getItem: () => null },
+    requestIdleCallback() {}, Log: { warn: (...a) => warns.push(a), info() {} },
+    __importRapier: () => Promise.resolve(rapier),
+  });
+  vm.runInContext(src, ctx);
+  const M = vm.runInContext("DebrisWorld", ctx);
+  M.create(G);
+  assert.equal(await M.ready(), true, "the wasm itself loaded");
+  assert.equal(M.active(), true);
+  assert.doesNotThrow(() => assert.equal(M.prime(), false, "prime() reports no world"));
+  assert.equal(M.active(), false, "a failed build disables debris");
+  assert.ok(warns.length >= 1, "the failure is logged, not swallowed");
+  assert.doesNotThrow(() => M.step(1 / 60));
+});
