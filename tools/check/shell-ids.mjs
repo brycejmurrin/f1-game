@@ -58,6 +58,7 @@ const AUXILIARY_HOSTS = {
  *  KNOWN_EXTERNAL_READS in tests/unit/global-registry.test.mjs: every entry is a
  *  decision with its reason, and the list may only shrink without a note here. */
 export const RUNTIME_IDS = {
+  "dh-tab-schedule":  "Data Hub hub.js builds its tab buttons as dh-tab-<id> when the lazy bundle opens; deep-link.js reads it null-guarded and retries",
   "ps-panel":          "PhotoStudio mk() builds the photo controls panel; setup-camera uses a null-guarded read to exclude it from orbit gestures",
   "pm-three-path":     "renderer-picker addBtn(), and only when the backend files exist — the read at paintPresent() is null-guarded",
   "pm-car-reflect":    "renderer-picker addBtn() CAR REFLECTIONS, injected only when the three files exist — every read is null-guarded",

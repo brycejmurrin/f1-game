@@ -217,6 +217,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `photo-studio.js` | `PhotoStudio` | tag | Photo Studio captures only the renderer, then composes a cropped image. |
 | `experience.js` | `UiExperience` | tag | connected menu doors, race context and bounded live garage home. |
 | `title-menu.js` | `TitleMenu` | tag | TITLE MENU retention doors: career summary, direct Continue, and today's Daily Challenge. |
+| `deep-link.js` | `DeepLink` | tag | DeepLink: the installed-icon shortcuts (manifest.json `shortcuts`) land on `./?go=<door>`. |
 | `title-flow.js` | `TitleFlow` | tag | TitleFlow: title-menu session entry and shared ghost links. |
 | `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
 | `onboard.js` | `Onboard` | tag | first-run COACH MARKS: three one-shot prompts (brake, overtake, active aero) shown through the existing #announce channel the first time each situation… |
