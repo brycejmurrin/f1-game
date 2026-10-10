@@ -451,6 +451,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-inputs.test.mjs",
   "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
+  // Behaviour pins that must survive the band allocator (PR #1375 audit; todo = known red on ship).
+  "tests/unit/hud-pins.test.mjs",
   // Portrait phone bottom cluster: TYRES stays in the column (landscape-only
   // dock anchor), fitHud caps --hud-z-bot vs AERO/OT, tip clash shapes.
   "tests/unit/hud-portrait-cluster.test.mjs",
