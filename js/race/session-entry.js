@@ -1,6 +1,12 @@
 "use strict";
 /* One owner for the asynchronous gap before a race or qualifying sheet commits.
- * The scenery request may outlive its menu, and a newer selection supersedes it. */
+ * The scenery request may outlive its menu, and a newer selection supersedes it.
+ *
+ * `recover` is the caller's way out of a start that will not happen. It runs when `valid()` fails
+ * ("settings changed": the start no longer matches what was asked for) and when prepare/commit throws;
+ * it does NOT run when the request is superseded — the newer start owns the screen. startRace passes
+ * quitToMenu, so a start that is cancelled for changed settings ends on the title: nothing here hands a
+ * previous race back, and the pause RESTART (which has already unpaused it) is no exception. */
 const SessionEntry = (function () {
   function create() {
     let generation = 0, pending = null;
