@@ -1,1 +1,1 @@
-1791602177	Bryce Murrin	PR #1289 isolated selector fallback; root-approved merge of exact published #1298 e900 dependency, no duplicate garage repair; root owns readiness/merge  [claude/code-review-bug-hunt-0ngtr5; session 64ccee8d520054d2ff48b2b3]
+1791603006	Bryce Murrin	PR #1289 selector repair plus root-approved exact published #1298 e900 and #1296 df22 test-only dependencies; no duplicate implementation; root owns readiness/merge  [claude/code-review-bug-hunt-0ngtr5; session 64ccee8d520054d2ff48b2b3]
