@@ -248,9 +248,16 @@ function toBlob(list) {
  * SHOTS_VERSION whenever a pose field changes what it means. */
 const SHOTS_VERSION = 2;
 function savedForm(list) { return { v: SHOTS_VERSION, shots: list }; }
-/** The list inside a saved value, or null when it is from another version. */
+/** The list inside a saved value, or null when it is from another version.
+ *  A numeric fov is CLAMPED to the slider here, on a copy: the free camera
+ *  saved 20-110° views before shotErrors held fov to FOV, and refusing those
+ *  would drop the whole edit for the shipped flyby. Anything else is judged
+ *  by shotErrors as before. */
 function fromSaved(saved) {
-  return (saved && !Array.isArray(saved) && saved.v === SHOTS_VERSION) ? saved.shots : null;
+  const list = (saved && !Array.isArray(saved) && saved.v === SHOTS_VERSION) ? saved.shots : null;
+  const num = (n) => typeof n === "number" && isFinite(n);
+  return !Array.isArray(list) ? list : list.map((s) => (s && Array.isArray(s.fov) && s.fov.every(num))
+    ? Object.assign({}, s, { fov: s.fov.map((n) => Math.min(FOV.max, Math.max(FOV.min, n))) }) : s);
 }
 
 const ops = {

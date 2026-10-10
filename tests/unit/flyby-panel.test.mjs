@@ -195,6 +195,61 @@ test("a shot's fov must sit inside the FOV slider's range", () => {
   assert.equal(fov([-40, 40]).length, 1, "negative");
 });
 
+// …and a list ALREADY SAVED with a free-camera fov (20-110°) before that range
+// check is clamped on load, not refused for the shipped flyby (fov only).
+test("a saved fov outside the slider is clamped on load, the rest of the list kept", () => {
+  const l = FP.normaliseDurs(goodList());
+  l[0].fov = [110, 100]; l[1].fov = [0, 40];
+  const saved = FP.savedForm(l);
+  const { panel, warned } = panelWith(saved);
+  const got = panel.loadSaved();
+  assert.ok(got, `the edited list still plays: ${warned.join(" | ")}`);
+  assert.deepEqual([...got[0].fov], [FP.FOV.max, FP.FOV.max]);
+  assert.deepEqual([...got[1].fov], [FP.FOV.min, 40]);
+  assert.deepEqual([...saved.shots[0].fov], [110, 100], "the stored value is not rewritten in place");
+  const bad = FP.normaliseDurs(goodList()); bad[0].fov = ["wide", 40];
+  assert.equal(panelWith(FP.savedForm(bad)).panel.loadSaved(), null, "a non-number fov is still refused");
+});
+
+// The FREE CAMERA flies at 20-110°; SET SHOT START copied that fov into the
+// shot unclamped, so a 110° view saved a list the range check then refused.
+test("SET SHOT START from a 110° free-camera view saves a shot that passes shotErrors", () => {
+  const anything = () => {
+    const vals = new Map();
+    const p = new Proxy(function () {}, {
+      get(_t, k) {
+        if (vals.has(k)) return vals.get(k);
+        if (k === Symbol.toPrimitive) return () => "";
+        if (k === Symbol.iterator) return function* () {};
+        if (k === "then") return undefined;
+        return anything();
+      },
+      set(_t, k, v) { vals.set(k, v); return true; },
+      apply() { return anything(); },
+    });
+    return p;
+  };
+  const els = new Map(), $ = (id) => { if (!els.has(id)) els.set(id, anything()); return els.get(id); };
+  const map = new Map([["flybyShots", FP.savedForm(FP.normaliseDurs(goodList()))]]);
+  let entered = null;
+  const sb = { Math, JSON, Object, Array, Number, String, isFinite, Date, console, Map, Set, Promise,
+    Log: { info() {}, warn() {}, debug() {} }, document: anything(), setTimeout: () => 0, clearTimeout() {},
+    FreeCam: { enterFrom: (o) => { entered = o; return true; } } };
+  sb.window = sb;
+  vm.runInNewContext(read("js/camera/flyby-panel.js").replace(/^const\b/gm, "var"), sb);
+  vm.runInNewContext(read("js/camera/flyby-editor.js").replace(/^const\b/gm, "var"), sb);
+  const G = new Proxy({ $, els: anything(), store: { get: (k, d) => (map.has(k) ? map.get(k) : d), set: (k, v) => { map.set(k, v); return true; } },
+    dbgCam: { eye: [0, 5, 0], target: [0, 0, 50], fov: 110 } }, { get: (t, k) => (k in t ? t[k] : anything()) });
+  sb.FlybyEditor.create(G);
+  $("fb-freecam").onclick();
+  assert.ok(entered && entered.actions, "the editor entered the free camera with its SET SHOT actions");
+  const pose = { at: "start", off: 0, x: 0, y: 5 };
+  entered.actions[0].run({ shot: { eye: [pose], look: [{ at: "start", off: 50, x: 0, y: 1 }], fov: [110] }, err: { eye: 0, look: 0 } });
+  const list = FP.fromSaved(map.get("flybyShots"));
+  assert.equal(list[0].fov[0], FP.FOV.max, "the copied fov is held to the shot table's range");
+  assert.deepEqual([...FP.shotErrors(list)], [], "the saved list stays playable");
+});
+
 test("n and rank must name a corner, a slot and a landmark", () => {
   const one = (pose) => { const l = goodList(); l[0].look[0] = pose; return [...FP.shotErrors(l)].length; };
   assert.equal(one({ at: "corner", n: "slowest" }), 0);
