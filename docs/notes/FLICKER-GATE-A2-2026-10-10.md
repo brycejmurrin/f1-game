@@ -10,8 +10,9 @@ and `tools/lib/flicker-metric.mjs`.
   (3.03 % of 960x540) with a largest luma step of 25. The other eight are exactly equal (`diffPx 0`).
 - The step (25) is under the flip threshold (`thr` 48), so `still.flipPx` is 0 and the fight measurement is
   unaffected. Nothing in the verdict is wrong; the tool's `stillExact` line is stricter than its own gate.
-- Most likely cause: the first race of the session had not fully settled after the 10 + 2 presents (late asset or
-  cadence-driven pass landing between A and A2), not an unfrozen clock. One measurement separates it (below).
+- Candidate cause: the first race of the session had not fully settled after the 10 + 2 presents (late asset or
+  cadence-driven pass landing between A and A2), not an unfrozen clock. **Not reproduced**: two later runs were
+  exact (section 6), so the original difference is unexplained; the tool now reports it instead of hiding it.
 - `stillExact:false` should NOT gate anything today. It is a calibration signal for the "tighten the ceilings"
   step in the tool header, and this run says that step's precondition is not yet met for this one site.
 
@@ -129,3 +130,34 @@ No, on the evidence.
 Follow-ups for whoever owns the tool (not done here, tool edits are out of scope): print which sites are inexact
 in the summary line instead of one boolean; print `still.diffPx` in the per-site console line only when nonzero
 (already the case for fight sites); run a warm-up site first or settle until two grabs are equal.
+
+## 6. Follow-up measurement, same day (2026-10-10, browser runs, GLX / swiftshader)
+
+What was run, on a box at load about 2.7 to 3.9 (the livery agent's node sweeps were still running on one core):
+
+| run | command | result |
+|---|---|---|
+| 1 | `--site madrid-overpass-soffit --a3 --png` (first and only site) | A vs A2 **0 px**, A2 vs A3 **0 px**, 207 s |
+| 3 | `--site madrid-ifema-soffit --site madrid-overpass-soffit --a3` (new settle code) | both sites exact, 0 settle rounds, 0 missed presents, 223 s and 122 s |
+
+- The site that differed in the original run is exact when measured first and alone, so "first site of a fresh page"
+  alone does not reproduce it. The hypothesis stays untested, not confirmed.
+- That original run overlapped other CPU work on the same box: the `frame_fleet` job, and then a `tooling-fast`
+  started on top of it (load 9.8 when checked). It is a candidate, not a finding: a run under deliberate load was
+  not made (the session's permission classifier refused to start CPU burners), so load sensitivity is **untested**.
+- One mechanism is a fact from the code, though: `awaitSoftPresent` rejects after its timeout and the gate caught
+  and discarded the rejection, so a timed-out present counted as done and a "settle of 10" could be fewer real
+  presents with nothing said. That path is the plausible way load could matter; whether it fired in the original run
+  cannot be known (nothing was recorded).
+- `--site` does not order a run: sites run in table order, so `madrid-overpass-soffit` is always first when
+  selected. "Measure it second" needs another site's race before it, which no flag does today.
+
+Changes made because of it (tools only, opt-in or report-only; verdicts on a settled box are unchanged, run 3):
+- `summary.inexactSites` and the `= flicker` line now name every site whose A and A2 differ, with pixels and step.
+- `site.missedPresents` / `summary.missedPresents` count timed-out presents; the `= flicker` line says so.
+- When A != A2 the gate runs up to three extra settle rounds and compares the next pair. A real frozen-clock leak
+  never converges and is still reported. `--no-settle` restores the old behaviour.
+- `--a3` takes a third still (A2 vs A3) and, with `--png`, writes the A-vs-A2 difference.
+
+Still open: why the original run differed. If it recurs, the new line names the site, and `missedPresents` says
+whether the box was too busy to settle.
