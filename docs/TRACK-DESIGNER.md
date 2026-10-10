@@ -142,11 +142,16 @@ changing one makes it a new circuit for time-trial boards.
 
 ### Trackside props
 
-Open **OBJECTS** and pick **STAND**, **GANTRY**, **TREES**, **WATER**, **FLOOD**,
-**BOARD**, **PALMS** (three palms) or **HEDGE** (a 48 m clipped hedge), then
+Open **OBJECTS**. The inspector separates **CHOOSE AN OBJECT**, **PLACE OBJECTS**,
+and **PLACED OBJECTS**. Filter the library by **NATURE** or **RACE VENUE**, or
+browse **ALL**. Each selected object has a description. Pick **STAND**, **GANTRY**, **TREES**, **WATER**, **FLOOD**,
+**BOARD**, **PALMS** (three palms), **HEDGE** (a 48 m clipped hedge),
+**PINES** (three tall pines), **BUSHES** (five low shrubs), **MARSHAL**
+(a signal shelter), or **CAMERA** (a broadcast tower), then
 select a control point on the map or enter its number. Choose **LEFT**, **RIGHT**
 or **BOTH** in driving
-direction and set **ROADSIDE GAP m** (distance from the road edge). Each prop
+direction and type a **ROADSIDE GAP** in metres (distance from the road edge),
+or use the − / + controls. **RESET GAP** restores that object’s default spacing. Each prop
 kind remembers its spacing while the designer is open. Clearances match the
 renderer, up to 120 m; gantries span the road and have no side/gap controls.
 
@@ -163,7 +168,10 @@ opens exact lap-percentage, side and gap controls; **APPLY** updates that object
 places another of the same kind there. **REMOVE** deletes that specific object;
 **REMOVE LAST** removes only the selected kind. These operations support undo/redo,
 autosave, saved circuits and share links. Existing per-kind caps and the total
-limit of 16 props still apply.
+limit of 16 props still apply. **SWAP ENDS** selects the opposite section
+around the loop without moving the track or changing any placed objects. Pine and
+bush clusters allow up to six placements each; marshal shelters and camera towers
+allow four each.
 
 ## 4 DETAILS
 
