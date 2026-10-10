@@ -571,6 +571,8 @@ function tick(dtMs) {
   // `degradeAt`, and to still MOVE when a step helps, without letting a
   // pathological hitch enter at its full value.
   _live = true;
+  // A zero / negative / NaN interval is a stamp artefact (pause -> resume: lastFrame is set in a handler, so the next rAF stamp can be earlier), not a frame: fed to the EMA and the derived floor it drags the floor under every healthy frame and trips a spurious step-down (then a revert). The history above already skips it.
+  if (!(dtMs > 0)) return;
   // Before any smoothing: the opening window wants the raw frame, spikes and
   // all, because a spike in the first seconds IS the thing being reported.
   if (_openN < OPEN_FRAMES) {

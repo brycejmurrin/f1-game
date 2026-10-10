@@ -443,7 +443,8 @@ interface GameCtx {
 
   // ── Determinism: the sim RNG seed (setting it rewinds the stream) ──────────
   seed: number;
-  readonly simSeed: (v?: number) => number;
+  /** `simSeed(v)` sets the seed AND restarts the stream; `simSeed(v, state)` resumes the stream at `state`; `simSeed(undefined, true)` reads the stream position. */
+  readonly simSeed: (v?: number, stream?: number | true) => number;
   /** The race counter the reliability and weather draws hash on. A bare
    *  passthrough (no stream rewind): VS FRIEND publishes it with the host's
    *  settings so both peers draw the same DNFs — js/net/lobby.js. */
