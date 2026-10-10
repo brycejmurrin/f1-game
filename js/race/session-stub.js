@@ -100,7 +100,7 @@ var RaceRadio = {
     setSpotter: () => false, spotter: () => false,
     chat: () => "normal", comm: () => "tv", commentates: () => true,
     callsResult: () => false, callsLastLap: () => false,
-    trafficBusy: () => false, spotterDebug: () => null,
+    trafficBusy: () => false,
     status: () => ({}), tick: function () {}, debug: () => ({}),
   }),
   durFor: () => 0,
