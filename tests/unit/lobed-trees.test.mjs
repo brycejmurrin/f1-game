@@ -97,3 +97,32 @@ test("invalid new crown options fail without geometry or occupancy", () => {
     assert.ok(f.out.pos.length>0);
   }
 });
+
+test("a tree whose trunk the pit guard rejects leaves no material, note or reserved spot behind", () => {
+  // The trunk's guarded addCyl can refuse (the pit complex keeps footings out).
+  // Every tree emitter stamped out._mat = WOOD first and returned past the reset,
+  // so the NEXT untextured emitter drew wood; tree() also noted itself and took
+  // the planting spot before the trunk existed, so a refused tree still blocked
+  // its neighbours' site and left a phantom box in the guard registry.
+  const reject = { on: true };
+  const f = makeFixture({ rejectPrimitive: (name) => reject.on && name === "addCyl" });
+  const col = [0.2, 0.35, 0.18];
+  assert.ok(f.ctx.MAT && f.ctx.MAT.WOOD, "fixture exposes the material ids");
+  const cases = {
+    tree: () => f.nature.tree(0, 1, 24, 12, col),
+    "dead tree": () => f.nature.tree(0, 1, 24, 12, col, { deadChance: 1 }),
+    conifer: () => f.nature.conifer(0, 1, 24, 12, col),
+    broadleafFall: () => f.nature.broadleafFall(0, 1, 24, 12, col),
+    acacia: () => f.nature.acacia(0, 1, 24, 12, col),
+    plane: () => f.nature.plane(0, 1, 24, 12, col),
+  };
+  for (const [name, run] of Object.entries(cases)) {
+    f.out._mat = 0;
+    run();
+    assert.equal(f.out._mat, 0, `${name}: out._mat must be reset when the trunk is refused`);
+  }
+  assert.equal(f.notes.filter((n) => n[0] === "tree").length, 0, "a refused tree is not noted as standing");
+  reject.on = false;
+  f.nature.tree(0, 1, 24, 12, col);
+  assert.ok(f.out.pos.length > 0, "the refused tree must not have taken the planting spot");
+});

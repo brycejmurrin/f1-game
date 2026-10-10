@@ -191,8 +191,12 @@ test("a run that wraps the start line is not read as contained in an earlier run
 test("one tree per spot", () => {
   const src = read("js/track/scenery/nature.js");
   assert.match(src, /const spotTaken = \(x, z\)/, "nature.js must carry the planting guard");
-  assert.equal((src.match(/if \(spotTaken\(a\.c\[0\], a\.c\[2\]\)\) return;/g) || []).length, 2,
-    "both pine() and tree() must take the guard — two trees on one spot is one tree drawn twice");
+  assert.equal((src.match(/if \(spotTaken\(a\.c\[0\], a\.c\[2\]\)\) return;/g) || []).length, 1,
+    "pine() takes the guard — two trees on one spot is one tree drawn twice");
+  // tree() checks without reserving and claims the spot only once its trunk has
+  // landed (a refused trunk must not block the site; lobed-trees pins the behaviour).
+  assert.match(src, /if \(spotOccupied\(a\.c\[0\], a\.c\[2\], false\)\) return;/, "tree() checks the spot");
+  assert.equal((src.match(/^\s+stands\(\);$/gm) || []).length, 2, "dead and live tree() claim the spot after the trunk");
 });
 
 test("a facade draws no rail on its bottom face", () => {
