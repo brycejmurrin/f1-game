@@ -1064,7 +1064,24 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
   strat._rect = { left: 10, top: 180, right: 330, bottom: 220, width: 320, height: 40 };
   h.refit();
   assert.equal(laneLeft(), "318.0px", "one below them (band ends at tower.bottom + 8 + 96) does not");
+  strat._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };   // the mini-dom keeps ids after removeChild: zero the box too
   h.dom.body.removeChild(strat);
+  // UNDER A CAUTION the card steps below the flag chip (css/hud.css), so the band
+  // starts under the flag: the dropped gaps strip at y 62..84 is above it now.
+  if (h.els.flag) {
+    h.els.flag.hidden = false;
+    h.els.flag._rect = { left: 350, top: 70, right: 450, bottom: 94, width: 100, height: 24 };
+    h.refit();
+    assert.equal(laneLeft(), "228.0px", "a visible flag lowers the band past a strip that ends above it (the map still starts the lane)");
+    h.els.flag.hidden = true; h.els.flag._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+    h.refit();
+  }
+  // INPUTS (opt-in, under the sector box on touch) ends the lane when it shares the rows.
+  const inputs = h.dom.document.createElement("div"); inputs.id = "hud-inputs"; h.dom.body.appendChild(inputs);
+  inputs._rect = { left: 540, top: 120, right: 640, bottom: 156, width: 100, height: 36 };
+  h.refit();
+  assert.equal(lane(), (540 - 8 - 318).toFixed(1) + "px", "INPUTS in the card's rows ends the lane at its left edge");
+  h.dom.body.removeChild(inputs);
   const src = read("js/ui/hud.js");
   assert.ok(src.indexOf("announceLane(document.documentElement)") > src.indexOf("hText(els.gapA"),
     "announceLane runs after this tick's gap strings, not only inside fitHud");

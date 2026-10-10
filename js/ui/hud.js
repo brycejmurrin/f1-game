@@ -501,7 +501,8 @@ function announceLane(root) {
   const W = window.innerWidth, H = window.innerHeight || 0;
   const y0 = t ? t.bottom : 0, mid = W / 2;
   const under = (el) => { if (!el || el.hidden || !el.getBoundingClientRect) return 0; const r = el.getBoundingClientRect(); return r.width && r.height ? r.bottom : 0; };
-  const bandTop = Math.max(y0, under(document.getElementById("hud-mirror")), under(document.getElementById("hud-mirror-chip"))) + RADIO_TOP_GAP, bandBot = bandTop + LANE_ROWS;
+  // Under a caution the card steps below the flag chip too (css/hud.css: the caution rules).
+  const bandTop = Math.max(y0, under(document.getElementById("hud-mirror")), under(document.getElementById("hud-mirror-chip")), under(els.flag)) + RADIO_TOP_GAP, bandBot = bandTop + LANE_ROWS;
   let sal = 0, sar = 0;
   if (typeof getComputedStyle === "function" && root) {
     try {
@@ -534,8 +535,9 @@ function announceLane(root) {
   const gaps = document.querySelector(".hud-gaps");
   clip(gaps && !gaps.hidden ? gaps.getBoundingClientRect() : null, false);
   // The opt-in readouts (MOVE & SIZE places them) and the track-limits chip: a
-  // STRATEGY box in the left column shares the card's rows on a phone.
-  for (const el of [document.getElementById("hud-rel"), document.getElementById("hud-strat"), document.getElementById("hud-damage"), els.hudLimits]) {
+  // STRATEGY box in the left column and the INPUTS trace under the sector box
+  // share the card's rows on a phone.
+  for (const el of [document.getElementById("hud-rel"), document.getElementById("hud-strat"), document.getElementById("hud-inputs"), document.getElementById("hud-damage"), els.hudLimits]) {
     if (el && !el.hidden && el.getBoundingClientRect) clip(el.getBoundingClientRect(), false);
   }
   const x = left + RADIO_TOP_GAP, w = right - RADIO_TOP_GAP - x;
