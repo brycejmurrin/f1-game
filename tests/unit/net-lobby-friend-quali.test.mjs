@@ -47,7 +47,7 @@ async function hostUp(startRace) {
   peerSays("hello", { team: "bravo", driver: 1 }); await sleep(80);
   peerSays("ready", { ready: true }); await sleep(80);
   lobby.setReady(true); await sleep(80);
-  return { G, lobby };
+  return { G, lobby, peerSays };
 }
 
 for (const [name, startRace] of [
