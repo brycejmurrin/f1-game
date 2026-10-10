@@ -111,8 +111,10 @@ test("pause owns paused navigation: #campicker stands down with the dim sheet", 
 test("sector box still clears #pausebtn via --tap-hud / --hud-z", () => {
   const hud = read("css/hud.css");
   // --tap-hud is #pausebtn's own height (it follows HUD SIZE, floored at --tap).
+  // Phase 0 also floors top against --hud-top-h so the plate clears the tower
+  // after the zoom fix stopped charging sectors into the tower row.
   assert.match(hud,
-    /#hud-sectors \{[\s\S]*?top:\s*calc\(\(8px \+ var\(--tap-hud\) \+ 4px \+ var\(--sat\)\) \/ var\(--hud-z\)\)/);
+    /#hud-sectors \{[\s\S]*?top:\s*max\(\s*calc\(\(8px \+ var\(--tap-hud\) \+ 4px \+ var\(--sat\)\) \/ var\(--hud-z\)\)/);
 });
 
 /* THE TOUCH-CONTROL TRANSPARENCY LADDER, and the specificity trap under it.
