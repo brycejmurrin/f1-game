@@ -1878,14 +1878,17 @@ function updateHud(force, dtMs) {
   if (els.hudLimits) {
     const player = G.player;
     const cw = player ? (player.cutWarn | 0) : 0;
+    // ANY time penalty the player carries (track limits, a caution pass): live
+    // position already prices it, so the chip shows it rather than a 3 s banner.
+    const pen = player ? Math.round(player.penalty || 0) : 0;
     if (_limitsDots == null) _limitsDots = els.hudLimits.querySelector("span");
-    if (cw > 0) {
+    if (cw > 0 || pen > 0) {
       if (els.hudLimits.hidden) els.hudLimits.hidden = false;
       // Strikes no longer reset (4th and each additional = +5 s), so four dots
       // are a cap: repeat() of a negative count throws.
       const shown = Math.min(cw, 4);
-      hText(_limitsDots, "\u25cf".repeat(shown) + "\u25cb".repeat(4 - shown));
-      hToggle(els.hudLimits, "limits-warn", cw >= 2 && cw < 3);
+      hText(_limitsDots, "\u25cf".repeat(shown) + "\u25cb".repeat(4 - shown) + (pen > 0 ? " +" + pen + "s" : ""));
+      hToggle(els.hudLimits, "limits-warn", (cw >= 2 || pen > 0) && cw < 3);
       hToggle(els.hudLimits, "limits-hot", cw >= 3);
     } else if (!els.hudLimits.hidden) {
       els.hudLimits.hidden = true;
@@ -1898,17 +1901,25 @@ function updateHud(force, dtMs) {
   // w.r.t. the cars; the debris side-world never moves one). Hidden when green.
   if (els.flag) {
     const cn = G.cautionInfo ? G.cautionInfo() : null;
-    const caution = !!(cn && cn.level > 0);
+    // A place gained under a caution owes a give-back inside a 5 s window
+    // (js/race/sporting-regs.js), which can outlast the caution itself.
+    const owed = !!(cn && cn.owed > 0);
+    const caution = !!(cn && (cn.level > 0 || owed));
     // BLUE FLAG: a caution outranks it (the chip holds one flag); no field, no flag.
     const blueCar = !caution && !timeTrial && _ro && G.track && G.state === "race"
       ? _ro.blueFlag(player, cars, G.track.total, G.vTop() * 0.26) : null;
     const show = caution || !!blueCar;
     if (caution) {
       const txt = cn.level === 1 ? "YELLOW" + (cn.sector >= 0 ? " S" + (cn.sector + 1) : "")
-                : cn.level === 2 ? "VSC" : cn.level === 4 ? "RED FLAG" : "SAFETY CAR";
-      hText(els.flag, txt);
+                : cn.level === 2 ? "VSC" : cn.level === 4 ? "RED FLAG" : cn.level === 3 ? "SAFETY CAR" : "";
+      // The window counts down on the chip at this 10 Hz tick ("SC · LET VER BY
+      // 4s"): the banner can be queued behind the caution's own radio card.
+      // "SC" keeps the chip short on a phone; the spoken flag below keys on the
+      // level text only, so the countdown never re-reads the flag.
+      const owe = owed ? "LET " + (cn.owedCode || "THE CAR") + (cn.owed > 1 ? " +" + (cn.owed - 1) : "") + " BY " + Math.ceil(cn.owedT) + "s" : "";
+      hText(els.flag, owe ? (txt === "SAFETY CAR" ? "SC" : txt) + (txt ? " \u00b7 " : "") + owe : txt);
       hClass(els.flag, cn.level === 4 ? "flag-red" : cn.level === 3 ? "flag-sc" : cn.level === 2 ? "flag-vsc" : "flag-yellow");
-      if (txt !== _flagSaid) { _flagSaid = txt; sayFlag(cn); }
+      if (txt !== _flagSaid) { _flagSaid = txt; if (txt) sayFlag(cn); }
     } else _flagSaid = "";
     if (blueCar) {
       hText(els.flag, "BLUE FLAG " + (blueCar.code || ""));

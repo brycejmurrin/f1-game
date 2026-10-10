@@ -771,8 +771,8 @@ const stricken = (o) => incidentSim.owns(o) || (o.rescueT || 0) > 0.25 || (!!o.o
 const cautionFair = (o) => SportingRegs.exempt(o) || stricken(o);   // a car it is legal to pass under a caution
 const scWatch = SportingRegs.createPassWatch(0, stricken);
 function scPassCall(ev) {
-  if (!ev || !player) return; Log.info("game", "Caution pass " + ev.type + " n=" + (ev.n || 0) + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap + " level=" + raceCtl.level); if (ev.type === "cleared") return;
-  if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn"); return; }
+  if (!ev || !player) return; Log.info("game", "Caution pass " + ev.type + " n=" + (ev.n || 0) + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap + " level=" + raceCtl.level); if (ev.type === "cleared") { announce("POSITION RETURNED — NO PENALTY", 1.5, "penalty-warn"); return; }
+  if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn", () => scWatch.info().owed > 0); return; }
   player.penalty += ev.sec;
   // The results countdown may already be running (the player just finished):
   // re-read it so a time penalty that reorders the finish is served first.
@@ -788,7 +788,7 @@ let engineer = null;  // RaceEngineer.create(G), same deferral
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
 function updateCaution(dt) { raceCtl.update(dt); }
 function applyCaution(d) { return raceCtl.apply(d); }
-function cautionInfo() { return raceCtl.info(); }
+function cautionInfo() { const i = raceCtl.info(), w = scWatch.info(); i.owed = w.owed; i.owedT = w.t; i.owedCode = w.code; return i; }   // + the give-back window (hud.js flag chip)
 function cautionLevel() { return raceCtl.level; }   // allocation-free, for per-tick readers
 function otEnabled() { return raceCtl.otEnabled(); }
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
@@ -1042,7 +1042,7 @@ let announcer = Announcer.inert();   // js/audio/announcer.js — the pre-race w
 // is a report. It ranks with the pit-lane messages it belongs to rather than
 // under them — before this it was "info", so the confirmation that you HAD
 // entered the pits outranked the call telling you to.
-const ANN_PRI = { comm: 1, coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, box: 4, race: 4, "penalty-hit": 5 };
+const ANN_PRI = { comm: 1, coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 4, box: 4, race: 4, "penalty-hit": 5 };   // penalty-warn over warning: a 5 s give-back window must not wait out the SC call
 // THE FLOOR. Every card gets ANN_MIN_S on screen, whatever its caller asked for
 // and whatever arrives next. Callers passed durations from 1.4 s up, and 1.4 s
 // is not a message — it is a flash you notice after it has gone. The floor is
@@ -1229,8 +1229,8 @@ function announce(msg, dur, kind, still, quiet) {   // still(): false once a que
   }
   // `_annFloor > 0` is the other half of the floor: a card still inside its
   // three seconds is not evicted even by something that outranks it — the
-  // arrival queues at the head instead and takes over the moment the current
-  // one is done. Without this clause the floor would only be a promise to
+  // arrival queues at the head instead and takes over when that floor runs out
+  // (the drain in tickBody). Without this clause the floor would only be a promise to
   // callers, not to the player, because the very next penalty would break it.
   if (announceT > 0 && (pri <= _annPri || _annFloor > 0)) {
     // Into the queue, highest priority first, arrival breaking ties. Taking a
@@ -8293,7 +8293,7 @@ function tickBody(now) {
   replayBuf.onTick(raceT, cars, state); // 30 Hz solo ring — never under netplay / scrub
   if (announceT > 0) {
     announceT -= dt;
-    if (_annFloor > 0) _annFloor -= dt;
+    if (_annFloor > 0 && (_annFloor -= dt) <= 0 && _annQueue.length && _annQueue[0].pri > _annPri) announceT = 0;   // an outranking card waits out the floor, not the whole card
     if (announceT <= 0) {
       els.announce.hidden = true;
       els.announce.className = "";
