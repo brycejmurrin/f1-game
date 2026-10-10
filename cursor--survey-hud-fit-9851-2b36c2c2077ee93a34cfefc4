@@ -1,1 +1,1 @@
-1791615751	Cursor Agent	SurveyHud: call GameHud.invalidateFit after holdChrome so survey shots get capped layout; OWNED js/ui/survey-hud.js only. Do not enable auto-merge or merge.  [cursor/survey-hud-fit-9851; session 2b36c2c2077ee93a34cfefc4]
+1791616709	Cursor Agent	DONE draft #1340 survey-hud-fit: js/ui/survey-hud.js invalidateFit after holdChrome. Verified tooling-fast + survey-hud unit. Next: survey shots confirm capped; tip CI; ready-gate. No AM/merge. Blockers: none.  [cursor/survey-hud-fit-9851; session 2b36c2c2077ee93a34cfefc4]
