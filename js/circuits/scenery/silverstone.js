@@ -1306,6 +1306,14 @@
           bakedModel("k_camera_exclusive", k(s), side, 13, { scale: 3 });
         // Low sponsor boards along the Hangar Straight and the Wellington straight.
         along(0.190, 0.265, 30, (kk) => { bakedModel("k_billboardlow", kk, 1, 14, { scale: 2.2 }); });
+        bakedModel("k_tentlong", k(0.47), 1, 90, { scale: 2.4 });
+        along(0.72, 0.726, 12.5, (kk) => { bakedModel("k_grandstandcovered", kk, 1, 34, { scale: 2.5 }); });
+        bakedModel("k_tentlong", k(0.96), -1, 60, { scale: 2.4 });
+        bakedModel("k_tentlong", k(0.905), -1, 90, { scale: 2.4 });
+        bakedModel("k_tentlong", k(0.49), 1, 60, { scale: 2.4 });
+        bakedModel("k_tentlong", k(0.62), 1, 60, { scale: 2.4 });
+        bakedModel("k_tentlong", k(0.1), 1, 60, { scale: 2.4 });
+        bakedModel("k_tentlong", k(0.49), -1, 60, { scale: 2.4 });
         bakedModel("k_radarequipment", k(0.44), 1, 60, { scale: 2.5 });
         bakedModel("k_radarequipment", k(0.236), 1, 52, { scale: 2.5 });
       }
