@@ -16,3 +16,13 @@ Each sheet: cameras cockpit / chase / helmet × "shipped" (opt-in RELATIVE, STRA
 | phone-portrait-390x844.jpg | portrait (behind the rotate prompt): radio × map, SECTORS × DAMAGE, radio × RELATIVE/STRATEGY. |
 | tablet-1180x820.jpg | iPad landscape: no overlaps. |
 | desktop-1280.jpg | desktop 1280x720: LIMITS × INPUTS and DAMAGE × INPUTS when the opt-ins are on. |
+
+## Batch 2 — sectors + limits to the left (branch cursor/hud-sectors-left-5d2e, on the band allocator)
+
+BEFORE = ship tip (980eadd), AFTER = cursor/hud-sectors-left-5d2e @ 9a3782f, same mock (`tools/shot/hud-mock.mjs`,
+LIMITS shown by a real strike via `__apex.strikes`). Rows: cockpit / chase × shipped / all-on, helmet all-on.
+
+| sheet | what it shows |
+|---|---|
+| before-after-phone-landscape-844x390.jpg | S1-S3 as one row under the map with LIMITS under it on every camera (was: plate beside BOOST, LIMITS left in cockpit / right in chase); DAMAGE beside LIMITS; radio card centre-left under the flag (was: over the map / flag); the right column keeps INPUTS only. Only overlap left: helmet GEAR × ERS (PR #1351). |
+| before-after-phone-se-667x375.jpg | the same on iPhone SE (no notch). With every opt-in on, STRATEGY drops (reported as "no room") instead of floating mid-track. |
