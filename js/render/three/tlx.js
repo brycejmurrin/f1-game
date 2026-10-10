@@ -2610,8 +2610,10 @@ const TLX = (function () {
         // pipeline runs _getVertexFormat, which is `e.array.constructor` with
         // NO null guard in the shipped vendor build (three.webgpu.min.js,
         // r185). Both rungs therefore throw and the ladder lands on
-        // refuseTab() — which reloads onto GLX, so the player still gets a
-        // game, just never the unlit TLX degradation those rungs exist for.
+        // refuseTab() — which reloads onto GLX only for an explicit pin or a boot
+        // already on three WebGL2 (a WebGPU AUTO boot reloads onto three WebGL2),
+        // so the player still gets a game, just never the unlit TLX degradation
+        // those rungs exist for.
         // Verified by reading the vendored bytes, not reproduced at runtime.
         // Do not add rungs above refuseTab() expecting them to run here.
         if (now - _mirrorSweepAt < 2000) return;
@@ -4364,14 +4366,25 @@ const TLX = (function () {
               if (_instRegistry[i]) _instRegistry[i].material = instMat;
             }
           };
+          // The last rung: even rawUnlitMat throws. AUTO on three's WebGPU takes three WebGL2 next boot (tlxAutoGL, a
+          // different configuration). A boot that is ALREADY three WebGL2 (forceWebGL / _autoStayGL) or an explicit pin
+          // has nothing lower on TLX, so it binds GLX (gfxClaimFail): tlxAutoGL there reproduced the same boot for ever.
+          // The reload spends the shared ctxLostReloads budget (n <= 2, like the heal path below); past it the latch is
+          // still written for the player's own next reload, but nothing reloads on its own.
           const refuseTab = () => {
-            if (_glPin !== "0" && _glPin !== "1") {
-              try { sessionStorage.setItem("apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps trying WebGPU */ }
-            } else {
-              try { sessionStorage.setItem("apex26.gfxClaimFail", "1"); } catch (_) { /* this tab keeps trying */ }
-            }
+            const toGlx = _glPin === "0" || _glPin === "1" || forceWebGL || _autoStayGL;
+            try { sessionStorage.setItem(toGlx ? "apex26.gfxClaimFail" : "apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps its path */ }
             try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* skipClaim still blocks revert */ }
-            try { location.reload(); } catch (_) { /* harness: GLX attaches next real boot */ }
+            let n;
+            try {
+              n = (parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) + 1;
+              sessionStorage.setItem("apex26.ctxLostReloads", String(n));
+            } catch (_) { n = ++_sessLostN; }
+            if (n <= 2) { try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
+            try {
+              if (typeof window.__apexReportError === "function")
+                window.__apexReportError("gfx", new Error("The graphics renderer cannot draw on this device — reload to try again, or pick another RENDERER in settings."));
+            } catch (_) { /* shell card absent */ }
           };
           let painted = false;
           try {

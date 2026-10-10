@@ -83,3 +83,61 @@ test("TLX post chain: re-callable factory, rebuilt at the next realloc, bound la
     "a post-only candidate must not label the session WEBGL2 while TLX keeps painting");
   assert.match(src, /\} catch \(e\) \{ persistFail\(e, !!post\); \}/, "the first catch marks a post-only candidate");
 });
+
+// 08-F1: refuseTab() on AUTO wrote tlxAutoGL, which only means "stay on three WebGL2"; a boot that was already
+// three WebGL2 reloaded into the identical configuration, uncounted, for ever. The real function body runs here.
+function refuse(o = {}) {
+  const store = Object.assign({}, o.ss || {});
+  const out = { reloads: 0, errors: [], store, local: Object.assign({ "apex26.gfxBackendProbe": "1" }, o.ls || {}) };
+  const ss = o.ssThrows
+    ? { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } }
+    : { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } };
+  const ctx = vm.createContext({
+    _glPin: o.pin ?? null, forceWebGL: !!o.forceWebGL, _autoStayGL: !!o.autoStayGL, _sessLostN: 0,
+    sessionStorage: ss,
+    localStorage: { removeItem: (k) => { delete out.local[k]; } },
+    location: { reload() { out.reloads++; } },
+    window: { __apexReportError: (w, e) => out.errors.push([w, e.message]) },
+  });
+  const src = read("js/render/three/tlx.js");
+  const body = src.slice(src.indexOf("const refuseTab = () => {"), src.indexOf("let painted = false;", src.indexOf("const refuseTab = () => {")));
+  assert.ok(body.startsWith("const refuseTab"), "the refuseTab needles moved — check this test, not the code");
+  out.call = vm.runInContext(body + "\n refuseTab", ctx);
+  return out;
+}
+
+test("refuseTab: AUTO on WebGPU takes three WebGL2, counted against the shared reload budget (08-F1)", () => {
+  const r = refuse();
+  r.call();
+  assert.equal(r.store["apex26.tlxAutoGL"], "1");
+  assert.equal(r.store["apex26.gfxClaimFail"], undefined);
+  assert.equal(r.store["apex26.ctxLostReloads"], "1", "the reload spends a ctxLostReloads credit");
+  assert.equal(r.reloads, 1);
+  assert.equal(r.local["apex26.gfxBackendProbe"], undefined, "the canary probe is cleared as before");
+});
+
+test("refuseTab: a boot already on three WebGL2 binds GLX instead of reloading into itself (08-F1)", () => {
+  for (const o of [{ forceWebGL: true }, { autoStayGL: true }, { pin: "1" }, { pin: "0" }]) {
+    const r = refuse(o);
+    r.call();
+    assert.equal(r.store["apex26.gfxClaimFail"], "1", JSON.stringify(o));
+    assert.equal(r.store["apex26.tlxAutoGL"], undefined, JSON.stringify(o));
+    assert.equal(r.reloads, 1, JSON.stringify(o));
+  }
+});
+
+test("refuseTab: bounded at two reloads per tab; past the cap the latch is kept but nothing reloads (08-F1)", () => {
+  const r = refuse({ forceWebGL: true });
+  for (let i = 0; i < 6; i++) r.call();
+  assert.equal(r.reloads, 2, "a tab that fails every boot cannot loop");
+  assert.equal(r.errors.length, 4, "every refused reload says so on the error card");
+  assert.equal(r.store["apex26.gfxClaimFail"], "1", "the player's own reload still lands on GLX");
+  const spent = refuse({ ss: { "apex26.ctxLostReloads": "2" } });
+  spent.call();
+  assert.equal(spent.reloads, 0);
+  assert.equal(spent.store["apex26.tlxAutoGL"], "1");
+  // sessionStorage blocked: the in-memory budget still bounds it.
+  const blocked = refuse({ ssThrows: true, forceWebGL: true });
+  for (let i = 0; i < 5; i++) blocked.call();
+  assert.equal(blocked.reloads, 2);
+});
