@@ -14,14 +14,16 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
+// production only calls update() in "count" and "race" (game.js update(); never in the menu), so the rigs do too.
 function rig({ session = "quali", timeTrial = false, practice = false, real = false, total = 5000, dropV = 60 } = {}) {
-  const plate = [], said = [];
+  const plate = [], said = [], seated = [];
   let calibrated = 0;
   const ctx = {
     Math, Object, Log: { info() {} },
     Input: { calibrate: () => { calibrated++; } },
     Tracks: { sample: (tr, s, o) => { o.p = [0, 0, s]; o.t = [0, 0, 1]; o.r = [1, 0, 0]; return o; } },
-    RealRace: { dropSpeed: () => dropV },
+    // seatOnRoad is the real one's contract: re-seed the pose from the road at the car's current s (stubbed tangent = +z)
+    RealRace: { dropSpeed: () => dropV, seatOnRoad: (tr, c) => { seated.push(c.s); c.head = 0; } },
   };
   vm.createContext(ctx);
   vm.runInContext(read("js/race/flying-start.js") + "\n;globalThis.FlyingStart = FlyingStart;", ctx);
@@ -36,12 +38,11 @@ function rig({ session = "quali", timeTrial = false, practice = false, real = fa
     announce: (t) => said.push(t),
   };
   const fs_ = ctx.FlyingStart.create(G, { realRace: () => real });
-  return { FS: ctx.FlyingStart, fs: fs_, G, player, plate, said, calibrated: () => calibrated };
+  return { FS: ctx.FlyingStart, fs: fs_, G, player, plate, said, seated, calibrated: () => calibrated };
 }
 
 test("qualifying: the first countdown frame drops the car in at speed before the line, the AI driving", () => {
   const r = rig();
-  r.fs.update(1 / 60);            // menu
   r.G.state = "count";
   r.fs.update(1 / 60);            // the countdown is entered: armed, green at once
   assert.equal(r.G.state, "race", "no gantry: straight to green");
@@ -64,6 +65,7 @@ test("the hand-over counts down on the plate, then GO gives the wheel back and r
   r.G.state = "count"; r.fs.update(1 / 60);
   for (let i = 0; i < 60 * r.FS.HANDOVER_S + 2; i++) r.fs.update(1 / 60);
   assert.equal(r.player.human, true);
+  assert.equal(r.seated.length, 1, "the hand-over re-seeds the heading from the road at the current s");
   assert.deepEqual(r.plate.slice(0, 4), [3, 2, 1, "GO"]);
   assert.equal(r.calibrated(), 1, "the gantry's first lamp calibrated tilt; the hand-over does now");
   for (let i = 0; i < 60; i++) r.fs.update(1 / 60);
@@ -100,8 +102,20 @@ test("stop() hands the wheel back at once (__apex.go() and quitting to the menu)
   assert.equal(r.fs.active(), true);
   r.fs.stop();
   assert.equal(r.player.human, true);
+  assert.equal(r.seated.length, 1, "…facing along the road, not the drop heading");
   assert.equal(r.fs.active(), false);
   assert.equal(r.plate[r.plate.length - 1], null);
+});
+
+test("a session quit mid-countdown (update() never runs in the menu) does not hide the next session's start", () => {
+  const r = rig({ session: "race" });
+  r.G.state = "count"; r.fs.update(1 / 60);          // a GP countdown, not wanted
+  assert.equal(r.G.state, "count");
+  r.G.state = "menu"; r.fs.stop();                   // quitToMenu() -> flyingStart.stop(); no update() in the menu
+  r.G.session = "tt"; r.G.timeTrial = true;
+  r.G.state = "count"; r.fs.update(1 / 60);          // the new time trial's first countdown frame
+  assert.equal(r.G.state, "race", "armed: the first update after a quit-in-count is still a new start");
+  assert.equal(r.fs.active(), true);
 });
 
 test("the run-up is clamped: never closer than the floor, never most of a short lap", () => {

@@ -52,7 +52,7 @@
       { kinds: ["foliage"], s0: 0.42, s1: 0.52, side: 1 },
     ],
     // British overcast (ATM.britishOvercast) — pale grey-blue sky, lush grass, soft fog.
-    pal: { zenith: [0.55, 0.62, 0.72], horizon: [0.72, 0.76, 0.82], grass: [0.16, 0.40, 0.18], runoff: [0.48, 0.46, 0.42], fog: [0.68, 0.72, 0.78], fogDensity: 0.0020, sunDir: [0.42010419876354255, 0.5521369469463703, 0.7201786264517872], sun: [0.92, 0.94, 0.96], sunColor: [0.92, 0.94, 0.96], ambientSky: [0.58, 0.62, 0.70], ambientGround: [0.30, 0.34, 0.28] },
+    pal: { zenith: [0.55, 0.62, 0.72], horizon: [0.72, 0.76, 0.82], grass: [0.16, 0.40, 0.18], runoff: [0.26, 0.36, 0.21], fog: [0.68, 0.72, 0.78], fogDensity: 0.0020, sunDir: [0.42010419876354255, 0.5521369469463703, 0.7201786264517872], sun: [0.92, 0.94, 0.96], sunColor: [0.92, 0.94, 0.96], ambientSky: [0.58, 0.62, 0.70], ambientGround: [0.30, 0.34, 0.28] },
     // Source-trace fractions mapping to racing s≈0.12 (rise) and s≈0.55 (dip).
     elevations: [
       { s: 0.7669, halfM: 420, rise: 7 },
@@ -74,7 +74,7 @@
     // re-seats turns when the start line moves.
     sectors: [0.3, 0.62],
     turns: [0.0705, 0.1095, 0.1526, 0.1780, 0.2101, 0.3402, 0.3723, 0.4199, 0.5229, 0.6140, 0.6324, 0.6612, 0.6838, 0.7105, 0.8556, 0.9384, 0.9507, 0.9802],  // Abbey Farm Village Loop Aintree Brooklands Luffield Woodcote Copse Maggotts Becketts(3) Chapel Stowe Vale Club(2) — curvature-peak apexes
-    furniture: { tree: "broad", fol: [0.28, 0.45, 0.22], lamp: "none", treeCrown: "vase" },  // English oak copses, mid-green
+    furniture: { tree: "broad", fol: [0.28, 0.45, 0.22], lamp: "post", treeCrown: "vase" },  // English oak copses, mid-green
     kit: { marshal: "cabin",     rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     standSet: ["navy", "steel", "alu"],  // Silverstone blue
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,

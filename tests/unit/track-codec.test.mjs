@@ -287,3 +287,12 @@ test("surface opts (kerb + berms): trailing byte only when off default; round-tr
   assert.equal(raw.kerbStyle, "sausage");
   assert.equal(raw.berms, true);
 });
+
+test("a hostile 282-char share code of a ~990 km loop is refused before anything builds it (13-F1)", async () => {
+  const { CD } = bootEditor();
+  const code = "APXT1.z.Hc7PSgJhFIbxBCHbve8dtPRGahUYOPfRLZwgBBEiiEgCnUGESCL8AyKEnI8gugY3zizKTQYiRKNIn3xn-_BbPAUcnB6W3bCow2I6L_U_SzKgftDfU94pHvpG_wVxTJbQKeM25ZXBTMyMmbSpI2o3RNegvlDXkGe6GfSJ8RLyaKZrpmMmNtNilkMfmPYoTbop9c7MrZkbM9dmGvT_kDplAa0xzSFXzHrUS_p-mJQmdYdgtgjmD8H8Ipg1glmZ-THzjaPopBodn1Uq5xebPQ";
+  assert.equal(code.length, 282);
+  const r = await CD.decode(code);
+  assert.equal(r.ok, false, "the base decoded this to lengthM 993532 and V.check then took 10 s / 227 MB");
+  assert.equal(r.reason, "geometry");
+});

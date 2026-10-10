@@ -730,13 +730,28 @@ function initPresentControls() {
   };
 }
 
-// __apex.diag({download:false}) → clipboard via ApexClipboard (API + textarea fallback).
+// The diag a player can copy. `window.__apex` is NULL on the shipped build (game.js declares it null and
+// fills it only for localhost / ?apex / devApi), so the full snapshot is dev-only; a player gets the
+// subset the picker can read without it: bound backend + its own state, stored pick, the warn/error log.
+function playerDiag() {
+  const safe = (fn) => { try { return fn(); } catch (e) { return { error: String((e && e.message) || e) }; } };
+  return {
+    when: new Date().toISOString(),
+    ua: safe(() => navigator.userAgent),
+    backend: safe(() => liveBackend()),
+    backendState: safe(() => (typeof GLX !== "undefined" && GLX && typeof GLX.backendState === "function") ? GLX.backendState() : null),
+    renderer: safe(() => JSON.parse(unavailableDiagnostics())),
+    log:safe(() => (typeof Log !== "undefined" && Log.records) ? Log.records({ level: "warn", limit: 40 }) : []),
+  };
+}
+
+// __apex.diag({download:false}) when the dev surface exists, else playerDiag() → clipboard via ApexClipboard.
 function copyDiag(btn) {
   const label = (t) => { if (btn) btn.textContent = t; };
   const reset = () => setTimeout(() => label("COPY DIAG"), 1600);
   let text = "";
   try {
-    const d = (typeof __apex !== "undefined" && __apex.diag) ? __apex.diag({ download: false }) : null;
+    const d = (typeof __apex !== "undefined" && __apex && typeof __apex.diag === "function") ? __apex.diag({ download: false }) : playerDiag();
     text = d ? JSON.stringify(d, null, 1) : "";
   } catch (e) { text = ""; }
   if (!text) { label("COPY DIAG — NO DIAG"); reset(); return; }

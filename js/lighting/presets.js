@@ -6472,18 +6472,30 @@ window.LightPresets = {
     "tint": -0.12,
     "saturation": 0.92
   },
+  // Night sky: *|night|dry cityGlowMul 0.55 crushed the open-circuit dome
+  // (theme "green" base glow [0.024,0.018,0.012]). Pass-2 A/B 2026-10-10
+  // (artifacts/survey/silverstone/pass2/night-ab): cityGlowMul 2.35 + Reach 0.42
+  // + Warm 0.45 lifts the horizon band (~+0.13 R) without beige verge wash.
+  // Stars: density/size nudges for when the soft present streams them;
+  // SwiftShader A/B of starBright alone was not repeatably visible.
   "silverstone|night|dry":   {
     "starBright": 1.6,
+    "starDensity": 1.35,
+    "starSize": 1.25,
     "bounceK": 0.3,
     "fogTint": 0.06,
     "lampFlicker": 0,
-    "lampRadiusMul": 1.9,
+    "lampRadiusMul": 0.9,
     "lampTemp": -0.792,
     "roadRough": 1.13,
     "ssrWetMul": 0.34,
     "surfDetail": 2.45,
     "tint": 0.06,
-    "wetDark": 1.47
+    "wetDark": 1.47,
+    "cityGlowMul": 2.35,
+    "cityGlowReach": 0.42,
+    "cityGlowWarm": 0.45,
+    "cityGlowTint": 0.42
   },
   "silverstone|night|fog": {
     "fogDensityMul": 1.7,

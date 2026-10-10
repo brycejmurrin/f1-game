@@ -10,11 +10,19 @@
 # Callers skip the expensive fast-tier STEPS (names still report) and still
 # run ready-only jobs (smoke, sweeps, renderer, selected).
 #
+# THE BASE MUST NOT HAVE MOVED (15-F5, 2026-10-10). A pull_request run tests
+# refs/pull/N/merge: the head merged into the base tip AT THAT TIME. Marking
+# ready hours later puts the new run on a newer base, and the merge-dependent
+# checks the reuse skips (tooling A/B, ratchet comparison, test:audit, the node
+# slices) are exactly the ones that fail on a semantic merge. So the draft run
+# is reused only when the base branch has taken no commit since it started.
+#
 # Fail-safe: any lookup problem is reuse=false (run the fast tier again).
 set -eu
 ACTION="${GITHUB_EVENT_ACTION:-}"
 HEAD="${PR_HEAD_SHA:-}"
 REPO="${GITHUB_REPOSITORY:?}"
+BASE_REF="${PR_BASE_REF:-}"
 say() { echo "$*" >&2; }
 
 if [ "$ACTION" != "ready_for_review" ]; then
@@ -38,8 +46,23 @@ hit="$(printf '%s' "$json" | node -e '
     const r = runs.find((x) => x.status === "completed" && x.conclusion === "success"
       && String(x.id) !== self && x.path === ".github/workflows/ci.yml"
       && x.event === "pull_request");
-    if (r) process.stdout.write(String(r.id));
+    if (r) process.stdout.write(`${r.id} ${r.run_started_at || r.created_at || ""}`);
   });')"
+if [ -n "$hit" ]; then
+  started="${hit#* }"
+  hit="${hit%% *}"
+  # The base branch's tip commit date, against the moment the draft run started.
+  tip="$( [ -n "$BASE_REF" ] && gh api "repos/$REPO/commits/$BASE_REF" --jq '.commit.committer.date' 2>/dev/null )" || tip=""
+  moved="$(node -e '
+    const t = Date.parse(process.argv[1]), r = Date.parse(process.argv[2]);
+    process.stdout.write(Number.isFinite(t) && Number.isFinite(r) ? (t > r ? "moved" : "same") : "unknown");
+  ' "$tip" "$started")"
+  if [ "$moved" != same ]; then
+    say "reuse-draft-fast: base $BASE_REF tip ($tip) is $moved against the draft run $hit (started $started) — merge-dependent checks must re-run"
+    echo "reuse=false"
+    exit 0
+  fi
+fi
 if [ -n "$hit" ]; then
   say "reuse-draft-fast: reusing ci.yml run $hit for head $HEAD"
   echo "reuse=true"

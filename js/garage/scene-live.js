@@ -53,8 +53,12 @@ function paintLive(cv, team, liv, ctx) {
     ctx2.fillStyle = "#f2f3f5"; ctx2.font = "700 18px system-ui, sans-serif";
     ctx2.textAlign = "left"; ctx2.textBaseline = "middle";
     ctx2.fillText(track ? String(track.name || track.id).toUpperCase() : "NO CIRCUIT", R.x + 10, R.y + 15, R.w - 20);
-    if (track && track.points && track.points.length > 3) {
-      const P = track.points;
+    // A raw Tracks.LIST entry that has not hydrated (LAZY_CIRCUIT meta stub) THROWS on
+    // `.points` ("has no path"): skip the map only, so the flag, banners and career footer
+    // below still paint; GarageScene.ctxKey repaints once the circuit is resident.
+    let P = null;
+    try { P = track && track.points; } catch (e) { P = null; }
+    if (P && P.length > 3) {
       let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
       for (let i = 0; i < P.length; i++) { x0 = Math.min(x0, P[i][0]); x1 = Math.max(x1, P[i][0]); z0 = Math.min(z0, P[i][2]); z1 = Math.max(z2z(P[i]), z1); }
       const pad = 22, top = R.y + 40, bh = R.h - 40 - 46, bw = R.w - pad * 2;

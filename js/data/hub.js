@@ -284,6 +284,16 @@ const DataHub = (function () {
     state.telemetry = null;
     state.results = null;
     state.race = null;
+    // A reopen is a fresh intent: a tab that FAILED earlier (opened offline) must
+    // try again, not repaint its old error card — which would also be re-rendered
+    // against today's navigator.onLine and blame the service for a lost link. The
+    // stale node a failed refresh kept still carries data: it goes back to a
+    // normal entry (age-checked by showTab); an empty failure is dropped.
+    for (const id in state) {
+      const st = state[id];
+      if (!st || st.status !== "failed") continue;
+      state[id] = st.node ? { node: st.node, at: st.at, status: "ready", error: null } : null;
+    }
     root.hidden = true;
     openFlag = false;
     if (returnFocus && returnFocus.isConnected && returnFocus.focus) returnFocus.focus();
@@ -548,7 +558,11 @@ const DataHub = (function () {
     if (title) selectEl.title = title; else selectEl.removeAttribute("title");
   }
 
-  function buildPicker(onPick) {
+  // onChange (optional) runs synchronously when the player starts a YEAR or GRAND
+  // PRIX change, BEFORE the picker queues its own meetings / sessions request: that
+  // request shares F1API's serialized lane, so whatever the tab still has in
+  // flight (TELEMETRY's COMPARE lanes) would be waited out first.
+  function buildPicker(onPick, onChange) {
     let pickerGen = 0;
     const box = el("div", "dh-picker");
     const yearRow = el("div", "dh-pick-years");
@@ -558,6 +572,7 @@ const DataHub = (function () {
       b.addEventListener("click", function () {
         if (y === sel.year) return;
         cancelRealRace();
+        if (onChange) onChange();
         sel.year = y; sel.meetingKey = null; sel.sessionKey = null; sel.pinned = false;
         for (let i = 0; i < yearRow.children.length; i++) {
           yearRow.children[i].classList.toggle("active", yearRow.children[i] === b);
@@ -601,6 +616,7 @@ const DataHub = (function () {
 
     gpSel.addEventListener("change", function () {
       cancelRealRace();
+      if (onChange) onChange();
       sel.meetingKey = gpSel.value ? Number(gpSel.value) : null;
       sel.sessionKey = null;
       sel.pinned = false;
