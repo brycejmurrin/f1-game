@@ -667,3 +667,39 @@ test("rescuePlayer deletes the lap in time trial and qualifying, not in a race a
     assert.deepEqual(run(p, "tt"), { inv: false, cut: false }, "an AI car's rescue never touches lap validity");
   } finally { p.human = true; g.G.session = "race"; }
 });
+
+// 01-F5 (hunt2): handing a flipped human car back called G.rescuePlayer BEFORE the car left the takeover; the real
+// rescuePlayer begins with incidentSim.release(c), which found the car still owned and ran handbackCar a second
+// time (second demote, restored last-good pose, fallbacks++, a second "anomaly" log). The module whole in a VM,
+// DebrisWorld stubbed, G a two-car world whose rescuePlayer does what game.js's does first: release(c).
+test("a flipped human car handed back from a takeover is demoted once and is not counted as a fallback", async () => {
+  const fsm = await import("node:fs"), pathm = await import("node:path"), { seedLog } = await import("../helpers/seed-log.mjs");
+  const root = pathm.resolve(pathm.dirname(new URL(import.meta.url).pathname), "..", "..");
+  const rd = (p) => fsm.readFileSync(pathm.join(root, p), "utf8");
+  const demoted = [], logs = [];
+  const flipped = { x: 0, z: 0, qx: 1, qy: 0, qz: 0, qw: 0, vx: 0, vz: 0, sleeping: true };   // up.y = -1: on its roof, at rest
+  const DebrisWorld = { active: () => true, rapierReady: () => true, worldGen: () => 1, promoteCarDynamic: () => true,
+    demoteCarKinematic: (i) => { demoted.push(i); }, carBodyPose: () => flipped };
+  const ctx = vm.createContext({ Math, JSON, Object, Array, String, Number, Map, Set, Uint8Array, isNaN, isFinite, console, DebrisWorld,
+    Tracks: { sample: () => {}, wallAt: () => 8 } });
+  seedLog(ctx);
+  for (const f of ["js/core/mat4.js", "js/race/race-control.js", "js/physics/incident-sim.js"]) vm.runInContext(rd(f), ctx, { filename: f });
+  const IncidentSim = vm.runInContext("IncidentSim", ctx);
+  const mk = (s, human) => ({ px: 0, pz: 0, head: 0, speed: 40, s, x: 0, vLat: 0, yawRateCur: 0, prog: s, finished: false, retired: false, human });
+  const cars = [mk(100, true), mk(103, false)];
+  let sim, rescued = 0;
+  const G = { cars, player: cars[0], track: { total: 5000 }, PACE: 1, vTop: () => 72, smp: {},
+    trackFrom: () => ({ s: 100, x: 0 }), worldFromTrack: () => ({ x: 0, z: 0 }),
+    rescuePlayer: (c) => { rescued++; sim.release(c); } };   // game.js rescuePlayer(): incidentSim.release(c) first
+  sim = IncidentSim.create(G);
+  sim.setFlags({ r2Airborne: true, r3Contact: false, c1Pileup: false });
+  sim.notifyCar(cars[0], cars[1], 30);
+  sim.preStep(1 / 60);
+  assert.equal(sim.status().owned, 2, "both cars are in the takeover");
+  for (let i = 0; i < 40 && sim.owns(cars[0]); i++) sim.postStep(1 / 60);   // settle on the roof -> handback
+  assert.equal(sim.owns(cars[0]), false, "the human car was handed back");
+  assert.equal(rescued, 1, "the inverted human car was rescued onto the road");
+  assert.equal(demoted.filter((i) => i === 0).length, 1, "demoted to kinematic exactly once");
+  assert.equal(sim.status().fallbacks, 0, "a clean settle is not an anomaly fallback");
+  assert.equal(sim.status().handbacks, 2, "one clean handback per car in the window (the human and the AI)");
+});
