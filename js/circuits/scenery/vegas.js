@@ -285,10 +285,10 @@
       for (let s = 0.10; s <= 0.27; s += 0.022) {
         lampPost(K(s), (s < 0.18 ? 1 : -1), 12);
       }
-      // Lamp posts along the full Strip (racing 0.48–0.82) — both sides, denser
-      for (let s = 0.48; s <= 0.82; s += 0.016) {
-        lampPost(K(sl(s)), -1, 13);
-        lampPost(K(sl(s + 0.008)), 1, 13);
+      // Lamp posts along the full Strip (racing 0.48–0.82) — setback clears neonTower.
+      for (let s = 0.48; s <= 0.82; s += 0.022) {
+        lampPost(K(sl(s)), -1, 16);
+        lampPost(K(sl(s + 0.011)), 1, 16);
       }
       // Lamp posts on the final straight / Harmon approach (racing 0.83–0.97)
       for (let s = 0.83; s <= 0.97; s += 0.020) {
@@ -394,37 +394,42 @@
 
       {
         const pads = [
-          ["kenney_com_building-f", 0.08, 1, 58],
-          ["kenney_com_building-b", 0.11, -1, 48],
-          ["kenney_com_building-skyscraper-b", 0.16, 1, 55],
-          ["kenney_ind_building-q", 0.20, -1, 50],
+          ["kenney_com_building-f", 0.08, 1, 62],
+          ["kenney_com_building-b", 0.11, -1, 58],
+          ["kenney_com_building-skyscraper-b", 0.16, 1, 64],
+          ["kenney_ind_building-q", 0.20, -1, 60],
         ];
         for (const [id, s, side, dist] of pads) {
           const sc = id.includes("skyscraper") ? 4.2 : 1.2;
-          if (!bakedModel(id, K(s), side, dist, { scale: sc }))
-            building(K(s), side, dist, 20, 40 * sc * 0.4, 18,
+          const ks = K(sl(s));
+          if (!bakedModel(id, ks, side, dist, { scale: sc }))
+            building(ks, side, dist, 20, 40 * sc * 0.4, 18,
               { kind: "tiered", wall: [0.16, 0.17, 0.20], window: [0.30, 0.38, 0.48], floor: 8, lit: true });
         }
       }
 
-      building(K(0.03), -1, 52, 34, 128, 30, { kind: "notch", wall: [0.07, 0.08, 0.13], window: [0.10, 0.22, 0.42], floor: 11, lit: true });
-      place(K(0.03), -1, 20, [10, 1.0, 26], [0.15, 0.30, 0.55]);   // cool blue base uplight
-      building(K(0.062), -1, 60, 30, 90, 26, { kind: "screen", wall: [0.14, 0.14, 0.18], window: LED, floor: 15, lit: true });
-      place(K(0.062), -1, 44, [2.5, 16, 30], LED);                // giant LED megascreen
+      building(K(sl(0.03)), -1, 58, 34, 128, 30, { kind: "notch", wall: [0.07, 0.08, 0.13], window: [0.10, 0.22, 0.42], floor: 11, lit: true });
+      place(K(sl(0.03)), -1, 24, [10, 1.0, 26], [0.15, 0.30, 0.55]);   // cool blue base uplight
+      // The 90 m tower yields silently to a generic city unit (massBlocked; also dropped before this PR); every
+      // other slot within 100 m is blocked or over the Koval bend, so only the megascreen board below stands here.
+      building(K(sl(0.062)), -1, 64, 30, 90, 26, { kind: "screen", wall: [0.14, 0.14, 0.18], window: LED, floor: 15, lit: true });
+      place(K(sl(0.062)), -1, 48, [2.5, 16, 30], LED);                // giant LED megascreen
 
       const BOH_WALL = [0.16, 0.17, 0.20];   // flat concrete-grey, no warm cast
       const BOH_WIN  = [0.30, 0.38, 0.48];   // cool dim office glass, not neon
-      // Prominent hotel towers either side of the start/finish straight approach
-      building(K(0.10), -1, 22, 30, 46, 30, { kind: "twin", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
-      building(K(0.14), 1, 20, 26, 40, 26, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
-      // gap 28 on the pit side: the complex's row and its tail keep 26.7 m.
-      cityFront(0.12, 0.20, -1, 28, { minH: 20, maxH: 42, depth: 22, step: 30,
+      // Prominent hotel towers either side of the PIT straight / T1-T2 (RACING 0.096 / 0.136 via sl(); nudged ~25 m so the generic city rows do not take the footprint first; docs/tracks/vegas.md §4
+      // puts the tall towers at the pit, neon billboards on the final straight). Bare K(0.10) had drifted ~0.16 lap
+      // onto the Harmon approach when startFrac moved (7a173519); the S/F approach keeps its billboards, grandstand and low rows.
+      building(K(sl(0.096)), -1, 58, 30, 46, 30, { kind: "twin", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
+      building(K(sl(0.136)), 1, 55, 26, 40, 26, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
+      // gap 58+: low back-of-house rows behind a forecourt band. cityFront takes AUTHORED fracs (not sl()): 0.12-0.20
+      // lands on RACING 0.963-0.04, the S/F approach, on purpose - the hotels above stay at the pit.
+      cityFront(0.12, 0.20, -1, 58, { minH: 6, maxH: 14, depth: 18, step: 32,
         palette: [[0.18, 0.18, 0.20], [0.19, 0.19, 0.20]], lit: true, windowCol: BOH_WIN });
-      cityFront(0.12, 0.20,  1, 20, { minH: 18, maxH: 38, depth: 20, step: 30,
+      cityFront(0.12, 0.20,  1, 52, { minH: 6, maxH: 12, depth: 16, step: 32,
         palette: [[0.18, 0.18, 0.20], [0.17, 0.18, 0.21]], lit: true, windowCol: BOH_WIN });
-      // Mid-sector buildings around T3-T5 corner — still low/dim, service-road massing
-      building(K(0.22), 1, 26, 30, 40, 28, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
-      building(K(0.28), -1, 30, 34, 46, 30, { kind: "notch", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
+      // Mid-sector service massing — re-keyed through sl(); pushed back off the barrier.
+      building(K(sl(0.26)), 1, 62, 30, 40, 28, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
 
       // Wynn / Encore — copper twin towers on Sands Ave approach just before
       // Venetian Strip entry (racing ~0.445, LEFT). Closed solid cores —
@@ -531,20 +536,32 @@
 
       // Venetian / Palazzo — warm-cream tower cluster + campanile at Strip entry
       // (racing ~0.49 / T12). Re-keyed 2026-10-05; bare 0.49 sat on Sands Ave.
-      building(K(sl(0.49)), -1, 24, 38, 92, 36, { kind: "twin", wall: [0.72, 0.66, 0.54], window: [1.0, 0.85, 0.35], floor: 9, lit: true });
-      building(K(sl(0.505)), -1, 48, 30, 70, 30, { kind: "tiered", wall: [0.68, 0.62, 0.50], window: [0.98, 0.80, 0.30], floor: 8, lit: true });
-      tower(K(sl(0.492)), -1, 72, 16, 62, { col: [0.62, 0.48, 0.36], seg: 6, cap: true, capCol: [1.0, 0.82, 0.20], mast: true });
-      place(K(sl(0.49)), -1, 9, [28, 1.8, 8], [1.0, 0.85, 0.25]);
+      building(K(sl(0.49)), -1, 68, 38, 92, 36, { kind: "twin", wall: [0.72, 0.66, 0.54], window: [1.0, 0.85, 0.35], floor: 9, lit: true });
+      building(K(sl(0.505)), -1, 78, 30, 70, 30, { kind: "tiered", wall: [0.68, 0.62, 0.50], window: [0.98, 0.80, 0.30], floor: 8, lit: true });
+      // Campanile beside the hotel, not inside it: the twin's second slab spans lateral 69-106 and
+      // 3-17 m along (75 m tall), so the tower stands ~31 m further along, clear of both slabs.
+      tower(K(sl(0.495)), -1, 82, 16, 62, { col: [0.62, 0.48, 0.36], seg: 6, cap: true, capCol: [1.0, 0.82, 0.20], mast: true });
+      place(K(sl(0.49)), -1, 14, [28, 1.8, 8], [1.0, 0.85, 0.25]);
 
-      ferrisWheel(K(sl(0.55)), -1, 85, 65);
-      billboard(K(sl(0.56)), -1, 18, 16, 10, CYAN);
-      building(K(sl(0.55)), -1, 22, 36, 18, 28, { kind: "screen", wall: [0.24, 0.24, 0.28], window: [0.15, 0.80, 1.00], floor: 4 });
-      place(K(sl(0.55)), -1, 10, [24, 0.7, 24], [0.15, 0.45, 0.65]);
-      place(K(sl(0.55)), -1, 10, [20, 0.5, 20], [0.10, 0.30, 0.50]);
+      // Wheel plane lateral 127-137: clear of the screen building (38-68) and of Strip tower j=1 (68-96).
+      ferrisWheel(K(sl(0.55)), -1, 132, 65);
+      billboard(K(sl(0.56)), -1, 16, 16, 10, CYAN);
+      building(K(sl(0.55)), -1, 38, 30, 18, 28, { kind: "screen", wall: [0.24, 0.24, 0.28], window: [0.15, 0.80, 1.00], floor: 4 });
+      place(K(sl(0.55)), -1, 14, [22, 0.65, 22], [0.12, 0.38, 0.58]);
+      // Pedestrian skywalks over Las Vegas Blvd (Flamingo / mid-Strip).
+      overheadSpan({
+        id: "vegas-flamingo-ped-bridge", frac: sl(0.548), clearance: 5.8,
+        thickness: 0.42, depth: 3.2, span: 32, color: [0.34, 0.35, 0.38], supportGap: 3,
+      });
+      overheadSpan({
+        id: "vegas-midstrip-ped-bridge", frac: sl(0.612), clearance: 6.4,
+        thickness: 0.36, depth: 2.6, span: 26,
+        color: [0.32, 0.33, 0.36], supportGap: 3,
+      });
 
       // Caesars Palace — wide ivory box, gold up-lights (racing ~0.62, RIGHT).
       {
-        const a = anchor(K(sl(0.62)), 1, 44);
+        const a = anchor(K(sl(0.62)), 1, 72);
         const b = [a.r, a.u, a.t];
         const IVORY = [0.78, 0.74, 0.64];
         const IVORY_D = [0.62, 0.58, 0.48];
@@ -567,13 +584,13 @@
           for (const off of [-28, -14, 0, 14, 28])
             seat.cyl(stage, vadd(vadd(a.c, a.t, off), a.r, -20), 1.15, 16, IVORY, 8, b);
         }, { required: true });
-        place(K(sl(0.62)), 1, 12, [44, 2.4, 8], [1.0, 0.88, 0.30]);
-        place(K(sl(0.62)), 1, 9, [50, 1.2, 10], [0.95, 0.75, 0.15]);
+        place(K(sl(0.62)), 1, 16, [44, 2.4, 8], [1.0, 0.88, 0.30]);
+        place(K(sl(0.62)), 1, 14, [50, 1.2, 10], [0.95, 0.75, 0.15]);
       }
 
       // Bellagio + fountain lake — long elegant box + blue reflective pool.
       {
-        const a = anchor(K(sl(0.68)), 1, 38);
+        const a = anchor(K(sl(0.68)), 1, 70);
         const b = [a.r, a.u, a.t];
         const BEL = [0.52, 0.48, 0.44];
         const BEL_WIN = [1.0, 0.88, 0.42];
@@ -592,7 +609,7 @@
           // Crown neon band — keep proud of the roof slab (no coplanar fight).
           addBox(stage, vadd(a.c, a.u, 75.2), [18, 2.0, 56], [1.0, 0.82, 0.35], b);
         }, { required: true });
-        place(K(sl(0.68)), 1, 52, [95, 2.0, 12], [1.0, 0.75, 0.20]);
+        place(K(sl(0.68)), 1, 18, [95, 2.0, 12], [1.0, 0.75, 0.20]);
         // Lake-edge balustrade posts (no shore groundPatch — was flat-coplanar
         // with the existing pool-strip / apron decals).
         for (let i = 0; i < 6; i++) {
@@ -614,24 +631,20 @@
         { id: "vegas-bellagio-lake-east", required: true });
       waterSurface(K(sl(0.702)), 1, 18, [110, 1.4, 145], [0.04, 0.16, 0.30],
         { id: "vegas-bellagio-lake-west" });
-      groundPatch(K(sl(0.685)), 1, 14, [22, 0.14, 96], [0.08, 0.28, 0.48],
+      groundPatch(K(sl(0.685)), 1, 16, [22, 0.14, 96], [0.08, 0.28, 0.48],
         { id: "vegas-bellagio-pool-strip", samples: 6 });
-      // Pool apron decal (was a 0.35 m place(), buried 0.3 m below ground).
-      groundPatch(K(sl(0.690)), 1, 7, [18, 0.35, 70], [0.12, 0.42, 0.72],
-        { id: "vegas-bellagio-pool-apron", samples: 4 });
 
       // Paris / Eiffel + Montgolfier balloon (racing ~0.74, LEFT).
-      tower(K(sl(0.74)), -1, 68, 22, 130, { col: [0.55, 0.48, 0.35], seg: 4, cap: true, capCol: [1.0, 0.85, 0.4], mast: true });
-      place(K(sl(0.74)), -1, 20, [10, 1.6, 10], [1.0, 0.80, 0.25]);
+      tower(K(sl(0.74)), -1, 74, 22, 130, { col: [0.55, 0.48, 0.35], seg: 4, cap: true, capCol: [1.0, 0.85, 0.4], mast: true });
       {
         // Gold plaza plinth 0.7 m proud. As a place() its top sat 0.1 m under
         // the ground (0.8 m sink): invisible. Raw box from 0.3 m under grade,
         // no blockAt — the pylon base above already bounds the car at 15 m.
-        const a = anchor(K(sl(0.74)), -1, 22);
+        const a = anchor(K(sl(0.74)), -1, 26);
         const b = [a.r, a.u, a.t];
         addBox(out, vadd(a.c, a.u, 0.65), [14, 1.3, 14], [0.95, 0.75, 0.20], b);
         // Base rings at the TOWER foot (gap 68) — grounded, no mid-air lattice.
-        const tw = anchor(K(sl(0.74)), -1, 68);
+        const tw = anchor(K(sl(0.74)), -1, 74);
         const tb = [tw.r, tw.u, tw.t];
         out._mat = MAT.METAL;
         for (const y of [8, 22, 40]) {
@@ -729,12 +742,6 @@
 
         const casinoPalL = [[0.22, 0.18, 0.22], [0.18, 0.17, 0.24], [0.24, 0.20, 0.20], [0.20, 0.18, 0.26]];
         const casinoPalR = [[0.20, 0.19, 0.26], [0.24, 0.20, 0.22], [0.18, 0.18, 0.22], [0.22, 0.21, 0.20]];
-        // Near facade row — primary casino street-wall (gap 56, step 38)
-        cityFront(s0, s1, -1, 19, { minH: 40, maxH: 85, depth: 20, step: 26,
-          palette: casinoPalL, lit: true, windowCol: WARM });
-        cityFront(s0, s1,  1, 19, { minH: 40, maxH: 85, depth: 20, step: 26,
-          palette: casinoPalR, lit: true, windowCol: CYAN });
-
         // Street-level storefront pods — closed solid cores (NOT building()).
         // Gap ~10.5 sits between barrier neon (~3) and palms (15) / cityFront
         // (19). Thin depth avoids neonTower / signature-tower clips.
@@ -765,7 +772,7 @@
         // Sparse, clip-safe placements (avoid neonTower hotspots ~0.53 / 0.60 / 0.69).
         for (const [s, side, gap] of [
           [0.500, -1, 11.4], [0.512, 1, 11.7], [0.545, -1, 11.4], [0.558, 1, 11.7],
-          [0.635, -1, 11.4], [0.648, 1, 11.7], [0.712, -1, 11.4], [0.728, 1, 11.7],
+          [0.635, -1, 11.4], [0.648, 1, 11.7], [0.728, 1, 11.7],
           [0.755, -1, 11.4], [0.770, 1, 11.7],
         ]) stripShop(s, side, gap);
         // Street-level Strip billboards (gap 16 clears shop pylons at ~10.5–14).
@@ -783,7 +790,7 @@
         for (let j = 0; j < 8; j++) {
           const s = 0.485 + (j + 0.5) / 8 * 0.33, side = (j % 2) ? -1 : 1;
           const windowCol = [WARM, CYAN, MAGENTA, GOLD, VIOLET][j % 5];
-          building(K(sl(s)), side, 17, 28, 120 + hash(j * 17) * 65, 36,
+          building(K(sl(s)), side, 68, 28, 120 + hash(j * 17) * 65, 36,
             { wall: [0.22, 0.20, 0.22], window: windowCol, floor: 16, lit: true });
         }
 
@@ -792,10 +799,11 @@
           const s = 0.485 + (j + 0.3) / 8 * 0.33, side = (j % 2) ? 1 : -1;
           billboard(K(sl(s)), side, 16, 16 + hash(j * 3) * 6, 10, NEON[(j + 2) % NEON.length]);
         }
-        for (let j = 0; j < 34; j++) {
-          const s = 0.485 + (j + 0.2) / 34 * 0.33, side = (j % 2) ? 1 : -1;
-          palm(K(sl(s)), side, 15, 11 + hash(j * 23) * 4, LIME);
-          palm(K(sl(s + 0.004)), -side, 15, 10 + hash(j * 29) * 3, LIME);
+        for (let j = 0; j < 22; j++) {
+          const s = 0.485 + (j + 0.2) / 22 * 0.33, side = (j % 2) ? 1 : -1;
+          palm(K(sl(s)), side, 22, 11 + hash(j * 23) * 4, LIME);
+          if (j % 3 === 0)
+            palm(K(sl(s + 0.004)), -side, 24, 10 + hash(j * 29) * 3, LIME);
         }
         for (let j = 0; j < 40; j++) {
           const s = 0.485 + (j + 0.6) / 40 * 0.33, side = (j % 2) ? -1 : 1;
@@ -805,11 +813,11 @@
         for (let j = 0; j < 10; j++) {
           const s = sl(0.485 + (j + 0.35) / 10 * 0.33), side = (j % 2) ? 1 : -1;
           if (j % 3 === 1) {
-            lotBleacher(`vegas-lot-bleacher-${j}`, s, side, 15, 8,
+            lotBleacher(`vegas-lot-bleacher-${j}`, s, side, 42, 8,
               { rows: j > 5 ? 8 : 6 });
             continue;
           }
-          grandstandEx(s, side, 15, 56, null, null, {
+          grandstandEx(s, side, 42, 56, null, null, {
             livery: vegasStandLiveries[j % vegasStandLiveries.length],
             tiers: (j % 3 === 0) ? 2 : 1,
             roof: (j % 2) ? "truss" : "cantilever",
@@ -819,18 +827,15 @@
         }
       }
 
-      for (const [s, side] of [[0.02, 1], [0.08, -1], [0.42, 1], [0.46, 1], [0.72, 1], [0.78, -1],
-                               [0.20, -1], [0.27, 1], [0.38, -1], [0.95, -1]]) {
-        palm(K(s), side, 18, 10 + hash(s * 100) * 3, LIME);
-        palm(K(s + 0.006), side, 22, 9 + hash(s * 131) * 3, LIME);
+      for (const [s, side] of [[0.02, 1], [0.08, -1], [0.95, -1]]) {
+        palm(K(sl(s)), side, 22, 10 + hash(s * 100) * 3, LIME);
+        palm(K(sl(s + 0.006)), side, 26, 9 + hash(s * 131) * 3, LIME);
       }
-      billboard(K(0.34), -1, 24, 16, 10, VIOLET);
-      billboard(K(0.58), 1, 17, 16, 10, GOLD);
-      billboard(K(0.67), 1, 16, 14, 9, LIME);
-      billboard(K(0.18), 1, 18, 14, 9, ROSE);
-      billboard(K(0.26), -1, 18, 14, 9, BLUE);
-
-      building(K(0.40), -1, 34, 28, 66, 26, { wall: [0.20, 0.19, 0.20], window: ROSE, floor: 8, lit: true });
+      billboard(K(sl(0.34)), -1, 24, 16, 10, VIOLET);
+      billboard(K(sl(0.58)), 1, 17, 16, 10, GOLD);
+      billboard(K(sl(0.67)), 1, 16, 14, 9, LIME);
+      billboard(K(sl(0.18)), 1, 18, 14, 9, ROSE);
+      billboard(K(sl(0.26)), -1, 18, 14, 9, BLUE);
 
       for (let j = 0; j < 6; j++) {
         const a = j / 6 * 6.2832 + 0.4, h = hash(j * 13 + 5);
