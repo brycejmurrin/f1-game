@@ -947,6 +947,16 @@ test("the safe-area inset comes from --sar, never from the sector plate's right 
   assert.ok(+gone.refit()["--hud-z-top"] >= edge - 1e-9, "removing the plate never needs MORE room");
 });
 
+test("a dropped gap strip carries the radio card's caution step down with the flag chip", () => {
+  const css = readCssSource("css/hud.css"), hud = read("js/ui/hud.js");
+  // The flag chip steps down under :root[data-gap-drop]; the card cannot reach `:root … body`, so the drop is mirrored onto body.
+  assert.match(css, /:root\[data-gap-drop\] #hud-flag \{\s*top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 74px\)/);
+  assert.match(css, /body\[data-gap-drop\]:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 74px\)[^;]*\+ 38px\)/,
+    "the card sits 38px under the dropped flag chip");
+  assert.match(css, /body\[data-gap-drop\]\[data-density="compact"\]:not[^{]*#announce \{ top: calc\([^;]*\+ 34px\)/, "compact keeps its tighter step under the dropped chip");
+  assert.match(hud, /drop !== document\.body\.hasAttribute\("data-gap-drop"\)/, "gapForm mirrors the drop onto body, compared against the DOM like the root attribute");
+});
+
 test("an empty timing tower still fits the bottom band and writes the dock cap", () => {
   const full = fitHarness().snap();
   const h = fitHarness({ emptyTower: true }), got = h.snap();
@@ -1199,7 +1209,7 @@ test("a moved (data-hl) piece whose words change width re-fits on the next tick,
 test("the caution step-aside needs the card's other slot to really apply; TEXT LARGER grows the ERS bar", () => {
   const rules = cssRules(read("css/hud.css"));
   const caution = rules.filter((r) => /:has\(#hud-flag:not\(\[hidden\]\)\) #announce$/.test(r.selector));
-  assert.equal(caution.length, 2, "base and compact caution rules");
+  assert.equal(caution.length, 4, "base and compact caution rules, each with its dropped-gap-strip twin (body[data-gap-drop])");
   for (const r of caution) assert.match(r.selector, /:not\(\.hud-mirror-on\.hud-mirror-side\)/, r.selector);
   const tok = read("css/tokens.css");
   for (const size of ["large", "larger"]) {

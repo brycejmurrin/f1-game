@@ -326,6 +326,12 @@ function gapForm() {
     if (drop) root.dataset.gapDrop = "1";
     else delete root.dataset.gapDrop;
   }
+  // MIRRORED ONTO <body> for the radio card: css/hud.css cannot write `:root … body`, and the card's
+  // caution step (below the flag chip) must follow the chip down when a dropped strip pushes it down.
+  if (drop !== document.body.hasAttribute("data-gap-drop")) {
+    if (drop) document.body.setAttribute("data-gap-drop", "1");
+    else document.body.removeAttribute("data-gap-drop");
+  }
   return short ? _gapFormShort : _gapFormLong;
 }
 // A LAP OR MORE IS LAPS, NOT SECONDS. distance ÷ the player's speed is a fair
