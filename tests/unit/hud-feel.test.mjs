@@ -963,6 +963,69 @@ test("fitHud's obstacle list names every visible piece, with its kind and column
   assert.equal(h.sb.GameHud.obstacles().find((o) => o.id === "limits").column, "right", "in the right column it says right");
 });
 
+/* THE RIGHT COLUMN BY MEASUREMENT (js/ui/hud.js placeRightColumn): sectors -> LIMITS -> DAMAGE ->
+ * INPUTS, each top the bottom of what is visible above it plus RCOL_AIR x its own zoom, in screen px. */
+function rightColumnHarness() {
+  const h = fitHarness();
+  const R = (left, top, w, hh) => ({ left, top, right: left + w, bottom: top + hh, width: w, height: hh });
+  // The right dock low enough that the LIMITS chip stays in this column (no data-limits-left).
+  const dockR = h.dom.byId("dock-right");
+  dockR._rect = R(650, 320, 150, 80); for (const g of dockR.children) g._rect = R(650, 320, 150, 80);
+  const lim = h.dom.byId("hud-limits"), dmg = h.dom.byId("hud-damage"), inp = h.dom.byId("hud-inputs");
+  lim._rect = R(690, 215, 80, 24); dmg._rect = R(720, 250, 60, 40); inp._rect = R(660, 300, 120, 36);
+  h.refit();
+  const y = (id) => h.root.style.getPropertyValue("--rcol-y-" + id);
+  const z = (k) => +h.root.style.getPropertyValue(k) || 1.5;
+  return { h, R, lim, dmg, inp, y, zTop: z("--hud-z-top"), zBot: z("--hud-z-bot") };
+}
+test("the right column stacks LIMITS, DAMAGE and INPUTS under the plate by their measured heights", () => {
+  const { h, lim, dmg, inp, y, zTop, zBot } = rightColumnHarness();
+  assert.ok(!("limitsLeft" in h.root.dataset), "the chip stays right in this fixture");
+  const px = (v) => v.toFixed(1) + "px";
+  // The plate (650,130 140x72) ends at 202.
+  const yl = 202 + 10 * zTop, yd = yl + 24 + 10 * zTop, yi = yd + 40 + 10 * zBot;
+  assert.equal(y("limits"), px(yl), "LIMITS under the plate");
+  assert.equal(y("damage"), px(yd), "DAMAGE under LIMITS, by LIMITS' own height (not a reserved 2.6em)");
+  assert.equal(y("inputs"), px(yi), "INPUTS under DAMAGE, its air in its OWN (bottom band) zoom — no zoom mix");
+  const snap = () => ["limits", "damage", "inputs"].map(y);
+  const s = snap();
+  h.refit(); h.refit();
+  assert.deepEqual(snap(), s, "two more fits publish the same column");
+  // A hidden LIMITS chip takes no room — but keeps its slot published, so a strike shows in place at once.
+  lim.hidden = true;
+  h.refit();
+  assert.equal(y("limits"), px(202 + 10 * zTop), "the chip's slot is ready for the strike");
+  assert.equal(y("damage"), px(202 + 10 * zTop), "DAMAGE closes up under the plate while there is no strike");
+  // The strike's own tick re-stacks (updateHud), not only the next fit.
+  h.G.player.cutWarn = 1; h.els.hudLimits = lim;
+  h.tick();
+  assert.equal(lim.hidden, false, "the strike shows the chip");
+  assert.equal(y("damage"), px(yd), "and DAMAGE steps below it on the same tick");
+  delete h.els.hudLimits; h.G.player.cutWarn = 0;
+  // A piece the player PLACED keeps its shipped anchor (no var) and the rest step around its painted box.
+  dmg.setAttribute("data-hl-user", "");
+  h.refit();
+  assert.equal(y("damage"), "", "a placed DAMAGE chip keeps the anchor its stored offset is relative to");
+  const yi2 = parseFloat(y("inputs"));
+  assert.ok(yi2 >= 250 + 40, "INPUTS steps below the placed DAMAGE box where they share columns (" + yi2 + ")");
+  dmg.removeAttribute("data-hl-user");
+  // Fixed offsets survive only as first-paint fallbacks.
+  const css = read("css/hud.css");
+  assert.match(css, /top: calc\(var\(--rcol-y-limits, calc\(\([^;]*\) \* var\(--hud-z\)\)\) \/ var\(--hud-z\)\);/);
+  assert.match(css, /top: calc\(var\(--rcol-y-damage, calc\(\([^;]*\) \* var\(--hud-z\)\)\) \/ var\(--hud-z\)\);/);
+  assert.equal((css.match(/top: calc\(var\(--rcol-y-inputs, /g) || []).length, 2, "touch and desktop INPUTS read the measured slot");
+  assert.match(css, /top: calc\(var\(--rcol-y-rel, 38svh\) \/ var\(--hud-z\)\);/, "desktop RELATIVE: 38svh is the floor the column pushes down from");
+});
+
+test("the --dock-r-w stand-off is computed in exactly one function", () => {
+  const src = read("js/ui/hud.js");
+  const writes = src.match(/hStyle\(root, "--dock-r-w", [^;]*;/g) || [];
+  assert.ok(writes.length >= 2, "fitHud and the phone stamp both publish it");
+  for (const w of writes) assert.match(w, /rightDockInset\(|dockRW\.toFixed/, "every --dock-r-w write goes through rightDockInset: " + w);
+  for (const a of src.match(/\bdockRW = [^;]*;/g) || []) assert.match(a, /= rightDockInset\(/, "dockRW is only ever rightDockInset's answer: " + a);
+  assert.equal((src.match(/midCap = Math\.max\(0, \(window\.innerWidth \/ 2\) \/ z/g) || []).length, 1, "one copy of the centre-line cap");
+});
+
 /** The fit with the safe-area token readable (as on a device, where --sar is a registered length)
  *  and the sector plate's left edge moved by `shift` px — what a touch dock stand-off does to it. */
 function topZoomWithPlateShift(shift, sarPx) {

@@ -1034,7 +1034,9 @@ body:not(.desktop) #hud-sectors {
      outside the broadcast profile — left this chip hanging 77px below an empty
      corner. The var is 0 exactly when the box is gone, so the chip rides up
      into the slot the sectors vacated. The em keeps the pre-fit paint honest. */
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px);
+  /* THE MEASURED SLOT (js/ui/hud.js placeRightColumn): --rcol-y-limits is the bottom of whatever is
+     visible above the chip, in SCREEN px; the fixed offset is only the first paint's fallback. */
+  top: calc(var(--rcol-y-limits, calc(((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px) * var(--hud-z))) / var(--hud-z));
   /* STAND OFF THE DOCK. This chip sits BELOW #hud-sectors, and on a touch phone
      that row is the BOOST pedal — so a track-limits warning painted straight
      over a tap target (reported from a phone). --dock-r-w is the right dock's
@@ -1886,7 +1888,9 @@ body[data-helmet-cam] #hud::before {
    shots, 2026-10-05). */
 #hud-damage {
   position: fixed;
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + 2.6em);
+  /* Stacked by placeRightColumn (--rcol-y-damage, screen px) under LIMITS only while it shows, else
+     under the plate; the fixed slot below LIMITS' reserved one is the first paint's fallback. */
+  top: calc(var(--rcol-y-damage, calc(((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + 2.6em) * var(--hud-z))) / var(--hud-z));
   right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
   display: flex;
   align-items: center;
@@ -1936,7 +1940,8 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 }
 #hud-rel {
   right: calc(10px + var(--sar) / var(--hud-z));
-  top: calc(38svh / var(--hud-z));
+  /* Desktop: 38svh is the floor; placeRightColumn pushes it below INPUTS / DAMAGE when they reach it. */
+  top: calc(var(--rcol-y-rel, 38svh) / var(--hud-z));
   border-left: 3px solid var(--dim);
 }
 #hud-rel > div {
@@ -2046,7 +2051,7 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
      then drop by --hud-sec-h. Omitting tap-hud + 4px put the trace ~44px into
      S1–S3 at touch --tap 52 (12 − 56 = −44 at z=1). --hud-sec-h is top-band
      units; at phone sizes bot/top zooms meet so it still clears the box. */
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z) + 12px + var(--inputs-below-limits, 0px));
+  top: calc(var(--rcol-y-inputs, calc(((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z) + 12px + var(--inputs-below-limits, 0px)) * var(--hud-z))) / var(--hud-z));
   max-width: min(120px, 22vw);
   max-height: min(18svh, 4.2em);
   overflow: hidden;
@@ -2068,7 +2073,7 @@ body.desktop #hud-inputs:not([data-hl-user]) {
   left: auto;
   right: calc(10px + var(--sar) / var(--hud-z));
   bottom: auto;
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z) + 12px + var(--inputs-below-limits, 0px));
+  top: calc(var(--rcol-y-inputs, calc(((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z) + 12px + var(--inputs-below-limits, 0px)) * var(--hud-z))) / var(--hud-z));
 }
 /* TOUCH TYRES (LANDSCAPE): out of the centred bottom stack (it sat under
    GEAR / ERS, on the car) to the left column, sitting on top of the left dock

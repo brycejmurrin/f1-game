@@ -389,6 +389,15 @@ let _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
 // aero right edge 1297 of 1280). textContent costs no layout; a length that
 // changes re-fits once, and the countdown only does so when a digit rolls over.
 function hlKey() { let k = ""; for (let i = 0; i < _hlEls.length; i++) { const el = _hlEls[i]; k += el.hidden ? "h" : "v" + (el.textContent || "").length + ","; } return k; }
+// The COLUMN pieces' visibility (the hidden attribute: layout-free). DAMAGE unhides from its own module,
+// LIMITS on a strike, the opt-in readouts from HUD ELEMENTS: each re-stacks its column on the next tick
+// (placeRightColumn / placeLeftColumn), not after the 3 s same-key re-measure.
+function colVisKey() {
+  let k = "";
+  for (const el of [els.hudLimits || document.getElementById("hud-limits"), document.getElementById("hud-damage"), document.getElementById("hud-inputs"),
+    document.getElementById("hud-rel"), document.getElementById("hud-strat"), document.getElementById("game-metrics")]) k += el && !el.hidden ? "1" : "0";
+  return k;
+}
 // THE TWO READS THE FIT MEMO NEVER COVERED. Both getComputedStyle(root) calls
 // in fitHud sat ABOVE its `_fitWait` early return, so the 3 s same-key backoff
 // paced the getBoundingClientRect pass and nothing else: these ran at the full
@@ -825,6 +834,61 @@ function rightDockInset(left, z, sarPx) {
   const need = Math.max(0, (window.innerWidth - left) / z - 10 - sar / z + DOCK_AIR / z);
   return Math.min(need, midCap);
 }
+// THE RIGHT COLUMN, STACKED BY MEASUREMENT. Under the pause / cam buttons the sector plate hangs, and
+// under it TRACK LIMITS, DAMAGE and INPUTS (and on desktop RELATIVE). Each used to sit at a fixed
+// offset from the plate (--hud-sec-h + 15px, + 2.6em, + 12px), so turning one on or off moved none of
+// its neighbours: a strike painted LIMITS over INPUTS in 12 of 13 quick-matrix cells, DAMAGE and
+// INPUTS shared a slot, and INPUTS mixed two zooms (its top was in the bottom band's units plus a
+// height measured in the top band's — 43 px of float under S3 at top 0.575 / bottom 1).
+// Now each piece's top is the bottom of whatever is visible above it plus RCOL_AIR, published as
+// --rcol-y-<id> in SCREEN px (each rule divides by the piece's own --hud-z, which is what retires the
+// zoom mix), so the column closes up and opens out as pieces come and go. The x is --dock-r-w
+// (rightDockInset) for every piece. A piece the player PLACED (data-hl-user) keeps its shipped anchor
+// (its var is removed: the CSS fallback is that anchor, which its stored offset is relative to) and is
+// stepped around where it is painted. A hidden piece gets the slot it WOULD take, without taking room,
+// so a LIMITS strike shows in its place at once (the fit key re-stacks the rest on the next tick, and
+// updateHud re-stacks on the strike's own tick).
+// SOLVED FROM INVARIANTS: the plate's un-moved box and each piece's own height — none of which a
+// published top changes — so two fits publish the same numbers.
+const RCOL_AIR = 10;   // unzoomed px between stacked pieces (screen px = air * the piece's zoom)
+function placeRightColumn(root, scale) {
+  const doc = document, body = doc.body;
+  const zTop = +root.style.getPropertyValue("--hud-z-top") || scale || 1;
+  const zBot = +root.style.getPropertyValue("--hud-z-bot") || scale || 1;
+  const limitsEl = els.hudLimits || doc.getElementById("hud-limits");
+  const pieces = [
+    ["limits", limitsEl, zTop, 0],
+    ["damage", doc.getElementById("hud-damage"), zTop, 0],
+    ["inputs", doc.getElementById("hud-inputs"), zBot, 0],
+  ];
+  // Desktop RELATIVE lives in this column at 38svh: that stays its floor, the stack only pushes it down.
+  if (body.classList.contains("desktop")) pieces.push(["rel", doc.getElementById("hud-rel"), zTop, 0.38 * (window.innerHeight || 0)]);
+  // The column starts under the plate's UN-MOVED box (layoutRect), or where the plate would start.
+  const sec = obs("sectors"), pause = obs("pause");
+  const secR = sec ? layoutRect(sec.el) : null;
+  const start = secR && secR.height ? secR.bottom : pause ? pause.rect.bottom + 4 : NaN;
+  const limLeft = !!(root.dataset && "limitsLeft" in root.dataset);
+  const user = (el) => !!(el && el.hasAttribute && el.hasAttribute("data-hl-user"));
+  const blockers = [];
+  for (const id of ["sectors", "limits", "damage", "inputs", "rel"]) {
+    const o = obs(id);
+    if (o && o.column === "right" && user(o.el)) blockers.push(o.rect);
+  }
+  blockers.sort((a, b) => a.top - b.top);
+  let cursor = start;
+  for (const [id, el, z, floor] of pieces) {
+    const name = "--rcol-y-" + id;
+    if (!Number.isFinite(cursor) || !el || user(el) || (id === "limits" && limLeft)) { hUnset(root, name); continue; }
+    const o = obs(id), air = RCOL_AIR * z;
+    let y = Math.max(cursor + air, floor);
+    if (o) {
+      const r = layoutRect(o.el), h = r.height;
+      for (const b of blockers) if (b.left < r.right && b.right > r.left && b.top < y + h && b.bottom > y) y = b.bottom + air;
+      cursor = y + h;
+    }
+    hStyle(root, name, y.toFixed(1) + "px");
+  }
+}
 /** Phone-only: after REL/sectors/announce land, re-fit rows and publish stamp. */
 function phoneFitStampSync(scale) {
   if (document.body.classList.contains("desktop")) return;
@@ -940,7 +1004,7 @@ function fitHud() {
   // 2026-10-04). So each data-hl element's `hidden` is in the key — a list
   // re-read only on a full fit (HudLayout.apply invalidates it), a flag read
   // per tick, no layout.
-  const head = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
+  const head = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|" + colVisKey() + "|";
   const tail = "|" + document.body.className;
   if (head + hlKey() + tail === _fitKey && --_fitWait > 0) {
     // Same-key backoff must not lock a short --dock-r-w while wrap-reverse
@@ -1523,6 +1587,11 @@ function fitHud() {
   // edge, then MOVE & SIZE grew/shifted .hud-top into the card (CI oversize:
   // .hud-top+#announce with hud-radio-top on notched-landscape buttons).
   if (els.hudSectors) void els.hudSectors.offsetHeight;
+  // The right column stacks under the plate as it now stands (after the inset and any shrink); the
+  // radio card is then placed against the column as painted.
+  list = obsCollect();
+  placeRightColumn(root, scale);
+  if (els.hudSectors) void els.hudSectors.offsetHeight;
   list = obsCollect();
   placeRadio(root, bcast, list);   // the one radio-slot resolver; its painted check is its own last step
   mirrorClear(root);
@@ -1989,7 +2058,12 @@ function updateHud(force, dtMs) {
     const cw = player ? (player.cutWarn | 0) : 0;
     if (_limitsDots == null) _limitsDots = els.hudLimits.querySelector("span");
     if (cw > 0) {
-      if (els.hudLimits.hidden) els.hudLimits.hidden = false;
+      if (els.hudLimits.hidden) {
+        els.hudLimits.hidden = false;
+        // The strike's own tick: re-stack the right column so DAMAGE / INPUTS step below the chip now
+        // (fitHud re-stacks on the next tick too — the chip's visibility is in its key).
+        if (_fitKey) { obsCollect(); placeRightColumn(document.documentElement, +document.documentElement.style.getPropertyValue("--hud-scale") || _cssScale); }
+      }
       // Strikes no longer reset (4th and each additional = +5 s), so four dots
       // are a cap: repeat() of a negative count throws.
       const shown = Math.min(cw, 4);
