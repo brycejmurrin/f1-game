@@ -1,1 +1,1 @@
-1791619132	Cursor Agent	COORD: media#1321 pushed ship-sync; game#1322+race-phys#1323 MERGEABLE; hunt2 pin 525k on CI; watching; no AM/merge  [claude/code-review-bug-hunt-mkrcf5; session f6ea4b08a162ee1c7624484a]
+1791619160	Cursor Agent	COORD done sync: #1321 media+#1322 game+#1323 race-phys MERGEABLE on ship; hunt2 525k pin pushed; watching CI; no AM/merge  [claude/code-review-bug-hunt-mkrcf5; session f6ea4b08a162ee1c7624484a]
