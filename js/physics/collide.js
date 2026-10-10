@@ -163,7 +163,9 @@ const Collide = (() => {
   };
   function _onTrafO(o) {
     const s = _traf, c = s.c;
-    if (o.finished) return;
+    // A finisher coasting past the line is still a car on the road: it blocks,
+    // takes room and sits alongside. It just gives no tow and chases nobody.
+    const fin = !!o.finished;
     let dprog = o._snapProg - c.prog;
     if (!Number.isFinite(dprog)) return;
     const ad = dprog < 0 ? -dprog : dprog, L = s.L, REJ = s.REJ;
@@ -184,6 +186,7 @@ const Collide = (() => {
       if (deficit > 0) s.sep += (dx <= 0 ? 1 : -1) * deficit * (1 - adp / 6.5);
     }
     if (dprog > 0.5 && dprog < s.blockerGap && Math.abs(dx) < (o === c.passFailOf && c.passFailT > 0 && !s.street ? 6 : _blockerHalfW)) { s.blocker = o; s.blockerGap = dprog; }
+    if (fin) return;
     if (dprog > 0.5 && dprog < s.towGap && Math.abs(dx) < _towHalfW) { s.towCar = o; s.towGap = dprog; }
     if (dprog < -0.5 && -dprog < s.chaserGap && Math.abs(dx) < (!s.street && -dprog < 0.5 * Math.max(c.speed, 10) ? 5.5 : 3)) { s.chaser = o; s.chaserGap = -dprog; }
   }

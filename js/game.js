@@ -4867,17 +4867,17 @@ function updateCar(c, dt, ranked) {
   let deploy = 0;
   if (c.isPlayer && Input.consumeBoostToggle()) c.boostOn = !c.boostOn;   // BOOST is a toggle
   // Short-circuit empty battery before the LUT sample AiDrive would ignore anyway.
-  let aiWantsBoost = false;
-  if (!c.human && c.energy > 0.02) {
+  const ersHeld = pits.held(c) || cautionV >= 0 || c.pitState === "box"; let aiWantsBoost = false;   // no BOOST at the limiter, in the box or under a caution cap: it only hit the cap and drained ~0.23/s
+  if (!c.human && c.energy > 0.02 && !ersHeld) {
     _aiBoost.traits = aiT; _aiBoost.energy = c.energy; _aiBoost.otActive = c.otT > 0;
     _aiBoost.kAhead60 = Tracks.curvature(track, wrapS(c.s + 60));
     _aiBoost.towCar = !!towCar; _aiBoost.towGap = towGap; _aiBoost.towSpeed = towCar ? towCar._snapSpeed : 0; _aiBoost.speed = c.speed;
     _aiBoost.chaser = !!chaser; _aiBoost.chaserGap = chaserGap; _aiBoost.chaserSpeed = chaser ? chaser._snapSpeed : 0;
     _aiBoost.team = c.team; _aiBoost.seat = c.seat; _aiBoost.stats = c.houseStats;
-    _aiBoost.ersDeploy = c.ersDeploy; _aiBoost.ersRegen = c.ersRegen;
+    _aiBoost.ersDeploy = c.ersDeploy; _aiBoost.ersRegen = c.ersRegen; _aiBoost.vTop = vTop();   // closing rates ride the pace scale
     aiWantsBoost = AiDrive.wantBoost(_aiBoost);
   }
-  const wantBoost = (c.human ? c.boostOn : aiWantsBoost)
+  const wantBoost = ((c.human ? c.boostOn : aiWantsBoost) && !ersHeld)
     || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   // OVERTAKE IS FREE. Its push does not come out of the battery, so an OT burst
   // costs nothing, fires on a flat ERS, and never competes with BOOST for charge.
@@ -5089,7 +5089,7 @@ function updateCar(c, dt, ranked) {
     // SQUEEZED (AiDrive.squeezeEase / squeezeBrake): touching a car we must
     // yield to, with no lane to yield into — back out under its speed, brake
     // dabbed, until we are clear. The pass latch below reads it too.
-    if (alongO && c.sbsT > AiDrive.sbsCommitT() && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5) vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.sbsEase());   // COMMIT OR YIELD: tuck in behind
+    if (alongO && c.sbsT > AiDrive.sbsCommitT() && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vTop() / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.sbsEase());   // COMMIT OR YIELD: tuck in behind
     squeezed = (c.contactT || 0) > 0 && !!alongO && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, c.kTurn) &&
         (alongDx <= 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) < AiDrive.minLatGap(hw, !!track.street);
     if (squeezed) {
