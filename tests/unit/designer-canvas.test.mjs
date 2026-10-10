@@ -13,7 +13,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
-import { bootEditor, read, plain } from "../helpers/editor-vm.mjs";
+import { bootEditor, read, plain, design } from "../helpers/editor-vm.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
 /** The canvas module on the engine VM, a recording context and manual timers. */
@@ -28,6 +28,7 @@ function boot(hooksExtra = {}, pts = null) {
   ctx.setTimeout = (fn, ms) => { const id = nextId++; timers.set(id, { fn, ms }); return id; };
   ctx.clearTimeout = (id) => { timers.delete(id); };
   const runTimers = () => { const due = [...timers.entries()]; timers.clear(); for (const [, t] of due) t.fn(); return due.length; };
+  vm.runInContext(read("js/editor/scenery-preview.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/editor/scenery-preview.js" });
   vm.runInContext(read("js/editor/canvas.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/editor/canvas.js" });
   const DC = ctx.DesignerCanvas;
   const canvas = dom.document.createElement("canvas");
@@ -294,6 +295,28 @@ test("SPEED: setHeat fills one COL.spd* polygon per run of a speed bucket (the w
   assert.equal(spdFills().length, 0); assert.ok(!h.rec.texts.includes("SLOW → FAST"));
 });
 
+test("elevation heat uses ordered height colours, numeric extrema and a flat legend; invalid data clears it", () => {
+  const h = boot(), n = h.pts.length;
+  const py = Float32Array.from({ length: n }, (_, i) => -20 + i * 5);
+  const tr = { n, px: h.pts.map(p => p[0]), pz: h.pts.map(p => p[1]), py, hw: new Float32Array(n).fill(7), total: 1600 };
+  const colours = ["#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"];
+  h.cv.setBuilt(tr); h.rec.fills.length = 0; h.rec.texts.length = 0;
+  h.cv.setHeat(py, "elevation");
+  assert.deepEqual(h.rec.fills.filter(c => colours.includes(c)), colours, "low-to-high runs follow node height");
+  assert.ok(h.rec.texts.includes("LOW -20.0 → HIGH 95.0 m"));
+  h.cv.setSelection(3, 8);
+  assert.deepEqual(plain(h.cv.selection()), { sel: 3, span: 8 });
+  h.rec.fills.length = 0; h.rec.texts.length = 0;
+  h.cv.setHeat(new Float32Array(n).fill(-5), "elevation");
+  assert.deepEqual(h.rec.fills.filter(c => colours.includes(c)), [colours[2]]);
+  assert.ok(h.rec.texts.includes("FLAT · -5.0 m"));
+  for (const bad of [py.slice(1), new Float32Array(n).fill(NaN), null]) {
+    h.rec.fills.length = 0; h.rec.texts.length = 0; h.cv.setHeat(bad, "elevation");
+    assert.equal(h.rec.fills.filter(c => colours.includes(c)).length, 0);
+    assert.ok(!h.rec.texts.some(t => /LOW |FLAT ·/.test(t)));
+  }
+});
+
 test("pickOnly: tap selects; drag / insert / long-press / Delete do not edit geometry", () => {
   const h = boot();
   h.cv.setTool("select", null, { pickOnly: true });
@@ -408,4 +431,45 @@ test("thumb(): one fitted outline in the asked colour and the start tick; nothin
   strokes.length = 0;
   h.DC.thumb(c, tr, { start: false });
   assert.deepEqual(strokes, [h.DC.COL.centre], "no tick when asked");
+});
+
+
+test("live scenery supports every theme with finite, bounded, deterministic footprints", () => {
+  const b = boot(), warnings = [];
+  b.ctx.Log.warn = (...args) => warnings.push(args.join(" "));
+  const d = design(), tr = b.ctx.TrackValidate.check(d).tr, P = b.ctx.DesignerSceneryPreview;
+  const before = plain(d);
+  for (const theme of b.ctx.TrackThemes.ORDER) {
+    const props = b.ctx.TrackDesignerProps.KINDS.map((kind, i) => ({ kind, s: 0.1 + i * 0.06, side: 1, gap: b.ctx.TrackDesignerProps.DEFAULT_GAP[kind] }));
+    const scene = P.plan({ ...d, theme, props }, tr), objects = [...scene.items, ...scene.ground];
+    assert.ok(objects.length > 0 && objects.length <= P.LIMIT, theme);
+    for (const item of objects) assert.ok([item.x, item.z, item.w, item.d, item.angle, ...item.col].every(Number.isFinite), theme + ": " + item.kind);
+  }
+  assert.deepEqual(warnings, [], "no swallowed recipe failures");
+  assert.deepEqual(plain(P.plan(d, tr)), plain(P.plan(d, tr)), "same design keeps scenery stable");
+  assert.deepEqual(plain(d), before, "preview does not alter the saved design");
+  const few = P.plan({ ...d, look: { trees: "few", crowd: "few" } }, tr);
+  const many = P.plan({ ...d, look: { trees: "many", crowd: "packed" } }, tr);
+  assert.ok(many.items.length > few.items.length, "density settings reach the preview");
+  assert.equal(P.plan({ ...d, look: { time: "night" } }, tr).night, true);
+  const prop = { kind: "marshal", s: 0.2, side: 1, gap: 25 };
+  const withProp = P.plan({ ...d, props: [prop] }, tr).items.filter(x => x.kind === "marshal");
+  const moved = P.plan({ ...d, props: [{ ...prop, gap: 50 }] }, tr).items.filter(x => x.kind === "marshal");
+  assert.equal(withProp.length, moved.length);
+  assert.ok(withProp.length > 0);
+  assert.ok(withProp.some((p, i) => Math.hypot(p.x - moved[i].x, p.z - moved[i].z) > 20), "roadside gap changes the footprint");
+});
+
+test("live scenery keeps map range picking and outline switching non-destructive", () => {
+  const h = boot({ rangeSelect: () => true }), d = design({ pts: h.pts });
+  h.cv.setBuilt(h.ctx.TrackValidate.check(d).tr);
+  h.cv.setScenery(d, true);
+  assert.equal(h.canvas.dataset.mapView, "scenery");
+  const a = h.scr(h.pts[3]), b = h.scr(h.pts[8]);
+  h.fire("pointerdown", a, 1, { pointerType: "mouse" }); h.fire("pointermove", b); h.fire("pointerup", b);
+  assert.deepEqual(plain(h.cv.selection()), { sel: 3, span: 8 });
+  h.cv.setScenery(d, false);
+  assert.equal(h.canvas.dataset.mapView, "outline");
+  assert.deepEqual(plain(h.cv.selection()), { sel: 3, span: 8 });
+  assert.equal(h.ev.changes.length, 0);
 });
