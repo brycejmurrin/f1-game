@@ -308,3 +308,28 @@ gear/ERS strip.
    allocator (fixes INPUTS zoom mix, DAMAGE × INPUTS, reserved LIMITS slot).
 4. Left column allocator (fixes the 168 px sidestep).  5. `rightDockInset()`.
 6. Centre-band top.  7. Column metadata.
+
+## What landed (branch `cursor/hud-band-allocator-5e2c`, on top of Phase 0)
+
+Unit-verified only (no browser in the implementing worktree): every
+`tests/unit/hud-*.test.mjs` file, `mirror-pass`, `ui-improve-pass`, `damage`,
+`ui-journey-race`, the `css-*` files green after each commit; ratchets clean.
+The browser gate (`npm test -- tests/specs/hud-layout.spec.js`, the phone survey
+cells) is still to run.
+
+| commit | phase | what |
+|---|---|---|
+| `08fa5cc1de` | 1 + 5 (extract) | `obsCollect()` — `{id, el, rect, kind, column}` for every visible piece, re-collected after each moving write; every slot / clash / inset consumer and `HudLayout.clearControls` (via `GameHud.obstacles()`) read it. `rightDockInset()` is the one `--dock-r-w` formula. |
+| `60ebe652fb` | 2 | `placeRadio()`: top → side → lane → collapsed → centre against the list; `body[data-radio-slot]` + only that slot's vars (`hUnset` forgets the write cache); painted collapse latched per fit. `MirrorPass.side()` only records `frame()`. CSS keys the top / side / lane rules on the attribute. |
+| `132f034e3d` | 3 | `placeRightColumn()`: LIMITS → DAMAGE → INPUTS (→ desktop RELATIVE, 38svh floor) as `--rcol-y-*` (screen px; each rule divides by its own zoom — no INPUTS zoom mix). Column pieces' `hidden` flags are in the fit key; a strike re-stacks on its tick. |
+| `ac519f3159` | 4 | `placeLeftColumn()`: LIMITS (crossed) → RELATIVE → STRATEGY, main column → beside a placed piece → dropped (`data-col-drop`); `--lcol-y-*` / `--lcol-x-*`. The 168 px sidestep and the reserved limits-left 2.6em are gone. |
+| `39f6d50c61` | 5 (size) | `--rcol-z` / `--lcol-z`: a column that does not fit scales its readouts to a 10 px `--fs-micro` floor before dropping; priority = stacking order, weighted so a lower piece never keeps a higher one's slot. |
+| `c4215ef656` | 6 | `centreBandTop()` / `--centre-band-top` (tower, frame, chip as painted): `--mir-bot`'s floor in every state; the lane's rows start under it (+ the flag). |
+| `b812d399ac` | 7 | `HudLayout.ELEMENTS[i][4]` column; origin derived; `columnOf()` live (touch RELATIVE = left); `CLEAR_CTRL` = every side-column piece. |
+| `91a43606a4` | review | bottom cluster in the list; column factors skip placed pieces; a slid RELATIVE is judged where painted. |
+| `c3a2951e14` | dock drag | the stand-off counts only dock groups that meet the column (x AND y); the plate narrows / drops at the centre chrome (start lights now listed, transient). New `hud-layout.spec` case "dragged touch docks". |
+
+Not done: the four caution `:has()` steps for the card under the flag stay
+(one is pinned by `ui-improve-pass.test.mjs`); they read the `hud-radio-top` /
+`hud-mirror-side` aliases, which the resolver keeps in step with
+`data-radio-slot`.
