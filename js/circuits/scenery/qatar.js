@@ -617,7 +617,10 @@
       const vergeLen = Math.max(1, Math.round(vergeStep / api.ds)) * api.ds - 0.4;
       const GREEN_GAP = 1.55, GREEN_W = 3.4;
       every(vergeStep, (k) => {
-        const s = ((k % n) + n) % n / n;
+        // every() hands the AUTHORED-frame node; the pit wall (sl(0.96..0.08))
+        // is keyed in RACING terms, so compare in racing terms too — the raw
+        // authored s skipped racing 0.65-0.80 (T12-T14) instead of the straight.
+        const s = (((k % n) + n) % n / n + 1 - SL) % 1;
         for (const side of [-1, 1]) {
           // Pit keep-out wall owns the left shoulder on the S/F (gap 3).
           if (side === -1 && (s >= 0.94 || s <= 0.10)) continue;
