@@ -146,21 +146,6 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
    explanation, and stays. */
 :root[data-menu-help="off"] :is(#pmsettings, #rs-body) .adv-help:not([role="status"]):not([aria-live]):not([data-help="keep"]) { display: none; }
 
-/* Some people turn transparency down at the OS level, and every sheet here is
-   translucent over a moving 3D scene — the worst case for legibility. Give them
-   solid surfaces. */
-@media (prefers-reduced-transparency: reduce) {
-  .sheet, .dh-card { background: var(--surf-1); }
-  .screen.dim { background: rgba(0, 0, 0, 0.92); }
-}
-/* prefers-contrast asks for the same remedy for the same reason: the
-   translucent panel over a moving 3D scene is the legibility risk
-   (css/tokens.css notes it at --panel). Same solid surfaces. */
-@media (prefers-contrast: more) {
-  .sheet, .dh-card { background: var(--surf-1); }
-  .screen.dim { background: rgba(0, 0, 0, 0.92); }
-}
-
 /* ---------- sheet: head / body / foot ---------- */
 .sheet {
   display: grid;
@@ -519,8 +504,9 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   .dh-tab:active, .dh-pill:active, .dh-dchip:active {
     transform: translateY(1px);
   }
-  .sel-chip, .opt-btn, .preset-btn, .cz-liv-none,
-  .cs-opt, .lt-tab, .dh-tab, .dh-pill, .dh-dchip {
+  /* .sel-chip / .dh-tab: their own sheets restate the transition with transform. */
+  .opt-btn, .preset-btn, .cz-liv-none,
+  .cs-opt, .lt-tab, .dh-pill, .dh-dchip {
     transition:
       background-color 0.14s ease, background 0.14s ease,
       border-color 0.14s ease, box-shadow 0.14s ease, color 0.14s ease,
@@ -704,5 +690,14 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
 .sel-chip, .sel-edit {
   display: inline-flex; align-items: center; justify-content: center;
   min-height: var(--chip-h); min-width: var(--chip-h);
+}
+
+/* prefers-reduced-transparency / prefers-contrast: solid sheets over the moving
+   3D scene. LAST in the file on purpose: same layer and specificity as `.sheet`
+   above, so only order wins. `.dh-card` (css/data.css) and `.screen.dim`
+   (css/dialogs.css) restate this after their own base rules; the cascade test
+   fails if any such block goes dead. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .sheet { background: var(--surf-1); }
 }
 } /* @layer components */

@@ -119,19 +119,23 @@ var RaceEngineer = (function () {
     // What the WEATHER wants on the car right now, and what is on it.
     const WET = ["wet", "rain"];
 
-    // The line to say right now, or "" — pure, so the whole ladder is testable
+    // The ladder, top rung first, offering each applicable line to `take(msg,
+    // key)` until it returns true — pure, so the whole ladder is testable
     // without a banner, a car or a session. Ordered by what a driver needs to
     // hear first: a stop beats a complaint, and a complaint you can act on
-    // beats one you cannot.
-    function callFor(s) {
-      if (!s) return "";
+    // beats one you cannot. A rung whose line has already been said (update's
+    // `take`) is passed over, so a condition that stays true — a blister never
+    // heals, a rain forecast holds — cannot shadow the rungs below it, BOX BOX
+    // BOX among them. Each rung offers ONE line (the variants are ternaries).
+    function ladder(s, take) {
+      if (!s) return;
       // ADVICE, never a decision. The AI has a plan and PitLane.think executes
       // it; the player has an engineer and decides for themselves, which is the
       // §11 "live, not pre-planned" call made good. So nothing below arms a
       // stop — every one of these is a sentence.
-      if (s.wrongTread) return [s.wet ? "RAIN — BOX FOR WETS" : "TRACK IS DRY — BOX FOR SLICKS", "tread"];
+      if (s.wrongTread && take(s.wet ? "RAIN — BOX FOR WETS" : "TRACK IS DRY — BOX FOR SLICKS", "tread")) return;
       // SAID ONCE per set (update() spends the key for good): a warning, not a nag.
-      if (s.oneCompound) return ["ONE COMPOUND ONLY — BOX FOR A DIFFERENT TYRE OR BE DISQUALIFIED", "compound"];
+      if (s.oneCompound && take("ONE COMPOUND ONLY — BOX FOR A DIFFERENT TYRE OR BE DISQUALIFIED", "compound")) return;
       // THE PLAN-AWARE LINES (the player's reference plan, PitLane.planFor),
       // between the tread and the tyre complaints: a caution that fits the plan
       // with margin to spare, a rival's undercut, rain arriving before the
@@ -140,23 +144,20 @@ var RaceEngineer = (function () {
       // Caution stop: always name the measured loss when we have it. Never
       // "free" / "loses nothing" — estimate() is a point estimate (gap behind
       // minus lane loss) and the voice pack already covers CHEAPER STOP / ABOUT.
-      if (s.cheapStop && s.pitLoss != null) {
-        return ["CAUTION — CHEAPER STOP, ABOUT " + Math.round(s.pitLoss) + "s LOST", "caution"];
-      }
-      if (s.cheapStop) return ["CAUTION — CHEAPER STOP — CONSIDER BOXING", "caution"];
-      if (s.rivalBoxed) return [s.rivalBoxed + " HAS BOXED — UNDERCUT ON, BOX NOW OR PUSH 2 LAPS", "undercut"];
+      if (s.cheapStop && take(s.pitLoss != null ? "CAUTION — CHEAPER STOP, ABOUT " + Math.round(s.pitLoss) + "s LOST"
+        : "CAUTION — CHEAPER STOP — CONSIDER BOXING", "caution")) return;
+      if (s.rivalBoxed && take(s.rivalBoxed + " HAS BOXED — UNDERCUT ON, BOX NOW OR PUSH 2 LAPS", "undercut")) return;
       // …and the THREAT before it happens: the car close behind is due in
       // (its plan's window, PitLane.windowOf) and ours is near. Boxing first
       // is the cover; a driver who knows can choose.
-      if (s.threat) return [s.threat + " CAN UNDERCUT — BOX NEXT LAP TO COVER", "threat"];
-      if (s.rainInLaps != null && s.lapsToStop != null && s.rainInLaps <= s.lapsToStop) {
-        return ["RAIN BEFORE THE STOP — BOX LAP " + ((s.lap || 0) + s.rainInLaps) + " FOR WETS", "rainplan"];
-      }
+      if (s.threat && take(s.threat + " CAN UNDERCUT — BOX NEXT LAP TO COVER", "threat")) return;
       if (s.rainInLaps != null) {
-        return ["RAIN IN " + s.rainInLaps + (s.rainInLaps === 1 ? " LAP" : " LAPS") + " — BE READY", "rain"];
+        if (s.lapsToStop != null && s.rainInLaps <= s.lapsToStop) {
+          if (take("RAIN BEFORE THE STOP — BOX LAP " + ((s.lap || 0) + s.rainInLaps) + " FOR WETS", "rainplan")) return;
+        } else if (take("RAIN IN " + s.rainInLaps + (s.rainInLaps === 1 ? " LAP" : " LAPS") + " — BE READY", "rain")) return;
       }
-      if (s.blistering >= BLISTER_CALL) return ["BLISTERS — THAT SET IS DONE", "blister"];
-      if (s.wear >= 1 && !s.noStop) return ["TYRES ARE GONE — BOX WHEN YOU CAN", "gone"];
+      if (s.blistering >= BLISTER_CALL && take("BLISTERS — THAT SET IS DONE", "blister")) return;
+      if (s.wear >= 1 && !s.noStop && take("TYRES ARE GONE — BOX WHEN YOU CAN", "gone")) return;
       // THE PIT CALL IS THE REAL ONE. On a Formula 1 radio the word is "box",
       // not "pit": it is short for the German *Boxenstopp*, and one hard
       // syllable carries over engine noise where "pit" does not. It is said
@@ -166,40 +167,43 @@ var RaceEngineer = (function () {
       // sure there's no confusion over the radio"). "Box this lap" is the
       // same call in longhand; the repeat is what a driver hears at 300 km/h,
       // so that is what this game says.
-      if (s.lapsToStop === 0) return ["BOX BOX BOX" + (s.nextCode ? " — " + s.nextCode : ""), "plan0"];
+      if (s.lapsToStop === 0 && take("BOX BOX BOX" + (s.nextCode ? " — " + s.nextCode : ""), "plan0")) return;
       // …with WHERE the stop drops the car: behind the first car it will not
       // clear, or into clear air. The lap before, when there is still a lap to
       // push for a better gap; "BOX BOX BOX" stays short.
-      if (s.lapsToStop === 1) {
-        return ["BOX NEXT LAP" + (s.nextCode ? " — " + s.nextCode : "")
-          + (s.rejoin === "" ? " — CLEAR AIR" : s.rejoin ? " — REJOIN BEHIND " + s.rejoin : ""), "plan1"];
-      }
-      if (s.graining >= GRAIN_CALL) return ["GRAINING — EASE OFF AND CLEAN THEM UP", "grain"];
+      if (s.lapsToStop === 1 && take("BOX NEXT LAP" + (s.nextCode ? " — " + s.nextCode : "")
+        + (s.rejoin === "" ? " — CLEAR AIR" : s.rejoin ? " — REJOIN BEHIND " + s.rejoin : ""), "plan1")) return;
+      if (s.graining >= GRAIN_CALL && take("GRAINING — EASE OFF AND CLEAN THEM UP", "grain")) return;
       // Not on the only lap there is (a qualifying lap, a one-lap race).
-      if (s.outLap && !s.finalLap && s.belowWindow >= COLD_CALL) return ["TYRES ARE COLD — TAKE A LAP", "cold"];
+      if (s.outLap && !s.finalLap && s.belowWindow >= COLD_CALL && take("TYRES ARE COLD — TAKE A LAP", "cold")) return;
       // THE AXLE CALL, and the one that would not exist without per-axle wear.
       // Deliberately below the defects: a grained front IS a front problem, and
       // "fronts going" when the real answer is "ease off" sends the driver the
       // wrong way.
-      if (s.axle >= AXLE_SPLIT) {
-        return s.front ? ["FRONTS ARE GOING — BRAKE EARLIER", "axleF"]
-                       : ["REARS ARE GOING — EASE ON THE THROTTLE", "axleR"];
-      }
+      if (s.axle >= AXLE_SPLIT && (s.front ? take("FRONTS ARE GOING — BRAKE EARLIER", "axleF")
+                                           : take("REARS ARE GOING — EASE ON THE THROTTLE", "axleR"))) return;
       // PACE, from the set's life against the laps it has to do (TyreModel
       // lapsLeft, the measured rate), for a car with a plan (the plan says
       // whether a stop is still coming): short of the flag with no stop left is
       // "manage"; laps to spare with a car close ahead is "push". Each names
       // what to do with the right foot, not a percentage.
-      if (s.planned && s.setLaps != null && s.stintLeft != null && s.stintLeft >= 2 && s.setLaps + 0.5 < s.stintLeft && s.lapsToStop == null) {
-        return ["MANAGE THE TYRES — " + s.stintLeft + " LAPS TO THE FLAG ON THAT SET", "manage"];
-      }
-      if (s.planned && s.setLaps != null && s.stintLeft != null && s.setLaps >= s.stintLeft + PUSH_SPARE && s.ahead) {
-        return ["TYRES ARE GOOD — PUSH, " + s.ahead + " IS " + s.aheadGap.toFixed(1) + "s AHEAD", "push"];
-      }
-      if (s.step >= 0) {
-        return ["TYRES AT " + Math.round((1 - WEAR_STEPS[s.step]) * 100) + "%", "wear" + s.step];
-      }
-      return "";
+      if (s.planned && s.setLaps != null && s.stintLeft != null && s.stintLeft >= 2 && s.setLaps + 0.5 < s.stintLeft && s.lapsToStop == null
+        && take("MANAGE THE TYRES — " + s.stintLeft + " LAPS TO THE FLAG ON THAT SET", "manage")) return;
+      if (s.planned && s.setLaps != null && s.stintLeft != null && s.setLaps >= s.stintLeft + PUSH_SPARE && s.ahead
+        && take("TYRES ARE GOOD — PUSH, " + s.ahead + " IS " + s.aheadGap.toFixed(1) + "s AHEAD", "push")) return;
+      if (s.step >= 0) take("TYRES AT " + Math.round((1 - WEAR_STEPS[s.step]) * 100) + "%", "wear" + s.step);
+    }
+
+    // The top line of the ladder, as [msg, key] (or "" when nothing applies) —
+    // what a car with no history would be told. update() walks the same ladder
+    // with its own `take`, past what it has already said.
+    let _first = null;
+    function takeFirst(msg, key) { _first = [msg, key]; return true; }
+    function callFor(s) {
+      _first = null;
+      ladder(s, takeFirst);
+      const r = _first; _first = null;
+      return r || "";
     }
 
     /** Build the pure state `callFor` reads, from one car (a fresh object). */
@@ -251,7 +255,14 @@ var RaceEngineer = (function () {
       // be wrong at both Monaco and Monza.
       const arc = G.weatherArc;
       const lapS = c.lastLap > 0 ? c.lastLap : 0;
-      const left = arc ? Math.max(0, arc.dur - arc.t) : 0;
+      // …to the FIRST WET STAGE, not the end of the arc: dry→rain walks
+      // [dry, wet, rain] and the road is wet a third of the way in (WeatherArc
+      // arcSeq). An arc without a stage list counts to its end.
+      let wetAt = 1;
+      if (arc && arc.seq) {
+        for (let i = 0; i < arc.seq.length; i++) { if (WET.indexOf(arc.seq[i]) >= 0) { wetAt = i / arc.seq.length; break; } }
+      }
+      const left = arc ? Math.max(0, arc.dur * wetAt - arc.t) : 0;
       // THE PLAN: the next planned stop lap and the compound it fits; and THE
       // UNDERCUT — a rival BEHIND, inside pit loss plus two seconds, whose stop
       // count rose since the last tick (remembered per rival in the bag).
@@ -344,6 +355,24 @@ var RaceEngineer = (function () {
       return out;
     }
 
+    // update()'s `take`: the first rung not yet said at its current state. The
+    // quiet timer holds the reports but NOT the pit calls — a BOX with a lap to
+    // act on cannot wait nine seconds behind a wear step. One scratch (no
+    // closure per tick), like _sense.
+    let _ub = null, _us = null, _um = "", _uk = "";
+    function takeUnsaid(msg, key) {
+      if (_ub.t > 0 && BOX_CALLS.indexOf(key) < 0) return false;
+      if (_ub.said[key] === String(stateOf(key, _us, _ub))) return false;
+      _um = msg; _uk = key;
+      return true;
+    }
+    // Is the car still on the track side of a stop — no stop armed or under way?
+    // The `still` of a line that was true when it was accepted but may wait
+    // behind the card on screen (announce() queues inside its 3 s floor).
+    function stopOpen(c) {
+      return !c.pitArmed && (!c.pitState || c.pitState === "none") && !c.finished && !c.retired;
+    }
+
     /** One tick for ONE car — the local player only; nobody else has a banner. */
     function update(c, dt) {
       if (!c || !c.local || !(dt > 0) || G.paused) return "";   // VS FRIEND ticks under pause: no call on the pause menu (a wear step waits for resume)
@@ -356,15 +385,13 @@ var RaceEngineer = (function () {
       if (lvl >= 2 && !(b.cLvl >= 2)) b.cEp++;
       b.cLvl = lvl;
       if (b.undercut && (b.undercut.left -= dt) <= 0) b.undercut = null;
-      // Gated first: callFor builds message strings, and this runs every step.
-      if (b.t > 0) return "";
-      const call = callFor(s);
-      if (!call) return "";
       const cue = G.pits && G.pits.lastCue ? G.pits.lastCue() : null;
       if (cue && DIRECTIONAL.indexOf(cue.phase) >= 0) return "";
-      const [msg, key] = call;
-      const sig = String(stateOf(key, s, b));
-      if (b.said[key] === sig) return "";
+      _ub = b; _us = s; _um = ""; _uk = "";
+      ladder(s, takeUnsaid);
+      _ub = _us = null;
+      if (!_uk) return "";
+      const msg = _um, key = _uk, sig = String(stateOf(key, s, b));
       // "info", so an engineer never talks over a flag, a penalty or the lights
       // (js/game.js ANN_PRI) — EXCEPT the pit call, which is not a report but an
       // instruction with a lap to act on it, and rides "box" (rank 4) with the
@@ -373,7 +400,14 @@ var RaceEngineer = (function () {
       // announce() reports back whether the line will actually be heard — a
       // cinematic camera drops "info", and a queue slot can be pushed off the
       // end by higher priorities.
-      if (!G.announce(msg, 2.2, BOX_CALLS.indexOf(key) >= 0 ? "box" : "info")) return "";
+      // A QUEUED line is re-checked when its turn comes: a BOX that waited out a
+      // card, after the car has already pitted, is a call to do what is done.
+      let still;
+      if (BOX_CALLS.indexOf(key) >= 0 || key === "rain" || key === "rainplan" || key === "undercut") {
+        const lap = key === "plan1" ? c.lap : -1;   // "next lap" is wrong a lap later
+        still = () => stopOpen(c) && (lap < 0 || c.lap === lap);
+      }
+      if (!G.announce(msg, 2.2, BOX_CALLS.indexOf(key) >= 0 ? "box" : "info", still)) return "";
       // A wear step is only CONSUMED when it is actually said, so a threshold
       // crossed while the banner was busy is still waiting on the next tick
       // rather than silently spent.

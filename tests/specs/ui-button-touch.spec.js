@@ -95,8 +95,36 @@ async function cycleToPauseSteerMode(page, targetText) {
   const mode = targetText.toLowerCase();
   const values = await page.locator("#pm-steer-sel option").evaluateAll((os) => os.map((o) => o.value));
   expect(values, `#pm-steer-sel has no option "${mode}"`).toContain(mode);
-  await page.locator("#pm-steer-sel").selectOption(mode, { force: true });
-  await page.waitForTimeout(300);
+  // TILT: enableTilt()'s no-sensor path (hard-deny or 1.5 s without gyroSeen)
+  // flips back to BUTTONS and leaves #pm-calib disabled — CI run 38033644776
+  // failed "calibrate button enabled in tilt mode" that way. headless() gates
+  // both fallbacks (game.js); seed a reading so gyroSeen is true if a sensor
+  // API exists. Drive the select via change event (same as sliders.spec) —
+  // Playwright selectOption({force}) sometimes sets the value without firing
+  // change under hasTouch, so setSteerMode never ran.
+  if (mode === "tilt") {
+    await page.evaluate(() => { if (window.__apex) window.__apex.headless(true); });
+  }
+  await page.evaluate((mode) => {
+    const sel = document.getElementById("pm-steer-sel");
+    sel.value = mode;
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+  }, mode);
+  if (mode === "tilt") {
+    await page.evaluate(() => {
+      try {
+        const e = new Event("deviceorientation");
+        Object.assign(e, { alpha: 0, beta: 0, gamma: 8, absolute: false });
+        window.dispatchEvent(e);
+      } catch (_) { /* no DOE */ }
+    });
+  }
+  await page.waitForFunction((mode) => {
+    const sel = document.getElementById("pm-steer-sel");
+    const calib = document.getElementById("pm-calib");
+    if (!sel || !calib || sel.value !== mode) return false;
+    return mode === "tilt" ? !calib.disabled : !!calib.disabled;
+  }, mode, { polling: 100, timeout: 5000 });
 }
 
 async function openLightingPhotoMode(page) {

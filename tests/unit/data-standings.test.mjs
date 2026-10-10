@@ -165,3 +165,17 @@ test("an empty current year falls back to last season's FINAL table, labelled as
     assert.equal(textOf(cols(w)[0], "dh-empty"), "No driver standings yet — season hasn't started.");
   }
 });
+
+test("a rival tied on points with the leader shows no gap, not \"−0\"", async () => {
+  const tied = [
+    { pos: 1, points: 120, wins: 3, name: "Lando Norris", code: "NOR", team: "McLaren" },
+    { pos: 2, points: 120, wins: 1, name: "Oscar Piastri", code: "PIA", team: "McLaren" },
+    { pos: 3, points: 118, wins: 0, name: "Test Driver", code: "TST", team: "Black Racing" },
+  ];
+  const wrap = await boot(tied, [
+    { pos: 1, points: 221, wins: 4, name: "McLaren" }, { pos: 2, points: 221, wins: 0, name: "Black Racing" },
+  ]).loadStandings();
+  const [dcol, ccol] = cols(wrap);
+  assert.deepEqual(rowsIn(dcol).map((r) => textOf(r, "dh-gap")), [null, null, "−2"]);
+  assert.deepEqual(rowsIn(ccol).map((r) => textOf(r, "dh-gap")), [null, null]);
+});

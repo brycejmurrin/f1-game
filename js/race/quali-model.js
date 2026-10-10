@@ -238,6 +238,8 @@ const Quali = (function () {
       } catch { /* persist is best-effort */ }
     }
 
+    function seatKey(driverId, team) { return driverId + "|" + (team && team.id || team || ""); }
+
     function persistOrder() {
       const s = G.season;
       if (!s || !classification) return;
@@ -254,9 +256,16 @@ const Quali = (function () {
       // A one-off GP runs on the standalone season's object: it must never
       // overwrite the grid a season (or career) round is keeping for CONTINUE.
       if (modeId() === "gp" && s.qualiOrder && s.qualiMode !== "gp") return;
-      s.qualiOrder = classification.map((r) => ({
-        id: r.driverId, t: r.t, human: !!r.human, noTime: !!r.noTime,
-      }));
+      // noTime rides along: its t is the synthetic slowest+1, which a restore
+      // would otherwise paint as a real "+1.000" lap (and DRIVEN) on the sheet.
+      s.qualiOrder = classification.map((r) => r.noTime
+        ? { id: r.driverId, t: r.t, human: !!r.human, noTime: true }
+        : { id: r.driverId, t: r.t, human: !!r.human });
+      // And whose weekend it was: a team or driver change makes the order a
+      // stranger's lap times under the new seat (see seatKey).
+      const me = classification.find((r) => r.isPlayer);
+      if (me) s.qualiSeat = seatKey(me.driverId, me.team);
+      else delete s.qualiSeat;
       // Stamp the circuit: an order restored onto a different track is a
       // grid drawn from the wrong lap times.
       s.qualiTrack = hereId();
@@ -288,6 +297,14 @@ const Quali = (function () {
       const ids = raw.map((e) => e && typeof e === "object" ? e.id : e);
       if (ids.length !== byId.size || new Set(ids).size !== byId.size ||
           ids.some((id) => !byId.has(id))) return false;
+      // The order is the PLAYER's weekend: a different seat (team or driver
+      // swapped since) refuses it, as another circuit does. An unstamped
+      // (older) order is accepted as before.
+      const seat = G.season.qualiSeat;
+      if (seat) {
+        const me = G.cars && G.cars.find((c) => c.isPlayer);
+        if (me && seatKey(me.driverId, me.team) !== seat) return false;
+      }
       classification = raw.map((entry, i) => {
         const obj = entry && typeof entry === "object";
         const driverId = obj ? entry.id : entry;
@@ -302,7 +319,7 @@ const Quali = (function () {
           team: car && car.team ? (car.team.id || car.team) : null,
           isPlayer: !!(car && car.isPlayer),
           human: !!(obj && entry.human),
-          noTime: !!(obj && entry.noTime),   // else the sheet shows a fabricated +gap for it
+          ...(obj && entry.noTime ? { noTime: true } : null),
         };
       });
       classTrack = G.season.qualiTrack || here;
@@ -360,6 +377,7 @@ const Quali = (function () {
       delete s.qualiOrder;
       delete s.qualiTrack;
       delete s.qualiMode;
+      delete s.qualiSeat;
       persistSeason(s);
     }
     function clear(forget) {

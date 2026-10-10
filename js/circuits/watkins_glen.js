@@ -45,14 +45,14 @@
       { s: 0.90, halfM: 300, rise: -5.0 },   // drop to the front straight
     ],
     hwZones: [
-      { s0: 0.070, s1: 0.115, hw: 6.3, ease: 0.012 },  // Turn 1 / the 90
+      { s0: 0.0434, s1: 0.0747, hw: 6.3, ease: 0.012 },  // Turn 1 / the 90 (index; arc 0.070-0.115)
       { s0: 0.430, s1: 0.480, hw: 6.2, ease: 0.012 },  // the Boot entry
-      { s0: 0.880, s1: 0.925, hw: 6.4, ease: 0.012 },  // the Anvil
+      { s0: 0.9208, s1: 0.9562, hw: 6.4, ease: 0.012 },  // the Anvil (index; arc 0.880-0.925)
     ],
     bankZones: [
-      { frac: 0.240, angleDeg: 4.5, widthM: 150 },   // the Esses
+      { turn: 1, angleDeg: 4.5, widthM: 150 },   // the Esses; re-seated frac 0.24 (was 951 m off any apex)
       { frac: 0.620, angleDeg: 3.5, widthM: 130 },   // Toe of the Boot
-      { frac: 0.900, angleDeg: 4.0, widthM: 130 },   // the Anvil
+      { turn: 10, angleDeg: 4.0, widthM: 130 },   // the Anvil; re-seated frac 0.9 (was 138 m off any apex)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

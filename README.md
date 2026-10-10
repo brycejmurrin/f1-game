@@ -38,7 +38,7 @@ Night races run under floodlights.
 
 **Build your own circuit** in the TRACK DESIGNER (title menu): RANDOMISE or
 draw a loop, drag its points, stamp corners, hairpins and chicanes, pick a
-theme (sixteen, each with time of day, trees and crowd options), and let the
+theme (27, each with time of day, trees and crowd options), and let the
 designer's checks (and their FIX buttons) make it raceable —
 then SAVE it and race the full field or a time trial on it, or share it as a
 link. The designer's HOW TO tab walks through it; the long form is
@@ -60,7 +60,7 @@ link. The designer's HOW TO tab walks through it; the long form is
   **Y** overtake, **RB**/**LB** shift up/down, **View/Back** camera,
   **Menu/Start** pause. Supported pads also rumble on contact and kerbs.
 - **Camera:** the **CAM** button (top-right, next to pause) or the `C` key
-  cycle through **14 camera modes** — **CHASE** (close), **FAR** (pulled back),
+  cycle through **20 camera modes** — **CHASE** (close), **FAR** (pulled back),
   **DRIFT**, **COCKPIT** (onboard driver's eye), **HOOD** (nose cam), and more
   (overhead, heli, trackside, cinematic, T-cam…). Your choice is remembered.
 
@@ -161,7 +161,7 @@ needs, run those in the background, tail the log.
 
 ```sh
 node tools/ci/pick-tests.mjs                    # which test:<group>s does this change need?
-node tools/ci/test-bg.mjs driving hooks         # start them in the background, one at a time
+node tools/ci/test-bg.mjs physics-core hooks    # start them in the background, one at a time
 tail -f artifacts/logs/smoke.log             # watch one live
 node tools/ci/test-bg.mjs --status              # running / how each ended
 
