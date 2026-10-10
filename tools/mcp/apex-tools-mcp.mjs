@@ -1138,7 +1138,18 @@ function aliasHudDevice(args) {
   const mapped = HUD_DEVICE_ALIASES[args.device];
   return mapped && mapped !== args.device ? { ...args, device: mapped } : args;
 }
+/** An unknown key is reported before a missing required one: `{fil:"x"}` is a typo for `file`, and "tool needs file" hides that. */
+function checkUnknownKeys(value, schema) {
+  if (!isObject(value) || schema.additionalProperties !== false || !schema.properties) return;
+  const valid = Object.keys(schema.properties);
+  for (const key of Object.keys(value)) {
+    if (Object.hasOwn(schema.properties, key)) continue;
+    const near = nearestKey(key, valid);
+    badArgs(`unknown argument ${key}`, `${near ? `Did you mean "${near}"? ` : ""}Valid: ${valid.join(", ")}.`);
+  }
+}
 function validateValue(value, schema, label) {
+  checkUnknownKeys(value, schema);
   if (schema.anyOf) {
     const fits = schema.anyOf.some((part) => { try { validateValue(value, part, label); return true; } catch { return false; } });
     if (!fits) badArgs(`${label === "arguments" ? "arguments" : label} must be ${describeSchema(schema)}`, `Got ${jsType(value)}${isObject(value) ? ` with keys ${Object.keys(value).join(", ") || "(none)"}` : ""}. Required: ${(schema.required || []).join(", ") || "see inputSchema"}.`);
@@ -1181,11 +1192,6 @@ function validateValue(value, schema, label) {
     }
     for (const [key, child] of Object.entries(value)) {
       const spec = schema.properties && Object.hasOwn(schema.properties, key) ? schema.properties[key] : null;
-      if (!spec && schema.additionalProperties === false) {
-        const valid = Object.keys(schema.properties || {});
-        const near = nearestKey(key, valid);
-        badArgs(`unknown argument ${key}`, `${near ? `Did you mean "${near}"? ` : ""}Valid: ${valid.join(", ")}.`);
-      }
       if (spec) validateValue(child, spec, key);
     }
   }

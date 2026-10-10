@@ -1743,3 +1743,13 @@ test("apex_catalog lists the ids the other tools accept, from their own schemas 
   assert.ok(b.jobKinds.includes("ui_matrix") && b.jobKinds.includes("float_all"));
   assert.ok(!b.uiViewports.includes("phone-landscape-844x390"), "the two viewport families stay distinct");
 });
+
+// A misspelled key used to hide behind "tool needs <required>" / the anyOf message; the typo is the likelier mistake.
+test("a misspelled key is reported with a did-you-mean before the missing required argument", () => {
+  const msg = (name, args) => { const b = JSON.parse(callCli(name, args).stdout); return `${b.message} | ${b.fix}`; };
+  assert.match(msg("apex_unit_test", { fil: "x" }), /unknown argument fil \| Did you mean "file"\?/);
+  assert.match(msg("apex_graph_parity", { bse: "HEAD", id: "monza" }), /unknown argument bse \| Did you mean "base"\?/);
+  assert.match(msg("apex_shot_survey", { trak: "monza" }), /unknown argument trak \| Did you mean "track"\?/);
+  // No typo: the missing required argument is still named.
+  assert.match(msg("apex_unit_test", {}), /tool needs file \| Pass "file"/);
+});
