@@ -26,34 +26,41 @@ const AiCorridor = (function () {
   function acceleration(car) {
     return Number.isFinite(car.corridorAccel) ? Math.max(-40, Math.min(20, car.corridorAccel)) : 0;
   }
+  // The per-tick traffic snapshot (game.js stamps _snapProg/_snapX/_snapSpeed on
+  // every car before any updateCar runs), so a rival moved earlier in the tick
+  // does not look ~1.3 m further along and the answer cannot depend on array
+  // order. Live value when a car carries no snapshot (bare tests, first tick).
+  function snap(o, key, live) { const v = o[key]; return Number.isFinite(v) ? v : live; }
   function candidate(ctx, car, blocker, cars, total, clear, side, out) {
     const room = side > 0 ? Math.min(ctx.roomR, ctx.roadR) : Math.min(ctx.roomL, ctx.roadL);
     out.side = side; out.score = -Infinity; out.reason = "road too narrow";
-    out.target = blocker.x + side * clear;
+    out.target = snap(blocker, "_snapX", blocker.x) + side * clear;
     if (room < clear || out.target < car.x - ctx.roadL || out.target > car.x + ctx.roadR) return;
     const lateral = out.target - car.x;
     const seconds = Math.max(.4, Math.min(1.6, Math.abs(lateral) / 2.4));
     out.seconds = seconds;
     const reach = Math.max(car.speed, 10) * 1.5;
-    const passT = Math.min(8, ((ctx.blockerGap || 0) + 6.3) / Math.max((ctx.freeSpeed || car.speed) - (ctx.blockerVmax || blocker.speed), (ctx.vTop || 72) / 72));
+    const blockerSpeed = snap(blocker, "_snapSpeed", blocker.speed);
+    const passT = Math.min(8, ((ctx.blockerGap || 0) + 6.3) / Math.max((ctx.freeSpeed || car.speed) - (ctx.blockerVmax || blockerSpeed), (ctx.vTop || 72) / 72));
     for (const other of cars) {
       if (other === car || other.retired || other.finished) continue;
-      const raw = other.prog - car.prog;
+      const oProg = snap(other, "_snapProg", other.prog), oX = snap(other, "_snapX", other.x), oSpeed = snap(other, "_snapSpeed", other.speed);
+      const raw = oProg - car.prog;
       const gap = ((raw + total / 2) % total + total) % total - total / 2;
-      const closing = other.speed - car.speed;
+      const closing = oSpeed - car.speed;
       // Observed motion only: no privileged knowledge of another driver's input.
       const accel = acceleration(other) - acceleration(car);
-      if (crosses(gap, other.x - car.x, closing, -lateral / seconds, seconds, accel)
+      if (crosses(gap, oX - car.x, closing, -lateral / seconds, seconds, accel)
         || crosses(gap + closing * seconds + .5 * accel * seconds * seconds,
-          other.x - out.target, closing + accel * seconds, 0, .5, accel)) {
+          oX - out.target, closing + accel * seconds, 0, .5, accel)) {
         out.reason = other === blocker ? "cannot clear the blocker in time" : "traffic in the passing lane"; return;
       }
       // LOOK DOWN THE LANE, not just beside it: a car ahead in the target lane
       // that we would catch before the pass is done (blocker gap + a car
       // length, at our closing rate on the blocker) is the next blocker — the
       // move pulls out only to queue again. Within 1.5 s of road.
-      if (!ctx.street && other !== blocker && gap > 0 && gap < reach && Math.abs(other.x - out.target) < 2.2
-        && gap - (car.speed - other.speed) * passT < 6) { out.reason = "traffic ahead in the passing lane"; return; }
+      if (!ctx.street && other !== blocker && gap > 0 && gap < reach && Math.abs(oX - out.target) < 2.2
+        && gap - (car.speed - oSpeed) * passT < 6) { out.reason = "traffic ahead in the passing lane"; return; }
     }
     out.reason = "clear passing lane";
     out.score = Math.min(room, 8) * .25 - seconds + AiDrive.passSideBonus(ctx, side);

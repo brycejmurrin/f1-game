@@ -74,6 +74,10 @@ async function reopenSetup(page) {
   await page.locator("#select").waitFor({ state: "visible" });
   await page.locator("#sel-car").click();
   await waitGarageSheet(page);
+  // FREE BUILD ships ON (unlimitedBudget default true). openSetup turns it
+  // off; a reload re-reads the default unless the store kept false — and the
+  // budget-after-reload case needs the numeric line, not "FREE BUILD — …".
+  await freeBuildOff(page);
 }
 
 test.describe("Parts persistence — localStorage writes", () => {

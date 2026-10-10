@@ -164,3 +164,27 @@ test("PRESETS bundle gripSteer: ROOKIE/RELAX on, STANDARD/PRO off", () => {
   assert.equal(grab("standard"), 1);
   assert.equal(grab("pro"), 1);
 });
+
+test("the cap aims at the FRONT curve's own peak slip (CURVE_PEAK_X_F), not the nominal pi/2", () => {
+  // The front curve is rescaled to peak earlier (TyreModel.CURVE_PEAK_X_F ≈ 1.27
+  // vs pi/2). Capping at (pi/2)·mu/cs·0.95 sat ~17 % past that peak, looser than
+  // "cap at peak slip" says. A context WITH the real TyreModel pins the new cap.
+  const tctx = { M4: ctx.M4, Math, Object, Log: { info() {}, debug() {}, warn() {}, error() {} } };
+  tctx.window = tctx;   // consts.js assigns window.PhysicsConsts
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/physics/consts.js"), "utf8").replace(/^const\b/gm, "var"), tctx);
+  vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/physics/tyre-model.js"), "utf8").replace(/^const\b/gm, "var"), tctx);
+  vm.runInNewContext(SRC.replace(/^const\b/gm, "var"), tctx);
+  const TM = tctx.TyreModel, G2 = tctx.GripSteer;
+  assert.ok(TM.CURVE_PEAK_X_F < TM.CURVE_PEAK_X, "premise: the front peaks earlier");
+  const muF = 22, cs = 130;
+  let capSm = 0, delta = 0.7;
+  for (let i = 0; i < 60; i++) {
+    const out = G2.apply(0.7, { speed: 45, vLat: 0, yawRate: 0, muF, csFront: cs, af: 1.3, ar: 1.5, braking: false, shaped: 1, capSm, dt: 1 / 60 }, 1);
+    delta = out.delta; capSm = out.capSm;
+  }
+  const want = TM.CURVE_PEAK_X_F * muF / cs * G2.TARGET;
+  assert.ok(Math.abs(delta - want) < 1e-3, `settled cap ${delta} vs peak-slip target ${want}`);
+  const x = cs * delta / muF;
+  assert.ok(x <= TM.CURVE_PEAK_X_F, `the capped slip stays on the rising side of the front's peak (x=${x}, peak ${TM.CURVE_PEAK_X_F})`);
+  assert.ok(Math.abs(TM.lateralCurve(x, TM.CURVE_FLOOR, TM.CURVE_FALL_W)) > 0.99, "...and still delivers ~all of the front's grip");
+});

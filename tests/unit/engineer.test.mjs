@@ -567,3 +567,113 @@ test("the cheap stop under caution is offered only when a stop is still due", ()
   long.G.pits = { estimate: () => ({ lossS: 18, marginS: 2 }), lastCue: () => null };
   assert.equal(long.eng.senseOf(b).cheapStop, true);
 });
+
+test("pits.estimate() is re-read on a 0.25 s clock, not every physics step (bug-hunt 7.11)", () => {
+  const { eng, tyres, G } = sessionFor();
+  let calls = 0;
+  G.pits = { estimate: () => { calls++; return { lossS: 22, gapS: 2, marginS: -20 }; }, lastCue: () => null };
+  const c = carOn(tyres, { wear: 0.1 });
+  for (let i = 0; i < 120; i++) eng.update(c, 1 / 60);       // 2 s of steps
+  assert.ok(calls <= 10, `estimate ran ${calls} times in 120 steps — it should follow the 0.25 s clock`);
+  assert.ok(calls >= 2, "…but it is still refreshed");
+  const n = calls;
+  eng.senseOf(c); eng.senseOf(c);
+  assert.equal(calls, n + 2, "a one-off sense (no dt) is always fresh");
+});
+
+// ── round-2 hunt (audio F1/F6/F7/F9) ────────────────────────────────────────
+
+// F1: callFor returned ONE line, the top rung, and update() dropped it when it
+// was already said — so a condition that stays true (a blister never heals; a
+// rain forecast holds) silenced every rung below it, BOX BOX BOX included.
+test("a said top rung does not shadow the pit call below it (blisters, then BOX BOX BOX)", () => {
+  const { eng, tyres, said } = sessionFor();
+  const c = carOn(tyres, { wear: 0.3 });
+  c.pitPlan = { lapsAt: [c.lap + 2], seq: ["M", "H"] };
+  c.tyreBlister = 0.5;                               // BLISTER_CALL 0.20: persistent for the set
+  for (let i = 0; i < 30; i++) eng.update(c, 1);
+  assert.deepEqual(said.filter((m) => /BLISTERS/.test(m)).length, 1, said.join(" | "));
+  c.lap += 2;                                        // the planned stop lap
+  for (let i = 0; i < 30; i++) eng.update(c, 1);
+  assert.ok(said.some((m) => /^BOX BOX BOX/.test(m)), `BOX BOX BOX never said: ${said.join(" | ")}`);
+  assert.equal(said.filter((m) => /BLISTERS/.test(m)).length, 1, "the blister line is not repeated");
+});
+
+test("a rain forecast already given does not block BOX BOX BOX on the stop lap", () => {
+  const { eng, tyres, said } = sessionFor({ arc: { to: "rain", dur: 900, t: 0 } });
+  const c = carOn(tyres, { wear: 0.3 });
+  c.pitPlan = { lapsAt: [c.lap], seq: ["M", "H"] };
+  for (let i = 0; i < 30; i++) eng.update(c, 1);
+  assert.ok(said.some((m) => /^RAIN /.test(m)), said.join(" | "));
+  assert.ok(said.some((m) => /^BOX BOX BOX/.test(m)), `BOX BOX BOX shadowed by the rain line: ${said.join(" | ")}`);
+});
+
+test("callFor still returns the single top line for a state", () => {
+  const eng = E.create({});
+  const top = eng.callFor(sense({ blistering: 1, lapsToStop: 0 }));
+  assert.equal(top[1], "blister");
+  assert.equal(eng.callFor(sense({})), "");
+});
+
+// F9: the 9 s quiet timer held a pit call behind any report that came first.
+test("a BOX call is not held by the quiet timer; a report still is", () => {
+  const { eng, tyres, said } = sessionFor();
+  const c = carOn(tyres, { wear: 0.8 });             // owes "TYRES AT 25%"
+  c.pitPlan = { lapsAt: [c.lap + 1], seq: ["M", "H"] };
+  eng.update(c, 1 / 60);
+  assert.match(said.at(-1), /TYRES AT|BOX NEXT LAP/);
+  const n = said.length;
+  c.lap += 1;                                        // lapsToStop 0 a second after a line
+  eng.update(c, 1);
+  assert.equal(said.length, n + 1, "BOX BOX BOX waited out the quiet window");
+  assert.match(said.at(-1), /^BOX BOX BOX/);
+  c.tyreWear = 0.95; c.tyreWearF = 0.95; c.tyreWearR = 0.95;
+  eng.update(c, 1);
+  assert.equal(said.length, n + 1, "a report is still held by QUIET_S");
+});
+
+// F6: a queued line carries a `still`, and it goes false once the car has pitted.
+test("queued BOX and rain calls carry a still() that goes false once the stop is armed", () => {
+  const stills = {};
+  const { eng, tyres, G } = sessionFor({ arc: { to: "rain", dur: 900, t: 0 } });
+  G.announce = (msg, dur, kind, still) => { stills[msg.split(" ")[0] + kind] = still; return true; };
+  const c = carOn(tyres, { wear: 0.3 });
+  c.pitPlan = { lapsAt: [c.lap], seq: ["M", "H"] };
+  for (let i = 0; i < 40; i++) eng.update(c, 1);
+  const box = stills.BOXbox, rain = stills.RAINinfo;
+  assert.equal(typeof box, "function", "BOX call has no still");
+  assert.equal(typeof rain, "function", "rain call has no still");
+  assert.equal(box(), true);
+  c.pitArmed = true;
+  assert.equal(box(), false, "BOX BOX BOX is stale once the stop is armed");
+  assert.equal(rain(), false);
+  c.pitArmed = false; c.pitState = "entry";
+  assert.equal(box(), false, "…and while in the lane");
+});
+
+test("BOX NEXT LAP is stale a lap later", () => {
+  let still;
+  const { eng, tyres, G } = sessionFor();
+  G.announce = (msg, dur, kind, s) => { if (/BOX NEXT LAP/.test(msg)) still = s; return true; };
+  const c = carOn(tyres, { wear: 0.3 });
+  c.pitPlan = { lapsAt: [c.lap + 1], seq: ["M", "H"] };
+  eng.update(c, 1);
+  assert.equal(still(), true);
+  c.lap += 1;
+  assert.equal(still(), false);
+});
+
+// F7: "RAIN IN N LAPS" counted to the end of the arc; the road is wet at the
+// first wet STAGE (dry→rain = [dry, wet, rain] → a third of the way in).
+test("RAIN IN N LAPS counts to the first wet stage of the arc, not its end", () => {
+  const seq = ["dry", "wet", "rain"];
+  const s = sessionFor({ arc: { from: "dry", to: "rain", dur: 540, t: 0, seq } });
+  const c = carOn(s.tyres, { wear: 0 });             // lastLap 90 s
+  s.eng.update(c, 1);
+  // 540 s * 1/3 = 180 s to the wet stage = 2 laps (the old end-of-arc count said 6)
+  assert.match(s.said[0], /^RAIN IN 2 LAPS/, s.said.join(" | "));
+  // Already wet (past the first wet stage): no forecast to give.
+  const w = sessionFor({ arc: { from: "dry", to: "rain", dur: 540, t: 200, seq } });
+  const d = carOn(w.tyres, { wear: 0 });
+  assert.equal(w.eng.senseOf(d).rainInLaps, null);
+});

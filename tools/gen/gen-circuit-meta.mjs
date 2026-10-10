@@ -15,7 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { createRequire } from "node:module";
-import { ROOT, isMain, firstDiff } from "./gen-lib.mjs";
+import { ROOT, isMain, firstDiff, argGate } from "./gen-lib.mjs";
 
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../manifest.cjs");
@@ -94,6 +94,8 @@ export function check() {
 }
 
 if (isMain(import.meta.url)) {
+  const gated = argGate(process.argv.slice(2));
+  if (gated !== null) process.exit(gated);
   const mode = process.argv.includes("--check") ? "check" : "write";
   if (mode === "check") process.exit(check() ? 0 : 1);
   console.log("wrote", write());
