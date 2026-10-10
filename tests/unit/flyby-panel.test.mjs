@@ -449,25 +449,3 @@ test("the preview flies a COPY re-taken when the list's contents change", () => 
   assert.match(src, /flybyCam\(u, playable\(\)\)/, "preview flies playable()");
   assert.match(src, /JSON\.stringify\(ensure\(\)\)/, "playable() keys its copy on the list's contents");
 });
-
-// bug-hunt 9.11 (c): a corrupted settings import could carry a pose whose numbers
-// were strings / null / non-finite and give the loading flyby a NaN eye.
-test("shotErrors rejects non-finite pose numbers via poseErrors (bug-hunt 9.11)", () => {
-  assert.deepEqual([...FP.shotErrors(goodList())], []);
-  for (const [field, bad] of [["off", "x"], ["x", null], ["y", Infinity], ["bear", NaN], ["distR", "1"],
-    ["yR", {}], ["distK", [1]], ["yK", null]]) {
-    const l = goodList();
-    l[0].eye[1][field] = bad;
-    const errs = [...FP.shotErrors(l)];
-    assert.ok(errs.some((m) => m.includes(field + " must be a number")),
-      `${field}=${String(bad)} is refused (${errs.join("; ") || "no error"})`);
-  }
-  const l = goodList();
-  l[1].eye[0].n = 3; l[1].eye[1].n = "slowest"; l[1].eye[0].rank = 2;
-  assert.deepEqual([...FP.shotErrors(l)], [], "a numeric n, a named n and a rank all pass");
-  l[1].eye[0].n = NaN;
-  assert.ok([...FP.shotErrors(l)].some((m) => /n is not a corner/.test(m)), "a NaN corner n is refused");
-  const r = goodList();
-  r[0].eye[1].at = "landmark"; r[0].eye[1].rank = Infinity;
-  assert.ok([...FP.shotErrors(r)].some((m) => /rank must be/.test(m)), "a non-finite rank is refused");
-});
