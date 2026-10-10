@@ -99,6 +99,24 @@ test("a place gained under the SC opens the window; given back in time, nothing"
   assert.equal(w.info().owed, 0);
 });
 
+test("info() names the car to let by and counts the window down, for the HUD's flag chip", () => {
+  const w = R.createPassWatch(5), f = field(2);
+  f.rivals[0].code = "VER"; f.rivals[1].code = "HAM";
+  w.tick(f.p, f.all, 3, DT);
+  assert.equal(w.info().code, null, "nothing owed: no car named");
+  f.p.prog = 115;                                 // past VER under the Safety Car
+  assert.equal(w.tick(f.p, f.all, 3, DT).type, "warn");
+  const open = w.info();
+  assert.equal(open.owed, 1);
+  assert.equal(open.code, "VER");
+  assert.ok(open.t > 4.5 && open.t <= 5, `the window starts near 5 s (${open.t})`);
+  run(w, f, 3, 2);
+  assert.ok(Math.abs(w.info().t - (open.t - 2)) < 0.05, `it counts down with the race clock (${w.info().t})`);
+  f.p.prog = 105;
+  assert.equal(w.tick(f.p, f.all, 3, DT).type, "cleared");
+  assert.deepEqual({ ...w.info() }, { owed: 0, t: 0, code: null }, "given back: the chip has nothing to show");
+});
+
 test("a place KEPT past the window is +10 s; two places are +20 s", () => {
   let w = R.createPassWatch(5), f = field(3);
   w.tick(f.p, f.all, 2, DT);

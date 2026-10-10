@@ -156,7 +156,9 @@ const SportingRegs = (function () {
       primed = true; finished = !!p.finished;
       return ev;
     }
-    function info() { return { owed: owed.length, t: +Math.max(0, t).toFixed(2) }; }
+    /** The open give-back window, for the HUD's flag chip: places owed, the
+     *  seconds left, and the code of the first car to let by (null if none). */
+    function info() { return { owed: owed.length, t: +Math.max(0, t).toFixed(2), code: owed.length ? owed[0].code || null : null }; }
     return { tick, reset, info };
   }
 

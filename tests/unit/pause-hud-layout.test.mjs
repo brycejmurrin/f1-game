@@ -86,6 +86,42 @@ test("a queued INFO card older than ANN_STALE_MS is dropped at the drain; a warn
   assert.deepEqual(shown.map((s) => s[0]), ["TYRES AT 50%"], "a fresh info card still plays");
 });
 
+test("a give-back warning is not starved behind the caution's own radio card: it takes over at the floor", () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const priorities = game.match(/const ANN_PRI = [^;]+;/)[0];
+  const stale = game.match(/const ANN_STALE_MS = [^;]+;/)[0];
+  const qmax = game.match(/const ANN_QUEUE_MAX = [^;]+;/)[0];
+  const announce = game.match(/function announce\([^]*?\n\}/)[0];
+  const tickAnn = game.match(/ {2}if \(announceT > 0\) \{\n {4}announceT -= dt;\n[\s\S]*?\n {4}\}\n {2}\}\n/)[0];
+  const shown = [];
+  const els = { announce: { hidden: false, className: "", dataset: {} } };
+  const ctx = vm.createContext({ hudProfile: "standard", CAM_MODES: [{ id: "chase" }], camMode: 0, els, shown,
+    announceT: 0, _annPri: 0, _annFloor: 0, _annQueue: [], performance: { now: () => 0 } });
+  vm.runInContext(priorities + "\n" + stale + "\n" + qmax + "\n" + announce
+    + "\nfunction showAnnounce(msg, dur, kind) { shown.push(msg); _annPri = ANN_PRI[kind] || 2; announceT = Math.max(3, (dur || 1.6) + 0.5); _annFloor = 3; }"
+    + "\nfunction tick(dt) {\n" + tickAnn + "}", ctx);
+  // "SAFETY CAR, SAFETY CAR. NO OVERTAKING" — race-radio's flag line, ~3.3 s spoken.
+  vm.runInContext('announce("SAFETY CAR. NO OVERTAKING", 3.3, "warning")', ctx);
+  vm.runInContext("tick(0.5)", ctx);
+  // The player gains a place half a second in: the 5 s window opens now.
+  vm.runInContext('announce("GIVE THE POSITION BACK", 2.5, "penalty-warn")', ctx);
+  assert.deepEqual(shown, ["SAFETY CAR. NO OVERTAKING"], "the floor still holds: the SC card is not blinked away");
+  let t = 0.5;
+  while (shown.length < 2 && t < 6) { vm.runInContext("tick(0.1)", ctx); t += 0.1; }
+  assert.equal(shown[1], "GIVE THE POSITION BACK");
+  assert.ok(t <= 3.05, `the warning shows when the SC card's 3 s floor ends, not after its whole life (${t.toFixed(1)} s)`);
+  // An equal-priority arrival still waits for the card to finish.
+  shown.length = 0; ctx._annQueue.length = 0; ctx.announceT = 0;
+  vm.runInContext('announce("TRACK LIMITS 1/4", 3.3, "penalty-warn"); announce("POSITION RETURNED — NO PENALTY", 1.5, "penalty-warn")', ctx);
+  t = 0;
+  while (shown.length < 2 && t < 6) { vm.runInContext("tick(0.1)", ctx); t += 0.1; }
+  assert.ok(t > 3.7, `equal priority waits out the whole card (${t.toFixed(1)} s)`);
+  // The warning is dropped from the queue once the place is back; the all-clear is said.
+  const sc = game.match(/function scPassCall\(ev\) \{[\s\S]*?\n\}/)[0];
+  assert.match(sc, /"GIVE THE POSITION BACK"[^;]*"penalty-warn", \(\) => scWatch\.info\(\)\.owed > 0\)/);
+  assert.match(sc, /ev\.type === "cleared"\) \{ announce\("POSITION RETURNED — NO PENALTY", [\d.]+, "penalty-warn"\); return; \}/);
+});
+
 test("losing focus while visible pauses a solo race; an iOS audio interruption does too; neither in a friend race", () => {
   const game = fs.readFileSync(path.join(ROOT, "js/ui/platform-session.js"), "utf8");
   const blur = game.match(/window\.addEventListener\("blur", \(\) => \{[\s\S]*?\n\}\);/)[0];
