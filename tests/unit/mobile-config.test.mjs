@@ -59,6 +59,11 @@ test("AndroidManifest: INTERNET, optional CAMERA, no cleartext, fullSensor", () 
   assert.match(manifest, /configChanges="[^"]*density/);
 });
 
+test("AndroidManifest: auto-backup is off (WebView storage holds the Spotify refresh token and career saves)", () => {
+  assert.match(manifest, /<application\b[^>]*android:allowBackup="false"/);
+  assert.doesNotMatch(manifest, /android:allowBackup="true"/);
+});
+
 test("Gradle wires APEX_VERSION_* env and optional APEX_KEYSTORE_* signing", () => {
   assert.match(gradle, /APEX_VERSION_CODE/);
   assert.match(gradle, /APEX_VERSION_NAME/);

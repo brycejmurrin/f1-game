@@ -230,6 +230,16 @@ test('sector mastery follows timing boundaries while other saved drill scores re
   assert.ok(saves.get('circuitMastery').entries.some(e => e.key === 'class:sector:0'),
     'unversioned records are retained rather than deleted');
 });
+test('drill speeds read through G.dashKph, the speedometer scale, not raw m/s (PACE)', () => {
+  const { api, G, c, tick } = fixture();
+  G.dashKph = v => v / 0.84 * 3.6;          // a PACE-0.84 game: the dial reads 1/0.84 of the raw ground speed
+  api.startDrill('braking');
+  tick({ prog: 20, brakeDemand: 1 }); tick({ prog: 30, speed: .5 }); tick({ speed: 0 });
+  assert.match(api.summary().lastDrill.text, /braking from 171 km\/h/);   // 40 m/s raw would print 144
+  c.speed = 0; api.startDrill('launch');
+  tick({ prog: 0, speed: 0 }, 2); tick({ prog: 1, speed: 5, throttleDemand: 1 }); tick({ prog: 30, speed: 51 });
+  assert.match(api.summary().lastDrill.text, /^0 to 214 km\/h in /);       // half of vTop 100 through the same scale
+});
 test('launch drill needs a stopped car and is timed from the first throttle to half of top speed', () => {
   const { api, c, tick, announcements } = fixture();
   assert.equal(api.startDrill('launch'), false); assert.match(announcements.at(-1)[0], /STOP THE CAR/);
@@ -511,6 +521,26 @@ test('BACKMARKERS counts cars cleared and scores the TIME, not the racecraft', (
   assert.equal(d.clean, true);
   assert.ok(d.score > 0, 'time is scored straight — less is better, no negation');
   assert.match(d.text, /cleared 3 of 3 in [\d.]+s/);
+});
+
+test('BACKMARKERS never scores a FASTER car that merely crosses the half-lap wrap', () => {
+  // gapTo() wraps at half a lap: a quicker car 148 m "ahead" that drifts to 152 m reads as 148 m
+  // "behind" in one frame. Only cars that pass the arming filter (slower than us) are candidates.
+  const f = fixture();
+  const slow = (prog) => ({ prog, x: 0, retired: false, _vmaxNow: 60, code: 'BAK' });
+  const t1 = slow(10), t2 = slow(20);
+  const quick = { prog: 148, x: 0, retired: false, _vmaxNow: 90, code: 'FST' };
+  f.G.cars = [t1, t2, quick, f.c];
+  f.c.prog = 0; f.c._vmaxNow = 70; f.c.x = 0;
+  f.api.update(f.c);
+  assert.equal(f.api.startDrill('backmarkers'), true);
+  f.tick({}, 0.4);                 // the quick car is seen "ahead" across the wrap
+  quick.prog = 152;                // ...and now "behind"
+  f.tick({}, 0.4);
+  for (let p = 2; p <= 30; p += 2) f.tick({ prog: p }, 0.4);   // two genuine backmarkers cleared
+  const s = f.api.summary();
+  assert.equal(s.lastDrill, null, 'two of three cleared is not a finished drill');
+  assert.ok(s.drill && !s.drill.done, 'still running');
 });
 
 test('BACKMARKERS refuses when nothing ahead is actually slower', () => {

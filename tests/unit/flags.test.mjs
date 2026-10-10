@@ -53,3 +53,15 @@ test("a country name works as well as a code; an unknown one is the chequered fa
   assert.equal(Flags.code("Atlantis"), null);
   assert.match(Flags.svg("gb", { label: "United Kingdom" }), /role="img" aria-label="United Kingdom"/);
 });
+
+test("SEC2-4: prototype-key countries render the chequered placeholder, never an inherited member", () => {
+  for (const c of ["constructor", "toString", "hasOwnProperty", "valueOf", "__proto__", "isPrototypeOf"]) {
+    assert.equal(Flags.code(c), null, `code(${c})`);
+    const out = Flags.svg(c);
+    assert.match(out, /^<svg data-flag="xx" /, `svg(${c}) is the xx placeholder`);
+    assert.doesNotMatch(out, /\[object|function|undefined/);
+  }
+  assert.equal(Flags.code(" Italy "), Flags.code("Italy"));
+  assert.match(Flags.svg("Italy"), /data-flag="it"/);
+  assert.match(Flags.svg("it"), /data-flag="it"/);
+});

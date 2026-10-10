@@ -31,7 +31,16 @@ const TRACKS = [
   { id: "monza", name: "MONZA", country: "Italy" }, { id: "imola", name: "IMOLA", country: "Italy", classic: true },
   { id: "baku", name: "BAKU", country: "Azerbaijan" }, { id: "cota", name: "COTA", country: "USA" },
   { id: "miami", name: "MIAMI", country: "USA" }, { id: "singapore", name: "SINGAPORE", country: "Singapore" },
+  { id: "bahrain", name: "BAHRAIN", country: "Bahrain" }, { id: "sepang", name: "SEPANG", country: "Malaysia", classic: true },
 ];
+
+// The shipped calendar, evaluated from season-cal.js itself: a hand-copied window would pass while the real one drifts.
+function realCalendar() {
+  const src = fs.readFileSync(path.join(ROOT, "js/career/season-cal.js"), "utf8");
+  const m = src.match(/const REAL_2026 = Object\.freeze\(\[[\s\S]*?\]\.map\([^\n]*\)\);/);
+  assert.ok(m, "REAL_2026 is still a const in season-cal.js");
+  return vm.runInContext(m[0] + "; REAL_2026", vm.createContext({ Object }));
+}
 
 function load(extra = {}) {
   const sb = { Math, Array, Object, Number, String, Boolean, Date, isFinite, isNaN, console, Promise, JSON, Set, Map, RegExp, ...extra };
@@ -171,11 +180,15 @@ test("the circuit resolves by name before country, and the weather and hour read
   assert.equal(D.trackIdFor({ country_name: "United States", circuit_short_name: "Austin" }, TRACKS), "cota");
   assert.equal(D.trackIdFor({ country_name: "Azerbaijan", circuit_short_name: "Baku" }, TRACKS), "baku");
   assert.equal(D.trackIdFor({ country_name: "Nowhere", circuit_short_name: "X" }, TRACKS), null);
-  assert.equal(D.trackIdFor({ country_name: "Bahrain", circuit_short_name: "Kuala Lumpur" }, TRACKS), null,
-    "a moved venue is not an invented circuit id — placeLabel owns the display country");
-  const tabSrc = fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8");
-  assert.doesNotMatch(tabSrc, /["']kuala lumpur["']\s*:/,
-    "trackIdFor must not grow a kuala lumpur → sepang alias; that key is Tracks-owned");
+  // The 2026 Bahrain GP ran at Sepang: OpenF1 names it "Kuala Lumpur" in country "Bahrain". The date window
+  // (SeasonCal.REAL_2026) gives the circuit; the country fallback alone would grid it on Sakhir.
+  const moved = { country_name: "Bahrain", circuit_short_name: "Kuala Lumpur", date_start: "2026-10-04T07:00:00+00:00", gmt_offset: "08:00:00" };
+  assert.equal(load({ SeasonCal: { REAL_2026: realCalendar() } }).D.trackIdFor(moved, TRACKS), "sepang", "by date window");
+  assert.equal(D.trackIdFor(moved, TRACKS), "sepang", "no calendar loaded: the venue alias still says Sepang");
+  assert.equal(D.trackIdFor({ country_name: "Bahrain", circuit_short_name: "Sakhir", date_start: "2026-02-20T09:00:00+00:00" }, TRACKS), "bahrain",
+    "an ordinary Sakhir session stays on Sakhir");
+  assert.equal(load({ SeasonCal: { REAL_2026: realCalendar() } }).D.trackIdFor({ country_name: "Italy", circuit_short_name: "Monza", date_start: "2026-10-03T09:00:00+00:00" }, TRACKS), "monza",
+    "an exact circuit name beats the date window");
   assert.equal(D.todFor({ date_start: "2026-10-11T12:00:00+00:00", gmt_offset: "08:00:00" }), "night", "Singapore at 20:00 local");
   assert.equal(D.todFor({ date_start: "2026-03-01T15:00:00+00:00", gmt_offset: "03:00:00" }), "dusk", "Bahrain at 18:00 local");
   assert.equal(D.todFor({ date_start: "nope" }), "default");
@@ -183,6 +196,34 @@ test("the circuit resolves by name before country, and the weather and hour read
   assert.equal(D.weatherFor([{ rainfall: 1 }, { rainfall: 0 }, { rainfall: 0 }]), "wet");
   assert.equal(D.weatherFor([{ rainfall: 1 }, { rainfall: 1 }, { rainfall: 0 }]), "rain");
   assert.deepEqual(host(D.gridFor([{ driver_number: 1, position: 5, date: "b" }, { driver_number: 1, position: 2, date: "a" }, { driver_number: 4, position: 1, date: "c" }])), { 1: 2, 4: 1 });
+});
+
+// A car a lap down finishes one lap short: its crossing row ends at its own last lap. It is RUNNING, not out
+// (R2-04); only a retirement stops. fmtLap rounds before it splits (R2-05).
+test("a lapped finisher stays on the final lap board as '+N LAP'; a retirement stays OUT; fmtLap never prints :60", () => {
+  const { D, ctx } = load();
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: "real-race.js" });
+  const lap = (n, t) => Array.from({ length: n }, () => t);
+  const script = { laps: 5, drivers: [
+    { num: 1, code: "WIN", laps: lap(5, 90), pits: [], stints: [], dnf: false },
+    { num: 2, code: "SEC", laps: lap(5, 91), pits: [], stints: [], dnf: false },
+    { num: 3, code: "LAP", laps: lap(4, 100), pits: [], stints: [], dnf: false },
+    { num: 4, code: "DNF", laps: lap(2, 95), lapsDone: 2, pits: [], stints: [], dnf: true } ] };
+  const before = host(D.lapBoard(script, 4));
+  assert.deepEqual(before.map((r) => r.code), ["WIN", "SEC", "LAP", "DNF"]);
+  assert.equal(before.find((r) => r.code === "LAP").down, 0, "still on the lead lap at lap 4");
+  const board = host(D.lapBoard(script, 5));
+  const lapped = board.find((r) => r.code === "LAP");
+  assert.equal(lapped.out, false, "a finisher a lap down is not OUT");
+  assert.equal(lapped.down, 1);
+  assert.equal(lapped.gap, null, "and its gap is not a time");
+  assert.deepEqual(board.map((r) => r.code), ["WIN", "SEC", "LAP", "DNF"], "classified order: lead lap, lapped, then the retirement");
+  assert.equal(board.find((r) => r.code === "DNF").out, true);
+  assert.equal(host(D.raceBook(script))[4].leader, "WIN");
+  assert.equal(D.fmtLap(119.9996), "2:00.000");
+  assert.equal(D.fmtLap(59.9996), "1:00.000");
+  assert.equal(D.fmtLap(112.263), "1:52.263");
 });
 
 test("rain by lap aligns the weather samples to the leader's lap windows; an unfinished race is not complete", () => {

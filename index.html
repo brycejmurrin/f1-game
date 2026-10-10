@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-ahIIg+W6KliuhOKnEcN9KqkAm5pzec8nCfsXuXb5m2Y=' 'sha256-fsFU0C3h0SGNa9Hq7GhQUKahoDMg2CiZrjDpTd7Kun4=' 'sha256-YNcj4XnIOSHuKTKMwoiMcAg530BS4cqIpbwXcg3Smuk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -68,7 +68,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Apex 26">
 <meta name="theme-color" content="#0c0c14">
-<meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
+<meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 52 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
 <meta name="apex-build" content="1695">
@@ -110,33 +110,34 @@
 <!-- @gen-shell:css -->
 <link rel="stylesheet" href="css/tokens.css?v=dev">
 <link rel="stylesheet" href="css/components.css?v=dev">
-<link rel="stylesheet" href="css/dialogs.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/settings.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/settings-controls.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/dialog-platform.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/tuner.css?v=dev" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/dialogs.css?v=dev" media="print">
+<link rel="stylesheet" href="css/settings.css?v=dev" media="print">
+<link rel="stylesheet" href="css/settings-controls.css?v=dev" media="print">
+<link rel="stylesheet" href="css/dialog-platform.css?v=dev" media="print">
+<link rel="stylesheet" href="css/tuner.css?v=dev" media="print">
 <link rel="stylesheet" href="css/title.css?v=dev">
 <link rel="stylesheet" href="css/menus.css?v=dev">
-<link rel="stylesheet" href="css/select.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/race-setup.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/carsetup.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/hud.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/fonts-hud.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/touch-controls.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/overlays.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/loading.css?v=dev" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/select.css?v=dev" media="print">
+<link rel="stylesheet" href="css/race-setup.css?v=dev" media="print">
+<link rel="stylesheet" href="css/carsetup.css?v=dev" media="print">
+<link rel="stylesheet" href="css/hud.css?v=dev" media="print">
+<link rel="stylesheet" href="css/fonts-hud.css?v=dev" media="print">
+<link rel="stylesheet" href="css/touch-controls.css?v=dev" media="print">
+<link rel="stylesheet" href="css/overlays.css?v=dev" media="print">
+<link rel="stylesheet" href="css/loading.css?v=dev" media="print">
 <link rel="stylesheet" href="css/responsive.css?v=dev">
-<link rel="stylesheet" href="css/track-detail.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/career.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/data.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/appearance-studio.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/watch-transport.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/career-experience.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/garage-experience.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/photo-studio.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/experience.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/editor.css?v=dev" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/cockpit-preview.css?v=dev" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="css/track-detail.css?v=dev" media="print">
+<link rel="stylesheet" href="css/career.css?v=dev" media="print">
+<link rel="stylesheet" href="css/data.css?v=dev" media="print">
+<link rel="stylesheet" href="css/appearance-studio.css?v=dev" media="print">
+<link rel="stylesheet" href="css/watch-transport.css?v=dev" media="print">
+<link rel="stylesheet" href="css/career-experience.css?v=dev" media="print">
+<link rel="stylesheet" href="css/garage-experience.css?v=dev" media="print">
+<link rel="stylesheet" href="css/photo-studio.css?v=dev" media="print">
+<link rel="stylesheet" href="css/experience.css?v=dev" media="print">
+<link rel="stylesheet" href="css/editor.css?v=dev" media="print">
+<link rel="stylesheet" href="css/cockpit-preview.css?v=dev" media="print">
+<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]');for(var i=0;i<L.length;i++)(function(l){function f(){l.media="all"}if(l.sheet)f();else l.addEventListener("load",f)})(L[i])})();</script>
 <!-- /@gen-shell:css -->
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
@@ -726,7 +727,7 @@
 </div>
 <div id="grp-taps" class="dock-grp col">
   <button id="btn-boost" class="touchbtn" hidden aria-label="Boost">BOOST</button>
-  <button id="btn-ot" class="touchbtn" hidden aria-label="Overtake">OT</button>
+  <button id="btn-ot" class="touchbtn" hidden aria-label="OT, overtake">OT</button>
   <button id="btn-aero" class="touchbtn" hidden aria-label="Active aero">AERO</button>
 </div>
 
@@ -991,9 +992,9 @@
             <div id="pm-pit-choice" class="set-row" role="group" aria-labelledby="pm-pit-choice-label">
               <span class="tune-label" id="pm-pit-choice-label">NEXT TYRES</span>
               <div>
-                <button id="pm-pit-choice-prev" type="button" data-step="-1" aria-label="Previous next tyres">&lsaquo;</button>
+                <button id="pm-pit-choice-prev" type="button" data-step="-1" aria-label="Previous tyre choice">&lsaquo;</button>
                 <select id="pm-pit-choice-sel" aria-labelledby="pm-pit-choice-label" aria-describedby="pm-pit-help"></select>
-                <button id="pm-pit-choice-next" type="button" data-step="1" aria-label="Next next tyres">&rsaquo;</button>
+                <button id="pm-pit-choice-next" type="button" data-step="1" aria-label="Next tyre choice">&rsaquo;</button>
               </div>
             </div>
             <p id="pm-pit-help" class="adv-help" data-help="keep">Choose the tyres to fit at your next stop. AUTO lets the game choose. Drive into the pit entry to stop; this choice does not call you into the pits. Requires tyre wear to be enabled.</p>
@@ -1860,13 +1861,13 @@
         <h3 class="adv-sec">BOOST</h3>
         <p class="as-note">While ERS deploys: LEVEL is the electric whine and whoosh, REV LIFT how far the note rises.</p>
         <label class="tune-row"><span class="tune-label">LEVEL <b id="as-t-boost-v">100</b></span>
-          <input id="as-t-boost" type="range" min="0" max="16" step="1" value="4" aria-label="ERS deploy whine and whoosh level"></label>
+          <input id="as-t-boost" type="range" min="0" max="100" step="1" value="25" aria-label="ERS deploy whine and whoosh level"></label>
         <label class="tune-row"><span class="tune-label">REV LIFT <b id="as-t-boostlift-v">100</b></span>
           <input id="as-t-boostlift" type="range" min="0" max="16" step="1" value="4" aria-label="Engine pitch lift while deploying"></label>
         <h3 class="adv-sec">LAYERS</h3>
         <p class="as-note">The sounds stacked on the engine. The sliders set their levels; the switches under them mute a layer entirely.</p>
         <label class="tune-row"><span class="tune-label">TURBO <b id="as-t-whine-v">100</b></span>
-          <input id="as-t-whine" type="range" min="0" max="16" step="1" value="4" aria-label="Turbo whine and wastegate level"></label>
+          <input id="as-t-whine" type="range" min="0" max="200" step="1" value="50" aria-label="Turbo whine and wastegate level"></label>
         <label class="tune-row"><span class="tune-label">HARVEST <b id="as-t-harvest-v">100</b></span>
           <input id="as-t-harvest" type="range" min="0" max="16" step="1" value="4" aria-label="MGU-K harvest whirr level"></label>
         <label class="tune-row"><span class="tune-label">WIND <b id="as-t-wind-v">100</b></span>
@@ -2150,7 +2151,7 @@
     <!-- USE AS CONTROLLER: the PHONE'S door to controller.html (type the room
          code there, or arrive by QR). Coarse pointers only — syncPointerKind()
          in js/game.js flips `hidden` live; a mouse never sees it. -->
-    <button id="mb-phonepad" class="bigbtn alt minibtn" hidden aria-label="Use this phone as the controller for a game on another screen"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>USE AS CONTROLLER</button>
+    <button id="mb-phonepad" class="bigbtn alt minibtn" hidden aria-label="Use as controller: this phone steers a game on another screen"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>USE AS CONTROLLER</button>
     <button id="mb-help" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>HOW TO PLAY</button>
     </div>
   </div>
@@ -2810,14 +2811,14 @@
     <details id="cz-paint">
     <summary class="cz-sep">EXTRA PAINT — OPTIONAL</summary>
     <div id="cz-paint-rows">
-    <div class="cz-row cz-liv-row"><label for="cz-stripe">BODY STRIPE</label><input id="cz-stripe" type="color"><button type="button" id="cz-stripe-none" class="cz-liv-none" aria-label="No body stripe">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-nosestripe">NOSE STRIPE</label><input id="cz-nosestripe" type="color"><button type="button" id="cz-nosestripe-none" class="cz-liv-none" aria-label="No nose stripe">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-detail">DETAIL</label><input id="cz-detail" type="color"><button type="button" id="cz-detail-none" class="cz-liv-none" aria-label="No detail">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-nose">NOSE CAP</label><input id="cz-nose" type="color"><button type="button" id="cz-nose-none" class="cz-liv-none" aria-label="No nose cap">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-pod">SIDEPOD</label><input id="cz-pod" type="color"><button type="button" id="cz-pod-none" class="cz-liv-none" aria-label="No sidepod">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-wing">WINGS</label><input id="cz-wing" type="color"><button type="button" id="cz-wing-none" class="cz-liv-none" aria-label="No wings">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-fin">TAIL FIN</label><input id="cz-fin" type="color"><button type="button" id="cz-fin-none" class="cz-liv-none" aria-label="No tail fin">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-finart">TAIL GRAPHIC</label><input id="cz-finart" type="color"><button type="button" id="cz-finart-none" class="cz-liv-none" aria-label="No tail graphic">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-stripe">BODY STRIPE</label><input id="cz-stripe" type="color"><button type="button" id="cz-stripe-none" class="cz-liv-none" aria-label="None, no body stripe">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-nosestripe">NOSE STRIPE</label><input id="cz-nosestripe" type="color"><button type="button" id="cz-nosestripe-none" class="cz-liv-none" aria-label="None, no nose stripe">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-detail">DETAIL</label><input id="cz-detail" type="color"><button type="button" id="cz-detail-none" class="cz-liv-none" aria-label="None, no detail">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-nose">NOSE CAP</label><input id="cz-nose" type="color"><button type="button" id="cz-nose-none" class="cz-liv-none" aria-label="None, no nose cap">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-pod">SIDEPOD</label><input id="cz-pod" type="color"><button type="button" id="cz-pod-none" class="cz-liv-none" aria-label="None, no sidepod">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-wing">WINGS</label><input id="cz-wing" type="color"><button type="button" id="cz-wing-none" class="cz-liv-none" aria-label="None, no wings">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-fin">TAIL FIN</label><input id="cz-fin" type="color"><button type="button" id="cz-fin-none" class="cz-liv-none" aria-label="None, no tail fin">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-finart">TAIL GRAPHIC</label><input id="cz-finart" type="color"><button type="button" id="cz-finart-none" class="cz-liv-none" aria-label="None, no tail graphic">NONE</button></div>
     <!-- Upload your own emblem. Downscaled and stored locally; CLEAR falls back
          to the generated monogram crest. -->
     <div class="cz-row cz-liv-row"><label for="cz-logofile">LOGO IMAGE</label>
@@ -2827,10 +2828,10 @@
         <input id="cz-logofile" type="file" accept="image/*" hidden>
         <button type="button" id="cz-logo-clear" class="cz-liv-none">CLEAR</button>
       </span></div>
-    <div class="cz-row cz-liv-row"><label for="cz-logo">LOGO TINT</label><input id="cz-logo" type="color"><button type="button" id="cz-logo-none" class="cz-liv-none" aria-label="No logo tint">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-logo2">MONOGRAM BOX</label><input id="cz-logo2" type="color"><button type="button" id="cz-logo2-none" class="cz-liv-none" aria-label="No monogram box">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-logo3">LOGO OUTLINE</label><input id="cz-logo3" type="color"><button type="button" id="cz-logo3-none" class="cz-liv-none" aria-label="No logo outline">NONE</button></div>
-    <div class="cz-row cz-liv-row"><label for="cz-halo">HALO</label><input id="cz-halo" type="color"><button type="button" id="cz-halo-none" class="cz-liv-none" aria-label="No halo">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-logo">LOGO TINT</label><input id="cz-logo" type="color"><button type="button" id="cz-logo-none" class="cz-liv-none" aria-label="None, no logo tint">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-logo2">MONOGRAM BOX</label><input id="cz-logo2" type="color"><button type="button" id="cz-logo2-none" class="cz-liv-none" aria-label="None, no monogram box">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-logo3">LOGO OUTLINE</label><input id="cz-logo3" type="color"><button type="button" id="cz-logo3-none" class="cz-liv-none" aria-label="None, no logo outline">NONE</button></div>
+    <div class="cz-row cz-liv-row"><label for="cz-halo">HALO</label><input id="cz-halo" type="color"><button type="button" id="cz-halo-none" class="cz-liv-none" aria-label="None, no halo">NONE</button></div>
     <!-- FINISH is the paint MATERIAL, not a colour, so it gets a 3-way choice
          instead of a swatch + NONE. Gloss is the default clearcoat car paint. -->
     <div class="cz-row cz-liv-row"><label id="cz-finish-lbl">FINISH</label><span class="cz-finish" id="cz-finish" role="group" aria-labelledby="cz-finish-lbl"><button type="button" data-cz-finish="gloss" class="cz-liv-none active">GLOSS</button><button type="button" data-cz-finish="satin" class="cz-liv-none">SATIN</button><button type="button" data-cz-finish="chrome" class="cz-liv-none">CHROME</button></span></div>

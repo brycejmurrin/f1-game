@@ -965,9 +965,11 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    transition-property:all, so leaving the helmet (its -6svh translate)
    started a transition that a paused clock (freeze / reduced-motion)
    held at the old offset and the bar stayed through SPEED. `.hud-bottom *`
-   is in the list for that. Paint-only properties keep their 0.01ms, so
+   is in the list for that. RELATIVE also resets left/max-height inside
+   syncPhoneFit: a transition returns its previous rectangle until the next
+   frame, even at 0.01ms. Paint-only properties keep their 0.01ms, so
    nothing that was instant starts moving. */
-:root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, .hud-bottom *, #pausebtn, #btn-cam) {
+:root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, .hud-bottom *, #pausebtn, #btn-cam, #hud-rel) {
   transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
 }
 /* The flag clears the DROPPED strip, so it tracks the same measured edge: 70px

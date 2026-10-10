@@ -44,13 +44,13 @@
     ],
     hwZones: [
       { s0: 0.230, s1: 0.275, hw: 6.3, ease: 0.012 },  // Turn 5-6
-      { s0: 0.520, s1: 0.565, hw: 6.2, ease: 0.012 },  // Turn 13-14
-      { s0: 0.790, s1: 0.835, hw: 6.4, ease: 0.012 },  // Turn 16-17
+      { s0: 0.4409, s1: 0.5014, hw: 6.2, ease: 0.012 },  // Turn 13-14 (index; arc 0.520-0.565)
+      { s0: 0.7514, s1: 0.8302, hw: 6.4, ease: 0.012 },  // Turn 16-17 (index; arc 0.790-0.835)
     ],
     bankZones: [
-      { frac: 0.085, angleDeg: 5.0, widthM: 260 },
+      { turn: 1, angleDeg: 5.0, widthM: 260 },  // re-seated frac 0.085 (was 220 m off any apex)
       { frac: 0.430, angleDeg: 3.0, widthM: 120 },
-      { frac: 0.900, angleDeg: 3.5, widthM: 120 },
+      { turn: 17, angleDeg: 3.5, widthM: 120 },  // re-seated frac 0.9 (was 128 m off any apex)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

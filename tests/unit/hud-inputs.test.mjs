@@ -144,5 +144,8 @@ test("touch INPUTS home clears PAUSE/CAM like #hud-limits (not through the secto
   // Same pause clearance prefix as limits; gap under the box may differ.
   const pauseStack = /\(8px \+ var\(--tap-hud\) \+ 4px \+ var\(--sat\)\) \/ var\(--hud-z\)/;
   assert.match(limTop[1], pauseStack, "limits pin (control)");
-  assert.match(top[1], pauseStack, "inputs must share limits' pause/cam stack");
+  // INPUTS zooms by --hud-z-bot but --hud-sec-h is in TOP-band units: the sector box is scaled by --hud-z-top
+  // INSIDE the one calc, then the whole inset is divided by this element's zoom.
+  assert.match(top[1], /^calc\(\(8px \+ var\(--tap-hud\) \+ 4px \+ var\(--sat\) \+ var\(--hud-sec-h, 4\.8em\) \* var\(--hud-z-top, var\(--hud-scale, 1\)\) \+ 16px\) \/ var\(--hud-z\)\)$/,
+    "inputs share limits' pause/cam stack, with the sector box in top-band zoom");
 });

@@ -167,7 +167,7 @@ const RealReplay = (function () {
     }
     return reel;
   }
-  function fmtLap(t) { if (!(t > 0)) return "—"; const m = Math.floor(t / 60), s = t - m * 60; return m + ":" + (s < 10 ? "0" : "") + s.toFixed(3); }
+  function fmtLap(t) { if (!(t > 0)) return "—"; const ms = Math.round(t * 1000), m = Math.floor(ms / 60000), s = (ms - m * 60000) / 1000; return m + ":" + (s < 10 ? "0" : "") + s.toFixed(3); }   // round first: never "1:60.000"
 
   // ── Traces for a whole field ──────────────────────────────────────────────
   /** Build every car's track trace (pure with Tracks and Log): one frame fit on the reference lap, then a projection per sample. */
@@ -214,7 +214,8 @@ const RealReplay = (function () {
       carOf: (num) => { for (const [c, f] of run.cars) if (f.num === num) return c; return null; },
       codeOf: (c) => { const f = run.cars.get(c); return f && f.d ? f.d.code : null; },   // the REAL driver's code (a seat car can wear another)
       colourOf: (num) => { for (const [c, f] of run.cars) if (f.num === num) return c.team && G.cssCol ? G.cssCol(c.team.color) : ""; return ""; },
-      running: () => [...run.cars.keys()].filter((c) => run.cars.get(c).tr && !c.retired).sort((a, b) => b.prog - a.prog).map((c) => ({ key: c, prog: c.prog, speed: c.speed })),
+      // c.speed is scaled by the replay rate for engine pitch; battles()/PiP/director need the real m/s.
+      running: () => [...run.cars.keys()].filter((c) => run.cars.get(c).tr && !c.retired).sort((a, b) => b.prog - a.prog).map((c) => ({ key: c, prog: c.prog, speed: c.speed / (run.speed || 1) })),
     };
 
     /** start({script, traces, seats: Map car->driver, startLap, follow, rate, reel, camera}) — false when no trace fits. */
@@ -389,14 +390,21 @@ const RealReplay = (function () {
       if (used) { e.preventDefault(); e.stopPropagation(); if (G.announce && e.code !== KEY_SKIP) G.announce((run.follow ? run.follow.code : "") + " · " + run.speed + "×", 1.2, "info"); }
     }
 
+    // A standing puppet for the audio feeds. game.js voices the engine and rivals from c.speed -> c.rpm, but a
+    // retired (parked) car returns from updateCar before it recomputes c.rpm, so a car whose data ended would
+    // keep its last revs for the rest of the replay: park it at idle.
+    function idle(c) {
+      c.speed = 0;
+      if (typeof PhysicsConsts !== "undefined" && PhysicsConsts.IDLE_RPM > 0) c.rpm = PhysicsConsts.IDLE_RPM;
+    }
     /** Pose every car at the clock. */
     function pose(discontinuous) {
       const track = G.track, total = track.total;
       for (const [c, f] of run.cars) {
-        if (!f.tr) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = f.d && f.d.dns ? "dns" : f.d && f.d.dnf ? "dnf" : null; c.speed = 0; } continue; }
+        if (!f.tr) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = f.d && f.d.dns ? "dns" : f.d && f.d.dnf ? "dnf" : null; idle(c); } continue; }
         sampleAt(f.tr, run.T, at);
-        if (at.before && !discontinuous) { if (f.posed) { c.speed = 0; } continue; }   // a seek before the trace reposes its first sample
-        if (at.ended && !discontinuous) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = f.d && f.d.dnf ? "dnf" : null; c.speed = 0; c.dnfAt = null; } continue; }
+        if (at.before && !discontinuous) { if (f.posed) { idle(c); } continue; }   // a seek before the trace reposes its first sample
+        if (at.ended && !discontinuous) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = f.d && f.d.dnf ? "dnf" : null; idle(c); c.dnfAt = null; } continue; }
         f.posed = true; f.parked = false; c.dnf = null;
         const lap = Math.floor(at.prog / total) + 1;
         const s = at.prog - (lap - 1) * total;
@@ -412,7 +420,7 @@ const RealReplay = (function () {
         c.head = Math.atan2(smp.t[0], smp.t[2]);
         if (discontinuous || c.rPrevPx === undefined) { c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevHead = c.head; }
         c.retired = at.ended; c.finished = false;
-        if (at.ended) { f.parked = true; c.dnf = f.d && f.d.dnf ? "dnf" : null; c.speed = 0; c.dnfAt = null; }
+        if (at.ended) { f.parked = true; c.dnf = f.d && f.d.dnf ? "dnf" : null; idle(c); c.dnfAt = null; }
         const v = at.speed / (G.vTop ? G.vTop() : 90);   // a fraction of the top speed: the tacho reads the real car's pace, whatever PACE the sim runs at
         c.gear = v > 0.7 ? 8 : v > 0.45 ? 6 : v > 0.2 ? 4 : 2;
         c.braking = false;
@@ -530,7 +538,9 @@ const RealReplay = (function () {
       if (!run || run.finished) return;
       if (G.state !== "race" && G.state !== "count") return;
       if (transport) transport.tick(dt);
-      if (run.paused) return;
+      // Paused (Space / the transport): the cars stand, so the engine, rival and SFX feeds must read a standing
+      // car too, not the last posed speed; playing again re-poses from the trace.
+      if (run.paused) { for (const [c, f] of run.cars) if (f.tr && !c.retired) c.speed = 0; return; }
       if (G.state === "race") run.T += dt * run.speed;
       pose();
       if (G.state !== "race") return;
