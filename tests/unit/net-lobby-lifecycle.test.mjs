@@ -677,6 +677,28 @@ test("makeAnswer refuses a second run for the same invite and reports a thrown h
   } finally { boom.lobby.cancel(); }
 });
 
+test("acceptAnswer refuses a re-entry inside the decode window and releases the guard after", async () => {
+  let accepts = 0;
+  let gate = deferred();
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    handshake: { acceptAnswer: async () => { accepts++; await gate.promise; return { ok: true, peer: null }; } },
+  });
+  try {
+    await h.lobby.host();
+    const first = h.lobby.acceptAnswer("APEX1.p.X");
+    // Paste + ACCEPT: the second call used to begin a new generation, cancelling the first (the
+    // only caller that reaches waitForOpen) and failing on a pc already past have-local-offer.
+    const second = await h.lobby.acceptAnswer("APEX1.p.X");
+    assert.equal(second.error, "already_accepting");
+    gate.resolve();
+    assert.equal((await first).ok, true, "the first read was not cancelled by the re-entry");
+    assert.equal(accepts, 1, "the handshake ran once");
+    gate = deferred(); gate.resolve();
+    assert.equal((await h.lobby.acceptAnswer("APEX1.p.X")).ok, true, "the guard is released once the read settles");
+  } finally { h.lobby.cancel(); }
+});
+
 test("a pc that already took an offer is not answered again", async () => {
   const h = harness({ scanFactory: () => ({ stop() {}, start() {} }),
     handshake: { acceptInvite: async () => ({ ok: true, code: "answer", peer: null }) } });
@@ -1415,6 +1437,77 @@ test("host onFail during a half-built join closes that peer PC and clears pendin
   } finally {
     h.lobby.cancel();
   }
+});
+
+// One connected, ready guest and a ready host: the state startFromRoom() needs.
+async function readyHostRoom() {
+  const made = [];
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made), transportStatus: "open",
+  });
+  h.lobby.setTransportFactory(() => ({ status: "open", onClose() {}, close() {} }));
+  h.lobby.wire();
+  await h.lobby.host();
+  h.lobby.watchForOpen();
+  for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+  assert.equal(made.length, 1, "guest bound");
+  made[0].deliver("hello", { team: "beta", driver: 0 });
+  made[0].deliver("ready", { ready: true });
+  h.lobby.setReady(true);
+  return h;
+}
+const settle = async (h) => {
+  for (let i = 0; i < 40 && /Starting race/.test(h.status.textContent); i++) await new Promise((r) => setTimeout(r, 50));
+};
+
+test("a startRace that resolves false closes the room instead of starting NetPlay over the menu", async () => {
+  // startRaceBody resolves false on a save conflict, a failed build, a lost
+  // context or a changed state; only { kind: "canceled" } used to be a failure,
+  // so netPlay.start()/hostStart() ran over the menu and stranded a netStart.
+  const h = await readyHostRoom();
+  const calls = [];
+  h.G.startRace = async () => false;
+  h.G.netPlay = { start: () => { calls.push("start"); return { ok: true }; }, hostStart() { calls.push("hostStart"); } };
+  try {
+    h.elements.get("vsfriend").hidden = false;   // the room dialog is on screen
+    assert.equal(h.lobby.startFromRoom(), true);
+    await settle(h);
+    assert.deepEqual(calls, [], "NetPlay never started");
+    assert.equal(h.elements.get("vsfriend").hidden, true, "the lobby closed");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a canceled startRace still closes the room (the branch the false case shares)", async () => {
+  const h = await readyHostRoom();
+  const calls = [];
+  h.G.startRace = async () => ({ kind: "canceled", reason: "superseded" });
+  h.G.netPlay = { start: () => { calls.push("start"); return { ok: true }; }, hostStart() { calls.push("hostStart"); } };
+  try {
+    h.elements.get("vsfriend").hidden = false;
+    h.lobby.startFromRoom();
+    await settle(h);
+    assert.deepEqual(calls, []);
+    assert.equal(h.elements.get("vsfriend").hidden, true);
+  } finally { h.lobby.cancel(); }
+});
+
+test("the host rewinds its sim stream before the race builds, as the guest's applySettings does", async () => {
+  // Re-assigning the seed resets the LCG state and nothing else (simSeed). The
+  // host used to keep wherever earlier races left the stream, so its AI skills,
+  // lanes and grid differed from the rewound guest's.
+  const h = await readyHostRoom();
+  const writes = [];
+  let seed = 1234;
+  Object.defineProperty(h.G, "seed", { get: () => seed, set: (v) => { writes.push(v); seed = v; }, configurable: true });
+  h.G.startRace = async () => { writes.push("startRace"); return { ok: true }; };
+  h.G.netPlay = { start: () => ({ ok: true }), hostStart() {} };
+  try {
+    h.lobby.startFromRoom();
+    await settle(h);
+    const rewind = writes.indexOf(1234), build = writes.indexOf("startRace");
+    assert.ok(rewind >= 0 && rewind < build, "G.seed re-set to its own value before startRace: " + JSON.stringify(writes));
+  } finally { h.lobby.cancel(); }
 });
 
 // bug-hunt 2 H5 / H6: the step widgets belong to ONE attempt, and a validation miss is not a new attempt.

@@ -56,7 +56,13 @@ function loadBackendScripts(files, edges, opts) {
         if (!preds.get(src).every((p) => done.has(p))) continue;
         pending.delete(src);
         inflight.add(src);
-        inject(src).then((ok) => {
+        // A throw in UpdateCheck.prepareLazyLoad (or the Promise executor) rejects
+        // inject(); unhandled, inflight never drained and pump() never finished,
+        // so the caller awaited forever. Count it as a failed file instead.
+        inject(src).catch((e) => {
+          if (typeof Log !== "undefined") Log.warn("game", "lazy load threw: " + src + " — " + (e && e.message));
+          return false;
+        }).then((ok) => {
           inflight.delete(src);
           if (ok) { done.add(src); if (loaded) loaded.add(src); }
           else { failed = true; if (!strict) done.add(src); }

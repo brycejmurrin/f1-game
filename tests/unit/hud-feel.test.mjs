@@ -658,6 +658,19 @@ test("MOTION: REDUCED stops every HUD pulse, not only the OS query", () => {
   assert.match(readCssSource("css/overlays.css"), /:root\[data-motion="reduce"\] #hud-restore::after \{ animation: none; \}/);
 });
 
+test("MOTION: REDUCED keeps RELATIVE fit geometry out of transitions", () => {
+  const rules = cssRules(read("css/hud.css"));
+  const fit = rules.find((r) => r.selector.includes(':root[data-motion="reduce"]')
+    && /#hud-rel\b/.test(r.selector) && r.decls.has("transition-property"));
+  assert.ok(fit, "RELATIVE needs the geometry exemption: even a 0.01ms transition returns its old rect inside syncPhoneFit");
+  const properties = fit.decls.get("transition-property").split(",").map((p) => p.trim());
+  for (const geometry of ["all", "left", "top", "width", "height", "max-height", "zoom", "transform"]) {
+    assert.ok(!properties.includes(geometry), `${geometry} must land before the synchronous clearance probe`);
+  }
+  assert.ok(properties.includes("opacity") && properties.includes("color"), "paint transitions keep the reduced-motion backstop");
+  assert.ok(!fit.decls.has("zoom") && !fit.decls.has("--hud-z"), "the exemption does not change RELATIVE's band zoom");
+});
+
 function pitBoot(opts) {
   const b = boot(opts);
   b.G.track.pit = { entryRoadM: 1, sA: 10, sB: 30, sIn: 15 };

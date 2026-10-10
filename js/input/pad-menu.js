@@ -2,7 +2,7 @@
 "use strict";
 
 const InputPadMenu = (function () {
-  function create({ btnDown, btnEdge, nowMs, getPadAxisMap }) {
+  function create({ btnDown, btnEdge, nowMs, getPadAxisMap, padRest = () => 0 }) {
     const PAD_NAV_DEADZONE = 0.22; // menu sticks only — larger so a resting stick does not creep
 
     let padNavDir = null;           // held direction while a menu is open, or null
@@ -96,6 +96,14 @@ const InputPadMenu = (function () {
       const axisMap = getPadAxisMap();
       const ped = (i) => i === axisMap.throttle || i === axisMap.brake;
       const ax = (pad.axes || []).map((v, i) => (ped(i) ? 0 : v));
+      // CALIBRATE STICK lets a worn pad rest anywhere up to ±0.5 on the steer
+      // axis; read raw, a rest past the dead zone auto-repeated one direction
+      // forever. Same sign convention as calibratePad (the offset is taken after
+      // steerInvert), so undo the invert, subtract, and put it back.
+      const sx = axisMap.steer;
+      if (Number.isInteger(sx) && sx >= 0 && sx < ax.length && !ped(sx)) {
+        ax[sx] = ((ax[sx] || 0) * axisMap.steerInvert - padRest()) * axisMap.steerInvert;
+      }
       const stick = (x, y) => {
         const mx = Math.abs(x) >= PAD_NAV_DEADZONE ? Math.abs(x) : 0;
         const my = Math.abs(y) >= PAD_NAV_DEADZONE ? Math.abs(y) : 0;
