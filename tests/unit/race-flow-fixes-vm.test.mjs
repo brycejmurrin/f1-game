@@ -26,6 +26,8 @@
  *     dropped, sub-step remainder included — which carries, not drops.
  *   - WAITING FOR PLAYERS: the card re-shows every 3 s while a room waits for
  *     its shared start, and each re-show was a fresh squelch and voice line.
+ *   - EXITS (round-3 hunt 2-F1..F3): a flag under the pause kept its tools (lt-open, photo mode) into RACE AGAIN;
+ *     QUIT left the pit WORK garage over the title; NEXT ROUND -> quali -> BACK x3 kept the old race's HUD.
  *
  * Run: node --test tests/unit/race-flow-fixes-vm.test.mjs
  */
@@ -35,7 +37,7 @@ import { createRequire } from "node:module";
 import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/lib/game-vm.cjs");
+const { createGame, settle } = require("../../tools/lib/game-vm.cjs");
 
 test("a red flag holds the field: no stuck-rescue kicks for the AI, no rescue for a player on the throttle", async () => {
   const g = await createGame({ track: "monza" });
@@ -296,4 +298,63 @@ test("startRaceBody aborts to the menu when the race-session bundle failed to lo
   assert.match(body, /const sessionOk = await ensureRaceSession\(\);/);
   assert.match(body, /if \(!sessionOk\) \{ loadingScreen\.stop\(\); quitToMenu\(\); announce\("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"\); return false; \}/);
   assert.ok(body.indexOf("if (!sessionOk)") < body.indexOf("await ensureAudio()"), "the abort comes before anything starts the race");
+});
+
+test("a flag that falls under the pause closes the pause tools: no lt-open / photo mode / previewed night into RACE AGAIN (2-F1)", async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const G = g.G, doc = g.sandbox.document, $ = (id) => doc.getElementById(id);
+    g.step(30);
+    assert.equal(G.state, "race");
+    const tod0 = G.raceTimeOfDay;
+    $("pausebtn").onclick();
+    $("pm-lighting").onclick();   // SETTINGS > LIGHTING TUNER, then a preview and FREE CAMERA inside it
+    G.setTimeOfDay(tod0 === "night" ? "day" : "night");
+    $("pc-toggle").onclick();
+    assert.ok(doc.body.classList.contains("lt-open") && G.photoMode, "precondition: the tuner and photo mode are up");
+    assert.notEqual(G.raceTimeOfDay, tod0, "precondition: the preview moved the time of day");
+    G.endRace();   // a VS FRIEND race runs on under the card: the rival's flag (or the host's RESULT) ends it
+    assert.equal(G.state, "results");
+    assert.equal(doc.body.classList.contains("lt-open"), false, "lt-open hides #hud, #pausebtn and every .touchbtn in the next race");
+    assert.equal(G.photoMode, false, "photo mode's capture-phase key handler would eat WASD/arrows next race");
+    assert.equal($("lighting").hidden, true);
+    assert.equal(G.raceTimeOfDay, tod0, "the tuner's preview is not the next race's time of day");
+  } finally { g.close(); }
+});
+
+test("QUIT from the pit WORK garage closes it at the title without starting the engine (2-F2)", async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const sb = g.sandbox, G = g.G, $ = (id) => sb.document.getElementById(id);
+    g.step(30);
+    const p = G.player; p.pitState = "box"; p.pitT = 8; p.local = true;
+    G.els.workBtn.onclick();   // WORK ON CAR from the box
+    assert.ok(!$("carsetup").hidden && G.setupPreviewOn, "precondition: the pit garage is up");
+    let starts = 0; const orig = sb.GameAudio.startEngine.bind(sb.GameAudio);
+    sb.GameAudio.startEngine = (...a) => { starts++; return orig(...a); };
+    G.soundOn = true;
+    G.quitToMenu();   // the pause card's QUIT TO MENU (stacked by a hidden tab) and the rotate blocker's EXIT RACE
+    assert.equal(G.state, "menu");
+    assert.equal($("carsetup").hidden, true, "the garage must not stay over the title with RETURN TO RACE live");
+    assert.equal(G.setupPreviewOn, false, "the turntable stops drawing (and the Home world is eligible again)");
+    assert.equal(starts, 0, "no engine loop at the title");
+  } finally { g.close(); }
+});
+
+test("championship NEXT ROUND -> qualifying sheet hides the finished race's HUD, so BACK x3 reaches a clean title (2-F3)", async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const sb = g.sandbox, G = g.G, $ = (id) => sb.document.getElementById(id);
+    g.step(10);
+    G.flow = "season"; G.season = sb.SeasonCal.load();
+    G.endRace();
+    assert.equal(G.els.hud.hidden, false, "precondition: the results sheet keeps the HUD under its scrim");
+    G.els.resNext.onclick();   // NEXT ROUND -> qualifying
+    await settle(() => G.state !== "results", 15000);
+    assert.equal(G.state, "menu", "precondition: openQualiBody ran (the sheet's state)");
+    assert.equal($("quali").hidden, false, "precondition: the qualifying sheet is up");
+    // q-back -> rs-cancel -> the picker's BACK reaches #overlay, which is no .screen: the HUD showed through its 36 % wash.
+    assert.equal(G.els.hud.hidden, true);
+    assert.equal(G.els.lights.hidden, true);
+  } finally { g.close(); }
 });
