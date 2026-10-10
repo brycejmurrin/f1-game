@@ -1,1 +1,0 @@
-1791620842	Cursor Agent	PR #1289: fix selected-3 parts-ers throttle in boostRun + gamepad d-pad hold under adaptive ramp; OWNED tests/specs/parts-ers.spec.js tests/specs/gamepad.spec.js; no game.js; no AM/merge  [claude/code-review-bug-hunt-0ngtr5; session 841b354c3f7b6b0183633cce]
