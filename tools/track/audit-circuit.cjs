@@ -20,8 +20,8 @@
 //   coplanar  tools/track/coplanar-audit.cjs <id>           same-facing coplanar spots ≤ tools/track/coplanar-baseline.json
 //   props     tools/track/props-tris.cjs <id> --json        the hidden-face compaction is render-identical
 //   ground    tools/track/ground-audit.cjs <id> --json      buried / unsupported / flatCoplanar ≤ tests/data/scenery-audit-baseline.json
-// A circuit missing from a baseline reads as cap 0 for clip/coplanar/float and
-// as "no cap" (ok) for ground, exactly as the audits' own --gate modes do.
+// A circuit missing from a baseline reads as cap 0 for every check (clip /
+// coplanar / float / ground) — same as each audit's own --gate mode.
 
 "use strict";
 
@@ -97,9 +97,10 @@ const CHECKS = {
     const base = readJson("tests/data/scenery-audit-baseline.json", {});
     const over = [];
     if (row && row.counts) {
+      // Absent circuit => cap 0 (ground-audit.cjs --gate); never "no cap".
       for (const k of Object.keys(row.counts)) {
-        const cap = base[k] && typeof base[k][id] === "number" ? base[k][id] : null;
-        if (cap != null && row.counts[k] > cap) over.push(`${k} ${row.counts[k]} > ${cap}`);
+        const cap = (base[k] && typeof base[k][id] === "number") ? base[k][id] : 0;
+        if (row.counts[k] > cap) over.push(`${k} ${row.counts[k]} > ${cap}`);
       }
     }
     return { ok: r.status === 0 && !!row && !over.length, ms: r.ms, counts: row ? row.counts : null, over,
