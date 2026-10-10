@@ -158,8 +158,15 @@ const DataTelemetryModel = (function () {
 
   function summaryTime(t) {
     if (typeof t !== "number" || !isFinite(t) || t < 0) return "—";
-    const m = Math.floor(t / 60), s = t - m * 60;
+    const cs = Math.round(t * 100), m = Math.floor(cs / 6000), s = (cs - m * 6000) / 100;   // round first: never "1:60.00"
     return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
+  }
+
+  // A signed delta, "+0.12" / "-0.12": the sign comes from the ROUNDED value,
+  // so a delta of -0.0003 reads "+0.00", never "-0.00".
+  function signed(v, digits) {
+    const r = +v.toFixed(digits);
+    return (r >= 0 ? "+" : "") + r.toFixed(digits);
   }
 
   function summaryValue(v, suffix) {
@@ -235,7 +242,7 @@ const DataTelemetryModel = (function () {
     return { driverColor, laneColors };
   }
 
-  return { create, clamp, laneRole, summaryTime, summaryValue, dcode, sessionShort, drsOpen,
+  return { create, clamp, laneRole, summaryTime, signed, summaryValue, dcode, sessionShort, drsOpen,
            CHANNELS, PADL, PADR, PADY, chartX, chanRaw, chanNorm, sampleAt, cumDist,
            distAtT, timeAtDist, locAt, dropStrays, locBounds, gapLimitMs, isGap };
 })();

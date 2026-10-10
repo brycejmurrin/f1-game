@@ -439,7 +439,11 @@ var Announcer = (function () {
   // Read over the results screen: the winner, the margin, your race against
   // your grid slot, the fastest lap. Pure over a plain summary, like rows().
   // Never "0.0": a margin under a tenth is a tenth, as on a timing screen.
-  function secs(s) { return s < 10 ? Math.max(0.1, s).toFixed(1) : String(Math.round(s)); }
+  // …and 9.96 rounds up to "10", not "10.0" (the voice would say "ten point zero").
+  function secs(s) {
+    const r = s < 10 ? Math.max(0.1, s).toFixed(1) : String(Math.round(s));
+    return r === "10.0" ? "10" : r;
+  }
   function lapTime(s) {
     if (!(s > 0) || !Number.isFinite(s)) return "";
     const q = Math.round(s * 10) / 10;   // 119.97 is "2 oh 0.0", not "1 60.0"

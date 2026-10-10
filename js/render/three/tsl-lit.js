@@ -382,7 +382,9 @@
         _hf = _hf * _hf * (3 - 2 * _hf);
         const _mSh = k("moonShadow", 0.25) * (frame.moonGate || 0);
         if (_mSh > _hf) _hf = _mSh;
-        U.shadowStr.value = k("shadowStr", 1.15) * _hf;
+        // A failed sun pass clears S.enabled and freezes the map + lightVP: read it every frame, or the lit shader
+        // keeps sampling the last good map (ghost shadows). tlx-post's god-ray sun term already gates on S.enabled.
+        U.shadowStr.value = SHD.S.enabled ? k("shadowStr", 1.15) * _hf : 0;
         uf1(U.shadowRange, k("shadowRange", 80.0));
         U.shadowTexel.value = 1 / (SHD.sunSize || 2048);
         const _sc = frame.shadowCtr || frame.eye;
