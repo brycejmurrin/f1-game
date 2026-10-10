@@ -453,6 +453,32 @@ test("CLI --merge combines two shard dirs into one report, copying shots", () =>
     assert.ok(fs.existsSync(path.join(out, "index.html")) && fs.existsSync(path.join(out, "findings.md")));
     const sum = JSON.parse(r.stdout.trim().split("\n").pop());
     assert.equal(sum.cells.length, 2);
+    assert.equal(sum.ok, false, "partial / unmeasured merge is not ok");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("CLI writeReport exits non-zero when any cell has cellError even if others measured", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "hud-cellerr-"));
+  try {
+    const out = path.join(dir, "out");
+    fs.mkdirSync(path.join(dir, "s1", "shots"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "s1", "shots", "ok.png"), "png");
+    // One measured cell + one cellError-only cell (no records) → failed>0 must exit 1.
+    fs.writeFileSync(path.join(dir, "s1", "report.json"), JSON.stringify({
+      meta: { matrix: "quick" },
+      cells: [
+        { id: "ok-cell", cell: M.normalizeCell({ name: "ok-cell" }), shotRel: "shots/ok.png",
+          records: [{ key: "map", exists: true, visible: true, x: 0, y: 0, w: 10, h: 10 }], findings: [] },
+        { id: "boom", cell: M.normalizeCell({ name: "boom" }), cellError: "CDP captureScreenshot timed out after 60 s",
+          records: [], findings: [{ cell: "boom", kind: "pageError", elements: [], detail: "cell failed", severity: "high" }] },
+      ],
+    }));
+    const r = run(["--merge", path.join(dir, "s1"), "--out", path.relative(ROOT, out), "--json"]);
+    assert.equal(r.status, 1, "cellError must fail the process even when another cell measured");
+    const sum = JSON.parse(r.stdout.trim().split("\n").pop());
+    assert.equal(sum.ok, false);
+    assert.equal(sum.cellFailed, 1);
+    assert.equal(sum.measured, 1);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

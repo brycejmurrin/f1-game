@@ -19,7 +19,7 @@ import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   SELECTED_GATE, FIXED_GATE_SPECS, MANUAL_OPT_IN_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
   scopeCarryForward, SOURCE_AFFECTED, specsAffectedBySource, specsRacing, circuitsOf } from "../../tools/ci/select-specs.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
-import { failedSpecsFrom } from "../../tools/ci/junit-failed.mjs";
+import { failedSpecsFrom, unattributedFailuresFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
 import { MEASURED, capacity, declaredTests } from "../../tools/ci/select-budget.mjs";
 import fs from "node:fs";
@@ -483,6 +483,19 @@ test("junit-failed reads Playwright's junit shape (system-out BEFORE the failure
 </testsuite></testsuites>`;
   assert.deepEqual(failedSpecsFrom(xml), ["tests/specs/boot-guard.spec.js", "tests/specs/logging.spec.js"]);
   assert.deepEqual(failedSpecsFrom("<testsuites></testsuites>"), []);
+});
+
+test("junit-failed counts a failing testcase that names no spec (15-F2, 2026-10-10)", () => {
+  // A load / setup error has no classname; `if (!cn) continue` used to drop it, so a
+  // shard that failed outside any test read as "no failures".
+  const xml = `<testsuites><testsuite>
+<testcase name="spec failed to load"><failure message="x">boom</failure></testcase>
+<testcase name="g" classname="global-setup.js"><error message="e">boom</error></testcase>
+<testcase name="ok" classname="specs/logging.spec.js"/>
+<testcase name="bad" classname="specs/smoke.spec.js"><failure message="f">x</failure></testcase>
+</testsuite></testsuites>`;
+  assert.deepEqual(unattributedFailuresFrom(xml), ["(no spec) g", "(no spec) spec failed to load"]);
+  assert.deepEqual(failedSpecsFrom(xml), ["tests/specs/smoke.spec.js"]);
 });
 
 test("a spec that cannot pass at the gate's per-test cap declares so, and is excluded", () => {
@@ -1214,4 +1227,23 @@ test("L9: circuitsOf(the ADAPTED runner) is the union of its specs' circuits (20
   for (const spec of Object.keys(ADAPTED)) for (const id of circuitsOf(spec) || []) want.add(id);
   assert.ok(want.has("cota"));
   assert.deepEqual([...circuitsOf(ADAPTED_RUNNER)].sort(), [...want].sort());
+});
+
+test("maxDeclaredTimeout folds `BOOT_MS + 240_000` and bills an unresolvable argument as over the cap (15-F4, 2026-10-10)", () => {
+  // garage-out-before-card declares BOOT_MS (45 s, imported from the fixtures) + 240_000 = 285 s per
+  // test, over the gate's 180 s cap; only literals counted, so it read 0 and was selected into the
+  // ordinary budgeted shards, where test.setTimeout overrides the CLI --timeout.
+  assert.equal(maxDeclaredTimeout("tests/specs/garage-out-before-card.spec.js"), 285_000);
+  assert.ok(maxDeclaredTimeout("tests/specs/garage-out-before-card.spec.js") > SELECTED_GATE.perTestTimeoutSec * 1000);
+  assert.equal(maxDeclaredTimeout("tests/specs/real-race.spec.js"), 135_000, "BOOT_MS + 90000");
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "mdt-"));
+  try {
+    const rel = (n) => path.relative(ROOT, path.join(dir, n));
+    fs.writeFileSync(path.join(dir, "a.spec.js"), 'const T = 100_000;\ntest.setTimeout(T * 2 + 5);\n');
+    fs.writeFileSync(path.join(dir, "b.spec.js"), 'test.setTimeout(someRuntimeValue());\n');
+    fs.writeFileSync(path.join(dir, "c.spec.js"), 'test.describe.configure({ timeout: 60_000 + 1 });\n');
+    assert.equal(maxDeclaredTimeout(rel("a.spec.js")), 200_005);
+    assert.equal(maxDeclaredTimeout(rel("b.spec.js")), 3 * SELECTED_GATE.perTestTimeoutSec * 1000, "unknown is over the cap, never free");
+    assert.equal(maxDeclaredTimeout(rel("c.spec.js")), 60_001);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

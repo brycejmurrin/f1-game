@@ -53,6 +53,9 @@ test("every workflow step that diffs a pull request resolves its base through th
   assert.match(job("sweeps", "ship-filter"), CALL, "the geometry sweeps filter");
   assert.match(job("renderer-filter", "renderer-macos"), CALL, "the renderer filter");
   assert.match(job("node-suites", "sweeps-parts"), /BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "the node-suites plan step");
+  // 15-F3: the two steps #1292 missed. xr-filter's regex names ci.yml, so a stale base re-ran the VR job.
+  assert.match(job("xr-filter", "xr"), CALL, "the xr filter");
+  assert.match(job("unit-plan", "node-suites"), /BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "the unit-plan step");
   assert.match(docs, /PR_BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "docs-guards' prose check");
   assert.match(resolver, /\[ "\$EVENT" = pull_request \] && BEFORE="\$\(bash "\$\(dirname "\$0"\)\/ci-pr-base\.sh" "\$BEFORE"\)"/,
     "the selected gate's resolver");
@@ -105,4 +108,34 @@ test("Structural guards ignores ship ceiling raises but still rejects a PR raise
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("15-F5: a green draft run is reused only while the base branch has not moved since it started", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "reuse-draft-"));
+  try {
+    // A stub `gh`: the runs list carries one green pull_request ci.yml run; the commit lookup prints the base tip's date.
+    fs.writeFileSync(path.join(dir, "gh"), [
+      "#!/usr/bin/env bash",
+      'case "$2" in',
+      '  repos/o/r/actions/runs*) printf \'{"workflow_runs":[{"id":77,"status":"completed","conclusion":"success","path":".github/workflows/ci.yml","event":"pull_request","run_started_at":"2026-10-10T10:00:00Z"}]}\' ;;',
+      '  repos/o/r/commits/*) printf \'%s\\n\' "$STUB_TIP_DATE" ;;',
+      '  *) exit 1 ;;',
+      "esac",
+    ].join("\n"), { mode: 0o755 });
+    const reuse = (tipDate, extra = {}) => cp.spawnSync("bash", [path.join(ROOT, "tools/ci/reuse-draft-fast.sh")], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", GITHUB_EVENT_ACTION: "ready_for_review",
+        PR_HEAD_SHA: "a".repeat(40), PR_BASE_REF: "ship", GITHUB_RUN_ID: "1", STUB_TIP_DATE: tipDate, ...extra },
+    });
+    const r1 = reuse("2026-10-10T09:00:00Z");
+    assert.match(r1.stdout, /reuse=true/, r1.stderr);
+    assert.match(r1.stdout, /run=77/);
+    const r2 = reuse("2026-10-10T11:30:00Z");
+    assert.match(r2.stdout, /reuse=false/, "the base took a commit after the draft run started: the merge-dependent checks must re-run");
+    assert.match(r2.stderr, /moved/);
+    // No base ref, or an unreadable tip date, is not "same": fail safe.
+    assert.match(reuse("2026-10-10T09:00:00Z", { PR_BASE_REF: "" }).stdout, /reuse=false/);
+    assert.match(reuse("").stdout, /reuse=false/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  assert.match(ci, /PR_BASE_REF: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/, "the reuse-draft job passes the base ref");
 });
