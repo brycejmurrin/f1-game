@@ -18,3 +18,19 @@ Taken at 844x390, touch, SwiftShader, on cursor/bh1-game 6e5526dce (window.__ape
 Not shown here (probe lines only): DAILY, quali TO THE GRID, Hub JUMP IN lap 1, season NEXT RACE, RACE AGAIN / TT TRY AGAIN, automation, headless/hidden = PASS. Designer TEST DRIVE = FAIL (js/editor/designer.js:2200 calls G.startRace directly). WATCH / HIGHLIGHTS / JUMP IN startLap>1 skip the drive-out but still play card+flyby (by design).
 
 Caveats: (1) designer TEST DRIVE plays no garage-out/flyby (designer.js:2200 calls G.startRace directly); covered by #1361. (2) WATCH / HIGHLIGHTS / mid-race JUMP IN (startLap>1) skip only the drive-out, by design: the card and flyby still play. Spec line 268 page.reload() bug is being fixed by the #1356 owner.
+
+## Second batch (same head 6e5526dce, 844x390 touch)
+| file | proves | result |
+|---|---|---|
+| daily-1-garage-driveout.png | DAILY: garage drive-out first | PASS |
+| daily-2-card.png | DAILY: session card after it | PASS |
+| qualigrid-0-results-sheet.png | quali sheet after SIMULATE, before TO THE GRID | context |
+| qualigrid-1-garage-driveout.png | quali TO THE GRID: garage drive-out plays (state menu, phase garage) | PASS |
+| hubjumpin-1-garage-driveout.png | Data Hub JUMP IN lap 1: garage drive-out | PASS |
+| hubjumpin-2-card.png | JUMP IN lap 1: card after it | PASS |
+| hubjumpin-3-flyby.png | JUMP IN lap 1: flyby | PASS |
+| watch-1-card-no-garage.png | WATCH: card + flyby phase with NO garage phase (drive-out skipped by design) | PASS (by design) |
+| raceagain-0-results-sheet.png | results sheet before RACE AGAIN | context |
+| raceagain-1-straight-to-grid.png | RACE AGAIN: straight to the grid, no garage or card (phases seen: count only) | PASS |
+
+Not captured: DAILY flyby and quali TO THE GRID card (the screenshot landed after the phase had already moved on, so those frames were discarded rather than mislabelled); both PASS in the phase-timeline probe.
