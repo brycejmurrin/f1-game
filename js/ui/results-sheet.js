@@ -455,7 +455,8 @@ function buildTTResults() {
       gl.textContent = guestGhost ? "RIVAL GHOST" : "YOUR PB";
       const gv = document.createElement("span"); gv.className = "res-pts"; gv.style.width = "auto";
       gv.style.color = delta <= 0 ? "var(--faster)" : "var(--slower)";
-      gv.textContent = `${delta >= 0 ? "+" : ""}${delta.toFixed(3)}s`;
+      const shown = +delta.toFixed(3);   // sign from the rounded value: -0.0003 reads +0.000, not -0.000
+      gv.textContent = `${shown >= 0 ? "+" : ""}${shown.toFixed(3)}s`;
       gr.append(gl, gv);
       els.resultsTable.appendChild(gr);
     }

@@ -204,3 +204,25 @@ test("pinFactorySeat lives on factory-seat.js, not the fixtures re-export", () =
     assert.match(src, /from "\.\.\/helpers\/factory-seat\.js"/, spec);
   }
 });
+
+test("a shipped setup sheet is the team's WORKS sheet: a fresh install does not read TUNED", () => {
+  // setup.mercedes shipped {arbF 6, arbR 5} against SetupTune.DEFAULTS {7, 7}, so
+  // SetupTune.isDefault("mercedes") was false from the first boot: the SETUP tab
+  // said TUNED and carried a small unasked-for handling offset.
+  const { def } = readDefaults();
+  const ctx = vm.createContext({
+    Math, console, Object, Array, Number, JSON, isFinite,
+    GameStore: { store: { get: (k, d) => (("setup." + k.replace(/^setup\./, "")) in def ? def["setup." + k.replace(/^setup\./, "")] : d), set() {} } },
+    Log: { info() {}, warn() {}, debug() {}, error() {} },
+  });
+  ctx.window = ctx;
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js", "js/garage/setup-tune.js"])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+  const S = vm.runInContext("SetupTune", ctx);
+  const shipped = Object.keys(def).filter((k) => k.startsWith("setup."));
+  assert.ok(shipped.length > 0);
+  for (const k of shipped) {
+    const id = k.slice("setup.".length);
+    assert.equal(S.isDefault(id), true, `${k} must equal SetupTune.defaults("${id}")`);
+  }
+});

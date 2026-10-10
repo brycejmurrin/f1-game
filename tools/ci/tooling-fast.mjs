@@ -57,6 +57,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The 2026-09-27 a11y/PWA pass: pad choice, landscape lock, CAM label in
   // name, manifest display_override. VM-executed
   // source, no browser, ~0.2 s.
+  // Round-2 (2026-10-10): visible text is contained in every control's accessible name (WCAG 2.5.3); static shell scan.
+  "tests/unit/a11y-label-in-name.test.mjs",
   "tests/unit/a11y-pwa-pass.test.mjs",
   "tests/unit/aero-flap-travel.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
@@ -98,6 +100,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // table nobody read. Node-side via verify-track.cjs, so it is cheap.
   "tests/unit/assert-audit.test.mjs",
   "tests/unit/assets-pack.test.mjs",
+  // Round-2: MUSIC OFF never decodes the menu track (setMusic before setSound) and rows changed before the race bundle lands reach the store, not the stub.
+  "tests/unit/audio-panel-boot.test.mjs",
   "tests/unit/audio-recovery.test.mjs",
   "tests/unit/audio-sample-upgrade.test.mjs",
   "tests/unit/audio-tune.test.mjs",
@@ -139,6 +143,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
   "tests/unit/cam-motion.test.mjs",
+  // Round-2 camera: corridor-clamped hang, wall clamp on street circuits, look-free director/PiP, NaN hold, bend hysteresis, frame-rate-free drone; 30/60/144 Hz sweep.
+  "tests/unit/cam-round2.test.mjs",
   "tests/unit/camera-defaults.test.mjs",
   "tests/unit/camera-feel.test.mjs",
   "tests/unit/camera-ride.test.mjs",
@@ -152,6 +158,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // group that held it is not gated at all.
   // car-fx.js (plank sparks, AI lock-up marks) + the particle pool's scrape /
   // flare / spray-plume discipline, in a VM with seeded Math.random; ~0.2 s.
+  // Round-2: decal LRU trims by bytes, the hi-res grave is reaped on the garage path, failed hi-res builds stop retrying.
+  "tests/unit/car-draw-decal-budget.test.mjs",
   "tests/unit/car-fx.test.mjs",
   "tests/unit/car-mesh-anchors.test.mjs",
   "tests/unit/car-mesh-crew-cache.test.mjs",
@@ -181,6 +189,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ci-watch.test.mjs",
   "tests/unit/circuit-axis.test.mjs",
   "tests/unit/circuit-corner-anchors.test.mjs",
+  // Round-2: manifest.json / meta description circuit counts pinned to Tracks.LIST.
+  "tests/unit/circuit-count-shell.test.mjs",
   "tests/unit/circuit-def-fields.test.mjs",
   "tests/unit/circuit-meta.test.mjs",
   "tests/unit/circuit-scope.test.mjs",
@@ -224,6 +234,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/css-layers.test.mjs",
   "tests/unit/css-media-disjoint.test.mjs",
   "tests/unit/css-play.test.mjs",
+  // Round-2: no @media (prefers-*/pointer/hover/orientation) declaration is dead under the layer cascade (node port of dead_decl.py).
+  "tests/unit/css-prefers-cascade.test.mjs",
   "tests/unit/css-token-adoption.test.mjs",
   "tests/unit/css-tokens.test.mjs",
   "tests/unit/curvature-channels.test.mjs",
@@ -399,6 +411,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ...and the garage's SIGNS: no prop mounted within half a metre in front of
   // a wall quad. Two shipped cut-off wordmarks and one never-visible live
   // trace were each found by a screenshot; this puts them in the edit loop.
+  // Round-2 garage: era bans never delete fitted parts, the wall board reads FREE BUILD, stats include career development, badges and legend chips.
+  "tests/unit/garage-sheet-round2.test.mjs",
   "tests/unit/garage-sign-occlusion.test.mjs",
   "tests/unit/gen-arch-table.test.mjs",
   "tests/unit/generated-docs.test.mjs",
@@ -408,6 +422,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ghost-share.test.mjs",
   "tests/unit/ghost.test.mjs",
   "tests/unit/global-registry.test.mjs",
+  // Round-2: GLX createTexture resets UNPACK flags and frees the texture when texImage2D throws (mock).
+  "tests/unit/glx-failure-paths.test.mjs",
   "tests/unit/glx-multidraw.test.mjs",
   "tests/unit/glx-occlusion.test.mjs",
   // GLX output-target (VR task 30): source-scan of bindFramebuffer(null) plus a recording-mock proof that setOutputTarget routes the final pass.
@@ -440,6 +456,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-strategy.test.mjs",
   "tests/unit/hud-survey.test.mjs",
   "tests/unit/hud-tyres.test.mjs",
+  // Round-2: hwZones are control-point index fractions — every zone with a curated turn inside its window narrows that corner.
+  "tests/unit/hw-zones.test.mjs",
   "tests/unit/image-grade-shaders.test.mjs",
   "tests/unit/import-models-workflow.test.mjs",
   "tests/unit/import-models.test.mjs",
@@ -454,6 +472,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The night lamp-shadow map holds one flood while the car sits between two:
   // the real frame-lights.js feeding the real ShadowPass.lampPass. ~0.3 s.
   "tests/unit/lamp-shadow-pick.test.mjs",
+  // Round-2: the m:ss formatters round before splitting (no 1:60.00) and signed deltas never print -0.000.
+  "tests/unit/lap-format-rollover.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",
   // …and the PERIOD CAR reaching the garage SHEET, not just the team
   // record. Twelve legends share one `legends` id, so the write policy is
@@ -533,6 +553,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/no-bare-console.test.mjs",
   "tests/unit/node-plan.test.mjs",
   "tests/unit/nontext-contrast.test.mjs",
+  // Round-2: a slow/offline navigation to controller.html never gets the game shell; controller.html is precached as optional.
+  "tests/unit/offline-precache-nav.test.mjs",
   "tests/unit/onboard.test.mjs",
   // updateCar OT ahead-scan gate: skip the O(n) walk when gapAhead is unused.
   "tests/unit/ot-ahead-scan-gate.test.mjs",
@@ -671,6 +693,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // each re-derives a fact the source depends on (which livery fields move a
   // vertex; that js/track/ reads the build's NIGHT, not the def's), so they are
   // only useful if they run right after the edit that would break them.
+  // Round-2: MUSIC & SOUND asks the audio bundle once per open and reveals the stub page with a note when it cannot load.
+  "tests/unit/settings-tabs.test.mjs",
   "tests/unit/setup-preview-hull.test.mjs",
   "tests/unit/setup-screens-state.test.mjs",
   "tests/unit/setup-tune.test.mjs",
@@ -689,6 +713,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/skidmarks-cadence.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
   "tests/unit/skill-smoke.test.mjs",
+  // Round-2: removeTrack frees its MUSIC_CACHE slot.
+  "tests/unit/soundtrack-cache.test.mjs",
   "tests/unit/source-integrity.test.mjs",
   "tests/unit/span-kinds.test.mjs",
   // The duration HISTORY behind the budget: junit/live-reporter merge,
@@ -701,6 +727,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // straight coast bit-identical to tip; held-steer coast matches couple
   // within tol; COUPLE_V_MIN=3; yaw damp untouched. createGame once, ~2.5 s.
   "tests/unit/speed-coupling.test.mjs",
+  // Round-2 track engine: surfaceFolds / centreline diagnostics, running-surface fold clamp, opt-in splineAlpha (unset = byte-identical path).
+  "tests/unit/spline-fold-diagnostics.test.mjs",
   "tests/unit/sporting-regs.test.mjs",
   // The start gantry's five lamps follow the countdown: one additive glow per
   // lit lamp, on the gantry nearest the line, out at green. VM, ~0.1 s.
@@ -747,6 +775,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // blur/reset belongs in the edit loop rather than in a browser group.
   "tests/unit/throttle-latch.test.mjs",
   "tests/unit/title-art.test.mjs",
+  // Round-2: VS FRIEND writes flow/selection only after the net bundle lands and announces a refused load.
+  "tests/unit/title-flow.test.mjs",
   "tests/unit/title-home-scene-prepaint.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
   "tests/unit/tlx-chunked-lifecycle.test.mjs",
@@ -766,8 +796,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // TLX drops a createTexture() source canvas once three has uploaded it,
   // and freeTexture retires the decal materials bound to it (lifted source
   // against three r186's real Texture). The pit-crew mesh cache is capped.
+  // Round-2 TLX: post chain retries after death, shadowStr 0 when the sun pass failed, DPR cap on mobileTier, caster geometry clone, warm-guarded releaseGeometry, true-LRU materials, pack CPU copy dropped, devtools-gated globals.
+  "tests/unit/tlx-round2.test.mjs",
   "tests/unit/tlx-texture-release.test.mjs",
   "tests/unit/tooling-fast-runner.test.mjs",
+  // Round-2 tooling: dup-keys scans js/render/three, stage/garage-angles refuse unsafe --out, wait-polling-lint parses scripts, generators reject unknown flags, Chromium cache key carries the runner image, pages.yml fast_tier_run expression.
+  "tests/unit/tools-a12-guards.test.mjs",
   "tests/unit/tools-runnable.test.mjs",
   "tests/unit/track-accuracy-validator.test.mjs",
   "tests/unit/track-build-vm-release.test.mjs",

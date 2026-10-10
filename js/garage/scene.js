@@ -860,11 +860,14 @@ function seatDriverAt(team, idx) {
 // (rebuild early-returns after the key check, but the key needs boardInfo first).
 // Cache on a cheap stamp: team, seat, store.rev (parts/livery), career budget.
 let _boardInfo = null, _boardInfoKey = "";
-function boardInfo(team, getParts, driverIdx) {
+function boardInfo(team, getParts, driverIdx, ctx) {
   if (typeof Parts === "undefined" || typeof getParts !== "function") return null;
   const rev = (typeof GameStore !== "undefined" && GameStore.store) ? GameStore.store.rev : 0;
-  const capStamp = (typeof Career !== "undefined" && Career.owned && team && Career.owned(team.id))
-    ? ("C" + Career.budget()) : "F";
+  const owned = typeof Career !== "undefined" && Career.owned && team && Career.owned(team.id);
+  const unlimited = !owned && !!(ctx && ctx.unlimited);
+  // tdev folds into the stat bars (Career.teamStats), so a development winter repaints the board.
+  const tdev = owned && Career.data ? ((Career.data().tdev || {})[team.id] || 0) : 0;
+  const capStamp = owned ? ("C" + Career.budget() + ":" + tdev) : unlimited ? "U" : "F";
   const stamp = (team && team.id) + "|" + (driverIdx | 0) + "|" + rev + "|" + capStamp;
   if (_boardInfo && stamp === _boardInfoKey) return _boardInfo;
   try {
@@ -873,7 +876,7 @@ function boardInfo(team, getParts, driverIdx) {
     // which is what a supplier-locked fallback actually fitted — not the id the
     // save asked for).
     const r = Parts.resolveSetup(getParts(team.id), team);
-    const base = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
+    const base = GarageExperience.statsOf(team) || { speed: 85, accel: 85, cornering: 85, braking: 85 };
     const stats = Parts.STAT_KEYS.map((k) => {
       const b = base[k.key] || 75;
       const value = Math.round(Parts.displayStat(b * r.mods[k.key]));
@@ -891,10 +894,11 @@ function boardInfo(team, getParts, driverIdx) {
     // empty bar, two metres from a DOM panel reading the true figure, and it
     // stayed at 0 however much was unfitted. Four of the seven starter teams are
     // over 780 on the factory build alone, and MY TEAM is 900.
-    const cap = (typeof Career !== "undefined" && Career.owned && Career.owned(team.id))
-      ? Career.budget() : Parts.BUDGET;
-    _boardInfo = { stats, spec, driver: drv, budget: cap,
-             left: Math.max(0, cap - (r.cost || 0)) };
+    const cap = owned ? Career.budget() : Parts.BUDGET;
+    // FREE BUILD has no cap to spend against (the DOM sheet says so): the board
+    // prints it instead of "0 cr OF 780 REMAINING" over an empty bar.
+    _boardInfo = { stats, spec, driver: drv, budget: cap, unlimited,
+             left: unlimited ? 0 : Math.max(0, cap - (r.cost || 0)) };
     _boardInfoKey = stamp;
     return _boardInfo;
   } catch (e) {
@@ -908,7 +912,7 @@ function boardInfo(team, getParts, driverIdx) {
 // — the texture would never be repainted.
 function boardKey(info) {
   if (!info) return "-";
-  let k = `${info.left}|${info.driver.num == null ? "-" : info.driver.num}`;
+  let k = `${info.unlimited ? "U" : info.left}|${info.driver.num == null ? "-" : info.driver.num}`;
   for (let i = 0; i < info.stats.length; i++) k += `|${info.stats[i].value}`;
   for (let i = 0; i < info.spec.length; i++) k += `|${info.spec[i].label}`;
   return k;
@@ -1133,13 +1137,19 @@ function paintBoards(cv, team, liv, info) {
   // BUDGET — spent against the cap, with a bar that empties as you spend.
   panel(D_BUDGET, "BUDGET");
   ctx.textAlign = "left"; ctx.fillStyle = "#f2f3f5"; ctx.font = "700 40px system-ui, sans-serif";
-  ctx.fillText(`${info.left} cr`, D_BUDGET.x + 18, D_BUDGET.y + 84);
-  ctx.fillStyle = "#8f98a6"; ctx.font = "700 20px system-ui, sans-serif";
-  ctx.fillText(`OF ${info.budget} REMAINING`, D_BUDGET.x + 190, D_BUDGET.y + 88);
-  const rw = D_BUDGET.w - 36;
-  ctx.fillStyle = "#191d24"; ctx.fillRect(D_BUDGET.x + 18, D_BUDGET.y + 104, rw, 12);
-  ctx.fillStyle = css(c2);
-  ctx.fillRect(D_BUDGET.x + 18, D_BUDGET.y + 104, rw * Math.max(0, Math.min(1, info.left / info.budget)), 12);
+  if (info.unlimited) {
+    ctx.fillText("FREE BUILD", D_BUDGET.x + 18, D_BUDGET.y + 84);
+    ctx.fillStyle = "#8f98a6"; ctx.font = "700 20px system-ui, sans-serif";
+    ctx.fillText("NO BUDGET LIMIT", D_BUDGET.x + 18, D_BUDGET.y + 118);
+  } else {
+    ctx.fillText(`${info.left} cr`, D_BUDGET.x + 18, D_BUDGET.y + 84);
+    ctx.fillStyle = "#8f98a6"; ctx.font = "700 20px system-ui, sans-serif";
+    ctx.fillText(`OF ${info.budget} REMAINING`, D_BUDGET.x + 190, D_BUDGET.y + 88);
+    const rw = D_BUDGET.w - 36;
+    ctx.fillStyle = "#191d24"; ctx.fillRect(D_BUDGET.x + 18, D_BUDGET.y + 104, rw, 12);
+    ctx.fillStyle = css(c2);
+    ctx.fillRect(D_BUDGET.x + 18, D_BUDGET.y + 104, rw * Math.max(0, Math.min(1, info.left / info.budget)), 12);
+  }
   ctx.textAlign = "center";
   // DRIVER — the SELECTED seat, not simply the first one on the entry list.
   panel(D_DRIVER, "DRIVER");
@@ -1525,7 +1535,7 @@ let lastTrace = -1e9, traceFail = 0;
 const shutterMat = new Float32Array(MAT_I), arrivalMirror = new Float32Array(MAT_MIRROR);
 function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat) {
   if (!_gfx) return;
-  rebuild(team, liv, boardInfo(team, getParts, driverIdx), ctx);
+  rebuild(team, liv, boardInfo(team, getParts, driverIdx, ctx), ctx);
   ensureDynamic();
   const now = ctx && Number.isFinite(ctx.sceneNow) ? ctx.sceneNow : typeof performance !== "undefined" ? performance.now() : Date.now();
   _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
@@ -1772,12 +1782,12 @@ function dropPreviewMeshes() {
 // Builds meshes and canvases only; the programs still compile on a draw.
 function prepare(team, liv, getParts, driverIdx, ctx) {
   if (!_gfx) return false;
-  rebuild(team, liv, boardInfo(team, getParts, driverIdx), ctx);
+  rebuild(team, liv, boardInfo(team, getParts, driverIdx, ctx), ctx);
   ensureDynamic();
   return prepared(team, liv, getParts, driverIdx, ctx);
 }
 function prepared(team, liv, getParts, driverIdx, ctx) {
-  return !!shellMesh && roomKeys(team, liv, boardInfo(team, getParts, driverIdx), ctx).key === cacheKey;
+  return !!shellMesh && roomKeys(team, liv, boardInfo(team, getParts, driverIdx, ctx), ctx).key === cacheKey;
 }
 
 // THE RACE DOES NOT CARRY THE GARAGE: the bay, both atlases, the moving props and

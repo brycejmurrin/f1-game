@@ -64,7 +64,7 @@ test("loading circuits one after another keeps one world in memory and does not 
   await page.addInitScript(censusInitScript);
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("HeapProfiler.enable");
-  await page.goto("/");
+  await page.goto("/?three-devtools=1");   // TLX exposes window.renderer only behind this flag
   await page.waitForFunction(() => window.__apex != null && typeof Tracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
   const backend = await page.evaluate(() => (typeof GLX !== "undefined" ? GLX.backend : null));
   expect(backend, "this spec measures the shipped TLX backend").toBe("three");

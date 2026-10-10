@@ -42,7 +42,9 @@ const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
 const LOCK_PATH = path.join(ROOT, "scratch", "apex-browser.lock");
-const TEST_BG_STATE = path.join(ROOT, "artifacts", "logs", "test-bg.json");
+// APEX_TEST_BG_STATE points the occupancy check at another registry, so a test
+// never rewrites the real artifacts/logs/test-bg.json under a live run (TS1).
+const TEST_BG_STATE = process.env.APEX_TEST_BG_STATE || path.join(ROOT, "artifacts", "logs", "test-bg.json");
 const CHROME_DAEMON_STATE = path.join(ROOT, "scratch", "probe-chrome-daemon.port");
 const ARTIFACTS_DIR = path.join(ROOT, "artifacts");
 const SCRATCH_DIR = path.join(ROOT, "scratch");

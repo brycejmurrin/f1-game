@@ -172,14 +172,18 @@ const Flags = (function () {
   };
 
   const cache = {};   // code -> rendered inner markup
+  // Own-key lookups only: a custom circuit's country is player text, and
+  // "constructor" / "__proto__" must not resolve to Object.prototype members.
+  const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   function code(country) {
-    return CODES[String(country || "").trim()] || null;
+    const k = String(country || "").trim();
+    return own(CODES, k) ? CODES[k] || null : null;
   }
   // Inline SVG markup for a country CODE ("gb") or a country NAME ("UK").
   // Decorative by default (aria-hidden): the circuit's name sits beside it as
   // text. Pass `{label}` for a labelled, role=img rendering.
   function svg(codeOrCountry, opts) {
-    const c = RECIPES[codeOrCountry] ? codeOrCountry : (code(codeOrCountry) || "xx");
+    const c = typeof codeOrCountry === "string" && own(RECIPES, codeOrCountry) ? codeOrCountry : (code(codeOrCountry) || "xx");
     if (!cache[c]) cache[c] = RECIPES[c]();
     const a11y = opts && opts.label
       ? ` role="img" aria-label="${String(opts.label).replace(/"/g, "&quot;")}"`

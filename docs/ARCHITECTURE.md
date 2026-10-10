@@ -1334,10 +1334,8 @@ directory). The generated module index at the top of this file and
 | `js/ui/quali-sheet.js` | `QualiSheet` | the QUALIFYING sheet (`#quali`): `build(rows)` / `open(rows)` / `close()` over `quali.rows()` — pure DOM assembly of the model's classification (podium classes, the DRIVEN tag on a rival's real lap, the P-title). No timing, no ordering, no persist |
 | `js/race/reliability.js` | `Reliability` | RELIABILITY / DNFs — whether a car reaches the flag. Risk is DERIVED (team tier, relieved by career team development and by the player's fitted engine + gearbox), never authored per team. The whole field's retirements are drawn ONCE at the green light from a stateless hash of `(seed, round, driver)`, so arming a race consumes nothing from the sim RNG stream. Ships OFF — opt-in per race via the RELIABILITY setting |
 | `js/perf/governor.js` | `PerfGov` | adaptive performance governor (render scale / FX tiers) |
-| `js/camera/vantage.js` | `GameCams` | the 15 player camera modes + the `__apex.view` debug free-cam framing |
-| `js/camera/mode-switch.js` | `CamModes` | `CAM_MODES` (the 15-entry player camera list — index IS the persisted `camMode`) plus the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to vantage |
-| `js/camera/vantage.js` | `GameCams` | the 18 player camera modes + the `__apex.view` debug free-cam framing |
-| `js/camera/mode-switch.js` | `CamModes` | `CAM_MODES` (the 17-entry player camera list — index IS the persisted `camMode`) plus the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to vantage |
+| `js/camera/vantage.js` | `GameCams` | the 20 player camera modes + the `__apex.view` debug free-cam framing |
+| `js/camera/mode-switch.js` | `CamModes` | `CAM_MODES` (the 20-entry player camera list — index IS the persisted `camMode`) plus the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to vantage |
 | `js/ui/hud.js` | `GameHud` | in-race DOM HUD (pos/lap/times, speed, energy, gaps, minimap) |
 | `js/ui/results-sheet.js` | `GameResults` | results + season-end screens, penalties, points |
 | `js/agent/apex.js` | `ApexApi` | the **whole `window.__apex` dev API** (see DEBUG-HOOKS.md). `LAZY_AGENT` — no tagged script; `game.js` injects it when `wantAgentSurface()` |
@@ -1416,18 +1414,16 @@ in load order, standings table between races, saved in
 `apex26.season`. localStorage: hiscore N/A, settings (team, difficulty, tilt,
 sound), season.
 
-Camera: 15 player modes (`CAM_MODES` in `js/camera/mode-switch.js`, driven by
-`GameCams`) cycled with the CAM button / C key (persisted) — CHASE (close,
-Camera: 18 player modes (`CAM_MODES` in `js/camera/mode-switch.js`, driven by
+Camera: 20 player modes (`CAM_MODES` in `js/camera/mode-switch.js`, driven by
 `GameCams` + `ExtraRigs`) cycled with the CAM button / C key (persisted) — CHASE (close,
 behind+above), FAR (pulled back/up), DRIFT (swings outside on a slide),
 COCKPIT (onboard eye, player car hidden), HOOD (nose cam), OVERHEAD (top-down
 drone), HELI (broadcast heli), REVERSE (mounted ahead looking back), TV SIDE
 (trackside panning), CINEMATIC (slow orbit), LOW (surface skimmer), T-CAM
-(roll-hoop broadcast), REAR CAM (tail-mounted looking back), VISOR (the cockpit eye further forward, no wheel), TRACKSIDE (fixed corner cams that auto-switch). Chase modes
 (roll-hoop broadcast), REAR CAM (tail-mounted looking back), VISOR (the cockpit eye further forward, no wheel),
-RIVAL LOCK (frames the nearest battle rival), PIT WALL (pit-lane wall cam with optional auto-cut),
-DRONE (smoothed tether with corner look-ahead). Chase modes
+TRACKSIDE (fixed corner cams that auto-switch), RIVAL LOCK (frames the nearest battle rival),
+PIT WALL (pit-lane wall cam with optional auto-cut), DRONE (smoothed tether with corner look-ahead),
+TV (the live director, `js/camera/director.js`) and HELMET (the cockpit from inside the lid). Chase modes
 anchor a fixed arc-length behind the car so they never lag at speed; onboard
 modes ride ON the car with very high damping. FOV widens with speed through one
 shared curve (`CamFeel.modeFov` in `js/camera/feel.js`); onboard cams also take
@@ -1584,7 +1580,7 @@ word (full list and commits: `docs/research/WEBGPU-PARITY.md` §5a rule 4):
 |---|---|---|---|
 | 1 | Metal PSO compiled lazily at first draw with `error:nil`; on failure the draw is issued with no pipeline. OOM error "…too complex, please reduce its size" (only since Oct 2025) | sky (small program) survives, every lit draw vanishes; `gpuFirst` now shows the message | THREE PATH: WEBGPU + COPY DIAG after one lap; if it names "too complex", the lit program is the size problem |
 | 3 | indexed draw skipped when any declared vertex buffer is one element short; OOB index poisons the index buffer for good | per-mesh, not per-material | `tlxForceBatches` / chunk on-off |
-| 4 | one validation failure kills the encoder for the rest of the pass | everything after the first bad draw missing, sky first so it survives | `tlxNoMrt` |
+| 4 | one validation failure kills the encoder for the rest of the pass | everything after the first bad draw missing, sky first so it survives | none shipped (a no-MRT switch was proposed, never built) |
 | 5 | mat3 packing miscompile (three `normalMatrix` in the object struct) fixed upstream mid-2026 | materials using normals only | a `colorNode`-only material draws, a lit one does not |
 
 **Resolved the same day.** With the listener live the phone reported
@@ -1624,7 +1620,7 @@ whole device.
 |---|---|---|
 | **WEBGL2** | Native canvas. Screenshots just work. | `canvas.toDataURL` |
 | **WEBGPU** | Soft-present: final pass → `COPY_SRC` texture → ephemeral readback → `putImageData` on `#game`. Forced by SCREENSHOTS: 2D BLIT or a software adapter. SCREENSHOTS: NATIVE leaves the swapchain black. | `GLX.awaitSoftPresent()` then `#game`; optional `GLX.capturePixels()` |
-| **THREE.JS** | AUTO can be **WebGPU or three WebGL2**. SETTINGS shows `AUTO (WEBGPU)` / `AUTO (WEBGL2)` from the live backend. It tries WebGPU wherever `navigator.gpu` exists (phones/Safari: lite stack, same as WGX_LITE; since 2026-09-02 a phone that picks THREE.JS BINDS it despite the §2m memory risk — `apex26.tlxMobile=0` declines back to GLX, and the boot canary reverts a load that never presented). It lands on three WebGL2 when GPU is missing, `apex26.tlxAutoGL=1` after this tab lost WebGPU, `init()` threw before `#game` was claimed, **or the browser is WebKit (Safari, every iOS browser) — since 2026-09-03: two deploys drew three-WebGPU wrongly on an iPhone with zero reported errors (bodywork missing, then sky-only at `c6d8fd3`); THREE PATH: WEBGPU still pins it for the investigation, with `apex26.tlxArrayNearest=1` / `apex26.tlxNoMrt=1` as the on-device A/B switches and SETTINGS ▸ COPY DIAG as the report** — still TLX, not game WEBGL2 (`gfxClaimFail` is what binds GLX). Software WebGPU 2D-blits the LDR target. `mappedAtCreation` uploads go through `queue.writeBuffer`. THREE PATH: WEBGL2 / WEBGPU pins one path. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 `readPixels`; WebGPU LDR readback |
+| **THREE.JS** | AUTO can be **WebGPU or three WebGL2**. SETTINGS shows `AUTO (WEBGPU)` / `AUTO (WEBGL2)` from the live backend. It tries WebGPU wherever `navigator.gpu` exists (phones/Safari: lite stack, same as WGX_LITE; since 2026-09-02 a phone that picks THREE.JS BINDS it despite the §2m memory risk — `apex26.tlxMobile=0` declines back to GLX, and the boot canary reverts a load that never presented). It lands on three WebGL2 when GPU is missing, `apex26.tlxAutoGL=1` after this tab lost WebGPU, `init()` threw before `#game` was claimed, **or the browser is WebKit (Safari, every iOS browser) — since 2026-09-03: two deploys drew three-WebGPU wrongly on an iPhone with zero reported errors (bodywork missing, then sky-only at `c6d8fd3`); THREE PATH: WEBGPU still pins it for the investigation, with `apex26.tlxArrayNearest=1` as the on-device A/B switch and SETTINGS ▸ COPY DIAG as the report** — still TLX, not game WEBGL2 (`gfxClaimFail` is what binds GLX). Software WebGPU 2D-blits the LDR target. `mappedAtCreation` uploads go through `queue.writeBuffer`. THREE PATH: WEBGL2 / WEBGPU pins one path. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 `readPixels`; WebGPU LDR readback |
 
 Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
 
