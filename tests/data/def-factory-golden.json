@@ -1,5 +1,5 @@
 {
-  "_doc": "sha256[0..16) of Tracks.LIST metadata and materialised points; tests/unit/track-def-factory.test.mjs recomputes the canon. Re-captured 2026-10-10 (round-2 bug hunt, train A) for the 28 circuits whose authored defs changed: 12 hwZones re-keyed onto the corner they name, the korea/buddh/bahrain hairpin fold clamp, and the splineAlpha plumb (copied only when authored, so the other 24 hashes are unchanged). Earlier: 2026-10-05 for Buddh/Fuji/Korea chord samples that clear Catmull-Rom tarmac folds (and Buddh sparse / Korea tree:none furniture); Hungaroring, Imola and Spa hashes from track-realism batch two (corner/sector/aero metadata).",
+  "_doc": "sha256[0..16) of Tracks.LIST metadata and materialised points; tests/unit/track-def-factory.test.mjs recomputes the canon. Re-captured 2026-10-10 for monaco alone (bankZones Massenet/Mirabeau re-anchored as turn 3 / turn 7; points unchanged). Earlier 2026-10-10 (round-2 bug hunt, train A) for the 28 circuits whose authored defs changed: 12 hwZones re-keyed onto the corner they name, the korea/buddh/bahrain hairpin fold clamp, and the splineAlpha plumb (copied only when authored, so the other 24 hashes are unchanged). Earlier: 2026-10-05 for Buddh/Fuji/Korea chord samples that clear Catmull-Rom tarmac folds (and Buddh sparse / Korea tree:none furniture); Hungaroring, Imola and Spa hashes from track-realism batch two (corner/sector/aero metadata).",
   "hashes": {
     "abudhabi": "bff3692d25d4beb8",
     "albert_park": "1fde6db9dea54c22",
@@ -30,7 +30,7 @@
     "magny_cours": "d04be62194329a5a",
     "mexico": "df79ed67a6aa09ea",
     "miami": "72fbdba31f49aa83",
-    "monaco": "ac52d7910de51389",
+    "monaco": "7b880211a01cb454",
     "mont_tremblant": "aaf2288518c66a07",
     "montreal": "40ff8552a79ece66",
     "monza": "d0ad2f3fc9ea15cc",
