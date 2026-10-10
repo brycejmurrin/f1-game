@@ -410,10 +410,16 @@ async function runGroup(browser, group, plan, log) {
         // cell's caps against the previous cell's (2026-10-04: --radio-top-*
         // identical before and after the slot fix).
         await cdpShot(page, null);
+        // THREE REFRESHES, not one: fitHud settles its gap-strip rungs over consecutive ticks (shorten the
+        // strip, then drop it under the map — each change re-keys the fit), and the sim is frozen here, so
+        // the game's own 10 Hz tick never supplies them. One pass left the strip in the tower's row on a
+        // cell where play drops it (2026-10-10, phoneL-cockpit: tower x gaps, gapShort/gapDrop both false).
         await page.evaluate((frac) => {
-          try { if (window.GameHud && GameHud.invalidateFit) GameHud.invalidateFit(); } catch { /* old tree */ }
           const a = window.__apex;
-          a.freeze(false); a.jump(frac, 60, 0); if (a.step) a.step(1 / 60, 2); a.freeze(true);
+          for (let pass = 0; pass < 3; pass++) {
+            try { if (window.GameHud && GameHud.invalidateFit) GameHud.invalidateFit(); } catch { /* old tree */ }
+            a.freeze(false); a.jump(frac, 60, 0); if (a.step) a.step(1 / 60, 2); a.freeze(true);
+          }
         }, plan.frac);
         await cdpShot(page, null);
         if (plan.shots) {
