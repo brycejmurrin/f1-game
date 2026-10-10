@@ -4281,6 +4281,7 @@ if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", (
 else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
 
 function quitToMenu() {
+  skipToResults();   // a finished player's result is settled (career/season) before the session is dropped
   Ghost.flush(); resultsCam.reset(); replayBuf.clear(); cancelIntro();
   if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
@@ -8897,11 +8898,11 @@ function setPaused(p, why) {
     // closes the same way.
     closeSettings();
   }
-  els.pausemenu.hidden = !p;
+  els.pausemenu.hidden = !p; $("pm-skip-results").hidden = !(p && postFinishWait());
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
-  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt(); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); $("pm-skip-results").hidden = !postFinishWait(); }   // rotate-block / photo hide the card in this task, so the #pausemenu observer never sees it (#988's garage was the same miss)
+  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt(); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); }   // rotate-block / photo hide the card in this task, so the #pausemenu observer never sees it (#988's garage was the same miss)
   // Music + rain too, as startRaceBody does: SOUND turned ON under the pause card defers
   // all of it here (js/audio/panel.js). Rain is SFX (same bus as the engine) and
   // must not hiss over a frozen race; both starts are no-ops when already playing.
@@ -8910,7 +8911,7 @@ function setPaused(p, why) {
 }
 els.pausebtn.onclick = () => setPaused(true);
 // SKIP TO RESULTS: the player is home and the solo field is still finishing (RaceControl.finishDelay waits for it).
-const postFinishWait = () => state === "race" && postFinish.solo && postFinish.since >= 0;
+function postFinishWait() { return state === "race" && postFinish.solo && postFinish.since >= 0; }
 function skipToResults() { if (!postFinishWait()) return false; resultT = 0; endRace(); return true; }
 $("pm-skip-results").onclick = () => skipToResults();
 addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.repeat && !paused && postFinishWait() && !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test((e.target && e.target.tagName) || "")) skipToResults(); });
@@ -8950,7 +8951,7 @@ const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false);
 $("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); startRace(); };
-$("pm-quit").onclick = () => { skipToResults(); quitToMenu(); };   // a finished player's result is settled before the session is dropped
+$("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 
 platformSession.paintBuild();
