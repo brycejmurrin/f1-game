@@ -1730,7 +1730,7 @@ return {
   gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,
   paceMult, teamStats, aiSetup,
   owned, isOwned, researchCost, research, budget, budgetUpgradeCost, upgradeBudget,
-  objective, objectiveFor, objectiveLabel, prizeFor, settleRound, scoreRound, worksCost, budgetCap,
+  objective, objectiveFor, objectiveLabel, objectiveMet, prizeFor, settleRound, scoreRound, worksCost, budgetCap,
   OBJ_CHOICES, objectiveChoices, objectivePick, chooseObjective, objectiveLocked, markWeekendStarted,
   driverStandings, teamStandings, rollover, offers, acceptOffer, marketValue, offerBar,
   round, roundsTotal, seasonDone, trackIndex, tallyOf,

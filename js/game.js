@@ -8259,12 +8259,12 @@ function tickBody(now) {
     lastFrame = Math.max(now, performance.now());
     return;
   }
-  if (paused && !netPlay.active()) {
+  if ((paused || UiExperience.resumeHolding(dt)) && !netPlay.active()) {   // …or the solo RESUME countdown (js/ui/experience.js) still runs
     director.tick(0);   // holds its shot; a camera picked in the pause menu still releases it
     // Nothing downstream reads the pad's edge latches while we are parked here,
     // so drop them rather than let a pause-menu button-mash queue up and fire
-    // in one burst on the first frame after RESUME (see Input.clearEdges).
-    Input.clearEdges();
+    // in one burst on the first frame after RESUME (see Input.clearEdges). Kept through the countdown: RECOVER CAR's request waits it out.
+    if (paused) Input.clearEdges();
     // LIGHTING / CAMERA / FLYBY tuner live preview: keep RENDERING (physics
     // stays paused) while any of the three panels is open so every slider
     // change shows on the held frame — a camera angle is unjudgeable on a
@@ -8280,7 +8280,7 @@ function tickBody(now) {
     // state in which it should still be flying.
     // SETTINGS open (SAVE SCREENSHOT / GFX toggles) also needs a live present — headed GLX has no preserved buffer.
     if (setupPreviewOn || replayBuf.isScrubbing() || ((state === "race" || state === "count") &&
-        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode || !els.pmsettings.hidden))) {
+        (!paused || !els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode || !els.pmsettings.hidden))) {
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it
@@ -8886,7 +8886,7 @@ function setPaused(p, why) {
   if (!p && garageReturn === "pit" && !$("carsetup").hidden) { els.pausemenu.hidden = true; return; }
   if (paused !== !!p) Log.info("game", "Race " + (p ? "paused" : "resumed") + " why=" + (why || "button") + " state=" + state + " raceT=" + raceT.toFixed(1));
   paused = p; GameAudio.resetReplayScrub(); replayBuf.onPause(!!p); // REPLAY overlay while paused
-  if (!netPlay.active()) { if (p) dropRaceWake(); else holdRaceWake(); }   // a paused screen may sleep; a networked race runs on under the card
+  if (!netPlay.active()) { if (p) dropRaceWake(); else holdRaceWake(); UiExperience.resumeArm(G, !p && why !== "restart" && state === "race" && !realRace.isWatch()); }   // a paused screen may sleep; a networked race runs on under the card, and never holds for a resume countdown
   if (!p) {
     closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
     // closeSettings disarms key/pad slots AND the wheel wizard (beginAxisCapture

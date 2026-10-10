@@ -273,7 +273,7 @@ test("the flyby editor keeps the world rendering while it is open", () => {
   // player kept looking at the race they paused out of. Source-level: the gate
   // is inside tickBody's paused branch, module-scope in the game.js IIFE.
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  const i = game.indexOf("if (paused && !netPlay.active())");
+  const i = game.indexOf("if ((paused || UiExperience.resumeHolding(dt)) && !netPlay.active())");
   assert.ok(i > 0, "tickBody still parks on a paused frame");
   const branch = game.slice(i, i + 2400);
   const gate = branch.match(/if \(setupPreviewOn \|\| (?:replayBuf\.isScrubbing\(\) \|\| )?\(\(state === "race" \|\| state === "count"\) &&[\s\S]{0,200}?\) \{/);
