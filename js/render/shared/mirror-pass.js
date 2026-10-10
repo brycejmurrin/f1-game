@@ -444,9 +444,23 @@ const MirrorPass = (function () {
         }
       } catch (_) { finishPreparation(job, false); }   // an optimisation cannot strand race entry
     }
+    // A PHONE picks its rung from what the governor MEASURED (autoTier: crash
+    // floor + evidence), floored at lite. tier() folds in the GRAPHICS preset,
+    // and on a phone that preset is not a statement about the mirror: MEDIUM is
+    // every phone's default (userTier 2 put a phone measured at tier 0 on the
+    // half-rate "low" rung), and ULTRA clears gfx.mobileTier, so the old
+    // `g.mobileTier` floor handed an ULTRA phone the desktop "full" rung. Only
+    // LOW, never a default, is still honoured as the player's ask for "min".
+    // A desktop keeps tier(): its preset is a choice (GRAPHICS: LOW pins min).
+    function qualityTier(g) {
+      if (!(g && (g.mobileTier || g.isMobile))) return PerfGov.tier();
+      const measured = PerfGov.autoTier ? PerfGov.autoTier() : PerfGov.tier();
+      const user = PerfGov.userTier ? PerfGov.userTier() : 0;
+      return Math.max(1, measured, user >= 4 ? 4 : 0);
+    }
     function quality(g) {
-      const tier = PerfGov.tier();
-      const qi = tier >= 4 ? 3 : tier >= 2 ? 2 : (g.mobileTier || tier >= 1) ? 1 : 0;
+      const tier = qualityTier(g);
+      const qi = tier >= 4 ? 3 : tier >= 2 ? 2 : tier >= 1 ? 1 : 0;
       if (qi !== _qWant) { _qWant = qi; _qHeld = 0; }
       if (qi !== _qi && (_qi < 0 || ++_qHeld >= Q_DWELL)) _qi = qi;
       _q = QUALITY[_qi];
@@ -470,6 +484,7 @@ const MirrorPass = (function () {
         if (e) e.hidden = !want;
         document.body.classList.toggle("hud-mirror-on", want);   // the radio card and flag clear it (css/hud.css)
         if (!want) { document.body.classList.toggle("hud-mirror-side", false); _sideFits = false; }
+        else _lastW = 0;   // the first look back draws: a cadence skip would composite the texture left from before it was hidden
         _measureAt = -Infinity;
       }
       const pip = pipWanted();
