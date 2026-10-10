@@ -186,7 +186,12 @@ export const MAX_OVERFLOW_SHARDS = 11;
 // their own `spill-<k>` jobs and logged with a SPILL line. Only what the spill
 // cannot carry is left in `skipped`, and that is reported as an ERROR (never
 // a quiet skip): it runs nowhere and the verdict reds on it.
-export const MAX_SPILL_SHARDS = 2;
+// PR #1289, CI 38010342804: the exact timing overlay and failing-spec hoist
+// filled 717 of 720 spill seconds, dropping props-over-road (374 s) and
+// parts-physics (70 s). One extra allowance merely displaced dev-tools;
+// four carry every candidate with two extra matrix jobs. Keep the verdict
+// strict: anything beyond this bounded allowance is still a named failure.
+export const MAX_SPILL_SHARDS = 4;
 // ROUTED DECLARED-SLOW SPECS RUN TOO (2026-10-04). A spec that declares a
 // per-test timeout >= the gate's 180 s and is merely ROUTED (rank 3) used to
 // land in overBudgetSpecs and never run on any PR or train: 41 of them on

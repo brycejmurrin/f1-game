@@ -148,13 +148,68 @@ test("a FULL overflow spills into bounded spill jobs instead of skipping (PR #12
   assert.deepEqual(off.skipped.map((s) => s.file), [dev], "without a spill leg dev-tools is skipped (the bug)");
   // Past the spill: bounded, and what is left is still NAMED in skipped (the
   // CLI/step report it as an error; the verdict reds on dropped > 0).
-  const over = plan(18).r;
+  const over = plan(20).r;
   assert.ok(secOf(over.spill) <= MAX_SPILL_SHARDS * TARGET_SHARD_SEC, `spill ${secOf(over.spill)} s is bounded`);
   assert.ok(over.skipped.length > 0, "what the spill cannot carry is named, not silently dropped");
   const placed = [...over.selected, ...over.overflow, ...over.spill, ...over.oversize, ...over.skipped].map((s) => s.file);
-  assert.equal(placed.length, 19, "every spec lands in exactly one bucket");
-  assert.equal(new Set(placed).size, 19);
-  assert.equal(MAX_SPILL_SHARDS, 2, "the spill leg stays small");
+  assert.equal(placed.length, 21, "every spec lands in exactly one bucket");
+  assert.equal(new Set(placed).size, 21);
+  assert.equal(MAX_SPILL_SHARDS, 4, "the measured spill allowance stays bounded");
+});
+
+test("a saturated wide plan runs props-over-road and parts-physics without displacing another spec (PR #1289)", () => {
+  // CI 38010342804: four oversize slots and the overflow were full, then
+  // 717 spill seconds left no room for 374 s of road props or 70 s of parts.
+  // Preserve those measured costs and ordering with real spec declarations.
+  const props = "tests/specs/props-over-road.spec.js";
+  const parts = "tests/specs/parts-physics.spec.js";
+  const oversized = [
+    ["tests/specs/career-season.spec.js", 403],
+    ["tests/specs/career.spec.js", 352],
+    ["tests/specs/hud-layout.spec.js", 1318],
+    ["tests/specs/terrain-over-road.spec.js", 638],
+  ];
+  const leftovers = [
+    ["tests/specs/ui-button-touch.spec.js", 254],
+    ["tests/specs/tracks-walls-b.spec.js", 78],
+    ["tests/specs/gamepad.spec.js", 262],
+    ["tests/specs/dev-tools.spec.js", 123],
+    [props, 374], [parts, 70],
+  ];
+  const reserved = new Set([...oversized, ...leftovers].map(([file]) => file));
+  const all = fs.readdirSync(path.join(ROOT, "tests/specs"))
+    .filter((f) => f.endsWith(".spec.js")).map((f) => "tests/specs/" + f);
+  const fillers = fit(all, 1000, { db: EMPTY, overflowShards: 0, spillShards: 0 }).selected
+    .filter((s) => !reserved.has(s.file) && !s.ownTimeoutSec && s.tests < 24)
+    .slice(0, 14).map((s) => s.file);
+  assert.equal(fillers.length, 14, "one budget filler and thirteen overflow fillers exist");
+  const [budgeted, ...overflowFillers] = fillers;
+  const rows = [[budgeted, 426], ...overflowFillers.map((f) => [f, 300]), ...oversized, ...leftovers];
+  const db = { specs: Object.fromEntries(rows.map(([file, sec]) => [file,
+    { s: [1, 2, 3].map((i) => [`2026-10-0${i}T00:00:00Z`, "llvmpipe", sec, declaredTests(file)]) }])) };
+  const affected = new Set(oversized.map(([file]) => file));
+  const rank = (file) => file === budgeted ? 0 : affected.has(file) ? 2 : 3;
+  const plan = (spillShards) => fit(rows.map(([file]) => file), DEFAULT_BUDGET_MIN,
+    { db, rank, spillShards });
+  const old = plan(2);
+  assert.equal(old.oversize.length, MAX_OVERSIZE_SHARDS, "all oversize slots are occupied");
+  assert.equal(old.spill.reduce((n, s) => n + s.sec, 0), 717);
+  assert.deepEqual(old.skipped.map((s) => s.file), [props, parts], "reproduces both CI omissions");
+  const fixed = plan(MAX_SPILL_SHARDS);
+  assert.deepEqual(fixed.skipped, [], "no candidate is displaced into the dropped list");
+  assert.deepEqual(fixed.overBudgetSpecs, []);
+  assert.deepEqual(fixed.unreachable, []);
+  const placed = [...fixed.selected, ...fixed.oversize, ...fixed.overflow, ...fixed.spill, ...fixed.overBudgetRun];
+  assert.equal(placed.length, rows.length, "every candidate has a scheduled bucket");
+  assert.equal(new Set(placed.map((s) => s.file)).size, rows.length, "every candidate is scheduled once");
+  assert.ok(fixed.spill.reduce((n, s) => n + s.sec, 0) <= MAX_SPILL_SHARDS * TARGET_SHARD_SEC);
+  const jobs = shards(fixed, db);
+  assert.equal(jobs.length, shards(old, db).length + 2, "coverage adds only two matrix jobs");
+  const propJobs = jobs.filter((j) => j.specs.split(" ").includes(props));
+  assert.deepEqual(propJobs.map((j) => j.shard), ["1/2", "2/2"], "both road-prop shards run");
+  assert.equal(jobs.filter((j) => j.specs.split(" ").includes(parts)).length, 1, "parts runs in one job");
+  assert.ok(jobs.every((j) => j.timeout <= (j.workers > 1 ? FAT_UI_SELECTED_JOB_MIN : MAX_SELECTED_JOB_MIN)),
+    "existing ordinary and fat-UI job caps stay unchanged");
 });
 
 test("overflow is bounded, and every spec lands in exactly one bucket at any allowance", () => {

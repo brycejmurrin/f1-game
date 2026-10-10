@@ -220,6 +220,62 @@ test("fitRows resets left / max-height once the clash is gone (STEERING change, 
   assert.equal(root.style.maxHeight, "", "max-height is released");
 });
 
+test("fitRows is stable across frozen rechecks and releases its fit when controls move", () => {
+  const decl = () => {
+    const d = {};
+    const camel = (k) => k.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    d.setProperty = (k, v) => { d[camel(k)] = v; };
+    d.removeProperty = (k) => { d[camel(k)] = ""; };
+    return d;
+  };
+  const mk = () => ({ hidden: true, attrs: {}, children: [], textContent: "", style: decl(),
+    setAttribute(k, v) { this.attrs[k] = String(v); }, removeAttribute(k) { delete this.attrs[k]; },
+    appendChild(c) { this.children.push(c); return c; } });
+  const root = mk();
+  root.currentCSSZoom = 1;
+  // Geometry follows the actual style and visible rows, unlike a static rect:
+  // hiding a row changes the card's natural height on the next forced fit.
+  Object.defineProperty(root, "scrollHeight", { get: () => root.children.filter((r) => !r.hidden).length * 32 });
+  Object.defineProperty(root, "clientHeight", { get: () => Math.min(root.scrollHeight, parseFloat(root.style.maxHeight) || 160) });
+  root.getBoundingClientRect = () => {
+    const left = parseFloat(root.style.left) || 50, top = 100;
+    return { left, right: left + 170, top, bottom: top + root.clientHeight, width: 170, height: root.clientHeight };
+  };
+  const brake = mk(); brake.hidden = false;
+  let brakeLeft = 60;
+  brake.getBoundingClientRect = () => ({ left: brakeLeft, right: brakeLeft + 104.5,
+    top: 180, bottom: 260, width: 104.5, height: 80 });
+  const els = { "hud-rel": root, "btn-brake": brake };
+  const doc = { body: { classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
+  const R = load({ document: doc, HudElements: { isOn: () => true } });
+  const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
+  const ahead = car("A1", 1100, 3, { rank: 1 });
+  const G = { cars: [p, ahead, car("A2", 1400, 3), car("B1", 900, 3, { rank: 3 }), car("B2", 600, 3, { rank: 4 })],
+    track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } };
+  const fit = () => ({ left: root.style.left || "", maxHeight: root.style.maxHeight || "",
+    rect: root.getBoundingClientRect(), hidden: root.children.map((r) => r.hidden) });
+  R.tick(G, p);
+  const solved = fit();
+  assert.equal(solved.left, "172.5px");
+  assert.equal(solved.maxHeight, "74.0px");
+  assert.equal(solved.hidden.filter(Boolean).length, 3, "outer occupied rows were dropped to clear the pedal");
+  for (let i = 0; i < 8; i++) {
+    R.fitRows(); // syncPhoneFit's inner retries, with no intervening HUD tick
+    assert.deepEqual(fit(), solved, "the same selected cars and controls produce the same solved fit");
+  }
+  brakeLeft = 900;
+  R.fitRows();
+  assert.equal(root.style.left, "", "a moved control releases the old horizontal offset");
+  assert.equal(root.style.maxHeight, "", "a moved control releases the old height cap");
+  assert.ok(root.children.every((r) => !r.hidden), "all occupied rows return when the card fits");
+  G.cars = [p, ahead];
+  R.tick(G, p);
+  const short = fit();
+  R.fitRows();
+  assert.deepEqual(fit(), short, "rechecking a short field does not revive empty rows");
+  assert.equal(short.hidden.filter(Boolean).length, 3);
+});
+
 test("never reads track curvature (the arc must not reach the driver)", () => {
   assert.doesNotMatch(SRC, /curvature|kCur|Tracks\./);
 });
