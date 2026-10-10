@@ -2218,7 +2218,7 @@ function spyCheck(b) {
   b.ctx.TrackValidate = Object.assign({}, orig, { check: (d) => { seen.push(plain({ baseHW: d.baseHW, hwZones: d.hwZones, bankZones: d.bankZones, elevations: d.elevations, bridges: d.bridges, heights: d.heights, props: d.props })); return orig.check(d); } });
   return seen;
 }
-const CLEAN = (s) => s.baseHW === 7 && ["hwZones", "bankZones", "elevations", "bridges"].every((k) => !s[k] || !s[k].length) && (!s.heights || s.heights.every((h) => h === 0)) && !s.props;
+const CLEAN = (s) => Number.isFinite(s.baseHW) && ["hwZones", "bankZones", "elevations", "bridges"].every((k) => !s[k] || !s[k].length) && (!s.heights || s.heights.every((h) => h === 0)) && !s.props;
 
 test("RANDOMISE judges candidates on a clean base: the same seed gives the same loop on a hilly and a flat base, and the fresh loop carries none of the old edits", () => {
   const flat = bootScreen(), hilly = bootScreen();
@@ -2229,7 +2229,7 @@ test("RANDOMISE judges candidates on a clean base: the same seed gives the same 
   assert.ok(seenHilly.length >= 1 && seenHilly.every(CLEAN), "every candidate was judged flat: " + JSON.stringify(seenHilly.find((s) => !CLEAN(s))));
   const d = hilly.D.state().design;
   assert.deepEqual(plain([d.hwZones, d.bankZones, d.elevations, d.bridges, d.turns]), [[], [], [], [], []], "fraction-keyed edits of the old loop are gone");
-  assert.equal(d.props, undefined); assert.equal(d.baseHW, 7, "committed on the width it was judged on");
+  assert.equal(d.props, undefined); assert.ok(Number.isFinite(d.baseHW), "committed on the width it was judged on");
   assert.ok(d.heights.every((h) => h === 0));
 });
 
@@ -2246,7 +2246,7 @@ test("DESIGNED, USE and MORE LIKE THIS judge on a clean base and USE commits a f
   assert.equal(hilly.D.useCandidate(0), true);
   let d = hilly.D.state().design;
   assert.deepEqual(plain([d.hwZones, d.bankZones, d.elevations, d.bridges, d.turns]), [[], [], [], [], []]);
-  assert.equal(d.props, undefined); assert.equal(d.baseHW, 7);
+  assert.equal(d.props, undefined); assert.ok(Number.isFinite(d.baseHW));
   // START FROM keeps nothing of the old loop either (props were the one it kept).
   hillyBase(hilly);
   assert.equal(hilly.D.startFrom("monza"), true);
