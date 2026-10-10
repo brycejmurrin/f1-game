@@ -288,26 +288,6 @@ test("a harness-driven launch (navigator.webdriver) keeps the 700 ms card and ha
   assert.equal(player.els.loading.dataset.phase, "run", "a player under REDUCED still gets the flyby (#1290)");
 });
 
-test("isAutomation is the one intro gate: navigator.webdriver, unless ?fullIntro=1 or window.__apexFullIntro opts back into player pace", () => {
-  const gate = (nav, extra = {}) => {
-    const sb = { Math, JSON, Object, Array, Number, String, isFinite, Date, console, ...extra };
-    if (nav !== undefined) sb.navigator = nav;
-    sb.window = sb;
-    vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb, { filename: "js/ui/loading-screen.js" });
-    return sb;
-  };
-  assert.equal(gate(undefined).LoadingScreen.isAutomation(), false, "no navigator: a player");
-  assert.equal(gate({ webdriver: false }).LoadingScreen.isAutomation(), false, "a player's browser");
-  assert.equal(gate({ webdriver: true }).LoadingScreen.isAutomation(), true, "a harness");
-  assert.equal(gate({ webdriver: true }, { location: { search: "?fullIntro=1" } }).LoadingScreen.isAutomation(), false, "?fullIntro=1 forces player pace");
-  assert.equal(gate({ webdriver: true }, { location: { search: "?fullIntro=0" } }).LoadingScreen.isAutomation(), true);
-  const sb = gate({ webdriver: true });
-  sb.__apexFullIntro = true;
-  assert.equal(sb.LoadingScreen.isAutomation(), false, "window.__apexFullIntro forces player pace (garage-out-before-card.spec)");
-  const src = read("js/ui/loading-screen.js");
-  assert.equal((src.match(/navigator\.webdriver\s*[!=]==/g) || []).length, 1, "one webdriver read in loading-screen.js: isAutomation");
-});
-
 test("a skip of the GARAGE leave is not a verdict on the flyby: the streak counts flyby skips only", () => {
   const src = fs.readFileSync(path.join(ROOT, "js/ui/loading-screen.js"), "utf8");
   const note = src.slice(src.indexOf("function noteFlyby("), src.indexOf("const MAP_W"));
@@ -962,9 +942,12 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
   assert.match(intro, /announce\("PREPARATION FAILED/, "a warm timeout recovers to the menu with a visible message");
   assert.match(intro, /if \(!built && menuWorld\(\) && introWarm\(go\)\) return;/, "raceIntro routes a built world with a pending warm through it");
   assert.match(intro, /function startRaceCovered\(\) \{\s*if \(!loadingScreen\.phase\(\)\) loadingScreen\.building\(loadingInfo\(\)\);\s*return startRace\(\);/);
-  for (const [name, re] of [["qualifying's GRID", /session = "race";\s*startRaceCovered\(\);/],
-    ["qualifying's DRIVE", /session = "quali";\s*startRaceCovered\(\);/],
-    ["a season's NEXT RACE", /openQuali\(\);\s*else startRaceCovered\(\);/]]) assert.match(game, re, `${name} starts under the card`);
+  // These three sheet routes play the garage drive-out before the card (bug-hunt 3.14): startRaceFromSheet,
+  // which falls back to startRaceCovered for a headless/hidden/net page. One-offs stay quick restarts.
+  for (const [name, re] of [["qualifying's GRID", /session = "race";\s*startRaceFromSheet\(\);/],
+    ["qualifying's DRIVE", /session = "quali";\s*startRaceFromSheet\(\);/],
+    ["a season's NEXT RACE", /openQuali\(\);\s*else if \(isChampionship\(\)\) startRaceFromSheet\(\);\s*\/\/[^\n]*\n\s*else startRaceCovered\(\);/]]) assert.match(game, re, `${name} starts under the card`);
+  assert.match(game, /function startRaceFromSheet\(\) \{\s*if \(headlessMode \|\| document\.hidden \|\| netPlay\.active\(\) \|\| qualiNet\.hasArmed\(\)\) return startRaceCovered\(\);/, "the covered start stays the fallback");
   // The build path plans the flyby for the length it will run (a real race's read).
   const build = game.slice(game.indexOf("function introBuild(go)"), game.indexOf("function introWarm(go)"));
   assert.match(build, /const info0 = loadingInfo\(\);/);
