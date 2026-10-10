@@ -460,7 +460,7 @@ const SceneryNature = (function () {
         }
       }
       const b = [a.r, a.u, a.t];
-      if (spotTaken(a.c[0], a.c[2])) return;   // reserve only the successful site
+      if (spotOccupied(a.c[0], a.c[2], false)) return;   // a pure check: the site is claimed in stands() once the trunk lands
       const reserve = () => {
         const parts = partsAt(a).map(palmFootprint);
         const minX = Math.min(...parts.map((f) => f.c[0] - f.ex)), maxX = Math.max(...parts.map((f) => f.c[0] + f.ex));
@@ -475,13 +475,19 @@ const SceneryNature = (function () {
             placedTrees.get(key).push(site);
           }
       };
-      // Past the on-track guard — this tree ships. Canopy radius scales with
-      // height, so w/d are an estimate rather than a measured bound.
-      ctx.note("tree", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.5, h, h * 0.5], { k, side, dist, initialDist });
+      // Past the on-track guard, and — once the trunk has landed — this tree ships:
+      // only then does it claim its planting spot and note itself (a trunk the pit
+      // guard refuses would otherwise block its neighbours with nothing standing).
+      // Canopy radius scales with height, so w/d are an estimate, not a measured bound.
+      const stands = () => {
+        spotTaken(a.c[0], a.c[2]);
+        ctx.note("tree", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.5, h, h * 0.5], { k, side, dist, initialDist });
+      };
       if (vr > deadAt) {   // dead/storm tree: bare trunk + a few angled branch stubs.
         const th = h * 0.7;
         out._mat = MAT.WOOD;
-        if (addCyl(out, vadd(a.c, a.u, -0.5), 0.32, th + 0.5, [0.28, 0.22, 0.16], 6, b) === false) return;   // no trunk, no crown (the pit complex keeps footings out)
+        if (addCyl(out, vadd(a.c, a.u, -0.5), 0.32, th + 0.5, [0.28, 0.22, 0.16], 6, b) === false) { out._mat = 0; return; }   // no trunk, no crown (the pit complex keeps footings out)
+        stands();
         const top = vadd(a.c, a.u, th);
         for (let i = 0; i < 3; i++) {
           const bh = hash(k * 11 + i * 3.1 + initialDist);
@@ -501,7 +507,8 @@ const SceneryNature = (function () {
       // per-instance jitter so adjacent broadleaves vary in size/shape
       const c2 = [col[0] * 0.88, col[1] * 0.9, col[2] * 0.84];   // sunlit upper foliage
       out._mat = MAT.WOOD;
-      if (addCyl(out, vadd(a.c, a.u, -0.5), 0.4, h * 0.55 + 0.5, [0.32, 0.23, 0.13], 6, b) === false) return;   // no trunk, no crown (the pit complex keeps footings out)
+      if (addCyl(out, vadd(a.c, a.u, -0.5), 0.4, h * 0.55 + 0.5, [0.32, 0.23, 0.13], 6, b) === false) { out._mat = 0; return; }   // no trunk, no crown (the pit complex keeps footings out)
+      stands();
       out._mat = MAT.FOLIAGE;
       swayOn(a.c, a.u, h * 0.22, h * 1.0);
       {
@@ -661,7 +668,7 @@ const SceneryNature = (function () {
       const vr = hash(k * 6.7 + side * 2.3 + dist), j = 0.85 + hash(k * 3.1 + side * 1.7 + dist) * 0.3;
       const lean = vr > 0.6 ? (vr - 0.6) * 1.3 * side : 0;
       out._mat = MAT.WOOD;
-      if (addCyl(out, vadd(a.c, a.u, -0.5), 0.3, h * 0.20 + 0.5, [0.34, 0.24, 0.15], 5, b) === false) return;   // no trunk, no crown (the pit complex keeps footings out)
+      if (addCyl(out, vadd(a.c, a.u, -0.5), 0.3, h * 0.20 + 0.5, [0.34, 0.24, 0.15], 5, b) === false) { out._mat = 0; return; }   // no trunk, no crown (the pit complex keeps footings out)
       out._mat = MAT.FOLIAGE;
       swayOn(a.c, a.u, h * 0.20, h * 1.1);
       addCone(out, vadd(vadd(a.c, a.u, h * 0.14), a.r, lean * 0.14), (2.1 + h * 0.06) * j, h * 0.44, col, 7, b);
@@ -730,7 +737,7 @@ const SceneryNature = (function () {
       const lobes = Math.max(2, Math.min(5, Math.round(opts.lobes || 3)));
       out._mat = MAT.WOOD;
       if (addCyl(out, vadd(a.c, a.u, -0.5), 0.22 + h * 0.012, h * 0.42 + 0.5,
-             opts.barkCol || [0.36, 0.30, 0.24], 5, b) === false) return;   // no trunk, no crown
+             opts.barkCol || [0.36, 0.30, 0.24], 5, b) === false) { out._mat = 0; return; }   // no trunk, no crown
       out._mat = MAT.FOLIAGE;
       swayOn(a.c, a.u, h * 0.40, h * 1.05);
       // Shade the lower lobes: a single flat autumn colour flattens into a blob.
@@ -782,7 +789,7 @@ const SceneryNature = (function () {
       const forkY = close(h * 0.68 + 0.35, layerY(0) - thick(0) / 2) - 0.35;   // fork top meets slab 0
       const trunkTop = close(h * 0.62, forkY - 0.35);                         // trunk meets the fork
       out._mat = MAT.WOOD;
-      if (addCyl(out, vadd(a.c, a.u, -0.5), 0.28, trunkTop + 0.5, bark, 5, b) === false) return;   // no trunk, no crown (the pit complex keeps footings out)
+      if (addCyl(out, vadd(a.c, a.u, -0.5), 0.28, trunkTop + 0.5, bark, 5, b) === false) { out._mat = 0; return; }   // no trunk, no crown (the pit complex keeps footings out)
       for (const dr of [-1, 1])                                    // the low fork
         addBox(out, vadd(vadd(a.c, a.u, forkY), a.r, dr * spread * 0.22),
                [spread * 0.44, 0.7, 0.22], bark, b);
@@ -814,7 +821,7 @@ const SceneryNature = (function () {
       const c2 = [col[0] * 0.80, col[1] * 0.84, col[2] * 0.80];
       out._mat = MAT.WOOD;
       if (addCyl(out, vadd(a.c, a.u, -0.5), 0.42, h * 0.48 + 0.5,
-             opts.trunkCol || [0.72, 0.70, 0.62], 6, b) === false) return;   // no trunk, no crown
+             opts.trunkCol || [0.72, 0.70, 0.62], 6, b) === false) { out._mat = 0; return; }   // no trunk, no crown
       out._mat = MAT.FOLIAGE;
       swayOn(a.c, a.u, h * 0.46, h * 1.1);
       // Each stage starts just inside the one below. A fixed 0.28 h step left

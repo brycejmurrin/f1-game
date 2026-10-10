@@ -191,8 +191,12 @@ test("a run that wraps the start line is not read as contained in an earlier run
 test("one tree per spot", () => {
   const src = read("js/track/scenery/nature.js");
   assert.match(src, /const spotTaken = \(x, z\)/, "nature.js must carry the planting guard");
-  assert.equal((src.match(/if \(spotTaken\(a\.c\[0\], a\.c\[2\]\)\) return;/g) || []).length, 2,
-    "both pine() and tree() must take the guard — two trees on one spot is one tree drawn twice");
+  assert.equal((src.match(/if \(spotTaken\(a\.c\[0\], a\.c\[2\]\)\) return;/g) || []).length, 1,
+    "pine() takes the guard — two trees on one spot is one tree drawn twice");
+  // tree() checks without reserving and claims the spot only once its trunk has
+  // landed (a refused trunk must not block the site; lobed-trees pins the behaviour).
+  assert.match(src, /if \(spotOccupied\(a\.c\[0\], a\.c\[2\], false\)\) return;/, "tree() checks the spot");
+  assert.equal((src.match(/^\s+stands\(\);$/gm) || []).length, 2, "dead and live tree() claim the spot after the trunk");
 });
 
 test("a facade draws no rail on its bottom face", () => {
@@ -290,4 +294,21 @@ test("transformSceneryApi along hands authored-frame k via sceneryNodeToAuthored
     "every must be wrapped the same way as along");
   assert.match(chunk, /api\.every\(m, \(kEng\) => fn\(TrackSpace\.sceneryNodeToAuthored\(def, kEng, n\)\)\)/,
     "every's callback k must be authored-frame before pine/marshalPost shift again");
+});
+
+test("tyreWall tecpro/airfence model keys carry the colours their bodies are drawn in", () => {
+  // The tecpro/airfence body is painted `cap`, its top strip `tyre`; the stack key
+  // named only `tyre` and the cap key only `cap`, so the first wall paint was
+  // reused by every later wall of the circuit (Austin red, yellow and blue walls
+  // all drew red).
+  const Tracks = buildContext();
+  const keys = (id) => [...Tracks.build(Tracks.LIST.find((d) => d.id === id)).graph.models.keys()]
+    .filter((k) => k.startsWith("tyre-"));
+  for (const [id, style, caps] of [["cota", "tecpro", 3], ["abudhabi", "airfence", 3], ["qatar", "airfence", 2]]) {
+    const k = keys(id).filter((x) => x.includes(`|${style}|`));
+    const stacks = k.filter((x) => x.startsWith("tyre-stack|")), tops = k.filter((x) => x.startsWith("tyre-cap|"));
+    assert.equal(stacks.length, caps, `${id}: one ${style} body per cap colour: ${stacks.join(" ; ")}`);
+    assert.equal(tops.length, 1, `${id}: one shared top strip (one tyre colour): ${tops.join(" ; ")}`);
+    assert.ok(stacks.every((x) => x.split("|").length === 4), `${id}: the body key names tyre AND cap`);
+  }
 });
