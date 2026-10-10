@@ -18,6 +18,16 @@ Re-measured on the merged tree before landing: #1366 (Phase 0 top-band fix) merg
 first and grew the pair, so the ceilings start at **1345 / 2281** (hud.js) and
 **1926 / 2120** (hud.css), ship `325100c05`.
 
+2026-10-10 ship tip catch-up (#1416): after #1386 / #1387 / #1383 / #1395 landed
+HUD features without ceiling snaps, ship `33ea003c1` measured **OVER**
+(`hud.js` lines 2377 > 2281, codeLines 1393 > 1345; `hud.css` lines 2150 > 2120,
+codeLines 1953 > 1926) — Structural guards tooling-A red on the deploy branch
+itself (run `38062352465`). Snap ceilings to the merged tree:
+`hud.js` **1393 / 2377**, `hud.css` **1953 / 2150**; `game.js` lowered slightly
+(4976→4974 codeLines, 9195→9186 lines). Past the 40-line absorb on purpose:
+this is the net-lines catch-up the audit required, not new HUD code in #1416
+(tools-only: hud-mock + ui-mock-core).
+
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
