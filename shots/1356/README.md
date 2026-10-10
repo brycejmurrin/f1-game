@@ -34,3 +34,6 @@ Caveats: (1) designer TEST DRIVE plays no garage-out/flyby (designer.js:2200 cal
 | raceagain-1-straight-to-grid.png | RACE AGAIN: straight to the grid, no garage or card (phases seen: count only) | PASS |
 
 Not captured: DAILY flyby and quali TO THE GRID card (the screenshot landed after the phase had already moved on, so those frames were discarded rather than mislabelled); both PASS in the phase-timeline probe.
+
+## Correction on the "flyby" frames (gp-3, tt-3, quali-3, hubjumpin-3)
+Those frames show the card in loading phase `run` (the flyby phase) but the 3D scene behind the card is still the blurred garage, not a moving circuit flyover. Retakes at run+8/13 s (TT, quali) looked the same. Under this container's software GL the canvas blit may not present the flyby world, so these shots prove the PHASE ORDER (garage -> run -> grid), not a rendered flyby. Only watch-1-card-no-garage.png shows real circuit scenery behind the card. A rendered flyby needs a real-GPU capture.
