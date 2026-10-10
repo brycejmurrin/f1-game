@@ -746,7 +746,7 @@ async function mountWith({ xr, ls = {} }) {
     document: { body: {} },
     localStorage: { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) },
     navigator: xr === undefined ? {} : { xr },
-    ApexRoster: { LAZY_XR: ["js/xr/x.js"], LAZY_XR_EDGES: [] },
+    ApexRoster: { LAZY_XR: ["js/xr/xr-plan.js"], LAZY_XR_EDGES: [] },
     ScriptLoader: { create: () => ({ load: async (files) => { loads.push(files.slice()); return true; }, }) },
     setTimeout: (fn) => setImmediate(fn),   // the probe's cap fires on the next turn
     clearTimeout() {},
