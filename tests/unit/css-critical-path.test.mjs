@@ -115,8 +115,9 @@ test("blocking and preload byte census stay under the post-cut ceilings", () => 
   // grid geometry in css/menus.css adds ~3.6 KiB so experience.css cannot move
   // the title column on first paint. Compact-wide under-brand #menu-secondary
   // nest (2026-10-07 UI Fit) adds ~2 KiB more in the same blocking sheet.
-  assert.ok(blocking < 218000, `blocking CSS is ${blocking} B; want < 218000`);
-  assert.ok(preload < 218000, `preload CSS is ${preload} B; want < 218000`);
+  // B1 (2026-10-10): CAREER skew pad + under-brand flex-start (~140 B).
+  assert.ok(blocking < 218500, `blocking CSS is ${blocking} B; want < 218500`);
+  assert.ok(preload < 218500, `preload CSS is ${preload} B; want < 218500`);
   const settingsBytes = SETTINGS_FOUC.reduce((n, f) => n + fs.statSync(path.join(ROOT, f)).size, 0);
   assert.ok(settingsBytes > 70000, "the dropped preload still exists as print→all bytes");
 });
