@@ -420,7 +420,7 @@ function replayContactFixture(count = 2) {
   assert.equal(replay.start({ script: { drivers }, traces, seats: new Map(cars.map((c, i) => [c, drivers[i]])), follow: "C0" }), true);
   replay.seek(0.1);
   const create = (owner) => vm.runInContext("Collide", ctx).create(G, () => { effects++; }, owner);
-  return { G, replay, create, counters: () => ({ incidents, debris, effects, writebacks }) };
+  return { ctx, G, replay, create, counters: () => ({ incidents, debris, effects, writebacks }) };
 }
 
 test("replay-owned overlapping and pit-lane poses survive both collision solver paths unchanged", () => {
@@ -461,6 +461,23 @@ test("ordinary cars still exchange speed, separate and respect barriers with no 
   assert.ok(b.prog - a.prog > gap, "ordinary overlapping cars still separate");
   assert.equal(a.x, 2); assert.equal(b.x, 2);
   assert.ok(f.counters().writebacks > 0, "ordinary corrected poses still reach world coordinates");
+});
+
+// THE SWEEP READS EACH CAR'S MOTION ONCE (hunt3 5-F4): the pair loop did a
+// WeakMap get for all 231 pairs of a full field before its arc reject threw
+// almost every one away. One snapshot per car per step, same visiting order.
+test("the swept-contact pass looks each car's motion up once a step, not once a pair", () => {
+  const f = replayContactFixture(22); f.replay.stop();
+  const solver = f.create();
+  f.G.cars.forEach((c, i) => Object.assign(c, { prog: 10 + i * 44, s: 10 + i * 44, x: 0, speed: 20, yawVis: 0 }));
+  solver.resolveCollisions(f.G.cars, DT);   // remember every car's pose
+  for (const c of f.G.cars) { c.prog += c.speed * DT; c.s += c.speed * DT; }
+  f.G.raceT += DT;
+  f.ctx.__gets = 0;
+  vm.runInContext("globalThis.__get = WeakMap.prototype.get; WeakMap.prototype.get = function (k) { __gets++; return __get.call(this, k); };", f.ctx);
+  try { solver.resolveCollisions(f.G.cars, DT); }
+  finally { vm.runInContext("WeakMap.prototype.get = __get;", f.ctx); }
+  assert.ok(f.ctx.__gets < 60, `${f.ctx.__gets} WeakMap lookups for one 22-car step`);
 });
 
 test("paused WATCH keeps overlapping traces and ignores manual recover in the real game update", async () => {

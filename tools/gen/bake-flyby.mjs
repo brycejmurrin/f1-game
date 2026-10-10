@@ -38,6 +38,10 @@ export const AT_KINDS = ["start", "pole", "grid", "slot", "corner", "centre", "l
  *  normalises internally, which is exactly why this is checked HERE: a list
  *  whose durations sum to 1.6 plays correctly and reads as nonsense forever. */
 export const DUR_TOLERANCE = 0.01;
+/** The FOV slider's range, mirrored from FOV in js/camera/flyby-panel.js (the
+ *  parity test compares the two): the flyby skips the race camera's FOV cap,
+ *  so a fov outside it reached the projection as-is (fovY 0 at fov 0). */
+export const FOV = { min: 15, max: 90 };
 
 /** Every reason FlybySeq.solve() could not PLAY this list. Empty == good.
  *  Mirrors shotErrors() in js/camera/flyby-panel.js: the structural half, which
@@ -60,6 +64,7 @@ export function shotErrors(list) {
     }
     if (!Array.isArray(s.fov) || s.fov.length !== 2 ||
         !s.fov.every((n) => typeof n === "number" && isFinite(n))) bad.push(`${at} fov must be [from, to] numbers`);
+    else if (!s.fov.every((n) => n >= FOV.min && n <= FOV.max)) bad.push(`${at} fov must be from ${FOV.min} to ${FOV.max}, not ${JSON.stringify(s.fov)}`);
   });
   return bad;
 }
