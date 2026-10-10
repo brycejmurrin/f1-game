@@ -3,7 +3,7 @@ const DataTelemetryPlayer = (function () {
   "use strict";
 
   function create({ el, cssColor }, renderer) {
-    const { clamp, laneRole, summaryTime, summaryValue, dcode, drsOpen, sampleAt,
+    const { clamp, laneRole, summaryTime, signed, summaryValue, dcode, drsOpen, sampleAt,
             PADL, PADR, distAtT, timeAtDist } = DataTelemetryModel;
 
     function paintFrame(view) {
@@ -174,7 +174,7 @@ const DataTelemetryPlayer = (function () {
       if (g.delta && view.compare) {
         const dP = distAtT(view.primary.cum, t);
         const delta = timeAtDist(view.compare.cum, dP) - t;   // >0: compare is behind
-        g.delta.textContent = (delta >= 0 ? "+" : "") + delta.toFixed(2) + "s";
+        g.delta.textContent = signed(delta, 2) + "s";
         g.delta.classList.toggle("dh-pos", delta > 0.02);
         g.delta.classList.toggle("dh-neg", delta < -0.02);
       }
@@ -187,7 +187,7 @@ const DataTelemetryPlayer = (function () {
           cell.spd.textContent = (cc && cc.speed !== null) ? Math.round(cc.speed) : "—";
           if (cell.ref) return;
           const dl = timeAtDist(lane.cum, dRef) - t;   // >0: this lane is behind the ref
-          cell.dl.textContent = (dl >= 0 ? "+" : "") + dl.toFixed(2);
+          cell.dl.textContent = signed(dl, 2);
           cell.dl.classList.toggle("dh-pos", dl > 0.02);
           cell.dl.classList.toggle("dh-neg", dl < -0.02);
         });

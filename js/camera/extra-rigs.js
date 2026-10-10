@@ -181,8 +181,12 @@ const ExtraRigs = (function () {
     _idealTgt[1] = lerp(cy + 0.8, _smpB.p[1] + 0.9 + bankDy, lead);
     _idealTgt[2] = lerp(aimCarZ, _smpB.p[2] + _smpB.r[2] * x * 0.3, lead);
     const dt = (extra && extra.dt) || 0;
+    // Backward-Euler blend lam*dt/(1+lam*dt), not 1-exp(-lam*dt): the filter runs on per-frame
+    // samples of a moving ideal, and this form keeps its steady-state lag at v/lam at ANY frame
+    // rate (the exp form lags v*dt*(1-a)/a, ~0.75 m shorter at 144 Hz than at 30 Hz at 60 m/s).
+    const lamD = (comfort ? 3.2 : 9) * dt;
     const a = dt > 0
-      ? (1 - Math.exp(-(comfort ? 3.2 : 9) * dt))
+      ? lamD / (1 + lamD)
       : (comfort ? DRONE_SMOOTH_COMFORT : DRONE_SMOOTH);
     if (!_droneLive || (extra && extra.snap)) {
       _droneEye[0] = _idealEye[0]; _droneEye[1] = _idealEye[1]; _droneEye[2] = _idealEye[2];
@@ -210,6 +214,9 @@ const ExtraRigs = (function () {
   function reset(mode) {
     if (!mode || mode === "drone") _droneLive = false;
   }
+
+  /** A new session: drop the pit auto-cut bookkeeping (quitting mid auto-cut left it armed). */
+  function resetAuto() { _autoOn = false; _autoPrev = -1; _wasInPit = false; }
 
   function inPit(c) {
     return !!(c && c.pitState && c.pitState !== "none");
@@ -272,7 +279,7 @@ const ExtraRigs = (function () {
   }
 
   return {
-    solve, reset, pickRival, tickPitAuto, pitCamAuto, localBattles,
+    solve, reset, resetAuto, pickRival, tickPitAuto, pitCamAuto, localBattles,
     BATTLE_S, FALLBACK_S, DRONE_BACK, DRONE_UP,
   };
 })();

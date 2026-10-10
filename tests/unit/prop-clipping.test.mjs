@@ -144,6 +144,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // 2026-10-04: Spa retains the shared elevation/registration cap of 7.
 // All seven severe locations match shared default 4f71c2b; the woodland
 // pass reduces total >=0.5m spots from 13 to 12 without adding a severe spot.
+// 2026-10-10 round-2 bug hunt (#1309): sepang 2 -> 1 and bahrain 1 -> 0 — the hwZone
+// re-key (Sepang's final hairpin) and the hairpin fold clamp moved the road off
+// two props that used to clip it. Lowered to the measured tree.
 
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "clip-baseline.json"), "utf8"),

@@ -55,10 +55,10 @@
     hwZones: [
       { s0: 0.230, s1: 0.275, hw: 6.3, ease: 0.012 },
       { s0: 0.540, s1: 0.585, hw: 6.2, ease: 0.012 },
-      { s0: 0.860, s1: 0.905, hw: 6.3, ease: 0.012 },
+      { s0: 0.9281, s1: 0.9625, hw: 6.3, ease: 0.012 },  // T1 Crowthorne (source-frame index; racing arc 0.105-0.150)
     ],
     bankZones: [
-      { frac: 0.075, angleDeg: 4.0, widthM: 120 },   // Crowthorne
+      { turn: 1, angleDeg: 4.0, widthM: 120 },   // Crowthorne; re-seated frac 0.075 (was 137 m off any apex)
       { frac: 0.400, angleDeg: 3.5, widthM: 130 },
       { frac: 0.700, angleDeg: 4.5, widthM: 140 },
     ],

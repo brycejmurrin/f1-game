@@ -21,14 +21,37 @@ const GhostShare = (function () {
   // their time binds to the trace. Not a signature — a casual-edit guard for
   // an in-memory guest rival with no leaderboard behind it.
   const TIME_SLACK = 0.25;
-  function validGhost(g) {
+  // THE SAMPLES ARE BOUNDED TOO. `h` is an unkeyed hash the sender computes, so a
+  // crafted link carried any finite x or s, and the guest is drawn at
+  // `smp.p + r * g.x`. The bounds are what a recorded lap can hold (ghost.js:
+  // 600 s at 20 Hz): lateral |x| within half-width + run-off, s within three
+  // laps of the circuit (60 km where the circuit declares no length).
+  const MAX_X = 60, MAX_T = 600, MAX_SAMPLES = 600 * 20, MAX_S = 60000;
+  function validGhost(g, maxS) {
     if (!g || !(g.time > 0) || !Number.isFinite(g.time)) return false;
     const t = g.t, s = g.s, x = g.x;
     if (!Array.isArray(t) || !Array.isArray(s) || !Array.isArray(x) ||
         s.length < MIN_SAMPLES || t.length !== s.length || x.length !== s.length) return false;
-    if (!(Math.abs(g.time - t[t.length - 1]) <= TIME_SLACK)) return false;
+    if (s.length > MAX_SAMPLES || !(Math.abs(g.time - t[t.length - 1]) <= TIME_SLACK)) return false;
+    const sMax = maxS > 0 ? maxS : MAX_S;
     return t.every((v, i) => Number.isFinite(v) && Number.isFinite(s[i]) && Number.isFinite(x[i]) &&
-      v >= 0 && (i === 0 || (v >= t[i - 1] && s[i] >= s[i - 1])));
+      v >= 0 && v <= MAX_T && s[i] >= 0 && s[i] <= sMax && Math.abs(x[i]) <= MAX_X &&
+      (i === 0 || (v >= t[i - 1] && s[i] >= s[i - 1])));
+  }
+  // Only the keys session-records writes (medal, pole, context, pace, difficulty,
+  // weather) survive, and only as a short string or a finite number: the meta
+  // reaches the results sheet and a stored ghost. A fresh object, so a
+  // `__proto__` key in the JSON can never become this one's prototype.
+  const META_KEYS = ["medal", "pole", "context", "pace", "difficulty", "weather"];
+  function cleanMeta(m) {
+    if (!m || typeof m !== "object" || Array.isArray(m)) return null;
+    const out = {};
+    for (const k of META_KEYS) {
+      if (!Object.prototype.hasOwnProperty.call(m, k)) continue;
+      const v = m[k];
+      if ((typeof v === "string" && v.length <= 32) || (typeof v === "number" && Number.isFinite(v))) out[k] = v;
+    }
+    return Object.keys(out).length ? out : null;
   }
   // FNV-1a (32-bit) over the JSON of [time, t, s, x]: JSON numbers round-trip
   // exactly, so the receiver hashes the same text the sender did.
@@ -49,7 +72,7 @@ const GhostShare = (function () {
       context: typeof o.context === "string" && o.context ? o.context : null,
       day: typeof o.day === "string" && o.day ? o.day : null,
       time: ghost.time,
-      meta: ghost.meta && typeof ghost.meta === "object" && !Array.isArray(ghost.meta) ? ghost.meta : null,
+      meta: cleanMeta(ghost.meta),
       t: ghost.t,
       s: ghost.s,
       x: ghost.x,
@@ -176,6 +199,13 @@ const GhostShare = (function () {
       Tracks.LIST.some((track) => track && track.id === id);
   }
 
+  // Three laps of the circuit's declared length, or 0 (= the generic ceiling).
+  function maxArc(id) {
+    const def = typeof Tracks !== "undefined" && Array.isArray(Tracks.LIST)
+      ? Tracks.LIST.find((track) => track && track.id === id) : null;
+    return def && def.lengthKm > 0 ? Math.min(MAX_S, def.lengthKm * 3000) : 0;
+  }
+
   async function decode(value) {
     // The DOWNLOAD's own text (a pasted .apexghost.json) is a ghost too: before
     // this, the file the too-large path offered could be imported nowhere.
@@ -197,17 +227,18 @@ const GhostShare = (function () {
     } catch (_) { return CORRUPT; }
   }
   function fromBody(body) {
-    if (!body || body.v !== 1 || body.kind !== "ghost" || !validGhost(body) ||
-        typeof body.track !== "string" || !body.track) return CORRUPT;
+    if (!body || body.v !== 1 || body.kind !== "ghost" || typeof body.track !== "string" || !body.track ||
+        !validGhost(body, maxArc(body.track))) return CORRUPT;
     if (body.h !== undefined && body.h !== traceHash(body)) return CORRUPT;   // time or trace edited after export
     if (!knownTrack(body.track)) return { ok: false, reason: "unknown-track" };
+    const meta = cleanMeta(body.meta);
     return {
       ok: true,
-      ghost: { time: body.time, t: body.t, s: body.s, x: body.x, meta: body.meta || undefined },
+      ghost: { time: body.time, t: body.t, s: body.s, x: body.x, meta: meta || undefined },
       track: body.track,
       context: typeof body.context === "string" ? body.context : null,
       day: typeof body.day === "string" ? body.day : null,
-      meta: body.meta && typeof body.meta === "object" ? body.meta : null,
+      meta,
     };
   }
 
@@ -219,7 +250,7 @@ const GhostShare = (function () {
       track: decoded.track,
       context: typeof decoded.context === "string" ? decoded.context : null,
       day: typeof decoded.day === "string" ? decoded.day : null,
-      meta: decoded.meta && typeof decoded.meta === "object" ? decoded.meta : null,
+      meta: cleanMeta(decoded.meta),
     };
     return true;
   }

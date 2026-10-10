@@ -33,6 +33,7 @@
       palette: { shell: [0.16, 0.30, 0.40], roof: [0.80, 0.88, 0.94] },
     },
     lengthKm: 4.9,
+    gpLaps: 62,   // real race distance (4.940 km); lengthKm's 1 dp derives 63
     tyreSeverity: 1.15,  // Marina Bay: thermal stress is the main deg cause despite smooth asphalt (Pirelli)
     baseHW: 6,
     street: true,
@@ -107,11 +108,11 @@
       { s: 0.9000, halfM: 120, rise: -2.5 },
       { s: 0.3800, halfM: 120, rise: 2.5 },
     ],
-    hwZones: [
-      { s0: 0.5890, s1: 0.6642, hw: 5.2, ease: 0.012 },  // arc 0.098-0.152 T1-T3
-      { s0: 0.1020, s1: 0.1774, hw: 5.1, ease: 0.012 },  // arc 0.650-0.685 bridge link
-      { s0: 0.2341, s1: 0.2901, hw: 5.3, ease: 0.012 },  // arc 0.808-0.838 Esplanade
-      { s0: 0.3236, s1: 0.4067, hw: 5.3, ease: 0.012 },  // arc 0.925-0.955 final corners
+    hwZones: [   // s0/s1 are CONTROL-INDEX fractions (def.js applyHwZones); "racing arc" = where the narrowed nodes really sit
+      { s0: 0.5890, s1: 0.6642, hw: 5.2, ease: 0.012 },  // racing arc 0.378-0.429 T1-T3
+      { s0: 0.1020, s1: 0.1774, hw: 5.1, ease: 0.012 },  // racing arc 0.846-0.874 bridge link
+      { s0: 0.2341, s1: 0.2901, hw: 5.3, ease: 0.012 },  // racing arc 0.692-0.716 Esplanade
+      { s0: 0.3236, s1: 0.4067, hw: 5.3, ease: 0.012 },  // racing arc 0.578-0.601 final corners
     ],
     // Flat city tarmac — crown only, 2.5-3°. Nothing here is banked.
     bankZones: [
@@ -131,7 +132,7 @@
     // are RACING-lap fractions, which the header says are never fmap'd, so they
     // had to move by hand or all 19 apexes would sit on the wrong corners. The
     // physical apex positions are unchanged — only which corner you meet first.
-    sectors: [0.34, 0.68],
+    sectors: [0.331, 0.68],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.34, 0.68])
     turns: [0.0629, 0.0809, 0.0914, 0.1739, 0.1814, 0.3409, 0.3839, 0.4259, 0.5179, 0.5414, 0.5484, 0.5574, 0.5829, 0.6004, 0.7104, 0.8579, 0.8714, 0.9299, 0.9499],
     barrier: { a: [0.92, 0.93, 0.96], b: [0.10, 0.34, 0.74], c: [0.90, 0.12, 0.18], night: [0.52, 0.54, 0.58], tyre: [0.10, 0.34, 0.74] },  // white/blue + flag red; night = floodlit grey concrete (the near-black navy vanished against the road at night)
     furniture: { tree: "palm",  fol: [0.16, 0.46, 0.20], lamp: "arm",   lc: [0.85, 0.95, 1.0] },

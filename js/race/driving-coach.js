@@ -118,6 +118,8 @@ const DrivingCoach = (function () {
       if (G.cautionLevel() > 0 || (c.pitState && c.pitState !== "none")) { lastMark = null; segs = []; return; }
       for (const b of bs) {
         if (!crossed(a, s, b.s)) continue;
+        // The reference is always the player's OWN personal-best Ghost, never a loaded
+        // rival (GhostShare guest) that the ghost car / DELTA chip may be racing.
         const g = Ghost.timeAt(b.s), now = { turn: b.turn, t: G.raceT, g };
         if (lastMark && lastMark.g != null && g != null && now.t > lastMark.t) {
           // The ghost's clock restarts at the line, so a segment spanning it
