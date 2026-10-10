@@ -418,7 +418,9 @@ body.hud-prof-broadcast #announce { top: max(calc(14svh / var(--hud-z)), calc(va
   left: calc(var(--lcol-x-limits, calc(10px * var(--hud-z) + var(--sal))) / var(--hud-z));
 }
 
-:root[data-sectors-left] body:not(.desktop) #hud-sectors {
+/* Must not write `:root … body` — source-integrity forbids body/html as a
+   descendant. fitHud only sets data-sectors-left off desktop anyway. */
+:root[data-sectors-left] #hud-sectors {
   /* TOUCH LANDSCAPE: S1-S3 LEAD THE LEFT COLUMN (js/ui/hud.js fitHud sets the attribute,
      placeLeftColumn the slot, in SCREEN px), as ONE ROW the width of the map, not a three-row plate
      beside BOOST. The fallback is the column's first paint: under the map / gap strip. */
@@ -430,7 +432,7 @@ body.hud-prof-broadcast #announce { top: max(calc(14svh / var(--hud-z)), calc(va
   line-height: 1.25;
   padding: calc(var(--gap) * 0.25) calc(var(--gap) * 0.67);
 }
-:root[data-sectors-left] body:not(.desktop) #hud-sectors:empty { display: none; }
+:root[data-sectors-left] #hud-sectors:empty { display: none; }
 
 /* ---------- LAYOUT (metrics) ----------
    AUTO keeps every widget painted and lets fitHud scale / stack / drop the gap
@@ -1227,10 +1229,11 @@ body[data-radio-slot="collapsed"] #announce {
   transform: translateX(var(--announce-lane-shift, -50%));
 }
 /* …in the rows the lane was cleared for, under the map's bottom too (--announce-lane-y; HUD audit
-   2026-10-10: the card painted over the minimap). The doubled id outranks the density / caution
-   tops; unset, it falls back to the flag's slot (--flag-slot-top). */
-body[data-radio-slot="lane"] #announce#announce,
-body[data-radio-slot="collapsed"] #announce#announce { top: calc(var(--announce-lane-y, calc(var(--flag-slot-top) * var(--hud-z))) / var(--hud-z)); }
+   2026-10-10: the card painted over the minimap). Attribute repeated for specificity (outranks the
+   density / caution tops) — source-integrity forbids #announce#announce. Unset, falls back to
+   --flag-slot-top. */
+body[data-radio-slot="lane"][data-radio-slot="lane"] #announce,
+body[data-radio-slot="collapsed"][data-radio-slot="collapsed"] #announce { top: calc(var(--announce-lane-y, calc(var(--flag-slot-top) * var(--hud-z))) / var(--hud-z)); }
 /* The plate. Italic is the racing number's own convention, not emphasis. */
 #announce-num {
   flex: 0 0 auto;
@@ -1900,7 +1903,7 @@ body[data-helmet-cam] #hud::before {
   color: var(--text);
 }
 #hud-damage[hidden] { display: none; }
-:root[data-sectors-left] body:not(.desktop) #hud-damage {
+:root[data-sectors-left] #hud-damage {
   /* With S1-S3 and LIMITS in the left column (js/ui/hud.js placeLeftColumn), DAMAGE sits beside LIMITS. */
   right: auto;
   left: calc(var(--lcol-x-damage, calc(10px * var(--hud-z) + var(--sal))) / var(--hud-z));

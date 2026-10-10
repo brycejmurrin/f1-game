@@ -720,7 +720,15 @@ function placeRadio(root, bcast, list, tick) {
   if (annPaint && !annPaint.hidden && annPaint.getBoundingClientRect) {
     const a = annPaint.getBoundingClientRect();
     const hit = (id) => { const o = obs(id); return !!(o && _hudRectsHit(a, o.rect)); };
-    if (hit("sectors") || hit("tower") || hit("map")) {
+    // Bottom instruments share the hanging lane's rows on a short landscape
+    // phone: the lane only clips LEFT/RIGHT inside its 96 px band, so a tall
+    // card still paints through them (hud-mock 734×343 chase: announce+energy /
+    // announce+aero). obsCollect names most of the bottom cluster by element
+    // id (`hud-energy`, `hud-aero`, …); gearbox/speed are the short aliases.
+    if (hit("sectors") || hit("tower") || hit("map")
+        || hit("gearbox") || hit("speed")
+        || hit("hud-energy") || hit("hud-aero") || hit("hud-tyre")
+        || hit("hud-ot") || hit("hud-bb") || hit("hud-pit")) {
       const at = lane || radioLane(root, list);
       writeRadio(root, "collapsed", null, null, { x: at.x, y: at.y, w: 0 });
       _radioPaintSeq = _fitSeq;
@@ -990,9 +998,12 @@ function placeLeftColumn(root, scale) {
       // DAMAGE rides beside the chip above it first (one warnings row); everything else takes the main column first.
       // RELATIVE trims its own rows above the left dock (HudRelative.fitRows): for it the left-dock
       // controls do not count, anything else does (the tyre chip sends it beside the stack instead).
+      // In data-sectors-left the left column is already the warnings stack — a RELATIVE
+      // sub-column beside DAMAGE floats mid-track on a short phone (hud-mock 734×343
+      // chase all-on: damage+rel). Drop it rather than open a second column there.
       if (p.id === "damage") at = beside();
       if (!at && free(main, p.id === "rel")) at = { y: y1, x: null, r: main };
-      if (!at) at = beside();
+      if (!at && !(p.id === "rel" && secLeft)) at = beside();
       if (!at) { out[p.id] = { y: y1, drop: true }; drops += p.cost; continue; }
       out[p.id] = { y: at.y, x: at.x };
       placed.push(at.r);
@@ -2590,6 +2601,20 @@ function invalidateFit() {
   const root = document.documentElement;
   hStyle(root, "--hud-fit-stamp", "");
   _fitStamped = false;
+  // Re-stack BOTH columns, then the radio. Showing LIMITS / DAMAGE / an opt-in
+  // (hud-mock, HudElements, a live strike) used to call only placeRadio here —
+  // the side columns kept the previous tick's --rcol-y-* / --lcol-y-* and the
+  // new chip painted over its neighbour (desktop limits+damage; phone
+  // damage+inputs before the band allocator). Under a held rAF (hud-mock) the
+  // next fitHud tick never runs, so this path has to place, not just dirty.
+  syncComputedRootVars();
+  const scale = +root.style.getPropertyValue("--hud-scale") || _cssScale;
+  obsCollect();
+  placeRightColumn(root, scale);
+  if (els.hudSectors) void els.hudSectors.offsetHeight;
+  obsCollect();
+  placeLeftColumn(root, scale);
+  if (els.hudSectors) void els.hudSectors.offsetHeight;
   // A full placement: the resolver's own painted check runs last, so a collapse it finds holds.
   placeRadio(root, document.body.classList.contains("hud-prof-broadcast"));
   mirrorClear(root);

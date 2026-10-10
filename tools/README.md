@@ -57,6 +57,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/track-build-vm.cjs** | The shared "run the REAL track build headless in a Node VM" harness the audits and VM tests load the engine through. | agent-view |
 | **lib/track-shot-survey.mjs** | Shot-survey plans: presets, resume filters, findings/progress JSON, HTML galleries (apex-extras / shot-survey). | survey-track |
 | **lib/tumftm.mjs** | Pure TUMFTM racetrack-database CSV parse/decimate → track-designer design + LGPL attribution envelope. | new-track |
+| **lib/ui-mock-core.mjs** | Shared core for hud-mock / menu-mock: held rAF, labelled boxes, CDP capture, contact sheet, cell cache. | — |
 | **lib/webgpu-chrome-args.cjs** | Single source for WebGPU Chromium flags, shared by `harness.mjs`, `chrome-devtools-mcp.sh` and tests. | mcp-probe |
 | **lib/work-tree-id.mjs** | Content id of the WORKING TREE (tracked + untracked, ignore rules honoured) as a git tree hash, and of a commit's tree. | — |
 
@@ -184,6 +185,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/garage-interior.mjs** | PNG gap-pixel gate for garage-frame.mjs (flat wall / paddock bleed); used after soft/CDP capture. | — |
 | **shot/garage-tap.mjs** | GARAGE tap from the title, prebuild ON vs OFF on one tree: tap-to-first-frame ms (__apex.garagePrebuild). | playwright-probe |
 | **shot/hud-live-sample.mjs** | Sample moved HUD pieces every few ms in an unfrozen race after position jumps; report time spent off screen. | survey-ui-matrix |
+| **shot/hud-mock.mjs** | Race-HUD layout shots on black: mocked widgets, labelled boxes, overlaps in red; ~1 s a shot. | survey-ui-matrix |
 | **shot/hud-survey.mjs** | Race-HUD survey: devices x cameras x presets/themes/scale → overlaps, missing, offscreen, tiny text + shots, gallery. | survey-ui-matrix |
 | **shot/loading-probe.mjs** | Tap RACE! headless; record the loading screen's phases (build/run/card) and frame gaps. `--settle ms --invalidate`. | — |
 | **shot/motion-capture.mjs** | Records a driven clip via `recordVideo` (headless rAF is frozen), extracts frames, scores per-frame flicker. | playwright-probe |
