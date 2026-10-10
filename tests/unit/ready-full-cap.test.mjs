@@ -123,3 +123,23 @@ test("AGENTS.md Concurrent PRs documents the ready-full-cap Merge Desk check", (
   assert.match(concurrent, /draft.*fast|fast.*draft|uncapped/i,
     "must not weaken draft=fast (cap applies only to ready full-tier)");
 });
+
+test("15-F11: measure pages ci.yml's pull_request runs, so a queued ready run past the first 100 still counts", () => {
+  const calls = [];
+  const request = (qs) => {
+    calls.push(qs);
+    if (qs.startsWith("pulls?")) return { json: [pr(1, "cursor/a"), pr(2, "cursor/b"), pr(3, "cursor/c")] };
+    const page = Number(/&page=(\d+)/.exec(qs)?.[1]);
+    if (qs.includes("status=queued")) {
+      // page 1: 100 sibling runs of other branches (no open PR); page 2 holds the three ready PRs' runs
+      if (page === 1) return { json: { workflow_runs: Array.from({ length: 100 }, (_, i) => run(`cursor/other-${i}`, "queued", { id: 1000 + i })) } };
+      if (page === 2) return { json: { workflow_runs: [run("cursor/a", "queued", { id: 1 }), run("cursor/b", "queued", { id: 2 }), run("cursor/c", "queued", { id: 3 })] } };
+    }
+    return { json: { workflow_runs: [] } };
+  };
+  const v = measure({ request, cap: 3 });
+  assert.equal(v.error, undefined);
+  assert.equal(v.count, 3, "the runs on page 2 are counted");
+  assert.equal(v.ok, false, "three ready full-tier runs fill the cap of 3");
+  assert.ok(calls.every((c) => c.startsWith("pulls?") || c.startsWith("actions/workflows/ci.yml/runs?event=pull_request&")), calls.join("\n"));
+});
