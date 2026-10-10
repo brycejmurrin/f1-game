@@ -1802,6 +1802,32 @@ test("scenery sections are navigable without edits; paired section placement and
   b.D.close();
 });
 
+test("object categories, numeric gap and section swap are preferences; new objects undo and save", () => {
+  const b = bootScreen(); openGreen(b); b.D.setMode("scenery");
+  const by = (key, value) => walk(b.root).find((e) => e.dataset && e.dataset[key] === value);
+  const undo = b.D.state().undo;
+  by("objectCategory", "nature").click();
+  assert.equal(by("prop", "pines").hidden, false); assert.equal(by("prop", "marshal").hidden, true);
+  by("prop", "pines").click();
+  const gap = b.root.querySelector('[aria-label="Roadside gap in metres"]');
+  gap.value = "33"; b.dom.dispatch(gap, { type: "change" });
+  b.D.selectRange(4, 16); by("placementMode", "range").click();
+  b.root.querySelector('[aria-label="Swap scenery section start and end"]').click();
+  assert.equal(b.D.state().sel, 16); assert.equal(b.D.state().span, 4);
+  assert.equal(b.D.state().undo, undo, "browsing and placement preferences do not create edits");
+  b.D.placeProp(); assert.equal(b.D.state().design.props.length, 3);
+  assert.ok(b.D.state().design.props.every((p) => p.kind === "pines" && p.gap === 33));
+  const saved = b.D.save(); assert.equal(saved.ok, true); assert.equal(b.C.get(saved.id).props.length, 3);
+  b.D.undo(); assert.equal(b.D.state().design.props, undefined);
+  gap.value = "1"; b.dom.dispatch(gap, { type: "change" }); assert.equal(gap.value, "20");
+  b.root.querySelector('[aria-label="Reset roadside gap for selected object"]').click(); assert.equal(gap.value, "28");
+  by("objectCategory", "venue").click();
+  assert.equal(by("prop", "pines").hidden, true); assert.equal(by("prop", "marshal").hidden, false);
+  by("prop", "marshal").click(); by("placementMode", "point").click(); b.D.placeProp();
+  assert.equal(b.D.state().design.props[0].kind, "marshal");
+  b.D.close();
+});
+
 test("SCENERY props: REVERSE / START HERE remap s; RANDOMISE clears props", () => {
   const b = bootScreen();
   openGreen(b);
@@ -1929,4 +1955,42 @@ test("level, smooth and zero affect only selected heights and retain smooth endp
   assert.ok(b.D.state().design.heights.every((h) => h === 0));
   assert.equal(b.D.adjustElevation("zero"), false, "no-op does not add undo");
   b.D.close();
+});
+
+test("an autosaved draft of an oversize loop is rejected on open instead of freezing the tab (13-F1)", () => {
+  const pts = [];
+  for (let i = 0; i < 40; i++) pts.push(i % 2 ? [-9000 + (i % 7) * 100, 9000 - i * 10] : [9000 - (i % 5) * 100, -9000 + i * 10]);
+  const b = bootScreen({ customTrackDraft: { name: "HOSTILE", seed: 7, theme: "parkland", baseHW: 7, pts } });
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open();
+  const st = b.D.state();
+  assert.ok(st.design && st.design.name !== "HOSTILE", "the oversize draft was not restored");
+  const per = st.design.pts.reduce((s, p, i) => { const q = st.design.pts[(i + 1) % st.design.pts.length]; return s + Math.hypot(q[0] - p[0], q[1] - p[1]); }, 0);
+  assert.ok(per <= b.C.LIMITS.loopMaxLoose, "the opened design is a sane loop: " + Math.round(per) + " m");
+}
+);
+
+test("DELETE POINT 0 and a stamp over the start line keep every surviving point's own height (13-F2)", () => {
+  const b = bootScreen();
+  const green = openGreen(b);
+  assert.equal(b.D.applyElevPreset("hilly"), true);
+  const d0 = plain(b.D.state().design);
+  assert.ok(d0.heights.filter(Boolean).length > 10, "the hilly preset left real heights to misalign");
+  const key = (p) => p[0] + "," + p[1];
+  const bad = (before, after) => {
+    const m = new Map(before.pts.map((p, i) => [key(p), before.heights[i]]));
+    return after.pts.filter((p, i) => m.has(key(p)) && m.get(key(p)) !== after.heights[i]).length;
+  };
+  assert.equal(b.D.deletePoint(0), true);
+  const d1 = plain(b.D.state().design);
+  assert.notDeepEqual(d1.pts[0], d0.pts[0], "the start point itself was deleted");
+  assert.equal(bad(d0, d1), 0, "DELETE POINT 0: no survivor carries its neighbour's height");
+  b.D.undo();
+  const N = b.D.state().design.pts.length, before = plain(b.D.state().design);
+  b.D.setTool("corner");
+  assert.equal(b.D.applyStamp(N - 2, 2, "corner"), true, "a stamp whose span wraps the start line");
+  const after = plain(b.D.state().design);
+  assert.ok(after.pts.filter((p) => before.pts.some((q) => key(q) === key(p))).length > 20, "plenty of shared points to check");
+  assert.equal(bad(before, after), 0, "wrapping stamp: heights stay keyed to their points");
+  assert.equal(green.pts.length > 0, true);
 });

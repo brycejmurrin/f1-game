@@ -14,7 +14,8 @@
               bleacher, broadleafFall, plane,
               groundedSegments, recordBarrier, circuitKit,
               signBoard, seat, bankedKerbStrip,
-              spectatorHill, cameraTower, sponsorHoarding, bakedModel, along, terrainYAt } = api;
+              spectatorHill, cameraTower, sponsorHoarding, bakedModel, along, terrainYAt,
+              bush, drapeRun } = api;
       // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
       // Ask the same question first, so a hill that overlaps a parallel stretch
       // is skipped instead of staged and dropped (64 per build here,
@@ -42,6 +43,9 @@
           if (!HEDGE_GRID.has(key)) HEDGE_GRID.set(key, []);
           HEDGE_GRID.get(key).push(c);
         }
+        // Understorey: a shrub tuft in front of the row every ~6th node.
+        if (gap >= 90) for (let kk = k(s0); kk <= k(s1); kk += 6)
+          bush(kk, side, gap - 4.5, hash(kk * 7 + gap) < 0.5 ? [0.13, 0.30, 0.14] : [0.20, 0.36, 0.17]);
       };
       const nearHedge = (c, r) => {
         const gx = Math.floor(c[0] / 16), gz = Math.floor(c[2] / 16);
@@ -69,6 +73,9 @@
 
       // 2. British overcast sky + lusher grass (ATM.britishOvercast).
       if (ATM && ATM.britishOvercast) Object.assign(pal, ATM.britishOvercast);
+      // Silverstone's run-off is mown grass with tarmac aprons at the fast corners,
+      // not the generic bare-earth tan the shared pack carries (survey 2026-10-09).
+      pal.runoff = [0.26, 0.36, 0.21];
 
       const COPSE  = [0.12, 0.36, 0.16];   // dark-green tree copses / hedgerows
       const COPSE2 = [0.16, 0.40, 0.18];   // slightly lighter broadleaf
@@ -78,7 +85,7 @@
       const STEEL  = [0.55, 0.56, 0.60];
       const CONC   = [0.74, 0.75, 0.76];
       // Airfield asphalt apron — former runway concrete, slightly lighter than racing line
-      const APRON  = (ATM && ATM.britishOvercast && ATM.britishOvercast.runoff) || [0.48, 0.46, 0.42];
+      const APRON  = [0.38, 0.38, 0.40];   // tarmac run-off apron
       const CROWD_C = [
         [0.52, 0.30, 0.28], [0.28, 0.32, 0.46], [0.62, 0.60, 0.56],
         [0.26, 0.40, 0.30], [0.44, 0.32, 0.42], [0.60, 0.48, 0.30],
@@ -96,19 +103,25 @@
       const FACADE_DIST = 38;   // thin glazed face just behind pit keep (≤30.1)
       const PODIUM_DIST = 36;
 
+      // Aerial perspective: the hills and backdrop slabs ignore the fog knob, so the far
+      // ones carry their haze in the colour (survey 2026-10-09: crisp toy-like horizon;
+      // fogDensityMul 3.6 changed nothing on them).
+      const HZ = [0.72, 0.76, 0.82];
+      const haze = (c, t) => [c[0] + (HZ[0] - c[0]) * t, c[1] + (HZ[1] - c[1]) * t, c[2] + (HZ[2] - c[2]) * t];
+
       every(110, (kk) => {
         for (const side of [-1, 1]) {
-          backdrop(kk, side, 195 + hash(kk * 6 + side) * 60, [150, 15, 150], [0.16, 0.30, 0.16]);
-          backdrop(kk, side, 260 + hash(kk * 9 + side) * 70, [170, 12, 170], [0.14, 0.28, 0.15]);
+          backdrop(kk, side, 195 + hash(kk * 6 + side) * 60, [150, 15, 150], haze([0.16, 0.30, 0.16], 0.12));
+          backdrop(kk, side, 260 + hash(kk * 9 + side) * 70, [170, 12, 170], haze([0.14, 0.28, 0.15], 0.22));
         }
       });
 
       // two overlapping rings of low green rises — dense enough to read as a wall
       const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, count, wMin, hMin, hVar, fc, rc] of [
-        [270, 20, 180,  9, 6, [0.16, 0.36, 0.18], [0.22, 0.40, 0.22]],
-        [370, 18, 220, 11, 7, [0.14, 0.32, 0.16], [0.20, 0.36, 0.20]],
-        [470, 16, 260, 14, 8, [0.12, 0.28, 0.14], [0.18, 0.34, 0.18]],
+        [270, 20, 180,  9, 6, haze([0.16, 0.36, 0.18], 0.18), haze([0.22, 0.40, 0.22], 0.18)],
+        [370, 18, 220, 11, 7, haze([0.14, 0.32, 0.16], 0.38), haze([0.20, 0.36, 0.20], 0.38)],
+        [470, 16, 260, 14, 8, haze([0.12, 0.28, 0.14], 0.58), haze([0.18, 0.34, 0.18], 0.58)],
       ]) {
         const ring = rad + extra;
         const span = 2 * Math.PI * ring / count;
@@ -1274,4 +1287,33 @@
           }
         }
       }
+      // ── Racing Kit furniture (CC0, assets/pack) — survey 2026-10-09 found Silverstone
+      // using 7 of 77 baked models. Every call keeps a procedural fallback or is a pure
+      // enhancement (bakedModel returns false when the pack lacks the id). Ids are string
+      // literals so ensureScenery fetches them.
+      {
+        // Floodlit pit straight, opposite the Wing, then the fast-corner exits.
+        along(0.440, 0.500, 38, (kk) => { bakedModel("k_lightpostlarge", kk, -1, 7, { scale: 3 }); });
+        for (const [s, side] of [[0.03, 1], [0.095, -1], [0.16, 1], [0.30, -1], [0.34, 1], [0.41, -1],
+                                 [0.56, -1], [0.63, 1], [0.68, -1], [0.80, 1], [0.84, 1], [0.90, -1], [0.97, -1]])
+          bakedModel("k_lightpostmodern", k(s), side, 9, { scale: 3 });
+        // Banner towers punctuating the grandstand ends.
+        for (const [s, side, red] of [[0.026, 1, 1], [0.054, 1, 0], [0.286, 1, 1], [0.316, 1, 0],
+                                      [0.436, 1, 1], [0.504, 1, 0], [0.838, -1, 1], [0.866, -1, 0]])
+          bakedModel(red ? "k_bannertowerred" : "k_bannertowergreen", k(s), side, 16, { scale: 2.4 });
+        // TV camera pods at the signature corners.
+        for (const [s, side] of [[0.07, 1], [0.13, -1], [0.34, 1], [0.42, 1], [0.58, -1], [0.66, -1], [0.85, -1]])
+          bakedModel("k_camera_exclusive", k(s), side, 13, { scale: 3 });
+        // Low sponsor boards along the Hangar Straight and the Wellington straight.
+        bakedModel("k_tentlong", k(0.47), 1, 90, { scale: 2.4 });
+        bakedModel("k_tentlong", k(0.96), -1, 60, { scale: 2.4 });
+        bakedModel("k_tentlong", k(0.905), -1, 90, { scale: 2.4 });
+        bakedModel("k_tentlong", k(0.49), 1, 60, { scale: 2.4 });
+        bakedModel("k_tentlong", k(0.62), 1, 60, { scale: 2.4 });
+        bakedModel("k_tentlong", k(0.1), 1, 60, { scale: 2.4 });
+        bakedModel("k_tentlong", k(0.49), -1, 60, { scale: 2.4 });
+        bakedModel("k_radarequipment", k(0.44), 1, 60, { scale: 2.5 });
+        bakedModel("k_radarequipment", k(0.236), 1, 52, { scale: 2.5 });
+      }
     };
+

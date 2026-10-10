@@ -37,6 +37,9 @@ const require = createRequire(import.meta.url);
 // 2026-10-05: Buddh 210980 -> 190604 (sparse field-boundary scatter) and
 // Korea 264747 -> 235195 (tree:"none" on the salt fill) after the fold-clear
 // chord samples. Fuji 612418 stays inside the 612361 ±0.5 % band.
+// 2026-10-09: Silverstone 398229 -> 422978 (+6.2 %): Racing Kit light posts, banner towers,
+// camera pods and radar (baked CC0 models), generic lamp posts (furniture.lamp "post")
+// and far-hedgerow understorey bushes — the survey found the circuit using 7 of 77 models.
 const BASELINE = JSON.parse(readFileSync(path.join(ROOT, "tools", "track", "props-tris-baseline.json"), "utf8"));
 const GROW = 1.005, STALE = 0.99;
 
