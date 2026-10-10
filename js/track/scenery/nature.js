@@ -475,15 +475,16 @@ const SceneryNature = (function () {
             placedTrees.get(key).push(site);
           }
       };
-      // Past the on-track guard — this tree ships. Canopy radius scales with
-      // height, so w/d are an estimate rather than a measured bound. (Noted before
-      // the trunk guard on purpose: the flyby planner's box registry was tuned with
-      // these notes, and a trunk the pit guard refuses still holds its spot — H26b.)
-      ctx.note("tree", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.5, h, h * 0.5], { k, side, dist, initialDist });
+      // Past the on-track guard — this tree ships once its trunk lands. Canopy
+      // radius scales with height, so w/d are an estimate rather than a measured
+      // bound. Noted AFTER the trunk guard: a trunk the pit guard refuses draws
+      // nothing, so it must not leave a phantom box in the registry (H26b).
+      const noteTree = () => ctx.note("tree", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.5, h, h * 0.5], { k, side, dist, initialDist });
       if (vr > deadAt) {   // dead/storm tree: bare trunk + a few angled branch stubs.
         const th = h * 0.7;
         out._mat = MAT.WOOD;
         if (addCyl(out, vadd(a.c, a.u, -0.5), 0.32, th + 0.5, [0.28, 0.22, 0.16], 6, b) === false) { out._mat = 0; return; }   // no trunk, no crown (the pit complex keeps footings out)
+        noteTree();
         const top = vadd(a.c, a.u, th);
         for (let i = 0; i < 3; i++) {
           const bh = hash(k * 11 + i * 3.1 + initialDist);
@@ -504,6 +505,7 @@ const SceneryNature = (function () {
       const c2 = [col[0] * 0.88, col[1] * 0.9, col[2] * 0.84];   // sunlit upper foliage
       out._mat = MAT.WOOD;
       if (addCyl(out, vadd(a.c, a.u, -0.5), 0.4, h * 0.55 + 0.5, [0.32, 0.23, 0.13], 6, b) === false) { out._mat = 0; return; }   // no trunk, no crown (the pit complex keeps footings out)
+      noteTree();
       out._mat = MAT.FOLIAGE;
       swayOn(a.c, a.u, h * 0.22, h * 1.0);
       {
