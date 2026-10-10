@@ -95,8 +95,7 @@ const RaceInsights = (function () {
           // Any slower car up the road, not just the one in our lane — traffic
           // is traffic wherever it sits.
           const slower = (G.cars || []).filter(o => o !== c && !o.retired && !o.finished
-            && (gapTo(o, c) || 0) > 0 && (o._vmaxNow || 0) > 0 && (c._vmaxNow || 0) > 0
-            && (o._vmaxNow / c._vmaxNow) < 1 - SLOW);
+            && (gapTo(o, c) || 0) > 0 && isBackmarker(o, c));
           if (!slower.length) { G.announce("NO SLOWER TRAFFIC AHEAD TO PASS", 2, "practice"); return false; }
           rival = slower[0];
         } else rival = mode === "defend" ? nearestBehind(c) : nearestAhead(c);
@@ -170,6 +169,8 @@ const RaceInsights = (function () {
       const d = (o.prog || 0) - (c.prog || 0);
       return ((d + L / 2) % L + L) % L - L / 2;
     }
+    // The arming filter for BACKMARKERS, shared with the clear count: a car 6% down on our own pace.
+    const isBackmarker = (o, c) => (o._vmaxNow || 0) > 0 && (c._vmaxNow || 0) > 0 && (o._vmaxNow / c._vmaxNow) < 1 - SLOW;
     // Nearest car in our lane, one direction. Positions only — no curvature, no
     // racing line, nothing the arc rule forbids reaching the driver.
     function nearestIn(c, sign) {
@@ -411,7 +412,7 @@ const RaceInsights = (function () {
           if (o === c || o.retired || o.finished) continue;
           const g = gapTo(o, c);
           if (g == null) continue;
-          if (g > SIDE_M) drill.passing.add(o);
+          if (g > SIDE_M) { if (isBackmarker(o, c)) drill.passing.add(o); }   // a quicker car crossing the half-lap wrap flips ahead->behind without being passed
           else if (g < -SIDE_M && drill.passing.delete(o)) drill.cleared++;
         }
         if (drill.cleared >= TRAFFIC_N) { finishDrill(current, c); return; }
