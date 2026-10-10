@@ -63,9 +63,6 @@
         [0.82, 0.90, 0.76],   // sage
       ];
       const rotPal = (arr, k) => arr.slice(k % arr.length).concat(arr.slice(0, k % arr.length));
-      const SKY_PAL_STADIUM = [   // stadium-lot corridor (T11 approach) — concrete-forward, cooler
-        CONCRETE, GREYWHITE, [0.62, 0.82, 0.88], [0.80, 0.84, 0.88], [0.90, 0.84, 0.76],
-      ];
       const SKY_PAL_DUSKGLASS = [   // back-straight DRS corridor — deeper, more saturated glass
         [0.30, 0.60, 0.64], [0.66, 0.40, 0.50], [0.44, 0.54, 0.78], [0.60, 0.68, 0.48], [0.78, 0.56, 0.32],
       ];
@@ -109,15 +106,25 @@
         const k = K(s), a = anchor(k, side, dist), bv = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 20)) return;
         const size = [rows * 6 + 4, 1.6, cols * 2.6 + 4];
-        modelGroup(`car-park-${k}`, { center: vadd(a.c, a.u, 0.8), size, basis: bv }, (stage) => {
-          addBox(stage, vadd(a.c, a.u, 0.1), [size[0], 0.2, size[2]], [0.30, 0.30, 0.33], bv);
+        // Ground the slab on the TERRAIN under the whole pad (3x3 samples), not
+        // the anchor: the pad is 20-45 m across, and where the ground stands
+        // above the anchor the slab and its paint were buried (ground-audit).
+        let gMax = a.c[1], gMin = a.c[1];
+        for (const i of [-1, 0, 1]) for (const j of [-1, 0, 1]) {
+          const q = vadd(vadd(a.c, a.r, i * size[0] / 2), a.t, j * size[2] / 2);
+          const ty = terrainYAt(q[0], q[2]);
+          if (typeof ty === "number" && isFinite(ty)) { gMax = Math.max(gMax, ty); gMin = Math.min(gMin, ty); }
+        }
+        const top = gMax + 0.06 - a.c[1], bot = gMin - 0.3 - a.c[1];   // slab faces, relative to the anchor
+        modelGroup(`car-park-${k}`, { center: vadd(a.c, a.u, (bot + top + 1.5) / 2), size: [size[0], top + 1.5 - bot, size[2]], basis: bv }, (stage) => {
+          addBox(stage, vadd(a.c, a.u, (top + bot) / 2), [size[0], top - bot, size[2]], [0.30, 0.30, 0.33], bv);
           // white bay lines
           for (let c = 0; c <= cols; c++)
-            addBox(stage, vadd(vadd(a.c, a.u, 0.2), a.t, (c - cols / 2) * 2.6), [rows * 6, 0.05, 0.12], WHITE, bv);
+            addBox(stage, vadd(vadd(a.c, a.u, top + 0.025), a.t, (c - cols / 2) * 2.6), [rows * 6, 0.05, 0.12], WHITE, bv);
           for (let r = 0; r < rows; r++)
             for (let c = 0; c < cols; c++) {
               if (hash(k + r * 13 + c * 7) > 0.82) continue;   // empty bays
-              const p = vadd(vadd(vadd(a.c, a.r, (r - rows / 2) * 6), a.u, 0.75), a.t, (c - cols / 2) * 2.6);
+              const p = vadd(vadd(vadd(a.c, a.r, (r - rows / 2) * 6), a.u, top + 0.55), a.t, (c - cols / 2) * 2.6);
               const t = hash(k * 5 + r * 11 + c);
               addBox(stage, p, [4.4, 1.4, 2.1],
                      [0.28 + t * 0.5, 0.30 + hash(c * 3) * 0.4, 0.34 + hash(r * 7) * 0.42], bv);
@@ -359,7 +366,7 @@
           // Fallback if the kit is unavailable — keep the pit lane building.
           building(K(0.0), -1, 13, 22, 9, 120, { kind: "hall", wall: WHITE, window: GLASS, lit: true, windowCol: WIN_AMBER });
         }
-        building(K(0.0), -1, 42, 26, 22, 120,
+        building(K(0.0), -1, 42, 26, 14, 120,
           { kind: "slab", wall: WHITE, window: GLASS, floor: 6, lit: true, windowCol: WIN_AMBER, neon: 0 });
         // DETAIL: closed end walls on the pit grandstand block (local; not city.js)
         // Vertical faces only — a roof slab fought grandstandEx flatCoplanar.
@@ -414,8 +421,9 @@
           roof: (i % 2) ? "truss" : "cantilever", endWalls: true,
         });
       }
-      cityFront(0.04, 0.12, 1, 30, {
-        minH: 14, maxH: 38, depth: 25, step: 20,
+      // Behind the T1 stand roofs: gap 30 put a low facade through a roof slab.
+      cityFront(0.04, 0.12, 1, 42, {
+        minH: 6, maxH: 14, depth: 14, step: 28,
         palette: SKY_PAL, lit: true, windowCol: WIN_AMBER,
       });
       for (let i = 0; i < 10; i++) palm(K(0.04 + i * 0.006), 1, 14 + (i % 2) * 5, 8 + hash(i) * 2, PALM_GREEN);
@@ -437,7 +445,7 @@
           (i % 2) ? PALM_DARK : PALM_GREEN);
       }
       cityFront(0.18, 0.26, -1, 42, {
-        minH: 10, maxH: 26, depth: 16, step: 18,
+        minH: 5, maxH: 12, depth: 12, step: 26,
         palette: [CORAL, PINK, TEAL, [1.0, 0.85, 0.60], GREYWHITE],
         lit: true, windowCol: WIN_AMBER,
       });
@@ -563,10 +571,11 @@
           endWalls: true,
         });
       }
-      cityFront(0.42, 0.53, -1, 24, {
-        minH: 14, maxH: 34, depth: 22, step: 20,
-        palette: SKY_PAL_STADIUM, lit: true, windowCol: WIN_AMBER,
-      });
+      // Lots sit in the GAPS between the stands (stand i spans 0.43+i*0.035 +-
+      // len/2): a carPark guards only the road, so one at a stand's s and side
+      // interpenetrated it. Placement measured against the built props.
+      carPark(0.4465, -1, 44, 3, 12);
+      carPark(0.4860, -1, 23, 1, 12);
       for (let i = 0; i < 10; i++) palm(K(0.43 + i * 0.005), -1, 12 + (i % 2) * 4, 8 + hash(i * 3) * 2, PALM_GREEN);
       carPark(0.47, -1, 60, 4, 18);
       parkingDeck(0.55, 1, 70, { tiers: 4, w: 34, len: 56 });
@@ -739,12 +748,12 @@
       billboard(K(0.52), 1, 10, 16, 8, TEAL);
       billboard(K(0.54), 1, 10, 16, 8, PINK);
       const DECO = [
-        [0.500, "ziggurat", WHITE,            22],
-        [0.518, "fin",      [0.96, 0.86, 0.70], 18],
-        [0.536, "chevron",  [0.86, 0.94, 0.94], 20],
-        [0.554, "setback",  [0.98, 0.82, 0.78], 16],
-        [0.572, "notch",    WHITE,            21],
-        [0.590, "ziggurat", [0.80, 0.92, 0.96], 17],
+        [0.500, "ziggurat", WHITE,            12],
+        [0.518, "fin",      [0.96, 0.86, 0.70], 10],
+        [0.536, "chevron",  [0.86, 0.94, 0.94], 11],
+        [0.554, "setback",  [0.98, 0.82, 0.78], 9],
+        [0.572, "notch",    WHITE,            11],
+        [0.590, "ziggurat", [0.80, 0.92, 0.96], 10],
       ];
       for (const [s, kind, wallCol, h] of DECO) {
         building(K(s), 1, 22, 20, h, 18, {
@@ -757,9 +766,9 @@
       }
       // DETAIL: extra pastel street masses (variety beyond the Deco six)
       const PASTEL_EXTRA = [
-        [0.508, "podium",  [0.95, 0.72, 0.78], 14],
-        [0.545, "slab",    [0.55, 0.85, 0.90], 12],
-        [0.580, "setback", [0.98, 0.90, 0.70], 15],
+        [0.508, "podium",  [0.95, 0.72, 0.78], 8],
+        [0.545, "slab",    [0.55, 0.85, 0.90], 7],
+        [0.580, "setback", [0.98, 0.90, 0.70], 9],
       ];
       for (const [s, kind, wallCol, h] of PASTEL_EXTRA) {
         building(K(s), 1, 28, 16, h, 14, {
@@ -808,7 +817,7 @@
         bench: [PINK, WHITE, TEAL], crowd: PASTELS, density: 0.55, legEvery: 1,
       });
       cityFront(0.76, 0.86, -1, 34, {
-        minH: 16, maxH: 38, depth: 22, step: 20,
+        minH: 6, maxH: 14, depth: 14, step: 28,
         palette: SKY_PAL_DUSKGLASS, lit: true, windowCol: WIN_AMBER,
       });
       for (let i = 0; i < 12; i++) {
@@ -825,7 +834,7 @@
       }
 
       cityFront(0.87, 0.97, -1, 26, {
-        minH: 10, maxH: 28, depth: 22, step: 18,
+        minH: 5, maxH: 12, depth: 12, step: 26,
         palette: [WHITE, ...rotPal(SKY_PAL, 3)], lit: true, windowCol: WIN_AMBER,
       });
       const FINAL_STANDS = ["pastel", "teal"];
@@ -889,6 +898,8 @@
       palmRow(0.60, 0.72, -1, 18, 28, 8.5);    // Turnpike service road
       palmRow(0.38, 0.55,  1, 16, 26, 8.5);    // stadium-lot perimeter
       palmRow(0.48, 0.58,  1, 20, 22, 9.5);    // beach-club palm belt
+      palmRow(0.02, 0.14,  1, 18, 22, 8.5);    // pit-straight (replaces generic palm scatter)
+      palmRow(0.64, 0.78, -1, 25, 24, 8.0);    // Turnpike outer service road (outside the 14-18 m rows)
       const LIVE_OAK = [0.22, 0.38, 0.20];
       // Kept clear of the stadium-lot cityFront (side -1, 24-46 m): a species
       // call guards against the ROAD only, never against a building already
