@@ -11,7 +11,7 @@ transition as `State a->b why=…`).
 
 | `state` | entered by (`why`) | left by |
 |---|---|---|
-| `menu` | `quit` (`quitToMenu`), `save-conflict` (`startRaceBody`), `quali-sheet` (`openQualiBody`) | `startRaceBody` → `count` |
+| `menu` | `quit` (`quitToMenu`), `quali-sheet` (`openQualiBody`) | `startRaceBody` → `count` |
 | `count` | `race-start` (`startRaceBody`), `red-flag-restart` (`redFlagRestart`) | `lights-out` → `race`; `goRolling()` (`rolling-start`: a jump-in, WATCH from a lap, a designer test drive) → `race` |
 | `race` | `lights-out`, `restart-green` (after a red flag), `rolling-start` | `endRace` → `results`; `quitToMenu` → `menu` |
 | `results` | `endRace` (`flag`, `forced-order`, `quali-end`) | `quitToMenu` → `menu`; RACE AGAIN / TRY AGAIN / NEXT RACE → `startRace` → `count` |
@@ -31,8 +31,10 @@ stateDiagram-v2
 ```
 
 `quitToMenu` is the one full teardown (HUD, lights, pause, rotate blocker, audio, session
-entry, netplay, season reload, title overlay). Anything that lands on `menu` any other way
-(`save-conflict`, `quali-sheet`) leaves the rest of that teardown to the caller.
+entry, netplay, season reload, title overlay). `openQualiBody` is the one other writer of
+`menu`: no race is up while the quali sheet is, so there is nothing to tear down. (The completed-season arm of
+`startRaceBody` was a second one — it left the race chrome up — until it was changed to `quitToMenu`; see
+the flow C PR "a start that finds the season finished".)
 
 ## Entering a session
 
