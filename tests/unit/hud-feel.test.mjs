@@ -921,6 +921,42 @@ test("a moved / resized tower, map, sector box or gearbox leaves every fit cap w
   assert.notDeepEqual(c.refit(), cBase, "un-marked painted rects move the caps — the fixture can see the defect");
 });
 
+/** The fit with the safe-area token readable (as on a device, where --sar is a registered length)
+ *  and the sector plate's left edge moved by `shift` px — what a touch dock stand-off does to it. */
+function topZoomWithPlateShift(shift, sarPx) {
+  const h = fitHarness();
+  const gcs = h.sb.getComputedStyle;
+  h.sb.getComputedStyle = (el) => { const r = gcs(el); return Object.assign({}, r, { getPropertyValue: (k) => (k === "--sar" ? sarPx + "px" : r.getPropertyValue(k)) }); };
+  const R = h.els.hudSectors._rect;
+  h.els.hudSectors._rect = { left: R.left - shift, top: R.top, right: R.right - shift, bottom: R.bottom, width: R.width, height: R.height };
+  return +h.refit()["--hud-z-top"];
+}
+
+test("the safe-area inset comes from --sar, never from the sector plate's right edge (touch dock stand-off)", () => {
+  // On touch #hud-sectors is pushed inboard by --dock-r-w (css/hud.css), so its right edge is the inset
+  // PLUS the dock: reading it as the notch inset charged the band ~210 px it does not owe and fit the
+  // tower to 0.575 on a 390 px phone (8 px text). The plate moving inboard must not move the fit.
+  const edge = topZoomWithPlateShift(0, 10), docked = topZoomWithPlateShift(150, 10);
+  assert.ok(edge > 0.4, "the fixture's band is not on the floor (" + edge + ")");
+  assert.equal(docked, edge, "a plate standing off the dock fits the same band as one at the edge");
+  // Hiding the plate entirely (MINIMAL) already read the other side's inset; the token makes it the same answer.
+  const gone = fitHarness();
+  const gcs = gone.sb.getComputedStyle;
+  gone.sb.getComputedStyle = (el) => { const r = gcs(el); return Object.assign({}, r, { getPropertyValue: (k) => (k === "--sar" ? "10px" : r.getPropertyValue(k)) }); };
+  gone.els.hudSectors._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+  assert.ok(+gone.refit()["--hud-z-top"] >= edge - 1e-9, "removing the plate never needs MORE room");
+});
+
+test("a dropped gap strip carries the radio card's caution step down with the flag chip", () => {
+  const css = readCssSource("css/hud.css"), hud = read("js/ui/hud.js");
+  // The flag chip steps down under :root[data-gap-drop]; the card cannot reach `:root … body`, so the drop is mirrored onto body.
+  assert.match(css, /:root\[data-gap-drop\] #hud-flag \{\s*top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 74px\)/);
+  assert.match(css, /body\[data-gap-drop\]:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 74px\)[^;]*\+ 38px\)/,
+    "the card sits 38px under the dropped flag chip");
+  assert.match(css, /body\[data-gap-drop\]\[data-density="compact"\]:not[^{]*#announce \{ top: calc\([^;]*\+ 34px\)/, "compact keeps its tighter step under the dropped chip");
+  assert.match(hud, /drop !== document\.body\.hasAttribute\("data-gap-drop"\)/, "gapForm mirrors the drop onto body, compared against the DOM like the root attribute");
+});
+
 test("an empty timing tower still fits the bottom band and writes the dock cap", () => {
   const full = fitHarness().snap();
   const h = fitHarness({ emptyTower: true }), got = h.snap();
@@ -1173,7 +1209,7 @@ test("a moved (data-hl) piece whose words change width re-fits on the next tick,
 test("the caution step-aside needs the card's other slot to really apply; TEXT LARGER grows the ERS bar", () => {
   const rules = cssRules(read("css/hud.css"));
   const caution = rules.filter((r) => /:has\(#hud-flag:not\(\[hidden\]\)\) #announce$/.test(r.selector));
-  assert.equal(caution.length, 2, "base and compact caution rules");
+  assert.equal(caution.length, 4, "base and compact caution rules, each with its dropped-gap-strip twin (body[data-gap-drop])");
   for (const r of caution) assert.match(r.selector, /:not\(\.hud-mirror-on\.hud-mirror-side\)/, r.selector);
   const tok = read("css/tokens.css");
   for (const size of ["large", "larger"]) {

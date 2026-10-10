@@ -1095,6 +1095,11 @@ body[data-density="compact"] #announce {
    card stayed in the centre — the flag on the card, 844x390 (survey 2026-10-04). */
 body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
 body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
+/* A DROPPED GAP STRIP PUSHES THE FLAG CHIP DOWN (:root[data-gap-drop] #hud-flag: the tower's measured height
+   + 74px), so the card's caution step follows the chip, not the 100px / 72px slot — it sat 8px over the chip on
+   844x390 (survey 2026-10-10: flag x announce in every phone cell). body[data-gap-drop] mirrors the root flag. */
+body[data-gap-drop]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
+body[data-gap-drop][data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
 
 /* ---------- start lights ---------- */
 /* The gantry is driven purely by `els.lights.hidden = true/false` in
@@ -2019,17 +2024,23 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
      128px, which is LESS than the dock at 100% (BOOST's column is ~250px on
      844×390), so the trace sat on BOOST / OT at the shipped size (HUD survey
      2026-10-10, phoneL-cockpit: inputs × btn-boost 66×18px). The cap is now
-     the trace's own width short of the centre (max-width 120px below), so it
+     the trace's own width short of the centre, so it
      stands off any dock up to the middle of the screen and never reaches the
-     left column. vw and the inset divide by this element's zoom like every
+     left column. That width is 100px, not the 120px max-width: the trace paints
+     ~105px, and budgeting 120 made the cap bind first at HUD 150 (right edge
+     602, 9px over OT at 593) where the dock stand-off alone ends it at the plate. vw and the inset divide by this element's zoom like every
      other anchor here. */
-  right: calc(10px + var(--sar) / var(--hud-z) + min(var(--dock-r-w, 0px), calc(50vw / var(--hud-z) - 10px - var(--sar) / var(--hud-z) - 120px)));
+  /* --dock-r-w (and --hud-sec-h below) are published in the CHROME's zoom (--hud-z-top); this trace is
+     drawn in the bottom band's (--hud-z), and the two part at HUD 150% / a capped top band: the stand-off
+     was ~1.5x too wide and the trace ended 9px over OT at HUD 150 + BTN 150 (survey 2026-10-10). Both
+     convert by --hud-z-top / --hud-z, so the trace ends where the sector plate does. */
+  right: calc(10px + var(--sar) / var(--hud-z) + min(var(--dock-r-w, 0px) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z), calc(50vw / var(--hud-z) - 10px - var(--sar) / var(--hud-z) - 100px)));
   bottom: auto;
   /* Same shape as #hud-limits: clear PAUSE/CAM via (8px + tap-hud + 4px + sat)
      then drop by --hud-sec-h. Omitting tap-hud + 4px put the trace ~44px into
      S1–S3 at touch --tap 52 (12 − 56 = −44 at z=1). --hud-sec-h is top-band
      units; at phone sizes bot/top zooms meet so it still clears the box. */
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z) + 12px + var(--inputs-below-limits, 0px));
   max-width: min(120px, 22vw);
   max-height: min(18svh, 4.2em);
   overflow: hidden;
@@ -2042,11 +2053,16 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) #hud-inputs-cv {
    HUD SIZE 150% (chase 1280×720 survey). Park under the sector column like
    the touch home — right + top from the pause/sectors stack — so the bottom
    band stays the driver's. A placed chip (data-hl-user) keeps its offset. */
+/* WHILE THE TRACK-LIMITS CHIP SHOWS, INPUTS STEPS BELOW IT. Both hang from the sector box's bottom edge
+   (limits at +15px, this trace at +12px), so a strike painted one over the other in 12 of the 13
+   quick-matrix cells (survey 2026-10-10: 2.7k px² at 1280x720). The chip is ~2.6em tall (DAMAGE steps
+   the same amount, below). The reserve is only while the chip has a box. */
+body:not([data-hud-hide~="limits"]):has(#hud-limits:not([hidden])) #hud-inputs { --inputs-below-limits: calc(2.6em + 3px); }
 body.desktop #hud-inputs:not([data-hl-user]) {
   left: auto;
   right: calc(10px + var(--sar) / var(--hud-z));
   bottom: auto;
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z) + 12px + var(--inputs-below-limits, 0px));
 }
 /* TOUCH TYRES (LANDSCAPE): out of the centred bottom stack (it sat under
    GEAR / ERS, on the car) to the left column, sitting on top of the left dock
