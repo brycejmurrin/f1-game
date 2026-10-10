@@ -59,31 +59,37 @@ const HudLayout = (function () {
   "use strict";
 
   const KEY = "hudLayout";   // apex26.hudLayout — {v: 3, standard?, minimal?, broadcast?} | null
-  // [id, label, selector, transform-origin]. The origin keeps a corner piece
-  // growing away from its corner. The four centred by `left: 50%;
-  // transform: translateX(-50%)` scale about their UNtransformed left edge,
-  // which is the screen's centre line, so they stay centred as they grow.
+  // [id, label, selector, transform-origin, column]. THE COLUMN is where the piece lives on screen —
+  // left (the map's column), right (under the pause / cam buttons), centre (the tower, the mirror and
+  // what hangs under them) or bottom (the cluster over the wheel) — and it decides the rest: the
+  // ORIGIN keeps a piece growing away from its column's edge (the centred pieces, `left: 50%;
+  // transform: translateX(-50%)`, scale about their UNtransformed left edge, which is the screen's
+  // centre line, so they stay centred as they grow), and a moved piece in a SIDE column is nudged off
+  // the touch controls (CLEAR_CTRL). js/ui/hud.js's column allocators stack the same side pieces.
+  // The column here is the shipped one; columnOf() is the live one (LIMITS crosses to the left column
+  // under :root[data-limits-left], RELATIVE's touch home is the left column).
+  const ORIGIN = Object.freeze({ left: "top left", right: "top right", centre: "top left", bottom: "bottom center" });
   const ELEMENTS = Object.freeze([
-    ["tower", "TIMING TOWER", ".hud-top", "top left"],
-    ["map", "TRACK MAP", "#minimap", "top left"],
-    ["gaps", "GAPS", ".hud-gaps", "top left"],
-    ["sectors", "SECTORS", "#hud-sectors", "top right"],
-    ["limits", "TRACK LIMITS", "#hud-limits", "top right"],   // "top left" when js/ui/hud.js crosses it to the left column (originOf)
-    ["flag", "FLAGS", "#hud-flag", "top left"],
-    ["mirror", "MIRROR", "#hud-mirror", "top left"],
-    ["announce", "RACE MESSAGES", "#announce", "top left"],
-    ["gearbox", "GEAR", "#hud-gearbox", "bottom center"],
-    ["speed", "SPEED", "#hud-speed", "bottom center"],   // its own piece since the HELMET set (visor HUD) lifts it off the wheel
-    ["energy", "ENERGY", "#hud-energy", "bottom center"],
-    ["tyre", "TYRES", "#hud-tyre", "bottom center"],
-    ["ot", "OVERTAKE", "#hud-ot", "bottom center"],
-    ["aero", "AERO", "#hud-aero", "bottom center"],
-    ["bb", "BRAKE BIAS", "#hud-bb", "bottom center"],
-    ["damage", "DAMAGE", "#hud-damage", "top right"],
-    ["rel", "RELATIVE", "#hud-rel", "top right"],
-    ["strat", "STRATEGY", "#hud-strat", "top left"],
-    ["inputs", "INPUTS", "#hud-inputs", "top right"],   // under the sector column (desktop + touch); was bottom left over SPEED & GEAR at 150%
-  ].map(Object.freeze));
+    ["tower", "TIMING TOWER", ".hud-top", "centre"],
+    ["map", "TRACK MAP", "#minimap", "left"],
+    ["gaps", "GAPS", ".hud-gaps", "left"],
+    ["sectors", "SECTORS", "#hud-sectors", "right"],
+    ["limits", "TRACK LIMITS", "#hud-limits", "right"],   // "left" when js/ui/hud.js crosses it to the left column (columnOf)
+    ["flag", "FLAGS", "#hud-flag", "centre"],
+    ["mirror", "MIRROR", "#hud-mirror", "centre"],
+    ["announce", "RACE MESSAGES", "#announce", "centre"],
+    ["gearbox", "GEAR", "#hud-gearbox", "bottom"],
+    ["speed", "SPEED", "#hud-speed", "bottom"],   // its own piece since the HELMET set (visor HUD) lifts it off the wheel
+    ["energy", "ENERGY", "#hud-energy", "bottom"],
+    ["tyre", "TYRES", "#hud-tyre", "bottom"],
+    ["ot", "OVERTAKE", "#hud-ot", "bottom"],
+    ["aero", "AERO", "#hud-aero", "bottom"],
+    ["bb", "BRAKE BIAS", "#hud-bb", "bottom"],
+    ["damage", "DAMAGE", "#hud-damage", "right"],
+    ["rel", "RELATIVE", "#hud-rel", "right"],   // desktop: under the right column at 38svh; touch: the left column (columnOf)
+    ["strat", "STRATEGY", "#hud-strat", "left"],
+    ["inputs", "INPUTS", "#hud-inputs", "right"],   // under the sector column (desktop + touch); was bottom left over SPEED & GEAR at 150%
+  ].map((e) => Object.freeze([e[0], e[1], e[2], ORIGIN[e[3]], e[3]])));
   const IDS = ELEMENTS.map((e) => e[0]);
   const SETS = Object.freeze(["cockpit", "helmet", "other"]);
   const PROFILES = Object.freeze(["standard", "minimal", "broadcast"]);
@@ -284,15 +290,22 @@ const HudLayout = (function () {
   /** SIZE as a factor (1 = shipped) — js/ui/hud.js sharpens the map canvas by it. */
   function scaleOf(id) { return get(id).s / 100; }
 
-  /** transform-origin for element `id` from its LIVE anchor: TRACK LIMITS
-   *  crosses to the left column under :root[data-limits-left] (css/hud.css),
-   *  and a left-anchored chip must grow away from the LEFT edge. */
-  function originOf(id) {
+  /** The LIVE column of element `id`: TRACK LIMITS crosses to the left one under
+   *  :root[data-limits-left] (js/ui/hud.js), and RELATIVE's touch home is the left column
+   *  (css/hud.css body:not(.desktop) #hud-rel) — everything else stays in its shipped column. */
+  function columnOf(id) {
     const row = ELEMENTS.find((e) => e[0] === id);
     if (!row) return null;
-    const root = doc && doc.documentElement;
-    if (id === "limits" && root && root.hasAttribute && root.hasAttribute("data-limits-left")) return "top left";
-    return row[3];
+    const root = doc && doc.documentElement, body = doc && doc.body;
+    if (id === "limits" && root && root.hasAttribute && root.hasAttribute("data-limits-left")) return "left";
+    if (id === "rel" && body && body.classList && !body.classList.contains("desktop")) return "left";
+    return row[4];
+  }
+  /** transform-origin for element `id` from its LIVE column: a left-anchored chip must grow away from
+   *  the LEFT edge (LIMITS crossed left; a touch RELATIVE, which grew off its left anchor before). */
+  function originOf(id) {
+    const col = columnOf(id);
+    return col ? ORIGIN[col] : null;
   }
 
   function apply() {
@@ -392,13 +405,18 @@ const HudLayout = (function () {
       }
     }
     // READOUT-ON-CONTROL: a MOVE & SIZE offset chosen on a wide desktop can
-    // land RELATIVE / INPUTS / SECTORS on a phone's touch discs. After the
-    // edge clamp, nudge those three left/up off any visible .touchbtn (and
-    // INPUTS off SPEED & GEAR) so a placed chip cannot cover a tap target.
+    // land a side-column piece (RELATIVE / INPUTS / SECTORS, the map, ...) on a
+    // phone's touch discs. After the edge clamp, nudge every CLEAR_CTRL piece
+    // left/up off any visible .touchbtn (and off SPEED & GEAR) so a placed
+    // chip cannot cover a tap target.
     clearControls(W, H);
   }
 
-  const CLEAR_CTRL = Object.freeze({ rel: 1, inputs: 1, sectors: 1 });
+  // Every SIDE-column piece (ELEMENTS' column): a moved map, gap strip, LIMITS / DAMAGE chip or opt-in
+  // readout can land on a phone's tap targets as easily as RELATIVE / INPUTS / SECTORS (the three this
+  // used to list by hand). The centre pieces have their own clearance (the radio card's slot, the
+  // flag's --mir-bot) and the bottom cluster sits among the controls by design.
+  const CLEAR_CTRL = Object.freeze(Object.fromEntries(ELEMENTS.filter((e) => e[4] === "left" || e[4] === "right").map((e) => [e[0], 1])));
   function clearControls(W, H) {
     if (!doc || !doc.querySelectorAll) return;
     const btns = [];
@@ -833,7 +851,7 @@ const HudLayout = (function () {
     KEY, ELEMENTS, SETS, PROFILES, LIM, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS,
     get, set, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, build,
     camSet, shown: () => shown(), profile, all, migrate, presetLayout, applyPreset, presetOf,
-    hiddenReason, originOf,
+    hiddenReason, originOf, columnOf, CLEAR_CTRL,
   };
 })();
 Object.freeze(HudLayout);

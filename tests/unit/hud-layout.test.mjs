@@ -632,6 +632,34 @@ test("CamGroups: one onboard table, a wheel-only cockpit-layout table; hud.js an
   assert.ok(man.indexOf('"js/camera/cam-groups.js"') < man.indexOf('"js/ui/hud-layout.js"'), "loads before hud-layout");
 });
 
+test("ELEMENTS carry their column; the origin and CLEAR_CTRL follow it, and columnOf is the live one", () => {
+  const { H } = load3({ classes: ["desktop"] });
+  const COLS = ["left", "right", "centre", "bottom"];
+  const ORIG = { left: "top left", right: "top right", centre: "top left", bottom: "bottom center" };
+  for (const e of H.ELEMENTS) {
+    assert.ok(COLS.includes(e[4]), e[0] + " has a column");
+    assert.equal(e[3], ORIG[e[4]], e[0] + ": the origin is its column's");
+  }
+  const col = Object.fromEntries(H.ELEMENTS.map((e) => [e[0], e[4]]));
+  assert.deepEqual(Object.keys(H.CLEAR_CTRL).sort(), Object.keys(col).filter((id) => col[id] === "left" || col[id] === "right").sort(),
+    "every side-column piece clears the touch controls when moved (it used to be rel / inputs / sectors by hand)");
+  for (const id of ["rel", "inputs", "sectors"]) assert.ok(H.CLEAR_CTRL[id], id + " still clears");
+  // Live: LIMITS crosses left under data-limits-left; RELATIVE's touch home is the left column.
+  assert.equal(H.columnOf("rel"), "right", "desktop RELATIVE: under the right column");
+  assert.equal(H.originOf("rel"), "top right");
+  const touch = load3({ classes: [] });
+  assert.equal(touch.H.columnOf("rel"), "left", "touch RELATIVE: the left column …");
+  assert.equal(touch.H.originOf("rel"), "top left", "… so it grows away from the LEFT edge, not off it");
+  const crossed = load3({ classes: ["desktop"], rootAttrs: { "data-limits-left": "" } });
+  assert.equal(crossed.H.columnOf("limits"), "left"); assert.equal(crossed.H.originOf("limits"), "top left");
+  // js/ui/hud.js's column allocators stack exactly the side pieces this table names.
+  const hud = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
+  const ids = (fn) => [...hud.slice(hud.indexOf("function " + fn), hud.indexOf("const solve", hud.indexOf("function " + fn))).matchAll(/\["(\w+)", /g)].map((m) => m[1]);
+  assert.ok(ids("placeRightColumn").length >= 3 && ids("placeLeftColumn").length >= 3, "the allocators list their pieces");
+  for (const id of ids("placeRightColumn")) assert.ok(id === "rel" || col[id] === "right", "right allocator piece " + id + " is a right-column element");
+  for (const id of ids("placeLeftColumn")) assert.ok(["limits", "rel"].includes(id) || col[id] === "left", "left allocator piece " + id + " is (live) a left-column element");
+});
+
 test("hiddenReason: a column piece js/ui/hud.js dropped for want of room says so, softly, until it is placed", () => {
   for (const id of ["strat", "rel", "inputs", "damage", "limits"]) {
     const L = load3({ live: true, classes: ["desktop"] });
