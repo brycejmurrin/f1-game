@@ -658,6 +658,19 @@ test("MOTION: REDUCED stops every HUD pulse, not only the OS query", () => {
   assert.match(readCssSource("css/overlays.css"), /:root\[data-motion="reduce"\] #hud-restore::after \{ animation: none; \}/);
 });
 
+test("MOTION: REDUCED keeps RELATIVE fit geometry out of transitions", () => {
+  const rules = cssRules(read("css/hud.css"));
+  const fit = rules.find((r) => r.selector.includes(':root[data-motion="reduce"]')
+    && /#hud-rel\b/.test(r.selector) && r.decls.has("transition-property"));
+  assert.ok(fit, "RELATIVE needs the geometry exemption: even a 0.01ms transition returns its old rect inside syncPhoneFit");
+  const properties = fit.decls.get("transition-property").split(",").map((p) => p.trim());
+  for (const geometry of ["all", "left", "top", "width", "height", "max-height", "zoom", "transform"]) {
+    assert.ok(!properties.includes(geometry), `${geometry} must land before the synchronous clearance probe`);
+  }
+  assert.ok(properties.includes("opacity") && properties.includes("color"), "paint transitions keep the reduced-motion backstop");
+  assert.ok(!fit.decls.has("zoom") && !fit.decls.has("--hud-z"), "the exemption does not change RELATIVE's band zoom");
+});
+
 function pitBoot(opts) {
   const b = boot(opts);
   b.G.track.pit = { entryRoadM: 1, sA: 10, sB: 30, sIn: 15 };
@@ -949,12 +962,18 @@ test("the safe-area inset comes from --sar, never from the sector plate's right 
 
 test("a dropped gap strip carries the radio card's caution step down with the flag chip", () => {
   const css = readCssSource("css/hud.css"), hud = read("js/ui/hud.js");
-  // The flag chip steps down under :root[data-gap-drop]; the card cannot reach `:root … body`, so the drop is mirrored onto body.
+  // The flag chip steps down under :root[data-gap-drop]; the card's caution step reads the same slot through
+  // --flag-slot-top, which the root flag raises (#1345) — ONE formula, no body mirror (the #1366 twins were
+  // dropped at the ship sync: HUD PR review 2026-10-10).
   assert.match(css, /:root\[data-gap-drop\] #hud-flag \{\s*top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 74px\)/);
-  assert.match(css, /body\[data-gap-drop\]:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 74px\)[^;]*\+ 38px\)/,
-    "the card sits 38px under the dropped flag chip");
-  assert.match(css, /body\[data-gap-drop\]\[data-density="compact"\]:not[^{]*#announce \{ top: calc\([^;]*\+ 34px\)/, "compact keeps its tighter step under the dropped chip");
-  assert.match(hud, /drop !== document\.body\.hasAttribute\("data-gap-drop"\)/, "gapForm mirrors the drop onto body, compared against the DOM like the root attribute");
+  assert.match(css, /:root\[data-gap-drop\] #announce \{ --flag-slot-top: calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 74px\); \}/,
+    "the dropped strip raises the card's flag slot to the chip's edge");
+  assert.match(css, /body:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 38px\); \}/,
+    "the card sits 38px under the flag slot, wherever the chip is");
+  assert.match(css, /body\[data-density="compact"\]:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 34px\); \}/,
+    "compact keeps its tighter step under the chip");
+  assert.doesNotMatch(css, /body\[data-gap-drop\]/, "no body[data-gap-drop] twin: the slot token is the one writer");
+  assert.doesNotMatch(hud, /body\.(setAttribute|removeAttribute|hasAttribute)\("data-gap-drop"/, "gapForm no longer mirrors the drop onto body");
 });
 
 test("an empty timing tower still fits the bottom band and writes the dock cap", () => {
@@ -1209,7 +1228,7 @@ test("a moved (data-hl) piece whose words change width re-fits on the next tick,
 test("the caution step-aside needs the card's other slot to really apply; TEXT LARGER grows the ERS bar", () => {
   const rules = cssRules(read("css/hud.css"));
   const caution = rules.filter((r) => /:has\(#hud-flag:not\(\[hidden\]\)\) #announce$/.test(r.selector));
-  assert.equal(caution.length, 4, "base and compact caution rules, each with its dropped-gap-strip twin (body[data-gap-drop])");
+  assert.equal(caution.length, 2, "base and compact caution rules — the dropped-gap-strip case rides --flag-slot-top, not a twin rule");
   for (const r of caution) assert.match(r.selector, /:not\(\.hud-mirror-on\.hud-mirror-side\)/, r.selector);
   const tok = read("css/tokens.css");
   for (const size of ["large", "larger"]) {

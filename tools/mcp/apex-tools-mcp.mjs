@@ -42,7 +42,9 @@ const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
 const LOCK_PATH = path.join(ROOT, "scratch", "apex-browser.lock");
-const TEST_BG_STATE = path.join(ROOT, "artifacts", "logs", "test-bg.json");
+// APEX_TEST_BG_STATE points the occupancy check at another registry, so a test
+// never rewrites the real artifacts/logs/test-bg.json under a live run (TS1).
+const TEST_BG_STATE = process.env.APEX_TEST_BG_STATE || path.join(ROOT, "artifacts", "logs", "test-bg.json");
 const CHROME_DAEMON_STATE = path.join(ROOT, "scratch", "probe-chrome-daemon.port");
 const ARTIFACTS_DIR = path.join(ROOT, "artifacts");
 const SCRATCH_DIR = path.join(ROOT, "scratch");
@@ -1130,6 +1132,20 @@ function aliasHudDevice(args) {
   const mapped = HUD_DEVICE_ALIASES[args.device];
   return mapped && mapped !== args.device ? { ...args, device: mapped } : args;
 }
+/** `apex_hud_shot` uses inlineImage; ui/shot wraps use image — accept either name. */
+function aliasImageArgs(name, args) {
+  if (!args || typeof args !== "object") return args;
+  if (name === "apex_hud_shot" && Object.hasOwn(args, "image") && !Object.hasOwn(args, "inlineImage")) {
+    const { image, ...rest } = args;
+    return { ...rest, inlineImage: image };
+  }
+  if ((name === "apex_ui_shot" || name === "apex_shot" || name === "apex_shot_survey")
+      && Object.hasOwn(args, "inlineImage") && !Object.hasOwn(args, "image")) {
+    const { inlineImage, ...rest } = args;
+    return { ...rest, image: inlineImage };
+  }
+  return args;
+}
 function validateValue(value, schema, label) {
   if (schema.anyOf) {
     const fits = schema.anyOf.some((part) => { try { validateValue(value, part, label); return true; } catch { return false; } });
@@ -2080,6 +2096,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 
   // layout-audit viewport ids are accepted and rewritten to HUD device ids before schema enum checks.
   if (name === "apex_hud_shot" || name === "apex_hud_survey") args = aliasHudDevice(args);
+  args = aliasImageArgs(name, args);
 
   try { validateArgs(known, args); }
   catch (e) { return e.refuse || refuse("bad_args", String(e.message || e), "See the tool inputSchema."); }

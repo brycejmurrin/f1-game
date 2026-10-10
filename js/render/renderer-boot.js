@@ -80,6 +80,27 @@ async function gpuAdapterAvailable() {
     return false;
   }
 }
+// Every awaited step of the backend boot runs before any menu handler is wired,
+// and several of them wait on the device or the network with no timer of their
+// own (ApexXR.detect → navigator.xr.isSessionSupported, the backend script fetch,
+// TLX's import("three/webgpu") / requestAdapter / renderer.init → requestDevice).
+// A hung request left a DEAD TITLE until the next reload's canary reverted to
+// GLX. A step that outlives BOOT_STEP_MS resolves to TIMED_OUT and the caller
+// treats the backend as unavailable and falls through to GLX. Logged once, where
+// it fires; a step that settles in time costs one cleared timer.
+const BOOT_STEP_MS = 8000;
+const TIMED_OUT = { timedOut: true };
+function withTimeout(promise, ms, label) {
+  if (typeof setTimeout !== "function") return Promise.resolve(promise);   // some VM harnesses: await it alone
+  let timer = null;
+  const cap = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      Log.warn("gfx", label + " gave no answer in " + ms / 1000 + " s — treating the backend as unavailable");
+      resolve(TIMED_OUT);
+    }, ms);
+  });
+  return Promise.race([Promise.resolve(promise), cap]).finally(() => clearTimeout(timer));
+}
 function showGraphicsUnavailable() {
   RendererPicker.showUnavailable({
     panel: $("nogl"), hud: els.hud, overlay: els.overlay,
@@ -91,6 +112,7 @@ function showGraphicsUnavailable() {
 async function start() {
 let gfx = null;
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
+let _createHung = false;     // the backend's create() never answered: leave its canary armed
 try {
   // Refresh apex26.xrCaps before sync bootPick (ms). ApexXR is LAZY_XR and is only
   // fetched by XrBoot.mountUi, after this runs, so on a real boot it is undefined
@@ -101,7 +123,7 @@ try {
   // renderer ENTER VR cannot use (the legacy XrBoot.ensureXrBackend TLX pin is
   // what works today). Fix the plan's backend first.
   if (typeof ApexXR !== "undefined" && ApexXR.detect) {
-    try { await ApexXR.detect(); } catch (_) { /* caps stay cached */ }
+    try { await withTimeout(ApexXR.detect(), BOOT_STEP_MS, "XR capability probe"); } catch (_) { /* caps stay cached */ }
   }
   const stored = storedBackendPreference();
   let pref = stored.pref;
@@ -177,8 +199,11 @@ try {
     // needed beyond this: a failed fetch leaves the backend global absent,
     // which Gfx.create treats as unavailable and falls through to GLX.
     if (pref === "three") preloadThreeVendor();
-    await loadBackendScripts(pref === "three" ? BACKEND_FILES.three : BACKEND_FILES.webgpu);
-    const backend = await Gfx.create(canvas, { backend: pref });
+    const fetched = await withTimeout(loadBackendScripts(pref === "three" ? BACKEND_FILES.three : BACKEND_FILES.webgpu), BOOT_STEP_MS, "backend script fetch");
+    // A slow fetch is the network's verdict, not the device's: GLX for this boot,
+    // canary state untouched. A hung create() IS the device's (see _createHung).
+    const made = fetched === TIMED_OUT ? null : await withTimeout(Gfx.create(canvas, { backend: pref }), BOOT_STEP_MS, "backend " + pref + " init");
+    const backend = made === TIMED_OUT ? (_createHung = true, null) : made;
     if (backend) {
       // game.js and tracks.js take the backend by injection (the `gfx` handle
       // / Tracks.build's opts.gfx) and need no patch. The descriptor-copy
@@ -244,8 +269,11 @@ if (!gfx) {
   try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window/event surface */ }
   // Live tab, create() refused. Keep the pick and disarm the canary so a
   // refresh retries instead of reverting to WEBGL2. Jetsam during create()
-  // never reaches here — the probe stays armed and the next boot reverts.
-  try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
+  // never reaches here — the probe stays armed and the next boot reverts. A
+  // create() that HUNG is the same case as a jetsam kill (it never completed),
+  // so its probe stays armed too: the strike ledger retires a device that hangs
+  // twice instead of costing every boot BOOT_STEP_MS.
+  if (!_createHung) try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
 }
 return { gfx, bound: _backendBound };
 }

@@ -153,13 +153,14 @@
      while the map pushes the widget rightward, and the slot between them closes.
      The adaptive font cap below holds the widget to 84px wide at 100% and 121 at
      200%, and it clears everything through 150% (27px of slack at 1000x450,
-     19px at 1280x800). Past that the slot is gone — but so is the corner: at
-     1280x800 @200% `#minimap`'s right edge is 21px PAST `.hud-top`'s left edge,
-     i.e. the map and the POS row overlap each other with this widget removed
-     from the comparison entirely (same at 852x393). Nothing legible fits in the
-     61px left at 175%, so there is no CSS fix at that end and no point pursuing
-     one; docking below `.hud-top` does clear at every scale, and was tried, but
-     it breaks up the top-left cluster. */
+     19px at 1280x800). Past that the slot is gone — `data-gap-drop` (fitHud)
+     parks this strip under the tower. Uncapped geometry still has the map and
+     POS row clash (historic: 1280×800 @200% map right 21px past `.hud-top`
+     left; same class at 852×393). With today's shared top-band cap, 1280×720
+     @150–200% keeps ~12px map×tower slack at `--hud-z-top`≈1.46 (hud-survey
+     2026-10-10) — so there is no CSS one-liner that clears a remaining clash
+     without breaking the top-left cluster; docking under `.hud-top` was tried
+     and rejected for that reason. */
   top: calc(8px + var(--sat) / var(--hud-z));
   left: calc(146px + var(--sal) / var(--hud-z));
   /* ADAPTIVE SIZE. 12px is the base — below --fs-micro (14px, the token scale's
@@ -954,9 +955,11 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    — and --dock-r-w was taken off the same stale BOOST edge. The top band got
    this fix first (`transition-property` on the --hud-z-top group above); the
    dock, the bottom band and the two top-right buttons are measured the same
-   way. Paint-only properties keep their 0.01ms, so nothing that was instant
+   way. RELATIVE also resets left/max-height inside syncPhoneFit: a transition
+   returns its previous rectangle until the next frame, even at 0.01ms.
+   Paint-only properties keep their 0.01ms, so nothing that was instant
    starts moving. */
-:root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, #pausebtn, #btn-cam) {
+:root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, #pausebtn, #btn-cam, #hud-rel) {
   transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
 }
 /* The flag clears the DROPPED strip, so it tracks the same measured edge: 70px
@@ -1093,13 +1096,13 @@ body[data-density="compact"] #announce {
    the card's other slot really applies: the beside-the-mirror rule also needs
    .hud-mirror-on, so a bare .hud-mirror-side used to cancel the step while the
    card stayed in the centre — the flag on the card, 844x390 (survey 2026-10-04). */
-body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
-body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
-/* A DROPPED GAP STRIP PUSHES THE FLAG CHIP DOWN (:root[data-gap-drop] #hud-flag: the tower's measured height
-   + 74px), so the card's caution step follows the chip, not the 100px / 72px slot — it sat 8px over the chip on
-   844x390 (survey 2026-10-10: flag x announce in every phone cell). body[data-gap-drop] mirrors the root flag. */
-body[data-gap-drop]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
-body[data-gap-drop][data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
+/* --flag-slot-top is declared on the main #announce rule (below). data-gap-drop
+   raises it to the dropped-strip edge so caution steps from the painted flag
+   (MCP survey B3 phoneL-chase). */
+body[data-density="compact"] #announce { --flag-slot-top: calc(72px + var(--sat) / var(--hud-z)); }
+:root[data-gap-drop] #announce { --flag-slot-top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px); }
+body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
+body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
 
 /* ---------- start lights ---------- */
 /* The gantry is driven purely by `els.lights.hidden = true/false` in
@@ -1173,6 +1176,8 @@ body[data-gap-drop][data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):
   overflow: hidden; clip-path: inset(50%); white-space: nowrap;
 }
 #announce {
+  /* Undropped flag home; gap-drop / compact override --flag-slot-top above. */
+  --flag-slot-top: calc(100px + var(--sat) / var(--hud-z));
   position: fixed;
   top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 10px), calc(var(--mir-bot, 0px) + 8px));
   left: 50%; transform: translateX(-50%);
@@ -1760,13 +1765,23 @@ body.lt-open .touchbtn { display: none !important; }
   outline: 1px solid var(--hc-hud-line);   /* outline, not border: the team stripe is border-left */
 }
 /* ── BROADCAST TIMING TOWER (js/race/broadcast.js) ──────────────────────────
-   A REAL RACE WATCH / HIGHLIGHTS run only (body.bc-on): the whole field down
-   the left edge, as the TV graphics show it. It takes the top-left corner, so
-   the minimap, the gap strip and the top band (the followed car's POS/LAP,
-   which the tower already says) stand down while it is up. The rows are
-   buttons: a tap follows that car. The head flips GAP / INTERVAL. */
-body.bc-on #minimap, body.bc-on .hud-gaps, body.bc-on .hud-top,
-body.bc-on #hud-tyre, body.bc-on #hud-pit { display: none !important; }   /* the tyre chip is the SIM's plan for a puppet: the tower shows the real stint */
+   A REAL RACE WATCH / HIGHLIGHTS run (body.bc-on). The picture is a
+   broadcast: the tower, the PiP and the replay bar stay. The driving HUD
+   does not — timing band, map, gaps, speed, gear, energy, tyres, overtake,
+   aero, bias, sectors, flags, mirror, the helmet visor and the touch pads.
+   display:none, not visibility, so a placed chip (data-hl) cannot punch
+   back through. The same list under body.watch-controls-on lives in
+   css/watch-transport.css (that class stays in one file). Pause stays.
+   The race camera chip and the radio card stand down; the replay bar has
+   its own camera control. The timing tower and the PiP stay. */
+body.bc-on :is(.hud-top, .hud-gaps, .hud-bottom, #minimap, #hud-dock) { display: none !important; }
+body.bc-on :is(#hud-gearbox, #hud-speed, #hud-energy, #hud-tyre, #hud-pit, #hud-work) { display: none !important; }
+body.bc-on :is(#hud-ot, #hud-aero, #hud-bb, #hud-sectors, #hud-limits) { display: none !important; }
+body.bc-on :is(#hud-damage, #hud-flag, #hud-mirror, #hud-mirror-chip) { display: none !important; }
+body.bc-on :is(#hud-rel, #hud-strat, #hud-inputs) { display: none !important; }
+body.bc-on :is(.touchbtn, #campicker) { display: none !important; }
+body.bc-on :is(#btn-cam, #announce, #lights) { display: none !important; }
+body.bc-on[data-helmet-cam] #hud::before { content: none; }
 #bc-tower {
   --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z);
   position: absolute;

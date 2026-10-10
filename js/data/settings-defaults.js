@@ -58,6 +58,7 @@ const SettingsDefaults = (function () {
     "raceGrid": "random",
     "drivingCoach": false,
     "caution": false,
+    "unlimitedBudget": true,
     // AUDIO (js/audio/panel.js)
     "volMusic": 0.6,
     "volSfx": 0.2,

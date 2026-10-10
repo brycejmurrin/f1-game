@@ -58,11 +58,17 @@ const RaceInsights = (function () {
   const SLOW = 0.06, TRAFFIC_N = 3;   // a "backmarker" is 6% down on your own _vmaxNow; three of them is a stint through traffic
   const CLEAR_S = 1.5;         // held clear before a pass is a pass
   // SPEED UNITS (js/ui/appearance-opts.js) is display-only; the drills still measure in m/s.
-  const kmh = v => (typeof AppearanceOpts !== "undefined" ? AppearanceOpts.speed(Math.abs(v) * 3.6) : Math.round(Math.abs(v) * 3.6));
+  // `dash` is G.dashKph: the speedometer's km/h (PACE-standardised), so a debrief
+  // speed reads like the dial did; a G without it falls back to the raw m/s.
+  const kmhOf = (dash, v) => {
+    const k = dash ? dash(Math.abs(v)) : Math.abs(v) * 3.6;
+    return typeof AppearanceOpts !== "undefined" ? AppearanceOpts.speed(k) : Math.round(k);
+  };
   const unit = () => (typeof AppearanceOpts !== "undefined" && AppearanceOpts.units() === "mph" ? " mph" : " km/h");
   const median = (a) => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[s.length >> 1] : null; };
   const boundedPush = (a, v, n) => { a.push(v); if (a.length > n) a.shift(); };
   function create(G) {
+    const kmh = (v) => kmhOf(G.dashKph, v);
     let previous = null, events = [], sequence = 0, laps = [], sector = null, energy = [[], [], []];
     let tyreStart = null, drill = null, lastDrill = null, distance = 0, lapClean = false, weather = null, attempts = {};
     let paceRef = null, paceWin = [];   // the car ahead, and the rolling pace read on it (samplePace)
@@ -95,8 +101,7 @@ const RaceInsights = (function () {
           // Any slower car up the road, not just the one in our lane — traffic
           // is traffic wherever it sits.
           const slower = (G.cars || []).filter(o => o !== c && !o.retired && !o.finished
-            && (gapTo(o, c) || 0) > 0 && (o._vmaxNow || 0) > 0 && (c._vmaxNow || 0) > 0
-            && (o._vmaxNow / c._vmaxNow) < 1 - SLOW);
+            && (gapTo(o, c) || 0) > 0 && isBackmarker(o, c));
           if (!slower.length) { G.announce("NO SLOWER TRAFFIC AHEAD TO PASS", 2, "practice"); return false; }
           rival = slower[0];
         } else rival = mode === "defend" ? nearestBehind(c) : nearestAhead(c);
@@ -170,6 +175,8 @@ const RaceInsights = (function () {
       const d = (o.prog || 0) - (c.prog || 0);
       return ((d + L / 2) % L + L) % L - L / 2;
     }
+    // The arming filter for BACKMARKERS, shared with the clear count: a car 6% down on our own pace.
+    const isBackmarker = (o, c) => (o._vmaxNow || 0) > 0 && (c._vmaxNow || 0) > 0 && (o._vmaxNow / c._vmaxNow) < 1 - SLOW;
     // Nearest car in our lane, one direction. Positions only — no curvature, no
     // racing line, nothing the arc rule forbids reaching the driver.
     function nearestIn(c, sign) {
@@ -411,7 +418,7 @@ const RaceInsights = (function () {
           if (o === c || o.retired || o.finished) continue;
           const g = gapTo(o, c);
           if (g == null) continue;
-          if (g > SIDE_M) drill.passing.add(o);
+          if (g > SIDE_M) { if (isBackmarker(o, c)) drill.passing.add(o); }   // a quicker car crossing the half-lap wrap flips ahead->behind without being passed
           else if (g < -SIDE_M && drill.passing.delete(o)) drill.cleared++;
         }
         if (drill.cleared >= TRAFFIC_N) { finishDrill(current, c); return; }

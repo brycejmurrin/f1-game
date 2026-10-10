@@ -15,8 +15,15 @@ const GameStore = (function () {
     return v;
   }
 
-  // full key -> error name of its last failed write (store.writeFailed()).
+  // full key -> { name, k, lane, v } of its last failed write: the error name
+  // for store.writeFailed(), and the value itself so retryFailed() can write it
+  // again once storage has room (a name alone could only be reported, never healed).
   const _writeFails = new Map();
+
+  // A shipped default is shared data: handing out the object itself let a
+  // caller that edits what get() returned (the garage sheet mutates its parts
+  // build in place) rewrite the default for every later read and for RESET.
+  const cloneDef = (v) => (v !== null && typeof v === "object" ? JSON.parse(JSON.stringify(v)) : v);
 
   const store = {
     _cache: new Map(),   // full-key -> parsed value; kills per-frame getItem + JSON.parse in the render loop
@@ -34,9 +41,9 @@ const GameStore = (function () {
     // guarded on typeof so store.js still loads alone in a unit test.
     _def(k, d) {
       if (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(k))
-        return SettingsDefaults.get(k);
+        return cloneDef(SettingsDefaults.get(k));
       if (typeof GarageDefaults !== "undefined" && GarageDefaults.has(k))
-        return GarageDefaults.get(k);
+        return cloneDef(GarageDefaults.get(k));
       return d;
     },
     get(k, d) {
@@ -74,6 +81,14 @@ const GameStore = (function () {
       }
       return v === undefined ? this._def(k, d) : v;
     },
+    // What the PLAYER stored (or set this session), with no shipped default and
+    // no call-site fallback: undefined when the key was never written. A "never
+    // seeded" sentinel cannot use get() once a default ships for its key.
+    getStored(k) {
+      const key = fullKey(k);
+      if (!this._cache.has(key)) this.get(k);   // fills the cache through the one read/corrupt-key path
+      return this._cache.get(key);
+    },
     // THE CACHE IS WRITTEN EVEN WHEN THE DISK WRITE FAILS, AND THAT IS DELIBERATE —
     // but it must not be silent. Safari on iOS sets the localStorage quota to ZERO
     // in Private Browsing, so setItem throws on the very first write while _cache
@@ -101,18 +116,32 @@ const GameStore = (function () {
     // default), and it is what the mirror below already did with it.
     write(k, v, options) {
       const key = "apex26." + k;
+      // STRINGIFY ONCE, BEFORE ANYTHING IS TOUCHED. It ran twice (inside the try
+      // and again for the mirror), so a BigInt or cyclic value threw out of
+      // write() AFTER the cache and `rev` had moved: the session answered with a
+      // value that could never be saved and the caller got an exception instead
+      // of a result. A value that cannot be serialised is refused whole: no
+      // cache, no rev, no mirror op (a null mirror json is read as a DELETE, so
+      // queueing it would tombstone a key that still holds its old value).
+      let json;
+      try { json = v === undefined ? undefined : JSON.stringify(v); }
+      catch (e) {
+        noteBroken(e, "write " + k);
+        _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "json", v });
+        return { ok: false, durable: false, reason: this.broken || (e && e.name) || "Error" };
+      }
       let durable = true;
       try {
-        if (v === undefined) localStorage.removeItem(key);
-        else setRoomy(key, JSON.stringify(v));
+        if (json === undefined) localStorage.removeItem(key);
+        else setRoomy(key, json);
         _writeFails.delete(key);
-      } catch (e) { durable = false; noteBroken(e, "write " + k); _writeFails.set(key, (e && e.name) || "Error"); }
+      } catch (e) { durable = false; noteBroken(e, "write " + k); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "json", v }); }
       this._cache.set(key, v);
       this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
       this.rev++;
       // Mirrored even when the disk write failed: a quota-refused career save
       // is exactly the write the durable copy exists for.
-      if (mirrorKey(key)) mirrorQueue(key, v === null || v === undefined ? null : JSON.stringify(v), durable, options);
+      if (mirrorKey(key)) mirrorQueue(key, v === null || json === undefined ? null : json, durable, options);
       const result = { ok: true, durable, reason: durable ? null : (this.broken || "Error") };
       this._notify({ key: k, durable, reason: result.reason, local: true });
       return result;
@@ -121,8 +150,23 @@ const GameStore = (function () {
     // or null. A corrupt read or a blocked read sets `broken` but is not this:
     // the save banner asks "will what I just saved survive a reload?".
     writeFailed() {
-      for (const reason of _writeFails.values()) return reason;
+      for (const f of _writeFails.values()) return f.name;
       return null;
+    },
+    // Write every failed key again (SAVE RETRY): a quota outage can refuse the
+    // garage, settings and leaderboard keys as well as the career save, and a
+    // banner that says SAVE RESTORED must mean all of them landed. Returns the
+    // combined write() shape; durable is false while any key is still refused.
+    retryFailed() {
+      let durable = true, reason = null, retried = 0;
+      for (const f of [..._writeFails.values()]) {
+        retried++;
+        const r = f.lane === "raw"
+          ? { durable: this.rawSet(f.k, f.v), reason: this.broken || f.name }
+          : this.write(f.k, f.v);
+        if (!r.durable) { durable = false; reason = reason || r.reason; }
+      }
+      return { ok: true, durable, reason, retried };
     },
     keyRevision(k) {
       return this._clearRev + ":" + (this._keyRev.get(fullKey(k)) || 0);
@@ -152,7 +196,7 @@ const GameStore = (function () {
       const key = fullKey(k);
       this._cache.delete(key);   // a key lives in one lane; if one ever strays, the disk wins
       try { setRoomy(key, v); _writeFails.delete(key); return true; }
-      catch (e) { noteBroken(e, "write " + k); _writeFails.set(key, (e && e.name) || "Error"); return false; }
+      catch (e) { noteBroken(e, "write " + k); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", v }); return false; }
     },
     rawDel(k) {
       const key = fullKey(k);
@@ -190,6 +234,10 @@ const GameStore = (function () {
     // in this origin is not ours and must not bump rev.
     onForeignWrite(e) {
       if (!e) return false;
+      // sessionStorage fires `storage` too (a sibling window of the same tab
+      // group, including its clear()), but those keys are not this document's
+      // localStorage cache. Checked first so a session clear() cannot drop it.
+      try { if (e.storageArea && e.storageArea !== localStorage) return false; } catch (_) { /* storage blocked: nothing to compare */ }
       if (e.key === null) {
         this._cache.clear(); this._clearRev++; this.rev++; this.foreign++;
         this._notify({ key: null, foreign: true, clear: true });
@@ -282,7 +330,14 @@ const GameStore = (function () {
         if (settled) { if (db) { try { db.close(); } catch (e) { /* late open after timeout: nothing owns it */ } } return; }
         settled = true;
         if (timer !== null) clearTimeout(timer);
-        if (db) db.onversionchange = () => { try { db.close(); } catch (e) { /* another lifecycle path closed it first */ } };
+        // The handle is closed for good, so the memo that resolves to it must go
+        // too: the next mirrorOpen() would otherwise hand every later flush a
+        // closed db (InvalidStateError -> "no mirror" until reload).
+        if (db) db.onversionchange = () => {
+          try { db.close(); } catch (e) { /* another lifecycle path closed it first */ }
+          mirror.supported = false;
+          _mirrorDb = null;
+        };
         res(db || null);
       };
       try {

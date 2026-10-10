@@ -17,11 +17,16 @@ $("mb-race").onclick = () => {
 };
 // Optional markup must not turn one missing screen into a whole-app boot failure.
 if ($("mb-vs")) $("mb-vs").onclick = () => {
-  // The peer-to-peer lobby starts the race once both sides agree.
-  G.flow = "gp"; G.session = "race";
-  restoreFreePlaySelection();
-  // The bundle lands before the screen does; ensureNet() wires the real lobby.
-  ensureNet().then((ok) => { if (ok) G.netLobby.open(); });
+  // The peer-to-peer lobby starts the race once both sides agree. The bundle
+  // lands before the screen does; ensureNet() wires the real lobby. Flow and
+  // selection are written only once it has: a refused/offline load must leave
+  // the title untouched and say so.
+  Promise.resolve(ensureNet()).then((ok) => ok, () => false).then((ok) => {
+    if (!ok) { G.announce("COULD NOT LOAD — CHECK YOUR CONNECTION OR RELOAD", 4, "warning"); return; }
+    G.flow = "gp"; G.session = "race";
+    restoreFreePlaySelection();
+    G.netLobby.open();
+  });
   if (G.soundOn) GameAudio.uiSelect();
 };
 function openTimeTrial(selectDaily) {
@@ -39,7 +44,11 @@ $("mb-tt").onclick = () => openTimeTrial(false);
 async function consumeGhostHash() {
   // A ghost link landing MID-RACE waits, fragment intact, for the menu (quitToMenu re-reads it) — as #353's invite link does.
   if (UiLayers.inRace()) { Log.info("game", "ghost link deferred: racing"); return null; }
-  const shared = await GhostShare.consumeHash({ valid: () => !UiLayers.inRace(),
+  // …and so does one landing over any other layer (results / quali sheet, the RACE loading plate, the career hub, an open
+  // picker): it would flip flow/session to a time trial under that screen. Only the title itself takes the link.
+  const top = els.overlay.hidden ? null : UiLayers.top();
+  if (els.overlay.hidden || (top && top.id !== "overlay")) { Log.info("game", "ghost link deferred: title not live"); return null; }
+  const shared = await GhostShare.consumeHash({ valid: () => !UiLayers.inRace() && !els.overlay.hidden,
     notify: (message, result) => G.announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
   });
   if (!shared || !shared.ok) return shared;

@@ -26,12 +26,20 @@ outputs:
 runs:
   using: composite
   steps:
+    # The runner image rolls under a constant runner.os (`Linux`): a restored
+    # browser would then run against system libraries --with-deps never
+    # installed on the new image. ImageOS/ImageVersion are runner env vars (not
+    # in the `env` context), so read them in a step (PA1, 2026-10-10).
+    - name: Name the runner image
+      id: img
+      shell: bash
+      run: echo "id=${ImageOS:-local}-${ImageVersion:-0}" >> "$GITHUB_OUTPUT"
     - name: Cache Chromium
       id: pwcache
       uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: ${{ inputs.browsers-path }}
-        key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+        key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ steps.img.outputs.id }}
     - name: Install Chromium on cache miss
       if: steps.pwcache.outputs.cache-hit != 'true'
       shell: bash

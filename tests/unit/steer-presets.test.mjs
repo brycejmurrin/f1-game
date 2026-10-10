@@ -136,8 +136,12 @@ test("RELAX is the most forgiving bundle, which is the whole point of it", () =>
 function bootTuning(input = {}) {
   const els = {};
   const noop = () => {};
-  const mk = () => ({ value: "", textContent: "", hidden: false, oninput: null, onclick: null,
-    classList: { toggle: noop, add: noop, remove: noop }, addEventListener: noop, setAttribute: noop });
+  const mk = () => {
+    const el = { value: "", textContent: "", hidden: false, oninput: null, onclick: null, listeners: [],
+      classList: { toggle: noop, add: noop, remove: noop }, setAttribute: noop };
+    el.addEventListener = (t, f) => { el.listeners.push([t, f]); };
+    return el;
+  };
   const $ = (id) => (els[id] ||= mk());
   const disk = {};
   const store = {
@@ -257,4 +261,18 @@ test("refreshPresetButtons reconciles a stale preset chip against live values", 
   disk.steerRate = 7; // PRO rack, but assists still OFF → no named bundle
   apply();
   assert.equal(disk.preset, "custom", "mixed values clear a stale ROOKIE claim");
+});
+
+test("the injected AUDIO DRIVING CUES row drops the preset chip by delegation (bug-hunt H11)", () => {
+  // driving-cues.js owns the row's own handler (injected after boot under LAZY_AUDIO);
+  // steer-tuning only sees its bubbled input event on #advanced-inner.
+  const { $, disk } = bootTuning();
+  $("pm-preset-pro").onclick();
+  assert.equal(disk.preset, "pro");
+  disk.audioCues = 5;   // what the row's own oninput has just stored
+  for (const [t, f] of $("advanced-inner").listeners) if (t === "input") f({ target: { id: "pm-audiocues" } });
+  assert.equal(disk.preset, "custom", "audioCues is preset-owned: moving it must clear PRO");
+  $("pm-preset-pro").onclick();
+  for (const [t, f] of $("advanced-inner").listeners) if (t === "input") f({ target: { id: "pm-haptics" } });
+  assert.equal(disk.preset, "pro", "another row's bubbled input leaves the chip alone");
 });

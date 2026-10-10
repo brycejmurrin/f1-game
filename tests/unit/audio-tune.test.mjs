@@ -2268,3 +2268,51 @@ test("feedReplayScrub: replay scrub drives engine + rivals from replayed speed, 
   feed(player, true); A.resetReplayScrub(); feed(player, false);
   assert.equal(A.debug().engineOn, true, "resetReplayScrub (setPaused) drops the pending exit");
 });
+
+test("stopping the engine stops EVERY source it started, the skid LFO included", async () => {
+  // Disconnecting an oscillator is not stopping it: a started, never-stopped
+  // source stays in the context's active-source set, one more per pause/resume,
+  // tab hide/show or race restart (skidLfo was only disconnected).
+  for (const samples of [true, false]) {
+    const { GameAudio, release, flushTimers, ctx } = boot();
+    // `live` forgets a node on disconnect(), which is exactly how this leak hid.
+    const sources = [];
+    for (const k of ["createOscillator", "createBufferSource"]) {
+      const make = ctx[k];
+      ctx[k] = () => {
+        const n = make(), start = n.start, stop = n.stop;
+        n.started = false; n.stopped = false;   // start()/stop() with no time argument leave no stamp
+        n.start = (...a) => { n.started = true; return start(...a); };
+        n.stop = (...a) => { n.stopped = true; return stop(...a); };
+        sources.push(n);
+        return n;
+      };
+    }
+    GameAudio.init();
+    if (samples) await release();
+    for (let i = 0; i < 4; i++) {
+      GameAudio.startEngine();
+      GameAudio.stopEngine();
+      ctx.currentTime += 1;
+      flushTimers();
+    }
+    assert.equal(GameAudio.debug().usingSamples, samples, "precondition: the core under test");
+    const leaked = sources.filter((n) => n.started && !n.stopped);
+    assert.equal(leaked.length, 0, `${samples ? "sample" : "synth"} core: ${leaked.length} started, never-stopped source(s)`);
+  }
+});
+
+test("an identical rival idles and revs on the player's own pitch curve, not 6-9 semitones above it", async () => {
+  // Rivals read (0.25 + 0.45*rev), the numbers from before RATE_IDLE/RATE_SPAN;
+  // the player read the new pair, so the same car at idle sat ~9.5 semitones high.
+  const A = await sampleEngine();
+  const slot0 = Math.pow(2, -22 / 1200);   // RIVAL_DETUNE[0]: the only per-slot difference
+  for (const rev of [0, 0.5, 1]) {
+    A.setEngine(rev, 0, false, 0.6, 5, {});
+    const mine = A.rate();
+    A.setRivals([{ lat: 0, arc: 4, rev, approach: 0 }]);
+    const theirs = A.rivalState()[0].rate / slot0;
+    const semitones = 12 * Math.log2(theirs / mine);
+    assert.ok(Math.abs(semitones) < 0.05, `rev ${rev}: the rival is ${semitones.toFixed(2)} semitones off your own note`);
+  }
+});

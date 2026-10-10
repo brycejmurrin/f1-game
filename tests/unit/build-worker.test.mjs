@@ -300,6 +300,17 @@ test("worker world == main-thread world WITH baked models, pit signs and MY TEAM
   assert.notDeepEqual(c.log, a.log, "premise: the baked models change the uploads");
 });
 
+test("the worker's reply carries no terrain lookup cache (bug-hunt 6.7)", async () => {
+  const { T, page } = pageWithWorker();
+  const id = "monza", def = T.LIST.find((d) => d.id === id);
+  await page.Assets.loadModels();
+  const msg = await page.TrackBuildClient.build(MANIFEST.CIRCUITS.indexOf(id), def, { chunkRibbons: true, retainGraph: false }, recorder().gfx, MANIFEST.sceneryPath(id));
+  assert.ok(msg, "the worker answered a world");
+  // terrainGrid() (tracks.js) rebuilds this on first use: the cell lists were structured-cloned for nothing.
+  assert.ok(!msg.track._terrGrid, "no _terrGrid in the post");
+  console.log("props.list size on " + id + ": " + (msg.track.props && msg.track.props.list ? msg.track.props.list.length : "n/a"));
+});
+
 test("a worker holding fewer models than the page answers null (build in steps)", async () => {
   const { T, page } = pageWithWorker({ workerPack: false });
   await page.Assets.loadModels();

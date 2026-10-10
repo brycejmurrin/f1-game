@@ -326,12 +326,8 @@ function gapForm() {
     if (drop) root.dataset.gapDrop = "1";
     else delete root.dataset.gapDrop;
   }
-  // MIRRORED ONTO <body> for the radio card: css/hud.css cannot write `:root … body`, and the card's
-  // caution step (below the flag chip) must follow the chip down when a dropped strip pushes it down.
-  if (drop !== document.body.hasAttribute("data-gap-drop")) {
-    if (drop) document.body.setAttribute("data-gap-drop", "1");
-    else document.body.removeAttribute("data-gap-drop");
-  }
+  // The radio card's caution step follows the chip through `:root[data-gap-drop] #announce { --flag-slot-top }`
+  // (css/hud.css, #1345): no body mirror needed.
   return short ? _gapFormShort : _gapFormLong;
 }
 // A LAP OR MORE IS LAPS, NOT SECONDS. distance ÷ the player's speed is a fair
@@ -378,6 +374,10 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + "s";
 const FIT_AIR = 10;              // px of daylight required between two clusters
 const ROW_AIR = 2;               // px between the tower's bottom and the sector plate's top (touch)
 let _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
+// _fitStamped: a stamp is published and no clash has voided it since.
+// _fitClashRun: consecutive same-key ticks that re-opened the fit for a clash.
+let _fitStamped = false, _fitClashRun = 0;
+const FIT_CLASH_TRIES = 5;
 // Per moved piece: hidden, or visible + the LENGTH of its words. A moved piece's
 // width is part of what HudLayout.fit clamps, and the AERO chip's words change
 // all lap ("AERO 523m" counting down, AERO ZONE, STRAIGHT MODE, CORNER MODE):
@@ -696,7 +696,7 @@ function phonePaintedClash() {
   return false;
 }
 /** Phone-only: after REL/sectors/announce land, re-fit rows and publish stamp. */
-function phoneFitStampSync(scale) {
+function phoneFitStampSync(scale, force) {
   if (document.body.classList.contains("desktop")) return;
   const root = document.documentElement;
   const DOCK_AIR = 12;
@@ -750,10 +750,17 @@ function phoneFitStampSync(scale) {
     bumpDock();
     shrinkSectors();
   }
+  // A custom property written on <html> invalidates style for the whole tree and
+  // wakes sheet-shape's watchScale observer, so the 10 Hz tick must not rewrite
+  // it while nothing changed. A new stamp means "a clash cleared" (or a probe
+  // asked via syncPhoneFit, whose waiters need a fresh value each call).
   if (!phonePaintedClash()) {
-    _fitClearSeq = (_fitClearSeq + 1) | 0;
-    hStyle(root, "--hud-fit-stamp", String(_fitClearSeq));
-  } else hStyle(root, "--hud-fit-stamp", "");
+    if (force || !_fitStamped) {
+      _fitClearSeq = (_fitClearSeq + 1) | 0;
+      hStyle(root, "--hud-fit-stamp", String(_fitClearSeq));
+      _fitStamped = true;
+    }
+  } else { hStyle(root, "--hud-fit-stamp", ""); _fitStamped = false; }
 }
 function fitHud() {
   // Cinematic HUD: OFF and "any open .screen" hide #hud via display:none.
@@ -840,7 +847,12 @@ function fitHud() {
       }
     }
     if (!clash && phonePaintedClash()) clash = true;
-    if (!clash) return;
+    if (!clash) { _fitClashRun = 0; return; }
+    // A clash the fit cannot resolve (REL x BRAKE when hud-relative's cap guard
+    // refuses, S3 x BOOST at high HUD SIZE) re-opened the full fit, up to 8
+    // passes of layout reads, on every 10 Hz tick. A few tries per key, then the
+    // 3 s cadence; a changed key (below) starts over.
+    if (++_fitClashRun > FIT_CLASH_TRIES) return;
     _fitWait = 0;
   }
   _hlEls = document.querySelectorAll ? document.querySelectorAll("[data-hl]") : [];
@@ -848,6 +860,7 @@ function fitHud() {
   // A CHANGED key (resize / hud-scale) re-fits at the next tick; the counter
   // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD
   // tick ≈ 3 s between forced layout reads while nothing changed.
+  if (key !== _fitKey) _fitClashRun = 0;
   _fitKey = key; _fitWait = 30;
   // SINGLE SOURCE: the published band zooms, not el.currentCSSZoom.
   // Under load currentCSSZoom lags --hud-z-top by a frame (Pages
@@ -2242,6 +2255,7 @@ function invalidateFit() {
   if (!_hudTop || document.body.classList.contains("hud-hidden")) return;
   const root = document.documentElement;
   hStyle(root, "--hud-fit-stamp", "");
+  _fitStamped = false;
   radioTopSlot(root, document.body.classList.contains("hud-prof-broadcast"));
   radioPaintedCollapse(root);   // a collapse the fit just made must survive this re-pick
   mirrorClear(root);
@@ -2249,7 +2263,7 @@ function invalidateFit() {
 _invalidateFit = invalidateFit;
 function syncPhoneFit() {
   syncComputedRootVars();
-  phoneFitStampSync(+document.documentElement.style.getPropertyValue("--hud-scale") || _cssScale);
+  phoneFitStampSync(+document.documentElement.style.getPropertyValue("--hud-scale") || _cssScale, true);
   const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
   return !phonePaintedClash() && /^\d+$/.test(stamp);
 }

@@ -53,7 +53,10 @@ const PhonePad = (function () {
     // AUTO have no paddles, throttle on AUTO has no GAS zone, aero on AUTO (or
     // a circuit with no zones) has no AERO button. Sent with every dash so a
     // setting changed mid-session reaches the phone within a frame.
-    gearsAuto: 512, throttleAuto: 1024, aeroAuto: 2048, aeroNone: 4096 });
+    gearsAuto: 512, throttleAuto: 1024, aeroAuto: 2048, aeroNone: 4096,
+    // The SESSION, so the LCD does not paint a race position where there is none: qualifying's
+    // field is the player alone ("P1/1") and practice's rank is road order (hud.js: Q / PRAC).
+    quali: 8192, practice: 16384 });
   const round2 = (v) => Math.round((+v || 0) * 100) / 100;
   const num = (v, lo, hi) => (typeof v === "number" && isFinite(v)) ? Math.min(hi, Math.max(lo, v)) : 0;
 
@@ -509,7 +512,7 @@ const PhonePad = (function () {
     text("gear", h.gear === 0 ? "N" : h.gear < 0 ? "R" : String(h.gear));
     text("speed", inRace ? String(h.kmh) : "---");
     text("lap", h.flags & DASH.timeTrial ? "TT" : h.laps ? "LAP " + Math.min(Math.max(h.lap, 1), h.laps) + "/" + h.laps : "");
-    text("pos", h.flags & DASH.retired ? "DNF" : h.flags & DASH.timeTrial ? "" : h.pos ? "P" + h.pos + "/" + h.cars : "");
+    text("pos", h.flags & DASH.retired ? "DNF" : h.flags & DASH.timeTrial ? "" : h.flags & DASH.quali ? "Q" : h.flags & DASH.practice ? "PRAC" : h.pos ? "P" + h.pos + "/" + h.cars : "");
     text("last", h.lastLapMs ? "LAST " + fmtLap(h.lastLapMs) : "");
     text("ot", h.flags & DASH.otActive ? "OVERTAKE" : h.flags & DASH.otArmed ? "OT READY" : "OT");
     text("aero", h.flags & DASH.aeroNone ? "NO ZONES" : h.flags & DASH.aeroAuto ? (h.flags & DASH.xOpen ? "AUTO STRAIGHT" : "AERO AUTO")

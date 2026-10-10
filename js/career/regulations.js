@@ -22,7 +22,9 @@
  * across three categories moved 4 of 11 grid slots on the AI side alone and
  * compressed the field spread by 42% — two backmarkers came out marginally
  * AHEAD, because their presets were barely using the premium options a
- * front-runner's was built on. A pecking-order change, not a flat nerf.
+ * front-runner's was built on. A pecking-order change, not a flat nerf. Which
+ * teams an era hits is decided by the explicit tie-break in bannedIds (cost,
+ * then an era+id hash), never by the catalog's authoring order.
  */
 const Regulations = (function () {
   "use strict";
@@ -73,6 +75,12 @@ const Regulations = (function () {
   // or adding an option moves the ban with it and no id can rot. Cached per era
   // because _resolve() asks per category per resolution.
   const _banCache = new Map();
+  function tieHash(eraId, id) {        // FNV-1a, 32-bit: stable across engines and catalog order
+    let h = 0x811c9dc5;
+    const str = eraId + ":" + id;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h;
+  }
   function bannedIds(eraId) {
     let set = _banCache.get(eraId);
     if (set) return set;
@@ -84,8 +92,12 @@ const Regulations = (function () {
         // Dearest first, take BAN_TOP. A cost-0 option is never banned: the
         // DEFAULTS are all cost-0 and _resolve() falls back to them, so banning
         // one would leave a category with nothing legal in it.
+        // Costs tie at the top of every ladder (six engines at 200, three wings at
+        // 190), so the cut is broken by a hash of era + id, not by authoring order:
+        // reordering the catalog never changes WHICH teams an era hits.
         const ranked = cat.options.filter((o) => (o.cost || 0) > 0)
-          .sort((a, b) => (b.cost || 0) - (a.cost || 0));
+          .sort((a, b) => (b.cost || 0) - (a.cost || 0)
+            || tieHash(eraId, a.id) - tieHash(eraId, b.id) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
         for (const o of ranked.slice(0, BAN_TOP)) set.add(o.id);
       }
     }
