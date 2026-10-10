@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
-function boot() {
+function boot(initOpts) {
   const listeners = {};
   // Keydowns the pad synthesises land here when they go to the document (the
   // fallback target); one that reaches a focused control is recorded by that
@@ -60,7 +60,7 @@ function boot() {
   for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(read(f), ctx, { filename: f });
   const Input = vm.runInContext("Input", ctx);
-  Input.init(el());
+  Input.init(el(), initOpts);
   const key = (code, down) => (listeners[down ? "keydown" : "keyup"] || [])
     .forEach((f) => f({ key: code, code, repeat: false, preventDefault() {}, target: { tagName: "BODY" } }));
   const fire = (t, e) => (listeners[t] || []).forEach((f) => f(e || {}));
@@ -785,4 +785,112 @@ test("a calibrated stick still reaches full lock on BOTH sides, and a pedal on a
   Input.setPadAxisMap({ steer: 0, throttle: 2, brake: null });
   Input.poll();
   assert.equal(Input.lookStick().x, 0, "a pedal mapped to axis 2 does not pan free-look");
+});
+
+test("axis capture skips axes already chosen: releasing the wheel cannot become the throttle", () => {
+  const { Input, sb, fire } = boot();
+  const pad = { connected: true, mapping: "", id: "G29", axes: [0, -1, -1, 0],
+    buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+  sb.navigator.getGamepads = () => [pad];
+  fire("gamepadconnected", { gamepad: pad });
+  Input.poll();
+  let steer = null;
+  Input.beginAxisCapture((axis) => { steer = axis; });
+  pad.axes[0] = -1; Input.poll();
+  assert.equal(steer, 0, "the wheel turned left on axis 0");
+  // Step 2 arms while the wheel is still held at full lock: that is the snapshot.
+  let got = null;
+  Input.beginAxisCapture((axis) => { got = axis; }, { exclude: [steer] });
+  pad.axes[0] = 0; Input.poll();   // the wheel springs back: |0 - -1| >= 0.45
+  assert.equal(got, null, "the steering axis moving back is not the throttle");
+  pad.axes[1] = 1; Input.poll();
+  assert.equal(got, 1, "the pedal still wins");
+  // Without the exclusion the old behaviour stands (the primitive is unchanged).
+  pad.axes[0] = -1; pad.axes[1] = -1; Input.poll();
+  let plain = null;
+  Input.beginAxisCapture((axis) => { plain = axis; });
+  pad.axes[0] = 0; Input.poll();
+  assert.equal(plain, 0);
+});
+
+test("the wheel wizard passes the axes it already mapped, so steering and throttle release never leak forward", () => {
+  const { Input, $, fire, sb } = bootUi(true);
+  const pad = { connected: true, mapping: "", id: "G29", axes: [0, -1, -1, 0],
+    buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+  sb.navigator.getGamepads = () => [pad];
+  fire("gamepadconnected", { gamepad: pad });
+  Input.poll();
+  $("pm-pad-wheel").onclick();
+  pad.axes[0] = -1; Input.poll();            // STEP 1: steer left and hold; step 2 arms at once (test timers are synchronous)
+  pad.axes[0] = 0; Input.poll();             // the wheel is let go before the pedal is touched
+  pad.axes[1] = 1; Input.poll();             // STEP 2: throttle
+  pad.axes[1] = -1; Input.poll();            // the pedal comes back up while step 3 listens
+  pad.axes[0] = -1; Input.poll();            // …and the wheel is turned again
+  assert.equal($("pm-pad-wheel").textContent, "CANCEL", "neither released axis finished a step");
+  pad.axes[2] = 1; Input.poll();             // STEP 3: brake
+  const map = Input.getPadAxisMap();
+  assert.equal(map.steer, 0);
+  assert.equal(map.throttle, 1, "throttle is the pedal, not the wheel springing back");
+  assert.equal(map.brake, 2);
+  assert.equal($("pm-pad-wheel").textContent, "SET UP A WHEEL", "the wizard finished");
+});
+
+test("menu navigation subtracts the CALIBRATE STICK rest offset from the steer axis", () => {
+  const { Input, sb, fire, dispatched, navOpen } = boot();
+  let t = 0; sb.performance.now = () => t;
+  const { pad } = fakePad(sb, fire);
+  sb.MenuNav = { activeLayer: () => ({}), FOCUSABLE: "button" };
+  // A stable layer object: the boot stub returns a fresh one per call, which
+  // re-seeds focus (an ArrowDown) every poll and would drown the signal here.
+  const layer = { id: "overlay", contains: () => true };
+  sb.UiLayers.top = () => layer;
+  navOpen.on = true;
+  Input.poll();
+  dispatched.length = 0;   // the one-off focus seed on menu open
+  Input.setPadRest(0.3);
+  pad.axes[0] = 0.3;   // a worn stick resting at its calibrated centre
+  for (let f = 0; f < 120; f++) { t += 16; Input.poll(); }
+  assert.deepEqual(dispatched.map((e) => e.key), [], "a calibrated rest is neutral to the menu, not a held direction");
+  pad.axes[0] = 0.9;
+  t += 16; Input.poll();
+  assert.deepEqual(dispatched.map((e) => e.key), ["ArrowRight"], "a real push still navigates, once");
+  pad.axes[0] = 0.3; t += 16; Input.poll();
+  dispatched.length = 0;
+  pad.axes[0] = -0.9;   // the long side: -0.9 - 0.3 is well past the dead zone
+  t += 16; Input.poll();
+  assert.deepEqual(dispatched.map((e) => e.key), ["ArrowLeft"]);
+});
+
+test("a printable PAUSE key typed into a focused <select> is type-ahead, not pause; Escape still pauses", () => {
+  let paused = 0;
+  const h = boot({ onPause: () => { paused++; } });
+  const press = (code, key) => h.fire("keydown", { key, code, repeat: false, isTrusted: true, preventDefault() {}, target: { tagName: "SELECT" } });
+  h.sb.document.activeElement = { tagName: "SELECT", id: "set-pad-type", matches: () => false };
+  press("KeyP", "p");
+  assert.equal(paused, 0, "P in a <select> selects PLAYSTATION/PRO/PULL");
+  h.sb.UiLayers.inRace = () => true;
+  press("Escape", "Escape");
+  assert.equal(paused, 1, "Escape is unaffected by a focused <select>");
+  h.sb.document.activeElement = null;
+  h.fire("keydown", { key: "p", code: "KeyP", repeat: false, isTrusted: true, preventDefault() {}, target: { tagName: "BODY" } });
+  assert.equal(paused, 2, "P with nothing focused still pauses");
+});
+
+test("a Cmd/Ctrl chord never latches a driving key (macOS sends no key-up for it); a plain press and Escape still work", () => {
+  let paused = 0;
+  const h = boot({ onPause: () => { paused++; } });
+  const press = (code, mods) => h.fire("keydown", { key: code, code, repeat: false, isTrusted: true, preventDefault() {}, target: { tagName: "BODY" }, ...mods });
+  const s = () => h.Input.debugState().key;
+  press("KeyD", { metaKey: true });
+  press("KeyS", { ctrlKey: true });
+  press("ArrowLeft", { metaKey: true });
+  press("KeyW", { ctrlKey: true });
+  assert.deepEqual(plain({ l: s().left, r: s().right, t: s().throttle, b: s().brake }), { l: false, r: false, t: false, b: false },
+    "chorded keydowns must not set any latch");
+  press("KeyD", {});
+  assert.equal(s().right, true, "the same key without a modifier still drives");
+  h.fire("keyup", { key: "KeyD", code: "KeyD", repeat: false, isTrusted: true, preventDefault() {}, target: { tagName: "BODY" } });
+  assert.equal(s().right, false);
+  press("KeyP", { metaKey: false });
+  assert.equal(paused, 1, "pause is handled above the chord gate");
 });

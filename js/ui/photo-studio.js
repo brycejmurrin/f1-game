@@ -239,6 +239,8 @@ function create(G, deps) {
     // display:none, so setPaused → syncRotateBlocker would miss the portrait
     // gate and leave the pause card up (photo-studio.spec.js race close).
     const target = focus, generation = st.generation;
+    // Release the composed canvas (up to 2048 px, ~17 MB RGBA) and its preview data URL; open() rebuilds both.
+    last = null; E["ps-preview"].removeAttribute("src"); E["ps-preview"].hidden = true;
     root.hidden = true; document.body.classList.remove("photo-studio-open");
     busy(false);
     if (back && returnTo) returnTo();

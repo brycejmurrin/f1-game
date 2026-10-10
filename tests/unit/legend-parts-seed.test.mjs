@@ -20,6 +20,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 
 function boot(sel = { teamIdx: 0, driverIdx: 0 }) {
   const ctx = vm.createContext({ console, Object, Math, Array, String, Number, JSON });
@@ -32,6 +33,7 @@ function boot(sel = { teamIdx: 0, driverIdx: 0 }) {
   const saved = {};
   const store = {
     get: (k, d) => (k in saved ? saved[k] : d),
+    getStored: (k) => (Object.hasOwn(saved, k) ? saved[k] : undefined),
     set: (k, v) => { saved[k] = v; },
   };
   const Teams = { LIST: [{ id: "mclaren" }] };
@@ -50,6 +52,9 @@ function boot(sel = { teamIdx: 0, driverIdx: 0 }) {
 
 test("an empty sheet is seeded with the picked legend's period car", () => {
   const { ct, Legends, store } = boot();
+  const fallback = { engine: "fallback" };
+  assert.equal(store.get("parts.legends", fallback), fallback, "get can supply a fallback");
+  assert.equal(store.getStored("parts.legends"), undefined, "a fallback is not a stored player sheet");
   ct.syncLegendsTeam(2);                       // roster index 2 — Fangio
   const want = Legends.parts(Legends.LIST[2].id);
   assert.deepEqual(store.get("parts.legends", null), want);
@@ -109,4 +114,41 @@ test("boot rebuilds the SAVED legend, not legend 0: no Fangio sheet in Schumache
   const other = boot({ teamIdx: 0, driverIdx: 2 });
   other.ct.syncLegendsTeam();
   assert.equal(other.Teams.LIST.find((t) => t.id === "legends").legend, Legends.LIST[0].id);
+});
+
+// D2 — the FRESH-INSTALL case. js/data/garage-defaults.js ships `parts.legends`
+// (a wing-68 build) and GameStore.get answers from it on a miss, so on a first
+// boot the sheet is never "empty": seedLegendParts saw a non-empty sheet, left it,
+// and the default seat 0 (Schumacher) raced in somebody else's car. PR #1289
+// makes seedLegendParts read the RAW key (a miss is a miss), after which this
+// passes; until that change is in the tree it is a known failure, hence `todo`.
+test("a fresh install's Legends seat 0 builds the period car, not the shipped sheet", { todo: true }, () => {
+  const disk = new Map();
+  const localStorage = { getItem: (k) => (disk.has(k) ? disk.get(k) : null), setItem: (k, v) => disk.set(k, String(v)),
+    removeItem: (k) => disk.delete(k), clear: () => disk.clear(), key: (i) => [...disk.keys()][i] ?? null, get length() { return disk.size; } };
+  const ctx = vm.createContext({ console, Object, Math, Array, String, Number, JSON, Date, Map, Set, Error, localStorage,
+    document: { querySelector: () => null } });
+  ctx.window = ctx; ctx.globalThis = ctx;
+  seedSaveMigrate(ctx);
+  ctx.Log = { info() {}, warn() {}, error() {}, debug() {} };
+  const read = (f) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
+  vm.runInContext(read("js/data/garage-defaults.js") + "\n;globalThis.GarageDefaults = GarageDefaults;", ctx);
+  vm.runInContext(read("js/core/store.js") + "\n;globalThis.GameStore = GameStore;", ctx);
+  for (const f of ["js/core/mat4.js", "js/data/legends.js", "js/career/custom-team.js"])
+    vm.runInContext(read(f), ctx, { filename: f });
+  const { store } = vm.runInContext("GameStore", ctx);
+  const Legends = vm.runInContext("Legends", ctx), CustomTeam = vm.runInContext("CustomTeam", ctx);
+  assert.ok(store.get("parts.legends", null), "precondition: the shipped sheet answers on a miss");
+  assert.equal(localStorage.getItem("apex26.parts.legends"), null, "precondition: nothing is stored");
+  const Teams = { LIST: [{ id: "mclaren" }] };
+  const ct = CustomTeam.create({
+    $: () => null, store, Teams, DEFAULT_CUSTOM: { id: "custom" },
+    invalidateDecalTextures() {}, invalidateCustomMeshCaches() {}, spMeshBust() {},
+    getSoundOn: () => false, GameAudio: { uiTick() {} }, getEls: () => ({}),
+    getTeamIdx: () => 0, setTeamIdx() {}, getDriverIdx: () => 0, setDriverIdx() {}, buildSelect() {}, buildSetup() {},
+    isCarsetupVisible: () => false, hexToRgb: () => [0, 0, 0], rgbToHex: () => "#000", hexToArr: () => [0, 0, 0],
+    clamp: (v) => v, getLivDraftOverride: () => null, setLivDraftOverride() {},
+  });
+  ct.syncLegendsTeam(0);                       // Legends seat 0 on a fresh store
+  assert.deepEqual(JSON.parse(JSON.stringify(store.get("parts.legends", null))), JSON.parse(JSON.stringify(Legends.parts("schumacher"))));
 });

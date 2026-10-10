@@ -17,11 +17,16 @@ $("mb-race").onclick = () => {
 };
 // Optional markup must not turn one missing screen into a whole-app boot failure.
 if ($("mb-vs")) $("mb-vs").onclick = () => {
-  // The peer-to-peer lobby starts the race once both sides agree.
-  G.flow = "gp"; G.session = "race";
-  restoreFreePlaySelection();
-  // The bundle lands before the screen does; ensureNet() wires the real lobby.
-  ensureNet().then((ok) => { if (ok) G.netLobby.open(); });
+  // The peer-to-peer lobby starts the race once both sides agree. The bundle
+  // lands before the screen does; ensureNet() wires the real lobby. Flow and
+  // selection are written only once it has: a refused/offline load must leave
+  // the title untouched and say so.
+  Promise.resolve(ensureNet()).then((ok) => ok, () => false).then((ok) => {
+    if (!ok) { G.announce("COULD NOT LOAD — CHECK YOUR CONNECTION OR RELOAD", 4, "warning"); return; }
+    G.flow = "gp"; G.session = "race";
+    restoreFreePlaySelection();
+    G.netLobby.open();
+  });
   if (G.soundOn) GameAudio.uiSelect();
 };
 function openTimeTrial(selectDaily) {

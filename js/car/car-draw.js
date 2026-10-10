@@ -125,6 +125,15 @@ const CarDraw = (function () {
     let carModelBuf = null;
     const CAR_MODEL_SCALE = 1;
 
+    // Ten legends share num 1, so the player's LEGENDS slot names its lid by the
+    // picked legend's code (Car3D opts.helmetKey) and every body-mesh key carries
+    // it. Any other team: undefined / "" — the key and the build do not move.
+    function legendLid(team) {
+      if (!team || team.id !== "legends") return undefined;
+      const d = team.drivers && team.drivers[G.driverIdx | 0];
+      return d && d.code ? d.code : undefined;
+    }
+    const lidKey = (team, suffix) => team.id === "legends" ? suffix + ":" + legendLid(team) : suffix;
     function buildCarData(team, extra) {
       const liv = deps.resolveLivery(team);   // chosen paint job (else team colours)
       if (carModelBuf) {
@@ -136,6 +145,7 @@ const CarDraw = (function () {
         livery: liv,
         teamId: team.id,   // per-team chassis style (nose/airbox/fin/mirrors/inlet)
         num: (extra && extra.num != null) ? extra.num : (team.drivers && team.drivers[0] && team.drivers[0].num),
+        helmetKey: legendLid(team),
         parts: Parts.getVisualTiers(setup, team),
         noWheels: !!(extra && extra.noWheels),
         field: !!(extra && extra.noWheels),   // factory body — probe vs playerBodies
@@ -197,7 +207,7 @@ const CarDraw = (function () {
       const num = carDecalNum(team, car);
       _pbTeam = team; _pbNum = num; _pbKind = sil ? 1 : 0;
       _pbSetup = (car && car.visualSetup) || null;
-      const painted = (_pbSetup && car.visPaint) || num;
+      const painted = lidKey(team, (_pbSetup && car.visPaint) || num);
       const shadow = (_pbSetup && car.visSh) || "sh";
       return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKeyFor(team, sil ? shadow : painted),
         buildPendingTeamMesh, TEAM_MESH_CACHE_MAX);
@@ -206,7 +216,7 @@ const CarDraw = (function () {
       const num = carDecalNum(team, car);
       _pbTeam = team; _pbNum = num; _pbKind = 2;   // body-only: noWheels, num
       _pbSetup = (car && car.visualSetup) || null;
-      const suffix = (_pbSetup && car.visPaint) || _pbNum;
+      const suffix = lidKey(team, (_pbSetup && car.visPaint) || _pbNum);
       return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKeyFor(team, suffix), buildPendingTeamMesh, TEAM_MESH_CACHE_MAX);
     }
 
@@ -214,14 +224,41 @@ const CarDraw = (function () {
     const _decalTexCache = {}, _decalTexFail = {}, _decalTexOrder = [];
     const _decalTexUse = new Map();   // key -> last-use tick (LRU; the putBoundedMesh idiom)
     let _decalTexTick = 0;
+    // The LRU is bounded by BYTES as well as slots: a desktop player's hi-res atlas
+    // is ~26.7 MB, a rival's half-tier one ~1.7 MB, and 36 slots of the former was
+    // up to ~960 MB of GPU while a garage browsed liveries. The live set (player
+    // hi-res + the field + photo mode's six) is ~110 MB, so 160 MB evicts only the
+    // browsed-away ones. A canvas with no numeric size counts 0 (tests, stubs).
+    const DECAL_TEX_BYTES_MAX = 160 * 1024 * 1024;
+    const _decalTexBytes = {};   // key -> estimated GPU bytes (RGBA + mip chain)
+    const atlasBytes = (canvas) => canvas && canvas.width > 0 && canvas.height > 0
+      ? Math.round(canvas.width * canvas.height * 4 * 4 / 3) : 0;
+    // Evict the least recently drawn until under both budgets; `keep` (the atlas
+    // just minted or swapped in) is never the victim.
+    function trimDecalCache(keep) {
+      for (;;) {
+        let bytes = 0;
+        for (let i = 0; i < _decalTexOrder.length; i++) bytes += _decalTexBytes[_decalTexOrder[i]] || 0;
+        if (_decalTexOrder.length <= 1 || (_decalTexOrder.length <= DECAL_TEX_CACHE_MAX && bytes <= DECAL_TEX_BYTES_MAX)) return;
+        let oi = -1, ot = Infinity;
+        for (let i = 0; i < _decalTexOrder.length; i++) {
+          if (_decalTexOrder[i] === keep) continue;
+          const u = _decalTexUse.get(_decalTexOrder[i]);
+          if (u === undefined) { oi = i; break; }
+          if (u < ot) { ot = u; oi = i; }
+        }
+        if (oi < 0) return;
+        dropDecalTexture(_decalTexOrder[oi]);
+      }
+    }
     // Free one cached atlas and forget every record of it. The ONE place a decal
     // texture leaves the cache: invalidation, LRU eviction and photo release.
     function dropDecalTexture(key) {
       const tex = _decalTexCache[key];
       if (tex && G.gfx.freeTexture) G.gfx.freeTexture(tex);
-      delete _decalTexCache[key]; delete _decalTexFail[key];
+      delete _decalTexCache[key]; delete _decalTexFail[key]; delete _decalTexBytes[key];
       _decalTexUse.delete(key); _photoKeys.delete(key);
-      _hiResDone.delete(key); _hiResPending.delete(key);
+      _hiResDone.delete(key); _hiResPending.delete(key); _hiResFail.delete(key);
       const oi = _decalTexOrder.indexOf(key); if (oi >= 0) _decalTexOrder.splice(oi, 1);
       // A deferred hi-res swap parks the preview in _hiResGrave until the next
       // bind. Invalidate / LRU / photo-release must free that parked tex now
@@ -351,6 +388,9 @@ const CarDraw = (function () {
     // atlas. AI, mobile, and photo-mode rivals never schedule — atlasDiv has
     // no larger upload, and photo rivals stay on the preview.
     const _hiResPending = new Map(), _hiResDone = new Set();   // pending: key -> the kick that owns it
+    // A failed build used to retry on every draw (each a 2048 paint). Two tries per
+    // key, like the sync path's three; an invalidate / eviction forgets the count.
+    const HIRES_TRIES = 2, _hiResFail = new Map();
     const _hiResGrave = [];   // {key, tex} prev preview; free AFTER the next bind
     function reapHiResGrave() {
       if (!_hiResGrave.length) return;
@@ -362,7 +402,7 @@ const CarDraw = (function () {
     function schedulePlayerHiRes(team, num, key) {
       if (typeof LiveryTex === "undefined" || !LiveryTex.playerHiResDeferred) return;
       if (!LiveryTex.playerHiResDeferred(!!LiveryTex.IS_MOBILE)) return;
-      if (_hiResDone.has(key) || _hiResPending.has(key)) return;
+      if (_hiResDone.has(key) || _hiResPending.has(key) || (_hiResFail.get(key) || 0) >= HIRES_TRIES) return;
       // The livery is resolved NOW, with the key (decalKeyFor embeds its id): the idle
       // slot can fire after the garage moved on, and building from the livery selected
       // THEN stored another livery's pixels under this key (A -> B -> A).
@@ -375,12 +415,16 @@ const CarDraw = (function () {
           if (!G.gfx || !G.gfx.createTexture) return;
           const canvas = LiveryTex.buildAtlas(team.id, livery, num, true, true);
           const next = crispPlayerDecal(G.gfx.createTexture(canvas));
+          if (!next) throw new Error("no texture");   // keep the preview rather than cache a null over it
           const prev = _decalTexCache[key];
           _decalTexCache[key] = next;
+          _decalTexBytes[key] = atlasBytes(canvas);
           _hiResDone.add(key);
           if (prev && prev !== next) _hiResGrave.push({ key: key, tex: prev });
-          if (next && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(next);
+          if (typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(next);
+          trimDecalCache(key);   // the swap grew this key's bytes
         } catch (e) {
+          _hiResFail.set(key, (_hiResFail.get(key) || 0) + 1);
           Log.warn("gfx", "deferred hi-res decal atlas failed for " + key, e);
         } finally {
           if (_hiResPending.get(key) === kick) _hiResPending.delete(key);
@@ -420,8 +464,10 @@ const CarDraw = (function () {
         try {
           // Sync path is ALWAYS the preview tier for the player (hiRes false).
           // Full 2048 is schedulePlayerHiRes only — never boot / garage-open.
-          t = G.gfx.createTexture(LiveryTex.buildAtlas(team.id, deps.resolveLivery(team), num, !!isPlayer, false));
+          const canvas = LiveryTex.buildAtlas(team.id, deps.resolveLivery(team), num, !!isPlayer, false);
+          t = G.gfx.createTexture(canvas);
           if (isPlayer) t = crispPlayerDecal(t);
+          _decalTexBytes[key] = atlasBytes(canvas);
         }
         catch (e) {
           // Swallowed AND cached as null before: one transient miss stripped that
@@ -434,16 +480,9 @@ const CarDraw = (function () {
         _decalTexCache[key] = t; _decalTexOrder.push(key); _decalTexUse.set(key, ++_decalTexTick);
         if (wantHi && t) schedulePlayerHiRes(team, num, key);
         // LRU: browsing liveries minted page-lifetime ~7 MB atlases; the least
-        // recently drawn goes, never one the field drew this frame.
-        while (_decalTexOrder.length > DECAL_TEX_CACHE_MAX) {
-          let oi = 0, ot = Infinity;
-          for (let i = 0; i < _decalTexOrder.length; i++) {
-            const u = _decalTexUse.get(_decalTexOrder[i]);
-            if (u === undefined) { oi = i; break; }
-            if (u < ot) { ot = u; oi = i; }
-          }
-          dropDecalTexture(_decalTexOrder[oi]);
-        }
+        // recently drawn goes, never one the field drew this frame (nor, by the
+        // byte budget, the atlas just minted).
+        trimDecalCache(key);
       }
       return _decalTexCache[key];
     }
@@ -621,6 +660,10 @@ const CarDraw = (function () {
       // SETUP for teamDecalState above and means something else entirely.
       const tex = decalTextureFor(team, num, usePlayerSetup);
       if (mesh && tex) { _decalOpts.glow = night ? 0.35 : 0; G.gfx.drawDecal(mesh, modelMat, tex, _decalOpts); }
+      // The race frees the parked previews once per frame, after its whole decal
+      // queue (flushDecals). The garage draws one car straight through here and
+      // never flushes, so every livery browsed parked its ~7 MB preview for good.
+      if (!_decalFlushing) reapHiResGrave();
     }
     // Pooled decal opts — drawCarDecals runs once per drawn car per frame; a fresh
     // literal there was ~20 allocations/frame feeding the night-track GC jitter.
@@ -918,10 +961,13 @@ const CarDraw = (function () {
       // Player-only draw path, so the cached playerVisualKey is always this team's
       // key — no per-frame partsVisualKey() rebuild. The number joins it: a player
       // in the second seat wears the second driver's helmet.
-      const key = team.id + ":" + visualKey + ":" + carDecalNum(team, car);
+      // LEGENDS: ten legends share num 1, so the picked legend's code joins the key
+      // and names the lid (Car3D opts.helmetKey); no other team moves (lid undefined).
+      const ld = team.id === "legends" && team.drivers ? team.drivers[G.driverIdx | 0] : null, lid = ld && ld.code || undefined;
+      const key = team.id + ":" + visualKey + ":" + carDecalNum(team, car) + (lid ? ":" + lid : "");
       const liv = deps.resolveLivery(team);
       return putBoundedMesh(playerBodies, playerBodyOrder, key, () => G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
-        { livery: liv, teamId: team.id, noWheels: true, num: carDecalNum(team, car),
+        { livery: liv, teamId: team.id, noWheels: true, num: carDecalNum(team, car), helmetKey: lid,
           parts: Parts.getVisualTiers(G.getTeamParts(team.id), team) })), PLAYER_BODY_CACHE_MAX);
     }
     // Player wheel meshes, keyed by the resolved TYRES/BRAKES visual tier (band
@@ -1067,7 +1113,8 @@ const CarDraw = (function () {
       const anim = c.pitState === "box" && G.pits && G.pits.stopAnim ? G.pits.stopAnim(c) : null;
       const lift = anim ? anim.lift : 0, off = anim ? anim.off : 0;
       // The camera distance, once per car: the brake rings draw within 40 m
-      // of a rival, the compound stripes within 60 m, everything for the player.
+      // of a rival (the flare from 40 m out to 240 m); everything else for a
+      // rival is gated by the LOD tier below (wheel extras within 50 m).
       let camD2 = 0;
       if (!c.isPlayer && !bare) {
         const dx = base[12] - G.camEye[0], dy = base[13] - G.camEye[1], dz = base[14] - G.camEye[2];
@@ -1075,14 +1122,20 @@ const CarDraw = (function () {
       }
       // FIELD LOD: past FieldLod.T.WHEEL_EXTRAS_M (reference-lens metres: a
       // long lens keeps them further out) a rival keeps its 4 rotating wheels
-      // only — no fixed layers, compound stripes or spin discs.
-      const lite = bare || (!c.isPlayer && FieldLod.wheelsLite(camD2, G.lens && G.lens.fovY));
+      // only — no fixed layers, compound stripes or spin discs. The cut is the
+      // tier game.js kept on the car (c._lodTier, with FieldLod's hysteresis: the
+      // stateless test flipped these layers every frame at ~50 m); a car with no
+      // tier yet (FieldLod off, tests) takes the plain table.
+      const lodT = c._lodTier, haveTier = FieldLod.on && (lodT === 0 || lodT === 1 || lodT === 2);
+      const lite = bare || (!c.isPlayer && (haveTier ? lodT >= 1 : FieldLod.wheelsLite(camD2, G.lens && G.lens.fovY)));
       const tyreCol = !lite && camD2 < 60 * 60 && c.tyre && c.tyre.colour ? c.tyre.colour : null;
       // SPIN BLUR (CarMesh.getSpinDisc): how far the rim turns THIS frame. Past
       // ~0.6 rad the spokes start to strobe, by 1.8 rad they alias outright, so
       // the disc fades in over that band. Per frame on purpose: a low frame
       // rate aliases sooner, and the blur has to cover what the display shows.
-      // Within 120 m of a rival; the player always.
+      // Within 120 m of a rival; the player always. (At the 60-degree reference
+      // lens the 50 m wheel-extras cut already stops a rival's stripes and discs
+      // first; these 60 / 120 m gates only bite through a long lens.)
       const spinRate = (c.speed / PhysicsConsts.WHEEL_R) * dt;
       const blur = !lite && camD2 < 120 * 120 ? Math.min(1, Math.max(0, (Math.abs(spinRate) - 0.6) / 1.2)) : 0;
       // PAST THE RINGS (a rival beyond 40 m): one cheap additive flare per FRONT
@@ -1297,10 +1350,14 @@ const CarDraw = (function () {
 
     // The render loop drains the decal queue once per frame, after the bodies.
     function beginDecals() { _decalCount = 0; }
+    let _decalFlushing = false;   // inside flushDecals: it reaps once, after the last bind
     function flushDecals(night) {
       planPhotoAtlases();
-      for (let i = 0; i < _decalCount; i++)
-        drawCarDecals(_decalTeams[i], _decalMats[i], night, _decalNums[i], _decalCockpit[i], _decalSetup[i], _decalVis[i], _decalStamp[i]);
+      _decalFlushing = true;
+      try {
+        for (let i = 0; i < _decalCount; i++)
+          drawCarDecals(_decalTeams[i], _decalMats[i], night, _decalNums[i], _decalCockpit[i], _decalSetup[i], _decalVis[i], _decalStamp[i]);
+      } finally { _decalFlushing = false; }
       reapHiResGrave();
     }
     // recomputePlayerMods hands over the player's resolved wheel spec + cosmetic key.

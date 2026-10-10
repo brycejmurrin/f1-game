@@ -77,6 +77,12 @@ export function renderToolingFast(doc, text) {
 }
 
 function main() {
+  // An unknown flag used to fall through to WRITE mode and rewrite package.json (G1).
+  const unknown = process.argv.slice(2).filter((a) => a !== "--check");
+  if (unknown.length) {
+    console.error(`gen-test-groups: unknown argument ${unknown.join(" ")}\nusage: node tools/gen/gen-test-groups.mjs [--check]`);
+    process.exit(2);
+  }
   const check = process.argv.includes("--check");
   const doc = loadGroups();
   const targets = [

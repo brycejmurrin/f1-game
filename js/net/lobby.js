@@ -1195,6 +1195,12 @@ const NetLobby = (function () {
 
     let friendQualifying = false;
     function beginRace() {
+      // BOTH peers start the sim stream from its seed: the guest was rewound by
+      // applySettings, but the host sat wherever its earlier races left it, so
+      // makeCars/gridUp (a lane and a skill roll per car, a grid jitter) drew
+      // different AI fields on the two screens. Re-setting the seed resets the
+      // stream only (simSeed keeps _simSeed, which luckSeed reads).
+      G.seed = G.seed;
       if (G.raceQuali && G.openQualiForNet) {
         friendQualifying = true;
         say("Qualifying…");
@@ -1239,7 +1245,9 @@ const NetLobby = (function () {
         const outcome = await G.startRace();
         // Every failed exit ends the lobby's hold on qualifying: left true,
         // Quali.persistOrder skipped saving for the rest of the page session.
-        if (outcome && outcome.kind === "canceled") { friendQualifying = false; close(); return; }
+        // startRaceBody also resolves `false` (save conflict, build failed, context lost, state changed): the
+        // same exit, or netPlay.start/hostStart would run over the menu and strand a netStart.
+        if (outcome === false || (outcome && outcome.kind === "canceled")) { friendQualifying = false; close(); return; }
         if (!sessions.size) { friendQualifying = false; clearInterval(pumpTimer); pumpTimer = null; close(); return; }
       } catch (e) {
         say("Could not start the race: " + (e && e.message), true);
@@ -1406,7 +1414,12 @@ const NetLobby = (function () {
       return res;
     }
 
+    // One answer read per connection, as `answering`: a paste + ACCEPT inside the decode window
+    // began a second generation, cancelling the first (which owned waitForOpen) while the
+    // second failed on a pc already past have-local-offer, leaving no watcher on a live pc.
+    let taking = null;
     async function acceptAnswer(codeIn) {
+      if (taking && taking === transport) { say("That answer is already being read.", true); return { ok: false, error: "already_accepting" }; }
       const gen = beginOperation();
       const e = els();
       const code = codeFrom(codeIn != null ? codeIn : (e.answerIn ? e.answerIn.value : ""));   // as makeAnswer
@@ -1418,7 +1431,9 @@ const NetLobby = (function () {
       const pending = transport;
       const id = pendingId;
       say("Reading answer…");
-      const res = await NetHandshake.acceptAnswer(pending, code);
+      taking = pending;
+      let res;
+      try { res = await NetHandshake.acceptAnswer(pending, code); } finally { if (taking === pending) taking = null; }
       if (!operationCurrent(gen) || transport !== pending || pendingId !== id) return cancelledResult();
       if (!res.ok) { say(res.message || "That answer could not be read.", true); return res; }
       // Under the id of the connection this answer belongs to, NOT a fixed

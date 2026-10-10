@@ -164,3 +164,24 @@ test("legalityFor returns nothing for an unrestricted era", () => {
   assert.equal(typeof Regulations.legalityFor(
     Regulations.ERAS.find((e) => e.cats.length).id), "function");
 });
+
+test("the banned set does not depend on the catalog's authoring order (tie-break is explicit)", () => {
+  // Costs tie at the top of every ladder, so "the dearest two" used to be "the
+  // first two written": reordering the catalog moved which TEAMS an era hits.
+  // Compare the set from the shipped order against reversed and rotated orders.
+  const snapshot = (reorder) => {
+    const { Parts, Regulations } = load();
+    if (reorder) for (const cat of Parts.CATALOG) reorder(cat.options);
+    const out = {};
+    for (const e of Regulations.ERAS) out[e.id] = [...Regulations.bannedIds(e.id)].sort();
+    return JSON.stringify(out);
+  };
+  const base = snapshot(null);
+  assert.equal(snapshot((o) => o.reverse()), base, "reversed catalog, same bans");
+  assert.equal(snapshot((o) => o.push(...o.splice(0, 3))), base, "rotated catalog, same bans");
+  // Ties really exist, otherwise this test proves nothing.
+  const { Parts, Regulations } = load();
+  const eng = Parts.CATALOG.find((c) => c.id === "engine");
+  const top = Math.max(...eng.options.map((o) => o.cost || 0));
+  assert.ok(eng.options.filter((o) => o.cost === top).length > Regulations.BAN_TOP, "the engine ladder ties at the top");
+});

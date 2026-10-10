@@ -289,8 +289,10 @@ test.describe("Apex 26 — steering", () => {
     // inheritance: held.after.x 7.567 vs hw−0.5 = 6.3).
     //
     // ON-TRACK WINDOW. At the old 22 m/s × 75 ticks even coasting can leave the
-    // road; 18 m/s × 55 ticks keeps BOTH runs inside |x| < hw − 0.5 on bahrain's
-    // first real corner while still clearing the 2 m authority bar.
+    // road; 18 m/s × 55 ticks was enough until tip scenery/elevation moved
+    // Bahrain's first corner (CI 38031749839: coast |x|=6.53 vs hw−0.5=6.5).
+    // 16 m/s × 45 ticks keeps BOTH runs inside |x| < hw − 0.5 while still
+    // clearing the 2 m authority bar.
     //
     // FROZEN + ONE EVALUATE: corner pick + both bursts share one frozen
     // evaluate so exactly 3 + 55 ticks run per arm (no page-loop ticks between
@@ -312,12 +314,12 @@ test.describe("Apex 26 — steering", () => {
         if (Math.abs(k0) <= 0.02) return { ok: false, k0 };
         const lockDir = -Math.sign(k0); // inside — fight the curvature drift
         const burst = (steer) => {
-          window.__apex.jump(frac, 18, 0);
+          window.__apex.jump(frac, 16, 0);
           window.__apex.setInput({ steer: 0, throttle: false, brake: false });
           window.__apex.step(1 / 60, 3);
           const before = window.__apex.probe();
           window.__apex.setInput({ steer, throttle: false, brake: false });
-          window.__apex.step(1 / 60, 55);
+          window.__apex.step(1 / 60, 45);
           window.__apex.clearInput();
           return { before, after: window.__apex.probe() };
         };
@@ -501,18 +503,22 @@ test.describe("Apex 26 — steering", () => {
     await page.evaluate(() => window.__apex.freeze(true));
     let off, pull, push;
     try {
+      // Tip Bahrain T1 (post live-scenery / elevation) throws a 24 m/s × 60
+      // tick coast into the verge where rescue zeros the PULL/PUSH delta
+      // (CI 38031749839: (dxPull-dxOff)*toward ≈ -0.018). Shorter slower
+      // bursts keep the car on the asphalt long enough for the assist to show.
       await setRaceLine(page, 0);
       expect(await page.evaluate(() => window.__apex.tuning().raceLineAssist)).toBe(0);
       await parkField(page, frac);
-      off = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
+      off = await run(page, { frac, speed: 18, steer: 0, ticks: 45 });
       await setRaceLine(page, 5);
       expect(await page.evaluate(() => window.__apex.tuning().raceLineAssist)).toBe(1);
       await parkField(page, frac);
-      pull = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
+      pull = await run(page, { frac, speed: 18, steer: 0, ticks: 45 });
       await setRaceLine(page, -5);
       expect(await page.evaluate(() => window.__apex.tuning().raceLineAssist)).toBe(-1);
       await parkField(page, frac);
-      push = await run(page, { frac, speed: 24, steer: 0, ticks: 60 });
+      push = await run(page, { frac, speed: 18, steer: 0, ticks: 45 });
       await setRaceLine(page, 0); // restore
     } finally {
       await page.evaluate(() => {

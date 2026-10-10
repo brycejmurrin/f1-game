@@ -284,6 +284,111 @@ test("CamTune exports player edits as window.CameraEdits and imports them back",
   assert.equal(CamTune.bob(), 0);
 });
 
+// The COPY VALUES button writes a readable window.CameraEdits snippet, `//` comments,
+// the pack JSON and the APXC1 share code into ONE box. The whole block is what a
+// player pastes back, and decodeShare used to accept only a leading APXC1. or bare
+// JSON, so the block the panel itself produced read "BAD PASTE".
+test("the whole COPY VALUES block imports back (APXC1 token found anywhere)", () => {
+  const A = loadCamTune();
+  A.set("chase", "dist", 2.5);
+  A.set("hood", "height", 0.4);
+  A.setGlobal("fov", 4);
+  A.comfortSet("bob", 0.3);
+  const pack = A.exportPack();
+  // The same shape tuner-panel.js's ct-copy handler joins (kept literal on purpose).
+  const block = [
+    "window.CameraEdits = {",
+    "  // THIS MODE — CHASE  (1 tuned)",
+    '  "chase": ' + JSON.stringify(pack.modes.chase) + ",",
+    "  // EVERY OTHER TUNED MODE — 1 mode",
+    '  "hood": ' + JSON.stringify(pack.modes.hood),
+    "};",
+    "",
+    "// Pack (JSON) — paste into IMPORT, or use the share code below",
+    JSON.stringify(pack),
+    "",
+    "// Share code",
+    A.encodeShare(pack),
+  ].join("\n");
+  assert.equal(A.decodeShare(block).ok, true, "the block COPY VALUES produced must decode");
+  assert.equal(A.decodeShare(block).kind, "share");
+
+  const B = loadCamTune();
+  const r = B.importText(block);
+  assert.equal(r.ok, true);
+  assert.equal(B.getModeOnly("chase", "dist"), 2.5);
+  assert.equal(B.getModeOnly("hood", "height"), 0.4);
+  assert.equal(B.getGlobal("fov"), 4);
+  assert.equal(B.bob(), 0.3);
+
+  // A bare code, a code with trailing text, and a code after a label still work.
+  const code = A.encodeShare(pack);
+  assert.equal(A.decodeShare("  " + code + "  \n").ok, true);
+  assert.equal(A.decodeShare(code + "\n// thanks!").pack.modes.chase.dist, 2.5);
+  assert.equal(A.decodeShare("Share code: " + code).ok, true);
+  // Without any token a mangled paste is still refused.
+  assert.equal(A.decodeShare("window.CameraEdits = {").ok, false);
+});
+
+// A modes-only snippet (the legacy window.CameraEdits shape) says nothing about
+// the global baseline or the accessibility COMFORT knobs, so importing one must
+// leave both alone. importPack's legacy branch used to pass null to importGlobal
+// and importComfort, which wiped them.
+test("a modes-only import keeps the global baseline and COMFORT knobs", () => {
+  const CamTune = loadCamTune();
+  CamTune.setGlobal("fov", 6);
+  CamTune.comfortSet("bob", 0.3);
+  CamTune.comfortSet("fovBias", 3);
+  CamTune.set("chase", "dist", 2);
+
+  const r = CamTune.importText('window.CameraEdits = {\n  "hood": {"height": 0.5}\n};');
+  assert.equal(r.ok, true);
+  assert.equal(CamTune.getModeOnly("hood", "height"), 0.5, "the snippet's modes are applied");
+  assert.equal(CamTune.stored("chase", "dist"), false, "modes are still replaced wholesale");
+  assert.equal(CamTune.getGlobal("fov"), 6, "global baseline survives");
+  assert.equal(CamTune.bob(), 0.3, "comfort bob survives");
+  assert.equal(CamTune.fovBias(), 3, "comfort FOV bias survives");
+
+  // A full pack (v:1) is still authoritative for all three.
+  CamTune.importPack({ v: 1, modes: { chase: { dist: 1 } } });
+  assert.equal(CamTune.getGlobal("fov"), 0, "a pack without global clears it");
+  assert.equal(CamTune.bob(), 1, "and without comfort resets it");
+});
+
+// persist() writes localStorage. The sliders fire it on every input event, so it
+// takes the store that changed and leaves the other two alone.
+test("persist(which) writes only the named CamTune store", () => {
+  const disk = new Map();
+  const writes = [];
+  const ctx = {
+    GameStore: { store: {
+      get(k, d) { return disk.has(k) ? disk.get(k) : d; },
+      set(k, v) { writes.push(k); disk.set(k, JSON.parse(JSON.stringify(v))); return true; },
+    } },
+    M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) },
+    Log: { info() {}, debug() {}, enabled() { return false; } },
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/offsets.js"), "utf8") + "\nthis.exported = CamTune;", ctx);
+  const CamTune = ctx.exported;
+  CamTune.set("chase", "dist", 2); CamTune.setGlobal("fov", 5); CamTune.comfortSet("bob", 0.5);
+
+  writes.length = 0; CamTune.persist("modes");
+  assert.deepEqual(writes, [CamTune.KEY], "a per-mode slider writes only camTune");
+  writes.length = 0; CamTune.persist("global");
+  assert.deepEqual(writes, [CamTune.KEY_GLOBAL]);
+  writes.length = 0; CamTune.persist("comfort");
+  assert.deepEqual(writes, [CamTune.KEY_COMFORT]);
+  assert.equal(disk.get(CamTune.KEY_COMFORT).bob, 0.5);
+  writes.length = 0; CamTune.persist();
+  assert.deepEqual(writes.slice().sort(), [CamTune.KEY, CamTune.KEY_COMFORT, CamTune.KEY_GLOBAL].sort(),
+    "no argument = all three (presets, import, reset)");
+
+  // The panel's slider handlers name the store they changed.
+  const panel = fs.readFileSync(path.join(root, "js/camera/tuner-panel.js"), "utf8");
+  assert.match(panel, /CamTune\.persist\("comfort"\)/);
+  assert.match(panel, /CamTune\.persist\(_scope === "global" \? "global" : "modes"\)/);
+});
+
 test("CamTune comfort knobs are independent of reduce-motion and default to shipped", () => {
   const CamTune = loadCamTune();
   for (const d of CamTune.COMFORT_DEFS) {

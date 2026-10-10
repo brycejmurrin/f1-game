@@ -159,17 +159,20 @@ test("store.subscribe on steerMode reloads that scheme's offsets", () => {
 function bootCreate() {
   const winL = {}, docL = {}, observers = [];
   const settings = { hidden: false };
-  const els = { "dock-left": dockEl(), "dock-right": dockEl(), pmsettings: settings };
+  const pause = { hidden: true };
+  const els = { "dock-left": dockEl(), "dock-right": dockEl(), pmsettings: settings, pausemenu: pause };
+  const made = [];
   const bodyAttrs = {};
   const ctx = {
     Log: { info() {}, warn() {}, debug() {}, enabled() { return false; } },
     window: { innerWidth: 400, innerHeight: 800, addEventListener(t, fn) { winL[t] = fn; } },
     document: {
       documentElement: {},
-      body: { setAttribute(k, v) { bodyAttrs[k] = v; }, removeAttribute(k) { delete bodyAttrs[k]; } },
+      body: { setAttribute(k, v) { bodyAttrs[k] = v; }, removeAttribute(k) { delete bodyAttrs[k]; }, appendChild(n) { made.push(n); } },
+      createElement() { return { style: {}, setAttribute() {} }; },
       addEventListener(t, fn) { docL[t] = fn; },
     },
-    MutationObserver: function (cb) { this.observe = () => observers.push(cb); },
+    MutationObserver: function (cb) { observers.push(cb); this.observe = () => {}; },
     getComputedStyle() { return { getPropertyValue() { return "0"; } }; },
   };
   vm.runInNewContext(SRC.replace(/^const\b/gm, "var"), ctx);
@@ -177,7 +180,7 @@ function bootCreate() {
   bag.buttons.L = { x: 0, y: 0.35 };
   const store = { get(k, d) { return k === "dockLayout" ? bag : d; }, set() {} };
   const api = ctx.DockLayout.create({ $: (id) => els[id] || null, store, getSteerMode: () => "buttons" });
-  return { ctx, api, winL, observers, settings, els, bodyAttrs };
+  return { ctx, api, winL, docL, observers, settings, pause, els, bodyAttrs, made };
 }
 
 test("a rotation repaints the dock offsets in the new viewport's pixels", () => {
@@ -190,13 +193,84 @@ test("a rotation repaints the dock offsets in the new viewport's pixels", () => 
   assert.match(els["dock-left"].style.transform, /-140\.0px\)/, "the same fraction of the landscape pad");
 });
 
-test("closing SETTINGS ends REPOSITION, so the dock does not drag during the race", () => {
-  const { api, observers, settings, bodyAttrs } = bootCreate();
+test("setEditing(true) hides SETTINGS and PAUSED so the docks are reachable, and false restores", () => {
+  const { api, settings, pause, made } = bootCreate();
+  pause.hidden = false; settings.hidden = false;   // both modal dialogs open: the whole document is inert
   api.setEditing(true);
-  assert.equal(bodyAttrs["data-dock-edit"], "1");
-  assert.equal(observers.length, 1, "create() must watch #pmsettings");
-  settings.hidden = true;
+  assert.equal(settings.hidden, true, "#pmsettings (showModal) would make the dock inert");
+  assert.equal(pause.hidden, true);
+  assert.equal(made.length, 1, "a floating DONE is the way out with SETTINGS hidden");
+  assert.equal(made[0].hidden, false);
+  api.setEditing(false);
+  assert.equal(settings.hidden, false, "exit re-shows settings");
+  assert.equal(pause.hidden, false, "and the pause card, only because it was open");
+  assert.equal(made[0].hidden, true);
+});
+
+test("only what REPOSITION hid comes back (settings opened from the menu, no pause card)", () => {
+  const { api, settings, pause } = bootCreate();
+  settings.hidden = false; pause.hidden = true;
+  api.setEditing(true);
+  api.setEditing(false);
+  assert.equal(settings.hidden, false);
+  assert.equal(pause.hidden, true, "the pause card was never open, so exit must not open it");
+});
+
+test("a pointerdown on #dock-right starts a drag while editing, and the move shifts it", () => {
+  const { api, docL, els } = bootCreate();
+  const target = { closest() { return null; } };
+  els["dock-right"].contains = (t) => t === target;
+  els["dock-left"].contains = () => false;
+  const ev = (o) => Object.assign({ target, pointerId: 1, preventDefault() { this.stopped = true; } }, o);
+  // Not editing: ignored.
+  const idle = ev({ clientX: 300, clientY: 700 });
+  docL.pointerdown(idle);
+  assert.ok(!idle.stopped, "outside edit mode the press passes through to the pedals");
+  api.setEditing(true);
+  const down = ev({ clientX: 300, clientY: 700 });
+  docL.pointerdown(down);
+  assert.ok(down.stopped, "the dock claimed the press");
+  docL.pointermove(ev({ clientX: 260, clientY: 700 }));   // 40 px toward the centre
+  docL.pointerup(ev({}));
+  assert.equal(api.bag().buttons.R.x, 40 / 400);
+});
+
+test("an external open of SETTINGS or PAUSED ends REPOSITION without stacking dialogs", () => {
+  const { api, observers, settings, pause, bodyAttrs } = bootCreate();
+  api.setEditing(true);
+  observers[0]();   // our own hide settled: nothing visible, still editing
+  assert.equal(api.editing(), true);
+  pause.hidden = false;   // the pause button
   observers[0]();
   assert.equal(api.editing(), false);
   assert.equal(bodyAttrs["data-dock-edit"], undefined);
+  assert.equal(settings.hidden, true, "settings is not re-shown over the pause card");
+});
+
+test("Escape ends REPOSITION and does not reach Input's pause toggle", () => {
+  const { api, docL, settings } = bootCreate();
+  api.setEditing(true);
+  let prevented = false, stopped = false;
+  docL.keydown({ key: "a", preventDefault() { prevented = true; } });
+  assert.equal(api.editing(), true);
+  docL.keydown({ key: "Escape", preventDefault() { prevented = true; }, stopPropagation() { stopped = true; } });
+  assert.equal(api.editing(), false);
+  assert.ok(prevented && stopped);
+  assert.equal(settings.hidden, false);
+});
+
+test("apply divides the translate by the dock's effective CSS zoom", () => {
+  // `zoom` multiplies a translate, so a px offset must be pre-divided or the
+  // dock lands at px × zoom (off-screen at BUTTON SIZE 300%).
+  const bag = DL.normalize({});
+  bag.buttons.L = { x: 0.2, y: 0.1 };
+  const plain = dockEl(), zoomed = dockEl(), third = dockEl();
+  zoomed.currentCSSZoom = 2;
+  third.currentCSSZoom = 3;
+  DL.apply("buttons", bag, { L: plain });
+  DL.apply("buttons", bag, { L: zoomed });
+  DL.apply("buttons", bag, { L: third });
+  assert.equal(plain.style.transform, "translate(80.0px, -80.0px)");
+  assert.equal(zoomed.style.transform, "translate(40.0px, -40.0px)", "zoom 2 renders the same visual shift from half the px");
+  assert.equal(third.style.transform, "translate(26.7px, -26.7px)");
 });

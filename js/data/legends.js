@@ -42,7 +42,7 @@ const Legends = (function () {
 
   const LIST = [
     { id: "schumacher", code: "MSC", marque: "ferrari", era: "vten04", name: "Michael Schumacher", nat: "DE",
-      years: "1991–2012", teams: "Benetton, Ferrari", car: "Ferrari F2004",
+      years: "1991–2012", teams: "Jordan, Benetton, Ferrari, Mercedes", car: "Ferrari F2004",
       record: { starts: 306, wins: 91, poles: 68, podiums: 155, titles: 7 },
       trait: "Relentless over a stint, and the era's benchmark in the wet.",
       // Ferrari's red is NOT one colour: 1996-2007 they ran a brighter, almost
@@ -84,7 +84,7 @@ const Legends = (function () {
       // the bare metal IS the colour, hence "Silver Arrow" and the brushed finish.
       livery: { name: "Silver Arrow '55", c1: [0.78, 0.79, 0.82], c2: [0.16, 0.17, 0.19],
                 accent: [0.55, 0.57, 0.60], finish: "brushed",
-                finShape: "none", spineHeight: "low", spineLogo: "number" } },
+                finShape: "none", spineHeight: "standard", spineLogo: "number" } },
 
     { id: "clark", code: "CLK", marque: null, era: "slim60", name: "Jim Clark", nat: "GB",
       years: "1960–1968", teams: "Lotus", car: "Lotus 25",
@@ -96,7 +96,7 @@ const Legends = (function () {
       // 1960s teams each ran their own shade — so this is the standard value.
       livery: { name: "Lotus Green '63", c1: [0.00, 0.26, 0.145], c2: [0.85, 0.70, 0.22],
                 stripe: [0.90, 0.76, 0.28], accent: [0.93, 0.94, 0.96],
-                finShape: "none", spineHeight: "low", spineLogo: "fade" } },
+                finShape: "none", spineHeight: "standard", spineLogo: "fade" } },
 
     { id: "lauda", code: "LAU", marque: "ferrari", era: "wing70", name: "Niki Lauda", nat: "AT",
       years: "1971–1985", teams: "March, BRM, Ferrari, Brabham, McLaren", car: "Ferrari 312T",
@@ -116,7 +116,7 @@ const Legends = (function () {
       // this tribute is for — and it keeps the 1975 car off the 2004 car's red.
       livery: { name: "Rat's Red '75", c1: [0.55, 0.02, 0.05], c2: [0.14, 0.14, 0.16],
                 stripe: [0.92, 0.93, 0.95], accent: [0.86, 0.72, 0.20],
-                finShape: "none", spineHeight: "low", spineLogo: "carbon" } },
+                finShape: "none", spineHeight: "standard", spineLogo: "carbon" } },
 
     { id: "prost", code: "PRO", marque: "williams", era: "active92", name: "Alain Prost", nat: "FR",
       years: "1980–1993", teams: "McLaren, Renault, Ferrari, Williams", car: "Williams FW15C",
@@ -144,7 +144,7 @@ const Legends = (function () {
       // VERIFIED: Tyrrell ran French Racing Blue under the Elf fuel sponsorship.
       livery: { name: "Tartan Blue '71", c1: [0.04, 0.24, 0.70], c2: [0.93, 0.94, 0.96],
                 stripe: [0.90, 0.20, 0.20], accent: [0.96, 0.96, 0.98],
-                finShape: "none", spineHeight: "low", spineLogo: "number" } },
+                finShape: "none", spineHeight: "standard", spineLogo: "number" } },
 
     { id: "moss", code: "MOS", marque: null, era: "front50", name: "Stirling Moss", nat: "GB",
       years: "1951–1961", teams: "HWM, Mercedes, Vanwall, Rob Walker, Lotus", car: "Vanwall VW5",
@@ -168,7 +168,7 @@ const Legends = (function () {
       // brighter green than Clark's Lotus and is meant to be.
       livery: { name: "Vanwall '58", c1: [0.05, 0.42, 0.20], c2: [0.93, 0.94, 0.96],
                 stripe: [0.90, 0.76, 0.28], accent: [0.10, 0.12, 0.14],
-                finShape: "none", spineHeight: "low", spineLogo: "number" } },
+                finShape: "none", spineHeight: "standard", spineLogo: "number" } },
 
     { id: "ghill", code: "GHL", marque: null, era: "wing68", name: "Graham Hill", nat: "GB",
       years: "1958–1975", teams: "BRM, Lotus, Brabham, Embassy Hill", car: "Lotus 49B",
@@ -178,7 +178,7 @@ const Legends = (function () {
       trait: "The only Triple Crown: Indy, Le Mans and Monaco, and five Monacos.",
       livery: { name: "Gold Leaf '68", c1: [0.86, 0.60, 0.10], c2: [0.93, 0.94, 0.96],
                 stripe: [0.80, 0.08, 0.10], accent: [0.15, 0.13, 0.10],
-                finShape: "none", spineHeight: "low", spineLogo: "cap" } },
+                finShape: "none", spineHeight: "standard", spineLogo: "cap" } },
 
     { id: "hakkinen", code: "HAK", marque: "mclaren", era: "narrow98", name: "Mika Häkkinen", nat: "FI",
       years: "1991–2001", teams: "Lotus, McLaren", car: "McLaren MP4/13",
