@@ -14,17 +14,23 @@
         bankedKerbStrip, sponsorHoarding, bleacher, acacia,
         spectatorHill, terrainYAt, onTrack } = api;
 
+      // sl(f) lands at RACING frac f (the brands_hatch idiom): this file's s = 0
+      // is the scenery origin (sceneryStartFrac 0.80), not the start line.
+      // 1 - def._sceneryShift at the 4 dp brands_hatch uses.
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
+
       if (circuitKit) {
         circuitKit.hospitality({
-          id: "kit:qatar:hospitality", frac: 0.86, side: -1, gap: 85,
+          id: "kit:qatar:hospitality", frac: sl(0.86), side: -1, gap: 85,
           size: [18, 9, 34], modules: 4, required: true,
         });
         circuitKit.serviceCompound({
-          id: "kit:qatar:paddock-service", frac: 0.895, side: -1, gap: 72,
+          id: "kit:qatar:paddock-service", frac: sl(0.895), side: -1, gap: 72,
           size: [24, 7, 42], vehicles: 8, required: true,
         });
         circuitKit.recoveryBay({
-          id: "kit:qatar:recovery-bay", frac: 0.845, side: -1, gap: 58,
+          id: "kit:qatar:recovery-bay", frac: sl(0.845), side: -1, gap: 58,
           size: [16, 6, 20], required: true,
         });
         circuitKit.marshalShelter({
@@ -150,7 +156,7 @@
       if (typeof floodMastRing === "function") {
         floodMastRing(80, { h: MAST_H, dist: 34, cool: true, pool: false });
         // Start/finish densification: ~every 55 m along the pit straight.
-        along(0.86, 0.14, 55, (k) => {
+        along(sl(0.89), sl(0.09), 55, (k) => {
           if (typeof floodMast === "function") {
             floodMast(k, -1, 32, { h: MAST_H_SF, cool: true, pool: false });
             floodMast(k,  1, 36, { h: MAST_H_SF, cool: true, pool: false });
@@ -201,10 +207,9 @@
       // complex, 0.3 of a lap from the engine pit lane (0.94-0.04, left) and
       // the start gantry. sl(f) lands at engine frac f: the slab, offices,
       // halls, pit wall, timing mast, media centre and the main stand opposite
-      // now stand on the real pit straight. The rest of the file keeps its
-      // authoring frame. 1 - def._sceneryShift at the 4 dp brands_hatch uses.
-      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
-      const sl = (f) => (f + SL) % 1;
+      // now stand on the real pit straight. The villas, kits, S/F masts,
+      // straight ads and the T1 block are sl()-keyed too (2026-10 review F2);
+      // the mid-lap tables below keep their authoring frame.
       (function pitSlab() {
         // BEHIND the engine pit complex (TrackPit), which owns the lane and the
         // bays: its keep-out reaches 30.1 m past the road edge along the row
@@ -312,7 +317,7 @@
 
       (function straightAds() {
         let i = 0;
-        along(0.86, 0.12, 28, (k) => {
+        along(sl(0.90), sl(0.085), 28, (k) => {
           if (i % 4 === 3) arabicSign(k, 1, 5, 9, 3.2, [0.98, 0.94, 0.66], [0.10, 0.30, 0.20]);
           else billboard(k, 1, 5, 9, 3.2, AD[i % AD.length]);
           i++;
@@ -322,13 +327,13 @@
       arabicSign(K(0.735), -1, 34, 20, 4.2, [0.97, 0.95, 0.90], [0.44, 0.06, 0.18]);
       arabicSign(K(0.935), 1, 26, 18, 4.0, [0.98, 0.90, 0.40], [0.12, 0.13, 0.17]);
 
-      qatarStand("qatar-t1-stand-a", 0.053, 1, 20, 95,
+      qatarStand("qatar-t1-stand-a", sl(0.053), 1, 20, 95,
         SHELL_SANDSTONE, [0.18, 0.18, 0.21], true);
-      qatarStand("qatar-t1-stand-b", 0.070, 1, 20, 65,
+      qatarStand("qatar-t1-stand-b", sl(0.070), 1, 20, 65,
         SHELL_SANDSTONE, [0.18, 0.18, 0.21]);
-      tyreWall(0.04, 0.085, 1, 5, [0.90, 0.86, 0.20]);
-      marshalPost(K(0.05), -1, 6);
-      billboard(K(0.065), 1, 6, 12, 3.8, AD[0]);
+      tyreWall(sl(0.04), sl(0.085), 1, 5, [0.90, 0.86, 0.20]);
+      marshalPost(K(sl(0.05)), -1, 6);
+      billboard(K(sl(0.065)), 1, 6, 12, 3.8, AD[0]);
 
       // Lusail Hill — elevated general-admission terraces outside Turn 1,
       // set in green space beyond the gravel trap. Prop mound only (no road
@@ -337,7 +342,7 @@
       // https://oversteer48.com/lusail-hill-general-admission-qatar-gp/
       // https://www.lcsc.qa/ticket/general-admission-lusail-hill-3-day
       (function lusailHill() {
-        const a = anchor(K(0.068), 1, 56), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(0.068)), 1, 56), b = [a.r, a.u, a.t];
         modelGroup("qatar-lusail-hill", {
           center: vadd(a.c, a.u, 5.5), size: [44, 13, 88], basis: b,
         }, (stage) => {
@@ -362,7 +367,7 @@
         // Soft GA bank further out than the required mound so ladders do not
         // share planes with qatar-lusail-hill terraces.
         if (typeof spectatorHill === "function") {
-          spectatorHill(0.060, 0.082, 1, 76, {
+          spectatorHill(sl(0.060), sl(0.082), 1, 76, {
             rows: 2, rise: 1.05, depth: 2.0, density: 0.38, step: 12,
             grass: GRASS, riser: [0.36, 0.32, 0.24],
           });
@@ -371,7 +376,7 @@
 
       {
         const hallH = 7;
-        building(K(0.060), 1, 54, 16, hallH, 34,
+        building(K(sl(0.060)), 1, 54, 16, hallH, 34,
           { kind: "hall", wall: WHITE, window: WIN_WARM, floor: 3.0 });
         // Light bar over the concourse roof. Two bugs stacked here:
         // building()'s "hall" kind caps its own mass at hallH * 0.5, not
@@ -382,19 +387,19 @@
         // overlapped the roof it was meant to rest on. Sharing the hall's
         // own k fixes the XZ overlap; roofTop fixes the Y gap.
         const roofTop = hallH * 0.5;
-        const a = anchor(K(0.060), 1, 63), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(0.060)), 1, 63), b = [a.r, a.u, a.t];
         addBox(out, vadd(a.c, a.u, roofTop - 0.05), [20, 0.30, 42], FLOOD, b);
       }
       // Arabic entrance signage over the North concourse gate.
-      arabicSign(K(0.064), 1, 44, 16, 3.4, [0.98, 0.92, 0.60], [0.13, 0.14, 0.18]);
+      arabicSign(K(sl(0.064)), 1, 44, 16, 3.4, [0.98, 0.92, 0.60], [0.13, 0.14, 0.18]);
 
       // T1 VVIP — white villa + ~60 m branch-style sail canopy (replaces mosque)
       (function t1Vvip() {
-        building(K(0.048), -1, 36, 18, 9, 32,
+        building(K(sl(0.048)), -1, 36, 18, 9, 32,
           { kind: "dome", wall: WHITE, window: WIN_COOL, floor: 3.4 });
-        building(K(0.058), -1, 40, 14, 7, 24,
+        building(K(sl(0.058)), -1, 40, 14, 7, 24,
           { kind: "arch", wall: [0.91, 0.91, 0.89], window: WIN_WARM, floor: 3.2 });
-        const a = anchor(K(0.052), -1, 48), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(0.052)), -1, 48), b = [a.r, a.u, a.t];
         modelGroup("qatar-t1-vvip-canopy", {
           center: vadd(a.c, a.u, 8.3), size: [62, 17, 38], basis: b,
         }, (stage) => {
@@ -697,7 +702,7 @@
         };
         // Literal modelGroup("…") ids — scenery-api-contract scans the source.
         {
-          const a0 = anchor(K(0.955), -1, 56), b = [a0.r, a0.u, a0.t];
+          const a0 = anchor(K(sl(0.955)), -1, 56), b = [a0.r, a0.u, a0.t];
           if (!(typeof onTrack === "function" && onTrack(a0.c[0], a0.c[2], 16))) {
             modelGroup("qatar-hospitality-villas-1", {
               center: vadd(a0.c, a0.u, 6.0), size: [20, 14, 46], basis: b,
@@ -709,7 +714,7 @@
           [2, 0.995, "qatar-hospitality-villas-3"],
           [3, 0.025, "qatar-hospitality-villas-4"],
         ]) {
-          const a0 = anchor(K(s0), -1, 56);
+          const a0 = anchor(K(sl(s0)), -1, 56);
           if (typeof onTrack === "function" && onTrack(a0.c[0], a0.c[2], 16)) continue;
           const b = [a0.r, a0.u, a0.t];
           modelGroup(id, {
