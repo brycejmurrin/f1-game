@@ -85,8 +85,17 @@ const GarageDefaults = (function () {
     }
     return v;
   }
+<<<<<<< HEAD
   function copy(v) {
     return v && typeof v === "object" ? JSON.parse(JSON.stringify(v)) : v;
+=======
+  function copy(v) {   // rebuilt with this realm's literals (a JSON round trip hands back the caller's realm, which deepStrictEqual sees)
+    if (!v || typeof v !== "object") return v;
+    if (Array.isArray(v)) return v.map(copy);
+    const o = {};
+    Object.keys(v).forEach((k) => { o[k] = copy(v[k]); });
+    return o;
+>>>>>>> origin/claude/f1-game-project-26h3ng
   }
   deepFreeze(DEF);
 

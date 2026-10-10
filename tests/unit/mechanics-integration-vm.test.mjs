@@ -606,3 +606,100 @@ test("ERS recovery needs the car moving: holding the brake or coasting at a stan
   assert.ok(p.energy > 0.3, "braking from speed recovers energy: " + p.energy);
   g.G._testInput = null;
 });
+
+// ---- Rolling-start hand-over (R1: 01-F1, 03-F3) --------------------------------------------------------
+// The AI never advances c.head, so the car took the wheel facing the heading it was DROPPED with: 93 deg off the
+// road at Silverstone, wall within 15 steps. Drive the real game VM through the run-up and read the heading the
+// step the player gets the wheel.
+async function handoverErrDeg(game) {
+  game.G.daily.stop(); game.G.timeTrial = true; game.G.raceWeather = "dry";
+  await game.G.startRace();
+  const p = game.G.player, Tr = vm.runInContext("Tracks", game.ctx);
+  game.step(1);
+  assert.equal(p.human, false, "armed: the AI drives the run-up");
+  for (let i = 0; i < 900; i++) {
+    const was = p.human;
+    game.step(1);
+    if (!was && p.human) {
+      const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+      Tr.sample(game.G.track, p.s, smp);
+      const err = (p.head - Math.atan2(smp.t[0], smp.t[2])) * 180 / Math.PI;
+      return { err: ((err + 540) % 360) - 180, vLat: p.vLat, yawRateCur: p.yawRateCur };
+    }
+  }
+  assert.fail("the hand-over never happened");
+}
+test("flying-start hand-over: the car takes the wheel pointing along the road (Silverstone bends; Monza control)", async () => {
+  const mz = await handoverErrDeg(g);
+  assert.ok(Math.abs(mz.err) < 2, "straight run-up control: " + mz.err);
+  const sv = await createGame({ track: "silverstone" });
+  try {
+    const r = await handoverErrDeg(sv);
+    assert.ok(Math.abs(r.err) < 2, "silverstone hand-over heading is " + r.err.toFixed(1) + " deg off the tangent");
+    assert.equal(r.vLat, 0); assert.equal(r.yawRateCur, 0);
+  } finally { sv.close(); }
+});
+
+test("flying-start: a session quit mid-countdown does not stop the next time trial arming its rolling start", async () => {
+  g.G.daily.stop(); g.G.timeTrial = false; g.G.raceWeather = "dry";
+  await g.G.startRace();          // a GP: the gantry countdown, which FlyingStart.update() sees in "count"
+  g.step(1);
+  assert.equal(g.G.state, "count");
+  g.G.quitToMenu();               // update() never runs in the menu, so only stop() can forget "count"
+  g.G.timeTrial = true;
+  await g.G.startRace();
+  g.step(1);
+  assert.equal(g.G.flyingStart.active(), true, "the next session's first countdown frame is a new start");
+  assert.equal(g.G.player.human, false);
+});
+
+// 01-F2 (hunt2, decided): RECOVER / the auto-rescue is a free, speed-preserving re-centre, so in TT and QUALI it deletes the lap.
+test("rescuePlayer deletes the lap in time trial and qualifying, not in a race and not for an AI car", async () => {
+  await tt();
+  const p = g.G.player;
+  const flags = (c) => ({ inv: !!c.incidentInvalidLap, cut: !!c.qualiCut });
+  const run = (c, session) => { g.G.session = session; c.incidentInvalidLap = false; c.qualiCut = false; g.G.rescuePlayer(c); return flags(c); };
+  try {
+    assert.deepEqual(run(p, "tt"), { inv: true, cut: false }, "time trial: the lap is invalid (no quali sheet to cut)");
+    assert.deepEqual(run(p, "quali"), { inv: true, cut: true }, "qualifying: invalid AND no time on the sheet");
+    assert.deepEqual(run(p, "race"), { inv: false, cut: false }, "a race has no lap-validity concept to add");
+    p.human = false;   // the AI's role (a time trial has no rivals to borrow)
+    assert.deepEqual(run(p, "tt"), { inv: false, cut: false }, "an AI car's rescue never touches lap validity");
+  } finally { p.human = true; g.G.session = "race"; }
+});
+
+// 01-F5 (hunt2): handing a flipped human car back called G.rescuePlayer BEFORE the car left the takeover; the real
+// rescuePlayer begins with incidentSim.release(c), which found the car still owned and ran handbackCar a second
+// time (second demote, restored last-good pose, fallbacks++, a second "anomaly" log). The module whole in a VM,
+// DebrisWorld stubbed, G a two-car world whose rescuePlayer does what game.js's does first: release(c).
+test("a flipped human car handed back from a takeover is demoted once and is not counted as a fallback", async () => {
+  const fsm = await import("node:fs"), pathm = await import("node:path"), { seedLog } = await import("../helpers/seed-log.mjs");
+  const root = pathm.resolve(pathm.dirname(new URL(import.meta.url).pathname), "..", "..");
+  const rd = (p) => fsm.readFileSync(pathm.join(root, p), "utf8");
+  const demoted = [], logs = [];
+  const flipped = { x: 0, z: 0, qx: 1, qy: 0, qz: 0, qw: 0, vx: 0, vz: 0, sleeping: true };   // up.y = -1: on its roof, at rest
+  const DebrisWorld = { active: () => true, rapierReady: () => true, worldGen: () => 1, promoteCarDynamic: () => true,
+    demoteCarKinematic: (i) => { demoted.push(i); }, carBodyPose: () => flipped };
+  const ctx = vm.createContext({ Math, JSON, Object, Array, String, Number, Map, Set, Uint8Array, isNaN, isFinite, console, DebrisWorld,
+    Tracks: { sample: () => {}, wallAt: () => 8 } });
+  seedLog(ctx);
+  for (const f of ["js/core/mat4.js", "js/race/race-control.js", "js/physics/incident-sim.js"]) vm.runInContext(rd(f), ctx, { filename: f });
+  const IncidentSim = vm.runInContext("IncidentSim", ctx);
+  const mk = (s, human) => ({ px: 0, pz: 0, head: 0, speed: 40, s, x: 0, vLat: 0, yawRateCur: 0, prog: s, finished: false, retired: false, human });
+  const cars = [mk(100, true), mk(103, false)];
+  let sim, rescued = 0;
+  const G = { cars, player: cars[0], track: { total: 5000 }, PACE: 1, vTop: () => 72, smp: {},
+    trackFrom: () => ({ s: 100, x: 0 }), worldFromTrack: () => ({ x: 0, z: 0 }),
+    rescuePlayer: (c) => { rescued++; sim.release(c); } };   // game.js rescuePlayer(): incidentSim.release(c) first
+  sim = IncidentSim.create(G);
+  sim.setFlags({ r2Airborne: true, r3Contact: false, c1Pileup: false });
+  sim.notifyCar(cars[0], cars[1], 30);
+  sim.preStep(1 / 60);
+  assert.equal(sim.status().owned, 2, "both cars are in the takeover");
+  for (let i = 0; i < 40 && sim.owns(cars[0]); i++) sim.postStep(1 / 60);   // settle on the roof -> handback
+  assert.equal(sim.owns(cars[0]), false, "the human car was handed back");
+  assert.equal(rescued, 1, "the inverted human car was rescued onto the road");
+  assert.equal(demoted.filter((i) => i === 0).length, 1, "demoted to kinematic exactly once");
+  assert.equal(sim.status().fallbacks, 0, "a clean settle is not an anomaly fallback");
+  assert.equal(sim.status().handbacks, 2, "one clean handback per car in the window (the human and the AI)");
+});

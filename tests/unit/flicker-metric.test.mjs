@@ -20,6 +20,7 @@ import {
   DEFAULTS, clusters, flickerScore, flipMask, frameDelta, judge, lumaFromRGBA,
 } from "../../tools/lib/flicker-metric.mjs";
 import { SITES, JITTER, dolly, parseArgs } from "../../tools/shot/flicker-gate.mjs";
+import { inexactSites } from "../../tools/lib/flicker-metric.mjs";
 import fs from "node:fs";
 
 const W = 96, H = 64, N = W * H;
@@ -174,4 +175,20 @@ test("dolly moves eye and target together along the view ray", () => {
   assert.throws(() => parseArgs(["--backend", "vulkan"]), /--backend/);
   assert.throws(() => parseArgs(["--bogus"]), /unknown argument/);
   assert.deepEqual(parseArgs(["--site", "a", "--site", "b"]).sites, ["a", "b"]);
+});
+
+// 2026-10-10: a run said `A==A2 at every site: false` and nothing said which site. inexactSites names them, worst first,
+// so one first-site warm-up (one site) reads differently from a live clock (every site).
+test("inexactSites lists the sites whose A and A2 differ, worst first; exact and skipped sites are not listed", () => {
+  const row = (id, diffPx, maxDelta = 0) => ({ id, still: { diffPx, maxDelta, flipPx: 0 } });
+  assert.deepEqual(inexactSites([row("a", 0), row("b", 120, 9), row("c", 15693, 25), { id: "d", status: "skipped" }]),
+    [{ id: "c", diffPx: 15693, maxDelta: 25 }, { id: "b", diffPx: 120, maxDelta: 9 }]);
+  assert.deepEqual(inexactSites([row("a", 0)]), []);
+});
+
+test("--a3 is an opt-in flag; extra settle rounds are on unless --no-settle", () => {
+  assert.equal(parseArgs([]).a3, undefined);
+  assert.equal(parseArgs(["--a3", "--png"]).a3, true);
+  assert.equal(parseArgs([]).settle, true);
+  assert.equal(parseArgs(["--no-settle"]).settle, false);
 });

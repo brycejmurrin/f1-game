@@ -534,6 +534,30 @@ export function createExtras(ctx) {
       return refreshDiskJob(raw);
     } catch { return null; }
   };
+  /** apex_job_status {}: drop finished manifests (+ .log/.err/.exit) ended over 7 days ago; re-judge a `failed` one with no
+   *  .exit file whose log's parsed result says ok:true (written before the .exit fix) as done. */
+  const JOB_TTL_MS = 7 * 86400000;
+  const pruneJobs = () => {
+    let files = [];
+    try { files = fs.readdirSync(JOB_DIR).filter((f) => f.endsWith(".json")); } catch { return; }
+    for (const f of files) {
+      try {
+        const mf = path.join(JOB_DIR, f);
+        const m = JSON.parse(fs.readFileSync(mf, "utf8"));
+        if (!["done", "failed", "cancelled"].includes(m.state)) continue;
+        const logAbs = m.log ? path.join(ROOT, m.log) : "";
+        const exitAbs = logAbs ? exitFileFor(logAbs) : "";
+        if (m.ended && Date.now() - m.ended > JOB_TTL_MS) {
+          for (const x of [mf, logAbs, m.stderr ? path.join(ROOT, m.stderr) : "", exitAbs]) if (x) fs.rmSync(x, { force: true });
+          continue;
+        }
+        if (m.state === "failed" && logAbs && !fs.existsSync(exitAbs)) {
+          const o = ctx.splitOut(fs.readFileSync(logAbs, "utf8")).out;
+          if (o && o.ok === true) { m.state = "done"; m.exit = 0; fs.writeFileSync(mf, JSON.stringify(m, null, 2) + "\n"); }
+        }
+      } catch { /* unreadable manifest: leave it */ }
+    }
+  };
   const listDiskJobs = () => {
     try {
       return fs.readdirSync(JOB_DIR).filter((f) => f.endsWith(".json")).map((f) => loadDiskJob(f.slice(0, -5))).filter(Boolean);
@@ -575,12 +599,39 @@ export function createExtras(ctx) {
     }
     return v;
   };
+  /** Measured ~4.3 s/cell on SwiftShader for layout-audit geometry (ui_matrix 2026-10-10). */
+  const UI_MATRIX_MS_PER_CELL = 4300;
+  const UI_GALLERY_MS_PER_CELL = 1500;
+  /** Sync estimate from the planned argv (wildcards use catalog-shaped sizes). */
+  function estimateLayoutJobMs(kind, argv) {
+    if (kind !== "ui_matrix" && kind !== "ui_gallery") return undefined;
+    const get = (p) => { const hit = (argv || []).find((a) => typeof a === "string" && a.startsWith(p)); return hit ? hit.slice(p.length) : null; };
+    const expand = (pat, fallback) => {
+      if (!pat) return fallback;
+      return Math.max(1, pat.split(",").filter(Boolean).reduce((n, p) => {
+        if (!p.includes("*")) return n + 1;
+        if (p.startsWith("ios-")) return n + 6;
+        if (p.startsWith("desktop-")) return n + 6;
+        return n + 4;
+      }, 0));
+    };
+    const screens = expand(get("--screens="), kind === "ui_gallery" ? 2 : 12);
+    const viewports = expand(get("--viewports="), kind === "ui_gallery" ? 2 : 12);
+    const scale = get("--scale=");
+    const scales = scale ? Math.max(1, scale.split(",").filter(Boolean).length) : 1;
+    const cells = screens * viewports * scales;
+    const per = kind === "ui_gallery" ? UI_GALLERY_MS_PER_CELL : UI_MATRIX_MS_PER_CELL;
+    return { estimateMs: cells * per, cells, screens, viewports, scales };
+  }
   function jobStart(args) {
     const kind = String(args.kind || "");
     let plan;
     try { plan = jobPlan(kind, args); } catch (e) { if (e.refuse) return e.refuse; throw e; }
-    if (args.dryRun) return toolResult({ ok: true, dryRun: true, kind, argv: plan.argv, env: plan.env, browser: plan.browser });
-    if (mockMode()) return toolResult({ ok: true, mock: true, kind, argv: plan.argv, env: plan.env });
+    const est = estimateLayoutJobMs(kind, plan.argv);
+    if (args.dryRun) {
+      return toolResult({ ok: true, dryRun: true, kind, argv: plan.argv, env: plan.env, browser: plan.browser, ...(est || {}) });
+    }
+    if (mockMode()) return toolResult({ ok: true, mock: true, kind, argv: plan.argv, env: plan.env, ...(est || {}) });
     const memRunning = [...jobs.values()].filter((j) => j.state === "running");
     const diskRunning = listDiskJobs().filter((j) => j.state === "running" && !jobs.has(j.id));
     if (memRunning.length + diskRunning.length >= 2) {
@@ -622,6 +673,7 @@ export function createExtras(ctx) {
   }
   function jobStatus(args) {
     if (!args.jobId) {
+      pruneJobs();
       const fromDisk = listDiskJobs();
       const merged = new Map(fromDisk.map((j) => [j.id, j]));
       for (const j of jobs.values()) merged.set(j.id, j);
@@ -693,7 +745,10 @@ export function createExtras(ctx) {
     let u; try { u = await uiArgs(args); } catch (e) { return e.refuse; }
     const scale = args.scale == null ? null : Number(args.scale);
     if (scale != null && !(scale >= 40 && scale <= 200)) return refuse("bad_args", "scale must be 40..200 (%)", "Interface size, e.g. 100 or 130.");
-    const argv = nodeArgv("ui/layout-audit.mjs", `--screens=${u.screen}`, `--viewports=${u.viewport}`, "--jobs=1", ...(scale ? [`--scale=${scale}`] : []));
+    // --json prints THIS run's rows on stdout (splitOut); audit.json is merged history and
+    // may keep a stale cell when --scale= retags the viewport (ios-iphone-landscape@130).
+    const argv = nodeArgv("ui/layout-audit.mjs", `--screens=${u.screen}`, `--viewports=${u.viewport}`, "--jobs=1", "--json",
+      ...(scale != null ? [`--scale=${scale}`] : []));
     if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv });
     if (mockMode()) return toolResult({ ok: true, mock: true, argv });
     const took = acquireLock("apex_ui_fit"); if (took) return took;
@@ -701,13 +756,24 @@ export function createExtras(ctx) {
       const r = await runSpawn(argv, { timeoutMs: 180000, signal });
       const b = bodyOf(r);
       if (b.error) return r;
-      let rows = [];
-      try { rows = JSON.parse(fs.readFileSync(path.join(ROOT, "artifacts", "layout-audit", "audit.json"), "utf8")).rows || []; } catch { /* report text only */ }
-      const row = rows.find((x) => x.screen === u.screen && x.viewport === u.viewport) || null;
-      if (!row) return refuse("no_result", `layout-audit wrote no row for ${u.screen} x ${u.viewport}`, "The audit ran but produced nothing for this cell (a screen that is skipped at this viewport, or an audit error): see stderr, or apex_ui_shot for the raw capture.");
-      const problems = row ? ["clipped", "offscreen", "smallTaps", "tinyTaps", "truncated", "underHardware", "starved", "deepScroll", "errors"]
-        .filter((k) => Array.isArray(row[k]) && row[k].length).map((k) => ({ kind: k, n: row[k].length })) : null;
-      return rewrap(r, { stdout: b.stdout.split("\n").filter((l) => l.startsWith(u.screen)).join("\n"), out: row && { ...row, problems, clean: problems.length === 0 } });
+      const vpKey = u.viewport + (scale != null ? `@${scale}` : "");
+      const matchRow = (rows) => (rows || []).find((x) => x.screen === u.screen
+        && (x.viewport === vpKey || x.viewport === u.viewport)) || null;
+      let row = null;
+      if (b.out && Array.isArray(b.out.rows)) row = matchRow(b.out.rows);
+      if (!row) {
+        try {
+          row = matchRow(JSON.parse(fs.readFileSync(path.join(ROOT, "artifacts", "layout-audit", "audit.json"), "utf8")).rows);
+        } catch { /* report text only */ }
+      }
+      if (!row) {
+        return refuse("no_result", `layout-audit wrote no row for ${u.screen} x ${vpKey}`,
+          "The audit ran but produced nothing for this cell (a screen that is skipped at this viewport, or an audit error): see stderr, or apex_ui_shot for the raw capture.");
+      }
+      const problems = ["clipped", "offscreen", "smallTaps", "tinyTaps", "truncated", "underHardware", "starved", "deepScroll", "errors"]
+        .filter((k) => Array.isArray(row[k]) && row[k].length).map((k) => ({ kind: k, n: row[k].length }));
+      const line = (b.stdout || "").split("\n").filter((l) => l.startsWith(u.screen)).join("\n");
+      return rewrap(r, { stdout: line, out: { ...row, problems, clean: problems.length === 0 } });
     } finally { releaseLock(); }
   }
   async function uiShot(args, { signal }) {

@@ -51,7 +51,8 @@ Fast, flowing layout inherited from its MotoGP origins: long medium- and high-sp
 - Frame asphalt with a continuous green artificial-grass verge, then warm `COL.desertSand` runoff aprons on the sourced bay windows (a full-lap sand chord at 7 m out flat-coplanars on inside curves — discrete bays), then open desert.
 - Sparse palms only; faint low Lusail/Doha skyline on the far horizon.
 - Keep corners long and gently curved with continuous red-white kerb boxes to evoke the flowing, motorcycle-style layout.
-- Residual `_sceneryShift` ≈ 0.70 from `sceneryStartFrac: 0.8` — probe before touching; prefer leave (Estoril lesson).
+- Residual `_sceneryShift` ≈ 0.70 from `sceneryStartFrac: 0.8` — probe before touching; prefer leave (Estoril lesson). **Frames:** the file's authored `s = 0` is the scenery origin, not the start line. Everything in §4 tagged with a pit-straight / T1 position is keyed through `sl(f)` (lands at RACING frac `f`): pit slab, offices, halls, wall, media centre, main stand, the four `qatar-hospitality-villas-*`, the `kit:qatar:*` paddock kits, the S/F flood-mast densification and straight ads (racing 0.89-0.09 / 0.90-0.085, the measured straight), and the whole T1 block (stands, VVIP, Lusail Hill, concourse hall + gate sign, tyre wall; racing 0.04-0.085, apex T1 = 0.1013). The pit keep-out skip on the left green verge compares in racing terms too. The mid-lap tables (T2/T3 stands, dune scatter, scrub, bays, palms, acacias, remaining masts/signs) keep the authored frame and are not claimed to sit at the §4 fractions.
+- Katara Towers / Lusail Stadium measure 229 m / 152 m beyond the nearest road (compass 151° / 163°, 740 / 720 m from the lap centroid): they read as neighbours, not a horizon. Left as is (2026-10 review F9); pushing them to 3-5 km with scaled heights is the Fuji approach if wanted.
 
 ## Research pass — verified; deliberate decisions
 
