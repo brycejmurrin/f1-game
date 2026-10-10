@@ -50,24 +50,50 @@ class ParseError(ValueError):
     """The text is not tokenisable; a strict reader (commit) must fail CLOSED."""
 
 
-def strip_heredocs(text):
-    """Drop heredoc BODIES (keep the line that opens them), so a commit
-    message or a file body never reads as commands."""
+_HEREDOC = re.compile(r"(?<!<)<<(?!<)-?\s*['\"]?([A-Za-z_][A-Za-z0-9_]*)['\"]?")
+# A heredoc whose consumer is a shell (or `source`/`eval`) feeds its body to the
+# shell AS COMMANDS: `bash <<EOF ... git commit ... EOF` is a commit (15-F6). The
+# consumer is a shell word before the `<<` on the opening line, or a shell after
+# a pipe following it (`cat <<EOF | bash`).
+_SHELL_BEFORE = re.compile(r"(^|[;&|(\s])(\S*/)?(sh|bash|dash|zsh|source|eval)(\s|$)")
+_SHELL_AFTER = re.compile(r"\|\s*(\S*/)?(sh|bash|dash|zsh)(\s|$)")
+
+
+def shell_heredoc(line, m):
+    """True when the heredoc opened by match `m` on `line` is fed to a shell."""
+    return bool(_SHELL_BEFORE.search(line[:m.start()]) or _SHELL_AFTER.search(line[m.end():]))
+
+
+def split_heredocs(text):
+    """(text without heredoc BODIES, [bodies fed to a shell]). The opening line
+    stays, so a commit message or a file body never reads as commands, while a
+    body a shell will RUN is handed back to be parsed as commands."""
     lines = text.split("\n")
-    out, term = [], None
+    out, bodies, term, cur = [], [], None, None
     for n, ln in enumerate(lines):
         if term is not None:
             if ln.strip() == term:
                 term = None
+                if cur is not None:
+                    bodies.append("\n".join(cur))
+            elif cur is not None:
+                cur.append(ln)
             continue
-        m = re.search(r"(?<!<)<<(?!<)-?\s*['\"]?([A-Za-z_][A-Za-z0-9_]*)['\"]?", ln)
-        # A heredoc needs its closing line, and `<<` inside `$(( … ))` is a
+        m = _HEREDOC.search(ln)
+        # A heredoc needs its closing line, and `<<` inside `$(( ... ))` is a
         # shift: `echo $((1 << n))` used to swallow every line after it (L12).
         if m and ln[:m.start()].count("((") <= ln[:m.start()].count("))") \
                 and any(x.strip() == m.group(1) for x in lines[n + 1:]):
             term = m.group(1)
+            cur = [] if shell_heredoc(ln, m) else None
         out.append(ln)
-    return "\n".join(out)
+    return "\n".join(out), bodies
+
+
+def strip_heredocs(text):
+    """Drop heredoc BODIES (keep the line that opens them), so a commit
+    message or a file body never reads as commands."""
+    return split_heredocs(text)[0]
 
 
 def tokens(text):
@@ -145,6 +171,12 @@ def commands(text, cwd=None, depth=0, strict=False):
     `sh -c BODY` unwrapped and `cd` tracked. `strict` raises ParseError on
     untokenisable text (here or in a `-c` / eval body) instead of yielding
     nothing, so a caller that must not miss a command can fail closed."""
+    _stripped, shell_bodies = split_heredocs(text)
+    # A body a shell runs is commands (`bash <<EOF ... git commit ... EOF`, 15-F6);
+    # a malformed one raises under `strict` like any other untokenisable text.
+    for body in shell_bodies:
+        if depth < 4:
+            yield from commands(body, cwd, depth + 1, strict)
     toks = tokens(text)
     if toks is None:
         if strict:
@@ -211,7 +243,8 @@ def commit_info(text):
     text cannot be tokenised (main() prints `null`, the shell then falls back
     to its regex: fail closed)."""
     found = []
-    for env, argv, _r, _cwd in commands(text, os.getcwd(), strict=True):
+    start = os.getcwd()
+    for env, argv, _r, cwd in commands(text, start, strict=True):
         if os.path.basename(argv[0]) != "git":
             continue
         i = 1
@@ -226,6 +259,12 @@ def commit_info(text):
             i += 1
         if i >= len(argv) or argv[i] != "commit":
             continue
+        # The tree the commit lands in: -C resolved against the tracked cwd, else
+        # a `cd <other tree> && git commit` cwd (15-F6); None = the hook's own.
+        if gitdir:
+            gitdir = _abs(gitdir, cwd)
+        elif cwd and os.path.normpath(cwd) != os.path.normpath(start):
+            gitdir = cwd
         info = {"all": False, "paths": [], "include": False, "dry": False,
                 "skip": env.get("APEX_SKIP_GUARDS") == "1", "gitdir": gitdir}
         j = i + 1
