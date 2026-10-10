@@ -2128,6 +2128,19 @@ jobs:
       - name: Mesa llvmpipe + Xvfb
         if: inputs.gl != 'swiftshader'
         uses: ./.github/actions/mesa-xvfb
+      # RUN-STEP MARKER (15-F2, 2026-10-10). selected-verdict reads "failed or
+      # cancelled shard, no junit failures" as infra noise ONLY for a shard that
+      # never got here (checkout / install / apt died). A shard that did reach
+      # the run step and left no junit with testcases (cap kill, crash, a spec
+      # that fails to load) is a red: this marker is how the verdict tells.
+      - name: Mark the run step reached
+        run: mkdir -p .selected-started && echo "${{ matrix.name }}" > .selected-started/marker.txt
+      - name: Upload the run-step marker
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: selected-started-${{ matrix.name }}-${{ strategy.job-index }}
+          path: .selected-started/marker.txt
+          retention-days: 1
       - name: Run the selection (${{ matrix.name }}, ${{ matrix.tests }} tests)
         env:
           APEX_WORKERS: ${{ matrix.workers || 1 }}
@@ -2275,12 +2288,23 @@ jobs:
           sparse-checkout: tools/ci
       # https://github.com/actions/download-artifact (v8: pattern + merge-multiple)
       - name: Every shard's junit
+        id: dl_junit
         if: ${{ needs.selected.result != 'skipped' }}
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: spec-timings-junit-selected-*
           path: junit-in
+      # Which shards reached their run step (15-F2): a shard in this list with no
+      # junit testcases in junit-in died mid-test, and the verdict reds on it.
+      - name: Every shard's run-step marker
+        id: dl_started
+        if: ${{ needs.selected.result != 'skipped' }}
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: selected-started-*
+          path: started-in
       - name: Stage junit for the verdict
         if: ${{ needs.selected.result != 'skipped' }}
         continue-on-error: true
@@ -2308,11 +2332,12 @@ jobs:
           DROPPED: ${{ needs.select.outputs.dropped }}
           CALLED: ${{ inputs.concurrency_key != '' }}
           DRAFT: ${{ github.event.pull_request.draft }}
+          DOWNLOAD_FAILED: ${{ steps.dl_junit.outcome == 'failure' || steps.dl_started.outcome == 'failure' }}
         run: |
           set -u
           JUNIT_ROOT=carry
           if [ ! -d "$JUNIT_ROOT" ]; then JUNIT_ROOT=""; fi
-          node tools/ci/selected-gate-verdict.mjs ${JUNIT_ROOT:+--junit-root "$JUNIT_ROOT"}
+          node tools/ci/selected-gate-verdict.mjs ${JUNIT_ROOT:+--junit-root "$JUNIT_ROOT"} --junit-in junit-in --started-in started-in
       # THE FAILING-SPEC CARRY-FORWARD, ONCE PER RUN (2026-10-04). Every
       # shard's junit (the timings artifacts above) is read here and saved
       # under one key, so a failure in ANY selected/overbudget/oversize job

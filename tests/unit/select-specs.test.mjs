@@ -19,7 +19,7 @@ import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   SELECTED_GATE, FIXED_GATE_SPECS, MANUAL_OPT_IN_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
   scopeCarryForward, SOURCE_AFFECTED, specsAffectedBySource, specsRacing, circuitsOf } from "../../tools/ci/select-specs.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
-import { failedSpecsFrom } from "../../tools/ci/junit-failed.mjs";
+import { failedSpecsFrom, unattributedFailuresFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
 import { MEASURED, capacity, declaredTests } from "../../tools/ci/select-budget.mjs";
 import fs from "node:fs";
@@ -483,6 +483,19 @@ test("junit-failed reads Playwright's junit shape (system-out BEFORE the failure
 </testsuite></testsuites>`;
   assert.deepEqual(failedSpecsFrom(xml), ["tests/specs/boot-guard.spec.js", "tests/specs/logging.spec.js"]);
   assert.deepEqual(failedSpecsFrom("<testsuites></testsuites>"), []);
+});
+
+test("junit-failed counts a failing testcase that names no spec (15-F2, 2026-10-10)", () => {
+  // A load / setup error has no classname; `if (!cn) continue` used to drop it, so a
+  // shard that failed outside any test read as "no failures".
+  const xml = `<testsuites><testsuite>
+<testcase name="spec failed to load"><failure message="x">boom</failure></testcase>
+<testcase name="g" classname="global-setup.js"><error message="e">boom</error></testcase>
+<testcase name="ok" classname="specs/logging.spec.js"/>
+<testcase name="bad" classname="specs/smoke.spec.js"><failure message="f">x</failure></testcase>
+</testsuite></testsuites>`;
+  assert.deepEqual(unattributedFailuresFrom(xml), ["(no spec) g", "(no spec) spec failed to load"]);
+  assert.deepEqual(failedSpecsFrom(xml), ["tests/specs/smoke.spec.js"]);
 });
 
 test("a spec that cannot pass at the gate's per-test cap declares so, and is excluded", () => {
