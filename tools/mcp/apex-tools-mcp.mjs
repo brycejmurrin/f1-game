@@ -2501,12 +2501,36 @@ function sendHttpJson(res, code, obj) {
   res.end(data);
 }
 
-function cmdServeHttp() {
+// MCP 2025-06-18 transports, Security Warning: servers MUST validate Origin (DNS rebinding).
+// A local client sends no Origin (or a loopback one), a loopback Host and a JSON body; a web
+// page's no-preflight POST is text/plain, and a rebound page's Host and Origin name its domain.
+const LOOPBACK_AUTHORITY = /^(?:127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?$/i;
+
+/** Why an HTTP request is refused ("" = allowed): a foreign Host, Origin or Content-Type. */
+export function httpRefusal(req) {
+  const h = req.headers || {};
+  if (!LOOPBACK_AUTHORITY.test(String(h.host || ""))) return "Host is not loopback";
+  if (h.origin !== undefined) {
+    const m = /^https?:\/\/([^/]+)$/i.exec(String(h.origin));
+    if (!m || !LOOPBACK_AUTHORITY.test(m[1])) return "Origin is not loopback";
+  }
+  if (req.method === "POST" && !/^application\/json\s*(?:;|$)/i.test(String(h["content-type"] || ""))) {
+    return "Content-Type must be application/json";
+  }
+  return "";
+}
+
+export function cmdServeHttp() {
   const port = /^\d+$/.test(String(process.env.APEX_MCP_HTTP_PORT || ""))
     ? Number(process.env.APEX_MCP_HTTP_PORT)
     : HTTP_PORT_DEFAULT;
   const srv = http.createServer((req, res) => {
     const url = req.url || "/";
+    const refused = httpRefusal(req);
+    if (refused) {
+      sendHttpJson(res, 403, rpcError(null, -32600, `Forbidden: ${refused}`));
+      return;
+    }
     if (req.method === "GET" && (url === "/healthz" || url.startsWith("/healthz?"))) {
       sendHttpJson(res, 200, {
         ok: true,
@@ -2560,7 +2584,7 @@ function cmdServeHttp() {
     const p = addr && typeof addr === "object" ? addr.port : port;
     log(`apex-tools-mcp http ${HTTP_HOST}:${p}`);
   });
-  return 0;
+  return srv;
 }
 
 function main(argv) {

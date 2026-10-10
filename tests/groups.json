@@ -482,6 +482,7 @@
     "// hut (ground-audit unsupported on monaco/spa/suzuka kiosk posts). ~0.1 s.",
     "tests/unit/marshal-post-grounding.test.mjs",
     "tests/unit/mcp-cli.test.mjs",
+    "tests/unit/mcp-http-origin.test.mjs",
     "tests/unit/mcp-smoke.test.mjs",
     "tests/unit/mechanics-coherence.test.mjs",
     "tests/unit/meeting-picker-labels.test.mjs",
