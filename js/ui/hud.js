@@ -72,6 +72,16 @@ const teamCss = (c) => {
 };
 let _secRows = null;
 let _secFlash = [0, 0, 0];
+// THE GAIN, not only the split: each sector row shows the split's delta to the
+// best it was chasing for SPLIT_DELTA_MS, then the absolute time again.
+// _secPrevBest is sectorBests as the last tick saw it — game.js writes the new
+// best in the same crossing that writes sectorLast, so only the copy taken
+// BEFORE the crossing still holds the time this split was measured against.
+const SPLIT_DELTA_MS = 3000;
+let _secPrevBest = [Infinity, Infinity, Infinity], _secDelta = [0, 0, 0], _secDeltaT = [0, 0, 0];
+// The lap clock's hold on the lap just driven (see the tick): the lap count and
+// lastLap as the last tick saw them, and whether this lap's hold is armed.
+let _holdLap = 0, _holdPrev = 0, _holdOn = false;
 let _limitsDots = null;
 let _hudCamMode = null, _hudCamProf = null;   // compared field by field: no key string per frame
 // The readouts js/ui/hud-readouts.js derives (gap laps, ERS, BB, blue flag, the
@@ -165,7 +175,17 @@ function syncHudCamClasses() {
   // changes — camera+profile stay put, so the key above does not.
   syncHudVisClasses(modeId);
 }
-function flashSector(i) { if (i >= 0 && i < 3) _secFlash[i] = 0.35; }
+// game.js calls this at the crossing, after writing sectorLast[i] and the new
+// best — so the delta is taken against the pre-crossing copy (_secPrevBest).
+// A first-ever split has nothing to beat and keeps the absolute time.
+function flashSector(i) {
+  if (!(i >= 0 && i < 3)) return;
+  _secFlash[i] = 0.35;
+  const t = G.sectorLast && G.sectorLast[i];
+  const ok = t != null && isFinite(_secPrevBest[i]);
+  _secDelta[i] = ok ? t - _secPrevBest[i] : 0;
+  _secDeltaT[i] = ok ? SPLIT_DELTA_MS : 0;
+}
 // "tt" | "quali" | "practice" | "race". PRACTICE is G.practice (armed on a race
 // session from the pause menu), never a G.session value.
 function sessionOf(timeTrial) {
@@ -326,6 +346,8 @@ function gapForm() {
     if (drop) root.dataset.gapDrop = "1";
     else delete root.dataset.gapDrop;
   }
+  // The radio card's caution step follows the chip through `:root[data-gap-drop] #announce { --flag-slot-top }`
+  // (css/hud.css, #1345): no body mirror needed.
   return short ? _gapFormShort : _gapFormLong;
 }
 // A LAP OR MORE IS LAPS, NOT SECONDS. distance ÷ the player's speed is a fair
@@ -370,6 +392,7 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + "s";
 // makes this stable rather than a feedback loop — capping changes the rect and
 // the zoom by the same factor, so the next measurement returns the same number.
 const FIT_AIR = 10;              // px of daylight required between two clusters
+const ROW_AIR = 2;               // px between the tower's bottom and the sector plate's top (touch)
 let _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
 // _fitStamped: a stamp is published and no clash has voided it since.
 // _fitClashRun: consecutive same-key ticks that re-opened the fit for a clash.
@@ -599,6 +622,38 @@ function radioTopSlot(root, bcast) {
   hStyle(root, "--radio-top-y", t.top.toFixed(1) + "px");
   hStyle(root, "--radio-top-w", ((right - RADIO_TOP_GAP - x) / as).toFixed(1) + "px");
   hStyle(root, "--radio-top-h", (t.height / as).toFixed(1) + "px");
+}
+// THE PAINTED GUARANTEE, one function for every caller: fitHud runs it last, invalidateFit right
+// after its own radioTopSlot (which alone could relight hud-radio-top over the tower until the next
+// fit tick repaired it).
+function radioPaintedCollapse(root) {
+  // Painted guarantee: if the card still rects onto S3 or the tower, collapse
+  // the hanging lane and drop the top slot. Do NOT call radioTopSlot again —
+  // that re-ran announceLane, cleared data-lane-collapsed when a gap reopened,
+  // and re-lit hud-radio-top, so the same-key clash path forced a full fit
+  // every tick. Under selected-2 load that left #minimap.currentCSSZoom on a
+  // stale cap while --hud-z-top moved (compact mmCss 142 ≠ 110).
+  const annPaint = typeof document !== "undefined" ? document.getElementById("announce") : null;
+  if (annPaint && !annPaint.hidden) {
+    const a = annPaint.getBoundingClientRect();
+    const hit = (el) => {
+      if (!el || el.hidden) return false;
+      const r = el.getBoundingClientRect();
+      return !!(a.width > 0 && r.width > 0
+        && r.left < a.right - 0.5 && a.left < r.right - 0.5
+        && r.top < a.bottom - 0.5 && a.top < r.bottom - 0.5);
+    };
+    const tower = _hudTop || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
+    if (hit(els.hudSectors) || hit(tower)) {
+      hToggle(document.body, "hud-radio-top", false);
+      const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();
+      hStyle(root, "--announce-lane-x", (salPx + RADIO_TOP_GAP).toFixed(1) + "px");
+      hStyle(root, "--announce-lane-shift", "0%");
+      hStyle(root, "--announce-lane-w", "0px");
+      if (annPaint.toggleAttribute) annPaint.toggleAttribute("data-lane-collapsed", true);
+      void annPaint.offsetHeight;
+    }
+  }
 }
 // THE MIRROR AS PAINTED, for the centre column under it. The flag and the
 // radio card clear the mirror through --mir-bot (css/hud.css), which is built
@@ -903,7 +958,15 @@ function fitHud() {
   const scR = els.hudSectors ? layoutRect(els.hudSectors) : null;
   const mz = zoomDiv(els.minimap, zTopPub), sz = zoomDiv(els.hudSectors, zTopPub);
   const salM = mmR && mmR.width ? Math.max(0, mmR.left - 10 * mz) : null;
-  const sarM = scR && scR.width ? Math.max(0, window.innerWidth - scR.right - 10 * sz) : null;
+  // THE RIGHT INSET IS THE TOKEN WHEN IT IS READABLE. On touch #hud-sectors is pushed inboard by
+  // --dock-r-w (css/hud.css), so its right edge is the notch inset PLUS the dock stand-off: reading
+  // that as the inset charged the right half ~210 px it does not owe and fit the tower to 0.575 on a
+  // 844x390 phone (8 px POS/LAP/TIME text), and hiding the plate (SECTORS off) jumped the band back to
+  // ~1.0. --sar is a registered length on a device (announceLane reads it the same way); where it is
+  // not readable (a bare engine, the unit fixtures: "env(...)") the plate's own edge is still measured.
+  let sarTok = null;
+  try { const v = parseFloat(getComputedStyle(root).getPropertyValue("--sar")); if (Number.isFinite(v) && v >= 0) sarTok = v; } catch (_) { /* mini-dom / detached root */ }
+  const sarM = sarTok != null ? sarTok : (scR && scR.width ? Math.max(0, window.innerWidth - scR.right - 10 * sz) : null);
   const sal = salM != null ? salM : (sarM != null ? sarM : 0);
   const sar = sarM != null ? sarM : (salM != null ? salM : 0);
   // WITH the gap strip and WITHOUT it. When the band fits at the player's own
@@ -975,7 +1038,24 @@ function fitHud() {
       capChrome = Math.min(capChrome, z >= 1 ? z : (room - k) / (top / 2));
     }
   }
-  const capTop = Math.min(capChrome, Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo)));
+  // THE TOWER MUST CLEAR THE SECTOR PLATE'S ROW ON TOUCH. There #hud-sectors sits at a fixed SCREEN
+  // y (8 + tap-hud + 4 + sat, below the pause button — its zoom cancels), while the tower's bottom
+  // scales with the band zoom: sat + z * (top offset + height). The right-half budget above only
+  // models the two side by side at the screen edge; once it stopped over-shrinking the band (the
+  // plate's dock stand-off is no longer read as a safe-area inset) the full-size tower hung 2.2 px
+  // below the plate's top and clipped its BEST tile (844x390 cockpit). Solved from the invariants
+  // (the tower's unzoomed top offset and height, the plate's screen top) so it cannot hunt.
+  let capRow = Infinity;
+  if (!bcast && top && scR && scR.width && !document.body.classList.contains("desktop")) {
+    const tR = layoutRect(_hudTop), zd = zoomDiv(_hudTop, zTopPub);
+    let satPx = 0;
+    try { satPx = parseFloat(getComputedStyle(root).getPropertyValue("--sat")) || 0; } catch (_) { /* mini-dom / detached root */ }
+    const y0 = (tR.top - satPx) / zd, hInt = tR.height / zd;
+    // Only a plate that STARTS BELOW the tower's top is a row to clear; one level with it shares the
+    // tower's row and is the right-half budget's business (a vertical limit there only drives the band to the floor).
+    if (hInt > 0 && y0 + hInt > 0 && scR.top > tR.top + ROW_AIR) capRow = (scR.top - ROW_AIR - satPx) / (y0 + hInt);
+  }
+  const capTop = Math.min(capChrome, capRow, Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo)));
   // THE BOTTOM BAND IS MEASURED BY ITS CHILDREN, not by its own box. `.hud-bottom`
   // is a flex ITEM inside #hud-dock carrying `min-width: 0` ("may shrink before it
   // pushes a dock", css/overlays.css), so its rect is the COMPRESSED width and its
@@ -1389,33 +1469,7 @@ function fitHud() {
   if (els.hudSectors) void els.hudSectors.offsetHeight;
   radioTopSlot(root, bcast);
   announceLane(root);
-  // Painted guarantee: if the card still rects onto S3 or the tower, collapse
-  // the hanging lane and drop the top slot. Do NOT call radioTopSlot again —
-  // that re-ran announceLane, cleared data-lane-collapsed when a gap reopened,
-  // and re-lit hud-radio-top, so the same-key clash path forced a full fit
-  // every tick. Under selected-2 load that left #minimap.currentCSSZoom on a
-  // stale cap while --hud-z-top moved (compact mmCss 142 ≠ 110).
-  const annPaint = typeof document !== "undefined" ? document.getElementById("announce") : null;
-  if (annPaint && !annPaint.hidden) {
-    const a = annPaint.getBoundingClientRect();
-    const hit = (el) => {
-      if (!el || el.hidden) return false;
-      const r = el.getBoundingClientRect();
-      return !!(a.width > 0 && r.width > 0
-        && r.left < a.right - 0.5 && a.left < r.right - 0.5
-        && r.top < a.bottom - 0.5 && a.top < r.bottom - 0.5);
-    };
-    const tower = _hudTop || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
-    if (hit(els.hudSectors) || hit(tower)) {
-      hToggle(document.body, "hud-radio-top", false);
-      const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();
-      hStyle(root, "--announce-lane-x", (salPx + RADIO_TOP_GAP).toFixed(1) + "px");
-      hStyle(root, "--announce-lane-shift", "0%");
-      hStyle(root, "--announce-lane-w", "0px");
-      if (annPaint.toggleAttribute) annPaint.toggleAttribute("data-lane-collapsed", true);
-      void annPaint.offsetHeight;
-    }
-  }
+  radioPaintedCollapse(root);   // terminal: nothing after it may re-run radioTopSlot (hud-metrics-layout.test)
   mirrorClear(root);
   if (els.minimap) void els.minimap.offsetHeight;
 }
@@ -1589,7 +1643,21 @@ function updateHud(force, dtMs) {
   if (rank) _lastRank = rank;
   hText(els.lap, Math.min(player.lap || 1, G.lapsTarget) + "/" + G.lapsTarget);
   if (typeof HudDamage !== "undefined") HudDamage.sync(player);   // DAMAGE chip (js/ui/hud-damage.js) — display only
-  hText(els.time, G.fmtTime(player.lapTime));
+  // THE LAP JUST DRIVEN. A race showed only the running clock, which snaps to
+  // zero at the line, so unless the lap was a best the driver never saw it.
+  // Hold it for the first 3 s of the next lap, green when it is a personal best
+  // (game.js writes best in the same crossing). Armed only when lastLap CHANGED
+  // with the lap count: game.js writes it for a valid lap alone, so an invalid
+  // lap keeps the running clock rather than re-showing the lap before it.
+  const lapN = player.lap | 0;
+  if (lapN !== _holdLap) {
+    _holdOn = sess === "race" && lapN > _holdLap && lapN > 1 && player.lastLap > 0 && player.lastLap !== _holdPrev;
+    _holdLap = lapN;
+  }
+  _holdPrev = player.lastLap;
+  if (_holdOn && !(player.lapTime < 3)) _holdOn = false;
+  hText(els.time, G.fmtTime(_holdOn ? player.lastLap : player.lapTime));
+  hData(els.time, "hold", _holdOn ? (player.lastLap <= player.best ? "pb" : "lap") : null);
   hText(els.best, isFinite(player.best) ? G.fmtTime(player.best) : "-");
   hStyle(els.energy, "width", (player.energy * 100).toFixed(0) + "%");
   // ENERGY as a number and a state, not only a bar length: MJ (the 2026 rule's
@@ -1859,7 +1927,15 @@ function updateHud(force, dtMs) {
       // ★ is the session best, ▼ a personal best, ▲ slower than your own. Same
       // single-glyph width as before, so the fixed row geometry is untouched,
       // and the colours stay exactly as they were for everyone reading them.
-      hText(_secRows[i], t == null ? "--" : (sb ? "★" : pb ? "▼" : "▲") + t.toFixed(3));
+      // For SPLIT_DELTA_MS after the crossing the number is the GAIN on the best
+      // it was chasing ("▼-0.142", "▲+0.310"), then the split itself again: the
+      // same glyph and colour states, and the same character count for any
+      // split or delta under 10 s, so the row geometry does not move.
+      const dHeld = _secDeltaT[i] > 0 && t != null;
+      if (_secDeltaT[i] > 0) _secDeltaT[i] -= HUD_TICK_MS;
+      const num = dHeld ? (_secDelta[i] < 0 ? "" : "+") + _secDelta[i].toFixed(3) : t == null ? "" : t.toFixed(3);
+      hText(_secRows[i], t == null ? "--" : (sb ? "★" : pb ? "▼" : "▲") + num);
+      _secPrevBest[i] = bests ? bests[i] : Infinity;   // the reference the NEXT crossing's delta is taken against
       // Timing-screen colours: purple session best, green personal best,
       // yellow slower than your own best; no split yet keeps the row's ink.
       hStyle(_secRows[i], "color", t == null ? "" : sb ? "var(--sec-best)" : pb ? "var(--faster)" : "var(--sec-slow)");
@@ -2191,6 +2267,7 @@ function invalidateMap() { minimapBg = null; }
 // The race DELTA's best lap and the spoken HUD's baselines are per race too.
 function resetRace() {
   _lastRank = 0; _posFlashT = 0; if (els.pos) delete els.pos.dataset.delta;
+  _holdLap = 0; _holdPrev = 0; _holdOn = false; _secPrevBest = [Infinity, Infinity, Infinity]; _secDeltaT = [0, 0, 0];
   _ePrev = NaN; _blueSaid = null; _blueLaps = 0;
   // THE GAP CHIPS CARRY STATE ACROSS SESSIONS: a time trial paints the ghost
   // delta's colour inline, a race the neighbour's team bar, the tow halo and
@@ -2223,6 +2300,7 @@ function invalidateFit() {
   hStyle(root, "--hud-fit-stamp", "");
   _fitStamped = false;
   radioTopSlot(root, document.body.classList.contains("hud-prof-broadcast"));
+  radioPaintedCollapse(root);   // a collapse the fit just made must survive this re-pick
   mirrorClear(root);
 }
 _invalidateFit = invalidateFit;

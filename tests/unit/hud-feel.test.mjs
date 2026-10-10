@@ -279,6 +279,73 @@ test("sector splits carry ★/▼/▲ against sectorBests, timing-screen colours
   assert.equal(vals[0].style.color, "var(--faster)");
 });
 
+test("a sector split shows its GAIN on the previous best for 3 s, then the split again", () => {
+  // The bare split made the driver remember last lap's figure to know whether
+  // ▼31.204 was 0.02 s or 0.6 s better. game.js writes sectorLast AND the new
+  // best in one crossing, then calls flashSector — so the HUD must measure
+  // against the best it saw BEFORE that crossing, not the one just written.
+  const { els, G, hud, tick } = boot();
+  tick();
+  const vals = els.hudSectors.children.map((row) => row.children[1]);
+  G.fieldSectorBests[0] = 28.0;
+  const cross = (t) => { G.sectorLast[0] = t; if (t < G.sectorBests[0]) G.sectorBests[0] = t; hud.flashSector(0); tick(); };
+
+  cross(28.431);
+  assert.equal(vals[0].textContent, "▼28.431", "a first-ever split has nothing to beat: the absolute time");
+
+  cross(28.9);
+  assert.equal(vals[0].textContent, "▲+0.469", "slower: the loss to the best, signed");
+  assert.equal(vals[0].style.color, "var(--sec-slow)", "the slower state keeps its yellow");
+  for (let k = 0; k < 29; k++) tick();
+  assert.equal(vals[0].textContent, "▲+0.469", "held for the whole 3 s");
+  tick();
+  assert.equal(vals[0].textContent, "▲28.900", "then the split itself again");
+
+  cross(28.289);
+  assert.equal(vals[0].textContent, "▼-0.142", "a new best reads its gain on the OLD best, not 0.000");
+  assert.equal(vals[0].style.color, "var(--faster)");
+
+  // A new race starts with no best: the first split is absolute again.
+  hud.resetRace();
+  G.sectorBests[0] = Infinity; G.sectorLast[0] = null; tick();
+  cross(29.5);
+  assert.equal(vals[0].textContent, "▼29.500");
+});
+
+test("in a race the lap clock holds the lap just driven for 3 s — green on a personal best", () => {
+  // The clock snapped to zero at the line and the race gaps slot shows gaps,
+  // so a race never showed the lap the driver had just completed.
+  const { els, G, player, tick } = boot();
+  tick();
+  assert.equal(els.time.textContent, "12.00", "mid-lap: the running clock");
+  const line = (lastLap, lapTime) => { player.lap++; player.lastLap = lastLap; if (lastLap < player.best) player.best = lastLap; player.lapTime = lapTime; tick(); };
+
+  line(91.5, 0.4);
+  assert.equal(els.time.textContent, "91.50", "the lap just driven, not 0.40");
+  assert.equal(els.time.dataset.hold, "pb", "a personal best is marked for the green");
+  player.lapTime = 2.9; tick();
+  assert.equal(els.time.textContent, "91.50", "still held inside the 3 s");
+  player.lapTime = 3.1; tick();
+  assert.equal(els.time.textContent, "3.10", "back to the running clock");
+  assert.equal(els.time.dataset.hold, undefined);
+
+  line(92.25, 0.2);
+  assert.equal(els.time.textContent, "92.25");
+  assert.equal(els.time.dataset.hold, "lap", "held, but not a personal best: no green");
+
+  // An INVALID lap leaves lastLap where it was (game.js writes it for a valid
+  // lap only) — the clock must not re-show the lap before it.
+  player.lapTime = 5; tick();
+  line(92.25, 0.3);
+  assert.equal(els.time.textContent, "0.30", "an invalid lap keeps the running clock");
+
+  // Qualifying is not a race: the clock is unchanged there.
+  G.session = "quali"; player.lapTime = 5; tick();
+  line(90, 0.3);
+  assert.equal(els.time.textContent, "0.30");
+  assert.match(read("css/hud.css"), /#hud-time\[data-hold="pb"\]\s*\{\s*color:\s*var\(--faster\)/);
+});
+
 test("the speed digits, energy bar and sector red are set up to be read at a glance", () => {
   const rules = cssRules(read("css/hud.css"));
   // The slot must hold three TABULAR digits so 99 -> 100 does not move the
@@ -934,6 +1001,48 @@ test("a moved / resized tower, map, sector box or gearbox leaves every fit cap w
   assert.notDeepEqual(c.refit(), cBase, "un-marked painted rects move the caps — the fixture can see the defect");
 });
 
+/** The fit with the safe-area token readable (as on a device, where --sar is a registered length)
+ *  and the sector plate's left edge moved by `shift` px — what a touch dock stand-off does to it. */
+function topZoomWithPlateShift(shift, sarPx) {
+  const h = fitHarness();
+  const gcs = h.sb.getComputedStyle;
+  h.sb.getComputedStyle = (el) => { const r = gcs(el); return Object.assign({}, r, { getPropertyValue: (k) => (k === "--sar" ? sarPx + "px" : r.getPropertyValue(k)) }); };
+  const R = h.els.hudSectors._rect;
+  h.els.hudSectors._rect = { left: R.left - shift, top: R.top, right: R.right - shift, bottom: R.bottom, width: R.width, height: R.height };
+  return +h.refit()["--hud-z-top"];
+}
+
+test("the safe-area inset comes from --sar, never from the sector plate's right edge (touch dock stand-off)", () => {
+  // On touch #hud-sectors is pushed inboard by --dock-r-w (css/hud.css), so its right edge is the inset
+  // PLUS the dock: reading it as the notch inset charged the band ~210 px it does not owe and fit the
+  // tower to 0.575 on a 390 px phone (8 px text). The plate moving inboard must not move the fit.
+  const edge = topZoomWithPlateShift(0, 10), docked = topZoomWithPlateShift(150, 10);
+  assert.ok(edge > 0.4, "the fixture's band is not on the floor (" + edge + ")");
+  assert.equal(docked, edge, "a plate standing off the dock fits the same band as one at the edge");
+  // Hiding the plate entirely (MINIMAL) already read the other side's inset; the token makes it the same answer.
+  const gone = fitHarness();
+  const gcs = gone.sb.getComputedStyle;
+  gone.sb.getComputedStyle = (el) => { const r = gcs(el); return Object.assign({}, r, { getPropertyValue: (k) => (k === "--sar" ? "10px" : r.getPropertyValue(k)) }); };
+  gone.els.hudSectors._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+  assert.ok(+gone.refit()["--hud-z-top"] >= edge - 1e-9, "removing the plate never needs MORE room");
+});
+
+test("a dropped gap strip carries the radio card's caution step down with the flag chip", () => {
+  const css = readCssSource("css/hud.css"), hud = read("js/ui/hud.js");
+  // The flag chip steps down under :root[data-gap-drop]; the card's caution step reads the same slot through
+  // --flag-slot-top, which the root flag raises (#1345) — ONE formula, no body mirror (the #1366 twins were
+  // dropped at the ship sync: HUD PR review 2026-10-10).
+  assert.match(css, /:root\[data-gap-drop\] #hud-flag \{\s*top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 74px\)/);
+  assert.match(css, /:root\[data-gap-drop\] #announce \{ --flag-slot-top: calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 74px\); \}/,
+    "the dropped strip raises the card's flag slot to the chip's edge");
+  assert.match(css, /body:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 38px\); \}/,
+    "the card sits 38px under the flag slot, wherever the chip is");
+  assert.match(css, /body\[data-density="compact"\]:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 34px\); \}/,
+    "compact keeps its tighter step under the chip");
+  assert.doesNotMatch(css, /body\[data-gap-drop\]/, "no body[data-gap-drop] twin: the slot token is the one writer");
+  assert.doesNotMatch(hud, /body\.(setAttribute|removeAttribute|hasAttribute)\("data-gap-drop"/, "gapForm no longer mirrors the drop onto body");
+});
+
 test("an empty timing tower still fits the bottom band and writes the dock cap", () => {
   const full = fitHarness().snap();
   const h = fitHarness({ emptyTower: true }), got = h.snap();
@@ -1186,7 +1295,7 @@ test("a moved (data-hl) piece whose words change width re-fits on the next tick,
 test("the caution step-aside needs the card's other slot to really apply; TEXT LARGER grows the ERS bar", () => {
   const rules = cssRules(read("css/hud.css"));
   const caution = rules.filter((r) => /:has\(#hud-flag:not\(\[hidden\]\)\) #announce$/.test(r.selector));
-  assert.equal(caution.length, 2, "base and compact caution rules");
+  assert.equal(caution.length, 2, "base and compact caution rules — the dropped-gap-strip case rides --flag-slot-top, not a twin rule");
   for (const r of caution) assert.match(r.selector, /:not\(\.hud-mirror-on\.hud-mirror-side\)/, r.selector);
   const tok = read("css/tokens.css");
   for (const size of ["large", "larger"]) {
