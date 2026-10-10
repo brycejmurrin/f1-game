@@ -281,4 +281,60 @@ test.describe("garage-out before race/session card", () => {
     const tl = await awaitGarageThenCard(page);
     assertGarageThenCard(tl, "season-next");
   });
+
+  // Launch unification: the other sessions a player starts themselves. TIME TRIAL and DAILY end at the same RACE SETTINGS
+  // GO; the Data Hub's JUMP IN runs RealRace.launch(…, {intro: true}). (RACE AGAIN / TRY AGAIN, pause RESTART and WATCH stay quick.)
+  async function openTrialSettings(page, daily) {
+    await toMenu(page);
+    await page.evaluate(() => {
+      const L = document.getElementById("loading");
+      if (L) { L.hidden = true; delete L.dataset.phase; }
+      try { Object.defineProperty(document, "hidden", { configurable: true, get: () => false }); } catch (_) { /* sealed */ }
+    });
+    await page.waitForFunction(() => window.__apex && window.__apex.info().state === "menu", null, { polling: 100, timeout: 60_000 });
+    await clickId(page, daily ? "mb-daily" : "mb-tt");
+    await page.waitForFunction(() => { const s = document.getElementById("select"); return !!(s && !s.hidden); }, null, { polling: 100, timeout: 30_000 });
+    await clickId(page, "sel-go");
+    await page.waitForFunction(() => {
+      const rs = document.getElementById("race-settings"), go = document.getElementById("rs-go");
+      return !!(rs && !rs.hidden && go && !go.disabled);
+    }, null, { polling: 100, timeout: 60_000 });
+  }
+
+  for (const [label, daily] of [["time trial", false], ["DAILY", true]]) {
+    test(`${label} from the menu: garage-out before the session card`, async ({ page }) => {
+      test.setTimeout(BOOT_MS + 240_000);
+      await setMotion(page, true);
+      await openTrialSettings(page, daily);
+      const tl = await startRaceFromSettings(page);
+      assertGarageThenCard(tl, daily ? "daily" : "time-trial");
+    });
+  }
+
+  test("Data Hub JUMP IN: garage-out before the race card", async ({ page }) => {
+    test.setTimeout(BOOT_MS + 240_000);
+    await setMotion(page, true);
+    await toMenu(page);
+    await page.evaluate(() => {
+      const L = document.getElementById("loading");
+      if (L) { L.hidden = true; delete L.dataset.phase; }
+      try { Object.defineProperty(document, "hidden", { configurable: true, get: () => false }); } catch (_) { /* sealed */ }
+    });
+    await page.waitForFunction(() => window.__apex && window.__apex.info().state === "menu", null, { polling: 100, timeout: 60_000 });
+    await armTimeline(page);
+    // The hub's jumpIn() passes exactly these options; a fixture script stands in for the network fetch.
+    await page.evaluate(() => {
+      const drv = (num, code, name, team, teamId, grid) => ({ num, code, name, team, teamId, grid, pos: grid, lapsDone: 3, dnf: false, laps: [112, 109, 108], stints: [{ c: "SOFT", from: 1, to: 3 }], pits: [] });
+      const script = {
+        v: 1, source: "test", sessionKey: 1, meetingKey: 1, year: 2026, name: "Azerbaijan Grand Prix", session: "Race", circuit: "Baku",
+        country: "Azerbaijan", trackId: "baku", dateStart: "2026-09-26T11:00:00+00:00", tod: "day", weather: "dry", laps: 3,
+        drivers: [drv(63, "RUS", "George RUSSELL", "Mercedes", "mercedes", 1), drv(16, "LEC", "Charles LECLERC", "Ferrari", "ferrari", 2)],
+        cautions: [],
+      };
+      // eslint-disable-next-line no-undef
+      RealRace.launch(script, { seat: "LEC", laps: 3, intro: true });
+    });
+    const tl = await awaitGarageThenCard(page);
+    assertGarageThenCard(tl, "jump-in");
+  });
 });

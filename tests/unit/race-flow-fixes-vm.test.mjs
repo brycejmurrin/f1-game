@@ -494,3 +494,60 @@ test("3.14 season NEXT RACE with qualifying off: the garage drive-out, then the 
     } finally { g.close(); }
   }
 });
+
+// Launch unification (bug-hunt 2): every session the player STARTS themselves plays garage drive-out, card, flyby. The routes below were
+// audited route by route; the quick restarts (RACE AGAIN / TRY AGAIN, pause RESTART, WATCH) are pinned as quick on purpose.
+test("launch: Data Hub JUMP IN (opts.intro) plays the garage drive-out before the countdown; a bare launch() still starts at once", async () => {
+  for (const intro of [true, false]) {
+    const g = await createGame({ track: "monza" });
+    try {
+      const G = g.G;
+      g.sandbox.GLX.makeFrustumPlanes = () => null;   // the VM's stub returns [] (no planes): the menu grid's rivals would index into it
+      G.daily.stop(); G.timeTrial = false; G.practice = false;
+      G.quitToMenu();   // the hub is opened from the menu (createGame leaves a race running)
+      vm.runInContext(readFileSync(join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx);
+      const Data = vm.runInContext("DataRealRace", g.ctx), Teams = vm.runInContext("Teams", g.ctx);
+      const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
+      const fixture = JSON.parse(readFileSync(join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
+      const script = Data.build(fixture, (name) => Teams.LIST.find((t) => t.name === name) || null, Tracks.LIST);
+      Real.launch(script, { seat: "STR", intro });
+      const r = await untilGarageOrGrid(g);
+      if (intro) {
+        assert.equal(r.garage, true, `JUMP IN played the garage drive-out (state ${r.state})`);
+        assert.equal(r.state, "menu", "…before the countdown");
+        assert.equal(Real.status().active, true, "the real race is staged under the intro");
+      } else {
+        assert.equal(r.garage, false, "a page probe calling launch() keeps its synchronous start");
+        assert.equal(r.state, "count");
+      }
+    } finally { g.close(); }
+  }
+});
+
+test("launch: a TIME TRIAL and the DAILY, started from RACE SETTINGS, play the garage drive-out; TRY AGAIN after a trial stays a quick restart", async () => {
+  for (const daily of [false, true]) {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G, doc = g.sandbox.document;
+    G.daily.stop(); G.practice = false;
+    G.quitToMenu();
+    G.flow = "gp"; G.session = "tt";
+    if (daily) G.daily.select("2026-09-14");   // the title's DAILY: the picker's select(), then the same sheet and GO as any trial
+    G.openRaceSettings("select");
+    assert.equal(doc.getElementById("race-settings").hidden, false);
+    doc.getElementById("rs-go").onclick();
+    const r = await untilGarageOrGrid(g);
+    assert.equal(r.garage, true, `the time trial's start played the garage drive-out (state ${r.state})`);
+    assert.equal(r.state, "menu", "…before the countdown");
+    assert.equal(G.session, "tt");
+    await g.settle(() => G.state === "count" || G.state === "race", 20000);
+    g.apex.go(); g.step(60);
+    g.apex.finishRace();
+    assert.equal(G.state, "results");
+    doc.getElementById("res-next").onclick();   // TRY AGAIN: a quick restart, left as it was
+    const q = await untilGarageOrGrid(g);
+    assert.equal(q.garage, false, "TRY AGAIN plays no garage-out");
+    assert.ok(q.state === "count" || q.state === "race", `…and starts at once (state ${q.state})`);
+  } finally { g.close(); }
+  }
+});
