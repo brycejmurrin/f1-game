@@ -1619,6 +1619,16 @@ function paintInstruments(player) {
   }
 }
 
+// VISUAL SPOTTER: #hud[data-along] ("l" / "r" / "l r") lights the matching
+// screen edge (css/hud.css) while a car is alongside. The occupancy is the
+// spotter's (js/race/spotter.js side(), via RaceRadio.trafficSide), measured
+// before its setting/sound gates, so the glow works with the voice off.
+const ALONG = [null, "l", "r", "l r"];
+function syncAlong() {
+  const rr = G.raceRadio, side = rr && rr.trafficSide ? rr.trafficSide() : 0;
+  hData(els.hud, "along", ALONG[side] || null);
+}
+
 function updateHud(force, dtMs) {
   if (!(Number.isFinite(dtMs) && dtMs > 0)) dtMs = 16.7;   // forced refreshes and the first frame: one nominal frame
   const player = G.player, cars = G.cars, timeTrial = G.timeTrial;
@@ -1656,6 +1666,7 @@ function updateHud(force, dtMs) {
   hudT = HUD_TICK_MS;
   syncHudLayoutClasses();      // before fitHud: show/hide/park changes what gets measured
   fitHud();                    // below the throttle: this reads layout, per TICK not per frame
+  syncAlong();
   // A retirement has no race position left to hold — `rank` is whatever it was
   // when the car stopped, and the field it was measured against no longer
   // contains it (see the ranked build in game.js).

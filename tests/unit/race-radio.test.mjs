@@ -987,6 +987,51 @@ test("a WATCH has no spotter: no 'car left' round a puppet, and a live race stil
   assert.equal(w.radio.trafficBusy(), false, "nor does a puppet's traffic hold the commentary");
 });
 
+test("trafficSide: the spotter's left/right occupancy reaches the HUD with the spoken spotter OFF and no pack", () => {
+  // The visual spotter (js/ui/hud.js syncAlong) is the phone player's: the
+  // voice spotter defaults OFF, needs sound and the recorded pack — none of
+  // which may hide the edge glow. Real spotter, its own realm (see above).
+  const sb = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Map, Set, String, RegExp,
+    Float64Array, Int32Array });
+  seedLog(sb);
+  sb.window = sb;
+  sb.CamModes = { CAM_MODES: [{ id: "chase" }] };
+  for (const f of ["js/audio/radio-voice.js", "js/race/radio-lines.js", "js/race/race-facts.js", "js/race/spotter.js", "js/race/race-radio.js"]) {
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), sb, { filename: f });
+  }
+  const RRs = vm.runInContext("RaceRadio", sb), Sp = vm.runInContext("Spotter", sb);
+  const me = car("PLY", 340, 60, { isPlayer: true, local: true, s: 340, x: 0 });
+  const rival = car("BBB", 342, 60, { s: 342, x: -2 });
+  const cars = [car("AAA", 1400, 60, { s: 1400, x: 0 }), rival, me];
+  const G = { state: "race", soundOn: false, raceT: 0, cars, player: me, track: { total: LAP }, lapsTarget: 20,
+    timeTrial: false, practice: false, camMode: 0, hudProfile: "standard", LAT_MAX: 30, vTop: () => 80, raceRound: 0,
+    announceBusy: false, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0,
+    store: { get: (k, d) => d, set() {} },          // nothing stored: the shipped default, spotter OFF
+    announce: () => true, radio: { pack: null, volume: () => 1, busy: () => false } };
+  // The module itself: Δs = 2 m, Δx = −2 m → LEFT (1), with the setting off.
+  const sp = Sp.create(G);
+  assert.equal(sp.update(1 / 60), "", "no call: the spoken spotter is off");
+  assert.equal(sp.side(), 1, "…but the occupancy is measured: a car on the left");
+  // Through the radio, the accessor the HUD reads.
+  const radio = RRs.create(G, { seed: 3 });
+  assert.equal(radio.spotter(), false, "precondition: the spotter setting is OFF");
+  const side = () => { G.raceT += 1 / 60; radio.update(1 / 60); return radio.trafficSide(); };
+  assert.equal(side(), 1, "left");
+  rival.x = 2;
+  assert.equal(side(), 2, "right");
+  cars.push(car("CCC", 338, 60, { s: 338, x: -2.5 }));
+  assert.equal(side(), 3, "both sides: three wide");
+  rival.s = 400; cars.pop();
+  assert.equal(side(), 0, "clear");
+  rival.s = 342;
+  assert.equal(side(), 2);
+  G.paused = true;
+  assert.equal(side(), 0, "paused: no live race, no glow");
+  G.paused = false;
+  radio.setWatching({ nameOf: (c) => c.code, radioBusy: () => false });
+  assert.equal(side(), 0, "a WATCH has nobody to spot for");
+});
+
 test("replayEvent outside a WATCH, with commentary OFF, or after the WATCH ends is a no-op", () => {
   const r = race({ cam: 2 });
   r.step(0.05, 20);

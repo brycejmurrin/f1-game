@@ -1876,6 +1876,32 @@ body[data-helmet-cam] #hud::before {
     color-mix(in oklab, var(--bg) 7%, transparent);
 }
 
+/* VISUAL SPOTTER (js/ui/hud.js syncAlong): a car alongside lights its screen
+   edge — the spotter's occupancy, shown with the voice off too, for the phone
+   player side by side into a corner who cannot see the car. ::after because
+   the helmet visor owns ::before; z-index -1 keeps it under every HUD number
+   (#hud is the stacking context). A low-alpha 24 px fade past the safe area
+   never hides track at 844x390, and it goes with the HUD when hud-hidden does.
+   Warning accent, not a team colour. The pulse is motion: none under REDUCE
+   MOTION (OS or html[data-motion]), where the glow simply holds. */
+#hud[data-along]::after {
+  --along: color-mix(in oklab, var(--spark) 45%, transparent);
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(to right, var(--along-l, transparent), transparent calc(24px + var(--sal))),
+    linear-gradient(to left, var(--along-r, transparent), transparent calc(24px + var(--sar)));
+}
+#hud[data-along~="l"]::after { --along-l: var(--along); }
+#hud[data-along~="r"]::after { --along-r: var(--along); }
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="reduce"]) #hud[data-along]::after { animation: along-pulse 0.9s ease-in-out infinite alternate; }
+}
+@keyframes along-pulse { from { opacity: 0.55; } }
+
 /* DAMAGE CHIP (#hud-damage, js/ui/hud-damage.js). DISPLAY ONLY — the record it
    draws (js/race/damage.js) feeds nothing back. Right edge, one chip-height
    under the track-limits slot so the two never stack on each other. Parts are
