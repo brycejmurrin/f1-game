@@ -3596,6 +3596,7 @@ const TLX = (function () {
             _gpuLastOperation = "render-mirror";
             renderer.render(scene, mirCam);
             _mirRenders++;
+            _mirFails = 0;   // the cap means FOUR CONSECUTIVE failures: unrelated one-frame throws must not retire the mirror
           } catch (e) {
             // Never strand the frame; a mirror that cannot render stops being asked.
             if (++_mirFails >= 4) _mirDead = true;

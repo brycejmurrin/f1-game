@@ -84,6 +84,30 @@ test("TLX post chain: re-callable factory, rebuilt at the next realloc, bound la
   assert.match(src, /\} catch \(e\) \{ persistFail\(e, !!post\); \}/, "the first catch marks a post-only candidate");
 });
 
+// 08-F4: _mirFails was a lifetime counter (four throws anywhere in a session retired the rear-view for good).
+test("mirrorEnd: only four CONSECUTIVE failed mirror renders retire the mirror (08-F4)", () => {
+  const src = read("js/render/three/tlx.js");
+  const a = src.indexOf("mirrorEnd() {");
+  const body = src.slice(a, src.indexOf("mirrorRect(r, flip)", a));
+  assert.ok(a > 0 && body.length > 200, "the mirrorEnd needles moved — check this test, not the code");
+  const st = { boom: false };
+  const ctx = vm.createContext({
+    _mirActive: false, _poolBatch: 0, drawList: [], _showInstanced() {}, chunkedSys: null, acquireMesh() {}, meshPool: [],
+    _hideUndrawnInstanced() {}, scene: { backgroundNode: null }, pinSkyMaterial() {}, mirRT: {}, mirCam: {}, _gpuLastOperation: "",
+    _mirRenders: 0, _mirFails: 0, _mirDead: false, _mirErr: null, softOutRT: () => null, resetRecs() {},
+    _dMatUsed: 0, _fxMatUsed: 0, _instAlive: new Set(),
+    renderer: { setRenderTarget() {}, render() { if (st.boom) throw new Error("stale geometry"); } },
+  });
+  const obj = vm.runInContext("({" + body.replace(/,\s*$/, "") + "})", ctx);
+  const frame = (boom) => { st.boom = boom; ctx._mirActive = true; obj.mirrorEnd(); };
+  for (let i = 0; i < 3; i++) { frame(true); frame(false); }   // three isolated throws, each followed by a good render
+  frame(true);                                                  // the fourth throw overall, but not consecutive
+  assert.equal(ctx._mirDead, false, "four unrelated throws no longer kill the mirror");
+  assert.equal(ctx._mirRenders, 3);
+  for (let i = 0; i < 3; i++) frame(true);                      // now four in a row
+  assert.equal(ctx._mirDead, true, "four consecutive failures still retire it");
+});
+
 // 08-F1: refuseTab() on AUTO wrote tlxAutoGL, which only means "stay on three WebGL2"; a boot that was already
 // three WebGL2 reloaded into the identical configuration, uncounted, for ever. The real function body runs here.
 function refuse(o = {}) {
