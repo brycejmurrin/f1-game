@@ -13,6 +13,7 @@
 // Flags: --devices a,b (tools/lib/hud-survey-matrix.mjs DEVICES)  --cams a,b
 //   --hud-scale / --ui-scale / --btn-scale a,b (percent)  --sets shipped,all-on (which opt-ins are on)
 //   --preset clean|big|corners|… (MOVE & SIZE)  --matrix <file.json>  --no-boxes  --no-mock
+//   --format png|jpeg (jpeg: ~5x smaller, faster)  --no-cache (re-shoot every cell; default reuses cells whose cell + js/css/index.html are unchanged)
 //   --out artifacts/hud-mock/<stamp>  --gl swiftshader|llvmpipe (default $APEX_GL or llvmpipe)
 //   --track monza  --frac 0.18  --list (cells, no browser)  --json (summary as the last stdout block)  --help
 //
@@ -38,18 +39,18 @@
 // Overlaps use the same rules as hud-survey / hud-layout.spec (hud-geometry.mjs).
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { CliArgError, makeFlags, runCli } from "../lib/cli-args.mjs";
 import { probeHudElements, analyzeOverlap, overlapArea } from "../lib/hud-geometry.mjs";
 import { DEVICES, HUD_TARGETS, normalizeCell, cellId } from "../lib/hud-survey-matrix.mjs";
+import { holdLoopInit, drawBoxes, captureShot, contactSheet, inputsHash, cellCache } from "../lib/ui-mock-core.mjs";
 import { installProbeInit } from "./probe-page.mjs";
 import { applyCell, chromiumArgs } from "./hud-survey.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const KNOWN = ["--devices", "--cams", "--hud-scale", "--ui-scale", "--btn-scale", "--sets", "--preset", "--matrix", "--no-boxes",
-  "--no-mock", "--out", "--gl", "--track", "--frac", "--list", "--json", "--help"];
+  "--no-mock", "--format", "--cache", "--no-cache", "--out", "--gl", "--track", "--frac", "--list", "--json", "--help"];
 const SETS = { "all-on": [], shipped: ["rel", "strat", "inputs"] };
 
 export function planCells(F) {
@@ -81,14 +82,6 @@ export function planCells(F) {
 }
 
 // ── in-page (self-contained) ──────────────────────────────────────────────
-/** Init script: a held rAF queue, so the frozen game's loop stops ticking the HUD while a cell is shot. */
-function holdLoopInit() {
-  const raf = window.requestAnimationFrame.bind(window);
-  const q = [];
-  window.__hudMock = { hold: false, release() { this.hold = false; for (const f of q.splice(0)) raf(f); } };
-  window.requestAnimationFrame = (f) => (window.__hudMock.hold ? (q.push(f), 0) : raf(f));
-}
-
 /** After the cell's last refresh: the widest transient text, the mirror's own show rule, the fit re-placed around them. */
 function mockWidgets(opt) {
   const $ = (id) => document.getElementById(id);
@@ -119,41 +112,7 @@ function mockWidgets(opt) {
   try { for (const an of document.getAnimations()) { try { an.finish(); } catch { /* infinite */ } } } catch { /* old engine */ }
 }
 
-/** Labelled outlines: controls yellow, readouts cyan, overlapping pairs red. */
-function drawBoxes({ recs, bad }) {
-  let layer = document.getElementById("hm-boxes");
-  if (layer) layer.remove();
-  layer = document.createElement("div");
-  layer.id = "hm-boxes";
-  layer.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:2147483647;font:10px/1 monospace";
-  for (const r of recs) {
-    const d = document.createElement("div");
-    const hot = bad.includes(r.key);
-    const col = hot ? "#ff3b3b" : r.role === "ctrl" ? "#ffd400" : "#22d3ee";
-    d.style.cssText = `position:absolute;left:${r.x}px;top:${r.y}px;width:${r.r - r.x}px;height:${r.b - r.y}px;` +
-      `outline:1px ${r.role === "ctrl" ? "dashed" : "solid"} ${col};${hot ? "background:rgba(255,59,59,.22);" : ""}`;
-    const t = document.createElement("span");
-    t.textContent = r.key;
-    t.style.cssText = `position:absolute;left:0;top:${r.y < 12 ? 1 : -11}px;color:${col};background:rgba(0,0,0,.7);padding:0 2px;white-space:nowrap`;
-    d.appendChild(t);
-    layer.appendChild(d);
-  }
-  document.body.appendChild(layer);
-}
-
 // ── node ──────────────────────────────────────────────────────────────────
-async function shot(page, file) {
-  const s = await page.context().newCDPSession(page);
-  let timer;
-  try {
-    const { data } = await Promise.race([
-      s.send("Page.captureScreenshot", { format: "png" }),
-      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error("capture timed out after 30 s")), 30000); }),
-    ]).finally(() => clearTimeout(timer));
-    fs.writeFileSync(file, Buffer.from(data, "base64"));
-  } finally { await s.detach().catch(() => {}); }
-}
-
 async function bootPage(browser, plan, touch) {
   const first = DEVICES[plan.cells.find((c) => DEVICES[c.device].touch === touch).device];
   const ctx = await browser.newContext({ viewport: { width: first.w, height: first.h }, hasTouch: touch, deviceScaleFactor: 1 });
@@ -189,18 +148,41 @@ async function main() {
   plan.url = srv.url;
   const rows = [];
   const t0 = Date.now();
+  const fmt = F.flag("--format", "png");
+  if (fmt !== "png" && fmt !== "jpeg") throw new CliArgError("--format: png | jpeg");
+  const ext = fmt === "jpeg" ? ".jpg" : ".png";
+  // A cell is reused only when its definition AND the tree inputs (index.html, css/, js/) are unchanged.
+  const cache = cellCache(path.join(ROOT, "artifacts", "ui-mock-cache"), "hud-mock", inputsHash(ROOT), { enabled: !F.has("--no-cache") });
+  let cachedN = 0;
   try {
     const browser = await launchChromium({ args: chromiumArgs({ backend: "three", gl: plan.gl }) });
     for (const touch of [true, false]) {
       const mine = cells.filter((c) => DEVICES[c.device].touch === touch);
       if (!mine.length) continue;
-      const tb = Date.now();
-      const { ctx, page, errs } = await bootPage(browser, plan, touch);
-      log(`boot ${touch ? "touch" : "desktop"} in ${((Date.now() - tb) / 1000).toFixed(0)} s`);
+      let booted = null;   // lazy: a pointer type whose cells all hit the cache never boots
+      const getBoot = async () => {
+        if (booted) return booted;
+        const tb = Date.now();
+        booted = await bootPage(browser, plan, touch);
+        log(`boot ${touch ? "touch" : "desktop"} in ${((Date.now() - tb) / 1000).toFixed(0)} s`);
+        return booted;
+      };
       for (const cell of mine) {
         const t1 = Date.now();
+        const key = cache.key({ cell, frac: plan.frac, boxes: plan.boxes, mock: plan.mock, fmt });
+        const hit = cache.get(key);
+        if (hit) {
+          const file = path.join(out, cell.id + ext);
+          fs.copyFileSync(hit.file, file);
+          const { _img, ...row } = hit.row;
+          rows.push({ ...row, shot: path.relative(ROOT, file), cached: true, ms: Date.now() - t1 });
+          cachedN++;
+          log(`${cell.id}: cached`);
+          continue;
+        }
+        const { page, errs } = await getBoot();
         const dev = DEVICES[cell.device];
-        await page.evaluate(() => window.__hudMock.release());
+        await page.evaluate(() => window.__uiMock.release());
         await page.setViewportSize({ width: dev.w, height: dev.h });
         await page.evaluate((i) => {
           let st = document.getElementById("hm-ins");
@@ -217,7 +199,7 @@ async function main() {
         await page.evaluate(async (frac) => {
           const a = window.__apex;
           a.headless(true);
-          window.__hudMock.hold = true;
+          window.__uiMock.hold = true;
           for (let pass = 0; pass < 3; pass++) {
             try { GameHud.invalidateFit(); } catch { /* old tree */ }
             a.freeze(false); a.jump(frac, 60, 0); a.freeze(true);
@@ -235,8 +217,8 @@ async function main() {
         });
         const bad = [...new Set(pairs.flatMap((p) => p.pair.split("+")))];
         if (plan.boxes) await page.evaluate(drawBoxes, { recs: recs.map((r) => ({ key: r.key, role: r.role, x: r.x, y: r.y, r: r.r, b: r.b })), bad });
-        const file = path.join(out, cell.id + ".png");
-        await shot(page, file);
+        const file = path.join(out, cell.id + ext);
+        await captureShot(page, file, { format: fmt });
         const minFont = recs.filter((r) => r.minFontPx != null).sort((x, y) => x.minFontPx - y.minFontPx).slice(0, 3).map((r) => [r.key, r.minFontPx]);
         const smallTaps = recs.filter((r) => r.role === "ctrl" && Math.min(r.r - r.x, r.b - r.y) < 44).map((r) => [r.key, Math.round(r.r - r.x), Math.round(r.b - r.y)]);
         const slots = await page.evaluate(() => {
@@ -248,9 +230,10 @@ async function main() {
           visible: recs.map((r) => r.key), ...slots,
           applyErrors: applied.errors, pageErrors: errs.splice(0), ms: Date.now() - t1 };
         rows.push(row);
+        cache.put(key, row, file);
         log(`${cell.id}: ${pairs.length} overlaps${pairs.length ? " (" + pairs.map((p) => p.pair).join(", ") + ")" : ""}, ${row.ms} ms`);
       }
-      await ctx.close().catch(() => {});
+      if (booted) await booted.ctx.close().catch(() => {});
     }
   } finally {
     await shutdown();
@@ -260,10 +243,8 @@ async function main() {
   const md = ["| cell | overlaps | unsafe | smallest text | taps < 44 px |", "|---|---|---|---|---|",
     ...rows.map((r) => `| [${r.id}](${path.basename(r.shot)}) | ${r.overlaps.map((p) => `${p.pair} ${p.px2}px²`).join("<br>") || "—"} | ${r.unsafe.join(", ") || "—"} | ${r.minFont.map(([k, v]) => `${k} ${v}`).join(", ")} | ${r.smallTaps.map(([k, w, h]) => `${k} ${w}×${h}`).join(", ") || "—"} |`)];
   fs.writeFileSync(path.join(out, "index.md"), md.join("\n") + "\n");
-  const sheet = spawnSync("sh", ["-c", "command -v montage"]).status === 0
-    ? spawnSync("montage", [...rows.flatMap((r) => ["-label", r.id, path.join(ROOT, r.shot)]), "-tile", "3x", "-geometry", "560x+4+4", "-pointsize", "12",
-      "-background", "#111", "-fill", "#eee", path.join(out, "sheet.jpg")], { timeout: 120000 }).status === 0 : false;
-  log(`= hud-mock done: ${rows.length} shots in ${((Date.now() - t0) / 1000).toFixed(0)} s → ${path.relative(ROOT, out)}${sheet ? " (sheet.jpg)" : ""}`);
+  const sheet = contactSheet(rows.map((r) => ({ id: r.id, file: path.join(ROOT, r.shot) })), path.join(out, "sheet.jpg"));
+  log(`= hud-mock done: ${rows.length} shots (${cachedN} cached) in ${((Date.now() - t0) / 1000).toFixed(0)} s → ${path.relative(ROOT, out)}${sheet ? " (sheet.jpg)" : ""}`);
   if (F.has("--json")) {
     const rel = (f) => path.relative(ROOT, path.join(out, f));
     console.log(JSON.stringify({ ok: rows.length === cells.length, out: path.relative(ROOT, out), report: rel("report.json"), index: rel("index.md"),

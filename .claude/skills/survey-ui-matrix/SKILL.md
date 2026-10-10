@@ -54,6 +54,22 @@ node tools/shot/hud-mock.mjs --devices phone-se-667x375,phone-max-932x430 --cams
 node tools/shot/hud-mock.mjs --matrix scratch/cells.json                  # hud-survey cell schema
 ```
 Approximate by design: the mirror frame follows its own show rule (no rendered frame, no side placement).
+`--format jpeg` is ~5x smaller; a cell whose definition AND `js/` `css/` `index.html` are unchanged is served from
+`artifacts/ui-mock-cache` (`--no-cache` re-shoots), so a re-run after a docs/tools edit costs ~1 s.
+
+## Fastest look at the MENUS and sheets: `tools/ui/menu-mock.mjs` (~1-2 s a cell)
+
+The same trick for every `menu-screens.mjs` screen: 3D off, one boot per pointer shape (touch-mobile / pointer-desktop),
+viewport + safe-area insets changed in place, JPEG at device scale 1, labelled boxes (controls yellow, tap/off-screen red),
+`index.md` with tap / off-screen / clipped / small-text per cell and a `sheet.jpg`. 24 cells (8 screens x 3 viewports)
+took 57 s cold and 1 s warm. Look-fast only: `layout-audit` / `fit-audit` stay the numbers of record.
+
+```sh
+node tools/ui/menu-mock.mjs                                                                  # title,settings,racesettings,results,quali,pause @ 844x390
+node tools/ui/menu-mock.mjs --screens=select,garage --viewports='ios-*,desktop-1280x800' --format jpeg
+node tools/ui/menu-mock.mjs --screens='*' --viewports=ios-iphone-landscape-844 --list         # cells, no browser
+```
+Shared pieces (held rAF, boxes, CDP capture, contact sheet, content-hash cache) live in `tools/lib/ui-mock-core.mjs`.
 
 ## Fast path for the RACE HUD: `apex_hud_survey` / `tools/shot/hud-survey.mjs`
 
