@@ -1,1 +1,1 @@
-1791616891	Cursor Agent	SYNC fleet CONFLICTING drafts: #1324-#1331 + #1313 via sync-pr --push; STAND DOWN #1296/#1322/#1323 (live claims). No AM/merge.  [cursor/survey-hud-fit-9851; session 2b36c2c2077ee93a34cfefc4]
+1791617364	Cursor Agent	SYNC DONE: #1324-#1331 MERGEABLE (xr-phase0+ratchets; #1329 editor took ship track-designer-dom). STILL CONFLICTING: #1323/#1322/#1296 live claims stand-down; #1313 hand custom-tracks.js+test. No AM/merge.  [cursor/survey-hud-fit-9851; session 2b36c2c2077ee93a34cfefc4]
