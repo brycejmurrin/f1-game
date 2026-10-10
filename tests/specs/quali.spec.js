@@ -338,12 +338,13 @@ test.describe("Qualifying — BACK", () => {
     expect(await page.evaluate(codes)).toHaveLength(22);
   });
 
-  test("BACK disappears once the session has been run", async ({ page }) => {
-    // Backing out after a result would silently throw it away.
+  test("BACK becomes MENU once the session has been run", async ({ page }) => {
+    // The result is persisted, so leaving does not throw it away; the single exit used to be TO THE GRID.
     await toQuali(page);
     await page.evaluate(() => document.getElementById("q-sim").click());
     await expect(page.locator("#q-go")).toBeVisible();
-    await expect(page.locator("#q-back")).toBeHidden();
+    await expect(page.locator("#q-back")).toBeVisible();
+    await expect(page.locator("#q-back")).toHaveText("MENU");
     await expect(page.locator("#q-drive")).toBeHidden();
   });
 });

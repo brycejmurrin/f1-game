@@ -564,8 +564,9 @@
    classification and only TO THE GRID. JS flips this class rather than rebuilding
    the foot, so focus is never yanked out from under a keyboard user. */
 #quali.q-done #q-drive, #quali.q-done #q-sim, #quali.q-done #q-back { display: none; }
-/* FRIEND quali keeps BACK after the session, relabelled MENU by JS: the way out of a rival who never posts. */
-#quali.q-done[data-net] #q-back { display: block; }
+/* BACK stays after the session, relabelled MENU by JS: solo it is the only way out but TO THE GRID,
+   and in a friend race the way out of a rival who never posts. */
+#quali.q-done #q-foot #q-back { display: block; }
 #quali:not(.q-done) #q-go { display: none; }
 /* NOTE: a stray `}` here used to close `@layer components` early, leaving
    everything below — the slot picker, sponsors, the facility, extra funds —
@@ -945,4 +946,5 @@
 #quali .sheet[data-density="compact"] #q-foot #q-drive,
 #quali .sheet[data-density="compact"] #q-foot #q-go { flex: 1 1 auto; }
 #quali.q-done .sheet[data-density="compact"] #q-foot #q-go { grid-column: 1 / -1; }
+#quali.q-done .sheet[data-density="compact"] #q-foot #q-back { grid-column: 1 / -1; }
 } /* @layer components */
