@@ -164,9 +164,17 @@ try {
       a.step && a.step(1 / 60, 4);
       const vs = a.viewState ? a.viewState() : null;
       const cs = a.camState ? a.camState() : null;
+      const dbgCamActive = !!(vs && vs.dbgCamActive) || !!(cs && cs.debug);
+      // Free-cam (orbit/eye/…) leaves CamModes on the last game mode (often helmet);
+      // echo the requested free-cam id so MCP / agents do not assert the wrong mode.
+      const camera = a.camera();
+      if (dbgCamActive && cam !== "park" && camera && typeof camera === "object") {
+        camera.mode = cam;
+        camera.freeCam = true;
+      }
       return {
-        camera: a.camera(),
-        dbgCamActive: !!(vs && vs.dbgCamActive) || !!(cs && cs.debug),
+        camera,
+        dbgCamActive,
         models: typeof Assets !== "undefined" && Assets.models ? Assets.models().length : 0,
         camState: cs,
       };
