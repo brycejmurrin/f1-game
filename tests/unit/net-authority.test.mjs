@@ -1198,7 +1198,7 @@ test("the host's actual AI retirement reaches a guest, including one that binds 
     car: host.cars[2], netPlay: hn, incidentSim: { release() {} }, track: host.track,
     smp: { hw: 8, t: [0, 0, 1] }, Tracks: { sample() {}, wallAt: () => 10 },
     clamp: M4.clamp, worldFromTrack: (s, x) => ({ x, z: s }), IDLE_RPM: 4000,
-    OvertakeMode: { reset() {} }, announce() {}, soundOn: false,
+    OvertakeMode: { reset() {} }, announce() {}, soundOn: false, pits: { clearArm() {} },   // retireCar clears a stale pit arm (bug-hunt 7.3)
   });
   const event = hs.sent.filter((e) => e.t === "lap" && e.d.driverId === "drv2").at(-1);
   assert.ok(event, "the host sends an AI retirement immediately");
