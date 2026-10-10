@@ -22,7 +22,11 @@ test("Hungaroring terrain stays below the racing surface through the T2 basin", 
   await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.race("hungaroring", "day", "dry"));
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.waitForTimeout(1500);
+  // Terrain is sampled only once its mesh covers the road: a null before that
+  // is "not built yet", which the gap === null assertions below would accept.
+  await page.waitForFunction(
+    (f) => { const g = window.__apex.groundY(f, 0); return !!g && g.terrainY != null; },
+    0.163, { polling: 100, timeout: BOOT_MS });
 
   const gaps = await page.evaluate(() =>
     [-6, -3, 0, 3, 6].map((lat) => window.__apex.groundY(0.163, lat).gap)
@@ -40,7 +44,11 @@ test("Red Bull Ring terrain stays below both nearby road sections", async ({ pag
   await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.race("redbull", "day", "dry"));
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.waitForTimeout(1200);
+  // Terrain is sampled only once its mesh covers the road: a null before that
+  // is "not built yet", which the gap === null assertions below would accept.
+  await page.waitForFunction(
+    (f) => { const g = window.__apex.groundY(f, 0); return !!g && g.terrainY != null; },
+    0.98, { polling: 100, timeout: BOOT_MS });
 
   const probes = await page.evaluate(() =>
     [0.98, 0.335].flatMap((frac) =>
@@ -58,7 +66,11 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
   await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.race("mexico", "day", "dry"));
   await page.waitForFunction(() => window.__apex.info().track === "mexico", null, { polling: 100, timeout: BOOT_MS });
-  await page.waitForTimeout(1200);
+  // Terrain is sampled only once its mesh covers the road: a null before that
+  // is "not built yet", which the gap === null assertions below would accept.
+  await page.waitForFunction(
+    (f) => { const g = window.__apex.groundY(f, 0); return !!g && g.terrainY != null; },
+    0.735, { polling: 100, timeout: BOOT_MS });
 
   const audit = await page.evaluate(() => {
     const profile = window.__apex.trackProfile(240);
@@ -185,7 +197,7 @@ for (const trk of TRACKS) {
     const offenders = [];
     await page.evaluate((t) => __apex.race(t, "day", "dry"), trk);
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
-    await page.waitForTimeout(1500);
+    await page.waitForFunction(() => !!window.__apex.trackGeometry(), null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate((knownCrossover) => {
       const caps = window.__apex.trackGeometry();
       if (!caps) return { err: "no meshes" };
