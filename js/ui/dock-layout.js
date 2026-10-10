@@ -81,8 +81,10 @@ const DockLayout = (function () {
       }
       // +x = toward centre from each dock's home edge; +y = up from the bottom.
       const sx = side === "L" ? 1 : -1;
-      const tx = (p.x * pad.w * sx).toFixed(1);
-      const ty = (-p.y * pad.h).toFixed(1);
+      // The dock's own CSS zoom scales a transform written on it: divide it back out.
+      const z = typeof CssZoom !== "undefined" ? CssZoom.of(el) : 1;
+      const tx = (p.x * pad.w * sx / z).toFixed(1);
+      const ty = (-p.y * pad.h / z).toFixed(1);
       el.style.transform = "translate(" + tx + "px, " + ty + "px)";
     }
   }

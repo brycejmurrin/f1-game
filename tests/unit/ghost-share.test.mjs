@@ -242,7 +242,8 @@ test("starting a race during ghost decoding preserves the link until returning t
   h.location.href = h.location.origin + h.location.pathname + h.location.hash;
   let racing = false, opens = 0;
   const ctx = vm.createContext({
-    GhostShare: h.GhostShare, UiLayers: { inRace: () => racing }, Log: { info() {} },
+    GhostShare: h.GhostShare, UiLayers: { inRace: () => racing, top: () => null }, Log: { info() {} },
+    els: { overlay: { hidden: false } },
     announce: h.notify, setFlow() {}, session: "race", DailyChallenge: { dayKey: () => "2026-09-29" },
     daily: { stop() {} }, restoreFreePlaySelection() {}, Tracks: { LIST: [{ id: "monza" }] },
     trackIdx: 0, buildSelect() { opens++; }, vt() {}, scheduleFlybyTrack() {},
@@ -262,6 +263,42 @@ test("starting a race during ghost decoding preserves the link until returning t
   assert.equal((await consume()).ok, true);
   assert.equal(opens, 1);
   assert.equal(h.GhostShare.guest().track, "monza");
+  assert.equal(h.location.hash, "");
+});
+
+// Bug hunt 2 H13: the guard was race-only, so a #ghost= hashchange while the
+// RESULTS sheet, the quali sheet, the RACE loading plate or the career hub was up
+// set flow="gp"/session="tt" and opened the picker over (or under) it. The link now
+// waits, fragment intact, unless the TITLE is the live layer; quitToMenu re-calls it.
+test("a ghost link landing over a non-title layer waits, fragment intact, for the title", async () => {
+  const h = harness({ plain: true });
+  const encoded = await h.GhostShare.encode(fixture, { track: "monza" });
+  h.location.hash = "#ghost=" + encoded.code;
+  h.location.href = h.location.origin + h.location.pathname + h.location.hash;
+  let topId = "results", overlayHidden = true, opens = 0;
+  const G = { announce: h.notify, flow: "season", session: "race", daily: { stop() {} }, trackIdx: 0,
+    buildSelect() { opens++; }, scheduleFlybyTrack() {} };
+  const ctx = vm.createContext({
+    G, GhostShare: h.GhostShare, Log: { info() {} },
+    UiLayers: { inRace: () => false, top: () => (topId ? { id: topId } : null) },
+    els: { get overlay() { return { hidden: overlayHidden }; } },
+    DailyChallenge: { dayKey: () => "2026-09-29" }, restoreFreePlaySelection() {},
+    Tracks: { LIST: [{ id: "monza" }] }, vt() {},
+  });
+  const source = fs.readFileSync(path.join(ROOT, "js/ui/title-flow.js"), "utf8");
+  const consume = vm.runInContext("(" + fnSource(source, "async function consumeGhostHash()") + ")", ctx);
+  for (const [id, hidden] of [["results", true], ["quali", true], ["loading", false], ["career", true], [null, true]]) {
+    topId = id; overlayHidden = hidden;
+    assert.equal(await consume(), null, `deferred over ${id || "a hidden title"}`);
+    assert.equal(opens, 0);
+    assert.equal(G.flow, "season", "flow untouched");
+    assert.equal(G.session, "race", "session untouched");
+    assert.ok(h.location.hash.includes("ghost="), "fragment kept for quitToMenu's re-call");
+  }
+  topId = "overlay"; overlayHidden = false;   // back on the title: the same link now lands
+  assert.equal((await consume()).ok, true);
+  assert.equal(opens, 1);
+  assert.equal(G.session, "tt");
   assert.equal(h.location.hash, "");
 });
 
