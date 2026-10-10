@@ -10,7 +10,8 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
-import { fnSource } from "../helpers/fn-source.mjs";
+import { gameSource, symbolSource } from "../helpers/game-source.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";   // title-flow.js is not a game.js carve-out
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const fixture = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/ghost-monza-short.json"), "utf8"));
@@ -255,8 +256,7 @@ test("starting a race during ghost decoding preserves the link until returning t
     trackIdx: 0, buildSelect() { opens++; }, vt() {}, scheduleFlybyTrack() {},
   });
   ctx.G = { announce: h.notify, session: "race", daily: { stop() {} }, trackIdx: 0, buildSelect() { opens++; }, scheduleFlybyTrack() {} };
-  const source = fs.readFileSync(path.join(ROOT, "js/ui/title-flow.js"), "utf8");
-  const consume = vm.runInContext("(" + fnSource(source, "async function consumeGhostHash()") + ")", ctx);
+  const consume = vm.runInContext("(" + symbolSource("async function consumeGhostHash()") + ")", ctx);
   const pending = consume();
   racing = true;
   assert.equal(await pending, null);
@@ -386,7 +386,7 @@ test("Phase 1 wires sharing into load order, results, boot/hashchange, HUD, and 
   const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
   const manifest = read("tools/manifest.cjs");
   const results = read("js/ui/results-sheet.js");
-  const game = read("js/ui/title-flow.js") + read("js/game.js");
+  const game = gameSource();   // game.js + its carved modules (title-flow.js among them)
   const hud = read("js/ui/hud.js");
 
   assert.match(manifest, /"js\/car\/ghost\.js",\s*"js\/car\/ghost-share\.js"/);

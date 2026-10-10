@@ -279,7 +279,7 @@ const GLXChunked = (function () {
 
     function createChunkedMesh(data, cellSize) {
       if (core.ctxGone && core.ctxGone()) return null;
-      const cell = cellSize > 0 ? cellSize : 72;
+      const cell = ChunkBins.cellSize(cellSize);
       let pos = toF32(data.pos), nrm = toF32(data.nrm), col = toF32(data.col);
       const srcIdx = data.idx, vCount = pos.length / 3, big = vCount > 65535;
       const triCount = (srcIdx.length / 3) | 0;
@@ -306,22 +306,7 @@ const GLXChunked = (function () {
       if (data._keepFullGeometry === false) {
         data.nrm = data.col = data.mat = data.trk = null;
       }
-      const buckets = new Map();
-      for (let t = 0; t < srcIdx.length; t += 3) {
-        const a = srcIdx[t], b = srcIdx[t+1], c = srcIdx[t+2];
-        const ax=pos[a*3],ay=pos[a*3+1],az=pos[a*3+2], bx=pos[b*3],by=pos[b*3+1],bz=pos[b*3+2],
-              cx=pos[c*3],cy=pos[c*3+1],cz=pos[c*3+2];
-        const gx = Math.floor(((ax+bx+cx)/3)/cell) + 1024;
-        const gz = Math.floor(((az+bz+cz)/3)/cell) + 1024;
-        const key = gx * 4096 + gz;
-        let bk = buckets.get(key);
-        if (!bk) { bk = { idx: [], mn: [Infinity,Infinity,Infinity], mx: [-Infinity,-Infinity,-Infinity] }; buckets.set(key, bk); }
-        bk.idx.push(a, b, c);
-        const mn = bk.mn, mx = bk.mx;
-        if (ax<mn[0])mn[0]=ax; if (ax>mx[0])mx[0]=ax; if (ay<mn[1])mn[1]=ay; if (ay>mx[1])mx[1]=ay; if (az<mn[2])mn[2]=az; if (az>mx[2])mx[2]=az;
-        if (bx<mn[0])mn[0]=bx; if (bx>mx[0])mx[0]=bx; if (by<mn[1])mn[1]=by; if (by>mx[1])mx[1]=by; if (bz<mn[2])mn[2]=bz; if (bz>mx[2])mx[2]=bz;
-        if (cx<mn[0])mn[0]=cx; if (cx>mx[0])mx[0]=cx; if (cy<mn[1])mn[1]=cy; if (cy>mx[1])mx[1]=cy; if (cz<mn[2])mn[2]=cz; if (cz>mx[2])mx[2]=cz;
-      }
+      const buckets = ChunkBins.bin(pos, srcIdx, cell);   // centroid cells keyed by ChunkBins.key: the cross-backend chunk identity
       pos = null;
       if (!data._keepPositions) { data.pos = null; data.idx = null; }
       const vao = gl.createVertexArray();
@@ -344,7 +329,7 @@ const GLXChunked = (function () {
       // ELEMENT_ARRAY_BUFFER bind).
       //
       // Nothing has to be rebased: bucket indices are already ABSOLUTE into the
-      // shared VBO (the binning loop above pushes raw srcIdx values) and the
+      // shared VBO (ChunkBins.bin pushes raw srcIdx values) and the
       // index TYPE is uniform per mesh, so concatenating in bucket order is a
       // byte-for-byte copy. Buckets keep Map insertion order, which is the
       // order triangles were emitted — along the arc — so the ranges are

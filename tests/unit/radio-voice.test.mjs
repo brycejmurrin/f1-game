@@ -26,7 +26,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
-import { fnSource } from "../helpers/fn-source.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 // VM timers are UNREF'd: they still fire while a test awaits, but a cue the
 // module schedules seconds ahead no longer holds the process open after the
 // last assertion (measured 2026-09-24: this file sat idle for most of its run).
@@ -797,7 +797,7 @@ test("quitting to the title ends the radio, not just the card", () => {
   // VOICE's teardown, which is never registered at all on a browser without
   // speechSynthesis. Quitting mid-transmission then left the radio running over
   // the title screen. quitToMenu already ends every other session thing.
-  const quit = fnSource(read("js/game.js"), "function quitToMenu()");
+  const quit = symbolSource("function quitToMenu()");
   assert.match(quit, /GameAudio\.radioStingStop\(\)/,
     "quitToMenu must end the sting itself rather than borrow the voice's observer");
   assert.match(quit, /_annQueue\.length = 0/, "…on the same pass that empties the announce queue");
@@ -947,7 +947,7 @@ test("a rotate-block pause that re-hides the card in the same task still halts r
 
   // setPaused(true, "rotate-block") then syncRotateBlocker(false), one task:
   pause.hidden = false;
-  const audio = fnSource(read("js/game.js"), "function setPaused(p, why) {")
+  const audio = symbolSource("function setPaused(p, why) {")
     .match(/if \(p\) \{ GameAudio\.stopEngine\(\);[^}]+\}/);
   assert.ok(audio, "setPaused still has a pause-audio line");
   vm.runInNewContext(audio[0], {
@@ -968,7 +968,7 @@ test("a rotate-block pause that re-hides the card in the same task still halts r
 });
 
 test('every message channel uses the same speaker for its HUD label and its voice', () => {
-  const f = vm.runInNewContext('(' + fnSource(read('js/game.js'), 'function radioWho(kind)') + ')',
+  const f = vm.runInNewContext('(' + symbolSource('function radioWho(kind)') + ')',
     { RadioVoice: RV, player: { name: 'Test Driver', code: 'TST' } });
   for (const [kind, speaker, label] of [
     ['warning','control','RACE CONTROL'], ['warn','control','RACE CONTROL'],

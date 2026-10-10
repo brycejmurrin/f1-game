@@ -7,11 +7,19 @@
  *   node tools/desktop/stage.mjs --out _site
  *   node tools/desktop/stage.mjs --out desktop/dist-site --stamp
  *   node tools/desktop/stage.mjs --out _site --stamp --at 3695 --sha <hex>
+ *   node tools/desktop/stage.mjs --out _site --stamp-only --sha "$GITHUB_SHA"   (pages.yml)
  *
  * Without `--stamp`, tags stay `?v=dev` (matches a local serve of the repo).
  * With `--stamp`, runs `bump-cache.mjs --apply` so packaged shells are
- * content-addressed like the live site. `--at` defaults to version.json's
- * build; pages.yml still stamps with `2000 + rev-list` itself after staging.
+ * content-addressed like the live site. `--stamp-only` stamps the tree already
+ * staged at `--out` without re-copying it.
+ *
+ * THE BUILD FORMULA LIVES HERE (2026-10-10, R3-ARCHITECTURE-10). `--at`
+ * defaults to `pagesBuild()` = 2000 + `git rev-list --count HEAD` and `--sha`
+ * to HEAD — the numbers pages.yml stamps at this commit. The default used to be
+ * the committed version.json build, which has been frozen at 1695 since Pages
+ * stopped committing builds (2026-09-01), so every desktop/Android package was
+ * v1.0.1695 with no apex-sha whatever commit it came from.
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -98,17 +106,48 @@ export function stageSite(outDir, opts = {}) {
   return dest;
 }
 
+/** `git <args>` in `root`, trimmed stdout; throws on a non-zero exit. */
+function gitOut(args, root) {
+  const r = spawnSync("git", args, { cwd: root, encoding: "utf8" });
+  if (r.status !== 0) throw new Error(`stage: git ${args.join(" ")} failed: ${(r.stderr || "").trim() || `exit ${r.status}`}`);
+  return r.stdout.trim();
+}
+
 /**
- * Content-hash stamp a staged tree (same tool pages.yml runs).
+ * The shell generation Pages stamps at HEAD: 2000 + the commit count. The 2000
+ * offset keeps every stamped build above the last COMMITTED one (1689), so no
+ * client is told a lower number (pages.yml "Stamp the shell generation").
+ * Refuses a shallow clone, whose count is its depth, not the history.
+ * @param {{ root?: string, git?: (args: string[]) => string }} [opts]
+ */
+export function pagesBuild(opts = {}) {
+  const git = opts.git || ((args) => gitOut(args, opts.root || ROOT));
+  if (git(["rev-parse", "--is-shallow-repository"]) === "true") {
+    throw new Error("stage: refusing to compute the build on a shallow clone (rev-list counts the depth); "
+      + "fetch full history (`git fetch --unshallow`) or pass --at N");
+  }
+  const n = Number(git(["rev-list", "--count", "HEAD"]));
+  if (!Number.isInteger(n) || n < 1) throw new Error(`stage: bad commit count ${n}`);
+  return 2000 + n;
+}
+
+/** The commit a stamp records as apex-sha: `git rev-parse HEAD`. */
+export function headSha(opts = {}) {
+  const git = opts.git || ((args) => gitOut(args, opts.root || ROOT));
+  const sha = git(["rev-parse", "HEAD"]);
+  if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error(`stage: HEAD is not a commit sha: ${sha}`);
+  return sha;
+}
+
+/**
+ * Content-hash stamp a staged tree (same tool pages.yml runs). `at` defaults
+ * to `pagesBuild()` and `sha` to `headSha()` of `root` (this checkout).
  * @param {string} stagedRoot
- * @param {{ at?: number, sha?: string }} [opts]
+ * @param {{ at?: number, sha?: string, root?: string, git?: (args: string[]) => string }} [opts]
  */
 export function stampStaged(stagedRoot, opts = {}) {
-  const versionPath = path.join(stagedRoot, "version.json");
-  let at = opts.at;
-  if (at == null) {
-    at = JSON.parse(fs.readFileSync(versionPath, "utf8")).build;
-  }
+  const at = opts.at != null ? opts.at : pagesBuild(opts);
+  const sha = opts.sha || headSha(opts);
   if (!Number.isInteger(at) || at < 1) {
     throw new Error(`stage: refuse to stamp with non-positive build ${at}`);
   }
@@ -119,16 +158,20 @@ export function stampStaged(stagedRoot, opts = {}) {
   if (r.status !== 0) {
     throw new Error(`bump-cache failed:\n${r.stderr || r.stdout || `exit ${r.status}`}`);
   }
-  if (opts.sha) {
-    const indexPath = path.join(stagedRoot, "index.html");
-    let html = fs.readFileSync(indexPath, "utf8");
-    if (!/name="apex-sha"/.test(html)) {
-      html = html.replace(
-        /(<meta\s+name="apex-build"\s+content="[^"]*"\s*\/?>)/,
-        `$1\n<meta name="apex-sha" content="${opts.sha}">`,
-      );
-      fs.writeFileSync(indexPath, html);
-    }
+  // <meta name="apex-sha"> is provenance AND the input to pages-publishable.sh's
+  // monotonic check, so a stamp that cannot place it fails.
+  const indexPath = path.join(stagedRoot, "index.html");
+  let html = fs.readFileSync(indexPath, "utf8");
+  if (!/name="apex-sha"/.test(html)) {
+    html = html.replace(
+      /(<meta\s+name="apex-build"\s+content="[^"]*"\s*\/?>)/,
+      `$1\n<meta name="apex-sha" content="${sha}">`,
+    );
+    fs.writeFileSync(indexPath, html);
+  }
+  const placed = html.match(/<meta name="apex-sha" content="([^"]*)">/);
+  if (!placed || placed[1] !== sha) {
+    throw new Error(`stage: index.html does not carry <meta name="apex-sha" content="${sha}"> after the stamp`);
   }
   const check = spawnSync(process.execPath, [bump, "--check", "--json", "--root", stagedRoot], {
     encoding: "utf8",
@@ -152,9 +195,10 @@ export function desktopVersionFromBuild(build, apexVersion) {
 function usage() {
   console.log(`usage: node tools/desktop/stage.mjs --out <dir> [--stamp] [--at N] [--sha HEX]
   --out     destination folder (replaced)
-  --stamp   run bump-cache --apply on the staged copy
-  --at N    build number for the stamp (default: version.json build)
-  --sha     optional commit hex for <meta name="apex-sha">`);
+  --stamp       run bump-cache --apply on the staged copy
+  --stamp-only  stamp the tree already staged at --out (no re-copy)
+  --at N        build number for the stamp (default: 2000 + git rev-list --count HEAD; refuses a shallow clone)
+  --sha HEX     commit for <meta name="apex-sha"> (default: git rev-parse HEAD)`);
 }
 
 function main() {
@@ -167,9 +211,17 @@ function main() {
     usage();
     process.exit(2);
   }
-  const dest = stageSite(path.isAbsolute(out) ? out : path.join(ROOT, out));
+  const outAbs = path.isAbsolute(out) ? out : path.join(ROOT, out);
+  let dest;
+  if (flag("--stamp-only")) {
+    assertStageDest(outAbs, ROOT);
+    if (!fs.existsSync(path.join(outAbs, "index.html"))) throw new Error(`stage: --stamp-only: nothing staged at ${outAbs}`);
+    dest = outAbs;
+  } else {
+    dest = stageSite(outAbs);
+  }
   let build = null;
-  if (flag("--stamp")) {
+  if (flag("--stamp") || flag("--stamp-only")) {
     const atRaw = opt("--at");
     build = stampStaged(dest, {
       at: atRaw != null ? Number(atRaw) : undefined,

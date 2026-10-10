@@ -2780,6 +2780,31 @@ point.
 
 ---
 
+## URL parameters (registry)
+
+Every query parameter the shipped build reads at boot (`rg -n 'location\.search' js index.html`; hand-kept,
+2026-10-10, R3-ARCHITECTURE-15). Most also have an `apex26.*` localStorage twin; the URL wins for that page
+load and is not saved. Add a row when you add a reader.
+
+| param | reader | effect |
+|---|---|---|
+| `log=<scope>:<level>` (repeatable) | `js/core/log.js` | per-scope log level, as `__apex.log()` (§Telemetry & diagnostics) |
+| `seed=<n>` | `js/game.js` | fixed sim seed for the session (§Physics control) |
+| `apex`, `debug`, `report` | `js/core/lazy-bundles.js` | load the lazy agent bundle (`__apex`) on a normal page; also `apex26.devApi="1"` or `navigator.webdriver` |
+| `metrics`, `metricsPage`, `metricsLog`, `metricsLvl`, `metricsPos`, `metricsSize` | `js/perf/metrics-overlay.js` | the METRICS overlay and its pinned page / log filter / level / side / size |
+| `gfxdebug=1` | `js/perf/gfx-debug-overlay.js` | on-screen GFX diagnostic (also `apex26.gfxDebug="1"`) |
+| `inputdebug=1` | `js/input/input.js` | input debug overlay (also `apex26.inputDebug="1"`) |
+| `upscale=1` | glx.js / tlx.js / wgx.js | spatial upscale at boot (also `apex26.spatialUpscale="1"`; §Misc) |
+| `carsmooth=<1\|team id\|0>` | `js/car/car-shade.js` | smoothed car body meshes: every car (`1`/`all`, the default), one team's (`mclaren`) or none (`0`/`off`); twin `apex26.carSmooth` |
+| `halo=<0\|slim\|1\|thick\|fairing>` | `js/camera/cockpit-opts.js` | cockpit halo variant; twin `apex26.cockpitHalo` |
+| `ckwheel`, `ckbody`, `ckseat`, `ckint` | `js/camera/cockpit-opts.js` | cockpit wheel / body / seat / interior variant (values in its `CHOICES` table) |
+| `turnchase=<amount>` | `js/camera/cockpit-opts.js` | cockpit turn-chase LEAD, 0..1 or a percent (`40`); `off`/`0` disables, a bare `1` is the legacy ON (0.35). Overrides `apex26.cockpitTurnChaseLead` for this load |
+| `cockpitpreview=1` | `js/camera/cockpit-preview.js` | marks the page as the cockpit preview FRAME: `cockpit-view.html` boots its isolated renderer only with it (the garage iframe's own src sets it; not a player flag) |
+| `three-devtools=1` | `js/render/three/tlx.js` | TLX only: publishes `window.scene`/`camera`/`renderer`/`THREE` for the three.js DevTools extension and the heap-census tooling (`track-switch-memory.spec.js`). Opt-in because the globals pin the whole scene graph |
+| `fullIntro=1` | `js/ui/loading-screen.js` | under automation (`navigator.webdriver`), run the PLAYER-pace intro (flyby, announcer, garage drive-out) instead of the 700 ms card; same as `window.__apexFullIntro = true` (garage-out-before-card.spec) |
+| `b=<build>` | `index.html` (shell) | cache-buster the version guard appends when it reloads onto a new build; stripped from the address bar at boot |
+| `code`, `state`, `error` | `js/audio/spotify.js` | the Spotify OAuth redirect's answer, consumed once |
+
 ## Misc
 
 ### `loadCarModel(url) → Promise<bool>`
