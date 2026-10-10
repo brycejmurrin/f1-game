@@ -573,11 +573,7 @@ const NetLobby = (function () {
         const me = Teams.LIST[G.teamIdx] || Teams.LIST[0];
         if (me && d.driverId === me.id + ":" + (G.driverIdx || 0)) return false;
         if (role !== "host") return true;
-        // RATE CAP, per connection, shared by QUALI and QLIVE. bindQuali calls
-        // this once per validated event before applying AND relaying it, and the
-        // host fans each one out to every other guest: unmetered, one guest's
-        // flood multiplied by the room. A real client sends ~2.5 QLIVE/s
-        // (quali-net.js reportLive: 400 ms) plus a QUALI or two per session.
+        // Per-connection QUALI+QLIVE cap (host relays each event to every guest).
         if (!underRate(qualiTimes, QUALI_RATE)) return false;
         const p = _peers.get(id);
         return !!(p && p.team && d.driverId != null
@@ -596,11 +592,7 @@ const NetLobby = (function () {
           if (other !== id) try { sess.sendEvent(type, lap); } catch (e) { /* departing peer */ }
         }
       });
-      // A GUEST BACKED OUT of the quali sheet (abortQuali): the host's TO THE
-      // GRID waits on every rival's lap, so tell it there will be none — the
-      // same no-time the sheet gives a deleted lap, relayed like a QUALI. Only
-      // while the host is itself qualifying, and only for the driver this
-      // connection's own HELLO claimed (never a name in the payload).
+      // Guest abortQuali → host grades that HELLO's driver no-time (relayed QUALI).
       made.onEvent(QABORT, () => {
         if (role !== "host" || !friendQualifying) return;
         const p = _peers.get(id);
@@ -631,9 +623,7 @@ const NetLobby = (function () {
     const PEER_ONE = "peer";
     const HELLO_RATE = 5, EVENT_WINDOW_MS = 1000;   // per connection, per event
     const QUALI_RATE = 12;                          // QUALI + QLIVE together, per connection
-    // Guest -> host: "I left the quali sheet". Lobby-local on purpose; it belongs
-    // beside NetPlay.EV.QUALI (netplay.js) once that file is free to take it.
-    const QABORT = "qabort";
+    const QABORT = "qabort";   // guest→host "left quali sheet" (lobby-local until netplay owns it)
     const _peers = new Map();
     const _ready = new Map();
     const _verify = new Map();   // connection id -> 4-letter code from both DTLS fingerprints
@@ -1236,12 +1226,7 @@ const NetLobby = (function () {
           return;
         }
         close();         // the sheet is the screen now — but the SESSION stays open
-        // openQuali is async and handles its own failure (scenery download,
-        // build) with quitToMenu — which cancels the lobby only for an ARMED
-        // sheet, so a prepare that failed left friendQualifying true for the
-        // page session and Quali.persistOrder skipped every later save. The
-        // promise settles after the sheet is up OR that recovery ran: a sheet
-        // still hidden then means no qualifying is coming.
+        // Prepare failure leaves friendQualifying true; cancel if sheet stays hidden.
         Promise.resolve(opened).then(() => {
           const sheet = $("quali");
           if (friendQualifying && sheet && sheet.hidden) cancel();
@@ -1281,9 +1266,7 @@ const NetLobby = (function () {
       } catch (e) {
         say("Could not start the race: " + (e && e.message), true);
         friendQualifying = false;   // keep the room and its message up, but stop gating quali saves
-        // After the quali sheet the lobby is HIDDEN (beginRace closed it): the
-        // message has no screen, and the open session would idle behind a
-        // dead start. Same exit as a refused netPlay.start() below.
+        // beginRace hid the lobby — quit rather than idle an open session.
         const screen = els().screen;
         if (screen && screen.hidden) { cancel(); if (G.quitToMenu) G.quitToMenu(); }
         return;
@@ -1325,9 +1308,7 @@ const NetLobby = (function () {
     async function host() {
       const gen = beginOperation();
       resetSteps();
-      // The tap answers at once: the relay-credential wait below can run for
-      // ICE_WAIT_MS with the pick screen still up and nothing said.
-      show("hosting");
+      show("hosting");   // answer the tap before the ICE_WAIT_MS credential wait
       // INVITE ANOTHER -> HOST A RACE after a code join: the reopened room code
       // stayed advertised (six relay sockets, the dead offer reposted every
       // 5 s) while this generation ignored its answers — a friend told the
@@ -1462,8 +1443,7 @@ const NetLobby = (function () {
       if (!transport) { say(noConnectionMsg(), true); return { ok: false, error: "no_transport" }; }
       const pending = transport;
       const id = pendingId;
-      // Bumped only once the tap is a real attempt (as makeAnswer): an empty or
-      // junk CONNECT while host() prepares its invite must not stale that invite.
+      // Real attempt only — empty CONNECT must not stale a host invite in flight.
       const gen = beginOperation();
       say("Reading answer…");
       const res = await NetHandshake.acceptAnswer(pending, code);
@@ -1857,10 +1837,7 @@ const NetLobby = (function () {
       return null;
     }
 
-    // The invite, QR and answer widgets belong to ONE attempt. open() cleared
-    // them but host()/join()/inviteAnother()/codeHost() did not, so a retry
-    // after a failed connect (or INVITE ANOTHER) showed the previous attempt's
-    // code and QR — a camera pointed at a peer connection that no longer exists.
+    // Clear invite/QR/answer widgets per attempt (retry used to show a dead peer).
     function resetSteps() {
       const e = els();
       for (const f of ["invite", "inviteIn", "answer", "answerIn"]) if (e[f]) e[f].value = "";
@@ -1907,8 +1884,7 @@ const NetLobby = (function () {
     // race-settings return here instead of starting a solo GP.
     function abortQuali() {
       friendQualifying = false;
-      // The host's sheet waits on every rival's lap: say this guest will drive none.
-      if (role === "guest") broadcast(QABORT, null);
+      if (role === "guest") broadcast(QABORT, null);   // host waits on every rival
       if (G.setNetRoom) G.setNetRoom(true);
       const e = els();
       if (e.screen) e.screen.hidden = false;
@@ -1924,9 +1900,7 @@ const NetLobby = (function () {
       clearInterval(pollTimer);
       Log.info("net", "lobby close");
       stopScan();
-      // beginRace() closes the lobby for the quali sheet but the SESSION stays
-      // open: a guest idling through quali must not lose the screen to sleep.
-      // Every way out of quali clears the flag first, so its close() drops it.
+      // Keep wake during friend quali (session stays open while lobby is hidden).
       if (!friendQualifying) dropWake();
       const e = els();
       if (e.screen) e.screen.hidden = true;
