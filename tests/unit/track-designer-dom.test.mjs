@@ -391,6 +391,23 @@ test("open({design}), EDIT and IMPORT never drop unsaved work: UNDO brings it ba
   assert.equal(b2.D.state().design.theme, "harbour");
 });
 
+test("UNDO inside one design keeps its name and library link (setName and SAVE sit outside the history)", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open(); b.D.randomise(7); b.D.preview();
+  b.D.setTheme("alpine");                       // an undoable edit, taken before the rename
+  b.D.setName("Renamed Loop");
+  assert.equal(b.D.undo(), true);
+  assert.equal(b.D.state().design.theme !== "alpine", true, "the edit was undone");
+  assert.equal(b.D.state().design.name, b.C.sanitizeName("Renamed Loop"), "…but not the rename");
+  b.D.preview(); assert.equal(b.D.save().ok, true);
+  const n = b.C.list().length, id = b.D.state().design.originId;
+  b.D.redo(); b.D.undo();                       // walk back across the SAVE
+  assert.equal(b.D.state().design.originId, id, "the library link survives UNDO");
+  b.D.preview(); assert.equal(b.D.save().ok, true);
+  assert.equal(b.C.list().length, n, "SAVE replaces the circuit instead of adding a copy");
+});
+
 test("a share link while the screen is open keeps the return focus; EDIT → SAVE replaces the circuit; a full library names its limit", async () => {
   const b = bootScreen();
   const door = b.dom.byId("mb-designer"); door.tagName = "BUTTON";
@@ -1402,6 +1419,21 @@ function recordingCanvas(b, texts, canvases) {
   };
 }
 const SHORT_LOOP = () => { const pts = []; for (let i = 0; i < 36; i++) { const t = i / 36 * Math.PI * 2; pts.push([Math.round(300 * Math.cos(t) * 4) / 4, Math.round(200 * Math.sin(t) * 4) / 4]); } return pts; };
+
+test("CARD: a share link too long for the card is not cut mid-code; the card points at SHARE instead", async () => {
+  const b = bootScreen();
+  const texts = [], canvases = [];
+  openGreen(b, 11);
+  recordingCanvas(b, texts, canvases);
+  b.ctx.File = File;
+  b.ctx.navigator = { canShare: () => true, share: async () => {} };
+  await b.D.shareCard();
+  const code = b.D.state().lastCode;
+  assert.ok(b.CD.shareUrl(code).length > 400, "a real code is far longer than the card's link column");
+  const lines = texts.slice(texts.indexOf("APEX 26 · TRACK DESIGNER") + 1);
+  assert.equal(lines.some((t) => t.length > 6 && code.includes(t.replace(/…$/, ""))), false, "no fragment of the code on the card: " + lines.join(" | "));
+  assert.ok(lines.includes("#track=…") && lines.includes("full link: SHARE"), lines.join(" | "));
+});
 
 test("CARD: a 640×360 PNG to the share sheet when canShare({files}) allows, else NativeDownload, else <a download>; a dismissed sheet is silent; red refuses", async () => {
   const b = bootScreen();
