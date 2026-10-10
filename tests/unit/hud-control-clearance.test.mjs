@@ -60,7 +60,7 @@ test("CSS: #hud-inputs clears the right dock on touch and the gear box on deskto
     /body:not\(\.desktop\) #hud-inputs:not\(\[data-hl-user\]\)\s*\{[^}]*position:\s*fixed/,
     "touch INPUTS uses fixed layout like sectors");
   assert.match(CSS,
-    /min\(var\(--dock-r-w, 0px\) \* var\(--hud-z-top, var\(--hud-scale\)\) \/ var\(--hud-z\), calc\(50vw \/ var\(--hud-z\) - 10px - var\(--sar\) \/ var\(--hud-z\) - 120px\)\)/,
+    /min\(var\(--dock-r-w, 0px\) \* var\(--hud-z-top, var\(--hud-scale\)\) \/ var\(--hud-z\), calc\(50vw \/ var\(--hud-z\) - 10px - var\(--sar\) \/ var\(--hud-z\) - 100px\)\)/,
     "touch INPUTS converts --dock-r-w from the chrome's zoom to its own and caps it at the centre line less its own width: off BOOST at 100%, off OT at HUD 150 + BTN 150 (a stand-off in the wrong zoom ended 9px over it), off the left steer arrows");
   assert.ok((CSS.match(/var\(--hud-sec-h, 4\.8em\) \* var\(--hud-z-top, var\(--hud-scale\)\) \/ var\(--hud-z\) \+ 12px \+ var\(--inputs-below-limits, 0px\)/g) || []).length === 2,
     "touch AND desktop INPUTS convert --hud-sec-h into their own zoom and reserve the limits chip's height");

@@ -2014,15 +2014,17 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
      128px, which is LESS than the dock at 100% (BOOST's column is ~250px on
      844×390), so the trace sat on BOOST / OT at the shipped size (HUD survey
      2026-10-10, phoneL-cockpit: inputs × btn-boost 66×18px). The cap is now
-     the trace's own width short of the centre (max-width 120px below), so it
+     the trace's own width short of the centre, so it
      stands off any dock up to the middle of the screen and never reaches the
-     left column. vw and the inset divide by this element's zoom like every
+     left column. That width is 100px, not the 120px max-width: the trace paints
+     ~105px, and budgeting 120 made the cap bind first at HUD 150 (right edge
+     602, 9px over OT at 593) where the dock stand-off alone ends it at the plate. vw and the inset divide by this element's zoom like every
      other anchor here. */
   /* --dock-r-w (and --hud-sec-h below) are published in the CHROME's zoom (--hud-z-top); this trace is
      drawn in the bottom band's (--hud-z), and the two part at HUD 150% / a capped top band: the stand-off
      was ~1.5x too wide and the trace ended 9px over OT at HUD 150 + BTN 150 (survey 2026-10-10). Both
      convert by --hud-z-top / --hud-z, so the trace ends where the sector plate does. */
-  right: calc(10px + var(--sar) / var(--hud-z) + min(var(--dock-r-w, 0px) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z), calc(50vw / var(--hud-z) - 10px - var(--sar) / var(--hud-z) - 120px)));
+  right: calc(10px + var(--sar) / var(--hud-z) + min(var(--dock-r-w, 0px) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z), calc(50vw / var(--hud-z) - 10px - var(--sar) / var(--hud-z) - 100px)));
   bottom: auto;
   /* Same shape as #hud-limits: clear PAUSE/CAM via (8px + tap-hud + 4px + sat)
      then drop by --hud-sec-h. Omitting tap-hud + 4px put the trace ~44px into

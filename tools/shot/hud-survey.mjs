@@ -257,6 +257,11 @@ export function probeWithTransients({ src, arg }) {
   });
   force("hud-limits", (el) => { const s = el.querySelector("span"); if (s) s.textContent = "●●●○"; });
   force("hud-flag", (el) => { if (!el.textContent.trim()) el.textContent = "YELLOW · SECTOR 2"; });
+  // Under MOTION: REDUCED (the survey's default) every HUD descendant carries a 0.01 ms `transition: all`
+  // (css/hud.css), and a style change made in THIS task starts it: a read here still returns the OLD top /
+  // left of anything that reacts to the forced chips (INPUTS stepping below the limits chip). Finish
+  // them so the probe sees the settled geometry a player sees a frame later.
+  try { for (const a of document.getAnimations()) { try { a.finish(); } catch (_) { /* infinite or detached */ } } } catch (_) { /* old engine */ }
   try { return probe(arg); }
   finally { for (const [el, hidden, html] of saved.reverse()) { el.innerHTML = html; el.hidden = hidden; } }
 }
