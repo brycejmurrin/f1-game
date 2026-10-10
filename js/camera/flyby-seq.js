@@ -1642,7 +1642,7 @@ const FlybySeq = (function () {
      judgement is cheaper than the level frame's. The eye is the solver's;
      only the aim moves, and only on a whole-circuit look. (A coarse 32-ray
      mix read a tilt that took 16 rows of ground away as adding 7.) */
-  const TILT_MAX = 0.7, TILT_PAD = 0.03;
+  const TILT_MAX = 0.7, TILT_PAD = 0.05;
   const _te = [0, 0, 0], _tl = [0, 0, 0];
   /** A whole-circuit look raised by `k` of the eye's height over it, at each end. */
   function tilt(track, eye, look, k) {
