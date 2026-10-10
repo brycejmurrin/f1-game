@@ -448,3 +448,39 @@ tooling PR (or into whichever PR next touches the survey) before closing.
 Note that #1316's own PR text says its `--radio` fill is undone by
 `game.js`'s announce drain, so port the false-positive fix first and the
 flags only with that caveat.
+
+## Addendum 6: the allocator branch (`c730579`, 20 commits, no PR yet)
+
+Read from the branch with `git show`, plus a simulated merge on ship + #1375 +
+#1394 (+ #1351).
+
+- **Merge state:** it has synced and now merges cleanly with ship (it
+  conflicted in five files before). 257 HUD and mirror-pass unit tests pass on
+  ship + #1375 + #1394 + allocator, with and without #1351; the three
+  `hud-pins` pins stay `todo` (F-01 etc.), none flip.
+- **Chase radio card over the minimap:** covered by the code. `radioLane`
+  starts its rows below the map's bottom edge (`Math.max(centreBandTop(...),
+  map.rect.bottom)`, with a comment naming the "card painted over the bottom of
+  the minimap" audit finding), and `placeRadio`'s painted guarantee collapses
+  the card if it still hits the sectors, the tower or the map. Read from code,
+  not screenshotted.
+- **Helmet gear × ERS:** NOT touched. The only helmet-related change is adding
+  `#hud-gearbox` to the obstacle list. #1351 still owns that fix, as intended.
+- **mirror-pass.js:** the mirror's own side-slot picker (`side()`) is deleted
+  in favour of `placeRadio`; the file merges cleanly with #1371. This is the
+  renderer-path rule's territory, so its owner must name what ran (the
+  `mirror-pass` unit file passes here).
+- **Size:** against #1375's ceilings (hud.js 1345 code / 2281 lines, hud.css
+  within) the allocator adds hud.js **+268 code lines / +319 lines**
+  (+286 / +341 with #1351). That is about 14% on the biggest HUD file, far past
+  the 40-line auto-absorb, so it needs a stated raise or a large extraction.
+  hud.css is inside its ceiling.
+- **#1404** (draft, `cursor/hud-sectors-left-5d2e`, base = this branch) moves
+  S1–S3 and TRACK LIMITS to the left column on touch landscape: another
+  hud.js +61 / hud.css +20 on top, and a visible layout change. It cannot land
+  before the allocator (it contains its commits). Its own PR text states the
+  land order #1351 → allocator → #1404.
+
+**Verdict, allocator: SAFE-AFTER #1351** and after #1375 is re-measured or the
+allocator states its own raise. **#1404: SAFE-AFTER the allocator**, with its
+own stated raise.
