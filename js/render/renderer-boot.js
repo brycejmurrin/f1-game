@@ -92,7 +92,14 @@ async function start() {
 let gfx = null;
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
-  // Refresh apex26.xrCaps before sync bootPick (ms); first armed boot may still be 2D.
+  // Refresh apex26.xrCaps before sync bootPick (ms). ApexXR is LAZY_XR and is only
+  // fetched by XrBoot.mountUi, after this runs, so on a real boot it is undefined
+  // here and both ApexXR guards (this and storedBackendPreference) fall through to
+  // the 2D pick; they act only when the bundle is already resident (a spec that
+  // preloads it). Loading it earlier is NOT a drop-in: XRPlan's webgl2 path maps
+  // to GLX, which has no attachXrSession, so an armed boot would land on a
+  // renderer ENTER VR cannot use (the legacy XrBoot.ensureXrBackend TLX pin is
+  // what works today). Fix the plan's backend first.
   if (typeof ApexXR !== "undefined" && ApexXR.detect) {
     try { await ApexXR.detect(); } catch (_) { /* caps stay cached */ }
   }

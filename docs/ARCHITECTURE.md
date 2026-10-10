@@ -317,6 +317,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `insight.js` | `TrackInsight` | LAZY_EDITOR | TrackInsight: what the track designer can say ABOUT a circuit rather than against it. |
 | `fixes.js` | `TrackFixes` | LAZY_EDITOR | TrackFixes: one-click remedies for the track designer's CHECKS (TrackValidate). |
 | `codec.js` | `TrackCodec` | LAZY_EDITOR | TrackCodec: the share code for a custom circuit. |
+| `scenery-preview.js` | `DesignerSceneryPreview` | LAZY_EDITOR | Live overhead illustration for the designer. |
 | `canvas.js` | `DesignerCanvas` | LAZY_EDITOR | DesignerCanvas: the track designer's 2D drawing surface. |
 | `elev-presets.js` | `ElevPresets` | LAZY_EDITOR | ElevPresets: Flat / Rolling / Hilly node-height profiles for the track designer. |
 | `profile.js` | `DesignerProfile` | LAZY_EDITOR | DesignerProfile: the track designer's elevation strip under the main canvas. |
