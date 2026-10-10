@@ -21,6 +21,7 @@
 //   node tools/shot/flicker-gate.mjs --backend three        # TLX (default: webgl2 = GLX)
 //   node tools/shot/flicker-gate.mjs --root <tree>          # serve ANOTHER checkout (positive control)
 //   node tools/shot/flicker-gate.mjs --out artifacts/flicker-gate --png
+//   node tools/shot/flicker-gate.mjs --a3 --png             # diagnostic: a THIRD still (A2 vs A3) + the A-vs-A2 diff PNG
 // Output: <out>/flicker-gate.json (per site + summary); with --png also each
 // site's A frame and its fight mask as grayscale PNGs. Exit 1 when any site
 // fails its ceiling, errors, or no site could be measured; 0 otherwise.
@@ -57,7 +58,7 @@ import { resolve, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { chromiumArgsForBackend, installProbeInit, gotoGame, screenshotPresentedCanvas } from "./probe-page.mjs";
-import { DEFAULTS, flickerScore, judge, lumaFromRGBA } from "../lib/flicker-metric.mjs";
+import { DEFAULTS, flickerScore, frameDelta, inexactSites, judge, lumaFromRGBA } from "../lib/flicker-metric.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
@@ -142,6 +143,7 @@ function parseArgs(argv) {
     else if (a === "--root") o.root = resolve(val());
     else if (a === "--out") o.out = resolve(val());
     else if (a === "--png") o.png = true;
+    else if (a === "--a3") o.a3 = true;
     else if (a === "--list") o.list = true;
     else if (a === "-h" || a === "--help") o.help = true;
     else throw new Error(`unknown argument ${a} (see the header of tools/shot/flicker-gate.mjs)`);
@@ -251,6 +253,15 @@ async function measureSite(page, site, opts) {
   await presents(page, 2);
   const A2f = await grabRGBA(page);
   const A2 = lumaFromRGBA(A2f.rgba, A2f.w, A2f.h);
+  // --a3 (diagnostic): a third still. A != A2 but A2 == A3 is a settle that finished (warm-up); A2 != A3 is something
+  // still moving (a live clock, or slow convergence). Opt-in: it adds presents before the jitter frames.
+  let a2a3 = null;
+  if (opts.a3) {
+    await presents(page, 2);
+    const A3f = await grabRGBA(page);
+    const d = frameDelta(A2, lumaFromRGBA(A3f.rgba, A3f.w, A3f.h));
+    a2a3 = { maxDelta: d.maxDelta, diffPx: d.diffPx };
+  }
   const jit = [];
   for (const m of JITTER) jit.push((await lumaAt(page, dolly(pose, m * site.jitterM))).luma);
   const maxFrac = site.maxFrac ?? DEFAULTS.maxFrac;
@@ -260,12 +271,15 @@ async function measureSite(page, site, opts) {
     const mask = Uint8Array.from(score.mask, (v) => (v ? 255 : 0));
     await writePng(join(opts.out, `${site.id}-A.png`), A.luma, A.w, A.h);
     await writePng(join(opts.out, `${site.id}-mask.png`), mask, A.w, A.h);
+    if (opts.a3) {   // where A and A2 differ, amplified (a step of 25 would be near-black unscaled)
+      await writePng(join(opts.out, `${site.id}-a-vs-a2.png`), Uint8Array.from(A.luma, (v, i) => Math.min(255, Math.abs(v - A2[i]) * 8)), A.w, A.h);
+    }
   }
   const { mask: _m, ...numbers } = score;
   return {
     id: site.id, track: site.track, status: verdict.ok ? "pass" : "fail", reasons: verdict.reasons,
     maxFrac, frame: { w: A.w, h: A.h, via: A.via }, pose: { eye: pose.eye.map((v) => +v.toFixed(3)), target: pose.target.map((v) => +v.toFixed(3)), fov: pose.fov, racingFrac: pose.racing },
-    jitterM: site.jitterM, ...numbers, ms: Date.now() - t0,
+    jitterM: site.jitterM, ...numbers, ...(a2a3 ? { a2a3 } : {}), ms: Date.now() - t0,
   };
 }
 
@@ -307,6 +321,7 @@ async function main() {
     backend: opts.backend, gl: process.env.APEX_GL || "swiftshader", root: opts.root === ROOT ? "." : opts.root,
     sites: results.length, pass: count("pass"), fail: count("fail"), error: count("error"), skipped: count("skipped"),
     stillExact: results.filter((r) => r.still).every((r) => r.still.diffPx === 0),
+    inexactSites: inexactSites(results),
     thr: DEFAULTS.thr, minFlips: DEFAULTS.minFlips, minCluster: DEFAULTS.minCluster, jitter: JITTER,
     ms: Date.now() - t0,
   };
@@ -315,7 +330,7 @@ async function main() {
   summary.verdict = ok ? "pass" : "fail";
   const outFile = join(opts.out, "flicker-gate.json");
   writeFileSync(outFile, JSON.stringify({ summary, sites: results }, null, 2) + "\n");
-  console.log(`= flicker ${summary.verdict}: ${summary.pass} pass, ${summary.fail} fail, ${summary.error} error, ${summary.skipped} skipped; A==A2 at every site: ${summary.stillExact} → ${outFile}`);
+  console.log(`= flicker ${summary.verdict}: ${summary.pass} pass, ${summary.fail} fail, ${summary.error} error, ${summary.skipped} skipped; A==A2 at every site: ${summary.stillExact}${summary.inexactSites.length ? ` (inexact: ${summary.inexactSites.map((x) => `${x.id} ${x.diffPx}px step ${x.maxDelta}`).join(", ")})` : ""} → ${outFile}`);
   return ok ? 0 : 1;
 }
 
