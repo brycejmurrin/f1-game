@@ -1,1 +1,1 @@
-1791631525	Cursor Agent	PR #1313 CONFLICTING after ship move; sync-pr --push; stay draft until ready-full-cap. Do not enable auto-merge or merge.  [sync-pr-cursor-hunt2-b-9c2d; session 15d936c3f342b33b03429c4e]
+1791633839	Cursor Agent	fix #1313 ship-sync: WATCH pause pose ownership (collision-contact-vm)  [sync-pr-cursor-hunt2-b-9c2d; session 15d936c3f342b33b03429c4e]
