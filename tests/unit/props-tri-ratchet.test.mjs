@@ -40,6 +40,13 @@ const require = createRequire(import.meta.url);
 // 2026-10-09: Silverstone 398229 -> 422978 (+6.2 %): Racing Kit light posts, banner towers,
 // camera pods and radar (baked CC0 models), generic lamp posts (furniture.lamp "post")
 // and far-hedgerow understorey bushes — the survey found the circuit using 7 of 77 models.
+// 2026-10-10: Silverstone 422978 -> 427464 (+1.1 %): pass-2 paddock facade dress
+// (Kenney com/sub buildings + Racing Kit pit office/garage modules).
+// 2026-10-10 round-2 bug hunt (#1309): buddh 192055 -> 197450 (+2.8 %) and bahrain
+// 197195 -> 194611 (-1.3 %). The hairpin fold clamp re-seats both centrelines and the
+// along-the-road dress follows the new chord samples; the per-emitter split of buddh's
+// +5395 was not broken down. Compaction stays identical (props-tris.cjs identity()
+// true for both). Re-measured on the merged tree, not widened.
 const BASELINE = JSON.parse(readFileSync(path.join(ROOT, "tools", "track", "props-tris-baseline.json"), "utf8"));
 const GROW = 1.005, STALE = 0.99;
 

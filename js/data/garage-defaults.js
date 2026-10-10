@@ -68,10 +68,31 @@ const GarageDefaults = (function () {
     "parts.racingbulls": {"engine":"sig_racingbulls_pu","aero":"sig_racingbulls_wing","suspension":"sig_racingbulls_susp","brakes":"sig_racingbulls_brakes","tyres":"sig_rb_street","ers":"sig_racingbulls_ers","gearbox":"sig_rb_shortcase","fuel":"sig_racingbulls_fuel","exhaust":"sig_racingbulls_exh","floor":"sig_racingbulls_floor","cockpit":"sig_racingbulls_cpit","wheels":"sig_racingbulls_rim"},
     "parts.redbull": {"engine":"manu_ford","aero":"circuit_adaptive","suspension":"sig_redbull_pullrod","brakes":"sig_redbull_brakes","tyres":"sig_redbull_tyre","ers":"sig_redbull_ers","gearbox":"sig_redbull_gbox","fuel":"sig_redbull_fuel","exhaust":"sig_redbull_exh","floor":"sig_redbull_floor","cockpit":"sig_redbull_cpit","wheels":"standard"},
     "parts.williams": {"engine":"sig_williams_pu","aero":"sig_williams_lowdrag","suspension":"sig_williams_susp","brakes":"sig_williams_brakes","tyres":"sig_williams_tyre","ers":"sig_williams_ers","gearbox":"sig_williams_longshift","fuel":"sig_williams_fuel","exhaust":"sig_williams_exh","floor":"sig_williams_floor","cockpit":"sig_williams_cpit","wheels":"sig_williams_rim"},
-    "setup.mercedes": {"arbF":6,"arbR":5,"rideF":24,"rideR":60,"brakeBias":56},
+    "setup.mercedes": {"arbF":7,"arbR":7,"rideF":24,"rideR":60,"brakeBias":56},
     "team": 0,
   };
   // @gen-garage-defaults end
+
+  // THE SHIPPED TABLE IS NEVER HANDED OUT. get() used to return DEF[k] itself;
+  // the store returns that on a miss, the garage mutates it in place
+  // (p[cat] = opt.id), and file() then serialised the mutated table — so RESET
+  // GARAGE TO DEFAULTS restored the player's own edits. DEF is frozen here and
+  // every way out is a deep copy (a livery row holds c1/c2 arrays).
+  function deepFreeze(v) {
+    if (v && typeof v === "object" && !Object.isFrozen(v)) {
+      Object.freeze(v);
+      Object.keys(v).forEach((k) => deepFreeze(v[k]));
+    }
+    return v;
+  }
+  function copy(v) {   // rebuilt with this realm's literals (a JSON round trip hands back the caller's realm, which deepStrictEqual sees)
+    if (!v || typeof v !== "object") return v;
+    if (Array.isArray(v)) return v.map(copy);
+    const o = {};
+    Object.keys(v).forEach((k) => { o[k] = copy(v[k]); });
+    return o;
+  }
+  deepFreeze(DEF);
 
   function file() {
     return {
@@ -80,13 +101,13 @@ const GarageDefaults = (function () {
       build: META.build,
       excluded: META.excluded,
       count: Object.keys(DEF).length,
-      garage: DEF,
+      garage: copy(DEF),
     };
   }
 
   return Object.freeze({
     has: (k) => Object.prototype.hasOwnProperty.call(DEF, k),
-    get: (k) => DEF[k],
+    get: (k) => copy(DEF[k]),
     keys: () => Object.keys(DEF),
     meta: () => META,
     file,

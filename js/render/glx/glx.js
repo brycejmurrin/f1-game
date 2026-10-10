@@ -1325,9 +1325,13 @@ const GLXBackend = (function () {
     // arrays) is INVALID_OPERATION with either set.
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    // A throwing upload (closed ImageBitmap, tainted canvas) must not strand the flags or the texture.
+    try { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); }
+    catch (e) { gl.deleteTexture(tex); throw e; }
+    finally {
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    }
     gl.generateMipmap(gl.TEXTURE_2D);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -2364,7 +2368,7 @@ const GLXBackend = (function () {
   // either snapshot standing would let a later cullInstances hit its cache and
   // draw this pack as though it were that frustum's. Pinned by
   // tests/unit/gfx-backend-canary.test.mjs.
-  function updateInstances(batch, matrices, n) {
+  function updateInstances(batch, matrices, n, colors) {
     if (ctxGone() || !batch || !batch.ibo) return 0;
     const cap = batch.instances | 0;
     const v = Math.max(0, Math.min(cap, n | 0));
@@ -2374,6 +2378,12 @@ const GLXBackend = (function () {
     if (v > 0) {
       gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, matrices, 0, v * 16);
+      // Optional colours: frozen-mirror restores the mirror pass's pack; DebrisWorld omits them.
+      const cols = colors || batch.packColors;
+      if (cols && batch.cbo) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, batch.cbo);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, cols, 0, v * 3);
+      }
     }
     return v;
   }

@@ -28,13 +28,35 @@ const TrackDesigner = (function () {
    *  STEPS in the order a first circuit is built, GESTURES per input, LIMITS. */
   const HOWTO = Object.freeze({
     STEPS: Object.freeze([
-      { n: 1, title: "Start", text: "Pick a MODE (DRAW / EDIT / ELEVATION / SCENERY / TEST), then RANDOMISE, TRACK OF THE DAY, START FROM…, or DRAW one closed loop." },
-      { n: 2, title: "Shape", text: "In EDIT, tap a white point to select then drag to move (arrows nudge); Shift-tap or SELECT END for a SPAN so the group moves together. Tap the road to add one; double-tap or DELETE POINT to remove — UNDO / REDO sit on the canvas toolbar." },
-      { n: 3, title: "Corners", text: "Still in EDIT, choose STRAIGHT / CORNER / HAIRPIN / CHICANE / S-BEND, set the shape, then tap where it should begin — or REPLACE THE SELECTED SPAN when a group is selected. UNDO takes a stamp back." },
-      { n: 4, title: "Elevation", text: "In ELEVATION, tap a grip to select then drag vertically (or POINT m / Flat / Rolling / Hilly); a SPAN offsets every grip in the group together. Bank a turn (BANK °), pick KERB flat/sausage/rumble, and keep BERMS on banked corners." },
-      { n: 5, title: "Look", text: "SCENERY mode: pick a theme and tune TIME OF DAY, TREES and CROWD; optionally place a few capped props (stand, gantry, trees, water, flood, billboard), then name the circuit." },
-      { n: 6, title: "Checks", text: "TEST mode emphasises CHECKS — red blocks saving; tap FIX or FIX ALL when the designer can repair a row." },
-      { n: 7, title: "Race and share", text: "SAVE, then RACE or TIME TRIAL (or TEST HERE from a point). SHARE copies a link; CARD / EXPORT / IMPORT move a circuit as a picture or file." },
+      { n: 1, title: "Start", text: "Use RANDOMISE for a starting circuit, START FROM… for a template, or DRAW one closed loop." },
+      { n: 2, title: "Shape", text: "Open EDIT and drag a selected point to move the road; RANGE selects a whole section. UNDO restores the previous edit." },
+      { n: 3, title: "Corners", text: "In EDIT, choose a corner shape and its size, then tap a point to place it. REPLACE THE SELECTED SPAN reshapes a selected section." },
+      { n: 4, title: "Elevation", text: "Open ELEVATION to select points and adjust their height in metres. BANK ° tilts a turn; KERB chooses flat, sausage or rumble, and BERMS supports banked corners." },
+      { n: 5, title: "Look", text: "Open SCENERY and choose a theme; LIVE SCENERY shows an overhead preview. Tune the atmosphere or place objects beside the road." },
+      { n: 6, title: "Checks", text: "Open TEST and resolve red CHECKS before saving. Use FIX where a repair is available." },
+      { n: 7, title: "Race and share", text: "Name your circuit and SAVE, then RACE or TIME TRIAL. SHARE copies a link; EXPORT saves a backup file." },
+    ]),
+    TASKS: Object.freeze([
+      { id: "selection", title: "Select several points", mode: "edit", steps: [
+        "Open EDIT or ELEVATION → SELECT POINTS → RANGE.",
+        "On either view, tap the first and last points or drag between them. On desktop, click then Shift-click also works.",
+        "Both views highlight the same section. Check the point count; use point numbers or FOCUS for crowded points.",
+        "Use LOWER / RAISE under HEIGHT to change every selected point by the shown metres, without leaving EDIT or RANGE. Switch to POINT to move the group on the map.",
+        "SELECT ALL picks the loop; CLEAR resets selection.",
+      ], note: "A range includes every point between its ends in driving order; an earlier end wraps over the start line. Separate Ctrl/Cmd-click selections are not supported." },
+      { id: "height", title: "Raise, lower or smooth a section", mode: "elevation", steps: [
+        "HEIGHT colours the road from low purple to high yellow; the legend shows metres above sea level. Toggle HEIGHT above the map to hide it.",
+        "Select one point, or use RANGE for a section, on either view. Under HEIGHT, enter a change in metres and press LOWER or RAISE; the whole selection moves together, even in EDIT.",
+        "Choose POINT, then drag a selected grip up or down on the elevation strip; the selected points move together.",
+        "For precision, enter POINT m / SPAN m or choose a 0.25, 1 or 5 m step and use − / +.",
+        "LEVEL makes the selection the same height, SMOOTH softens its slopes, and ZERO returns it to sea level; UNDO reverses the change.",
+      ], note: "Raising a range preserves its hills within the height limits; points outside the selection stay unchanged." },
+      { id: "scenery", title: "Preview a theme and place scenery", mode: "scenery", steps: [
+        "Open SCENERY → THEMES and choose a look; LIVE SCENERY updates the overhead map automatically.",
+        "Open ATMOSPHERE to change time of day, trees and crowd; use OUTLINE when you want a clear editing map.",
+        "Open OBJECTS, choose an object, then tap a map point or enter its number; for a section, enter the start and end points.",
+        "Choose LEFT, RIGHT or BOTH, set the roadside gap, then PLACE; the map updates and UNDO removes the placement.",
+      ], note: "The live overhead view simplifies terrain and small scenery. RACE or TIME TRIAL opens the full 3D circuit." },
     ]),
     GESTURES: Object.freeze([
       { input: "Touch", text: "Tap a point to select · RANGE then tap or drag to an end point on either view for a SPAN · drag a selected point or span to move · tap the road to add / double-tap to delete · press and hold for DELETE / START HERE · pinch to zoom, drag empty space to pan · on the elevation strip, tap then drag vertically (≥44 px)." },
@@ -54,7 +76,7 @@ const TrackDesigner = (function () {
   let spanArm = false, selectionMode = "point", selectionPanel = null, heightStep = 1;
   let params = { L: 200, R: 60, deg: 90, dir: 1 };
   // propKind: the scenery-mode props palette selection (TrackDesignerProps.KINDS).
-  let propKind = "stand", scenery = null;
+  let propKind = "stand", scenery = null, sceneryView = false;
   const undo = [], redo = [];
   let previewT = 0, draftT = 0, confirmDel = null, msgT = 0;
   // savedSnap: the design as last loaded or saved — anything else is unsaved
@@ -71,7 +93,7 @@ const TrackDesigner = (function () {
   const copy = (d) => JSON.parse(JSON.stringify(d));
   const lattice = (pts) => pts.map((p) => [Math.round(p[0] * 4) / 4, Math.round(p[1] * 4) / 4]);
   const fmtKm = (m) => (m / 1000).toFixed(2) + " km";
-  const fmtLap = (s) => { if (!(s > 0)) return "—"; const m = Math.floor(s / 60), r = s - m * 60; return m + ":" + (r < 10 ? "0" : "") + r.toFixed(1); };
+  const fmtLap = (s) => { if (!(s > 0)) return "—"; const ds = Math.round(s * 10), m = Math.floor(ds / 600), r = (ds - m * 600) / 10; return m + ":" + (r < 10 ? "0" : "") + r.toFixed(1); };   // round first: never "1:60.0"
   function blank() {
     // kerbStyle / berms omitted at defaults (flat + berms on) so content ids match older saves.
     return { name: "MY CIRCUIT", seed: (Date.now() % 4294967296) >>> 0, theme: TrackThemes.ORDER[0], baseHW: 7, pts: [], heights: [], hwZones: [], bankZones: [], elevations: [], bridges: [], turns: [], lengthM: 0 };
@@ -95,6 +117,25 @@ const TrackDesigner = (function () {
   function flatHeights(pts) {
     return (Array.isArray(pts) ? pts : []).map(() => 0);
   }
+  /** What a CANDIDATE loop is judged against: the look of the circuit (theme,
+   *  width, seed, kerbs, berms), never the old loop's heights / elevations /
+   *  bridges / zones — those belong to a road that is about to be replaced, and
+   *  a hill on an unrelated loop is a grade RED (RANDOMISE failed 12/12 after any
+   *  ELEVATION edit, and TRACK OF THE DAY gave a different circuit per player). */
+  function cleanBase(d) {
+    const out = {};
+    for (const key of ["theme", "baseHW", "seed", "look", "kerbStyle", "berms"]) if (d && d[key] !== undefined) out[key] = d[key];
+    return out;
+  }
+  /** A new loop on the same sheet (DRAW, RANDOMISE, USE, START FROM): the old
+   *  loop's zones, bridges, authored props and turn marks are arc fractions of a
+   *  road that is gone, so they would land at arbitrary places on this one. */
+  function freshLoop(d, pts, seed) {
+    const next = Object.assign({}, d, { pts, heights: flatHeights(pts), hwZones: [], bankZones: [], elevations: [], bridges: [], turns: [], originId: undefined });
+    if (seed !== undefined) next.seed = seed;
+    delete next.props;
+    return next;
+  }
   function message(text, warn) {
     if (!ui.msg) return;
     ui.msg.textContent = text || "";
@@ -109,12 +150,19 @@ const TrackDesigner = (function () {
   /** The active tool's one-line instruction (the stage hint, the rail copy, the status line on a change). */
   function toolHint() {
     if (mode === "elevation") return "ELEVATION: POINT or RANGE on either view · drag height or enter metres · zoom for precise picks";
-    if (mode === "scenery") return "SCENERY: find a theme · choose an atmosphere · select a point to place scenery";
+    if (mode === "scenery") return (sceneryView ? "LIVE SCENERY" : "OUTLINE") + ": theme → atmosphere → objects · HOW TO for help";
     if (mode === "test") return "TEST: fix red CHECKS, then RACE, TIME TRIAL, or TEST HERE from a selected point";
     if (mode === "draw" || tool === "draw") return "DRAW: draw one closed loop in a single stroke — it closes and smooths itself";
     const kind = TrackStamps.KINDS[tool];
     return kind ? kind.label + ": tap a point to stamp it after that point (or REPLACE THE SELECTED SPAN when a group is selected)"
-      : "SELECT: tap a point · SELECT END / shift-tap a second for a SPAN · drag or arrows move the group · tap the road to add · double-tap to delete";
+      : "EDIT: POINT selects one · RANGE selects a section on either view · switch to POINT to move the group · UNDO reverses edits";
+  }
+  function refreshMapView() {
+    if (cv && design && cv.setScenery) cv.setScenery(design, sceneryView);
+    for (const [b, on] of [[ui.outlineView, !sceneryView], [ui.sceneryView, sceneryView]]) if (b) {
+      b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
+    }
+    if (ui.hint && design) ui.hint.textContent = toolHint();
   }
   /** "CORNER R 45 m × 90° LEFT" — what STAMP will lay down with the stepper values. */
   function stampExample() {
@@ -169,7 +217,12 @@ const TrackDesigner = (function () {
       elevations: each(d.elevations, pt("s")),
       bridges: each(d.bridges, pt("s")),
     };
-    if (Array.isArray(d.props)) out.props = each(d.props, pt("s"));
+    if (Array.isArray(d.props)) {
+      out.props = each(d.props, pt("s"));
+      // `side` is relative to the travel direction (+1 right): REVERSE turns the
+      // road round, so the same bank is now the other side.
+      if (flip) out.props = out.props.map((p) => Object.assign({}, p, { side: p.side < 0 ? 1 : -1 }));
+    }
     return out;
   }
   /** Apply zoneMap and drop an emptied props list (absent, like look defaults). */
@@ -217,16 +270,27 @@ const TrackDesigner = (function () {
     };
     return withZones(d, { heights: remapHeights(d, oldPts, newPts) }, at, false);
   }
-  /** Keep per-node heights on shared control points; new points start flat. */
+  /** Keep per-node heights on shared control points; a new point takes the
+   *  arc-weighted blend of the nearest kept heights either side (0 m would carve
+   *  a notch when it is inserted mid-hill). */
   function remapHeights(d, oldPts, newPts) {
     const oldH = Array.isArray(d.heights) ? d.heights : [];
     const idx = new Map();
     for (let i = 0; i < oldPts.length; i++) idx.set(oldPts[i][0] + "," + oldPts[i][1], i);
-    const next = new Array(newPts.length);
-    for (let j = 0; j < newPts.length; j++) {
+    const M = newPts.length, known = new Array(M);
+    for (let j = 0; j < M; j++) {
       const k = idx.get(newPts[j][0] + "," + newPts[j][1]);
-      next[j] = k != null && k < oldH.length && Number.isFinite(+oldH[k]) ? +oldH[k] : 0;
+      known[j] = k != null && k < oldH.length && Number.isFinite(+oldH[k]) ? +oldH[k] : null;
     }
+    const c = cumArc(newPts), L = c[M];
+    const next = known.map((v, j) => {
+      if (v != null || !known.some((u) => u != null)) return v != null ? v : 0;
+      let a = j, b = j;
+      while (known[a] == null) a = (a - 1 + M) % M;
+      while (known[b] == null) b = (b + 1) % M;
+      const back = (c[j] - c[a] + L) % L, fwd = (c[b] - c[j] + L) % L;
+      return back + fwd > 0 ? known[a] + (known[b] - known[a]) * back / (back + fwd) : known[a];
+    });
     return typeof ElevPresets !== "undefined" ? ElevPresets.sanitize(newPts, next) : next;
   }
 
@@ -270,6 +334,7 @@ const TrackDesigner = (function () {
     // of range) builds nothing and may name no red: never show "All checks pass".
     if (!verdict.ok && !verdict.red) verdict = Object.assign({}, verdict, { red: 1, issues: verdict.issues.concat([{ code: "bounds", level: "red", msg: "This loop cannot be built — make it bigger (2.5–7 km) and keep its points in range" }]) });
     if (cv) { cv.setBuilt(verdict.tr); cv.setIssues(verdict.issues); }
+    refreshMapView();
     renderIssues(); renderStats(); announceChecks();
     renderInsight();
     renderProfile();
@@ -342,10 +407,7 @@ const TrackDesigner = (function () {
     if (p.length > CustomTracks.LIMITS.ptsMax) p = S.rdp(p, 2);
     p = startOnLongestStraight(p);
     sel = -1; span = -1;
-    // A new loop: clear cosine elevations and authored props (stale fractions).
-    const drawn = Object.assign({}, design, { pts: p, heights: flatHeights(p), elevations: [], originId: undefined });
-    delete drawn.props;
-    commit(drawn, "draw");   // a new circuit: SAVE adds, never replaces
+    commit(freshLoop(design, p), "draw");   // a new circuit: SAVE adds, never replaces
     message("Loop drawn — drag the points to tune it");
     return true;
   }
@@ -360,12 +422,10 @@ const TrackDesigner = (function () {
   }
   function randomise(seed) {
     const s = Number.isFinite(seed) ? (seed >>> 0) : ((Math.imul(design.seed ^ (design.seed >>> 16), 0x45d9f3b) + 0x9e3779b9) >>> 0);
-    const base = Object.assign({}, design);
+    const base = cleanBase(design);
     const r = TrackRandom.generateValid(s, (pts) => TrackValidate.check(Object.assign({}, base, { pts })).ok, 12);
     sel = -1; span = -1;
-    const rolled = Object.assign({}, design, { pts: r.pts, heights: flatHeights(r.pts), elevations: [], seed: r.seed, originId: undefined });
-    delete rolled.props;
-    commit(rolled, "randomise");   // a new circuit, as DRAW
+    commit(freshLoop(design, r.pts, r.seed), "randomise");   // a new circuit, as DRAW
     if (cv) cv.fit();
     message(r.ok ? "Randomised — seed " + r.seed : "No clean loop in 12 tries — RANDOMISE again or tune the points", !r.ok);
     return !!r.ok;
@@ -455,6 +515,26 @@ const TrackDesigner = (function () {
     else if (action === "left" || action === "right") prof.pan(action === "left" ? -0.4 : 0.4);
     else prof.zoom(action === "in" ? 2 : 0.5);
     return true;
+  }
+  function shiftSelectedHeight(direction) {
+    if (!design || sel < 0) return false;
+    ensureHeights(design);
+    const ids = S.spanIndices(sel, span, design.pts.length), limit = CustomTracks.LIMITS.rise;
+    const values = ids.map(i => design.heights[i] || 0);
+    // Stop the whole selection at the limit; do not squash its relative hills.
+    const delta = Math.max(-limit - Math.min(...values), Math.min(limit - Math.max(...values), direction * heightStep));
+    if (!delta) { message("Selected points have reached the height limit", true); return false; }
+    const next = design.heights.slice();
+    for (const i of ids) next[i] = elevH(next[i] + delta);
+    const changed = setHeights(next, sel);
+    if (changed) {
+      toggleElevationHeat(true);
+      message((delta > 0 ? "Raised " : "Lowered ") + ids.length + (ids.length === 1 ? " point" : " points") + " by " + Math.abs(delta) + " m · UNDO to revert");
+    }
+    return changed;
+  }
+  function revealSelectionHeight() {
+    if (ui.rail && sel >= 0 && (mode === "edit" || mode === "elevation")) ui.rail.scrollTop = 0;
   }
   function adjustElevation(action) {
     if (!design || sel < 0 || !["level", "smooth", "zero"].includes(action)) return false;
@@ -602,8 +682,10 @@ const TrackDesigner = (function () {
   }
   function setMode(name) {
     const next = MODES.some((m) => m[0] === name) ? name : "edit";
+    if (next === "scenery") sceneryView = true;
     if (next === mode) { refreshControls(); return mode; }
     mode = next;
+    if (mode === "elevation") toggleElevationHeat(true);
     if (ui.rail) ui.rail.scrollTop = 0;
     if (mode === "draw") tool = "draw";
     else if (mode === "edit" && tool === "draw") tool = "select";
@@ -701,7 +783,7 @@ const TrackDesigner = (function () {
     const stage = el("div", "td-stage");
     canvas = el("canvas");
     canvas.tabIndex = 0;
-    canvas.setAttribute("aria-label", "Circuit design. Tap a point to select it, then drag to move. Shift-tap or SELECT END picks a SPAN so the group moves together. Tap the road to add one; double-tap a point to delete it. Arrow keys nudge the selection.");
+    canvas.setAttribute("aria-label", "Circuit design. POINT selects one point; RANGE selects a section on this map or the elevation strip. Switch to POINT to move the selected group. OUTLINE and LIVE SCENERY change the view. Arrow keys nudge the selection.");
     ui.stats = el("div", "td-stats");
     ui.hint = el("div", "td-hint", "Tap to select · SELECT END / shift-tap a SPAN · drag moves the group · tap the road to add one");
     // The canvas's press-and-hold row (hooks.onContext): absolute over the
@@ -719,13 +801,21 @@ const TrackDesigner = (function () {
     ui.toolbar = el("div", "td-chips");
     ui.toolbar.setAttribute("data-role", "toolbar");
     ui.toolbar.setAttribute("role", "toolbar");
-    ui.toolbar.setAttribute("aria-label", "Edit history");
+    ui.toolbar.setAttribute("aria-label", "Edit history and map view");
     ui.undo = btn("UNDO", "sel-chip", () => doUndo());
     ui.redo = btn("REDO", "sel-chip", () => doRedo());
     ui.undo.setAttribute("aria-keyshortcuts", "Control+Z Meta+Z");
     ui.redo.setAttribute("aria-keyshortcuts", "Control+Shift+Z Meta+Shift+Z");
     ui.fitBtn = btn("FIT VIEW", "sel-chip", () => cv && cv.fit());
     ui.toolbar.append(ui.undo, ui.redo, ui.fitBtn);
+    ui.outlineView = btn("OUTLINE", "sel-chip", () => { sceneryView = false; refreshMapView(); });
+    ui.sceneryView = btn("LIVE SCENERY", "sel-chip", () => { sceneryView = true; refreshMapView(); });
+    ui.outlineView.dataset.mapView = "outline"; ui.sceneryView.dataset.mapView = "scenery";
+    ui.heightHeat = btn("HEIGHT", "sel-chip", () => toggleElevationHeat());
+    ui.heightHeat.setAttribute("aria-label", "Elevation heat map");
+    ui.heightHeat.setAttribute("aria-pressed", String(heightHeatOn));
+    ui.heightHeat.title = "Colour road height: low purple → high yellow; legend in metres above sea level";
+    ui.toolbar.append(ui.outlineView, ui.sceneryView, ui.heightHeat);
     stage.insertBefore(ui.toolbar, canvas);
     // rail
     const rail = el("div", "td-rail"); ui.rail = rail;
@@ -769,7 +859,7 @@ const TrackDesigner = (function () {
         span = (sel >= 0 && Number.isInteger(j) && j !== sel) ? j : -1;
         if (sel < 0) { span = -1; spanArm = false; }
         if (span >= 0) spanArm = false;
-        refreshControls();
+        refreshControls(); revealSelectionHeight();
       },
       onPick: (i, ev) => {
         const extend = !!(ev && (ev.shiftKey || spanArm));
@@ -783,7 +873,7 @@ const TrackDesigner = (function () {
         else { sel = i; span = -1; }
         cv.setSelection(sel, span);
         if (prof && mode === "elevation" && prof.setSelection) prof.setSelection(sel, span);
-        refreshControls();
+        refreshControls(); revealSelectionHeight();
       },
       onDelete: (i) => deletePoint(i),
       onDraw: (path) => freehand(path),
@@ -808,6 +898,7 @@ const TrackDesigner = (function () {
   }
   function showPane(pane) {
     if (pane !== "library" && pane !== "howto") pane = "design";
+    if (root) root.dataset.pane = pane;
     for (const [b, p, id] of [[ui.tabDesign, ui.paneDesign, "design"], [ui.tabLib, ui.paneLib, "library"], [ui.tabHow, ui.paneHow, "howto"]]) {
       const on = id === pane;
       p.hidden = !on;
@@ -818,12 +909,22 @@ const TrackDesigner = (function () {
   function group(label) { const g = el("div", "td-group"); g._label = el("div", "td-label", label); g.appendChild(g._label); return g; }
   /** HOW TO: flat info rows (the CHECKS row recipe) under .td-label headings, from HOWTO. */
   function buildHowTo(pane) {
+    pane.appendChild(el("p", "td-hint", "Start with a task below. Selection is shared between the main map and elevation strip; UNDO reverses your edits."));
+    for (const task of HOWTO.TASKS) {
+      const details = el("details", "td-group"); details.dataset.helpTask = task.id;
+      details.open = task.id === "selection";
+      details.appendChild(el("summary", "td-label", task.title));
+      const steps = el("ol");
+      for (const text of task.steps) steps.appendChild(el("li", "td-hint", text));
+      details.append(steps, el("p", "td-hint", task.note), btn("OPEN " + task.mode.toUpperCase(), "sel-chip", () => { setMode(task.mode); showPane("design"); }));
+      pane.appendChild(details);
+    }
     const list = (label, rows) => {
       const ul = el("ul", "td-issues"); ul.setAttribute("aria-label", label);
       for (const t of rows) { const li = el("li", "td-issue", t); li.dataset.level = "info"; ul.appendChild(li); }
       pane.append(el("div", "td-label", label), ul);
     };
-    list("Build a circuit in seven steps", HOWTO.STEPS.map((st) => st.n + " · " + st.title.toUpperCase() + " — " + st.text));
+    list("Your first circuit", HOWTO.STEPS.map((st) => st.n + " · " + st.title.toUpperCase() + " — " + st.text));
     list("Controls", HOWTO.GESTURES.map((g) => g.input.toUpperCase() + " — " + g.text));
     list("Limits", [HOWTO.LIMITS]);
   }
@@ -834,7 +935,7 @@ const TrackDesigner = (function () {
     const lead = randomisedOnOpen ? "RANDOMISE gave you a circuit to start from. " : "";
     const card = el("div", "td-group");
     card.setAttribute("data-role", "coach");
-    const li = el("div", "td-issue", lead + "Use the MODE tabs (DRAW / EDIT / ELEVATION / SCENERY / TEST). Drag the white points, then SAVE and RACE. Open HOW TO for the full guide.");
+    const li = el("div", "td-issue", lead + "EDIT shapes the road; ELEVATION changes height; SCENERY previews its look. Select one point with POINT, or a section with RANGE. HOW TO has step-by-step guides.");
     li.dataset.level = "info";
     const row = el("div", "td-chips");
     const howTo = btn("HOW TO", "sel-chip", () => showPane("howto"));
@@ -990,7 +1091,7 @@ const TrackDesigner = (function () {
     }, (v) => setNodeHeight(sel, v), () => heightStep, null, true);
     const steps = el("div", "td-chips"); steps.setAttribute("aria-label", "Elevation adjustment step");
     for (const v of [0.25, 1, 5]) {
-      const b = btn(v + " m STEP", "sel-chip", () => { heightStep = v; for (const c of steps.children) { const on = +c.dataset.heightStep === v; c.classList.toggle("active", on); c.setAttribute("aria-pressed", String(on)); } });
+      const b = btn(v + " m STEP", "sel-chip", () => { heightStep = v; refreshControls(); });
       b.dataset.heightStep = String(v); b.setAttribute("aria-pressed", String(v === heightStep)); b.classList.toggle("active", v === heightStep); steps.appendChild(b);
     }
     ui.elevActions = el("div", "td-chips");
@@ -1039,6 +1140,24 @@ const TrackDesigner = (function () {
     loadRow.appendChild(ui.load);
     sharing.append(ui.code, loadRow);
     selectionPanel = DesignerSelection.create({ el, btn, group, onSelect: selectRange, onMode: setSelectionMode, onCycle: cyclePoint, onFocus: focusSelection, onView: profileView });
+    ui.quickHeight = el("div", "td-group"); ui.quickHeight.dataset.role = "selection-height";
+    ui.quickHeightLabel = el("div", "td-label");
+    const quickRow = el("div", "td-chips"); quickRow.dataset.role = "height-shift";
+    const lower = btn("LOWER", "sel-chip", () => shiftSelectedHeight(-1)); lower.setAttribute("aria-label", "Lower selected points");
+    const raise = btn("RAISE", "sel-chip", () => shiftSelectedHeight(1)); raise.setAttribute("aria-label", "Raise selected points");
+    ui.heightDelta = el("input", "td-input"); ui.heightDelta.type = "number";
+    ui.heightDelta.min = "0.25"; ui.heightDelta.max = String(CustomTracks.LIMITS.rise * 2); ui.heightDelta.step = "0.25";
+    ui.heightDelta.setAttribute("aria-label", "Elevation change in metres");
+    const readDelta = () => {
+      if (ui.heightDelta.value.trim() && Number.isFinite(+ui.heightDelta.value)) heightStep = Math.max(0.25, Math.min(CustomTracks.LIMITS.rise * 2, Math.round(+ui.heightDelta.value * 4) / 4));
+      ui.heightDelta.value = String(heightStep); refreshControls();
+    };
+    ui.heightDelta.addEventListener("change", readDelta);
+    ui.heightDelta.addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); readDelta(); } });
+    quickRow.append(lower, ui.heightDelta, raise);
+    ui.quickHeightHint = el("div", "td-hint");
+    ui.quickHeight.append(ui.quickHeightLabel, quickRow, ui.quickHeightHint);
+    selectionPanel.root.insertBefore(ui.quickHeight, selectionPanel.root.children[2]);
     pane.append(selectionPanel.root, tools, ui.shape, ui.elevGroup, ui.bankGroup, theme, circuit, issues, sharing);
     buildInsight(pane, circuit, actions, sharing);
     buildAuthoring();
@@ -1125,6 +1244,7 @@ const TrackDesigner = (function () {
   }
   function refreshControls() {
     if (!built || !design) return;
+    refreshMapView();
     if (ui.modes) for (const b of ui.modes.children) {
       const on = b.dataset.mode === mode;
       b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false");
@@ -1159,6 +1279,18 @@ const TrackDesigner = (function () {
     }
     if (scenery) scenery.refresh({ design, sel, span, propKind });
     if (selectionPanel) selectionPanel.refresh({ design, sel, span, mode, selectionMode });
+    if (ui.quickHeight) {
+      ui.quickHeight.hidden = sel < 0;
+      if (sel >= 0) {
+        const count = S.spanIndices(sel, span, design.pts.length).length;
+        ui.quickHeightLabel.textContent = "HEIGHT CHANGE (m) · " + count + (count === 1 ? " POINT" : " POINTS");
+        ui.quickHeightHint.textContent = "Change all " + count + " by " + heightStep + " m. Keeps relative hills and your selection.";
+        if (document.activeElement !== ui.heightDelta) ui.heightDelta.value = String(heightStep);
+      }
+      for (const b of root.querySelectorAll("[data-height-step]")) {
+        const on = +b.dataset.heightStep === heightStep; b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
+      }
+    }
     if (ui.elevActions) for (const b of ui.elevActions.children) b.disabled = sel < 0;
     if (document.activeElement !== ui.name) ui.name.value = design.name;
     if (ui.country) ui.country.value = design.country || "";
@@ -1380,7 +1512,7 @@ const TrackDesigner = (function () {
       undo: undo.length, redo: redo.length, library: custom ? custom.list().map((i) => i.id) : [],
       lastCode,
       corners: ins.map((c) => ({ n: c.n, dir: c.dir, angDeg: Math.round(c.angDeg), R: Math.round(c.R), kmh: Math.round(c.vApex * 3.6), lenM: Math.round(c.lenM), i0: c.i0, i1: c.i1, fit: c.fit ? copy(c.fit) : null })),
-      heat: heatOn,
+      heat: heatOn, elevationHeat: heightHeatOn,
       candidates: cands.map((c) => ({ seed: c.seed >>> 0, score: +c.score.toFixed(3) })),
       thumbs: { cached: thumbTr.size, maxPts: Math.max(0, ...[...thumbTr.values()].map((t) => t.n)) },
       coach: !!ui.coach,
@@ -1389,7 +1521,7 @@ const TrackDesigner = (function () {
 
   // ── insight: TURNS, SPEED, TRACK OF THE DAY, START FROM (TrackInsight) ──
   // ins: the TURNS rows of the last preview; heatV: its per-node speeds (m/s).
-  let ins = [], heatOn = false, heatV = null, fromJob = 0;
+  let ins = [], heatOn = false, heightHeatOn = false, heatV = null, fromJob = 0;
   // START FROM: def id → the OUTLINE DesignerCanvas.thumb strokes ({ px, pz, n }, at most
   // THUMB_PTS points), built once. It held each whole line-less centreline: 52 circuits,
   // ~4 MB pinned for the page after the panel opened once, for a 160×110 card.
@@ -1429,7 +1561,7 @@ const TrackDesigner = (function () {
     const I = insight(), tr = verdict && verdict.tr;
     heatV = I && tr ? I.speedProfile(tr) : null;
     ins = I && tr ? I.corners(tr, design.pts, heatV, verdict.turns) : [];
-    if (cv && cv.setHeat) cv.setHeat(heatOn ? heatV : null);
+    refreshHeat();
     refreshAuthoring();
     if (!ui.turns) return;
     while (ui.turns.firstChild) ui.turns.removeChild(ui.turns.firstChild);
@@ -1457,11 +1589,23 @@ const TrackDesigner = (function () {
     message("T" + n + " selected — tune it and press REPLACE THE SELECTED SPAN");
     return true;
   }
+  function refreshHeat() {
+    for (const [button, on] of [[ui.heat, heatOn], [ui.heightHeat, heightHeatOn]]) if (button) {
+      button.setAttribute("aria-pressed", String(on)); button.classList.toggle("active", on);
+    }
+    if (cv && cv.setHeat) cv.setHeat(heightHeatOn ? verdict && verdict.tr && verdict.tr.py : heatOn ? heatV : null, heightHeatOn ? "elevation" : "speed");
+  }
   function toggleHeat(on) {
     heatOn = on == null ? !heatOn : !!on;
-    if (ui.heat) { ui.heat.setAttribute("aria-pressed", heatOn ? "true" : "false"); ui.heat.classList.toggle("active", heatOn); }
-    if (cv && cv.setHeat) cv.setHeat(heatOn ? heatV : null);
+    if (heatOn) heightHeatOn = false;
+    refreshHeat();
     return heatOn;
+  }
+  function toggleElevationHeat(on) {
+    heightHeatOn = on == null ? !heightHeatOn : !!on;
+    if (heightHeatOn) heatOn = false;
+    refreshHeat();
+    return heightHeatOn;
   }
   /** TRACK OF THE DAY: the same RANDOMISE seed for everyone on one UTC day. */
   function trackOfTheDay(day) {
@@ -1479,10 +1623,7 @@ const TrackDesigner = (function () {
     try { f = I.fromCircuit(def); } catch (e) { Log.warn("track", "start from " + id + " failed: " + (e && e.message || e)); f = null; }
     if (!f || f.pts.length < CustomTracks.LIMITS.ptsMin) { message("Could not trace " + def.name, true); return false; }
     sel = -1; span = -1;
-    commit(Object.assign({}, design, {
-      pts: f.pts, heights: flatHeights(f.pts), baseHW: f.baseHW, seed: (Date.now() % 4294967296) >>> 0, originId: undefined, name: CustomTracks.sanitizeName(def.name + " REMIX"),
-      hwZones: [], bankZones: [], elevations: [], bridges: [], turns: [],
-    }), "seed:" + id);
+    commit(Object.assign(freshLoop(design, f.pts, (Date.now() % 4294967296) >>> 0), { baseHW: f.baseHW, name: CustomTracks.sanitizeName(def.name + " REMIX") }), "seed:" + id);
     if (ui.name) ui.name.value = design.name;
     if (cv) cv.fit();
     if (ui.from) { ui.from.hidden = true; ui.fromBtn.setAttribute("aria-expanded", "false"); }
@@ -1689,7 +1830,7 @@ const TrackDesigner = (function () {
           sel = -1; span = -1;
           if (cv) cv.setSelection(sel, span);
         }
-        refreshControls();
+        refreshControls(); revealSelectionHeight();
       },
     });
   }
@@ -1837,7 +1978,7 @@ const TrackDesigner = (function () {
     const baseSeed = Number.isFinite(seed) ? seed >>> 0 : (Math.imul(s0 ^ (s0 >>> 13), 0x2c1b3c6d) + 0x6a09e667) >>> 0;
     candStyle = style;
     for (const st of DESIGN_STYLES) { const on = st === style; ui.styles[st].setAttribute("aria-pressed", on ? "true" : "false"); ui.styles[st].classList.toggle("active", on); }
-    const opts = { tries: 3, base: Object.assign({}, design), check: TrackValidate.check, score: I.rate };
+    const opts = { tries: 3, base: cleanBase(design), check: TrackValidate.check, score: I.rate };
     const per = Math.ceil(DESIGN_N / DESIGN_SLICES), found = [];
     return runSliced("Designing " + DESIGN_N + " circuits…", DESIGN_SLICES, (k) => {
       for (let i = k * per; i < Math.min(DESIGN_N, (k + 1) * per); i++) found.push(TrackRandom.designOne(baseSeed, i, style, opts));
@@ -1853,7 +1994,7 @@ const TrackDesigner = (function () {
     const c = cands[i];
     if (!c || candBusy || !design) return false;
     sel = -1; span = -1;
-    commit(Object.assign({}, design, { pts: c.pts.map((p) => [p[0], p[1]]), heights: flatHeights(c.pts), elevations: [], seed: c.seed >>> 0, originId: undefined }), "randomise");
+    commit(freshLoop(design, c.pts.map((p) => [p[0], p[1]]), c.seed >>> 0), "randomise");
     if (cv) cv.fit();
     message("Design " + (i + 1) + " loaded — seed " + (c.seed >>> 0) + ", UNDO to go back");
     return true;
@@ -1863,7 +2004,7 @@ const TrackDesigner = (function () {
   function moreLikeThis(i) {
     const c = cands[i], I = insight();
     if (!c || candBusy || !I || !TrackRandom.mutate || !design) return Promise.resolve(false);
-    const style = candStyle || "MIXED", base = Object.assign({}, design), found = [];
+    const style = candStyle || "MIXED", base = cleanBase(design), found = [];
     return runSliced("Designing 4 circuits like design " + (i + 1) + "…", 4, (j) => {
       const seed = Hash32.mix((c.seed + j) >>> 0);
       const m = TrackRandom.mutate(c.pts, seed, { check: (pts) => TrackValidate.check(Object.assign({}, base, { pts })) });
@@ -2114,7 +2255,7 @@ const TrackDesigner = (function () {
   }
 
   return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, armSpanEnd, undo: doUndo, redo: doRedo, setTheme, setLook, setAtmosphere, setPropKind, placeProp, removeProp, removePropAt, editPropAt, copyPropAt, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, setHeights, selectRange, setSelectionMode, adjustElevation, profileView, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
-    selectCorner, toggleHeat, trackOfTheDay, startFrom, toggleStartFrom,
+    selectCorner, toggleHeat, toggleElevationHeat, trackOfTheDay, startFrom, toggleStartFrom,
     designed, useCandidate, moreLikeThis,
     setSpanWidth, setCornerBank, setKerbStyle, setBerms };
 })();

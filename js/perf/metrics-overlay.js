@@ -494,8 +494,9 @@ function fmt(v, digits) {
 
 function fmtTime(t) {
   if (t == null || !isFinite(t)) return "—";
-  const m = Math.floor(t / 60);
-  const s = t - m * 60;
+  const ms = Math.round(t * 1000);   // round first: never "1:60.000"
+  const m = Math.floor(ms / 60000);
+  const s = (ms - m * 60000) / 1000;
   return m + ":" + (s < 10 ? "0" : "") + s.toFixed(3);
 }
 

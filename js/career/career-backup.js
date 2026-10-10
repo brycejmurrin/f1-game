@@ -33,10 +33,15 @@ const CareerBackup = (function () {
 
   // Hostile-payload gate BEFORE migrateCareer: the ladder coerces NaN money to
   // 0, which would silently turn a poisoned file into a zero-credit career.
-  function slotPayloadOk(data) {
+  // `rowFlavour` is the slot the file files it under; a driver career that
+  // claims a MY TEAM row (a hand edit) would load as a driver save in that set.
+  function slotPayloadOk(data, rowFlavour) {
     if (data == null) return { ok: true };
     if (Array.isArray(data)) return { ok: false, reason: "slot-not-object" };
     if (!isObj(data)) return { ok: false, reason: "slot-not-object" };
+    if (data.flavour != null && flavourIn(data.flavour) !== flavourIn(rowFlavour)) {
+      return { ok: false, reason: "flavour-mismatch" };
+    }
     if (Object.prototype.hasOwnProperty.call(data, "money")) {
       const m = data.money;
       if (typeof m === "number" && !Number.isFinite(m)) return { ok: false, reason: "nan-money" };
@@ -198,6 +203,11 @@ const CareerBackup = (function () {
     if (raw.format !== FORMAT) return { ok: false, reason: "wrong-format" };
     if (!Array.isArray(raw.slots)) return { ok: false, reason: "slots-not-array" };
     if (raw.slots.length > 12) return { ok: false, reason: "too-many-slots" };
+    // One row per slot (build() never exports two): apply() writes row by row,
+    // so a second row for the same slot either overwrote the first or, with a
+    // pinned revision, wrote the first and THEN reported "conflict". Refused
+    // here, before anything is written.
+    const seenSlots = {};
     for (let i = 0; i < raw.slots.length; i++) {
       const row = raw.slots[i];
       if (!isObj(row)) return { ok: false, reason: "slot-row-not-object" };
@@ -207,9 +217,11 @@ const CareerBackup = (function () {
       }
       const idx = slotIn(row.i);
       if (row.i != null && (row.i | 0) !== idx) return { ok: false, reason: "bad-index" };
-      const chk = slotPayloadOk(row.data);
+      const chk = slotPayloadOk(row.data, row.flavour);
       if (!chk.ok) return chk;
-      void f;
+      const slotId = f + ":" + idx;
+      if (Object.prototype.hasOwnProperty.call(seenSlots, slotId)) return { ok: false, reason: "duplicate-slot" };
+      seenSlots[slotId] = true;
     }
     if (raw.season != null && !isObj(raw.season)) return { ok: false, reason: "season-not-object" };
     if (raw.badges != null && !isObj(raw.badges)) return { ok: false, reason: "badges-not-object" };
@@ -395,7 +407,7 @@ const CareerBackup = (function () {
       const idx = slotIn(row.i);
       if (allowed.indexOf(f) === -1) { skipped.push(f + ":" + idx); continue; }
       const id = f + ":" + idx;
-      const chk = slotPayloadOk(row.data);
+      const chk = slotPayloadOk(row.data, row.flavour);
       if (!chk.ok) return chk;
       // An empty row is "nothing to restore", never "delete": build() exports
       // all six slots, so writing its nulls wiped saves the backup never had.

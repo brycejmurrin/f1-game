@@ -10,10 +10,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
-import { bootEditor, read, plain } from "../helpers/editor-vm.mjs";
+import { bootEditor, read, plain, ellipse, design } from "../helpers/editor-vm.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
-const SCREEN_FILES = ["js/ui/dom.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/designer.js"];
+const SCREEN_FILES = ["js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/designer.js"];
 
 function bootScreen(stored = {}) {
   const vmx = bootEditor(stored);
@@ -21,7 +21,7 @@ function bootScreen(stored = {}) {
   const dom = makeDom({ tagFor: (id) => (id === "trackdesigner" ? "dialog" : id === "td-close" ? "button" : "div") });
   // What the browser gives the screen and the mini DOM does not: a 2D context
   // (every call a no-op), text nodes, the timers the screen debounces with.
-  const noop2d = new Proxy({}, { get: (t, k) => (k === "setLineDash" || typeof k !== "string" ? () => {} : () => {}), set: () => true });
+  const noop2d = new Proxy({}, { get: (t, k) => (k === "measureText" ? (s) => ({ width: String(s).length * 6 }) : () => {}), set: () => true });
   const mkEl = dom.document.createElement;
   dom.document.createElement = (tag) => {
     const el = mkEl(tag);
@@ -719,7 +719,22 @@ test("HOW TO: a third tab lists every HOWTO step, every input and the limits; th
   tabs[2].click();
   assert.deepEqual([design.hidden, lib.hidden, how.hidden], [true, true, false]);
   assert.deepEqual(tabs.map((t) => t.getAttribute("aria-selected")), ["false", "false", "true"]);
+  assert.equal(b.root.dataset.pane, "howto", "phone layout can give the guide its own space");
   const H = b.D.HOWTO;
+  const tasks = walk(how).filter(e => e.dataset.helpTask);
+  assert.deepEqual(tasks.map(e => e.dataset.helpTask), ["selection", "height", "scenery"]);
+  assert.equal(tasks[0].open, true);
+  const history = b.D.state().undo;
+  chipsIn(how, "OPEN SCENERY")[0].click();
+  assert.equal(b.D.state().mode, "scenery");
+  assert.equal(how.hidden, true);
+  assert.equal(b.root.dataset.pane, "design");
+  const live = walk(b.root).find(e => e.dataset.mapView === "scenery" && e.tagName === "BUTTON");
+  assert.equal(live.getAttribute("aria-pressed"), "true");
+  chipsIn(b.root, "OUTLINE")[0].click();
+  assert.equal(live.getAttribute("aria-pressed"), "false");
+  assert.equal(b.D.state().undo, history, "view and help navigation do not edit the circuit");
+  tabs[2].click();
   const rows = walk(how).filter((e) => e.classList.contains("td-issue"));
   for (const r of rows) assert.equal(r.dataset.level, "info", "info rows, the CHECKS recipe");
   const text = rows.map((r) => r.textContent).join("\n");
@@ -759,7 +774,7 @@ test("the first-open card: shown once, HOW TO switches tab, GOT IT stores apex26
   const note = card.children[0];
   assert.ok(note.classList.contains("td-issue")); assert.equal(note.dataset.level, "info");
   assert.match(note.textContent, /RANDOMISE gave you a circuit/);
-  assert.match(note.textContent, /MODE tabs/);
+  assert.match(note.textContent, /EDIT shapes the road/);
   assert.deepEqual(chipsIn(card).map((c) => c.textContent), ["HOW TO", "GOT IT"]);
   const u0 = b.D.state().undo;
   chipsIn(card, "HOW TO")[0].click();
@@ -794,7 +809,7 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   const hint = toolsGroup.querySelector(".td-hint"), stageHint = stage.querySelector(".td-hint");
   assert.ok(hint && stageHint && hint !== stageHint);
   assert.ok(toolsGroup && toolsGroup.children.some((c) => c.classList.contains("td-chips") && c.children.every((t) => t.dataset.tool)), "the hint sits in the TOOLS group");
-  assert.match(hint.textContent, /^SELECT: tap a point/);
+  assert.match(hint.textContent, /^EDIT: POINT selects one/);
   // css/editor.css: the phone rules hide only the stage's copy; the rail's stays.
   const css = read("css/editor.css");
   assert.equal((css.match(/\.td-stage \.td-hint \{ display: none; \}/g) || []).length, 2, "narrow/portrait and short both hide the stage hint");
@@ -815,7 +830,7 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   assert.ok(shortOnly, "short-height media query present");
   assert.doesNotMatch(shortOnly[1], /\.td-body\s*\{/,
     "max-height:500 alone must not restack .td-body (safari 2-col stays)");
-  for (const [tool, re] of [["draw", /^DRAW: draw one closed loop/], ["corner", /^CORNER: tap a point to stamp/], ["hairpin", /^HAIRPIN: tap a point/], ["straight", /^STRAIGHT: tap a point/], ["select", /^SELECT: /]]) {
+  for (const [tool, re] of [["draw", /^DRAW: draw one closed loop/], ["corner", /^CORNER: tap a point to stamp/], ["hairpin", /^HAIRPIN: tap a point/], ["straight", /^STRAIGHT: tap a point/], ["select", /^EDIT: /]]) {
     b.D.setTool(tool);
     assert.match(hint.textContent, re, tool);
     assert.equal(stageHint.textContent, hint.textContent, "one string, two places");
@@ -980,7 +995,7 @@ test("4 DETAILS: RANDOMISE · TRACK OF THE DAY · START FROM… over the edit ro
   // UNDO / REDO / FIT live on the stage toolbar (not buried under DETAILS).
   const toolbar = b.root.querySelector('.td-chips[data-role="toolbar"]');
   assert.ok(toolbar, "stage toolbar");
-  assert.deepEqual([...toolbar.children].map((c) => c.textContent), ["UNDO", "REDO", "FIT VIEW"]);
+  assert.deepEqual([...toolbar.children].map((c) => c.textContent), ["UNDO", "REDO", "FIT VIEW", "OUTLINE", "LIVE SCENERY", "HEIGHT"]);
   // SPEED: a toggle the canvas paints from.
   assert.equal(speed.getAttribute("aria-pressed"), "false"); assert.equal(b.D.state().heat, false);
   speed.click();
@@ -994,6 +1009,31 @@ test("4 DETAILS: RANDOMISE · TRACK OF THE DAY · START FROM… over the edit ro
   assert.equal(b.D.trackOfTheDay(), true);
   assert.deepEqual(plain(b.D.state().design.pts), a, "deterministic for the day");
   assert.equal(b.D.state().design.seed >>> 0, b.D.state().design.seed);
+});
+
+test("HEIGHT maps engine elevation, survives scenery and undo, and excludes SPEED without editing the design", () => {
+  const b = bootScreen(); openGreen(b);
+  const before = plain(b.D.state());
+  const height = chipsIn(b.root, "HEIGHT")[0];
+  b.D.setMode("elevation");
+  assert.equal(height.getAttribute("aria-pressed"), "true");
+  assert.equal(b.D.state().elevationHeat, true);
+  assert.deepEqual(plain(b.D.state().design), before.design);
+  assert.equal(b.D.state().undo, before.undo);
+  b.D.applyElevPreset("hilly"); b.D.preview();
+  b.D.setMode("scenery");
+  assert.equal(b.D.state().elevationHeat, true);
+  b.D.undo(); b.D.preview();
+  assert.deepEqual(plain(b.D.state().design.heights), before.design.heights);
+  assert.equal(b.D.state().elevationHeat, true);
+  b.D.toggleHeat(true);
+  assert.equal(height.getAttribute("aria-pressed"), "false");
+  assert.equal(b.D.state().heat, true);
+  height.click();
+  assert.equal(b.D.state().heat, false);
+  assert.equal(b.D.state().elevationHeat, true);
+  height.click();
+  assert.equal(b.D.state().elevationHeat, false);
 });
 
 test("START FROM…: a card per shipped circuit; a pick traces it into a new design, one UNDO away", () => {
@@ -1868,6 +1908,41 @@ test("SCENERY props: REVERSE / START HERE remap s; RANDOMISE clears props", () =
   assert.equal(b.D.state().design.props, undefined, "RANDOMISE clears props");
 });
 
+test("map ranges have immediate LOWER / RAISE controls in EDIT; offsets preserve hills, limits, selection and undo", () => {
+  const b = bootHooked(); openGreen(b);
+  const n = b.D.state().design.pts.length;
+  const heights = Array.from({ length: n }, (_, i) => i % 4);
+  b.D.setHeights(heights, 0); b.D.setMode("edit"); b.D.setSelectionMode("range");
+  const box = walk(b.root).find(e => e.dataset.role === "selection-height");
+  const raise = box.querySelector('[aria-label="Raise selected points"]');
+  const lower = box.querySelector('[aria-label="Lower selected points"]');
+  const amount = box.querySelector('input');
+  b.root.querySelector('.td-rail').scrollTop = 900;
+  b.hooks.onSelect(n - 2, 1);
+  assert.equal(b.root.querySelector('.td-rail').scrollTop, 0, "map selection reveals height controls");
+  assert.equal(box.hidden, false);
+  assert.match(box.children[0].textContent, /HEIGHT CHANGE \(m\) · 4 POINTS/);
+  amount.value = "2.5"; b.dom.dispatch(amount, { type: "change" });
+  const before = plain(b.D.state()); raise.click();
+  let after = plain(b.D.state());
+  assert.equal(after.mode, "edit"); assert.equal(after.selectionMode, "range");
+  assert.deepEqual([after.sel, after.span], [n - 2, 1]);
+  assert.equal(after.undo, before.undo + 1);
+  for (let i = 0; i < n; i++) assert.equal(after.design.heights[i], heights[i] + (i >= n - 2 || i <= 1 ? 2.5 : 0));
+  assert.equal(after.elevationHeat, true);
+  b.D.undo(); assert.deepEqual(plain(b.D.state().design.heights), heights);
+  b.D.selectRange(n - 2, 1); lower.click();
+  for (let i = 0; i < n; i++) assert.equal(b.D.state().design.heights[i], heights[i] - (i >= n - 2 || i <= 1 ? 2.5 : 0));
+  const limit = b.ctx.CustomTracks.LIMITS.rise;
+  const high = heights.slice(); high[0] = limit - 1; high[1] = limit - 4;
+  b.D.setHeights(high, 0); b.D.selectRange(0, 1);
+  amount.value = "5"; b.dom.dispatch(amount, { type: "change" }); raise.click();
+  after = plain(b.D.state());
+  assert.equal(after.design.heights[0], limit); assert.equal(after.design.heights[1], limit - 3, "whole group stops together");
+  raise.click(); assert.equal(b.D.state().undo, after.undo, "at limit is a no-op");
+  b.D.selectRange(-1, -1); assert.equal(box.hidden, true);
+});
+
 test("SELECT END arms a touch-friendly span; stamp REPLACE uses it; group elev offsets the span", () => {
   const b = bootHooked();
   openGreen(b);
@@ -1906,6 +1981,105 @@ test("SELECT END arms a touch-friendly span; stamp REPLACE uses it; group elev o
   for (let i = 5; i <= 9; i++) assert.equal(hs[i], (i - 5) + 3, "point " + i);
   assert.equal(hs[0], 0, "outside the span stays flat");
   assert.deepEqual([b.D.state().sel, b.D.state().span], [5, 9], "span selection survives group elev");
+});
+
+// ── stale design state must not leak into a NEW loop ────────────────────────
+const hilly = (b, extra) => b.C.sanitize(design(Object.assign({
+  pts: ellipse(36, 800, 500),
+  heights: ellipse(36).map((_, i) => Math.round(30 * Math.sin(i / 3) * 4) / 4),
+  elevations: [{ s: 0.5, halfM: 400, rise: 25 }],
+}, extra)));
+
+test("RANDOMISE · TRACK OF THE DAY · FAST judge a candidate against the look only, never the old loop's elevations", async () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root }); b.D.open();
+  // A hilly start used to fail 12/12: the old heights were applied to the new loop (a grade RED).
+  b.D.load(hilly(b), "import");
+  assert.equal(b.D.randomise(101), true, "RANDOMISE finds a clean loop after an ELEVATION edit");
+  // "The same circuit for everyone": a flat start and a hilly start roll the same day's loop.
+  const day = "2026-10-09";
+  b.D.load(b.C.sanitize(design({ pts: ellipse(36, 800, 500) })), "import");
+  assert.equal(b.D.trackOfTheDay(day), true);
+  const flat = plain(b.D.state().design);
+  b.D.load(hilly(b), "import");
+  assert.equal(b.D.trackOfTheDay(day), true);
+  const rolled = plain(b.D.state().design);
+  assert.deepEqual(rolled.pts, flat.pts, "same pts from a hilly start as from a flat one");
+  assert.equal(rolled.seed, flat.seed);
+  b.D.load(hilly(b), "import");
+  assert.equal(await b.D.designed("FAST", 4242), true);
+  assert.equal(b.D.state().candidates.length, 4, "FAST fills four cards from a hilly start");
+});
+
+test("every action that starts a new loop clears the old loop's zones, bridges, turns and props", async () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root }); b.D.open();
+  const stale = () => b.C.sanitize(design({
+    pts: ellipse(36, 800, 500),
+    hwZones: [{ s0: 0.2, s1: 0.3, hw: 5.5, ease: 0.02 }],
+    bankZones: [{ frac: 0.4, angleDeg: 6, widthM: 120 }],
+    elevations: [{ s: 0.5, halfM: 300, rise: 6 }],
+    bridges: [{ s: 0.8, halfM: 160, rise: 8 }],
+    turns: [0.1, 0.4, 0.7],
+    props: [{ kind: "stand", s: 0.3, side: 1, gap: 18 }],
+  }));
+  const clean = (what) => {
+    const d = b.D.state().design;
+    assert.deepEqual(plain([d.hwZones, d.bankZones, d.elevations, d.bridges, d.turns]), [[], [], [], [], []], what + ": zone lists empty");
+    assert.equal(d.props, undefined, what + ": no authored props");
+  };
+  b.D.load(stale(), "import"); assert.ok(b.D.state().design.props.length === 1, "the fixture carries a prop");
+  assert.equal(b.D.randomise(101), true); clean("RANDOMISE");
+  const path = [];
+  for (let i = 0; i < 160; i++) { const t = i / 160 * Math.PI * 2; path.push([Math.cos(t) * 700, Math.sin(t) * 420 + 60 * Math.sin(3 * t)]); }
+  b.D.load(stale(), "import");
+  assert.equal(b.D.freehand(path), true); clean("DRAW");
+  b.D.load(stale(), "import");
+  assert.equal(await b.D.designed("FAST", 4242), true);
+  b.D.load(stale(), "import");   // the cards survive a load; USE swaps only the loop
+  assert.equal(b.D.useCandidate(0), true); clean("USE");
+  b.D.load(stale(), "import");
+  assert.equal(b.D.startFrom("monza"), true); clean("START FROM");
+});
+
+test("REVERSE keeps each authored prop on the same bank (its side is relative to the travel direction)", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root }); b.D.open();
+  const pts = ellipse(36, 800, 500), N = pts.length, i = 10;
+  const s = b.ctx.TrackDesignerProps.pointFrac(pts, i);
+  b.D.load(b.C.sanitize(design({ pts, props: [{ kind: "stand", s, side: 1, gap: 18 }, { kind: "billboard", s: b.ctx.TrackDesignerProps.pointFrac(pts, 20), side: -1, gap: 12 }] })), "import");
+  // A prop's world offset: side × the right-hand normal of the travel direction at its node.
+  const before = plain(b.D.state().design);
+  const at = (d, kind, k) => { const p = d.props.find((x) => x.kind === kind), P = d.pts, a = P[(k - 1 + N) % N], c = P[(k + 1) % N], tx = c[0] - a[0], tz = c[1] - a[1], m = Math.hypot(tx, tz); return [p.side * tz / m, p.side * -tx / m]; };
+  assert.equal(b.D.reverse(), true);
+  const after = plain(b.D.state().design);
+  // Point k of the old loop is point N − k on the reversed loop (point 0 stays).
+  for (const [kind, k] of [["stand", 10], ["billboard", 20]]) {
+    const o = at(before, kind, k), r = at(after, kind, N - k);
+    assert.ok(o[0] * r[0] + o[1] * r[1] > 0.99, kind + " stays on the same bank after REVERSE: " + o + " vs " + r);
+  }
+  assert.deepEqual(after.props.map((p) => p.kind + p.side).sort(), ["billboard1", "stand-1"], "the stored side is flipped with the travel direction");
+  // START HERE moves the line, not the travel direction: sides stay as they are.
+  const sides = after.props.map((p) => p.kind + p.side).sort();
+  assert.equal(b.D.setStart(5), true);
+  assert.deepEqual(b.D.state().design.props.map((p) => p.kind + p.side).sort(), sides, "START HERE leaves prop sides alone");
+});
+
+test("an inserted point takes the heights of its neighbours, not 0 m (no notch mid-hill)", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root }); b.D.open();
+  const pts = ellipse(36, 800, 500);
+  const heights = pts.map((_, i) => (i === 10 || i === 11 ? 10 : 0));
+  b.D.load(b.C.sanitize(design({ pts, heights })), "import");
+  const d = plain(b.D.state().design);
+  // A shape stamped after point 10 inserts new points between the two 10 m points.
+  b.D.setTool("straight");
+  assert.equal(b.D.applyStamp(10, 10), true);
+  const h = plain(b.D.state().design.heights), P = plain(b.D.state().design.pts);
+  assert.equal(h.length, P.length);
+  const k10 = P.findIndex((p) => p[0] === d.pts[10][0] && p[1] === d.pts[10][1]);
+  assert.equal(h[k10], 10, "the kept point keeps its height");
+  assert.ok(h[k10 + 1] > 0, "the point inserted after a 10 m point is not a 0 m notch: " + h.slice(k10, k10 + 4));
 });
 
 test("selection controls synchronize both views; elevation edits keep the range and undo once", () => {

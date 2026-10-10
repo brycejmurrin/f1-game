@@ -24,6 +24,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
@@ -68,16 +69,24 @@ test("index.html stylesheet sequence equals MANIFEST.CSS", () => {
 // seed and js/roster.js are projections of the manifest; a hand edit inside a
 // generated block, or a manifest edit without a regeneration, shows up here as
 // the first differing line.
-// L8-f: the CSP is generated (tools/gen/gen-shell.mjs CSP), sits before every
+// L8-f: the CSP is generated (tools/gen/gen-shell.mjs cspFor), sits before every
 // script it governs, and is the strictest the shell boots under: no script
-// origin but ours and the Spotify SDK, no eval (WASM only), no plugins, no <base>.
+// origin but ours and the Spotify SDK, no eval (WASM only), no plugins, no <base>,
+// and (SEC2-7) no 'unsafe-inline' for scripts: one sha256 per inline <script>.
+const cspOf = (html) => {
+  const m = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]*)">/);
+  assert.ok(m, "the page carries the generated CSP meta");
+  return { at: m.index, text: m[1], dir: Object.fromEntries(m[1].split(/;\s*/).map((d) => { const [k, ...v] = d.split(/\s+/); return [k, v]; })) };
+};
+const sha = (t) => `'sha256-${createHash("sha256").update(t.replace(/\r\n?/g, "\n"), "utf8").digest("base64")}'`;
+const inlineBodies = (html) => [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)].filter((m) => !/\bsrc\s*=/i.test(m[1])).map((m) => m[2]);
+
 test("the shell's Content-Security-Policy is generated, first, and strict where it can be", async () => {
-  const { CSP } = await import("../../tools/gen/gen-shell.mjs");
+  const { cspFor } = await import("../../tools/gen/gen-shell.mjs");
   const html = readFileSync(join(ROOT, "index.html"), "utf8");
-  const at = html.indexOf('<meta http-equiv="Content-Security-Policy" content="' + CSP + '">');
-  assert.ok(at > 0, "the generated meta is in the shell");
+  const { at, text, dir } = cspOf(html);
+  assert.equal(text, cspFor(html), "the meta is the generated one");
   assert.ok(at < html.indexOf("<script"), "before the first <script>, or that script is ungoverned");
-  const dir = Object.fromEntries(CSP.split(/;\s*/).map((d) => { const [k, ...v] = d.split(/\s+/); return [k, v]; }));
   assert.deepEqual(dir["object-src"], ["'none'"]);
   assert.deepEqual(dir["base-uri"], ["'self'"]);
   assert.ok(!dir["script-src"].includes("'unsafe-eval'"), "no eval; Rapier needs only 'wasm-unsafe-eval'");
@@ -89,6 +98,47 @@ test("the shell's Content-Security-Policy is generated, first, and strict where 
   for (const u of spotify.match(/https:\/\/[a-z.]+\/[\w./-]+\.js/g) || []) assert.ok(origins.includes(new URL(u).origin), u);
   // The Nostr relays are wss:, the data APIs https: — both inside connect-src.
   assert.ok(dir["connect-src"].includes("https:") && dir["connect-src"].includes("wss:"));
+});
+
+// SEC2-7: an injected <img onerror=…> or <script> is the stored-XSS class the
+// 2026-09-24 sweep fixed; 'unsafe-inline' in script-src would let it run again.
+for (const page of ["index.html", "controller.html"]) {
+  test(`${page}: script-src has no 'unsafe-inline' and one sha256 per inline <script>`, () => {
+    const html = readFileSync(join(ROOT, page), "utf8");
+    const { at, dir } = cspOf(html);
+    const src = dir["script-src"];
+    assert.ok(!src.includes("'unsafe-inline'"), "script-src must not allow inline");
+    assert.ok(!src.includes("'unsafe-hashes'"), "no attribute-handler escape hatch either");
+    const bodies = inlineBodies(html);
+    assert.ok(bodies.length >= 4, "the inline scripts were found");
+    const hashes = src.filter((s) => s.startsWith("'sha256-"));
+    assert.deepEqual([...hashes].sort(), [...new Set(bodies.map(sha))].sort(),
+      "script-src hashes == the inline scripts' hashes (run `node tools/gen/gen-shell.mjs`)");
+    assert.equal(new Set(hashes).size, hashes.length, "no duplicate hash");
+    assert.ok(at < html.indexOf("<script"), "CSP precedes the first <script>");
+    // A handler attribute (onload=, onclick=) is inline script CSP now blocks.
+    const tags = html.replace(/<script\b[\s\S]*?<\/script>/gi, "").replace(/<!--[\s\S]*?-->/g, "");
+    assert.deepEqual(tags.match(/<[a-z][^>]*\s on[a-z]+\s*=/gi) || [], [], "no inline event-handler attributes");
+    // bump-cache rewrites src=/href="…?v=…" anywhere in the page text; an inline
+    // script holding one would change after its hash was taken.
+    for (const b of bodies) assert.deepEqual(b.match(/\b(?:src|href)="[^"?#]+\?v=[A-Za-z0-9._-]+"/g) || [], []);
+  });
+}
+
+// Playwright injects addInitScript / addScriptTag({content}) as unhashed inline
+// scripts; the suite must bypass CSP or Smoke/TLX/selected go red on the
+// console scrape. The production meta stays strict (players are unaffected).
+test("Playwright bypasses CSP so the harness init scripts still run", () => {
+  const cfg = readFileSync(join(ROOT, "playwright.config.js"), "utf8");
+  assert.match(cfg, /\bbypassCSP:\s*true\b/,
+    "playwright.config.js needs bypassCSP: true while script-src has no 'unsafe-inline'");
+});
+
+test("deferred stylesheets flip print→all from the hashed script, not an onload= attribute", async () => {
+  const { DEFER_CSS_SCRIPT } = await import("../../tools/gen/gen-shell.mjs");
+  const html = readFileSync(join(ROOT, "index.html"), "utf8");
+  assert.ok(html.includes(DEFER_CSS_SCRIPT), "the flipper is in the shell");
+  assert.ok(html.indexOf(DEFER_CSS_SCRIPT) > html.lastIndexOf('media="print">'), "after the last deferred <link>");
 });
 
 test("every gen-shell block is byte-identical to a fresh generation", () => {
@@ -107,6 +157,15 @@ test("every asset tag reads ?v=dev and the shell generation matches version.json
   const meta = indexHtml.match(/<meta\s+name="apex-build"\s+content="(\d+)"/);
   assert.ok(meta, "index.html must declare the shell generation");
   assert.equal(versionJson.build, Number(meta[1]), "version.json build must equal the shell generation");
+});
+
+test("controller.html carries the same apex-build generation marker as the shell", () => {
+  // sw.js reads the marker before caching a navigation; the deploy stamps both
+  // pages (tools/ci/bump-cache.mjs EXTRA_PAGES), so the repo copy must match.
+  const ctl = readFileSync(join(ROOT, "controller.html"), "utf8");
+  const m = ctl.match(/<meta\s+name="apex-build"\s+content="(\d+)"/);
+  assert.ok(m, "controller.html must declare the build generation");
+  assert.equal(m[1], indexHtml.match(/<meta\s+name="apex-build"\s+content="(\d+)"/)[1]);
 });
 
 test("__APEX_BUILD is derived, not a stale literal", () => {
@@ -378,7 +437,7 @@ test("the data-hub DAG orders every tab module before hub.js", () => {
 // it is last and every module points at it. Derived like the data hub's.
 test("the track-designer DAG orders shape.js before every module that destructures it, and the screen last", () => {
   const SHAPE = "js/editor/shape.js", CODEC = "js/editor/codec.js", ELEV = "js/editor/elev-presets.js", SCREEN = "js/editor/designer.js";
-  const pure = new Set([SHAPE, CODEC, ELEV, SCREEN, "js/editor/scenery-panel.js", "js/editor/selection-panel.js"]);
+  const pure = new Set([SHAPE, CODEC, ELEV, SCREEN, "js/editor/scenery-preview.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js"]);
   assert.equal(MANIFEST.LAZY_EDITOR[0], SHAPE, "shape.js evaluates first");
   assert.equal(MANIFEST.LAZY_EDITOR[MANIFEST.LAZY_EDITOR.length - 1], SCREEN, "the screen evaluates last");
   const shapeEdges = MANIFEST.LAZY_EDITOR.filter((f) => !pure.has(f)).map((f) => [SHAPE, f]);

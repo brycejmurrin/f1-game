@@ -333,7 +333,7 @@ test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
   const nav = read("js/ui/settings-tabs.js");
   assert.match(nav, /controls: document\.getElementById\("pm-open-controls"\)/);
   assert.match(nav, /for \(const \[id, door\] of Object\.entries\(doors\)\) if \(door\) door\.onclick = \(\) => \{/);
-  assert.match(nav, /show\(id, true, \(\) => \{ if \(onSelect\) onSelect\(id\); \}\)/);  assert.match(read("js/ui/scale.js"), /if \(uiEl\) uiEl\.oninput/);
+  assert.match(nav, /show\(id, true, \(\) => \{ if \(onSelect\) onSelect\(id\); \}(, true)?\)/);   // the door passes `ensured` since the LAZY_AUDIO busy-loop fix (bug-hunt 2.1)  assert.match(read("js/ui/scale.js"), /if \(uiEl\) uiEl\.oninput/);
   assert.doesNotMatch(html, /id="pm-category-tabs"|id="pm-tab-more"|id="pm-panel-more"/);
   const rules = cssRules(readCssSource("css/components.css"));
   assert.ok(ruleFor(rules, /^\.balanced-row\s*>\s*:not\(\[hidden\]\)$/), "the balanced-row child rule exists");

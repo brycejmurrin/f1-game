@@ -27,6 +27,34 @@ the browser loses nothing.
 3. Check **5 CHECKS** at the bottom of the rail: green means ready.
 4. **SAVE**, then **RACE** or **TIME TRIAL**.
 
+## Select several points, then adjust their elevation
+
+1. Open **EDIT** or **ELEVATION**, then **SELECT POINTS → RANGE**.
+2. On either the main map or elevation strip, drag between two points, or tap
+   the first and last points. Desktop also supports click, then Shift-click.
+3. The highlighted section and point count show the same selection in both views.
+   A range follows driving order: an earlier end wraps across the start line.
+   Separate Ctrl/Cmd-click selections are not supported.
+4. To change height immediately, use **LOWER / RAISE** below the selection
+   count. The number between them is the change in metres applied to every
+   selected point. This works in **EDIT** and **RANGE**, keeps the selection
+   and its relative hills, and stops the whole group at the height limit.
+5. Switch to **POINT** to drag the selected group. On the elevation strip,
+   drag vertically to raise or lower it; in **ELEVATION**, **POINT m / SPAN m**
+   and the **0.25 / 1 / 5 m** steps give precise height control.
+6. **LEVEL** flattens the selection, **SMOOTH** softens its slopes, and **ZERO**
+   returns it to sea level. **UNDO** reverses an edit; **CLEAR** clears selection.
+
+**HEIGHT** above the map toggles an elevation heat map, enabled when entering
+ELEVATION. Purple is low; yellow is high. The legend shows the current road’s
+minimum and maximum in metres above sea level; a level circuit reads **FLAT**.
+Colours rescale to the current height range after edits, including undo. This
+shows height, not slope steepness, over either OUTLINE or LIVE SCENERY.
+**SPEED** switches to speed colouring; the two overlays are mutually exclusive.
+
+**HOW TO** contains expandable task guides and buttons to open each tool.
+On portrait screens, the guide uses the map’s space while it is open.
+
 ## 1 SHAPE — the loop
 
 | You want to… | Do this |
@@ -80,6 +108,15 @@ and the pit exit needs some straight after it. The checks say how many metres
 are missing.
 
 ## SCENERY — themes and atmosphere
+
+Opening **SCENERY** turns on **LIVE SCENERY**: an overhead illustration of
+this circuit, with theme terrain, vegetation, water, buildings and placed props.
+Theme, atmosphere and object edits update it automatically. Point selection,
+pan and zoom still work; **OUTLINE** returns to the plain editing map without
+changing the circuit or undo history. On phones, SCENERY gives the map the
+elevation strip’s space; open ELEVATION to bring both selection views back.
+The preview simplifies terrain relief
+and small furniture; **RACE** or **TIME TRIAL** opens the full 3D circuit.
 
 A theme sets the scenery, the sky and the ground. The inspector has **THEMES**,
 **ATMOSPHERE**, and **OBJECTS** tabs, so each task has its own controls. Arrow

@@ -557,3 +557,21 @@ test("the Red Bull wrap's two bulls stand on the ridge: each side's top crosses 
   assert.ok([...edge.keys()].some((c) => both.includes(c)) && [...edgeL.keys()].some((c) => both.includes(c)),
     "the bull does not reach the shoulders");
 });
+
+test("the shoulder shelf never lands on its own saddle (ferrari, audi: shipped saddleTint)", () => {
+  // Ferrari and Audi ship an explicit saddleTint and coverBind saddleWrap, so
+  // the flank is already painted saddleTint when SIDE shoulder paints the shelf:
+  // 1.00:1, invisible. The shelf re-picks against the flank when the flank is
+  // that saddle. Shipped livery, NOT stripped, over every crown design.
+  const bad = [];
+  for (const id of ["ferrari", "audi"]) {
+    const t = A.Teams.LIST.find((x) => x.id === id);
+    const base = A.Liveries.forTeam(t)[0];
+    for (const spineLogo of A.LT.SPINE_LOGO_IDS) for (const spineSide of A.LT.SPINE_SIDE_IDS) {
+      const liv = Object.assign({}, base, { spineLogo, spineSide });
+      for (const hit of sweepAtlas(A, id, liv, ["spineSide", "spineSideL"], 14))
+        bad.push(`${id} ${spineLogo}/${spineSide} ${hit.region}: ${hit.paint} over ${hit.over} at ${hit.contrast}:1`);
+    }
+  }
+  assert.deepEqual(bad, [], bad.join("\n"));
+});

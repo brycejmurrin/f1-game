@@ -3734,9 +3734,17 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
   // ensureScenery: four callers race the same circuit at boot; the promise memo
   // is what stops each of them injecting its own copy of the closure.
-  const es = game.slice(game.indexOf("function ensureScenery("), game.indexOf("function ensureScenery(") + 600);
-  assert.match(es, /_sceneryLoads\.get\(def\.id\)/, "ensureScenery must consult the in-flight memo");
-  assert.match(es, /_sceneryLoads\.delete\(def\.id\)/, "and clear it on settle so a dropped fetch retries");
+  const lazy = read("js/core/lazy-bundles.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const fetchAt = lazy.indexOf("function fetchScenery(");
+  assert.ok(fetchAt >= 0, "LazyBundles owns the shared scenery fetch");
+  const fetch = lazy.slice(fetchAt, lazy.indexOf("\n}\n", fetchAt));
+  assert.match(fetch, /_sceneryLoads\.get\(id\)/, "fetchScenery must consult the in-flight memo");
+  assert.match(fetch, /_sceneryLoads\.set\(id, p\)/, "the pending fetch is shared by every caller");
+  assert.match(fetch, /_sceneryLoads\.delete\(id\)/, "and clear it on settle so a dropped fetch retries");
+  const ensureAt = lazy.indexOf("async function ensureScenery(");
+  assert.ok(ensureAt >= 0);
+  assert.match(lazy.slice(ensureAt, lazy.indexOf("\n}\n", ensureAt)), /await fetchScenery\(def\.id\)/,
+    "ensureScenery awaits the memoised fetch helper");
   // warmCarAssets: the caches were lazy, so the first countdown frame built
   // every mesh and atlas; startRace now does it before the first render.
   // startRace() itself is a re-entrancy-latch wrapper (start-race-latch
@@ -5574,7 +5582,7 @@ function bootScenario({ install = true, init = true, pref = "webgl2", skip = fal
     Event: class { constructor(type) { this.type = type; } },
     location: { reload: () => events.push("reload") },
     BACKEND_FILES: { webgl2: ["glsl-chunks.js", "glx.js"] },
-    canvas: {}, _claimSkipped: skip,
+    canvas: {}, _claimSkipped: skip, _createHung: false,   // start()'s closure state the sliced fallback reads
     backendPreference: () => pref,
     showGraphicsUnavailable: () => events.push("unavailable"),
     async loadBackendScripts(group) {
@@ -6071,6 +6079,15 @@ test("PCSS blocker: 32-bit float and the min over the whole 4x4 source footprint
   eval(loop[1]);
   assert.equal(new Set(seen).size, 16, "16 distinct source texels at 2048 -> 512");
   assert.equal(d, 16);
+});
+
+// M15b: pause + SETTINGS must keep presenting so SAVE SCREENSHOT can get a live frame
+// (headed GLX has no preserved buffer; without this the button only said NO LIVE FRAME).
+test("paused race keeps presenting while SETTINGS is open (SAVE SCREENSHOT)", () => {
+  const src = read("js/game.js");
+  const gate = src.slice(src.indexOf("if (paused && !netPlay.active())"), src.indexOf("replayBuf.onTick(raceT, cars, state)"));
+  assert.match(gate, /!els\.pmsettings\.hidden/,
+    "SETTINGS open during pause must call render() so headed GLX SAVE SCREENSHOT sees a frame");
 });
 
 // M15: headed GLX has no #game-soft and no preserved drawing buffer, so #game.toDataURL()

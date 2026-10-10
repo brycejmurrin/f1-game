@@ -385,7 +385,18 @@ test("serve stdout is JSON-RPC only (no log lines)", () => {
 });
 
 const LOCK = path.join(ROOT, "scratch", "apex-browser.lock");
-const TEST_BG = path.join(ROOT, "artifacts", "logs", "test-bg.json");
+// A private test-bg registry per test (TS1): these tests used to overwrite the REAL
+// artifacts/logs/test-bg.json and restore it afterwards, which loses a live run's
+// update in that window and, when the per-file timeout SIGKILLs the file, leaves
+// the fake in place and hides the real run from --status/--wait/--stop.
+function withFakeRegistry(state, fn) {
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "fake-test-bg-"));
+  const file = path.join(dir, "test-bg.json");
+  fs.writeFileSync(file, JSON.stringify(state));
+  try { return fn({ APEX_TEST_BG_STATE: file }); }
+  finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
 
 test("playwright occupancy matches `playwright test` tokens, not MCP JSON", async () => {
   const { classifyPlaywrightLine, scanPlaywrightLines } = await import("../../tools/ci/playwright-occupancy.mjs");
@@ -740,22 +751,12 @@ test("week-2 dryRun steals a stale lock (dead PID)", () => {
 });
 
 test("week-2 dryRun refuses playwright_live from test-bg.json (no Chromium)", () => {
-  fs.mkdirSync(path.dirname(TEST_BG), { recursive: true });
-  let prev = null;
-  if (fs.existsSync(TEST_BG)) prev = fs.readFileSync(TEST_BG, "utf8");
-  fs.writeFileSync(TEST_BG, JSON.stringify({ mode: "test", runs: [{ pid: process.pid, group: "tiny" }] }));
-  try {
-    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "" });
+  withFakeRegistry({ mode: "test", runs: [{ pid: process.pid, group: "tiny" }] }, (reg) => {
+    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "", ...reg });
     assert.equal(r.status, 1, r.stderr);
     const body = JSON.parse(r.stdout);
     assert.equal(body.error, "playwright_live");
-  } finally {
-    if (prev == null) {
-      try { fs.unlinkSync(TEST_BG); } catch { /* ignore */ }
-    } else {
-      fs.writeFileSync(TEST_BG, prev);
-    }
-  }
+  });
 });
 
 test("an IDLE host Playwright MCP server is reported, not occupancy; its launched browser is", () => {
@@ -779,27 +780,18 @@ test("an IDLE host Playwright MCP server is reported, not occupancy; its launche
 });
 
 test("a live Node-only test-bg group does not impersonate Playwright", () => {
-  fs.mkdirSync(path.dirname(TEST_BG), { recursive: true });
-  let prev = null;
-  if (fs.existsSync(TEST_BG)) prev = fs.readFileSync(TEST_BG, "utf8");
-  fs.writeFileSync(TEST_BG, JSON.stringify({
+  withFakeRegistry({
     mode: "sequential",
     runs: [{ pid: process.pid, group: "tooling-fast", browser: false }],
-  }));
-  try {
+  }, (reg) => {
     const r = callCli("apex_shot", { track: "monza", dryRun: true }, {
       APEX_MCP_MOCK: "0",
       APEX_MCP_PS: "1 bash\n",
+      ...reg,
     });
     assert.equal(r.status, 0, r.stderr + r.stdout);
     assert.equal(JSON.parse(r.stdout).ok, true);
-  } finally {
-    if (prev == null) {
-      try { fs.unlinkSync(TEST_BG); } catch { /* ignore */ }
-    } else {
-      fs.writeFileSync(TEST_BG, prev);
-    }
-  }
+  });
 });
 
 test("week-2 dryRun refuses chrome_daemon_up when /healthz answers", async () => {
@@ -1299,7 +1291,9 @@ test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and re
   bad("apex_track", { op: "shot", frac: 2 });
   bad("apex_track", { op: "shot" }, "track_not_open");
   ok("apex_job_start", { kind: "survey_track", track: "monza", oblique: true }, /survey-track\.mjs","monza","--oblique/);
-  ok("apex_job_start", { kind: "ui_matrix", screens: "settings,garage", viewports: "ios-*", scale: "100,130" }, /--screens=settings,garage","--viewports=ios-\*","--scale=100,130/);
+  const matrix = ok("apex_job_start", { kind: "ui_matrix", screens: "settings,garage", viewports: "ios-*", scale: "100,130" }, /--screens=settings,garage","--viewports=ios-\*","--scale=100,130/);
+  assert.equal(typeof matrix.estimateMs, "number", "ui_matrix dryRun names estimateMs (hud_survey-style)");
+  assert.ok(matrix.estimateMs > 0 && matrix.cells >= 2, `ui_matrix cells/estimate: ${JSON.stringify(matrix)}`);
   ok("apex_job_start", { kind: "flicker_gate", site: "a,b" }, /"--site","a","--site","b"/);
   ok("apex_job_start", { kind: "livery_contrast", team: "ferrari" }, /--team=ferrari/);
   bad("apex_job_start", { kind: "rm_rf" });
@@ -1307,7 +1301,7 @@ test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and re
   bad("apex_job_start", { kind: "survey_track", track: "nope" });
   bad("apex_job_status", { jobId: "missing" }, "unknown_job");
   bad("apex_job_cancel", { jobId: "missing" }, "unknown_job");
-  ok("apex_ui_fit", { screen: "settings", scale: 130 }, /--screens=settings","--viewports=ios-iphone-landscape","--jobs=1","--scale=130/);
+  ok("apex_ui_fit", { screen: "settings", scale: 130 }, /--screens=settings","--viewports=ios-iphone-landscape","--jobs=1","--json","--scale=130/);
   bad("apex_ui_fit", { screen: "--all" });
   bad("apex_ui_fit", { screen: "settings", scale: 500 });
   ok("apex_ui_shot", { screen: "garage", viewport: "desktop-1440x900" }, /--screen=garage","--viewport=desktop-1440x900/);
@@ -1627,6 +1621,16 @@ test("apex_ui_fit / apex_ui_shot refuse an id the audit does not know instead of
   assert.match(vp.fix, /ios-iphone-landscape-844/, "the phone-landscape id is in the list");
 });
 
+test("apex_hud_shot aliases layout-audit viewport ids and did-you-means a near miss", () => {
+  const aliased = callTools([["apex_hud_shot", { device: "ios-iphone-landscape-844", dryRun: true }]])[0].body;
+  assert.equal(aliased.ok, true, JSON.stringify(aliased));
+  assert.match(JSON.stringify(aliased.argv), /phone-landscape-844x390/, "alias rewrites before the CLI");
+  const miss = callTools([["apex_hud_shot", { device: "phone-landscape-844", dryRun: true }]])[0].body;
+  assert.equal(miss.ok, false);
+  assert.equal(miss.error, "bad_args");
+  assert.match(miss.fix, /Did you mean "phone-landscape-844x390"\?/, miss.fix);
+});
+
 test("apex_job_status {} is bounded: newest first, limit, state filter, total", async () => {
   const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
   const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
@@ -1636,7 +1640,7 @@ test("apex_job_status {} is bounded: newest first, limit, state filter, total", 
     fs.mkdirSync(dir, { recursive: true });
     for (let i = 1; i <= 5; i++) {
       fs.writeFileSync(path.join(dir, `float_all-t${i}.json`), JSON.stringify({ id: `float_all-t${i}`, kind: "float_all", state: i % 2 ? "done" : "failed", exit: i % 2 ? 0 : 1,
-        started: 1000 * i, ended: 1000 * i + 5, argv: [], log: `artifacts/logs/apex-jobs/float_all-t${i}.log`, stderr: "" }));
+        started: 1000 * i, ended: Date.now() - 5, argv: [], log: `artifacts/logs/apex-jobs/float_all-t${i}.log`, stderr: "" }));   // recent: older than 7 days is pruned
     }
     const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
     const x = createExtras({ ROOT: fake, toolResult, refuse: (e, m, f) => toolResult({ ok: false, error: e, message: m, fix: f }), acquireLock: () => null, releaseLock() {},
@@ -1649,5 +1653,38 @@ test("apex_job_status {} is bounded: newest first, limit, state filter, total", 
     const failed = list({ state: "failed" });
     assert.deepEqual(failed.jobs.map((j) => j.jobId), ["float_all-t4", "float_all-t2"]);
     assert.equal(failed.hint, undefined, "nothing hidden, no hint");
+  } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
+
+test("apex_job_status {} prunes manifests older than 7 days and re-judges a pre-.exit failed job whose log says ok:true", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const fake = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-jobs-test-"));
+  try {
+    const rel = "artifacts/logs/apex-jobs";
+    const dir = path.join(fake, rel);
+    fs.mkdirSync(dir, { recursive: true });
+    const now = Date.now();
+    const mk = (id, state, ended, logText, exitText) => {
+      fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, kind: "float_all", state, exit: state === "done" ? 0 : 1, started: ended - 10, ended, argv: [], log: `${rel}/${id}.log`, stderr: `${rel}/${id}.err` }));
+      fs.writeFileSync(path.join(dir, `${id}.log`), logText);
+      fs.writeFileSync(path.join(dir, `${id}.err`), "");
+      if (exitText != null) fs.writeFileSync(path.join(dir, `${id}.exit`), exitText);
+    };
+    const old = now - 8 * 86400000;
+    mk("old-done", "done", old, "{}", "0");
+    mk("old-failed", "failed", old, "{}", "1");
+    mk("stale-failed", "failed", now - 1000, 'noise\n{"ok": true, "n": 3}\n');   // no .exit, log says ok:true
+    mk("real-failed", "failed", now - 2000, '{"ok": false}\n');                   // no .exit, log says ok:false
+    mk("exit-failed", "failed", now - 3000, '{"ok": true}\n', "1");               // has .exit: trust it
+    const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
+    const x = createExtras({ ROOT: fake, toolResult, refuse: (e, m, f) => toolResult({ ok: false, error: e, message: m, fix: f }), acquireLock: () => null, releaseLock() {},
+      occupancyRefuse: () => null, assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
+    const res = JSON.parse(x.handlers.apex_job_status({}).content[0].text);
+    const state = Object.fromEntries(res.jobs.map((j) => [j.jobId, j.state]));
+    assert.deepEqual(state, { "stale-failed": "done", "real-failed": "failed", "exit-failed": "failed" });
+    assert.equal(res.total, 3);
+    assert.deepEqual(fs.readdirSync(dir).filter((f) => f.startsWith("old-")), [], "json, log, err and exit of an expired job are all gone");
+    assert.ok(fs.existsSync(path.join(dir, "real-failed.log")), "recent jobs keep their files");
   } finally { fs.rmSync(fake, { recursive: true, force: true }); }
 });

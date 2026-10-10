@@ -45,6 +45,11 @@ function isInstallCriticalOptional(u) {
 function isRuntimeOnlyOptional(u) {
   return /^js\/render\/webgpu\//.test(u);
 }
+// Is this navigation the game's own shell? Any *.html page other than
+// index.html is a different document and must never be answered with the game.
+function isShellDocument(url) {
+  return /\/index\.html$/.test(url.pathname) || !/\.[A-Za-z0-9]+$/.test(url.pathname);
+}
 function isBackgroundOptional(u) {
   return !isInstallCriticalOptional(u) && !isRuntimeOnlyOptional(u);
 }
@@ -268,6 +273,8 @@ async function precacheAssetLists() {
     "assets/fonts/barlow-condensed-latin-700-normal.woff2",
     "assets/fonts/saira-apex26-800-italic.woff2",
     // @gen-shell:sw-optional
+    // ROOT PAGES — answered offline under their own URL, never by the game shell
+    "controller.html",
     // DEFERRED renderer backends (no <script> tag; injected on opt-in)
     "js/render/glx/shaders/glsl-chunks.js",
     "js/render/glx/shaders/glsl-lit.js",
@@ -472,6 +479,7 @@ async function precacheAssetLists() {
     "js/editor/insight.js",
     "js/editor/fixes.js",
     "js/editor/codec.js",
+    "js/editor/scenery-preview.js",
     "js/editor/canvas.js",
     "js/editor/elev-presets.js",
     "js/editor/profile.js",
@@ -835,7 +843,16 @@ self.addEventListener("fetch", (event) => {
       // guard swallows the parse error).
       if (isVersion) return (await matchPreferCurrent("version.json")) || Response.error();
       if (isShellBust) return bustShell || Response.error();
-      return (await matchPreferCurrent(req)) || (await matchPreferCurrent("index.html")) || Response.error();
+      const own = await matchPreferCurrent(req);
+      if (own) return own;
+      // The GAME shell answers only the game's own address ("/", a directory
+      // URL, "/index.html", or an extensionless deep link). Another root page
+      // (controller.html — the "Phone controller" shortcut and the QR landing
+      // page — bench.html, cockpit-view.html) that lost the race used to open
+      // the game instead; let its late network answer win, else fail honestly.
+      if (isShellDocument(url)) return (await matchPreferCurrent("index.html")) || Response.error();
+      try { const late = await network; if (late) return late; } catch (_) { /* offline: nothing to show */ }
+      return Response.error();
     })());
     return;
   }

@@ -49,10 +49,17 @@ function hookNames() {
   return names;
 }
 
-// A hook counts as documented if the reference names it as `__apex.foo` or as a
-// `foo(` heading — both forms are in use and neither is wrong.
+// A hook counts as documented only by a STRUCTURED hand entry: a heading that
+// names it (`### \`foo(…)\``, `### … \`__apex.foo\``), a bold lead (`**\`foo(`)
+// or a table row that opens with it. A passing prose mention (`__apex.foo` in an
+// example, "see \`foo()\`") is NOT enough: six hooks (trackGeometry, carOrbit,
+// lobby, lobbyRoom, lobbyHost, logs) passed on mentions alone while the file's
+// header promises a hand section for every hook.
 function documented(doc, name) {
-  return new RegExp("__apex\\." + name + "\\b|`" + name + "\\(").test(doc);
+  return new RegExp(
+    "^(?:#{2,5} .*(?:`|__apex\\.)(?:await |async )?(?:__apex\\.)?" + name + "\\b" +
+    "|\\*\\*`" + name + "\\b" +
+    "|\\| `(?:async )?" + name + "\\b)", "m").test(doc);
 }
 
 // The generated hook index (tools/gen/gen-hooks-table.mjs) lists EVERY hook by
