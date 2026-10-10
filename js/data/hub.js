@@ -284,6 +284,16 @@ const DataHub = (function () {
     state.telemetry = null;
     state.results = null;
     state.race = null;
+    // A reopen is a fresh intent: a tab that FAILED earlier (opened offline) must
+    // try again, not repaint its old error card — which would also be re-rendered
+    // against today's navigator.onLine and blame the service for a lost link. The
+    // stale node a failed refresh kept still carries data: it goes back to a
+    // normal entry (age-checked by showTab); an empty failure is dropped.
+    for (const id in state) {
+      const st = state[id];
+      if (!st || st.status !== "failed") continue;
+      state[id] = st.node ? { node: st.node, at: st.at, status: "ready", error: null } : null;
+    }
     root.hidden = true;
     openFlag = false;
     if (returnFocus && returnFocus.isConnected && returnFocus.focus) returnFocus.focus();

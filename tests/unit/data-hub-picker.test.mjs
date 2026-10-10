@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function harness({ motion, latest = undefined, realTelemetry = false, drivers = [] } = {}) {
+function harness({ motion, latest = undefined, realTelemetry = false, drivers = [], scheduleOnline = true } = {}) {
   let docRoot = null;
   const scrolls = [];
   class El {
@@ -86,8 +86,9 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
   const LATEST = latest !== undefined ? latest
     : { sessionKey: 500, meetingKey: 50, year: 2026, name: "Race", type: "Race", dateStart: "2026-10-04T12:00:00Z" };
   const meetingYears = [];
-  let cancels = 0;
+  let cancels = 0, scheduleCalls = 0;
   const F1API = {
+    schedule: () => { scheduleCalls++; return scheduleOnline ? Promise.resolve([]) : Promise.reject(new Error("offline")); },
     latestSession: () => defer("latestSession", LATEST),
     meetings: (year) => { meetingYears.push(year); return defer("meetings", [{ meetingKey: 50, name: "Latest GP", dateStart: "2026-10-01" }, { meetingKey: 40, name: "Picked GP", dateStart: "2026-09-01" }]); },
     sessionsForMeeting: (mk) => defer("sessions(" + mk + ")", [{ sessionKey: mk * 10, meetingKey: mk, name: "Race", type: "Race", dateStart: "2026-09-01T12:00:00Z" }]),
@@ -131,7 +132,7 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
   DataHub.init(root);
   const content = () => root.find((n) => n.id === "dh-panel");
   const tab = (id) => root.find((n) => n.id === "dh-tab-" + id).dispatch("click");
-  return { DataHub, root, content, tab, settle, get cancels() { return cancels; }, drain, flush, pending, resultKeys, scrolls, document, byId, place, meetingYears };
+  return { DataHub, root, content, tab, settle, get cancels() { return cancels; }, get scheduleCalls() { return scheduleCalls; }, setOnline: (v) => { scheduleOnline = v; }, drain, flush, pending, resultKeys, scrolls, document, byId, place, meetingYears };
 }
 
 // LIVE booted on the latest session, the player has just picked "Picked GP"
@@ -314,4 +315,29 @@ test("leaving TELEMETRY mid-COMPARE cancels the in-flight lane fetches once, and
   const again = h.cancels;
   h.tab("live"); await h.drain();
   assert.equal(h.cancels, again, "leaving with no lane in flight cancels nothing");
+});
+
+// 14-F8: a SCHEDULE / STANDINGS / EXPORT tab that failed stayed "failed" across a
+// hub close and reopen (close() only dropped the picker tabs), so a player who
+// opened DATA offline, reconnected and reopened it was shown the old error card
+// until they found RETRY. A reopen is a fresh intent.
+test("closing and reopening the hub retries a tab that failed, instead of repainting its error", async () => {
+  const h = harness({ scheduleOnline: false });
+  h.DataHub.open("schedule"); await h.drain();
+  assert.ok(h.content().querySelector(".dh-error"), "offline: SCHEDULE shows its error card");
+  assert.equal(h.scheduleCalls, 1);
+  h.DataHub.close(); await h.flush();
+  h.setOnline(true);
+  h.DataHub.open("schedule"); await h.drain();
+  assert.equal(h.scheduleCalls, 2, "the reopen asked again");
+  assert.equal(h.content().querySelector(".dh-error"), null, "…and the error card is gone");
+});
+
+test("closing the hub keeps a good tab's cached copy (only failures are forgotten)", async () => {
+  const h = harness();
+  h.DataHub.open("schedule"); await h.drain();
+  assert.equal(h.scheduleCalls, 1);
+  h.DataHub.close(); await h.flush();
+  h.DataHub.open("schedule"); await h.drain();
+  assert.equal(h.scheduleCalls, 1, "inside its freshness window the reopen reuses the copy");
 });
