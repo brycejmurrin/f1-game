@@ -187,12 +187,15 @@ const Broadcast = (function () {
   const _fights = [];
   /** The closest battle among running cars ordered by progress: [{chaser, gapS}] best first — tighter and
    *  further up the order is better. cars: [{key, prog, speed, pos}] sorted by prog descending.
-   *  Returns a module-owned pooled array (mutated on the next call). */
-  function battles(cars) {
+   *  Returns a module-owned pooled array (mutated on the next call). vScale: vTop()/VMAX when the speeds are the
+   *  SIM's (PACE-scaled), so the 20 m/s crawl floor is the same fraction of the envelope at any OVERALL SPEED;
+   *  omit it for real m/s (WATCH's traces run at the real car's pace whatever PACE is). */
+  function battles(cars, vScale) {
     let n = 0;
+    const floor = 20 * (vScale > 0 ? vScale : 1);
     for (let i = 1; i < cars.length; i++) {
       const a = cars[i - 1], b = cars[i];
-      const v = Math.max(b.speed || 0, 20);
+      const v = Math.max(b.speed || 0, floor);
       const g = (a.prog - b.prog) / v;
       if (g < 0 || g >= BATTLE_S) continue;
       let f = _fights[n];

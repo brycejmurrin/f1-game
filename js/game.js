@@ -120,9 +120,9 @@ if (typeof Assets !== "undefined") {
   // at the first IDLE slice after boot, not in it: the arrays are ~1.6 MB of
   // PNG that competed with the boot scripts for the wire and the decoder, and
   // boot never awaited them. Skipped when something already loaded, unloaded
-  // (__apex.assetLoad(false)) or adopted a pack before the slice came round.
-  // Baked MODELS are not prefetched here: ensureScenery() loads each circuit's
-  // own set before its build (Assets.modelsReady, capped at 4 s).
+  // (__apex.assetLoad(false)) or adopted a pack before the slice came round; a
+  // FAILED load is retried once at race entry (startRace: Assets.retry()).
+  // Baked MODELS: ensureScenery() loads each circuit's set (modelsReady, 4 s cap).
   const kickPack = () => { const s = Assets.state(); if (s.tier === null && !s.uploaded) Assets.load(); };
   if (typeof requestIdleCallback === "function") requestIdleCallback(kickPack, { timeout: 3000 }); else setTimeout(kickPack, 1500);
 }
@@ -594,12 +594,12 @@ function aeroDfMult(c) { return 1 - xDfLoss(c) * (c && c.aeroX || 0); }
 // agent template. Cheap, seedable, and long-period enough for a race.
 let _simSeed = 1;
 let _simRngState = 1 >>> 0;
-function simSeed(v) {
+function simSeed(v, stream) {   // stream: a number resumes the draw stream there instead of at the seed; `true` reads its position (DailyChallenge hands both back on stop)
   if (v !== undefined) {
     _simSeed = (v >>> 0) || 1;
-    _simRngState = _simSeed;
+    _simRngState = typeof stream === "number" ? stream >>> 0 : _simSeed;
   }
-  return _simSeed;
+  return stream === true ? _simRngState : _simSeed;
 }
 // A PLAYER'S SESSION starts from a fresh seed: at a fixed 1 the first race after
 // every page load was the same race (retirements, weather arc, mistakes,
@@ -771,8 +771,8 @@ const stricken = (o) => incidentSim.owns(o) || (o.rescueT || 0) > 0.25 || (!!o.o
 const cautionFair = (o) => SportingRegs.exempt(o) || stricken(o);   // a car it is legal to pass under a caution
 const scWatch = SportingRegs.createPassWatch(0, stricken);
 function scPassCall(ev) {
-  if (!ev || !player) return; Log.info("game", "Caution pass " + ev.type + " n=" + (ev.n || 0) + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap + " level=" + raceCtl.level); if (ev.type === "cleared") return;
-  if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn"); return; }
+  if (!ev || !player) return; Log.info("game", "Caution pass " + ev.type + " n=" + (ev.n || 0) + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap + " level=" + raceCtl.level); if (ev.type === "cleared") { announce("POSITION RETURNED — NO PENALTY", 1.5, "penalty-warn"); return; }
+  if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn", () => scWatch.info().owed > 0); return; }
   player.penalty += ev.sec;
   // The results countdown may already be running (the player just finished):
   // re-read it so a time penalty that reorders the finish is served first.
@@ -788,7 +788,7 @@ let engineer = null;  // RaceEngineer.create(G), same deferral
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
 function updateCaution(dt) { raceCtl.update(dt); }
 function applyCaution(d) { return raceCtl.apply(d); }
-function cautionInfo() { return raceCtl.info(); }
+function cautionInfo() { const i = raceCtl.info(), w = scWatch.info(); i.owed = w.owed; i.owedT = w.t; i.owedCode = w.code; return i; }   // + the give-back window (hud.js flag chip)
 function cautionLevel() { return raceCtl.level; }   // allocation-free, for per-tick readers
 function otEnabled() { return raceCtl.otEnabled(); }
 let camEye = [0, 6, -10], camTgt = [0, 0, 0], camFov = 62;
@@ -861,7 +861,7 @@ const isChampionship = () => flow === "season" || flow === "career";
 // GO button ask this, and they must agree — a race that qualified and then
 // gridded up P12 would throw the session away, and one that gridded from a
 // classification it never ran would read a stale one.
-const gridFromQuali = () => (isChampionship() ? SeasonCal.quali() : (qualiGrid() && !isTimeTrial()));   // a one-off's rule never reaches a championship
+const gridFromQuali = () => (isChampionship() ? SeasonCal.quali() : (qualiGrid() && !isTimeTrial() && !realRace.status().active));   // a one-off's rule never reaches a championship; a real race (Data Hub JUMP IN) has its own grid and never opens #quali (realRace: a later const, read at call time)
 // The ONE way `flow` is written. Career's save is loaded at boot and stays loaded,
 // so js/career/career.js has to be told whether its rules apply to the session that
 // is running — otherwise a Grand Prix would quietly inherit the career's team
@@ -1042,7 +1042,7 @@ let announcer = Announcer.inert();   // js/audio/announcer.js — the pre-race w
 // is a report. It ranks with the pit-lane messages it belongs to rather than
 // under them — before this it was "info", so the confirmation that you HAD
 // entered the pits outranked the call telling you to.
-const ANN_PRI = { comm: 1, coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, box: 4, race: 4, "penalty-hit": 5 };
+const ANN_PRI = { comm: 1, coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 4, box: 4, race: 4, "penalty-hit": 5 };   // penalty-warn over warning: a 5 s give-back window must not wait out the SC call
 // THE FLOOR. Every card gets ANN_MIN_S on screen, whatever its caller asked for
 // and whatever arrives next. Callers passed durations from 1.4 s up, and 1.4 s
 // is not a message — it is a flash you notice after it has gone. The floor is
@@ -1229,8 +1229,8 @@ function announce(msg, dur, kind, still, quiet) {   // still(): false once a que
   }
   // `_annFloor > 0` is the other half of the floor: a card still inside its
   // three seconds is not evicted even by something that outranks it — the
-  // arrival queues at the head instead and takes over the moment the current
-  // one is done. Without this clause the floor would only be a promise to
+  // arrival queues at the head instead and takes over when that floor runs out
+  // (the drain in tickBody). Without this clause the floor would only be a promise to
   // callers, not to the player, because the very next penalty would break it.
   if (announceT > 0 && (pri <= _annPri || _annFloor > 0)) {
     // Into the queue, highest priority first, arrival breaking ties. Taking a
@@ -2789,8 +2789,6 @@ async function startRaceBody() {
   // and setMusic/setSfx lift it if it is off, so it can never strand you.
   // (#soundbtn rides #overlay now — see css/overlays.css for why.)
   document.body.classList.add("in-race");
-  syncRotateBlocker(true);
-  holdRaceWake();
   for (const l of els.lights.children) l.classList.remove("on");
   els.lights.classList.remove("count");   // a jump-in's hand-over count (handoverCount) never outlives its race
   showTouchControls(true);
@@ -2805,6 +2803,7 @@ async function startRaceBody() {
   // rain patter — a damp "wet" track is silent — and it must STOP too: a
   // restart after a changeable race had arced into rain kept playing it dry.
   if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
+  holdRaceWake(); syncRotateBlocker(true);   // AFTER the audio: on a portrait phone this pauses (stops engine/rain, drops the wake), and setPaused(false) on rotate restarts them
   if (!vmNoFramePump) await yieldMain(); if (stale()) return false;   // do not glue car-mesh warm onto the settings/grid sync stretch
   if (gfxContextLost()) { loadingScreen.stop(); quitToMenu(); return false; }
   RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
@@ -2842,8 +2841,9 @@ function startRace() {
     rs.hidden = true;
     try { if (rs.open && typeof rs.close === "function") rs.close(); } catch (_) { /* already closed */ }
   }
+  practiceMode = false;   // before loadingInfo() reads it: the body clears it only after several awaits
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
-  if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
+  if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome(); if (typeof Assets !== "undefined") Assets.retry();
   const key = entrySettings(), idx = trackIdx;
   const request = RaceEntryProfile.runSession(sessionEntry, key, () => Promise.all([ensureScenery(idx), DebrisWorld.ready()]),
     (current) => startRaceBody(current), () => key === entrySettings(),
@@ -3272,7 +3272,7 @@ const G = {
   get headlessMode() { return headlessMode; }, set headlessMode(v) { headlessMode = v; },
   get hideMeshes() { return hideMeshes; }, set hideMeshes(v) { hideMeshes = v; },
   get paused() { return paused; }, set paused(v) { paused = v; },
-  get raceLaps() { return raceLaps; }, set raceLaps(v) { raceLaps = v; },
+  get raceLaps() { return raceLaps; }, set raceLaps(v) { raceLaps = v; wxArc && wxArc.plan === wxArc._derived && (wxArc.plan = null); },
   get raceT() { return raceT; }, set raceT(v) { raceT = v; },
   // The RENDER clock (sky/cloud drift, FLAG cloth wave). It accumulates real
   // frame dt, so its value depends on how many frames happened to render — which
@@ -3289,13 +3289,13 @@ const G = {
   // the LOCAL player at P12 and so differs per machine.
   get gridPreOrdered() { return gridPreOrdered; },
   get lens() { return _lens; },
-  get raceWeather() { return raceWeather; }, set raceWeather(v) { raceWeather = v; },
+  get raceWeather() { return raceWeather; }, set raceWeather(v) { raceWeather = v; wxArc && wxArc.plan === wxArc._derived && (wxArc.plan = null); },
   get sectorBests() { return sectorBests; }, set sectorBests(v) { sectorBests = v; },
   get fieldSectorBests() { return fieldSectorBests; },
   get sectorIdx() { return sectorIdx; }, set sectorIdx(v) { sectorIdx = v; },
   get sectorStartT() { return sectorStartT; }, set sectorStartT(v) { sectorStartT = v; },
   get skyViewOverride() { return skyViewOverride; }, set skyViewOverride(v) { skyViewOverride = v; },
-  get trackIdx() { return trackIdx; }, set trackIdx(v) { trackIdx = v; },
+  get trackIdx() { return trackIdx; }, set trackIdx(v) { trackIdx = v; wxArc && wxArc.plan === wxArc._derived && (wxArc.plan = null); },
   get ttLaps() { return ttLaps; }, set ttLaps(v) { ttLaps = v; },
   get weatherArc() { return wxArc.arc; }, set weatherArc(v) { wxArc.arc = v; },
   // Mutable state consumed by js/lighting/atmosphere.js.
@@ -3525,9 +3525,9 @@ const G = {
   get ttDistance() { return TT_LAPS; },   // the time-trial distance a daily session stages (ttLaps is the session's lap list)
   // CHANGEABLE conditions: the weather walks from the chip's start to a
   // target the host decides (wxArcPlan) — see startRace / WeatherArc.planFor.
-  get raceChangeable() { return wxArc.changeable; }, set raceChangeable(v) { wxArc.changeable = !!v; },
+  get raceChangeable() { return wxArc.changeable; }, set raceChangeable(v) { wxArc.changeable = !!v; wxArc && wxArc.plan === wxArc._derived && (wxArc.plan = null); },   // a DERIVED plan (cached below) is dropped by every setting it reads; an assigned (host) one stays
   get announceBusy() { return announceT > 0; },   // a coach mark must never stomp a race message
-  get wxArcPlan() { return wxArc.plan || (wxArc.changeable ? wxArc.planFor() : null); },
+  get wxArcPlan() { return wxArc.plan || (wxArc.changeable ? (wxArc.plan = wxArc._derived = wxArc.planFor()) : null); },   // cached: the plan lobby publishes IS the one startChangeable arms (planFor reads the previous session's laps/track)
   set wxArcPlan(v) { wxArc.plan = v && typeof v === "object" ? { to: v.to, dur: v.dur } : null; },
   openGarageFrom: (from) => openGarage(from),
   startWeatherArc: (from, to, dur) => wxArc.startArc(from, to, dur),
@@ -3990,6 +3990,21 @@ function startRaceCovered() {
   if (!loadingScreen.phase()) loadingScreen.building(loadingInfo());
   return startRace();
 }
+/** The same start for the sheets that sit over a FINISHED session (qualifying's TO THE GRID and DRIVE, a
+ *  championship NEXT RACE): the garage drive-out, then the flyby, as every other route plays. raceIntro's
+ *  paths gate on state "menu" and menuWorld(), so the sheet's state ("results" after a driven lap or a race)
+ *  becomes "menu" with qualifying's classification, the flow and the built circuit kept (quitToMenu would
+ *  clear them). Kept on startRaceCovered: agent / dev callers, a hidden or headless page, VS FRIEND. */
+function startRaceFromSheet() {
+  if (headlessMode || document.hidden || netPlay.active() || qualiNet.hasArmed()) return startRaceCovered();
+  try {
+    resultsCam.reset(); els.results.hidden = true; clearTimeout(flybyBuildTimer); _menuGate.generation++;
+    setState("menu", "sheet-start");
+    const def = Tracks.LIST[trackIdx];
+    if (track && def && builtTrackId === def.id && builtTrackNight === sessionDarkFor(def) && builtGridSlots === fieldSize()) { _menuGate.track = track; _menuGate.ready = menuKey(trackIdx); }
+    raceIntro(startRace);
+  } catch (e) { Log.warn("game", "pre-race screen failed — starting straight away", e); cancelIntro(); loadingScreen.stop(); return startRaceCovered(); }
+}
 // An intro abandoned in the menu (its request went stale) must not leave a bare page: raceIntro hid the title.
 function titleIfBare() { sheetRelease(false); if (state === "menu" && els.overlay.hidden && ![...document.querySelectorAll(".screen")].some((el) => !el.hidden)) els.overlay.hidden = false; }
 // START RACE / PRACTICE START FROM RACE SETTINGS (_introSheet). The sheet stays up
@@ -4333,7 +4348,7 @@ function quitToMenu() {
   // session for itself, so this only stops a half-finished career leaking into the
   // next thing the player presses. The championship SAVES are untouched — what
   // makes the CONTINUE buttons appear is `season`/`career`, not the mode.
-  setFlow("gp"); session = "race";
+  setFlow("gp"); session = "race"; practiceMode = false; tyres.setLevel(raceTyreWear);   // practice is per-session; a time trial / Daily left the tyre model "off" (gridUp)
   quali.clear();   // memory only — persist stays until award/abort so CONTINUE keeps the grid
   qualiNet.clearPeers();
   // Title QUIT leaves the session: cancel() tears RTC down; q-back keeps abortQuali().
@@ -4582,7 +4597,7 @@ function update(dt) {
   // for values only the last step's survive. carSfx keeps every step (edges).
   if (soundOn && player && _audioParamStep) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
-    _engArg.slip = player.slipFactor ?? 1; _engArg.ax = player.axEstSm ?? 0;
+    _engArg.slip = player.slipFactor ?? 1; _engArg.ax = player.axEstSm ?? 0; _engArg.axStd = aStd(_engArg.ax);   // braking stays absolute; the pull rides PACE
     _engArg.onKerb = !!player.onKerb; _engArg.wet = isWetRoad(); _engArg.tow = player.towing || 0;
     // ERS state for the deploy whine: continuous, charge-scaled, part-flavoured.
     _engArg.deploy = player.deploying ? 1 : 0; _engArg.energy = player.energy ?? 1;
@@ -4610,7 +4625,7 @@ function update(dt) {
   if (soundOn && player) carSfx.update(player);
 }
 
-const _aiBoost = { traits: null, energy: 0, otActive: false, kAhead60: 0, towCar: false, towGap: 0, towSpeed: 0, speed: 0, chaser: false, chaserGap: 0, chaserSpeed: 0, team: null, seat: 0, stats: null, ersDeploy: 0, ersRegen: 0 };
+const _aiBoost = { traits: null, energy: 0, otActive: false, kAhead60: 0, towCar: false, towGap: 0, towSpeed: 0, speed: 0, chaser: false, chaserGap: 0, chaserSpeed: 0, team: null, seat: 0, stats: null, ersDeploy: 0, ersRegen: 0, vTop: 0 };
 const _aiOtFire = { traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0, speed: 0, aheadSpeed: 0, kAhead: 0, street: false, team: null, seat: 0, stats: null, other: null, vTop: 0 };
 // AI lateral controller (updateCar, "--- lateral ---"): heading state, not a
 // position P-loop. Tunables, not model numbers — see the block for the why.
@@ -4629,7 +4644,7 @@ const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, g
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0, queueT: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
 const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, kTurn: 0, calm: 0, roll: 0.5, queueT: 0 };
-const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null, blockerGap: 0, kTurn: 0, toTurnIn: 0, roadL: 0, roadR: 0, x: 0 };
+const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null, blockerGap: 0, kTurn: 0, toTurnIn: 0, roadL: 0, roadR: 0, x: 0, vTop: 0 };
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const _aiDefOnce = { defend: 0, side: 0 };
 const LCAR = Collide.LCAR, WCAR = Collide.WCAR;   // car box (js/physics/collide.js)
@@ -4665,13 +4680,13 @@ function collideFx(a, b, impact) {
 function updateCar(c, dt, ranked) {
   // A retirement is out of the race: no driving model, no coast, no lap timing.
   // It stays exactly where retireCar() parked it until the flag.
-  if (c.retired) { c._prevS = c.s; return; }
+  if (c.retired) { c._prevS = c.s; c.skidIntensity = c.wheelLock = c.brakeDemand = c.throttleDemand = c.towing = c.wake = 0; c.deploying = false; c.collideT = Math.max(0, c.collideT - dt); return; }   // the cues below are about driving: zero them, or squeal / smoke / marks / the ERS whine freeze at the last value until the flag
   // A net-owned rival takes no local motion, finished or not: coasting it here
   // fought poseRemote every tick (jitter, prog drift). See js/net/netplay.js.
   // The revs follow the coast DOWN in the gear it crossed in (a lift, not a downshift ladder):
   // returning before `c.rpm = rpmFor(...)` below held the crossing's revs — flat out on the
   // limiter — while coast() bled the car to a crawl (setEngine / RivalAudio read c.rpm).
-  if (c.finished && !netPlay.owns(c)) { pits.update(c, dt); coast(c, dt); c.rpm = rpmFor(c.gear || 1, Math.max(0, c.speed || 0)); c._prevS = c.s; return; }
+  if (c.finished && !netPlay.owns(c)) { pits.update(c, dt); coast(c, dt); c.rpm = rpmFor(c.gear || 1, Math.max(0, c.speed || 0)); c._prevS = c.s; c.skidIntensity = c.wheelLock = c.brakeDemand = c.throttleDemand = c.towing = c.wake = 0; c.deploying = false; c.collideT = Math.max(0, c.collideT - dt); return; }
   // Incident-sim takeover (R2/R3/C1): while Rapier owns this car's 6-DoF body,
   // the bespoke integration + wall clamp + collision writeback are SKIPPED —
   // postStep drives px/pz/head/(s,x) from the dynamic body instead. Bounded and
@@ -4685,8 +4700,8 @@ function updateCar(c, dt, ranked) {
   // IDLE_RPM all race. rpmFor is pure — the owner's own gear at the posed speed.
   if (netPlay.owns(c)) { c.rpm = rpmFor(c.gear || 1, Math.max(0, c.speed || 0)); c._prevS = c.s; return; }
   // A REAL REPLAY puppet: posed from the real positions (js/race/real-replay.js). Its gear is
-  // the tacho's coarse 2/4/6/8 band, so the note follows the speed's natural gear instead.
-  if (realRace.owns(c)) { const v = Math.max(0, c.speed || 0); c.rpm = rpmFor(naturalGear(v), v); c._prevS = c.s; return; }
+  // the tacho's coarse 2/4/6/8 band, so the note follows the speed's natural gear instead — at the transport's rate (2×–8×).
+  if (realRace.owns(c)) { const v = Math.max(0, c.speed || 0) * (c.replayRate || 1); c.rpm = rpmFor(naturalGear(v), v); c._prevS = c.s; return; }
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
   const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
@@ -4857,7 +4872,7 @@ function updateCar(c, dt, ranked) {
     _aiBoost.towCar = !!towCar; _aiBoost.towGap = towGap; _aiBoost.towSpeed = towCar ? towCar._snapSpeed : 0; _aiBoost.speed = c.speed;
     _aiBoost.chaser = !!chaser; _aiBoost.chaserGap = chaserGap; _aiBoost.chaserSpeed = chaser ? chaser._snapSpeed : 0;
     _aiBoost.team = c.team; _aiBoost.seat = c.seat; _aiBoost.stats = c.houseStats;
-    _aiBoost.ersDeploy = c.ersDeploy; _aiBoost.ersRegen = c.ersRegen;
+    _aiBoost.ersDeploy = c.ersDeploy; _aiBoost.ersRegen = c.ersRegen; _aiBoost.vTop = vTop();
     aiWantsBoost = AiDrive.wantBoost(_aiBoost);
   }
   const wantBoost = (c.human ? c.boostOn : aiWantsBoost)
@@ -5424,7 +5439,7 @@ function updateCar(c, dt, ranked) {
     c.pressT = clamp((c.pressT || 0) + (chaser && chaserGap < 0.6 * Math.max(c.speed, 10) ? dt : -dt * 0.5), 0, 6);
     c.errT = Math.max(0, (c.errT || 0) - dt);
     if (_atk.toTurnIn < Math.max(c.speed, 10) * 1.2) {
-      const zk = Math.round(c.s + _atk.toTurnIn);
+      const zk = Math.round(wrapS(c.s + _atk.toTurnIn));
       if (zk !== c.zoneKey) {
         c.zoneKey = zk;
         if (!c.errT && !alongO && DriverRatings.hash32(luckSeed() + ":" + (isChampionship() ? SeasonCal.drawRound(season) : raceIndex) + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6, dd.err)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
@@ -5506,7 +5521,7 @@ function updateCar(c, dt, ranked) {
       // ...and only where the move is ON (AiDrive.attackOK: a straight, or an
       // attack zone at its baked quality), and not on a car we just gave up on.
       _aiOtPull.attackQ = _atk.q; _aiOtPull.toTurnIn = _atk.toTurnIn; _aiOtPull.kTurn = c.kTurn; _aiOtPull.calm = c.calm || 0;
-      _aiOtPull.roll = AiDrive.attemptRoll(c.raceHash, c.lap, Math.round(c.s + _atk.toTurnIn));   // a fresh roll per braking zone
+      _aiOtPull.roll = AiDrive.attemptRoll(c.raceHash, c.lap, Math.round(wrapS(c.s + _atk.toTurnIn)));   // a fresh roll per braking zone
       c.atkWant = AiDrive.otWant(_aiOtPull);
       const sameCar = blocker === c.passFailOf && (c.passFailT || 0) > 0;
       // No passing under the safety car or VSC (FIA Sporting Regs): the
@@ -5540,7 +5555,7 @@ function updateCar(c, dt, ranked) {
       _aiDefend.street = !!track.street; _aiDefend.traits = aiT; _aiDefend.speed = c.speed;
       _aiDefend.team = c.team; _aiDefend.seat = c.seat; _aiDefend.stats = c.houseStats;
       _aiDefend.chaser = true; _aiDefend.chaserGap = chaserGap; _aiDefend.chaserSpeed = chaser._snapSpeed;
-      _aiDefend.kA = kA; _aiDefend.roomL = roomL; _aiDefend.roomR = roomR; _aiDefend.other = chaser; _aiDefend.x = c.x;
+      _aiDefend.kA = kA; _aiDefend.roomL = roomL; _aiDefend.roomR = roomR; _aiDefend.other = chaser; _aiDefend.x = c.x; _aiDefend.vTop = vTop();
       _aiDefend.blocker = blocker; _aiDefend.blockerGap = blockerGap; _aiDefend.kTurn = c.kTurn; _aiDefend.toTurnIn = _atk.toTurnIn; _aiDefend.roadL = roadL; _aiDefend.roadR = roadR;
       defend = AiDrive.defendPull(_aiDefend);
     }
@@ -6318,7 +6333,7 @@ function retireCar(c, reason) {
   c.rPrevHead = c.head; c.rPrevYawVis = 0;
   c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.yawVis = 0; c.steerVis = 0; c.skidIntensity = 0;   // a stale slip keeps the screech loop on
   c.gear = 1; c.rpm = IDLE_RPM;
-  c.boostOn = false; c.deploying = false; OvertakeMode.reset(c);
+  c.boostOn = false; c.deploying = false; OvertakeMode.reset(c); pits.clearArm(c);   // PitLane.update skips a retirement, so a car dead in the lane / box kept its crew, jacks and lifted body until the flag
   // The broadcast call. Every retirement is announced, not only the player's:
   // losing a rival is race information, and it is the only way a DNF that
   // happened half a lap away is visible at all.
@@ -8293,7 +8308,7 @@ function tickBody(now) {
   replayBuf.onTick(raceT, cars, state); // 30 Hz solo ring — never under netplay / scrub
   if (announceT > 0) {
     announceT -= dt;
-    if (_annFloor > 0) _annFloor -= dt;
+    if (_annFloor > 0 && (_annFloor -= dt) <= 0 && _annQueue.length && _annQueue[0].pri > _annPri) announceT = 0;   // an outranking card waits out the floor, not the whole card
     if (announceT <= 0) {
       els.announce.hidden = true;
       els.announce.className = "";
@@ -8499,7 +8514,7 @@ els.selBack.onclick = () => {
   if (daily.isActive()) daily.stop();
   vt(() => {
     els.select.hidden = true;
-    if (raceSettings.netRoom) $("vsfriend").hidden = false; else els.overlay.hidden = false;
+    if (raceSettings.netRoom) $("vsfriend").hidden = false; else { els.overlay.hidden = false; consumeGhostHash(); }   // a #ghost= link deferred while the picker was up lands now (bug-hunt 2 H13)
   });
   if (soundOn) GameAudio.uiSelect();
 };
@@ -8614,13 +8629,13 @@ function openQualiBody(fresh, netDone) {
 function closeQualiToGrid() {
   qualiSheet.close();
   session = "race";
-  startRaceCovered();             // gridUp() reads quali.order()
+  startRaceFromSheet();           // gridUp() reads quali.order()
 }
 $("q-drive").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   qualiSheet.close();
   session = "quali";
-  startRaceCovered();             // one out-lap + one flying lap, alone
+  startRaceFromSheet();           // one out-lap + one flying lap, alone
 };
 // FRIEND QUALIFYING WAITS FOR EVERY PLAYER'S TIME (qualiNet.waiting), and a
 // SIMULATE or a lap with no valid time sent none: the other sheet read "WAITING
@@ -8873,6 +8888,7 @@ els.resNext.onclick = () => {
   // weather plan — this solo race would have replayed the host's {to, dur}.
   wxArc.endSession();
   if (isChampionship() && (SeasonCal.qualiNext(season) || (SeasonCal.quali() && !quali.results()))) openQuali();
+  else if (isChampionship()) startRaceFromSheet();   // RACE AGAIN / TRY AGAIN (one-offs, trials) stay quick restarts
   else startRaceCovered();
 };
 
@@ -8942,7 +8958,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false);
-$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); startRace(); };
+$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; startRace().then(() => { if (state === "race") frozen = false; }, () => {}); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it with its own paused = false, and a start that was cancelled (settings changed) hands the old race back
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 

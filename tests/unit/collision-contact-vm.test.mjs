@@ -466,10 +466,11 @@ test("ordinary cars still exchange speed, separate and respect barriers with no 
 test("paused WATCH keeps overlapping traces and ignores manual recover in the real game update", async () => {
   await g.race("monza");
   g.apex.headless(true);
-  const advanceLoop = () => {
-    const start = g.sandbox.performance.now();
-    for (let i = 1; i <= 240; i++) g.pumpFrame(start + i * 1000 / 60);
-  };
+  // One virtual clock for every frame: the game clamps dt to >= 0 against its last stamp, so a stamp taken from
+  // the wall clock after a long virtual advance can land BEHIND it, run no update, and leave paused puppets un-zeroed.
+  let clock = g.sandbox.performance.now();
+  const frame = () => g.pumpFrame(clock += 1000 / 60);
+  const advanceLoop = () => { for (let i = 1; i <= 240; i++) frame(); };
   advanceLoop();
   const pause = () => g.G.els.pausebtn.onclick();
   const instantReplayButton = () => g.sandbox.document.getElementById("pm-replay");
@@ -502,7 +503,7 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
     g.G.setCamMode(0, { persist: false });
     for (const flag of ["retired", "finished"]) {
       watched[2][flag] = true;
-      g.pumpFrame(g.sandbox.performance.now() + 1000 / 60);
+      frame();
       assert.equal(g.G.camMode, 0, "a finished/retired WATCH seat retains the viewer's camera");
       assert.equal(g.G.dbgCam, null, "live TV cannot override the recorded broadcast picture");
       assert.equal(liveDirector.status().cuts, 0);
@@ -511,6 +512,11 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
     assert.ok(watched[2].x > Tracks.wallAt(g.G.track, watched[2].s, 1), "the replay pit-lane pose lies beyond the local driving barrier");
     const poses = () => watched.map((c) => ({ prog: c.prog, s: c.s, x: c.x, speed: c.speed, px: c.px, pz: c.pz,
       lap: c.lap, penalty: c.penalty, tyreWear: c.tyreWear }));
+    // One deterministic update first: a paused replay stands its traced cars (RealReplay's
+    // paused tick zeroes their speed), and the wall-clock pumpFrame above may or may not
+    // have stepped after the flags cleared — on a fast runner it often does not.
+    g.step(1);
+    assert.ok(watched.every((c) => c.speed === 0), "a paused WATCH stands every traced car");
     const before = poses();
     assert.equal(g.G.raceT, 0.1, "the replay seek synchronizes the game's HUD clock");
     vm.runInContext('Input.remoteEvent("recover")', g.ctx);   // the same action as keyboard R / gamepad RECOVER

@@ -244,7 +244,9 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
                count: rows.length, rendered: box.height > 0 };
     });
     await page.evaluate(() => window.__apex.uiScale(null));
-    test.skip(!r.scrolls, "the grid fits this viewport whole — no render boundary to cross");
+    // 200% UI size is set above precisely so the grid scrolls: a grid that fits
+    // whole here is a regression, not a reason to skip (round-3 8-F5).
+    expect(r.scrolls, "at 200% UI size the livery grid scrolls — there is a render boundary to cross").toBe(true);
     expect(r.count).toBeGreaterThan(20);
     expect(r.inLastRow, "End landed in the LAST row, not the render boundary").toBe(true);
     expect(r.rendered, "focus made the skipped row render").toBe(true);
@@ -267,7 +269,9 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.locator("#carsetup").waitFor({ state: "visible" });
     await page.locator('#cs-tabs [data-cs-cat="team"]').click();
     const chips = await page.evaluate(() => document.querySelectorAll("#cs-driver .sel-chip").length);
-    test.skip(chips < 2, "team has a single driver chip");
+    // Every team in js/data/teams.js races two drivers, so fewer chips is a
+    // garage regression, never a reason to skip (round-3 8-F5).
+    expect(chips, "the TEAM tab shows one chip per driver").toBeGreaterThanOrEqual(2);
 
     await page.evaluate(() => document.querySelector("#cs-driver .sel-chip").focus());
     const a = await focusInfo(page);

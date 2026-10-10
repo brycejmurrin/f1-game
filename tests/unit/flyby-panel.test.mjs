@@ -449,3 +449,40 @@ test("the preview flies a COPY re-taken when the list's contents change", () => 
   assert.match(src, /flybyCam\(u, playable\(\)\)/, "preview flies playable()");
   assert.match(src, /JSON\.stringify\(ensure\(\)\)/, "playable() keys its copy on the list's contents");
 });
+
+// 3-F1 (round-3 hunt): CAMERA TUNER / FLYBY EDITOR retry after one file of
+// LAZY_CAM_EDITOR failed re-injected the one that had already run: its
+// script-level `const` threw "already declared" (the red JS-error overlay).
+test("a camera-editor retry after a partial load failure injects only the file that failed (3-F1)", async () => {
+  const GLOBALS = { "js/camera/tuner-panel.js": "CamTunerEditor", "js/camera/flyby-editor.js": "FlybyEditor" };
+  const FAIL = "js/camera/tuner-panel.js";
+  const evaluated = new Set(), redeclared = [], attempts = [];
+  let attempt = 0;
+  const sb = { Math, JSON, Object, Array, Number, String, isFinite, Date, console, Promise, Set, Map, setTimeout, clearTimeout,
+    Log: { info() {}, warn() {}, debug() {} },
+    ApexRoster: { LAZY_CAM_EDITOR: Object.keys(GLOBALS), LAZY_CAM_EDITOR_EDGES: [], DEFERRED_EDGES: [] } };
+  sb.window = sb; sb.__APEX_BUILD = 1;
+  sb.document = {
+    createElement: () => ({ dataset: {}, remove() {} }),
+    head: { appendChild(el) {
+      const src = el.src.replace(/\?v=.*$/, "");
+      attempts[attempt].push(src);
+      setTimeout(() => {
+        if (attempt === 1 && src === FAIL) { el.onerror(); return; }   // one dropped request
+        if (evaluated.has(src)) redeclared.push(src);                  // == SyntaxError: already declared
+        evaluated.add(src); sb[GLOBALS[src]] = {};
+        el.onload();
+      }, 0);
+    } },
+  };
+  vm.createContext(sb);
+  vm.runInContext(read("js/core/script-loader.js").replace(/^const\b/gm, "var"), sb, { filename: "js/core/script-loader.js" });
+  vm.runInContext(read("js/camera/flyby-panel.js").replace(/^const\b/gm, "var"), sb, { filename: "js/camera/flyby-panel.js" });
+  attempt = 1; attempts[1] = [];
+  assert.equal(await sb.FlybyPanel.ensureCamEditor(), false, "the first open fails on the dropped file");
+  assert.ok(evaluated.has("js/camera/flyby-editor.js"), "flyby-editor.js ran on the first attempt");
+  attempt = 2; attempts[2] = [];
+  assert.equal(await sb.FlybyPanel.ensureCamEditor(), true, "the retry opens the editor");
+  assert.deepEqual(attempts[2], [FAIL], "only the file that failed is asked for again");
+  assert.deepEqual(redeclared, [], "no file was evaluated twice (no 'already declared' overlay)");
+});

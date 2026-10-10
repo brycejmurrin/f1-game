@@ -82,20 +82,25 @@ test("Rapier is not imported inside the boot burst; prime() starts it if a race 
 });
 
 function lateRapier({ enabled = true } = {}) {
-  let finish, fail, imports = 0, builds = 0;
-  const imported = new Promise((resolve, reject) => { finish = resolve; fail = reject; });
+  let finish, fail, imports = 0, builds = 0, imported;
+  const urls = [], timers = [];
+  const arm = () => { imported = new Promise((resolve, reject) => { finish = resolve; fail = reject; }); };
+  arm();
   const G = { track: {}, cars: [{ s: 0, x: 0 }] };
   const ctx = vm.createContext({
     URL, document: {}, location: { href: "http://localhost/js/game.js" },
     GameStore: { store: { raw: () => enabled ? "1" : "0" } },
     localStorage: { getItem: () => null }, requestIdleCallback() {},
+    // ready()'s cap timer, driven by hand (fire()) so no test sleeps 4 s.
+    setTimeout: (fn, ms) => { timers.push({ fn, ms, live: true }); return timers.length; },
+    clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].live = false; },
     Log: { warn() {}, info() {} },
-    __importRapier: () => { imports++; return imported; },
+    __importRapier: (url) => { imports++; urls.push(url); return imported; },
     __build: () => { builds++; },
   });
   // Mock only the external import and costly WASM construction. All readiness,
   // activation and first-step decisions execute the real module.
-  const src = SRC.replace("import(RAPIER_URL)", "__importRapier()")
+  const src = SRC.replace("import(url)", "__importRapier(url)")
     .replace(extractFn(SRC, "buildWorld"), `function buildWorld(track, cars) {
       __build(); world = { timestep: FIXED_DT }; _worldTrack = track;
       _mirrors = cars.map(() => ({}));
@@ -103,15 +108,17 @@ function lateRapier({ enabled = true } = {}) {
   vm.runInContext(src, ctx);
   const M = vm.runInContext("DebrisWorld", ctx);
   M.create(G);
-  return { M, G, finish: () => finish({ default: { init: () => Promise.resolve() } }), fail,
-    imports: () => imports, builds: () => builds };
+  return { M, G, finish: () => finish({ default: { init: () => Promise.resolve() } }), fail: (e) => fail(e), arm,
+    imports: () => imports, builds: () => builds, urls, timers,
+    fire: () => { for (const t of timers) if (t.live) { t.live = false; t.fn(); } } };
 }
 
 test("race readiness waits for a late import: setup builds once and the first green step does not build", async () => {
   const d = lateRapier();
   assert.equal(d.M.prime(), false, "the old setup path can beat the import");
   const p = d.M.ready();
-  assert.strictEqual(d.M.ready(), p, "race entry shares the idle/prime load");
+  d.M.ready();
+  assert.equal(d.imports(), 1, "race entry shares the idle/prime load");
   let done = false;
   p.then(() => { done = true; });
   await Promise.resolve();
@@ -135,8 +142,46 @@ test("race readiness leaves debris disabled and degrades a failed import without
   assert.equal(await p, false, "optional debris never prevents racing");
   assert.equal(failed.M.active(), false);
   assert.equal(failed.M.prime(), false);
-  assert.equal(await failed.M.ready(), false, "a failed import stays settled");
-  assert.equal(failed.imports(), 1);
+  assert.equal(failed.imports(), 1, "prime() does not re-import a failed load (no loop)");
+});
+
+// 3-F3 (round-3 hunt): race entry awaited the optional 2.2 MB Rapier import with
+// no cap (a stalled fetch held the loading card), and a failed import latched
+// _loadState -1 for the session: neither a later race nor DEBRIS OFF→ON ever
+// imported again.
+test("race readiness is capped, and a failed import is retried by the next race or toggle (3-F3)", async () => {
+  const hang = lateRapier();
+  let settled = null;
+  hang.M.ready().then((v) => { settled = v; });
+  await Promise.resolve();
+  const cap = hang.timers.find((t) => t.live);
+  assert.ok(cap, "ready() arms a cap while the import is in flight");
+  assert.ok(cap.ms > 0 && cap.ms <= 5000, `cap ${cap.ms} ms is in the modelsReady range`);
+  hang.fire();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(settled, false, "past the cap the race starts without debris");
+  hang.finish();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(hang.M.active(), true, "the import that lands later still switches debris on (step() builds lazily)");
+
+  const d = lateRapier();
+  const p = d.M.ready();
+  d.fail(new Error("dropped request"));
+  assert.equal(await p, false);
+  assert.equal(d.M.status().loadState, -1);
+  d.arm();
+  const again = d.M.ready();
+  assert.equal(d.imports(), 2, "the next race entry imports again");
+  assert.notEqual(d.urls[1], d.urls[0], "on a fresh URL: older engines cache a failed module fetch");
+  d.fail(new Error("still down"));
+  assert.equal(await again, false);
+  d.arm();
+  d.M.setEnabled(false); d.M.setEnabled(true);
+  assert.equal(d.imports(), 3, "DEBRIS OFF→ON imports again");
+  d.finish();
+  assert.equal(await d.M.ready(), true);
+  assert.equal(d.M.active(), true);
+  assert.equal(d.M.status().error, null, "a landed retry clears the earlier failure");
 });
 
 test("idle Rapier mirrors start incidents at the current human and AI pose", async () => {
@@ -151,7 +196,7 @@ test("idle Rapier mirrors start incidents at the current human and AI pose", asy
   const ctx = vm.createContext({
     URL, document: {}, location: { href: "http://localhost/js/game.js" },
     GameStore: { store: { raw: () => "1" } }, localStorage: { getItem: () => null },
-    requestIdleCallback() {}, Log: { info() {}, warn() {} },
+    requestIdleCallback() {}, Log: { info() {}, warn() {} }, setTimeout, clearTimeout,
     __importRapier: () => Promise.resolve(rapier),
     Tracks: { sample(track, s, out) {
       out.p = [s, track.height, 0]; out.r = [0, 0, -1]; out.t = [1, 0, 0]; out.hw = 7;
@@ -162,7 +207,7 @@ test("idle Rapier mirrors start incidents at the current human and AI pose", asy
     vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx);
   // Only substitute module loading; promotion, stepping and handback use the
   // shipped DebrisWorld, IncidentSim and vendored Rapier WASM implementation.
-  vm.runInContext(SRC.replace("import(RAPIER_URL)", "__importRapier()"), ctx);
+  vm.runInContext(SRC.replace("import(url)", "__importRapier()"), ctx);
   const debris = vm.runInContext("DebrisWorld", ctx);
   const incident = vm.runInContext("IncidentSim", ctx);
   debris.create(G);

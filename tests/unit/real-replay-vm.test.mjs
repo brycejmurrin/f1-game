@@ -358,6 +358,19 @@ test("BROADCAST battles: reuses one pooled array across calls (Director / PiP / 
   } finally { g.close(); }
 });
 
+test("BROADCAST battles: the crawl floor rides the pace scale when the caller passes vTop()/VMAX (4-F6)", () => {
+  // The same slow corner at OVERALL SPEED pace 1 and pace 0.5: every ground speed and so every progress gap
+  // halves. In seconds it is the same fight, but a raw 20 m/s floor reads it twice as tight at the low pace.
+  const B = vm.runInContext("(function(){" + fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8") + ";return Broadcast;})()", vm.createContext({}));
+  const at = (k) => host(B.battles([{ key: "a", prog: 1000 * k, speed: 5 * k }, { key: "b", prog: 1000 * k - 8 * k, speed: 5 * k }], k));
+  const full = at(1), half = at(0.5);
+  assert.equal(full.length, 1);
+  assert.ok(Math.abs(full[0].gapS - 0.4) < 1e-9, "pace 1: 8 m under the 20 m/s floor is 0.4 s: " + full[0].gapS);
+  assert.ok(Math.abs(half[0].gapS - full[0].gapS) < 1e-9, "pace 0.5 reads the same seconds: " + half[0].gapS);
+  const real = host(B.battles([{ key: "a", prog: 1000, speed: 5 }, { key: "b", prog: 992, speed: 5 }]));
+  assert.ok(Math.abs(real[0].gapS - 0.4) < 1e-9, "no scale (WATCH's real m/s): the plain 20 m/s floor");
+});
+
 test("BROADCAST in WATCH (camera AUTO): the tower goes up, the director cuts to the car in the next event with a new shot, a follow key hands the picture over, the results take it down", async () => {
   const g = await createGame({ track: "baku", storage: { tyreWear: "real" } });
   try {
@@ -930,8 +943,8 @@ test("WATCH transport: no aria-pressed on PLAY, and a focused, playing timeline 
 });
 
 test("WATCH broadcast: the running order's speeds are the cars' own, whatever the replay rate (battles()/PiP/director read them)", () => {
-  // pose() scales c.speed by the replay rate (engine pitch), but Broadcast.battles() divides a progress
-  // gap by that speed to get SECONDS: at 8x the same two cars must read the same battle as at 1x.
+  // Broadcast.battles() divides a progress gap by the running order's speed to get SECONDS: at 8x the
+  // same two cars must read the same battle as at 1x (c.speed is the trace's m/s; the rate rides c.replayRate).
   const grab = (rate) => {
     let seen = null;
     const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
@@ -961,7 +974,7 @@ test("WATCH broadcast: the running order's speeds are the cars' own, whatever th
   assert.deepEqual(eight.fights, one.fights, "the same two cars give the same battles at rate 1 and rate 8");
 });
 
-// The replay puppets' engines are voiced from c.speed / c.rpm (game.js updateCar: realRace.owns -> rpmFor(naturalGear(v), v);
+// The replay puppets' engines are voiced from c.speed x c.replayRate -> c.rpm (game.js updateCar: realRace.owns -> rpmFor(naturalGear(v), v);
 // a retired car returns before that line and keeps whatever c.rpm it last had).
 function audioHarness() {
   const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
@@ -990,6 +1003,20 @@ test("WATCH transport pause hands the audio a stopped car, and playing again bri
   replay.setPaused(false);
   replay.tick(0.1);
   assert.ok(a.speed > 49 && b.speed > 49, "playing again: " + a.speed);
+  replay.stop();
+});
+
+test("WATCH at 4x: c.speed is the trace's real m/s (camera, CamFeel, ExtraRigs read it); the rate rides apart for the revs", () => {
+  // 1a-F2: pose() wrote c.speed = trace x rate, so at 4x a 50 m/s car read 200 m/s to every camera reader of the
+  // followed puppet (camVantage's speed dolly, the CamFeel vignette, ExtraRigs' battle gaps), not just the engine.
+  const { replay, a, b } = audioHarness();
+  replay.setSpeed(4);
+  replay.seek(10); replay.tick(0);
+  assert.ok(Math.abs(a.speed - 50) < 0.01 && Math.abs(b.speed - 50) < 0.01, "4x: the trace's own speed, not 4x it: " + a.speed);
+  assert.equal(a.replayRate, 4, "the transport rate game.js multiplies into the revs (and only there)");
+  replay.setSpeed(1); replay.tick(0);
+  assert.ok(Math.abs(a.speed - 50) < 0.01, "1x: unchanged");
+  assert.equal(a.replayRate, 1);
   replay.stop();
 });
 
