@@ -479,7 +479,9 @@ function contactSheets(out, cells) {
   return { sheets };
 }
 
-/** report.json + findings.md + index.html + contact sheets, and the --json summary. */
+/** report.json + findings.md + index.html + contact sheets, and the --json summary.
+ *  Exit success only when every cell was measured and none carried a cellError
+ *  (a CDP timeout mid-matrix used to leave exit 0 with "27/28 cells measured"). */
 function writeReport(plan, report, log) {
   const sheets = report.cells.some((c) => c.shotRel) ? contactSheets(plan.out, report.cells) : { skipped: "no shots" };
   report.sheets = sheets;
@@ -489,13 +491,16 @@ function writeReport(plan, report, log) {
   fs.writeFileSync(path.join(plan.out, "index.html"), renderIndexHtml(report));
   const rel = (f) => path.relative(ROOT, path.join(plan.out, f));
   const measured = report.cells.filter((c) => c.records && c.records.length).length;
-  log(`= hud-survey ${measured ? "done" : "failed"}: ${measured}/${report.cells.length} cells measured, ${JSON.stringify(report.counts)}`);
+  const cellFailed = report.cells.filter((c) => c.cellError).length;
+  const ok = measured > 0 && cellFailed === 0 && measured === report.cells.length;
+  log(`= hud-survey ${ok ? "done" : "failed"}: ${measured}/${report.cells.length} cells measured` +
+    `${cellFailed ? `, ${cellFailed} cellError` : ""}, ${JSON.stringify(report.counts)}`);
   for (const f of report.findings.slice(0, 12)) log(`  ${f.severity.padEnd(6)} ${f.kind.padEnd(10)} ${f.cell}: ${f.detail}`);
   if (plan.json) {
     const summary = {
-      ok: measured > 0, out: path.relative(ROOT, plan.out), report: rel("report.json"), findingsMd: rel("findings.md"),
+      ok, out: path.relative(ROOT, plan.out), report: rel("report.json"), findingsMd: rel("findings.md"),
       indexHtml: rel("index.html"), sheets: sheets.sheets || [], counts: report.counts, meta: report.meta.matrix,
-      cells: report.cells.map((c) => ({
+      measured, cellFailed, cells: report.cells.map((c) => ({
         id: c.id, shot: c.shotRel ? path.relative(ROOT, path.join(plan.out, c.shotRel)) : null, lit: c.lit ?? null,
         error: c.cellError || null, state: c.state || null, findings: c.findings || [],
         measurements: (c.records || []).filter((r) => r.exists).map((r) => ({ key: r.key, visible: r.visible && !r.fadedByAncestor,
@@ -504,7 +509,7 @@ function writeReport(plan, report, log) {
     };
     console.log(JSON.stringify(summary));
   }
-  return measured;
+  return ok;
 }
 
 /** --merge: shard dirs → one report; shots are copied under <out>/shots. */

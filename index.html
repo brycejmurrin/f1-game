@@ -403,7 +403,8 @@
       .then(function () {
         if (!window.caches) return null;
         return caches.keys().then(function (names) {
-          return Promise.all(names.map(function (n) { return caches.delete(n); }));
+          // Only OUR caches: github.io is a SHARED origin, so keys() also lists other projects' Cache Storage.
+          return Promise.all(names.filter(function (n) { return n.indexOf("apex26-") === 0; }).map(function (n) { return caches.delete(n); }));
         });
       })
       .then(function () { return fetch(el.src, { cache: "reload" }); })

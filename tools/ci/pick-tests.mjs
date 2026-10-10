@@ -223,6 +223,7 @@ export const RULES = [
   // tests/unit/pick-tests.test.mjs holds the invariant, so a thirteenth cannot
   // appear in silence — these twelve are what it measured.
   [/^js\/race\/race-settings\.js/, ["game-vm"], "race-settings-vm.test.mjs"],
+  [/^js\/ui\/settings-tabs\.js/, ["steering-unit", "ui"], "settings-tabs.test.mjs (the page stack + LAZY_AUDIO gate); ui for the menu specs"],
   [/^js\/career\/custom-team\.js/, ["car"], "custom-team.spec.js"],
   [/^js\/car\/helmets\.js/, ["garage-unit"], "helmets.test.mjs"],
   [/^js\/car\/car-shade\.js/, ["garage-unit"], "car-shade.test.mjs"],
