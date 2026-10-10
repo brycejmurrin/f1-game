@@ -206,3 +206,14 @@ test("the pkill guard sees through timeout / xargs / setsid wrappers (15-F7)", (
   for (const cmd of ["timeout 5 sleep 1", "echo a | xargs echo", "timeout 5 pkill -x firefox", "echo 'timeout 5 pkill -f chrome'"])
     assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
 });
+
+test("settings.json auto-approves curl only to a loopback PORT, never a lookalike host (15-F8, Bryce 2026-10-10)", () => {
+  const allow = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8")).permissions.allow
+    .filter((d) => d.startsWith("Bash(curl")).map((d) => d.slice("Bash(".length, -1));
+  const matches = (pat, cmd) => new RegExp("^" + pat.split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$").test(cmd);
+  const allowed = (cmd) => allow.some((p) => matches(p, cmd));
+  for (const cmd of ["curl http://127.0.0.1:3456/version.json", "curl http://localhost:3713/health"])
+    assert.ok(allowed(cmd), `settings.json must allow: ${cmd}`);
+  for (const cmd of ["curl http://127.0.0.1.evil.example/?d=x", "curl http://127.0.0.1@evil.example/", "curl http://localhost.evil.example/"])
+    assert.ok(!allowed(cmd), `settings.json must NOT auto-approve: ${cmd}`);
+});

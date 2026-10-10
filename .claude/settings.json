@@ -70,8 +70,8 @@
       "Bash(diff *)",
       "Bash(cat /proc/loadavg)",
       "Bash(ps *)",
-      "Bash(curl http://127.0.0.1*)",
-      "Bash(curl http://localhost*)"
+      "Bash(curl http://127.0.0.1:*)",
+      "Bash(curl http://localhost:*)"
     ],
     "deny": [
       "Bash(git push --force*)",
