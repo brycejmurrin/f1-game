@@ -1,0 +1,1 @@
+1791611799	Cursor Agent	apex-tools MCP validation fixes 1-4 + job_status prove: OWNED tools/mcp/** tools/shot/hud-survey.mjs tools/ui/layout-audit.mjs tools/lib/hud-survey-matrix.mjs related unit tests. FORBIDDEN game.js circuits render. Do not enable auto-merge or merge.  [cursor/mcp-validation-fix-71a3; session 9c015ecb8534c69acd1dd463]
