@@ -370,6 +370,7 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + "s";
 // makes this stable rather than a feedback loop — capping changes the rect and
 // the zoom by the same factor, so the next measurement returns the same number.
 const FIT_AIR = 10;              // px of daylight required between two clusters
+const ROW_AIR = 2;               // px between the tower's bottom and the sector plate's top (touch)
 let _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
 // Per moved piece: hidden, or visible + the LENGTH of its words. A moved piece's
 // width is part of what HudLayout.fit clamps, and the AERO chip's words change
@@ -998,7 +999,24 @@ function fitHud() {
       capChrome = Math.min(capChrome, z >= 1 ? z : (room - k) / (top / 2));
     }
   }
-  const capTop = Math.min(capChrome, Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo)));
+  // THE TOWER MUST CLEAR THE SECTOR PLATE'S ROW ON TOUCH. There #hud-sectors sits at a fixed SCREEN
+  // y (8 + tap-hud + 4 + sat, below the pause button — its zoom cancels), while the tower's bottom
+  // scales with the band zoom: sat + z * (top offset + height). The right-half budget above only
+  // models the two side by side at the screen edge; once it stopped over-shrinking the band (the
+  // plate's dock stand-off is no longer read as a safe-area inset) the full-size tower hung 2.2 px
+  // below the plate's top and clipped its BEST tile (844x390 cockpit). Solved from the invariants
+  // (the tower's unzoomed top offset and height, the plate's screen top) so it cannot hunt.
+  let capRow = Infinity;
+  if (!bcast && top && scR && scR.width && !document.body.classList.contains("desktop")) {
+    const tR = layoutRect(_hudTop), zd = zoomDiv(_hudTop, zTopPub);
+    let satPx = 0;
+    try { satPx = parseFloat(getComputedStyle(root).getPropertyValue("--sat")) || 0; } catch (_) { /* mini-dom / detached root */ }
+    const y0 = (tR.top - satPx) / zd, hInt = tR.height / zd;
+    // Only a plate that STARTS BELOW the tower's top is a row to clear; one level with it shares the
+    // tower's row and is the right-half budget's business (a vertical limit there only drives the band to the floor).
+    if (hInt > 0 && y0 + hInt > 0 && scR.top > tR.top + ROW_AIR) capRow = (scR.top - ROW_AIR - satPx) / (y0 + hInt);
+  }
+  const capTop = Math.min(capChrome, capRow, Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo)));
   // THE BOTTOM BAND IS MEASURED BY ITS CHILDREN, not by its own box. `.hud-bottom`
   // is a flex ITEM inside #hud-dock carrying `min-width: 0` ("may shrink before it
   // pushes a dock", css/overlays.css), so its rect is the COMPRESSED width and its
