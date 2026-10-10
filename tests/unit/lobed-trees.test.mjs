@@ -40,7 +40,9 @@ function makeFixture(options = {}) {
     massBlocked: () => false, barrierClear: () => true, hash: () => 0.2,
     upOf: () => [0, 1, 0], bankOffsetAt: () => 0,
     lod: (n, floor) => Math.max(floor, Math.round(n * (options.mobile ? 0.72 : 1))),
-    note: (...args) => notes.push(args), noteSuppressed: (...args) => notes.push(args),
+    note: (...args) => { notes.push(args); return args; },
+    unnote: (rec) => { const i = notes.lastIndexOf(rec); if (i >= 0) notes.splice(i, 1); },
+    noteSuppressed: (...args) => notes.push(args),
     instance: (key, placement, build, metadata, opts) => {
       if (options.instanceResult !== undefined) return options.instanceResult;
       const replay = opts && opts.roundNormals ? { ...emit, roundNormals: geom.roundNormals } : emit;
