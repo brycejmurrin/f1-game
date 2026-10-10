@@ -472,11 +472,11 @@ const NetLobby = (function () {
       // Nothing legitimate sends more than a handful a second (a seat clash
       // settles in one round trip), so past HELLO_RATE in a rolling second
       // the rest are dropped on the floor. Separate windows per event.
-      const helloTimes = [], readyTimes = [];
-      const underRate = (times) => {
+      const helloTimes = [], readyTimes = [], qualiTimes = [];
+      const underRate = (times, limit = HELLO_RATE) => {
         const now = performance.now();
         while (times.length && now - times[0] > EVENT_WINDOW_MS) times.shift();
-        if (times.length >= HELLO_RATE) return false;
+        if (times.length >= limit) return false;
         times.push(now);
         return true;
       };
@@ -573,6 +573,8 @@ const NetLobby = (function () {
         const me = Teams.LIST[G.teamIdx] || Teams.LIST[0];
         if (me && d.driverId === me.id + ":" + (G.driverIdx || 0)) return false;
         if (role !== "host") return true;
+        // Per-connection QUALI+QLIVE cap (host relays each event to every guest).
+        if (!underRate(qualiTimes, QUALI_RATE)) return false;
         const p = _peers.get(id);
         return !!(p && p.team && d.driverId != null
           && d.driverId === p.team + ":" + (p.driver || 0));
@@ -589,6 +591,18 @@ const NetLobby = (function () {
         for (const [other, sess] of sessions) {
           if (other !== id) try { sess.sendEvent(type, lap); } catch (e) { /* departing peer */ }
         }
+      });
+      // Guest abortQuali → host grades that HELLO's driver no-time (relayed QUALI).
+      made.onEvent(QABORT, () => {
+        if (role !== "host" || !friendQualifying) return;
+        const p = _peers.get(id);
+        if (!p || !p.team) return;
+        const q = { driverId: p.team + ":" + (p.driver || 0), t: Infinity, noTime: true };
+        if (G.onPeerQuali) G.onPeerQuali(q);
+        for (const [other, sess] of sessions) {
+          if (other !== id) try { sess.sendEvent(NetPlay.EV.QUALI, { driverId: q.driverId, t: null, noTime: true }); } catch (e) { /* departing peer */ }
+        }
+        say("A player left qualifying — their time is set to none.");
       });
       made.sendEvent(NetPlay.EV.HELLO, Object.assign(localProfile(), role === "host" ? { rank: joinRank(id) } : null));
       if (role === "host") {
@@ -608,6 +622,8 @@ const NetLobby = (function () {
     // filed under PEER_ONE; a host files each guest under its minted "gN" id.
     const PEER_ONE = "peer";
     const HELLO_RATE = 5, EVENT_WINDOW_MS = 1000;   // per connection, per event
+    const QUALI_RATE = 12;                          // QUALI + QLIVE together, per connection
+    const QABORT = "qabort";   // guest→host "left quali sheet" (lobby-local until netplay owns it)
     const _peers = new Map();
     const _ready = new Map();
     const _verify = new Map();   // connection id -> 4-letter code from both DTLS fingerprints
@@ -1204,17 +1220,23 @@ const NetLobby = (function () {
       if (G.raceQuali && G.openQualiForNet) {
         friendQualifying = true;
         say("Qualifying…");
+        let opened;
         sealRoom();
         if (G.setNetRoom) G.setNetRoom(false);
         try {
           G.flow = "gp";
-          G.openQualiForNet(finishStart);   // calls back when TO THE GRID is pressed
+          opened = G.openQualiForNet(finishStart);   // calls back when TO THE GRID is pressed
         } catch (e) {
           friendQualifying = false;
           say("Could not start qualifying: " + (e && e.message), true);
           return;
         }
         close();         // the sheet is the screen now — but the SESSION stays open
+        // Prepare failure leaves friendQualifying true; cancel if sheet stays hidden.
+        Promise.resolve(opened).then(() => {
+          const sheet = $("quali");
+          if (friendQualifying && sheet && sheet.hidden) cancel();
+        }, () => {});
         return;
       }
       finishStart();
@@ -1252,6 +1274,9 @@ const NetLobby = (function () {
       } catch (e) {
         say("Could not start the race: " + (e && e.message), true);
         friendQualifying = false;   // keep the room and its message up, but stop gating quali saves
+        // beginRace hid the lobby — quit rather than idle an open session.
+        const screen = els().screen;
+        if (screen && screen.hidden) { cancel(); if (G.quitToMenu) G.quitToMenu(); }
         return;
       }
       const started = G.netPlay.start({
@@ -1290,6 +1315,8 @@ const NetLobby = (function () {
 
     async function host() {
       const gen = beginOperation();
+      resetSteps();
+      show("hosting");   // answer the tap before the ICE_WAIT_MS credential wait
       // INVITE ANOTHER -> HOST A RACE after a code join: the reopened room code
       // stayed advertised (six relay sockets, the dead offer reposted every
       // 5 s) while this generation ignored its answers — a friend told the
@@ -1298,7 +1325,6 @@ const NetLobby = (function () {
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
       await readyIce();
       if (!operationCurrent(gen)) return cancelledResult();
-      show("hosting");
       if (!newTransport("host")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
       const pending = transport;
       say("Preparing invite… (this can take a few seconds)");
@@ -1323,7 +1349,7 @@ const NetLobby = (function () {
         say("That is four players — the grid is full.", true);
         return { ok: false, error: "room_full" };
       }
-      stopScan();          // a camera left running from the last sub-step
+      resetSteps();        // the consumed invite/QR/answer, and a camera left running from the last sub-step
       show("pick");
       if ($("vs-join")) $("vs-join").hidden = true;
       if ($("vs-code-join")) $("vs-code-join").hidden = true;
@@ -1340,6 +1366,7 @@ const NetLobby = (function () {
     let joinP = null;
     async function join() {
       const gen = beginOperation();
+      resetSteps();
       show("joining");
       const said = sayGen;
       const p = (async () => {
@@ -1420,7 +1447,6 @@ const NetLobby = (function () {
     let taking = null;
     async function acceptAnswer(codeIn) {
       if (taking && taking === transport) { say("That answer is already being read.", true); return { ok: false, error: "already_accepting" }; }
-      const gen = beginOperation();
       const e = els();
       const code = codeFrom(codeIn != null ? codeIn : (e.answerIn ? e.answerIn.value : ""));   // as makeAnswer
       if (codeIn != null && e.answerIn) e.answerIn.value = codeIn;
@@ -1430,6 +1456,8 @@ const NetLobby = (function () {
       if (!transport) { say(noConnectionMsg(), true); return { ok: false, error: "no_transport" }; }
       const pending = transport;
       const id = pendingId;
+      // Real attempt only — empty CONNECT must not stale a host invite in flight.
+      const gen = beginOperation();
       say("Reading answer…");
       taking = pending;
       let res;
@@ -1492,6 +1520,7 @@ const NetLobby = (function () {
     async function codeHost(opts) {
       opts = opts || {};
       const gen = beginOperation();
+      resetSteps();
       stopCodeWait();
       await readyIce();
       if (!operationCurrent(gen)) return cancelledResult();
@@ -1823,6 +1852,19 @@ const NetLobby = (function () {
       return null;
     }
 
+    // Clear invite/QR/answer widgets per attempt (retry used to show a dead peer).
+    function resetSteps() {
+      const e = els();
+      for (const f of ["invite", "inviteIn", "answer", "answerIn"]) if (e[f]) e[f].value = "";
+      if (e.answerHint) e.answerHint.hidden = true;
+      if (e.answerActions) e.answerActions.hidden = true;
+      if (e.answerRaw) e.answerRaw.hidden = true;
+      if (e.answerWait) e.answerWait.hidden = false;
+      if ($("vs-qr-wrap")) $("vs-qr-wrap").hidden = true;
+      if (e.answerQrWrap) e.answerQrWrap.hidden = true;
+      stopScan();
+    }
+
     function open() {
       const block = blockingTitleSheet();
       if (block) {
@@ -1842,16 +1884,7 @@ const NetLobby = (function () {
       // JOIN anybody afterwards.
       if ($("vs-join")) $("vs-join").hidden = false;
       if ($("vs-code-join")) $("vs-code-join").hidden = false;
-      for (const f of ["invite", "inviteIn", "answer", "answerIn"]) if (e[f]) e[f].value = "";
-      if (e.answerHint) e.answerHint.hidden = true;
-      if (e.answerActions) e.answerActions.hidden = true;
-      if (e.answerRaw) e.answerRaw.hidden = true;
-      if (e.answerWait) e.answerWait.hidden = false;
-      // Reopening must not show the PREVIOUS session's QR — it would point a
-      // camera at a peer connection that no longer exists.
-      if ($("vs-qr-wrap")) $("vs-qr-wrap").hidden = true;
-      if (e.answerQrWrap) e.answerQrWrap.hidden = true;
-      stopScan();
+      resetSteps();
       const raw = document.querySelector("#vs-hosting .vs-raw");
       if (raw) raw.open = false;
       say("");
@@ -1866,6 +1899,7 @@ const NetLobby = (function () {
     // race-settings return here instead of starting a solo GP.
     function abortQuali() {
       friendQualifying = false;
+      if (role === "guest") broadcast(QABORT, null);   // host waits on every rival
       if (G.setNetRoom) G.setNetRoom(true);
       const e = els();
       if (e.screen) e.screen.hidden = false;
@@ -1881,7 +1915,8 @@ const NetLobby = (function () {
       clearInterval(pollTimer);
       Log.info("net", "lobby close");
       stopScan();
-      dropWake();
+      // Keep wake during friend quali (session stays open while lobby is hidden).
+      if (!friendQualifying) dropWake();
       const e = els();
       if (e.screen) e.screen.hidden = true;
     }
@@ -2034,12 +2069,12 @@ const NetLobby = (function () {
     }
 
     return {
-      wire, open, close, cancel, abortQuali, host, join, makeAnswer, acceptAnswer,
-      shareInvite, shareAnswer, canShare, openFromUrl,
-      scan, stopScan, pasteInto, deliver,
-      codeHost, codeJoin, stopCodeWait,
+      wire, open, cancel, abortQuali, host, join, makeAnswer, acceptAnswer,
+      shareInvite, shareAnswer, openFromUrl,
+      scan, stopScan,
+      codeHost, codeJoin,
       watchForOpen: waitForOpen,
-      roomChanged, setReady, startFromRoom, renderRoom, removeGuest,
+      roomChanged, setReady, startFromRoom, removeGuest,
       verifyCodes: () => Object.fromEntries(_verify),
       // Mint a further invite without disturbing the room. Host only, capped.
       inviteAnother,

@@ -86,6 +86,16 @@ test("compact-wide live Home grid-places #menu-secondary under the brand", () =>
     /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*white-space:\s*nowrap/,
     "under-brand room labels stay on one line (no wrap clip)",
   );
+  assert.match(
+    menus,
+    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*justify-content:\s*flex-start/,
+    "under-brand room icons stay on the leading edge (not clipped by center+overflow)",
+  );
+  assert.match(
+    menus,
+    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[\s\S]*padding-inline:\s*var\(--gap\)/,
+    "CAREER skew tip clears #menu-buttons overflow-x via inline pad",
+  );
   assert.doesNotMatch(
     menus,
     /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*white-space:\s*normal/,

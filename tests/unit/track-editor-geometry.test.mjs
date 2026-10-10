@@ -202,6 +202,22 @@ test("stamps: arcs are sampled exactly — 8-25 m chords, compensated at their o
   }
 });
 
+test("stamps: arc chords survive the 0.25 m save lattice — every chord of a snapped arc stays >= 8 m (bug-hunt H7)", () => {
+  const { ST, S } = bootEditor();
+  const q = (v) => Math.round(v * 4) / 4;
+  let worst = Infinity, cases = 0;
+  for (const R of [15, 16, 18, 20, 22, 25, 30, 45, 60, 100, 300]) for (let deg = 10; deg <= 270; deg += 10) for (const th of [0, 0.7, 2.1]) {
+    const A = deg * Math.PI / 180, { Rc, n } = ST.arcFor(R, A);
+    if (n < 2) continue;   // a one-step arc is one chord: nothing to keep apart (the validator sees it against its neighbours)
+    const pose = { x: q(10.13), z: q(-20.37), th }, pts = S.arcPts(pose, Rc, A, 0, n).pts.map((p) => [q(p[0]), q(p[1])]);
+    const all = [[pose.x, pose.z]].concat(pts);
+    for (let i = 1; i < all.length; i++) worst = Math.min(worst, Math.hypot(all[i][0] - all[i - 1][0], all[i][1] - all[i - 1][1]));
+    cases++;
+  }
+  assert.ok(cases > 300, "the sweep ran");
+  assert.ok(worst >= ST.SPACING, `shortest snapped chord ${worst.toFixed(3)} m < 8 m: validate.js reds \"Two points closer than 8 m\" right after a legal stamp`);
+});
+
 test("stamps: a CORNER spliced into a 25 m loop BUILDS at the requested radius (±3 %, R 30-300)", () => {
   const { ST, S, C, ctx } = bootEditor();
   const base = S.resample(ellipse(36, 900, 500), 25);
@@ -309,7 +325,7 @@ test("SPIRAL: every curved stamp turns exactly its angle for Ls 0–80; its exit
 
 test("SPIRAL: Ls 0 (or omitted) is the pre-spiral stamp byte for byte; a spiralled stamp keeps 8 m spacing and splices", () => {
   const { ST, S, TR } = bootEditor();
-  // fnv1a over every pre-spiral sample (shape.js + stamps.js at f244cee83), pinned.
+  // fnv1a over every pre-spiral sample (shape.js + stamps.js), pinned; re-pinned 8d93271b when arcFor took the lattice margin (SPACING + 0.5, bug-hunt H7) — the plain arcs changed, Ls stayed inert.
   const digest = (extra) => {
     let h = 0x811c9dc5;
     const feed = (s) => { for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } };
@@ -319,9 +335,9 @@ test("SPIRAL: Ls 0 (or omitted) is the pre-spiral stamp byte for byte; a spirall
     }
     return (h >>> 0).toString(16);
   };
-  assert.equal(digest({}), "e86efca4", "Ls omitted: the pre-spiral output");
-  assert.equal(digest({ Ls: 0 }), "e86efca4", "Ls 0: the same");
-  assert.notEqual(digest({ Ls: 40 }), "e86efca4");
+  assert.equal(digest({}), "8d93271b", "Ls omitted: the pre-spiral output");
+  assert.equal(digest({ Ls: 0 }), "8d93271b", "Ls 0: the same");
+  assert.notEqual(digest({ Ls: 40 }), "8d93271b");
   assert.equal(ST.clampParams("corner", { Ls: 999 }).Ls, 80); assert.equal(ST.clampParams("hairpin", { Ls: -5 }).Ls, 0);
   assert.equal("Ls" in ST.clampParams("straight", {}), false, "a straight has no spiral");
   for (const kind of Object.keys(CURVED)) for (let R = 15; R <= 300; R += 7) for (const deg of [10, 45, 90, 180, 270]) for (const Ls of [5, 10, 25, 50, 80]) {
@@ -379,4 +395,14 @@ test("SPIRAL: a spiralled CORNER builds at its radius (±5 %, R 30–300) and th
     assert.ok(cut >= 0.3, rows[rows.length - 1]);
   }
   console.log("SPIRAL 80 m on a 120° corner:\n  " + rows.join("\n  "));
+});
+
+test("validate: 201 control points read 'Too many points', not the ±10 km 'bounds' refusal (bug-hunt H10)", () => {
+  const { V } = bootEditor();
+  const v = V.check(design({ pts: ellipse(201) }));
+  const codes = v.issues.map((i) => i.code + ":" + i.level);
+  assert.ok(v.issues.some((i) => i.code === "points" && i.level === "red" && /^Too many points/.test(i.msg)), "the cap is named: " + codes);
+  assert.ok(!v.issues.some((i) => i.code === "bounds"), "…and the loop is not blamed on the map bounds: " + codes);
+  assert.equal(v.ok, false);
+  assert.ok(V.check(design({ pts: [[0, 0], [20000, 0], [0, 20000], [-9000, 0], [0, -9000], [900, 900], [-900, 900], [900, -900]] })).issues.some((i) => i.code === "bounds"), "a real off-map point still says bounds");
 });
