@@ -15,6 +15,7 @@
 //   --preset clean|big|corners|… (MOVE & SIZE)  --matrix <file.json>  --no-boxes  --no-mock
 //   --out artifacts/hud-mock/<stamp>  --gl swiftshader|llvmpipe (default $APEX_GL or llvmpipe)
 //   --track monza  --frac 0.18  --list (cells, no browser)  --json (summary as the last stdout block)  --help
+//   --css <file> (extra stylesheet injected after boot: prototype a layout before writing it)
 //
 // WHY IT IS FAST. hud-survey.mjs paints a software 3D frame per cell; this tool
 // paints none after boot. It builds ONE race per pointer type (touch / desktop:
@@ -49,7 +50,7 @@ import { applyCell, chromiumArgs } from "./hud-survey.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const KNOWN = ["--devices", "--cams", "--hud-scale", "--ui-scale", "--btn-scale", "--sets", "--preset", "--matrix", "--no-boxes",
-  "--no-mock", "--out", "--gl", "--track", "--frac", "--list", "--json", "--help"];
+  "--no-mock", "--out", "--gl", "--track", "--frac", "--list", "--json", "--css", "--help"];
 const SETS = { "all-on": [], shipped: ["rel", "strat", "inputs"] };
 
 export function planCells(F) {
@@ -169,6 +170,7 @@ async function bootPage(browser, plan, touch) {
   await sleep(800);
   await page.evaluate(() => { const a = window.__apex; a.go(); a.headless(true); });
   await page.addStyleTag({ content: "#game,#game-soft,canvas#game{visibility:hidden!important}html,body{background:#000!important}" });
+  if (plan.css) await page.addStyleTag({ content: plan.css });
   return { ctx, page, errs };
 }
 
@@ -181,6 +183,7 @@ async function main() {
   if (!["artifacts", "scratch"].some((d) => !path.relative(path.join(ROOT, d), out).startsWith(".."))) throw new CliArgError("--out must stay under artifacts/ or scratch/");
   if (F.has("--list")) { for (const c of cells) console.log(c.id); console.log(`[hud-mock] ${cells.length} cells`); return; }
   const plan = { cells, track: F.flag("--track", "monza"), frac: Number(F.flag("--frac", "0.18")), boxes: !F.has("--no-boxes"), mock: !F.has("--no-mock"),
+    css: F.has("--css") ? fs.readFileSync(path.resolve(ROOT, F.flag("--css", "")), "utf8") : "",
     gl: F.flag("--gl", process.env.APEX_GL === "swiftshader" ? "swiftshader" : "llvmpipe") };
   fs.mkdirSync(out, { recursive: true });
   const log = (m) => (F.has("--json") ? console.error : console.log)("[hud-mock] " + m);
