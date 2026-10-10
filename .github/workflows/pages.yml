@@ -322,6 +322,12 @@ jobs:
       # staged tags too, so the committed placeholder only has to be
       # consistent, never current. <meta name="apex-sha"> records provenance —
       # and is what pages-publishable.sh reads back to keep deploys monotonic.
+      # The formula lives in tools/desktop/stage.mjs (`pagesBuild`), the ONE
+      # copy the desktop and Android packagers stamp with too (2026-10-10:
+      # this step's inline bash was the only copy, so every shell shipped the
+      # committed placeholder build 1695). stage.mjs runs bump-cache --apply,
+      # places apex-sha after apex-build, and bump-cache --check — the same
+      # bytes this step's bash produced (tests/unit/deploy-staging-build).
       - name: Stamp the shell generation
         id: stamp
         run: |
@@ -329,11 +335,9 @@ jobs:
           # HEAD is GITHUB_SHA: the count, the staged bytes and apex-sha all
           # describe the one commit this run tested and is publishing.
           PUBLISH_SHA="$GITHUB_SHA"
-          BUILD=$(( 2000 + $(git rev-list --count HEAD) ))
-          node tools/ci/bump-cache.mjs --apply --at "$BUILD" --root _site
-          sed -i "s|<meta name=\"apex-build\" content=\"$BUILD\">|<meta name=\"apex-build\" content=\"$BUILD\">\n<meta name=\"apex-sha\" content=\"$PUBLISH_SHA\">|" _site/index.html
-          grep -q 'name="apex-sha"' _site/index.html
-          node tools/ci/bump-cache.mjs --check --json --root _site
+          OUT=$(node tools/desktop/stage.mjs --out _site --stamp-only --sha "$PUBLISH_SHA")
+          BUILD=$(node -p 'JSON.parse(process.argv[1]).stamped' "$OUT")
+          grep -q "<meta name=\"apex-sha\" content=\"$PUBLISH_SHA\">" _site/index.html
           echo "build=$BUILD" >> "$GITHUB_OUTPUT"
           echo "stamped build $BUILD for $PUBLISH_SHA"
       # Artifact name is scoped to the RUN ATTEMPT: artifacts survive across

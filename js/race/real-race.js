@@ -778,6 +778,8 @@ const RealRace = (function () {
       G.setCarRole(c, true, true);
       seatOnRoad(G.track, c);
       c.launch = null; c.launchOn = false;
+      // Zero the tilt/stick NOW, as FlyingStart's hand-over does: a jump-in never passes the gantry's first lamp.
+      if (typeof Input !== "undefined" && Input.calibrate) Input.calibrate();
       count("GO"); goHold = GO_HOLD_S;
       if (G.announce) G.announce("YOU HAVE CONTROL", 1.5, "race");
       Log.info("game", "RealRace.handover " + c.code + " lap=" + c.lap + " speed=" + (c.speed || 0).toFixed(1));

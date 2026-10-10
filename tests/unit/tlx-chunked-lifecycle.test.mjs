@@ -7,6 +7,7 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 
 const SRC = new URL("../../js/render/three/tlx-chunked.js", import.meta.url);
+const CHUNK_BINS = fs.readFileSync(new URL("../../js/render/shared/chunk-bins.js", import.meta.url), "utf8").replace(/^const\b/gm, "var");
 
 class BufferAttribute {
   constructor(array, itemSize, normalized) {
@@ -36,6 +37,7 @@ function factory(released) {
   };
   vm.createContext(sandbox);
   seedLog(sandbox);
+  vm.runInContext(CHUNK_BINS, sandbox, { filename: "chunk-bins.js" });   // build() bins through ChunkBins at call time
   vm.runInContext(fs.readFileSync(SRC, "utf8"), sandbox, { filename: "tlx-chunked.js" });
   return sandbox.window.TLXShaders.chunked(THREE, {
     isWebGPU: () => false,
@@ -95,6 +97,7 @@ function mergeFactory(value) {
   };
   vm.createContext(sandbox);
   seedLog(sandbox);
+  vm.runInContext(CHUNK_BINS, sandbox, { filename: "chunk-bins.js" });   // build() bins through ChunkBins at call time
   vm.runInContext(fs.readFileSync(SRC, "utf8"), sandbox, { filename: "tlx-chunked.js" });
   return sandbox.window.TLXShaders.chunked(THREE, { isWebGPU: () => false, releaseGeometry() {} });
 }

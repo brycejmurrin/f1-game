@@ -15,10 +15,11 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
+import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/race/quali-model.js"), "utf8");
-const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+const GAME = gameSource();   // game.js + the modules carved from it (tests/helpers/game-source.mjs)
 const QUALI_NET = fs.readFileSync(path.join(ROOT, "js/race/quali-net.js"), "utf8");
 const CAREER_UI = fs.readFileSync(path.join(ROOT, "js/career/career-ui.js"), "utf8");
 
@@ -156,8 +157,8 @@ test("a driven simulate persists; an active netPlay session does not", () => {
 });
 
 test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race uses fresh", () => {
-  const open = fnSource(GAME, "function openQuali(fresh, netDone)");
-  const commit = fnSource(GAME, "function openQualiBody(fresh, netDone)");
+  const open = symbolSource("function openQuali(fresh, netDone)");
+  const commit = symbolSource("function openQualiBody(fresh, netDone)");
   assert.match(open, /sessionEntry\.begin\("quali", key, \(\) => \{ qualiNet\.clearPeers\(\); return ensureScenery\(idx\); \},\s*\(\) => openQualiBody\(fresh, netDone\)/,
     "scenery must finish before the synchronous qualifying commit; peer times clear in prepare");
   // Not after the load: a rival's one-shot QUALI that lands during the scenery
@@ -187,7 +188,7 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   // where the bug lived; require the guard where it is legitimate.
   assert.doesNotMatch(commit, /quali\.clear\(true\)/,
     "openQuali must not wipe the persist — that is the bug this suite exists for");
-  assert.doesNotMatch(fnSource(GAME, "function quitToMenu()"), /quali\.clear\(true\)/,
+  assert.doesNotMatch(symbolSource("function quitToMenu()"), /quali\.clear\(true\)/,
     "quit-to-menu keeps the persist so CONTINUE still has the driven grid");
   // This used to be the whole guard, and it asserted NOTHING: `clear(true)`
   // has no call site anywhere in js/ (measured 2026-09-22 — `clear(forget)`
@@ -223,10 +224,10 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   // Scoped to the function each line is about: over all of game.js the lazy
   // match ran 244k characters into quitToMenu's copy, so deleting the closers
   // from setPaused(false) still passed (testing-gap audit 2026-09-29).
-  assert.match(fnSource(GAME, "function setPaused(p, why)"), /if \(!p\) \{\s*closeLightTuner\(false\); closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\);/);
-  assert.match(fnSource(GAME, "function setPaused(p, why)"), /closeSettings\(\)/,
+  assert.match(symbolSource("function setPaused(p, why)"), /if \(!p\) \{\s*closeLightTuner\(false\); closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\);/);
+  assert.match(symbolSource("function setPaused(p, why)"), /closeSettings\(\)/,
     "setPaused(false) must closeSettings so pad axis capture cannot survive resume");
-  assert.match(fnSource(GAME, "function quitToMenu()"), /closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\);/);
+  assert.match(symbolSource("function quitToMenu()"), /closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\);/);
   assert.match(GAME, /isCareer\(\) && Career\.conflicted\(\)/);
   // The caution pace cap, now four levels deep: RED (4) stops the field at a
   // walking-pace floor rather than 0, so every "approaches vmax" fade stays
@@ -260,7 +261,7 @@ test("friend-race title quit cancels the lobby instead of aborting back into it"
   // NOT GAME.slice(i, i + 2200) — that window took the deploy branch red on
   // 2026-09-02: quitToMenu grew and netLobby.cancel() moved to +2605, so this
   // assertion failed for a call that was still there. See tests/helpers/fn-source.mjs.
-  const quit = fnSource(GAME, "function quitToMenu()");
+  const quit = symbolSource("function quitToMenu()");
   assert.match(quit, /qualiNet\.resetOnQuitWithCancel\(\)/);
   assert.match(fnSource(QUALI_NET, "function resetOnQuitWithCancel()"), /netLobby\.cancel\(\)/);
   assert.doesNotMatch(quit, /netLobby\.abortQuali\(\)/);

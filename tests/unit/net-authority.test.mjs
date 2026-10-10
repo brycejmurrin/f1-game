@@ -35,7 +35,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
-import { fnSource } from "../helpers/fn-source.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
@@ -51,7 +51,7 @@ globalThis.NetSession = NetSession;
 const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
 
 test("a host RESULT must be a bijection before its timing mutates any guest car", () => {
-  const netOrderSource = fnSource(src("js/game.js"), "function netOrder(order)");
+  const netOrderSource = symbolSource("function netOrder(order)");
   const classify = (verdict) => {
     const cars = [{ driverId: "a", finishT: 10 }, { driverId: "b", finishT: 20 }, { driverId: "c", finishT: 30 }];
     const netPlay = { active: () => true, ownsClassification: () => false, peerResult: () => verdict };
@@ -74,7 +74,7 @@ test("a host RESULT must be a bijection before its timing mutates any guest car"
 });
 
 test("host RESULT preserves authoritative laps and NC status, with optional fields for older payloads", () => {
-  const netOrderSource = fnSource(src("js/game.js"), "function netOrder(order)");
+  const netOrderSource = symbolSource("function netOrder(order)");
   const cars = [{ driverId: "winner", lap: 11, classified: true }, { driverId: "guest", lap: 10, classified: true }];
   let verdict;
   const netPlay = { active: () => true, ownsClassification: () => true, reportResult: (rows) => { verdict = rows; } };
@@ -896,7 +896,7 @@ test("a HOST ignores a guest's claim that one of the host's AI retired", () => {
 });
 
 test("retireCar reports the host's own AI retirements on the reliable channel, not only the local car's", () => {
-  const body = fnSource(src("js/game.js"), "function retireCar(c, reason)");
+  const body = symbolSource("function retireCar(c, reason)");
   assert.match(body, /c\.local \|\| \(!c\.human && netPlay\.ownsRaceControl\(\)\)/, "the host owns its AI's word");
   assert.match(body, /driverId: c\.driverId/, "the guest finds the AI by driverId");
 });
@@ -1194,7 +1194,7 @@ test("the host's actual AI retirement reaches a guest, including one that binds 
   const hm = hs.sent.find((e) => e.t === "model").d, gm = gs.sent.find((e) => e.t === "model").d;
   hs.deliver("model", gm); gs.deliver("model", hm);
   // Execute the game's real sender, not a reproduction of its local/host gate.
-  vm.runInNewContext(fnSource(src("js/game.js"), "function retireCar(c, reason)") + ";retireCar(car, 'engine');", {
+  vm.runInNewContext(symbolSource("function retireCar(c, reason)") + ";retireCar(car, 'engine');", {
     car: host.cars[2], netPlay: hn, incidentSim: { release() {} }, track: host.track,
     smp: { hw: 8, t: [0, 0, 1] }, Tracks: { sample() {}, wallAt: () => 10 },
     clamp: M4.clamp, worldFromTrack: (s, x) => ({ x, z: s }), IDLE_RPM: 4000,

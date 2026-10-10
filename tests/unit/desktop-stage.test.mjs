@@ -55,8 +55,9 @@ test("stampStaged rewrites ?v=dev tags to content hashes", () => {
     stageSite(dest, { root: ROOT });
     const before = fs.readFileSync(path.join(dest, "index.html"), "utf8");
     assert.match(before, /\?v=dev/);
-    const build = stampStaged(dest);
-    assert.ok(Number.isInteger(build) && build > 0);
+    // An explicit build: the default (2000 + rev-list count) refuses a shallow clone (deploy-staging-build).
+    const build = stampStaged(dest, { at: 4242 });
+    assert.equal(build, 4242);
     const after = fs.readFileSync(path.join(dest, "index.html"), "utf8");
     assert.doesNotMatch(after, /\?v=dev/);
     assert.match(after, /\?v=[a-f0-9]{12}/);

@@ -7,13 +7,9 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { fnSource } from "../helpers/fn-source.mjs";
+import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const SRC = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+const SRC = gameSource();   // game.js + the modules carved from it (tests/helpers/game-source.mjs)
 
 function fnBody(src, name) {
   const m = src.match(new RegExp(`(?:async\\s+)?function\\s+${name}\\s*\\([^)]*\\)\\s*\\{`));
@@ -98,7 +94,7 @@ test("loadTrackStepped matches loadTrack: menu skip, race/count arm", async () =
 });
 
 test("startRaceBody still arms the sentinel after the world exists", () => {
-  const body = fnSource(SRC, "async function startRaceBody()");
+  const body = symbolSource("async function startRaceBody()");
   assert.match(body, /PerfGov\.sentinelArm\(true\)/, "race-start arming stays in startRaceBody");
   assert.doesNotMatch(body, /if\s*\(\s*raceArmedSentinel\s*\(\s*\)\s*\)\s*PerfGov\.sentinelArm\(true\)/,
     "startRaceBody must not inherit the menu/flyby gate");
@@ -124,10 +120,10 @@ test("a resize burst schedules one gfx.resize per animation frame", () => {
 });
 
 test("menuKey has no pane rect, so a resize cannot rebuild through the flyby gate", () => {
-  const keySrc = fnSource(SRC, "const menuKey = ");
+  const keySrc = symbolSource("const menuKey = ");
   assert.match(keySrc, /idx,\s*raceTimeOfDay,\s*raceWeather,\s*fieldSize\(\)/);
   assert.doesNotMatch(keySrc, /innerWidth|innerHeight|pane|rect|getBoundingClientRect|viewKey/);
-  const fly = fnSource(SRC, "function scheduleFlybyTrack(settle)");
+  const fly = symbolSource("function scheduleFlybyTrack(settle)");
   assert.match(fly, /const key = menuKey\(want\)/);
   assert.match(fly, /_menuGate\.ready === key/);
   assert.match(SRC, /addEventListener\("resize",\s*scheduleGfxResize\)/);

@@ -652,17 +652,7 @@ function prebakeLamps() {
   if (!G.track._lights || !G.track._lights.length) G.track._lights = buildTrackLights(G.track);
   return LampBake.prebake(G.track, G.track._lights, LT.lampNearClamp, LampBake.budget(G.gfx));
 }
-// Capture / regression read of the sky vectors GLX uploads (post cityGlowMul + wx blend).
-function skyGlowProbe() {
-  const sky = G.frameSky || {};
-  const out = { cityGlow: null, moon: null, horizon: null, wxBlend: wxBlend() };
-  if (sky.cityGlow) out.cityGlow = sky.cityGlow.slice();
-  if (sky.moon != null) out.moon = sky.moon;
-  if (sky.horizon) out.horizon = sky.horizon.slice();
-  return out;
-}
-if (typeof window !== "undefined") window.__apexAtmoSkyProbe = skyGlowProbe;
-return { applyRaceSettings, prebakeLamps, floodEmit, tick, wxBlend, WX_BLEND_S, skyGlowProbe };
+return { applyRaceSettings, prebakeLamps, floodEmit, tick, wxBlend, WX_BLEND_S };
 }
 
 return { create };
