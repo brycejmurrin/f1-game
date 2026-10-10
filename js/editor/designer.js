@@ -767,6 +767,7 @@ const TrackDesigner = (function () {
       extendSelection: () => spanArm,
       onBegin: () => {},
       onChange: (pts, kind) => { commit(Object.assign({}, design, { pts }), kind); },
+      onLimit: () => message(CustomTracks.LIMITS.ptsMax + " points is the most a circuit holds — delete one first", true),
       onSelect: (i, j) => {
         sel = Number.isInteger(i) ? i : -1;
         span = (sel >= 0 && Number.isInteger(j) && j !== sel) ? j : -1;

@@ -39,9 +39,12 @@ const DesignerCanvas = (function () {
   // The storage bounds (CustomTracks.LIMITS.coord, FULL): a point dragged past
   // them would make the whole design unsaveable, so a drag stops at the edge.
   const COORD = typeof CustomTracks !== "undefined" && CustomTracks.LIMITS ? CustomTracks.LIMITS.coord : 10000;
+  // The point cap (CustomTracks.LIMITS.ptsMax): the road tap-to-insert stops there (hooks.onLimit says why) instead of
+  // a 201st point the registry refuses and the autosave then loses.
+  const PTS_MAX = typeof CustomTracks !== "undefined" && CustomTracks.LIMITS ? CustomTracks.LIMITS.ptsMax : 200;
   const place = (x, z) => [clamp(snap(x), -COORD, COORD), clamp(snap(z), -COORD, COORD)];
 
-  /** Mount on a <canvas>. hooks: onBegin(), onChange(pts, kind), onPick(i, ev),
+  /** Mount on a <canvas>. hooks: onBegin(), onChange(pts, kind), onLimit(what), onPick(i, ev),
    *  onSelect(sel, span), onDelete(i), onDraw(path), onView(), onContext(i, {x, y})
    *  (a long-press on a handle; x/y canvas-relative css px). Returns the api. */
   function create(canvas, hooks) {
@@ -285,7 +288,9 @@ const DesignerCanvas = (function () {
         return;
       }
       const k = hitSegment(p.x, p.y);
-      if (k >= 0 && tool === "select" && !ev.shiftKey && !pickOnly) {
+      if (k >= 0 && tool === "select" && !ev.shiftKey && !pickOnly && base.length >= PTS_MAX) {
+        if (hooks.onLimit) hooks.onLimit("points");
+      } else if (k >= 0 && tool === "select" && !ev.shiftKey && !pickOnly) {
         taps[taps.length - 1] = { kind: "insert", i: k + 1 };
         beginDrag(k + 1, true);
         placeGroup(toWX(p.x), toWZ(p.y));
