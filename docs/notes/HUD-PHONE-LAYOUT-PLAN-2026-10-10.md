@@ -279,6 +279,26 @@ false positive). Output `artifacts/hud-survey/quick-2026-10-10/`.
 - `chase-hud70`: every readout at 9.8 px (the 70 % HUD size is the owner's
   choice; the floor question in Phase 0 B applies).
 
+## Gap cells, 2026-10-10 (six one-cell runs the matrices never cover)
+
+`node tools/shot/hud-survey.mjs --device phone-landscape-844x390 …`, output
+`artifacts/hud-survey/gaps-2026-10-10/<cell>/`:
+
+| cell | flags | overlaps | note |
+|---|---|---|---|
+| cockpit-shipped | `--cam cockpit --off rel,strat,inputs` | 0 | the shipped default (opt-ins off) is clean; 8 tinyText (zoom fit) |
+| cockpit-hud130 | `--cam cockpit --hud-scale 130` | 0 | clean |
+| cockpit-hud150-btn150 | `--cam cockpit --hud-scale 150 --btn-scale 150` | 1 | INPUTS [444,184 158×54] × OT by 9×54 px: the centre-line cap subtracts 120 px in zoomed units, but at HUD 150 the trace paints 158 px wide — the cap should subtract the trace's PAINTED width (its own box, or `120px * var(--hud-z)` in screen terms); Phase 3 input, or a one-line follow-up |
+| cockpit-buttons | `--cam cockpit --steer buttons --off strat,inputs` | 0 | clean |
+| cockpit-tilt | `--cam cockpit --steer tilt` | 5 | tower × gaps chip (59×18 px — the chip sits in the tower's row at tilt's dock zoom) and RELATIVE × STRATEGY (78×54 px — the literal 168 px sidestep is too small at this zoom; adaptability gap 1) |
+| helmet-shipped | `--cam helmet --off rel,strat,inputs` | 1 | gearbox × energy (106×15 px) in the helmet touch bottom strip (HELMET_TOUCH offsets; bottom band — outside the allocator's scope, own fix) |
+
+Takeaways: the two fixes in #1301 hold across sizes and steer modes; the
+remaining phone clashes are the ones the plan already names (literal
+sidesteps in the left column, the top-band zoom fit, the right-column stack)
+plus two new small ones: the INPUTS cap in zoomed units and the helmet
+gear/ERS strip.
+
 ## Order of work (revised)
 
 0. Top-band zoom fix (Fix A) + `invalidateFit` relight fix + survey flags for
