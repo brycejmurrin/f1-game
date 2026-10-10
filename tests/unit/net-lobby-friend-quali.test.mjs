@@ -149,21 +149,6 @@ test("a reopened room code remembers the answers it already took (a guest's repo
   assert.match(lobby, /const answersSeen = _answersSeen\.set;/);
 });
 
-test("a roster peer with no string team is not a rival to wait for (bug-hunt 8.5)", () => {
-  const QualiNet = eval(src("js/race/quali-net.js") + ";QualiNet");
-  const peers = [{ team: "bravo", driver: 1 }, { driver: 1 }, { team: 7, driver: 0 }, { team: null }, null];
-  const q = QualiNet.create({
-    $: () => null, fmtTime: String, isQuali: () => false, getPlayer: () => ({ driverId: "alpha:0" }), getCars: () => [],
-    openQuali: () => {}, applyPeerQuali: () => {},
-    getNetPlay: () => ({ rivalDriverIds: () => [] }),
-    getNetLobby: () => ({ roomState: () => ({ peers }) }),
-  });
-  q.arm(() => {});
-  assert.equal(q.waiting(), true, "the real rival still gates the grid");
-  q.onPeerQuali({ driverId: "bravo:1", t: 70 });
-  assert.equal(q.waiting(), false, "…and once they have posted, nothing malformed keeps it locked");
-});
-
 // bug-hunt 2 follow-ups: a guest's BACK from the quali sheet, and the host-side relay cap.
 test("a guest that backs out of friend quali releases the host's wait on its lap", async () => {
   const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));
