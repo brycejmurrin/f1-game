@@ -356,6 +356,23 @@ test('checkpoint messages name the practice goal, and the pause menu lists attem
   assert.equal(nodes.get('pm-drill-status').textContent, 'Repeat any section at your own pace.');
 });
 
+test('retry puts the pit plan back: replan() mutates it in place, so it rides in the checkpoint with tyre and pitNext', () => {
+  const { coach, G, c } = fixture();
+  G.cars = [c];
+  c.pitPlan = { seq: ['medium', 'hard'], lapsAt: [10], stops: 1, loadK: 1 };
+  assert.equal(coach.mark(), true);
+  // pit-lane.js replan(): plan.seq / lapsAt / stops / loadK are reassigned on the live object.
+  c.pitPlan.seq = ['medium', 'soft', 'hard']; c.pitPlan.lapsAt = [4, 9]; c.pitPlan.stops = 2; c.pitPlan.loadK = 2;
+  assert.equal(coach.retry(), true);
+  assert.equal(JSON.stringify(c.pitPlan), JSON.stringify({ seq: ['medium', 'hard'], lapsAt: [10], stops: 1, loadK: 1 }), 'the plan the checkpoint saw');
+  c.pitPlan.lapsAt[0] = 3;   // a second attempt mutates the restored plan: the checkpoint must not alias it
+  assert.equal(coach.retry(), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.pitPlan.lapsAt)), [10], 'the saved plan is a copy');
+  c.pitPlan = null;
+  assert.equal(coach.retry(), true);
+  assert.equal(JSON.stringify(c.pitPlan), JSON.stringify({ seq: ['medium', 'hard'], lapsAt: [10], stops: 1, loadK: 1 }));
+});
+
 test('practice guidance says retry and rewind restore the grid and race clock', () => {
   const { coach, nodes } = fixture();
   assert.equal(coach.mark(), true);

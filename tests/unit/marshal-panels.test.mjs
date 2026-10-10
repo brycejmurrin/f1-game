@@ -92,6 +92,41 @@ test("when a caution clears every post shows green for a few seconds, then goes 
   assert.equal(P.calls.length, n, "dark again once the green has run");
 });
 
+test("a red-flag restart: the green is armed on the clear but spent only in the race, not on the countdown grid", () => {
+  const MP = load();
+  let level = 4;
+  const P = stub();
+  const g = G(4, -1); g.cautionLevel = () => level;
+  const mp = MP.create(g, { Particles: P });
+  mp.update(0.1);
+  assert.equal(P.calls.length, 9, "red waves at every post");
+  // redFlagRestart() sets state 'count': the level reads 0 there, but nothing draws until lights out.
+  g.state = "count"; level = 0;
+  for (let i = 0; i < 60; i++) mp.update(0.1);   // 6 s of countdown > GREEN_S
+  assert.equal(P.calls.length, 9, "no panels on the countdown grid");
+  g.state = "race";
+  mp.update(0.1);
+  const green = P.calls.slice(9);
+  assert.equal(green.length, 9, "the first race frame after the restart shows green at every post");
+  assert.ok(green.every((c) => c[5] > 0.9 && c[4] < 0.3), "green");
+});
+
+test("quitting under a caution does not leave a green armed for the next race", () => {
+  const MP = load();
+  let level = 2;
+  const P = stub();
+  const g = G(2, -1); g.cautionLevel = () => level;
+  const mp = MP.create(g, { Particles: P });
+  mp.update(0.1);
+  g.state = "menu"; level = 0;
+  mp.update(0.1);
+  g.state = "count"; mp.update(0.1);
+  g.state = "race";
+  const n = P.calls.length;
+  mp.update(0.1);
+  assert.equal(P.calls.length, n, "a fresh race starts dark");
+});
+
 test("only the nearest posts to the eye light under a full-course caution, and nothing outside the race", () => {
   const MP = load();
   const g = G(3, -1); g.track.props.list = [];

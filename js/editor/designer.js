@@ -875,6 +875,7 @@ const TrackDesigner = (function () {
       extendSelection: () => spanArm,
       onBegin: () => {},
       onChange: (pts, kind) => { commit(Object.assign({}, design, { pts }), kind); },
+      onLimit: () => message(CustomTracks.LIMITS.ptsMax + " points is the most a circuit holds — delete one first", true),
       onSelect: (i, j) => {
         sel = Number.isInteger(i) ? i : -1;
         span = (sel >= 0 && Number.isInteger(j) && j !== sel) ? j : -1;
@@ -2253,6 +2254,17 @@ const TrackDesigner = (function () {
     p.rPrevPx = p.px; p.rPrevPz = p.pz; p.rPrevS = p.s; p.rPrevX = p.x; p.rPrevHead = p.head; p.rPrevYawVis = 0;
     return s;
   }
+  /** The solo start every other route plays: the pre-race screen (garage leave, card, flyby), which runs
+   *  startRace itself once the card is up. A headless or hidden page has no frames for it (raceIntro's other
+   *  callers take the same quick path) and a throw before the card starts the race anyway — the title is
+   *  already hidden. Resolves with startRace's own result; never when the player abandons the intro. */
+  function startViaIntro() {
+    if (typeof G.raceIntro !== "function" || G.headlessMode || document.hidden) return G.startRace();
+    return new Promise((resolve, reject) => {
+      const go = () => { try { resolve(G.startRace()); } catch (e) { reject(e); } };
+      try { G.raceIntro(go); } catch (e) { Log.warn("track", "test drive pre-race screen failed — starting straight away: " + (e && e.message || e)); go(); }
+    });
+  }
   /** TEST HERE: save, then a TIME TRIAL (startRaceBody clears practiceMode, so
    *  a time trial is the unscored session that survives it) with the car at
    *  rest on point i — the selected one by default — and green at once.
@@ -2270,7 +2282,7 @@ const TrackDesigner = (function () {
     G.trackIdx = idx; G.seasonMode = false; G.timeTrial = true;   // openTimeTrial's flow + session
     close();
     Log.info("track", "designer test drive on " + r.id + " from point " + (at + 1) + " (s " + Math.round(s) + " m)");
-    try { await G.startRace(); } catch (e) { Log.warn("track", "test drive start failed: " + (e && e.message || e)); }
+    try { await startViaIntro(); } catch (e) { Log.warn("track", "test drive start failed: " + (e && e.message || e)); }
     if (G.state === "count" && G.player && G.track && s >= 0) {
       placeAt(G.player, G.track, s);
       if (G.snapGameCam) G.snapGameCam();

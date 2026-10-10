@@ -377,7 +377,7 @@ const DrivingCoach = (function () {
     // and retry() all move the SAME state, so they share these rather than
     // each growing their own field list that drifts out of step.
     const PRIM = (v) => v == null || ["number", "boolean", "string"].includes(typeof v);
-    const DEEP = ["tyre", "tyreLog", "pitNext"];
+    const DEEP = ["tyre", "tyreLog", "pitNext", "pitPlan"];   // pitPlan: pit-lane replan() rewrites it in place, so a retry/rewind must put the saved copy back
     // The generic sweep is deliberate: a car carries ~60 live primitives and an
     // explicit list would rot silently — see EPISODE_TRANSIENTS in
     // js/agent/apex.js, which had to be built by measurement rather than
