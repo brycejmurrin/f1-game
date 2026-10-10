@@ -1,4 +1,4 @@
-// Boot / race-entry idle prefetch: LazyBundles.raceAssets, TrackBuildClient.idleWarm,
+// Boot / race-entry idle prefetch: LazyBundles.raceAssets, TrackBuildClient spawn gating,
 // renderer-boot adapter probe cap, Assets strip-decode yields.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -26,11 +26,11 @@ test("raceAssets schedules scenery on microtask and LAZY_RACE on idle", () => {
   assert.doesNotMatch(src.replace(/\/\/.*$/gm, ""), /TrackBuildClient\.idleWarm/, "no build worker warm from raceAssets");
 });
 
-test("raceAssets microtask kicks scenery/worker; idle injects lights", async () => {
+test("raceAssets microtask kicks scenery; idle injects lights", async () => {
   const loader = read("js/core/script-loader.js");
   const bundles = read("js/core/lazy-bundles.js");
   const idles = [];
-  let warmCalls = 0, lightLoads = 0;
+  let lightLoads = 0;
   const ctx = vm.createContext({
     ApexRoster: {
       DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
@@ -48,7 +48,6 @@ test("raceAssets microtask kicks scenery/worker; idle injects lights", async () 
       hydrate: () => true,
     },
     TrackScenery: { monza: () => {} },
-    TrackBuildClient: { idleWarm() { warmCalls++; } },
     Assets: { modelsReady: () => Promise.resolve(0) },
     Log: { warn() {}, info() {} },
     els: { datahub: {} },
@@ -77,14 +76,12 @@ test("raceAssets microtask kicks scenery/worker; idle injects lights", async () 
     globalThis.__raceAssets = lb.raceAssets;
   `, ctx);
   ctx.__raceAssets();
-  assert.equal(warmCalls, 0, "microtask not yet drained");
   assert.equal(idles.length, 3, "lights + race-session + audio-prefetch on idle");
   const lightIdle = idles.find((i) => i.opts && i.opts.timeout === 2500);
   assert.ok(lightIdle, "lights idle at 2500ms");
   assert.ok(idles.some((i) => i.opts && i.opts.timeout === 2800), "race-session idle at 2800ms");
   assert.ok(idles.some((i) => i.opts && i.opts.timeout === 4500), "audio HTTP prefetch idle at 4500ms");
   await new Promise((r) => queueMicrotask(r));
-  assert.equal(warmCalls, 0, "no idleWarm from the scenery microtask (3-F4)");
   assert.equal(lightLoads, 0, "lights not yet");
   await lightIdle.fn();
   await new Promise((r) => setTimeout(r, 0));
@@ -147,11 +144,11 @@ test("the title's idle prefetch spawns no build worker on a multi-core device (3
   assert.equal(workers, 0, "no Worker is constructed at the title");
 });
 
-test("TrackBuildClient.idleWarm no-ops when build worker is off", () => {
+// 3-F4 follow-up: idleWarm lost its only caller (raceAssets) and was removed;
+// spawn() is the one entry, and it must still refuse while the worker is off.
+test("TrackBuildClient has no idleWarm; spawn() no-ops when build worker is off", () => {
   const src = read("js/track/build-client.js");
-  assert.match(src, /function idleWarm\(\)/);
-  assert.match(src, /if \(!enabled\(\)\) return null/);
-  assert.match(src, /requestIdleCallback\(kick, \{ timeout: 3000 \}\)/);
+  assert.doesNotMatch(src, /idleWarm/, "dead idle-warm entry stays removed");
   const main = vm.createContext({
     localStorage: { getItem: () => "0", setItem() {} },
     document: { readyState: "complete", getElementById: () => null, addEventListener() {} },
@@ -164,7 +161,8 @@ test("TrackBuildClient.idleWarm no-ops when build worker is off", () => {
     URL,
   });
   vm.runInContext(read("js/track/build-client.js").replace(/^const\b/gm, "var"), main);
-  assert.equal(main.TrackBuildClient.idleWarm(), null);
+  assert.equal(main.TrackBuildClient.idleWarm, undefined);
+  assert.equal(main.TrackBuildClient.spawn(), null);
 });
 
 test("renderer-boot caps requestAdapter and idle-preloads three vendor", () => {
