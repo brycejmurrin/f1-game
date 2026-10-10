@@ -258,6 +258,8 @@ const ops = {
 
 
 let _camEdLoad = null;
+// Files that evaluated on an earlier (failed) attempt: re-injecting a const-declaring one throws "already declared".
+const _camEdLoaded = new Set();
 function ensureCamEditor() {
   if (typeof FlybyEditor !== "undefined" && typeof CamTunerEditor !== "undefined") return Promise.resolve(true);
   if (_camEdLoad) return _camEdLoad;
@@ -267,7 +269,7 @@ function ensureCamEditor() {
     Log.warn("game", "camera editor bundle is not in this build");
     return Promise.resolve(false);
   }
-  _camEdLoad = ScriptLoader.create().load(files, edges, { strict: true }).then((ok) => {
+  _camEdLoad = ScriptLoader.create().load(files, edges, { strict: true, loaded: _camEdLoaded }).then((ok) => {
     if (!ok || typeof FlybyEditor === "undefined" || typeof CamTunerEditor === "undefined") {
       _camEdLoad = null;
       Log.warn("game", "the camera editor bundle did not load");

@@ -330,6 +330,60 @@ test("material and model loads recover after a temporarily unavailable pack", as
   assert.equal(modelGets, 2, "a failed model fetch does not permanently cache a miss");
 });
 
+// 3-F2 (round-3 hunt): boot asks for the material arrays ONCE (game.js kickPack,
+// one idle slice, refused once tier is "off"), so one dropped strip request left
+// every race of the session on procedural materials. startRace calls
+// Assets.retry(): one more load per session, never for an unsupported backend,
+// never after an explicit unload.
+test("a failed pack load is retried once at race entry, and only once (3-F2)", async () => {
+  let stripGets = 0, drop = 1;
+  const pack = () => assetLoader({
+    async fetch(url) {
+      if (url.endsWith("manifest.json")) return { ok: true, json: async () => ({ materials: { size: 2, albedo: "a.png", layers: [{ mat: 1, scale: 1 }] } }) };
+      stripGets++;
+      if (drop > 0) { drop--; throw new TypeError("Failed to fetch"); }   // a flaky link drops the request
+      return { ok: true, blob: async () => ({ size: 1 }) };
+    },
+    async createImageBitmap() { return { close() {} }; },
+  });
+  const assets = pack();
+  assets.init({ createTextureArray: () => ({}), setMaterialMaps() {} });
+  assert.equal(await assets.load(), false, "the boot load drops its strip");
+  assert.equal(assets.state().tier, "off");
+  assert.equal(typeof assets.retry, "function", "Assets.retry exists");
+  assert.equal(assets.retry(), true, "race entry asks again");
+  await assets.load();   // shares the retry's in-flight promise
+  assert.equal(assets.state().uploaded, true, "the retry lands the pack");
+  assert.equal(assets.retry(), false, "nothing to retry once uploaded");
+
+  drop = 99; stripGets = 0;
+  const flaky = pack();
+  flaky.init({ createTextureArray: () => ({}), setMaterialMaps() {} });
+  await flaky.load();
+  assert.equal(flaky.retry(), true);
+  await flaky.load();
+  const after = stripGets;
+  assert.equal(flaky.retry(), false, "ONE retry per session: no loop on a dead link");
+  assert.equal(stripGets, after);
+
+  const off = pack(); drop = 1;
+  off.init({ createTextureArray: () => ({}), setMaterialMaps() {} });
+  await off.load();
+  off.unload();
+  assert.equal(off.retry(), false, "an explicit unload is never undone by the retry");
+
+  const nobackend = assetLoader({ async fetch() { throw new Error("must not fetch"); } });
+  nobackend.init({});
+  assert.equal(await nobackend.load(), false);
+  assert.equal(nobackend.state().error, "backend");
+  assert.equal(nobackend.retry(), false, "an unsupported backend is not retried");
+
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const startRace = game.slice(game.indexOf("function startRace() {"), game.indexOf("RaceEntryProfile.runSession(sessionEntry"));
+  assert.match(startRace, /Assets\.retry\(\)/, "startRace asks Assets for its one retry");
+  assert.doesNotMatch(startRace, /await[^;\n]*Assets\.retry/, "…and never waits on it");
+});
+
 for (const failFallback of [true, false]) {
   test(`asset loader closes every decoded bitmap when fallback ${failFallback ? "fails" : "succeeds"}`, async () => {
     const bitmaps = [];

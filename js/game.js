@@ -120,9 +120,9 @@ if (typeof Assets !== "undefined") {
   // at the first IDLE slice after boot, not in it: the arrays are ~1.6 MB of
   // PNG that competed with the boot scripts for the wire and the decoder, and
   // boot never awaited them. Skipped when something already loaded, unloaded
-  // (__apex.assetLoad(false)) or adopted a pack before the slice came round.
-  // Baked MODELS are not prefetched here: ensureScenery() loads each circuit's
-  // own set before its build (Assets.modelsReady, capped at 4 s).
+  // (__apex.assetLoad(false)) or adopted a pack before the slice came round; a
+  // FAILED load is retried once at race entry (startRace: Assets.retry()).
+  // Baked MODELS: ensureScenery() loads each circuit's set (modelsReady, 4 s cap).
   const kickPack = () => { const s = Assets.state(); if (s.tier === null && !s.uploaded) Assets.load(); };
   if (typeof requestIdleCallback === "function") requestIdleCallback(kickPack, { timeout: 3000 }); else setTimeout(kickPack, 1500);
 }
@@ -2843,7 +2843,7 @@ function startRace() {
     try { if (rs.open && typeof rs.close === "function") rs.close(); } catch (_) { /* already closed */ }
   }
   if (!loadingScreen.phase()) { loadingScreen.building(loadingInfo()) || loadingScreen.busy("Starting race"); }
-  if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
+  if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome(); if (typeof Assets !== "undefined") Assets.retry();
   const key = entrySettings(), idx = trackIdx;
   const request = RaceEntryProfile.runSession(sessionEntry, key, () => Promise.all([ensureScenery(idx), DebrisWorld.ready()]),
     (current) => startRaceBody(current), () => key === entrySettings(),
