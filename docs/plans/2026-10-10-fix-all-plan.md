@@ -51,12 +51,10 @@ nothing is pushed there directly.
 8. **Follow-ups after the merges**: xr/boot batch (with the render session), `game.js` carve-outs, the sleep→hook
    spec conversions, the hunt-2 perf rows P3, P5, P6 (bit-identical, game.js +3..+6 lines each), H2's VR rows.
 
-## Decisions needed from Bryce
-- **H15** ERS battery drains while braking with BOOST latched (human and AI). The fix moves the drain after the
-  braking decision; the characterization baseline moves only if a scenario brakes with BOOST on. Land or hold?
-- **Mid-race Hub JUMP IN** (start lap > 1) deliberately skips the drive-out ("not your car leaving the garage").
-  Keep, or play it there too (one-line change in `studioOpen`)?
-- **RACE AGAIN / TRY AGAIN**: read as "restart", left quick. Confirm.
+## Decisions (Bryce, 2026-10-10 03:50Z: "all 3 should skip")
+- **H15** ERS drain under braking: **held**, not landed (physics baseline). Stays a register row marked held.
+- **Mid-race Hub JUMP IN** (start lap > 1): **keeps skipping** the drive-out; only a lap-1 start plays it.
+- **RACE AGAIN / TRY AGAIN**: **stay quick restarts**, no garage sequence (same as pause RESTART).
 
 ## Verification contract (what "done" means per batch)
 - Every row: a unit test that failed on the base commit and passes with the fix (reports name both).
