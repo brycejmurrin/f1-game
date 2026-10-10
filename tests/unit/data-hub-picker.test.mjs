@@ -341,3 +341,40 @@ test("closing the hub keeps a good tab's cached copy (only failures are forgotte
   h.DataHub.open("schedule"); await h.drain();
   assert.equal(h.scheduleCalls, 1, "inside its freshness window the reopen reuses the copy");
 });
+
+// 14-F5: M24 aborted the lanes only on LEAVING the tab. Changing GP / YEAR / SESSION inside TELEMETRY left the
+// COMPARE lanes ahead of the picker's own next request in F1API's serialized lane, so the new list waited them out.
+const TWO = [{ num: 1, name: "A One", code: "ONE" }, { num: 2, name: "B Two", code: "TWO" }];
+
+test("changing SESSION mid-COMPARE aborts the stale lane fetches before the new driver list is asked for", async () => {
+  const h = harness({ realTelemetry: true, drivers: TWO });
+  await startCompare(h);
+  const [, sesSel] = h.content().selects();
+  const before = h.cancels;
+  sesSel.value = "500"; sesSel.dispatch("change");
+  assert.equal(h.cancels - before, 1, "F1API.cancelAll() ran for the abandoned COMPARE");
+  await h.drain();
+  assert.ok(h.content().find((n) => n.classList.contains("dh-dchip")), "the new session's driver chips render");
+});
+
+test("changing GRAND PRIX mid-COMPARE aborts the lanes BEFORE the picker queues its sessions request", async () => {
+  const h = harness({ realTelemetry: true, drivers: TWO });
+  await startCompare(h);
+  const [gpSel] = h.content().selects();
+  const before = h.cancels;
+  gpSel.value = "40"; gpSel.dispatch("change");
+  assert.equal(h.cancels - before, 1, "cancelled synchronously, ahead of sessions(40)");
+  assert.ok(h.pending.some((p) => p.name === "sessions(40)"), "the picker's own request is the one that follows");
+  await h.drain();
+});
+
+test("changing GP / SESSION with no lane in flight cancels nothing", async () => {
+  const h = harness({ realTelemetry: true, drivers: TWO });
+  h.DataHub.open("telemetry");
+  await h.drain();
+  const [gpSel, sesSel] = h.content().selects();
+  const before = h.cancels;
+  sesSel.value = "500"; sesSel.dispatch("change"); await h.drain();
+  gpSel.value = "40"; gpSel.dispatch("change"); await h.drain();
+  assert.equal(h.cancels, before);
+});

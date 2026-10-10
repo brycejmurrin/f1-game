@@ -558,7 +558,11 @@ const DataHub = (function () {
     if (title) selectEl.title = title; else selectEl.removeAttribute("title");
   }
 
-  function buildPicker(onPick) {
+  // onChange (optional) runs synchronously when the player starts a YEAR or GRAND
+  // PRIX change, BEFORE the picker queues its own meetings / sessions request: that
+  // request shares F1API's serialized lane, so whatever the tab still has in
+  // flight (TELEMETRY's COMPARE lanes) would be waited out first.
+  function buildPicker(onPick, onChange) {
     let pickerGen = 0;
     const box = el("div", "dh-picker");
     const yearRow = el("div", "dh-pick-years");
@@ -568,6 +572,7 @@ const DataHub = (function () {
       b.addEventListener("click", function () {
         if (y === sel.year) return;
         cancelRealRace();
+        if (onChange) onChange();
         sel.year = y; sel.meetingKey = null; sel.sessionKey = null; sel.pinned = false;
         for (let i = 0; i < yearRow.children.length; i++) {
           yearRow.children[i].classList.toggle("active", yearRow.children[i] === b);
@@ -611,6 +616,7 @@ const DataHub = (function () {
 
     gpSel.addEventListener("change", function () {
       cancelRealRace();
+      if (onChange) onChange();
       sel.meetingKey = gpSel.value ? Number(gpSel.value) : null;
       sel.sessionKey = null;
       sel.pinned = false;
