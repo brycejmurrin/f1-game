@@ -1697,3 +1697,157 @@ test("apex_job_status {} prunes manifests older than 7 days and re-judges a pre-
     assert.ok(fs.existsSync(path.join(dir, "real-failed.log")), "recent jobs keep their files");
   } finally { fs.rmSync(fake, { recursive: true, force: true }); }
 });
+
+// 2026-10-10: async surveys silently dropped `cams` (and cam/az/el/dist/h/side/hud/shots/cols/sheetName) and still said ok.
+// This is the class guard: for every optional argument of every dry-run-able tool, SOME value must change the dry-run plan (or the
+// call must be refused as invalid), unless the argument is exempt below WITH a reason. A new argument that does nothing fails here
+// until it is wired or exempted; an exemption that has become unnecessary fails too, so the table cannot rot.
+const ARG_BASES = {
+  apex_shot: [{ track: "monza" }],
+  apex_agent: [{ track: "monza" }],
+  apex_eval: [{ track: "monza", expr: "1" }],
+  apex_frame_report: [{ track: "monza" }],
+  apex_hud_shot: [{ track: "monza" }],
+  apex_hud_survey: [{}],
+  apex_shot_survey: [{ track: "monza" }],
+  apex_ui_fit: [{ screen: "title" }],
+  apex_ui_shot: [{ screen: "title" }],
+  apex_unit_test: [{ file: "tests/unit/a11y-pwa-pass.test.mjs" }],
+  apex_select_specs: [{ since: "HEAD~1" }],
+  apex_graph_parity: [{ base: "HEAD", id: "monza" }],
+  apex_pick_tests: [{}],
+  apex_track_audit: [{ track: "monza" }],
+  apex_car_audit: [{ check: "ladder" }, { check: "crest" }],               // teams: the crest sweep only
+  apex_garage: [{ op: "open", team: "ferrari" }, { op: "team", team: "mercedes" }, { op: "design" }, { op: "design", design: { stripe: "#ffffff" } }, { op: "shot" }, { op: "sheet" }],   // each op reads its own keys; base only with a design
+  apex_track: [{ op: "survey", track: "monza" }, { op: "shot" }, { op: "eval" }],
+  apex_job_start: ["shot_survey", "flicker_gate", "livery_contrast", "survey_track", "graph_parity_all", "ui_matrix"].map((kind) => ({ kind, track: "monza" })),
+};
+const ARG_EXEMPT = {
+  "apex_hud_shot.async": "routing only: job vs inline; never part of the pinned argv",
+  "apex_hud_shot.inlineImage": "output only: attach the PNG inline; not part of the pinned argv",
+  "apex_hud_survey.async": "routing only: job vs inline; never part of the pinned argv",
+};
+const ARG_ALWAYS = new Set(["dryRun", "target", "url", "image"]);   // transport / output flags of every tool
+const argCandidates = (spec) => {
+  if (spec.enum) return spec.enum;
+  if (spec.type === "boolean") return [true, false];
+  if (spec.type === "integer" || spec.type === "number") {
+    const lo = spec.exclusiveMinimum != null ? spec.exclusiveMinimum + 1 : (spec.minimum ?? 0) + 1;
+    return [lo, lo + 1];
+  }
+  if (spec.type === "array") return [spec.items?.enum ? [spec.items.enum[0]] : spec.items?.type === "number" ? [0.3] : spec.items?.type === "object" ? [{}] : ["a"]];
+  if (spec.type === "object") return [{ a: 1 }];
+  return [spec.pattern ? "probe-1" : "probe"];
+};
+test("every optional argument of every dry-run-able tool changes the plan (or is exempt with a reason)", () => {
+  const tools = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }]).find((m) => m.id === 1).result.tools;
+  const cases = [];
+  for (const t of tools) {
+    const bases = ARG_BASES[t.name];
+    if (!bases || !t.inputSchema.properties.dryRun) continue;
+    for (const base of bases) {
+      cases.push({ tool: t.name, base, key: null, args: base });
+      for (const [k, spec] of Object.entries(t.inputSchema.properties)) {
+        if (ARG_ALWAYS.has(k) || k in base) continue;
+        for (const v of argCandidates(spec)) cases.push({ tool: t.name, base, key: k, args: { ...base, [k]: v } });
+      }
+    }
+  }
+  const norm = (b) => JSON.stringify(b, (k, v) => (k === "durationMs" ? undefined : v)).replace(/20\d\d-\d\d-\d\dT[\d.:-]+Z?/g, "T").replace(/-[a-z0-9]{8,}-\d+/g, "");
+  const res = callTools(cases.map((c) => [c.tool, { ...c.args, dryRun: true }])).map((r) => r.body);
+  const baseline = new Map();
+  cases.forEach((c, i) => { if (c.key === null) baseline.set(c.tool + JSON.stringify(c.base), res[i]); });
+  const used = new Map();   // "tool.key" -> true once any case under any base shows an effect or a validation refusal
+  cases.forEach((c, i) => {
+    if (c.key === null) return;
+    const id = `${c.tool}.${c.key}`;
+    const b = res[i], bb = baseline.get(c.tool + JSON.stringify(c.base));
+    const effect = b && (b.ok === false || (bb && norm(b) !== norm(bb)));
+    if (!used.has(id)) used.set(id, false);
+    if (effect) used.set(id, true);
+  });
+  const dead = [...used].filter(([id, u]) => !u && !(id in ARG_EXEMPT)).map(([id]) => id);
+  assert.deepEqual(dead, [], "these optional arguments change nothing in the dry-run plan: wire them, or exempt each in ARG_EXEMPT with a reason");
+  const stale = Object.keys(ARG_EXEMPT).filter((id) => used.get(id) === true || !used.has(id));
+  assert.deepEqual(stale, [], "these exemptions are no longer needed (the argument now has an effect) or name no argument: remove them");
+});
+
+// 2026-10-10: "does the running server need a restart?" was a guess all session. apex_status now says: the server's start time, and
+// which of the files it loaded (tools/mcp/*.mjs and the tools/lib modules they import) changed after it.
+test("serverFreshness: stale only when a loaded file is newer than the server; a missing file is not stale", async () => {
+  const { serverFreshness } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const files = [path.join(ROOT, "fixture-dir", "alpha.mjs"), path.join(ROOT, "fixture-dir", "beta.mjs"), path.join(ROOT, "fixture-dir", "gone.mjs")];
+  const mt = { [files[0]]: 1000, [files[1]]: 5000 };
+  const fresh = serverFreshness(2000, [files[0], files[2]], (f) => { if (f in mt) return mt[f]; throw new Error("ENOENT"); });
+  assert.equal(fresh.stale, false);
+  assert.deepEqual(fresh.staleFiles, []);
+  assert.equal(fresh.fix, undefined);
+  const stale = serverFreshness(2000, files, (f) => { if (f in mt) return mt[f]; throw new Error("ENOENT"); });
+  assert.equal(stale.stale, true);
+  assert.deepEqual(stale.staleFiles, [path.join("fixture-dir", "beta.mjs")]);
+  assert.match(stale.fix, /restart the apex-tools MCP server/);
+});
+
+test("apex_status reports the server and the open sessions", () => {
+  const r = callCli("apex_status", {});
+  assert.equal(r.status, 0, r.stderr);
+  const b = JSON.parse(r.stdout);
+  assert.equal(b.server.stale, false, "a one-shot call is a fresh process");
+  assert.ok(b.server.watched >= 3, `watched ${b.server.watched}`);
+  assert.ok(b.server.startedAt && b.server.version);
+  assert.deepEqual(b.sessions.garage, null);
+  assert.deepEqual(b.sessions.track, null);
+});
+
+// 2026-10-10: a bad `out` on apex_shot_survey / apex_track open threw an error that carried its refusal and nothing caught it:
+// a bare JSON-RPC "path_escaped" over stdio, a stack trace from `call`.
+test("a bad `out` is the normal refusal (with its fix), not a thrown error", () => {
+  for (const [tool, args] of [["apex_shot_survey", { track: "monza", out: "probe-1", dryRun: true }], ["apex_track", { op: "open", track: "monza", out: "../etc" }]]) {
+    const r = callCli(tool, args);
+    assert.equal(r.status, 1, `${tool}: ${r.stderr}`);
+    const b = JSON.parse(r.stdout);
+    assert.equal(b.error, "path_escaped");
+    assert.match(b.fix, /under artifacts\/ or scratch\//);
+    assert.doesNotMatch(r.stderr, /at assertSafeOut|node:internal/, "no stack trace");
+  }
+});
+
+// 2026-10-10: polling apex_job_status in a loop (or a Monitor on the manifest) for a 20-50 min survey; and a capped result that
+// said only "see the log". `wait` holds the call; `topFindings` puts the worst findings in the reply.
+test("apex_job_status wait holds until the job is done; a capped survey result carries topFindings", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const fake = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-jobs-test-"));
+  try {
+    fs.mkdirSync(path.join(fake, "tools", "track"), { recursive: true });
+    fs.mkdirSync(path.join(fake, "artifacts", "survey"), { recursive: true });
+    const findings = [
+      ...Array.from({ length: 30 }, (_, i) => ({ cell: `c${i}`, kind: "overlap", severity: "medium", detail: "m".repeat(400) })),
+      { cell: "worst", kind: "tinyText", severity: "high", detail: "h".repeat(400) },
+      { cell: "info", kind: "lead", severity: "info", detail: "i" },
+      { cell: "worst2", kind: "overlap", severity: "high", detail: "second" },
+    ];
+    fs.writeFileSync(path.join(fake, "artifacts/survey/report.json"), JSON.stringify({ findings }));
+    fs.writeFileSync(path.join(fake, "tools/track/verify-track.cjs"),
+      'setTimeout(() => { const cells = Array.from({ length: 3000 }, (_, i) => ({ c: "c" + i, pad: "x".repeat(20) }));\n'
+      + 'console.log(JSON.stringify({ ok: true, report: "artifacts/survey/report.json", counts: { total: 33 }, cells })); }, 1500);\n');
+    const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
+    const x = createExtras({ ROOT: fake, toolResult, refuse: (e, m, f) => toolResult({ ok: false, error: e, message: m, fix: f }), acquireLock: () => null, releaseLock() {},
+      occupancyRefuse: () => null, assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
+    const body = (r) => JSON.parse(r.content[0].text);
+    const j = body(x.handlers.apex_job_start({ kind: "verify_all" }));
+    const short = body(await x.handlers.apex_job_status({ jobId: j.jobId, wait: 1 }));
+    assert.equal(short.state, "running");
+    assert.equal(short.stillRunning, true, "a wait that ran out says so");
+    assert.ok(short.waitedS >= 1);
+    const done = body(await x.handlers.apex_job_status({ jobId: j.jobId, wait: 20 }));
+    assert.equal(done.state, "done");
+    assert.equal(done.stillRunning, undefined);
+    assert.equal(done.out.truncated, true);
+    assert.equal(done.out.findingsTotal, 33);
+    assert.equal(done.out.topFindings.length, 10, "the worst ten");
+    assert.deepEqual(done.out.topFindings.slice(0, 2).map((f) => f.cell), ["worst", "worst2"], "high before medium before info");
+    assert.ok(done.out.topFindings.every((f) => f.detail.length <= 200), "long details are cut");
+    assert.deepEqual(body(await x.handlers.apex_job_status({ jobId: j.jobId })).state, "done", "no wait: unchanged");
+  } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
