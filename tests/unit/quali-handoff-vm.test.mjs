@@ -84,3 +84,22 @@ test("a failed openQuali lands on the menu instead of rejecting into the void", 
   assert.deepEqual(g.record.rejections.slice(rejBefore), [], "openQuali's failure escaped as an unhandled rejection");
   assert.equal(sheet.hidden, true, "the qualifying sheet was left up over the menu");
 });
+
+test("friend quali: after SIMULATE BACK becomes MENU, and a second press quits cleanly (a silent rival cannot trap the player)", async () => {
+  const doc = g.sandbox.document;
+  let called = 0;
+  g.G.openQualiForNet(() => { called++; });
+  assert.ok(await settle(() => { const el = doc.getElementById("quali"); return el && el.hidden === false; }, 4000));
+  await flush();
+  const q = doc.getElementById("quali"), back = doc.getElementById("q-back");
+  assert.equal(q.getAttribute("data-net") !== null, true, "a friend sheet is marked so CSS keeps BACK on the foot");
+  doc.getElementById("q-sim").onclick();
+  assert.ok(q.classList.contains("q-done"));
+  assert.equal(back.textContent, "MENU");
+  back.onclick();
+  assert.notEqual(back.textContent, "MENU", "the first press only arms the exit");
+  back.onclick();
+  await flush(10);
+  assert.equal(called, 0, "leaving never starts the race");
+  assert.equal(g.sandbox.__apex.info().state, "menu", "back at the menu");
+});

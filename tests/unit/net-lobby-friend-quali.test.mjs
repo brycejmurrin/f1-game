@@ -209,3 +209,64 @@ test("the host drops a guest's QUALI/QLIVE flood past a small per-second cap", a
     assert.ok(driven < 50, "a QUALI flood is capped too (got " + driven + ")");
   } finally { lobby.cancel(); }
 });
+
+// Flow B item 1: an AFK rival who stays in the room must not trap a player who has driven.
+function timedQualiNet(peers) {
+  const QualiNet = eval(src("js/race/quali-net.js") + ";QualiNet");
+  const btn = { disabled: false, textContent: "" };
+  let clock = 1000, applied = 0;
+  const q = QualiNet.create({
+    $: (id) => (id === "q-go" ? btn : null), fmtTime: String, isQuali: () => true,
+    getPlayer: () => ({ driverId: "alpha:0", lastLap: 70, best: 70 }), getCars: () => [],
+    openQuali: () => {}, applyPeerQuali: () => { applied++; },
+    getNetPlay: () => ({ rivalDriverIds: () => [] }),
+    getNetLobby: () => ({ roomState: () => ({ peers }) }),
+    now: () => clock, setTimer: () => 0, clearTimer: () => {},
+  });
+  return { q, btn, tick: (ms) => { clock += ms; q.refreshQualiGate(); }, applied: () => applied };
+}
+
+test("friend quali: after the bounded wait TO THE GRID opens WITHOUT the silent rival, graded no-time", () => {
+  const { q, btn, tick, applied } = timedQualiNet([{ team: "bravo", driver: 1 }]);
+  q.arm(() => {});
+  q.markDone();
+  q.refreshQualiGate();
+  assert.equal(q.waiting(), true);
+  assert.equal(btn.disabled, true);
+  assert.equal(q.timedOut(), false);
+  tick(q.WAIT_MS - 1);
+  assert.equal(q.waiting(), true, "one tick short of the bound still waits");
+  tick(2);
+  assert.equal(q.waiting(), false, "the wait is over");
+  assert.equal(q.timedOut(), true);
+  assert.equal(btn.disabled, false);
+  assert.equal(btn.textContent, "TO THE GRID WITHOUT THEM");
+  assert.equal(q.driven(70).get("bravo:1"), Infinity, "the silent rival is graded NO TIME, as a guest abort is");
+  assert.ok(applied() >= 1, "the sheet is regraded so the rival sits last");
+});
+
+test("friend quali: the wait only starts once the player has a result, and a late lap still wins", () => {
+  const { q, btn, tick } = timedQualiNet([{ team: "bravo", driver: 1 }]);
+  q.arm(() => {});
+  tick(q.WAIT_MS * 3);
+  assert.equal(q.timedOut(), false, "driving the lap is not waiting");
+  q.markDone();
+  tick(1); tick(q.WAIT_MS + 1);
+  assert.equal(q.timedOut(), true);
+  q.onPeerQuali({ driverId: "bravo:1", t: 80 });
+  assert.equal(q.driven(70).get("bravo:1"), 80);
+  assert.equal(btn.textContent, "TO THE GRID", "their real time replaces the no-time");
+});
+
+test("friend quali: leaving is open once timed out, and re-arming forgets the timeout", () => {
+  const { q, tick } = timedQualiNet([{ team: "bravo", driver: 1 }]);
+  q.arm(() => {});
+  q.markDone();
+  q.refreshQualiGate();
+  assert.equal(q.canLeave(), false, "BACK/Escape still shake while the rival may yet post");
+  tick(q.WAIT_MS + 1);
+  assert.equal(q.canLeave(), true);
+  q.arm(() => {});
+  assert.equal(q.timedOut(), false);
+  assert.equal(q.canLeave(), false);
+});

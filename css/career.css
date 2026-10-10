@@ -564,6 +564,8 @@
    classification and only TO THE GRID. JS flips this class rather than rebuilding
    the foot, so focus is never yanked out from under a keyboard user. */
 #quali.q-done #q-drive, #quali.q-done #q-sim, #quali.q-done #q-back { display: none; }
+/* FRIEND quali keeps BACK after the session, relabelled MENU by JS: the way out of a rival who never posts. */
+#quali.q-done[data-net] #q-back { display: block; }
 #quali:not(.q-done) #q-go { display: none; }
 /* NOTE: a stray `}` here used to close `@layer components` early, leaving
    everything below — the slot picker, sponsors, the facility, extra funds —
