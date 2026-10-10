@@ -1,0 +1,1 @@
+1791617548	Cursor Agent	MCP bug survey fixes B2/B4 + findings note: OWNED tools/mcp/apex-tools-mcp.mjs tools/shot/shot.mjs tests/unit/apex-tools-mcp.test.mjs docs/notes/MCP-BUG-SURVEY-2026-10-10.md. FORBIDDEN hud garage game.js. Do not enable auto-merge or merge.  [cursor/mcp-bug-survey-71a3; session 98fa16442b2d9289d26fb280]
