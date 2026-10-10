@@ -1,0 +1,1 @@
+1791636186	Claude	F-01 zoomDiv fallback (iOS Safari < 26.4, no Element.currentCSSZoom): js/ui/hud.js zoomDiv only + drop the F-01 todo in tests/unit/hud-pins.test.mjs. Stacked on #1394. Parent-assigned after #1366 merged. Do not enable auto-merge or merge.  [cursor/hud-zoomdiv-f01-868c; session d74e2ce9b5cfe7a5eba885ef]
