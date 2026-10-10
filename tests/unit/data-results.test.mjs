@@ -258,6 +258,23 @@ test("a race shows points and formats the winner's distance as a clock", async (
   assert.deepEqual(r[1].slice(4), ["2:04:56.395", "+11.536", "18"]);
 });
 
+// OpenF1 sends duration null and gap_to_leader "+1 LAP" for a lapped finisher
+// (session 9590, Imola 2024). The label is the gap; it must not be dropped for
+// want of a time, and a retirement keeps its empty gap.
+test("a lapped finisher shows its +1 LAP label in the GAP column", async () => {
+  const tree = await render(
+    { sessionKey: 9590, name: "Race", type: "Race" },
+    [
+      { pos: 1, num: 1, laps: 53, points: 25, dnf: false, dns: false, dsq: false, duration: 4480.727, gap: 0 },
+      { pos: 14, num: 63, laps: 52, points: 0, dnf: false, dns: false, dsq: false, duration: null, gap: "+1 LAP" },
+      { pos: null, num: 16, laps: 40, points: 0, dnf: true, dns: false, dsq: false, duration: null, gap: "+13 LAPS" }
+    ]
+  );
+  const r = rows(tree);
+  assert.deepEqual(r[1].slice(4, 6), ["—", "+1 LAP"]);
+  assert.deepEqual(r[2].slice(4, 6), ["DNF", "—"], "a retirement keeps an empty gap");
+});
+
 // A sprint arrives as session_name "Sprint" with session_type "Race". Reading
 // the TYPE alone is right here by luck; reading the NAME alone puts it in the
 // practice branch and loses the points column, which is the whole reason a

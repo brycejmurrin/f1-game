@@ -304,8 +304,8 @@ change.** A matching build number only proves Pages published *a* build with
 that number, not that your edit is inside it. Read the `?v=<12 hex>` for the
 path from the live `index.html`, fetch `…/js/<path>.js?v=<hash>` and grep a
 marker unique to your change. MEASURED 2026-08-13, confirming a per-chunk-lamp
-feature shipped: `_pickChunkLamps`, `uploadLightSet`, `perChunkLights` and
-`uCarBiasScale` all found in the live artifact.
+feature shipped: `_pickChunkLamps` (since renamed `LampChunks.resolve`), `uploadLightSet`,
+`perChunkLights` and `uCarBiasScale` all found in the live artifact.
 
 **Gotchas that hand you a FALSE negative.** A markdown-rendering fetcher
 escapes `*`, `_` and backticks (`d /= k * k` came back as `d /= k \\* k`;

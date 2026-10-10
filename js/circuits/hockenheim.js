@@ -38,12 +38,12 @@
       { s: 0.70, halfM: 420, rise: 4.0 },   // climb back toward the Motodrom
     ],
     hwZones: [
-      { s0: 0.435, s1: 0.480, hw: 6.2, ease: 0.012 },  // Spitzkehre hairpin
+      { s0: 0.3624, s1: 0.4169, hw: 6.2, ease: 0.012 },  // Spitzkehre hairpin (index; arc 0.435-0.480)
       { s0: 0.815, s1: 0.960, hw: 6.6, ease: 0.015 },  // Motodrom stadium loop
     ],
     bankZones: [
       { frac: 0.055, angleDeg: 3.0, widthM: 110 },   // Nordkurve
-      { frac: 0.335, angleDeg: 2.5, widthM: 90 },    // Ostkurve entry
+      { turn: 4, angleDeg: 2.5, widthM: 90 },    // Ostkurve entry; re-seated frac 0.335 (was 533 m off any apex)
       { frac: 0.880, angleDeg: 4.0, widthM: 120 },   // Sachskurve
     ],
 

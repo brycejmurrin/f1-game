@@ -235,6 +235,38 @@ const Collide = (() => {
   // — while nothing moves. Measured at dProg = -4.75.
   const CORR_EPS = 1e-3;
 
+  // Per-side driving limits at (s, x): Tracks.wallAt, the pit wall / exit wall face and
+  // the gantry legs — a copy of the limit block at the top of WallClamp.apply
+  // (js/physics/wall-clamp.js; keep the two in step). Fills `out` {r, l, laneMin, side}.
+  const _lim = { r: 0, l: 0, laneMin: 0, side: 0 }, _postLim = { r: 0, l: 0, minOut: 0, side: 0 };
+  function _wallLimits(track, s, x, out) {
+    let wallR = Tracks.wallAt(track, s, 1), wallL = Tracks.wallAt(track, s, -1);
+    let laneMin = 0, pitSd = 0;
+    const p = track.pit;
+    if (p && !p.painted) {
+      const k = ((Math.round(s / track.total * track.n) % track.n) + track.n) % track.n;
+      if (p.v[k] >= 0.98) {
+        pitSd = p.side;
+        const face = track.hw[k] + p.bands.verge;
+        if (x * pitSd < face + 0.125) { if (pitSd > 0) wallR = Math.min(wallR, face - 1.1); else wallL = Math.min(wallL, face - 1.1); }
+        else laneMin = track.hw[k] + p.off.fastIn + 1.0;
+      } else if (p.w[k] >= TrackPit.EXIT_WALL_W && ((s - p.sOut) % track.total + track.total) % track.total < p.exitRoadM) {
+        pitSd = p.side;
+        const wallLat = track.hw[k] + p.bands.verge * p.v[k];
+        if (x * pitSd < wallLat + 0.125) { if (pitSd > 0) wallR = Math.min(wallR, wallLat - 1.15); else wallL = Math.min(wallL, wallLat - 1.15); }
+        else laneMin = wallLat + 0.30 + 1.0;
+      }
+    }
+    if (track.posts && track.posts.length) {
+      Tracks.postLimits(track, s, x, _postLim);
+      if (_postLim.r < wallR) wallR = _postLim.r;
+      if (_postLim.l < wallL) wallL = _postLim.l;
+      if (_postLim.minOut > laneMin) { laneMin = _postLim.minOut; pitSd = _postLim.side; }
+    }
+    out.r = wallR; out.l = wallL; out.laneMin = laneMin; out.side = pitSd;
+    return out;
+  }
+
   function create(G, collideFx, ownsPose = () => false) {
     Log.info("game", "Collide.create");
     const wrapS = G.wrapS;
@@ -725,8 +757,12 @@ const Collide = (() => {
       // keep everyone inside the per-side barriers after being shoved around
       for (const c of ranked) {
         if (ownsPose(c) || incidentSim.owns(c)) continue;   // the pose owner supplies its own boundary
-        const wr = Tracks.wallAt(track, c.s, 1), wl = Tracks.wallAt(track, c.s, -1);
-        if (c.x > wr) c.x = wr; else if (c.x < -wl) c.x = -wl;
+        // The SAME boundary WallClamp.apply enforces every tick (barriers, pit wall,
+        // exit wall, gantry legs), so a shove cannot leave a car past the pit wall
+        // or a leg for the rest of this step.
+        const lim = _wallLimits(track, c.s, c.x, _lim);
+        if (c.x > lim.r) c.x = lim.r; else if (c.x < -lim.l) c.x = -lim.l;
+        if (lim.laneMin > 0 && c.x * lim.side < lim.laneMin) c.x = lim.laneMin * lim.side;
         if (!c.human && (c.s !== c._preColS || c.x !== c._preColX)) {
           const w = G.worldFromTrack(c.s, c.x);
           c.px = w.x; c.pz = w.z;

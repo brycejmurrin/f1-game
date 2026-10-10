@@ -59,12 +59,15 @@ const hasKey = (obj, name) =>
      (p.key.type === "Literal" && p.key.value === name)));
 
 export function lintSource(src, file = "<src>") {
+  // Module first, then script: a sloppy-mode .cjs (`with`, `var await`) is not a
+  // module, and a file neither parses was linted by nothing (WP1).
   let ast;
-  try {
-    ast = espree.parse(src, { ecmaVersion: "latest", sourceType: "module", loc: true });
-  } catch (e) {
-    return { file, parseError: e.message, sites: [] };
+  let firstError;
+  for (const sourceType of ["module", "script"]) {
+    try { ast = espree.parse(src, { ecmaVersion: "latest", sourceType, loc: true }); break; }
+    catch (e) { firstError = firstError || e; }
   }
+  if (!ast) return { file, parseError: firstError.message, sites: [] };
   const sites = [];
   each(ast, (n) => {
     if (n.type !== "CallExpression") return;
@@ -130,7 +133,12 @@ export function lintAll(root = ROOT) {
 }
 
 export function count(root = ROOT) {
-  return lintAll(root).reduce((a, r) => a + r.sites.length, 0);
+  const rows = lintAll(root);
+  // An unparseable file contributes 0 sites, so the ratchet would never move
+  // for it: a parse failure is a failure, not a zero (WP1).
+  const bad = rows.filter((r) => r.parseError);
+  if (bad.length) throw new Error(`wait-polling-lint: ${bad.length} file(s) cannot be parsed, so their waits are uncounted: ${bad.map((r) => `${r.file} (${r.parseError})`).join("; ")}`);
+  return rows.reduce((a, r) => a + r.sites.length, 0);
 }
 
 function main() {

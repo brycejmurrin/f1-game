@@ -271,10 +271,13 @@ function rivalPan(row, basis) {
   return A.rivalState()[0].pan;
 }
 
+// The listener basis is the one vantage.js publishes: right = (-fwdZ, fwdX), so
+// forward (1,0) has right (0,+1) and the visual LEFT is -z (round-2 hunt F15: the
+// fixtures had the mirrored basis, so no test pinned the real convention).
 test("external camera: rival on the visual left pans negative; 180° yaw flips the sign", () => {
-  const leftBasis = { external: true, x: 0, z: 0, fwdX: 1, fwdZ: 0, rightX: 0, rightZ: -1, valid: true };
-  const flipBasis = { external: true, x: 0, z: 0, fwdX: -1, fwdZ: 0, rightX: 0, rightZ: 1, valid: true };
-  const row = { lat: 0, arc: 10, wx: 0, wz: 12, rev: 0.5, approach: 0, slot: 0 };
+  const leftBasis = { external: true, x: 0, z: 0, fwdX: 1, fwdZ: 0, rightX: 0, rightZ: 1, valid: true };
+  const flipBasis = { external: true, x: 0, z: 0, fwdX: -1, fwdZ: 0, rightX: 0, rightZ: -1, valid: true };
+  const row = { lat: 0, arc: 10, wx: 0, wz: -12, rev: 0.5, approach: 0, slot: 0 };
   const panLeft = rivalPan(row, leftBasis);
   const panFlip = rivalPan(row, flipBasis);
   assert.ok(panLeft < -0.2, `visual left should pan negative, got ${panLeft}`);
@@ -283,7 +286,7 @@ test("external camera: rival on the visual left pans negative; 180° yaw flips t
 });
 
 test("external camera: rival ahead or behind the line of sight pans near centre", () => {
-  const basis = { external: true, x: 0, z: 0, fwdX: 1, fwdZ: 0, rightX: 0, rightZ: -1, valid: true };
+  const basis = { external: true, x: 0, z: 0, fwdX: 1, fwdZ: 0, rightX: 0, rightZ: 1, valid: true };
   const ahead = rivalPan({ lat: 0, arc: 0, wx: 40, wz: 0, rev: 0.5, approach: 0, slot: 0 }, basis);
   const behind = rivalPan({ lat: 0, arc: 0, wx: -30, wz: 0, rev: 0.5, approach: 0, slot: 0 }, basis);
   assert.ok(Math.abs(ahead) < 0.05, `ahead pan ${ahead} should be near 0`);
@@ -293,7 +296,7 @@ test("external camera: rival ahead or behind the line of sight pans near centre"
 test("chase and missing camera basis keep the pre-fix player-track pan law", () => {
   for (const f of CHASE_PAN_FIXTURES) {
     const row = { lat: f.lat, arc: f.arc, rev: 0.6, approach: 0, slot: 0 };
-    const chase = rivalPan(row, { external: false, valid: true, x: 0, z: 0, fwdX: 1, fwdZ: 0, rightX: 0, rightZ: -1 });
+    const chase = rivalPan(row, { external: false, valid: true, x: 0, z: 0, fwdX: 1, fwdZ: 0, rightX: 0, rightZ: 1 });
     const missing = rivalPan(row, null);
     assert.ok(Math.abs(chase - f.pan) < 1e-4, `chase ${f.lat},${f.arc} expected ${f.pan}, got ${chase}`);
     assert.ok(Math.abs(missing - f.pan) < 1e-4, `fallback ${f.lat},${f.arc} expected ${f.pan}, got ${missing}`);
@@ -303,12 +306,12 @@ test("chase and missing camera basis keep the pre-fix player-track pan law", () 
 test("onboard → TV external flag clears cached pan targets so the next aim reschedules", () => {
   const row = { lat: 3, arc: 5, wx: 50, wz: 53, rev: 0.6, approach: 0, slot: 0 };
   const basisRef = {
-    current: { external: false, valid: true, x: 0, z: 0, fwdX: 1, fwdZ: 0, rightX: 0, rightZ: -1 },
+    current: { external: false, valid: true, x: 0, z: 0, fwdX: 1, fwdZ: 0, rightX: 0, rightZ: 1 },
   };
   const A = bootRivalPanEngine(basisRef);
   A.setRivals([row]);
   const st0 = A.rivalState()[0];
-  basisRef.current = { external: true, x: 0, z: 0, fwdX: 1, fwdZ: 0, rightX: 0, rightZ: -1, valid: true };
+  basisRef.current = { external: true, x: 0, z: 0, fwdX: 1, fwdZ: 0, rightX: 0, rightZ: 1, valid: true };
   A.setRivals([row]);
   const st1 = A.rivalState()[0];
   assert.notEqual(st1.pan, st0.pan, "camera-relative pan differs from player-track pan for the same row");
