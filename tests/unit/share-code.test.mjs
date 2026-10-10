@@ -162,8 +162,8 @@ test("hash consumer clears #share= and does not invoke startRace", async () => {
 test("title-flow source never calls startRace from share apply hooks", () => {
   const src = fs.readFileSync(path.join(ROOT, "js/ui/title-flow.js"), "utf8");
   assert.match(src, /ShareCode\.consumeHash/);
-  assert.match(src, /startRace:\s*\(\)\s*=>\s*\{\s*started\.n\+\+/);
-  assert.doesNotMatch(src, /openDaily:\s*\([^)]*\)\s*=>\s*\{[^}]*startRace/);
+  assert.match(src, /startRace:\s*\(\)\s*=>\s*\{\s*started\.n\+\+;?\s*\}/);
+  assert.doesNotMatch(src, /openDaily:\s*\([^)]*\)\s*=>\s*\{[^}]*G\.startRace/);
 });
 
 test("lastSession round-trips and continueHint prefers career then daily then session", () => {

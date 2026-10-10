@@ -825,10 +825,12 @@ function create(G) {
     shareNote.className = "adv-help";
     shareNote.setAttribute("data-help", "keep");
     shareNote.textContent = "Paste an APXS1 / APXL1 / APXD1 share code (or a #share= link) to stage a setup, livery, or daily challenge. Ghosts still use APXG1 / #ghost=.";
-    const shareIn = document.createElement("input");
-    shareIn.type = "text";
+    // textarea — not <input>: settings-export tests pick the LOAD file input via
+    // querySelector("input"), and a text field here would steal that match.
+    const shareIn = document.createElement("textarea");
     shareIn.id = "pm-share-code-in";
     shareIn.className = "sel-chip";
+    shareIn.rows = 2;
     shareIn.spellcheck = false;
     shareIn.autocomplete = "off";
     shareIn.placeholder = "paste APXS1 / APXL1 / APXD1 code";

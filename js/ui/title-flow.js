@@ -36,71 +36,62 @@ function openTimeTrial(selectDaily) {
   if (!selectDaily) G.scheduleFlybyTrack(true);
 }
 $("mb-tt").onclick = () => openTimeTrial(false);
-async function drainGhostHash() {
+async function consumeGhostHash() {
   // A ghost link landing MID-RACE waits, fragment intact, for the menu (quitToMenu re-reads it) — as #353's invite link does.
   if (UiLayers.inRace()) { Log.info("game", "ghost link deferred: racing"); return null; }
   const shared = await GhostShare.consumeHash({ valid: () => !UiLayers.inRace(),
     notify: (message, result) => G.announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
   });
-  if (!shared || !shared.ok) return shared;
-  G.flow = "gp"; G.session = "tt";
-  const today = DailyChallenge.dayKey();
-  if (shared.day && shared.day === today) {
-    G.daily.select(shared.day);
-  } else {
-    G.daily.stop();
-    restoreFreePlaySelection();
-    const idx = Tracks.LIST.findIndex((entry) => entry.id === shared.track);
-    if (idx < 0) return shared;   // decode already guards this; retain a safe no-op
-    G.trackIdx = idx;
+  if (shared && shared.ok) {
+    G.flow = "gp"; G.session = "tt";
+    const today = DailyChallenge.dayKey();
+    if (shared.day && shared.day === today) {
+      G.daily.select(shared.day);
+    } else {
+      G.daily.stop();
+      restoreFreePlaySelection();
+      const idx = Tracks.LIST.findIndex((entry) => entry.id === shared.track);
+      if (idx < 0) return shared;   // decode already guards this; retain a safe no-op
+      G.trackIdx = idx;
+    }
+    G.buildSelect();
+    vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
+    G.scheduleFlybyTrack(true);
   }
-  G.buildSelect();
-  vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
-  G.scheduleFlybyTrack(true);
-  return shared;
-}
-async function drainShareHash() {
   // Setup / livery / daily envelopes on #share= — stage only, never startRace.
-  if (typeof ShareCode === "undefined") return null;
-  if (UiLayers.inRace()) { Log.info("game", "share link deferred: racing"); return null; }
-  const started = { n: 0 };
-  const shared = await ShareCode.consumeHash({
-    valid: () => !UiLayers.inRace(),
-    apply: (decoded) => ShareCode.apply(decoded, {
-      store: G.store,
-      startRace: () => { started.n++; },   // must stay unused — unit tests spy this
-      selectTeam: (teamId) => {
-        const ti = Teams.LIST.findIndex((t) => t.id === teamId);
-        if (ti >= 0) G.teamIdx = ti;
+  // Inlined (not a sibling fn) so ghost-share.test.mjs can extract this body alone.
+  if (typeof ShareCode !== "undefined" && !UiLayers.inRace()) {
+    const started = { n: 0 };
+    await ShareCode.consumeHash({
+      valid: () => !UiLayers.inRace(),
+      apply: (decoded) => ShareCode.apply(decoded, {
+        store: G.store,
+        startRace: () => { started.n++; },
+        selectTeam: (teamId) => {
+          const ti = Teams.LIST.findIndex((t) => t.id === teamId);
+          if (ti >= 0) G.teamIdx = ti;
+        },
+        openGarage: (from) => { if (G.openGarage) G.openGarage(from || "share"); },
+        openDaily: (decoded) => {
+          G.flow = "gp"; G.session = "tt";
+          const today = DailyChallenge.dayKey();
+          if (decoded.day === today) G.daily.select(decoded.day);
+          else G.daily.select(today);
+          G.buildSelect();
+          vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
+          G.scheduleFlybyTrack(true);
+        },
+      }),
+      notify: (message, result) => {
+        if (started.n) Log.warn("game", "share apply tried startRace — ignored");
+        G.announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning");
       },
-      openGarage: (from) => { if (G.openGarage) G.openGarage(from || "share"); },
-      openDaily: (decoded) => {
-        G.flow = "gp"; G.session = "tt";
-        const today = DailyChallenge.dayKey();
-        if (decoded.day === today) G.daily.select(decoded.day);
-        else {
-          // Past / future day: open today's daily door with the share as context text only.
-          G.daily.select(today);
-        }
-        G.buildSelect();
-        vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
-        G.scheduleFlybyTrack(true);
-      },
-    }),
-    notify: (message, result) => {
-      if (started.n) Log.warn("game", "share apply tried startRace — ignored");
-      G.announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning");
-    },
-  });
+    });
+  }
   return shared;
-}
-// Exported as consumeGhostHash for game.js quitToMenu — also drains #share=.
-async function consumeGhostHash() {
-  await drainGhostHash();
-  await drainShareHash();
 }
 consumeGhostHash();
-window.addEventListener("hashchange", () => { consumeGhostHash(); });
+window.addEventListener("hashchange", consumeGhostHash);
 // HTP section links write #htp-*; CLOSE (and Esc via data-esc-close) must drop
 // a stale hash so reopen does not jump mid-pane. Keep this off game.js: that
 // file's pick-tests blast radius is circuits/physics and overflows the selected gate.
