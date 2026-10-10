@@ -459,3 +459,42 @@ test("sanitize refuses a loop thousands of km long (13-F1): strict above loopMax
   assert.equal(C.sanitize(design({ pts: e(k) })), null, "over loopMax: refused for storage");
   assert.ok(C.sanitize(design({ pts: e(k) }), { loose: true }), "…but a red work-in-progress draft restores");
 });
+
+// 3-F1 (round-3 hunt): every LAZY_EDITOR file opens with a script-level `const`.
+// A retry after a partial failure re-injected the files that had already run,
+// each threw "Identifier … has already been declared" and index.html raised the
+// red JS-error overlay over the designer. The retry must inject only what failed.
+test("a TRACK DESIGNER retry after a partial load failure injects only the files that failed (3-F1)", async () => {
+  const { ctx, C } = boot();
+  const { LAZY_EDITOR, LAZY_EDITOR_EDGES } = require(path.join(ROOT, "tools/manifest.cjs"));
+  const FAIL = "js/editor/codec.js";
+  const evaluated = new Set(), redeclared = [], attempts = [];
+  let attempt = 0;
+  ctx.ApexRoster = { LAZY_EDITOR, LAZY_EDITOR_EDGES, DEFERRED_EDGES: [] };
+  ctx.window = ctx.window || ctx;
+  ctx.window.__APEX_BUILD = 1;
+  ctx.document = {
+    createElement: () => ({ dataset: {}, remove() {} }),
+    head: { appendChild(el) {
+      const src = el.src.replace(/\?v=.*$/, "");
+      attempts[attempt].push(src);
+      setTimeout(() => {
+        if (attempt === 1 && src === FAIL) { el.onerror(); return; }   // one dropped request
+        if (evaluated.has(src)) redeclared.push(src);                  // == SyntaxError: already declared
+        evaluated.add(src);
+        el.onload();
+      }, 0);
+    } },
+  };
+  vm.runInContext(read("js/core/script-loader.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/core/script-loader.js" });
+  const api = C.create({ soundOn: false }, { load: ctx.ScriptLoader.create().load });
+  attempt = 1; attempts[1] = [];
+  assert.equal(await api.ensureEditor(), false, "the first tap fails on the dropped file");
+  assert.ok(attempts[1].includes("js/editor/shape.js") && evaluated.has("js/editor/shape.js"), "shape.js ran on the first attempt");
+  attempt = 2; attempts[2] = [];
+  assert.equal(await api.ensureEditor(), true, "the retry tap opens the designer");
+  assert.ok(attempts[2].includes(FAIL), "the file that failed is asked for again");
+  assert.ok(!attempts[2].includes("js/editor/shape.js"), "a file that already ran is not re-injected");
+  assert.deepEqual(redeclared, [], "no file was evaluated twice (no 'already declared' overlay)");
+  assert.equal(evaluated.size, LAZY_EDITOR.length, "every file ran exactly once in the end");
+});

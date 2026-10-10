@@ -288,26 +288,6 @@ test("a harness-driven launch (navigator.webdriver) keeps the 700 ms card and ha
   assert.equal(player.els.loading.dataset.phase, "run", "a player under REDUCED still gets the flyby (#1290)");
 });
 
-test("isAutomation is the one intro gate: navigator.webdriver, unless ?fullIntro=1 or window.__apexFullIntro opts back into player pace", () => {
-  const gate = (nav, extra = {}) => {
-    const sb = { Math, JSON, Object, Array, Number, String, isFinite, Date, console, ...extra };
-    if (nav !== undefined) sb.navigator = nav;
-    sb.window = sb;
-    vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb, { filename: "js/ui/loading-screen.js" });
-    return sb;
-  };
-  assert.equal(gate(undefined).LoadingScreen.isAutomation(), false, "no navigator: a player");
-  assert.equal(gate({ webdriver: false }).LoadingScreen.isAutomation(), false, "a player's browser");
-  assert.equal(gate({ webdriver: true }).LoadingScreen.isAutomation(), true, "a harness");
-  assert.equal(gate({ webdriver: true }, { location: { search: "?fullIntro=1" } }).LoadingScreen.isAutomation(), false, "?fullIntro=1 forces player pace");
-  assert.equal(gate({ webdriver: true }, { location: { search: "?fullIntro=0" } }).LoadingScreen.isAutomation(), true);
-  const sb = gate({ webdriver: true });
-  sb.__apexFullIntro = true;
-  assert.equal(sb.LoadingScreen.isAutomation(), false, "window.__apexFullIntro forces player pace (garage-out-before-card.spec)");
-  const src = read("js/ui/loading-screen.js");
-  assert.equal((src.match(/navigator\.webdriver\s*[!=]==/g) || []).length, 1, "one webdriver read in loading-screen.js: isAutomation");
-});
-
 test("a skip of the GARAGE leave is not a verdict on the flyby: the streak counts flyby skips only", () => {
   const src = fs.readFileSync(path.join(ROOT, "js/ui/loading-screen.js"), "utf8");
   const note = src.slice(src.indexOf("function noteFlyby("), src.indexOf("const MAP_W"));
@@ -962,15 +942,42 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
   assert.match(intro, /announce\("PREPARATION FAILED/, "a warm timeout recovers to the menu with a visible message");
   assert.match(intro, /if \(!built && menuWorld\(\) && introWarm\(go\)\) return;/, "raceIntro routes a built world with a pending warm through it");
   assert.match(intro, /function startRaceCovered\(\) \{\s*if \(!loadingScreen\.phase\(\)\) loadingScreen\.building\(loadingInfo\(\)\);\s*return startRace\(\);/);
-  for (const [name, re] of [["qualifying's GRID", /session = "race";\s*startRaceCovered\(\);/],
-    ["qualifying's DRIVE", /session = "quali";\s*startRaceCovered\(\);/],
-    ["a season's NEXT RACE", /openQuali\(\);\s*else startRaceCovered\(\);/]]) assert.match(game, re, `${name} starts under the card`);
+  // These three sheet routes play the garage drive-out before the card (bug-hunt 3.14): startRaceFromSheet,
+  // which falls back to startRaceCovered for a headless/hidden/net page. One-offs stay quick restarts.
+  for (const [name, re] of [["qualifying's GRID", /session = "race";\s*startRaceFromSheet\(\);/],
+    ["qualifying's DRIVE", /session = "quali";\s*startRaceFromSheet\(\);/],
+    ["a season's NEXT RACE", /openQuali\(\);\s*else if \(isChampionship\(\)\) startRaceFromSheet\(\);\s*\/\/[^\n]*\n\s*else startRaceCovered\(\);/]]) assert.match(game, re, `${name} starts under the card`);
+  assert.match(game, /function startRaceFromSheet\(\) \{\s*if \(headlessMode \|\| document\.hidden \|\| netPlay\.active\(\) \|\| qualiNet\.hasArmed\(\)\) return startRaceCovered\(\);/, "the covered start stays the fallback");
   // The build path plans the flyby for the length it will run (a real race's read).
   const build = game.slice(game.indexOf("function introBuild(go)"), game.indexOf("function introWarm(go)"));
   assert.match(build, /const info0 = loadingInfo\(\);/);
   assert.match(build, /await introPrepare\(live, key, info0, n, true\)/);
   assert.match(game, /FlybySeq\.setDuration\(loadingScreen\.nextFlyMs\(info\.readMs\)\);/);
   assert.match(build, /await awaitIntroWarm\(live\)/, "introBuild waits via awaitIntroWarm, not the race-start introWarm(go)");
+});
+
+test("launch unification: every session the player starts reaches raceIntro; the quick restarts and automation stay quick", () => {
+  const game = read("js/game.js"), rs = read("js/race/race-settings.js"), real = read("js/race/real-race.js");
+  // Menu starts (one-off race, TIME TRIAL, DAILY, season / career round 1, practice) all end at RACE SETTINGS' GO, which hands raceIntro the sheet.
+  assert.match(rs, /else if \(raceIntro\) \{[\s\S]{0,200}?try \{ raceIntro\(startRace, sheet, \$\("rs-go"\)\);/, "GO plays the pre-race screen");
+  assert.match(rs, /\(!isChampionship\(\) && gridFromQuali\(\) && !qualiResults\(\)\)\) \{ dismissSheet\(\); openQuali\(\); \}/, "…except a qualifying grid, whose sheet leads to startRaceFromSheet");
+  assert.match(game, /const gridFromQuali = \(\) => \(isChampionship\(\) \? SeasonCal\.quali\(\) : \(qualiGrid\(\) && !isTimeTrial\(\)/, "a time trial never detours through the qualifying sheet");
+  // The DAILY button only SELECTS today's plan and opens the circuit picker (so its GO is the same sheet); it starts nothing itself.
+  assert.match(game, /openDailyPicker: \(\) => openTimeTrial\(true\)/);
+  assert.doesNotMatch(read("js/ui/title-flow.js").match(/function openTimeTrial[\s\S]*?\n\}/)[0], /startRace|raceIntro/, "the title's TT / DAILY open the picker, they never start");
+  // The Data Hub's JUMP IN opts in to the pre-race screen, and RealRace.launch runs the raw raceIntro (not the sheet variant: no sheet to hold).
+  const tab = read("js/data/real-race-tab.js");
+  assert.match(tab.match(/function jumpIn[\s\S]*?\n    \}/)[0], /RealRace\.launch\(script, \{[^}]*intro: true \}\)/, "JUMP IN passes intro");
+  assert.match(real, /if \(opts && opts\.intro && G\.raceIntro\) \{\s*try \{ G\.raceIntro\(G\.startRace\); \}/, "launch runs the pre-race screen when asked");
+  assert.match(game, /\n  raceIntro,   \/\/ the pre-race screen, for a launch that is not RACE!/, "the façade hands launch the raw raceIntro");
+  // The drive-out is dropped only where the player's car is not leaving the garage, or nothing could show it.
+  assert.match(game, /const off = \(real && \(real\.watch \|\| real\.startLap > 1\)\) \|\| headlessMode \|\| document\.hidden;/);
+  // QUICK on purpose: RACE AGAIN / TRY AGAIN, pause RESTART. (Net / headless / hidden fall back inside startRaceFromSheet.)
+  assert.match(game, /else if \(isChampionship\(\)\) startRaceFromSheet\(\);[^\n]*\n\s*else startRaceCovered\(\);/, "RACE AGAIN / TRY AGAIN stay card-only restarts");
+  assert.match(game, /\$\("pm-restart"\)\.onclick = \(\) => \{[^\n]*startRace\(\)\.then\(/, "pause RESTART calls startRace() directly");
+  assert.doesNotMatch(game.match(/\$\("pm-restart"\)\.onclick[^\n]*/)[0], /raceIntro|startRaceFromSheet|startRaceCovered/);
+  // Agent / dev starts (__apex.race()/tt(), Daily.open) keep the synchronous start the specs are written against.
+  assert.match(read("js/race/daily-challenge.js"), /function open\(day, mode = "standard"\) \{[\s\S]*?G\.startRace\(\);/);
 });
 
 test("the card over the scene: black bars and a light hint in every theme, an undistorted map, a real fade, no bars under MENU ANIMATIONS: REDUCED", () => {

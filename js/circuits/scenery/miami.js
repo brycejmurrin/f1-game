@@ -740,7 +740,7 @@
         }
       }
 
-      beachClub(0.515, 1, 42);
+      beachClub(0.52, 1, 48);
       for (let i = 0; i < 16; i++) palm(K(0.50 + i * 0.004),  1, 11 + (i % 3) * 6, 9 + hash(i)     * 2, PALM_GREEN);
       for (let i = 0; i < 6;  i++) palm(K(0.55 + i * 0.005), -1, 12 + (i % 2) * 5, 8 + hash(i * 2) * 1, PALM_DARK);
       billboard(K(0.50), 1, 11, 18, 9, CORAL);

@@ -214,8 +214,8 @@ const RealReplay = (function () {
       carOf: (num) => { for (const [c, f] of run.cars) if (f.num === num) return c; return null; },
       codeOf: (c) => { const f = run.cars.get(c); return f && f.d ? f.d.code : null; },   // the REAL driver's code (a seat car can wear another)
       colourOf: (num) => { for (const [c, f] of run.cars) if (f.num === num) return c.team && G.cssCol ? G.cssCol(c.team.color) : ""; return ""; },
-      // c.speed is scaled by the replay rate for engine pitch; battles()/PiP/director need the real m/s.
-      running: () => [...run.cars.keys()].filter((c) => run.cars.get(c).tr && !c.retired).sort((a, b) => b.prog - a.prog).map((c) => ({ key: c, prog: c.prog, speed: c.speed / (run.speed || 1) })),
+      // c.speed is the trace's real m/s at every rate (pose() carries the rate apart, in c.replayRate), so battles()/PiP/director read it as is.
+      running: () => [...run.cars.keys()].filter((c) => run.cars.get(c).tr && !c.retired).sort((a, b) => b.prog - a.prog).map((c) => ({ key: c, prog: c.prog, speed: c.speed })),
     };
 
     /** start({script, traces, seats: Map car->driver, startLap, follow, rate, reel, camera}) — false when no trace fits. */
@@ -390,7 +390,7 @@ const RealReplay = (function () {
       if (used) { e.preventDefault(); e.stopPropagation(); if (G.announce && e.code !== KEY_SKIP) G.announce((run.follow ? run.follow.code : "") + " · " + run.speed + "×", 1.2, "info"); }
     }
 
-    // A standing puppet for the audio feeds. game.js voices the engine and rivals from c.speed -> c.rpm, but a
+    // A standing puppet for the audio feeds. game.js voices the engine and rivals from c.speed × c.replayRate -> c.rpm, but a
     // retired (parked) car returns from updateCar before it recomputes c.rpm, so a car whose data ended would
     // keep its last revs for the rest of the replay: park it at idle.
     function idle(c) {
@@ -411,10 +411,10 @@ const RealReplay = (function () {
         Tracks.sample(track, s, smp);
         const x = clamp(at.x, -(smp.hw + MAX_X), smp.hw + MAX_X);
         c.lap = lap; c.prog = at.prog; c.s = s; c.x = x; c.xVis = x;
-        // Trace speed is the car's real m/s; the transport clock runs faster at 2×–8×,
-        // so engine/rival pitch must scale too (game.js revs replay puppets from c.speed).
-        // At 1× this is a no-op; rpmFor still caps redline on extreme 8× straights.
-        c.speed = at.speed * run.speed;
+        // c.speed stays the trace's real m/s: the followed puppet is the camera target, and camVantage, CamFeel,
+        // ExtraRigs and the broadcast battles all read it. The transport runs 2×–8× faster, so the ENGINE note
+        // must too: game.js revs a replay puppet from c.speed × c.replayRate (its only reader; rpmFor caps redline).
+        c.speed = at.speed; c.replayRate = run.speed;
         const rl = Math.hypot(smp.r[0], smp.r[2]) || 1;
         c.px = smp.p[0] + smp.r[0] / rl * x; c.pz = smp.p[2] + smp.r[2] / rl * x;
         c.head = Math.atan2(smp.t[0], smp.t[2]);

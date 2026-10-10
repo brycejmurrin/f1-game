@@ -1021,6 +1021,66 @@ test("lamp shadow arm does not leak into the next frame", async () => {
   assert.equal(frame[133], 0, "params8.y must clear after present");
 });
 
+// A stride-15 record per [x, y, z] (radius 10): enough for the slot / baked-position matches.
+const lampRecs = (...pos) => { const a = []; for (const p of pos) a.push(p[0], p[1], p[2], 1, 1, 1, 10, 0, -1, 0, 0.9, 0.8, 0, 0, 0); return a; };
+const IDENT16 = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+
+// 1b-F3 (hunt 3): SHD.lampIdx is a slot of the FORWARD frame.lights; the mirror re-ranks its own list
+// (FrameLights.viewLights), so the slot names another lamp there. GLX gated it in #1281; WGX did not.
+test("the WGX mirror pass runs with the lamp shadow off; the main pass after it re-arms (1b-F3)", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  const fb = h.buffers.find((buffer) => buffer.desc.size === 672);
+  const last = () => h.writes.filter((write) => write.buffer === fb).at(-1).values;
+  const allLights = lampRecs([0, 5, 0], [10, 5, 0], [20, 5, 0], [30, 5, 0]);
+  const fwd = { lights: lampRecs([30, 5, 0], [0, 5, 0], [20, 5, 0]), allLights, allLightsGen: 1, perChunkLights: 0 };
+  const mir = { lights: lampRecs([10, 5, 0], [0, 5, 0], [30, 5, 0]), allLights, allLightsGen: 1, perChunkLights: 0 };
+  gfx.lampShadowBegin(IDENT16, 2);   // the forward slot 2 = the lamp at x 20
+  gfx.lampShadowEnd();
+  assert.equal(gfx.mirrorBegin(mir, 64, 16), true);
+  let d = last();
+  assert.equal(d[133], 0, "params8.y: no lamp shadow in the mirror — its slot 2 is the lamp at x 30");
+  assert.equal(d[140], -1, "params10.x: no per-chunk shadow lamp in the mirror either");
+  gfx.mirrorEnd();
+  assert.equal(gfx.begin(fwd), true);
+  d = last();
+  assert.equal(d[133], 1, "the forward pass keeps its lamp shadow");
+  assert.equal(d[134], 2);
+  assert.equal(d[140], 2, "the caster's absolute index in the baked set (x 20)");
+  gfx.present({});
+});
+
+// 1b-F4 (hunt 3): frame.allLights is ONE buffer refilled in place (frame-lights.js), so a rebuild:true
+// tuner edit (LAMP DENSITY / POOL RADIUS) re-orders it under the same identity while the caster keeps
+// its position. The memo keyed on identity + position returned the caster's OLD index.
+test("the WGX shadow-lamp absolute index follows an in-place refill of the baked set (1b-F4)", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  const fb = h.buffers.find((buffer) => buffer.desc.size === 672);
+  const last = () => h.writes.filter((write) => write.buffer === fb).at(-1).values;
+  const allLights = lampRecs([0, 5, 0], [10, 5, 0], [20, 5, 0], [30, 5, 0]);
+  const frame = { lights: lampRecs([30, 5, 0], [20, 5, 0]), allLights, allLightsGen: 1, perChunkLights: 0 };
+  const frameOn = () => { gfx.lampShadowBegin(IDENT16, 1); gfx.lampShadowEnd(); assert.equal(gfx.begin(frame), true); const d = last(); gfx.present({}); return d; };
+  assert.equal(frameOn()[140], 2, "x 20 is record 2");
+  assert.equal(frameOn()[140], 2, "a memo hit");
+  // The density edit: same array, new order, the caster (x 20) now record 0 and record 2 a different lamp.
+  allLights.length = 0;
+  allLights.push(...lampRecs([20, 5, 0], [5, 5, 0], [15, 5, 0]));
+  frame.allLightsGen = 2;
+  assert.equal(frameOn()[140], 0, "the caster's NEW index, not the memoised one");
+  // A caster absent from the set (-1) is re-looked-up once the set's values move.
+  allLights.length = 0;
+  allLights.push(...lampRecs([0, 5, 0]));
+  frame.allLightsGen = 3;
+  assert.equal(frameOn()[140], -1, "not in the set");
+  allLights.length = 0;
+  allLights.push(...lampRecs([0, 5, 0], [20, 5, 0]));
+  frame.allLightsGen = 4;
+  assert.equal(frameOn()[140], 1, "the refill that brings it in is seen");
+});
+
 test("god-ray uploads nearest lamps and remaps the shadowed index", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
