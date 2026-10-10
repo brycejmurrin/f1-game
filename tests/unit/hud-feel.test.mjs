@@ -1573,7 +1573,7 @@ test("phone chase: the radio card never paints over the minimap's bottom — the
   assert.equal(h.dom.body.getAttribute("data-radio-slot"), "collapsed", "a top-row card painted on the map collapses too");
   ann._rect = R(0, 0, 0, 0); ann.hidden = true;
   const css = read("css/hud.css");
-  assert.match(css, /body\[data-radio-slot="lane"\] #announce#announce,\s*body\[data-radio-slot="collapsed"\] #announce#announce \{ top: calc\(var\(--announce-lane-y, calc\(var\(--flag-slot-top\) \* var\(--hud-z\)\)\) \/ var\(--hud-z\)\); \}/,
+  assert.match(css, /body\[data-radio-slot="lane"\]\[data-radio-slot="lane"\] #announce,\s*body\[data-radio-slot="collapsed"\]\[data-radio-slot="collapsed"\] #announce \{ top: calc\(var\(--announce-lane-y, calc\(var\(--flag-slot-top\) \* var\(--hud-z\)\)\) \/ var\(--hud-z\)\); \}/,
     "the card sits in the lane's rows, outranking the density / caution tops");
 });
 
