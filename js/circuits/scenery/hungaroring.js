@@ -663,12 +663,18 @@
       cameraTower(K(0.905),  -1, 40, { h: 14 });
 
       (function countryside() {
-        const a = anchor(K(0.62), 1, 260);
+        // OUTSIDE the circuit (side -1; the infield, side +1, is the circuit's own
+        // hairpin loop: this village anchored there stood 16-47 m from the road at
+        // racing 0.32-0.33, so the nave, roof and two cottages were rejected whole).
+        // Measured clear of EVERY centreline stretch (not just the nearest at its
+        // own s): cottages and church 266 m+ from any tarmac edge.
+        const SD = -1;
+        const a = anchor(K(0.62), SD, 260);
         const b = [a.r, a.u, a.t], base = a.c;
         const wallC = [0.82, 0.78, 0.68], roofC = [0.56, 0.30, 0.22];
         for (let i = 0; i < 6; i++) {
           const off = (i - 2.5) * 34, out2 = hash(i * 9) * 40;
-          const ai = anchor(K(0.62) + Math.round(off / ds), 1, 260 + out2);
+          const ai = anchor(K(0.62) + Math.round(off / ds), SD, 260 + out2);
           const bi = [ai.r, ai.u, ai.t], f = ai.c;
           const w = 12 + hash(i * 7) * 6, hh = 7 + hash(i * 5) * 3;
           out._mat = MAT.STONE;
@@ -677,18 +683,23 @@
           addPrism(out, vadd(f, ai.u, hh), [w, 3.2, w * 0.8], roofC, bi);
           out._mat = 0;
         }
-        // Village church: white nave + a tall spire.
-        const cf = vadd(vadd(base, a.t, 20), a.r, 60);
-        out._mat = MAT.STONE;
-        addBox(out, vadd(cf, a.u, 8), [14, 16, 22], [0.90, 0.88, 0.82], b);
-        out._mat = MAT.ROOF;
-        addPrism(out, vadd(cf, a.u, 17), [14, 4, 22], roofC, b);
-        const tf = vadd(cf, a.t, 13);
-        out._mat = MAT.STONE;
-        addBox(out, vadd(tf, a.u, 13), [5, 26, 5], [0.92, 0.90, 0.84], b);
-        out._mat = MAT.METAL;
-        addCone(out, vadd(tf, a.u, 26), 3.4, 12, roofC, 7, b);
-        out._mat = 0;
+        // Village church: white nave + a tall spire, one atomic group so the spire
+        // never stands without its nave.
+        const cf = vadd(vadd(base, a.t, 20), a.r, 60 * SD);
+        modelGroup("hungaroring-village-church", {
+          center: vadd(vadd(cf, a.t, 2.25), a.u, 19), size: [14, 38, 27], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(cf, a.u, 8), [14, 16, 22], [0.90, 0.88, 0.82], b);
+          stage._mat = MAT.ROOF;
+          addPrism(stage, vadd(cf, a.u, 17), [14, 4, 22], roofC, b);
+          const tf = vadd(cf, a.t, 13);
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(tf, a.u, 13), [5, 26, 5], [0.92, 0.90, 0.84], b);
+          stage._mat = MAT.METAL;
+          addCone(stage, vadd(tf, a.u, 26), 3.4, 12, roofC, 7, b);
+          stage._mat = 0;
+        });
       })();
       // Sunflower / wheat field patches on the open plain (dusty Hungarian gold).
       for (const [s, side, dist] of [[0.35, 1, 120], [0.45, -1, 130], [0.70, 1, 140], [0.25, -1, 115]]) {
