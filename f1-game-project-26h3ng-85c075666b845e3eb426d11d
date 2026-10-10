@@ -1,1 +1,1 @@
-1791631706	Cursor Agent	tip db7b355 rawColor 336 OK (via #1289); local tooling-fast 488/0; watching ship CI 38048423645; no duplicate PR; #1368 CLEAN but redundant  [claude/f1-game-project-26h3ng; session 85c075666b845e3eb426d11d]
+1791631747	Cursor Agent	tip 3c65520 rawColor 336 already landed (#1289); code green locally (tooling-fast 488/0 on prior tip); ship CI cascade cancelling under merge burst — watching 38048524339; #1368 green+redundant (same 336); no AM/merge  [claude/f1-game-project-26h3ng; session 85c075666b845e3eb426d11d]
