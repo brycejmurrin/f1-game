@@ -921,6 +921,48 @@ test("a moved / resized tower, map, sector box or gearbox leaves every fit cap w
   assert.notDeepEqual(c.refit(), cBase, "un-marked painted rects move the caps — the fixture can see the defect");
 });
 
+/* THE OBSTACLE LIST (js/ui/hud.js obsCollect): one measured list per fit stage that the radio card's
+ * slot, the mirror's centre-column edge, the phone-clash check, the dock inset and
+ * HudLayout.clearControls all read, instead of each walking its own hand-picked rects. */
+test("fitHud's obstacle list names every visible piece, with its kind and column, and drops hidden ones", () => {
+  const h = fitHarness();
+  const R = (left, top, w, hh) => ({ left, top, right: left + w, bottom: top + hh, width: w, height: hh });
+  const put = (id, r) => { const el = h.dom.byId(id); el._rect = r; return el; };
+  put("hud-rel", R(10, 160, 120, 60)); put("hud-strat", R(10, 230, 120, 40)); put("hud-inputs", R(540, 210, 100, 36));
+  put("hud-damage", R(600, 260, 60, 40)); put("hud-limits", R(650, 215, 80, 24));
+  put("hud-mirror", R(330, 70, 140, 40)); put("hud-flag", R(350, 120, 100, 24));
+  put("pausebtn", R(746, 8, 44, 44)); put("btn-cam", R(660, 8, 80, 44));
+  const boost = put("btn-boost", R(700, 250, 80, 80)); boost.className = "touchbtn";
+  h.refit();
+  const list = h.sb.GameHud.obstacles();
+  const by = Object.fromEntries(list.map((o) => [o.id, o]));
+  const want = {
+    tower: ["chrome", "top"], map: ["readout", "left"], sectors: ["readout", "right"],
+    rel: ["readout", "left"], strat: ["readout", "left"], inputs: ["readout", "right"], damage: ["readout", "right"],
+    limits: ["readout", "left"], mirror: ["chrome", "centre"], flag: ["chrome", "centre"],
+    pause: ["control", "top"], cam: ["control", "top"], dockL0: ["control", "left"], dockR0: ["control", "right"],
+    "btn-boost": ["control", "right"],
+  };
+  for (const [id, [kind, column]] of Object.entries(want)) {
+    assert.ok(by[id], `${id} is in the list (${Object.keys(by).join(",")})`);
+    assert.equal(by[id].kind, kind, id + " kind"); assert.equal(by[id].column, column, id + " column");
+  }
+  assert.deepEqual(by.inputs.rect, h.dom.byId("hud-inputs")._rect, "the entry carries the painted box");
+  assert.ok(by.dockL0.group && by.dockL0.dock === "L" && by.dockR0.dock === "R", "dock groups say which dock");
+  assert.ok(by["btn-boost"].tap, "a .touchbtn is a tap target (HudLayout.clearControls reads those)");
+  assert.equal(list.filter((o) => o.id === "tower").length, 1, "each piece once");
+  // A hidden or unlaid-out piece has no box to clear.
+  h.dom.byId("hud-strat").hidden = true; h.dom.byId("hud-flag")._rect = R(0, 0, 0, 0);
+  h.refit();
+  const ids = h.sb.GameHud.obstacles().map((o) => o.id);
+  assert.ok(!ids.includes("strat") && !ids.includes("flag"), "hidden STRATEGY and an empty flag drop out: " + ids);
+  // TRACK LIMITS crossed to the left column (the right dock reaches the chip's row here: data-limits-left).
+  assert.ok("limitsLeft" in h.root.dataset, "the fixture crosses the chip left");
+  delete h.root.dataset.limitsLeft;
+  h.sb.GameHud.invalidateFit();
+  assert.equal(h.sb.GameHud.obstacles().find((o) => o.id === "limits").column, "right", "in the right column it says right");
+});
+
 /** The fit with the safe-area token readable (as on a device, where --sar is a registered length)
  *  and the sector plate's left edge moved by `shift` px — what a touch dock stand-off does to it. */
 function topZoomWithPlateShift(shift, sarPx) {

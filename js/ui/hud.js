@@ -14,7 +14,7 @@ const motionReduced = () => !!(_rmq && _rmq.matches)
   || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
 
 // GameHud.invalidateFit(): the live instance's re-fit trigger (null until create).
-let _invalidateFit = null, _syncPhoneFit = null;
+let _invalidateFit = null, _syncPhoneFit = null, _obstacles = null;
 function create(G) {
 Log.info("ui", "GameHud.create");
 
@@ -461,6 +461,72 @@ function layoutRect(el) {
   }
   return { left, top, right: left + w, bottom: top + h, width: w, height: h };
 }
+// THE OBSTACLE LIST: every visible HUD piece, measured ONCE per stage of a fit.
+// The radio card's slot pickers, the mirror's centre-column edge, the painted
+// phone-clash check, the sector plate's dock inset and HudLayout.clearControls
+// each used to walk their own hand-picked set of getBoundingClientRect calls,
+// and each picked a different set (the side-of-mirror picker ignored the map,
+// the flag and the readouts; the top-row picker ignored the readouts). One
+// list, collected after the dock caps are written and re-collected after any
+// write that moves a piece (the dock inset, MOVE & SIZE's clamp, a sector
+// shrink), is what every consumer reads, so they all judge the same screen.
+// Entry: { id, el, rect (painted, screen px), kind: control | readout | chrome,
+// column: left | right | centre | top | bottom, group?: dock group, dock?: L|R }.
+// A hidden or unlaid-out piece is not in the list (it has no box to clear).
+// THE BOX IS THE PAINTED ONE: what a card must clear is where a piece IS, MOVE &
+// SIZE offset included. The fit's own budgets keep measuring layoutRect (the
+// un-moved layout), never this list.
+let _obs = [], _obsBy = Object.create(null);
+function obsCollect() {
+  const list = [], by = Object.create(null);
+  const W = window.innerWidth || 0, mid = W / 2;
+  const doc = typeof document !== "undefined" ? document : null;
+  if (!doc) { _obs = list; _obsBy = by; return list; }
+  if (!_hudTop) {
+    _hudTop = doc.querySelector(".hud-top"); _hudBottom = doc.querySelector(".hud-bottom");
+    _dockL = doc.getElementById("dock-left"); _dockR = doc.getElementById("dock-right");
+  }
+  const add = (id, el, kind, column, extra) => {
+    if (!el || el.hidden || !el.getBoundingClientRect) return;
+    const r = el.getBoundingClientRect();
+    if (!(r && r.width && r.height)) return;
+    const o = { id, el, rect: r, kind, column: column || ((r.left + r.right) / 2 >= mid ? "right" : "left") };
+    if (extra) for (const k in extra) o[k] = extra[k];
+    list.push(o);
+    if (!by[id]) by[id] = o;
+  };
+  const root = doc.documentElement;
+  add("tower", _hudTop, "chrome", "top");
+  add("map", els.minimap, "readout", "left");
+  add("gaps", doc.querySelector(".hud-gaps"), "readout", "left");
+  add("metrics", doc.getElementById("game-metrics"), "readout", null);
+  add("sectors", els.hudSectors, "readout", "right");
+  add("limits", els.hudLimits || doc.getElementById("hud-limits"), "readout", root && root.dataset && "limitsLeft" in root.dataset ? "left" : "right");
+  add("damage", doc.getElementById("hud-damage"), "readout", null);
+  add("rel", doc.getElementById("hud-rel"), "readout", null);
+  add("strat", doc.getElementById("hud-strat"), "readout", null);
+  add("inputs", doc.getElementById("hud-inputs"), "readout", null);
+  add("mirror", doc.getElementById("hud-mirror"), "chrome", "centre");
+  add("mirrorChip", doc.getElementById("hud-mirror-chip"), "control", "centre");
+  add("flag", els.flag || doc.getElementById("hud-flag"), "chrome", "centre");
+  add("pause", els.pausebtn || doc.getElementById("pausebtn"), "control", "top");
+  add("cam", els.btnCam || doc.getElementById("btn-cam"), "control", "top");
+  add("gearbox", doc.getElementById("hud-gearbox"), "readout", "bottom");
+  add("speed", doc.getElementById("hud-speed"), "readout", "bottom");
+  for (const [d, side] of [[_dockL, "L"], [_dockR, "R"]]) {
+    if (!d || !d.children) continue;
+    let i = 0;
+    for (const g of d.children) add("dock" + side + (i++), g, "control", side === "L" ? "left" : "right", { group: true, dock: side });
+  }
+  // The individual tap targets (BOOST / OT / AERO, the pedals, the steer arrows): the dock groups above
+  // carry most of them, but TILT parks BRAKE beside the map and the pedals are #btn-* siblings.
+  const taps = doc.querySelectorAll ? doc.querySelectorAll(".touchbtn") : [];
+  for (let i = 0; i < taps.length; i++) add(taps[i].id || "tap" + i, taps[i], "control", null, { tap: true });
+  _obs = list; _obsBy = by;
+  return list;
+}
+/** The latest collected entry for `id`, or null (hidden / unlaid-out / not collected yet). */
+function obs(id) { return _obsBy[id] || null; }
 // THE RADIO CARD'S TOP-ROW SLOT: right of the timing tower, left of the cam /
 // pause buttons, in the tower's own row — off the road and clear of the mirror
 // under the tower (a phone report: the card beside the mirror still sat on the
@@ -503,21 +569,23 @@ const RADIO_TOP_MIN = 96, RADIO_TOP_GAP = 8;
 // viewport (desktop's empty docks never do); it bounds the lane only from the
 // card's rows, as the map, the gaps chip and the opt-in readouts do.
 const LANE_ROWS = 96;
-function announceLane(root) {
-  const t = _hudTop ? _hudTop.getBoundingClientRect() : null;
+function towerRect() {
+  const o = obs("tower");
+  return o ? o.rect : (_hudTop && _hudTop.getBoundingClientRect ? _hudTop.getBoundingClientRect() : null);
+}
+function cssPx(root, name) {
+  if (typeof getComputedStyle !== "function" || !root) return 0;
+  try { return parseFloat(getComputedStyle(root).getPropertyValue(name)) || 0; } catch (_) { return 0; }   // mini-dom / detached root
+}
+function announceLane(root, list) {
+  if (!list) list = obsCollect();
+  const t = towerRect();
   const W = window.innerWidth, H = window.innerHeight || 0;
   const y0 = t ? t.bottom : 0, mid = W / 2;
-  const under = (el) => { if (!el || el.hidden || !el.getBoundingClientRect) return 0; const r = el.getBoundingClientRect(); return r.width && r.height ? r.bottom : 0; };
+  const under = (id) => { const o = obs(id); return o ? o.rect.bottom : 0; };
   // Under a caution the card steps below the flag chip too (css/hud.css: the caution rules).
-  const bandTop = Math.max(y0, under(document.getElementById("hud-mirror")), under(document.getElementById("hud-mirror-chip")), under(els.flag)) + RADIO_TOP_GAP, bandBot = bandTop + LANE_ROWS;
-  let sal = 0, sar = 0;
-  if (typeof getComputedStyle === "function" && root) {
-    try {
-      const cs = getComputedStyle(root);
-      sal = parseFloat(cs.getPropertyValue("--sal")) || 0;
-      sar = parseFloat(cs.getPropertyValue("--sar")) || 0;
-    } catch (_) { /* mini-dom / detached root */ }
-  }
+  const bandTop = Math.max(y0, under("mirror"), under("mirrorChip"), under("flag")) + RADIO_TOP_GAP, bandBot = bandTop + LANE_ROWS;
+  const sal = cssPx(root, "--sal"), sar = cssPx(root, "--sar");
   let left = sal, right = W - sar, any = false;
   const clip = (r, counts) => {
     if (!r || !r.width || !r.height) return;
@@ -526,30 +594,24 @@ function announceLane(root) {
     if ((r.left + r.right) / 2 >= mid) right = Math.min(right, r.left);
     else left = Math.max(left, r.right);
   };
-  for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) clip(g.getBoundingClientRect(), true);
+  for (const o of list) if (o.group) clip(o.rect, true);
   // SECTORS always end the RIGHT of the lane. After #1191 the plate takes
   // --dock-r-w on buttons (and #1212 on every phone steer); a wide wrap-reverse
   // dock can push its centre left of mid, so the mid-based clip() above would
   // treat it as LEFT chrome and leave --announce-lane-w spanning into S1–S3
   // (Pages gate: #hud-sectors+#announce on notched-landscape buttons).
-  const sec = els.hudSectors;
-  const secR = sec && !sec.hidden ? sec.getBoundingClientRect() : null;
   // Clip the RIGHT to sectors without setting `any` — desktop empty docks must
   // still clear the lane vars (CSS falls back to centred). Phone docks set
   // `any` via the group loop above.
-  if (secR && secR.width && secR.height) right = Math.min(right, secR.left);
-  clip(els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null, false);
-  const gaps = document.querySelector(".hud-gaps");
-  clip(gaps && !gaps.hidden ? gaps.getBoundingClientRect() : null, false);
-  // The opt-in readouts (MOVE & SIZE places them) and the track-limits chip: a
-  // STRATEGY box in the left column and the INPUTS trace under the sector box
-  // share the card's rows on a phone.
-  for (const el of [document.getElementById("hud-rel"), document.getElementById("hud-strat"), document.getElementById("hud-inputs"), document.getElementById("hud-damage"), els.hudLimits]) {
-    if (el && !el.hidden && el.getBoundingClientRect) clip(el.getBoundingClientRect(), false);
-  }
+  const sec = obs("sectors"), secR = sec ? sec.rect : null;
+  if (secR) right = Math.min(right, secR.left);
+  // The map, the gaps chip, the opt-in readouts (MOVE & SIZE places them) and the
+  // track-limits chip: a STRATEGY box in the left column and the INPUTS trace under
+  // the sector box share the card's rows on a phone.
+  for (const id of ["map", "gaps", "rel", "strat", "inputs", "damage", "limits"]) { const o = obs(id); if (o) clip(o.rect, false); }
   const x = left + RADIO_TOP_GAP, w = right - RADIO_TOP_GAP - x;
   const on = any && w > 0;
-  const collapsed = !on && any && secR && secR.width;
+  const collapsed = !on && any && !!secR;
   if (on) {
     hStyle(root, "--announce-lane-x", x.toFixed(1) + "px");
     hStyle(root, "--announce-lane-shift", "0%");
@@ -571,9 +633,10 @@ function announceLane(root) {
   const annEl = typeof document !== "undefined" ? document.getElementById("announce") : null;
   if (annEl && annEl.toggleAttribute) annEl.toggleAttribute("data-lane-collapsed", !!collapsed);
 }
-function radioTopSlot(root, bcast) {
-  const t = !bcast && _hudTop ? _hudTop.getBoundingClientRect() : null;
-  announceLane(root);
+function radioTopSlot(root, bcast, list) {
+  if (!list) list = obsCollect();
+  const t = !bcast ? towerRect() : null;
+  announceLane(root, list);
   let right = window.innerWidth - 10;
   const x = t ? t.right + RADIO_TOP_GAP : 0;
   // Pause / cam share the tower's rows. Dock groups bound a wrapping card
@@ -585,12 +648,12 @@ function radioTopSlot(root, bcast) {
     if (!r || !r.width || !r.height || !(r.top < bot && r.bottom > t.top)) return;
     if (needPast ? r.left > t.right : r.right > x) right = Math.min(right, r.left);
   };
-  for (const el of [els.btnCam, els.pausebtn]) bound(t && el && !el.hidden ? el.getBoundingClientRect() : null, true, t ? t.bottom : 0);
   if (t) {
+    for (const id of ["cam", "pause"]) { const o = obs(id); if (o) bound(o.rect, true, t.bottom); }
     const wrapBot = t.bottom + t.height;
-    for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) bound(g.getBoundingClientRect(), false, wrapBot);
-    const sec = els.hudSectors;
-    bound(sec && !sec.hidden ? sec.getBoundingClientRect() : null, true, wrapBot);
+    for (const o of list) if (o.group) bound(o.rect, false, wrapBot);
+    const sec = obs("sectors");
+    if (sec) bound(sec.rect, true, wrapBot);
   }
   const fits = !!(t && t.width && t.height) && right - RADIO_TOP_GAP - x >= RADIO_TOP_MIN;
   hToggle(document.body, "hud-radio-top", fits);
@@ -616,17 +679,11 @@ function radioPaintedCollapse(root) {
   const annPaint = typeof document !== "undefined" ? document.getElementById("announce") : null;
   if (annPaint && !annPaint.hidden) {
     const a = annPaint.getBoundingClientRect();
-    const hit = (el) => {
-      if (!el || el.hidden) return false;
-      const r = el.getBoundingClientRect();
-      return !!(a.width > 0 && r.width > 0
-        && r.left < a.right - 0.5 && a.left < r.right - 0.5
-        && r.top < a.bottom - 0.5 && a.top < r.bottom - 0.5);
-    };
-    const tower = _hudTop || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
-    if (hit(els.hudSectors) || hit(tower)) {
+    // The tower and the plate do not move when the card does: the list collected for this placement holds.
+    const hit = (id) => { const o = obs(id); return !!(o && _hudRectsHit(a, o.rect)); };
+    if (hit("sectors") || hit("tower")) {
       hToggle(document.body, "hud-radio-top", false);
-      const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();
+      const salPx = cssPx(root, "--sal");
       hStyle(root, "--announce-lane-x", (salPx + RADIO_TOP_GAP).toFixed(1) + "px");
       hStyle(root, "--announce-lane-shift", "0%");
       hStyle(root, "--announce-lane-w", "0px");
@@ -646,12 +703,10 @@ function radioPaintedCollapse(root) {
 // box depends on reads it, so it cannot feed back. Run inside the fit: a move
 // re-fits through HudLayout.apply, and hud-mirror-on is in the fit key.
 const MIR_COL = 230;   // half-width of the centre column, px: the widest card at 440 plus its air
-let _mirEl;
 function mirrorClear(root) {
-  if (_mirEl === undefined) _mirEl = document.getElementById("hud-mirror");
-  const on = _mirEl && !_mirEl.hidden && document.body.classList.contains("hud-mirror-on");
-  const r = on ? _mirEl.getBoundingClientRect() : null, cx = window.innerWidth / 2;
-  const b = r && r.width && r.left < cx + MIR_COL && r.right > cx - MIR_COL ? r.bottom : 0;
+  const m = document.body.classList.contains("hud-mirror-on") ? obs("mirror") : null;
+  const r = m ? m.rect : null, cx = window.innerWidth / 2;
+  const b = r && r.left < cx + MIR_COL && r.right > cx - MIR_COL ? r.bottom : 0;
   hStyle(root, "--mir-paint-b", b.toFixed(1) + "px");
 }
 /** Conservative rect overlap — same 0.5 px slack as hud-layout.spec.js probes. */
@@ -661,45 +716,52 @@ function _hudRectsHit(a, b) {
     && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5);
 }
 function _boostOnRightHalf() {
-  const boost = typeof document !== "undefined" ? document.getElementById("btn-boost") : null;
-  if (!boost || boost.hidden) return null;
-  const br = boost.getBoundingClientRect();
-  if (!(br.width && br.height)) return null;
-  if ((br.left + br.right) / 2 < window.innerWidth / 2) return null;
-  return boost;
+  const o = obs("btn-boost");
+  return o && (o.rect.left + o.rect.right) / 2 >= window.innerWidth / 2 ? o.el : null;
 }
-/** Painted phone readout-on-control clashes the spec measures (not budget math). */
-function phonePaintedClash() {
+/** Painted phone readout-on-control clashes the spec measures (not budget math). Collects the list
+ *  afresh: every caller runs it right after a write that can move a piece (the dock inset, a shrink). */
+function phonePaintedClash(list) {
   if (document.body.classList.contains("desktop")) return false;
-  const sectors = els.hudSectors;
-  const boost = _boostOnRightHalf();
-  if (sectors && !sectors.hidden && boost && _hudRectsHit(sectors.getBoundingClientRect(), boost.getBoundingClientRect())) return true;
-  const rel = typeof document !== "undefined" ? document.getElementById("hud-rel") : null;
-  if (rel && !rel.hidden) {
-    const rr = rel.getBoundingClientRect();
+  if (!list) obsCollect();
+  const sectors = obs("sectors"), boost = _boostOnRightHalf() ? obs("btn-boost") : null;
+  if (sectors && boost && _hudRectsHit(sectors.rect, boost.rect)) return true;
+  const rel = obs("rel");
+  if (rel) {
     // Pedals are #btn-* siblings, not #dock-left children (index.html).
-    if (_dockL) {
-      for (const g of _dockL.children) {
-        if (g.hidden) continue;
-        const box = g.getBoundingClientRect();
-        if (box.width && box.height && _hudRectsHit(rr, box)) return true;
-      }
-    }
-    const pedalSteer = [els.btnBrake, els.btnThrottle, els.btnSteerLeft, els.btnSteerRight];
-    for (let i = 0; i < pedalSteer.length; i++) {
-      const el = pedalSteer[i];
-      if (!el || el.hidden) continue;
-      const box = el.getBoundingClientRect();
-      if (box.width && box.height && _hudRectsHit(rr, box)) return true;
+    for (const o of _obs) if (o.group && o.dock === "L" && _hudRectsHit(rel.rect, o.rect)) return true;
+    for (const id of ["btn-brake", "btn-throttle", "btn-steer-left", "btn-steer-right"]) {
+      const o = obs(id);
+      if (o && _hudRectsHit(rel.rect, o.rect)) return true;
     }
   }
   return false;
+}
+// THE RIGHT COLUMN'S X, IN ONE FUNCTION. --dock-r-w is the stand-off every right-anchored readout
+// (sectors, LIMITS, DAMAGE, INPUTS) takes from the right dock: css/hud.css adds it to
+// `right: 10px + sar/z`, in the CHROME's zoom space (--hud-z-top) — so it is the dock's screen
+// reach over that zoom, never re-divided by the CSS. It used to be computed in four places with
+// three copies of this arithmetic; every writer now calls this.
+// Air is SCREEN px converted into the plate's zoom space (+AIR/z). Subtracting
+// AIR before dividing shrank the inset (tilt @150% S3×BOOST). Zoomed +8 was
+// only ~4px at z≈0.5 and failed CI workers=2. Keep 8px — more shoved S3 into
+// #announce before announceLane could clip the card.
+// 8px under-cleared BOOST by ~2px at HUD 140% on CI (sectors r 590.7 vs
+// BOOST l 588.8). 12px screen air is still well below the midCap.
+// Capped at the centre line so S3 cannot walk past mid into #minimap / #announce.
+const RIGHT_DOCK_AIR = 12;
+function rightDockInset(left, z, sarPx) {
+  if (!Number.isFinite(left) || !(z > 0)) return 0;
+  const DOCK_AIR = RIGHT_DOCK_AIR, sar = sarPx || 0;
+  const midCap = Math.max(0, (window.innerWidth / 2) / z - 10 - sar / z);
+  const need = Math.max(0, (window.innerWidth - left) / z - 10 - sar / z + DOCK_AIR / z);
+  return Math.min(need, midCap);
 }
 /** Phone-only: after REL/sectors/announce land, re-fit rows and publish stamp. */
 function phoneFitStampSync(scale) {
   if (document.body.classList.contains("desktop")) return;
   const root = document.documentElement;
-  const DOCK_AIR = 12;
+  const DOCK_AIR = RIGHT_DOCK_AIR;
   if (!_hudTop) {
     _hudTop = document.querySelector(".hud-top");
     _hudBottom = document.querySelector(".hud-bottom");
@@ -715,14 +777,7 @@ function phoneFitStampSync(scale) {
     const zTop = (+root.style.getPropertyValue("--hud-z-top") || scale || 1);
     const live = probe && probe.currentCSSZoom > 0 ? probe.currentCSSZoom : zTop;
     const z = Math.min(zTop, live) || 1;
-    let sarPx = 0;
-    try { sarPx = parseFloat(getComputedStyle(root).getPropertyValue("--sar")) || 0; } catch (_) { /* */ }
-    const midCap = Math.max(0, (window.innerWidth / 2) / z - 10 - sarPx / z);
-    const need = Math.min(
-      Math.max(0, (window.innerWidth - br.left) / z - 10 - sarPx / z + DOCK_AIR / z),
-      midCap
-    );
-    hStyle(root, "--dock-r-w", (need > 0 ? need : 0).toFixed(1) + "px");
+    hStyle(root, "--dock-r-w", rightDockInset(br.left, z, cssPx(root, "--sar")).toFixed(1) + "px");
     if (els.hudSectors) void els.hudSectors.offsetHeight;
     if (_dockR) void _dockR.offsetHeight;
     return true;
@@ -824,22 +879,18 @@ function fitHud() {
     // still crawls BOOST left under load (CI oversize APEX_WORKERS=2:
     // #hud-sectors+btn-boost after the wait already saw clearance).
     let clash = false;
-    if (!document.body.classList.contains("desktop") && els.hudSectors && !els.hudSectors.hidden) {
-      const s = els.hudSectors.getBoundingClientRect();
-      const boost = _boostOnRightHalf();
-      const b = boost ? boost.getBoundingClientRect() : null;
+    const list = document.body.classList.contains("desktop") ? null : obsCollect();
+    const sec = list ? obs("sectors") : null;
+    if (sec) {
+      const s = sec.rect, b = _boostOnRightHalf() ? obs("btn-boost").rect : null;
       // Only a RIGHT-half BOOST can clash with the sectors plate's dock inset.
-      if (b && b.width && s.width && s.right > b.left - 8) clash = true;
+      if (b && s.right > b.left - 8) clash = true;
       else {
         const ann = typeof document !== "undefined" ? document.getElementById("announce") : null;
-        if (ann && !ann.hidden && !ann.hasAttribute("data-lane-collapsed")) {
-          const a = ann.getBoundingClientRect();
-          if (a.width > 0 && s.width && s.left < a.right - 0.5 && a.left < s.right - 0.5
-              && s.top < a.bottom - 0.5 && a.top < s.bottom - 0.5) clash = true;
-        }
+        if (ann && !ann.hidden && !ann.hasAttribute("data-lane-collapsed") && _hudRectsHit(ann.getBoundingClientRect(), s)) clash = true;
       }
     }
-    if (!clash && phonePaintedClash()) clash = true;
+    if (!clash && list && phonePaintedClash(list)) clash = true;
     if (!clash) return;
     _fitWait = 0;
   }
@@ -1311,25 +1362,13 @@ function fitHud() {
   // BOOST only anchors --dock-r-w when it sits in the RIGHT half. Tilt parks
   // BOOST on the left column; using that left as the inset target blew midCap
   // (CI: dockRW 907, #hud-sectors unsafe under --sal).
-  const boostRightLeft = () => {
-    const boost = typeof document !== "undefined" ? document.getElementById("btn-boost") : null;
-    if (!boost || boost.hidden) return NaN;
-    const br = boost.getBoundingClientRect();
-    if (!(br.width && br.height)) return NaN;
-    if ((br.left + br.right) / 2 < window.innerWidth / 2) return NaN;
-    return br.left;
-  };
-  const dockLeftOf = () => {
+  const boostRightLeft = () => (_boostOnRightHalf() ? obs("btn-boost").rect.left : NaN);
+  // The LEFTMOST painted right-dock control, from the obstacle list (re-collected by the caller after
+  // any write). Prefer the RIGHT-dock BOOST disc — grp-taps can still be mid-wrap while the button's
+  // box has already landed (CI: dockLeft 597 vs BOOST 587).
+  const dockLeftOf = (list) => {
     let left = Infinity;
-    if (_dockR) {
-      for (const g of _dockR.children) {
-        if (g.hidden) continue;
-        const r = g.getBoundingClientRect();
-        if (r.width && r.height) left = Math.min(left, r.left);
-      }
-    }
-    // Prefer the RIGHT-dock BOOST disc — grp-taps can still be mid-wrap while
-    // the button's box has already landed (CI: dockLeft 597 vs BOOST 587).
+    for (const o of list) if (o.group && o.dock === "R") left = Math.min(left, o.rect.left);
     const brLeft = boostRightLeft();
     if (Number.isFinite(brLeft)) left = Math.min(left, brLeft);
     if (!Number.isFinite(left) && _dockR) {
@@ -1338,45 +1377,35 @@ function fitHud() {
     }
     return left;
   };
-  let sarPx = 0;
-  try { sarPx = parseFloat(getComputedStyle(root).getPropertyValue("--sar")) || 0; } catch (_) { /* */ }
-  // Air is SCREEN px converted into the plate's zoom space (+AIR/z). Subtracting
-  // AIR before dividing shrank the inset (tilt @150% S3×BOOST). Zoomed +8 was
-  // only ~4px at z≈0.5 and failed CI workers=2. Keep 8px — more shoved S3 into
-  // #announce before announceLane could clip the card.
-  // 8px under-cleared BOOST by ~2px at HUD 140% on CI (sectors r 590.7 vs
-  // BOOST l 588.8). 12px screen air is still well below the midCap.
-  const DOCK_AIR = 12;
-  const insetFor = (left, z) => {
-    if (!Number.isFinite(left) || !(z > 0)) return 0;
-    const midCap = Math.max(0, (window.innerWidth / 2) / z - 10 - sarPx / z);
-    const need = Math.max(0, (window.innerWidth - left) / z - 10 - sarPx / z + DOCK_AIR / z);
-    // Cap so S3 cannot walk past mid into #minimap / #announce.
-    return Math.min(need, midCap);
-  };
+  const sarPx = cssPx(root, "--sar");
+  const DOCK_AIR = RIGHT_DOCK_AIR;
   // Publish from the current leftmost right-dock / BOOST edge, then at most
   // one painted correction against a RIGHT-side BOOST only.
+  let list = obsCollect();
   let zTop = zPaint();
-  let dockRW = insetFor(dockLeftOf(), zTop);
-  hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
+  let dockRW = rightDockInset(dockLeftOf(list), zTop, sarPx);
+  hStyle(root, "--dock-r-w", dockRW.toFixed(1) + "px");
   if (els.hudSectors) void els.hudSectors.offsetHeight;
   if (_dockR) void _dockR.offsetHeight;
-  if (!document.body.classList.contains("desktop") && els.hudSectors && !els.hudSectors.hidden) {
-    const secR = els.hudSectors.getBoundingClientRect();
+  if (!document.body.classList.contains("desktop")) {
+    list = obsCollect();
+    const sec = obs("sectors");
     const brLeft = boostRightLeft();
-    const left = Number.isFinite(brLeft) ? brLeft : dockLeftOf();
-    if (secR.width && Number.isFinite(left) && secR.right > left - DOCK_AIR + 0.5) {
+    const left = Number.isFinite(brLeft) ? brLeft : dockLeftOf(list);
+    const secR = sec ? sec.rect : null;
+    if (secR && Number.isFinite(left) && secR.right > left - DOCK_AIR + 0.5) {
       zTop = zPaint();
       if (zTop > 0) {
         // Absolute clear from the right-dock edge — never stack += grow on a
         // stale plate, and never aim at a left-column BOOST (tilt).
-        dockRW = insetFor(left, zTop);
-        hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
+        dockRW = rightDockInset(left, zTop, sarPx);
+        hStyle(root, "--dock-r-w", dockRW.toFixed(1) + "px");
         void els.hudSectors.offsetHeight;
         if (_dockR) void _dockR.offsetHeight;
       }
     }
   }
+  list = obsCollect();
   mirrorClear(root);
   // MOVE & SIZE: re-clamp moved pieces against the bands as now laid out.
   if (typeof HudLayout !== "undefined") HudLayout.fit();
@@ -1384,58 +1413,51 @@ function fitHud() {
   // inset widen (widening slides the plate left into #minimap).
   if (!document.body.classList.contains("desktop") && els.hudSectors && _dockR) {
     const margin = DOCK_AIR;
-    const mapR = els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null;
-    const mapClear = mapR && mapR.width ? mapR.right + margin : 0;
     const secEl = els.hudSectors;
     if (secEl.style && secEl.style.removeProperty) secEl.style.removeProperty("max-width");
-    for (let pass = 0; pass < 4; pass++) {
-      const secR = secEl.getBoundingClientRect();
-      if (!secR.width) break;
+    // How far the painted plate reaches into the right dock's groups (list collected afresh).
+    const overDock = () => {
+      list = obsCollect();
+      const sec = obs("sectors");
       let worst = 0;
-      for (const g of _dockR.children) {
-        const r = g.getBoundingClientRect();
-        if (!(r.width && r.height)) continue;
-        if (secR.right > r.left - margin) worst = Math.max(worst, secR.right - (r.left - margin));
-      }
-      if (!(worst > 0.5)) break;
+      if (sec) for (const o of list) if (o.group && o.dock === "R" && sec.rect.right > o.rect.left - margin) worst = Math.max(worst, sec.rect.right - (o.rect.left - margin));
+      return { sec, worst };
+    };
+    for (let pass = 0; pass < 4; pass++) {
+      const { sec, worst } = overDock();
+      if (!sec || !(worst > 0.5)) break;
       const zSec = zPaint() || 1;
-      const curW = secR.width / zSec;
-      secEl.style.maxWidth = Math.max(48, curW - worst / zSec).toFixed(1) + "px";
+      secEl.style.maxWidth = Math.max(48, sec.rect.width / zSec - worst / zSec).toFixed(1) + "px";
       void secEl.offsetHeight;
     }
-    let secR = secEl.getBoundingClientRect();
-    let worst = 0;
-    for (const g of _dockR.children) {
-      const r = g.getBoundingClientRect();
-      if (!(r.width && r.height)) continue;
-      if (secR.right > r.left - margin) worst = Math.max(worst, secR.right - (r.left - margin));
-    }
-    if (worst > 0.5) {
+    const after = overDock();
+    if (after.sec && after.worst > 0.5) {
+      const mapR = obs("map") ? obs("map").rect : null;
+      const mapClear = mapR ? mapR.right + margin : 0;
       const brLeft = boostRightLeft();
-      const left = Number.isFinite(brLeft) ? brLeft : dockLeftOf();
-      if (Number.isFinite(left) && !(mapClear && secR.left - worst < mapClear)) {
+      const left = Number.isFinite(brLeft) ? brLeft : dockLeftOf(list);
+      if (Number.isFinite(left) && !(mapClear && after.sec.rect.left - after.worst < mapClear)) {
         zTop = zPaint();
         if (zTop > 0) {
-          dockRW = insetFor(left, zTop);
-          hStyle(root, "--dock-r-w", (dockRW > 0 ? dockRW : 0).toFixed(1) + "px");
+          dockRW = rightDockInset(left, zTop, sarPx);
+          hStyle(root, "--dock-r-w", dockRW.toFixed(1) + "px");
           void secEl.offsetHeight;
         }
       }
     }
-    secR = secEl.getBoundingClientRect();
+    list = obsCollect();
+    const sec = obs("sectors");
     let onDock = false;
-    for (const g of _dockR.children) {
-      const r = g.getBoundingClientRect();
-      if (r.width && r.height && secR.right > r.left - margin && secR.left < r.right - margin) { onDock = true; break; }
-    }
+    if (sec) for (const o of list) if (o.group && o.dock === "R" && sec.rect.right > o.rect.left - margin && sec.rect.left < o.rect.right - margin) { onDock = true; break; }
     if (!onDock && secEl.style && secEl.style.removeProperty) secEl.style.removeProperty("max-width");
   }
   // Radio top slot AFTER HudLayout.fit — a pre-fit slot used the shipped tower
   // edge, then MOVE & SIZE grew/shifted .hud-top into the card (CI oversize:
   // .hud-top+#announce with hud-radio-top on notched-landscape buttons).
   if (els.hudSectors) void els.hudSectors.offsetHeight;
-  radioTopSlot(root, bcast);
-  announceLane(root);
+  list = obsCollect();
+  radioTopSlot(root, bcast, list);
+  announceLane(root, list);
   radioPaintedCollapse(root);   // terminal: nothing after it may re-run radioTopSlot (hud-metrics-layout.test)
   mirrorClear(root);
   if (els.minimap) void els.minimap.offsetHeight;
@@ -2254,6 +2276,7 @@ function syncPhoneFit() {
   return !phonePaintedClash() && /^\d+$/.test(stamp);
 }
 _syncPhoneFit = syncPhoneFit;
+_obstacles = () => _obs;
 return { updateHud, invalidateMap, flashSector, resetRace, invalidateFit, syncPhoneFit };
 }
 
@@ -2261,6 +2284,8 @@ return {
   create,
   invalidateFit: () => { if (_invalidateFit) _invalidateFit(); },
   syncPhoneFit: () => (_syncPhoneFit ? _syncPhoneFit() : false),
+  // The last collected obstacle list (fitHud): HudLayout.clearControls reads its tap targets from it.
+  obstacles: () => (_obstacles ? _obstacles() : null),
 };
 })();
 Object.freeze(GameHud);

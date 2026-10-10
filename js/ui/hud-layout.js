@@ -402,18 +402,30 @@ const HudLayout = (function () {
   function clearControls(W, H) {
     if (!doc || !doc.querySelectorAll) return;
     const btns = [];
-    const nodes = doc.querySelectorAll(".touchbtn, #hud-gearbox, #hud-speed");
-    for (let i = 0; i < nodes.length; i++) {
-      const el = nodes[i];
-      if (!el || el.hidden) continue;
+    const desk = !!(doc.body && doc.body.classList.contains("desktop"));
+    const take = (el, r, tap) => {
       const cs = typeof getComputedStyle === "function" ? getComputedStyle(el) : null;
-      if (cs && (cs.display === "none" || cs.visibility === "hidden")) continue;
-      const r = el.getBoundingClientRect();
-      if (!(r.width && r.height)) continue;
+      if (cs && (cs.display === "none" || cs.visibility === "hidden")) return;
       // Desktop: ignore touch discs that stay in the tree but are not the
       // player's controls; keep SPEED & GEAR so INPUTS still clears them.
-      if (el.classList && el.classList.contains("touchbtn") && doc.body && doc.body.classList.contains("desktop")) continue;
+      if (tap && desk) return;
       btns.push(r);
+    };
+    // fitHud's obstacle list (js/ui/hud.js), collected after the dock caps and the dock inset: the
+    // same boxes the radio card and the phone-clash check judge. Without a HUD (node harnesses,
+    // the menus) the tap targets are queried here, as before.
+    const list = typeof GameHud !== "undefined" && GameHud && typeof GameHud.obstacles === "function" ? GameHud.obstacles() : null;
+    if (list && list.length) {
+      for (const o of list) if (o.tap || o.id === "gearbox" || o.id === "speed") take(o.el, o.rect, !!o.tap);
+    } else {
+      const nodes = doc.querySelectorAll(".touchbtn, #hud-gearbox, #hud-speed");
+      for (let i = 0; i < nodes.length; i++) {
+        const el = nodes[i];
+        if (!el || el.hidden) continue;
+        const r = el.getBoundingClientRect();
+        if (!(r.width && r.height)) continue;
+        take(el, r, !!(el.classList && el.classList.contains("touchbtn")));
+      }
     }
     if (!btns.length) return;
     const a = all()[shown()];
