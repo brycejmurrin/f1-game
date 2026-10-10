@@ -1228,3 +1228,22 @@ test("L9: circuitsOf(the ADAPTED runner) is the union of its specs' circuits (20
   assert.ok(want.has("cota"));
   assert.deepEqual([...circuitsOf(ADAPTED_RUNNER)].sort(), [...want].sort());
 });
+
+test("maxDeclaredTimeout folds `BOOT_MS + 240_000` and bills an unresolvable argument as over the cap (15-F4, 2026-10-10)", () => {
+  // garage-out-before-card declares BOOT_MS (45 s, imported from the fixtures) + 240_000 = 285 s per
+  // test, over the gate's 180 s cap; only literals counted, so it read 0 and was selected into the
+  // ordinary budgeted shards, where test.setTimeout overrides the CLI --timeout.
+  assert.equal(maxDeclaredTimeout("tests/specs/garage-out-before-card.spec.js"), 285_000);
+  assert.ok(maxDeclaredTimeout("tests/specs/garage-out-before-card.spec.js") > SELECTED_GATE.perTestTimeoutSec * 1000);
+  assert.equal(maxDeclaredTimeout("tests/specs/real-race.spec.js"), 135_000, "BOOT_MS + 90000");
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "mdt-"));
+  try {
+    const rel = (n) => path.relative(ROOT, path.join(dir, n));
+    fs.writeFileSync(path.join(dir, "a.spec.js"), 'const T = 100_000;\ntest.setTimeout(T * 2 + 5);\n');
+    fs.writeFileSync(path.join(dir, "b.spec.js"), 'test.setTimeout(someRuntimeValue());\n');
+    fs.writeFileSync(path.join(dir, "c.spec.js"), 'test.describe.configure({ timeout: 60_000 + 1 });\n');
+    assert.equal(maxDeclaredTimeout(rel("a.spec.js")), 200_005);
+    assert.equal(maxDeclaredTimeout(rel("b.spec.js")), 3 * SELECTED_GATE.perTestTimeoutSec * 1000, "unknown is over the cap, never free");
+    assert.equal(maxDeclaredTimeout(rel("c.spec.js")), 60_001);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
