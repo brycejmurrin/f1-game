@@ -14,6 +14,9 @@ Every open HUD branch was growing the pair (the band-allocator refactor +474 net
 top of the last. Owner decision: a HUD replacement deletes what it replaces in the
 same PR, and growth past the 40-line absorb says why
 (`docs/notes/HUD-CODE-AUDIT-2026-10-10.md` §net-lines rule).
+Re-measured on the merged tree before landing: #1366 (Phase 0 top-band fix) merged
+first and grew the pair, so the ceilings start at **1345 / 2281** (hud.js) and
+**1926 / 2120** (hud.css), ship `325100c05`.
 
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
