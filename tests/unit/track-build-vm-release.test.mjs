@@ -186,7 +186,9 @@ const STRIP = {
   // → DETAIL pass (quay/Fairmont rails/paddock/banners) #1062: 279741/258567
   // → marshalPost seat/pole brace (2026-10-07): +96 emitted / +96 survive
   //   (deeper pole + brace arm on every post; roofs reseated, no new strip)
-  monaco: { before: 279837, after: 258663 },
+  // → bank zones on Massenet T3 / Mirabeau T7 (2026-10-10; were on Ste Devote
+  //   T1 / T4): same emission, the 3° camber re-seats roadside prims, −46 survive
+  monaco: { before: 279837, after: 258617 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)

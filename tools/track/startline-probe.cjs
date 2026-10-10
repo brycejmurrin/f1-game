@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @doc The two checks that can FAIL a `startFrac`: mean curvature 120 m around s=0, and the first apex hand; `--calibrate`.
+// @doc Checks that can FAIL a `startFrac`: |k| at s=0 (120 m mean, ±40 m max), the 24-slot grid span, first apex hand.
 // @skill agent-view
 /* Apex 26 — is the start/finish line on a straight, and what does the driver
  * meet first?
@@ -11,6 +11,13 @@
  *   1. STRAIGHTNESS — mean |curvature| over the 120 m centred on racing s=0.
  *      A start line sits on a straight. `> 0.004` rad/m mean (a ~250 m radius
  *      held right across the line) means it is in a corner and still wrong.
+ *      So does any single `|k| > 0.008` within ±40 m: the mean alone averaged
+ *      a chicane away (magny_cours, max 0.0255).
+ *   1b. GRID SPAN — max |curvature| from the line back past the 24th slot
+ *      (TrackMesh.gridSlot), bar 0.004. The circuits that fail either today
+ *      are GRID_CURVE_ALLOW below, each with its reason and a ceiling
+ *      (tests/unit/grid-boxes.test.mjs enforces the same list). Exit 1 on any
+ *      failure that list does not excuse.
  *   2. FIRST APEX HAND — walk forward from s=0 to the first curvature peak
  *      above 0.008 rad/m and report its sign. `+k = LEFT` (AGENTS.md), but that
  *      label has shipped backwards before, so --calibrate scores the measure
@@ -47,6 +54,41 @@ const STRAIGHT_BAR = 0.004;
 // A curvature peak has to clear this to count as a corner rather than a kink.
 // 0.008 rad/m is a 125 m radius.
 const APEX_BAR = 0.008;
+// The MEAN alone let a corner through: 120 m of straight averages a sharp
+// chicane away (magny_cours read "straight" with max |k| 0.0255 at -60 m).
+// So the line also fails on any single |k| above APEX_BAR within ±40 m — the
+// pole box and the first metres off the line. Fleet worst outside the
+// allowlist is mosport 0.0060 at +40 m (2026-10-10).
+const LINE_HALF_M = 40;
+const LINE_MAX_BAR = APEX_BAR;
+
+// THE GRID SPAN. TrackMesh.gridSlot() puts pole 14 m behind the line and each
+// next slot 8 m further back; the largest field is 24 (22 + a MY TEAM career's
+// two), plus the 3 m of box behind the last slot's point — ~201 m of road that
+// only the ±60 m check above ever looked at. The span is read off gridSlot()
+// itself, not a copy of its constants. Bar 0.004 rad/m (R 250 m, the same
+// "no straight holds it" number as STRAIGHT_BAR) sits in the gap of the
+// measured fleet: clean circuits top out at nurburgring 0.0032, the first
+// offender is suzuka 0.0056 (2026-10-10, all 52 circuits).
+const GRID_MAX_SLOTS = 24;
+const GRID_BOX_TAIL_M = 3;
+const GRID_K_BAR = 0.004;
+// Circuits whose AUTHORED line puts slots (or the line) on a corner today.
+// Fixing one means re-deriving its startFrac, which needs a rendered lap — so
+// they are named here, with the measured worst |k| as a ceiling: a regression
+// that worsens one by > 10 % still fails, and an entry that measures clean is
+// stale and fails too (delete it). Shared with tests/unit/grid-boxes.test.mjs.
+// `gridK` caps the grid span, `lineK` (only where needed) the ±40 m max.
+const GRID_CURVE_ALLOW = {
+  magny_cours: { gridK: 0.0627, why: "slots 5-14 sit in the Lycee chicane (T16/T17, 71-97 m behind the line, R≈19 m) and slots 17-23 run into T15 (203 m behind)" },
+  jeddah: { gridK: 0.0326, lineK: 0.0326, why: "startFrac 0.9625 is documented known-wrong (docs/tracks/START-LINES.md, no usable source): pole sits 15 m past the T27 apex, slots 0-9 on that bend, R≈31 m at pole" },
+  silverstone: { gridK: 0.0248, why: "slots 10-17 sit in Club (T18, 116 m behind the line; R≈40 m at slot 12) and slots 20-23 reach back toward T17 (288 m behind)" },
+  vegas: { gridK: 0.0137, why: "slots 4-11 sit on T17 (63 m behind the line), R≈73 m" },
+  mexico: { gridK: 0.0083, why: "slots 22-23 only, past the default 22-car field: the tail reaches T17's exit (216 m behind the line)" },
+  monaco: { gridK: 0.0059, why: "slot 23 only, past the default 22-car field: the gently curving harbour straight toward Anthony Noghes (T19, 308 m behind), R≈168 m" },
+  suzuka: { gridK: 0.0056, why: "slots 10-23 on the R≈180-220 m bend of the main straight out of the last corner (T18, 283 m behind the line)" },
+};
+const ALLOW_SLACK = 1.10;
 
 // Turn 1's hand where it is NOT in dispute. This calibrates the sign of the
 // measurement; it is not evidence about any other circuit.
@@ -93,12 +135,52 @@ function rotated(source, startFrac, reverse) {
 
 function straightness(Tracks, track) {
   const L = track.total;
-  let sum = 0, max = 0, count = 0;
+  let sum = 0, max = 0, count = 0, lineMax = 0;
   for (let d = -HALF_WINDOW_M; d <= HALF_WINDOW_M; d += 2) {
     const k = Math.abs(Tracks.curvature(track, ((d % L) + L) % L));
     sum += k; if (k > max) max = k; count++;
+    if (Math.abs(d) <= LINE_HALF_M && k > lineMax) lineMax = k;
   }
-  return { mean: sum / count, max, ok: sum / count <= STRAIGHT_BAR };
+  return { mean: sum / count, max, lineMax, ok: sum / count <= STRAIGHT_BAR && lineMax <= LINE_MAX_BAR };
+}
+
+// Max |k| over every metre of the grid span (the line back to the last box's
+// tail), where it peaks, and which slots have |k| > GRID_K_BAR within their
+// own ±GRID_BOX_TAIL_M. `TrackMesh` defaults to the probe's VM context.
+function gridSpan(Tracks, track, TrackMesh) {
+  const TM = TrackMesh || (Tracks._vmContext && Tracks._vmContext.TrackMesh);
+  const L = track.total, at = (d) => Math.abs(Tracks.curvature(track, (((L - d) % L) + L) % L));
+  const behind = (i) => L - TM.gridSlot(track, i).s;        // metres behind the line
+  const spanM = behind(GRID_MAX_SLOTS - 1) + GRID_BOX_TAIL_M;
+  let max = 0, atM = 0;
+  for (let d = 0; d <= spanM; d += 1) { const k = at(d); if (k > max) { max = k; atM = d; } }
+  const slots = [];
+  for (let i = 0; i < GRID_MAX_SLOTS; i++) {
+    const b = behind(i);
+    let m = 0;
+    for (let d = b - GRID_BOX_TAIL_M; d <= b + GRID_BOX_TAIL_M; d += 1) m = Math.max(m, at(d));
+    if (m > GRID_K_BAR) slots.push(i);
+  }
+  return { max, atM, spanM, slots, ok: max <= GRID_K_BAR };
+}
+
+// The allowlist verdict for one circuit's measured line + grid: the problems
+// that are NOT excused (empty = pass). Shared by the CLI and the unit test.
+function allowVerdict(id, line, grid) {
+  const a = GRID_CURVE_ALLOW[id], bad = [];
+  const cap = (v, c, what) => {
+    if (c == null) return false;
+    if (v > c * ALLOW_SLACK) bad.push(`${id}: ${what} |k| ${v.toFixed(4)} is past its allowlisted ${c} (+10 %) — a regression`);
+    return true;
+  };
+  if (!grid.ok && !cap(grid.max, a && a.gridK, "grid"))
+    bad.push(`${id}: grid max |k| ${grid.max.toFixed(4)} (R ${(1 / grid.max).toFixed(0)} m) ${grid.atM} m behind the line, slots ${grid.slots.join(",")} — over ${GRID_K_BAR}`);
+  if (!line.ok && !cap(line.lineMax, a && a.lineK, "line"))
+    bad.push(`${id}: start line in a corner — mean |k| ${line.mean.toFixed(5)} over ±${HALF_WINDOW_M} m (bar ${STRAIGHT_BAR}), ` +
+      `max ${line.lineMax.toFixed(4)} within ±${LINE_HALF_M} m (bar ${LINE_MAX_BAR})`);
+  if (a && grid.ok && a.gridK != null) bad.push(`${id}: allowlisted for the grid but measures ${grid.max.toFixed(4)} ≤ ${GRID_K_BAR} — delete the stale entry`);
+  if (a && a.lineK != null && line.ok) bad.push(`${id}: allowlisted for the line but measures straight — delete lineK`);
+  return bad;
 }
 
 // First curvature peak after the line: walk forward, take the first local
@@ -141,7 +223,7 @@ function probe(candidates) {
         points: rotated(source, frac, def.reverse),
       });
       const track = Tracks.buildCenterline(d2);
-      return { ...straightness(Tracks, track), apex: firstApex(Tracks, track), total: track.total };
+      return { ...straightness(Tracks, track), apex: firstApex(Tracks, track), grid: gridSpan(Tracks, track), total: track.total };
     };
 
     const now = measure(authored);
@@ -149,6 +231,7 @@ function probe(candidates) {
       id: def.id, n: N, reverse: !!def.reverse,
       authored, now,
       spacingM: Math.round(now.total / N),
+      unexcused: allowVerdict(def.id, now, now.grid),
     };
     if (Math.abs(want - authored) > 1e-9) { row.candidate = want; row.next = measure(want); }
     rows.push(row);
@@ -158,12 +241,20 @@ function probe(candidates) {
 
 /* ---------- CLI ---------- */
 
+// [5,6,7,9] -> "5-7,9"
+const ranges = (xs) => xs.reduce((out, x, i) => {
+  if (i && x === xs[i - 1] + 1) out[out.length - 1][1] = x; else out.push([x, x]);
+  return out;
+}, []).map(([a, b]) => (a === b ? `${a}` : `${a}-${b}`)).join(",");
+
 function fmt(id, frac, m, spacing) {
   const verdict = m.ok ? "straight" : "IN A CORNER";
+  const g = m.grid;
   return `${id.padEnd(13)} frac=${frac.toFixed(4)}  mean|k|=${m.mean.toFixed(5)}  ` +
     `max=${m.max.toFixed(5)}  ${verdict.padEnd(11)}  ` +
     `first apex ${m.apex.hand} at ${String(m.apex.distM).padStart(4)} m` +
-    (spacing != null ? `  (node ${spacing} m)` : "");
+    (spacing != null ? `  (node ${spacing} m)` : "") +
+    `  grid max|k|=${g.max.toFixed(4)} ${g.ok ? "ok" : `slots ${ranges(g.slots)} IN A CORNER` + (GRID_CURVE_ALLOW[id] ? " (allowlisted)" : "")}`;
 }
 
 if (require.main === module) {
@@ -207,10 +298,11 @@ if (require.main === module) {
     console.log(`\n  ${hit}/${seen} — ${hit === seen ? "sign convention calibrated (+k = LEFT)" : "DO NOT TRUST ANY HAND BELOW"}\n`);
   }
 
-  let bad = 0, badAfter = 0;
+  let bad = 0, badAfter = 0, badGrid = 0;
   for (const r of rows) {
     console.log(fmt(r.id, r.authored, r.now, r.spacingM));
     if (!r.now.ok) bad++;
+    if (!r.now.grid.ok) badGrid++;
     if (r.next) {
       const better = r.next.mean < r.now.mean;
       console.log(`  ->          ${fmt("", r.candidate, r.next).trim()}   ${better ? "improved" : "no better"}`);
@@ -219,6 +311,16 @@ if (require.main === module) {
   }
   console.log(`\n${bad}/${rows.length} start lines in a corner as authored` +
     (rows.some((r) => r.next) ? `; ${badAfter}/${rows.length} after the candidate values` : ""));
+  // The verdict that can fail: the AUTHORED line and grid against the allowlist.
+  const unexcused = rows.flatMap((r) => r.unexcused);
+  console.log(`${badGrid}/${rows.length} grids (${GRID_MAX_SLOTS} slots) reach a corner over ${GRID_K_BAR} rad/m; ` +
+    `${Object.keys(GRID_CURVE_ALLOW).length} allowlisted`);
+  for (const u of unexcused) console.log(`  FAIL ${u}`);
+  if (unexcused.length) process.exitCode = 1;
 }
 
-module.exports = { probe, STRAIGHT_BAR, HALF_WINDOW_M, KNOWN_T1 };
+module.exports = {
+  probe, gridSpan, allowVerdict, straightness,
+  STRAIGHT_BAR, HALF_WINDOW_M, LINE_HALF_M, LINE_MAX_BAR,
+  GRID_MAX_SLOTS, GRID_BOX_TAIL_M, GRID_K_BAR, GRID_CURVE_ALLOW, KNOWN_T1,
+};

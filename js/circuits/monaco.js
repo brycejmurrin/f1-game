@@ -90,9 +90,14 @@
       { s0: 0.4848, s1: 0.5349, hw: 4.4, ease: 0.012 },  // arc 0.815-0.855 swimming pool
       { s0: 0.3488, s1: 0.3918, hw: 4.3, ease: 0.012 },  // arc 0.930-0.955 Rascasse
     ],
+    // Massenet and Mirabeau are TURN anchors (1-based into `turns` below): as
+    // fracs (0.1286 / 0.2961) the _sceneryShift compensation landed them on
+    // T1 Ste Devote and T4 (mid-Massenet). T3 0.2135 is Massenet's first apex
+    // (long left, +k), T7 0.3433 Mirabeau Haute (right, -k). The other three
+    // fracs measure onto T13 Tabac, T16 the pool and T18 Rascasse.
     bankZones: [
-      { frac: 0.1286, angleDeg: 3.0, widthM: 60 },    // Massenet
-      { frac: 0.2961, angleDeg: 3.0, widthM: 160 },   // Mirabeau/descent
+      { turn: 3, angleDeg: 3.0, widthM: 60 },         // Massenet
+      { turn: 7, angleDeg: 3.0, widthM: 160 },        // Mirabeau/descent
       { frac: 0.7791, angleDeg: 3.0, widthM: 120 },   // Tabac
       { frac: 0.8847, angleDeg: 2.5, widthM: 140 },   // swimming pool
       { frac: 0.9417, angleDeg: 2.5, widthM: 100 },   // Rascasse
