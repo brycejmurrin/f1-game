@@ -194,16 +194,19 @@ const HudRelative = (function () {
       // hide rows).
       if (root.style.removeProperty) { root.style.removeProperty("left"); root.style.removeProperty("max-height"); }
       const rootEl = doc.documentElement;
-      let zPub = 1;
+      // The zoom the card paints at: var(--hud-z-top, var(--hud-scale))
+      // (css/hud.css). fitHud REMOVES --hud-z-top whenever the cap fits, so
+      // fall back to --hud-scale (inline, else the stylesheet's) — dividing by
+      // 1 there painted the cap --hud-scale times too tall, over BRAKE.
+      let zPub = 0;
       if (rootEl && rootEl.style && rootEl.style.getPropertyValue) {
-        const inline = parseFloat(rootEl.style.getPropertyValue("--hud-z-top"));
-        if (Number.isFinite(inline) && inline > 0) zPub = inline;
-      } else if (rootEl && typeof getComputedStyle === "function") {
-        try {
-          const cs = parseFloat(getComputedStyle(rootEl).getPropertyValue("--hud-scale"));
-          if (Number.isFinite(cs) && cs > 0) zPub = cs;
-        } catch (_) { /* mini-dom / VM */ }
+        zPub = parseFloat(rootEl.style.getPropertyValue("--hud-z-top")) ||
+               parseFloat(rootEl.style.getPropertyValue("--hud-scale")) || 0;
       }
+      if (!(zPub > 0) && rootEl && typeof getComputedStyle === "function") {
+        try { zPub = parseFloat(getComputedStyle(rootEl).getPropertyValue("--hud-scale")) || 0; } catch (_) { /* mini-dom / VM */ }
+      }
+      if (!(zPub > 0)) zPub = 1;
       const live = root.currentCSSZoom > 0 ? root.currentCSSZoom : zPub;
       const z = Math.min(zPub, live);
       for (let pass = 0; pass < 3; pass++) {

@@ -235,6 +235,33 @@ test("a pointerdown on #dock-right starts a drag while editing, and the move shi
   assert.equal(api.bag().buttons.R.x, 40 / 400);
 });
 
+test("a REPOSITION drag that starts on GAS never reaches the button: the throttle LATCH stays put (hunt3 7-F4)", () => {
+  const { api, docL, els } = bootCreate();
+  const gas = { closest() { return gas; }, setPointerCapture() {} };
+  els["dock-left"].contains = (t) => t === gas;
+  els["dock-right"].contains = () => false;
+  // DOM dispatch, reduced: document capture first, then the target's own
+  // pointerdown (hold-buttons: THROTTLE = LATCH toggles on every press edge)
+  // unless the capture listener stopped the event.
+  let latched = false;
+  const press = (o) => {
+    const e = Object.assign({ target: gas, pointerId: 7, preventDefault() {}, stopped: false,
+      stopImmediatePropagation() { this.stopped = true; }, stopPropagation() { this.stopped = true; } }, o);
+    docL.pointerdown(e);
+    if (!e.stopped) latched = !latched;
+    docL.pointerup(Object.assign({}, e, { clientX: o.clientX + 30 }));
+    return e;
+  };
+  press({ clientX: 50, clientY: 700 });
+  assert.equal(latched, true, "outside REPOSITION the press is GAS's (the baseline)");
+  latched = false;
+  api.setEditing(true);
+  const e = press({ clientX: 50, clientY: 700 });
+  assert.equal(e.stopped, true, "the dock claims the press before the button's own listener");
+  assert.equal(latched, false, "an odd number of drags on GAS must not arm the latch");
+  api.setEditing(false);
+});
+
 test("an external open of SETTINGS or PAUSED ends REPOSITION without stacking dialogs", () => {
   const { api, observers, settings, pause, bodyAttrs } = bootCreate();
   api.setEditing(true);

@@ -761,6 +761,59 @@ test("pad(): the page's pedals, paddles and LCD are wired through to the wire an
   assert.equal(dom.connect.disabled, false, "CONNECT is offered again");
 });
 
+test("pad(): a lost lift on the menu stick or a held arrow is caught by the all-fingers-up / hidden nets (hunt3 7-F5)", async () => {
+  const desk = bootInput();
+  const [padEnd, hostEnd] = NetTransport.loopback({ latencyMs: 2, rnd: NetTransport.seededRnd(3) });
+  padEnd.pump(0); hostEnd.pump(0);
+  const clock = desk.clock;
+  const link = PhonePad.link(hostEnd, { input: desk.Input, pump: false, now: () => clock.t, hud: () => null });
+  const docL = {};
+  const hadDoc = Object.prototype.hasOwnProperty.call(globalThis, "document");
+  const prevDoc = globalThis.document;
+  globalThis.document = { hidden: false, visibilityState: "visible", addEventListener(t, f) { (docL[t] ||= []).push(f); } };
+  try {
+    const dom = { body: fakeEl(), status: fakeEl(), codeIn: fakeEl(), connect: fakeEl(), gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(),
+      center: fakeEl(), rim: fakeEl(), buttons: Object.fromEntries(PhonePad.EVENTS.map((k) => [k, fakeEl()])), hud: lcd() };
+    dom.stick = fakeEl(); dom.nub = fakeEl();
+    dom.arrows = { navUp: fakeEl(), navDown: fakeEl(), navLeft: fakeEl(), navRight: fakeEl() };
+    const timers = fakeTimers();
+    const ctl = PhonePad.pad(dom, { now: () => clock.t, timers, deps: {
+      rtc: () => padEnd, prefetchIce: async () => null, normalise: (c) => String(c).toUpperCase(), valid: (c) => c.length === 6,
+      swap: async (o) => { const ans = await o.reply("OFFER"); return ans ? { ok: true } : { ok: false, error: "reply_failed" }; },
+      acceptInvite: async () => ({ ok: true, code: "ANSWER" }),
+    } });
+    assert.deepEqual(await ctl.connect("abc234"), { ok: true });
+    const frame = () => { clock.t += STEP; ctl.pump(); link.pump(); };
+    const fire = (t, ev) => { for (const f of docL[t] || []) f(ev); };
+    // The stick held right; its pointerup is lost, then the last finger lifts.
+    dom.stick.dispatch("pointerdown", { clientX: 95, clientY: 200 });
+    for (let i = 0; i < 3; i++) frame();
+    const s0 = link.stats().events;
+    fire("touchend", { touches: [] });
+    timers.advance(1000); for (let i = 0; i < 3; i++) frame();
+    assert.equal(link.stats().events, s0, "no repeat after every finger is up");
+    assert.equal(timers.pending(), 0, "and no timer left behind");
+    assert.ok(!dom.stick.classes.has("on") && !dom.arrows.navRight.classes.has("on"), "the stick and its arrow go dark");
+    dom.stick.dispatch("pointerdown", { pointerId: 2, clientX: 5, clientY: 200 });
+    for (let i = 0; i < 3; i++) frame();
+    assert.equal(link.stats().events, s0 + 1, "the stick takes the next press (its pointer slot was freed)");
+    dom.stick.dispatch("pointerup", { pointerId: 2 });
+    // A held D-pad arrow; the page is hidden (a call, the lock button) with no pointercancel.
+    dom.buttons.navDown.dispatch("pointerdown", {});
+    for (let i = 0; i < 3; i++) frame();
+    const a0 = link.stats().events;
+    globalThis.document.hidden = true;
+    fire("visibilitychange", {});
+    timers.advance(1000); for (let i = 0; i < 3; i++) frame();
+    assert.equal(link.stats().events, a0, "a hidden page stops the arrow's repeat");
+    assert.equal(timers.pending(), 0);
+    assert.ok(!dom.buttons.navDown.classes.has("on"));
+    link.close(); frame();
+  } finally {
+    if (hadDoc) globalThis.document = prevDoc; else delete globalThis.document;
+  }
+});
+
 // ---------------------------------------------------------------------------
 // The desktop's pairing flow: host() with the signalling stood in for, onto the
 // loopback wire — the phase machine, the QR hand-off, the lost-link cleanup.

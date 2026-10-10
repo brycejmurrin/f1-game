@@ -763,16 +763,22 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   border: 1px solid var(--look-hud-dim);
 }
 /* HUD-hidden mode: "HIDE HUD" (pause menu) strips every overlay for a clean
-   cinematic view — readouts, start lights, announce, cam picker, cam/pause
-   buttons and the touch pads — leaving the restore eye. The METRICS overlay
+   cinematic view — readouts, start lights, announce, cam picker and the cam
+   button — leaving the restore eye and the pause button. The METRICS overlay
    stays up so a debug session can hide the HUD without losing the live
-   readouts (photo-mode HIDE HUD is the opposite: see body.pc-uihidden). */
-body.hud-hidden #hud,
+   readouts (photo-mode HIDE HUD is the opposite: see body.pc-uihidden).
+   ON TOUCH THE PEDALS STAY: the race resumes on HUD: OFF, and a phone with
+   no GAS/BRAKE/steer buttons is an undrivable car (TOUCH runs on auto-gas with
+   no brake). So off .desktop only the readouts go — every #hud child but the
+   dock, and the instrument cluster inside it; the docks keep their buttons. */
+body.hud-hidden.desktop #hud,
+body.hud-hidden #hud > :not(#hud-dock),
+body.hud-hidden #hud-dock > .hud-bottom,
 body.hud-hidden #lights,
 body.hud-hidden #announce,
 body.hud-hidden #campicker,
 body.hud-hidden #btn-cam,
-body.hud-hidden .touchbtn { display: none !important; }
+body.hud-hidden.desktop .touchbtn { display: none !important; }
 #hud-restore {
   position: fixed;
   top: calc(8px + var(--sat));

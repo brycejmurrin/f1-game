@@ -423,6 +423,12 @@ function create(G) {
       Input.beginAxisCapture(null);
       wheelBtn.textContent = "SET UP A WHEEL";
     };
+    /* BACK from the CONTROLS page must stop the wizard too: only closeSettings
+       disarmed it, so it kept re-mapping axes and zeroing the pedals from the
+       home page. SettingsNav.onLeave(fn) is called with the page id as it hides. */
+    if (typeof SettingsNav !== "undefined" && SettingsNav && SettingsNav.onLeave) {
+      SettingsNav.onLeave((id) => { if (id === "controls") abortWheel(); });
+    }
     const finish = (map, msg) => {
       running = false;
       clearTimeout(stepTimer);

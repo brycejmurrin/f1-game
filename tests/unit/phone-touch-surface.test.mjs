@@ -524,3 +524,23 @@ test("a gamepad without the standard mapping is logged once, and never remapped"
   for (let i = 0; i < 200; i++) h2.Input.poll();
   assert.equal(warns2.filter((m) => /mapping/.test(m)).length, 0, "a standard pad is silent");
 });
+
+test("HUD: OFF on touch hides the readouts but keeps the driving controls (hunt3 7-F2)", () => {
+  // pm-hidehud resumes the race. `body.hud-hidden #hud` / `.touchbtn` took the
+  // whole dock with it, so a phone resumed on auto-gas with no BRAKE.
+  const DRIVE = /(^|\s)(#hud|#hud-dock|\.dock|\.dock-grp|\.touchbtn|#btn-(?!cam$)[\w-]+|#grp-[\w-]+|#pausebtn)$/;
+  const offending = [];
+  let readoutsHidden = false;
+  for (const file of CSS_FILES) {
+    for (const r of css(file)) {
+      if (!/^none\b/.test(String(r.decls.get("display") || ""))) continue;
+      for (const part of r.selector.split(",").map((s) => s.trim())) {
+        if (!/body\.hud-hidden\b/.test(part) || /\.desktop\b/.test(part)) continue;
+        if (DRIVE.test(part)) offending.push(file + ": " + part);
+        if (/#hud > :not\(#hud-dock\)$/.test(part)) readoutsHidden = true;
+      }
+    }
+  }
+  assert.deepEqual(offending, [], "no non-.desktop body.hud-hidden rule hides the touch dock, its buttons or PAUSE");
+  assert.ok(readoutsHidden, "the readouts still go: every #hud child but the dock");
+});

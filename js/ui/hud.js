@@ -1528,7 +1528,7 @@ function paintInstruments(player) {
     if (pct !== _rpmPct || !(pct >= 0)) { _rpmPct = pct; hStyle(els.rpmFill, "--rpm", (pct / 100).toFixed(2)); }
     hToggle(els.tach, "redline", _redline);
   }
-  const kph = G.dashKph(player.speed);   // SPEED UNITS is display-only (js/ui/appearance-opts.js)
+  const kph = Math.max(0, G.dashKph(player.speed));   // SPEED UNITS is display-only (js/ui/appearance-opts.js); >= 0 like the wheel LCD (reverse read "-26")
   // One SPD plate (HudReadouts.spdPlate): same n + MPH|KPH as the wheel LCD.
   if (_ro && typeof _ro.spdPlate === "function") {
     const plate = _ro.spdPlate(kph);
