@@ -421,7 +421,8 @@
           roof: (i % 2) ? "truss" : "cantilever", endWalls: true,
         });
       }
-      cityFront(0.04, 0.12, 1, 30, {
+      // Behind the T1 stand roofs: gap 30 put a low facade through a roof slab.
+      cityFront(0.04, 0.12, 1, 42, {
         minH: 6, maxH: 14, depth: 14, step: 28,
         palette: SKY_PAL, lit: true, windowCol: WIN_AMBER,
       });

@@ -34,6 +34,9 @@
       { kinds: ["city", "foliage"], s0: 0.26, s1: 0.38, side: 1 },
       { kinds: ["city", "foliage"], s0: 0.60, s1: 0.72 },
       { kinds: ["city"], s0: 0.115, s1: 0.128 },   // T4 inside: retail boxes converge and interpenetrate
+      { kinds: ["city"], s0: 0.095, s1: 0.115, side: -1 }, // T4 inside is also beside the T11 stand's rake
+      { kinds: ["city"], s0: 0.565, s1: 0.575, side: 1 },   // low retail plinth and front-row tower share a footprint
+      { kinds: ["city"], s0: 0.7626, s1: 0.7774 }, // scaffold stand on the left; overlapping retail plinth on the right
     ],
     pal: { zenith: [0.22, 0.5, 0.88], horizon: [0.80, 0.86, 0.90], grass: [0.20, 0.42, 0.18], runoff: [0.34, 0.33, 0.32], fogDensity: 0.0014, sunDir: [0.3131803839972462, 0.7933903061263571, 0.521967306662077], sun: [1, 0.96, 0.82], sunColor: [1, 0.94, 0.8] },
     elevations: [{ s: 0.8605, halfM: 220, rise: 3.5 }],
