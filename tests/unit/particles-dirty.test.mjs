@@ -30,7 +30,7 @@ function make(uploads) {
   return P;
 }
 
-test("parked rain expands once then skips upload until the eye leaves the cell", () => {
+test("parked rain expands at most ~30x/s (not every frame, not frozen) until the eye leaves the cell", () => {
   const uploads = [];
   const P = make(uploads);
   P.rainSeed(false);
@@ -49,8 +49,12 @@ test("parked rain expands once then skips upload until the eye leaves the cell",
     P.rainUpdate(0.016, eye, true);   // drops fall, eye cell unchanged
     P.draw();
   }
-  assert.ok(P.stats().skips >= 25, `most parked frames skip expand (skips=${P.stats().skips})`);
-  assert.ok(uploads.every((u) => u.dirty === false), "skipped frames pass dirty=false");
+  // bug-hunt 9.6: 30 frames x 16 ms = 0.48 s parked. The streaks must keep
+  // falling (the old "expand once" froze them) but never re-expand per frame.
+  const st = P.stats();
+  assert.ok(st.skips >= 15, `most parked frames still skip expand (skips=${st.skips})`);
+  assert.ok(st.expands >= 8 && st.expands <= 16, `parked rain re-expands ~30 Hz: ${st.expands} expands in 0.48 s`);
+  assert.ok(uploads.some((u) => u.dirty === false), "skipped frames pass dirty=false");
   assert.ok(uploads.every((u) => u.floats === firstFloats), "re-issue keeps the last float count");
 
   uploads.length = 0;

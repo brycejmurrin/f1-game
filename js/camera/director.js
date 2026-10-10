@@ -93,16 +93,23 @@ const Director = (function () {
       const m = modes[G.camMode];
       return m ? m.id : "";
     }
+    // Pooled rows + array (as Broadcast.battles pools its fights): the list is
+    // rebuilt on every cut-eligible tick and used only inside it.
+    const runRows = [], runOut = [];
     function runningList() {
       const cars = G.cars || [];
-      const out = [];
+      let n = 0;
       for (let i = 0; i < cars.length; i++) {
         const c = cars[i];
         if (!c || c.retired || c.finished) continue;
-        out.push({ key: c, prog: c.prog || 0, speed: c.speed || 0 });
+        let r = runRows[n];
+        if (!r) { r = { key: null, prog: 0, speed: 0 }; runRows[n] = r; }
+        r.key = c; r.prog = c.prog || 0; r.speed = c.speed || 0;
+        runOut[n++] = r;
       }
-      out.sort((a, b) => b.prog - a.prog);
-      return out;
+      runOut.length = n;
+      runOut.sort((a, b) => b.prog - a.prog);
+      return runOut;
     }
     function clearDbg() {
       if (ownCamera && G.dbgCam === ownCamera) G.dbgCam = null;
@@ -175,6 +182,12 @@ const Director = (function () {
       if (modeId() !== "tv") { clearDbg(); return; }
 
       wall += dt > 0 ? dt : 0;
+      // Dwell: decideCut is null before SHOT_MIN_S, so a live subject on a held
+      // shot only needs its pose refreshed — skip the field scan + sort.
+      if (subject && onAirShot && !subject.retired && !subject.finished && wall - lastCut < SHOT_MIN_S) {
+        applyShot(subject, onAirShot, dt, false);
+        return;
+      }
       const running = runningList();
       // A subject that retired or took the flag leaves the shot now, not after SHOT_MAX_S.
       if (subject && (subject.retired || subject.finished) && running.length) {

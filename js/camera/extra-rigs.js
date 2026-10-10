@@ -31,21 +31,30 @@ const ExtraRigs = (function () {
     return v < 0 ? v + L : v;
   }
 
+  const _rvRows = [], _rvOut = [];
+
   /** Closest battle partner for the player, reusing Broadcast.battles when present. The 20 m/s crawl
    *  floor rides _vScale (vTop()/VMAX, latched by tickPitAuto(G) each frame before game.js calls this)
    *  for the sim's PACE-scaled speeds; WATCH's puppets (c.replayRate set by RealReplay.pose) carry the
    *  trace's real m/s, so they keep the bare floor. */
   function pickRival(cars, player) {
     if (!cars || !player || cars.length < 2) return null;
-    const running = [];
+    // Pooled rows + array (Broadcast.battles pools its fights the same way):
+    // rival mode calls this every rendered frame, and the rows never escape.
+    const running = _rvOut;
+    let n = 0;
     let vScale = _vScale;
     for (let i = 0; i < cars.length; i++) {
       const c = cars[i];
       if (c && c.replayRate != null) vScale = 1;
       if (!c || c.retired || c.finished) continue;
       if (c.pitState && c.pitState !== "none") continue;
-      running.push({ key: c, prog: c.prog || 0, speed: c.speed || 0, pos: c.rank || 0 });
+      let r = _rvRows[n];
+      if (!r) { r = { key: null, prog: 0, speed: 0, pos: 0 }; _rvRows[n] = r; }
+      r.key = c; r.prog = c.prog || 0; r.speed = c.speed || 0; r.pos = c.rank || 0;
+      running[n++] = r;
     }
+    running.length = n;
     running.sort((a, b) => b.prog - a.prog);
     const fights = (typeof Broadcast !== "undefined" && Broadcast.battles)
       ? Broadcast.battles(running, vScale)
