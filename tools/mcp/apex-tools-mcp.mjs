@@ -376,6 +376,13 @@ const CATALOG = [
     inputSchema: { type: "object", properties: { dryRun: { type: "boolean" } } },
   },
   {
+    name: "apex_catalog",
+    week: 8,
+    kind: "tree",
+    description: "Tree — every valid id the other apex_* tools accept, in one read: tracks, cams, times of day, shot_survey presets, HUD devices and cams, job kinds, UI screens and UI viewports (the two viewport families differ: apex_ui_* take ios-*/desktop-*, apex_hud_* take phone-*/desktop-*). Read-only, no browser; call it instead of guessing an id and reading the bad_args reply.",
+    inputSchema: { type: "object", properties: { dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } } },
+  },
+  {
     name: "apex_doctor",
     kind: "tree",
     description: "Tree — read-only local tool readiness and prerequisite report; no browser, network, installation or writes.",
@@ -811,10 +818,11 @@ const CATALOG = [
     name: "apex_job_status",
     week: 7,
     kind: "tree",
-    description: "Tree — a background job's state (running | done | failed | cancelled), elapsed time, log tail and, once finished, its parsed JSON result in out. No jobId lists every job this server started. Skill: check-changes.",
+    description: "Tree — a background job's state (running | done | failed | cancelled), elapsed time, log tail and, once finished, its parsed JSON result in out. `wait` (≤120 s) blocks until it finishes. No jobId lists every job this server started. Skill: check-changes.",
     inputSchema: { type: "object", additionalProperties: false, properties: { jobId: { type: "string" },
       state: { type: "string", enum: ["running", "done", "failed", "cancelled"], description: "No jobId: list only jobs in this state." },
       limit: { type: "integer", minimum: 1, maximum: 200, description: "No jobId: newest N jobs (default 20)." },
+      wait: { type: "number", minimum: 0, maximum: 120, description: "With jobId: block up to N seconds until the job leaves running (replaces a shell sleep loop); reply carries waitedMs." },
       dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } } },
   },
   {
@@ -1734,6 +1742,26 @@ function statusNext(lock, playwright, loadavg) {
     hint: "e.g. apex_shot_survey {track, preset:\"quick\"} or multi-track async job via tracks[].",
   };
 }
+/** apex_catalog: ids come from the tool schemas and the UI audit's own catalogs, so they cannot drift from what the tools accept. */
+async function handleCatalog(args = {}) {
+  if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv: ["apex_catalog"], note: "read-only; no browser" });
+  const enumOf = (tool, prop) => CATALOG.find((t) => t.name === tool)?.inputSchema?.properties?.[prop]?.enum || [];
+  let ui = { screens: [], viewports: [] };
+  try {
+    const m = await import("../ui/menu-screens.mjs");
+    ui = { screens: m.listScreenIds(), viewports: m.VIEWPORTS.map((v) => v[0]) };
+  } catch (e) { ui.error = String(e.message || e); }
+  return toolResult({
+    ok: true,
+    tracks: enumOf("apex_shot", "track"), cams: enumOf("apex_shot", "cam"), tods: enumOf("apex_shot", "tod"),
+    shotPresets: enumOf("apex_shot_survey", "preset"),
+    hudDevices: enumOf("apex_hud_shot", "device"), hudCams: enumOf("apex_hud_shot", "cam"),
+    jobKinds: JOB_KINDS,
+    uiScreens: ui.screens, uiViewports: ui.viewports, ...(ui.error ? { uiError: ui.error } : {}),
+    hint: "apex_ui_fit / apex_ui_shot take uiScreens × uiViewports; apex_hud_shot takes hudDevices (ios-iphone-landscape-844 aliases phone-landscape-844x390).",
+  });
+}
+
 function handleStatus(args = {}) {
   if (args.dryRun) {
     return toolResult({
@@ -2085,6 +2113,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   catch (e) { return e.refuse || refuse("bad_args", String(e.message || e), "See the tool inputSchema."); }
 
   if (name === "apex_status") return handleStatus(args);
+  if (name === "apex_catalog") return handleCatalog(args);
   if (name === "apex_garage") return handleGarage(args);   // async: a persistent child, not a spawnSync
   if (name === "apex_graph_parity" && args.all === true) {
     // Every circuit twice outlasts the 180 s cap (killed at ~46 of 52,
@@ -2264,6 +2293,9 @@ const S = (type) => ({ type });
 const OUTPUT_SCHEMAS = {
   apex_status: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), lock: S("object"), chromeDaemon: S("object"),
     testBg: S("object"), playwright: S("object"), loadavg: S("array"), knownGap: S("object") } },
+  apex_catalog: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), tracks: S("array"), cams: S("array"), tods: S("array"),
+    shotPresets: S("array"), hudDevices: S("array"), hudCams: S("array"), jobKinds: S("array"), uiScreens: S("array"), uiViewports: S("array"),
+    hint: S("string"), error: S("string"), message: S("string"), fix: S("string") } },
   apex_doctor: cliOut({ ok: S("boolean"), mode: S("string"), checks: S("array"), summary: S("object") }),
   apex_pick_tests: cliOut({ reason: S("string"), receipts: S("array"), unclaimed: S("array"), files: S("array"), groups: S("array") }),
   apex_select_specs: cliOut({ reason: S("string"), changed: S("number"), groups: S("array"), selected: S("array"), skipped: S("array"),

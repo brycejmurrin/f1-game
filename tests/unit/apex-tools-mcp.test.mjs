@@ -164,6 +164,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_agent",
     "apex_bump_cache_check",
     "apex_car_audit",
+    "apex_catalog",
     "apex_ci_status",
     "apex_doctor",
     "apex_eval",
@@ -1695,4 +1696,50 @@ test("apex_job_status {} prunes manifests older than 7 days and re-judges a pre-
     assert.deepEqual(fs.readdirSync(dir).filter((f) => f.startsWith("old-")), [], "json, log, err and exit of an expired job are all gone");
     assert.ok(fs.existsSync(path.join(dir, "real-failed.log")), "recent jobs keep their files");
   } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
+
+// apex_job_status {wait}: one blocking call replaces a shell sleep loop (AGENTS.md rule 4).
+test("apex_job_status wait blocks until the job finishes, times out with a hint, and refuses a bad value", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const fake = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-jobs-test-"));
+  try {
+    fs.mkdirSync(path.join(fake, "tools", "track"), { recursive: true });
+    fs.writeFileSync(path.join(fake, "tools/track/verify-track.cjs"),
+      'setTimeout(() => console.log(JSON.stringify({ ok: true })), Number(process.env.SLEEP_MS || 1200));\n');
+    const toolResult = (body, { isError = false } = {}) => ({ content: [{ type: "text", text: JSON.stringify(body) }], ...(isError || body.ok === false ? { isError: true } : {}) });
+    const refuse = (error, message, fix) => toolResult({ ok: false, error, message, fix });
+    const x = createExtras({ ROOT: fake, toolResult, refuse, acquireLock: () => null, releaseLock() {}, occupancyRefuse: () => null,
+      assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
+    const body = (r) => JSON.parse(r.content[0].text);
+    const { jobId } = body(x.handlers.apex_job_start({ kind: "verify_all" }));
+    const timedOut = body(await x.handlers.apex_job_status({ jobId, wait: 0.6 }));
+    assert.equal(timedOut.state, "running", JSON.stringify(timedOut));
+    assert.ok(timedOut.waitedMs >= 500, `waited ${timedOut.waitedMs} ms`);
+    assert.match(timedOut.hint, /still running/);
+    const done = body(await x.handlers.apex_job_status({ jobId, wait: 30 }));
+    assert.equal(done.state, "done", JSON.stringify(done));
+    assert.deepEqual(done.out, { ok: true });
+    assert.ok(done.waitedMs < 30000, "returned when the job finished, not at the cap");
+    // A finished job and wait:0 answer at once, without waitedMs.
+    assert.equal(body(x.handlers.apex_job_status({ jobId, wait: 5 })).waitedMs, undefined);
+    assert.equal(body(x.handlers.apex_job_status({ jobId })).waitedMs, undefined);
+    for (const w of [-1, 121, "x"]) assert.equal(body(x.handlers.apex_job_status({ jobId, wait: w })).error, "bad_args", `wait ${w}`);
+  } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
+
+// apex_catalog: one read for every id the tools accept; it reads the tools' own schemas, so it cannot drift.
+test("apex_catalog lists the ids the other tools accept, from their own schemas and the UI audit catalogs", () => {
+  const r = callCli("apex_catalog", {});
+  assert.equal(r.status, 0, r.stderr);
+  const b = JSON.parse(r.stdout);
+  assert.equal(b.ok, true);
+  const list = JSON.parse(spawnSync(process.execPath, [MCP, "list-tools"], { encoding: "utf8", cwd: ROOT }).stdout);
+  const enumOf = (tool, prop) => list.find((t) => t.name === tool).inputSchema.properties[prop].enum;
+  assert.deepEqual(b.tracks, enumOf("apex_shot", "track"));
+  assert.deepEqual(b.hudDevices, enumOf("apex_hud_shot", "device"));
+  assert.deepEqual(b.shotPresets, enumOf("apex_shot_survey", "preset"));
+  assert.ok(b.uiScreens.includes("settings") && b.uiViewports.includes("ios-iphone-landscape"), "the UI audit's catalogs");
+  assert.ok(b.jobKinds.includes("ui_matrix") && b.jobKinds.includes("float_all"));
+  assert.ok(!b.uiViewports.includes("phone-landscape-844x390"), "the two viewport families stay distinct");
 });
