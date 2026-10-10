@@ -170,13 +170,20 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
     "the loading card must come down before the qualifying sheet opens");
   // openQuali is the latched wrapper: nobody awaits it, so it must catch its own
   // failure and land on the menu rather than raise the global error overlay.
-  assert.match(open, /\(e\) => \{[^}]*qualiSheet\.close\(\); quitToMenu\(\); \}\)/,
+  // A friend-race gate (netDone) is armed before the quit so quitToMenu cancels
+  // the lobby; otherwise friendQualifying would gate every later quali save.
+  assert.match(open, /\(e\) => \{[^}]*qualiSheet\.close\(\); (?:if \(netDone\) qualiNet\.arm\(netDone\); )?quitToMenu\(\); \}\)/,
     "entry recovery must close the sheet and return to the menu");
   assert.match(open, /\.catch\(\(e\) => Log\.debug\("game", "openQuali rejected/,
     "menu callers fire and forget, so the wrapper must observe rejection");
   assert.match(commit, /if \(fresh\) quali\.simulate\(0\); else quali\.begin\(\)/);
   assert.match(QUALI_NET, /openQuali\(true, done \|\| null\)/);   // fresh sim, and the gate handed in
-  assert.match(GAME, /quali\.clear\(\);   \/\/ memory only/);
+  // quitToMenu's clear is memory-only for every championship; the one persist it
+  // may drop is a ONE-OFF GP weekend's own order (forgetGp), which no CONTINUE
+  // ever re-grids from — a championship's flag stays false by construction.
+  assert.match(GAME, /quali\.clear\(forgetGp\);   \/\/ memory only/);
+  assert.match(GAME, /const forgetGp = !isChampionship\(\) && !!season && season\.qualiMode === "gp";/,
+    "quitToMenu may forget only a one-off GP's order, never a season's or career's");
   // NOT a blanket whole-file ban. The bug this suite exists for is a
   // clear(true) inside the SHEET'S OWN lifecycle (openQuali / quitToMenu),
   // which wiped the persist so simulate(0) re-stamped an all-AI grid. A
