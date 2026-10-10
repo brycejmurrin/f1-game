@@ -1,0 +1,1 @@
+1791615645	Cursor Agent	PR #1313 menu-baseline: pin freeBuildOff so phone garage golden matches (unlimitedBudget default true). OWNED tests/specs/menu-baseline.spec.js only. FORBIDDEN garage CSS. Do not push #1289. Do not enable auto-merge or merge.  [sync-pr-cursor-hunt2-a-7f3e; session 52bc9abcccb3f6b8d61031f8]
