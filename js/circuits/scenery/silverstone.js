@@ -103,19 +103,25 @@
       const FACADE_DIST = 38;   // thin glazed face just behind pit keep (≤30.1)
       const PODIUM_DIST = 36;
 
+      // Aerial perspective: the hills and backdrop slabs ignore the fog knob, so the far
+      // ones carry their haze in the colour (survey 2026-10-09: crisp toy-like horizon;
+      // fogDensityMul 3.6 changed nothing on them).
+      const HZ = [0.72, 0.76, 0.82];
+      const haze = (c, t) => [c[0] + (HZ[0] - c[0]) * t, c[1] + (HZ[1] - c[1]) * t, c[2] + (HZ[2] - c[2]) * t];
+
       every(110, (kk) => {
         for (const side of [-1, 1]) {
-          backdrop(kk, side, 195 + hash(kk * 6 + side) * 60, [150, 15, 150], [0.16, 0.30, 0.16]);
-          backdrop(kk, side, 260 + hash(kk * 9 + side) * 70, [170, 12, 170], [0.14, 0.28, 0.15]);
+          backdrop(kk, side, 195 + hash(kk * 6 + side) * 60, [150, 15, 150], haze([0.16, 0.30, 0.16], 0.12));
+          backdrop(kk, side, 260 + hash(kk * 9 + side) * 70, [170, 12, 170], haze([0.14, 0.28, 0.15], 0.22));
         }
       });
 
       // two overlapping rings of low green rises — dense enough to read as a wall
       const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, count, wMin, hMin, hVar, fc, rc] of [
-        [270, 20, 180,  9, 6, [0.16, 0.36, 0.18], [0.22, 0.40, 0.22]],
-        [370, 18, 220, 11, 7, [0.14, 0.32, 0.16], [0.20, 0.36, 0.20]],
-        [470, 16, 260, 14, 8, [0.12, 0.28, 0.14], [0.18, 0.34, 0.18]],
+        [270, 20, 180,  9, 6, haze([0.16, 0.36, 0.18], 0.18), haze([0.22, 0.40, 0.22], 0.18)],
+        [370, 18, 220, 11, 7, haze([0.14, 0.32, 0.16], 0.38), haze([0.20, 0.36, 0.20], 0.38)],
+        [470, 16, 260, 14, 8, haze([0.12, 0.28, 0.14], 0.58), haze([0.18, 0.34, 0.18], 0.58)],
       ]) {
         const ring = rad + extra;
         const span = 2 * Math.PI * ring / count;
