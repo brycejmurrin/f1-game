@@ -65,7 +65,13 @@ export const ONBOARD_IDS = Object.freeze(["cockpit", "hood", "tcam", "visor", "h
 // has a screen). HELMET_LAYOUT_IDS: the same wheel seen from inside the lid,
 // whose HUD is the visor (its own set, no cockpit-cam).
 export const COCKPIT_LAYOUT_IDS = Object.freeze(["cockpit"]);
+// js/ui/hud-layout.js TOUCH_PRESET_HOLD (lockstepped by tests/unit/hud-survey.test.mjs).
+export const TOUCH_PRESET_HOLD = Object.freeze({
+  cockpit: Object.freeze({ energy: 1, tyre: 1, ot: 1, aero: 1, bb: 1 }),
+  helmet: Object.freeze({ gearbox: 1, energy: 1, tyre: 1, ot: 1, aero: 1, bb: 1 }),
+});
 export const HELMET_LAYOUT_IDS = Object.freeze(["helmet"]);
+const HudSetOf = (cam) => (COCKPIT_LAYOUT_IDS.includes(cam) ? "cockpit" : HELMET_LAYOUT_IDS.includes(cam) ? "helmet" : null);
 // Cameras whose framing the TV director / auto-cut owns: no camera-keyed expectation.
 const DYNAMIC_CAMS = new Set(["tv", "trackside"]);
 // HudElements.ELEMENTS ids (js/ui/hud-elements.js) → the probe key each hides
@@ -685,13 +691,16 @@ export function expectedVisibility(cell, ctx = {}) {
   // only the wheel LCD's gear / speed hide. HELMET is its own set, the visor:
   // on touch it leaves out OT / AERO and BRAKE BIAS only.
   const cockpitSet = COCKPIT_LAYOUT_IDS.includes(cam), helmetSet = HELMET_LAYOUT_IDS.includes(cam);
-  const big = dev.w >= 900 && dev.h >= 600;
   const prof = cell.profileLive && cell.profileLive !== "none" ? cell.profileLive : cell.profile;
   const minimal = prof === "minimal", broadcast = prof === "broadcast";
   const lay = cell.layout;
   // A preset written into another style's layout places nothing on this HUD.
   const writtenTo = cell.presetProf && cell.presetProf !== "shown" ? cell.presetProf : cell.profile;
   const placed = new Set(writtenTo !== prof ? [] : typeof cell.preset === "object" ? Object.keys(cell.preset) : PRESETS[cell.preset] || []);
+  // A NAMED preset never places the chips a touch cockpit / helmet hides (js/ui/hud-layout.js
+  // TOUCH_PRESET_HOLD: it sets no data-hl-user on them), so they stay hidden; inline offsets are placements.
+  const hold = !dev.touch || typeof cell.preset === "object" ? null : TOUCH_PRESET_HOLD[HudSetOf(cam)];
+  if (hold) for (const id of Object.keys(hold)) placed.delete(id);
   const portraitBlock = dev.touch && dev.h > dev.w && dev.w <= 743 && dev.h <= 956;
   const E = {};
   const want = (key, v, why) => { E[key] = { want: v, why }; };
@@ -716,8 +725,10 @@ export function expectedVisibility(cell, ctx = {}) {
   if (minimal || lay === "driver" || lay === "compact") want("sectors", false, "sectors drop under MINIMAL / DRIVER / COMPACT");
   else camRule("sectors", !(bcam && !broadcast), "a broadcast camera hides sectors outside the BROADCAST profile");
   camRule("gearbox", !(cockpitCam || bcam), "the wheel LCD (cockpit-cam) and broadcast cameras hide SPEED & GEAR; a helmet (the visor) paints the chip on every device");
-  camRule("speed", !((cockpitCam && big) || (broadcast && bcam)),
-    "cockpit-cam hides the floating speed only at >= 900x600; BROADCAST + broadcast cam hides .hud-bottom");
+  // css/track-detail.css: body.cockpit-cam #hud-speed { display: none } at EVERY size (the >= 900x600 limit
+  // this rule had was a false "missing" on every phone cockpit cell; salvaged from PR #1316).
+  camRule("speed", !(cockpitCam || (broadcast && bcam)),
+    "cockpit-cam always hides the floating speed (wheel LCD); BROADCAST + broadcast cam hides .hud-bottom");
   for (const k of ["energy", "ot", "aero"]) {
     if (minimal || lay === "timing" || lay === "compact") want(k, false, "dropped by MINIMAL / TIMING / COMPACT");
     else camRule(k, !(bcam || (cockpitSet && !desktop && !placed.has(k)) || (helmetSet && k !== "energy" && !desktop && !placed.has(k))),
@@ -942,7 +953,7 @@ export function selfTest(analyze = analyzeOverlap) {
   const cock = expectedVisibility(normalizeCell({ cam: "cockpit" }), { desktop: true, cockpitCam: true });
   check("desktop cockpit expects OT/AERO, not gearbox", cock.ot.want && cock.aero.want && cock.gearbox.want === false);
   const pc = expectedVisibility(normalizeCell({ cam: "cockpit", device: "phone-landscape-844x390" }), { desktop: false, cockpitCam: true });
-  check("touch cockpit hides OT unless placed", pc.ot.want === false && pc.speed.want === true);
+  check("touch cockpit hides OT unless placed, and the floating SPEED (wheel LCD)", pc.ot.want === false && pc.speed.want === false);
   check("touch cockpit hides TYRES unless placed", pc.tyre.want === false && cock.tyre.want === true);
   const offGear = expectedVisibility(normalizeCell({ off: ["gear"] }), { desktop: true });
   check("HudElements gear OFF hides the gearbox only", offGear.gearbox.want === false && offGear.speed.want === true);
