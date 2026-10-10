@@ -20,8 +20,13 @@
 const TrackBuildClient = (function () {
   "use strict";
   const KEY = "apex26.buildWorker";
-  let _w = null, _ready = null, _seq = 0;
+  let _w = null, _ready = null, _readyRes = null, _seq = 0;
   const _pending = new Map();
+  // How long the page waits on the worker (its init, then one build) before it
+  // gives up on it and builds in steps. A build is seconds even under SwiftShader;
+  // the cap only exists so a wedged worker cannot hold loadTrackStepped (and, via
+  // busy(), every synchronous build) forever.
+  const ANSWER_MS = 30000;
 
   // Explicit "1"/"0" wins; unset → ON when a Worker exists and there is a spare
   // core (MULTITHREADING-PLAN §3: single-core phones can lose on worker parse).
@@ -74,7 +79,11 @@ const TrackBuildClient = (function () {
     for (const p of _pending.values()) p.resolve(null);
     _pending.clear();
     try { if (_w) _w.terminate(); } catch (_) { /* already gone */ }
-    _w = null; _ready = null;
+    // Settle the readiness promise too: a post() already awaiting it (BUILD IN
+    // BACKGROUND turned off while the worker was still parsing) would otherwise
+    // hang on a promise nothing can resolve any more.
+    if (_readyRes) _readyRes(false);
+    _w = null; _ready = null; _readyRes = null;
     Log.warn("track", "build worker off: " + why);
   }
 
@@ -97,7 +106,7 @@ const TrackBuildClient = (function () {
     if (!enabled() || typeof Worker === "undefined" || !files) return null;
     try { _w = new Worker(url("js/track/build-worker.js")); } catch (e) { drop("spawn " + e.message); return null; }
     let ok;
-    const worker = _w, ready = _ready = new Promise((res) => { ok = res; });
+    const worker = _w, ready = _ready = new Promise((res) => { ok = _readyRes = res; });
     const failed = (why) => { if (_w === worker) { ok(false); drop(why); } };
     worker.onmessage = (e) => {
       if (_w !== worker) return;
@@ -109,12 +118,18 @@ const TrackBuildClient = (function () {
       const p = _pending.get(m.seq);
       if (!p) return;
       _pending.delete(m.seq);
-      const lack = m.type === "built" ? missingModels(p.def, m.models) : [];
-      if (lack.length) {
-        Log.warn("track", `build worker: ${m.id} built without ${lack.length} of its baked models the page holds (${lack.join(", ")}) — building in steps instead`);
-        p.resolve(null);
-      } else if (m.type === "built") p.resolve(m);
-      else { Log.warn("track", "build worker failed: " + m.message); p.resolve(null); }
+      // The entry is already out of _pending, so neither drop() nor the answer
+      // timer can reach it any more: whatever happens below, THIS handler must
+      // settle it (a throw in the model comparison stranded the awaiter, busy()
+      // stuck true). null = the caller builds in steps.
+      let answer = null;
+      try {
+        const lack = m.type === "built" ? missingModels(p.def, m.models) : [];
+        if (lack.length) Log.warn("track", `build worker: ${m.id} built without ${lack.length} of its baked models the page holds (${lack.join(", ")}) — building in steps instead`);
+        else if (m.type === "built") answer = m;
+        else Log.warn("track", "build worker failed: " + m.message);
+      } catch (err) { Log.warn("track", "build worker: reply unusable (" + (err && err.message) + ") — building in steps instead"); }
+      p.resolve(answer);
     };
     worker.onerror = (e) => failed("error " + ((e && e.message) || ""));
     worker.onmessageerror = () => failed("unreadable worker response");
@@ -146,11 +161,24 @@ const TrackBuildClient = (function () {
   async function post(idx, def, opts, gfx, sceneryFile) {
     if (opts && opts.retainGraph && !_graphNoted) { _graphNoted = true; Log.info("track", "build worker: scenery graph not retained (__apex.trackGraph is null)"); }
     const r = spawn();
-    if (!r || !(await r) || !_w) return null;
-    const seq = ++_seq;
+    if (!r) return null;
+    let initTimer = null, timedOut = false;
+    const up = await Promise.race([r, new Promise((res) => {
+      if (typeof setTimeout === "function") initTimer = setTimeout(() => { timedOut = true; res(false); }, ANSWER_MS);
+    })]);
+    if (initTimer != null) clearTimeout(initTimer);
+    if (timedOut && _ready === r) drop("worker init gave no answer in " + ANSWER_MS / 1000 + " s");
+    if (!up || !_w) return null;
+    const seq = ++_seq, worker = _w;
     return new Promise((resolve) => {
-      _pending.set(seq, { resolve, def });
-      _w.postMessage({
+      let timer = null;
+      if (typeof setTimeout === "function") timer = setTimeout(() => {
+        if (!_pending.delete(seq)) return;
+        resolve(null);
+        if (_w === worker) drop("no answer for " + def.id + " in " + ANSWER_MS / 1000 + " s");
+      }, ANSWER_MS);
+      _pending.set(seq, { resolve: (m) => { if (timer != null) clearTimeout(timer); resolve(m); }, def });
+      worker.postMessage({
         type: "build", seq, idx, id: def.id,
         opts: { night: opts.night, gridSlots: opts.gridSlots, chunkRibbons: !!opts.chunkRibbons, retainGraph: false },
         mobileTier: !!gfx.mobileTier, chunkedTrackCoords: gfx.chunkedTrackCoords,

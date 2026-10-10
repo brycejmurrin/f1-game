@@ -78,17 +78,19 @@ const retrySave = () => {
   if (typeof Career !== "undefined" && Career.data && Career.data()) results.push(Career.saveStatus());
   if (G.season && !(typeof Career !== "undefined" && Career.inCareer && Career.inCareer()))
     results.push(SeasonCal.save(G.season));
-  // With no active championship, use a harmless probe so Settings-only users
-  // can still verify that storage became available again.
+  // Career/season above re-save their CURRENT state; whatever else the outage
+  // refused (garage, settings, leaderboards) is rewritten from the store's own
+  // record of failed writes, after them so a stale value never lands on top.
+  const rest = store.retryFailed();
+  if (rest.retried) results.push(rest);
+  // With no active championship and nothing else pending, use a harmless probe
+  // so Settings-only users can still verify that storage became available again.
   if (!results.length) results.push(store.write("saveProbe", { at: Date.now() }));
   const durable = results.every((r) => r && r.durable);
   if (durable) {
-    // RETRY clears BOTH records: `broken`, and the failed-write state — the
-    // career / season / probe keys just landed durably, so their entries in
-    // store.writeFailed() are gone already; a store that also offers an explicit
-    // clear (for a stale key nobody will rewrite) gets it called too.
+    // Every failed key just landed durably (a write that lands drops its entry
+    // from store.writeFailed()), so RETRY only has `broken` left to clear.
     store.broken = null;
-    if (store.clearWriteFailed) store.clearWriteFailed();
     hideSaveWarning();
     if (G.announce) G.announce("SAVE RESTORED");
   } else showSaveWarning((results.find((r) => r && r.reason) || {}).reason || store.broken);
@@ -882,9 +884,11 @@ function updateTrackPreview() {
   if (t._metaOnly || !(t.path && t.path.pts && t.path.pts.length)) {
     if (G.ensureCircuit) {
       const idx = G.trackIdx;
+      // ensureCircuit rejects when the circuit payload fails to load; unhandled,
+      // index.html paints that as a full-screen "Promise rejection" overlay.
       G.ensureCircuit(idx).then(() => {
         if (G.trackIdx === idx) updateTrackPreview();
-      });
+      }).catch((e) => Log.warn("track", "preview could not load circuit " + idx + ": " + ((e && e.message) || e)));
     }
   }
   const crns = TrackMaps.corners(t);

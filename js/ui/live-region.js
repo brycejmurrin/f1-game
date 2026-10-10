@@ -46,7 +46,8 @@ const LiveRegion = (function () {
     }
     queue.push(item);
     queue.sort((a, b) => b.p - a.p || a.seq - b.seq);
-    while (queue.length > MAX_Q) queue.pop();
+    // The queue is urgent-first, oldest-first within a priority, so the lowest priority's FIRST entry is the oldest to drop.
+    while (queue.length > MAX_Q) queue.splice(queue.findIndex((q) => q.p === queue[queue.length - 1].p), 1);
   }
   function write(item) {
     const r = region();

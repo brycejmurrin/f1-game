@@ -54,7 +54,9 @@ const TrackFixes = (function () {
     const pt = (key) => (z) => (z && Number.isFinite(z[key]) ? Object.assign({}, z, { [key]: wrap01(at(z[key])) }) : z);
     const range = (z) => (z && Number.isFinite(z.s0) && Number.isFinite(z.s1) ? Object.assign({}, z, { s0: wrap01(at(z.s0)), s1: wrap01(at(z.s1)) }) : z);
     const each = (list, fn) => (Array.isArray(list) ? list.map(fn) : list);
-    return { hwZones: each(d.hwZones, range), bankZones: each(d.bankZones, pt("frac")), elevations: each(d.elevations, pt("s")), bridges: each(d.bridges, pt("s")) };
+    const out = { hwZones: each(d.hwZones, range), bankZones: each(d.bankZones, pt("frac")), elevations: each(d.elevations, pt("s")), bridges: each(d.bridges, pt("s")) };
+    if (Array.isArray(d.props)) out.props = each(d.props, pt("s"));   // authored scenery rides the road like any zone
+    return out;
   }
   /** Zones follow the road through an edit: anchors are the control points both
    *  loops share (`pairs` [oldIdx, newIdx], starting [0, 0]); a zone keeps its
@@ -79,10 +81,17 @@ const TrackFixes = (function () {
     out.forEach((p, j) => { if (idx.has(p)) pairs.push([idx.get(p), j]); });
     return pairs.length && pairs[0][0] === 0 && pairs[0][1] === 0 ? pairs : null;
   }
-  /** The new design: a clone with `pts` (on the lattice) and zones remapped by `pairs` (null: fractions stand). */
+  /** The new design: a clone with `pts` (on the lattice) and zones + heights remapped by `pairs` (null: fractions stand). */
   function rebuilt(d, oldPts, newPts, pairs) {
     const out = clone(d);
     out.pts = lattice(newPts);
+    // Heights are parallel to pts BY INDEX: a merged or thinned point would
+    // otherwise slide every later height one point down the road. Every new
+    // point is a survivor (enforceSpacing / rdp only drop), so each has a pair.
+    if (pairs && Array.isArray(d.heights) && d.heights.length === oldPts.length) {
+      out.heights = out.pts.map(() => 0);
+      for (const [o, n] of pairs) if (Number.isFinite(+d.heights[o])) out.heights[n] = +d.heights[o];
+    }
     return pairs ? remap(out, oldPts, out.pts, pairs) : out;
   }
 
@@ -144,7 +153,7 @@ const TrackFixes = (function () {
    *  second click would not move it again. */
   function fixStart(d, pts) {
     if (typeof TrackRandom === "undefined") return null;
-    let cur = pts, f = 0;
+    let cur = pts, f = 0, rot = 0;
     for (let pass = 0; pass < 2; pass++) {
       const ls = TrackRandom.longestStraight(cur);
       if (!ls || !ls.dense || !ls.dense.length || !(ls.lenM > 0)) break;
@@ -155,11 +164,14 @@ const TrackFixes = (function () {
       const c = cum(cur);
       f += c[j] / c[cur.length];
       cur = S.rotate(cur, j);
+      rot += j;
     }
     if (cur === pts || samePts(lattice(cur), lattice(pts))) return null;   // already there (or a full turn)
     const out = clone(d);
     out.pts = lattice(cur);
     Object.assign(out, mapZones(out, (v) => v - f));
+    // Heights are parallel to pts: rotate them with it (the designer's START HERE does).
+    if (Array.isArray(out.heights) && out.heights.length === pts.length) { const k = rot % pts.length; out.heights = out.heights.slice(k).concat(out.heights.slice(0, k)); }
     return { design: out, msg: "Moved the start to the longest straight" };
   }
   /** Scale about the centroid by k; recentre and fit the map when that pushes a point past it. */
