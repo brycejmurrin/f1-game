@@ -312,14 +312,16 @@ test("the CAM button's accessible name starts with the word it shows", () => {
 // (≤ 1 per 10 min), shows #update-chip outside races, and its tap persists
 // state, then reloads the way the boot guard does (?b=, query + hash kept).
 // https://developer.chrome.com/docs/workbox/handling-service-worker-updates
-function bootUpdateCheck({ booted = 100, build = 101, controller = 0, racing = false, persist } = {}) {
+function bootUpdateCheck({ booted = 100, build = 101, controller = 0, racing = false, persist, fetchImpl } = {}) {
   let t = 1_000_000, fetches = 0, replaced = null, persisted = 0;
-  const chip = { hidden: true, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
+  const said = [];
+  const chip = { hidden: true, textContent: "UPDATE READY · RELOAD", attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
   const store = new Map();
   const sb = {
     Math, Object, Number, JSON, Promise, RegExp, String, URLSearchParams,
     setTimeout, clearTimeout, setInterval: () => 1, clearInterval() {},
     Log: { info() {}, warn() {} },
+    LiveRegion: { say: (text, kind) => said.push([text, kind]) },
     sessionStorage: { setItem: (k, v) => store.set(k, v), getItem: (k) => store.get(k) ?? null },
     document: { hidden: false, querySelector: () => ({ content: String(booted) }) },
     navigator: { serviceWorker: { controller: controller ? { scriptURL: "https://x.test/sw.js?v=" + controller } : null } },
@@ -329,11 +331,11 @@ function bootUpdateCheck({ booted = 100, build = 101, controller = 0, racing = f
   const UC = vm.runInContext("UpdateCheck", sb);
   const u = UC.create({
     now: () => t, inRace: () => racing, chip: () => chip,
-    fetch: async (url, init) => { fetches++; assert.equal(init.cache, "no-store"); assert.match(url, /^version\.json\?_=\d+$/); return { ok: true, json: async () => ({ build }) }; },
+    fetch: async (url, init) => { fetches++; assert.equal(init.cache, "no-store"); assert.match(url, /^version\.json\?_=\d+$/); if (fetchImpl) return fetchImpl(fetches); return { ok: true, json: async () => ({ build }) }; },
     persist: () => { persisted++; return persist && persist(); },
     location: { pathname: "/f1-game/", search: "?log=net", hash: "#vs=CODE", replace: (u2) => { replaced = u2; } },
   });
-  return { UC, u, chip, store, advance: (ms) => { t += ms; }, race: (v) => { racing = v; },
+  return { UC, u, chip, store, said, advance: (ms) => { t += ms; }, race: (v) => { racing = v; },
     get fetches() { return fetches; }, get replaced() { return replaced; }, get persisted() { return persisted; } };
 }
 
@@ -394,6 +396,60 @@ test("a newer CONTROLLING worker blocks lazy loads once the session is wired, an
   assert.equal(h.chip.hidden, false);
   const same = bootUpdateCheck({ build: 100, controller: 100 });
   assert.equal(same.UC.blocksLazyLoad(), false, "same build: load as usual");
+});
+
+// 06-F4: lastCheck was stamped BEFORE the fetch, so a version.json read that
+// failed (offline, a deploy window, a non-200) blocked every retry for the full
+// 10-minute throttle. A failure now backs off ~30 s; a success still holds 10 min.
+test("update check: a failed version.json read is retried after the short backoff, not the full throttle", async () => {
+  const h = bootUpdateCheck({ build: 105, fetchImpl: (n) => (n === 1 ? Promise.reject(new Error("offline")) : n === 2 ? { ok: false, status: 503 } : { ok: true, json: async () => ({ build: 105 }) }) });
+  h.advance(h.UC.THROTTLE_MS);
+  assert.equal(await h.u.check(false), false, "the read failed");
+  assert.equal(h.fetches, 1);
+  h.advance(10_000); await h.u.check(false);
+  assert.equal(h.fetches, 1, "too soon after a failure: still backed off");
+  h.advance(25_000); await h.u.check(false);
+  assert.equal(h.fetches, 2, "~30 s later it asks again (and gets a 503: a failure too)");
+  h.advance(31_000);
+  assert.equal(await h.u.check(false), true, "the next read lands");
+  assert.equal(h.fetches, 3);
+  assert.equal(h.chip.hidden, false);
+  h.advance(60_000); await h.u.check(false);
+  assert.equal(h.fetches, 3, "a SUCCESS holds the full throttle");
+});
+
+// 14-F3: once UPDATE READY is raised every lazy load is refused (a file asked for
+// as the old build would be answered with the new one). The refusal stays; it is
+// no longer silent: the chip says what is happening and a screen reader is told,
+// once per pending build.
+test("a refused lazy load explains itself once: chip text and a spoken line, then quiet", async () => {
+  const h = bootUpdateCheck({ build: 105, controller: 105 });
+  assert.equal(h.UC.blocksLazyLoad(), true, "refused");
+  assert.equal(h.chip.textContent, "UPDATE READY · RELOAD TO CONTINUE");
+  assert.deepEqual(h.said, [["UPDATE READY — RELOAD TO CONTINUE", "save"]]);
+  assert.equal(h.UC.blocksLazyLoad(), true);
+  assert.equal(await h.UC.prepareLazyLoad({}), false, "every further refusal stays refused…");
+  assert.equal(h.said.length, 1, "…but says nothing more");
+  h.u.markReady(106);
+  assert.equal(h.UC.blocksLazyLoad(), true);
+  assert.equal(h.said.length, 2, "a newer pending build is a new explanation");
+});
+
+test("a refusal during a race is spoken at the next menu, not over the race", () => {
+  const h = bootUpdateCheck({ build: 105, controller: 105, racing: true });
+  assert.equal(h.UC.blocksLazyLoad(), true);
+  assert.equal(h.said.length, 0, "nothing spoken mid-race");
+  assert.equal(h.chip.hidden, true);
+  h.race(false); h.u.render();
+  assert.equal(h.said.length, 1);
+  assert.equal(h.chip.hidden, false);
+});
+
+test("a sound load with no newer build is never explained as an update", () => {
+  const h = bootUpdateCheck({ build: 100, controller: 100 });
+  assert.equal(h.UC.blocksLazyLoad(), false);
+  assert.equal(h.said.length, 0);
+  assert.equal(h.chip.textContent, "UPDATE READY · RELOAD");
 });
 
 test("UpdateCheck is wired: #update-chip in the shell, the visibility hook, the loader guard", () => {
