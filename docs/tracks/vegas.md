@@ -81,3 +81,20 @@ Sphere on Koval, Strip densify on Sands Ave — so the racing Strip read thin
 racing frame; registered `tests/data/landmarks/vegas.json`.
 
 **2026-10-06 — DETAIL pass.** Strengthened Sphere LED meridians (chunky ribs + magenta equator), Caesars pediment/columns, Bellagio crown + lake-edge posts, Paris tower rings, Wynn/Encore copper twins on Sands, Strip storefront pods with pylon signs + sidewalk pads, street-level Strip billboards, and far-skyline width variety. Hollow grey open-face buildings stay on shared `building()` (#1056); not closed here.
+
+**2026-10-09 — Strip setback review (PR #1221).** `dressingExclusions` are AUTHORED-frame (`TrackSpace.sceneryRange` adds
+`_sceneryShift` 0.8433), unlike the `sl()` racing fracs the hand-placed Strip uses: the Strip window is authored 0.642-0.972
+(racing 0.485-0.815) and the Sphere/Koval one authored 0.377-0.497 (racing 0.22-0.34); the first draft wrote the racing numbers
+and excluded racing 0.328-0.658 instead. With the window right, Strip towers j=1/5/7 and the Paris-side hotel are no longer
+silently `massBlocked` by generic city units. Campanile moved clear of the Venetian twin's second slab (sl 0.495), High Roller
+at lateral 132 with its screen building at gap 38 (they overlapped at 87-97 vs 72-108), mid-Strip skywalk centred on its piers.
+Tall hotel massing sits at the pit (racing 0.096 / 0.136); the S/F approach keeps billboards, the Harmon stand and low
+back-of-house `cityFront` rows (authored 0.12-0.20 = racing 0.963-0.04). The 90 m "screen" tower at racing 0.062 still yields
+to a generic unit (as before this PR); only its megascreen board stands there.
+
+**2026-10-10 — place() argument order (review F3).** `place(k, side, dist, [w, h, d], col)` rejects a box when
+`onTrack(.., sz[0]/2 + 1.5)`, and `sz[0]` is the LATERAL width. Four forecourt strips (Venetian gold fascia, the two
+Caesars strips, the Bellagio apron) had been written `[along-road length, h, depth]`, so each was culled on every build
+(`dist=18 sz[0]=95` needed dist > 49). They are now `[depth, h, length]` and all four emit (0/1 -> 1/0 each, counted per
+source line in the headless build). The Bellagio apron sits at dist 9 / 10 m deep (lateral 4-14, between kerb and the
+lake-edge posts) rather than over the lake, and the second Caesars strip's foot is sunk 0.3 m so the pair is not coplanar.

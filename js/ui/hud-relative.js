@@ -79,12 +79,13 @@ const HudRelative = (function () {
     r.laps = car && car !== player ? lapsApart(player.prog, car.prog, d, total) : 0;
   }
 
-  /** "-1.2" for a car 1.2 s in front, "+0.8" behind; one decimal under 10 s,
-   *  whole seconds to 99, then "99+". The sign is the meaning, never a colour. */
-  function fmtGap(sec, ahead) {
-    const a = Math.abs(sec);
-    const v = !Number.isFinite(a) ? "--" : a >= 99.5 ? "99+" : a < 9.95 ? a.toFixed(1) : String(Math.round(a));
-    return (ahead ? "-" : "+") + v;
+  /** "-0.94" for a car 0.94 s in front, "+0.80" behind: HudReadouts.fmtGap, the
+   *  chip's own spelling (hundredths under ~10 s, tenths above), then "99+".
+   *  The sign is the meaning, never a colour. */
+  function fmtGap(sec, ahead, profile) {
+    if (typeof HudReadouts !== "undefined" && HudReadouts && typeof HudReadouts.fmtGap === "function") return HudReadouts.fmtGap(sec, ahead, profile);
+    const a = Math.abs(sec);   // boots without HudReadouts: the same rule, inline
+    return (ahead ? "-" : "+") + (!Number.isFinite(a) ? "--" : a >= 99.5 ? "99+" : a.toFixed(profile === "broadcast" || a < 9.95 ? 2 : 1));
   }
   const lapText = (n) => (n > 0 ? "+" + n + "L" : n < 0 ? n + "L" : "");
 
@@ -93,7 +94,7 @@ const HudRelative = (function () {
   let root = null, built = null;   // #hud-rel, and per row {el, pos, code, gap, tyre, lap}
   const sm = new Array(ROWS).fill(NaN), smWho = new Array(ROWS).fill(null);
   const last = [];                 // per row: the write cache
-  for (let i = 0; i < ROWS; i++) last.push({ who: null, rank: -1, pos: "", q: NaN, gap: "", tyre: "", lap: 0, team: "" });
+  for (let i = 0; i < ROWS; i++) last.push({ who: null, rank: -1, pos: "", gap: "", tyre: "", lap: 0, team: "" });
 
   function build() {
     root = doc && doc.getElementById("hud-rel");
@@ -137,15 +138,15 @@ const HudRelative = (function () {
       const r = rows[i], dom = built[i], c = last[i], car = r.car;
       if (!car) { if (!dom.el.hidden) dom.el.hidden = true; c.who = null; smWho[i] = null; continue; }
       if (dom.el.hidden) dom.el.hidden = false;
-      // Strings are built only when what they say changed: the gap is compared
-      // as signed tenths, the rest as the numbers/objects they come from.
+      // Write only when the displayed value changes: gap spelling includes
+      // profile and precision boundaries, the rest compare their source values.
       let dirty = false;
       if (i !== SELF) {
         const raw = Math.abs(r.rel) / vFloor;
         if (smWho[i] !== car || !Number.isFinite(sm[i])) { smWho[i] = car; sm[i] = raw; }
         else sm[i] += (raw - sm[i]) * EMA;
-        const q = Math.round(sm[i] * 10) * (r.rel > 0 ? -1 : 1);
-        if (c.q !== q) { c.q = q; c.gap = fmtGap(sm[i], r.rel > 0); dom.gap.textContent = c.gap; dirty = true; }
+        const gap = fmtGap(sm[i], r.rel > 0, G.hudProfile);
+        if (c.gap !== gap) { c.gap = gap; dom.gap.textContent = gap; dirty = true; }
       }
       if (c.rank !== (car.rank || 0)) { c.rank = car.rank || 0; c.pos = c.rank ? "P" + c.rank : "-"; dom.pos.textContent = c.pos; dirty = true; }
       if (c.who !== car) { c.who = car; dom.code.textContent = car.code || "---"; dirty = true; }

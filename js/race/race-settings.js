@@ -445,8 +445,13 @@ const RaceSettings = (function () {
       b.setAttribute("aria-disabled", "true");
       b.tabIndex = -1;
       b.textContent = "CUSTOM";
+      // The hint says how to get here: the chip is display-only, so "your own
+      // mix" on a button-shaped tile read as a preset to tap that did nothing
+      // (Pages recheck 2026-10-08). It lights by itself once any row below
+      // stops matching QUICK / WEEKEND / ENDURANCE.
+      b.title = "Lights on its own when your settings match no preset";
       const cap = document.createElement("small");
-      cap.textContent = "your own mix";
+      cap.textContent = "change any setting";
       b.appendChild(cap);
       row.appendChild(b);
       return b;

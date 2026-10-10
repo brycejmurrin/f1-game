@@ -206,10 +206,34 @@ const XrBoot = (function () {
     bindInner(api);
   }
 
-  function wantXrBundle() {
+  // Chrome and Edge on a desktop expose navigator.xr with no headset anywhere, so
+  // its mere presence fetched the ~42 KB LAZY_XR bundle (and mounted an ENTER VR
+  // button that could only fail) for every one of them. Ask whether an
+  // immersive-vr session can start at all. true / false, or null when that cannot
+  // be known (no isSessionSupported, a throw, a hang past the cap).
+  const PROBE_CAP_MS = 1500;
+  function probeVr() {
+    return (async () => {
+      try {
+        const xr = typeof navigator !== "undefined" && navigator.xr;
+        if (!xr) return false;
+        if (typeof xr.isSessionSupported !== "function") return null;
+        let timer = null;
+        const cap = new Promise((resolve) => { if (typeof setTimeout === "function") timer = setTimeout(() => resolve(null), PROBE_CAP_MS); });
+        try {
+          const v = await Promise.race([xr.isSessionSupported("immersive-vr"), cap]);
+          return v === null ? null : !!v;
+        } finally { if (timer !== null) clearTimeout(timer); }
+      } catch (_) { return null; }
+    })();
+  }
+
+  async function wantXrBundle() {
     try { if (localStorage.getItem("apex26.xr") === "1") return true; } catch (_) { /* blocked */ }
     try { if (localStorage.getItem("apex26.xrEnterPending") === "1") return true; } catch (_) { /* blocked */ }
-    return typeof navigator !== "undefined" && !!navigator.xr;
+    if (typeof navigator === "undefined" || !navigator.xr) return false;
+    // Only a definite "no headset" skips the fetch; an unknown answer keeps the old one.
+    return (await probeVr()) !== false;
   }
 
   function mountUi() {
@@ -232,8 +256,7 @@ const XrBoot = (function () {
       }
     };
     if (typeof XrUi !== "undefined") { finish(); return; }
-    if (!wantXrBundle()) return;
-    ensureXr().then((ok) => { if (ok) finish(); });
+    wantXrBundle().then((want) => (want ? ensureXr() : false)).then((ok) => { if (ok) finish(); }, () => { /* the VR button is optional */ });
   }
 
   /**
@@ -303,7 +326,7 @@ const XrBoot = (function () {
   }
 
   return {
-    bind, mountUi, ensureXr, comfort, camComfort, loopByXr, isBound, canAttach,
+    bind, mountUi, ensureXr, wantXrBundle, comfort, camComfort, loopByXr, isBound, canAttach,
     ensureXrBackend, applyEyes, present, afterTick, chainWindowRaf,
     findCockpit, diag, setFoveation, saveAndForceCockpit, restoreSavedCam,
     // Test / UI helpers

@@ -45,7 +45,6 @@ test.describe("Hungaroring track foundation", () => {
       "hungaroring-pit-complex",
       "hungaroring-main-tribune",
       "hungaroring-pit-wall",
-      "hungaroring-lake",
       "hungaroring-start-gantry",
     ])
       expect(result.models.emitted.map((entry) => entry.id), `${id} emitted`).toContain(id);

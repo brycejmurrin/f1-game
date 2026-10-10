@@ -285,9 +285,13 @@ function buildResults(order, race) {
     // so its lap count is what separates it from the winner — say so.
     const winnerData = order[0] ? sourceOf(order[0]) : null;
     const carData = sourceOf(c) || {};
+    // Both sides take the same running discount (a car still running is flagged
+    // at its NEXT crossing), as RaceControl.classify's lapsAt does — applied to
+    // the car alone, a winner who never took the flag undercounted by one.
+    const lapsAt = (d) => (d.lap | 0) + (d.finished ? 0 : 1);
     const down = !dnf && winnerData && typeof winnerData.lap === "number" &&
       isFinite(winnerData.lap) && typeof carData.lap === "number" && isFinite(carData.lap)
-      ? Math.max(0, (winnerData.lap | 0) - (carData.lap | 0) - (carData.finished ? 0 : 1)) : 0;   // a car still running is flagged at its NEXT crossing — without the -1 every lead-lap car still on its final lap read "+1 LAP"
+      ? Math.max(0, lapsAt(winnerData) - lapsAt(carData)) : 0;
     const suffix = dnf ? `  (${dnf})` : carData.penalty ? `  (+${carData.penalty}s)` : "";
     const downSuffix = down ? `  (+${down}${down > 1 ? " LAPS)" : " LAP)"}` : "";
     nm.textContent = `${c.code}  ${c.name}${suffix}${downSuffix}`;

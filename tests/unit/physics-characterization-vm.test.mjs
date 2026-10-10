@@ -72,7 +72,7 @@ test("A3: characterization boot pins dry weather and zero wetness", () => {
   assert.equal(g.G.raceWeather, "dry");
   assert.equal(g.G.trackWetness(), 0);
   assert.equal(g.G.trackWetness(), 0);
-  assert.equal(g.G.frame.wetness, 0);
+  assert.equal(g.G.frame.wetness || 0, 0);   // render() is the one producer now (unset until a frame renders; every reader defaults to 0)
   assert.equal(g.G.gripMult({ tread: 0 }), 1);
 });
 

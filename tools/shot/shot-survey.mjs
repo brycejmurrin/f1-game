@@ -50,6 +50,9 @@ const fracsRaw = flag("--fracs", "");
 const dryRun = has("--dry-run");
 
 const planArgs = { preset, label };
+// --plan-json: the plan-shaping options the flags below do not name (cam/cams/az/el/dist/h/side/hud/shots/cols/sheetName)
+const planJson = flag("--plan-json", "");
+if (planJson) Object.assign(planArgs, JSON.parse(planJson), { preset, label });
 if (tod) planArgs.tod = tod;
 if (count) planArgs.count = Number(count);
 if (fracsRaw) planArgs.fracs = fracsRaw.split(",").map(Number);

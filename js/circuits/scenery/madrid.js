@@ -42,9 +42,16 @@
       const at = (frac) => Math.round(frac * n) % n;
       const basis = (a) => [a.r, a.u, a.t];
 
-      function venueGroup(id, frac, side, gap, size, required, emit) {
+      function venueGroup(id, frac, side, gap, size, required, emit, bearing) {
         const k = at(frac);
-        const a = anchor(k, side, gap + size[0] / 2);
+        let a = anchor(k, side, gap + size[0] / 2);
+        if (bearing !== undefined) {
+          // TRUE COMPASS BEARING from the lap centroid, keeping the anchor's own
+          // distance from it and its height/basis. World frame: +X west, +Z north
+          // (the Fuji compass pattern in scenery/fuji.js), so bearing b is (x, z) = (-sin b, cos b).
+          const { cx, cz } = lapBounds(), d = Math.hypot(a.c[0] - cx, a.c[2] - cz), b = bearing * Math.PI / 180;
+          a = { c: [cx - Math.sin(b) * d, a.c[1], cz + Math.cos(b) * d], r: a.r, u: a.u, t: a.t };
+        }
         const center = vadd(a.c, a.u, size[1] / 2);
         return modelGroup(id, { center, size, basis: basis(a) }, (stage) => {
           emit(stage, a, k);
@@ -400,7 +407,11 @@
       // now nothing in the file referenced it. Floated far beyond the terrain
       // ribbon like the Sierra ridge below, so it never needs real terrain
       // grounding: a control tower silhouette plus one low-poly airliner on
-      // approach, s≈0.02 L per the brief.
+      // approach. Bearing 51 deg (NE) from the lap centroid: Barajas is at about
+      // 40.499 N 3.561 W against IFEMA's 40.4653 N 3.6156 W, 5.9 km away. The
+      // distance stays compressed at the old ~1.4 km (the "s≈0.02 L" road-side
+      // guess put both on 165 deg, SSE, the opposite horizon).
+      const BARAJAS_BEARING = 51;
       {
         const TOWER_COL = [0.80, 0.81, 0.83];
         const TOWER_GLASS = night ? [0.85, 0.92, 1.00] : [0.55, 0.72, 0.86];
@@ -411,7 +422,7 @@
           addCyl(stage, vadd(a.c, a.u, 38), 0.35, 6, STEEL, 6, b);      // radar mast
           addBox(stage, vadd(a.c, a.u, 44.4), [1.6, 0.3, 1.6],
             night ? [1.6, 0.2, 0.16] : MADRID_RED, b);                  // beacon
-        });
+        }, BARAJAS_BEARING);
 
         const AIR_BODY = [0.82, 0.84, 0.87];
         const AIR_TAIL = MADRID_RED;
@@ -422,7 +433,7 @@
           addPrism(stage, vadd(centre, a.u, -0.4), [4.2, 0.9, 26], AIR_BODY, [a.t, a.u, a.r]);
           // Tail fin: a vertical ridge near the tail.
           addPrism(stage, vadd(centre, a.t, -16.6), [0.6, 5.2, 4.2], AIR_TAIL, [a.r, a.u, a.t]);
-        });
+        }, BARAJAS_BEARING);
       }
 
       // Pit wall & main grandstand (brief s≈0.00 R) — fans on the OPPOSITE side
@@ -434,7 +445,7 @@
         [0.00, 10, 52, "crimson", 3, "cantilever"],
         [0.018, 11, 40, "crimson", 2, "cantilever"],
         [0.085, 16, 45, "sandstone", 1, "truss"],
-        [0.50, 20, 40, "steel", 2, "flat"],
+        [0.54, 22, 40, "steel", 2, "flat"],
       ]) {
         grandstandEx(sf, -1, gap, len, null, null, {
           livery: liv, tiers, roof, suites: sf < 0.05, endWalls: true, pylons: true,
@@ -951,6 +962,8 @@
         recordBarrier(0.48, 0.54, side, 2.6);
         recordBarrier(0.86, 0.88, side, 2.6);
         recordBarrier(0.98, 0.06, side, 2.6);
+        recordBarrier(0.06, 0.15, side, 2.6);
+        recordBarrier(0.55, 0.68, side, 2.6);
       }
       tyreWall(0.075, 0.105, 1, 3.2, [0.88, 0.25, 0.18]);
       tyreWall(0.13, 0.16, -1, 3.2, [0.18, 0.38, 0.82]);
@@ -1063,10 +1076,14 @@
         else bush(k, side, 13, OLIVE);
       }
 
-      const SIERRA = [0.55, 0.60, 0.66];
-      const SIERRA_FAR = [0.61, 0.66, 0.72];
+      // Sierra de Guadarrama — N/NW only (bearing ~280° at s≈0.40); south/east
+      // stay flat Castilian plain. Six slots on the W→N arc (i/16×360°).
+      const SIERRA = [0.50, 0.56, 0.62];
+      const SIERRA_FAR = [0.56, 0.62, 0.68];
       const { cx, cz, radius } = lapBounds();
-      for (let i = 0; i < 16; i++) {
+      const sierraArc = [0, 1, 2, 3, 4, 5];
+      for (let j = 0; j < sierraArc.length; j++) {
+        const i = sierraArc[j];
         const angle = i / 16 * Math.PI * 2;
         const R = radius + 1150 + hash(i * 3) * 180;
         const along = angle + Math.PI / 2 + (hash(i * 7) - 0.5) * 0.45;
@@ -1077,8 +1094,8 @@
           along,
           540 + hash(i * 5) * 260,
           170,
-          52 + hash(i * 11) * 58,
-          i % 2 ? SIERRA : SIERRA_FAR,
+          90 + hash(i * 11) * 60,
+          j % 2 ? SIERRA : SIERRA_FAR,
         );
       }
     };

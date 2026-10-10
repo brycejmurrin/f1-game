@@ -356,15 +356,22 @@
         capCol: [0.70, 0.74, 0.78], mast: 6,
       });
 
-      // Mid-distance backdrop skyline — further back, sparser (city second)
-      every(42, (k) => {
+      // Mid-distance skyline — sparse low ochre/terracotta band; Popo/Iztaccíhuatl read above.
+      every(96, (k) => {
+        if (hash(k * 81) > 0.62) return;
         for (const side of [-1, 1]) {
-          const d = 280 + hash(k * 82 + side) * 140 + (k & 1) * 24;
-          const h = 26 + hash(k * 83 + side) * 40;
-          const tone = 0.62 + hash(k * 84 + side) * 0.10;
+          const d = 460 + hash(k * 82 + side) * 90 + (k & 1) * 12;
+          const h = 8 + hash(k * 83 + side) * 14;
+          const warm = hash(k * 84 + side);
+          const col = [
+            0.70 + warm * 0.08,
+            0.50 + warm * 0.07,
+            0.36 + warm * 0.05,
+          ];
+          const w = 28 + hash(k * 85 + side) * 14;
           const p = anchor(k, side, d);
-          if (onTrack(p.c[0], p.c[2], 60)) continue;   // would straddle another leg
-          backdrop(k, side, d, [100, h, 45], [tone * 0.98, tone, tone * 1.02]);
+          if (onTrack(p.c[0], p.c[2], 55)) continue;
+          backdrop(k, side, d, [w, h, 16], col);
         }
       });
 
@@ -792,13 +799,7 @@
         [0.60, 0.72,  1], [0.60, 0.72, -1],
         [0.86, 1.00,  1], [0.86, 1.00, -1],
       ]) fence(s0, s1, side, 5.5, 3.4, FENCE_M);
-      for (const [s0, s1, side] of [
-        // +1 is the pit side: the complex (0.951-0.046) supersedes a hedge base
-        // there but not its lump, which floated 1 m (float-audit).
-        [0.05, 0.10,  1], [0.16, 0.30,  1], [0.30, 0.48, -1],
-        [0.48, 0.60,  1], [0.60, 0.72, -1], [0.86, 0.95,  1],
-        [0.10, 0.30, -1], [0.48, 0.60, -1], [0.86, 1.00, -1],
-      ]) hedge(s0, s1, side, 2.4, 1.4, side < 0 ? PARKGRN : TREEGRN);
+      // Perimeter hedge loop removed: ~1202/1248 segments were guard-suppressed (build cost only).
       for (let i = 0; i < 44; i++) {
         const sf = i / 44;
         if (sf > 0.72 && sf < 0.87) continue;      // Foro Sol bowl is dressed already
@@ -939,6 +940,20 @@
         }
       }
 
+      // TRUE COMPASS BEARINGS from the lap centroid (the Fuji pattern,
+      // fuji.js), not a road normal: the normal tracks the road's heading,
+      // which put Popocatepetl at 114.3 deg and Iztaccihuatl at 119.3 — 17 deg
+      // off and in swapped order. From the autodrome (19.4042 N 99.0907 W)
+      // Popocatepetl (19.0225 N 98.6278 W) is 131.1 deg and Iztaccihuatl
+      // (19.1792 N 98.6422 W) 117.9 deg. World frame: +X west, +Z north, so
+      // bearing b is (x, z) = (-sin b, cos b). Distances (1746 / 1876 m) and
+      // sizes are unchanged: compressed from the real 64 / 53 km.
+      const vol = (deg, d) => [cx - Math.sin(deg * Math.PI / 180) * d, cz + Math.cos(deg * Math.PI / 180) * d];
+      const popo = vol(131.1, 1746), izta = vol(117.9, 1876);
+      // The far ring keeps clear of both volcanoes: a ring hill (up to 274 m) 170-270 m
+      // from Iztaccihuatl (245 m) hid it.
+      const nearVolcano = (x, z) => Math.hypot(x - popo[0], z - popo[1]) < 280 || Math.hypot(x - izta[0], z - izta[1]) < 360;
+
       for (const [extra, wMin, hMin, count, rock, snowL] of [
         [980,  360, 150, 16, [0.50, 0.55, 0.62], 0.74],
         [1260, 460, 210, 12, [0.56, 0.60, 0.66], 0.68],
@@ -948,6 +963,7 @@
           const a = (i + (hash(i * 5 + extra) - 0.5) * 0.45) / count * 6.2832;
           const hv = hash(i * 7 + extra), j = hash(i * 11 + extra);
           const rr = ring - wMin * 0.12 + hash(i * 17 + extra) * wMin * 0.22;
+          if (nearVolcano(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr)) continue;
           mountain(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr, pyMin,
                    wMin + hv * 150, hMin + j * 110,
                    { seg: 6, seed: i * 13 + extra, snowline: snowL, rock,
@@ -956,14 +972,12 @@
       }
 
       {
-        const popo = anchor(K(0.34), -1, 1180);
-        mountain(popo.c[0], popo.c[2], pyMin, 560, 350, {
+        mountain(popo[0], popo[1], pyMin, 560, 350, {
           seg: 8, seed: 2601, rough: 0.24, snowline: 0.66,
           rock: [0.42, 0.46, 0.52], forest: [0.34, 0.40, 0.40],
           snow: [0.92, 0.93, 0.96],
         });
-        const izta = anchor(K(0.37), -1, 1320);
-        mountain(izta.c[0], izta.c[2], pyMin, 720, 245, {
+        mountain(izta[0], izta[1], pyMin, 720, 245, {
           seg: 8, seed: 2602, rough: 0.38, snowline: 0.72,
           rock: [0.48, 0.51, 0.57], forest: [0.37, 0.42, 0.42],
           snow: [0.89, 0.91, 0.94],

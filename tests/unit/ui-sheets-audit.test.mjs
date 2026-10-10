@@ -664,6 +664,25 @@ test("an UNFINISHED car on the lead lap reads no \"+1 LAP\"; a genuinely lapped 
   assert.equal(names[4], "TWO  Twice  (+2 LAPS)", "and the plural holds");
 });
 
+test("a winner who never took the flag discounts BOTH sides alike (bug-hunt 5.4)", () => {
+  // The running -1 was applied to the car only: with the winner still on its
+  // final lap too, a genuinely lapped runner read one lap short. classify
+  // applies lapsAt to both sides; so must the sheet.
+  const team = (id, color) => ({ id, name: id.toUpperCase(), color });
+  const cars = [
+    { driverId: "w", code: "WIN", name: "Winner", team: team("red", [1, 0, 0]), lap: 4, finished: false, penalty: 0 },
+    { driverId: "r", code: "RUN", name: "Running", team: team("blue", [0, 0, 1]), lap: 4, finished: false, penalty: 0 },
+    { driverId: "l", code: "LAP", name: "Lapped", team: team("blue", [0, 0, 1]), lap: 3, finished: false, penalty: 0 },
+    { driverId: "t", code: "TWO", name: "Twice", team: team("red", [1, 0, 0]), lap: 2, finished: false, penalty: 0 },
+  ];
+  const h = bootResults({ season: null, cars, seasonMode: false });
+  h.api.buildResults(cars.slice());
+  const names = rowsOf(h.els.resultsTable).map(nameOf);
+  assert.equal(names[1], "RUN  Running", "same lap as the unflagged winner: not lapped");
+  assert.equal(names[2], "LAP  Lapped  (+1 LAP)", "one crossing behind an unflagged winner is a lap down");
+  assert.equal(names[3], "TWO  Twice  (+2 LAPS)");
+});
+
 test("RESULTS: your row keeps its lime ink and OPAQUE sticky ground on the podium", () => {
   // The bug (2026-09-30): .res-row.p1/.p2/.p3 sat AFTER .res-row.you at the
   // same specificity, so finishing P1-P3 repainted your row in the metal and

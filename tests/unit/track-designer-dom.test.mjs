@@ -13,7 +13,7 @@ import vm from "node:vm";
 import { bootEditor, read, plain } from "../helpers/editor-vm.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
-const SCREEN_FILES = ["js/ui/dom.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/designer.js"];
+const SCREEN_FILES = ["js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/designer.js"];
 
 function bootScreen(stored = {}) {
   const vmx = bootEditor(stored);
@@ -21,7 +21,7 @@ function bootScreen(stored = {}) {
   const dom = makeDom({ tagFor: (id) => (id === "trackdesigner" ? "dialog" : id === "td-close" ? "button" : "div") });
   // What the browser gives the screen and the mini DOM does not: a 2D context
   // (every call a no-op), text nodes, the timers the screen debounces with.
-  const noop2d = new Proxy({}, { get: (t, k) => (k === "setLineDash" || typeof k !== "string" ? () => {} : () => {}), set: () => true });
+  const noop2d = new Proxy({}, { get: (t, k) => (k === "measureText" ? (s) => ({ width: String(s).length * 6 }) : () => {}), set: () => true });
   const mkEl = dom.document.createElement;
   dom.document.createElement = (tag) => {
     const el = mkEl(tag);
@@ -428,7 +428,7 @@ test("a share link while the screen is open keeps the return focus; EDIT → SAV
 test("CHECKS is not a live region; count changes are announced once; an unbuildable loop never reads 'All checks pass'", () => {
   const b = bootScreen();
   const d0 = openGreen(b);
-  const list = b.root.querySelector(".td-issues");
+  const list = b.root.querySelector('[aria-label="Design checks"]');
   assert.equal(list.getAttribute("aria-live"), null, "the 80 ms rebuild is not read out");
   const tiny = Object.assign({}, d0, { pts: Array.from({ length: 36 }, (_, i) => [Math.round(120 * Math.cos(i / 36 * 2 * Math.PI) * 4) / 4, Math.round(80 * Math.sin(i / 36 * 2 * Math.PI) * 4) / 4]) });
   b.D.load(tiny);
@@ -650,7 +650,7 @@ test("FIX chips: only on rows TrackFixes can repair; FIX commits one UNDO entry 
     fixAll: () => null,
   };
   green = shortLoop(b);
-  const rows = b.root.querySelector(".td-issues").children;
+  const rows = b.root.querySelector('[aria-label="Design checks"]').children;
   const fixable = rows.filter((li) => chipsIn(li, "FIX").length);
   assert.equal(fixable.length, 1, "one FIX chip, on the length row");
   assert.match(fixable[0].textContent, /Lap is/);
@@ -669,12 +669,12 @@ test("FIX chips: only on rows TrackFixes can repair; FIX commits one UNDO entry 
   assert.equal(chipsIn(b.root, "FIX ALL")[0].hidden, true, "nothing red, no FIX ALL");
   assert.equal(b.D.undo(), true);
   assert.equal(b.D.preview().ok, false, "UNDO takes the fix back");
-  b.dom.dispatch(chipsIn(b.root.querySelector(".td-issues"), "FIX")[0], { type: "click", bubbles: true });
+  b.dom.dispatch(chipsIn(b.root.querySelector('[aria-label="Design checks"]'), "FIX")[0], { type: "click", bubbles: true });
   assert.equal(msgText(b), "No automatic fix for this one");
   // No TrackFixes (the module did not load): no chips at all, never a throw.
   delete b.ctx.TrackFixes;
   b.D.preview();
-  assert.equal(chipsIn(b.root.querySelector(".td-issues"), "FIX").length, 0);
+  assert.equal(chipsIn(b.root.querySelector('[aria-label="Design checks"]'), "FIX").length, 0);
   assert.equal(chipsIn(b.root, "FIX ALL")[0].hidden, true);
 });
 
@@ -691,7 +691,7 @@ test("FIX ALL runs fixAll(design, TrackValidate.check) and commits once, naming 
   const real = b.DC;
   b.ctx.DesignerCanvas = { create: (c, h) => { const api = real.create(c, h), fit = api.fit; api.fit = () => { fits++; return fit(); }; return api; } };
   green = shortLoop(b);
-  assert.ok(chipsIn(b.root.querySelector(".td-issues"), "FIX").length >= 2, "every fixable row has its chip");
+  assert.ok(chipsIn(b.root.querySelector('[aria-label="Design checks"]'), "FIX").length >= 2, "every fixable row has its chip");
   const u0 = b.D.state().undo, f0 = fits;
   chipsIn(b.root, "FIX ALL")[0].click();
   assert.deepEqual(calls, [true], "handed the validator's own check");
@@ -719,7 +719,22 @@ test("HOW TO: a third tab lists every HOWTO step, every input and the limits; th
   tabs[2].click();
   assert.deepEqual([design.hidden, lib.hidden, how.hidden], [true, true, false]);
   assert.deepEqual(tabs.map((t) => t.getAttribute("aria-selected")), ["false", "false", "true"]);
+  assert.equal(b.root.dataset.pane, "howto", "phone layout can give the guide its own space");
   const H = b.D.HOWTO;
+  const tasks = walk(how).filter(e => e.dataset.helpTask);
+  assert.deepEqual(tasks.map(e => e.dataset.helpTask), ["selection", "height", "scenery"]);
+  assert.equal(tasks[0].open, true);
+  const history = b.D.state().undo;
+  chipsIn(how, "OPEN SCENERY")[0].click();
+  assert.equal(b.D.state().mode, "scenery");
+  assert.equal(how.hidden, true);
+  assert.equal(b.root.dataset.pane, "design");
+  const live = walk(b.root).find(e => e.dataset.mapView === "scenery" && e.tagName === "BUTTON");
+  assert.equal(live.getAttribute("aria-pressed"), "true");
+  chipsIn(b.root, "OUTLINE")[0].click();
+  assert.equal(live.getAttribute("aria-pressed"), "false");
+  assert.equal(b.D.state().undo, history, "view and help navigation do not edit the circuit");
+  tabs[2].click();
   const rows = walk(how).filter((e) => e.classList.contains("td-issue"));
   for (const r of rows) assert.equal(r.dataset.level, "info", "info rows, the CHECKS recipe");
   const text = rows.map((r) => r.textContent).join("\n");
@@ -759,7 +774,7 @@ test("the first-open card: shown once, HOW TO switches tab, GOT IT stores apex26
   const note = card.children[0];
   assert.ok(note.classList.contains("td-issue")); assert.equal(note.dataset.level, "info");
   assert.match(note.textContent, /RANDOMISE gave you a circuit/);
-  assert.match(note.textContent, /MODE tabs/);
+  assert.match(note.textContent, /EDIT shapes the road/);
   assert.deepEqual(chipsIn(card).map((c) => c.textContent), ["HOW TO", "GOT IT"]);
   const u0 = b.D.state().undo;
   chipsIn(card, "HOW TO")[0].click();
@@ -790,11 +805,11 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   const b = bootScreen();
   openGreen(b);
   const rail = b.root.querySelector(".td-rail"), stage = b.root.querySelector(".td-stage");
-  const hint = rail.querySelector(".td-hint"), stageHint = stage.querySelector(".td-hint");
+  const toolsGroup = panes(b)[0].children.find((g) => g.children.some((c) => c.children && c.children.some((t) => t.dataset && t.dataset.tool)));
+  const hint = toolsGroup.querySelector(".td-hint"), stageHint = stage.querySelector(".td-hint");
   assert.ok(hint && stageHint && hint !== stageHint);
-  const toolsGroup = panes(b)[0].children.find((g) => g.children.includes(hint));
   assert.ok(toolsGroup && toolsGroup.children.some((c) => c.classList.contains("td-chips") && c.children.every((t) => t.dataset.tool)), "the hint sits in the TOOLS group");
-  assert.match(hint.textContent, /^SELECT: tap a point/);
+  assert.match(hint.textContent, /^EDIT: POINT selects one/);
   // css/editor.css: the phone rules hide only the stage's copy; the rail's stays.
   const css = read("css/editor.css");
   assert.equal((css.match(/\.td-stage \.td-hint \{ display: none; \}/g) || []).length, 2, "narrow/portrait and short both hide the stage hint");
@@ -803,8 +818,8 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   // 3-up foot grid — stacking ALL short heights (incl. 852×344 safari) made
   // clipped findings worse (layout-audit 2026-10-05).
   assert.match(css,
-    /@media \(max-width: 760px\) and \(max-height: 500px\) and \(orientation: landscape\) \{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*3fr\)\s*minmax\(0,\s*1fr\)/,
-    "narrow+short landscape biases height to the stage row");
+    /@media \(max-width: 760px\) and \(max-height: 500px\) and \(orientation: landscape\) \{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(240px,\s*38%\)/,
+    "narrow+short landscape keeps a usable side-by-side inspector");
   assert.match(css,
     /@media \(max-width: 760px\) and \(max-height: 500px\) and \(orientation: landscape\) \{[\s\S]*?\.td-foot \{ display: flex/,
     "narrow+short landscape restores a single-row foot");
@@ -815,7 +830,7 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   assert.ok(shortOnly, "short-height media query present");
   assert.doesNotMatch(shortOnly[1], /\.td-body\s*\{/,
     "max-height:500 alone must not restack .td-body (safari 2-col stays)");
-  for (const [tool, re] of [["draw", /^DRAW: draw one closed loop/], ["corner", /^CORNER: tap a point to stamp/], ["hairpin", /^HAIRPIN: tap a point/], ["straight", /^STRAIGHT: tap a point/], ["select", /^SELECT: /]]) {
+  for (const [tool, re] of [["draw", /^DRAW: draw one closed loop/], ["corner", /^CORNER: tap a point to stamp/], ["hairpin", /^HAIRPIN: tap a point/], ["straight", /^STRAIGHT: tap a point/], ["select", /^EDIT: /]]) {
     b.D.setTool(tool);
     assert.match(hint.textContent, re, tool);
     assert.equal(stageHint.textContent, hint.textContent, "one string, two places");
@@ -825,12 +840,12 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   const labels = () => panes(b)[0].children.map((g) => (g.children[0] && g.children[0].classList.contains("td-label") ? g.children[0] : walk(g).find((e) => e.classList.contains("td-label")))).filter(Boolean).map((l) => l.textContent);
   // MODE + numbered groups; ELEVATION / BANKING & KERBS / LOOK stay in the DOM (mode toggles visibility).
   // #1039: 2 CORNERS stays in the rail so numbering never skips 1 → 3.
-  assert.deepEqual(labels().slice(0, 7), ["MODE", "1 SHAPE", "2 CORNERS", "ELEVATION", "BANKING & KERBS", "3 LOOK", "4 DETAILS"]);
+  assert.deepEqual(labels().slice(0, 7), ["SELECT POINTS", "1 SHAPE", "2 CORNERS", "ELEVATION", "BANKING & KERBS", "SCENERY", "4 DETAILS"]);
   assert.ok(labels().includes("5 CHECKS"));
   const shapeG = panes(b)[0].children.find((g) => g.children[0] && g.children[0].textContent === "2 CORNERS");
   assert.ok(shapeG && !shapeG.hidden, "2 CORNERS group stays visible under EDIT/SELECT");
   assert.match(shapeG.querySelector(".td-hint").textContent, /^Pick STRAIGHT/);
-  assert.deepEqual(chipsIn(panes(b)[0]).filter((c) => c.dataset.mode).map((c) => c.dataset.mode), ["draw", "edit", "elevation", "scenery", "test"]);
+  assert.deepEqual(chipsIn(b.root).filter((c) => c.dataset.mode).map((c) => c.dataset.mode), ["draw", "edit", "elevation", "scenery", "test"]);
   b.D.setMode("elevation");
   assert.equal(b.D.state().mode, "elevation");
   assert.match(hint.textContent, /^ELEVATION:/);
@@ -861,8 +876,8 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   assert.match(css, /max-height: 500px[\s\S]*?data-role="profile"[\s\S]*?display:\s*block/, "profile strip kept on short phones");
   assert.match(css, /\.td-stage canvas \{[^}]*min-height:\s*72px/, "main map canvas keeps a 72px floor in every layout");
   assert.match(css,
-    /@media \(max-width: 760px\), \(orientation: portrait\) \{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*1\.65fr\)/,
-    "portrait stack biases height to the stage row");
+    /@media \(max-width: 760px\), \(orientation: portrait\) \{[\s\S]*?grid-template-rows:\s*auto\s+minmax\(0,\s*1fr\)\s+minmax\(0,\s*1\.2fr\)/,
+    "portrait stack reserves space for the inspector below the map");
   assert.match(css,
     /@media \(max-height: 500px\) \{[\s\S]*?\.td-stats \{ display: none; \}/,
     "short viewports hide duplicate stage stats (852×344 safari 2-col included)");
@@ -934,7 +949,7 @@ test("the canvas's press-and-hold row: DELETE · START HERE · CLOSE act on that
 });
 
 // ── Insight (js/editor/insight.js): TURNS, SPEED, TRACK OF THE DAY, START FROM ──
-const turnsList = (b) => walk(panes(b)[0]).filter((e) => e.tagName === "UL" && e.classList.contains("td-issues"))[1];
+const turnsList = (b) => walk(b.root).find((e) => e.getAttribute && e.getAttribute("aria-label") === "Corners, in driving order");
 
 test("TURNS: one info row per corner; a row selects its span, prefills the tool and REPLACE re-stamps it green", () => {
   const b = bootScreen();
@@ -980,7 +995,7 @@ test("4 DETAILS: RANDOMISE · TRACK OF THE DAY · START FROM… over the edit ro
   // UNDO / REDO / FIT live on the stage toolbar (not buried under DETAILS).
   const toolbar = b.root.querySelector('.td-chips[data-role="toolbar"]');
   assert.ok(toolbar, "stage toolbar");
-  assert.deepEqual([...toolbar.children].map((c) => c.textContent), ["UNDO", "REDO", "FIT VIEW"]);
+  assert.deepEqual([...toolbar.children].map((c) => c.textContent), ["UNDO", "REDO", "FIT VIEW", "OUTLINE", "LIVE SCENERY", "HEIGHT"]);
   // SPEED: a toggle the canvas paints from.
   assert.equal(speed.getAttribute("aria-pressed"), "false"); assert.equal(b.D.state().heat, false);
   speed.click();
@@ -994,6 +1009,31 @@ test("4 DETAILS: RANDOMISE · TRACK OF THE DAY · START FROM… over the edit ro
   assert.equal(b.D.trackOfTheDay(), true);
   assert.deepEqual(plain(b.D.state().design.pts), a, "deterministic for the day");
   assert.equal(b.D.state().design.seed >>> 0, b.D.state().design.seed);
+});
+
+test("HEIGHT maps engine elevation, survives scenery and undo, and excludes SPEED without editing the design", () => {
+  const b = bootScreen(); openGreen(b);
+  const before = plain(b.D.state());
+  const height = chipsIn(b.root, "HEIGHT")[0];
+  b.D.setMode("elevation");
+  assert.equal(height.getAttribute("aria-pressed"), "true");
+  assert.equal(b.D.state().elevationHeat, true);
+  assert.deepEqual(plain(b.D.state().design), before.design);
+  assert.equal(b.D.state().undo, before.undo);
+  b.D.applyElevPreset("hilly"); b.D.preview();
+  b.D.setMode("scenery");
+  assert.equal(b.D.state().elevationHeat, true);
+  b.D.undo(); b.D.preview();
+  assert.deepEqual(plain(b.D.state().design.heights), before.design.heights);
+  assert.equal(b.D.state().elevationHeat, true);
+  b.D.toggleHeat(true);
+  assert.equal(height.getAttribute("aria-pressed"), "false");
+  assert.equal(b.D.state().heat, true);
+  height.click();
+  assert.equal(b.D.state().heat, false);
+  assert.equal(b.D.state().elevationHeat, true);
+  height.click();
+  assert.equal(b.D.state().elevationHeat, false);
 });
 
 test("START FROM…: a card per shipped circuit; a pick traces it into a new design, one UNDO away", () => {
@@ -1536,7 +1576,7 @@ test("consumeTrackHash: an armed return reopens with sel/span (only for the same
   assert.ok(!Object.keys(b.data).some((k) => /return/i.test(k)), "no stored return key");
 });
 
-test("3 LOOK: a chip per theme (twenty-five), dual-colour swatches, the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
+test("3 LOOK: a chip per theme (twenty-seven), dual-colour swatches, the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
   const b = bootScreen();
   openGreen(b);
   b.D.setMode("scenery");
@@ -1546,10 +1586,11 @@ test("3 LOOK: a chip per theme (twenty-five), dual-colour swatches, the theme's 
     "tuscany", "coast", "savanna", "ardennes", "airfield", "canyon", "winter", "twilight",
     "jungle", "lakeside", "moorland", "metropolis"];
   const SLICE_I = ["shipyard", "saltflat", "vineyard", "stadium", "island"];
-  assert.equal(T.ORDER.length, 25);
+  assert.equal(T.ORDER.length, 27);
   // Spread out of the editor VM realm — deepEqual rejects cross-realm arrays.
   assert.deepEqual([...T.ORDER.slice(0, 20)], LEGACY_20, "legacy ORDER ids never reorder");
-  assert.deepEqual([...T.ORDER.slice(20)], SLICE_I, "slice I appends shipyard…island");
+  assert.deepEqual([...T.ORDER.slice(20, 25)], SLICE_I, "slice I appends shipyard…island");
+  assert.deepEqual([...T.ORDER.slice(25)], ["blossom", "volcanic"], "new worlds append without shifting old share codes");
   assert.equal(typeof T.swatchCss, "function", "swatchCss helper for LOOK tiles");
   // Every preset keeps a two-colour swatch pair; ORDER must not reorder.
   for (const id of T.ORDER) {
@@ -1698,6 +1739,135 @@ test("SCENERY props palette: place at selected point, remove last, caps, UNDO, s
   assert.equal(typeof listed.scenery, "function", "saved def still carries scenery");
 });
 
+test("scenery discovery filters without changing the circuit; atmosphere presets undo atomically", () => {
+  const b = bootScreen(); openGreen(b); b.D.setMode("scenery");
+  const by = (key, value) => walk(b.root).find((e) => e.dataset && e.dataset[key] === value);
+  const visible = () => walk(b.root).filter((e) => e.dataset && e.dataset.theme && !e.hidden).map((e) => e.dataset.theme);
+  const search = b.root.querySelector('[aria-label="Find a scenery theme"]');
+  const before = plain(b.D.state().design), undo = b.D.state().undo;
+  by("category", "night").click();
+  assert.deepEqual(visible(), ["desertnight", "marina", "twilight", "stadium"]);
+  search.value = "floodlit sand"; b.dom.dispatch(search, { type: "input" });
+  assert.deepEqual(visible(), ["desertnight"], "search includes descriptions and intersects the category");
+  search.value = "no matching world"; b.dom.dispatch(search, { type: "input" });
+  assert.deepEqual(visible(), []);
+  assert.match(by("role", "theme-results").textContent, /No themes found/);
+  b.root.querySelector('[aria-label="Clear theme search and filters"]').click();
+  assert.equal(visible().length, 27);
+  assert.deepEqual(plain(b.D.state().design), before, "browsing never edits the circuit");
+  assert.equal(b.D.state().undo, undo);
+  by("preset", "golden").click();
+  assert.deepEqual(plain(b.D.state().design.look), { time: "dusk", trees: "many", crowd: "few" });
+  assert.equal(b.D.state().undo, undo + 1);
+  assert.equal(by("preset", "golden").getAttribute("aria-pressed"), "true");
+  by("preset", "golden").click();
+  assert.equal(b.D.state().undo, undo + 1, "reapplying the same preset is a no-op");
+  b.D.undo(); assert.deepEqual(plain(b.D.state().design), before);
+  by("preset", "race").click();
+  assert.equal(b.D.state().design.look.time, "night");
+  assert.equal(b.D.state().design.look.crowd, "packed");
+  by("preset", "default").click();
+  assert.equal(b.D.state().design.look, undefined, "default stays compatible with old designs");
+});
+
+test("prop inspector places on either side, clamps gaps, removes exactly one object and round-trips", async () => {
+  const b = bootScreen(); openGreen(b); b.D.setMode("scenery");
+  const by = (key, value) => walk(b.root).find((e) => e.dataset && e.dataset[key] === value);
+  by("side", "-1").click();
+  b.root.querySelector('[aria-label="ROADSIDE GAP m up"]').click();
+  assert.equal(b.D.placeProp(), true);
+  assert.equal(b.D.state().design.props[0].side, -1);
+  assert.equal(b.D.state().design.props[0].gap, 20);
+  b.D.setPropKind("billboard"); by("side", "1").click(); b.D.placeProp();
+  assert.equal(b.D.state().design.props[1].side, 1);
+  assert.equal(b.D.state().design.props[1].gap, 9, "each kind keeps its own spacing");
+  for (let i = 0; i < 8; i++) b.root.querySelector('[aria-label="ROADSIDE GAP m down"]').click();
+  b.D.placeProp(); assert.equal(b.D.state().design.props[2].gap, 6, "matches the renderer clearance floor");
+  const original = plain(b.D.state().design.props);
+  b.root.querySelector('[aria-label="Remove placed stand 1"]').click();
+  assert.deepEqual(plain(b.D.state().design.props), original.slice(1));
+  assert.equal(b.D.removeProp("stand"), false, "missing kind never removes a different prop");
+  b.D.undo(); assert.deepEqual(plain(b.D.state().design.props), original);
+  const decoded = await b.CD.decode(await b.D.shareCode());
+  assert.equal(decoded.ok, true);
+  assert.deepEqual(plain(decoded.design.props), original);
+  const saved = b.D.save(); assert.equal(saved.ok, true);
+  assert.deepEqual(plain(b.C.get(saved.id).props), original);
+  b.D.setPropKind("gantry");
+  assert.equal(by("role", "prop-side").hidden, true);
+  assert.equal(by("role", "prop-gap").hidden, true, "gantries span the road");
+  b.D.placeProp(); assert.equal(b.D.state().design.props.at(-1).gap, 0);
+});
+
+test("scenery sections are navigable without edits; paired section placement and object edits undo atomically", () => {
+  const b = bootScreen(); openGreen(b); b.D.setMode("scenery");
+  const by = (key, value) => walk(b.root).find((e) => e.dataset && e.dataset[key] === value);
+  const undo = b.D.state().undo;
+  const themes = by("scenerySection", "themes"), atmosphere = by("scenerySection", "atmosphere"), objects = by("scenerySection", "objects");
+  assert.equal(themes.getAttribute("aria-selected"), "true");
+  assert.equal(by("role", "prop-inspector").hidden, true);
+  b.dom.dispatch(themes, { type: "keydown", key: "ArrowRight", preventDefault() {} });
+  assert.equal(atmosphere.getAttribute("aria-selected"), "true");
+  assert.equal(b.dom.document.activeElement, atmosphere);
+  objects.click();
+  assert.equal(by("role", "prop-inspector").hidden, false);
+  assert.equal(by("role", "atmosphere").hidden, true);
+  assert.equal(b.D.state().undo, undo, "tab navigation never changes the design");
+  by("preset", "festival").click();
+  assert.deepEqual(plain(b.D.state().design.look), { time: "dusk", trees: "many", crowd: "packed" });
+  b.D.undo();
+  b.D.setPropKind("hedge"); b.D.selectRange(b.D.state().design.pts.length - 8, 8);
+  by("placementMode", "range").click(); by("side", "0").click();
+  assert.equal(b.D.placeProp(), true);
+  const placed = plain(b.D.state().design.props);
+  assert.equal(placed.length, 6); assert.equal(b.D.state().undo, undo + 1);
+  assert.deepEqual(placed.map((p) => p.side), [-1, 1, -1, 1, -1, 1]);
+  assert.equal(b.D.placeProp(), false, "a whole over-cap row is refused");
+  assert.equal(b.D.state().undo, undo + 1);
+  b.root.querySelector('[aria-label="Edit placed hedge 1"]').click();
+  assert.equal(by("role", "prop-editor").hidden, false);
+  const lap = b.root.querySelector('[aria-label="Placed object lap percentage"]'); lap.value = "35";
+  const gap = b.root.querySelector('[aria-label="Placed object roadside gap in metres"]'); gap.value = "22";
+  const apply = walk(by("role", "prop-editor")).find((e) => e.tagName === "BUTTON" && e.textContent === "APPLY"); apply.click();
+  assert.ok(Math.abs(b.D.state().design.props[0].s - 0.35) < 1e-4);
+  assert.equal(b.D.state().design.props[0].gap, 22);
+  assert.deepEqual(plain(b.D.state().design.props.slice(1)), placed.slice(1));
+  b.D.undo(); assert.deepEqual(plain(b.D.state().design.props), placed);
+  b.D.undo(); assert.equal(b.D.state().design.props, undefined);
+  by("placementMode", "point").click(); by("side", "1").click(); b.D.setPropKind("palms");
+  b.D.placeProp(); b.D.selectRange(12); assert.equal(b.D.copyPropAt(0), true);
+  assert.equal(b.D.state().design.props.length, 2);
+  assert.notEqual(b.D.state().design.props[0].s, b.D.state().design.props[1].s);
+  b.D.undo(); assert.equal(b.D.state().design.props.length, 1);
+  b.D.close();
+});
+
+test("object categories, numeric gap and section swap are preferences; new objects undo and save", () => {
+  const b = bootScreen(); openGreen(b); b.D.setMode("scenery");
+  const by = (key, value) => walk(b.root).find((e) => e.dataset && e.dataset[key] === value);
+  const undo = b.D.state().undo;
+  by("objectCategory", "nature").click();
+  assert.equal(by("prop", "pines").hidden, false); assert.equal(by("prop", "marshal").hidden, true);
+  by("prop", "pines").click();
+  const gap = b.root.querySelector('[aria-label="Roadside gap in metres"]');
+  gap.value = "33"; b.dom.dispatch(gap, { type: "change" });
+  b.D.selectRange(4, 16); by("placementMode", "range").click();
+  b.root.querySelector('[aria-label="Swap scenery section start and end"]').click();
+  assert.equal(b.D.state().sel, 16); assert.equal(b.D.state().span, 4);
+  assert.equal(b.D.state().undo, undo, "browsing and placement preferences do not create edits");
+  b.D.placeProp(); assert.equal(b.D.state().design.props.length, 3);
+  assert.ok(b.D.state().design.props.every((p) => p.kind === "pines" && p.gap === 33));
+  const saved = b.D.save(); assert.equal(saved.ok, true); assert.equal(b.C.get(saved.id).props.length, 3);
+  b.D.undo(); assert.equal(b.D.state().design.props, undefined);
+  gap.value = "1"; b.dom.dispatch(gap, { type: "change" }); assert.equal(gap.value, "20");
+  b.root.querySelector('[aria-label="Reset roadside gap for selected object"]').click(); assert.equal(gap.value, "28");
+  by("objectCategory", "venue").click();
+  assert.equal(by("prop", "pines").hidden, true); assert.equal(by("prop", "marshal").hidden, false);
+  by("prop", "marshal").click(); by("placementMode", "point").click(); b.D.placeProp();
+  assert.equal(b.D.state().design.props[0].kind, "marshal");
+  b.D.close();
+});
+
 test("SCENERY props: REVERSE / START HERE remap s; RANDOMISE clears props", () => {
   const b = bootScreen();
   openGreen(b);
@@ -1738,6 +1908,41 @@ test("SCENERY props: REVERSE / START HERE remap s; RANDOMISE clears props", () =
   assert.equal(b.D.state().design.props, undefined, "RANDOMISE clears props");
 });
 
+test("map ranges have immediate LOWER / RAISE controls in EDIT; offsets preserve hills, limits, selection and undo", () => {
+  const b = bootHooked(); openGreen(b);
+  const n = b.D.state().design.pts.length;
+  const heights = Array.from({ length: n }, (_, i) => i % 4);
+  b.D.setHeights(heights, 0); b.D.setMode("edit"); b.D.setSelectionMode("range");
+  const box = walk(b.root).find(e => e.dataset.role === "selection-height");
+  const raise = box.querySelector('[aria-label="Raise selected points"]');
+  const lower = box.querySelector('[aria-label="Lower selected points"]');
+  const amount = box.querySelector('input');
+  b.root.querySelector('.td-rail').scrollTop = 900;
+  b.hooks.onSelect(n - 2, 1);
+  assert.equal(b.root.querySelector('.td-rail').scrollTop, 0, "map selection reveals height controls");
+  assert.equal(box.hidden, false);
+  assert.match(box.children[0].textContent, /HEIGHT CHANGE \(m\) · 4 POINTS/);
+  amount.value = "2.5"; b.dom.dispatch(amount, { type: "change" });
+  const before = plain(b.D.state()); raise.click();
+  let after = plain(b.D.state());
+  assert.equal(after.mode, "edit"); assert.equal(after.selectionMode, "range");
+  assert.deepEqual([after.sel, after.span], [n - 2, 1]);
+  assert.equal(after.undo, before.undo + 1);
+  for (let i = 0; i < n; i++) assert.equal(after.design.heights[i], heights[i] + (i >= n - 2 || i <= 1 ? 2.5 : 0));
+  assert.equal(after.elevationHeat, true);
+  b.D.undo(); assert.deepEqual(plain(b.D.state().design.heights), heights);
+  b.D.selectRange(n - 2, 1); lower.click();
+  for (let i = 0; i < n; i++) assert.equal(b.D.state().design.heights[i], heights[i] - (i >= n - 2 || i <= 1 ? 2.5 : 0));
+  const limit = b.ctx.CustomTracks.LIMITS.rise;
+  const high = heights.slice(); high[0] = limit - 1; high[1] = limit - 4;
+  b.D.setHeights(high, 0); b.D.selectRange(0, 1);
+  amount.value = "5"; b.dom.dispatch(amount, { type: "change" }); raise.click();
+  after = plain(b.D.state());
+  assert.equal(after.design.heights[0], limit); assert.equal(after.design.heights[1], limit - 3, "whole group stops together");
+  raise.click(); assert.equal(b.D.state().undo, after.undo, "at limit is a no-op");
+  b.D.selectRange(-1, -1); assert.equal(box.hidden, true);
+});
+
 test("SELECT END arms a touch-friendly span; stamp REPLACE uses it; group elev offsets the span", () => {
   const b = bootHooked();
   openGreen(b);
@@ -1776,4 +1981,91 @@ test("SELECT END arms a touch-friendly span; stamp REPLACE uses it; group elev o
   for (let i = 5; i <= 9; i++) assert.equal(hs[i], (i - 5) + 3, "point " + i);
   assert.equal(hs[0], 0, "outside the span stays flat");
   assert.deepEqual([b.D.state().sel, b.D.state().span], [5, 9], "span selection survives group elev");
+});
+
+test("selection controls synchronize both views; elevation edits keep the range and undo once", () => {
+  const b = bootScreen(); openGreen(b);
+  const before = b.D.state(), n = before.design.pts.length;
+  b.D.setMode("elevation");
+  b.D.setSelectionMode("range");
+  b.D.selectRange(2, 5);
+  const strip = b.root.querySelector('canvas[data-role="profile"]');
+  assert.match(strip.getAttribute("aria-label"), /Span 3–6 \(4 points\)/);
+  assert.equal(b.D.state().undo, before.undo, "selection stays outside history");
+  const height = walk(b.root).find((e) => e.getAttribute("aria-label") === "Selected point height in metres");
+  b.D.setSelectionMode("point");
+  assert.equal(b.D.state().span, 5, "switching to height dragging retains the group");
+  height.value = "3.25";
+  b.dom.dispatch(height, { type: "keydown", key: "Enter", preventDefault() {} });
+  const raised = b.D.state();
+  assert.equal(raised.undo, before.undo + 1);
+  assert.deepEqual([raised.sel, raised.span], [2, 5]);
+  for (let i = 0; i < n; i++) assert.equal(raised.design.heights[i], i >= 2 && i <= 5 ? 3.25 : 0);
+  b.D.undo();
+  assert.deepEqual(b.D.state().design.heights, before.design.heights);
+  assert.doesNotMatch(strip.getAttribute("aria-label"), /Span 3–6/, "undo clears selection on both views");
+  b.D.selectRange(n - 2, 1);
+  b.D.setNodeHeight(n - 2, 2);
+  const wrap = b.D.state().design.heights;
+  for (let i = 0; i < n; i++) assert.equal(wrap[i], i >= n - 2 || i <= 1 ? 2 : 0, "wrapped range follows driving order");
+  b.D.selectRange(-1);
+  assert.equal(b.D.adjustElevation("zero"), false, "empty selection cannot edit the whole track");
+  b.D.close();
+});
+
+test("level, smooth and zero affect only selected heights and retain smooth endpoints", () => {
+  const b = bootScreen(); openGreen(b);
+  const n = b.D.state().design.pts.length, hs = new Array(n).fill(0);
+  hs[2] = 2; hs[3] = 10; hs[4] = 2; hs[5] = 4;
+  b.D.setHeights(hs); b.D.selectRange(2, 5);
+  let undo = b.D.state().undo;
+  assert.equal(b.D.adjustElevation("smooth"), true);
+  let out = b.D.state();
+  assert.equal(out.undo, undo + 1);
+  assert.deepEqual(plain(out.design.heights.slice(2, 6)), [2, 6, 4.5, 4]);
+  assert.equal(out.design.heights[1], 0); assert.equal(out.design.heights[6], 0);
+  assert.equal(b.D.adjustElevation("level"), true);
+  assert.deepEqual(plain(b.D.state().design.heights.slice(2, 6)), [2, 2, 2, 2]);
+  assert.equal(b.D.adjustElevation("zero"), true);
+  assert.ok(b.D.state().design.heights.every((h) => h === 0));
+  assert.equal(b.D.adjustElevation("zero"), false, "no-op does not add undo");
+  b.D.close();
+});
+
+test("an autosaved draft of an oversize loop is rejected on open instead of freezing the tab (13-F1)", () => {
+  const pts = [];
+  for (let i = 0; i < 40; i++) pts.push(i % 2 ? [-9000 + (i % 7) * 100, 9000 - i * 10] : [9000 - (i % 5) * 100, -9000 + i * 10]);
+  const b = bootScreen({ customTrackDraft: { name: "HOSTILE", seed: 7, theme: "parkland", baseHW: 7, pts } });
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open();
+  const st = b.D.state();
+  assert.ok(st.design && st.design.name !== "HOSTILE", "the oversize draft was not restored");
+  const per = st.design.pts.reduce((s, p, i) => { const q = st.design.pts[(i + 1) % st.design.pts.length]; return s + Math.hypot(q[0] - p[0], q[1] - p[1]); }, 0);
+  assert.ok(per <= b.C.LIMITS.loopMaxLoose, "the opened design is a sane loop: " + Math.round(per) + " m");
+}
+);
+
+test("DELETE POINT 0 and a stamp over the start line keep every surviving point's own height (13-F2)", () => {
+  const b = bootScreen();
+  const green = openGreen(b);
+  assert.equal(b.D.applyElevPreset("hilly"), true);
+  const d0 = plain(b.D.state().design);
+  assert.ok(d0.heights.filter(Boolean).length > 10, "the hilly preset left real heights to misalign");
+  const key = (p) => p[0] + "," + p[1];
+  const bad = (before, after) => {
+    const m = new Map(before.pts.map((p, i) => [key(p), before.heights[i]]));
+    return after.pts.filter((p, i) => m.has(key(p)) && m.get(key(p)) !== after.heights[i]).length;
+  };
+  assert.equal(b.D.deletePoint(0), true);
+  const d1 = plain(b.D.state().design);
+  assert.notDeepEqual(d1.pts[0], d0.pts[0], "the start point itself was deleted");
+  assert.equal(bad(d0, d1), 0, "DELETE POINT 0: no survivor carries its neighbour's height");
+  b.D.undo();
+  const N = b.D.state().design.pts.length, before = plain(b.D.state().design);
+  b.D.setTool("corner");
+  assert.equal(b.D.applyStamp(N - 2, 2, "corner"), true, "a stamp whose span wraps the start line");
+  const after = plain(b.D.state().design);
+  assert.ok(after.pts.filter((p) => before.pts.some((q) => key(q) === key(p))).length > 20, "plenty of shared points to check");
+  assert.equal(bad(before, after), 0, "wrapping stamp: heights stay keyed to their points");
+  assert.equal(green.pts.length > 0, true);
 });
