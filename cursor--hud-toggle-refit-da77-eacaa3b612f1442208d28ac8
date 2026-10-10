@@ -1,0 +1,1 @@
+1791615770	Cursor Agent	HUD toggle-refit: verify body[data-hud-hide] + invalidateFit leave no stale clearance; OWNED js/ui/hud-elements.js (+ hud.js fit key only if bug). FORBIDDEN js/car/** AGENTS.md. Do not enable auto-merge or merge.  [cursor/hud-toggle-refit-da77; session eacaa3b612f1442208d28ac8]
