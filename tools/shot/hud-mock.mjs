@@ -15,6 +15,7 @@
 //   --preset clean|big|corners|… (MOVE & SIZE)  --matrix <file.json>  --no-boxes  --no-mock
 //   --out artifacts/hud-mock/<stamp>  --gl swiftshader|llvmpipe (default $APEX_GL or llvmpipe)
 //   --track monza  --frac 0.18  --list (cells, no browser)  --json (summary as the last stdout block)  --help
+//   --probe <js expression> (evaluated in the page per cell after the fit; its JSON goes in report.json)
 //   --css <file> (a stylesheet painted over each cell AFTER its fit — a prototype repaints, it does not steer the
 //   fit; removed before the next cell. Wrap rules in @layer if the game's own layered !important must lose)
 //
@@ -51,7 +52,7 @@ import { applyCell, chromiumArgs } from "./hud-survey.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const KNOWN = ["--devices", "--cams", "--hud-scale", "--ui-scale", "--btn-scale", "--sets", "--preset", "--matrix", "--no-boxes",
-  "--no-mock", "--out", "--gl", "--track", "--frac", "--list", "--json", "--css", "--help"];
+  "--no-mock", "--out", "--gl", "--track", "--frac", "--list", "--json", "--css", "--probe", "--help"];
 const SETS = { "all-on": [], shipped: ["rel", "strat", "inputs"] };
 
 export function planCells(F) {
@@ -183,6 +184,7 @@ async function main() {
   if (!["artifacts", "scratch"].some((d) => !path.relative(path.join(ROOT, d), out).startsWith(".."))) throw new CliArgError("--out must stay under artifacts/ or scratch/");
   if (F.has("--list")) { for (const c of cells) console.log(c.id); console.log(`[hud-mock] ${cells.length} cells`); return; }
   const plan = { cells, track: F.flag("--track", "monza"), frac: Number(F.flag("--frac", "0.18")), boxes: !F.has("--no-boxes"), mock: !F.has("--no-mock"),
+    probe: F.flag("--probe", ""),
     css: F.has("--css") ? fs.readFileSync(path.resolve(ROOT, F.flag("--css", "")), "utf8") : "",
     gl: F.flag("--gl", process.env.APEX_GL === "swiftshader" ? "swiftshader" : "llvmpipe") };
   fs.mkdirSync(out, { recursive: true });
@@ -255,7 +257,8 @@ async function main() {
             announceBox: ann ? { display: cs.display, visibility: cs.visibility, opacity: cs.opacity, x: Math.round(ar.x), y: Math.round(ar.y), w: Math.round(ar.width), h: Math.round(ar.height) } : null,
             dropped: [...document.querySelectorAll("[data-col-drop]")].map((e) => e.id) };
         });
-        const row = { id: cell.id, cell, shot: path.relative(ROOT, file), overlaps: pairs, unsafe: ov.unsafe, minFont, smallTaps,
+        const probe = plan.probe ? await page.evaluate((src) => { try { return JSON.parse(JSON.stringify((0, eval)(src))); } catch (e) { return "probe error: " + e.message; } }, plan.probe) : undefined;
+        const row = { id: cell.id, cell, shot: path.relative(ROOT, file), overlaps: pairs, unsafe: ov.unsafe, minFont, smallTaps, probe,
           visible: recs.map((r) => r.key), ...slots,
           applyErrors: applied.errors, pageErrors: errs.splice(0), ms: Date.now() - t1 };
         rows.push(row);
