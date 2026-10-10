@@ -1990,9 +1990,14 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "…and step below the flag chip while a caution shows, never on top of it");
   assert.equal(decl(css("css/hud.css"), ":root[data-gap-drop] #announce", "--flag-slot-top"), "calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px)",
     "gap-drop raises --flag-slot-top so announce steps from the dropped flag edge");
+  // ONE formula for the phone INPUTS top (HUD PR review 2026-10-10): --hud-sec-h is published in the chrome's
+  // zoom (--hud-z-top) and converted into this band's (--hud-z); the step below the #hud-limits chip is
+  // conditional (--inputs-below-limits, set only while the chip shows) rather than a permanent +1.75em+8px.
   assert.equal(decl(css("css/hud.css"), "body:not(.desktop) #hud-inputs:not([data-hl-user])", "top"),
-    "calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + 1.75em + 8px)",
-    "phone INPUTS park below the #hud-limits slot in the sector column");
+    "calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z) + 12px + var(--inputs-below-limits, 0px))",
+    "phone INPUTS park under the sector plate, and below the #hud-limits chip only while it shows");
+  assert.equal(decl(css("css/hud.css"), 'body:not([data-hud-hide~="limits"]):has(#hud-limits:not([hidden])) #hud-inputs', "--inputs-below-limits"), "calc(2.6em + 3px)",
+    "the limits step is the chip's own rule");
   assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #hud-flag', "top"), "max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px))");
   assert.equal(decl(css("css/career.css"), '#quali .sheet[data-density="compact"] #q-foot', "display"), "grid");
   assert.equal(decl(css("css/career.css"), '#quali.q-done .sheet[data-density="compact"] #q-foot #q-go', "grid-column"), "1 / -1");

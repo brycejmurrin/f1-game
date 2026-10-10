@@ -2755,7 +2755,12 @@ const TLX = (function () {
       // Window resize (game.js) and settings can fire many times per drag frame.
       // Coalesce those to one target realloc per animation frame; begin() and
       // setRenderScale force an immediate apply so the draw sees the new size.
-      let _resizeRaf = 0, _resizeNow = false;
+      // _sizeOwned: a resizeNow() (begin) ran since the last resize(). game.js
+      // calls resize() every rendered frame and begin() cancels the rAF it
+      // scheduled the same frame, so while begin() is driving, resize() defers
+      // to it instead of paying a requestAnimationFrame + cancel per frame. One
+      // call per begin(): with no begin() (menus) the next call schedules again.
+      let _resizeRaf = 0, _resizeNow = false, _sizeOwned = false;
       function applyResize() {
         // Immersive-vr owns the drawing buffer via XRWebGLLayer — leave size alone.
         if (_xrActive) return;
@@ -2831,6 +2836,7 @@ const TLX = (function () {
         // latest CSS size and settings once the warm task releases ownership.
         if (_warmPending) { cssSizeCache.markDirty(); return; }
         if (_resizeNow) { applyResize(); return; }
+        if (_sizeOwned) { _sizeOwned = false; return; }
         if (_resizeRaf) return;
         const schedule = typeof requestAnimationFrame === "function"
           ? requestAnimationFrame
@@ -3681,7 +3687,7 @@ const TLX = (function () {
           if (frame.eye) mirCam.position.set(frame.eye[0], frame.eye[1], frame.eye[2]);
           const z = frame.skyZenith || frame.fogColor;
           if (z && z.length >= 3) scene.background.setRGB(z[0], z[1], z[2]);
-          lit.updateFrame(frame);
+          lit.updateFrame(frame, true);   // true: the forward lamp-shadow slot is off in the mirror (tsl-lit)
           if (fx) fx.updateFrame(frame);
           _mirVP.set(frame.viewProj); _mirEye = frame.eye || null; _mirCull = frame.cullDist || 0; _mirFog = frame.cullFog || null;
           scene.backgroundNode = null;
@@ -4000,6 +4006,7 @@ const TLX = (function () {
         begin(frame) {
           _matFrame++;   // new frame: last frame's materials are evictable again
           resizeNow();
+          _sizeOwned = true;   // the next resize() defers to the next begin() (no rAF + cancel per frame)
           // A dead post chain used to come back only on a resize/DPR change. Retry on a 2 s timer (3-strike cap kept):
           // one transient throw must not cost ACES/bloom/FXAA/mirror for the rest of the race. Not warmed: one compile hitch.
           if (_postRebuild && !post && !_warmPending
