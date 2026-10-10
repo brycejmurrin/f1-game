@@ -47,7 +47,7 @@ async function hostUp(startRace) {
   peerSays("hello", { team: "bravo", driver: 1 }); await sleep(80);
   peerSays("ready", { ready: true }); await sleep(80);
   lobby.setReady(true); await sleep(80);
-  return { G, lobby, peerSays };
+  return { G, lobby, peerSays, far };
 }
 
 for (const [name, startRace] of [
@@ -207,5 +207,19 @@ test("the host drops a guest's QUALI/QLIVE flood past a small per-second cap", a
     for (let i = 0; i < 50; i++) peerSays("quali", { driverId: "bravo:1", t: 80 });
     await sleep(120);
     assert.ok(driven < 50, "a QUALI flood is capped too (got " + driven + ")");
+  } finally { lobby.cancel(); }
+});
+
+test("the host tells guests it went on after friend quali (qgo), so a guest that backed out can follow", async () => {
+  const { G, lobby, peerSays, far } = await hostUp(async () => ({ ok: true }));
+  G.netPlay = { start: () => ({ ok: true }), hostStart() {} };
+  const got = [];
+  far.onMessage((ch, data) => { try { got.push(JSON.parse(typeof data === "string" ? data : new TextDecoder().decode(data)).t); } catch (e) { /* binary */ } });
+  try {
+    assert.equal(lobby.startFromRoom(), true);
+    peerSays("qabort", null); await sleep(30);
+    await G._done();
+    for (let i = 0; i < 5; i++) { far.pump(performance.now() + 100); await sleep(30); }
+    assert.ok(got.includes("qgo"), "the aborted guest is told the host went on (got " + got.join(",") + ")");
   } finally { lobby.cancel(); }
 });
