@@ -315,8 +315,14 @@ test("a grid over 22 cars (MY TEAM / LEGENDS) records instead of resetting every
 });
 
 async function bootSoloRaceForScrubAudio() {
-  let fa = null;
-  const g = await createGame({ carMeshes: false, onSandbox: (sb) => { fa = installFakeAudio(sb); } });
+  let fa = null, rb = null;
+  // The game's ring is a closure handle, never a G member (1a-F3): catch the instance ReplayBuf.create hands game.js.
+  const trapCreate = (sb) => {
+    let mod;
+    Object.defineProperty(sb, "ReplayBuf", { configurable: true, enumerable: true, get: () => mod,
+      set: (v) => { mod = Object.assign({}, v, { create: (...a) => (rb = v.create(...a)) }); } });
+  };
+  const g = await createGame({ carMeshes: false, onSandbox: (sb) => { fa = installFakeAudio(sb); trapCreate(sb); } });
   const sb = g.sandbox;
   sb.dispatchEvent({ type: "pointerdown", pointerType: "mouse" });
   await vmSettle(() => !sb.GameAudio._stub && !sb.AudioPanel._stub, 4000);
@@ -328,17 +334,23 @@ async function bootSoloRaceForScrubAudio() {
   g.apex.setInput({ throttle: true, steer: 0 });
   const t0 = sb.performance.now();
   for (let i = 1; i <= 240; i++) g.pumpFrame(t0 + i * 1000 / 60);
-  return { g, sb, G: g.G, t0, frameBase: 240 };
+  assert.ok(rb, "ReplayBuf.create was trapped");
+  return { g, sb, G: g.G, rb, t0, frameBase: 240 };
 }
 
+test("the replay ring is not a G expando: game.js never assigns G.replayBuf (1a-F3)", () => {
+  // The façade is DECLARED, not grown by assignment (an Object.seal(G) would throw at boot); tests reach the ring above.
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.ok(!/\bG\.replayBuf\s*=(?!=)/.test(game), "G.replayBuf = … is an undeclared façade member");
+});
+
 test("solo pause replay scrub feeds engine and rivals; rpm tracks speed; radio silent", async () => {
-  const { g, sb, G, t0, frameBase } = await bootSoloRaceForScrubAudio();
+  const { g, sb, G, rb, t0, frameBase } = await bootSoloRaceForScrubAudio();
   try {
     const doc = g.sandbox.document;
     G.els.pausebtn.onclick();
     assert.equal(G.paused, true);
     assert.equal(sb.GameAudio.debug().engineOn, false, "plain pause silences the engine");
-    const rb = G.replayBuf;
     assert.ok(rb && rb.window().frames >= 90, "need ~3 s of ring before scrub");
     let radioCalls = 0;
     const origRadio = sb.GameAudio.radioVoice.bind(sb.GameAudio);
@@ -376,17 +388,17 @@ function rivalPanWithGain(sb) {
 }
 
 test("dbgCam during replay scrub pans rivals from the free camera, not chase", async () => {
-  const { g, sb, G, t0, frameBase } = await bootSoloRaceForScrubAudio();
+  const { g, sb, G, rb, t0, frameBase } = await bootSoloRaceForScrubAudio();
   try {
     G.els.pausebtn.onclick();
-    assert.equal(G.replayBuf.beginScrub(false), true);
+    assert.equal(rb.beginScrub(false), true);
     const rival = G.cars.find((c) => c !== G.player);
     assert.ok(rival, "need a rival car");
     g.apex.headless(false);
     const saveFrustum = G.gfx.makeFrustumPlanes;
     G.gfx.makeFrustumPlanes = null;
-    const origTickScrub = G.replayBuf.tickScrub.bind(G.replayBuf);
-    G.replayBuf.tickScrub = (dt) => {
+    const origTickScrub = rb.tickScrub.bind(rb);
+    rb.tickScrub = (dt) => {
       origTickScrub(dt);
       G.player.s = 500; G.player.x = 0;
       rival.s = 502; rival.x = 0;
@@ -408,14 +420,14 @@ test("dbgCam during replay scrub pans rivals from the free camera, not chase", a
 });
 
 test("pause + free camera without scrub stays silent (#1262)", async () => {
-  const { g, sb, G, t0, frameBase } = await bootSoloRaceForScrubAudio();
+  const { g, sb, G, rb, t0, frameBase } = await bootSoloRaceForScrubAudio();
   try {
     G.els.pausebtn.onclick();
     assert.equal(G.paused, true);
     assert.equal(sb.GameAudio.debug().engineOn, false);
     g.sandbox.document.getElementById("pc-toggle").onclick();
     assert.equal(G.photoMode, true);
-    assert.equal(G.replayBuf.isScrubbing(), false);
+    assert.equal(rb.isScrubbing(), false);
     for (let i = 1; i <= 5; i++) g.pumpFrame(t0 + (frameBase + i) * 1000 / 60);
     assert.equal(sb.GameAudio.debug().engineOn, false, "plain pause + photo cam: no engine");
     assert.ok(sb.GameAudio.rivalState().every((v) => v.gain < 0.001), "no rival voices open");
@@ -423,17 +435,17 @@ test("pause + free camera without scrub stays silent (#1262)", async () => {
 });
 
 test("clearing dbgCam and resuming chase restores player-track rival pan", async () => {
-  const { g, sb, G, t0, frameBase } = await bootSoloRaceForScrubAudio();
+  const { g, sb, G, rb, t0, frameBase } = await bootSoloRaceForScrubAudio();
   try {
     G.els.pausebtn.onclick();
-    assert.equal(G.replayBuf.beginScrub(false), true);
+    assert.equal(rb.beginScrub(false), true);
     g.apex.headless(false);
     const saveFrustum = G.gfx.makeFrustumPlanes;
     G.gfx.makeFrustumPlanes = null;
     G.dbgCam = { eye: [0, 5, 0], target: [100, 5, 0], fov: 70, far: 2500 };
     g.pumpFrame(t0 + (frameBase + 1) * 1000 / 60);
     assert.equal(sb.GameCams.getListenerBasis().external, true, "dbgCam publishes external basis");
-    G.replayBuf.endScrub();
+    rb.endScrub();
     G.dbgCam = null;
     g.sandbox.document.getElementById("pm-resume").onclick();
     assert.equal(G.paused, false);

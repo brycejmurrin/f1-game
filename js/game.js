@@ -2989,7 +2989,7 @@ function endRace(forcedOrder) {
   Ghost.flush(); if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (replayBuf.isScrubbing()) return; // scrub: no career settle / results
   try { sessionStorage.removeItem("apex26.ctxLostReloads"); } catch (_) { /* a clean race: the context-loss budget counts CONSECUTIVE losses, not the tab's lifetime */ }   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
-  PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
+  PerfGov.cleanRace(); if (paused) { closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode(); closeSettings(); }   // clean finish: disarm + pay a crash strike down; a (net) flag under the pause gets RESUME's tool teardown, before the weather is judged
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
@@ -3574,7 +3574,7 @@ titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
-  resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf); G.replayBuf = replayBuf;   // tests + pause UI (internal handle, not on the typed façade)
+  resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf);
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -3896,7 +3896,7 @@ function introGarage(go) {
   let prepared = false;
   (async () => {
     try {
-      const prepP = introPrepare(live, key, info, n, false);
+      const prepP = introPrepare(live, key, info, n, false); prepP.catch(() => {});   // handled: awaited below, after the drive-out — a rejection meanwhile is not the global error overlay
       await studioDone(live, n);   // garage-out first (or its 3× / openAt safety cap)
       const ready = await prepP;
       if (!ready) return;
@@ -3968,7 +3968,7 @@ function introWarm(go) {
         if (_introSkip !== n) { studioOpen(n, info); await studioDone(live, n); }
       } else {
         // Warm world: garage-out and prepare overlap; never wait on prepare before studioDone.
-        const prepP = introPrepare(live, key, info, n, false);
+        const prepP = introPrepare(live, key, info, n, false); prepP.catch(() => {});   // handled: awaited below, after the drive-out (as introGarage)
         await studioDone(live, n);
         const ready = await prepP;
         if (!ready) return;
@@ -4320,7 +4320,7 @@ function quitToMenu() {
   // it; update() never reaches raceRadio after state=menu. halt() cuts every channel.
   radioVoice.halt();
   GameAudio.radioStingStop();
-  $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
+  $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true; if (garageReturn === "pit" && !$("carsetup").hidden) { leaveGarage(); pitWorkSpec = null; garageReturn = "select"; }   // the pit WORK garage (QUIT over its card, rotate EXIT RACE) closes without closePitWork's engine start
   els.overlay.hidden = false;
   $("race-settings").hidden = true;
   Particles.rainShow(false);
@@ -8600,7 +8600,7 @@ function openQualiBody(fresh, netDone) {
   // Reached from race settings this is already "menu"; reached from the results
   // screen it would still say "results". No race is running while the sheet is
   // up, so both paths say the same thing.
-  setState("menu", "quali-sheet");
+  setState("menu", "quali-sheet"); els.hud.hidden = true; els.lights.hidden = true;   // the finished race's HUD goes too: q-back can walk on to the title
   quali.clear();
   qualiNet.arm(netDone);   // armed from the ARG: a caller's write lands before this line
   loadTrack(trackIdx);

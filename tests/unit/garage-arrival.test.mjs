@@ -144,7 +144,7 @@ test('cold preparation settles before the drive-out; a warm world opens on the g
   assert.match(warm,
     /if \(cold\) \{\s*\/\/ Cold:[^\n]*\n\s*const ready = await introPrepare\(live, key, info, n, true\);[\s\S]*?studioOpen\(n, info\); await studioDone\(live, n\);/,
     'cold motion starts only after compilation settles');
-  assert.match(warm, /const prepP = introPrepare\(live, key, info, n, false\);\s*await studioDone\(live, n\);/,
+  assert.match(warm, /const prepP = introPrepare\(live, key, info, n, false\); prepP\.catch\(\(\) => \{\}\);[^\n]*\n\s*await studioDone\(live, n\);/,
     'warm path: garage-out overlaps prepare, never blocked behind it');
   assert.match(game, /if \(built && _introSkip === _introRun\) _introSkip = 0;   \/\/ skipped in the garage: only the drive-out ends/, 'a skip in the garage ends the drive-out only: the card and the flyby still follow');
   assert.ok(!/_introSkip === _introRun\) \{ _introSkip = 0; go\(\); return; \}/.test(game), 'no garage skip jumps past the flyby to the race');
@@ -155,6 +155,32 @@ test('cold preparation settles before the drive-out; a warm world opens on the g
   assert.ok(!/OUT_REDUCE_SPEED/.test(cam), 'reduce-motion plays the drive-out at the tuned pace, never a sped-up cut');
   assert.match(game, /function studioClose\(n\) \{\n  if \(!_studio \|\| _studio\.n !== n\) return;/, 'only the intro run that opened it closes it');
   assert.match(game, /function afterGarageOut\(n, key, go, prepared, live\)/, 'every intro path awaits garage-out then shows the card through one handoff');
+});
+
+test('a preparation that rejects during the drive-out is the PREPARATION FAILED banner, never an unhandled rejection (1a-F1)', async () => {
+  // index.html's unhandledrejection listener raises the full-screen error overlay; prepP waits unawaited
+  // for the whole drive-out (introGarage, and introWarm's warm branch), so it needs its handler at birth.
+  const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
+  const fnSrc = (name) => { const at = game.indexOf('function ' + name + '(go) {'); return game.slice(at, game.indexOf('\n}\n', at) + 3); };
+  const unhandled = [];
+  const onRej = (r) => unhandled.push(String(r && r.message || r));
+  process.on('unhandledRejection', onRej);
+  try {
+    for (const name of ['introGarage', 'introWarm']) {
+      const said = [];
+      const c = { state: 'menu', trackIdx: 0, _introRun: 0, _introSkip: 0, _studio: null, _warmKey: 'k', _menuFly: null, _menuGate: {},
+        menuKey: () => 'k', entrySettings: () => 's', loadingInfo: () => ({}), gfx: { warm() {}, warming: () => true },
+        studioOpen: (n) => { c._studio = { n }; }, introCover() {}, loadingScreen: { stop() {} },
+        introPrepare: async () => { await null; throw new Error('planner threw'); },
+        studioDone: () => new Promise((r) => setTimeout(r, 30)),   // the drive-out: a macrotask, so the rejection check runs first
+        afterGarageOut() {}, quitToMenu() { said.push('quit'); }, announce: (m) => said.push(m), Log: { warn() {} } };
+      vm.createContext(c); vm.runInContext(fnSrc(name), c);
+      assert.equal(c[name](() => {}), true, name + ' took the drive-out path');
+      await new Promise((r) => setTimeout(r, 80));
+      assert.deepEqual(said, ['quit', 'PREPARATION FAILED — please retry'], name + ': the catch still runs');
+    }
+    assert.deepEqual(unhandled, [], 'no unhandledRejection while the car drives out');
+  } finally { process.off('unhandledRejection', onRej); }
 });
 
 test('the first presented garage frame takes over its preparation cover, then hands off after driving out', async () => {
