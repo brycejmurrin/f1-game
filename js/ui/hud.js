@@ -526,6 +526,12 @@ function obsCollect() {
   add("cam", els.btnCam || doc.getElementById("btn-cam"), "control", "top");
   add("gearbox", doc.getElementById("hud-gearbox"), "readout", "bottom");
   add("speed", doc.getElementById("hud-speed"), "readout", "bottom");
+  // The rest of the bottom cluster (ENERGY, TYRES — which a touch landscape parks on top of the left
+  // dock, in the left column's way — OVERTAKE, AERO, BRAKE BIAS, the plan line).
+  if (_hudBottom && _hudBottom.children) {
+    let i = 0;
+    for (const c of _hudBottom.children) { const id = c.id || "bottom" + i; i++; if (!by[id]) add(id, c, "readout", "bottom"); }
+  }
   for (const [d, side] of [[_dockL, "L"], [_dockR, "R"]]) {
     if (!d || !d.children) continue;
     let i = 0;
@@ -1048,7 +1054,10 @@ function placeLeftColumn(root, scale) {
       if (p.hidden) { out[p.id] = { y: y1 }; continue; }   // its slot is ready; it takes no room
       const w = p.w * k, h = p.h * k;
       let at = null;
-      const main = colRect(x0, y1, w, h);
+      // HudRelative.fitRows may have slid RELATIVE right past a TILT pedal in the map column (an inline
+      // `left` in its own zoom units): the column judges it where it is painted, scaled to this factor.
+      const slid = p.id === "rel" && p.el.style && p.el.style.left ? p.r.left / p.d * k : null;
+      const main = colRect(slid != null ? slid : x0, y1, w, h);
       if (p.id === "rel" || free(main)) at = { y: y1, x: null, r: main };
       for (let i = placed.length - 1; !at && i >= 0; i--) {
         const q = placed[i], r = colRect(q.right + air, q.top, w, h);

@@ -1937,10 +1937,12 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
    not fit its height its readouts scale down together — --rcol-z / --lcol-z multiply each piece's own
    band zoom, absent (1) whenever everything fits — to a floor that keeps --fs-micro text at 10px or more,
    before the lowest-priority piece is dropped. Every offset these pieces carry divides by this --hud-z,
-   and the dock stand-off converts from the chrome's zoom, so a factor moves nothing sideways. */
-#hud-inputs { --hud-z: calc(var(--hud-z-bot, var(--hud-scale)) * var(--rcol-z, 1)); zoom: var(--hud-z); }
-#hud-limits, #hud-damage, body.desktop #hud-rel { --hud-z: calc(var(--hud-z-top, var(--hud-scale)) * var(--rcol-z, 1)); }
-#hud-strat, body:not(.desktop) #hud-rel, :root[data-limits-left] #hud-limits { --hud-z: calc(var(--hud-z-top, var(--hud-scale)) * var(--lcol-z, 1)); }
+   and the dock stand-off converts from the chrome's zoom, so a factor moves nothing sideways. A piece
+   the player placed (data-hl-user) is outside the allocator, so a column factor never resizes it. */
+#hud-inputs { --hud-z: var(--hud-z-bot, var(--hud-scale)); zoom: var(--hud-z); }
+#hud-inputs:not([data-hl-user]) { --hud-z: calc(var(--hud-z-bot, var(--hud-scale)) * var(--rcol-z, 1)); }
+:is(#hud-limits, #hud-damage):not([data-hl-user]), body.desktop #hud-rel:not([data-hl-user]) { --hud-z: calc(var(--hud-z-top, var(--hud-scale)) * var(--rcol-z, 1)); }
+#hud-strat:not([data-hl-user]), body:not(.desktop) #hud-rel:not([data-hl-user]), :root[data-limits-left] #hud-limits:not([data-hl-user]) { --hud-z: calc(var(--hud-z-top, var(--hud-scale)) * var(--lcol-z, 1)); }
 #hud-rel, #hud-strat, #hud-inputs {
   position: absolute;
   background: var(--plate-opaque);

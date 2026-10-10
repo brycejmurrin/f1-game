@@ -974,6 +974,9 @@ function rightColumnHarness() {
   // The right dock low enough that the LIMITS chip stays in this column (no data-limits-left).
   const dockR = h.dom.byId("dock-right");
   dockR._rect = R(650, 360, 150, 40); for (const g of dockR.children) g._rect = R(650, 360, 150, 40);
+  // The bottom cluster (an obstacle too) a little lower, clear of the column at full size.
+  h.gear._rect = R(100, 345, 300, 50);
+  for (const c of h.gear.parentNode.children) if (c !== h.gear) c._rect = R(400, 345, 300, 50);
   const lim = h.dom.byId("hud-limits"), dmg = h.dom.byId("hud-damage"), inp = h.dom.byId("hud-inputs");
   lim._rect = R(690, 215, 80, 24); dmg._rect = R(720, 250, 60, 40); inp._rect = R(660, 300, 120, 36);
   h.refit();
@@ -1106,9 +1109,11 @@ test("a right column that does not fit above the dock SHRINKS (--rcol-z) before 
   dockAt(360);
   assert.equal(v("--rcol-z"), ""); assert.ok(!inp.hasAttribute("data-col-drop"));
   const css = read("css/hud.css");
-  assert.match(css, /#hud-inputs \{ --hud-z: calc\(var\(--hud-z-bot, var\(--hud-scale\)\) \* var\(--rcol-z, 1\)\); zoom: var\(--hud-z\); \}/);
-  assert.match(css, /#hud-limits, #hud-damage, body\.desktop #hud-rel \{ --hud-z: calc\(var\(--hud-z-top, var\(--hud-scale\)\) \* var\(--rcol-z, 1\)\); \}/);
-  assert.match(css, /#hud-strat, body:not\(\.desktop\) #hud-rel, :root\[data-limits-left\] #hud-limits \{ --hud-z: calc\(var\(--hud-z-top, var\(--hud-scale\)\) \* var\(--lcol-z, 1\)\); \}/);
+  // The factor reads only on pieces the allocator owns: a placed (data-hl-user) piece keeps its size.
+  assert.match(css, /#hud-inputs \{ --hud-z: var\(--hud-z-bot, var\(--hud-scale\)\); zoom: var\(--hud-z\); \}/);
+  assert.match(css, /#hud-inputs:not\(\[data-hl-user\]\) \{ --hud-z: calc\(var\(--hud-z-bot, var\(--hud-scale\)\) \* var\(--rcol-z, 1\)\); \}/);
+  assert.match(css, /:is\(#hud-limits, #hud-damage\):not\(\[data-hl-user\]\), body\.desktop #hud-rel:not\(\[data-hl-user\]\) \{ --hud-z: calc\(var\(--hud-z-top, var\(--hud-scale\)\) \* var\(--rcol-z, 1\)\); \}/);
+  assert.match(css, /#hud-strat:not\(\[data-hl-user\]\), body:not\(\.desktop\) #hud-rel:not\(\[data-hl-user\]\), :root\[data-limits-left\] #hud-limits:not\(\[data-hl-user\]\) \{ --hud-z: calc\(var\(--hud-z-top, var\(--hud-scale\)\) \* var\(--lcol-z, 1\)\); \}/);
   assert.equal((css.match(/var\(--dock-r-w, 0px\) \* var\(--hud-z-top, var\(--hud-scale\)\) \/ var\(--hud-z\)/g) || []).length, 3,
     "LIMITS, DAMAGE and INPUTS convert the dock stand-off into their own (column-scaled) zoom");
 });
