@@ -1698,6 +1698,60 @@ test("apex_job_status {} prunes manifests older than 7 days and re-judges a pre-
   } finally { fs.rmSync(fake, { recursive: true, force: true }); }
 });
 
+// 2026-10-10: serve-http (127.0.0.1:3713 /mcp + /healthz) had no test. Real process, a FREE port (APEX_MCP_HTTP_PORT), mock mode.
+test("serve-http answers /healthz and a JSON-RPC tools/list on loopback, then stops", async () => {
+  const net = await import("node:net");
+  const http = await import("node:http");
+  const port = await new Promise((res, rej) => { const s = net.createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); }); s.on("error", rej); });
+  const { spawn } = await import("node:child_process");
+  const child = spawn(process.execPath, [MCP, "serve-http"], { cwd: ROOT, env: { ...process.env, APEX_MCP_MOCK: "1", APEX_MCP_HTTP_PORT: String(port) }, stdio: ["ignore", "ignore", "pipe"] });
+  const req = (method, urlPath, body) => new Promise((res, rej) => {
+    const r = http.request({ host: "127.0.0.1", port, path: urlPath, method, headers: body ? { "Content-Type": "application/json" } : {} }, (m) => {
+      let d = ""; m.on("data", (c) => (d += c)); m.on("end", () => res({ status: m.statusCode, body: d ? JSON.parse(d) : null }));
+    });
+    r.on("error", rej); if (body) r.write(JSON.stringify(body)); r.end();
+  });
+  try {
+    let health = null;
+    for (let i = 0; i < 60 && !health; i++) {
+      try { health = await req("GET", "/healthz"); } catch { await new Promise((r) => setTimeout(r, 250)); }
+    }
+    assert.ok(health, "serve-http never answered /healthz");
+    assert.equal(health.status, 200);
+    assert.equal(health.body.ok, true);
+    assert.equal(health.body.bind, "127.0.0.1", "loopback only, never 0.0.0.0");
+    assert.ok(health.body.tools >= 28, `tools ${health.body.tools}`);
+    const list = await req("POST", "/mcp", { jsonrpc: "2.0", id: 1, method: "tools/list" });
+    assert.equal(list.status, 200);
+    assert.ok(list.body.result.tools.some((t) => t.name === "apex_status"));
+    const bad = await req("POST", "/mcp", { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_shot", arguments: { track: "monza", fracc: 1 } } });
+    assert.match(JSON.parse(bad.body.result.content[0].text).fix, /Did you mean "frac"/, "the same self-explaining refusals over HTTP");
+    assert.equal((await req("GET", "/nope")).status, 404);
+  } finally { child.kill("SIGTERM"); }
+});
+
+// 2026-10-10: "2 jobs already running" sent the caller to a second call to learn which.
+test("jobs_busy names the running jobs and the limit", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const fake = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-jobs-test-"));
+  try {
+    const dir = path.join(fake, "artifacts/logs/apex-jobs");
+    fs.mkdirSync(dir, { recursive: true });
+    for (const [id, kind] of [["hud_survey-a", "hud_survey"], ["frame_fleet-b", "frame_fleet"]]) {
+      fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, kind, state: "running", exit: null, pid: process.pid, started: Date.now() - 5000, argv: [], log: `artifacts/logs/apex-jobs/${id}.log`, stderr: "" }));
+    }
+    const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
+    const x = createExtras({ ROOT: fake, toolResult, refuse: (e, m, f) => toolResult({ ok: false, error: e, message: m, fix: f }), acquireLock: () => null, releaseLock() {},
+      occupancyRefuse: () => null, assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
+    const r = JSON.parse(x.handlers.apex_job_start({ kind: "verify_all" }).content[0].text);
+    assert.equal(r.error, "jobs_busy");
+    assert.match(r.message, /hud_survey-a \(hud_survey, \d+s\)/);
+    assert.match(r.message, /frame_fleet-b \(frame_fleet, \d+s\)/);
+    assert.match(r.fix, /At most 2 run at once/);
+  } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
+
 // 2026-10-10: async surveys silently dropped `cams` (and cam/az/el/dist/h/side/hud/shots/cols/sheetName) and still said ok.
 // This is the class guard: for every optional argument of every dry-run-able tool, SOME value must change the dry-run plan (or the
 // call must be refused as invalid), unless the argument is exempt below WITH a reason. A new argument that does nothing fails here

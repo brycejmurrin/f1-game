@@ -653,7 +653,9 @@ export function createExtras(ctx) {
     const memRunning = [...jobs.values()].filter((j) => j.state === "running");
     const diskRunning = listDiskJobs().filter((j) => j.state === "running" && !jobs.has(j.id));
     if (memRunning.length + diskRunning.length >= 2) {
-      return refuse("jobs_busy", `${memRunning.length + diskRunning.length} jobs already running`, "apex_job_status to watch them; apex_job_cancel to free a slot.");
+      // Name them: "2 jobs already running" sent the caller to a second tool call just to learn which, and for how long.
+      const who = [...memRunning, ...diskRunning].map((j) => `${j.id} (${j.kind}, ${Math.round((Date.now() - (j.started || Date.now())) / 1000)}s)`).join(", ");
+      return refuse("jobs_busy", `${memRunning.length + diskRunning.length} jobs already running: ${who}`, "At most 2 run at once. apex_job_status {jobId} to watch one; apex_job_cancel {jobId} to free a slot.");
     }
     if (plan.browser) { const took = acquireLock(`apex_job:${kind}`); if (took) return took; }
     fs.mkdirSync(JOB_DIR, { recursive: true });
