@@ -75,7 +75,7 @@
       if (ATM && ATM.britishOvercast) Object.assign(pal, ATM.britishOvercast);
       // Silverstone's run-off is mown grass with tarmac aprons at the fast corners,
       // not the generic bare-earth tan the shared pack carries (survey 2026-10-09).
-      pal.runoff = [0.30, 0.38, 0.24];
+      pal.runoff = [0.26, 0.36, 0.21];
 
       const COPSE  = [0.12, 0.36, 0.16];   // dark-green tree copses / hedgerows
       const COPSE2 = [0.16, 0.40, 0.18];   // slightly lighter broadleaf
