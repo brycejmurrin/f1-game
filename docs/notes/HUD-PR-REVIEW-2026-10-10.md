@@ -418,3 +418,33 @@ growth or raising them with a stated reason.
   Close it.
 - **Allocator (`868a050`):** conflicts with ship in hud.css, hud.js and three
   HUD unit tests. It must sync onto #1366's merge before it opens as a PR.
+
+## Addendum 5: ship `3e25590` surveyed, and a correction on #1316
+
+`node tools/shot/hud-survey.mjs --cam <cam> --device phone-landscape-844x390
+--preset clean` on ship `3e25590` (includes #1366), SwiftShader, monza:
+
+- **chase:** 0 findings. The tower is full size, SPEED and ERS have a gap, and
+  the sector plate clears BOOST.
+- **cockpit:** 3 findings, all `missing`: speed, OT, AERO "expected but hidden
+  by display". The shot itself is clean (tower full size, nothing overlapping).
+  These are false positives in the survey's expectation table, not HUD bugs.
+- The shots are as painted: the radio card, limits chip and flag are hidden at
+  rest, so these two shots do not show the radio-card case from the original
+  phone report. The survey forces them on only for its overlap pass.
+
+**Correction: #1316 has something to port after all.** I said earlier that
+nothing in it needed porting. That is true of its game code (#1366 covers it),
+but not of its survey tooling. #1316 also changes `tools/lib/hud-survey-matrix.mjs`,
+`tools/shot/hud-survey.mjs` and `hud-survey.test.mjs` to:
+
+- stop expecting the floating speed in cockpit cam at every size (the 3
+  findings above: the false positive named in #1316's own description);
+- add `--radio`, `--flag` and `--damage` and a mirror-chip option, so the card
+  and chips go through real fit ticks.
+
+Closing #1316 as is drops that. Ask: salvage the survey-only hunks into a small
+tooling PR (or into whichever PR next touches the survey) before closing.
+Note that #1316's own PR text says its `--radio` fill is undone by
+`game.js`'s announce drain, so port the false-positive fix first and the
+flags only with that caveat.
