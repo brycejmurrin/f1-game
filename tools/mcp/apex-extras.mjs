@@ -79,6 +79,8 @@ export async function thumbBlock(png, width = 640) {
 export function createExtras(ctx) {
   const { ROOT, toolResult, refuse, acquireLock, releaseLock, occupancyRefuse, assertSafeOut,
     knownCircuits, runSpawn, log, mockMode } = ctx;
+  /** verify-change --fast exits 2 for a "partial" verdict (the browser groups are not run by design): a result, not a failure — the sync tool allowed 0 and 2 too. */
+  const jobExitOk = (kind, code) => code === 0 || (kind === "verify_change_fast" && code === 2);
   const nodeArgv = (rel, ...a) => [process.execPath, path.join(ROOT, "tools", rel), ...a];
   const bodyOf = (r) => JSON.parse(r.content[0].text);
   const rewrap = (r, patch) => { const b = { ...bodyOf(r), ...patch }; r.content[0].text = JSON.stringify(b); r.isError = b.ok === false ? true : undefined; if (!r.isError) delete r.isError; return r; };
@@ -471,6 +473,14 @@ export function createExtras(ctx) {
         const t = list(a.team, "team");
         return { browser: false, argv: nodeArgv("car/livery-contrast.mjs", "--json", ...(t ? [`--team=${t}`] : [])) };
       }
+      // The sync apex_verify_change_fast outran both the host's ~180 s cap and its own 600 s (a two-commit diff, 2026-10-10).
+      // Pinned exactly like the sync tool: --fast --json, never --wait.
+      case "verify_change_fast": {
+        if (a.since != null && (typeof a.since !== "string" || a.since.startsWith("-"))) {
+          throw Object.assign(new Error("since"), { refuse: refuse("bad_args", "since must be a git ref, not a flag", 'e.g. {"since":"HEAD~2"}.') });
+        }
+        return { browser: false, argv: nodeArgv("ci/verify-change.mjs", "--fast", "--json", ...(a.since ? ["--since", String(a.since)] : []), ...(a.staged ? ["--staged"] : [])) };
+      }
       case "verify_all": return { browser: false, argv: nodeArgv("track/verify-track.cjs", "--all", "--quiet") };
       case "float_all": return { browser: false, argv: nodeArgv("track/float-audit.cjs", "--all") };
       // Every circuit built twice (~4 s each): 52 outran apex_graph_parity's
@@ -522,7 +532,7 @@ export function createExtras(ctx) {
       if (/"ok"\s*:\s*true/.test(last)) exit = 0;
       else if (/"ok"\s*:\s*false/.test(last) || last) exit = exit ?? 1;
     } catch { /* empty log */ }
-    meta.state = exit === 0 ? "done" : "failed";
+    meta.state = jobExitOk(meta.kind, exit) ? "done" : "failed";
     meta.exit = exit ?? 1;
     meta.ended = meta.ended || Date.now();
     try { fs.writeFileSync(jobManifestPath(meta.id), JSON.stringify(meta, null, 2) + "\n"); } catch { /* */ }
@@ -656,7 +666,7 @@ export function createExtras(ctx) {
     child.on("exit", (code, sig) => {
       j.ended = Date.now();
       j.exit = code ?? sig;
-      if (j.state === "running") j.state = code === 0 ? "done" : "failed";
+      if (j.state === "running") j.state = jobExitOk(j.kind, code) ? "done" : "failed";
       writeJobManifest(j);
       // A cancelled browser job frees the lock from jobCancel, after its tree is gone.
       if (j.browser && !j.cancelTree) releaseLock();
@@ -870,6 +880,6 @@ export function createExtras(ctx) {
   };
 }
 
-export const JOB_KINDS = ["survey_track", "shot_survey", "hud_shot", "hud_survey", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all"];
+export const JOB_KINDS = ["survey_track", "shot_survey", "hud_shot", "hud_survey", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all", "verify_change_fast"];
 /** Key apex-tools-mcp uses to hand apex_job_start a pinned HUD argv; unreachable from JSON. */
 export const HUD_JOB_ARGV = Symbol("apex.hudJobArgv");

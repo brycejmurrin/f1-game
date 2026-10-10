@@ -1753,3 +1753,62 @@ test("a misspelled key is reported with a did-you-mean before the missing requir
   // No typo: the missing required argument is still named.
   assert.match(msg("apex_unit_test", {}), /tool needs file \| Pass "file"/);
 });
+
+// apex_verify_change_fast is ~10 min (tooling-fast on one job): past the host cap and its own 600 s. It runs as a job.
+test("apex_verify_change_fast routes to a background verify_change_fast job, pinned --fast --json, sync:true opts out", () => {
+  const body = (r) => JSON.parse(r.stdout);
+  const job = body(callCli("apex_job_start", { kind: "verify_change_fast", since: "HEAD~1", staged: true, dryRun: true }));
+  assert.equal(job.ok, true);
+  assert.deepEqual(job.argv.slice(1).map((a) => a.replace(/^.*\/tools\//, "tools/")), ["tools/ci/verify-change.mjs", "--fast", "--json", "--since", "HEAD~1", "--staged"]);
+  assert.equal(job.browser, false, "a tree job: no browser lock");
+  assert.match(body(callCli("apex_job_start", { kind: "verify_change_fast", since: "--wait", dryRun: true })).message, /may not start with a CLI flag|since must be a git ref/);
+  // The tool: dryRun keeps its plan; a real call routes (mock mode: no process is started).
+  assert.equal(body(callCli("apex_verify_change_fast", { dryRun: true })).out.plan, true);
+  const routed = body(callCli("apex_verify_change_fast", { since: "HEAD~1" }, { APEX_MCP_MOCK: "1" }));
+  assert.equal(routed.routed, "apex_job_start verify_change_fast", JSON.stringify(routed));
+  assert.equal(routed.kind, "verify_change_fast");
+  assert.match(routed.hint, /apex_job_status/);
+  // sync:true is still accepted (it blocks); its dryRun shows the same pinned argv.
+  const sync = body(callCli("apex_verify_change_fast", { since: "HEAD~1", sync: true, dryRun: true }));
+  assert.ok(sync.argv.includes("--fast") && sync.argv.includes("--json") && !sync.argv.includes("--wait"));
+});
+
+// verify-change --fast exits 2 for a "partial" verdict (browser groups not run, by design): the job is done, not failed.
+test("a verify_change_fast job that exits 2 (partial) is done; any other non-zero exit is failed", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const fake = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-jobs-test-"));
+  try {
+    fs.mkdirSync(path.join(fake, "tools", "ci"), { recursive: true });
+    fs.mkdirSync(path.join(fake, "tools", "track"), { recursive: true });
+    fs.writeFileSync(path.join(fake, "tools/ci/verify-change.mjs"), 'console.log(JSON.stringify({ verdict: "partial", notRun: ["browser"] })); process.exit(Number(process.env.VC_EXIT || 2));\n');
+    fs.writeFileSync(path.join(fake, "tools/track/verify-track.cjs"), "process.exit(2);\n");
+    const toolResult = (body, { isError = false } = {}) => ({ content: [{ type: "text", text: JSON.stringify(body) }], ...(isError || body.ok === false ? { isError: true } : {}) });
+    const refuse = (error, message, fix) => toolResult({ ok: false, error, message, fix });
+    const x = createExtras({ ROOT: fake, toolResult, refuse, acquireLock: () => null, releaseLock() {}, occupancyRefuse: () => null,
+      assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
+    const body = (r) => JSON.parse(r.content[0].text);
+    const settle = async (jobId) => body(await x.handlers.apex_job_status({ jobId, wait: 30 }));
+    const vc = await settle(body(x.handlers.apex_job_start({ kind: "verify_change_fast" })).jobId);
+    assert.equal(vc.state, "done", JSON.stringify(vc));
+    assert.equal(vc.exit, 2);
+    assert.equal(vc.out.verdict, "partial");
+    // The same exit 2 from another kind is a failure.
+    const other = await settle(body(x.handlers.apex_job_start({ kind: "verify_all" })).jobId);
+    assert.equal(other.state, "failed", JSON.stringify(other));
+  } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
+
+// ui_fit / ui_shot / ci_status / rotate_markings_check refine a CLI body by rewriting content[0].text; the spec's primary
+// channel is structuredContent, which used to keep the raw CLI body (ui_fit: no `clean`; ci_status: out null).
+test("syncStructured makes structuredContent match the refined text body, and leaves consistent results alone", async () => {
+  const { syncStructured } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const stale = { content: [{ type: "text", text: JSON.stringify({ ok: true, out: { clean: true } }) }], structuredContent: { ok: true, out: { rows: [1] } } };
+  assert.deepEqual(syncStructured(stale).structuredContent, { ok: true, out: { clean: true } });
+  const same = { content: [{ type: "text", text: JSON.stringify({ ok: true }) }], structuredContent: { ok: true } };
+  assert.deepEqual(syncStructured(same).structuredContent, { ok: true });
+  // No structuredContent (a refusal-free text result) and non-JSON text are untouched.
+  const bare = { content: [{ type: "text", text: "not json" }], structuredContent: { ok: true, keep: 1 } };
+  assert.deepEqual(syncStructured(bare).structuredContent, { ok: true, keep: 1 });
+  assert.deepEqual(syncStructured({ content: [{ type: "text", text: "{}" }] }), { content: [{ type: "text", text: "{}" }] });
+});

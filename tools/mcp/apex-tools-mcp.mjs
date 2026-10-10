@@ -327,12 +327,13 @@ const CATALOG = [
   {
     name: "apex_verify_change_fast",
     week: 1,
-    description: "Tree — verify-change --fast --json (no browser groups). Never --wait. Can take several minutes on a large diff (10 min cap). Skill: check-changes.",
+    description: "Tree — verify-change --fast --json (no browser groups). Never --wait. Takes ~10 min (it is tooling-fast on one job), past the host's ~180 s cap, so it runs as a background job and returns a jobId (watch it with apex_job_status {jobId, wait}); sync:true blocks instead (10 min cap, the host will time out). Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
         since: { type: "string" },
         staged: { type: "boolean" },
+        sync: { type: "boolean", description: "Block for the whole run instead of starting a background job." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
@@ -801,6 +802,8 @@ const CATALOG = [
         count: { type: "integer", description: "shot_survey: frac count override." },
         fracs: { type: "array", items: { type: "number" }, description: "shot_survey: explicit fracs." },
         oblique: { type: "boolean", description: "survey_track: add topdown + N/E/S/W aerials." },
+        since: { type: "string", description: "verify_change_fast: git ref to diff against." },
+        staged: { type: "boolean", description: "verify_change_fast: verify the staged diff." },
         screens: { type: "string", description: "ui_gallery / ui_matrix: comma list of screen ids." },
         viewports: { type: "string", description: "ui_gallery / ui_matrix: comma list (wildcards ok, e.g. ios-*)." },
         scale: { type: "string", description: "ui_matrix: comma list of interface sizes, e.g. 100,130." },
@@ -2094,6 +2097,15 @@ function garageCommand(op, args) {
 }
 process.on("exit", () => { if (garage) garageClose("server exit"); });
 
+/** Several wrappers (ui_fit, ui_shot, ci_status, rotate_markings_check) refine a CLI result by rewriting content[0].text only;
+ *  structuredContent kept the raw CLI body, so a client reading it (the spec's primary channel) saw out:null / the unrefined audit. */
+export function syncStructured(result) {
+  const t = result?.content?.[0];
+  if (!t || t.type !== "text" || !result.structuredContent) return result;
+  try { const b = JSON.parse(t.text); if (isObject(b)) result.structuredContent = b; } catch { /* text is not a JSON body */ }
+  return result;
+}
+
 function dispatch(name, args = {}, { signal = null } = {}) {
   if (typeof name !== "string") return refuse("bad_args", "tool name must be a string", "Use a name from tools/list.");
   if (!name.startsWith(PREFIX)) {
@@ -2121,6 +2133,16 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   if (name === "apex_status") return handleStatus(args);
   if (name === "apex_catalog") return handleCatalog(args);
   if (name === "apex_garage") return handleGarage(args);   // async: a persistent child, not a spawnSync
+  if (name === "apex_verify_change_fast" && args.sync !== true && !args.dryRun) {
+    // ~10 min against a ~180 s host cap: a background job, not a call that times out (and is killed at 600 s).
+    const gate = gateTreeArgs(args);
+    if (gate) return gate;
+    const r = extras().handlers.apex_job_start({ kind: "verify_change_fast", since: args.since, staged: args.staged });
+    const body = JSON.parse(r.content[0].text);
+    if (body.ok === false) return r;
+    return toolResult({ ...body, routed: "apex_job_start verify_change_fast",
+      hint: "Runs in the background (~10 min): apex_job_status {jobId, wait:100} until state is done; the verdict JSON is in out. sync:true blocks instead." });
+  }
   if (name === "apex_graph_parity" && args.all === true) {
     // Every circuit twice outlasts the 180 s cap (killed at ~46 of 52,
     // 2026-10-05): the whole fleet runs as a background job instead.
@@ -2473,7 +2495,7 @@ async function handleRpc(msg) {
     const ctl = new AbortController();
     inflight.set(String(mid), ctl);
     try {
-      const result = await dispatch(params.name, params.arguments ?? {}, { signal: ctl.signal });
+      const result = syncStructured(await dispatch(params.name, params.arguments ?? {}, { signal: ctl.signal }));
       return ctl.signal.aborted ? null : { jsonrpc: "2.0", id: mid, result };
     } catch (e) {
       return {
