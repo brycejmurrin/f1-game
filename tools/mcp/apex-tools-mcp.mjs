@@ -1800,6 +1800,13 @@ function sessionsInfo() {
   };
 }
 
+/** How long one browser call may run. 180 s fits a boot plus one query (apex_agent commands took 100-130 s, measured), but
+ *  `atmosphere` with weather / tod rebuilds and re-settles the scene: 269 s measured (2026-10-10), so the flat cap killed a working call. */
+export function browserTimeoutMs(name, args = {}) {
+  if (name === "apex_agent" && (args.weather != null || args.tod != null)) return 420000;
+  return 180000;
+}
+
 function handleStatus(args = {}) {
   if (args.dryRun) {
     return toolResult({
@@ -2229,7 +2236,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
     if (took) return took;
     // Released when the child exits — after a cancel too, never while a
     // Chromium still runs.
-    const run = runSpawn(argv, { timeoutMs: 180000, env, signal }).finally(releaseLock);
+    const run = runSpawn(argv, { timeoutMs: browserTimeoutMs(name, args), env, signal }).finally(releaseLock);
     // apex_shot: attach the frame as a thumbnail so the caller sees it in the
     // result (image:false opts out). The path is on shot.mjs's "wrote" line.
     if (name !== "apex_shot" || args.image === false) return run;

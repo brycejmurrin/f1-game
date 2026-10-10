@@ -1936,3 +1936,15 @@ test("a CLI that fails with its own {error, message, fix} has them lifted out of
   assert.equal(plain.ok, false);
   assert.equal(plain.error, undefined);
 });
+
+// 2026-10-10: apex_agent atmosphere {weather:"wet", tod:"dusk"} WORKS but took 269 s; the flat 180 s browser cap killed it (the other 14
+// apex_agent commands took 100-130 s).
+test("browserTimeoutMs: 180 s, 420 s for an apex_agent call that changes weather or time of day", async () => {
+  const { browserTimeoutMs } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  assert.equal(browserTimeoutMs("apex_agent", { command: "world" }), 180000);
+  assert.equal(browserTimeoutMs("apex_agent", { command: "atmosphere" }), 180000, "reading the atmosphere changes nothing");
+  assert.equal(browserTimeoutMs("apex_agent", { command: "atmosphere", weather: "wet" }), 420000);
+  assert.equal(browserTimeoutMs("apex_agent", { command: "atmosphere", tod: "dusk" }), 420000);
+  assert.equal(browserTimeoutMs("apex_shot", { tod: "night" }), 180000, "only apex_agent rebuilds the scene on a tod");
+  assert.ok(browserTimeoutMs("apex_agent", { weather: "wet" }) > 269000, "above the measured duration");
+});
