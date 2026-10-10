@@ -836,8 +836,8 @@ test("RACE! before the menu's build: prepare under the card, then drive out and 
   assert.ok(l > 0 && p > l && b > p && h > b, "build and plans precede the outgoing animation and afterGarageOut handoff");
   assert.match(ib, /_menuGate\.ready = key; _menuGate\.track = track;/, "the build is keyed like the menu's, so menuWorld() sees it");
   assert.match(handoff, /_introKey = key; raceIntro\(go\)/, "the hand-over marks itself, so a failed build falls back to the card instead of looping");
-  assert.match(ib, /reduce-motion still builds then plays a short garage-out before the card/,
-    "reduced motion still builds + short garage-out (flyby itself stays gated in loadingScreen.run)");
+  assert.match(ib, /reduce-motion still builds then plays the garage-out before the card and the flyby/,
+    "reduced motion still builds + the garage-out at its tuned pace, then card + flyby (loadingScreen.run no longer gates it)");
   assert.match(game, /_mq = [^;]*matchMedia\("\(prefers-reduced-motion: reduce\)"\)/, "…and motionReduced still reads the OS flag");
   assert.match(game, /function motionReduced\(\) \{\s*return !!\(_mq && _mq\.matches\)/);
   const pa = ib.indexOf("prepareMenuCarAssets(");
@@ -1324,13 +1324,14 @@ test("one indivisible expensive shot cannot trigger another step beyond the plan
   assert.equal(h.yields(), 0);
 });
 
-test("intro planning rechecks cancellation and skip after a delayed yield", async () => {
-  for (const interrupt of ["cancel", "skip"]) {
-    const h = introPlanBudgetHarness({ interrupt });
-    assert.equal(await h.run(), null, interrupt);
-    assert.equal(h.steps(), 1, interrupt + ": obsolete work stops before another shot");
-    assert.equal(h.yields(), 1);
-  }
+test("intro planning rechecks cancellation after a delayed yield; a garage skip keeps planning (the flyby still flies it)", async () => {
+  const h = introPlanBudgetHarness({ interrupt: "cancel" });
+  assert.equal(await h.run(), null, "cancel");
+  assert.equal(h.steps(), 1, "cancel: obsolete work stops before another shot");
+  assert.equal(h.yields(), 1);
+  const s = introPlanBudgetHarness({ interrupt: "skip" });
+  assert.ok(await s.run(), "skip: a tap in the garage ends the drive-out only — the plan is still the flyby's");
+  assert.equal(s.steps(), 11, "skip: every shot is still planned");
 });
 
 // Append beside the existing introOverlapHarness tests. No fixture edits needed.
@@ -1385,13 +1386,14 @@ test("intro planning yields after 3ms active batches, excluding delayed timers",
   assert.equal(h.elapsed(), 30011, "yield time spends neither active budget");
 });
 
-test("intro planning checks ownership and skip between cheap steps in one batch", async () => {
-  for (const interrupt of ["cancel", "skip"]) {
-    const h = introPlanBudgetHarness({ stepMs: 0.25, interrupt, interruptAtStep: 2 });
-    assert.equal(await h.run(), null, interrupt);
-    assert.equal(h.steps(), 2);
-    assert.equal(h.yields(), 0, "cancellation needs no additional work or timer");
-  }
+test("intro planning checks ownership between cheap steps in one batch; a garage skip does not cancel it", async () => {
+  const h = introPlanBudgetHarness({ stepMs: 0.25, interrupt: "cancel", interruptAtStep: 2 });
+  assert.equal(await h.run(), null, "cancel");
+  assert.equal(h.steps(), 2);
+  assert.equal(h.yields(), 0, "cancellation needs no additional work or timer");
+  const s = introPlanBudgetHarness({ stepMs: 0.25, interrupt: "skip", interruptAtStep: 2 });
+  assert.ok(await s.run(), "skip: planning runs to the end");
+  assert.equal(s.steps(), 11);
 });
 
 test("intro planning still yields after every indivisible 50ms cold shot", async () => {

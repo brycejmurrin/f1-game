@@ -399,8 +399,8 @@ function aeroLoadOf(c) { return c && c.aeroLoad != null ? c.aeroLoad : 0.5; }
 // trade each way. Exactly 1 on a slick track, so the dry car is untouched.
 function aeroWetK() { return raceCtl && raceCtl.lowGrip() ? 0.5 : 1; }
 function xVmaxGain(c) { return aeroWetK() * lerp(X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, aeroLoadOf(c)); }
-// A car's PACE as the AI judges it: vmax less its X-mode gain, and for a HUMAN x its paceF (AiDrive.paceSample).
-function paceVmax(o) { return (o._vmaxNow || 0) / (1 + xVmaxGain(o) * (o.aeroX || 0)) * (o.human ? (o.paceF || 1) : 1); }
+// A car's PACE as the AI judges it: vmax less its X-mode gain, and for a HUMAN x its paceF (AiDrive.paceSample). A net-owned human never reaches updateCar's stamp, so it reads vTop().
+function paceVmax(o) { return (o._vmaxNow || (o.human ? vTop() : 0)) / (1 + xVmaxGain(o) * (o.aeroX || 0)) * (o.human ? (o.paceF || 1) : 1); }
 // The per-node AI speed/vmax profile paceSample learns, one per field (kept on the function: no new top-level state).
 function paceRef() { let r = paceRef.r; if (!r || r.cars !== cars) { r = paceRef.r = new Float32Array(track.n); r.cars = cars; } return r; }
 function xDfLoss(c) { return aeroWetK() * lerp(X_DF_LOSS_LO, X_DF_LOSS_HI, aeroLoadOf(c)); }
@@ -3843,20 +3843,20 @@ async function studioDone(live, n) {
 // Plan while the garage animates, rather than holding its last pose to plan the
 // opening flyby. This only reads the circuit; shader work retains renderer ownership.
 async function introPlan(live, key, info, n) {
-  if (!live() || _introSkip === n) return null;
+  if (!live()) return null;   // a garage skip ends the drive-out only: the flyby still flies this plan
   reloadFlybyShots();
   if (!flybyShots && _menuFly && _menuFly.key === key && _menuFly.track === track) return _menuFly;
   FlybySeq.setDuration(loadingScreen.nextFlyMs(info.readMs));
   const fly = { key, track, shots: flybyShots || FlybySeq.vary(FlybySeq.DEFAULT, (Date.now() ^ (trackIdx * 2654435761)) >>> 0, false) }, step = FlybySeq.planSteps(track, fly.shots);
   // Compilation can delay a yielded timer for seconds; budget only planner CPU.
-  for (let spent = 0, slice = 0; live() && _introSkip !== n && spent < 800;) {
+  for (let spent = 0, slice = 0; live() && spent < 800;) {
     const at = performance.now(), done = step(), elapsed = performance.now() - at;
     spent += elapsed; slice += elapsed;
     if (done || spent >= 800) break;
     // Cheap/cache-hit shots share a slice; one expensive shot still yields alone.
     if (slice >= 3) { await menuSlice(); slice = 0; }
   }
-  return live() && _introSkip !== n ? fly : null;
+  return live() ? fly : null;
 }
 // Prepare lamp inputs before compilation owns the scene; their CPU-only
 // slices and shot planning can then run alongside the hidden shader warm.
@@ -3890,7 +3890,7 @@ async function introPrepare(live, key, info, n, cold) {
   } catch (e) { failed = true; throw e; }
 }
 // A ready, warm world opens on the garage immediately; planning overlaps its motion.
-// Reduce-motion plays a short drive-out (setup-camera startDriveOut), never skips it.
+// Reduce-motion plays the same drive-out at its tuned pace (setup-camera startDriveOut), never skips it.
 // Await garage-out (studioDone) in parallel with prepare — never block the card on a
 // stuck prepare while the car has already left the bay.
 function introGarage(go) {
@@ -3916,7 +3916,7 @@ function introGarage(go) {
 function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
   const settings = entrySettings(), live = () => n === _introRun && state === "menu" && settings === entrySettings();
-  if (!(idx >= 0)) return false;   // reduce-motion still builds then plays a short garage-out before the card
+  if (!(idx >= 0)) return false;   // reduce-motion still builds then plays the garage-out before the card and the flyby
   clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own build stands down
   const info0 = loadingInfo();   // its readMs: a real race's flyby is planned for the length it will run (a 24 s plan is re-planned mid-flyby)
   introCover(info0, n);
@@ -4029,7 +4029,7 @@ function raceIntro(go) {
   const built = _introKey; _introKey = "";
   if (!built && !menuWorld() && introBuild(go)) return;
   if (!built && menuWorld() && introWarm(go)) return;
-  if (!built && introGarage(go)) return;   // reduce-motion: short garage-out, then card (never skip)
+  if (!built && introGarage(go)) return;   // reduce-motion too: the garage-out at its tuned pace, then card + flyby (never skip)
   // Strict: never raise the race/session card while a garage-out is still live.
   if (_studio) {
     const n = _studio.n, key = menuKey(trackIdx);
@@ -4041,7 +4041,7 @@ function raceIntro(go) {
     return;
   }
   sheetRelease(true);   // no drive-out to give way to (or it was skipped): the flyby or the race does
-  if (built && _introSkip === _introRun) { _introSkip = 0; go(); return; }   // skipped in the garage: the race, not the flyby, is next
+  if (built && _introSkip === _introRun) _introSkip = 0;   // skipped in the garage: only the drive-out ends — the card and the flyby (skippable itself) always follow
   const world = menuWorld();
   if (world) menuGridCars();
   // A REAL RACE grids from its script at the lights (RealRace.arm), not in the
@@ -4303,7 +4303,7 @@ function quitToMenu() {
   // left the flyby active() for the session — capture listeners attached, and
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
-  setState("menu", "quit"); paused = false; raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  setState("menu", "quit"); paused = false; raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -6260,11 +6260,10 @@ function updateCar(c, dt, ranked) {
   c._prevS = c.s;
 }
 
-// Put the player back on the racing line at its CURRENT progress, facing forward
-// at a modest speed — for recovering from a spin, a beached off-track moment, or
-// being pinned to a wall. Progress (s/prog/lap) is preserved; only the lateral
-// position, heading and slip are reset, and a little speed restored.
+// Put the player back on the racing line at its CURRENT progress, facing forward at a modest speed — for a spin, a
+// beach or a wall. Progress is kept; lateral position, heading and slip reset. In TT/QUALI the lap is DELETED (no free re-centre).
 function rescuePlayer(c) {
+  if (c.human && (isTimeTrial() || isQuali())) { c.incidentInvalidLap = true; if (c.isPlayer && isQuali()) c.qualiCut = true; }   // as a track-limits cut
   // A live incident takeover would re-impose the Rapier pose over this rescue
   // (same authority rule as __apex.jump) — hand the car back first.
   incidentSim.release(c);
@@ -6325,7 +6324,7 @@ function retireCar(c, reason) {
   // smears the car across the track from wherever it was a step ago.
   c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x;
   c.rPrevHead = c.head; c.rPrevYawVis = 0;
-  c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.yawVis = 0; c.steerVis = 0;
+  c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.yawVis = 0; c.steerVis = 0; c.skidIntensity = 0;   // a stale slip keeps the screech loop on
   c.gear = 1; c.rpm = IDLE_RPM;
   c.boostOn = false; c.deploying = false; OvertakeMode.reset(c);
   // The broadcast call. Every retirement is announced, not only the player's:
@@ -6635,27 +6634,26 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
     if (wet) { if (_lit) { m = _wmPropsWetN; m.emissive = Math.min(0.80, floodEmit); } else m = _wmPropsWetD; }
     else { if (_lit) { m = _wmPropsDryN; m.emissive = floodEmit; } else m = _wmPropsDryD; }
     const _pb = track.meshes.propBatches;
-    // frame.mirrorLite: the phone-grade rear-view mirror (js/render/shared/mirror-pass.js)
-    // skips the batches — a second frustum re-culls and re-uploads every pack each frame.
-    // frame.mirrorFreezeInstanced (audit #8, full quality): reuse the last mirror
-    // pack via updateInstances — skip AABB sweep + CPU pack; cars still redraw.
+    // mirrorLite skips batches; mirrorFreezeInstanced reuses last mirror mats+colours (main pass would overwrite at ~30 Hz).
     if (_pb && _pb.length && gfx.drawInstanced && !frame.mirrorLite && !envProbe) {
       const planes = gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
-      const freeze = !!frame.mirrorFreezeInstanced;
+      const freeze = !!frame.mirrorFreezeInstanced, rec = frame.mirrorLite === false;
       for (let i = 0; i < _pb.length; i++) {
         const b = _pb[i];
         if (freeze && b._mirN > 0 && b._mirMats && gfx.updateInstances) {
-          gfx.updateInstances(b, b._mirMats, b._mirN);
+          gfx.updateInstances(b, b._mirMats, b._mirN, b._mirCols || null);
         } else {
           if (planes && gfx.cullInstances) gfx.cullInstances(b, planes);
           const n = b.visible | 0;
-          if (n > 0 && b.packMatrices) {
+          if (rec && n > 0 && b.packMatrices) {
             if (!b._mirMats || b._mirMats.length < n * 16) b._mirMats = new Float32Array(n * 16);
             b._mirMats.set(b.packMatrices.subarray(0, n * 16));
+            const nc = n * 3;
+            if (!b._mirCols || b._mirCols.length < nc) b._mirCols = new Float32Array(nc);
+            if (b.packColors) b._mirCols.set(b.packColors.subarray(0, nc));
+            else if (b._instPacked) for (let j = 0; j < n; j++) { const s = j * 20 + 16, d = j * 3; b._mirCols[d] = b._instPacked[s]; b._mirCols[d + 1] = b._instPacked[s + 1]; b._mirCols[d + 2] = b._instPacked[s + 2]; }
             b._mirN = n;
-          } else {
-            b._mirN = 0;
-          }
+          } else if (rec) b._mirN = 0;
         }
         gfx.drawInstanced(b, m);
       }
@@ -6698,9 +6696,9 @@ function armBackendProbe() {
     catch (_) { /* no probe: a jetsam in the arming window will not auto-revert */ }
   }
 }
-/** True when the bound backend reports a lost context/device (GLX/TLX backendState). */
+/** True when the bound backend reports a lost context/device (its cheap ctxLost(); backendState() is the diagnostic fallback). */
 function gfxContextLost() {
-  try { const s = gfx && gfx.backendState && gfx.backendState(); return !!(s && s.ctxLost); }
+  try { if (gfx && gfx.ctxLost) return !!gfx.ctxLost(); const s = gfx && gfx.backendState && gfx.backendState(); return !!(s && s.ctxLost); }
   catch (_) { return false; }
 }
 function render(dt) {
@@ -7186,8 +7184,8 @@ function render(dt) {
   // arms a lane, and the shaders test the zero LENGTH, so nothing paints.
   frame.pitLane = pits.laneUniform();
   frame.pitBox = pits.boxUniform();   // where YOUR box is, for roadMarkings to draw
-  // frame.wetness: WeatherArc.syncWetness (also from wxArc.tick for headless
-  // look=drive). LT.wetness ≥ 0 is the live tuner pin only — never a preset.
+  // frame.wetness: WeatherArc.syncWetness (wxArc.tick stands in only when
+  // headless, so it ramps once). LT.wetness ≥ 0 is the live tuner pin only — never a preset.
   if (wxArc) wxArc.syncWetness(dt);
   // Falling rain, for the puddle RIPPLES in the lit shaders (uRain / U.rain /
   // params4.z): 1 in a storm, a third under the DRIZZLE tier, 0 dry — ramped at
@@ -8288,8 +8286,9 @@ function tickBody(now) {
     // the pause menu, and its placements publish one zero-dt frame. Resuming tears
     // it down (setPaused -> exitPhotoMode -> FreeCam.onPhotoExit), so no unpaused
     // state in which it should still be flying.
+    // SETTINGS open (SAVE SCREENSHOT / GFX toggles) also needs a live present — headed GLX has no preserved buffer.
     if (setupPreviewOn || replayBuf.isScrubbing() || ((state === "race" || state === "count") &&
-        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode))) {   // photoMode: the FREE CAMERA panel docks with no tuner open
+        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode || !els.pmsettings.hidden))) {
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it

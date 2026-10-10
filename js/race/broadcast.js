@@ -170,7 +170,9 @@ const Broadcast = (function () {
     if (r.pos === 1) return mode === "interval" ? "INTERVAL" : "LEADER";
     if (r.down) return "+" + r.down + " LAP" + (r.down > 1 ? "S" : "");
     const v = mode === "interval" ? r.interval : r.gap;
-    return v == null ? "" : "+" + v.toFixed(1);
+    if (v == null) return "";
+    // The HUD chip's spelling (hundredths under ~10 s, tenths above); inline when HudReadouts has not loaded.
+    return "+" + (typeof HudReadouts !== "undefined" && HudReadouts ? HudReadouts.fmtGapSec(v) : v.toFixed(v < 9.95 ? 2 : 1));
   }
 
   // ── The director (pure): who to show, and how ─────────────────────────────

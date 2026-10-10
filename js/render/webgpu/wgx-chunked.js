@@ -10,6 +10,7 @@ const WGXChunked = (function () {
   function init(core) {
     let _ciCursor = 0;
     let _ciSeg = new WeakMap();
+    let _ciLive = 0;   // chunk arrays that hold a segment; the cursor rewinds when the last one is freed
     let _lm0 = 0, _lm1 = 0, _lmGen = 0;
     let _mrMaskL = null, _mrSlot = 0, _mrPass = null, _mrRoad = false;
 
@@ -181,6 +182,10 @@ const WGXChunked = (function () {
       if (!m) return;
       // Drop the lamp-table segment (and any overflow sentinel) keyed on this
       // chunks array — a rebuilt mesh must re-resolve, not inherit stale state.
+      // The cursor only ever advanced (the reset in wgx.js keys on the lamp set MOVING, and frame.allLights is one
+      // reused buffer), so each night track build leaked its tables until the 16384-entry buffer overflowed to the
+      // global lamp set (measured ~2.6-3.4k per build). Nothing live left means nothing to preserve: rewind.
+      if (m.chunks && _ciSeg.has(m.chunks) && --_ciLive <= 0) { _ciLive = 0; _ciCursor = 0; }
       if (m.chunks) _ciSeg.delete(m.chunks);
       // ROAD-LUT OWNER, the chunked twin of the freeMesh() clear below. The
       // chunked road path returns `sbuf: lut.sbuf, attrBG: lut.attrBG` (see
@@ -315,6 +320,7 @@ const WGXChunked = (function () {
         let seg = _ciSeg.get(chunks);
         const table = LampChunks.resolve(core.frameAllLights, chunks, core.framePerChunk);
         if (!seg || seg.table !== table) {
+          if (!seg) _ciLive++;
           const need = table.concat.length;
           if (_ciCursor + need > core.CHUNK_IDX_CAP) {
             // Overflow (extreme lampDensity): warn ONCE per table — the
@@ -459,6 +465,7 @@ const WGXChunked = (function () {
     }
     function resetLampSeg() {
       _ciCursor = 0;
+      _ciLive = 0;
       _ciSeg = new WeakMap();
     }
     function bumpLampGen() { _lmGen++; }

@@ -16,7 +16,7 @@ const TrackThemes = (function () {
     "tuscany", "coast", "savanna", "ardennes", "airfield", "canyon", "winter", "twilight",
     "jungle", "lakeside", "moorland", "metropolis",
     // Slice I — append only; share-code indexes the first twenty unchanged.
-    "shipyard", "saltflat", "vineyard", "stadium", "island"];
+    "shipyard", "saltflat", "vineyard", "stadium", "island", "blossom", "volcanic"];
 
   const pal = (base, extra) => Object.assign({}, base || {}, extra || {});
   const rgb = (c, m) => [c[0] * m, c[1] * m, c[2] * m];
@@ -279,6 +279,22 @@ const TrackThemes = (function () {
       furniture: { tree: "palm", fol: [0.18, 0.42, 0.18], lamp: "none" },
       standSet: ["pastel", "sandstone", "teal"],
     },
+  };
+
+  // Append-only additions reuse the established terrain and foliage machinery.
+  PRESETS.blossom = {
+    label: "BLOSSOM PARK", blurb: "Pink blossom belts, fresh spring grass, pale hills and pastel stands.",
+    swatch: ["#dc8ca9", "#83a95b"], theme: "green", sceneryTheme: "park", night: false, street: false,
+    pal: { grass: [0.30, 0.48, 0.22], runoff: [0.68, 0.62, 0.50], zenith: [0.34, 0.56, 0.84], horizon: [0.90, 0.80, 0.84], fog: [0.86, 0.80, 0.82], sunColor: [1.0, 0.94, 0.86] },
+    terrainOuter: 140, flatTerrain: false, elevStyle: "rolling",
+    furniture: { tree: "broad", fol: [0.74, 0.40, 0.52], lamp: "none" }, standSet: ["pastel", "alu", "concrete"],
+  };
+  PRESETS.volcanic = {
+    label: "VOLCANIC COAST", blurb: "Basalt mountains, sparse scrub, a deep-blue shoreline and silver stands.",
+    swatch: ["#42454b", "#326580"], theme: "green", sceneryTheme: "park", night: false, street: false,
+    pal: { grass: [0.24, 0.27, 0.22], runoff: [0.34, 0.34, 0.36], zenith: [0.24, 0.42, 0.64], horizon: [0.62, 0.70, 0.76], fog: [0.56, 0.64, 0.70], sunColor: [0.96, 0.94, 0.90] },
+    terrainOuter: 150, flatTerrain: false, elevStyle: "hilly",
+    furniture: { tree: "acacia", fol: [0.28, 0.34, 0.20], lamp: "none", sparse: true }, standSet: ["alu", "darkSteel", "concrete"],
   };
 
   const clone = (v) => (v == null ? v : JSON.parse(JSON.stringify(v)));
@@ -764,6 +780,18 @@ const TrackThemes = (function () {
       ["funfair", (api, sv, h) => funfair(api, sv, h, { dist: 145, r: 22 })],
     ],
   };
+  DRESS.blossom = [
+    ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.3, gap: 38, col: [0.76, 0.42, 0.54], col2: [0.88, 0.62, 0.70], pineFrac: 0, hMin: 7, hMax: 12, density: 0.28 })],
+    ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 10, hills: 2, livery: "pastel", livery2: "alu" })],
+    ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 20, h0: 12, h1: 8, cols: [[0.38, 0.48, 0.28], [0.60, 0.48, 0.46]] })],
+    ["village", (api, sv, h) => village(api, sv, h, { count: 5, walls: [[0.86, 0.80, 0.70], [0.82, 0.72, 0.72]], roof: [0.34, 0.36, 0.40], roofType: "gable" })],
+  ];
+  DRESS.volcanic = [
+    ["shore", (api, sv, h) => shore(api, sv, h, { col: [0.10, 0.26, 0.36], second: false, size: [750, 0.2, 850] })],
+    ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.1, gap: 45, col: [0.24, 0.30, 0.18], col2: [0.30, 0.34, 0.22], pineFrac: 0, hMin: 5, hMax: 9, density: 0.2 })],
+    ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 1, second: false, livery: "alu" })],
+    ["horizon", (api, sv, h) => horizon(api, sv, h, { mountain: true, count: 9, rMin: 850, rMax: 1400, w0: 600, w1: 360, h0: 210, h1: 160, rough: 0.35, snowline: 1.6, rock: [0.28, 0.28, 0.31], forest: [0.22, 0.27, 0.20] })],
+  ];
   /** Three hangars (corrugated-metal box, gable roof, dark door facing the
    *  track) and a control tower on the outside of the second-longest straight
    *  (the longest is the pit straight, its pits and stands). Primitives, not

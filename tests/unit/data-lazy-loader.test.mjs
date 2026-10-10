@@ -91,3 +91,56 @@ test("the script loader injects nothing while UpdateCheck reports a newer active
   assert.equal(await ctx.__load(["js/net/lobby.js"], []), true);
   assert.equal(appended, 1);
 });
+
+// 14-F2: the LAZY_RACE lighting presets were fetched ONCE at idle and the answer
+// ignored, so one dropped request meant default lighting for every race of the
+// session. A failure is now forgotten: the next race start (ensureCircuit, which
+// startRace reaches through ensureScenery) asks again; before any failure the
+// race start fetches nothing extra, so the title path is unchanged.
+test("a failed lighting-presets fetch is retried at the next race start, then not again", async () => {
+  const attempts = [];
+  let applied = 0;
+  const idle = [];
+  const ctx = vm.createContext({
+    ApexRoster: { DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [], LAZY_RACE: ["js/lighting/presets.js"], SCENERY_DIR: "", LAZY_DATA: [] },
+    window: { __APEX_BUILD: "test" },
+    els: {},
+    Log: { warn() {}, info() {} },
+    Tracks: { LIST: [{ id: "t0", scenery() {} }], circuitPayloadResident: () => true },
+    Assets: { modelsReady: async () => {} },
+    requestIdleCallback: (fn) => { idle.push(fn); },
+    document: {
+      createElement() { return { dataset: {}, remove() {} }; },
+      head: { appendChild(node) {
+        attempts.push(node.src.split("?")[0]);
+        const n = attempts.length;
+        queueMicrotask(() => {
+          if (n === 1) { node.onerror(); return; }   // the first request is dropped
+          ctx.window.LightPresets = {};
+          node.onload();
+        });
+      } },
+    },
+  });
+  vm.runInContext(loader + "\n" + bundles + "\nglobalThis.__lb = LazyBundles.create({ els, loadBackendScripts: ScriptLoader.create().load, getContext: () => ({ trackIdx: 0 }), applyLightTuneIfReady: () => globalThis.__applied() });", ctx);
+  ctx.__applied = () => { applied++; };
+  const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
+  ctx.__lb.raceAssets();
+  await flush();
+  await ctx.__lb.ensureCircuit(0);
+  await flush();
+  assert.equal(attempts.length, 0, "no failure yet: a race start must not pull the presets onto the title path");
+  idle[0]();                                   // the 2.5 s idle prefetch: dropped
+  await flush();
+  assert.deepEqual(attempts, ["js/lighting/presets.js"]);
+  assert.equal(ctx.window.LightPresets, undefined);
+  assert.equal(applied, 0);
+  await ctx.__lb.ensureCircuit(0);             // the next race start
+  await flush();
+  assert.equal(attempts.length, 2, "the failed fetch is asked for again");
+  assert.ok(ctx.window.LightPresets, "presets resident");
+  assert.equal(applied, 1, "lighting re-walked once the presets landed");
+  await ctx.__lb.ensureCircuit(0);
+  await flush();
+  assert.equal(attempts.length, 2, "resident: nothing more to fetch");
+});

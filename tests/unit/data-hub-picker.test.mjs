@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function harness({ motion, latest = undefined } = {}) {
+function harness({ motion, latest = undefined, realTelemetry = false, drivers = [], scheduleOnline = true } = {}) {
   let docRoot = null;
   const scrolls = [];
   class El {
@@ -86,22 +86,34 @@ function harness({ motion, latest = undefined } = {}) {
   const LATEST = latest !== undefined ? latest
     : { sessionKey: 500, meetingKey: 50, year: 2026, name: "Race", type: "Race", dateStart: "2026-10-04T12:00:00Z" };
   const meetingYears = [];
+  let cancels = 0, scheduleCalls = 0;
   const F1API = {
+    schedule: () => { scheduleCalls++; return scheduleOnline ? Promise.resolve([]) : Promise.reject(new Error("offline")); },
     latestSession: () => defer("latestSession", LATEST),
     meetings: (year) => { meetingYears.push(year); return defer("meetings", [{ meetingKey: 50, name: "Latest GP", dateStart: "2026-10-01" }, { meetingKey: 40, name: "Picked GP", dateStart: "2026-09-01" }]); },
     sessionsForMeeting: (mk) => defer("sessions(" + mk + ")", [{ sessionKey: mk * 10, meetingKey: mk, name: "Race", type: "Race", dateStart: "2026-09-01T12:00:00Z" }]),
     sessionResult: (sk) => { resultKeys.push(sk); return defer("sessionResult", []); },
-    sessionDrivers: () => defer("drivers", []),
+    sessionDrivers: () => defer("drivers", drivers),
+    fastestLap: () => defer("fastestLap", null),
     weather: () => defer("weather", null), livePositions: () => defer("pos", { values: [], cursor: null }),
     liveIntervals: () => defer("int", { values: {}, cursor: null }),
-    cancelAll() {}, cacheEntryT: () => null,
+    cancelAll() { cancels++; }, cacheEntryT: () => null,
   };
   const ctx = vm.createContext({ document, F1API, Log: { info() {}, warn() {} }, navigator: { onLine: true }, queueMicrotask, console,
     localStorage: { length: 0, key: () => null, getItem: () => null }, setTimeout, clearTimeout, Teams: { LIST: [] },
     DataTelemetry: { create: () => ({ loadTelemetry: () => Promise.resolve(new El("div")), closeTelemPopup() {} }) },
     DataRealRace: { create: () => ({ loadRealRace: () => Promise.resolve(new El("div")), cancel() {} }) },
     DataExport: { create: () => ({ loadExport: () => Promise.resolve(new El("div")) }) } });
-  for (const f of ["js/ui/dom.js", "js/data/schedule.js", "js/data/standings.js", "js/data/tab-utils.js", "js/data/results.js", "js/data/live.js", "js/data/hub.js"])
+  // realTelemetry: the real telemetry.js + model on a stubbed view (the canvas player is not under test).
+  if (realTelemetry) {
+    ctx.M4 = { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) };
+    ctx.DataTelemetryView = { create: () => ({ buildTelemetryView() {}, pauseAnim() {} }) };
+    delete ctx.DataTelemetry;
+  }
+  const files = ["js/ui/dom.js", "js/data/schedule.js", "js/data/standings.js", "js/data/tab-utils.js", "js/data/results.js", "js/data/live.js"];
+  if (realTelemetry) files.push("js/data/telemetry-model.js", "js/data/telemetry.js");
+  files.push("js/data/hub.js");
+  for (const f of files)
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
   const DataHub = vm.runInContext("DataHub", ctx);
   const flush = () => new Promise((r) => setImmediate(r));
@@ -120,7 +132,7 @@ function harness({ motion, latest = undefined } = {}) {
   DataHub.init(root);
   const content = () => root.find((n) => n.id === "dh-panel");
   const tab = (id) => root.find((n) => n.id === "dh-tab-" + id).dispatch("click");
-  return { DataHub, root, content, tab, settle, drain, flush, pending, resultKeys, scrolls, document, byId, place, meetingYears };
+  return { DataHub, root, content, tab, settle, get cancels() { return cancels; }, get scheduleCalls() { return scheduleCalls; }, setOnline: (v) => { scheduleOnline = v; }, drain, flush, pending, resultKeys, scrolls, document, byId, place, meetingYears };
 }
 
 // LIVE booted on the latest session, the player has just picked "Picked GP"
@@ -274,4 +286,95 @@ test("RESULTS cold-start with empty latestSession defaults year (never meetings(
   const active = h.content().find((n) => n.classList.contains("dh-pill") && n.classList.contains("active"));
   assert.ok(active, "one year pill is active");
   assert.equal(active.textContent, String(year));
+});
+
+// M24: leaving TELEMETRY mid-COMPARE used to leave its OpenF1 lane fetches queued in F1API's serialized lane, so the next
+// tab waited behind work nobody would render. Only hub close() and WATCH cancelled.
+async function startCompare(h) {
+  h.DataHub.open("telemetry");
+  await h.drain();                                   // latestSession, meetings, sessions, drivers
+  const chips = [];
+  (function walk(n) { n.children.forEach((c) => { if (c.classList.contains("dh-dchip")) chips.push(c); walk(c); }); })(h.content());
+  assert.equal(chips.length, 2, "two drivers to pick");
+  chips.forEach((c) => c.dispatch("click"));
+  const go = h.content().find((n) => n.classList.contains("dh-livebtn") && /COMPARE 2/.test(n.textContent));
+  assert.ok(go, "COMPARE 2 LAPS is offered");
+  go.dispatch("click"); await h.flush();
+  assert.equal(h.pending.filter((p) => p.name === "fastestLap").length, 2, "both lanes are fetching");
+}
+
+test("leaving TELEMETRY mid-COMPARE cancels the in-flight lane fetches once, and the tab rebuilds on return", async () => {
+  const h = harness({ realTelemetry: true, drivers: [{ num: 1, name: "A One", code: "ONE" }, { num: 2, name: "B Two", code: "TWO" }] });
+  await startCompare(h);
+  const before = h.cancels;
+  h.tab("results"); await h.flush();
+  assert.equal(h.cancels - before, 1, "F1API.cancelAll() ran for the abandoned COMPARE");
+  await h.drain();
+  h.tab("telemetry"); await h.drain();
+  assert.ok(h.content().find((n) => n.classList.contains("dh-dchip")), "TELEMETRY is rebuilt with its driver chips, not left half-failed");
+  const again = h.cancels;
+  h.tab("live"); await h.drain();
+  assert.equal(h.cancels, again, "leaving with no lane in flight cancels nothing");
+});
+
+// 14-F8: a SCHEDULE / STANDINGS / EXPORT tab that failed stayed "failed" across a
+// hub close and reopen (close() only dropped the picker tabs), so a player who
+// opened DATA offline, reconnected and reopened it was shown the old error card
+// until they found RETRY. A reopen is a fresh intent.
+test("closing and reopening the hub retries a tab that failed, instead of repainting its error", async () => {
+  const h = harness({ scheduleOnline: false });
+  h.DataHub.open("schedule"); await h.drain();
+  assert.ok(h.content().querySelector(".dh-error"), "offline: SCHEDULE shows its error card");
+  assert.equal(h.scheduleCalls, 1);
+  h.DataHub.close(); await h.flush();
+  h.setOnline(true);
+  h.DataHub.open("schedule"); await h.drain();
+  assert.equal(h.scheduleCalls, 2, "the reopen asked again");
+  assert.equal(h.content().querySelector(".dh-error"), null, "…and the error card is gone");
+});
+
+test("closing the hub keeps a good tab's cached copy (only failures are forgotten)", async () => {
+  const h = harness();
+  h.DataHub.open("schedule"); await h.drain();
+  assert.equal(h.scheduleCalls, 1);
+  h.DataHub.close(); await h.flush();
+  h.DataHub.open("schedule"); await h.drain();
+  assert.equal(h.scheduleCalls, 1, "inside its freshness window the reopen reuses the copy");
+});
+
+// 14-F5: M24 aborted the lanes only on LEAVING the tab. Changing GP / YEAR / SESSION inside TELEMETRY left the
+// COMPARE lanes ahead of the picker's own next request in F1API's serialized lane, so the new list waited them out.
+const TWO = [{ num: 1, name: "A One", code: "ONE" }, { num: 2, name: "B Two", code: "TWO" }];
+
+test("changing SESSION mid-COMPARE aborts the stale lane fetches before the new driver list is asked for", async () => {
+  const h = harness({ realTelemetry: true, drivers: TWO });
+  await startCompare(h);
+  const [, sesSel] = h.content().selects();
+  const before = h.cancels;
+  sesSel.value = "500"; sesSel.dispatch("change");
+  assert.equal(h.cancels - before, 1, "F1API.cancelAll() ran for the abandoned COMPARE");
+  await h.drain();
+  assert.ok(h.content().find((n) => n.classList.contains("dh-dchip")), "the new session's driver chips render");
+});
+
+test("changing GRAND PRIX mid-COMPARE aborts the lanes BEFORE the picker queues its sessions request", async () => {
+  const h = harness({ realTelemetry: true, drivers: TWO });
+  await startCompare(h);
+  const [gpSel] = h.content().selects();
+  const before = h.cancels;
+  gpSel.value = "40"; gpSel.dispatch("change");
+  assert.equal(h.cancels - before, 1, "cancelled synchronously, ahead of sessions(40)");
+  assert.ok(h.pending.some((p) => p.name === "sessions(40)"), "the picker's own request is the one that follows");
+  await h.drain();
+});
+
+test("changing GP / SESSION with no lane in flight cancels nothing", async () => {
+  const h = harness({ realTelemetry: true, drivers: TWO });
+  h.DataHub.open("telemetry");
+  await h.drain();
+  const [gpSel, sesSel] = h.content().selects();
+  const before = h.cancels;
+  sesSel.value = "500"; sesSel.dispatch("change"); await h.drain();
+  gpSel.value = "40"; gpSel.dispatch("change"); await h.drain();
+  assert.equal(h.cancels, before);
 });

@@ -60,19 +60,21 @@ test("maxAdjOver ignores a pure hw step with constant clearance", () => {
 
 test("fleet: open-circuit tyre termini stay under 1.5 m after feather (Slice 2)", () => {
   // Would fail on ship tip before featherBarrierEnds (maxOver ≈ 7.9).
-  // Pit.keep edges are protected (openBoundary must stay open) — exclude
-  // pairs that touch a keep node from the cap (those cliffs are intentional).
+  // Pit.keep edges on the PIT side are protected (openBoundary must stay open) —
+  // exclude pairs that touch a keep node on THAT array only (those cliffs are
+  // intentional); the opposite side is checked in full (M43, below).
   const { buildContext } = require(path.join(ROOT, "tools/lib/track-build-vm.cjs"));
   const { Tracks } = buildContext();
   for (const id of ["monza", "spa", "bahrain", "silverstone"]) {
     const track = Tracks.build(Tracks.LIST.find((d) => d.id === id));
     const pit = track.pit;
     const keep = (k) => !!(pit && !pit.painted && pit.keep[k] > 0);
+    const pitBar = pit && !pit.painted ? (pit.side > 0 ? track.barR : track.barL) : null;
     let maxOver = 0, maxWall = 0;
     for (let k = 0; k < track.n; k++) {
       const j = (k + 1) % track.n;
-      if (keep(k) || keep(j)) continue;
       for (const arr of [track.barL, track.barR]) {
+        if (arr === pitBar && (keep(k) || keep(j))) continue;
         const d = Math.abs((arr[k] - track.hw[k]) - (arr[j] - track.hw[j]));
         if (d > maxOver) maxOver = d;
         const a = Math.min(arr[k], arr[j]);
@@ -116,4 +118,54 @@ test("monaco pit keep nodes stay open; non-pit maxOver under 1.5 m", () => {
     }
   }
   assert.ok(maxOffPit < 1.5, `off-pit maxOver=${maxOffPit}`);
+});
+
+test("fleet: the NON-pit side inside the pit window has no clearance step over 1.5 m (M43)", () => {
+  // featherAfterOpen used to hand the pit.keep protect callback to BOTH barL and
+  // barR, so the side openBoundary never opened kept its 7.9 m run-off cliffs
+  // inside the window (silverstone, miami, abudhabi, nurburgring, magny_cours,
+  // brands_hatch; 23 circuits over 1.5 m) and WallClamp turned each into a
+  // sideways snap of c.x. Would fail on the base for those circuits.
+  const { buildContext } = require(path.join(ROOT, "tools/lib/track-build-vm.cjs"));
+  const { Tracks } = buildContext();
+  const bad = [];
+  let checked = 0;
+  for (const def of Tracks.LIST) {
+    const track = Tracks.build(def);
+    const pit = track.pit;
+    if (!pit || pit.painted) continue;
+    const opp = pit.side > 0 ? track.barL : track.barR;
+    let worst = 0;
+    for (let k = 0; k < track.n; k++) {
+      const j = (k + 1) % track.n;
+      if (!(pit.keep[k] > 0 || pit.keep[j] > 0)) continue;
+      worst = Math.max(worst, Math.abs((opp[k] - track.hw[k]) - (opp[j] - track.hw[j])));
+    }
+    checked++;
+    if (worst >= 1.5) bad.push(`${def.id} ${worst.toFixed(2)}`);
+  }
+  assert.ok(checked >= 40, `only ${checked} pit complexes checked`);
+  assert.deepEqual(bad, [], `non-pit side steps >= 1.5 m inside the pit window: ${bad.join(", ")}`);
+});
+
+test("street barrier: the last panel closes on node 0, not past it (10-F2, odd n)", () => {
+  // The panel walk stepped k += 2 and wrapped the last span with `% n`: on an odd node
+  // count the final panel ran n-1, 0, 1 (two nodes, ~8 m) on top of the first (0, 1, 2).
+  // Vegas 1543, Singapore 1227 and Baku 1475 are odd. Would fail on the base (the k = n-1
+  // panel measures ~8.07 m there; one node is ~4.06).
+  const { buildContext } = require(path.join(ROOT, "tools/lib/track-build-vm.cjs"));
+  const { Tracks } = buildContext();
+  let seen = 0;
+  for (const id of ["vegas", "singapore", "baku"]) {
+    const track = Tracks.build(Tracks.LIST.find((d) => d.id === id));
+    const n = track.n, ds = track.total / n;
+    assert.equal(n % 2, 1, `${id} is no longer an odd-node circuit`);
+    for (const nd of track.graph.nodes) {
+      const m = nd.meta;
+      if (!m || m.kind !== "streetBarrier" || m.k !== n - 1) continue;
+      seen++;
+      assert.ok(nd.s[2] < 1.5 * ds, `${id} side ${m.side}: the n-1 panel is ${nd.s[2].toFixed(2)} m long (one node is ${ds.toFixed(2)}): it wraps onto node 1`);
+    }
+  }
+  assert.ok(seen >= 3, `only ${seen} seam panels found`);
 });

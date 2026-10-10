@@ -25,7 +25,7 @@ climbs through the middle sector before rolling home.
 | 0.02 | L | near | Pit wall + garage row: thin white box strip with red kerb trim |
 | 0.07 | R | mid | T1 / Pit Exit cluster — covered cantilever stand on the outside braking zone (oversteer48 Pit Exit 1/2 + T1; Pit Exit 2 not a separate mass — vertex budget) |
 | 0.090–0.098 | R | near | Pit Exit 1 uncovered bleacher (oversteer48: no roof), positive rake |
-| 0.08 | R | far | Small lake/pond in the valley floor: flat dark blue-green box below banking |
+| 0.08 | R | far | Dry-grass colour patch (40 x 32 m, 0.14 m skin) on the valley floor below T1 banking; no infield water |
 | 0.12 | L | mid | Grass amphitheatre hill, sun-bleached green, dotted dark tree-cube clumps |
 | 0.18 | R | mid | Low grandstand bleacher: pale tiered box facing the slow complex |
 | 0.30 | L | far | Tree line mass: cluster of dark green cubes along ridge |
@@ -45,7 +45,7 @@ Famously twisty and slow with very few overtaking spots — pole and clean air d
 ## 6. Modelling notes
 - Sell the AMPHITHEATRE: line nearly the whole lap with stepped green banking boxes so the track sits in a bowl of grass.
 - Use dry yellow-green grass, not vivid lawn — it reads as hot Hungarian summer.
-- Make Turn 1 dramatic with a clear DOWN drop and tall banking + a small dark lake box in the basin.
+- Make Turn 1 dramatic with a clear DOWN drop, tall banking, and dry grass in the basin floor.
 - Cluster dark-green tree cubes along ridge lines for a low forested horizon.
 - Anchor s=0 with the long modern pit slab (L) facing the deep covered grandstand (R).
 - Keep palette warm and slightly hazy; fade far hills toward the fog tint for depth.
@@ -120,3 +120,23 @@ states that the old Marlboro bridge had gone and pedestrian traffic would use
 a new tunnel under the main straight. That secondary report describes the
 renovation; it does not locate the separate bridge mentioned in the FIA's
 Turn 14 change note.
+
+## Frame audit (2026-10-10, review F4 / F7)
+
+`sceneryStartFrac` 0.9825 puts this file's authored `0.00` at racing 0.903, 424 m before the real line, so a raw
+authored fraction is 0.0971 of a lap early. Only the start gantry had been re-keyed (through `sl()`), which left the
+sections table above in the authored frame. Now:
+
+| piece | before (racing) | after (racing) |
+|-------|-----------------|----------------|
+| pit building (gap 24 -> 44, behind the engine garages), paddock patch, broadcast compound, hospitality / service kits, pit wall, pit-side tunnel mouth | 0.903 (424 m before the line) | 0.000 (pit-side mouth: 0.965) |
+| main tribune, tribune-side tunnel mouth | 0.903 | 0.000 |
+| "Turn 5 Mogyoród" stand (+ accent, lit strip, hill shoulder) | 0.058 (1591 m from T5 apex 0.4225) | 0.434 (52 m past the apex; the exact apex buries 13 crowd bodies in the slope) |
+| "T6/7 Driving Centre" stand | 0.158 (1459 m from T6 0.4922) | 0.492 (T6 apex) |
+| Club stand, "final corner" | 0.803 (344 m from T14 0.8818) | 0.882 (T14 apex) |
+| countryside village + church | infield, 16-47 m from the road at 0.32-0.33 (nave, roof, 2 cottages rejected) | outside (side -1), >= 236 m from any tarmac; church is one `modelGroup` |
+
+Corner stands are keyed with `au(def.turns[i])`, the authored fraction that lands on a racing-frame apex. The engine
+pit complex owns racing 0.93-0.04 (`pit.keep` reaches 30 m beyond the edge), so the hand-built pit block must clear that
+footprint outright (gap 44 for its 22 m bounds) or it is superseded whole. Not re-keyed: the T1 / Pit Exit cluster
+(authored 0.07-0.12, racing 0.97-0.02), whose `-1` stands at authored 0.10 / 0.12 sit on the engine pit and are dropped.

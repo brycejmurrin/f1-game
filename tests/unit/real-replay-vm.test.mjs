@@ -292,7 +292,7 @@ test("BROADCAST tower: the grid at lights out, the leader and gaps at the last l
     }
     assert.ok(rows.filter((r) => !r.out).every((r) => /^[SMHIW]$/.test(r.tyre || "")), "every running car shows its tyre");
     assert.equal(B.fmtGap(rows[0], "gap"), "LEADER");
-    assert.match(B.fmtGap(rows[1], "gap"), /^\+\d+\.\d$/);
+    assert.match(B.fmtGap(rows[1], "gap"), /^\+\d+\.\d{1,2}$/);   // hundredths under ~10 s (HudReadouts.fmtGapSec), tenths above
     // The fastest lap turns purple only once it is set.
     const f = script.fastest;
     assert.ok(host(B.towerAt(script, f.t - 1)).every((r) => !r.fastest));

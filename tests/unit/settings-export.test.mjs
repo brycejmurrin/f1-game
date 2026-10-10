@@ -640,6 +640,41 @@ test("a malformed custom livery cannot reach the garage screen", () => {
   }
 });
 
+// M26: the import was shape-checked but not BOUNDED, and enum-typed fields index plain objects.
+const garageLiveries = (b, list) => {
+  const r = b.loadGarage({ format: "apex26-garage-v1", garage: { "livery.custom.mclaren": list } });
+  assert.equal(r.ok, true);
+  return JSON.parse(b.disk.get("apex26.livery.custom.mclaren") || "[]");
+};
+const sound = (id, extra = {}) => Object.assign({ id, c1: [1, 0, 0], c2: [0, 0, 1] }, extra);
+
+test("M26: an enum pill that names an Object.prototype member is dropped, not stored", () => {
+  // Car3D finOf / FINISH_SURFACE and LiveryTex NUM_FONTS index plain tables: "constructor" resolved to an
+  // inherited function and threw in every build of that team.
+  const kept = garageLiveries(boot(), [sound("custom_1", { finShape: "constructor", numFont: "__proto__", finish: "toString", stripe: [1, 1, 1] })]);
+  assert.equal(kept.length, 1, "the livery itself survives");
+  for (const k of ["finShape", "numFont", "finish"]) assert.equal(Object.hasOwn(kept[0], k), false, k + " is dropped");
+  assert.deepEqual(kept[0].stripe, [1, 1, 1], "its colours are untouched");
+});
+
+test("M26: a team keeps at most 32 liveries", () => {
+  const list = Array.from({ length: 33 }, (_, i) => sound("custom_" + i));
+  const kept = garageLiveries(boot(), list);
+  assert.equal(kept.length, 32);
+  assert.equal(kept.some((l) => l.id === "custom_32"), false, "the 33rd is dropped");
+});
+
+test("M26: a livery id longer than 64 characters is dropped", () => {
+  const kept = garageLiveries(boot(), [sound("a".repeat(64)), sound("a".repeat(65))]);
+  assert.deepEqual(kept.map((l) => l.id.length), [64]);
+});
+
+test("M26: livery colours are clamped to 0..1", () => {
+  const kept = garageLiveries(boot(), [sound("custom_1", { c1: [2.0, -5, 0.5], stripe: [1e9, 0, 1] })]);
+  assert.deepEqual(kept[0].c1, [1, 0, 0.5]);
+  assert.deepEqual(kept[0].stripe, [1, 0, 1]);
+});
+
 test("a garage value of the wrong shape is skipped, not written", () => {
   const b = boot();
   const r = b.loadGarage({

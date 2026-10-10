@@ -70,7 +70,9 @@ Its single most distinctive real-world fact is that it sits minutes from
 Zaffelli). First GP weekend: 11–13 Sep 2026.
 
 Already modelled: IFEMA halls, La Monumental banked bowl, both tunnel portals,
-and a Barajas control tower with an airliner on approach. The Estadio
+and a Barajas control tower with an airliner on approach, on the true
+bearing 51° (north-east) from the lap centroid, distance compressed from the
+real ~5.9 km to ~1.4 km (it was 165°, south-south-east, until 2026-10-10). The Estadio
 Metropolitano (~3 km south) stays off the skyline — too far.
 
 ## Wave 6 scenery (landmark)
