@@ -54,6 +54,10 @@ async function startLiveRace(page) {
   // (CI 37082214838 / 37080085921: held.x 7.567 vs hw−0.5 6.3).
   const track = await page.evaluate(() => {
     try {
+      // These cases step physics and never inspect pixels. Stop rasterising
+      // before race setup: CI 38011592645 spent 73-79 s in the 45 s track wait
+      // while car preparation blocked the main thread on software GL.
+      window.__apex.headless(true);
       const i = window.__apex && window.__apex.info();
       return i && i.track != null ? i.track : null;
     } catch (_) { return null; }
@@ -79,6 +83,8 @@ async function startLiveRace(page) {
     () => window.__apex != null && !!document.getElementById("mb-race"),
     null, { polling: 100, timeout: BOOT_MS }
   );
+  // Navigation above resets the hook; apply it before opening the race flow.
+  await page.evaluate(() => window.__apex.headless(true));
   const show = (id) => page.waitForFunction(
     (n) => { const el = document.getElementById(n); return !!el && !el.hidden; },
     id, { polling: 100, timeout: 30_000 }
