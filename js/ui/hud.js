@@ -72,6 +72,16 @@ const teamCss = (c) => {
 };
 let _secRows = null;
 let _secFlash = [0, 0, 0];
+// THE GAIN, not only the split: each sector row shows the split's delta to the
+// best it was chasing for SPLIT_DELTA_MS, then the absolute time again.
+// _secPrevBest is sectorBests as the last tick saw it — game.js writes the new
+// best in the same crossing that writes sectorLast, so only the copy taken
+// BEFORE the crossing still holds the time this split was measured against.
+const SPLIT_DELTA_MS = 3000;
+let _secPrevBest = [Infinity, Infinity, Infinity], _secDelta = [0, 0, 0], _secDeltaT = [0, 0, 0];
+// The lap clock's hold on the lap just driven (see the tick): the lap count and
+// lastLap as the last tick saw them, and whether this lap's hold is armed.
+let _holdLap = 0, _holdPrev = 0, _holdOn = false;
 let _limitsDots = null;
 let _hudCamMode = null, _hudCamProf = null;   // compared field by field: no key string per frame
 // The readouts js/ui/hud-readouts.js derives (gap laps, ERS, BB, blue flag, the
@@ -165,7 +175,17 @@ function syncHudCamClasses() {
   // changes — camera+profile stay put, so the key above does not.
   syncHudVisClasses(modeId);
 }
-function flashSector(i) { if (i >= 0 && i < 3) _secFlash[i] = 0.35; }
+// game.js calls this at the crossing, after writing sectorLast[i] and the new
+// best — so the delta is taken against the pre-crossing copy (_secPrevBest).
+// A first-ever split has nothing to beat and keeps the absolute time.
+function flashSector(i) {
+  if (!(i >= 0 && i < 3)) return;
+  _secFlash[i] = 0.35;
+  const t = G.sectorLast && G.sectorLast[i];
+  const ok = t != null && isFinite(_secPrevBest[i]);
+  _secDelta[i] = ok ? t - _secPrevBest[i] : 0;
+  _secDeltaT[i] = ok ? SPLIT_DELTA_MS : 0;
+}
 // "tt" | "quali" | "practice" | "race". PRACTICE is G.practice (armed on a race
 // session from the pause menu), never a G.session value.
 function sessionOf(timeTrial) {
@@ -1623,7 +1643,21 @@ function updateHud(force, dtMs) {
   if (rank) _lastRank = rank;
   hText(els.lap, Math.min(player.lap || 1, G.lapsTarget) + "/" + G.lapsTarget);
   if (typeof HudDamage !== "undefined") HudDamage.sync(player);   // DAMAGE chip (js/ui/hud-damage.js) — display only
-  hText(els.time, G.fmtTime(player.lapTime));
+  // THE LAP JUST DRIVEN. A race showed only the running clock, which snaps to
+  // zero at the line, so unless the lap was a best the driver never saw it.
+  // Hold it for the first 3 s of the next lap, green when it is a personal best
+  // (game.js writes best in the same crossing). Armed only when lastLap CHANGED
+  // with the lap count: game.js writes it for a valid lap alone, so an invalid
+  // lap keeps the running clock rather than re-showing the lap before it.
+  const lapN = player.lap | 0;
+  if (lapN !== _holdLap) {
+    _holdOn = sess === "race" && lapN > _holdLap && lapN > 1 && player.lastLap > 0 && player.lastLap !== _holdPrev;
+    _holdLap = lapN;
+  }
+  _holdPrev = player.lastLap;
+  if (_holdOn && !(player.lapTime < 3)) _holdOn = false;
+  hText(els.time, G.fmtTime(_holdOn ? player.lastLap : player.lapTime));
+  hData(els.time, "hold", _holdOn ? (player.lastLap <= player.best ? "pb" : "lap") : null);
   hText(els.best, isFinite(player.best) ? G.fmtTime(player.best) : "-");
   hStyle(els.energy, "width", (player.energy * 100).toFixed(0) + "%");
   // ENERGY as a number and a state, not only a bar length: MJ (the 2026 rule's
@@ -1893,7 +1927,15 @@ function updateHud(force, dtMs) {
       // ★ is the session best, ▼ a personal best, ▲ slower than your own. Same
       // single-glyph width as before, so the fixed row geometry is untouched,
       // and the colours stay exactly as they were for everyone reading them.
-      hText(_secRows[i], t == null ? "--" : (sb ? "★" : pb ? "▼" : "▲") + t.toFixed(3));
+      // For SPLIT_DELTA_MS after the crossing the number is the GAIN on the best
+      // it was chasing ("▼-0.142", "▲+0.310"), then the split itself again: the
+      // same glyph and colour states, and the same character count for any
+      // split or delta under 10 s, so the row geometry does not move.
+      const dHeld = _secDeltaT[i] > 0 && t != null;
+      if (_secDeltaT[i] > 0) _secDeltaT[i] -= HUD_TICK_MS;
+      const num = dHeld ? (_secDelta[i] < 0 ? "" : "+") + _secDelta[i].toFixed(3) : t == null ? "" : t.toFixed(3);
+      hText(_secRows[i], t == null ? "--" : (sb ? "★" : pb ? "▼" : "▲") + num);
+      _secPrevBest[i] = bests ? bests[i] : Infinity;   // the reference the NEXT crossing's delta is taken against
       // Timing-screen colours: purple session best, green personal best,
       // yellow slower than your own best; no split yet keeps the row's ink.
       hStyle(_secRows[i], "color", t == null ? "" : sb ? "var(--sec-best)" : pb ? "var(--faster)" : "var(--sec-slow)");
@@ -2225,6 +2267,7 @@ function invalidateMap() { minimapBg = null; }
 // The race DELTA's best lap and the spoken HUD's baselines are per race too.
 function resetRace() {
   _lastRank = 0; _posFlashT = 0; if (els.pos) delete els.pos.dataset.delta;
+  _holdLap = 0; _holdPrev = 0; _holdOn = false; _secPrevBest = [Infinity, Infinity, Infinity]; _secDeltaT = [0, 0, 0];
   _ePrev = NaN; _blueSaid = null; _blueLaps = 0;
   // THE GAP CHIPS CARRY STATE ACROSS SESSIONS: a time trial paints the ghost
   // delta's colour inline, a race the neighbour's team bar, the tow halo and

@@ -250,7 +250,25 @@ function buildResults(order, race) {
     const card = document.createElement("div"); card.className = "res-personal";
     const heading = document.createElement("strong"); heading.textContent = "YOUR RACE · " + (dnfOf(self) ? outLabel(dnfOf(self)) : self.classified === false ? "NC" : "P" + (playerPlace + 1));
     const detail = document.createElement("span");
-    detail.textContent = elapsed == null ? self.name : self.name + " · " + raceClock(G, elapsed);
+    // The card the player reads without scrolling to their row: where they
+    // started (gridPos, game.js's grid build) and the places gained, their best
+    // lap (★ when it is the race's fastest, the badge rule's field above) and
+    // the penalty time the classification carried.
+    const parts = [self.name];
+    if (elapsed != null) parts.push(raceClock(G, elapsed));
+    const classified = !dnfOf(self) && self.classified !== false;
+    if (self.gridPos > 0) {
+      const gained = classified ? self.gridPos - (playerPlace + 1) : 0;
+      parts.push("FROM P" + self.gridPos + (gained ? " (" + (gained > 0 ? "▲" : "▼") + Math.abs(gained) + ")" : ""));
+    }
+    if (isFinite(self.best) && self.best > 0) {
+      let fl = Infinity;
+      for (const c of order) if (!c.retired && !c.dsq && c.best < fl) fl = c.best;
+      parts.push("BEST " + lapClock(G, self.best) + (self.best === fl ? " ★" : ""));
+    }
+    const pen = verdict && verdict.penalty;
+    if (pen > 0) parts.push("PEN +" + pen + "s");
+    detail.textContent = parts.join(" · ");
     card.append(heading, detail); els.resultsTable.appendChild(card);
   }
   if (badges && badges.length) els.resultsTable.appendChild(badgeCard(badges));
