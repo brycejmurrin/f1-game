@@ -1636,7 +1636,7 @@ test("apex_job_status {} is bounded: newest first, limit, state filter, total", 
     fs.mkdirSync(dir, { recursive: true });
     for (let i = 1; i <= 5; i++) {
       fs.writeFileSync(path.join(dir, `float_all-t${i}.json`), JSON.stringify({ id: `float_all-t${i}`, kind: "float_all", state: i % 2 ? "done" : "failed", exit: i % 2 ? 0 : 1,
-        started: 1000 * i, ended: 1000 * i + 5, argv: [], log: `artifacts/logs/apex-jobs/float_all-t${i}.log`, stderr: "" }));
+        started: 1000 * i, ended: Date.now() - 5, argv: [], log: `artifacts/logs/apex-jobs/float_all-t${i}.log`, stderr: "" }));   // recent: older than 7 days is pruned
     }
     const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
     const x = createExtras({ ROOT: fake, toolResult, refuse: (e, m, f) => toolResult({ ok: false, error: e, message: m, fix: f }), acquireLock: () => null, releaseLock() {},
@@ -1649,5 +1649,38 @@ test("apex_job_status {} is bounded: newest first, limit, state filter, total", 
     const failed = list({ state: "failed" });
     assert.deepEqual(failed.jobs.map((j) => j.jobId), ["float_all-t4", "float_all-t2"]);
     assert.equal(failed.hint, undefined, "nothing hidden, no hint");
+  } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
+
+test("apex_job_status {} prunes manifests older than 7 days and re-judges a pre-.exit failed job whose log says ok:true", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const fake = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-jobs-test-"));
+  try {
+    const rel = "artifacts/logs/apex-jobs";
+    const dir = path.join(fake, rel);
+    fs.mkdirSync(dir, { recursive: true });
+    const now = Date.now();
+    const mk = (id, state, ended, logText, exitText) => {
+      fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, kind: "float_all", state, exit: state === "done" ? 0 : 1, started: ended - 10, ended, argv: [], log: `${rel}/${id}.log`, stderr: `${rel}/${id}.err` }));
+      fs.writeFileSync(path.join(dir, `${id}.log`), logText);
+      fs.writeFileSync(path.join(dir, `${id}.err`), "");
+      if (exitText != null) fs.writeFileSync(path.join(dir, `${id}.exit`), exitText);
+    };
+    const old = now - 8 * 86400000;
+    mk("old-done", "done", old, "{}", "0");
+    mk("old-failed", "failed", old, "{}", "1");
+    mk("stale-failed", "failed", now - 1000, 'noise\n{"ok": true, "n": 3}\n');   // no .exit, log says ok:true
+    mk("real-failed", "failed", now - 2000, '{"ok": false}\n');                   // no .exit, log says ok:false
+    mk("exit-failed", "failed", now - 3000, '{"ok": true}\n', "1");               // has .exit: trust it
+    const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
+    const x = createExtras({ ROOT: fake, toolResult, refuse: (e, m, f) => toolResult({ ok: false, error: e, message: m, fix: f }), acquireLock: () => null, releaseLock() {},
+      occupancyRefuse: () => null, assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
+    const res = JSON.parse(x.handlers.apex_job_status({}).content[0].text);
+    const state = Object.fromEntries(res.jobs.map((j) => [j.jobId, j.state]));
+    assert.deepEqual(state, { "stale-failed": "done", "real-failed": "failed", "exit-failed": "failed" });
+    assert.equal(res.total, 3);
+    assert.deepEqual(fs.readdirSync(dir).filter((f) => f.startsWith("old-")), [], "json, log, err and exit of an expired job are all gone");
+    assert.ok(fs.existsSync(path.join(dir, "real-failed.log")), "recent jobs keep their files");
   } finally { fs.rmSync(fake, { recursive: true, force: true }); }
 });
