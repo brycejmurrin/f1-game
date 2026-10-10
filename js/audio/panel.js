@@ -707,9 +707,9 @@ var AudioPanel = (() => {
       { k: "limiter",    id: "as-t-lim",    lo: 0,    step: 0.25 },
       { k: "limRate",    id: "as-t-limrate", lo: 0.40, step: 0.10 },
       { k: "limPitch",   id: "as-t-limsag", lo: 0,    step: 0.25 },
-      { k: "boost",      id: "as-t-boost",  lo: 0,    step: 0.25 },
+      { k: "boost",      id: "as-t-boost",  lo: 0,    step: 0.04 },   // shipped 1.12 = position 28
       { k: "boostPitch", id: "as-t-boostlift", lo: 0, step: 0.25 },
-      { k: "whine",      id: "as-t-whine",  lo: 0,    step: 0.25 },
+      { k: "whine",      id: "as-t-whine",  lo: 0,    step: 0.02 },   // shipped 0.62 = position 31
       { k: "harvest",    id: "as-t-harvest", lo: 0,   step: 0.25 },
       { k: "wind",       id: "as-t-wind",   lo: 0,    step: 0.25 },
       { k: "screech",    id: "as-t-tyres",  lo: 0,    step: 0.25 },
