@@ -4281,7 +4281,6 @@ if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", (
 else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
 
 function quitToMenu() {
-  skipToResults();   // a finished player's result is settled (career/season) before the session is dropped
   Ghost.flush(); resultsCam.reset(); replayBuf.clear(); cancelIntro();
   if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
@@ -4300,6 +4299,7 @@ function quitToMenu() {
   // left the flyby active() for the session — capture listeners attached, and
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
+  if (skipToResults()) { resultsCam.reset(); replayBuf.clear(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
   setState("menu", "quit"); paused = false; raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
