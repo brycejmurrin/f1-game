@@ -117,6 +117,27 @@ radio collapse, and outside the fit the per-tick `phoneFitStampSync` (up to 8 pa
 | `cursor/hud-band-allocator-5e2c` (branch, no PR yet; +735/−297 in `hud.js`) | plan Phases 1–5: obstacle list, `rightDockInset`, `placeRadio`, `--rcol-y-*`, `--lcol-y-*`, `hUnset` | Addresses F-02, F-04, F-06, F-09 and part of F-07/F-13/F-14. **It does not touch F-01**, which applies to its formulas too. |
 | merged #1301, #1349, #1367, #1344, #1345 | lane rows, invalidateFit stale-clearance verify, survey capture cap, minimap slot note, survey B1–B5 | Already in `5ab09b4`; audited as shipped. |
 
+## Screenshot cross-check (2026-10-10, read by this session)
+
+Sources: `shots/hud-survey` (made with the `hud-mock` shot tool on branch `cursor/hud-survey-7c3a`: every widget filled with mock content on
+black, overlapping pairs in red; the README says ship `980eadd`). Plus one real SwiftShader render,
+the `btn1-dragged` frame on branch `shots/1360` (844×390, Monza, helmet). The mock does not run the 10 Hz fit loop, so a
+red pair there shows the layout the CSS and the last fit produced. It does not prove any per-tick path.
+
+| what the sheets show | where | finding it supports |
+|---|---|---|
+| Tower and sector text tiny in **cockpit and helmet** (top band zoom-capped); full size in chase | every phone landscape sheet | **F-05**: confirmed on shipped layouts |
+| Radio card pinned at the left edge (`x = sal + 8`) **over the bottom of the minimap**, full width, in chase *shipped* | 844×390, the left-notch 844×390 sheet, 932×430 | F-06 shape: `sal + 8` is exactly the collapse branch's `--announce-lane-x` (`hud.js:552` / `:1410`), yet the card still paints at full width. The lane obstacle list starts at the tower's bottom, not the map's. Cause not proven (mock). |
+| Radio card over the caution flag (chase all-on; left-notch chase shipped) | 844×390, left-notch 844×390, 640×360 | `announceLane`'s `bandTop` counts the flag only while it is unhidden at the time of the read; plan "flag × announce" item |
+| **INPUTS × DAMAGE** (and × LIMITS) in all-on, every phone and desktop | all | F-09 / plan anchors items 2–3: confirmed |
+| DAMAGE chip floats alone at about 60 % of the width in cockpit *shipped* | 844×390, 932×430 | plan anchors item 3 (stands off the full `--dock-r-w`, no column) |
+| Helmet: GEAR × ERS bar | every phone | outside this audit (bottom strip, `HELMET_TOUCH`); the survey session owns it |
+| Real render, docks dragged: BOOST over S1–S3 and over the start lights; S2 hidden | `shots/1360` branch, `btn1-dragged` | **F-08**: confirmed visually (the sector plate does not re-clear a dragged dock) |
+| Portrait (behind the rotate prompt): map × REL/STRAT, SECTORS × DAMAGE, helmet GEAR × ERS | 390×844 | low priority while the rotate prompt covers it |
+
+Not checkable from these sheets: F-01 (needs WebKit or iOS < 26.4) and F-02 (needs the docks to hide and
+come back during a run).
+
 ## The HUD only grows: a net-lines rule (owner decision, 2026-10-10)
 
 Every open HUD change makes the code larger, including the one meant to simplify it
