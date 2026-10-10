@@ -27,10 +27,10 @@ const DesignerScenery = (function () {
     const text = (p.label + " " + p.blurb).toLowerCase();
     return (!ids || ids.includes(id)) && words.every((w) => text.includes(w));
   }
-  function create({ el, btn, group, stepper, onTheme, onLook, onPreset, onKind, onPlace, onRemove, onRemoveAt, onSelect, onEditAt, onCopyAt }) {
+  function create({ el, btn, group, onTheme, onLook, onPreset, onKind, onPlace, onRemove, onRemoveAt, onSelect, onEditAt, onCopyAt }) {
     const root = group("SCENERY");
     root.dataset.role = "scenery";
-    let category = "all", current = null, side = 1, lastProps = null, section = "themes", placementMode = "point", copies = 3, editing = -1;
+    let category = "all", current = null, side = 1, lastProps = null, section = "themes", placementMode = "point", copies = 3, editing = -1, objectCategory = "all";
     const MIN_GAP = TrackDesignerProps.MIN_GAP;
     const gaps = Object.assign({}, TrackDesignerProps.DEFAULT_GAP);
     const summary = el("div", "td-group"); summary.dataset.role = "theme-summary";
@@ -100,11 +100,27 @@ const DesignerScenery = (function () {
     }
 
     const propsGroup = group("TRACKSIDE PROPS"); propsGroup.dataset.role = "prop-inspector";
+    const library = group("1 · CHOOSE AN OBJECT"); library.dataset.role = "object-library";
+    const objectFilters = el("div", "td-chips"); objectFilters.dataset.role = "object-filters";
+    objectFilters.setAttribute("role", "group"); objectFilters.setAttribute("aria-label", "Object categories");
+    const nature = ["trees", "water", "palms", "hedge", "pines", "bushes"];
+    function filterObjects() {
+      for (const b of objectFilters.children) pressed(b, b.dataset.objectCategory === objectCategory);
+      for (const b of props.children) b.hidden = objectCategory !== "all" && (nature.includes(b.dataset.prop) ? "nature" : "venue") !== objectCategory;
+    }
+    for (const [id, label] of [["all", "ALL"], ["nature", "NATURE"], ["venue", "RACE VENUE"]]) {
+      const b = btn(label, "sel-chip", () => { objectCategory = id; filterObjects(); });
+      b.dataset.objectCategory = id; objectFilters.appendChild(b);
+    }
     const props = el("div", "td-chips"); props.dataset.role = "props";
     props.setAttribute("role", "group"); props.setAttribute("aria-label", "Scenery props");
     for (const id of TrackDesignerProps.KINDS) {
-      const b = btn(TrackDesignerProps.LABELS[id], "sel-chip", () => onKind(id)); b.dataset.prop = id; props.appendChild(b);
+      const b = btn(TrackDesignerProps.LABELS[id], "sel-chip", () => onKind(id)); b.dataset.prop = id; b.title = TrackDesignerProps.DESCRIPTIONS[id]; props.appendChild(b);
     }
+    const selectedObject = el("div", "td-hint"); selectedObject.dataset.role = "selected-object";
+    selectedObject.setAttribute("role", "status");
+    library.append(objectFilters, props);
+    const placementGroup = group("2 · PLACE OBJECTS"); placementGroup.dataset.role = "object-placement";
     const sides = el("div", "td-chips"); sides.dataset.role = "prop-side";
     sides.setAttribute("role", "group"); sides.setAttribute("aria-label", "Track side in driving direction");
     sides.appendChild(el("span", "td-hint", "TRACK SIDE"));
@@ -112,11 +128,19 @@ const DesignerScenery = (function () {
       const b = btn(label, "sel-chip", () => { side = value; if (current) refresh(current); });
       b.dataset.side = String(value); sides.appendChild(b);
     }
-    const gap = stepper("ROADSIDE GAP m", () => gaps[current ? current.propKind : "stand"], (v) => {
+    const gap = el("div", "td-row"); gap.dataset.role = "prop-gap";
+    function setGap(v) {
       const kind = current ? current.propKind : "stand";
       gaps[kind] = Math.max(MIN_GAP[kind], Math.min(120, Math.round(v))); gap._refresh();
-    }, 2);
-    gap.dataset.role = "prop-gap";
+    }
+    const gapValue = numberInput("Roadside gap in metres", 0, 120, 1, setGap);
+    const gapDown = btn("−", "sel-chip", () => setGap(gaps[current.propKind] - 2));
+    const gapUp = btn("+", "sel-chip", () => setGap(gaps[current.propKind] + 2));
+    gapDown.setAttribute("aria-label", "ROADSIDE GAP m down"); gapUp.setAttribute("aria-label", "ROADSIDE GAP m up");
+    gap._refresh = () => { const k = current ? current.propKind : "stand"; gapValue.min = String(MIN_GAP[k]); gapValue.value = String(gaps[k]); gapDown.disabled = gaps[k] <= MIN_GAP[k]; gapUp.disabled = gaps[k] >= 120; };
+    gap.append(el("span", "td-hint", "ROADSIDE GAP · m"), gapDown, gapValue, gapUp);
+    const resetGap = btn("RESET GAP", "sel-chip", () => setGap(TrackDesignerProps.DEFAULT_GAP[current.propKind]));
+    resetGap.setAttribute("aria-label", "Reset roadside gap for selected object"); gap.appendChild(resetGap);
     const hint = el("div", "td-hint"); hint.dataset.role = "props-hint";
     function numberInput(label, min, max, step, onApply) {
       const input = el("input", "td-input"); input.type = "number";
@@ -137,6 +161,9 @@ const DesignerScenery = (function () {
     const quantity = numberInput("Scenery positions along section", 2, 8, 1, (v) => { copies = Math.max(2, Math.min(8, Math.round(v))); });
     field(target, "START POINT", startPoint);
     const endField = field(target, "END POINT", endPoint), countField = field(target, "POSITIONS", quantity);
+    const rangeActions = el("div", "td-chips"); rangeActions.dataset.role = "range-actions";
+    const swap = btn("SWAP ENDS", "sel-chip", () => { if (current && current.sel >= 0 && current.span >= 0) onSelect(current.span, current.sel); });
+    swap.setAttribute("aria-label", "Swap scenery section start and end"); rangeActions.appendChild(swap); target.appendChild(rangeActions);
     const actions = el("div", "td-chips"); actions.dataset.role = "prop-actions";
     const place = btn("PLACE AT POINT", "sel-edit", onPlace);
     place.setAttribute("aria-label", "Place the selected prop at the selected control point");
@@ -160,7 +187,12 @@ const DesignerScenery = (function () {
     const copy = btn("COPY TO POINT", "sel-chip", () => { if (editing >= 0) onCopyAt(editing); place.focus(); });
     const cancel = btn("CANCEL", "sel-chip", () => { editing = -1; editor.hidden = true; place.focus(); });
     editActions.append(applyEdit, move, copy, cancel); editor.append(editFields, editActions);
-    propsGroup.append(props, placement, target, sides, gap, hint, actions, editor, list);
+    const placedGroup = group("3 · PLACED OBJECTS"); placedGroup.dataset.role = "object-list";
+    const empty = el("div", "td-hint", "No objects placed yet. Choose an object above, then select where to place it.");
+    empty.dataset.role = "objects-empty";
+    placedGroup.append(empty, editor, list);
+    placementGroup.append(selectedObject, placement, target, sides, gap, hint, actions);
+    propsGroup.append(library, placementGroup, placedGroup);
     const panels = { themes: themePanel, atmosphere, objects: propsGroup };
     function showSection(id) {
       section = panels[id] ? id : "themes";
@@ -196,6 +228,10 @@ const DesignerScenery = (function () {
       for (const key of Object.keys(lookRows)) for (const b of lookRows[key].children) if (b.dataset.look) pressed(b, b.dataset.look === key + ":" + look[key]);
       for (const b of presets.children) pressed(b, LOOK_ROWS.every(([key]) => PRESETS[b.dataset.preset][key] === look[key]));
       const c = TrackDesignerProps.counts(d.props);
+      selectedObject.textContent = TrackDesignerProps.LABELS[kind] + " · " + TrackDesignerProps.DESCRIPTIONS[kind];
+      empty.hidden = c.total > 0;
+      rangeActions.hidden = placementMode !== "range"; swap.disabled = state.sel < 0 || state.span < 0 || state.sel === state.span;
+      resetGap.hidden = kind === "gantry";
       nav.children[2].textContent = "OBJECTS " + c.total + "/" + TrackDesignerProps.TOTAL;
       for (const b of props.children) {
         const id = b.dataset.prop;
@@ -242,7 +278,7 @@ const DesignerScenery = (function () {
         }
       }
     }
-    filter(); showSection(section);
+    filter(); filterObjects(); showSection(section);
     return { root, refresh, placement: (kind) => ({ side: kind === "gantry" ? 1 : side, gap: gaps[kind], mode: placementMode, count: placementMode === "range" ? copies : 1 }) };
   }
   return { create, matches, PRESETS, CATEGORIES };

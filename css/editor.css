@@ -445,6 +445,21 @@
 #trackdesigner [data-role="scenery"] [role="tabpanel"] { margin-top: 0; }
 #trackdesigner .td-chips[data-role="props"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 #trackdesigner [data-role="props"] .sel-chip { justify-content: space-between; }
+#trackdesigner [data-role="object-library"],
+#trackdesigner [data-role="object-placement"],
+#trackdesigner [data-role="object-list"] { margin-top: 0; padding-top: calc(var(--gap) / 2); }
+#trackdesigner [data-role="object-placement"],
+#trackdesigner [data-role="object-list"] { border-top: 1px solid var(--plate-line); }
+#trackdesigner [data-role="object-filters"] { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+#trackdesigner [data-role="object-filters"] .sel-chip { min-width: 0; justify-content: center; padding-inline: calc(var(--gap) / 3); }
+#trackdesigner [data-role="object-library"] [data-role="props"] { max-height: calc(var(--chip-h) * 3 + var(--gap) * 2); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+#trackdesigner [data-role="selected-object"] { color: var(--text); }
+#trackdesigner [data-role="prop-gap"] { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; }
+#trackdesigner [data-role="prop-gap"] .sel-chip { min-height: var(--chip-h); min-width: var(--chip-h); padding-inline: calc(var(--gap) / 3); }
+#trackdesigner [data-role="prop-gap"] > span { grid-column: 1 / -1; }
+#trackdesigner [data-role="range-actions"] { align-self: end; }
+#trackdesigner [data-role="range-actions"] .sel-chip { width: 100%; justify-content: center; }
+#trackdesigner [data-role="prop-gap"] .td-input { width: 100%; min-width: 0; box-sizing: border-box; text-align: center; }
 #trackdesigner [data-role="placement-mode"] { display: grid; grid-template-columns: 1fr 1fr; }
 #trackdesigner [data-role="scenery-fields"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--gap) / 2); }
 #trackdesigner [data-role="scenery-field"] { display: flex; flex-direction: column; gap: calc(var(--gap) / 3); min-width: 0; }
@@ -474,6 +489,11 @@
 @container (max-width: 320px) {
   #trackdesigner .td-row:has([data-look]) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   #trackdesigner .td-row:has([data-look]) > span { grid-column: 1 / -1; }
+}
+
+/* Scenery controls need more room on tall phones while both picking views stay visible. */
+@media (max-width: 760px) and (min-height: 740px) and (orientation: portrait) {
+  #trackdesigner[data-mode="scenery"] .td-body { grid-template-rows: auto minmax(0, 0.9fr) minmax(0, 1.3fr); }
 }
 
 }

@@ -1802,6 +1802,32 @@ test("scenery sections are navigable without edits; paired section placement and
   b.D.close();
 });
 
+test("object categories, numeric gap and section swap are preferences; new objects undo and save", () => {
+  const b = bootScreen(); openGreen(b); b.D.setMode("scenery");
+  const by = (key, value) => walk(b.root).find((e) => e.dataset && e.dataset[key] === value);
+  const undo = b.D.state().undo;
+  by("objectCategory", "nature").click();
+  assert.equal(by("prop", "pines").hidden, false); assert.equal(by("prop", "marshal").hidden, true);
+  by("prop", "pines").click();
+  const gap = b.root.querySelector('[aria-label="Roadside gap in metres"]');
+  gap.value = "33"; b.dom.dispatch(gap, { type: "change" });
+  b.D.selectRange(4, 16); by("placementMode", "range").click();
+  b.root.querySelector('[aria-label="Swap scenery section start and end"]').click();
+  assert.equal(b.D.state().sel, 16); assert.equal(b.D.state().span, 4);
+  assert.equal(b.D.state().undo, undo, "browsing and placement preferences do not create edits");
+  b.D.placeProp(); assert.equal(b.D.state().design.props.length, 3);
+  assert.ok(b.D.state().design.props.every((p) => p.kind === "pines" && p.gap === 33));
+  const saved = b.D.save(); assert.equal(saved.ok, true); assert.equal(b.C.get(saved.id).props.length, 3);
+  b.D.undo(); assert.equal(b.D.state().design.props, undefined);
+  gap.value = "1"; b.dom.dispatch(gap, { type: "change" }); assert.equal(gap.value, "20");
+  b.root.querySelector('[aria-label="Reset roadside gap for selected object"]').click(); assert.equal(gap.value, "28");
+  by("objectCategory", "venue").click();
+  assert.equal(by("prop", "pines").hidden, true); assert.equal(by("prop", "marshal").hidden, false);
+  by("prop", "marshal").click(); by("placementMode", "point").click(); b.D.placeProp();
+  assert.equal(b.D.state().design.props[0].kind, "marshal");
+  b.D.close();
+});
+
 test("SCENERY props: REVERSE / START HERE remap s; RANDOMISE clears props", () => {
   const b = bootScreen();
   openGreen(b);
