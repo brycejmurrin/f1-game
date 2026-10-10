@@ -55,6 +55,7 @@ node tools/shot/hud-survey.mjs --self-test               # pure logic, no browse
 node tools/shot/hud-survey.mjs --list --matrix leads     # cells + cost, no browser
 node tools/shot/hud-survey.mjs --matrix quick --only chase-default   # 1 boot, ~2 min
 node tools/shot/hud-survey.mjs --matrix quick            # 13 cells / 3 boots, ~10 min
+node tools/shot/hud-survey.mjs --matrix quick --no-shots --gl llvmpipe   # MEASURE FIRST: 5.4 min, then --only <cells with findings> for pixels
 node tools/shot/hud-survey.mjs --matrix leads            # static-audit repros with numeric checks
 # full ≈ 45 min (pairwise); exhaustive ≈ 4 h → shard it: --shard i/n, then --merge <dirs>,
 # or dispatch .github/workflows/hud-survey.yml (llvmpipe shards + one merged artifact)

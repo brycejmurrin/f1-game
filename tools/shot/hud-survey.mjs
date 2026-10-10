@@ -17,7 +17,8 @@
 //
 // Flags: --matrix quick|full|exhaustive|leads|<file.json>  --track monza  --frac 0.18
 //   --only <substr,…>  --shard i/n  --out artifacts/hud-survey/<stamp>
-//   --no-shots (measure only; skips the lit-frame wait)  --backend three|webgl2
+//   --no-shots (measure only; skips the lit-frame wait)  --render-every-frame (keep the 3D loop drawing
+//   between captures; default paints ONE frame per cell, then __apex.headless)  --backend three|webgl2
 //   --gl swiftshader|llvmpipe (default $APEX_GL or swiftshader)  --min-font 10
 //   --wait <s boot budget, 180>  --json (summary JSON as the last stdout block)
 //   --list (cells, no browser)  --plan  --self-test  --merge <dir…>
@@ -51,10 +52,13 @@
 // text in ONE synchronous evaluate (overlaps judge this).
 // Findings: tools/lib/hud-survey-matrix.mjs classifyFindings.
 //
-// RUNTIME HERE: SwiftShader, ~1-1.5 min per boot (page + race build), then
-// ~20-30 s per cell (first lit present after a camera cut), ~5-10 s with
-// --no-shots. quick ≈ 10 min, full ≈ 45 min, exhaustive ≈ 4 h (shard it:
-// .github/workflows/hud-survey.yml runs it on llvmpipe). AGENTS.md rule 4:
+// RUNTIME HERE: ~35-55 s per boot (page + race build, --gl llvmpipe), then
+// ~6-15 s per cell with --no-shots (ONE 3D frame per cell, see runGroup) and
+// minutes per cell with shots on software GL. Measure first, shoot second:
+// quick --no-shots --gl llvmpipe = 5.4 min (was ~35 min with shots, 2026-10-10),
+// then --only the cells with findings for pixels. full ≈ 45 min with shots,
+// exhaustive ≈ 4 h (shard it: .github/workflows/hud-survey.yml runs it on
+// llvmpipe). AGENTS.md rule 4:
 // run it in the BACKGROUND with its log in artifacts/logs/, never beside a
 // Playwright run (check /proc/loadavg < 3).
 import fs from "node:fs";
@@ -79,7 +83,7 @@ const CELL_FLAGS = { "--device": "device", "--cam": "cam", "--profile": "profile
   "--gaps": "gaps", "--mirror": "mirror", "--preset": "preset", "--preset-set": "presetSet", "--preset-prof": "presetProf", "--theme": "theme",
   "--cvd": "cvd", "--contrast": "contrast", "--text-size": "textSize", "--hud-scale": "hudScale", "--ui-scale": "uiScale",
   "--btn-scale": "btnScale", "--tyres": "tyres", "--hud": "hud", "--tod": "tod", "--steer": "steer", "--profile-live": "profileLive", "--off": "off", "--name": "name" };
-export const KNOWN_FLAGS = ["--matrix", "--track", "--frac", "--only", "--shard", "--out", "--no-shots", "--backend", "--gl",
+export const KNOWN_FLAGS = ["--matrix", "--track", "--frac", "--only", "--shard", "--out", "--no-shots", "--render-every-frame", "--backend", "--gl",
   "--min-font", "--wait", "--json", "--list", "--plan", "--self-test", "--merge", "--url", "--help", ...Object.keys(CELL_FLAGS)];
 
 const insideOutput = (p) => ["artifacts", "scratch"].some((d) => {
@@ -107,7 +111,7 @@ export function parseArgs(argv, { now = new Date(), readFile = (p) => fs.readFil
   const stamp = now.toISOString().replace(/[:.]/g, "-").replace(/Z$/, "");
   const out = path.resolve(ROOT, F.flag("--out", path.join("artifacts", "hud-survey", stamp)));
   if (!insideOutput(out)) throw new CliArgError(`--out must stay under artifacts/ or scratch/ (got ${out})`);
-  const common = { out, track, frac, backend, gl, minFont, waitMs: waitS * 1000, shots: !F.has("--no-shots"),
+  const common = { out, track, frac, backend, gl, minFont, waitMs: waitS * 1000, shots: !F.has("--no-shots"), renderAll: F.has("--render-every-frame"),
     json: F.has("--json"), list: F.has("--list"), plan: F.has("--plan") };
   if (F.has("--merge")) {
     // Every non-flag token after --merge is a shard directory.
@@ -345,10 +349,12 @@ async function cdpShot(page, file) {
     if (!file) opts.clip = { x: 0, y: 0, width: 1, height: 1, scale: 1 };
     const vp = page.viewportSize() || { width: 0, height: 0 };
     const cap = shotTimeoutMs(vp.width, vp.height);
+    // A CLEARED timer: a bare sleep(cap) kept node alive 60-180 s after the last capture (2026-10-10).
+    let timer;
     const { data } = await Promise.race([
       session.send("Page.captureScreenshot", opts),
-      sleep(cap).then(() => { throw new Error(`CDP captureScreenshot timed out after ${cap / 1000} s at ${vp.width}x${vp.height} (software GL; --gl llvmpipe is faster)`); }),
-    ]);
+      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(`CDP captureScreenshot timed out after ${cap / 1000} s at ${vp.width}x${vp.height} (software GL; --gl llvmpipe is faster)`)), cap); }),
+    ]).finally(() => clearTimeout(timer));
     if (file) fs.writeFileSync(file, Buffer.from(data, "base64"));
   } finally { try { await session.detach(); } catch { /* closed */ } }
 }
@@ -391,6 +397,7 @@ async function runGroup(browser, group, plan, log) {
         // Measure-only skips the lit-frame wait: the DOM boxes do not depend
         // on the canvas, and that wait is most of a cell's cost here.
         if (plan.shots) {
+          await page.evaluate(() => window.__apex.headless(false));
           for (let t = 0; t < 30; t++) {
             await awaitPresentedFrame(page, 12000);
             lit = await page.evaluate(litFraction);
@@ -415,6 +422,25 @@ async function runGroup(browser, group, plan, log) {
         // same spot), then the measured frame. Without it the leads compared one
         // cell's caps against the previous cell's (2026-10-04: --radio-top-*
         // identical before and after the slot fix).
+        // ONE 3D FRAME PER CELL. The boxes are DOM, but the mirror frame, the
+        // camera's body classes and the radio slot follow a rendered frame, so the
+        // cell paints once (or the lit wait above painted it); then render() is
+        // skipped (__apex.headless) and every later capture only composites the
+        // DOM over that frame. A software 3D frame here costs seconds; the old path
+        // painted ~3 per cell, plus the game loop's own frames in every wait: a
+        // measure-only cell went 32 s -> ~13 s (844x390 llvmpipe, 2026-10-10).
+        // --render-every-frame restores the old behaviour.
+        if (!plan.renderAll) {
+          await page.evaluate(async (painted) => {
+            const a = window.__apex;
+            if (!painted) {
+              a.headless(false);
+              await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+              try { if (window.GLX && GLX.awaitSoftPresent) await GLX.awaitSoftPresent(12000); } catch { /* no soft present */ }
+            }
+            a.headless(true);
+          }, !!plan.shots);
+        }
         await cdpShot(page, null);
         await page.evaluate((frac) => {
           try { if (window.GameHud && GameHud.invalidateFit) GameHud.invalidateFit(); } catch { /* old tree */ }
