@@ -5,7 +5,7 @@
 // Run: node --test tests/unit/ratchets.test.mjs   (npm run test:tooling-fast)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { load, measure, verdict, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, diffRatchets, compareToBase, loadAt } from "../../tools/check/ratchets.mjs";
+import { load, measure, verdict, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt } from "../../tools/check/ratchets.mjs";
 
 test("every ratcheted metric is at or under its ceiling", async () => {
   const v = verdict(await measure());
@@ -25,8 +25,20 @@ test("every ratcheted metric is at or under its ceiling", async () => {
 
 test("no ceiling is left far above the value it guards (one slack rule)", async () => {
   const v = verdict(await measure());
-  assert.deepEqual(v.loose.map((r) => `${r.file} ${r.metric}: ${r.value} but ceiling ${r.ceiling} (slack ${r.slack} > max(${SLACK_MIN}, ${SLACK_PCT * 100}%))`), [],
+  assert.deepEqual(v.loose.map(looseLine), [],
     "a ceiling drifted above its file and stopped ratcheting — node tools/check/ratchets.mjs --update");
+});
+
+test("a LOOSE line names the rule the entry is held to: its own slack, or the default", async () => {
+  // A `slack: 0` entry (rawColor, …) one under its ceiling used to print
+  // "slack 1 > max(60, 4%)" — the default rule, which it is NOT held to.
+  const v0 = (await measure({ files: {}, tree: { bareCatches: 1 } }))[0].value;
+  const exact = verdict(await measure({ files: {}, tree: { bareCatches: { ceiling: v0 + 1, slack: 0 } } }));
+  assert.equal(exact.loose.length, 1, "a slack-0 entry one above its value is LOOSE");
+  assert.equal(looseLine(exact.loose[0]), `(tree) bareCatches: ${v0} but ceiling ${v0 + 1} (slack 1 > the entry's own slack 0 (exact))`);
+  const dflt = verdict(await measure({ files: {}, tree: { bareCatches: v0 + 500 } }));
+  const want = Math.max(SLACK_MIN, Math.round((v0 + 500) * SLACK_PCT));
+  assert.equal(looseLine(dflt.loose[0]), `(tree) bareCatches: ${v0} but ceiling ${v0 + 500} (slack 500 > max(${SLACK_MIN}, ${SLACK_PCT * 100}%) = ${want})`);
 });
 
 test("the data names only known metrics, and game.js carries the carve metrics", () => {

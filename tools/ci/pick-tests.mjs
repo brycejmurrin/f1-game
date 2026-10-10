@@ -282,10 +282,11 @@ export const RULES = [
   [/^css\/menus\.css/, ["ui", "baseline"], "the menu chrome: only the blessed PNGs in menu-baseline.spec.js see it"],
   [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],
   // Two rules, because "script tags + DOM shell" is LOAD-BEARING: it is one of
-  // select-specs' BOOT_FALLBACK_REASONS, the strings that let the selected gate
-  // drop the boot group when only a blanket rule named it. Rewording it to
-  // mention the art would have put boot-guard and logging — the two
-  // slowest-per-test specs in the tree — back into every source edit.
+  // select-specs' BOOT_FALLBACK_REASONS, the strings that let node-plan.mjs
+  // drop the boot group from the VM plan when only a blanket rule named it
+  // (select() keeps the group for the browser gate since round-3 8-F2).
+  // Rewording it to mention the art would put vm-page — logging.spec.js's VM
+  // twin — back into every source edit's node plan.
   [/^index\.html/, ["baseline"], "the #title-car art the baseline PNGs pixel-compare"],
   [/^(index|cockpit-view)\.html/, ["tiny", "ui"], "script tags + DOM shell"],
   [/^tools\/manifest\.cjs/, ["tooling-fast"], "load order is asserted against index.html"],
@@ -347,7 +348,7 @@ export function specOwners(spec, groups = groupsJson()) {
 
 /** Undo the spec-owner routing for a CI selector: strip SPEC_OWNER_REASON
  *  from every group and drop a group it alone named, so the selection (and
- *  dropBootFallback after it) sees exactly the RULES' answer. */
+ *  node-plan's dropBootFallback after it) sees exactly the RULES' answer. */
 export function stripSpecOwner(groups) {
   const dropped = [];
   for (const [g, reasons] of groups) {

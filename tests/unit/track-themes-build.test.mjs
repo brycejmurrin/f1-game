@@ -178,20 +178,16 @@ test("every preset with NIGHT · MANY TREES · PACKED CROWD at ~6.9 km stays und
 });
 
 // CustomTracks.toRaw (js/editor/custom-tracks.js) must pass the design:
-// `TrackThemes.defFields(it.theme, it)`. Until it does, the length-scaled
-// fields never reach a saved circuit — reported as a TODO, strict once wired.
-{
+// `TrackThemes.defFields(it.theme, it)`. Without the design the length-scaled
+// fields never reach a saved circuit. Strict: a regression fails here, never a TODO.
+test("CustomTracks.toRaw hands the design to TrackThemes.defFields (a long street lap carries its city gaps)", () => {
   const probe = boot().ctx;
   const d = { theme: "harbour", baseHW: 7, seed: 1, pts: Array.from({ length: 40 }, (_, i) => [Math.round(1400 * Math.cos(i / 40 * 2 * Math.PI)), Math.round(900 * Math.sin(i / 40 * 2 * Math.PI))]) };
   const it = probe.CustomTracks.sanitize(d);
-  const wired = !!(it && probe.CustomTracks.toRaw(it).dressingExclusions);
-  test("CustomTracks.toRaw hands the design to TrackThemes.defFields (a long street lap carries its city gaps)",
-    { todo: wired ? false : "js/editor/custom-tracks.js toRaw: TrackThemes.defFields(it.theme) → defFields(it.theme, it)" }, () => {
-      assert.ok(it.lengthM > 3600, "the probe lap is longer than harbour's cityM");
-      assert.deepEqual(JSON.parse(JSON.stringify(probe.CustomTracks.toRaw(it).dressingExclusions || null)),
-        JSON.parse(JSON.stringify(probe.TrackThemes.cityGaps(it.lengthM, probe.TrackThemes.PRESETS.harbour.cityM))));
-    });
-}
+  assert.ok(it && it.lengthM > 3600, "the probe lap is longer than harbour's cityM");
+  assert.deepEqual(JSON.parse(JSON.stringify(probe.CustomTracks.toRaw(it).dressingExclusions || null)),
+    JSON.parse(JSON.stringify(probe.TrackThemes.cityGaps(it.lengthM, probe.TrackThemes.PRESETS.harbour.cityM))));
+});
 
 test("survey() lists the start straight once; cityGaps scale with the lap", { timeout: 300000 }, () => {
   const { Tracks, ctx } = boot();

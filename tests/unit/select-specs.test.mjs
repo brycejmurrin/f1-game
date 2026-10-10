@@ -611,16 +611,26 @@ test("the selected-gate settings match select-budget's recommendation", () => {
     "the selected settings must fit MORE tests than smoke's settings, or they buy nothing");
 });
 
-test("the boot group is not selected for a blanket source edit — the fixed smoke gate owns that question", () => {
-  // 2026-09-02: every js/css edit routed to `tiny`, whose cheapest-by-count
-  // specs (boot-guard, logging) are the slowest per test; they timed out the
-  // deploy gate twice on starved runners for diffs that never touched them.
+test("a blanket source edit keeps the boot group in the REQUIRED selected gate — Smoke is not a required check (8-F2)", () => {
+  // 2026-09-02 select() dropped `tiny` when only the blanket rules named it and
+  // left "does the page still boot" to the Smoke job. Smoke is not in the branch
+  // protection's required contexts and is skipped on drafts and deploy pushes,
+  // so a boot-breaking diff could merge with every required check green.
   const g = pick(["js/ui/hud.js", "index.html"]);
-  assert.ok(g.has("tiny"), "the blanket rules still route to the boot group for a human reader");
+  assert.ok(g.has("tiny"), "the blanket rules route a source edit to the boot group");
   for (const why of g.get("tiny")) assert.ok(BOOT_FALLBACK_REASONS.has(why), `unexpected boot reason: ${why}`);
-  assert.equal(dropBootFallback(g), true);
-  assert.ok(!g.has("tiny"), "the selected gate drops the boot group when only the blanket rules named it");
-  // A group named for a specific reason stays.
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
+  const body = src.slice(src.indexOf("export function select("), src.indexOf("r.shards = shards(r)"));
+  assert.ok(body.length > 0 && !/dropBootFallback\(/.test(body), "select() must not drop the boot group");
+  // …and the group still yields a boot spec the selected gate RUNS: not a
+  // fixed-gate (Smoke-owned) spec, not a VM twin, not manual.
+  const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
+  const boot = specsOf(["test:tiny"], scripts);
+  assert.ok(boot.includes("tests/specs/boot-guard.spec.js"), "boot-guard is in the boot group");
+  const r = fit(boot, DEFAULT_BUDGET_MIN, { db: EMPTY });
+  const runs = [...r.selected, ...(r.oversize || []), ...(r.overflow || []).flat(), ...(r.overBudgetPool || [])].map((s) => s.file ?? s);
+  assert.ok(runs.includes("tests/specs/boot-guard.spec.js"), `boot-guard runs in the selected gate: ${JSON.stringify(runs)}`);
+  // The VM plan (node-plan.mjs, vm-page) still drops it; a specific reason keeps it there too.
   const specific = new Map([["tiny", new Set(["js/core/log.js"])]]);
   assert.equal(dropBootFallback(specific), false);
   assert.ok(specific.has("tiny"));
