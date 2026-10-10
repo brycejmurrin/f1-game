@@ -514,18 +514,17 @@ const TrackDesigner = (function () {
     if (typeof TrackDesignerProps === "undefined" || !design || !design.pts.length) return false;
     const k = kind || propKind;
     if (!TrackDesignerProps.has(k)) return false;
-    if (!TrackDesignerProps.canPlace(design.props, k)) {
-      message("Prop cap reached for " + (TrackDesignerProps.LABELS[k] || k), true);
-      return false;
-    }
     const i = sel >= 0 ? sel : 0;
-    const s = TrackDesignerProps.pointFrac(design.pts, i);
-    const next = TrackDesignerProps.place(design.props, k, Object.assign({ s }, scenery ? scenery.placement(k) : { side: 1 }));
-    if (!next) return false;
+    const opts = scenery ? scenery.placement(k) : { side: 1, count: 1 };
+    if (opts.mode === "range" && (sel < 0 || span < 0 || sel === span)) { message("Select a start and end point for the scenery section", true); return false; }
+    const start = TrackDesignerProps.pointFrac(design.pts, i), end = span >= 0 ? TrackDesignerProps.pointFrac(design.pts, span) : null;
+    const next = TrackDesignerProps.placeBatch(design.props, k, Object.assign({ start, end }, opts));
+    if (!next) { message("Placement exceeds the object limit — reduce positions or choose one side", true); return false; }
+    const added = next.length - (design.props || []).length;
     const d = Object.assign({}, design);
     if (next.length) d.props = next; else delete d.props;
     commit(d, "prop");
-    message("Placed " + (TrackDesignerProps.LABELS[k] || k) + " at point " + (i + 1));
+    message("Placed " + added + " " + (TrackDesignerProps.LABELS[k] || k) + (opts.mode === "range" ? " along the selected section" : " at point " + (i + 1)));
     return true;
   }
   /** Remove only the chosen kind; never silently remove a different object. */
@@ -547,6 +546,18 @@ const TrackDesigner = (function () {
     if (props.length) next.props = props; else delete next.props;
     commit(next, "prop");
     return true;
+  }
+  function editPropAt(i, patch) {
+    if (!design) return false;
+    const props = TrackDesignerProps.updateAt(design.props, i, patch);
+    if (!props) return false;
+    commit(Object.assign({}, design, { props }), "prop"); return true;
+  }
+  function copyPropAt(i) {
+    const p = design && design.props && design.props[i]; if (!p) return false;
+    const props = TrackDesignerProps.place(design.props, p.kind, Object.assign({}, p, { s: TrackDesignerProps.pointFrac(design.pts, Math.max(0, sel)) }));
+    if (!props) { message("Object limit reached", true); return false; }
+    commit(Object.assign({}, design, { props }), "prop"); return true;
   }
   function setWidth(hw) {
     hw = Math.round(Math.min(CustomTracks.LIMITS.hwMax, Math.max(CustomTracks.LIMITS.hwMin, hw)) * 10) / 10;
@@ -923,7 +934,8 @@ const TrackDesigner = (function () {
     // module so history, validation, autosave and race hand-off share one path.
     scenery = DesignerScenery.create({ el, btn, group, stepper,
       onTheme: setTheme, onLook: setLook, onPreset: setAtmosphere, onKind: setPropKind,
-      onPlace: () => placeProp(), onRemove: () => removeProp(), onRemoveAt: removePropAt });
+      onPlace: () => placeProp(), onRemove: () => removeProp(), onRemoveAt: removePropAt,
+      onSelect: selectRange, onEditAt: editPropAt, onCopyAt: copyPropAt });
     const theme = scenery.root; ui.themeGroup = theme;
     // circuit
     const circuit = group("4 DETAILS");
@@ -1143,7 +1155,7 @@ const TrackDesigner = (function () {
     } else if (ui.shapeLabel) {
       ui.shapeLabel.textContent = "2 CORNERS";
     }
-    if (scenery) scenery.refresh({ design, sel, propKind });
+    if (scenery) scenery.refresh({ design, sel, span, propKind });
     if (selectionPanel) selectionPanel.refresh({ design, sel, span, mode, selectionMode });
     if (ui.elevActions) for (const b of ui.elevActions.children) b.disabled = sel < 0;
     if (document.activeElement !== ui.name) ui.name.value = design.name;
@@ -2099,7 +2111,7 @@ const TrackDesigner = (function () {
     return true;
   }
 
-  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, armSpanEnd, undo: doUndo, redo: doRedo, setTheme, setLook, setAtmosphere, setPropKind, placeProp, removeProp, removePropAt, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, setHeights, selectRange, setSelectionMode, adjustElevation, profileView, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
+  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, armSpanEnd, undo: doUndo, redo: doRedo, setTheme, setLook, setAtmosphere, setPropKind, placeProp, removeProp, removePropAt, editPropAt, copyPropAt, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, setHeights, selectRange, setSelectionMode, adjustElevation, profileView, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
     selectCorner, toggleHeat, trackOfTheDay, startFrom, toggleStartFrom,
     designed, useCandidate, moreLikeThis,
     setSpanWidth, setCornerBank, setKerbStyle, setBerms };
