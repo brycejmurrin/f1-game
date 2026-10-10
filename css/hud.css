@@ -2034,7 +2034,7 @@ body:not(.desktop) #hud-strat {
 /* A column piece with no free slot on this screen (placeLeftColumn): invisible, but still laid out so
    the next fit measures the same box and asks the same question. The MOVE & SIZE fold (hiddenReason) names it;
    MOVE & SIZE placing it (data-hl-user) takes it out of the allocator and shows it. */
-:is(#hud-limits, #hud-damage, #hud-inputs, #hud-rel, #hud-strat)[data-col-drop] { visibility: hidden !important; }
+:is(#hud-sectors, #hud-limits, #hud-damage, #hud-inputs, #hud-rel, #hud-strat)[data-col-drop] { visibility: hidden !important; }
 body:not(.desktop) #hud-inputs:not([data-hl-user]) {
   /* Same containing block as #hud-sectors / #hud-limits: position-anchor on an
      absolute child of #hud could resolve before --dock-r-w lands and paint the

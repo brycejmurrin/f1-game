@@ -124,7 +124,9 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   // painted-overlap grow (CI oversize workers=2: stale dockLeft vs BOOST).
   assert.match(hud, /btn-boost/);
   assert.match(hud, /DOCK_AIR \/ z/);
-  assert.match(hud, /secR\.right > left - DOCK_AIR/);
+  // The painted correction meets the dock in x AND y (a dock dragged clear of the column is no reason to move).
+  assert.match(hud, /dockLeftIn\(list, grow\(s, DOCK_AIR - 0\.5\)\)/);
+  assert.doesNotMatch(hud, /secR\.right > left - DOCK_AIR/, "no x-only overlap test against the dock");
   // After --hud-z-top, flush #minimap so currentCSSZoom catches the cap
   // (selected-2 ui-redesign: compact mmCss 142 = 110×staleZoom/zTop).
   assert.match(hud, /if \(els\.minimap\) void els\.minimap\.offsetHeight/);

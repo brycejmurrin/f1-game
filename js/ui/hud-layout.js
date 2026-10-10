@@ -610,7 +610,7 @@ const HudLayout = (function () {
     // js/ui/hud.js placeRightColumn / placeLeftColumn: no free slot in its column on this screen, even at
     // the column's smallest readable size (data-col-drop). A place
     // (data-hl-user) takes it out of the allocator, so the sliders cure it.
-    [["limits", "damage", "inputs", "rel", "strat"], (h, a, off, el) => !a && !!(el && el.hasAttribute && el.hasAttribute("data-col-drop")),
+    [["sectors", "limits", "damage", "inputs", "rel", "strat"], (h, a, off, el) => !a && !!(el && el.hasAttribute && el.hasAttribute("data-col-drop")),
       "no room in its column on this screen — move it to show it", true],
     [["map"], (h) => h("hud-hide-map"), "MAP is off for this camera or style (DISPLAY › HUD › MAP)"],
     [["gaps"], (h) => h("hud-hide-gaps"), "GAPS is off for this style (DISPLAY › HUD › GAPS)"],

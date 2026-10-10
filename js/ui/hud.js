@@ -522,6 +522,9 @@ function obsCollect() {
   add("mirror", doc.getElementById("hud-mirror"), "chrome", "centre");
   add("mirrorChip", doc.getElementById("hud-mirror-chip"), "control", "centre");
   add("flag", els.flag || doc.getElementById("hud-flag"), "chrome", "centre");
+  // The start lights: transient chrome (they show for the start only), so the sector plate stays clear of
+  // them but neither column allocator treats them as a lasting obstacle.
+  add("lights", els.lights || doc.getElementById("lights"), "chrome", "centre", { transient: true });
   add("pause", els.pausebtn || doc.getElementById("pausebtn"), "control", "top");
   add("cam", els.btnCam || doc.getElementById("btn-cam"), "control", "top");
   add("gearbox", doc.getElementById("hud-gearbox"), "readout", "bottom");
@@ -970,7 +973,7 @@ function placeRightColumn(root, scale) {
   const steps = [], blocks = [];
   for (const o of _obs) {
     if (colUser(o.el) && (mine[o.id] || o.id === "sectors")) { if (o.column === "right") steps.push(o.rect); continue; }
-    if (mine[o.id] || (theirs[o.id] && !colUser(o.el))) continue;
+    if (o.transient || mine[o.id] || (theirs[o.id] && !colUser(o.el))) continue;
     blocks.push(o.rect);
   }
   steps.sort((a, b) => a.top - b.top);
@@ -1037,7 +1040,7 @@ function placeLeftColumn(root, scale) {
   if (gm && gm.column === "left") start = Math.max(start, gm.rect.bottom);
   // Obstacles: everything on screen but the pieces this pass places (a placed-by-the-player one stays).
   const blocks = [];
-  for (const o of _obs) if (!(mine[o.id] && !colUser(o.el))) blocks.push(o.rect);
+  for (const o of _obs) if (!o.transient && !(mine[o.id] && !colUser(o.el))) blocks.push(o.rect);
   const solve = (k) => {
     const out = {}, placed = [];
     const air = LCOL_AIR * zTop * k, x0 = sal + 10 * zTop * k;
@@ -1090,6 +1093,10 @@ function phoneFitStampSync(scale) {
     if (!boost) return false;
     const br = boost.getBoundingClientRect();
     if (!(br.width && br.height)) return false;
+    // Only a plate that really meets BOOST (x AND y) is moved: the clash that woke this pass may be
+    // RELATIVE on the left dock, and a dock dragged clear of the column must not shove S1-S3 inboard.
+    const sr = els.hudSectors && !els.hudSectors.hidden ? els.hudSectors.getBoundingClientRect() : null;
+    if (!sr || !_hudRectsHit(sr, br)) return false;
     const probe = els.hudSectors || _hudTop || els.minimap;
     const zTop = (+root.style.getPropertyValue("--hud-z-top") || scale || 1);
     const live = probe && probe.currentCSSZoom > 0 ? probe.currentCSSZoom : zTop;
@@ -1200,8 +1207,9 @@ function fitHud() {
     const sec = list ? obs("sectors") : null;
     if (sec) {
       const s = sec.rect, b = _boostOnRightHalf() ? obs("btn-boost").rect : null;
-      // Only a RIGHT-half BOOST can clash with the sectors plate's dock inset.
-      if (b && s.right > b.left - 8) clash = true;
+      // Only a RIGHT-half BOOST can clash with the sectors plate's dock inset — and only one that really
+      // meets the plate (x AND y, 8 px of air): a dock dragged clear of the column is no clash.
+      if (b && _hudRectsHit({ left: s.left - 8, top: s.top - 8, right: s.right + 8, bottom: s.bottom + 8, width: s.width + 16, height: s.height + 16 }, b)) clash = true;
       else {
         const ann = typeof document !== "undefined" ? document.getElementById("announce") : null;
         if (ann && !ann.hidden && !ann.hasAttribute("data-lane-collapsed") && _hudRectsHit(ann.getBoundingClientRect(), s)) clash = true;
@@ -1676,50 +1684,84 @@ function fitHud() {
     const live = probe && probe.currentCSSZoom > 0 ? probe.currentCSSZoom : pub;
     return Math.min(pub, live);
   };
-  // BOOST only anchors --dock-r-w when it sits in the RIGHT half. Tilt parks
-  // BOOST on the left column; using that left as the inset target blew midCap
-  // (CI: dockRW 907, #hud-sectors unsafe under --sal).
-  const boostRightLeft = () => (_boostOnRightHalf() ? obs("btn-boost").rect.left : NaN);
-  // The LEFTMOST painted right-dock control, from the obstacle list (re-collected by the caller after
-  // any write). Prefer the RIGHT-dock BOOST disc — grp-taps can still be mid-wrap while the button's
-  // box has already landed (CI: dockLeft 597 vs BOOST 587).
-  const dockLeftOf = (list) => {
-    let left = Infinity;
-    for (const o of list) if (o.group && o.dock === "R") left = Math.min(left, o.rect.left);
-    const brLeft = boostRightLeft();
-    if (Number.isFinite(brLeft)) left = Math.min(left, brLeft);
-    if (!Number.isFinite(left) && _dockR) {
-      const dr = _dockR.getBoundingClientRect();
-      if (dr.width) left = dr.left;
-    }
-    return left;
-  };
+  // THE DOCK COUNTS ONLY WHERE IT MEETS THE COLUMN — in x AND y. The stand-off used to be taken from the
+  // leftmost right-dock control wherever it sat, and the repair passes tested `plate.right > group.left`
+  // alone: with the docks DRAGGED inboard (SETTINGS › CONTROLS › dock layout, 844x390 touch) the right
+  // dock sat left of the sector plate's home, so --dock-r-w shoved S1-S3 to the centre cap, under the
+  // start lights, and BOOST ended up on the plate (shots/1360 btn1-dragged). Now only a right-dock group
+  // or a right-half BOOST that intersects the right column's HOME box — the plate's box with no
+  // stand-off (its right edge at the safe edge + 10 zoomed px), from its top to the screen's foot, plus
+  // DOCK_AIR — pushes the column; a dock dragged clear of it leaves S1-S3 at home. Every overlap test
+  // below is a real rect intersection.
+  // AND THE PLATE STOPS AT THE CENTRE CHROME: where the stand-off would carry it into the tower, the
+  // start lights, the mirror or the flag in its own rows, it keeps its right edge clear of the dock and
+  // narrows (max-width) to fit between the two; too narrow even for that (48 px) and it is DROPPED
+  // (data-col-drop, still laid out so the next fit measures the same box) rather than painted over either.
+  const W = window.innerWidth || 0, Hh = window.innerHeight || 0;
   const sarPx = cssPx(root, "--sar");
   const DOCK_AIR = RIGHT_DOCK_AIR;
-  // Publish from the current leftmost right-dock / BOOST edge, then at most
-  // one painted correction against a RIGHT-side BOOST only.
+  const touch = !document.body.classList.contains("desktop");
+  const secEl = els.hudSectors;
+  // The plate as laid out, measured off the element (a dropped plate is not in the obstacle list).
+  const plateBox = () => {
+    const r = secEl && !secEl.hidden && secEl.getBoundingClientRect ? secEl.getBoundingClientRect() : null;
+    return r && r.width && r.height ? r : null;
+  };
+  const homeBox = (z) => {
+    const s = plateBox(), p = obs("pause");
+    let w = s ? s.width : 0;
+    for (const id of ["limits", "damage", "inputs"]) { const o = obs(id); if (o && o.column === "right") w = Math.max(w, o.rect.width); }
+    const right = W - sarPx - 10 * z, top = s ? s.top : p ? p.rect.bottom + 4 : 0;
+    return colRect(right - w - DOCK_AIR, top - DOCK_AIR, w + 2 * DOCK_AIR, Math.max(0, Hh - top) + DOCK_AIR);
+  };
+  const grow = (r, a) => colRect(r.left - a, r.top - a, r.width + 2 * a, r.height + 2 * a);
+  // The leftmost right-dock group / right-half BOOST that meets `box`; Infinity when none does. BOOST
+  // is preferred where it lands first — grp-taps can still be mid-wrap while the button's box has
+  // already landed (CI: dockLeft 597 vs BOOST 587). Tilt parks BOOST on the left column: never a target.
+  const dockLeftIn = (list, box) => {
+    let left = Infinity;
+    for (const o of list) if (o.group && o.dock === "R" && _hudRectsHit(o.rect, box)) left = Math.min(left, o.rect.left);
+    const b = _boostOnRightHalf() ? obs("btn-boost") : null;
+    if (b && _hudRectsHit(b.rect, box)) left = Math.min(left, b.rect.left);
+    return left;
+  };
+  // The right edge of the centre chrome sharing the plate's rows (-Infinity: none).
+  const chromeEdge = (s) => {
+    let edge = -Infinity;
+    for (const id of ["tower", "lights", "mirror", "mirrorChip", "flag"]) {
+      const o = obs(id);
+      if (o && o.rect.top < s.bottom - 0.5 && o.rect.bottom > s.top + 0.5 && o.rect.left < s.right) edge = Math.max(edge, o.rect.right);
+    }
+    return edge;
+  };
+  let plateMax = null;   // SCREEN px the plate may be wide between the chrome and the dock (null: its own width)
+  const publish = (left, z) => {
+    const rw = Number.isFinite(left) ? rightDockInset(left, z, sarPx) : 0;
+    hStyle(root, "--dock-r-w", rw.toFixed(1) + "px");
+    plateMax = null;
+    const s = plateBox();
+    if (s && rw > 0) {
+      const edge = chromeEdge(s), rightEdge = W - sarPx - (10 + rw) * z;
+      if (Number.isFinite(edge) && rightEdge - s.width < edge + DOCK_AIR) plateMax = rightEdge - edge - DOCK_AIR;
+    }
+    return rw;
+  };
+  // Start from the plate's own width: a max-width left by the last fit would read as its size.
+  if (secEl && secEl.style && secEl.style.removeProperty) secEl.style.removeProperty("max-width");
   let list = obsCollect();
   let zTop = zPaint();
-  let dockRW = rightDockInset(dockLeftOf(list), zTop, sarPx);
-  hStyle(root, "--dock-r-w", dockRW.toFixed(1) + "px");
+  let dockRW = publish(touch ? dockLeftIn(list, homeBox(zTop)) : Infinity, zTop);
   if (els.hudSectors) void els.hudSectors.offsetHeight;
   if (_dockR) void _dockR.offsetHeight;
-  if (!document.body.classList.contains("desktop")) {
+  // One painted correction: the plate as it now lands, against the dock it actually meets.
+  if (touch) {
     list = obsCollect();
-    const sec = obs("sectors");
-    const brLeft = boostRightLeft();
-    const left = Number.isFinite(brLeft) ? brLeft : dockLeftOf(list);
-    const secR = sec ? sec.rect : null;
-    if (secR && Number.isFinite(left) && secR.right > left - DOCK_AIR + 0.5) {
+    const s = plateBox();
+    const left = s ? dockLeftIn(list, grow(s, DOCK_AIR - 0.5)) : Infinity;
+    if (Number.isFinite(left)) {
       zTop = zPaint();
-      if (zTop > 0) {
-        // Absolute clear from the right-dock edge — never stack += grow on a
-        // stale plate, and never aim at a left-column BOOST (tilt).
-        dockRW = rightDockInset(left, zTop, sarPx);
-        hStyle(root, "--dock-r-w", dockRW.toFixed(1) + "px");
-        void els.hudSectors.offsetHeight;
-        if (_dockR) void _dockR.offsetHeight;
-      }
+      // Absolute clear from that dock edge — never stack += grow on a stale plate.
+      if (zTop > 0) { dockRW = publish(left, zTop); void els.hudSectors.offsetHeight; if (_dockR) void _dockR.offsetHeight; }
     }
   }
   list = obsCollect();
@@ -1728,45 +1770,46 @@ function fitHud() {
   if (typeof HudLayout !== "undefined") HudLayout.fit();
   // fit() can undo the dock inset; shrink the sector plate before any extra
   // inset widen (widening slides the plate left into #minimap).
-  if (!document.body.classList.contains("desktop") && els.hudSectors && _dockR) {
+  if (touch && secEl && _dockR) {
     const margin = DOCK_AIR;
-    const secEl = els.hudSectors;
-    if (secEl.style && secEl.style.removeProperty) secEl.style.removeProperty("max-width");
-    // How far the painted plate reaches into the right dock's groups (list collected afresh).
+    // How far the painted plate reaches into a right-dock group it really meets (list collected afresh).
     const overDock = () => {
       list = obsCollect();
-      const sec = obs("sectors");
+      const s = plateBox();
       let worst = 0;
-      if (sec) for (const o of list) if (o.group && o.dock === "R" && sec.rect.right > o.rect.left - margin) worst = Math.max(worst, sec.rect.right - (o.rect.left - margin));
-      return { sec, worst };
+      if (s) for (const o of list) if (o.group && o.dock === "R" && _hudRectsHit(grow(s, margin), o.rect)) worst = Math.max(worst, s.right - (o.rect.left - margin));
+      return { s, worst };
     };
     for (let pass = 0; pass < 4; pass++) {
-      const { sec, worst } = overDock();
-      if (!sec || !(worst > 0.5)) break;
+      const { s, worst } = overDock();
+      if (!s || !(worst > 0.5)) break;
       const zSec = zPaint() || 1;
-      secEl.style.maxWidth = Math.max(48, sec.rect.width / zSec - worst / zSec).toFixed(1) + "px";
+      secEl.style.maxWidth = Math.max(48, s.width / zSec - worst / zSec).toFixed(1) + "px";
       void secEl.offsetHeight;
     }
     const after = overDock();
-    if (after.sec && after.worst > 0.5) {
+    if (after.s && after.worst > 0.5) {
       const mapR = obs("map") ? obs("map").rect : null;
       const mapClear = mapR ? mapR.right + margin : 0;
-      const brLeft = boostRightLeft();
-      const left = Number.isFinite(brLeft) ? brLeft : dockLeftOf(list);
-      if (Number.isFinite(left) && !(mapClear && after.sec.rect.left - after.worst < mapClear)) {
+      const left = dockLeftIn(list, grow(after.s, margin));
+      if (Number.isFinite(left) && !(mapClear && after.s.left - after.worst < mapClear)) {
         zTop = zPaint();
-        if (zTop > 0) {
-          dockRW = rightDockInset(left, zTop, sarPx);
-          hStyle(root, "--dock-r-w", dockRW.toFixed(1) + "px");
-          void secEl.offsetHeight;
-        }
+        if (zTop > 0) { dockRW = publish(left, zTop); void secEl.offsetHeight; }
       }
     }
     list = obsCollect();
-    const sec = obs("sectors");
+    const s = plateBox();
     let onDock = false;
-    if (sec) for (const o of list) if (o.group && o.dock === "R" && sec.rect.right > o.rect.left - margin && sec.rect.left < o.rect.right - margin) { onDock = true; break; }
+    if (s) for (const o of list) if (o.group && o.dock === "R" && _hudRectsHit(grow(s, margin - 0.5), o.rect)) { onDock = true; break; }
     if (!onDock && secEl.style && secEl.style.removeProperty) secEl.style.removeProperty("max-width");
+  }
+  // The centre chrome bounds the plate last: narrowed to fit between it and the dock, or dropped.
+  if (secEl && secEl.style) {
+    const zSec = zPaint() || 1;
+    const drop = plateMax != null && plateMax < 48 * zSec;
+    if (plateMax != null && !drop) secEl.style.maxWidth = (plateMax / zSec).toFixed(1) + "px";
+    if (secEl.toggleAttribute) secEl.toggleAttribute("data-col-drop", drop);
+    void secEl.offsetHeight;
   }
   // Radio top slot AFTER HudLayout.fit — a pre-fit slot used the shipped tower
   // edge, then MOVE & SIZE grew/shifted .hud-top into the card (CI oversize:

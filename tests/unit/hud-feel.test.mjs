@@ -1118,12 +1118,54 @@ test("a right column that does not fit above the dock SHRINKS (--rcol-z) before 
     "LIMITS, DAMAGE and INPUTS convert the dock stand-off into their own (column-scaled) zoom");
 });
 
+/* DOCKS DRAGGED INBOARD (SETTINGS dock layout; shots/1360 btn1-dragged at 844x390 touch): the stand-off
+ * counts only a right-dock group that meets the column's home box in x AND y, and the plate stops at the
+ * centre chrome (tower, start lights, mirror, flag) instead of sliding under it. */
+test("a right dock dragged clear of the sector column leaves S1-S3 at home; one still in it pushes, never past the start lights", () => {
+  const h = fitHarness();
+  const R = (left, top, w, hh) => ({ left, top, right: left + w, bottom: top + hh, width: w, height: hh });
+  const v = (k) => h.root.style.getPropertyValue(k);
+  const sec = h.els.hudSectors, dockR = h.dom.byId("dock-right");
+  const dockAt = (r) => { for (const el of [dockR, ...dockR.children]) el._rect = r; h.refit(); };
+  // Shipped: the dock group (650,200) shares the column under the plate (650,130 140x72): it pushes.
+  const z = +v("--hud-z-top") || 1.5;
+  const want = Math.min((800 - 650) / z - 10 + 12 / z, 400 / z - 10);
+  assert.equal(v("--dock-r-w"), want.toFixed(1) + "px", "a dock in the column stands the plate off its left edge");
+  // Dragged inboard and up (the plate's home 635..800 is clear): no stand-off at all.
+  dockAt(R(420, 120, 150, 200));
+  assert.equal(v("--dock-r-w"), "0.0px", "S1-S3 stay in their home column");
+  assert.ok(!sec.hasAttribute("data-col-drop"));
+  h.refit(); h.refit();
+  assert.equal(v("--dock-r-w"), "0.0px", "and stay there (no same-key clash from an x-only test)");
+  // A dock dragged UP but still in the column pushes the plate — and the start lights in the plate's rows
+  // stop it: it keeps its right edge clear of the dock and narrows to fit between the two.
+  const lights = h.dom.byId("lights"); lights._rect = R(300, 90, 200, 60);
+  dockAt(R(650, 100, 150, 300));
+  const rw = parseFloat(v("--dock-r-w")), rightEdge = 800 - (10 + rw) * z;
+  assert.ok(rw > 0, "still a stand-off");
+  assert.equal(sec.style.maxWidth, ((rightEdge - 500 - 12) / z).toFixed(1) + "px", "narrowed to end 12 px right of the lights");
+  assert.ok(!sec.hasAttribute("data-col-drop"));
+  // No room even for a 48 px plate between the lights and the dock: dropped, never painted over either.
+  lights._rect = R(200, 90, 420, 60);
+  h.refit();
+  assert.ok(sec.hasAttribute("data-col-drop"), "dropped");
+  h.refit(); h.refit();
+  assert.ok(sec.hasAttribute("data-col-drop"), "and the decision holds (its box still measures)");
+  lights._rect = R(0, 0, 0, 0);
+  dockAt(R(420, 120, 150, 200));
+  assert.ok(!sec.hasAttribute("data-col-drop"), "back home when the lights go out and the dock is clear");
+  assert.equal(v("--dock-r-w"), "0.0px");
+  // Every overlap test against the dock is a real rect intersection.
+  const src = read("js/ui/hud.js");
+  assert.doesNotMatch(src, /\.right > (?:o\.rect|b|r)\.left - (?:margin|8|DOCK_AIR)\)/, "no x-only dock overlap tests left");
+});
+
 test("the --dock-r-w stand-off is computed in exactly one function", () => {
   const src = read("js/ui/hud.js");
   const writes = src.match(/hStyle\(root, "--dock-r-w", [^;]*;/g) || [];
   assert.ok(writes.length >= 2, "fitHud and the phone stamp both publish it");
-  for (const w of writes) assert.match(w, /rightDockInset\(|dockRW\.toFixed/, "every --dock-r-w write goes through rightDockInset: " + w);
-  for (const a of src.match(/\bdockRW = [^;]*;/g) || []) assert.match(a, /= rightDockInset\(/, "dockRW is only ever rightDockInset's answer: " + a);
+  for (const w of writes) assert.match(w, /rightDockInset\(|\brw\.toFixed/, "every --dock-r-w write goes through rightDockInset: " + w);
+  for (const a of src.match(/\b(?:dockRW|rw) = [^;]*;/g) || []) assert.match(a, /= (?:publish\(|Number\.isFinite\(left\) \? rightDockInset\()/, "the stand-off is only ever rightDockInset's answer: " + a);
   assert.equal((src.match(/midCap = Math\.max\(0, \(window\.innerWidth \/ 2\) \/ z/g) || []).length, 1, "one copy of the centre-line cap");
 });
 

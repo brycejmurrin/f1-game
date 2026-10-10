@@ -661,7 +661,7 @@ test("ELEMENTS carry their column; the origin and CLEAR_CTRL follow it, and colu
 });
 
 test("hiddenReason: a column piece js/ui/hud.js dropped for want of room says so, softly, until it is placed", () => {
-  for (const id of ["strat", "rel", "inputs", "damage", "limits"]) {
+  for (const id of ["strat", "rel", "inputs", "damage", "limits", "sectors"]) {
     const L = load3({ live: true, classes: ["desktop"] });
     const sel = L.H.ELEMENTS.find((e) => e[0] === id)[2];
     const el = L.els[sel] || (L.els[sel] = fakeEl());
@@ -723,7 +723,7 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     "touch RELATIVE uses the same allocated left column");
   assert.doesNotMatch(css, /#hud-strat[^{]*\{[^}]*168px/, "no literal STRATEGY sidestep: the allocator puts it beside RELATIVE by RELATIVE's measured width");
   assert.doesNotMatch(css, /:root\[data-limits-left\] #hud-strat/, "no reserved 2.6em for a LIMITS chip that is not showing");
-  assert.match(css, /:is\(#hud-limits, #hud-damage, #hud-inputs, #hud-rel, #hud-strat\)\[data-col-drop\] \{ visibility: hidden !important; \}/,
+  assert.match(css, /:is\(#hud-sectors, #hud-limits, #hud-damage, #hud-inputs, #hud-rel, #hud-strat\)\[data-col-drop\] \{ visibility: hidden !important; \}/,
     "a piece with no free slot is dropped (still laid out), not painted over a control");
   assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*#dock-left \{ anchor-name: --apex-dock-left; \}[\s\S]*#hud-tyre \{[^}]*position-anchor: --apex-dock-left;[^}]*bottom: calc\(anchor\(top\)/,
     "touch TYRES sits on top of the left dock");

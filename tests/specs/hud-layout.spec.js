@@ -153,8 +153,10 @@ async function race(page, steer, manual, ins, opts) {
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(([s, m, prof, lay, hudSc, btnSc]) => {
+  await page.evaluate(([s, m, prof, lay, hudSc, btnSc, dock]) => {
     localStorage.setItem("apex26.steerMode", JSON.stringify(s));
+    // The player's dragged touch docks (js/ui/dock-layout.js), a boot key like the rest.
+    if (dock) localStorage.setItem("apex26.dockLayout", JSON.stringify(dock));
     localStorage.setItem("apex26.manual", JSON.stringify(m));
     // THE PROFILE IS A BOOT KEY. Every case below used the DEFAULT profile on a
     // chase camera, so the whole broadcast layout — which re-anchors `.hud-top`
@@ -167,7 +169,7 @@ async function race(page, steer, manual, ins, opts) {
     if (lay) localStorage.setItem("apex26.hudMetricsLayout", JSON.stringify(lay));
     if (hudSc != null) localStorage.setItem("apex26.hudScale", JSON.stringify(hudSc));
     if (btnSc != null) localStorage.setItem("apex26.hudBtnScale", JSON.stringify(btnSc));
-  }, [steer, manual, o.profile || null, o.layout || null, o.hudScale ?? null, o.btnScale ?? null]);
+  }, [steer, manual, o.profile || null, o.layout || null, o.hudScale ?? null, o.btnScale ?? null, o.dockLayout || null]);
   await page.reload();
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.addStyleTag({ content:
@@ -661,6 +663,48 @@ test.describe("tilt steer high HUD scale", () => {
     const r = analyzeOverlap(recs, v.w, v.h, v);
     const hits = r.hudClash.filter((p) => p.includes("hud-sectors") || p.includes("hud-rel"));
     expect(hits, JSON.stringify({ hudClash: r.hudClash, boxes: recs })).toEqual([]);
+  });
+});
+
+// DOCKS DRAGGED INBOARD (SETTINGS › CONTROLS dock layout). shots/1360 btn1-dragged (844x390 touch,
+// Monza): with both docks moved 20% in and 20% up, --dock-r-w was taken from the right dock's left edge
+// wherever it sat and the repair passes tested x alone, so S1-S3 slid under the start lights and BOOST
+// sat on the plate. js/ui/hud.js now counts only a dock group that meets the column in x AND y.
+test.describe("dragged touch docks", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  test("S1-S3 stay in their home column, clear of the dock, BOOST and the start lights", async ({ page }) => {
+    const v = { name: "phone-landscape", w: 844, h: 390, sal: 47, sar: 47, sat: 0, sab: 21 };
+    await race(page, "touch", false, v, { dockLayout: { touch: { L: { x: 0.2, y: 0.2 }, R: { x: 0.2, y: 0.2 } } } });
+    await waitPhoneHudFitClearance(page);
+    const out = await page.evaluate(() => {
+      const box = (el) => {
+        if (!el || el.hidden) return null;
+        const r = el.getBoundingClientRect();
+        return r.width && r.height && getComputedStyle(el).visibility !== "hidden"
+          ? { l: r.left, t: r.top, r: r.right, b: r.bottom } : null;
+      };
+      const sec = document.getElementById("hud-sectors");
+      const docks = [...document.getElementById("dock-right").children].map(box).filter(Boolean);
+      return {
+        W: window.innerWidth, sec: box(sec), dropped: !!(sec && sec.hasAttribute("data-col-drop")),
+        boost: box(document.getElementById("btn-boost")), lights: box(document.getElementById("lights")),
+        tower: box(document.querySelector(".hud-top")), docks,
+        dockRW: document.documentElement.style.getPropertyValue("--dock-r-w"),
+        dockT: document.getElementById("dock-right").style.transform,
+      };
+    });
+    const d = JSON.stringify(out);
+    expect(out.dockT, "the drag is applied " + d).toMatch(/translate/);
+    expect(out.dropped, "the plate is shown " + d).toBe(false);
+    expect(out.sec, "the plate is laid out " + d).not.toBeNull();
+    const hit = (a, b) => !!(a && b && a.l < b.r - 0.5 && b.l < a.r - 0.5 && a.t < b.b - 0.5 && b.t < a.b - 0.5);
+    // Home column: the plate stays in the right half, under the pause / cam buttons.
+    expect((out.sec.l + out.sec.r) / 2, "S1-S3 stay in the right column " + d).toBeGreaterThan(out.W / 2);
+    expect(hit(out.sec, out.boost), "BOOST clears the plate " + d).toBe(false);
+    for (const g of out.docks) expect(hit(out.sec, g), "no right-dock group on the plate " + d).toBe(false);
+    expect(hit(out.sec, out.lights), "the plate clears the start lights " + d).toBe(false);
+    expect(hit(out.sec, out.tower), "and the timing tower " + d).toBe(false);
   });
 });
 
