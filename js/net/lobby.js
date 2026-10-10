@@ -2041,12 +2041,12 @@ const NetLobby = (function () {
     }
 
     return {
-      wire, open, close, cancel, abortQuali, host, join, makeAnswer, acceptAnswer,
-      shareInvite, shareAnswer, canShare, openFromUrl,
-      scan, stopScan, pasteInto, deliver,
-      codeHost, codeJoin, stopCodeWait,
+      wire, open, cancel, abortQuali, host, join, makeAnswer, acceptAnswer,
+      shareInvite, shareAnswer, openFromUrl,
+      scan, stopScan,
+      codeHost, codeJoin,
       watchForOpen: waitForOpen,
-      roomChanged, setReady, startFromRoom, renderRoom, removeGuest,
+      roomChanged, setReady, startFromRoom, removeGuest,
       verifyCodes: () => Object.fromEntries(_verify),
       // Mint a further invite without disturbing the room. Host only, capped.
       inviteAnother,
