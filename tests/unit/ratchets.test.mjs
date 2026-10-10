@@ -180,3 +180,26 @@ test("--base names every ceiling that moved, and only a raise past the hook's ab
   assert.equal(compareToBase("0000000000000000000000000000000000000000", { print: (l) => nope.push(l) }), 2);
   assert.match(nope[0], /cannot read tests\/data\/ratchets\.json at 0{40}/);
 });
+
+test("15-F10: --base blocks a loosened slack and a deleted entry whose file still exists", () => {
+  const head = loadAt("HEAD");
+  const exact = Object.entries(head.tree).find(([, v]) => typeof v === "object" && v.slack === 0)?.[0];
+  assert.ok(exact, "ratchets.json carries at least one exact-equality (slack 0) tree entry to loosen");
+  const loosened = { ...head, tree: { ...head.tree, [exact]: head.tree[exact].ceiling } };   // {ceiling, slack:0} -> bare number
+  const out = [];
+  assert.equal(compareToBase("HEAD", { current: loosened, print: (l) => out.push(l) }), 1);
+  assert.ok(out.some((l) => new RegExp(`LOOSEN \\(tree\\) ${exact}: slack 0 -> default`).test(l)), out.join("\n"));
+  const adv = [];
+  assert.equal(compareToBase("HEAD", { current: loosened, print: (l) => adv.push(l), advisory: true }), 0, "advisory on a push");
+  // A tightened slack, or a ceiling lowered with it, is not a loosening.
+  const tighter = { ...head, tree: { ...head.tree, bareCatches: { ...head.tree.bareCatches, slack: 0 } } };
+  assert.equal(compareToBase("HEAD", { current: tighter, print: () => {} }), 0);
+  // Deleting the entry of a file that still exists removes a guard; of a file that is gone does not.
+  const { "js/game.js": _game, ...rest } = head.files;
+  const dropped = [];
+  assert.equal(compareToBase("HEAD", { current: { ...head, files: rest }, print: (l) => dropped.push(l) }), 1);
+  assert.ok(dropped.some((l) => /GONE   js\/game\.js lines: was \d+ — .*the file still exists/.test(l)), dropped.join("\n"));
+  const rows = diffRatchets({ files: { "fixture-gone": { lines: 1 } } }, { files: {} });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].kind, "gone");
+});
