@@ -1,0 +1,1 @@
+1791604039	Bryce Murrin	Resume PR1297 only: publish already verified OFF qualifying test repair 97888b3, watch draft/full checks and merge on explicit user request. Scenery feature ebddbf8 unchanged. OFF case near line373 only; PR1296 owns separate one-off GP case near line55. No duplicate gameplay fixes.  [cursor/designer-object-library-c4f8; session e71ed1d71d94d3a7d0c49a99]
