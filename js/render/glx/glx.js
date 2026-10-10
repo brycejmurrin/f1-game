@@ -2824,6 +2824,7 @@ const GLXBackend = (function () {
     // carries the three.js decision tree, WGX the rung). Read by the GOV
     // panel and __apex.diag().env so a phone screenshot names the API and
     // the first GPU error — the evidence a "see-through car" report lacked.
+    ctxLost: () => _ctxLost,   // cheap per-frame read for game.js gfxContextLost (backendState allocates)
     backendState: () => ({
       api: "webgl2", isMobile: IS_MOBILE, mobileTier: MOBILE_TIER,
       gpuErrors: _glErrors, gpuFirstError: _glFirstError || null,

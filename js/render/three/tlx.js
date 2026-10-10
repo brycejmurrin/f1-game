@@ -3657,6 +3657,11 @@ const TLX = (function () {
           const t = this && this.__tlx;
           return (t && typeof t.backendState === "function") ? t.backendState() : null;
         },
+        // Cheap per-frame boolean (game.js gfxContextLost): backendState() builds a ~50-field object and walks meshPool.
+        ctxLost() {
+          const t = this && this.__tlx;
+          return !!(t && typeof t.ctxLost === "function" && t.ctxLost());
+        },
         makeFrustumPlanes(viewProj, out) {
           return TLXShaders.makeFrustumPlanes(viewProj, out);
         },
@@ -4721,6 +4726,7 @@ const TLX = (function () {
           // Which three backend actually came up, and why — the one question a
           // "TLX looks wrong on my phone" report has to answer first, since the
           // WebGPU/WebGL2 choice is now device-dependent (see the pin above).
+          ctxLost() { return !!_deviceLost; },
           backendState() {
             return {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",

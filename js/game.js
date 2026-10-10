@@ -6698,9 +6698,9 @@ function armBackendProbe() {
     catch (_) { /* no probe: a jetsam in the arming window will not auto-revert */ }
   }
 }
-/** True when the bound backend reports a lost context/device (GLX/TLX backendState). */
+/** True when the bound backend reports a lost context/device (its cheap ctxLost(); backendState() is the diagnostic fallback). */
 function gfxContextLost() {
-  try { const s = gfx && gfx.backendState && gfx.backendState(); return !!(s && s.ctxLost); }
+  try { if (gfx && gfx.ctxLost) return !!gfx.ctxLost(); const s = gfx && gfx.backendState && gfx.backendState(); return !!(s && s.ctxLost); }
   catch (_) { return false; }
 }
 function render(dt) {

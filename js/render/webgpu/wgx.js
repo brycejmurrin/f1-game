@@ -5719,6 +5719,7 @@ const WGX = (function () {
       gpuFirstError: () => _gpuFirstMsg,
       // GLX/TLX parity: the backend's own account of the device for the GOV
       // panel and __apex.diag().env.
+      ctxLost: () => !!_lost,   // cheap per-frame read for game.js gfxContextLost (backendState allocates)
       backendState: () => ({
         api: "webgpu", lite: WGX_LITE, minimal: WGX_MINIMAL, softGpu: _softGpu,
         isMobile: IS_MOBILE, gpuErrors: _gpuErrors, gpuFirstError: _gpuFirstMsg,

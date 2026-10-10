@@ -6116,6 +6116,29 @@ test("the GLX mirror pass runs with the lamp shadow off — the forward slot nam
   assert.match(chunked, /SH\.lampArmed && SH\.lampIdx >= 0 && F\.lights && !core\.post\.mirror\.active\(\)/);
 });
 
+// 08-F3: render() asked the backend for its full backendState() (TLX: ~50 fields, a meshPool walk, ~1 KB of garbage)
+// every frame to read one boolean. Every backend now carries a cheap ctxLost(); backendState() is only the fallback.
+test("game.js gfxContextLost reads the cheap ctxLost() accessor, not backendState() (08-F3)", () => {
+  const game = read("js/game.js");
+  const fn = span(game, "function gfxContextLost()", "function render(dt)", "gfxContextLost");
+  const run = (gfx) => vm.runInContext(fn + "\ngfxContextLost();", vm.createContext({ gfx }));
+  let built = 0;
+  const bs = () => { built++; return { ctxLost: true }; };
+  assert.equal(run({ ctxLost: () => false, backendState: bs }), false);
+  assert.equal(run({ ctxLost: () => true, backendState: bs }), true);
+  assert.equal(built, 0, "the diagnostic snapshot is never built when ctxLost() exists");
+  assert.equal(run({ backendState: bs }), true, "a backend without the accessor still answers through backendState()");
+  assert.equal(run({}), false);
+  assert.equal(run(null), false);
+  assert.equal(run({ ctxLost() { throw new Error("x"); } }), false, "a throwing accessor reads as not lost");
+  // Each backend exposes it, and it reads the same flag its backendState reports.
+  assert.match(read("js/render/glx/glx.js"), /ctxLost: \(\) => _ctxLost,/);
+  assert.match(read("js/render/webgpu/wgx.js"), /ctxLost: \(\) => !!_lost,/);
+  const tlx = read("js/render/three/tlx.js");
+  assert.match(tlx, /ctxLost\(\) \{ return !!_deviceLost; \},/, "the __tlx object");
+  assert.match(tlx, /ctxLost\(\) \{\s*const t = this && this\.__tlx;\s*return !!\(t && typeof t\.ctxLost === "function" && t\.ctxLost\(\)\);/, "the façade that game.js sees");
+});
+
 // 14-F1: window.__apex is NULL on the shipped build (game.js declares it null, only dev surfaces fill it), so
 // `typeof __apex !== "undefined" && __apex.diag` passed (typeof null is "object") then threw into the catch and
 // COPY DIAG always said NO DIAG. A player now gets playerDiag(); the dev surface still wins when it exists.
