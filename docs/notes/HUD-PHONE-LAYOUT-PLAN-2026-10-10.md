@@ -248,6 +248,37 @@ Prefix: `node tools/shot/hud-survey.mjs --device phone-landscape-844x390
 
 Items 1–4 and 6 are Phase 3/4 inputs; the allocator replaces the literals.
 
+## Quick-matrix survey, 2026-10-10 (after PR #1301's commits)
+
+`node tools/shot/hud-survey.mjs --matrix quick` (13 cells, every HUD piece on,
+monza @ 0.18): 56 findings — 21 overlap, 34 tinyText, 1 missing (the `speed`
+false positive). Output `artifacts/hud-survey/quick-2026-10-10/`.
+
+- **phoneL-cockpit: 0 overlaps** (the lane and INPUTS fixes hold); all its
+  findings are the 7.9 px text from the top-band zoom fit (Phase 0) and the
+  `speed` false positive.
+- **LIMITS × INPUTS in 12 of 13 cells** (desktop 1280 chase / cockpit / visor
+  / light / deutan / hud70 / hud150 / every preset, phone chase, portrait):
+  both chips hang under the sector box at `--hud-sec-h + 12px` (INPUTS) and
+  `+ 15px` (LIMITS), so the moment a track-limits strike shows they paint one
+  over the other (2.7k px² at 1280×720, 5.7k at HUD 150). This is the first
+  concrete item for Phase 3 and small enough to fix ahead of it: INPUTS steps
+  below the limits chip while `#hud-limits` is visible (measured height, not
+  `2.6em`), or the allocator publishes both tops.
+- **flag × announce** on `phoneL-chase` and `chase-hud150`: the caution flag
+  over the radio card in the survey's forced transient pass. The CSS caution
+  step (`+ 38px`) depends on `:has(#hud-flag:not([hidden]))`, which should
+  hold; the forced pass fills text without a fit tick, so treat as a survey
+  blind spot until Phase 0 item 2 lets the card go through real ticks, then
+  re-measure before changing CSS.
+- **chase-preset-big: tower × gaps chip** (desktop 1280, MOVE & SIZE "big"):
+  the enlarged tower reaches the gaps chip by 24×22 px — a preset clamp gap,
+  Phase 7's column metadata (the chip belongs to the left column).
+- **chase-preset-corners: sectors × INPUTS and LIMITS × INPUTS**: the
+  "corners" preset moves the sector box onto the right column stack — Phase 3.
+- `chase-hud70`: every readout at 9.8 px (the 70 % HUD size is the owner's
+  choice; the floor question in Phase 0 B applies).
+
 ## Order of work (revised)
 
 0. Top-band zoom fix (Fix A) + `invalidateFit` relight fix + survey flags for
