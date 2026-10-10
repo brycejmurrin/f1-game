@@ -188,7 +188,7 @@ it("garage sheet chrome is opaque, themed, and hides a redundant BACK", () => {
     "ACTIVE AERO label never ellipsizes away under CORNER/STRAIGHT MODE");
   assert.match(css, /\.cs-aero-val \{[^}]*flex:\s*0\s+0\s+auto/s,
     "aero value does not shrink — CORNER↔STRAIGHT must not reflow the chip");
-  assert.match(css, /\.cs-aero-val \{[^}]*min-width:\s*13ch/s,
+  assert.match(css, /\.cs-aero-val \{[^}]*min-width:\s*14ch/s,
     "aero value floor is STRAIGHT MODE (longest), so the chip width stays put");
   assert.match(css, /\.cs-aero-lbl \{[^}]*color:\s*color-mix\(in oklab,\s*var\(--text\)\s+62%/s,
     "ACTIVE AERO label uses the same rest colour as CAMERA");
