@@ -1067,7 +1067,7 @@ const WGX = (function () {
     // shaders of all three backends (a static SBO per bake).
     const TL_VALUES_DT = 1 / 30;
     // Memo for the armed-shadow-lamp position -> absolute index scan in _writeFrame.
-    let _asAL = null, _asX = 0, _asY = 0, _asZ = 0, _asIdx = -1;
+    let _asAL = null, _asX = 0, _asY = 0, _asZ = 0, _asIdx = -1, _asGen = -1;
     // Which source array _tlScratch's STATIC lanes were packed from.
     let _tlFullPack = null, _tlLoGen = -1;   // + the lamp bake gen its LIVE-ONLY lane (cone.w) came from
     const _tlScratch = new Float32Array(TRACK_LIGHT_CAP * 16);
@@ -3203,7 +3203,7 @@ const WGX = (function () {
       t._wgxDecalBG = null;
     }
 
-    function _writeFrame(f) {
+    function _writeFrame(f, mirror) {
       const d = frameData;
       const vp = (f.viewProj && f.viewProj.length >= 16) ? f.viewProj : IDENT;
       const pj = f.proj, ipj = f.invProj;
@@ -3379,7 +3379,10 @@ const WGX = (function () {
       d[115] = (T && T.lampNearClamp != null) ? T.lampNearClamp : 4.0;
       d.set(SHD.lampArmed ? SHD.lampShadowLVPData : IDENT, 116);
       d[132] = f.lampFog != null ? f.lampFog : 0;
-      d[133] = SHD.lampArmed ? 1 : 0;
+      // SHD.lampIdx is a slot of the FORWARD frame.lights; the mirror (mirrorBegin)
+      // re-ranks its own list, so there it names another lamp: shadow off (GLX #1281).
+      const _lampOn = SHD.lampArmed && !mirror;
+      d[133] = _lampOn ? 1 : 0;
       d[134] = SHD.lampIdx;
       // params8.w = BAKED MATERIALS mix, forced to 0 with no albedo array bound
       // (GLX: uMatTexMix = matAlbedoTex ? mix : 0). The 1x1 placeholder's alpha
@@ -3398,20 +3401,28 @@ const WGX = (function () {
       // scales rgb only), and the appended tail range is excluded.
       // Memoised on (identity, position): an O(all baked lamps) scan, up to 1024
       // records, run every frame and per env-probe face for a value that moves
-      // only when the CASTER does. Positions are stable per the comment above.
+      // only when the CASTER does. Identity alone is NOT the set: frame.allLights
+      // is ONE buffer refilled in place (js/lighting/frame-lights.js), so a
+      // rebuild:true edit (LAMP DENSITY, POOL RADIUS) re-orders it under the same
+      // identity. A hit is therefore re-checked against the record it names (O(1));
+      // a cached miss (-1) holds only while allLightsGen stands still. GLX keys
+      // the same lookup on the LampChunks table (chunked.js _shadowAllIdx).
+      // Never in the mirror: the forward slot names another lamp there.
       let _absShadowIdx = -1;
       const _AL = f.allLights;
-      if (SHD.lampArmed && SHD.lampIdx >= 0 && L && _AL &&
+      if (_lampOn && SHD.lampIdx >= 0 && L && _AL &&
           !(f.tailCount > 0 && SHD.lampIdx >= f.tailStart)) {
         const so = SHD.lampIdx * 15;
         const lx = L[so], ly = L[so + 1], lz = L[so + 2];
-        if (_AL === _asAL && lx === _asX && ly === _asY && lz === _asZ) {
+        const ho = _asIdx * 15;
+        if (_AL === _asAL && lx === _asX && ly === _asY && lz === _asZ &&
+            (_asIdx >= 0 ? _AL[ho] === lx && _AL[ho + 1] === ly && _AL[ho + 2] === lz : _asGen === f.allLightsGen)) {
           _absShadowIdx = _asIdx;
         } else {
           for (let p = 0; p < _AL.length; p += 15) {
             if (_AL[p] === lx && _AL[p + 1] === ly && _AL[p + 2] === lz) { _absShadowIdx = p / 15; break; }
           }
-          _asAL = _AL; _asX = lx; _asY = ly; _asZ = lz; _asIdx = _absShadowIdx;
+          _asAL = _AL; _asX = lx; _asY = ly; _asZ = lz; _asIdx = _absShadowIdx; _asGen = f.allLightsGen;
         }
       }
       d[140] = _absShadowIdx;
@@ -3439,7 +3450,7 @@ const WGX = (function () {
         d[152] = live ? lb.x0 : 0; d[153] = live ? lb.z0 : 0;
         d[154] = live ? lb.tilesX * lb.T * lb.cell : 1; d[155] = live ? lb.tilesY * lb.T * lb.cell : 1;
         d[156] = live ? sc[0] : 0; d[157] = live ? sc[1] : 0; d[158] = live ? sc[2] : 0; d[159] = live ? 1 : 0;
-        const shc = live && typeof LampBake !== "undefined" ? LampBake.shadowCol(f, SHD.lampIdx, _bakeShScr) : null;
+        const shc = live && typeof LampBake !== "undefined" ? LampBake.shadowCol(f, _lampOn ? SHD.lampIdx : -1, _bakeShScr) : null;
         d[160] = shc ? shc[0] : 0; d[161] = shc ? shc[1] : 0; d[162] = shc ? shc[2] : 0;
         d[163] = live ? lb.T : 1;
         d[164] = live ? lb.tilesX : 1; d[165] = live ? lb.tilesY : 1;
@@ -4084,7 +4095,7 @@ const WGX = (function () {
         }
       }
       _passSamples = 1;
-      _writeFrame(frame);
+      _writeFrame(frame, true);   // true: no forward lamp-shadow slot in the mirror's re-ranked list
       const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
       if (SHD) SHD.flushPending();   // this frame's shadow maps land before the mirror samples them
       _mirEncoder = device.createCommandEncoder();
