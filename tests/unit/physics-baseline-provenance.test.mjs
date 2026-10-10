@@ -48,9 +48,15 @@ test("the data hash matches — the numbers were written by the spec, not by han
     "without regenerating. Run the spec with APEX_UPDATE_BASELINE=1 and READ THE DIFF.");
 });
 
-test("the blessing sha is a commit this tree descends from (when the checkout can see it)", () => {
+test("the blessing sha is a commit this tree descends from (when the checkout can see it)", (t) => {
   assert.match(b.sha || "", /^[0-9a-f]{40}$/, "sha must be a full commit id");
   let known = false;
+  // A SHALLOW clone can hold the object and have a ref reach it while its
+  // history is cut, so merge-base --is-ancestor fails on a healthy tree: the
+  // ancestry half cannot be checked there (unshallow to check it).
+  let shallow = false;
+  try { shallow = cp.execSync("git rev-parse --is-shallow-repository", { cwd: ROOT, encoding: "utf8" }).trim() === "true"; } catch (_) {}
+  if (shallow) return t.skip("shallow clone: ancestry cannot be checked (git fetch --unshallow)");
   try {
     cp.execSync(`git cat-file -e ${b.sha}^{commit}`, { cwd: ROOT, stdio: "ignore" });
     known = true;

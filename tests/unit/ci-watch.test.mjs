@@ -10,7 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, openPrFor, watchSha, api, supersededBy } from "../../tools/ci/ci-watch.mjs";
+import { latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, openPrFor, watchSha, api, supersededBy, resolveSha } from "../../tools/ci/ci-watch.mjs";
 import { githubToken, NO_TOKEN_HINT } from "../../tools/ci/github-token.mjs";
 
 const run = (id, name, status, conclusion, created) => ({ id, name, status, conclusion, created_at: created });
@@ -319,4 +319,20 @@ test("a pending ship-fast run replaced by a newer push is SUPERSEDED, not a time
       assert.ok(result.lines.some((l) => l.startsWith("= ci cancelled")));
     }
   }
+});
+
+test("resolveSha: a short sha becomes the full id (local prefix first, then GitHub), never reaches the API short", () => {
+  const FULL = "87575fbde50f19e5b53ee438e01bf1881ac1fae6";
+  const never = () => { throw new Error("API must not be asked when git resolves it"); };
+  assert.deepEqual(resolveSha("87575fbde", { revParse: () => `${FULL}\n`, request: never }), { sha: FULL }, "unique local prefix");
+  assert.deepEqual(resolveSha(FULL, { revParse: () => FULL, request: never }), { sha: FULL });
+  // Not in this clone (an unfetched merge commit): GitHub expands it.
+  assert.deepEqual(resolveSha("87575fbde", { revParse: () => "", request: (e) => (e === "commits/87575fbde" ? { json: { sha: FULL } } : never()) }), { sha: FULL });
+});
+
+test("resolveSha: an unresolvable or ambiguous short sha is a clear error, not a short sha for the API (was `HTTP 422`)", () => {
+  const r = resolveSha("87575fbde", { revParse: () => "", request: () => ({ error: "HTTP 422" }) });
+  assert.equal(r.sha, undefined, "no short sha leaks through");
+  assert.match(r.error, /cannot expand --sha 87575fbde/);
+  assert.match(resolveSha("--evil", { revParse: () => "", request: () => ({}) }).error ?? "", /invalid --sha/);
 });
