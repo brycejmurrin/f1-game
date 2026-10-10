@@ -244,7 +244,7 @@ function harness(stored = {}, storeOverride = null, docEl = null, nav = undefine
   });
   const info = { track: { id: "monza", name: "MONZA", country: "Italy" }, laps: 5, hasWorld: true };
   return {
-    screen, saved, plays, races, els,
+    screen, saved, plays, races, els, sb,
     run: (over = {}) => screen.run(Object.assign({}, info, over), () => races.push(now)),
     skip: (ev = {}) => { for (const fn of listeners.keydown || []) fn(Object.assign({ type: "keydown", repeat: false }, ev)); },
     tick(ms) {
@@ -1022,4 +1022,43 @@ test("the garage phase (the drive-out before the flyby): no card, no timer, and 
   const css = readCssSource("css/overlays.css");
   assert.match(css, /#loading\[data-phase="garage"\] \{ background: none; \}/, "no scrim over the car");
   assert.match(css, /#loading\[data-phase="garage"\] #ld-card \{ visibility: hidden; \}/, "the card is out of the accessibility tree, not just transparent");
+});
+
+test("a HIDDEN tab at run() gets the card, not the flyby: no announcer read starts unseen (bug-hunt 3, 2026-10-10)", () => {
+  // The drive-out's safety cap can carry the intro into run() with the tab in the background (START,
+  // then switch apps). The flyby timer, the announcer and the radio check would start there unseen —
+  // speechSynthesis speaks in a hidden tab, and iOS synthesis then breaks until reload.
+  const h = harness({}, null, { dataset: {} });
+  h.sb.document.hidden = true;
+  h.run();
+  assert.equal(h.els.loading.dataset.phase, "card", "hidden: the 700 ms card");
+  assert.equal(h.plays.length, 0, "no announcer read in a hidden tab");
+  h.tick(LS.CARD_MS);
+  assert.equal(h.races.length, 1, "the race starts after the card (game.js then pauses it under the hidden-tab rule)");
+  const vis = harness({}, null, { dataset: {} });
+  vis.sb.document.hidden = false;
+  vis.run();
+  assert.equal(vis.els.loading.dataset.phase, "run", "visible: the flyby as before");
+});
+
+test("the intro's safety caps run on introNow(), which freezes while the tab is hidden (bug-hunt 3, 2026-10-10)", () => {
+  // Shader warm and the drive-out advance only on rendered frames — stopped in a hidden tab — while
+  // the 30 s caps ran on the wall clock: START, 30 s in another app during a cold build, and the
+  // intro threw "Shader preparation timed out" (PREPARATION FAILED) on return, or cut the drive-out.
+  const game = read("js/game.js");
+  assert.match(game, /const _hidden = \{ ms: 0, at: 0 \};[^\n]*\nfunction introNow\(\) \{\s*const now = performance\.now\(\), hid = typeof document !== "undefined" && !!document\.hidden;\s*if \(hid && !_hidden\.at\) _hidden\.at = now;\s*else if \(!hid && _hidden\.at\) \{ _hidden\.ms \+= now - _hidden\.at; _hidden\.at = 0; \}\s*return now - _hidden\.ms - \(_hidden\.at \? now - _hidden\.at : 0\);/,
+    "introNow() keeps the hidden-time ledger by polling (no eval-time listener: the intro is sliced into node sandboxes)");
+  assert.doesNotMatch(game.slice(game.indexOf("function cancelIntro()"), game.indexOf("\nfunction introWarm(go)")), /addEventListener\("visibilitychange"/,
+    "no visibilitychange listener in the intro slice");
+  const warm = game.slice(game.indexOf("async function awaitIntroWarm("), game.indexOf("function studioOpen("));
+  assert.doesNotMatch(warm, /performance\.now\(\)|Date\.now\(\)/, "awaitIntroWarm reads the frozen clock only");
+  assert.match(warm, /introNow\(\) - at >= 30000/, "…for its 30 s cap");
+  const d0 = game.indexOf("async function studioDone(");
+  const d1 = Math.min(...["\nfunction ", "\nasync function "].map((k) => game.indexOf(k, d0 + 1)).filter((i) => i > 0));
+  const done = game.slice(d0, d1);
+  assert.doesNotMatch(done, /performance\.now\(\)|Date\.now\(\)/, "studioDone's drive-out and hang caps read the frozen clock only");
+  const shown = game.slice(game.indexOf("function studioShown()"), game.indexOf("async function studioDone("));
+  assert.match(shown, /_studio\.at = introNow\(\)/, "the drive-out's own clock starts on introNow()");
+  const prep = game.slice(game.indexOf("async function introPrepare("), game.indexOf("async function introPrepare(") + 4000);
+  assert.match(prep, /const lampAt = introNow\(\);[\s\S]*introNow\(\) - lampAt >= 30000/, "the lamp bake's cap too");
 });

@@ -201,6 +201,8 @@ test("hidden tab stops the announcer; resume does not restart the stale line", a
   ctx.document.hidden = true;
   listeners.visibilitychange();
   assert.equal(ann.speaking(), false, "hiding the tab cuts commentary");
+  assert.equal(ann.play(INFO), false, "a hidden tab refuses a NEW read: a flyby timer landing in the background would speak unseen (bug-hunt 3, 2026-10-10)");
+  assert.equal(ann.speaking(), false);
   // Resume: clear pause flags the way setPaused(false) would — must not restart.
   paused = false;
   pause.hidden = true;

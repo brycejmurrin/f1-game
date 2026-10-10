@@ -166,7 +166,7 @@ test('the first presented garage frame takes over its preparation cover, then ha
     const events = [];
     const c = { _atmo: { prebakeLamps: () => null }, awaitIntroWarm: async current => { while (current() && c.gfx.warming()) await c.menuSlice(); return current(); }, state: 'menu', trackIdx: 0, track: {}, _introRun: 0, _introKey: '', _introSkip: 0, _menuFly: null, flybyShots: null, setupPreviewOn: false, settings: 'one',
       reloadFlybyShots() {}, FlybySeq: { DEFAULT: [], setDuration() {}, vary: () => [], planSteps: () => () => true },
-      entrySettings: () => c.settings, menuKey: () => 'world', performance: { now: () => now },
+      entrySettings: () => c.settings, menuKey: () => 'world', performance: { now: () => now }, introNow: () => now,
       loadingInfo: () => ({ track: {}, real: mode === 'watched' ? { watch: true } : null }),
       loadingScreen: { garage: (inf, onSkip) => { c._ph = 'garage'; c._skip = onSkip; events.push('garage'); },
         prep: (inf, onSkip) => { c._ph = 'prep'; c._skip = onSkip; events.push('prep'); },
@@ -337,7 +337,7 @@ test('the car out, the garage HOLDS until the flyby where the backend warms (TLX
     const ctx = { _studio: { n: 1, skip: false, at: 0, ms: 5300, cardUp: false, info: {}, ...extra }, setupPreviewOn: true, gfx,
       setupCam: { driveOutLeft: () => 0, stopDriveOut: () => calls.push('stop') },
       loadingScreen: { phase: () => 'garage', building: () => calls.push('card') },
-      menuSlice: async () => {}, performance: { now: () => 0 } };
+      menuSlice: async () => {}, performance: { now: () => 0 }, introNow: () => 0 };
     const { studioDone } = new Function('ctx', 'with (ctx) {' + src + '; return { studioDone }; }')(ctx);
     await studioDone(() => true, 1);
     return { ctx, calls };
@@ -378,7 +378,7 @@ test('START from race settings: the sheet covers preparation (PREPARING…), nev
     const snap = (tag) => [tag, sheet.hidden, btn.disabled, btn.textContent, back.disabled];
     const ctx = { _introRun: 0, state: 'menu', settings: 'one', flybyBuildTimer: 7, cleared: 0, _menuGate: { generation: 0 },
       $: (id) => (id === 'rs-cancel' ? back : null), clearTimeout(t) { if (t === 7) ctx.cleared++; },
-      Log: { warn() {} }, announce() { events.push(['failed']); }, gfx: { warming: () => warming }, performance: { now: () => now },
+      Log: { warn() {} }, announce() { events.push(['failed']); }, gfx: { warming: () => warming }, performance: { now: () => now }, introNow: () => now,
       entrySettings: () => ctx.settings, loadingScreen: { building: () => events.push(['card']), stop() {} }, studioSkip() {},
       cancelIntro() { ctx._introRun++; ctx.sheetRelease(false); },
       // Model a successfully presented garage frame releasing the sheet.

@@ -84,7 +84,7 @@ var Spotter = (() => {
   }
 
   function create(G) {
-    let st = fresh(), lastCars = null, calls = 0, last = "", occupied = 0;
+    let st = fresh(), lastCars = null, calls = 0, last = "", occupied = 0, spoke = false;   // spoke: the pack may hold a spotter clip
     const on = () => G.store.get("spotter", false) !== false;
 
     // `quiet`: a REAL RACE WATCH (js/race/race-radio.js) — every car is a
@@ -93,15 +93,26 @@ var Spotter = (() => {
       if (!Number.isFinite(dt) || dt <= 0) return "";
       const pack = G.radio && G.radio.pack;
       const p = G.player;
+      // RESET ONLY WHEN THERE IS SOMETHING TO RESET. These two early-outs run on EVERY physics step
+      // while the spotter is off (the default), not racing, or in the pits; each used to allocate a
+      // fresh state and call pack.stop("spotter") (which allocates too) — 600 steps, 601 stops
+      // (bug-hunt 3, 2026-10-10). A state that never spoke has nothing to stop; one that handed the pack
+      // a clip (`spoke`, even if valid() since discarded it) may still have it on air, so it IS stopped.
+      const dirty = () => spoke || !!(st.cur || st.cand || st.called || st.stillSaid);
+      const reset = () => { st = fresh(); spoke = false; if (pack && pack.stop) pack.stop("spotter"); };
       if (quiet || G.state !== "race" || G.paused || !p || p.finished || p.retired || !G.track
           || Math.abs(p.speed || 0) < G.vTop() * 0.12 || (p.pitState && p.pitState !== "none")) {
-        st = fresh(); occupied = 0; if (pack && pack.stop) pack.stop("spotter"); return "";
+        if (dirty()) reset();
+        occupied = 0; return "";
       }
-      if (G.cars !== lastCars) { lastCars = G.cars; st = fresh(); occupied = 0; if (pack && pack.stop) pack.stop("spotter"); }
+      if (G.cars !== lastCars) { lastCars = G.cars; occupied = 0; if (dirty()) reset(); }
+      // Occupancy is computed while racing even with the spotter OFF: race-radio reads occupied() to hold the
+      // engineer's routine lines in traffic.
       occupied = occupancy(p, G.cars, G.track.total, occupied);
       // Awareness also gates the coach and routine radio with speech muted.
       if (!pack || !on() || !G.soundOn || (G.radio.volume && G.radio.volume() <= 0)) {
-        st = fresh(); if (pack && pack.stop) pack.stop("spotter"); return "";
+        if (dirty()) reset();
+        return "";
       }
       // The engineer's chosen voice, from its radio pack (where the spotter's calls are).
       const voice = G.radio.recordedPack ? G.radio.recordedPack("radio") : G.radio.recordedVoice ? G.radio.recordedVoice("radio") : "george";
@@ -115,6 +126,7 @@ var Spotter = (() => {
         if (pack.busy() || (synth && synth.speaking) || (G.radio.busy && G.radio.busy())) return false;
         const state = st;
         const expected = key === "clear" ? 0 : key === "three wide" ? 3 : key === "car left" ? LEFT : key === "car right" ? RIGHT : st.cur;
+        spoke = true;
         return pack.speak(voice, KEYS[key], { channel: "spotter", volume: G.radio.volume ? G.radio.volume() : 1,
           // Recheck after decoding: a late "car left" is worse than silence.
           valid: () => { const valid = G.state === "race" && !G.paused && G.player === p && !p.finished && !p.retired && on() && G.soundOn

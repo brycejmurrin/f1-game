@@ -881,7 +881,7 @@ test("intro builds cancel at async boundaries and never fly over pending compila
       quitToMenu: () => { c.cancelIntro(); c.loadingScreen.stop(); events.push("recover"); },
       announce: () => events.push("message"), Log: { warn() {} },
       // The studio drive-out, on in every mode: no path may leave the garage preview up.
-      LoadingScreen: { SHORT_FLY_MS: 12000 }, headlessMode: false, document: { hidden: false },
+      LoadingScreen: { SHORT_FLY_MS: 12000 }, headlessMode: false, document: { hidden: false, addEventListener() {} },   // introNow()'s visibility ledger registers at load
       setupPreviewOn: false, setupCam: { startDriveOut: () => 5000, stopDriveOut() {}, driveOutLeft: () => Math.max(0, 5000 - now) } };
     vm.createContext(c); vm.runInContext(game.slice(a, b), c);
     c.introBuild(() => events.push("go"));
@@ -918,7 +918,7 @@ test("cold intros await compilation before drive-out and cut directly afterward;
     const c = { trackIdx: 0, track: {}, state: "menu", _introRun: 0, _introKey: "", _introSkip: 0, _menuFly: null, flybyShots: null,
       _menuGate: { generation: 0, warm: 0 }, flybyBuildTimer: 0, _studio: null, _warmKey: "", gfx: { warm() {}, warming: () => warming },
       entrySettings: () => "settings", menuKey: () => "world", motionReduced: () => false,
-      clearTimeout() {}, setTimeout: f => f(), performance: { now: () => now }, requestAnimationFrame: f => { c._menuGate.warm--; f(); },
+      clearTimeout() {}, setTimeout: f => f(), performance: { now: () => now }, introNow: () => now, requestAnimationFrame: f => { c._menuGate.warm--; f(); },
       loadingInfo: () => ({}), loadingScreen: { nextFlyMs: () => 24000, stop() {}, building: (info, skip) => { c.skip = skip; } },
       studioSkip: n => { c._introSkip = n; }, introCover: (info, n) => c.loadingScreen.building(info, () => c.studioSkip(n)),
       studioOpen() { assert.equal(warming, false, "no outgoing motion before compilation settles"); c._studio = {}; events.push("out"); },
@@ -1096,6 +1096,7 @@ function introOverlapHarness({ cold = true, planThrows = false, cancelDuringPlan
     FlybySeq: { reset() { events.push("camera:reset"); } },
     requestAnimationFrame(fn) { c._menuGate.warm--; fn(); },
     awaitIntroWarm: async current => { events.push("warm:wait"); warmCurrent = current; await warm.promise; return current(); },
+    introNow: () => Date.now(),   // the intro's hidden-time-frozen clock (game.js); the sandbox is never hidden
   };
   vm.createContext(c); vm.runInContext(source, c);
   const done = c.introPrepare(() => wanted, "world", {}, 1, cold).then(

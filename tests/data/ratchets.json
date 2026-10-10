@@ -12,9 +12,9 @@
       "lines": 3625
     },
     "js/game.js": {
-      "codeLines": 4965,
+      "codeLines": 4975,
       "gMembers": 288,
-      "lines": 9179,
+      "lines": 9202,
       "topLets": 155
     },
     "js/lighting/presets.js": {
@@ -51,7 +51,7 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 337,
+      "ceiling": 336,
       "slack": 0
     },
     "rawColorDistinct": {

@@ -669,7 +669,10 @@ const LoadingScreen = (function () {
       // read on software GL (#1290 dropped the reduce-motion card the e2e suite's
       // pinned reducedMotion relied on, and the quali/real-race specs timed out). The
       // garage drive-out before it is skipped through the same gate (isAutomation).
-      const fly = !!info.hasWorld && !isAutomation();
+      // A HIDDEN TAB gets the card, not the flyby: after the drive-out's safety cap the intro reaches run()
+      // in the background, where the flyby timer, the announcer and the radio check would start unseen
+      // (speechSynthesis speaks in a hidden tab, and iOS synthesis then breaks until reload).
+      const fly = !!info.hasWorld && !isAutomation() && !(typeof document !== "undefined" && document.hidden);
       addEventListener("pointerdown", onSkip, true);
       addEventListener("keydown", onSkip, true);
       padHeld.clear();

@@ -26,6 +26,10 @@
  *     dropped, sub-step remainder included — which carries, not drops.
  *   - WAITING FOR PLAYERS: the card re-shows every 3 s while a room waits for
  *     its shared start, and each re-show was a fresh squelch and voice line.
+ *   - PIT GARAGE PAUSE (bug-hunt 3, 2026-10-10): WORK ON CAR freezes the race
+ *     behind #carsetup without the pause card; a hidden tab / blur / rotate
+ *     ran the FULL pause over it — the card stacked, QUIT left the garage
+ *     open on the title, RESUME + RETURN TO RACE raced lock-less.
  *
  * Run: node --test tests/unit/race-flow-fixes-vm.test.mjs
  */
@@ -35,7 +39,7 @@ import { createRequire } from "node:module";
 import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/lib/game-vm.cjs");
+const { createGame, settle } = require("../../tools/lib/game-vm.cjs");
 
 test("a red flag holds the field: no stuck-rescue kicks for the AI, no rescue for a player on the throttle", async () => {
   const g = await createGame({ track: "monza" });
@@ -227,5 +231,85 @@ test("WAITING FOR PLAYERS squelches and speaks on its first show, not on every 3
     assert.equal(g.sandbox.document.getElementById("announce").hidden, false, "the card is still up");
     assert.match(g.sandbox.document.getElementById("announce-text").textContent, /WAITING FOR PLAYERS/);
     assert.equal(g.sandbox.__stings, 1, "one squelch for the wait, not one per refresh");
+  } finally { g.close(); }
+});
+
+// ── THE PIT GARAGE HOLDS ITS OWN PAUSE (bug-hunt 3, 2026-10-10) ───────────────
+// setPaused(true) leaves the garage's pause alone (as setPaused(false) already
+// did), quitToMenu takes the garage down, closePitWork re-holds the wake lock.
+// The lock mock is tests/specs/wake-lock.spec.js's: it auto-releases on hide.
+// The two tests live here and not in wake-lock-vm.test.mjs because that file is
+// the spec's TWIN and must declare exactly the spec's test count.
+async function pitGarage(g) {
+  const doc = g.sandbox.document, log = [];
+  g.sandbox.navigator.wakeLock = {
+    request: (type) => {
+      log.push("request:" + type);
+      let released = false;
+      const listeners = {};
+      const sentinel = {
+        addEventListener: (ev, cb) => { listeners[ev] = cb; },
+        release: () => { if (!released) { released = true; log.push("release"); if (listeners.release) listeners.release(); } return Promise.resolve(); },
+      };
+      doc.addEventListener("visibilitychange", () => { if (doc.hidden) sentinel.release(); });
+      return Promise.resolve(sentinel);
+    },
+  };
+  await g.race("bahrain", "day", "dry");
+  assert.ok(await settle(() => log.includes("request:screen"), 4000), "the race holds the lock");
+  // On the jacks by decree: PitLane.canWork reads pitState "box" with hold left
+  // (pit-lane-vm drives the real stop; this is about the pause, not the lane).
+  const car = g.G.cars.find((c) => c.local);
+  car.pitState = "box"; car.pitT = 5;
+  doc.getElementById("pausemenu").hidden = true;       // index.html ships the card hidden; the VM DOM does not parse the shell
+  doc.getElementById("hud-work").onclick();            // WORK ON CAR (openPitWork)
+  const tick = () => new Promise((r) => setImmediate(r));
+  const visibility = async (hidden) => { doc.hidden = hidden; doc.dispatchEvent({ type: "visibilitychange" }); await tick(); };
+  return { doc, log, car, tick, visibility, garage: doc.getElementById("carsetup"), card: doc.getElementById("pausemenu") };
+}
+
+test("a hidden tab under WORK ON CAR shows no pause card, stays the garage's pause, and QUIT takes the garage down", async () => {
+  const g = await createGame({ storage: { trackId: "bahrain" } });
+  try {
+    const h = await pitGarage(g);
+    assert.equal(h.garage.hidden, false, "precondition: the garage is up");
+    assert.equal(g.G.paused, true, "precondition: the garage's own pause");
+    assert.equal(h.card.hidden, true, "precondition: no card");
+    await h.visibility(true);
+    assert.equal(g.G.paused, true, "still paused");
+    assert.equal(h.card.hidden, true, "no pause card over the garage");
+    assert.equal(h.garage.hidden, false, "the garage is still the screen");
+    await h.visibility(false);
+    assert.equal(h.card.hidden, true, "nor after the return");
+    assert.equal(g.G.paused, true, "the garage's pause survives the round trip");
+    // Any path to quitToMenu takes the garage down with the race (PAUSE > QUIT; CONFIRM QUIT arms first).
+    const q = h.doc.getElementById("pm-quit");
+    q.click(); if (q.classList.contains("armed")) q.click();
+    await h.tick();
+    assert.equal(h.garage.hidden, true, "QUIT closes #carsetup");
+    assert.equal(g.apex.info().state, "menu");
+    assert.equal(h.log.at(-1), "release", "the lock is dropped with the race");
+  } finally { g.close(); }
+});
+
+test("the garage's pause never drops the wake lock: the return to the tab re-holds it, and RETURN TO RACE races with it held", async () => {
+  // Before: the hidden tab's setPaused(true) dropped the lock (wanted=false); RESUME from the stacked
+  // card returned early under the garage, so nothing re-held it and RETURN TO RACE ran lock-less.
+  const g = await createGame({ storage: { trackId: "bahrain" } });
+  try {
+    const h = await pitGarage(g);
+    await h.visibility(true);                       // the platform releases the sentinel on hide (the mock does the same)
+    assert.ok(await settle(() => h.log.length >= 2, 4000), "the release on hide");
+    await h.visibility(false);                      // PlatformSession: `if (!document.hidden && raceWakeLock.wanted()) hold()`
+    assert.ok(await settle(() => h.log.length >= 3, 4000), "the re-acquire on return (the lock was never un-wanted)");
+    assert.deepEqual(h.log, ["request:screen", "release", "request:screen"]);
+    h.doc.getElementById("cs-back").onclick();      // RETURN TO RACE: closePitWork's own hold coalesces with the held lock
+    await h.tick();
+    assert.deepEqual(h.log, ["request:screen", "release", "request:screen"], "held, not requested twice");
+    assert.equal(g.G.paused, false, "racing again");
+    assert.equal(h.garage.hidden, true);
+    g.apex.finishRace();
+    await h.tick();
+    assert.equal(h.log.at(-1), "release", "and the race's end releases the lock RETURN TO RACE raced under");
   } finally { g.close(); }
 });
