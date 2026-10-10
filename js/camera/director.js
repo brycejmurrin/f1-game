@@ -128,7 +128,7 @@ const Director = (function () {
        would otherwise be damped toward two different cars on alternate calls. */
     function applyShot(car, shot, dt, cut) {
       if (!car || !G.track || !G.camVantage) return false;
-      const extra = { att: car, dt: cut ? 0 : (dt > 0 ? dt : 0), snap: !!cut, lookBack: false };
+      const extra = { att: car, noLook: true, dt: cut ? 0 : (dt > 0 ? dt : 0), snap: !!cut };   // noLook: the PLAYER's look-back / glance never steers a TV shot
       const pose = G.camPoseOf ? G.camPoseOf(car) : null;
       let s = car.s || 0, x = car.x || 0;
       if (pose) {

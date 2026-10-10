@@ -378,7 +378,7 @@ test("a TV-director solve never perturbs the player's bend hang", () => {
 // bug-hunt 9.5: the look-back mirror lived inside every vantage() solve, so a
 // latched rear view flipped the Director's TV shot after the flag and the
 // results chequered cut. Only the player's own solve may mirror.
-test("look-back mirrors the player's solve only; extra.lookBack === false opts out", () => {
+test("look-back mirrors the player's solve only; extra.noLook opts out (bug-hunt 9.5)", () => {
   const n = 1000, total = 4000;
   const track = { total, n, px: new Float64Array(n), py: new Float64Array(n),
     pz: Float64Array.from({ length: n }, (_, k) => k * 4), rx: new Float64Array(n).fill(1),
@@ -390,7 +390,7 @@ test("look-back mirrors the player's solve only; extra.lookBack === false opts o
     curvature: () => 0,
     banking: (t, s, l, scr) => { if (scr) { scr.dy = 0; scr.roll = 0; return scr; } return { dy: 0, roll: 0 }; },
   };
-  const solve = (back, extraFlag) => {
+  const solve = (back, noLook) => {
     const ctx = vm.createContext({ Math, JSON, Object, Array, Number, Tracks,
       Input: { lookingBack: () => back },
       GameStore: { store: { get: (k, d) => d, set: () => true, raw: () => null, rawSet: () => true } },
@@ -398,12 +398,12 @@ test("look-back mirrors the player's solve only; extra.lookBack === false opts o
     vm.runInContext(["js/core/mat4.js", ...["drive-chase.js", "drive-broadcast.js", "drive-onboard.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage.js"]
       .map((f) => fs.readFileSync(path.join(root, f), "utf8")).join("\n") + "\nthis.GC = GameCams;", ctx);
     const extra = { carPos: [0, 500], carHead: 0, snap: true, att: {} };
-    if (extraFlag !== undefined) extra.lookBack = extraFlag;
+    if (noLook) extra.noLook = true;
     const v = ctx.GC.vantage(track, "chase", 500, 0, 60, 0, extra);
     return { eye: Array.from(v.eye), tgt: Array.from(v.tgt) };
   };
-  const fwd = solve(false), mirrored = solve(true), tv = solve(true, false);
+  const fwd = solve(false), mirrored = solve(true), tv = solve(true, true);
   assert.ok(Math.abs(mirrored.tgt[2] - mirrored.eye[2] - -(fwd.tgt[2] - fwd.eye[2])) < 1e-6, "the player's own solve still mirrors");
-  assert.deepEqual(tv.tgt, fwd.tgt, "a TV/results solve (lookBack:false) ignores a latched rear view");
+  assert.deepEqual(tv.tgt, fwd.tgt, "a TV/results solve (noLook) ignores a latched rear view");
   assert.deepEqual(tv.eye, fwd.eye);
 });

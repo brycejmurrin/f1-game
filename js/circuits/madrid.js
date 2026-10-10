@@ -73,7 +73,7 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    sectors: [0.32, 0.66],
+    sectors: [0.304, 0.66],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.32, 0.66])
     turns: [0.0455, 0.0520, 0.0755, 0.2455, 0.2515, 0.3155, 0.3275, 0.3775, 0.3990, 0.4330, 0.4470, 0.5710, 0.6055, 0.6370, 0.6560, 0.7005, 0.7440, 0.7825, 0.8455, 0.8530, 0.8735, 0.9300],
     barrier: { a: [0.90, 0.12, 0.14], b: [0.97, 0.81, 0.12], c: [0.55, 0.12, 0.42], night: [0.26, 0.13, 0.06], tyre: [0.97, 0.81, 0.12] },  // Spain red/gold + crimson-purple
     furniture: { tree: "plane", fol: [0.40, 0.45, 0.27], lamp: "post",  lc: [1.0, 0.90, 0.66] },  // olive, not northern green

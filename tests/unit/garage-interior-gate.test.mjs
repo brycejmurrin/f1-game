@@ -178,6 +178,16 @@ it("garage sheet chrome is opaque, themed, and hides a redundant BACK", () => {
   }
   assert.match(css, /#cs-aero \{[^}]*width:\s*max-content/s,
     "the aero chip hugs its labels instead of stretching the car band");
+  assert.match(css, /#cs-bar \{[^}]*align-items:\s*center/s,
+    "CAMERA and ACTIVE AERO share one vertical centre on the bar");
+  assert.match(css, /#cs-aero \{[^}]*align-items:\s*center/s,
+    "aero chip centres its label+value like CAMERA, not baseline");
+  assert.match(css, /#cs-aero \{[^}]*flex:\s*0\s+0\s+auto/s,
+    "aero chip does not shrink under the bar (CAMERA is 0 0 auto)");
+  assert.match(css, /\.cs-aero-lbl \{[^}]*flex:\s*0\s+0\s+auto/s,
+    "ACTIVE AERO label never ellipsizes away under CORNER/STRAIGHT MODE");
+  assert.match(css, /\.cs-aero-lbl \{[^}]*color:\s*color-mix\(in oklab,\s*var\(--text\)\s+62%/s,
+    "ACTIVE AERO label uses the same rest colour as CAMERA");
   assert.match(css, /@media \(max-width: 820px\) \{[^]*#cs-aero \{[^}]*flex-direction:\s*column/s,
     "below the 844 phone-landscape golden, ACTIVE AERO stacks above CORNER MODE");
   assert.match(css,

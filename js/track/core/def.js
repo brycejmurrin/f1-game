@@ -144,7 +144,10 @@ const TrackDef = (function () {
     const def = {
       id: d.id, name: d.name, gp: d.gp, country: d.country, laps: 3,
       // Fewest laps covering the regulation race distance (TrackSceneryData.GP_DISTANCE_KM).
-      gpLaps: Math.ceil((TrackSceneryData.GP_DISTANCE_KM[d.id] || TrackSceneryData.GP_DISTANCE_KM.default) / (d.lengthKm || 5)),
+      // `lengthKm` is one decimal, so five circuits came out a lap off the real race:
+      // an authored integer `gpLaps` (> 3) overrides the derivation.
+      gpLaps: Number.isInteger(d.gpLaps) && d.gpLaps > 3 ? d.gpLaps
+        : Math.ceil((TrackSceneryData.GP_DISTANCE_KM[d.id] || TrackSceneryData.GP_DISTANCE_KM.default) / (d.lengthKm || 5)),
       night: d.night, theme: d.theme, lengthKm: d.lengthKm,
       classic: !!d.classic, custom: !!d.custom,
       palette: (d.night ? nightPal : dayPal)(d.pal || {}),
@@ -209,6 +212,10 @@ const TrackDef = (function () {
       elevations: hasRealElevation(d.id) ? null : (d.elevations || null),
       // Half-width overlays on the real centreline (the only way to narrow a section).
       hwZones: d.hwZones || null,
+      // Opt-in centripetal centreline (tracks.js buildCenterline). Copied only when
+      // authored: an absent key keeps every other def's metadata hash unchanged.
+      ...(d.splineAlpha != null ? { splineAlpha: d.splineAlpha } : {}),
+
       reverse: !!d.reverse,
       startFrac: d.startFrac || 0,
       // The startFrac this circuit's RACING-space scenery, dressingExclusions

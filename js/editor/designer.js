@@ -93,7 +93,7 @@ const TrackDesigner = (function () {
   const copy = (d) => JSON.parse(JSON.stringify(d));
   const lattice = (pts) => pts.map((p) => [Math.round(p[0] * 4) / 4, Math.round(p[1] * 4) / 4]);
   const fmtKm = (m) => (m / 1000).toFixed(2) + " km";
-  const fmtLap = (s) => { if (!(s > 0)) return "—"; const m = Math.floor(s / 60), r = s - m * 60; return m + ":" + (r < 10 ? "0" : "") + r.toFixed(1); };
+  const fmtLap = (s) => { if (!(s > 0)) return "—"; const ds = Math.round(s * 10), m = Math.floor(ds / 600), r = (ds - m * 600) / 10; return m + ":" + (r < 10 ? "0" : "") + r.toFixed(1); };   // round first: never "1:60.0"
   function blank() {
     // kerbStyle / berms omitted at defaults (flat + berms on) so content ids match older saves.
     return { name: "MY CIRCUIT", seed: (Date.now() % 4294967296) >>> 0, theme: TrackThemes.ORDER[0], baseHW: 7, pts: [], heights: [], hwZones: [], bankZones: [], elevations: [], bridges: [], turns: [], lengthM: 0 };

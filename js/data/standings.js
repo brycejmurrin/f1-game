@@ -37,7 +37,7 @@ const DataStandings = (function () {
         row.appendChild(el("span", "dh-name", s.name || "—"));
         if (s.wins > 0) row.appendChild(el("span", "dh-wins", `${s.wins}W`));
         row.appendChild(el("span", "dh-pts", s.points));
-        if (leaderPts !== null && s.pos !== 1) {
+        if (leaderPts !== null && s.pos !== 1 && leaderPts > s.points) {   // tied on points: no gap, not "−0"
           row.appendChild(el("span", "dh-gap", `−${leaderPts - s.points}`));
         }
         sec.appendChild(row);
@@ -96,7 +96,7 @@ const DataStandings = (function () {
         mainInfo.appendChild(el("span", "dh-name", s.name || "—"));
         if (s.wins > 0) mainInfo.appendChild(el("span", "dh-wins", `${s.wins}W`));
         mainInfo.appendChild(el("span", "dh-pts", s.points));
-        if (leaderPts !== null && s.pos !== 1) {
+        if (leaderPts !== null && s.pos !== 1 && leaderPts > s.points) {   // tied on points: no gap, not "−0"
           mainInfo.appendChild(el("span", "dh-gap", `−${leaderPts - s.points}`));
         }
         row.appendChild(mainInfo);

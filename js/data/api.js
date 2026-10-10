@@ -470,7 +470,7 @@ const F1API = (function () {
 
   // OpenF1 meeting.country_name follows the GP title, not always the venue
   // (2026 Bahrain Grand Prix: circuit_short_name "Kuala Lumpur"). Display
-  // mapping only — trackIdFor still resolves by country (Tracks handoff).
+  // mapping only — trackIdFor resolves the circuit by the calendar date window.
   const VENUE_COUNTRY = Object.freeze({
     "kuala lumpur": "Malaysia",
     "sepang": "Malaysia"

@@ -268,10 +268,29 @@ function crY(p0, p1, p2, p3, t) {
 // pose instead of from the previous race's last bend.
 const _hangOut = Object.create(null);
 const _hangFast = Object.create(null);
+const _bendSgn = Object.create(null), _bendDwell = Object.create(null);   // heli/side/cinematic held side + seconds until it may flip
 // snapGameCam's half of a cut: the CamFeel follows are reset beside this.
 function resetSmoothing() {
   for (const k in _hangOut) delete _hangOut[k];
   for (const k in _hangFast) delete _hangFast[k];
+  for (const k in _bendSgn) delete _bendSgn[k];
+  for (const k in _bendDwell) delete _bendDwell[k];
+}
+// Which side of the road a broadcast rig hangs on (+1 = +r, 0 = no bend seen yet), HELD so a
+// chicane cannot flip it before the last move has finished: leaving the held side needs
+// |kA| past `hi` (a Schmitt band over the entry threshold `lo`) and BEND_DWELL seconds since
+// the last flip (`neutral`: a straight reads 0 instead of holding). A one-shot solve (no dt) and a snap are stateless, as the raw threshold was.
+const BEND_DWELL = 0.7;
+function bendSide(key, kA, lo, hi, dt, snap, neutral) {
+  const raw = kA > lo ? 1 : kA < -lo ? -1 : 0;
+  if (neutral && raw === 0 && dt > 0 && !snap) { const hk1 = hangKey(key); _bendSgn[hk1] = 0; _bendDwell[hk1] = 0; return 0; }   // cinematic: a straight is its own framing and releases the hold
+  if (!(dt > 0) || snap) { if (snap) { const hk0 = hangKey(key); _bendSgn[hk0] = raw; _bendDwell[hk0] = 0; } return raw; }
+  const hk = hangKey(key), cur = _bendSgn[hk] || 0;
+  const dwell = Math.max(0, (_bendDwell[hk] || 0) - dt);
+  _bendDwell[hk] = dwell;
+  if (raw === cur) return cur;
+  if (cur === 0 || (raw !== 0 && dwell <= 0 && Math.abs(kA) > hi)) { _bendSgn[hk] = raw || cur; _bendDwell[hk] = BEND_DWELL; return raw || cur; }
+  return cur;
 }
 // The maps key by CamFeel's SCOPED key (#913's "tv:" prefix): the TV director
 // solving a car in the other bend must not read as the player's sign flip, and
@@ -288,11 +307,6 @@ function bendHang(key, kA, dt, reduce, gain, lambda, snap) {
   if (!(dt > 0) || reduce || !gain) { if (snap || reduce) hangReset(key, lambda); return 0; }
   if (!kA) { hangReset(key, lambda); return 0; }
   const raw = clamp(kA * 18, -1, 1), hk = hangKey(key);
-  if (!(dt > 0)) {   // a snap reseeds (like speedOpen) so the next live frame does not pop from a stale hang
-    _hangOut[hk] = raw; _hangFast[hk] = 0;
-    if (typeof CamFeel !== "undefined") CamFeel.follow(key, raw, lambda, 0);
-    return raw * gain;
-  }
   const prev = _hangOut[hk] || 0;
   // A chicane flips sign before a hairpin-rate head can arrive, and the two
   // sides cancel. Catch faster for a short stretch after the flip, then go
@@ -390,9 +404,47 @@ function onboardAttitude(mode, eye, tgt, extra, s, spN) {
 
 const _vantEye = [0, 0, 0], _vantTgt = [0, 0, 0];
 const _vantOut = { eye: _vantEye, tgt: _vantTgt, fov: 60 };
+// The last finite pose, held when a solve goes non-finite: the render damper in game.js
+// is exponential, so ONE NaN frame would poison camEye/camTgt/camFov until the next snap.
+const _goodEye = [0, 1, 0], _goodTgt = [0, 1, 1];
+let _goodFov = 60, _nanWarned = false;
+
+// STREET-CIRCUIT CORRIDOR at arc `sAt` (half-width `hw` there): the broadcast eye stays over
+// the road edge (hw - 1, floor 4) AND inside the nearer barrier (wallAt - 0.6, e.g. Monaco's
+// pinched 3.3 m wall), so no hang/offset knob can put it behind the barrier. Infinity on open circuits.
+function _vCorr(sAt, hw) {
+  const tk = _vTrack;
+  if (!tk.def || !tk.def.street) return Infinity;
+  let c = Math.max(hw - 1.0, 4);
+  if (typeof Tracks.wallAt === "function") {
+    const w = Math.min(Tracks.wallAt(tk, sAt, 1), Tracks.wallAt(tk, sAt, -1)) - 0.6;
+    if (w < c) c = Math.max(w, 1.5);
+  }
+  return c;
+}
+// The chase/far/drift/reverse hang is added to a car-relative eye, so on a street circuit it
+// can land behind the barrier. Soft-limit the eye's lateral (C1 handover, like softFloor) to
+// the barrier on its own side, measured at the eye's own arc `sAt`. No-op on open circuits.
+function _vWallClamp(eye, sAt) {
+  const tk = _vTrack;
+  if (!tk.def || !tk.def.street || typeof Tracks.wallAt !== "function") return;
+  const w = _vWrapS(sAt);
+  Tracks.sample(tk, w, cvB);
+  const lat = (eye[0] - cvB.p[0]) * cvB.r[0] + (eye[2] - cvB.p[2]) * cvB.r[2];
+  const side = lat >= 0 ? 1 : -1, a = lat * side;
+  const cap = Math.max(Tracks.wallAt(tk, w, side) - 0.6, 1.5);
+  if (!(a > cap - 0.5)) return;
+  const d = (cap - softFloor(cap - a, 0, 0.5) - a) * side;
+  eye[0] += cvB.r[0] * d; eye[2] += cvB.r[2] * d;
+}
 
 function vantage(track, mode, s, x, spd, now, extra) {
   extra = extra || {};
+  if (!isFinite(spd)) spd = 0;
+  if (!isFinite(x)) x = 0;
+  // The PLAYER's look-back key and free-look glance steer only the player's own camera: a solve
+  // without `att` (the PiP inset) or flagged `noLook` (the TV director's shots) must not spin.
+  const localLook = !!extra.att && !extra.noLook;
   if (extra.att) headOffset(mode, extra, _head);   // the live camera publishes the rig's head offset
   _vTrack = track; _vS = s;
   const wrapS = _vWrapS;
@@ -451,7 +503,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // Instead, on street tracks the broadcast cams stay over the ROAD EDGE itself
   // (furniture is never on the tarmac) and trade the lost width for extra
   // height — a crane-over-the-circuit shot. Open circuits keep the full framing.
-  const corr = track.def && track.def.street ? Math.max(cvA.hw - 1.0, 4) : Infinity;
+  let eyeS = s;   // the arc the eye actually sits at (the ground clamp reads it there)
   let eye = _vantEyeW, tgt = _vantTgtW, fov, vantCut = false;   // pooled; every branch below writes IN PLACE
   // RIVAL / PIT WALL / DRONE — solvers live in js/camera/extra-rigs.js so this
   // file stays under the ratchet. They write eye/tgt and return fov; CamTune
@@ -540,11 +592,13 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // merge cannot quietly put the 26 / 17 / 18 m overhead back.
     // Live frames ease the side across; a hard sign flip teleported the eye
     // across the road and the damper then swam it through the circuit.
-    Tracks.sample(track, wrapS(s - 16), cvB);
-    const sgnRaw = kA > 0.001 ? 1 : kA < -0.001 ? -1 : 1;
+    eyeS = s - 16;
+    Tracks.sample(track, wrapS(eyeS), cvB);
+    const sgnRaw = bendSide("bendHeli", kA, 0.001, 0.0015, extra.dt, extra.snap) || 1;
     const sgn = typeof CamFeel !== "undefined" ? CamFeel.follow("bendHeli", sgnRaw, 2.4, extra.dt || 0) : sgnRaw;
+    const corr = _vCorr(wrapS(eyeS), cvB.hw);
     const hl = Math.min(12, corr);              // stay inside the street canyon
-    const hlLat = hl * hangScale("heli");
+    const hlLat = Math.min(hl * hangScale("heli"), corr);   // CORNER HANG widens the rig, never past the corridor
     eye[0] = cvB.p[0] + cvB.r[0] * hlLat * sgn;
     eye[1] = centreY(track, s - 16) + 8.5 + (12 - hl) * 0.45 + bankDy;
     eye[2] = cvB.p[2] + cvB.r[2] * hlLat * sgn;
@@ -553,6 +607,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     tgt[0] = heliAim[0]; tgt[1] = heliAim[1]; tgt[2] = heliAim[2];
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 36 + dep * 2;
   } else if (mode === "reverse") {
+    eyeS = s + 5.5;
     eye[0] = p[0] + t[0] * 5.5; eye[1] = p[1] + 1.35; eye[2] = p[2] + t[2] * 5.5;
     const revOut = bendHang("revBend", kA, extra.dt, extra.reduceMotion, 3.6 * hangScale("reverse"), 5, extra.snap);
     eye[0] += r[0] * revOut; eye[2] += r[2] * revOut;
@@ -564,11 +619,13 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // 6 m back, 3.2 m up, 14 m out, aim 14 m ahead: pinned by
     // tests/unit/camera-ride.test.mjs. The TV director and the results
     // screen's chequered cut (ResultsCam.cheqPose) solve this same branch.
-    const sgnRaw = kA > 0.002 ? 1 : kA < -0.002 ? -1 : 1;
+    const sgnRaw = bendSide("bendSide", kA, 0.002, 0.003, extra.dt, extra.snap) || 1;
     const sgn = typeof CamFeel !== "undefined" ? CamFeel.follow("bendSide", sgnRaw, 2.6, extra.dt || 0) : sgnRaw;
+    eyeS = s - 6;
+    Tracks.sample(track, wrapS(eyeS), cvB);
+    const corr = _vCorr(wrapS(eyeS), cvB.hw);
     const sl = Math.min(14, corr);              // stay inside the street canyon
-    const slLat = sl * hangScale("side");
-    Tracks.sample(track, wrapS(s - 6), cvB);
+    const slLat = Math.min(sl * hangScale("side"), corr);
     eye[0] = cvB.p[0] + cvB.r[0] * sgn * slLat; eye[1] = centreY(track, s - 6) + 3.2 + (14 - sl) * 0.25 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * sgn * slLat;
     const sideAim = aheadPt(14, 0.7, x * 0.3);   // after the eye: aheadPt reuses cvB
     tgt[0] = sideAim[0]; tgt[1] = sideAim[1]; tgt[2] = sideAim[2];
@@ -581,11 +638,13 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // slowly drifts a three-quarter angle. Angle is measured around the car from
     // the track tangent, so the framing reads consistently corner to corner.
     // +kA = LEFT bend → outside is +r → positive angle (same fix as heli above).
-    const baseRaw = kA === 0 ? 0.6 : (kA > 0 ? 1 : -1) * 1.15;
+    const cineSide = bendSide("bendCine", kA, 0.0003, 0.0015, extra.dt, extra.snap, true);
+    const baseRaw = cineSide === 0 ? 0.6 : cineSide * 1.15;
     const base = typeof CamFeel !== "undefined" ? CamFeel.follow("bendCine", baseRaw, 2.2, extra.dt || 0) : baseRaw;
     const a = base + Math.sin(now * 0.00022) * 0.25;
+    const corr = _vCorr(wrapS(s), cvA.hw);
     const od = Math.min(22, corr);
-    const odLat = od * hangScale("cinematic");
+    const odLat = Math.min(od * hangScale("cinematic"), corr);
     const dir = _dirScr;
     dir[0] = Math.cos(a) * t[0] + Math.sin(a) * r[0]; dir[1] = 0; dir[2] = Math.cos(a) * t[2] + Math.sin(a) * r[2];
     eye[0] = p[0] + dir[0] * odLat; eye[1] = p[1] + 6.5 + (22 - od) * 0.45; eye[2] = p[2] + dir[2] * odLat;
@@ -593,7 +652,8 @@ function vantage(track, mode, s, x, spd, now, extra) {
     tgt[0] = cinAim[0]; tgt[1] = cinAim[1]; tgt[2] = cinAim[2];
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(50, 60, spFov);
   } else if (mode === "low") {
-    Tracks.sample(track, wrapS(s - 8), cvB);
+    eyeS = s - 8;
+    Tracks.sample(track, wrapS(eyeS), cvB);
     const cx = x * 0.3;
     eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 8) + 0.55 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
     const lowAim = aheadPt(18, 0.45, x * 0.35);
@@ -611,7 +671,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     } else {
       // No measured corners yet — fall back to TV side framing.
       const sgn = 1;
-      const sl = Math.min(25, corr);
+      const sl = Math.min(25, _vCorr(wrapS(s), cvA.hw));
       eye[0] = p[0] + r[0] * sgn * sl; eye[1] = p[1] + 6.0; eye[2] = p[2] + r[2] * sgn * sl;
       tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
       fov = 44;
@@ -722,26 +782,32 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // so an untuned install frames exactly as it did before this existed.
   // Deliberately BEFORE the ground clamp: a lowered eye must still be caught by
   // the terrain floor, or a −3 m HEIGHT would render the world from inside a hill.
+  if (mode === "chase" || mode === "far" || mode === "drift" || mode === "reverse")
+    _vWallClamp(eye, mode === "far" ? s - 10.5 : mode === "chase" ? s - 5.8 : mode === "drift" ? s - 6.2 : s + 5.5);
   if (typeof CamTune !== "undefined") fov = CamTune.apply(mode, eye, tgt, fov);
   // FREE-LOOK (js/camera/feel.js): additive yaw/pitch on bolted-on cams, after
   // CamTune so the tuner offsets stay the base and free-look stacks on top.
-  if (typeof CamFeel !== "undefined") CamFeel.applyFreeLook(eye, tgt);
+  if (localLook && typeof CamFeel !== "undefined") CamFeel.applyFreeLook(eye, tgt);
   /* LOOK BACK — spin the AIM about the eye, never move the eye.
      Mode-aware via CamFeel: reverse/rear already face aft, so a flip is skipped.
      Default is hold (mirror glance); SETTINGS › CAMERA FEEL can latch on press.
      After CamTune + free-look so trim and glance are part of what gets mirrored;
-     before the ground clamp (eye unchanged). The player's own solve only:
-     the Director's TV shot and the results cut pass extra.lookBack === false,
-     so a latched rear view cannot flip a broadcast camera after the flag. */
-  const _lbHeld = typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack();
-  const _lb = typeof CamFeel !== "undefined" ? CamFeel.shouldLookBack(mode, _lbHeld) : _lbHeld;
-  if (_lb && !(extra && extra.lookBack === false)) {
+     before the ground clamp (eye unchanged). */
+  const _lbHeld = localLook && typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack();
+  const _lb = localLook && (typeof CamFeel !== "undefined" ? CamFeel.shouldLookBack(mode, _lbHeld) : _lbHeld);
+  if (_lb) {
     const dx = tgt[0] - eye[0], dz = tgt[2] - eye[2];
     tgt[0] = eye[0] - dx; tgt[2] = eye[2] - dz;
   }
   // Speed / brake / yaw motion. Before the ground clamp so a dip cannot put
   // the eye under the road. No-op without a timestep.
-  if (typeof CamFeel !== "undefined" && CamFeel.drive) fov = CamFeel.drive(mode, eye, tgt, fov, extra, spN);
+  if (typeof CamFeel !== "undefined" && CamFeel.drive) {
+    // drive() adds a lens delta AFTER CamTune's 20-110 clamp (heli +11, far +7): clamp again, but
+    // never pull in a FOV that arrived outside the range (trackside's long 18 deg lens).
+    const f0 = fov;
+    fov = CamFeel.drive(mode, eye, tgt, fov, extra, spN);
+    fov = clamp(fov, Math.min(f0, 20), Math.max(f0, 110));
+  }
   // Open-circuit wall / building avoidance for broadcast cams (street circuits
   // already use `corr`). Steps toward the road, then lifts over roofs — see
   // js/camera/cam-avoid.js. Runs before the ground floor so a lifted eye is
@@ -782,7 +848,12 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // js/track/core/mesh.js banking() lerps for exactly this reason ("so cars and
     // cameras do not jump between the road mesh's ~4 m longitudinal nodes") —
     // this clamp simply never got the same treatment.
-    const pos = (((s % track.total) + track.total) % track.total) / track.total * n;
+    // The floor is read at the EYE's own arc (reverse s+5.5, low s-8, heli s-16, side s-6), not the
+    // car's: on a crest (Spa's Raidillon) the node under the car is metres above the one under the eye.
+    // chase/far/drift keep the car's s on purpose — their reference is the smoothed ride height above.
+    const eyeAt = mode === "reverse" || mode === "low" || mode === "heli" || mode === "side" ? eyeS : s;
+    const fr = eyeAt === s ? cvA : (Tracks.sample(track, wrapS(eyeAt), cvB), cvB);
+    const pos = (((eyeAt % track.total) + track.total) % track.total) / track.total * n;
     const k0 = Math.floor(pos) % n, kf = pos - Math.floor(pos);
     // kPrev, NOT kA: this function's outer scope declares kA as a CURVATURE
     // (1/m) ~200 lines up; reusing the name here for a node index was a
@@ -791,10 +862,10 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // Lateral offset of the eye, measured against the INTERPOLATED frame at s
     // (cvA still holds that sample) rather than one node's — same reason: a
     // per-node frame steps the lateral reading too.
-    const ex = eye[0] - cvA.p[0], ez = eye[2] - cvA.p[2];
-    const lat = ex * cvA.r[0] + ez * cvA.r[2];
-    const beyond = Math.max(0, Math.abs(lat) - cvA.hw);
-    const bank = Tracks.banking ? Tracks.banking(track, s, lat, _bankScr, true) : null;
+    const ex = eye[0] - fr.p[0], ez = eye[2] - fr.p[2];
+    const lat = ex * fr.r[0] + ez * fr.r[2];
+    const beyond = Math.max(0, Math.abs(lat) - fr.hw);
+    const bank = Tracks.banking ? Tracks.banking(track, eyeAt, lat, _bankScr, true) : null;
     const ground = crY(track.surface.heightAt(kPrev, beyond), track.surface.heightAt(k0, beyond),
                        track.surface.heightAt(k1, beyond), track.surface.heightAt(kB, beyond), kf)
                  + (bank ? bank.dy : 0);
@@ -832,12 +903,19 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // ripple, it is relief — the raw floor stays.
     let floorY = ground + MIN_CLEAR;
     if (beyond === 0) {
-      const smoothG = rideY(track, s) + (bank ? bank.dy : 0);
+      const smoothG = rideY(track, eyeAt) + (bank ? bank.dy : 0);
       floorY = Math.max(smoothG, ground - FLOOR_LEAD) + MIN_CLEAR;
     }
     eye[1] = softFloor(eye[1], floorY, CLAMP_BLEND);
   }
   if (onboard || mode === "tcam") onboardAttitude(mode, eye, tgt, extra, s, spN);
+  if (isFinite(eye[0] + eye[1] + eye[2] + tgt[0] + tgt[1] + tgt[2] + fov)) {
+    _goodEye[0] = eye[0]; _goodEye[1] = eye[1]; _goodEye[2] = eye[2];
+    _goodTgt[0] = tgt[0]; _goodTgt[1] = tgt[1]; _goodTgt[2] = tgt[2]; _goodFov = fov;
+  } else {   // hold the last finite pose: see _goodEye
+    eye = _goodEye; tgt = _goodTgt; fov = _goodFov;
+    if (!_nanWarned) { _nanWarned = true; Log.warn("game", "GameCams.vantage: non-finite pose in mode " + mode + ", holding the last good one"); }
+  }
   _vantEye[0] = eye[0]; _vantEye[1] = eye[1]; _vantEye[2] = eye[2];
   _vantTgt[0] = tgt[0]; _vantTgt[1] = tgt[1]; _vantTgt[2] = tgt[2];
   _vantOut.eye = _vantEye; _vantOut.tgt = _vantTgt; _vantOut.fov = fov; _vantOut.cut = vantCut;

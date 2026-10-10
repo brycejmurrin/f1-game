@@ -58,11 +58,17 @@ const RaceInsights = (function () {
   const SLOW = 0.06, TRAFFIC_N = 3;   // a "backmarker" is 6% down on your own _vmaxNow; three of them is a stint through traffic
   const CLEAR_S = 1.5;         // held clear before a pass is a pass
   // SPEED UNITS (js/ui/appearance-opts.js) is display-only; the drills still measure in m/s.
-  const kmh = v => (typeof AppearanceOpts !== "undefined" ? AppearanceOpts.speed(Math.abs(v) * 3.6) : Math.round(Math.abs(v) * 3.6));
+  // `dash` is G.dashKph: the speedometer's km/h (PACE-standardised), so a debrief
+  // speed reads like the dial did; a G without it falls back to the raw m/s.
+  const kmhOf = (dash, v) => {
+    const k = dash ? dash(Math.abs(v)) : Math.abs(v) * 3.6;
+    return typeof AppearanceOpts !== "undefined" ? AppearanceOpts.speed(k) : Math.round(k);
+  };
   const unit = () => (typeof AppearanceOpts !== "undefined" && AppearanceOpts.units() === "mph" ? " mph" : " km/h");
   const median = (a) => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[s.length >> 1] : null; };
   const boundedPush = (a, v, n) => { a.push(v); if (a.length > n) a.shift(); };
   function create(G) {
+    const kmh = (v) => kmhOf(G.dashKph, v);
     let previous = null, events = [], sequence = 0, laps = [], sector = null, energy = [[], [], []];
     let tyreStart = null, drill = null, lastDrill = null, distance = 0, lapClean = false, weather = null, attempts = {};
     let paceRef = null, paceWin = [];   // the car ahead, and the rolling pace read on it (samplePace)
