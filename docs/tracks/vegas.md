@@ -91,3 +91,10 @@ at lateral 132 with its screen building at gap 38 (they overlapped at 87-97 vs 7
 Tall hotel massing sits at the pit (racing 0.096 / 0.136); the S/F approach keeps billboards, the Harmon stand and low
 back-of-house `cityFront` rows (authored 0.12-0.20 = racing 0.963-0.04). The 90 m "screen" tower at racing 0.062 still yields
 to a generic unit (as before this PR); only its megascreen board stands there.
+
+**2026-10-10 — place() argument order (review F3).** `place(k, side, dist, [w, h, d], col)` rejects a box when
+`onTrack(.., sz[0]/2 + 1.5)`, and `sz[0]` is the LATERAL width. Four forecourt strips (Venetian gold fascia, the two
+Caesars strips, the Bellagio apron) had been written `[along-road length, h, depth]`, so each was culled on every build
+(`dist=18 sz[0]=95` needed dist > 49). They are now `[depth, h, length]` and all four emit (0/1 -> 1/0 each, counted per
+source line in the headless build). The Bellagio apron sits at dist 9 / 10 m deep (lateral 4-14, between kerb and the
+lake-edge posts) rather than over the lake, and the second Caesars strip's foot is sunk 0.3 m so the pair is not coplanar.

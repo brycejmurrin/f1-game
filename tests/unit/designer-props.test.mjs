@@ -8,7 +8,7 @@ import { bootEditor, design, plain, ellipse } from "../helpers/editor-vm.mjs";
 
 test("KINDS / CAPS / sanitize: known kinds only, per-kind and total caps", () => {
   const { P } = bootEditor();
-  assert.equal(P.KINDS.join(","), "stand,gantry,trees,water,flood,billboard,palms,hedge");
+  assert.equal(P.KINDS.join(","), "stand,gantry,trees,water,flood,billboard,palms,hedge,pines,bushes,marshal,camera");
   assert.equal(P.TOTAL, 16);
   assert.equal(P.sanitize(null), null);
   assert.equal(P.sanitize([]), null);
@@ -93,6 +93,22 @@ test("palms and hedges render through existing APIs and survive the share codec"
   assert.equal(props[0].side, -1, "editing does not mutate the original");
   assert.equal(P.updateAt(props, -1, { s: 0.5 }), null);
   assert.equal(P.updateAt(props, 0, { s: NaN }), null);
+});
+
+test("new nature and venue objects keep codec indices and dress at metre spacing", async () => {
+  const { P, C, CD } = bootEditor(), calls = {};
+  const api = { K: (f) => ((f % 1 + 1) % 1) * 1000 };
+  for (const name of ["pine", "bush", "marshalPost", "cameraTower"]) api[name] = (...args) => (calls[name] ||= []).push(args);
+  const props = ["pines", "bushes", "marshal", "camera"].map((kind) => ({ kind, s: 0, side: -1, gap: P.DEFAULT_GAP[kind] }));
+  assert.equal(P.dress(api, { n: 1000, total: 5000 }, props), 4);
+  assert.equal(calls.pine.length, 3); assert.equal(calls.bush.length, 5);
+  assert.ok(Math.abs(calls.pine[1][0] - calls.pine[2][0] + 2.8) < 1e-8);
+  assert.ok(Math.abs(calls.bush[3][0] - calls.bush[4][0] + 1.2) < 1e-8);
+  assert.equal(calls.marshalPost[0][1], -1); assert.equal(calls.cameraTower[0][3].h, 12);
+  assert.equal(P.dress({}, { n: 1000, total: 5000 }, props), 0, "missing APIs degrade safely");
+  const d = C.sanitize(design({ props })), back = await CD.decode(await CD.encode(d));
+  assert.equal(back.ok, true); assert.deepEqual(plain(back.design.props), plain(d.props));
+  for (const kind of P.KINDS) assert.ok(P.DESCRIPTIONS[kind], kind + " has a useful description");
 });
 
 test("CustomTracks: props round-trip in sanitize / id / toRaw scenery", () => {

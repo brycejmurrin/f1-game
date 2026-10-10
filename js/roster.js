@@ -507,6 +507,7 @@
     "js/editor/insight.js",
     "js/editor/fixes.js",
     "js/editor/codec.js",
+    "js/editor/scenery-preview.js",
     "js/editor/canvas.js",
     "js/editor/elev-presets.js",
     "js/editor/profile.js",
@@ -569,6 +570,10 @@
     ],
     [
       "js/editor/codec.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/scenery-preview.js",
       "js/editor/designer.js"
     ],
     [
