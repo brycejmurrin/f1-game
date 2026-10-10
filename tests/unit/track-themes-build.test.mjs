@@ -104,6 +104,23 @@ function longDesign(ctx, seed, theme, targetL = 6950) {
   assert.ok(v.stats.lengthM > 6700 && v.stats.lengthM <= V.LIMITS.lenMax, `${theme}: built ${v.stats.lengthM} m, near the ${V.LIMITS.lenMax} m cap`);
   return d;
 }
+
+test("authored palms and hedges survive sharing and add real scenery without build warnings", { timeout: 300000 }, async () => {
+  const { Tracks, ctx } = boot();
+  for (const kind of ["palms", "hedge"]) {
+    const design = designFor(ctx, 7, "blossom");
+    const bare = verifyDef(Tracks, customDef(Tracks, design), { quiet: true });
+    design.props = [0.2, 0.45, 0.7].flatMap((s) => [-1, 1].map((side) => ({ kind, s, side, gap: 24 })));
+    const back = await ctx.TrackCodec.decode(await ctx.TrackCodec.encode(design));
+    assert.equal(back.ok, true);
+    assert.equal(back.design.props.length, 6);
+    const before = Tracks._vmConsole.length;
+    const built = verifyDef(Tracks, customDef(Tracks, back.design), { quiet: true });
+    assert.ok(built.props > bare.props, `${kind}: authored objects add real geometry`);
+    assert.ok(built.props < PROP_VERT_CAP);
+    assert.deepEqual(Tracks._vmConsole.slice(before).filter((l) => /custom (?:prop|scenery).*failed/.test(l)), []);
+  }
+});
 /** The def as CustomTracks.toRaw builds it once it hands the DESIGN to
  *  TrackThemes.defFields (the length-scaled fields): the theme's fields re-applied with the design. */
 function scaledDef(ctx, design) {

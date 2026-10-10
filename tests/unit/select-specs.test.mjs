@@ -157,16 +157,39 @@ test("a FULL overflow spills into bounded spill jobs instead of skipping (PR #12
   assert.equal(MAX_SPILL_SHARDS, 4, "the measured spill allowance stays bounded");
 });
 
+test("full oversize slots carry expensive suites before a smaller hoisted failure (PR #1289)", () => {
+  const terrain = "tests/specs/terrain-over-road.spec.js", hoisted = "tests/specs/career-hub.spec.js";
+  const rows = [["tests/specs/hud-layout.spec.js", 1318], [terrain, 638],
+    ["tests/specs/career-season.spec.js", 403], ["tests/specs/career.spec.js", 352], [hoisted, 260]];
+  const db = { specs: Object.fromEntries(rows.map(([file, sec]) => [file,
+    { s: [1, 2, 3].map((i) => [`2026-10-0${i}T00:00:00Z`, "llvmpipe", sec, declaredTests(file)]) }])) };
+  // Four slots plus one 360-second slow pool can carry all five suites. Giving
+  // the small failure a slot strands terrain's 638 seconds, which cannot fit that pool.
+  const r = fit(rows.map(([file]) => file), budgetFor(1), { db,
+    rank: (file) => file === hoisted ? 1 : file === terrain ? 3 : 2,
+    overflowShards: 0, spillShards: 0, overBudgetShards: 1 });
+  assert.equal(r.oversize.length, MAX_OVERSIZE_SHARDS);
+  assert.ok(r.oversize.some((s) => s.file === terrain), "the largest routed suite keeps a scarce slot");
+  assert.ok(!r.oversize.some((s) => s.file === hoisted), "a smaller failure cannot evict a larger workload");
+  assert.deepEqual(r.overBudgetRun.map((s) => s.file), [hoisted]);
+  assert.deepEqual(r.skipped, []);
+  assert.deepEqual(r.overBudgetSpecs, []);
+  const jobs = shards(r, db);
+  for (const [file] of rows) assert.ok(jobs.some((j) => j.specs.split(" ").includes(file)), `${file} is scheduled`);
+});
+
 test("terrain and ordinary parts leftovers use only spare over-budget capacity (PR #1289)", () => {
   // CI 38018686533 carried quali instead of Abu Dhabi. Career Hub took the
   // fourth oversize slot, leaving terrain (638 s) outside the ordinary pools
-  // despite 1512 spare seconds in the already-reserved over-budget pool.
+  // despite 1512 spare seconds in the already-reserved over-budget pool. Keep
+  // four genuinely larger occupants here to test fallback under cost-first
+  // allocation too, independently of that subsequent allocation repair.
   const terrain = "tests/specs/terrain-over-road.spec.js";
   const slow = "tests/specs/track-switch-memory.spec.js";
   const oversized = [
-    ["tests/specs/career-season.spec.js", 403],
-    ["tests/specs/career.spec.js", 352],
-    ["tests/specs/career-hub.spec.js", 260],
+    ["tests/specs/career-season.spec.js", 700],
+    ["tests/specs/career.spec.js", 700],
+    ["tests/specs/career-hub.spec.js", 700],
     ["tests/specs/hud-layout.spec.js", 1318],
   ];
   const leftovers = [
@@ -223,8 +246,8 @@ test("terrain and ordinary parts leftovers use only spare over-budget capacity (
   // ordering too: unused reserved room must carry it without raising limits.
   const props = "tests/specs/props-over-road.spec.js", parts = "tests/specs/parts-physics.spec.js";
   const ordinaryRows = [...rows.filter(([file]) => file !== terrain)
-    .map(([file, sec]) => [file, overflowFillers.includes(file) ? 308
-      : file === "tests/specs/dev-tools.spec.js" ? 523 : sec]), [parts, 70]];
+    .map(([file, sec]) => [file, overflowFillers.includes(file) ? 298
+      : file === "tests/specs/dev-tools.spec.js" ? 495 : sec]), [parts, 70]];
   const ordinaryDb = dbFor(ordinaryRows);
   const ordinaryPlan = (overBudgetShards) => fit(ordinaryRows.map(([file]) => file), DEFAULT_BUDGET_MIN,
     { db: ordinaryDb, rank: (file) => file === props ? 1 : rank(file), overBudgetShards });

@@ -242,7 +242,7 @@ function customContext(Tracks) {
     if (typeof globalThis[g] !== "undefined") ctx[g] = globalThis[g];
   // The editor's PURE core only: the screen pair (canvas.js, designer.js) binds
   // Dom at eval and needs a page; this is the headless gate, so it stays out.
-  const files = ["js/core/hash32.js", "js/editor/track-themes.js", "js/editor/custom-tracks.js"]
+  const files = ["js/core/hash32.js", "js/editor/track-themes.js", "js/editor/props.js", "js/editor/custom-tracks.js"]
     .concat((MANIFEST.LAZY_EDITOR || []).filter((f) => !/\/(canvas|designer)\.js$/.test(f)));
   for (const f of files) {
     const src = fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var");

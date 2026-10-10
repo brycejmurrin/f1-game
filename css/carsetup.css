@@ -525,6 +525,14 @@
 .cs-tab.active { background: var(--plate-on); border-color: var(--red); }
 .cs-tab.active .cs-tab-lbl { color: var(--text); }
 .cs-tab.active .cs-tab-cur { color: color-mix(in oklab, var(--text) 72%, transparent); }
+/* ENGINE subtitle (Pages recheck 2026-10-08): a FACTORY power unit keeps its
+   full name ("Ferrari 066/12", "Ford Powertrains") — no works prefix for
+   tabSub() to drop — and the 1280 rail ellipsised it to "Ferrari 066…". The
+   ENGINE line may take a second line instead; two at most, then ellipsis. */
+.cs-tab[data-cs-cat="engine"] .cs-tab-cur {
+  white-space: normal; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+}
 
 /* ---------- option rows ---------- */
 .cs-opt {
