@@ -1610,7 +1610,6 @@ const GLXBackend = (function () {
     // reflection this check was written to fix. Returning null here makes
     // game.js skip the probe, which is what "disabled" has to mean.
     if (!envTex) { envInit(); if (_envDisabled || !envTex || !envFBO) return null; }
-    _envActive = true;   // begin() → env FBO + 64px viewport; env unit → dummy cube
     const F = ENV_FACES[face];
     _envTgt[0] = eye[0] + F[0][0]; _envTgt[1] = eye[1] + F[0][1]; _envTgt[2] = eye[2] + F[0][2];
     M4.lookAtTo(_envView, eye, _envTgt, F[1]);
@@ -1645,7 +1644,15 @@ const GLXBackend = (function () {
     // (the tier-3 far-plane cap), the probe keeps that tighter value. A cullDist of
     // 0 means "no cull", so it is treated as unbounded rather than as zero.
     frame.cullDist = _envSvCull > 0 ? Math.min(_envSvCull, ENV_CULL_M) : ENV_CULL_M;
-    begin(frame);
+    // _envActive goes up only here, with its undo beside it: a throw in begin() used to leave it set (the caller's
+    // envFaceEnd never runs for a begin that threw), so every later main begin() drew into the 64px probe face.
+    _envActive = true;   // begin() → env FBO + 64px viewport; env unit → dummy cube
+    try { begin(frame); }
+    catch (e) {
+      _envActive = false;
+      _envFrame.viewProj = _envSvVP; _envFrame.eye = _envSvEye; _envFrame.cullDist = _envSvCull; _envFrame = null;
+      throw e;
+    }
     return _envInvVP;
   }
   function envFaceEnd(face) {
@@ -1684,7 +1691,9 @@ const GLXBackend = (function () {
   function mirrorBegin(frame, w, h) {
     if (!gl || ctxGone() || !PST || _envActive) return false;
     if (!PST.mirror.begin(Math.max(16, Math.min(1024, w | 0)), Math.max(8, Math.min(512, h | 0)))) return false;
-    begin(frame);   // binds the mirror FBO while mirror.active()
+    // begin() binds the mirror FBO while mirror.active(). The caller only ends a pass whose mirrorBegin RETURNED, so
+    // a throw here must put the flag down itself, or the next MAIN begin() renders into the mirror target.
+    try { begin(frame); } catch (e) { PST.mirror.abort(); bindOutputViewport(); throw e; }
     return true;
   }
   function mirrorEnd() {

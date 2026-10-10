@@ -6116,6 +6116,40 @@ test("the GLX mirror pass runs with the lamp shadow off — the forward slot nam
   assert.match(chunked, /SH\.lampArmed && SH\.lampIdx >= 0 && F\.lights && !core\.post\.mirror\.active\(\)/);
 });
 
+// 07-F4: GLX raised the mirror / env-probe "active" flag BEFORE begin(), and the caller only ends a pass whose
+// begin RETURNED, so a throw inside begin() left every later MAIN begin() rendering into the mirror / probe target.
+test("GLX mirrorBegin / envFaceBegin put their active flag down when begin() throws (07-F4)", () => {
+  const h = bootGlx();
+  const G = h.GLX;
+  const lastFbo = () => h.calls.filter((c) => c[0] === "bindFramebuffer").at(-1)[1][1];
+  const boom = () => { const f = h.frame(); Object.defineProperty(f, "fogColor", { get() { throw new Error("begin boom"); } }); return f; };
+  // The healthy passes tell us which framebuffer objects are the mirror's and the probe's.
+  assert.equal(G.mirrorBegin(h.frame(), 64, 16), true);
+  const mirFbo = lastFbo();
+  G.mirrorEnd();
+  G.envFaceBegin(0, [0, 1, 0], h.frame());
+  const envFbo = lastFbo();
+  G.envFaceEnd(0);
+  assert.ok(mirFbo && mirFbo.fbo && envFbo && envFbo.fbo && mirFbo !== envFbo);
+  const rendersBefore = G.mirrorState().renders;
+
+  const f1 = boom();
+  assert.throws(() => G.mirrorBegin(f1, 64, 16), /begin boom/);
+  G.begin(h.frame());
+  assert.notEqual(lastFbo(), mirFbo, "the main pass after a throwing mirrorBegin does not draw into the mirror target");
+  assert.equal(G.mirrorState().renders, rendersBefore, "an aborted pass is not counted as a rendered mirror frame");
+
+  const f2 = boom();
+  const vp = f2.viewProj, eye = f2.eye;
+  assert.throws(() => G.envFaceBegin(1, [0, 1, 0], f2), /begin boom/);
+  assert.equal(f2.viewProj, vp, "the caller's view-projection is handed back");
+  assert.equal(f2.eye, eye);
+  G.begin(h.frame());
+  assert.notEqual(lastFbo(), envFbo, "the main pass after a throwing envFaceBegin does not draw into the probe face");
+  assert.equal(G.mirrorBegin(h.frame(), 64, 16), true, "the mirror is not wedged behind a stuck probe flag");
+  G.mirrorEnd();
+});
+
 // 08-F3: render() asked the backend for its full backendState() (TLX: ~50 fields, a meshPool walk, ~1 KB of garbage)
 // every frame to read one boolean. Every backend now carries a cheap ctxLost(); backendState() is only the fallback.
 test("game.js gfxContextLost reads the cheap ctxLost() accessor, not backendState() (08-F3)", () => {
