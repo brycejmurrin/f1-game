@@ -116,6 +116,10 @@
 #hud-pos, #hud-lap { min-width: 5ch; }
 #hud-time, #hud-best, #hud-delta-n { min-width: 7ch; }
 #hud-delta[data-pending] { visibility: hidden; }
+/* THE LAP JUST DRIVEN: in a race the TIME box holds it for 3 s after the line
+   (js/ui/hud.js, data-hold) — green when it is a personal best. Same digits,
+   same slot: colour only, no width. */
+#hud-time[data-hold="pb"] { color: var(--faster); }
 /* POSITION CHANGE. hud.js stamps data-delta="up"/"down" on #hud-pos for ~6
    HUD ticks when the rank moves; the colour is state (kept under reduced
    motion), the scale pop is motion (not). */
