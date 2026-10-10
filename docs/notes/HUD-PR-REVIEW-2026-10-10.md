@@ -368,7 +368,8 @@ was wrong.
 
 These are simulated merges on ship `184507f` plus #1375 `63130b8` and #1394
 `d4840ef`, measured with `tools/check/ratchets.mjs` and
-`node --test tests/unit/hud-pins.test.mjs`. Both PRs merge cleanly with ship.
+`node --test` on #1394's hud-pins unit test (which exists only on that
+branch). Both PRs merge cleanly with ship.
 
 | on top of ship + #1375 + #1394 | hud.js codeLines / lines | hud.css codeLines / lines | ratchets | hud-pins |
 |---|---|---|---|---|
@@ -394,10 +395,10 @@ These are simulated merges on ship `184507f` plus #1375 `63130b8` and #1394
   including both HUD PRs. The three `todo` pins (F-01, F-02, F-06) name the
   allocator branch and post-#1366 work as their fixes. When those land, each
   `todo` must flip to a real assertion in the same PR.
-- **The ship-wide red** `physics-baseline-provenance.test.mjs` (baseline
-  blessed at `b4df4321d`, not an ancestor of ship) is unrelated to every HUD
-  change here. It will show on every PR's guards until ship fixes it, so it
-  is not a verdict on these.
+- **`physics-baseline-provenance.test.mjs` is not a ship red** (corrected by
+  the audit session). It fails only in a shallow clone, where `b4df4321d` is
+  missing. After `git fetch --unshallow` it passes 5/5. Do not re-bless
+  `tests/data/physics-baseline.json`.
 
 **Merge order, revised:** #1346, #1366 and #1351 (any order once each is
 green) → #1394 (any time) → #1375, re-measured on the merged tree → close
