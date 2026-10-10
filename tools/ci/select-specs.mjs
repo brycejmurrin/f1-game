@@ -612,6 +612,19 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
       if (sec <= room) { overBudgetRun.push(r); room -= sec; continue; }
       overBudgetSpecs.push({ file: r.file, tests: r.tests, ownTimeoutSec: r.ownTimeoutSec });
     }
+    // Ordinary leftovers may use reserved capacity left AFTER the pool's
+    // existing slow candidates. A changed failure cache must not strand room
+    // while dropping terrain or parts. Isolate each fallback so it cannot
+    // inherit another candidate's longer per-test timeout when packed.
+    const keep = [];
+    for (const r of skipped) {
+      const sec = r.sec != null ? r.sec : Math.round(expectedSec(r, db));
+      if (sec <= room) {
+        overBudgetRun.push({ ...r, capacityFallback: true }); room -= sec;
+      } else keep.push(r);
+    }
+    skipped.length = 0;
+    skipped.push(...keep);
   }
   return { selected, skipped, unreachable, oversize: oversizeRun, overflow, spill, overBudgetRun, overBudgetSpecs, coveredByFixedGates, coveredByManualOptIn, coveredByVmTwin,
     unreadable,
@@ -679,7 +692,7 @@ export function shards(r, db = timings()) {
       }
       continue;
     }
-    const solo = /menu-baseline/.test(s.file) || (s.ownTimeoutSec || 0) >= SOLO_OWN_TIMEOUT_SEC;
+    const solo = !!s.capacityFallback || /menu-baseline/.test(s.file) || (s.ownTimeoutSec || 0) >= SOLO_OWN_TIMEOUT_SEC;
     items.push({ solo, budgeted: !!s.budgeted, pool: s.pool || false, name: `oversize-${base}`,
       files: [s.file], shard: "", tests: s.tests, sec, perTest, workers: 1 });
   }
