@@ -117,8 +117,47 @@ radio collapse, and outside the fit the per-tick `phoneFitStampSync` (up to 8 pa
 | `cursor/hud-band-allocator-5e2c` (branch, no PR yet; +735/−297 in `hud.js`) | plan Phases 1–5: obstacle list, `rightDockInset`, `placeRadio`, `--rcol-y-*`, `--lcol-y-*`, `hUnset` | Addresses F-02, F-04, F-06, F-09 and part of F-07/F-13/F-14. **It does not touch F-01**, which applies to its formulas too. |
 | merged #1301, #1349, #1367, #1344, #1345 | lane rows, invalidateFit stale-clearance verify, survey capture cap, minimap slot note, survey B1–B5 | Already in `5ab09b4`; audited as shipped. |
 
+## The HUD only grows: a net-lines rule (owner decision, 2026-10-10)
+
+Every open HUD change makes the code larger, including the one meant to simplify it
+(`git diff --numstat` against ship, `js/ui/hud.js` + `css/hud.css`):
+
+| branch | added | removed | net |
+|---|---|---|---|
+| `cursor/hud-band-allocator-5e2c` (the "one contract" refactor) | +793 | −319 | **+474** |
+| #1316 Phase 0 | +118 | −42 | +76 |
+| #1351 overlap clearance | +78 | −22 | +56 |
+| #1366 top-band fit | +89 | −34 | +55 |
+
+`hud.js` (2246 lines, 1330 code lines) and `css/hud.css` (2109 lines, 1917 code lines)
+have no entry in `tests/data/ratchets.json`, so nothing makes a HUD PR pay for what it
+adds. Most of this audit's findings share one cause: each phone bug got its own repair
+pass, layered on top of the passes before it.
+
+The rule the owner asked for:
+
+1. **Ratchet both files at ship's values**: `js/ui/hud.js` `{ codeLines: 1330, lines: 2246 }`,
+   `css/hud.css` `{ codeLines: 1917, lines: 2109 }`. The commit hook absorbs ≤ 40 lines.
+   A larger raise needs a stated reason in the PR, as `game.js` already requires.
+   Add the entries with `ratchets.mjs` or with the protected-file override (the edit hook
+   blocks a hand edit of `ratchets.json`). Note this as a new line in `CEILING-HISTORY.md`.
+2. **A replacement must delete what it replaces, in the same PR.** Each allocator phase
+   removes the passes it supersedes: the sector `max-width` shrink loops, three of the
+   four `--dock-r-w` writers, the painted-collapse block, `phoneFitStampSync`'s 8-pass
+   loop, and the `:has()`/fixed-offset CSS for that column. It also retires the regex
+   pins (T-1) that only hold those passes in place. **A phase that is not net-negative
+   in `hud.js` + `hud.css` is not a replacement yet** and should not merge as one.
+3. **Prefer fixes that subtract.** F-01 and F-02 are a few lines each. F-15, F-24, F-25
+   and the F-14 token work remove lines. New features (a new readout, a new slot) carry
+   their own deletions or a written raise.
+
+In-flight PRs (#1366, #1316, #1351) are each over the 40-line absorb. Once the ratchet
+lands they need either a raise with a reason or a matching deletion. That is the point:
+decide which repair each one retires.
+
 ## Safest order to change things
 
+0. **The ratchet above**, before anything else merges.
 1. **Land one Phase 0**: #1366. Close or shrink #1316 (F-03) before either merges.
 2. **F-01 divisor** (S, isolated, pinned by a new unit variant). Land it before the allocator so that every later phone measurement is taken at the right zoom on iOS.
 3. **F-02 `hUnset`**, either cherry-picked from the allocator branch or landing with it, plus a lint so it cannot come back.
