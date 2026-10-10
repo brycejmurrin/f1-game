@@ -4,6 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -13,6 +14,37 @@ test("ScrollFade SEL includes career body and track-designer rail", () => {
   const fade = rd("js/ui/scroll-fade.js");
   assert.match(fade, /"#cr-body"/, "career hub scroll body");
   assert.match(fade, /"\.td-rail"/, "track designer tool rail");
+});
+
+// Opening a <details> grows a pane's scrollHeight with no scroller resize and
+// no childList change, so the fade/thumb kept the old length until the next
+// scroll. A capture-phase `toggle` (it does not bubble) now schedules a repaint.
+test("ScrollFade repaints when a <details> fold toggles (and only for <details>)", () => {
+  const docL = [];
+  const timers = [];
+  const context = {
+    Log: { info() {} },
+    window: { addEventListener() {} },
+    document: {
+      readyState: "complete",
+      addEventListener: (type, fn, opts) => docL.push({ type, fn, opts }),
+      querySelectorAll: () => [],
+    },
+    setTimeout: (fn) => { timers.push(fn); return timers.length; },
+    clearTimeout() {},
+  };
+  context.globalThis = context;
+  vm.createContext(context);
+  vm.runInContext(rd("js/ui/scroll-fade.js"), context);
+  const drain = () => { while (timers.length) timers.shift()(); };
+  drain();                                         // init's settle()
+  const toggle = docL.find((l) => l.type === "toggle");
+  assert.ok(toggle, "a document-level toggle listener exists");
+  assert.equal(toggle.opts === true || (toggle.opts && toggle.opts.capture === true), true, "capture: toggle does not bubble");
+  toggle.fn({ target: { tagName: "DIALOG" } });
+  assert.equal(timers.length, 0, "a popover/dialog toggle is not a fold");
+  toggle.fn({ target: { tagName: "DETAILS" } });
+  assert.equal(timers.length, 1, "a fold schedules one repaint");
 });
 
 test("settings HUD checklist floors labels and checkboxes in settings-controls.css", () => {

@@ -717,7 +717,47 @@ test("D-pad Left/Right on a focused <select> wraps past disabled options and fir
   assert.equal(keys.pop().key, "ArrowDown", "the cross-axis arrow is the plain synthetic keydown MenuNav walks on");
 });
 
-test("D-pad Left/Right on a focused slider steps by its step within min/max; a button gets the plain arrow", () => {
+test("D-pad Left/Right on a wrap:false <select> (LAPS) stops at its ends like the row chevrons", () => {
+  const { Input, sb, fire, navOpen } = boot();
+  const { press, release } = fakePad(sb, fire);
+  navOpen.on = true;
+  const events = [];
+  const sel = { tagName: "SELECT", disabled: false, _srLive: { wrap: false },
+    options: [{ disabled: false }, { disabled: false }, { disabled: false }], selectedIndex: 0,
+    dispatchEvent: (e) => { events.push(e.type); return true; } };
+  sb.document.activeElement = sel;
+  press(14); Input.poll(); release(14); Input.poll();         // D-pad left at the first option
+  assert.equal(sel.selectedIndex, 0, "no wrap from 3 LAPS to FULL");
+  assert.deepEqual(events, [], "…and no change fires for the no-op");
+  sel.selectedIndex = 2;
+  press(15); Input.poll(); release(15); Input.poll();         // right at the last
+  assert.equal(sel.selectedIndex, 2, "no wrap from FULL back to 3 LAPS");
+  press(14); Input.poll(); release(14); Input.poll();
+  assert.equal(sel.selectedIndex, 1, "inside the list it still steps");
+  sel._srLive = { wrap: true }; sel.selectedIndex = 0;
+  press(14); Input.poll(); release(14); Input.poll();
+  assert.equal(sel.selectedIndex, 2, "an ordinary row still wraps");
+});
+
+test("D-pad on UI SIZE (40–200, step 0.25) moves a visible amount per press, on the step grid", () => {
+  const { Input, sb, fire, navOpen } = boot();
+  const { press, release } = fakePad(sb, fire);
+  navOpen.on = true;
+  const rng = { tagName: "INPUT", type: "range", disabled: false, min: "40", max: "200", step: "0.25", value: "100", dispatchEvent: () => true };
+  sb.document.activeElement = rng;
+  press(15); Input.poll(); release(15); Input.poll();
+  assert.ok(+rng.value - 100 >= 4, `one press moved ${+rng.value - 100}, not 0.25 (640 presses end to end)`);
+  assert.equal((+rng.value * 4) % 1, 0, "the value stays on the 0.25 grid");
+  rng.value = "100"; rng.dataset = { padStep: "10" };
+  press(14); Input.poll(); release(14); Input.poll();
+  assert.equal(rng.value, "90", "data-pad-step overrides the 1/40 default");
+  const fine = { tagName: "INPUT", type: "range", disabled: false, min: "0", max: "10", step: "1", value: "5", dispatchEvent: () => true };
+  sb.document.activeElement = fine;
+  press(15); Input.poll(); release(15); Input.poll();
+  assert.equal(fine.value, "6", "a coarse slider never moves less than its own step");
+});
+
+test("D-pad Left/Right on a focused slider steps within min/max; a button gets the plain arrow", () => {
   const { Input, sb, fire, dispatched, navOpen } = boot();
   const { press, release } = fakePad(sb, fire);
   navOpen.on = true;
@@ -730,7 +770,7 @@ test("D-pad Left/Right on a focused slider steps by its step within min/max; a b
   assert.equal(rng.value, "200", "at the end nothing changes");
   assert.deepEqual(events, ["input", "change"], "…and no event fires for a no-op");
   press(14); Input.poll(); release(14); Input.poll();
-  assert.equal(rng.value, "199.75");
+  assert.equal(rng.value, "196", "a pad press covers 1/40 of the 160-wide span");
   assert.equal(dispatched.length, 0);
   sb.document.activeElement = { tagName: "BUTTON", disabled: false };
   press(15); Input.poll(); release(15); Input.poll();

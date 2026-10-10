@@ -60,8 +60,13 @@ const InputPadMenu = (function () {
           // Match the row chevrons: wrap and skip sentinels such as CUSTOM,
           // which describe a slider-made state but are deliberately unpickable.
           // Assigning selectedIndex directly does not honour `option.disabled`.
+          // A wrap:false row (LAPS — js/ui/setting-row.js `_srLive.wrap`) stops
+          // at its ends like its chevrons do, instead of 3 ↔ FULL.
+          const wrap = !(el._srLive && el._srLive.wrap === false);
           for (let seen = 0; seen < n; seen++) {
-            j = ((j + d) % n + n) % n;
+            const k = j + d;
+            if (!wrap && (k < 0 || k >= n)) { j = el.selectedIndex; break; }
+            j = ((k % n) + n) % n;
             if (!opts[j].disabled) break;
           }
           if (n && j !== el.selectedIndex && !opts[j].disabled) {
@@ -74,7 +79,19 @@ const InputPadMenu = (function () {
         if (t === "INPUT" && (ty === "range" || ty === "number") && horizontal) {
           const step = parseFloat(el.step) || 1;
           const min = el.min === "" ? -Infinity : parseFloat(el.min), max = el.max === "" ? Infinity : parseFloat(el.max);
-          const v = Math.max(min, Math.min(max, (parseFloat(el.value) || 0) + (dir === "right" ? step : -step)));
+          // ONE PRESS IS A VISIBLE MOVE. UI / HUD / BUTTON SIZE step 0.25 over a
+          // 130–260 span: stepping by `step` took 400–1040 D-pad presses. A pad
+          // press covers ~1/40 of a bounded range (or the slider's own
+          // data-pad-step), snapped to the step grid; never less than `step`.
+          const ds = parseFloat(el.dataset && el.dataset.padStep);
+          const span = max - min;
+          const coarse = ds > 0 ? ds : (isFinite(span) && span > 0 ? span / 40 : step);
+          const padStep = Math.max(step, Math.round(coarse / step) * step);
+          const dec = Math.min(6, (String(el.step).split(".")[1] || "").length);
+          const base = isFinite(min) ? min : 0;
+          let v = (parseFloat(el.value) || 0) + (dir === "right" ? padStep : -padStep);
+          v = +(base + Math.round((v - base) / step) * step).toFixed(dec);
+          v = Math.max(min, Math.min(max, v));
           if (String(v) !== String(el.value)) {
             el.value = String(v);
             el.dispatchEvent(new Event("input", { bubbles: true }));
