@@ -2851,7 +2851,7 @@ function startRace() {
   // Menu buttons fire and forget. Observe rejection on a separate branch so
   // those callers do not raise an unhandledrejection overlay; an awaiting agent
   // still receives the original rejecting promise and its original error.
-  request.catch((e) => Log.debug("game", "startRace rejected (handled by onFail): " + (e && e.message || e)));
+  request.then((r) => { if (r !== false) CustomTracks.afterStart(); }, (e) => Log.debug("game", "startRace rejected (handled by onFail): " + (e && e.message || e)));   // afterStart: a designer test drive's restarts go back to its point
   return request;
 }
 

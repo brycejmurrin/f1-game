@@ -2219,6 +2219,15 @@ const TrackDesigner = (function () {
       try { G.raceIntro(go); } catch (e) { Log.warn("track", "test drive pre-race screen failed — starting straight away: " + (e && e.message || e)); go(); }
     });
   }
+  /** The car at rest on a test drive's point and green at once. Every start while the return is armed comes
+   *  here (CustomTracks.afterStart): the first, TRY AGAIN and the pause RESTART alike. */
+  function placeTest(r) {
+    if (G.state !== "count" || !G.player || !G.track || !r || !(r.s >= 0) || !design || design.originId !== r.id) return false;
+    placeAt(G.player, G.track, r.s);
+    if (G.snapGameCam) G.snapGameCam();
+    if (G.refreshHud) G.refreshHud(true);
+    return !!G.goRolling();
+  }
   /** TEST HERE: save, then a TIME TRIAL (startRaceBody clears practiceMode, so
    *  a time trial is the unscored session that survives it) with the car at
    *  rest on point i — the selected one by default — and green at once.
@@ -2237,12 +2246,8 @@ const TrackDesigner = (function () {
     close();
     Log.info("track", "designer test drive on " + r.id + " from point " + (at + 1) + " (s " + Math.round(s) + " m)");
     try { await startViaIntro(); } catch (e) { Log.warn("track", "test drive start failed: " + (e && e.message || e)); }
-    if (G.state === "count" && G.player && G.track && s >= 0) {
-      placeAt(G.player, G.track, s);
-      if (G.snapGameCam) G.snapGameCam();
-      if (G.refreshHud) G.refreshHud(true);
-      if (G.goRolling()) return true;
-    }
+    if (G.state === "count") placeTest(back);   // startRace's own afterStart usually got there first (then the state is already "race")
+    if (G.state === "race") return true;
     // Never a frozen race: out through the pause menu's own quit (quitToMenu),
     // whose consumeTrackHash() hands the screen back with the reason. A start
     // that already failed back to the menu (startRace's onFail quits) is
@@ -2266,7 +2271,7 @@ const TrackDesigner = (function () {
     return true;
   }
 
-  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, armSpanEnd, undo: doUndo, redo: doRedo, setTheme, setLook, setAtmosphere, setPropKind, placeProp, removeProp, removePropAt, editPropAt, copyPropAt, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, setHeights, selectRange, setSelectionMode, adjustElevation, profileView, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
+  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, armSpanEnd, undo: doUndo, redo: doRedo, setTheme, setLook, setAtmosphere, setPropKind, placeProp, removeProp, removePropAt, editPropAt, copyPropAt, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, setHeights, selectRange, setSelectionMode, adjustElevation, profileView, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere, placeTest,
     selectCorner, toggleHeat, toggleElevationHeat, trackOfTheDay, startFrom, toggleStartFrom,
     designed, useCandidate, moreLikeThis,
     setSpanWidth, setCornerBank, setKerbStyle, setBerms };
