@@ -2,7 +2,8 @@
 // shipped circuit's built centreline by the designer's rules. Real circuits
 // must not read RED on length, crossing (Suzuka's figure-8 is bridged),
 // clearance or grade, and the tarmac-fold rule must name exactly the circuits
-// tools/track/verify-track.cjs knows fold (bahrain, buddh, korea). The
+// tools/track/verify-track.cjs knows fold (none since the 2026-10-10 hairpin
+// fold clamp cleared bahrain, buddh and korea). The
 // start-straight rule is REPORTED, not asserted: pit.js names the circuits
 // whose real start sits in a corner. Proves the validator measures the
 // engine, not itself. The insight ambers (js/editor/insight.js, fia-*: the FIA
@@ -16,7 +17,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { bootEditor } from "../helpers/editor-vm.mjs";
 
-const KNOWN_FOLDS = ["bahrain", "buddh", "korea"];   // verify-track.cjs knownTarmacFolds()
+const KNOWN_FOLDS = [];   // verify-track.cjs knownTarmacFolds(): empty since the round-2 clamp fixed the three hairpin folds
 
 test("the shipped fleet passes the designer's road rules; the fold rule agrees with verify-track", () => {
   const { Tracks, V } = bootEditor();
