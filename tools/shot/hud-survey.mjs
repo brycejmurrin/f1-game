@@ -268,6 +268,9 @@ export function hudFitState() {
   for (const k of ["--hud-z-top", "--hud-z-bot", "--hud-z-dock", "--hud-z", "--hud-scale", "--hud-top-h"]) vars[k] = root.style.getPropertyValue(k).trim();
   return {
     vars, limitsLeft: "limitsLeft" in root.dataset,
+    // fitHud's gap-strip rungs (shorten, then drop under the map): read with the caps so a tower x gaps
+    // overlap can be told apart as "the strip never dropped" vs "it dropped and still clashes".
+    gapShort: "gapShort" in root.dataset, gapDrop: "gapDrop" in root.dataset,
     layoutSet: typeof HudLayout !== "undefined" ? HudLayout.shown() : null,
     bodyHud: (document.body.className.match(/\b(hud-[a-z-]+|cockpit-cam|desktop|in-race)\b/g) || []).join(" "),
   };
