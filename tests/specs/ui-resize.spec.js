@@ -371,12 +371,23 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     // --sheet-scale. On a fast CI runner the baseline read caught zoom 1 while
     // the settled cap was 1.363, and "keyboard gone" then compared settled to
     // unsettled (ci run 36652043544). Wait until style and paint agree.
+    // Short+compact MQ (css/menus.css) caps .sheet zoom at --ui-compact-scale
+    // (= min(--ui-scale, 1.25) in tokens.css); paint may be below classifyFit's
+    // --sheet-scale. getPropertyValue("--ui-compact-scale") returns the min()
+    // expression string, so resolve the cap from --ui-scale here.
     await page.waitForFunction(() => {
       const sheet = document.getElementById("cs-inner");
       if (!sheet || sheet.dataset.fit !== "on") return false;
       const scale = parseFloat(sheet.style.getPropertyValue("--sheet-scale"));
+      if (!Number.isFinite(scale) || scale <= 0) return false;
       const zoom = Number(getComputedStyle(sheet).zoom);
-      return Number.isFinite(scale) && scale > 0 && Math.abs(zoom - scale) < 0.001;
+      const uiScale = parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue("--ui-scale"));
+      const bodyCompact = document.body.dataset.density === "compact";
+      const shortMq = window.matchMedia("(max-width: 899px), (max-height: 699px)").matches;
+      const compactCap = Number.isFinite(uiScale) ? Math.min(uiScale, 1.25) : 1.25;
+      const expected = (bodyCompact && shortMq) ? Math.min(scale, compactCap) : scale;
+      return Math.abs(zoom - expected) < 0.001;
     }, null, { polling: 100, timeout: 5_000 });
 
     const before = await read();
