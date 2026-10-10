@@ -139,8 +139,7 @@ The rule the owner asked for:
 1. **Ratchet both files at ship's values**: `js/ui/hud.js` `{ codeLines: 1330, lines: 2246 }`,
    `css/hud.css` `{ codeLines: 1917, lines: 2109 }`. The commit hook absorbs ≤ 40 lines.
    A larger raise needs a stated reason in the PR, as `game.js` already requires.
-   Add the entries with `ratchets.mjs` or with the protected-file override (the edit hook
-   blocks a hand edit of `ratchets.json`). Note this as a new line in `CEILING-HISTORY.md`.
+   **Added in this PR** (`tests/data/ratchets.json`, recorded in `CEILING-HISTORY.md`).
 2. **A replacement must delete what it replaces, in the same PR.** Each allocator phase
    removes the passes it supersedes: the sector `max-width` shrink loops, three of the
    four `--dock-r-w` writers, the painted-collapse block, `phoneFitStampSync`'s 8-pass
@@ -157,7 +156,7 @@ decide which repair each one retires.
 
 ## Safest order to change things
 
-0. **The ratchet above**, before anything else merges.
+0. **The ratchet above** (this PR): land it before anything else merges.
 1. **Land one Phase 0**: #1366. Close or shrink #1316 (F-03) before either merges.
 2. **F-01 divisor** (S, isolated, pinned by a new unit variant). Land it before the allocator so that every later phone measurement is taken at the right zoom on iOS.
 3. **F-02 `hUnset`**, either cherry-picked from the allocator branch or landing with it, plus a lint so it cannot come back.

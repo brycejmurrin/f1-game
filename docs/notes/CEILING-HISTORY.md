@@ -7,6 +7,14 @@ Every raise and lower was recorded as a comment beside its number; those comment
 are preserved here verbatim, per file, as the record of WHY each number moved.
 The live numbers are in `ratchets.json`; nothing here is asserted.
 
+2026-10-10 the HUD joins the ratchet: `js/ui/hud.js` (codeLines **1330**, lines
+**2246**) and `css/hud.css` (codeLines **1917**, lines **2109**), at ship `107d232f1`.
+Every open HUD branch was growing the pair (the band-allocator refactor +474 net,
+#1316 +76, #1351 +56, #1366 +55) because each phone bug got its own repair pass on
+top of the last. Owner decision: a HUD replacement deletes what it replaces in the
+same PR, and growth past the 40-line absorb says why
+(`docs/notes/HUD-CODE-AUDIT-2026-10-10.md` §net-lines rule).
+
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
