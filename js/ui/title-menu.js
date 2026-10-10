@@ -29,11 +29,19 @@ const TitleMenu = (function () {
 
       const cont = $("mb-continue"), contSub = $("mb-continue-sub");
       if (cont && contSub) {
-        cont.hidden = !c;
-        if (c) {
-          const next = Tracks.SEASON[Math.min(c.season.round, Tracks.SEASON.length - 1)];
-          contSub.textContent = c.year + " · ROUND " + Math.min(c.season.round + 1, Tracks.SEASON.length)
-            + (next ? " · " + next.name : "");
+        // Priority: open career → daily streak / unfinished yesterday → lastSession.
+        const hint = (typeof ShareCode !== "undefined" && ShareCode.continueHint)
+          ? ShareCode.continueHint(G) : (c ? { kind: "career" } : null);
+        cont.hidden = !hint;
+        cont._apexContinue = hint || null;
+        if (hint) {
+          if (hint.kind === "career" && c && !hint.sub) {
+            const next = Tracks.SEASON[Math.min(c.season.round, Tracks.SEASON.length - 1)];
+            contSub.textContent = c.year + " · ROUND " + Math.min(c.season.round + 1, Tracks.SEASON.length)
+              + (next ? " · " + next.name : "");
+          } else {
+            contSub.textContent = hint.sub || "";
+          }
           cont.setAttribute("aria-label", "Continue — " + contSub.textContent);   // starts with the visible "CONTINUE"
         }
       }
@@ -63,7 +71,26 @@ const TitleMenu = (function () {
     const careerBtn = $("mb-career");
     if (careerBtn) careerBtn.onclick = () => G.openCareerSlots();
     const continueBtn = $("mb-continue");
-    if (continueBtn) continueBtn.onclick = () => G.openCareer();
+    if (continueBtn) continueBtn.onclick = () => {
+      const hint = continueBtn._apexContinue;
+      if (!hint || hint.kind === "career") { G.openCareer(); return; }
+      if (hint.kind === "daily") { G.openDailyPicker(); return; }
+      if (hint.kind === "session" && hint.session) {
+        // Stage the circuit picker only — never startRace (share-code / lastSession contract).
+        if (G.daily && G.daily.stop) G.daily.stop();
+        const idx = Tracks.LIST.findIndex((t) => t.id === hint.session.trackId);
+        if (idx < 0) return;
+        G.trackIdx = idx;
+        G.flow = hint.session.flow || "gp";
+        G.timeTrial = hint.session.session === "tt";
+        G.buildSelect();
+        G.els.overlay.hidden = true;
+        G.els.select.hidden = false;
+        if (G.scheduleFlybyTrack) G.scheduleFlybyTrack(true);
+        if (G.soundOn) GameAudio.uiSelect();
+        return;
+      }
+    };
     const dailyBtn = $("mb-daily");
     if (dailyBtn) dailyBtn.onclick = () => G.openDailyPicker();
 

@@ -359,6 +359,42 @@ function buildTeamOptions(optsEl, team) {
     const row = SettingsExport.garageRow();
     if (row) { optsEl.appendChild(csLabel("GARAGE FILE")); optsEl.appendChild(row); }
   }
+  // Share-a-code (player-a11y slice 4): pasteable APXS/APXL for this team's
+  // setup sheet and active livery. JS-built chips — no new shell nodes.
+  if (typeof ShareCode !== "undefined" && ShareCode.encode) {
+    const team = Teams.LIST[G.teamIdx];
+    if (team) {
+      optsEl.appendChild(csLabel("SHARE CODE"));
+      const shareRow = document.createElement("div");
+      shareRow.className = "sel-edit-row";
+      shareRow.id = "cs-share-code-row";
+      const mk = (id, label, kind) => {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "sel-chip"; b.id = id; b.textContent = label;
+        b.onclick = () => {
+          let payload = null;
+          if (kind === "setup" && typeof SetupTune !== "undefined") {
+            payload = { team: team.id, tune: SetupTune.get(team.id) };
+          } else if (kind === "livery") {
+            const idLiv = G.getLiveryId ? G.getLiveryId(team.id) : "default";
+            const customs = G.getCustomLiveries ? (G.getCustomLiveries(team.id) || []) : [];
+            const liv = customs.find((l) => l && l.id === idLiv) || null;
+            payload = { team: team.id, id: idLiv, livery: liv || undefined };
+          }
+          const encoded = ShareCode.encode(kind, payload);
+          if (!encoded.ok) { b.textContent = "UNAVAILABLE"; return; }
+          const done = (ok) => { b.textContent = ok ? "COPIED" : encoded.code; };
+          if (typeof ApexClipboard !== "undefined" && ApexClipboard.write) {
+            ApexClipboard.write(encoded.code).then(done, () => done(false));
+          } else done(false);
+        };
+        return b;
+      };
+      shareRow.append(mk("cs-share-setup", "COPY SETUP CODE", "setup"),
+        mk("cs-share-livery", "COPY LIVERY CODE", "livery"));
+      optsEl.appendChild(shareRow);
+    }
+  }
 }
 
 // BACK stays only when DONE is a different door (RACE SETUP from #select).

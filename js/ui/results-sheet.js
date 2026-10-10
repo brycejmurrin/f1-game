@@ -169,8 +169,19 @@ function stintStrip(c) {
 // flag must not come from SeasonCal.scored() alone: award() returns early on a
 // save conflict and leaves the weekend's sprint marker, so a Grand Prix read
 // back as a sprint. Callers without it fall back to scored().
+function noteLastSession(session) {
+  if (typeof ShareCode === "undefined" || !ShareCode.recordSession || !G.store || !G.track) return;
+  ShareCode.recordSession(G.store, {
+    trackId: G.track.def.id,
+    trackName: G.track.def.name,
+    session: session === "tt" ? "tt" : "race",
+    flow: G.flow || "gp",
+  });
+}
+
 function buildResults(order, race) {
   Log.info("ui", `GameResults.buildResults n=${order && order.length}`);
+  noteLastSession("race");
   const els = G.els;
   const season = G.season;
   const track = G.track;
@@ -427,6 +438,7 @@ function buildResults(order, race) {
 }
 
 function buildTTResults() {
+  noteLastSession("tt");
   const els = G.els;
   const track = G.track;
   els.resultsTable.textContent = "";
@@ -515,6 +527,30 @@ function buildTTResults() {
       }, () => { btn.textContent = text; });
     };
     els.resultsTable.appendChild(btn);
+    if (typeof ShareCode !== "undefined" && ShareCode.encode) {
+      const codeBtn = document.createElement("button");
+      codeBtn.type = "button";
+      codeBtn.className = "sel-chip";
+      codeBtn.id = "res-daily-share-code";
+      codeBtn.textContent = "COPY DAILY CODE";
+      codeBtn.onclick = () => {
+        const p = G.daily.current() || G.daily.plan();
+        const text = G.daily.shareText();
+        const medalMatch = /\b(GOLD|SILVER|BRONZE)\b/.exec(text);
+        const encoded = ShareCode.encode("daily", {
+          day: p.day, track: p.trackId, trackName: p.trackName, weather: p.weather,
+          best: G.player && isFinite(G.player.best) ? G.player.best : undefined,
+          medal: medalMatch ? medalMatch[1].toLowerCase() : undefined,
+          streak: G.daily.liveStreak ? G.daily.liveStreak() : 0,
+          class: p.class || "standard",
+        });
+        if (!encoded.ok) { codeBtn.textContent = "UNAVAILABLE"; return; }
+        ApexClipboard.write(encoded.code).then((ok) => {
+          codeBtn.textContent = ok ? "COPIED" : encoded.code;
+        }, () => { codeBtn.textContent = encoded.code; });
+      };
+      els.resultsTable.appendChild(codeBtn);
+    }
   }
 
   // Portable PB export. The guest slot is deliberately not exported here:
