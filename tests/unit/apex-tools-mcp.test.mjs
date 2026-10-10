@@ -385,7 +385,18 @@ test("serve stdout is JSON-RPC only (no log lines)", () => {
 });
 
 const LOCK = path.join(ROOT, "scratch", "apex-browser.lock");
-const TEST_BG = path.join(ROOT, "artifacts", "logs", "test-bg.json");
+// A private test-bg registry per test (TS1): these tests used to overwrite the REAL
+// artifacts/logs/test-bg.json and restore it afterwards, which loses a live run's
+// update in that window and, when the per-file timeout SIGKILLs the file, leaves
+// the fake in place and hides the real run from --status/--wait/--stop.
+function withFakeRegistry(state, fn) {
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "fake-test-bg-"));
+  const file = path.join(dir, "test-bg.json");
+  fs.writeFileSync(file, JSON.stringify(state));
+  try { return fn({ APEX_TEST_BG_STATE: file }); }
+  finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
 
 test("playwright occupancy matches `playwright test` tokens, not MCP JSON", async () => {
   const { classifyPlaywrightLine, scanPlaywrightLines } = await import("../../tools/ci/playwright-occupancy.mjs");
@@ -740,22 +751,12 @@ test("week-2 dryRun steals a stale lock (dead PID)", () => {
 });
 
 test("week-2 dryRun refuses playwright_live from test-bg.json (no Chromium)", () => {
-  fs.mkdirSync(path.dirname(TEST_BG), { recursive: true });
-  let prev = null;
-  if (fs.existsSync(TEST_BG)) prev = fs.readFileSync(TEST_BG, "utf8");
-  fs.writeFileSync(TEST_BG, JSON.stringify({ mode: "test", runs: [{ pid: process.pid, group: "tiny" }] }));
-  try {
-    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "" });
+  withFakeRegistry({ mode: "test", runs: [{ pid: process.pid, group: "tiny" }] }, (reg) => {
+    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "", ...reg });
     assert.equal(r.status, 1, r.stderr);
     const body = JSON.parse(r.stdout);
     assert.equal(body.error, "playwright_live");
-  } finally {
-    if (prev == null) {
-      try { fs.unlinkSync(TEST_BG); } catch { /* ignore */ }
-    } else {
-      fs.writeFileSync(TEST_BG, prev);
-    }
-  }
+  });
 });
 
 test("an IDLE host Playwright MCP server is reported, not occupancy; its launched browser is", () => {
@@ -779,27 +780,18 @@ test("an IDLE host Playwright MCP server is reported, not occupancy; its launche
 });
 
 test("a live Node-only test-bg group does not impersonate Playwright", () => {
-  fs.mkdirSync(path.dirname(TEST_BG), { recursive: true });
-  let prev = null;
-  if (fs.existsSync(TEST_BG)) prev = fs.readFileSync(TEST_BG, "utf8");
-  fs.writeFileSync(TEST_BG, JSON.stringify({
+  withFakeRegistry({
     mode: "sequential",
     runs: [{ pid: process.pid, group: "tooling-fast", browser: false }],
-  }));
-  try {
+  }, (reg) => {
     const r = callCli("apex_shot", { track: "monza", dryRun: true }, {
       APEX_MCP_MOCK: "0",
       APEX_MCP_PS: "1 bash\n",
+      ...reg,
     });
     assert.equal(r.status, 0, r.stderr + r.stdout);
     assert.equal(JSON.parse(r.stdout).ok, true);
-  } finally {
-    if (prev == null) {
-      try { fs.unlinkSync(TEST_BG); } catch { /* ignore */ }
-    } else {
-      fs.writeFileSync(TEST_BG, prev);
-    }
-  }
+  });
 });
 
 test("week-2 dryRun refuses chrome_daemon_up when /healthz answers", async () => {
@@ -1299,7 +1291,9 @@ test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and re
   bad("apex_track", { op: "shot", frac: 2 });
   bad("apex_track", { op: "shot" }, "track_not_open");
   ok("apex_job_start", { kind: "survey_track", track: "monza", oblique: true }, /survey-track\.mjs","monza","--oblique/);
-  ok("apex_job_start", { kind: "ui_matrix", screens: "settings,garage", viewports: "ios-*", scale: "100,130" }, /--screens=settings,garage","--viewports=ios-\*","--scale=100,130/);
+  const matrix = ok("apex_job_start", { kind: "ui_matrix", screens: "settings,garage", viewports: "ios-*", scale: "100,130" }, /--screens=settings,garage","--viewports=ios-\*","--scale=100,130/);
+  assert.equal(typeof matrix.estimateMs, "number", "ui_matrix dryRun names estimateMs (hud_survey-style)");
+  assert.ok(matrix.estimateMs > 0 && matrix.cells >= 2, `ui_matrix cells/estimate: ${JSON.stringify(matrix)}`);
   ok("apex_job_start", { kind: "flicker_gate", site: "a,b" }, /"--site","a","--site","b"/);
   ok("apex_job_start", { kind: "livery_contrast", team: "ferrari" }, /--team=ferrari/);
   bad("apex_job_start", { kind: "rm_rf" });
@@ -1307,7 +1301,7 @@ test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and re
   bad("apex_job_start", { kind: "survey_track", track: "nope" });
   bad("apex_job_status", { jobId: "missing" }, "unknown_job");
   bad("apex_job_cancel", { jobId: "missing" }, "unknown_job");
-  ok("apex_ui_fit", { screen: "settings", scale: 130 }, /--screens=settings","--viewports=ios-iphone-landscape","--jobs=1","--scale=130/);
+  ok("apex_ui_fit", { screen: "settings", scale: 130 }, /--screens=settings","--viewports=ios-iphone-landscape","--jobs=1","--json","--scale=130/);
   bad("apex_ui_fit", { screen: "--all" });
   bad("apex_ui_fit", { screen: "settings", scale: 500 });
   ok("apex_ui_shot", { screen: "garage", viewport: "desktop-1440x900" }, /--screen=garage","--viewport=desktop-1440x900/);
@@ -1625,6 +1619,25 @@ test("apex_ui_fit / apex_ui_shot refuse an id the audit does not know instead of
   for (const b of [menu, typo, vp]) { assert.equal(b.ok, false); assert.equal(b.error, "bad_args"); }
   assert.match(typo.fix, /Did you mean settings\?/);
   assert.match(vp.fix, /ios-iphone-landscape-844/, "the phone-landscape id is in the list");
+});
+
+test("apex_hud_shot aliases layout-audit viewport ids and did-you-means a near miss", () => {
+  const aliased = callTools([["apex_hud_shot", { device: "ios-iphone-landscape-844", dryRun: true }]])[0].body;
+  assert.equal(aliased.ok, true, JSON.stringify(aliased));
+  assert.match(JSON.stringify(aliased.argv), /phone-landscape-844x390/, "alias rewrites before the CLI");
+  const miss = callTools([["apex_hud_shot", { device: "phone-landscape-844", dryRun: true }]])[0].body;
+  assert.equal(miss.ok, false);
+  assert.equal(miss.error, "bad_args");
+  assert.match(miss.fix, /Did you mean "phone-landscape-844x390"\?/, miss.fix);
+});
+
+test("image and inlineImage are aliases across shot / ui_shot / hud_shot", () => {
+  const hud = callTools([["apex_hud_shot", { image: true, dryRun: true }]])[0].body;
+  assert.equal(hud.ok, true, `hud image→inlineImage: ${JSON.stringify(hud)}`);
+  const ui = callTools([["apex_ui_shot", { screen: "title", inlineImage: true, dryRun: true }]])[0].body;
+  assert.equal(ui.ok, true, `ui_shot inlineImage→image: ${JSON.stringify(ui)}`);
+  const shot = callTools([["apex_shot", { track: "monza", inlineImage: false, dryRun: true }]])[0].body;
+  assert.equal(shot.ok, true, `shot inlineImage→image: ${JSON.stringify(shot)}`);
 });
 
 test("apex_job_status {} is bounded: newest first, limit, state filter, total", async () => {

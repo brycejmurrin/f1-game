@@ -26,6 +26,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.3,
+    gpLaps: 72,   // real race distance (4.259 km); lengthKm's 1 dp derives 71
     baseHW: 7,
     sceneryCoordinates: "racing",
     terrainOuter: 120,
@@ -50,10 +51,10 @@
       { turn: 7,  angleDeg: 3.0, widthM: 110 },  // Hunserug-side sweep
       { turn: 11, angleDeg: 3.5, widthM: 140 },  // Hans Ernst chicane
     ],
-    hwZones: [
-      { s0: 0.7310, s1: 0.8081, hw: 6.0, ease: 0.012 },  // arc 0.395-0.432 infield esses
-      { s0: 0.0142, s1: 0.0785, hw: 6.0, ease: 0.012 },  // arc 0.748-0.778 Hans Ernst
-      { s0: 0.1745, s1: 0.2287, hw: 6.1, ease: 0.012 },  // arc 0.868-0.898 Kumho
+    hwZones: [   // s0/s1 are CONTROL-INDEX fractions (def.js applyHwZones); "racing arc" = where the narrowed nodes really sit
+      { s0: 0.7310, s1: 0.8081, hw: 6.0, ease: 0.012 },  // racing arc 0.726-0.756 infield esses
+      { s0: 0.0142, s1: 0.0785, hw: 6.0, ease: 0.012 },  // racing arc 0.075-0.102 Hans Ernst
+      { s0: 0.1745, s1: 0.2287, hw: 6.1, ease: 0.012 },  // racing arc 0.195-0.212 Kumho
     ],
     pal: { zenith: [0.28, 0.41, 0.60], horizon: [0.82, 0.78, 0.70], grass: [0.42, 0.50, 0.25], runoff: [0.60, 0.52, 0.34], fog: [0.74, 0.73, 0.70], fogDensity: 0.0024, sunDir: [0.5597170785495562, 0.6492718111174852, 0.5149397122655918], sun: [1, 0.94, 0.80], sunColor: [1, 0.9, 0.74] },
     elevations: [{ s: 0.56, halfM: 300, rise: 8 }],

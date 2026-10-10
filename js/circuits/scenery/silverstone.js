@@ -201,7 +201,7 @@
 
       const STAND_LIVS = ["navy", "steel", "alu"];      // the def's standSet rotation
       const SIL_ROOF   = [0.16, 0.30, 0.58];             // shared Silverstone-blue roof
-      const SIL_FASCIA = [0.09, 0.19, 0.42];             // shared deeper-blue fascia band
+      const SIL_FASCIA = [0.24, 0.38, 0.66];             // shared deeper-blue fascia band
       let standI = 0;
       const nextLiv = () => STAND_LIVS[standI++ % STAND_LIVS.length];
       const stand = (s, side, gap, len, opts) =>
@@ -384,8 +384,12 @@
       // https://www.grandprix.com/photos/cfb499a3-9c15-409a-89ad-847dec0a233c/aerial-photograph-of-the-silverstone-wing
       // Measured row midpoint: racing .0033358, scenery shift .5232951.
       // The old .46 anchor sat on Club's curve; keep the stand on the straight.
+      // standSet rotates "navy" first — pin concrete + light fascia so the
+      // 110 m face reads as pale BRDC cladding, not a navy slab (survey 2026-10-09).
       stand(0.48004, -1, 12, 110, { tiers: 3, roof: "cantilever", suites: true,
-        endWalls: true, pylons: true, roofCol: [0.78, 0.80, 0.82] });
+        endWalls: true, pylons: true, livery: "concrete",
+        roofCol: [0.78, 0.80, 0.82], fasciaCol: [0.70, 0.72, 0.76],
+        suiteCol: [0.16, 0.20, 0.28] });
       // Tall stepped seating boxes flanking The Wing (research priority).
       stand(0.442, 1, 14, 48, { tiers: 3, roof: "cantilever", endWalls: true, pylons: true });
       stand(0.498, 1, 14, 48, { tiers: 3, roof: "cantilever", endWalls: true, pylons: true });
@@ -508,7 +512,9 @@
         }
       }
 
-      building(k(0.97), 1, 6, 12, 8, 90, { kind: "hall", wall: [0.82, 0.83, 0.85], window: [0.20, 0.24, 0.28], floor: 4 });
+      // Paddock hall — warmer brick/cream walls (was plain grey slab); Kenney
+      // commercial blocks and Racing Kit pit offices dress the yard behind it.
+      building(k(0.97), 1, 6, 12, 8, 90, { kind: "hall", wall: [0.78, 0.72, 0.64], window: [0.18, 0.26, 0.34], floor: 4 });
       for (const [s, d, w, h, ln, col] of [
         [0.95, 40, 14, 7, 34, [0.76, 0.76, 0.72]],
         [0.99, 44, 16, 6, 30, [0.72, 0.74, 0.76]],
@@ -516,17 +522,33 @@
       ]) motorhome(k(s), 1, d, w, h, ln, { wall: col, window: [0.28, 0.32, 0.36] });
       {
         const yards = [
-          ["kenney_ind_building-e", 0.93, 1, 78],
-          ["kenney_ind_building-g", 0.96, 1, 82],
-          ["kenney_ind_building-c", 0.995, 1, 80],
-          ["kenney_com_low-detail-building-wide-b", 0.91, 1, 88],
+          ["kenney_ind_building-e", 0.93, 1, 78, 1],
+          ["kenney_ind_building-g", 0.96, 1, 82, 1],
+          ["kenney_ind_building-c", 0.995, 1, 80, 1],
+          ["kenney_com_low-detail-building-wide-b", 0.91, 1, 88, 1],
+          // Pass-2 facade dress (Kenney commercial / suburban) — scale ~2 so
+          // the ~4 m kit reads at paddock distance.
+          ["kenney_com_building-a", 0.94, 1, 100, 2.2],
+          ["kenney_com_building-e", 0.98, 1, 96, 2.2],
+          ["kenney_sub_building-type-h", 0.915, -1, 70, 2.0],
         ];
-        for (const [id, s, side, dist] of yards) {
-          if (!bakedModel(id, k(s), side, dist))
+        for (const [id, s, side, dist, sc] of yards) {
+          if (!bakedModel(id, k(s), side, dist, sc !== 1 ? { scale: sc } : undefined))
             building(k(s), side, dist, 16, 12, 14,
-              { kind: "hall", wall: [0.74, 0.74, 0.72], window: [0.22, 0.26, 0.30], floor: 4 });
+              { kind: "hall", wall: [0.74, 0.70, 0.64], window: [0.22, 0.26, 0.30], floor: 4 });
         }
         bakedModel("kenney_ind_chimney-large", k(0.945), 1, 90, { scale: 0.7 });
+        // Pit-lane offices / garage modules (Racing Kit) — audit-gated below.
+        for (const [id, s, side, dist, sc] of [
+          ["k_pitsoffice", 0.455, 1, 58, 2.6],
+          ["k_pitsofficecorner", 0.468, 1, 62, 2.6],
+          ["k_pitsgarage", 0.490, 1, 54, 2.8],
+          ["k_pitsgarageclosed", 0.502, 1, 56, 2.8],
+        ]) {
+          if (!bakedModel(id, k(s), side, dist, { scale: sc }))
+            building(k(s), side, dist, 10, 6, 14,
+              { kind: "hall", wall: [0.70, 0.72, 0.74], window: [0.20, 0.28, 0.36], floor: 2 });
+        }
       }
       // Kenney Racing Kit (CC0) barriers and pylons; the synthetic construction
       // props stay the fallback for a build the pack has not reached.

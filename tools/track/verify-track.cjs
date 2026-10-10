@@ -321,8 +321,14 @@ function verifyDef(Tracks, def, opts) {
   console.log(`OK ${id}: props ${props} verts (road ${road}, terrain ${terrain})` +
     (inst ? ` — ${inst} instanced` : "") + ` — ${total} total`);
   if (folds) console.log(folds);
+  // The centreline itself (TrackSpline.surfaceFolds), independent of buildRoad's fold
+  // clamp: a tight min radius or fold nodes here is circuit DATA (add control points)
+  // even when the clamped mesh looks fine. Informational — never changes the exit code.
+  const cl = geo.find((g) => g.name === "centreline");
+  if (cl) console.log(`  centreline: min node radius ${cl.minNodeRadius} m at node ${cl.minNodeRadiusNode} (hw ${cl.minNodeRadiusHw} m), ` +
+    `surface folds ${cl.foldCount}` + (cl.foldCount ? ` (nodes ${cl.foldNodes.join(",")}${cl.foldCount > cl.foldNodes.length ? ",…" : ""})` : ""));
   if (!opts.quiet) reportDiagnostics(diagnostics, Tracks._vmConsole || []);
-  return { id, road, terrain, props, inst, total, folds, diagnostics, track };
+  return { id, road, terrain, props, inst, total, folds, centreline: cl || null, diagnostics, track };
 }
 
 // Circuits whose CENTRELINE kinks tighter than the half-width somewhere (turn
@@ -343,8 +349,13 @@ function verifyDef(Tracks, def, opts) {
 // 300R; apexes within 0.3 m, lap within 0.02 %, float-audit still clean),
 // buddh's at 0.119 and 0.792 (40 m; the 0.869 fold, opening a 742 m straight,
 // does not), and korea's at 0.428 (40 m; the other four do not).
+// 2026-10-10 (TE-1): buildRoad's fold clamp now covers the running surface, so
+// bahrain/buddh/korea no longer fold in the MESH and the set is empty: any circuit
+// that grows a mesh fold FAILS. Their centreline kinks remain circuit DATA — the
+// "centreline:" row (min node radius, surface-fold nodes) is what to drive to
+// >= 4 m / 0 by adding control points.
 function knownTarmacFolds() {   // a function, not a const: main() runs above this line
-  return new Set(["bahrain", "buddh", "korea"]);
+  return new Set([]);
 }
 
 // Road-ribbon geometry checks on track.roadGeo (the 14-column main ribbon, then

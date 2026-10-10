@@ -327,6 +327,13 @@ const round = (recs) => recs.map((r) => {
   return o;
 });
 
+/** How long one CDP capture may take. Software GL (SwiftShader) paints a 1920x1080 frame several times slower than a phone
+ *  frame: lead10-announce-s150-1920 failed the old flat 60 s cap on an idle box twice (2026-10-10) and passed under llvmpipe, so
+ *  the cap scales with the pixel count. Phones and 1280-wide desktops keep 60 s. */
+export function shotTimeoutMs(w, h) {
+  return w * h > 1.5e6 ? 180000 : 60000;
+}
+
 async function cdpShot(page, file) {
   // CDP directly, not page.screenshot(): Playwright's path waits on
   // document.fonts.ready, which hung GHA smoke shards (probe-page.mjs).
@@ -336,9 +343,11 @@ async function cdpShot(page, file) {
   try {
     const opts = { format: "png", captureBeyondViewport: false };
     if (!file) opts.clip = { x: 0, y: 0, width: 1, height: 1, scale: 1 };
+    const vp = page.viewportSize() || { width: 0, height: 0 };
+    const cap = shotTimeoutMs(vp.width, vp.height);
     const { data } = await Promise.race([
       session.send("Page.captureScreenshot", opts),
-      sleep(60000).then(() => { throw new Error("CDP captureScreenshot timed out after 60 s"); }),
+      sleep(cap).then(() => { throw new Error(`CDP captureScreenshot timed out after ${cap / 1000} s at ${vp.width}x${vp.height} (software GL; --gl llvmpipe is faster)`); }),
     ]);
     if (file) fs.writeFileSync(file, Buffer.from(data, "base64"));
   } finally { try { await session.detach(); } catch { /* closed */ } }
@@ -479,7 +488,9 @@ function contactSheets(out, cells) {
   return { sheets };
 }
 
-/** report.json + findings.md + index.html + contact sheets, and the --json summary. */
+/** report.json + findings.md + index.html + contact sheets, and the --json summary.
+ *  Exit success only when every cell was measured and none carried a cellError
+ *  (a CDP timeout mid-matrix used to leave exit 0 with "27/28 cells measured"). */
 function writeReport(plan, report, log) {
   const sheets = report.cells.some((c) => c.shotRel) ? contactSheets(plan.out, report.cells) : { skipped: "no shots" };
   report.sheets = sheets;
@@ -489,13 +500,16 @@ function writeReport(plan, report, log) {
   fs.writeFileSync(path.join(plan.out, "index.html"), renderIndexHtml(report));
   const rel = (f) => path.relative(ROOT, path.join(plan.out, f));
   const measured = report.cells.filter((c) => c.records && c.records.length).length;
-  log(`= hud-survey ${measured ? "done" : "failed"}: ${measured}/${report.cells.length} cells measured, ${JSON.stringify(report.counts)}`);
+  const cellFailed = report.cells.filter((c) => c.cellError).length;
+  const ok = measured > 0 && cellFailed === 0 && measured === report.cells.length;
+  log(`= hud-survey ${ok ? "done" : "failed"}: ${measured}/${report.cells.length} cells measured` +
+    `${cellFailed ? `, ${cellFailed} cellError` : ""}, ${JSON.stringify(report.counts)}`);
   for (const f of report.findings.slice(0, 12)) log(`  ${f.severity.padEnd(6)} ${f.kind.padEnd(10)} ${f.cell}: ${f.detail}`);
   if (plan.json) {
     const summary = {
-      ok: measured > 0, out: path.relative(ROOT, plan.out), report: rel("report.json"), findingsMd: rel("findings.md"),
+      ok, out: path.relative(ROOT, plan.out), report: rel("report.json"), findingsMd: rel("findings.md"),
       indexHtml: rel("index.html"), sheets: sheets.sheets || [], counts: report.counts, meta: report.meta.matrix,
-      cells: report.cells.map((c) => ({
+      measured, cellFailed, cells: report.cells.map((c) => ({
         id: c.id, shot: c.shotRel ? path.relative(ROOT, path.join(plan.out, c.shotRel)) : null, lit: c.lit ?? null,
         error: c.cellError || null, state: c.state || null, findings: c.findings || [],
         measurements: (c.records || []).filter((r) => r.exists).map((r) => ({ key: r.key, visible: r.visible && !r.fadedByAncestor,
@@ -504,7 +518,7 @@ function writeReport(plan, report, log) {
     };
     console.log(JSON.stringify(summary));
   }
-  return measured;
+  return ok;
 }
 
 /** --merge: shard dirs → one report; shots are copied under <out>/shots. */

@@ -163,6 +163,42 @@ const InputGhost = (function () {
       return { durable: false };
     return GameStore.store.write(STORE_KEY, store);
   }
+  // Another tab wrote the store (GameStore's `storage` listener): forget the
+  // cached copy, re-read it, and lay this tab's unsaved laps back on top, so the
+  // next save does not write a stale whole-object over the other tab's ghosts.
+  function betterGhost(a, b) {
+    const av = valid(a), bv = valid(b);
+    if (!av) return bv ? b : null;
+    if (!bv) return a;
+    const ac = compatible(a), bc = compatible(b);
+    if (ac !== bc) return ac ? a : b;
+    const winner = a.time <= b.time ? a : b;
+    winner._used = Math.max(Number(a._used) || 0, Number(b._used) || 0);
+    return winner;
+  }
+  function onStoreChange(change) {
+    if (!change || !change.foreign) return;
+    if (change.clear) {
+      pending.clear();
+      storeCache = null;
+      best = null;
+      return;
+    }
+    if (change.key !== STORE_KEY) return;
+    let fresh = null;
+    try { fresh = GameStore.store.get(STORE_KEY, {}); } catch { fresh = null; }
+    if (!fresh || typeof fresh !== "object" || Array.isArray(fresh)) fresh = {};
+    for (const [id, snap] of pending) {
+      const winner = betterGhost(fresh[id], snap);
+      if (winner) fresh[id] = winner;
+    }
+    storeCache = fresh;
+    const current = storageId == null ? null : fresh[storageId];
+    best = valid(current) ? current : null;
+  }
+  if (typeof GameStore !== "undefined" && GameStore && GameStore.store && typeof GameStore.store.subscribe === "function")
+    GameStore.store.subscribe(onStoreChange);
+
   function scheduleSave(id, snap) {
     touch(snap);
     pending.set(id, snap);
@@ -229,7 +265,9 @@ const InputGhost = (function () {
     const m = meta;
     rec = null;
     meta = null;
-    if (best && lapTime >= best.time) return false;
+    // A stored ghost from another physics revision / build is not a record to
+    // beat: it cannot be replayed, and it would otherwise block every later lap.
+    if (best && compatible(best) && lapTime >= best.time) return false;
     const snap = {
       v: 1,
       kind: "input-ghost",

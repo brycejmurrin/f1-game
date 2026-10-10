@@ -156,6 +156,26 @@ function normaliseDurs(list) {
   return out;
 }
 
+/** Why this pose's NUMBERS cannot be solved. A field the shipped shots leave out
+ *  (solve() defaults it) passes; one that is PRESENT must be a finite number
+ *  inside its slider range, because `x: "abc"` on a start-anchored pose gave a
+ *  non-finite eye on every frame while the old structural check accepted it. */
+function poseErrors(p) {
+  const bad = [];
+  for (const f of POSE_FIELDS[p.at]) {
+    const v = p[f];
+    if (v === undefined) continue;
+    if (typeof v !== "number" || !isFinite(v) || v < FIELD[f].min || v > FIELD[f].max) {
+      bad.push(f + " must be a number from " + FIELD[f].min + " to " + FIELD[f].max + ", not " + JSON.stringify(v));
+    }
+  }
+  const int = (v, lo) => typeof v === "number" && isFinite(v) && v === Math.floor(v) && v >= lo;
+  if (p.at === "corner" && p.n !== undefined && CORNER_NS.indexOf(p.n) === -1 && !int(p.n, 1)) bad.push("n is not a corner: " + JSON.stringify(p.n));
+  if (p.at === "slot" && p.n !== undefined && p.n !== "player" && !int(p.n, 0)) bad.push("n is not a grid slot: " + JSON.stringify(p.n));
+  if (p.at === "landmark" && p.rank !== undefined && RANKS.indexOf(p.rank) === -1) bad.push("rank must be one of " + RANKS.join(", ") + ", not " + JSON.stringify(p.rank));
+  return bad;
+}
+
 /** Every reason FlybySeq.solve() could not PLAY this list. Empty == good.
  *  Split out of validateShots because a SAVED list is read back through this
  *  half only: solve() normalises by the durations' own total, so a list nobody
@@ -175,7 +195,8 @@ function shotErrors(list) {
       if (!Array.isArray(s[k]) || s[k].length !== 2) { bad.push(at + " " + k + " must be a [from, to] pair"); continue; }
       s[k].forEach((p, j) => {
         if (!p || typeof p !== "object") { bad.push(at + " " + k + "[" + j + "] is not a pose"); return; }
-        if (AT_KINDS.indexOf(p.at) === -1) bad.push(at + " " + k + "[" + j + "] has unknown at: " + JSON.stringify(p.at));
+        if (AT_KINDS.indexOf(p.at) === -1) { bad.push(at + " " + k + "[" + j + "] has unknown at: " + JSON.stringify(p.at)); return; }
+        poseErrors(p).forEach((e) => bad.push(at + " " + k + "[" + j + "] " + e));
       });
     }
     if (!Array.isArray(s.fov) || s.fov.length !== 2 ||

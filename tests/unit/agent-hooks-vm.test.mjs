@@ -71,6 +71,23 @@ test("a lapped rival a few metres ahead on the road is ahead, not a lap away", a
   assert.notEqual(r.threat, "clear");
 });
 
+test("same-lap rivals do not invent lapsAhead from nearest-prog wrap", async () => {
+  // MCP survey B5: first-lap pack with |prog| > L/2 and lap:0 both sides used
+  // to report rel:"behind" + lapsAhead:1. Standing is the lap counter.
+  await load("spa", 0.5, 50);
+  const p = g.G.player, L = g.G.track.total;
+  const c = g.G.cars.find((x) => !x.isPlayer);
+  p.lap = 0; p.s = 200; p.prog = 200;
+  c.lap = 0; c.s = L - 800; c.prog = L - 800; c.x = p.x; c.speed = 30;
+  const id = c.id != null ? c.id : g.G.cars.indexOf(c);
+  const r = g.apex.world({ detail: "full" }).rivals.find((x) => x.id === id);
+  truthy(r);
+  assert.equal(r.lap, 0);
+  assert.equal(r.lapsAhead, 0);
+  assert.equal(r.rel, "ahead");
+  gt(r.gapM, L / 2 - 50);
+});
+
 test("a retired car is classified behind the running field in every order hook", async () => {
   await load("monza", 0.5, 50);
   const p = g.G.player;

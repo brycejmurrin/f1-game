@@ -60,9 +60,12 @@ const RaceControl = (function () {
     e.callback = callback; e.newS = newS;
     return true;
   }
+  // At an exact tie the full-distance crossing raises the flag first. Module scope:
+  // settleLineStep runs twice per physics step, almost always with no entries, and
+  // an inline arrow allocated a closure each time.
+  const byCrossing = (a, b) => (a.time - b.time) || ((b.c.lap > b.target) - (a.c.lap > a.target));
   function settleLineStep() {
-    // At an exact tie the full-distance crossing raises the flag first.
-    lineEntries.sort((a, b) => (a.time - b.time) || ((b.c.lap > b.target) - (a.c.lap > a.target)));
+    if (lineEntries.length > 1) lineEntries.sort(byCrossing);
     for (const e of lineEntries) settleLine(e);
   }
   function endLineStep() {
@@ -308,7 +311,11 @@ const RaceControl = (function () {
       // State reset BEFORE the ownership gate: a guest's caution mirror comes
       // from host apply(), and returning early here would leave the last flag
       // flown on its HUD after the race ended (reset() is local-only, safe for all).
-      if (G.state !== "race") {
+      // A lone lap has no field to protect: in Time Trial and qualifying the
+      // player's OWN cones and shards (hz.total >= 6) raised a VSC whose
+      // cautionV held them to 0.6 of vTop, and the CAUTIONS row is hidden there
+      // so it could not be switched off. Same reset path as "not racing".
+      if (G.state !== "race" || G.timeTrial || G.session === "quali") {
         if (caution.level !== 0 || capHoldT) reset();
         lowGripNoted = false;
         return;
@@ -535,6 +542,11 @@ const RaceControl = (function () {
   // it has closed, blended over the next second so the cap never chatters.
   // Returns a FRACTION of vTop() — the caller multiplies, so it rides PACE.
   const SC_PACE = 0.45, SC_CATCH = 0.6, SC_QUEUE_GAP = 1.0;
+  // Other cars' pose from the per-tick traffic snapshot game.js stamps on every car
+  // before any updateCar runs (as ai-corridor.js does), so a rival already moved this
+  // tick does not shift the verdict with its place in cars[]. Live when unstamped.
+  const snapProg = (o) => (Number.isFinite(o._snapProg) ? o._snapProg : o.prog);
+  const snapSpeed = (o) => (Number.isFinite(o._snapSpeed) ? o._snapSpeed : o.speed);
   function scQueueFrac(c, cars, total, leader, vTop, skip) {
     const out = (o) => o.finished || o.retired || (skip && skip(o));
     // A leader in the pit lane (or out) is not the front of the queue: the
@@ -543,13 +555,13 @@ const RaceControl = (function () {
     // ran SC_CATCH while it should be setting the SC pace.
     if (leader && out(leader)) {
       leader = null;
-      for (const o of cars) if (!out(o) && (!leader || o.prog > leader.prog)) leader = o;
+      for (const o of cars) if (!out(o) && (!leader || snapProg(o) > snapProg(leader))) leader = o;
     }
     if (!c || c === leader || !(total > 0)) return SC_PACE;
     let gap = Infinity;
     for (const o of cars) {
       if (o === c || out(o)) continue;
-      const d = ((o.prog - c.prog) % total + total) % total;   // forward, on the road
+      const d = ((snapProg(o) - c.prog) % total + total) % total;   // forward, on the road
       if (d > 0 && d < gap) gap = d;
     }
     if (!Number.isFinite(gap)) return SC_PACE;
@@ -573,9 +585,9 @@ const RaceControl = (function () {
     for (let j = i - 1; j >= 0; j--) {
       const o = ranked[j];
       if (o.finished || o.retired || (fair && fair(o))) continue;
-      const gap = o.prog - c.prog;
+      const gap = snapProg(o) - c.prog;
       if (!(gap < HOLD_M)) return Infinity;
-      return Math.max(0, (o.speed || 0) * (gap < HOLD_M / 2 ? 0.9 : 1));
+      return Math.max(0, (snapSpeed(o) || 0) * (gap < HOLD_M / 2 ? 0.9 : 1));
     }
     return Infinity;
   }

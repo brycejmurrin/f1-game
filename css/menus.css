@@ -404,7 +404,10 @@ html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #ov
   width: auto; height: 100%; max-height: 100%; min-height: 0; align-self: stretch;
   overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
   /* Above brand so zoomed secondary keeps DATA HUB hittable; empty cells pass clicks through. */
-  touch-action: pan-y; z-index: 2; background: transparent; padding: calc(var(--gap) * 0.5);
+  touch-action: pan-y; z-index: 2; background: transparent;
+  /* Inline pad: CAREER skewX tip past overflow-x:hidden (B1). */
+  padding-block: calc(var(--gap) * 0.5);
+  padding-inline: var(--gap);
   pointer-events: none;
 }
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > * {
@@ -429,11 +432,12 @@ html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #ov
 /* One line per room: column wrap was clipping DESIGNER / PLAY under --tap.
    0.72× micro + zero tracking fits TRACK DESIGNER; overflow hidden kills 200% sideways scroll. */
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
-  display: inline-flex; flex-direction: row; justify-content: center; align-items: center;
+  /* Leading-edge icons: center+overflow clipped .btn-ico (B1). */
+  display: inline-flex; flex-direction: row; justify-content: flex-start; align-items: center;
   gap: calc(var(--gap) / 8); min-height: var(--tap-paint); height: 100%; max-height: 100%;
-  padding: 0 calc(var(--gap) / 8); font-size: calc(var(--fs-micro) * 0.72);
+  padding: 0 calc(var(--gap) / 8) 0 calc(var(--gap) / 4); font-size: calc(var(--fs-micro) * 0.72);
   letter-spacing: 0; line-height: 1; white-space: nowrap; overflow: hidden;
-  text-overflow: ellipsis; text-align: center; min-width: 0;
+  text-overflow: ellipsis; text-align: start; min-width: 0;
 }
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn .btn-ico {
   width: 0.9em; height: 0.9em; flex: none; margin: 0;

@@ -13,7 +13,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { analyzeOverlap, controlClash, probeHudElements, rectHit } from "../../tools/lib/hud-geometry.mjs";
 import * as M from "../../tools/lib/hud-survey-matrix.mjs";
-import { applyCell, chromiumArgs, hudFitState, parseArgs, probeWithTransients, runExtras } from "../../tools/shot/hud-survey.mjs";
+import { applyCell, chromiumArgs, hudFitState, parseArgs, probeWithTransients, runExtras, shotTimeoutMs } from "../../tools/shot/hud-survey.mjs";
 import { analyzeSamples, parseArgs as parseLive, summarize } from "../../tools/shot/hud-live-sample.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -453,6 +453,32 @@ test("CLI --merge combines two shard dirs into one report, copying shots", () =>
     assert.ok(fs.existsSync(path.join(out, "index.html")) && fs.existsSync(path.join(out, "findings.md")));
     const sum = JSON.parse(r.stdout.trim().split("\n").pop());
     assert.equal(sum.cells.length, 2);
+    assert.equal(sum.ok, false, "partial / unmeasured merge is not ok");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("CLI writeReport exits non-zero when any cell has cellError even if others measured", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "hud-cellerr-"));
+  try {
+    const out = path.join(dir, "out");
+    fs.mkdirSync(path.join(dir, "s1", "shots"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "s1", "shots", "ok.png"), "png");
+    // One measured cell + one cellError-only cell (no records) → failed>0 must exit 1.
+    fs.writeFileSync(path.join(dir, "s1", "report.json"), JSON.stringify({
+      meta: { matrix: "quick" },
+      cells: [
+        { id: "ok-cell", cell: M.normalizeCell({ name: "ok-cell" }), shotRel: "shots/ok.png",
+          records: [{ key: "map", exists: true, visible: true, x: 0, y: 0, w: 10, h: 10 }], findings: [] },
+        { id: "boom", cell: M.normalizeCell({ name: "boom" }), cellError: "CDP captureScreenshot timed out after 60 s",
+          records: [], findings: [{ cell: "boom", kind: "pageError", elements: [], detail: "cell failed", severity: "high" }] },
+      ],
+    }));
+    const r = run(["--merge", path.join(dir, "s1"), "--out", path.relative(ROOT, out), "--json"]);
+    assert.equal(r.status, 1, "cellError must fail the process even when another cell measured");
+    const sum = JSON.parse(r.stdout.trim().split("\n").pop());
+    assert.equal(sum.ok, false);
+    assert.equal(sum.cellFailed, 1);
+    assert.equal(sum.measured, 1);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -636,4 +662,12 @@ test("hud-live-sample: the CLI refuses a bad device before it launches anything,
   const help = spawnSync(process.execPath, [CLI2, "--help"], { cwd: ROOT, encoding: "utf8", timeout: 30000 });
   assert.equal(help.status, 0);
   assert.match(help.stdout + help.stderr, /UNFROZEN/);
+});
+
+// 2026-10-10: lead10-announce-s150-1920 failed a flat 60 s CDP capture cap twice on an idle box under SwiftShader (200 s
+// cells) and passed under llvmpipe. A 1920x1080 frame gets a longer cap; every phone / 1280-wide cell keeps 60 s.
+test("shotTimeoutMs: 60 s up to 1280x800, 180 s for a 1920x1080 frame", () => {
+  for (const [w, h] of [[390, 844], [844, 390], [640, 360], [1180, 820], [1280, 800]]) assert.equal(shotTimeoutMs(w, h), 60000, `${w}x${h}`);
+  assert.equal(shotTimeoutMs(1920, 1080), 180000);
+  assert.equal(shotTimeoutMs(2560, 1440), 180000);
 });

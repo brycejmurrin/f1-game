@@ -77,11 +77,18 @@ function cornerPose(track, n) {
   // Through the FLYBY PLANNER, as a held one-frame shot: the same fence cap,
   // step-in, tree and building clearance the loading screen's corner shots
   // get. A raw point 30 m out landed inside Monza's pine canopy.
-  const eye = { at: "corner", n: k, off: -CN_BACK, x: CN_OUT, y: CN_UP }, look = { at: "corner", n: k, off: 0, x: 0, y: 1 };
-  const v = FlybySeq.solve(track, 0, [{ id: "snap", dur: 1, ease: "linear", eye: [eye, eye], look: [look, look], fov: [50, 50] }]);
-  const out = { n: k, count, eye: v.eye.slice(), target: v.tgt.slice() };
-  FlybySeq.reset();   // a borrowed solve must not leave the next loading-screen flyby thinking its first frame is not a cut
-  return out;
+  // The plan is a pure function of the built track, but solving it costs up to
+  // ~650 ms on a busy circuit, so each corner is solved once and memoised on the
+  // track object (a rebuilt track is a new object and re-plans). Callers get a copy.
+  const memo = track._fcCorner || (track._fcCorner = {});
+  let hit = memo[k];
+  if (!hit) {
+    const eye = { at: "corner", n: k, off: -CN_BACK, x: CN_OUT, y: CN_UP }, look = { at: "corner", n: k, off: 0, x: 0, y: 1 };
+    const v = FlybySeq.solve(track, 0, [{ id: "snap", dur: 1, ease: "linear", eye: [eye, eye], look: [look, look], fov: [50, 50] }]);
+    hit = memo[k] = { n: k, count, eye: v.eye.slice(), target: v.tgt.slice() };
+    FlybySeq.reset();   // a borrowed solve must not leave the next loading-screen flyby thinking its first frame is not a cut
+  }
+  return { n: hit.n, count: hit.count, eye: hit.eye.slice(), target: hit.target.slice() };
 }
 
 /** A pose from FlybySeq.poseFromWorld as a short human line. */

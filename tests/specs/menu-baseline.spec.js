@@ -48,10 +48,11 @@ const SCREENS = [
     // yield, #1024). Click ENGINE after the identity settle — hiding
     // #game on desktop remounts the pair sheet back to TEAM.
     await waitGarageSheet(page);
-    // GarageDefaults / unlimitedBudget can leave FREE BUILD ON; the golden
-    // is the budgeted sheet (ci run 38049517942 phone-landscape flake).
-    await freeBuildOff(page);
-    await waitGarageSheet(page);
+    // Free play ships `unlimitedBudget` default true (js/game.js). The blessed
+    // garage goldens are the budget-cap identity (BUDGET: −N / remaining) —
+    // same pin as parts-budget / parts-catalog. Without it, phone-landscape
+    // garage diffs ~5% on FREE BUILD: ON (CI oversize-menu-baseline).
+    if (await freeBuildOff(page)) await waitGarageSheet(page);
   }],
 ];
 

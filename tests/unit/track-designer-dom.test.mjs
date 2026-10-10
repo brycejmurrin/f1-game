@@ -10,7 +10,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
-import { bootEditor, read, plain } from "../helpers/editor-vm.mjs";
+import { bootEditor, read, plain, ellipse, design } from "../helpers/editor-vm.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
 const SCREEN_FILES = ["js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/designer.js"];
@@ -502,11 +502,11 @@ function bootCanvas() {
   const canvas = b.dom.document.createElement("canvas");
   const fills = [];
   canvas.getContext = () => new Proxy({}, { get: (t, k) => (k === "fill" ? () => fills.push(t.fillStyle) : k in t ? t[k] : () => {}), set: (t, k, v) => { t[k] = v; return true; } });
-  const ev = { changes: [], picks: [], deletes: [] };
+  const ev = { changes: [], picks: [], deletes: [], limits: [] };
   let cv = null;
   cv = b.DC.create(canvas, {
     onChange: (pts, kind) => { ev.changes.push({ pts, kind }); cv.setPoints(pts); },
-    onPick: (i) => ev.picks.push(i), onDelete: (i) => ev.deletes.push(i), onSelect: () => {},
+    onPick: (i) => ev.picks.push(i), onDelete: (i) => ev.deletes.push(i), onSelect: () => {}, onLimit: (w) => ev.limits.push(w),
   });
   const pts = [];
   for (let i = 0; i < 24; i++) { const t = i / 24 * Math.PI * 2; pts.push([Math.round(300 * Math.cos(t) * 4) / 4, Math.round(200 * Math.sin(t) * 4) / 4]); }
@@ -548,6 +548,22 @@ test("DesignerCanvas: double-tap deletes only under SELECT and only the handle b
   h.tap(mid); h.tap(mid); h.fire("dblclick", mid);
   assert.equal(h.ev.changes.filter((c) => c.kind === "insert").length, 1);
   assert.deepEqual(h.ev.deletes, [6], "the inserted point is not deleted by the same double-tap");
+});
+
+test("DesignerCanvas: a tap on the road at the point cap inserts nothing and says so (bug-hunt H10)", () => {
+  const h = bootCanvas();
+  // 200 points in four tight clusters, so the long edges between them are far from every handle.
+  const max = h.b.C.LIMITS.ptsMax, ring = [], corners = [[-1000, -700], [1000, -700], [1000, 700], [-1000, 700]];
+  for (const c of corners) for (let i = 0; i < max / 4; i++) ring.push([c[0] + i * 0.25, c[1]]);
+  h.cv.setPoints(ring); h.cv.fit();
+  const edge = [(ring[49][0] + ring[50][0]) / 2, (ring[49][1] + ring[50][1]) / 2];
+  h.tap(h.scr(edge));
+  assert.equal(h.ev.changes.filter((c) => c.kind === "insert").length, 0, "the 201st point is refused (validate.js and the registry both red it)");
+  assert.deepEqual(h.ev.limits, ["points"], "the screen is told, so it can say why");
+  h.cv.setPoints(ring.slice(0, max - 1)); h.cv.fit();
+  h.tap(h.scr(edge));
+  assert.equal(h.ev.changes.filter((c) => c.kind === "insert").length, 1, "one under the cap still inserts");
+  assert.match(read("js/editor/designer.js"), /onLimit: \(\) => message\(CustomTracks\.LIMITS\.ptsMax[^\n]*, true\)/, "the screen words the refusal as a warning");
 });
 
 test("DesignerCanvas: a drag stops at the storage bounds; a preview landing mid-drag keeps the road stale", () => {
@@ -1476,6 +1492,8 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   Object.assign(b.G, {
     state: "menu", player: null, track: null, timeTrial: false, seasonMode: true,
     startRace: async () => { calls.push(["startRace", b.G.trackIdx, b.G.timeTrial, b.G.seasonMode, b.D.isOpen()]); b.G.state = "count"; b.G.track = tr; b.G.player = Object.assign({}, grid); },
+    // The pre-race screen every solo start plays (card, flyby): it runs the start itself, later.
+    raceIntro: (go) => { calls.push(["raceIntro"]); Promise.resolve().then(go); },
     goRolling: () => { calls.push(["goRolling"]); if (b.G.state !== "count") return false; b.G.state = "race"; return true; },
     snapGameCam: () => calls.push(["snap"]), refreshHud: () => calls.push(["hud"]),
     quitToMenu: () => { calls.push(["quit"]); b.G.state = "menu"; b.C.consumeTrackHash(); },
@@ -1498,7 +1516,7 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.equal(await b.D.testHere(), true);
   const id = b.D.state().library[0];
   assert.ok(id && b.D.state().design.originId === id, "saved first");
-  assert.deepEqual(plain(calls), [["startRace", b.Tracks.LIST.findIndex((t) => t.id === id), true, false, false], ["snap"], ["hud"], ["goRolling"]], "trackIdx + time trial + gp flow, closed, then the drop and the green");
+  assert.deepEqual(plain(calls), [["raceIntro"], ["startRace", b.Tracks.LIST.findIndex((t) => t.id === id), true, false, false], ["snap"], ["hud"], ["goRolling"]], "trackIdx + time trial + gp flow, closed, the pre-race screen, then the drop and the green");
   assert.equal(b.G.state, "race");
   // Within 20 m of the control's built s (the nearest node of the same engine build).
   const p0 = d.pts[12];
@@ -1524,6 +1542,21 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.equal(b.D.isOpen(), true);
   assert.equal(b.D.state().sel, 12, "the selected point is back");
   assert.equal(msgText(b), "Back from the test drive");
+  // A headless or hidden page has no frames for the card: the quick path, as raceIntro's other callers take.
+  calls.length = 0; b.G.headlessMode = true; b.G.state = "menu";
+  hooks.onPick(12, { shiftKey: false });
+  assert.equal(await b.D.testHere(), true);
+  assert.deepEqual(plain(calls.map((c) => c[0])), ["startRace", "snap", "hud", "goRolling"], "headless: straight to the start, no pre-race screen");
+  b.G.headlessMode = false;
+  assert.equal(await b.C.consumeTrackHash(), true, "back on the designer for the next scenario");
+  // A raceIntro that throws before the card: the start still happens (the title is already hidden).
+  calls.length = 0; b.G.state = "menu";
+  const intro = b.G.raceIntro; b.G.raceIntro = () => { calls.push(["raceIntro"]); throw new Error("no card"); };
+  hooks.onPick(12, { shiftKey: false });
+  assert.equal(await b.D.testHere(), true);
+  assert.deepEqual(plain(calls.map((c) => c[0])), ["raceIntro", "startRace", "snap", "hud", "goRolling"]);
+  b.G.raceIntro = intro;
+  assert.equal(await b.C.consumeTrackHash(), true);
   // A start that never reaches the lights: out through quitToMenu, back with the reason.
   calls.length = 0;
   b.G.startRace = async () => { calls.push(["startRace"]); };
@@ -1531,7 +1564,7 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   hooks.onPick(12, { shiftKey: false });
   assert.equal(await b.D.testHere(), false);
   await new Promise((r) => setTimeout(r, 0));
-  assert.deepEqual(plain(calls), [["startRace"], ["quit"]], "never a frozen race");
+  assert.deepEqual(plain(calls), [["raceIntro"], ["startRace"], ["quit"]], "never a frozen race");
   assert.equal(b.D.isOpen(), true);
   assert.match(msgText(b), /could not start/);
   // A red design is refused before anything moves.
@@ -1983,6 +2016,105 @@ test("SELECT END arms a touch-friendly span; stamp REPLACE uses it; group elev o
   assert.deepEqual([b.D.state().sel, b.D.state().span], [5, 9], "span selection survives group elev");
 });
 
+// ── stale design state must not leak into a NEW loop ────────────────────────
+const hilly = (b, extra) => b.C.sanitize(design(Object.assign({
+  pts: ellipse(36, 800, 500),
+  heights: ellipse(36).map((_, i) => Math.round(30 * Math.sin(i / 3) * 4) / 4),
+  elevations: [{ s: 0.5, halfM: 400, rise: 25 }],
+}, extra)));
+
+test("RANDOMISE · TRACK OF THE DAY · FAST judge a candidate against the look only, never the old loop's elevations", async () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root }); b.D.open();
+  // A hilly start used to fail 12/12: the old heights were applied to the new loop (a grade RED).
+  b.D.load(hilly(b), "import");
+  assert.equal(b.D.randomise(101), true, "RANDOMISE finds a clean loop after an ELEVATION edit");
+  // "The same circuit for everyone": a flat start and a hilly start roll the same day's loop.
+  const day = "2026-10-09";
+  b.D.load(b.C.sanitize(design({ pts: ellipse(36, 800, 500) })), "import");
+  assert.equal(b.D.trackOfTheDay(day), true);
+  const flat = plain(b.D.state().design);
+  b.D.load(hilly(b), "import");
+  assert.equal(b.D.trackOfTheDay(day), true);
+  const rolled = plain(b.D.state().design);
+  assert.deepEqual(rolled.pts, flat.pts, "same pts from a hilly start as from a flat one");
+  assert.equal(rolled.seed, flat.seed);
+  b.D.load(hilly(b), "import");
+  assert.equal(await b.D.designed("FAST", 4242), true);
+  assert.equal(b.D.state().candidates.length, 4, "FAST fills four cards from a hilly start");
+});
+
+test("every action that starts a new loop clears the old loop's zones, bridges, turns and props", async () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root }); b.D.open();
+  const stale = () => b.C.sanitize(design({
+    pts: ellipse(36, 800, 500),
+    hwZones: [{ s0: 0.2, s1: 0.3, hw: 5.5, ease: 0.02 }],
+    bankZones: [{ frac: 0.4, angleDeg: 6, widthM: 120 }],
+    elevations: [{ s: 0.5, halfM: 300, rise: 6 }],
+    bridges: [{ s: 0.8, halfM: 160, rise: 8 }],
+    turns: [0.1, 0.4, 0.7],
+    props: [{ kind: "stand", s: 0.3, side: 1, gap: 18 }],
+  }));
+  const clean = (what) => {
+    const d = b.D.state().design;
+    assert.deepEqual(plain([d.hwZones, d.bankZones, d.elevations, d.bridges, d.turns]), [[], [], [], [], []], what + ": zone lists empty");
+    assert.equal(d.props, undefined, what + ": no authored props");
+  };
+  b.D.load(stale(), "import"); assert.ok(b.D.state().design.props.length === 1, "the fixture carries a prop");
+  assert.equal(b.D.randomise(101), true); clean("RANDOMISE");
+  const path = [];
+  for (let i = 0; i < 160; i++) { const t = i / 160 * Math.PI * 2; path.push([Math.cos(t) * 700, Math.sin(t) * 420 + 60 * Math.sin(3 * t)]); }
+  b.D.load(stale(), "import");
+  assert.equal(b.D.freehand(path), true); clean("DRAW");
+  b.D.load(stale(), "import");
+  assert.equal(await b.D.designed("FAST", 4242), true);
+  b.D.load(stale(), "import");   // the cards survive a load; USE swaps only the loop
+  assert.equal(b.D.useCandidate(0), true); clean("USE");
+  b.D.load(stale(), "import");
+  assert.equal(b.D.startFrom("monza"), true); clean("START FROM");
+});
+
+test("REVERSE keeps each authored prop on the same bank (its side is relative to the travel direction)", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root }); b.D.open();
+  const pts = ellipse(36, 800, 500), N = pts.length, i = 10;
+  const s = b.ctx.TrackDesignerProps.pointFrac(pts, i);
+  b.D.load(b.C.sanitize(design({ pts, props: [{ kind: "stand", s, side: 1, gap: 18 }, { kind: "billboard", s: b.ctx.TrackDesignerProps.pointFrac(pts, 20), side: -1, gap: 12 }] })), "import");
+  // A prop's world offset: side × the right-hand normal of the travel direction at its node.
+  const before = plain(b.D.state().design);
+  const at = (d, kind, k) => { const p = d.props.find((x) => x.kind === kind), P = d.pts, a = P[(k - 1 + N) % N], c = P[(k + 1) % N], tx = c[0] - a[0], tz = c[1] - a[1], m = Math.hypot(tx, tz); return [p.side * tz / m, p.side * -tx / m]; };
+  assert.equal(b.D.reverse(), true);
+  const after = plain(b.D.state().design);
+  // Point k of the old loop is point N − k on the reversed loop (point 0 stays).
+  for (const [kind, k] of [["stand", 10], ["billboard", 20]]) {
+    const o = at(before, kind, k), r = at(after, kind, N - k);
+    assert.ok(o[0] * r[0] + o[1] * r[1] > 0.99, kind + " stays on the same bank after REVERSE: " + o + " vs " + r);
+  }
+  assert.deepEqual(after.props.map((p) => p.kind + p.side).sort(), ["billboard1", "stand-1"], "the stored side is flipped with the travel direction");
+  // START HERE moves the line, not the travel direction: sides stay as they are.
+  const sides = after.props.map((p) => p.kind + p.side).sort();
+  assert.equal(b.D.setStart(5), true);
+  assert.deepEqual(b.D.state().design.props.map((p) => p.kind + p.side).sort(), sides, "START HERE leaves prop sides alone");
+});
+
+test("an inserted point takes the heights of its neighbours, not 0 m (no notch mid-hill)", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root }); b.D.open();
+  const pts = ellipse(36, 800, 500);
+  const heights = pts.map((_, i) => (i === 10 || i === 11 ? 10 : 0));
+  b.D.load(b.C.sanitize(design({ pts, heights })), "import");
+  const d = plain(b.D.state().design);
+  // A shape stamped after point 10 inserts new points between the two 10 m points.
+  b.D.setTool("straight");
+  assert.equal(b.D.applyStamp(10, 10), true);
+  const h = plain(b.D.state().design.heights), P = plain(b.D.state().design.pts);
+  assert.equal(h.length, P.length);
+  const k10 = P.findIndex((p) => p[0] === d.pts[10][0] && p[1] === d.pts[10][1]);
+  assert.equal(h[k10], 10, "the kept point keeps its height");
+  assert.ok(h[k10 + 1] > 0, "the point inserted after a 10 m point is not a 0 m notch: " + h.slice(k10, k10 + 4));
+});
+
 test("selection controls synchronize both views; elevation edits keep the range and undo once", () => {
   const b = bootScreen(); openGreen(b);
   const before = b.D.state(), n = before.design.pts.length;
@@ -2068,4 +2200,65 @@ test("DELETE POINT 0 and a stamp over the start line keep every surviving point'
   assert.ok(after.pts.filter((p) => before.pts.some((q) => key(q) === key(p))).length > 20, "plenty of shared points to check");
   assert.equal(bad(before, after), 0, "wrapping stamp: heights stay keyed to their points");
   assert.equal(green.pts.length > 0, true);
+});
+
+// ── bug-hunt 2 H8 / H9: a new loop is judged AND committed on a clean base ──
+/** The previous design's fraction-keyed edits, a wide road and two props: all of it belongs to the OLD loop. */
+function hillyBase(b) {
+  const d = openGreen(b);
+  b.D.load(Object.assign(d, plain(ZONES), { baseHW: 8 }));
+  b.D.setNodeHeight(3, 9);
+  b.D.cyclePoint(1); b.D.placeProp("stand");
+  assert.ok(b.D.state().design.props.length >= 1 && b.D.state().design.hwZones.length === 1, "the base carries the old loop's edits");
+  b.D.preview();   // settle the debounced preview: the spy must see candidates only
+}
+/** Every design TrackValidate.check is asked about, recorded (the screen reads the global at call time). */
+function spyCheck(b) {
+  const seen = [], orig = b.ctx.TrackValidate;
+  b.ctx.TrackValidate = Object.assign({}, orig, { check: (d) => { seen.push(plain({ baseHW: d.baseHW, hwZones: d.hwZones, bankZones: d.bankZones, elevations: d.elevations, bridges: d.bridges, heights: d.heights, props: d.props })); return orig.check(d); } });
+  return seen;
+}
+const CLEAN = (s) => Number.isFinite(s.baseHW) && ["hwZones", "bankZones", "elevations", "bridges"].every((k) => !s[k] || !s[k].length) && (!s.heights || s.heights.every((h) => h === 0)) && !s.props;
+
+test("RANDOMISE judges candidates on a clean base: the same seed gives the same loop on a hilly and a flat base, and the fresh loop carries none of the old edits", () => {
+  const flat = bootScreen(), hilly = bootScreen();
+  openGreen(flat); hillyBase(hilly);
+  const seenHilly = spyCheck(hilly);
+  assert.equal(flat.D.randomise(11), true); assert.equal(hilly.D.randomise(11), true);
+  assert.deepEqual(plain(hilly.D.state().design.pts), plain(flat.D.state().design.pts), "TRACK OF THE DAY: a seed means one loop, whatever the player had open");
+  assert.ok(seenHilly.length >= 1 && seenHilly.every(CLEAN), "every candidate was judged flat: " + JSON.stringify(seenHilly.find((s) => !CLEAN(s))));
+  const d = hilly.D.state().design;
+  assert.deepEqual(plain([d.hwZones, d.bankZones, d.elevations, d.bridges, d.turns]), [[], [], [], [], []], "fraction-keyed edits of the old loop are gone");
+  assert.equal(d.props, undefined); assert.ok(Number.isFinite(d.baseHW), "committed on the width it was judged on");
+  assert.ok(d.heights.every((h) => h === 0));
+});
+
+test("DESIGNED, USE and MORE LIKE THIS judge on a clean base and USE commits a fresh loop; DRAW and START FROM clear the old loop's edits", async () => {
+  const flat = bootScreen(), hilly = bootScreen();
+  openGreen(flat); hillyBase(hilly);
+  const seen = spyCheck(hilly);
+  assert.equal(await flat.D.designed("FAST", 21), true); assert.equal(await hilly.D.designed("FAST", 21), true);
+  assert.deepEqual(plain(hilly.D.state().candidates), plain(flat.D.state().candidates), "the same seeds give the same cards on either base");
+  assert.ok(seen.length >= 16 && seen.every(CLEAN), "designed(): every check was on the clean base: " + seen.length + " " + JSON.stringify(seen.find((s) => !CLEAN(s))));
+  seen.length = 0;
+  assert.equal(await hilly.D.moreLikeThis(0), true);
+  assert.ok(seen.length >= 1 && seen.every(CLEAN), "moreLikeThis(): every check was on the clean base");
+  assert.equal(hilly.D.useCandidate(0), true);
+  let d = hilly.D.state().design;
+  assert.deepEqual(plain([d.hwZones, d.bankZones, d.elevations, d.bridges, d.turns]), [[], [], [], [], []]);
+  assert.equal(d.props, undefined); assert.ok(Number.isFinite(d.baseHW));
+  // START FROM keeps nothing of the old loop either (props were the one it kept).
+  hillyBase(hilly);
+  assert.equal(hilly.D.startFrom("monza"), true);
+  d = hilly.D.state().design;
+  assert.equal(d.props, undefined, "START FROM clears the old loop's props");
+  assert.deepEqual(plain([d.hwZones, d.bankZones, d.elevations, d.bridges]), [[], [], [], []]);
+  // DRAW
+  hillyBase(hilly);
+  const path = [];
+  for (let i = 0; i < 160; i++) { const t = i / 160 * Math.PI * 2; path.push([Math.cos(t) * 700, Math.sin(t) * 420 + 60 * Math.sin(3 * t)]); }
+  assert.equal(hilly.D.freehand(path), true);
+  d = hilly.D.state().design;
+  assert.deepEqual(plain([d.hwZones, d.bankZones, d.elevations, d.bridges, d.turns]), [[], [], [], [], []], "DRAW clears the old loop's zones and bridges");
+  assert.equal(d.props, undefined);
 });

@@ -448,3 +448,41 @@ test("clearing dbgCam and resuming chase restores player-track rival pan", async
     G.gfx.makeFrustumPlanes = saveFrustum;
   } finally { g.close(); }
 });
+
+test("the replay dock is styled from css (no inline cssText) and labelled for assistive tech", () => {
+  // S2 (round-2 shell hunt): the dock was a JS-inlined ~600px row that clipped on a
+  // 390px portrait phone and had an unlabelled range.
+  const made = [];
+  const el = (tag) => {
+    const e = { tag, hidden: false, attrs: {}, children: {}, style: new Proxy({}, { set(_t, k) { e.styleWrites.push(k); return true; } }), styleWrites: [],
+      setAttribute(k, v) { this.attrs[k] = v; }, appendChild() {},
+      querySelector(sel) { return (this.children[sel] ||= { onclick: null, oninput: null }); } };
+    made.push(e);
+    return e;
+  };
+  const doc = { getElementById: (id) => (id === "pm-replay" ? { hidden: true } : null), createElement: el, body: { appendChild() {} } };
+  const R = boot(doc);
+  const field = cars(1), api = R.create({ cars: field, netPlay: { active: () => false }, raceT: 4 });
+  for (let i = 0; i < R.HZ * 4; i++) { field[0].px = i; api.sample(i / R.HZ, field); }
+  assert.equal(api.beginScrub(), true);
+  const dock = made.find((e) => e.tag === "div");
+  assert.ok(dock, "the dock was built");
+  assert.deepEqual(dock.styleWrites, [], "no inline style: css/dialogs.css owns the look");
+  assert.equal(dock.attrs.role, "group");
+  assert.equal(dock.attrs["aria-label"], "Instant replay");
+  assert.match(dock.innerHTML, /<input id="pm-replay-scrub" type="range"[^>]*aria-label="Replay position"/);
+  assert.doesNotMatch(dock.innerHTML, /style=/);
+});
+
+test("css/dialogs.css gives #pm-replay-dock safe-area, wrapping and a viewport cap", () => {
+  const css = fs.readFileSync(path.join(ROOT, "css/dialogs.css"), "utf8");
+  const m = css.match(/#pm-replay-dock \{([^}]*)\}/);
+  assert.ok(m, "a #pm-replay-dock rule exists");
+  const body = m[1];
+  assert.match(body, /position:\s*fixed/);
+  assert.match(body, /flex-wrap:\s*wrap/);
+  assert.match(body, /bottom:\s*calc\(var\(--safe-b\)/);
+  assert.match(body, /max-width:\s*calc\(100vw - var\(--safe-l\) - var\(--safe-r\)\)/);
+  assert.doesNotMatch(body, /#fff|rgba\(|monospace/, "tokens, not hard-coded colours or fonts");
+  assert.doesNotMatch(fs.readFileSync(path.join(ROOT, "js/camera/replay-buf.js"), "utf8"), /style\.cssText/);
+});

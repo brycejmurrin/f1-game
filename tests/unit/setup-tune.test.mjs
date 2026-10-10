@@ -16,11 +16,16 @@ import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function load() {
+function load(shipped = {}) {
   const stored = new Map();
   const ctx = vm.createContext({
     Math, console, Object, Array, Number, JSON, isFinite,
-    GameStore: { store: { get: (k, d) => (stored.has(k) ? stored.get(k) : d), set: (k, v) => stored.set(k, v) } },
+    // Mirrors GameStore: a miss answers the SHIPPED value (garage-defaults) before the
+    // call-site default, and set(k, undefined) removes the key while null is a stored value.
+    GameStore: { store: {
+      get: (k, d) => (stored.has(k) ? stored.get(k) : (k in shipped ? shipped[k] : d)),
+      set: (k, v) => (v === undefined ? stored.delete(k) : stored.set(k, v)),
+    } },
   });
   seedLog(ctx);
   ctx.window = ctx;
@@ -120,4 +125,18 @@ test("the rake sheet reaches the player alone: a shared MY TEAM build carries th
   assert.ok(line, "makeCars no longer has the shared-build aeroLoad line — re-point this test");
   assert.ok(/isP \? SetupTune\.aero\(team\.id\) : undefined/.test(line),
     "the teammate must not receive the player's setup sheet: " + line.trim().slice(0, 160));
+});
+
+test("reset returns to the SHIPPED sheet a fresh install gets, not the works default", () => {
+  const designer = { arbF: 9, arbR: 4, rideF: 20, rideR: 70, brakeBias: 58 };
+  const { S } = load({ "setup.mercedes": designer });
+  const fresh = host(S.get("mercedes"));
+  assert.deepEqual(fresh, designer, "a fresh Mercedes reads the shipped sheet");
+  S.set("mercedes", { arbF: 2, rideR: 45 });
+  assert.notDeepEqual(host(S.get("mercedes")), fresh);
+  assert.deepEqual(host(S.reset("mercedes")), fresh, "reset must land where a fresh install lands");
+  assert.deepEqual(host(S.get("mercedes")), fresh);
+  const { S: bare } = load();
+  bare.set("mclaren", { arbF: 11 });
+  assert.equal(bare.reset("mclaren").arbF, 6, "a team with no shipped sheet still resets to the works default");
 });

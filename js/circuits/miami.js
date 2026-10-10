@@ -34,12 +34,12 @@
       { kinds: ["city", "foliage"], s0: 0.26, s1: 0.38, side: 1 },
       { kinds: ["city", "foliage"], s0: 0.60, s1: 0.72 },
       { kinds: ["city"], s0: 0.115, s1: 0.128 },   // T4 inside: retail boxes converge and interpenetrate
-      { kinds: ["city"], s0: 0.095, s1: 0.115, side: -1 }, // T4 inside is also beside the T11 stand's rake
-      { kinds: ["city"], s0: 0.565, s1: 0.575, side: 1 },   // low retail plinth and front-row tower share a footprint
-      { kinds: ["city"], s0: 0.7626, s1: 0.7774 }, // scaffold stand on the left; overlapping retail plinth on the right
     ],
     pal: { zenith: [0.22, 0.5, 0.88], horizon: [0.80, 0.86, 0.90], grass: [0.20, 0.42, 0.18], runoff: [0.34, 0.33, 0.32], fogDensity: 0.0014, sunDir: [0.3131803839972462, 0.7933903061263571, 0.521967306662077], sun: [1, 0.96, 0.82], sunColor: [1, 0.94, 0.8] },
-    elevations: [{ s: 0.8605, halfM: 220, rise: 3.5 }],
+    elevations: [
+      { s: 0.8605, halfM: 220, rise: 3.5 },
+      { s: 0.662, halfM: 95, rise: 3.4 },   // Turnpike chicane crest (~11 ft under 2nd deck)
+    ],
     bankZones: [
       { frac: 0.0816, angleDeg: 3.0, widthM: 240 },   // T3
       { frac: 0.2783, angleDeg: 3.5, widthM: 240 },   // T11
@@ -52,7 +52,7 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    sectors: [0.3, 0.62],
+    sectors: [0.3, 0.641],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.3, 0.62])
     turns: [0.0463, 0.0628, 0.0823, 0.1188, 0.1813, 0.2058, 0.2128, 0.2388, 0.2558, 0.2648, 0.2773, 0.5533, 0.5668, 0.5793, 0.5968, 0.6118, 0.6333, 0.8803, 0.9078],
     barrier: { a: [0.97, 0.32, 0.56], b: [0.08, 0.74, 0.78], c: [0.97, 0.80, 0.22], night: [0.30, 0.10, 0.32], tyre: [0.97, 0.32, 0.56] },  // vice pink/teal + sun gold
     furniture: { tree: "none",  fol: [0.20, 0.48, 0.22], lamp: "post",  lc: [1.0, 0.78, 0.85] },
