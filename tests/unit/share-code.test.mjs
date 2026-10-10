@@ -209,6 +209,89 @@ test("lastSession round-trips and continueHint prefers career then daily then se
   assert.equal(hintS.kind, "session");
 });
 
+// Round-3 hunt 6-F1: the livery branch did next.slice(0, 32) — a player with 40 custom
+// liveries lost 33–40 for good and the shared one (appended last) was cut too, while the
+// pick pointed at it and the toast said "Livery loaded". At the cap it now refuses whole.
+test("a livery code never trims the player's customs; at the cap it refuses honestly", async () => {
+  const { ShareCode, store, location } = harness();
+  const mine = Array.from({ length: 40 }, (_, i) => ({ id: "c" + i, c1: [1, 0, 0], c2: [0, 0, 1] }));
+  store.set("livery.custom.ferrari", mine);
+  store.set("livery.ferrari", "c3");
+  const shared = { id: "custom_friend", c1: [0, 1, 0], c2: [1, 1, 1] };
+  const encoded = ShareCode.encode("livery", { team: "ferrari", id: shared.id, livery: shared });
+  location.hash = "#share=" + encoded.code;
+  location.href = "https://example.test/f1-game/" + location.hash;
+  const notices = [];
+  await ShareCode.consumeHash({
+    apply: (d) => ShareCode.apply(d, { store, openGarage() {}, selectTeam() {} }),
+    notify: (msg, result) => notices.push({ msg, ok: result.ok }),
+  });
+  const after = store.get("livery.custom.ferrari");
+  assert.equal(after.length, 40, "no custom livery deleted");
+  assert.deepEqual(after.map((l) => l.id), mine.map((l) => l.id));
+  assert.equal(store.get("livery.ferrari"), "c3", "selection untouched when refused");
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].ok, false);
+  assert.doesNotMatch(notices[0].msg, /Livery loaded/);
+  assert.match(notices[0].msg, /not added .*32-livery limit/);
+
+  // Under the cap: the shared livery is stored AND selected; re-sharing it replaces in place.
+  store.set("livery.custom.ferrari", mine.slice(0, 10));
+  const ok = ShareCode.apply(ShareCode.decode(encoded.code), { store });
+  assert.equal(ok.ok, true);
+  const got = store.get("livery.custom.ferrari");
+  assert.equal(got.length, 11);
+  assert.ok(got.some((l) => l.id === shared.id));
+  assert.equal(store.get("livery.ferrari"), shared.id);
+  ShareCode.apply(ShareCode.decode(encoded.code), { store });
+  assert.equal(store.get("livery.custom.ferrari").length, 11);
+});
+
+// Round-3 hunt 6-F2: opening a #share= setup/livery link replaced the team's stored
+// sheet / livery pick with no way back. apply() now keeps the previous values, the
+// toast says so, and pasting UNDO (SETTINGS › FILES) restores them. A link cannot undo.
+test("a setup code keeps the player's previous sheet and UNDO restores it", async () => {
+  const { ShareCode, store, bag, location } = harness();
+  const own = { arbF: 3, arbR: 4, rideF: 30, rideR: 70, brakeBias: 58 };
+  store.set("setup.ferrari", own);
+  const encoded = ShareCode.encode("setup", { team: "ferrari", tune: { arbF: 11, arbR: 11, rideF: 15, rideR: 40, brakeBias: 62 } });
+  location.hash = "#share=" + encoded.code;
+  location.href = "https://example.test/f1-game/" + location.hash;
+  const notices = [];
+  await ShareCode.consumeHash({
+    apply: (d) => ShareCode.apply(d, { store, openGarage() {}, selectTeam() {} }),
+    notify: (msg) => notices.push(msg),
+  });
+  assert.equal(store.get("setup.ferrari").arbF, 11, "the shared sheet is applied");
+  assert.match(notices[0], /UNDO/, "the toast names the way back");
+  // #share=UNDO is not a door: only a pasted word undoes.
+  location.hash = "#share=UNDO";
+  location.href = "https://example.test/f1-game/" + location.hash;
+  assert.equal((await ShareCode.consumeHash({ apply: (d) => ShareCode.apply(d, { store }) })).ok, false);
+  assert.equal(store.get("setup.ferrari").arbF, 11);
+  const undone = ShareCode.apply(ShareCode.decode("undo"), { store });
+  assert.equal(undone.ok, true);
+  assert.deepEqual(j(store.get("setup.ferrari")), own);
+  assert.equal(ShareCode.apply(ShareCode.decode("UNDO"), { store }).ok, false, "one-deep");
+  // A team with no sheet of its own goes back to having none.
+  ShareCode.apply(ShareCode.decode(ShareCode.encode("setup", { team: "mercedes", tune: own }).code), { store });
+  ShareCode.apply(ShareCode.decode("UNDO"), { store });
+  assert.equal(bag.get("setup.mercedes"), undefined);
+});
+
+// Round-3 hunt 6-F3: lastSession kept any flow string and CONTINUE restored it into the
+// FREE picker — a season round came back with seasonMode on, a deleted career's "career"
+// with isCareer() true and no save. Only free play's flow is recorded or restored.
+test("CONTINUE's lastSession never carries a season or career flow", () => {
+  const { ShareCode, store, bag } = harness();
+  ShareCode.recordSession(store, { trackId: "monza", flow: "season" });
+  assert.equal(ShareCode.lastSession(store).flow, "gp");
+  bag.set("lastSession", { trackId: "monza", session: "race", flow: "career" });
+  assert.equal(ShareCode.lastSession(store).flow, "gp");
+  const menu = fs.readFileSync(path.join(ROOT, "js/ui/title-menu.js"), "utf8");
+  assert.doesNotMatch(menu, /G\.flow\s*=\s*hint\.session\.flow/, "CONTINUE does not trust the stored flow");
+});
+
 test("share-code module is referenced (zeroRefModules)", () => {
   const { ShareCode } = harness();
   assert.equal(typeof ShareCode.encode, "function");

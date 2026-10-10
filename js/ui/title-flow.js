@@ -42,7 +42,18 @@ async function consumeGhostHash() {
   // …and so does one landing over any other layer (results / quali sheet, the RACE loading plate, the career hub, an open
   // picker): it would flip flow/session to a time trial under that screen. Only the title itself takes the link.
   const top = els.overlay.hidden ? null : UiLayers.top();
-  if (els.overlay.hidden || (top && top.id !== "overlay")) { Log.info("game", "ghost link deferred: title not live"); return null; }
+  if (els.overlay.hidden || (top && top.id !== "overlay")) {
+    Log.info("game", "ghost link deferred: title not live");
+    // BACK to the title (the covering layer or #overlay toggles hidden/open) re-reads the held link, not only
+    // quitToMenu (6-F4). One-shot; a re-defer re-arms it on whatever layer is then on top.
+    if (typeof MutationObserver === "function" && /(?:^#|&)(?:ghost|share)=/.test(location.hash) && !els.overlay._apexLinkWatch) {
+      const watch = els.overlay._apexLinkWatch = new MutationObserver(() => {
+        watch.disconnect(); els.overlay._apexLinkWatch = null; setTimeout(consumeGhostHash, 0);
+      });
+      for (const el of [els.overlay, top]) if (el) watch.observe(el, { attributes: true, attributeFilter: ["hidden", "open"] });
+    }
+    return null;
+  }
   const titleLive = () => !UiLayers.inRace() && !els.overlay.hidden;
   const shared = await GhostShare.consumeHash({ valid: titleLive,
     notify: (message, result) => G.announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),

@@ -81,7 +81,8 @@ const TitleMenu = (function () {
         const idx = Tracks.LIST.findIndex((t) => t.id === hint.session.trackId);
         if (idx < 0) return;
         G.trackIdx = idx;
-        G.flow = hint.session.flow || "gp";
+        // Free play only: lastSession never carries a season/career flow into this picker (6-F3).
+        G.flow = "gp";
         G.timeTrial = hint.session.session === "tt";
         G.buildSelect();
         G.els.overlay.hidden = true;

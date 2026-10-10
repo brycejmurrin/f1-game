@@ -302,6 +302,48 @@ test("a ghost link landing over a non-title layer waits, fragment intact, for th
   assert.equal(h.location.hash, "");
 });
 
+// Round-3 hunt 6-F4: a link held over #select / settings was only re-read by quitToMenu (after a race) or a
+// reload — BACK to the title did nothing. The deferral now arms a one-shot observer on #overlay and the covering
+// layer; when one of them toggles hidden/open, the held link is consumed again.
+test("a link held over the picker or a title layer lands on BACK to the title", async () => {
+  for (const [first, hidden] of [["select", true], ["settings", false]]) {
+    const h = harness({ plain: true });
+    const encoded = await h.GhostShare.encode(fixture, { track: "monza" });
+    h.location.hash = "#ghost=" + encoded.code;
+    h.location.href = h.location.origin + h.location.pathname + h.location.hash;
+    let topId = first, opens = 0;
+    const overlay = { id: "overlay", hidden }, layer = { id: first };
+    const observers = [];
+    class MutationObserver {
+      constructor(cb) { this.cb = cb; this.targets = []; observers.push(this); }
+      observe(el) { this.targets.push(el); }
+      disconnect() { this.targets = []; }
+    }
+    const G = { announce: h.notify, flow: "gp", session: "race", daily: { stop() {} }, trackIdx: 0,
+      buildSelect() { opens++; }, scheduleFlybyTrack() {} };
+    const ctx = vm.createContext({
+      G, GhostShare: h.GhostShare, Log: { info() {} }, MutationObserver, setTimeout, location: h.location,
+      UiLayers: { inRace: () => false, top: () => (topId === first ? layer : overlay) },
+      els: { overlay }, DailyChallenge: { dayKey: () => "2026-09-29" }, restoreFreePlaySelection() {},
+      Tracks: { LIST: [{ id: "monza" }] }, vt() {},
+    });
+    const source = fs.readFileSync(path.join(ROOT, "js/ui/title-flow.js"), "utf8");
+    const consume = vm.runInContext("(" + fnSource(source, "async function consumeGhostHash()") + ")", ctx);
+    assert.equal(await consume(), null, `deferred over ${first}`);
+    assert.equal(await consume(), null, "a second defer does not stack a second watch");
+    assert.equal(observers.length, 1, `one watch armed over ${first}`);
+    assert.ok(observers[0].targets.includes(overlay), "watches #overlay");
+    // BACK: the covering layer closes and the title is live again.
+    topId = "overlay"; overlay.hidden = false;
+    observers[0].cb([]);
+    for (let i = 0; i < 50 && !opens; i++) await new Promise((r) => setTimeout(r, 5));
+    assert.equal(opens, 1, `link consumed on BACK from ${first}`);
+    assert.equal(G.session, "tt");
+    assert.equal(h.GhostShare.guest().track, "monza");
+    assert.equal(h.location.hash, "");
+  }
+});
+
 function resultsHarness({ ghost = null, guest = false } = {}) {
   const dom = makeDom();
   const Ghost = {

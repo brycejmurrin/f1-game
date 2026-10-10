@@ -1,10 +1,17 @@
 /* ShareCode: pasteable APX envelopes for setup / livery / daily (+ #share=).
    Ghosts stay on GhostShare (APXG1 / #ghost=). Deep links stage sheets only —
-   never startRace / gridUp. Plan slice 4: docs/plans/2026-09-30-player-a11y.md. */
+   never startRace / gridUp. A setup/livery code DOES write the team's stored
+   sheet / livery pick, so apply() first saves what it replaces (UNDO_KEY) and
+   the toast names the door back: paste UNDO in SETTINGS › FILES (6-F2).
+   Plan slice 4: docs/plans/2026-09-30-player-a11y.md. */
 "use strict";
 
 const ShareCode = (function () {
   const LAST_KEY = "lastSession";
+  const UNDO_KEY = "shareUndo";
+  // The settings GARAGE FILE door's per-team cap (settings-export.js GARAGE_LIVERIES_MAX).
+  // A link never trims the player's own list to fit it: at the cap it refuses (6-F1).
+  const LIVERY_CAP = 32;
   const MAX_CODE_CHARS = 32 * 1024;
   const MAX_DECODED_BYTES = 64 * 1024;
   const CORRUPT = Object.freeze({ ok: false, reason: "corrupt" });
@@ -167,6 +174,7 @@ const ShareCode = (function () {
 
   function decode(value) {
     const raw = String(value || "").trim();
+    if (/^undo$/i.test(raw)) return { ok: true, kind: "undo" };   // SETTINGS › FILES paste only
     if (raw.startsWith("{")) {
       if (raw.length > MAX_DECODED_BYTES) return CORRUPT;
       try { return fromBody(JSON.parse(raw)); } catch (_) { return CORRUPT; }
@@ -186,12 +194,17 @@ const ShareCode = (function () {
 
   function messageFor(result) {
     if (result && result.ok) {
-      if (result.kind === "setup") return "Setup loaded — " + result.team.toUpperCase() + ".";
-      if (result.kind === "livery") return "Livery loaded — " + result.team.toUpperCase() + ".";
+      const undo = " Your previous one is kept: paste UNDO in SETTINGS › FILES to restore it.";
+      if (result.kind === "setup") return "Setup loaded — " + result.team.toUpperCase() + "." + undo;
+      if (result.kind === "livery") return "Livery loaded — " + result.team.toUpperCase() + "." + undo;
+      if (result.kind === "undo") return "Share code undone — your previous setup / livery is back.";
       if (result.kind === "daily") return "Daily challenge — " + (result.trackName || result.track).toUpperCase() + ".";
     }
     if (result && result.reason === "unknown-team") return "That share code names a team this version does not know.";
     if (result && result.reason === "unknown-track") return "That share code names a circuit this version does not know.";
+    if (result && result.reason === "livery-full") return "Livery not added — " + String(result.team || "").toUpperCase()
+      + " is at the " + LIVERY_CAP + "-livery limit for share codes. Delete one in GARAGE › TEAM first.";
+    if (result && result.reason === "nothing-to-undo") return "There is no share code import to undo.";
     return "That share code is incomplete or corrupt.";
   }
 
@@ -201,19 +214,32 @@ const ShareCode = (function () {
     if (!decoded || !decoded.ok || !store) return { ok: false, reason: "no-store" };
     // Staging only — callers must never pass startRace here.
     if (typeof h.startRace === "function") { /* intentionally unused */ }
+    if (decoded.kind === "undo") return undo(store);
     if (decoded.kind === "setup") {
+      saveUndo(store, ["setup." + decoded.team]);
       store.set("setup." + decoded.team, decoded.tune);
       if (typeof h.selectTeam === "function") h.selectTeam(decoded.team);
       if (typeof h.openGarage === "function") h.openGarage("share");
       return { ok: true, kind: "setup", team: decoded.team };
     }
     if (decoded.kind === "livery") {
-      store.set("livery." + decoded.team, decoded.id);
+      const customKey = "livery.custom." + decoded.team;
+      let next = null;
       if (decoded.livery) {
-        const arr = store.get("livery.custom." + decoded.team, []) || [];
-        const next = arr.filter((l) => !l || l.id !== decoded.livery.id).concat([decoded.livery]);
-        store.set("livery.custom." + decoded.team, next.slice(0, 32));
+        const stored = store.get(customKey, []);
+        const arr = Array.isArray(stored) ? stored : [];
+        const kept = arr.filter((l) => !l || l.id !== decoded.livery.id);
+        // Re-sharing a livery the player already has replaces it in place; a NEW one
+        // at the cap is refused before anything is written — never trim their list.
+        if (kept.length === arr.length && arr.length >= LIVERY_CAP) {
+          return { ok: false, kind: "livery", reason: "livery-full", team: decoded.team };
+        }
+        next = kept.concat([decoded.livery]);
       }
+      saveUndo(store, ["livery." + decoded.team, customKey]);
+      if (next) store.set(customKey, next);
+      // Select the livery that was actually stored (a crafted code could name another id).
+      store.set("livery." + decoded.team, decoded.livery ? decoded.livery.id : decoded.id);
       if (typeof h.selectTeam === "function") h.selectTeam(decoded.team);
       if (typeof h.openGarage === "function") h.openGarage("share");
       return { ok: true, kind: "livery", team: decoded.team };
@@ -223,6 +249,27 @@ const ShareCode = (function () {
       return { ok: true, kind: "daily", day: decoded.day, track: decoded.track };
     }
     return CORRUPT;
+  }
+
+  // One-deep undo for the last setup/livery code: the keys it is about to overwrite,
+  // with their previous values (null = absent: undo removes it via store.set(k, undefined)).
+  function saveUndo(store, keys) {
+    const prev = {};
+    for (const k of keys) prev[k] = store.get(k, null);
+    store.set(UNDO_KEY, { keys, prev, at: Date.now() });
+  }
+  function undo(store) {
+    const rec = store && store.get(UNDO_KEY, null);
+    if (!rec || !Array.isArray(rec.keys) || !rec.prev || typeof rec.prev !== "object") {
+      return { ok: false, kind: "undo", reason: "nothing-to-undo" };
+    }
+    for (const k of rec.keys) {
+      if (!/^(setup|livery|livery\.custom)\.[a-z0-9_-]+$/.test(String(k))) continue;
+      const v = Object.prototype.hasOwnProperty.call(rec.prev, k) ? rec.prev[k] : null;
+      store.set(k, v == null ? undefined : v);
+    }
+    store.set(UNDO_KEY, undefined);
+    return { ok: true, kind: "undo" };
   }
 
   function hashCode(hash) {
@@ -244,7 +291,8 @@ const ShareCode = (function () {
     const mine = ++hashGeneration;
     const raw = typeof location !== "undefined" ? hashCode(location.hash) : null;
     if (!raw) return null;
-    const result = decode(raw);
+    let result = decode(raw);
+    if (result.kind === "undo") result = CORRUPT;   // UNDO is a pasted word, never a link
     if (mine !== hashGeneration || hashCode(location.hash) !== raw ||
         (opts && typeof opts.valid === "function" && !opts.valid())) return null;
     let applied = null;
@@ -256,17 +304,22 @@ const ShareCode = (function () {
       }
     } catch (_) { /* guest apply still works */ }
     const notify = opts && opts.notify;
-    if (typeof notify === "function") notify(messageFor(result), result, applied);
+    // A refused apply (livery cap) reports the refusal, not "loaded".
+    const shown = applied && applied.ok === false && applied.reason ? applied : result;
+    if (typeof notify === "function") notify(messageFor(shown), shown, applied);
     return result;
   }
 
+  // CONTINUE re-opens the FREE circuit picker, so only free play's flow is kept or
+  // restored: a season round has SEASON's door and a career round CAREER's (6-F3).
+  const FREE_FLOW = "gp";
   function recordSession(store, snap) {
     if (!store || !snap || typeof snap.trackId !== "string" || !snap.trackId) return false;
     const session = snap.session === "tt" ? "tt" : "race";
     const row = {
       trackId: snap.trackId,
       session,
-      flow: typeof snap.flow === "string" ? snap.flow : "gp",
+      flow: FREE_FLOW,
       trackName: typeof snap.trackName === "string" ? snap.trackName.slice(0, 64) : null,
       at: typeof snap.at === "number" && isFinite(snap.at) ? snap.at : Date.now(),
     };
@@ -281,7 +334,7 @@ const ShareCode = (function () {
     return {
       trackId: raw.trackId,
       session: raw.session === "tt" ? "tt" : "race",
-      flow: typeof raw.flow === "string" ? raw.flow : "gp",
+      flow: FREE_FLOW,
       trackName: typeof raw.trackName === "string" ? raw.trackName : null,
       at: typeof raw.at === "number" ? raw.at : 0,
     };
@@ -330,8 +383,8 @@ const ShareCode = (function () {
   }
 
   return {
-    KINDS, encode, decode, apply, consumeHash, withoutShare, messageFor,
-    recordSession, lastSession, continueHint, LAST_KEY,
+    KINDS, encode, decode, apply, undo, consumeHash, withoutShare, messageFor,
+    recordSession, lastSession, continueHint, LAST_KEY, UNDO_KEY,
   };
 })();
 Object.freeze(ShareCode);
