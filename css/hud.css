@@ -1755,13 +1755,23 @@ body.lt-open .touchbtn { display: none !important; }
   outline: 1px solid var(--hc-hud-line);   /* outline, not border: the team stripe is border-left */
 }
 /* ── BROADCAST TIMING TOWER (js/race/broadcast.js) ──────────────────────────
-   A REAL RACE WATCH / HIGHLIGHTS run only (body.bc-on): the whole field down
-   the left edge, as the TV graphics show it. It takes the top-left corner, so
-   the minimap, the gap strip and the top band (the followed car's POS/LAP,
-   which the tower already says) stand down while it is up. The rows are
-   buttons: a tap follows that car. The head flips GAP / INTERVAL. */
-body.bc-on #minimap, body.bc-on .hud-gaps, body.bc-on .hud-top,
-body.bc-on #hud-tyre, body.bc-on #hud-pit { display: none !important; }   /* the tyre chip is the SIM's plan for a puppet: the tower shows the real stint */
+   A REAL RACE WATCH / HIGHLIGHTS run (body.bc-on). The picture is a
+   broadcast: the tower, the PiP and the replay bar stay. The driving HUD
+   does not — timing band, map, gaps, speed, gear, energy, tyres, overtake,
+   aero, bias, sectors, flags, mirror, the helmet visor and the touch pads.
+   display:none, not visibility, so a placed chip (data-hl) cannot punch
+   back through. The same list under body.watch-controls-on lives in
+   css/watch-transport.css (that class stays in one file). Pause stays.
+   The race camera chip and the radio card stand down; the replay bar has
+   its own camera control. The timing tower and the PiP stay. */
+body.bc-on :is(.hud-top, .hud-gaps, .hud-bottom, #minimap, #hud-dock) { display: none !important; }
+body.bc-on :is(#hud-gearbox, #hud-speed, #hud-energy, #hud-tyre, #hud-pit, #hud-work) { display: none !important; }
+body.bc-on :is(#hud-ot, #hud-aero, #hud-bb, #hud-sectors, #hud-limits) { display: none !important; }
+body.bc-on :is(#hud-damage, #hud-flag, #hud-mirror, #hud-mirror-chip) { display: none !important; }
+body.bc-on :is(#hud-rel, #hud-strat, #hud-inputs) { display: none !important; }
+body.bc-on :is(.touchbtn, #campicker) { display: none !important; }
+body.bc-on :is(#btn-cam, #announce, #lights) { display: none !important; }
+body.bc-on[data-helmet-cam] #hud::before { content: none; }
 #bc-tower {
   --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z);
   position: absolute;
