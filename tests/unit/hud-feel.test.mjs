@@ -1085,6 +1085,15 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
   // to +96) and starts the lane; the left dock group (y 200..400) only publishes it;
   // sectors 650..790 at y 130 end it the way BOOST does on a phone. --announce-lane-x
   // is screen px: css/hud.css divides by --hud-z on #announce, where it lives.
+  // The resolver publishes ONLY the chosen slot's vars, and the fixture's tower row has a top slot:
+  // the pause button right of the tower (in its row) leaves it under 96 px, so the card hangs.
+  assert.equal(h.dom.body.getAttribute("data-radio-slot"), "top", "the default fixture takes the top row");
+  assert.equal(lane(), "", "a top-row card carries no lane vars");
+  h.dom.byId("pausebtn")._rect = { left: 600, top: 8, right: 644, bottom: 52, width: 44, height: 44 };
+  h.refit();
+  assert.equal(h.dom.body.getAttribute("data-radio-slot"), "lane");
+  assert.ok(!h.dom.body.classList.contains("hud-radio-top"), "the alias class follows the slot");
+  for (const k of ["--radio-top-x", "--radio-top-y", "--radio-top-w", "--radio-top-h"]) assert.equal(h.root.style.getPropertyValue(k), "", k + " removed with the top slot");
   assert.equal(laneLeft(), "158.0px");
   assert.equal(lane(), "484.0px");
   const boost = h.dom.document.createElement("div"); boost.className = "boost";
@@ -1161,21 +1170,113 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
   assert.equal(lane(), (540 - 8 - 318).toFixed(1) + "px", "INPUTS in the card's rows ends the lane at its left edge");
   h.dom.body.removeChild(inputs);
   const src = read("js/ui/hud.js");
-  assert.ok(src.indexOf("announceLane(document.documentElement)") > src.indexOf("hText(els.gapA"),
-    "announceLane runs after this tick's gap strings, not only inside fitHud");
+  assert.ok(src.indexOf("placeRadio(document.documentElement") > src.indexOf("hText(els.gapA"),
+    "the lane is re-placed after this tick's gap strings, not only inside fitHud");
   for (const g of [...h.dom.byId("dock-left").children, ...h.dom.byId("dock-right").children]) g._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
   h.refit();
   assert.equal(lane(), "", "empty docks (desktop) publish no lane, so the CSS cap falls away");
   assert.equal(laneLeft(), "");
+  assert.equal(h.dom.body.getAttribute("data-radio-slot"), "centre", "no top row, no mirror, no dock: the shipped centred slot");
   const css = read("css/hud.css");
   const rule = css.match(/body:not\(\.desktop\) #announce \{[^}]*\}/);
   assert.ok(rule, "a touch-only #announce lane rule");
   assert.match(rule[0], /max-width: min\(440px, calc\(72 \* var\(--vwzh\)\), calc\(var\(--announce-lane-w, 9999px\) \/ var\(--hud-z\)\)\)/);
   assert.match(rule[0], /min-width:\s*0/);
   assert.match(rule[0], /width:\s*min\(100%, max-content, calc\(var\(--announce-lane-w/);
-  assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x\) \/ var\(--hud-z\)\)/);
-  assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?transform: translateX\(var\(--announce-lane-shift, -50%\)\)/);
+  // The lane rule keys on the resolver's attribute, not on a :not() chain of the other slots' classes.
+  assert.match(css, /body\[data-radio-slot="lane"\] #announce,\s*body\[data-radio-slot="collapsed"\] #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x\) \/ var\(--hud-z\)\)/);
+  assert.match(css, /body\[data-radio-slot="lane"\] #announce,\s*body\[data-radio-slot="collapsed"\] #announce \{[\s\S]*?transform: translateX\(var\(--announce-lane-shift, -50%\)\)/);
+  assert.doesNotMatch(css, /:not\(\.hud-radio-top\):not\(\.hud-mirror-side\) #announce/, "the lane's :not() chain is gone");
+  assert.match(css, /body\[data-radio-slot="top"\] #announce:not\(\[hidden\]\) \{/, "the top row keys on the attribute");
+  assert.match(css, /body\.hud-mirror-on\[data-radio-slot="side"\] #announce \{/, "beside the mirror keys on the attribute (and a shown mirror)");
   assert.doesNotMatch(css, /body\.desktop[^{]*#announce[^{]*\{[^}]*announce-lane/, "desktop never reads the lane");
+});
+
+/* ONE RADIO-SLOT RESOLVER (js/ui/hud.js placeRadio): top row -> beside the mirror -> lane ->
+ * collapsed -> centred, against the obstacle list; body[data-radio-slot] plus only that slot's vars.
+ * The beside-the-mirror geometry used to be js/render/shared/mirror-pass.js side()'s own pick. */
+const RADIO_SNAP = ["--radio-top-x", "--radio-top-y", "--radio-top-w", "--radio-top-h", "--mir-side-x", "--mir-side-w",
+  "--announce-lane-x", "--announce-lane-shift", "--announce-lane-w"];
+function radioSnap(h) {
+  const b = h.dom.body;
+  return { slot: b.getAttribute("data-radio-slot"), top: b.classList.contains("hud-radio-top"), side: b.classList.contains("hud-mirror-side"),
+    collapsed: h.dom.byId("announce").hasAttribute("data-lane-collapsed"),
+    vars: Object.fromEntries(RADIO_SNAP.map((k) => [k, h.root.style.getPropertyValue(k)])) };
+}
+test("the radio card goes BESIDE the mirror when the top row is full, and that strip ends at whatever shares its rows", () => {
+  const h = fitHarness();
+  const R = (left, top, w, hh) => ({ left, top, right: left + w, bottom: top + hh, width: w, height: hh });
+  // The cam button right of the tower, in its row, leaves the top strip under 96 px.
+  h.dom.byId("btn-cam")._rect = R(560, 8, 40, 44);
+  h.dom.byId("hud-mirror")._rect = R(250, 70, 140, 40);
+  h.dom.body.classList.add("hud-mirror-on");
+  h.refit();
+  let s = radioSnap(h);
+  assert.equal(s.slot, "side", JSON.stringify(s));
+  assert.ok(s.side && !s.top, "the alias class follows the slot");
+  assert.equal(s.vars["--mir-side-x"], "398.0px", "8px right of the frame");
+  assert.equal(s.vars["--mir-side-w"], "244.0px", "up to the sector plate past the frame");
+  for (const k of RADIO_SNAP.filter((k) => !k.startsWith("--mir-side"))) assert.equal(s.vars[k], "", k + " is another slot's var: removed");
+  // STABLE: two more fits publish exactly the same slot and vars.
+  h.refit(); h.refit();
+  assert.deepEqual(radioSnap(h), s, "the side slot does not hunt");
+  // A dock group in the card's rows ends the strip at its left edge (cockpit BOOST at y 72 on 844x390) …
+  const boost = h.dom.document.createElement("div"); boost.className = "boost"; h.dom.byId("dock-right").appendChild(boost);
+  boost._rect = R(600, 76, 88, 88);
+  h.refit();
+  assert.equal(radioSnap(h).vars["--mir-side-w"], (600 - 8 - 398).toFixed(1) + "px");
+  // … and one that leaves under 190 px drops the side slot: the card hangs in the lane instead.
+  boost._rect = R(500, 72, 88, 88);
+  h.refit();
+  assert.equal(radioSnap(h).slot, "lane", "87px is no room beside the mirror");
+  boost._rect = R(600, 300, 88, 88);   // below the card's rows (the pedals): the strip is whole again
+  h.refit();
+  assert.equal(radioSnap(h).slot, "side");
+  // A READOUT in the card's rows ends it too (the side() pick never saw them): the INPUTS trace.
+  const inputs = h.dom.byId("hud-inputs");
+  inputs._rect = R(540, 120, 100, 36);
+  h.refit();
+  assert.equal(radioSnap(h).slot, "lane", "INPUTS at x 540 leaves 134 px beside the mirror");
+  inputs._rect = R(0, 0, 0, 0);
+  // Mirror off: no side slot, whatever the room.
+  h.dom.body.classList.remove("hud-mirror-on");
+  h.refit();
+  s = radioSnap(h);
+  assert.equal(s.slot, "lane"); assert.ok(!s.side);
+  assert.equal(s.vars["--mir-side-x"], "", "the side vars go with the slot");
+  // The mirror pass no longer picks a slot at all.
+  const mp = read("js/render/shared/mirror-pass.js");
+  assert.doesNotMatch(mp, /classList\.toggle\("hud-mirror-side"/, "mirror-pass toggles no slot class");
+  assert.doesNotMatch(mp, /--mir-side-[xw]/, "mirror-pass writes no slot var");
+});
+
+test("the top row outranks the side slot, and a painted collapse holds for the rest of the fit", () => {
+  const h = fitHarness();
+  const R = (left, top, w, hh) => ({ left, top, right: left + w, bottom: top + hh, width: w, height: hh });
+  h.dom.byId("hud-mirror")._rect = R(250, 70, 140, 40);
+  h.dom.body.classList.add("hud-mirror-on");
+  h.refit();
+  const s = radioSnap(h);
+  assert.equal(s.slot, "top", "room in the tower row wins over room beside the mirror");
+  assert.equal(s.vars["--mir-side-x"], "");
+  h.refit(); h.refit();
+  assert.deepEqual(radioSnap(h), s, "the top slot does not hunt");
+  // THE PAINTED GUARANTEE: a card that still paints onto the tower collapses, and the per-tick
+  // re-place (updateHud, after the gap strings) keeps that collapse until the next full fit.
+  const ann = h.dom.byId("announce");
+  h.dom.byId("btn-cam")._rect = R(560, 8, 40, 44);   // no top row: the card hangs in the lane
+  h.refit();
+  assert.equal(radioSnap(h).slot, "side");
+  h.dom.body.classList.remove("hud-mirror-on");
+  ann.hidden = false; ann._rect = R(300, 30, 200, 60);   // laid out over the tower's rows
+  h.refit();
+  assert.equal(radioSnap(h).slot, "collapsed", "painted onto the tower: collapsed");
+  assert.ok(ann.hasAttribute("data-lane-collapsed"));
+  h.tick(); h.tick();
+  assert.equal(radioSnap(h).slot, "collapsed", "the per-tick re-place does not reopen the lane this fit");
+  ann._rect = R(160, 120, 200, 60);   // clear of the tower and the plate
+  h.refit();
+  assert.equal(radioSnap(h).slot, "lane", "the next full fit judges afresh");
 });
 
 test("MOVE & SIZE on the tower re-derives the radio card's slot at invalidateFit, not a tick later", () => {

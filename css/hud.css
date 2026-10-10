@@ -841,16 +841,23 @@ body.hud-mirror-on :is(#announce, #hud-flag) {
     calc(var(--mir-paint-b, 0px) / var(--hud-z)));
 }
 body.hud-prof-broadcast.hud-mirror-on :is(#announce, #hud-flag) { --mir-top: calc(8px + var(--sat) / var(--hud-z)); }
-/* BESIDE THE MIRROR where there is room — the card shares the mirror's row
-   instead of stacking under it. js/render/shared/mirror-pass.js measures the
-   strip right of the frame (up to the cam/pause column) and sets the class
-   and --mir-side-x / -w in SCREEN px only when a card fits, so they divide
-   by this element's zoom; the row is the mirror's own CSS top (--mir-top),
-   never a half-second-old measurement. Outweighs the density/broadcast tops; the
-   caution rules below step aside (:not(.hud-mirror-side)) — the flag stays
-   under the mirror, the card beside it. Portrait / a big HUD SIZE: no room,
-   no class, the --mir-bot stack above. */
-body.hud-mirror-on.hud-mirror-side:not(.hud-radio-top) #announce {
+/* THE RADIO CARD'S SLOT IS ONE ATTRIBUTE. js/ui/hud.js placeRadio() picks it
+   once per placement, in priority order — top (right of the tower) > side
+   (beside the mirror) > lane (between the touch docks) > collapsed > centre —
+   and writes body[data-radio-slot] plus ONLY that slot's vars, in SCREEN px
+   (each rule divides by the card's own --hud-z). No attribute (the first
+   paint) or "centre" is the shipped slot under the tower / mirror below. The
+   classes body.hud-radio-top / .hud-mirror-side are the resolver's aliases for
+   "top" / "side" (the specs and the survey assert them; the caution steps
+   below still read them as their pre-fit fallback).
+   BESIDE THE MIRROR where there is room — the card shares the mirror's row
+   instead of stacking under it: the strip right of the frame up to the
+   cam/pause column, the right dock and any readout in the card's rows. The
+   row is the mirror's own CSS top (--mir-top). Outweighs the density/broadcast
+   tops; the flag stays under the mirror, the card beside it. Portrait / a big
+   HUD SIZE: no room, another slot. .hud-mirror-on as well: the mirror hidden
+   since the last placement leaves no --mir-top to sit at. */
+body.hud-mirror-on[data-radio-slot="side"] #announce {
   top: var(--mir-top);
   left: calc(var(--mir-side-x) / var(--hud-z));
   transform: none;
@@ -860,14 +867,13 @@ body.hud-mirror-on.hud-mirror-side:not(.hud-radio-top) #announce {
 /* THE TOP ROW, FIRST CHOICE: right of the timing tower, left of the cam
    button, in the tower's own row — smaller, off the road, and clear of the
    mirror under the tower (a phone report: beside the mirror it still sat on
-   the view). js/ui/hud.js radioTopSlot() sets body.hud-radio-top and the
-   --radio-top-* box in SCREEN px only when a shrunk card fits, so they divide
-   by this element's zoom. Outweighs the density and broadcast tops; the
-   beside-the-mirror and caution rules step aside (:not(.hud-radio-top)),
+   the view). placeRadio() picks it where a shrunk card fits and publishes the
+   --radio-top-* box in SCREEN px, divided here by this element's zoom.
+   Outweighs the density and broadcast tops; the caution steps do not apply,
    since the flag chip under the tower no longer shares the card's column. The
    type floor is --fs-micro, so the shrink is the plate, the padding and the
    message dropping to the name line's size. */
-body.hud-radio-top #announce:not([hidden]) {
+body[data-radio-slot="top"] #announce:not([hidden]) {
   top: calc(var(--radio-top-y) / var(--hud-z));
   left: calc(var(--radio-top-x) / var(--hud-z));
   transform: none;
@@ -878,7 +884,7 @@ body.hud-radio-top #announce:not([hidden]) {
   line-height: 1.15;
   --radio-num: 18px;
 }
-body.hud-radio-top #announce-body {
+body[data-radio-slot="top"] #announce-body {
   justify-content: center; gap: 0;
   padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.6);
 }
@@ -1194,16 +1200,15 @@ body[data-gap-drop][data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):
   --radio-num: 26px;   /* a HUD digit readout: off the body type scale on purpose (css/tokens.css) */
 }
 /* ON TOUCH THE CARD STAYS IN THE DOCK LANE. --announce-lane-x / -shift / -w
-   (js/ui/hud.js announceLane) are the gap the dock groups leave under the
-   tower, already inset by --sal/--sar, in SCREEN px. --hud-z lives on this
-   element, so left divides here: a calc embedding var(--hud-z) on :root is
-   invalid at computed-value time and left fell back to 50% while transform
-   was none — the card's left edge sat at centre (hud-layout CI:
-   #announce+btn-boost at x426 on 852, broadcast+cockpit). Unpublished
-   --announce-lane-x invalidates that left, so the centred #announce
-   { left: 50% } wins; --announce-lane-shift falls back to -50%. The
-   beside-the-mirror and top-row slots outweigh this. Desktop (.desktop:
-   empty docks) is untouched. */
+   (js/ui/hud.js placeRadio, slot "lane" / "collapsed") are the gap the dock
+   groups leave under the tower, already inset by --sal/--sar, in SCREEN px.
+   --hud-z lives on this element, so left divides here: a calc embedding
+   var(--hud-z) on :root is invalid at computed-value time and left fell back
+   while transform was none — the card's left edge sat at centre (hud-layout
+   CI: #announce+btn-boost at x426 on 852, broadcast+cockpit). Only the lane
+   slots read the left (rule below); every other slot finds the lane vars
+   removed, so the width cap here falls back to 9999px. Desktop (.desktop:
+   empty docks) never gets a lane. */
 body:not(.desktop) #announce {
   /* min-width must not exceed the lane: a bare 200px floor outgrew a tight
      --announce-lane-w and painted over #hud-sectors (oversize CI workers=2). */
@@ -1211,7 +1216,7 @@ body:not(.desktop) #announce {
   max-width: min(440px, calc(72 * var(--vwzh)), calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
   width: min(100%, max-content, calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
 }
-/* Collapsed dock lane (js/ui/hud.js announceLane): flex min-content from
+/* Collapsed dock lane (js/ui/hud.js placeRadio): flex min-content from
    #announce-num kept a painted box at width:0; hide the card so it cannot
    clash with #hud-sectors after a large --dock-r-w (oversize CI workers=2). */
 #announce[data-lane-collapsed] {
@@ -1223,7 +1228,8 @@ body:not(.desktop) #announce {
   overflow: hidden !important;
   visibility: hidden;
 }
-body:not(.desktop):not(.hud-radio-top):not(.hud-mirror-side) #announce {
+body[data-radio-slot="lane"] #announce,
+body[data-radio-slot="collapsed"] #announce {
   left: calc(var(--announce-lane-x) / var(--hud-z));
   transform: translateX(var(--announce-lane-shift, -50%));
 }

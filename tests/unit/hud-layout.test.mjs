@@ -684,7 +684,8 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     "touch TYRES sits on top of the left dock");
   assert.match(css, /body:not\(\.desktop\) #hud-sectors \{[\s\S]*?right:\s*calc\(10px \+ var\(--sar\) \/ var\(--hud-z\) \+ var\(--dock-r-w, 0px\)\)/,
     "phone sectors (tilt/touch/buttons) take the same --dock-r-w clearance as limits/damage");
-  assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x\) \/ var\(--hud-z\)\)/,
+  // Only the lane slots placeRadio (js/ui/hud.js) picks read the lane's left — no :not() chain of the other slots.
+  assert.match(css, /body\[data-radio-slot="lane"\] #announce,\s*body\[data-radio-slot="collapsed"\] #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x\) \/ var\(--hud-z\)\)/,
     "touch #announce sits in the published dock lane, not at 10px+sal over TILT's left dock");
   assert.doesNotMatch(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-prof-broadcast\)[^{]*#announce \{[\s\S]*?left: calc\(10px \+ var\(--sal\)/,
     "the under-map announce park is gone — it sat on BRAKE / BOOST / SHIFT");

@@ -230,58 +230,20 @@ const MirrorPass = (function () {
     function measure() {
       checkDead();
       _rect = rectOf(el());
-      if (_rect) { const er = el().getBoundingClientRect(); _cssW = er.width; _cssH = er.height; side(er); }
+      if (_rect) { const er = el().getBoundingClientRect(); _cssW = er.width; _cssH = er.height; side(er); } else side(null);
     }
-    // THE RADIO CARD BESIDE THE MIRROR, not under it. Right of the frame is the
-    // widest free strip at that height on a landscape screen (the map and gap
-    // readouts own the left, 844x390: ~280px right vs ~230px left). The strip
-    // ends at the right column: the pause button's column always (the sector
-    // box that hangs under it comes and goes, and is ~10px wider), the cam
-    // button only where it shares the card's rows (BROADCAST, mirror at the
-    // very top). Published in SCREEN px — css/hud.css divides by the card's
-    // own zoom — and only when a card fits; otherwise the card stacks under
-    // the mirror (--mir-bot).
-    const SIDE_MIN = 190, SIDE_GAP = 8, SIDE_ROWS = 96;
-    let _sideFits = null, _sideX = "", _sideW = "";   // what side() last wrote (null: unknown)
+    // THE FRAME'S SCREEN BOX, for the radio card's slot resolver. Where the card
+    // goes (top row, beside this frame, the hanging lane, collapsed, centred) is
+    // decided in ONE place, js/ui/hud.js placeRadio, against the same obstacle
+    // list as every other slot: this measure used to pick a beside-the-mirror
+    // slot on its own 500 ms clock, against its own short list (no map, no
+    // flag, no readouts), and toggle body.hud-mirror-side behind the resolver's
+    // back. It now only records the frame as measured (screen px, null while
+    // hidden) — never a <body> class or a custom property, so a re-measure
+    // invalidates no style at all.
+    let _frameBox = null;
     function side(er) {
-      const b = document.body;
-      let right = typeof innerWidth === "number" ? innerWidth - 10 : 0;
-      const pause = document.getElementById("pausebtn"), cam = document.getElementById("btn-cam");
-      const sec = document.getElementById("hud-sectors");
-      const box = (n) => (n && !n.hidden && n.getBoundingClientRect ? n.getBoundingClientRect() : null);
-      const p = box(pause), c = box(cam), s = box(sec);
-      // Only what is RIGHT of the frame: the sector box can cross to the left column.
-      const past = (r) => r && r.width > 0 && r.left > er.right;
-      if (past(p)) right = Math.min(right, p.left - 12);
-      if (past(s)) right = Math.min(right, s.left);
-      if (past(c) && c.bottom > er.top) right = Math.min(right, c.left);
-      const x = er.right + SIDE_GAP;
-      // THE TOUCH DOCKS END THE STRIP TOO. The cockpit's right dock reaches the
-      // mirror's rows on a landscape phone (BOOST at y 72 on 844x390), and the
-      // card was published straight across it (survey: #announce [500,66 223x65]
-      // over #btn-boost [603,72]) — the same defect js/ui/hud.js radioTopSlot
-      // fixed for the top row. The card's rows are the mirror's top down by the
-      // card's own height (at least SIDE_ROWS while it is hidden); a group in
-      // them that reaches past the slot's start ends the strip at its left edge,
-      // one that already covers the start leaves no slot (the card stacks).
-      const ann = box(document.getElementById("announce"));
-      const rowsB = er.top + Math.max(er.height, SIDE_ROWS, ann ? ann.height : 0);
-      for (const d of [document.getElementById("dock-left"), document.getElementById("dock-right")]) {
-        for (const g of (d && d.children) || []) {
-          const r = g.getBoundingClientRect ? g.getBoundingClientRect() : null;
-          if (r && r.width > 0 && r.height > 0 && r.top < rowsB && r.bottom > er.top && r.right > x) right = Math.min(right, r.left);
-        }
-      }
-      const w = right - SIDE_GAP - x;
-      const fits = w >= SIDE_MIN;
-      // Compare before writing: a <body> class or custom-property write
-      // invalidates style page-wide even when the value is the same.
-      if (fits !== _sideFits) { _sideFits = fits; b.classList.toggle("hud-mirror-side", fits); }
-      if (fits && b.style) {
-        const sx = x.toFixed(1) + "px", sw = w.toFixed(1) + "px";
-        if (sx !== _sideX) { _sideX = sx; b.style.setProperty("--mir-side-x", sx); }
-        if (sw !== _sideW) { _sideW = sw; b.style.setProperty("--mir-side-w", sw); }
-      }
+      _frameBox = er && er.width > 0 ? { x: er.left, y: er.top, w: er.width, h: er.height } : null;
     }
 
     // The player's (or a rival's) grounded basis: interpolated world position,
@@ -469,7 +431,7 @@ const MirrorPass = (function () {
         const e = el();
         if (e) e.hidden = !want;
         document.body.classList.toggle("hud-mirror-on", want);   // the radio card and flag clear it (css/hud.css)
-        if (!want) { document.body.classList.toggle("hud-mirror-side", false); _sideFits = false; }
+        if (!want) _frameBox = null;   // js/ui/hud.js re-places the radio card: hud-mirror-on is in its fit key
         _measureAt = -Infinity;
       }
       const pip = pipWanted();
@@ -636,7 +598,7 @@ const MirrorPass = (function () {
     // the car. Hides the frame, the chip and the PiP and clears the rect.
     function standDown() {
       cancelPreparation();
-      if (_shown) { _shown = false; const e = el(); if (e) e.hidden = true; document.body.classList.toggle("hud-mirror-on", false); document.body.classList.toggle("hud-mirror-side", false); _sideFits = false; }
+      if (_shown) { _shown = false; const e = el(); if (e) e.hidden = true; document.body.classList.toggle("hud-mirror-on", false); _frameBox = null; }
       if (_chipShown) { _chipShown = false; const c = chip(); if (c) c.hidden = true; }
       if (_pipShown) { _pipShown = false; const e = pipEl(); if (e) e.hidden = true; }
       _measureAt = -Infinity;
@@ -663,7 +625,9 @@ const MirrorPass = (function () {
       drawing: () => _shown && !!_rect && !_dead,
       // __apex.mirror(): the setting, what this frame resolved, the backend's own
       // count, and the cockpit glass (car-draw.js glassState: live vs fallback).
-      state: () => ({ mode, shown: _shown, collapsed: _collapsed, rect: _rect, cars: _cars, drawn: _drawn, cam: camId(), lite: _q.lite, quality: _q.name,
+      // The frame as last measured, SCREEN px ({x, y, w, h}, null while hidden): js/ui/hud.js placeRadio.
+      frame: () => _frameBox,
+      state: () => ({ mode, shown: _shown, collapsed: _collapsed, rect: _rect, frame: _frameBox, cars: _cars, drawn: _drawn, cam: camId(), lite: _q.lite, quality: _q.name,
         instEvery: _q.instEvery || 1, instFreezeSkips: _instFreezeSkips, instRefresh: _instRefresh,
         preparing: !!_preparation, prepared: _prepared,
         pip: { mode: pipMode, shown: _pipShown, code: _sub ? _sub.code : null, cam: _subMode, rect: _pipRect },

@@ -341,45 +341,25 @@ test("a tap collapses the mirror to a chip for the session; a tap on the chip br
   assert.equal(off.chipEl.hidden, true);
 });
 
-test("the radio card goes BESIDE the mirror when the row has room, and stacks under it when not", () => {
-  // Frame 440..840 at y 70..184 on a 1280-wide screen; the pause column at 1226.
+// THE SLOT IS NOT THE MIRROR'S TO PICK. side() used to choose a beside-the-mirror
+// slot for the radio card on its own 500 ms clock and toggle body.hud-mirror-side;
+// js/ui/hud.js placeRadio now picks every slot against one obstacle list (the
+// geometry tests moved to tests/unit/hud-feel.test.mjs). The pass only records the
+// frame's screen box.
+test("side() records the frame's screen box for the radio resolver and writes no <body> class or property for it", () => {
   const box = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
-  const wide = boot({ mode: "on", boxes: { pausebtn: box(1226, 8, 44, 44), "btn-cam": box(1138, 8, 84, 44) } });
-  wide.render();
-  assert.ok(wide.classes.has("hud-mirror-side"), "358px free right of the frame");
-  assert.equal(wide.props["--mir-side-x"], "848.0px", "8px right of the frame");
-  assert.equal(wide.props["--mir-side-w"], "358.0px", "up to the pause column less its sector-box margin");
-  // The sector box under the buttons ends the strip where it is wider.
-  const sec = boot({ mode: "on", boxes: { pausebtn: box(1226, 8, 44, 44), "hud-sectors": box(1100, 56, 170, 77) } });
-  sec.render();
-  assert.equal(sec.props["--mir-side-w"], "244.0px");
-  // The cam button counts only where it shares the card's rows (BROADCAST).
-  const bcast = boot({ mode: "on", boxes: { "btn-cam": box(900, 60, 84, 44) } });
-  bcast.render();
-  assert.ok(!bcast.classes.has("hud-mirror-side"), "44px is no room: stack under the mirror");
-  // Hiding the mirror drops the side placement with it.
-  wide.press(); wide.render();
-  assert.equal(wide.mp.state().shown, false);
-  assert.ok(!wide.classes.has("hud-mirror-side"));
-});
-
-test("the side slot stops at a touch dock group in the card's rows (cockpit BOOST at 844x390), and drops when one covers its start", () => {
-  // Frame 440..840 at y 70..184, as above; the pause column at 1226.
-  const box = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
-  const pause = { pausebtn: box(1226, 8, 44, 44) };
-  // A tap column reaching the mirror's rows ends the strip at its left edge.
-  const taps = boot({ mode: "on", boxes: pause, docks: { "dock-right": [box(1100, 76, 88, 200)] } });
-  taps.render();
-  assert.ok(taps.classes.has("hud-mirror-side"), "1100 - 8 - 848 = 244px still fits");
-  assert.equal(taps.props["--mir-side-w"], "244.0px", "ends at the dock group, not the pause column");
-  // A group below the card's rows (the pedals) leaves the strip alone.
-  const low = boot({ mode: "on", boxes: pause, docks: { "dock-right": [box(1000, 400, 150, 150)] } });
-  low.render();
-  assert.equal(low.props["--mir-side-w"], "358.0px");
-  // The survey's shape: the group starts 95px past the slot - no room, stack under the mirror.
-  const tight = boot({ mode: "on", boxes: pause, docks: { "dock-right": [box(943, 72, 88, 88)] } });
-  tight.render();
-  assert.ok(!tight.classes.has("hud-mirror-side"), "87px is no room: the card stacks, never over BOOST");
+  const h = boot({ mode: "on", boxes: { pausebtn: box(1226, 8, 44, 44) }, docks: { "dock-right": [box(943, 72, 88, 88)] } });
+  h.render();
+  assert.equal(h.mp.state().shown, true);
+  assert.deepEqual({ ...h.mp.frame() }, { x: 440, y: 70, w: 400, h: 114 }, "the frame as measured, screen px");
+  assert.deepEqual({ ...h.mp.state().frame }, { ...h.mp.frame() }, "and in __apex.mirror()");
+  assert.ok(!h.classes.has("hud-mirror-side"), "no slot class from the mirror pass");
+  assert.equal(h.props["--mir-side-x"], undefined); assert.equal(h.props["--mir-side-w"], undefined);
+  assert.equal(h.writes.prop, 0, "no custom-property write at all");
+  // Hiding the mirror forgets the box.
+  h.press(); h.render();
+  assert.equal(h.mp.state().shown, false);
+  assert.equal(h.mp.frame(), null);
 });
 
 test("a WATCH: the mirror stands down; the PiP draws its subject on the TV shot, unflipped, into #bc-pip, with ITS neighbours", () => {
@@ -685,7 +665,7 @@ test("the shipped-before path, for contrast: teamMesh per mirror rival builds a 
 // count is not a clock (docs/notes/PERF-FINDINGS.md §2n) — and side() writes the
 // <body> class and custom properties only when they change: each write
 // invalidates style page-wide, and the layout is still almost every time.
-test("the mirror re-measures on a 500 ms clock and leaves <body> alone when the side layout has not moved", () => {
+test("the mirror re-measures on a 500 ms clock and leaves <body> alone while it does", () => {
   const box = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
   const h = boot({ mode: "on", boxes: { pausebtn: box(1226, 8, 44, 44) } });
   let reads = 0;
@@ -694,7 +674,7 @@ test("the mirror re-measures on a 500 ms clock and leaves <body> alone when the 
   h.render();
   const first = reads;
   assert.ok(first > 0, "the first frame measures");
-  assert.ok(h.classes.has("hud-mirror-side"));
+  assert.deepEqual({ ...h.mp.frame() }, { x: 440, y: 70, w: 400, h: 114 });
   const w0 = { ...h.writes };
   for (let i = 0; i < 60; i++) h.render();
   assert.equal(reads, first, "60 frames inside 500 ms: no layout read (it was one every 30 FRAMES)");
@@ -702,17 +682,18 @@ test("the mirror re-measures on a 500 ms clock and leaves <body> alone when the 
   assert.equal(reads, first, "still inside the window");
   h.clock.t = 500; h.render();
   assert.ok(reads > first, "the clock re-measures");
-  assert.deepEqual(h.writes, w0, "same layout: no class toggle, no custom-property write");
-  // The layout moves: the new values are written.
+  assert.deepEqual(h.writes, w0, "a re-measure toggles no class and writes no custom property");
+  // The frame moves: the recorded box follows on the next clock tick, still with no <body> write.
   h.frameEl.getBoundingClientRect = () => { reads++; return { left: 400, top: 70, width: 400, height: 114, right: 800, bottom: 184 }; };
   h.clock.t = 1000; h.render();
-  assert.equal(h.props["--mir-side-x"], "808.0px");
-  assert.ok(h.writes.prop > w0.prop);
+  assert.deepEqual({ ...h.mp.frame() }, { x: 400, y: 70, w: 400, h: 114 });
+  assert.deepEqual(h.writes, w0, "the slot is js/ui/hud.js placeRadio's to write");
   // A state change still measures on the very next frame (no 500 ms wait).
   h.mp.setMode("off"); h.render();
+  assert.equal(h.mp.frame(), null, "hidden: no box");
   h.mp.setMode("on"); const r = reads; h.render();
   assert.ok(reads > r, "re-shown: measured at once");
-  assert.ok(h.classes.has("hud-mirror-side"), "hiding cleared the class; showing re-applies it");
+  assert.ok(h.mp.frame(), "and recorded again");
 });
 
 // L4: drawWorldMeshes recorded `b._mirMats` on EVERY non-frozen draw, the MAIN camera

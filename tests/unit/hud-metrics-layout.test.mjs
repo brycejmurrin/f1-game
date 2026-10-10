@@ -127,18 +127,21 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   // After --hud-z-top, flush #minimap so currentCSSZoom catches the cap
   // (selected-2 ui-redesign: compact mmCss 142 = 110×staleZoom/zTop).
   assert.match(hud, /if \(els\.minimap\) void els\.minimap\.offsetHeight/);
-  // Painted announce collapse must be terminal in the fit: a trailing
-  // radioTopSlot re-lit hud-radio-top and cleared data-lane-collapsed.
+  // ONE RADIO-SLOT WRITER: fitHud places the card once (placeRadio), whose painted check is its own
+  // last step; a collapse it makes is LATCHED for the fit, so the per-tick re-place after the gap
+  // strings cannot re-light the card over the plate (that forced a full fit every tick).
   const fitBody = hud.slice(hud.indexOf("function fitHud"), hud.indexOf("\nfunction ", hud.indexOf("function fitHud") + 1));
-  const paintCollapse = fitBody.indexOf("radioPaintedCollapse(root)");
-  assert.ok(paintCollapse > 0, "fitHud runs the painted announce collapse");
-  assert.equal(fitBody.indexOf("radioTopSlot(", paintCollapse), -1,
-    "no radioTopSlot after painted announce collapse (undoes the collapse)");
-  const helper = hud.slice(hud.indexOf("function radioPaintedCollapse"), hud.indexOf("// THE MIRROR AS PAINTED"));
-  assert.ok(helper.includes('toggleAttribute("data-lane-collapsed", true)'), "the helper paints data-lane-collapsed on a hit");
-  // invalidateFit re-picks the slot, so it must run the same guard right after (it used to leave a relit top slot until the next tick).
+  assert.ok(fitBody.includes("placeRadio(root, bcast, list)"), "fitHud places the radio card once");
+  assert.doesNotMatch(fitBody, /radioTopSlot\(|announceLane\(|radioPaintedCollapse\(/, "no second slot picker inside the fit");
+  const place = hud.slice(hud.indexOf("function placeRadio"), hud.indexOf("// THE MIRROR AS PAINTED"));
+  assert.ok(place.indexOf('writeRadio(root, "collapsed"') > place.indexOf("writeRadio(root, slot"), "the painted collapse is written after the slot it overrules");
+  assert.match(place, /_radioPaintSeq === _fitSeq/, "a per-tick re-place keeps a painted collapse latched for this fit");
+  const writer = hud.slice(hud.indexOf("function writeRadio"), hud.indexOf("function placeRadio"));
+  assert.ok(writer.includes('toggleAttribute("data-lane-collapsed", slot === "collapsed")'), "the writer paints data-lane-collapsed");
+  // invalidateFit re-places through the same resolver (it used to re-pick the top slot without the painted check).
   const inv = hud.slice(hud.indexOf("function invalidateFit"), hud.indexOf("_invalidateFit = invalidateFit"));
-  assert.ok(inv.indexOf("radioPaintedCollapse(root)") > inv.indexOf("radioTopSlot("), "invalidateFit runs the painted collapse after its own radioTopSlot");
+  assert.match(inv, /placeRadio\(root, /, "invalidateFit re-places through the resolver");
+  assert.doesNotMatch(inv, /radioTopSlot\(/);
 });
 
 test("HUD layout options live in a full-width pause submenu", () => {
