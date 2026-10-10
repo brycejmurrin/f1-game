@@ -1905,3 +1905,34 @@ test("apex_job_status wait holds until the job is done; a capped survey result c
     assert.deepEqual(body(await x.handlers.apex_job_status({ jobId: j.jobId })).state, "done", "no wait: unchanged");
   } finally { fs.rmSync(fake, { recursive: true, force: true }); }
 });
+
+// 2026-10-10 (apex_agent matrix, 17 real commands): `describe` with no id cost a ~100 s browser boot to learn "describe(id) needs an id",
+// and the reply said error:null / message:null with that text buried in `out`.
+test("apex_agent describe without an id is refused up front, with the id forms", () => {
+  const [bad, ok] = callTools([
+    ["apex_agent", { track: "monza", command: "describe", at: 0.3 }],
+    ["apex_agent", { track: "monza", command: "describe", id: "corner:T3", dryRun: true }],
+  ]).map((r) => r.body);
+  assert.equal(bad.error, "bad_args");
+  assert.match(bad.message, /describe needs id/);
+  assert.match(bad.fix, /corner:T3/);
+  assert.equal(ok.ok, true);
+  assert.deepEqual(ok.argv.slice(-4), ["monza", "describe", "--id", "corner:T3"]);
+});
+
+test("a CLI that fails with its own {error, message, fix} has them lifted out of `out`", async () => {
+  const { runSpawn } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const script = 'console.log(JSON.stringify({ ok: false, error: "BadArgumentError", message: "describe(id) needs an id", fix: "ids look like corner:T3" })); process.exit(2);';
+  const r = await runSpawn([process.execPath, "-e", script], { timeoutMs: 15000 });
+  const b = JSON.parse(r.content[0].text);
+  assert.equal(b.ok, false);
+  assert.equal(b.exit, 2);
+  assert.equal(b.error, "BadArgumentError");
+  assert.equal(b.message, "describe(id) needs an id");
+  assert.equal(b.fix, "ids look like corner:T3");
+  assert.equal(b.out.error, "BadArgumentError", "`out` still holds the CLI's own JSON");
+  // a failure whose out carries no error is untouched
+  const plain = JSON.parse((await runSpawn([process.execPath, "-e", 'console.log(JSON.stringify({ n: 1 })); process.exit(1);'], { timeoutMs: 15000 })).content[0].text);
+  assert.equal(plain.ok, false);
+  assert.equal(plain.error, undefined);
+});

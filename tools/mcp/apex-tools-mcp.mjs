@@ -1474,6 +1474,10 @@ function buildArgv(name, args) {
       return argv;
     }
     case "apex_agent": {
+      // agent.mjs refuses a describe with no id, but only after a ~100 s browser boot. Say so before it.
+      if (String(args.command || "") === "describe" && !args.id) {
+        badArgs("apex_agent describe needs id", 'Pass {"command":"describe","id":"corner:T3"}: ids look like "prop:12", "corner:T3", "car:4", "span:2" (scene / track / field return them).');
+      }
       const argv = [
         ...nodeTool("shot/agent.mjs"),
         String(args.track || "monza"),
@@ -1650,6 +1654,13 @@ export function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {}, 
         body.fix = stopped === "timeout" ? "Check apex_status for load, then retry." : "Retry when ready.";
       } else if (allowExit && allowExit.has(exit)) {
         body.ok = true;
+      }
+      // A CLI that fails with its own {error, message, fix} JSON (agent.mjs: "describe(id) needs an id") left the wrapper saying
+      // error:null / message:null with the explanation buried in `out`. Lift it to where every other refusal puts it.
+      if (!body.ok && body.error == null && out && typeof out === "object" && typeof out.error === "string") {
+        body.error = out.error;
+        if (typeof out.message === "string") body.message = out.message;
+        if (typeof out.fix === "string") body.fix = out.fix;
       }
       const result = toolResult(body, { isError: !body.ok });
       if (treeGone) treeGone.then(() => resolve(result)); else resolve(result);
