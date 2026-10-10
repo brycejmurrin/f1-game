@@ -149,3 +149,19 @@ test("drone cornerLead is gated in CamTune.modes", () => {
   const src = fs.readFileSync(path.join(root, "js/camera/offsets.js"), "utf8");
   assert.match(src, /modes:\s*\["chase",\s*"far",\s*"drone"\]/);
 });
+
+// bug-hunt 9.8: pickRival ran every rendered frame in RIVAL mode, allocating a
+// row per car + an array + a sort; the rows are now pooled.
+test("ExtraRigs.pickRival reuses its running-car rows and array across calls", () => {
+  const { ExtraRigs, ctx } = loadExtraRigs();
+  const a = { prog: 100, speed: 50, s: 100, x: 0 };
+  const b = { prog: 80, speed: 50, s: 80, x: 0 };
+  const seen = [];
+  ctx.Broadcast = { battles(cars) { seen.push({ arr: cars, rows: cars.slice() }); return []; } };
+  ExtraRigs.pickRival([a, b], a);
+  ExtraRigs.pickRival([b, a], a);   // different order: still the same pooled rows
+  assert.equal(seen[0].arr, seen[1].arr, "the same running array is reused");
+  assert.ok(seen[1].rows.every((r) => seen[0].rows.includes(r)), "the same row objects are reused");
+  assert.equal(seen[1].arr.length, 2);
+  assert.equal(seen[1].arr[0].key, a, "rows are re-filled and re-sorted (a leads on prog)");
+});

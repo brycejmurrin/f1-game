@@ -528,6 +528,11 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
     assert.ok(watched[2].x > Tracks.wallAt(g.G.track, watched[2].s, 1), "the replay pit-lane pose lies beyond the local driving barrier");
     const poses = () => watched.map((c) => ({ prog: c.prog, s: c.s, x: c.x, speed: c.speed, px: c.px, pz: c.pz,
       lap: c.lap, penalty: c.penalty, tyreWear: c.tyreWear }));
+    // One deterministic update first: a paused replay stands its traced cars (RealReplay's
+    // paused tick zeroes their speed), and the wall-clock pumpFrame above may or may not
+    // have stepped after the flags cleared — on a fast runner it often does not.
+    g.step(1);
+    assert.ok(watched.every((c) => c.speed === 0), "a paused WATCH stands every traced car");
     const before = poses();
     assert.equal(g.G.raceT, 0.1, "the replay seek synchronizes the game's HUD clock");
     vm.runInContext('Input.remoteEvent("recover")', g.ctx);   // the same action as keyboard R / gamepad RECOVER
