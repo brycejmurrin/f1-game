@@ -50,8 +50,11 @@
     // required bespoke landmarks alone).
     dressingExclusions: [
       { kinds: ["city"], s0: 0, s1: 1 },
-      { kinds: ["foliage"], s0: 0.95, s1: 0.06 },
-      { kinds: ["foliage", "lighting"], s0: 0.68, s1: 0.83 },
+      // city is already cut lap-wide above; it is repeated in the two
+      // precinct zones so each zone states its full kind set (the
+      // new-hooks Madrid foundation spec pins these two zones).
+      { kinds: ["city", "foliage"], s0: 0.95, s1: 0.06 },
+      { kinds: ["city", "foliage", "lighting"], s0: 0.68, s1: 0.83 },
     ],
     pal: {
       zenith: [0.30, 0.58, 0.90],
