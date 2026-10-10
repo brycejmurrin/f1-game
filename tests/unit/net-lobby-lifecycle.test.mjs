@@ -1416,3 +1416,149 @@ test("host onFail during a half-built join closes that peer PC and clears pendin
     h.lobby.cancel();
   }
 });
+
+// bug-hunt 2 H5 / H6: the step widgets belong to ONE attempt, and a validation miss is not a new attempt.
+function stepWidgets(h) {
+  const add = (id, hidden = true) => { const el = { id, hidden, value: "", textContent: "", focus() {}, setAttribute() {}, removeAttribute() {} }; h.elements.set(id, el); return el; };
+  return {
+    invite: add("vs-invite"), qrWrap: add("vs-qr-wrap", false), hosting: add("vs-hosting"),
+    answer: add("vs-answer"), answerQrWrap: add("vs-answer-qr-wrap", false),
+    answerHint: add("vs-answer-hint", false), answerActions: add("vs-answer-actions", false),
+    answerRaw: add("vs-answer-raw", false), answerWait: add("vs-answer-wait", true),
+    inviteIn: add("vs-invite-in"), answerIn: add("vs-answer-in"),
+  };
+}
+
+test("a retry after a failed connect starts from empty invite, QR and answer widgets (bug-hunt H6)", async () => {
+  let mode = "ok";
+  const handshake = {
+    createInvite: async () => (mode === "ok" ? { ok: true, code: "invite-1" } : { ok: false, error: "invite_failed", message: "nope" }),
+    acceptInvite: async () => ({ ok: true, code: "answer-1", peer: null }),
+  };
+  const h = harness({ handshake, scanFactory: () => ({ stop() {}, start() {} }) });
+  const w = stepWidgets(h);
+  try {
+    assert.equal((await h.lobby.host()).ok, true);
+    assert.equal(w.invite.value, "invite-1");
+    w.qrWrap.hidden = false;                     // the first attempt drew its QR
+    mode = "fail";
+    assert.equal((await h.lobby.host()).ok, false);
+    assert.equal(w.invite.value, "", "HOST A RACE retry must not show the previous attempt's invite");
+    assert.equal(w.qrWrap.hidden, true, "…or its QR");
+
+    // JOIN: a previous answer, its QR and its buttons are gone.
+    w.answer.value = "stale-answer"; w.answerQrWrap.hidden = false; w.answerActions.hidden = false; w.answerHint.hidden = false;
+    w.answerRaw.hidden = false; w.answerWait.hidden = true; w.inviteIn.value = "stale-invite";
+    assert.equal((await h.lobby.join()).ok, true);
+    assert.equal(w.answer.value, "");
+    assert.equal(w.inviteIn.value, "");
+    assert.equal(w.answerQrWrap.hidden, true);
+    assert.equal(w.answerActions.hidden, true);
+    assert.equal(w.answerHint.hidden, true);
+    assert.equal(w.answerRaw.hidden, true);
+    assert.equal(w.answerWait.hidden, false, "step 2's placeholder prose is back");
+
+    // INVITE ANOTHER must not show the consumed invite.
+    mode = "ok";
+    await h.lobby.host();
+    w.qrWrap.hidden = false;
+    assert.equal(w.invite.value, "invite-1");
+    await h.lobby.inviteAnother();
+    assert.equal(w.invite.value, "", "INVITE ANOTHER shows no consumed invite");
+    assert.equal(w.qrWrap.hidden, true);
+  } finally { h.lobby.cancel(); }
+});
+
+test("HOST A RACE shows the hosting step at once, not after the ICE wait (bug-hunt H6)", async () => {
+  const ice = deferred();
+  const h = harness({ prefetchIce: () => ice.promise, scanFactory: () => ({ stop() {}, start() {} }) });
+  const w = stepWidgets(h);
+  try {
+    const hosting = h.lobby.host();
+    assert.equal(w.hosting.hidden, false, "the tap answers immediately while the relay credentials load");
+    ice.resolve();
+    assert.equal((await hosting).ok, true);
+  } finally { h.lobby.cancel(); }
+});
+
+test("an empty CONNECT tap during invite preparation does not cancel the host's invite (bug-hunt H5)", async () => {
+  const gate = deferred();
+  const handshake = { createInvite: async () => { await gate.promise; return { ok: true, code: "invite-1" }; } };
+  const h = harness({ handshake, scanFactory: () => ({ stop() {}, start() {} }) });
+  const w = stepWidgets(h);
+  try {
+    const hosting = h.lobby.host();
+    await new Promise((r) => setImmediate(r));          // past readyIce, inside createInvite
+    const tap = await h.lobby.acceptAnswer();           // nothing pasted
+    assert.equal(tap.error, "empty");
+    gate.resolve();
+    const res = await hosting;
+    assert.equal(res.ok, true, "the pending invite survives a validation miss");
+    assert.equal(w.invite.value, "invite-1");
+  } finally { h.lobby.cancel(); }
+});
+
+// bug-hunt 2 H30: the lobby is hidden while the quali sheet is the screen.
+async function guestInQuali(extra = {}) {
+  const ctx = closableHarness(extra);
+  const { h, made } = ctx;
+  h.G.raceQuali = true;
+  h.G.openQualiForNet = (done) => { h.G._qualiDone = done; };
+  h.lobby.open();
+  await h.lobby.join();
+  h.lobby.watchForOpen();
+  for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+  assert.equal(made.length, 1);
+  made[0].deliver("hello", { team: "beta", driver: 0, rank: 1 });
+  made[0].deliver("go", {});
+  assert.equal(h.lobby.qualifying(), true, "friend quali is armed");
+  return ctx;
+}
+
+test("a start that throws after the quali sheet cancels and quits instead of failing silently (bug-hunt H30)", async () => {
+  const { h } = await guestInQuali();
+  let quits = 0;
+  h.G.startRace = async () => { throw new Error("scenery failed"); };
+  h.G.quitToMenu = () => { quits++; };
+  try {
+    assert.equal(h.elements.get("vsfriend").hidden, true, "the sheet, not the lobby, is on screen");
+    await h.G._qualiDone();
+    assert.equal(quits, 1, "nobody can see the lobby's message, so the race is quit");
+    assert.equal(h.lobby.status().guests, 0, "…and the half-started room is torn down");
+    assert.equal(h.lobby.qualifying(), false);
+  } finally { h.lobby.cancel(); }
+});
+
+test("a start that throws with the lobby on screen keeps the room and its message (bug-hunt H30)", async () => {
+  const { h } = await guestInQuali();
+  let quits = 0;
+  h.G.startRace = async () => { throw new Error("scenery failed"); };
+  h.G.quitToMenu = () => { quits++; };
+  try {
+    h.lobby.abortQuali();                          // BACK from the sheet: the room is on screen again
+    assert.equal(h.elements.get("vsfriend").hidden, false);
+    await h.G._qualiDone();
+    assert.equal(quits, 0, "a visible lobby shows the error itself");
+    assert.match(h.status.textContent, /Could not start the race: scenery failed/);
+    assert.equal(h.lobby.status().guests, 1, "the room stays up for a retry");
+  } finally { h.lobby.cancel(); }
+});
+
+test("the screen wake lock survives the lobby closing for friend quali and drops when the race starts (bug-hunt H30)", async () => {
+  const sentinels = [];
+  const wakeLock = { request: () => {
+    const s = { releases: 0, addEventListener() {}, release() { this.releases++; } };
+    sentinels.push(s);
+    return Promise.resolve(s);
+  } };
+  const { h } = await guestInQuali({ wakeLock });
+  try {
+    await new Promise((r) => setImmediate(r));
+    assert.equal(sentinels.length, 1, "open() holds the wake lock");
+    assert.equal(sentinels[0].releases, 0, "close() for the quali sheet must not release it (a guest idling through quali sleeps the screen)");
+    h.G.startRace = async () => ({ ok: true });
+    h.G.netPlay = { start: () => ({ ok: true }), hostStart() {} };
+    await h.G._qualiDone();
+    assert.equal(sentinels[0].releases, 1, "the race start's close() releases it");
+  } finally { h.lobby.cancel(); }
+});

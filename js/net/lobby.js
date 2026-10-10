@@ -1244,6 +1244,11 @@ const NetLobby = (function () {
       } catch (e) {
         say("Could not start the race: " + (e && e.message), true);
         friendQualifying = false;   // keep the room and its message up, but stop gating quali saves
+        // After the quali sheet the lobby is HIDDEN (beginRace closed it): the
+        // message has no screen, and the open session would idle behind a
+        // dead start. Same exit as a refused netPlay.start() below.
+        const screen = els().screen;
+        if (screen && screen.hidden) { cancel(); if (G.quitToMenu) G.quitToMenu(); }
         return;
       }
       const started = G.netPlay.start({
@@ -1282,6 +1287,10 @@ const NetLobby = (function () {
 
     async function host() {
       const gen = beginOperation();
+      resetSteps();
+      // The tap answers at once: the relay-credential wait below can run for
+      // ICE_WAIT_MS with the pick screen still up and nothing said.
+      show("hosting");
       // INVITE ANOTHER -> HOST A RACE after a code join: the reopened room code
       // stayed advertised (six relay sockets, the dead offer reposted every
       // 5 s) while this generation ignored its answers — a friend told the
@@ -1290,7 +1299,6 @@ const NetLobby = (function () {
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
       await readyIce();
       if (!operationCurrent(gen)) return cancelledResult();
-      show("hosting");
       if (!newTransport("host")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
       const pending = transport;
       say("Preparing invite… (this can take a few seconds)");
@@ -1315,7 +1323,7 @@ const NetLobby = (function () {
         say("That is four players — the grid is full.", true);
         return { ok: false, error: "room_full" };
       }
-      stopScan();          // a camera left running from the last sub-step
+      resetSteps();        // the consumed invite/QR/answer, and a camera left running from the last sub-step
       show("pick");
       if ($("vs-join")) $("vs-join").hidden = true;
       if ($("vs-code-join")) $("vs-code-join").hidden = true;
@@ -1332,6 +1340,7 @@ const NetLobby = (function () {
     let joinP = null;
     async function join() {
       const gen = beginOperation();
+      resetSteps();
       show("joining");
       const said = sayGen;
       const p = (async () => {
@@ -1407,7 +1416,6 @@ const NetLobby = (function () {
     }
 
     async function acceptAnswer(codeIn) {
-      const gen = beginOperation();
       const e = els();
       const code = codeFrom(codeIn != null ? codeIn : (e.answerIn ? e.answerIn.value : ""));   // as makeAnswer
       if (codeIn != null && e.answerIn) e.answerIn.value = codeIn;
@@ -1417,6 +1425,9 @@ const NetLobby = (function () {
       if (!transport) { say(noConnectionMsg(), true); return { ok: false, error: "no_transport" }; }
       const pending = transport;
       const id = pendingId;
+      // Bumped only once the tap is a real attempt (as makeAnswer): an empty or
+      // junk CONNECT while host() prepares its invite must not stale that invite.
+      const gen = beginOperation();
       say("Reading answer…");
       const res = await NetHandshake.acceptAnswer(pending, code);
       if (!operationCurrent(gen) || transport !== pending || pendingId !== id) return cancelledResult();
@@ -1477,6 +1488,7 @@ const NetLobby = (function () {
     async function codeHost(opts) {
       opts = opts || {};
       const gen = beginOperation();
+      resetSteps();
       stopCodeWait();
       await readyIce();
       if (!operationCurrent(gen)) return cancelledResult();
@@ -1808,6 +1820,22 @@ const NetLobby = (function () {
       return null;
     }
 
+    // The invite, QR and answer widgets belong to ONE attempt. open() cleared
+    // them but host()/join()/inviteAnother()/codeHost() did not, so a retry
+    // after a failed connect (or INVITE ANOTHER) showed the previous attempt's
+    // code and QR — a camera pointed at a peer connection that no longer exists.
+    function resetSteps() {
+      const e = els();
+      for (const f of ["invite", "inviteIn", "answer", "answerIn"]) if (e[f]) e[f].value = "";
+      if (e.answerHint) e.answerHint.hidden = true;
+      if (e.answerActions) e.answerActions.hidden = true;
+      if (e.answerRaw) e.answerRaw.hidden = true;
+      if (e.answerWait) e.answerWait.hidden = false;
+      if ($("vs-qr-wrap")) $("vs-qr-wrap").hidden = true;
+      if (e.answerQrWrap) e.answerQrWrap.hidden = true;
+      stopScan();
+    }
+
     function open() {
       const block = blockingTitleSheet();
       if (block) {
@@ -1827,16 +1855,7 @@ const NetLobby = (function () {
       // JOIN anybody afterwards.
       if ($("vs-join")) $("vs-join").hidden = false;
       if ($("vs-code-join")) $("vs-code-join").hidden = false;
-      for (const f of ["invite", "inviteIn", "answer", "answerIn"]) if (e[f]) e[f].value = "";
-      if (e.answerHint) e.answerHint.hidden = true;
-      if (e.answerActions) e.answerActions.hidden = true;
-      if (e.answerRaw) e.answerRaw.hidden = true;
-      if (e.answerWait) e.answerWait.hidden = false;
-      // Reopening must not show the PREVIOUS session's QR — it would point a
-      // camera at a peer connection that no longer exists.
-      if ($("vs-qr-wrap")) $("vs-qr-wrap").hidden = true;
-      if (e.answerQrWrap) e.answerQrWrap.hidden = true;
-      stopScan();
+      resetSteps();
       const raw = document.querySelector("#vs-hosting .vs-raw");
       if (raw) raw.open = false;
       say("");
@@ -1866,7 +1885,10 @@ const NetLobby = (function () {
       clearInterval(pollTimer);
       Log.info("net", "lobby close");
       stopScan();
-      dropWake();
+      // beginRace() closes the lobby for the quali sheet but the SESSION stays
+      // open: a guest idling through quali must not lose the screen to sleep.
+      // Every way out of quali clears the flag first, so its close() drops it.
+      if (!friendQualifying) dropWake();
       const e = els();
       if (e.screen) e.screen.hidden = true;
     }
@@ -2019,12 +2041,12 @@ const NetLobby = (function () {
     }
 
     return {
-      wire, open, close, cancel, abortQuali, host, join, makeAnswer, acceptAnswer,
-      shareInvite, shareAnswer, canShare, openFromUrl,
-      scan, stopScan, pasteInto, deliver,
-      codeHost, codeJoin, stopCodeWait,
+      wire, open, cancel, abortQuali, host, join, makeAnswer, acceptAnswer,
+      shareInvite, shareAnswer, openFromUrl,
+      scan, stopScan,
+      codeHost, codeJoin,
       watchForOpen: waitForOpen,
-      roomChanged, setReady, startFromRoom, renderRoom, removeGuest,
+      roomChanged, setReady, startFromRoom, removeGuest,
       verifyCodes: () => Object.fromEntries(_verify),
       // Mint a further invite without disturbing the room. Host only, capped.
       inviteAnother,
