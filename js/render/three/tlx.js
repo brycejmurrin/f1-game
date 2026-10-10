@@ -1652,10 +1652,11 @@ const TLX = (function () {
       // as its own render object (17 steady, 98 in a pileup). The cull snapshot
       // is cleared for the same reason as GLX/WGX: these bytes came from no
       // frustum, so a later cullInstances must not claim them.
-      function updateInstances(batch, matrices, n) {
+      function updateInstances(batch, matrices, n, colors) {
         if (!batch || !batch.imesh) return 0;
         const v = Math.max(0, Math.min(batch.instances | 0, n | 0));
-        _writeInstanceMatrices(batch.imesh, matrices, null, v);
+        // colours: frozen-mirror restores the mirror pack; DebrisWorld passes null (leave tint alone).
+        _writeInstanceMatrices(batch.imesh, matrices, colors || null, v);
         batch.visible = v;
         batch._cullPlanes = null;
         InstCells.invalidate(batch);

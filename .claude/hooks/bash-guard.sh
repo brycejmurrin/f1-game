@@ -71,14 +71,19 @@ fi
 SCAN=$(printf '%s' "$CMD" | python3 -c '
 import re,sys
 s=sys.stdin.read()
-out=[];term=None;L=s.split("\n")
+out=[];term=None;keep=False;L=s.split("\n")
 for n,ln in enumerate(L):
     if term is not None:
         if ln.strip()==term: term=None
+        elif keep: out.append(ln)
         continue
     m=re.search(r"(?<!<)<<(?!<)-?\s*[\x27\"]?([A-Za-z_][A-Za-z0-9_]*)[\x27\"]?",ln)
     # a heredoc needs its closing line and is not a `$(( 1 << n ))` shift (2026-10-09)
-    if m and ln[:m.start()].count("((")<=ln[:m.start()].count("))") and any(x.strip()==m.group(1) for x in L[n+1:]): term=m.group(1)
+    if m and ln[:m.start()].count("((")<=ln[:m.start()].count("))") and any(x.strip()==m.group(1) for x in L[n+1:]):
+        term=m.group(1)
+        # a body a SHELL runs (bash <<EOF, cat <<EOF | bash) is commands, so it
+        # stays in SCAN: the commit fallback and the kill rules must see it (15-F6)
+        keep=bool(re.search(r"(^|[;&|(\s])(\S*/)?(sh|bash|dash|zsh|source|eval)(\s|$)",ln[:m.start()]) or re.search(r"\|\s*(\S*/)?(sh|bash|dash|zsh)(\s|$)",ln[m.end():]))
     out.append(ln)
 s="\n".join(out)
 res=[];i=0;n=len(s)
@@ -109,7 +114,9 @@ except Exception:
     print("")
 ')
 # Prefixes that carry the verb: wrappers, a shell -c, an absolute path.
-PRE='((sudo|env|exec|nice|nohup|command)[[:space:]]+)*((sh|bash|dash|zsh)[[:space:]]+-l?c[[:space:]]+)?((sudo|env|exec)[[:space:]]+)*(/[^[:space:]]*/)?'
+# 15-F7: `timeout 5 pkill -f chrome` and `xargs pkill -f` are the same kill (timeout,
+# xargs and their flags/duration are wrappers; setsid/doas/stdbuf likewise).
+PRE='((sudo|env|exec|nice|nohup|command|setsid|doas|stdbuf([[:space:]]+-[^[:space:]]+)*|timeout([[:space:]]+-[^[:space:]]+([[:space:]]+[0-9.]+[smhd]?)?)*[[:space:]]+[0-9.]+[smhd]?|xargs([[:space:]]+-[^[:space:]]+([[:space:]]+[0-9]+)?)*)[[:space:]]+)*((sh|bash|dash|zsh)[[:space:]]+-l?c[[:space:]]+)?((sudo|env|exec)[[:space:]]+)*(/[^[:space:]]*/)?'
 # THE TREE THE COMMIT LANDS IN, NOT THE SESSION'S. $CLAUDE_PROJECT_DIR names
 # the MAIN checkout, so a commit made from a LINKED WORKTREE read the main
 # tree's staged list, gated files the commit does not touch, and `--auto-raise`

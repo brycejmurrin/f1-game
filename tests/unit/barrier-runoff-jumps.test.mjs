@@ -147,3 +147,25 @@ test("fleet: the NON-pit side inside the pit window has no clearance step over 1
   assert.ok(checked >= 40, `only ${checked} pit complexes checked`);
   assert.deepEqual(bad, [], `non-pit side steps >= 1.5 m inside the pit window: ${bad.join(", ")}`);
 });
+
+test("street barrier: the last panel closes on node 0, not past it (10-F2, odd n)", () => {
+  // The panel walk stepped k += 2 and wrapped the last span with `% n`: on an odd node
+  // count the final panel ran n-1, 0, 1 (two nodes, ~8 m) on top of the first (0, 1, 2).
+  // Vegas 1543, Singapore 1227 and Baku 1475 are odd. Would fail on the base (the k = n-1
+  // panel measures ~8.07 m there; one node is ~4.06).
+  const { buildContext } = require(path.join(ROOT, "tools/lib/track-build-vm.cjs"));
+  const { Tracks } = buildContext();
+  let seen = 0;
+  for (const id of ["vegas", "singapore", "baku"]) {
+    const track = Tracks.build(Tracks.LIST.find((d) => d.id === id));
+    const n = track.n, ds = track.total / n;
+    assert.equal(n % 2, 1, `${id} is no longer an odd-node circuit`);
+    for (const nd of track.graph.nodes) {
+      const m = nd.meta;
+      if (!m || m.kind !== "streetBarrier" || m.k !== n - 1) continue;
+      seen++;
+      assert.ok(nd.s[2] < 1.5 * ds, `${id} side ${m.side}: the n-1 panel is ${nd.s[2].toFixed(2)} m long (one node is ${ds.toFixed(2)}): it wraps onto node 1`);
+    }
+  }
+  assert.ok(seen >= 3, `only ${seen} seam panels found`);
+});

@@ -415,7 +415,8 @@ const IncidentSim = (function () {
         const inV = snap && fin(snap.speed) ? Math.abs(snap.speed) : 0;
         const inverted = pose ? upYOf(pose) < INVERT_UP_Y : false;
         if (inverted) {
-          if (c.human && G.rescuePlayer) { try { G.rescuePlayer(c); } catch (e) { /* handback must complete regardless */ } }
+          // rescuePlayer begins with release(c): leave the takeover FIRST or it re-enters handbackCar (a 2nd demote, a spurious fallback).
+          if (c.human && G.rescuePlayer) { finishCar(inc, i); try { G.rescuePlayer(c); } catch (e) { /* handback must complete regardless */ } }
           else rescueAI(c);
         } else {
           try {

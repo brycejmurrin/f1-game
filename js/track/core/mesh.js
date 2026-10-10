@@ -1491,7 +1491,12 @@ const TrackMesh = (function () {
       // Each strip [lon0, lon1] x [lat0, lat1] in the box's own frame, laid on
       // the lane by pitPaint (on it, above it, facing up).
       const strip = (lon0, lon1, lat0, lat1, col) => pitPaint(track, out, s, lon0, lon1, lat0, lat1, lat0, lat1, col, uu);
-      const wi = sd * (smp.hw + o.corrOut + 0.3), wo = sd * (smp.hw + o.workOut - 0.3);
+      // Bay circuits paint the working lane; a bay-less complex (jeddah, jerez,
+      // mont_tremblant) has none — the stop IS in the fast lane (TrackPit.at()
+      // workCentre), so the box is painted across it, not on the apron past the wall.
+      const lane = p.hasBays === false;
+      const wi = sd * (smp.hw + (lane ? o.fastIn * p.v[k] + 0.15 : o.corrOut + 0.3));
+      const wo = sd * (smp.hw + (lane ? o.fastOut * p.w[k] - 0.15 : o.workOut - 0.3));
       const x0 = Math.min(wi, wo), x1 = Math.max(wi, wo);
       const boxLen = p.row.boxLen, paint = 0.16;
       const outer = sd > 0 ? x1 : x0;

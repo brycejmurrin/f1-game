@@ -1599,3 +1599,55 @@ test("bay circuits' working lane is untouched by the no-bay fix (byte-identical 
     assert.deepEqual(JSON.parse(JSON.stringify(got)), want, `${id}: TrackPit.at() moved`);
   }
 });
+
+// 10-F1: the painted box lines/team bars sat 1.3 m BEYOND the outer wall on the bay-less
+// complexes (they used the static corridor/working-lane bands that collapse there). The
+// paint must lie across the fast lane — where TrackPit.at().workCentre now stops the car.
+{
+  const { Tracks, TrackMesh, sandbox } = buildContext();
+  const paint = (id) => {
+    const track = Tracks.build(Tracks.LIST.find((d) => d.id === id));
+    const out = { pos: [], nrm: [], col: [], idx: [] };
+    TrackMesh.buildPitBoxes(track, out);
+    return { track, out };
+  };
+  const hashOf = (pos) => { let h = 2166136261; for (const v of pos) { h ^= Math.round(v * 1000) | 0; h = Math.imul(h, 16777619) >>> 0; } return h; };
+
+  for (const id of ["jeddah", "jerez", "mont_tremblant"]) {
+    test(`${id}: pit-box paint lies inside the fast lane, not past the outer wall`, () => {
+      const { track, out } = paint(id);
+      const p = track.pit, sd = p.side, box = p.row.boxes[0];
+      assert.equal(p.hasBays, false, `${id} grew bays`);
+      assert.ok(out.pos.length > 0, "no box paint at all");
+      const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+      sandbox.TrackSpline.sample(track, box.s, smp);
+      const rib = Tracks.pitLaneAt(track, box.s);
+      let lo = Infinity, hi = -Infinity;
+      for (let i = 0; i < out.pos.length; i += 3) {
+        // only the first box: stay within its own footprint along the lane
+        const d = [out.pos[i] - smp.p[0], out.pos[i + 1] - smp.p[1], out.pos[i + 2] - smp.p[2]];
+        if (Math.abs(d[0] * smp.t[0] + d[1] * smp.t[1] + d[2] * smp.t[2]) > p.row.boxLen) continue;
+        const lat = sd * (d[0] * smp.r[0] + d[1] * smp.r[1] + d[2] * smp.r[2]) - smp.hw;
+        lo = Math.min(lo, lat); hi = Math.max(hi, lat);
+      }
+      const inner = Math.abs(rib.inner) - smp.hw, outer = Math.abs(rib.fastOut) - smp.hw;
+      assert.ok(lo >= inner - 0.05, `paint starts ${lo.toFixed(2)} m out, lane starts ${inner.toFixed(2)}`);
+      assert.ok(hi <= outer + 0.05, `paint reaches ${hi.toFixed(2)} m out, past the lane's outer edge ${outer.toFixed(2)} (the wall)`);
+      const mid = Math.abs(rib.workCentre) - smp.hw;
+      assert.ok(lo < mid && mid < hi, "the stop position is not inside the painted box");
+    });
+  }
+
+  test("bay circuits' pit-box paint is byte-identical (vertex count + hash pinned)", () => {
+    // Golden values measured on the base (0f8c88843) — the lane branch must not touch hasBays rows.
+    const GOLD = {
+      silverstone: { verts: 532, idx: 798, hash: 412361315 },
+      monaco: { verts: 536, idx: 804, hash: 2522254 },
+    };
+    for (const [id, want] of Object.entries(GOLD)) {
+      const { track, out } = paint(id);
+      assert.equal(track.pit.hasBays, true, id);
+      assert.deepEqual({ verts: out.pos.length / 3, idx: out.idx.length, hash: hashOf(out.pos) }, want, `${id}: pit-box paint moved`);
+    }
+  });
+}

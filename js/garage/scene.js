@@ -1526,7 +1526,9 @@ function ctxKey(ctx) {
   // result) and the sponsor banner too, or entering a career on the same
   // circuit kept "NEXT RACE" and the free-play footer.
   const last = ctx.last;
-  return `${ctx.track ? ctx.track.id : "-"}|${ctx.weather || "-"}|${ctx.tod || "-"}`
+  // The `hydrated` bit: a LAZY_CIRCUIT stub paints no map; the key must change when it hydrates.
+  const hyd = ctx.track && typeof Tracks !== "undefined" && Tracks.circuitPayloadResident && Tracks.circuitPayloadResident(ctx.track) ? 1 : 0;
+  return `${ctx.track ? ctx.track.id : "-"}:${hyd}|${ctx.weather || "-"}|${ctx.tod || "-"}`
          + `|${ctx.wins | 0}|${ctx.night ? 1 : 0}|${ctx.career ? 1 : 0}|${ctx.round | 0}`
          + `|${last ? (last.dnf || "") + ":" + (last.p | 0) + ":" + (last.pts | 0) : "-"}`
          + `|${ctx.sponsor && ctx.sponsor.label || "-"}|${ctx.studio ? 1 : 0}|${GarageExperience.careerKey(ctx)}`;

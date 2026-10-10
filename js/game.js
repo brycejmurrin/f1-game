@@ -399,8 +399,8 @@ function aeroLoadOf(c) { return c && c.aeroLoad != null ? c.aeroLoad : 0.5; }
 // trade each way. Exactly 1 on a slick track, so the dry car is untouched.
 function aeroWetK() { return raceCtl && raceCtl.lowGrip() ? 0.5 : 1; }
 function xVmaxGain(c) { return aeroWetK() * lerp(X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, aeroLoadOf(c)); }
-// A car's PACE as the AI judges it: vmax less its X-mode gain, and for a HUMAN x its paceF (AiDrive.paceSample).
-function paceVmax(o) { return (o._vmaxNow || 0) / (1 + xVmaxGain(o) * (o.aeroX || 0)) * (o.human ? (o.paceF || 1) : 1); }
+// A car's PACE as the AI judges it: vmax less its X-mode gain, and for a HUMAN x its paceF (AiDrive.paceSample). A net-owned human never reaches updateCar's stamp, so it reads vTop().
+function paceVmax(o) { return (o._vmaxNow || (o.human ? vTop() : 0)) / (1 + xVmaxGain(o) * (o.aeroX || 0)) * (o.human ? (o.paceF || 1) : 1); }
 // The per-node AI speed/vmax profile paceSample learns, one per field (kept on the function: no new top-level state).
 function paceRef() { let r = paceRef.r; if (!r || r.cars !== cars) { r = paceRef.r = new Float32Array(track.n); r.cars = cars; } return r; }
 function xDfLoss(c) { return aeroWetK() * lerp(X_DF_LOSS_LO, X_DF_LOSS_HI, aeroLoadOf(c)); }
@@ -4303,7 +4303,7 @@ function quitToMenu() {
   // left the flyby active() for the session — capture listeners attached, and
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
-  setState("menu", "quit"); paused = false; raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  setState("menu", "quit"); paused = false; raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -6260,11 +6260,10 @@ function updateCar(c, dt, ranked) {
   c._prevS = c.s;
 }
 
-// Put the player back on the racing line at its CURRENT progress, facing forward
-// at a modest speed — for recovering from a spin, a beached off-track moment, or
-// being pinned to a wall. Progress (s/prog/lap) is preserved; only the lateral
-// position, heading and slip are reset, and a little speed restored.
+// Put the player back on the racing line at its CURRENT progress, facing forward at a modest speed — for a spin, a
+// beach or a wall. Progress is kept; lateral position, heading and slip reset. In TT/QUALI the lap is DELETED (no free re-centre).
 function rescuePlayer(c) {
+  if (c.human && (isTimeTrial() || isQuali())) { c.incidentInvalidLap = true; if (c.isPlayer && isQuali()) c.qualiCut = true; }   // as a track-limits cut
   // A live incident takeover would re-impose the Rapier pose over this rescue
   // (same authority rule as __apex.jump) — hand the car back first.
   incidentSim.release(c);
@@ -6635,25 +6634,24 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
     if (wet) { if (_lit) { m = _wmPropsWetN; m.emissive = Math.min(0.80, floodEmit); } else m = _wmPropsWetD; }
     else { if (_lit) { m = _wmPropsDryN; m.emissive = floodEmit; } else m = _wmPropsDryD; }
     const _pb = track.meshes.propBatches;
-    // frame.mirrorLite: the phone-grade rear-view mirror (js/render/shared/mirror-pass.js)
-    // skips the batches — a second frustum re-culls and re-uploads every pack each frame.
-    // frame.mirrorFreezeInstanced (audit #8, full quality): reuse the last mirror
-    // pack via updateInstances — skip AABB sweep + CPU pack; cars still redraw.
-    // `rec`: only the MIRROR's own cull is recorded (mirrorLite is a boolean only
-    // inside mirror-pass; the main pass would replay the forward pack at ~30 Hz).
+    // mirrorLite skips batches; mirrorFreezeInstanced reuses last mirror mats+colours (main pass would overwrite at ~30 Hz).
     if (_pb && _pb.length && gfx.drawInstanced && !frame.mirrorLite && !envProbe) {
       const planes = gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
       const freeze = !!frame.mirrorFreezeInstanced, rec = frame.mirrorLite === false;
       for (let i = 0; i < _pb.length; i++) {
         const b = _pb[i];
         if (freeze && b._mirN > 0 && b._mirMats && gfx.updateInstances) {
-          gfx.updateInstances(b, b._mirMats, b._mirN);
+          gfx.updateInstances(b, b._mirMats, b._mirN, b._mirCols || null);
         } else {
           if (planes && gfx.cullInstances) gfx.cullInstances(b, planes);
           const n = b.visible | 0;
           if (rec && n > 0 && b.packMatrices) {
             if (!b._mirMats || b._mirMats.length < n * 16) b._mirMats = new Float32Array(n * 16);
             b._mirMats.set(b.packMatrices.subarray(0, n * 16));
+            const nc = n * 3;
+            if (!b._mirCols || b._mirCols.length < nc) b._mirCols = new Float32Array(nc);
+            if (b.packColors) b._mirCols.set(b.packColors.subarray(0, nc));
+            else if (b._instPacked) for (let j = 0; j < n; j++) { const s = j * 20 + 16, d = j * 3; b._mirCols[d] = b._instPacked[s]; b._mirCols[d + 1] = b._instPacked[s + 1]; b._mirCols[d + 2] = b._instPacked[s + 2]; }
             b._mirN = n;
           } else if (rec) b._mirN = 0;
         }
@@ -8288,8 +8286,9 @@ function tickBody(now) {
     // the pause menu, and its placements publish one zero-dt frame. Resuming tears
     // it down (setPaused -> exitPhotoMode -> FreeCam.onPhotoExit), so no unpaused
     // state in which it should still be flying.
+    // SETTINGS open (SAVE SCREENSHOT / GFX toggles) also needs a live present — headed GLX has no preserved buffer.
     if (setupPreviewOn || replayBuf.isScrubbing() || ((state === "race" || state === "count") &&
-        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode))) {   // photoMode: the FREE CAMERA panel docks with no tuner open
+        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode || !els.pmsettings.hidden))) {
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it

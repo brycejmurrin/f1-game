@@ -322,3 +322,43 @@ are held by the session that owns them. Rows marked fixed-in-#NNNN are in this s
 - M40 input — stored `steerMode` unvalidated at boot (Input falls back to "tilt", game.js to "buttons"); a `connected===false` pad counts as present. `js/game.js:239`, `js/input/input.js:1598,1913` · low
 - M42 player physics — `frontUtil` still normalised by pi/2 after the front peak moved (#1266); toggled BOOST drains while braking; manual RECOVER has no pit-lane guard. `js/physics/player-forces.js:260,273`, `js/game.js:4839-4848,4349` · low
 - M37 (presets part) lighting — shared `*|day|*` stamps exist only for dry/wet, so rain/overcast/fog fall through to knob defaults (monaco tunnel lampLevel 0.26 vs 0.13; dawn/rain lampLevel on 47+ circuits). `js/lighting/presets.js:205,223` · low · **unassigned**
+
+## 2026-10-10 round-2 backlog (tooling / CI / hooks; not fixed by `ci-page-sources-guard`)
+
+From the round-2 tooling hunt (`15-tooling-ci`, tip `0f8c88843`). F1-F11 are fixed (or narrowed, below) by the
+`ci-page-sources-guard` PR; what that PR deliberately left is listed here. It stays off the merge train.
+
+- 15-F1 (narrowed) `PAGE_SOURCES` is a hand list again (core/log.js, track/core/{space,spline,pit,line}.js, physics/**, agent/**
+  plus the two race files). The ADAPTED specs boot the WHOLE manifest in the VM, so a derived "files this spec reads" set would
+  be the transitive closure of the manifest; a list is the honest cheap answer. A new ADAPTED spec must add its source to the list
+  (`tests/unit/pick-unit-slices.test.mjs` pins the current set). `tools/ci/twinned-specs.mjs` still says the Pages gate runs
+  vm-page "UNCONDITIONALLY"; it runs it when the `page` slice is picked. Fix the sentence or the gate. · low
+- 15-F2 (narrowed) a selected shard now reds when it reached its run step and left no junit with testcases. A shard killed by its
+  job cap AFTER `= run passed` but during the junit upload (the run 37493213168 shape) now reads red too instead of infra-retry;
+  that is a rerun, by design, but if it recurs the shard should upload its junit from a step that cannot be cancelled by the cap.
+  The `selected-started-*` marker adds one tiny artifact per shard. · low
+- 15-F6 (residual) `cd X` inside a `( … )` subshell leaks its cwd to later commands in `shellparse.commands`; a worktree path
+  containing a space breaks the `read -r C_RUN C_ALL C_GITDIR C_PATHS` split in `bash-guard.sh`. Both fail toward guarding the
+  wrong tree, not toward skipping the guard. · low
+- 15-F8 (residual) `Bash(curl http://127.0.0.1:*)` still matches `http://127.0.0.1:80@evil.example/` (userinfo form), because the
+  permission glob is a prefix match. The push deny-list still only matches a command that STARTS with `git push`
+  (`git -C . push origin HEAD:refs/heads/claude/f1-game-project-26h3ng` and a bare `git push` from a checkout whose upstream is the
+  ship branch are not denied; only server-side protection, which is `non_admins`, stands in the way). Proposed: deny
+  `Bash(git * push *claude/f1-game-project-26h3ng*)` and `Bash(git push)`. · medium, needs Bryce
+- 15-F10 (narrowed) `ratchets --base` now blocks a loosened explicit slack and a deleted entry whose file still exists. A NEW entry
+  with an inflated ceiling is still only caught by `--check`'s slack rule (the right place), not by `--base`. · low
+- 15-F11 (residual) `ready-full-cap` is still check-then-act: two agents running the check in the same minute both see 2/3 and
+  both flip. The flip itself should re-check after marking ready (CI Watch owns the flip). · low
+- Observation: `tools/ci/spec-timings.mjs` `parseJunit` feeds the time of FAILED testcases into the rolling record and
+  `spec-timings.yml` has no `conclusion == 'success'` filter, so a test that timed out at 180 s is billed at 180 s until the
+  samples roll off, which can push its spec over the selected-gate budget (a self-reinforcing drop). · low
+- Observation: `pages-reuse-verdict.sh` can only reuse a PR run when a merge COMMIT's parent tree equals its tree; merges are
+  SQUASH-only, so the reuse path is effectively dead for PR merges (perf only, fails safe). · low
+- Observation: `git diff --name-only` is still used by `pick-tests.mjs:420-435`, `verify-change.mjs:83-87`, `change-kind.mjs:25`
+  and the sweeps/parts/ship/xr shell filters in ci.yml, so a `git mv` of a circuit file still hides the source side
+  from `pick-tests` and the fleet-sweep filter (#1288 converted only the three PR-gate selectors). · low
+- Observation: `conflict-cure.mjs` `resolveGenBlocks` understands only HTML `@gen-shell` spans, so an `sw.js`
+  `// @gen-shell:sw-optional` conflict still stops the deploy (fail-safe friction); `deploy.mjs` `ratchetOverruns` skips a
+  metric missing from one of its three stages, so a metric newly added on one side is not bounded by the "sum of deliberate
+  raises" guard; ci.yml's PR concurrency group is `head.ref` only (two forks with one branch name would cancel each other;
+  single-owner repo, unreachable today). · low
