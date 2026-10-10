@@ -20,6 +20,13 @@ const UpdateCheck = (function () {
   // What the player reads when a lazy load was refused to avoid mixing builds.
   const REFUSED_CHIP = "UPDATE READY · RELOAD TO CONTINUE";
   const REFUSED_SAY = "UPDATE READY — RELOAD TO CONTINUE";
+  // FIRST VISIT (no service worker controls the tab): no controller probe and no
+  // controllerchange can learn of a deploy that lands while the tab stays
+  // visible, and Pages answers a lazy `?v=<booted>` request with the NEW file.
+  // So a lazy load re-reads version.json first when the last read is older than
+  // this — once per loader call, and never waiting longer than FRESH_WAIT_MS.
+  const FRESH_MS = 60 * 1000;
+  const FRESH_WAIT_MS = 1500;
 
   function bootedBuild() {
     try {
@@ -202,8 +209,17 @@ const UpdateCheck = (function () {
       render();
     }
 
+    // A lazy load with no controller: a forced read when the last one is stale.
+    function freshen() {
+      const read = now() - lastCheck > FRESH_MS ? check(true) : inflight;
+      if (!read) return Promise.resolve(false);
+      let timer = null;
+      const late = new Promise((resolve) => { timer = setTimeout(() => resolve(false), FRESH_WAIT_MS); });
+      return Promise.race([read, late]).then((r) => { clearTimeout(timer); return r; });
+    }
+
     const api = {
-      check, markReady, newerActive, apply, render, onVisible, blocked, checkController, noteRefused,
+      check, markReady, newerActive, apply, render, onVisible, blocked, checkController, noteRefused, freshen,
       state: () => ({ booted, ready, lastCheck, checking: !!inflight }),
       stop: () => { clearInterval(follow); follow = 0; },
     };
@@ -227,6 +243,12 @@ const UpdateCheck = (function () {
     // per dependency wave. Never retain that fallback across loader calls, or
     // apply it to a replacement controller with the same registration URL.
     if (scope && c && scope.legacyController === c) return allowed();
+    if (!c) {
+      // One read per loader call, shared by every file of it (parallel ones too).
+      if (!scope) await _active.freshen();
+      else await (scope.fresh || (scope.fresh = _active.freshen()));
+      return allowed();
+    }
     const result = await _active.checkController();
     if (!result.current || controller() !== c) return false;
     if (scope && result.unsupported) scope.legacyController = c;

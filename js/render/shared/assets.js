@@ -249,6 +249,20 @@ const Assets = (function () {
     return _loadPromise;
   }
 
+  // ONE more try per session after a failed load. Boot asks once, at idle, so a
+  // single dropped manifest/strip request used to leave every race of the
+  // session on procedural materials. game.js calls this at race entry and never
+  // awaits it. No retry for an unsupported backend ("backend"), after an
+  // explicit unload(), while a load is in flight, or once the pack is up.
+  let _retried = false;
+  function retry() {
+    if (_retried || _uploaded || _loadPromise || _tier !== "off" || !_err || _err === "backend") return false;
+    _retried = true;
+    Log.info("assets", "retrying the material pack after: " + _err);
+    load();
+    return true;
+  }
+
   async function _load(opts, generation) {
     if (!supported()) { _err = "backend"; _tier = "off"; return false; }
     const m = await manifest();
@@ -360,6 +374,7 @@ const Assets = (function () {
 
   function unload() {
     _loadGeneration++;
+    _retried = true;   // an explicit off (__apex.assetLoad(false)) is never undone behind its back
     if (_gfx && _gfx.setMaterialMaps) _gfx.setMaterialMaps(null);
     _uploaded = false;
     _tier = "off";
@@ -570,7 +585,7 @@ const Assets = (function () {
     return (_manifest && _manifest.credits) ? _manifest.credits.slice() : [];
   }
 
-  return { init, supported, manifest, load, unload, adopt, state, readLayerBytes,
+  return { init, supported, manifest, load, retry, unload, adopt, state, readLayerBytes,
            model, modelSync, models, modelIds, loadModels, loadModelsFor, modelsReady, env, credits, MAT_LAYERS };
 })();
 

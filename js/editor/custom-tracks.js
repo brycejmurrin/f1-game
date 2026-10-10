@@ -400,11 +400,15 @@ const CustomTracks = (function () {
   /** game.js hands the façade + the lazy loader; the designer screen (PR4) and
    *  the #track= share link (PR5) hang off this. Idempotent, DOM-optional. */
   let _editorLoad = null, _G = null, _hooks = null;
+  // Files that evaluated on an earlier (failed) attempt: each opens with a
+  // script-level `const`, so re-injecting one on the retry tap threw "already
+  // declared" and raised the red error overlay over the designer.
+  const _editorLoaded = new Set();
   function ensureEditor() {
     if (_editorLoad) return _editorLoad;
     const files = typeof ApexRoster !== "undefined" && ApexRoster.LAZY_EDITOR, edges = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_EDITOR_EDGES) || [];
     if (!files || !_hooks || typeof _hooks.load !== "function") { Log.warn("track", "track designer bundle is not in this build"); return Promise.resolve(false); }
-    _editorLoad = _hooks.load(files, edges, { strict: true }).then((ok) => {
+    _editorLoad = _hooks.load(files, edges, { strict: true, loaded: _editorLoaded }).then((ok) => {
       if (!ok) { _editorLoad = null; Log.warn("track", "the track designer bundle did not load"); return false; }
       if (typeof TrackDesigner !== "undefined" && TrackDesigner.init) TrackDesigner.init(_G, { custom: CustomTracks });
       return true;

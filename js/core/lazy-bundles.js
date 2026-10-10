@@ -579,11 +579,11 @@ function raceAssets() {
     ensureScenery(deps.getContext().trackIdx).catch((e) => {
       Log.warn("track", "scenery prefetch failed: " + (e && e.message));
     });
-    // Opt-in build worker: parse TRACK_VM off the main thread while the menu
-    // idles so RACE! does not pay worker importScripts on the critical path.
-    if (typeof TrackBuildClient !== "undefined" && TrackBuildClient.idleWarm) {
-      try { TrackBuildClient.idleWarm(); } catch (_) { /* warm is best-effort */ }
-    }
+    // NO build-worker warm here. The worker (default ON on multi-core) imports
+    // all of TRACK_VM, every LAZY_CIRCUIT payload included (~1.36 MB, a ~20 MB
+    // heap), and only an IN-SESSION track switch posts to it (game.js
+    // loadTrackStepped: state race/count); cold race entry builds paced on the
+    // main thread. TrackBuildClient.build() spawns it on that first use.
   };
   if (typeof queueMicrotask === "function") queueMicrotask(kickScenery);
   else Promise.resolve().then(kickScenery);
