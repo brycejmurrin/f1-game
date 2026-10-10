@@ -12,6 +12,14 @@ const UpdateCheck = (function () {
   // after it must not reload a second time for the same build.
   const RELOAD_KEY = "apex26.shellReloadedTo";
   const FOLLOW_MS = 2000;
+  // A version.json read that FAILED (offline, a deploy window, a bad body) is
+  // asked again after this, not after the full throttle: the throttle exists to
+  // spare a successful check, and counting a failed one against it hid an
+  // update for ten minutes on exactly the flaky link that dropped the request.
+  const FAIL_BACKOFF_MS = 30 * 1000;
+  // What the player reads when a lazy load was refused to avoid mixing builds.
+  const REFUSED_CHIP = "UPDATE READY · RELOAD TO CONTINUE";
+  const REFUSED_SAY = "UPDATE READY — RELOAD TO CONTINUE";
 
   function bootedBuild() {
     try {
@@ -50,6 +58,8 @@ const UpdateCheck = (function () {
     let ready = 0;
     let inflight = null;
     let follow = 0;   // once ready: re-render on a slow timer, so the chip follows race start / finish
+    let refusedFor = 0;   // the build a refused lazy load was last explained for (once per build)
+    let refusedSaid = 0;  // …and the build whose screen-reader line has been spoken
 
     function render() {
       const el = chip();
@@ -58,6 +68,24 @@ const UpdateCheck = (function () {
       // chip over the track is a distraction. It reappears at the next menu.
       el.hidden = !(ready > 0 && !inRace());
       if (!el.hidden) el.setAttribute("aria-label", "Update ready: build " + ready + ". Reload to update.");
+      // The spoken line waits for a menu: a radio-priority interruption mid-race is noise.
+      if (!el.hidden && refusedFor === ready && refusedSaid !== ready) {
+        refusedSaid = ready;
+        try { if (typeof LiveRegion !== "undefined") LiveRegion.say(REFUSED_SAY, "save"); } catch (e) { /* announcing never blocks the chip */ }
+      }
+    }
+
+    // A lazy load was REFUSED because it would mix builds (blocked()). The refusal
+    // itself stays — a file asked for as the old build would be answered with the
+    // new one — but it used to be silent: DATA, VS FRIEND, sound and an unvisited
+    // circuit were dead buttons with only a small chip to explain them. Say so,
+    // once per pending build, on the chip the player is already being offered.
+    function noteRefused() {
+      if (!(ready > booted) || refusedFor === ready) return;
+      refusedFor = ready;
+      const el = chip();
+      if (el) el.textContent = REFUSED_CHIP;
+      render();
     }
 
     function markReady(build) {
@@ -80,9 +108,9 @@ const UpdateCheck = (function () {
       lastCheck = t;
       inflight = Promise.resolve()
         .then(() => doFetch("version.json?_=" + t, { cache: "no-store" }))
-        .then((r) => (r && r.ok ? r.json() : null))
+        .then((r) => { if (!(r && r.ok)) throw new Error("version.json " + (r && r.status)); return r.json(); })
         .then((v) => markReady(v && v.build))
-        .catch(() => false)   // offline / deploy window: ask again next time
+        .catch(() => { lastCheck = t - THROTTLE_MS + FAIL_BACKOFF_MS; return false; })   // offline / deploy window: ask again soon
         .finally(() => { inflight = null; });
       return inflight;
     }
@@ -175,7 +203,7 @@ const UpdateCheck = (function () {
     }
 
     const api = {
-      check, markReady, newerActive, apply, render, onVisible, blocked, checkController,
+      check, markReady, newerActive, apply, render, onVisible, blocked, checkController, noteRefused,
       state: () => ({ booted, ready, lastCheck, checking: !!inflight }),
       stop: () => { clearInterval(follow); follow = 0; },
     };
@@ -187,7 +215,9 @@ const UpdateCheck = (function () {
   // once the session is wired (create() ran) — at boot the shell guard owns a
   // stale shell, and refusing a backend there would cost the renderer.
   function blocksLazyLoad() {
-    return !!(_active && _active.blocked());
+    const b = !!(_active && _active.blocked());
+    if (b) _active.noteRefused();
+    return b;
   }
 
   async function prepareLazyLoad(scope) {
@@ -196,11 +226,17 @@ const UpdateCheck = (function () {
     // Only an unresponsive legacy controller gets one timeout per load(), not
     // per dependency wave. Never retain that fallback across loader calls, or
     // apply it to a replacement controller with the same registration URL.
-    if (scope && c && scope.legacyController === c) return !_active.blocked();
+    if (scope && c && scope.legacyController === c) return allowed();
     const result = await _active.checkController();
     if (!result.current || controller() !== c) return false;
     if (scope && result.unsupported) scope.legacyController = c;
-    return !_active.blocked();
+    return allowed();
+  }
+  // True when the load may go ahead; a refusal is explained to the player once.
+  function allowed() {
+    const b = _active.blocked();
+    if (b) _active.noteRefused();
+    return !b;
   }
 
   return { create, blocksLazyLoad, prepareLazyLoad, bootedBuild, controllerBuild, THROTTLE_MS };

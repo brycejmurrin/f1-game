@@ -111,6 +111,7 @@ const GROWABLE_GLOBALS = {
 // external name is a red flag (an undeclared dependency or a typo'd global).
 const KNOWN_EXTERNAL_READS = {
   "js/camera/cockpit-preview.js": ["CockpitPreviewFrame"], // Runtime export in the isolated same-origin cockpit-view.html iframe; parent reads only after its load event, not a second eval-time module global.
+  "js/ui/loading-screen.js": ["__apexFullIntro"], // harness opt-in (page.addInitScript) to player-pace intro under navigator.webdriver; isAutomation() reads it, garage-out-before-card.spec sets it
   "js/ui/layers.js": ["HTMLDialogElement"], // Browser native dialog prototype; typeof-guarded opening-order tracking, absent in VM mocks.
   "js/track/core/def.js": ["CircuitElevations"],  // tools/gen/bake-elevation.mjs output; typeof-guarded feature probe (moved from tracks.js with elevationAt)
   "js/editor/custom-tracks.js": ["TrackDesigner", "TrackCodec"], // the LAZY_EDITOR screen and codec; typeof-guarded, reached only after ensureEditor() loaded the bundle

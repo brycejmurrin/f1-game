@@ -80,7 +80,10 @@ Peraltada line survives as real **banking** into the final corners (6° at
 
 The Foro Sol stadium section, the Peralta banking, the crowd, the jacarandas
 and the **Popocatépetl / Iztaccíhuatl** twin-volcano silhouette on the
-high-altitude Sierra Nevada horizon are all modelled.
+high-altitude Sierra Nevada horizon are all modelled. The two volcanoes stand on
+TRUE compass bearings from the lap centroid (Popocatépetl 131.1°, Iztaccíhuatl
+117.9°, so Popo is the more southerly), compressed to 1.75 / 1.88 km; they were
+road-normal anchors 17° off and in swapped order until 2026-10-10.
 
 **DETAIL 2026-10-05:** closed Foro Sol terrace/bowl backs, seated portals +
 scoreboard masts, midfield plaza/lawn/service roads, brick pavilion variety,

@@ -168,6 +168,18 @@ test.describe("Track designer", () => {
     await openDesigner(page);
     await randomiseGreen(page, 19);
     await page.locator('#trackdesigner [data-mode="scenery"]').click();
+    const map = page.locator('#trackdesigner .td-stage > canvas').first();
+    await expect(map).toHaveAttribute("data-map-view", "scenery");
+    const history = await page.evaluate(() => TrackDesigner.state().undo);
+    await page.getByRole("button", { name: "OUTLINE", exact: true }).click();
+    await expect(map).toHaveAttribute("data-map-view", "outline");
+    await page.getByRole("tab", { name: "HOW TO", exact: true }).click();
+    await expect(page.locator('[data-help-task="selection"]')).toHaveAttribute("open", "");
+    await page.locator('[data-help-task="scenery"] summary').click();
+    await page.getByRole("button", { name: "OPEN SCENERY", exact: true }).click();
+    await expect(map).toHaveAttribute("data-map-view", "scenery");
+    expect(await page.evaluate(() => TrackDesigner.state().undo)).toBe(history);
+
     await page.locator('#trackdesigner [data-category="nature"]').click();
     await page.getByRole("searchbox", { name: "Find a scenery theme" }).fill("pine walls");
     await expect(page.locator('#trackdesigner [data-theme]:visible')).toHaveCount(1);
@@ -186,23 +198,32 @@ test.describe("Track designer", () => {
     expect(await page.evaluate(() => TrackDesigner.state().design.look)).toBeUndefined();
     await page.locator('#trackdesigner [data-preset="race"]').click();
     await page.getByRole("tab", { name: /^OBJECTS/ }).click();
-    await page.locator('#trackdesigner [data-prop="hedge"]').click();
+    await page.locator('[data-object-category="nature"]').click();
+    await expect(page.locator('[data-prop="marshal"]')).toBeHidden();
+    await page.locator('#trackdesigner [data-prop="pines"]').click();
     await page.locator('#trackdesigner [data-placement-mode="range"]').click();
     for (const [name, value] of [["Scenery start point number", "3"], ["Scenery end point number", "10"], ["Scenery positions along section", "2"]]) {
       const input = page.getByRole("spinbutton", { name, exact: true }); await input.fill(value); await input.press("Enter");
     }
+    const roadsideGap = page.getByRole("spinbutton", { name: "Roadside gap in metres", exact: true });
+    await roadsideGap.fill("32"); await roadsideGap.press("Enter");
+    await page.getByRole("button", { name: "Swap scenery section start and end", exact: true }).click();
+    expect(await page.evaluate(() => [TrackDesigner.state().sel, TrackDesigner.state().span])).toEqual([9, 2]);
     await page.locator('#trackdesigner [data-side="0"]').click();
     const batchUndo = await page.evaluate(() => TrackDesigner.state().undo);
     await page.getByRole("button", { name: "Place objects along the selected section", exact: true }).click();
     expect(await page.evaluate(() => TrackDesigner.state().design.props.map((p) => p.side))).toEqual([-1, 1, -1, 1]);
     expect(await page.evaluate(() => TrackDesigner.state().undo)).toBe(batchUndo + 1);
-    await page.getByRole("button", { name: "Edit placed hedge 1", exact: true }).click();
+    await page.getByRole("button", { name: "Edit placed pines 1", exact: true }).click();
     await page.getByRole("spinbutton", { name: "Placed object roadside gap in metres", exact: true }).fill("24");
     await page.locator('[data-role="prop-editor"]').getByRole("button", { name: "APPLY", exact: true }).click();
     expect(await page.evaluate(() => TrackDesigner.state().design.props[0].gap)).toBe(24);
     await page.getByRole("button", { name: "UNDO", exact: true }).click();
     await page.getByRole("button", { name: "UNDO", exact: true }).click();
     expect(await page.evaluate(() => TrackDesigner.state().design.props)).toBeUndefined();
+    await page.locator('[data-object-category="venue"]').click();
+    await expect(page.locator('[data-prop="pines"]')).toBeHidden();
+    await expect(page.locator('[data-prop="camera"]')).toBeVisible();
     await page.locator('#trackdesigner [data-placement-mode="point"]').click();
     await page.locator('#trackdesigner [data-prop="stand"]').click();
     await page.locator('#trackdesigner [data-side="-1"]').click();
@@ -397,6 +418,13 @@ test.describe("Track designer", () => {
     // Per-node heights (slice C): presets write heights[] and clear legacy cosine bumps.
     await page.evaluate(() => TrackDesigner.setMode("elevation"));
     await expect(page.locator('#trackdesigner [data-mode="elevation"]')).toHaveAttribute("aria-pressed", "true");
+    const heatButton = page.getByRole("button", { name: "Elevation heat map", exact: true });
+    const map = page.locator('#trackdesigner .td-stage > canvas:not([data-role="profile"])');
+    await expect(heatButton).toHaveAttribute("aria-pressed", "true");
+    await expect(map).toHaveAttribute("data-heat-map", "elevation");
+    await heatButton.click();
+    await expect(map).toHaveAttribute("data-heat-map", "off");
+    await heatButton.click();
     const ok = await page.evaluate(() => TrackDesigner.applyElevPreset("hilly"));
     expect(ok).toBe(true);
     await page.waitForFunction(() => {
@@ -451,6 +479,7 @@ test.describe("Track designer", () => {
     for (let i = 0; i < edited.design.heights.length; i++) expect(edited.design.heights[i]).toBe(baseline.design.heights[i] + (i >= 3 && i <= 10 ? 1 : 0));
     await page.getByRole("button", { name: "UNDO", exact: true }).click();
     expect(await page.evaluate(() => TrackDesigner.state().design.heights)).toEqual(baseline.design.heights);
+    await page.evaluate(() => TrackDesigner.setMode("edit"));
     await page.getByRole("button", { name: "FIT VIEW", exact: true }).click();
     await page.locator('[data-selection-mode="range"]').click();
     const mapPoints = await page.evaluate(() => {
@@ -467,6 +496,17 @@ test.describe("Track designer", () => {
     expect(await page.evaluate(() => { const s = TrackDesigner.state(); return [s.sel, s.span]; })).toEqual([2, 7]);
     await expect(strip).toHaveAttribute("aria-label", /Span 3–8/);
     expect(await page.evaluate(() => TrackDesigner.state().design.pts)).toEqual(baseline.design.pts);
+    const quickBefore = await page.evaluate(() => TrackDesigner.state());
+    const delta = page.getByRole("spinbutton", { name: "Elevation change in metres", exact: true });
+    await expect(delta).toBeVisible();
+    await delta.fill("2.5");
+    await page.getByRole("button", { name: "Raise selected points", exact: true }).click();
+    const raised = await page.evaluate(() => TrackDesigner.state());
+    expect([raised.mode, raised.selectionMode, raised.sel, raised.span]).toEqual(["edit", "range", 2, 7]);
+    expect(raised.undo).toBe(quickBefore.undo + 1);
+    for (let i = 0; i < raised.design.heights.length; i++) expect(raised.design.heights[i]).toBe(quickBefore.design.heights[i] + (i >= 2 && i <= 7 ? 2.5 : 0));
+    await page.getByRole("button", { name: "UNDO", exact: true }).click();
+    expect(await page.evaluate(() => TrackDesigner.state().design.heights)).toEqual(quickBefore.design.heights);
   });
 
   test("FIX ALL turns a deliberately short loop green and SAVE enables", async ({ page }) => {

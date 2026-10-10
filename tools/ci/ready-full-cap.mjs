@@ -139,10 +139,17 @@ export function measure(opts = {}) {
     if (batch.length < 100) break;
   }
   const runs = [];
+  // ci.yml's pull_request runs only, and every page (15-F11): the repo-wide first 100 runs
+  // filled with other workflows and sibling fan-out in a merge burst, so older queued ready-PR
+  // runs fell off and the count read under the cap.
   for (const status of ["in_progress", "queued"]) {
-    const r = request(`actions/runs?status=${status}&per_page=100`);
-    if (r.error) return { ok: false, error: r.error, count: null, cap: opts.cap ?? MAX_LIVE, slots: [] };
-    runs.push(...(r.json?.workflow_runs || []));
+    for (let page = 1; page <= 10; page++) {
+      const r = request(`actions/workflows/ci.yml/runs?event=pull_request&status=${status}&per_page=100&page=${page}`);
+      if (r.error) return { ok: false, error: r.error, count: null, cap: opts.cap ?? MAX_LIVE, slots: [] };
+      const batch = r.json?.workflow_runs || [];
+      runs.push(...batch);
+      if (batch.length < 100) break;
+    }
   }
   return evaluate(prs, runs, { cap: opts.cap, exclude: opts.exclude });
 }
