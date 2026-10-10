@@ -91,7 +91,11 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
     store: { get: (k, d) => (k in stored ? stored[k] : d), set: (k, v) => { stored[k] = v; } },
   };
   const deps = {
-    drawWorldMeshes: (frame) => { calls.push(["world", frame.viewProj, frame.mirrorLite, !!frame.mirrorFreezeInstanced, Object.assign({}, frame.tune)]); if (throwInWorld) throw new Error("boom"); },
+    // tune: the knobs read BY NAME, the way every backend reads frame.tune (the mirror's is a prototype view).
+    drawWorldMeshes: (frame) => { const t = frame.tune;
+      calls.push(["world", frame.viewProj, frame.mirrorLite, !!frame.mirrorFreezeInstanced,
+        { carSunGlint: t.carSunGlint, carSparkle: t.carSparkle, windowSunFlash: t.windowSunFlash, shadowStr: t.shadowStr, keyMul: t.keyMul }, t]);
+      if (throwInWorld) throw new Error("boom"); },
     drawCar: (c, m) => gfx.draw("mesh:" + c.team, m),   // CarDraw.drawMirrorCar in the game (the real one: the test below)
     renderPosOf: (c) => ({ world: true, x: 0, z: c.s }),
     playerAnchor: (c) => ({ cS: c.s, cX: 0 }),
@@ -467,6 +471,37 @@ test("the sun's view-dependent terms stay out of the mirror, and the main frame 
   own.keyMul = 0.9;
   h.render();
   assert.equal(h.calls.filter((c) => c[0] === "world").pop()[4].keyMul, 0.9);
+});
+
+// 5-F1 (hunt 3): the override used to Object.assign all ~190 LightKnobs.LT knobs (a dictionary-mode
+// object) into a scratch object every mirror frame to change four — ~46 µs a frame for no visual effect.
+test("the mirror's tune is a view built once per source table, never a per-frame copy of every knob (5-F1)", () => {
+  const h = boot({ mode: "on" });
+  const own = h.frame.tune;
+  let enumerations = 0;
+  // A copy enumerates the source ([[OwnPropertyKeys]]); a prototype read-through never does.
+  const counted = new Proxy(own, { ownKeys(t) { enumerations++; return Reflect.ownKeys(t); } });
+  h.frame.tune = counted;
+  h.render();
+  h.render();
+  h.render();
+  const worlds = h.calls.filter((c) => c[0] === "world");
+  assert.equal(worlds.length, 3);
+  assert.equal(enumerations, 0, "no pass enumerates the lighting table");
+  assert.equal(worlds[0][5], worlds[2][5], "one view object across frames while the table is the same object");
+  assert.equal(worlds[2][5].keyMul, own.keyMul, "the other knobs read through to the live table");
+  assert.equal(worlds[2][5].carSunGlint, 0, "the four overrides stay on the view");
+  assert.equal(h.frame.tune, counted, "the main pass gets its own table back");
+  own.keyMul = 0.7;   // the tuner edits in place: no rebuild needed, the read-through follows
+  h.render();
+  assert.equal(h.calls.filter((c) => c[0] === "world").pop()[4].keyMul, 0.7);
+  const other = { carSunGlint: 5, keyMul: 2 };   // a different table (a new frame.tune) rebuilds the view
+  h.frame.tune = other;
+  h.render();
+  const last = h.calls.filter((c) => c[0] === "world").pop();
+  assert.notEqual(last[5], worlds[0][5]);
+  assert.deepEqual([last[4].keyMul, last[4].carSunGlint], [2, 0]);
+  assert.equal(other.carSunGlint, 5, "the source table is never written");
 });
 
 test("standDown (the GARAGE preview frame) hides the mirror and clears the composite rect; the race brings it back", () => {
