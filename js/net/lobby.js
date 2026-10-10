@@ -1244,6 +1244,11 @@ const NetLobby = (function () {
       } catch (e) {
         say("Could not start the race: " + (e && e.message), true);
         friendQualifying = false;   // keep the room and its message up, but stop gating quali saves
+        // After the quali sheet the lobby is HIDDEN (beginRace closed it): the
+        // message has no screen, and the open session would idle behind a
+        // dead start. Same exit as a refused netPlay.start() below.
+        const screen = els().screen;
+        if (screen && screen.hidden) { cancel(); if (G.quitToMenu) G.quitToMenu(); }
         return;
       }
       const started = G.netPlay.start({
@@ -1880,7 +1885,10 @@ const NetLobby = (function () {
       clearInterval(pollTimer);
       Log.info("net", "lobby close");
       stopScan();
-      dropWake();
+      // beginRace() closes the lobby for the quali sheet but the SESSION stays
+      // open: a guest idling through quali must not lose the screen to sleep.
+      // Every way out of quali clears the flag first, so its close() drops it.
+      if (!friendQualifying) dropWake();
       const e = els();
       if (e.screen) e.screen.hidden = true;
     }

@@ -1497,3 +1497,68 @@ test("an empty CONNECT tap during invite preparation does not cancel the host's 
     assert.equal(w.invite.value, "invite-1");
   } finally { h.lobby.cancel(); }
 });
+
+// bug-hunt 2 H30: the lobby is hidden while the quali sheet is the screen.
+async function guestInQuali(extra = {}) {
+  const ctx = closableHarness(extra);
+  const { h, made } = ctx;
+  h.G.raceQuali = true;
+  h.G.openQualiForNet = (done) => { h.G._qualiDone = done; };
+  h.lobby.open();
+  await h.lobby.join();
+  h.lobby.watchForOpen();
+  for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+  assert.equal(made.length, 1);
+  made[0].deliver("hello", { team: "beta", driver: 0, rank: 1 });
+  made[0].deliver("go", {});
+  assert.equal(h.lobby.qualifying(), true, "friend quali is armed");
+  return ctx;
+}
+
+test("a start that throws after the quali sheet cancels and quits instead of failing silently (bug-hunt H30)", async () => {
+  const { h } = await guestInQuali();
+  let quits = 0;
+  h.G.startRace = async () => { throw new Error("scenery failed"); };
+  h.G.quitToMenu = () => { quits++; };
+  try {
+    assert.equal(h.elements.get("vsfriend").hidden, true, "the sheet, not the lobby, is on screen");
+    await h.G._qualiDone();
+    assert.equal(quits, 1, "nobody can see the lobby's message, so the race is quit");
+    assert.equal(h.lobby.status().guests, 0, "…and the half-started room is torn down");
+    assert.equal(h.lobby.qualifying(), false);
+  } finally { h.lobby.cancel(); }
+});
+
+test("a start that throws with the lobby on screen keeps the room and its message (bug-hunt H30)", async () => {
+  const { h } = await guestInQuali();
+  let quits = 0;
+  h.G.startRace = async () => { throw new Error("scenery failed"); };
+  h.G.quitToMenu = () => { quits++; };
+  try {
+    h.lobby.abortQuali();                          // BACK from the sheet: the room is on screen again
+    assert.equal(h.elements.get("vsfriend").hidden, false);
+    await h.G._qualiDone();
+    assert.equal(quits, 0, "a visible lobby shows the error itself");
+    assert.match(h.status.textContent, /Could not start the race: scenery failed/);
+    assert.equal(h.lobby.status().guests, 1, "the room stays up for a retry");
+  } finally { h.lobby.cancel(); }
+});
+
+test("the screen wake lock survives the lobby closing for friend quali and drops when the race starts (bug-hunt H30)", async () => {
+  const sentinels = [];
+  const wakeLock = { request: () => {
+    const s = { releases: 0, addEventListener() {}, release() { this.releases++; } };
+    sentinels.push(s);
+    return Promise.resolve(s);
+  } };
+  const { h } = await guestInQuali({ wakeLock });
+  try {
+    await new Promise((r) => setImmediate(r));
+    assert.equal(sentinels.length, 1, "open() holds the wake lock");
+    assert.equal(sentinels[0].releases, 0, "close() for the quali sheet must not release it (a guest idling through quali sleeps the screen)");
+    h.G.startRace = async () => ({ ok: true });
+    h.G.netPlay = { start: () => ({ ok: true }), hostStart() {} };
+    await h.G._qualiDone();
+    assert.equal(sentinels[0].releases, 1, "the race start's close() releases it");
+  } finally { h.lobby.cancel(); }
+});
