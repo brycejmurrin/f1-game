@@ -244,3 +244,28 @@ test("fixAll: a green RANDOMISE loop is a no-op", () => {
   assert.equal(r.design, d, "the same design");
   assert.deepEqual(plain(r.applied), []);
 });
+
+// Heights are parallel to pts by index and props are arc-fraction keyed: a remedy
+// that drops or rotates points must carry both, or every later height slides one
+// point down the road (~80 m measured) and a stand strands on the wrong straight.
+const triples = (d) => d.pts.map((p, i) => p[0] + "," + p[1] + "," + (d.heights[i] || 0)).filter((t) => !t.endsWith(",0")).sort();
+test("heights and props ride through a remedy: SPACING and START keep every (x, z, height) triple and each prop's place on the road", () => {
+  // SPACING: a point 4 m past point 20 is merged away; the 36 original points keep their own heights.
+  const base = ellipse(36, 800, 500), p20 = base[20];
+  const crowded = base.slice(0, 21).concat([[q(p20[0] + 4), q(p20[1])]], base.slice(21));
+  const heights = crowded.map((_, i) => (i === 21 ? 0 : 1 + (i % 9)));
+  const props = [{ kind: "stand", s: 0.8, side: 1, gap: 18 }, { kind: "billboard", s: 0.3, side: -1, gap: 12 }];
+  const d = design({ pts: crowded, heights, props });
+  const { r } = fix(d, "spacing");
+  assert.equal(r.design.pts.length, crowded.length - 1);
+  assert.equal(r.design.heights.length, r.design.pts.length, "heights stay parallel to pts");
+  assert.deepEqual(triples(r.design), triples(d), "spacing: the heights stay on their points");
+  props.forEach((p, i) => assert.ok(dist(at(d.pts, p.s), at(r.design.pts, r.design.props[i].s)) <= 0.5, `spacing: prop ${i} stays put`));
+  assert.deepEqual(plain(r.design.props.map((p) => [p.kind, p.side, p.gap])), props.map((p) => [p.kind, p.side, p.gap]), "…and keeps its kind, side and gap");
+  // START: the line moves to the longest straight, heights rotate with their points, props stay on their road.
+  const st = stadium(), ds = design({ pts: st, heights: st.map((_, i) => 1 + (i % 7)), props: [{ kind: "stand", s: 0.1, side: 1, gap: 18 }, { kind: "trees", s: 0.55, side: -1, gap: 24 }] });
+  const { r: rs } = fix(ds, "start", { movesStart: true });
+  assert.deepEqual(rs.design.heights.slice().sort((a, b) => a - b), ds.heights.slice().sort((a, b) => a - b), "start: the same heights");
+  assert.deepEqual(triples(rs.design), triples(ds), "start: each height still sits on its own point");
+  ds.props.forEach((p, i) => assert.ok(dist(at(ds.pts, p.s), at(rs.design.pts, rs.design.props[i].s)) <= 0.5, `start: prop ${i} stays put`));
+});

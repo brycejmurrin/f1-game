@@ -1197,17 +1197,46 @@ test("modelsReady gives up at its cap when the pack hangs, and never rejects on 
   assert.equal(await broken.modelsReady(1000), 0, "a failing manifest resolves 0 at once, not a rejection");
 });
 
-test("ensureScenery awaits THIS circuit's models (Assets.modelsReady with the closure source) before any build", () => {
+test("ensureScenery awaits THIS circuit's models (Assets.modelsReady with the closure source) before any build", { timeout: 5000 }, async () => {
   const src = fs.readFileSync(path.join(ROOT, "js/core/lazy-bundles.js"), "utf8");
-  const i = src.indexOf("function ensureScenery(");
-  assert.ok(i >= 0, "ensureScenery lives in LazyBundles after the extract");
-  const fn = src.slice(i, src.indexOf("\n}\n", i));
-  const h = src.indexOf("function sceneryModels(");
-  assert.ok(h >= 0, "sceneryModels(def) is ensureScenery's model wait");
-  assert.match(fn, /sceneryModels\(def\)/, "ensureScenery no longer waits for the circuit's baked models");
-  assert.match(src.slice(h, src.indexOf("\n}\n", h)), /Assets\.modelsReady\(0, fn \? String\(fn\) : ""\)/, "sceneryModels no longer reads the closure source");
-  assert.match(fn, /return p\.then\(models\)/, "the models are resolved from the closure once the scenery script lands");
-  assert.match(fn, /return models\(\)\.then/, "a resident or inline scenery must still wait for its models");
+  for (const mode of ["fetched", "resident", "inline"]) {
+    const scenery = function (api) { api.bakedModel("test_model"); };
+    let releaseModels, enterModelWait;
+    const modelBarrier = new Promise((resolve) => { releaseModels = resolve; });
+    const modelWaitEntered = new Promise((resolve) => { enterModelWait = resolve; });
+    const calls = [], fetches = [];
+    const def = { id: "monza", ...(mode === "inline" ? { scenery } : {}) };
+    const ctx = vm.createContext({
+      ApexRoster: { DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
+        LAZY_RACE: [], LAZY_RACE_SESSION: [], LAZY_AUDIO: [], LAZY_DATA: [], LAZY_NET: [],
+        SCENERY_DIR: "js/circuits/scenery" },
+      Tracks: { LIST: [def], circuitPayloadResident: () => true },
+      TrackScenery: mode === "resident" ? { monza: scenery } : {},
+      Assets: { modelsReady(cap, source) {
+        calls.push({ cap, source }); enterModelWait(); return modelBarrier;
+      } },
+      Log: { warn() {} },
+    });
+    ctx.window = ctx;
+    const bundles = vm.runInContext(src + "; LazyBundles", ctx).create({
+      els: {}, loadBackendScripts: async (files) => {
+        fetches.push([...files]); ctx.TrackScenery.monza = scenery; return true;
+      },
+    });
+    let built = false;
+    const build = bundles.ensureScenery(0).then((ready) => {
+      assert.equal(ready, true, mode + ": scenery is resident"); built = true;
+    });
+    await modelWaitEntered;
+    await Promise.resolve(); await Promise.resolve();
+    assert.equal(built, false, mode + ": a build cannot pass the pending model wait");
+    assert.deepEqual(calls, [{ cap: 0, source: String(scenery) }], mode + ": wait for this closure's models");
+    assert.deepEqual(fetches, mode === "fetched" ? [["js/circuits/scenery/monza.js"]] : [],
+      mode + ": resident and inline closures need no script fetch");
+    releaseModels();
+    await build;
+    assert.equal(built, true, mode + ": releasing the models permits the build");
+  }
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   assert.doesNotMatch(game, /Assets\.loadModels\(\)/, "boot must not prefetch the whole model pack again");
 });

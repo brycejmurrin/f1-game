@@ -1219,6 +1219,14 @@ test("the host's actual AI retirement reaches a guest, including one that binds 
   assert.ok(repeated, "the existing reliable sync repeats terminal AI state");
   ls.deliver(repeated.t, repeated.d);
   assert.equal(late.cars[2].retired, true);
+  // ONCE per arriving receiver, not once a second for the rest of the race: every repeat was a reliable
+  // event per retired car per guest, filling a frozen guest's inbox.
+  hs.sent.length = 0; hn.tick(11500); hn.tick(13000);
+  assert.ok(hs.sent.some((e) => e.t === NetPlay.EV.STRATEGY), "the 1 s strategy block ran on both ticks");
+  assert.equal(hs.sent.filter((e) => e.t === "lap" && e.d.driverId === "drv2").length, 0, "the terminal state is not re-broadcast");
+  hs.deliver("model", ls.sent.find((e) => e.t === "model").d);   // another receiver binds: now it is owed again
+  hs.sent.length = 0; hn.tick(14500);
+  assert.equal(hs.sent.filter((e) => e.t === "lap" && e.d.driverId === "drv2").length, 1);
   hn.stop(); gn.stop(); ln.stop();
 });
 
@@ -1265,4 +1273,95 @@ test("silence grace: a rival quiet > 2 s is the local AI's, back on the wire whe
   assert.equal(rival.human, true);
   assert.deepEqual(net.status().stale, []);
   net.stop();
+});
+
+// ---- a rival that left while a guest was still BUILDING (sibling register 8.1) ----
+// The host's race-phase LEFT ({wire}) reached a guest whose session still held the LOBBY's handlers,
+// which read only the lobby phase's `from`: it seated the leaver as a human nobody would move, and
+// finishDelay waited the 360 s/lap hard cap on it.
+test("the host tells a guest that arms late about a rival that left before it was built", () => {
+  const host = poseG(3), hn = NetPlay.create(host);
+  const ss = { a: stateSession(), b: stateSession() };
+  assert.equal(hn.start({ role: "host", session: ss.a,
+    sessions: Object.entries(ss).map(([k, session], i) => ({ id: i + 1, session })),
+    peers: [{ id: 1 }, { id: 2 }] }).ok, true);
+  const lefts = (sess) => sess.sent.filter((e) => e.t === NetPlay.EV.LEFT);
+  ss.b.disconnect("transport");                                   // guest b leaves while guest a is still building
+  assert.equal(lefts(ss.a).length, 1, "the live broadcast, which a still-building guest cannot read");
+  ss.a.deliver(NetPlay.EV.ARMED, {});                              // a's circuit is built; its handlers are bound
+  assert.equal(lefts(ss.a).length, 2, "…so ARMED earns the LEFT again");
+  assert.deepEqual(lefts(ss.a)[1].d, { wire: 2, why: "transport" });
+  ss.a.deliver(NetPlay.EV.ARMED, {});                              // ARMED is re-sent each second until START lands
+  assert.equal(lefts(ss.a).length, 2, "…once per arriving guest, not on every repeat");
+  // The guest that was building: seated b as a human rival; the resent LEFT frees it.
+  const guest = poseG(3), gn = NetPlay.create(guest), gs = stateSession();
+  assert.equal(gn.start({ role: "guest", session: gs, peers: [{ id: 1 }, { id: 2 }] }).ok, true);
+  assert.equal(guest.cars[2].human, true, "precondition: seated as a human rival");
+  gs.deliver(NetPlay.EV.LEFT, lefts(ss.a)[1].d);
+  assert.equal(guest.cars[2].human, false, "the leaver is the local AI's");
+  hn.stop(); gn.stop();
+});
+
+test("a human rival that never speaks is the local AI's after the start's own backstop, not never", () => {
+  const G = poseG(3), net = NetPlay.create(G), s = stateSession();
+  assert.equal(net.start({ role: "guest", session: s, peers: [{ id: 1 }, { id: 2 }] }).ok, true);
+  const rival = G.cars[2];
+  let t = 10_000;
+  G.netNow = t; net.tick(t);
+  t += 54_000; G.netNow = t; net.tick(t);
+  assert.equal(rival.human, true, "a rival still building stays parked where it is, as before");
+  t += 2_000; G.netNow = t; net.tick(t);
+  assert.equal(rival.human, false, "past HOLD_MAX_MS of silence it is handed to the local AI");
+  assert.equal(net.owns(rival), false);
+  assert.ok(net.status().stale.includes(2));
+  s.feed(t + 100, 2, lapPose(300), t + 110);                      // a packet still brings it back
+  t += 150; G.netNow = t; net.tick(t);
+  assert.equal(net.owns(rival), true);
+  net.stop();
+});
+
+test("a session ending hands the HOST's AI cars back scrubbed too, not only the human rivals", () => {
+  // aiRemotes skipped updateCar like any net-owned car, so their lapTime never
+  // advanced: the first line crossing after the host timed out recorded a
+  // short bogus best lap for ~19 cars (fastest-lap badge, radio call, results).
+  const G = poseG(4);                 // cars[0] guest, [1] host, [2..3] the host's AI
+  const net = NetPlay.create(G);
+  assert.equal(net.start({ role: "guest", session: stateSession() }).ok, true);
+  assert.equal(net.status().hostAi, 2, "two cars are the host's AI");
+  for (const c of G.cars.slice(1)) { c.lapTime = 0; c._secT0 = 0; c.incidentInvalidLap = false; c.dnfAt = 5; c.dnfWhy = "x"; c._nOk = true; }
+  net.stop("timeout");
+  for (const c of G.cars.slice(1)) {
+    assert.equal(c.incidentInvalidLap, true, c.code + ": the lap in progress is untimed");
+    assert.equal(c.lapTime, 0, c.code);
+    assert.equal(c._secT0, null, c.code);
+    assert.equal(c.dnfAt, null, c.code);
+    assert.equal(c._nOk, false, c.code);
+  }
+});
+
+test("a hidden tab keeps pumping the session but publishes no pose; it resumes on return", () => {
+  // Physics runs from rAF only, so a backgrounded tab's pose is frozen at the
+  // last speed. Publishing it made peers solve contact against a ghost and
+  // kept the silence rule (-> local AI) from ever firing.
+  const G = stubG();
+  const net = NetPlay.create(G);
+  const s = fakeSession();
+  const published = [];
+  let pumps = 0;
+  s.sendState = (bytes) => { published.push(NetSnapshot.decodeSnapshot(bytes)); return true; };
+  s.pump = () => { pumps++; return true; };
+  assert.equal(net.start({ role: "guest", session: s }).ok, true);
+  const had = Object.getOwnPropertyDescriptor(globalThis, "document");
+  try {
+    globalThis.document = { hidden: true };
+    net.tick(10000); net.tick(10500); net.tick(11000);
+    assert.equal(pumps, 3, "pings still pumped: the session stays alive");
+    assert.equal(published.length, 0, "no own-car entry while hidden");
+    globalThis.document = { hidden: false };
+    net.tick(11500);
+    assert.equal(published.length, 1, "publishing resumes the moment the tab is back");
+    assert.equal(published[0].cars.length, 1);
+  } finally {
+    if (had) Object.defineProperty(globalThis, "document", had); else delete globalThis.document;
+  }
 });

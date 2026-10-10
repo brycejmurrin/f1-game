@@ -143,3 +143,58 @@ test("clearance: a pair 25 m apart across a 24 m grid boundary is still seen (ce
   const j = V.judge(tr, {});
   assert.ok(j.issues.some((i) => i.code === "clearance"), "25 m apart at hw 8 (amber under 26 m): " + JSON.stringify(j.issues.map((i) => i.code + ":" + i.level)));
 });
+
+test("clearance: a pit-reach pair is found wherever the grid puts it (bug-hunt 6.6)", () => {
+  const { V, ctx } = bootEditor();
+  // A wide pit complex (reach 37.6 m): two straights 48.6 m apart (hw 7 + 7 + reach - 3) are RED
+  // as "the pit opening crosses the other part". The cell was 26 m, so the pair was seen only when
+  // the hash put both nodes in neighbouring cells: the verdict changed with the loop's z offset.
+  const def = { pit: { bands: { work: 30 } } };
+  const reach = ctx.TrackPit.resolve(def).off.workOut - 0.9;
+  const verdicts = new Set();
+  for (const z0 of [-30, -20, -10, -5, -1, 0, 5, 10, 20]) {
+    const g = 14 + reach - 3, P = [];
+    for (let x = 0; x < 1000; x += 4) P.push([x, z0]);
+    for (let z = z0; z < z0 + g; z += 4) P.push([1000, z]);
+    for (let x = 1000; x > 0; x -= 4) P.push([x, z0 + g]);
+    for (let z = z0 + g; z > z0; z -= 4) P.push([0, z]);
+    const n = P.length, f = (fn) => Float32Array.from(P.map(fn));
+    let total = 0; for (let i = 0; i < n; i++) total += Math.hypot(P[(i + 1) % n][0] - P[i][0], P[(i + 1) % n][1] - P[i][1]);
+    const tr = { n, total, px: f((p) => p[0]), pz: f((p) => p[1]), py: new Float32Array(n), curv: new Float32Array(n), hw: new Float32Array(n).fill(7) };
+    const j = V.judge(tr, { pts: [[0, 0]] }, def);
+    verdicts.add(j.issues.filter((i) => i.code === "clearance").map((i) => i.level).join(","));
+  }
+  assert.deepEqual([...verdicts], ["red"], "the same verdict at every offset");
+});
+
+test("check: a 2,000 km loop is one RED length issue, with no build (bug-hunt 6.2)", () => {
+  const { V } = bootEditor();
+  // 200 legal points spread over the +-10 km map: the polygon is ~2,200 km (548 k engine nodes).
+  const pts = Array.from({ length: 200 }, (_, i) => { const a = ((i * 37) % 200) / 200 * Math.PI * 2; return [Math.round(Math.cos(a) * 9990 * 4) / 4, Math.round(Math.sin(a) * 9990 * 4) / 4]; });
+  const t0 = Date.now();
+  const v = V.check({ name: "STAR", seed: 1, theme: "parkland", baseHW: 7, pts });
+  const ms = Date.now() - t0;
+  assert.ok(ms < 50, `answered in ${ms} ms`);
+  assert.equal(v.issues.length, 1, JSON.stringify(v.issues.map((i) => i.code)));
+  assert.equal(v.issues[0].code, "length");
+  assert.equal(v.issues[0].level, "red");
+  assert.equal(v.red, 1);
+  assert.equal(v.ok, false);
+  assert.equal(v.tr, null);
+  assert.ok(v.stats.lengthM > 2000000);
+  assert.ok(v.issues[0].fix, "LENGTH stays a one-click remedy");
+});
+
+test("judge: the crossing list is capped (bug-hunt 6.2)", () => {
+  const { V } = bootEditor();
+  // A zig-zag loop whose two chains cross ~200 times.
+  const P = [];
+  for (let k = 0; k < 200; k++) P.push([k * 10, 0], [k * 10 + 5, 80]);
+  for (let k = 200; k > 0; k--) P.push([k * 10 - 5, 40]);
+  const n = P.length, f = (fn) => Float32Array.from(P.map(fn));
+  const tr = { n, total: n * 40, px: f((p) => p[0]), pz: f((p) => p[1]), py: new Float32Array(n), curv: new Float32Array(n), hw: new Float32Array(n).fill(7) };
+  const j = V.judge(tr, {});
+  const rows = j.issues.filter((i) => i.code === "crossing" || (i.code === "bridge" && i.level === "info")).length;
+  assert.ok(rows > 0 && rows <= 64, `${rows} crossing rows`);
+  assert.ok(j.stats.crossings <= 64);
+});

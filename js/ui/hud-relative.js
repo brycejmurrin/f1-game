@@ -180,6 +180,19 @@ const HudRelative = (function () {
       return;
     }
     if (root.getBoundingClientRect && doc.getElementById && root.style) {
+      // A forced phone-fit recheck can run without tick(). Rebuild the natural
+      // occupied-row height before removing our previous fit: rows hidden by
+      // that cap are an output, not the next pass's layout input.
+      for (let i = 0; i < ROWS; i++) {
+        const hidden = !rows[i].car;
+        if (built[i].el.hidden !== hidden) built[i].el.hidden = hidden;
+      }
+      // Re-derive from the CSS box every pass: left / max-height are only ever
+      // SET on a clash, so a clash that went away (STEERING back to BUTTONS, a
+      // lower HUD SIZE, a rotation) otherwise left the card offset and truncated
+      // until reload (a stale max-height also makes scrollHeight > clientHeight
+      // hide rows).
+      if (root.style.removeProperty) { root.style.removeProperty("left"); root.style.removeProperty("max-height"); }
       const rootEl = doc.documentElement;
       let zPub = 1;
       if (rootEl && rootEl.style && rootEl.style.getPropertyValue) {

@@ -120,7 +120,6 @@ const PRESETS = Object.freeze({
 let _store = {};
 let _global = {};
 let _comfort = {};
-let _any = false;            // fast path: skip apply() entirely when nothing is tuned
 
 function sanitizeProf(src) {
   const prof = {};
@@ -150,28 +149,24 @@ function sanitizeComfort(raw) {
   }
   return out;
 }
-function refreshAny() {
-  _any = Object.keys(_store).length > 0 || Object.keys(_global).length > 0 ||
-    (typeof _comfort.fovBias === "number" && _comfort.fovBias !== 0);
-}
-function load(raw) { _store = sanitize(raw); refreshAny(); return _store; }
-function loadGlobal(raw) { _global = sanitizeProf(raw); refreshAny(); return _global; }
-function loadComfort(raw) { _comfort = sanitizeComfort(raw); refreshAny(); return _comfort; }
+function load(raw) { _store = sanitize(raw); return _store; }
+function loadGlobal(raw) { _global = sanitizeProf(raw); return _global; }
+function loadComfort(raw) { _comfort = sanitizeComfort(raw); return _comfort; }
 load(store.get(KEY, null));
 loadGlobal(store.get(KEY_GLOBAL, null));
 loadComfort(store.get(KEY_COMFORT, null));
 
-function persist() {
-  if (Object.keys(_store).length) store.set(KEY, _store); else store.set(KEY, {});
-  if (Object.keys(_global).length) store.set(KEY_GLOBAL, _global); else store.set(KEY_GLOBAL, {});
-  if (Object.keys(_comfort).length) store.set(KEY_COMFORT, _comfort); else store.set(KEY_COMFORT, {});
+// `which` = "modes" | "global" | "comfort" writes only that store (the sliders fire
+// this on every input event); no argument writes all three (presets, import, reset).
+function persist(which) {
+  if (!which || which === "modes") store.set(KEY, _store);
+  if (!which || which === "global") store.set(KEY_GLOBAL, _global);
+  if (!which || which === "comfort") store.set(KEY_COMFORT, _comfort);
 }
 
 function mergedProf(mode) {
   // Global baseline under per-mode: mode wins on a shared knob.
   const g = _global, m = _store[mode];
-  if (!g && !m) return null;
-  if (!g) return m;
   if (!m) return g;
   const out = {};
   for (const d of CAM_TUNE_DEFS) {
@@ -243,11 +238,6 @@ function exportEdits() {
 function exportGlobal() {
   return Object.keys(_global).length ? { ..._global } : {};
 }
-function exportComfort() {
-  const out = {};
-  for (const d of COMFORT_DEFS) out[d.id] = comfortGet(d.id);
-  return out;
-}
 function exportPack() {
   const modes = exportEdits();
   const global = exportGlobal();
@@ -271,7 +261,6 @@ function set(mode, id, v) {
   const prof = _store[mode] || (_store[mode] = {});
   if (v === d.def) delete prof[id]; else prof[id] = v;
   if (!Object.keys(prof).length) delete _store[mode];
-  refreshAny();
   return true;
 }
 function setGlobal(id, v) {
@@ -279,18 +268,14 @@ function setGlobal(id, v) {
   if (!d || typeof v !== "number" || !isFinite(v)) return false;
   v = clamp(v, d.min, d.max);
   if (v === d.def) delete _global[id]; else _global[id] = v;
-  refreshAny();
   return true;
 }
-function reset(mode) { Log.info("game", "CamTune.reset " + mode); delete _store[mode]; refreshAny(); }
-function resetGlobal() { Log.info("game", "CamTune.resetGlobal"); _global = {}; refreshAny(); }
+function reset(mode) { Log.info("game", "CamTune.reset " + mode); delete _store[mode]; }
+function resetGlobal() { Log.info("game", "CamTune.resetGlobal"); _global = {}; }
 function resetAll() {
   Log.info("game", "CamTune.resetAll");
   _store = {}; _global = {}; _comfort = {};
-  refreshAny();
 }
-function all() { return _store; }
-function globalAll() { return _global; }
 
 function comfortGet(id) {
   const d = COMFORT_BY_ID[id];
@@ -302,10 +287,8 @@ function comfortSet(id, v) {
   if (!d || typeof v !== "number" || !isFinite(v)) return false;
   v = clamp(v, d.min, d.max);
   if (v === d.def) delete _comfort[id]; else _comfort[id] = v;
-  refreshAny();
   return true;
 }
-function comfortReset() { _comfort = {}; refreshAny(); }
 function fovBias() { return comfortGet("fovBias"); }
 function speedFov() { return comfortGet("speedFov"); }
 function bob() { return comfortGet("bob"); }
@@ -330,11 +313,9 @@ function copyFrom(srcMode, dstMode) {
   const src = _store[srcMode];
   if (!src || !Object.keys(src).length) {
     delete _store[dstMode];
-    refreshAny();
     return true;
   }
   _store[dstMode] = { ...src };
-  refreshAny();
   return true;
 }
 function applyToAllModes(srcMode) {
@@ -350,7 +331,6 @@ function applyToAllModes(srcMode) {
     else _store[m] = { ...src };
     n++;
   }
-  refreshAny();
   return n;
 }
 
@@ -370,43 +350,34 @@ function applyPreset(id) {
   else if (p.global) _global = sanitizeProf(p.global);
   if (p.comfort === null) _comfort = {};
   else if (p.comfort) _comfort = sanitizeComfort(p.comfort);
-  refreshAny();
   return true;
 }
 
 function importModes(raw) {
   const next = sanitize(raw);
   _store = next;
-  refreshAny();
   return Object.keys(next).length;
 }
 function importGlobal(raw) {
   _global = sanitizeProf(raw);
-  refreshAny();
   return Object.keys(_global).length;
 }
 function importComfort(raw) {
   _comfort = sanitizeComfort(raw);
-  refreshAny();
   return Object.keys(_comfort).length;
 }
 
 // Accept a pack, a legacy CameraEdits object, or a bare modes map.
 function importPack(raw) {
   if (!raw || typeof raw !== "object") return { ok: false, reason: "not an object" };
-  let modes = null, global = null, comfort = null;
   if (raw.v === 1 || raw.modes || raw.global || raw.comfort) {
-    modes = raw.modes || {};
-    global = raw.global || {};
-    comfort = raw.comfort || {};
-  } else {
-    // Legacy window.CameraEdits = { chase: {...}, ... } or a modes-only map.
-    modes = raw;
+    // A pack is authoritative for all three stores.
+    return { ok: true, modes: importModes(raw.modes || {}), global: importGlobal(raw.global || {}), comfort: importComfort(raw.comfort || {}) };
   }
-  const nModes = importModes(modes);
-  const nGlobal = importGlobal(global);
-  const nComfort = importComfort(comfort);
-  return { ok: true, modes: nModes, global: nGlobal, comfort: nComfort };
+  // Legacy window.CameraEdits = { chase: {...}, ... } or a modes-only map: it says
+  // nothing about the GLOBAL baseline or the COMFORT (accessibility) knobs, so it
+  // must not wipe them.
+  return { ok: true, modes: importModes(raw), global: countGlobal(), comfort: Object.keys(_comfort).length };
 }
 
 // Compact share code: APXC1 + base64url(JSON). No compression — packs stay small.
@@ -480,10 +451,12 @@ function decodeShare(text) {
   if (typeof text !== "string") return { ok: false, reason: "not a string" };
   const t = text.trim();
   if (!t) return { ok: false, reason: "empty" };
-  // Share code
-  if (t.indexOf(SHARE_MAGIC + ".") === 0) {
+  // Share code: bare, or the last line of the COPY VALUES block (CameraEdits +
+  // comments + pack JSON + code), so the token is looked for anywhere in the paste.
+  const sc = /(?:^|\s)APXC1\.([A-Za-z0-9_-]+)/.exec(t);
+  if (sc) {
     try {
-      const json = b64urlDecode(t.slice(SHARE_MAGIC.length + 1));
+      const json = b64urlDecode(sc[1]);
       const obj = JSON.parse(json);
       return { ok: true, pack: obj, kind: "share" };
     } catch (e) {
@@ -557,15 +530,15 @@ function apply(mode, eye, tgt, fov) {
 return { CAM_TUNE_DEFS, COMFORT_DEFS, PRESETS, FOV_MIN, FOV_MAX, GLOBAL_MODE, SHARE_MAGIC,
          KEY, KEY_GLOBAL, KEY_COMFORT,
          apply, values, get, getModeOnly, getGlobal, stored, storedGlobal, cornerLead, cornerHang,
-         exportEdits, exportGlobal, exportComfort, exportPack,
+         exportEdits, exportGlobal, exportPack,
          set, setGlobal, reset, resetGlobal, resetAll,
-         count, countGlobal, tunedModes, all, globalAll, load, loadGlobal, loadComfort, persist,
-         comfortGet, comfortSet, comfortReset, fovBias, speedFov, bob, rollLean,
+         count, countGlobal, tunedModes, load, loadGlobal, loadComfort, persist,
+         comfortGet, comfortSet, fovBias, speedFov, bob, rollLean,
          shakeOffset, buzzAmp, rollTarget,
          copyFrom, applyToAllModes, applyPreset,
          importModes, importGlobal, importComfort, importPack, importText,
          encodeShare, decodeShare,
          defs: () => CAM_TUNE_DEFS, comfortDefs: () => COMFORT_DEFS,
-         presets: () => PRESETS, active: () => _any };
+         presets: () => PRESETS };
 })();
 Object.freeze(CamTune);

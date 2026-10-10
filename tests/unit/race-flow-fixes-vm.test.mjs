@@ -550,4 +550,70 @@ test("launch: a TIME TRIAL and the DAILY, started from RACE SETTINGS, play the g
     assert.ok(q.state === "count" || q.state === "race", `…and starts at once (state ${q.state})`);
   } finally { g.close(); }
   }
+// ---- WP-G flow fixes (code review 2026-10-09) --------------------------------
+
+const drain = async (n = 50) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
+
+test("quitToMenu() during a race load cancels it: the body does not go on to count the grid down", async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const G = g.G;
+    G.quitToMenu();
+    const round0 = G.raceRound;
+    const started = G.startRace();   // SessionEntry hands startRaceBody its own `current`
+    for (let i = 0; i < 18; i++) await Promise.resolve();
+    G.quitToMenu();
+    assert.equal(await started, false, "a canceled race body resolves false without rejecting");
+    await drain();
+    assert.equal(G.state, "menu", "the abandoned load must not undo the quit");
+    assert.equal(G.raceRound, round0, "and must not count a race that never started");
+  } finally { g.close(); }
+});
+
+test("a second startRace() after the first passed raceIndex++ joins it: one race, round +1, state stays count", async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const G = g.G;
+    G.quitToMenu();
+    const round0 = G.raceRound;
+    const first = G.startRace();
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    assert.equal(G.raceRound, round0 + 1, "the first body is past raceIndex++");
+    const second = G.startRace();
+    await Promise.allSettled([first, second]);
+    await drain(80);
+    assert.equal(second, first, "the in-flight request is shared, not restarted");
+    assert.equal(G.state, "count", "the freshly started race survives its duplicate");
+    assert.equal(G.raceRound, round0 + 1);
+  } finally { g.close(); }
+});
+
+test("manual RECOVER does nothing to a car serving a pit stop; on the track it still puts the car back", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G, p = G.player;
+    g.step(60 * 3);
+    assert.equal(G.state, "race");
+    // rescuePlayer() stamps rescueLastT; the pit-box hold moves x on its own, so x is no witness.
+    p.rescueLastT = -1; p.pitState = "box"; p.speed = 0;
+    vm.runInContext('Input.remoteEvent("recover")', g.ctx);
+    g.step(1);
+    assert.equal(p.rescueLastT, -1, "a boxed car is not rescued: x = 0 would strand it on the racing surface");
+    p.pitState = null;
+    vm.runInContext('Input.remoteEvent("recover")', g.ctx);
+    g.step(1);
+    assert.notEqual(p.rescueLastT, -1, "a car on the racing surface is still recovered");
+  } finally { g.close(); }
+});
+
+test("startRaceBody aborts to the menu when the race-session bundle failed to load (source-level)", async () => {
+  // The loader is a closure over game.js and game-vm's onScript hook never sees the shell's scripts, so a behavioural
+  // stub of ensureRaceSession is not reachable from here. Pin the guard instead: the boolean is read, and a false
+  // stops the loading screen, quits to the menu, tells the player and returns before the stubs can start a race.
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  const body = src.slice(src.indexOf("async function startRaceBody()"), src.indexOf("async function startRaceBody()") + 6000);
+  assert.match(body, /const sessionOk = await ensureRaceSession\(\);/);
+  assert.match(body, /if \(!sessionOk\) \{ loadingScreen\.stop\(\); quitToMenu\(\); announce\("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"\); return false; \}/);
+  assert.ok(body.indexOf("if (!sessionOk)") < body.indexOf("await ensureAudio()"), "the abort comes before anything starts the race");
 });

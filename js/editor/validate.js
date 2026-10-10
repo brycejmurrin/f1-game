@@ -35,6 +35,7 @@ const TrackValidate = (function () {
   // The clearance scan's grid cell: a 3×3 neighbourhood sees every pair closer
   // than one cell, and the AMBER threshold reaches hw_i + hw_j + 10 m.
   const CLEAR_CELL = Math.max(24, 2 * LIMITS.hwMax + 10);
+  const MAX_CROSSINGS = 64, MAP_HALF = 10000;   // MAP_HALF: CustomTracks.LIMITS.coord
 
   /** The built-def for a design under its CONTENT id (CustomTracks.sanitize's
    *  it.id) — the id seeds the elevation ripple, so the preview is the saved
@@ -110,6 +111,17 @@ const TrackValidate = (function () {
     const add = (code, level, msg, extra) => issues.push(Object.assign({ code, level, msg }, extra || {}));
     const pts = design && Array.isArray(design.pts) ? design.pts : [];
     if (pts.length < LIMITS.ptsMin) add("points", "red", "Needs at least " + LIMITS.ptsMin + " points — keep drawing");
+    // A loop thousands of km long (a share code can spread 200 legal points over the
+    // whole map) would build ~500 k nodes and scan them for crossings: judge the
+    // control polygon first and say so without building. Past 2× the lap cap the
+    // built lap is red on length whatever the smoothing does.
+    const onMap = (p) => Array.isArray(p) && Math.abs(+p[0]) <= MAP_HALF && Math.abs(+p[1]) <= MAP_HALF;   // off the map is the `bounds` refusal below, which builds nothing
+    const poly = pts.length >= LIMITS.ptsMin && pts.every(onMap) ? S.polyLen(pts.map((p) => [+p[0], +p[1]]), true) : 0;
+    if (poly > 2 * LIMITS.lenMax) {
+      add("length", "red", "Lap is " + (poly / 1000).toFixed(1) + " km — at most 7 km", { fix: "length" });
+      const stats = Object.assign(emptyStats(), { lengthM: Math.round(poly) });
+      return { ok: false, red: issues.length, amber: 0, issues, stats, def: null, tr: null, turns: [] };
+    }
     if (pts.length > LIMITS.ptsMax) add("points", "red", "Too many points (" + pts.length + "/" + LIMITS.ptsMax + ") — delete some", { fix: "points" });
     else if (pts.length > LIMITS.ptsAmber) add("points", "amber", pts.length + " points — near the " + LIMITS.ptsMax + " cap", { fix: "points" });
     for (let i = 0; i < pts.length && pts.length >= 2; i++) {
@@ -180,7 +192,8 @@ const TrackValidate = (function () {
       else if (foldAmber) add("fold", "amber", "Corner nearly as tight as the road is wide", { s: foldAmber.k * ds, k: foldAmber.k, fix: "fold" });
       // Crossings: covered by a bridge (built height difference) or at grade.
       const bridges = Array.isArray(design.bridges) ? design.bridges : [];
-      const xs = S.crossings(px, pz, n, 3);
+      // Capped: a tangle of a thousand crossings is one message, not a thousand rows.
+      const xs = S.crossings(px, pz, n, 3).slice(0, MAX_CROSSINGS);
       for (const c of xs) {
         stats.crossings++;
         const sep = Math.abs(py[c.i] - py[c.j]);
@@ -207,7 +220,11 @@ const TrackValidate = (function () {
           pitReach = Math.max(0, ((off && off.workOut) || 0) - 0.9);
         } catch (_) { pitReach = 0; }
       }
-      for (const w of S.clearance(px, pz, py, n, Dnodes, LIMITS.bridgeSep, CLEAR_CELL, 6)) {
+      // The cell must out-reach the widest threshold below (both half-widths + the
+      // pit opening, or 10 m): at 26 m a pit-reach pair 35-45 m apart was found only
+      // when the hash put its two nodes in neighbouring cells.
+      const cell = Math.max(CLEAR_CELL, 2 * LIMITS.hwMax + Math.max(10, pitReach) + 2);
+      for (const w of S.clearance(px, pz, py, n, Dnodes, LIMITS.bridgeSep, cell, 6)) {
         const need = hwA[w.i] + hwA[w.j];
         if (w.dist < need + 2) { add("clearance", "red", "Two parts of the track overlap (" + Math.round(w.dist) + " m apart)", { s: w.i * ds, s2: w.j * ds, fix: "clearance" }); break; }
         if (pitReach > 2 && w.dist < need + pitReach) { add("clearance", "red", "The pit opening crosses the other part of the track", { s: w.i * ds, s2: w.j * ds, fix: "clearance" }); break; }

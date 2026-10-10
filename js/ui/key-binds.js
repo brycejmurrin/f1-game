@@ -457,6 +457,9 @@ function create(G) {
         if (!running) return;
         if (i >= STEPS.length) { finish(map, "Wheel set up. Steering, throttle and brake are mapped to the axes you moved."); return; }
         say(STEPS[i].ask);
+        // Axes already chosen are off the table: the wheel is still springing back
+        // from the steering step when the pedal steps snapshot their rest.
+        const taken = STEPS.slice(0, i).map((s) => map[s.key]).filter((a) => a != null);
         Input.beginAxisCapture((axis, dir) => {
           if (!running) return;
           const st = STEPS[i];
@@ -469,7 +472,7 @@ function create(G) {
           tick();
           clearTimeout(stepTimer);
           stepTimer = setTimeout(step, 600);   // let the pedal come back up before listening again
-        });
+        }, { exclude: taken });
       };
       step();
     };

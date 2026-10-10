@@ -139,7 +139,14 @@ test("a SUBSYSTEM key is never silently promoted to a shipped default", () => {
   const review = reviewKeys();
   assert.ok(Object.keys(review).length > 0,
     "settings-export.js marks no key `subsystem:` — the classification was lost, and nothing now stops an export shipping the driving model");
+  // Subsystem keys that ship as a DELIBERATE product decision (--include), each
+  // with its reason. Adding one here is that decision, reviewed; a drive-by
+  // export still fails the loop below.
+  const DELIBERATE = {
+    unlimitedBudget: "FREE BUILD ships on (2026-10-09): the shipped garage builds exceed Parts.BUDGET, so with the cap on 8 of 11 teams have no clickable part row on a fresh install",
+  };
   for (const [k, why] of Object.entries(review)) {
+    if (DELIBERATE[k]) continue;
     assert.equal(Object.prototype.hasOwnProperty.call(obj, k), false,
       `${k} is in the shipped defaults: ${why}. It needs --include and a deliberate decision, not a drive-by export.`);
   }

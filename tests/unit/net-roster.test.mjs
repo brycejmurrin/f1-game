@@ -367,6 +367,12 @@ test("predict() and the tick's _n fields are clamped through the same helper as 
   assert.deepEqual([c.s, c.x, c.speed, c.lap], [0, 0, 0, 6], "non-finite reads as 0, exactly as the pose always did");
   assert.deepEqual(NetPlay.clampWire({ s: -5, x: -999, head: 0, speed: -999, lap: -3 }, 5000, 5).speed, -200);
   assert.ok(Math.abs(c.head) <= Math.PI, "head is wrapped into one turn");
+  // The wire gear is a nibble (0-15); the gearbox has 8, and gearHi(g) is undefined above them.
+  const gearOf = (gear) => NetPlay.clampWire({ s: 0, x: 0, head: 0, speed: 0, lap: 1, gear }, 5000, 5).gear;
+  assert.equal(gearOf(15), 8, "a corrupt 15 cannot index past the box");
+  assert.equal(gearOf(0), 1);
+  assert.equal(gearOf(undefined), 1);
+  assert.equal(gearOf(5), 5, "a real gear passes untouched");
   net.stop("local");
 });
 

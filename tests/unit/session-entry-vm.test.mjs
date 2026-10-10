@@ -121,7 +121,12 @@ test("two agent requests have distinct outcomes when the later mode supersedes",
     assert.equal(fresh.track, "monaco");
     assert.equal(g.G.track.def.id, "monaco");
     assert.equal(g.G.session, "tt");
-  } finally { b.restore(); if (m) m.restore(); }
+  } finally {
+    // The Monaco interceptor wraps Bahrain's: unwind in reverse order so a
+    // later failed Bahrain fetch can retry through the real script loader.
+    if (m) m.restore();
+    b.restore();
+  }
 });
 
 test("fire-and-forget start survives a delayed script failure without hiding awaiter rejection", async () => {
@@ -213,4 +218,18 @@ test("restarting results releases its montage before the next qualifying field i
   button.onclick();
   assert.equal(g.G.dbgCam, null, "old control cannot acquire qualifying results");
   } finally { doc.getElementById = get; }
+});
+
+test("commit receives a current() check that goes false after cancel()", async () => {
+  const entry = vm.runInContext("SessionEntry", g.ctx).create();
+  let seen = null, whileCurrent = null;
+  const p = entry.begin("race", "k", () => Promise.resolve(), (current) => {
+    seen = current; whileCurrent = current();
+    return Promise.resolve(true);
+  }, () => true);
+  assert.equal(await p, true);
+  assert.equal(typeof seen, "function", "commit is handed the supersession check");
+  assert.equal(whileCurrent, true, "true while this request is the live one");
+  entry.cancel();
+  assert.equal(seen(), false, "false once cancel() bumps the generation");
 });
