@@ -240,3 +240,28 @@ test("workTreeId is the committed tree once the dirty edits are committed, and m
     assert.notEqual(workTreeId(dir), dirty);
   } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });
+
+test("workTreeId sees a same-size rewrite that git's stat cache would call clean (racy index)", async () => {
+  // Deterministic version of the CI flake: no timing luck. The real index is made older than the entry
+  // (so git itself treats the entry as racily clean), ctime is not trusted (a rewrite always moves it), and
+  // the file is rewritten with the SAME size and its ORIGINAL mtime restored. A copy of the index with a
+  // fresh mtime made every entry look safely older, git trusted the stat cache, and the old tree came back.
+  const { workTreeId } = await import("../../tools/lib/work-tree-id.mjs");
+  const { execFileSync } = await import("node:child_process");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-racy-"));
+  const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
+  try {
+    g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t"); g("config", "core.trustctime", "false");
+    const file = path.join(dir, "a.js");
+    fs.writeFileSync(file, "1\n"); g("add", "-A"); g("commit", "-qm", "base");
+    const X = Date.now() / 1000 - 50;
+    fs.utimesSync(file, X, X);
+    g("update-index", "--refresh");                      // the entry now records mtime X
+    const index = path.join(dir, ".git", "index");
+    fs.utimesSync(index, X - 10, X - 10);                // index older than the entry: racily clean for git
+    const before = workTreeId(dir);
+    fs.writeFileSync(file, "3\n"); fs.utimesSync(file, X, X);   // same size, same mtime, different content
+    fs.utimesSync(index, X - 10, X - 10);
+    assert.notEqual(workTreeId(dir), before, "a same-size rewrite in a racy window must still move the tree id");
+  } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+});

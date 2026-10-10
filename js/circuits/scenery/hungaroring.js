@@ -15,6 +15,18 @@
               forestEdge, along, modelGroup, overheadSpan, groundPatch, groundedSegments,
               recordBarrier, circuitKit, pal, ATM, terrainYAt } = api;
 
+      // FRAMES. This file is authored against the scenery origin (sceneryStartFrac
+      // 0.9825), 0.0971 of a lap BEFORE the real line, so a raw authored fraction
+      // lands 425 m early in the racing frame (the pit building stood 427 m before
+      // the engine pit complex). `au(r)` is the authored fraction that lands at
+      // RACING fraction r; `sl(f)` re-keys an authored-at-the-line fraction f.
+      // Corner stands go through au(def.turns[i]), the curated racing-frame apex.
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
+      const au = (r) => Math.round((((r - api.def._sceneryShift) % 1) + 1) % 1 * 1e4) / 1e4;
+      const TURN = (i) => au(api.def.turns[i - 1]);
+      const T5 = TURN(5) + 0.012, T67 = TURN(6), T14 = TURN(14);
+
       // A crowd blanket on the hillside: prop()'s footprint and gap (near
       // edge), but ~6 m tiles each seated on the ground under it and standing
       // `h` proud. prop() sinks 0.8 m, so these 0.3-0.65 m patches were buried
@@ -170,7 +182,7 @@
                 h < 0.45 ? TREE : TREE2, 7, null);
       }
 
-      billboard(K(0.00), 1, 38, 22, 6, RED);
+      billboard(K(sl(0.00)), 1, 38, 22, 6, RED);
       // T1 / main-straight outside stands (racing side +1 = opposite pit.side -1).
       // oversteer48: Pit Exit 1 closest to T1 (uncovered), Pit Exit 2 between it and
       // the main grandstand, T1 stand adjacent — all on the outside near T1.
@@ -196,15 +208,18 @@
       // (it reads the barrier/solid index built by grandstandEx's recordBarrier
       // + indexSolid AFTER this runs) frames them INSIDE the treeline rather
       // than growing trees through them.
-      grandstandEx(0.155, 1, 24, 58, SHELL, CROWD[1],
+      // The corner stands are keyed to the curated racing-frame apexes (T5 / T6-7
+      // midpoint / T14) through au(), not to raw authored fractions: 0.155, 0.255
+      // and 0.90 stood at racing 0.058, 0.158 and 0.803, nowhere near their turns.
+      grandstandEx(T5, 1, 24, 58, SHELL, CROWD[1],
                    { livery: "alu", tiers: 1, roof: "truss", endWalls: true });     // Turn 5 Mogyoród
-      grandstandEx(0.255, -1, 22, 54, SHELL, CROWD[3],
+      grandstandEx(T67, -1, 22, 54, SHELL, CROWD[3],
                    { livery: "steel", tiers: 1, roof: "cantilever", suites: true }); // T6/7 Driving Centre chicane
       grandstandEx(0.40,  1, 13, 46, SHELL, CROWD[0],
                    { livery: "steel", tiers: 2, roof: "flat" });
       grandstandEx(0.55, -1, 10, 50, SHELL, CROWD[1],
                    { livery: "alu", tiers: 1, roof: "truss" });
-      grandstandEx(0.90,  1, 10, 62, SHELL, CROWD[0],   // Club stand — final corner
+      grandstandEx(T14, 1, 10, 62, SHELL, CROWD[0],   // Club stand — final corner (T14)
                    { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
 
       const FASCIA  = [0.94, 0.92, 0.84];
@@ -221,20 +236,20 @@
       standAccent(0.07, 1, 11, 58);
       standAccent(0.10, -1, 10, 56);
       standAccent(0.12, -1, 10, 44);
-      standAccent(0.155, 1, 24, 58);
+      standAccent(T5, 1, 24, 58);
       // No standAccent on 0.255 — it fought the cantilever roof (flatCoplanar).
       standAccent(0.40,  1, 13, 46);
       standAccent(0.55, -1, 10, 50);
-      standAccent(0.90,  1, 10, 62);
+      standAccent(T14, 1, 10, 62);
 
       // Grandstand lit-window concourse strips
       const gsLit = [
         { s: 0.07, side: 1, gap: 18, len: 54 },
         { s: 0.10, side: -1, gap: 15, len: 52 },
-        { s: 0.155, side: 1, gap: 26, len: 54 },
-        { s: 0.255, side: -1, gap: 24, len: 50 },
+        { s: T5, side: 1, gap: 26, len: 54 },
+        { s: T67, side: -1, gap: 24, len: 50 },
         { s: 0.55, side: -1, gap: 15, len: 46 },
-        { s: 0.90, side: 1, gap: 15, len: 58 },
+        { s: T14, side: 1, gap: 15, len: 58 },
       ];
       for (const g of gsLit) {
         const k = K(g.s);
@@ -341,7 +356,12 @@
         const LEN = 128;
         const STOREYS = 5;
         const STOREY_H = 3.4;
-        const a = anchor(K(0.00), -1, 24);
+        // Re-keyed through sl() onto the real line, where the engine builds its own
+        // garages and lane (pit.keep: 30 m beyond the edge, racing 0.93-0.045): the
+        // building is the block BEHIND them: its 22 m wide bounds must clear that
+        // footprint outright or the engine supersedes the whole (required) group,
+        // which gap 24 and gap 40 both were, so it stands at gap 44.
+        const a = anchor(K(sl(0.00)), -1, 44);
         if (onTrack(a.c[0], a.c[2], 14)) return;
         const b = [a.r, a.u, a.t];
         const totalH = STOREYS * STOREY_H;
@@ -351,6 +371,9 @@
           const SLAB2 = [0.84, 0.85, 0.88];
           const DOOR_N = 16, DOOR_PITCH = LEN / DOOR_N;
           stage._mat = MAT.CONCRETE;
+          // The block stands on the slope behind the garages (ground falls ~1 m across
+          // its 11.5 m depth): fill down to the lowest sampled corner.
+          foundation(stage, { center: a.c, size: [11.1, LEN - 0.4], top: a.c[1] + 0.02, basis: b, col: PADDOCK });
           addBox(stage, vadd(a.c, a.u, STOREY_H * 0.5), [11.5, STOREY_H, LEN], WHITE, b);
           for (let i = 0; i < DOOR_N; i++) {
             const off = (i - (DOOR_N - 1) / 2) * DOOR_PITCH;
@@ -394,7 +417,7 @@
             addBox(stage, vadd(vadd(a.c, a.t, off), a.u, PERG_H),
                    [8.5, 0.1, 0.16], PERGOLA, b);
             if (i % 2 === 0)
-              addCyl(stage, vadd(vadd(a.c, a.t, off), a.r, 3.8), 0.07, 2.3, PERGOLA, 4, b);
+              addCyl(stage, vadd(vadd(vadd(a.c, a.t, off), a.r, 3.8), a.u, roofY + 0.14), 0.07, 2.05, PERGOLA, 4, b);   // on the roof slab, up to the beam
           }
           addBox(stage, vadd(vadd(a.c, a.r, 3.2), a.u, PERG_H + 0.12),
                  [0.12, 0.12, LEN - 32], PERGOLA, b);
@@ -404,17 +427,22 @@
           center: vadd(a.c, a.u, totalH * 0.5), size: [22, totalH + 3, LEN + 8], basis: b,
         }, dressPit, { required: true });
       })();
-      groundPatch(K(0.00), -1, 70, [130, 1.0, 160], PADDOCK,
+      groundPatch(K(sl(0.00)), -1, 70, [130, 1.0, 160], PADDOCK,
                   { id: "hungaroring-paddock", samples: 8 });
       // Rear motorhome row omitted — motorhome() posts buried; seated boxes
       // deferred to keep props-tris within the 0.5 % ratchet of the prior slab.
       // timing/control block dropped this pass — floated unsupported over the
       // paddock apron after the pit mass grew; re-seat in a follow-up if needed.
-      broadcastCompound(K(0.045), -1, 78, { vans: 4, dishes: 2, mastH: 10 });
+      broadcastCompound(K(sl(0.045)), -1, 78, { vans: 4, dishes: 2, mastH: 10 });
+      // Pit wall, re-keyed to the real pit straight. The engine's own wall owns the
+      // pit.keep window (racing 0.93-0.04 at this dist) and supersedes every chord
+      // inside it by design. The walk starts on the pit-ENTRY approach (racing
+      // 0.9125-0.93, outside the footprint) so the entry wall still emits, and stops
+      // at the last node inside the window (racing 0.0375): no stub past the exit.
       const pitWallPoints = [];
-      for (let i = 0; i <= 28; i++) {
-        const s = (0.985 + i * 0.0025) % 1;
-        pitWallPoints.push({ k: K(s), side: -1, dist: 8 });
+      for (let i = 0; i <= 50; i++) {
+        const s = (0.9125 + i * 0.0025) % 1;
+        pitWallPoints.push({ k: K(sl(s)), side: -1, dist: 8 });
       }
       groundedSegments({
         id: "hungaroring-pit-wall", points: pitWallPoints,
@@ -425,14 +453,13 @@
         points: pitWallPoints.map((point) => Object.assign({}, point, { dist: 7.5 })),
         width: 0.35, height: 0.3, color: RED,
       });
-      recordBarrier(0.985, 0.055, -1, 8);
+      recordBarrier(sl(0.9125), sl(0.0375), -1, 8);
       // The start gantry stands over the REAL line, re-keyed through sl() (the
       // brands_hatch idiom): this file's s = 0 is the scenery origin, and the
       // shift alone put the span 402 m before the grid. It carries the
       // countdown lamps (startLights, js/race/start-lights.js).
-      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       overheadSpan({
-        id: "hungaroring-start-gantry", frac: (0.005 + SL) % 1, clearance: 7.05,
+        id: "hungaroring-start-gantry", frac: sl(0.005), clearance: 7.05,
         thickness: 0.9, depth: 1.4, supportGap: 2.5, startLights: true,
         color: [0.30, 0.32, 0.36], required: true,
       });
@@ -444,7 +471,7 @@
         const FACE = 56;
         const DEPTH = 26;
         const gap0 = 28; // clear of road — tighter gaps got footprint-rejected
-        const a0 = anchor(K(0.00), 1, gap0 + DEPTH * 0.4);
+        const a0 = anchor(K(sl(0.00)), 1, gap0 + DEPTH * 0.4);
         if (onTrack(a0.c[0], a0.c[2], FACE * 0.35)) return;
         const b0 = [a0.r, a0.u, a0.t];
         modelGroup("hungaroring-main-tribune", {
@@ -452,7 +479,7 @@
           size: [DEPTH * 0.7, 20, FACE + 6], basis: b0,
         }, (stage) => {
           for (let t = 0; t < 4; t++) {
-            const a = anchor(K(0.00), 1, gap0 + t * 4.8);
+            const a = anchor(K(sl(0.00)), 1, gap0 + t * 4.8);
             const b = [a.r, a.u, a.t];
             const h = 2.2 + t * 2.35;
             const len = FACE - t * 2.5;
@@ -465,12 +492,12 @@
             stage._mat = 0;
             addBox(stage, vadd(a.c, a.u, h + 1.35), [3.9, 0.2, len - 1], [0.90, 0.88, 0.80], b);
           }
-          const aR = anchor(K(0.00), 1, gap0 + DEPTH * 0.45);
+          const aR = anchor(K(sl(0.00)), 1, gap0 + DEPTH * 0.45);
           stage._mat = MAT.METAL;
           addBox(stage, vadd(aR.c, aR.u, 16.2), [DEPTH * 0.7, 0.75, FACE + 4], ROOF_DK, [aR.r, aR.u, aR.t]);
           addBox(stage, vadd(vadd(aR.c, aR.r, -DEPTH * 0.22), aR.u, 15.4),
                  [1.0, 1.4, FACE + 2], [0.32, 0.33, 0.36], [aR.r, aR.u, aR.t]);
-          const aB = anchor(K(0.00), 1, gap0 + DEPTH * 0.78);
+          const aB = anchor(K(sl(0.00)), 1, gap0 + DEPTH * 0.78);
           stage._mat = MAT.CONCRETE;
           addBox(stage, vadd(aB.c, aB.u, 9), [3.2, 16, FACE - 6], SHELL2, [aB.r, aB.u, aB.t]);
           stage._mat = 0;
@@ -479,8 +506,8 @@
         }, { required: true });
       })();
 
-      function tunnelStairhead(s, side) {
-        const a = anchor(K(s), side, 14);
+      function tunnelStairhead(s, side, gap = 14) {
+        const a = anchor(K(s), side, gap);
         if (onTrack(a.c[0], a.c[2], 6)) return;
         const b = [a.r, a.u, a.t];
         out._mat = MAT.CONCRETE;
@@ -494,8 +521,11 @@
         out._mat = 0;
       }
       // Two tunnels (Motorsport.com): one mouth pair near each end of the complex.
-      tunnelStairhead(0.985, -1);
-      tunnelStairhead(0.022,  1);
+      // The pit-side mouth sits at the ENTRY end of the complex, ahead of the engine's
+      // pit.keep window (14 m at racing 0.97, 30 m from 0.99): on the lane footprint
+      // at gap 14 the guard drops it, so it stands back at gap 24 where it clears.
+      tunnelStairhead(sl(0.965), -1, 24);
+      tunnelStairhead(sl(0.022),  1);
 
       // T1 basin: grassy amphitheatre floor (no standing water — satellite/OSM
       // show grass banking in the Valley of the Three Springs at Mogyoród).
@@ -572,9 +602,9 @@
       for (const [s, side, gap, len, rows] of [
         [0.07,  1, 32, 52, 3],   // Turn 1 / Pit Exit hillside
         [0.12, -1, 26, 48, 3],   // inside the slow complex
-        [0.145, 1, 36, 40, 2],   // grass shoulder around the Turn 5 (Mogyoród) stand
+        [T5 - 0.01, 1, 36, 40, 2],   // grass shoulder around the Turn 5 (Mogyoród) stand
         [0.19, -1, 30, 40, 2],   // inside hillside threading T5 into the chicane
-        [0.225, 1, 34, 38, 2],   // grass shoulder around the T6/7 "Driving Centre" stand
+        [T67 - 0.03, 1, 34, 38, 2],   // grass shoulder around the T6/7 "Driving Centre" stand
         [0.27, -1, 28, 36, 2],   // trailing off toward T4
         [0.30, -1, 30, 40, 2],
         [0.40,  1, 34, 42, 2],
@@ -582,7 +612,7 @@
         [0.58,  1, 30, 46, 2],
         [0.68, -1, 28, 42, 2],
         [0.78,  1, 30, 44, 2],
-        [0.90,  1, 28, 54, 3],   // Club-corner hillside back to the line
+        [T14, 1, 28, 54, 3],   // Club-corner (T14) hillside back to the line
       ]) {
         const half = hillHalf(len);
         spectatorHill(s - half, s + half, side, gap,
@@ -663,12 +693,18 @@
       cameraTower(K(0.905),  -1, 40, { h: 14 });
 
       (function countryside() {
-        const a = anchor(K(0.62), 1, 260);
+        // OUTSIDE the circuit (side -1; the infield, side +1, is the circuit's own
+        // hairpin loop: this village anchored there stood 16-47 m from the road at
+        // racing 0.32-0.33, so the nave, roof and two cottages were rejected whole).
+        // Measured clear of EVERY centreline stretch (not just the nearest at its
+        // own s): cottages and church 266 m+ from any tarmac edge.
+        const SD = -1;
+        const a = anchor(K(0.62), SD, 260);
         const b = [a.r, a.u, a.t], base = a.c;
         const wallC = [0.82, 0.78, 0.68], roofC = [0.56, 0.30, 0.22];
         for (let i = 0; i < 6; i++) {
           const off = (i - 2.5) * 34, out2 = hash(i * 9) * 40;
-          const ai = anchor(K(0.62) + Math.round(off / ds), 1, 260 + out2);
+          const ai = anchor(K(0.62) + Math.round(off / ds), SD, 260 + out2);
           const bi = [ai.r, ai.u, ai.t], f = ai.c;
           const w = 12 + hash(i * 7) * 6, hh = 7 + hash(i * 5) * 3;
           out._mat = MAT.STONE;
@@ -677,18 +713,23 @@
           addPrism(out, vadd(f, ai.u, hh), [w, 3.2, w * 0.8], roofC, bi);
           out._mat = 0;
         }
-        // Village church: white nave + a tall spire.
-        const cf = vadd(vadd(base, a.t, 20), a.r, 60);
-        out._mat = MAT.STONE;
-        addBox(out, vadd(cf, a.u, 8), [14, 16, 22], [0.90, 0.88, 0.82], b);
-        out._mat = MAT.ROOF;
-        addPrism(out, vadd(cf, a.u, 17), [14, 4, 22], roofC, b);
-        const tf = vadd(cf, a.t, 13);
-        out._mat = MAT.STONE;
-        addBox(out, vadd(tf, a.u, 13), [5, 26, 5], [0.92, 0.90, 0.84], b);
-        out._mat = MAT.METAL;
-        addCone(out, vadd(tf, a.u, 26), 3.4, 12, roofC, 7, b);
-        out._mat = 0;
+        // Village church: white nave + a tall spire, one atomic group so the spire
+        // never stands without its nave.
+        const cf = vadd(vadd(base, a.t, 20), a.r, 60 * SD);
+        modelGroup("hungaroring-village-church", {
+          center: vadd(vadd(cf, a.t, 2.25), a.u, 19), size: [14, 38, 27], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(cf, a.u, 8), [14, 16, 22], [0.90, 0.88, 0.82], b);
+          stage._mat = MAT.ROOF;
+          addPrism(stage, vadd(cf, a.u, 17), [14, 4, 22], roofC, b);
+          const tf = vadd(cf, a.t, 13);
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(tf, a.u, 13), [5, 26, 5], [0.92, 0.90, 0.84], b);
+          stage._mat = MAT.METAL;
+          addCone(stage, vadd(tf, a.u, 26), 3.4, 12, roofC, 7, b);
+          stage._mat = 0;
+        });
       })();
       // Sunflower / wheat field patches on the open plain (dusty Hungarian gold).
       for (const [s, side, dist] of [[0.35, 1, 120], [0.45, -1, 130], [0.70, 1, 140], [0.25, -1, 115]]) {
@@ -720,11 +761,11 @@
 
       if (circuitKit) {
         circuitKit.hospitality({
-          id: "kit:hungaroring:paddock-hospitality", frac: 0.012,
+          id: "kit:hungaroring:paddock-hospitality", frac: sl(0.012),
           side: -1, gap: 92, size: [18, 9, 38], modules: 5,
         });
         circuitKit.serviceCompound({
-          id: "kit:hungaroring:paddock-service", frac: 0.035,
+          id: "kit:hungaroring:paddock-service", frac: sl(0.035),
           side: -1, gap: 112, size: [26, 6, 34], vehicles: 7,
         });
         for (const [id, frac, side] of [

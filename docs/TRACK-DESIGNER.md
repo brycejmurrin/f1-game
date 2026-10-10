@@ -27,6 +27,34 @@ the browser loses nothing.
 3. Check **5 CHECKS** at the bottom of the rail: green means ready.
 4. **SAVE**, then **RACE** or **TIME TRIAL**.
 
+## Select several points, then adjust their elevation
+
+1. Open **EDIT** or **ELEVATION**, then **SELECT POINTS → RANGE**.
+2. On either the main map or elevation strip, drag between two points, or tap
+   the first and last points. Desktop also supports click, then Shift-click.
+3. The highlighted section and point count show the same selection in both views.
+   A range follows driving order: an earlier end wraps across the start line.
+   Separate Ctrl/Cmd-click selections are not supported.
+4. To change height immediately, use **LOWER / RAISE** below the selection
+   count. The number between them is the change in metres applied to every
+   selected point. This works in **EDIT** and **RANGE**, keeps the selection
+   and its relative hills, and stops the whole group at the height limit.
+5. Switch to **POINT** to drag the selected group. On the elevation strip,
+   drag vertically to raise or lower it; in **ELEVATION**, **POINT m / SPAN m**
+   and the **0.25 / 1 / 5 m** steps give precise height control.
+6. **LEVEL** flattens the selection, **SMOOTH** softens its slopes, and **ZERO**
+   returns it to sea level. **UNDO** reverses an edit; **CLEAR** clears selection.
+
+**HEIGHT** above the map toggles an elevation heat map, enabled when entering
+ELEVATION. Purple is low; yellow is high. The legend shows the current road’s
+minimum and maximum in metres above sea level; a level circuit reads **FLAT**.
+Colours rescale to the current height range after edits, including undo. This
+shows height, not slope steepness, over either OUTLINE or LIVE SCENERY.
+**SPEED** switches to speed colouring; the two overlays are mutually exclusive.
+
+**HOW TO** contains expandable task guides and buttons to open each tool.
+On portrait screens, the guide uses the map’s space while it is open.
+
 ## 1 SHAPE — the loop
 
 | You want to… | Do this |
@@ -80,6 +108,15 @@ and the pit exit needs some straight after it. The checks say how many metres
 are missing.
 
 ## SCENERY — themes and atmosphere
+
+Opening **SCENERY** turns on **LIVE SCENERY**: an overhead illustration of
+this circuit, with theme terrain, vegetation, water, buildings and placed props.
+Theme, atmosphere and object edits update it automatically. Point selection,
+pan and zoom still work; **OUTLINE** returns to the plain editing map without
+changing the circuit or undo history. On phones, SCENERY gives the map the
+elevation strip’s space; open ELEVATION to bring both selection views back.
+The preview simplifies terrain relief
+and small furniture; **RACE** or **TIME TRIAL** opens the full 3D circuit.
 
 A theme sets the scenery, the sky and the ground. The inspector has **THEMES**,
 **ATMOSPHERE**, and **OBJECTS** tabs, so each task has its own controls. Arrow
@@ -142,11 +179,16 @@ changing one makes it a new circuit for time-trial boards.
 
 ### Trackside props
 
-Open **OBJECTS** and pick **STAND**, **GANTRY**, **TREES**, **WATER**, **FLOOD**,
-**BOARD**, **PALMS** (three palms) or **HEDGE** (a 48 m clipped hedge), then
+Open **OBJECTS**. The inspector separates **CHOOSE AN OBJECT**, **PLACE OBJECTS**,
+and **PLACED OBJECTS**. Filter the library by **NATURE** or **RACE VENUE**, or
+browse **ALL**. Each selected object has a description. Pick **STAND**, **GANTRY**, **TREES**, **WATER**, **FLOOD**,
+**BOARD**, **PALMS** (three palms), **HEDGE** (a 48 m clipped hedge),
+**PINES** (three tall pines), **BUSHES** (five low shrubs), **MARSHAL**
+(a signal shelter), or **CAMERA** (a broadcast tower), then
 select a control point on the map or enter its number. Choose **LEFT**, **RIGHT**
 or **BOTH** in driving
-direction and set **ROADSIDE GAP m** (distance from the road edge). Each prop
+direction and type a **ROADSIDE GAP** in metres (distance from the road edge),
+or use the − / + controls. **RESET GAP** restores that object’s default spacing. Each prop
 kind remembers its spacing while the designer is open. Clearances match the
 renderer, up to 120 m; gantries span the road and have no side/gap controls.
 
@@ -163,7 +205,10 @@ opens exact lap-percentage, side and gap controls; **APPLY** updates that object
 places another of the same kind there. **REMOVE** deletes that specific object;
 **REMOVE LAST** removes only the selected kind. These operations support undo/redo,
 autosave, saved circuits and share links. Existing per-kind caps and the total
-limit of 16 props still apply.
+limit of 16 props still apply. **SWAP ENDS** selects the opposite section
+around the loop without moving the track or changing any placed objects. Pine and
+bush clusters allow up to six placements each; marshal shelters and camera towers
+allow four each.
 
 ## 4 DETAILS
 

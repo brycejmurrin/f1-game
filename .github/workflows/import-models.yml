@@ -145,6 +145,22 @@ jobs:
           fi
           git config user.name "apex-model-bot"
           git config user.email "noreply@anthropic.com"
+          # BEGIN force-push guard (15-F9, 2026-10-10)
+          # A branch this workflow did not create is never overwritten: a typo, or a
+          # chosen name that is another session's live head, an open PR head or
+          # gh-pages, used to be force-pushed over with a contents:write token. A NEW
+          # branch is pushed plainly; an existing one only when its tip is the bot's
+          # own commit, and then with a lease on exactly that tip.
+          PUSH_LEASE=""
+          if git ls-remote --exit-code --heads origin "$COMMIT_BRANCH" >/dev/null 2>&1; then
+            git fetch --no-tags --depth=1 origin "$COMMIT_BRANCH"
+            if [ "$(git log -1 --format=%an FETCH_HEAD)" != "apex-model-bot" ]; then
+              echo "::error::origin/$COMMIT_BRANCH exists and its tip is not an apex-model-bot commit; refusing to overwrite it. Pick a new commit_branch (default bot/model-import)."
+              exit 2
+            fi
+            PUSH_LEASE="--force-with-lease=$COMMIT_BRANCH:$(git rev-parse FETCH_HEAD)"
+          fi
+          # END force-push guard
           git checkout -B "$COMMIT_BRANCH"
           git add assets/pack/models assets/pack/manifest.json assets/pack/CREDITS.md
           if git diff --cached --quiet; then
@@ -160,5 +176,5 @@ jobs:
           Baked on the runner by tools/gen/import-models.mjs — mat=$MODEL_MAT,
           height=${MODEL_HEIGHT}m scale=${MODEL_SCALE}. Merge this branch into the deploy branch
           to ship; nothing places these until a circuit calls api.bakedModel()."
-          git push -f origin "$COMMIT_BRANCH"
+          git push ${PUSH_LEASE:+"$PUSH_LEASE"} origin "$COMMIT_BRANCH"
           echo "pushed to $COMMIT_BRANCH — merge it into the deploy branch to ship"

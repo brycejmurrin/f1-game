@@ -42,9 +42,16 @@
       const at = (frac) => Math.round(frac * n) % n;
       const basis = (a) => [a.r, a.u, a.t];
 
-      function venueGroup(id, frac, side, gap, size, required, emit) {
+      function venueGroup(id, frac, side, gap, size, required, emit, bearing) {
         const k = at(frac);
-        const a = anchor(k, side, gap + size[0] / 2);
+        let a = anchor(k, side, gap + size[0] / 2);
+        if (bearing !== undefined) {
+          // TRUE COMPASS BEARING from the lap centroid, keeping the anchor's own
+          // distance from it and its height/basis. World frame: +X west, +Z north
+          // (the Fuji compass pattern in scenery/fuji.js), so bearing b is (x, z) = (-sin b, cos b).
+          const { cx, cz } = lapBounds(), d = Math.hypot(a.c[0] - cx, a.c[2] - cz), b = bearing * Math.PI / 180;
+          a = { c: [cx - Math.sin(b) * d, a.c[1], cz + Math.cos(b) * d], r: a.r, u: a.u, t: a.t };
+        }
         const center = vadd(a.c, a.u, size[1] / 2);
         return modelGroup(id, { center, size, basis: basis(a) }, (stage) => {
           emit(stage, a, k);
@@ -400,7 +407,11 @@
       // now nothing in the file referenced it. Floated far beyond the terrain
       // ribbon like the Sierra ridge below, so it never needs real terrain
       // grounding: a control tower silhouette plus one low-poly airliner on
-      // approach, s≈0.02 L per the brief.
+      // approach. Bearing 51 deg (NE) from the lap centroid: Barajas is at about
+      // 40.499 N 3.561 W against IFEMA's 40.4653 N 3.6156 W, 5.9 km away. The
+      // distance stays compressed at the old ~1.4 km (the "s≈0.02 L" road-side
+      // guess put both on 165 deg, SSE, the opposite horizon).
+      const BARAJAS_BEARING = 51;
       {
         const TOWER_COL = [0.80, 0.81, 0.83];
         const TOWER_GLASS = night ? [0.85, 0.92, 1.00] : [0.55, 0.72, 0.86];
@@ -411,7 +422,7 @@
           addCyl(stage, vadd(a.c, a.u, 38), 0.35, 6, STEEL, 6, b);      // radar mast
           addBox(stage, vadd(a.c, a.u, 44.4), [1.6, 0.3, 1.6],
             night ? [1.6, 0.2, 0.16] : MADRID_RED, b);                  // beacon
-        });
+        }, BARAJAS_BEARING);
 
         const AIR_BODY = [0.82, 0.84, 0.87];
         const AIR_TAIL = MADRID_RED;
@@ -422,7 +433,7 @@
           addPrism(stage, vadd(centre, a.u, -0.4), [4.2, 0.9, 26], AIR_BODY, [a.t, a.u, a.r]);
           // Tail fin: a vertical ridge near the tail.
           addPrism(stage, vadd(centre, a.t, -16.6), [0.6, 5.2, 4.2], AIR_TAIL, [a.r, a.u, a.t]);
-        });
+        }, BARAJAS_BEARING);
       }
 
       // Pit wall & main grandstand (brief s≈0.00 R) — fans on the OPPOSITE side

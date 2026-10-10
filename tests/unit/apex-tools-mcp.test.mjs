@@ -1299,7 +1299,9 @@ test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and re
   bad("apex_track", { op: "shot", frac: 2 });
   bad("apex_track", { op: "shot" }, "track_not_open");
   ok("apex_job_start", { kind: "survey_track", track: "monza", oblique: true }, /survey-track\.mjs","monza","--oblique/);
-  ok("apex_job_start", { kind: "ui_matrix", screens: "settings,garage", viewports: "ios-*", scale: "100,130" }, /--screens=settings,garage","--viewports=ios-\*","--scale=100,130/);
+  const matrix = ok("apex_job_start", { kind: "ui_matrix", screens: "settings,garage", viewports: "ios-*", scale: "100,130" }, /--screens=settings,garage","--viewports=ios-\*","--scale=100,130/);
+  assert.equal(typeof matrix.estimateMs, "number", "ui_matrix dryRun names estimateMs (hud_survey-style)");
+  assert.ok(matrix.estimateMs > 0 && matrix.cells >= 2, `ui_matrix cells/estimate: ${JSON.stringify(matrix)}`);
   ok("apex_job_start", { kind: "flicker_gate", site: "a,b" }, /"--site","a","--site","b"/);
   ok("apex_job_start", { kind: "livery_contrast", team: "ferrari" }, /--team=ferrari/);
   bad("apex_job_start", { kind: "rm_rf" });
@@ -1307,7 +1309,7 @@ test("2026-10-03 tools: track session, jobs, UI and audits pin their argv and re
   bad("apex_job_start", { kind: "survey_track", track: "nope" });
   bad("apex_job_status", { jobId: "missing" }, "unknown_job");
   bad("apex_job_cancel", { jobId: "missing" }, "unknown_job");
-  ok("apex_ui_fit", { screen: "settings", scale: 130 }, /--screens=settings","--viewports=ios-iphone-landscape","--jobs=1","--scale=130/);
+  ok("apex_ui_fit", { screen: "settings", scale: 130 }, /--screens=settings","--viewports=ios-iphone-landscape","--jobs=1","--json","--scale=130/);
   bad("apex_ui_fit", { screen: "--all" });
   bad("apex_ui_fit", { screen: "settings", scale: 500 });
   ok("apex_ui_shot", { screen: "garage", viewport: "desktop-1440x900" }, /--screen=garage","--viewport=desktop-1440x900/);
@@ -1557,4 +1559,140 @@ test("apex-eval: the shapeOf helper it injects into the page parses (named fn ex
   new Function("window", SHAPE)(win);
   assert.equal(typeof win.__shape, "function");
   assert.equal(win.__shape([1, 2]).startsWith("Array(2)"), true);
+});
+
+// 2026-10-10: a tool must say what it needs. Ten first calls in one session came back bad_args with no way forward
+// ("arguments must match one of the advertised types", "tool needs file"); the survey dropped `cams` and still said ok.
+// These keep every tool answerable to a minimal valid call, and every refusal self-explaining.
+const MIN_ARGS = {
+  apex_unit_test: { file: "tests/unit/a11y-pwa-pass.test.mjs" },
+  apex_select_specs: { since: "HEAD~1" },
+  apex_graph_parity: { base: "HEAD~1", id: "monza" },
+  apex_frame_report: { track: "monza" },
+  apex_shot_survey: { track: "monza" },
+  apex_car_audit: { check: "ladder" },
+  apex_ui_fit: { screen: "title" },
+  apex_ui_shot: { screen: "title" },
+  apex_job_start: { kind: "verify_all" },
+};
+const callTools = (calls) => {
+  const out = rpc([
+    { jsonrpc: "2.0", id: 0, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "1" } } },
+    { jsonrpc: "2.0", method: "notifications/initialized" },
+    ...calls.map(([name, args], i) => ({ jsonrpc: "2.0", id: i + 1, method: "tools/call", params: { name, arguments: args } })),
+  ]);
+  return calls.map((_, i) => {
+    const r = out.find((m) => m.id === i + 1);
+    assert.ok(r && r.result, `no reply for ${calls[i][0]}`);
+    return { isError: !!r.result.isError, body: JSON.parse(r.result.content[0].text) };
+  });
+};
+
+test("every tool answers a minimal valid call (mock): ok, not a bad_args refusal", () => {
+  const tools = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }]).find((m) => m.id === 1).result.tools;
+  assert.ok(tools.length >= 28, `catalog has ${tools.length} tools`);
+  const skip = new Set(["apex_job_cancel", "apex_garage", "apex_track"]);   // need a prior job / a live session
+  const calls = tools.filter((t) => !skip.has(t.name)).map((t) => {
+    const args = { ...(MIN_ARGS[t.name] || {}) };
+    for (const k of t.inputSchema.required || []) if (!(k in args)) args[k] = t.inputSchema.properties[k].enum?.[0] ?? "x";
+    return [t.name, args];
+  });
+  const res = callTools(calls);
+  const bad = res.map((r, i) => [calls[i][0], r]).filter(([, r]) => r.body.error === "bad_args");
+  assert.deepEqual(bad.map(([n, r]) => `${n}: ${r.body.message}`), [], "a minimal valid call must not be refused as bad_args");
+});
+
+test("bad_args names the way forward: required hint, did-you-mean, valid keys, got-type", () => {
+  const [needs, anyOf, key, en, type] = callTools([
+    ["apex_unit_test", {}],
+    ["apex_graph_parity", {}],
+    ["apex_shot", { track: "monza", fracc: 0.1 }],
+    ["apex_shot", { track: "monza", cam: "orbt" }],
+    ["apex_shot", { track: "monza", frac: "x" }],
+  ]).map((r) => r.body);
+  assert.match(needs.fix, /Pass "file": string/, "required key: what to pass");
+  assert.match(anyOf.message, /id or all:true/, "anyOf: the alternatives, not 'one of the advertised types'");
+  assert.match(anyOf.fix, /Required: base/);
+  assert.match(key.fix, /Did you mean "frac"\?.*Valid: track, frac, cam/, "unknown key: nearest + the valid list");
+  assert.match(en.fix, /Did you mean "orbit"\?/);
+  assert.match(type.message, /frac must be number, got string/);
+});
+
+test("apex_ui_fit / apex_ui_shot refuse an id the audit does not know instead of ok:true, out:null", () => {
+  const [menu, typo, vp] = callTools([
+    ["apex_ui_fit", { screen: "menu" }],
+    ["apex_ui_shot", { screen: "settngs" }],
+    ["apex_ui_fit", { screen: "settings", viewport: "phone-landscape-844x390" }],
+  ]).map((r) => r.body);
+  for (const b of [menu, typo, vp]) { assert.equal(b.ok, false); assert.equal(b.error, "bad_args"); }
+  assert.match(typo.fix, /Did you mean settings\?/);
+  assert.match(vp.fix, /ios-iphone-landscape-844/, "the phone-landscape id is in the list");
+});
+
+test("apex_hud_shot aliases layout-audit viewport ids and did-you-means a near miss", () => {
+  const aliased = callTools([["apex_hud_shot", { device: "ios-iphone-landscape-844", dryRun: true }]])[0].body;
+  assert.equal(aliased.ok, true, JSON.stringify(aliased));
+  assert.match(JSON.stringify(aliased.argv), /phone-landscape-844x390/, "alias rewrites before the CLI");
+  const miss = callTools([["apex_hud_shot", { device: "phone-landscape-844", dryRun: true }]])[0].body;
+  assert.equal(miss.ok, false);
+  assert.equal(miss.error, "bad_args");
+  assert.match(miss.fix, /Did you mean "phone-landscape-844x390"\?/, miss.fix);
+});
+
+test("apex_job_status {} is bounded: newest first, limit, state filter, total", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const fake = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-jobs-test-"));
+  try {
+    const dir = path.join(fake, "artifacts/logs/apex-jobs");
+    fs.mkdirSync(dir, { recursive: true });
+    for (let i = 1; i <= 5; i++) {
+      fs.writeFileSync(path.join(dir, `float_all-t${i}.json`), JSON.stringify({ id: `float_all-t${i}`, kind: "float_all", state: i % 2 ? "done" : "failed", exit: i % 2 ? 0 : 1,
+        started: 1000 * i, ended: Date.now() - 5, argv: [], log: `artifacts/logs/apex-jobs/float_all-t${i}.log`, stderr: "" }));   // recent: older than 7 days is pruned
+    }
+    const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
+    const x = createExtras({ ROOT: fake, toolResult, refuse: (e, m, f) => toolResult({ ok: false, error: e, message: m, fix: f }), acquireLock: () => null, releaseLock() {},
+      occupancyRefuse: () => null, assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
+    const list = (a) => JSON.parse(x.handlers.apex_job_status(a).content[0].text);
+    const two = list({ limit: 2 });
+    assert.deepEqual(two.jobs.map((j) => j.jobId), ["float_all-t5", "float_all-t4"], "newest first");
+    assert.equal(two.total, 5);
+    assert.match(two.hint, /3 older job\(s\) not shown/);
+    const failed = list({ state: "failed" });
+    assert.deepEqual(failed.jobs.map((j) => j.jobId), ["float_all-t4", "float_all-t2"]);
+    assert.equal(failed.hint, undefined, "nothing hidden, no hint");
+  } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
+
+test("apex_job_status {} prunes manifests older than 7 days and re-judges a pre-.exit failed job whose log says ok:true", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const fake = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-jobs-test-"));
+  try {
+    const rel = "artifacts/logs/apex-jobs";
+    const dir = path.join(fake, rel);
+    fs.mkdirSync(dir, { recursive: true });
+    const now = Date.now();
+    const mk = (id, state, ended, logText, exitText) => {
+      fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, kind: "float_all", state, exit: state === "done" ? 0 : 1, started: ended - 10, ended, argv: [], log: `${rel}/${id}.log`, stderr: `${rel}/${id}.err` }));
+      fs.writeFileSync(path.join(dir, `${id}.log`), logText);
+      fs.writeFileSync(path.join(dir, `${id}.err`), "");
+      if (exitText != null) fs.writeFileSync(path.join(dir, `${id}.exit`), exitText);
+    };
+    const old = now - 8 * 86400000;
+    mk("old-done", "done", old, "{}", "0");
+    mk("old-failed", "failed", old, "{}", "1");
+    mk("stale-failed", "failed", now - 1000, 'noise\n{"ok": true, "n": 3}\n');   // no .exit, log says ok:true
+    mk("real-failed", "failed", now - 2000, '{"ok": false}\n');                   // no .exit, log says ok:false
+    mk("exit-failed", "failed", now - 3000, '{"ok": true}\n', "1");               // has .exit: trust it
+    const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
+    const x = createExtras({ ROOT: fake, toolResult, refuse: (e, m, f) => toolResult({ ok: false, error: e, message: m, fix: f }), acquireLock: () => null, releaseLock() {},
+      occupancyRefuse: () => null, assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
+    const res = JSON.parse(x.handlers.apex_job_status({}).content[0].text);
+    const state = Object.fromEntries(res.jobs.map((j) => [j.jobId, j.state]));
+    assert.deepEqual(state, { "stale-failed": "done", "real-failed": "failed", "exit-failed": "failed" });
+    assert.equal(res.total, 3);
+    assert.deepEqual(fs.readdirSync(dir).filter((f) => f.startsWith("old-")), [], "json, log, err and exit of an expired job are all gone");
+    assert.ok(fs.existsSync(path.join(dir, "real-failed.log")), "recent jobs keep their files");
+  } finally { fs.rmSync(fake, { recursive: true, force: true }); }
 });
