@@ -954,9 +954,11 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    — and --dock-r-w was taken off the same stale BOOST edge. The top band got
    this fix first (`transition-property` on the --hud-z-top group above); the
    dock, the bottom band and the two top-right buttons are measured the same
-   way. Paint-only properties keep their 0.01ms, so nothing that was instant
+   way. RELATIVE also resets left/max-height inside syncPhoneFit: a transition
+   returns its previous rectangle until the next frame, even at 0.01ms.
+   Paint-only properties keep their 0.01ms, so nothing that was instant
    starts moving. */
-:root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, #pausebtn, #btn-cam) {
+:root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, #pausebtn, #btn-cam, #hud-rel) {
   transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
 }
 /* The flag clears the DROPPED strip, so it tracks the same measured edge: 70px

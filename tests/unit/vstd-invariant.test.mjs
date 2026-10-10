@@ -53,7 +53,7 @@ const ALLOWED = [
   {
     file: "js/game.js",
     expr: "c.speed < 7",
-    code: 'if (state === "race" && c.speed < 7 && boxed) c.stuckT = (c.stuckT || 0) + dt;',
+    code: 'if (state === "race" && c.speed < 7 && boxed && raceCtl.level < 4) c.stuckT = (c.stuckT || 0) + dt;',
     // "Boxed in AND going nowhere". The bottom of the speed range does not move
     // with PACE: the AI's corner speed is sqrt(LAT_MAX·bankMu·gripMult()/kMax)
     // and LAT_MAX is one of the deliberately-absolute force constants, so even

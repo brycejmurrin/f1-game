@@ -1201,3 +1201,34 @@ test("day building() drops facade kit when the wall mass is rejected", () => {
   assert.equal(rejected.kinds.filter((k) => k === "facadeMullion").length, 0,
     "rejected wall must not leave orphan mullions");
 });
+
+test("neonTower resets out._mat when a rejected body section returns early", () => {
+  // The kind chain stamps out._mat = METAL before its first section; a refused
+  // body (sec() === false) returned past the closing reset, so the next
+  // untextured emitter drew metal.
+  const Geom = load("js/track/core/geom.js", "TrackGeom");
+  const Models = load("js/track/scenery/models.js", "TrackModels");
+  const out = Models.scratch(8), glassBuf = Models.scratch(4);
+  const p = { c: [40, 2, -10], r: [1, 0, 0], u: [0, 1, 0], t: [0, 0, 1] };
+  const ctx = {
+    out, glassBuf, def: { id: "test", street: false }, theme: "neutral",
+    NIGHT: false, MAT: Geom.MAT, lod: (n) => n, seat: { prism: () => {} },
+    addBox: () => false,
+    addCyl: (...a) => Geom.addCyl(...a), addCone: (...a) => Geom.addCone(...a),
+    addFrustum: (...a) => Geom.addFrustum(...a), addPrism: (...a) => Geom.addPrism(...a),
+    addPyramid: (...a) => Geom.addPyramid(...a),
+    rejBox: () => false, blockAt: () => {}, onTrack: () => false,
+    hash: () => 0.2, vadd: Geom.vadd, kitOf: () => null, anchor: () => p, along: () => p,
+    massBlocked: () => false, massAdd: () => {}, terrainYAt: () => null, treeInFootprint: () => false,
+    note: () => {}, noteSuppressed: () => {}, instance: () => 0,
+  };
+  const City = load("js/track/scenery/city.js", "SceneryCity", {
+    TrackSceneryData: {}, TrackGraph: { NODE_COLOR: [1, 1, 1] }, TrackGeom: Geom,
+  });
+  const city = City.create(ctx);
+  for (const kind of ["tiered", "podium", "slab", "twin", "jenga", "hall", "setback"]) {
+    out._mat = 0;
+    city.neonTower(5, 1, 30, 12, 40, 12, [1, 0.2, 0.6], kind, null, 1);
+    assert.equal(out._mat, 0, `${kind}: out._mat must be 0 after a rejected body section`);
+  }
+});

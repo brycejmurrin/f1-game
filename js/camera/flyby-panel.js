@@ -42,7 +42,6 @@ const FIELD = {
   yK: { label: "HEIGHT (LANDMARK HEIGHTS)", min: -1, max: 3, step: 0.05, unit: "", def: 0.4 },
 };
 const FIELD_IDS = Object.keys(FIELD);
-const POSE_NUMS = FIELD_IDS.concat("rank");   // every numeric a pose may carry (n is separate: name or number)
 // `rank` is a landmark index and `n` a corner, and neither is a continuous
 // quantity — both are pickers, and both live outside FIELD for that reason.
 const RANKS = [0, 1, 2, 3, 4, 5];
@@ -157,6 +156,26 @@ function normaliseDurs(list) {
   return out;
 }
 
+/** Why this pose's NUMBERS cannot be solved. A field the shipped shots leave out
+ *  (solve() defaults it) passes; one that is PRESENT must be a finite number
+ *  inside its slider range, because `x: "abc"` on a start-anchored pose gave a
+ *  non-finite eye on every frame while the old structural check accepted it. */
+function poseErrors(p) {
+  const bad = [];
+  for (const f of POSE_FIELDS[p.at]) {
+    const v = p[f];
+    if (v === undefined) continue;
+    if (typeof v !== "number" || !isFinite(v) || v < FIELD[f].min || v > FIELD[f].max) {
+      bad.push(f + " must be a number from " + FIELD[f].min + " to " + FIELD[f].max + ", not " + JSON.stringify(v));
+    }
+  }
+  const int = (v, lo) => typeof v === "number" && isFinite(v) && v === Math.floor(v) && v >= lo;
+  if (p.at === "corner" && p.n !== undefined && CORNER_NS.indexOf(p.n) === -1 && !int(p.n, 1)) bad.push("n is not a corner: " + JSON.stringify(p.n));
+  if (p.at === "slot" && p.n !== undefined && p.n !== "player" && !int(p.n, 0)) bad.push("n is not a grid slot: " + JSON.stringify(p.n));
+  if (p.at === "landmark" && p.rank !== undefined && RANKS.indexOf(p.rank) === -1) bad.push("rank must be one of " + RANKS.join(", ") + ", not " + JSON.stringify(p.rank));
+  return bad;
+}
+
 /** Every reason FlybySeq.solve() could not PLAY this list. Empty == good.
  *  Split out of validateShots because a SAVED list is read back through this
  *  half only: solve() normalises by the durations' own total, so a list nobody
@@ -176,15 +195,8 @@ function shotErrors(list) {
       if (!Array.isArray(s[k]) || s[k].length !== 2) { bad.push(at + " " + k + " must be a [from, to] pair"); continue; }
       s[k].forEach((p, j) => {
         if (!p || typeof p !== "object") { bad.push(at + " " + k + "[" + j + "] is not a pose"); return; }
-        if (AT_KINDS.indexOf(p.at) === -1) bad.push(at + " " + k + "[" + j + "] has unknown at: " + JSON.stringify(p.at));
-        // A pose number is read straight into the eye: a corrupted settings
-        // import (off: "x", bear: null, y: 1e999) must not reach the loading
-        // flyby as a NaN eye. `n` is a corner name OR a number.
-        for (const f of POSE_NUMS) {
-          if (p[f] !== undefined && (typeof p[f] !== "number" || !isFinite(p[f])))
-            bad.push(at + " " + k + "[" + j + "]." + f + " must be a finite number");
-        }
-        if (typeof p.n === "number" && !isFinite(p.n)) bad.push(at + " " + k + "[" + j + "].n must be finite");
+        if (AT_KINDS.indexOf(p.at) === -1) { bad.push(at + " " + k + "[" + j + "] has unknown at: " + JSON.stringify(p.at)); return; }
+        poseErrors(p).forEach((e) => bad.push(at + " " + k + "[" + j + "] " + e));
       });
     }
     if (!Array.isArray(s.fov) || s.fov.length !== 2 ||

@@ -777,9 +777,11 @@ function vantage(track, mode, s, x, spd, now, extra) {
   }
   // Per-mode HEIGHT/DISTANCE/SIDE/PITCH/YAW/FOV nudges from js/camera/offsets.js,
   // applied to the solved rig rather than baked into each branch — one place to
-  // reason about, and every mode gets the same six knobs for free. A no-op (and
-  // an early return inside apply()) until the player actually tunes something,
-  // so an untuned install frames exactly as it did before this existed.
+  // reason about, and every mode gets the same six knobs for free. A no-op (an
+  // early return inside apply() when the mode has no profile and COMFORT's FOV
+  // bias is 0) until the player actually tunes something, so an untuned install
+  // frames exactly as it did before this existed. There is no separate "anything
+  // tuned" flag: apply() decides from the merged profile itself.
   // Deliberately BEFORE the ground clamp: a lowered eye must still be caught by
   // the terrain floor, or a −3 m HEIGHT would render the world from inside a hill.
   if (mode === "chase" || mode === "far" || mode === "drift" || mode === "reverse")
