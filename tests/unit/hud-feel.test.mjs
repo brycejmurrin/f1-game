@@ -31,7 +31,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
-import { cssRules, decl } from "../helpers/css-rules.mjs";
+import { cssRules, decl, ruleFor } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -1197,4 +1197,32 @@ test("the caution step-aside needs the card's other slot to really apply; TEXT L
     assert.ok(mh && lh, "both rules present");
     assert.ok(fs * +mh[1] + +mh[2] - 2 >= fs * lh, `${size}: the bar's inner height holds one ${fs}px label line`);
   }
+});
+
+// VISUAL SPOTTER. The spotter's occupancy (RaceRadio.trafficSide: 1 left,
+// 2 right, 3 both — measured with the voice OFF, race-radio.test.mjs) lights
+// the matching screen edge through #hud[data-along], written at the 10 Hz tick.
+test("a car alongside lights its screen edge: trafficSide → #hud[data-along], under the numbers, no pulse under REDUCE MOTION", () => {
+  const { dom, els, G, tick } = boot();
+  els.hud = dom.byId("hud");
+  let side = 0;
+  G.raceRadio = { trafficSide: () => side };
+  const along = () => els.hud.dataset.along ?? null;   // mini-dom keeps dataset apart from attributes
+  tick(); assert.equal(along(), null, "nobody alongside: no attribute, no glow");
+  for (const [s, v] of [[1, "l"], [2, "r"], [3, "l r"], [0, null]]) { side = s; tick(); assert.equal(along(), v, "side " + s); }
+  G.raceRadio = { trafficBusy: () => true };   // a radio without the accessor (js/race/session-stub.js)
+  side = 1; tick(); assert.equal(along(), null);
+
+  const rules = cssRules(read("css/hud.css"));
+  assert.equal(decl(rules, '#hud[data-along~="l"]::after', "--along-l"), "var(--along)");
+  assert.equal(decl(rules, '#hud[data-along~="r"]::after', "--along-r"), "var(--along)");
+  const base = ruleFor(rules, "#hud[data-along]::after", "background");
+  assert.equal(base.decls.get("z-index"), "-1", "under every HUD number");
+  assert.equal(base.decls.get("pointer-events"), "none");
+  assert.match(base.decls.get("background"), /var\(--along-l, transparent\), transparent calc\(24px \+ var\(--sal\)\)/, "a 24 px fade past the safe area");
+  assert.match(base.decls.get("--along"), /var\(--spark\) 45%, transparent/, "low-alpha warning accent, not a team colour");
+  const anim = rules.filter((r) => /#hud\[data-along\]::after$/.test(r.selector) && r.decls.has("animation"));
+  assert.equal(anim.length, 1, "one pulse rule");
+  assert.ok(anim[0].context.some((c) => /prefers-reduced-motion: no-preference/.test(c)), "only when motion is allowed by the OS");
+  assert.match(anim[0].selector, /^:root:not\(\[data-motion="reduce"\]\) /, "…and by SETTINGS › MOTION");
 });
