@@ -510,6 +510,8 @@
     "js/editor/canvas.js",
     "js/editor/elev-presets.js",
     "js/editor/profile.js",
+    "js/editor/selection-panel.js",
+    "js/editor/scenery-panel.js",
     "js/editor/designer.js"
   ],
     LAZY_EDITOR_EDGES: [
@@ -579,6 +581,14 @@
     ],
     [
       "js/editor/profile.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/selection-panel.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/scenery-panel.js",
       "js/editor/designer.js"
     ]
   ],

@@ -200,7 +200,7 @@ test("hud.js: a car a lap up reads +1L, not distance ÷ speed", () => {
   tick();
   assert.equal(els.gapA.textContent, "▲ BEA +1L");
   rival.prog = player.prog + 100; tick();
-  assert.match(els.gapA.textContent, /^▲ BEA 2\.0s$/, "back to seconds, with no EMA carried from the lap");
+  assert.match(els.gapA.textContent, /^▲ BEA 2\.00s$/, "back to seconds (2 dp under ~10 s), with no EMA carried from the lap");
 });
 
 test("hud.js: gear, tach and speed update every frame; the clock stays at 10 Hz", () => {
@@ -376,7 +376,7 @@ test("hud.js: POS is session-aware — TT, Q in qualifying, PRAC in practice, ra
 test("hud.js: the gap chips carry no sign — the arrow is the direction, as RELATIVE agrees", () => {
   const { els, rival, player, tick } = boot();
   rival.prog = player.prog + 100; tick();
-  assert.match(els.gapA.textContent, /^▲ BEA \d+\.\ds$/, "no '+' on the ahead chip (RELATIVE reads ahead as '-')");
+  assert.match(els.gapA.textContent, /^▲ BEA \d+\.\d{1,2}s$/, "no '+' on the ahead chip (RELATIVE reads ahead as '-')");
   rival.prog = player.prog + 1000 + 300; tick();
   assert.equal(els.gapA.textContent, "▲ BEA +1L", "laps keep RELATIVE's own '+1L' (a lap up)");
 });

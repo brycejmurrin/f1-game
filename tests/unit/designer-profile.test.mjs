@@ -12,7 +12,7 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 
 const W = 640, H = 72;
 
-function boot(heights) {
+function boot(heights, hooks = {}) {
   const { ctx, V, C } = bootEditor();
   const dom = makeDom();
   ctx.document = dom.document;
@@ -47,6 +47,7 @@ function boot(heights) {
   const ev = { changes: [], selects: [] };
   let pr = null;
   pr = DP.create(canvas, {
+    ...hooks,
     onChange: (i, h, live, all) => {
       ev.changes.push({ i, h, live, all: all ? all.slice() : null });
       if (!live) {
@@ -66,6 +67,46 @@ function boot(heights) {
   return { ctx, C, DP, dom, canvas, pr, tr, d, ev, rec, grips, fire, key, list: () => list, n };
 }
 const commits = (ev) => ev.changes.filter((c) => !c.live);
+
+test("profile picks the entire column and maps zoomed touch coordinates correctly", () => {
+  const h = boot();
+  Object.defineProperty(h.canvas, "clientWidth", { value: W });
+  Object.defineProperty(h.canvas, "clientHeight", { value: H });
+  h.canvas._rect = { left: 10, top: 20, width: W * 1.25, height: H * 1.25 };
+  h.pr.resize();
+  const g = h.grips()[4];
+  h.fire("pointerdown", { x: 10 + g.x * 1.25, y: 21 }, 1, { pointerType: "touch" });
+  h.fire("pointerup", { x: 10 + g.x * 1.25, y: 21 }, 1, { pointerType: "touch" });
+  assert.equal(h.pr.selected(), 4, "selection follows horizontal position even away from the grip");
+  assert.equal(commits(h.ev).length, 0);
+});
+
+test("range dragging selects points without editing heights; zoom and pan stay view-only", () => {
+  const h = boot(null, { rangeSelect: () => true });
+  const gs = h.grips(), a = gs[2], b = gs[7];
+  h.fire("pointerdown", { x: a.x, y: 2 }, 1, { pointerType: "mouse" });
+  h.fire("pointermove", { x: b.x, y: 55 });
+  h.fire("pointerup", { x: b.x, y: 55 });
+  assert.deepEqual(plain(h.pr.selection()), { sel: 2, span: 7 });
+  assert.equal(h.ev.changes.length, 0, "a range gesture never becomes a height drag");
+  h.pr.zoom(4);
+  assert.equal(h.pr.view().span, 0.25);
+  h.pr.pan(10);
+  assert.equal(h.pr.view().start, 0.75);
+  h.pr.fit();
+  assert.deepEqual(plain(h.pr.view()), { start: 0, span: 1 });
+  assert.equal(h.ev.changes.length, 0);
+});
+
+test("armed range end preserves the profile's existing anchor", () => {
+  const h = boot(null, { extendSelection: () => true });
+  const g = h.grips()[8];
+  h.pr.select(3);
+  h.fire("pointerdown", { x: g.x, y: g.y });
+  h.fire("pointerup", { x: g.x, y: g.y });
+  assert.deepEqual(plain(h.pr.selection()), { sel: 3, span: 8 });
+  assert.equal(h.ev.changes.length, 0);
+});
 
 test("one grip per control point; touch hit radius is ≥44 px", () => {
   const h = boot();

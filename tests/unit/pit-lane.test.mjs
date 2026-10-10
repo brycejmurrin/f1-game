@@ -33,6 +33,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { createRequire } from "node:module";
 import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -215,12 +216,14 @@ test("the commitment gesture is deliberate to make and still possible to make", 
 
 // A live session whose track samples a constant half-width. `committing` is the
 // ONE place this module samples the track, so a counting stub proves that too.
-function commitSession({ hw = 7, vTop = 60, total = 5386, weather = "dry" } = {}) {
+function commitSession({ hw = 7, vTop = 60, total = 5386, weather = "dry", real = null } = {}) {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Float32Array });
   seedLog(ctx);
   ctx.window = ctx;
   let samples = 0;
-  ctx.Tracks = { sample: (t, s2, out) => { samples++; out.hw = hw; return out; } };
+  // `real` = { Tracks, track }: a circuit built by the engine, for tests that
+  // need the true pit ribbon (the stub above has none).
+  ctx.Tracks = real ? real.Tracks : { sample: (t, s2, out) => { samples++; out.hw = hw; return out; } };
   // Committing picks the set the crew will fit, which reaches both of these at
   // call time. Minimal stubs: the choice itself is tyre-model.test.mjs's job.
   ctx.TyreModel = {
@@ -242,9 +245,10 @@ function commitSession({ hw = 7, vTop = 60, total = 5386, weather = "dry" } = {}
                        "racingbulls", "haas", "williams", "audi", "astonmartin",
                        "cadillac", "custom"].map((id) => ({ id })) };
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
+  if (real) vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: "pit.js" });
   vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
   const Pl = vm.runInContext("PitLane", ctx);
-  const track = { total, n: 1346, def: {} };
+  const track = real ? real.track : { total, n: 1346, def: {} };
   const said = [];
   const fitted = [];
   const records = {
@@ -1460,4 +1464,82 @@ test("stuck is the nearest car ahead, not any car inside the window", () => {
   assert.match(fn, /aheadGap = -gap/);
   assert.match(fn, /ahead && aheadGap < S\.STUCK_GAP_S/);
   assert.doesNotMatch(fn, /-gap < S\.STUCK_GAP_S && !inLane/);
+});
+
+// ── A box with no garage behind it is a place in the FAST lane (L16) ─────────
+// jeddah, jerez and mont_tremblant have no bays. TrackPit.at() collapsed the
+// working lane onto the fast lane's OUTER edge there, 0.9 m beyond where the
+// driving boundary lets a car's centre go, so the latch (inBoxLat + boxSquare)
+// accepted a human's stop only in a ~10 cm band against the pit wall: "SQUARE IT
+// UP", and no crew. These build the real circuits and stop a real car on them.
+const require = createRequire(import.meta.url);
+const { buildContext } = require(join(ROOT, "tools/lib/track-build-vm.cjs"));
+const BUILT = (() => {
+  const { Tracks } = buildContext(), memo = {};
+  return { Tracks, build: (id) => memo[id] || (memo[id] = Tracks.build(Tracks.LIST.find((d) => d.id === id))) };
+})();
+
+/** A human at the box of the last row (MY TEAM's bay) of circuit `id`, stationary at lateral `x`. */
+function stoppedAtBox(id, x) {
+  const track = BUILT.build(id);
+  const S = commitSession({ real: { Tracks: BUILT.Tracks, track } });
+  const c = { local: true, human: true, pitArmed: true, pitState: "lane", speed: 0, lap: 3,
+              tyre: { code: "M", tread: 0 }, x: 0, head: undefined };
+  c.s = ((S.zone.sIn + S.pits.boxThroughFor(c)) % track.total + track.total) % track.total;
+  c.x = typeof x === "function" ? x(Tracks_at(track, c.s)) : x;
+  return { S, track, c };
+}
+const Tracks_at = (track, s) => BUILT.Tracks.pitLaneAt(track, s);
+
+/** The lateral band over which a stationary human at the box serves its stop, and the wall limit. */
+function acceptBand(id) {
+  const { S, track, c } = stoppedAtBox(id, 0);
+  const side = track.pit.side, rib = Tracks_at(track, c.s);
+  let lo = Infinity, hi = -Infinity;
+  const k = Math.round(c.s / track.total * track.n) % track.n;
+  const reach = (side > 0 ? track.barR : track.barL)[k] - track.hw[k];   // the wall clamp: how far out the car's CENTRE can get
+  for (let d = 0; d <= reach + 1e-6; d += 0.01) {
+    c.x = side * (track.hw[k] + d);
+    if (S.pits.inBoxLat(c, 0, side) && S.pits.boxSquare(c)) { lo = Math.min(lo, d); hi = Math.max(hi, d); }
+  }
+  return { lo, hi, width: hi - lo, rib, S, track, c };
+}
+
+for (const id of ["jeddah", "jerez", "mont_tremblant"]) {
+  test(`${id}: no bays, so the box is the fast lane's own centre`, () => {
+    const { track } = stoppedAtBox(id, 0);
+    assert.equal(track.pit.hasBays, false, `${id} grew garage bays — pick another bay-less circuit`);
+    const b = track.pit.row.boxes[0], rib = BUILT.Tracks.pitLaneAt(track, b.s);
+    assert.ok(Math.abs(rib.workCentre - rib.centre) < 1e-6, `workCentre ${rib.workCentre} != fast-lane centre ${rib.centre}`);
+    assert.ok(Math.abs(rib.workIn - rib.inner) < 1e-6, `workIn ${rib.workIn} != lane inner edge ${rib.inner}`);
+    assert.ok(Math.abs(rib.workCentre) < Math.abs(rib.fastOut) - 1, "the box centre sat on the pit wall again");
+  });
+
+  test(`${id}: a stop at the lane centre latches; the accepted band is a car's worth, not 10 cm`, () => {
+    const { S, track, c } = stoppedAtBox(id, (rib) => rib.workCentre);
+    assert.ok(S.pits.inBoxLat(c, 0, track.pit.side), "the lane centre is not 'in the box'");
+    assert.ok(S.pits.boxSquare(c), "the lane centre is not 'square' — the player is told SQUARE IT UP");
+    S.pits.update(c, 0.1);
+    assert.equal(c.pitState, "box", "a car stopped at the lane centre did not get its crew");
+    assert.equal(c.pitStops, 1);
+    const band = acceptBand(id);
+    assert.ok(band.width >= 1.8, `${id} accept band ${band.width.toFixed(2)} m wide (was 0.10 m)`);
+    // …and it is still a box, not "anywhere": the racing line is outside it.
+    c.x = 0;
+    assert.ok(!S.pits.inBoxLat(c, 0, track.pit.side) || !S.pits.boxSquare(c), "the racing line latched a stop");
+  });
+}
+
+test("bay circuits' working lane is untouched by the no-bay fix (byte-identical at() numbers)", () => {
+  // Golden values measured on the base (88f2b21a6) at the 6th box of each row.
+  const GOLD = {
+    bahrain: { side: 1, w: 1, v: 1, inner: 11, outer: 21, centre: 12.75, fastOut: 14.5, workIn: 15.5, workCentre: 18.25, width: 10 },
+    monaco: { side: 1, w: 1, v: 1, inner: 7.2, outer: 15.600000000000001, centre: 8.8, fastOut: 10.4, workIn: 11.4, workCentre: 13.5, width: 8.400000000000002 },
+  };
+  for (const [id, want] of Object.entries(GOLD)) {
+    const track = BUILT.build(id);
+    assert.equal(track.pit.hasBays, true, id);
+    const got = BUILT.Tracks.pitLaneAt(track, track.pit.row.boxes[5].s);
+    assert.deepEqual(JSON.parse(JSON.stringify(got)), want, `${id}: TrackPit.at() moved`);
+  }
 });

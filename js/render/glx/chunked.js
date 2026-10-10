@@ -8,10 +8,11 @@ const GLXChunked = (function () {
   // drawChunked is called once per chunked mesh (props, glass, terrain, road),
   // so it ran 4-5x a frame, and again per env-probe face, to recompute a value
   // that is identical for the whole frame and usually for many frames: the
-  // mapped lamp only changes when the shadow caster does. Keyed on the array
-  // identity plus the position, so a rebuilt lamp set or a new caster misses
-  // exactly once.
-  let _saAL = null, _saX = 0, _saY = 0, _saZ = 0, _saIdx = -1;
+  // mapped lamp only changes when the shadow caster does. Keyed on the baked
+  // TABLE (a new object whenever the lamp set moved — F.allLights itself is
+  // refilled in place, so its identity says nothing) plus the position, so a
+  // rebuilt lamp set or a new caster misses exactly once.
+  let _saTbl = null, _saX = 0, _saY = 0, _saZ = 0, _saIdx = -1;
   // Two chunks share a light set when the baked lists are the same object (the
   // common case — LampChunks reuses a list across neighbours) or element-wise
   // equal. Lists are perChunkLights long, i.e. single digits.
@@ -71,13 +72,13 @@ const GLXChunked = (function () {
     _gidCache.set(tbl, e);
     return e;
   }
-  function _shadowAllIdx(AL, lx, ly, lz) {
-    if (AL === _saAL && lx === _saX && ly === _saY && lz === _saZ) return _saIdx;
+  function _shadowAllIdx(AL, tbl, lx, ly, lz) {
+    if (tbl === _saTbl && lx === _saX && ly === _saY && lz === _saZ) return _saIdx;
     let r = -1;
     for (let p = 0; p < AL.length; p += 15) {
       if (AL[p] === lx && AL[p + 1] === ly && AL[p + 2] === lz) { r = p / 15; break; }
     }
-    _saAL = AL; _saX = lx; _saY = ly; _saZ = lz; _saIdx = r;
+    _saTbl = tbl; _saX = lx; _saY = ly; _saZ = lz; _saIdx = r;
     return r;
   }
 
@@ -425,19 +426,20 @@ const GLXChunked = (function () {
         // record in F.allLights ONCE per call by baked position (setFrame
         // copies positions verbatim; flicker scales rgb only), then per chunk
         // find its slot in that chunk's index list.
+        // The whole per-chunk table is baked ONCE per (lights, knob) by the
+        // shared LampChunks module (build-time work). F.allLights is refilled in
+        // place, so resolve() invalidates on the lamp positions/radii it bakes
+        // from, not on array identity; this loop only binds each visible chunk's
+        // pre-baked list. Resolved first: the shadow-slot lookup keys on it.
+        const _tbl = LampChunks.resolve(F.allLights, chunks, F.perChunkLights);
         const SH = core.shadow;
         let shadowAllIdx = -1;
-        if (SH && SH.lampEnabled && SH.lampArmed && SH.lampIdx >= 0 && F.lights &&
+        // Not in the mirror pass: SH.lampIdx is a slot of the FORWARD list.
+        if (SH && SH.lampEnabled && SH.lampArmed && SH.lampIdx >= 0 && F.lights && !core.post.mirror.active() &&
             !(F.tailCount > 0 && SH.lampIdx >= F.tailStart)) {
           const o = SH.lampIdx * 15;
-          shadowAllIdx = _shadowAllIdx(F.allLights, F.lights[o], F.lights[o + 1], F.lights[o + 2]);
+          shadowAllIdx = _shadowAllIdx(F.allLights, _tbl, F.lights[o], F.lights[o + 1], F.lights[o + 2]);
         }
-        // The whole per-chunk table is baked ONCE per (lights, knob) by the
-        // shared LampChunks module (build-time work, invalidated by lights
-        // array identity + knob value — a rebuild:true tuner edit nulls
-        // track._lights and the next build mints a new array); this loop only
-        // binds each visible chunk's pre-baked list.
-        const _tbl = LampChunks.resolve(F.allLights, chunks, F.perChunkLights);
         let lastSlot = null, lastLi = null;
         // RUN-MERGE, the per-chunk twin of the plain branch below. This drew
         // once per visible chunk — 128 of the frame's 129 drawElements — and

@@ -25,7 +25,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { GEOMETRY_PATHS } from "./geometry-paths.mjs";
 import { DEPLOY_BRANCH } from "./pick-tests.mjs";
-import { ADAPTED } from "./twinned-specs.mjs";
+import { circuitsOf } from "./select-specs.mjs";
+import { ADAPTED, ADAPTED_RUNNER } from "./twinned-specs.mjs";
+import { changedPaths } from "../lib/changed-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -172,9 +174,7 @@ function changedFiles(argv) {
       ref = "HEAD";
     }
   }
-  const out = execFileSync("git", ["diff", "--name-only", ref],
-    { cwd: ROOT, encoding: "utf8" }).trim();
-  return out ? out.split("\n").filter(Boolean) : [];
+  return changedPaths([ref]);   // rename SOURCES too (ledger M36)
 }
 
 /** Unit files that live only in tooling-fast / sweeps — not a CI node slice. */
@@ -189,6 +189,29 @@ export function classifyUnitFile(f, owners, groupsJson = null) {
   const tf = new Set(g.toolingFast?.filter((x) => typeof x === "string" && !x.startsWith("//")) || []);
   if (tf.has(f)) return { kind: "tooling-fast", slices: ["guards"] };
   return { kind: "unit-new", slices: ["guards"] };
+}
+
+/** The SOURCE an ADAPTED spec asserts (ledger L9, 2026-10-09). select-specs
+ *  drops an ADAPTED spec's browser copy as VM-covered, and vm-page is the only
+ *  place it runs, so an edit to what it reads must spin `page` too or the spec
+ *  runs nowhere on the PR (the Pages train then goes red). Circuit data: any
+ *  circuit an ADAPTED spec builds (circuitsOf the runner); circuit SCENERY:
+ *  only the circuits whose *-foundation spec is ADAPTED (a scenery edit cannot
+ *  move a lap-distance or wall-scrub read). Unknown .js under js/circuits ->
+ *  page (fail safe). Returns the reason, or "" when no rule applies. */
+const PAGE_SOURCES = [/^js\/race\/pit-lane\.js$/, /^js\/race\/race-control\.js$/, /^js\/track\/core\/space\.js$/];
+export function adaptedSourceWhy(f) {
+  if (PAGE_SOURCES.some((re) => re.test(f))) return `source of an ADAPTED spec (vm-page runs it): ${f}`;
+  if (!/^js\/circuits\/.+\.js$/.test(f)) return "";
+  const m = /^js\/circuits\/(scenery\/)?([^/]+)\.js$/.exec(f);
+  if (!m) return `unclassified circuits path, fail safe: ${f}`;
+  const id = m[2];
+  if (m[1]) {
+    const foundation = Object.keys(ADAPTED).map((s) => /^tests\/specs\/(.+)-foundation\.spec\.js$/.exec(s)?.[1]?.replace(/-/g, "_"));
+    return foundation.includes(id) ? `scenery of ${id}, whose foundation spec is ADAPTED (vm-page runs it)` : "";
+  }
+  const built = circuitsOf(ADAPTED_RUNNER);
+  return built === null || built.has(id) ? `circuit ${id} is built by an ADAPTED spec (vm-page runs it)` : "";
 }
 
 export function pickAll(why = "--all") {
@@ -227,6 +250,9 @@ export function pick(files, opts = {}) {
     // counts it as VM-covered, so its edit must schedule `page` or it runs
     // nowhere on the pull request (2026-10-05; node-plan forces the script).
     if (Object.hasOwn(ADAPTED, f)) { hit = true; add("page", `ADAPTED spec, vm-page runs it as itself: ${f}`); }
+
+    const sourceWhy = adaptedSourceWhy(f);
+    if (sourceWhy) { hit = true; add("page", sourceWhy); }
 
     if (GEOMETRY_PATHS.test(f)) {
       hit = true;
