@@ -417,6 +417,11 @@ const CustomTracks = (function () {
   let _ret = null;
   /** Arm the return the next consumeTrackHash() outside a race takes (quitToMenu calls it). */
   function armReturn(r) { _ret = r && typeof r === "object" ? r : null; }
+  /** A start just reached its countdown (game.js startRace): while a test drive's return is armed, every start
+   *  — TRY AGAIN, the pause RESTART — goes back onto the test point, not the grid line. */
+  function afterStart() {
+    if (_ret && typeof TrackDesigner !== "undefined" && TrackDesigner.placeTest) TrackDesigner.placeTest(_ret);
+  }
   /** A #track=<APXT1 code> link (TrackCodec.shareUrl): load the designer and
    *  open the shared design in it, then strip the fragment so a reload does not
    *  re-open it. Mid-race it waits, fragment intact, for the menu (game.js
@@ -468,6 +473,6 @@ const CustomTracks = (function () {
 
   sync();   // at EVAL: before game.js resolves the stored trackId
 
-  return { KEY, DRAFT_KEY, DRAFT_PREV_KEY, LIMITS, KERB_STYLES, sanitize, sanitizeName, sanitizeCountry, sanitizeHeights, sanitizeKerbStyle, sanitizeBerms, idOf, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn };
+  return { KEY, DRAFT_KEY, DRAFT_PREV_KEY, LIMITS, KERB_STYLES, sanitize, sanitizeName, sanitizeCountry, sanitizeHeights, sanitizeKerbStyle, sanitizeBerms, idOf, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn, afterStart };
 })();
 Object.freeze(CustomTracks);

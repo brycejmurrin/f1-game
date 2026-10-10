@@ -1531,6 +1531,17 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.equal(p._prevS, p.s);
   assert.deepEqual([p.x, p.xVis, p.speed, p.vLat, p.yawRateCur, p.yawVis, p.steerVis, p.rescueT, p.wallT, p.wasOnWall, p.wrongT, p.wrongWay, p.offT], [0, 0, 0, 0, 0, 0, 0, 0, 0, false, 0, false, 0], "at rest, every transient cleared");
   assert.deepEqual([p.rPrevPx, p.rPrevPz, p.rPrevS, p.rPrevX, p.rPrevHead, p.rPrevYawVis], [p.px, p.pz, p.s, 0, p.head, 0], "render anchors seeded");
+  // TRY AGAIN / the pause RESTART re-enter startRace: while the return is armed the new countdown goes back onto the test point.
+  const sTest = p.s;
+  Object.assign(b.G.player, { s: tr.total - 14, _prevS: tr.total - 14, prog: -14, speed: 55 }); b.G.state = "count"; calls.length = 0;
+  b.C.afterStart();
+  assert.deepEqual(plain(calls), [["snap"], ["hud"], ["goRolling"]], "a restart drops the car on the point again and goes green");
+  assert.equal(b.G.state, "race");
+  assert.equal(b.G.player.s, sTest, "…the same point, not the grid line");
+  assert.equal(b.G.player.speed, 0);
+  calls.length = 0; b.C.afterStart();
+  assert.equal(calls.length, 0, "a race already rolling is left alone");
+  assert.match(read("js/game.js"), /request\.then\(\(r\) => \{ if \(r !== false\) CustomTracks\.afterStart\(\); \}/, "game.js startRace tells CustomTracks a countdown began");
   // The way back: armed, so quitting reopens the designer on the same point.
   b.D.load(Object.assign({}, b.D.state().design), "library", id);   // as if something reset the selection
   b.D.close();
@@ -1541,6 +1552,8 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.equal(await b.C.consumeTrackHash(), true);
   assert.equal(b.D.isOpen(), true);
   assert.equal(b.D.state().sel, 12, "the selected point is back");
+  b.G.state = "count"; calls.length = 0; b.C.afterStart();
+  assert.equal(calls.length, 0, "the return was taken: a later start is an ordinary one");
   assert.equal(msgText(b), "Back from the test drive");
   // A headless or hidden page has no frames for the card: the quick path, as raceIntro's other callers take.
   calls.length = 0; b.G.headlessMode = true; b.G.state = "menu";
