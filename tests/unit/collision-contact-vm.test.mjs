@@ -514,6 +514,7 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
     // tick); reposing resumes it from the trace — do not assert speed here.
     const poses = () => watched.map((c) => ({ prog: c.prog, s: c.s, x: c.x, px: c.px, pz: c.pz,
       lap: c.lap, penalty: c.penalty, tyreWear: c.tyreWear }));
+    g.step(1);   // settle the seek's pose: a loaded runner may pump the camera frames above with no physics step, leaving the seek's speed on the puppet
     const before = poses();
     assert.equal(g.G.raceT, 0.1, "the replay seek synchronizes the game's HUD clock");
     vm.runInContext('Input.remoteEvent("recover")', g.ctx);   // the same action as keyboard R / gamepad RECOVER
