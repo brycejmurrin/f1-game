@@ -571,6 +571,8 @@
     "// open PR's head, claims on age; pure fixtures, under a second.",
     "tests/unit/prune-branches.test.mjs",
     "tests/unit/pu-harvest-audio.test.mjs",
+    "// shots/<topic> evidence-branch publisher: validations, dry run, full publish into a throwaway bare repo.",
+    "tests/unit/publish-shots.test.mjs",
     "tests/unit/quick-validate.test.mjs",
     "tests/unit/race-control.test.mjs",
     "tests/unit/race-entry-profile.test.mjs",
