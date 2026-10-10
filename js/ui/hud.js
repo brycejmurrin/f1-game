@@ -12,6 +12,7 @@ const _rmq = (typeof window !== "undefined" && window.matchMedia)
   ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
 const motionReduced = () => !!(_rmq && _rmq.matches)
   || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
+const _noCssZoom = typeof Element === "function" && !("currentCSSZoom" in Element.prototype);
 
 // GameHud.invalidateFit(): the live instance's re-fit trigger (null until create).
 let _invalidateFit = null, _syncPhoneFit = null;
@@ -868,12 +869,12 @@ function fitHud() {
   // 142 = 110×0.862/0.666). Dividing getBoundingClientRect by that stale live
   // zoom over/under-estimates intrinsics and the next pass flips between
   // ~--hud-scale (uncapped) and the 0.4 floor. Measure with what we published.
-  // When currentCSSZoom is absent (mini-dom fixtures paint unscaled rects),
-  // fall back to 1 so those harnesses keep measuring in layout px.
+  // No currentCSSZoom on a real DOM (iOS Safari < 26.4) still paints zoom into rects:
+  // divide by pub (hud-pins F-01). Only DOM-less mini-dom harnesses fall back to 1.
   const zTopPub = +root.style.getPropertyValue("--hud-z-top") || scale;
   const zBotPub = +root.style.getPropertyValue("--hud-z-bot") || scale;
   const zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(1, btnScale);
-  const zoomDiv = (el, pub) => (el && el.currentCSSZoom > 0 ? (pub || 1) : 1);
+  const zoomDiv = (el, pub) => (el && (el.currentCSSZoom > 0 || _noCssZoom) ? (pub || 1) : 1);
   const wide = (el, pub) => {
     if (!el) return 0;
     const r = layoutRect(el);

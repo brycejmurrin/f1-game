@@ -72,6 +72,9 @@ function boot({ W = 844, H = 390, scale = 1, cssZoom = true, camInRow = true } =
     }),
   };
   sb.window = sb;
+  // Old Safari is a real DOM whose Element.prototype lacks currentCSSZoom; the
+  // other harnesses here (and mini-dom suites) define no Element at all.
+  if (!cssZoom) sb.Element = function Element() {};
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: "js/ui/live-region.js" });
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: "js/ui/hud.js" });
   vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: "js/race/overtake-mode.js" });
@@ -214,7 +217,6 @@ test("pin F-06: a radio card the fit collapsed off S3 stays collapsed for the re
   });
 
 test("pin F-01: without Element.currentCSSZoom the top-band zoom converges instead of flip-flopping",
-  { todo: "fitHud's zoomDiv divides painted rects by 1 when currentCSSZoom is absent (iOS Safari < 26.4) — the F-01 fix lands after #1366" },
   () => {
     // Control: the same layout WITH currentCSSZoom settles (one value), so a failure
     // below is the missing property, not the harness.
@@ -231,4 +233,7 @@ test("pin F-01: without Element.currentCSSZoom the top-band zoom converges inste
     const tail = caps.slice(-4);
     const spread = Math.max(...tail) - Math.min(...tail);
     assert.ok(spread < 0.02, "the published --hud-z-top must settle; got " + JSON.stringify(caps));
+    // …and on the same zoom a browser WITH the property reaches: same layout, same cap.
+    assert.ok(Math.abs(caps[caps.length - 1] - ctl[0]) < 0.02,
+      "old Safari must settle where the control does (" + ctl[0] + "); got " + JSON.stringify(caps));
   });
