@@ -968,10 +968,15 @@ const AiDrive = (function () {
       const total = v.reduce((a, x) => a + x, 0) || 1;
       const out = v.map((x) => Math.max(1, Math.round(laps * x / total)));
       let drift = out.reduce((a, x) => a + x, 0) - laps;
-      for (let i = out.length - 1; i >= 0 && drift !== 0; i--) {
-        const take = Math.min(Math.abs(drift), out[i] - 1) * Math.sign(drift);
+      // Over-allocated: shave stints down to their 1-lap floor, last first.
+      for (let i = out.length - 1; i >= 0 && drift > 0; i--) {
+        const take = Math.min(drift, out[i] - 1);
         out[i] -= take; drift -= take;
       }
+      // Under-allocated: the floor never limits a stint that GROWS, so the
+      // last stint takes the shortfall (the 1-lap cap left [1,1,1] of 4 laps
+      // summing to 3 and the plan finished a lap early).
+      if (drift < 0) out[out.length - 1] -= drift;
       return out;
     };
     let out = share(lives);

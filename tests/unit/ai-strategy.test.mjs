@@ -199,6 +199,14 @@ test("splitStints shares the distance in proportion to life", () => {
   assert.equal(skew.reduce((a, v) => a + v, 0), 30, "and the split still covers the distance");
 });
 
+test("splitStints covers the distance when rounding under-allocates and the last stints are 1 lap", () => {
+  // [1,1,1] over 4 laps rounds to 1,1,1 (sum 3): the old 1-lap floor capped the
+  // CORRECTION too, so nothing grew and the plan ended a lap short.
+  const out = A.splitStints(4, [1, 1, 1]);
+  assert.equal([...out].reduce((a, v) => a + v, 0), 4);
+  assert.ok([...out].every((v) => v >= 1));
+});
+
 // ── 4. The reactive rules ──────────────────────────────────────────────────
 
 const now = (o) => A.pitNow(Object.assign(
