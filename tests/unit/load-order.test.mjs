@@ -125,6 +125,15 @@ for (const page of ["index.html", "controller.html"]) {
   });
 }
 
+// Playwright injects addInitScript / addScriptTag({content}) as unhashed inline
+// scripts; the suite must bypass CSP or Smoke/TLX/selected go red on the
+// console scrape. The production meta stays strict (players are unaffected).
+test("Playwright bypasses CSP so the harness init scripts still run", () => {
+  const cfg = readFileSync(join(ROOT, "playwright.config.js"), "utf8");
+  assert.match(cfg, /\bbypassCSP:\s*true\b/,
+    "playwright.config.js needs bypassCSP: true while script-src has no 'unsafe-inline'");
+});
+
 test("deferred stylesheets flip print→all from the hashed script, not an onload= attribute", async () => {
   const { DEFER_CSS_SCRIPT } = await import("../../tools/gen/gen-shell.mjs");
   const html = readFileSync(join(ROOT, "index.html"), "utf8");
