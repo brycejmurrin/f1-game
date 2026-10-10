@@ -683,3 +683,31 @@ test("waitFor expired copy is actionable (no false 'couple of minutes' claim)", 
     await r.close();
   }
 });
+
+test("a private-relay HOST keeps polling past the guest's 12 s; guests keep 12 s (bug-hunt 8.4)", async () => {
+  assert.ok(NetRendezvous.HOST_POLL_TIMEOUT_MS >= 60000, "a host is waiting for a friend who must be sent the code");
+  assert.match(fs.readFileSync(path.join(ROOT, "js/net/rendezvous.js"), "utf8"),
+    /waitFor\(code, want, token, onTick, HOST_POLL_TIMEOUT_MS\)/, "swap's host branch passes the host window");
+  const r = await relay();
+  const realNow = Date.now;
+  let skew = 0;
+  try {
+    Date.now = () => realNow() + skew;
+    const code = NetRendezvous.makeCode();
+    // Guest (no timeout argument): expired once past POLL_TIMEOUT_MS.
+    const guest = await NetRendezvous.waitFor(code, "offer", null, () => { skew = NetRendezvous.POLL_TIMEOUT_MS + 1; });
+    assert.equal(guest.error, "expired");
+    // Host: the same skew is not an expiry; only HOST_POLL_TIMEOUT_MS is.
+    skew = 0;
+    let ticks = 0;
+    const host = await NetRendezvous.waitFor(code, "offer", null, () => {
+      ticks++;
+      skew = ticks === 1 ? NetRendezvous.POLL_TIMEOUT_MS + 1 : NetRendezvous.HOST_POLL_TIMEOUT_MS + 1;
+    }, NetRendezvous.HOST_POLL_TIMEOUT_MS);
+    assert.ok(ticks >= 2, "the host was still polling after the guest's window");
+    assert.equal(host.error, "expired");
+  } finally {
+    Date.now = realNow;
+    await r.close();
+  }
+});

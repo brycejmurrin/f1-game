@@ -21,7 +21,7 @@ import { webcrypto } from "node:crypto";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 
-function boot() {
+function boot({ joinMs } = {}) {
   const sockets = [];
   class FakeWebSocket {
     constructor(url) {
@@ -50,7 +50,7 @@ function boot() {
   const sb = {
     console, Object, Array, String, Number, Promise, JSON, Math, Date, Map, Set, Error, TypeError, URL,
     Uint8Array, ArrayBuffer, TextEncoder, TextDecoder, DataView,
-    setTimeout, clearTimeout, setInterval, clearInterval,
+    setTimeout, clearTimeout, setInterval, clearInterval, btoa, atob,
     crypto: webcrypto,
     WebSocket: FakeWebSocket,
     document,
@@ -62,12 +62,15 @@ function boot() {
   for (const f of ["js/net/bytes.js", "js/net/rendezvous.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: f });
   const src = read("js/net/nostr.js");
   assert.ok(src.includes('import("@trystero-p2p/nostr")'), "the vendored import is the seam this test replaces");
-  vm.runInContext(src.replace('import("@trystero-p2p/nostr")', "__importNostr()").replace(/^const\b/gm, "var"), ctx, { filename: "js/net/nostr.js" });
+  let patched = src.replace('import("@trystero-p2p/nostr")', "__importNostr()").replace(/^const\b/gm, "var");
+  // A shortened guest find-window, so the reply-deadline case runs in seconds.
+  if (joinMs) patched = patched.replace("const JOIN_TIMEOUT_MS = 12000", "const JOIN_TIMEOUT_MS = " + joinMs);
+  vm.runInContext(patched, ctx, { filename: "js/net/nostr.js" });
   const NetNostr = vm.runInContext("NetNostr", ctx);
   const tick = () => new Promise((r) => setTimeout(r, 20));
   // The topics are PBKDF2-stretched (120 000 rounds) before any socket opens.
   const untilSockets = async (n) => { for (let i = 0; i < 300 && sockets.length < n; i++) await tick(); };
-  return { NetNostr, sockets, document, listeners, tick, untilSockets, fire: (ev) => { const fn = listeners.get(ev); if (fn) fn(); } };
+  return { NetNostr, NetRendezvous: vm.runInContext("NetRendezvous", ctx), NetBytes: vm.runInContext("NetBytes", ctx), sockets, document, listeners, tick, untilSockets, fire: (ev) => { const fn = listeners.get(ev); if (fn) fn(); } };
 }
 
 test("the REQ carries no `since`: a fast device clock must not filter the host's offer", async () => {
@@ -194,4 +197,30 @@ test("host room survives past JOIN_TIMEOUT; guest still expires around it (accep
   assert.equal(hostFail, null, "host must NOT expire at JOIN_TIMEOUT");
   assert.ok(hostH.sockets.some((s) => s.readyState === 1), "host sockets still open past guest expiry");
   hostRoom.stop();
+});
+
+test("a guest that finds the offer late is not expired while it builds the answer (bug-hunt 8.3)", async () => {
+  // JOIN_TIMEOUT_MS (shortened to 1.5 s here) is the window to FIND the offer.
+  // The reply (build + ICE gather) takes 2.5 s: longer than the whole window.
+  // Before the fix the join timer kept running, won, and heard() returned
+  // without ever publishing the answer.
+  const h = boot({ joinMs: 1500 });
+  assert.equal(h.NetNostr.JOIN_TIMEOUT_MS, 1500, "the patch took");
+  const token = { cancelled: false };
+  let res = null, replyDone = false;
+  const p = h.NetNostr.directExchange({
+    code: "ABCDEF", token,
+    reply: async () => { await new Promise((r) => setTimeout(r, 2500)); replyDone = true; return "ANSWER"; },
+  }).then((r) => { res = r; return r; });
+  await h.untilSockets(1);
+  const w = h.sockets[0];
+  w.open();
+  const sealed = await h.NetRendezvous.seal("ABCDEF", "OFFER", "offer");
+  w.onmessage({ data: JSON.stringify(["EVENT", "s1", { content: h.NetBytes.bytesToB64(sealed) }]) });
+  await new Promise((r) => setTimeout(r, 3300));      // past find window AND the reply
+  assert.equal(replyDone, true, "precondition: the reply finished after the find window");
+  assert.equal(res, null, "the exchange was not expired mid-reply");
+  assert.ok(w.sent.some((f) => f.startsWith('["EVENT"')), "the answer reached the wire");
+  token.cancelled = true;                              // tick() finishes it within a second
+  await p;
 });
