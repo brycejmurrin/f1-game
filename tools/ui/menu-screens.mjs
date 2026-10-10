@@ -133,7 +133,9 @@ export const SCREENS = [
       await p.evaluate(() => { const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
         (t.find((e) => /TEAM/i.test(e.textContent)) || t[0])?.click(); });
       await p.waitForTimeout(400);
-      await p.click("#cs-team-card");
+      // iPad landscape: Playwright actionability times out on #cs-team-card while
+      // the element is present (menu-mock *, 2026-10-10). Same door as the player.
+      await p.evaluate(() => document.getElementById("cs-team-card")?.click());
       await p.waitForSelector("#teampicker:not([hidden])", { timeout: 15000 }); } },
   { id: "racesettings", name: "Race settings", root: "#race-settings", open: async (p) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
@@ -195,7 +197,10 @@ export const SCREENS = [
   { id: "trackdetail", name: "Circuit detail", root: "#track-detail", mapAxis: true, open: async (p, circuit) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
       await pickCircuit(p, circuit);
-      await p.click("#sel-preview-map");
+      // Canvas hit-testing flakes under Playwright actionability on phone landscape
+      // (menu-mock * sweep: 3× Timeout on #sel-preview-map, 2026-10-10). Dispatch the
+      // same click the player fires.
+      await p.evaluate(() => document.getElementById("sel-preview-map")?.click());
       await p.waitForSelector("#track-detail:not([hidden])", { timeout: 15000 });
       // The modal fits its map on a ResizeObserver after the open transition
       // (js/ui/select-screen.js), so the first frame is not the final size.
