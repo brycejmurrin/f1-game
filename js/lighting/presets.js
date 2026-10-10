@@ -7104,7 +7104,7 @@ window.LightPresets = {
     "floodEmitMul": 0.42,
     "fogTint": 0.06,
     "lampFlicker": 0,
-    "lampRadiusMul": 1.9,
+    "lampRadiusMul": 0.9,
     "roadRough": 1.13,
     "ssrWetMul": 0.34,
     "surfDetail": 2.45,
