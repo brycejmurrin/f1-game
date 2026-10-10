@@ -153,13 +153,14 @@
      while the map pushes the widget rightward, and the slot between them closes.
      The adaptive font cap below holds the widget to 84px wide at 100% and 121 at
      200%, and it clears everything through 150% (27px of slack at 1000x450,
-     19px at 1280x800). Past that the slot is gone — but so is the corner: at
-     1280x800 @200% `#minimap`'s right edge is 21px PAST `.hud-top`'s left edge,
-     i.e. the map and the POS row overlap each other with this widget removed
-     from the comparison entirely (same at 852x393). Nothing legible fits in the
-     61px left at 175%, so there is no CSS fix at that end and no point pursuing
-     one; docking below `.hud-top` does clear at every scale, and was tried, but
-     it breaks up the top-left cluster. */
+     19px at 1280x800). Past that the slot is gone — `data-gap-drop` (fitHud)
+     parks this strip under the tower. Uncapped geometry still has the map and
+     POS row clash (historic: 1280×800 @200% map right 21px past `.hud-top`
+     left; same class at 852×393). With today's shared top-band cap, 1280×720
+     @150–200% keeps ~12px map×tower slack at `--hud-z-top`≈1.46 (hud-survey
+     2026-10-10) — so there is no CSS one-liner that clears a remaining clash
+     without breaking the top-left cluster; docking under `.hud-top` was tried
+     and rejected for that reason. */
   top: calc(8px + var(--sat) / var(--hud-z));
   left: calc(146px + var(--sal) / var(--hud-z));
   /* ADAPTIVE SIZE. 12px is the base — below --fs-micro (14px, the token scale's
