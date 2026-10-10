@@ -49,6 +49,6 @@ Likely wrap/arc signing in the agent world pack — needs a focused agent-view r
 ## Fixed in follow-up on this branch
 - **B2** — `tools/shot/shot.mjs` echoes the free-cam id (`orbit`/…) on `frame.camera.mode` when `dbgCamActive`.
 - **B4** — MCP aliases `image` ↔ `inlineImage` across `apex_hud_shot` / `apex_ui_shot` / `apex_shot`.
-
-## Stand-down
-B1 (title CAREER clip) → UI Survey. B3 (HUD overlaps) → HUD phone-layout claims. B5 (lapsAhead) → needs agent-view repro before code.
+- **B1** — compact-wide live Home: `#menu-buttons` inline pad clears CAREER skew tip; under-brand rooms `justify-content:flex-start` so `.btn-ico` is not clipped.
+- **B3** — `#announce` caution step follows `data-gap-drop` flag edge; phone `#hud-inputs` clears a visible `#hud-limits`.
+- **B5** — `world().rivals[].lapsAhead` is lap-counter standing (`c.lap - p.lap`); road `gap` is `prog` minus that standing (keeps lapped-ahead contract).

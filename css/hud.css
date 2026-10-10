@@ -1095,6 +1095,16 @@ body[data-density="compact"] #announce {
    card stayed in the centre — the flag on the card, 844x390 (survey 2026-10-04). */
 body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
 body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
+/* data-gap-drop lowers #hud-flag by --hud-top-h+74px (rule above). The 72/100
+   caution steps still assumed the undropped slot, so #announce sat on the flag
+   on phoneL-chase (MCP survey B3, 1981px²). Step from the dropped edge.
+   body rides in :where() so source-integrity does not see a body descendant. */
+:root[data-gap-drop] :where(body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden]))) #announce {
+  top: calc(max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px), calc(var(--mir-bot, 0px) + 8px)) + 38px);
+}
+:root[data-gap-drop] :where(body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden]))) #announce {
+  top: calc(max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px), calc(var(--mir-bot, 0px) + 8px)) + 34px);
+}
 
 /* ---------- start lights ---------- */
 /* The gantry is driven purely by `els.lights.hidden = true/false` in
@@ -2023,6 +2033,12 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
   max-width: min(120px, 22vw);
   max-height: min(18svh, 4.2em);
   overflow: hidden;
+}
+/* Forced track-limits + INPUTS share the sector column: inputs' +12 sat 3px
+   above limits' +15 and overlapped the chip (phoneL-chase, 291px²). Drop the
+   trace under the limits slot while that chip is shown. */
+body:not(.desktop):has(#hud-limits:not([hidden])) #hud-inputs:not([data-hl-user]) {
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + 1.75em + 8px);
 }
 body:not(.desktop) #hud-inputs:not([data-hl-user]) #hud-inputs-cv {
   width: 84px;
