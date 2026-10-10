@@ -6073,6 +6073,15 @@ test("PCSS blocker: 32-bit float and the min over the whole 4x4 source footprint
   assert.equal(d, 16);
 });
 
+// M15b: pause + SETTINGS must keep presenting so SAVE SCREENSHOT can get a live frame
+// (headed GLX has no preserved buffer; without this the button only said NO LIVE FRAME).
+test("paused race keeps presenting while SETTINGS is open (SAVE SCREENSHOT)", () => {
+  const src = read("js/game.js");
+  const gate = src.slice(src.indexOf("if (paused && !netPlay.active())"), src.indexOf("replayBuf.onTick(raceT, cars, state)"));
+  assert.match(gate, /!els\.pmsettings\.hidden/,
+    "SETTINGS open during pause must call render() so headed GLX SAVE SCREENSHOT sees a frame");
+});
+
 // M15: headed GLX has no #game-soft and no preserved drawing buffer, so #game.toDataURL()
 // after an await returned the cleared buffer: a black PNG reported SAVED. The picker now
 // asks GLX for a frame that resolves from inside present() and reports NO LIVE FRAME

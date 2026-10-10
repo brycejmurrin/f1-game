@@ -5026,12 +5026,16 @@ const WGX = (function () {
     // packed with. CLEARING BOTH CULL SNAPSHOTS IS LOAD-BEARING (same contract
     // as glx.js, pinned by gfx-backend-canary): bytes written here came from
     // no frustum, so a later cullInstances must never hit its cache on them.
-    function updateInstances(batch, matrices, n) {
+    function updateInstances(batch, matrices, n, colors) {
       if (_lost || !batch || !batch._instPacked || !batch.instBuf || batch.instBuf === identInstanceBuf) return 0;
       const v = Math.max(0, Math.min(batch.instances | 0, n | 0)), dst = batch._instPacked;
       for (let i = 0; i < v; i++) {
         const so = i * 16, d = i * 20;
         for (let k = 0; k < 16; k++) dst[d + k] = matrices[so + k];
+        // Optional colours (frozen-mirror). DebrisWorld omits them — colour lanes stay as packed.
+        if (colors) {
+          dst[d + 16] = colors[i * 3]; dst[d + 17] = colors[i * 3 + 1]; dst[d + 18] = colors[i * 3 + 2];
+        }
       }
       batch.visible = v;
       batch._cullPlanes = null;

@@ -6634,25 +6634,24 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
     if (wet) { if (_lit) { m = _wmPropsWetN; m.emissive = Math.min(0.80, floodEmit); } else m = _wmPropsWetD; }
     else { if (_lit) { m = _wmPropsDryN; m.emissive = floodEmit; } else m = _wmPropsDryD; }
     const _pb = track.meshes.propBatches;
-    // frame.mirrorLite: the phone-grade rear-view mirror (js/render/shared/mirror-pass.js)
-    // skips the batches — a second frustum re-culls and re-uploads every pack each frame.
-    // frame.mirrorFreezeInstanced (audit #8, full quality): reuse the last mirror
-    // pack via updateInstances — skip AABB sweep + CPU pack; cars still redraw.
-    // `rec`: only the MIRROR's own cull is recorded (mirrorLite is a boolean only
-    // inside mirror-pass; the main pass would replay the forward pack at ~30 Hz).
+    // mirrorLite skips batches; mirrorFreezeInstanced reuses last mirror mats+colours (main pass would overwrite at ~30 Hz).
     if (_pb && _pb.length && gfx.drawInstanced && !frame.mirrorLite && !envProbe) {
       const planes = gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
       const freeze = !!frame.mirrorFreezeInstanced, rec = frame.mirrorLite === false;
       for (let i = 0; i < _pb.length; i++) {
         const b = _pb[i];
         if (freeze && b._mirN > 0 && b._mirMats && gfx.updateInstances) {
-          gfx.updateInstances(b, b._mirMats, b._mirN);
+          gfx.updateInstances(b, b._mirMats, b._mirN, b._mirCols || null);
         } else {
           if (planes && gfx.cullInstances) gfx.cullInstances(b, planes);
           const n = b.visible | 0;
           if (rec && n > 0 && b.packMatrices) {
             if (!b._mirMats || b._mirMats.length < n * 16) b._mirMats = new Float32Array(n * 16);
             b._mirMats.set(b.packMatrices.subarray(0, n * 16));
+            const nc = n * 3;
+            if (!b._mirCols || b._mirCols.length < nc) b._mirCols = new Float32Array(nc);
+            if (b.packColors) b._mirCols.set(b.packColors.subarray(0, nc));
+            else if (b._instPacked) for (let j = 0; j < n; j++) { const s = j * 20 + 16, d = j * 3; b._mirCols[d] = b._instPacked[s]; b._mirCols[d + 1] = b._instPacked[s + 1]; b._mirCols[d + 2] = b._instPacked[s + 2]; }
             b._mirN = n;
           } else if (rec) b._mirN = 0;
         }
@@ -8287,8 +8286,9 @@ function tickBody(now) {
     // the pause menu, and its placements publish one zero-dt frame. Resuming tears
     // it down (setPaused -> exitPhotoMode -> FreeCam.onPhotoExit), so no unpaused
     // state in which it should still be flying.
+    // SETTINGS open (SAVE SCREENSHOT / GFX toggles) also needs a live present — headed GLX has no preserved buffer.
     if (setupPreviewOn || replayBuf.isScrubbing() || ((state === "race" || state === "count") &&
-        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode))) {   // photoMode: the FREE CAMERA panel docks with no tuner open
+        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden || photoMode || !els.pmsettings.hidden))) {
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it
