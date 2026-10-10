@@ -186,7 +186,9 @@ test("inexactSites lists the sites whose A and A2 differ, worst first; exact and
   assert.deepEqual(inexactSites([row("a", 0)]), []);
 });
 
-test("--a3 is an opt-in flag", () => {
+test("--a3 is an opt-in flag; extra settle rounds are on unless --no-settle", () => {
   assert.equal(parseArgs([]).a3, undefined);
   assert.equal(parseArgs(["--a3", "--png"]).a3, true);
+  assert.equal(parseArgs([]).settle, true);
+  assert.equal(parseArgs(["--no-settle"]).settle, false);
 });
