@@ -1,1 +1,1 @@
-1791601486	Bryce Murrin	PR #1289 owned selector fallback and regression; preserve existing HUD/CSS fixes; root owns readiness/merge  [claude/code-review-bug-hunt-0ngtr5; session 64ccee8d520054d2ff48b2b3]
+1791602177	Bryce Murrin	PR #1289 isolated selector fallback; root-approved merge of exact published #1298 e900 dependency, no duplicate garage repair; root owns readiness/merge  [claude/code-review-bug-hunt-0ngtr5; session 64ccee8d520054d2ff48b2b3]
