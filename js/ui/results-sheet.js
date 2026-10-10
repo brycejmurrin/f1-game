@@ -440,7 +440,7 @@ function buildResults(order, race) {
     els.resNext.textContent = sprint ? "TO THE GRAND PRIX"
       : season.round >= SeasonCal.rounds() ? "VIEW CHAMPION" : "NEXT ROUND";
   } else {
-    els.resNext.textContent = "RACE AGAIN";
+    els.resNext.textContent = watched ? "WATCH AGAIN" : "RACE AGAIN";   // a watched real race re-runs the replay, it is not a new race
   }
 }
 

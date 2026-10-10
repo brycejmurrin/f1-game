@@ -807,3 +807,17 @@ test("SettingRow wrap:false clamps the LAPS chevrons at the ends", () => {
   built.prev.click();
   assert.equal(laps, 5);
 });
+
+// Flow B item 4: a WATCHED real race (REAL REPLAY / HIGHLIGHTS) re-runs the replay, so its button must not say RACE AGAIN.
+test("results next-button label is pinned by mode: WATCH AGAIN for a watched real race, RACE AGAIN for a driven one", () => {
+  const { cars } = tiedSeason();
+  const driven = bootResults({ season: null, cars, seasonMode: false });
+  driven.api.buildResults(cars.slice());
+  assert.equal(driven.els.resNext.textContent, "RACE AGAIN");
+  const watched = bootResults({ season: null, cars, seasonMode: false, globals: { RealRace: { status: () => ({ watch: true }) } } });
+  watched.api.buildResults(cars.slice());
+  assert.equal(watched.els.resNext.textContent, "WATCH AGAIN");
+  const raced = bootResults({ season: null, cars, seasonMode: false, globals: { RealRace: { status: () => ({ watch: false }) } } });
+  raced.api.buildResults(cars.slice());
+  assert.equal(raced.els.resNext.textContent, "RACE AGAIN", "a real-race grid the player drives is still a race");
+});
