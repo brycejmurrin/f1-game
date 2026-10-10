@@ -1362,6 +1362,8 @@ not a per-file list).
 
 ## js/game.js — main
 
+Session flow (the four-state machine, how a start is entered, what the flag shows per mode): [FLOW.md](FLOW.md).
+
 The entry point (the largest file in the repo — its line ceiling is ratcheted by
 `tests/data/ratchets.json`; loop, physics, AI, race logic — the subsystems
 above are extracted). Player + 21 AI.
