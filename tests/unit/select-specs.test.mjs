@@ -12,7 +12,7 @@ import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
   MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS, MAX_SPILL_SHARDS, MAX_SELECTED_JOB_MIN, MAX_TESTS_PER_JOB,
   FAT_UI_SELECTED_JOB_MIN, FAT_UI_SEC_PER_TEST,
-  SOLO_OWN_TIMEOUT_SEC,
+  SOLO_OWN_TIMEOUT_SEC, SELECTED_SETUP_MIN, SELECTED_WRAP_MIN,
   partitionMegaSweepArgs, megasForThisShard, megaShardPlan, megaSoloFlags, playwrightShard, isMegaSweepSpec,
   expectedSec, measuredCheap, circuitsTouched, dataCircuits, racingCircuitIds, foundationSpec, CIRCUIT_FILTERED_TESTS, CIRCUIT_DEF,
   DEFAULT_BUDGET_MIN,
@@ -229,7 +229,10 @@ test("terrain and ordinary parts leftovers use only spare over-budget capacity (
   assert.ok(full.overBudgetRun.reduce((n, s) => n + s.sec, 0) <= MAX_OVER_BUDGET_SHARDS * TARGET_SHARD_SEC);
   const jobs = shards(full, db);
   const terrainJobs = jobs.filter((j) => j.specs.split(" ").includes(terrain));
-  assert.deepEqual(terrainJobs.map((j) => j.shard), Array.from({ length: 7 }, (_, i) => `${i + 1}/7`));
+  // Split by its MEASURED 638 s, not 8 tests a leg (R3-CI-HEALTH-3): it was
+  // seven --shard pieces of ~91 s each, every one paying setup and a slot.
+  const nTerrain = Math.ceil(638 / TARGET_SHARD_SEC);
+  assert.deepEqual(terrainJobs.map((j) => j.shard), Array.from({ length: nTerrain }, (_, i) => `${i + 1}/${nTerrain}`));
   assert.ok(terrainJobs.every((j) => j.specs === terrain && j.perTest === SELECTED_GATE.perTestTimeoutSec),
     "existing slow-pool sharding and per-test limits apply");
   assert.ok(jobs.every((j) => j.timeout <= (j.workers > 1 ? FAT_UI_SELECTED_JOB_MIN : MAX_SELECTED_JOB_MIN)));
@@ -835,8 +838,11 @@ test("ci.yml runs the selected gate with the settings the selector models", () =
   // the model described a job that did not exist.
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   const ms = SELECTED_GATE.perTestTimeoutSec * 1000;
-  assert.match(yml, new RegExp(`--retries=0 --timeout=${ms} --max-failures=${MAX_FAILURES}`),
-    `ci.yml's selected step does not run --timeout=${ms} --max-failures=${MAX_FAILURES}`);
+  // Retries come from the plan: 0 on every leg but a quarantined spec's own
+  // (R3-CI-HEALTH-4; tests/unit/flaky-quarantine.test.mjs pins that half).
+  assert.equal(SELECTED_GATE.retries, 0);
+  assert.match(yml, new RegExp(`--retries=\\$\\{\\{ matrix\\.retries \\|\\| 0 \\}\\} --timeout=${ms} --max-failures=${MAX_FAILURES}`),
+    `ci.yml's selected step does not run --retries=<plan> --timeout=${ms} --max-failures=${MAX_FAILURES}`);
   // The cap is DERIVED per job by shardCapMin and handed over through the
   // matrix; it must clear the budgeted job's worst case, which --max-failures
   // bounds: its whole allowance, then MAX_FAILURES timeouts, then setup.
@@ -1039,9 +1045,102 @@ test("solo oversize mega keeps --shard (selected gate does not peel itself)", ()
 test("shardCapMin leaves wrap-up room after Mesa setup", () => {
   // PR #1109 image-grade-visual 1of2: 5 tests billed ~265 s → used to cap at
   // 8 min; 5/5 passed in 379 s after 113 s Mesa, then the kill hit upload.
+  // Since R3-CI-HEALTH-6: 2 x work + one 180 s timeout + setup 3 + wrap 2.
   assert.equal(shardCapMin(265), MAX_SELECTED_JOB_MIN);
-  assert.equal(shardCapMin(163), 8);
-  assert.equal(shardCapMin(1), 6);
+  assert.equal(shardCapMin(163), 2 * 3 + 3 + 3 + 2);
+  assert.equal(shardCapMin(1), 2 + 3 + 3 + 2);
+  assert.ok(shardCapMin(1) >= 6, "the floor stays");
+});
+
+test("a leg packed to TARGET_SHARD_SEC gets a cap of 2x its work + setup + wrap (R3-CI-HEALTH-6)", () => {
+  // Ship 37996125261 selected-5 (104 tests) and 38020479662 selected-2 (87):
+  // killed at the 10 min cap after `+ pass 101/104` / `+ pass 85/87`, 0
+  // failed — 561 s of passing tests in a leg billed ~360 s, a 1.6x cap. The
+  // comment promised 2x; the formula added a flat 5 min.
+  const fullLeg = shardCapMin(TARGET_SHARD_SEC);
+  const workMin = Math.ceil(TARGET_SHARD_SEC / 60);
+  assert.ok(fullLeg >= 2 * workMin + SELECTED_SETUP_MIN + SELECTED_WRAP_MIN,
+    `a full leg (${TARGET_SHARD_SEC} s) is capped at ${fullLeg} min — under 2 x ${workMin} + ${SELECTED_SETUP_MIN} + ${SELECTED_WRAP_MIN}`);
+  assert.ok(fullLeg >= 561 / 60 + SELECTED_SETUP_MIN + SELECTED_WRAP_MIN, "the measured 561 s passing leg fits with its setup");
+  // Every leg the planner can emit at the gate's own timeout keeps that 2x.
+  for (const sec of [1, 60, 120, 200, 300, TARGET_SHARD_SEC]) {
+    const cap = shardCapMin(sec);
+    assert.ok(cap >= 2 * Math.ceil(sec / 60) + SELECTED_SETUP_MIN + SELECTED_WRAP_MIN, `${sec} s -> ${cap} min`);
+    assert.ok(cap <= MAX_SELECTED_JOB_MIN);
+  }
+  // A shorter leg also keeps one whole per-test timeout of headroom, so one
+  // hung test fails by its own timeout rather than the job's kill.
+  assert.ok(shardCapMin(120) >= 2 * 2 + Math.ceil(SELECTED_GATE.perTestTimeoutSec / 60) + SELECTED_SETUP_MIN + SELECTED_WRAP_MIN);
+  // A retry (a quarantined spec's leg) buys one more timeout of headroom.
+  assert.ok(shardCapMin(60, 180, MAX_SELECTED_JOB_MIN, 1) > shardCapMin(60, 180, MAX_SELECTED_JOB_MIN, 0));
+});
+
+test("declared-slow specs are split by MEASURED time, not 8 tests a leg: the 22-of-30-legs-under-2-min plan (R3-CI-HEALTH-3)", () => {
+  // Ship run 38041862767's oversize legs, from its select log: new-hooks 7 x
+  // ~46 s, terrain-over-road 7 x ~118 s, ui-scale 3 x ~75 s, menu-keyboard
+  // 3 x ~50 s — 20 jobs, 18 of them expecting under 2 min, because each spec
+  // DECLARES >= the gate's 180 s a test and MAX_TESTS_PER_JOB cut it by count
+  // (20 of the run's 30 legs ran < 2 min of tests; ~0.55 min setup each).
+  // Measured per-test rates from that log (expected s / tests per leg).
+  const rate = { "tests/specs/new-hooks.spec.js": 46 / 8, "tests/specs/terrain-over-road.spec.js": 118 / 8,
+    "tests/specs/ui-scale.spec.js": 75 / 7, "tests/specs/menu-keyboard.spec.js": 50 / 7 };
+  const files = Object.keys(rate);
+  const db = { specs: Object.fromEntries(files.map((f) => [f,
+    { s: [1, 2, 3].map((i) => [`2026-10-0${i}T00:00:00Z`, "llvmpipe", rate[f] * declaredTests(f), declaredTests(f)]) }])) };
+  const rows = files.map((f) => ({ file: f, tests: declaredTests(f), ownTimeoutSec: maxDeclaredTimeout(f) / 1000 }));
+  for (const r of rows) assert.ok(r.ownTimeoutSec >= SELECTED_GATE.perTestTimeoutSec, `${r.file} must still declare >= the gate (${r.ownTimeoutSec} s)`);
+  // The count rule, as it was: max(ceil(sec / target), ceil(tests / 8)) legs each.
+  const before = rows.flatMap((r) => {
+    const sec = expectedSec(r, db), n = Math.max(Math.ceil(sec / TARGET_SHARD_SEC), Math.ceil(r.tests / MAX_TESTS_PER_JOB));
+    return Array.from({ length: n }, () => sec / n);
+  });
+  const plan = shards({ selected: [], oversize: rows }, db, new Set());
+  const after = plan.filter((j) => files.some((f) => j.specs.split(" ").includes(f)));
+  assert.ok(before.length >= 18, `the count rule's plan: ${before.length} legs`);
+  assert.ok(after.length * 2 <= before.length, `measured time must at least halve the legs: ${before.length} -> ${after.length} (${after.map((j) => `${j.name}:${j.sec}s`).join(", ")})`);
+  assert.ok(after.filter((j) => j.sec < 120).length < before.filter((s) => s < 120).length,
+    "fewer legs that pay setup and a queue slot for under 2 min of tests");
+  // Every spec still runs whole: the pieces of a split carry --shard i/n.
+  for (const f of files) {
+    const legs = after.filter((j) => j.specs.split(" ").includes(f));
+    assert.ok(legs.length >= 1, `${f} runs`);
+    if (legs.length > 1) assert.ok(legs.every((j) => j.specs === f && new RegExp(`^\\d+/${legs.length}$`).test(j.shard)), `${f} split as --shard i/${legs.length}`);
+  }
+  // BOUNDED BY THE PER-TEST TIMEOUT: no leg expects more than the target, and
+  // each leg's cap still holds 2x its work plus one of its spec's declared
+  // timeouts, where the ceiling allows one.
+  assert.ok(after.every((j) => j.sec <= TARGET_SHARD_SEC), "no leg over the target");
+  for (const j of after) {
+    const need = 2 * Math.ceil(j.sec / 60) + SELECTED_SETUP_MIN + SELECTED_WRAP_MIN;
+    assert.ok(j.timeout >= need, `${j.name}: cap ${j.timeout} < 2x work + setup (${need})`);
+    if (need + Math.ceil(j.perTest / 60) <= MAX_SELECTED_JOB_MIN) assert.ok(j.timeout >= need + Math.ceil(j.perTest / 60), `${j.name}: no timeout headroom`);
+  }
+  // UNMEASURED, the count rule stands: a fallback rate is a guess, and the
+  // declared timeout is the only signal of what the spec costs.
+  const blind = shards({ selected: [], oversize: rows.filter((r) => r.file.includes("new-hooks")) }, EMPTY, new Set());
+  assert.equal(blind.length, Math.max(Math.ceil(expectedSec(rows[0], EMPTY) / TARGET_SHARD_SEC), Math.ceil(rows[0].tests / MAX_TESTS_PER_JOB)));
+});
+
+test("the browser legs do not wait on the guards aggregator, and a guards red still fails the run (R3-CI-HEALTH-2)", () => {
+  // Ship run 38041862767: the legs started at 11.3 min behind the 30 s
+  // aggregator's own queue trip instead of ~2; in the 07:59Z burst that trip
+  // alone queued 26-37 min. The verdict jobs keep the edge.
+  const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+  const job = (name) => (yml.split(`\n  ${name}:\n`)[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
+  const needsOf = (name) => {
+    const body = job(name);
+    const inline = body.match(/^    needs: \[([^\]]*)\]$/m);
+    if (inline) return inline[1].split(",").map((x) => x.trim());
+    const list = body.match(/^    needs:\n((?:      - [\w-]+\n)+)/m);
+    return list ? list[1].trim().split("\n").map((l) => l.replace(/^\s*- /, "")) : [];
+  };
+  assert.deepEqual(needsOf("selected"), ["select"], "the matrix starts as soon as the plan exists");
+  assert.doesNotMatch(job("selected").match(/^    if: .*$/m)?.[0] || "", /needs\.guards/, "its if: must not read a job it does not need");
+  for (const j of ["selected-verdict", "ci-verdict", "poke-train"]) assert.ok(needsOf(j).includes("guards"), `${j} must still need guards`);
+  assert.match(job("poke-train"), /needs\.guards\.result == 'success'/, "a guards red pokes no train");
+  const verdictSrc = fs.readFileSync(path.join(ROOT, "tools/ci/selected-gate-verdict.mjs"), "utf8");
+  assert.match(verdictSrc, /if \(guards !== "success" && guards !== "skipped"\)/, "selected-verdict reds on a guards red");
+  assert.match(job("selected-verdict"), /GUARDS: \$\{\{ needs\.guards\.result \}\}/);
 });
 
 test("run-playwright keeps native --shard for megas-only oversize jobs (PR #1110)", () => {

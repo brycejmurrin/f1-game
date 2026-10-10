@@ -9,6 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadQuarantine, flakyVerdict, armed, QUARANTINE } from "../helpers/flaky-policy.mjs";
+import { shards, fit } from "../../tools/ci/select-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FILE = JSON.parse(fs.readFileSync(QUARANTINE, "utf8"));
@@ -124,4 +125,40 @@ test("the verdict line counts skips apart, and a run that executed nothing is RE
   const mixed = run(["passed", "skipped"]);
   assert.match(mixed.verdict, /= run passed {2}\(2\/2 done, 0 failed, 1 skipped\)/);
   assert.equal(mixed.override, undefined);
+});
+
+test("the selected gate honours the quarantine: its specs get a leg of their own with one retry, nothing else is retried", () => {
+  /* R3-CI-HEALTH-4 (2026-10-10). The change-aware gate ran --retries=0, so no
+     test there could ever be "flaky": hud-mirror (quarantined) was routed into
+     it (log-select-38042136314: `OVERFLOW (routed; …): tests/specs/hud-mirror.spec.js`)
+     and its known flake red a PR exactly as an un-quarantined one would, while
+     APEX_FAIL_ON_FLAKY=1 on that step was dead configuration. Pure node: the
+     plan select-specs hands ci.yml, for a fixture quarantine. */
+  const flaky = "tests/specs/hud-mirror.spec.js", plain = "tests/specs/boot-guard.spec.js";
+  const q = new Set([flaky]);
+  const r = fit([flaky, plain], 30, { rank: () => 0, db: { specs: {} } });
+  const plan = shards(r, { specs: {} }, q);
+  const legsOf = (f) => plan.filter((j) => j.specs.split(" ").includes(f));
+  assert.ok(legsOf(flaky).length >= 1, "a quarantined spec still RUNS");
+  for (const j of legsOf(flaky)) {
+    assert.equal(j.retries, 1, `${j.name}: a quarantined spec's leg retries once`);
+    assert.equal(j.specs, flaky, `${j.name}: nothing shares the retry`);
+  }
+  for (const j of plan.filter((x) => !x.specs.split(" ").includes(flaky))) assert.equal(j.retries, 0, `${j.name}: un-quarantined legs never retry`);
+  // Without the quarantine row, the same spec is an ordinary leg again.
+  assert.ok(shards(r, { specs: {} }, new Set()).every((j) => j.retries === 0));
+  // The REAL ledger: every row the planner can route lands on a retrying leg of its own.
+  for (const spec of loadQuarantine()) {
+    const real = shards(fit([spec, plain], 30, { rank: () => 0, db: { specs: {} } }), { specs: {} });
+    const legs = real.filter((j) => j.specs.split(" ").includes(spec));
+    assert.ok(legs.length >= 1 && legs.every((j) => j.retries >= 1 && j.specs === spec), `${spec}: ${JSON.stringify(legs)}`);
+  }
+  // ci.yml reads the plan's retries; APEX_FAIL_ON_FLAKY stays armed on the step,
+  // so a pass-on-retry outside the quarantine is still a red.
+  const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+  const from = yml.indexOf("- name: Run the selection (");
+  const run = yml.slice(from, yml.indexOf("- name: Spec timings (junit", from));
+  assert.ok(from > 0 && run.length > 0, "the selected job's run step is gone");
+  assert.match(run, /APEX_FAIL_ON_FLAKY: 1/);
+  assert.match(run, /--retries=\$\{\{ matrix\.retries \|\| 0 \}\}/);
 });

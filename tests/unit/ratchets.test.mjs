@@ -5,7 +5,7 @@
 // Run: node --test tests/unit/ratchets.test.mjs   (npm run test:tooling-fast)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { load, measure, verdict, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, diffRatchets, compareToBase, loadAt } from "../../tools/check/ratchets.mjs";
+import { load, measure, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, diffRatchets, compareToBase, loadAt } from "../../tools/check/ratchets.mjs";
 
 test("every ratcheted metric is at or under its ceiling", async () => {
   const v = verdict(await measure());
@@ -23,10 +23,43 @@ test("every ratcheted metric is at or under its ceiling", async () => {
     missing.length ? `a ratcheted file is gone — ${missing.join("; ")}` : "a ratcheted file is gone — drop its entry or fix the path");
 });
 
-test("no ceiling is left far above the value it guards (one slack rule)", async () => {
-  const v = verdict(await measure());
-  assert.deepEqual(v.loose.map((r) => `${r.file} ${r.metric}: ${r.value} but ceiling ${r.ceiling} (slack ${r.slack} > max(${SLACK_MIN}, ${SLACK_PCT * 100}%))`), [],
+test("no ceiling is left far above the value it guards (one slack rule)", async (t) => {
+  // ADVISORY OFF A PULL REQUEST (R3-CI-HEALTH-1 follow-up): two green PRs that
+  // each remove one item from a slack-0 metric merge to a tip below its
+  // ceiling, and this turned the deploy tip red on an improvement. On a push /
+  // schedule / Pages run the rows are printed as warnings and pass; a PR run
+  // and a local run (no GITHUB_EVENT_NAME) still fail. OVER is the test above.
+  const advisory = looseAdvisory();
+  const v = verdict(await measure(), { looseAdvisory: advisory });
+  // The row's OWN slack, not the default formula: a slack-0 entry used to be
+  // reported as "slack 1 > max(60, 4%)", which reads as a contradiction.
+  const loose = v.loose.map((r) => `${r.file} ${r.metric}: ${r.value} but ceiling ${r.ceiling} (slack ${r.slack} > ${r.slackMax}${r.slackMax === 0 ? ", exact" : ""})`);
+  if (advisory) {
+    for (const l of loose) t.diagnostic(`LOOSE (advisory on ${process.env.GITHUB_EVENT_NAME}) ${l} — lower it with node tools/check/ratchets.mjs --update`);
+    assert.equal(v.ok, v.over.length === 0, "advisory: a LOOSE row never decides the verdict, an OVER row still does");
+    return;
+  }
+  assert.deepEqual(loose, [],
     "a ceiling drifted above its file and stopped ratcheting — node tools/check/ratchets.mjs --update");
+});
+
+test("LOOSE is advisory on push / schedule / Pages events and fatal on a PR or locally; OVER is fatal everywhere", async () => {
+  assert.equal(looseAdvisory({}), false, "a local run keeps today's behaviour");
+  assert.equal(looseAdvisory({ GITHUB_EVENT_NAME: "" }), false);
+  assert.equal(looseAdvisory({ GITHUB_EVENT_NAME: "pull_request" }), false, "the PR run is where the author can --update");
+  for (const ev of ["push", "schedule", "workflow_dispatch", "workflow_call"]) assert.equal(looseAdvisory({ GITHUB_EVENT_NAME: ev }), true, ev);
+  // The real measurement, doctored: one row below its exact ceiling (the
+  // 2026-10-10 rawColor 336/337 shape) and, separately, one row over.
+  const value = (await measure({ files: {}, tree: { cssClasses: { ceiling: 1e9, slack: SLACK_MIN } } }))[0].value;
+  const below = await measure({ files: {}, tree: { cssClasses: { ceiling: value + 1, slack: 0 } } });
+  assert.equal(verdict(below).ok, false, "below an exact ceiling is LOOSE by default");
+  assert.equal(verdict(below, { looseAdvisory: false }).ok, false);
+  const adv = verdict(below, { looseAdvisory: true });
+  assert.equal(adv.ok, true, "…and advisory off a PR: an improvement must not red the tip");
+  assert.equal(adv.loose.length, 1, "the row is still REPORTED, not hidden");
+  const over = await measure({ files: {}, tree: { cssClasses: { ceiling: value - 1, slack: 0 } } });
+  assert.equal(verdict(over, { looseAdvisory: true }).ok, false, "OVER stays fatal under the advisory");
+  assert.equal(verdict(over, { looseAdvisory: false }).ok, false);
 });
 
 test("the data names only known metrics, and game.js carries the carve metrics", () => {
