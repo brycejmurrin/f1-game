@@ -12,6 +12,32 @@ const _rmq = (typeof window !== "undefined" && window.matchMedia)
   ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
 const motionReduced = () => !!(_rmq && _rmq.matches)
   || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
+// THE VIEWPORT, CACHED. innerWidth/innerHeight are not free on a phone: Blink's
+// LocalDOMWindow::GetViewportSize() runs UpdateStyleAndLayout first whenever the
+// mobile viewport is enabled (Android Chrome), so each read after a DOM write is
+// a forced layout, and the 10 Hz tick read them after this frame's writes in
+// the fit key, gapForm and the minimap key. Re-read once after resize,
+// orientationchange or a visualViewport resize (pinch zoom changes innerWidth
+// with no window resize). iOS fires resize/orientationchange while the sizes
+// still hold the portrait numbers and may fire nothing once they land
+// (js/ui/sheet-shape.js SETTLE_MS, webkit 170595), so reads stay live for
+// VP_SETTLE_MS after each event — a rotation is re-laying the page anyway. With
+// no event source (the node VM harnesses set `innerWidth` directly) every read
+// stays live, as before.
+const VP_SETTLE_MS = 2000;   // > sheet-shape's last 1500 ms re-ask
+const _vpNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+const _vp = { w: 0, h: 0, stale: true, live: true, until: 0 };
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  _vp.live = false;
+  const stale = () => { _vp.stale = true; _vp.until = _vpNow() + VP_SETTLE_MS; };
+  window.addEventListener("resize", stale, { passive: true });
+  window.addEventListener("orientationchange", stale, { passive: true });
+  const vv = window.visualViewport;
+  if (vv && typeof vv.addEventListener === "function") vv.addEventListener("resize", stale, { passive: true });
+}
+function vpSync() { if (_vp.stale) { _vp.w = window.innerWidth; _vp.h = window.innerHeight; _vp.stale = _vp.live || _vpNow() < _vp.until; } }
+const vpW = () => { vpSync(); return _vp.w; };
+const vpH = () => { vpSync(); return _vp.h; };
 
 // GameHud.invalidateFit(): the live instance's re-fit trigger (null until create).
 let _invalidateFit = null, _syncPhoneFit = null;
@@ -254,12 +280,12 @@ function buildSecRows() {
 // shorten band between 550 and 640 and drops below it; wide has no useful
 // shorten band at all and drops straight away at 800.
 //
-// Every read here is cheap and needs no cache. Both custom properties are
+// Every read here is cheap. Both custom properties are
 // INLINE declarations this file's own passes write (applyScale writes
 // --hud-scale; the fit pass writes --hud-z-top when its cap binds) — string
 // reads, not getComputedStyle, so they force no style or layout pass — and
-// innerWidth is free. The gaps strip PAINTS at the capped --hud-z-top, so
-// that is the divisor when present; the raw slider is only the fallback
+// the width is the cached vpW() (innerWidth itself lays out on Android). The
+// gaps strip PAINTS at the capped --hud-z-top, so that is the divisor when present; the raw slider is only the fallback
 // before the first fit. Nothing here asks the layout engine anything, so it
 // can simply run every tick and follow a window resize for free.
 const GAP_SHORT_AT = { narrow: 640, wide: 800 };
@@ -298,8 +324,8 @@ function gapForm() {
   const root = document.documentElement;
   const s = +root.style.getPropertyValue("--hud-z-top") ||
             +root.style.getPropertyValue("--hud-scale") || 1;
-  const ratio = window.innerWidth / s;
-  const k = window.innerWidth >= 1200 ? "wide" : "narrow";
+  const ratio = vpW() / s;
+  const k = vpW() >= 1200 ? "wide" : "narrow";
   // SHORTEN FIRST, DROP SECOND — they were wired to different signals, so the
   // widget fell to its own line while still painting the WIDEST spelling
   // ("▲ STR +6.3s" below the map, reported from a phone). `drop` read the
@@ -393,7 +419,7 @@ function hlKey() { let k = ""; for (let i = 0; i < _hlEls.length; i++) { const e
 //
 // getComputedStyle itself is cheap; getPropertyValue against a dirty tree is
 // not, and the tree is dirty by construction — syncHudLayoutClasses() runs
-// immediately before fitHud() and updateHud writes DOM either side of it.
+// immediately before fitHud(), and the end-of-tick call follows the tick's writes.
 //
 // What they read are STYLESHEET defaults, from `@media (pointer: coarse)` and
 // the viewport, so they can only change when the viewport or the body classes
@@ -405,7 +431,7 @@ function hlKey() { let k = ""; for (let i = 0; i < _hlEls.length; i++) { const e
 // cost depends on a tree this box does not reproduce.
 let _cssRootKey = "", _cssScale = 1, _cssMult = 1;
 function syncComputedRootVars() {
-  const k = window.innerWidth + "x" + window.innerHeight + "|" + document.body.className;
+  const k = vpW() + "x" + vpH() + "|" + document.body.className;
   if (k === _cssRootKey) return;
   _cssRootKey = k;
   // typeof-guarded: this module is exercised in a VM on tests/helpers/mini-dom,
@@ -502,7 +528,7 @@ const RADIO_TOP_MIN = 96, RADIO_TOP_GAP = 8;
 const LANE_ROWS = 96;
 function announceLane(root) {
   const t = _hudTop ? _hudTop.getBoundingClientRect() : null;
-  const W = window.innerWidth, H = window.innerHeight || 0;
+  const W = vpW(), H = vpH() || 0;
   const y0 = t ? t.bottom : 0, mid = W / 2;
   const under = (el) => { if (!el || el.hidden || !el.getBoundingClientRect) return 0; const r = el.getBoundingClientRect(); return r.width && r.height ? r.bottom : 0; };
   // Under a caution the card steps below the flag chip too (css/hud.css: the caution rules).
@@ -789,7 +815,7 @@ function fitHud() {
   // 2026-10-04). So each data-hl element's `hidden` is in the key — a list
   // re-read only on a full fit (HudLayout.apply invalidates it), a flag read
   // per tick, no layout.
-  const head = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
+  const head = vpW() + "x" + vpH() + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
   const tail = "|" + document.body.className;
   if (head + hlKey() + tail === _fitKey && --_fitWait > 0) {
     // Same-key backoff must not lock a short --dock-r-w while wrap-reverse
@@ -1564,7 +1590,11 @@ function updateHud(force, dtMs) {
   // reads to shift and to brake, and at 10 Hz the tach visibly stepped and a
   // shift showed up to 100 ms late. All three go through the write cache, so a
   // frame that changes nothing writes nothing; everything else stays at 10 Hz.
-  paintInstruments(player);
+  // ON A TICK FRAME THEY PAINT AFTER fitHud's READS, not before: written first,
+  // they dirtied the tree and the fit's first rect / viewport read forced a
+  // synchronous layout on every tick on a phone. Same writes, same frame.
+  const tick = force || !(hudT - dtMs > 0);   // exactly the throttle test below
+  if (!tick) paintInstruments(player);
   if (typeof HudInputs !== "undefined") HudInputs.frame(G, player, dtMs);   // opt-in INPUTS trace: samples per frame, draws at 10 Hz itself
   if (_trace && G.track) _trace.sample(player, G.track.total);   // the race DELTA's best-lap reference
   hudT -= dtMs;
@@ -1587,6 +1617,7 @@ function updateHud(force, dtMs) {
   if (rank && _lastRank && rank !== _lastRank) { els.pos.dataset.delta = rank < _lastRank ? "up" : "down"; _posFlashT = 600; }
   else if (_posFlashT > 0 && (_posFlashT -= HUD_TICK_MS) <= 0) { _posFlashT = 0; delete els.pos.dataset.delta; }
   if (rank) _lastRank = rank;
+  paintInstruments(player);   // this tick frame's instruments, after fitHud's reads (see the top)
   hText(els.lap, Math.min(player.lap || 1, G.lapsTarget) + "/" + G.lapsTarget);
   if (typeof HudDamage !== "undefined") HudDamage.sync(player);   // DAMAGE chip (js/ui/hud-damage.js) — display only
   hText(els.time, G.fmtTime(player.lapTime));
@@ -1971,7 +2002,7 @@ function drawMinimap() {
   // Keep the bounded retry while the fit has no laid-out box, and the track
   // invalidation path (minimapBg null) so a newly visible map measures afresh.
   const root = document.documentElement, body = document.body;
-  const measureKey = window.innerWidth + "x" + window.innerHeight + "|" + body.className
+  const measureKey = vpW() + "x" + vpH() + "|" + body.className
     + "|" + (body.dataset.density || "") + "|" + root.style.getPropertyValue("--hud-scale")
     + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + (window.devicePixelRatio || 1)
     + "|" + els.minimap.style.getPropertyValue("--hl-s");   // MOVE & SIZE (js/ui/hud-layout.js)

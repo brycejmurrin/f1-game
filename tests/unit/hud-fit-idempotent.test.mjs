@@ -288,3 +288,182 @@ test("fitHud: --hud-fit-stamp is written once in steady state, and again after a
   assert.match(after, /^\d+$/);
   assert.notEqual(after, stamp, "the stamp changes after a clash clears");
 });
+
+/* READ BEFORE WRITE (round-3 5-perf F2). The instruments (speed, gear, --rpm)
+ * are written every frame; the 10 Hz tick's fitHud reads layout. Painted
+ * first, they left the tree dirty and the fit's first viewport / rect read
+ * forced a synchronous layout; gapForm and the end-of-tick key then read
+ * innerWidth after the tick's own writes, which lays out on Android
+ * (LocalDOMWindow::GetViewportSize). This harness models exactly that: any
+ * DOM write marks the tree dirty, the next layout read (a rect, an offset /
+ * client size, innerWidth / innerHeight) is a FORCED layout and cleans it, and
+ * the browser cleans it between frames. A phone body (no `desktop` class). */
+function bootOrderHarness({ events = true } = {}) {
+  const W0 = 844, H0 = 390;
+  const dom = makeDom();
+  const state = { dirty: false, forced: 0, why: [], vw: W0, vh: H0, vpReads: 0, now: 1000 };
+  const write = () => { state.dirty = true; };
+  const read = (what) => { if (state.dirty) { state.forced++; state.why.push(what); state.dirty = false; } };
+  const seen = new WeakSet();
+  const instrument = (el) => {
+    if (!el || seen.has(el)) return el;
+    seen.add(el);
+    let text = el.textContent;
+    Object.defineProperty(el, "textContent", { configurable: true, get: () => text, set: (v) => { text = String(v); write(); } });
+    let hidden = el.hidden;
+    Object.defineProperty(el, "hidden", { configurable: true, get: () => hidden, set: (v) => { if (hidden !== !!v) write(); hidden = !!v; } });
+    const cn = Object.getOwnPropertyDescriptor(el, "className");
+    Object.defineProperty(el, "className", { configurable: true, get: cn.get, set: (v) => { write(); cn.set(v); } });
+    const sp = el.style.setProperty, rp = el.style.removeProperty;
+    el.style.setProperty = (k, v) => { write(); sp(k, v); };
+    el.style.removeProperty = (k) => { write(); rp(k); };
+    const cl = el.classList, tg = cl.toggle, add = cl.add, rm = cl.remove;
+    cl.toggle = (c, f) => { const was = cl.contains(c), on = tg(c, f); if (was !== on) write(); return on; };
+    cl.add = (...c) => { write(); add(...c); };
+    cl.remove = (...c) => { write(); rm(...c); };
+    el.dataset = new Proxy(el.dataset, {
+      set: (t, k, v) => { write(); t[k] = v; return true; },
+      deleteProperty: (t, k) => { write(); delete t[k]; return true; },
+    });
+    const gbcr = el.getBoundingClientRect;
+    el.getBoundingClientRect = () => { read("rect"); return gbcr(); };
+    for (const k of ["offsetHeight", "offsetWidth", "clientHeight", "clientWidth"]) {
+      const d = Object.getOwnPropertyDescriptor(el, k);
+      Object.defineProperty(el, k, { configurable: true, get: () => { read(k); return d.get.call(el); } });
+    }
+    return el;
+  };
+  const rawCreate = dom.document.createElement, rawById = dom.document.getElementById;
+  dom.document.createElement = (tag) => {
+    const el = instrument(rawCreate(tag));
+    if (String(tag).toLowerCase() === "canvas") el.getContext = () => ctx2d();
+    return el;
+  };
+  dom.document.getElementById = (id) => instrument(rawById(id));
+  instrument(dom.documentElement); instrument(dom.body);
+  const listeners = {};
+  const on = (t, fn) => { (listeners[t] = listeners[t] || []).push(fn); };
+  const sb = {
+    Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, WeakSet, RegExp, Date,
+    parseFloat, parseInt, isFinite, Infinity,
+    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
+    document: dom.document, devicePixelRatio: 1,
+    M4: { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) },
+    PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 },
+    Ghost: { hasGhost: () => false, timeAt: () => null, at: () => null },
+    GhostShare: { hasGuest: () => false, timeAt: () => null, at: () => null },
+    TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"] },
+    setTimeout: () => 1, clearTimeout: () => {},
+    performance: { now: () => state.now },
+    matchMedia: () => ({ matches: false, addListener() {}, removeListener() {} }),
+    getComputedStyle: () => ({
+      getPropertyValue: (k) => { read("computed " + k); return ALL_TOKENS[k] || ""; },
+      columnGap: "0px", rowGap: "0px", transform: "none",
+    }),
+  };
+  for (const [k, sk] of [["innerWidth", "vw"], ["innerHeight", "vh"]]) {
+    Object.defineProperty(sb, k, { configurable: true, enumerable: true,
+      get: () => { state.vpReads++; read(k); return state[sk]; } });
+  }
+  if (events) {
+    sb.addEventListener = on;
+    sb.visualViewport = { addEventListener: (t, fn) => on("vv:" + t, fn) };
+  }
+  sb.window = sb;
+  vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: "js/ui/live-region.js" });
+  vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: "js/ui/hud.js" });
+  vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: "js/race/overtake-mode.js" });
+  const $ = (id) => dom.document.getElementById(id);
+  const minimap = $("minimap");
+  const els = {
+    pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"), best: $("hud-best"),
+    speed: $("hud-speed-n"), energy: $("hud-energy-fill"), ot: $("hud-ot"), aero: $("hud-aero"),
+    btnOT: $("btn-ot"), btnAero: $("btn-aero"),
+    gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"), hudSectors: $("hud-sectors"),
+    flag: $("hud-flag"), minimap, gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
+    announceLive: $("announce-live"), pausebtn: $("pausebtn"), btnCam: $("btn-cam"),
+  };
+  minimap.getContext = () => ctx2d();
+  dom.document.body.classList.add("in-race");
+  const player = {
+    team: { id: "t1", color: [1, 0, 0] }, code: "YOU", rank: 1, lap: 1, lapTime: 12, best: Infinity,
+    speed: 50, energy: 0.5, gear: 3, rpm: 5000, boostOn: false,
+    otT: 0, otArmed: false, otE: 0, otEarned: false, aeroX: 0, xArmed: false, s: 10, prog: 10, retired: false,
+  };
+  const G = {
+    els, player, cars: [player], ranked: [player], timeTrial: false, state: "race",
+    lapsTarget: 5, track: { map: [[0, 0], [1, 1]], total: 100, def: {} },
+    sectorLast: [null, null, null], sectorBests: [Infinity, Infinity, Infinity],
+    fieldSectorBests: [Infinity, Infinity, Infinity], aeroZones: [{}], ttRecord: Infinity,
+    fmtTime: (t) => String(t), dashKph: (v) => v * 3.6, vTop: () => 90, otEnabled: () => true,
+    cssCol: () => "#f00",
+  };
+  const hud = sb.GameHud.create(G);
+  const R = (left, top_, w, h) => ({ left, top: top_, right: left + w, bottom: top_ + h, width: w, height: h });
+  const mk = (cls, parent) => { const e = dom.document.createElement("div"); e.className = cls; (parent || dom.body).appendChild(e); return e; };
+  const top = mk("hud-top"), bottom = mk("hud-bottom");
+  const dockL = $("dock-left"), dockR = $("dock-right");
+  const gear = mk("g", bottom), gL = mk("gl", dockL), gR = mk("gr", dockR);
+  const paint = () => {
+    const w = state.vw, h = state.vh;
+    top._rect = R((w - 300) / 2, 8, 300, 54);
+    minimap._rect = R(10, 8, 110, 110);
+    els.hudSectors._rect = R(w - 150, 8, 140, 72);
+    gear._rect = R(100, h - 90, 250, 50);
+    dockL._rect = gL._rect = R(0, 200, 140, h - 200);
+    dockR._rect = gR._rect = R(w - 140, 200, 140, h - 200);
+  };
+  paint();
+  let n = 0;
+  /** One rAF: the browser lays out between frames, then the race frame runs. */
+  const frame = (dt = 16.7) => {
+    state.dirty = false;
+    player.speed = 50 + (n % 37); player.rpm = 6000 + (n * 97) % 8000; player.gear = 3 + (n % 4);
+    player.lapTime = 12 + n * 0.0167; n++;   // the tick writes its lap clock every tick, as in a race
+    const f0 = state.forced, r0 = state.vpReads;
+    state.why.length = 0;
+    hud.updateHud(false, dt);
+    state.now += dt;
+    return { forced: state.forced - f0, vpReads: state.vpReads - r0, why: state.why.slice() };
+  };
+  const resize = (w, h) => {
+    state.vw = w; state.vh = h; paint();
+    for (const fn of listeners.resize || []) fn({ type: "resize" });
+  };
+  return { frame, resize, state, paint, root: dom.documentElement, settle: () => { state.now += 5000; } };
+}
+
+test("HUD tick: fit reads run before the frame's instrument writes, and the viewport is cached (5-perf F2)", () => {
+  const h = bootOrderHarness();
+  for (let i = 0; i < 40; i++) h.frame();   // boot, first fits, the full-fit key settles
+  h.settle();
+  const frames = [];
+  for (let i = 0; i < 120; i++) frames.push(h.frame());   // 2 s at 60 fps: ~20 ticks, incl. same-key re-measures
+  const worst = Math.max(...frames.map((f) => f.forced));
+  // At most the end-of-tick phoneFitStampSync measure, which intentionally
+  // measures after REL / sector rows / announce land (tip: 2-3 per tick).
+  assert.ok(worst <= 1,
+    "a tick forced " + worst + " layouts: " + JSON.stringify(frames.filter((f) => f.forced > 1).slice(0, 2)));
+  assert.ok(frames.filter((f) => f.forced === 1).length >= 15, "the harness really crossed the 10 Hz throttle");
+  assert.equal(frames.reduce((a, f) => a + f.vpReads, 0), 0, "innerWidth / innerHeight are not read per tick once cached");
+});
+
+test("HUD viewport cache: a resize re-fits from the new size, and fit results match the live-read path", () => {
+  const cached = bootOrderHarness({ events: true });
+  const live = bootOrderHarness({ events: false });
+  const run = (k) => { for (let i = 0; i < k; i++) { cached.frame(); live.frame(); } };
+  const decls = (h) => JSON.stringify(h.root.style._decls);
+  run(60);
+  assert.equal(decls(cached), decls(live), "same published fit with the cache as with live reads");
+  // A real resize event: the cached path re-reads and re-fits.
+  cached.resize(932, 430); live.state.vw = 932; live.state.vh = 430; live.paint();
+  assert.ok(cached.frame().vpReads > 0, "the resize re-reads the viewport");
+  live.frame();
+  run(30);
+  assert.equal(decls(cached), decls(live), "same published fit after the resize");
+  // Past the iOS settle window the cache stops reading again.
+  cached.settle(); run(12);
+  let reads = 0;
+  for (let i = 0; i < 30; i++) reads += cached.frame().vpReads;
+  assert.equal(reads, 0, "settled: no viewport reads per tick");
+});
