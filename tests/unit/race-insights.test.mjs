@@ -230,6 +230,16 @@ test('sector mastery follows timing boundaries while other saved drill scores re
   assert.ok(saves.get('circuitMastery').entries.some(e => e.key === 'class:sector:0'),
     'unversioned records are retained rather than deleted');
 });
+test('drill speeds read through G.dashKph, the speedometer scale, not raw m/s (PACE)', () => {
+  const { api, G, c, tick } = fixture();
+  G.dashKph = v => v / 0.84 * 3.6;          // a PACE-0.84 game: the dial reads 1/0.84 of the raw ground speed
+  api.startDrill('braking');
+  tick({ prog: 20, brakeDemand: 1 }); tick({ prog: 30, speed: .5 }); tick({ speed: 0 });
+  assert.match(api.summary().lastDrill.text, /braking from 171 km\/h/);   // 40 m/s raw would print 144
+  c.speed = 0; api.startDrill('launch');
+  tick({ prog: 0, speed: 0 }, 2); tick({ prog: 1, speed: 5, throttleDemand: 1 }); tick({ prog: 30, speed: 51 });
+  assert.match(api.summary().lastDrill.text, /^0 to 214 km\/h in /);       // half of vTop 100 through the same scale
+});
 test('launch drill needs a stopped car and is timed from the first throttle to half of top speed', () => {
   const { api, c, tick, announcements } = fixture();
   assert.equal(api.startDrill('launch'), false); assert.match(announcements.at(-1)[0], /STOP THE CAR/);

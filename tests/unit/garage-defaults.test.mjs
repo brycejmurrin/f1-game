@@ -151,9 +151,45 @@ test("resetGarage clears extras then restores the shipped garage", () => {
   assert.equal(r.ok, true);
   assert.ok(r.applied >= 30);
   assert.equal(GameStore.store.get("team", 99), GarageDefaults.get("team"));
+  // Compare to the literal shipped value, not GarageDefaults.get() (that read
+  // is the same object the store returns when get() aliased, so it proved nothing).
+  assert.equal(GameStore.store.get("parts.mercedes", {}).engine, "sig_mercedes_zero");
   assert.deepEqual(GameStore.store.get("parts.mercedes", {}), GarageDefaults.get("parts.mercedes"));
   assert.equal(localStorage.getItem("apex26.customTeam"), null, "extras not in the shipped file are cleared");
   assert.equal(JSON.parse(localStorage.getItem("apex26.difficulty")), "easy", "settings survive a garage reset");
+});
+
+test("RESET GARAGE restores the SHIPPED garage, not the player's edits (bug-hunt 1.1)", () => {
+  // The garage mutates the object store.get returns in place (p[cat] = opt.id)
+  // then store.set()s it. On a miss that object used to BE the shipped DEF
+  // entry, so the edit rewrote the defaults and a reset restored the edit.
+  const { SettingsExport, GarageDefaults, GameStore } = load();
+  const snapParts = JSON.stringify(GarageDefaults.get("parts.mercedes"));
+  const snapLiv = JSON.stringify(GarageDefaults.get("livery.custom.mercedes"));
+  const snapFile = JSON.stringify(GarageDefaults.file().garage);
+  const store = GameStore.store;
+
+  const p = store.get("parts.mercedes", {});
+  p.engine = "player_build";
+  store.set("parts.mercedes", p);
+  const liv = store.get("livery.custom.mercedes", []);
+  liv[0].c1[0] = 0.123;
+  liv[0].name = "Edited";
+  store.set("livery.custom.mercedes", liv);
+
+  assert.equal(JSON.stringify(GarageDefaults.get("parts.mercedes")), snapParts, "get() hands out a copy");
+  assert.equal(JSON.stringify(GarageDefaults.get("livery.custom.mercedes")), snapLiv, "nested arrays are copied too");
+  assert.equal(JSON.stringify(GarageDefaults.file().garage), snapFile, "file() is not the edited table");
+
+  assert.equal(SettingsExport.resetGarage().ok, true);
+  assert.equal(JSON.stringify(store.get("parts.mercedes", {})), snapParts, "reset restores the shipped parts");
+  assert.deepEqual(JSON.parse(JSON.stringify(store.get("livery.custom.mercedes", []))), JSON.parse(snapLiv), "reset restores the shipped livery");
+
+  // file() hands out a deep copy: scribbling on it cannot reach the table.
+  const f = GarageDefaults.file();
+  f.garage["parts.mercedes"].engine = "x";
+  f.garage["livery.custom.mercedes"][0].c1[0] = 9;
+  assert.equal(JSON.stringify(GarageDefaults.file().garage), snapFile);
 });
 
 test("part and livery ids match the source export verbatim", () => {
@@ -269,4 +305,26 @@ test("a fresh install fields the first legend in his own period car, not the shi
     const want = JSON.parse(JSON.stringify(Legends.parts(Legends.LIST[0].id)));
     assert.deepEqual(JSON.parse(JSON.stringify(g.G.getTeamParts("legends"))), want);
   } finally { g.close(); }
+});
+
+test("a shipped setup sheet is the team's WORKS sheet: a fresh install does not read TUNED", () => {
+  // setup.mercedes shipped {arbF 6, arbR 5} against SetupTune.DEFAULTS {7, 7}, so
+  // SetupTune.isDefault("mercedes") was false from the first boot: the SETUP tab
+  // said TUNED and carried a small unasked-for handling offset.
+  const { def } = readDefaults();
+  const ctx = vm.createContext({
+    Math, console, Object, Array, Number, JSON, isFinite,
+    GameStore: { store: { get: (k, d) => (("setup." + k.replace(/^setup\./, "")) in def ? def["setup." + k.replace(/^setup\./, "")] : d), set() {} } },
+    Log: { info() {}, warn() {}, debug() {}, error() {} },
+  });
+  ctx.window = ctx;
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js", "js/garage/setup-tune.js"])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+  const S = vm.runInContext("SetupTune", ctx);
+  const shipped = Object.keys(def).filter((k) => k.startsWith("setup."));
+  assert.ok(shipped.length > 0);
+  for (const k of shipped) {
+    const id = k.slice("setup.".length);
+    assert.equal(S.isDefault(id), true, `${k} must equal SetupTune.defaults("${id}")`);
+  }
 });

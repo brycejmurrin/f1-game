@@ -124,7 +124,9 @@ function apply() {
     tagCount++;
     return `${attr}="${rel}?v=${digest(rel)}"`;
   });
-  for (const page of EXTRA_PAGES) fs.writeFileSync(page, hashTags(fs.readFileSync(page, "utf8")));
+  // An extra page carries the same apex-build meta when it has one (controller.html
+  // since 2026-10-10: the SW compares it to the shell's), so stamp it in step.
+  for (const page of EXTRA_PAGES) fs.writeFileSync(page, hashTags(fs.readFileSync(page, "utf8")).replace(META_RE, `$1${next}$3`));
   let output = hashTags(html);
   if (!META_RE.test(output)) throw new Error('index.html is missing <meta name="apex-build" content="N">');
   output = output.replace(META_RE, `$1${next}$3`);

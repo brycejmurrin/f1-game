@@ -601,6 +601,62 @@ test("a weather change replaces a stale selected tread and every announcement na
   assert.equal(fitted.at(-1), chosenWet, "a same-tread player selection remains authoritative");
 });
 
+// An AI's stop is armed with a CLASS record (setNext(classRecord(want))). When
+// the tread the road wants changes before the box (routine in a mixed arc, whose
+// ramp is 1-3 laps), nextFor used to fall through to pickFor — the PLAYER's
+// catalogue / owned rows (wet_full, p_zero_red: no pace offset, catalogue life).
+const AI_IDS = ["soft", "medium", "hard", "inter", "wet"];
+function aiWeatherSession(weather) {
+  const s = commitSession({ weather });
+  const { ctx, G, records, car } = s;
+  // The player's garage: rows that must never reach an AI car.
+  ctx.Parts.CATALOG[0].options.push({ id: "wet_full", cost: 0 }, { id: "p_zero_red", cost: 0 });
+  G.tyres.optionRecord = (o) => ({ id: o.id, code: "X", life: 1.1, off: 0, tread: o.id === "wet_full" ? 2 : 0 });
+  G.tyres.classRecord = (id) => records[id] || records.medium;
+  ctx.TyreModel.classForTread = (t) => (t === 2 ? "wet" : null);
+  const ai = (tread, next) => Object.assign(car(0.95), {
+    human: false, local: false, pitArmed: true, tyre: { code: "?", tread },
+    pitNext: next, pitPlan: { stops: 1, seq: ["medium", "hard"], stints: [12, 13], lapsAt: [12] },
+  });
+  return { ...s, ai };
+}
+
+test("an AI armed on a slick that meets rain fits the AI wet class, never the player's catalogue wet", () => {
+  const { pits, G, ai, fitted, records } = aiWeatherSession("dry");
+  const c = ai(0, records.soft);
+  G.raceWeather = "rain";                       // the road turned between the arm and the box
+  pits.think(c);                                // armed: refreshes the choice, arms nothing new
+  assert.equal(c.pitNext.id, "wet", "think refreshes the armed choice from the AI class ladder");
+  c.pitNext = records.soft;                     // …and serviceCar alone is safe too
+  pits.serviceCar(c);
+  assert.ok(AI_IDS.includes(fitted.at(-1).id), `fitted ${fitted.at(-1).id}, not an AI class`);
+  assert.equal(fitted.at(-1).id, "wet");
+});
+
+test("an AI armed on a wet that meets a drying road fits an AI dry class, never the player's slick", () => {
+  const { pits, G, ai, fitted, records } = aiWeatherSession("rain");
+  const c = ai(2, records.wet);
+  G.raceWeather = "dry";
+  pits.think(c);
+  assert.ok(AI_IDS.includes(c.pitNext.id) && (c.pitNext.tread || 0) === 0, `armed ${c.pitNext.id}`);
+  c.pitNext = records.wet;
+  pits.serviceCar(c);
+  assert.ok(AI_IDS.includes(fitted.at(-1).id) && (fitted.at(-1).tread || 0) === 0, `fitted ${fitted.at(-1).id}`);
+});
+
+test("an AI choice whose tread still matches the road is left alone, and a player's is untouched", () => {
+  const { pits, ai, fitted, records, car } = aiWeatherSession("dry");
+  const c = ai(0, records.soft);
+  pits.think(c);
+  assert.equal(c.pitNext, records.soft, "no weather change: the plan's compound stands");
+  pits.serviceCar(c);
+  assert.equal(fitted.at(-1), records.soft);
+  const p = car(0.95);                          // the local human keeps the catalogue path
+  p.pitNext = { id: "p_zero_red", code: "X", life: 1.1, tread: 0 };
+  pits.serviceCar(p);
+  assert.equal(fitted.at(-1).id, "p_zero_red", "a same-tread player selection remains authoritative");
+});
+
 test("the first stop is taught in three lines — the road, the line, the gate — each once", () => {
   const { pits, zone, car, said, hw } = commitSession();
   const c = car(0);

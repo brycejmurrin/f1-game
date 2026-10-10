@@ -161,6 +161,7 @@ function phonePadDash() {
   const controls = G.recordControls();
   const flags = (p.boostOn ? D.boost : 0) | (p.otT > 0 ? D.otActive : p.otArmed ? D.otArmed : 0)
     | (xOpen ? D.xOpen : p.xArmed ? D.xArmed : 0) | (p.retired ? D.retired : 0) | (G.timeTrial ? D.timeTrial : 0)
+    | (G.session === "quali" ? D.quali : G.practice && !G.timeTrial ? D.practice : 0)
     | (G.paused ? D.paused : 0) | (p.rpm > MAX_RPM * 0.92 ? D.redline : 0)
     // The control modes, so the wheel offers only what the driver operates.
     | (controls.gearsManual ? 0 : D.gearsAuto) | (controls.autoThrottle ? D.throttleAuto : 0)

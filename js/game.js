@@ -8394,10 +8394,12 @@ function enableTilt() {
         setSteerMode("buttons"); paintSteer();
         tiltSay("no motion sensor — switched to buttons");
       }, 1500);
-    } else if (Input.gyroHardDenied) {   // a RESOLVED refusal, never a transient rejection (no user gesture)
+    } else if (Input.gyroHardDenied && !headlessMode) {   // a RESOLVED refusal, never a transient rejection (no user gesture)
       // Permission denied — fall back to buttons so the player can still steer.
       // (Staying in tilt mode with no sensor data leaves steer locked at 0 and
       // the car just follows ROAD_FOLLOW, appearing to "auto-drive" the racing line.)
+      // headlessMode: specs assert pause-menu TILT chrome (#pm-calib enabled)
+      // without a motion sensor — same gate as the 1.5 s no-reading fallback.
       setSteerMode("buttons");
     }
     paintSteer();
