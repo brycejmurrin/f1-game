@@ -35,10 +35,11 @@ function ctx2d() {
 }
 
 /** Compact short-landscape @ HUD SIZE 200 % — the ui-redesign flake shape. */
-function bootFlipHarness() {
-  const INTRINSIC = { map: 110, top: 300, sectors: 140, gaps: 84 };
-  const SCALE = 2;
-  const W = 852, H = 393;
+function bootFlipHarness(o = {}) {
+  const INTRINSIC = o.intrinsic || { map: 110, top: 300, sectors: 140, gaps: 84 };
+  const SCALE = o.scale == null ? 2 : o.scale;
+  const W = o.W || 852, H = o.H || 393;
+  const SAL = o.sal || 0, PLATE_TOP = o.plateTop == null ? 8 : o.plateTop, PLATE_IN = o.plateInset || 0, TOWER_H = o.towerH || 54;
   const dom = makeDom();
   const rawCreate = dom.document.createElement;
   dom.document.createElement = (tag) => {
@@ -60,7 +61,7 @@ function bootFlipHarness() {
     performance: { now: () => 1000 },
     matchMedia: () => ({ matches: false, addListener() {}, removeListener() {} }),
     getComputedStyle: () => ({
-      getPropertyValue: (k) => ALL_TOKENS[k] || "",
+      getPropertyValue: (k) => (o.tokens && k in o.tokens ? o.tokens[k] : (ALL_TOKENS[k] || "")),
       columnGap: "0px", rowGap: "0px", transform: "none",
     }),
   };
@@ -127,10 +128,10 @@ function bootFlipHarness() {
   function paintAt(z, liveOverride) {
     const L = liveOverride == null ? z : liveOverride;
     const bz = Math.min(SCALE, 1);
-    top._rect = R((W - INTRINSIC.top * z) / 2, 8, INTRINSIC.top * z, 54 * z);
-    minimap._rect = R(10 * z, 8, INTRINSIC.map * z, INTRINSIC.map * z);
-    gaps._rect = R(10 * z + INTRINSIC.map * z + 8 * z, 8, INTRINSIC.gaps * z, 40 * z);
-    els.hudSectors._rect = R(W - 10 * z - INTRINSIC.sectors * z, 8, INTRINSIC.sectors * z, 72 * z);
+    top._rect = R((W - INTRINSIC.top * z) / 2, 8 * z, INTRINSIC.top * z, TOWER_H * z);
+    minimap._rect = R(10 * z + SAL, 8 * z, INTRINSIC.map * z, INTRINSIC.map * z);
+    gaps._rect = R(10 * z + SAL + INTRINSIC.map * z + 8 * z, 8 * z, INTRINSIC.gaps * z, 40 * z);
+    els.hudSectors._rect = R(W - 10 * z - SAL - PLATE_IN - INTRINSIC.sectors * z, PLATE_TOP, INTRINSIC.sectors * z, 72 * z);
     gear._rect = R(100, 300, 250 * bz, 50 * bz);
     energy._rect = R(400, 300, 250 * bz, 50 * bz);
     bar._rect = R(0, 200, W, H - 200);
@@ -166,7 +167,7 @@ function bootFlipHarness() {
   });
 
   return {
-    SCALE, W, H, R, $, root, minimap, liveZ, pub, snap,
+    SCALE, W, H, R, $, root, minimap, liveZ, pub, snap, sb,
     paintAt,
     invalidate() { sb.GameHud.invalidateFit(); },
     tick() { hud.updateHud(true); },
@@ -230,6 +231,42 @@ test("fitHud measures top-band intrinsics from the published --hud-z-top, not cu
   const css = read("css/hud.css");
   assert.match(css, /#minimap[\s\S]*?transition-property:/,
     "top-band zoom group must not transition zoom (default all desyncs under load)");
+});
+
+/** 844x390 phone, cockpit: the tower 462 wide x 50 tall at y 8*z, the map and gap strip left of it, the
+ *  sector plate on its own row at SCREEN y 56 (its zoom cancels) pushed inboard by the dock, --sar 47. */
+const PHONE = { W: 844, H: 390, scale: 1, sal: 47, plateTop: 56, plateInset: 200, towerH: 50.2,
+  intrinsic: { map: 110, top: 462.4, sectors: 46, gaps: 75.2 }, tokens: { "--sar": "47px", "--sal": "47px", "--sat": "0px" } };
+
+test("fitHud: on touch the tower clears the sector plate's row without shrinking the whole band", () => {
+  const h = bootFlipHarness(PHONE);
+  const settle = (n) => { for (let i = 0; i < n; i++) { h.paintAt(h.pub()); h.invalidate(); h.tick(); } };   // a page repaints at the published zoom; the fixture does not
+  settle(6);
+  const z = h.pub();
+  // The tower's bottom at the published zoom sits above the plate's top (56) by ROW_AIR.
+  const bottom = z * (8 + PHONE.towerH);
+  assert.ok(bottom <= 56 - 2 + 0.01, "tower bottom " + bottom.toFixed(2) + " clears the plate's top at y 56");
+  assert.ok(z > 0.85 && z < 1, "and the band is only as small as that row needs (" + z.toFixed(3) + "), not the old 0.575 read off the dock stand-off");
+  // Stable: more ticks do not move it.
+  settle(4);
+  assert.equal(h.pub(), z, "the cap does not hunt");
+});
+
+test("fitHud: hiding the sector plate frees the row (touch), and a plate level with the tower is not a row to clear", () => {
+  const run = (hidePlate) => {
+    const h = bootFlipHarness(PHONE);
+    for (let i = 0; i < 6; i++) {
+      h.paintAt(h.pub());
+      if (hidePlate) h.sb.document.getElementById("hud-sectors")._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };   // SECTORS off / MINIMAL: no box, no row
+      h.invalidate(); h.tick();
+    }
+    return h.pub();
+  };
+  assert.ok(run(true) >= run(false) - 1e-9, "removing the plate never needs more room (" + run(true) + " vs " + run(false) + ")");
+  // A plate level with the tower shares its ROW: the vertical limit does not apply (the right-half budget does).
+  const level = bootFlipHarness({ ...PHONE, plateTop: 8 });
+  for (let i = 0; i < 6; i++) { level.paintAt(level.pub()); level.invalidate(); level.tick(); }
+  assert.ok(level.pub() > 0.95, "a plate level with the tower is not a row to clear (" + level.pub() + ")");
 });
 
 /** A painted S3 x BOOST clash the fit cannot resolve: BOOST on the right half,
