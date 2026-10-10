@@ -1016,8 +1016,9 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
   const h = fitHarness();
   const lane = () => h.root.style.getPropertyValue("--announce-lane-w");
   const laneLeft = () => h.root.style.getPropertyValue("--announce-lane-x");
-  // innerWidth 800; left group 0..150, sectors 650..790 at y 130 (in the hanging
-  // band — they end the lane the way BOOST does on a phone). --announce-lane-x
+  // innerWidth 800; the map 10..150 hangs into the card's rows (tower.bottom 62 + 8
+  // to +96) and starts the lane; the left dock group (y 200..400) only publishes it;
+  // sectors 650..790 at y 130 end it the way BOOST does on a phone. --announce-lane-x
   // is screen px: css/hud.css divides by --hud-z on #announce, where it lives.
   assert.equal(laneLeft(), "158.0px");
   assert.equal(lane(), "484.0px");
@@ -1029,7 +1030,7 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
   assert.equal(lane(), (520 - 8 - 158).toFixed(1) + "px", "BOOST ends the lane at its left edge");
   boost._rect = { left: 520, top: 300, right: 608, bottom: 388, width: 88, height: 88 };
   h.refit();
-  assert.equal(lane(), (520 - 8 - 158).toFixed(1) + "px", "TILT's bottom tap column still ends the lane");
+  assert.equal(lane(), "484.0px", "a tap column on the bottom edge (TILT's pedals, the steer buttons) shares none of the card's rows: it no longer ends the lane (phone 2026-10-10: the card pinned at the steer column's edge, over the cars)");
   boost._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
   h.els.hudSectors._rect = { left: 500, top: 8, right: 640, bottom: 80, width: 140, height: 72 };
   h.refit();
@@ -1058,13 +1059,42 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
   h.dom.body.appendChild(gapBox);
   gapBox._rect = { left: 160, top: 8, right: 250, bottom: 30, width: 90, height: 22 }; // above tower.bottom=62
   h.refit();
-  assert.equal(laneLeft(), "258.0px", "gaps in the tower row still start the hanging lane");
+  assert.equal(laneLeft(), "228.0px", "gaps in the tower row end above the card's rows: they do not start the hanging lane");
+  gapBox._rect = { left: 160, top: 62, right: 250, bottom: 84, width: 90, height: 22 }; // a DROPPED strip, into the card's rows
+  h.refit();
+  assert.equal(laneLeft(), "258.0px", "a dropped gaps strip in the card's rows starts the hanging lane");
   // Same-tick growth: the spec measures after jump()'s updateHud, whose gap
   // strings land AFTER fitHud. Widening the box without changing the fit key
   // (text length / class / viewport) must still move the lane on this tick.
-  gapBox._rect = { left: 160, top: 8, right: 310, bottom: 30, width: 150, height: 22 };
+  gapBox._rect = { left: 160, top: 62, right: 310, bottom: 84, width: 150, height: 22 };
   h.tick();
   assert.equal(laneLeft(), "318.0px", "a wider gaps chip re-clips the lane on the same HUD tick");
+  // An opt-in STRATEGY box in the left column shares the rows too (the phone's own layout).
+  const strat = h.dom.document.createElement("div"); strat.id = "hud-strat"; h.dom.body.appendChild(strat);
+  strat._rect = { left: 10, top: 150, right: 330, bottom: 190, width: 320, height: 40 };
+  h.refit();
+  assert.equal(laneLeft(), "338.0px", "a readout in the card's rows starts the lane");
+  strat._rect = { left: 10, top: 180, right: 330, bottom: 220, width: 320, height: 40 };
+  h.refit();
+  assert.equal(laneLeft(), "318.0px", "one below them (band ends at tower.bottom + 8 + 96) does not");
+  strat._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };   // the mini-dom keeps ids after removeChild: zero the box too
+  h.dom.body.removeChild(strat);
+  // UNDER A CAUTION the card steps below the flag chip (css/hud.css), so the band
+  // starts under the flag: the dropped gaps strip at y 62..84 is above it now.
+  if (h.els.flag) {
+    h.els.flag.hidden = false;
+    h.els.flag._rect = { left: 350, top: 70, right: 450, bottom: 94, width: 100, height: 24 };
+    h.refit();
+    assert.equal(laneLeft(), "228.0px", "a visible flag lowers the band past a strip that ends above it (the map still starts the lane)");
+    h.els.flag.hidden = true; h.els.flag._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+    h.refit();
+  }
+  // INPUTS (opt-in, under the sector box on touch) ends the lane when it shares the rows.
+  const inputs = h.dom.document.createElement("div"); inputs.id = "hud-inputs"; h.dom.body.appendChild(inputs);
+  inputs._rect = { left: 540, top: 120, right: 640, bottom: 156, width: 100, height: 36 };
+  h.refit();
+  assert.equal(lane(), (540 - 8 - 318).toFixed(1) + "px", "INPUTS in the card's rows ends the lane at its left edge");
+  h.dom.body.removeChild(inputs);
   const src = read("js/ui/hud.js");
   assert.ok(src.indexOf("announceLane(document.documentElement)") > src.indexOf("hText(els.gapA"),
     "announceLane runs after this tick's gap strings, not only inside fitHud");

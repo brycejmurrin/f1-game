@@ -2005,11 +2005,17 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
      trace over the steer column (844×390 cockpit, INPUTS opt-in). */
   position: fixed;
   left: auto;
-  /* Cap the dock standoff: at HUD/BTN 150% the wrap-reverse right dock can
-     measure ~480px wide, and adding the full --dock-r-w shoved this trace
-     onto the LEFT steer arrows (844×390). A small floor (BOOST column
-     width-ish) keeps a gap from the pedals without crossing RELATIVE. */
-  right: calc(10px + var(--sar) / var(--hud-z) + min(var(--dock-r-w, 0px), 128px));
+  /* Cap the dock standoff AT THE CENTRE LINE: at HUD/BTN 150% the wrap-reverse
+     right dock can measure ~480px wide, and adding the full --dock-r-w shoved
+     this trace onto the LEFT steer arrows (844×390). The first cap was a flat
+     128px, which is LESS than the dock at 100% (BOOST's column is ~250px on
+     844×390), so the trace sat on BOOST / OT at the shipped size (HUD survey
+     2026-10-10, phoneL-cockpit: inputs × btn-boost 66×18px). The cap is now
+     the trace's own width short of the centre (max-width 120px below), so it
+     stands off any dock up to the middle of the screen and never reaches the
+     left column. vw and the inset divide by this element's zoom like every
+     other anchor here. */
+  right: calc(10px + var(--sar) / var(--hud-z) + min(var(--dock-r-w, 0px), calc(50vw / var(--hud-z) - 10px - var(--sar) / var(--hud-z) - 120px)));
   bottom: auto;
   /* Same shape as #hud-limits: clear PAUSE/CAM via (8px + tap-hud + 4px + sat)
      then drop by --hud-sec-h. Omitting tap-hud + 4px put the trace ~44px into

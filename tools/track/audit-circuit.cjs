@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // audit-circuit.cjs — ONE circuit's offline health: every per-circuit audit
 // against its baseline, in one call, no browser.
-// @doc One circuit's offline audits in one call: verify-track + float + clip + coplanar + props-tris + ground against their baselines; `--json`, `--checks a,b`.
+// @doc One circuit's offline audits in one call (verify/float/clip/coplanar/props/ground) vs baselines; `--json`, `--checks`.
 // @skill survey-track
 //
 //   node tools/track/audit-circuit.cjs <trackId>                      # every check, a line each, exit 1 on any FAIL
@@ -15,7 +15,7 @@
 //
 // The checks and what "ok" means (each is the audit's own single-track mode):
 //   verify    tools/track/verify-track.cjs <id> --quiet     builds road/terrain/props/gate in a VM; a THROW fails
-//   float     tools/track/float-audit.cjs <id> --json       unsupported floating clusters ≤ tools/track/float-baseline.json cap
+//   float     tools/track/float-audit.cjs <id> --json       unsupported floating clusters ≤ tools/track/float-baseline.json cap (count vs cap, not the exit code)
 //   clip      tools/track/clip-audit.cjs <id>               severe prop-vs-prop spots ≤ tools/track/clip-baseline.json
 //   coplanar  tools/track/coplanar-audit.cjs <id>           same-facing coplanar spots ≤ tools/track/coplanar-baseline.json
 //   props     tools/track/props-tris.cjs <id> --json        the hidden-face compaction is render-identical
@@ -48,6 +48,15 @@ function lastJson(text) {
   try { return JSON.parse(text.slice(i).trim()); } catch (_) { return null; }
 }
 
+// float-audit exits 1 on ANY floater (its own gate is "none"), so the exit code
+// cannot be the verdict for a circuit whose cap is non-zero: madrid, donington
+// and mexico (cap 2, measured 2) printed float:FAIL forever. The verdict is the
+// count against the cap; a real tool failure (spawn error, usage exit 2, a
+// crash with no JSON) still fails.
+function floatOk(r, n, cap) {
+  return !r.error && (r.status === 0 || r.status === 1) && n != null && n <= cap;
+}
+
 const CHECKS = {
   verify(id) {
     const r = run("tools/track/verify-track.cjs", [id, "--quiet"]);
@@ -58,7 +67,7 @@ const CHECKS = {
     const r = run("tools/track/float-audit.cjs", [id, "--json"]);
     const j = lastJson(r.stdout), cap = readJson("tools/track/float-baseline.json", {})[id] || 0;
     const n = j && Array.isArray(j.floating) ? j.floating.length : null;
-    return { ok: r.status === 0 && n != null && n <= cap, ms: r.ms, floating: n, cap,
+    return { ok: floatOk(r, n, cap), ms: r.ms, floating: n, cap,
       summary: n == null ? "no JSON from float-audit" : `${n} unsupported floating cluster(s), cap ${cap}` };
   },
   clip(id) {
@@ -122,4 +131,4 @@ function main(argv) {
 }
 
 if (require.main === module) process.exit(main(process.argv.slice(2)));
-module.exports = { main, CHECKS, ORDER };
+module.exports = { main, CHECKS, ORDER, floatOk };
