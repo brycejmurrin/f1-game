@@ -3459,6 +3459,9 @@ const WGX = (function () {
       // records × the knob dimmer; no twilight ramp/flicker, GLX parity), so
       // the buffer is static until the next bake. A moved pair also resets
       // the chunkIdx segment allocator: every mesh re-appends on next draw.
+      // (frame.allLights is ONE reused buffer, so identity rarely moves: the
+      // allocator also rewinds in freeChunkedMesh when the last mesh holding a
+      // segment is freed — wgx-chunked.js — or each track build would leak.)
       // Re-upload when the SET changes (identity/knob) or when its VALUES change
       // (allLightsGen — flicker, warm-up, a LAMPS slider). The two are kept
       // apart deliberately: the segment allocator below may only be reset for
