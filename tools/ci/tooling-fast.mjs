@@ -693,12 +693,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/session-status.test.mjs",
   "tests/unit/settings-defaults.test.mjs",
   "tests/unit/settings-export.test.mjs",
+  // Round-2: MUSIC & SOUND asks the audio bundle once per open and reveals the stub page with a note when it cannot load.
+  "tests/unit/settings-tabs.test.mjs",
   // R19 guards. Both belong in the EDIT LOOP rather than a slow topical group:
   // each re-derives a fact the source depends on (which livery fields move a
   // vertex; that js/track/ reads the build's NIGHT, not the def's), so they are
   // only useful if they run right after the edit that would break them.
-  // Round-2: MUSIC & SOUND asks the audio bundle once per open and reveals the stub page with a note when it cannot load.
-  "tests/unit/settings-tabs.test.mjs",
   "tests/unit/setup-preview-hull.test.mjs",
   "tests/unit/setup-screens-state.test.mjs",
   "tests/unit/setup-tune.test.mjs",

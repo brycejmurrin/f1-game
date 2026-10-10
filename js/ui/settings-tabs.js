@@ -16,6 +16,14 @@ const SettingsNav = (function () {
     files: "BACKUP & RESTORE",
   };
   let live = null;
+  // Subscribers told when a page is hidden by show()/back() (the CONTROLS wheel
+  // wizard disarms itself here). Module-level so a subscriber needs no instance.
+  const leaveFns = [];
+  function fireLeave(id) {
+    for (const fn of leaveFns) {
+      try { fn(id); } catch (e) { Log.warn("game", "SettingsNav.onLeave handler failed: " + (e && e.message)); }
+    }
+  }
 
   // Each page's panel element, looked up by its own literal id (dynamicIdReads
   // ratchet: getElementById must never take a computed argument).
@@ -73,7 +81,8 @@ const SettingsNav = (function () {
 
     // audioTried: undefined = not yet, "ok" / "failed" = the lazy bundle already
     // answered once for this open. Never gate twice: a failed ensureAudio leaves
-    // the stub resident, so re-gating would retry forever.
+    // the stub resident, so re-gating would retry forever. (Ship #1320 used a
+    // boolean `ensured` flag; keep the richer "failed" → offline note path.)
     function show(want, focus, after, audioTried) {
       const id = TITLES[want] ? want : "home";
       // LAZY_AUDIO: same gate as the audio door — SettingRow must wire before
@@ -116,6 +125,7 @@ const SettingsNav = (function () {
         const active = document.activeElement;
         originDoor = active && index.contains && index.contains(active) ? active : null;
       }
+      if (current !== "home" && current !== id) fireLeave(current);
       current = id;
       const title = document.getElementById("dlg-settings");
       if (title) title.textContent = TITLES[id];
@@ -199,6 +209,7 @@ const SettingsNav = (function () {
   return {
     create,
     show: (id, focus) => { if (live) live.show(id, focus); },
+    onLeave: (fn) => { if (typeof fn === "function") leaveFns.push(fn); },
   };
 })();
 Object.freeze(SettingsNav);

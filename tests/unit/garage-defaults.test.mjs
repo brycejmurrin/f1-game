@@ -146,9 +146,45 @@ test("resetGarage clears extras then restores the shipped garage", () => {
   assert.equal(r.ok, true);
   assert.ok(r.applied >= 30);
   assert.equal(GameStore.store.get("team", 99), GarageDefaults.get("team"));
+  // Compare to the literal shipped value, not GarageDefaults.get() (that read
+  // is the same object the store returns when get() aliased, so it proved nothing).
+  assert.equal(GameStore.store.get("parts.mercedes", {}).engine, "sig_mercedes_zero");
   assert.deepEqual(GameStore.store.get("parts.mercedes", {}), GarageDefaults.get("parts.mercedes"));
   assert.equal(localStorage.getItem("apex26.customTeam"), null, "extras not in the shipped file are cleared");
   assert.equal(JSON.parse(localStorage.getItem("apex26.difficulty")), "easy", "settings survive a garage reset");
+});
+
+test("RESET GARAGE restores the SHIPPED garage, not the player's edits (bug-hunt 1.1)", () => {
+  // The garage mutates the object store.get returns in place (p[cat] = opt.id)
+  // then store.set()s it. On a miss that object used to BE the shipped DEF
+  // entry, so the edit rewrote the defaults and a reset restored the edit.
+  const { SettingsExport, GarageDefaults, GameStore } = load();
+  const snapParts = JSON.stringify(GarageDefaults.get("parts.mercedes"));
+  const snapLiv = JSON.stringify(GarageDefaults.get("livery.custom.mercedes"));
+  const snapFile = JSON.stringify(GarageDefaults.file().garage);
+  const store = GameStore.store;
+
+  const p = store.get("parts.mercedes", {});
+  p.engine = "player_build";
+  store.set("parts.mercedes", p);
+  const liv = store.get("livery.custom.mercedes", []);
+  liv[0].c1[0] = 0.123;
+  liv[0].name = "Edited";
+  store.set("livery.custom.mercedes", liv);
+
+  assert.equal(JSON.stringify(GarageDefaults.get("parts.mercedes")), snapParts, "get() hands out a copy");
+  assert.equal(JSON.stringify(GarageDefaults.get("livery.custom.mercedes")), snapLiv, "nested arrays are copied too");
+  assert.equal(JSON.stringify(GarageDefaults.file().garage), snapFile, "file() is not the edited table");
+
+  assert.equal(SettingsExport.resetGarage().ok, true);
+  assert.equal(JSON.stringify(store.get("parts.mercedes", {})), snapParts, "reset restores the shipped parts");
+  assert.deepEqual(JSON.parse(JSON.stringify(store.get("livery.custom.mercedes", []))), JSON.parse(snapLiv), "reset restores the shipped livery");
+
+  // file() hands out a deep copy: scribbling on it cannot reach the table.
+  const f = GarageDefaults.file();
+  f.garage["parts.mercedes"].engine = "x";
+  f.garage["livery.custom.mercedes"][0].c1[0] = 9;
+  assert.equal(JSON.stringify(GarageDefaults.file().garage), snapFile);
 });
 
 test("part and livery ids match the source export verbatim", () => {

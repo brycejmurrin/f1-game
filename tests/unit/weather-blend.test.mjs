@@ -295,8 +295,10 @@ test("silverstone night dry→wet blends city skyglow, moon and the stamped knob
   const glowLum = (g) => (g ? g[0] + g[1] + g[2] : 0);
   const dryGlow = glowLum(b.G.frameSky.cityGlow);
   const wetGlow = glowLum(cut.G.frameSky.cityGlow);
-  assert.ok(Math.abs(stampDry.cityGlowMul - 0.55) < 1e-6 && Math.abs(stampWet.cityGlowMul - 0.88) < 1e-6,
-    "endpoints use the shipped *|night|dry / *|night|wet stamps");
+  // Dry endpoint is the Silverstone pass-2 skyglow override (2.35), not the
+  // fleet *|night|dry 0.55; wet still inherits *|night|wet 0.88.
+  assert.ok(Math.abs(stampDry.cityGlowMul - 2.35) < 1e-6 && Math.abs(stampWet.cityGlowMul - 0.88) < 1e-6,
+    "endpoints use silverstone|night|dry cityGlow + *|night|wet stamps");
   b.G.raceWeather = "wet";
   b.atmo.applyRaceSettings(true);
   const at = (s) => {
@@ -311,6 +313,7 @@ test("silverstone night dry→wet blends city skyglow, moon and the stamped knob
       horizon: host(b.G.frameSky.horizon),
     };
   };
+  const between = (v, a, b) => v > Math.min(a, b) && v < Math.max(a, b);
   const p0 = at(0);
   assert.deepEqual(p0.horizon, [0.04, 0.03, 0.06], "night horizon stays on the dry palette at blend start");
   assert.equal(p0.cityGlowMul, stampDry.cityGlowMul, "cityGlowMul at 0%");
@@ -318,13 +321,12 @@ test("silverstone night dry→wet blends city skyglow, moon and the stamped knob
   assert.equal(p0.bloomMul, stampDry.bloomMul);
   assert.ok(Math.abs(p0.glow - dryGlow) < 1e-6, "city skyglow starts on the dry look");
   const p1 = at(0.5);
-  assert.ok(p1.cityGlowMul > stampDry.cityGlowMul && p1.cityGlowMul < stampWet.cityGlowMul, "cityGlowMul mid-fade");
-  assert.ok(p1.keyMul > stampWet.keyMul && p1.keyMul < stampDry.keyMul, "keyMul mid-fade");
-  assert.ok(p1.bloomMul > stampWet.bloomMul && p1.bloomMul < stampDry.bloomMul, "bloomMul mid-fade");
-  assert.ok(p1.glow > dryGlow && p1.glow < wetGlow, "city skyglow mid-fade");
+  assert.ok(between(p1.cityGlowMul, stampDry.cityGlowMul, stampWet.cityGlowMul), "cityGlowMul mid-fade");
+  assert.ok(between(p1.keyMul, stampDry.keyMul, stampWet.keyMul), "keyMul mid-fade");
+  assert.ok(between(p1.bloomMul, stampDry.bloomMul, stampWet.bloomMul), "bloomMul mid-fade");
+  assert.ok(between(p1.glow, dryGlow, wetGlow), "city skyglow mid-fade");
   if (stampDry.moonBright !== stampWet.moonBright)
-    assert.ok(p1.moonBright > Math.min(stampDry.moonBright, stampWet.moonBright) &&
-      p1.moonBright < Math.max(stampDry.moonBright, stampWet.moonBright), "moonBright mid-fade");
+    assert.ok(between(p1.moonBright, stampDry.moonBright, stampWet.moonBright), "moonBright mid-fade");
   const p2 = at(1);
   assert.equal(p2.cityGlowMul, stampWet.cityGlowMul);
   assert.equal(p2.keyMul, stampWet.keyMul);

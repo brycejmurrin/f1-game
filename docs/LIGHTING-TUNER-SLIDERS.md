@@ -594,7 +594,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `neonBoost` | NEON & LENS BLOOM | 0 … 1.5 | 0.6 | `uBloomBoost` | ✓ | glx.js×2 |
 | `cityGlowMul` | CITY SKYGLOW | 0 … 2.75 | 1 | — | ✓ | atmosphere.js×2 |
 | `cityGlowWarm` | SKYGLOW WARMTH | -5 … 3.3 | 0 | — | ✓ | atmosphere.js |
-| `cityGlowTint` | SKYGLOW ON AMBIENT | 0 … 0.7 | 0.28 | — |   | game.js×2 |
+| `cityGlowTint` | SKYGLOW ON AMBIENT | 0 … 0.7 | 0.28 | — | ✓ | game.js×2 |
 | `bloomMul` | BLOOM AMOUNT | 0 … 2.5 | 1 | — | ✓ | game.js, setup-camera.js |
 | `bloomSpread` | BLOOM SPREAD | 0.25 … 2.125 | 1 | `uSpread` | ✓ | — |
 | `threshOff` | BLOOM THRESHOLD | -0.57 … 0.4 | 0 | — |   | game.js, setup-camera.js |
@@ -676,7 +676,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `sunDiscSize` | SUN DISC SIZE | 0.06 … 2.405 | 1 | `uSunDiscSize` | ✓ | game.js×2, glx.js×2 |
 | `sunCorona` | SUN CORONA RING | 0 … 2.5 | 1 | `uSunCorona` | ✓ | game.js×2, glx.js×2 |
 | `sunSquash` | SUN HORIZON SQUASH | 0 … 2.5 | 1 | `uSunSquash` | ✓ | game.js×2, glx.js×2 |
-| `starSize` | STAR SIZE | 0.2 … 2.2 | 1 | `uStarSize` |   | game.js×2, glx.js×2 |
+| `starSize` | STAR SIZE | 0.2 … 2.2 | 1 | `uStarSize` | ✓ | game.js×2, glx.js×2 |
 | `starTwinkle` | STAR TWINKLE | 0 … 4 | 1 | `uStarTwinkle` |   | game.js×2, glx.js×2 |
 | `moonDiscSize` | MOON DISC SIZE | 0.06 … 2.405 | 1 | `uMoonDiscSize` |   | game.js×2, glx.js×2 |
 | `moonHalo` | MOON HALO SPREAD | 0 … 2.5 | 1 | `uMoonHalo` |   | game.js×2, glx.js×2 |

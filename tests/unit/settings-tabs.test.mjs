@@ -1,6 +1,8 @@
-/* settings-tabs.test.mjs — SettingsNav's lazy MUSIC & SOUND gate.
+/* settings-tabs.test.mjs — SettingsNav's lazy MUSIC & SOUND gate + onLeave.
  * M1 (round 2): AudioPanel._ensure() resolving false (UPDATE READY / offline)
- * used to re-enter show() -> _ensure() forever and never reveal #audioset. */
+ * used to re-enter show() -> _ensure() forever and never reveal #audioset.
+ * Ship #1320 covered the same fail-loop with a boolean `ensured` flag; we keep
+ * the richer offline-note path and still pin onLeave from that suite. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -55,4 +57,20 @@ test("MUSIC & SOUND: a bundle that loads reveals the wired page without the offl
   assert.equal(audio.hidden, false);
   assert.deepEqual(sel, ["audio"]);
   assert.notEqual(dom.byId("audioset-offline").hidden, false);
+});
+
+test("onLeave(fn) is called with the page id when back() / show() hides a page", () => {
+  const { nav, ctx } = boot({ ensure: () => Promise.resolve(true), stub: false });
+  const left = [];
+  ctx.SettingsNav.onLeave((id) => left.push(id));
+  assert.deepEqual(left, [], "the initial show('home') leaves nothing");
+  nav.show("controls", false);
+  assert.deepEqual(left, [], "home is the index, not a page");
+  nav.back();
+  assert.deepEqual(left, ["controls"]);
+  nav.show("driving", false);
+  nav.show("display", false);
+  assert.deepEqual(left, ["controls", "driving"]);
+  nav.show("display", false);
+  assert.deepEqual(left, ["controls", "driving"], "re-showing the same page leaves nothing");
 });
