@@ -977,8 +977,15 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
      rides `zoom: var(--hud-scale)` (see the group rule above) while #pausebtn
      does NOT, so clearing an unscaled box means converting the unscaled sum into
      this element's own units. Dividing only --sat left the two drifting apart at
-     any non-default HUD SIZE. Desktop is unchanged at 56; touch moves to 64. */
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z));
+     any non-default HUD SIZE. Desktop is unchanged at 56; touch moves to 64.
+     ALSO clear the measured tower (--hud-top-h): Phase 0's --sar fix stops the
+     false 0.575 top-band zoom, so at the player's scale the centred tower reaches
+     the plate (hud-layout: .hud-top+#hud-sectors on notched-landscape buttons/
+     tilt-manual). max() keeps the pause clearance and the tower clearance. */
+  top: max(
+    calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z)),
+    calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 4px)
+  );
   /* STAND OFF THE RIGHT DOCK on every phone STEER mode. Same --dock-r-w
      clearance #hud-limits / #hud-damage take; those chips sit lower. BOOST /
      OT / AERO share the right column and at HUD/BTN SIZE 130–150% (short
@@ -1027,8 +1034,13 @@ body:not(.desktop) #hud-sectors {
      be: every profile that hides #hud-sectors — MINIMAL, and a broadcast camera
      outside the broadcast profile — left this chip hanging 77px below an empty
      corner. The var is 0 exactly when the box is gone, so the chip rides up
-     into the slot the sectors vacated. The em keeps the pre-fit paint honest. */
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px);
+     into the slot the sectors vacated. The em keeps the pre-fit paint honest.
+     The max() matches #hud-sectors' tower-aware top so a tall tower that pushes
+     the plate down does not leave this chip painted through S1–S3. */
+  top: calc(max(
+    calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z)),
+    calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 4px)
+  ) + var(--hud-sec-h, 4.8em) + 15px);
   /* STAND OFF THE DOCK. This chip sits BELOW #hud-sectors, and on a touch phone
      that row is the BOOST pedal — so a track-limits warning painted straight
      over a tap target (reported from a phone). --dock-r-w is the right dock's
@@ -1865,7 +1877,10 @@ body[data-helmet-cam] #hud::before {
    shots, 2026-10-05). */
 #hud-damage {
   position: fixed;
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + 2.6em);
+  top: calc(max(
+    calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z)),
+    calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 4px)
+  ) + var(--hud-sec-h, 4.8em) + 15px + 2.6em);
   right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
   display: flex;
   align-items: center;
@@ -2014,11 +2029,13 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
      120 under-cleared OT by 9px. */
   right: calc(10px + var(--sar) / var(--hud-z) + min(var(--dock-r-w, 0px), calc(50vw / var(--hud-z) - 10px - var(--sar) / var(--hud-z) - var(--hud-inputs-w, 120px))));
   bottom: auto;
-  /* Same shape as #hud-limits: clear PAUSE/CAM via (8px + tap-hud + 4px + sat)
-     then drop by --hud-sec-h. Omitting tap-hud + 4px put the trace ~44px into
-     S1–S3 at touch --tap 52 (12 − 56 = −44 at z=1). --hud-sec-h is top-band
-     units; at phone sizes bot/top zooms meet so it still clears the box. */
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
+  /* Same shape as #hud-limits: clear PAUSE/CAM and the tower, then drop by
+     --hud-sec-h. Omitting tap-hud + 4px put the trace ~44px into S1–S3 at
+     touch --tap 52 (12 − 56 = −44 at z=1). */
+  top: calc(max(
+    calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z)),
+    calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 4px)
+  ) + var(--hud-sec-h, 4.8em) + 12px);
   max-width: min(120px, 22vw);
   max-height: min(18svh, 4.2em);
   overflow: hidden;
@@ -2028,7 +2045,10 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
    under the sector box (limits +15px, inputs +12px) and overlap in 12/13
    quick-matrix cells. */
 body:not(.desktop):has(#hud-limits:not([hidden])) #hud-inputs:not([data-hl-user]) {
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + var(--hud-limits-h, 2.6em) + 12px);
+  top: calc(max(
+    calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z)),
+    calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 4px)
+  ) + var(--hud-sec-h, 4.8em) + 15px + var(--hud-limits-h, 2.6em) + 12px);
 }
 body:not(.desktop) #hud-inputs:not([data-hl-user]) #hud-inputs-cv {
   width: 84px;
@@ -2042,10 +2062,16 @@ body.desktop #hud-inputs:not([data-hl-user]) {
   left: auto;
   right: calc(10px + var(--sar) / var(--hud-z));
   bottom: auto;
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
+  top: calc(max(
+    calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z)),
+    calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 4px)
+  ) + var(--hud-sec-h, 4.8em) + 12px);
 }
 body.desktop:has(#hud-limits:not([hidden])) #hud-inputs:not([data-hl-user]) {
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + var(--hud-limits-h, 2.6em) + 12px);
+  top: calc(max(
+    calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z)),
+    calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 4px)
+  ) + var(--hud-sec-h, 4.8em) + 15px + var(--hud-limits-h, 2.6em) + 12px);
 }
 /* TOUCH TYRES (LANDSCAPE): out of the centred bottom stack (it sat under
    GEAR / ERS, on the car) to the left column, sitting on top of the left dock

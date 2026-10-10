@@ -47,6 +47,9 @@ test("CSS: #hud-sectors clears the right dock on every phone steer mode", () => 
   assert.doesNotMatch(CSS,
     /#hud-sectors\s*\{[^}]*max\(\s*calc\(10px \+ var\(--sar\)[^}]*anchor\(left\)/,
     "no max(dock-r-w, anchor(left)) on sectors");
+  assert.match(CSS,
+    /#hud-sectors\s*\{[\s\S]*?top:\s*max\([\s\S]*?--hud-top-h/,
+    "sectors top clears the measured tower (--hud-top-h) as well as PAUSE/CAM");
 });
 
 test("CSS: touch #hud-rel is capped above the left dock (steer / BRAKE)", () => {
