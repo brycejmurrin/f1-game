@@ -352,3 +352,15 @@ test("the SUBJECT row shows only when the door offers one, and hands the other p
   assert.equal(group.hidden, true, "the pause-menu door (already on the circuit) offers no subject");
   b.api.close(false);
 });
+
+test("leaks #1: closing the studio releases the composed canvas and its preview source", async () => {
+  const b = boot(); assert.equal(b.api.open({ source: "race" }), true);
+  assert.equal(await b.api.capture(), true);
+  const preview = b.dom.byId("ps-preview"), removed = [], remove = preview.removeAttribute;
+  preview.removeAttribute = (k) => { removed.push(k); return remove.call(preview, k); };   // mini-dom keeps `src` as a plain property
+  assert.ok(preview.src, "preview holds the thumbnail while open"); assert.equal(b.api.state().captured, true);
+  b.api.close(true);
+  assert.equal(b.api.state().captured, false, "`last` canvas is dropped");
+  assert.deepEqual(removed, ["src"], "the ~640x360 JPEG data URL is dropped"); assert.equal(preview.hidden, true);
+  await b.api.exportPhoto(); assert.deepEqual(b.downloads, [], "nothing left to export after close");
+});

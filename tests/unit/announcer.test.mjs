@@ -533,6 +533,30 @@ test("every lore line is one spoken sentence the synth can read", () => {
   }
 });
 
+// Baku is exempt until its night line is baked: lore lines are pre-baked TTS clips (assets/voice/*.json, tools/gen/voicepack.mjs, author-side
+// credentials), and voice-pack.test.mjs fails on an unbaked line. Drop BAKED_GAP once the voice pack is re-baked with a Baku night line.
+const BAKED_GAP = ["baku"];
+test("every night circuit has a night line, so the announcer has something to say after dark", () => {
+  const { CircuitLore } = load();
+  const nights = readdirSync(join(ROOT, "js/circuits")).filter((f) => f.endsWith(".js"))
+    .filter((f) => /^ {4}night: true,/m.test(readFileSync(join(ROOT, "js/circuits", f), "utf8")))
+    .map((f) => f.replace(/\.js$/, ""));
+  assert.ok(nights.includes("baku") && nights.length >= 7, `only found ${nights.join(", ")}`);
+  assert.deepEqual(nights.filter((id) => !BAKED_GAP.includes(id) && !CircuitLore.LORE[id].night), [], "a night circuit has no `night` lore slot");
+});
+
+test("Baku's night line is a known gap (voice bake pending)", { todo: true }, () => {
+  const { CircuitLore } = load();
+  assert.ok(CircuitLore.LORE.baku.night, "Baku is night: true but has no night lore line");
+});
+
+// Reverted until the voice pack is re-baked: the Istanbul `corner` line IS voiced (voice-pack.test.mjs fails on any reworded line),
+// so the fix is "seems to last forever" + a bake of that line.
+test("no lore line states a duration the circuit does not have (Istanbul turn eight is seconds, not a minute)", { todo: true }, () => {
+  const { CircuitLore } = load();
+  assert.doesNotMatch(CircuitLore.LORE.istanbul.corner, /minute/);
+});
+
 test("the circuit's own line is spoken, and outranks the numbers when the budget is tight", () => {
   const spa = info({ track: { id: "spa", name: "Spa", gp: "Belgian Grand Prix", lengthKm: 7.004 }, turns: 19 });
   assert.match(said(spa), /Ardennes/, "Spa's identity line never reached the script");
@@ -842,6 +866,15 @@ test("a photo-finish margin is read as a tenth, never '0.0 seconds'", () => {
     second: "Lando Norris", margin: 0.04, you: { pos: 5, grid: 5 } }).join(" ");
   assert.doesNotMatch(txt, /0\.0 seconds/);
   assert.match(txt, /0\.1 seconds ahead of Norris/);
+});
+
+test("a margin that rounds up to ten is read as '10', never '10.0 seconds'", () => {
+  const txt = A.wrapRows({ event: "the British Grand Prix", n: 20, winner: { name: "Max Verstappen" },
+    second: "Lando Norris", margin: 9.96, you: { pos: 5, grid: 5 } }).join(" ");
+  assert.doesNotMatch(txt, /10\.0/);
+  assert.match(txt, /10 seconds ahead of Norris/);
+  assert.match(A.wrapRows({ event: "x", n: 20, winner: { name: "Max Verstappen" }, second: "Lando Norris", margin: 9.94,
+    you: { pos: 5, grid: 5 } }).join(" "), /9\.9 seconds ahead/);
 });
 
 test("the wrap-up reads the result the stewards gave: a penalty is part of the margin, and a sprint is the sprint", async () => {

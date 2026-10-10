@@ -21,6 +21,8 @@ const load = (p, name) => new Function(read(p) + "; return " + name + ";")();
 const Helmets = load("js/car/helmets.js", "Helmets");
 const Teams = load("js/data/teams.js", "Teams");
 
+const loadLegends = () => load("js/core/mat4.js", "M4") && new Function(read("js/core/mat4.js") + "; " + read("js/data/legends.js") + "; return Legends;")();
+
 const grid = () => {
   const out = [];
   for (const t of Teams.LIST) for (const d of t.drivers) out.push({ ...d, team: t.short, teamC: t.color });
@@ -185,6 +187,43 @@ test("a number off the grid gets a design of its own, stable and distinct", () =
   assert.notDeepEqual([a.base, a.zones.length], [c.base, c.zones.length], "two career drivers do not share a helmet");
   const paint = Helmets.painter(Helmets.designFor(101, [0.5, 0.5, 0.5]));
   assert.ok(Array.isArray(paint(0.4, 40)));
+});
+
+test("a legend or MY TEAM driver never wears a 2026 driver's design, whatever number he carries", () => {
+  const Legends = loadLegends();
+  const gridNames = new Set(Object.values(Helmets.DESIGNS).map((d) => d.name));
+  const seen = new Set();
+  for (const l of Legends.LIST) {
+    // num 1 is the neutral fallback (Norris on the grid), 12 Senna (Antonelli), 5 Mansell (Bortoleto).
+    const d = Helmets.designFor(l.num || 1, null, l.code);
+    assert.equal(d.generated, true, `${l.code} got a hand-made grid design (${d.name})`);
+    assert.ok(!gridNames.has(d.name), `${l.code} wears ${d.name}'s lid`);
+    assert.equal(d.name, l.code);
+    assert.deepEqual(Helmets.designFor(l.num || 1, null, l.code).base, d.base, "stable between calls");
+    seen.add(JSON.stringify([d.base, d.zones.map((z) => z.k + z.c)]));
+  }
+  // generated() draws from a 12-colour wheel, so a dozen keys can share a head (birthday bound,
+  // ~7-8 distinct expected); the floor guards a hash that collapses to a handful.
+  assert.ok(seen.size >= 6, `legend helmets collapse: ${seen.size} distinct of ${Legends.LIST.length}`);
+  // No key = the old behaviour, so the 2026 grid is untouched.
+  assert.equal(Helmets.designFor(1, null).name, "NOR");
+});
+
+test("car3d keys the helmet on the legend / custom driver, not the number", () => {
+  const car3d = read("js/car/car3d.js");
+  const src = car3d.match(/function helmetKey\(opts\) \{[\s\S]*?\n  \}\n/);
+  assert.ok(src, "car3d has helmetKey(opts)");
+  assert.match(car3d, /Helmets\.designFor\(opts && opts\.num, c1, helmetKey\(opts\)\)/);
+  const Legends = loadLegends();
+  const helmetKey = new Function("Legends", src[0] + "; return helmetKey;")(Legends);
+  assert.equal(helmetKey({ teamId: "mclaren", num: 1 }), null, "a 2026 team keeps its hand-made design");
+  assert.equal(helmetKey({ teamId: "legend_fangio", num: 1 }), "FAN");
+  assert.equal(helmetKey({ teamId: "legends", num: 12 }), "SEN", "a unique number names the legend in the player's slot");
+  assert.equal(helmetKey({ teamId: "legends", num: 1 }), "LGD#1", "the shared neutral 1 is not Norris");
+  assert.equal(helmetKey({ teamId: "custom", num: 44 }), "custom#44", "MY TEAM #44 is not Hamilton's lid");
+  assert.equal(helmetKey({ teamId: "legends", num: 3, helmetKey: "VET" }), "VET", "an explicit key wins");
+  const des = Helmets.designFor(44, null, helmetKey({ teamId: "custom", num: 44 }));
+  assert.equal(des.generated, true);
 });
 
 test("car3d builds the helmet through Helmets, and keeps no head geometry of its own", () => {

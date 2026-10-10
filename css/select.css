@@ -792,6 +792,11 @@
   transition: background 0.12s, box-shadow 0.12s;
   cursor: pointer;
 }
+/* The 1px press travel (css/components.css, no-preference) only animates if the
+   chip's own transition list names transform; this rule outranks that one. */
+@media (prefers-reduced-motion: no-preference) {
+  .sel-chip { transition: background 0.12s, box-shadow 0.12s, transform 0.08s ease; }
+}
 /* hover/press fills come from the button base (css/tokens.css) */
 /* Selected mark is the settings-tab recipe (left inset bar + glow), never an
    `outline`. An outline paints outside the border box, and these chips sit
