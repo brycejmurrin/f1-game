@@ -436,12 +436,12 @@
       broadcastCompound(K(sl(0.045)), -1, 78, { vans: 4, dishes: 2, mastH: 10 });
       // Pit wall, re-keyed to the real pit straight. The engine's own wall owns the
       // pit.keep window (racing 0.93-0.04 at this dist) and supersedes every chord
-      // inside it by design, so the walk stops at the last node still inside it
-      // (racing 0.0375) instead of leaving a stub past the exit as the old
-      // authored-frame walk did (8 of 29 chords outside the footprint).
+      // inside it by design. The walk starts on the pit-ENTRY approach (racing
+      // 0.9125-0.93, outside the footprint) so the entry wall still emits, and stops
+      // at the last node inside the window (racing 0.0375): no stub past the exit.
       const pitWallPoints = [];
-      for (let i = 0; i <= 21; i++) {
-        const s = (0.985 + i * 0.0025) % 1;
+      for (let i = 0; i <= 50; i++) {
+        const s = (0.9125 + i * 0.0025) % 1;
         pitWallPoints.push({ k: K(sl(s)), side: -1, dist: 8 });
       }
       groundedSegments({
@@ -453,7 +453,7 @@
         points: pitWallPoints.map((point) => Object.assign({}, point, { dist: 7.5 })),
         width: 0.35, height: 0.3, color: RED,
       });
-      recordBarrier(sl(0.985), sl(0.0375), -1, 8);
+      recordBarrier(sl(0.9125), sl(0.0375), -1, 8);
       // The start gantry stands over the REAL line, re-keyed through sl() (the
       // brands_hatch idiom): this file's s = 0 is the scenery origin, and the
       // shift alone put the span 402 m before the grid. It carries the
