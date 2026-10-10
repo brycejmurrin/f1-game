@@ -16,3 +16,5 @@ Taken at 844x390, touch, SwiftShader, on cursor/bh1-game 6e5526dce (window.__ape
 | restart-skip-straight-to-grid.png | pause RESTART: straight to the grid (state=count, no loading phase, no garage, no flyby) | PASS |
 
 Not shown here (probe lines only): DAILY, quali TO THE GRID, Hub JUMP IN lap 1, season NEXT RACE, RACE AGAIN / TT TRY AGAIN, automation, headless/hidden = PASS. Designer TEST DRIVE = FAIL (js/editor/designer.js:2200 calls G.startRace directly). WATCH / HIGHLIGHTS / JUMP IN startLap>1 skip the drive-out but still play card+flyby (by design).
+
+Caveats: (1) designer TEST DRIVE plays no garage-out/flyby (designer.js:2200 calls G.startRace directly); covered by #1361. (2) WATCH / HIGHLIGHTS / mid-race JUMP IN (startLap>1) skip only the drive-out, by design: the card and flyby still play. Spec line 268 page.reload() bug is being fixed by the #1356 owner.
