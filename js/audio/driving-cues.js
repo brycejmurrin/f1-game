@@ -119,19 +119,33 @@ var DrivingCues = (function () {
     }
 
     // Inject ADVANCED row (keeps shellNodes flat). Sits after PREDICTIVE CUE.
+    // Under LAZY_AUDIO this runs long after steer-tuning's boot wiring, so the
+    // row paints and wires ITSELF (store, live level, label). steer-tuning only
+    // adds the preset-chip clear, by delegation on #advanced-inner.
     (function ensureSlider() {
       if (typeof document === "undefined" || !G.$) return;
-      if (G.$("pm-audiocues")) return;
-      const cue = G.$("pm-brakecue");
-      const row = cue && cue.closest ? cue.closest("label") : null;
-      const host = row && row.parentNode;
-      if (!host) return;
-      const lab = document.createElement("label");
-      lab.className = "tune-row";
-      lab.innerHTML = '<span class="tune-label">AUDIO DRIVING CUES <b id="pm-audiocues-v">OFF</b></span>'
-        + '<input id="pm-audiocues" type="range" min="1" max="10" step="1" value="1" '
-        + 'aria-label="Audio driving cues: braking tone and left right corner calls">';
-      host.insertBefore(lab, row.nextSibling);
+      if (!G.$("pm-audiocues")) {
+        const cue = G.$("pm-brakecue");
+        const row = cue && cue.closest ? cue.closest("label") : null;
+        const host = row && row.parentNode;
+        if (!host) return;
+        const lab = document.createElement("label");
+        lab.className = "tune-row";
+        lab.innerHTML = '<span class="tune-label">AUDIO DRIVING CUES <b id="pm-audiocues-v">OFF</b></span>'
+          + '<input id="pm-audiocues" type="range" min="1" max="10" step="1" value="1" '
+          + 'aria-label="Audio driving cues: braking tone and left right corner calls">';
+        host.insertBefore(lab, row.nextSibling);
+      }
+      const el = G.$("pm-audiocues"), out = G.$("pm-audiocues-v");
+      if (!el) return;
+      el.value = level;
+      if (out) out.textContent = labelOf(level);
+      el.oninput = (e) => {
+        const v = clamp(+e.target.value, 1, 10);
+        if (G.store && G.store.set) G.store.set("audioCues", v);
+        if (inst) inst.setLevel(v);
+        if (out) out.textContent = labelOf(v);
+      };
     })();
 
     function tick() {
