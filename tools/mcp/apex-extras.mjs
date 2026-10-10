@@ -671,7 +671,7 @@ export function createExtras(ctx) {
       hint: "apex_job_status {jobId} for progress (works across call processes via disk manifest); result in out when done.",
     });
   }
-  function jobStatus(args) {
+  function jobStatus(args, { signal } = {}) {
     if (!args.jobId) {
       pruneJobs();
       const fromDisk = listDiskJobs();
@@ -683,9 +683,27 @@ export function createExtras(ctx) {
       return toolResult({ ok: true, jobs: all.slice(0, limit).map((j) => jobView(j)), total: all.length, ...(all.length > limit ? { hint: `${all.length - limit} older job(s) not shown; pass limit (max 200) or state.` } : {}) });
     }
     const id = String(args.jobId);
-    const j = jobs.get(id) || loadDiskJob(id);
-    if (!j) return refuse("unknown_job", `no job ${id}`, "apex_job_status {} lists in-memory and disk manifests under artifacts/logs/apex-jobs/.");
-    return toolResult({ ok: j.state !== "failed", ...jobView(j, true) }, { isError: j.state === "failed" });
+    const wait = args.wait == null ? 0 : Number(args.wait);
+    if (!(wait >= 0 && wait <= 120)) return refuse("bad_args", "wait must be 0..120 (seconds)", "Blocks until the job leaves `running` or the time is up; stay under the host's ~180 s tool cap.");
+    const one = (extra) => {
+      const j = jobs.get(id) || loadDiskJob(id);
+      if (!j) return refuse("unknown_job", `no job ${id}`, "apex_job_status {} lists in-memory and disk manifests under artifacts/logs/apex-jobs/.");
+      return toolResult({ ok: j.state !== "failed", ...jobView(j, true), ...extra }, { isError: j.state === "failed" });
+    };
+    const first = jobs.get(id) || loadDiskJob(id);
+    if (!wait || !first || first.state !== "running") return one();
+    // One blocking call instead of a shell sleep loop (AGENTS.md rule 4): re-read the job every 500 ms.
+    return (async () => {
+      const t0 = Date.now();
+      while (Date.now() - t0 < wait * 1000 && !signal?.aborted) {
+        await new Promise((r) => setTimeout(r, 500));
+        const j = jobs.get(id) || loadDiskJob(id);
+        if (!j || j.state !== "running") break;
+      }
+      const waitedMs = Date.now() - t0;
+      const j = jobs.get(id) || loadDiskJob(id);
+      return one({ waitedMs, ...(j?.state === "running" ? { hint: `still running after ${Math.round(waitedMs / 1000)} s; call again with wait to keep blocking.` } : {}) });
+    })();
   }
   async function jobCancel(args) {
     const id = String(args.jobId || "");
@@ -842,7 +860,7 @@ export function createExtras(ctx) {
       apex_shot_survey: (a) => handleShotSurvey(a),
       apex_track: (a) => handleTrack(a),
       apex_job_start: (a) => jobStart(a),
-      apex_job_status: (a) => jobStatus(a),
+      apex_job_status: (a, o) => jobStatus(a, o),
       apex_job_cancel: (a) => jobCancel(a),
       apex_ui_fit: (a, o) => uiFit(a, o),
       apex_ui_shot: (a, o) => uiShot(a, o),

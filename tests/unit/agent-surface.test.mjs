@@ -91,12 +91,12 @@ test("server table names the three attached servers and the four that left", () 
 
 test("wrap map is exactly the sixteen kept wraps", () => {
   const catalog = JSON.parse(fs.readFileSync(CATALOG, "utf8"));
-  assert.equal(catalog.tools.length, 28,
+  assert.equal(catalog.tools.length, 29,
     "30 → 12 on 2026-09, then 12 → 10 on 2026-09-03 when apex_gfx_probe and " +
     "apex_wgx_validate_static left with the WGX/TLX spike-out (their CLIs are in " +
     "tools/gfx/ now), then 10 → 11 on 2026-09-10 for apex_garage, the one wrap that " +
     "is a SESSION (garage-angles --serve), then 11 → 12 on 2026-09-24 for " +
-    "apex_frame_report (node-VM framing report, no browser), then 12 → 13 for read-only apex_doctor and 13 → 16 for read-only session checks; then 16 → 24 on 2026-10-03 for the track session, background jobs, one-cell UI tools and offline car/track audits; then 24 → 26 on 2026-10-04 for apex_hud_shot / apex_hud_survey (one CLI, hud-survey.mjs); then 26 → 27 on 2026-10-05 for apex_unit_test; then 27 → 28 on 2026-10-06 for apex_shot_survey (multi-shot track-session panel); " +
+    "apex_frame_report (node-VM framing report, no browser), then 12 → 13 for read-only apex_doctor and 13 → 16 for read-only session checks; then 16 → 24 on 2026-10-03 for the track session, background jobs, one-cell UI tools and offline car/track audits; then 24 → 26 on 2026-10-04 for apex_hud_shot / apex_hud_survey (one CLI, hud-survey.mjs); then 26 → 27 on 2026-10-05 for apex_unit_test; then 27 → 28 on 2026-10-06 for apex_shot_survey (multi-shot track-session panel); then 28 → 29 on 2026-10-10 for apex_catalog (every valid id in one read); " +
     "grow it on purpose, in the doc too");
 });
 
