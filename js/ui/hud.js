@@ -835,6 +835,65 @@ function rightDockInset(left, z, sarPx) {
   const need = Math.max(0, (window.innerWidth - left) / z - 10 - sar / z + DOCK_AIR / z);
   return Math.min(need, midCap);
 }
+// THE COLUMNS ARE SIZED, NOT ONLY PLACED. The bands have zoom caps (--hud-z-top / -bot / -dock); the
+// two side columns get the same idea. When a column's stack does not fit its height — the next piece
+// would land on a control, a dock group, the bottom band or off the screen — its readouts scale down
+// together (--rcol-z / --lcol-z, a factor on each piece's own band zoom, published like --hud-z-top:
+// absent when 1) to a FLOOR that keeps --fs-micro text at COL_TEXT_MIN px or more on screen, and only
+// what still does not fit at that floor is dropped. PRIORITY is the stacking order — the order each
+// allocator lists its pieces in, highest first: right column LIMITS > DAMAGE > INPUTS (> desktop
+// RELATIVE), left column LIMITS > RELATIVE > STRATEGY — so the lowest-priority piece is the one left
+// without room.
+// SOLVED FROM INVARIANTS so it cannot hunt: each piece's size at factor 1 is its box over the factor
+// it is painted at (the published one — only where the engine paints zoom, as fitHud's own caps
+// measure), the factor is the largest one (to 0.001) whose layout drops no more than the floor's does
+// — weighed by priority: a dropped piece outweighs every piece below it, so a lower piece never keeps
+// a slot a higher one lost — found by bisection over pure arithmetic, and the other column's allocated
+// pieces are never an obstacle for the right one (the left column is placed after it, against it as
+// now stacked).
+const COL_TEXT_MIN = 10;
+/** The smallest column factor that keeps --fs-micro text >= COL_TEXT_MIN px in every band `zs` lists. */
+function colZoomFloor(root, zs) {
+  const fs = cssPx(root, "--fs-micro") || 14;
+  let k = 0;
+  for (const z of zs) k = Math.max(k, COL_TEXT_MIN / (fs * (z || 1)));
+  return Math.min(1, k);
+}
+/** The largest factor in [kMin, 1] whose layout's drop cost is no more than kMin's; 1 when nothing drops
+ *  or shrinking would not help (the player's size is kept). */
+function bestColZoom(solve, kMin) {
+  const full = solve(1);
+  if (!full.drops || !(kMin < 1)) return { k: 1, sol: full };
+  const low = solve(kMin);
+  if (low.drops >= full.drops) return { k: 1, sol: full };
+  let lo = kMin, hi = 1;
+  for (let i = 0; i < 12; i++) { const mid = (lo + hi) / 2; if (solve(mid).drops <= low.drops) lo = mid; else hi = mid; }
+  const k = Math.max(kMin, Math.floor(lo * 1000) / 1000);
+  return { k, sol: solve(k) };
+}
+function publishColZoom(root, name, k) {
+  if (k >= 1) hUnset(root, name); else hStyle(root, name, String(k));
+}
+// One column piece, described at factor 1: { id, el, skip | hidden | w, h, r }. `kPub` is the factor
+// it is painted at (only divided out where the engine paints zoom: mini-dom rects never scale).
+function colPiece(id, el, kPub, skip) {
+  if (skip || !el) return { id, el, skip: true };
+  // Measured off the element, not the list: a DROPPED piece is not an obstacle (obsCollect skips it),
+  // but its box still measures here, so the next fit asks the same question of the same size.
+  const box = !el.hidden && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+  if (!(box && box.width && box.height)) return { id, el, hidden: true };
+  const r = layoutRect(el), d = el.currentCSSZoom > 0 ? kPub : 1;
+  return { id, el, w: r.width / d, h: r.height / d, r, d };
+}
+function colWrite(root, prefix, p, slot) {
+  const ny = prefix + "y-" + p.id, nx = prefix + "x-" + p.id;
+  if (p.skip || !slot) { hUnset(root, ny); hUnset(root, nx); if (p.el && p.el.removeAttribute) p.el.removeAttribute("data-col-drop"); return; }
+  hStyle(root, ny, slot.y.toFixed(1) + "px");
+  if (slot.x != null) hStyle(root, nx, slot.x.toFixed(1) + "px"); else hUnset(root, nx);
+  if (p.el && p.el.toggleAttribute) p.el.toggleAttribute("data-col-drop", !!slot.drop);
+}
+const colUser = (el) => !!(el && el.hasAttribute && el.hasAttribute("data-hl-user"));
+const colRect = (x, y, w, h) => ({ left: x, top: y, right: x + w, bottom: y + h, width: w, height: h });
 // THE RIGHT COLUMN, STACKED BY MEASUREMENT. Under the pause / cam buttons the sector plate hangs, and
 // under it TRACK LIMITS, DAMAGE and INPUTS (and on desktop RELATIVE). Each used to sit at a fixed
 // offset from the plate (--hud-sec-h + 15px, + 2.6em, + 12px), so turning one on or off moved none of
@@ -844,51 +903,72 @@ function rightDockInset(left, z, sarPx) {
 // Now each piece's top is the bottom of whatever is visible above it plus RCOL_AIR, published as
 // --rcol-y-<id> in SCREEN px (each rule divides by the piece's own --hud-z, which is what retires the
 // zoom mix), so the column closes up and opens out as pieces come and go. The x is --dock-r-w
-// (rightDockInset) for every piece. A piece the player PLACED (data-hl-user) keeps its shipped anchor
-// (its var is removed: the CSS fallback is that anchor, which its stored offset is relative to) and is
-// stepped around where it is painted. A hidden piece gets the slot it WOULD take, without taking room,
-// so a LIMITS strike shows in its place at once (the fit key re-stacks the rest on the next tick, and
-// updateHud re-stacks on the strike's own tick).
-// SOLVED FROM INVARIANTS: the plate's un-moved box and each piece's own height — none of which a
-// published top changes — so two fits publish the same numbers.
+// (rightDockInset) for every piece, converted into each piece's zoom by the CSS, so a column factor
+// never walks a piece onto the dock. A piece the player PLACED (data-hl-user) keeps its shipped anchor
+// (its var is removed: the CSS fallback is that anchor, which its stored offset is relative to) and the
+// rest step below it where it is painted. A hidden piece gets the slot it WOULD take, without taking
+// room, so a LIMITS strike shows in its place at once (the fit key re-stacks the rest on the next
+// tick, and updateHud re-stacks on the strike's own tick). A piece that would land on anything else in
+// the list — a dock group, a tap target, the bottom band — or off the screen first shrinks the column
+// (above), then is dropped.
 const RCOL_AIR = 10;   // unzoomed px between stacked pieces (screen px = air * the piece's zoom)
 function placeRightColumn(root, scale) {
-  const doc = document, body = doc.body;
+  const doc = document, body = doc.body, desk = body.classList.contains("desktop");
+  const W = window.innerWidth || 0, H = window.innerHeight || 0;
   const zTop = +root.style.getPropertyValue("--hud-z-top") || scale || 1;
   const zBot = +root.style.getPropertyValue("--hud-z-bot") || scale || 1;
-  const limitsEl = els.hudLimits || doc.getElementById("hud-limits");
-  const pieces = [
-    ["limits", limitsEl, zTop, 0],
-    ["damage", doc.getElementById("hud-damage"), zTop, 0],
-    ["inputs", doc.getElementById("hud-inputs"), zBot, 0],
-  ];
-  // Desktop RELATIVE lives in this column at 38svh: that stays its floor, the stack only pushes it down.
-  if (body.classList.contains("desktop")) pieces.push(["rel", doc.getElementById("hud-rel"), zTop, 0.38 * (window.innerHeight || 0)]);
+  const kPub = +root.style.getPropertyValue("--rcol-z") || 1;
   // The column starts under the plate's UN-MOVED box (layoutRect), or where the plate would start.
   const sec = obs("sectors"), pause = obs("pause");
   const secR = sec ? layoutRect(sec.el) : null;
   const start = secR && secR.height ? secR.bottom : pause ? pause.rect.bottom + 4 : NaN;
   const limLeft = !!(root.dataset && "limitsLeft" in root.dataset);
-  const user = (el) => !!(el && el.hasAttribute && el.hasAttribute("data-hl-user"));
-  const blockers = [];
-  for (const id of ["sectors", "limits", "damage", "inputs", "rel"]) {
-    const o = obs(id);
-    if (o && o.column === "right" && user(o.el)) blockers.push(o.rect);
+  const none = !Number.isFinite(start);
+  const spec = [
+    ["limits", els.hudLimits || doc.getElementById("hud-limits"), zTop, 0, limLeft],
+    ["damage", doc.getElementById("hud-damage"), zTop, 0, false],
+    ["inputs", doc.getElementById("hud-inputs"), zBot, 0, false],
+  ];
+  // Desktop RELATIVE lives in this column at 38svh: that stays its floor, the stack only pushes it down.
+  if (desk) spec.push(["rel", doc.getElementById("hud-rel"), zTop, 0.38 * H, false]);
+  const P = spec.map(([id, el, zb, floor, out], i) => {
+    const p = colPiece(id, el, kPub, none || out || colUser(el));
+    p.zb = zb; p.floor = floor; p.cost = 1 << (spec.length - i);   // dropping a higher piece costs more than every lower one
+    // Right-anchored: the 10px edge air scales with the piece's zoom, the dock stand-off does not.
+    if (p.r) p.c = W - p.r.right - 10 * zb * p.d;
+    return p;
+  });
+  const mine = { limits: !limLeft, damage: true, inputs: true, rel: desk };
+  const theirs = { limits: limLeft, rel: !desk, strat: true };   // the left column's: placed after this one
+  const steps = [], blocks = [];
+  for (const o of _obs) {
+    if (colUser(o.el) && (mine[o.id] || o.id === "sectors")) { if (o.column === "right") steps.push(o.rect); continue; }
+    if (mine[o.id] || (theirs[o.id] && !colUser(o.el))) continue;
+    blocks.push(o.rect);
   }
-  blockers.sort((a, b) => a.top - b.top);
-  let cursor = start;
-  for (const [id, el, z, floor] of pieces) {
-    const name = "--rcol-y-" + id;
-    if (!Number.isFinite(cursor) || !el || user(el) || (id === "limits" && limLeft)) { hUnset(root, name); continue; }
-    const o = obs(id), air = RCOL_AIR * z;
-    let y = Math.max(cursor + air, floor);
-    if (o) {
-      const r = layoutRect(o.el), h = r.height;
-      for (const b of blockers) if (b.left < r.right && b.right > r.left && b.top < y + h && b.bottom > y) y = b.bottom + air;
-      cursor = y + h;
+  steps.sort((a, b) => a.top - b.top);
+  const solve = (k) => {
+    const out = {};
+    let cursor = start, drops = 0;
+    for (const p of P) {
+      if (p.skip) continue;
+      const air = RCOL_AIR * p.zb * k;
+      let y = Math.max(cursor + air, p.floor);
+      if (p.hidden) { out[p.id] = { y }; continue; }
+      const w = p.w * k, h = p.h * k, right = W - (p.c + 10 * p.zb * k);
+      for (const b of steps) if (b.left < right && b.right > right - w && b.top < y + h && b.bottom > y) y = b.bottom + air;
+      const r = colRect(right - w, y, w, h);
+      let ok = r.bottom <= H - 4;
+      for (let i = 0; ok && i < blocks.length; i++) if (_hudRectsHit(r, blocks[i])) ok = false;
+      if (!ok) { out[p.id] = { y, drop: true }; drops += p.cost; continue; }
+      out[p.id] = { y };
+      cursor = r.bottom;
     }
-    hStyle(root, name, y.toFixed(1) + "px");
-  }
+    return { out, drops };
+  };
+  const { k, sol } = none ? { k: 1, sol: { out: {} } } : bestColZoom(solve, colZoomFloor(root, [zTop, zBot]));
+  publishColZoom(root, "--rcol-z", k);
+  for (const p of P) colWrite(root, "--rcol-", p, sol.out[p.id]);
 }
 // THE LEFT COLUMN, THE SAME WAY. Under the map and the gap strip (and the metrics panel when it is
 // parked left) come TRACK LIMITS (when fitHud crosses it left), RELATIVE (touch) and STRATEGY. They
@@ -900,68 +980,69 @@ function placeRightColumn(root, scale) {
 // chrome and readout this allocator does not place, as painted, plus what it has placed):
 //   1. the main column, under whatever is visible above it (+ air);
 //   2. a second sub-column, beside a piece already placed, at that piece's top;
-// and if neither is free it is DROPPED (data-col-drop: visibility hidden, so its box still measures
-// and the decision cannot hunt; HudLayout.hiddenReason says why) instead of painting over a control.
-// RELATIVE sizes itself (HudRelative.fitRows trims its outer rows above the left dock), so it always
-// takes the main column. Published as --lcol-y-<id> / --lcol-x-<id> (x only in the sub-column) in
-// SCREEN px; desktop STRATEGY keeps 40svh as its floor. Placed pieces (data-hl-user) keep their
-// shipped anchors (vars removed) and are obstacles where they are painted, as on the right.
+// and if neither is free the column shrinks (above), then the piece is DROPPED (data-col-drop:
+// visibility hidden, so its box still measures and the decision cannot hunt; HudLayout's hiddenReason
+// says why) instead of painting over a control. RELATIVE sizes itself (HudRelative.fitRows trims its
+// outer rows above the left dock), so it always takes the main column and never drives the factor.
+// Published as --lcol-y-<id> / --lcol-x-<id> (x only in the sub-column) in SCREEN px; desktop
+// STRATEGY keeps 40svh as its floor. Placed pieces (data-hl-user) keep their shipped anchors (vars
+// removed) and are obstacles where they are painted, as on the right.
 const LCOL_AIR = 8;
 function placeLeftColumn(root, scale) {
   const doc = document, body = doc.body, desk = body.classList.contains("desktop");
   const W = window.innerWidth || 0, H = window.innerHeight || 0;
   const zTop = +root.style.getPropertyValue("--hud-z-top") || scale || 1;
-  const air = LCOL_AIR * zTop, x0 = cssPx(root, "--sal") + 10 * zTop;
+  const kPub = +root.style.getPropertyValue("--lcol-z") || 1;
+  const sal = cssPx(root, "--sal");
   const limLeft = !!(root.dataset && "limitsLeft" in root.dataset);
-  const pieces = [];
-  if (limLeft) pieces.push(["limits", els.hudLimits || doc.getElementById("hud-limits"), 0]);
-  if (!desk) pieces.push(["rel", doc.getElementById("hud-rel"), 0]);
-  pieces.push(["strat", doc.getElementById("hud-strat"), desk ? 0.40 * H : 0]);
+  const spec = [
+    ["limits", els.hudLimits || doc.getElementById("hud-limits"), 0, !limLeft],
+    ["rel", doc.getElementById("hud-rel"), 0, desk],
+    ["strat", doc.getElementById("hud-strat"), desk ? 0.40 * H : 0, false],
+  ];
+  const P = spec.map(([id, el, floor, out], i) => { const p = colPiece(id, el, kPub, out || colUser(el)); p.floor = floor; p.cost = 1 << (spec.length - i); return p; });
   const mine = { limits: limLeft, rel: !desk, strat: true };
-  const user = (el) => !!(el && el.hasAttribute && el.hasAttribute("data-hl-user"));
   // The column starts under the map / gap strip (un-moved boxes), the broadcast tower, and the metrics panel when it is left.
-  let cursor = 0;
-  for (const id of ["map", "gaps"]) { const o = obs(id); if (o) cursor = Math.max(cursor, layoutRect(o.el).bottom); }
-  if (body.classList.contains("hud-prof-broadcast")) { const t = obs("tower"); if (t) cursor = Math.max(cursor, layoutRect(t.el).bottom); }
+  let start = 0;
+  for (const id of ["map", "gaps"]) { const o = obs(id); if (o) start = Math.max(start, layoutRect(o.el).bottom); }
+  if (body.classList.contains("hud-prof-broadcast")) { const t = obs("tower"); if (t) start = Math.max(start, layoutRect(t.el).bottom); }
   const gm = obs("metrics");
-  if (gm && gm.column === "left") cursor = Math.max(cursor, gm.rect.bottom);
+  if (gm && gm.column === "left") start = Math.max(start, gm.rect.bottom);
   // Obstacles: everything on screen but the pieces this pass places (a placed-by-the-player one stays).
   const blocks = [];
-  for (const o of _obs) if (!(mine[o.id] && !user(o.el))) blocks.push(o.rect);
-  const placed = [];
-  const free = (x, y, w, h) => {
-    if (x < 0 || y < 0 || x + w > W - 4 || y + h > H - 4) return false;
-    const r = { left: x, top: y, right: x + w, bottom: y + h, width: w, height: h };
-    for (const b of blocks) if (_hudRectsHit(r, b)) return false;
-    for (const p of placed) if (_hudRectsHit(r, p)) return false;
-    return true;
+  for (const o of _obs) if (!(mine[o.id] && !colUser(o.el))) blocks.push(o.rect);
+  const solve = (k) => {
+    const out = {}, placed = [];
+    const air = LCOL_AIR * zTop * k, x0 = sal + 10 * zTop * k;
+    const free = (r) => {
+      if (r.left < 0 || r.top < 0 || r.right > W - 4 || r.bottom > H - 4) return false;
+      for (const b of blocks) if (_hudRectsHit(r, b)) return false;
+      for (const q of placed) if (_hudRectsHit(r, q)) return false;
+      return true;
+    };
+    let cursor = start, drops = 0;
+    for (const p of P) {
+      if (p.skip) continue;
+      const y1 = Math.max(cursor + air, p.floor);
+      if (p.hidden) { out[p.id] = { y: y1 }; continue; }   // its slot is ready; it takes no room
+      const w = p.w * k, h = p.h * k;
+      let at = null;
+      const main = colRect(x0, y1, w, h);
+      if (p.id === "rel" || free(main)) at = { y: y1, x: null, r: main };
+      for (let i = placed.length - 1; !at && i >= 0; i--) {
+        const q = placed[i], r = colRect(q.right + air, q.top, w, h);
+        if (free(r)) at = { y: q.top, x: q.right + air, r };
+      }
+      if (!at) { out[p.id] = { y: y1, drop: true }; drops += p.cost; continue; }
+      out[p.id] = { y: at.y, x: at.x };
+      placed.push(at.r);
+      if (at.x == null) cursor = at.r.bottom;
+    }
+    return { out, drops };
   };
-  for (const [id, el, floor] of pieces) {
-    const ny = "--lcol-y-" + id, nx = "--lcol-x-" + id;
-    if (!el || user(el)) { hUnset(root, ny); hUnset(root, nx); if (el && el.removeAttribute) el.removeAttribute("data-col-drop"); continue; }
-    // Measured off the element, not the list: a DROPPED piece is not an obstacle (obsCollect skips it),
-    // but its box still measures here, so the next fit asks the same question of the same size.
-    const box = !el.hidden && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
-    const y1 = Math.max(cursor + air, floor);
-    if (!(box && box.width && box.height)) {   // hidden: its slot is ready, it takes no room
-      hStyle(root, ny, y1.toFixed(1) + "px"); hUnset(root, nx);
-      if (el.removeAttribute) el.removeAttribute("data-col-drop");
-      continue;
-    }
-    const r = layoutRect(el), w = r.width, h = r.height;
-    let at = null;
-    if (id === "rel" || free(x0, y1, w, h)) at = { x: x0, y: y1, main: true };
-    for (let i = placed.length - 1; !at && i >= 0; i--) {
-      const p = placed[i];
-      if (free(p.right + air, p.top, w, h)) at = { x: p.right + air, y: p.top, main: false };
-    }
-    if (el.toggleAttribute) el.toggleAttribute("data-col-drop", !at);
-    if (!at) { hStyle(root, ny, y1.toFixed(1) + "px"); hUnset(root, nx); continue; }
-    hStyle(root, ny, at.y.toFixed(1) + "px");
-    if (at.main) hUnset(root, nx); else hStyle(root, nx, at.x.toFixed(1) + "px");
-    placed.push({ left: at.x, top: at.y, right: at.x + w, bottom: at.y + h, width: w, height: h });
-    if (at.main) cursor = at.y + h;
-  }
+  const { k, sol } = bestColZoom(solve, colZoomFloor(root, [zTop]));
+  publishColZoom(root, "--lcol-z", k);
+  for (const p of P) colWrite(root, "--lcol-", p, sol.out[p.id]);
 }
 /** Phone-only: after REL/sectors/announce land, re-fit rows and publish stamp. */
 function phoneFitStampSync(scale) {

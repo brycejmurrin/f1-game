@@ -632,6 +632,21 @@ test("CamGroups: one onboard table, a wheel-only cockpit-layout table; hud.js an
   assert.ok(man.indexOf('"js/camera/cam-groups.js"') < man.indexOf('"js/ui/hud-layout.js"'), "loads before hud-layout");
 });
 
+test("hiddenReason: a column piece js/ui/hud.js dropped for want of room says so, softly, until it is placed", () => {
+  for (const id of ["strat", "rel", "inputs", "damage", "limits"]) {
+    const L = load3({ live: true, classes: ["desktop"] });
+    const sel = L.H.ELEMENTS.find((e) => e[0] === id)[2];
+    const el = L.els[sel] || (L.els[sel] = fakeEl());
+    el.getBoundingClientRect = () => ({ left: 10, top: 200, right: 140, bottom: 240, width: 130, height: 40 });   // laid out …
+    el.setAttribute("data-col-drop", "");                                                                      // … but invisible
+    const r = L.H.hiddenReason(id);
+    assert.ok(r && r.soft && /no room/.test(r.reason), id + ": " + JSON.stringify(r));
+    el.setAttribute("data-hl-user", "");   // the player placed it: the allocator lets go of it
+    el.removeAttribute("data-col-drop");
+    assert.equal(L.H.hiddenReason(id), null, id + " placed: drawn");
+  }
+});
+
 test("hiddenReason: classes name the reason; the live element has the last word", () => {
   const h = (o) => load3(o).H;
   assert.equal(h({ classes: ["hud-prof-minimal"], live: false }).hiddenReason("ot").reason, "MINIMAL style");
@@ -680,7 +695,7 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     "touch RELATIVE uses the same allocated left column");
   assert.doesNotMatch(css, /#hud-strat[^{]*\{[^}]*168px/, "no literal STRATEGY sidestep: the allocator puts it beside RELATIVE by RELATIVE's measured width");
   assert.doesNotMatch(css, /:root\[data-limits-left\] #hud-strat/, "no reserved 2.6em for a LIMITS chip that is not showing");
-  assert.match(css, /:is\(#hud-limits, #hud-rel, #hud-strat\)\[data-col-drop\] \{ visibility: hidden !important; \}/,
+  assert.match(css, /:is\(#hud-limits, #hud-damage, #hud-inputs, #hud-rel, #hud-strat\)\[data-col-drop\] \{ visibility: hidden !important; \}/,
     "a piece with no free slot is dropped (still laid out), not painted over a control");
   assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*#dock-left \{ anchor-name: --apex-dock-left; \}[\s\S]*#hud-tyre \{[^}]*position-anchor: --apex-dock-left;[^}]*bottom: calc\(anchor\(top\)/,
     "touch TYRES sits on top of the left dock");

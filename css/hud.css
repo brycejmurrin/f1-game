@@ -1051,7 +1051,7 @@ body:not(.desktop) #hud-sectors {
      a dotted member in a COMMENT as one),
      so in every spec fixture it has no box at all and contributes nothing to a
      collision check — absence reading as a pass. */
-  right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
+  right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z));
   background: rgb(8 8 14 / calc(0.72 * var(--hud-panel-a-eff)));
   border-radius: var(--r-sm);
   /* Tighter than the sector box above it: this is a four-state indicator, not a
@@ -1894,7 +1894,7 @@ body[data-helmet-cam] #hud::before {
   /* Stacked by placeRightColumn (--rcol-y-damage, screen px) under LIMITS only while it shows, else
      under the plate; the fixed slot below LIMITS' reserved one is the first paint's fallback. */
   top: calc(var(--rcol-y-damage, calc(((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + 2.6em) * var(--hud-z))) / var(--hud-z));
-  right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
+  right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z));
   display: flex;
   align-items: center;
   gap: calc(var(--gap) * 0.4);
@@ -1929,7 +1929,14 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
    box; nothing here animates, so REDUCE MOTION has nothing to take out (the
    trace itself swaps to still bars in JS). */
 #hud-rel, #hud-strat { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
-#hud-inputs { --hud-z: var(--hud-z-bot, var(--hud-scale)); zoom: var(--hud-z); }
+/* THE COLUMN FACTORS (js/ui/hud.js placeRightColumn / placeLeftColumn): when a side column's stack does
+   not fit its height its readouts scale down together — --rcol-z / --lcol-z multiply each piece's own
+   band zoom, absent (1) whenever everything fits — to a floor that keeps --fs-micro text at 10px or more,
+   before the lowest-priority piece is dropped. Every offset these pieces carry divides by this --hud-z,
+   and the dock stand-off converts from the chrome's zoom, so a factor moves nothing sideways. */
+#hud-inputs { --hud-z: calc(var(--hud-z-bot, var(--hud-scale)) * var(--rcol-z, 1)); zoom: var(--hud-z); }
+#hud-limits, #hud-damage, body.desktop #hud-rel { --hud-z: calc(var(--hud-z-top, var(--hud-scale)) * var(--rcol-z, 1)); }
+#hud-strat, body:not(.desktop) #hud-rel, :root[data-limits-left] #hud-limits { --hud-z: calc(var(--hud-z-top, var(--hud-scale)) * var(--lcol-z, 1)); }
 #hud-rel, #hud-strat, #hud-inputs {
   position: absolute;
   background: var(--plate-opaque);
@@ -2021,7 +2028,7 @@ body:not(.desktop) #hud-strat {
 /* A column piece with no free slot on this screen (placeLeftColumn): invisible, but still laid out so
    the next fit measures the same box and asks the same question. The MOVE & SIZE fold (hiddenReason) names it;
    MOVE & SIZE placing it (data-hl-user) takes it out of the allocator and shows it. */
-:is(#hud-limits, #hud-rel, #hud-strat)[data-col-drop] { visibility: hidden !important; }
+:is(#hud-limits, #hud-damage, #hud-inputs, #hud-rel, #hud-strat)[data-col-drop] { visibility: hidden !important; }
 body:not(.desktop) #hud-inputs:not([data-hl-user]) {
   /* Same containing block as #hud-sectors / #hud-limits: position-anchor on an
      absolute child of #hud could resolve before --dock-r-w lands and paint the

@@ -929,7 +929,7 @@ test("fitHud's obstacle list names every visible piece, with its kind and column
   const R = (left, top, w, hh) => ({ left, top, right: left + w, bottom: top + hh, width: w, height: hh });
   const put = (id, r) => { const el = h.dom.byId(id); el._rect = r; return el; };
   put("hud-rel", R(10, 160, 120, 60)); put("hud-strat", R(10, 230, 120, 40)); put("hud-inputs", R(540, 210, 100, 36));
-  put("hud-damage", R(600, 260, 60, 40)); put("hud-limits", R(650, 215, 80, 24));
+  put("hud-damage", R(560, 260, 60, 40)); put("hud-limits", R(650, 215, 80, 24));
   put("hud-mirror", R(330, 70, 140, 40)); put("hud-flag", R(350, 120, 100, 24));
   put("pausebtn", R(746, 8, 44, 44)); put("btn-cam", R(660, 8, 80, 44));
   const boost = put("btn-boost", R(700, 250, 80, 80)); boost.className = "touchbtn";
@@ -973,7 +973,7 @@ function rightColumnHarness() {
   const R = (left, top, w, hh) => ({ left, top, right: left + w, bottom: top + hh, width: w, height: hh });
   // The right dock low enough that the LIMITS chip stays in this column (no data-limits-left).
   const dockR = h.dom.byId("dock-right");
-  dockR._rect = R(650, 320, 150, 80); for (const g of dockR.children) g._rect = R(650, 320, 150, 80);
+  dockR._rect = R(650, 360, 150, 40); for (const g of dockR.children) g._rect = R(650, 360, 150, 40);
   const lim = h.dom.byId("hud-limits"), dmg = h.dom.byId("hud-damage"), inp = h.dom.byId("hud-inputs");
   lim._rect = R(690, 215, 80, 24); dmg._rect = R(720, 250, 60, 40); inp._rect = R(660, 300, 120, 36);
   h.refit();
@@ -1046,13 +1046,28 @@ test("the left column stacks LIMITS and RELATIVE under the map and puts STRATEGY
   const s = snap();
   h.refit(); h.refit();
   assert.deepEqual(snap(), s, "two more fits publish the same column");
-  // A wider steer column leaves no free slot: STRATEGY is DROPPED (laid out, invisible), never painted on it.
+  assert.equal(v("--lcol-z"), "", "everything fits at the player's size: no column factor");
+  // SIZE EVERY ELEMENT: a wider steer column leaves no free slot at full size, so the column SHRINKS
+  // (--lcol-z) until STRATEGY fits beside RELATIVE again — never below the text floor.
   for (const el of [dockL, ...dockL.children]) el._rect = R(0, 200, 150, 200);
   h.refit();
+  const k = +v("--lcol-z"), floorK = 10 / (14 * z);
+  assert.ok(k < 1 && k >= floorK - 1e-9, `the column scales down, to no less than the 10 px text floor (${k} vs ${floorK.toFixed(3)})`);
+  assert.ok(!strat.hasAttribute("data-col-drop"), "shrinking found STRATEGY a slot");
+  assert.notEqual(v("--lcol-x-strat"), "", "beside RELATIVE");
+  const ks = [k, v("--lcol-y-strat"), v("--lcol-x-strat")];
+  h.refit(); h.refit();
+  assert.deepEqual([+v("--lcol-z"), v("--lcol-y-strat"), v("--lcol-x-strat")], ks, "the factor does not hunt");
+  // A steer column with no room even at the floor: the LOWEST priority piece (STRATEGY) is DROPPED
+  // (laid out, invisible), never painted on it; LIMITS, first in the order, keeps its slot.
+  for (const el of [dockL, ...dockL.children]) el._rect = R(0, 172, 320, 228);
+  h.refit();
   assert.ok(strat.hasAttribute("data-col-drop"), "no room anywhere: dropped");
+  assert.ok(!lim.hasAttribute("data-col-drop"), "LIMITS outranks STRATEGY");
   assert.ok(!h.sb.GameHud.obstacles().some((o) => o.id === "strat"), "a dropped piece is no obstacle (the radio lane may use its rows)");
   h.refit(); h.refit();
   assert.ok(strat.hasAttribute("data-col-drop"), "and it stays dropped: its box still measures, so the question does not change");
+  for (const el of [dockL, ...dockL.children]) el._rect = R(0, 200, 100, 200);
   // A piece the player PLACED keeps its shipped anchor; it is an obstacle where it is painted.
   rel.setAttribute("data-hl-user", "");
   h.refit();
@@ -1063,6 +1078,39 @@ test("the left column stacks LIMITS and RELATIVE under the map and puts STRATEGY
   h.refit();
   assert.equal(v("--lcol-y-strat"), px(148 + air), "STRATEGY's slot is right under the map with nothing above it");
   assert.ok(!strat.hasAttribute("data-col-drop"), "a hidden piece is never dropped");
+});
+
+test("a right column that does not fit above the dock SHRINKS (--rcol-z) before it drops its lowest piece", () => {
+  const { h, R, lim, inp, y, zTop, zBot } = rightColumnHarness();
+  const v = (k) => h.root.style.getPropertyValue(k);
+  assert.equal(v("--rcol-z"), "", "the harness column fits at full size");
+  const dockR = h.dom.byId("dock-right");
+  const dockAt = (top) => { for (const el of [dockR, ...dockR.children]) el._rect = R(650, top, 150, 400 - top); h.refit(); };
+  // INPUTS (660..780) would end at ~329 on a dock group starting at 320: the column scales down.
+  dockAt(320);
+  const k = +v("--rcol-z"), floorK = Math.max(10 / (14 * zTop), 10 / (14 * zBot));
+  assert.ok(k < 1 && k >= Math.min(1, floorK) - 1e-9, `scaled, never under the text floor (${k} vs ${floorK.toFixed(3)})`);
+  assert.ok(!inp.hasAttribute("data-col-drop"), "INPUTS keeps a slot");
+  const yi = parseFloat(y("inputs"));
+  assert.ok(yi + 36 * k <= 320 + 0.5, `INPUTS ends above the dock at the factor (the 0.5 px overlap slack every probe uses) (${yi} + ${(36 * k).toFixed(1)})`);
+  const s = [v("--rcol-z"), y("limits"), y("damage"), y("inputs")];
+  h.refit(); h.refit();
+  assert.deepEqual([v("--rcol-z"), y("limits"), y("damage"), y("inputs")], s, "the factor and the stack do not hunt");
+  // No room even at the floor: INPUTS — last in the order — is dropped; LIMITS is never the one left out.
+  dockAt(262);
+  assert.ok(inp.hasAttribute("data-col-drop"), "INPUTS dropped");
+  assert.ok(!lim.hasAttribute("data-col-drop"), "LIMITS outranks it");
+  h.refit(); h.refit();
+  assert.ok(inp.hasAttribute("data-col-drop"), "and stays dropped");
+  // Room again: the factor goes away and the piece comes back.
+  dockAt(360);
+  assert.equal(v("--rcol-z"), ""); assert.ok(!inp.hasAttribute("data-col-drop"));
+  const css = read("css/hud.css");
+  assert.match(css, /#hud-inputs \{ --hud-z: calc\(var\(--hud-z-bot, var\(--hud-scale\)\) \* var\(--rcol-z, 1\)\); zoom: var\(--hud-z\); \}/);
+  assert.match(css, /#hud-limits, #hud-damage, body\.desktop #hud-rel \{ --hud-z: calc\(var\(--hud-z-top, var\(--hud-scale\)\) \* var\(--rcol-z, 1\)\); \}/);
+  assert.match(css, /#hud-strat, body:not\(\.desktop\) #hud-rel, :root\[data-limits-left\] #hud-limits \{ --hud-z: calc\(var\(--hud-z-top, var\(--hud-scale\)\) \* var\(--lcol-z, 1\)\); \}/);
+  assert.equal((css.match(/var\(--dock-r-w, 0px\) \* var\(--hud-z-top, var\(--hud-scale\)\) \/ var\(--hud-z\)/g) || []).length, 3,
+    "LIMITS, DAMAGE and INPUTS convert the dock stand-off into their own (column-scaled) zoom");
 });
 
 test("the --dock-r-w stand-off is computed in exactly one function", () => {
