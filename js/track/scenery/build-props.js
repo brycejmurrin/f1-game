@@ -49,7 +49,9 @@ const TrackBuildProps = (function () {
     }
   }
 
-  // Call AFTER TrackPit.openBoundary: three passes on barL/barR, protect pit.keep.
+  // Call AFTER TrackPit.openBoundary: three passes on barL/barR; only the PIT
+  // side's array protects pit.keep (the one openBoundary opened) — the opposite
+  // side is feathered like any other stretch of run-off.
   // Two passes settled simple tyre-terminus cliffs; a third is required when a
   // correctly placed marshalPost (every() authored-frame wrap) sits next to a
   // tyre wall — the single-pass scan can leave a >1.5 m step behind the k it
@@ -59,9 +61,10 @@ const TrackBuildProps = (function () {
     if (!track || !track.barL || !track.hw) return;
     const pit = track.pit;
     const protect = (pit && !pit.painted) ? (k) => pit.keep[k] > 0 : null;
+    const pitBar = protect && (pit.side > 0 ? track.barR : track.barL);
     for (let pass = 0; pass < 3; pass++) {
-      featherBarrierEnds(track.barL, track.hw, null, null, protect);
-      featherBarrierEnds(track.barR, track.hw, null, null, protect);
+      featherBarrierEnds(track.barL, track.hw, null, null, track.barL === pitBar ? protect : null);
+      featherBarrierEnds(track.barR, track.hw, null, null, track.barR === pitBar ? protect : null);
     }
   }
 

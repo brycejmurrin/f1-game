@@ -12,7 +12,7 @@
               billboard, marshalPost, fence, guardrail, tyreWall,
               anchor, addBox, addCyl, addCone, addFrustum, addPrism, vadd, onTrack, groundYAt,
               seat, foundation, cantilever, lampPost,
-              forestEdge, along, modelGroup, overheadSpan, waterSurface, groundPatch, groundedSegments,
+              forestEdge, along, modelGroup, overheadSpan, groundPatch, groundedSegments,
               recordBarrier, circuitKit, pal, ATM, terrainYAt } = api;
 
       // A crowd blanket on the hillside: prop()'s footprint and gap (near
@@ -123,7 +123,6 @@
       const GREY   = [0.72, 0.74, 0.78];
       const RED    = [0.82, 0.18, 0.18];
       const STEEL  = [0.66, 0.68, 0.72];
-      const WATER  = [0.14, 0.28, 0.32];
       const PADDOCK = [0.55, 0.55, 0.57];
       const LAMP_POST = [0.28, 0.29, 0.30];
       const LAMP_HEAD = [0.96, 0.94, 0.84];
@@ -498,8 +497,12 @@
       tunnelStairhead(0.985, -1);
       tunnelStairhead(0.022,  1);
 
-      waterSurface(K(0.08), 1, 75, [40, 1.0, 32], WATER,
-                   { id: "hungaroring-lake", required: true });
+      // T1 basin: grassy amphitheatre floor (no standing water — satellite/OSM
+      // show grass banking in the Valley of the Three Springs at Mogyoród).
+      groundPatch(K(0.08), 1, 75, [40, 0.14, 32], AMPH,
+                  { id: "hungaroring-basin-grass", samples: 8 });
+      tree(K(0.074), 1, 84, 11, TREE);
+      tree(K(0.092), 1, 70, 10, TREE2);
       hedge(0.035, 0.055, 1, 42, 3, TREE);
 
       // Hungarian tricolour accent billboards (red/white/green)
@@ -514,7 +517,7 @@
 
       every(26, (kk) => {
         const sf = kk / n;
-        // Stadium bowl (T1-4, s0-0.10) + the lake/amphitheatre back sweeps.
+        // Stadium bowl (T1-4, s0-0.10) + amphitheatre back sweeps.
         // frac~0.42-0.44 needs no skip: a headless verify-track build with
         // every [scenery] SUPPRESSED warning instrumented fires none near 0.43
         // at this file's gaps (8 m lamps, 40-58 m crowd blanket), and the

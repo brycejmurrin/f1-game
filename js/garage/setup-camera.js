@@ -100,12 +100,10 @@ function startDriveOut() {
   endHome();
   driveOut = null;
   if (!cfg.enabled) return 0;
-  // Reduce-motion: short version (OUT_REDUCE_SPEED), never skip — Start Race
-  // awaits this before the race/session card (js/game.js studioDone → raceIntro).
-  const speed = reducedMotion()
-    ? Math.max(cfg.speed, 1) * GarageArrival.OUT_REDUCE_SPEED
-    : cfg.speed;
-  const play = Object.assign({}, cfg, { speed, enabled: true });
+  // Reduce-motion plays it too, at the tuner's own pace (cfg.speed), never a
+  // sped-up cut and never skipped — Start Race awaits this before the race/session
+  // card (js/game.js studioDone → afterGarageOut → raceIntro).
+  const play = Object.assign({}, cfg, { enabled: true });
   driveOut = { t: 0, cfg: play };
   return Math.round(GarageArrival.OUT_DURATION * 1000 / play.speed);
 }

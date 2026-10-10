@@ -59,6 +59,21 @@ async function startRace(page, id) {
   await page.evaluate(() => window.__apex.go());
 }
 
+// Title boot hands Tracks.LIST LAZY_CIRCUIT meta stubs (#1134, 2026-10-06): a
+// bare Tracks.buildCenterline on one throws `has no path`. The banking audits
+// below read a def without entering a race, so hydrate the ids they read the
+// same way race entry does (ensureCircuit) — the gate f1-track-accuracy and
+// terrain-over-road already use. Red in every `circuits` run since #1134.
+async function bootHydrated(page, ids) {
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(async (list) => {
+    const ensure = window.__apex && window.__apex.ensureCircuit;
+    if (!ensure) throw new Error("ensureCircuit not on __apex — circuit meta split needs a hydrate gate");
+    for (const id of list) await ensure(Tracks.LIST.findIndex((entry) => entry.id === id));
+  }, ids);
+}
+
 test.describe("Apex 26 — elevation & banking tracks", () => {
   // SEQUENTIAL, IN ONE WORKER. `fullyParallel: true` in playwright.config.js
   // spreads the tests in a file across workers, and each test here BUILDS A
@@ -79,8 +94,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
   test.describe.configure({ mode: "default" });
 
   test("banking pivots around the centreline with smooth edge transitions", async ({ page }) => {
-    await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await bootHydrated(page, ["zandvoort", "madrid"]);
     const audits = await page.evaluate(() => {
       return ["zandvoort", "madrid"].map((id) => {
         const def = Tracks.LIST.find((entry) => entry.id === id);
@@ -108,8 +122,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
   });
 
   test("Zandvoort banking peaks at Hugenholtz and Arie Luyendyk", async ({ page }) => {
-    await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await bootHydrated(page, ["zandvoort"]);
     const result = await page.evaluate(() => {
       const def = Tracks.LIST.find((entry) => entry.id === "zandvoort");
       const track = Tracks.buildCenterline(def);
@@ -138,8 +151,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
   });
 
   test("Madrid converts La Monumental's 24 percent bank to degrees", async ({ page }) => {
-    await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await bootHydrated(page, ["madrid"]);
     const rollDeg = await page.evaluate(() => {
       const def = Tracks.LIST.find((entry) => entry.id === "madrid");
       const track = Tracks.buildCenterline(def);
@@ -152,8 +164,7 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
   });
 
   test("bank roll matches the road surface slope", async ({ page }) => {
-    await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await bootHydrated(page, ["madrid"]);
     const result = await page.evaluate(() => {
       const def = Tracks.LIST.find((entry) => entry.id === "madrid");
       const track = Tracks.buildCenterline(def);

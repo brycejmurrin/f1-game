@@ -281,15 +281,18 @@ const _gapW = [0, 0];
 // seconds (EMA, ~0.3 s at 10 Hz) per slot; a neighbour change resets the
 // slot so a new rival never inherits the old one's lag.
 const _gapSm = [NaN, NaN], _gapWho = [null, null];
-function gapDecimals() {
-  // F1 2026 dropped to one decimal on TV and fans pushed back hard — broadcast
-  // profile keeps two so 0.95 vs 1.04 stays readable; standard stays at one.
-  return (G.hudProfile || "standard") === "broadcast" ? 2 : 1;
+function gapDecimals(sec) {
+  // Shared with REL / tower via HudReadouts: two decimals under ~10 s on every
+  // profile (Overtake unlock ~1.0 s); see HudReadouts.gapDecimals.
+  if (_ro && typeof _ro.gapDecimals === "function") return _ro.gapDecimals(G.hudProfile, sec);
+  return (G.hudProfile || "standard") === "broadcast" ? 2 : (Number.isFinite(sec) && Math.abs(sec) < 9.95 ? 2 : 1);
 }
 function gapSec(slot, who, raw) {
   if (who !== _gapWho[slot] || !isFinite(_gapSm[slot])) { _gapWho[slot] = who; _gapSm[slot] = raw; }
   else _gapSm[slot] += (raw - _gapSm[slot]) * 0.3;
-  return _gapSm[slot].toFixed(gapDecimals());
+  const v = _gapSm[slot];
+  if (_ro && typeof _ro.fmtGapSec === "function") return _ro.fmtGapSec(v, G.hudProfile);
+  return v.toFixed(gapDecimals(v));
 }
 function gapForm() {
   const root = document.documentElement;
