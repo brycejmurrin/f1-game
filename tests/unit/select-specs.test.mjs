@@ -100,8 +100,8 @@ test("a spec bigger than the whole pack runs as OVERSIZE shards, not unreachable
   assert.deepEqual(both.skipped, []);
   const planned = shards(both, EMPTY).flatMap((r) => r.specs.split(" "));
   assert.ok(planned.includes(both.overflow[0].file), "shards() packs the overflow spec into a job");
-  const none = fit([a, b], bud, { db: EMPTY, overflowShards: 0, spillShards: 0 });
-  assert.equal(none.skipped.length, 1, "no overflow or spill allowance: skipped by name");
+  const none = fit([a, b], bud, { db: EMPTY, overflowShards: 0, spillShards: 0, overBudgetShards: 0 });
+  assert.equal(none.skipped.length, 1, "no remaining pool allowance: skipped by name");
   assert.deepEqual(none.overflow, []);
   const spilled = fit([a, b], bud, { db: EMPTY, overflowShards: 0 });
   assert.equal(spilled.spill.length, 1, "no overflow allowance: the spill leg carries it");
@@ -143,18 +143,191 @@ test("a FULL overflow spills into bounded spill jobs instead of skipping (PR #12
   const sp = jobs.filter((j) => j.name.startsWith("spill-"));
   assert.equal(sp.length, 1, `one spill job in the matrix: ${jobs.map((j) => j.name)}`);
   assert.ok(sp[0].specs.split(" ").includes(dev), "the spill job runs dev-tools");
-  // The pre-fix behaviour, reproduced with the spill turned off: skipped by name.
-  const off = plan(14, { spillShards: 0 }).r;
+  // Disable the later spare-pool fallback as well to isolate the spill fix.
+  const off = plan(14, { spillShards: 0, overBudgetShards: 0 }).r;
   assert.deepEqual(off.skipped.map((s) => s.file), [dev], "without a spill leg dev-tools is skipped (the bug)");
   // Past the spill: bounded, and what is left is still NAMED in skipped (the
   // CLI/step report it as an error; the verdict reds on dropped > 0).
-  const over = plan(18).r;
+  const over = plan(20, { overBudgetShards: 0 }).r;
   assert.ok(secOf(over.spill) <= MAX_SPILL_SHARDS * TARGET_SHARD_SEC, `spill ${secOf(over.spill)} s is bounded`);
   assert.ok(over.skipped.length > 0, "what the spill cannot carry is named, not silently dropped");
   const placed = [...over.selected, ...over.overflow, ...over.spill, ...over.oversize, ...over.skipped].map((s) => s.file);
-  assert.equal(placed.length, 19, "every spec lands in exactly one bucket");
-  assert.equal(new Set(placed).size, 19);
-  assert.equal(MAX_SPILL_SHARDS, 2, "the spill leg stays small");
+  assert.equal(placed.length, 21, "every spec lands in exactly one bucket");
+  assert.equal(new Set(placed).size, 21);
+  assert.equal(MAX_SPILL_SHARDS, 4, "the measured spill allowance stays bounded");
+});
+
+test("full oversize slots carry expensive suites before a smaller hoisted failure (PR #1289)", () => {
+  const terrain = "tests/specs/terrain-over-road.spec.js", hoisted = "tests/specs/career-hub.spec.js";
+  const rows = [["tests/specs/hud-layout.spec.js", 1318], [terrain, 638],
+    ["tests/specs/career-season.spec.js", 403], ["tests/specs/career.spec.js", 352], [hoisted, 260]];
+  const db = { specs: Object.fromEntries(rows.map(([file, sec]) => [file,
+    { s: [1, 2, 3].map((i) => [`2026-10-0${i}T00:00:00Z`, "llvmpipe", sec, declaredTests(file)]) }])) };
+  // Four slots plus one 360-second slow pool can carry all five suites. Giving
+  // the small failure a slot strands terrain's 638 seconds, which cannot fit that pool.
+  const r = fit(rows.map(([file]) => file), budgetFor(1), { db,
+    rank: (file) => file === hoisted ? 1 : file === terrain ? 3 : 2,
+    overflowShards: 0, spillShards: 0, overBudgetShards: 1 });
+  assert.equal(r.oversize.length, MAX_OVERSIZE_SHARDS);
+  assert.ok(r.oversize.some((s) => s.file === terrain), "the largest routed suite keeps a scarce slot");
+  assert.ok(!r.oversize.some((s) => s.file === hoisted), "a smaller failure cannot evict a larger workload");
+  assert.deepEqual(r.overBudgetRun.map((s) => s.file), [hoisted]);
+  assert.deepEqual(r.skipped, []);
+  assert.deepEqual(r.overBudgetSpecs, []);
+  const jobs = shards(r, db);
+  for (const [file] of rows) assert.ok(jobs.some((j) => j.specs.split(" ").includes(file)), `${file} is scheduled`);
+});
+
+test("terrain and ordinary parts leftovers use only spare over-budget capacity (PR #1289)", () => {
+  // CI 38018686533 carried quali instead of Abu Dhabi. Career Hub took the
+  // fourth oversize slot, leaving terrain (638 s) outside the ordinary pools
+  // despite 1512 spare seconds in the already-reserved over-budget pool. Keep
+  // four genuinely larger occupants here to test fallback under cost-first
+  // allocation too, independently of that subsequent allocation repair.
+  const terrain = "tests/specs/terrain-over-road.spec.js";
+  const slow = "tests/specs/track-switch-memory.spec.js";
+  const oversized = [
+    ["tests/specs/career-season.spec.js", 700],
+    ["tests/specs/career.spec.js", 700],
+    ["tests/specs/career-hub.spec.js", 700],
+    ["tests/specs/hud-layout.spec.js", 1318],
+  ];
+  const leftovers = [
+    ["tests/specs/ui-button-touch.spec.js", 254],
+    ["tests/specs/tracks-walls-b.spec.js", 78],
+    ["tests/specs/gamepad.spec.js", 262],
+    ["tests/specs/props-over-road.spec.js", 374],
+    ["tests/specs/dev-tools.spec.js", 123], [terrain, 638], [slow, 87],
+  ];
+  const reserved = new Set([...oversized, ...leftovers].map(([file]) => file));
+  const all = fs.readdirSync(path.join(ROOT, "tests/specs"))
+    .filter((f) => f.endsWith(".spec.js")).map((f) => "tests/specs/" + f);
+  const fillers = fit(all, 1000, { db: EMPTY, overflowShards: 0, spillShards: 0 }).selected
+    .filter((s) => !reserved.has(s.file) && !s.ownTimeoutSec && s.tests < 24)
+    .slice(0, 14).map((s) => s.file);
+  assert.equal(fillers.length, 14);
+  const [budgeted, ...overflowFillers] = fillers;
+  const rows = [[budgeted, 426], ...overflowFillers.map((f) => [f, 300]), ...oversized, ...leftovers];
+  const dbFor = (rows) => ({ specs: Object.fromEntries(rows.map(([file, sec]) => [file,
+    { s: [1, 2, 3].map((i) => [`2026-10-0${i}T00:00:00Z`, "llvmpipe", sec, declaredTests(file)]) }])) });
+  const db = dbFor(rows);
+  const affected = new Set(oversized.map(([file]) => file));
+  const rank = (file) => file === budgeted ? 0 : affected.has(file) ? 2 : 3;
+  const plan = (overBudgetShards) => fit(rows.map(([file]) => file), DEFAULT_BUDGET_MIN,
+    { db, rank, overBudgetShards });
+  assert.equal(maxDeclaredTimeout(terrain), SELECTED_GATE.perTestTimeoutSec * 1000);
+  assert.equal(measuredCheap(terrain, db), true, "terrain remains eligible for the ordinary measured cut first");
+  const full = plan(MAX_OVER_BUDGET_SHARDS);
+  assert.equal(full.oversize.length, MAX_OVERSIZE_SHARDS);
+  assert.deepEqual(full.spill.map((s) => s.file), leftovers.slice(0, 5).map(([file]) => file));
+  // Per-test rate rounding changes with the real specs' case counts. Assert
+  // the saturated capacity boundary, not a historical rounded total.
+  const spillSec = full.spill.reduce((n, s) => n + s.sec, 0);
+  const spillRoom = MAX_SPILL_SHARDS * TARGET_SHARD_SEC - spillSec;
+  assert.ok(spillRoom >= 0 && spillRoom < full.overBudgetRun.find((s) => s.file === terrain).sec,
+    "spill stays bounded and cannot carry terrain");
+  assert.deepEqual(full.overBudgetRun.map((s) => s.file), [slow, terrain]);
+  assert.deepEqual(full.skipped, []);
+  assert.deepEqual(full.overBudgetSpecs, []);
+  const placed = [...full.selected, ...full.oversize, ...full.overflow, ...full.spill, ...full.overBudgetRun];
+  assert.equal(placed.length, rows.length);
+  assert.equal(new Set(placed.map((s) => s.file)).size, rows.length, "admission is not duplicated");
+  assert.ok(full.overBudgetRun.reduce((n, s) => n + s.sec, 0) <= MAX_OVER_BUDGET_SHARDS * TARGET_SHARD_SEC);
+  const jobs = shards(full, db);
+  const terrainJobs = jobs.filter((j) => j.specs.split(" ").includes(terrain));
+  assert.deepEqual(terrainJobs.map((j) => j.shard), Array.from({ length: 7 }, (_, i) => `${i + 1}/7`));
+  assert.ok(terrainJobs.every((j) => j.specs === terrain && j.perTest === SELECTED_GATE.perTestTimeoutSec),
+    "existing slow-pool sharding and per-test limits apply");
+  assert.ok(jobs.every((j) => j.timeout <= (j.workers > 1 ? FAT_UI_SELECTED_JOB_MIN : MAX_SELECTED_JOB_MIN)));
+  const exhausted = plan(2); // 720 - 87 < 638: the earlier slow candidate wins.
+  assert.deepEqual(exhausted.overBudgetRun.map((s) => s.file), [slow]);
+  assert.deepEqual(exhausted.skipped.map((s) => s.file), [terrain], "unused but insufficient capacity still drops by name");
+  const disabled = plan(0);
+  assert.deepEqual(disabled.overBudgetRun, []);
+  assert.deepEqual(disabled.overBudgetSpecs.map((s) => s.file), [slow]);
+  assert.deepEqual(disabled.skipped.map((s) => s.file), [terrain]);
+
+  // The single-failure-cache audit also found props-first displacing parts,
+  // which has no long declaration. Saturate the ordinary pools with that
+  // ordering too: unused reserved room must carry it without raising limits.
+  const props = "tests/specs/props-over-road.spec.js", parts = "tests/specs/parts-physics.spec.js";
+  const ordinaryRows = [...rows.filter(([file]) => file !== terrain)
+    .map(([file, sec]) => [file, overflowFillers.includes(file) ? 298
+      : file === "tests/specs/dev-tools.spec.js" ? 495 : sec]), [parts, 70]];
+  const ordinaryDb = dbFor(ordinaryRows);
+  const ordinaryPlan = (overBudgetShards) => fit(ordinaryRows.map(([file]) => file), DEFAULT_BUDGET_MIN,
+    { db: ordinaryDb, rank: (file) => file === props ? 1 : rank(file), overBudgetShards });
+  assert.equal(maxDeclaredTimeout(parts), 0, "this regression covers ordinary, not declared-slow, work");
+  const ordinary = ordinaryPlan(MAX_OVER_BUDGET_SHARDS);
+  assert.deepEqual(ordinary.skipped, []);
+  assert.deepEqual(ordinary.overBudgetRun.map((s) => s.file), [slow, parts]);
+  const ordinarySpillSec = ordinary.spill.reduce((n, s) => n + s.sec, 0);
+  assert.ok(ordinarySpillSec <= MAX_SPILL_SHARDS * TARGET_SHARD_SEC
+    && MAX_SPILL_SHARDS * TARGET_SHARD_SEC - ordinarySpillSec < 70, "parts cannot fit the bounded ordinary spill");
+  const partJobs = shards(ordinary, ordinaryDb).filter((j) => j.specs.split(" ").includes(parts));
+  assert.equal(partJobs.length, 1, "all 70 parts tests stay in one job");
+  assert.ok(partJobs.every((j) => j.specs === parts && j.perTest === SELECTED_GATE.perTestTimeoutSec
+    && j.timeout <= MAX_SELECTED_JOB_MIN), "parts stays isolated at 180 s instead of inheriting the earlier slow candidate's 360 s");
+  const noOrdinaryRoom = ordinaryPlan(0);
+  assert.deepEqual(noOrdinaryRoom.skipped.map((s) => s.file), [parts], "exhausted capacity still names ordinary omissions");
+});
+
+test("a saturated wide plan runs props-over-road and parts-physics without displacing another spec (PR #1289)", () => {
+  // CI 38010342804: four oversize slots and the overflow were full, then
+  // 717 spill seconds left no room for 374 s of road props or 70 s of parts.
+  // Preserve those measured costs and ordering with real spec declarations.
+  const props = "tests/specs/props-over-road.spec.js";
+  const parts = "tests/specs/parts-physics.spec.js";
+  const oversized = [
+    ["tests/specs/career-season.spec.js", 403],
+    ["tests/specs/career.spec.js", 352],
+    ["tests/specs/hud-layout.spec.js", 1318],
+    ["tests/specs/terrain-over-road.spec.js", 638],
+  ];
+  const leftovers = [
+    ["tests/specs/ui-button-touch.spec.js", 254],
+    ["tests/specs/tracks-walls-b.spec.js", 78],
+    ["tests/specs/gamepad.spec.js", 262],
+    ["tests/specs/dev-tools.spec.js", 123],
+    [props, 374], [parts, 70],
+  ];
+  const reserved = new Set([...oversized, ...leftovers].map(([file]) => file));
+  const all = fs.readdirSync(path.join(ROOT, "tests/specs"))
+    .filter((f) => f.endsWith(".spec.js")).map((f) => "tests/specs/" + f);
+  const fillers = fit(all, 1000, { db: EMPTY, overflowShards: 0, spillShards: 0 }).selected
+    .filter((s) => !reserved.has(s.file) && !s.ownTimeoutSec && s.tests < 24)
+    .slice(0, 14).map((s) => s.file);
+  assert.equal(fillers.length, 14, "one budget filler and thirteen overflow fillers exist");
+  const [budgeted, ...overflowFillers] = fillers;
+  const rows = [[budgeted, 426], ...overflowFillers.map((f) => [f, 300]), ...oversized, ...leftovers];
+  const db = { specs: Object.fromEntries(rows.map(([file, sec]) => [file,
+    { s: [1, 2, 3].map((i) => [`2026-10-0${i}T00:00:00Z`, "llvmpipe", sec, declaredTests(file)]) }])) };
+  const affected = new Set(oversized.map(([file]) => file));
+  const rank = (file) => file === budgeted ? 0 : affected.has(file) ? 2 : 3;
+  const plan = (spillShards, overBudgetShards = MAX_OVER_BUDGET_SHARDS) => fit(rows.map(([file]) => file), DEFAULT_BUDGET_MIN,
+    { db, rank, spillShards, overBudgetShards });
+  const old = plan(2, 0); // Disable the later spare-pool fallback to isolate the original spill defect.
+  assert.equal(old.oversize.length, MAX_OVERSIZE_SHARDS, "all oversize slots are occupied");
+  assert.deepEqual(old.spill.map((s) => s.file), leftovers.slice(0, 4).map(([file]) => file));
+  assert.deepEqual(old.skipped.map((s) => s.file), [props, parts], "reproduces both CI omissions");
+  const oldSpillRoom = 2 * TARGET_SHARD_SEC - old.spill.reduce((n, s) => n + s.sec, 0);
+  assert.ok(oldSpillRoom >= 0 && old.skipped.every((s) => s.sec > oldSpillRoom),
+    "the bounded old spill cannot carry either omitted suite");
+  const fixed = plan(MAX_SPILL_SHARDS);
+  assert.deepEqual(fixed.skipped, [], "no candidate is displaced into the dropped list");
+  assert.deepEqual(fixed.overBudgetSpecs, []);
+  assert.deepEqual(fixed.unreachable, []);
+  const placed = [...fixed.selected, ...fixed.oversize, ...fixed.overflow, ...fixed.spill, ...fixed.overBudgetRun];
+  assert.equal(placed.length, rows.length, "every candidate has a scheduled bucket");
+  assert.equal(new Set(placed.map((s) => s.file)).size, rows.length, "every candidate is scheduled once");
+  assert.ok(fixed.spill.reduce((n, s) => n + s.sec, 0) <= MAX_SPILL_SHARDS * TARGET_SHARD_SEC);
+  const jobs = shards(fixed, db);
+  assert.equal(jobs.length, shards(old, db).length + 2, "coverage adds only two matrix jobs");
+  const propJobs = jobs.filter((j) => j.specs.split(" ").includes(props));
+  assert.deepEqual(propJobs.map((j) => j.shard), ["1/2", "2/2"], "both road-prop shards run");
+  assert.equal(jobs.filter((j) => j.specs.split(" ").includes(parts)).length, 1, "parts runs in one job");
+  assert.ok(jobs.every((j) => j.timeout <= (j.workers > 1 ? FAT_UI_SELECTED_JOB_MIN : MAX_SELECTED_JOB_MIN)),
+    "existing ordinary and fat-UI job caps stay unchanged");
 });
 
 test("overflow is bounded, and every spec lands in exactly one bucket at any allowance", () => {
