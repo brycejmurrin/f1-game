@@ -96,6 +96,8 @@ export function createExtras(ctx) {
 
   // ── apex_track: one persistent track-session.mjs child ───────────────────
   let sess = null;
+  /** apex_status: the open track session, if any (it holds the browser lock until op:close). */
+  const sessionInfo = () => (sess ? { track: sess.track, uptimeS: Math.round((Date.now() - sess.started) / 1000), shots: sess.shots } : null);
   /** Close the session; the returned promise settles once its whole process
    *  tree is gone and the lock is free, so a status right after close is true. */
   function sessClose(reason) {
@@ -203,6 +205,8 @@ export function createExtras(ctx) {
     if (args.dryRun) {
       return toolResult({
         ok: true, dryRun: true, track: tracks[0], tracks, out: outRoot, ...plan,
+        // Every option the real run reads, so a dry run shows what would happen (and a test can see an option is wired).
+        options: { panel: wantPanel, index: wantIndex, resume, gl: args.gl ?? null, async: args.async ?? null, closeSession: args.closeSession !== false && !args.keepSession, keepSession: !!args.keepSession },
         estimateMs, asyncDefault: asJob, resume,
         hint: asJob
           ? "Long/multi-track: omit async:false to get a jobId via shot_survey; watch apex_job_status."
@@ -566,6 +570,17 @@ export function createExtras(ctx) {
   /** A finished survey's parsed result can run past 100 KB (hud_survey: every cell); a client then drops the whole reply.
    *  Over the cap, keep the headline keys and point at the log, which still holds all of it. */
   const JOB_OUT_CAP = 20000;
+  const SEV = { high: 0, medium: 1, low: 2, info: 3 };
+  const topFindings = (reportPath, n = 10) => {
+    if (typeof reportPath !== "string") return null;
+    try {
+      const f = JSON.parse(fs.readFileSync(path.resolve(ROOT, reportPath), "utf8")).findings;
+      if (!Array.isArray(f) || !f.length) return null;
+      const rows = [...f].sort((a, b) => (SEV[a.severity] ?? 9) - (SEV[b.severity] ?? 9)).slice(0, n)
+        .map((x) => ({ severity: x.severity, kind: x.kind, cell: x.cell, detail: String(x.detail || "").slice(0, 200) }));
+      return { rows, total: f.length };
+    } catch { return null; }
+  };
   const capJobOut = (out, logRel) => {
     let bytes = 0;
     try { bytes = JSON.stringify(out).length; } catch { return out; }
@@ -576,7 +591,10 @@ export function createExtras(ctx) {
       let n = 0; try { n = JSON.stringify(val).length; } catch { /* */ }
       if (n <= 2000) small[k] = val;
     }
-    return { truncated: true, bytes, keys: Object.keys(o), ...small, hint: `full result: ${logRel} (jq on the log); per-cell data is in the report named above` };
+    // A survey names its report.json; its findings are what the caller wants first. Surface the worst few so nobody has to jq the log.
+    const top = topFindings(o.report);
+    return { truncated: true, bytes, keys: Object.keys(o), ...small, ...(top ? { topFindings: top.rows, findingsTotal: top.total } : {}),
+      hint: `full result: ${logRel} (jq on the log); per-cell data is in the report named above` };
   };
   const jobView = (j, full = false) => {
     // log = the CLI's stdout, where every job CLI reports; stderr beside it.
@@ -688,6 +706,27 @@ export function createExtras(ctx) {
     const j = jobs.get(id) || loadDiskJob(id);
     if (!j) return refuse("unknown_job", `no job ${id}`, "apex_job_status {} lists in-memory and disk manifests under artifacts/logs/apex-jobs/.");
     return toolResult({ ok: j.state !== "failed", ...jobView(j, true) }, { isError: j.state === "failed" });
+  }
+  /** `wait` (seconds, 1-300): hold the call until the job leaves "running" or the time is up, instead of the caller polling
+   *  apex_job_status in a loop. Returns the same body as without it, plus waitedS / stillRunning. A host may move a long MCP
+   *  call to the background on its own (it did at ~120 s for garage shots), so keep waits modest. */
+  function jobStatusWait(args) {
+    const wait = Math.min(Math.max(Number(args.wait) || 0, 0), 300);
+    if (!wait || !args.jobId) return jobStatus(args);   // synchronous, as before: only a wait returns a promise
+    return waitForJob(args, wait);
+  }
+  async function waitForJob(args, wait) {
+    const t0 = Date.now();
+    const state = () => { const j = jobs.get(String(args.jobId)) || loadDiskJob(String(args.jobId)); return j ? j.state : null; };
+    while (state() === "running" && Date.now() - t0 < wait * 1000) await new Promise((r) => setTimeout(r, 1000));
+    const r = jobStatus(args);
+    try {
+      const b = JSON.parse(r.content[0].text);
+      b.waitedS = Math.round((Date.now() - t0) / 1000);
+      if (b.state === "running") b.stillRunning = true;
+      r.content[0].text = JSON.stringify(b);
+    } catch { /* leave the reply as it is */ }
+    return r;
   }
   async function jobCancel(args) {
     const id = String(args.jobId || "");
@@ -840,11 +879,12 @@ export function createExtras(ctx) {
 
   return {
     thumbBlock,
+    sessionInfo,
     handlers: {
       apex_shot_survey: (a) => handleShotSurvey(a),
       apex_track: (a) => handleTrack(a),
       apex_job_start: (a) => jobStart(a),
-      apex_job_status: (a) => jobStatus(a),
+      apex_job_status: (a) => jobStatusWait(a),
       apex_job_cancel: (a) => jobCancel(a),
       apex_ui_fit: (a, o) => uiFit(a, o),
       apex_ui_shot: (a, o) => uiShot(a, o),

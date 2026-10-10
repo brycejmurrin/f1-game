@@ -817,6 +817,7 @@ const CATALOG = [
     inputSchema: { type: "object", additionalProperties: false, properties: { jobId: { type: "string" },
       state: { type: "string", enum: ["running", "done", "failed", "cancelled"], description: "No jobId: list only jobs in this state." },
       limit: { type: "integer", minimum: 1, maximum: 200, description: "No jobId: newest N jobs (default 20)." },
+      wait: { type: "integer", minimum: 1, maximum: 300, description: "With jobId: hold the call up to N seconds until the job is no longer running (no polling loop); the reply says waitedS / stillRunning." },
       dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } } },
   },
   {
@@ -1750,6 +1751,44 @@ function statusNext(lock, playwright, loadavg) {
     hint: "e.g. apex_shot_survey {track, preset:\"quick\"} or multi-track async job via tracks[].",
   };
 }
+/** When this server process started, and the source files it loaded (tools/mcp/*.mjs plus the tools/lib modules they import).
+ *  A file edited AFTER start means the running server is older than the tree: every "does it need a restart?" guess in the
+ *  2026-10-10 session was about exactly this. A one-shot `call` is a fresh process, so it is never stale. */
+const SERVER_STARTED = Date.now();
+function watchedSources() {
+  const dir = path.join(ROOT, "tools", "mcp");
+  const files = new Set();
+  let names = [];
+  try { names = fs.readdirSync(dir).filter((f) => f.endsWith(".mjs")); } catch { /* no dir */ }
+  for (const f of names) {
+    files.add(path.join(dir, f));
+    if (f !== "apex-tools-mcp.mjs" && f !== "apex-extras.mjs") continue;
+    try {
+      for (const m of fs.readFileSync(path.join(dir, f), "utf8").matchAll(/["'](\.\.\/lib\/[\w.-]+\.mjs)["']/g)) files.add(path.resolve(dir, m[1]));
+    } catch { /* unreadable: skip */ }
+  }
+  return [...files];
+}
+export function serverFreshness(startedAt = SERVER_STARTED, files = watchedSources(), mtimeOf = (f) => fs.statSync(f).mtimeMs) {
+  const stale = [];
+  for (const f of files) { try { if (mtimeOf(f) > startedAt) stale.push(path.relative(ROOT, f)); } catch { /* removed: not stale */ } }
+  return {
+    pid: process.pid, startedAt: new Date(startedAt).toISOString(), uptimeS: Math.round((Date.now() - startedAt) / 1000),
+    version: SERVER_VERSION, watched: files.length, stale: stale.length > 0, staleFiles: stale,
+    ...(stale.length ? { fix: "The tree changed after this server started: restart the apex-tools MCP server to load it (a one-shot `call` always runs the current files)." } : {}),
+  };
+}
+/** Open persistent sessions: they hold the browser lock until closed, which is why the next browser tool says lock_held. */
+function sessionsInfo() {
+  const now = Date.now();
+  const track = (() => { try { return extras().sessionInfo?.() || null; } catch { return null; } })();
+  return {
+    garage: garage ? { team: (() => { const i = (garage.argv || []).indexOf("--team"); return i >= 0 ? garage.argv[i + 1] : null; })(), uptimeS: Math.round((now - garage.started) / 1000), shots: garage.shots } : null,
+    track,
+    hint: garage || track ? "An open session holds the browser lock: apex_garage / apex_track {op:\"close\"} frees it." : undefined,
+  };
+}
+
 function handleStatus(args = {}) {
   if (args.dryRun) {
     return toolResult({
@@ -1772,6 +1811,8 @@ function handleStatus(args = {}) {
       testBg: { recorded: false, running: [] },
       playwright,
       loadavg,
+      server: serverFreshness(),
+      sessions: sessionsInfo(),
       next: statusNext(lock, playwright, loadavg),
       knownGap: KNOWN_GAP,
     });
@@ -1787,6 +1828,8 @@ function handleStatus(args = {}) {
     testBg: testBgStatus(),
     playwright,
     loadavg,
+    server: serverFreshness(),
+    sessions: sessionsInfo(),
     next: statusNext(lock, playwright, loadavg),
     knownGap: KNOWN_GAP,
   });
@@ -2118,7 +2161,13 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   if (Object.hasOwn(extras().handlers, name)) {
     const gate = toolKind(known) === "tree" ? gateTreeArgs(args) : gateBrowserArgs(args);
     if (gate) return gate;
-    return extras().handlers[name](args, { signal });
+    // assertSafeOut (a bad `out`) throws an error that CARRIES its refusal; only some handlers caught it. Over stdio that surfaced as a
+    // bare JSON-RPC "path_escaped" with no fix text, and in a one-shot `call` as a stack trace. Return the refusal, for every handler.
+    const refusalOf = (e) => { if (e && e.refuse) return e.refuse; throw e; };
+    try {
+      const r = extras().handlers[name](args, { signal });
+      return r && typeof r.then === "function" ? r.catch(refusalOf) : r;
+    } catch (e) { return refusalOf(e); }
   }
 
   const kind = toolKind(known);
@@ -2369,7 +2418,13 @@ async function cmdCall(name, argsJson) {
     log(`args must be JSON: ${e.message}`);
     return 2;
   }
-  const result = await dispatch(name, args);
+  let result;
+  try { result = await dispatch(name, args); }
+  catch (e) {   // an unexpected throw is a failed call, not a stack trace
+    process.stdout.write(JSON.stringify({ ok: false, error: "internal_error", message: String((e && e.message) || e).slice(0, 500), fix: "Report this with the tool name and arguments." }, null, 2) + "\n");
+    if (garage) garageClose("call ended");
+    return 1;
+  }
   const body = JSON.parse(result.content[0].text);
   process.stdout.write(JSON.stringify(body, null, 2) + "\n");
   if (garage) garageClose("call ended");   // a one-shot call cannot keep a session
