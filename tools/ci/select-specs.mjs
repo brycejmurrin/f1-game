@@ -526,10 +526,10 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
     unreachable.push(...tooBig);
   }
   // The oversize list is bounded; the overflow is skipped BY NAME, never silently.
-  // Affected first, then the most expensive: a big spec the change reaches is
-  // the one a small routed spec must not displace (tracks-walls losing its
-  // slot to three 11-test specs was CI run 36057109364).
-  oversize.sort((a, b) => a.rank - b.rank || expectedSec(b, db) - expectedSec(a, db));
+  // Largest expected workloads first, priority for ties. A small hoisted
+  // failure must not evict a larger required suite that cannot fit another
+  // pool. Main/overflow/spill still run failures first; all suites must run.
+  oversize.sort((a, b) => expectedSec(b, db) - expectedSec(a, db) || a.rank - b.rank);
   const oversizeRun = oversize.slice(0, MAX_OVERSIZE_SHARDS);
   // An over-budget spill must NOT fall into skipped → overflow. Overflow bills
   // at the measured/fallback rate, so a 1500 s all-circuits sweep looks like
@@ -612,6 +612,19 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
       if (sec <= room) { overBudgetRun.push(r); room -= sec; continue; }
       overBudgetSpecs.push({ file: r.file, tests: r.tests, ownTimeoutSec: r.ownTimeoutSec });
     }
+    // Ordinary leftovers may use reserved capacity left AFTER the pool's
+    // existing slow candidates. A changed failure cache must not strand room
+    // while dropping terrain or parts. Isolate each fallback so it cannot
+    // inherit another candidate's longer per-test timeout when packed.
+    const keep = [];
+    for (const r of skipped) {
+      const sec = r.sec != null ? r.sec : Math.round(expectedSec(r, db));
+      if (sec <= room) {
+        overBudgetRun.push({ ...r, capacityFallback: true }); room -= sec;
+      } else keep.push(r);
+    }
+    skipped.length = 0;
+    skipped.push(...keep);
   }
   return { selected, skipped, unreachable, oversize: oversizeRun, overflow, spill, overBudgetRun, overBudgetSpecs, coveredByFixedGates, coveredByManualOptIn, coveredByVmTwin,
     unreadable,
@@ -679,7 +692,7 @@ export function shards(r, db = timings()) {
       }
       continue;
     }
-    const solo = /menu-baseline/.test(s.file) || (s.ownTimeoutSec || 0) >= SOLO_OWN_TIMEOUT_SEC;
+    const solo = !!s.capacityFallback || /menu-baseline/.test(s.file) || (s.ownTimeoutSec || 0) >= SOLO_OWN_TIMEOUT_SEC;
     items.push({ solo, budgeted: !!s.budgeted, pool: s.pool || false, name: `oversize-${base}`,
       files: [s.file], shard: "", tests: s.tests, sec, perTest, workers: 1 });
   }
@@ -1004,6 +1017,11 @@ export const SOURCE_AFFECTED = [
   [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career.spec.js"],
   [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career-season.spec.js"],
   [/^js\/career\/(career-ui|career-backup)\.js$/, "tests/specs/career-hub.spec.js"],
+  // THE START RACE INTRO (garage drive-out + card): quali.spec and steering.spec
+  // launch races through it (#mb-race → rs-go) and wait BOOT_MS for the grid.
+  // A ui/car route never picked them, so #1290 shipped red there (Browser group
+  // input 38015514694, Pages 38016755004); real-race owns the JUMP IN card.
+  ...["quali", "steering", "real-race"].map((s) => [/^js\/(ui\/loading-screen|garage\/(setup-camera|arrival))\.js$/, `tests/specs/${s}.spec.js`]),
 ];
 export function specsAffectedBySource(changed, root = ROOT) {
   const hit = new Set();

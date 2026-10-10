@@ -139,6 +139,8 @@ test("paintPresetState lights CUSTOM when no preset matches; weekend lights week
   assert.ok(custom, "CUSTOM chip is minted into #rs-presets");
   assert.equal(custom.getAttribute("data-rs-preset"), null, "CUSTOM is not a writable preset");
   assert.equal(custom.getAttribute("aria-disabled"), "true");
+  assert.equal(custom.children[0] && custom.children[0].textContent, "change any setting",
+    "CUSTOM hint tells the player how it lights, not a tap target (Pages recheck 2026-10-08)");
   assert.ok(custom.classList.contains("active"), "3-lap open lights CUSTOM");
   assert.equal(custom.getAttribute("aria-pressed"), "true");
   assert.equal(row.getAttribute("data-rs-match"), "custom");

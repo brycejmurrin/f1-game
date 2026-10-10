@@ -84,6 +84,9 @@ function assertGarageThenCard(tl, label) {
 
 async function openRaceSettings(page) {
   await toMenu(page);
+  // Player pace (see the beforeEach): set on the live page too, then prove the gate is off.
+  await page.evaluate(() => { window.__apexFullIntro = true; });
+  expect(await page.evaluate(() => LoadingScreen.isAutomation()), "fullIntro opt-in must turn the automation gate off").toBe(false);
   // Drop a leftover handoff/build plate from a prior sharedTest race.
   await page.evaluate(() => {
     const L = document.getElementById("loading");
@@ -155,6 +158,15 @@ async function setMotion(page, on) {
 test.describe("garage-out before race/session card", () => {
   test.use({ viewport: { width: 1280, height: 720 } });
 
+  // PLAYER PACE UNDER THE HARNESS: navigator.webdriver skips the garage drive-out
+  // and the flyby (LoadingScreen.isAutomation) so other specs reach the grid inside
+  // BOOT_MS. This file is what proves the player's sequence (7.6 s drive-out, then
+  // card), so it opts back in through the gate's own flag, before and after any
+  // navigation, and keeps its >6 s assertion.
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => { window.__apexFullIntro = true; });
+  });
+
   // Start Race leaves state === "menu" under the loading/garage plate, so
   // shared-page toMenu() only hides .screen nodes and never runs quitToMenu /
   // cancelIntro — the next sharedTest on the worker (parts-ers) then hits a
@@ -172,8 +184,11 @@ test.describe("garage-out before race/session card", () => {
     await toMenu(page).catch(() => {});
   });
 
+  // Keep the existing 45 s boot + 240 s sequence budget as a literal so the
+  // CI selector can account for these rendered cases instead of packing them
+  // as cheap tests. The runtime limit is unchanged.
   test("reduce-motion: short garage-out completes before session card", async ({ page }) => {
-    test.setTimeout(BOOT_MS + 240_000);
+    test.setTimeout(285_000);
     await setMotion(page, false);
     await openRaceSettings(page);
     const tl = await startRaceFromSettings(page);
@@ -189,7 +204,7 @@ test.describe("garage-out before race/session card", () => {
   });
 
   test("view-transition / Home vt race: garage-out before flyby card", async ({ page }) => {
-    test.setTimeout(BOOT_MS + 240_000);
+    test.setTimeout(285_000);
     await setMotion(page, true);
     await openRaceSettings(page);
     const tl = await startRaceFromSettings(page);
@@ -197,7 +212,7 @@ test.describe("garage-out before race/session card", () => {
   });
 
   test("quick start (warm race-settings): garage-out before card", async ({ page }) => {
-    test.setTimeout(BOOT_MS + 240_000);
+    test.setTimeout(285_000);
     await setMotion(page, true);
     await openRaceSettings(page);
     await page.waitForFunction(() => {

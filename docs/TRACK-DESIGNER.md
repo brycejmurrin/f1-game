@@ -81,7 +81,10 @@ are missing.
 
 ## SCENERY — themes and atmosphere
 
-A theme sets the scenery, the sky and the ground. Browse 25 themes using
+A theme sets the scenery, the sky and the ground. The inspector has **THEMES**,
+**ATMOSPHERE**, and **OBJECTS** tabs, so each task has its own controls. Arrow
+keys, Home and End navigate these tabs without changing the circuit.
+Browse 27 themes using
 **ALL**, **NATURE**, **COAST**, **CITY**, **DESERT** or **NIGHT**, or search by
 name and description. Search and category work together; **CLEAR** resets both.
 Browsing does not change the circuit until you choose a theme. The current
@@ -117,11 +120,16 @@ The mode bar stays above the canvas while the inspector scrolls. Select
 | VINEYARD VALLEY | Golden rows, olive trees and warm afternoon sun |
 | STADIUM NIGHT | A floodlit bowl with packed steel grandstands |
 | TROPICAL ISLAND | Turquoise water, palms and bright sand |
+| BLOSSOM PARK | Pink blossom belts, spring grass, pale hills and pastel stands |
+| VOLCANIC COAST | Basalt mountains, sparse scrub and a deep-blue shoreline |
 
-**ATMOSPHERE** offers three one-click presets. **THEME DEFAULT** restores the
+**ATMOSPHERE** offers six one-click presets. **THEME DEFAULT** restores the
 original sky and normal trees/crowd; **GOLDEN HOUR** combines dusk, many trees
 and few spectators; **RACE NIGHT** combines night, normal trees and a packed
-crowd. Each preset is one **UNDO** step. The three rows below can fine-tune it:
+crowd. **QUIET PRACTICE** uses daylight with few trees and spectators;
+**SUNSET FESTIVAL** combines dusk, many trees and packed stands;
+**FOREST ESCAPE** uses daylight, many trees and few spectators.
+Each preset is one **UNDO** step. The three rows below can fine-tune it:
 
 - **TIME OF DAY** — AUTO keeps the theme's own sky. DAY, DUSK (a low orange
   sun) or NIGHT (floodlights and lamps along the lap) override it; a street
@@ -134,16 +142,26 @@ changing one makes it a new circuit for time-trial boards.
 
 ### Trackside props
 
-Pick **STAND**, **GANTRY**, **TREES**, **WATER**, **FLOOD** or **BOARD**, then
-select a control point on the map. Choose **LEFT** or **RIGHT** in driving
+Open **OBJECTS** and pick **STAND**, **GANTRY**, **TREES**, **WATER**, **FLOOD**,
+**BOARD**, **PALMS** (three palms) or **HEDGE** (a 48 m clipped hedge), then
+select a control point on the map or enter its number. Choose **LEFT**, **RIGHT**
+or **BOTH** in driving
 direction and set **ROADSIDE GAP m** (distance from the road edge). Each prop
 kind remembers its spacing while the designer is open. Clearances match the
 renderer, up to 120 m; gantries span the road and have no side/gap controls.
 
 **PLACE AT POINT** adds at the selected point; with nothing selected the button
-explicitly says **PLACE AT START**. The list shows each object's type, lap
-position, side and spacing. **REMOVE** deletes that specific object; **REMOVE
-LAST** removes only the selected kind. Placement and removal support undo/redo,
+explicitly says **PLACE AT START**. **ALONG SECTION** evenly spaces 2–8 positions
+between the start and end points in driving order. An earlier end wraps across
+the start line. **BOTH** places a pair at each position; gantries span the road
+and are never doubled. The button shows the total object count. A placement
+that exceeds a cap is refused in full, and the entire batch is one **UNDO**.
+
+The list shows each object's type, lap position, side and spacing. **EDIT**
+opens exact lap-percentage, side and gap controls; **APPLY** updates that object.
+**MOVE TO POINT** moves it to the selected map point, and **COPY TO POINT**
+places another of the same kind there. **REMOVE** deletes that specific object;
+**REMOVE LAST** removes only the selected kind. These operations support undo/redo,
 autosave, saved circuits and share links. Existing per-kind caps and the total
 limit of 16 props still apply.
 

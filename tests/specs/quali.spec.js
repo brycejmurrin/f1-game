@@ -57,6 +57,10 @@ test.describe("Qualifying — the session", () => {
     // earns a qualifying classification. The exact rule is a generated
     // preference/default, not a qualifying contract.
     await boot(page);
+    // This checks session routing, not canvas output. Cold software rendering
+    // exhausted the startup wait twice in CI 38015881289; keep that work out
+    // of the assertion while the garage sequence has its own rendered specs.
+    await page.evaluate(() => window.__apex.headless(true));
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();
     await page.locator("#rs-go").click();

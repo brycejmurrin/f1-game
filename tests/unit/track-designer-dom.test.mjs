@@ -1536,7 +1536,7 @@ test("consumeTrackHash: an armed return reopens with sel/span (only for the same
   assert.ok(!Object.keys(b.data).some((k) => /return/i.test(k)), "no stored return key");
 });
 
-test("3 LOOK: a chip per theme (twenty-five), dual-colour swatches, the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
+test("3 LOOK: a chip per theme (twenty-seven), dual-colour swatches, the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
   const b = bootScreen();
   openGreen(b);
   b.D.setMode("scenery");
@@ -1546,10 +1546,11 @@ test("3 LOOK: a chip per theme (twenty-five), dual-colour swatches, the theme's 
     "tuscany", "coast", "savanna", "ardennes", "airfield", "canyon", "winter", "twilight",
     "jungle", "lakeside", "moorland", "metropolis"];
   const SLICE_I = ["shipyard", "saltflat", "vineyard", "stadium", "island"];
-  assert.equal(T.ORDER.length, 25);
+  assert.equal(T.ORDER.length, 27);
   // Spread out of the editor VM realm — deepEqual rejects cross-realm arrays.
   assert.deepEqual([...T.ORDER.slice(0, 20)], LEGACY_20, "legacy ORDER ids never reorder");
-  assert.deepEqual([...T.ORDER.slice(20)], SLICE_I, "slice I appends shipyard…island");
+  assert.deepEqual([...T.ORDER.slice(20, 25)], SLICE_I, "slice I appends shipyard…island");
+  assert.deepEqual([...T.ORDER.slice(25)], ["blossom", "volcanic"], "new worlds append without shifting old share codes");
   assert.equal(typeof T.swatchCss, "function", "swatchCss helper for LOOK tiles");
   // Every preset keeps a two-colour swatch pair; ORDER must not reorder.
   for (const id of T.ORDER) {
@@ -1712,7 +1713,7 @@ test("scenery discovery filters without changing the circuit; atmosphere presets
   assert.deepEqual(visible(), []);
   assert.match(by("role", "theme-results").textContent, /No themes found/);
   b.root.querySelector('[aria-label="Clear theme search and filters"]').click();
-  assert.equal(visible().length, 25);
+  assert.equal(visible().length, 27);
   assert.deepEqual(plain(b.D.state().design), before, "browsing never edits the circuit");
   assert.equal(b.D.state().undo, undo);
   by("preset", "golden").click();
@@ -1756,6 +1757,49 @@ test("prop inspector places on either side, clamps gaps, removes exactly one obj
   assert.equal(by("role", "prop-side").hidden, true);
   assert.equal(by("role", "prop-gap").hidden, true, "gantries span the road");
   b.D.placeProp(); assert.equal(b.D.state().design.props.at(-1).gap, 0);
+});
+
+test("scenery sections are navigable without edits; paired section placement and object edits undo atomically", () => {
+  const b = bootScreen(); openGreen(b); b.D.setMode("scenery");
+  const by = (key, value) => walk(b.root).find((e) => e.dataset && e.dataset[key] === value);
+  const undo = b.D.state().undo;
+  const themes = by("scenerySection", "themes"), atmosphere = by("scenerySection", "atmosphere"), objects = by("scenerySection", "objects");
+  assert.equal(themes.getAttribute("aria-selected"), "true");
+  assert.equal(by("role", "prop-inspector").hidden, true);
+  b.dom.dispatch(themes, { type: "keydown", key: "ArrowRight", preventDefault() {} });
+  assert.equal(atmosphere.getAttribute("aria-selected"), "true");
+  assert.equal(b.dom.document.activeElement, atmosphere);
+  objects.click();
+  assert.equal(by("role", "prop-inspector").hidden, false);
+  assert.equal(by("role", "atmosphere").hidden, true);
+  assert.equal(b.D.state().undo, undo, "tab navigation never changes the design");
+  by("preset", "festival").click();
+  assert.deepEqual(plain(b.D.state().design.look), { time: "dusk", trees: "many", crowd: "packed" });
+  b.D.undo();
+  b.D.setPropKind("hedge"); b.D.selectRange(b.D.state().design.pts.length - 8, 8);
+  by("placementMode", "range").click(); by("side", "0").click();
+  assert.equal(b.D.placeProp(), true);
+  const placed = plain(b.D.state().design.props);
+  assert.equal(placed.length, 6); assert.equal(b.D.state().undo, undo + 1);
+  assert.deepEqual(placed.map((p) => p.side), [-1, 1, -1, 1, -1, 1]);
+  assert.equal(b.D.placeProp(), false, "a whole over-cap row is refused");
+  assert.equal(b.D.state().undo, undo + 1);
+  b.root.querySelector('[aria-label="Edit placed hedge 1"]').click();
+  assert.equal(by("role", "prop-editor").hidden, false);
+  const lap = b.root.querySelector('[aria-label="Placed object lap percentage"]'); lap.value = "35";
+  const gap = b.root.querySelector('[aria-label="Placed object roadside gap in metres"]'); gap.value = "22";
+  const apply = walk(by("role", "prop-editor")).find((e) => e.tagName === "BUTTON" && e.textContent === "APPLY"); apply.click();
+  assert.ok(Math.abs(b.D.state().design.props[0].s - 0.35) < 1e-4);
+  assert.equal(b.D.state().design.props[0].gap, 22);
+  assert.deepEqual(plain(b.D.state().design.props.slice(1)), placed.slice(1));
+  b.D.undo(); assert.deepEqual(plain(b.D.state().design.props), placed);
+  b.D.undo(); assert.equal(b.D.state().design.props, undefined);
+  by("placementMode", "point").click(); by("side", "1").click(); b.D.setPropKind("palms");
+  b.D.placeProp(); b.D.selectRange(12); assert.equal(b.D.copyPropAt(0), true);
+  assert.equal(b.D.state().design.props.length, 2);
+  assert.notEqual(b.D.state().design.props[0].s, b.D.state().design.props[1].s);
+  b.D.undo(); assert.equal(b.D.state().design.props.length, 1);
+  b.D.close();
 });
 
 test("SCENERY props: REVERSE / START HERE remap s; RANDOMISE clears props", () => {
