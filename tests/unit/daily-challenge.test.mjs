@@ -199,3 +199,20 @@ test("with no medal passed, the share line carries TODAY's — from today's best
   const src = readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8");
   assert.doesNotMatch(src, /shareText\(Ghost\.medal\(\)\)/, "the results sheet no longer passes the ghost's medal");
 });
+
+test("stop() resumes the sim stream where the Daily found it (G.simSeed(seed, stream)), not at the seed's start", () => {
+  const { d, G } = load();
+  // The real contract (js/game.js simSeed): setting the seed restarts the stream; (v, n) resumes it at n; (undefined, true) reads it.
+  let seed = 777, stream = 123456;
+  G.simSeed = (v, st) => {
+    if (v !== undefined) { seed = v; stream = typeof st === "number" ? st : v; }
+    return st === true ? stream : seed;
+  };
+  Object.defineProperty(G, "seed", { get: () => seed, set: (v) => G.simSeed(v) });
+  d.select("2026-09-03");
+  assert.notEqual(seed, 777, "precondition: the Daily took the seed over");
+  assert.equal(stream, seed, "...restarting the stream at the day's seed");
+  d.stop();
+  assert.equal(seed, 777);
+  assert.equal(stream, 123456, "the stream is back where race 1 left it");
+});
