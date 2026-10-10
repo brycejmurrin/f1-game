@@ -466,10 +466,11 @@ test("ordinary cars still exchange speed, separate and respect barriers with no 
 test("paused WATCH keeps overlapping traces and ignores manual recover in the real game update", async () => {
   await g.race("monza");
   g.apex.headless(true);
-  const advanceLoop = () => {
-    const start = g.sandbox.performance.now();
-    for (let i = 1; i <= 240; i++) g.pumpFrame(start + i * 1000 / 60);
-  };
+  // One virtual clock for every frame: the game clamps dt to >= 0 against its last stamp, so a stamp taken from
+  // the wall clock after a long virtual advance can land BEHIND it, run no update, and leave paused puppets un-zeroed.
+  let clock = g.sandbox.performance.now();
+  const frame = () => g.pumpFrame(clock += 1000 / 60);
+  const advanceLoop = () => { for (let i = 1; i <= 240; i++) frame(); };
   advanceLoop();
   const pause = () => g.G.els.pausebtn.onclick();
   const instantReplayButton = () => g.sandbox.document.getElementById("pm-replay");
@@ -502,7 +503,7 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
     g.G.setCamMode(0, { persist: false });
     for (const flag of ["retired", "finished"]) {
       watched[2][flag] = true;
-      g.pumpFrame(g.sandbox.performance.now() + 1000 / 60);
+      frame();
       assert.equal(g.G.camMode, 0, "a finished/retired WATCH seat retains the viewer's camera");
       assert.equal(g.G.dbgCam, null, "live TV cannot override the recorded broadcast picture");
       assert.equal(liveDirector.status().cuts, 0);
