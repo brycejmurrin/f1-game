@@ -203,6 +203,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **gfx/batch-visible-probe.mjs** | Read-only probe: is ONE instanced scenery batch (e.g. cota's yellow tecpro wall) submitted AND visible in the lit… | — |
 | **gfx/chunk-reach.cjs** | How much chunked scenery a pass reaches, counted headlessly: re-bins triangles into 72 m cells like `createChunkedMesh`. | — |
 | **gfx/chunk-share-census.mjs** | Do adjacent chunks share a lamp list? Per baked `LampChunks` table: empty chunks, adjacent-equal pairs, longest run. | renderer-debug / lighting-tuner |
 | **gfx/frame-hitch.mjs** | Measures per-rAF-callback main-thread cost and finds PERIODIC hitches (spike train + autocorrelation). | playwright-probe / renderer-debug |
