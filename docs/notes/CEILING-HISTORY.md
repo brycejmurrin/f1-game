@@ -17,6 +17,13 @@ same PR, and growth past the 40-line absorb says why
 Re-measured on the merged tree before landing: #1366 (Phase 0 top-band fix) merged
 first and grew the pair, so the ceilings start at **1345 / 2281** (hud.js) and
 **1926 / 2120** (hud.css), ship `325100c05`.
+2026-10-10 second re-measure, ship `33ea003c1`: #1375 landed first, then the round-3
+HUD PRs (#1395 viewport cache, #1387 give-back countdown, #1386 visual spotter) merged
+without the raises they had planned, so ship read OVER by hud.js +48 code / +96 lines
+and hud.css +27 / +30 and Structural guards went red on every PR. New ceilings:
+hud.js **1393 / 2377**, hud.css **1953 / 2150**. The same update lowered game.js
+4976 → 4974 code / 9195 → 9186 lines (it had shrunk). Owner decision: raises with a
+stated reason are fine; the allocator's own raise follows when it lands.
 
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
