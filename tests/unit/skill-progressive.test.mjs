@@ -304,14 +304,14 @@ test("every custom subagent declares name, description, and model", () => {
   // does not silently pick a different model; readonly / is_background optional.
   const files = fs.readdirSync(AGENTS).filter((f) => f.endsWith(".md") && f !== "README.md");
   assert.deepEqual(files.sort(), [
-    "bloat-auditor.md", "ci-red-triage.md", "deploy-research.md", "physics-contract-auditor.md",
+    "bloat-auditor.md", "ci-red-triage.md", "ci-watcher.md", "deploy-research.md", "physics-contract-auditor.md",
     "track-surveyor.md", "verify-agent.md",
-  ], "six agents since 2026-09-22 (ci-red-triage added; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
+  ], "seven agents since 2026-10-10 (ci-watcher added; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
   // Model tiering (2026-09-22): a scan-and-report agent runs on a cheaper
   // tier; judgement stays on the session's model. Anything else is a typo.
   const TIER = {
     "bloat-auditor.md": "haiku", "deploy-research.md": "haiku", "verify-agent.md": "haiku",
-    "ci-red-triage.md": "sonnet", "physics-contract-auditor.md": "inherit", "track-surveyor.md": "inherit",
+    "ci-red-triage.md": "sonnet", "ci-watcher.md": "haiku", "physics-contract-auditor.md": "inherit", "track-surveyor.md": "inherit",
   };
   const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.";
   for (const f of files) {
@@ -403,7 +403,7 @@ test("coverage skills exist for input, season, data-hub, and AI", () => {
 });
 
 test("readonly review agents stay --fast and never start Playwright", () => {
-  for (const id of ["physics-contract-auditor", "bloat-auditor", "verify-agent", "deploy-research", "ci-red-triage"]) {
+  for (const id of ["physics-contract-auditor", "bloat-auditor", "verify-agent", "deploy-research", "ci-red-triage", "ci-watcher"]) {
     const file = path.join(AGENTS, `${id}.md`);
     assert.ok(fs.existsSync(file), `missing .claude/agents/${id}.md`);
     const text = fs.readFileSync(file, "utf8");

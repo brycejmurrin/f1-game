@@ -562,6 +562,8 @@
     "tests/unit/pit-lane.test.mjs",
     "// PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.",
     "tests/unit/player-forces.test.mjs",
+    "// CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.",
+    "tests/unit/pr-board.test.mjs",
     "// test-coverage-audit answers \"is this file in SOME topical group\"; this one",
     "// answers the question that actually bites, \"does the pre-push gate RUN it\" —",
     "// two deploys (2026-09-02) and one (2026-09-18) went red on pins that no",
