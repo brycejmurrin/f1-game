@@ -17,13 +17,14 @@ const Director = (function () {
   const SHOT_MAX_S = (typeof Broadcast !== "undefined" && Broadcast.SHOT_MAX_S) || 14;
   const BATTLE_S = 1.0;
 
-  /** Progress-ordered running cars → Broadcast.battles shape. */
-  function battles(cars) {
-    if (typeof Broadcast !== "undefined" && Broadcast.battles) return Broadcast.battles(cars);
+  /** Progress-ordered running cars → Broadcast.battles shape. vScale: vTop()/VMAX — the director
+   *  only cuts the SIM's race (eligible() keeps WATCH out), whose speeds are PACE-scaled. */
+  function battles(cars, vScale) {
+    if (typeof Broadcast !== "undefined" && Broadcast.battles) return Broadcast.battles(cars, vScale);
     const out = [];
     for (let i = 1; i < cars.length; i++) {
       const a = cars[i - 1], b = cars[i];
-      const v = Math.max(b.speed || 0, 20);
+      const v = Math.max(b.speed || 0, 20 * (vScale > 0 ? vScale : 1));
       const g = (a.prog - b.prog) / v;
       if (g >= 0 && g < BATTLE_S) out.push({ key: b.key, ahead: a.key, gapS: g, score: g + i * 0.08 });
     }
@@ -39,13 +40,14 @@ const Director = (function () {
    * Pure cut decision. Mirrors Broadcast.direct: no cut before SHOT_MIN_S;
    * a battle (or leader rotate) only after SHOT_MAX_S unless an explicit
    * event kind is supplied. Returns null to hold, or { subject, kind, shot }.
+   * st.vScale: battles()' speed scale (vTop()/VMAX); omitted = 1.
    */
   function decideCut(st) {
     const age = st.wall - st.lastCut;
     if (age < SHOT_MIN_S) return null;
     const running = st.running || [];
     if (!running.length) return null;
-    const fight = battles(running)[0];
+    const fight = battles(running, st.vScale)[0];
     // Under SHOT_MAX_S: only cut when a battle appears and we are not already
     // on its chaser (Broadcast cuts events early; live director treats a new
     // battle the same way once the min dwell has passed).
@@ -182,6 +184,7 @@ const Director = (function () {
       // of the field only — still no force path.
       const decision = decideCut({
         wall, lastCut, cuts, onAirShot, subject,
+        vScale: G.vTop && typeof PhysicsConsts !== "undefined" ? G.vTop() / PhysicsConsts.VMAX : 1,   // sim speeds (never WATCH, above)
         running: running.length ? running : (player && !player.retired ? [{ key: player, prog: player.prog || 0, speed: player.speed || 0 }] : []),
       });
       if (decision) {

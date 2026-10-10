@@ -23,6 +23,7 @@ const ExtraRigs = (function () {
   let _autoPrev = -1;            // camMode restored after a pit auto-cut (-1 = idle)
   let _autoOn = false;           // we currently hold an ephemeral pitwall cut
   let _wasInPit = false;
+  let _vScale = 1;               // vTop()/VMAX, latched by tickPitAuto(G) for pickRival's crawl floor
 
   function wrapS(track, s) {
     const L = track.total;
@@ -30,20 +31,25 @@ const ExtraRigs = (function () {
     return v < 0 ? v + L : v;
   }
 
-  /** Closest battle partner for the player, reusing Broadcast.battles when present. */
+  /** Closest battle partner for the player, reusing Broadcast.battles when present. The 20 m/s crawl
+   *  floor rides _vScale (vTop()/VMAX, latched by tickPitAuto(G) each frame before game.js calls this)
+   *  for the sim's PACE-scaled speeds; WATCH's puppets (c.replayRate set by RealReplay.pose) carry the
+   *  trace's real m/s, so they keep the bare floor. */
   function pickRival(cars, player) {
     if (!cars || !player || cars.length < 2) return null;
     const running = [];
+    let vScale = _vScale;
     for (let i = 0; i < cars.length; i++) {
       const c = cars[i];
+      if (c && c.replayRate != null) vScale = 1;
       if (!c || c.retired || c.finished) continue;
       if (c.pitState && c.pitState !== "none") continue;
       running.push({ key: c, prog: c.prog || 0, speed: c.speed || 0, pos: c.rank || 0 });
     }
     running.sort((a, b) => b.prog - a.prog);
     const fights = (typeof Broadcast !== "undefined" && Broadcast.battles)
-      ? Broadcast.battles(running)
-      : localBattles(running);
+      ? Broadcast.battles(running, vScale)
+      : localBattles(running, vScale);
     for (let i = 0; i < fights.length; i++) {
       const f = fights[i];
       if (f.key === player) return f.ahead;
@@ -54,18 +60,18 @@ const ExtraRigs = (function () {
     for (let i = 0; i < running.length; i++) {
       const o = running[i].key;
       if (o === player) continue;
-      const v = Math.max(player.speed || 0, o.speed || 0, 20);
+      const v = Math.max(player.speed || 0, o.speed || 0, 20 * vScale);
       const g = Math.abs((o.prog || 0) - (player.prog || 0)) / v;
       if (g < bestG) { bestG = g; best = o; }
     }
     return best;
   }
 
-  function localBattles(cars) {
+  function localBattles(cars, vScale) {
     const out = [];
     for (let i = 1; i < cars.length; i++) {
       const a = cars[i - 1], b = cars[i];
-      const v = Math.max(b.speed || 0, 20);
+      const v = Math.max(b.speed || 0, 20 * (vScale > 0 ? vScale : 1));
       const g = (a.prog - b.prog) / v;
       if (g >= 0 && g < BATTLE_S) out.push({ key: b.key, ahead: a.key, gapS: g, score: g + i * 0.08 });
     }
@@ -228,6 +234,7 @@ const ExtraRigs = (function () {
    *  back on exit) was reported as unwanted on 2026-10-02, so the player's own
    *  camera stays put; PIT WALL is still one press of the camera button away. */
   function tickPitAuto(G) {
+    if (G && G.vTop && typeof PhysicsConsts !== "undefined") _vScale = G.vTop() / PhysicsConsts.VMAX;
     if (!G || !G.player || typeof CamModes === "undefined") return null;
     const store = G.store || (typeof GameStore !== "undefined" ? GameStore.store : null);
     const enabled = !!store && store.get("pitCamAuto", false) === true;

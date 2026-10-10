@@ -119,6 +119,38 @@ test("create().tick writes dbgCam from camVantage and never mutates car speed", 
   assert.equal(G.dbgCam, null);
 });
 
+test("the live director's battle pick is the same at OVERALL SPEED 0.469 as at pace 1 (4-F6)", () => {
+  // Broadcast.battles floors the chaser's speed at 20 × vScale; the director must pass
+  // vTop()/VMAX for the sim's PACE-scaled field. Same scene at both paces: two cars 24 m
+  // apart crawling at 12 m/s (1.2 s on the floor — not a battle), the field scaled by PACE.
+  const subjectAt = (pace) => {
+    const sb = {
+      Math, console, Object, Array, Number, String, JSON, Map, Set, isFinite,
+      Log: { info() {}, debug() {}, warn() {}, enabled() { return false; } },
+      CamModes: { CAM_MODES: [{ id: "chase" }, { id: "tv" }] },
+      PhysicsConsts: { VMAX: 72 },
+    };
+    sb.window = sb;
+    const ctx = vm.createContext(sb);
+    vm.runInContext(src("js/race/broadcast.js"), ctx, { filename: "broadcast.js" });
+    vm.runInContext(src("js/camera/director.js"), ctx, { filename: "director.js" });
+    const Dir = vm.runInContext("Director", ctx);
+    const car = (code, prog) => ({ code, prog: prog * pace, s: prog * pace, x: 0, speed: 12 * pace, retired: false, finished: false });
+    const field = [car("LEA", 1024), car("CHA", 1000), car("TAI", 0)];
+    const G = {
+      state: "race", camMode: 1, cars: field, player: field[2], track: { total: 5000 }, dbgCam: null,
+      netPlay: { active: () => false }, vTop: () => 72 * pace,
+      camVantage: (mode, s, x) => ({ eye: [s, 5, x], tgt: [s + 10, 2, x], fov: 50 }),
+    };
+    const api = Dir.create(G);
+    api.tick(1);
+    return api.status().subject;
+  };
+  assert.equal(subjectAt(1), "LEA", "pace 1: no battle, the director rotates onto the leader");
+  assert.equal(subjectAt(0.469), subjectAt(1),
+    "pace 0.469: the same scene is no battle either — the crawl floor scales with vTop()/VMAX");
+});
+
 test("CAM_MODES keeps tv at its shipped index — save-format index contract", () => {
   const text = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
   const ids = [...text.matchAll(/\{\s*id:\s*"([^"]+)"/g)].map((m) => m[1]);
