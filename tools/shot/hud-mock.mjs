@@ -29,7 +29,8 @@
 //  - the radio card, the track-limits chip and the caution flag get their widest
 //    text after the last refresh (as hud-survey's transient pass), then
 //    GameHud.invalidateFit re-places the card around them;
-//  - DAMAGE is real state (__apex.damage, display-only);
+//  - DAMAGE and the track-limits strikes are real state (__apex.damage / __apex.strikes,
+//    display-only), so the fit places those pieces itself;
 //  - the MIRROR frame: render() is off, so its frame is shown by the pass's own
 //    rule (ON, or AUTO on an onboard camera, as on a phone with a GPU), not by a
 //    rendered frame; the side-of-tower placement (hud-mirror-side) is not run;
@@ -100,8 +101,8 @@ function mockWidgets(opt) {
       if (num) num.textContent = "33";
       ann.hidden = false;
     }
-    const lim = $("hud-limits");
-    if (lim && !document.body.matches('[data-hud-hide~="limits"]')) { const s = lim.querySelector("span"); if (s) s.textContent = "●●●○"; lim.hidden = false; }
+    const lim = $("hud-limits");   // forced only on a tree without __apex.strikes (the real strike shows it otherwise)
+    if (lim && !(window.__apex && window.__apex.strikes) && !document.body.matches('[data-hud-hide~="limits"]')) { const s = lim.querySelector("span"); if (s) s.textContent = "●●●○"; lim.hidden = false; }
     const flag = $("hud-flag");
     if (flag) { if (!flag.textContent.trim()) flag.textContent = "YELLOW · SECTOR 2"; flag.hidden = false; }
   }
@@ -206,7 +207,12 @@ async function main() {
           if (!st) { st = document.createElement("style"); st.id = "hm-ins"; document.head.appendChild(st); }
           st.textContent = `:root{--sal:${i.sal}px;--sar:${i.sar}px;--sat:${i.sat}px;--sab:${i.sab}px}`;
         }, dev.ins);
-        if (plan.mock) await page.evaluate(() => { try { window.__apex.damage(0, { long: 1, lat: 0.6, sev: 0.9 }); } catch { /* old tree */ } });
+        // Real state where a hook exists, so the fit (and any column allocator) places the piece itself.
+        if (plan.mock) await page.evaluate(() => {
+          const a = window.__apex;
+          try { a.damage(null, { long: 1, lat: 0.6, sev: 0.9 }); } catch { /* old tree */ }
+          try { if (a.strikes) a.strikes(2); } catch { /* old tree */ }
+        });
         const applied = await page.evaluate(applyCell, { ...cell, frac: plan.frac });
         await page.evaluate(async (frac) => {
           const a = window.__apex;
@@ -233,7 +239,13 @@ async function main() {
         await shot(page, file);
         const minFont = recs.filter((r) => r.minFontPx != null).sort((x, y) => x.minFontPx - y.minFontPx).slice(0, 3).map((r) => [r.key, r.minFontPx]);
         const smallTaps = recs.filter((r) => r.role === "ctrl" && Math.min(r.r - r.x, r.b - r.y) < 44).map((r) => [r.key, Math.round(r.r - r.x), Math.round(r.b - r.y)]);
+        const slots = await page.evaluate(() => {
+          const ann = document.getElementById("announce");
+          return { radioSlot: document.body.dataset.radioSlot || null, announce: ann ? (ann.hidden ? "hidden" : ann.hasAttribute("data-lane-collapsed") ? "collapsed" : "shown") : null,
+            dropped: [...document.querySelectorAll("[data-col-drop]")].map((e) => e.id) };
+        });
         const row = { id: cell.id, cell, shot: path.relative(ROOT, file), overlaps: pairs, unsafe: ov.unsafe, minFont, smallTaps,
+          visible: recs.map((r) => r.key), ...slots,
           applyErrors: applied.errors, pageErrors: errs.splice(0), ms: Date.now() - t1 };
         rows.push(row);
         log(`${cell.id}: ${pairs.length} overlaps${pairs.length ? " (" + pairs.map((p) => p.pair).join(", ") + ")" : ""}, ${row.ms} ms`);
