@@ -30,11 +30,11 @@
 //   node tools/ci/node-plan.mjs --since <ref> --json
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { pick, stripSpecOwner } from "./pick-tests.mjs";
 import { TRACKED, circuitsOf, circuitsTouched, dropBootFallback, specsOf } from "./select-specs.mjs";
 import { ADAPTED } from "./twinned-specs.mjs";
+import { changedPaths } from "../lib/changed-files.mjs";
 import { TOOLING_FAST_FILES } from "./tooling-fast.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -181,7 +181,7 @@ export function plan(changed, ref = "", scripts = pkgScripts()) {
 }
 
 export function changedSince(ref) {
-  return execFileSync("git", ["diff", "--name-only", ref], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean);
+  return changedPaths([ref]);   // rename SOURCES too (ledger M36)
 }
 
 /** The shell form the node-suites step sources: a `planned <script>` predicate,

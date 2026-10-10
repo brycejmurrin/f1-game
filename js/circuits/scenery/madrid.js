@@ -434,7 +434,7 @@
         [0.00, 10, 52, "crimson", 3, "cantilever"],
         [0.018, 11, 40, "crimson", 2, "cantilever"],
         [0.085, 16, 45, "sandstone", 1, "truss"],
-        [0.50, 20, 40, "steel", 2, "flat"],
+        [0.54, 22, 40, "steel", 2, "flat"],
       ]) {
         grandstandEx(sf, -1, gap, len, null, null, {
           livery: liv, tiers, roof, suites: sf < 0.05, endWalls: true, pylons: true,
@@ -951,6 +951,8 @@
         recordBarrier(0.48, 0.54, side, 2.6);
         recordBarrier(0.86, 0.88, side, 2.6);
         recordBarrier(0.98, 0.06, side, 2.6);
+        recordBarrier(0.06, 0.15, side, 2.6);
+        recordBarrier(0.55, 0.68, side, 2.6);
       }
       tyreWall(0.075, 0.105, 1, 3.2, [0.88, 0.25, 0.18]);
       tyreWall(0.13, 0.16, -1, 3.2, [0.18, 0.38, 0.82]);
@@ -1063,10 +1065,14 @@
         else bush(k, side, 13, OLIVE);
       }
 
-      const SIERRA = [0.55, 0.60, 0.66];
-      const SIERRA_FAR = [0.61, 0.66, 0.72];
+      // Sierra de Guadarrama — N/NW only (bearing ~280° at s≈0.40); south/east
+      // stay flat Castilian plain. Six slots on the W→N arc (i/16×360°).
+      const SIERRA = [0.50, 0.56, 0.62];
+      const SIERRA_FAR = [0.56, 0.62, 0.68];
       const { cx, cz, radius } = lapBounds();
-      for (let i = 0; i < 16; i++) {
+      const sierraArc = [0, 1, 2, 3, 4, 5];
+      for (let j = 0; j < sierraArc.length; j++) {
+        const i = sierraArc[j];
         const angle = i / 16 * Math.PI * 2;
         const R = radius + 1150 + hash(i * 3) * 180;
         const along = angle + Math.PI / 2 + (hash(i * 7) - 0.5) * 0.45;
@@ -1077,8 +1083,8 @@
           along,
           540 + hash(i * 5) * 260,
           170,
-          52 + hash(i * 11) * 58,
-          i % 2 ? SIERRA : SIERRA_FAR,
+          90 + hash(i * 11) * 60,
+          j % 2 ? SIERRA : SIERRA_FAR,
         );
       }
     };

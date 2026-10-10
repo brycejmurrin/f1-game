@@ -34,7 +34,7 @@ Near-flat but not billiard-table: two long, gentle swells (~3.5 m and ~5.5 m, bo
 | 0.18 | R | mid | T2/T3 grandstands: paired low grey slabs, ~14 m |
 | 0.28 | L | far | Low sand dunes: rounded tan wedges, 3–6 m (seated on local `terrainYAt`) |
 | 0.40 | both | far | Flowing Turns 4–6 sweep flanked by green-grass verge + flat sand |
-| 0.52 | L | far | Distant **Lusail/Doha skyline**: thin pale tower silhouettes + Lusail Stadium bowl (backdrop; bearing not independently verified) |
+| compass | SSE | far | **Katara Towers** (151°, 740 m) + **Lusail Stadium** (163°, 720 m) placed by compass from the lap centroid, not by a road anchor |
 | 0.62 | R | mid | Marshal/timing huts: small white cubes, ~4 m, dark-tan service track |
 | 0.74 | both | mid | Repeating floodlight masts + catch-fence: dark verticals, white caps |
 | 0.86 | L | far | Sparse palm row + sand flats, near-ground tan plane |
@@ -72,7 +72,15 @@ re-introduce exactly what was deliberately removed. **Nothing added.**
 - Sixteen team hospitality villas in groups of four, curved fronts + LED façade screens: [Tilke](https://tilke.de/portfolio/lusail-race-track-qatar/)
 - Artificial grass then sand runoff (green→sand sandwich): [Wikipedia](https://en.wikipedia.org/wiki/Lusail_International_Circuit), [F1 destination guide](https://www.formula1.com/en/latest/article/destination-guide-what-fans-can-eat-see-and-do-when-they-visit-qatar-for.6w898BzkTVMpvoYbQ9BHqJ)
 
+### Geography (horizon — 2026-10 survey pass)
+Coordinates from [Wikipedia Lusail International Circuit](https://en.wikipedia.org/wiki/Lusail_International_Circuit) (25.49000°N, 51.45417°E), [Aspire Tower](https://en.wikipedia.org/wiki/Aspire_Tower) (25.262472°N, 51.444833°E), [Katara Towers](https://en.wikipedia.org/wiki/Katara_Towers) (~25.36°N, 51.53°E), [Lusail Stadium](https://en.wikipedia.org/wiki/Lusail_Iconic_Stadium) (~25.42°N, 51.49°E). Great-circle from the circuit:
+
+| Landmark | Distance | Bearing (N clockwise) | In-game |
+|----------|----------|------------------------|---------|
+| Katara Towers | ~16 km | ~153° | `qatar-katara-towers` @ 151° / 740 m from lap centroid (engine-measured) |
+| Lusail Stadium | ~8.5 km | ~155° | `qatar-lusail-stadium` @ 163° / 720 m from lap centroid (engine-measured) |
+| Aspire Tower (Doha) | ~25 km | ~182° | **Not modelled** — beyond plausible desert horizon; landmarks list omits by design |
+
 ### Uncertain (not asserted as fact)
 - Crescent main-stand plan — survey ask only; modelled as a long covered stand.
 - Geographic south for race-control end — Tilke says southern end; we placed RC at the pit-entry / T16 end of the slab.
-- Katara towers / Lusail Stadium bearing from the circuit — kept as far backdrops, bearing not re-verified.

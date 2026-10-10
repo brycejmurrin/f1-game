@@ -178,3 +178,65 @@ test("stampReadySha writes the tip", () => {
   assert.equal(stampReadySha("abcdef1234567890", { stampPath: stamp }), true);
   assert.equal(fs.readFileSync(stamp, "utf8").trim(), "abcdef1234567890");
 });
+
+// M36 (2026-10-09): the stamp names the tree the suite MEASURED, not HEAD read afterwards.
+const T1 = "1".repeat(40), T2 = "2".repeat(40);
+const stampFiles = (stampBody, logBody) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const stampPath = path.join(dir, "tooling-fast-ready.sha"), logPath = path.join(dir, "tooling-fast-suite.log");
+  fs.writeFileSync(stampPath, stampBody); fs.writeFileSync(logPath, logBody);
+  return { stampPath, logPath };
+};
+const PASS = "[tooling-fast] = run passed (10 passed, 0 failed)\n";
+
+test("a tree stamp matches the tip's TREE: verify dirty, commit exactly that, and the gate agrees", () => {
+  const tip = "abcdef1234567890abcdef1234567890abcdef12";
+  const files = stampFiles(`${"9".repeat(40)} tree=${T1}\n`, `[tooling-fast] = tree ${T1} head ${"9".repeat(40)}\n${PASS}`);
+  // the stamp's HEAD is the pre-edit commit and is NOT the tip: irrelevant, the tree is what was verified
+  assert.equal(localVerdict(tip, { ...files, treeOf: () => T1 }).state, "passed");
+  // a red committed tip with an uncommitted fix: the run measured T1, the tip is T2 -> refuse
+  const hole = localVerdict(tip, { ...files, treeOf: () => T2 });
+  assert.equal(hole.state, "failed");
+  assert.match(hole.evidence, /HEAD moved|not what was committed/);
+  assert.equal(localVerdict(tip, { ...files, treeOf: () => null }).state, "none", "an unresolvable tip tree is no evidence");
+});
+
+test("a tree stamp needs the suite log of the SAME run", () => {
+  const tip = "abcdef1234567890abcdef1234567890abcdef12";
+  const sameRun = stampFiles(`${tip} tree=${T1}\n`, `[tooling-fast] = tree ${T1} head ${tip}\n${PASS}`);
+  assert.equal(localVerdict(tip, { ...sameRun, treeOf: () => T1 }).state, "passed");
+  // a subset run overwrote the log afterwards: no `= tree` line
+  const subset = stampFiles(`${tip} tree=${T1}\n`, PASS);
+  assert.equal(localVerdict(tip, { ...subset, treeOf: () => T1 }).state, "none");
+  const other = stampFiles(`${tip} tree=${T1}\n`, `[tooling-fast] = tree ${T2} head ${tip}\n${PASS}`);
+  assert.equal(localVerdict(tip, { ...other, treeOf: () => T1 }).state, "none");
+});
+
+test("stampReadySha writes `sha tree=<hash>` and refuses a malformed tree", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-"));
+  const stamp = path.join(dir, "s.sha");
+  assert.equal(stampReadySha("abcdef1234567890", { tree: T1, stampPath: stamp }), true);
+  assert.equal(fs.readFileSync(stamp, "utf8").trim(), `abcdef1234567890 tree=${T1}`);
+  assert.equal(stampReadySha("abcdef1234567890", { tree: "not-a-tree", stampPath: stamp }), false);
+});
+
+test("workTreeId is the committed tree once the dirty edits are committed, and moves when they change", async () => {
+  const { workTreeId, commitTreeId } = await import("../../tools/lib/work-tree-id.mjs");
+  const { execFileSync } = await import("node:child_process");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-gate-tree-"));
+  const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
+  try {
+    g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    fs.writeFileSync(path.join(dir, "a.js"), "1\n"); g("add", "-A"); g("commit", "-qm", "base");
+    const clean = workTreeId(dir);
+    assert.equal(clean, commitTreeId("HEAD", dir), "a clean tree is HEAD's tree");
+    fs.writeFileSync(path.join(dir, "a.js"), "2\n"); fs.writeFileSync(path.join(dir, "new.test.mjs"), "x\n");   // tracked edit + UNTRACKED new file
+    const dirty = workTreeId(dir);
+    assert.notEqual(dirty, clean, "a dirty tree is not HEAD's tree (the old HEAD stamp could not tell)");
+    assert.equal(g("status", "--porcelain").split("\n").length, 2, "the real index and tree were left alone");
+    g("add", "-A"); g("commit", "-qm", "the verified edits");
+    assert.equal(commitTreeId("HEAD", dir), dirty, "commit exactly what was verified -> the gate's tree comparison agrees");
+    fs.writeFileSync(path.join(dir, "a.js"), "3\n");
+    assert.notEqual(workTreeId(dir), dirty);
+  } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+});

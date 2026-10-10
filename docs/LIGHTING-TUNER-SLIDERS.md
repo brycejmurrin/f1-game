@@ -563,8 +563,8 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
 | `alwaysLampFloor` | ALWAYS-ON LAMP FLOOR | 0 … 0.687 | 0 | — | ✓ | frame-lights.js×2 |
-| `twilightFloor` | TWILIGHT FLOOR | 0 … 1 | 0.3 | — | ✓ | game.js×2 |
-| `twilightRamp` | TWILIGHT RAMP | 0.4 … 6 | 6 | — | ✓ | game.js×2 |
+| `twilightFloor` | TWILIGHT FLOOR | 0 … 1 | 0.3 | — | ✓ | game.js×2, atmosphere.js |
+| `twilightRamp` | TWILIGHT RAMP | 0.4 … 6 | 6 | — | ✓ | game.js×2, atmosphere.js |
 | `twilightWarm` | TWILIGHT WARMTH | 0 … 2.5 | 1 | — | ✓ | game.js×2 |
 | `lampWarmup` | LAMP WARM-UP | 0 … 2.5 | 1 | — | ✓ | frame-lights.js×2 |
 | `lampWarmupDim` | WARM-UP DIP | 0 … 0.9 | 0.3 | — |   | frame-lights.js×2 |
@@ -677,7 +677,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `cityGlowReach` | CITY GLOW REACH | 0.04 … 2.44 | 1 | `uCityGlowReach` | ✓ | game.js×2, glx.js×2 |
 | `cloudDef` | CLOUD DEFINITION | 0 … 1.2 | 1 | `uCloudDef` |   | game.js×2, glx.js×2 |
 | `skyColorSat` | SKY COLOUR SATURATION | 0 … 2.5 | 1 | — | ✓ | atmosphere.js×2 |
-| `wetness` | WETNESS | -0.05 … 1 | -0.05 | — |   | apex.js, game.js×9, weather-arc.js×5, glx.js×2 |
+| `wetness` | WETNESS | -0.05 … 1 | -0.05 | — |   | apex.js, game.js×9, weather-arc.js×6, glx.js×2 |
 | `rainCount` | RAIN INTENSITY | 20 … 1000 | 360 | — | ✓ | particles.js×3 |
 | `rainStreak` | RAIN STREAK LEN | 0.04 … 2.44 | 1 | — | ✓ | particles.js×2 |
 | `rainSpeed` | RAIN FALL SPEED | 0.04 … 2.44 | 1 | — | ✓ | particles.js×4 |

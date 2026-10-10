@@ -71,7 +71,7 @@ function updateLtProfileLabel() {
   if (!key) { host.textContent = ""; return; }
   const [id, tod, wx] = key.split("|");
   const name = (G.track && G.track.def && G.track.def.name) || id;
-  const nOver = G._ltStore[key] ? Object.keys(G._ltStore[key]).length : 0;
+  const nOver = LightStore.tuned();   // this key plus the |dry slot's sun knobs (profiles.js)
   host.textContent = name.toUpperCase() + " · " + tod.toUpperCase() + " · " + wx.toUpperCase() +
     (nOver ? "  (" + nOver + " tuned)" : "  (defaults)");
 }
@@ -322,10 +322,9 @@ $("lt-help-on").onchange = (e) => {
 $("lt-reset").onclick = () => {
   // Drop this condition's LOCAL edits so it falls back to the shipped file /
   // defaults. The shipped file is never touched; other CONDITIONS are only
-  // reached through the legacy global layer cleared below.
-  const key = ltKey();
-  if (key && G._ltStore[key]) delete G._ltStore[key];
-  if (G._ltStore["*"]) delete G._ltStore["*"];
+  // reached through the legacy global layer cleared with it. The sun knobs live
+  // in the "|dry" slot whatever the weather, so the store clears them there too.
+  LightStore.reset();
   persistLightTune();
   applyLightTune();
   refreshLightTunePanel();

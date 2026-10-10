@@ -534,7 +534,7 @@ const CATALOG = [
         livery: { type: "string", description: "Catalog livery id." },
         design: { type: "object", description: "Liveries.FIELDS values (+ part.<cat>, driver, light.<knob>)." },
         base: { type: "string", description: "Catalog livery the design paints over." },
-        frame: { description: "Station / alias / view name, or {view|station|cam, az, el, dist, target, lamp, zoom, pan, eye, look, clamp, crop}." },
+        frame: { description: "Station / alias / view name, or {view|station|cam, az, el, dist, target, lamp, zoom, pan, eye, look, clamp, crop}. az / el are RADIANS (el is clamped to the orbit's pitch range), dist is metres." },
         name: { type: "string", description: "Output name for op shot (default: the tool's own name)." },
         diff: { type: "array", items: { type: "string" }, description: "Two shot names or PNG paths → Δ fraction + overlay." },
         sheet: { type: "string", description: "Contact-sheet name for op sheet." },
@@ -812,7 +812,10 @@ const CATALOG = [
     week: 7,
     kind: "tree",
     description: "Tree — a background job's state (running | done | failed | cancelled), elapsed time, log tail and, once finished, its parsed JSON result in out. No jobId lists every job this server started. Skill: check-changes.",
-    inputSchema: { type: "object", additionalProperties: false, properties: { jobId: { type: "string" }, dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } } },
+    inputSchema: { type: "object", additionalProperties: false, properties: { jobId: { type: "string" },
+      state: { type: "string", enum: ["running", "done", "failed", "cancelled"], description: "No jobId: list only jobs in this state." },
+      limit: { type: "integer", minimum: 1, maximum: 200, description: "No jobId: newest N jobs (default 20)." },
+      dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } } },
   },
   {
     name: "apex_job_cancel",
@@ -831,7 +834,7 @@ const CATALOG = [
       additionalProperties: false,
       properties: {
         screen: { type: "string", description: "layout-audit screen id (title, select, garage, settings, …)." },
-        viewport: { type: "string", description: "Default ios-iphone-landscape." },
+        viewport: { type: "string", description: "Default ios-iphone-landscape. Ids: `node tools/ui/layout-audit.mjs --list` (a phone at 844x390 is ios-iphone-landscape-844)." },
         scale: { type: "number", minimum: 40, maximum: 200, description: "Interface size %, default 100." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
@@ -849,8 +852,8 @@ const CATALOG = [
       type: "object",
       additionalProperties: false,
       properties: {
-        screen: { type: "string" },
-        viewport: { type: "string" },
+        screen: { type: "string", description: "A screen id from `node tools/ui/layout-audit.mjs --list` (title, select, garage, settings, …)." },
+        viewport: { type: "string", description: "Default ios-iphone-landscape; ids from the same --list (a phone at 844x390 is ios-iphone-landscape-844)." },
         image: { type: "boolean", description: "Attach a JPEG thumbnail (default true)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
@@ -1029,6 +1032,7 @@ schemaFor("apex_select_specs").required = ["since"];
 schemaFor("apex_graph_parity").required = ["base"];
 schemaFor("apex_graph_parity").anyOf = [{ required: ["id"] }, { required: ["all"], properties: { all: { const: true } } }];
 schemaFor("apex_frame_report").required = ["track"];
+schemaFor("apex_shot_survey").anyOf = [{ required: ["track"] }, { required: ["tracks"] }];   // the handler refuses without one; say so in the schema
 bound("apex_graph_parity", "id", { enum: knownCircuits() });
 bound("apex_pick_tests", "files", { items: { type: "string", minLength: 1, maxLength: 4096 } });
 bound("apex_select_specs", "budgetMin", { exclusiveMinimum: 0, maximum: 120 });
@@ -1073,10 +1077,34 @@ bound("apex_hud_survey", "only", { maxItems: 32, items: { type: "string", minLen
 bound("apex_hud_survey", "matrix", { minLength: 1, maxLength: 1024 });
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const jsType = (v) => (v === null ? "null" : Array.isArray(v) ? "array" : typeof v);
+/** One short phrase for what a schema accepts: its enum, its type, or the keys it needs. */
+function describeSchema(spec) {
+  if (!spec) return "a value";
+  if (spec.enum) return `one of ${spec.enum.slice(0, 8).join(", ")}${spec.enum.length > 8 ? `, … (${spec.enum.length} in all)` : ""}`;
+  if (spec.const !== undefined) return `exactly ${JSON.stringify(spec.const)}`;
+  if (spec.anyOf) return spec.anyOf.map(describeSchema).join(" or ");
+  if (spec.required && !spec.type) return spec.required.map((k) => `${k}${spec.properties?.[k]?.const !== undefined ? `:${JSON.stringify(spec.properties[k].const)}` : ""}`).join(" + ");
+  const t = spec.type || "value";
+  const range = spec.minimum != null || spec.maximum != null ? ` ${spec.minimum ?? ""}..${spec.maximum ?? ""}` : "";
+  return `${t}${range}${spec.description ? `, ${spec.description.split(/(?<=\.)\s/)[0].replace(/\.$/, "").slice(0, 100)}` : ""}`;
+}
+/** The valid key nearest a mistyped one: a shared prefix, containment, or one edit away. */
+function nearestKey(key, keys) {
+  const k = key.toLowerCase();
+  const edit1 = (a, b) => {
+    if (Math.abs(a.length - b.length) > 1) return false;
+    let i = 0; while (i < a.length && i < b.length && a[i] === b[i]) i++;
+    return a.slice(i + 1) === b.slice(i + 1) || a.slice(i) === b.slice(i + 1) || a.slice(i + 1) === b.slice(i);
+  };
+  return keys.find((c) => c.toLowerCase() === k)
+    || keys.find((c) => edit1(k, c.toLowerCase()))
+    || keys.find((c) => c.length > 2 && (c.toLowerCase().includes(k) || k.includes(c.toLowerCase()))) || null;
+}
 function validateValue(value, schema, label) {
   if (schema.anyOf) {
     const fits = schema.anyOf.some((part) => { try { validateValue(value, part, label); return true; } catch { return false; } });
-    if (!fits) badArgs(`${label} must match one of the advertised types`);
+    if (!fits) badArgs(`${label === "arguments" ? "arguments" : label} must be ${describeSchema(schema)}`, `Got ${jsType(value)}${isObject(value) ? ` with keys ${Object.keys(value).join(", ") || "(none)"}` : ""}. Required: ${(schema.required || []).join(", ") || "see inputSchema"}.`);
   }
   if (Object.hasOwn(schema, "const") && value !== schema.const) badArgs(`${label} must equal ${JSON.stringify(schema.const)}`);
   const type = schema.type;
@@ -1085,8 +1113,11 @@ function validateValue(value, schema, label) {
     : type === "integer" ? Number.isInteger(value)
     : type === "number" ? typeof value === "number" && Number.isFinite(value)
     : typeof value === type);
-  if (!validType) badArgs(`${label} must be ${type}`);
-  if (schema.enum && !schema.enum.includes(value)) badArgs(`${label} must be one of ${schema.enum.join(", ")}`);
+  if (!validType) badArgs(`${label} must be ${type}, got ${jsType(value)}`, schema.description || undefined);
+  if (schema.enum && !schema.enum.includes(value)) {
+    const near = typeof value === "string" ? nearestKey(value, schema.enum.map(String)) : null;
+    badArgs(`${label} must be one of ${schema.enum.join(", ")}`, near ? `Did you mean "${near}"?` : undefined);
+  }
   if (typeof value === "number") {
     if (!Number.isFinite(value)) badArgs(`${label} must be finite`);
     if (schema.minimum != null && value < schema.minimum || schema.maximum != null && value > schema.maximum
@@ -1103,10 +1134,18 @@ function validateValue(value, schema, label) {
     if (schema.items) value.forEach((item, i) => validateValue(item, schema.items, `${label}[${i}]`));
   }
   if (isObject(value)) {
-    for (const key of schema.required || []) if (!(key in value)) badArgs(`${label === "arguments" ? "tool" : label} needs ${key}`);
+    for (const key of schema.required || []) {
+      if (key in value) continue;
+      const spec = schema.properties?.[key];
+      badArgs(`${label === "arguments" ? "tool" : label} needs ${key}`, `Pass "${key}": ${describeSchema(spec)}.`);
+    }
     for (const [key, child] of Object.entries(value)) {
       const spec = schema.properties && Object.hasOwn(schema.properties, key) ? schema.properties[key] : null;
-      if (!spec && schema.additionalProperties === false) badArgs(`unknown argument ${key}`);
+      if (!spec && schema.additionalProperties === false) {
+        const valid = Object.keys(schema.properties || {});
+        const near = nearestKey(key, valid);
+        badArgs(`unknown argument ${key}`, `${near ? `Did you mean "${near}"? ` : ""}Valid: ${valid.join(", ")}.`);
+      }
       if (spec) validateValue(child, spec, key);
     }
   }
@@ -1949,8 +1988,17 @@ async function handleGarage(args = {}) {
     return refuse("bad_args", String(e.message || e), "See the apex_garage inputSchema.");
   }
   if (op === "close") {
+    const g = garage;
     const why = garageClose("close");
-    return toolResult({ ok: true, op, ...(why || { closed: false, reason: "not open" }) });
+    // The child still owns its browser while it shuts down and holds the browser lock until it exits: wait for that, so
+    // the next browser tool does not hit lock_held (a software-GL Chromium took ~30 s). A slow child is reported, not waited on forever.
+    let settled = true;
+    if (g) {
+      const deadline = Date.now() + 60000;
+      while (!g.exited && Date.now() < deadline) await new Promise((r) => setTimeout(r, 250));
+      settled = !!g.exited;
+    }
+    return toolResult({ ok: true, op, ...(why || { closed: false, reason: "not open" }), ...(why ? { settled } : {}) });
   }
   if (!garage) return refuse("garage_not_open", "no garage session", 'Call apex_garage with {"op":"open","team":"ferrari"} first.');
   const cmd = garageCommand(op, args);
