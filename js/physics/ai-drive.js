@@ -347,8 +347,10 @@ const AiDrive = (function () {
     const kAhead = Math.abs(ctx.kAhead60 || 0);
     const straight = kAhead < 0.006;
     if (!straight) return false;
-    const catching = !!(ctx.towCar && ctx.towGap < 28 && (ctx.speed || 0) >= (ctx.towSpeed || 0) - 1);
-    const defending = !!(ctx.chaser && ctx.chaserGap < 14 && (ctx.chaserSpeed || 0) > (ctx.speed || 0) - 2);
+    // The 1 / 2 m/s closing tolerances are pace-5 m/s: they ride vScale = vTop()/VMAX (as letPassCase).
+    const vs = ctx.vTop > 0 ? ctx.vTop / 72 : 1;
+    const catching = !!(ctx.towCar && ctx.towGap < 28 && (ctx.speed || 0) >= (ctx.towSpeed || 0) - 1 * vs);
+    const defending = !!(ctx.chaser && ctx.chaserGap < 14 && (ctx.chaserSpeed || 0) > (ctx.speed || 0) - 2 * vs);
     const hs = houseStyle(ctx.team, ctx.seat, ctx.stats);
     const dep = ctx.ersDeploy != null ? ctx.ersDeploy : 0.5;
     const regen = ctx.ersRegen != null ? ctx.ersRegen : 0.5;
@@ -423,8 +425,8 @@ const AiDrive = (function () {
     const skill = t.skill;
     // The aero speed envelope is shared by every lookahead node this tick.
     // Keep the same solve as cornerSpeed without reclamping pace/vmax per node.
-    const V = Math.max(0.05, ctx.pace === undefined ? 1 : ctx.pace)
-      * Math.max(1, ctx.vmax === undefined ? 72 : ctx.vmax), vSq = V * V;
+    const vs = Math.max(0.05, ctx.pace === undefined ? 1 : ctx.pace);   // vTop()/VMAX
+    const V = vs * Math.max(1, ctx.vmax === undefined ? 72 : ctx.vmax), vSq = V * V;
     let vLimSq = Infinity, bVC = 0, bD = 1;
     for (let i = 0; i < samples.length; i++) {
       const s = samples[i];
@@ -444,7 +446,8 @@ const AiDrive = (function () {
     const hold = houseStyle(ctx.team, ctx.seat, ctx.stats).hold;
     if (hold) vLim *= 1 - hold * 0.025;
     // Craft late-brake when attacking with room: allow a few % over the limit.
-    const attacking = !!(ctx.blocker && ctx.blockerGap < 16 && (ctx.speed || 0) > (ctx.blockerSpeed || 0) - 1);
+    // The 1 m/s "still closing" band is pace-5 m/s, so it rides vs like V.
+    const attacking = !!(ctx.blocker && ctx.blockerGap < 16 && (ctx.speed || 0) > (ctx.blockerSpeed || 0) - 1 * vs);
     const room = Math.max(ctx.roomL || 0, ctx.roomR || 0);
     if (attacking && room > 1.6) {
       vLim *= lerp(1.0, 1.07, t.craft) * houseMulCtx(ctx, 0.99, 1.03, "attack");
@@ -1396,7 +1399,8 @@ const AiDrive = (function () {
     const gT = (ctx.chaserGap == null ? 99 : ctx.chaserGap) / Math.max(ctx.speed || 0, 10);
     const winT = defendWindowT(ctx.traits);
     if (gT >= winT) return 0;
-    if ((ctx.chaserSpeed || 0) <= (ctx.speed || 0) - 3) return 0;
+    // Not closing: 3 m/s on the pace-5 scale, riding vTop()/VMAX (BUGS M34).
+    if ((ctx.chaserSpeed || 0) <= (ctx.speed || 0) - 3 * (ctx.vTop > 0 ? ctx.vTop / 72 : 1)) return 0;
     const kA = ctx.kA || 0;
     // COVER SIDE. Into a corner the inside is the thing worth having, so the
     // side comes from curvature. On a STRAIGHT kA is ~0 and -Math.sign(kA) is

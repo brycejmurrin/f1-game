@@ -435,6 +435,37 @@ test("a refused lazy load explains itself once: chip text and a spoken line, the
   assert.equal(h.said.length, 2, "a newer pending build is a new explanation");
 });
 
+// 3-F5 (round-3 hunt): on a FIRST visit no service worker controls the tab, so
+// neither the controller probe nor controllerchange can learn of a deploy that
+// lands while the tab stays visible; Pages then answers a lazy `?v=<booted>`
+// request with the NEW file for the OLD core. A lazy load re-reads version.json
+// first when the last read is over a minute old (once per loader call, capped).
+test("with no controlling worker, a lazy load re-reads a stale version.json and refuses a newer build (3-F5)", async () => {
+  const h = bootUpdateCheck({ build: 101, controller: 0 });
+  assert.equal(await h.UC.prepareLazyLoad({}), true, "fresh from boot: no extra read, the load goes ahead");
+  assert.equal(h.fetches, 0);
+  h.advance(61_000);
+  const scope = {};
+  const [a, b] = await Promise.all([h.UC.prepareLazyLoad(scope), h.UC.prepareLazyLoad(scope)]);
+  assert.equal(h.fetches, 1, "one read for the whole loader call, its parallel files included");
+  assert.equal(a, false, "build 101 is live: the old core's lazy file is refused");
+  assert.equal(b, false, "…for every file of the call");
+  assert.equal(h.chip.hidden, false, "and UPDATE READY explains it");
+
+  const same = bootUpdateCheck({ build: 100, controller: 0 });
+  same.advance(61_000);
+  assert.equal(await same.UC.prepareLazyLoad({}), true, "same build: the load goes ahead after the read");
+  assert.equal(same.fetches, 1);
+  assert.equal(await same.UC.prepareLazyLoad({}), true);
+  assert.equal(same.fetches, 1, "that read is fresh for the next minute");
+
+  const hung = bootUpdateCheck({ build: 101, controller: 0, fetchImpl: () => new Promise(() => {}) });
+  hung.advance(61_000);
+  const t0 = Date.now();
+  assert.equal(await hung.UC.prepareLazyLoad({}), true, "a version.json that never answers does not hold the load");
+  assert.ok(Date.now() - t0 < 5000, "the wait is capped");
+});
+
 test("a refusal during a race is spoken at the next menu, not over the race", () => {
   const h = bootUpdateCheck({ build: 105, controller: 105, racing: true });
   assert.equal(h.UC.blocksLazyLoad(), true);
