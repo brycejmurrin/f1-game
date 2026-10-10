@@ -351,3 +351,15 @@ only through ship drift). S = semantic overlap. O = order dependence.
   - The owner has to show the new look is intended and re-baseline it, or fix
     the cap so the phone garage paints as before.
   - **Verdict: FIX-FIRST.** It is still independent of the HUD PRs.
+
+**Correction to addendum 2 on #1346:** I blamed the cap for the red, and that
+was wrong.
+- The `menu-baseline` phone-landscape garage diff is 16,983 px, exactly what
+  ship's own Pages run 38045606891 measured without #1346.
+- The cause is the golden: it shows `BUDGET: -525 / 780 cr remaining`, but free
+  play now renders `FREE BUILD: ON`.
+- #1391 (`184507f`, merged 12:19Z) pins FREE BUILD off in the spec. #1346's head
+  `7ab5147` does not contain `184507f`, so this red is inherited from ship.
+- **Verdict back to SAFE once CI is green.** The check: once #1346 has ship
+  merged in, `menu-baseline.spec.js` must pass. A different pixel count there
+  would mean the cap really does change the phone garage.
