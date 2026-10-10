@@ -15,7 +15,8 @@
 //   --preset clean|big|corners|… (MOVE & SIZE)  --matrix <file.json>  --no-boxes  --no-mock
 //   --out artifacts/hud-mock/<stamp>  --gl swiftshader|llvmpipe (default $APEX_GL or llvmpipe)
 //   --track monza  --frac 0.18  --list (cells, no browser)  --json (summary as the last stdout block)  --help
-//   --css <file> (extra stylesheet injected after boot: prototype a layout before writing it)
+//   --css <file> (a stylesheet painted over each cell AFTER its fit — a prototype repaints, it does not steer the
+//   fit; removed before the next cell. Wrap rules in @layer if the game's own layered !important must lose)
 //
 // WHY IT IS FAST. hud-survey.mjs paints a software 3D frame per cell; this tool
 // paints none after boot. It builds ONE race per pointer type (touch / desktop:
@@ -170,7 +171,6 @@ async function bootPage(browser, plan, touch) {
   await sleep(800);
   await page.evaluate(() => { const a = window.__apex; a.go(); a.headless(true); });
   await page.addStyleTag({ content: "#game,#game-soft,canvas#game{visibility:hidden!important}html,body{background:#000!important}" });
-  if (plan.css) await page.addStyleTag({ content: plan.css });
   return { ctx, page, errs };
 }
 
@@ -203,7 +203,7 @@ async function main() {
       for (const cell of mine) {
         const t1 = Date.now();
         const dev = DEVICES[cell.device];
-        await page.evaluate(() => window.__hudMock.release());
+        await page.evaluate(() => { window.__hudMock.release(); const st = document.getElementById("hm-css"); if (st) st.remove(); });
         await page.setViewportSize({ width: dev.w, height: dev.h });
         await page.evaluate((i) => {
           let st = document.getElementById("hm-ins");
@@ -228,6 +228,12 @@ async function main() {
           }
         }, plan.frac);
         await page.evaluate(mockWidgets, { mock: plan.mock });
+        // A prototype places the radio card itself, so the lane's own collapse (a layered !important
+        // width 0 the sheet cannot outrank) is lifted for the shot.
+        if (plan.css) await page.evaluate((css) => {
+          const st = document.createElement("style"); st.id = "hm-css"; st.textContent = css; document.head.appendChild(st);
+          const ann = document.getElementById("announce"); if (ann) ann.removeAttribute("data-lane-collapsed");
+        }, plan.css);
         await sleep(60);
         const recs = (await page.evaluate(probeHudElements, { targets, fonts: true })).filter((r) => r.visible);
         const ov = analyzeOverlap(recs, dev.w, dev.h, dev.ins);
@@ -244,7 +250,9 @@ async function main() {
         const smallTaps = recs.filter((r) => r.role === "ctrl" && Math.min(r.r - r.x, r.b - r.y) < 44).map((r) => [r.key, Math.round(r.r - r.x), Math.round(r.b - r.y)]);
         const slots = await page.evaluate(() => {
           const ann = document.getElementById("announce");
+          const cs = ann ? getComputedStyle(ann) : null, ar = ann ? ann.getBoundingClientRect() : null;
           return { radioSlot: document.body.dataset.radioSlot || null, announce: ann ? (ann.hidden ? "hidden" : ann.hasAttribute("data-lane-collapsed") ? "collapsed" : "shown") : null,
+            announceBox: ann ? { display: cs.display, visibility: cs.visibility, opacity: cs.opacity, x: Math.round(ar.x), y: Math.round(ar.y), w: Math.round(ar.width), h: Math.round(ar.height) } : null,
             dropped: [...document.querySelectorAll("[data-col-drop]")].map((e) => e.id) };
         });
         const row = { id: cell.id, cell, shot: path.relative(ROOT, file), overlaps: pairs, unsafe: ov.unsafe, minFont, smallTaps,
