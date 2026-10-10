@@ -1,1 +1,1 @@
-1791617042	Cursor Agent	HANDOFF Grok Bot: #1342 draft tip d4b20856c; files css/select.css css/race-setup.css; next=tip CI then ready-gate; blockers=none; no AM/merge  [cursor/preview-clips-7acc; session 55a0622b3b133409dd7062b1]
+1791617216	Cursor Agent	MONITOR #1342 ready; user armed AM — watching tip CI 38034409118 (draft cancelled=dedupe); ready-gate ok; ready-full-cap 16/3 overloaded; no second push  [cursor/preview-clips-7acc; session 55a0622b3b133409dd7062b1]
