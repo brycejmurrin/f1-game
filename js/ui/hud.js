@@ -513,7 +513,7 @@ function obsCollect() {
   add("map", els.minimap, "readout", "left");
   add("gaps", doc.querySelector(".hud-gaps"), "readout", "left");
   add("metrics", doc.getElementById("game-metrics"), "readout", null);
-  add("sectors", els.hudSectors, "readout", "right");
+  add("sectors", els.hudSectors, "readout", root && root.dataset && "sectorsLeft" in root.dataset ? "left" : "right");
   add("limits", els.hudLimits || doc.getElementById("hud-limits"), "readout", root && root.dataset && "limitsLeft" in root.dataset ? "left" : "right");
   add("damage", doc.getElementById("hud-damage"), "readout", null);
   add("rel", doc.getElementById("hud-rel"), "readout", null);
@@ -625,8 +625,10 @@ function radioLane(root, list) {
   // Clip the RIGHT to sectors without setting `any` — desktop empty docks must
   // still clear the lane vars (CSS falls back to centred). Phone docks set
   // `any` via the group loop above.
+  // (Only a RIGHT-column plate: in the left column — data-sectors-left — it bounds the lane's left like the map, below.)
   const sec = obs("sectors"), secR = sec ? sec.rect : null;
-  if (secR) right = Math.min(right, secR.left);
+  if (secR && sec.column === "right") right = Math.min(right, secR.left);
+  else if (secR) clip(secR, false);
   // The map, the gaps chip, the opt-in readouts (MOVE & SIZE places them) and the
   // track-limits chip: a STRATEGY box in the left column and the INPUTS trace under
   // the sector box share the card's rows on a phone.
@@ -951,12 +953,13 @@ function placeRightColumn(root, scale) {
   // The column starts under the plate's UN-MOVED box (layoutRect), or where the plate would start.
   const sec = obs("sectors"), pause = obs("pause");
   const secR = sec ? layoutRect(sec.el) : null;
-  const start = secR && secR.height ? secR.bottom : pause ? pause.rect.bottom + 4 : NaN;
+  const secLeft = !!(root.dataset && "sectorsLeft" in root.dataset);   // the plate leads the left column instead
+  const start = !secLeft && secR && secR.height ? secR.bottom : pause ? pause.rect.bottom + 4 : NaN;
   const limLeft = !!(root.dataset && "limitsLeft" in root.dataset);
   const none = !Number.isFinite(start);
   const spec = [
     ["limits", els.hudLimits || doc.getElementById("hud-limits"), zTop, 0, limLeft],
-    ["damage", doc.getElementById("hud-damage"), zTop, 0, false],
+    ["damage", doc.getElementById("hud-damage"), zTop, 0, secLeft],   // beside LIMITS in the left column then
     ["inputs", doc.getElementById("hud-inputs"), zBot, 0, false],
   ];
   // Desktop RELATIVE lives in this column at 38svh: that stays its floor, the stack only pushes it down.
@@ -968,8 +971,8 @@ function placeRightColumn(root, scale) {
     if (p.r) p.c = W - p.r.right - 10 * zb * p.d;
     return p;
   });
-  const mine = { limits: !limLeft, damage: true, inputs: true, rel: desk };
-  const theirs = { limits: limLeft, rel: !desk, strat: true };   // the left column's: placed after this one
+  const mine = { limits: !limLeft, damage: !secLeft, inputs: true, rel: desk };
+  const theirs = { limits: limLeft, damage: secLeft, rel: !desk, strat: true };   // the left column's: placed after this one
   const steps = [], blocks = [];
   for (const o of _obs) {
     if (colUser(o.el) && (mine[o.id] || o.id === "sectors")) { if (o.column === "right") steps.push(o.rect); continue; }
@@ -1025,13 +1028,20 @@ function placeLeftColumn(root, scale) {
   const kPub = +root.style.getPropertyValue("--lcol-z") || 1;
   const sal = cssPx(root, "--sal");
   const limLeft = !!(root.dataset && "limitsLeft" in root.dataset);
+  const secLeft = !!(root.dataset && "sectorsLeft" in root.dataset);
+  // S1-S3 lead it and DAMAGE joins the warnings beside LIMITS only in the left-column mode
+  // (data-sectors-left: both are status chips, and on a cockpit camera BOOST fills the right column under
+  // the pause button, where DAMAGE was dropped or painted over the flag). Listed only then: a skipped
+  // piece's write clears its data-col-drop, which would undo the right-hand pass's decision.
   const spec = [
+    ...(secLeft ? [["sectors", els.hudSectors, 0, false]] : []),
     ["limits", els.hudLimits || doc.getElementById("hud-limits"), 0, !limLeft],
+    ...(secLeft ? [["damage", doc.getElementById("hud-damage"), 0, false]] : []),
     ["rel", doc.getElementById("hud-rel"), 0, desk],
     ["strat", doc.getElementById("hud-strat"), desk ? 0.40 * H : 0, false],
   ];
   const P = spec.map(([id, el, floor, out], i) => { const p = colPiece(id, el, kPub, out || colUser(el)); p.floor = floor; p.cost = 1 << (spec.length - i); return p; });
-  const mine = { limits: limLeft, rel: !desk, strat: true };
+  const mine = { sectors: secLeft, limits: limLeft, damage: secLeft, rel: !desk, strat: true };
   // The column starts under the map / gap strip (un-moved boxes), the broadcast tower, and the metrics panel when it is left.
   let start = 0;
   for (const id of ["map", "gaps"]) { const o = obs(id); if (o) start = Math.max(start, layoutRect(o.el).bottom); }
@@ -1039,14 +1049,19 @@ function placeLeftColumn(root, scale) {
   const gm = obs("metrics");
   if (gm && gm.column === "left") start = Math.max(start, gm.rect.bottom);
   // Obstacles: everything on screen but the pieces this pass places (a placed-by-the-player one stays).
+  // A left-dock control is "soft" for RELATIVE alone: HudRelative.fitRows trims its rows above the left dock.
   const blocks = [];
-  for (const o of _obs) if (!o.transient && !(mine[o.id] && !colUser(o.el))) blocks.push(o.rect);
+  for (const o of _obs) if (!o.transient && !(mine[o.id] && !colUser(o.el))) blocks.push({ r: o.rect, soft: !!(o.group || (o.kind === "control" && o.rect.left + o.rect.right < W)) });
+  // THE COLUMN STAYS A COLUMN: a sub-column may not reach past 40% of the width. Beyond it a piece floats
+  // in the middle of the track and takes the radio card's lane (667x375, everything on: RELATIVE and
+  // STRATEGY beside the stack at x 218-420 collapsed the card). Past it a piece is dropped instead.
+  const colMax = W * 0.4;
   const solve = (k) => {
     const out = {}, placed = [];
     const air = LCOL_AIR * zTop * k, x0 = sal + 10 * zTop * k;
-    const free = (r) => {
+    const free = (r, softOk) => {
       if (r.left < 0 || r.top < 0 || r.right > W - 4 || r.bottom > H - 4) return false;
-      for (const b of blocks) if (_hudRectsHit(r, b)) return false;
+      for (const b of blocks) if (!(softOk && b.soft) && _hudRectsHit(r, b.r)) return false;
       for (const q of placed) if (_hudRectsHit(r, q)) return false;
       return true;
     };
@@ -1061,15 +1076,25 @@ function placeLeftColumn(root, scale) {
       // `left` in its own zoom units): the column judges it where it is painted, scaled to this factor.
       const slid = p.id === "rel" && p.el.style && p.el.style.left ? p.r.left / p.d * k : null;
       const main = colRect(slid != null ? slid : x0, y1, w, h);
-      if (p.id === "rel" || free(main)) at = { y: y1, x: null, r: main };
-      for (let i = placed.length - 1; !at && i >= 0; i--) {
-        const q = placed[i], r = colRect(q.right + air, q.top, w, h);
-        if (free(r)) at = { y: q.top, x: q.right + air, r };
-      }
+      const beside = () => {
+        for (let i = placed.length - 1; i >= 0; i--) {
+          const q = placed[i], r = colRect(q.right + air, q.top, w, h);
+          if ((r.right <= colMax || desk) && free(r)) return { y: q.top, x: q.right + air, r };
+        }
+        return null;
+      };
+      // DAMAGE rides beside the chip above it first (one warnings row); everything else takes the main column first.
+      // RELATIVE trims its own rows above the left dock (HudRelative.fitRows): for it the left-dock
+      // controls do not count, anything else does (the tyre chip sends it beside the stack instead).
+      if (p.id === "damage") at = beside();
+      if (!at && free(main, p.id === "rel")) at = { y: y1, x: null, r: main };
+      if (!at) at = beside();
       if (!at) { out[p.id] = { y: y1, drop: true }; drops += p.cost; continue; }
       out[p.id] = { y: at.y, x: at.x };
       placed.push(at.r);
-      if (at.x == null) cursor = at.r.bottom;
+      // A piece beside a shorter one (DAMAGE's car outline beside LIMITS) hangs below that row: the next
+      // main-column piece starts under the lower of the two.
+      cursor = at.x == null ? at.r.bottom : Math.max(cursor, at.r.bottom);
     }
     return { out, drops };
   };
@@ -1154,6 +1179,23 @@ function fitHud() {
   // _cssRootKey above for why they could not stay where they were.
   syncComputedRootVars();
   const scale = +root.style.getPropertyValue("--hud-scale") || _cssScale;
+  // TOUCH LANDSCAPE: S1-S3 AND TRACK LIMITS LEAD THE LEFT COLUMN, on every camera. Under the pause /
+  // cam buttons the plate sat beside BOOST (the dock stand-off narrowed or dropped it), LIMITS crossed
+  // sides by camera (left in cockpit, right in chase), and DAMAGE / INPUTS stacked under them over the
+  // pedals (hud-mock sheets, 2026-10-10). The left column under the map has the room: the plate reads
+  // as one row there (css/hud.css :root[data-sectors-left]) and placeLeftColumn stacks it first. The
+  // right column keeps DAMAGE and INPUTS. Not on desktop (no dock), portrait (its own ladder), the
+  // broadcast profile (its tower owns that column) or a plate the player placed (data-hl-user: its
+  // stored offset is relative to the shipped right-hand anchor). The viewport and body classes that
+  // decide it are in the fit key; the attribute is read by every pass below.
+  // apex26.hudSectorsSide "right" keeps the shipped plate beside BOOST (no SETTINGS row yet).
+  const secSide = G.store && typeof G.store.get === "function" ? G.store.get("hudSectorsSide", "left") : "left";
+  const secLeft = secSide !== "right" && !document.body.classList.contains("desktop") && window.innerWidth > window.innerHeight
+    && !document.body.classList.contains("hud-prof-broadcast") && !colUser(els.hudSectors);
+  if (secLeft !== ("sectorsLeft" in root.dataset)) {
+    if (secLeft) root.dataset.sectorsLeft = "1";
+    else delete root.dataset.sectorsLeft;
+  }
   // body.className is part of the key: cycling STEERING MODE re-parents the
   // dock groups (layoutDocks), so the tallest column's height changes while
   // viewport and scale do not — without it the key holds the stale dock cap for
@@ -1333,10 +1375,26 @@ function fitHud() {
   // it, so the horizontal budget is the WIDER of the two, once, against the
   // whole viewport less both insets — not a sum across a centre line.
   const bcast = document.body.classList.contains("hud-prof-broadcast");
+  // With S1-S3 in the left column the top-right cluster beside the tower is PAUSE + CAM, not the plate.
+  // They are --tap-hud = --tap x max(1, z) wide, so the right half needs t*z + c*max(1, z) <= room
+  // (t = half the tower, c = the cluster's width at z <= 1): solved in closed form, it cannot hunt.
+  let capRightSec = null;
+  if (secLeft && !bcast) {
+    let cl = Infinity;
+    for (const el of [els.btnCam, els.pausebtn]) {
+      const b = el && !el.hidden && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+      if (b && b.width) cl = Math.min(cl, b.left);
+    }
+    if (Number.isFinite(cl)) {
+      const zNow = zTopPub || scale || 1;
+      const c = (window.innerWidth - cl) / Math.max(1, zNow), t = Math.max(top / 2, 1), room = half - FIT_AIR;
+      capRightSec = t + c <= room ? room / (t + c) : (room - c) / t;
+    }
+  }
   const capFor = (l) => (bcast
     ? (window.innerWidth - sal - sar) / Math.max(Math.max(top, l) + right, 1)
     : Math.min((half - sal) / Math.max(l + top / 2, 1),
-               (half - sar) / Math.max(right + top / 2, 1)));
+               capRightSec != null ? capRightSec : (half - sar) / Math.max(right + top / 2, 1)));
   // EACH RUNG IS JUDGED AGAINST THE SPELLING IT DECIDES, NOT THE ONE ON SCREEN.
   //
   // Reading the RENDERED width is a feedback loop with no fixed point wherever
@@ -1389,7 +1447,7 @@ function fitHud() {
   // below the plate's top and clipped its BEST tile (844x390 cockpit). Solved from the invariants
   // (the tower's unzoomed top offset and height, the plate's screen top) so it cannot hunt.
   let capRow = Infinity;
-  if (!bcast && top && scR && scR.width && !document.body.classList.contains("desktop")) {
+  if (!bcast && !secLeft && top && scR && scR.width && !document.body.classList.contains("desktop")) {
     const tR = layoutRect(_hudTop), zd = zoomDiv(_hudTop, zTopPub);
     let satPx = 0;
     try { satPx = parseFloat(getComputedStyle(root).getPropertyValue("--sat")) || 0; } catch (_) { /* mini-dom / detached root */ }
@@ -1505,7 +1563,7 @@ function fitHud() {
   // measures from whichever is lower — the map/strip edge or the panel's bottom.
   const leftFilled = Math.max(leftBot, gmBot);
   const leftRoom = !(dockL && dockL.width && leftFilled + (8 + CHIP_H) * chromeZ > dockL.top);
-  const limLeft = hitsRight && leftRoom;
+  const limLeft = secLeft || (hitsRight && leftRoom);   // with S1-S3 on the left, LIMITS hangs under them
   if (limLeft !== ("limitsLeft" in root.dataset)) {
     if (limLeft) root.dataset.limitsLeft = "1";
     else delete root.dataset.limitsLeft;
@@ -1703,8 +1761,11 @@ function fitHud() {
   const touch = !document.body.classList.contains("desktop");
   const secEl = els.hudSectors;
   // The plate as laid out, measured off the element (a dropped plate is not in the obstacle list).
+  // A plate in the LEFT column (data-sectors-left) is none of this pass's business: the right column's
+  // home box is then the pieces under the pause button, and nothing below narrows or drops the plate
+  // (secLeft: decided at the top of this fit).
   const plateBox = () => {
-    const r = secEl && !secEl.hidden && secEl.getBoundingClientRect ? secEl.getBoundingClientRect() : null;
+    const r = !secLeft && secEl && !secEl.hidden && secEl.getBoundingClientRect ? secEl.getBoundingClientRect() : null;
     return r && r.width && r.height ? r : null;
   };
   const homeBox = (z) => {
@@ -1804,7 +1865,7 @@ function fitHud() {
     if (!onDock && secEl.style && secEl.style.removeProperty) secEl.style.removeProperty("max-width");
   }
   // The centre chrome bounds the plate last: narrowed to fit between it and the dock, or dropped.
-  if (secEl && secEl.style) {
+  if (secEl && secEl.style && !secLeft) {
     const zSec = zPaint() || 1;
     const drop = plateMax != null && plateMax < 48 * zSec;
     if (plateMax != null && !drop) secEl.style.maxWidth = (plateMax / zSec).toFixed(1) + "px";

@@ -886,6 +886,14 @@ const api = {
     else if (hit && typeof hit === "object") Damage.apply(Damage.get(c), +hit.long || 0, +hit.lat || 0, +hit.sev || 0);
     return Damage.state(c);
   },
+  // strikes(n?) — the player's track-limits warnings (cutWarn, 0..4). No arg reads; a number sets it, so
+  // the TRACK LIMITS chip shows (and the side columns stack it) through the HUD's own tick, as a real strike would.
+  strikes(n) {
+    const p = G.player;
+    if (!p) return null;
+    if (n !== undefined) p.cutWarn = Math.max(0, Math.min(4, n | 0));
+    return p.cutWarn | 0;
+  },
   wallStats() {
     if (!G.track || !G.track.barR) return null;
     // Sides the PIT COMPLEX owns (TrackPit.openBoundary widens them to the garages after the scenery)

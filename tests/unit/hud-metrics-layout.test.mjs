@@ -118,7 +118,7 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   assert.ok(leftPxCall, "--hud-left-px is not published at all");
   assert.ok(!/gm/i.test(leftPxCall),
     "--hud-left-px must not read the metrics panel's own box: " + leftPxCall);
-  assert.match(hud, /const limLeft = hitsRight && leftRoom;/);
+  assert.match(hud, /const limLeft = secLeft \|\| \(hitsRight && leftRoom\);/);
   // Dock inset is published AFTER zoom caps, from BOOST / leftmost dock
   // control, using the plate's painted zoom + screen-px air, then one
   // painted-overlap grow (CI oversize workers=2: stale dockLeft vs BOOST).
