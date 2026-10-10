@@ -760,6 +760,7 @@ var Announcer = (function () {
       // the WebAudio graph, so nothing else silences it — a player who turned
       // sound off and then heard a voice would have found a bug, not a feature.
       if (!G.soundOn) return false;
+      if (typeof document !== "undefined" && document.hidden) return false;   // a hidden tab: speechSynthesis would speak unseen (and iOS synthesis then breaks until reload)
       const parts = (Array.isArray(lines) ? lines : [lines])
         .map((l) => { const t = String(l == null ? "" : l); return RadioVoice.speakable ? RadioVoice.speakable(t) : t; })
         .filter(Boolean);

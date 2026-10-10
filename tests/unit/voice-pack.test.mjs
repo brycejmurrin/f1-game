@@ -848,3 +848,37 @@ test("the pit garage halts every radio channel the way the pause card does", () 
   assert.match(close, /if \(isRaining\(\)\) GameAudio\.startRain\(\)/,
     "leaving the pit garage restarts rain the way RESUME does");
 });
+
+test("the spotter's idle early-outs reset nothing: 600 steps off / in the menu / in the pits cost zero pack.stop() calls (bug-hunt 3, 2026-10-10)", () => {
+  // Before: every physics step while the spotter was OFF (the default), not racing or in the pits
+  // allocated a fresh state and called pack.stop("spotter") — 600 steps, 601 stops, each a GC churn
+  // on a phone. A state that never spoke has nothing to stop.
+  let stops = 0, on = false;
+  const pack = { stop: () => { stops++; }, busy: () => false, ensure() {}, plan: () => true, speak: () => false };
+  const G = {
+    state: "menu", paused: false, player: null, track: null, cars: null, soundOn: true, vTop: () => 90,
+    store: { get: (k, d) => (k === "spotter" ? on : d) },
+    radio: { pack, volume: () => 1, recordedPack: () => "george", busy: () => false },
+  };
+  const sp = Spotter.create(G);
+  for (let i = 0; i < 600; i++) sp.update(1 / 60, false);
+  assert.equal(stops, 0, "menu: nothing to stop");
+  // Racing with the spotter OFF: occupancy is still computed (race-radio holds routine lines in traffic)…
+  G.state = "race"; G.track = { total: 1000 };
+  G.player = { s: 500, x: 0, speed: 60, pitState: "none" };
+  G.cars = [G.player, { s: 502, x: -2.5, pitState: "none" }];
+  for (let i = 0; i < 60; i++) sp.update(1 / 60, false);
+  assert.equal(sp.occupied(), true, "race-radio still reads a car alongside with the spotter off");
+  assert.equal(stops, 0, "…and the off branch stops nothing");
+  G.player.pitState = "lane";
+  for (let i = 0; i < 60; i++) sp.update(1 / 60, false);
+  assert.equal(stops, 0, "pits: nothing to stop");
+  G.player.pitState = "none";
+  // Spotter ON with a car alongside: the state goes dirty (a side is being debounced, a call made) —
+  // now a reset IS owed, exactly once, when the race ends.
+  on = true;
+  for (let i = 0; i < 30; i++) sp.update(1 / 60, false);
+  G.state = "menu";
+  for (let i = 0; i < 60; i++) sp.update(1 / 60, false);
+  assert.equal(stops, 1, "a state that was in use is reset — once");
+});
