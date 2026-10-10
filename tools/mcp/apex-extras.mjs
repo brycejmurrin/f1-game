@@ -534,6 +534,30 @@ export function createExtras(ctx) {
       return refreshDiskJob(raw);
     } catch { return null; }
   };
+  /** apex_job_status {}: drop finished manifests (+ .log/.err/.exit) ended over 7 days ago; re-judge a `failed` one with no
+   *  .exit file whose log's parsed result says ok:true (written before the .exit fix) as done. */
+  const JOB_TTL_MS = 7 * 86400000;
+  const pruneJobs = () => {
+    let files = [];
+    try { files = fs.readdirSync(JOB_DIR).filter((f) => f.endsWith(".json")); } catch { return; }
+    for (const f of files) {
+      try {
+        const mf = path.join(JOB_DIR, f);
+        const m = JSON.parse(fs.readFileSync(mf, "utf8"));
+        if (!["done", "failed", "cancelled"].includes(m.state)) continue;
+        const logAbs = m.log ? path.join(ROOT, m.log) : "";
+        const exitAbs = logAbs ? exitFileFor(logAbs) : "";
+        if (m.ended && Date.now() - m.ended > JOB_TTL_MS) {
+          for (const x of [mf, logAbs, m.stderr ? path.join(ROOT, m.stderr) : "", exitAbs]) if (x) fs.rmSync(x, { force: true });
+          continue;
+        }
+        if (m.state === "failed" && logAbs && !fs.existsSync(exitAbs)) {
+          const o = ctx.splitOut(fs.readFileSync(logAbs, "utf8")).out;
+          if (o && o.ok === true) { m.state = "done"; m.exit = 0; fs.writeFileSync(mf, JSON.stringify(m, null, 2) + "\n"); }
+        }
+      } catch { /* unreadable manifest: leave it */ }
+    }
+  };
   const listDiskJobs = () => {
     try {
       return fs.readdirSync(JOB_DIR).filter((f) => f.endsWith(".json")).map((f) => loadDiskJob(f.slice(0, -5))).filter(Boolean);
@@ -622,6 +646,7 @@ export function createExtras(ctx) {
   }
   function jobStatus(args) {
     if (!args.jobId) {
+      pruneJobs();
       const fromDisk = listDiskJobs();
       const merged = new Map(fromDisk.map((j) => [j.id, j]));
       for (const j of jobs.values()) merged.set(j.id, j);
