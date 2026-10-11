@@ -210,52 +210,52 @@ test("the host drops a guest's QUALI/QLIVE flood past a small per-second cap", a
   } finally { lobby.cancel(); }
 });
 
-// Flow B item 1: an AFK rival who stays in the room must not trap a player who has driven.
+// Flow B item 1 + ship NP-2: an AFK rival must not trap the sheet; after
+// GATE_TIMEOUT_MS the gate opens (NO LAP FROM THEM). MENU leave uses canLeave.
 function timedQualiNet(peers) {
   const QualiNet = eval(src("js/race/quali-net.js") + ";QualiNet");
   const btn = { disabled: false, textContent: "" };
-  let clock = 1000, applied = 0;
+  let clock = 1000;
   const q = QualiNet.create({
     $: (id) => (id === "q-go" ? btn : null), fmtTime: String, isQuali: () => true,
     getPlayer: () => ({ driverId: "alpha:0", lastLap: 70, best: 70 }), getCars: () => [],
-    openQuali: () => {}, applyPeerQuali: () => { applied++; },
+    openQuali: () => {}, applyPeerQuali: () => {},
     getNetPlay: () => ({ rivalDriverIds: () => [] }),
     getNetLobby: () => ({ roomState: () => ({ peers }) }),
     now: () => clock, setTimer: () => 0, clearTimer: () => {},
   });
-  return { q, btn, tick: (ms) => { clock += ms; q.refreshQualiGate(); }, applied: () => applied };
+  return { q, btn, tick: (ms) => { clock += ms; q.refreshQualiGate(); } };
 }
 
-test("friend quali: after the bounded wait TO THE GRID opens WITHOUT the silent rival, graded no-time", () => {
-  const { q, btn, tick, applied } = timedQualiNet([{ team: "bravo", driver: 1 }]);
+test("friend quali: after the bounded wait TO THE GRID opens (NO LAP FROM THEM)", () => {
+  const { q, btn, tick } = timedQualiNet([{ team: "bravo", driver: 1 }]);
   q.arm(() => {});
   q.markDone();
   q.refreshQualiGate();
   assert.equal(q.waiting(), true);
   assert.equal(btn.disabled, true);
   assert.equal(q.timedOut(), false);
+  assert.equal(q.WAIT_MS, 60000, "WAIT_MS aliases GATE_TIMEOUT_MS");
   tick(q.WAIT_MS - 1);
   assert.equal(q.waiting(), true, "one tick short of the bound still waits");
   tick(2);
   assert.equal(q.waiting(), false, "the wait is over");
   assert.equal(q.timedOut(), true);
   assert.equal(btn.disabled, false);
-  assert.equal(btn.textContent, "TO THE GRID WITHOUT THEM");
-  assert.equal(q.driven(70).get("bravo:1"), Infinity, "the silent rival is graded NO TIME, as a guest abort is");
-  assert.ok(applied() >= 1, "the sheet is regraded so the rival sits last");
+  assert.match(btn.textContent, /NO LAP FROM THEM|TO THE GRID/);
+  // Seat absent from driven() (model fills it) — not a fake/Infinity lap (NP-2).
+  assert.equal(q.driven(70).has("bravo:1"), false);
 });
 
-test("friend quali: the wait only starts once the player has a result, and a late lap still wins", () => {
+test("friend quali: a late real lap after the cap still replaces the empty seat", () => {
   const { q, btn, tick } = timedQualiNet([{ team: "bravo", driver: 1 }]);
   q.arm(() => {});
-  tick(q.WAIT_MS * 3);
-  assert.equal(q.timedOut(), false, "driving the lap is not waiting");
-  q.markDone();
-  tick(1); tick(q.WAIT_MS + 1);
+  q.refreshQualiGate();
+  tick(q.WAIT_MS + 1);
   assert.equal(q.timedOut(), true);
   q.onPeerQuali({ driverId: "bravo:1", t: 80 });
   assert.equal(q.driven(70).get("bravo:1"), 80);
-  assert.equal(btn.textContent, "TO THE GRID", "their real time replaces the no-time");
+  assert.equal(btn.textContent, "TO THE GRID", "their real time clears the timed-out label");
 });
 
 test("friend quali: leaving is open once timed out, and re-arming forgets the timeout", () => {

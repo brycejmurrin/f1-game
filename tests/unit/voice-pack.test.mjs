@@ -752,15 +752,20 @@ test('the engineer TEST previews the selected recorded source; SYSTEM previews s
 });
 
 
-test('engineer waits for the full spotter clip and stays written when its finish time is unknown', () => {
+test('engineer waits for the full spotter clip, and behind a still-decoding one uses a bounded lead instead of being dropped', () => {
   const long = radio({spotterLeft: 1.8});
   assert.equal(long.v.say('BOX BOX BOX', 5, 'info'), true);
   assert.ok(long.packCalls.find(c => c.id).leadS >= 1.88);
   long.v.stop();
+  // remaining() is Infinity while the spotter clip decodes; that used to make the
+  // budget -Infinity ("too-long") and the BOX line was lost with no retry.
   const pending = radio({spotterLeft: Infinity});
-  assert.equal(pending.v.say('BOX BOX BOX', 5, 'info'), false);
-  assert.equal(pending.packCalls.filter(c => c.id).length, 0);
+  assert.equal(pending.v.say('BOX BOX BOX', 5, 'info'), true);
+  const call = pending.packCalls.find(c => c.id);
+  assert.ok(call, 'the line is spoken');
+  assert.ok(call.leadS >= 0.6 && call.leadS < 1, 'behind a bounded 0.6 s lead, got ' + call.leadS);
   assert.deepEqual(pending.spoken, []);
+  pending.v.stop();
 });
 
 test('recorded decoding consumes the card budget and pending clips have no known finish time', async () => {

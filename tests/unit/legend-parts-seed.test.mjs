@@ -22,8 +22,9 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 
-function boot(sel = { teamIdx: 0, driverIdx: 0 }) {
-  const ctx = vm.createContext({ console, Object, Math, Array, String, Number, JSON });
+function boot(sel = { teamIdx: 0, driverIdx: 0 }, over = {}) {
+  const ctx = vm.createContext({ console, Object, Math, Array, String, Number, JSON,
+    document: { querySelectorAll: () => [] } });
   ctx.globalThis = ctx;
   for (const f of ["js/core/mat4.js", "js/data/legends.js", "js/career/custom-team.js"]) {
     vm.runInContext(readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"), ctx, { filename: f });
@@ -36,18 +37,20 @@ function boot(sel = { teamIdx: 0, driverIdx: 0 }) {
     getStored: (k) => (Object.hasOwn(saved, k) ? saved[k] : undefined),
     set: (k, v) => { saved[k] = v; },
   };
-  const Teams = { LIST: [{ id: "mclaren" }] };
+  const Teams = { LIST: [{ id: "mclaren" }], sanitizeCustom: (t) => t };
+  const invalidated = [];
   const ct = CustomTeam.create({
     $: () => null, store, Teams, DEFAULT_CUSTOM: { id: "custom" },
-    invalidateDecalTextures() {}, invalidateCustomMeshCaches() {}, spMeshBust() {},
+    invalidateDecalTextures: (id) => invalidated.push(id), invalidateCustomMeshCaches() {}, spMeshBust() {},
     getSoundOn: () => false, GameAudio: { uiTick() {} },
     getEls: () => ({}), getTeamIdx: () => sel.teamIdx, setTeamIdx() {},
     getDriverIdx: () => sel.driverIdx, setDriverIdx() {}, buildSelect() {}, buildSetup() {},
     isCarsetupVisible: () => false, hexToRgb: () => [0, 0, 0], rgbToHex: () => "#000",
     hexToArr: () => [0, 0, 0], clamp: (v) => v,
     getLivDraftOverride: () => null, setLivDraftOverride() {},
+    ...over,
   });
-  return { ct, Legends, store, saved, Teams };
+  return { ct, Legends, store, saved, Teams, invalidated };
 }
 
 test("an empty sheet is seeded with the picked legend's period car", () => {
@@ -114,6 +117,84 @@ test("boot rebuilds the SAVED legend, not legend 0: no Fangio sheet in Schumache
   const other = boot({ teamIdx: 0, driverIdx: 2 });
   other.ct.syncLegendsTeam();
   assert.equal(other.Teams.LIST.find((t) => t.id === "legends").legend, Legends.LIST[0].id);
+});
+
+test("G1: syncing MY TEAM while MY TEAM is selected keeps the picked legend and its tuned build", () => {
+  // Boot with Legends selected (it lands after custom: index 2), pick Senna and
+  // tune the sheet; then the player selects MY TEAM and saves it (or another tab
+  // writes customTeam) -> syncCustomTeam(). Mid-sync MY TEAM's old index equalled
+  // the Legends slot, so legendSeat() read MY TEAM's driver seat (0) and flipped
+  // the pick to Schumacher, replacing the build with the period car.
+  const sel = { teamIdx: 2, driverIdx: 0 };
+  const { ct, Legends, Teams, store } = boot(sel);
+  ct.syncCustomTeam();                                   // boot: [mclaren, custom, legends]
+  const idx = (id) => Teams.LIST.findIndex((t) => t.id === id);
+  assert.equal(idx("legends"), 2);
+  ct.syncLegendsTeam(1);                                 // Senna
+  store.set("parts.legends", Object.assign({}, store.get("parts.legends", {}), { engine: "sprint" }));
+  sel.teamIdx = idx("custom"); sel.driverIdx = 0;        // MY TEAM selected, seat 0
+  ct.syncCustomTeam();
+  assert.equal(Teams.LIST[idx("legends")].legend, Legends.LIST[1].id, "the legend pick survives the sync");
+  assert.equal(store.get("parts.legends", {}).engine, "sprint", "and so does its tuned build");
+  ct.syncCustomTeam();                                   // a second sync is still a no-op
+  assert.equal(Teams.LIST[idx("legends")].legend, Legends.LIST[1].id);
+  assert.equal(Teams.LIST.filter((t) => t.id === "custom").length, 1);
+  assert.equal(Teams.LIST.filter((t) => t.id === "legends").length, 1);
+});
+
+test("G1: with LEGENDS selected the picker's seat still wins through a MY TEAM sync", () => {
+  const sel = { teamIdx: 2, driverIdx: 0 };
+  const { ct, Legends, Teams } = boot(sel);
+  ct.syncCustomTeam();
+  sel.driverIdx = 3;                                     // the driver picker moved the legend
+  ct.syncCustomTeam();
+  const t = Teams.LIST.find((x) => x.id === "legends");
+  assert.equal(t.legend, Legends.LIST[3].id);
+});
+
+function fakeDialog() {
+  const els = new Map();
+  const el = (id) => {
+    if (!els.has(id)) {
+      const cls = new Set();
+      els.set(id, {
+        value: "#112233", textContent: "", style: {}, listeners: {},
+        classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), contains: (c) => cls.has(c) },
+        addEventListener(t, f) { this.listeners[t] = f; },
+      });
+    }
+    return els.get(id);
+  };
+  return { el, els };
+}
+
+test("MY TEAM preview invalidates the decal atlas as the livery changes, not only on SAVE", () => {
+  const d = fakeDialog();
+  let draft = null;
+  const { ct, invalidated } = boot({ teamIdx: 0, driverIdx: 0 }, {
+    $: d.el, hexToRgb: (h) => h, rgbToHex: (a) => a, hexToArr: (h) => h,
+    DEFAULT_CUSTOM: { id: "custom", name: "My Team", short: "YOU", color: "#111111", color2: "#222222",
+      drivers: [{ name: "N", code: "YOU", num: 7 }], livery: {} },
+    getEls: () => ({ customize: {} }), setLivDraftOverride: (v) => { draft = v; },
+  });
+  ct.openCustomize();
+  assert.ok(draft, "the draft override is live");
+  const n0 = invalidated.filter((x) => x === "custom").length;
+  assert.ok(n0 >= 1, "opening the dialog drops the atlas for the draft");
+  ct.init();                                            // wireDialog + (inert here) store/LiveryTex hooks
+  // LOGO TINT row: a colour is chosen -> the draft's livery changes -> atlas dropped.
+  const tint = d.el("cz-logo");
+  tint.value = "#ff0000";
+  tint.listeners.input();
+  assert.equal(draft.liv.logo, "#ff0000");
+  assert.ok(invalidated.filter((x) => x === "custom").length > n0, "LOGO TINT change invalidates the atlas");
+  // An identical event (a drag repeating the same value) does not thrash the atlas.
+  const n1 = invalidated.filter((x) => x === "custom").length;
+  tint.listeners.input();
+  assert.equal(invalidated.filter((x) => x === "custom").length, n1, "an unchanged preview is deduped");
+  // CANCEL drops the draft atlas so the saved look comes back.
+  d.el("cz-cancel").onclick();
+  assert.ok(invalidated.filter((x) => x === "custom").length > n1, "closing the preview restores the saved atlas");
 });
 
 // D2 — the FRESH-INSTALL case. js/data/garage-defaults.js ships `parts.legends`

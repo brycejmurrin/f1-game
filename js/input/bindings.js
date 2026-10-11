@@ -259,17 +259,20 @@ const InputBindings = (function () {
       padLabelMode = PAD_NAME_SETS[m] ? m : "auto";
     }
     function padLabelModeOf() { return padLabelMode; }
-    function padBrandAuto() {
-      const pad = activePad();
+    function padBrandAuto(known) {
+      const pad = known || activePad();
       const id = String((pad && pad.id) || "");
       if (/playstation|dualshock|dualsense|\b054c\b|sony/i.test(id)) return "ps";
       if (/nintendo|switch\s*pro|joy-?con|\b057e\b/i.test(id)) return "nintendo";
       return "xbox";
     }
+    // The resolved brand: the player's override, else what the pad id suggests.
+    // `pad` spares the activePad() scan to a caller that already holds it.
+    const padBrand = (pad) => (padLabelMode === "auto" ? padBrandAuto(pad) : padLabelMode);
     // The name on a chip: the player's override, else what the pad id suggests.
     function padLabel(index) {
       if (index == null) return "";
-      const brand = padLabelMode === "auto" ? padBrandAuto() : padLabelMode;
+      const brand = padBrand();
       const names = PAD_NAME_SETS[brand] || PAD_NAMES_XBOX;
       return names[index] || `BTN ${index}`;
     }
@@ -279,7 +282,7 @@ const InputBindings = (function () {
       keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel, loadLayoutMap,
       keyAction: (code) => codeToAction[normCode(code)] || null,
       padBindings, setPadBinding, clearPadBinding, setPadMap, getPadMap, resetPad, padsAreDefault, padLabel,
-      setPadLabelMode, padLabelMode: padLabelModeOf,
+      setPadLabelMode, padLabelMode: padLabelModeOf, padBrand,
       padButtons: (id) => padMap[id],
     };
   }

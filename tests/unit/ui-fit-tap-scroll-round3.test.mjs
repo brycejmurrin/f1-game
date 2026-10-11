@@ -99,24 +99,23 @@ test("How to Play compact section chips floor at --tap-paint", () => {
   );
 });
 
-test("compact body sheet zoom re-derives --tap-paint at the paint scale", () => {
+test("compact short-viewport sheets re-derive --tap-paint against the paint zoom", () => {
   // Ship #1346 names the painted zoom --_sheet-z (also pinned in
-  // ui-improve-pass.test.mjs). Keep a source pin here so a round-3 ui-fit
-  // regression cannot drop the re-derive while leaving the zoom cap.
+  // ui-improve-pass.test.mjs). Pin :where(…) form to match css/menus.css.
   const css = rd("css/menus.css");
   assert.match(
     css,
-    /body\[data-density="compact"\]\)\s*\.sheet\s*\{[^}]*--_sheet-z:\s*min\(var\(--sheet-scale,\s*var\(--ui-scale\)\),\s*var\(--ui-compact-scale\)\)/s,
-    "compact sheets publish --_sheet-z (fit-cap ∩ 125% geometry)",
+    /:where\(body\[data-density="compact"\]\) \.sheet\s*\{[^}]*--_sheet-z:\s*min\(var\(--sheet-scale,\s*var\(--ui-scale\)\),\s*var\(--ui-compact-scale\)\)/s,
+    "compact .sheet names the capped paint scale (--_sheet-z)",
   );
   assert.match(
     css,
-    /body\[data-density="compact"\]\)\s*\.sheet\s*\{[^}]*--tap-paint:\s*max\(24px,\s*calc\(var\(--tap-paint-at\)\s*\/\s*var\(--_sheet-z\)\)\)/s,
-    "compact sheet --tap-paint divides by --_sheet-z, not bare --ui-scale",
+    /:where\(body\[data-density="compact"\]\) \.sheet\s*\{[^}]*zoom:\s*var\(--_sheet-z\)/s,
+    "compact .sheet zooms by --_sheet-z",
   );
   assert.match(
     css,
-    /body\[data-density="compact"\]\)\s*\.sheet\s*\{[^}]*zoom:\s*var\(--_sheet-z\)/s,
-    "compact sheet zoom uses the same --_sheet-z",
+    /:where\(body\[data-density="compact"\]\) \.sheet\s*\{[^}]*--tap-paint:\s*max\(24px,\s*calc\(var\(--tap-paint-at\)\s*\/\s*var\(--_sheet-z\)\)\)/s,
+    "compact .sheet divides --tap-paint by the paint scale, not bare --ui-scale",
   );
 });

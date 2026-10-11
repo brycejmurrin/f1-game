@@ -148,7 +148,9 @@ const calCustom = () => flow !== "career";
 const fmtActive = () => flow === "season";
 
 function list() {
-  if (!calCustom()) return Tracks.SEASON;
+  // A career races the calendar it STAMPED at the season's start (Career.calendar),
+  // which is Tracks.SEASON for a save without one.
+  if (!calCustom()) return typeof Career !== "undefined" && Career.calendar ? Career.calendar() : Tracks.SEASON;
   if (!resolved) {
     const byId = new Map(Tracks.LIST.map((t) => [t.id, t]));
     resolved = rulesConfig().trackIds.map((id) => byId.get(id)).filter(Boolean);
@@ -491,6 +493,7 @@ function award(season, order, fastestId, run) {
   // Either leg spends its qualifying: the Grand Prix runs its own session.
   delete season.qualiOrder;
   delete season.qualiTrack;
+  delete season.qualiMode;
   if (scoring === "sprint") {
     season.stage = "race";
   } else {
