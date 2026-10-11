@@ -25,6 +25,12 @@ a warning, not a red — #1386/#1387/#1395 grew HUD without raising the #1375 ca
 and every PR that re-snapped hit Structural guards with no CI override for a
 stated reason. Real source growth past absorb still fails on the PR run.
 
+2026-10-11 ship sync on #1384: HUD re-measured after merge with ship tip
+(post-#1408/#1351 growth): `js/ui/hud.js` → codeLines **1411** / lines **2399**,
+`css/hud.css` → codeLines **1960** / lines **2158**. Ceiling catch-up in
+`ratchets.mjs --base` (same day) keeps Structural guards green. Source-pin
+raw `game.js` reads ceiling 351 → **356** (merge brought more canary pins).
+
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
