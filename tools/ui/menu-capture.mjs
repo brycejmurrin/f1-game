@@ -78,7 +78,7 @@ function expandScreens(screens, circuitsAxis) {
   return expanded;
 }
 
-async function bootPage(page, base, { hideGame = true, scale = null, timeout = 90000 } = {}) {
+export async function bootPage(page, base, { hideGame = true, scale = null, timeout = 90000 } = {}) {
   await page.goto(base, { waitUntil: "domcontentloaded", timeout });
   await page.waitForFunction(() => window.__apex && window.__apex.race, null, {
     polling: 100,
@@ -95,7 +95,7 @@ async function bootPage(page, base, { hideGame = true, scale = null, timeout = 9
   page.setDefaultTimeout(12000);
 }
 
-async function resetToTitle(page, base, hideGame) {
+export async function resetToTitle(page, base, hideGame) {
   await page.evaluate((ids) => {
     for (const id of ids) {
       const el = document.getElementById(id);
@@ -129,7 +129,7 @@ async function resetToTitle(page, base, hideGame) {
   }
 }
 
-async function waitScreenReady(page, screen) {
+export async function waitScreenReady(page, screen) {
   await page.waitForFunction(menuReady, screen.root, { polling: 100, timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(150);
   if (screen.id.split("#")[0] === "select") {
@@ -137,7 +137,7 @@ async function waitScreenReady(page, screen) {
   }
 }
 
-async function applyInsets(page, insets) {
+export async function applyInsets(page, insets) {
   if (!insets) return;
   await page.evaluate((i) => {
     const d = document.documentElement.style;
