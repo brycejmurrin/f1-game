@@ -160,6 +160,19 @@ const NetPlay = (function () {
     }
     return true;
   }
+  // QUALI + QLIVE flood cap, shared by the lobby and the in-race relay: per
+  // connection, rolling window. A real client sends ~2.5 QLIVE/s plus one QUALI.
+  const QUALI_RATE = 12, EVENT_WINDOW_MS = 1000;
+  function rateGate(limit, windowMs = EVENT_WINDOW_MS) {
+    const times = [];
+    return () => {
+      const now = performance.now();
+      while (times.length && now - times[0] > windowMs) times.shift();
+      if (times.length >= limit) return false;
+      times.push(now);
+      return true;
+    };
+  }
   // Register the QUALI/QLIVE receivers on a session. `ownsDriver(d)` is the
   // caller's sender binding — the lobby keys it on the HELLO profile filed
   // under the connection, NetPlay on the remote car it seated — because the
@@ -523,6 +536,7 @@ const NetPlay = (function () {
     }
 
     function bindSession(id, s) {
+      const qualiGate = rateGate(QUALI_RATE);
       function sendersOwnDriver(d) {
         if (role !== "host") return true;
         const wid = remoteFor(id);
@@ -746,7 +760,7 @@ const NetPlay = (function () {
           if (name === EV.CAUTION && d && !ownsRaceControl() && G.applyCaution) G.applyCaution(d);
         });
       }
-      bindQuali(s, sendersOwnDriver, G);
+      bindQuali(s, (d) => (role !== "host" || qualiGate()) && sendersOwnDriver(d), G);
     }
 
     function handBackToAI(reason, id) {
@@ -1311,6 +1325,7 @@ const NetPlay = (function () {
   }
 
   return { create, EV, PUBLISH_HZ, INTERP_DELAY_MS, strategyState, applyStrategy, STRATEGY_VERSION,
-    clampWire, validQuali, validQualiLive, bindQuali, qualiReporters, QUALI_MIN_S, QUALI_MAX_S };
+    clampWire, validQuali, validQualiLive, bindQuali, qualiReporters, QUALI_MIN_S, QUALI_MAX_S,
+    QUALI_RATE, EVENT_WINDOW_MS, rateGate };
 })();
 Object.freeze(NetPlay);

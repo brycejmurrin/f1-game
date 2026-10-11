@@ -130,10 +130,15 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   // Painted announce collapse must be terminal in the fit: a trailing
   // radioTopSlot re-lit hud-radio-top and cleared data-lane-collapsed.
   const fitBody = hud.slice(hud.indexOf("function fitHud"), hud.indexOf("\nfunction ", hud.indexOf("function fitHud") + 1));
-  const paintCollapse = fitBody.indexOf('toggleAttribute("data-lane-collapsed", true)');
-  assert.ok(paintCollapse > 0, "fitHud paints data-lane-collapsed on a hit");
+  const paintCollapse = fitBody.indexOf("radioPaintedCollapse(root)");
+  assert.ok(paintCollapse > 0, "fitHud runs the painted announce collapse");
   assert.equal(fitBody.indexOf("radioTopSlot(", paintCollapse), -1,
     "no radioTopSlot after painted announce collapse (undoes the collapse)");
+  const helper = hud.slice(hud.indexOf("function radioPaintedCollapse"), hud.indexOf("// THE MIRROR AS PAINTED"));
+  assert.ok(helper.includes('toggleAttribute("data-lane-collapsed", true)'), "the helper paints data-lane-collapsed on a hit");
+  // invalidateFit re-picks the slot, so it must run the same guard right after (it used to leave a relit top slot until the next tick).
+  const inv = hud.slice(hud.indexOf("function invalidateFit"), hud.indexOf("_invalidateFit = invalidateFit"));
+  assert.ok(inv.indexOf("radioPaintedCollapse(root)") > inv.indexOf("radioTopSlot("), "invalidateFit runs the painted collapse after its own radioTopSlot");
 });
 
 test("HUD layout options live in a full-width pause submenu", () => {
