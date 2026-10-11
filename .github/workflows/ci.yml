@@ -440,14 +440,8 @@ jobs:
           [ "$EVENT" = pull_request ] && base="$(bash tools/ci/ci-pr-base.sh "$base")"
           case "$base" in 0000000000000000000000000000000000000000|"") base=origin/claude/f1-game-project-26h3ng ;; esac
           git cat-file -e "$base^{commit}" 2>/dev/null || base=origin/claude/f1-game-project-26h3ng
-          # Intentional remeasure past the 40-line absorb: CEILING-HISTORY.md in
-          # the PR diff is the reason the error text always asked for (#1437).
-          DOC=""
-          if [ "$EVENT" = pull_request ] && git diff --name-only "$base" HEAD | grep -qx 'docs/notes/CEILING-HISTORY.md'; then
-            DOC=--documented
-          fi
-          echo "ratchet base: $base ${RATCHET_MODE:+(advisory) }${DOC}"
-          node tools/check/ratchets.mjs --base "$base" $RATCHET_MODE $DOC
+          echo "ratchet base: $base ${RATCHET_MODE:+(advisory)}"
+          node tools/check/ratchets.mjs --base "$base" $RATCHET_MODE
       - name: Every test file belongs to a topical group
         if: needs.reuse-draft.outputs.reuse != 'true'
         run: npm run test:audit

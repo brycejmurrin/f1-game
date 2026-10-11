@@ -171,27 +171,35 @@ test("--base names every ceiling that moved, and only a raise past the hook's ab
   const lines = [];
   assert.equal(compareToBase("HEAD", { current: head, print: (l) => lines.push(l) }), 0);
   assert.match(lines.at(-1), /0 ceiling\(s\) moved/);
-  // A raise within the absorb is reported, not fatal; past it, fatal.
+  // A raise within the absorb is reported, not fatal. Past it: fatal only when
+  // the SOURCE file's metric also grew past absorb (injectable sourceGrowthFn).
+  // A ceiling-only bump with no source growth is catch-up — warning, exit 0 —
+  // so a re-measure after other PRs landed lines (#1437 / ship HUD) can clear
+  // Structural guards without an admin merge.
   const raised = (n) => ({ ...head, files: { ...head.files, "js/game.js": { ...head.files["js/game.js"], lines: head.files["js/game.js"].lines + n } } });
   const out = [];
   assert.equal(compareToBase("HEAD", { current: raised(40), print: (l) => out.push(l) }), 0);
   assert.ok(out.some((l) => /RAISE  js\/game\.js lines: \d+ -> \d+ \(\+40\)/.test(l)), out.join("\n"));
+  const catchUp = [];
+  assert.equal(compareToBase("HEAD", {
+    current: raised(41), print: (l) => catchUp.push(l), sourceGrowthFn: () => 0,
+  }), 0, "ceiling catch-up with no source growth must not fail");
+  assert.ok(catchUp.some((l) => /catch-up \(source lines grew 0 ≤ 40/.test(l)), catchUp.join("\n"));
   const big = [];
-  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => big.push(l) }), 1);
+  assert.equal(compareToBase("HEAD", {
+    current: raised(41), print: (l) => big.push(l), sourceGrowthFn: () => 41,
+  }), 1, "real source growth past absorb still fails");
   assert.ok(big.some((l) => /past the 40-line commit-hook absorb/.test(l)));
-  // ADVISORY (a push run): the same raise is still named, and still says it
-  // needs a reason, but the exit is 0 — a push has no PR body to carry the
-  // reason, so failing there is a red that no push can clear. The PR run
+  // ADVISORY (a push run): the same real-growth raise is still named, and still
+  // says it needs a reason, but the exit is 0 — a push has no PR body to carry
+  // the reason, so failing there is a red that no push can clear. The PR run
   // for the same commits calls without --advisory and blocks as above.
   const adv = [];
-  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => adv.push(l), advisory: true }), 0);
+  assert.equal(compareToBase("HEAD", {
+    current: raised(41), print: (l) => adv.push(l), advisory: true, sourceGrowthFn: () => 41,
+  }), 0);
   assert.ok(adv.some((l) => /past the 40-line commit-hook absorb.*advisory on a push/.test(l)), adv.join("\n"));
-  assert.match(adv.at(-1), /1 past the 40-line absorb \(advisory\)|past-absorb raises soft \(advisory\)/);
-  // DOCUMENTED (CEILING-HISTORY.md moved with the raise): same past-absorb
-  // raise is a warning, exit 0 — the reason the CI error text always asked for.
-  const doc = [];
-  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => doc.push(l), documented: true }), 0);
-  assert.ok(doc.some((l) => /CEILING-HISTORY\.md moved with this raise/.test(l)), doc.join("\n"));
+  assert.match(adv.at(-1), /1 past the 40-line absorb \(advisory\)/);
   // An unreachable ref is a distinct exit, not a crash and not a pass.
   const nope = [];
   assert.equal(compareToBase("0000000000000000000000000000000000000000", { print: (l) => nope.push(l) }), 2);
