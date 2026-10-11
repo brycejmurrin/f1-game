@@ -218,6 +218,7 @@ test("a finisher two laps down is still in `order` with a finPos, after every cl
     place(D, L - 3000, 9, 70);
     a.setInput({ throttle: true, steer: 0 });
     for (let i = 0; i < 60 * 40 && G.state === "race"; i++) g5.step(1);
+    skipPostFinish(g5);   // D would otherwise be waited for (POST_FINISH_CAP); C must already have flagged
     assert.equal(G.state, "results");
     assert.equal(C.finished, true, "the lapped car really took the flag");
     assert.equal(C.classified, false);
