@@ -2643,8 +2643,7 @@ async function startRaceBody() {
       announce("SAVE CONFLICT — reload " + (careerSaveConflict ? "career" : "season"), 3, "info");
       return false;
     }
-    setState("menu", "save-conflict"); $("race-settings").hidden = true;
-    buildSelect(); els.select.hidden = false;
+    quitToMenu();   // a bare setState("menu") left the HUD, in-race class, lights and engine up (RESTART from the pause card)
     return false;
   }
   resultsCam.reset();   // restore a montage before replacing the previous field

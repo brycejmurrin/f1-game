@@ -329,12 +329,13 @@ const CATALOG = [
   {
     name: "apex_verify_change_fast",
     week: 1,
-    description: "Tree — verify-change --fast --json (no browser groups). Never --wait. Can take several minutes on a large diff (10 min cap). Skill: check-changes.",
+    description: "Tree — verify-change --fast --json (no browser groups). Never --wait. Takes ~10 min (it is tooling-fast on one job), past the host's ~180 s cap, so it runs as a background job and returns a jobId (watch it with apex_job_status {jobId, wait}); sync:true blocks instead (10 min cap, the host will time out). Skill: check-changes.",
     inputSchema: {
       type: "object",
       properties: {
         since: { type: "string" },
         staged: { type: "boolean" },
+        sync: { type: "boolean", description: "Block for the whole run instead of starting a background job." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
@@ -376,6 +377,13 @@ const CATALOG = [
     week: 1,
     description: "Tree — read-only occupancy: lock, chrome /healthz, test-bg, playwright PIDs, loadavg. Does not take the lock. Call before any browser apex_*.",
     inputSchema: { type: "object", properties: { dryRun: { type: "boolean" } } },
+  },
+  {
+    name: "apex_catalog",
+    week: 8,
+    kind: "tree",
+    description: "Tree — every valid id the other apex_* tools accept, in one read: tracks, cams, times of day, shot_survey presets, HUD devices and cams, job kinds, UI screens and UI viewports (the two viewport families differ: apex_ui_* take ios-*/desktop-*, apex_hud_* take phone-*/desktop-*). Read-only, no browser; call it instead of guessing an id and reading the bad_args reply.",
+    inputSchema: { type: "object", properties: { dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } } },
   },
   {
     name: "apex_doctor",
@@ -824,6 +832,8 @@ const CATALOG = [
         count: { type: "integer", description: "shot_survey: frac count override." },
         fracs: { type: "array", items: { type: "number" }, description: "shot_survey: explicit fracs." },
         oblique: { type: "boolean", description: "survey_track: add topdown + N/E/S/W aerials." },
+        since: { type: "string", description: "verify_change_fast: git ref to diff against." },
+        staged: { type: "boolean", description: "verify_change_fast: verify the staged diff." },
         screens: { type: "string", description: "ui_gallery / ui_matrix: comma list of screen ids." },
         viewports: { type: "string", description: "ui_gallery / ui_matrix: comma list (wildcards ok, e.g. ios-*)." },
         scale: { type: "string", description: "ui_matrix: comma list of interface sizes, e.g. 100,130." },
@@ -841,10 +851,11 @@ const CATALOG = [
     name: "apex_job_status",
     week: 7,
     kind: "tree",
-    description: "Tree — a background job's state (running | done | failed | cancelled), elapsed time, log tail and, once finished, its parsed JSON result in out. No jobId lists every job this server started. Skill: check-changes.",
+    description: "Tree — a background job's state (running | done | failed | cancelled), elapsed time, log tail and, once finished, its parsed JSON result in out. `wait` (1–300 s) blocks until it finishes (waitedS / stillRunning); capped results carry topFindings. No jobId lists every job this server started. Skill: check-changes.",
     inputSchema: { type: "object", additionalProperties: false, properties: { jobId: { type: "string" },
       state: { type: "string", enum: ["running", "done", "failed", "cancelled"], description: "No jobId: list only jobs in this state." },
       limit: { type: "integer", minimum: 1, maximum: 200, description: "No jobId: newest N jobs (default 20)." },
+      wait: { type: "integer", minimum: 1, maximum: 300, description: "With jobId: hold the call up to N seconds until the job is no longer running (no polling loop); the reply says waitedS / stillRunning." },
       dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } } },
   },
   {
@@ -1163,6 +1174,16 @@ function aliasHudDevice(args) {
   const mapped = HUD_DEVICE_ALIASES[args.device];
   return mapped && mapped !== args.device ? { ...args, device: mapped } : args;
 }
+/** An unknown key is reported before a missing required one: `{fil:"x"}` is a typo for `file`, and "tool needs file" hides that. */
+function checkUnknownKeys(value, schema) {
+  if (!isObject(value) || schema.additionalProperties !== false || !schema.properties) return;
+  const valid = Object.keys(schema.properties);
+  for (const key of Object.keys(value)) {
+    if (Object.hasOwn(schema.properties, key)) continue;
+    const near = nearestKey(key, valid);
+    badArgs(`unknown argument ${key}`, `${near ? `Did you mean "${near}"? ` : ""}Valid: ${valid.join(", ")}.`);
+  }
+}
 /** `apex_hud_shot` uses inlineImage; ui/shot wraps use image — accept either name. */
 function aliasImageArgs(name, args) {
   if (!args || typeof args !== "object") return args;
@@ -1178,6 +1199,7 @@ function aliasImageArgs(name, args) {
   return args;
 }
 function validateValue(value, schema, label) {
+  checkUnknownKeys(value, schema);
   if (schema.anyOf) {
     const fits = schema.anyOf.some((part) => { try { validateValue(value, part, label); return true; } catch { return false; } });
     if (!fits) badArgs(`${label === "arguments" ? "arguments" : label} must be ${describeSchema(schema)}`, `Got ${jsType(value)}${isObject(value) ? ` with keys ${Object.keys(value).join(", ") || "(none)"}` : ""}. Required: ${(schema.required || []).join(", ") || "see inputSchema"}.`);
@@ -1220,11 +1242,6 @@ function validateValue(value, schema, label) {
     }
     for (const [key, child] of Object.entries(value)) {
       const spec = schema.properties && Object.hasOwn(schema.properties, key) ? schema.properties[key] : null;
-      if (!spec && schema.additionalProperties === false) {
-        const valid = Object.keys(schema.properties || {});
-        const near = nearestKey(key, valid);
-        badArgs(`unknown argument ${key}`, `${near ? `Did you mean "${near}"? ` : ""}Valid: ${valid.join(", ")}.`);
-      }
       if (spec) validateValue(child, spec, key);
     }
   }
@@ -1556,6 +1573,10 @@ function buildArgv(name, args) {
       return argv;
     }
     case "apex_agent": {
+      // agent.mjs refuses a describe with no id, but only after a ~100 s browser boot. Say so before it.
+      if (String(args.command || "") === "describe" && !args.id) {
+        badArgs("apex_agent describe needs id", 'Pass {"command":"describe","id":"corner:T3"}: ids look like "prop:12", "corner:T3", "car:4", "span:2" (scene / track / field return them).');
+      }
       const argv = [
         ...nodeTool("shot/agent.mjs"),
         String(args.track || "monza"),
@@ -1733,6 +1754,13 @@ export function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {}, 
       } else if (allowExit && allowExit.has(exit)) {
         body.ok = true;
       }
+      // A CLI that fails with its own {error, message, fix} JSON (agent.mjs: "describe(id) needs an id") left the wrapper saying
+      // error:null / message:null with the explanation buried in `out`. Lift it to where every other refusal puts it.
+      if (!body.ok && body.error == null && out && typeof out === "object" && typeof out.error === "string") {
+        body.error = out.error;
+        if (typeof out.message === "string") body.message = out.message;
+        if (typeof out.fix === "string") body.fix = out.fix;
+      }
       const result = toolResult(body, { isError: !body.ok });
       if (treeGone) treeGone.then(() => resolve(result)); else resolve(result);
     };
@@ -1833,6 +1861,70 @@ function statusNext(lock, playwright, loadavg) {
     hint: "e.g. apex_shot_survey {track, preset:\"quick\"} or multi-track async job via tracks[].",
   };
 }
+/** apex_catalog: ids come from the tool schemas and the UI audit's own catalogs, so they cannot drift from what the tools accept. */
+async function handleCatalog(args = {}) {
+  if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv: ["apex_catalog"], note: "read-only; no browser" });
+  const enumOf = (tool, prop) => CATALOG.find((t) => t.name === tool)?.inputSchema?.properties?.[prop]?.enum || [];
+  let ui = { screens: [], viewports: [] };
+  try {
+    const m = await import("../ui/menu-screens.mjs");
+    ui = { screens: m.listScreenIds(), viewports: m.VIEWPORTS.map((v) => v[0]) };
+  } catch (e) { ui.error = String(e.message || e); }
+  return toolResult({
+    ok: true,
+    tracks: enumOf("apex_shot", "track"), cams: enumOf("apex_shot", "cam"), tods: enumOf("apex_shot", "tod"),
+    shotPresets: enumOf("apex_shot_survey", "preset"),
+    hudDevices: enumOf("apex_hud_shot", "device"), hudCams: enumOf("apex_hud_shot", "cam"),
+    jobKinds: JOB_KINDS,
+    uiScreens: ui.screens, uiViewports: ui.viewports, ...(ui.error ? { uiError: ui.error } : {}),
+    hint: "apex_ui_fit / apex_ui_shot take uiScreens × uiViewports; apex_hud_shot takes hudDevices (ios-iphone-landscape-844 aliases phone-landscape-844x390).",
+  });
+}
+/** When this server process started, and the source files it loaded (tools/mcp/*.mjs plus the tools/lib modules they import).
+ *  A file edited AFTER start means the running server is older than the tree: every "does it need a restart?" guess in the
+ *  2026-10-10 session was about exactly this. A one-shot `call` is a fresh process, so it is never stale. */
+const SERVER_STARTED = Date.now();
+function watchedSources() {
+  const dir = path.join(ROOT, "tools", "mcp");
+  const files = new Set();
+  let names = [];
+  try { names = fs.readdirSync(dir).filter((f) => f.endsWith(".mjs")); } catch { /* no dir */ }
+  for (const f of names) {
+    files.add(path.join(dir, f));
+    if (f !== "apex-tools-mcp.mjs" && f !== "apex-extras.mjs") continue;
+    try {
+      for (const m of fs.readFileSync(path.join(dir, f), "utf8").matchAll(/["'](\.\.\/lib\/[\w.-]+\.mjs)["']/g)) files.add(path.resolve(dir, m[1]));
+    } catch { /* unreadable: skip */ }
+  }
+  return [...files];
+}
+export function serverFreshness(startedAt = SERVER_STARTED, files = watchedSources(), mtimeOf = (f) => fs.statSync(f).mtimeMs) {
+  const stale = [];
+  for (const f of files) { try { if (mtimeOf(f) > startedAt) stale.push(path.relative(ROOT, f)); } catch { /* removed: not stale */ } }
+  return {
+    pid: process.pid, startedAt: new Date(startedAt).toISOString(), uptimeS: Math.round((Date.now() - startedAt) / 1000),
+    version: SERVER_VERSION, watched: files.length, stale: stale.length > 0, staleFiles: stale,
+    ...(stale.length ? { fix: "The tree changed after this server started: restart the apex-tools MCP server to load it (a one-shot `call` always runs the current files)." } : {}),
+  };
+}
+/** Open persistent sessions: they hold the browser lock until closed, which is why the next browser tool says lock_held. */
+function sessionsInfo() {
+  const now = Date.now();
+  const track = (() => { try { return extras().sessionInfo?.() || null; } catch { return null; } })();
+  return {
+    garage: garage ? { team: (() => { const i = (garage.argv || []).indexOf("--team"); return i >= 0 ? garage.argv[i + 1] : null; })(), uptimeS: Math.round((now - garage.started) / 1000), shots: garage.shots } : null,
+    track,
+    hint: garage || track ? "An open session holds the browser lock: apex_garage / apex_track {op:\"close\"} frees it." : undefined,
+  };
+}
+
+/** How long one browser call may run. 180 s fits a boot plus one query (apex_agent commands took 100-130 s, measured), but
+ *  `atmosphere` with weather / tod rebuilds and re-settles the scene: 269 s measured (2026-10-10), so the flat cap killed a working call. */
+export function browserTimeoutMs(name, args = {}) {
+  if (name === "apex_agent" && (args.weather != null || args.tod != null)) return 420000;
+  return 180000;
+}
+
 function handleStatus(args = {}) {
   if (args.dryRun) {
     return toolResult({
@@ -1855,6 +1947,8 @@ function handleStatus(args = {}) {
       testBg: { recorded: false, running: [] },
       playwright,
       loadavg,
+      server: serverFreshness(),
+      sessions: sessionsInfo(),
       next: statusNext(lock, playwright, loadavg),
       knownGap: KNOWN_GAP,
     });
@@ -1870,6 +1964,8 @@ function handleStatus(args = {}) {
     testBg: testBgStatus(),
     playwright,
     loadavg,
+    server: serverFreshness(),
+    sessions: sessionsInfo(),
     next: statusNext(lock, playwright, loadavg),
     knownGap: KNOWN_GAP,
   });
@@ -2165,6 +2261,15 @@ function garageCommand(op, args) {
 }
 process.on("exit", () => { if (garage) garageClose("server exit"); });
 
+/** Several wrappers (ui_fit, ui_shot, ci_status, rotate_markings_check) refine a CLI result by rewriting content[0].text only;
+ *  structuredContent kept the raw CLI body, so a client reading it (the spec's primary channel) saw out:null / the unrefined audit. */
+export function syncStructured(result) {
+  const t = result?.content?.[0];
+  if (!t || t.type !== "text" || !result.structuredContent) return result;
+  try { const b = JSON.parse(t.text); if (isObject(b)) result.structuredContent = b; } catch { /* text is not a JSON body */ }
+  return result;
+}
+
 function dispatch(name, args = {}, { signal = null } = {}) {
   if (typeof name !== "string") return refuse("bad_args", "tool name must be a string", "Use a name from tools/list.");
   if (!name.startsWith(PREFIX)) {
@@ -2191,7 +2296,18 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   catch (e) { return e.refuse || refuse("bad_args", String(e.message || e), "See the tool inputSchema."); }
 
   if (name === "apex_status") return handleStatus(args);
+  if (name === "apex_catalog") return handleCatalog(args);
   if (name === "apex_garage") return handleGarage(args);   // async: a persistent child, not a spawnSync
+  if (name === "apex_verify_change_fast" && args.sync !== true && !args.dryRun) {
+    // ~10 min against a ~180 s host cap: a background job, not a call that times out (and is killed at 600 s).
+    const gate = gateTreeArgs(args);
+    if (gate) return gate;
+    const r = extras().handlers.apex_job_start({ kind: "verify_change_fast", since: args.since, staged: args.staged });
+    const body = JSON.parse(r.content[0].text);
+    if (body.ok === false) return r;
+    return toolResult({ ...body, routed: "apex_job_start verify_change_fast",
+      hint: "Runs in the background (~10 min): apex_job_status {jobId, wait:100} until state is done; the verdict JSON is in out. sync:true blocks instead." });
+  }
   if (name === "apex_graph_parity" && args.all === true) {
     // Every circuit twice outlasts the 180 s cap (killed at ~46 of 52,
     // 2026-10-05): the whole fleet runs as a background job instead.
@@ -2207,7 +2323,13 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   if (Object.hasOwn(extras().handlers, name)) {
     const gate = toolKind(known) === "tree" ? gateTreeArgs(args) : gateBrowserArgs(args);
     if (gate) return gate;
-    return extras().handlers[name](args, { signal });
+    // assertSafeOut (a bad `out`) throws an error that CARRIES its refusal; only some handlers caught it. Over stdio that surfaced as a
+    // bare JSON-RPC "path_escaped" with no fix text, and in a one-shot `call` as a stack trace. Return the refusal, for every handler.
+    const refusalOf = (e) => { if (e && e.refuse) return e.refuse; throw e; };
+    try {
+      const r = extras().handlers[name](args, { signal });
+      return r && typeof r.then === "function" ? r.catch(refusalOf) : r;
+    } catch (e) { return refusalOf(e); }
   }
 
   const kind = toolKind(known);
@@ -2258,7 +2380,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
     if (took) return took;
     // Released when the child exits — after a cancel too, never while a
     // Chromium still runs.
-    const run = runSpawn(argv, { timeoutMs: 180000, env, signal }).finally(releaseLock);
+    const run = runSpawn(argv, { timeoutMs: browserTimeoutMs(name, args), env, signal }).finally(releaseLock);
     // apex_shot: attach the frame as a thumbnail so the caller sees it in the
     // result (image:false opts out). The path is on shot.mjs's "wrote" line.
     if (name !== "apex_shot" || args.image === false) return run;
@@ -2370,6 +2492,9 @@ const S = (type) => ({ type });
 const OUTPUT_SCHEMAS = {
   apex_status: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), lock: S("object"), chromeDaemon: S("object"),
     testBg: S("object"), playwright: S("object"), loadavg: S("array"), knownGap: S("object") } },
+  apex_catalog: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), tracks: S("array"), cams: S("array"), tods: S("array"),
+    shotPresets: S("array"), hudDevices: S("array"), hudCams: S("array"), jobKinds: S("array"), uiScreens: S("array"), uiViewports: S("array"),
+    hint: S("string"), error: S("string"), message: S("string"), fix: S("string") } },
   apex_doctor: cliOut({ ok: S("boolean"), mode: S("string"), checks: S("array"), summary: S("object") }),
   apex_pick_tests: cliOut({ reason: S("string"), receipts: S("array"), unclaimed: S("array"), files: S("array"), groups: S("array") }),
   apex_select_specs: cliOut({ reason: S("string"), changed: S("number"), groups: S("array"), selected: S("array"), skipped: S("array"),
@@ -2459,7 +2584,13 @@ async function cmdCall(name, argsJson) {
     log(`args must be JSON: ${e.message}`);
     return 2;
   }
-  const result = await dispatch(name, args);
+  let result;
+  try { result = await dispatch(name, args); }
+  catch (e) {   // an unexpected throw is a failed call, not a stack trace
+    process.stdout.write(JSON.stringify({ ok: false, error: "internal_error", message: String((e && e.message) || e).slice(0, 500), fix: "Report this with the tool name and arguments." }, null, 2) + "\n");
+    if (garage) garageClose("call ended");
+    return 1;
+  }
   const body = JSON.parse(result.content[0].text);
   process.stdout.write(JSON.stringify(body, null, 2) + "\n");
   if (garage) garageClose("call ended");   // a one-shot call cannot keep a session
@@ -2542,7 +2673,7 @@ async function handleRpc(msg) {
     const ctl = new AbortController();
     inflight.set(String(mid), ctl);
     try {
-      const result = await dispatch(params.name, params.arguments ?? {}, { signal: ctl.signal });
+      const result = syncStructured(await dispatch(params.name, params.arguments ?? {}, { signal: ctl.signal }));
       return ctl.signal.aborted ? null : { jsonrpc: "2.0", id: mid, result };
     } catch (e) {
       return {

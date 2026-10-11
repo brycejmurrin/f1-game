@@ -328,7 +328,7 @@ const TrackBuildProps = (function () {
     let curRec = null, curAnchor = null;
     const OWN_R = 20;
     const note = (kind, c, size, extra) => {
-      if (propList.length >= PROP_CAP) { propDropped++; return; }
+      if (propList.length >= PROP_CAP) { propDropped++; return null; }
       const r1 = (v) => Math.round(v * 10) / 10;
       const rec = { kind, x: r1(c[0]), y: r1(c[1]), z: r1(c[2]),
                     w: r1(size[0]), h: r1(size[1]), d: r1(size[2]) };
@@ -340,6 +340,17 @@ const TrackBuildProps = (function () {
       // recorded 9 m wide against a real ~5.4 m canopy, which closed up the sky
       // in frame()'s raster and over-stated every proximity query.
       curRec = rec; curAnchor = [c[0], c[1], c[2]];
+      return rec;
+    };
+    // Take back a record note() just made: the emitter's guard refused the very
+    // primitive the record stood for, so nothing ships there. The note comes FIRST
+    // on purpose (it owns the primitives that follow), so a refusal retracts it
+    // rather than leaving a phantom box in the registry.
+    const unnote = (rec) => {
+      if (!rec) return;
+      const i = propList.lastIndexOf(rec);
+      if (i >= 0) propList.splice(i, 1);
+      if (curRec === rec) { curRec = null; curAnchor = null; }
     };
     // Linear features — armco, catch fencing, tyre walls, boundary walls — are
     // emitted by along() in 3–6 m steps. Recording each step would bury the
@@ -1495,7 +1506,7 @@ const TrackBuildProps = (function () {
       hash, upOf, cross, norm, lerp, vadd,
       // semantic prop registry (see note() above) — scenery modules call this
       // after their own guards so only props that actually ship are recorded
-      note, noteSpan, noteSuppressed,
+      note, unnote, noteSpan, noteSuppressed,
       kitOf: (family, fallback) => {
         const D = TrackSceneryData.KIT_DEF || {};
         const row = def.kit || D[theme] || D.green || {};

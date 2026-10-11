@@ -16,7 +16,7 @@
 // SCREENS, because screen state is the thing the shared-page reset cannot
 // restore. Count the locator() calls before converting, not the goto()s.
 import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+import { BOOT_MS, RACE_BUILD_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -24,6 +24,26 @@ async function boot(page) {
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+}
+
+// A RACE STARTED FROM THE UI IS A BUILD, NOT A BOOT (R3-CI-HEALTH-5). Every
+// START click below (#rs-go / #q-go / Q-DRIVE) waited BOOT_MS for
+// info().track, i.e. for "the page answers", while it actually waits for
+// garage-out + a 22-car Grand Prix build that measured 45-50 s on llvmpipe
+// (Pages 38016755004: `race car assets ready` logged at 49.6 s, the 45 s wait
+// already expired; ship 37997893083 failed two other tests on the same wait).
+// So: wait for THIS race's own end-of-build signal — warmCarAssets' `race car
+// assets ready` line (js/car/car-draw.js), read from the Log ring after a mark
+// taken before the click — under its own build budget, RACE_BUILD_MS.
+async function raceFrom(page, start) {
+  const mark = await page.evaluate(() => {
+    const l = window.__apex.logs();
+    return l.length ? l[l.length - 1].id : 0;
+  });
+  await start();
+  await page.waitForFunction((since) => window.__apex.info().track != null
+    && window.__apex.logs({ ns: "gfx", since }).some((r) => r.msg.startsWith("race car assets ready")),
+  mark, { polling: 100, timeout: RACE_BUILD_MS });
 }
 
 // A championship weekend: SEASON -> select -> race settings -> QUALIFYING.
@@ -63,8 +83,7 @@ test.describe("Qualifying — the session", () => {
     await page.evaluate(() => window.__apex.headless(true));
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();
-    await page.locator("#rs-go").click();
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await raceFrom(page, () => page.locator("#rs-go").click());
     await expect(page.locator("#quali")).toBeHidden();
     const info = await page.evaluate(() => window.__apex.info());
     expect(info.session).toBe("race");
@@ -123,8 +142,7 @@ test.describe("Qualifying — the grid", () => {
     await toQuali(page);
     await page.locator("#q-sim").click();
     const qOrder = await page.evaluate(codes);
-    await page.locator("#q-go").click();
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await raceFrom(page, () => page.locator("#q-go").click());
     const gridOrder = await page.evaluate(() => window.__apex.fieldState().map((c) => c.code));
     expect(gridOrder).toEqual(qOrder);
   });
@@ -137,8 +155,7 @@ test.describe("Qualifying — the grid", () => {
       return rows.findIndex((r) => r.classList.contains("you")) + 1;
     });
     expect(qPos).toBeGreaterThan(0);
-    await page.locator("#q-go").click();
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await raceFrom(page, () => page.locator("#q-go").click());
     const gridPos = await page.evaluate(() => window.__apex.fieldState().find((c) => c.isPlayer).pos);
     expect(gridPos).toBe(qPos);
     expect(await page.evaluate(() => window.__apex.info().session)).toBe("race");
@@ -159,8 +176,7 @@ test.describe("Qualifying — the grid", () => {
     await toQuali(page);
     await page.locator("#q-sim").click();
     const r1 = await page.evaluate(codes);
-    await page.locator("#q-go").click();
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await raceFrom(page, () => page.locator("#q-go").click());
     await page.evaluate(() => { window.__apex.park(0.9); window.__apex.finishRace(); });
     await expect(page.locator("#results")).toBeVisible({ timeout: 10_000 });
     await page.locator("#res-next").click();
@@ -187,16 +203,14 @@ test.describe("Qualifying — the grid", () => {
     // for. Read as: qualify, quit, then start a plain GP and check the climb.
     await toQuali(page);
     await page.locator("#q-sim").click();
-    await page.locator("#q-go").click();
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await raceFrom(page, () => page.locator("#q-go").click());
     await page.evaluate(() => { window.__apex.park(0.9); window.__apex.finishRace(); });
     await expect(page.locator("#results")).toBeVisible({ timeout: 10_000 });
     await page.locator("#res-menu").click();          // quitToMenu()
     await expect(page.locator("#overlay")).toBeVisible();
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();
-    await page.locator("#rs-go").click();
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await raceFrom(page, () => page.locator("#rs-go").click());
     const info = await page.evaluate(() => ({
       flow: window.__apex.info().flow,
       raceGrid: window.__apex.info().raceGrid,
@@ -257,8 +271,7 @@ test.describe("Qualifying — the lap itself", () => {
 
   async function driveQuali(page) {
     await toQuali(page);
-    await page.evaluate(() => document.getElementById("q-drive").click());
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await raceFrom(page, () => page.evaluate(() => document.getElementById("q-drive").click()));
   }
 
   test("the session is one lap, not two", async ({ page }) => {
@@ -297,8 +310,7 @@ test.describe("Qualifying — the lap itself", () => {
     await boot(page);
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();
-    await page.locator("#rs-go").click();
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await raceFrom(page, () => page.locator("#rs-go").click());
     const speed = await page.evaluate(() => {
       for (let i = 0; i < 900 && window.__apex.info().state !== "race"; i++) window.__apex.step(1 / 60, 1);
       return window.__apex.carAt(0).speed;
