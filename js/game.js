@@ -8956,7 +8956,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 // the update loop's `cycleCam()` closes over this const.
 const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
 
-$("pm-resume").onclick = () => setPaused(false);
+$("pm-resume").onclick = () => setPaused(false); $("pm-quick-doors").insertBefore(Object.assign(document.createElement("button"), { id: "pm-recover", type: "button", textContent: "RECOVER CAR", onclick: () => { setPaused(false); Input.requestRecover(); } }), $("pm-checkpoint"));   // RECOVER CAR = the R key; touch had none. Built here like REPLAY: shellNodes holds
 $("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; startRace().then(() => { if (state === "race") frozen = false; }, () => {}); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it with its own paused = false, and a start that was cancelled (settings changed) hands the old race back
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
