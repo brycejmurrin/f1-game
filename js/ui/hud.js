@@ -630,7 +630,9 @@ function announceLane(root) {
 // clipper's hidden flag, the gap strings' length) with fitHud's 3 s backstop.
 let _laneKey = "", _laneWait = 0;
 function announceLaneTick(root, force) {
-  let k = window.innerWidth + "x" + window.innerHeight + "|" + _fitKey + "|" + document.body.className + "|"
+  // Use the cached viewport (vpW/vpH), not window.innerWidth — a per-tick live
+  // read defeats 5-perf F2 and forces layout on Android (#1395).
+  let k = vpW() + "x" + vpH() + "|" + _fitKey + "|" + document.body.className + "|"
     + (els.hudSectors && els.hudSectors.hidden ? "s" : "S") + (els.minimap && els.minimap.hidden ? "m" : "M")
     + (els.gapA ? (els.gapA.textContent || "").length : 0) + "." + (els.gapB ? (els.gapB.textContent || "").length : 0);
   for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) k += g.hidden ? "h" : "v";
