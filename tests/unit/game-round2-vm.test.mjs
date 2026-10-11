@@ -23,8 +23,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import fs from "node:fs";
 import vm from "node:vm";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -97,7 +97,7 @@ test("S4: the TT ghost car waits for the first line crossing (lap 0 is the run-u
   // render() cannot run its car/ghost draw in the VM (the culling planes come from GLX, stubbed
   // here: every frame faults at game.js _carCullPlanes), so this pins the gate in the source, next
   // to the HUD's own (hud.js: `(player.lap | 0) >= 1 ? ghost.timeAt(...)`).
-  const src = fs.readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  const src = gameSource();
   const line = src.split("\n").find((l) => /replayGhost\.at\(player\.lapTime\)/.test(l));
   assert.ok(line, "the ghost car lookup exists");
   assert.match(line, /\(player\.lap \| 0\) >= 1 \?/, "and runs only once the line has been crossed");

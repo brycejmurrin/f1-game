@@ -22,6 +22,7 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import v8 from "node:v8";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const require = createRequire(import.meta.url);
 const { createGame, ROOT } = require("../../tools/lib/game-vm.cjs");
@@ -96,7 +97,7 @@ test("manifest loads car-fields.js before game.js", () => {
 });
 
 test("game.js makeCars calls CarFields.predeclare once per spawned car", () => {
-  const src = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  const src = gameSource();
   assert.equal((src.match(/CarFields\.predeclare\(/g) || []).length, 1);
 });
 
