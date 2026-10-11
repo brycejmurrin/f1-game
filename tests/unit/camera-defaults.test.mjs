@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
@@ -164,7 +165,7 @@ test("shipped chase corner lead is baked into vantage.js", () => {
 });
 
 test("cockpit interior uses the heading viewmodel, not a road-locked basis", () => {
-  const src = fs.readFileSync(path.join(root, "js/game.js"), "utf8");
+  const src = gameSource();
   assert.match(src, /GameCams\.cockpitViewmodelAxes/,
     "the cockpit draw must yaw with the body; a raw smp2.t basis crabs through turns");
   assert.doesNotMatch(src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, ""),
