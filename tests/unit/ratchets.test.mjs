@@ -5,7 +5,6 @@
 // Run: node --test tests/unit/ratchets.test.mjs   (npm run test:tooling-fast)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import { load, measure, verdict, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt } from "../../tools/check/ratchets.mjs";
 
 test("every ratcheted metric is at or under its ceiling", async () => {
@@ -172,29 +171,33 @@ test("--base names every ceiling that moved, and only a raise past the hook's ab
   const lines = [];
   assert.equal(compareToBase("HEAD", { current: head, print: (l) => lines.push(l) }), 0);
   assert.match(lines.at(-1), /0 ceiling\(s\) moved/);
-  // A raise within the absorb is reported, not fatal; past it, fatal.
+  // A raise within the absorb is reported, not fatal. Past it: fatal only when
+  // the SOURCE file's metric also grew past absorb (injectable sourceGrowthFn).
+  // A ceiling-only bump with no source growth is catch-up — warning, exit 0 —
+  // so a re-measure after other PRs landed lines (#1437 / ship HUD) can clear
+  // Structural guards without an admin merge.
   const raised = (n) => ({ ...head, files: { ...head.files, "js/game.js": { ...head.files["js/game.js"], lines: head.files["js/game.js"].lines + n } } });
   const out = [];
   assert.equal(compareToBase("HEAD", { current: raised(40), print: (l) => out.push(l) }), 0);
   assert.ok(out.some((l) => /RAISE  js\/game\.js lines: \d+ -> \d+ \(\+40\)/.test(l)), out.join("\n"));
+  const catchUp = [];
+  assert.equal(compareToBase("HEAD", {
+    current: raised(41), print: (l) => catchUp.push(l), sourceGrowthFn: () => 0,
+  }), 0, "ceiling catch-up with no source growth must not fail");
+  assert.ok(catchUp.some((l) => /catch-up \(source lines grew 0 ≤ 40/.test(l)), catchUp.join("\n"));
   const big = [];
-  // Empty history → past-absorb still blocks (CEILING-HISTORY is the reason gate).
-  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => big.push(l), historyPath: "/dev/null" }), 1);
-  assert.ok(big.some((l) => /past the 40-line commit-hook absorb.*CEILING-HISTORY/.test(l)));
-  // Documented raise: file path + new ceiling in CEILING-HISTORY → exit 0.
-  const nowLines = head.files["js/game.js"].lines + 41;
-  const histDoc = `/tmp/ratchet-hist-doc-${process.pid}.md`;
-  fs.writeFileSync(histDoc, `js/game.js lines raised to **${nowLines}** for the unit test.\n`);
-  const doc = [];
-  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => doc.push(l), historyPath: histDoc }), 0);
-  assert.ok(doc.some((l) => /documented in CEILING-HISTORY/.test(l)), doc.join("\n"));
-  fs.unlinkSync(histDoc);
-  // ADVISORY (a push run): the same raise is still named, and still says it
-  // needs a reason, but the exit is 0 — a push has no PR body to carry the
-  // reason, so failing there is a red that no push can clear. The PR run
+  assert.equal(compareToBase("HEAD", {
+    current: raised(41), print: (l) => big.push(l), sourceGrowthFn: () => 41,
+  }), 1, "real source growth past absorb still fails");
+  assert.ok(big.some((l) => /past the 40-line commit-hook absorb/.test(l)));
+  // ADVISORY (a push run): the same real-growth raise is still named, and still
+  // says it needs a reason, but the exit is 0 — a push has no PR body to carry
+  // the reason, so failing there is a red that no push can clear. The PR run
   // for the same commits calls without --advisory and blocks as above.
   const adv = [];
-  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => adv.push(l), advisory: true, historyPath: "/dev/null" }), 0);
+  assert.equal(compareToBase("HEAD", {
+    current: raised(41), print: (l) => adv.push(l), advisory: true, sourceGrowthFn: () => 41,
+  }), 0);
   assert.ok(adv.some((l) => /past the 40-line commit-hook absorb.*advisory on a push/.test(l)), adv.join("\n"));
   assert.match(adv.at(-1), /1 past the 40-line absorb \(advisory\)/);
   // An unreachable ref is a distinct exit, not a crash and not a pass.

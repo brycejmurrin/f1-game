@@ -35,6 +35,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | Tool | Does | Paired skill |
 |---|---|---|
 | **lib/ai-ratings-math.mjs** | Pure Pearson / means / style zero-mean helpers for `ai-ratings.mjs` (personality dial census). | — |
+| **lib/browser-workers.mjs** | GL-aware Playwright / capture worker defaults (llvmpipe vs SwiftShader). | — |
 | **lib/changed-files.mjs** | `git diff` path lists naming BOTH ends of a rename, so a file moved out of a watched directory still routes its rules. | — |
 | **lib/chromium-path.mjs** | Derives the Chromium executable from playwright-core's browsers.json revision + the browsers root; run it to print. | playwright-probe |
 | **lib/cli-args.mjs** | Shared CLI flag reader: both `--name=v` and `--name v`, and an unknown flag is an ERROR not a shrug. | — |
@@ -57,7 +58,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/track-build-vm.cjs** | The shared "run the REAL track build headless in a Node VM" harness the audits and VM tests load the engine through. | agent-view |
 | **lib/track-shot-survey.mjs** | Shot-survey plans: presets, resume filters, findings/progress JSON, HTML galleries (apex-extras / shot-survey). | survey-track |
 | **lib/tumftm.mjs** | Pure TUMFTM racetrack-database CSV parse/decimate → track-designer design + LGPL attribution envelope. | new-track |
-| **lib/ui-mock-core.mjs** | Shared core for hud-mock / menu-mock: held rAF, labelled boxes, CDP capture, contact sheet, cell cache. | — |
+| **lib/ui-mock-core.mjs** | Shared core of the "mock" UI shot tools (hud-mock, menu-mock): held rAF loop, labelled boxes, cheap CDP capture… | — |
 | **lib/webgpu-chrome-args.cjs** | Single source for WebGPU Chromium flags, shared by `harness.mjs`, `chrome-devtools-mcp.sh` and tests. | mcp-probe |
 | **lib/work-tree-id.mjs** | Content id of the WORKING TREE (tracked + untracked, ignore rules honoured) as a git tree hash, and of a commit's tree. | — |
 
@@ -80,7 +81,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/remote-group.mjs** | One test:* browser group on 4 llvmpipe runners (browser-group.yml); a line per shard, then `= group`. | check-changes |
 | **ci/repo-size.mjs** | Full-history size report: largest blobs ever committed and on-disk totals per top-level directory (repo-size.yml). | check-changes |
 | **ci/run-group.mjs** | PR-only topical runner: drop TOOLING_FAST_FILES so always-on vm-b1 riders do not double-bill. | — |
-| **ci/session-status.mjs** | Prints the branch's handoff block (sessions, commits, dirty/unpushed, test verdicts, live run) as Markdown or `--json`. | check-changes |
+| **ci/session-status.mjs** | Prints the branch's handoff block (sessions, commits, dirty/unpushed, test verdicts, live run); `--pr` adds live PR… | check-changes |
 | **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>. | check-changes |
 | **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
 | **ci/who-is-on-it.mjs** | Recent pushes per branch, who touched your paths, live claims: the check before fixing a shared red. | check-changes |
@@ -185,7 +186,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/garage-interior.mjs** | PNG gap-pixel gate for garage-frame.mjs (flat wall / paddock bleed); used after soft/CDP capture. | — |
 | **shot/garage-tap.mjs** | GARAGE tap from the title, prebuild ON vs OFF on one tree: tap-to-first-frame ms (__apex.garagePrebuild). | playwright-probe |
 | **shot/hud-live-sample.mjs** | Sample moved HUD pieces every few ms in an unfrozen race after position jumps; report time spent off screen. | survey-ui-matrix |
-| **shot/hud-mock.mjs** | Race-HUD layout shots on black: mocked widgets, labelled boxes, overlaps in red; ~1 s a shot. | survey-ui-matrix |
+| **shot/hud-mock.mjs** | Race-HUD layout shots on black: mocked widgets, labelled boxes, overlaps in red; one race boot per pointer type, ~1 s… | survey-ui-matrix |
 | **shot/hud-survey.mjs** | Race-HUD survey: devices x cameras x presets/themes/scale → overlaps, missing, offscreen, tiny text + shots, gallery. | survey-ui-matrix |
 | **shot/loading-probe.mjs** | Tap RACE! headless; record the loading screen's phases (build/run/card) and frame gaps. `--settle ms --invalidate`. | — |
 | **shot/motion-capture.mjs** | Records a driven clip via `recordVideo` (headless rAF is frozen), extracts frames, scores per-frame flicker. | playwright-probe |
@@ -194,8 +195,9 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/profile-gameloop.mjs** | Headless V8 CPU profile of the game loop → a `.cpuprofile` for Chrome DevTools. | playwright-probe |
 | **shot/replay-camera-probe.mjs** | Offline-fixture live-render camera discontinuity probe across replay entry, seek, follow, exit and reentry. | replay-camera |
 | **shot/repro-shot.mjs** | Render a player's exact frame from an `__apex.repro()` blob. Its COCKPIT output is WRONG — read the header. | playwright-probe |
+| **shot/shot-jobs.mjs** | Pure helpers for shot.mjs: CLI/batch job parse, output format, track grouping. | — |
 | **shot/shot-survey.mjs** | Multi-track shot survey CLI (job backend): track-session boots, resume, progress/findings JSON. | survey-track |
-| **shot/shot.mjs** | One deterministic framed screenshot via `__apex` camera hooks: `shot.mjs <trackId> <frac> [cam] [out.png]`. | playwright-probe |
+| **shot/shot.mjs** | One Chromium session for one or many framed shots (`--batch`); JPEG/raster modes for cheaper sweeps. | playwright-probe |
 | **shot/show-menus.mjs** | Every menu and popup, then the Display survey, as JPEGs plus an index.html in artifacts/show-menus. | playwright-probe |
 | **shot/track-session.mjs** | Persistent track session (`--serve`): boot once, then JSON-line shot/eval/track/sheet/diff ops in seconds each. | survey-track |
 
@@ -287,6 +289,7 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/layout-audit.mjs** | ONE CLI for menu geometry + PNG/DOM capture: clip/tap/overflow matrix, `--gallery`, `--screen=ID`, `--survey`. | survey-ui-matrix |
 | **ui/menu-capture.mjs** | Library (not a CLI): `runMenuShot` / `runMenuGallery` behind `layout-audit --gallery` / `--screen=`. | survey-ui-matrix |
 | **ui/menu-fit.mjs** | Audits every menu screen for cramped/clipped layout at a viewport; `--safe=` simulates arbitrary notch insets. | ui-menu-a11y |
+| **ui/menu-mock.mjs** | Menu-screen layout shots (menu-screens SCREENS x VIEWPORTS), 3D off, one boot per pointer shape, boxes +… | survey-ui-matrix |
 | **ui/menu-readiness.mjs** | Serializable menu readiness predicate, used with bounded Playwright polling. | — |
 | **ui/menu-screens.mjs** | Canonical `SCREENS` + `VIEWPORTS` + `OVERLAY_IDS` (library) for the layout tools. | survey-ui-matrix |
 | **ui/ui-scale-axis.mjs** | The `--scale=` axis (40–200 % interface size) shared by layout-audit, menu-fit and fit-audit. | survey-ui-matrix |
@@ -399,6 +402,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/pages-reuse-verdict.sh** | Pages gate reuse: prints `reuse=true` (+source/run) when this tree already passed CI as this commit or a parent. |
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
+| **ci/publish-shots.mjs** | Publish review screenshots to a shots/<topic> evidence branch cut from the ship tip, touching no PR branch. |
 | **ci/ready-full-cap.mjs** | Cap concurrent ready-PR full-tier CI: refuse mark-ready when ≥N ready PRs already run full CI. |
 | **ci/reuse-draft-fast.sh** | On ready_for_review, reuse a green draft fast-tier run for the same PR head SHA. |
 | **ci/run-playwright.mjs** | The engine behind every `npm run test:*`: a free port + port-suffixed report paths so runs never share a server. |

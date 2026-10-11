@@ -4132,7 +4132,7 @@ function drivingLineApi(trk) {
     _dlApi.sample = (s, out) => Tracks.sample(trk, s, out);
     _dlApi.curvature = (s) => Tracks.curvature(trk, s);   // wraps s itself
     _dlApi.lineAt = trk.line ? (s) => TrackLine.at(trk, s) : null;   // the baked racing line the AI drives
-    _dlApi.latMax = PhysicsConsts.LAT_MAX; _dlApi.brake = PhysicsConsts.BRAKE; _dlApi.accel = PhysicsConsts.ACCEL;
+    _dlApi.latMax = PhysicsConsts.LAT_MAX; _dlApi.brake = PhysicsConsts.BRAKE; _dlApi.accel = aTop();   // moves with vTop (both PACE)
     _dlApi.vTop = vTop(); _dlApi.grip = 1; DrivingLine.reset();
   }
   return _dlApi;

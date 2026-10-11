@@ -7,12 +7,13 @@
 //                                      #   or on a merged tree — the deploy-merge rule)
 //   node tools/check/ratchets.mjs --json     # {ok, rows:[{file, metric, value, ceiling, over, slack}]}
 //   node tools/check/ratchets.mjs --base <ref> [--max-raise=40] [--advisory]   # --advisory: a raise past the absorb
-//                                      #   annotates instead of failing — for PUSH runs (no PR / history gate)
+//                                      #   annotates instead of failing — for PUSH runs, where no PR body can carry the reason
 //                                      # every ceiling that moved since <ref> (git show); raises are
-//                                      #   warnings; a raise past the commit hook's absorb fails UNLESS
-//                                      #   docs/notes/CEILING-HISTORY.md documents that file + new ceiling
-//                                      #   (the machine-checked "reason"); ci.yml's guards job runs this
-//                                      #   against the PR base / deploy tip
+//                                      #   warnings. A raise past the commit hook's absorb fails ONLY when
+//                                      #   the SOURCE file's metric also grew past absorb since <ref> —
+//                                      #   a ceiling catch-up after other PRs landed growth (file delta ≤
+//                                      #   absorb) is a warning, not a red. ci.yml's guards job runs this
+//                                      #   against the PR base / deploy tip.
 //
 // Replaced the module-size unit test on 2026-09-03 (Phase 1-lite of
 // docs/research/TREE-RESTRUCTURE-2026-09.md). The idiom is unchanged — a number
@@ -48,26 +49,8 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const DATA = path.join(ROOT, "tests/data/ratchets.json");
-export const HISTORY = path.join(ROOT, "docs/notes/CEILING-HISTORY.md");
 export const SLACK_MIN = 60;
 export const SLACK_PCT = 0.04;
-
-/** True when CEILING-HISTORY names this file (or tree metric) and the new
- *  ceiling value close together — the documented reason for a raise past the
- *  commit-hook absorb. Without a match, `--base` still fails the PR run. */
-export function ceilingRaiseDocumented(file, metric, now, { historyPath = HISTORY } = {}) {
-  if (now == null || !historyPath || !fs.existsSync(historyPath)) return false;
-  const text = fs.readFileSync(historyPath, "utf8");
-  const n = String(now);
-  if (file === "(tree)") {
-    const esc = String(metric).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return new RegExp(`\\b${esc}\\b[\\s\\S]{0,500}?\\b${n}\\b`).test(text)
-      || new RegExp(`\\b${n}\\b[\\s\\S]{0,500}?\\b${esc}\\b`).test(text);
-  }
-  const esc = String(file).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`${esc}[\\s\\S]{0,500}?\\b${n}\\b`).test(text)
-    || new RegExp(`\\b${n}\\b[\\s\\S]{0,500}?${esc}`).test(text);
-}
 
 const COMMENT = /^\s*(\/\/|\*|\/\*)/;
 
@@ -290,15 +273,43 @@ export function loadAt(ref) {
   return JSON.parse(out);
 }
 
+/**
+ * How much a sync file metric grew between `ref` and the working tree.
+ * Returns null when the metric is async/tree-scoped or the file is missing at
+ * either side — callers treat null as "not a catch-up" (keep the hard fail).
+ * `lines` / `codeLines` / `topLets` are the sync metrics the absorb gate cares about.
+ */
+export function sourceGrowth(ref, file, metric) {
+  if (!file || file === "(tree)") return null;
+  const fn = METRICS[metric];
+  if (typeof fn !== "function" || fn.constructor?.name === "AsyncFunction") return null;
+  let baseText;
+  try {
+    baseText = cp.execFileSync("git", ["show", `${ref}:${file}`], {
+      cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch { return null; }
+  const abs = path.join(ROOT, file);
+  if (!fs.existsSync(abs)) return null;
+  const nowText = fs.readFileSync(abs, "utf8");
+  const a = fn(file, baseText), b = fn(file, nowText);
+  if (typeof a !== "number" || typeof b !== "number") return null;
+  return b - a;
+}
+
 /** `--base <ref>`: every ceiling that moved since <ref>. A loosened slack, or a
  *  deleted entry whose file still exists, blocks like a raise past the absorb
  *  (15-F10). Raises are warnings
- *  (GitHub `::warning::` annotations on CI, plain lines elsewhere); a raise
- *  past `maxRaise` fails unless CEILING-HISTORY documents that file + new
- *  ceiling (or `--advisory` on a push). Returns the exit code. */
+ *  (GitHub `::warning::` annotations on CI, plain lines elsewhere). A raise
+ *  past `maxRaise` fails only when the SOURCE file's metric also grew past
+ *  `maxRaise` since <ref> — that is the commit-hook absorb applied to real
+ *  growth. A ceiling catch-up (file delta ≤ absorb; other PRs already landed
+ *  the lines) is a warning so a re-measure after a shared-branch merge can
+ *  land without an admin override. `sourceGrowthFn` is injectable for tests.
+ *  Returns the exit code. */
 export function compareToBase(ref, {
   maxRaise = 40, current = load(), print = console.log, advisory = false,
-  historyPath = HISTORY,
+  sourceGrowthFn = sourceGrowth,
 } = {}) {
   let base;
   try { base = loadAt(ref); }
@@ -306,22 +317,25 @@ export function compareToBase(ref, {
   const rows = diffRatchets(base, current);
   const gh = process.env.GITHUB_ACTIONS === "true";
   let blocked = 0;
-  let documented = 0;
   for (const r of rows) {
     const where = `${r.file} ${r.metric}`;
     if (r.kind === "raise") {
-      const over = r.delta > maxRaise;
-      const reasoned = over && ceilingRaiseDocumented(r.file, r.metric, r.now, { historyPath });
-      if (over && !reasoned) blocked++;
-      else if (reasoned) documented++;
+      let over = r.delta > maxRaise;
+      let growth = null;
+      if (over) {
+        growth = sourceGrowthFn(ref, r.file, r.metric);
+        // Catch-up: ceiling tracks size that is already on the tree at both
+        // sides (or grew within the absorb). Only real source growth past
+        // absorb keeps the hard fail — that is what the hook was for.
+        if (growth !== null && growth <= maxRaise) over = false;
+      }
+      if (over) blocked++;
       const msg = `RAISE  ${where}: ${r.base} -> ${r.now} (+${r.delta})` + (over
-        ? (reasoned
-          ? ` — past the ${maxRaise}-line commit-hook absorb: documented in CEILING-HISTORY.md`
-          : ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in CEILING-HISTORY.md (file + new ceiling)`)
-          + (advisory ? " (advisory on a push: the PR run is the gate)" : "")
-        : "");
-      const asError = over && !reasoned && !advisory;
-      print(gh ? `::${asError ? "error" : "warning"} file=tests/data/ratchets.json,title=ratchet raised::${msg}` : msg);
+        ? ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : "")
+        : (r.delta > maxRaise && growth !== null
+          ? ` — catch-up (source ${r.metric} grew ${growth} ≤ ${maxRaise}; ceiling tracks already-landed size)`
+          : ""));
+      print(gh ? `::${over && !advisory ? "error" : "warning"} file=tests/data/ratchets.json,title=ratchet raised::${msg}` : msg);
     } else if (r.kind === "lower") print(`LOWER  ${where}: ${r.base} -> ${r.now} (${r.delta})`);
     else if (r.kind === "new") print(`NEW    ${where}: ${r.now}`);
     else if (r.kind === "loosen") {
@@ -340,12 +354,14 @@ export function compareToBase(ref, {
     }
   }
   const raises = rows.filter((r) => r.kind === "raise").length;
-  print(`ratchets --base ${ref}: ${rows.length} ceiling(s) moved (${raises} raised, ${rows.filter((r) => r.kind === "lower").length} lowered, ${rows.filter((r) => r.kind === "new").length} new, ${rows.filter((r) => r.kind === "gone").length} gone)`
-    + (documented ? ` — ${documented} past absorb documented in CEILING-HISTORY` : "")
-    + (blocked ? ` — ${blocked} past the ${maxRaise}-line absorb${advisory ? " (advisory)" : ""}` : ""));
-  // ADVISORY ON A PUSH. A raise past the absorb with no CEILING-HISTORY match
-  // still fails the pull_request run. Push runs annotate only — ten of fourteen
-  // ci.yml failures on 2026-09-22 were this message on the same branch's pushes.
+  print(`ratchets --base ${ref}: ${rows.length} ceiling(s) moved (${raises} raised, ${rows.filter((r) => r.kind === "lower").length} lowered, ${rows.filter((r) => r.kind === "new").length} new, ${rows.filter((r) => r.kind === "gone").length} gone)` + (blocked ? ` — ${blocked} past the ${maxRaise}-line absorb${advisory ? " (advisory)" : ""}` : ""));
+  // ADVISORY ON A PUSH. A raise that is still a hard fail (real source growth
+  // past absorb) has no PR body on a push run, so failing there is a red that
+  // cannot be cleared by pushing again. Ten of the fourteen ci.yml failures on
+  // 2026-09-22 were this one message repeated on the same branch's pushes
+  // (eight of them on one branch), each a wasted run and a re-push into the
+  // same wall. The push run now annotates; the pull_request run still fails
+  // when the source file itself grew past absorb.
   return blocked && !advisory ? 1 : 0;
 }
 
