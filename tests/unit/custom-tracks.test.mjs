@@ -440,6 +440,51 @@ test("one throwing stored record is skipped, not fatal, at eval and on sync (6.6
   assert.equal(data.customTracks.items.length, 2);
 });
 
+test("collection backup merges once, keeps local duplicate labels, and preserves selection", () => {
+  const { C, ctx, writes, Tracks } = boot();
+  const saved = C.upsert(design({ name: "LOCAL" }));
+  const G = { trackIdx: Tracks.LIST.findIndex((t) => t.id === saved.id) }; C.create(G, {});
+  const envelope = C.exportCollection();
+  assert.equal(envelope.format, "apex26.tracks"); assert.equal(envelope.v, 1);
+  envelope.items[0].name = "IMPORTED LABEL";
+  envelope.items.push(design({ seed: 8 }), design({ seed: 8, name: "DUPLICATE" }));
+  const before = writes.length, result = C.importCollection(envelope);
+  assert.deepEqual(plain(result), { ok: true, added: 1, skipped: 2, durable: true });
+  assert.equal(writes.length, before + 1, "all new circuits land in one write");
+  assert.equal(C.get(saved.id).name, "LOCAL");
+  assert.equal(Tracks.LIST[G.trackIdx].id, saved.id);
+  assert.equal(C.list().length, 2);
+  const second = C.importCollection(C.exportCollection());
+  assert.equal(second.added, 0); assert.equal(second.skipped, 2);
+  assert.equal(writes.length, before + 1, "an unchanged collection performs no write");
+  ctx.GameStore.store.write = () => ({ ok: true, durable: false });
+  assert.equal(C.importCollection({ format: C.COLLECTION_FORMAT, v: 1, items: [design({ seed: 9 })] }).durable, false);
+});
+
+test("collection import preflights invalid entries, validator failures and capacity without partial writes", () => {
+  const { C, writes } = boot();
+  const envelope = (items) => ({ format: C.COLLECTION_FORMAT, v: 1, items });
+  assert.equal(C.importCollection({ ...envelope([]), v: 2 }).reason, "format");
+  assert.equal(C.importCollection(envelope([design(), { pts: [] }])).index, 1);
+  assert.equal(C.importCollection(envelope([design()]), () => ({ ok: false })).reason, "invalid");
+  assert.equal(C.importCollection(envelope([design({ pts: ellipse(36, 9000, 9000) })])).reason, "invalid");
+  assert.equal(writes.length, 0); assert.equal(C.list().length, 0);
+  const full = Array.from({ length: C.LIMITS.items }, (_, seed) => design({ seed }));
+  assert.equal(C.importCollection(envelope(full)).added, C.LIMITS.items);
+  const before = writes.length;
+  assert.equal(C.importCollection(envelope([design({ seed: 90 }), design({ seed: 91 })])).reason, "full");
+  assert.equal(C.importCollection(envelope(full.concat(design({ seed: 99 })))).reason, "full");
+  assert.equal(writes.length, before); assert.equal(C.list().length, C.LIMITS.items);
+});
+
+test("collection import refuses distinct geometry with a colliding content hash", () => {
+  const { C, ctx, writes } = boot();
+  ctx.Hash32 = { fnv1a: () => 7 };
+  const result = C.importCollection({ format: C.COLLECTION_FORMAT, v: 1, items: [design(), design({ baseHW: 6 })] });
+  assert.equal(result.reason, "collision"); assert.equal(result.index, 1);
+  assert.equal(writes.length, 0); assert.equal(C.list().length, 0);
+});
+
 test("sanitize refuses a loop thousands of km long (13-F1): strict above loopMax, loose above loopMaxLoose", () => {
   const { C } = boot();
   const star = (R) => {   // 40 points zig-zagging corner to corner at radius R
