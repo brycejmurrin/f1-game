@@ -9,8 +9,11 @@
 //   node tools/check/ratchets.mjs --base <ref> [--max-raise=40] [--advisory]   # --advisory: a raise past the absorb
 //                                      #   annotates instead of failing — for PUSH runs, where no PR body can carry the reason
 //                                      # every ceiling that moved since <ref> (git show); raises are
-//                                      #   warnings, a raise past the commit hook's absorb fails —
-//                                      #   ci.yml's guards job runs this against the PR base / deploy tip
+//                                      #   warnings. A raise past the commit hook's absorb fails ONLY when
+//                                      #   the SOURCE file's metric also grew past absorb since <ref> —
+//                                      #   a ceiling catch-up after other PRs landed growth (file delta ≤
+//                                      #   absorb) is a warning, not a red. ci.yml's guards job runs this
+//                                      #   against the PR base / deploy tip.
 //
 // Replaced the module-size unit test on 2026-09-03 (Phase 1-lite of
 // docs/research/TREE-RESTRUCTURE-2026-09.md). The idiom is unchanged — a number
@@ -103,10 +106,18 @@ function entry(raw, label) {
   const ceiling = typeof raw === "number" ? raw : raw.ceiling;
   if (typeof ceiling !== "number") throw new Error(`${label}: no ceiling`);
   const dflt = Math.max(SLACK_MIN, Math.round(ceiling * SLACK_PCT));
-  if (typeof raw === "number") return { ceiling, slackMax: dflt };
-  if (raw.slack === undefined) return { ceiling, slackMax: dflt };
+  // slackRule names the rule this entry is held to, for the LOOSE message: an
+  // explicit `slack` is its own rule, never the default it tightens.
+  const rule = `max(${SLACK_MIN}, ${SLACK_PCT * 100}%) = ${dflt}`;
+  if (typeof raw === "number") return { ceiling, slackMax: dflt, slackRule: rule };
+  if (raw.slack === undefined) return { ceiling, slackMax: dflt, slackRule: rule };
   if (raw.slack > dflt) throw new Error(`${label}: slack ${raw.slack} is looser than the default ${dflt} — an entry may tighten the rule, never widen it`);
-  return { ceiling, slackMax: raw.slack };
+  return { ceiling, slackMax: raw.slack, slackRule: `the entry's own slack ${raw.slack}${raw.slack === 0 ? " (exact)" : ""}` };
+}
+
+/** One LOOSE row as a line: the slack it has and the rule it is held to. */
+export function looseLine(r) {
+  return `${r.file} ${r.metric}: ${r.value} but ceiling ${r.ceiling} (slack ${r.slack} > ${r.slackRule ?? r.slackMax})`;
 }
 
 export function load() {
@@ -123,16 +134,16 @@ export async function measure(data = load()) {
       const fn = METRICS[metric];
       if (!fn) throw new Error(`${file}: unknown metric "${metric}" (known: ${Object.keys(METRICS).join(", ")})`);
       const value = await fn(file, text);
-      const { ceiling, slackMax } = entry(raw, `${file} ${metric}`);
-      rows.push({ file, metric, value, ceiling, over: Math.max(0, value - ceiling), slack: ceiling - value, slackMax });
+      const { ceiling, slackMax, slackRule } = entry(raw, `${file} ${metric}`);
+      rows.push({ file, metric, value, ceiling, over: Math.max(0, value - ceiling), slack: ceiling - value, slackMax, slackRule });
     }
   }
   for (const [metric, raw] of Object.entries(data.tree || {})) {
     const fn = TREE_METRICS[metric];
     if (!fn) throw new Error(`tree: unknown metric "${metric}" (known: ${Object.keys(TREE_METRICS).join(", ")})`);
     const value = await fn();
-    const { ceiling, slackMax } = entry(raw, `tree ${metric}`);
-    rows.push({ file: "(tree)", metric, value, ceiling, over: Math.max(0, value - ceiling), slack: ceiling - value, slackMax, tree: true });
+    const { ceiling, slackMax, slackRule } = entry(raw, `tree ${metric}`);
+    rows.push({ file: "(tree)", metric, value, ceiling, over: Math.max(0, value - ceiling), slack: ceiling - value, slackMax, slackRule, tree: true });
   }
   return rows;
 }
@@ -262,13 +273,44 @@ export function loadAt(ref) {
   return JSON.parse(out);
 }
 
+/**
+ * How much a sync file metric grew between `ref` and the working tree.
+ * Returns null when the metric is async/tree-scoped or the file is missing at
+ * either side — callers treat null as "not a catch-up" (keep the hard fail).
+ * `lines` / `codeLines` / `topLets` are the sync metrics the absorb gate cares about.
+ */
+export function sourceGrowth(ref, file, metric) {
+  if (!file || file === "(tree)") return null;
+  const fn = METRICS[metric];
+  if (typeof fn !== "function" || fn.constructor?.name === "AsyncFunction") return null;
+  let baseText;
+  try {
+    baseText = cp.execFileSync("git", ["show", `${ref}:${file}`], {
+      cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024,
+    });
+  } catch { return null; }
+  const abs = path.join(ROOT, file);
+  if (!fs.existsSync(abs)) return null;
+  const nowText = fs.readFileSync(abs, "utf8");
+  const a = fn(file, baseText), b = fn(file, nowText);
+  if (typeof a !== "number" || typeof b !== "number") return null;
+  return b - a;
+}
+
 /** `--base <ref>`: every ceiling that moved since <ref>. A loosened slack, or a
  *  deleted entry whose file still exists, blocks like a raise past the absorb
  *  (15-F10). Raises are warnings
- *  (GitHub `::warning::` annotations on CI, plain lines elsewhere); a raise
- *  past `maxRaise` — the commit hook's own absorb, so only APEX_SKIP_GUARDS
- *  could have produced it — fails. Returns the exit code. */
-export function compareToBase(ref, { maxRaise = 40, current = load(), print = console.log, advisory = false } = {}) {
+ *  (GitHub `::warning::` annotations on CI, plain lines elsewhere). A raise
+ *  past `maxRaise` fails only when the SOURCE file's metric also grew past
+ *  `maxRaise` since <ref> — that is the commit-hook absorb applied to real
+ *  growth. A ceiling catch-up (file delta ≤ absorb; other PRs already landed
+ *  the lines) is a warning so a re-measure after a shared-branch merge can
+ *  land without an admin override. `sourceGrowthFn` is injectable for tests.
+ *  Returns the exit code. */
+export function compareToBase(ref, {
+  maxRaise = 40, current = load(), print = console.log, advisory = false,
+  sourceGrowthFn = sourceGrowth,
+} = {}) {
   let base;
   try { base = loadAt(ref); }
   catch (e) { print(`ratchets --base: cannot read tests/data/ratchets.json at ${ref} (${String(e.stderr || e.message).trim().split("\n")[0]}) — is the checkout deep enough (fetch-depth: 0)?`); return 2; }
@@ -278,11 +320,21 @@ export function compareToBase(ref, { maxRaise = 40, current = load(), print = co
   for (const r of rows) {
     const where = `${r.file} ${r.metric}`;
     if (r.kind === "raise") {
-      const over = r.delta > maxRaise;
+      let over = r.delta > maxRaise;
+      let growth = null;
+      if (over) {
+        growth = sourceGrowthFn(ref, r.file, r.metric);
+        // Catch-up: ceiling tracks size that is already on the tree at both
+        // sides (or grew within the absorb). Only real source growth past
+        // absorb keeps the hard fail — that is what the hook was for.
+        if (growth !== null && growth <= maxRaise) over = false;
+      }
       if (over) blocked++;
       const msg = `RAISE  ${where}: ${r.base} -> ${r.now} (+${r.delta})` + (over
         ? ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : "")
-        : "");
+        : (r.delta > maxRaise && growth !== null
+          ? ` — catch-up (source ${r.metric} grew ${growth} ≤ ${maxRaise}; ceiling tracks already-landed size)`
+          : ""));
       print(gh ? `::${over && !advisory ? "error" : "warning"} file=tests/data/ratchets.json,title=ratchet raised::${msg}` : msg);
     } else if (r.kind === "lower") print(`LOWER  ${where}: ${r.base} -> ${r.now} (${r.delta})`);
     else if (r.kind === "new") print(`NEW    ${where}: ${r.now}`);
@@ -303,12 +355,13 @@ export function compareToBase(ref, { maxRaise = 40, current = load(), print = co
   }
   const raises = rows.filter((r) => r.kind === "raise").length;
   print(`ratchets --base ${ref}: ${rows.length} ceiling(s) moved (${raises} raised, ${rows.filter((r) => r.kind === "lower").length} lowered, ${rows.filter((r) => r.kind === "new").length} new, ${rows.filter((r) => r.kind === "gone").length} gone)` + (blocked ? ` — ${blocked} past the ${maxRaise}-line absorb${advisory ? " (advisory)" : ""}` : ""));
-  // ADVISORY ON A PUSH. The reason for a raise past the absorb lives in a PR
-  // body, and a push run has no PR — so failing there is a red that cannot
-  // be cleared by pushing again. Ten of the fourteen ci.yml failures on
+  // ADVISORY ON A PUSH. A raise that is still a hard fail (real source growth
+  // past absorb) has no PR body on a push run, so failing there is a red that
+  // cannot be cleared by pushing again. Ten of the fourteen ci.yml failures on
   // 2026-09-22 were this one message repeated on the same branch's pushes
   // (eight of them on one branch), each a wasted run and a re-push into the
-  // same wall. The push run now annotates; the pull_request run still fails.
+  // same wall. The push run now annotates; the pull_request run still fails
+  // when the source file itself grew past absorb.
   return blocked && !advisory ? 1 : 0;
 }
 
@@ -353,7 +406,7 @@ async function main() {
   // is the half a bare count cannot carry.
   const where = (r) => (r.tree ? " — breakdown: node tools/check/tree-counts.mjs --offenders" : "");
   for (const r of v.over) console.log(`OVER   ${r.file} ${r.metric}: ${r.value} > ceiling ${r.ceiling} (+${r.over}) — extract, or raise it deliberately and say why in the commit${where(r)}`);
-  for (const r of v.loose) console.log(`LOOSE  ${r.file} ${r.metric}: ${r.value} but ceiling ${r.ceiling} (slack ${r.slack} > ${r.slackMax}) — lower it: node tools/check/ratchets.mjs --update`);
+  for (const r of v.loose) console.log(`LOOSE  ${looseLine(r)} — lower it: node tools/check/ratchets.mjs --update`);
   if (v.ok) {
     const d = load();
     console.log(`ratchets: ${v.rows.length} metrics on ${Object.keys(d.files).length} files + ${Object.keys(d.tree || {}).length} tree-wide, all at or under their ceilings`);

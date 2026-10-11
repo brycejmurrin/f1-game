@@ -18,7 +18,7 @@
 //   node tools/shot/apex-capture.mjs identity [outdir] [id ...]   # aerial+tour+eye
 //   node tools/shot/apex-capture.mjs lap-tour [track] [speed] [outdir] [weather=wet] [tod=dusk]
 //
-// Env: APEX_WORKERS=N  (default 2 for identity/tracks — 4+ OOMs SwiftShader on laptops)
+// Env: APEX_WORKERS=N  (default: 2 on SwiftShader, up to 4 on APEX_GL=llvmpipe — see browser-workers.mjs)
 // Logs/redirects: use artifacts/tmp/ (never /tmp) — e.g.
 //   node tools/shot/apex-capture.mjs identity scratch/captures/apex-capture/identity > artifacts/tmp/apex-identity.log 2>&1 &
 // Default output roots when [outdir] is omitted:
@@ -36,6 +36,7 @@ import { createServer as createHttpServer } from "node:http";
 import { join, normalize, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchChromium } from "../lib/harness.mjs";
+import { defaultCaptureWorkers } from "../lib/browser-workers.mjs";
 import { screenshotPresentedCanvas } from "./probe-page.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
@@ -49,7 +50,7 @@ exitIfHelp(argv, `apex-capture — parallel headless screenshot sweep
   node tools/shot/apex-capture.mjs identity [outdir] [id ...]
   node tools/shot/apex-capture.mjs lap-tour [track] [speed] [outdir]
 
-Default cmd=modes. Env APEX_WORKERS=N (default 2).`);
+Default cmd=modes. Env APEX_WORKERS=N (GL-aware default via browser-workers.mjs).`);
 const [cmd = "modes", ...rest] = argv;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const LAND = { width: 844, height: 390 };
@@ -278,7 +279,7 @@ async function fanoutPages(pages, jobs, run) {
 }
 
 function workersEnv(def = 2) {
-  return Math.max(1, Math.min(8, parseInt(process.env.APEX_WORKERS || String(def), 10) || def));
+  return defaultCaptureWorkers({ defSwift: def });
 }
 
 async function prepCleanChrome(page) {

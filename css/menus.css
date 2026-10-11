@@ -915,10 +915,12 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
     --vhz: calc(1vh / var(--ui-compact-scale));
     --svhz: calc(1svh / var(--ui-compact-scale));
   }
+  /* Sheets share title chrome geometry cap (secondary rows @ 150%+). */
+  :where(body[data-density="compact"]) .sheet {
+    zoom: min(var(--sheet-scale, var(--ui-scale)), var(--ui-compact-scale));
+  }
 
-  /* Type still honours the requested percentage. The compact landscape rules
-     use a deliberate 17px control rung; every smaller label uses the shared
-     micro rung. Icons are em-sized and follow their label automatically. */
+  /* Type still honours the requested %; compact landscape keeps the 17px rung. */
   :where(body[data-density="compact"]) #menu-buttons .bigbtn {
     font-size: calc(var(--fs-4) * var(--ui-compact-text));
   }

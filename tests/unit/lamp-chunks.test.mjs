@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -476,5 +476,59 @@ test("TLX lamp grid: a PER-CHUNK LAMPS drag bakes once and re-grids only per cap
     assert.equal(n.bakes, 2, "a changed chunk set must rebake");
   } finally {
     delete globalThis.__n;
+  }
+});
+
+/* ── ChunkBins: the chunk key the lamp grid decodes ──────────────────────────
+ *
+ * R3-ARCHITECTURE-5 (2026-10-10). buildGrid above trusts each chunk's gx/gz,
+ * and those come from the binning loop every backend's chunked builder ran —
+ * four copies (GLX, TLX, WGX ×2) of `floor(centroid / cell) + 1024`, keyed
+ * `gx * 4096 + gz`. One shared helper now; these pin its key and that the
+ * GLX and TLX builders bin through it. WGX still carries its two copies (the
+ * WGX lane migrates them); the allow-list below may only shrink. */
+const ChunkBins = new Function(readFileSync(join(ROOT, "js/render/shared/chunk-bins.js"), "utf8") + "; return ChunkBins;")();
+
+test("ChunkBins key: gx * 4096 + gz over 72 m cells biased by 1024, and it round-trips", () => {
+  assert.deepEqual([ChunkBins.CELL, ChunkBins.BIAS, ChunkBins.STRIDE], [72, 1024, 4096]);
+  assert.equal(ChunkBins.cellSize(0), 72);
+  assert.equal(ChunkBins.cellSize(50), 50);
+  assert.equal(ChunkBins.cellOf(-0.5, 72), 1023, "floor, not truncation: -0.5 m is the cell west of the origin");
+  assert.equal(ChunkBins.cellOf(71.9, 72), 1024);
+  for (const [gx, gz] of [[1024, 1024], [0, 4095], [2047, 3], [1500, 600]]) {
+    const k = ChunkBins.key(gx, gz);
+    assert.equal(k, gx * 4096 + gz);
+    assert.deepEqual([ChunkBins.gxOf(k), ChunkBins.gzOf(k)], [gx, gz]);
+  }
+});
+
+test("ChunkBins.bin: centroid cells, vertex AABBs, emission order, absolute indices", () => {
+  // Three triangles: two in the origin cell, one whose centroid sits in the
+  // +x neighbour but whose vertex reaches back across the boundary.
+  const pos = new Float32Array([
+    0, 0, 0,   10, 0, 0,   0, 0, 10,      // tri 0: cell (1024, 1024)
+    100, 2, 0, 110, 0, 0,  60, -1, 5,     // tri 1: centroid x 90 -> cell (1025, 1024); vertex x 60 is in 1024
+    5, 1, 5,   6, 0, 5,    5, 0, 6,       // tri 2: cell (1024, 1024) again
+  ]);
+  const idx = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+  const b = ChunkBins.bin(pos, idx, 72);
+  assert.deepEqual([...b.keys()], [ChunkBins.key(1024, 1024), ChunkBins.key(1025, 1024)], "first-seen order");
+  const o = b.get(ChunkBins.key(1024, 1024)), e = b.get(ChunkBins.key(1025, 1024));
+  assert.deepEqual(o.idx, [0, 1, 2, 6, 7, 8]);
+  assert.deepEqual([o.mn, o.mx], [[0, 0, 0], [10, 1, 10]]);
+  assert.deepEqual(e.idx, [3, 4, 5]);
+  assert.deepEqual([e.mn, e.mx], [[60, -1, 0], [110, 2, 5]], "the AABB is the vertices', so it may leave its own cell");
+});
+
+test("the GLX and TLX chunked builders bin through ChunkBins (no private copy of the key)", () => {
+  const COPY = /\*\s*4096\s*\+\s*gz|\)\s*\/\s*cell\)\s*\+\s*1024/;
+  const allowed = new Set(["js/render/webgpu/wgx-chunked.js"]);   // WGX lane: migrate, then delete this entry
+  const walk = (rel) => readdirSync(join(ROOT, rel), { withFileTypes: true })
+    .flatMap((e) => e.isDirectory() ? walk(rel + "/" + e.name) : e.name.endsWith(".js") ? [rel + "/" + e.name] : []);
+  const copies = walk("js/render").filter((f) => f !== "js/render/shared/chunk-bins.js" && !f.includes("/vendor/"))
+    .filter((f) => readFileSync(join(ROOT, f), "utf8").split("\n").some((l) => !/^\s*(\/\/|\*)/.test(l) && COPY.test(l)));
+  assert.deepEqual(copies.filter((f) => !allowed.has(f)), [], "bin through ChunkBins.bin / ChunkBins.key instead");
+  for (const f of ["js/render/glx/chunked.js", "js/render/three/tlx-chunked.js"]) {
+    assert.match(readFileSync(join(ROOT, f), "utf8"), /ChunkBins\.bin\(pos, srcIdx, cell\)/, f);
   }
 });
