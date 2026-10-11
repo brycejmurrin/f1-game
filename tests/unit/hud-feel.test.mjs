@@ -31,7 +31,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
-import { cssRules, decl } from "../helpers/css-rules.mjs";
+import { cssRules, decl, ruleFor } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -277,6 +277,73 @@ test("sector splits carry ★/▼/▲ against sectorBests, timing-screen colours
   G.fieldSectorBests[0] = 28.0; G.sectorLast[0] = 28.431; tick();
   assert.equal(vals[0].textContent, "▼28.431");
   assert.equal(vals[0].style.color, "var(--faster)");
+});
+
+test("a sector split shows its GAIN on the previous best for 3 s, then the split again", () => {
+  // The bare split made the driver remember last lap's figure to know whether
+  // ▼31.204 was 0.02 s or 0.6 s better. game.js writes sectorLast AND the new
+  // best in one crossing, then calls flashSector — so the HUD must measure
+  // against the best it saw BEFORE that crossing, not the one just written.
+  const { els, G, hud, tick } = boot();
+  tick();
+  const vals = els.hudSectors.children.map((row) => row.children[1]);
+  G.fieldSectorBests[0] = 28.0;
+  const cross = (t) => { G.sectorLast[0] = t; if (t < G.sectorBests[0]) G.sectorBests[0] = t; hud.flashSector(0); tick(); };
+
+  cross(28.431);
+  assert.equal(vals[0].textContent, "▼28.431", "a first-ever split has nothing to beat: the absolute time");
+
+  cross(28.9);
+  assert.equal(vals[0].textContent, "▲+0.469", "slower: the loss to the best, signed");
+  assert.equal(vals[0].style.color, "var(--sec-slow)", "the slower state keeps its yellow");
+  for (let k = 0; k < 29; k++) tick();
+  assert.equal(vals[0].textContent, "▲+0.469", "held for the whole 3 s");
+  tick();
+  assert.equal(vals[0].textContent, "▲28.900", "then the split itself again");
+
+  cross(28.289);
+  assert.equal(vals[0].textContent, "▼-0.142", "a new best reads its gain on the OLD best, not 0.000");
+  assert.equal(vals[0].style.color, "var(--faster)");
+
+  // A new race starts with no best: the first split is absolute again.
+  hud.resetRace();
+  G.sectorBests[0] = Infinity; G.sectorLast[0] = null; tick();
+  cross(29.5);
+  assert.equal(vals[0].textContent, "▼29.500");
+});
+
+test("in a race the lap clock holds the lap just driven for 3 s — green on a personal best", () => {
+  // The clock snapped to zero at the line and the race gaps slot shows gaps,
+  // so a race never showed the lap the driver had just completed.
+  const { els, G, player, tick } = boot();
+  tick();
+  assert.equal(els.time.textContent, "12.00", "mid-lap: the running clock");
+  const line = (lastLap, lapTime) => { player.lap++; player.lastLap = lastLap; if (lastLap < player.best) player.best = lastLap; player.lapTime = lapTime; tick(); };
+
+  line(91.5, 0.4);
+  assert.equal(els.time.textContent, "91.50", "the lap just driven, not 0.40");
+  assert.equal(els.time.dataset.hold, "pb", "a personal best is marked for the green");
+  player.lapTime = 2.9; tick();
+  assert.equal(els.time.textContent, "91.50", "still held inside the 3 s");
+  player.lapTime = 3.1; tick();
+  assert.equal(els.time.textContent, "3.10", "back to the running clock");
+  assert.equal(els.time.dataset.hold, undefined);
+
+  line(92.25, 0.2);
+  assert.equal(els.time.textContent, "92.25");
+  assert.equal(els.time.dataset.hold, "lap", "held, but not a personal best: no green");
+
+  // An INVALID lap leaves lastLap where it was (game.js writes it for a valid
+  // lap only) — the clock must not re-show the lap before it.
+  player.lapTime = 5; tick();
+  line(92.25, 0.3);
+  assert.equal(els.time.textContent, "0.30", "an invalid lap keeps the running clock");
+
+  // Qualifying is not a race: the clock is unchanged there.
+  G.session = "quali"; player.lapTime = 5; tick();
+  line(90, 0.3);
+  assert.equal(els.time.textContent, "0.30");
+  assert.match(read("css/hud.css"), /#hud-time\[data-hold="pb"\]\s*\{\s*color:\s*var\(--faster\)/);
 });
 
 test("the speed digits, energy bar and sector red are set up to be read at a glance", () => {
@@ -1239,4 +1306,32 @@ test("the caution step-aside needs the card's other slot to really apply; TEXT L
     assert.ok(mh && lh, "both rules present");
     assert.ok(fs * +mh[1] + +mh[2] - 2 >= fs * lh, `${size}: the bar's inner height holds one ${fs}px label line`);
   }
+});
+
+// VISUAL SPOTTER. The spotter's occupancy (RaceRadio.trafficSide: 1 left,
+// 2 right, 3 both — measured with the voice OFF, race-radio.test.mjs) lights
+// the matching screen edge through #hud[data-along], written at the 10 Hz tick.
+test("a car alongside lights its screen edge: trafficSide → #hud[data-along], under the numbers, no pulse under REDUCE MOTION", () => {
+  const { dom, els, G, tick } = boot();
+  els.hud = dom.byId("hud");
+  let side = 0;
+  G.raceRadio = { trafficSide: () => side };
+  const along = () => els.hud.dataset.along ?? null;   // mini-dom keeps dataset apart from attributes
+  tick(); assert.equal(along(), null, "nobody alongside: no attribute, no glow");
+  for (const [s, v] of [[1, "l"], [2, "r"], [3, "l r"], [0, null]]) { side = s; tick(); assert.equal(along(), v, "side " + s); }
+  G.raceRadio = { trafficBusy: () => true };   // a radio without the accessor (js/race/session-stub.js)
+  side = 1; tick(); assert.equal(along(), null);
+
+  const rules = cssRules(read("css/hud.css"));
+  assert.equal(decl(rules, '#hud[data-along~="l"]::after', "--along-l"), "var(--along)");
+  assert.equal(decl(rules, '#hud[data-along~="r"]::after', "--along-r"), "var(--along)");
+  const base = ruleFor(rules, "#hud[data-along]::after", "background");
+  assert.equal(base.decls.get("z-index"), "-1", "under every HUD number");
+  assert.equal(base.decls.get("pointer-events"), "none");
+  assert.match(base.decls.get("background"), /var\(--along-l, transparent\), transparent calc\(24px \+ var\(--sal\)\)/, "a 24 px fade past the safe area");
+  assert.match(base.decls.get("--along"), /var\(--spark\) 45%, transparent/, "low-alpha warning accent, not a team colour");
+  const anim = rules.filter((r) => /#hud\[data-along\]::after$/.test(r.selector) && r.decls.has("animation"));
+  assert.equal(anim.length, 1, "one pulse rule");
+  assert.ok(anim[0].context.some((c) => /prefers-reduced-motion: no-preference/.test(c)), "only when motion is allowed by the OS");
+  assert.match(anim[0].selector, /^:root:not\(\[data-motion="reduce"\]\) /, "…and by SETTINGS › MOTION");
 });

@@ -165,26 +165,27 @@ const NetPlay = (function () {
     }
     return true;
   }
+  // QUALI + QLIVE flood cap, shared by the lobby and the in-race relay: per
+  // connection, rolling window. A real client sends ~2.5 QLIVE/s plus one QUALI.
+  const QUALI_RATE = 12, EVENT_WINDOW_MS = 1000;
+  function rateGate(limit, windowMs = EVENT_WINDOW_MS) {
+    const times = [];
+    return () => {
+      const now = performance.now();
+      while (times.length && now - times[0] > windowMs) times.shift();
+      if (times.length >= limit) return false;
+      times.push(now);
+      return true;
+    };
+  }
   // Register the QUALI/QLIVE receivers on a session. `ownsDriver(d)` is the
   // caller's sender binding — the lobby keys it on the HELLO profile filed
   // under the connection, NetPlay on the remote car it seated — because the
   // two phases hold different truths about who a connection speaks for.
-  // PER-CONNECTION RATE LIMIT, one rolling window per kind: the host relays every
-  // accepted entry to all other guests, so an unlimited sender is an amplifier.
-  // A legitimate peer sends a QLIVE every 400 ms and one QUALI per driven lap.
-  const QUALI_RATE = 5, QUALI_WINDOW_MS = 1000;
-  function bindQuali(s, ownsDriver, G, onAccepted, clock) {
-    const nowMs = clock || (() => performance.now());
-    const quTimes = [], qlTimes = [];
-    const underRate = (times) => {
-      const now = nowMs();
-      while (times.length && now - times[0] > QUALI_WINDOW_MS) times.shift();
-      if (times.length >= QUALI_RATE) return false;
-      times.push(now);
-      return true;
-    };
+  // Rate limiting lives in the caller (lobby / bindSession) via rateGate so
+  // QUALI and QLIVE share one window per connection (#1414).
+  function bindQuali(s, ownsDriver, G, onAccepted) {
     s.onEvent(EV.QUALI, (d) => {
-      if (!underRate(quTimes)) return;
       const q = validQuali(d);
       if (q && ownsDriver(q)) {
         if (G.onPeerQuali) G.onPeerQuali(q);
@@ -192,7 +193,6 @@ const NetPlay = (function () {
       }
     });
     s.onEvent(EV.QLIVE, (d) => {
-      if (!underRate(qlTimes)) return;
       const q = validQualiLive(d);
       if (q && ownsDriver(q)) {
         if (G.onPeerQualiLive) G.onPeerQualiLive(q);
@@ -543,6 +543,7 @@ const NetPlay = (function () {
     }
 
     function bindSession(id, s) {
+      const qualiGate = rateGate(QUALI_RATE);
       function sendersOwnDriver(d) {
         if (role !== "host") return true;
         const wid = remoteFor(id);
@@ -769,7 +770,7 @@ const NetPlay = (function () {
           if (name === EV.CAUTION && d && !ownsRaceControl() && G.applyCaution) G.applyCaution(d);
         });
       }
-      bindQuali(s, sendersOwnDriver, G);
+      bindQuali(s, (d) => (role !== "host" || qualiGate()) && sendersOwnDriver(d), G);
     }
 
     function handBackToAI(reason, id) {
@@ -1335,6 +1336,7 @@ const NetPlay = (function () {
   }
 
   return { create, EV, PUBLISH_HZ, INTERP_DELAY_MS, strategyState, applyStrategy, STRATEGY_VERSION,
-    clampWire, validQuali, validQualiLive, bindQuali, qualiReporters, QUALI_MIN_S, QUALI_MAX_S };
+    clampWire, validQuali, validQualiLive, bindQuali, qualiReporters, QUALI_MIN_S, QUALI_MAX_S,
+    QUALI_RATE, EVENT_WINDOW_MS, rateGate };
 })();
 Object.freeze(NetPlay);
