@@ -66,6 +66,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
   // asserted instead of described; under a second.
   "tests/unit/agent-config.test.mjs",
+  // The orchestrator/worker contract (skill agent-fleet): host-correct PR
+  // subscribe tools, one fleet block, the mandated launch fields. < 0.1 s.
+  "tests/unit/agent-fleet.test.mjs",
   "tests/unit/agent-surface.test.mjs",
   "tests/unit/ai-band.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
@@ -455,6 +458,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-inputs.test.mjs",
   "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
+  // Behaviour pins that must survive the band allocator (PR #1375 audit; todo = known red on ship).
+  "tests/unit/hud-pins.test.mjs",
   // Portrait phone bottom cluster: TYRES stays in the column (landscape-only
   // dock anchor), fitHud caps --hud-z-bot vs AERO/OT, tip clash shapes.
   "tests/unit/hud-portrait-cluster.test.mjs",
@@ -621,6 +626,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // open PR's head, claims on age; pure fixtures, under a second.
   "tests/unit/prune-branches.test.mjs",
   "tests/unit/pu-harvest-audio.test.mjs",
+  // shots/<topic> evidence-branch publisher: validations, dry run, full publish into a throwaway bare repo.
+  "tests/unit/publish-shots.test.mjs",
   "tests/unit/quick-validate.test.mjs",
   "tests/unit/race-control.test.mjs",
   "tests/unit/race-entry-profile.test.mjs",

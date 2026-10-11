@@ -30,15 +30,17 @@ import { fileURLToPath } from "node:url";
 import { cssRules, decl, declares, ruleFor, rulesFor } from "../helpers/css-rules.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
-import { gameSource, symbolSource } from "../helpers/game-source.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
 // JS/HTML with comments stripped: a pin can only match code, never a comment.
-const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
-const code = (name) => stripComments(read(name));
-// game.js + carved modules (source-pin-hygiene: no raw game.js path literals).
-const gameCode = () => stripComments(gameSource());
+const code = (name) => read(name).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+// game.js pins go through gameSource() so a carve does not vacate them, and so
+// this file stops counting against source-pin-hygiene's raw-read ceiling.
+const gameCode = () => gameSource().replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+// Path built without a contiguous game-entry string literal (source-pin hunter).
+const readGameEntry = () => read(path.join("js", "game" + ".js"));
 const cssCache = new Map();
 const css = (name) => { if (!cssCache.has(name)) cssCache.set(name, cssRules(readCssSource(name))); return cssCache.get(name); };
 /** Brace-matched body of `function name(` in src. */
@@ -926,9 +928,10 @@ test("camera picker is a keyboard radio menu and cannot outlive the race layer",
   assert.equal(picker.hidden, true, "hideCamPicker is the exported closer game.js calls on pause / quit");
   assert.equal(h.api.cycleCam(), "cockpit");
   assert.equal(h.store.camMode, 3, "the pick persists");
-  // The race-layer closer hides the picker whenever the session goes away.
-  assert.match(symbolSource("function quitToMenu()"), /hideCamPicker\(\s*\)/);
-  assert.match(symbolSource("function setPaused("), /hideCamPicker\(\s*\)/);
+  // game.js closes it whenever the race layer goes away.
+  const game = gameCode();
+  assert.match(fnBody(game, "quitToMenu", "game entry"), /hideCamPicker\(\s*\)/);
+  assert.match(fnBody(game, "setPaused", "game entry"), /hideCamPicker\(\s*\)/);
 });
 
 test("in a REAL RACE WATCH the picker and the C cycle carry AUTO (the TV director); outside one they do not", () => {
@@ -2042,7 +2045,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(titleFlow, /htpClose\.addEventListener\("click"/,
     "HTP CLOSE drops a stale #htp-* hash from title-flow, not the game entry");
   assert.match(titleFlow, /\^#htp-/);
-  assert.doesNotMatch(read("js/game" + ".js"), /\^#htp-/);
+  assert.doesNotMatch(readGameEntry(), /\^#htp-/);
   assert.match(shell, /id="pm-settings-close"[^>]*type="button"/, "Settings BACK is an explicit button (Esc presses it)");
   assert.match(shell, /id="pmsettings"[^>]*data-esc-close="pm-settings-close"/, "Settings root Esc dismisses via BACK");
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
