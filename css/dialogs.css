@@ -611,6 +611,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
     align-items: center;
     justify-content: flex-end;
     flex-wrap: wrap;
+    height: auto;
+    max-height: none;
     min-height: var(--tap-paint);
     padding: calc(var(--pad) * 0.35) var(--pad);
     background: revert-layer;
@@ -626,5 +628,39 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   #vsfriend #vsfriend-inner[data-shape="tall"] > #vs-head,
   #vsfriend #vsfriend-inner[data-density="compact"][data-shape="tall"] > #vs-head {
     padding-right: var(--pad);
+  }
+  /* Wide compact: restate head-parked CLOSE AFTER tall rules (this file loads
+     after overlays.css in CSS_DEFERRED). selected-3 2026-10-11: base
+     .sheet-foot padding (0.35*pad) survived under absolute top:0 and pushed
+     #vs-close ~5.69px past #vs-head (closeInHead). */
+  #vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot {
+    position: absolute;
+    top: 0;
+    right: var(--pad);
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    height: var(--tap-paint);
+    min-height: var(--tap-paint);
+    max-height: var(--tap-paint);
+    padding-top: 0;
+    padding-bottom: 0;
+    padding-left: 0;
+    padding-right: 0;
+    background: none;
+  }
+  #vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before {
+    display: none;
+  }
+  #vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close {
+    min-width: var(--tap);
+    min-height: var(--tap-paint);
+    margin: 0;
+    padding: 0 var(--gap);
+    font-size: var(--fs-micro);
+    line-height: 1;
+    box-sizing: border-box;
+    align-self: stretch;
   }
 } /* @layer overlays */
