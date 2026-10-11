@@ -35,6 +35,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | Tool | Does | Paired skill |
 |---|---|---|
 | **lib/ai-ratings-math.mjs** | Pure Pearson / means / style zero-mean helpers for `ai-ratings.mjs` (personality dial census). | — |
+| **lib/browser-workers.mjs** | GL-aware Playwright / capture worker defaults (llvmpipe vs SwiftShader). | — |
 | **lib/changed-files.mjs** | `git diff` path lists naming BOTH ends of a rename, so a file moved out of a watched directory still routes its rules. | — |
 | **lib/chromium-path.mjs** | Derives the Chromium executable from playwright-core's browsers.json revision + the browsers root; run it to print. | playwright-probe |
 | **lib/cli-args.mjs** | Shared CLI flag reader: both `--name=v` and `--name v`, and an unknown flag is an ERROR not a shrug. | — |
@@ -79,7 +80,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/remote-group.mjs** | One test:* browser group on 4 llvmpipe runners (browser-group.yml); a line per shard, then `= group`. | check-changes |
 | **ci/repo-size.mjs** | Full-history size report: largest blobs ever committed and on-disk totals per top-level directory (repo-size.yml). | check-changes |
 | **ci/run-group.mjs** | PR-only topical runner: drop TOOLING_FAST_FILES so always-on vm-b1 riders do not double-bill. | — |
-| **ci/session-status.mjs** | Prints the branch's handoff block (sessions, commits, dirty/unpushed, test verdicts, live run) as Markdown or `--json`. | check-changes |
+| **ci/session-status.mjs** | Prints the branch's handoff block (sessions, commits, dirty/unpushed, test verdicts, live run); `--pr` adds live PR… | check-changes |
 | **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>. | check-changes |
 | **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
 | **ci/who-is-on-it.mjs** | Recent pushes per branch, who touched your paths, live claims: the check before fixing a shared red. | check-changes |
@@ -192,8 +193,9 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/profile-gameloop.mjs** | Headless V8 CPU profile of the game loop → a `.cpuprofile` for Chrome DevTools. | playwright-probe |
 | **shot/replay-camera-probe.mjs** | Offline-fixture live-render camera discontinuity probe across replay entry, seek, follow, exit and reentry. | replay-camera |
 | **shot/repro-shot.mjs** | Render a player's exact frame from an `__apex.repro()` blob. Its COCKPIT output is WRONG — read the header. | playwright-probe |
+| **shot/shot-jobs.mjs** | Pure helpers for shot.mjs: CLI/batch job parse, output format, track grouping. | — |
 | **shot/shot-survey.mjs** | Multi-track shot survey CLI (job backend): track-session boots, resume, progress/findings JSON. | survey-track |
-| **shot/shot.mjs** | One deterministic framed screenshot via `__apex` camera hooks: `shot.mjs <trackId> <frac> [cam] [out.png]`. | playwright-probe |
+| **shot/shot.mjs** | One Chromium session for one or many framed shots (`--batch`); JPEG/raster modes for cheaper sweeps. | playwright-probe |
 | **shot/show-menus.mjs** | Every menu and popup, then the Display survey, as JPEGs plus an index.html in artifacts/show-menus. | playwright-probe |
 | **shot/track-session.mjs** | Persistent track session (`--serve`): boot once, then JSON-line shot/eval/track/sheet/diff ops in seconds each. | survey-track |
 
@@ -397,6 +399,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/pages-reuse-verdict.sh** | Pages gate reuse: prints `reuse=true` (+source/run) when this tree already passed CI as this commit or a parent. |
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
+| **ci/publish-shots.mjs** | Publish review screenshots to a shots/<topic> evidence branch cut from the ship tip, touching no PR branch. |
 | **ci/ready-full-cap.mjs** | Cap concurrent ready-PR full-tier CI: refuse mark-ready when ≥N ready PRs already run full CI. |
 | **ci/reuse-draft-fast.sh** | On ready_for_review, reuse a green draft fast-tier run for the same PR head SHA. |
 | **ci/run-playwright.mjs** | The engine behind every `npm run test:*`: a free port + port-suffixed report paths so runs never share a server. |

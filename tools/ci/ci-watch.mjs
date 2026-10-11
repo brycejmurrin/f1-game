@@ -167,6 +167,23 @@ exitIfHelp(argv, `usage: node tools/ci/ci-watch.mjs [--sha <sha|ref>] [--pages] 
   --once polls one time and exits. Details: the header of this file and AGENTS.md §Watching CI and Pages.`);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
 
+/** Expand `ref` (short sha, branch, HEAD) to a full 40-char commit id: local
+ *  `git rev-parse` first (a unique prefix; unknown or ambiguous fails), then
+ *  GitHub for a commit this clone has not fetched (a PR merge commit,
+ *  2026-09-27). Never returns a short sha: { sha } or { error }. */
+export function resolveSha(ref, { revParse = defaultRevParse, request = api } = {}) {
+  if (typeof ref !== "string" || !/^[\w./@^~-]+$/.test(ref) || ref.startsWith("-")) return { error: `invalid --sha ${JSON.stringify(ref)}` };
+  const local = (revParse(ref) || "").trim();
+  if (/^[0-9a-f]{40}$/.test(local)) return { sha: local };
+  const remote = request(`commits/${encodeURIComponent(ref)}`).json?.sha;
+  if (typeof remote === "string" && /^[0-9a-f]{40}$/.test(remote)) return { sha: remote };
+  return { error: `cannot expand --sha ${ref} to a full commit id: not a unique prefix of a commit in this clone, and GitHub did not resolve it either (git fetch, or pass the 40-char sha)` };
+}
+function defaultRevParse(ref) {
+  const g = spawnSync("git", ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], { cwd: ROOT, encoding: "utf8" });
+  return g.status === 0 ? g.stdout : "";
+}
+
 // The commit-associated endpoint avoids a stale/incomplete broad open-PR
 // listing. Association can include earlier commits, so confirm the current
 // open head using the individual PR response before diagnosing no-run state.
@@ -307,13 +324,11 @@ async function watchPages(sha, { interval, deadline }) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const ref = opt("--sha", "HEAD");
-  const g = spawnSync("git", ["rev-parse", ref], { cwd: ROOT, encoding: "utf8" });
-  // actions/runs?head_sha= matches a FULL sha only. A commit made on GitHub
-  // (a PR's merge commit) is not in this clone until the next fetch, so
-  // rev-parse fails and a short sha reached the API: "no run" and then a false
-  // "= ci none" on a deploy push whose run was in progress (2026-09-27).
-  let sha = (g.stdout || "").trim();
-  if (!/^[0-9a-f]{40}$/.test(sha)) sha = (/^[0-9a-f]{4,39}$/.test(ref) && api(`commits/${ref}`).json?.sha) || ref;
+  // actions/runs?head_sha= matches a FULL sha only: a short one reached the API
+  // as "no run" (2026-09-27) and as `associated PR lookup: HTTP 422` (2026-10-10).
+  const resolved = resolveSha(ref);
+  if (resolved.error) { say(`= ci unknown — ${resolved.error}`); process.exit(3); }
+  const sha = resolved.sha;
   const interval = Math.max(10, +opt("--interval", 30)) * 1000;
   // No --timeout = DEFAULT_TIMEOUT_MIN, not forever: a `--pages` watch whose
   // train never contains the SHA (or a CI that never reports) used to poll

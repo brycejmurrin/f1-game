@@ -635,6 +635,26 @@ test("a mid-race jump-in is a ROLLING start: the seat car is driven for four sec
   assert.ok(!g2.calls.some((c) => c[0] === "count"), "a standing start runs the gantry, not the hand-over count");
 });
 
+test("the rolling hand-over re-zeroes the input (Input.calibrate) once, when the wheel passes — as FlyingStart's does", () => {
+  // R3-ARCHITECTURE-8 (2026-10-10): tickHandover was FlyingStart.tick's hand-over minus this call, and a mid-race
+  // jump-in never reaches the gantry's first lamp, so a tilt player kept the zero captured at the race's start.
+  const { R, script, Teams, ctx } = load();
+  vm.runInContext("var Input = { n: 0, calibrate: function () { this.n++; } };", ctx);
+  const Input = vm.runInContext("Input", ctx);
+  const cars = makeCars(Teams, "ferrari:0");
+  const { G } = makeG(Teams, cars);
+  const rr = R.create(G);
+  rr.stage(script, { seat: "LEC", startLap: 31 });
+  const me = cars.find((c) => c.code === "LEC");
+  me.local = true; me.isPlayer = true;
+  G.state = "count"; rr.update(1 / 60);
+  for (let i = 0; i < 60 * 3.5; i++) rr.update(1 / 60);
+  assert.equal(Input.n, 0, "not while the AI still has the wheel");
+  for (let i = 0; i < 60 * 2; i++) rr.update(1 / 60);
+  assert.equal(me.human, true);
+  assert.equal(Input.n, 1, "once, at the hand-over");
+});
+
 test("dropSpeed: FULL speed for the road ahead — vTop on a straight, the AI's entry budget before a hairpin, never below the floor", () => {
   const { R, ctx } = load();
   const Tracks = vm.runInContext("Tracks", ctx), AD = vm.runInContext("AiDrive", ctx), PC = vm.runInContext("PhysicsConsts", ctx);

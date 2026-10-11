@@ -73,16 +73,20 @@ node tools/car/carshot.mjs 40 day 2 artifacts/tmp/carshot.jpg  # tiny cropped JP
 ## Single framed screenshot (`shot.mjs`)
 
 ```sh
-node tools/shot/shot.mjs <trackId> <frac> [cam] [out.png] \
+node tools/shot/shot.mjs <trackId> <frac> [cam] [out.png|out.jpg] \
   [--az N] [--el N] [--dist N] [--side -1|1] [--tod day|dusk|dawn|night] [--hud] \
-  [--team <id>] [--wait <s>]      # BROWSER (boots Chromium; no --help)
+  [--team <id>] [--wait <s>] [--jpeg] [--raster]   # BROWSER (one Chromium; --help ok)
+# Many frames, one boot (JSON array / {jobs} / JSONL); same track reuses race():
+node tools/shot/shot.mjs --batch jobs.json [--jpeg] [--raster]
 ```
 
 `cam` = `park` (the in-game **chase** rig: snapCam, no free-cam) | `eye` | `orbit`
 (default) | `cinematic` | `trackside`. Default out
-`scratch/captures/playwright-probe/<track>-<pct>-<cam>.png`; it warns on
-`<5KB` (blank) and `free-cam inactive`. Find `frac` first (no browser: `turns:`
-in `js/circuits/<id>.js`; Spa Eau Rouge compression ~0.075).
+`scratch/captures/playwright-probe/<track>-<pct>-<cam>.png`; `.jpg` / `--jpeg`
+writes JPEG q85 (human review); `--raster` writes `__apex.render` JSON only
+(no pixels). It warns on blank frames and `free-cam inactive`. Find `frac` first
+(no browser: `turns:` in `js/circuits/<id>.js`; Spa Eau Rouge compression ~0.075).
+Speed notes: `docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md`.
 
 `trackside` here is the free-cam `view({look:"in"})`, not the `trackside` CAM_MODES rig.
 `turns:` has no tunnel/bridge entries: read the circuit file's comments (Monaco bore
