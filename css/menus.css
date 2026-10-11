@@ -915,9 +915,22 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
     --vhz: calc(1vh / var(--ui-compact-scale));
     --svhz: calc(1svh / var(--ui-compact-scale));
   }
-  /* Sheets share title chrome geometry cap (secondary rows @ 150%+). */
+  /* Sheets share title chrome geometry cap (secondary rows @ 150%+).
+     Re-derive --tap-paint / --slider / viewport tokens against the zoom this
+     rule ACTUALLY paints at. components.css divides by --sheet-scale|--ui-scale;
+     leaving that alone while zoom caps at --ui-compact-scale (1.25) under-paints
+     every compact tap floor — MEASURED 2026-10-11 (time-trial Driving zoom
+     matrix, small-phone / phone-portrait / phone-browser-landscape @150%): HTP
+     section chips 42.68 tall (52/1.5 × 1.25) vs the 43.5 shortHelpChips floor,
+     because min-height used 52/--ui-scale while zoom was only 1.25. */
   :where(body[data-density="compact"]) .sheet {
-    zoom: min(var(--sheet-scale, var(--ui-scale)), var(--ui-compact-scale));
+    --sheet-paint-scale: min(var(--sheet-scale, var(--ui-scale)), var(--ui-compact-scale));
+    zoom: var(--sheet-paint-scale);
+    --vwz: calc(1vw / var(--sheet-paint-scale));
+    --vhz: calc(1vh / var(--sheet-paint-scale));
+    --svhz: calc(1svh / var(--sheet-paint-scale));
+    --slider: calc(32px / var(--sheet-paint-scale));
+    --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--sheet-paint-scale)));
   }
 
   /* Type still honours the requested %; compact landscape keeps the 17px rung. */

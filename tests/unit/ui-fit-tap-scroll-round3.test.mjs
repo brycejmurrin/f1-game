@@ -66,3 +66,22 @@ test("How to Play compact section chips floor at --tap-paint", () => {
     "no hard-coded 44px floor on compact htp chips",
   );
 });
+
+test("compact body sheet zoom re-derives --tap-paint at the paint scale", () => {
+  const css = rd("css/menus.css");
+  assert.match(
+    css,
+    /body\[data-density="compact"\]\)\s*\.sheet\s*\{[^}]*--sheet-paint-scale:\s*min\(var\(--sheet-scale,\s*var\(--ui-scale\)\),\s*var\(--ui-compact-scale\)\)/s,
+    "compact sheets publish --sheet-paint-scale (fit-cap ∩ 125% geometry)",
+  );
+  assert.match(
+    css,
+    /body\[data-density="compact"\]\)\s*\.sheet\s*\{[^}]*--tap-paint:\s*max\(24px,\s*calc\(var\(--tap-paint-at\)\s*\/\s*var\(--sheet-paint-scale\)\)\)/s,
+    "compact sheet --tap-paint divides by --sheet-paint-scale, not bare --ui-scale",
+  );
+  assert.match(
+    css,
+    /body\[data-density="compact"\]\)\s*\.sheet\s*\{[^}]*zoom:\s*var\(--sheet-paint-scale\)/s,
+    "compact sheet zoom uses the same --sheet-paint-scale",
+  );
+});
