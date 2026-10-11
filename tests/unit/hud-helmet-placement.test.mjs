@@ -33,13 +33,13 @@ test("touch HELMET docks ENERGY in the bottom strip (not mid-visor y:-37)", () =
   assert.equal(e.x, 0, "touch helmet ENERGY stays centred on the strip anchor until CSS docks it on the left column");
 });
 
-test("touch helmet ENERGY anchors above TYRES on the left dock (like the tyre chip)", () => {
-  const block = CSS.match(/@supports \(anchor-name: --a\)\s*\{([\s\S]*?)\n\}/);
-  assert.ok(block, "touch TYRES anchor block exists");
-  assert.match(block[1], /body\[data-hl-set="helmet"\]:not\(\.desktop\) #hud-energy[\s\S]*position-anchor:/,
-    "helmet touch ENERGY must tether to the left column, not translate into the visor centre");
-  assert.match(block[1], /body\[data-hl-set="helmet"\]:not\(\.desktop\) #hud-energy[\s\S]*bottom:\s*calc\(anchor\(top\)/,
-    "ERS sits on the bottom strip above the tyre chip");
+test("touch helmet ENERGY stays in the cluster grid beside the gear (never anchored to the later-sibling tyre)", () => {
+  const src = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+  // anchor() cannot resolve a LATER sibling: tethering ENERGY to the tyre dropped the bar onto the gear plate (852x393 helmet).
+  assert.doesNotMatch(src, /body\[data-hl-set="helmet"\]:not\(\.desktop\) #hud-energy\s*\{[^}]*position-anchor:/,
+    "helmet touch ENERGY must not tether to the tyre anchor");
+  assert.match(src, /body\[data-hl-set="helmet"\]:not\(\.desktop\) #hud-tyre\[data-hl\]\s*\{\s*translate:\s*none/,
+    "the shipped y:-6 translate is dropped so the dock anchor on TYRES is the only shift");
 });
 
 test("portrait helmet touch hides the PLAN row when it would crowd GEAR/SPEED", () => {
