@@ -121,7 +121,7 @@ test("a Rapier build that throws degrades debris off instead of rejecting race e
   // buildWorld() was the one Rapier chain with no catch: prime() sits on the
   // race-entry path and step() on the per-frame one.
   const src = fs.readFileSync(path.join(ROOT, "js/physics/debris-world.js"), "utf8")
-    .replace("import(RAPIER_URL)", "__importRapier()");
+    .replace("import(url)", "__importRapier()");
   const chain = new Proxy({}, { get: (t, k) => (k === "then" ? undefined : () => chain) });
   const rapier = { default: {
     init: () => Promise.resolve(),
@@ -134,7 +134,7 @@ test("a Rapier build that throws degrades debris off instead of rejecting race e
   const ctx = vm.createContext({
     URL, document: {}, location: { href: "http://localhost/js/game.js" },
     GameStore: { store: { raw: () => "1" } }, localStorage: { getItem: () => null },
-    requestIdleCallback() {}, Log: { warn: (...a) => warns.push(a), info() {} },
+    requestIdleCallback() {}, Log: { warn: (...a) => warns.push(a), info() {} }, setTimeout, clearTimeout,
     __importRapier: () => Promise.resolve(rapier),
   });
   vm.runInContext(src, ctx);
