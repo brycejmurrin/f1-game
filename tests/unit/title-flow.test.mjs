@@ -10,10 +10,11 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 
 function boot({ ensureNet = () => Promise.resolve(true), top = () => null, racing = false, link = false } = {}) {
   const hash = { on: link };
-  const btns = {}, listeners = {}, log = { announce: [], vt: 0, builds: 0, opened: 0, consumed: 0, restore: 0 };
+  const btns = {}, listeners = {}, log = { announce: [], vt: 0, builds: 0, opened: 0, consumed: 0, restore: 0, flyby: 0, dailySelect: 0 };
   const G = {
     flow: "title", session: "none", soundOn: false, trackIdx: 0, announce: (...a) => log.announce.push(a),
-    buildSelect: () => { log.builds++; }, scheduleFlybyTrack() {}, daily: { select() {}, stop() {} },
+    buildSelect: () => { log.builds++; }, scheduleFlybyTrack() { log.flyby++; },
+    daily: { select() { log.dailySelect++; }, stop() {} },
     netLobby: { open: () => { log.opened++; } }, els: { overlay: { hidden: false }, select: { hidden: true } },
     $: (id) => btns[id] || (btns[id] = { id, addEventListener() {} }),
   };
@@ -49,4 +50,19 @@ test("M5: VS FRIEND sets the gp/race flow and opens the lobby once the bundle la
   assert.equal(h.G.flow, "gp"); assert.equal(h.G.session, "race");
   assert.equal(h.log.restore, 1); assert.equal(h.log.opened, 1);
   assert.equal(h.log.announce.length, 0);
+});
+
+// DAILY used to skip scheduleFlybyTrack; START then cold-compiled Shanghai FOG under
+// the sheet and burned awaitIntroWarm on CI (garage-out-before-card DAILY, 2026-10-11).
+test("DAILY and TIME TRIAL both warm the selected circuit under the picker", () => {
+  const tt = boot();
+  tt.api.openTimeTrial(false);
+  assert.equal(tt.G.session, "tt");
+  assert.equal(tt.log.dailySelect, 0);
+  assert.equal(tt.log.flyby, 1, "free TT warms");
+  const daily = boot();
+  daily.api.openTimeTrial(true);
+  assert.equal(daily.G.session, "tt");
+  assert.equal(daily.log.dailySelect, 1);
+  assert.equal(daily.log.flyby, 1, "daily warms the already-selected circuit");
 });
