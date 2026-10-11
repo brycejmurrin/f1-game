@@ -31,6 +31,11 @@ on this tip via `ratchets.mjs --update`: **js/ui/hud.js** 1345/2281 → **1393/2
 **css/hud.css** 1926/2120 → **1953/2150**; game.js lowered 4976/9195 → 4974/9186.
 Paired with the `--base` absorb catch-up so Structural guards can go green.
 
+2026-10-11 HUD remeasure after ship sync (#1378): PR merge-ref CI saw ship-grown
+HUD past the prior tip caps (Structural guards tooling A). Remeasured on the
+synced tree: **js/ui/hud.js** 1393/2377 → **1411/2399**, **css/hud.css** 1953/2150 →
+**1960/2158**. Also raise docs/TESTING.md unit-suite floor 550 → 600 (disk 605).
+
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
