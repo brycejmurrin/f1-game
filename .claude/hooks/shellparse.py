@@ -23,8 +23,10 @@ BODY` recursively, and tracks `cd DIR` so relative targets resolve.
 
 KNOWN GAPS (documented, not silently claimed): writes made by an interpreter
 (`python3 -c "open(...,'w')"`, `node -e "fs.writeFileSync(…)"`), by `git
-apply`/`patch`, or through a variable or command substitution in the target
-are not seen. Unparseable text (an unbalanced quote) yields a conservative
+apply`/`patch`, by a whole-tree git command (`reset --hard`, `stash pop`,
+`merge`, a `checkout`/`restore` of a DIRECTORY or glob pathspec — the target
+reads as the directory, not the files under it), by `curl -O` / `wget -O`, or
+through a variable or command substitution in the target are not seen. Unparseable text (an unbalanced quote) yields a conservative
 best effort: the commit reader then falls back to a regex, and the write
 reader reports nothing.
 """
@@ -309,9 +311,199 @@ def _abs(p, cwd):
     return os.path.normpath(p if os.path.isabs(p) else os.path.join(cwd or os.getcwd(), p))
 
 
+# Allow-listed "read" commands that write a named file (R4-SUPPLY-4, 2026-10-10):
+# `git checkout <ref> -- f`, `git restore --source=<ref> f`, `git diff --output=f`,
+# `sed -n 'w f'`, `curl -so f URL` each overwrote a generated file with no hook.
+CHECKOUT_WITH_ARG = {"-b", "-B", "--orphan", "--conflict", "--pathspec-from-file", "-s", "--source"}
+GIT_OUTPUT_CMDS = {"diff", "log", "show", "diff-tree", "diff-index", "diff-files", "whatchanged",
+                   "range-diff", "format-patch"}
+# curl options whose argument is a file curl WRITES (`-` is stdout), and the
+# short options that take an argument (the rest of a cluster is that argument).
+CURL_WRITE_ARG = {"-o", "--output", "-D", "--dump-header", "-c", "--cookie-jar", "--trace", "--trace-ascii",
+                  "--stderr", "--libcurl"}
+CURL_SHORT_ARG = set("AbcCdDeEFhHKmoPQrtTuUwxXyYz")
+
+
+def _git_writes(args, c):
+    """[(path, kind)] a `git` argv (argv[1:]) writes to a NAMED worktree file:
+    checkout/restore pathspecs and diff-family --output. `-C dir` moves c."""
+    i = 0
+    while i < len(args) and args[i].startswith("-"):
+        if args[i] in GIT_GLOBAL_WITH_ARG:
+            if args[i] == "-C" and i + 1 < len(args):
+                c = _abs(args[i + 1], c)
+            i += 2
+            continue
+        i += 1
+    if i >= len(args):
+        return []
+    sub, rest, out = args[i], args[i + 1:], []
+    if sub in GIT_OUTPUT_CMDS:
+        for k, a in enumerate(rest):
+            if a == "--":
+                break
+            if a.startswith("--output="):
+                out.append((a.split("=", 1)[1], "git-" + sub))
+            elif a == "--output" and k + 1 < len(rest):
+                out.append((rest[k + 1], "git-" + sub))
+    elif sub in ("checkout", "restore"):
+        pos, after, branch, staged, worktree, k = [], [], False, False, False, 0
+        while k < len(rest):
+            a = rest[k]
+            if a == "--":
+                after = rest[k + 1:]
+                break
+            if a in CHECKOUT_WITH_ARG:
+                branch = branch or a in ("-b", "-B", "--orphan")
+                k += 2
+                continue
+            if a in ("--staged", "--worktree"):
+                staged, worktree = staged or a == "--staged", worktree or a == "--worktree"
+            elif re.match(r"^-[A-Za-z]", a) and not a.startswith("--"):
+                flags = a[1:].split("s", 1)[0]   # -sHEAD~5: the rest is restore's source
+                staged, worktree = staged or "S" in flags, worktree or "W" in flags
+                branch = branch or (sub == "checkout" and bool(set(flags) & set("bB")))
+            elif not a.startswith("-"):
+                pos.append(a)
+            k += 1
+        if sub == "restore":
+            # every pathspec is restored; --staged alone writes the index, not the file
+            paths = [] if staged and not worktree else pos + after
+        elif branch:
+            paths = after
+        else:
+            # `checkout <tree-ish> <paths>` / `checkout -- <paths>`; a lone word is
+            # a branch unless a FILE of that name exists (git then restores it)
+            paths = after + pos[1:] + [p for p in pos[:1] if os.path.isfile(_abs(p, c))]
+        out += [(p, "git-" + sub) for p in paths]
+    return [(_abs(p, c), kind) for p, kind in out if p and p != "-"]
+
+
+def _sed_w_files(script):
+    """Files a sed SCRIPT writes with a `w`/`W` command or an `s///w` flag (GNU:
+    the filename runs to the end of the line, `;` included). Conservative: the
+    text lines after a multi-line a/i/c read as commands."""
+    found = []
+    for line in script.split("\n"):
+        k, n = 0, len(line)
+        while k < n:
+            ch = line[k]
+            if ch in " \t;{}!,0123456789$~+":    # separators and numeric addresses
+                k += 1
+            elif ch in "/\\":                     # an address regex: /re/ or \cREc
+                if ch == "\\":
+                    k += 1
+                if k >= n:
+                    break
+                d, k = line[k], k + 1
+                while k < n and line[k] != d:
+                    k += 2 if line[k] == "\\" else 1
+                k += 1
+                while k < n and line[k] in "IM":
+                    k += 1
+            elif ch in "wW":
+                found.append(line[k + 1:].strip())
+                break
+            elif ch in "aicrRe#":                 # text, a read file or a command: to end of line
+                break
+            elif ch in ":bTt":                    # a label: to `;` (GNU)
+                j = line.find(";", k)
+                k = n if j < 0 else j + 1
+            elif ch in "sy" and k + 1 < n:        # s/re/rep/FLAGS, y/src/dst/
+                d, k, parts = line[k + 1], k + 2, 0
+                while k < n and parts < 2:
+                    if line[k] == "\\":
+                        k += 2
+                        continue
+                    parts += line[k] == d
+                    k += 1
+                while ch == "s" and k < n and line[k] not in ";}":
+                    if line[k] in "wW":
+                        found.append(line[k + 1:].strip())
+                        k = n
+                    k += 1
+            else:                                 # a one-letter command (p, d, n, q, =, …)
+                k += 1
+    return [f for f in found if f and not f.startswith("/dev/")]
+
+
+def _sed_scripts(args, c):
+    """The scripts a sed argv (argv[1:]) runs: -e/--expression, -f/--file
+    (read from disk), else the first operand."""
+    scripts, explicit, k = [], False, 0
+    while k < len(args):
+        a = args[k]
+        if a.startswith("--expression=") or a.startswith("--file="):
+            explicit = True
+            v = a.split("=", 1)[1]
+            scripts.append(v if a.startswith("--e") else _read(_abs(v, c)))
+        elif a in ("--expression", "--file"):
+            explicit = True
+            if k + 1 < len(args):
+                scripts.append(args[k + 1] if a == "--expression" else _read(_abs(args[k + 1], c)))
+            k += 1
+        elif a in ("-l", "--line-length"):
+            k += 1
+        elif re.match(r"^-[A-Za-z]", a):
+            for j, ch in enumerate(a[1:]):
+                if ch == "i" or ch == "l":                 # -i[SUFFIX], -lN: the rest is theirs
+                    break
+                if ch in "ef":
+                    explicit = True
+                    v = a[j + 2:] or (args[k + 1] if k + 1 < len(args) else "")
+                    if not a[j + 2:]:
+                        k += 1
+                    scripts.append(v if ch == "e" else _read(_abs(v, c)))
+                    break
+        elif not a.startswith("-") and not explicit:
+            scripts.append(a)
+            explicit = True
+        k += 1
+    return scripts
+
+
+def _read(p):
+    try:
+        with open(p, encoding="utf8") as fh:
+            return fh.read()
+    except Exception:
+        return ""
+
+
+def _curl_writes(args, c):
+    """Files a curl argv (argv[1:]) writes: -o/--output (under --output-dir),
+    -D, -c, --trace*, --stderr, --libcurl; `-so FILE`, `-oFILE` included."""
+    outdir, named, k = None, [], 0
+    while k < len(args):
+        a = args[k]
+        if a == "--output-dir" and k + 1 < len(args):
+            outdir = args[k + 1]
+            k += 2
+            continue
+        if a in CURL_WRITE_ARG:
+            if k + 1 < len(args):
+                named.append((args[k + 1], a in ("-o", "--output")))
+            k += 2
+            continue
+        if re.match(r"^-[A-Za-z0-9#:]", a) and not a.startswith("--"):
+            for j, ch in enumerate(a[1:]):
+                if ch in CURL_SHORT_ARG:
+                    v = a[j + 2:]
+                    if not v and k + 1 < len(args):
+                        v = args[k + 1]
+                        k += 1
+                    if "-" + ch in CURL_WRITE_ARG:
+                        named.append((v, ch == "o"))
+                    break
+        k += 1
+    return [_abs(os.path.join(outdir, f) if outdir and is_o else f, c)
+            for f, is_o in named if f and f != "-" and f != "/dev/null"]
+
+
 def write_targets(text, cwd):
-    """Files (absolute) a command writes: redirections, sed/perl -i, tee,
-    cp/mv/install/rsync/ln destinations, truncate, dd of=."""
+    """Files (absolute) a command writes: redirections, sed/perl -i, sed
+    `w` commands, tee, cp/mv/install/rsync/ln destinations, truncate, dd of=,
+    git checkout/restore pathspecs and --output, curl -o."""
     out = []
     for _env, argv, redirs, c in commands(text, cwd):
         for op, tgt in redirs:
@@ -320,6 +512,10 @@ def write_targets(text, cwd):
         base = os.path.basename(argv[0])
         args = argv[1:]
         if base in ("sed", "gsed", "perl"):
+            if base != "perl":
+                # `sed -n 'w f'` writes f with or without -i (`--sandbox` rejects it)
+                for script in _sed_scripts(args, c):
+                    out += [{"path": _abs(f, c), "kind": "sed-w"} for f in _sed_w_files(script)]
             inplace = any(re.match(r"^-[a-zA-Z]*i", a) or a.startswith("--in-place") for a in args)
             if not inplace:
                 continue
@@ -387,6 +583,10 @@ def write_targets(text, cwd):
             for a in args:
                 if a.startswith("of="):
                     out.append({"path": _abs(a[3:], c), "kind": "dd"})
+        elif base == "git":
+            out += [{"path": p, "kind": kind} for p, kind in _git_writes(args, c)]
+        elif base == "curl":
+            out += [{"path": p, "kind": "curl"} for p in _curl_writes(args, c)]
     return out
 
 

@@ -2006,17 +2006,23 @@ test("title settings, pause standings, and career modes stay reachable", () => {
       "min-height"),
     "var(--tap-paint)",
     "compact VS Friend CLOSE floors at --tap-paint");
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close', "height"), "var(--tap-paint)",
+    "compact CLOSE height locked to --tap-paint (closeInHead settle)");
   assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] #vs-pick > .bigbtn', "min-height"), "var(--tap-paint)",
     "compact HOST / JOIN floor at --tap-paint");
   // Title band must clear the absolute CLOSE (ui-redesign closeInHead).
   assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] > #vs-head', "min-height"), "var(--tap-paint)",
     "compact VS Friend head clears --tap-paint CLOSE");
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] > #vs-head', "height"), "var(--tap-paint)",
+    "compact head height locked with CLOSE");
   assert.equal(
     decl(css("css/overlays.css"),
       '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot',
       "top"),
     "0",
     "compact CLOSE foot sits at head top (no pad inset past the band)");
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot', "height"), "var(--tap-paint)",
+    "compact CLOSE foot height locked to --tap-paint");
   assert.equal(
     decl(css("css/overlays.css"),
       '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot',

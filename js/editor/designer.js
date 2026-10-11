@@ -2272,13 +2272,22 @@ const TrackDesigner = (function () {
     });
   }
   /** The car at rest on a test drive's point and green at once. Every start while the return is armed comes
-   *  here (CustomTracks.afterStart): the first, TRY AGAIN and the pause RESTART alike. */
+   *  here (CustomTracks.afterStart): the first, TRY AGAIN and the pause RESTART alike.
+   *  Also relocates when startRace's awaits let the lights finish so state is already
+   *  "race" before afterStart runs (selected-4 TEST HERE, tip 210d293 / ship #1296). */
   function placeTest(r) {
-    if (G.state !== "count" || !G.player || !G.track || !r || !(r.s >= 0) || !design || design.originId !== r.id) return false;
+    if (!G.player || !G.track || !r || !(r.s >= 0) || !design || design.originId !== r.id) return false;
+    if (G.state !== "count" && G.state !== "race") return false;
+    const L = G.track.total || 0;
+    if (G.state === "race" && L > 0) {
+      const ds = Math.abs(G.player.s - r.s);
+      if (Math.min(ds, L - ds) <= 20) return false;   // already on the point (second afterStart)
+    }
     placeAt(G.player, G.track, r.s);
     if (G.snapGameCam) G.snapGameCam();
     if (G.refreshHud) G.refreshHud(true);
-    return !!G.goRolling();
+    if (G.state === "count") return !!G.goRolling();
+    return true;
   }
   /** TEST HERE: save, then a TIME TRIAL (startRaceBody clears practiceMode, so
    *  a time trial is the unscored session that survives it) with the car at
@@ -2298,7 +2307,9 @@ const TrackDesigner = (function () {
     close();
     Log.info("track", "designer test drive on " + r.id + " from point " + (at + 1) + " (s " + Math.round(s) + " m)");
     try { await startViaIntro(); } catch (e) { Log.warn("track", "test drive start failed: " + (e && e.message || e)); }
-    if (G.state === "count") placeTest(back);   // startRace's own afterStart usually got there first (then the state is already "race")
+    // afterStart usually placed during "count"; if the lights already rolled to
+    // "race", placeTest still relocates onto the point (see placeTest above).
+    if (G.state === "count" || G.state === "race") placeTest(back);
     if (G.state === "race") return true;
     // Never a frozen race: out through the pause menu's own quit (quitToMenu),
     // whose consumeTrackHash() hands the screen back with the reason. A start
