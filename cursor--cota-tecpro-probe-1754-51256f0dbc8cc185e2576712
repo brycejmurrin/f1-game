@@ -1,1 +1,1 @@
-1791681858	Cursor Agent	PR#1421 ack orchestrator: stand down ratchets; re-watch tip 88f1d6931; #1437 owns remeasure  [cursor/cota-tecpro-probe-1754; session 51256f0dbc8cc185e2576712]
+1791682634	Cursor Agent	PR#1421: #1437 merged — sync-pr if needed then re-watch tip CI  [cursor/cota-tecpro-probe-1754; session 51256f0dbc8cc185e2576712]
