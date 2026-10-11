@@ -2,6 +2,33 @@
   "schemaVersion": 1,
   "recipes": [
     {
+      "skill": "agent-fleet",
+      "task": "Exercise the fleet block keys",
+      "fixture": "tests/unit/agent-fleet.test.mjs",
+      "pattern": "the\\ fleet\\ block\\ keys",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
       "skill": "agent-view",
       "task": "Exercise AgentView.create() still returns the whole documented surface",
       "fixture": "tests/unit/agentview-api-contract.test.mjs",
