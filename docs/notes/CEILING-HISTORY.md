@@ -1,5 +1,10 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-10-11 — sync #1385 again: HUD caps to current ship tip
+
+`js/ui/hud.js` → **1411 / 2399**; `css/hud.css` → **1960 / 2158** (ship tip after further HUD merges; same measure as #1437 tip). Catch-up absorb already on this branch. Source-pin raw `game.js` reads 351 → **357** (ship unit growth). Doc floors README/TESTING 550+ → **600+** (605 unit suites on disk).
+
+
 ## 2026-10-11 — sync #1385: re-measure HUD caps after ship #1386/#1387/#1395
 
 `js/ui/hud.js` codeLines 1345 → **1393**, lines 2281 → **2377**; `css/hud.css` codeLines 1926 → **1953**, lines 2120 → **2150**. Ship tip after the visual-spotter / give-back / layout-cache HUD merges grew past both ceilings without a raise (same measure as open #1437). Deliberate sync cure on `cursor/r3-touch-hud-db7b` — not an extraction; no OWNED hud.js growth in this PR beyond the ship union. Also ports #1437's `--base` absorb catch-up in `tools/check/ratchets.mjs`: a ceiling raise past 40 fails only when the SOURCE file metric also grew past absorb since the base (ceiling-only remeasure → warning).
