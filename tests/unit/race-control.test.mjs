@@ -823,6 +823,43 @@ test("settleLineStep with no or one entry never sorts, and the comparator is not
   assert.ok(!/=>/.test(body), "settleLineStep must not allocate an arrow comparator per call");
 });
 
+test("SOLO: a finished player waits for the AI still running, bounded by the post-finish cap", () => {
+  const { finishDelay, POST_FINISH_CAP } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  assert.equal(POST_FINISH_CAP, 75);
+  const you = { human: true, finished: true, retired: false, finishT: 100 };
+  const ai = { human: false, finished: false, retired: false };
+  const solo = { solo: true, since: -1 };
+  assert.equal(finishDelay([you, ai], 101, 3, 0, solo), 0, "an AI still on track: keep counting, no 2.2 s countdown");
+  assert.equal(solo.since, 101, "the wait is timed from the first tick the player was done");
+  assert.equal(finishDelay([you, ai], 101 + 74, 3, 0, solo), 0, "still inside the cap");
+  assert.equal(finishDelay([you, ai], 101 + 75, 3, 0, solo), 0.1, "the cap ends it: endRace classifies the runners by progress");
+  assert.equal(finishDelay([you, { ...ai, finished: true, finishT: 110 }], 111, 3, 0, { solo: true, since: -1 }), 2.2,
+    "the whole field home: today's 2.2 s");
+  assert.equal(finishDelay([you, { ...ai, retired: true }], 101, 3, 0, { solo: true, since: -1 }), 2.2, "a retired AI is not waited for");
+  assert.equal(finishDelay([you, ai], 101, 3), 2.2, "no options (net, TT, quali, harnesses): today's behaviour");
+  assert.equal(finishDelay([you, ai], 101, 3, 0, { solo: false, since: -1 }), 2.2, "net keeps the host rules");
+});
+
+test("SOLO: the wait clock restarts when the player is no longer done (a new race, a red-flag restart)", () => {
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const solo = { solo: true, since: 50 };
+  finishDelay([{ human: true, finished: false, retired: false }, { human: false, finished: false, retired: false }], 10, 3, 0, solo);
+  assert.equal(solo.since, -1);
+});
+
+test("SOLO: a retired player keeps the race running until the field finishes or the cap", () => {
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const out = { human: true, finished: false, retired: true };
+  const ai = { human: false, finished: false, retired: false };
+  const solo = { solo: true, since: -1 };
+  assert.equal(finishDelay([out, ai], 40, 3, 0, solo), 0, "the DNF no longer ends the race for everyone");
+  assert.equal(finishDelay([out, ai], 40 + 75, 3, 0, solo), 0.1, "…until the cap forces the short run");
+  assert.equal(finishDelay([out, { ...ai, finished: true, finishT: 90 }], 91, 3, 0, { solo: true, since: -1 }), 2.2,
+    "the field home: today's 2.2 s");
+  assert.equal(finishDelay([out, { ...ai, retired: true }], 40, 3, 0, { solo: true, since: -1 }), 2.2, "nobody left: no wait");
+  assert.equal(finishDelay([out, ai], 40, 3), 2.2, "net / harnesses (no post bag) keep the 2.2 s");
+});
+
 test("classify(): a flagged finisher below 90 % of the winner's laps stays in the order, ahead of slower unclassified cars", () => {
   const RC = load(null);
   const mk = (id, lap, prog, o = {}) => Object.assign({ id, lap, prog }, o);
