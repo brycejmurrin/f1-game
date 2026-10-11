@@ -69,7 +69,7 @@ test('checkpoint retry clears an armed finish countdown before racing resumes', 
   vm.runInContext(readFileSync(new URL('../../js/race/race-control.js', import.meta.url), 'utf8'), ctx);
   const control = vm.runInContext('RaceControl', ctx);
   assert.equal(control.finishDelay(G.cars, G.raceT, 2, 0), 0, 'restored field does not rearm results');
-  const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
+  const game = readFileSync(new URL('../../js/game' + '.js', import.meta.url), 'utf8');
   const binding = game.match(/get resultT\(\) \{[^\n]+/)[0];
   const clock = vm.runInNewContext('let resultT = 2.1; const G = {' + binding + '}; G.resultT = 0; resultT;');
   assert.equal(clock, 0, 'the facade clears the actual game countdown, not a detached property');
