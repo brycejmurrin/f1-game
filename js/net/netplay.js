@@ -13,6 +13,11 @@ const NetPlay = (function () {
   // race session itself tolerates RACE_GRACE_MS of silence before the car is
   // the AI's for good. A transport that CLOSES still ends the peer at once.
   const STALE_MS = 2000;
+  // The host relays a human rival's pose only while its newest packet is this
+  // fresh. Past it the pose is sample()'s 250 ms-capped extrapolation of a car
+  // that has stopped talking, and stamping that "now" (presentedAt keeps
+  // advancing) made every guest's predict() run a parked car at full speed.
+  const RELAY_FRESH_MS = 500;
   const RACE_GRACE_MS = 25000;
 
   const EV = {
@@ -177,6 +182,8 @@ const NetPlay = (function () {
   // caller's sender binding — the lobby keys it on the HELLO profile filed
   // under the connection, NetPlay on the remote car it seated — because the
   // two phases hold different truths about who a connection speaks for.
+  // Rate limiting lives in the caller (lobby / bindSession) via rateGate so
+  // QUALI and QLIVE share one window per connection (#1414).
   function bindQuali(s, ownsDriver, G, onAccepted) {
     s.onEvent(EV.QUALI, (d) => {
       const q = validQuali(d);
@@ -645,7 +652,10 @@ const NetPlay = (function () {
           // on the grid forever with no lamps and no way out. The __apex twin
           // (js/agent/apex.js netStartArm) already defaults it; the wire needs
           // the same, plus a range — a hostile 1e9 hold is the same hang.
-          if (name === EV.START && d && d.at != null && !ownsRaceControl()) {
+          // ONE START per race: once the countdown has consumed it (startSeen,
+          // netStart null) a duplicate — the host answers every late ARMED with
+          // the named moment — must not re-arm a past instant.
+          if (name === EV.START && d && d.at != null && !ownsRaceControl() && !(startSeen && !G.netStart)) {
             const h = Number(d.hold);
             armStart(d.at, Number.isFinite(h) ? Math.min(2, Math.max(0, h)) : 0.5);
           }
@@ -1245,6 +1255,7 @@ const NetPlay = (function () {
           if (sessions.size > 1) for (const r of remotes.values()) {
             const id = G.wireId(r.car), at = r.interp.presentedAt ? r.interp.presentedAt() : now;
             if (r.stale || id < 0 || !Number.isFinite(at)) continue;   // nothing posed yet: nothing to relay
+            if (r.heardAt != null && now - r.heardAt > RELAY_FRESH_MS) continue;   // silent: not a frozen pose with a fresh stamp
             _relay.push({ id, car: r.car, at });
           }
           if (withAi) for (const c of G.cars || []) {

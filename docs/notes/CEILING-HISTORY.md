@@ -128,6 +128,11 @@ lines 9186→9189. Not merge duplication — the only game.js delta vs ship is t
 union-budget guard saw mine=0/+2 against a stale base after #1437 lowered the
 ship caps; hand-resolved ratchets via --update on the clean merge.
 
+2026-10-11 #1431 sync onto ship after #1313+#1398: `js/game.js` codeLines
+4990→**4994** / lines 9207→**9211**. Same NEW FRIEND ROOM delta; sync-pr union
+budget was 4990+3 / 9207+3 and measure was one over — hand `--update` on the
+clean merge (not duplication).
+
 2026-10-11 third re-measure after ship #1351 (phone HUD overlaps) landed on tip
 `bdbfa191a`: hud.js **1411 / 2399**, hud.css **1960 / 2158**. Prior #1437 snap to
 1393 / 2377 was already short once the merge tree carried #1351's growth.
@@ -150,6 +155,9 @@ a warning, not a red — #1386/#1387/#1395 grew HUD without raising the #1375 ca
 and every PR that re-snapped hit Structural guards with no CI override for a
 stated reason. Real source growth past absorb still fails on the PR run.
 
+2026-10-11 third re-measure after ship #1351 (phone HUD overlaps) landed on tip
+`bdbfa191a`: hud.js **1411 / 2399**, hud.css **1960 / 2158**. Prior #1437 snap to
+1393 / 2377 was already short once the merge tree carried #1351's growth.
 2026-10-11 HUD catch-up remeasure (#1378 steward): ship tip was OVER after
 #1375 landed caps then #1386/#1387/#1395 grew HUD without raises. Remeasured
 on this tip via `ratchets.mjs --update`: **js/ui/hud.js** 1345/2281 → **1393/2377**,
@@ -3445,6 +3453,9 @@ Closing-chord centerline interpolation shifted start-seam props on indy/madrid/w
 
 A later sync onto the deploy tip also moved `js/game.js` codeLines 4795 → **4798** and lines 8946 → **8943**, and `js/track/tracks.js` 703 → **702** (measure of the merged tree — take the base's ceilings where they lowered, raise codeLines for ship-tip growth). Deliberate lobby raise for the intentional onClose clear; the game.js codeLines raise is the sync cure, not an extraction.
 
+## 2026-10-11 — ship sync on #1398: HUD caps after #1386/#1387/#1395 (same remeasure as #1437)
+
+`js/ui/hud.js` codeLines 1345 → **1393** (+48) and lines 2281 → **2377** (+96); `css/hud.css` codeLines 1926 → **1953** (+27) and lines 2120 → **2150** (+30). Ship tip `1a980f907` carried the larger HUD files without the raise (#1386/#1387/#1395), so Structural guards was OVER. This branch synced ship to clear CONFLICTING and re-snapped the ceilings to the measured tree — intentional remeasure, not extraction. Parallel intentional raise: #1437.
 ## 2026-10-11 — menus-hunt #1405 ship sync HUD catch-up
 
 `js/ui/hud.js` lines **2377 → 2399**, codeLines **1393 → 1411**; `css/hud.css`

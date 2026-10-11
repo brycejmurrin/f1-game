@@ -15,14 +15,15 @@ const param = (v) => ({ value: v, setTargetAtTime() {}, setValueAtTime() {}, lin
 function boot(opts = {}) {
   const started = [];
   const listeners = {};
-  const node = (kind) => { const n = { kind, connect: (t) => t, disconnect() {}, start(...args) { n.startArgs = args; started.push(n); }, stop() {}, type: "", loop: false, loopStart: 0, loopEnd: 0, buffer: null, onended: null,
-    gain: param(1), frequency: param(440), detune: param(0), Q: param(1), playbackRate: param(1), pan: param(0) }; return n; };
+  const nodes = [];
+  const node = (kind) => { const n = { kind, connect: (t) => t, disconnect() { n.disc = (n.disc || 0) + 1; }, start(...args) { n.startArgs = args; started.push(n); }, stop() {}, type: "", loop: false, loopStart: 0, loopEnd: 0, buffer: null, onended: null,
+    gain: param(1), frequency: param(440), detune: param(0), Q: param(1), playbackRate: param(1), pan: param(0) }; nodes.push(n); return n; };
   let resumes = 0;
   const contexts = [];
   function createContext() {
     const buffers = [];
     const ctx = { currentTime: 0, state: opts.state || "running", sampleRate: 8000, destination: node("dest"), buffers,
-      createGain: () => node("gain"), createBiquadFilter: () => node("biquad"), createOscillator: () => node("osc"), createBufferSource: () => node("src"),
+      createGain: () => node("gain"), createBiquadFilter: () => node("biquad"), createOscillator: () => node("osc"), createWaveShaper: () => node("shaper"), createBufferSource: () => node("src"),
       createDynamicsCompressor: () => Object.assign(node("comp"), { threshold: param(0), knee: param(0), ratio: param(0), attack: param(0), release: param(0) }),
       createBuffer: (ch, len, sr) => { const b = { sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }; buffers.push(b); return b; },
       decodeAudioData: (ab, res, rej) => (decoded.push(ab._url || ""), opts.badDecode && opts.badDecode(ab) ? rej(new Error("EncodingError")) : res({ duration: 4, length: 32000, sampleRate: 8000, numberOfChannels: 1, getChannelData: () => new Float32Array(32000) })),
@@ -56,7 +57,7 @@ function boot(opts = {}) {
     };
   }
   return {
-    A: vm.runInContext("GameAudio", v), started, fetched, decoded, mediaEls, resumes: () => resumes, contexts,
+    A: vm.runInContext("GameAudio", v), started, fetched, decoded, mediaEls, nodes, resumes: () => resumes, contexts,
     document: sb.document, listeners, blipFires, sandbox: sb,
     fireDeviceChange: () => { if (deviceListeners.devicechange) deviceListeners.devicechange(); },
   };
@@ -433,4 +434,126 @@ test("the SOUND toggle restarts rain from the live weather, not the grid's raceW
   assert.match(block, /if \(G\.isRaining\(\)\) GameAudio\.startRain\(\);/);
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   assert.match(game, /\bisRaining: \(\) => isRaining\(\),/, "G.isRaining is exported to the panel");
+});
+
+// ── round-2 audio fixes (F2, F3, F8-adjacent plumbing, F10, F13, F14) ──────────
+const sticky = { isActive: true, hasBeenActive: true };
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test("a WATCH clip whose media element errors AND rejects play() falls back once: one fetch, one voice", async () => {
+  // Per the HTML media-failure steps `error` fires and then the pending play()
+  // promise rejects; both handlers used to fetch+decode the clip.
+  const els = [];
+  function Audio() {
+    const el = { preload: "", crossOrigin: "", volume: 1, paused: false, ended: false, onerror: null, onended: null, _src: "", pause() {},
+      play() { return Promise.reject(new Error("NotSupportedError")); } };
+    Object.defineProperty(el, "src", { get: () => el._src, set(v) { el._src = v; Promise.resolve().then(() => { if (el.onerror) el.onerror(); }); } });
+    els.push(el);
+    return el;
+  }
+  const { A, sandbox, fetched } = boot({ Audio, mediaSource: true });
+  A.init(); await flush();
+  const URL_ = "https://example.test/radio.mp3";
+  const h = sandbox.GameAudioRadioFx.playWatchMedia(URL_, { volume: 0.9 });
+  assert.ok(h, "precondition: the clip was accepted");
+  await flush();
+  assert.equal(fetched.filter((u) => u === URL_).length, 1, "one fetch, not one per failure signal");
+  assert.equal(A.radioVoicesLive(), 1, "one voice on air, so stop() can reach it");
+  h.stop();
+  for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 150));
+  assert.equal(A.radioVoicesLive(), 0, "and stop() cuts that one voice");
+});
+
+test("music duck is held per source: a WATCH clip, the engineer and the replay fallback do not release each other", async () => {
+  const { A, contexts } = boot();
+  const gains = [], mk = (c) => { const f = c.createGain; c.createGain = () => { const n = f(); gains.push(n); return n; }; };
+  mk(contexts[0] || (A.init(), contexts[0]));
+  A.startMusic(); await flush();
+  const music = gains.find((g) => Math.abs(g.gain.value - 0.5 * 0.52) < 1e-9);
+  assert.ok(music, "precondition: the music gain exists at its default level");
+  let target = null;
+  music.gain.setTargetAtTime = (v) => { target = v; };
+  const full = 0.5 * 0.52, ducked = full * 0.35;
+  A.setRadioDuck(true, "watch:1");
+  assert.ok(Math.abs(target - ducked) < 1e-9, "a clip ducks the music");
+  A.setRadioDuck(true, "watch:2");
+  A.setRadioDuck(false, "watch:1");
+  assert.ok(Math.abs(target - ducked) < 1e-9, "the first clip ending leaves the second's duck");
+  A.setRadioDuck(true);                                   // the engineer: default source, signature unchanged
+  A.setRadioDuck(false, "watch:2");
+  assert.ok(Math.abs(target - ducked) < 1e-9, "the engineer's hold survives the second clip");
+  A.setRadioDuck(false);
+  assert.ok(Math.abs(target - full) < 1e-9, "the last holder lifts it");
+});
+
+test("a quick hide -> show does not rebuild a healthy context (late 'suspended' statechange)", async () => {
+  for (const announce of [true, false]) {
+    const { A, contexts, document, listeners } = boot({ userActivation: sticky });
+    A.init(); await flush();
+    const ctx = contexts[0];
+    ctx.resume = () => new Promise((r) => setTimeout(() => { ctx.state = "running"; if (announce) ctx.onstatechange(); r(); }, 30));
+    document.hidden = true; listeners.visibilitychange();
+    assert.equal(ctx.state, "suspended");
+    document.hidden = false; listeners.visibilitychange();
+    ctx.onstatechange();                  // the "suspended" event, delivered after the page is visible again
+    await wait(400);
+    assert.equal(ctx.state, "running", "precondition: the context came back by itself");
+    assert.equal(contexts.length, 1, "no spurious rebuild (statechange " + (announce ? "announced" : "silent") + ")");
+  }
+});
+
+test("device-driven context rebuilds are capped (three per 30 s)", async () => {
+  const { A, contexts, fireDeviceChange } = boot({ userActivation: sticky });
+  A.init(); await flush();
+  for (let i = 0; i < 6; i++) { fireDeviceChange(); await wait(DEVICE_REBUILD_DEBOUNCE_MS + 40); }
+  await flush();
+  assert.equal(contexts.length, 1 + 3, "three rebuilds in the window, then the cap holds");
+});
+
+test("a rebuild forgets the old clock: revFlare and the limiter hold clock restart", async () => {
+  const { A, contexts, fireDeviceChange } = boot({ userActivation: sticky });
+  A.init(); await flush(); A.startEngine();
+  contexts[0].currentTime = 100;
+  A.setEngine(0.99, 0, false, 0.95, 8, {});
+  A.shift(false);
+  assert.equal(A.limiterHeld(), 0, "precondition: the top-gear cut began on the old clock");
+  assert.ok(A.carSfx().revFlare > 0, "precondition: the downshift flare is live");
+  fireDeviceChange(); await wait(DEVICE_REBUILD_DEBOUNCE_MS + 60); await flush();
+  assert.equal(contexts.length, 2, "precondition: rebuilt");
+  assert.equal(A.limiterHeld(), null, "limSince is not a timestamp of the closed context");
+  assert.equal(A.carSfx().revFlare, 0);
+});
+
+test("a devicechange while hidden is remembered and served when the tab returns", async () => {
+  const { A, contexts, document, listeners, fireDeviceChange } = boot({ userActivation: sticky });
+  A.init(); await flush();
+  document.hidden = true;
+  fireDeviceChange(); await wait(DEVICE_REBUILD_DEBOUNCE_MS + 60);
+  assert.equal(contexts.length, 1, "nothing rebuilds under a hidden tab");
+  document.hidden = false; listeners.visibilitychange(); await flush();
+  assert.equal(contexts.length, 2, "the headset swap made while backgrounded is rebuilt for on return");
+  // Without sticky activation the request waits for the first gesture instead.
+  const b = boot({ userActivation: { isActive: false, hasBeenActive: false } });
+  b.A.init(); await flush();
+  b.document.hidden = true; b.fireDeviceChange(); await wait(DEVICE_REBUILD_DEBOUNCE_MS + 60);
+  b.document.hidden = false; b.listeners.visibilitychange(); await flush();
+  assert.equal(b.contexts.length, 1, "no activation: still deferred");
+  b.A.init(); await flush();
+  assert.equal(b.contexts.length, 2, "the next gesture performs it");
+});
+
+test("the sample upgrade lets the synth fade play out instead of cutting it", async () => {
+  const { A, nodes, contexts } = boot();
+  A.setMusicEnabled(false);
+  A.init(); A.startEngine();                             // samples still decoding: the synth voice
+  assert.equal(A.debug().usingSamples, false, "precondition: synth first");
+  await flush();
+  const before = new Set(nodes);
+  A.setEngine(0.6, 0, false, 0.6, 4, {});
+  assert.equal(A.debug().usingSamples, true, "precondition: upgraded to the samples");
+  const cut = [...before].filter((n) => n.disc && n.kind !== "dest");
+  assert.deepEqual(cut.map((n) => n.kind), [], "the fading synth chain is still connected right after the swap");
+  await wait(520);
+  assert.ok([...before].some((n) => n.disc), "and its own timer buries the chain once the fade is done");
+  assert.equal(contexts.length, 1);
 });
