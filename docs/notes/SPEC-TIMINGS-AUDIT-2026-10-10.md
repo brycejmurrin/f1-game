@@ -60,3 +60,13 @@ Not sampled: circuits specs (imola-foundation ~43 s/test with 1 test, cota/alber
 collisions / collision-ai-fixes, parts-livery-contrast, xr-plan (~3 s/test, harmless). `material-shimmer` is a manual opt-in spec that
 the selector never puts on a command. Each needs 1-2 more group runs (`circuits`, `collisions`, `car`).
 The data file also gained whole-group samples for already-measured specs (rolling window of 10).
+
+## Selector pin fallout (2026-10-11 steward)
+Honest llvmpipe medians flipped several high-`test.setTimeout` specs to
+`measuredCheap` (`sec * 3 <= 180`): bahrain-foundation (~15 s/test),
+physics-hotpath / map-hooks (~7–8 s/test), hud-layout (~38 s/test → oversize).
+`tests/unit/select-specs.test.mjs` pins moved: over-budget example is now
+`track-switch-memory` (~76 s/test, still not cheap); the race-fixture /
+hud-layout pins accept the measuredCheap path. Ship sync also re-serialised
+the union via `tools/ci/spec-timings.mjs` `serialise()` and absorbed #1437's
+HUD ratchet raise so the merge could commit.
