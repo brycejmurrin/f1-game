@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // session-status.mjs — the session's handoff block, GENERATED from git and the logs, never hand-kept.
-// @doc Prints the branch's handoff block (sessions, commits, dirty/unpushed, test verdicts, live run) as Markdown or `--json`.
+// @doc Prints the branch's handoff block (sessions, commits, dirty/unpushed, test verdicts, live run); `--pr` adds live PR state.
 // Full description: Prints this branch's handoff block (sessions from `Claude-Session:` trailers, commits vs the deploy branch, dirty/unpushed state, each test log's verdict, a live run) as Markdown for the draft PR body, or `--json`.
 // @skill check-changes
 //
@@ -19,6 +19,12 @@
 // Reads only: local git (no fetch — run `git fetch origin <deploy>` first for a
 // fresh ahead/behind), artifacts/logs/*.log, and .claude/hooks/live-run.py.
 // Exit 0 always.
+//
+//   --pr [<number>]  appends the PR's LIVE state (head sha, draft/ready,
+//   mergeable_state, newest CI conclusion), each line stamped with the UTC time
+//   it was read: the lines agents used to hand-type and let go stale. No token
+//   or an API error: one "unavailable" line, same exit 0. Without --pr the
+//   output is unchanged.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -102,11 +108,66 @@ export function toMarkdown(s) {
   return out.join("\n");
 }
 
+/** One verdict over a head sha's workflow runs: only the NEWEST run per workflow counts. */
+export function ciSummary(runs) {
+  const by = new Map();
+  for (const r of runs || []) {
+    const c = by.get(r.name), t = Date.parse(r.created_at), ct = c ? Date.parse(c.created_at) : -Infinity;
+    if (!c || t > ct || (t === ct && r.id > c.id)) by.set(r.name, r);
+  }
+  const L = [...by.values()];
+  if (!L.length) return "no CI run for this sha";
+  if (L.some((r) => r.status !== "completed")) return "running";
+  const bad = L.find((r) => !["success", "skipped", "neutral"].includes(r.conclusion));
+  return bad ? (bad.conclusion === "cancelled" ? "cancelled (rule 8: a timeout or dedupe until proven otherwise)" : "failure") : "success";
+}
+
+/** Live PR state from `request(pathQs) -> {json}|{error}`; never throws. */
+export function fetchLivePr({ prArg, branch, request }) {
+  try {
+    let n = /^\d+$/.test(prArg) ? prArg : null;
+    if (!n) {
+      const l = request(`pulls?state=open&head=${encodeURIComponent("brycejmurrin:" + branch)}`);
+      if (l.error) return { error: l.error };
+      if (!Array.isArray(l.json) || !l.json.length) return { error: `no open PR for branch ${branch}` };
+      n = l.json[0].number;
+    }
+    const p = request(`pulls/${n}`);
+    if (p.error) return { error: `PR #${n}: ${p.error}` };
+    const r = request(`actions/runs?head_sha=${p.json.head.sha}&per_page=50`);
+    return { pr: p.json, ci: r.error ? `unknown (${r.error})` : ciSummary(r.json.workflow_runs) };
+  } catch (e) { return { error: String(e.message || e) }; }
+}
+
+export function livePrLines({ at, pr, ci, localHead, error }) {
+  if (error || !pr) return [`- **Live PR state** unavailable: ${error || "no PR"} (checked ${at})`];
+  const snap = `(snapshot read ${at}; stale once anything moves)`;
+  const out = [
+    `- **PR #${pr.number} head** \`${pr.head.sha.slice(0, 9)}\` — ${pr.draft ? "draft" : "ready"} ${snap}`,
+    `- **Mergeable** mergeable_state \`${pr.mergeable_state}\` ${snap}`,
+    `- **CI on that head** ${ci} ${snap}; gates: run \`node tools/ci/ready-gate.mjs\` / \`ready-full-cap.mjs\``,
+  ];
+  if (localHead && localHead !== pr.head.sha) out.unshift(`- **LOCAL HEAD != PR HEAD** — local \`${localHead.slice(0, 9)}\`, PR \`${pr.head.sha.slice(0, 9)}\`: push or sync before trusting anything below`);
+  return out;
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
-    console.log("usage: node tools/ci/session-status.mjs [--json]   # the branch's handoff block for the draft PR body (Markdown, or data)");
+    console.log("usage: node tools/ci/session-status.mjs [--json] [--pr [N]]   # the branch's handoff block for the draft PR body (Markdown, or data)");
     process.exit(0);
   }
   const s = collect();
-  console.log(process.argv.includes("--json") ? JSON.stringify(s, null, 2) : toMarkdown(s));
+  const i = process.argv.indexOf("--pr");
+  if (i >= 0) {
+    const arg = process.argv[i + 1] || "";
+    const at = new Date().toISOString();
+    let live;
+    try {
+      const { api } = await import("./ci-watch.mjs");   // dynamic: ci-watch parses --help at import
+      live = fetchLivePr({ prArg: arg, branch: s.branch, request: api });
+    } catch (e) { live = { error: String(e.message || e) }; }
+    s.livePr = { at, ...live, localHead: git("rev-parse", "HEAD") };
+  }
+  console.log(process.argv.includes("--json") ? JSON.stringify(s, null, 2)
+    : toMarkdown(s) + (s.livePr ? "\n\n" + livePrLines(s.livePr).join("\n") : ""));
 }

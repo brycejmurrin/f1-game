@@ -103,10 +103,18 @@ function entry(raw, label) {
   const ceiling = typeof raw === "number" ? raw : raw.ceiling;
   if (typeof ceiling !== "number") throw new Error(`${label}: no ceiling`);
   const dflt = Math.max(SLACK_MIN, Math.round(ceiling * SLACK_PCT));
-  if (typeof raw === "number") return { ceiling, slackMax: dflt };
-  if (raw.slack === undefined) return { ceiling, slackMax: dflt };
+  // slackRule names the rule this entry is held to, for the LOOSE message: an
+  // explicit `slack` is its own rule, never the default it tightens.
+  const rule = `max(${SLACK_MIN}, ${SLACK_PCT * 100}%) = ${dflt}`;
+  if (typeof raw === "number") return { ceiling, slackMax: dflt, slackRule: rule };
+  if (raw.slack === undefined) return { ceiling, slackMax: dflt, slackRule: rule };
   if (raw.slack > dflt) throw new Error(`${label}: slack ${raw.slack} is looser than the default ${dflt} — an entry may tighten the rule, never widen it`);
-  return { ceiling, slackMax: raw.slack };
+  return { ceiling, slackMax: raw.slack, slackRule: `the entry's own slack ${raw.slack}${raw.slack === 0 ? " (exact)" : ""}` };
+}
+
+/** One LOOSE row as a line: the slack it has and the rule it is held to. */
+export function looseLine(r) {
+  return `${r.file} ${r.metric}: ${r.value} but ceiling ${r.ceiling} (slack ${r.slack} > ${r.slackRule ?? r.slackMax})`;
 }
 
 export function load() {
@@ -123,16 +131,16 @@ export async function measure(data = load()) {
       const fn = METRICS[metric];
       if (!fn) throw new Error(`${file}: unknown metric "${metric}" (known: ${Object.keys(METRICS).join(", ")})`);
       const value = await fn(file, text);
-      const { ceiling, slackMax } = entry(raw, `${file} ${metric}`);
-      rows.push({ file, metric, value, ceiling, over: Math.max(0, value - ceiling), slack: ceiling - value, slackMax });
+      const { ceiling, slackMax, slackRule } = entry(raw, `${file} ${metric}`);
+      rows.push({ file, metric, value, ceiling, over: Math.max(0, value - ceiling), slack: ceiling - value, slackMax, slackRule });
     }
   }
   for (const [metric, raw] of Object.entries(data.tree || {})) {
     const fn = TREE_METRICS[metric];
     if (!fn) throw new Error(`tree: unknown metric "${metric}" (known: ${Object.keys(TREE_METRICS).join(", ")})`);
     const value = await fn();
-    const { ceiling, slackMax } = entry(raw, `tree ${metric}`);
-    rows.push({ file: "(tree)", metric, value, ceiling, over: Math.max(0, value - ceiling), slack: ceiling - value, slackMax, tree: true });
+    const { ceiling, slackMax, slackRule } = entry(raw, `tree ${metric}`);
+    rows.push({ file: "(tree)", metric, value, ceiling, over: Math.max(0, value - ceiling), slack: ceiling - value, slackMax, slackRule, tree: true });
   }
   return rows;
 }
@@ -353,7 +361,7 @@ async function main() {
   // is the half a bare count cannot carry.
   const where = (r) => (r.tree ? " — breakdown: node tools/check/tree-counts.mjs --offenders" : "");
   for (const r of v.over) console.log(`OVER   ${r.file} ${r.metric}: ${r.value} > ceiling ${r.ceiling} (+${r.over}) — extract, or raise it deliberately and say why in the commit${where(r)}`);
-  for (const r of v.loose) console.log(`LOOSE  ${r.file} ${r.metric}: ${r.value} but ceiling ${r.ceiling} (slack ${r.slack} > ${r.slackMax}) — lower it: node tools/check/ratchets.mjs --update`);
+  for (const r of v.loose) console.log(`LOOSE  ${looseLine(r)} — lower it: node tools/check/ratchets.mjs --update`);
   if (v.ok) {
     const d = load();
     console.log(`ratchets: ${v.rows.length} metrics on ${Object.keys(d.files).length} files + ${Object.keys(d.tree || {}).length} tree-wide, all at or under their ceilings`);
