@@ -85,3 +85,20 @@ test("Audi factory Neuburg Compound band is team color2 (not supersoft magenta)"
   assert.equal(tiers._ids.tyres, "sig_audi_tyre");
   assert.equal(bandKey(tiers._visual.tyres.band), bandKey(audi.color2));
 });
+
+// bug-hunt 9.9: factoryCache was keyed id|engine|ruleset, but every legend is
+// id "legends" with its own `factory` (legends.js raceTeam / custom-team.js swap
+// the team object on a legend switch), so the slot kept the FIRST legend's build.
+test("two teams of one id with different `factory` resolve their own factory build", () => {
+  const base = M.Teams.LIST.find((t) => t.id === "mclaren");
+  const fa = { engine: "stock", aero: "minimal", tyres: "medium" };
+  const fb = { engine: "stock", aero: "extreme", tyres: "medium" };
+  const a = { id: "legends", engine: "stock", color: base.color, color2: base.color2, factory: fa };
+  const b = { id: "legends", engine: "stock", color: base.color, color2: base.color2, factory: fb };
+  assert.equal(M.Parts.getFactorySetup(a).aero, "minimal");
+  assert.equal(M.Parts.getFactorySetup(b).aero, "extreme", "second legend must not be served the first legend's build");
+  assert.notEqual(M.Parts.factoryKey(a), M.Parts.factoryKey(b));
+  assert.equal(M.Parts.getFactorySetup(a).aero, "minimal", "and the first still resolves to its own");
+  // A team with no factory object keeps the string-keyed (preset / DEFAULTS) path.
+  assert.equal(M.Parts.getFactorySetup({ id: "legends", engine: "stock" }).aero, M.Parts.getFactorySetup({ id: "legends", engine: "stock" }).aero);
+});

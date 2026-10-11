@@ -65,7 +65,7 @@
       { s0: 0.0135, s1: 0.0980, hw: 6.6, ease: 0.003 },  // Pont / Le Village / Tour (racing 0.883-0.927)
     ],
     bankZones: [
-      { frac: 0.070, angleDeg: 3.0, widthM: 130 },   // Verrerie
+      { turn: 1, angleDeg: 3.0, widthM: 130 },   // Verrerie; re-seated frac 0.07 (was 101 m off any apex)
       { frac: 0.713, angleDeg: 4.0, widthM: 170 },   // Signes (0.560 sat on the Mistral and was re-seated onto the chicane)
       { frac: 0.745, angleDeg: 3.5, widthM: 160 },   // Le Beausset (was "Bosch curve" 0.640, re-seated here)
     ],

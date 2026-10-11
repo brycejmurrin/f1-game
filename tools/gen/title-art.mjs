@@ -600,6 +600,14 @@ function scene() {
 const PLACE = process.env.TA_PLACE || "202 675";
 const SCALE = process.env.TA_SCALE || "0.99";
 const argv = process.argv.slice(2);
+// An unknown flag used to fall through to WRITE mode and rewrite index.html (G1).
+{
+  const unknown = argv.filter((a) => a !== "--check");
+  if (unknown.length) {
+    console.error(`title-art: unknown argument ${unknown.join(" ")}\nusage: node tools/gen/title-art.mjs [--check]`);
+    process.exit(2);
+  }
+}
 // #tc-frame is the per-SHAPE framing that css/menus.css puts on top of that one
 // placement: a phone in portrait wants the pair nudged off the left edge, a
 // phone in landscape wants it smaller and lower so the trail clears the button

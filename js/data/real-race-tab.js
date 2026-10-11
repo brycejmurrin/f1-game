@@ -34,11 +34,21 @@ const DataRealRace = (function () {
 
   // ── The script builder (pure; tests/unit/real-race-script.test.mjs) ──────
 
-  /** Game circuit for an OpenF1 session: the country's current-season circuit
-   *  first (Tracks.SEASON order), else any circuit of that country, else null.
-   *  Venue→id aliases below are the Tracks handoff. Display country for a
-   *  moved meeting (OpenF1 "Kuala Lumpur" + GP country "Bahrain") is
-   *  F1API.placeLabel only — do not invent a kuala lumpur → sepang key here. */
+  /** The session's LOCAL calendar day (date_start + gmt_offset) as YYYY-MM-DD, or null. */
+  function localDay(session) {
+    const t = Date.parse(session.date_start || session.dateStart || "");
+    if (!isFinite(t)) return null;
+    const off = String(session.gmt_offset || "00:00:00").split(":");
+    const sign = off[0].trim().startsWith("-") ? -1 : 1;
+    return new Date(t + sign * (Math.abs(+off[0]) + (+off[1] || 0) / 60) * 3600000).toISOString().slice(0, 10);
+  }
+
+  /** Game circuit for an OpenF1 session: the circuit's own name first, then the
+   *  2026 calendar by DATE (SeasonCal.REAL_2026 windows — a GP that moved venue,
+   *  like the Bahrain GP run at Sepang, is named for its GP country but sits on
+   *  the circuit the calendar gives it), then the venue aliases below (the Tracks
+   *  handoff), then the country's current-season circuit, else any of that
+   *  country, else null. F1API.placeLabel owns the display country. */
   function trackIdFor(session, tracks) {
     const list = arr(tracks);
     const country = String(session.country_name || session.country || "").toLowerCase();
@@ -48,7 +58,11 @@ const DataRealRace = (function () {
     // Circuit first: a country with two circuits (Italy: Monza + Imola; USA: Miami/Austin/Vegas) tells them apart by name.
     const byCircuit = list.find((t) => circuit && (norm(t.id) === norm(circuit) || norm(t.name) === norm(circuit)));
     if (byCircuit) return byCircuit.id;
-    const alias = { "monte carlo": "monaco", "sakhir": "bahrain", "melbourne": "albert_park", "spielberg": "redbull", "austin": "cota",
+    const day = localDay(session);
+    const win = day && typeof SeasonCal !== "undefined" && SeasonCal.REAL_2026
+      ? SeasonCal.REAL_2026.find((r) => day >= r.from && day <= r.to && list.some((t) => t.id === r.id)) : null;
+    if (win) return win.id;
+    const alias = { "kuala lumpur": "sepang", "monte carlo": "monaco", "sakhir": "bahrain", "melbourne": "albert_park", "spielberg": "redbull", "austin": "cota",
                     "mexico city": "mexico", "yas marina": "abudhabi", "lusail": "qatar", "las vegas": "vegas", "spa-francorchamps": "spa",
                     "marina bay": "singapore", "budapest": "hungaroring", "montreal": "montreal", "imola": "imola", "barcelona": "catalunya" };
     if (alias[circuit] && list.some((t) => t.id === alias[circuit])) return alias[circuit];
@@ -287,7 +301,7 @@ const DataRealRace = (function () {
   // ── The race book (pure): the order at every lap, and what each lap held ──
 
   /** The classification at the end of real lap L, from the crossing times:
-   *  [{num, t (lap time), cum, gap, interval, pitIn, pitOut, out}] fastest
+   *  [{num, t (lap time), cum, gap, interval, down, pitIn, pitOut, out}] fastest
    *  crossing first, then the cars that had stopped by then (last lap first). */
   function lapBoard(script, lap) {
     const cum = typeof RealRace !== "undefined" && RealRace.cumTable ? RealRace.cumTable(script) : null;
@@ -296,13 +310,20 @@ const DataRealRace = (function () {
     for (const d of script.drivers || []) {
       const row = cum[d.num];
       const pits = d.pits || [];
-      if (row.length > lap) running.push({ num: d.num, code: d.code, t: d.laps[lap - 1] > 0 ? d.laps[lap - 1] : null, cum: row[lap], pitIn: pits.indexOf(lap) >= 0, pitOut: pits.indexOf(lap - 1) >= 0, tyre: compoundAt(d, lap), out: false });
+      // A classified finisher a lap or more down never reaches the later laps' crossings: its row ends at its own last
+      // lap. It is still RUNNING, `down` laps behind, not out (only a retirement stops).
+      const done = row.length - 1, down = !d.dnf && !d.dns && done >= 1 && done < lap ? lap - done : 0;
+      if (row.length > lap || down) running.push({ num: d.num, code: d.code, down, t: d.laps[lap - 1] > 0 ? d.laps[lap - 1] : null, cum: row[Math.min(lap, done)], pitIn: pits.indexOf(lap) >= 0, pitOut: pits.indexOf(lap - 1) >= 0, tyre: compoundAt(d, lap), out: false });
       else stopped.push({ num: d.num, code: d.code, t: null, cum: null, done: row.length - 1, pitIn: false, pitOut: false, tyre: compoundAt(d, row.length - 1), out: true });
     }
-    running.sort((a, b) => a.cum - b.cum);
+    running.sort((a, b) => a.down - b.down || a.cum - b.cum);
     stopped.sort((a, b) => b.done - a.done);
     const lead = running.length ? running[0].cum : 0;
-    running.forEach((r, i) => { r.pos = i + 1; r.gap = +(r.cum - lead).toFixed(3); r.interval = i ? +(r.cum - running[i - 1].cum).toFixed(3) : 0; });
+    running.forEach((r, i) => {
+      r.pos = i + 1;
+      r.gap = r.down ? null : +(r.cum - lead).toFixed(3);   // a lap down is not a time gap: the board says "+N LAP"
+      r.interval = r.down ? null : i ? +(r.cum - running[i - 1].cum).toFixed(3) : 0;
+    });
     stopped.forEach((r, i) => { r.pos = running.length + i + 1; r.gap = null; r.interval = null; });
     return running.concat(stopped);
   }
@@ -341,7 +362,7 @@ const DataRealRace = (function () {
 
   function fmtLap(t) {
     if (!(t > 0)) return "—";
-    const m = Math.floor(t / 60), sec = t - m * 60;
+    const ms = Math.round(t * 1000), m = Math.floor(ms / 60000), sec = (ms - m * 60000) / 1000;   // round first: never "1:60.000"
     return m + ":" + (sec < 10 ? "0" : "") + sec.toFixed(3);
   }
   function fmtGap(v) { return v == null ? "—" : v === 0 ? "" : "+" + v.toFixed(3); }
@@ -832,7 +853,7 @@ const DataRealRace = (function () {
         if (r.pos <= 3 && !r.out) row.className = r.pos === 1 ? "dh-lr-p1" : r.pos === 2 ? "dh-lr-p2" : "dh-lr-p3";
         row.appendChild(el("td", null, r.out ? "OUT" : "P" + r.pos));
         row.appendChild(el("td", null, r.code));
-        row.appendChild(el("td", null, r.out ? "L" + r.done : fmtGap(r.gap)));
+        row.appendChild(el("td", null, r.out ? "L" + r.done : r.down ? "+" + r.down + (r.down > 1 ? " LAPS" : " LAP") : fmtGap(r.gap)));
         row.appendChild(el("td", null, r.out ? "" : fmtGap(r.interval)));
         row.appendChild(el("td", null, fmtLap(r.t)));
         row.appendChild(el("td", null, r.tyre || "—"));

@@ -186,7 +186,7 @@ export function render() {
 
 if (isMain(import.meta.url)) {
   try {
-    if (process.argv.includes("--rows")) {
+    if (process.argv.slice(2).length === 1 && process.argv[2] === "--rows") {
       process.stdout.write(JSON.stringify(collect(), null, 2) + "\n");
     } else {
       process.exitCode = emit(TARGET, render());

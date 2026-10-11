@@ -66,6 +66,10 @@ test.describe("Car runtime effects", () => {
   test("electric ERS deployment never creates an exhaust boost flame", async ({ page }) => {
     await startCar(page, 30);
     await page.evaluate(() => {
+      // Deploy (and the ersDeploy lamp) follow onThrottle — same gate as the
+      // drain. A coasting setBoost alone leaves ersDeploy false after the
+      // bug-hunt throttle branch (selected packed-4 on #1289).
+      window.__apex.setInput({ steer: 0, throttle: true, brake: false });
       window.__apex.setBoost(true);
       window.__apex.step(1 / 60, 2);
     });
@@ -122,6 +126,7 @@ test.describe("Car runtime effects", () => {
     await page.evaluate(() => {
       window.__apex.jump(0.1, 30, 0);
       window.__apex.setEnergy(1);
+      window.__apex.setInput({ steer: 0, throttle: true, brake: false });
       window.__apex.setBoost(true);
       window.__apex.step(1 / 60, 2);
     });

@@ -56,7 +56,7 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    sectors: [0.3, 0.62],
+    sectors: [0.314, 0.62],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.3, 0.62])
     turns: [0.0655, 0.1765, 0.1935, 0.2325, 0.2590, 0.2890, 0.2950, 0.3050, 0.3435, 0.4155, 0.6335, 0.6740, 0.6915, 0.7155, 0.7260, 0.7655, 0.7825, 0.8005, 0.8630, 0.9175],
     furniture: { tree: "acacia", fol: [0.32, 0.39, 0.18], lamp: "none" },  // dry Texas live oak
     kit: { marshal: "kiosk",     rail: "safer",       fence: "panelled",  tyre: "tecpro",  board: "monopole",  gantry: "truss",      camera: "lattice",   hoarding: "panel" },

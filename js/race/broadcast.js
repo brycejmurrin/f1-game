@@ -51,14 +51,7 @@ const Broadcast = (function () {
     if (ls[k - 1] != null && laps[k - 1] > 0) return ls[k - 1] + laps[k - 1];
     return null;
   }
-  /** Laps driver d had completed by T: {k, at} (at = that crossing's time; k = 0 before the first). */
-  function doneBy(d, T) {
-    let k = 0, at = null;
-    const n = (d.laps || []).length;
-    for (let j = 1; j <= n; j++) { const c = crossAt(d, j); if (c == null || c > T) break; k = j; at = c; }
-    return { k, at };
-  }
-  /** Write doneBy into `slot` (no alloc). Returns slot. */
+  /** Laps driver d had completed by T, written into `slot` (no alloc): {k, at} (at = that crossing's time; k = 0 before the first). Returns slot. */
   function doneByInto(d, T, slot) {
     let k = 0, at = null;
     const n = (d.laps || []).length;
@@ -194,12 +187,15 @@ const Broadcast = (function () {
   const _fights = [];
   /** The closest battle among running cars ordered by progress: [{chaser, gapS}] best first — tighter and
    *  further up the order is better. cars: [{key, prog, speed, pos}] sorted by prog descending.
-   *  Returns a module-owned pooled array (mutated on the next call). */
-  function battles(cars) {
+   *  Returns a module-owned pooled array (mutated on the next call). vScale: vTop()/VMAX when the speeds are the
+   *  SIM's (PACE-scaled), so the 20 m/s crawl floor is the same fraction of the envelope at any OVERALL SPEED;
+   *  omit it for real m/s (WATCH's traces run at the real car's pace whatever PACE is). */
+  function battles(cars, vScale) {
     let n = 0;
+    const floor = 20 * (vScale > 0 ? vScale : 1);
     for (let i = 1; i < cars.length; i++) {
       const a = cars[i - 1], b = cars[i];
-      const v = Math.max(b.speed || 0, 20);
+      const v = Math.max(b.speed || 0, floor);
       const g = (a.prog - b.prog) / v;
       if (g < 0 || g >= BATTLE_S) continue;
       let f = _fights[n];
@@ -449,6 +445,6 @@ const Broadcast = (function () {
     return { start, stop, tick, refresh, onCut, manual, setAuto, setLocked, resetTiming, autoOn, status, isOn: () => on };
   }
 
-  return { create, towerAt, towerSample, crossAt, doneBy, battles, nextEvent, pipPick, shotFor, fmtGap, SHOTS, SHOT_MIN_S, SHOT_MAX_S, MANUAL_S };
+  return { create, towerAt, towerSample, crossAt, battles, nextEvent, pipPick, shotFor, fmtGap, SHOTS, SHOT_MIN_S, SHOT_MAX_S, MANUAL_S };
 })();
 Object.freeze(Broadcast);

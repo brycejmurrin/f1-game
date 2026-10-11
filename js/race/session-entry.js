@@ -21,7 +21,8 @@ const SessionEntry = (function () {
             if (recover) recover();
             return { kind: "canceled", reason: "settings changed" };
           }
-          return await commit();
+          // `current` lets a long commit re-check supersession after each of its own awaits.
+          return await commit(current);
         } catch (e) {
           if (!current()) return { kind: "canceled", reason: "superseded" };
           if (recover) recover(e);

@@ -43,6 +43,14 @@ const TLX = (function () {
     return true;
   }
 
+  // addUpdateRange() mints a {start,count} per call (60-120 a frame across the instanced batches). three reads the
+  // list synchronously at upload and then empties the array, so one cached range object per attribute can be re-pushed.
+  function setRange0(attr, count) {
+    const r = attr.__tlxRange || (attr.__tlxRange = { start: 0, count: 0 });
+    r.count = count;
+    const ur = attr.updateRanges; ur.length = 0; ur.push(r);
+  }
+
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
   async function create(canvas /*, opts */) {
     // Hoisted so the outer catch can tear down a half-booted soft overlay /
@@ -961,7 +969,7 @@ const TLX = (function () {
         return spatialUpscale && renderScale < 0.98 && !!(post && post.spatialOk && post.spatialOk());
       }
       function getPresentSize() { return { width: presentW || W, height: presentH || H }; }
-      const DPR_CAP = isMobile ? 1.5 : 2;
+      const DPR_CAP = mobileTier ? 1.5 : 2;   // GRAPHICS: HIGH on a phone restores full DPR (glx.js MOBILE_TIER contract)
 
       // M9 GPU frame timer state
       // supported only where three's timestamp-query feature is present — the
@@ -995,10 +1003,14 @@ const TLX = (function () {
       const camera = new THREE.PerspectiveCamera(60, 1, 0.3, 4000);
       camera.matrixAutoUpdate = false;
 
+      // Opt-in only (?three-devtools=1): the bare globals pin the whole scene graph and would collide with any
+      // future `scene`/`camera` identifier. The heap-census tooling and track-switch-memory.spec.js set the flag.
       try {
-        window.scene = scene; window.camera = camera; window.renderer = renderer;
-        window.THREE = THREE;
-        Log.info("gfx", "[TLX] window.scene / camera / renderer / THREE exposed — Three.js DevTools will find the scene");
+        if (typeof location !== "undefined" && /(?:^|[?&])three-devtools=1(?:&|$)/.test(location.search || "")) {
+          window.scene = scene; window.camera = camera; window.renderer = renderer;
+          window.THREE = THREE;
+          Log.info("gfx", "[TLX] window.scene / camera / renderer / THREE exposed — Three.js DevTools will find the scene");
+        }
       } catch (_) { /* non-fatal: debug convenience only */ }
 
       // Fallback materials: unlit vertex colour (the M2 look). Node unlit is
@@ -1062,6 +1074,7 @@ const TLX = (function () {
           // and returns false once the hidden canvas is a WebGPU context).
           shadowSys = TLXShaders.shadowSys(THREE, TSL, {
             renderer, mobileTier, isMobile, softwareGL: softContent("shadow"),
+            isWarming: () => !!_warmPending,   // releaseGeometry queues its park while a compile holds the casters
           });
         }
       } catch (e) {
@@ -1120,7 +1133,7 @@ const TLX = (function () {
       return post;
       }
       post = buildPost();
-      let _postStrikes = 0, _postRebuild = false;   // post-only deaths so far; a rebuild is owed
+      let _postStrikes = 0, _postRebuild = false, _postRetryAt = 0;   // post-only deaths so far; a rebuild is owed, and when to try it
 
       const ENV_SIZE = 64;
       const ENV_CULL_M = 150;
@@ -1404,6 +1417,18 @@ const TLX = (function () {
       const matCache = new Map();
       const _matDispose = [];   // evicted materials; disposed in present() after paint
       const MAT_CACHE_CAP = 64;
+      // True LRU: the entry last drawn longest ago (smallest __tlxFrame), never one used this frame. Insertion order
+      // evicted the long-lived road/terrain keys first, which are drawn later the same frame, so past the cap every
+      // frame re-minted the hottest material.
+      function lruVictim(cache, frame) {
+        let best, bestAt = Infinity;
+        for (const [k, v] of cache) {
+          const at = v ? v.__tlxFrame : -1;
+          if (at === frame) continue;
+          if (at < bestAt) { bestAt = at; best = k; }
+        }
+        return best;
+      }
       // Frame stamp per cached material, so eviction can never dispose one that
       // is still queued to draw. drawList holds `mat` REFERENCES and is flushed
       // at the end of the frame, while eviction disposed the oldest INSERTED
@@ -1510,13 +1535,13 @@ const TLX = (function () {
             // Releasing the lit registry entry is what lets the JS object go
             // — setSsrMrt held every minted material forever, so its loop
             // grew and evictions freed nothing.
-            for (const [k, v] of matCache) {
-              if (v && v.__tlxFrame === _matFrame) continue;
+            const k = lruVictim(matCache, _matFrame);
+            if (k !== undefined) {
+              const v = matCache.get(k);
               matCache.delete(k);
               if (lit.releaseMaterial) lit.releaseMaterial(v);
               if (v) _matDispose.push(v);
               _matEvict++;
-              break;
             }
           }
           m = lit.makeMaterial(chunked
@@ -1615,9 +1640,9 @@ const TLX = (function () {
           // without node colours (graph.js passes null -> packColors null), so
           // marking it outside this branch re-uploaded an unchanged all-ones
           // buffer — drawN x 12 B a frame for bytes nothing had touched.
-          col.clearUpdateRanges(); col.addUpdateRange(0, nc); col.needsUpdate = true;
+          setRange0(col, nc); col.needsUpdate = true;
         }
-        im.clearUpdateRanges(); im.addUpdateRange(0, nf);
+        setRange0(im, nf);
         im.needsUpdate = true;
         imesh.count = drawN;
       }
@@ -2730,7 +2755,12 @@ const TLX = (function () {
       // Window resize (game.js) and settings can fire many times per drag frame.
       // Coalesce those to one target realloc per animation frame; begin() and
       // setRenderScale force an immediate apply so the draw sees the new size.
-      let _resizeRaf = 0, _resizeNow = false;
+      // _sizeOwned: a resizeNow() (begin) ran since the last resize(). game.js
+      // calls resize() every rendered frame and begin() cancels the rAF it
+      // scheduled the same frame, so while begin() is driving, resize() defers
+      // to it instead of paying a requestAnimationFrame + cancel per frame. One
+      // call per begin(): with no begin() (menus) the next call schedules again.
+      let _resizeRaf = 0, _resizeNow = false, _sizeOwned = false;
       function applyResize() {
         // Immersive-vr owns the drawing buffer via XRWebGLLayer — leave size alone.
         if (_xrActive) return;
@@ -2806,6 +2836,7 @@ const TLX = (function () {
         // latest CSS size and settings once the warm task releases ownership.
         if (_warmPending) { cssSizeCache.markDirty(); return; }
         if (_resizeNow) { applyResize(); return; }
+        if (_sizeOwned) { _sizeOwned = false; return; }
         if (_resizeRaf) return;
         const schedule = typeof requestAnimationFrame === "function"
           ? requestAnimationFrame
@@ -3017,6 +3048,95 @@ const TLX = (function () {
         _softReadPending = false;
       }
 
+      // present()'s failure ladder, hoisted out of the per-frame body (it minted four closures a frame).
+      // First renderer.render() is when three compiles TSL → GLSL. A
+      // factory that returned is not a compiled program — Safari WebGL2
+      // often throws here. tick() reports any escape as the full-screen
+      // overlay ("Caught @ tick") and rethrows. The 1269 post catch then
+      // retried the SAME render unwrapped, so a compile error became the
+      // crash. Every paint below stays inside try; the pick is never
+      // written to webgl2 (session skip + reload if even classic dies).
+      // postOnly: the failure may be the post chain alone and the canvas repaint
+      // below still paints on TLX — then the session stays bound to three.
+      const persistFail = (e, postOnly) => {
+        const reason = (e && e.message) || String(e);
+        _lastFailure = { reason, at: Date.now() };
+        try { localStorage.setItem("apex26.gfxTlxFail", reason); } catch (_) { /* blocked storage */ }
+        if (!postOnly) try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
+        try { if (!_presentWarned) { _presentWarned = true; Log.warn("gfx", "TLX: present failed —", e); } } catch (_) { /* Log absent in the node harness */ }
+      };
+      const paintCanvas = (self) => {
+        _gpuLastOperation = "render-canvas";
+        pinSkyMaterial();
+        // WebXR stereo (Phase 0): immersive layer + per-eye matrices/viewports.
+        const xrEyes = self._pendingXrEyes;
+        const xrLayer = self._xrLayer;
+        if (xrEyes && xrEyes.length && xrLayer) {
+          const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
+          // Real headset: bind the layer FBO. IWER: framebuffer is null →
+          // default framebuffer (canvas); currentDrawbuffers was remapped
+          // in attachXrSession so three's WeakMap path does not throw.
+          if (gl && xrLayer.framebuffer) {
+            try { gl.bindFramebuffer(gl.FRAMEBUFFER, xrLayer.framebuffer); } catch (_) { /* */ }
+          }
+          renderer.setRenderTarget(null);
+          for (let ei = 0; ei < xrEyes.length; ei++) {
+            const eye = xrEyes[ei];
+            // Skip zero-width views (IWER mono right eye) — nothing to draw.
+            const vp = eye.viewport;
+            if (vp && !(vp.width > 0 && vp.height > 0)) continue;
+            self._applyXrEye(eye);
+            if (vp && typeof renderer.setViewport === "function") {
+              renderer.setViewport(vp.x, vp.y, vp.width, vp.height);
+            } else if (vp && gl) {
+              gl.viewport(vp.x, vp.y, vp.width, vp.height);
+            }
+            _gpuLastOperation = "render-xr-" + ei;
+            _renderTimed(scene, camera);
+          }
+          try { renderer.setViewport(0, 0, W, H); } catch (_) { /* */ }
+          if (gl && xrLayer.framebuffer) {
+            try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); } catch (_) { /* */ }
+          }
+          return;
+        }
+        if (_softBlit) {
+          const rt = _ensureBlitRT(W, H);
+          renderer.setRenderTarget(rt);
+          _renderTimed(scene, camera);
+          _queueSoftBlit(rt);
+          return;
+        }
+        renderer.setRenderTarget(null);
+        _renderTimed(scene, camera);
+      };
+      const dropTo = (mode, mat) => {
+        _drawMatMode = mode;
+        const deadPost = post;
+        post = null;
+        _postRebuild = false;   // lit/fx go too: no chain to rebuild for
+        _cancelSoftBlits();
+        try { if (deadPost && deadPost.dispose) deadPost.dispose(); } catch (_) { /* best-effort degradation */ }
+        sky = null;
+        hideSkyMesh();
+        try { scene.backgroundNode = null; } catch (_) { /* node already gone */ }
+        lit = null;
+        fx = null;
+        for (let i = 0; i < meshPool.length; i++) {
+          const pm = meshPool[i];
+          if (pm && pm.__tlxBatch === _poolBatch) pm.material = mat;
+        }
+        // Live InstancedMeshes hold their own material reference — leave
+        // them on a dead lit material and the retry render throws again,
+        // burning the remaining fallback rungs in one frame. They get the
+        // fallbackMat contract's instanced rung (per-instance tint attribute)
+        // — plain unlitMat has no instanceTint read and paints every
+        // TrackGraph batch flat.
+        const instMat = mode >= 2 ? mat : unlitInstancedMat;
+        for (let i = 0; i < _instRegistry.length; i++) {
+          if (_instRegistry[i]) _instRegistry[i].material = instMat;
+        }
+      };
       // the backend object (the ~40-member seam contract)
       const backend = {
         backend: "three",                    // WGX precedent: backend id marker
@@ -3227,6 +3347,10 @@ const TLX = (function () {
             t.magFilter = THREE.LinearFilter;
             t.generateMipmaps = true;
             t.anisotropy = 4;                            // the road is the grazing surface
+            // three keeps texture.image.data for the texture's life (~4.4 MB a map at the shipped 256 px, ~36 MB at
+            // 512). Drop it once the first upload has run; the dims stay so a later size query still answers. A context
+            // loss reloads the page, so nothing re-reads the bytes. (createTexture's releaseTexSource, for arrays.)
+            t.onUpdate = (tex) => { tex.onUpdate = null; tex.image = { data: null, width: size, height: size, depth: n }; };
             t.needsUpdate = true;
             return t;
           } catch (_) { return null; }
@@ -3563,7 +3687,7 @@ const TLX = (function () {
           if (frame.eye) mirCam.position.set(frame.eye[0], frame.eye[1], frame.eye[2]);
           const z = frame.skyZenith || frame.fogColor;
           if (z && z.length >= 3) scene.background.setRGB(z[0], z[1], z[2]);
-          lit.updateFrame(frame);
+          lit.updateFrame(frame, true);   // true: the forward lamp-shadow slot is off in the mirror (tsl-lit)
           if (fx) fx.updateFrame(frame);
           _mirVP.set(frame.viewProj); _mirEye = frame.eye || null; _mirCull = frame.cullDist || 0; _mirFog = frame.cullFog || null;
           scene.backgroundNode = null;
@@ -3882,6 +4006,13 @@ const TLX = (function () {
         begin(frame) {
           _matFrame++;   // new frame: last frame's materials are evictable again
           resizeNow();
+          _sizeOwned = true;   // the next resize() defers to the next begin() (no rAF + cancel per frame)
+          // A dead post chain used to come back only on a resize/DPR change. Retry on a 2 s timer (3-strike cap kept):
+          // one transient throw must not cost ACES/bloom/FXAA/mirror for the rest of the race. Not warmed: one compile hitch.
+          if (_postRebuild && !post && !_warmPending
+              && (typeof performance !== "undefined" ? performance.now() : Date.now()) >= _postRetryAt) {
+            _postRebuild = false; post = buildPost(); if (post) post.resize(W, H);
+          }
           _instAlive.clear();
           const z = frame && frame.skyZenith;
           const f = (z && z.length >= 3) ? z
@@ -4127,6 +4258,7 @@ const TLX = (function () {
           _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();
           prunePool(_poolNow);
           flushDropped();
+          if (shadowSys && shadowSys.flushDropped) shadowSys.flushDropped();   // its parked casters, queued mid-warm
           // renderOrder = submission index: three sorts opaque and transparent
           // lists by renderOrder first, so caller order (the GLX contract)
           // survives its z-sort in BOTH lists. Opaques still render before
@@ -4285,99 +4417,12 @@ const TLX = (function () {
           // later warm passes, but cannot cancel a compile already in flight.
           if (_warmRequested && !_warmPending && !_deviceLost) startProgramWarm(opts);
           if (_warmPending) return;
-          // First renderer.render() is when three compiles TSL → GLSL. A
-          // factory that returned is not a compiled program — Safari WebGL2
-          // often throws here. tick() reports any escape as the full-screen
-          // overlay ("Caught @ tick") and rethrows. The 1269 post catch then
-          // retried the SAME render unwrapped, so a compile error became the
-          // crash. Every paint below stays inside try; the pick is never
-          // written to webgl2 (session skip + reload if even classic dies).
-          // postOnly: the failure may be the post chain alone and the canvas repaint
-          // below still paints on TLX — then the session stays bound to three.
-          const persistFail = (e, postOnly) => {
-            const reason = (e && e.message) || String(e);
-            _lastFailure = { reason, at: Date.now() };
-            try { localStorage.setItem("apex26.gfxTlxFail", reason); } catch (_) { /* blocked storage */ }
-            if (!postOnly) try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label keeps the pick */ }
-            try { if (!_presentWarned) { _presentWarned = true; Log.warn("gfx", "TLX: present failed —", e); } } catch (_) { /* Log absent in the node harness */ }
-          };
-          const paintCanvas = () => {
-            _gpuLastOperation = "render-canvas";
-            pinSkyMaterial();
-            // WebXR stereo (Phase 0): immersive layer + per-eye matrices/viewports.
-            const xrEyes = this._pendingXrEyes;
-            const xrLayer = this._xrLayer;
-            if (xrEyes && xrEyes.length && xrLayer) {
-              const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
-              // Real headset: bind the layer FBO. IWER: framebuffer is null →
-              // default framebuffer (canvas); currentDrawbuffers was remapped
-              // in attachXrSession so three's WeakMap path does not throw.
-              if (gl && xrLayer.framebuffer) {
-                try { gl.bindFramebuffer(gl.FRAMEBUFFER, xrLayer.framebuffer); } catch (_) { /* */ }
-              }
-              renderer.setRenderTarget(null);
-              for (let ei = 0; ei < xrEyes.length; ei++) {
-                const eye = xrEyes[ei];
-                // Skip zero-width views (IWER mono right eye) — nothing to draw.
-                const vp = eye.viewport;
-                if (vp && !(vp.width > 0 && vp.height > 0)) continue;
-                this._applyXrEye(eye);
-                if (vp && typeof renderer.setViewport === "function") {
-                  renderer.setViewport(vp.x, vp.y, vp.width, vp.height);
-                } else if (vp && gl) {
-                  gl.viewport(vp.x, vp.y, vp.width, vp.height);
-                }
-                _gpuLastOperation = "render-xr-" + ei;
-                _renderTimed(scene, camera);
-              }
-              try { renderer.setViewport(0, 0, W, H); } catch (_) { /* */ }
-              if (gl && xrLayer.framebuffer) {
-                try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); } catch (_) { /* */ }
-              }
-              return;
-            }
-            if (_softBlit) {
-              const rt = _ensureBlitRT(W, H);
-              renderer.setRenderTarget(rt);
-              _renderTimed(scene, camera);
-              _queueSoftBlit(rt);
-              return;
-            }
-            renderer.setRenderTarget(null);
-            _renderTimed(scene, camera);
-          };
-          const dropTo = (mode, mat) => {
-            _drawMatMode = mode;
-            const deadPost = post;
-            post = null;
-            _postRebuild = false;   // lit/fx go too: no chain to rebuild for
-            _cancelSoftBlits();
-            try { if (deadPost && deadPost.dispose) deadPost.dispose(); } catch (_) { /* best-effort degradation */ }
-            sky = null;
-            hideSkyMesh();
-            try { scene.backgroundNode = null; } catch (_) { /* node already gone */ }
-            lit = null;
-            fx = null;
-            for (let i = 0; i < meshPool.length; i++) {
-              const pm = meshPool[i];
-              if (pm && pm.__tlxBatch === _poolBatch) pm.material = mat;
-            }
-            // Live InstancedMeshes hold their own material reference — leave
-            // them on a dead lit material and the retry render throws again,
-            // burning the remaining fallback rungs in one frame. They get the
-            // fallbackMat contract's instanced rung (per-instance tint attribute)
-            // — plain unlitMat has no instanceTint read and paints every
-            // TrackGraph batch flat.
-            const instMat = mode >= 2 ? mat : unlitInstancedMat;
-            for (let i = 0; i < _instRegistry.length; i++) {
-              if (_instRegistry[i]) _instRegistry[i].material = instMat;
-            }
-          };
           // The last rung: even rawUnlitMat throws. AUTO on three's WebGPU takes three WebGL2 next boot (tlxAutoGL, a
           // different configuration). A boot that is ALREADY three WebGL2 (forceWebGL / _autoStayGL) or an explicit pin
           // has nothing lower on TLX, so it binds GLX (gfxClaimFail): tlxAutoGL there reproduced the same boot for ever.
           // The reload spends the shared ctxLostReloads budget (n <= 2, like the heal path below); past it the latch is
           // still written for the player's own next reload, but nothing reloads on its own.
+          // (persistFail / paintCanvas / dropTo are hoisted above present(): one closure set per renderer, not four a frame.)
           const refuseTab = () => {
             const toGlx = _glPin === "0" || _glPin === "1" || forceWebGL || _autoStayGL;
             try { sessionStorage.setItem(toGlx ? "apex26.gfxClaimFail" : "apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps its path */ }
@@ -4442,7 +4487,7 @@ const TLX = (function () {
               }
               if (_softBlit && post.presentedTarget) _queueSoftBlit(post.presentedTarget());
             } else {
-              paintCanvas();
+              paintCanvas(this);
             }
             painted = true;
           } catch (e) { persistFail(e, !!post); }
@@ -4453,18 +4498,19 @@ const TLX = (function () {
             post = null;
             _cancelSoftBlits();
             _postRebuild = ++_postStrikes <= 3;
-            try { paintCanvas(); painted = true; } catch (e) { persistFail(e); }
+            _postRetryAt = (typeof performance !== "undefined" ? performance.now() : Date.now()) + 2000;   // begin() retries; a resize is not required
+            try { paintCanvas(this); painted = true; } catch (e) { persistFail(e); }
             finally {
               try { if (deadPost.dispose) deadPost.dispose(); } catch (_) { /* device already dying */ }
             }
           }
           if (!painted) {
             dropTo(1, unlitMat);
-            try { paintCanvas(); painted = true; } catch (e) { persistFail(e); }
+            try { paintCanvas(this); painted = true; } catch (e) { persistFail(e); }
           }
           if (!painted) {
             dropTo(2, rawUnlitMat);
-            try { paintCanvas(); painted = true; }
+            try { paintCanvas(this); painted = true; }
             catch (e) { persistFail(e); refuseTab(); }
           }
           _presentN++;

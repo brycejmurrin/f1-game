@@ -52,14 +52,14 @@
     ],
     hwZones: [
       { s0: 0.135, s1: 0.180, hw: 6.4, ease: 0.012 },  // Turn 3-4 complex
-      { s0: 0.590, s1: 0.640, hw: 6.4, ease: 0.012 },  // Turn 9-10
+      { s0: 0.7125, s1: 0.7742, hw: 6.4, ease: 0.012 },  // Turn 9-10 (index; arc 0.590-0.640)
       { s0: 0.880, s1: 0.930, hw: 6.3, ease: 0.012 },  // Turn 13-14
     ],
     // Turn 8 is the famous one: a long, banked, quadruple-apex left taken flat.
     bankZones: [
       { frac: 0.050, angleDeg: 4.0, widthM: 130 },   // Turn 1
-      { frac: 0.400, angleDeg: 7.0, widthM: 300 },   // Turn 8 — the big one
-      { frac: 0.760, angleDeg: 3.5, widthM: 130 },   // Turn 12
+      { turn: 6, angleDeg: 7.0, widthM: 300 },   // Turn 8 — the big one; re-seated frac 0.4 (was 179 m off any apex)
+      { turn: 11, angleDeg: 3.5, widthM: 130 },   // Turn 12; re-seated frac 0.76 (was 641 m off any apex)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

@@ -44,8 +44,8 @@
       { s0: 0.830, s1: 0.875, hw: 6.4, ease: 0.012 },
     ],
     bankZones: [
-      { frac: 0.380, angleDeg: 5.0, widthM: 240 },
-      { frac: 0.070, angleDeg: 3.0, widthM: 110 },
+      { turn: 6, angleDeg: 5.0, widthM: 240 },  // re-seated frac 0.38 (was 114 m off any apex)
+      { turn: 1, angleDeg: 3.0, widthM: 110 },  // re-seated frac 0.07 (was 81 m off any apex)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

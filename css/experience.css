@@ -29,6 +29,15 @@
   #pm-checkpoint summary { min-height: max(var(--chip-h), 44px); display: flex; align-items: center; justify-content: center; cursor: pointer; text-align: center; }
   #pm-checkpoint[open] { padding-bottom: calc(var(--gap) / 2); }
   #pm-checkpoint button { font-size: var(--fs-micro); }
+  /* Short landscape phone (the compact pause card, css/dialogs.css): tighter tray
+     gap and the --tap-paint floors. Here, after the base rules above, because
+     this layer outranks the components layer the card's other short-landscape
+     rules sit in. */
+  @media (orientation: landscape) and (max-height: 500px) {
+    #pm-quick-doors { gap: 2px; }
+    #pm-quick-doors button,
+    #pm-checkpoint summary { min-height: max(34px, var(--tap-paint)); padding-block: 2px; }
+  }
   #practice-brief { background: var(--plate-on); border: 1px solid var(--red); border-radius: var(--r-md); padding: var(--gap); margin-bottom: var(--gap); font-size: var(--fs-micro); color-scheme: dark; }
   #practice-brief p { margin-block: calc(var(--gap) / 2); color: var(--dim); }
   /* GOAL uses the shared ‹ VALUE › row (css/settings-controls.css .set-row).

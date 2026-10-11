@@ -345,9 +345,15 @@ const UiExperience = (function () {
     }
     function renderHome(dt) {
       if (previewBusy) return false;
-      let s = scene();
-      const photoOpen = $("photo-studio") && !$("photo-studio").hidden;
+      const photoEl = $("photo-studio"), photoOpen = photoEl && !photoEl.hidden;
       if (!photoOpen) { photoHomeCamera = null; if (photoScene && !photoSwitching) photoScene = null; }
+      // Racing with Home already torn down: this runs every race frame, and
+      // stopHome() below would only repeat work that is done (scene() alloc,
+      // removeAttribute). A live Home, a pending track world or a photo dock
+      // still fall through.
+      if (G.state !== "menu" && !home && !photoOpen && !painted && !signature && !(world.active && world.active())
+          && !(world.wantsTrack && world.wantsTrack())) { variation.leave(); return false; }
+      let s = scene();
       const visible = G.state === "menu" && overlay && !overlay.hidden && !document.hidden
         && !G.setupPreviewOn && (["garage", "night", "studio", "track", "pitlane"].includes(s.mode) || photoOpen);
       // Only the title scene and its own photo dock can own this camera.

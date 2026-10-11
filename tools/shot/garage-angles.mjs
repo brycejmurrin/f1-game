@@ -117,6 +117,7 @@ import { join, extname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
+import { assertOutputDir } from "../lib/output-paths.mjs";
 import {
   chromiumArgsForBackend, installProbeInit, gotoGame, openGarage, settleGarage,
   screenshotGameCanvas,
@@ -1934,6 +1935,9 @@ async function main() {
     return;
   }
   if (argvHas("--reset") && existsSync(outDir)) {
+    // --reset deletes outDir recursively: only inside artifacts/ or scratch/ (S1).
+    try { assertOutputDir(outDir, fileURLToPath(new URL("../..", import.meta.url)), "--reset --out"); }
+    catch (e) { console.error(e.message); process.exit(1); }
     rmSync(outDir, { recursive: true, force: true });
     console.log(`reset: cleared ${outDir}`);
   }

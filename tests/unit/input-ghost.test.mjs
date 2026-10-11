@@ -18,7 +18,7 @@ import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function createHarness(opts = {}) {
-  const store = new Map(Object.entries(opts.disk || {}));
+  const store = opts.store || new Map(Object.entries(opts.disk || {}));
   const mockLocalStorage = {
     getItem(k) { return store.has(k) ? store.get(k) : null; },
     setItem(k, v) { store.set(k, String(v)); },
@@ -139,6 +139,60 @@ test("InputGhost keeps the faster lap and persists under GameStore", () => {
   assert.ok(keys.length >= 1, "expected a stored input ghost");
   assert.equal(raw[keys[0]].time, 18);
   assert.equal(raw[keys[0]].seed, 7);
+});
+
+// A recording from before a physics/build bump is refused for replay, and used to
+// stay `best` for the record test too: every later lap that was not faster than a
+// lap set on the OLD physics returned false, so the circuit never got a usable
+// input ghost again.
+test("an incompatible stored ghost does not block the record test (REVISION flip)", () => {
+  const { InputGhost: IG, sandbox } = createHarness();
+  IG.setTrack("monza");
+  assert.equal(driveLap(IG, 40, 9.0), true);
+  IG.flush();
+  sandbox.PhysicsConsts.REVISION = "rev-2";
+  IG.setTrack("monza");
+  assert.equal(IG.hasGhost(), true, "the stale entry is still there");
+  assert.equal(IG.compatible(IG.envelope()), false);
+  assert.equal(IG.beginReplay(), false);
+  IG.startLap({ seed: 7, physRev: "rev-2", build: 42, dt: 1 / 60 });
+  for (let i = 0; i < 40; i++) IG.record({ steer: 0.1, throttle: true });
+  assert.equal(IG.finishLap(10.0), true, "a slower lap on the new revision is the record");
+  assert.equal(IG.bestTime(), 10);
+  assert.equal(IG.compatible(IG.envelope()), true);
+  assert.equal(IG.beginReplay(), true);
+  // The compatible record still guards itself.
+  assert.equal(driveLap(IG, 40, 11), false);
+});
+
+// Unlike pose Ghost, InputGhost cached the whole store object forever and wrote
+// all of it back, so a second tab's input ghost was overwritten.
+test("a foreign tab's input ghost survives this tab's save (two harnesses, one disk)", () => {
+  const disk = new Map();
+  const A = createHarness({ store: disk }), B = createHarness({ store: disk });
+  B.InputGhost.setTrack("spa");                       // B loads the (empty) store
+  A.InputGhost.setTrack("monza");
+  assert.equal(driveLap(A.InputGhost, 40, 20), true);
+  A.InputGhost.flush();
+  assert.deepEqual(Object.keys(JSON.parse(disk.get("apex26.inputGhost.v1"))), ["monza"]);
+  B.GameStore.store.onForeignWrite({ key: "apex26.inputGhost.v1" });   // the storage event
+  assert.equal(driveLap(B.InputGhost, 40, 21), true);
+  B.InputGhost.flush();
+  const saved = JSON.parse(disk.get("apex26.inputGhost.v1"));
+  assert.deepEqual(Object.keys(saved).sort(), ["monza", "spa"], "B's save keeps A's monza ghost");
+  assert.equal(saved.monza.time, 20);
+  // A foreign write to this tab's own circuit re-picks `best`; a pending lap rebases onto it.
+  A.InputGhost.setTrack("spa");
+  B.InputGhost.setTrack("monza");
+  assert.equal(B.InputGhost.bestTime(), 20);
+  assert.equal(driveLap(A.InputGhost, 40, 15), true);
+  A.InputGhost.flush();
+  B.GameStore.store.onForeignWrite({ key: "apex26.inputGhost.v1" });
+  assert.equal(B.InputGhost.bestTime(), 20, "B is on monza; A's spa PB is not its best");
+  B.InputGhost.setTrack("spa");
+  assert.equal(B.InputGhost.bestTime(), 15, "the other tab's spa PB is read, not B's stale cache");
+  B.GameStore.store.onForeignWrite({ key: null });
+  assert.equal(B.InputGhost.hasGhost(), false, "a foreign storage.clear() drops the cached ghost");
 });
 
 test("quantizeSteer / packFlags are stable helpers", () => {

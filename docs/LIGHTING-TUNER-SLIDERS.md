@@ -212,20 +212,26 @@ state-level feature verified by `lightState().moonGate`, not something to sign
 off from a screenshot. (Unproven, worth checking before relying on it: whether
 raising `moonBright` alongside it gives the shadows enough key to actually read.)
 
-### PER-CHUNK LAMPS: why the 32-lamp ceiling is not what it looks like
+### PER-CHUNK LAMPS: why the lamp-slot ceiling is not what it looks like
 
-`lampCull`/`lampReach` exist to ration 32 shader slots across the whole visible
-scene. But **`MAX_LIGHTS = 32` is a fragment-shader uniform-array size, so it
-bounds lights per DRAW, not per scene.** Binding a different 32 per draw needs no
+> **Numbers in this section are a dated measurement.** It was taken when the slot
+> count was 32; the shipped budget is `LightBudget.MAX = 48` slots per draw and
+> `LightBudget.CHUNK = 24` lamps per chunk (`js/render/shared/light-budget.js`,
+> `docs/LIGHTING.md`). Where a figure below says 32 it is that measurement, not the
+> current cap.
+
+`lampCull`/`lampReach` exist to ration the shader's slots (48) across the whole visible
+scene. But **`MAX_LIGHTS` is a fragment-shader uniform-array size, so it
+bounds lights per DRAW, not per scene.** Binding a different set per draw needs no
 shader change at all — `glsl-lit.js`, `MAX_LIGHTS` and the per-fragment loop are
 untouched. Two properties of this codebase make that cheap: track lamps are baked
 and static (`track._lights`), and chunked scenery already carries per-chunk AABBs
 that `drawChunked` frustum-tests, so each chunk's lamp set is computed once
-(`_pickChunkLamps`, radius-vs-AABB) and cached on the chunk.
+(`LampChunks.resolve` in `js/render/shared/lamp-chunks.js`, radius-vs-AABB) and cached on the chunk.
 
 The generic alternative is worse here. WebGL2 has **no compute shaders and no
 SSBOs**, and UBOs cap at 64 KB with a performance penalty — which is why engines
-pick ~32 rather than it being a device cap. Clustered forward IS reachable via
+pick a few tens of slots rather than it being a device cap. Clustered forward IS reachable via
 CPU-built clusters + data textures (a three.js forward+ demo runs 1000 point
 lights that way) but needs a whole new spatial structure and showed
 hardware-specific breakage on mobile.
@@ -235,7 +241,7 @@ Measured at Singapore 0.55, night (`perChunkLights` 0 → 1):
 | | uploads/frame | max bound on one draw | GL errors |
 |---|---|---|---|
 | off | 18 | 28 (the global cull) | 0 |
-| on | 190 | **32** (chunks fill the array) | 0 |
+| on | 190 | **32** (chunks filled the 32-slot array of the day) | 0 |
 
 Visually the effect lands on the scenery, not the road, and the road doubles as
 an in-frame control:
@@ -274,7 +280,7 @@ and interleave A/B/A/B for drift rather than sampling long.
 **PER-CHUNK ROAD (`roadChunkLamps`) is where the original complaint actually
 lived.** PER-CHUNK LAMPS lit the scenery but barely moved the road, and the
 reason is structural: only `props`/`glass` go through `drawChunked`; the road is
-a single `gfx.draw()` mesh, so it can only ever carry the ONE global set of 32 —
+a single `gfx.draw()` mesh, so it can only ever carry the ONE global set of `MAX_LIGHTS` —
 culled nearest the CAMERA, which covers the tarmac around the car and starves
 the road AHEAD. Drawing the ribbon chunked (99 cells at Singapore) routes it
 through the same path. Measured, same frozen chase vantage, `roadChunkLamps`
@@ -289,11 +295,11 @@ overall MAD 4.15, 38,154 px over threshold, and the diff map is a solid filled
 ribbon following the road into the distance rather than edge outlines.
 `drawChunked` goes from 2 calls/frame to 3, the new one carrying 99 chunks.
 
-**Seams are not possible below the cap, by construction:** `_pickChunkLamps`
+**Seams are not possible below the cap, by construction:** `LampChunks.resolve`
 excludes a lamp with the SAME reach test the shader uses (`radius` vs the chunk
 AABB ↔ `if (dist > rad) continue`), so an excluded lamp would have contributed
-exactly zero anyway. The one case that CAN seam is a chunk with more than 32
-lamps reaching it, where the cap drops real contributors — rare for props (2 of
+exactly zero anyway. The one case that CAN seam is a chunk with more lamps than the per-chunk cap (`LightBudget.CHUNK`, 24 today; 32 when measured)
+reaching it, where the cap drops real contributors — rare for props (2 of
 104 chunks) but unmeasured for road chunks, so check that before defaulting on.
 
 **`_keepPositions` is mandatory when building the chunked road**, not defensive:
@@ -304,11 +310,11 @@ after (≈42.7k triangles, comfortably over the 2,000-triangle chunking floor).
 
 **Car tail-lights needed explicit plumbing, and verifying it took three tries.**
 `appendCarTailLights` pushes onto `frame.lights` AFTER the static cull, so those
-records live outside `track._lights` — the array `_pickChunkLamps` builds from.
+records live outside `track._lights` — the array `LampChunks.resolve` builds from.
 Left alone, switching the knob ON silently stopped chunked scenery receiving any
 tail-light contribution. `uploadLightSet` now takes an optional second source and
 reserves the tail-lights FIRST (at most 5; a car beside you outranks the
-32nd-nearest lamp). Confirmed live: `drawChunked` sees
+last-ranked lamp). Confirmed live: `drawChunked` sees
 `[perChunkLights 1, tailCount 5, hasLights 1, hasAllLights 1]`.
 
 Two traps cost a full debugging round each, both worth avoiding:

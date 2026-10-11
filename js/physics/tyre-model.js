@@ -30,6 +30,10 @@ const TyreModel = (function () {
   "use strict";
 
   const clamp = M4.clamp;
+  // A non-finite input (a corrupt rating, a hook handing back NaN) must cost one
+  // neutral tick, not poison the wear integral: clamp() passes NaN through, and
+  // 0 * Infinity is NaN. Finite values are returned untouched.
+  const fin = (v, d) => (typeof v === "number" && isFinite(v) ? v : d);
 
   // What the TYRE WEAR race setting means, as a scale on the wear rate. OFF is
   // a TRUE no-op: gripMul/tractionMul/fuelMul all return exactly 1, so
@@ -214,9 +218,9 @@ const TyreModel = (function () {
   // it is what makes a tidy lap materially cheaper than a scrappy one — the
   // thing this system exists to reward.
   function humanLoad(c, latMax) {
-    const lat = clamp(Math.abs((c.speed || 0) * (c.yawRateCur || 0)) / Math.max(1, latMax), 0, 1.2);
-    const lng = clamp(c.axFrac || 0, 0, 1);
-    const slide = clamp(c.skidIntensity || 0, 0, 1);
+    const lat = clamp(Math.abs(fin(c.speed, 0) * fin(c.yawRateCur, 0)) / Math.max(1, fin(latMax, 1)), 0, 1.2);
+    const lng = clamp(fin(c.axFrac, 0), 0, 1);
+    const slide = clamp(fin(c.skidIntensity, 0), 0, 1);
     const raw = clamp(LOAD_IDLE + W_LAT * lat * lat + W_LONG * lng * lng + W_SLIDE * slide
       + (c.onKerb ? W_KERB : 0) + (c.offroad ? W_OFF : 0), LOAD_MIN, LOAD_MAX);
     return raw / LOAD_REF;
@@ -261,8 +265,8 @@ const TyreModel = (function () {
   // clamp, exactly as humanLoad does, so the two paths stay the same shape.
   const LOAD_AI_REF = 1.23;
   function aiLoad(c, aTop) {
-    const cons = clamp(c.consistency != null ? c.consistency : 0.75, 0, 1);
-    const lng = clamp(Math.abs(c.accSm || 0) / Math.max(1, aTop), 0, 1);
+    const cons = clamp(fin(c.consistency, 0.75), 0, 1);
+    const lng = clamp(fin(Math.abs(fin(c.accSm, 0)) / Math.max(1, aTop), 0), 0, 1);
     return clamp(LOAD_AI_BASE + LOAD_AI_STYLE * (1 - cons) + LOAD_AI_LONG * lng * lng
       + (c.offroad ? W_OFF : 0), LOAD_MIN, LOAD_MAX) / LOAD_AI_REF;
   }
@@ -321,8 +325,8 @@ const TyreModel = (function () {
 
   /** Signed longitudinal effort: -1 full braking .. +1 full traction. */
   function longSigned(c, aTop) {
-    if (c.human) return ((c.axEstSm || 0) < 0 ? -1 : 1) * clamp(c.axFrac || 0, 0, 1);
-    return clamp((c.accSm || 0) / Math.max(1, aTop), -1, 1);
+    if (c.human) return ((c.axEstSm || 0) < 0 ? -1 : 1) * clamp(fin(c.axFrac, 0), 0, 1);
+    return clamp(fin(fin(c.accSm, 0) / Math.max(1, aTop), 0), -1, 1);
   }
   /** [frontShare, rearShare] for this tick. Averages to exactly 1, by construction. */
   function axleShare(c, aTop) {
@@ -504,8 +508,12 @@ const TyreModel = (function () {
   //
   // Scaled by the scheduled distance for the same reason life is: a 3-lap race
   // carries three laps of fuel, not a 305 km load. FUEL_ACCEL is the
-  // acceleration penalty at a full tank, decaying linearly to nothing at the
-  // flag — 2026 cars start on ~70 kg, worth ~2.1-2.8 s of lap time across a
+  // acceleration penalty at a full tank. The tank drops by 1/n at each line
+  // crossing (fuelFrac below counts COMPLETED laps), so the burn is a per-lap
+  // staircase, not a linear drain: lap 1 runs at a full tank throughout and
+  // the mean load over an n-lap race is (n+1)/(2n), not 1/2. LOAD_REF and
+  // LOAD_AI_REF were measured on that staircase; smoothing it would move them.
+  // 2026 cars start on ~70 kg, worth ~2.1-2.8 s of lap time across a
   // race, so this is deliberately a small number that matters only cumulatively.
   const FUEL_ACCEL = 0.060;
   const FUEL_VMAX = 0.012;
@@ -793,7 +801,7 @@ const TyreModel = (function () {
       const amb = ambient();
       const trk = trackTemp();
       if (c.tyreTs == null) { c.tyreTs = amb; c.tyreTb = amb; }
-      const vFrac = Math.abs(c.speed || 0) / Math.max(1, G.vTop());
+      const vFrac = fin(Math.abs(fin(c.speed, 0)) / Math.max(1, G.vTop()), 0);
       // Graining needs a measured slide, which only human cars have (the same
       // asymmetry the load model documents). An AI car still heats, cools and
       // blisters; it just never grains, and the field is scored on one curve
@@ -805,12 +813,17 @@ const TyreModel = (function () {
       c.tyreBlister = blisterStep(c.tyreBlister, c.tyreTb, c.tyre.life, dt);
       // WEAR is distance, so it stops when the car does. Slip-speed factor is
       // 1 when rolling (slide 0) and rises with body slip.
-      const lapFrac = Math.abs(c.speed || 0) * dt / track.total;
+      const lapFrac = Math.abs(fin(c.speed, 0)) * dt / track.total;
       if (!(lapFrac > 0)) return;
       const slipMul = 1 + W_SLIP_SPD * clamp(slide, 0, 1);
       const dw = lapFrac * load * slipMul * LEVELS[level] / effLifeLaps(c.tyre.life, G.lapsTarget);
+      // Finite guard (temperature has one in tempInto): `x + NaN` is NaN and the
+      // next tick's `c.tyreWear || 0` reads NaN as 0, so a single bad tick (a
+      // NaN accSm through aiLoad) would wipe the set's accumulated wear.
+      if (!Number.isFinite(dw)) return;
       c.tyreWear = (c.tyreWear || 0) + dw;
-      const d = axleTilt(c, G.aTop());
+      const d0 = axleTilt(c, G.aTop());
+      const d = Number.isFinite(d0) ? d0 : 0;
       c.tyreWearF = (c.tyreWearF || 0) + dw * (1 + d);
       c.tyreWearR = (c.tyreWearR || 0) + dw * (1 - d);
     }

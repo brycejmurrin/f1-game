@@ -15,7 +15,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { measure } from "../../tools/check/player-dyn.mjs";
+import { measure, bench } from "../../tools/check/player-dyn.mjs";
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 let g = null, m = null;
@@ -61,6 +61,52 @@ test("on the throttle the rear pays the ellipse and the front pays for the weigh
   assert.equal(m.powerOn.axFracF, 0, "the front spends nothing on the throttle");
   assert.ok(m.powerOn.axFracR >= 0.3, `the rear pays the ellipse on the throttle (axFracR=${m.powerOn.axFracR})`);
   assert.ok(Math.abs(m.powerOn.aR_power - m.powerOn.aR_coast) < 3, `the rear must not snap either way at a corner exit (${m.powerOn.aR_coast}° → ${m.powerOn.aR_power}°)`);
+});
+
+test("braking wins over a held throttle: the rear is not charged for thrust that braking does not make", () => {
+  // Auto-throttle (touch / tilt) and W-under-brake keep onThrottle true while the
+  // speed integrator and axEstTarget already let `braking` win. The grip model
+  // used to charge the driven rear clamp(THR_VK/vStd, THR_FLOOR, THR_CAP) of
+  // LONG_GRIP anyway (measured 30 m/s, 0.75 lock: axFracR 0.39 -> 0.62, rear grip
+  // 8.9 -> 7.6), defeating the rear brake-by-wire (BRAKE_STAB).
+  const b = bench(g, 0);
+  const run = (v0, thr) => {
+    b.reset(v0);
+    for (let i = 0; i < 30; i++) b.step({ steer: 0.75, brake: true, throttle: thr });
+    return b.state();
+  };
+  for (const v0 of [30, 55]) {
+    const brakeOnly = run(v0, false), both = run(v0, true);
+    assert.ok(brakeOnly.axFracR > 0.1, `the rear carries its pedal share at ${v0} m/s (axFracR=${brakeOnly.axFracR})`);
+    for (const k of ["axFracR", "axFracF", "yaw", "muR", "uR"])
+      assert.ok(Math.abs(both[k] - brakeOnly[k]) <= 0.01 * Math.abs(brakeOnly[k]) + 1e-9,
+        `${v0} m/s ${k}: brake+throttle ${both[k]} vs brake ${brakeOnly[k]}`);
+  }
+});
+
+test("frontUtil is 1.0 where the front's lateral force peaks (the front curve peaks at CURVE_PEAK_X_F, not pi/2)", () => {
+  const { TyreModel } = g.sandbox;
+  assert.ok(TyreModel.CURVE_PEAK_X_F < TyreModel.CURVE_PEAK_X, "the front peaks earlier than the nominal curve");
+  // The front force is muF·sin(k·x) up to its peak, k = (pi/2)/CURVE_PEAK_X_F, so
+  // |Fy|/muF reaches 1 exactly where x = CURVE_PEAK_X_F. frontUtil is x / peak:
+  // read off the live car across a steer sweep, the force ratio must follow
+  // sin(frontUtil·pi/2) below util 1 and sit at ~1 (the maximum) at util 1.
+  const b = bench(g, 0);
+  const rows = [];
+  // steer is shaped (nonlinear), so the approach to the peak is dense in 0.40-0.60
+  for (const st of [0.3, 0.4, 0.42, 0.44, 0.46, 0.48, 0.5, 0.52, 0.54, 0.56, 0.58, 0.6, 0.8, 1.0]) {
+    b.reset(40);
+    for (let i = 0; i < 20; i++) b.step({ steer: st, throttle: b.P.speed < 39.8 });
+    const s = b.state();
+    rows.push({ u: s.uF, f: s.FyF / s.muF });
+  }
+  const near = rows.filter((r) => r.u > 0.3 && r.u <= 1.05);
+  assert.ok(near.length >= 2, `the sweep samples the approach to the peak (${JSON.stringify(rows)})`);
+  for (const r of near) assert.ok(Math.abs(r.f - Math.sin(Math.min(r.u, 1) * Math.PI / 2)) <= 0.02, `|Fy|/muF ${r.f.toFixed(3)} at frontUtil ${r.u.toFixed(3)} is off the curve`);
+  const peak = rows.reduce((a, r) => (r.f > a.f ? r : a));
+  assert.ok(peak.f > 0.99, `the sweep reaches the force peak (${peak.f.toFixed(3)})`);
+  assert.ok(peak.u >= 0.98 - 1e-9, `the force peak (${peak.f.toFixed(4)} of muF) sits at frontUtil ~1 (u=${peak.u.toFixed(3)}; pre-fix it read 0.78 there)`);
+  assert.ok(rows.every((r) => r.f < 0.99 || r.u >= 0.98), `no row hits the force peak while frontUtil still reads below 0.98: ${JSON.stringify(rows)}`);
 });
 
 test("lifting off near the limit rotates the car (lift-off oversteer)", () => {

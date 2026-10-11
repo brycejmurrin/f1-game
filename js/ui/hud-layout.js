@@ -425,7 +425,10 @@ const HudLayout = (function () {
       if (!el || !el.hasAttribute("data-hl")) continue;
       let r = el.getBoundingClientRect();
       if (!(r.width && r.height)) continue;
-      let dx = 0, dy = 0;
+      // Seed from what fit()'s edge clamp already painted, so the nudge adds to it instead of replacing it.
+      const px = el.style.getPropertyValue ? parseFloat(el.style.getPropertyValue("--hl-x")) : NaN;
+      const py = el.style.getPropertyValue ? parseFloat(el.style.getPropertyValue("--hl-y")) : NaN;
+      let dx = isFinite(px) ? (px - e.x) * W / 100 : 0, dy = isFinite(py) ? (py - e.y) * H / 100 : 0;
       for (let n = 0; n < 4; n++) {
         let hit = null;
         for (let i = 0; i < btns.length; i++) {
@@ -569,12 +572,17 @@ const HudLayout = (function () {
   const READOUTS = ["damage", "rel", "strat", "inputs"];   // css/hud.css hides all four on the same classes
   /** body[data-*] presence (mode-switch sets data-helmet-cam / data-wheel-lcd). */
   const bodyAttr = (n) => !!(doc && doc.body && doc.body.hasAttribute && doc.body.hasAttribute(n));
+  // Data Hub WATCH / HIGHLIGHTS (css/hud.css). Hard: a placed chip does not
+  // bring the driving HUD back. "tower" here is the POS/LAP band (.hud-top),
+  // not #bc-tower. The radio card stands down with the rest of the HUD.
+  const REPLAY_HUD = ["tower", "map", "gaps", "sectors", "limits", "flag", "mirror", "announce"]
+    .concat(BOTTOM, READOUTS);
+  const replayOn = (h) => h("bc-on") || h("watch-controls-on");
   const HIDE_RULES = Object.freeze([
+    [REPLAY_HUD, replayOn, "a real-race watch keeps the driving HUD off"],
     [["map"], (h) => h("hud-hide-map"), "MAP is off for this camera or style (DISPLAY › HUD › MAP)"],
     [["gaps"], (h) => h("hud-hide-gaps"), "GAPS is off for this style (DISPLAY › HUD › GAPS)"],
     [BOTTOM, (h) => h("hud-prof-broadcast") && h("hud-bcam"), "BROADCAST style on a TV camera keeps the frame clean"],
-    [["sectors", "tyre", "limits"], (h) => h("bc-on"), "the broadcast replay shows its own timing"],
-    [READOUTS, (h) => h("bc-on"), "the broadcast replay keeps the frame clean"],
     [CHIPS.concat(["bb", "sectors"], READOUTS), (h) => h("hud-prof-minimal"), "MINIMAL style"],
     [CHIPS.concat(["bb"]), (h) => h("hud-met-timing"), "LAYOUT is TIMING"],
     [CHIPS.concat(["bb", "sectors", "tyre"]), (h) => h("hud-met-compact"), "LAYOUT is COMPACT"],

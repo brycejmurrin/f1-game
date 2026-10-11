@@ -271,9 +271,10 @@ test("EVENT cap: non-critical drops above the outbound buffer; criticals arrive 
     assert.ok(event.bufferedAmountLowThreshold > 0,
       "EVENT bufferedAmountLowThreshold must be set above zero");
 
-    const lap = JSON.stringify({ t: "lap", d: { retired: "mechanical" } });
+    // QLIVE (a live preview) and STRATEGY (re-sent every second) are the sheddable ones.
+    const lap = JSON.stringify({ t: "qlive", d: { t: 71.2 } });
     const strategy = JSON.stringify({ t: "strategy", d: { epoch: 1 } });
-    assert.equal(ep.send(fresh.EVENT, lap), false, "non-critical LAP drops above EVENT cap");
+    assert.equal(ep.send(fresh.EVENT, lap), false, "non-critical QLIVE drops above EVENT cap");
     assert.equal(ep.send(fresh.EVENT, strategy), false, "non-critical STRATEGY drops above EVENT cap");
     assert.equal(event.sent.length, 0, "dropped non-criticals must not hit the wire");
 
@@ -285,6 +286,11 @@ test("EVENT cap: non-critical drops above the outbound buffer; criticals arrive 
     assert.equal(ep.send(fresh.EVENT, start), true, "critical START queues under pressure");
     assert.equal(ep.send(fresh.EVENT, result), true, "critical RESULT queues under pressure");
     assert.equal(ep.send(fresh.EVENT, bye), true, "critical BYE queues under pressure");
+    // Lost, these desync the room for good: the whole grid, a finish/retirement, the race rules.
+    const quali = JSON.stringify({ t: "quali", d: { driverId: "a", t: 71.2 } });
+    const finLap = JSON.stringify({ t: "lap", d: { lap: 3, fin: 49.9 } });
+    const settings = JSON.stringify({ t: "settings", d: { laps: 3 } });
+    for (const m of [quali, finLap, settings]) assert.equal(ep.send(fresh.EVENT, m), true, "critical " + JSON.parse(m).t + " queues");
     assert.equal(event.sent.length, 0, "criticals wait for the buffer to drain");
 
     // Still backed up: another LAP must keep dropping (not jump the critical queue).
@@ -292,7 +298,7 @@ test("EVENT cap: non-critical drops above the outbound buffer; criticals arrive 
 
     event.bufferedAmount = 0;
     event.onbufferedamountlow();
-    assert.deepEqual(event.sent, [go, start, result, bye],
+    assert.deepEqual(event.sent, [go, start, result, bye, quali, finLap, settings],
       "critical EVENTs must flush in send order once bufferedAmount drains");
   } finally {
     delete global.RTCPeerConnection;

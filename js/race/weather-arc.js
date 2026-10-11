@@ -79,31 +79,59 @@ const WeatherArc = (function () {
       return setWeatherLive(w);
     }
 
+    /** The distance a MIXED plan is capped for. G.lapsTarget is only the CURRENT
+     *  session's once a race is counting down or running; before that it still
+     *  holds the LAST session's (1 after qualifying, 4 after a time trial), so the
+     *  host's lobby shipped a plan capped for the wrong distance and the guest
+     *  adopted it unchanged. Outside a live race the choice on the sheet decides. */
+    function capLaps() {
+      const live = G.state === "race" || G.state === "count";
+      return live ? ((G.lapsTarget | 0) || (G.raceLaps | 0)) : (G.raceLaps | 0);
+    }
     /** Cap a derived MIXED walk so a 3–5 lap race still reaches `to` before the
      *  flag. The seed still draws 2–7 minutes; a host-supplied wxArc.dur is
      *  never recapped (the lobby already agreed those seconds). ~48 m/s is a
      *  conservative race-average so a street circuit is not over-cut. */
     function capPlanDur(dur) {
       dur = Math.max(1, dur | 0);
-      const laps = (G.lapsTarget | 0) || (G.raceLaps | 0);
+      const laps = capLaps();
       const len = G.track && G.track.total;
       if (!(laps > 0) || !(len > 0)) return dur;
       const cap = Math.max(90, Math.floor(laps * (len / 48) * 0.72));
       return Math.min(dur, cap);
     }
+    // The seed the plan draws from: the same selector as reliability, launch and
+    // qualifying (game.js luckSeed, quali-model.js) — a career's season seed, a
+    // standalone Season's stamped one (SeasonCal.luckSeed, so a reload cannot
+    // re-roll the rain), else the session's.
+    function planSeed() {
+      if (typeof Career !== "undefined" && Career.inCareer && Career.inCareer() && Career.seasonSeed) return Career.seasonSeed();
+      if (G.flow === "season" && G.season && typeof SeasonCal !== "undefined" && SeasonCal.luckSeed) {
+        return SeasonCal.luckSeed(G.season, G.simSeed());
+      }
+      return G.simSeed();
+    }
+    // planFor() is read twice for one race: by the host's lobby when it ships
+    // SETTINGS, and by startChangeable() at the green. It is a pure function of
+    // the inputs in `memoKey`, so it is remembered until one of them changes and
+    // the two reads cannot disagree.
+    let memo = null;     // { key, plan }
     /** The CHANGEABLE plan derived from (sim seed, race counter): 2–7 minutes
      *  to a target that is never the weather we start on, then capPlanDur. */
     function planFor() {
-      const r = (k) => {
-        const seed = (typeof Career !== "undefined" && Career.inCareer && Career.inCareer() && Career.seasonSeed)
-          ? Career.seasonSeed() : G.simSeed();
-        const round = (G.seasonMode && typeof SeasonCal !== "undefined" && SeasonCal.drawRound && G.season)
-          ? SeasonCal.drawRound(G.season) : G.raceRound;
-        return Career.hash(seed, round, "wx", k);
-      };
-      const opts = TARGETS.filter((w) => w !== G.raceWeather);
+      const seed = planSeed();
+      const round = (G.seasonMode && typeof SeasonCal !== "undefined" && SeasonCal.drawRound && G.season)
+        ? SeasonCal.drawRound(G.season) : G.raceRound;
+      // `base` is the weather the armed race STARTED on: raceWeather itself walks
+      // away from it during the arc.
+      const from = base != null ? base : G.raceWeather;
+      const key = [seed, round, from, capLaps(), G.track && G.track.total].join("|");
+      if (memo && memo.key === key) return { to: memo.plan.to, dur: memo.plan.dur };
+      const r = (k) => Career.hash(seed, round, "wx", k);
+      const opts = TARGETS.filter((w) => w !== from);
       const to = opts[Math.floor(r("to") * opts.length)] || "wet";
       const dur = capPlanDur(120 + Math.floor(r("dur") * 300));
+      memo = { key, plan: { to, dur } };
       return { to, dur };
     }
     function startChangeable() {

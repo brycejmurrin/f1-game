@@ -39,13 +39,13 @@
     // hasRealElevation(id) nulls any `elevations` key here.
     hwZones: [
       { s0: 0.100, s1: 0.180, hw: 6.2, ease: 0.012 },  // Mercedes-Arena complex
-      { s0: 0.630, s1: 0.690, hw: 6.4, ease: 0.012 },  // Dunlop-Kehre
+      { s0: 0.7785, s1: 0.8127, hw: 6.4, ease: 0.012 },  // Dunlop-Kehre (index; arc 0.630-0.690)
       { s0: 0.910, s1: 0.955, hw: 6.3, ease: 0.012 },  // Veedol chicane
     ],
     bankZones: [
       { frac: 0.055, angleDeg: 3.5, widthM: 110 },   // Castrol-S
-      { frac: 0.300, angleDeg: 4.5, widthM: 140 },   // Ford Kurve
-      { frac: 0.520, angleDeg: 3.0, widthM: 120 },   // Bit-Kurve
+      { turn: 7, angleDeg: 4.5, widthM: 140 },   // Ford Kurve; re-seated frac 0.3 (was 184 m off any apex)
+      { turn: 11, angleDeg: 3.0, widthM: 120 },   // Bit-Kurve; re-seated frac 0.52 (was 238 m off any apex)
       { frac: 0.780, angleDeg: 4.0, widthM: 130 },   // Schumacher-S
     ],
 

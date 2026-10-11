@@ -150,7 +150,7 @@ test("game.js: under FieldLod the caster is pushed AFTER the side-frustum test, 
   assert.match(g, /carDraw\.drawExhaustFx\(c, tmpMat, [^\n]*FieldLod\.flame\(_lodD2\)\)/, "flame gate from the table");
   const cd = read("js/car/car-draw.js");
   // BARE (the mirror / PiP, drawMirrorCar) is lite at any distance.
-  assert.match(cd, /const lite = bare \|\| \(!c\.isPlayer && FieldLod\.wheelsLite\(camD2, G\.lens && G\.lens\.fovY\)\)/);
+  assert.match(cd, /const lite = bare \|\| \(!c\.isPlayer && \(haveTier \? lodT >= 1 : FieldLod\.wheelsLite\(camD2, G\.lens && G\.lens\.fovY\)\)\)/);
   // lite: the rotating wheel draw, then only the far brake flare (a Particles
   // flare outside the pool, 40-240 m) before the wheel's other layers are skipped.
   assert.match(cd, /if \(lite\) \{[\s\S]{0,600}?Particles\.flare\([\s\S]{0,200}?continue;/, "lite: the rotating wheel, the far flare, then nothing else for that wheel");
@@ -387,4 +387,40 @@ test("warm: warmCarAssets builds the caster silhouette, the field wheels and the
   assert.match(body, /const lodWarm = FieldLod\.on && !G\.headlessMode/, "headless skips the FieldLod warm");
   assert.match(body, /CarMesh\.getExhaustFlame\(c\.fuelVisual && c\.fuelVisual\.fxFlame\)/, "flame quad (same key the draw uses)");
   assert.match(cd, /FieldLod\.init\(G\.store\)/, "the off-switch is read once at boot");
+});
+
+// The wheel extras take the tier game.js keeps on the car (FieldLod's 10 %
+// hysteresis); the stateless wheelsLite() flipped the fixed layers every frame
+// for a rival jittering +-1.2 m around 50 m.
+test("drawPlayerWheels' lite gate follows c._lodTier (hysteresis), wheelsLite only without a tier", () => {
+  const cd = read("js/car/car-draw.js");
+  const decl = cd.match(/const lodT = c\._lodTier, haveTier = [^\n]*\n\s*(const lite = [^\n]*;)/);
+  assert.ok(decl, "the lite gate is present");
+  const run = (ctx, c, camD2, bare = false) => vm.runInContext(
+    `(function (c, camD2, bare, G) { const lodT = c._lodTier, haveTier = ${cd.match(/haveTier = ([^\n]*);/)[1]}; ${decl[1]} return lite; })`, ctx)
+    (c, camD2, bare, { lens: null });
+  const flips = (useTier) => {
+    const ctx = loadLod(), L = ctx.FieldLod, car = { isPlayer: false };
+    let n = 0, prev = null;
+    for (let f = 0; f < 200; f++) {
+      const d2 = at(f % 2 ? 51.2 : 48.8);
+      if (useTier) L.tier(d2, undefined, car);
+      const lite = run(ctx, car, d2);
+      if (prev !== null && lite !== prev) n++;
+      prev = lite;
+    }
+    return n;
+  };
+  assert.equal(flips(true), 0, "with the game.js tier: no flicker around 50 m");
+  assert.equal(flips(false), 199, "no tier on the car: the plain table (what every test and FieldLod-off path sees)");
+  const ctx = loadLod(), L = ctx.FieldLod;
+  const car = { isPlayer: false };
+  L.tier(at(30), undefined, car);
+  assert.equal(run(ctx, car, at(52)), false, "tier 0 holds to +10 %");
+  L.tier(at(56), undefined, car);
+  assert.equal(run(ctx, car, at(56)), true, "tier 1 past it");
+  assert.equal(run(ctx, { isPlayer: true, _lodTier: 2 }, at(900)), false, "the player is never lite");
+  assert.equal(run(ctx, { isPlayer: false, _lodTier: 0 }, at(9), true), true, "bare (mirror / PiP) is always lite");
+  const off = loadLod(0);
+  assert.equal(run(off, { isPlayer: false, _lodTier: 2 }, at(500)), false, "FieldLod off ignores a stale tier");
 });

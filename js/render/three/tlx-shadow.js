@@ -285,6 +285,22 @@
     // batch on WebGPU's default 64 KiB limit, and only for batches that have
     // ever entered a shadow box. `count` still limits the draw to the culled set.
     const iByBatch = new Map();   // batch -> InstancedMesh (sized past the UBO limit)
+    // The caster draws a SHALLOW CLONE of the batch geometry, so each geometry has exactly ONE InstancedMesh. three
+    // frees an instance attribute only through the dispose listener of the geometry whose RenderObject initialised
+    // it; two meshes on one geometry stranded the second one's ~64 KB instanceMatrix buffer on every free. The clone
+    // shares the vertex/index attributes (no copy) and leaves out the lit pass's `instanceTint` (depth never reads it).
+    function casterGeo(src) {
+      const g = new THREE.BufferGeometry();
+      if (src.index) g.setIndex(src.index);
+      for (const k in src.attributes) if (k !== "instanceTint") g.setAttribute(k, src.attributes[k]);
+      g.drawRange.start = src.drawRange.start; g.drawRange.count = src.drawRange.count;
+      for (let i = 0; i < src.groups.length; i++) g.addGroup(src.groups[i].start, src.groups[i].count, src.groups[i].materialIndex);
+      g.userData.casterOf = src;
+      return g;
+    }
+    function freeCasterGeo(m) {
+      try { m.geometry.dispose(); } catch (_) { /* the clone releases its own instanceMatrix */ }
+    }
     const iCast = [];             // this pass's casts, hidden again at the next Begin
     const sharedInstCap = (n) => uboInstCap(renderer, n);
     // Scratch for setMatrixAt — never allocate per cast (was per-instance GC).
@@ -295,9 +311,9 @@
       const n = culled ? Math.min(count | 0, batch.instances | 0) : (batch.instances | 0);
       if (!(n > 0)) return;
       let m = iByBatch.get(batch);
-      if (!m || m.geometry !== batch.geo) {
-        if (m) { castScene.remove(m); try { m.dispose(); } catch (_) { /* */ } }
-        m = new THREE.InstancedMesh(batch.geo, depthMat, sharedInstCap(batch.instances | 0));
+      if (!m || m.geometry.userData.casterOf !== batch.geo) {
+        if (m) { const ix = iCast.indexOf(m); if (ix >= 0) iCast.splice(ix, 1); castScene.remove(m); try { m.dispose(); } catch (_) { /* */ } freeCasterGeo(m); }
+        m = new THREE.InstancedMesh(casterGeo(batch.geo), depthMat, sharedInstCap(batch.instances | 0));
         m.matrixAutoUpdate = false;
         m.frustumCulled = false;
         m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -333,8 +349,10 @@
       // drawn, so a full 64 KB write per batch per rebuild would be pure cost.
       // (The setMatrixAt branch never flagged its upload at all before this.)
       const im = m.instanceMatrix;
-      im.clearUpdateRanges();
-      im.addUpdateRange(0, n * 16);
+      // One cached range per attribute, re-pushed (addUpdateRange minted an object per batch per cast).
+      const rg = im.__tlxRange || (im.__tlxRange = { start: 0, count: 0 });
+      rg.count = n * 16;
+      im.updateRanges.length = 0; im.updateRanges.push(rg);
       im.needsUpdate = true;
       m.count = n;
       m.matrix.identity();
@@ -353,8 +371,15 @@
     // slot renders again, and a parked slot does not. The "dispose" event is
     // what drops that render object (tlx.js dropWrapper has the measurement);
     // the slot stays in the pool and simply builds a fresh one when next cast.
+    //
+    // NOT WHILE A WARM IS IN FLIGHT (tlx.js dropWrapper has the measurement): compileAsync collects (object, material)
+    // pairs up front and awaits them one at a time, so a slot parked here is re-fetched by the warm with its render
+    // object gone and its geometry attribute-less. Queue the geometry; flushDropped() runs the park on the first
+    // present after the warm settles. Slots re-used for another geometry by then no longer match and are left alone.
+    const dropQ = [];   // geometries owed a park
     function releaseGeometry(geo) {
       if (!geo) return;
+      if (ctx.isWarming && ctx.isWarming()) { if (dropQ.indexOf(geo) < 0) dropQ.push(geo); return; }
       for (const pl of pools.values()) {
         for (let i = 0; i < pl.pool.length; i++) {
           const m = pl.pool[i];
@@ -363,6 +388,11 @@
           try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
         }
       }
+    }
+    function flushDropped() {
+      if (!dropQ.length || (ctx.isWarming && ctx.isWarming())) return;
+      const q = dropQ.splice(0);
+      for (let i = 0; i < q.length; i++) releaseGeometry(q[i]);
     }
 
     // The batch is gone (track switch): its caster goes with it, so a hidden
@@ -375,6 +405,7 @@
       if (ix >= 0) iCast.splice(ix, 1);
       castScene.remove(m);
       try { m.dispose(); } catch (_) { /* */ }
+      freeCasterGeo(m);
     }
 
     // three WebGPU rasterises z in [0,1] and adds no remap of its own, so a GL
@@ -670,6 +701,7 @@
       castInstanced,
       freeInstanced,
       releaseGeometry,
+      flushDropped,
       castShadowChunked: cast,
       shadowEnd: () => endPass(sunRT),
       carShadowEnd,

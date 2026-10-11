@@ -98,11 +98,20 @@ const GarageExperience = (function () {
       shiftY: (y0 + y1) / 2 - (1 - pane.top - pane.bottom), width: x1 - x0, height: y1 - y0 };
   }
 
+  // The team's stats AS RACED: Career.teamStats folds in the career development
+  // (tdev) that game.js modsFor applies, so the bars, the comparison and the wall
+  // board all agree with the car. Outside a career it is team.stats.
+  function statsOf(team) {
+    const s = typeof Career !== "undefined" && Career.teamStats ? Career.teamStats(team) : null;
+    return s || (team && team.stats) || null;
+  }
+
   function compare(team, parts, cat, current, candidate, tune, cap) {
     const next = Object.assign({}, parts, { [cat.id]: candidate.id });
     const before = Parts.getMods(parts, team, tune), after = Parts.getMods(next, team, tune);
+    const stats = statsOf(team);
     const deltas = Parts.STAT_KEYS.map(({ key, label }) => {
-      const base = (team.stats && team.stats[key]) || 75;
+      const base = (stats && stats[key]) || 75;
       return { key, label, value: Math.round(Parts.displayStat(base * after[key])) - Math.round(Parts.displayStat(base * before[key])) };
     });
     return { deltas, cost: (candidate.cost || 0) - ((current && current.cost) || 0),
@@ -168,5 +177,5 @@ const GarageExperience = (function () {
     c.fillText(a.wins + " WINS · " + a.podiums + " PODIUMS · " + a.titles + " TITLES", 256, 365, 490);
   }
 
-  return Object.freeze({ clock, homeShot, homeSession, canOrbit, freePane, fitHome, compare, partSummary, careerKey, buildFacility, paintCareer });
+  return Object.freeze({ clock, homeShot, homeSession, canOrbit, freePane, fitHome, statsOf, compare, partSummary, careerKey, buildFacility, paintCareer });
 })();

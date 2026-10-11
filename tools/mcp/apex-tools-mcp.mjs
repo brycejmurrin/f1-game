@@ -42,7 +42,9 @@ const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
 const LOCK_PATH = path.join(ROOT, "scratch", "apex-browser.lock");
-const TEST_BG_STATE = path.join(ROOT, "artifacts", "logs", "test-bg.json");
+// APEX_TEST_BG_STATE points the occupancy check at another registry, so a test
+// never rewrites the real artifacts/logs/test-bg.json under a live run (TS1).
+const TEST_BG_STATE = process.env.APEX_TEST_BG_STATE || path.join(ROOT, "artifacts", "logs", "test-bg.json");
 const CHROME_DAEMON_STATE = path.join(ROOT, "scratch", "probe-chrome-daemon.port");
 const ARTIFACTS_DIR = path.join(ROOT, "artifacts");
 const SCRATCH_DIR = path.join(ROOT, "scratch");
@@ -1151,6 +1153,20 @@ function checkUnknownKeys(value, schema) {
     badArgs(`unknown argument ${key}`, `${near ? `Did you mean "${near}"? ` : ""}Valid: ${valid.join(", ")}.`);
   }
 }
+/** `apex_hud_shot` uses inlineImage; ui/shot wraps use image — accept either name. */
+function aliasImageArgs(name, args) {
+  if (!args || typeof args !== "object") return args;
+  if (name === "apex_hud_shot" && Object.hasOwn(args, "image") && !Object.hasOwn(args, "inlineImage")) {
+    const { image, ...rest } = args;
+    return { ...rest, inlineImage: image };
+  }
+  if ((name === "apex_ui_shot" || name === "apex_shot" || name === "apex_shot_survey")
+      && Object.hasOwn(args, "inlineImage") && !Object.hasOwn(args, "image")) {
+    const { inlineImage, ...rest } = args;
+    return { ...rest, image: inlineImage };
+  }
+  return args;
+}
 function validateValue(value, schema, label) {
   checkUnknownKeys(value, schema);
   if (schema.anyOf) {
@@ -2126,6 +2142,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 
   // layout-audit viewport ids are accepted and rewritten to HUD device ids before schema enum checks.
   if (name === "apex_hud_shot" || name === "apex_hud_survey") args = aliasHudDevice(args);
+  args = aliasImageArgs(name, args);
 
   try { validateArgs(known, args); }
   catch (e) { return e.refuse || refuse("bad_args", String(e.message || e), "See the tool inputSchema."); }
@@ -2559,12 +2576,36 @@ function sendHttpJson(res, code, obj) {
   res.end(data);
 }
 
-function cmdServeHttp() {
+// MCP 2025-06-18 transports, Security Warning: servers MUST validate Origin (DNS rebinding).
+// A local client sends no Origin (or a loopback one), a loopback Host and a JSON body; a web
+// page's no-preflight POST is text/plain, and a rebound page's Host and Origin name its domain.
+const LOOPBACK_AUTHORITY = /^(?:127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?$/i;
+
+/** Why an HTTP request is refused ("" = allowed): a foreign Host, Origin or Content-Type. */
+export function httpRefusal(req) {
+  const h = req.headers || {};
+  if (!LOOPBACK_AUTHORITY.test(String(h.host || ""))) return "Host is not loopback";
+  if (h.origin !== undefined) {
+    const m = /^https?:\/\/([^/]+)$/i.exec(String(h.origin));
+    if (!m || !LOOPBACK_AUTHORITY.test(m[1])) return "Origin is not loopback";
+  }
+  if (req.method === "POST" && !/^application\/json\s*(?:;|$)/i.test(String(h["content-type"] || ""))) {
+    return "Content-Type must be application/json";
+  }
+  return "";
+}
+
+export function cmdServeHttp() {
   const port = /^\d+$/.test(String(process.env.APEX_MCP_HTTP_PORT || ""))
     ? Number(process.env.APEX_MCP_HTTP_PORT)
     : HTTP_PORT_DEFAULT;
   const srv = http.createServer((req, res) => {
     const url = req.url || "/";
+    const refused = httpRefusal(req);
+    if (refused) {
+      sendHttpJson(res, 403, rpcError(null, -32600, `Forbidden: ${refused}`));
+      return;
+    }
     if (req.method === "GET" && (url === "/healthz" || url.startsWith("/healthz?"))) {
       sendHttpJson(res, 200, {
         ok: true,
@@ -2618,7 +2659,7 @@ function cmdServeHttp() {
     const p = addr && typeof addr === "object" ? addr.port : port;
     log(`apex-tools-mcp http ${HTTP_HOST}:${p}`);
   });
-  return 0;
+  return srv;
 }
 
 function main(argv) {

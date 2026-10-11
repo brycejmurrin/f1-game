@@ -7,6 +7,11 @@
 
    Must load BEFORE js/game.js (see index.html / tools/manifest.cjs). */
 const UiScale = (() => {
+  // The primary-pointer test every touch default below keys off. Module level so
+  // defaultResMode() answers without a create(G) (SettingsExport's SPEC row).
+  const coarseUi = () => { try { return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (_) { return false; } };
+  // The RESOLUTION pin's shipped default: a phone ships LOW, a pointer device AUTO.
+  const defaultResMode = () => (coarseUi() ? "low" : "auto");
   function create(G) {
     Log.info("ui", "UiScale.create");
     const { $, els, store } = G;
@@ -62,7 +67,6 @@ const UiScale = (() => {
     // Target size and readout size are separate floors; this ratio carries the
     // buttons' physical floor, --hud-scale no longer carries a blanket bump.
     const BTN_OVER_HUD = 1.25;
-    const coarseUi = () => { try { return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (_) { return false; } };
     const scaleDefault = (k) => (coarseUi() ? (k === "hudScale" ? 100 : 109) : 100);
     const scaleSnap = (v, k) => {
       const n = Math.max(minFor(k), Math.min(maxFor(k), +v));
@@ -231,7 +235,7 @@ const UiScale = (() => {
     // other half of the HIGH graphics preset above. Same question
     // Input.touchControlsNeeded() asks, asked directly (coarseUi, above) so
     // this module keeps no dependency on the input stack.
-    let resMode = store.get("resMode", coarseUi() ? "low" : "auto");
+    let resMode = store.get("resMode", defaultResMode());
     function applyResMode() {
       const m = RES_MODES.find((r) => r.id === resMode) || RES_MODES[0];
       SettingRow.paint($("pm-res"), m.id);
@@ -316,5 +320,5 @@ const UiScale = (() => {
     return { setScale, applyResMode, applyUiScale, applyHudScale, applyBtnScale, applyBtnOpacity, applyPanelOpacity, applyUpscale, upscaleOn,
              applyOcclusion, occlusionOn, occlusionSupported };
   }
-  return { create };
+  return { create, defaultResMode };
 })();

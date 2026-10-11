@@ -38,8 +38,14 @@ only way to narrow a section (e.g. Baku castle) is an overlay on the track def:
 hwZones: [{ s0: 0.42, s1: 0.50, hw: 3.8, ease: 0.02 }]
 ```
 
-`hw` is half-width in metres; `ease` is a soft blend shoulder in lap fraction
-(default `0.025`). Zones remapped with `startFrac`/`reverse` like elevations.
+`hw` is half-width in metres. `s0`/`s1` and `ease` are **control-point INDEX
+fractions** (`i / N` over the def's control points, `applyHwZones` in
+`js/track/core/def.js`), NOT lap (arc-length) fractions: control points are
+irregularly spaced, so a window authored as a lap fraction lands hundreds of
+metres from where it was meant (baku's 0.8232-0.8825 lands at arc 0.736-0.776).
+Convert an arc position to its control-index fraction before authoring a window.
+`ease` is the soft blend shoulder in the same index fraction (default `0.025`).
+Zones are remapped with `startFrac`/`reverse` like elevations.
 
 ---
 

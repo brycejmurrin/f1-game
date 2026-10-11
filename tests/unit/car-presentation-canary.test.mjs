@@ -273,7 +273,7 @@ test("the mirror and the PiP draw rivals via teamBodyMesh + the field wheels, ne
   assert.match(cd, /return \{[\s\S]*?drawMirrorCar,[\s\S]*?\};/, "exported");
   // BARE: rotating wheels only and no Particles flare, at any distance.
   assert.match(cd, /function drawPlayerWheels\(c, base, dt, opt, frontsOnly, fwdOffset, wScale, bare\)/);
-  assert.match(cd, /const lite = bare \|\| \(!c\.isPlayer && FieldLod\.wheelsLite\(camD2, G\.lens && G\.lens\.fovY\)\);/);
+  assert.match(cd, /const lite = bare \|\| \(!c\.isPlayer && \(haveTier \? lodT >= 1 : FieldLod\.wheelsLite\(camD2, G\.lens && G\.lens\.fovY\)\)\);/);
   assert.match(cd, /const flareA = !bare && /);
   // The wheels' material is the main pass's: TLX keys materials by VALUE, so
   // equal opts are the one material (and pipeline) the race already compiled.

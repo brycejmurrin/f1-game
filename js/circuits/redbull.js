@@ -55,7 +55,7 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    sectors: [0.3, 0.62],
+    sectors: [0.29, 0.62],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.3, 0.62])
     turns: [0.0851, 0.3036, 0.4913, 0.6024, 0.6267, 0.6752, 0.6958, 0.7322, 0.8526, 0.9049],
     furniture: { tree: "fir",   fol: [0.17, 0.40, 0.22], lamp: "none" },  // lush emerald alpine spruce
     kit: { marshal: "cabin",     rail: "armco",       fence: "mesh",   tyre: "stack",   board: "banner",    gantry: "portal",     camera: "monopole",  hoarding: "banner" },

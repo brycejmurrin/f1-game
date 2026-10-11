@@ -72,7 +72,10 @@ var AudioPanel = (() => {
      * created the module (G.raceRadio is still in its TDZ then). */
     const CHAT_VALUES = [["off", "OFF"], ["key", "KEY CALLS"], ["normal", "NORMAL"], ["chatty", "CHATTY"]];
     const COMM_VALUES = [["off", "OFF"], ["tv", "TV CAMERAS"], ["on", "ALWAYS"]];
-    const rr = () => { try { return G.raceRadio || null; } catch (e) { return null; } };
+    // …and the STUB (session-stub.js, until LAZY_RACE_SESSION lands) counts as
+    // absent: its setChat/setComm/setSpotter persist nothing, so a row changed
+    // before the real module existed was lost, and read back as the defaults.
+    const rr = () => { try { const r = G.raceRadio; return r && !r._stub ? r : null; } catch (e) { return null; } };
     const chatNow = () => (rr() ? rr().chat() : store.get("radioChat", "normal"));
     const commNow = () => (rr() ? rr().comm() : store.get("commentary", "tv"));
     const PACK_VALUES = [["rec", "RECORDED"], ["sys", "SYSTEM"]];
@@ -707,9 +710,9 @@ var AudioPanel = (() => {
       { k: "limiter",    id: "as-t-lim",    lo: 0,    step: 0.25 },
       { k: "limRate",    id: "as-t-limrate", lo: 0.40, step: 0.10 },
       { k: "limPitch",   id: "as-t-limsag", lo: 0,    step: 0.25 },
-      { k: "boost",      id: "as-t-boost",  lo: 0,    step: 0.25 },
+      { k: "boost",      id: "as-t-boost",  lo: 0,    step: 0.04 },   // shipped 1.12 = position 28; the shell rests on 1.0 (25) like every row
       { k: "boostPitch", id: "as-t-boostlift", lo: 0, step: 0.25 },
-      { k: "whine",      id: "as-t-whine",  lo: 0,    step: 0.25 },
+      { k: "whine",      id: "as-t-whine",  lo: 0,    step: 0.02 },   // shipped 0.62 = position 31; shell 1.0 = 50
       { k: "harvest",    id: "as-t-harvest", lo: 0,   step: 0.25 },
       { k: "wind",       id: "as-t-wind",   lo: 0,    step: 0.25 },
       { k: "screech",    id: "as-t-tyres",  lo: 0,    step: 0.25 },
@@ -866,8 +869,11 @@ var AudioPanel = (() => {
       // on its first frame. Restoring after would run one race's worth of
       // frames on the default voice and only correct on the next setEngine.
       applyStoredTone();
-      setSound(G.soundOn, false);
+      // setMusic BEFORE setSound: setSound starts the menu track, and the
+      // soundtrack's own switch defaults ON — a MUSIC OFF player would fetch and
+      // decode menu.mp3 at boot before the switch was ever set.
       setMusic(G.musicEnabled, false);
+      setSound(G.soundOn, false);
       // A STORED "spotify" IS NOT WHAT IS PLAYING. Spotify never auto-connects,
       // so the restore below deliberately skips it — but `musicSrc` was left
       // holding the stored word, and the now-playing caption reads it: after a

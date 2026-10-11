@@ -94,14 +94,22 @@ var AudioPanel = {
       if (typeof GameAudio !== "undefined" && GameAudio.setEnabled) GameAudio.setEnabled(b);
     }
     if (els && els.soundbtn) {
-      els.soundbtn.onclick = () => {
+      const stubClick = () => {
         const next = !G.soundOn;
         // game.js sets AudioPanel._ensure = ensureAudio while the stub is resident.
         const ensure = AudioPanel._ensure;
         if (typeof ensure === "function") {
-          ensure().then(() => { setSound(next); if (next && GameAudio.init) GameAudio.init(); });
+          ensure().then(() => {
+            // The real panel bound over this button while the bundle loaded: hand the
+            // click to ITS setSound (title music, MUSIC/SFX sync) — ours only flipped
+            // the flag and left SOUND ON over a silent title.
+            const cur = els.soundbtn.onclick;
+            if (cur && cur !== stubClick && G.soundOn !== next) { cur(); return; }
+            setSound(next); if (next && GameAudio.init) GameAudio.init();
+          });
         } else setSound(next);
       };
+      els.soundbtn.onclick = stubClick;
     }
     return { init: function () {}, _stub: true, setSound };
   },

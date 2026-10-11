@@ -56,10 +56,35 @@ const TrackSpline = (function () {
     return pts;
   }
 
-  // Catmull-Rom (centripetal-ish uniform) for one component
+  // Catmull-Rom for one component. UNIFORM: the parameter t is per control INDEX,
+  // not per chord length, so irregular control spacing (a 260 m chord next to a
+  // 13 m one at a hairpin) overshoots. crc() below is the opt-in centripetal form.
   function cr(p0, p1, p2, p3, t) {
     const t2 = t * t, t3 = t2 * t;
     return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
+  }
+
+  // Opt-in Catmull-Rom with chord-length knots (def.splineAlpha: 0.5 =
+  // centripetal, 1 = chordal; Barry-Goldman pyramid) for the segment b->c of
+  // control points a,b,c,d (arrays, x/y/z at [0..2]); writes x/y/z to out. Knot
+  // spacing is |chord|^alpha, so it tracks irregular control spacing and does not
+  // overshoot at a hairpin — but it moves the whole path (median ~9.5 m at alpha
+  // 0.5), so it is per-circuit and off by default (buildCenterline calls cr()).
+  function crc(a, b, c, d, t, alpha, out) {
+    const EPS = 1e-6;
+    const k1 = Math.pow(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) + EPS, alpha);
+    const k2 = k1 + Math.pow(Math.hypot(c[0] - b[0], c[1] - b[1], c[2] - b[2]) + EPS, alpha);
+    const k3 = k2 + Math.pow(Math.hypot(d[0] - c[0], d[1] - c[1], d[2] - c[2]) + EPS, alpha);
+    const u = k1 + t * (k2 - k1);
+    for (let i = 0; i < 3; i++) {
+      const a1 = ((k1 - u) * a[i] + u * b[i]) / k1;
+      const a2 = ((k2 - u) * b[i] + (u - k1) * c[i]) / (k2 - k1);
+      const a3 = ((k3 - u) * c[i] + (u - k2) * d[i]) / (k3 - k2);
+      const b1 = ((k2 - u) * a1 + u * a2) / k2;
+      const b2 = ((k3 - u) * a2 + (u - k1) * a3) / (k3 - k1);
+      out[i] = ((k2 - u) * b1 + (u - k1) * b2) / (k2 - k1);
+    }
+    return out;
   }
 
   function sample(track, s, out) {
@@ -102,7 +127,9 @@ const TrackSpline = (function () {
 
   // Hot path: the AI calls this ~500× per physics substep. Curvature is static,
   // so read the baked per-node LUT (track.curv) with the same index+lerp math as
-  // sample()/bankAngle() — zero garbage, no atan2s. Node-aligned samples (k*ds,
+  // sample()/bankAngle() — no atan2s and no object/array allocation (the returned
+  // double is still boxed: ~16 B per non-inlined call, ~10-15 KB/frame at 22 cars;
+  // an AI look-ahead bake would remove the three per-car reads). Node-aligned samples (k*ds,
   // e.g. findCorners) return the exact baked value. Falls back to the direct
   // computation for any track built before the LUT existed. Signature unchanged.
   function curvature(track, s) {
@@ -235,6 +262,38 @@ const TrackSpline = (function () {
     return out;
   }
 
-  return { SCALE, centerline, cr, sample, curvatureRaw, curvature, project, wallAt, postLimits };
+  // Centreline kink diagnostic (verify-track + track.geometryDiagnostics "centreline"
+  // row). minNodeRadius = tightest chord-to-chord turn radius over the baked nodes;
+  // a surface FOLD node is a span where the half-width rail runs (near) backwards,
+  // hw·|d(right)/dt| > 0.97·|dP| — the road quads there invert on the inside edge
+  // (buildRoad's fold clamp only hides it) and world→(s,x) reads a wrong s/x. Pure
+  // read of px/pz/rx/rz/hw; nothing here reaches the driver.
+  function surfaceFolds(track) {
+    const n = track.n, px = track.px, pz = track.pz, rx = track.rx, rz = track.rz, hw = track.hw;
+    let minR = Infinity, minK = -1;
+    const folds = [];
+    let foldCount = 0;
+    for (let k = 0; k < n; k++) {
+      const a = (k - 1 + n) % n, b = (k + 1) % n;
+      const ix = px[k] - px[a], iz = pz[k] - pz[a], ox = px[b] - px[k], oz = pz[b] - pz[k];
+      const Li = Math.hypot(ix, iz), Lo = Math.hypot(ox, oz);
+      const dth = Math.abs(Math.atan2(ix * oz - iz * ox, ix * ox + iz * oz));
+      if (dth > 1e-9) {
+        const R = 0.5 * (Li + Lo) / dth;
+        if (R < minR) { minR = R; minK = k; }
+      }
+      if (Lo > 1e-9) {
+        const drt = ((rx[b] - rx[k]) * ox + (rz[b] - rz[k]) * oz) / Lo;
+        if (Math.max(hw[k], hw[b]) * Math.abs(drt) > 0.97 * Lo) { foldCount++; if (folds.length < 16) folds.push(k); }
+      }
+    }
+    return {
+      minNodeRadius: minK < 0 ? null : Math.round(minR * 100) / 100,
+      minNodeRadiusNode: minK, minNodeRadiusHw: minK < 0 ? null : Math.round(hw[minK] * 100) / 100,
+      foldCount, foldNodes: folds,
+    };
+  }
+
+  return { SCALE, centerline, cr, crc, sample, curvatureRaw, curvature, project, wallAt, postLimits, surfaceFolds };
 })();
 Object.freeze(TrackSpline);

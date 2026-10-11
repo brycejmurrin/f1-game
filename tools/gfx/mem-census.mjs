@@ -92,7 +92,8 @@ async function main() {
     page.on("pageerror", (e) => errors.push(String(e).slice(0, 300)));
     const cdp = await ctx.newCDPSession(page);
     await cdp.send("HeapProfiler.enable");
-    await page.goto(srv.url, { waitUntil: "load" });
+    // TLX exposes window.renderer only behind this flag (tools/lib/mem-census reads it).
+    await page.goto(srv.url + (srv.url.includes("?") ? "&" : "?") + "three-devtools=1", { waitUntil: "load" });
     await page.waitForFunction(() => window.__apex && window.__apex.info && typeof Tracks !== "undefined", null, { polling: 100, timeout: 120000 });
     const emit = (row) => { rows.push(row); if (!o.quiet) console.log(JSON.stringify(row)); };
     emit({ step: "boot", ...(await censusAfterGc(page, cdp)) });

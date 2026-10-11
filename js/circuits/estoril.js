@@ -53,8 +53,8 @@
       { s0: 0.760, s1: 0.800, hw: 6.1, ease: 0.012 },
     ],
     bankZones: [
-      { frac: 0.075, angleDeg: 3.5, widthM: 110 },
-      { frac: 0.420, angleDeg: 3.0, widthM: 110 },
+      { turn: 1, angleDeg: 3.5, widthM: 110 },  // re-seated frac 0.075 (was 158 m off any apex)
+      { turn: 7, angleDeg: 3.0, widthM: 110 },  // re-seated frac 0.42 (was 299 m off any apex)
       // Parabolica Ayrton Senna — the long final right onto the pit straight.
       // ANCHORED BY TURN, not frac: authored 0.900 compensates to engine 0.7562,
       // which is T13's entry (R 161 m), one corner early — and mesh.js's re-seat

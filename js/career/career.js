@@ -238,7 +238,7 @@ function clear() {
 function slotInfo(c, f, i) {
   if (!c) return { flavour: f, i, used: false };
   const team = teamOf(c.team);
-  const hist = c.history || [];
+  const tally = tallyOf(c);
   return {
     flavour: f, i, used: true, year: c.year,
     live: f === slotFlavour && i === slotIdx,
@@ -246,10 +246,9 @@ function slotInfo(c, f, i) {
     team: c.team, teamName: team ? team.name : c.team,
     code: c.driver ? c.driver.code : "", name: c.driver ? c.driver.name : "",
     money: c.money, rep: c.rep,
-    seasons: hist.length + 1,
-    titles: hist.filter((h) => h.pos === 1).length,
-    wins: hist.reduce((n, h) => n + (h.wins || 0), 0)
-        + (c.results || []).filter((r) => r.p === 1).length,
+    seasons: tally.seasons + 1,
+    titles: tally.titles,
+    wins: tally.wins + (c.results || []).filter((r) => r.p === 1).length,
   };
 }
 // One flavour's three, or all six when asked for neither.
@@ -380,6 +379,7 @@ function start(opts) {
     obj: null,
     objPick: null,      // {round, i}: which of the round's three briefs was taken
     history: [],
+    tally: { seasons: 0, wins: 0, podiums: 0, titles: 0, cTitles: 0, pts: 0 },
     roster: null,
   };
   if (flavour === "myteam") {
@@ -514,7 +514,9 @@ const GOAL_KINDS = {
 const GOAL_BASE = ["champPos", "teamPos", "beatMate"];
 // Every declared kind, for the contract tests and anything enumerating them.
 const GOAL_ORDER = GOAL_BASE.concat(["beatRival"]);
-function goalKind(type) { return GOAL_KINDS[type] || GOAL_KINDS.champPos; }
+// Own keys only: a persisted "constructor" / "__proto__" resolved to Object's
+// function and the first `.label(...)` threw.
+function goalKind(type) { return Object.hasOwn(GOAL_KINDS, type) ? GOAL_KINDS[type] : GOAL_KINDS.champPos; }
 // Drawn from the career seed and the YEAR, so a career is not the same promise
 // five seasons running and a reload cannot reroll it.
 // A FOURTH KIND MUST NOT RE-PROMISE THE OTHER THREE. This was
@@ -664,7 +666,7 @@ function gridDrivers(team) {
 
 function wageBill() {
   if (!inCareer() || career.flavour !== "myteam" || !career.roster) return 0;
-  return career.roster.reduce((n, d) => n + (d.salary || 0), 0);
+  return career.roster.reduce((n, d) => n + (Number(d.salary) || 0), 0);
 }
 
 function devFor(teamId, seatIdx) {
@@ -674,13 +676,16 @@ function devFor(teamId, seatIdx) {
 
 // Neutral outside career. `tdev` is an additive delta in stat points; Teams.LIST is
 // NEVER mutated, so a save can't corrupt the shipped grid.
+// Clamped as well as migrated: this multiplies every AI car's tier speed, so a
+// poisoned tdev that slipped past the importer must not outrun the physics.
 function paceMult(teamId) {
   if (!inCareer()) return 1;
-  return 1 + (career.tdev[teamId] || 0) * TDEV_TO_PACE;
+  const d = Number(career.tdev[teamId]);
+  return clamp(1 + (Number.isFinite(d) ? d : 0) * TDEV_TO_PACE, 0.9, 1.1);
 }
 function teamStats(team) {
   if (!inCareer() || !team) return team && team.stats;
-  const d = career.tdev[team.id] || 0;
+  const d = Number(career.tdev[team.id]) || 0;
   if (!d) return team.stats;
   const out = {};
   for (const k in team.stats) out[k] = clamp(team.stats[k] + d, 0, 100);
@@ -975,7 +980,7 @@ const OBJ_LABELS = {
   clean: () => "Clean race — no track limits, no penalty",
 };
 function objectiveLabel(o) {
-  const f = o && OBJ_LABELS[o.type];
+  const f = o && Object.hasOwn(OBJ_LABELS, o.type) ? OBJ_LABELS[o.type] : null;
   return f ? f(o.value) : "";
 }
 
@@ -1106,7 +1111,10 @@ function settleRound(order, player, table = Teams.POINTS) {   // table: a shorte
   // still paid the start() deal's salary + points bonus every round, under a
   // contract rollover() never runs down for an owner.
   const owner = career.flavour === "myteam";
-  const salary = career.deal && !owner ? career.deal.salary : 0;
+  // Number(): a string salary (an offer signed before the importer coerced it)
+  // made `money + salary` a concatenation, not a sum.
+  const dealSalary = career.deal ? Number(career.deal.salary) : 0;
+  const salary = career.deal && !owner && Number.isFinite(dealSalary) ? dealSalary : 0;
   const bonus = career.deal && !owner ? career.deal.bonusPt * pts : 0;
 
   // Recomputed rather than read off career.obj: the draw is pure, so this can
@@ -1493,7 +1501,7 @@ function acceptOffer(i) {
   const kind = o.goal && o.goal.type ? o.goal.type : "champPos";
   career.deal = {
     team: team.id, seat: career.seat,
-    years: o.years, left: o.years, salary: o.salary,
+    years: o.years, left: o.years, salary: Number.isFinite(Number(o.salary)) ? Number(o.salary) : 0,
     bonusPt: bonusPtFor(team),
     ambition: amb,
     goal: { type: kind, value: goalKind(kind).value(team, amb) },
@@ -1511,6 +1519,21 @@ function codeOf(id) {
   const t = teamOf(teamId);
   const d = t && seatDriver(teamId, seat | 0, t.drivers[seat | 0]);
   return (d && d.code) || id;
+}
+
+// The cumulative career record (seasons closed out, wins, podiums, titles,
+// constructors' titles, points), which outlives the trimmed history archive.
+// migrateCareer derives it for older saves; the fallback serves a career built
+// without it (a test harness whose migrateCareer is the identity).
+function tallyOf(c) {
+  if (c.tally && typeof c.tally === "object") return c.tally;
+  const t = { seasons: 0, wins: 0, podiums: 0, titles: 0, cTitles: 0, pts: 0 };
+  for (const h of c.history || []) {
+    t.seasons++; t.wins += h.wins || 0; t.podiums += h.podiums || 0; t.pts += h.pts || 0;
+    if (h.pos === 1) t.titles++;
+    if (h.cPos === 1) t.cTitles++;
+  }
+  return t;
 }
 
 function rollover() {
@@ -1538,6 +1561,15 @@ function rollover() {
     // player's craft axis from it; `career.results` is cleared further down.
     craft: seasonCraft() == null ? null : Math.round(seasonCraft() * 100) / 100,
   };
+  // The cumulative record is taken BEFORE the archive is trimmed: HISTORY_MAX
+  // keeps the last ten seasons for the screen, the tally keeps all of them.
+  const tally = career.tally = tallyOf(career);
+  tally.seasons++;
+  tally.wins += entry.wins;
+  tally.podiums += entry.podiums;
+  tally.pts += entry.pts;
+  if (entry.pos === 1) tally.titles++;
+  if (entry.cPos === 1) tally.cTitles++;
   career.history.push(entry);
   if (career.history.length > HISTORY_MAX)
     career.history.splice(0, career.history.length - HISTORY_MAX);
@@ -1674,7 +1706,7 @@ function state() {
     roster: career.roster, wages: wageBill(), hire: hirePending(),
     sponsor: sponsor(),
     offers: career.offers.length, moves: (career.moves || []).length,
-    seasons: career.history.length,
+    seasons: tallyOf(career).seasons,
     slot: slotIdx, slotFlavour,
     slotsUsed: slots(career.flavour).filter((s) => s.used).length,
     slotsTotal: SLOTS,
@@ -1701,7 +1733,7 @@ return {
   objective, objectiveFor, objectiveLabel, prizeFor, settleRound, scoreRound, worksCost, budgetCap,
   OBJ_CHOICES, objectiveChoices, objectivePick, chooseObjective, objectiveLocked, markWeekendStarted,
   driverStandings, teamStandings, rollover, offers, acceptOffer, marketValue, offerBar,
-  round, roundsTotal, seasonDone, trackIndex,
+  round, roundsTotal, seasonDone, trackIndex, tallyOf,
 };
 })();
 Object.freeze(Career);

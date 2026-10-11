@@ -88,3 +88,36 @@ test('on a street the look-ahead and the next-corner bonus are off', () => {
   assert.equal(scenario([{ prog: 120, x: -2.8, speed: 37 }], { blockerGap: 15, street: true }).side, -1, 'a slower car ahead does not close a street lane');
   assert.equal(scenario([], { kAhead: 0, kTurn: -0.01, toTurnIn: 120, roomR: 3, roadR: 3, street: true }).side, -1, 'no 0.8 inside bonus: the roomier lane wins');
 });
+
+// ORDER INDEPENDENCE: game.js stamps _snapProg/_snapX/_snapSpeed on every car
+// before any updateCar runs; a rival updated EARLIER in the tick has already
+// moved speed·dt on its live fields (~0.7 m at 40 m/s, ~1.3 m at 80 m/s).
+// choose() must read the snapshot, or the same traffic picks a different side
+// depending on cars[] order.
+test('the passing side does not depend on cars[] order (snapshots, not live fields)', () => {
+  const dt = 1 / 60, L = 1000;
+  const mk = (prog, x, speed) => ({ prog, x, speed, _snapProg: prog, _snapX: x, _snapSpeed: speed });
+  // The rival keeps pace in the left lane, 5.3-5.4 m behind the subject at the
+  // snapshot: just outside the 5.2 m longitudinal window, so the left lane is
+  // open. A live read that has advanced it 0.67 m puts it inside the window.
+  for (const rivalProg of [94.6, 94.7, 94.75]) {
+    const sides = [];
+    for (const rivalFirst of [true, false]) {
+      const car = mk(100, 0, 40), blocker = mk(115, 0, 37), rival = mk(rivalProg, -2.8, 40);
+      const cars = rivalFirst ? [rival, car, blocker] : [car, blocker, rival];
+      // Emulate the tick: every car ahead of the subject in the array has
+      // already integrated its motion into the LIVE fields (snapshots stay).
+      for (const o of cars.slice(0, cars.indexOf(car))) o.prog += o.speed * dt;
+      const ctx = { roomL: 6, roomR: 6, roadL: 6, roadR: 6, kAhead: .01 };
+      sides.push(A.choose(ctx, car, blocker, cars, L, 2.8).side);
+    }
+    assert.equal(sides[0], -1, 'the snapshot gap leaves the inside lane open');
+    assert.equal(sides[0], sides[1], `rival snapshot at ${rivalProg}: array order changed the side (${sides})`);
+  }
+});
+test('a car without snapshots falls back to its live fields', () => {
+  const p = scenario([{ prog: 100, x: -2.8, speed: 40 }]);
+  assert.equal(p.side, 1);
+  const withSnap = scenario([{ prog: 999, x: 9, speed: 0, _snapProg: 100, _snapX: -2.8, _snapSpeed: 40 }]);
+  assert.equal(withSnap.side, 1, 'the snapshot, not the stale live value, is what the planner reads');
+});

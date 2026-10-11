@@ -16,6 +16,8 @@
  * ctxLost / Graphics unavailable (#1033): treat backendState().ctxLost as dead —
  * do not wait for an in-race HUD. holdChrome() re-asserts survey chrome after
  * showUnavailable (which would otherwise hide #hud and cover with #nogl).
+ * After holdChrome chrome is up, call GameHud.invalidateFit when present so
+ * survey screenshots get the capped layout (fitHud never ran — no race start).
  */
 const SurveyHud = (function () {
   const KEY = "APEX_SURVEY_HUD";
@@ -135,6 +137,11 @@ const SurveyHud = (function () {
       if (doc.body.dataset) doc.body.dataset.surveyHud = "1";
     }
     hidePlayGlyphs($, doc);
+    // Survey shots never start a race, so fitHud's create-time path never runs.
+    // Re-fit now (no-op until GameHud.create) so capped layout paints for captures.
+    if (typeof GameHud !== "undefined" && GameHud && typeof GameHud.invalidateFit === "function") {
+      try { GameHud.invalidateFit(); } catch (_) { /* pre-create / headless stub */ }
+    }
     return !!hud && !hud.hidden;
   }
 

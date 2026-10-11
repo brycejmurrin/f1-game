@@ -503,6 +503,32 @@ test("live docs name only real files in backticked bare `name.js` tokens", () =>
   assert.deepEqual(bad, [], "a live doc names a .js file no tracked file is called — write its real path, or mark the line historical");
 });
 
+// A BARE test-file name (`foo.test.mjs`, `foo.spec.js`) is how TESTING.md's coverage
+// tables name a suite, and the path guard above only matches prefixed paths
+// (`tests/unit/…`), so a row for a suite that was reverted (material-variants.test.mjs,
+// 7d64f2bdf → e8378538b) sat in the table, unchecked. Same rule as the `name.js` test.
+// CEILING-HISTORY.md is an append-only ledger: it names suites that were later merged away.
+const BARE_TEST_ALLOW = /CEILING-HISTORY\.md$/;
+test("live docs name only real test files in backticked bare `name.test.mjs` / `name.spec.js` tokens", () => {
+  if (!TRACKED) return;
+  const bases = new Set([...TRACKED.files].map((f) => path.basename(f)));
+  const HISTORY = /historical|\bold\b|split from|\bwas\b|former/i;
+  const bad = [];
+  for (const doc of LIVE_DOCS) {
+    if (doc.startsWith(path.join("docs", "plans") + path.sep) || BARE_TEST_ALLOW.test(doc)) continue;
+    read(doc).split("\n").forEach((line, i) => {
+      // A table row that OPENS with the name is a claim that the suite exists — no
+      // "was" in its prose excuses it (the material-variants row had one).
+      const rowLead = /^\|\s*`/.test(line);
+      if (!rowLead && HISTORY.test(line)) return;
+      for (const [, name] of line.matchAll(/`([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.(?:test\.(?:mjs|cjs|js)|spec\.(?:js|mjs)))`/g)) {
+        if (!bases.has(name)) bad.push(`${doc}:${i + 1} ${name}`);
+      }
+    });
+  }
+  assert.deepEqual(bad, [], "a live doc names a test file no tracked file is called — write its real name, or mark the line historical");
+});
+
 // The three counts below all drifted in the same way and for the same reason:
 // something ELSE changed (a circuit was added, four part categories were added,
 // a knob's default was flipped) and the prose that quoted it did not move.

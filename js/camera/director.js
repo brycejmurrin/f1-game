@@ -17,13 +17,14 @@ const Director = (function () {
   const SHOT_MAX_S = (typeof Broadcast !== "undefined" && Broadcast.SHOT_MAX_S) || 14;
   const BATTLE_S = 1.0;
 
-  /** Progress-ordered running cars → Broadcast.battles shape. */
-  function battles(cars) {
-    if (typeof Broadcast !== "undefined" && Broadcast.battles) return Broadcast.battles(cars);
+  /** Progress-ordered running cars → Broadcast.battles shape. vScale: vTop()/VMAX — the director
+   *  only cuts the SIM's race (eligible() keeps WATCH out), whose speeds are PACE-scaled. */
+  function battles(cars, vScale) {
+    if (typeof Broadcast !== "undefined" && Broadcast.battles) return Broadcast.battles(cars, vScale);
     const out = [];
     for (let i = 1; i < cars.length; i++) {
       const a = cars[i - 1], b = cars[i];
-      const v = Math.max(b.speed || 0, 20);
+      const v = Math.max(b.speed || 0, 20 * (vScale > 0 ? vScale : 1));
       const g = (a.prog - b.prog) / v;
       if (g >= 0 && g < BATTLE_S) out.push({ key: b.key, ahead: a.key, gapS: g, score: g + i * 0.08 });
     }
@@ -39,13 +40,14 @@ const Director = (function () {
    * Pure cut decision. Mirrors Broadcast.direct: no cut before SHOT_MIN_S;
    * a battle (or leader rotate) only after SHOT_MAX_S unless an explicit
    * event kind is supplied. Returns null to hold, or { subject, kind, shot }.
+   * st.vScale: battles()' speed scale (vTop()/VMAX); omitted = 1.
    */
   function decideCut(st) {
     const age = st.wall - st.lastCut;
     if (age < SHOT_MIN_S) return null;
     const running = st.running || [];
     if (!running.length) return null;
-    const fight = battles(running)[0];
+    const fight = battles(running, st.vScale)[0];
     // Under SHOT_MAX_S: only cut when a battle appears and we are not already
     // on its chaser (Broadcast cuts events early; live director treats a new
     // battle the same way once the min dwell has passed).
@@ -91,16 +93,23 @@ const Director = (function () {
       const m = modes[G.camMode];
       return m ? m.id : "";
     }
+    // Pooled rows + array (as Broadcast.battles pools its fights): the list is
+    // rebuilt on every cut-eligible tick and used only inside it.
+    const runRows = [], runOut = [];
     function runningList() {
       const cars = G.cars || [];
-      const out = [];
+      let n = 0;
       for (let i = 0; i < cars.length; i++) {
         const c = cars[i];
         if (!c || c.retired || c.finished) continue;
-        out.push({ key: c, prog: c.prog || 0, speed: c.speed || 0 });
+        let r = runRows[n];
+        if (!r) { r = { key: null, prog: 0, speed: 0 }; runRows[n] = r; }
+        r.key = c; r.prog = c.prog || 0; r.speed = c.speed || 0;
+        runOut[n++] = r;
       }
-      out.sort((a, b) => b.prog - a.prog);
-      return out;
+      runOut.length = n;
+      runOut.sort((a, b) => b.prog - a.prog);
+      return runOut;
     }
     function clearDbg() {
       if (ownCamera && G.dbgCam === ownCamera) G.dbgCam = null;
@@ -121,7 +130,7 @@ const Director = (function () {
        would otherwise be damped toward two different cars on alternate calls. */
     function applyShot(car, shot, dt, cut) {
       if (!car || !G.track || !G.camVantage) return false;
-      const extra = { att: car, dt: cut ? 0 : (dt > 0 ? dt : 0), snap: !!cut };
+      const extra = { att: car, noLook: true, dt: cut ? 0 : (dt > 0 ? dt : 0), snap: !!cut };   // noLook: the PLAYER's look-back / glance never steers a TV shot
       const pose = G.camPoseOf ? G.camPoseOf(car) : null;
       let s = car.s || 0, x = car.x || 0;
       if (pose) {
@@ -173,6 +182,12 @@ const Director = (function () {
       if (modeId() !== "tv") { clearDbg(); return; }
 
       wall += dt > 0 ? dt : 0;
+      // Dwell: decideCut is null before SHOT_MIN_S, so a live subject on a held
+      // shot only needs its pose refreshed — skip the field scan + sort.
+      if (subject && onAirShot && !subject.retired && !subject.finished && wall - lastCut < SHOT_MIN_S) {
+        applyShot(subject, onAirShot, dt, false);
+        return;
+      }
       const running = runningList();
       // A subject that retired or took the flag leaves the shot now, not after SHOT_MAX_S.
       if (subject && (subject.retired || subject.finished) && running.length) {
@@ -182,6 +197,7 @@ const Director = (function () {
       // of the field only — still no force path.
       const decision = decideCut({
         wall, lastCut, cuts, onAirShot, subject,
+        vScale: G.vTop && typeof PhysicsConsts !== "undefined" ? G.vTop() / PhysicsConsts.VMAX : 1,   // sim speeds (never WATCH, above)
         running: running.length ? running : (player && !player.retired ? [{ key: player, prog: player.prog || 0, speed: player.speed || 0 }] : []),
       });
       if (decision) {

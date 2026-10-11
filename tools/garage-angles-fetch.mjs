@@ -19,11 +19,11 @@
 // (commits ahead + watched files under js/car|garage|render, teams.js, tools).
 // No pack at all → exit 2. API / usage errors → exit 3.
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { githubToken, NO_TOKEN_HINT } from "./ci/github-token.mjs";
+import { assertOutputDir } from "./lib/output-paths.mjs";
 import {
   SHIP_BRANCH, ARTIFACT_PREFIX,
   artifactName, listPackArtifacts, pickNearestPack, compareCommits,
@@ -171,12 +171,18 @@ export async function fetchPack(opts = {}) {
 
   if (opts.dryRun) return result;
 
+  // `unzip -o` overwrites whatever --out names: artifacts/ or scratch/ only (S1).
+  let outDir;
+  try { outDir = assertOutputDir(opts.out || path.join(ROOT, "artifacts", "garage-before"), ROOT); }
+  catch (e) { return { error: e.message, code: 3, ...result }; }
+
   if (!picked.pack.id) return { error: `pack ${result.packName} has no artifact id (dry catalog?)`, code: 3, ...result };
   if (!token) return { error: NO_TOKEN_HINT, code: 3, ...result };
 
-  const outDir = path.resolve(opts.out || path.join(ROOT, "artifacts", "garage-before"));
   fs.mkdirSync(outDir, { recursive: true });
-  const tmp = path.join(os.tmpdir(), `garage-before-${process.pid}.zip`);
+  // The zip is regenerable output: artifacts/, not the system temp dir.
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const tmp = path.join(ROOT, "artifacts", `garage-before-${process.pid}.zip`);
   const dl = downloadZip(picked.pack.id, tmp, token);
   if (dl.error) return { error: dl.error, code: 3, ...result };
   const uz = unzipInto(tmp, outDir);

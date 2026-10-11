@@ -19,6 +19,107 @@ const SaveMigrate = (function () {
     return Number.isFinite(n) ? n : 0;
   }
 
+  // Mirrors of career.js's TDEV_MAX / DEV_MAX / EXP_MAX (this file loads first
+  // and cannot read them; save-migrate.test.mjs pins the three pairs equal).
+  const TDEV_LIMIT = 8;
+  const DEV_LIMIT = 12;
+  const EXP_LIMIT = 40;
+
+  function clampTo(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+
+  // A sparse {key: number} map -> only the finite entries, clamped. Career
+  // multiplies tdev into every AI car's pace and adds dev into every rating:
+  // one "abc" or 1e308 there became NaN or an infinite lap time for the grid.
+  // A non-numeric entry is DROPPED (absent reads as 0), not zeroed in place.
+  function numMap(o, lo, hi) {
+    const out = {};
+    if (!o || typeof o !== "object" || Array.isArray(o)) return out;
+    for (const k of Object.keys(o)) {
+      if (k === "__proto__") continue;
+      const v = o[k];
+      const n = typeof v === "number" || (typeof v === "string" && v.trim() !== "") ? Number(v) : NaN;
+      if (Number.isFinite(n)) out[k] = clampTo(n, lo, hi);
+    }
+    return out;
+  }
+
+  // driverId -> per-axis deltas over the shipped DriverRatings table. Only the
+  // five quality axes are authored by career; experience is the age proxy and
+  // runs 0..EXP_LIMIT, the rest are signed.
+  function devMap(o) {
+    const out = {};
+    if (!o || typeof o !== "object" || Array.isArray(o)) return out;
+    for (const k of Object.keys(o)) {
+      if (k === "__proto__" || !o[k] || typeof o[k] !== "object" || Array.isArray(o[k])) continue;
+      const row = {};
+      for (const axis of ["pace", "craft", "awareness", "consistency"])
+        Object.assign(row, numMap({ [axis]: o[k][axis] }, -DEV_LIMIT, DEV_LIMIT));
+      Object.assign(row, numMap({ experience: o[k].experience }, 0, EXP_LIMIT));
+      out[k] = row;
+    }
+    return out;
+  }
+
+  // driverId -> {name, code, num}: the AI driver a market move seated there.
+  // An entry that is not a named, coded driver is dropped and the shipped
+  // driver stays in the seat.
+  function seatMap(o) {
+    const out = {};
+    if (!o || typeof o !== "object" || Array.isArray(o)) return out;
+    for (const k of Object.keys(o)) {
+      const d = o[k];
+      if (k === "__proto__" || !d || typeof d !== "object" || Array.isArray(d)) continue;
+      if (typeof d.name !== "string" || !d.name || typeof d.code !== "string" || !d.code) continue;
+      out[k] = { name: d.name, code: d.code, num: clampTo(Math.trunc(finiteNumber(d.num)), 0, 999) };
+    }
+    return out;
+  }
+
+  // Offers are signed verbatim by acceptOffer(): a string salary there reached
+  // settleRound as `money + "9"` and concatenated the balance.
+  // Only keys that are present: a stub row stays a stub (acceptOffer refuses it).
+  function cleanOffer(o) {
+    if ("years" in o) o.years = clampTo(Math.round(finiteNumber(o.years)), 1, 3);
+    if ("salary" in o) o.salary = Math.max(0, finiteNumber(o.salary));
+    return o;
+  }
+
+  // A settled round's three numbers: round index, finishing position, points.
+  // Only keys that are present are coerced, so a row never gains a round it did
+  // not have (the season guard reads `row.r`).
+  function cleanResult(row) {
+    if ("r" in row) row.r = Math.max(0, Math.trunc(finiteNumber(row.r)));
+    if ("p" in row) row.p = Math.max(0, Math.trunc(finiteNumber(row.p)));
+    if ("pts" in row) row.pts = Math.max(0, finiteNumber(row.pts));
+    return row;
+  }
+
+  // The cumulative career record. career.history is a rolling archive of the
+  // last HISTORY_MAX seasons, so every "N seasons · M titles" total read off it
+  // stopped climbing at 11 / 10. The tally outlives the archive: rollover() adds
+  // each closing season to it, and a save from before it existed derives it once
+  // here from whatever history it still has (a lower bound for a long career).
+  const TALLY_KEYS = ["seasons", "wins", "podiums", "titles", "cTitles", "pts"];
+  function tallyOf(history) {
+    const t = { seasons: 0, wins: 0, podiums: 0, titles: 0, cTitles: 0, pts: 0 };
+    for (const h of Array.isArray(history) ? history : []) {
+      if (!h || typeof h !== "object") continue;
+      t.seasons++;
+      t.wins += Math.max(0, finiteNumber(h.wins));
+      t.podiums += Math.max(0, finiteNumber(h.podiums));
+      t.pts += Math.max(0, finiteNumber(h.pts));
+      if (h.pos === 1) t.titles++;
+      if (h.cPos === 1) t.cTitles++;
+    }
+    return t;
+  }
+  function cleanTally(t, history) {
+    if (!t || typeof t !== "object" || Array.isArray(t)) return tallyOf(history);
+    const out = {};
+    for (const k of TALLY_KEYS) out[k] = Math.max(0, finiteNumber(t[k]));
+    return out;
+  }
+
   function seasonDriverId(teamId, driverIndex) { return `${teamId}:${driverIndex}`; }
 
   // The two per-driver sparse arrays a championship carries beside `pts`:
@@ -105,6 +206,11 @@ const SaveMigrate = (function () {
     deal.bonusPt = finiteNumber(deal.bonusPt);
     deal.left = finiteNumber(deal.left);
     deal.years = finiteNumber(deal.years);
+    // A goal type that names an Object.prototype member ("constructor",
+    // "__proto__") is junk: it is what Career.goalKind would have indexed a plain
+    // table with. Unknown-but-plain types stay (they already resolve as champPos).
+    const g = deal.goal;
+    if (g && typeof g === "object" && !Array.isArray(g) && (typeof g.type !== "string" || g.type in Object.prototype)) g.type = "champPos";
     return deal;
   }
 
@@ -138,7 +244,10 @@ const SaveMigrate = (function () {
     career.rep = Math.max(0, Math.min(100, Number(career.rep) || 0));
     career.driver = career.driver && typeof career.driver === "object"
       ? career.driver : { name: "Your Name", code: "YOU", num: 99 };
-    career.team = typeof career.team === "string" && career.team ? career.team : null;
+    // A missing team defaults as Career.start does: a null here threw on the title
+    // screen's `.toUpperCase()` at boot, from an imported row like {"money":100}
+    // (slotPayloadOk does not look at the team).
+    career.team = typeof career.team === "string" && career.team ? career.team : (career.flavour === "myteam" ? "custom" : "haas");
     // THE SEAT IS AN INDEX INTO THE TEAM'S GRID ROW. game.js copies it straight
     // into driverIdx, and makeCars marks the player by `di === driverIdx`, so a
     // hand-edited or imported `seat: 5` / `-1` gridded a race with no player car.
@@ -151,20 +260,25 @@ const SaveMigrate = (function () {
     // and Career.load() runs at boot uncaught — one bad slot stopped the game.
     const sz = career.season;
     career.season = remapPoints(sz && typeof sz === "object" && !Array.isArray(sz) ? sz : { round: 0, pts: {}, teamPts: {}, driverCodes: {} });
+    // A career season never carries a frozen rules snapshot (that is the
+    // standalone Season screen's). An imported one with a huge `round` made
+    // SeasonCal.netPts loop `round` times, so it is dropped on the way in.
+    delete career.season.config;
     career.owned = Array.isArray(career.owned) ? career.owned : [];
     career.fitted = career.fitted && typeof career.fitted === "object" ? career.fitted : {};
     // Only object rows: a null or a number in the ledger threw on the first
     // `r.round` read in the history screen (and history on the title screen's
     // Career.slots(); offers and moves the same way).
     const rows = (a) => (Array.isArray(a) ? a.filter((r) => r && typeof r === "object" && !Array.isArray(r)) : []);
-    career.results = rows(career.results);
+    career.results = rows(career.results).map(cleanResult);
     career.history = rows(career.history);
-    career.dev = career.dev && typeof career.dev === "object" ? career.dev : {};
-    career.tdev = career.tdev && typeof career.tdev === "object" ? career.tdev : {};
+    career.tally = cleanTally(career.tally, career.history);
+    career.dev = devMap(career.dev);
+    career.tdev = numMap(career.tdev, -TDEV_LIMIT, TDEV_LIMIT);
     career.aiParts = career.aiParts && typeof career.aiParts === "object" && !Array.isArray(career.aiParts)
       ? career.aiParts : {};
-    career.seats = career.seats && typeof career.seats === "object" ? career.seats : {};
-    career.offers = rows(career.offers);
+    career.seats = seatMap(career.seats);
+    career.offers = rows(career.offers).map(cleanOffer);
     career.obj = career.obj && typeof career.obj === "object" ? career.obj : null;
     // Which of the round's three briefs was chosen, {round, i}. No CAREER_V rung:
     // absent reads as index 0, which is the kind the single dealt brief always
@@ -194,6 +308,7 @@ const SaveMigrate = (function () {
     return season;
   }
 
-  return { migrateCareer, migrateSeasonPoints, remapPoints, roundMap, finishMap, CAREER_V };
+  return { migrateCareer, migrateSeasonPoints, remapPoints, roundMap, finishMap, CAREER_V, tallyOf,
+           LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT }) };
 })();
 Object.freeze(SaveMigrate);

@@ -126,7 +126,7 @@ test("hostile visual snapshots are clamped, normalized and stripped of unrelated
     hudBtnOpacity: 0, motion: "wobble", steering: "pro", __proto__: { unlimitedBudget: true } });
   assert.equal(clean.uiTheme, "dark"); assert.equal(clean.menuAccentHex, "#e10600"); assert.equal(clean.uiScale, 200);
   assert.equal(clean.hudScale, null); assert.equal(clean.hudBtnScale, 40); assert.equal(clean.hudBtnOpacity, 20);
-  assert.equal(clean.motion, "on"); assert.equal(clean.steering, undefined); assert.equal(clean.unlimitedBudget, undefined);
+  assert.equal(clean.motion, null); assert.equal(clean.steering, undefined); assert.equal(clean.unlimitedBudget, undefined);
 });
 
 test("Undo restores the last visual batch; current-screen preset preserves other views", () => {
@@ -233,6 +233,7 @@ test("profile apply, reset and Undo disclose session-only restoration when stora
   const status = descendants(dom.byId("appearance-studio")).find(node => node.dataset.as === "status");
   studio.saveProfile("Night"); studio.applyPreset("sunlight"); studio.loadProfile("profile-1");
   assert.match(status.textContent, /applied.*for this session; browser storage is unavailable/);
+  studio.applyPreset("sunlight"); // reset needs something to change: unchanged keys are no longer rewritten
   studio.reset(); assert.match(status.textContent, /reset for this session; browser storage is unavailable/);
   studio.undo(); assert.match(status.textContent, /restored for this session; browser storage is unavailable/);
 });
@@ -290,4 +291,18 @@ test("Opening Appearance marks the panel busy and defers scene preview off the c
   for (const fn of second) fn();
   assert.equal(panel.getAttribute("aria-busy"), null);
   assert.ok(sceneHits.length >= 1, "garage preview runs after the sheet has a frame");
+});
+
+test("M2: Studio edits never pin motion:'on' and write only the keys that changed", () => {
+  const { studio, values, writes } = load();
+  studio.setScene("garage");
+  assert.equal(studio.snapshot().motion, null);
+  assert.ok(!("motion" in values), "an unset motion stays unset (touch auto comfort keeps working)");
+  assert.deepEqual(writes, ["homeScene"], "unchanged keys are not frozen at today's value");
+  writes.length = 0; studio.applyPreset("classic"); studio.reset();
+  assert.ok(!writes.includes("motion"));
+  // An explicit reduce is still honoured, and RESET/null removes the key rather than writing "on".
+  studio.applyPreset("focus"); assert.equal(values.motion, "reduce");
+  studio.reset(); assert.equal(values.motion, undefined);
+  studio.undo(); assert.equal(values.motion, "reduce");
 });

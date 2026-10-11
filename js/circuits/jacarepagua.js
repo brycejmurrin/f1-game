@@ -52,7 +52,7 @@
     ],
     bankZones: [
       { frac: 0.075, angleDeg: 3.5, widthM: 120 },
-      { frac: 0.470, angleDeg: 4.5, widthM: 200 },   // the long lagoon-side sweep
+      { turn: 5, angleDeg: 4.5, widthM: 200 },   // the long lagoon-side sweep; re-seated frac 0.47 (was 609 m off any apex)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

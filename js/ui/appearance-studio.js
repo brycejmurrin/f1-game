@@ -11,7 +11,7 @@ const AppearanceStudio = (function () {
     uiContrast: ["off", "high"], cvdMode: ["off", "deutan", "protan", "tritan"], speedUnits: ["kmh", "mph"], menuHelp: ["on", "off"], motion: ["on", "reduce"],
     titleIntro: ["full", "quick", "off"], menuWash: ["full", "soft", "off"], titleArt: ["on", "soft", "off"],
     pauseLayout: ["grid", "list", "compact", "wide", "sidebar"], pauseSide: ["centre", "left", "right"], pauseDim: ["full", "soft", "off"],
-    pauseConfirm: ["on", "off"], hudProfile: ["minimal", "standard", "broadcast"], hudMetricsLayout: ["auto", "full", "timing", "driver", "compact"],
+    hudProfile: ["minimal", "standard", "broadcast"], hudMetricsLayout: ["auto", "full", "timing", "driver", "compact"],
     hudMapVis: ["auto", "on", "off"], hudGapsVis: ["auto", "on", "off"], hudMirror: ["auto", "on", "off"],
     homeScene: ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"], backgroundMotion: ["still", "ambient"],
     homeCamera: ["auto", "hero", "front", "side", "rear"],
@@ -21,13 +21,15 @@ const AppearanceStudio = (function () {
   const shipped = (k, d) => (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(k))
     ? SettingsDefaults.get(k) : d;
   const DEFAULTS = Object.freeze({ uiTheme: "dark", menuAccent: shipped("menuAccent", "ember"), hudAccent: "team", menuAccentHex: "#e10600", hudAccentHex: "#e10600",
-    textSize: shipped("textSize", "large"), uiContrast: shipped("uiContrast", "high"), cvdMode: "off", speedUnits: "kmh", menuHelp: "on", motion: "on", uiScale: null,
+    textSize: shipped("textSize", "large"), uiContrast: shipped("uiContrast", "high"), cvdMode: "off", speedUnits: "kmh", menuHelp: "on", motion: null, uiScale: null,
     hudScale: null, hudBtnScale: null, hudBtnOpacity: null, hudPanelOpacity: null,
     titleIntro: "full", menuWash: "full", titleArt: "on", titleLayout: null,
     pauseLayout: "grid", pauseSide: "centre", pauseDim: "full",
     hudProfile: "standard", hudMetricsLayout: "full", hudMapVis: "on", hudGapsVis: "on", hudMirror: shipped("hudMirror", "auto"),
     lookPause: null, lookDatahub: null, lookSelect: null, lookRace: null, lookCareer: null, lookGarage: null, lookPopups: null,
     homeScene: shipped("homeScene", "photo"), backgroundMotion: shipped("backgroundMotion", "ambient"), homeCamera: shipped("homeCamera", "side") });
+  // motion is NULLABLE: unset = follow the OS / touch auto comfort (CamComfort,
+  // TitleFx); an explicit "on" would override both, so the Studio never pins it.
   const VISUAL_KEYS = Object.freeze(Object.keys(DEFAULTS));
   const LOOKS = { lookPause: "pause", lookDatahub: "datahub", lookSelect: "select", lookRace: "race", lookCareer: "career", lookGarage: "garage", lookPopups: "popups" };
   const SCREEN_KEYS = Object.freeze({ home: ["titleIntro", "menuWash", "titleArt", "titleLayout", "homeScene", "backgroundMotion", "homeCamera"],
@@ -94,7 +96,16 @@ const AppearanceStudio = (function () {
     const next = normalizeSnapshot(value), before = snapshot(), keys = keysFor(options.scope || "global");
     let durable = true;
     clearTimeout(pending); muted = true;
-    try { for (const k of keys) if (store.set(k, clone(next[k])) === false) durable = false; refreshOwners(snapshot()); }
+    // Only keys whose value actually changes are written: an untouched key stays
+    // unset (it keeps following SettingsDefaults), and a null motion REMOVES the
+    // key instead of pinning "on".
+    try {
+      for (const k of keys) {
+        if (JSON.stringify(before[k]) === JSON.stringify(next[k])) continue;
+        if (store.set(k, k === "motion" && next[k] === null ? undefined : clone(next[k])) === false) durable = false;
+      }
+      refreshOwners(snapshot());
+    }
     finally { muted = false; }
     if (options.history !== false) remember(before);
     last = snapshot(); render();
@@ -182,7 +193,7 @@ const AppearanceStudio = (function () {
   }
   function render() {
     if (!ui) return; const s = snapshot();
-    for (const c of ui.choices) for (const { id, b } of c.list) b.setAttribute("aria-pressed", String(s[c.key] === id));
+    for (const c of ui.choices) for (const { id, b } of c.list) b.setAttribute("aria-pressed", String((s[c.key] == null && c.key === "motion" ? "on" : s[c.key]) === id));
     for (const c of ui.colours) { c.row.hidden = s[c.key] !== "custom"; c.input.value = s[c.hexKey]; }
     for (const r of ui.ranges) { const v = s[r.key] || (r.key === "uiScale" && typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches ? 109 : 100); r.input.value = v; r.out.textContent = v + "%"; }
     for (const { id, b } of ui.presets) b.setAttribute("aria-pressed", String(activePreset === id));

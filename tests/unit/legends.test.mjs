@@ -268,3 +268,16 @@ test("parts() hands back a copy, so a caller cannot edit the table", () => {
   assert.equal(Legends.parts("fangio").aero, "minimal");
   assert.equal(Legends.parts("nobody"), null);
 });
+
+test("every legend livery spineHeight is a registered Car3D id (not \"low\")", () => {
+  const src = fs.readFileSync(new URL("../../js/car/car3d.js", import.meta.url), "utf8");
+  const ids = JSON.parse(src.match(/SPINE_HEIGHT_IDS = Object\.freeze\((\[[^\]]*\])\)/)[1]);
+  for (const l of Legends.LIST) {
+    assert.ok(ids.includes(l.livery.spineHeight), `${l.id}: spineHeight "${l.livery.spineHeight}" is not one of ${ids}`);
+  }
+});
+
+test("Schumacher's teams cover his whole 1991-2012 career", () => {
+  const msc = Legends.LIST.find((l) => l.id === "schumacher");
+  for (const t of ["Jordan", "Benetton", "Ferrari", "Mercedes"]) assert.ok(msc.teams.includes(t), `missing ${t}`);
+});

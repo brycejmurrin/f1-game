@@ -182,6 +182,25 @@ test("wear reaches 1.0 after `life x lapsTarget` laps at load 1", () => {
     `ten laps of a 0.5-life set in a 20-lap race should be about spent, got ${c.tyreWear.toFixed(3)}`);
 });
 
+test("one NaN tick does not wipe a set's accumulated wear (bug-hunt 7.10)", () => {
+  const s = ctxFor({ laps: 20 });
+  s.setLevel("real");
+  const c = freshCar(s, 0.5);
+  run(s, c, 4);
+  const w = c.tyreWear;
+  assert.ok(w > 0.1, "precondition: the set has real wear");
+  // aiLoad launders consistency through fin(); wear still advances from a
+  // neutral load. The dw finite-guard is the backstop if an increment ever
+  // goes non-finite — either way the set's accumulated wear must not reset.
+  c.consistency = NaN;
+  s.update(c, 1);
+  assert.ok(Number.isFinite(c.tyreWear), "wear stays finite");
+  assert.ok(c.tyreWear >= w - 1e-12, "a bad tick must not wipe accumulated wear to 0");
+  c.consistency = 0.75;
+  s.update(c, 1);
+  assert.ok(c.tyreWear > w, "…and the next good tick carries on from the old wear, not from 0");
+});
+
 test("the SAME compound lasts proportionally longer in a longer race", () => {
   // This is the whole distance-fraction idea in one assertion. A soft is spent
   // at the same FRACTION of a 5-lap race and a 50-lap race; if this ever became
@@ -980,4 +999,50 @@ test("belowWindow preserves info's rounding, missing-state and non-finite behavi
       assert.deepEqual(c, before, "reading a cold-window deficit changed the car");
     }
   }
+});
+
+// A corrupt rating (consistency NaN) or a hook handing back NaN/Infinity used to
+// make tyreWear/F/R NaN for a tick (clamp() passes NaN through; 0 * Infinity is
+// NaN). Every load input is now finite-guarded: one neutral tick, never a poisoned
+// integral. Finite inputs are unchanged (the rest of this file pins those).
+test("NaN / Infinity in any load input never poisons the wear, temperature or grip state", () => {
+  const BAD = [NaN, Infinity, -Infinity, undefined, null];
+  const INPUTS = ["consistency", "accSm", "speed", "yawRateCur", "axFrac", "skidIntensity", "brakeBias"];
+  for (const aTop of [7, NaN, Infinity]) {
+    for (const human of [false, true]) {
+      for (const field of INPUTS) {
+        for (const bad of BAD) {
+          const s = T.create({ lapsTarget: 10, track: { total: 5000, def: {} }, LAT_MAX: 22,
+            aTop: () => aTop, vTop: () => 60, raceWeather: "dry" });
+          s.setLevel("real");
+          const c = freshCar(s, 0.74, { human, accSm: 1, yawRateCur: 0.2, axFrac: 0.3, skidIntensity: 0.1, lap: 2 });
+          c[field] = bad;
+          let last = 0;
+          for (let i = 0; i < 4; i++) {
+            s.update(c, 1);
+            for (const k of ["tyreWear", "tyreWearF", "tyreWearR", "tyreTs", "tyreTb", "tyreGrain", "tyreBlister", "_tyreLoad"]) {
+              assert.ok(Number.isFinite(c[k]), `${human ? "human" : "ai"} ${field}=${bad} aTop=${aTop} tick ${i}: ${k}=${c[k]}`);
+            }
+            assert.ok(c.tyreWear >= last, "wear never runs backwards");
+            last = c.tyreWear;
+          }
+          const g = s.gripMul(c), a = s.axleSplit(c);
+          assert.ok(Number.isFinite(g) && Number.isFinite(a.f) && Number.isFinite(a.r), `${field}=${bad}: grip ${g} ${a.f}/${a.r}`);
+        }
+      }
+    }
+  }
+});
+
+test("non-finite inputs read as the neutral value, finite ones are untouched", () => {
+  const run = (over) => {
+    const s = ctxFor({ laps: 10 }); s.setLevel("real");
+    const c = freshCar(s, 0.74, over);
+    for (let i = 0; i < 20; i++) s.update(c, 1);
+    return c.tyreWear;
+  };
+  assert.equal(run({ consistency: NaN }), run({ consistency: 0.75 }), "a NaN rating is the mid driver");
+  assert.equal(run({ consistency: undefined }), run({ consistency: 0.75 }));
+  assert.equal(run({ accSm: NaN }), run({ accSm: 0 }));
+  assert.ok(run({ consistency: 0.2 }) > run({ consistency: 0.9 }), "a ragged driver still wears more (finite path unchanged)");
 });

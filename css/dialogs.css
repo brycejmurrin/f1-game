@@ -247,7 +247,6 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    the 30/34 arms still decide a short desktop window. The body already
    scrolls, so the taller doors scroll; RESUME stays the first button. */
 @media (orientation: landscape) and (max-height: 500px) {
-  #pausemenu .sheet-body.stack { gap: 2px; }
   #pausemenu .sheet-body.stack > button:not(.as-tbtn) {
     min-height: max(30px, var(--tap-paint));
     padding-block: 3px;
@@ -255,9 +254,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   #pausemenu #pm-resume { min-height: max(34px, var(--tap-paint)); }
   #pm-race-context { padding-block: 1px; }
   #pm-race-context :is(span, small) { display: none; }
-  #pm-quick-doors { gap: 2px; }
-  #pm-quick-doors button,
-  #pm-checkpoint summary { min-height: max(34px, var(--tap-paint)); padding-block: 2px; }
+  /* The RACE TOOLS tray's compact gap/floors live in css/experience.css, after
+     the tray's own (overlays-layer) base rules: written here they lost to them. */
   #pm-now-card, #pm-build { display: none; }
   #pausemenu .sheet-body {
     overflow-y: auto;
@@ -273,6 +271,13 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   background:
     radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) var(--pause-wash, 14%), transparent), transparent 58%),
     rgba(6, 6, 10, var(--pause-scrim, 0.58));
+}
+/* prefers-reduced-transparency / prefers-contrast: a solid scrim. After both
+   scrim rules above (the generic one and the pause card's id-qualified one) so
+   it wins on order; the dialog's ::backdrop has its own copy in
+   css/dialog-platform.css. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .screen.dim, #pausemenu.screen.dim { background: rgba(0, 0, 0, 0.92); }
 }
 /* PAUSE MENU player settings (APPEARANCE › PAUSE MENU, js/ui/pause-opts.js).
    Each lands on <html> only when it differs from the shipped look.
@@ -419,6 +424,33 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 :root[data-look-pause-music="hide"] #pm-now-card { display: none; }
 :root[data-look-pause-build="hide"] #pm-build { display: none; }
 
+/* INSTANT REPLAY DOCK (js/camera/replay-buf.js builds it; it used to carry its
+   own cssText). Fixed above the bottom safe edge, never wider than the safe
+   viewport, and it WRAPS: four buttons, a scrub bar and the time label are
+   ~600px in one row, which clipped EXIT and the label on a 390px portrait
+   phone. Plain tokens so the LIGHT theme and the text size follow. */
+#pm-replay-dock {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--safe-b) + var(--gap));
+  transform: translateX(-50%);
+  z-index: 40;
+  box-sizing: border-box;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: calc(var(--gap) * 0.67);
+  max-width: calc(100vw - var(--safe-l) - var(--safe-r));
+  padding: calc(var(--gap) * 0.67) var(--gap);
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-md);
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+}
+#pm-replay-dock[hidden] { display: none; }
+#pm-replay-dock button { min-height: var(--tap-paint); padding-inline: var(--gap); }
+#pm-replay-scrub { flex: 1 1 12rem; width: 12rem; min-width: 0; max-width: 100%; }
+#pm-replay-label { min-width: 4ch; text-align: end; font-variant-numeric: tabular-nums; }
 } /* @layer components */
 
 /* ---- VS Friend chrome (@layer overlays on purpose) ----

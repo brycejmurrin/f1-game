@@ -51,8 +51,8 @@
     // (`node tools/gen/bake-elevation.mjs suzuka`); authored cosine bumps leave
     // ~71% of the lap under 0.5% grade (stair-step undulation).
     bridges: [{ s: 0.845, halfM: 160, rise: 10 }],
-    hwZones: [
-      { s0: 0.8710, s1: 0.9671, hw: 6.1, ease: 0.012 },  // arc 0.300-0.348 the Esses
+    hwZones: [   // s0/s1 are CONTROL-INDEX fractions (def.js applyHwZones); "racing arc" = where the narrowed nodes really sit
+      { s0: 0.8710, s1: 0.9671, hw: 6.1, ease: 0.012 },  // racing arc 0.919-0.965 Casio chicane
     ],
     bankZones: [
       // Racing-frame fracs, each on a curated apex (turns[i]). Re-keyed +0.6198
@@ -72,7 +72,7 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    sectors: [0.32, 0.68],
+    sectors: [0.32, 0.703],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.32, 0.68])
     turns: [0.1198, 0.1392, 0.1890, 0.2104, 0.2339, 0.2754, 0.2968, 0.3404, 0.3930, 0.4213, 0.4753, 0.4988, 0.5472, 0.6537, 0.6820, 0.8549, 0.9275, 0.9511],
     furniture: { tree: "broad", fol: [0.24, 0.46, 0.24], lamp: "none" },  // mixed Japanese hill forest
     kit: { marshal: "kiosk",     rail: "wArmco",      fence: "panelled",  tyre: "stack",   board: "banner",    gantry: "truss",      camera: "lattice",   hoarding: "banner" },

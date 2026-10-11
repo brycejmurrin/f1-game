@@ -207,8 +207,11 @@ const SPEC = [
   { k: "champGrid", lane: "json", group: "driving", def: "champ", src: "js/game.js", oneOf: ["champ", "tier", "revchamp", "random"] },
   { k: "reliability", lane: "json", group: "driving", def: "off", src: "js/game.js" },
   { k: "caution", lane: "json", group: "driving", def: false, src: "js/race/race-control.js" },
-  { k: "unlimitedBudget", lane: "json", group: "driving", def: false, src: "js/game.js",
-    subsystem: "removes the career economy constraint for everyone — a design change, not a preference" },
+  // Ships ON since 2026-10-09: the 2026-10-05 garage export fitted works builds
+  // above Parts.BUDGET, and the garage gate refuses any swap that ends over the
+  // cap, so a fresh install could not change a part on 8 of 11 teams. Free play
+  // only — a career slot still uses Career.budget() (setup-sheet.js `owned`).
+  { k: "unlimitedBudget", lane: "json", group: "driving", def: true, src: "js/game.js" },
   { k: "bodyAttitude", lane: "raw", group: "driving", def: null, src: "js/physics/body-attitude.js (null = on)" },
   // PRE-RACE MEMORY. Both unset until used: the race sheet saves a draft only
   // when a solo one-off GP STARTs, and the list exists only once a circuit is

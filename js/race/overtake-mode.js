@@ -128,7 +128,13 @@ const OvertakeMode = (function () {
     if (started) note(c, "on mj=" + mj(c).toFixed(2));
     else if (wasOn && !c.otOn) note(c, gate ? "off" : "cut gate-closed");
     const rate = energy() / Math.max(0.5, pushS || 4);
-    const live = c.otOn && !!speedOK;   // paused below OT_MIN_SPEED, not cancelled
+    // Paused below OT_MIN_SPEED, and while the pedal is down, not cancelled: the
+    // push only enters the acceleration in the throttle branch, and braking wins
+    // there, so burning the allowance through a braking zone spent MJ for no
+    // thrust. spend() runs before this tick's brake decision, so it reads the
+    // LAST tick's pedal (c.brakeDemand, written at the end of updateCar) — one
+    // tick of lag at 60 Hz, absent (undefined) on a fresh car = not braking.
+    const live = c.otOn && !!speedOK && !(c.brakeDemand > 0);
     if (live) {
       c.otE = Math.max(0, c.otE - rate * dt);
       if (c.otE <= 0) { c.otOn = false; note(c, "spent"); }

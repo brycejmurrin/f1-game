@@ -15,6 +15,7 @@
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
@@ -32,6 +33,42 @@ const opt = (name) => {
 };
 
 /**
+ * Refuse a destination `stageSite` must never delete (2026-10-10, S1). The
+ * stage REPLACES `dest` with a recursive rmSync, and `--out .`, `--out ..`,
+ * `--out ~` or a forgotten value (`--out --stamp`) used to resolve to the
+ * working tree, its parent or a home directory. Allowed: a path that does not
+ * exist, an empty directory, or the product of an earlier stage (it holds
+ * index.html and version.json and none of .git, tools, tests, package.json,
+ * node_modules). Never the checkout root, an ancestor of it, or anything in
+ * .git or a source directory the stage copies from.
+ * @param {string} dest absolute destination
+ * @param {string} root the checkout being staged
+ */
+export function assertStageDest(dest, root) {
+  const rel = path.relative(dest, root);   // "" = dest is root; no ".." = dest is an ancestor of root
+  if (rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))) {
+    throw new Error(`stage: refusing --out ${dest}: it is the checkout (${root}) or contains it`);
+  }
+  const inside = path.relative(root, dest).split(path.sep);
+  if (inside[0] === ".git" || STAGE_DIRS.includes(inside[0])) {
+    throw new Error(`stage: refusing --out ${dest}: it is inside ${inside[0]}/, which the stage reads or git owns`);
+  }
+  if (dest === path.parse(dest).root || dest === os.homedir()) {
+    throw new Error(`stage: refusing --out ${dest}: a filesystem or home root`);
+  }
+  if (!fs.existsSync(dest)) return;
+  if (!fs.statSync(dest).isDirectory()) throw new Error(`stage: --out ${dest} exists and is not a directory`);
+  const names = fs.readdirSync(dest);
+  if (names.length === 0) return;
+  const prior = names.includes("index.html") && names.includes("version.json")
+    && !names.some((n) => [".git", "tools", "tests", "package.json", "node_modules"].includes(n));
+  if (!prior) {
+    throw new Error(`stage: refusing --out ${dest}: it is not empty and does not look like an earlier stage `
+      + `(no index.html + version.json, or it holds .git/tools/tests/package.json). Remove it by hand if you mean it.`);
+  }
+}
+
+/**
  * Copy the runtime allow-list into `outDir` (replaced if it exists).
  * @param {string} outDir absolute or repo-relative output directory
  * @param {{ root?: string }} [opts]
@@ -40,6 +77,7 @@ const opt = (name) => {
 export function stageSite(outDir, opts = {}) {
   const root = opts.root || ROOT;
   const dest = path.resolve(outDir);
+  assertStageDest(dest, path.resolve(root));
   fs.rmSync(dest, { recursive: true, force: true });
   fs.mkdirSync(dest, { recursive: true });
 
@@ -125,7 +163,7 @@ function main() {
     process.exit(0);
   }
   const out = opt("--out");
-  if (!out) {
+  if (!out || out.startsWith("-")) {   // `--out --stamp` would name a directory "--stamp"
     usage();
     process.exit(2);
   }

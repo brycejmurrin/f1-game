@@ -277,11 +277,7 @@ const SceneryStructures = (function () {
       }, `guardrail|${side}|${gap}|${postKey}|${railKey}`);
     };
     // Stacked-tyre barrier with a coloured conveyor-belt cap.
-    //   opts: { style: "stack"(default) | "double" | "pyramid" | "tecpro"
-    //                | "airfence", tyreCol }
-    // BUDGET NOTE: "double" and "pyramid" are 2x and 3x the tyre count. They
-    // belong on circuits with measured headroom, never in KIT_DEF — this
-    // emitter runs 142 times across 38 circuits.
+    //   opts: { style: "stack"(default) | "tecpro" | "airfence", tyreCol }
     const tyreWall = (s0, s1, side, gap, capCol, opts) => {
       const st = (opts && opts.style) || kitOf("tyre", "stack");
       if (alreadyLaid("tyreWall", s0, s1, side, gap, st + "|" + (capCol || []).join(","))) return;
@@ -290,8 +286,12 @@ const SceneryStructures = (function () {
       // Keys and tints hoisted for the reason written out over `fence` above.
       const tyre = (opts && opts.tyreCol) || [0.10, 0.10, 0.11];
       const cap = capCol || [0.9, 0.9, 0.92];
-      const stackKey = `tyre-stack|${st}|${tyre.join(",")}`;
-      const capKey = `tyre-cap|${st}|${cap.join(",")}`;
+      // The key names every colour the model draws: tecpro/airfence paint the BODY
+      // `cap` and the top strip `tyre`, the plain stack the reverse. A key that
+      // omitted one let the circuit's first wall colour every later one.
+      const slab = st === "tecpro" || st === "airfence";
+      const stackKey = `tyre-stack|${st}|${tyre.join(",")}` + (slab ? `|${cap.join(",")}` : "");
+      const capKey = `tyre-cap|${st}|${(slab ? tyre : cap).join(",")}`;
       along(s0, s1, 3.4, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], 1.0)) {
@@ -307,13 +307,6 @@ const SceneryStructures = (function () {
               rec.box([0, 0.86, 0], [1.5, 0.14, 1.6], tyre);
             } else if (st === "airfence") {
               rec.frustum([0, -0.35, 0], 1.05, 0.72, 1.45, cap, 8);
-            } else if (st === "pyramid") {
-              rec.cyl([0, -0.35, 0], 1.0, 1.25, tyre, 7);
-              rec.cyl([side * 1.75, -0.35, 0], 1.0, 1.25, tyre, 7);
-              rec.cyl([side * 0.88, 0.90, 0], 0.95, 1.10, tyre, 7);
-            } else if (st === "double") {
-              rec.cyl([0, -0.35, 0], 1.0, 1.25, tyre, 7);
-              rec.cyl([side * 1.85, -0.35, 0], 1.0, 1.25, tyre, 7);
             } else {
               rec.cyl([0, -0.35, 0], 1.0, 1.25, tyre, 7);                       // stack (default)
             }
@@ -324,8 +317,6 @@ const SceneryStructures = (function () {
           (rec) => {
             if (st === "tecpro") rec.box([0, 0.98, 0], [1.7, 0.16, 1], tyre);
             else if (st === "airfence") rec.box([0, 1.14, 0], [1.5, 0.14, 1], tyre);
-            else if (st === "pyramid") rec.box([side * 0.88, 2.05, 0], [2.0, 0.3, 1], cap);
-            else if (st === "double") rec.box([side * 0.92, 0.95, 0], [3.8, 0.3, 1], cap);
             else rec.box([0, 0.95, 0], [2.0, 0.3, 1], cap);                     // stack (default)
           },
           { kind: "tyreWall", k, side });

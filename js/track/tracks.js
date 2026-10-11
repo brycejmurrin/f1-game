@@ -11,7 +11,7 @@ const Tracks = (function () {
   const WORLD_UP = [0, 1, 0];
 
   const { cross, norm, addBox } = TrackGeom;
-  const { cr, sample, curvatureRaw, curvature, project, wallAt, postLimits } = TrackSpline;
+  const { cr, crc, sample, curvatureRaw, curvature, project, wallAt, postLimits, surfaceFolds } = TrackSpline;
   const { upOf, bankingProfile, onKerb, bankAngle, banking,
           buildRoad, buildTerrainSteps, buildFloor } = TrackMesh;
   const lerp = M4.lerp, __M = Math, __isFinite = Number.isFinite;
@@ -27,14 +27,21 @@ const Tracks = (function () {
     const P = def.points, N = P.length;
     const idx = (i) => ((i % N) + N) % N;
     const SUB = 16;
+    // def.splineAlpha (opt-in, unset = today's uniform Catmull-Rom bit-for-bit): knot
+    // exponent for crc(); 0.5 = centripetal. Moves the whole path, so per-circuit.
+    const alpha = def.splineAlpha > 0 ? Math.min(1, +def.splineAlpha) : 0, crOut = [0, 0, 0];
     const dx = [], dy = [], dz = [], dhw = [], dbank = [], dlen = [0];
     for (let i = 0; i < N; i++) {
       const a = P[idx(i - 1)], b = P[i], c = P[idx(i + 1)], d = P[idx(i + 2)];
       for (let j = 0; j < SUB; j++) {
         const t = j / SUB;
-        const x = cr(a[0], b[0], c[0], d[0], t);
-        const y = cr(a[1], b[1], c[1], d[1], t);
-        const z = cr(a[2], b[2], c[2], d[2], t);
+        let x, y, z;
+        if (alpha) { crc(a, b, c, d, t, alpha, crOut); x = crOut[0]; y = crOut[1]; z = crOut[2]; }
+        else {
+          x = cr(a[0], b[0], c[0], d[0], t);
+          y = cr(a[1], b[1], c[1], d[1], t);
+          z = cr(a[2], b[2], c[2], d[2], t);
+        }
         dx.push(x); dy.push(y); dz.push(z);
         dhw.push(lerp(b[3], c[3], t));
         dbank.push(lerp(b[4], c[4], t));
@@ -283,6 +290,8 @@ const Tracks = (function () {
     // Keep the upload block scoped; the precondition at entry guarantees it runs.
     {
       track.geometryDiagnostics = [];
+      // Informational row (always ok): min node radius + surface-fold nodes, see TrackSpline.surfaceFolds.
+      track.geometryDiagnostics.push(Object.assign({ name: "centreline", ok: true }, surfaceFolds(track)));
       const chunkRibbons = !!(opts && opts.chunkRibbons && G.createChunkedMesh);
       const buildRibbon = (geo, key) => {
         const canChunk = chunkRibbons && (key !== "road" || G.chunkedTrackCoords !== false);

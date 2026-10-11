@@ -21,6 +21,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.7,
+    gpLaps: 66,   // real race distance (4.657 km); lengthKm's 1 dp derives 65
     tyreSeverity: 2.00,  // Barcelona softs 0.247 s/lap (F1 Chronicle half-season) — heaviest 2026; clamped to model max
     baseHW: 7.5,
     sceneryCoordinates: "racing",
@@ -54,13 +55,13 @@
     hwZones: [
       { s0: 0.290, s1: 0.335, hw: 6.4, ease: 0.012 },  // Seat / Wurth chicane
       { s0: 0.660, s1: 0.705, hw: 6.3, ease: 0.012 },  // La Caixa hairpin
-      { s0: 0.905, s1: 0.955, hw: 6.5, ease: 0.012 },  // final chicane complex
+      { s0: 0.9504, s1: 0.9946, hw: 6.5, ease: 0.012 },  // final chicane complex (index; arc 0.905-0.955)
     ],
     bankZones: [
-      { frac: 0.1976, angleDeg: 3.5, widthM: 120 },   // Elf (T1)
+      { turn: 2, angleDeg: 3.5, widthM: 120 },   // Elf (T1); re-seated frac 0.1976 (was 72 m off any apex)
       { frac: 0.3726, angleDeg: 4.0, widthM: 130 },   // Repsol
-      { frac: 0.6376, angleDeg: 4.5, widthM: 150 },   // Campsa
-      { frac: 0.9376, angleDeg: 3.0, widthM: 120 },   // Europcar
+      { turn: 8, angleDeg: 4.5, widthM: 150 },   // Campsa; re-seated frac 0.6376 (was 133 m off any apex)
+      { turn: 14, angleDeg: 3.0, widthM: 120 },   // Europcar; re-seated frac 0.9376 (was 70 m off any apex)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

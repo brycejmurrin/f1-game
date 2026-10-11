@@ -208,6 +208,15 @@ const { overlapArea } = createRequire(import.meta.url)("../../tools/track/coplan
 // resampled start (q=660 vs q=722; --why --raw). Positional coincidence from
 // the intended road move, not a new emitter class; raising records the
 // measured tree. korea stays 0.
+//
+// 2026-10-10 round-2 bug hunt (#1309): the korea/buddh/bahrain hairpin fold clamp and
+// the 12 hwZone re-keys moved those roads, and prop coincidences moved with them
+// (--why per circuit): bahrain 0 -> 1 (a city building face against its own
+// drawFace detail strip, 3.0 m2 at 14.3 mm), korea 0 -> 1 (two city/place
+// buildings, 41 m2 at 2.4 mm), sochi 8 -> 9 (two cypress at 0.3 mm). All are
+// generic emitters meeting by chance on the moved road, none a new emitter class;
+// buddh 1 -> 0 (the spot recorded on 2026-10-05 no longer coincides after the
+// clamp). Re-measured on the merged tree, not widened.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "coplanar-baseline.json"), "utf8"),
 );

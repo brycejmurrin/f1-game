@@ -382,8 +382,8 @@
   ],
   "livery.alpine": "custom_17893711436331",
   "setup.mercedes": {
-   "arbF": 6,
-   "arbR": 5,
+   "arbF": 7,
+   "arbR": 7,
    "rideF": 24,
    "rideR": 60,
    "brakeBias": 56

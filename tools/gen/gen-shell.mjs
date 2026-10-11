@@ -18,7 +18,8 @@
  *                      <!-- @gen-shell:css --> … <!-- /@gen-shell:css -->
  *                      <!-- @gen-shell:scripts --> … <!-- /@gen-shell:scripts -->
  *   tools/carview.html <!-- @gen-shell:carview --> … <!-- /@gen-shell:carview -->
- *   controller.html    <!-- @gen-shell:controller --> … <!-- /@gen-shell:controller -->
+ *   controller.html    <!-- @gen-shell:csp --> … <!-- /@gen-shell:csp -->
+ *                      <!-- @gen-shell:controller --> … <!-- /@gen-shell:controller -->
  *   sw.js              // @gen-shell:sw-optional … // /@gen-shell:sw-optional
  *                      // @gen-shell:sw-lazy-agent … // /@gen-shell:sw-lazy-agent
  *   js/roster.js       the whole file (one global, ApexRoster)
@@ -71,22 +72,28 @@ export function replaceMarked(text, open, close, body) {
 // CONTENT-SECURITY-POLICY, the strictest this shell boots under. Defence in
 // depth: the 2026-10-04 DOM-sink sweep found nothing to exploit; this contains
 // the NEXT regression or a compromised dependency.
-//   script-src keeps 'unsafe-inline': the shell's inline guards, the importmap
-//     and the deferred-stylesheet onload= attributes are inline, and hashes
-//     would churn on every shell edit (and cannot cover attribute handlers
-//     without 'unsafe-hashes'). 'strict-dynamic' needs nonces/hashes, so it is
-//     out. What it buys: no script from any origin but ours and the Spotify
-//     Web Playback SDK. 'wasm-unsafe-eval' is Rapier (vendor/rapier, the
-//     optional debris world, which degrades if refused). No 'unsafe-eval'.
+//   script-src has NO 'unsafe-inline' (round-2 SEC2-7): each inline <script>
+//     (the shell guards, the importmap, the deferred-stylesheet flipper below)
+//     is allowed by its own 'sha256-…', computed here from the page text, so a
+//     shell edit regenerates the line in the same run. Attribute handlers
+//     (onload=, onclick=) are NOT allowed and the load-order test refuses them;
+//     the deferred stylesheets flip print→all from DEFER_CSS_SCRIPT instead.
+//     'strict-dynamic' needs nonces/hashes on every loader, so it is out. What
+//     it buys: no script from any origin but ours and the Spotify Web Playback
+//     SDK, and an injected inline <script>/onerror= no longer runs.
+//     'wasm-unsafe-eval' is Rapier (vendor/rapier, the optional debris world,
+//     which degrades if refused). No 'unsafe-eval'.
+//     style-src keeps 'unsafe-inline': the shell is styled by inline <style>
+//     and style= attributes by design.
 //   connect-src stays https:/wss: wide on purpose: the TURN credential URL
 //     (apex26.turnApi), the room-code Worker (apex26.rendezvous) and the Nostr
 //     relays are player-configurable, so an allow-list would break overrides.
 //   object-src 'none' and base-uri 'self' close plugin and <base> injection.
 // frame-ancestors / report-to are header-only and cannot be set from a meta.
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy
-export const CSP = [
+const CSP_DIRECTIVES = (scriptHashes) => [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://sdk.scdn.co",
+  ["script-src 'self'", ...scriptHashes, "'wasm-unsafe-eval' https://sdk.scdn.co"].join(" "),
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "media-src 'self' data: blob: https:",
@@ -103,9 +110,36 @@ export const CSP = [
   "form-action 'self'",
 ].join("; ");
 
-function cspBlock() {
-  return `<meta http-equiv="Content-Security-Policy" content="${CSP}">\n`;
+/** Every inline <script> body in `html` (no src=), in document order. The
+ *  parser hashes the text between the tags with CRLF folded to LF. */
+export function inlineScripts(html) {
+  const out = [];
+  for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+    if (/\bsrc\s*=/i.test(m[1])) continue;
+    out.push(m[2].replace(/\r\n?/g, "\n"));
+  }
+  return out;
 }
+
+/** CSP source expression for one inline script body. */
+export const scriptHash = (text) => `'sha256-${createHash("sha256").update(text, "utf8").digest("base64")}'`;
+
+/** The CSP for a page: one hash per distinct inline script (deduped, in order). */
+export function cspFor(html) {
+  return CSP_DIRECTIVES([...new Set(inlineScripts(html).map(scriptHash))]);
+}
+
+function cspBlock(html) {
+  return `<meta http-equiv="Content-Security-Policy" content="${cspFor(html)}">\n`;
+}
+
+// The deferred stylesheets (MANIFEST.CSS_DEFERRED) load as media="print" so
+// they do not hold LCP, then flip to "all". That was an onload= attribute; an
+// attribute handler needs 'unsafe-inline'/'unsafe-hashes', so it is one hashed
+// script instead. A sheet already loaded when this runs has a .sheet; a
+// still-loading one gets a load listener (listeners are not CSP-governed).
+export const DEFER_CSS_SCRIPT = `<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]');` +
+  `for(var i=0;i<L.length;i++)(function(l){function f(){l.media="all"}if(l.sheet)f();else l.addEventListener("load",f)})(L[i])})();</script>`;
 
 function preloadBlock() {
   return (MANIFEST.CSS_PRELOAD || []).map((f) =>
@@ -116,7 +150,7 @@ function cssBlock() {
   const deferred = new Set(MANIFEST.CSS_DEFERRED || []);
   return MANIFEST.CSS.map((f) =>
     `<link rel="stylesheet" href="${f}?v=${DEV_TOKEN}"` +
-    (deferred.has(f) ? ` media="print" onload="this.media='all'"` : "") + ">").join("\n") + "\n";
+    (deferred.has(f) ? ` media="print"` : "") + ">").join("\n") + "\n" + DEFER_CSS_SCRIPT + "\n";
 }
 
 function scriptsBlock() {
@@ -169,8 +203,15 @@ export function swOptionalFiles() {
   ];
 }
 
+/** Root pages other than the shell that an installed PWA must answer offline
+ *  (the manifest's "Phone controller" shortcut and the QR landing page). Seeded
+ *  OPTIONAL and bare: sw.js serves them cache-first-after-race under their own
+ *  URL and never substitutes the game shell for them. */
+export const SW_ROOT_PAGES = Object.freeze(["controller.html"]);
+
 function swOptionalBlock() {
   const groups = [
+    ["ROOT PAGES — answered offline under their own URL, never by the game shell", SW_ROOT_PAGES],
     ["DEFERRED renderer backends (no <script> tag; injected on opt-in)", Object.values(MANIFEST.DEFERRED).flat()],
     ["LAZY_RACE + LAZY_CIRCUIT + LAZY_SCENERY — race payload; a miss builds a bare/meta circuit offline", [...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_CIRCUIT, ...MANIFEST.LAZY_SCENERY]],
     ["LAZY_RACE_SESSION — pit/radio/reliability behind startRace (title boots stub)", MANIFEST.LAZY_RACE_SESSION || []],
@@ -240,14 +281,16 @@ function rosterSource() {
 export function generate() {
   const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
   let html = read("index.html");
-  html = replaceMarked(html, "<!-- @gen-shell:csp -->", "<!-- /@gen-shell:csp -->", cspBlock());
   html = replaceMarked(html, "<!-- @gen-shell:preload -->", "<!-- /@gen-shell:preload -->", preloadBlock());
   html = replaceMarked(html, "<!-- @gen-shell:css -->", "<!-- /@gen-shell:css -->", cssBlock());
   html = replaceMarked(html, "<!-- @gen-shell:scripts -->", "<!-- /@gen-shell:scripts -->", scriptsBlock());
+  // Last: the CSP hashes every inline script, including the one cssBlock emits.
+  html = replaceMarked(html, "<!-- @gen-shell:csp -->", "<!-- /@gen-shell:csp -->", cspBlock(html));
   let carview = read("tools/carview.html");
   carview = replaceMarked(carview, "<!-- @gen-shell:carview -->", "<!-- /@gen-shell:carview -->", carviewBlock());
   let controller = read("controller.html");
   controller = replaceMarked(controller, "<!-- @gen-shell:controller -->", "<!-- /@gen-shell:controller -->", controllerBlock());
+  controller = replaceMarked(controller, "<!-- @gen-shell:csp -->", "<!-- /@gen-shell:csp -->", cspBlock(controller));
   let sw = read("sw.js");
   sw = replaceMarked(sw, "// @gen-shell:sw-optional", "// /@gen-shell:sw-optional", swOptionalBlock());
   sw = replaceMarked(sw, "// @gen-shell:sw-lazy-agent", "// /@gen-shell:sw-lazy-agent", swLazyAgentBlock());

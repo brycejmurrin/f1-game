@@ -187,6 +187,15 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // The shell's CSP hashes every inline <script> and drops script-src
+    // 'unsafe-inline' (tools/gen/gen-shell.mjs SEC2-7). Playwright's
+    // addInitScript / addScriptTag({content}) inject unhashed inline scripts
+    // (fixtures.js sets __TEST_MODE + gfx/tyre pins; tlx-probes pins three;
+    // physics-hotpath injects probes). Without this, Chromium logs CSP
+    // violations as console errors and Smoke / TLX / selected shards go red
+    // while the production meta stays strict. Players are unaffected.
+    // https://playwright.dev/docs/api/class-browser#browser-new-context-option-bypass-csp
+    bypassCSP: true,
     // Pin prefers-reduced-motion for every spec. Two reasons: determinism (the
     // pulse/spinner animations stop mid-frame differences in screenshots), and
     // View Transitions — menus.js's vt() goes direct under reduce, skipping

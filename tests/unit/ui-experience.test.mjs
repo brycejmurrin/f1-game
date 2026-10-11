@@ -395,3 +395,39 @@ test("Home ambient motion comes from AppearanceStudio, never a stale variation o
   assert.match(code, /s\.motion = selected\.motion;/);
   assert.doesNotMatch(code, /s\.motion = \(varied && varied\.motion\) \|\| selected\.motion;/);
 });
+
+test("PERF-4: renderHome does no per-frame teardown work while racing with Home already stopped", () => {
+  const dom = makeDom();
+  for (const id of ['photo-studio', 'pmsettings', 'pm-panel-appearance', 'carsetup']) dom.byId(id).hidden = true;
+  let owned = false, scenes = 0, ends = 0;
+  const setupCam = {
+    captureCamera: () => ({}), restoreCamera() {},
+    beginHome() { owned = true; return true; }, endHome() { owned = false; },
+    homeState: () => owned ? { motion: "ambient" } : null, renderHome() { return owned; },
+  };
+  const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, innerWidth: 1440, innerHeight: 900,
+    HomeWorld: { create: () => ({ end() { ends++; }, active: () => false, wantsTrack: () => false, state: () => ({}) }) },
+    GarageExperience: { freePane: () => ({ left: 0, right: .6, top: 0, bottom: 1 }) },
+    GameStore: { store: { get: (_key, value) => value, set() {} } }, TitleFx: { mode: () => 'on' },
+    AppearanceStudio: { scene: () => { scenes++; return { mode: 'garage', motion: 'ambient' }; }, homeCamera: () => 'hero', onSceneChange() {} },
+    addEventListener() {}, setTimeout, clearTimeout, Log: { warn() {} } };
+  sandbox.window = sandbox;
+  const local = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local);
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local);
+  const G = { $: dom.byId, state: 'menu', setupPreviewOn: false };
+  const ui = local.api.create(G, { setupCam, trackReady: () => true });
+  assert.equal(ui.renderHome(1 / 24), true); assert.equal(owned, true);
+  G.state = 'race';
+  assert.equal(ui.renderHome(1 / 60), false, "the first race frame still tears Home down");
+  assert.equal(owned, false);
+  const overlay = dom.byId('overlay'), remove = overlay.removeAttribute;
+  let removed = 0; overlay.removeAttribute = (k) => { removed++; return remove.call(overlay, k); };
+  scenes = 0; ends = 0;
+  for (let i = 0; i < 100; i++) assert.equal(ui.renderHome(1 / 60), false);
+  assert.equal(removed, 0, "no removeAttribute per race frame");
+  assert.equal(scenes, 0, "no scene() allocation per race frame");
+  assert.equal(ends, 0, "no world.end() per race frame");
+  G.state = 'menu';
+  assert.equal(ui.renderHome(1 / 24), true, "returning to the menu starts Home again");
+});

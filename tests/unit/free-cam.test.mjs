@@ -31,7 +31,7 @@ const FlybySeq = {
   // The planner stand-in: a corner pose sits at its apex, +x outside by cornerSide, off along +Z.
   solve(track, u, shots) {
     const at = (q) => { const s0 = track._fbCorners[q.n - 1].f * track.total, sd = this.cornerSide(track, q.n); return [(q.x || 0) * sd, 2 + (q.y || 0), s0 + (q.off || 0)]; };
-    this.lastShot = shots[0]; this.resets = this.resets || 0;
+    this.lastShot = shots[0]; this.resets = this.resets || 0; this.solves = (this.solves || 0) + 1;
     return { eye: at(shots[0].eye[0]), tgt: at(shots[0].look[0]) };
   },
   reset() { this.resets = (this.resets || 0) + 1; },
@@ -177,6 +177,25 @@ test("photo mode leaving by another door (resume / quit) closes the panel withou
   api.onPhotoExit();
   assert.equal(api.isOpen(), false);
   assert.equal(dom.byId("pmsettings").hidden, true);
+});
+
+test("cornerPose plans each corner once per track and hands back a private copy", () => {
+  const { FC } = boot();
+  const trk = { total: 1000 };
+  const a = FC.cornerPose(trk, 2);
+  const solves = FlybySeq.solves, resets = FlybySeq.resets;
+  const b = FC.cornerPose(trk, 2);
+  assert.equal(FlybySeq.solves, solves, "the second press of a corner does not re-plan it");
+  assert.equal(FlybySeq.resets, resets, "a memo hit leaves the flyby's cut state alone");
+  assert.deepEqual(plain(b), plain(a));
+  b.eye[0] = 999; b.target[0] = 999;
+  assert.notEqual(FC.cornerPose(trk, 2).eye[0], 999, "a caller mutating a pose cannot poison the memo");
+  FC.cornerPose(trk, 3);
+  assert.equal(FlybySeq.solves, solves + 1, "another corner is a fresh plan");
+  assert.equal(FC.cornerPose(trk, 6).n, 2, "a wrapped n hits the same entry as the corner it wraps to");
+  assert.equal(FlybySeq.solves, solves + 1);
+  FC.cornerPose({ total: 1000 }, 2);
+  assert.equal(FlybySeq.solves, solves + 2, "a rebuilt track object is planned again");
 });
 
 test("__apex.freeCam: state, place, snap, copy and exit", () => {

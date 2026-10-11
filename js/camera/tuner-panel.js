@@ -142,7 +142,7 @@ function buildTools(host) {
     const src = sel.value, dst = curMode();
     if (src === dst) return;
     CamTune.copyFrom(src, dst);
-    CamTune.persist();
+    CamTune.persist("modes");
     applyLive();
     refreshCamTunePanel();
   };
@@ -164,7 +164,7 @@ function buildTools(host) {
     clearTimeout(armT);
     armed = false; allBtn.classList.remove("on");
     const n = CamTune.applyToAllModes(curMode());
-    CamTune.persist();
+    CamTune.persist("modes");
     applyLive();
     refreshCamTunePanel();
     allBtn.textContent = "COPIED " + n + " ✓";
@@ -199,7 +199,7 @@ function buildTools(host) {
     inp.setAttribute("aria-label", d.label);
     inp.oninput = () => {
       CamTune.comfortSet(d.id, parseFloat(inp.value));
-      CamTune.persist();
+      CamTune.persist("comfort");
       b.textContent = fmtCt(d, CamTune.comfortGet(d.id));
       applyLive();
     };
@@ -246,7 +246,7 @@ function buildCamTunePanel() {
         } else {
           CamTune.set(curMode(), d.id, parseFloat(inp.value));
         }
-        CamTune.persist();
+        CamTune.persist(_scope === "global" ? "global" : "modes");
         const v = _scope === "global" ? CamTune.getGlobal(d.id) : CamTune.getModeOnly(curMode(), d.id);
         b.textContent = fmtCt(d, v);
         updateCtProfileLabel();

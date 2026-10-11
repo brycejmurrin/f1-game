@@ -48,6 +48,7 @@ function fakeDom(els, modalOrder) {
   nodes.forEach((n) => U.trackDialog(n));
   modalOrder.forEach((id) => byId.get(id).showModal());
   U._nodes = byId;
+  U._doc = context.document;
   return U;
 }
 
@@ -110,6 +111,25 @@ test("#loading is a gated UiLayers entry: anyOpen while the plate is up", () => 
   assert.equal(U.anyOpen(), true, "driving keys and Escape-as-pause stay gated");
   U._nodes.get("loading").hidden = true;
   assert.equal(U.anyOpen(), false, "clearing the plate restores anyOpen");
+});
+
+test("navOpen: no querySelectorAll when nothing is open (it runs every frame for a pad player)", () => {
+  const U = fakeDom([{ id: "overlay", z: 10, hidden: true }, { id: "rotate-device", hidden: true }, { id: "pausemenu", modal: true, hidden: true }], []);
+  let scans = 0;
+  const qsa = U._doc.querySelectorAll;
+  U._doc.querySelectorAll = (sel) => { scans++; return qsa(sel); };
+  assert.equal(U.navOpen(), false, "a race with nothing open");
+  assert.equal(scans, 0, "the hot path must not run top()'s selector walk");
+  U._nodes.get("overlay").hidden = false;
+  assert.equal(U.navOpen(), true, "the title screen keeps pad navigation");
+  U._nodes.get("overlay").hidden = true;
+  U._nodes.get("rotate-device").hidden = false;
+  assert.equal(U.navOpen(), true, "so does the rotate blocker");
+  U._nodes.get("rotate-device").hidden = true;
+  U._nodes.get("pausemenu").hidden = false;
+  U._nodes.get("pausemenu").showModal();
+  assert.equal(U.navOpen(), true, "an open dialog still counts");
+  assert.equal(scans, 0);
 });
 
 test("Photo Studio owns focus and Escape above its borrowed fly-camera controls", () => {

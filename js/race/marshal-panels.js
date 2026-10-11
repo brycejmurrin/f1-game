@@ -92,8 +92,13 @@ var MarshalPanels = (function () {
     function update(dt) {
       _t += dt > 0 ? dt : 0;
       if (!P || !P.flare) return;
+      // showing() arms the 4 s green on the level->0 edge and spends it as it draws, so it runs in the
+      // race only: a red-flag restart reads level 0 on the 'count' grid, where the green would be spent
+      // unseen. Between sessions (menu/results) the edge state resets so a quit under a caution cannot
+      // hand the next race a stale green.
+      if (G.state !== "race") { if (G.state !== "count") { _prevLevel = 0; _greenT = 0; } return; }
       const show = showing(dt > 0 ? dt : 0);
-      if (!show || G.state !== "race") return;
+      if (!show) return;
       const posts = postsFor(G.track);
       if (!posts) return;
       const eye = (G.frame && G.frame.eye) || null;

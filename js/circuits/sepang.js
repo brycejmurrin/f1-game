@@ -56,11 +56,11 @@
     ],
     hwZones: [
       { s0: 0.145, s1: 0.185, hw: 6.8, ease: 0.014 },  // T3-T4
-      { s0: 0.560, s1: 0.600, hw: 6.9, ease: 0.014 },  // T9 hairpin
-      { s0: 0.865, s1: 0.905, hw: 6.6, ease: 0.012 },  // T15 final hairpin
+      { s0: 0.6837, s1: 0.7639, hw: 6.9, ease: 0.014 },  // T9 hairpin (index; arc 0.560-0.600)
+      { s0: 0.9459, s1: 0.9838, hw: 6.6, ease: 0.012 },  // T15 final hairpin (index; arc 0.865-0.905)
     ],
     bankZones: [
-      { frac: 0.045, angleDeg: 3.5, widthM: 140 },   // T1-T2 loop
+      { turn: 1, angleDeg: 3.5, widthM: 140 },   // T1-T2 loop; re-seated frac 0.045 (was 144 m off any apex)
       { frac: 0.330, angleDeg: 4.0, widthM: 150 },   // T5-T6 sweep
       { frac: 0.660, angleDeg: 3.0, widthM: 130 },   // T12-T13
     ],

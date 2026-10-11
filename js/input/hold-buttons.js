@@ -113,9 +113,13 @@ const InputHoldButtons = (function () {
       el.addEventListener("pointerdown", e => {
         try { el.setPointerCapture(e.pointerId); } catch (_) { /* pointer already gone (cancelled between down and here); the button still works uncaptured */ }
         e.preventDefault();
+        // Only the FIRST contact is a press edge: THROTTLE = LATCH toggles on every
+        // apply(true), so a second finger landing on GAS cancelled the latch while
+        // the first was still down.
+        const firstContact = ids.size === 0;
         ids.add(e.pointerId);
         live.set(e.pointerId, !holdTargetGone(el));
-        apply(true);
+        if (firstContact) apply(true);
         if (level) { anchors.set(e.pointerId, axis === "x" ? e.clientX : e.clientY); level(1); }
       });
       if (level) el.addEventListener("pointermove", e => {

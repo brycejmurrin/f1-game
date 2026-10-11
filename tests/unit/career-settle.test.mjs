@@ -983,6 +983,19 @@ test("every declared kind derives a target and labels it", () => {
   }
 });
 
+test("a persisted goal/objective type of constructor or __proto__ resolves as champPos / blank, never throws", () => {
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const champ = Career.goalLabel({ type: "champPos", value: 3 });
+  for (const type of ["constructor", "__proto__", "toString", "hasOwnProperty"]) {
+    assert.equal(Career.goalLabel({ type, value: 3 }), champ, `${type} labels as champPos`);
+    assert.doesNotThrow(() => { Career.goalNow({ type, value: 3 }); Career.goalOnTrack({ type, value: 3 }); }, `${type} goalNow/goalOnTrack`);
+    assert.equal(Career.objectiveLabel({ type, value: 1 }), "", `${type} is not an objective label`);
+  }
+  assert.ok(Career.objectiveLabel({ type: "finish", value: 4 }).includes("P4"), "a real objective still labels");
+});
+
 test("ambition shifts every kind that HAS a target, in the same direction", () => {
   const Career = loadDriver();
   Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
@@ -1297,4 +1310,45 @@ test("a move resolves the new team's WORKS build outside the current era's bans 
   const fn = src.slice(src.indexOf("function acceptOffer("), src.indexOf("\n}\n", src.indexOf("function acceptOffer(")));
   const clear = fn.indexOf('Parts.setLegality(null, "")'), fac = fn.indexOf("Parts.getFactorySetup(team)"), re = fn.indexOf("applyRegs()");
   assert.ok(clear > 0 && fac > clear && re > fac, "clear the ruleset, read the factory, re-install the era");
+});
+
+// ── a hostile offer / tdev that slipped past the importer ───────────────────
+// migrateCareer is the identity in this harness, so these exercise the
+// CONSUMPTION-SITE defence (the importer's own is in save-migrate.test.mjs).
+
+test("a string offer salary leaves money a finite number after settleRound", () => {
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const c = Career.data();
+  c.rep = 50; c.deal.years = 1; c.deal.left = 1;
+  Career.rollover();
+  assert.ok((c.offers || []).length > 0, "seed 7 at rep 50 draws winter offers, so the checks below run");
+  c.offers[0].salary = "500"; c.offers[0].years = "2";
+  const deal = Career.acceptOffer(0);
+  assert.equal(typeof deal.salary, "number", "the signed salary is a number, not the offer's string");
+  c.money = 100; c.season.round = 1;
+  const mk = (id) => ({ team: { id }, retired: false, cuts: 0, penalty: 0, gridPos: 5 });
+  const player = mk(c.team);
+  Career.settleRound([mk("apex"), player, mk("apex")], player);
+  assert.ok(Number.isFinite(c.money) && c.money < 100000,
+    `money stayed a sum (${c.money}), not a concatenation like "100500"`);
+  c.deal.salary = "x";
+  c.season.round = 2;
+  Career.settleRound([mk("apex"), player, mk("apex")], player);
+  assert.ok(Number.isFinite(c.money), "an unparseable stored salary pays nothing instead of NaN");
+});
+
+test("paceMult is clamped to [0.9, 1.1] whatever the stored tdev says", () => {
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const c = Career.data();
+  c.tdev = { a: 1e308, b: -1e308, c: NaN, d: "abc", e: Infinity };
+  assert.equal(Career.paceMult("a"), 1.1);
+  assert.equal(Career.paceMult("b"), 0.9);
+  assert.equal(Career.paceMult("c"), 1);
+  assert.equal(Career.paceMult("d"), 1);
+  assert.equal(Career.paceMult("e"), 1, "a non-finite entry is no entry");
+  assert.equal(Career.paceMult("missing"), 1);
 });

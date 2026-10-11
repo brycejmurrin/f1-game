@@ -79,6 +79,40 @@ test("web boot still waits for the first gesture before creating an AudioContext
   } finally { g.close(); }
 });
 
+test("the first SOUND click while the bundle loads starts the title music (H22)", async () => {
+  // Saved SOUND OFF; the click lands on the STUB panel while the real bundle loads. The
+  // stub used to flip soundOn + init() and stop there: the real panel's setSound (title
+  // music, MUSIC/SFX control sync) never ran, so SOUND read ON over silence.
+  let fa = null;
+  const g = await createGame({ carMeshes: false, storage: { sound: false }, onSandbox: (sb) => { fa = install(sb); } });
+  const sb = g.sandbox;
+  try {
+    const music = [];
+    let real = sb.AudioPanel;
+    // The real AudioPanel is a `var` the bundle assigns on load: wrap its create() so
+    // GameAudio.startMusic (the real engine's, by then) is recorded.
+    Object.defineProperty(sb, "AudioPanel", {
+      configurable: true, get() { return real; },
+      set(v) {
+        real = v && v.create && !v._stub ? Object.assign({}, v, { create(G) {
+          const o = sb.GameAudio.startMusic;
+          sb.GameAudio.startMusic = (...a) => { music.push(a); return o(...a); };
+          return v.create(G);
+        } }) : v;
+      },
+    });
+    const pd = { type: "pointerdown", pointerType: "mouse", target: sb.document.body };
+    sb.dispatchEvent(pd); sb.document.dispatchEvent(pd);
+    assert.equal(g.G.soundOn, false, "precondition: saved SOUND OFF");
+    sb.document.getElementById("soundbtn").onclick();   // still the stub's handler
+    await settle(() => !sb.GameAudio._stub && !sb.AudioPanel._stub, 4000);
+    await turns(50);
+    assert.equal(g.G.soundOn, true);
+    assert.ok(music.length > 0, "SOUND ON over a silent title: the real panel's setSound never started the music");
+    assert.ok(fa.made.length >= 1);
+  } finally { g.close(); }
+});
+
 test("the saved AUDIO DRIVING CUES level survives the LAZY_AUDIO reinjection", async () => {
   const { g, sb } = await bootAndGesture({ audioCues: 7 });
   try {

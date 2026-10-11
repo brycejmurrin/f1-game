@@ -399,6 +399,8 @@ var GameAudioSoundtrack = (function () {
       if (i < 0) return false;
       const wasPlaying = musicOn && i === musicIndex;
       delete musicBuffers[PLAYLIST[i].url];
+      const k = _bufKeys.indexOf(PLAYLIST[i].url);   // …and its LRU slot, or it starves a live buffer
+      if (k >= 0) _bufKeys.splice(k, 1);
       PLAYLIST.splice(i, 1);
       if (i < musicIndex) musicIndex--;
       if (!PLAYLIST.length) { stopInternal(); musicIndex = 0; return true; }

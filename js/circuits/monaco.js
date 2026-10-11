@@ -10,6 +10,7 @@
     night: false,
     theme: "street_day",
     lengthKm: 3.3,
+    gpLaps: 78,   // real race distance (3.337 km, 260 km regulation); lengthKm's 1 dp derives 79
     // TYRE SEVERITY: what the SURFACE and the speeds do to a tyre, on top of the
     // work the LAYOUT already makes it do (js/physics/tyre-model.js derives that
     // emergently from the forces the car made). Real 2026 rate / the 0.0493 s/lap

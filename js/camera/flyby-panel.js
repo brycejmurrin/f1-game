@@ -156,6 +156,26 @@ function normaliseDurs(list) {
   return out;
 }
 
+/** Why this pose's NUMBERS cannot be solved. A field the shipped shots leave out
+ *  (solve() defaults it) passes; one that is PRESENT must be a finite number
+ *  inside its slider range, because `x: "abc"` on a start-anchored pose gave a
+ *  non-finite eye on every frame while the old structural check accepted it. */
+function poseErrors(p) {
+  const bad = [];
+  for (const f of POSE_FIELDS[p.at]) {
+    const v = p[f];
+    if (v === undefined) continue;
+    if (typeof v !== "number" || !isFinite(v) || v < FIELD[f].min || v > FIELD[f].max) {
+      bad.push(f + " must be a number from " + FIELD[f].min + " to " + FIELD[f].max + ", not " + JSON.stringify(v));
+    }
+  }
+  const int = (v, lo) => typeof v === "number" && isFinite(v) && v === Math.floor(v) && v >= lo;
+  if (p.at === "corner" && p.n !== undefined && CORNER_NS.indexOf(p.n) === -1 && !int(p.n, 1)) bad.push("n is not a corner: " + JSON.stringify(p.n));
+  if (p.at === "slot" && p.n !== undefined && p.n !== "player" && !int(p.n, 0)) bad.push("n is not a grid slot: " + JSON.stringify(p.n));
+  if (p.at === "landmark" && p.rank !== undefined && RANKS.indexOf(p.rank) === -1) bad.push("rank must be one of " + RANKS.join(", ") + ", not " + JSON.stringify(p.rank));
+  return bad;
+}
+
 /** Every reason FlybySeq.solve() could not PLAY this list. Empty == good.
  *  Split out of validateShots because a SAVED list is read back through this
  *  half only: solve() normalises by the durations' own total, so a list nobody
@@ -175,11 +195,15 @@ function shotErrors(list) {
       if (!Array.isArray(s[k]) || s[k].length !== 2) { bad.push(at + " " + k + " must be a [from, to] pair"); continue; }
       s[k].forEach((p, j) => {
         if (!p || typeof p !== "object") { bad.push(at + " " + k + "[" + j + "] is not a pose"); return; }
-        if (AT_KINDS.indexOf(p.at) === -1) bad.push(at + " " + k + "[" + j + "] has unknown at: " + JSON.stringify(p.at));
+        if (AT_KINDS.indexOf(p.at) === -1) { bad.push(at + " " + k + "[" + j + "] has unknown at: " + JSON.stringify(p.at)); return; }
+        poseErrors(p).forEach((e) => bad.push(at + " " + k + "[" + j + "] " + e));
       });
     }
+    // In the slider's range, not merely finite: the flyby skips the race
+    // camera's FOV cap, so a saved fov of 0 reached the projection as fovY 0.
     if (!Array.isArray(s.fov) || s.fov.length !== 2 ||
         !s.fov.every((n) => typeof n === "number" && isFinite(n))) bad.push(at + " fov must be [from, to] numbers");
+    else if (!s.fov.every((n) => n >= FOV.min && n <= FOV.max)) bad.push(at + " fov must be from " + FOV.min + " to " + FOV.max + ", not " + JSON.stringify(s.fov));
   });
   return bad;
 }
@@ -224,9 +248,16 @@ function toBlob(list) {
  * SHOTS_VERSION whenever a pose field changes what it means. */
 const SHOTS_VERSION = 2;
 function savedForm(list) { return { v: SHOTS_VERSION, shots: list }; }
-/** The list inside a saved value, or null when it is from another version. */
+/** The list inside a saved value, or null when it is from another version.
+ *  A numeric fov is CLAMPED to the slider here, on a copy: the free camera
+ *  saved 20-110° views before shotErrors held fov to FOV, and refusing those
+ *  would drop the whole edit for the shipped flyby. Anything else is judged
+ *  by shotErrors as before. */
 function fromSaved(saved) {
-  return (saved && !Array.isArray(saved) && saved.v === SHOTS_VERSION) ? saved.shots : null;
+  const list = (saved && !Array.isArray(saved) && saved.v === SHOTS_VERSION) ? saved.shots : null;
+  const num = (n) => typeof n === "number" && isFinite(n);
+  return !Array.isArray(list) ? list : list.map((s) => (s && Array.isArray(s.fov) && s.fov.every(num))
+    ? Object.assign({}, s, { fov: s.fov.map((n) => Math.min(FOV.max, Math.max(FOV.min, n))) }) : s);
 }
 
 const ops = {
@@ -237,6 +268,8 @@ const ops = {
 
 
 let _camEdLoad = null;
+// Files that evaluated on an earlier (failed) attempt: re-injecting a const-declaring one throws "already declared".
+const _camEdLoaded = new Set();
 function ensureCamEditor() {
   if (typeof FlybyEditor !== "undefined" && typeof CamTunerEditor !== "undefined") return Promise.resolve(true);
   if (_camEdLoad) return _camEdLoad;
@@ -246,7 +279,7 @@ function ensureCamEditor() {
     Log.warn("game", "camera editor bundle is not in this build");
     return Promise.resolve(false);
   }
-  _camEdLoad = ScriptLoader.create().load(files, edges, { strict: true }).then((ok) => {
+  _camEdLoad = ScriptLoader.create().load(files, edges, { strict: true, loaded: _camEdLoaded }).then((ok) => {
     if (!ok || typeof FlybyEditor === "undefined" || typeof CamTunerEditor === "undefined") {
       _camEdLoad = null;
       Log.warn("game", "the camera editor bundle did not load");

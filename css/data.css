@@ -149,6 +149,10 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   text-align: center;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
+/* Press travel (css/components.css, no-preference) needs transform in the list; this layer outranks it. */
+@media (prefers-reduced-motion: no-preference) {
+  .dh-tab { transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.08s ease; }
+}
 @media (hover: hover) and (pointer: fine) {
   .dh-tab:hover { color: var(--text); }
 }
@@ -1154,5 +1158,13 @@ body[data-density="compact"] {
   .dh-tpopup .dh-transport { gap: 5px; flex-wrap: nowrap; margin: 2px 0; }
   .dh-tpopup .dh-thint { display: none; }
   .dh-tpopup .dh-tbtn { padding: 5px calc(var(--pad) * 0.5); font-size: var(--fs-micro); }
+}
+
+/* Solid hub card for prefers-reduced-transparency / prefers-contrast (the
+   remedy css/components.css gives `.sheet`). Restated here because this file's
+   @layer overlays outranks components, so the base `.dh-card { background:
+   var(--panel) }` above would otherwise always win. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .dh-card { background: var(--surf-1); }
 }
 } /* @layer overlays */

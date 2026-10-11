@@ -1128,6 +1128,8 @@ var PitLane = (function () {
       return (c.x || 0) * zz.side >= laneEdge(hw, zz.side) * zz.side;
     }
 
+    const _boxU = [0, 0], _laneU = [0, 0, 0, 0];   // the per-frame uniform rows: one array each, not two fresh ones a frame while a stop is armed
+
     /** The numbers the lit shaders paint THIS CAR's BOX from: how far into the
      *  window it sits, and how long it is. Null when there is no lane, or no
      *  car with a team to have a box in the row.
@@ -1140,7 +1142,8 @@ var PitLane = (function () {
       const zz = z(), t = G.track, car = G.player;
       if (!enabled() || !zz || !t || !car) return null;
       if (t.pit && !t.pit.painted) return null;
-      return [boxThroughFor(car, zz, t.total), BOX_TOL * 0.75];
+      _boxU[0] = boxThroughFor(car, zz, t.total); _boxU[1] = BOX_TOL * 0.75;
+      return _boxU;   // pooled: read by the frame's uniform upload within the same frame, never retained
     }
 
     /** The four numbers the lit shaders paint the PAINTED lane from, or null.
@@ -1153,7 +1156,8 @@ var PitLane = (function () {
       const zz = z(), t = G.track;
       if (!enabled() || !zz || !t) return null;
       if (t.pit && !t.pit.painted) return null;
-      return [zz.sIn, zz.lenM, zz.side, t.total];
+      _laneU[0] = zz.sIn; _laneU[1] = zz.lenM; _laneU[2] = zz.side; _laneU[3] = t.total;
+      return _laneU;   // pooled (see boxUniform)
     }
 
     /** How far through the commitment dwell this car is, 0-1. The HUD's cue. */
@@ -1176,6 +1180,11 @@ var PitLane = (function () {
       // intact leaves game.js applying zero speed/the limiter forever.
       if (!enabled()) { clearArm(c); c.pitNext = null; return; }
       const st = c.pitState || "none";
+      // think() guards ARMING on the last lap / a flagged leader, but an AI that
+      // armed on lap L-1 and missed its entry (it comes in next time round) was
+      // still armed past it: the stop paid nothing and was taken anyway.
+      if (!c.human && c.pitArmed && st === "none" &&
+          ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars)))) clearArm(c);
       const zz = z(), L = G.track.total;
       if (st === "out" && c.pitOutT > 0) c.pitOutT = Math.max(0, c.pitOutT - dt);   // the GO chip's clock
       // Every plan is re-cut once per lap (replan): the player's reference, and
@@ -1380,6 +1389,9 @@ var PitLane = (function () {
     // tread after the weather changes. Resolve it once for every surface that
     // names or fits the set, so the entry radio, armed cue and crew agree.
     function nextFor(c) {
+      // An AI's set is a CLASS record from its own ladder, never a row of the
+      // player's garage: keep it on the tread the road wants (refreshAiNext).
+      if (c && !c.local && !c.human && c.pitNext) { refreshAiNext(c); return c.pitNext; }
       const automatic = c && (c.local || c.pitNext) ? pickFor(c) : null;
       const selected = c && c.pitNext;
       if (!selected || !automatic) return selected || automatic;
@@ -1404,6 +1416,31 @@ var PitLane = (function () {
 
     /** The compound this car will fit at its next stop (a TyreModel record). */
     function setNext(c, record) { if (c) c.pitNext = record || null; }
+
+    /** The AI class a stop fits. A weather stop fits what the WEATHER wants; any
+     *  other stop follows the plan. Without the first branch a car pits, fits
+     *  another slick, is still wrong, and pits again — a stop every lap. */
+    function aiClassFor(c, wantTread, wrongTread) {
+      const wetCls = TyreModel.classForTread(wantTread);
+      const lifeLaps = (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget);
+      const lapsLeft = Math.max(1, lapsToFlag(c));
+      const plan = c.pitPlan, planned = plan && plan.seq ? plan.seq[(c.pitStops || 0) + 1] : null;
+      // …and in a wet race EVERY stop fits the wet tread: the plan's classes are
+      // dry, so a planned stop on inters bolted on a slick, which was then the
+      // wrong tread, and the car pitted again a lap later.
+      return wrongTread ? (wetCls || AiDrive.compoundFor(lapsLeft, lifeLaps))
+           : wantTread > 0 && wetCls ? wetCls
+           : (planned || AiDrive.compoundFor(lapsLeft, lifeLaps));
+    }
+    /** An armed AI whose tread stopped matching the road (wetness crossed a
+     *  threshold between the arm and the box: routine in a mixed arc) is
+     *  re-chosen from the AI class ladder, so serviceCar never falls back to
+     *  pickFor — the PLAYER's catalogue / owned rows, with no pace offset. */
+    function refreshAiNext(c) {
+      const wantTread = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
+      if ((c.pitNext.tread || 0) === wantTread) return;
+      setNext(c, G.tyres.classRecord(aiClassFor(c, wantTread, !!c.tyre && (c.tyre.tread || 0) !== wantTread)));
+    }
 
     // ── STRATEGY ─────────────────────────────────────────────────────────────
     // The plan is AiDrive's (stintPlan); what lives here is the race state it
@@ -1726,6 +1763,7 @@ var PitLane = (function () {
       react: 0, attack: 0, cautionLevel: 0, wear: 0, wrongTread: false, lapsLeft: 0, pitLossLaps: 0, scripted: false };
     function think(c) {
       const plan = c && c.pitPlan;
+      if (c && c.pitNext && !c.human && !c.local) refreshAiNext(c);   // armed, before the early return below
       // A HUMAN's plan is advice (planFor): nothing here ever arms it.
       if (!plan || c.human || c.pitArmed || (c.pitState && c.pitState !== "none")) return "";
       // The flying-start run-up hands the player's car to the AI for a few
@@ -1793,19 +1831,7 @@ var PitLane = (function () {
       q.scripted = !!plan.scripted;   // a real race's plan (js/race/real-race.js planFor)
       const why = AiDrive.pitNow(q);
       if (!why) return "";
-      // A weather stop fits what the WEATHER wants; any other stop follows the
-      // plan. Without the first branch a car pits, fits another slick, is still
-      // wrong, and pits again — a stop every lap.
-      const wetCls = TyreModel.classForTread(wantTread);
-      const lifeLaps = (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget);
-      const lapsLeft = Math.max(1, lapsToFlag(c));
-      const planned = plan.seq[(c.pitStops || 0) + 1];
-      // …and in a wet race EVERY stop fits the wet tread: the plan's classes are
-      // dry, so a planned stop on inters bolted on a slick, which was then the
-      // wrong tread, and the car pitted again a lap later.
-      const want = wrongTread ? (wetCls || AiDrive.compoundFor(lapsLeft, lifeLaps))
-                 : wantTread > 0 && wetCls ? wetCls
-                 : (planned || AiDrive.compoundFor(lapsLeft, lifeLaps));
+      const want = aiClassFor(c, wantTread, wrongTread);
       arm(c, true);
       setNext(c, G.tyres.classRecord(want));
       c.pitWhy = why;

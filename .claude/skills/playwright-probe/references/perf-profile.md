@@ -44,8 +44,7 @@ Open `scratch/profiles/<track>-<mode>.cpuprofile` in Chrome DevTools →
 The light-upload path was a known GC source but is **fixed**: `js/render/glx/glx.js`
 allocates its per-lamp uniform scratch (one interleaved `_luL` Float32Array,
 16 floats per light) **once at module scope** and writes into it each frame, and
-`js/lighting/frame-lights.js`'s per-frame selection buffers (`_tlSel`, `_lightCullBuf`,
-`_lightHeap`, …) are pooled objects reused in place. **Don't blame "per-frame
+`js/lighting/frame-lights.js`'s per-frame selection buffers (`_tlSel`, `_gHeap`, …) are pooled objects reused in place. **Don't blame "per-frame
 `new Float32Array` in light upload" from memory — that folklore predates the
 pooling fix.** If `Minor GC` still shows up on Vegas/Singapore, profile fresh
 and find the actual allocator.

@@ -162,3 +162,18 @@ test("DebrisWorld.reset() re-arms the latch a trapped step lowered", () => {
   assert.equal(run({ _active: false, _enabled: true, _loadState: 0 }), false,
     "rapier has not landed yet — prime() would build nothing");
 });
+
+// The fifth reader: `steerMode` went straight from storage to Input.setSteerMode,
+// where anything unknown means "tilt" with no enableTilt() call (game.js's own
+// setSteerMode maps unknown to "buttons"), so a foreign value left a phone unable to steer.
+// Executed through the booted game, not grepped.
+test("an unknown stored steerMode boots as BUTTONS, a valid one is kept", async () => {
+  const { createRequire } = await import("node:module");
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const steerOf = async (stored) => {
+    const g = await createGame({ storage: { steerMode: stored } });
+    try { return vm.runInContext("Input.debugState().steerMode", g.ctx); } finally { g.close(); }
+  };
+  assert.equal(await steerOf("foo"), "buttons");
+  assert.equal(await steerOf("touch"), "touch");
+});

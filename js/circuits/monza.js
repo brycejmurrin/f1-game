@@ -46,10 +46,10 @@
       { s: 0.3867, halfM: 220, rise: -1.5 },
       { s: 0.5667, halfM: 340, rise: 4.5 },
     ],
-    hwZones: [
-      { s0: 0.0155, s1: 0.0949, hw: 6.8, ease: 0.012 },  // arc 0.003-0.024 Rettifilo
-      { s0: 0.2821, s1: 0.3460, hw: 7.0, ease: 0.012 },  // arc 0.212-0.234 Roggia
-      { s0: 0.5960, s1: 0.7315, hw: 7.2, ease: 0.012 },  // arc 0.524-0.572 Ascari
+    hwZones: [   // s0/s1 are CONTROL-INDEX fractions (def.js applyHwZones); "racing arc" = where the narrowed nodes really sit
+      { s0: 0.0155, s1: 0.0949, hw: 6.8, ease: 0.012 },  // racing arc 0.087-0.104 Rettifilo
+      { s0: 0.2821, s1: 0.3460, hw: 7.0, ease: 0.012 },  // racing arc 0.295-0.315 Roggia
+      { s0: 0.5960, s1: 0.7315, hw: 7.2, ease: 0.012 },  // racing arc 0.608-0.652 Ascari
     ],
     bankZones: [
       { frac: 0.1636, angleDeg: 3.0, widthM: 240 },   // Curva Grande

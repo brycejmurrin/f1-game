@@ -135,6 +135,11 @@ test("gpLaps is the circuit's real race distance, not a flat number", () => {
   near("monza", 53);
   near("silverstone", 52);
 
+  // lengthKm's one decimal puts five circuits a lap off the real race, so they
+  // carry an authored `gpLaps` (def.js fromRaw). Exact, not ±1.
+  for (const [id, laps] of [["monaco", 78], ["singapore", 62], ["zandvoort", 72], ["catalunya", 66], ["portimao", 66]])
+    assert.equal(at(id).gpLaps, laps, `${id} race distance`);
+
   // The defect this replaced: one number for every circuit. Monaco and Spa must
   // not agree, or FULL is again a flat literal wearing a circuit's name.
   assert.notEqual(at("monaco").gpLaps, at("spa").gpLaps,
@@ -249,6 +254,88 @@ test("every circuit names two ascending sector splits", () => {
     if (!(s[0] > 0.15 && s[1] < 0.85 && s[1] - s[0] > 0.15)) bad.push(`${def.id}: ${JSON.stringify(s)} not ~thirds`);
   }
   assert.deepEqual(bad, []);
+});
+
+// A timing line inside a corner flips S1/S2 colours mid-turn. Nine circuits
+// shipped the default [0.3, 0.62] (or a near copy) with a line in a tight
+// corner; each is now snapped onto a |k| < 0.0035 stretch. Gate: no line within
+// 20 m of a corner tighter than R = 67 m.
+test("no sector timing line sits inside a corner", () => {
+  const Tracks = buildContext();
+  const bad = [];
+  for (const def of Tracks.LIST) {
+    const tr = Tracks.buildCenterline(def, { line: false });
+    const L = tr.total, wrap = (v) => ((v % L) + L) % L;
+    def.sectors.forEach((f, i) => {
+      let pk = 0;
+      for (let d = -20; d <= 20; d += 4) pk = Math.max(pk, Math.abs(Tracks.curvature(tr, wrap(f * L + d))));
+      if (pk > 0.015) bad.push(`${def.id} S${i + 1}@${f}: R ${(1 / pk).toFixed(0)} m`);
+    });
+  }
+  assert.deepEqual(bad, [], "snap the split to the nearest stretch with |k| < 0.0035");
+});
+
+// bankZones with a `frac` that lands on a straight > 60 m from every curated apex
+// are silently re-seated onto the nearest unclaimed apex (mesh.js bankingProfile),
+// so the authored fraction and its comment no longer say where the camber is
+// (watkins_glen's "Esses" was 951 m from the corner it banked). Author `turn: N`
+// instead. This replays the re-seat test and demands none fires.
+test("no bankZone relies on the straight-line re-seat", () => {
+  const Tracks = buildContext();
+  const bad = [];
+  for (const def of Tracks.LIST) {
+    const zones = def.bankZones;
+    if (!zones || !zones.length) continue;
+    const turns = def.turns || [];
+    const tr = Tracks.buildCenterline(def, { line: false });
+    const n = tr.n, L = tr.total, ds = L / n, SM = Math.max(1, Math.round(12 / ds));
+    const raw = new Float64Array(n), ksm = new Float64Array(n);
+    for (let k = 0; k < n; k++) raw[k] = Tracks.curvature(tr, k * ds);
+    for (let k = 0; k < n; k++) { let s = 0; for (let j = -SM; j <= SM; j++) s += raw[(k + j + n) % n]; ksm[k] = s / (2 * SM + 1); }
+    const wrap = (v) => ((v % 1) + 1) % 1;
+    const dress = def._sceneryShift || 0, mirror = def.reverse && def.sceneryLapMirror ? -1 : 1;
+    zones.forEach((z, i) => {
+      if (Number.isFinite(z.turn)) {
+        if (!Number.isInteger(z.turn) || z.turn < 1 || z.turn > turns.length) bad.push(`${def.id} bank ${i}: turn ${z.turn} is not a curated turn`);
+        return;
+      }
+      const f = wrap((z.frac || 0) * mirror + dress);
+      if (Math.abs(ksm[Math.round(f * n) % n]) >= 0.004) return;   // on a corner
+      let near = Infinity;
+      for (const tf of turns) { let d = Math.abs(wrap(tf) - f); if (d > 0.5) d = 1 - d; near = Math.min(near, d * L); }
+      if (near > 60) bad.push(`${def.id} bank ${i}: frac ${z.frac} is on a straight, ${near.toFixed(0)} m from any apex`);
+    });
+  }
+  assert.deepEqual(bad, [], "anchor the zone with `turn: N` (1-based into def.turns)");
+});
+
+// Uniform Catmull-Rom over the OSM trace overshoots a hairpin whose neighbours
+// are hundreds of metres away: korea's centreline zigzagged to a 2.2 m node
+// radius (road half-width 8 m) and the running surface folded at four nodes.
+// Short chord control points either side of the hairpin tame it. Node radius =
+// chord / heading change between adjacent 4 m nodes.
+test("hairpin circuits keep a node radius of at least 4 m and no folded road surface", () => {
+  const Tracks = buildContext();
+  const bad = [];
+  for (const id of ["korea", "buddh", "bahrain", "singapore", "magny_cours"]) {
+    const def = Tracks.LIST.find((t) => t.id === id);
+    const tr = Tracks.buildCenterline(def, { line: false });
+    const n = tr.n;
+    let minR = Infinity;
+    const folds = [];
+    for (let k = 0; k < n; k++) {
+      const k1 = (k + 1) % n;
+      let da = Math.atan2(tr.tx[k1], tr.tz[k1]) - Math.atan2(tr.tx[k], tr.tz[k]);
+      while (da > Math.PI) da -= 2 * Math.PI;
+      while (da < -Math.PI) da += 2 * Math.PI;
+      const dP = Math.hypot(tr.px[k1] - tr.px[k], tr.pz[k1] - tr.pz[k]);
+      if (Math.abs(da) > 1e-9) minR = Math.min(minR, dP / Math.abs(da));
+      if (tr.hw[k] * Math.hypot(tr.rx[k1] - tr.rx[k], tr.rz[k1] - tr.rz[k]) > 0.97 * dP) folds.push(k);
+    }
+    if (minR < 4) bad.push(`${id}: min node radius ${minR.toFixed(2)} m`);
+    if (folds.length) bad.push(`${id}: running surface folds at node(s) ${folds.join(",")}`);
+  }
+  assert.deepEqual(bad, [], "add short-spaced path.pts either side of the hairpin (js/circuits/<id>.js)");
 });
 
 // Spa and Monaco carry hand-authored cosine bumps. They were authored against

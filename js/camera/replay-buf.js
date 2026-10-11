@@ -298,14 +298,15 @@ const ReplayBuf = (function () {
       dock = document.createElement("div");
       dock.id = "pm-replay-dock";
       dock.hidden = true;
-      dock.style.cssText = "position:fixed;left:50%;bottom:12%;transform:translateX(-50%);z-index:40;" +
-        "display:flex;gap:8px;align-items:center;padding:8px 12px;background:rgba(0,0,0,.72);color:#fff;font:12px monospace";
+      // Styled by `#pm-replay-dock` in css/dialogs.css (safe-area, wrap, tokens).
+      dock.setAttribute("role", "group");
+      dock.setAttribute("aria-label", "Instant replay");
       dock.innerHTML =
         '<button type="button" id="pm-replay-exit">EXIT</button>' +
         '<button type="button" id="pm-replay-play">PAUSE</button>' +
         '<button type="button" id="pm-replay-last">LAST</button>' +
         '<button type="button" id="pm-replay-rate">1×</button>' +
-        '<input id="pm-replay-scrub" type="range" min="0" max="1000" value="1000" style="width:12rem">' +
+        '<input id="pm-replay-scrub" type="range" min="0" max="1000" value="1000" aria-label="Replay position">' +
         '<span id="pm-replay-label">0.0</span>';
       (document.body || document.documentElement).appendChild(dock);
       dock.querySelector("#pm-replay-exit").onclick = () => {

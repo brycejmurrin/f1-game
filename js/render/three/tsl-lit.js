@@ -310,7 +310,10 @@
       if (u.value !== v) u.value = v;
     }
     const _bakeShScr = [0, 0, 0];
-    function updateFrame(frame) {
+    // mirror: tlx.js mirrorBegin's pass. SHD.S.lampIdx is a slot of the FORWARD
+    // frame.lights; the mirror re-ranks its own list (FrameLights.viewLights), so
+    // there it names another lamp: lamp shadow off (GLX glx.js _lampOn, #1281).
+    function updateFrame(frame, mirror) {
       const T = (frame && frame.tune) || null;
       const k = (id, def) => (T && T[id] != null ? T[id] : def);
       const s3 = (u, a, m) => { if (a) u.value.set(a[0] * (m || 1), a[1] * (m || 1), a[2] * (m || 1)); };
@@ -382,7 +385,9 @@
         _hf = _hf * _hf * (3 - 2 * _hf);
         const _mSh = k("moonShadow", 0.25) * (frame.moonGate || 0);
         if (_mSh > _hf) _hf = _mSh;
-        U.shadowStr.value = k("shadowStr", 1.15) * _hf;
+        // A failed sun pass clears S.enabled and freezes the map + lightVP: read it every frame, or the lit shader
+        // keeps sampling the last good map (ghost shadows). tlx-post's god-ray sun term already gates on S.enabled.
+        U.shadowStr.value = SHD.S.enabled ? k("shadowStr", 1.15) * _hf : 0;
         uf1(U.shadowRange, k("shadowRange", 80.0));
         U.shadowTexel.value = 1 / (SHD.sunSize || 2048);
         const _sc = frame.shadowCtr || frame.eye;
@@ -395,9 +400,10 @@
         }
         if (lampShadowOn) {
           U.lampShadowVP.value.fromArray(SHD.S.lampLightVP);
-          U.lampShadowOn.value = SHD.S.lampArmed ? 1 : 0;
+          const _lampOn = SHD.S.lampArmed && !mirror;
+          U.lampShadowOn.value = _lampOn ? 1 : 0;
           U.lampShadowIdx.value = SHD.S.lampIdx;
-          const _sc = typeof LampBake !== "undefined" ? LampBake.shadowCol(frame, SHD.S.lampIdx, _bakeShScr) : _bakeShScr;
+          const _sc = typeof LampBake !== "undefined" ? LampBake.shadowCol(frame, _lampOn ? SHD.S.lampIdx : -1, _bakeShScr) : _bakeShScr;
           U.bakeShCol.value.set(_sc[0], _sc[1], _sc[2]);
         }
       }

@@ -183,6 +183,30 @@ test("below the speed floor the push pauses (not cancelled); a closed gate cance
   assert.equal(c.otOn, false, "the Safety Car / low grip / the pit limiter switch it off");
 });
 
+test("braking pauses the push (not cancelled): the allowance survives a braking zone, then spends again", () => {
+  // The thrust only enters the acceleration in the throttle branch and braking
+  // wins there, so burning MJ through a braking zone bought nothing. spend()
+  // reads the last tick's pedal off the car (c.brakeDemand, set by updateCar).
+  const { OM } = load();
+  const dt = 1 / 60, push = 4;
+  for (const human of [true, false]) {
+    const c = car({ human, otE: 0.125 });
+    OM.arm(c, true, true); OM.spend(c, dt, true, true, true, push);
+    assert.equal(c.otOn, true);
+    for (let i = 0; i < 30; i++) { OM.arm(c, true, true); OM.spend(c, dt, false, true, true, push); }
+    const e = c.otE;
+    assert.ok(e < 0.125, "it was spending before the brake");
+    c.brakeDemand = 0.8;
+    for (let i = 0; i < 120; i++) { OM.arm(c, true, true); OM.spend(c, dt, false, true, true, push); }   // 2 s on the brakes with OT armed
+    assert.equal(c.otE, e, `${human ? "human" : "AI"}: allowance unchanged across 2 s of braking`);
+    assert.equal(c.otOn, true, "still switched on, not cancelled");
+    assert.equal(c.otT, 0, "but no push for deployTaper to see while braking");
+    c.brakeDemand = 0;
+    OM.arm(c, true, true); OM.spend(c, dt, false, true, true, push);
+    assert.ok(c.otE < e && c.otT > 0, "off the brake it spends again");
+  }
+});
+
 // ── RaceControl: low grip and the Safety Car queue ──────────────────────────
 
 function rcWith(weather, wetness) {

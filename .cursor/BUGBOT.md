@@ -6,14 +6,17 @@ can still ship with an explicit "not run" note.
 
 ## Merge & CI ops (blocking)
 
-- Prefer **MERGE** (merge commit). Flag any PR advice that recommends squash
-  merge, rebase merge, or squash auto-merge. Do not suggest rewriting history
-  on shared topic or deploy branches.
+- Only CI Watch arms auto-merge, **SQUASH only**, on ready tip-green PRs.
+  Agents, sessions and tools never arm or merge. Flag advice that recommends a
+  merge-commit or rebase merge, or an agent arming auto-merge itself. Do not
+  suggest rewriting history on shared topic or deploy branches (sync by
+  merging origin/ship; never rebase or force-push).
 - Never dual-dispatch Pages, and never cancel another session's CI to free
   slots. Flag suggestions to re-run or cancel siblings for capacity.
 - Treat an explicit human veto only (`hold`, `do not merge this PR`, or
-  similar). The standard launch line that Merge Desk owns merge-when-green is
-  **not** a body veto — do not block Merge Desk MERGE auto-merge for it.
+  similar). The standard launch line `Do not enable auto-merge or merge.` is
+  agent-side policy, not a body veto — do not block CI Watch's SQUASH
+  auto-merge for it. Flag any foreign MERGE/REBASE auto-merge arm.
 
 ## Hot-path evidence (blocking when absent)
 

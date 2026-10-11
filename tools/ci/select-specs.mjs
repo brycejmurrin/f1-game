@@ -60,10 +60,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 // `timeout-minutes` with it: cap >= (tests x timeout) + setup + margin.
 export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 180 };
 
-// These specs already have independent blocking jobs with runner-measured
-// timeout policies. Re-running them in the selected job used its generic 120 s
-// cap and turned a green 420 s smoke shard into a deterministic false red.
-// Keep them named in the selector report, but never put them on its command.
+// These specs already have their own jobs with runner-measured timeout
+// policies. Re-running them in the selected job used its generic 120 s cap and
+// turned a green 420 s smoke shard into a deterministic false red. Keep them
+// named in the selector report, but never put them on its command. NOT A
+// REQUIRED CHECK: the Smoke job is not in the branch protection's required
+// contexts, so boot coverage in the required "Selected specs" gate comes from
+// the boot group's other specs, which select() keeps (see BOOT_FALLBACK_REASONS).
 export const FIXED_GATE_SPECS = new Set([
   "tests/specs/smoke.spec.js",
   "tests/specs/physics-characterization.spec.js",
@@ -249,7 +252,12 @@ export const MAX_OVERFLOW_SHARDS = 11;
 // their own `spill-<k>` jobs and logged with a SPILL line. Only what the spill
 // cannot carry is left in `skipped`, and that is reported as an ERROR (never
 // a quiet skip): it runs nowhere and the verdict reds on it.
-export const MAX_SPILL_SHARDS = 2;
+// PR #1289, CI 38010342804: the exact timing overlay and failing-spec hoist
+// filled 717 of 720 spill seconds, dropping props-over-road (374 s) and
+// parts-physics (70 s). One extra allowance merely displaced dev-tools;
+// four carry every candidate with two extra matrix jobs. Keep the verdict
+// strict: anything beyond this bounded allowance is still a named failure.
+export const MAX_SPILL_SHARDS = 4;
 // ROUTED DECLARED-SLOW SPECS RUN TOO (2026-10-04). A spec that declares a
 // per-test timeout >= the gate's 180 s and is merely ROUTED (rank 3) used to
 // land in overBudgetSpecs and never run on any PR or train: 41 of them on
@@ -584,10 +592,10 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
     unreachable.push(...tooBig);
   }
   // The oversize list is bounded; the overflow is skipped BY NAME, never silently.
-  // Affected first, then the most expensive: a big spec the change reaches is
-  // the one a small routed spec must not displace (tracks-walls losing its
-  // slot to three 11-test specs was CI run 36057109364).
-  oversize.sort((a, b) => a.rank - b.rank || expectedSec(b, db) - expectedSec(a, db));
+  // Largest expected workloads first, priority for ties. A small hoisted
+  // failure must not evict a larger required suite that cannot fit another
+  // pool. Main/overflow/spill still run failures first; all suites must run.
+  oversize.sort((a, b) => expectedSec(b, db) - expectedSec(a, db) || a.rank - b.rank);
   const oversizeRun = oversize.slice(0, MAX_OVERSIZE_SHARDS);
   // An over-budget spill must NOT fall into skipped → overflow. Overflow bills
   // at the measured/fallback rate, so a 1500 s all-circuits sweep looks like
@@ -670,6 +678,19 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
       if (sec <= room) { overBudgetRun.push(r); room -= sec; continue; }
       overBudgetSpecs.push({ file: r.file, tests: r.tests, ownTimeoutSec: r.ownTimeoutSec });
     }
+    // Ordinary leftovers may use reserved capacity left AFTER the pool's
+    // existing slow candidates. A changed failure cache must not strand room
+    // while dropping terrain or parts. Isolate each fallback so it cannot
+    // inherit another candidate's longer per-test timeout when packed.
+    const keep = [];
+    for (const r of skipped) {
+      const sec = r.sec != null ? r.sec : Math.round(expectedSec(r, db));
+      if (sec <= room) {
+        overBudgetRun.push({ ...r, capacityFallback: true }); room -= sec;
+      } else keep.push(r);
+    }
+    skipped.length = 0;
+    skipped.push(...keep);
   }
   return { selected, skipped, unreachable, oversize: oversizeRun, overflow, spill, overBudgetRun, overBudgetSpecs, coveredByFixedGates, coveredByManualOptIn, coveredByVmTwin,
     unreadable,
@@ -737,7 +758,7 @@ export function shards(r, db = timings()) {
       }
       continue;
     }
-    const solo = /menu-baseline/.test(s.file) || (s.ownTimeoutSec || 0) >= SOLO_OWN_TIMEOUT_SEC;
+    const solo = !!s.capacityFallback || /menu-baseline/.test(s.file) || (s.ownTimeoutSec || 0) >= SOLO_OWN_TIMEOUT_SEC;
     items.push({ solo, budgeted: !!s.budgeted, pool: s.pool || false, name: `oversize-${base}`,
       files: [s.file], shard: "", tests: s.tests, sec, perTest, workers: 1 });
   }
@@ -1140,15 +1161,16 @@ export function scopeCarryForward(failed, routed) {
   return { inScope, dropped };
 }
 
-// The boot group reaches this gate only through pick-tests' two blanket
+// The boot group reaches the gates only through pick-tests' two blanket
 // rules ("any source edit: does the page still boot", "script tags + DOM
-// shell"). That question is already answered on every push and every deploy
-// by the FIXED smoke gate (smoke.spec.js, one shard on llvmpipe), so routing it here
-// too selected the boot group's cheapest-by-count specs — boot-guard (two
-// reload cycles) and logging (a Monaco build) — for EVERY source edit, the two
-// slowest-per-test specs in the tree, and they timed out the deploy gate twice
-// on starved runners (2026-09-02) for diffs that never touched them. A rule
-// that names the boot group for a specific reason still selects it.
+// shell"). select() USED to drop it here (2026-09-02: boot-guard and logging
+// timed out the then-120 s gate on starved runners), handing "does the page
+// still boot" to the Smoke job — which is NOT a required check and is skipped
+// on draft PRs and deploy pushes, so a boot-breaking diff could merge green
+// (round-3 8-F2). select() now keeps the group: boot-guard measures ~6 s on
+// llvmpipe under the 180 s gate, logging runs as its VM twin, and dev-tools
+// competes for the budget like any routed spec. node-plan.mjs still drops it
+// for the VM plan (vm-page), which is what these reasons remain for.
 export const BOOT_FALLBACK_REASONS = new Set([
   "any source edit: does the page still boot",
   "script tags + DOM shell",
@@ -1174,7 +1196,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // An edited spec already runs first, alone (changedSpecs, rank 0); its
   // group-mates are not this diff's business (pick-tests SPEC_OWNER_REASON).
   stripSpecOwner(g);
-  const bootCoveredBySmoke = dropBootFallback(g);
+  // The boot group stays (BOOT_FALLBACK_REASONS): Smoke is not a required check.
   const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
   const browserGroups = [...g.keys()].map((n) => `test:${n}`)
     .filter((s) => scripts[s] && scripts[s].includes("run-playwright")).sort();
@@ -1228,7 +1250,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // `circuits` is set only when EVERY changed path is circuit-scoped: it is
   // what lets a per-circuit loop skip the other 51 circuits, so a diff that
   // also touches the engine must leave it empty (the whole fleet runs).
-  const r = { reason, changed: changed.length, tracked, groups: browserGroups, bootCoveredBySmoke,
+  const r = { reason, changed: changed.length, tracked, groups: browserGroups,
               circuits: circ.scoped ? circ.ids : [], circuitsTouched: circ.ids,
               changedSpecs, imported, racing, failed: failedInScope, failedDropped, ...cut,
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };

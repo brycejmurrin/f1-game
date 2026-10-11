@@ -386,7 +386,18 @@ test("serve stdout is JSON-RPC only (no log lines)", () => {
 });
 
 const LOCK = path.join(ROOT, "scratch", "apex-browser.lock");
-const TEST_BG = path.join(ROOT, "artifacts", "logs", "test-bg.json");
+// A private test-bg registry per test (TS1): these tests used to overwrite the REAL
+// artifacts/logs/test-bg.json and restore it afterwards, which loses a live run's
+// update in that window and, when the per-file timeout SIGKILLs the file, leaves
+// the fake in place and hides the real run from --status/--wait/--stop.
+function withFakeRegistry(state, fn) {
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "fake-test-bg-"));
+  const file = path.join(dir, "test-bg.json");
+  fs.writeFileSync(file, JSON.stringify(state));
+  try { return fn({ APEX_TEST_BG_STATE: file }); }
+  finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
 
 test("playwright occupancy matches `playwright test` tokens, not MCP JSON", async () => {
   const { classifyPlaywrightLine, scanPlaywrightLines } = await import("../../tools/ci/playwright-occupancy.mjs");
@@ -741,22 +752,12 @@ test("week-2 dryRun steals a stale lock (dead PID)", () => {
 });
 
 test("week-2 dryRun refuses playwright_live from test-bg.json (no Chromium)", () => {
-  fs.mkdirSync(path.dirname(TEST_BG), { recursive: true });
-  let prev = null;
-  if (fs.existsSync(TEST_BG)) prev = fs.readFileSync(TEST_BG, "utf8");
-  fs.writeFileSync(TEST_BG, JSON.stringify({ mode: "test", runs: [{ pid: process.pid, group: "tiny" }] }));
-  try {
-    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "" });
+  withFakeRegistry({ mode: "test", runs: [{ pid: process.pid, group: "tiny" }] }, (reg) => {
+    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "", ...reg });
     assert.equal(r.status, 1, r.stderr);
     const body = JSON.parse(r.stdout);
     assert.equal(body.error, "playwright_live");
-  } finally {
-    if (prev == null) {
-      try { fs.unlinkSync(TEST_BG); } catch { /* ignore */ }
-    } else {
-      fs.writeFileSync(TEST_BG, prev);
-    }
-  }
+  });
 });
 
 test("an IDLE host Playwright MCP server is reported, not occupancy; its launched browser is", () => {
@@ -780,27 +781,18 @@ test("an IDLE host Playwright MCP server is reported, not occupancy; its launche
 });
 
 test("a live Node-only test-bg group does not impersonate Playwright", () => {
-  fs.mkdirSync(path.dirname(TEST_BG), { recursive: true });
-  let prev = null;
-  if (fs.existsSync(TEST_BG)) prev = fs.readFileSync(TEST_BG, "utf8");
-  fs.writeFileSync(TEST_BG, JSON.stringify({
+  withFakeRegistry({
     mode: "sequential",
     runs: [{ pid: process.pid, group: "tooling-fast", browser: false }],
-  }));
-  try {
+  }, (reg) => {
     const r = callCli("apex_shot", { track: "monza", dryRun: true }, {
       APEX_MCP_MOCK: "0",
       APEX_MCP_PS: "1 bash\n",
+      ...reg,
     });
     assert.equal(r.status, 0, r.stderr + r.stdout);
     assert.equal(JSON.parse(r.stdout).ok, true);
-  } finally {
-    if (prev == null) {
-      try { fs.unlinkSync(TEST_BG); } catch { /* ignore */ }
-    } else {
-      fs.writeFileSync(TEST_BG, prev);
-    }
-  }
+  });
 });
 
 test("week-2 dryRun refuses chrome_daemon_up when /healthz answers", async () => {
@@ -1640,6 +1632,15 @@ test("apex_hud_shot aliases layout-audit viewport ids and did-you-means a near m
   assert.match(miss.fix, /Did you mean "phone-landscape-844x390"\?/, miss.fix);
 });
 
+test("image and inlineImage are aliases across shot / ui_shot / hud_shot", () => {
+  const hud = callTools([["apex_hud_shot", { image: true, dryRun: true }]])[0].body;
+  assert.equal(hud.ok, true, `hud image→inlineImage: ${JSON.stringify(hud)}`);
+  const ui = callTools([["apex_ui_shot", { screen: "title", inlineImage: true, dryRun: true }]])[0].body;
+  assert.equal(ui.ok, true, `ui_shot inlineImage→image: ${JSON.stringify(ui)}`);
+  const shot = callTools([["apex_shot", { track: "monza", inlineImage: false, dryRun: true }]])[0].body;
+  assert.equal(shot.ok, true, `shot inlineImage→image: ${JSON.stringify(shot)}`);
+});
+
 test("apex_job_status {} is bounded: newest first, limit, state filter, total", async () => {
   const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
   const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
@@ -1695,6 +1696,60 @@ test("apex_job_status {} prunes manifests older than 7 days and re-judges a pre-
     assert.equal(res.total, 3);
     assert.deepEqual(fs.readdirSync(dir).filter((f) => f.startsWith("old-")), [], "json, log, err and exit of an expired job are all gone");
     assert.ok(fs.existsSync(path.join(dir, "real-failed.log")), "recent jobs keep their files");
+  } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
+
+// 2026-10-10: serve-http (127.0.0.1:3713 /mcp + /healthz) had no test. Real process, a FREE port (APEX_MCP_HTTP_PORT), mock mode.
+test("serve-http answers /healthz and a JSON-RPC tools/list on loopback, then stops", async () => {
+  const net = await import("node:net");
+  const http = await import("node:http");
+  const port = await new Promise((res, rej) => { const s = net.createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); }); s.on("error", rej); });
+  const { spawn } = await import("node:child_process");
+  const child = spawn(process.execPath, [MCP, "serve-http"], { cwd: ROOT, env: { ...process.env, APEX_MCP_MOCK: "1", APEX_MCP_HTTP_PORT: String(port) }, stdio: ["ignore", "ignore", "pipe"] });
+  const req = (method, urlPath, body) => new Promise((res, rej) => {
+    const r = http.request({ host: "127.0.0.1", port, path: urlPath, method, headers: body ? { "Content-Type": "application/json" } : {} }, (m) => {
+      let d = ""; m.on("data", (c) => (d += c)); m.on("end", () => res({ status: m.statusCode, body: d ? JSON.parse(d) : null }));
+    });
+    r.on("error", rej); if (body) r.write(JSON.stringify(body)); r.end();
+  });
+  try {
+    let health = null;
+    for (let i = 0; i < 60 && !health; i++) {
+      try { health = await req("GET", "/healthz"); } catch { await new Promise((r) => setTimeout(r, 250)); }
+    }
+    assert.ok(health, "serve-http never answered /healthz");
+    assert.equal(health.status, 200);
+    assert.equal(health.body.ok, true);
+    assert.equal(health.body.bind, "127.0.0.1", "loopback only, never 0.0.0.0");
+    assert.ok(health.body.tools >= 28, `tools ${health.body.tools}`);
+    const list = await req("POST", "/mcp", { jsonrpc: "2.0", id: 1, method: "tools/list" });
+    assert.equal(list.status, 200);
+    assert.ok(list.body.result.tools.some((t) => t.name === "apex_status"));
+    const bad = await req("POST", "/mcp", { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_shot", arguments: { track: "monza", fracc: 1 } } });
+    assert.match(JSON.parse(bad.body.result.content[0].text).fix, /Did you mean "frac"/, "the same self-explaining refusals over HTTP");
+    assert.equal((await req("GET", "/nope")).status, 404);
+  } finally { child.kill("SIGTERM"); }
+});
+
+// 2026-10-10: "2 jobs already running" sent the caller to a second call to learn which.
+test("jobs_busy names the running jobs and the limit", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const fake = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-jobs-test-"));
+  try {
+    const dir = path.join(fake, "artifacts/logs/apex-jobs");
+    fs.mkdirSync(dir, { recursive: true });
+    for (const [id, kind] of [["hud_survey-a", "hud_survey"], ["frame_fleet-b", "frame_fleet"]]) {
+      fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, kind, state: "running", exit: null, pid: process.pid, started: Date.now() - 5000, argv: [], log: `artifacts/logs/apex-jobs/${id}.log`, stderr: "" }));
+    }
+    const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
+    const x = createExtras({ ROOT: fake, toolResult, refuse: (e, m, f) => toolResult({ ok: false, error: e, message: m, fix: f }), acquireLock: () => null, releaseLock() {},
+      occupancyRefuse: () => null, assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
+    const r = JSON.parse(x.handlers.apex_job_start({ kind: "verify_all" }).content[0].text);
+    assert.equal(r.error, "jobs_busy");
+    assert.match(r.message, /hud_survey-a \(hud_survey, \d+s\)/);
+    assert.match(r.message, /frame_fleet-b \(frame_fleet, \d+s\)/);
+    assert.match(r.fix, /At most 2 run at once/);
   } finally { fs.rmSync(fake, { recursive: true, force: true }); }
 });
 

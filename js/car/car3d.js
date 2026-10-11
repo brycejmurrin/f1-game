@@ -90,6 +90,29 @@ const Car3D = (function () {
   function teamStyleOf(teamId) {
     return (teamId && TEAM_STYLE[teamId]) || DEFAULT_STYLE;
   }
+
+  /* WHO WEARS THE LID, for a team whose number is not a 2026 seat. A legend or a
+     MY TEAM driver must never inherit a grid driver's design through a shared
+     number (ten legends carry the neutral 1 = Norris), so those teams key the
+     helmet on the person: opts.helmetKey, else the legend's code, else the typed
+     custom number. A 2026 team returns null and keeps its hand-made design. */
+  function helmetKey(opts) {
+    if (!opts) return null;
+    if (opts.helmetKey != null) return opts.helmetKey;
+    const id = opts.teamId;
+    if (id === "custom") return "custom#" + opts.num;
+    if (typeof Legends === "undefined") return null;
+    if (typeof id === "string" && id.indexOf("legend_") === 0) {
+      const l = Legends.byId(id.slice(7));
+      return l ? l.code : null;
+    }
+    if (id === "legends") {
+      // The player's slot carries only a number: a unique one names the legend.
+      const hit = Legends.LIST.filter((l) => (l.num || 1) === (opts.num || 1));
+      return hit.length === 1 ? hit[0].code : "LGD#" + (opts.num || 1);
+    }
+    return null;
+  }
   function styledNoseStations(style) {
     const s = style || DEFAULT_STYLE;
     if (s === DEFAULT_STYLE || (!s.noseTipZ && s.noseSlim === 1 && !s.noseDroop)) return CHASSIS.nose;
@@ -2644,7 +2667,7 @@ const Car3D = (function () {
       // 0.765 — the head was BELOW the tub, and a design nobody can see is the
       // defect this module exists to fix. 0.715 clears it by 82 mm, and still
       // passes 43 mm under the halo at 0.890.
-      const des = Helmets.designFor(opts && opts.num, c1);
+      const des = Helmets.designFor(opts && opts.num, c1, helmetKey(opts));
       // Paint-edge splits (~+2k tris on busy lids) matter when the helmet is
       // large on screen (player body, garage, cockpit). Field AI bodies are
       // tens of pixels; depth silhouettes never see paint. Both drop to 0.

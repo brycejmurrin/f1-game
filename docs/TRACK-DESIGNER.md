@@ -62,7 +62,7 @@ On portrait screens, the guide uses the map’s space while it is open.
 | Select a point | Tap (click) a white point — selecting never moves it. |
 | Select a group (SPAN) | Choose **RANGE**, then tap or drag between points on the map or elevation profile; start/end point numbers also work. The range follows driving order and can cross the start line. Shift-tap, **SELECT END**, and **TURNS** rows also select spans. Switch to **POINT** to drag the selected group. |
 | Move the road | Drag a **selected** point (or drag past a short threshold on mouse). With a SPAN selected, drag any point in the group — the whole stretch moves together. Arrow keys nudge 1 m (10 m with Shift), the whole SPAN when one is selected. **UNDO** restores an accidental move. |
-| Add a point | Tap (click) the road between two points. |
+| Add a point | Tap (click) the road between two points. A circuit holds at most 200 points; at the cap the tap says so and adds nothing. |
 | Remove a point | Double-tap it, press and hold it and choose DELETE, or select it and press **DELETE POINT**. A loop keeps at least 8 points. |
 | Cycle points | **PREV** / **NEXT** in Edit and Elevation, **PREV POINT** / **NEXT POINT** in other modes, Tab, or `[` `]` step through the loop (clears a SPAN); Escape deselects. Enter a point number to jump directly. |
 | Draw a new circuit | Pick **DRAW** and draw one closed loop in a single stroke. It closes, smooths and spaces itself, and the start goes on its longest straight. |
@@ -329,7 +329,9 @@ and lists what it finds:
 Select a point and press **TEST HERE** (the last chip under 4 DETAILS, or in
 the press-and-hold row on the canvas). The designer saves the circuit and drops
 you on that point at a standstill in a **time trial** — your stored weather and
-laps, no race-settings sheet, no rivals. The run up to the start line is an
+laps, no race-settings sheet, no rivals. It plays the same pre-race screen as
+every solo start (garage leave, card, flyby; a tap skips them); a hidden or
+headless page goes straight to the grid. The run up to the start line is an
 out-lap; the timed lap begins when you cross it, and lands on the circuit's
 time-trial board like any other. **PAUSE → QUIT** brings you straight back to
 the designer with the same point selected.

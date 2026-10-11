@@ -47,7 +47,7 @@
       { s0: 0.900, s1: 0.945, hw: 6.4, ease: 0.012 },  // Lycée
     ],
     bankZones: [
-      { frac: 0.060, angleDeg: 3.0, widthM: 110 },
+      { turn: 1, angleDeg: 3.0, widthM: 110 },  // re-seated frac 0.06 (was 135 m off any apex)
       { frac: 0.400, angleDeg: 3.5, widthM: 130 },
       { frac: 0.780, angleDeg: 3.0, widthM: 120 },
     ],

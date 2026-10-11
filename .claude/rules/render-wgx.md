@@ -10,7 +10,7 @@ paths:
   backend failure lands on. Software / headless adapters (Dawn, SwiftShader,
   empty adapter info) now BOOT WGX at MSAA 1 behind the 2D soft-present blit —
   refusing used to bind GLX silently while SETTINGS still read WEBGPU.
-  `apex26.gfxWgxAllowSoftware` is a legacy no-op that six tools still set.
+  `apex26.gfxWgxAllowSoftware` is a legacy no-op that eight tools and one test still set.
 - Gate every WGSL or pipeline edit with `node tools/gfx/wgx-validate.mjs`
   (~5 s, real Dawn WGSL + pipeline validation in-container; never ship
   "read-verified" WGSL) plus `tests/unit/webgpu-lifecycle.test.mjs` and

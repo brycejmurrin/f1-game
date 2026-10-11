@@ -485,6 +485,23 @@ test("the dash reaches the phone ~15 Hz on the unreliable channel and paints the
   assert.equal(el.pos.textContent, "DNF");
 });
 
+test("the LCD says Q / PRAC where the race HUD does, not a race position (R2-08)", () => {
+  const D = PhonePad.DASH, el = lcd();
+  const base = { gear: 3, kmh: 100, rpm: 0.5, lap: 1, laps: 1, pos: 1, cars: 1, ers: 0.5, flags: 0, caution: 0, lastLapMs: 0, state: "race", team: "" };
+  PhonePad.paintHud(el, base);
+  assert.equal(el.pos.textContent, "P1/1", "a race still reads its position");
+  PhonePad.paintHud(el, { ...base, flags: D.quali });
+  assert.equal(el.pos.textContent, "Q");
+  PhonePad.paintHud(el, { ...base, pos: 7, cars: 20, flags: D.practice });
+  assert.equal(el.pos.textContent, "PRAC");
+  PhonePad.paintHud(el, { ...base, flags: D.quali | D.retired });
+  assert.equal(el.pos.textContent, "DNF", "a retirement outranks the session tag, as on the HUD");
+  const back = PhonePad.decodeHud(PhonePad.encodeHud({ ...base, flags: D.quali | D.practice }));
+  assert.equal(back.flags, D.quali | D.practice, "the session bits survive the wire");
+  assert.match(read("js/ui/platform-session.js"), /G\.session === "quali" \? D\.quali : G\.practice && !G\.timeTrial \? D\.practice/,
+    "the sampler tags the session from the game's own state");
+});
+
 test("the control modes reach the wheel's layout: no paddles on AUTO gears, no GAS zone on AUTO throttle, AERO greyed on AUTO or no zones", () => {
   const D = PhonePad.DASH, el = lcd();
   const base = { gear: 3, kmh: 100, rpm: 0.5, lap: 1, laps: 5, pos: 2, cars: 20, ers: 0.5, flags: 0, caution: 0, lastLapMs: 0, state: "race", team: "" };

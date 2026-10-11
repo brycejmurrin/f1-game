@@ -137,7 +137,9 @@ const TrackRandom = (function () {
   /** One candidate of a design run: generateValid(seed_i) judged by opts.check
    *  (a design → verdict; the caller's validator), scored by opts.score(verdict,
    *  style) → a number or { score, feats }. The verdict's tr / stats / issues
-   *  ride along so nothing rebuilds. null when no try was green. */
+   *  ride along so nothing rebuilds. null when no try was green. opts.base is
+   *  the look of the circuit only (theme, baseHW, kerbs…): the old loop's heights,
+   *  bridges and zones would be judged against a road they do not belong to. */
   function designOne(baseSeed, i, style, opts) {
     const base = opts.base || {};
     let last = null;

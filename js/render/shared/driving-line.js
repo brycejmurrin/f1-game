@@ -228,9 +228,16 @@ window.DrivingLine = (function () {
      Builds lazily when the circuit changed. Returns false when the line is off
      or the backend's pass is not ready. */
   const _drawOpts = { speed: 0, cornersOnly: false, palette: 0, opacity: 1 };
-  function draw(gfx, api, playerSpeed) {
-    if (mode === "off" || !gfx || typeof gfx.drawDrivingLine !== "function") return false;
+  // The circuit draw() was last handed, kept so cue() can build the profile with
+  // the line hidden: game.js hands the api to draw() every frame and to nothing else.
+  let _api = null;
+  function ensure(api) {
     if (cache.id !== api.id || !cache.verts) build(api);
+  }
+  function draw(gfx, api, playerSpeed) {
+    if (api) _api = api;
+    if (mode === "off" || !gfx || typeof gfx.drawDrivingLine !== "function") return false;
+    ensure(api);
     // One scratch opts, refilled per frame: every backend reads it synchronously.
     _drawOpts.speed = playerSpeed || 0; _drawOpts.cornersOnly = mode === "corner";
     _drawOpts.palette = palette === "safe" ? 1 : 0; _drawOpts.opacity = _opMul;
@@ -261,6 +268,10 @@ window.DrivingLine = (function () {
      0 = on the line's pace or under it. 1 = the ribbon is fully red.
      Null when there is no baked profile to be over. */
   function cue(playerSpeed, s) {
+    // The cue exists FOR the player who hides the ribbon (BRAKE CUE with the line
+    // OFF), and draw() returns before building in that mode — so the profile it
+    // reads is built here, lazily, from the circuit draw() last saw.
+    if (_api && (cache.id !== _api.id || !cache.v)) ensure(_api);
     const v = speedAt(s);
     if (v == null) return null;
     const over = (playerSpeed || 0) / Math.max(v, 1);
@@ -268,7 +279,7 @@ window.DrivingLine = (function () {
     return t * t * (3 - 2 * t);
   }
 
-  function reset() { cache.id = null; cache.verts = null; cache.count = 0; cache.v = null; cache.zone = null; }
+  function reset() { _api = null; cache.id = null; cache.verts = null; cache.count = 0; cache.v = null; cache.zone = null; }
 
   return { MODES, PALETTES, OPACITIES, STRIDE, STEP, HALF_W, setMode, mode: getMode,
            setPalette, palette: getPalette, setOpacity, opacity: getOpacity, opacityMul,

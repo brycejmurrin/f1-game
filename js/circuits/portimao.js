@@ -27,6 +27,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.7,
+    gpLaps: 66,   // real race distance (4.653 km); lengthKm's 1 dp derives 65
     baseHW: 7.5,
     sceneryCoordinates: "racing",
     terrainOuter: 125,
@@ -62,13 +63,13 @@
     hwZones: [
       { s0: 0.140, s1: 0.185, hw: 6.3, ease: 0.012 },
       { s0: 0.470, s1: 0.515, hw: 6.2, ease: 0.012 },
-      { s0: 0.820, s1: 0.870, hw: 6.4, ease: 0.012 },
+      { s0: 0.9089, s1: 0.9760, hw: 6.4, ease: 0.012 },  // (index; arc 0.820-0.870)
     ],
     bankZones: [
-      { frac: 0.050, angleDeg: 4.0, widthM: 110 },
+      { turn: 1, angleDeg: 4.0, widthM: 110 },  // re-seated frac 0.05 (was 119 m off any apex)
       { frac: 0.300, angleDeg: 3.5, widthM: 120 },
       { frac: 0.640, angleDeg: 4.5, widthM: 130 },
-      { frac: 0.900, angleDeg: 3.5, widthM: 110 },
+      { turn: 15, angleDeg: 3.5, widthM: 110 },  // re-seated frac 0.9 (was 233 m off any apex)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

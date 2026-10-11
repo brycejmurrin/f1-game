@@ -495,7 +495,7 @@ lighting tuner's failure was in a state the grid had no entry for.
 | `datatelemetry` | the trace viewer/map/playback — the densest thing in the app |
 | `dataschedule` | a wide table, the case that wants horizontal scroll |
 | `lightingtuner` | `#lighting`, a docked slider panel; `#lt-rail` goes `display: contents` when wide |
-| `cameratuner` | `#camtune`, the same shape for the 14 camera modes |
+| `cameratuner` | `#camtune`, the same shape for the 20 camera modes |
 | `hudmanual` | MANUAL moves the gearbox into the right thumb column and relocates BOOST/OT/AERO — a different control stack, not a restyle |
 
 Also measured, added when the gaps above were closed: `datastandings`,
