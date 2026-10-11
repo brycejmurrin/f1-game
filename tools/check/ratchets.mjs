@@ -148,10 +148,26 @@ export async function measure(data = load()) {
   return rows;
 }
 
-export function verdict(rows) {
+/** Is a LOOSE ceiling (value BELOW it by more than its slack) advisory here?
+ *  (R3-CI-HEALTH-1 follow-up, 2026-10-10.) Two green PRs that each remove one
+ *  raw colour both write rawColor 338 -> 337; git merges the identical hunks
+ *  cleanly, the merged tip measures 336, and a slack-0 entry then turned the
+ *  DEPLOY TIP red on an improvement (ship runs 38042136314 / 38044675617) —
+ *  holding the release train for an hour, on a push no author can `--update`
+ *  from. So below-ceiling is advisory on every GitHub event but
+ *  `pull_request` (push, schedule, the Pages call — whose event is the
+ *  caller's — and dispatch), and stays fatal on a PR, where the author can
+ *  lower it, and locally, where nothing sets GITHUB_EVENT_NAME (the commit
+ *  hook lowers it on the way through). OVER a ceiling is fatal everywhere. */
+export function looseAdvisory(env = process.env) {
+  const ev = env.GITHUB_EVENT_NAME || "";
+  return ev !== "" && ev !== "pull_request";
+}
+
+export function verdict(rows, { looseAdvisory: advisory = false } = {}) {
   const over = rows.filter((r) => r.over > 0);
   const loose = rows.filter((r) => !r.missing && r.slack > r.slackMax);
-  return { ok: over.length === 0 && loose.length === 0, over, loose, rows };
+  return { ok: over.length === 0 && (advisory || loose.length === 0), over, loose, looseAdvisory: advisory, rows };
 }
 
 export function updateReceipt(rows, { lowerOnly = false } = {}) {
@@ -273,6 +289,20 @@ export function loadAt(ref) {
   return JSON.parse(out);
 }
 
+/** True when `docs/notes/CEILING-HISTORY.md` differs from <ref> — the written
+ *  reason that lets a raise past the 40-line absorb clear on a PR (owner
+ *  decision 2026-10-10: "raises with a stated reason are fine"). Without it a
+ *  remesaure that cures a red deploy tip (#1437 / ship OVER after stacked HUD
+ *  merges) can never go green: the message says "needs a reason in the PR" but
+ *  the exit stayed 1 with no machine check for the reason. */
+export function ceilingHistoryReasoned(ref) {
+  try {
+    const out = cp.execFileSync("git", ["diff", "--name-only", `${ref}`, "--", "docs/notes/CEILING-HISTORY.md"],
+      { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    return out.trim().length > 0;
+  } catch { return false; }
+}
+
 /**
  * How much a sync file metric grew between `ref` and the working tree.
  * Returns null when the metric is async/tree-scoped or the file is missing at
@@ -299,24 +329,25 @@ export function sourceGrowth(ref, file, metric) {
 
 /** `--base <ref>`: every ceiling that moved since <ref>. A loosened slack, or a
  *  deleted entry whose file still exists, blocks like a raise past the absorb
- *  (15-F10). Raises are warnings
- *  (GitHub `::warning::` annotations on CI, plain lines elsewhere). A raise
- *  past `maxRaise` fails only when the SOURCE file's metric also grew past
- *  `maxRaise` since <ref> — that is the commit-hook absorb applied to real
- *  growth. A ceiling catch-up (file delta ≤ absorb; other PRs already landed
- *  the lines) is a warning so a re-measure after a shared-branch merge can
- *  land without an admin override. `sourceGrowthFn` is injectable for tests.
- *  Returns the exit code. */
+ *  (15-F10). Raises are warnings (GitHub `::warning::` annotations on CI, plain
+ *  lines elsewhere). A raise past `maxRaise` fails only when the SOURCE file's
+ *  metric also grew past `maxRaise` since <ref> — a ceiling catch-up (file
+ *  delta ≤ absorb; other PRs already landed the lines) is a warning. A raise
+ *  that is still past absorb soft-passes when CEILING-HISTORY.md also moved
+ *  (deliberate remesaure with a written reason). `sourceGrowthFn` /
+ *  `historyReasoned` are injectable for tests. Returns the exit code. */
 export function compareToBase(ref, {
   maxRaise = 40, current = load(), print = console.log, advisory = false,
-  sourceGrowthFn = sourceGrowth,
+  sourceGrowthFn = sourceGrowth, historyReasoned = undefined,
 } = {}) {
   let base;
   try { base = loadAt(ref); }
   catch (e) { print(`ratchets --base: cannot read tests/data/ratchets.json at ${ref} (${String(e.stderr || e.message).trim().split("\n")[0]}) — is the checkout deep enough (fetch-depth: 0)?`); return 2; }
   const rows = diffRatchets(base, current);
   const gh = process.env.GITHUB_ACTIONS === "true";
-  let blocked = 0;
+  const reasoned = historyReasoned === undefined ? ceilingHistoryReasoned(ref) : !!historyReasoned;
+  let blocked = 0; // named past-absorb / loosen / gone-guard rows (summary)
+  let fatal = 0;   // rows that still fail the PR run
   for (const r of rows) {
     const where = `${r.file} ${r.metric}`;
     if (r.kind === "raise") {
@@ -329,17 +360,24 @@ export function compareToBase(ref, {
         // absorb keeps the hard fail — that is what the hook was for.
         if (growth !== null && growth <= maxRaise) over = false;
       }
-      if (over) blocked++;
+      // A raise past absorb with a CEILING-HISTORY reason is the remesaure
+      // path: still named (and annotated), but not a red — the history file
+      // carries the why. Without it (and not advisory) it stays fatal.
+      if (over) {
+        blocked++;
+        if (!advisory && !reasoned) fatal++;
+      }
       const msg = `RAISE  ${where}: ${r.base} -> ${r.now} (+${r.delta})` + (over
-        ? ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : "")
+        ? ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : reasoned ? " (reason recorded in docs/notes/CEILING-HISTORY.md)" : "")
         : (r.delta > maxRaise && growth !== null
           ? ` — catch-up (source ${r.metric} grew ${growth} ≤ ${maxRaise}; ceiling tracks already-landed size)`
           : ""));
-      print(gh ? `::${over && !advisory ? "error" : "warning"} file=tests/data/ratchets.json,title=ratchet raised::${msg}` : msg);
+      print(gh ? `::${over && !advisory && !reasoned ? "error" : "warning"} file=tests/data/ratchets.json,title=ratchet raised::${msg}` : msg);
     } else if (r.kind === "lower") print(`LOWER  ${where}: ${r.base} -> ${r.now} (${r.delta})`);
     else if (r.kind === "new") print(`NEW    ${where}: ${r.now}`);
     else if (r.kind === "loosen") {
       blocked++;
+      if (!advisory) fatal++;
       const msg = `LOOSEN ${where}: slack ${r.base} -> ${r.now ?? "default"} — a ratchet that tightened its own slack was widened; this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : "");
       print(gh ? `::${advisory ? "warning" : "error"} file=tests/data/ratchets.json,title=ratchet loosened::${msg}` : msg);
     } else {
@@ -348,21 +386,23 @@ export function compareToBase(ref, {
       const guardRemoved = r.file === "(tree)" || fs.existsSync(path.join(ROOT, r.file));
       if (guardRemoved) {
         blocked++;
+        if (!advisory) fatal++;
         const msg = `GONE   ${where}: was ${r.base} — the entry was deleted but ${r.file === "(tree)" ? "it is a tree metric" : "the file still exists"}; this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : "");
         print(gh ? `::${advisory ? "warning" : "error"} file=tests/data/ratchets.json,title=ratchet removed::${msg}` : msg);
       } else print(`GONE   ${where}: was ${r.base}`);
     }
   }
   const raises = rows.filter((r) => r.kind === "raise").length;
-  print(`ratchets --base ${ref}: ${rows.length} ceiling(s) moved (${raises} raised, ${rows.filter((r) => r.kind === "lower").length} lowered, ${rows.filter((r) => r.kind === "new").length} new, ${rows.filter((r) => r.kind === "gone").length} gone)` + (blocked ? ` — ${blocked} past the ${maxRaise}-line absorb${advisory ? " (advisory)" : ""}` : ""));
+  print(`ratchets --base ${ref}: ${rows.length} ceiling(s) moved (${raises} raised, ${rows.filter((r) => r.kind === "lower").length} lowered, ${rows.filter((r) => r.kind === "new").length} new, ${rows.filter((r) => r.kind === "gone").length} gone)` + (blocked ? ` — ${blocked} past the ${maxRaise}-line absorb${advisory ? " (advisory)" : reasoned ? " (history-reasoned)" : ""}` : ""));
   // ADVISORY ON A PUSH. A raise that is still a hard fail (real source growth
-  // past absorb) has no PR body on a push run, so failing there is a red that
-  // cannot be cleared by pushing again. Ten of the fourteen ci.yml failures on
-  // 2026-09-22 were this one message repeated on the same branch's pushes
-  // (eight of them on one branch), each a wasted run and a re-push into the
-  // same wall. The push run now annotates; the pull_request run still fails
-  // when the source file itself grew past absorb.
-  return blocked && !advisory ? 1 : 0;
+  // past absorb, no CEILING-HISTORY reason) has no PR body on a push run, so
+  // failing there is a red that cannot be cleared by pushing again. Ten of the
+  // fourteen ci.yml failures on 2026-09-22 were this one message repeated on
+  // the same branch's pushes (eight of them on one branch), each a wasted run
+  // and a re-push into the same wall. The push run now annotates; the
+  // pull_request run still fails when the source grew past absorb and
+  // CEILING-HISTORY.md did not move.
+  return fatal ? 1 : 0;
 }
 
 async function main() {
@@ -399,14 +439,19 @@ async function main() {
     return;
   }
   let v;
-  try { v = verdict(await measure()); }
+  try { v = verdict(await measure(), { looseAdvisory: looseAdvisory() }); }
   catch (e) { console.error(`ratchets: ${e.message}`); process.exitCode = 2; return; }
   if (argv.includes("--json")) { console.log(JSON.stringify(v, null, 2)); process.exitCode = v.ok ? 0 : 1; return; }
   // A tree metric's number says something drifted; --offenders says WHERE, which
   // is the half a bare count cannot carry.
   const where = (r) => (r.tree ? " — breakdown: node tools/check/tree-counts.mjs --offenders" : "");
   for (const r of v.over) console.log(`OVER   ${r.file} ${r.metric}: ${r.value} > ceiling ${r.ceiling} (+${r.over}) — extract, or raise it deliberately and say why in the commit${where(r)}`);
-  for (const r of v.loose) console.log(`LOOSE  ${looseLine(r)} — lower it: node tools/check/ratchets.mjs --update`);
+  for (const r of v.loose) {
+    const msg = `LOOSE  ${looseLine(r)} — lower it: node tools/check/ratchets.mjs --update`
+      + (v.looseAdvisory ? ` (advisory on ${process.env.GITHUB_EVENT_NAME}: an improvement; the PR run is the gate)` : "");
+    console.log(v.looseAdvisory && process.env.GITHUB_ACTIONS === "true"
+      ? `::warning file=tests/data/ratchets.json,title=ratchet loose::${msg}` : msg);
+  }
   if (v.ok) {
     const d = load();
     console.log(`ratchets: ${v.rows.length} metrics on ${Object.keys(d.files).length} files + ${Object.keys(d.tree || {}).length} tree-wide, all at or under their ceilings`);

@@ -1,7 +1,7 @@
 // `js/track/` reads the BUILD's night, never the circuit's authored default.
 //
 // `def.night` is what the circuit file declares. `track._night` is what THIS
-// build was asked for — game.js's TIME OF DAY setting overrides the default, and
+// build was asked for — the TIME OF DAY setting in game.js overrides the default, and
 // tracks.js hands the resolved value to every scenery module as `NIGHT`. Reading
 // `def.night` inside a scenery emitter therefore ignores the player's choice: a
 // night-def circuit raced by day renders that prop's night dress in daylight,

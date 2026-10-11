@@ -1085,7 +1085,10 @@ Two always-judged checks give the gate fixed names:
 - **`CI`** (`ci-verdict` job, #480): aggregates every sibling job via
   `tools/ci/ci-verdict.mjs`, including `selected-verdict` (2026-10-04 — it
   needed only `selected`, so an all-dropped plan passed `CI` while the verdict
-  failed). A needed job skipped by its `if:` is a pass; a needed failure or
+  failed). Since 2026-10-10 (R3-CI-HEALTH-2) `selected` itself needs only
+  `select`, so the browser legs start as soon as the plan exists instead of
+  queueing behind the ~6 min guards shards; `selected-verdict`, `ci-verdict`
+  and `poke-train` still need `guards`, so a guards red still fails the gate. A needed job skipped by its `if:` is a pass; a needed failure or
   cancel fails the aggregator. Advisory jobs (`baseline-trial`) never fail it.
   It is the only check that also carries smoke, the sweeps, renderer-macos and
   xr, so branch protection should require it (an owner setting).
@@ -1119,7 +1122,10 @@ Every `pull_request` workflow uses a per-PR concurrency group with
 
 Playwright retries default to **1 under `CI`** when unset
 (`playwright.config.js`); the change-aware `selected` gate sets `--retries=0`
-so a flake is news, not a doubled bill. Under `APEX_FAIL_ON_FLAKY=1` (every
+so a flake is news, not a doubled bill — except a QUARANTINED spec, which
+`select-specs.mjs` schedules alone in its own leg with `--retries=1`
+(2026-10-10, R3-CI-HEALTH-4), so one quarantined flake cannot red an
+otherwise green leg. Under `APEX_FAIL_ON_FLAKY=1` (every
 browser job in `ci.yml`) a pass-on-retry is a red unless the spec is listed in
 `tests/data/flaky-quarantine.json` — the one `@quarantine` ledger (owner,
 since, why). Quarantined specs still run; they are excluded from blocking
@@ -1574,6 +1580,7 @@ what it covers.
 | `replay-buf.test.mjs` | Instant-replay ring (`js/camera/replay-buf.js`): ≤0.7 MB at 22 cars / 20 s, wrap drops oldest, `at(t)` interpolates, scrub restore equality on captured fields, netplay scrub no-op, retirement auto-tag + `jumpLastTag`, and the `game.js` scrub gate precedes `Career.scoreRound` |
 | `results-cam.test.mjs` | Results cam (`js/camera/results-cam.js`): finite orbit pose, highlights reel budget/order, chequered→orbit phase machine, mobile/high-tier disable, and `game.js` results early-return gated on `resultsCam.live()` |
 | `ghost-share.test.mjs` | APXG1 compressed/plain codec round-trips, corrupt and unknown-track refusal, 14 KiB fragment cap with file fallback, session-only guest replay/interpolation, selective `#ghost=` consumption, results export controls, and Phase 1 boot/HUD/world wiring |
+| `share-code.test.mjs` | APXS1/APXL1/APXD1 envelopes (`js/ui/share-code.js`): setup/livery/daily round-trips, corrupt and unknown-team refusal, apply writes store without calling `startRace`, `#share=` consume clears the fragment, Continue hint priority career → daily streak → `lastSession`, and title-flow source pins that share apply never races |
 | `input-ghost.test.mjs` | deterministic local ghosts: fixed-timestep steer/throttle/brake + seed + physRev/build; PB gate; version refuse; TT wiring pins |
 | `input-ghost-replay-vm.test.mjs` | packed InputGhost tape → `__apex.setInput`+`step` is byte-identical under one seed (game-vm) |
 | `fuzz-untrusted-inputs.test.mjs` | seeded fuzz (Hash32 PRNG in `tests/helpers/seeded-fuzz.mjs`, N=2000 mutations per decoder) over every door that decodes player-shaped data: `GhostShare.decode` (`#ghost=` / pasted APXG1 / `.apexghost.json`), `LobbyCodes.codeFrom` + `NetHandshake.peekCode`/`decodeCode` (pasted invites), `NetSdp.unpack`, `NetQr.encode`, `NetSnapshot.decodeSnapshot` (peer packets), `SettingsExport.applySettings`/`applyGarage`, `SaveMigrate.migrateCareer`, and `GameStore.get` (corrupt disk). Asserts: never throws past the decoder boundary; returns the module's own `{ok:false,reason\|error}` (or null) failure shape; never writes NaN/undefined into live Career/G/store. Failures print `seed=` + trial so a regression is replayable. Budget under 10 s wall clock |
