@@ -298,6 +298,8 @@ const HudLayout = (function () {
     if (!row) return null;
     const root = doc && doc.documentElement, body = doc && doc.body;
     if (id === "limits" && root && root.hasAttribute && root.hasAttribute("data-limits-left")) return "left";
+    // Touch landscape (js/ui/hud.js fitHud: data-sectors-left): S1-S3 lead the left column, DAMAGE beside LIMITS.
+    if ((id === "sectors" || id === "damage") && root && root.hasAttribute && root.hasAttribute("data-sectors-left")) return "left";
     if (id === "rel" && body && body.classList && !body.classList.contains("desktop")) return "left";
     return row[4];
   }

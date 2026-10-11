@@ -94,6 +94,7 @@ function bootFlipHarness(o = {}) {
     fieldSectorBests: [Infinity, Infinity, Infinity], aeroZones: [{}], ttRecord: Infinity,
     fmtTime: (t) => String(t), dashKph: (v) => v * 3.6, vTop: () => 90, otEnabled: () => true,
     cssCol: () => "#f00",
+    store: { rev: 1, get: (k, d) => (k === "hudSectorsSide" ? (o.secSide || "right") : d) },   // the fixture's plate is on the right
   };
   const hud = sb.GameHud.create(G);
   const root = dom.documentElement;
