@@ -190,7 +190,9 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
   assert.doesNotMatch(selectJob, /inputs\.concurrency_key == ''/, "the plan must never exclude the deploy gate");
   assert.doesNotMatch(selectJob + selectedJob, /^    continue-on-error:/m);
   // The runner consumes the plan as a matrix and takes its cap per shard.
-  assert.match(selectedJob, /needs: \[select, guards\]/);
+  // 2026-10-10 (R3-CI-HEALTH-2): the selected legs start as soon as the plan exists; a guards red
+  // still fails selected-verdict / ci-verdict / poke-train, which keep `guards` in their needs.
+  assert.match(selectedJob, /needs: \[select\]$/m);
   assert.match(selectedJob, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.shards\) \}\}/);
   assert.match(selectedJob, /timeout-minutes: \$\{\{ matrix\.timeout \}\}/);
   assert.match(selectedJob, /APEX_WORKERS: \$\{\{ matrix\.workers \|\| 1 \}\}/,
