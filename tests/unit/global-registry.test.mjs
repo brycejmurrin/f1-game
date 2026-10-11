@@ -35,6 +35,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { scanRepo, buildGraph, checkGraph } from "../../tools/check/scan-globals.mjs";
 
 const require = createRequire(import.meta.url);
@@ -235,4 +238,48 @@ test("the unscannable window[<expr>] class stays extinct", () => {
     "dynamic window[expr] access defeats the whole registry — name the global " +
     "statically; if truly unavoidable, record the site in KNOWN_UNSCANNABLE_SITES " +
     "as \"file:line\" with a comment saying why it cannot be static");
+});
+
+// Every `window.__X = …` the shipped code writes, with ONE file that reads it
+// (R3-ARCHITECTURE-14, 2026-10-10). The registry above links global READS; a
+// member WRITE onto window is invisible to it, so a capture probe outlived its
+// capture: `window.__apexAtmoSkyProbe` (atmosphere.js skyGlowProbe) had no
+// reader anywhere and was deleted. A new write needs a named reader here — a
+// spec, tool or module that uses it — or it is dead weight on every page.
+const WINDOW_WRITES = {
+  __APEX_BUILD: "js/career/career-backup.js",      // the shell's build id, stamped into every save/file envelope
+  __apex: "tools/shot/agent.mjs",                   // the dev API itself (game.js binds ApexApi)
+  __apexErrors: "js/agent/apex.js",                 // index.html's error ring → __apex health
+  __apexROLoops: "js/agent/apex.js",                // index.html's ResizeObserver loop counter → health roLoops
+  __apexReportError: "js/game.js",                  // the shell's visible error card
+  __apexXr: "tests/unit/xr-phase0.test.mjs",        // xr-boot's phase-0 seam
+};
+
+test("every window.__* write has a named reader (no write-only probes)", () => {
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const files = ["index.html"];
+  const walk = (rel) => {
+    for (const e of fs.readdirSync(path.join(ROOT, rel), { withFileTypes: true })) {
+      const r = rel + "/" + e.name;
+      if (e.isDirectory()) walk(r);
+      else if (e.name.endsWith(".js")) files.push(r);
+    }
+  };
+  walk("js");
+  const writers = new Map();
+  for (const f of files) {
+    const code = fs.readFileSync(path.join(ROOT, f), "utf8").split("\n")
+      .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join("\n");   // a comment naming the write is not one
+    for (const m of code.matchAll(/window\.(__[A-Za-z0-9_]+)\s*=(?!=)/g)) {
+      if (!writers.has(m[1])) writers.set(m[1], new Set());
+      writers.get(m[1]).add(f);
+    }
+  }
+  assert.deepEqual([...writers.keys()].sort(), Object.keys(WINDOW_WRITES).sort(),
+    "a window.__* write appeared or went: name the file that reads it in WINDOW_WRITES (or delete the write)");
+  for (const [name, reader] of Object.entries(WINDOW_WRITES)) {
+    assert.ok(!writers.get(name).has(reader), `${name}: the reader must not be its own writer (${reader})`);
+    const src = fs.readFileSync(path.join(ROOT, reader), "utf8");
+    assert.ok(new RegExp("\\b" + name + "\\b").test(src), `${name}: ${reader} no longer reads it`);
+  }
 });
