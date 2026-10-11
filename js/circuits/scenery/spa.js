@@ -16,6 +16,11 @@
 
       // 1. Cool Ardennes atmosphere — grey zenith/horizon/fog; kill alpine sun.
       if (ATM && ATM.dampArdennes) Object.assign(pal, ATM.dampArdennes);
+      // Spa's run-off is mown grass, not the bare-earth tan dampArdennes still
+      // carries for sky/fog. Must land AFTER the ATM assign — terrain meshes
+      // upload before and after this callback, and a mid-build pal.runoff flip
+      // made buildSteps diverge from build() (CI sweeps, #1403).
+      pal.runoff = [0.20, 0.30, 0.16];
 
       // The start gantry stands over the REAL line, re-keyed through sl() (the
       // brands_hatch idiom): this file's s = 0 is the scenery origin, and RS()
