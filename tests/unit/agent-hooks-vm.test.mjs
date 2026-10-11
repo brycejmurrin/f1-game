@@ -134,3 +134,82 @@ test("a rainy night does not claim a starry sky the cloud deck hides", async () 
   g.apex.weather("dry");
 });
 
+
+// ── round 2, B8 ─────────────────────────────────────────────────────────────
+
+test("act() in a time trial ends the flying-start run-up: the wheel is the agent's", async () => {
+  try { g.apex.clearInput(); } catch (_) {}
+  const before = g.G.cars;
+  assert.ok(g.apex.tt("monza", "day"), "tt() starts");
+  await g.settle(() => g.G.cars !== before && g.G.state === "count", 4000);
+  pump(3);   // the first countdown frame arms FlyingStart (it is a per-frame update)
+  truthy(g.G.flyingStart.active(), "the run-up is armed after tt()");
+  const o0 = g.apex.act({ steer: 0, throttle: true }, 1 / 60, 1);
+  assert.equal(g.G.flyingStart.active(), false, "act() hands the run-up back");
+  const v0 = o0.speed != null ? o0.speed : g.G.player.speed;
+  g.apex.act({ steer: 0, throttle: true }, 1 / 60, 30);
+  truthy(g.G.player.human, "the player car is human again");
+  gt(g.G.player.speed, v0, "throttle input is obeyed (speed rises)");
+  // restore a plain race for the tests after this one
+  g.G.timeTrial = false;
+});
+
+test("reset() ends an armed flying-start run-up", async () => {
+  try { g.apex.clearInput(); } catch (_) {}
+  const before = g.G.cars;
+  g.apex.tt("monza", "day");
+  await g.settle(() => g.G.cars !== before && g.G.state === "count", 4000);
+  pump(3);
+  truthy(g.G.flyingStart.active());
+  g.apex.reset(0.1, 40, 0);
+  assert.equal(g.G.flyingStart.active(), false);
+  truthy(g.G.player.human);
+  g.G.timeTrial = false;
+});
+
+test("world().ego.pos for a retired player is the same running-then-retired rank as timing()", async () => {
+  await load("monza", 0.5, 50);
+  g.apex.retire();   // the player
+  truthy(g.G.player.retired);
+  const pos = g.apex.world({ detail: "full" }).ego.pos;
+  gt(pos, 0, "never P0");
+  assert.equal(pos, g.apex.timing().pos);
+  assert.equal(pos, g.G.cars.length, "the lone retiree is classified last");
+});
+
+test("world({since}) reports a small move of a unit-range field (frac within 0.005), not a quarter-range deadband", async () => {
+  await load("monza", 0.2, 60);
+  const a = g.apex.world({ detail: "drive" });
+  g.apex.step(1 / 60, 120);
+  const full = g.apex.world({ detail: "drive" });
+  gt(Math.abs(full.ego.frac - a.ego.frac), 0.005, "the run moved frac by more than the tolerance");
+  g.apex.step(1 / 60, 1);
+  const d = g.apex.world({ detail: "drive", since: full.seq });
+  const now = g.apex.world({ detail: "drive" });
+  // reconstruct from the delta chain: base `full`, plus whatever the delta carried
+  const rec = d.ego && d.ego.frac !== undefined ? d.ego.frac : full.ego.frac;
+  lt(Math.abs(rec - now.ego.frac), 0.0051, "the reconstructed frac is within 0.005 of the truth");
+  // and a 120-frame hop on its own surfaces frac in the delta
+  const b = g.apex.world({ detail: "drive" });
+  g.apex.step(1 / 60, 120);
+  const d2 = g.apex.world({ detail: "drive", since: b.seq });
+  truthy(d2.ego && d2.ego.frac !== undefined, "a 120-frame move of frac is carried by the delta");
+});
+
+test("obs().axFrac and physState().axFrac agree, both preferring the stored value", async () => {
+  await load("monza", 0.3, 50);
+  g.G.player.axFrac = 0.42; g.G.player.axEstSm = 0;
+  assert.equal(g.apex.obs().axFrac, 0.42);
+  assert.equal(g.apex.physState().axFrac, 0.42);
+  g.G.player.axFrac = undefined;
+});
+
+test("nodeAt(NaN) and other non-numbers answer {ok:false} instead of throwing", async () => {
+  await load("monza", 0.3, 50);
+  for (const bad of [NaN, undefined, "abc", Infinity, null]) {
+    const r = g.apex.nodeAt(bad);
+    assert.equal(r && r.ok, false, "nodeAt(" + String(bad) + ")");
+  }
+  assert.equal(typeof g.apex.nodeAt(0.45).k, "number");
+  assert.equal(typeof g.apex.nodeAt(0).k, "number");
+});

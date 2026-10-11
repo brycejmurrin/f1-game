@@ -19,16 +19,18 @@ const HudReadouts = (function () {
     return Math.floor(dist / L);
   }
 
-  /** "▲ BEA +1L" / short "▲ +1L" — the lapped spelling of the gap chip. */
+  /** "▲ BEA +1L" / short "▼ -1L" — the lapped spelling of the gap chip. `n` is
+   *  SIGNED like HudRelative's: + = that car is a lap UP, - = a lap down. */
   function lapGapText(arrow, code, n, short) {
-    return short ? arrow + " +" + n + "L" : arrow + " " + code + " +" + n + "L";
+    const l = (n > 0 ? "+" : "") + n + "L";
+    return short ? arrow + " " + l : arrow + " " + code + " " + l;
   }
 
   // GAP DECIMALS. 2026 Overtake unlocks inside ~1.0 s, so every race HUD
   // profile needs hundredths near that threshold (0.94 vs 1.04). Under ~10 s
   // the chip / REL / tower share two decimals; above that, standard and
   // minimal drop to one (same character count as "9.94" → "10.4") while
-  // broadcast keeps TV-style hundredths. Lap-down stays "+1L" (lapGapText).
+  // broadcast keeps TV-style hundredths. Lap-down spells "-1L" (lapGapText).
   const GAP_FINE_LT = 9.95;
   /** Decimal places for a gap of `sec` seconds on HUD profile `profile`. */
   function gapDecimals(profile, sec) {

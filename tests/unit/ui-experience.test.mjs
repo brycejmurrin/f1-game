@@ -41,6 +41,13 @@ test('pause context reads live classification and distinguishes online practice'
   G.timeTrial = true; G.session = 'tt'; G.netPlay.active=()=>false;
   assert.doesNotMatch(ctx.api.raceBrief(G).detail,/P2|\/ 12|ONLINE/);
 });
+test('pause context carries the career brief line from CareerExperience', () => {
+  const local = vm.createContext({ CareerExperience: { objectiveStatus: (G) => G.session === 'race' ? 'OBJECTIVE · TARGET P6 · NOW P8' : '' } });
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local);
+  const p = {lap: 2}, G = { player:p, ranked:[p], track:{def:{name:'Monza'}}, session:'race', lapsTarget:12 };
+  assert.equal(local.api.raceBrief(G).objective, 'OBJECTIVE · TARGET P6 · NOW P8');
+  assert.equal(ctx.api.raceBrief(G).objective, '', 'no CareerExperience, no line');
+});
 test('task doors retain canonical close and settings destinations', () => {
   const html=fs.readFileSync(new URL('../../index.html',import.meta.url),'utf8');
   for(const id of ['mb-watch','mb-practice','mb-photo','menu-explore','pm-strategy','pm-review','pm-photo','pm-checkpoint-save']) assert.match(html,new RegExp('id="'+id+'"'));

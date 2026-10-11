@@ -9,6 +9,13 @@ const WatchTransport = (function () {
   }
   function create(G, replay) {
     let root = null, refs = {}, desc = null, tickAt = 0, scrubbing = false;
+    let pendingSeek = null, seekFrame = 0;   // the latest scrub value awaiting its frame
+    function flushSeek() {
+      seekFrame = 0;
+      if (pendingSeek == null || !root) { pendingSeek = null; return; }
+      const v = pendingSeek; pendingSeek = null;
+      replay.seek(v);
+    }
     function node(tag, key, text) {
       const n = document.createElement(tag);
       if (key) { n.dataset.wt = key; refs[key] = n; }
@@ -65,8 +72,16 @@ const WatchTransport = (function () {
       track.appendChild(marks);
       const seek = node("input", "seek"); seek.type = "range"; seek.min = "0"; seek.max = String(duration); seek.step = "0.1";
       seek.setAttribute("aria-label", "Race replay timeline");
-      seek.addEventListener("input", () => { scrubbing = true; replay.seek(+seek.value); refs.time.textContent = clock(+seek.value); });
-      seek.addEventListener("change", () => { scrubbing = false; replay.seek(+seek.value); paint(); });
+      // A drag fires `input` far faster than the screen refreshes, and replay.seek() poses 22 cars and
+      // renders synchronously: the clock text follows every event, the seek itself runs once per frame
+      // with the latest value (a browser without rAF seeks at once).
+      seek.addEventListener("input", () => {
+        scrubbing = true; refs.time.textContent = clock(+seek.value);
+        pendingSeek = +seek.value;
+        if (typeof requestAnimationFrame !== "function") { flushSeek(); return; }
+        if (!seekFrame) seekFrame = requestAnimationFrame(flushSeek);
+      });
+      seek.addEventListener("change", () => { scrubbing = false; pendingSeek = null; replay.seek(+seek.value); paint(); });
       seek.addEventListener("blur", () => { scrubbing = false; paint(); });
       track.appendChild(seek); timeline.appendChild(track); timeline.appendChild(node("span", "duration", clock(duration)));
       root.appendChild(timeline);
@@ -111,7 +126,7 @@ const WatchTransport = (function () {
       refs.next.disabled = !desc.events.some((e) => e.t - lead > s.T + 1);
     }
     function stop() {
-      if (root) root.remove(); root = null; refs = {}; desc = null; scrubbing = false; tickAt = 0;
+      if (root) root.remove(); root = null; refs = {}; desc = null; scrubbing = false; tickAt = 0; pendingSeek = null;
       if (typeof document !== "undefined" && document.body) document.body.classList.remove("watch-controls-on");
     }
     function tick(dt) { tickAt -= dt; if (tickAt <= 0) { tickAt = 0.1; paint(); } }

@@ -522,7 +522,7 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
   G.track = { total: 5000, propTop: 20, meshes: { terrain: {}, road: {}, props: {} } };
   G.camEye = [0.31, 1.07, 1000.4]; G.camTgt = [0.2, 1, 1030];
   const sp = ctx.ShadowPass.create(G, { teamMesh: carDraw.teamMesh, vStd: (x) => x, cockpitCaster: carDraw.cockpitCaster });
-  // The grounded transform game.js's currentCarGroundMat writes (banked: its
+  // The grounded transform currentCarGroundMat in game.js writes (banked: its
   // right/up are rolled, which the camera-anchored cockpit basis is not).
   const ground = [0.995, 0.0998, 0, 0, -0.0998, 0.995, 0, 0, 0, 0, 1, 0, 0.3, 0.05, 1000.2, 1];
   const len = Math.hypot(0, 0.04, 1);
@@ -542,7 +542,7 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
     return mine[0];
   };
   const close = (a, b, msg, eps = 2e-3) => a.forEach((x, i) => assert.ok(Math.abs(x - b[i]) < eps, `${msg}: [${i}] ${x} vs ${b[i]}`));
-  // What game.js's cockpit branch draws the body at: the same call over the same inputs.
+  // What the cockpit branch in game.js draws the body at: the same call over the same inputs.
   const drawnMat = (seat) => {
     const R = [0, 0, 0], U = [0, 1, 0], F = [0, 0, 0], P = [0, 0, 0];
     ctx.GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, R, U, F, P, ctx.GameCams.seatFwd(seat), ctx.GameCams.seatUp(seat));
