@@ -1670,6 +1670,26 @@ test("a guest's BACK from the quali sheet tells the host", async () => {
   } finally { h.lobby.cancel(); }
 });
 
+test("a guest that backed out of quali joins the race when the host sends qgo (additive; old clients ignore it)", async () => {
+  const { h, made } = await guestInQuali();
+  let started = 0, netStarts = 0;
+  h.G.startRace = async () => { started++; return { ok: true }; };
+  h.G.netPlay = { start: () => { netStarts++; return { ok: true }; }, hostStart() {} };
+  try {
+    made[0].deliver("qgo", {});
+    await new Promise((r) => setImmediate(r));
+    assert.equal(started, 0, "still on the sheet: qgo is not a start for a guest that did not back out");
+    h.lobby.abortQuali();
+    made[0].deliver("qgo", {});
+    await new Promise((r) => setImmediate(r));
+    assert.equal(started, 1, "the guest that left the sheet builds the race with the host");
+    assert.equal(netStarts, 1);
+    made[0].deliver("qgo", {});
+    await new Promise((r) => setImmediate(r));
+    assert.equal(started, 1, "a repeated qgo does not start twice");
+  } finally { h.lobby.cancel(); }
+});
+
 test("a failed quali prepare (sheet never opens) cancels the lobby so persistOrder is not gated for the page session", async () => {
   const { h } = await guestInQuali({}, false);
   try {
