@@ -507,6 +507,27 @@ test("garage orbit path reuses lampAim, chase buffer, and boardInfo cache", () =
   assert.match(cam, /const ctx = _garageCtx/, "garageCtx mutates one object");
 });
 
+test("logo, sponsor and number edits repaint atlases and leave the bay meshes", () => {
+  const { GarageScene, meshes } = harness();
+  GarageScene.draw(TEAM, LIV, [0, 1.6, 0], null, 0);
+  const n = meshes.length;
+  const g = GarageScene.debug().geomKey;
+  assert.ok(n > 0, "the bay built meshes");
+  GarageScene.draw(TEAM, { ...LIV, logo: [1, 0, 0], logo2: [0, 0, 1], logo3: [0, 1, 0], sponsors: "clean" }, [0, 1.6, 0], null, 0);
+  assert.equal(GarageScene.debug().geomKey, g, "crest and sponsor pixels are not a new shell");
+  assert.equal(meshes.length, n, "a logo drag must not rebuild the bay");
+  const numbered = { ...TEAM, drivers: [{ name: "A", code: "AAA", num: 1 }, { name: "B", code: "BBB", num: 2 }] };
+  GarageScene.draw(numbered, LIV, [0, 1.6, 0], null, 0);
+  assert.equal(GarageScene.debug().geomKey, g, "driver numbers live on the board, not in the shell");
+  assert.equal(meshes.length, n);
+  GarageScene.draw(TEAM, LIV, [0, 1.6, 0], null, 0, { weather: "wet" });
+  assert.notEqual(GarageScene.debug().geomKey, g, "wet equipment is real geometry");
+  assert.ok(meshes.length > n, "weather still rebuilds the bay");
+  const wetN = meshes.length;
+  GarageScene.draw(TEAM, { ...LIV, c1: [0.1, 0.2, 0.9] }, [0, 1.6, 0], null, 0);
+  assert.ok(meshes.length > wetN, "body colour is vertex paint and must rebuild");
+});
+
 test("the LEGENDS bay rebuilds when the legend changes, even on the same paint", () => {
   // The Legends row keeps team id "legends" across all twelve legends, and two
   // tribute liveries can share every colour (Schumacher's and Senna's reds):

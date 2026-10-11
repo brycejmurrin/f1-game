@@ -1355,13 +1355,12 @@ let floorMesh = null, trussMesh = null, cacheKey = "";
 const dressMesh = {};
 let dressTex = null, dressFail = 0, dressRetryAt = 0;
 // TWO keys, not one. Everything above is GEOMETRY and depends on the team and
-// its colours; the dress atlas additionally carries boardKey(info), which
-// changes on every part pick. One combined key would make a brake-duct choice
-// rebuild the shell, the LED strips, the floor, every prop AND repaint the
-// full 1024² atlas — measured 12 ms on top of the car's own rebuild, enough to
-// stall the turntable on a pick. Geometry survives a part pick; only the four
-// boards repaint and re-upload.
-let geomKey = "", dressCanvas = null;
+// its body colours; the dress atlas additionally carries the crest (logo,
+// logo2, logo3), the driver numbers and boardKey(info). Folding the crest into
+// the geometry key made a TEAM LOGO drag rebuild the shell, the LEDs, the
+// floor and every prop — the turntable hitch. Geometry survives a logo,
+// sponsor or number edit; only the atlas that reads those pixels repaints.
+let geomKey = "", liveKey = "", dressIdKey = "", dressFullKey = "", dressCanvas = null;
 const propMesh = {};
 // `mat` is a PER-VERTEX MATERIAL ID, and its absence is why this whole room was
 // untextured. GLX wires the attribute only when `data.mat.length === vCount`
@@ -1413,32 +1412,48 @@ function buildStatic(liv, opts) {
   return out;
 }
 
-// The room's build identity: `gKey` is what the geometry and the live atlas are
-// built from, `key` adds the spec boards. rebuild() and prepared() share it.
+// The room's build identity. `geom` rebuilds meshes, `live` repaints the 512
+// screens, `dressId` repaints the crest, and `key` is the whole thing plus the
+// spec boards. rebuild() and prepared() share it.
 function roomKeys(team, liv, info, ctx) {
   const drv = [seatDriverAt(team, 0), seatDriverAt(team, 1)];
   // Same idiom as getCockpitWheel's _cockpitWheelKey (js/car/car-mesh.js): fold
   // every colour the build consumes, rounded, into one string.
   const kc = (c) => (c ? rgb(c, [0, 0, 0]).map((v) => v.toFixed(3)).join(",") : "-");
-  const livKey = `${kc(liv && liv.c1)}/${kc(liv && (liv.accent || liv.stripe || liv.c2))}`
-                 + `/${kc(liv && liv.c2)}/${kc(liv && liv.logo)}`
-                 + `/${kc(liv && liv.logo2)}/${kc(liv && liv.logo3)}`
-                 + `/${(liv && liv.sponsors) || "-"}`;   // the bay banners paint the sponsor pack (scene-live.js)
-  // `legend`: the LEGENDS row keeps its id across legends, and two tribute
-  // liveries can share every colour (Schumacher's and Senna's reds), so the
-  // wall kept the previous legend's crest — a Ferrari horse over Senna.
-  const gKey = `${team && team.id}|${(team && team.legend) || ""}|${livKey}`
-               + `|${logoGen}|${drv[0] && drv[0].num}-${drv[1] && drv[1].num}`
-               + `|${ctxKey(ctx)}`;
-  return { gKey, key: `${gKey}|${boardKey(info)}` };
+  const paint = `${kc(liv && liv.c1)}/${kc(liv && (liv.accent || liv.stripe || liv.c2))}/${kc(liv && liv.c2)}`;
+  const marks = `${kc(liv && liv.logo)}/${kc(liv && liv.logo2)}/${kc(liv && liv.logo3)}`;
+  const nums = `${drv[0] && drv[0].num}-${drv[1] && drv[1].num}`;
+  const ck = ctxKey(ctx);
+  // Shell, floor, LEDs, props and the career desks. Not the crest, the sponsor
+  // banners or the pit-board numbers — those are atlas texels.
+  const geom = `${team && team.id}|${(team && team.legend) || ""}|${paint}`
+               + `|${ctx && ctx.night ? 1 : 0}|${(ctx && ctx.weather) || "-"}|${GarageExperience.careerKey(ctx)}`;
+  const live = `${paint}|${(liv && liv.sponsors) || "-"}|${ck}`;
+  const dressId = `${team && team.id}|${(team && team.legend) || ""}|${paint}|${marks}|${logoGen}|${nums}`;
+  return { geom, live, dressId, key: `${geom}|${live}|${dressId}|${boardKey(info)}` };
+}
+function uploadLive(team, liv, ctx) {
+  if (!_gfx.createTexture || !_gfx.createTexMesh || typeof LiveryTex === "undefined") return;
+  try {
+    if (!liveCanvas) { liveCanvas = document.createElement("canvas"); liveCanvas.width = liveCanvas.height = LIVE; }
+    paintLive(liveCanvas, team, liv, ctx);
+    GarageExperience.paintCareer(liveCanvas, ctx);
+    if (liveTex && _gfx.freeTexture) _gfx.freeTexture(liveTex);
+    liveTex = _gfx.createTexture(liveCanvas);
+    if (!liveTex || liveTex._phase === 4) throw new Error("live texture upload returned no handle");
+    if (!liveMesh.mid) {
+      const lg = GarageLive.build(FIXTURES);
+      for (const k in lg) if (lg[k].idx.length) liveMesh[k] = _gfx.createTexMesh(lg[k]);
+    }
+  } catch (e) { liveTex = null; Log.warn("game", `GarageScene live atlas failed: ${e && e.message}`); }
 }
 function rebuild(team, liv, info, ctx) {
-  const { gKey, key } = roomKeys(team, liv, info, ctx);
+  const { geom, live, dressId, key } = roomKeys(team, liv, info, ctx);
   const now = typeof performance !== "undefined" ? performance.now() : Date.now();
   if (key === cacheKey && shellMesh &&
       (dressTex || dressFail >= 3 || now < dressRetryAt ||
        !_gfx.createTexture || !_gfx.createTexMesh || typeof LiveryTex === "undefined")) return;
-  if (gKey !== geomKey || !shellMesh) {
+  if (geom !== geomKey || !shellMesh) {
     // A new team/paint/context is a fresh texture; old failed uploads must
     // not permanently remove this team's wall graphics or moving trace.
     dressFail = 0; dressRetryAt = 0; traceFail = 0;
@@ -1475,28 +1490,21 @@ function rebuild(team, liv, info, ctx) {
       if (g[SIDES[i]].idx.length) propMesh[SIDES[i]] = _gfx.createMesh(g[SIDES[i]]);
     for (let i = 0; i < SIDES.length; i++)
       if (dressMesh[SIDES[i]]) { _gfx.freeMesh(dressMesh[SIDES[i]]); dressMesh[SIDES[i]] = null; }
-    // A new team or paint: the whole atlas repaints, and the "what changed"
-    // marker on the spec board starts over — every row differs from the last
-    // team's, and a board of twelve highlights marks nothing.
-    dressCanvas = null; lastSpec = null;
-    geomKey = gKey;
-    // The live atlas follows the geometry key (team, paint, ctx): repaint it
-    // here, and build its quads once.
-    if (_gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined") {
-      try {
-        if (!liveCanvas) { liveCanvas = document.createElement("canvas"); liveCanvas.width = liveCanvas.height = LIVE; }
-        paintLive(liveCanvas, team, liv, ctx);
-        GarageExperience.paintCareer(liveCanvas, ctx);
-        if (liveTex && _gfx.freeTexture) _gfx.freeTexture(liveTex);
-        liveTex = _gfx.createTexture(liveCanvas);
-        if (!liveTex || liveTex._phase === 4) throw new Error("live texture upload returned no handle");
-        if (!liveMesh.mid) {
-          const lg = GarageLive.build(FIXTURES);
-          for (const k in lg) if (lg[k].idx.length) liveMesh[k] = _gfx.createTexMesh(lg[k]);
-        }
-      } catch (e) { liveTex = null; Log.warn("game", `GarageScene live atlas failed: ${e && e.message}`); }
-    }
+    // A new team or paint: the "what changed" marker on the spec board starts
+    // over — every row differs from the last team's, and a board of twelve
+    // highlights marks nothing. The crest canvas itself is keyed below.
+    lastSpec = null;
+    geomKey = geom;
+    liveKey = "";
+    dressFullKey = "";
   }
+  if (live !== liveKey || !liveTex) {
+    uploadLive(team, liv, ctx);
+    liveKey = live;
+  }
+  if (dressId !== dressIdKey) { dressCanvas = null; dressIdKey = dressId; }
+  const dressFull = dressId + "|" + boardKey(info);
+  if (dressFull === dressFullKey && dressTex) { cacheKey = key; return; }
   // Team dress. Three strikes then stop trying: an unbranded bay is far better
   // than a canvas that throws once a frame forever.
   if (dressTex && _gfx.freeTexture) _gfx.freeTexture(dressTex);
@@ -1513,6 +1521,7 @@ function rebuild(team, liv, info, ctx) {
       }
       if (!dressTex || dressTex._phase === 4) throw new Error("dress texture upload returned no handle");
       dressFail = 0; dressRetryAt = 0;
+      dressFullKey = dressFull;
     } catch (e) {
       if (dressTex && _gfx.freeTexture) _gfx.freeTexture(dressTex);
       dressFail++; dressRetryAt = now + 1000; dressTex = null; dressCanvas = null;
@@ -1561,7 +1570,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   // against the floor's depth — which is exactly the clip a planar reflection
   // needs, with no stencil and no second floor pass. MAT_MIRROR reflects X as
   // the preview does (MAT_REFLECT_X) and Y for the floor; det +1, no cull flip.
-  if (carMesh && !(_gfx.isMobile || _gfx.mobileTier)) {
+  if (carMesh) {
     if (carMat) { arrivalMirror.set(carMat); arrivalMirror[1] = -carMat[1]; arrivalMirror[5] = -carMat[5]; arrivalMirror[9] = -carMat[9]; arrivalMirror[13] = -carMat[13]; }
     else arrivalMirror.set(MAT_MIRROR);
     _gfx.draw(carMesh, arrivalMirror, MIRROR_OPTS);
@@ -1825,7 +1834,7 @@ function release() {
   for (const ent of previewMeshes.values()) fm(ent.mesh);
   previewMeshes.clear(); previewHulls.clear();
   dressCanvas = null; liveCanvas = null; lastSpec = null;
-  cacheKey = ""; geomKey = ""; dressFail = 0; dressRetryAt = 0; traceFail = 0; lastTrace = -1e9;
+  cacheKey = ""; geomKey = ""; liveKey = ""; dressIdKey = ""; dressFullKey = ""; dressFail = 0; dressRetryAt = 0; traceFail = 0; lastTrace = -1e9;
   _boardInfo = null; _boardInfoKey = "";
   _rigK0 = NaN; _rigK1 = NaN; _rigK2 = NaN; _rig.length = 0; _chase.length = 0;
   return n;
