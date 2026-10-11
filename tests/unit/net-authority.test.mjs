@@ -712,7 +712,7 @@ test("LOBBY phase: a guest drops a relayed QUALI naming its OWN seat", async () 
 
 test("LOBBY phase: room tyre-wear / reliability rules never overwrite the guest's SAVED choice", async () => {
   const { G, lobby, peerSays, settle } = await lobbyUp("guest");
-  // game.js's setters persist (store "tyreWear" / "reliability"); mirror that.
+  // setters in game.js persist (store "tyreWear" / "reliability"); mirror that.
   const saved = new Map([["tyreWear", "off"]]);   // "reliability" never saved
   G.store = {
     get: (k, d) => (saved.has(k) ? saved.get(k) : d),

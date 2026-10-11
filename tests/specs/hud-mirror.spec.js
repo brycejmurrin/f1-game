@@ -354,6 +354,10 @@ test.describe("HUD rear-view mirror", () => {
       await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
       const prepared = await page.evaluate(async () => {
         const a = window.__apex;
+        // prepareRace gives up after 30 s of wall clock (mirror-pass.js), and that
+        // budget starts inside race(). Let the cold TLX boot present its first
+        // frame BEFORE the budget starts, so it measures the mirror, not the boot.
+        try { await a.awaitPresent(30000); } catch (_) {}
         // Pin both levers before preparation so the first race frame asks for
         // the same target size. renderScale alone does not hold mirror quality.
         a.renderScale(0.5);
