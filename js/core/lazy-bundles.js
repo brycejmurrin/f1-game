@@ -393,7 +393,8 @@ function prefetchAudio() {
   if (typeof document === "undefined" || !document.createElement) return;
   for (let i = 0; i < AUDIO_FILES.length; i++) {
     const src = AUDIO_FILES[i];
-    const href = src + "?v=" + (window.__APEX_BUILD || 0);
+    // The key inject() will ask for (content hash when deployed), so the prefetch is the hit.
+    const href = typeof ScriptLoader !== "undefined" && ScriptLoader.url ? ScriptLoader.url(src) : src + "?v=" + (window.__APEX_BUILD || 0);
     if (document.querySelector && document.querySelector('link[rel="prefetch"][href="' + href + '"]')) continue;
     const el = document.createElement("link");
     el.rel = "prefetch";
@@ -579,11 +580,13 @@ function raceAssets() {
     ensureScenery(deps.getContext().trackIdx).catch((e) => {
       Log.warn("track", "scenery prefetch failed: " + (e && e.message));
     });
-    // NO build-worker warm here. The worker (default ON on multi-core) imports
-    // all of TRACK_VM, every LAZY_CIRCUIT payload included (~1.36 MB, a ~20 MB
-    // heap), and only an IN-SESSION track switch posts to it (game.js
-    // loadTrackStepped: state race/count); cold race entry builds paced on the
-    // main thread. TrackBuildClient.build() spawns it on that first use.
+    // Build worker: warmed at the title for the AGENT SURFACE only (its
+    // __apex.race() track switches are what post builds); a player's worker is
+    // spawned by the first build actually posted (R3-ASYNC-2, build-client.js).
+    // A player title never pays the TRACK_VM heap (3-F4).
+    if (typeof TrackBuildClient !== "undefined" && TrackBuildClient.idleWarm) {
+      try { TrackBuildClient.idleWarm(wantAgentSurface()); } catch (_) { /* warm is best-effort */ }
+    }
   };
   if (typeof queueMicrotask === "function") queueMicrotask(kickScenery);
   else Promise.resolve().then(kickScenery);

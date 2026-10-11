@@ -3,6 +3,8 @@
 //
 //   L8   tuner RESET + "(N tuned)" must see the sun knobs, which live in the
 //        "<track>|<tod>|dry" slot whatever the weather (profiles.js keyFor)
+//   R3-PERSISTENCE-3  a pre-2026-10-04 save's per-weather sun edit is moved to
+//        that slot at load (or dropped when ambiguous), not left dead + counted
 //   M3   frame.wetness is integrated by render() alone (wxArc.tick stands in
 //        only when headless), so it ramps at the documented 0.8/s, not ~1.6/s
 //   M10  endSession() puts the chip's weather back AND re-lights for it
@@ -33,11 +35,11 @@ const DEFS = [
   { id: "sunAzim", def: 0, min: -180, max: 180 },
   { id: "lampLevel", def: 0.2, min: 0, max: 1 },
 ];
-function loadStore(weather) {
-  const stored = { lightTune: null };
+function loadStore(weather, saved = null) {
+  const stored = { lightTune: saved }, writes = [];
   const st = { weather };
   const G = {
-    store: { get: (k, d) => (stored[k] == null ? d : stored[k]), set: (k, v) => { stored[k] = JSON.parse(JSON.stringify(v)); } },
+    store: { get: (k, d) => (stored[k] == null ? d : stored[k]), set: (k, v) => { writes.push(k); stored[k] = JSON.parse(JSON.stringify(v)); } },
     clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)),
     track: { def: { id: "monaco", night: false } },
     raceTimeOfDay: "dusk",
@@ -53,7 +55,7 @@ function loadStore(weather) {
   const LS = vm.runInContext("LightStore", ctx);
   const store = LS.create(G);
   store.apply();
-  return { LS, store, st, LT: vm.runInContext("LightTune.LT", ctx) };
+  return { LS, store, st, stored, writes, LT: vm.runInContext("LightTune.LT", ctx) };
 }
 
 test("L8: RESET in the wet clears the sun edit the tuner filed under |dry, and the count agrees", () => {
@@ -94,6 +96,38 @@ test("L8: the RESET button goes through the store, not a bare delete of the weat
   const src = read("js/lighting/tuner-panel.js");
   assert.match(src, /\$\("lt-reset"\)\.onclick[\s\S]{0,700}LightStore\.reset\(\)/);
   assert.match(src, /LightStore\.tuned\(\)/);
+});
+
+// ── R3-PERSISTENCE-3: legacy per-weather sun edits ─────────────────────────
+test("R3-PERSISTENCE-3: a pre-10-04 wet sun edit moves to |dry at load, applies, and the export carries no dead entry", () => {
+  const h = loadStore("wet", { "monaco|dusk|wet": { sunElev: -6, sunAzim: 40, lampLevel: 0.5 } });
+  assert.deepEqual(host(h.stored.lightTune), { "monaco|dusk|wet": { lampLevel: 0.5 }, "monaco|dusk|dry": { sunElev: -6, sunAzim: 40 } },
+    "the load persisted the migrated blob (what SAVE ALL exports)");
+  assert.equal(h.LT.sunElev, -6, "the player's sun edit is live again");
+  assert.equal(h.LT.sunAzim, 40);
+  assert.equal(h.LS.tuned(), 3, "the label counts live knobs only");
+  h.store.persist();
+  assert.deepEqual(host(h.stored.lightTune), host(h.store.profiles), "a re-save writes the same clean shape");
+});
+
+test("R3-PERSISTENCE-3: ambiguous legacy sun edits are dropped (dry slot already set, or weathers disagree)", () => {
+  const h = loadStore("rain", {
+    "monaco|dusk|dry": { sunElev: 5 },
+    "monaco|dusk|wet": { sunElev: -6, sunAzim: 40 },
+    "monaco|dusk|rain": { sunAzim: 12, lampLevel: 0.4 },
+    "monaco|night|wet": { sunAzim: 7 }, "monaco|night|rain": { sunAzim: 7 },
+  });
+  assert.deepEqual(host(h.stored.lightTune), {
+    "monaco|dusk|dry": { sunElev: 5 }, "monaco|dusk|rain": { lampLevel: 0.4 }, "monaco|night|dry": { sunAzim: 7 },
+  }, "dry wins over a legacy sunElev; wet 40 vs rain 12 sunAzim is dropped; agreeing weathers move once");
+  assert.equal(h.LT.sunElev, 5);
+  assert.equal(h.LS.tuned(), 2, "rain lampLevel + the dry slot's sunElev");
+});
+
+test("R3-PERSISTENCE-3: a clean save is not rewritten at load", () => {
+  const h = loadStore("wet", { "monaco|dusk|dry": { sunElev: 5 }, "monaco|dusk|wet": { lampLevel: 0.5 }, "*": { lampLevel: 0.3 } });
+  assert.deepEqual(h.writes, [], "no store.set at boot");
+  assert.equal(h.LS.tuned(), 2, "wet lampLevel + the dry slot's sunElev");
 });
 
 // ── M3 / M10: weather-arc ──────────────────────────────────────────────────

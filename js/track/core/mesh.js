@@ -93,6 +93,7 @@ const TrackMesh = (function () {
     if (!def.banked && !(zones && zones.length)) return null;
     const n = track.n;
     const ds = track.total / n;
+    if (!(ds > 0)) return null;   // zero-length loop: 12 / ds below would be an endless window
     const lift = new Float32Array(n);
     const bsign = new Float32Array(n);   // outer side: +1 = right edge, -1 = left
 

@@ -110,10 +110,10 @@
 // the same reason — see AGENTS.md §Verification.
 import vm from "node:vm";
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync, readFileSync, renameSync, existsSync, rmSync, statSync, watch as fsWatch } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, renameSync, existsSync, rmSync, statSync, realpathSync, watch as fsWatch } from "node:fs";
 import readline from "node:readline";
 import { execFileSync } from "node:child_process";
-import { join, extname, basename } from "node:path";
+import { join, extname, basename, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
@@ -128,6 +128,7 @@ import { occlusionMap, hiddenIn } from "../car/flank-occlusion.mjs";
 import { sweep as spineSweep, writePng as writeFlatPng } from "../car/spine-station.mjs";
 
 const LIVE_BASE = "https://brycejmurrin.github.io/f1-game/";
+const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const argv = process.argv.slice(2);
 // Bare `--help` used to be silently ignored (OWN_FLAGS only catches `--k=v`
 // unknowns as livery axes) and launch a multi-minute Chromium shoot. Exit
@@ -1641,10 +1642,23 @@ async function serveSession(browser, gameUrl) {
     await openGarage(page, { team: st.team });
     await reapply();
   };
+  // A diff side is a shot name or a PNG path. A path must be a file under
+  // artifacts/ or scratch/ (real path, so a symlink out is refused): the rule
+  // apex_frame_report's shots follow (apex-tools-mcp.mjs assertSafeIn). Any
+  // existing path used to reach sharp and the overlay (R3-HOSTILE-3).
   const pngOf = (name) => {
-    if (existsSync(String(name))) return String(name);
     const hit = st.shots.find((s) => basename(s.png, ".png") === name);
-    return hit ? hit.png : join(outDir, `${safe(name)}.png`);
+    if (hit) return hit.png;
+    if (!existsSync(String(name))) return join(outDir, `${safe(name)}.png`);
+    const real = realpathSync(String(name));
+    const inside = ["artifacts", "scratch"].some((d) => {
+      let base = join(repoRoot, d);
+      try { base = realpathSync(base); } catch { /* not created yet: nothing can be inside it */ }
+      const rel = relative(base, real);
+      return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+    });
+    if (!inside || !statSync(real).isFile()) throw new Error(`diff: ${name} is not a shot name or a PNG under artifacts/ or scratch/`);
+    return real;
   };
   const run = async (cmd) => {
     const r = {};

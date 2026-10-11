@@ -489,11 +489,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2: the m:ss formatters round before splitting (no 1:60.00) and signed deltas never print -0.000.
   "tests/unit/lap-format-rollover.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",
+  "tests/unit/lazy-bundles-prefetch.test.mjs",
   // …and the PERIOD CAR reaching the garage SHEET, not just the team
   // record. Twelve legends share one `legends` id, so the write policy is
   // the behaviour: seed an empty sheet, reseed on a real switch, never on a
   // boot or a same-seat re-sync (that would wipe a paid-for build).
-  "tests/unit/lazy-bundles-prefetch.test.mjs",
   "tests/unit/legend-parts-seed.test.mjs",
   // The LEGENDS TEAM as a grid entry: its own id (not the custom slot), the
   // whole roster in `drivers` so the driver picker is the legend picker, and
@@ -617,6 +617,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // enough to stop in, and the COMMITMENT that replaced the pit button tells
   // a driven pit entry from a car that ran wide there. ~0.2 s.
   "tests/unit/pit-lane.test.mjs",
+  "tests/unit/platform-session-install.test.mjs",
   // PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.
   "tests/unit/player-forces.test.mjs",
   // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
@@ -711,6 +712,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/session-contracts.test.mjs",
   "tests/unit/session-entry-vm.test.mjs",
   "tests/unit/session-status.test.mjs",
+  "tests/unit/session-stub-surface.test.mjs",
   "tests/unit/settings-defaults.test.mjs",
   "tests/unit/settings-export.test.mjs",
   // Round-2: MUSIC & SOUND asks the audio bundle once per open and reveals the stub page with a note when it cannot load.
@@ -782,6 +784,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // once owned apex26.brakeCue with incompatible types (fixed by renaming the
   // ribbon flag to lineBrakeCue); this still asks that one key means one type.
   "tests/unit/store-key-types.test.mjs",
+  "tests/unit/store-registry.test.mjs",
   "tests/unit/surface-id-parity.test.mjs",
   // APEX_SURVEY_HUD=1: flag parse (query|hash|localStorage) + HUD-visible stub without race warm. Pure, ~0.1 s.
   "tests/unit/survey-hud.test.mjs",
@@ -810,6 +813,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/title-home-scene-prepaint.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
   "tests/unit/tlx-chunked-lifecycle.test.mjs",
+  "tests/unit/tlx-cull-shadow-pack.test.mjs",
   // A throw in one TLX subsystem costs that subsystem only: the car/lamp shadow
   // pass no longer clears the SUN flag; a retired post chain is rebuilt at the
   // next realloc and a post-only death keeps the bound label.
@@ -928,6 +932,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 WGX: buffers freed while an encoder (or the pending shadow encoder) is live retire through _retiredBufs; the swapchain self-test pops its validation scope before its first await.
   "tests/unit/wgx-free-retire.test.mjs",
   "tests/unit/who-is-on-it.test.mjs",
+  "tests/unit/xr-backend-pin.test.mjs",
+  "tests/unit/xr-cull-union.test.mjs",
   "tests/unit/xr-opts.test.mjs",
   // ...and WebXR Phase 0: seated-rig compose, controller→remoteSample mapping,
   // sessionInit feature flags, vendored XRButton/WebGLXRFallback presence. ~0.1 s.
@@ -935,6 +941,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ...and XRPlan / XROpts (task 20): pure path selection table + bootPick
   // never writes apex26.gfxBackend. ~0.1 s.
   "tests/unit/xr-plan.test.mjs",
+  "tests/unit/xr-visibility-pause.test.mjs",
   // Speed-scaled yaw damp (local SPEED_YAW_* in player-forces): step-steer
   // overshoot ≤12% at 61.1 m/s / ≤14% at 83.3 m/s; ≤50 m/s and lift-off
   // unchanged. createGame once, ~2.5 s.

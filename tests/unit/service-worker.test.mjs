@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
@@ -22,7 +23,7 @@ function requestKey(value) {
   return value.url;
 }
 
-function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test", registration, posted, workerURL } = {}) {
+function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test", registration, posted, workerURL, globals } = {}) {
   const listeners = new Map();
   const stores = new Map();
   const deleted = [];
@@ -112,6 +113,7 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
       : setTimeout,
     clearTimeout,
     ...(navigator ? { navigator } : {}),
+    ...(globals || {}),
   });
   vm.runInContext(SW_SOURCE, context, { filename: "sw.js" });
 
@@ -1313,4 +1315,123 @@ test("the broken-install repair deletes only apex26- caches", async () => {
   const filter = body.indexOf('indexOf("apex26-") === 0');
   const del = body.indexOf("caches.delete");
   assert.ok(filter > 0 && del > filter, "names are filtered to the apex26- prefix before any delete");
+});
+
+// R3-ASYNC-1: the generation query is a LOCAL fact. Answered from a no-store
+// version.json read with no timeout, it left every lazy load() on lie-fi (a
+// request that hangs while navigator.onLine is true) to the page's 1.5 s timer.
+function askGeneration(h) {
+  const ch = new MessageChannel();
+  const t0 = Date.now();
+  let timer;
+  const reply = new Promise((resolve) => {
+    ch.port1.once("message", (d) => resolve({ build: d.build, ms: Date.now() - t0 }));
+    timer = setTimeout(() => resolve({ build: "NO REPLY", ms: Date.now() - t0 }), 2000);   // the page's own timer is 1.5 s
+  });
+  h.messageEvent({ type: "apex-cache-generation" }, [ch.port2]);
+  return reply.finally(() => { clearTimeout(timer); ch.port1.close(); });
+}
+function hangingVersion(counter) {
+  return (request) => {
+    const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    if (url.pathname.endsWith("/version.json")) { counter.n++; return new Promise(() => {}); }
+    return Promise.reject(new Error("offline"));
+  };
+}
+
+test("a hanging version.json still answers the generation query from the settled cache", async () => {
+  const fetches = { n: 0 };
+  const h = createHarness({ fetchImpl: hangingVersion(fetches) });
+  h.stores.set("apex26-320", new Map([[`${ORIGIN}/__apex_install_settled__`, new Response("settled")]]));
+  h.stores.set("apex26-321", new Map([[`${ORIGIN}/__apex_install_settled__`, new Response("settled")]]));
+  h.stores.set("apex26-322", new Map([[`${ORIGIN}/__apex_install_complete__`, new Response("complete")]]));   // half-installed: not served
+  const r = await askGeneration(h);
+  assert.equal(r.build, 321, "the newest SETTLED generation answers");
+  assert.ok(r.ms < 50, `answered in ${r.ms} ms, not after the network`);
+  assert.equal(fetches.n, 0, "no version.json read while a local answer exists");
+});
+
+test("with nothing cached, the generation query races the network only briefly", async () => {
+  const fetches = { n: 0 };
+  const h = createHarness({ fetchImpl: hangingVersion(fetches), immediateTimeoutMs: 300 });
+  const r = await askGeneration(h);
+  assert.equal(r.build, 0, "unknown, so the page falls back to the registration URL");
+  assert.equal(fetches.n, 1);
+  // …and a network answer that arrives in time is still used.
+  const ok = createHarness({ fetchImpl: installFetch() });
+  assert.equal((await askGeneration(ok)).build, 321);
+});
+
+test("four sequential lazy loads behind a lie-fi worker finish well inside one page timeout", async () => {
+  const h = createHarness({ fetchImpl: hangingVersion({ n: 0 }) });
+  h.stores.set("apex26-321", new Map([[`${ORIGIN}/__apex_install_settled__`, new Response("settled")]]));
+  const controller = { scriptURL: `${ORIGIN}/sw.js?v=321`, postMessage(data, ports) { h.messageEvent(data, ports); } };
+  let appended = 0;
+  const ctx = vm.createContext({
+    navigator: { serviceWorker: { controller } }, MessageChannel, setTimeout, clearTimeout,
+    setInterval: () => 1, clearInterval() {}, Log: { info() {}, warn() {} },
+    ApexRoster: { DEFERRED_EDGES: [] }, window: { __APEX_BUILD: 321 },
+    document: { createElement: () => ({}), head: { appendChild(el) { appended++; setImmediate(() => el.onload()); } } },
+  });
+  vm.runInContext(await readFile(new URL("../../js/ui/update-check.js", import.meta.url), "utf8"), ctx);
+  vm.runInContext(await readFile(new URL("../../js/core/script-loader.js", import.meta.url), "utf8"), ctx);
+  vm.runInContext("globalThis.u = UpdateCheck.create({booted:321}); globalThis.loader = ScriptLoader.create();", ctx);
+  const t0 = Date.now();
+  for (const f of ["js/circuits/monza.js", "js/circuits/scenery/monza.js", "js/race/pit-lane.js", "js/audio/engine.js"]) {
+    assert.equal(await ctx.loader.load([f], []), true, f);
+  }
+  const ms = Date.now() - t0;
+  assert.equal(appended, 4);
+  assert.ok(ms < 1500, `4 loads took ${ms} ms (each used to wait out the 1.5 s timer)`);
+  ctx.u.stop();
+});
+
+// R3-PHONE-8: lazy files were keyed `?v=<build>`, a new URL for ~200 files on
+// every deploy whatever changed. The staged shell now carries a content-hash map
+// (tools/ci/bump-cache.mjs); install seeds under it, and copies a file an older
+// generation already holds under that exact hash instead of downloading it.
+const hash12 = (text) => createHash("sha256").update(text).digest("hex").slice(0, 12);
+function lazyShellFetch(map, seen) {
+  return async (request) => {
+    const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    if (seen) seen.push(url.pathname.slice(1) + url.search);
+    if (url.pathname.endsWith("/version.json")) return new Response('{"build":322}', { status: 200 });
+    if (url.pathname.endsWith("/index.html")) {
+      return new Response('<meta name="apex-build" content="322"><script src="js/game.js?v=aaaaaaaaaaaa"></script>' +
+        (map ? `<script type="application/json" id="apex-lazy-v">${JSON.stringify(map)}</script>` : ""), { status: 200 });
+    }
+    return new Response("body of " + url.pathname.slice(1), { status: 200 });
+  };
+}
+
+test("install seeds lazy files under the shell's content-hash map; no map keeps the build key", async () => {
+  const map = { "js/circuits/monza.js": hash12("body of js/circuits/monza.js"), "js/render/glx/glx.js": hash12("body of js/render/glx/glx.js") };
+  const h = createHarness({ fetchImpl: lazyShellFetch(map) });
+  await h.lifecycleEvent("install").done();
+  const keys = [...h.stores.get("apex26-322").keys()];
+  assert.ok(keys.includes(`${ORIGIN}/js/circuits/monza.js?v=${map["js/circuits/monza.js"]}`), "optional lazy file under its hash");
+  assert.ok(keys.includes(`${ORIGIN}/js/render/glx/glx.js?v=${map["js/render/glx/glx.js"]}`), "required GLX under its hash");
+  assert.ok(keys.includes(`${ORIGIN}/js/circuits/spa.js?v=322`), "a file the map does not name keeps the build");
+  assert.ok(!keys.includes(`${ORIGIN}/js/circuits/monza.js?v=322`));
+  const dev = createHarness({ fetchImpl: lazyShellFetch(null) });
+  await dev.lifecycleEvent("install").done();
+  assert.ok(dev.stores.get("apex26-322").has(`${ORIGIN}/js/circuits/monza.js?v=322`), "no map: ?v=<build>, as before");
+});
+
+test("an unchanged hashed file is copied from the older generation, only when its bytes match the key", async () => {
+  const monza = hash12("body of js/circuits/monza.js"), spa = hash12("body of js/circuits/spa.js");
+  const seen = [];
+  const h = createHarness({ fetchImpl: lazyShellFetch({ "js/circuits/monza.js": monza, "js/circuits/spa.js": spa }, seen),
+    globals: { crypto: globalThis.crypto } });
+  h.stores.set("apex26-321", new Map([
+    [`${ORIGIN}/js/circuits/monza.js?v=${monza}`, new Response("body of js/circuits/monza.js")],
+    // a cache-first miss filed a newer deploy's body under this key (Pages ignores ?v=)
+    [`${ORIGIN}/js/circuits/spa.js?v=${spa}`, new Response("some other build's spa")],
+  ]));
+  await h.lifecycleEvent("install").done();
+  assert.ok(!seen.includes(`js/circuits/monza.js?v=${monza}`), "the unchanged file is not downloaded again");
+  assert.ok(seen.includes(`js/circuits/spa.js?v=${spa}`), "a copy whose digest disagrees with its key is refetched");
+  const cur = h.stores.get("apex26-322");
+  assert.equal(await cur.get(`${ORIGIN}/js/circuits/monza.js?v=${monza}`).clone().text(), "body of js/circuits/monza.js");
+  assert.equal(await cur.get(`${ORIGIN}/js/circuits/spa.js?v=${spa}`).clone().text(), "body of js/circuits/spa.js");
 });

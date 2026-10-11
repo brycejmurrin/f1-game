@@ -150,6 +150,41 @@ test("gpLaps is the circuit's real race distance, not a flat number", () => {
     assert.ok(t.gpLaps > 3, `${t.id} gpLaps ${t.gpLaps} must exceed the 3-lap floor`);
 });
 
+// THE TITLE'S STUB MUST SAY THE SAME. Until ensureCircuit() hydrates it, a
+// circuit in Tracks.LIST is built from its GENERATED meta stub
+// (tools/gen/gen-circuit-meta.mjs → js/track/circuit-meta.js), and RACE
+// SETTINGS reads FULL (gpLaps) off that stub. Without `gpLaps` in META_KEYS,
+// fromRaw re-derived the five overrides above a lap off — Monaco 79,
+// Zandvoort 71 — until the payload landed (R3-SEAMS-1). Boot TRACK_VM the way
+// the title does, over the generator's own output (gen:check pins the file to it).
+test("the title's meta stubs carry the menu fields their hydrated defs do (gpLaps included)", async () => {
+  const { generate, META_KEYS } = await import(path.join(ROOT, "tools/gen/gen-circuit-meta.mjs"));
+  const M = require(path.join(ROOT, "tools/manifest.cjs"));
+  const sb = { console, Math, Date, JSON, performance: { now: () => 0 } };
+  sb.window = sb; sb.self = sb; sb.GLX = { isMobile: false };
+  vm.createContext(sb);
+  for (const f of M.TRACK_VM) {
+    const src = f === "@circuits" ? generate() : fs.readFileSync(path.join(ROOT, f), "utf8");
+    vm.runInContext(src, sb, { filename: f === "@circuits" ? M.CIRCUIT_META : f });
+  }
+  const stubs = vm.runInContext("Tracks", sb).LIST;
+  const full = buildContext().LIST;
+  const at = (id) => stubs.find((t) => t.id === id);
+  for (const [id, laps] of [["monaco", 78], ["singapore", 62], ["zandvoort", 72], ["catalunya", 66], ["portimao", 66]]) {
+    assert.ok(at(id) && at(id)._metaOnly, `${id} boots as a meta stub`);
+    assert.equal(at(id).gpLaps, laps, `${id}: the title's FULL race distance`);
+  }
+  // Every meta key, and gpLaps, reads the same before and after hydration.
+  const drift = [];
+  for (const d of full) {
+    const s = at(d.id);
+    if (!s) { drift.push(d.id + ": no meta stub"); continue; }
+    for (const k of new Set([...META_KEYS, "gpLaps"]))
+      if (JSON.stringify(s[k]) !== JSON.stringify(d[k])) drift.push(`${d.id}.${k}: stub ${JSON.stringify(s[k])} vs hydrated ${JSON.stringify(d[k])}`);
+  }
+  assert.deepEqual(drift, [], "a menu reading the title's stub sees a different circuit than the race");
+});
+
 // The per-circuit data that used to live in js/track/ (geo-paths.js,
 // markings.js, the id-keyed scenery-data tables) is now authored in the def,
 // and the engine reads it OFF THE BUILT DEF — which is the trap above again,

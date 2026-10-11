@@ -41,6 +41,15 @@ export function makeRng(seed) {
   };
 }
 
+/** Hostile values for ONE field of an otherwise-valid upstream row (an OpenF1
+ *  body): fractional, string-numeric, huge and negative counts beside the type
+ *  swaps. `1e9` as a `lap_number` once sized a per-driver array and OOMed the
+ *  process (R3-HOSTILE-1); `2.5` / `"57.5"` threw `Invalid array length`. */
+export const HOSTILE_ROW_VALUES = Object.freeze([
+  null, "", "x", -1, 0, 1.5, 2.5, "57.5", 101, 2e4, 3e6, 1e9, 5e9, -1e9, NaN, Infinity, "1e3",
+  true, [], {}, "constructor", "__proto__", "2026-13-45T99:99:99Z",
+]);
+
 const TYPE_SWAPS = [
   null, undefined, true, false, 0, 1, -1, 0.5, NaN, Infinity, -Infinity,
   "", "0", "null", "undefined", "__proto__",

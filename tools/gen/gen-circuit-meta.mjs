@@ -22,12 +22,14 @@ const MANIFEST = require("../manifest.cjs");
 
 export const TARGET = "js/track/circuit-meta.js";
 
-/** Fields the title, track picker filter, and career continue line read before
- *  a circuit is picked. Everything else (path, pal, sectors, kit, …) hydrates
- *  via LAZY_CIRCUIT when ensureCircuit() runs. */
+/** Fields the title, track picker filter, career continue line and RACE
+ *  SETTINGS read before a circuit is picked. Everything else (path, pal,
+ *  sectors, kit, …) hydrates via LAZY_CIRCUIT when ensureCircuit() runs.
+ *  `gpLaps`: an authored override (def.js fromRaw) that a stub without it
+ *  re-derives a lap off — RACE SETTINGS' FULL reads it before hydration. */
 export const META_KEYS = Object.freeze([
   "id", "name", "gp", "country", "night", "theme", "sceneryTheme",
-  "lengthKm", "tyreSeverity", "classic", "street", "banked", "reverse",
+  "lengthKm", "gpLaps", "tyreSeverity", "classic", "street", "banked", "reverse",
   "sunAzimBias", "baseHW", "sceneryCoordinates", "sceneryLapMirror",
   "ownPitStraight", "undulate", "flatTerrain", "terrainOuter",
   "terrainFalloffStart", "terrainMat",

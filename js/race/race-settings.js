@@ -288,6 +288,8 @@ const RaceSettings = (function () {
       paintFold($("rs-fold-assists"), $("rs-fold-assists-sum"), "ASSISTS & WEAR");
     }
 
+    /** The circuit the sheet is setting up (the picker's), not the built world. */
+    function planTrackId() { const t = Tracks.LIST[G.trackIdx]; return t ? t.id : null; }
     /** The STRATEGY row and its stint bar. Hidden with TYRE WEAR (a plan is a
      *  consequence of wear existing) and in a time trial; degrades to the row
      *  alone where no complex is built yet (no zone: no plan to draw). */
@@ -300,9 +302,14 @@ const RaceSettings = (function () {
       $("rs-plan").hidden = !on;
       const bar = $("rs-plan-bar");
       if (!on) { bar.hidden = true; return; }
-      const pin = pits.pinnedStops();
+      // THE SHEET SETS UP THE SELECTED CIRCUIT; the pit model knows the BUILT
+      // one, and right after a pick (or while the flyby builds) that is still
+      // the last race's world: the pin is keyed by the selected id, and the
+      // stint bar waits until the selected world is the built one.
+      const id = planTrackId(), pin = pits.pinnedStops(id);
       SettingRow.paint("rs-plan", pin == null ? "auto" : String(pin), RS_PLAN);
-      const plan = pits.zoneOf() ? pits.planFor(0.5, true, laps) : null;
+      const built = !!(G.track && G.track.def && G.track.def.id === id);
+      const plan = built && pits.zoneOf() ? pits.planFor(0.5, true, laps) : null;
       bar.hidden = !plan;
       if (!plan) return;
       const stints = $("rs-plan-stints");
@@ -348,8 +355,8 @@ const RaceSettings = (function () {
       wire("rs-tyres", () => G.raceTyreWear, (v) => { G.raceTyreWear = v; });
       wire("rs-dirty", () => G.raceDirtyAir, (v) => { G.raceDirtyAir = v; });
       wire("rs-line", () => DrivingLine.mode(), setDrivingLine);
-      wire("rs-plan", () => { const p = G.pits; const v = p ? p.pinnedStops() : null; return v == null ? "auto" : String(v); },
-           (v) => { const p = G.pits; if (p) p.setPinnedStops(v === "auto" ? null : +v); });
+      wire("rs-plan", () => { const p = G.pits; const v = p ? p.pinnedStops(planTrackId()) : null; return v == null ? "auto" : String(v); },
+           (v) => { const p = G.pits; if (p) p.setPinnedStops(v === "auto" ? null : +v, planTrackId()); });
       for (const b of body.querySelectorAll ? body.querySelectorAll("[data-rs-preset]") : []) {
         b.onclick = () => {
           applyPreset(b.getAttribute("data-rs-preset"));
@@ -602,6 +609,7 @@ const RaceSettings = (function () {
       resetDraft,
       wireButtons,
       applyPreset,
+      repaintPlan: () => paintPlan(isTimeTrial(), G.raceLaps),   // game.js, once the selected circuit's world is built
       get netRoom() { return netRoom; },
       get rsReturn() { return rsReturn; },
     };

@@ -1,9 +1,10 @@
 /* Apex 26 — the page side of the track build Worker (js/track/build-worker.js).
    Ships ON by default when Worker exists and the device reports more than one
    logical core (apex26.buildWorker "1"/"0" still forces on/off). spawn() runs
-   on the first build() (an in-session track switch) or when BUILD IN
-   BACKGROUND is switched on — never at the title, whose idle prefetch no longer
-   warms it (3-F4); build() posts one circuit and resolves the
+   on the first build() (an in-session track switch), when BUILD IN
+   BACKGROUND is switched on, or idleWarm on the title for the AGENT SURFACE
+   only (R3-ASYNC-2 / 3-F4 — a player's title never warms it); build() posts one
+   circuit and resolves the
    worker's answer; replay() turns its recorded uploads into real gfx calls on
    the main thread and rebuilds what could not cross (the surface sampler, the
    def, the gfx handle). Any failure answers null and the caller builds in
@@ -63,7 +64,10 @@ const TrackBuildClient = (function () {
     if (document.readyState === "complete") initUI();
     else document.addEventListener("DOMContentLoaded", initUI, { once: true });
   }
-  const url = (f) => new URL(f + "?v=" + (window.__APEX_BUILD || 0), location.href).href;
+  // ScriptLoader.url: the deploy's content-hash key for a lazy file (the same
+  // URL the page and the SW precache use), else `?v=<build>` (R3-PHONE-8).
+  const url = (f) => new URL(typeof ScriptLoader !== "undefined" && ScriptLoader.url ? ScriptLoader.url(f)
+    : f + "?v=" + (window.__APEX_BUILD || 0), location.href).href;
   // Every build module is a page <script>: import it by the page's OWN src (its
   // deploy-time content hash), so the worker's fetch is a cache hit, not a
   // second download under a ?v= key nothing seeded.
@@ -86,6 +90,22 @@ const TrackBuildClient = (function () {
     if (_readyRes) _readyRes(false);
     _w = null; _ready = null; _readyRes = null;
     Log.warn("track", "build worker off: " + why);
+  }
+
+  // Idle warm: parse TRACK_VM in the worker while the title is quiet. Only for
+  // the AGENT SURFACE (LazyBundles.raceAssets passes wantAgentSurface()): no
+  // player flow posts a build from the menu (loadTrackStepped uses the worker
+  // for in-session switches only, PR #1175), so warming at every title cost a
+  // phone a second JS heap and ~1.3 MB of parse for nothing (R3-ASYNC-2). A
+  // player's worker is spawned by the first build that is actually posted
+  // (post → spawn). Safe to call bare: it then only reports the readiness.
+  function idleWarm(agentSurface) {
+    if (!enabled()) return null;
+    if (!agentSurface) return _ready;
+    const kick = () => { try { spawn(); } catch (_) { /* best-effort */ } };
+    if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 3000 });
+    else setTimeout(kick, 500);
+    return _ready;
   }
 
   // Idempotent. Resolves true once every build module has loaded in the worker.
@@ -297,6 +317,6 @@ const TrackBuildClient = (function () {
   // nothing may fill it with a synchronous build meanwhile (__apex's lazy ensure).
   const busy = () => _inflight > 0;
 
-  return { enabled, set, spawn, build, replay, busy, KEY, defaultOn };
+  return { enabled, set, spawn, idleWarm, build, replay, busy, KEY, defaultOn };
 })();
 if (typeof window !== "undefined") window.TrackBuildClient = TrackBuildClient;

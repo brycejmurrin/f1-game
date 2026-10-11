@@ -36,9 +36,11 @@ function openTimeTrial(selectDaily) {
   G.buildSelect();
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (G.soundOn) GameAudio.uiSelect();
-  // Daily selection already names the exact circuit/weather/time. Do not first
-  // arm a free-play scene that is immediately discarded.
-  if (!selectDaily) G.scheduleFlybyTrack(true);
+  // Warm the selected circuit under the picker. Daily already pinned
+  // track/weather/tod via select(); skipping the warm left START on a cold
+  // Shanghai FOG compile that can burn the sheet's 30 s shader-prep wait on CI
+  // (garage-out-before-card DAILY, tip 7ba546, 2026-10-11).
+  G.scheduleFlybyTrack(true);
 }
 $("mb-tt").onclick = () => openTimeTrial(false);
 async function consumeGhostHash() {

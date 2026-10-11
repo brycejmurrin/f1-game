@@ -108,15 +108,20 @@ if ($("pm-fullscreen")) {
 // mini-infobar. https://web.dev/articles/customize-install — preventDefault,
 // stash the event, call prompt() from a tap (once: the event is single-use),
 // and appinstalled covers every other route in. A suggestion, like the nudge.
+// The chip is a 20 s toast on one launch; the stashed event stays a door for
+// the whole session through Settings › DISPLAY's INSTALL APP row (#pm-install),
+// shown whenever an event is held (R3-PHONE-11). Chromium fires a fresh event
+// after a dismissed prompt, so the row comes back with it.
 (function installChip() {
-  const chip = $("install-chip");
-  if (!chip) return;
+  const chip = $("install-chip"), row = $("pm-install");
+  if (!chip && !row) return;
   let deferred = null;
-  const hide = () => { chip.hidden = true; };
+  const hide = () => { if (chip) chip.hidden = true; };
+  const paintRow = () => { if (row) row.hidden = !deferred; };
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
-    deferred = e;
-    if (store.get("installChipSeen", false) || UiLayers.inRace()) return;
+    deferred = e; paintRow();
+    if (!chip || store.get("installChipSeen", false) || UiLayers.inRace()) return;
     chip.hidden = false;
     // SEEN ONCE SHOWN, like the iOS nudge: set only on a tap or an install, it
     // came back for 20 s on every launch until somebody tapped it. The stashed
@@ -124,14 +129,16 @@ if ($("pm-fullscreen")) {
     store.set("installChipSeen", true);
     setTimeout(hide, 20000);
   });
-  chip.addEventListener("click", async () => {
+  const install = async () => {
     hide(); store.set("installChipSeen", true);
-    const e = deferred; deferred = null;
+    const e = deferred; deferred = null; paintRow();
     if (!e) return;
     try { await e.prompt(); const c = await e.userChoice; Log.info("game", "install prompt " + ((c && c.outcome) || "?")); }
     catch (err) { Log.warn("game", "install prompt failed: " + ((err && err.message) || err)); }
-  });
-  window.addEventListener("appinstalled", () => { hide(); deferred = null; store.set("installChipSeen", true); });
+  };
+  if (chip) chip.addEventListener("click", install);
+  if (row) row.addEventListener("click", install);
+  window.addEventListener("appinstalled", () => { hide(); deferred = null; paintRow(); store.set("installChipSeen", true); });
   const ov = $("overlay");
   if (ov) ov.addEventListener("click", (e) => { if (e.target.closest && e.target.closest(".bigbtn")) hide(); });
 })();
@@ -204,6 +211,8 @@ $("pm-phonepad").onclick = () => {
         btn.textContent = "UNPAIR PHONE"; G.announce("PHONE CONNECTED — TILT TO STEER", 3, "info");
         if (VISOR_CAM >= 0 && G.camMode !== VISOR_CAM) { phonePadCam = G.camMode; G.setCamMode(VISOR_CAM, { persist: false }); }   // the phone's view, not the player's saved one
       },
+      // The phone's wire died: PhonePad hosts the same code again and the phone re-dials it (lost() follows only if it gives up).
+      relinking: () => { G.announce("PHONE LINK LOST — RECONNECTING", 3, "warn"); },
       lost: () => {
         btn.textContent = "STEER THIS GAME WITH A PHONE"; phonePad = null; G.announce("PHONE DISCONNECTED", 3, "warn");
         if (phonePadCam >= 0 && G.camMode === VISOR_CAM) G.setCamMode(phonePadCam);

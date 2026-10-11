@@ -52,6 +52,11 @@ const Tracks = (function () {
     const M = dx.length;
     const closeGap = Math.hypot(dx[0] - dx[M - 1], dy[0] - dy[M - 1], dz[0] - dz[M - 1]);
     const total = dlen[M - 1] + closeGap;
+    // Every control point stacked (a designer draft can quantise to that): a
+    // zero-length lap has no arc to sample — ds = 0 sends bankingProfile's
+    // smoothing window to Infinity and the build never returns. Refuse it;
+    // TrackValidate.build reports the throw as a RED.
+    if (!(total > 1)) throw new Error("degenerate loop: lap length " + total + " m");
     // The last dense point is still short of the lap origin. Include that
     // final chord as a real interpolation interval: otherwise the final
     // output nodes extrapolate the preceding Catmull segment with f > 1.
