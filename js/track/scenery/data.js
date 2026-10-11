@@ -146,7 +146,8 @@ const TrackSceneryData = (function () {
     dampArdennes: {
       zenith: [0.42, 0.48, 0.52], horizon: [0.58, 0.62, 0.64], fog: [0.55, 0.60, 0.62],
       fogDensity: 0.0032, ambientSky: [0.50, 0.54, 0.58], ambientGround: [0.28, 0.30, 0.26],
-      sunColor: [0.88, 0.90, 0.92], grass: [0.14, 0.28, 0.16], runoff: [0.40, 0.38, 0.34],
+      // Mown-grass verge (Spa survey 2026-10-10) — was bare-earth tan 0.40/0.38/0.34.
+      sunColor: [0.88, 0.90, 0.92], grass: [0.14, 0.28, 0.16], runoff: [0.20, 0.30, 0.16],
     },
     britishOvercast: {
       zenith: [0.55, 0.62, 0.72], horizon: [0.72, 0.76, 0.82], fog: [0.68, 0.72, 0.78],

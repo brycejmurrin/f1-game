@@ -23,7 +23,9 @@ import { carvedFromGame, gameSource, symbolSource } from "../helpers/game-source
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 // The count of quoted `game.js` path literals under tests/ (the hunter's metric:
 // `rg -c "game\.js['\"]" tests`), less the helper that is the sanctioned reader.
-// 2026-10-11: after #1313/#1398 ship sync + this PR's union, measured 308.
+// 2026-10-11: ship #1378→338→330 (menus/ui-improve); catch-up 333 then
+// #1313 hunt2-b migrations. Ship later lowered to 308 after #1313/#1398
+// union measure; keep that ratchet on sync.
 const CEILING = 308;
 const EXEMPT = new Set(["tests/helpers/game-source.mjs", "tests/unit/source-pin-hygiene.test.mjs"]);
 const RAW = /game\.js['"]/g;

@@ -9,17 +9,20 @@ const QualiNet = (function () {
   // hidden tab keeps the connection (and the 6 s silence timeout) alive but
   // never posts a time. After GATE_TIMEOUT_MS everyone's gate opens and the
   // missing seat is gridded from the model; the HOST may skip the wait earlier,
-  // after OVERRIDE_AFTER_MS ("START ANYWAY").
+  // after OVERRIDE_AFTER_MS ("START ANYWAY"). WAIT_MS is the same bound under
+  // the Flow B name (MENU leave / unit harness).
   const OVERRIDE_AFTER_MS = 15000;
   const GATE_TIMEOUT_MS = 60000;
+  const WAIT_MS = GATE_TIMEOUT_MS;
 
   function create(hooks) {
     const { $, fmtTime, isQuali, getPlayer, getCars, openQuali, applyPeerQuali,
       getNetPlay, getNetLobby } = hooks;
-    // Injectable for tests; the game passes neither.
+    // Injectable for tests; the game passes neither. Accept both naming styles
+    // (Flow B setTimer/clearTimer and NP-2 setTimeout/clearTimeout).
     const clock = hooks.now || (() => performance.now());
-    const setTimer = hooks.setTimeout || ((fn, ms) => setTimeout(fn, ms));
-    const clearTimer = hooks.clearTimeout || ((h) => clearTimeout(h));
+    const setTimer = hooks.setTimer || hooks.setTimeout || ((fn, ms) => setTimeout(fn, ms));
+    const clearTimer = hooks.clearTimer || hooks.clearTimeout || ((h) => clearTimeout(h));
 
     // driverId -> seconds, one entry per rival who has driven.
     let qualiPeers = new Map();
@@ -28,12 +31,13 @@ const QualiNet = (function () {
     let qualiLiveAt = 0;
     let qualiNetDone = null;
     let qualiHadRivals = false;
-    let gateSince = null;     // when the gate first held the player after their own lap
+    let gateSince = null;     // when the gate first held after arm (rival outstanding)
     let gateTimedOut = false;
     let gateTimer = null;
+    let iDone = false;        // Flow B: player's own session is on the sheet (MENU path)
 
     function gateReset() {
-      gateSince = null; gateTimedOut = false;
+      gateSince = null; gateTimedOut = false; iDone = false;
       if (gateTimer != null) { clearTimer(gateTimer); gateTimer = null; }
     }
 
@@ -119,9 +123,10 @@ const QualiNet = (function () {
       if (!w && canForce()) { b.disabled = false; b.textContent = "START ANYWAY"; return; }
       b.disabled = w;
       if (!w) {
+        const stillSilent = rivalDriverIds().some((id) => !(qualiPeers.get(id) > 0));
         b.textContent = (qualiNetDone && qualiHadRivals && !rivalDriverIds().length)
           ? "RIVAL LEFT — TO THE GRID"
-          : (gateTimedOut ? "NO LAP FROM THEM — TO THE GRID" : "TO THE GRID");
+          : (gateTimedOut && stillSilent ? "NO LAP FROM THEM — TO THE GRID" : "TO THE GRID");
         return;
       }
       const rivals = rivalDriverIds();
@@ -164,7 +169,9 @@ const QualiNet = (function () {
       // quali-model.js and a string or boolean there throws mid-sheet.
       const t = d ? Number(d.t) : NaN;
       // Infinity = NO TIME (validQuali's noTime marker): drove, no valid lap.
-      if (d && d.driverId != null && (t === Infinity || (Number.isFinite(t) && t > 0))) qualiPeers.set(d.driverId, t);
+      if (d && d.driverId != null && (t === Infinity || (Number.isFinite(t) && t > 0))) {
+        qualiPeers.set(d.driverId, t);
+      }
       if (!isQuali()) return;
       const player = getPlayer();
       const mine = player && player.lastLap > 0 ? player.lastLap
@@ -188,6 +195,12 @@ const QualiNet = (function () {
       qualiHadRivals = false;
       gateReset();
     }
+
+    /** The player's own session is run (q-done): MENU is the second door off the sheet. */
+    function markDone() { iDone = true; }
+    const timedOut = () => gateTimedOut;
+    /** BACK/Escape may leave once the gate gave up on a silent rival. */
+    const canLeave = () => gateTimedOut;
 
     function clearPeers() { qualiPeers.clear(); }
 
@@ -235,9 +248,10 @@ const QualiNet = (function () {
       onPeerQuali, onPeerQualiLive, openQualiForNet, refreshQualiGate,
       reportLive, reportQuali, driven, waiting, canForce, arm, clearPeers, resetSoft,
       hasArmed, takeGoCallback, resetOnQuitWithCancel, resetOnBackWithAbort,
+      markDone, timedOut, canLeave, WAIT_MS,
     };
   }
 
-  return { create };
+  return { create, WAIT_MS, GATE_TIMEOUT_MS, OVERRIDE_AFTER_MS };
 })();
 Object.freeze(QualiNet);
