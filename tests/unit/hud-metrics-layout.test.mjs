@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 
 const root = path.resolve(import.meta.dirname, "../..");
 
@@ -213,4 +214,23 @@ test("paintInstruments paints SPD via HudReadouts.spdPlate (one MPH|KPH plate)",
   assert.match(paint, /_ro\.spdPlate\(/);
   assert.match(paint, /plate\.unit/);
   assert.doesNotMatch(paint, /AppearanceOpts\.unitLabel/);
+});
+
+test("paintInstruments never paints a negative speed in reverse; the wheel LCD and phone pad clamp to 0 (hunt3 4-F4)", () => {
+  const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
+  const paint = hud.slice(hud.indexOf("function paintInstruments"), hud.indexOf("function updateHud"));
+  const els = { speed: {} };
+  const ctx = {
+    clamp: (v, a, b) => Math.max(a, Math.min(b, v)), IDLE_RPM: 4000, MAX_RPM: 12000, _redline: false, _rpmPct: -1,
+    document: { body: { classList: { contains: (c) => c === "cockpit-cam" } } },
+    G: { dashKph: (v) => v * 3.6 * 1.43 },   // the sign passes through dashKph (vStd scale) as on the tip
+    _ro: { spdPlate: (k) => ({ n: Math.round(k), unit: "KPH" }) },   // spdPlate passes the sign through too
+    els, hText: (el, s) => { el.text = s; }, speedUnitEl: () => ({}),
+  };
+  vm.createContext(ctx);
+  vm.runInContext(paint + ";this.paintInstruments = paintInstruments;", ctx);
+  ctx.paintInstruments({ rpm: 5000, speed: -5 });   // REVERSE_MAX: brake held at a standstill
+  assert.equal(els.speed.text, "0", "reverse reads 0, not a minus sign");
+  ctx.paintInstruments({ rpm: 5000, speed: 50 });
+  assert.equal(els.speed.text, "257", "forward speed is untouched");
 });
