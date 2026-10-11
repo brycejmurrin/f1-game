@@ -915,9 +915,20 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
     --vhz: calc(1vh / var(--ui-compact-scale));
     --svhz: calc(1svh / var(--ui-compact-scale));
   }
-  /* Sheets share title chrome geometry cap (secondary rows @ 150%+). */
+  /* Sheets share title chrome geometry cap (secondary rows @ 150%+).
+     --_sheet-z is the zoom this subtree ACTUALLY paints at after the cap
+     (#1346). Re-derive --tap-paint / viewport tokens against it — otherwise
+     they still divide by the uncapped --sheet-scale/--ui-scale and compact
+     help chips (and every other tap floor) paint under 43.5 px when the
+     slider is above 125% (time-trial Driving zoom matrix shortHelpChips). */
   :where(body[data-density="compact"]) .sheet {
-    zoom: min(var(--sheet-scale, var(--ui-scale)), var(--ui-compact-scale));
+    --_sheet-z: min(var(--sheet-scale, var(--ui-scale)), var(--ui-compact-scale));
+    zoom: var(--_sheet-z);
+    --vwz: calc(1vw / var(--_sheet-z));
+    --vhz: calc(1vh / var(--_sheet-z));
+    --svhz: calc(1svh / var(--_sheet-z));
+    --slider: calc(32px / var(--_sheet-z));
+    --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--_sheet-z)));
   }
 
   /* Type still honours the requested %; compact landscape keeps the 17px rung. */
