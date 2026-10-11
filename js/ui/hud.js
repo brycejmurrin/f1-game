@@ -12,6 +12,32 @@ const _rmq = (typeof window !== "undefined" && window.matchMedia)
   ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
 const motionReduced = () => !!(_rmq && _rmq.matches)
   || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
+// THE VIEWPORT, CACHED. innerWidth/innerHeight are not free on a phone: Blink's
+// LocalDOMWindow::GetViewportSize() runs UpdateStyleAndLayout first whenever the
+// mobile viewport is enabled (Android Chrome), so each read after a DOM write is
+// a forced layout, and the 10 Hz tick read them after this frame's writes in
+// the fit key, gapForm and the minimap key. Re-read once after resize,
+// orientationchange or a visualViewport resize (pinch zoom changes innerWidth
+// with no window resize). iOS fires resize/orientationchange while the sizes
+// still hold the portrait numbers and may fire nothing once they land
+// (js/ui/sheet-shape.js SETTLE_MS, webkit 170595), so reads stay live for
+// VP_SETTLE_MS after each event — a rotation is re-laying the page anyway. With
+// no event source (the node VM harnesses set `innerWidth` directly) every read
+// stays live, as before.
+const VP_SETTLE_MS = 2000;   // > sheet-shape's last 1500 ms re-ask
+const _vpNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+const _vp = { w: 0, h: 0, stale: true, live: true, until: 0 };
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  _vp.live = false;
+  const stale = () => { _vp.stale = true; _vp.until = _vpNow() + VP_SETTLE_MS; };
+  window.addEventListener("resize", stale, { passive: true });
+  window.addEventListener("orientationchange", stale, { passive: true });
+  const vv = window.visualViewport;
+  if (vv && typeof vv.addEventListener === "function") vv.addEventListener("resize", stale, { passive: true });
+}
+function vpSync() { if (_vp.stale) { _vp.w = window.innerWidth; _vp.h = window.innerHeight; _vp.stale = _vp.live || _vpNow() < _vp.until; } }
+const vpW = () => { vpSync(); return _vp.w; };
+const vpH = () => { vpSync(); return _vp.h; };
 
 // GameHud.invalidateFit(): the live instance's re-fit trigger (null until create).
 let _invalidateFit = null, _syncPhoneFit = null;
@@ -72,6 +98,16 @@ const teamCss = (c) => {
 };
 let _secRows = null;
 let _secFlash = [0, 0, 0];
+// THE GAIN, not only the split: each sector row shows the split's delta to the
+// best it was chasing for SPLIT_DELTA_MS, then the absolute time again.
+// _secPrevBest is sectorBests as the last tick saw it — game.js writes the new
+// best in the same crossing that writes sectorLast, so only the copy taken
+// BEFORE the crossing still holds the time this split was measured against.
+const SPLIT_DELTA_MS = 3000;
+let _secPrevBest = [Infinity, Infinity, Infinity], _secDelta = [0, 0, 0], _secDeltaT = [0, 0, 0];
+// The lap clock's hold on the lap just driven (see the tick): the lap count and
+// lastLap as the last tick saw them, and whether this lap's hold is armed.
+let _holdLap = 0, _holdPrev = 0, _holdOn = false;
 let _limitsDots = null;
 let _hudCamMode = null, _hudCamProf = null;   // compared field by field: no key string per frame
 // The readouts js/ui/hud-readouts.js derives (gap laps, ERS, BB, blue flag, the
@@ -165,7 +201,17 @@ function syncHudCamClasses() {
   // changes — camera+profile stay put, so the key above does not.
   syncHudVisClasses(modeId);
 }
-function flashSector(i) { if (i >= 0 && i < 3) _secFlash[i] = 0.35; }
+// game.js calls this at the crossing, after writing sectorLast[i] and the new
+// best — so the delta is taken against the pre-crossing copy (_secPrevBest).
+// A first-ever split has nothing to beat and keeps the absolute time.
+function flashSector(i) {
+  if (!(i >= 0 && i < 3)) return;
+  _secFlash[i] = 0.35;
+  const t = G.sectorLast && G.sectorLast[i];
+  const ok = t != null && isFinite(_secPrevBest[i]);
+  _secDelta[i] = ok ? t - _secPrevBest[i] : 0;
+  _secDeltaT[i] = ok ? SPLIT_DELTA_MS : 0;
+}
 // "tt" | "quali" | "practice" | "race". PRACTICE is G.practice (armed on a race
 // session from the pause menu), never a G.session value.
 function sessionOf(timeTrial) {
@@ -254,12 +300,12 @@ function buildSecRows() {
 // shorten band between 550 and 640 and drops below it; wide has no useful
 // shorten band at all and drops straight away at 800.
 //
-// Every read here is cheap and needs no cache. Both custom properties are
+// Every read here is cheap. Both custom properties are
 // INLINE declarations this file's own passes write (applyScale writes
 // --hud-scale; the fit pass writes --hud-z-top when its cap binds) — string
 // reads, not getComputedStyle, so they force no style or layout pass — and
-// innerWidth is free. The gaps strip PAINTS at the capped --hud-z-top, so
-// that is the divisor when present; the raw slider is only the fallback
+// the width is the cached vpW() (innerWidth itself lays out on Android). The
+// gaps strip PAINTS at the capped --hud-z-top, so that is the divisor when present; the raw slider is only the fallback
 // before the first fit. Nothing here asks the layout engine anything, so it
 // can simply run every tick and follow a window resize for free.
 const GAP_SHORT_AT = { narrow: 640, wide: 800 };
@@ -298,8 +344,8 @@ function gapForm() {
   const root = document.documentElement;
   const s = +root.style.getPropertyValue("--hud-z-top") ||
             +root.style.getPropertyValue("--hud-scale") || 1;
-  const ratio = window.innerWidth / s;
-  const k = window.innerWidth >= 1200 ? "wide" : "narrow";
+  const ratio = vpW() / s;
+  const k = vpW() >= 1200 ? "wide" : "narrow";
   // SHORTEN FIRST, DROP SECOND — they were wired to different signals, so the
   // widget fell to its own line while still painting the WIDEST spelling
   // ("▲ STR +6.3s" below the map, reported from a phone). `drop` read the
@@ -396,7 +442,7 @@ function hlKey() { let k = ""; for (let i = 0; i < _hlEls.length; i++) { const e
 //
 // getComputedStyle itself is cheap; getPropertyValue against a dirty tree is
 // not, and the tree is dirty by construction — syncHudLayoutClasses() runs
-// immediately before fitHud() and updateHud writes DOM either side of it.
+// immediately before fitHud(), and the end-of-tick call follows the tick's writes.
 //
 // What they read are STYLESHEET defaults, from `@media (pointer: coarse)` and
 // the viewport, so they can only change when the viewport or the body classes
@@ -408,7 +454,7 @@ function hlKey() { let k = ""; for (let i = 0; i < _hlEls.length; i++) { const e
 // cost depends on a tree this box does not reproduce.
 let _cssRootKey = "", _cssScale = 1, _cssMult = 1;
 function syncComputedRootVars() {
-  const k = window.innerWidth + "x" + window.innerHeight + "|" + document.body.className;
+  const k = vpW() + "x" + vpH() + "|" + document.body.className;
   if (k === _cssRootKey) return;
   _cssRootKey = k;
   // typeof-guarded: this module is exercised in a VM on tests/helpers/mini-dom,
@@ -505,7 +551,7 @@ const RADIO_TOP_MIN = 96, RADIO_TOP_GAP = 8;
 const LANE_ROWS = 96;
 function announceLane(root) {
   const t = _hudTop ? _hudTop.getBoundingClientRect() : null;
-  const W = window.innerWidth, H = window.innerHeight || 0;
+  const W = vpW(), H = vpH() || 0;
   const y0 = t ? t.bottom : 0, mid = W / 2;
   const under = (el) => { if (!el || el.hidden || !el.getBoundingClientRect) return 0; const r = el.getBoundingClientRect(); return r.width && r.height ? r.bottom : 0; };
   // Under a caution the card steps below the flag chip too (css/hud.css: the caution rules).
@@ -824,7 +870,7 @@ function fitHud() {
   // 2026-10-04). So each data-hl element's `hidden` is in the key — a list
   // re-read only on a full fit (HudLayout.apply invalidates it), a flag read
   // per tick, no layout.
-  const head = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
+  const head = vpW() + "x" + vpH() + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
   const tail = "|" + document.body.className;
   if (head + hlKey() + tail === _fitKey && --_fitWait > 0) {
     // Same-key backoff must not lock a short --dock-r-w while wrap-reverse
@@ -1573,6 +1619,16 @@ function paintInstruments(player) {
   }
 }
 
+// VISUAL SPOTTER: #hud[data-along] ("l" / "r" / "l r") lights the matching
+// screen edge (css/hud.css) while a car is alongside. The occupancy is the
+// spotter's (js/race/spotter.js side(), via RaceRadio.trafficSide), measured
+// before its setting/sound gates, so the glow works with the voice off.
+const ALONG = [null, "l", "r", "l r"];
+function syncAlong() {
+  const rr = G.raceRadio, side = rr && rr.trafficSide ? rr.trafficSide() : 0;
+  hData(els.hud, "along", ALONG[side] || null);
+}
+
 function updateHud(force, dtMs) {
   if (!(Number.isFinite(dtMs) && dtMs > 0)) dtMs = 16.7;   // forced refreshes and the first frame: one nominal frame
   const player = G.player, cars = G.cars, timeTrial = G.timeTrial;
@@ -1598,7 +1654,11 @@ function updateHud(force, dtMs) {
   // reads to shift and to brake, and at 10 Hz the tach visibly stepped and a
   // shift showed up to 100 ms late. All three go through the write cache, so a
   // frame that changes nothing writes nothing; everything else stays at 10 Hz.
-  paintInstruments(player);
+  // ON A TICK FRAME THEY PAINT AFTER fitHud's READS, not before: written first,
+  // they dirtied the tree and the fit's first rect / viewport read forced a
+  // synchronous layout on every tick on a phone. Same writes, same frame.
+  const tick = force || !(hudT - dtMs > 0);   // exactly the throttle test below
+  if (!tick) paintInstruments(player);
   if (typeof HudInputs !== "undefined") HudInputs.frame(G, player, dtMs);   // opt-in INPUTS trace: samples per frame, draws at 10 Hz itself
   if (_trace && G.track) _trace.sample(player, G.track.total);   // the race DELTA's best-lap reference
   hudT -= dtMs;
@@ -1606,6 +1666,7 @@ function updateHud(force, dtMs) {
   hudT = HUD_TICK_MS;
   syncHudLayoutClasses();      // before fitHud: show/hide/park changes what gets measured
   fitHud();                    // below the throttle: this reads layout, per TICK not per frame
+  syncAlong();
   // A retirement has no race position left to hold — `rank` is whatever it was
   // when the car stopped, and the field it was measured against no longer
   // contains it (see the ranked build in game.js).
@@ -1621,9 +1682,24 @@ function updateHud(force, dtMs) {
   if (rank && _lastRank && rank !== _lastRank) { els.pos.dataset.delta = rank < _lastRank ? "up" : "down"; _posFlashT = 600; }
   else if (_posFlashT > 0 && (_posFlashT -= HUD_TICK_MS) <= 0) { _posFlashT = 0; delete els.pos.dataset.delta; }
   if (rank) _lastRank = rank;
+  paintInstruments(player);   // this tick frame's instruments, after fitHud's reads (see the top)
   hText(els.lap, Math.min(player.lap || 1, G.lapsTarget) + "/" + G.lapsTarget);
   if (typeof HudDamage !== "undefined") HudDamage.sync(player);   // DAMAGE chip (js/ui/hud-damage.js) — display only
-  hText(els.time, G.fmtTime(player.lapTime));
+  // THE LAP JUST DRIVEN. A race showed only the running clock, which snaps to
+  // zero at the line, so unless the lap was a best the driver never saw it.
+  // Hold it for the first 3 s of the next lap, green when it is a personal best
+  // (game.js writes best in the same crossing). Armed only when lastLap CHANGED
+  // with the lap count: game.js writes it for a valid lap alone, so an invalid
+  // lap keeps the running clock rather than re-showing the lap before it.
+  const lapN = player.lap | 0;
+  if (lapN !== _holdLap) {
+    _holdOn = sess === "race" && lapN > _holdLap && lapN > 1 && player.lastLap > 0 && player.lastLap !== _holdPrev;
+    _holdLap = lapN;
+  }
+  _holdPrev = player.lastLap;
+  if (_holdOn && !(player.lapTime < 3)) _holdOn = false;
+  hText(els.time, G.fmtTime(_holdOn ? player.lastLap : player.lapTime));
+  hData(els.time, "hold", _holdOn ? (player.lastLap <= player.best ? "pb" : "lap") : null);
   hText(els.best, isFinite(player.best) ? G.fmtTime(player.best) : "-");
   hStyle(els.energy, "width", (player.energy * 100).toFixed(0) + "%");
   // ENERGY as a number and a state, not only a bar length: MJ (the 2026 rule's
@@ -1893,7 +1969,15 @@ function updateHud(force, dtMs) {
       // ★ is the session best, ▼ a personal best, ▲ slower than your own. Same
       // single-glyph width as before, so the fixed row geometry is untouched,
       // and the colours stay exactly as they were for everyone reading them.
-      hText(_secRows[i], t == null ? "--" : (sb ? "★" : pb ? "▼" : "▲") + t.toFixed(3));
+      // For SPLIT_DELTA_MS after the crossing the number is the GAIN on the best
+      // it was chasing ("▼-0.142", "▲+0.310"), then the split itself again: the
+      // same glyph and colour states, and the same character count for any
+      // split or delta under 10 s, so the row geometry does not move.
+      const dHeld = _secDeltaT[i] > 0 && t != null;
+      if (_secDeltaT[i] > 0) _secDeltaT[i] -= HUD_TICK_MS;
+      const num = dHeld ? (_secDelta[i] < 0 ? "" : "+") + _secDelta[i].toFixed(3) : t == null ? "" : t.toFixed(3);
+      hText(_secRows[i], t == null ? "--" : (sb ? "★" : pb ? "▼" : "▲") + num);
+      _secPrevBest[i] = bests ? bests[i] : Infinity;   // the reference the NEXT crossing's delta is taken against
       // Timing-screen colours: purple session best, green personal best,
       // yellow slower than your own best; no split yet keeps the row's ink.
       hStyle(_secRows[i], "color", t == null ? "" : sb ? "var(--sec-best)" : pb ? "var(--faster)" : "var(--sec-slow)");
@@ -1912,14 +1996,17 @@ function updateHud(force, dtMs) {
   if (els.hudLimits) {
     const player = G.player;
     const cw = player ? (player.cutWarn | 0) : 0;
+    // ANY time penalty the player carries (track limits, a caution pass): live
+    // position already prices it, so the chip shows it rather than a 3 s banner.
+    const pen = player ? Math.round(player.penalty || 0) : 0;
     if (_limitsDots == null) _limitsDots = els.hudLimits.querySelector("span");
-    if (cw > 0) {
+    if (cw > 0 || pen > 0) {
       if (els.hudLimits.hidden) els.hudLimits.hidden = false;
       // Strikes no longer reset (4th and each additional = +5 s), so four dots
       // are a cap: repeat() of a negative count throws.
       const shown = Math.min(cw, 4);
-      hText(_limitsDots, "\u25cf".repeat(shown) + "\u25cb".repeat(4 - shown));
-      hToggle(els.hudLimits, "limits-warn", cw >= 2 && cw < 3);
+      hText(_limitsDots, "\u25cf".repeat(shown) + "\u25cb".repeat(4 - shown) + (pen > 0 ? " +" + pen + "s" : ""));
+      hToggle(els.hudLimits, "limits-warn", (cw >= 2 || pen > 0) && cw < 3);
       hToggle(els.hudLimits, "limits-hot", cw >= 3);
     } else if (!els.hudLimits.hidden) {
       els.hudLimits.hidden = true;
@@ -1932,17 +2019,25 @@ function updateHud(force, dtMs) {
   // w.r.t. the cars; the debris side-world never moves one). Hidden when green.
   if (els.flag) {
     const cn = G.cautionInfo ? G.cautionInfo() : null;
-    const caution = !!(cn && cn.level > 0);
+    // A place gained under a caution owes a give-back inside a 5 s window
+    // (js/race/sporting-regs.js), which can outlast the caution itself.
+    const owed = !!(cn && cn.owed > 0);
+    const caution = !!(cn && (cn.level > 0 || owed));
     // BLUE FLAG: a caution outranks it (the chip holds one flag); no field, no flag.
     const blueCar = !caution && !timeTrial && _ro && G.track && G.state === "race"
       ? _ro.blueFlag(player, cars, G.track.total, G.vTop() * 0.26) : null;
     const show = caution || !!blueCar;
     if (caution) {
       const txt = cn.level === 1 ? "YELLOW" + (cn.sector >= 0 ? " S" + (cn.sector + 1) : "")
-                : cn.level === 2 ? "VSC" : cn.level === 4 ? "RED FLAG" : "SAFETY CAR";
-      hText(els.flag, txt);
+                : cn.level === 2 ? "VSC" : cn.level === 4 ? "RED FLAG" : cn.level === 3 ? "SAFETY CAR" : "";
+      // The window counts down on the chip at this 10 Hz tick ("SC · LET VER BY
+      // 4s"): the banner can be queued behind the caution's own radio card.
+      // "SC" keeps the chip short on a phone; the spoken flag below keys on the
+      // level text only, so the countdown never re-reads the flag.
+      const owe = owed ? "LET " + (cn.owedCode || "THE CAR") + (cn.owed > 1 ? " +" + (cn.owed - 1) : "") + " BY " + Math.ceil(cn.owedT) + "s" : "";
+      hText(els.flag, owe ? (txt === "SAFETY CAR" ? "SC" : txt) + (txt ? " \u00b7 " : "") + owe : txt);
       hClass(els.flag, cn.level === 4 ? "flag-red" : cn.level === 3 ? "flag-sc" : cn.level === 2 ? "flag-vsc" : "flag-yellow");
-      if (txt !== _flagSaid) { _flagSaid = txt; sayFlag(cn); }
+      if (txt !== _flagSaid) { _flagSaid = txt; if (txt) sayFlag(cn); }
     } else _flagSaid = "";
     if (blueCar) {
       hText(els.flag, "BLUE FLAG " + (blueCar.code || ""));
@@ -2005,7 +2100,7 @@ function drawMinimap() {
   // Keep the bounded retry while the fit has no laid-out box, and the track
   // invalidation path (minimapBg null) so a newly visible map measures afresh.
   const root = document.documentElement, body = document.body;
-  const measureKey = window.innerWidth + "x" + window.innerHeight + "|" + body.className
+  const measureKey = vpW() + "x" + vpH() + "|" + body.className
     + "|" + (body.dataset.density || "") + "|" + root.style.getPropertyValue("--hud-scale")
     + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + (window.devicePixelRatio || 1)
     + "|" + els.minimap.style.getPropertyValue("--hl-s");   // MOVE & SIZE (js/ui/hud-layout.js)
@@ -2225,6 +2320,7 @@ function invalidateMap() { minimapBg = null; }
 // The race DELTA's best lap and the spoken HUD's baselines are per race too.
 function resetRace() {
   _lastRank = 0; _posFlashT = 0; if (els.pos) delete els.pos.dataset.delta;
+  _holdLap = 0; _holdPrev = 0; _holdOn = false; _secPrevBest = [Infinity, Infinity, Infinity]; _secDeltaT = [0, 0, 0];
   _ePrev = NaN; _blueSaid = null; _blueLaps = 0;
   // THE GAP CHIPS CARRY STATE ACROSS SESSIONS: a time trial paints the ghost
   // delta's colour inline, a race the neighbour's team bar, the tow halo and

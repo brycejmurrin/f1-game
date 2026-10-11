@@ -4,6 +4,12 @@ const SceneryCity = (function () {
 
   const UNIT_BOX = "unit-box";
   const unitBox = (rec) => rec.box([0, 0, 0], [1, 1, 1], TrackGraph.NODE_COLOR);
+  // A wall mass carries its facade material INTO the shared model: the canonical
+  // mesh an instanced batch uploads has no `out._mat` register to inherit, so a
+  // bare unit-box drew every city mass untextured in a browser (mat 0) while the
+  // same mass replayed inline got its brick/stone/concrete layer (H27). One model
+  // per material id keeps the batch count at the 3-4 facadeMat can return.
+  const massBox = (mat) => (rec) => { rec.mat(mat); unitBox(rec); };
 
   function create(ctx) {
     const { out, glassBuf, def, theme, NIGHT, MAT, lod,
@@ -231,9 +237,9 @@ const SceneryCity = (function () {
           : [0.42 + cv * 0.12, 0.42 + cv * 0.11, 0.41 + cv * 0.10];
         const wmat = facadeMat(dayWall);
         out._mat = wmat; glassBuf._mat = MAT.GLASS;
-        const ok = ctx.instance(UNIT_BOX,                                                   // solid wall mass
+        const ok = ctx.instance(UNIT_BOX + ":" + wmat,                                      // solid wall mass
           { o: vadd(p.c, p.u, yBase + sh / 2), r: p.r, u: p.u, t: p.t, s: [sw, sh, sd], col: dayWall },
-          unitBox, { kind: "buildingMass", k, side }) > 0;
+          massBox(wmat), { kind: "buildingMass", k, side }) > 0;
         // DAY must match NIGHT: a rejected wall mass must not leave orphan
         // facade rails / panes / mullions (the open-face / skeletal-slab look
         // on Vegas/Baku/Sochi/Imola — W4-AUDIT 2026-08, survey 2026-10-05).

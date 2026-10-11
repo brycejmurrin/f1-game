@@ -412,6 +412,53 @@ test("hud.js: the same car lapping the player AGAIN is a new blue flag, spoken a
   assert.equal(live.textContent, "RACE CONTROL: BLUE FLAG, LET BEA THROUGH", "the second lapping is called too");
 });
 
+test("hud.js: the flag chip counts the give-back window down and names the car, without re-speaking the flag", () => {
+  const { els, G, tick, flush } = boot();
+  const live = els.announceLive;
+  let cn = { level: 3, sector: -1, owed: 0, owedT: 0, owedCode: null };
+  G.cautionInfo = () => cn;
+  tick(); flush();
+  assert.equal(els.flag.textContent, "SAFETY CAR");
+  assert.equal(live.textContent, "RACE CONTROL: SAFETY CAR");
+  live.textContent = "";
+  cn = { ...cn, owed: 1, owedT: 4.9, owedCode: "VER" };
+  tick(); flush();
+  assert.equal(els.flag.textContent, "SC · LET VER BY 5s", "the window is on the chip, short enough for a phone");
+  cn = { ...cn, owedT: 3.2 }; tick(); flush();
+  assert.equal(els.flag.textContent, "SC · LET VER BY 4s", "…and counts down at the HUD tick");
+  assert.equal(live.textContent, "", "a countdown is not a new flag: nothing re-spoken");
+  cn = { ...cn, level: 2, owed: 2, owedT: 1.5 }; tick(); flush();
+  assert.equal(els.flag.textContent, "VSC · LET VER +1 BY 2s", "two places owed: the first car and a count");
+  // The window outlives the caution (sporting-regs keeps it): the chip stays up.
+  cn = { level: 0, sector: -1, owed: 1, owedT: 0.4, owedCode: "VER" }; tick(); flush();
+  assert.equal(els.flag.hidden, false, "green flag, place still owed: the chip stays");
+  assert.equal(els.flag.textContent, "LET VER BY 1s");
+  cn = { level: 0, sector: -1, owed: 0, owedT: 0, owedCode: null }; tick(); flush();
+  assert.equal(els.flag.hidden, true, "given back (or charged): the chip goes");
+});
+
+test("hud.js: the LIMITS chip carries ANY time penalty as +Ns, a caution-pass one included", () => {
+  const { $, els, player, dom, tick } = boot();
+  const chip = $("hud-limits"), dots = dom.document.createElement("span");
+  dots.className = "limits-dots"; chip.appendChild(dots); chip.hidden = true;
+  els.hudLimits = chip;
+  tick();
+  assert.equal(chip.hidden, true, "no strike, no penalty: no chip");
+  player.penalty = 10;                               // +10 s, overtaking under caution — no strike
+  tick();
+  assert.equal(chip.hidden, false, "a caution-pass penalty shows though cutWarn is 0");
+  assert.equal(dots.textContent, "○○○○ +10s");
+  assert.equal(chip.classList.contains("limits-warn"), true);
+  player.cutWarn = 4; player.penalty = 15;           // the 4th strike's +5 s on top
+  tick();
+  assert.equal(dots.textContent, "●●●● +15s");
+  assert.equal(chip.classList.contains("limits-hot"), true);
+  assert.equal(chip.classList.contains("limits-warn"), false);
+  player.cutWarn = 1; player.penalty = 0;
+  tick();
+  assert.equal(dots.textContent, "●○○○", "a strike with no penalty reads as before");
+});
+
 test("hud.js: resetRace clears the chips' carried state — team bar, tow, pit window, ghost tint", () => {
   const { els, G, player, rival, hud, tick } = boot();
   G.pits = { windowOf: () => "P12" };
