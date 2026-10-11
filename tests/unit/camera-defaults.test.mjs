@@ -3,8 +3,38 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { makeDom } from "../helpers/mini-dom.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
+
+test("CAM touch release preserves the long-press picker; cancelled holds never consume the next tap", () => {
+  for (const ending of ["release", "pointercancel", "lostpointercapture"]) {
+    const dom = makeDom(), timers = new Map();
+    let serial = 0;
+    const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
+      setTimeout(fn) { timers.set(++serial, fn); return serial; }, clearTimeout(id) { timers.delete(id); } };
+    ctx.window = ctx;
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx);
+    const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race" };
+    const cams = ctx.CamModes.create(G), button = dom.byId("btn-cam");
+    const fire = type => dom.dispatch(button, { type, pointerType: "touch", pointerId: 1 });
+    fire("pointerdown");
+    if (ending === "release") {
+      for (const fn of timers.values()) fn();
+      assert.equal(dom.byId("campicker").hidden, false);
+      fire("pointerup"); fire("lostpointercapture"); button.onclick();
+      assert.equal(dom.byId("campicker").hidden, false, "normal implicit capture loss must not close the picker");
+      assert.equal(G.camMode, 0);
+      cams.hideCamPicker();
+    } else {
+      fire(ending);
+      assert.equal(timers.size, 0, "abandoned holds cannot open later");
+    }
+    fire("pointerdown"); fire("pointerup"); fire("lostpointercapture"); button.onclick();
+    assert.equal(G.camMode, 1, "the next short tap still cycles");
+  }
+});
 
 function loadCockpitOpts(disk) {
   const store = new Map(Object.entries(disk || {}));
@@ -135,7 +165,7 @@ test("shipped chase corner lead is baked into vantage.js", () => {
 });
 
 test("cockpit interior uses the heading viewmodel, not a road-locked basis", () => {
-  const src = fs.readFileSync(path.join(root, "js/game.js"), "utf8");
+  const src = gameSource();
   assert.match(src, /GameCams\.cockpitViewmodelAxes/,
     "the cockpit draw must yaw with the body; a raw smp2.t basis crabs through turns");
   assert.doesNotMatch(src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, ""),

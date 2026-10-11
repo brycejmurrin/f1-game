@@ -100,6 +100,8 @@ test("How to Play compact section chips floor at --tap-paint", () => {
 });
 
 test("compact short-viewport sheets re-derive --tap-paint against the paint zoom", () => {
+  // Ship #1346 names the painted zoom --_sheet-z (also pinned in
+  // ui-improve-pass.test.mjs). Pin :where(…) form to match css/menus.css.
   const css = rd("css/menus.css");
   assert.match(
     css,
