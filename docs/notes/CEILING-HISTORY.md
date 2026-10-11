@@ -130,6 +130,10 @@ stated reason. Real source growth past absorb still fails on the PR run.
 hud.js **1411 / 2399**, hud.css **1960 / 2158**. Same update lowered game.js
 4976 → 4974 code / 9195 → 9186 lines. Unblocks Structural guards on the merge
 tree; #1437 carries the same HUD snap for ship.
+2026-10-11 re-measure on ship after #1386/#1387/#1395 (and later HUD merges) grew
+the pair without raising the ceilings: hud.js **1411 / 2399**, hud.css **1960 /
+2158** (`ratchets.mjs --update` on the #1392 sync tree). Unblocks Structural
+guards on every PR whose CI merge pulls the grown HUD.
 2026-10-11 ship catch-up + F-01 (#1409): after #1375, round-3 HUD PRs (#1395
 viewport cache, #1387 give-back, #1386 spotter) and then #1351 (phone HUD
 overlaps) landed without their planned raises, so ship tip / PR merge refs

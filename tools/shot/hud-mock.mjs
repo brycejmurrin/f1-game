@@ -16,6 +16,9 @@
 //   --format png|jpeg (jpeg: ~5x smaller, faster)  --no-cache (re-shoot every cell; default reuses cells whose cell + js/css/index.html are unchanged)
 //   --out artifacts/hud-mock/<stamp>  --gl swiftshader|llvmpipe (default $APEX_GL or llvmpipe)
 //   --track monza  --frac 0.18  --list (cells, no browser)  --json (summary as the last stdout block)  --help
+//   --probe <js expression> (evaluated in the page per cell after the fit; its JSON goes in report.json)
+//   --css <file> (a stylesheet painted over each cell AFTER its fit — a prototype repaints, it does not steer the
+//   fit; removed before the next cell. Wrap rules in @layer if the game's own layered !important must lose)
 //
 // WHY IT IS FAST. hud-survey.mjs paints a software 3D frame per cell; this tool
 // paints none after boot. It builds ONE race per pointer type (touch / desktop:
@@ -30,7 +33,8 @@
 //  - the radio card, the track-limits chip and the caution flag get their widest
 //    text after the last refresh (as hud-survey's transient pass), then
 //    GameHud.invalidateFit re-places the card around them;
-//  - DAMAGE is real state (__apex.damage, display-only);
+//  - DAMAGE and the track-limits strikes are real state (__apex.damage / __apex.strikes,
+//    display-only), so the fit places those pieces itself;
 //  - the MIRROR frame: render() is off, so its frame is shown by the pass's own
 //    rule (ON, or AUTO on an onboard camera, as on a phone with a GPU), not by a
 //    rendered frame; the side-of-tower placement (hud-mirror-side) is not run;
@@ -49,7 +53,7 @@ import { applyCell, chromiumArgs } from "./hud-survey.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const KNOWN = ["--devices", "--cams", "--hud-scale", "--ui-scale", "--btn-scale", "--sets", "--preset", "--matrix", "--no-boxes",
-  "--no-mock", "--format", "--cache", "--no-cache", "--out", "--gl", "--track", "--frac", "--list", "--json", "--help"];
+  "--no-mock", "--format", "--cache", "--no-cache", "--out", "--gl", "--track", "--frac", "--list", "--json", "--css", "--probe", "--help"];
 const SETS = { "all-on": [], shipped: ["rel", "strat", "inputs"] };
 
 export function planCells(F) {
@@ -91,10 +95,11 @@ function mockWidgets(opt) {
       if (who) who.textContent = "VERSTAPPEN · RADIO";
       if (text) text.textContent = "Box this lap — CAUTION, cheaper stop, about 23s lost";
       if (num) num.textContent = "33";
+      ann.dataset.kind = "box";   // a PIT CALL: the kind that must never be cut short (an info line may clamp)
       ann.hidden = false;
     }
-    const lim = $("hud-limits");
-    if (lim && !document.body.matches('[data-hud-hide~="limits"]')) { const s = lim.querySelector("span"); if (s) s.textContent = "●●●○"; lim.hidden = false; }
+    const lim = $("hud-limits");   // forced only on a tree without __apex.strikes (the real strike shows it otherwise)
+    if (lim && !(window.__apex && window.__apex.strikes) && !document.body.matches('[data-hud-hide~="limits"]')) { const s = lim.querySelector("span"); if (s) s.textContent = "●●●○"; lim.hidden = false; }
     const flag = $("hud-flag");
     if (flag) { if (!flag.textContent.trim()) flag.textContent = "YELLOW · SECTOR 2"; flag.hidden = false; }
   }
@@ -132,13 +137,15 @@ async function bootPage(browser, plan, touch) {
 
 async function main() {
   const F = makeFlags(process.argv.slice(2), KNOWN);
-  if (F.has("--help")) { console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 18).map((l) => l.replace(/^\/\/ ?/, "")).join("\n")); return; }
+  if (F.has("--help")) { console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 21).map((l) => l.replace(/^\/\/ ?/, "")).join("\n")); return; }
   const cells = planCells(F);
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const out = path.resolve(ROOT, F.flag("--out", path.join("artifacts", "hud-mock", stamp)));
   if (!["artifacts", "scratch"].some((d) => !path.relative(path.join(ROOT, d), out).startsWith(".."))) throw new CliArgError("--out must stay under artifacts/ or scratch/");
   if (F.has("--list")) { for (const c of cells) console.log(c.id); console.log(`[hud-mock] ${cells.length} cells`); return; }
   const plan = { cells, track: F.flag("--track", "monza"), frac: Number(F.flag("--frac", "0.18")), boxes: !F.has("--no-boxes"), mock: !F.has("--no-mock"),
+    probe: F.flag("--probe", ""),
+    css: F.has("--css") ? fs.readFileSync(path.resolve(ROOT, F.flag("--css", "")), "utf8") : "",
     gl: F.flag("--gl", process.env.APEX_GL === "swiftshader" ? "swiftshader" : "llvmpipe") };
   fs.mkdirSync(out, { recursive: true });
   const log = (m) => (F.has("--json") ? console.error : console.log)("[hud-mock] " + m);
@@ -168,7 +175,7 @@ async function main() {
       };
       for (const cell of mine) {
         const t1 = Date.now();
-        const key = cache.key({ cell, frac: plan.frac, boxes: plan.boxes, mock: plan.mock, fmt });
+        const key = cache.key({ cell, frac: plan.frac, boxes: plan.boxes, mock: plan.mock, fmt, css: plan.css, probe: plan.probe });   // --css / --probe are inputs: editing either must miss
         const hit = cache.get(key);
         if (hit) {
           const file = path.join(out, cell.id + ext);
@@ -181,14 +188,19 @@ async function main() {
         }
         const { page, errs } = await getBoot();
         const dev = DEVICES[cell.device];
-        await page.evaluate(() => window.__uiMock.release());
+        await page.evaluate(() => { window.__uiMock.release(); const st = document.getElementById("hm-css"); if (st) st.remove(); });
         await page.setViewportSize({ width: dev.w, height: dev.h });
         await page.evaluate((i) => {
           let st = document.getElementById("hm-ins");
           if (!st) { st = document.createElement("style"); st.id = "hm-ins"; document.head.appendChild(st); }
           st.textContent = `:root{--sal:${i.sal}px;--sar:${i.sar}px;--sat:${i.sat}px;--sab:${i.sab}px}`;
         }, dev.ins);
-        if (plan.mock) await page.evaluate(() => { try { window.__apex.damage(0, { long: 1, lat: 0.6, sev: 0.9 }); } catch { /* old tree */ } });
+        // Real state where a hook exists, so the fit (and any column allocator) places the piece itself.
+        if (plan.mock) await page.evaluate(() => {
+          const a = window.__apex;
+          try { a.damage(null, { long: 1, lat: 0.6, sev: 0.9 }); } catch { /* old tree */ }
+          try { if (a.strikes) a.strikes(2); } catch { /* old tree */ }
+        });
         const applied = await page.evaluate(applyCell, { ...cell, frac: plan.frac });
         await page.evaluate(async (frac) => {
           const a = window.__apex;
@@ -201,6 +213,12 @@ async function main() {
           }
         }, plan.frac);
         await page.evaluate(mockWidgets, { mock: plan.mock });
+        // A prototype places the radio card itself, so the lane's own collapse (a layered !important
+        // width 0 the sheet cannot outrank) is lifted for the shot.
+        if (plan.css) await page.evaluate((css) => {
+          const st = document.createElement("style"); st.id = "hm-css"; st.textContent = css; document.head.appendChild(st);
+          const ann = document.getElementById("announce"); if (ann) ann.removeAttribute("data-lane-collapsed");
+        }, plan.css);
         await sleep(60);
         const recs = (await page.evaluate(probeHudElements, { targets, fonts: true })).filter((r) => r.visible);
         const ov = analyzeOverlap(recs, dev.w, dev.h, dev.ins);
@@ -215,7 +233,16 @@ async function main() {
         await captureShot(page, file, { format: fmt });
         const minFont = recs.filter((r) => r.minFontPx != null).sort((x, y) => x.minFontPx - y.minFontPx).slice(0, 3).map((r) => [r.key, r.minFontPx]);
         const smallTaps = recs.filter((r) => r.role === "ctrl" && Math.min(r.r - r.x, r.b - r.y) < 44).map((r) => [r.key, Math.round(r.r - r.x), Math.round(r.b - r.y)]);
-        const row = { id: cell.id, cell, shot: path.relative(ROOT, file), overlaps: pairs, unsafe: ov.unsafe, minFont, smallTaps,
+        const slots = await page.evaluate(() => {
+          const ann = document.getElementById("announce");
+          const cs = ann ? getComputedStyle(ann) : null, ar = ann ? ann.getBoundingClientRect() : null;
+          return { radioSlot: document.body.dataset.radioSlot || null, announce: ann ? (ann.hidden ? "hidden" : ann.hasAttribute("data-lane-collapsed") ? "collapsed" : "shown") : null,
+            announceBox: ann ? { display: cs.display, visibility: cs.visibility, opacity: cs.opacity, x: Math.round(ar.x), y: Math.round(ar.y), w: Math.round(ar.width), h: Math.round(ar.height) } : null,
+            dropped: [...document.querySelectorAll("[data-col-drop]")].map((e) => e.id) };
+        });
+        const probe = plan.probe ? await page.evaluate((src) => { try { return JSON.parse(JSON.stringify((0, eval)(src))); } catch (e) { return "probe error: " + e.message; } }, plan.probe) : undefined;
+        const row = { id: cell.id, cell, shot: path.relative(ROOT, file), overlaps: pairs, unsafe: ov.unsafe, minFont, smallTaps, probe,
+          visible: recs.map((r) => r.key), ...slots,
           applyErrors: applied.errors, pageErrors: errs.splice(0), ms: Date.now() - t1 };
         rows.push(row);
         cache.put(key, row, file);
