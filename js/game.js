@@ -6777,6 +6777,7 @@ function render(dt) {
     }
     return;
   }
+  if (setupCam.endGarageRes) setupCam.endGarageRes();
   gfx.resize();
   // No track yet (the menus build none — the flyby belongs to RACE SETTINGS, see
   // scheduleFlybyTrack): DRAW NOTHING. alpha:false composites an undrawn canvas

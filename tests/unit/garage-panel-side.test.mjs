@@ -139,6 +139,10 @@ test("garage present routes through Lighting Tuner multipliers", () => {
   assert.ok(defThreshold >= 0.75,
     `threshold ${defThreshold} must sit above mid-grey so fixtures do not bloom the bay`);
   assert.equal(def.contact, 0);
+  assert.equal(def.reflect, 0, "the bay has no wet road to reflect");
+  assert.equal(def.carReflect, 0, "omitted carReflect is the 0.05 SSR default");
+  assert.equal(def.ssao, 0);
+  assert.equal(def.godray, 0);
   assert.ok(def.tune && Number.isFinite(def.tune.sunShaftMul));
   // A closed bay has no sun disc — screen sun-shafts from the roof fill wash
   // liveries after orbit / team switch. Force off even when the race slider is hot.
@@ -173,6 +177,8 @@ test("the garage frame calls presentOpts and glareScale; the race path still own
   // The bay sky fill is not a sun disc — presentOpts must zero screen shafts
   // (a scale factor left enough energy to wash Ferrari/RBR/AM after orbit).
   assert.match(cam, /_presentTune\.sunShaftMul\s*=\s*0/);
+  assert.match(cam, /_presentOpts\.carReflect = 0/);
+  assert.match(cam, /pinGarageRes\(\)/);
   assert.doesNotMatch(cam, /SP_SHAFT_SCALE/);
   const game = read("js/game.js");
   assert.match(game, /po\.exposure = frame\.exposure \* LT\.exposureMul/);

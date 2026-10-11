@@ -580,7 +580,7 @@ function live(liv, now, ctx) {
     rig[o + 3] = F[3][0] * e; rig[o + 4] = F[3][1] * e; rig[o + 5] = F[3][2] * e;
   }
   const u = (now - pulseAt) / 2200;
-  if ((ctx && ctx.ambient === false) || u < 0 || u >= 1) return rig;
+  if ((ctx && ctx.ambient === false) || u < 0 || u >= 1) return litRig(rig);
   const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
   const m = Math.max(c2[0], c2[1], c2[2]) || 1, ce = (2.6 / m) * E * Math.sin(u * Math.PI);
   const z = Z_BACK + (Z_DOOR - Z_BACK) * u;
@@ -589,7 +589,20 @@ function live(liv, now, ctx) {
   chase.length = rig.length;
   chase.push(-4.6, 4.55, z, c2[0] * ce, c2[1] * ce, c2[2] * ce, 5, 0, -1, 0, 0.92, 0.55, 0.06, 0, 0.9);
   chase.push(4.6, 4.55, z, c2[0] * ce, c2[1] * ce, c2[2] * ce, 5, 0, -1, 0, 0.92, 0.55, 0.06, 0, 0.9);
-  return chase;
+  return litRig(chase);
+}
+// Daytime gantries and the parked lamp stay at energy 0. The lit shader still
+// loops every record, so hand present only the ones that actually emit.
+const _lit = [];
+function litRig(src) {
+  _lit.length = 0;
+  const n = (src.length / 15) | 0;
+  for (let i = 0; i < n; i++) {
+    const o = i * 15;
+    if (src[o + 3] + src[o + 4] + src[o + 5] <= 1e-4 && src[o + 14] <= 1e-4) continue;
+    for (let k = 0; k < 15; k++) _lit.push(src[o + k]);
+  }
+  return _lit;
 }
 // Column-major T * Ry(ay) * Rz(az), written into `out`.
 function mk(out, tx, ty, tz, ay, az) {
@@ -1548,7 +1561,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   // against the floor's depth — which is exactly the clip a planar reflection
   // needs, with no stencil and no second floor pass. MAT_MIRROR reflects X as
   // the preview does (MAT_REFLECT_X) and Y for the floor; det +1, no cull flip.
-  if (carMesh) {
+  if (carMesh && !(_gfx.isMobile || _gfx.mobileTier)) {
     if (carMat) { arrivalMirror.set(carMat); arrivalMirror[1] = -carMat[1]; arrivalMirror[5] = -carMat[5]; arrivalMirror[9] = -carMat[9]; arrivalMirror[13] = -carMat[13]; }
     else arrivalMirror.set(MAT_MIRROR);
     _gfx.draw(carMesh, arrivalMirror, MIRROR_OPTS);
@@ -1601,7 +1614,10 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   // Three strikes, as the dress: the atlas stays up with its last traces. A
   // Keep the last working handle until the replacement uploads successfully:
   // a transient upload failure can then retry without losing the live atlas.
-  if ((!ctx || ctx.ambient !== false) && liveTex && liveCanvas && traceFail < 3 && now - lastTrace > 1500) {
+  // Phone: the trace is a 256×128 scribble, but the upload replaces the whole
+  // 512² atlas. Stretch the hitch; desktop keeps the 1.5 s tick.
+  const traceMs = (_gfx.isMobile || _gfx.mobileTier) ? 4000 : 1500;
+  if ((!ctx || ctx.ambient !== false) && liveTex && liveCanvas && traceFail < 3 && now - lastTrace > traceMs) {
     lastTrace = now;
     try {
       paintTrace(liveCanvas, liv, now);
