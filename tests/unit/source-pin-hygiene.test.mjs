@@ -23,13 +23,10 @@ import { carvedFromGame, gameSource, symbolSource } from "../helpers/game-source
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 // The count of quoted `game.js` path literals under tests/ (the hunter's metric:
 // `rg -c "game\.js['\"]" tests`), less the helper that is the sanctioned reader.
-// 2026-10-11: ship #1378 lowered to 338; menus tip post-merge measure 330
-// (ui-improve gameSource migrations). Ceiling only moves down.
-// 2026-10-11: after #1442 lowered to 330, ship tip + merge tree read 333
-// (#1405/#1409/#1424 wave). Catch-up raise; migrate sites then lower.
-// 2026-10-11: ship #1313 / hunt2-b migrated 2 OWNED raw reads
-// (car-fields-vm + game-round2-vm); remeasure after sync — keep ≤330 if green.
-const CEILING = 330;
+// 2026-10-11: ship #1378→338→330 (menus/ui-improve); catch-up 333 then
+// #1313 hunt2-b migrations. Ship later lowered to 308 after #1313/#1398
+// union measure; keep that ratchet on sync.
+const CEILING = 308;
 const EXEMPT = new Set(["tests/helpers/game-source.mjs", "tests/unit/source-pin-hygiene.test.mjs"]);
 const RAW = /game\.js['"]/g;
 

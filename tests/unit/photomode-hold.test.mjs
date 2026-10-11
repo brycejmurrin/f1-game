@@ -30,7 +30,7 @@ test("rotation never resurfaces the pause card over an active photo camera", () 
   for (const photoMode of [false, true]) for (const active of [false, true]) {
     const box = { setAttribute() {} }, pausemenu = { hidden: false };
     const ctx = vm.createContext({ $: () => box, getComputedStyle: () => ({ display: active ? "flex" : "none" }),
-      rotateBlockMql: { matches: true }, paused: true, photoMode, els: { pausemenu } });
+      rotateBlockMql: { matches: true }, paused: true, photoMode, els: { pausemenu }, garageReturn: "select" });   // not the pit garage's own pause
     vm.runInContext(fn, ctx); ctx.syncRotateBlocker(false);
     assert.equal(pausemenu.hidden, active || photoMode);
   }

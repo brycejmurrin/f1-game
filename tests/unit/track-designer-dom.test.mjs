@@ -1573,6 +1573,15 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.equal(b.G.player.speed, 0);
   calls.length = 0; b.C.afterStart();
   assert.equal(calls.length, 0, "a race already rolling is left alone");
+  // Lights can finish during startRace's awaits so afterStart sees "race" with
+  // the car still on the grid — still drop onto the armed point (selected-4).
+  Object.assign(b.G.player, { s: tr.total - 14, _prevS: tr.total - 14, prog: -14, speed: 55 });
+  b.G.state = "race"; calls.length = 0;
+  b.C.afterStart();
+  assert.deepEqual(plain(calls), [["snap"], ["hud"]], "late afterStart relocates without a second goRolling");
+  assert.equal(b.G.state, "race");
+  assert.equal(b.G.player.s, sTest, "…onto the armed point, not the grid");
+  assert.equal(b.G.player.speed, 0);
   assert.match(read("js/game.js"), /request\.then\(\(r\) => \{ if \(r !== false\) CustomTracks\.afterStart\(\); \}/, "game.js startRace tells CustomTracks a countdown began");
   // The way back: armed, so quitting reopens the designer on the same point.
   b.D.load(Object.assign({}, b.D.state().design), "library", id);   // as if something reset the selection
