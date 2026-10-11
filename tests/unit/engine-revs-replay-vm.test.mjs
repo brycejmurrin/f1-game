@@ -85,7 +85,7 @@ async function watchStraight(g, transportSpeed) {
   return { G, RR, PC: sb.PhysicsConsts };
 }
 
-test("WATCH transport speed scales fed speed and rpm (1x trace pace unchanged)", async () => {
+test("WATCH transport speed scales the rpm, never the car's speed (camera readers see the trace's m/s)", async () => {
   const g1 = await createGame({ track: "baku", carMeshes: false, onSandbox: (sb) => { install(sb); } });
   const g4 = await createGame({ track: "baku", carMeshes: false, onSandbox: (sb) => { install(sb); } });
   try {
@@ -94,7 +94,8 @@ test("WATCH transport speed scales fed speed and rpm (1x trace pace unchanged)",
     const p1 = one.G.player;
     const p4 = four.G.player;
     assert.ok(Math.abs(p1.speed - 22) < 1, "1x fed speed stays the trace pace");
-    assert.ok(Math.abs(p4.speed / p1.speed - 4) < 0.05, "4x multiplies fed speed by the transport rate");
+    // 1a-F2: the followed puppet is the camera target, so c.speed stays real at 4x; only the revs take the rate.
+    assert.ok(Math.abs(p4.speed - p1.speed) < 0.5, `4x keeps the trace's m/s (${p4.speed.toFixed(1)} vs ${p1.speed.toFixed(1)})`);
     const rpmRatio = p4.rpm / p1.rpm;
     assert.ok(rpmRatio > 1.3, `4x must raise rpm with fed speed (ratio ${rpmRatio.toFixed(2)})`);
     assert.ok(p4.rpm <= one.PC.MAX_RPM * 1.05, "redline cap still bounds extreme effective speeds");

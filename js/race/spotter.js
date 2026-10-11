@@ -5,9 +5,12 @@
  * debounce so a car darting in and out does not stutter the call, "clear" only
  * after a call was actually made, and one "still there" if it stays.
  *
- * Audio only, and only from the recorded voice pack (js/audio/voice-pack.js):
- * a spotter call is useless late, and speech synthesis' start-up delay makes
- * it late, so with no pack there is no spotter rather than a slow one.
+ * The CALLS are audio only, and only from the recorded voice pack
+ * (js/audio/voice-pack.js): a spotter call is useless late, and speech
+ * synthesis' start-up delay makes it late, so with no pack there is no spoken
+ * spotter rather than a slow one. The occupancy behind them is measured
+ * BEFORE the setting/sound/pack gates, so side() also feeds the HUD's edge
+ * glow (js/ui/hud.js) with the spoken spotter off — the phone case.
  *
  * Reads car positions in the TRACK frame (arc s, lateral x) and nothing about
  * the track's curvature — the same frame js/audio/rivals.js uses.
@@ -128,7 +131,8 @@ var Spotter = (() => {
       return key;
     }
 
-    return { update, occupied: () => occupied !== 0 || st.cur !== 0 };
+    // side(): the raw occupancy bits (LEFT 1 | RIGHT 2), 0 outside a live race.
+    return { update, occupied: () => occupied !== 0 || st.cur !== 0, side: () => occupied };
   }
 
   return Object.freeze({ create, step, occupancy, fresh, KEYS, OVERLAP_ARC, SIDE_MIN, SIDE_MAX, DEBOUNCE_S, CLEAR_S, STILL_S, GAP_S });

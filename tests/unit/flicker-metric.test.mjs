@@ -19,7 +19,7 @@ import assert from "node:assert/strict";
 import {
   DEFAULTS, clusters, flickerScore, flipMask, frameDelta, judge, lumaFromRGBA,
 } from "../../tools/lib/flicker-metric.mjs";
-import { SITES, JITTER, dolly, parseArgs } from "../../tools/shot/flicker-gate.mjs";
+import { SITES, JITTER, dolly, parseArgs, chooseSites } from "../../tools/shot/flicker-gate.mjs";
 import { inexactSites } from "../../tools/lib/flicker-metric.mjs";
 import fs from "node:fs";
 
@@ -191,4 +191,13 @@ test("--a3 is an opt-in flag; extra settle rounds are on unless --no-settle", ()
   assert.equal(parseArgs(["--a3", "--png"]).a3, true);
   assert.equal(parseArgs([]).settle, true);
   assert.equal(parseArgs(["--no-settle"]).settle, false);
+});
+
+// 2026-10-10: --site used to filter the table, so the run order was the table's and madrid-overpass-soffit was always first;
+// "measure it after another site" (the warm-up question in docs/notes/FLICKER-GATE-A2-2026-10-10.md) could not be asked.
+test("chooseSites runs --site in the order given; no --site is the whole table", () => {
+  assert.deepEqual(chooseSites(["madrid-ifema-soffit", "madrid-overpass-soffit"]).map((s) => s.id), ["madrid-ifema-soffit", "madrid-overpass-soffit"]);
+  assert.deepEqual(chooseSites(["madrid-overpass-soffit", "madrid-ifema-soffit"]).map((s) => s.id), ["madrid-overpass-soffit", "madrid-ifema-soffit"]);
+  assert.equal(chooseSites([]).length, SITES.length);
+  assert.deepEqual(chooseSites(["nope", "monaco-tunnel-vault"]).map((s) => s.id), ["monaco-tunnel-vault"], "main() rejects unknown ids before this");
 });

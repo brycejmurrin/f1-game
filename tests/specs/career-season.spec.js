@@ -342,9 +342,13 @@ test.describe.parallel("Career — contracts", () => {
       const i = c.offers.findIndex((o) => o.teamId !== c.team);
       return i < 0 ? null : { i, team: c.team, owned: c.owned.slice(), fitted: Object.assign({}, c.fitted) };
     });
-    // Offers beyond the renewal are gated by market value, so a weak season can
-    // legitimately produce none. Skipping beats asserting on a coin flip.
-    test.skip(!move, "this season drew no move offer — market value gates them by tier");
+    // Offers beyond the renewal are gated by market value and a seeded count, so
+    // a weak season can legitimately produce none — but this one is not a coin
+    // flip: startCareer's fixed seed (4242) draws one extra offer for 2026
+    // (Hash32.unit(4242, 2026, "offer", "n") = 0.648 -> 1), and the season ends
+    // with the player World champion (asserted above), which clears every
+    // lower tier's offerBar. No move here is a regression, not a skip (8-F5).
+    expect(move, "a champion's season with seed 4242 draws a move offer").not.toBeNull();
 
     await page.locator("#co-body .co-offer").nth(move.i).click();
     const after = await page.evaluate(() => window.__apex.career());

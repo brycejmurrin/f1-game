@@ -214,6 +214,7 @@ test("fitRows resets left / max-height once the clash is gone (STEERING change, 
   R.tick(G, p);
   assert.ok(root.style.left && root.style.maxHeight, "the TILT clash slid and capped the card");
   brakeLeft = 900;        // STEERING -> BUTTONS: BRAKE leaves the REL box
+  brake.className = "steer-btn"; // ...and the control's class says so (the fit's change key)
   root.scrollHeight = 40; // and the card fits again
   R.tick(G, p);
   assert.equal(root.style.left, "", "left is released");
@@ -278,4 +279,26 @@ test("fitRows is stable across frozen rechecks and releases its fit when control
 
 test("never reads track curvature (the arc must not reach the driver)", () => {
   assert.doesNotMatch(SRC, /curvature|kCur|Tracks\./);
+});
+
+test("tick: a settled phone layout is fitted once, not forced to layout every 100 ms (bug-hunt 2 P9)", () => {
+  const mk = () => {
+    const el = { hidden: true, attrs: {}, children: [], textContent: "", style: { setProperty() {}, removeProperty() {} },
+      setAttribute(k, v) { el.attrs[k] = String(v); }, removeAttribute() {}, appendChild(c) { el.children.push(c); return c; } };
+    return el;
+  };
+  const root = mk();
+  root.clientHeight = 160; root.scrollHeight = 160; root.currentCSSZoom = 1;
+  let reads = 0;
+  root.getBoundingClientRect = () => { reads++; return { left: 50, right: 220, top: 100, bottom: 260, width: 170, height: 160 }; };
+  const els = { "hud-rel": root };
+  const doc = { body: { className: "", classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
+  const R = load({ document: doc, HudElements: { isOn: () => true } });
+  const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
+  const G = { cars: [p, car("A1", 1100, 3, { rank: 1 }), car("A2", 1400, 3)], track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } };
+  for (let i = 0; i < 9; i++) R.tick(G, p);
+  assert.ok(reads <= 2, "nine unchanged ticks forced " + reads + " layout reads");
+  const before = reads;
+  doc.body.className = "hud-touch"; R.tick(G, p);
+  assert.ok(reads > before, "a changed layout input refits at once");
 });

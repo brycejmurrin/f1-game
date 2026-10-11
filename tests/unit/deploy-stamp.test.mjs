@@ -18,8 +18,9 @@ const ci = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
 
 test("pages.yml stamps the generation from the commit count on a full-depth checkout", () => {
   assert.match(pages, /name: Stamp the shell generation/);
-  assert.match(pages, /BUILD=\$\(\( 2000 \+ \$\(git rev-list --count HEAD\) \)\)/, "2000 + commit count — the offset keeps stamped builds above the last committed 1689");
-  assert.match(pages, /bump-cache\.mjs --apply --at "\$BUILD" --root _site/);
+  // 2000 + commit count lives in tools/desktop/stage.mjs pagesBuild() (one copy for Pages, desktop and Android);
+  // tests/unit/deploy-staging-build.test.mjs pins the formula and the stamped bytes.
+  assert.match(pages, /node tools\/desktop\/stage\.mjs --out _site --stamp-only --sha "\$PUBLISH_SHA"/);
   assert.match(pages, /apex-sha/, "provenance meta, because the deployed shell no longer equals the committed bytes");
   const deployJob = pages.slice(pages.indexOf("\n  deploy:"), pages.indexOf("\n  verify-live:"));
   assert.match(deployJob, /fetch-depth: 0/, "the deploy job must check out full history or rev-list counts 1");
