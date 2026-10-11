@@ -18,6 +18,11 @@ Re-measured on the merged tree before landing: #1366 (Phase 0 top-band fix) merg
 first and grew the pair, so the ceilings start at **1345 / 2281** (hud.js) and
 **1926 / 2120** (hud.css), ship `325100c05`.
 
+2026-10-11 re-measure on sync of #1403 onto ship (after #1351 phone HUD overlaps):
+hud.js **1411 / 2399**, hud.css **1960 / 2158**. Same update lowered game.js
+4976 → 4974 code / 9195 → 9186 lines. Unblocks Structural guards on the merge
+tree; #1437 carries the same HUD snap for ship.
+
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
