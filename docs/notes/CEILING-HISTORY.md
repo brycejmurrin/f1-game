@@ -3292,3 +3292,11 @@ Closing-chord centerline interpolation shifted start-seam props on indy/madrid/w
 `js/net/lobby.js` lines 1884 → **1887** on the feature tip (+3: two comment lines and `_peers.clear(); _ready.clear(); clashClear(); myRank = Infinity` when the room ends so relayed guest profiles do not survive into the next room), then 1891 → **1894** after syncing the deploy tip (base had already absorbed other lobby growth to 1891; the union is base + the three teardown lines).
 
 A later sync onto the deploy tip also moved `js/game.js` codeLines 4795 → **4798** and lines 8946 → **8943**, and `js/track/tracks.js` 703 → **702** (measure of the merged tree — take the base's ceilings where they lowered, raise codeLines for ship-tip growth). Deliberate lobby raise for the intentional onClose clear; the game.js codeLines raise is the sync cure, not an extraction.
+
+## 2026-10-11 — menus-hunt #1405 ship sync HUD catch-up
+
+`js/ui/hud.js` lines **2377 → 2399**, codeLines **1393 → 1411**; `css/hud.css`
+lines **2150 → 2158**, codeLines **1953 → 1960**. Re-measure after merging ship
+(incl. #1351 phone HUD overlaps). This branch does not edit the HUD sources —
+ceilings track already-landed size via the catch-up absorb in `compareToBase`
+(same policy as #1437 / #1384).
