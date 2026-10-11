@@ -677,16 +677,20 @@ body:has(dialog[open]) #save-warning { display: none; }
 #vsfriend-inner[data-density="compact"] > #vs-head {
   padding-right: calc(var(--pad) + var(--tap));
   min-height: var(--tap-paint);
+  height: var(--tap-paint);
+  max-height: var(--tap-paint);
   box-sizing: border-box;
   display: flex;
   align-items: center;
+  overflow: hidden;
 }
 /* top:0 (not pad*0.18): that inset pushed a --tap-paint CLOSE past a
    title-sized head on 852×393 (Selected specs 2026-10-05).
    Longhands beat .sheet-foot / compact foot padding-top from @layer
-   components — Selected specs selected-3 (2026-10-11) measured CLOSE
-   0.35*pad*zoom (~5.69px) past the head band while position:absolute held
-   (ui-redesign closeInHead). Tall restores the foot in dialogs.css. */
+   components — Selected specs selected-3 / packed-3 (2026-10-11) measured
+   CLOSE 0.35*pad*zoom (~5.69px) past the head band while position:absolute
+   held (ui-redesign closeInHead). Height locked to --tap-paint. Tall
+   restores the foot in dialogs.css. */
 #vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot {
   position: absolute; top: 0; right: var(--pad); z-index: 3;
   display: flex; align-items: center;
@@ -697,6 +701,7 @@ body:has(dialog[open]) #save-warning { display: none; }
   padding-top: 0; padding-bottom: 0;
   padding-left: 0; padding-right: 0;
   background: none;
+  overflow: hidden;
 }
 #vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before {
   display: none;
@@ -707,8 +712,8 @@ body:has(dialog[open]) #save-warning { display: none; }
    56.7–104); --tap-paint holds 52 painted on touch and stays --tap-min
    with a mouse (css/tokens.css). */
 #vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close {
-  min-width: var(--tap); min-height: var(--tap-paint); padding: 0 var(--gap);
-  margin: 0;
+  min-width: var(--tap); min-height: var(--tap-paint); height: var(--tap-paint);
+  max-height: var(--tap-paint); margin: 0; padding: 0 var(--gap);
   font-size: var(--fs-micro); line-height: 1;
   box-sizing: border-box;
   align-self: stretch;
