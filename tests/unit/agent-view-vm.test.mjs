@@ -21,7 +21,7 @@
  * VM never pumps rAF on its own, so renderFrames() here drives the queued
  * tick through g.pumpFrame(now) with a SYNTHETIC 50 ms clock. Why a fixed
  * cadence and not the host clock: the live chase camera converges by
- * exponential damping per frame and game.js's tickBody() hands render() at
+ * exponential damping per frame and tickBody() in game.js hands render() at
  * most 1/20 s of dt, so every cadence >= 50 ms is one camera regime — the one
  * SwiftShader's 50-150 ms frames put the browser in — whereas back-to-back
  * pumps on the host clock (~18 ms here) leave a 2.5 m camera lag the browser

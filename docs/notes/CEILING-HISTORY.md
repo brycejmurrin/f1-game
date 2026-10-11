@@ -24,6 +24,9 @@ and hud.css +27 / +30 and Structural guards went red on every PR. New ceilings:
 hud.js **1393 / 2377**, hud.css **1953 / 2150**. The same update lowered game.js
 4976 → 4974 code / 9195 → 9186 lines (it had shrunk). Owner decision: raises with a
 stated reason are fine; the allocator's own raise follows when it lands.
+2026-10-11 third re-measure (PR #1376 sync onto ship after #1351/#1394/#1430):
+hud.js **1411 / 2399**, hud.css **1960 / 2158**. Same catch-up policy as below —
+source files unchanged on this docs PR; ceilings track already-landed ship size.
 
 2026-10-11 absorb catch-up (`tools/check/ratchets.mjs --base`): a ceiling raise
 past 40 lines fails only when the SOURCE file's metric also grew past 40 since
