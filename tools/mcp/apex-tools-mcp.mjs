@@ -37,7 +37,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.13.0";
+const SERVER_VERSION = "1.14.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -727,6 +727,34 @@ const CATALOG = [
       },
     },
   },
+  // 28 → 29 on 2026-10-10: the HUD on black with mocked widgets (tools/shot/hud-mock.mjs), ~1 s a shot.
+  {
+    name: "apex_hud_mock",
+    kind: "browser",
+    description: "Browser (lock first) — FASTEST look at the race-HUD LAYOUT: the HUD on black, every widget mocked (radio card, flag, track-limits chip, damage), a labelled box per element (readouts cyan, taps yellow, overlapping pairs red). One race boot per pointer type (~37 s), then ~1 s a shot: devices × cams × sets (shipped / all-on) × HUD / UI / BUTTON size. Returns overlaps, unsafe boxes, smallest text and taps < 44 px per cell + resource_links to the PNGs and sheet.jpg. Defaults to a background job (apex_job_status); async:false blocks. No 3D behind the HUD — for occlusion use apex_hud_shot. Skill: survey-ui-matrix.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        devices: { type: "array", items: { type: "string", enum: HUD_ENUMS.device }, description: "Default [phone-landscape-844x390]." },
+        cams: { type: "array", items: { type: "string", enum: HUD_ENUMS.cam }, description: "Default cockpit, chase, hood, helmet, tv." },
+        sets: { type: "array", items: { type: "string", enum: ["shipped", "all-on"] }, description: "shipped = opt-in RELATIVE / STRATEGY / INPUTS off; all-on = every element. Default both." },
+        hudScale: { type: "array", items: { type: "number" }, description: "HUD SIZE percents (40..200)." },
+        uiScale: { type: "array", items: { type: "number" }, description: "UI SIZE percents (40..200)." },
+        btnScale: { type: "array", items: { type: "number" }, description: "BUTTON SIZE percents (40..300; touch devices only)." },
+        preset: { type: "string", enum: Object.keys(HUD_PRESETS), description: "MOVE & SIZE preset (default shipped)." },
+        boxes: { type: "boolean", description: "Default true: draw the labelled boxes." },
+        mock: { type: "boolean", description: "Default true: fill the transient widgets with their widest text." },
+        inlineImage: { type: "boolean", description: "Also return sheet.jpg (or the single shot) as image content (≤ 1.5 MB; async:false only)." },
+        async: { type: "boolean", description: "Default true = background hud_mock job (jobId); false = block (~40 s + ~1 s a cell; host may time out)." },
+        track: { type: "string", description: "Circuit id (default monza)." },
+        frac: { type: "number", description: "Lap fraction to park at (default 0.18)." },
+        out: { type: "string", description: "Output dir under artifacts/ or scratch/." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
   // 16 → 24 on 2026-10-03: a persistent track session, background jobs for the
   // minutes-long CLIs, one-cell UI checks, and the offline car / track audits.
   // Handlers live in tools/mcp/apex-extras.mjs.
@@ -777,7 +805,7 @@ const CATALOG = [
     name: "apex_job_start",
     week: 7,
     kind: "tree",
-    description: "Tree — start a minutes-long CLI in the BACKGROUND and return a jobId at once (survey_track, shot_survey, hud_shot, hud_survey, ui_gallery, ui_matrix, flicker_gate take the browser lock until they exit; hud_* start only from apex_hud_shot / apex_hud_survey). Watch with apex_job_status. Skill: check-changes.",
+    description: "Tree — start a minutes-long CLI in the BACKGROUND and return a jobId at once (survey_track, shot_survey, hud_shot, hud_survey, hud_mock, ui_gallery, ui_matrix, flicker_gate take the browser lock until they exit; hud_* start only from apex_hud_shot / apex_hud_survey / apex_hud_mock). Watch with apex_job_status. Skill: check-changes.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -1077,6 +1105,9 @@ bound("apex_hud_survey", "shard", { maxLength: 5 });
 bound("apex_hud_shot", "preset", { anyOf: [{ type: "string", enum: Object.keys(HUD_PRESETS) }, { type: "object" }] });
 bound("apex_hud_survey", "only", { maxItems: 32, items: { type: "string", minLength: 1, maxLength: 80 } });
 bound("apex_hud_survey", "matrix", { minLength: 1, maxLength: 1024 });
+bound("apex_hud_mock", "frac", { minimum: 0, maximum: 1 });
+for (const k of ["hudScale", "uiScale", "btnScale"]) bound("apex_hud_mock", k, { maxItems: 6, items: { type: "number", minimum: HUD_SCALES[k][0], maximum: HUD_SCALES[k][1] } });
+for (const k of ["devices", "cams"]) bound("apex_hud_mock", k, { maxItems: 24 });
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const jsType = (v) => (v === null ? "null" : Array.isArray(v) ? "array" : typeof v);
@@ -1326,9 +1357,59 @@ export function hudSurveyArgv(args) {
   if (args.noShots) argv.push("--no-shots");
   return argv;
 }
+const HUD_MOCK_TOOL = "shot/hud-mock.mjs";
+export function hudMockArgv(args) {
+  const argv = [...nodeTool(HUD_MOCK_TOOL), "--json"];
+  const csv = (k, fl) => { if (Array.isArray(args[k]) && args[k].length) argv.push(fl, [...new Set(args[k].map(String))].join(",")); };
+  csv("devices", "--devices"); csv("cams", "--cams"); csv("sets", "--sets");
+  csv("hudScale", "--hud-scale"); csv("uiScale", "--ui-scale"); csv("btnScale", "--btn-scale");
+  if (args.preset) argv.push("--preset", String(args.preset));
+  if (args.boxes === false) argv.push("--no-boxes");
+  if (args.mock === false) argv.push("--no-mock");
+  if (args.track) argv.push("--track", String(args.track));
+  if (args.frac != null) argv.push("--frac", String(args.frac));
+  argv.push("--out", assertSafeOut(args.out || `artifacts/hud-mock/mcp-${hudStamp()}`));
+  return argv;
+}
+/** hud-mock.mjs --json → structuredContent + its text copy + a summary + resource_links (sheet first). */
+export function hudMockResult(result, args = {}) {
+  let body;
+  try { body = JSON.parse(result.content[0].text); } catch { return result; }
+  const sum = body.out;
+  if (!sum || typeof sum !== "object" || !Array.isArray(sum.cells)) return result;
+  const link = (rel, mimeType, description) => rel ? {
+    type: "resource_link", uri: pathToFileURL(path.join(ROOT, rel)).href, name: path.basename(rel), mimeType, description,
+  } : null;
+  const structured = { ok: !!sum.ok && body.ok !== false, tool: "apex_hud_mock", mock: body.mock || undefined, argv: body.argv,
+    durationMs: sum.durationMs ?? body.durationMs, out: sum.out, sheet: sum.sheet || null, report: sum.report, index: sum.index, cells: sum.cells };
+  const text = `HUD mock: ${sum.cells.length} shots in ${Math.round((structured.durationMs || 0) / 1000)} s → ${sum.out}\n` +
+    sum.cells.map((c) => `- ${c.id}: ${c.overlaps.length ? c.overlaps.map((o) => `${o.pair} ${o.px2}px²`).join(", ") : "no overlaps"}`
+      + (c.smallTaps && c.smallTaps.length ? `; taps < 44px ${c.smallTaps.map((t) => t[0]).join(", ")}` : "")).join("\n");
+  const links = [link(sum.sheet, "image/jpeg", "contact sheet"), link(sum.index, "text/markdown", "per-cell table"),
+    link(sum.report, "application/json", "report.json"), ...sum.cells.slice(0, 24).map((c) => link(c.shot, "image/png", `HUD layout ${c.id}`))];
+  const content = [{ type: "text", text: JSON.stringify(structured) }, { type: "text", text }, ...links.filter(Boolean)];
+  const img = args.inlineImage ? (sum.sheet || (sum.cells.length === 1 ? sum.cells[0].shot : null)) : null;
+  if (img) {
+    try {
+      const buf = fs.readFileSync(path.join(ROOT, img));
+      if (buf.length <= 1.5 * 1024 * 1024) content.push({ type: "image", data: buf.toString("base64"), mimeType: img.endsWith(".jpg") ? "image/jpeg" : "image/png" });
+    } catch { /* the link still stands */ }
+  }
+  const out = { content, structuredContent: structured };
+  if (!structured.ok) out.isError = true;
+  return out;
+}
+function hudMockMock(argv) {
+  const rel = path.relative(ROOT, argv[argv.indexOf("--out") + 1]);
+  const summary = { ok: true, out: rel, report: path.join(rel, "report.json"), index: path.join(rel, "index.md"), sheet: path.join(rel, "sheet.jpg"),
+    durationMs: 0, cells: [{ id: "mock-cell", shot: path.join(rel, "mock-cell.png"), overlaps: [{ pair: "damage+inputs", px2: 120 }], unsafe: [], minFont: [["tower", 12]], smallTaps: [], errors: [] }] };
+  return hudMockResult(toolResult({ ok: true, mock: true, exit: 0, argv, stdout: "", stderr: "", out: summary, durationMs: 0 }));
+}
+
 /** Budget: twice the CLI's own estimate for the named matrix (+ 5 min), capped at 90 min. */
 const HUD_TIMEOUT_MS = (name, args) => {
   if (name === "apex_hud_shot") return 420000;
+  if (name === "apex_hud_mock") return 600000;
   let est = 45;
   try {
     const m = args.matrix || "quick";
@@ -1403,6 +1484,8 @@ function buildArgv(name, args) {
       return hudShotArgv(args);
     case "apex_hud_survey":
       return hudSurveyArgv(args);
+    case "apex_hud_mock":
+      return hudMockArgv(args);
     case "apex_doctor":
       return [...nodeTool("check/doctor.mjs"), "--tree", "--json"];
     case "apex_frame_report":
@@ -1878,6 +1961,12 @@ function pinOk(name, argv) {
       "Run `node tools/shot/hud-survey.mjs --plan` or `--self-test` from a shell.",
     );
   }
+  if (name === "apex_hud_mock"
+      && (!argv.some((a) => a.endsWith("hud-mock.mjs")) || !argv.includes("--json") || !argv.includes("--out")
+        || argv.some((a) => /^--(list|help|url)(=|$)/.test(a)))) {
+    return refuse("pin_violated", "apex_hud_mock spawns hud-mock.mjs --json --out <dir>, never --list / --help / --url",
+      "Run `node tools/shot/hud-mock.mjs --list` from a shell.");
+  }
   if (name === "apex_hud_shot" && !(argv.includes("--device") && argv.includes("--cam"))) {
     return refuse("pin_violated", "apex_hud_shot is one cell: --device and --cam always", "See the apex_hud_shot inputSchema.");
   }
@@ -2145,13 +2234,13 @@ function dispatch(name, args = {}, { signal = null } = {}) {
     return dryRunBody(name, argv, env);
   }
 
-  const hud = name === "apex_hud_shot" || name === "apex_hud_survey";
-  if (mockMode()) return hud ? hudMock(name, argv, args) : mockSuccess(name, argv, env);
+  const hud = name === "apex_hud_shot" || name === "apex_hud_survey" || name === "apex_hud_mock";
+  if (mockMode()) return name === "apex_hud_mock" ? hudMockMock(argv) : hud ? hudMock(name, argv, args) : mockSuccess(name, argv, env);
 
   if (hud && args.async !== false) {
     // Host MCP calls die at ~60–120 s; a cell is ~2 min and the quick matrix
     // ~10 min. Default to a background job (pinned argv above) unless async:false.
-    const kind = name === "apex_hud_shot" ? "hud_shot" : "hud_survey";
+    const kind = { apex_hud_shot: "hud_shot", apex_hud_survey: "hud_survey", apex_hud_mock: "hud_mock" }[name];
     const r = extras().handlers.apex_job_start({ kind, [HUD_JOB_ARGV]: argv });   // sync: returns the jobId at once
     const body = JSON.parse(r.content[0].text);
     if (body.ok === false) return r;
@@ -2162,7 +2251,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
     const took = acquireLock(name);
     if (took) return took;
     return runSpawn(argv, { timeoutMs: HUD_TIMEOUT_MS(name, args), env, signal })
-      .then((r) => hudResult(name, r, args)).finally(releaseLock);
+      .then((r) => (name === "apex_hud_mock" ? hudMockResult(r, args) : hudResult(name, r, args))).finally(releaseLock);
   }
   if (kind === "browser") {
     const took = acquireLock(name);
@@ -2299,6 +2388,7 @@ const OUTPUT_SCHEMAS = {
     message: S("string"), fix: S("string") } },
   apex_hud_shot: HUD_RESULT_SCHEMA,
   apex_hud_survey: HUD_RESULT_SCHEMA,
+  apex_hud_mock: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), tool: S("string"), out: S("string"), sheet: S(["string", "null"]), cells: S("array"), error: S("string"), message: S("string"), fix: S("string") } },
 };
 function toolOutputSchema(entry) {
   return OUTPUT_SCHEMAS[entry.name] || CLI_RESULT_SCHEMA;
