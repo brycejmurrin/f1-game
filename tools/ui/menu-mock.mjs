@@ -36,8 +36,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const KNOWN = ["--screens", "--viewports", "--format", "--no-boxes", "--no-cache", "--min-tap", "--min-font", "--out", "--gl", "--list", "--json", "--help"];
 export const DEFAULT_SCREENS = "title,settings,racesettings,results,quali,pause";
 export const DEFAULT_VIEWPORTS = "ios-iphone-landscape-844";
-// The race-bound screens last, as the gallery orders them: each one leaves a race behind it.
-const LAST = ["hud", "pause", "results"];
+// Mode / session screens last: each one leaves a race, a covering layer, or a body class
+// behind it. Order matches layout-audit's gallery (race-bound last).
+const LAST = ["photostudio", "lightingtuner", "cameratuner", "flybyeditor", "lightingtunerfly", "photocontrols", "loading", "hud", "pause", "results"];
 
 /** Pure: the cell list + the boot groups it needs. Throws CliArgError on an unknown id. */
 export function planMenuCells(screensArg, viewportsArg, { screens = SCREENS, viewports = VIEWPORTS } = {}) {
@@ -113,9 +114,19 @@ export function leaveToMenu() {
   if (quali && !quali.hidden) { if (quali.classList.contains("q-done")) quali.hidden = true; else $("q-back")?.click(); }
   const rs = $("race-settings");
   if (rs && !rs.hidden) $("rs-cancel")?.click();
+  // Photo Studio / lighting / camera leave covering layers + body classes; close via their doors when present.
+  if ($("photo-studio") && !$("photo-studio").hidden) $("ps-close")?.click();
+  if ($("lighting") && !$("lighting").hidden) $("lt-close")?.click();
+  if ($("camtune") && !$("camtune").hidden) $("ct-close")?.click();
+  if ($("flyby") && !$("flyby").hidden) $("fb-close")?.click();
+  const tip = $("ios-install"); if (tip) tip.hidden = true;
+  const chip = $("install-chip"); if (chip) chip.hidden = true;
+  document.body.classList.remove(
+    "in-race", "lt-open", "photo-mode", "photo-studio-open",
+    "pc-nopanel", "pc-uihidden", "rotate-help-open", "manual");
   // The quali route sets GRID = QUALIFYING LAP, and the game keeps it: every later race() would open the quali sheet instead of the grid.
   const g = $("rs-quali-sel");
-  if (g && window.__mmGrid != null && a.info().raceGrid !== window.__mmGrid && [...g.options].some((o) => o.value === window.__mmGrid)) { g.value = window.__mmGrid; g.dispatchEvent(new Event("change", { bubbles: true })); }
+  if (g && window.__mmGrid != null && a && a.info && a.info().raceGrid !== window.__mmGrid && [...g.options].some((o) => o.value === window.__mmGrid)) { g.value = window.__mmGrid; g.dispatchEvent(new Event("change", { bubbles: true })); }
 }
 
 const countIssues = (i) => i.tap.length + i.offscreen.length + i.clipped.length + i.smallText.length;
