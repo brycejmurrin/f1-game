@@ -154,8 +154,10 @@ never a looser pattern or `| tail` on a live log.
 Use `--session <unique-id>` with `who-is-on-it.mjs --claim/--release` on hosts
 without a Claude session variable; do not share a `nosession` identity.
 Subscribe with the host's own tool: Claude Code `subscribe_pr_activity`
-(claude-code-remote MCP), Cursor `subscribe_github_ci` + `subscribe_github_pr`
-(cursor-subscriptions MCP); never call a name the host does not list. If those or Monitor/send_later
+(GitHub MCP), Cursor `subscribe_github_ci` + `subscribe_github_pr`
+(cursor-subscriptions MCP); never call a name the host does not list. Keep one
+timer beside it (`send_later` / `subscribe_timer`) and read CI on every wake:
+Claude's subscription can drop `check_run` completions. If those or Monitor/timers
 are absent, run the watcher as one owned background command with a log, read
 events while doing independent work, and at most one `ci-watch --sha <sha>
 --once` at a checkpoint (no shell-poll loops while subscribed). Record missing

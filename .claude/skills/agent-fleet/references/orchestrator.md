@@ -34,20 +34,34 @@ Mark ready only after ready-gate.mjs exits 0 and ready-full-cap.mjs allows it.
 Do not enable auto-merge or merge.
 ```
 
-## Per-vendor adapters (verified 2026-10-10; sources in the design note)
+## Per-vendor adapters (re-verified 2026-10-11; sources in the design note)
 
-| need | Claude Code cloud | Cursor Cloud Agents API v1 | Grok |
-|---|---|---|---|
-| spawn | `create_session` (claude-code-remote MCP) with `prompt`; or a routine `/fire` | `POST /v1/agents` (`prompt.text`, `repos[].url`, `startingRef`/`prUrl`, `model`) | `grok -p "<prompt>"` headless inside a GitHub Actions job or VM you own (no cloud API documented) |
-| message a running worker | `send_message` (wakes an idle session) | `POST /v1/agents/{id}/runs` (one active run at a time) | none: comment on its PR and re-run its job |
-| worker → orchestrator | `send_message` back | none: PR comment + fleet block | none: PR comment + fleet block |
-| status | `get_session` (`status_bucket`), `list_events` | `GET /v1/agents/{id}/runs/{runId}` / `…/stream` | the job's log |
-| stop | `interrupt_session`, then `archive_session` | `POST /v1/agents/{id}/runs/{runId}/cancel`, `…/archive` | cancel the job |
-| PR events | `subscribe_pr_activity` | `subscribe_github_ci` + `subscribe_github_pr` (inside Cursor) | none |
+Pick the column of the host YOU run on for the orchestrator's own tools; the
+worker's column only matters for how you reach it.
 
-Cursor sessions do not appear in Claude's session list, and `send_message` to
-one fails ("target session could not be verified"): reach them through their
-PR.
+| need | Claude Code cloud | Cursor, from inside a Cursor cloud agent | Cursor Cloud Agents API v1 (any host with a key) | Grok Build |
+|---|---|---|---|---|
+| spawn | `create_session` (claude-code-remote MCP) with `prompt`; or a routine `/fire` | `Task` with `environment: "cloud"`, `run_in_background: true`, `cloud_base_branch` = the deploy branch (own VM + branch) | `POST /v1/agents` (`prompt.text`, `repos[].url`, `startingRef`/`prUrl`, `model.id`) | `grok --no-auto-update -p "<prompt>" -w --ref <deploy branch> --always-approve --output-format streaming-json` in a job or VM you own (no cloud API) |
+| message a running worker | `send_message` (wakes an idle session) | `Task` `resume: <id>` once it has finished (fails while it runs); else a PR comment | `POST /v1/agents/{id}/runs` (one active run at a time) | `grok -r <session> -p "<msg>"` in the same job, or a PR comment |
+| worker → orchestrator | `send_message` back | the subagent's final message returns to you; mid-run only the PR | none: PR comment + fleet block | none: PR comment + fleet block |
+| status | `get_session` (`status_bucket`), `list_events` | `cursor-cloud` `list-cloud-agents` / `batch-fetch-details` | `GET /v1/agents/{id}`, `…/runs/{runId}`, `…/stream` | the job's log |
+| stop | `interrupt_session`, then `archive_session` | none in-tool: ask via PR; the API column can cancel | `POST /v1/agents/{id}/runs/{runId}/cancel`, then `POST /v1/agents/{id}/archive` | cancel the job; `--max-turns` caps it up front |
+| PR events | `subscribe_pr_activity` + a `send_later` poll | `subscribe_github_ci` + `subscribe_github_pr` | none (webhooks are v0-only) | none |
+| timer | `send_later` | `subscribe_timer` (`once: true` + `delaySeconds`) | none | none |
+
+- Grok Build reads this repo as-is: `AGENTS.md`, `CLAUDE.md`, `.claude/rules/`,
+  `.cursor/rules/`, and Claude Code's skills, agents, hooks and MCP config
+  (`grok inspect` lists what it found). The guard hooks therefore bind a Grok
+  worker too. Give it `--deny "Bash(git push --force*)"`; deny always wins.
+- Grok Bot (bots on a shared cloud computer that message each other) has no
+  documented GitHub or API path: do not plan a worker on it.
+- Cursor sessions do not appear in Claude's session list, and `send_message`
+  to one fails ("target session could not be verified"): reach them through
+  their PR.
+- Claude Code's `subscribe_pr_activity` has open bugs: it can drop
+  `check_run` completions and bot-authored reviews, so a worker that only
+  waits on it sits idle through a red. Read CI with `ci-watch.mjs --once` on
+  every timer wake.
 
 ## Reading the fleet
 
@@ -57,15 +71,16 @@ PR.
 - A worker is **stalled** when its state has not changed and its branch has
   not moved for ~90 min, or it passed its caps. Ask once, then interrupt and
   relaunch with NEW evidence or a narrower OWNED, never the same prompt.
-- Keep one safety-net `send_later` check-in (~50 min, later ~4 h) while
-  workers run; drop it when every PR is merged or closed.
+- Keep one safety-net timer (`send_later` / `subscribe_timer`, ~50 min, later
+  ~4 h) while workers run; drop it when every PR is merged or closed.
 
 ## Answering an escalation
 
 Answer only from what the user already decided, the launch prompt, the code,
 or AGENTS.md. Anything that is the user's call goes to the user, with the
 worker's question quoted and the options. Reply where the worker can read it:
-`send_message` (Claude), a follow-up run (Cursor), a PR comment (all).
+`send_message` (Claude), `Task` `resume` or a follow-up run (Cursor), a PR
+comment (all).
 
 ## Never
 

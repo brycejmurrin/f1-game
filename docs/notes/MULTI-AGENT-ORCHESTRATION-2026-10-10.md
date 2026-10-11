@@ -12,9 +12,17 @@ today, what this repo already had, and what is still missing. Workflow lives in
   not the user. Cloud sessions are reachable only from a session connected
   through Remote Control. In a cloud session the same surface is the
   claude-code-remote MCP: `create_session`, `send_message`, `get_session`,
-  `list_events`, `interrupt_session`, `archive_session`, `send_later`,
-  `subscribe_pr_activity`.
+  `list_events`, `interrupt_session`, `archive_session`, `send_later`.
+  `SendMessage`'s `notify_when_idle` wakes you when a session goes idle, but
+  only for sessions on the same machine.
   <https://code.claude.com/docs/en/cross-session-messaging>
+- **PR watching** (re-read 2026-10-11): the tool is the GitHub MCP's
+  `mcp__github__subscribe_pr_activity`; Auto-fix (CI status bar toggle, or
+  `/autofix-pr` from a terminal) drives it. Open issues report it dropping
+  `check_run` completions (anthropics/claude-code#62561), bot-authored reviews
+  (#62096, #62977) and commit-status events (#62928); the reporters' fallback
+  is a timed poll. Hence the skill's "subscription plus timer, read CI on
+  every wake". <https://code.claude.com/docs/en/claude-code-on-the-web>
 - **Projects** (public beta, Pro/Max): a coordinator conversation starts one
   cloud "thread" per task. Each thread works on its own branch, opens a PR,
   watches it with auto-fix (CI, review comments) and reports back; the Overview
@@ -35,22 +43,56 @@ today, what this repo already had, and what is still missing. Workflow lives in
   `prUrl`, `model.id`, `envVars`, `autoCreatePR`, `workOnCurrentBranch`;
   branches are `cursor/…`).
 - Message in: `POST /v1/agents/{id}/runs` (a follow-up on the same workspace;
-  one active run at a time). Status: `GET …/runs/{runId}` and `…/stream`.
-  Stop: `…/runs/{runId}/cancel`, `/archive`. Artifacts: `GET /v1/agents/{id}/artifacts`.
-- Webhooks: "coming soon" in v1 (legacy v0 has them).
-- No message OUT: a Cursor agent cannot call its orchestrator; it can only push,
-  comment on GitHub, or end its run. A Claude session's `send_message` to a
-  Cursor session fails ("target session could not be verified", observed today).
+  one active run at a time). Status: `GET /v1/agents/{id}`, `…/runs/{runId}`
+  and `…/stream`. Stop: `POST …/runs/{runId}/cancel`, then
+  `POST /v1/agents/{id}/archive` (agent-level). Artifacts:
+  `GET /v1/agents/{id}/artifacts`; cost: `GET /v1/agents/{id}/usage`.
+- Webhooks: "coming soon" in v1 (legacy v0 has them). Re-read 2026-10-11.
+- No message OUT: an API-launched Cursor agent cannot call its orchestrator; it
+  can only push, comment on GitHub, or end its run. A Claude session's
+  `send_message` to a Cursor session fails ("target session could not be
+  verified", observed 2026-10-10).
+
+**Cursor, inside a cloud agent** (tool schemas read first-hand in a Cursor
+cloud VM, 2026-10-11; no public page documents them yet):
+- `Task` with `environment: "cloud"` launches a worker on its own VM and
+  branch (`cloud_base_branch`, default the parent's pushed branch);
+  `run_in_background: true` delivers its final message back to the parent.
+  That return is the one worker → orchestrator channel Cursor has.
+  `resume: <id>` sends a follow-up only after the worker finishes.
+- `cursor-cloud` MCP: `list-cloud-agents` and `batch-fetch-details` read
+  sibling runs (status, transcripts, diffs) in the same environment.
+- `cursor-subscriptions` MCP: `subscribe_github_ci` (one commit-wide verdict,
+  delivered only while that commit is still the branch head),
+  `subscribe_github_pr` (skips the agent's own pushes and auto-merge toggles),
+  and `subscribe_timer` (cron or `delaySeconds`, `once: true`), Cursor's
+  `send_later`.
 
 **Grok / xAI.**
 - **Grok Build** is a coding-agent CLI (`grok`, headless `grok -p … --output-format
   streaming-json`) with skills, plugins, hooks, MCP and an ACP editor protocol;
-  open source. No cloud/remote mode is documented, and which instruction file
-  it reads is UNVERIFIED. As a worker it runs headless inside a job you own.
-  <https://docs.x.ai/build/overview>, <https://github.com/xai-org/grok-build>
-- **Grok Bot**: persistent bots on a shared cloud computer that message each
-  other and hand off work. GitHub clone/push/PR, an API and webhooks are not
-  documented. <https://docs.x.ai/grok-bot/overview>
+  open source. No cloud/remote mode is documented. As a worker it runs headless
+  inside a job you own. <https://docs.x.ai/build/overview>,
+  <https://github.com/xai-org/grok-build>
+- Instruction files (re-read 2026-10-11, was UNVERIFIED): every directory from
+  the repo root down loads `AGENTS.md`, `CLAUDE.md` and friends plus
+  `.grok/rules/*.md`, `.claude/rules/` and `.cursor/rules/`; Claude Code
+  skills, plugins, agents, hooks and MCP config are read "with no extra
+  setup". So this repo's `.claude/skills/` and guard hooks already reach a
+  Grok worker; `grok inspect` confirms per checkout. Both rule dirs load, so
+  `render-wgx` / `render-tlx` arrive twice there (harmless; same bodies).
+  <https://docs.x.ai/build/features/project-rules>,
+  <https://docs.x.ai/build/features/skills-plugins-marketplaces>
+- Headless flags: `-w/--worktree` + `--ref <branch>`, `-s/--session-id`,
+  `-r/--resume`, `--max-turns`, `--always-approve`, `--allow` / `--deny`
+  (deny wins), `--no-auto-update` for CI.
+  <https://docs.x.ai/build/cli/headless-scripting>,
+  <https://docs.x.ai/build/cli/reference>,
+  <https://docs.x.ai/build/features/permissions>
+- **Grok Bot**: persistent bots on a shared cloud computer (run in Cursor's
+  cloud, included with paid Cursor plans) that message each other, share group
+  chats and pass task ownership. GitHub clone/push/PR, an API and webhooks are
+  still not documented (re-read 2026-10-11). <https://docs.x.ai/grok-bot/overview>
 
 **Cross-vendor.** AGENTS.md is read by Cursor, and by Claude Code only when no
 CLAUDE.md exists (this repo's CLAUDE.md imports it, the right pattern)
@@ -60,12 +102,13 @@ The one bus all three can read and write is GitHub.
 
 | capability | Claude Code | Cursor | Grok |
 |---|---|---|---|
-| spawn a worker | yes | yes | partial (headless in your CI/VM) |
-| message a running worker | yes (wakes it) | yes (follow-up run) | no API |
-| worker → orchestrator | yes | no (GitHub only) | no (GitHub only) |
-| wake on PR/CI event | yes | v0 webhooks only | no |
+| spawn a worker | yes | yes (API, or `Task` cloud in-agent) | partial (headless in your CI/VM) |
+| message a running worker | yes (wakes it) | API follow-up run; `Task resume` only once finished | no API (`-r` resume in your job) |
+| worker → orchestrator | yes | `Task` final message; else GitHub only | no (GitHub only) |
+| wake on PR/CI event | yes, lossy (see PR watching) | in-agent subscriptions; API: v0 webhooks only | no |
 | open a PR | yes | yes | via `gh` in your job |
-| schedule | yes (routines, `send_later`) | no | bot skills, no repo |
+| schedule | yes (routines, `send_later`) | `subscribe_timer` in-agent | bot routines, no repo |
+| reads this repo's skills/hooks | yes | skills yes (`.claude/skills`) | yes (Claude Code compat) |
 
 ## Design
 
@@ -107,3 +150,6 @@ Still open (separate PRs, each needs its own verification):
    edit today).
 6. A shallow clone fails `physics-baseline-provenance` locally when the
    blessing commit is fetched but its ancestry is cut: `git fetch --unshallow`.
+7. No `workflow_dispatch` job hosts a Grok Build worker yet (needs an
+   `XAI_API_KEY` secret and a `contents: write` / `pull-requests: write`
+   token); until one exists, a Grok worker runs on a machine the user owns.
