@@ -25,7 +25,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
-import { fnSource } from "../helpers/fn-source.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
@@ -205,7 +205,7 @@ function flapRig() {
   M.CarMesh.init(gfx);
   const st = { col: [0.8, 0.1, 0.1], finish: null };
   const draw = new Function("wingColorOf", "clamp", "resolveLivery", "Car3D", "CarMesh", "gfx", "_flapWorld",
-    fnSource(read("js/game.js"), "function drawAeroFlaps(") + "\nreturn drawAeroFlaps;")(
+    symbolSource("function drawAeroFlaps(") + "\nreturn drawAeroFlaps;")(
     () => st.col, (v, a, b) => Math.min(b, Math.max(a, v)), () => ({ finish: st.finish }),
     M.Car3D, M.CarMesh, gfx, new Float32Array(16));
   return { M, made, draws, freed, draw, st };

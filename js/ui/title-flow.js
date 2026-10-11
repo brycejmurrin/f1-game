@@ -44,7 +44,11 @@ $("mb-tt").onclick = () => openTimeTrial(false);
 async function consumeGhostHash() {
   // A ghost link landing MID-RACE waits, fragment intact, for the menu (quitToMenu re-reads it) — as #353's invite link does.
   if (UiLayers.inRace()) { Log.info("game", "ghost link deferred: racing"); return null; }
-  const shared = await GhostShare.consumeHash({ valid: () => !UiLayers.inRace(),
+  // …and so does one landing over any other layer (results / quali sheet, the RACE loading plate, the career hub, an open
+  // picker): it would flip flow/session to a time trial under that screen. Only the title itself takes the link.
+  const top = els.overlay.hidden ? null : UiLayers.top();
+  if (els.overlay.hidden || (top && top.id !== "overlay")) { Log.info("game", "ghost link deferred: title not live"); return null; }
+  const shared = await GhostShare.consumeHash({ valid: () => !UiLayers.inRace() && !els.overlay.hidden,
     notify: (message, result) => G.announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
   });
   if (!shared || !shared.ok) return shared;
@@ -65,6 +69,7 @@ async function consumeGhostHash() {
   return shared;
 }
 consumeGhostHash();
+DeepLink.create(G);   // installed-icon shortcuts: ?go=race|daily|nextgp|garage
 window.addEventListener("hashchange", consumeGhostHash);
 // HTP section links write #htp-*; CLOSE (and Esc via data-esc-close) must drop
 // a stale hash so reopen does not jump mid-pane. Keep this off game.js: that

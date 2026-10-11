@@ -119,6 +119,38 @@ test("create().tick writes dbgCam from camVantage and never mutates car speed", 
   assert.equal(G.dbgCam, null);
 });
 
+test("the live director's battle pick is the same at OVERALL SPEED 0.469 as at pace 1 (4-F6)", () => {
+  // Broadcast.battles floors the chaser's speed at 20 × vScale; the director must pass
+  // vTop()/VMAX for the sim's PACE-scaled field. Same scene at both paces: two cars 24 m
+  // apart crawling at 12 m/s (1.2 s on the floor — not a battle), the field scaled by PACE.
+  const subjectAt = (pace) => {
+    const sb = {
+      Math, console, Object, Array, Number, String, JSON, Map, Set, isFinite,
+      Log: { info() {}, debug() {}, warn() {}, enabled() { return false; } },
+      CamModes: { CAM_MODES: [{ id: "chase" }, { id: "tv" }] },
+      PhysicsConsts: { VMAX: 72 },
+    };
+    sb.window = sb;
+    const ctx = vm.createContext(sb);
+    vm.runInContext(src("js/race/broadcast.js"), ctx, { filename: "broadcast.js" });
+    vm.runInContext(src("js/camera/director.js"), ctx, { filename: "director.js" });
+    const Dir = vm.runInContext("Director", ctx);
+    const car = (code, prog) => ({ code, prog: prog * pace, s: prog * pace, x: 0, speed: 12 * pace, retired: false, finished: false });
+    const field = [car("LEA", 1024), car("CHA", 1000), car("TAI", 0)];
+    const G = {
+      state: "race", camMode: 1, cars: field, player: field[2], track: { total: 5000 }, dbgCam: null,
+      netPlay: { active: () => false }, vTop: () => 72 * pace,
+      camVantage: (mode, s, x) => ({ eye: [s, 5, x], tgt: [s + 10, 2, x], fov: 50 }),
+    };
+    const api = Dir.create(G);
+    api.tick(1);
+    return api.status().subject;
+  };
+  assert.equal(subjectAt(1), "LEA", "pace 1: no battle, the director rotates onto the leader");
+  assert.equal(subjectAt(0.469), subjectAt(1),
+    "pace 0.469: the same scene is no battle either — the crawl floor scales with vTop()/VMAX");
+});
+
 test("CAM_MODES keeps tv at its shipped index — save-format index contract", () => {
   const text = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
   const ids = [...text.matchAll(/\{\s*id:\s*"([^"]+)"/g)].map((m) => m[1]);
@@ -356,4 +388,36 @@ test("actual AI TV CHASE follows +X motion instead of the unchanged grid heading
   const heading = Math.atan2(target[0] - eye[0], target[2] - eye[2]);
   assert.ok(Math.abs(heading - Math.PI / 2) < 0.2,
     "only the intentional shoulder offset remains, not the former ~44° shipped-heading error");
+});
+
+// bug-hunt 9.8: in TV mode the running list (rows + array + sort) was rebuilt
+// every rendered frame, even during the 5 s dwell where decideCut is always null.
+test("create().tick skips the running-car scan while holding a fresh shot (SHOT_MIN_S dwell)", () => {
+  const car = { code: "VER", s: 100, x: 0, speed: 60, prog: 1000, px: 1, pz: 2, head: 0.1, retired: false, finished: false };
+  const field = [car, { code: "HAM", s: 90, x: 0, speed: 58, prog: 990, px: 0, pz: 0, head: 0, retired: false, finished: false }];
+  let carReads = 0, vantageCalls = 0;
+  const G = {
+    state: "race", camMode: 1, player: car, track: { total: 5000 }, dbgCam: null,
+    netPlay: { active: () => false }, setCamMode(i) { G.camMode = i; },
+    get cars() { carReads++; return field; },
+    camVantage(mode, s, x) { vantageCalls++; return { eye: [s, 5, x], tgt: [s + 10, 2, x], fov: 50 }; },
+  };
+  const sb = { Math, console, Object, Array, Number, String, JSON, Map, Set, isFinite,
+    Log: { info() {}, debug() {}, warn() {}, enabled() { return false; } },
+    CamModes: { CAM_MODES: [{ id: "chase" }, { id: "tv", label: "TV", cut: 0.5 }] } };
+  sb.window = sb;
+  const ctx = vm.createContext(sb);
+  vm.runInContext(src("js/race/broadcast.js"), ctx, { filename: "broadcast.js" });
+  vm.runInContext(src("js/camera/director.js"), ctx, { filename: "director.js" });
+  const Dir = vm.runInContext("Director", ctx);
+  const api = Dir.create(G);
+  api.tick(Dir.SHOT_MIN_S + 1);                 // first cut scans the field
+  assert.ok(carReads >= 1 && G.dbgCam, "the cut scanned the field and took the air");
+  carReads = 0; vantageCalls = 0;
+  for (let i = 0; i < 60; i++) api.tick(1 / 60);   // 1 s of dwell
+  assert.equal(carReads, 0, "no running-list scan during the dwell");
+  assert.equal(vantageCalls, 60, "the held shot is still solved every frame");
+  for (const c of field) c.retired = true;      // the subject leaving must still re-cut at once
+  api.tick(1 / 60);
+  assert.ok(carReads >= 1, "a retired subject forces the scan again");
 });
