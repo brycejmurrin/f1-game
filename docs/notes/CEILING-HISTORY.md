@@ -35,6 +35,10 @@ a warning, not a red — #1386/#1387/#1395 grew HUD without raising the #1375 ca
 and every PR that re-snapped hit Structural guards with no CI override for a
 stated reason. Real source growth past absorb still fails on the PR run.
 
+2026-10-11 third re-measure after ship #1351 (phone HUD overlaps) landed on tip
+`bdbfa191a`: hud.js **1411 / 2399**, hud.css **1960 / 2158**. Prior #1437 snap to
+1393 / 2377 was already short once the merge tree carried #1351's growth.
+
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
