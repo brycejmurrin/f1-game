@@ -37,7 +37,7 @@ async function load(page, id) {
   // physics ticks in ONE in-page evaluate, and the whole time the rAF loop is
   // rasterising suzuka on SwiftShader beside it, competing for the same cores —
   // which is why the lap costs ~185 s here alone and blows any budget the moment
-  // a second worker exists. headless(true) makes game.js's render() return early
+  // a second worker exists. headless(true) makes render() in game.js return early
   // and every metric this file reads survives it: probe(), physState() and
   // maxWallOvershoot() are all computed from G.cars and Tracks.wallAt, never from
   // a frame. Nothing here calls render({what:...}), which is the one hook that
