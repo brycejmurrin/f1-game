@@ -128,6 +128,17 @@ a warning, not a red — #1386/#1387/#1395 grew HUD without raising the #1375 ca
 and every PR that re-snapped hit Structural guards with no CI override for a
 stated reason. Real source growth past absorb still fails on the PR run.
 
+2026-10-11 #1431 sync onto ship after #1437: `js/game.js` codeLines 4974→4977 /
+lines 9186→9189. Not merge duplication — the only game.js delta vs ship is the
+#1435 NEW FRIEND ROOM `resMenu.onclick` (quit then open VS FRIEND). sync-pr's
+union-budget guard saw mine=0/+2 against a stale base after #1437 lowered the
+ship caps; hand-resolved ratchets via --update on the clean merge.
+
+2026-10-11 #1431 sync onto ship after #1313+#1398: `js/game.js` codeLines
+4990→**4994** / lines 9207→**9211**. Same NEW FRIEND ROOM delta; sync-pr union
+budget was 4990+3 / 9207+3 and measure was one over — hand `--update` on the
+clean merge (not duplication).
+
 2026-10-11 third re-measure after ship #1351 (phone HUD overlaps) landed on tip
 `bdbfa191a`: hud.js **1411 / 2399**, hud.css **1960 / 2158**. Prior #1437 snap to
 1393 / 2377 was already short once the merge tree carried #1351's growth.

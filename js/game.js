@@ -8893,7 +8893,11 @@ $("cs-unlimited").onclick = () => {
   store.set("unlimitedBudget", unlimitedBudget);
   buildSetup();
 };
-els.resMenu.onclick = () => quitToMenu();
+els.resMenu.onclick = () => {
+  const room = netPlay.active();   // read BEFORE the quit: results are shown with NetPlay still live (NEW FRIEND ROOM)
+  quitToMenu();
+  if (room && $("mb-vs")) $("mb-vs").click();   // the title's own VS FRIEND door: a fresh room, since the race ended this one
+};
 els.resNext.onclick = () => {
   resultsCam.reset();
   if (announcer.stop) announcer.stop();   // a read-out still waiting on the radio must not start over the hub / quali sheet

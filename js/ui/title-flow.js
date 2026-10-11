@@ -38,8 +38,8 @@ function openTimeTrial(selectDaily) {
   if (G.soundOn) GameAudio.uiSelect();
   // Warm the selected circuit under the picker. Daily already pinned
   // track/weather/tod via select(); skipping the warm left START on a cold
-  // Shanghai FOG compile that can burn raceIntroFromSheet's 30 s awaitIntroWarm
-  // on CI (garage-out-before-card DAILY, tip 7ba546, 2026-10-11).
+  // Shanghai FOG compile that can burn the sheet's 30 s shader-prep wait on CI
+  // (garage-out-before-card DAILY, tip 7ba546, 2026-10-11).
   G.scheduleFlybyTrack(true);
 }
 $("mb-tt").onclick = () => openTimeTrial(false);

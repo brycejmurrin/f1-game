@@ -16,9 +16,15 @@
       "lines": 3625
     },
     "js/game.js": {
+<<<<<<< HEAD
       "codeLines": 5017,
       "gMembers": 290,
       "lines": 9255,
+=======
+      "codeLines": 5016,
+      "gMembers": 290,
+      "lines": 9252,
+>>>>>>> origin/claude/f1-game-project-26h3ng
       "topLets": 155
     },
     "js/lighting/presets.js": {
