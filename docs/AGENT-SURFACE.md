@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Twenty-eight `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
+do the work. Twenty-nine `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -253,6 +253,10 @@ Chromium), `apex_hud_shot` / `apex_hud_survey` gained `backend`, and
 baseline through `track/audit-circuit.cjs`; the bare call still runs the
 verify-track + float-audit pair). `apex_unit_test` is built-in: `node --test`
 of one `tests/unit/` file, no CLI of its own.
+28 → 29 on 2026-10-10 for `apex_hud_mock` (`shot/hud-mock.mjs`): the race HUD on
+black with every widget mocked and a labelled box per element, one race boot per
+pointer type then ~1 s a shot — the fast look at a layout; `apex_hud_shot` stays
+the tool when the 3D frame behind the HUD matters.
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -285,6 +289,7 @@ of one `tests/unit/` file, no CLI of its own.
 | `apex_garage` | `shot/garage-angles.mjs` | browser | garage-parts-livery |
 | `apex_hud_shot` | `shot/hud-survey.mjs` | browser | survey-ui-matrix |
 | `apex_hud_survey` | `shot/hud-survey.mjs` | browser | survey-ui-matrix |
+| `apex_hud_mock` | `shot/hud-mock.mjs` | browser | survey-ui-matrix |
 
 Pins the wrap always applies (you cannot override them):
 
@@ -328,6 +333,9 @@ Pins the wrap always applies (you cannot override them):
   The reported `log` is the CLI's stdout (its report; the status `tail` reads it),
   `stderr` the file beside it, both in `artifacts/logs/apex-jobs/`
 - `apex_ui_fit` / `apex_ui_shot` → ONE screen × viewport; the matrix is a job
+- `apex_hud_mock` → `hud-mock.mjs --json --out <dir>`, never `--list` / `--help` /
+  `--url`; devices / cams are enums, HUD / UI / BUTTON sizes bounded arrays; like
+  the other HUD wraps it defaults to an `apex_job_start` `hud_mock` job (async:false blocks)
 - `apex_car_audit` → `ladder` or `crest` only (the minutes-long sweeps are jobs)
 - `apex_hud_shot` / `apex_hud_survey` → `hud-survey.mjs --json --out <dir>`,
   never `--plan` / `--self-test` / `--url`; `apex_hud_shot` always passes
