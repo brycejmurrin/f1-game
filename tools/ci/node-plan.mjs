@@ -154,8 +154,11 @@ export function plan(changed, ref = "", scripts = pkgScripts()) {
   // The boot group reaches here only through pick-tests' two blanket rules
   // ("any source edit", "script tags + DOM shell"), the same way it reaches
   // the selected gate — and logging.spec.js, an ADAPTED spec, lives in it, so
-  // without this every js/ edit ran vm-page. select-specs answers that with
-  // the fixed smoke gate; the same rule applies here.
+  // without this every js/ edit ran vm-page. select-specs no longer drops it
+  // (round-3 8-F2: Smoke is not a required check), so "does the page still
+  // boot" is answered by boot-guard / dev-tools in the required Selected specs
+  // gate. This VM plan still drops it, so a plain js/ edit does not run
+  // vm-page for logging's twin alone.
   // An edited browser spec changes no VM file, so its owner group (pick-tests
   // SPEC_OWNER_REASON) is human advice here — EXCEPT an ADAPTED spec, which
   // vm-page runs as itself and select-specs therefore never runs in a browser:

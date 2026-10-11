@@ -82,6 +82,33 @@ test("ExtraRigs.pickRival falls back to nearest car within FALLBACK_S", () => {
   assert.equal(ExtraRigs.pickRival([player], player), null);
 });
 
+test("ExtraRigs.pickRival: RIVAL LOCK picks the same rival at OVERALL SPEED 0.469 as at pace 1; WATCH keeps real m/s (4-F6)", () => {
+  // Player P between X (22 m ahead) and Y (20 m behind), all at a 12 m/s crawl: at pace 1 neither
+  // gap is a battle (≥ 1 s on the 20 m/s floor) and the fallback frames the nearer car, Y. The same
+  // scene at pace 0.469 must agree: the floor is 20 × vTop()/VMAX, latched by tickPitAuto(G).
+  // k scales the scene (gaps and speeds); pace is the sim's OVERALL SPEED that tickPitAuto latches.
+  const rivalAt = (k, pace, broadcast, watch) => {
+    const { ExtraRigs, ctx } = loadExtraRigs();
+    ctx.PhysicsConsts = { VMAX: 72 };
+    if (broadcast) {
+      vm.runInContext(fs.readFileSync(path.join(root, "js/race/broadcast.js"), "utf8").replace(/^const\b/gm, "var"), ctx);
+    }
+    const car = (code, prog) => ({ code, prog: prog * k, s: prog * k, x: 0, speed: 12 * k, replayRate: watch ? 1 : undefined });
+    const X = car("X", 1022), P = car("P", 1000), Y = car("Y", 980);
+    ExtraRigs.tickPitAuto({ vTop: () => 72 * pace, player: P, camMode: 0 });
+    return ExtraRigs.pickRival([X, P, Y], P).code;
+  };
+  for (const broadcast of [false, true]) {
+    const tag = broadcast ? "Broadcast.battles" : "localBattles";
+    assert.equal(rivalAt(1, 1, broadcast), "Y", tag + ": pace 1 frames the nearer car (no battle)");
+    assert.equal(rivalAt(0.469, 0.469, broadcast), "Y", tag + ": pace 0.469 agrees with pace 1");
+    // WATCH: a real 5.6 m/s crawl 10-11 m apart IS a battle on the bare 20 m/s floor (X, up the
+    // order), whatever OVERALL SPEED the sim was left at — the latched scale must not reach it.
+    assert.equal(rivalAt(0.469, 1, broadcast, true), "X", tag + ": WATCH at sim pace 1");
+    assert.equal(rivalAt(0.469, 0.469, broadcast, true), "X", tag + ": WATCH at sim pace 0.469 ignores the latched scale");
+  }
+});
+
 test("ExtraRigs.solve returns finite eye/tgt/fov for rival, pitwall, drone", () => {
   const { ExtraRigs } = loadExtraRigs();
   const track = { total: 1000, pit: { side: 1 }, def: {} };

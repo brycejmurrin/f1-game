@@ -166,7 +166,28 @@ const HudRelative = (function () {
     // TOUCH clearance: css/hud.css caps #hud-rel above the left dock at high
     // HUD SIZE. When that max-height clips, drop the farthest road neighbours
     // first (never the player's row) so we never paint a half-row over BRAKE.
-    fitRows();
+    // fitRows forces layout (getBoundingClientRect x passes); the tick is 10 Hz, so
+    // run it only when something that decides the fit moved (bug-hunt 2 P9).
+    const key = fitKey();
+    if (key !== fitSeen || ++fitAge >= FIT_REFRESH) fitRows();   // the age is a 1 Hz net for layout the key cannot see
+  }
+  let fitSeen = null, fitAge = 0;
+  const FIT_REFRESH = 10;
+  /** Everything fitRows reads that is not layout itself: occupied rows, viewport,
+   *  HUD scale, the body's mode classes and each clearance control's hidden/class. */
+  function fitKey() {
+    let k = "";
+    for (let i = 0; i < ROWS; i++) k += rows[i].car ? "1" : "0";
+    const w = doc.defaultView || (typeof window !== "undefined" ? window : null);
+    k += "|" + (w ? w.innerWidth + "x" + w.innerHeight : "");
+    const el = doc.documentElement;
+    k += "|" + (el && el.style && el.style.getPropertyValue ? el.style.getPropertyValue("--hud-z-top") : "");
+    k += "|" + (doc.body ? doc.body.className : "");
+    if (doc.getElementById) for (let i = 0; i < CLEAR_IDS.length; i++) {
+      const c = doc.getElementById(CLEAR_IDS[i]);
+      k += "|" + (c ? (c.hidden ? "h" : "v") + c.className : "-");
+    }
+    return k;
   }
   const CLEAR_IDS = Object.freeze(["dock-left", "btn-brake", "btn-throttle", "btn-steer-left", "btn-steer-right"]);
   /** Cap the card above any overlapping left-column control, then hide the
@@ -174,6 +195,7 @@ const HudRelative = (function () {
    *  (no steer-* class; BRAKE sits in the map column). */
   function fitRows() {
     if (!root || !built) return;
+    fitSeen = fitKey(); fitAge = 0;
     const b = doc && doc.body;
     if (b && b.classList && b.classList.contains("desktop")) {
       if (root.style && root.style.removeProperty) root.style.removeProperty("max-height");

@@ -1189,3 +1189,23 @@ test("a load that STEPS does not buy a reallocation every few seconds", () => {
   assert.ok(changes <= 25,
     `a 6 ms transient must not buy a reallocation every few seconds: ${changes} in 600 s`);
 });
+
+test("one short or negative frame sample (pause -> resume stamps) must not collapse the frame floor into a spurious step-down", () => {
+  // bug-hunt 2026-10-09 4.1. setPaused(false) stamps lastFrame = performance.now() inside a
+  // handler, so the NEXT rAF stamp can be earlier and tickBody feeds a raw dt <= 0. tick()
+  // guarded only the history write: the sample still entered the EMA and the derived floor,
+  // the floor dropped by (dt - floor) * FLOOR_DOWN_A, every healthy frame then read as
+  // "over budget", and the governor cut the render scale (and then reverted it, leaving the
+  // lever disabled for the session). Repro: scratchpad/gov-sim.cjs (setRenderScale(0.9) at frame 134).
+  for (const bad of [-8, -5, -3, 0, NaN]) {
+    const { PerfGov, scale } = makeGov();
+    PerfGov.sentinelArm(true);
+    let lowest = 1;
+    for (let f = 0; f < 400; f++) {
+      PerfGov.tick(f === 100 ? bad : 16.7);
+      lowest = Math.min(lowest, scale());
+    }
+    assert.equal(lowest, 1, `a ${bad} ms sample must not trigger a render-scale step-down`);
+    assert.ok(Math.abs(PerfGov.floorMs() - 16.7) < 0.5, `the floor stays on the healthy cadence (${PerfGov.floorMs()}) after a ${bad} ms sample`);
+  }
+});
