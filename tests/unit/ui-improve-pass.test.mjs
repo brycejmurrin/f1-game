@@ -2235,6 +2235,21 @@ test("menu range sliders share a painted-size token that cancels UI SIZE zoom", 
   }
 });
 
+test("short+compact .sheet re-derives --tap-paint against the capped zoom (#1346 follow-up)", () => {
+  // #1346 capped compact short-viewport .sheet zoom at --ui-compact-scale but
+  // left --tap-paint dividing by the uncapped --ui-scale, so help chips painted
+  // ~32 px at 150%+ (time-trial Driving zoom matrix shortHelpChips). The cap
+  // and the painted floor must share one effective zoom token.
+  const sel = ':where(body[data-density="compact"]) .sheet';
+  assert.match(decl(css("css/menus.css"), sel, "--_sheet-z") || "",
+    /min\(var\(--sheet-scale,\s*var\(--ui-scale\)\),\s*var\(--ui-compact-scale\)\)/,
+    "effective zoom is min(sheet-scale, ui-compact-scale)");
+  assert.equal(decl(css("css/menus.css"), sel, "zoom"), "var(--_sheet-z)");
+  assert.match(decl(css("css/menus.css"), sel, "--tap-paint") || "",
+    /var\(--tap-paint-at\)\s*\/\s*var\(--_sheet-z\)/,
+    "--tap-paint divides by the capped zoom, not the uncapped slider");
+});
+
 test("COPY VALUES tries the synchronous copy while the click still has activation", () => {
   const h = bootCopyValues({ execOk: true });
   assert.equal(h.order[0], "execCommand:copy",

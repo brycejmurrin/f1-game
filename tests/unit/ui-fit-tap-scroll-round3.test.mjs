@@ -71,17 +71,17 @@ test("compact short-viewport sheets re-derive --tap-paint against the paint zoom
   const css = rd("css/menus.css");
   assert.match(
     css,
-    /:where\(body\[data-density="compact"\]\) \.sheet\s*\{[^}]*--sheet-paint-scale:\s*min\(var\(--sheet-scale,\s*var\(--ui-scale\)\),\s*var\(--ui-compact-scale\)\)/s,
-    "compact .sheet names the capped paint scale",
+    /:where\(body\[data-density="compact"\]\) \.sheet\s*\{[^}]*--_sheet-z:\s*min\(var\(--sheet-scale,\s*var\(--ui-scale\)\),\s*var\(--ui-compact-scale\)\)/s,
+    "compact .sheet names the capped paint scale (--_sheet-z)",
   );
   assert.match(
     css,
-    /:where\(body\[data-density="compact"\]\) \.sheet\s*\{[^}]*zoom:\s*var\(--sheet-paint-scale\)/s,
-    "compact .sheet zooms by --sheet-paint-scale",
+    /:where\(body\[data-density="compact"\]\) \.sheet\s*\{[^}]*zoom:\s*var\(--_sheet-z\)/s,
+    "compact .sheet zooms by --_sheet-z",
   );
   assert.match(
     css,
-    /:where\(body\[data-density="compact"\]\) \.sheet\s*\{[^}]*--tap-paint:\s*max\(24px,\s*calc\(var\(--tap-paint-at\)\s*\/\s*var\(--sheet-paint-scale\)\)\)/s,
+    /:where\(body\[data-density="compact"\]\) \.sheet\s*\{[^}]*--tap-paint:\s*max\(24px,\s*calc\(var\(--tap-paint-at\)\s*\/\s*var\(--_sheet-z\)\)\)/s,
     "compact .sheet divides --tap-paint by the paint scale, not bare --ui-scale",
   );
 });

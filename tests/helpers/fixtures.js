@@ -26,6 +26,15 @@ export const BOOT_MS = 45000;
 // loadTrack fixture no longer uses it — see awaitTrackBuild below, which those
 // specs should move to whenever one of them next goes red on a slow box.
 export const TRACK_MS = 45000;
+// A race STARTED FROM THE UI (a START/GO click: garage-out, then a 22-car Grand
+// Prix build and car warm-up) is not a boot, and BOOT_MS is what it borrowed:
+// on llvmpipe CI that build measured 45-50 s (Pages 38016755004: `race car
+// assets ready` at 49.6 s after a 45 s wait had already expired), so the wait
+// sat on its own budget's edge (R3-CI-HEALTH-5). Its own number, per the rule
+// above: ~1.8x the slowest measured build, as BOOT_MS is of the slowest boot.
+// Wait on the build's own end signal with it (tests/specs/quali.spec.js
+// raceFrom), never on a bare clock; the test timeout stays the backstop.
+export const RACE_BUILD_MS = 90000;
 
 
 import { TRACK_STALL_MS, awaitTrackBuild } from "./await-track-build.js";

@@ -915,20 +915,16 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
     --vhz: calc(1vh / var(--ui-compact-scale));
     --svhz: calc(1svh / var(--ui-compact-scale));
   }
-  /* Sheets share title chrome geometry cap (secondary rows @ 150%+).
-     Re-derive painted floors against the SAME scale the zoom uses: dividing
-     --tap-paint by the requested --ui-scale (css/components.css) while this
-     rule caps zoom at --ui-compact-scale (≤1.25) painted How-to-Play section
-     chips at 43.0 / 34.6 px on small-phone @150/@200 (Driving zoom matrix
-     selected-2, tip f6b6d2f5a) — under the 43.5 / 52 floors. */
+  /* Compact sheet zoom cap (#1346): --_sheet-z is the painted zoom; re-derive
+     --tap-paint / vwz against it (shortHelpChips at 150%+). */
   :where(body[data-density="compact"]) .sheet {
-    --sheet-paint-scale: min(var(--sheet-scale, var(--ui-scale)), var(--ui-compact-scale));
-    zoom: var(--sheet-paint-scale);
-    --vwz: calc(1vw / var(--sheet-paint-scale));
-    --vhz: calc(1vh / var(--sheet-paint-scale));
-    --svhz: calc(1svh / var(--sheet-paint-scale));
-    --slider: calc(32px / var(--sheet-paint-scale));
-    --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--sheet-paint-scale)));
+    --_sheet-z: min(var(--sheet-scale, var(--ui-scale)), var(--ui-compact-scale));
+    zoom: var(--_sheet-z);
+    --vwz: calc(1vw / var(--_sheet-z));
+    --vhz: calc(1vh / var(--_sheet-z));
+    --svhz: calc(1svh / var(--_sheet-z));
+    --slider: calc(32px / var(--_sheet-z));
+    --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--_sheet-z)));
   }
 
   /* Type still honours the requested %; compact landscape keeps the 17px rung. */

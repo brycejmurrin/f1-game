@@ -40,7 +40,9 @@ function makeFixture(options = {}) {
     massBlocked: () => false, barrierClear: () => true, hash: () => 0.2,
     upOf: () => [0, 1, 0], bankOffsetAt: () => 0,
     lod: (n, floor) => Math.max(floor, Math.round(n * (options.mobile ? 0.72 : 1))),
-    note: (...args) => notes.push(args), noteSuppressed: (...args) => notes.push(args),
+    note: (...args) => { notes.push(args); return args; },
+    unnote: (rec) => { const i = notes.lastIndexOf(rec); if (i >= 0) notes.splice(i, 1); },
+    noteSuppressed: (...args) => notes.push(args),
     instance: (key, placement, build, metadata, opts) => {
       if (options.instanceResult !== undefined) return options.instanceResult;
       const replay = opts && opts.roundNormals ? { ...emit, roundNormals: geom.roundNormals } : emit;
@@ -123,4 +125,17 @@ test("a tree whose trunk the pit guard rejects leaves no material behind", () =>
   }
   reject.on = false;
   f.nature.tree(0, 1, 24, 12, col);
+});
+
+test("a tree whose trunk the guard refuses leaves no registry note (H26b)", () => {
+  const reject = { on: true };
+  const f = makeFixture({ rejectPrimitive: (name) => reject.on && name === "addCyl" });
+  const col = [0.2, 0.35, 0.18];
+  const treeNotes = () => f.notes.filter((n) => n[0] === "tree").length;
+  f.nature.tree(0, 1, 24, 12, col);
+  f.nature.tree(0, 1, 24, 12, col, { deadChance: 1 });
+  assert.equal(treeNotes(), 0, "a refused trunk draws nothing, so it notes nothing");
+  const g = makeFixture();
+  g.nature.tree(0, 1, 24, 12, col);
+  assert.equal(g.notes.filter((n) => n[0] === "tree").length, 1, "a landed trunk is noted once");
 });
