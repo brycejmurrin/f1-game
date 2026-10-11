@@ -141,6 +141,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // reuse/start decision for its public tunnel. Pure Node, no Chromium.
   "tests/unit/browser-http-mcp.test.mjs",
   "tests/unit/browser-http-up.test.mjs",
+  // GL-aware capture / remote-group worker defaults (llvmpipe vs SwiftShader).
+  "tests/unit/browser-workers.test.mjs",
   "tests/unit/build-client-drop.test.mjs",
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
@@ -268,11 +270,13 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // empty state, on mini-dom with the real Dom.el. ~0.1 s.
   "tests/unit/data-standings.test.mjs",
   "tests/unit/debris-step-skip.test.mjs",
+  "tests/unit/deep-link.test.mjs",
   // ...and a third of the same family: two widgets keyed on ONE sign convention
   // were painted opposite colours. Neither half is wrong alone, so only a test
   // comparing the PAIR can see it. Pure text, well under a second.
   "tests/unit/delta-sign-colour.test.mjs",
   "tests/unit/deploy-pr-rest.test.mjs",
+  "tests/unit/deploy-staging-build.test.mjs",
   "tests/unit/deploy-staging.test.mjs",
   // that touches the LUT rather than on every edit.
   // The three raster/spawn-heavy car files (cockpit-pale-surfaces 69 s,
@@ -619,6 +623,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // open PR's head, claims on age; pure fixtures, under a second.
   "tests/unit/prune-branches.test.mjs",
   "tests/unit/pu-harvest-audio.test.mjs",
+  // shots/<topic> evidence-branch publisher: validations, dry run, full publish into a throwaway bare repo.
+  "tests/unit/publish-shots.test.mjs",
   "tests/unit/quick-validate.test.mjs",
   "tests/unit/race-control.test.mjs",
   "tests/unit/race-entry-profile.test.mjs",
@@ -720,6 +726,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/sheetshape-registry.test.mjs",
   "tests/unit/shell-ids.test.mjs",
   "tests/unit/ship-filter-paths.test.mjs",
+  // shot.mjs --batch / --jpeg / --raster parse (no Chromium).
+  "tests/unit/shot-jobs.test.mjs",
   // skidmarks.js lays marks per SECOND of laying (was per frame): a VM run of
   // the ring buffer at three refresh rates, ~0.1 s.
   "tests/unit/skidmarks-cadence.test.mjs",
@@ -728,6 +736,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2: removeTrack frees its MUSIC_CACHE slot.
   "tests/unit/soundtrack-cache.test.mjs",
   "tests/unit/source-integrity.test.mjs",
+  "tests/unit/source-pin-hygiene.test.mjs",
   "tests/unit/span-kinds.test.mjs",
   // The duration HISTORY behind the budget: junit/live-reporter merge,
   // the bounded rolling record, the CI-bucket fallback and the growth flag.

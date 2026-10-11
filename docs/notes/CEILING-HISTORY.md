@@ -19,13 +19,15 @@ first and grew the pair, so the ceilings start at **1345 / 2281** (hud.js) and
 **1926 / 2120** (hud.css), ship `325100c05`.
 
 2026-10-11 ship catch-up + F-01 (#1409): after #1375, round-3 HUD PRs (#1395
-viewport cache, #1387 give-back, #1386 spotter) landed without their planned
-raises, so ship tip read OVER (Structural guards red). Re-measure on the
-synced #1409 tree (ship `1a980f907` + F-01 `zoomDiv` feature-detect): hud.js
-**1394 / 2381** (+1 code / +4 lines over the ship-only remeasure of 1393 /
-2377 — the F-01 `_noCssZoom` const and its comment), hud.css **1953 / 2150**.
-Same update lowered game.js 4976 → 4974 code / 9195 → 9186 lines. Sibling
-#1437 owns the ship-only remeasure; this tip needs the F-01 +1 as well.
+viewport cache, #1387 give-back, #1386 spotter) and then #1351 (phone HUD
+overlaps) landed without their planned raises, so ship tip / PR merge refs
+read OVER (Structural guards red). Re-measure on the synced #1409 tree
+(ship `23641805f` + F-01 `zoomDiv` feature-detect): hud.js **1412 / 2403**
+(+1 code / +4 lines over the ship-only remeasure of 1411 / 2399 — the F-01
+`_noCssZoom` const and its comment), hud.css **1960 / 2158**. Sibling #1437
+owns the ship-only remeasure; this tip needs the F-01 +1 as well. Also
+reworded four comment `game.js's` hits (source-pin ≤351) and raised the
+unit-suite floor 550+ → 580+ (605 on disk).
 
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
