@@ -35,9 +35,10 @@ const TrackStamps = (function () {
   // make sure Rc's chords still clear the spacing rule (fewer steps only grow Rc).
   function arcFor(R, A) {
     const comp = (n) => compensate(R, R * A / n);   // compensate() reads φ as h / R
+    const cMin = SPACING + 0.5;   // half a metre over the rule: the 0.25 m save lattice moves each end (as spiralArc)
     let Rc = R, n = 1;
-    for (let it = 0; it < 6; it++) { n = S.arcSteps(Rc, A, SPACING, CHORD_MAX); Rc = comp(n); }
-    while (n > 1 && 2 * Rc * Math.sin(A / (2 * n)) < SPACING) Rc = comp(--n);
+    for (let it = 0; it < 6; it++) { n = S.arcSteps(Rc, A, cMin, CHORD_MAX); Rc = comp(n); }
+    while (n > 1 && 2 * Rc * Math.sin(A / (2 * n)) < cMin) Rc = comp(--n);
     return { Rc, n };
   }
 

@@ -31,6 +31,8 @@ function load({
   const dataset = {};
   const els = new Map();
   const mqListeners = [];
+  const mq = { light: preferLight };                       // the OS colour scheme, flippable mid-test
+  const tokens = { text: "#f6f6f9", bg: "#0c0c14" };       // what getComputedStyle reads for --text / --bg
 
   function makeEl(id) {
     const listeners = {};
@@ -201,15 +203,15 @@ function load({
     },
     getComputedStyle: () => ({
       getPropertyValue: (p) => {
-        if (p === "--text") return "#f6f6f9";
-        if (p === "--bg") return "#0c0c14";
+        if (p === "--text") return tokens.text;
+        if (p === "--bg") return tokens.bg;
         return "";
       },
     }),
   };
   sb.window = sb;
   sb.window.matchMedia = (q) => ({
-    matches: preferLight && String(q).includes("light"),
+    matches: mq.light && String(q).includes("light"),
     media: q,
     addEventListener(_t, fn) { mqListeners.push(fn); },
     addListener(fn) { mqListeners.push(fn); },
@@ -221,7 +223,7 @@ function load({
   vm.runInContext(SRC, ctx, { filename: "js/ui/appearance-opts.js" });
   return {
     M: vm.runInContext("AppearanceOpts", ctx),
-    rows, written, style, dataset, stored, byId, created, mqListeners, document: sb.document,
+    rows, written, style, dataset, stored, byId, created, mqListeners, document: sb.document, mq, tokens,
     fireMq: () => { for (const fn of mqListeners) fn(); },
   };
 }
@@ -349,6 +351,19 @@ test("pickInk chooses --bg on a light custom HUD accent (dark theme)", () => {
   M.setHudHex("#ffff00");
   assert.equal(style.get("--accent"), "#ffff00");
   assert.equal(style.get("--accent-ink"), "var(--bg)");
+});
+
+// Bug hunt 2 H18: themeInkPair cached on data-ui-theme / contrast / html class, none of which
+// change when the OS flips under theme "system" (the attribute reads "system" both ways), so
+// the accent ink stayed picked against the old scheme's --text / --bg.
+test("SYSTEM theme: an OS colour-scheme flip re-reads --text/--bg for the accent ink", () => {
+  const { M, style, fireMq, mq, tokens } = load();
+  M.setTheme("system");
+  M.setHudHex("#ffff00");
+  assert.equal(style.get("--accent-ink"), "var(--bg)", "dark OS: yellow takes the dark --bg ink");
+  mq.light = true; tokens.text = "#111118"; tokens.bg = "#ffffff";   // the OS goes light; CSS re-resolves the tokens
+  fireMq();
+  assert.equal(style.get("--accent-ink"), "var(--text)", "light OS: the dark --text now contrasts best");
 });
 
 test("pickInk chooses --text on a dark custom HUD accent", () => {

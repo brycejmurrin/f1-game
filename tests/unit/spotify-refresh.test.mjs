@@ -73,6 +73,7 @@ function load(fetchImpl, opts = {}) {
     Log: { info() {}, warn() {}, debug() {} },
   };
   sandbox.window = sandbox;
+  Object.assign(sandbox, opts.globals || {});   // e.g. a fake GameAudio that records setMusicBackend
   const ctx = vm.createContext(sandbox);
   seedStore(ctx);   // spotify.js keeps its keys through GameStore.store's raw lane, over the fake localStorage above
   vm.runInContext(SRC, ctx, { filename: "js/audio/spotify.js" });
@@ -376,4 +377,71 @@ test("the now-playing poll waits out a 429's Retry-After", async () => {
   limited = false;
   for (let i = 0; i < 5; i++) { await intervals[0](); await settle(); }
   assert.equal(polls, 1, "no poll inside the 120 s Retry-After window");
+});
+
+/** A fake GameAudio that records the music backend the module installs/removes. */
+function fakeAudio() {
+  const a = { backend: null, sets: [] };
+  a.GameAudio = {
+    setMusicBackend(b) { a.backend = b; a.sets.push(b); },
+    musicBackend() { return a.backend; },
+    setSessionType() {},
+  };
+  return a;
+}
+
+test("a transient refresh failure on a connected remote session keeps it connected, backend installed (H12)", async () => {
+  const audio = fakeAudio();
+  let tokenFails = false;
+  const { SpotifyMusic, disk } = load((url) => {
+    if (String(url).includes("/api/token")) {
+      return tokenFails ? Promise.reject(new Error("offline"))
+        : Promise.resolve(jsonResponse({ access_token: "fresh", refresh_token: "r-1", expires_in: 3600,
+                                         scope: "user-modify-playback-state" }));
+    }
+    return Promise.resolve(jsonResponse({ devices: [], items: [], product: "premium" }));
+  }, {
+    search: "?code=auth-code&state=st-1",
+    session: [["apex26.spotify.verifier", "v-1"], ["apex26.spotify.state", "st-1"]],
+    globals: { GameAudio: audio.GameAudio },
+  });
+  await SpotifyMusic.handleRedirect();
+  await settle();
+  assert.equal(SpotifyMusic.status().state, "connected");
+  assert.ok(audio.backend, "connecting installs the music backend");
+  // The access token ages out and the network blips: refresh() fails TRANSIENTLY.
+  disk.set(TOKEN_KEY, JSON.stringify(token("r-1")));
+  tokenFails = true;
+  await SpotifyMusic.check();
+  assert.equal(SpotifyMusic.status().state, "connected",
+    "demoting to configured left the backend installed but inactive: the game's music stayed silenced");
+  assert.ok(audio.backend && audio.backend.active(), "an installed backend must stay active");
+  assert.ok(disk.has(TOKEN_KEY), "the long-lived session survives");
+});
+
+test("switching play mode tears the OLD transport down before the stored mode flips (H25)", async () => {
+  const audio = fakeAudio();
+  const real = audio.GameAudio.setMusicBackend;
+  // Like soundtrack.js: replacing/removing the backend stops the one being dropped.
+  audio.GameAudio.setMusicBackend = (b) => { const old = audio.backend; if (old && old !== b) old.stop(); real(b); };
+  const seen = [];
+  const { SpotifyMusic } = load((url, o) => {
+    seen.push(((o && o.method) || "GET") + " " + String(url));
+    return Promise.resolve(String(url).includes("/api/token")
+      ? jsonResponse({ access_token: "fresh", refresh_token: "r-1", expires_in: 3600, scope: "user-modify-playback-state" })
+      : jsonResponse({ devices: [], items: [], product: "premium" }));
+  }, {
+    search: "?code=auth-code&state=st-1",
+    session: [["apex26.spotify.verifier", "v-1"], ["apex26.spotify.state", "st-1"]],
+    globals: { GameAudio: audio.GameAudio },
+  });
+  await SpotifyMusic.handleRedirect();
+  await settle();
+  assert.equal(SpotifyMusic.status().state, "connected");
+  assert.equal(seen.some((u) => u.includes("/me/player/pause")), false);
+  SpotifyMusic.setMode("browser");
+  await settle();
+  assert.equal(SpotifyMusic.mode(), "browser");
+  assert.ok(seen.some((u) => u.startsWith("PUT ") && u.includes("/me/player/pause")),
+    "the remote device was never paused: stop() ran against the already-flipped mode");
 });

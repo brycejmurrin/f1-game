@@ -195,6 +195,9 @@ it("garage sheet chrome is opaque, themed, and hides a redundant BACK", () => {
   assert.match(css, /@media \(max-width: 820px\) \{[^]*#cs-aero \{[^}]*flex-direction:\s*column/s,
     "below the 844 phone-landscape golden, ACTIVE AERO stacks above CORNER MODE");
   assert.match(css,
+    /@media \(orientation:\s*landscape\) and \(max-height:\s*480px\) \{[^]*#cs-cam-panel \{[^}]*max-height:\s*min\(30vh,\s*160px\)/s,
+    "short landscape caps the open cam panel harder so the turntable stays visible");
+  assert.match(css,
     /:root\[data-look-garage-glass="glass"\] #carsetup #cs-inner > \.sheet-head \{[^}]*background-color:\s*var\(--carbon\)/s,
     "GLASS thins the card body only — head chrome stays carbon");
   assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs\s*\{[^}]*scrollbar-color:/s,

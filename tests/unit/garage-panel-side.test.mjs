@@ -179,3 +179,54 @@ test("the garage frame calls presentOpts and glareScale; the race path still own
   assert.match(game, /po\.tune = LT;/);
   assert.doesNotMatch(game, /presentOpts\(/);
 });
+
+// bug-hunt 9.11 (a)+(b): the wall "wins" counter was cached by results.length
+// alone (stale after switching to another slot with the same count), and
+// Career.sponsor() + CareerExperience.garageMetadata() (Career.state() + totals)
+// ran on every garage frame in a career.
+function garageCtxHarness() {
+  const src = read("js/garage/setup-camera.js");
+  const start = src.indexOf("const _garageCtx = {");
+  const end = src.indexOf("function captureCamera", start);
+  assert.ok(start > 0 && end > start, "the real garageCtx segment must be available");
+  const calls = { sponsor: 0, meta: 0 };
+  const store = { rev: 1 };
+  let career = null;
+  const sandbox = {
+    Career: { inCareer: () => !!career, data: () => career, sponsor() { calls.sponsor++; return { type: "pts" }; } },
+    CareerExperience: { garageMetadata() { calls.meta++; return { active: true, wins: 0 }; } },
+    Tracks: { SEASON: [{ id: "a" }, { id: "b" }], LIST: [{ id: "a" }] },
+    SeasonCal: { track: () => ({ id: "a" }) },
+    G: { store, seasonMode: false, trackIdx: 0, raceWeather: "dry", raceTimeOfDay: "day" },
+    home: { active: false, moving: false, mode: "garage" },
+    setupPreviewSpin: false, ambientClock: { value: 0 }, garageNow: () => 0, reducedMotion: () => false,
+  };
+  const ctx = vm.createContext(sandbox);
+  const garageCtx = vm.runInContext("(function () {" + src.slice(start, end) + ";return garageCtx; })()", ctx);
+  return { garageCtx, calls, store, setCareer(c) { career = c; } };
+}
+const careerWith = (ps) => ({ season: { round: 1, pts: {} }, team: "t", seat: 0, year: 2026, history: [],
+  results: ps.map((p, r) => ({ r, p })) });
+
+test("garage wall wins are keyed on the results array, not just its length", () => {
+  const h = garageCtxHarness();
+  h.setCareer(careerWith([1, 1, 5]));
+  assert.equal(h.garageCtx().wins, 2);
+  h.setCareer(careerWith([4, 5, 6]));          // another slot, same result count
+  assert.equal(h.garageCtx().wins, 0, "a different results array must recount");
+});
+
+test("garage frames memoise the career sponsor + achievements on (store.rev, results, history)", () => {
+  const h = garageCtxHarness();
+  const c = careerWith([1, 2]);
+  h.setCareer(c);
+  for (let i = 0; i < 30; i++) h.garageCtx();
+  assert.deepEqual(h.calls, { sponsor: 1, meta: 1 }, "30 identical frames derive once");
+  h.store.rev++;                                // any save write
+  h.garageCtx();
+  assert.deepEqual(h.calls, { sponsor: 2, meta: 2 }, "a store write refreshes");
+  c.results.push({ r: 2, p: 1 });               // a new result
+  h.garageCtx();
+  assert.equal(h.calls.meta, 3);
+  assert.equal(h.garageCtx().wins, 2, "and the tally follows the pushed win");
+});
