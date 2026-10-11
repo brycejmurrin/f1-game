@@ -2850,7 +2850,7 @@ function startRace() {
   // Menu buttons fire and forget. Observe rejection on a separate branch so
   // those callers do not raise an unhandledrejection overlay; an awaiting agent
   // still receives the original rejecting promise and its original error.
-  request.catch((e) => Log.debug("game", "startRace rejected (handled by onFail): " + (e && e.message || e)));
+  request.then((r) => { if (r !== false) CustomTracks.afterStart(); }, (e) => Log.debug("game", "startRace rejected (handled by onFail): " + (e && e.message || e)));   // afterStart: a designer test drive's restarts go back to its point
   return request;
 }
 
@@ -3273,6 +3273,7 @@ const G = {
   get paused() { return paused; }, set paused(v) { paused = v; },
   get raceLaps() { return raceLaps; }, set raceLaps(v) { raceLaps = v; wxArc && wxArc.plan === wxArc._derived && (wxArc.plan = null); },
   get raceT() { return raceT; }, set raceT(v) { raceT = v; },
+  get resultT() { return resultT; }, set resultT(v) { resultT = v; },
   // The RENDER clock (sky/cloud drift, FLAG cloth wave). It accumulates real
   // frame dt, so its value depends on how many frames happened to render — which
   // makes any pixel comparison across runs non-deterministic. Exposed so a
@@ -8956,7 +8957,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 // the update loop's `cycleCam()` closes over this const.
 const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
 
-$("pm-resume").onclick = () => setPaused(false);
+$("pm-resume").onclick = () => setPaused(false); $("pm-quick-doors").insertBefore(Object.assign(document.createElement("button"), { id: "pm-recover", type: "button", textContent: "RECOVER CAR", onclick: () => { setPaused(false); Input.requestRecover(); } }), $("pm-checkpoint"));   // RECOVER CAR = the R key; touch had none. Built here like REPLAY: shellNodes holds
 $("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; startRace().then(() => { if (state === "race") frozen = false; }, () => {}); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it with its own paused = false, and a start that was cancelled (settings changed) hands the old race back
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });

@@ -31,6 +31,10 @@ window.TopModal = (function () {
       try { el.showModal(); } catch (_) { /* already in the top layer */ }
       try { Log.info("ui", `TopModal open #${el.id || "?"}`); } catch (_) { /* Log absent */ }
     } else if (!wantOpen && el.open) {
+      // LIFT ISOLATION FIRST: close() hands focus straight back to the opener —
+      // usually a title-screen control under #overlay — and an opener that is
+      // still `inert` refuses it, so focus fell to <body> (a pad's cursor gone).
+      syncMenuIsolation();
       try { el.close(); } catch (_) {}
       try { Log.info("ui", `TopModal close #${el.id || "?"}`); } catch (_) { /* Log absent */ }
     }
@@ -138,6 +142,12 @@ window.TopModal = (function () {
 
   function onEscape(e) {
     if (e.key !== "Escape" || e.defaultPrevented) return;
+    // A HELD Escape is one press. Its auto-repeat reached the door of the layer
+    // the first press opened: in a race that paused, then pressed RESUME; from a
+    // Settings sub-page it walked BACK → close → RESUME. input.js already
+    // ignores repeats for the pause switch; swallow them here so nothing
+    // downstream (a door, the pause switch) sees the key again.
+    if (e.repeat) { e.preventDefault(); e.stopPropagation(); return; }
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     const layer = window.UiLayers && window.UiLayers.top();
     if (!layer) return;
@@ -325,8 +335,10 @@ window.TopModal = (function () {
     if (!el || wired.has(el) || typeof el.showModal === "function") return;
     wired.add(el);
     new MutationObserver(() => {
-      if (el.hidden) onLayerHide(el); else onLayerShow(el);
-      syncMenuIsolation();
+      // Hide: un-inert the title BEFORE onLayerHide refocuses the opener there
+      // (focus() on an inert node is a no-op). Show: record the opener first —
+      // inerting #overlay while it holds focus would blur it to <body>.
+      if (el.hidden) { syncMenuIsolation(); onLayerHide(el); } else { onLayerShow(el); syncMenuIsolation(); }
     })
       .observe(el, { attributes: true, attributeFilter: ["hidden"] });
   }
