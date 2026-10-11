@@ -219,7 +219,13 @@ test("terrain and ordinary parts leftovers use only spare over-budget capacity (
   assert.equal(measuredCheap(terrain, db), true, "terrain remains eligible for the ordinary measured cut first");
   const full = plan(MAX_OVER_BUDGET_SHARDS);
   assert.equal(full.oversize.length, MAX_OVERSIZE_SHARDS);
-  assert.equal(full.spill.reduce((n, s) => n + s.sec, 0), 1091);
+  assert.deepEqual(full.spill.map((s) => s.file), leftovers.slice(0, 5).map(([file]) => file));
+  // Per-test rate rounding changes with the real specs' case counts. Assert
+  // the saturated capacity boundary, not a historical rounded total.
+  const spillSec = full.spill.reduce((n, s) => n + s.sec, 0);
+  const spillRoom = MAX_SPILL_SHARDS * TARGET_SHARD_SEC - spillSec;
+  assert.ok(spillRoom >= 0 && spillRoom < full.overBudgetRun.find((s) => s.file === terrain).sec,
+    "spill stays bounded and cannot carry terrain");
   assert.deepEqual(full.overBudgetRun.map((s) => s.file), [slow, terrain]);
   assert.deepEqual(full.skipped, []);
   assert.deepEqual(full.overBudgetSpecs, []);
@@ -305,8 +311,11 @@ test("a saturated wide plan runs props-over-road and parts-physics without displ
     { db, rank, spillShards, overBudgetShards });
   const old = plan(2, 0); // Disable the later spare-pool fallback to isolate the original spill defect.
   assert.equal(old.oversize.length, MAX_OVERSIZE_SHARDS, "all oversize slots are occupied");
-  assert.equal(old.spill.reduce((n, s) => n + s.sec, 0), 717);
+  assert.deepEqual(old.spill.map((s) => s.file), leftovers.slice(0, 4).map(([file]) => file));
   assert.deepEqual(old.skipped.map((s) => s.file), [props, parts], "reproduces both CI omissions");
+  const oldSpillRoom = 2 * TARGET_SHARD_SEC - old.spill.reduce((n, s) => n + s.sec, 0);
+  assert.ok(oldSpillRoom >= 0 && old.skipped.every((s) => s.sec > oldSpillRoom),
+    "the bounded old spill cannot carry either omitted suite");
   const fixed = plan(MAX_SPILL_SHARDS);
   assert.deepEqual(fixed.skipped, [], "no candidate is displaced into the dropped list");
   assert.deepEqual(fixed.overBudgetSpecs, []);
@@ -369,15 +378,18 @@ test("a spec that reserves more than the selected-gate timeout runs in the OVER-
   // The cost model's blind spot, measured on CI run 31233088772: the selector
   // billed every test at ~80 s while 8 of its 10 picks declared their own
   // test.setTimeout of 180-420 s — which OVERRIDES the job's --timeout — and
-  // the "14-minute" selection failed the job. bahrain-foundation (300 s) is the
-  // standing over-budget example after imola-foundation moved to ADAPTED
-  // (fit() files ADAPTED specs as coveredByVmTwin before budgeting — same as
-  // projection.spec.js). If bahrain's budget ever drops below the selected-gate
-  // timeout this pin should move to whichever non-twinned spec then holds it.
-  const pin = "tests/specs/bahrain-foundation.spec.js";
+  // the "14-minute" selection failed the job. bahrain-foundation (300 s) held
+  // this pin until the 2026-10-10 timings audit measured it at ~15 s/test
+  // (measuredCheap), so it enters the budgeted cut. track-switch-memory
+  // (360 s declare, ~76 s/test measured) is the standing non-cheap example:
+  // still over the gate/3 rule, still non-twinned. Move the pin again if it
+  // ever goes measuredCheap or ADAPTED.
+  const pin = "tests/specs/track-switch-memory.spec.js";
   const own = maxDeclaredTimeout(pin);
   assert.ok(own > SELECTED_GATE.perTestTimeoutSec * 1000,
-    `bahrain-foundation now declares ${own} ms — find a new worst example for this pin`);
+    `track-switch-memory now declares ${own} ms — find a new worst example for this pin`);
+  assert.ok(!measuredCheap(pin),
+    `${pin} is measuredCheap — pick a non-cheap over-declaration for this pin`);
   const r = fit([pin, "tests/specs/boot-guard.spec.js"], 15);
   // 2026-10-04: a ROUTED over-budget spec runs in its own pool. It used to be
   // named in overBudgetSpecs and run by nothing but the 11-night rota.
@@ -689,18 +701,23 @@ test("a spec that cannot pass at the gate's per-test cap declares so, and is exc
   // stopped by a spec that never had a chance to pass.
   //
   // Pinned as the RULE, not the number: whatever the gate's cap is, this spec
-  // must sit above it and must therefore be excluded. Raising the gate later
-  // does not quietly re-admit it.
-  const own = maxDeclaredTimeout("tests/specs/hud-layout.spec.js");
+  // must declare above it. After the 2026-10-10 timings audit it is
+  // measuredCheap (~38 s/test) so it bypasses the over-budget pool and lands
+  // in oversize (39 tests * 38 s >> a 26-minute cut) — still never in
+  // `selected`. The declaration still sets the job kill timer.
+  const pin = "tests/specs/hud-layout.spec.js";
+  const own = maxDeclaredTimeout(pin);
   assert.ok(own > SELECTED_GATE.perTestTimeoutSec * 1000,
     `hud-layout.spec.js declares ${own / 1000}s, at or under the ${SELECTED_GATE.perTestTimeoutSec}s gate — ` +
     "it boots a full race per case and cannot pass there; see Pages #1967");
 
-  const r = fit(["tests/specs/hud-layout.spec.js"], 26);
+  const r = fit([pin], 26);
   assert.deepEqual(r.selected, [], "the budgeted gate must not select it");
-  assert.ok(r.overBudgetRun.some((s) => s.file === "tests/specs/hud-layout.spec.js"),
-    "it runs in the over-budget pool, whose job is capped from its own declaration");
-  const job = shards(r).find((j) => j.specs.split(" ").includes("tests/specs/hud-layout.spec.js"));
+  assert.ok(measuredCheap(pin),
+    "hud-layout is measured under gate/3 — if that flips, restore the overBudgetRun pin");
+  assert.ok(r.oversize.some((s) => s.file === pin),
+    "measuredCheap + too big for the cut → oversize (still not selected)");
+  const job = shards(r).find((j) => j.specs.split(" ").includes(pin));
   assert.ok(job && job.perTest >= own / 1000, `its job's per-test cap clears its ${own / 1000}s declaration`);
 });
 
@@ -712,9 +729,11 @@ test("every race-fixture spec the gate has starved DECLARES a budget above it", 
   // ran 185-190 s and 116-125 s + a context that never came). Each boots a full
   // race or two circuits; each belongs to a browser group, not the gate.
   //
-  // Same RULE as hud-layout above, one row per victim: above whatever the gate's
-  // cap is, and NAMED as over budget in the report. Add a spec here the day the
-  // gate starves it — the declaration is the fix, this row keeps it fixed.
+  // Same RULE as hud-layout above, one row per victim: declare above whatever
+  // the gate's cap is. The 2026-10-10 timings audit measured physics-hotpath
+  // and map-hooks at ~7–8 s/test (measuredCheap), so they may enter the
+  // budgeted cut — the declaration still sets the kill timer. Specs that are
+  // NOT measuredCheap must still land in the over-budget pool.
   //
   // projection.spec.js was the third row until 2026-09-22: it is ADAPTED now
   // (runs under the vm-page adapter, 13 s), so fit() files it as
@@ -729,8 +748,16 @@ test("every race-fixture spec the gate has starved DECLARES a budget above it", 
       `${spec} declares ${own / 1000}s, at or under the ${SELECTED_GATE.perTestTimeoutSec}s gate — ` +
       "it boots a race fixture and cannot pass there; see Pages #2048");
     const r = fit([spec], 26);
-    assert.deepEqual(r.selected, [], `the budgeted gate must not select ${spec}`);
-    assert.ok(r.overBudgetRun.some((x) => x.file === spec), `${spec} must run in the over-budget pool`);
+    if (measuredCheap(spec)) {
+      assert.ok(
+        r.selected.some((x) => x.file === spec) || r.oversize.some((x) => x.file === spec),
+        `${spec} is measuredCheap — must run in the budgeted cut or oversize, not silently drop`);
+      assert.ok(!r.overBudgetRun.some((x) => x.file === spec),
+        `${spec} measuredCheap must not also sit in the over-budget pool`);
+    } else {
+      assert.deepEqual(r.selected, [], `the budgeted gate must not select ${spec}`);
+      assert.ok(r.overBudgetRun.some((x) => x.file === spec), `${spec} must run in the over-budget pool`);
+    }
   }
 });
 

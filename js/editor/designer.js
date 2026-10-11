@@ -34,7 +34,7 @@ const TrackDesigner = (function () {
       { n: 4, title: "Elevation", text: "Open ELEVATION to select points and adjust their height in metres. BANK ° tilts a turn; KERB chooses flat, sausage or rumble, and BERMS supports banked corners." },
       { n: 5, title: "Look", text: "Open SCENERY and choose a theme; LIVE SCENERY shows an overhead preview. Tune the atmosphere or place objects beside the road." },
       { n: 6, title: "Checks", text: "Open TEST and resolve red CHECKS before saving. Use FIX where a repair is available." },
-      { n: 7, title: "Race and share", text: "Name your circuit and SAVE, then RACE or TIME TRIAL. SHARE copies a link; EXPORT saves a backup file." },
+      { n: 7, title: "Race and share", text: "Name your circuit and SAVE, then RACE or TIME TRIAL. SHARE copies a link; CARD / EXPORT / IMPORT move one circuit; MY CIRCUITS → EXPORT ALL / IMPORT LIBRARY backs up the collection." },
     ]),
     TASKS: Object.freeze([
       { id: "selection", title: "Select several points", mode: "edit", steps: [
@@ -842,7 +842,12 @@ const TrackDesigner = (function () {
     ui.paneHow.setAttribute("aria-label", "How to build a circuit");
     rail.append(tabs, ui.paneDesign, ui.paneLib, ui.paneHow);
     buildDesignPane(ui.paneDesign);
-    ui.lib = el("div", "td-grid"); ui.paneLib.appendChild(ui.lib);
+    const libraryFiles = el("div", "td-chips"); libraryFiles.dataset.role = "library-files";
+    libraryFiles.append(btn("EXPORT ALL", "sel-chip", exportLibraryFile), btn("IMPORT LIBRARY", "sel-chip", () => ui.libraryFile.click()));
+    ui.libraryFile = el("input"); ui.libraryFile.type = "file"; ui.libraryFile.accept = ".json,application/json"; ui.libraryFile.hidden = true;
+    ui.libraryFile.setAttribute("aria-label", "Import a circuit library file");
+    ui.libraryFile.addEventListener("change", () => { const f = ui.libraryFile.files && ui.libraryFile.files[0]; ui.libraryFile.value = ""; if (f) importLibraryFile(f); });
+    ui.lib = el("div", "td-grid"); ui.paneLib.append(libraryFiles, ui.libraryFile, ui.lib);
     buildHowTo(ui.paneHow);
     body.append(ui.modeGroup, stage, rail);
     // foot
@@ -1219,6 +1224,30 @@ const TrackDesigner = (function () {
       return true;
     } catch (e) { message("Export failed: " + (e && e.message || e), true); return false; }
   }
+  async function exportLibraryFile() {
+    const data = custom.exportCollection();
+    try {
+      await saveFile(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), "apex26-circuits.apextracks.json");
+      message("Exported " + data.items.length + " saved circuits"); return true;
+    } catch (e) { message("Library export failed: " + (e && e.message || e), true); return false; }
+  }
+  function loadCollection(data) {
+    const r = custom.importCollection(data, TrackValidate.check);
+    if (!r.ok) {
+      const why = r.reason === "full" ? "MY CIRCUITS holds at most " + custom.LIMITS.items + " circuits — remove some before importing"
+        : r.reason === "invalid" || r.reason === "collision" ? "Circuit " + (r.index + 1) + " " + (r.reason === "collision" ? "has a conflicting content ID" : "failed validation")
+        : r.reason === "write" ? "Library storage write failed" : "Not a supported Apex 26 circuit library";
+      message(why + ". Nothing imported.", true); return false;
+    }
+    renderLibrary(); showPane("library");
+    message("Imported " + r.added + " circuits · " + r.skipped + " duplicates kept unchanged" + (r.durable ? "" : " · storage unavailable: export a backup before reloading"), !r.durable);
+    return true;
+  }
+  async function importLibraryFile(file) {
+    if (!file || !(file.size <= IMPORT_MAX * custom.LIMITS.items)) { message("Library file is too large (" + (IMPORT_MAX * custom.LIMITS.items >> 10) + " KB max)", true); return false; }
+    try { return loadCollection(JSON.parse(await file.text())); }
+    catch (_) { message("Could not read the library file. Nothing imported.", true); return false; }
+  }
   async function importFile(file) {
     // An exported circuit is a few KB; never read a large file into memory to find out it is not one.
     if (!file || !(file.size <= IMPORT_MAX)) { message("That file is too big to be an Apex 26 circuit (" + (IMPORT_MAX >> 10) + " KB max)", true); return false; }
@@ -1231,6 +1260,7 @@ const TrackDesigner = (function () {
     let code = null, raw = null;
     if (s[0] === "{") {
       let obj = null; try { obj = JSON.parse(s); } catch (_) { obj = null; }
+      if (obj && obj.format === custom.COLLECTION_FORMAT) return loadCollection(obj);
       const f = TrackCodec.fromFile(obj);
       if (!f) { message("Not an Apex 26 circuit file", true); return false; }
       if (f.code) code = f.code; else raw = f.design;
@@ -1860,7 +1890,7 @@ const TrackDesigner = (function () {
     const next = design.pts.map((_, k) => elevH(k < list.length ? list[k] : 0));
     let same = next.length === design.heights.length;
     if (same) for (let k = 0; k < next.length; k++) if (next[k] !== design.heights[k]) { same = false; break; }
-    if (Number.isInteger(anchor) && anchor >= 0 && anchor < design.pts.length) sel = anchor;
+    if (Number.isInteger(anchor) && anchor >= 0 && anchor < design.pts.length && !(hasSpan() && TrackShape.inSpan(anchor, sel, span, design.pts.length))) sel = anchor;
     if (same) {
       if (cv) cv.setSelection(sel, span);
       if (prof) { if (prof.setSelection) prof.setSelection(sel, span); else prof.select(sel); }
@@ -2241,6 +2271,15 @@ const TrackDesigner = (function () {
       try { G.raceIntro(go); } catch (e) { Log.warn("track", "test drive pre-race screen failed — starting straight away: " + (e && e.message || e)); go(); }
     });
   }
+  /** The car at rest on a test drive's point and green at once. Every start while the return is armed comes
+   *  here (CustomTracks.afterStart): the first, TRY AGAIN and the pause RESTART alike. */
+  function placeTest(r) {
+    if (G.state !== "count" || !G.player || !G.track || !r || !(r.s >= 0) || !design || design.originId !== r.id) return false;
+    placeAt(G.player, G.track, r.s);
+    if (G.snapGameCam) G.snapGameCam();
+    if (G.refreshHud) G.refreshHud(true);
+    return !!G.goRolling();
+  }
   /** TEST HERE: save, then a TIME TRIAL (startRaceBody clears practiceMode, so
    *  a time trial is the unscored session that survives it) with the car at
    *  rest on point i — the selected one by default — and green at once.
@@ -2259,12 +2298,8 @@ const TrackDesigner = (function () {
     close();
     Log.info("track", "designer test drive on " + r.id + " from point " + (at + 1) + " (s " + Math.round(s) + " m)");
     try { await startViaIntro(); } catch (e) { Log.warn("track", "test drive start failed: " + (e && e.message || e)); }
-    if (G.state === "count" && G.player && G.track && s >= 0) {
-      placeAt(G.player, G.track, s);
-      if (G.snapGameCam) G.snapGameCam();
-      if (G.refreshHud) G.refreshHud(true);
-      if (G.goRolling()) return true;
-    }
+    if (G.state === "count") placeTest(back);   // startRace's own afterStart usually got there first (then the state is already "race")
+    if (G.state === "race") return true;
     // Never a frozen race: out through the pause menu's own quit (quitToMenu),
     // whose consumeTrackHash() hands the screen back with the reason. A start
     // that already failed back to the menu (startRace's onFail quits) is
@@ -2288,9 +2323,10 @@ const TrackDesigner = (function () {
     return true;
   }
 
-  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, armSpanEnd, undo: doUndo, redo: doRedo, setTheme, setLook, setAtmosphere, setPropKind, placeProp, removeProp, removePropAt, editPropAt, copyPropAt, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, setHeights, selectRange, setSelectionMode, adjustElevation, profileView, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere,
+  return { init, open, close, isOpen, state, preview: runPreview, randomise, freehand, applyStamp, reverse, setStart, deletePoint, cyclePoint, armSpanEnd, undo: doUndo, redo: doRedo, setTheme, setLook, setAtmosphere, setPropKind, placeProp, removeProp, removePropAt, editPropAt, copyPropAt, setWidth, setName, setTool, setMode, applyElevPreset, setNodeHeight, setHeights, selectRange, setSelectionMode, adjustElevation, profileView, save, race, load, shareCode, share, exportEnvelope, exportFile, importFile, loadFrom, showPane, fixIssue, fixAll: fixEverything, TOOLS, MODES, HOWTO, saveFile, cardCanvas, shareCard, testHere, placeTest,
     selectCorner, toggleHeat, toggleElevationHeat, trackOfTheDay, startFrom, toggleStartFrom,
     designed, useCandidate, moreLikeThis,
-    setSpanWidth, setCornerBank, setKerbStyle, setBerms };
+    setSpanWidth, setCornerBank, setKerbStyle, setBerms,
+    exportLibraryFile, importLibraryFile, loadCollection };
 })();
 Object.freeze(TrackDesigner);

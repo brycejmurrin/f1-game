@@ -228,7 +228,12 @@ const DockLayout = (function () {
       const left = $("dock-left"), right = $("dock-right");
       const side = (left && left.contains(t)) ? "L" : (right && right.contains(t)) ? "R" : null;
       if (!side) return;
+      // The press is the drag's, not the button's: preventDefault alone let
+      // GAS's own pointerdown run, which flips THROTTLE = LATCH (and fires
+      // BOOST/OT/AERO taps), so RESUME launched the car. Document capture runs
+      // before the target, so stopping here means the button never sees it.
       e.preventDefault();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
       const s = schemeOf();
       drag = {
         side,

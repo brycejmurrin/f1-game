@@ -1563,6 +1563,17 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.equal(p._prevS, p.s);
   assert.deepEqual([p.x, p.xVis, p.speed, p.vLat, p.yawRateCur, p.yawVis, p.steerVis, p.rescueT, p.wallT, p.wasOnWall, p.wrongT, p.wrongWay, p.offT], [0, 0, 0, 0, 0, 0, 0, 0, 0, false, 0, false, 0], "at rest, every transient cleared");
   assert.deepEqual([p.rPrevPx, p.rPrevPz, p.rPrevS, p.rPrevX, p.rPrevHead, p.rPrevYawVis], [p.px, p.pz, p.s, 0, p.head, 0], "render anchors seeded");
+  // TRY AGAIN / the pause RESTART re-enter startRace: while the return is armed the new countdown goes back onto the test point.
+  const sTest = p.s;
+  Object.assign(b.G.player, { s: tr.total - 14, _prevS: tr.total - 14, prog: -14, speed: 55 }); b.G.state = "count"; calls.length = 0;
+  b.C.afterStart();
+  assert.deepEqual(plain(calls), [["snap"], ["hud"], ["goRolling"]], "a restart drops the car on the point again and goes green");
+  assert.equal(b.G.state, "race");
+  assert.equal(b.G.player.s, sTest, "…the same point, not the grid line");
+  assert.equal(b.G.player.speed, 0);
+  calls.length = 0; b.C.afterStart();
+  assert.equal(calls.length, 0, "a race already rolling is left alone");
+  assert.match(read("js/game.js"), /request\.then\(\(r\) => \{ if \(r !== false\) CustomTracks\.afterStart\(\); \}/, "game.js startRace tells CustomTracks a countdown began");
   // The way back: armed, so quitting reopens the designer on the same point.
   b.D.load(Object.assign({}, b.D.state().design), "library", id);   // as if something reset the selection
   b.D.close();
@@ -1573,6 +1584,8 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.equal(await b.C.consumeTrackHash(), true);
   assert.equal(b.D.isOpen(), true);
   assert.equal(b.D.state().sel, 12, "the selected point is back");
+  b.G.state = "count"; calls.length = 0; b.C.afterStart();
+  assert.equal(calls.length, 0, "the return was taken: a later start is an ordinary one");
   assert.equal(msgText(b), "Back from the test drive");
   // A headless or hidden page has no frames for the card: the quick path, as raceIntro's other callers take.
   calls.length = 0; b.G.headlessMode = true; b.G.state = "menu";
@@ -2193,6 +2206,87 @@ test("level, smooth and zero affect only selected heights and retain smooth endp
   assert.equal(b.D.adjustElevation("zero"), true);
   assert.ok(b.D.state().design.heights.every((h) => h === 0));
   assert.equal(b.D.adjustElevation("zero"), false, "no-op does not add undo");
+  b.D.close();
+});
+
+test("deleting the start point retains every surviving point's elevation, with undo", () => {
+  const b = bootScreen(); const d = openGreen(b);
+  d.heights = d.pts.map((_, i) => i / 4);
+  b.D.load(d); b.D.deletePoint(0);
+  assert.deepEqual(plain(b.D.state().design.heights), d.heights.slice(1));
+  assert.deepEqual(plain(b.D.state().design.pts), d.pts.slice(1));
+  b.D.undo(); assert.deepEqual(plain(b.D.state().design.heights), d.heights);
+  b.D.close();
+});
+
+test("dragging an interior elevation grip keeps both ends of the selected span", () => {
+  const b = bootScreen(); const d = openGreen(b);
+  b.D.setMode("elevation"); b.D.selectRange(2, 8); b.D.setSelectionMode("point");
+  const strip = b.root.querySelector('canvas[data-role="profile"]');
+  const pts = d.pts, c = [0];
+  for (let i = 0; i < pts.length; i++) c.push(c[i] + Math.hypot(pts[(i + 1) % pts.length][0] - pts[i][0], pts[(i + 1) % pts.length][1] - pts[i][1]));
+  const x = c[5] / c[pts.length] * 640;
+  for (const [type, y] of [["pointerdown", 200], ["pointermove", 150], ["pointerup", 150]]) {
+    b.dom.dispatch(strip, { type, pointerId: 1, pointerType: "mouse", button: 0, clientX: x, clientY: y, preventDefault() {} });
+  }
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [2, 8]);
+  const h = b.D.state().design.heights;
+  assert.ok(h[5] > 0); assert.equal(h[2], h[5]); assert.equal(h[8], h[5]); assert.equal(h[1], 0);
+  b.D.close();
+});
+
+test("save after undo and redo replaces the current library record without duplicating", () => {
+  const b = bootScreen(); openGreen(b);
+  const first = b.D.save(); assert.equal(first.ok, true);
+  b.D.setWidth(6); b.D.preview(); const second = b.D.save();
+  assert.equal(second.ok, true); assert.notEqual(second.id, first.id);
+  b.D.undo(); b.D.preview(); const restored = b.D.save();
+  assert.equal(restored.id, first.id); assert.deepEqual(plain(b.D.state().library), [first.id]);
+  b.D.redo(); b.D.preview(); const redone = b.D.save();
+  assert.equal(redone.id, second.id); assert.deepEqual(plain(b.D.state().library), [second.id]);
+  b.D.close();
+});
+
+test("MY CIRCUITS collection controls import atomically and leave the working draft intact", async () => {
+  const b = bootScreen(); openGreen(b);
+  assert.deepEqual(walk(b.root).find((e) => e.dataset.role === "library-files").children.map((e) => e.textContent), ["EXPORT ALL", "IMPORT LIBRARY"]);
+  const draft = plain(b.D.state().design), envelope = { format: b.C.COLLECTION_FORMAT, v: 1, items: [draft] };
+  assert.equal(await b.D.importLibraryFile({ size: 1000, text: async () => JSON.stringify(envelope) }), true);
+  assert.match(msgText(b), /Imported 1 circuits/); assert.equal(b.C.list().length, 1);
+  assert.deepEqual(plain(b.D.state().design), draft);
+  b.ctx.Blob = Blob;
+  let exported;
+  b.ctx.NativeDownload = { viable: () => true, saveBlob: async (blob, name) => { exported = { name, data: JSON.parse(await blob.text()) }; } };
+  assert.equal(await b.D.exportLibraryFile(), true);
+  assert.equal(exported.name, "apex26-circuits.apextracks.json");
+  assert.equal(exported.data.format, b.C.COLLECTION_FORMAT); assert.equal(exported.data.items.length, 1);
+  assert.equal(await b.D.loadFrom(JSON.stringify(envelope)), true);
+  assert.match(msgText(b), /Imported 0 circuits.*1 duplicates/);
+  assert.equal(await b.D.importLibraryFile({ size: 1000, text: async () => JSON.stringify({ ...envelope, items: [draft, { pts: [] }] }) }), false);
+  assert.match(msgText(b), /Circuit 2 failed validation.*Nothing imported/); assert.equal(b.C.list().length, 1);
+  assert.equal(await b.D.importLibraryFile({ size: 2000000, text: async () => { throw new Error("must not read"); } }), false);
+  assert.match(msgText(b), /too large/);
+  b.ctx.GameStore.store.write = () => ({ ok: false, durable: false });
+  assert.equal(b.D.loadCollection({ ...envelope, items: [{ ...draft, seed: 17 }] }), false);
+  assert.match(msgText(b), /Library storage write failed.*Nothing imported/);
+  assert.equal(b.C.list().length, 1); assert.deepEqual(plain(b.D.state().design), draft);
+  b.D.close();
+});
+
+test("first-save history keeps its library identity without linking another imported document", () => {
+  const b = bootScreen(); openGreen(b);
+  b.D.setWidth(6); b.D.preview(); const first = b.D.save();
+  b.D.undo(); b.D.preview(); const restored = b.D.save();
+  assert.equal(restored.ok, true); assert.notEqual(restored.id, first.id);
+  assert.deepEqual(plain(b.D.state().library), [restored.id], "pre-first-save undo replaces, rather than adds");
+  b.D.setName("MY UNSAVED LABEL");
+  const imported = { ...b.D.state().design, seed: 876543, name: "OTHER DOCUMENT" };
+  b.D.load(imported, "import"); b.D.preview(); const other = b.D.save();
+  assert.equal(other.ok, true); assert.equal(b.C.list().length, 2);
+  b.D.undo(); b.D.preview(); const back = b.D.save();
+  assert.equal(back.id, restored.id); assert.equal(b.C.list().length, 2);
+  assert.equal(b.C.get(other.id).name, "OTHER DOCUMENT", "saving the restored document does not replace the imported one");
+  assert.equal(b.C.get(restored.id).name, "MY UNSAVED LABEL");
   b.D.close();
 });
 

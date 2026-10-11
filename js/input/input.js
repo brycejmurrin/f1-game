@@ -2105,6 +2105,7 @@ const Input = (function () {
     consumeShiftDown,
     consumeCameraCycle,
     consumeRecover,
+    requestRecover: () => { recoverPressed = true; },   // pause card RECOVER CAR: touch has no R key
     consumeRadio,
     consumeMirror,
     lookingBack,

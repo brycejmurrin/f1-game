@@ -182,6 +182,40 @@ test("fitRows caps max-height above an overlapping BRAKE", () => {
     "either height-cap (brake below) or slide right of a left pedal: cap=" + cap + " left=" + left);
 });
 
+test("fitRows divides by --hud-scale when the fit removed --hud-z-top (HUD SIZE > 100 %, hunt3 1b-F2)", () => {
+  // #hud-rel paints at zoom var(--hud-z-top, var(--hud-scale)); fitHud removes
+  // --hud-z-top whenever the cap fits. Dividing by 1 then wrote a cap that
+  // painted 1.3x too tall and the card stayed over BRAKE.
+  const Z = 1.3;
+  for (const where of ["inline", "stylesheet"]) {
+    const mk = () => {
+      const el = { hidden: true, attrs: {}, children: [], textContent: "",
+        style: { setProperty(k, v) { el.style[k] = v; }, removeProperty(k) { delete el.style[k]; } },
+        setAttribute(k, v) { el.attrs[k] = String(v); }, removeAttribute(k) { delete el.attrs[k]; },
+        appendChild(c) { el.children.push(c); return c; } };
+      return el;
+    };
+    const root = mk();
+    root.clientHeight = 0;
+    root.currentCSSZoom = Z;
+    root.getBoundingClientRect = () => ({ left: 8, right: 8 + 150 * Z, top: 120, bottom: 120 + 130 * Z, width: 150 * Z, height: 130 * Z });
+    const brake = mk();
+    brake.hidden = false;
+    brake.getBoundingClientRect = () => ({ left: 60, right: 190, top: 250, bottom: 330, width: 130, height: 80 });
+    const els = { "hud-rel": root, "btn-brake": brake };
+    const vars = where === "inline" ? { "--hud-scale": String(Z) } : {};
+    const documentElement = { style: { getPropertyValue: (k) => vars[k] || "" } };
+    const doc = { documentElement, body: { classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
+    const getComputedStyle = () => ({ getPropertyValue: (k) => (k === "--hud-scale" ? " " + Z : "") });
+    const R = load({ document: doc, HudElements: { isOn: () => true }, getComputedStyle });
+    const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
+    R.tick({ cars: [p, car("A1", 1100, 3, { rank: 1 })], track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } }, p);
+    const cap = parseFloat(root.style.maxHeight);
+    assert.ok(cap > 0, where + ": a cap was written");
+    assert.ok(cap * Z <= 250 - 120, where + ": the painted card (" + (cap * Z).toFixed(1) + " px) clears BRAKE (130 px)");
+  }
+});
+
 test("fitRows resets left / max-height once the clash is gone (STEERING change, HUD SIZE, rotation)", () => {
   // A CSSStyleDeclaration maps max-height <-> maxHeight; the plain-object mock
   // above cannot tell a removed property from one it never cleared.

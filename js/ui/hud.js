@@ -12,6 +12,10 @@ const _rmq = (typeof window !== "undefined" && window.matchMedia)
   ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
 const motionReduced = () => !!(_rmq && _rmq.matches)
   || (typeof document !== "undefined" && !!document.documentElement && document.documentElement.dataset.motion === "reduce");
+// F-01: browsers without Element.currentCSSZoom (iOS Safari < 26.4, Firefox < 126)
+// still paint CSS zoom into getBoundingClientRect — divide by the published zoom.
+// DOM-less mini-dom harnesses (no Element) keep the layout-px fallback of 1.
+const _noCssZoom = typeof Element === "function" && !("currentCSSZoom" in Element.prototype);
 // THE VIEWPORT, CACHED. innerWidth/innerHeight are not free on a phone: Blink's
 // LocalDOMWindow::GetViewportSize() runs UpdateStyleAndLayout first whenever the
 // mobile viewport is enabled (Android Chrome), so each read after a DOM write is
@@ -914,12 +918,12 @@ function fitHud() {
   // 142 = 110×0.862/0.666). Dividing getBoundingClientRect by that stale live
   // zoom over/under-estimates intrinsics and the next pass flips between
   // ~--hud-scale (uncapped) and the 0.4 floor. Measure with what we published.
-  // When currentCSSZoom is absent (mini-dom fixtures paint unscaled rects),
-  // fall back to 1 so those harnesses keep measuring in layout px.
+  // No currentCSSZoom on a real DOM (iOS Safari < 26.4) still paints zoom into rects:
+  // divide by pub (hud-pins F-01). Only DOM-less mini-dom harnesses fall back to 1.
   const zTopPub = +root.style.getPropertyValue("--hud-z-top") || scale;
   const zBotPub = +root.style.getPropertyValue("--hud-z-bot") || scale;
   const zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(1, btnScale);
-  const zoomDiv = (el, pub) => (el && el.currentCSSZoom > 0 ? (pub || 1) : 1);
+  const zoomDiv = (el, pub) => (el && (el.currentCSSZoom > 0 || _noCssZoom) ? (pub || 1) : 1);
   const wide = (el, pub) => {
     if (!el) return 0;
     const r = layoutRect(el);
@@ -1630,7 +1634,7 @@ function paintInstruments(player) {
     if (pct !== _rpmPct || !(pct >= 0)) { _rpmPct = pct; hStyle(els.rpmFill, "--rpm", (pct / 100).toFixed(2)); }
     hToggle(els.tach, "redline", _redline);
   }
-  const kph = G.dashKph(player.speed);   // SPEED UNITS is display-only (js/ui/appearance-opts.js)
+  const kph = Math.max(0, G.dashKph(player.speed));   // SPEED UNITS is display-only (js/ui/appearance-opts.js); >= 0 like the wheel LCD (reverse read "-26")
   // One SPD plate (HudReadouts.spdPlate): same n + MPH|KPH as the wheel LCD.
   if (_ro && typeof _ro.spdPlate === "function") {
     const plate = _ro.spdPlate(kph);

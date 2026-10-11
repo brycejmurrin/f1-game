@@ -2850,7 +2850,7 @@ function startRace() {
   // Menu buttons fire and forget. Observe rejection on a separate branch so
   // those callers do not raise an unhandledrejection overlay; an awaiting agent
   // still receives the original rejecting promise and its original error.
-  request.catch((e) => Log.debug("game", "startRace rejected (handled by onFail): " + (e && e.message || e)));
+  request.then((r) => { if (r !== false) CustomTracks.afterStart(); }, (e) => Log.debug("game", "startRace rejected (handled by onFail): " + (e && e.message || e)));   // afterStart: a designer test drive's restarts go back to its point
   return request;
 }
 
@@ -2988,7 +2988,7 @@ function endRace(forcedOrder) {
   Ghost.flush(); if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (replayBuf.isScrubbing()) return; // scrub: no career settle / results
   try { sessionStorage.removeItem("apex26.ctxLostReloads"); } catch (_) { /* a clean race: the context-loss budget counts CONSECUTIVE losses, not the tab's lifetime */ }   // off-race: write a pending lap-record ghost now (js/car/ghost.js)
-  PerfGov.cleanRace();   // finished cleanly — disarm + pay a crash strike down
+  PerfGov.cleanRace(); if (paused) { closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode(); closeSettings(); }   // clean finish: disarm + pay a crash strike down; a (net) flag under the pause gets RESUME's tool teardown, before the weather is judged
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
@@ -3274,6 +3274,7 @@ const G = {
   get paused() { return paused; }, set paused(v) { paused = v; },
   get raceLaps() { return raceLaps; }, set raceLaps(v) { raceLaps = v; wxArc && wxArc.plan === wxArc._derived && (wxArc.plan = null); },
   get raceT() { return raceT; }, set raceT(v) { raceT = v; },
+  get resultT() { return resultT; }, set resultT(v) { resultT = v; },
   // The RENDER clock (sky/cloud drift, FLAG cloth wave). It accumulates real
   // frame dt, so its value depends on how many frames happened to render — which
   // makes any pixel comparison across runs non-deterministic. Exposed so a
@@ -3574,7 +3575,7 @@ titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
-  resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf); G.replayBuf = replayBuf;   // tests + pause UI (internal handle, not on the typed façade)
+  resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf);
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -3896,7 +3897,7 @@ function introGarage(go) {
   let prepared = false;
   (async () => {
     try {
-      const prepP = introPrepare(live, key, info, n, false);
+      const prepP = introPrepare(live, key, info, n, false); prepP.catch(() => {});   // handled: awaited below, after the drive-out — a rejection meanwhile is not the global error overlay
       await studioDone(live, n);   // garage-out first (or its 3× / openAt safety cap)
       const ready = await prepP;
       if (!ready) return;
@@ -3968,7 +3969,7 @@ function introWarm(go) {
         if (_introSkip !== n) { studioOpen(n, info); await studioDone(live, n); }
       } else {
         // Warm world: garage-out and prepare overlap; never wait on prepare before studioDone.
-        const prepP = introPrepare(live, key, info, n, false);
+        const prepP = introPrepare(live, key, info, n, false); prepP.catch(() => {});   // handled: awaited below, after the drive-out (as introGarage)
         await studioDone(live, n);
         const ready = await prepP;
         if (!ready) return;
@@ -4335,7 +4336,7 @@ function quitToMenu() {
   // it; update() never reaches raceRadio after state=menu. halt() cuts every channel.
   radioVoice.halt();
   GameAudio.radioStingStop();
-  $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
+  $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true; if (garageReturn === "pit" && !$("carsetup").hidden) { leaveGarage(); pitWorkSpec = null; garageReturn = "select"; }   // the pit WORK garage (QUIT over its card, rotate EXIT RACE) closes without closePitWork's engine start
   els.overlay.hidden = false;
   $("race-settings").hidden = true;
   Particles.rainShow(false);
@@ -8615,7 +8616,7 @@ function openQualiBody(fresh, netDone) {
   // Reached from race settings this is already "menu"; reached from the results
   // screen it would still say "results". No race is running while the sheet is
   // up, so both paths say the same thing.
-  setState("menu", "quali-sheet");
+  setState("menu", "quali-sheet"); els.hud.hidden = true; els.lights.hidden = true;   // the finished race's HUD goes too: q-back can walk on to the title
   quali.clear();
   qualiNet.arm(netDone);   // armed from the ARG: a caller's write lands before this line
   loadTrack(trackIdx);
@@ -8966,7 +8967,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 // the update loop's `cycleCam()` closes over this const.
 const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
 
-$("pm-resume").onclick = () => setPaused(false);
+$("pm-resume").onclick = () => setPaused(false); $("pm-quick-doors").insertBefore(Object.assign(document.createElement("button"), { id: "pm-recover", type: "button", textContent: "RECOVER CAR", onclick: () => { setPaused(false); Input.requestRecover(); } }), $("pm-checkpoint"));   // RECOVER CAR = the R key; touch had none. Built here like REPLAY: shellNodes holds
 $("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false, "restart"); frozen = true; startRace().then(() => { if (state === "race") frozen = false; }, () => {}); };   // frozen: the old race must not run (or be scored at its flag) through the async start; startRaceBody lifts it with its own paused = false, and a start that was cancelled (settings changed) hands the old race back
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
