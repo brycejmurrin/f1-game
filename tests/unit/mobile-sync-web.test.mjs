@@ -1,4 +1,6 @@
-/* mobile-sync-web.test.mjs — sync-web refuses unstamped shells unless --dev.
+/* mobile-sync-web.test.mjs — sync-web refuses unstamped shells unless --dev,
+ * and (with desktop/lib/site.cjs) reuses an earlier stage only when it was
+ * stamped from HEAD (R3-ARCHITECTURE-11).
  *
  * Run: node --test tests/unit/mobile-sync-web.test.mjs
  */
@@ -7,7 +9,9 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { prepareSrc, resolveSrc } from "../../mobile/scripts/sync-web.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCRIPT = path.join(ROOT, "mobile/scripts/sync-web.mjs");
@@ -92,4 +96,66 @@ test("sync-web.mjs imports the shared desktop stager, not a second allow-list", 
   const src = fs.readFileSync(SCRIPT, "utf8");
   assert.match(src, /tools\/desktop\/stage\.mjs/);
   assert.match(src, /stageSite|stampStaged/);
+});
+
+/* R3-ARCHITECTURE-11 (2026-10-10). Without --src, sync-web used ANY index.html
+ * in artifacts/site or _site, and the desktop resolver ANY artifacts/site — so
+ * an APK or installer built from commit X could package an earlier stage.
+ * A reused tree must carry <meta name="apex-sha"> == HEAD; otherwise stage fresh. */
+const HEAD = "1111111111111111111111111111111111111111";
+const OLD = "2222222222222222222222222222222222222222";
+function stagedTree(dir, sha) {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "index.html"),
+    `<meta name="apex-build" content="2400">\n${sha ? `<meta name="apex-sha" content="${sha}">\n` : ""}<script src="js/game.js?v=abc123def456"></script>\n`);
+  fs.writeFileSync(path.join(dir, "version.json"), `{ "build": 2400 }\n`);
+}
+function fakeRoot(t) {
+  const tmp = path.join(ROOT, "artifacts", "tmp");
+  fs.mkdirSync(tmp, { recursive: true });
+  const root = fs.mkdtempSync(path.join(tmp, "mobile-root-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  return root;
+}
+
+test("sync-web restages instead of reusing a stale artifacts/site or _site", (t) => {
+  const root = fakeRoot(t);
+  const artifacts = path.join(root, "artifacts", "site");
+  stagedTree(artifacts, OLD);
+  stagedTree(path.join(root, "_site"), null);   // an unstamped Pages stage: no provenance at all
+  assert.equal(resolveSrc({ root, explicit: null, head: HEAD }), null, "neither tree is HEAD's");
+  const calls = [];
+  const src = prepareSrc({
+    root, explicit: null, head: HEAD, dev: false,
+    stage: (dest, o) => { calls.push(["stage", dest, o.root]); fs.rmSync(dest, { recursive: true, force: true }); stagedTree(dest, null); },
+    stamp: (dest, o) => { calls.push(["stamp", dest, o.root]); stagedTree(dest, HEAD); },
+  });
+  assert.equal(src, artifacts);
+  assert.deepEqual(calls, [["stage", artifacts, root], ["stamp", artifacts, root]]);
+  assert.match(fs.readFileSync(path.join(src, "index.html"), "utf8"), new RegExp(HEAD));
+});
+
+test("sync-web reuses a stage stamped from HEAD without restaging", (t) => {
+  const root = fakeRoot(t);
+  stagedTree(path.join(root, "artifacts", "site"), OLD);
+  stagedTree(path.join(root, "_site"), HEAD);
+  const boom = () => { throw new Error("must not restage a current tree"); };
+  assert.equal(prepareSrc({ root, explicit: null, head: HEAD, dev: false, stage: boom, stamp: boom }), path.join(root, "_site"));
+  assert.equal(resolveSrc({ root, explicit: null, head: null }), null, "no HEAD (git failed): nothing is provably current");
+});
+
+test("desktop resolveSiteDir ignores a stale artifacts/site fallback", (t) => {
+  const { resolveSiteDir, stagedSha } = createRequire(import.meta.url)("../../desktop/lib/site.cjs");
+  const root = fakeRoot(t);
+  const desktop = path.join(root, "desktop");
+  fs.mkdirSync(desktop);
+  const artifacts = path.join(root, "artifacts", "site");
+  stagedTree(artifacts, OLD);
+  const saved = process.env.APEX_SITE_DIR;
+  delete process.env.APEX_SITE_DIR;
+  t.after(() => { if (saved !== undefined) process.env.APEX_SITE_DIR = saved; });
+  assert.equal(stagedSha(artifacts), OLD);
+  assert.equal(resolveSiteDir(desktop, { head: HEAD }), path.join(desktop, "dist-site"),
+    "a stale fallback resolves to dist-site, which prebuild then refuses as missing (run npm run stage)");
+  assert.equal(resolveSiteDir(desktop, { head: OLD }), artifacts, "the fallback stays when it IS this commit's stage");
 });
