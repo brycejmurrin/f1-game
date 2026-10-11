@@ -1,6 +1,6 @@
 ---
 name: agent-fleet
-description: "Use when one session orchestrates sibling worker sessions (Claude Code, Cursor or Grok), when a worker is launched, blocked or needs to escalate, or when writing a launch prompt, a fleet status block or a hand-back. The worker loop: plan, implement, verify, screenshot, draft PR, subscribe, fix until merged."
+description: "Use when one session orchestrates sibling workers (Claude Code, Cursor, Grok), a worker is launched/blocked/escalating, or writing a launch prompt, fleet block or hand-back."
 ---
 
 # Agent fleet: one orchestrator, many workers

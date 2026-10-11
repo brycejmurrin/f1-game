@@ -1,6 +1,6 @@
 ---
 name: steward
-description: "Use when driving a PR to green — after a CI or Pages red (naming the failed test is ci-red-triage), a PR event or check-in, a base merge conflict, a fix push to validate. Only the Apex 26 overrides: draft/ready dedupe (`cancelled` is normal), sync-pr.mjs over a hand merge, who-is-on-it.mjs before a shared red, what live means. Pre-push is check-changes."
+description: "Use when driving a PR to green — CI/Pages red (ci-red-triage names the test), PR check-in, base conflict, fix-push validate. Apex overrides only: draft/ready dedupe, sync-pr.mjs, who-is-on-it before a shared red. Pre-push is check-changes."
 ---
 
 # Driving a PR to green in Apex 26
@@ -153,9 +153,8 @@ never a looser pattern or `| tail` on a live log.
 
 Use `--session <unique-id>` with `who-is-on-it.mjs --claim/--release` on hosts
 without a Claude session variable; do not share a `nosession` identity.
-Subscribe with the host's own tool: Claude Code `subscribe_pr_activity`
-(GitHub MCP), Cursor `subscribe_github_ci` + `subscribe_github_pr`
-(cursor-subscriptions MCP); never call a name the host does not list. Keep one
+Subscribe with the host's own tool: Claude Code `subscribe_pr_activity`, Cursor `subscribe_github_ci` + `subscribe_github_pr`
+(cursor-subscriptions MCP); never call a name the host does not list (skill `session-comms`). Keep one
 timer beside it (`send_later` / `subscribe_timer`) and read CI on every wake:
 Claude's subscription can drop `check_run` completions. If those or Monitor/timers
 are absent, run the watcher as one owned background command with a log, read

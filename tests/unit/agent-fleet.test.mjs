@@ -35,8 +35,6 @@ test("a subscription never stands alone: each host's timer is named beside it", 
     ["agent-fleet/SKILL.md", SKILL], ["references/worker.md", WORKER]]) {
     assert.match(text, /send_later/, `${file} names Claude Code's timer`);
     assert.match(text, /subscribe_timer/, `${file} names Cursor's timer`);
-    assert.doesNotMatch(text, /subscribe_pr_activity`?\s*\(claude-code-remote/,
-      `${file}: subscribe_pr_activity is the GitHub MCP's tool, not claude-code-remote's`);
   }
   assert.match(WORKER, /ci-watch\.mjs --sha <head> --once/, "worker reads CI on every wake");
 });

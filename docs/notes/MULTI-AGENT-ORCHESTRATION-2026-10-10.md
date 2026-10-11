@@ -16,8 +16,10 @@ today, what this repo already had, and what is still missing. Workflow lives in
   `SendMessage`'s `notify_when_idle` wakes you when a session goes idle, but
   only for sessions on the same machine.
   <https://code.claude.com/docs/en/cross-session-messaging>
-- **PR watching** (re-read 2026-10-11): the tool is the GitHub MCP's
-  `mcp__github__subscribe_pr_activity`; Auto-fix (CI status bar toggle, or
+- **PR watching** (re-read 2026-10-11): the bug reports name it
+  `mcp__github__subscribe_pr_activity` (GitHub MCP), while `session-comms`
+  (#1369) lists it on the claude-code-remote MCP; the surface may differ by
+  session type, so the docs name the tool, not its server. Auto-fix (CI status bar toggle, or
   `/autofix-pr` from a terminal) drives it. Open issues report it dropping
   `check_run` completions (anthropics/claude-code#62561), bot-authored reviews
   (#62096, #62977) and commit-status events (#62928); the reporters' fallback
