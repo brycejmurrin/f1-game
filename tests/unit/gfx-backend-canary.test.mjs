@@ -6085,7 +6085,7 @@ test("PCSS blocker: 32-bit float and the min over the whole 4x4 source footprint
 // (headed GLX has no preserved buffer; without this the button only said NO LIVE FRAME).
 test("paused race keeps presenting while SETTINGS is open (SAVE SCREENSHOT)", () => {
   const src = read("js/game.js");
-  const gate = src.slice(src.indexOf("if (paused && !netPlay.active())"), src.indexOf("replayBuf.onTick(raceT, cars, state)"));
+  const gate = src.slice(src.indexOf("if ((paused || UiExperience.resumeHolding(dt)) && !netPlay.active())"), src.indexOf("replayBuf.onTick(raceT, cars, state)"));
   assert.match(gate, /!els\.pmsettings\.hidden/,
     "SETTINGS open during pause must call render() so headed GLX SAVE SCREENSHOT sees a frame");
 });

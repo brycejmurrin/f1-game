@@ -76,6 +76,30 @@ const CareerExperience = (function () {
     return card;
   }
 
+  // THE ROUND'S BRIEF, LIVE, for the pause card (js/ui/experience.js raceBrief):
+  // "OBJECTIVE · TARGET P6 · NOW P8". The verdict is Career.objectiveMet on the
+  // ctx settleRound builds — the live order for the finish order — so the card
+  // and the results sheet cannot disagree about what the brief asks. A points
+  // brief reads the full points table (a shortened race pays SeasonCal's).
+  // objectiveFor(round) is the pure draw (no save write), and "" outside a
+  // career race, quali reading the brief alone.
+  function objectiveStatus(G) {
+    if (typeof Career === "undefined" || !Career.inCareer() || !Career.objectiveMet) return "";
+    const c = Career.data(), p = G.player;
+    if (!c || !c.season || !p || G.timeTrial || G.practice) return "";
+    const o = Career.objectiveFor(c.season.round), label = o ? Career.objectiveLabel(o).toUpperCase() : "";
+    if (!label) return "";
+    if (G.session !== "race") return "OBJECTIVE · " + label;
+    const ranked = G.ranked || [], at = (car) => ranked.indexOf(car) + 1 || ranked.length + 1;
+    const pos = at(p), mate = (G.cars || []).find((car) => car !== p && car.team && car.team.id === c.team);
+    const pts = (typeof Teams !== "undefined" && Teams.POINTS[pos - 1]) || 0;
+    const met = Career.objectiveMet(o, { pos, pts, player: p, mate, matePos: mate ? at(mate) : 0 });
+    if (o.type === "finish") return "OBJECTIVE · TARGET P" + o.value + " · NOW P" + pos + (met ? " ✓" : "");
+    if (o.type === "clean") return "OBJECTIVE · " + label + (met ? " · CLEAN SO FAR" : " · MISSED");
+    if (o.type === "outQualMate") return "OBJECTIVE · " + label + (met ? " ✓" : " · MISSED");
+    return "OBJECTIVE · " + label + (met ? " · ON TARGET" : " · NOT YET");
+  }
+
   function seasonStory(G, c, st, team) {
     const el = Dom.el, story = part("section", "story");
     story.setAttribute("aria-label", "Your season story");
@@ -156,6 +180,6 @@ const CareerExperience = (function () {
     G.$("cr-header").appendChild(nav);
   }
 
-  return { totals, calendar, garageMetadata, raceBrief, mount, clear };
+  return { totals, calendar, garageMetadata, raceBrief, objectiveStatus, mount, clear };
 })();
 Object.freeze(CareerExperience);
