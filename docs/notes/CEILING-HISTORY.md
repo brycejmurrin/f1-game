@@ -25,6 +25,13 @@ hud.js **1393 / 2377**, hud.css **1953 / 2150**. The same update lowered game.js
 4976 → 4974 code / 9195 → 9186 lines (it had shrunk). Owner decision: raises with a
 stated reason are fine; the allocator's own raise follows when it lands.
 
+2026-10-11 absorb catch-up (`tools/check/ratchets.mjs --base`): a ceiling raise
+past 40 lines fails only when the SOURCE file's metric also grew past 40 since
+the base. A re-measure that tracks size already on the tree (file delta ≤ 40) is
+a warning, not a red — #1386/#1387/#1395 grew HUD without raising the #1375 caps,
+and every PR that re-snapped hit Structural guards with no CI override for a
+stated reason. Real source growth past absorb still fails on the PR run.
+
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
