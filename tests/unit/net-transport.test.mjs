@@ -161,6 +161,40 @@ test("RTC inbox pressure drops state snapshots, never reliable events", () => {
   }
 });
 
+test("a guest adopts only the expected data-channel labels, once each (NP-7)", () => {
+  class FakePC {
+    constructor() { this.connectionState = "new"; this.iceConnectionState = "new"; this.iceGatheringState = "new"; }
+    close() {}
+  }
+  const channel = (label) => ({ label, readyState: "open", closed: 0, bufferedAmount: 0, send() {}, close() { this.closed++; } });
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    const ep = fresh.rtc({ role: "guest" });
+    const opens = [];
+    ep.onOpen(() => opens.push(1));
+    const state = channel("state"), state2 = channel("state"), alien = channel("telemetry"), event = channel("event");
+    ep.pc.ondatachannel({ channel: state });
+    ep.pc.ondatachannel({ channel: state2 });   // duplicate
+    ep.pc.ondatachannel({ channel: alien });    // unknown
+    assert.equal(state2.closed, 1, "duplicate label is refused");
+    assert.equal(alien.closed, 1, "unknown label is refused");
+    state.onopen();
+    assert.equal(state2.onopen, undefined, "the refused channel was never wired");
+    assert.equal(opens.length, 0, "one channel open is not an open transport");
+    assert.equal(ep.status, "connecting");
+    ep.pc.ondatachannel({ channel: event });
+    event.onopen();
+    assert.equal(opens.length, 1, "open fires once both DISTINCT kinds opened");
+    assert.equal(ep.status, "open");
+    assert.equal(ep.send(fresh.EVENT, "{}"), true, "the EVENT channel is the real one");
+  } finally {
+    delete global.RTCPeerConnection;
+    delete global.localStorage;
+  }
+});
+
 test("RTC disconnects instead of dropping reliable events when its inbox overflows", () => {
   let pcClosed = 0;
   class FakePC {

@@ -3078,13 +3078,25 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
     // buffer, or the cheap plane compare above starts claiming a pack it never
     // produced — the same "right count, wrong transforms" defect the _cullSig
     // assertion above exists to prevent, reintroduced through the side door.
-    const cellHit = body.indexOf("_cellKeyN === k");
-    if (cellHit !== -1) {
-      const hitBlock = body.slice(cellHit, cellHit + 600);
-      assert.doesNotMatch(hitBlock, /_cullPlanes\s*(=|\[)/,
-        `${file}: a cell-set cache HIT must not write the plane snapshot`);
-    }
+    // The comparison itself moved into the shared helper (InstCells.sameKey);
+    // the old needle `_cellKeyN === k` exists nowhere, and an `if (idx !== -1)`
+    // around the assertion let it go unreachable. The needle is asserted PRESENT
+    // so the guard cannot die quietly again.
+    const cellHit = body.indexOf("InstCells.sameKey(");
+    assert.notEqual(cellHit, -1, `${file}: cullInstances lost its InstCells.sameKey cell-set hit — update this guard, do not skip it`);
+    const hitEnd = body.indexOf("return", cellHit);
+    assert.notEqual(hitEnd, -1, `${file}: the cell-set hit no longer returns`);
+    const hitBlock = body.slice(cellHit, hitEnd + 60);
+    assert.doesNotMatch(hitBlock, /_cullPlanes\s*(=|\[)/,
+      `${file}: a cell-set cache HIT must not write the plane snapshot`);
   }
+  // The shared helper's own hit/record path never stamps the plane snapshot either.
+  const cells = read("js/render/shared/inst-cells.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  for (const fn of ["sameKey", "recordKey", "invalidate", "collectVisible", "scratchKeys"]) {
+    assert.doesNotMatch(fnBody(cells, fn), /_cullPlanes/,
+      `inst-cells.js ${fn}(): the cell-set key must not touch the plane snapshot`);
+  }
+  assert.match(fnBody(cells, "sameKey"), /_cellKeyN\s*!==\s*kN/, "inst-cells.js sameKey compares the cell count first");
   const glShadow = read("js/render/glx/shadow.js");
   const wgxSh = read("js/render/webgpu/wgx-shadow.js");
   assert.match(glShadow, /bufferSubData\([^]*?batch\._cullPlanes\s*=\s*null/,
