@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @doc Read-only probe: is ONE instanced scenery batch (e.g. cota's yellow tecpro wall) submitted AND visible in the lit pass? Pixel-independent verdict plus a region diff; runs on software or hardware.
+// @doc Read-only probe: is one instanced scenery batch (cota yellow tecpro) submitted and lit-visible on software or hardware.
 /* batch-visible-probe.mjs — "is this instanced batch actually on screen?"
  *
  * Born of the cota T12 tecpro wall (shots/scenery/README.md): the batch is built,
