@@ -915,9 +915,16 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
     --vhz: calc(1vh / var(--ui-compact-scale));
     --svhz: calc(1svh / var(--ui-compact-scale));
   }
-  /* Sheets share title chrome geometry cap (secondary rows @ 150%+). */
+  /* Compact sheet zoom cap (#1346): --_sheet-z is the painted zoom; re-derive
+     --tap-paint / vwz against it (shortHelpChips at 150%+). */
   :where(body[data-density="compact"]) .sheet {
-    zoom: min(var(--sheet-scale, var(--ui-scale)), var(--ui-compact-scale));
+    --_sheet-z: min(var(--sheet-scale, var(--ui-scale)), var(--ui-compact-scale));
+    zoom: var(--_sheet-z);
+    --vwz: calc(1vw / var(--_sheet-z));
+    --vhz: calc(1vh / var(--_sheet-z));
+    --svhz: calc(1svh / var(--_sheet-z));
+    --slider: calc(32px / var(--_sheet-z));
+    --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--_sheet-z)));
   }
 
   /* Type still honours the requested %; compact landscape keeps the 17px rung. */
