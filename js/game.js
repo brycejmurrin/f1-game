@@ -8675,11 +8675,12 @@ $("q-back").onclick = () => {
   // the sheet, leaving is TO THE GRID's job — but a SILENT dead key read as
   // broken, so point the player at the door instead of ignoring them.
   if ($("quali").classList.contains("q-done")) {
-    // FRIEND quali: MENU is the way out of a rival who never posts. One press
-    // arms it (a stray Escape must not drop a result the friend is waiting on);
-    // the second, or any press once the wait timed out, leaves via quitToMenu(),
-    // which cancels the lobby while the gate is armed.
-    if (qualiNet.hasArmed() && (qualiNet.canLeave() || $("q-back").dataset.armed)) { if (soundOn) GameAudio.uiSelect(); delete $("q-back").dataset.armed; quitToMenu(); return; }
+    // MENU is the second door off a finished sheet (the first is TO THE GRID). SOLO one
+    // press leaves — the classification stays persisted for CONTINUE. FRIEND quali is the
+    // way out of a rival who never posts: one press arms it (a stray Escape must not drop
+    // a result the friend is waiting on), the second, or any press once the wait timed
+    // out, leaves; quitToMenu() cancels the lobby while the gate is armed.
+    if (!qualiNet.hasArmed() || qualiNet.canLeave() || $("q-back").dataset.armed) { if (soundOn) GameAudio.uiSelect(); delete $("q-back").dataset.armed; quitToMenu(); return; }
     if (qualiNet.hasArmed()) { $("q-back").dataset.armed = "1"; $("q-back").textContent = "PRESS AGAIN TO LEAVE"; }
     if (soundOn) GameAudio.uiTick();
     const go = $("q-go");

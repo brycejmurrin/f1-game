@@ -103,3 +103,19 @@ test("friend quali: after SIMULATE BACK becomes MENU, and a second press quits c
   assert.equal(called, 0, "leaving never starts the race");
   assert.equal(g.sandbox.__apex.info().state, "menu", "back at the menu");
 });
+
+test("solo quali: after SIMULATE the sheet has a MENU exit (one press) and Escape's door works", async () => {
+  const doc = g.sandbox.document;
+  g.G.openQualiForNet();   // no lobby callback = the solo sheet
+  assert.ok(await settle(() => { const el = doc.getElementById("quali"); return el && el.hidden === false; }, 4000));
+  await flush();
+  const q = doc.getElementById("quali"), back = doc.getElementById("q-back");
+  assert.equal(q.getAttribute("data-net"), null, "a solo sheet is not a friend sheet");
+  doc.getElementById("q-sim").onclick();
+  assert.ok(q.classList.contains("q-done"));
+  assert.equal(back.textContent, "MENU", "the door out is named");
+  back.onclick();   // Escape presses this same button (data-esc-close)
+  await flush(10);
+  assert.equal(g.sandbox.__apex.info().state, "menu");
+  assert.equal(q.classList.contains("q-done"), false, "the sheet is closed and reset");
+});
