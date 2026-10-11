@@ -54,6 +54,9 @@ M = a new buffer, a shared-file change or a capability flag; L = a design change
 | 13 | Lamp texture: 64 KB re-upload per night frame when only ~3.7 KB of colour moved | A3 | S-M | yes | identical |
 | 14 | SSR march skipped by day below gate ≈ 0.02 (max blend weight ≤ 0.014 at the shipped 0.07) | D4 | S-M | — | needs A/B |
 | 15 | AO → R8, bloom/godray → RG11B10F (GLX already does; three r186 supports both) | D6 | S-M | yes | A/B for RG11B10 |
+| 16 | The mirror ignores the render scale: the governor drops the main frame first, so a GPU-bound desktop keeps the full-res 2× supersampled mirror (~8 texels per displayed pixel at scale 0.7); one shared-file change covers all three backends | E2 | S | — | identical |
+| 17 | The full mirror rung draws building glass and water for a ~300 CSS px box; the lite rung already drops both | E6 | S | — | near-identical |
+| 18 | Sky cloud noise (17 value-noise calls per sky pixel by day) runs on every uncovered pixel every frame, main pass and mirror, for clouds that drift ≤ 0.11 px/frame; cache the slow part in a 2D texture refreshed a slice at a time | E1 | L | yes | needs A/B + GLX/WGX parity |
 
 Everything marked "identical" should be pixel-identical within the same-tree A/B floor
 and is verified by a frozen A/B plus `gfx-probe` with `gpuErrors` 0 on both three paths;
@@ -197,3 +200,63 @@ path; the MRT set during post adds no shader cost (pretty:4339-4341); `present()
 JS is ~75 uniform writes, ~45 knob lookups and one closure; the blurs are already
 separable and bilinear-optimised.
 
+## E. Sky, FX, mirror pass, assets (`tsl-sky.js`, `tsl-fx.js`, `shared/mirror-pass.js`)
+
+What the mirror and the env cube cost per frame (desktop HIGH, tier 0, HELMET, mirror
+AUTO = the "full" rung every frame): one world render of the whole scene into its own
+target (the world to 400 m with the main frame's fog cull, building glass, water, up to 6
+rivals, the full cloud sky; no shadows, post, particles, decals or skid marks), then a
+full mip chain of that target (WebGPU: an extra submit plus ~9–10 tiny passes,
+pretty:21444-21449 → 18628-18675; WebGL2: one `generateMipmap`), then one quad into the
+HUD box. Resolution is CSS box × DPR (max 2) × 2 supersampling, capped 1024×512
+(`mirror-pass.js:147-153`): 600×171 at 1080p (~5 % of the main frame's pixels), 1024×293
+on a DPR-2 laptop. Lite / low / min rungs run at 0.6 / 0.5 / 0.4 of that every 1 / 2 / 3
+frames and drop instanced props, glass and water. The env cube renders zero faces per
+frame — TLX opts out of the probe unless `apex26.tlxEnvProbe=1` (`tlx.js:2106, 3479`).
+The main-pass sky covers the ~25 % of pixels the world leaves uncovered; by day
+(cloud 0.4) each runs 17 value-noise calls, at night ~8.
+
+| # | file:line | finding | confidence | cost | fix |
+|---|---|---|---|---|---|
+| E1 | `tsl-sky.js:259-340` | Full cloud noise on every sky pixel every frame, main pass and mirror, for clouds drifting ≤ 0.11 px/frame (0.3 at max speed); cache the slow part in a 2D texture keyed by direction, refreshed a slice at a time (2D, not a cube: the WebGPU cube target still has the open "black world" problem); sun, stars, moon, dither stay per pixel | runs-per-frame CONFIRMED, saving SUSPECTED (est. 3–7× less sky work) | GPU ALU | L, look change, GLX/WGX parity |
+| E2 | `mirror-pass.js:147-153, 463-475` | The mirror ignores the render scale; the governor drops the main frame first and sheds tiers only at the floor, so a GPU-bound desktop keeps the full-res 2× supersampled mirror | CONFIRMED | GPU fill | S, shared file, all backends |
+| E3 | `tlx-post.js:166-180` | ssrTag RGBA16F for one scalar: 8 B written per scene fragment, 8 B read + written per blended smoke / spray / rain / halo fragment, multisampled + resolved on desktop WebGL2 (= D2 / B7) | format CONFIRMED | bandwidth | S, TLX only |
+| E4 | `particles.js:338, 486, 517-560` | Rain is rebuilt on the CPU and re-uploaded at ≥ 30 Hz: 450–650 drops × 6 vertices ≈ 156 KB per upload while spray is alive; a vertex shader can place drops from data seeded once | CONFIRMED | CPU + upload | M, shared across backends |
+| E5 | `tsl-sky.js:186-197, 297-311, 377-393` | ~25 uniform-only sky terms computed per pixel; move to `update()` | CONFIRMED | ALU (est. 5–10 % of sky) | S-M, near-identical |
+| E6 | `game.js:6712, 6716` | The full mirror rung draws building glass and water; gate on "this is the mirror" as the lite rung does | CONFIRMED | draws + per-object updates | S |
+| E7 | `tsl-fx.js:186-206` | Particle and rain quad corners (21 %) blend at exactly zero alpha; the outer halo band contributes < 0.5 %: discard the first, shrink the halo quad to ±0.8 | math CONFIRMED, saving SUSPECTED | blend bandwidth | S |
+| E8 | `tlx.js:1180`; pretty:21444, 18637 | The mirror rebuilds its whole mip chain every frame; the HUD box reads only the first level down, the deep levels serve the cockpit glass only, so hood / visor / T-cam could skip them | CONFIRMED | small | S |
+| E9 | `tsl-lit.js:1747`; `mirror-pass.js:611-617` | The mirror at night has no lamp cap: the full per-chunk lamp loop at 2× supersampling, and every baked lamp re-ranked on the CPU each frame | CONFIRMED, benefit SUSPECTED | GPU + CPU | S-M, look change |
+| E10 | env probe (opt-in) | The cube target has `generateMipmaps: true`, so three rebuilds 6 faces × 6 mips (36 passes) after every single face render; the explicit pass at face 5 is redundant — fix before re-enabling the probe | CONFIRMED | — (opt-in only) | S |
+| E11 | `tsl-lit.js:492-501`; `tlx.js:4374` | Lamp texture re-uploaded every night frame for ~235 colour changes (= A3) | CONFIRMED | 64 KB/frame | S |
+| E12 | `tsl-lit.js:1937` | The car sparkle block still runs in the mirror: gated per material, not on the sparkle setting the mirror zeroes | CONFIRMED | tiny | S |
+
+`assets.js` / `gltf.js`: nothing per frame; the per-track lamp grid uploads ~0.8 MB of
+fixed-size textures per bake, fine at that cadence.
+
+Not confirmed or not worth it: no FX material reads scene depth, so no soft-particle
+cost; draw counts are already low (2 particle, 1 skid, 1 glow, ~1.8 blob shadows, 1
+decal per car); the glow halo rebuild is ~8.6 KB/frame; gating the mirror when the
+player is stationary almost never fires (cars behind move); a half-rate mirror world
+reads as lag without reprojection; skipping thick cloud noise where coverage is zero
+saves about what the branch costs (~12 % of day sky pixels are clear at cloud 0.4);
+mirror MSAA instead of 2× supersampling does not remove shading aliasing.
+
+Verify: frozen-frame look A/B against the same-tree noise floor; `frame-hitch.mjs` for
+CPU and allocations; `__apex.mirror().backend.w/h`, `Particles.stats()`,
+`tools/gfx/ssr-probe.mjs`, `mem-census.mjs`; gpu-census on macos-latest (gpuErrors,
+meanLuma, gpuMs) — a day leg covers E1, night legs E9 and E11.
+
+## Method notes
+
+- One Opus agent per slice, two concurrent (AGENTS.md: ≤ 2 nested subagents), read-only,
+  no browser; each got the do-not-re-report list and a disjoint file set, and wrote its
+  full report to the session scratchpad (gone with the container; this note is the copy).
+- The hunters beautified the minified vendored three r186 with the repo's terser to read
+  its internals; those `pretty:NNNN` lines are reproducible from
+  `vendor/three-0.186.0` but are not repo lines.
+- Cross-slice duplicates were found independently by two hunters each, which is weak
+  corroboration: ssrTag format (B7 = D2 = E3), the lamp texture upload (A3 = E11), the
+  mirror's instance re-pack (A1, and E's cost table).
+- Two hunters' ruled-out lists disagree with nothing in the others'; the one open
+  conflict is D7 (fold SSAO into the godray target) versus D6 (RG11B10 for godray).
