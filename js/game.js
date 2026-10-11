@@ -3573,7 +3573,7 @@ titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
-  resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf); G.replayBuf = replayBuf;   // tests + pause UI (internal handle, not on the typed façade)
+  resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf);
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).

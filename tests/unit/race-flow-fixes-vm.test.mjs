@@ -753,9 +753,19 @@ test("NEXT ROUND's qualifying sheet hides the finished race's HUD", async () => 
 });
 
 test("a red-flag restart breaks the instant-replay timeline (the re-grid is a teleport, not motion)", async () => {
-  const g = await createGame({ carMeshes: false, track: "monza" });
+  // Ring is a closure handle, never G.replayBuf (1a-F3): trap ReplayBuf.create.
+  let rb = null;
+  const g = await createGame({
+    carMeshes: false, track: "monza",
+    onSandbox: (sb) => {
+      let mod;
+      Object.defineProperty(sb, "ReplayBuf", { configurable: true, enumerable: true, get: () => mod,
+        set: (v) => { mod = Object.assign({}, v, { create: (...a) => (rb = v.create(...a)) }); } });
+    },
+  });
   try {
-    const G = g.G, rb = G.replayBuf;
+    const G = g.G;
+    assert.ok(rb, "ReplayBuf.create was trapped");
     let breaks = 0;
     const real = rb.breakTimeline;
     assert.equal(typeof real, "function", "ReplayBuf has the explicit break");

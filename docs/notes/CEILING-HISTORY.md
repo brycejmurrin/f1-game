@@ -17,8 +17,9 @@ same PR, and growth past the 40-line absorb says why
 Re-measured on the merged tree before landing: #1366 (Phase 0 top-band fix) merged
 first and grew the pair, so the ceilings start at **1345 / 2281** (hud.js) and
 **1926 / 2120** (hud.css), ship `325100c05`.
-2026-10-11 #1389 tip-red fix: restore G.replayBuf after ship merge dropped it;
-move pit leaveGarage before closeRaceSheets (2-F2). game.js **4978 / 9192**.
+2026-10-11 #1389 tip-red: pit leaveGarage before closeRaceSheets (2-F2); keep
+1a-F3 (no G.replayBuf expando — trap create in race-flow test). game.js ceilings
+unchanged after the follow-up.
 2026-10-11 #1389 sync onto ship `986462257` (#1378 quitToMenu close + openQualiBody
 lights): hand-union kept hunt3 `closeRaceSheets` with ship's advanced/lighting/audioset
 hide and `els.lights.hidden`. game.js ceilings **4977 / 9188** (+1 code / +1 lines).
