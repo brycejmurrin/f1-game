@@ -46,6 +46,22 @@ stated reason. Real source growth past absorb still fails on the PR run.
 2026-10-11 third re-measure after ship #1351 (phone HUD overlaps) landed on tip
 `bdbfa191a`: hud.js **1411 / 2399**, hud.css **1960 / 2158**. Prior #1437 snap to
 1393 / 2377 was already short once the merge tree carried #1351's growth.
+2026-10-10 ship tip catch-up (#1416): after #1386 / #1387 / #1383 / #1395 landed
+HUD features without ceiling snaps, ship `33ea003c1` measured **OVER**
+(`hud.js` lines 2377 > 2281, codeLines 1393 > 1345; `hud.css` lines 2150 > 2120,
+codeLines 1953 > 1926) — Structural guards tooling-A red on the deploy branch
+itself (run `38062352465`). Snap ceilings to the merged tree:
+`hud.js` **1393 / 2377**, `hud.css` **1953 / 2150**; `game.js` lowered slightly
+(4976→4974 codeLines, 9195→9186 lines). Past the 40-line absorb on purpose:
+this is the net-lines catch-up the audit required, not new HUD code in #1416
+(tools-only: hud-mock + ui-mock-core).
+
+2026-10-11 ship tip re-snap (#1416): after #1351 (phone HUD overlaps) and further
+ship merges, tip `2e1725b34` measures `js/ui/hud.js` codeLines **1411**, lines
+**2399** and `css/hud.css` codeLines **1960**, lines **2158** (still OVER the
+#1375 caps). Ceilings snapped to those values so a PR merge with current ship
+passes absolute ratchets. `ratchets --base` past-absorb raises clear when this
+file documents the path + new ceiling (machine-checked reason).
 
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
@@ -3318,4 +3334,17 @@ A later sync onto the deploy tip also moved `js/game.js` codeLines 4795 → **47
 ## 2026-10-11 — ship sync on #1398: HUD caps after #1386/#1387/#1395 (same remeasure as #1437)
 
 `js/ui/hud.js` codeLines 1345 → **1393** (+48) and lines 2281 → **2377** (+96); `css/hud.css` codeLines 1926 → **1953** (+27) and lines 2120 → **2150** (+30). Ship tip `1a980f907` carried the larger HUD files without the raise (#1386/#1387/#1395), so Structural guards was OVER. This branch synced ship to clear CONFLICTING and re-snapped the ceilings to the measured tree — intentional remeasure, not extraction. Parallel intentional raise: #1437.
+## 2026-10-11 — HUD remeasure after #1386/#1387/#1395 (+ ship tip growth)
+
+Ship Structural guards went red after #1375 landed the HUD ratchet, then
+round-3 HUD PRs (#1395 viewport cache, #1387 give-back countdown, #1386 visual
+spotter) and later tip merges grew past the ceilings without planned raises.
+
+Measured on the synced tip (ship `2e1725b` + MCP #1400):
+- `js/ui/hud.js` → `{codeLines 1411, lines 2399}` (was 1345 / 2281)
+- `css/hud.css` → `{codeLines 1960, lines 2158}` (was 1926 / 2120)
+
+Deliberate `--update` remeasure so every PR's merge-with-ship Structural
+guards can pass. Past-absorb raise is allowed because this history entry
+moves with `tests/data/ratchets.json` (`ratchets.mjs --documented` / CI).
 
