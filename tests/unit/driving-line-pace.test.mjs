@@ -1,7 +1,7 @@
 /* driving-line-pace.test.mjs — the DRIVING LINE / brake cue profile is built
  * with what the car actually pulls (hunt 3, R3-RACE-INTEGRITY-2).
  *
- * game.js's drivingLineApi() handed DrivingLine.build() the bare pace-5
+ * drivingLineApi() in game.js handed DrivingLine.build() the bare pace-5
  * PhysicsConsts.ACCEL — the mismatch aTop() fixed in quali-model — so at the
  * top PACE notch the forward sweep under-rated a 9.4 m/s² car at 7 m/s² and
  * the cue read "brake" on ~8 % more of a lap driven at AI pace
