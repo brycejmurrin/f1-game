@@ -915,12 +915,8 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
     --vhz: calc(1vh / var(--ui-compact-scale));
     --svhz: calc(1svh / var(--ui-compact-scale));
   }
-  /* Sheets share title chrome geometry cap (secondary rows @ 150%+).
-     --_sheet-z is the zoom this subtree ACTUALLY paints at after the cap
-     (#1346). Re-derive --tap-paint / viewport tokens against it — otherwise
-     they still divide by the uncapped --sheet-scale/--ui-scale and compact
-     help chips (and every other tap floor) paint under 43.5 px when the
-     slider is above 125% (time-trial Driving zoom matrix shortHelpChips). */
+  /* Compact sheet zoom cap (#1346): --_sheet-z is the painted zoom; re-derive
+     --tap-paint / vwz against it (shortHelpChips at 150%+). */
   :where(body[data-density="compact"]) .sheet {
     --_sheet-z: min(var(--sheet-scale, var(--ui-scale)), var(--ui-compact-scale));
     zoom: var(--_sheet-z);
