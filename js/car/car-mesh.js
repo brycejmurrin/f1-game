@@ -666,13 +666,20 @@ function getAeroFlap(aLvl, col, idx, style, el, finish) {
 // into one buffer: one draw with the same options, the same surfaces. It is what
 // a rival past FieldLod.flapsM() and the mirror / PiP draw (they drew NO flaps:
 // a rear wing stripped to its main plane) and any car whose wings are at rest.
-const _flapSets = {}, _flapSetOrder = [];
+const _flapSets = {}, _flapSetOrder = [], _flapSetMemo = new Map();   // base key -> [mesh per (open, only) slot]
 const FLAP_SET_MAX = 64;   // ~11 teams x 2 poses a race (+ the cockpit's front-only)
 function getAeroFlapSet(aLvl, col, style, finish, open, only) {
   const c = col || FLAP_DEF_COL, flaps = Car3D.aeroFlaps(aLvl, style);
   if (!flaps.length) return null;
-  const key = _flapKey(flaps[0], aLvl, style, c, finish) + (open ? "|X|" : "|Z|") + (only || "");
-  if (_flapSets[key]) return _flapSets[key];
+  // The full key is a string concat per call (per drawn car per frame): a (record, pose) memo keyed on the
+  // already-memoised base key turns a hit into two Map/array reads. Cleared whole on an eviction.
+  const bk = _flapKey(flaps[0], aLvl, style, c, finish), slot = !only ? (open ? 1 : 0) : only === "front" ? (open ? 3 : 2) : only === "rear" ? (open ? 5 : 4) : -1;
+  let memo = slot >= 0 ? _flapSetMemo.get(bk) : undefined;
+  if (memo && memo[slot]) return memo[slot];
+  const key = bk + (open ? "|X|" : "|Z|") + (only || "");
+  const remember = (m) => { if (slot >= 0) { if (!memo) _flapSetMemo.set(bk, memo = []); memo[slot] = m; } return m; };
+  if (_flapSets[key]) return remember(_flapSets[key]);
+  const nOrder = _flapSetOrder.length;
   const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
   for (const fg of flaps) {
     if (only && fg.wing !== only) continue;
@@ -687,7 +694,9 @@ function getAeroFlapSet(aLvl, col, style, finish, open, only) {
     for (const m of g.mat) out.mat.push(m);
     for (const k of g.idx) out.idx.push(base + k);
   }
-  return _flapPut(_flapSets, _flapSetOrder, FLAP_SET_MAX, key, out);
+  const made = _flapPut(_flapSets, _flapSetOrder, FLAP_SET_MAX, key, out);
+  if (_flapSetOrder.length === nOrder) { _flapSetMemo.clear(); memo = undefined; }   // an eviction freed a mesh the memo may still point at
+  return remember(made);
 }
 
 function _rigBox(out, cx, cy, cz, sx, sy, sz, col) {
@@ -1720,11 +1729,19 @@ function getAeroEdgeStrip() {
 }
 const _aeW = new Float32Array(16);
 const _AE_FX = { emissive: 1, roughness: 0.9, specular: 0, noAlphaWrite: true };
+// Memoised for half a second: it was a localStorage read per X-mode car per frame (~1,300/s at
+// 22 cars on a straight). The debug latch (apex.aeroEdge(), or the console) still takes
+// effect within the window, with no hook between this file and whoever flips it.
+let _aeOn = false, _aeAt = -1e9;
 function aeroEdgeOn() {
-  try { return localStorage.getItem("apex26.aeroEdge") === "1"; } catch (e) { return false; }
+  const now = Date.now();
+  if (now - _aeAt >= 0 && now - _aeAt < 500) return _aeOn;
+  _aeAt = now;
+  try { _aeOn = localStorage.getItem("apex26.aeroEdge") === "1"; } catch (e) { _aeOn = false; }
+  return _aeOn;
 }
 function drawAeroEdge(modelMat, aLvl, style, blend) {
-  if (!aeroEdgeOn() || !(blend > 0.45) || !_gfx) return;
+  if (!(blend > 0.45) || !_gfx || !aeroEdgeOn()) return;   // blend first: a Z-mode car (most of a lap) never reaches the latch
   const flaps = Car3D.aeroFlaps(aLvl, style);
   const pick = (wing) => { let last = null; for (const e of flaps) if (e.wing === wing) last = e; return last; };
   const drawOne = (fg, half) => {

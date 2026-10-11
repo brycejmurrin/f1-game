@@ -196,6 +196,30 @@ test("a WATCHED real race (REAL REPLAY / HIGHLIGHTS) awards no badge and draws n
   assert.ok(driven.cards.some((t) => /^BADGE UNLOCKED/.test(t)), "and its badge card: " + JSON.stringify(driven.cards));
 });
 
+test("YOUR RACE says where you started, the places gained, your best lap and the penalty carried", () => {
+  // The card the player reads without scrolling to their own row was a
+  // position and a clock; the grid slot, best lap and penalty were on the
+  // car (gridPos from game.js's grid build) and never shown.
+  const card = (over, rest = {}) => {
+    const team = { id: "red", name: "RED", color: [1, 0, 0] };
+    const cars = ["a", "b", "c"].map((id, i) => ({ driverId: id, code: id.toUpperCase().repeat(3), name: id, team,
+      best: 80 + i, finished: true, lap: 5, finishT: 400 + i, penalty: 0, gridPos: 3 - i, ...(i === 1 ? over : {}), ...(i === 0 ? rest : {}) }));
+    const h = bootResults({ season: null, cars, seasonMode: false });
+    h.G.player = cars[1];
+    h.api.buildResults(cars.slice());
+    const el = h.els.resultsTable.children.find((e) => e.classList.contains("res-personal"));
+    return el.children[1].textContent;
+  };
+  const p2 = card({ isPlayer: true, gridPos: 5, penalty: 5 });
+  assert.match(p2, /· FROM P5 \(▲3\)/, "started P5, finished P2: three places gained — " + p2);
+  assert.match(p2, /· BEST 1:21\.000(?! ★)/, "a best lap that is not the race's fastest has no star — " + p2);
+  assert.match(p2, /· PEN \+5s$/, "the penalty seconds the classification carried — " + p2);
+  const lost = card({ isPlayer: true, gridPos: 1, best: 79 });
+  assert.match(lost, /· FROM P1 \(▼1\) · BEST 1:19\.000 ★$/, "places lost read ▼; the field's fastest lap is starred, no penalty part — " + lost);
+  const same = card({ isPlayer: true, gridPos: 2 }, { best: 85 });
+  assert.match(same, /· FROM P2 · BEST/, "no places gained: no arrow — " + same);
+});
+
 test("a GUEST's RESULTS labels DNF from the host's verdict, not from its own reliability plan", () => {
   // Bug-hunt 2026-09-02 (UI, not landed in round 1): the order was the host's
   // (netOrder) but "(dnf)" / "DNF" came from this peer's own `retired`, drawn

@@ -119,10 +119,9 @@ test("boot rebuilds the SAVED legend, not legend 0: no Fangio sheet in Schumache
 // D2 — the FRESH-INSTALL case. js/data/garage-defaults.js ships `parts.legends`
 // (a wing-68 build) and GameStore.get answers from it on a miss, so on a first
 // boot the sheet is never "empty": seedLegendParts saw a non-empty sheet, left it,
-// and the default seat 0 (Schumacher) raced in somebody else's car. PR #1289
-// makes seedLegendParts read the RAW key (a miss is a miss), after which this
-// passes; until that change is in the tree it is a known failure, hence `todo`.
-test("a fresh install's Legends seat 0 builds the period car, not the shipped sheet", { todo: true }, () => {
+// and the default seat 0 (Schumacher) raced in somebody else's car. Since PR
+// #1289 seedLegendParts reads the RAW key (a miss is a miss); strict from here.
+test("a fresh install's Legends seat 0 builds the period car, not the shipped sheet", () => {
   const disk = new Map();
   const localStorage = { getItem: (k) => (disk.has(k) ? disk.get(k) : null), setItem: (k, v) => disk.set(k, String(v)),
     removeItem: (k) => disk.delete(k), clear: () => disk.clear(), key: (i) => [...disk.keys()][i] ?? null, get length() { return disk.size; } };
