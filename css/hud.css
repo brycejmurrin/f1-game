@@ -1232,6 +1232,42 @@ body[data-radio-slot="collapsed"] #announce {
    2026-10-10: the card painted over the minimap). Attribute repeated for specificity (outranks the
    density / caution tops) — source-integrity forbids #announce#announce. Unset, falls back to
    --flag-slot-top. */
+/* THE MESSAGE LINE (touch landscape, js/ui/hud.js radioTicker): the flag at the line's left end, the
+   card after it, both directly under the timing tower / mirror, in SCREEN px over each one's --hud-z.
+   !important: the caution :has() steps and the density tops outrank a doubled attribute here. */
+body[data-radio-slot="ticker"] #hud-flag {
+  top: calc(var(--tick-y) / var(--hud-z)) !important;
+  left: calc(var(--tick-flag-x) / var(--hud-z)) !important;
+  transform: none !important;
+}
+/* Info-only lines (comm / coach / practice / info) clamp to ONE line with an ellipsis; a pit call, a
+   penalty, a warning or race news is never cut (owner's requirements, 2026-10-10): it wraps. */
+body[data-radio-slot="ticker"] #announce:is([data-kind="comm"], [data-kind="coach"], [data-kind="practice"], [data-kind="info"]) #announce-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  overflow: hidden;
+}
+/* While the band shows a flag or a message, the cockpit / helmet mirror frame (or its chip) and a
+   chase INPUTS trace that shares its rows step down under it (--tick-bottom, --tick-step-y: screen px). */
+body[data-radio-slot="ticker"]:has(#announce:not([hidden]), #hud-flag:not([hidden])) #hud-mirror {
+  top: calc(var(--tick-bottom) / var(--hud-z) + 6px) !important;
+}
+body[data-radio-slot="ticker"]:has(#announce:not([hidden]), #hud-flag:not([hidden])) #hud-mirror-chip {
+  top: calc(var(--tick-bottom) + 6px) !important;
+}
+body[data-radio-slot="ticker"]:has(#announce:not([hidden]), #hud-flag:not([hidden])) #hud-inputs[data-tick-step] {
+  top: calc(var(--tick-step-y) / var(--hud-z)) !important;
+}
+body[data-radio-slot="ticker"] #announce {
+  top: calc(var(--tick-card-y, var(--tick-y)) / var(--hud-z)) !important;
+  left: calc(var(--tick-x) / var(--hud-z)) !important;
+  transform: none !important;
+  width: calc(var(--tick-w) / var(--hud-z)) !important;
+  max-width: calc(var(--tick-w) / var(--hud-z)) !important;
+  min-width: 0 !important;
+}
 body[data-radio-slot="lane"][data-radio-slot="lane"] #announce,
 body[data-radio-slot="collapsed"][data-radio-slot="collapsed"] #announce { top: calc(var(--announce-lane-y, calc(var(--flag-slot-top) * var(--hud-z))) / var(--hud-z)); }
 /* The plate. Italic is the racing number's own convention, not emphasis. */
