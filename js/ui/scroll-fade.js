@@ -228,6 +228,14 @@ window.ScrollFade = (function () {
       const t = e.target;
       if (t && t.nodeType === 1 && t.matches && t.matches(SEL)) paint(t);
     }, { capture: true, passive: true });
+    // Opening or folding a <details> changes a pane's scrollHeight with no
+    // resize of the scroller and no childList change, so neither observer saw
+    // it: the fade/thumb kept describing the old length. `toggle` does not
+    // bubble — capture catches every fold with one listener.
+    document.addEventListener("toggle", (e) => {
+      const t = e.target;
+      if (t && t.tagName === "DETAILS") schedule();
+    }, true);
     window.addEventListener("resize", settle, { passive: true });
     window.addEventListener("orientationchange", settle, { passive: true });
     if (screenMo) {

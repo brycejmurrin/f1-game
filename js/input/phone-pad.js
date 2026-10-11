@@ -704,6 +704,7 @@ const PhonePad = (function () {
         if (repeat) r.start();
       });
       const up = () => { el.classList.remove("on"); stop(); };
+      releases.push(up);   // a lost lift must not repeat a menu step forever (the nets above)
       el.addEventListener("pointerup", up);
       el.addEventListener("pointercancel", up);
       el.addEventListener("pointerleave", up);
@@ -766,6 +767,9 @@ const PhonePad = (function () {
         base.classList.remove("on");
         if (nub && nub.style) nub.style.transform = "";
       };
+      // In the release nets too: a lost lift otherwise repeats forever and
+      // `id` stays set, so the stick refuses every later press.
+      releases.push(() => { if (id !== null) up({ pointerId: id }); });
       base.addEventListener("pointerup", up);
       base.addEventListener("pointercancel", up);
       base.addEventListener("lostpointercapture", up);
