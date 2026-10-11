@@ -127,22 +127,29 @@ function create(G) {
     });
     if (result.ok) {
       G.refreshCareerButton();
+      pending.unconfirmed = pending.unconfirmed || result.durable === false || !!result.failed;
+      const restored = pending.unconfirmed
+        ? "RESTORED FOR THIS SESSION — SAVE NOT CONFIRMED; KEEP YOUR BACKUP"
+        : "CAREER RESTORED";
       if (result.needsConfirm && !otherConfirmed) {
         pendingImport = pending;
         armedImport = `${focusFlavour}:other`;
-        announce("CAREER RESTORED — CONFIRM OTHER MODE?");
+        announce(restored + " — CONFIRM OTHER MODE?");
         build();
         return result;
       }
       armedImport = "";
       pendingImport = null;
-      announce("CAREER RESTORED");
+      announce(restored);
       build();
       return result;
     }
     armedImport = "";
     pendingImport = null;
-    announce(result.reason === "conflict" ? "SAVE CONFLICT — IMPORT REFUSED"
+    const partial = (result.written && result.written.length) || (result.applied && result.applied.length);
+    if (partial) G.refreshCareerButton();
+    announce(partial ? "RESTORE INCOMPLETE — SOME DATA APPLIED; KEEP YOUR BACKUP"
+      : result.reason === "conflict" ? "SAVE CONFLICT — IMPORT REFUSED"
       : ("IMPORT FAILED — " + String(result.reason || "error").toUpperCase()));
     build();
     return result;
@@ -250,13 +257,25 @@ function create(G) {
       if (armed && pendingImport) {
         const target = otherArmed ? (s.flavour === "driver" ? "myteam" : "driver") : s.flavour;
         const mode = target === "myteam" ? "My Team" : "Driver career";
-        for (const row of pendingImport.envelope.slots) {
-          if (!row || (row.flavour === "myteam" ? "myteam" : "driver") !== target || !row.data) continue;
-          const rawRound = row.data.season && row.data.season.round;
-          const round = Number.isInteger(rawRound) && rawRound >= 0 ? rawRound : 0;
-          const year = row.data.year | 0 || 2026;
-          card.appendChild(el("div", "cr-note", `${mode} · ${year} · ${round} rounds completed · Destination slot ${(row.i | 0) + 1}`));
+        const preview = CareerBackup.preview(pendingImport.envelope, {
+          flavours: [target], includeProgressExtras: !otherArmed,
+        });
+        const summary = (c, incoming) => {
+          if (!c) return "Empty";
+          const team = teamById(c.team);
+          const identity = incoming && c.team === "custom" && pendingImport.envelope.myTeam;
+          const teamName = identity && identity.customTeam && identity.customTeam.name;
+          const round = Number.isInteger(c.season && c.season.round) ? Math.max(0, c.season.round) : 0;
+          return `${c.year | 0 || 2026} · ${teamName || (team ? team.name : c.team || "Team unspecified")} · ${round} rounds completed`;
+        };
+        card.appendChild(el("div", "cr-note", `Review restore — press ${otherArmed ? "ALL MODES?" : "IMPORT?"} to apply`));
+        for (const row of preview.slots || []) {
+          card.appendChild(el("div", "cr-note", `${mode} · Destination slot ${row.i + 1}`));
+          card.appendChild(el("div", "cr-note", "Current: " + summary(row.current)));
+          card.appendChild(el("div", "cr-note", "Backup: " + summary(row.incoming, true)));
         }
+        for (const text of preview.extras || []) card.appendChild(el("div", "cr-note", text));
+        card.appendChild(el("div", "cr-note", "Empty backup slots leave existing saves unchanged."));
       }
     }
     if (s.used) {

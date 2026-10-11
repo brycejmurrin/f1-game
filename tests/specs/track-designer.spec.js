@@ -40,6 +40,27 @@ async function randomiseGreen(page, seed) {
 test.describe("Track designer", () => {
   test.use({ viewport: LANDSCAPE });
 
+  test("library collection file imports atomically and preserves the open draft", async ({ page }) => {
+    await bootClean(page);
+    await openDesigner(page);
+    await randomiseGreen(page, 23);
+    expect((await page.evaluate(() => TrackDesigner.save())).ok).toBe(true);
+    const collection = await page.evaluate(() => CustomTracks.exportCollection());
+    await page.evaluate(() => { for (const it of CustomTracks.list()) CustomTracks.remove(it.id); TrackDesigner.showPane("library"); });
+    const draft = await page.evaluate(() => TrackDesigner.state().design);
+    const file = page.locator('input[aria-label="Import a circuit library file"]');
+    await file.setInputFiles({ name: "circuits.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(collection)) });
+    await page.waitForFunction(() => CustomTracks.list().length === 1, null, { polling: 100, timeout: 5000 });
+    expect(await page.evaluate(() => TrackDesigner.state().design)).toEqual(draft);
+    await file.setInputFiles({ name: "duplicates.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(collection)) });
+    await expect(page.locator("#trackdesigner")).toContainText("1 duplicates kept unchanged");
+    expect(await page.evaluate(() => CustomTracks.list().length)).toBe(1);
+    await expect(page.getByRole("button", { name: "EXPORT ALL", exact: true })).toBeVisible();
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "EXPORT ALL", exact: true }).click();
+    expect((await download).suggestedFilename()).toBe("apex26-circuits.apextracks.json");
+  });
+
   test("the title door opens the designer; a randomised design validates green and saves into MY CIRCUITS", async ({ page }) => {
     await bootClean(page);
     const before = await page.evaluate(() => ({ n: Tracks.LIST.length, custom: Tracks.LIST.filter((t) => t.custom).length }));
