@@ -98,3 +98,25 @@ test("How to Play compact section chips floor at --tap-paint", () => {
     "no hard-coded 44px floor on compact htp chips",
   );
 });
+
+test("compact body sheet zoom re-derives --tap-paint at the paint scale", () => {
+  // Ship #1346 names the painted zoom --_sheet-z (also pinned in
+  // ui-improve-pass.test.mjs). Keep a source pin here so a round-3 ui-fit
+  // regression cannot drop the re-derive while leaving the zoom cap.
+  const css = rd("css/menus.css");
+  assert.match(
+    css,
+    /body\[data-density="compact"\]\)\s*\.sheet\s*\{[^}]*--_sheet-z:\s*min\(var\(--sheet-scale,\s*var\(--ui-scale\)\),\s*var\(--ui-compact-scale\)\)/s,
+    "compact sheets publish --_sheet-z (fit-cap ∩ 125% geometry)",
+  );
+  assert.match(
+    css,
+    /body\[data-density="compact"\]\)\s*\.sheet\s*\{[^}]*--tap-paint:\s*max\(24px,\s*calc\(var\(--tap-paint-at\)\s*\/\s*var\(--_sheet-z\)\)\)/s,
+    "compact sheet --tap-paint divides by --_sheet-z, not bare --ui-scale",
+  );
+  assert.match(
+    css,
+    /body\[data-density="compact"\]\)\s*\.sheet\s*\{[^}]*zoom:\s*var\(--_sheet-z\)/s,
+    "compact sheet zoom uses the same --_sheet-z",
+  );
+});

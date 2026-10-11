@@ -493,6 +493,8 @@ interface GameCtx {
   paused: boolean;
   raceLaps: number;
   raceT: number;
+  /** Pending results delay; practice restores clear it for the restored field. */
+  resultT: number;
   /** The RENDER clock (sky drift, flag cloth) — pin it for a pixel comparison. */
   skyT: number;
   skyHold: boolean;
