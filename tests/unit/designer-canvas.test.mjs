@@ -17,8 +17,9 @@ import { bootEditor, read, plain, design } from "../helpers/editor-vm.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
 /** The canvas module on the engine VM, a recording context and manual timers. */
-function boot(hooksExtra = {}, pts = null) {
+function boot(hooksExtra = {}, pts = null, wrapShape = null) {
   const { ctx, S } = bootEditor();
+  if (wrapShape) ctx.TrackShape = wrapShape(ctx.TrackShape);
   const dom = makeDom();
   ctx.document = dom.document;
   ctx.devicePixelRatio = 1;
@@ -472,4 +473,16 @@ test("live scenery keeps map range picking and outline switching non-destructive
   assert.equal(h.canvas.dataset.mapView, "outline");
   assert.deepEqual(plain(h.cv.selection()), { sel: 3, span: 8 });
   assert.equal(h.ev.changes.length, 0);
+});
+
+test("controls(): a selected span is walked once per redraw, not once per handle (bug-hunt 2 P10)", () => {
+  let walks = 0;
+  const h = boot({}, null, (T) => ({ ...T,
+    inSpan: (...a) => { walks++; return T.inSpan(...a); },
+    spanIndices: (...a) => { walks++; return T.spanIndices(...a); } }));
+  const n = h.pts.length;
+  h.cv.setSelection(3, 20);
+  assert.ok(walks <= 2 && walks < n, "span walks per redraw " + walks + " for " + n + " handles");
+  h.rec.arcs.length = 0; h.cv.setSelection(3, 20);
+  assert.ok(h.rec.arcs.filter(r => r === 7).length >= 18, "span members still draw as selected");
 });
