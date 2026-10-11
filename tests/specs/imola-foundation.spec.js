@@ -3,7 +3,7 @@ import { test, expect } from "../helpers/fixtures.js";
 
 async function loadImola(racePage, time = "day") {
   await racePage.evaluate((tod) => window.__apex.race("imola", tod, "dry"), time);
-  await racePage.waitForFunction(() => window.__apex.info().track === "imola");
+  await racePage.waitForFunction(() => window.__apex.info().track === "imola", null, { polling: 100 });
 }
 
 async function imolaDayDiag(racePage) {

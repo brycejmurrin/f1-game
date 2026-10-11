@@ -180,3 +180,19 @@ test("the lit gantry is equally bright at 30, 60 and 144 Hz and takes nothing fr
   // The mobile tier's flare budget still holds every lamp.
   assert.equal(runAt(60, 0.2, true).maxFl, 5);
 });
+
+test("a lookup before the props list exists is not memoised: the lamps appear once the build fills it", () => {
+  const sl = load().create({ state: "count", lightsLit: 5, track: null }, { Particles: stub() });
+  const t = track([{ k: 1 }]);
+  const list = t.props.list;
+  t.props = null;   // the circuit's scenery has not populated yet
+  assert.equal(sl.lampsFor(t), null, "nothing to hang the lamps on yet");
+  t.props = { list };
+  const lamps = sl.lampsFor(t);
+  assert.ok(lamps && lamps.length === 5, "the same track object lights up after the build");
+  // A genuine miss (list present, no gantry, no gate) IS remembered.
+  const bare = track([]);
+  assert.equal(sl.lampsFor(bare), null);
+  bare.props.list.push({ kind: "gantry", side: 0, w: 16, h: 9, d: 1, x: 0, y: 4.5, z: 4, k: 1 });
+  assert.equal(sl.lampsFor(bare), null, "a searched, empty list stays a memoised miss");
+});

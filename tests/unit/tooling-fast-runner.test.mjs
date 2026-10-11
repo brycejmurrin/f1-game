@@ -12,7 +12,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
-  parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard }
+  parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK }
   from "../../tools/ci/tooling-fast.mjs";
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "apex-tf-"));
@@ -205,4 +205,47 @@ test("CLI: --help and unknown flags never start the suite", () => {
   assert.deepEqual(applyFileShard(["a", "b", "c", "d"], "1/2"), ["a", "c"]);
   assert.deepEqual(applyFileShard(["a", "b", "c", "d"], "2/2"), ["b", "d"]);
   assert.throws(() => applyFileShard(["a"], "3/2"), /bad --shard/);
+});
+
+// TF1 — exit 0 is not a verdict. Each fixture is run through the real runner.
+test("tapSummary / emptyRunReason read the TAP footer", () => {
+  const foot = (o) => Object.entries({ tests: 0, suites: 0, pass: 0, fail: 0, cancelled: 0, skipped: 0, todo: 0, ...o })
+    .map(([k, v]) => `# ${k} ${v}`).join("\n");
+  assert.equal(emptyRunReason(foot({ tests: 3, pass: 3 })), null);
+  assert.equal(emptyRunReason(foot({ tests: 3, pass: 1, skipped: 2 })), null, "some skips are fine while something passed");
+  assert.match(emptyRunReason(foot({ tests: 0 })), /zero tests/);
+  assert.match(emptyRunReason(foot({ tests: 3, skipped: 3 })), /no test passed/);
+  assert.match(emptyRunReason(foot({ tests: 2, todo: 2 })), /no test passed/);
+  assert.match(emptyRunReason(foot({ tests: 4, pass: 1 })), /only 1 of 4/);
+  assert.match(emptyRunReason("no footer at all"), /no TAP footer/);
+  // node counts a test-less file as ONE passing test named after the file:
+  // Fixture labels borrow REAL repo paths (the comment-citation guard requires every
+  // path-shaped token to exist); the TAP text is synthetic.
+  const self = "TAP version 13\nok 1 - tests/unit/a11y-pwa-pass.test.mjs\n" + foot({ tests: 1, pass: 1 });
+  assert.match(emptyRunReason(self, "tests/unit/a11y-pwa-pass.test.mjs"), /registered no tests/);
+  assert.equal(emptyRunReason("ok 1 - a real single test\n" + foot({ tests: 1, pass: 1 }), "tests/unit/ai-band.test.mjs"), null);
+  assert.deepEqual(ALL_SKIP_OK, {}, "the opt-out list starts empty: every entry needs a written reason");
+});
+
+test("a file that runs zero tests, skips every test, or calls process.exit(0) FAILS the runner; a real pass still passes", async () => {
+  const dir = tmp();
+  try {
+    const mk = (n, body) => { const f = path.join(dir, `${n}.test.mjs`); fs.writeFileSync(f, body); return f; };
+    const files = {
+      zero: mk("zero", `export const x = 1;\n`),
+      allskip: mk("allskip", `import test from "node:test"; test("a", { skip: true }, () => {}); test("b", { todo: true }, () => {});\n`),
+      exit0: mk("exit0", `import test from "node:test"; test("never runs", () => {}); process.exit(0);\n`),
+      good: mk("good", `import test from "node:test"; test("ok", () => {}); test("skipped one", { skip: true }, () => {});\n`),
+    };
+    const logPath = path.join(dir, "suite.log");
+    const r = await runToolingFast(Object.values(files), { jobs: 1, logPath, localTimingsPath: null, order: "list" });
+    const byName = Object.fromEntries(r.results.map((x) => [path.basename(x.file, ".test.mjs"), x.ok]));
+    assert.deepEqual(byName, { zero: false, allskip: false, exit0: false, good: true });
+    assert.equal(r.ok, false);
+    const log = fs.readFileSync(logPath, "utf8");
+    assert.match(log, /FAIL .*zero\.test\.mjs .*reason=empty-run/);
+    assert.match(log, /FAIL .*allskip\.test\.mjs .*reason=empty-run/);
+    assert.match(log, /FAIL .*exit0\.test\.mjs .*reason=empty-run/);
+    assert.match(log, /PASS .*good\.test\.mjs/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

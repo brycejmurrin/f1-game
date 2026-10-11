@@ -570,6 +570,7 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
     assert.equal(g.G.raceT, 0.1, "ordinary simulation steps cannot advance the paused replay's HUD clock");
     assert.ok(watched.every((c) => c.speed === 0), "paused WATCH stands the puppets for audio");
     assert.deepEqual(poses(), before, "neither the collider nor manual recovery may rewrite paused replay puppets");
+    assert.ok(watched.every((c) => c.speed === 0), "paused WATCH keeps audio standing while the pose stays frozen");
 
     replay.follow("LEC");
     const p = g.G.player, penalty = p.penalty;

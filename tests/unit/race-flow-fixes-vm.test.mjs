@@ -13,8 +13,8 @@
  *     peaked at ~0.7 s and decayed — a beached AI was never rescued. It now
  *     shares the player's beachedAt() test.
  *   - HUMAN DNF: the only human retiring ends the race 2.2 s later
- *     (RaceControl.finishDelay, by design); an AI whose reliability failure was
- *     already drawn used to be classified — and scored — from that snapshot.
+ *     (RaceControl.finishDelay, by design); an AI that had already PASSED its
+ *     drawn failure retires with it, one that never reached it stays a runner.
  *   - LIGHTS (review 2026-10-04): RECOVER or a shift tapped on the grid stayed
  *     latched and fired on the first green frame — a free re-place at rescue
  *     speed, or 2nd gear with no drive. Input.clearDriveEdges() at lights-out.
@@ -30,6 +30,9 @@
  *     behind #carsetup without the pause card; a hidden tab / blur / rotate
  *     ran the FULL pause over it — the card stacked, QUIT left the garage
  *     open on the title, RESUME + RETURN TO RACE raced lock-less.
+ *   - RESUME COUNTDOWN (2026-10-10, a behaviour change): RESUME restarted the
+ *     sim on the frame it was tapped, mid-corner at race speed. A solo race
+ *     now holds ~1.2 s on the start plate (3, 2, 1); a net race does not.
  *   - EXITS (round-3 hunt 2-F1..F3): a flag under the pause kept its tools (lt-open, photo mode) into RACE AGAIN;
  *     QUIT left the pit WORK garage over the title; NEXT ROUND -> quali -> BACK x3 kept the old race's HUD.
  *
@@ -113,20 +116,23 @@ test("finishers coast home at the floor and never collide with each other", asyn
   } finally { g.close(); }
 });
 
-test("the only human retiring retires every AI whose failure was already drawn", async () => {
+test("the only human retiring retires only the AI it had already PASSED the failure point of", async () => {
   const g = await createGame({ track: "monza" });
   try {
     const G = g.G;
     g.apex.setInput({ throttle: true, steer: 0 });   // the player must cross the line for a distance-keyed DNF to fire
     g.step(60 * 5);
     const ai = G.cars.filter((c) => !c.human && !c.retired);
-    const doomed = ai[3];
-    doomed.dnfAt = 0.99; doomed.dnfWhy = "gearbox";   // drawn, but beyond where the race now stops
+    const unreached = ai[3], passed = ai[4];
+    unreached.dnfAt = 0.99; unreached.dnfWhy = "gearbox";   // drawn, but never reached: the race stops far short of it
+    passed.dnfAt = 0.00001; passed.dnfWhy = "hydraulics";   // already behind the car
     G.player.dnfAt = 0.0001; G.player.dnfWhy = "engine";
     for (let i = 0; i < 60 * 10 && G.state === "race"; i++) g.step(1);
     assert.equal(G.state, "results", "the race ends once its only human is out");
-    assert.equal(doomed.retired, true, "a drawn failure is met, not scored past");
-    assert.equal(doomed.dnf, "gearbox");
+    assert.equal(passed.retired, true, "a failure the car had passed is met, not scored past");
+    assert.equal(passed.dnf, "hydraulics");
+    assert.equal(unreached.retired, false, "a failure it never reached is not invented at the flag (round-2 rules #2)");
+    assert.equal(unreached.dnf, null);
   } finally { g.close(); }
 });
 
@@ -309,6 +315,51 @@ test("startRaceBody aborts to the menu when the race-session bundle failed to lo
   assert.ok(body.indexOf("if (!sessionOk)") < body.indexOf("await ensureAudio()"), "the abort comes before anything starts the race");
 });
 
+test("RESUME holds a solo race ~1.2 s on the start plate, a pause cancels it, and a net race resumes at once", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G, $ = (id) => g.sandbox.document.getElementById(id), lights = $("lights");
+    g.apex.headless(true);
+    assert.equal(G.state, "race");
+    let t = g.sandbox.performance.now() + 1000;
+    const run = (s) => { for (let i = 0; i < Math.round(s * 60); i++) g.pumpFrame(t += 1000 / 60); };
+    // setPaused stamps lastFrame from the real clock, as a browser's next rAF stamp
+    // follows it; re-base the pumped clock there or the first frame is a 0.25 s gap.
+    const resume = () => { $("pm-resume").onclick(); t = g.sandbox.performance.now(); };
+    run(0.2);
+    $("pausebtn").onclick(); run(0.1); resume();
+    assert.equal(G.paused, false);
+    let t0 = G.raceT;
+    run(0.5);
+    assert.equal(G.raceT, t0, "no physics step in the first 0.5 s after RESUME");
+    assert.equal(lights.hidden, false, "the start plate carries the count");
+    assert.equal(lights.dataset.count, "2", "3, 2, 1 at 0.4 s a beat");
+    // A second pause mid-count cancels it cleanly; the next RESUME counts from 3 again.
+    $("pausebtn").onclick();
+    assert.equal(lights.hidden, true, "pausing drops the plate");
+    run(0.1); resume();
+    assert.equal(lights.dataset.count, "3");
+    // RECOVER CAR (PR #1385's pause tile) is setPaused(false) and then the R-key edge:
+    // the hold keeps that edge for its first live frame instead of clearing it as a pause does.
+    const p = G.player, rescued = p.rescueLastT;
+    vm.runInContext('Input.remoteEvent("recover")', g.ctx);
+    run(1.1);
+    assert.equal(G.raceT, t0, "still held at 1.1 s");
+    run(0.3);
+    assert.ok(G.raceT > t0, `the sim runs again after the count (raceT ${G.raceT} vs ${t0})`);
+    assert.equal(lights.hidden, true, "the plate clears at the end of the count");
+    assert.notEqual(p.rescueLastT, rescued, "a RECOVER pressed during the count lands when it ends");
+    // A NETWORKED race runs on under the card and never holds.
+    const active = G.netPlay.active;
+    G.netPlay.active = () => true;
+    try {
+      $("pausebtn").onclick(); resume();
+      t0 = G.raceT;
+      run(0.2);
+      assert.ok(G.raceT > t0, "a net race steps at once after RESUME");
+    } finally { G.netPlay.active = active; }
+  } finally { g.close(); }
+});
 test("a flag that falls under the pause closes the pause tools: no lt-open / photo mode / previewed night into RACE AGAIN (2-F1)", async () => {
   const g = await createGame({ track: "monza", carMeshes: false });
   try {
