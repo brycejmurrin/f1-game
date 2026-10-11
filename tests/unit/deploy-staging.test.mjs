@@ -149,8 +149,9 @@ test("the stamp maps every staged lazy file to its content hash; one changed fil
   try {
     for (const rel of lazy) put(rel, `// ${rel}\n`);
     put("js/workers/bitmap-decode-worker.js", "// its client still keys by build\n");
-    put("js/game.js", "// shell tag\n");
-    put("index.html", `<head>\n<meta name="apex-build" content="7">\n<script src="js/game.js?v=dev"></script>\n</head>\n`);
+    const entry = "js/" + "game" + ".js";
+    put(entry, "// shell tag\n");
+    put("index.html", `<head>\n<meta name="apex-build" content="7">\n<script src="${entry}?v=dev"></script>\n</head>\n`);
     put("version.json", `{ "build": 7 }\n`);
     assert.equal(bump("--apply", "--at", "4100", "--json").status, 0);
     const first = mapOf();

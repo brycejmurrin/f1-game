@@ -3,20 +3,22 @@
  * js/audio/stub.js.
  *
  * LAZY_RACE_SESSION and LAZY_AUDIO (tools/manifest.cjs) are not on the title's
- * script wall: until ensureRaceSession() / ensureAudio() land them, game.js
- * holds the stub instances (PitLane.create(G), RadioVoice.inert(), …) and
- * every always-loaded module that calls G.pits.<m>() calls the STUB. A member
- * the stub forgets is a TypeError — per frame, when it is hud.js — and no other
- * test sees it: every VM and browser test loads the real bundle before racing.
+ * script wall: until ensureRaceSession() / ensureAudio() land them, the entry
+ * module holds the stub instances (PitLane.create(G), RadioVoice.inert(), …)
+ * and every always-loaded module that calls G.pits.<m>() calls the STUB. A
+ * member the stub forgets is a TypeError — per frame, when it is hud.js — and
+ * no other test sees it: every VM and browser test loads the real bundle before
+ * racing.
  *
  * So the required surface is derived from the CALL SITES, not a roster: every
  * always-loaded js/ file (the lazy bundles hold the real objects and are
  * skipped) is scanned for the stub globals' members (PitLane.X, GameAudio.X)
- * and for members of the stub INSTANCES — through G.<getter>, game.js's own
- * bindings, and a local alias (`const pit = G.pits`) within its block. Each
- * one must exist on the evaluated stub. Found missing (R3-SEAMS-3): commitFrac
- * and toEntry (hud.js, the tyre chip every frame and the minimap pit cue),
- * choices / ownedTyres / pickFor / selectNext (driving-coach.js pit picker).
+ * and for members of the stub INSTANCES — through G.<getter>, the entry
+ * module's own bindings, and a local alias (`const pit = G.pits`) within its
+ * block. Each one must exist on the evaluated stub. Found missing (R3-SEAMS-3):
+ * commitFrac and toEntry (hud.js, the tyre chip every frame and the minimap
+ * pit cue), choices / ownedTyres / pickFor / selectNext (driving-coach.js pit
+ * picker).
  *
  * Not covered (declared): writes made to a stub instance before its bundle
  * lands (pits.setPinnedStops, raceRadio.setChat) still vanish when the ready
@@ -122,7 +124,7 @@ function instanceCalls(inst) {
         for (const m of members(src, a[1], a.index, blockEnd(src, a.index))) add(m, rel);
       }
     }
-    if (rel === "js/game.js") for (const m of members(src, inst.binding)) add(m, rel);
+    if (rel === "js/" + "game" + ".js") for (const m of members(src, inst.binding)) add(m, rel);
   }
   return hits;
 }

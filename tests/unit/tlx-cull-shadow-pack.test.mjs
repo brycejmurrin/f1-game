@@ -4,17 +4,18 @@
  * ({upload:false}) and hands the count to gfx.castShadowInstanced. TLX packed
  * that cull into batch.packMatrices — the CAMERA pack — so a mirror cull that
  * then HIT the cell-set cache (same cells as the last upload: no repack)
- * left the shadow pack in packMatrices, game.js drawWorldMeshes' recorder copied
- * it into _mirMats, and the next frozen mirror frame (instEvery 2) uploaded
- * instances the mirror cannot see (scratch/hunt3-render/tlx-mirpack.cjs).
- * GLX/WGX were immune (_shadowPackFor). The real cullInstances +
- * castShadowInstanced (extracted from tlx.js), real InstCells/Frustum, and the
- * recorder extracted verbatim from game.js. No browser (~0.1 s).
+ * left the shadow pack in packMatrices, the entry module's drawWorldMeshes
+ * recorder copied it into _mirMats, and the next frozen mirror frame
+ * (instEvery 2) uploaded instances the mirror cannot see
+ * (scratch/hunt3-render/tlx-mirpack.cjs). GLX/WGX were immune (_shadowPackFor).
+ * The real cullInstances + castShadowInstanced (extracted from tlx.js), real
+ * InstCells/Frustum, and the recorder extracted via gameSource(). No browser (~0.1 s).
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 function span(src, from, endMark) {
@@ -29,7 +30,8 @@ function load() {
   const tlx = read("js/render/three/tlx.js");
   const cull = span(tlx, "      function cullInstances(batch, planes, opts) {", "        return n;\n      }");
   const cast = span(tlx, "      function castShadowInstanced(batch, count) {", "\n      }");
-  const rec = /if \(rec && n > 0 && b\.packMatrices\) \{[\s\S]*?b\._mirN = n;\n\s*\}/.exec(read("js/game.js"));
+  const game = gameSource().slice("// ==== js/game.js\n".length).split("\n// ==== ")[0];
+  const rec = /if \(rec && n > 0 && b\.packMatrices\) \{[\s\S]*?b\._mirN = n;\n\s*\}/.exec(game);
   assert.ok(rec, "drawWorldMeshes' mirror recorder");
   const casts = [];
   const ctx = vm.createContext({ localStorage: { getItem: () => null }, Math, Float32Array, Float64Array, Int32Array, Array });
