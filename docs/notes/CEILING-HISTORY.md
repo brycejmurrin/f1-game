@@ -3320,3 +3320,18 @@ Closing-chord centerline interpolation shifted start-seam props on indy/madrid/w
 `js/net/lobby.js` lines 1884 → **1887** on the feature tip (+3: two comment lines and `_peers.clear(); _ready.clear(); clashClear(); myRank = Infinity` when the room ends so relayed guest profiles do not survive into the next room), then 1891 → **1894** after syncing the deploy tip (base had already absorbed other lobby growth to 1891; the union is base + the three teardown lines).
 
 A later sync onto the deploy tip also moved `js/game.js` codeLines 4795 → **4798** and lines 8946 → **8943**, and `js/track/tracks.js` 703 → **702** (measure of the merged tree — take the base's ceilings where they lowered, raise codeLines for ship-tip growth). Deliberate lobby raise for the intentional onClose clear; the game.js codeLines raise is the sync cure, not an extraction.
+
+## 2026-10-11 — HUD remeasure after #1386/#1387/#1395 (+ ship tip growth)
+
+Ship Structural guards went red after #1375 landed the HUD ratchet, then
+round-3 HUD PRs (#1395 viewport cache, #1387 give-back countdown, #1386 visual
+spotter) and later tip merges grew past the ceilings without planned raises.
+
+Measured on the synced tip (ship `2e1725b` + MCP #1400):
+- `js/ui/hud.js` → `{codeLines 1411, lines 2399}` (was 1345 / 2281)
+- `css/hud.css` → `{codeLines 1960, lines 2158}` (was 1926 / 2120)
+
+Deliberate `--update` remeasure so every PR's merge-with-ship Structural
+guards can pass. Past-absorb raise is allowed because this history entry
+moves with `tests/data/ratchets.json` (`ratchets.mjs --documented` / CI).
+
