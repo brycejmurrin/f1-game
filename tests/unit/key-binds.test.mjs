@@ -128,6 +128,27 @@ test("the defaults are the keys the game always had", () => {
   assert.equal(Input.keysAreDefault(), true);
 });
 
+test("the pause card's RECOVER CAR raises the same edge R raises (hunt3 7-F3)", () => {
+  // Touch had no path to recoverPressed: only R, the pad and the paired phone.
+  const { Input, key } = boot();
+  key("KeyR", true); key("KeyR", false);
+  assert.equal(Input.consumeRecover(), true, "R: the baseline edge");
+  assert.equal(typeof Input.requestRecover, "function", "Input exposes the touch path");
+  Input.requestRecover();
+  assert.equal(Input.consumeRecover(), true, "RECOVER CAR raises it");
+  assert.equal(Input.consumeRecover(), false, "an edge: consumed once");
+  Input.requestRecover();
+  Input.clearEdges();
+  assert.equal(Input.consumeRecover(), false, "clearEdges drops it like R's (paused frames, lights-out)");
+  // The pause card's RACE TOOLS tray gets the tile (built in game.js, as
+  // replay-buf.js builds REPLAY, so the shell's node count holds).
+  const shell = read("index.html");
+  assert.match(shell, /<nav id="pm-quick-doors"[\s\S]*?<details id="pm-checkpoint">/, "the tray and its REWIND tile exist");
+  const game = read("js/game.js");
+  assert.match(game, /\$\("pm-quick-doors"\)\.insertBefore\(Object\.assign\(document\.createElement\("button"\), \{ id: "pm-recover", type: "button", textContent: "RECOVER CAR", onclick: \(\) => \{ setPaused\(false\); Input\.requestRecover\(\); \} \}\), \$\("pm-checkpoint"\)\)/,
+    "RECOVER CAR resumes, then raises the edge game.js's consumeRecover gate reads");
+});
+
 test("a rebind moves the action to the new key and the old key stops answering", () => {
   const { Input, key } = boot();
   key("Space", true); assert.equal(Input.consumeBoostToggle(), true, "Space boosts by default");
@@ -368,7 +389,8 @@ test("Input.activeInputSource follows real activity, not connected-device presen
 // A DOM just deep enough for KeyBinds.create: elements by id with hidden,
 // textContent and children; createElement for the rows.
 // `disk`, when given, backs the store (reads and writes land in it).
-function bootUi(desktop, helpSlots = {}, disk = null) {
+// `pre(sb)` adds globals the module reads at create() time (SettingsNav).
+function bootUi(desktop, helpSlots = {}, disk = null, pre = null) {
   const { Input, key, sb, fire } = boot();
   const nodes = {};
   const mk = (tag = "div") => {
@@ -392,6 +414,7 @@ function bootUi(desktop, helpSlots = {}, disk = null) {
   sb.addEventListener = (t, f) => { (winListeners[t] ||= []).push(f); };
   sb.removeEventListener = (t, f) => { const l = winListeners[t] || []; const i = l.indexOf(f); if (i >= 0) l.splice(i, 1); };
   sb.GameAudio = null;
+  if (pre) pre(sb);
   sb.setTimeout = (f) => { f(); return 0; };   // the reveal defers past the dispatch; here it just runs
   vm.runInContext(read("js/ui/key-binds.js"), sb.__ctx || (sb.__ctx = vm.createContext(sb)), { filename: "js/ui/key-binds.js" });
   const KeyBinds = vm.runInContext("KeyBinds", sb.__ctx);
@@ -550,6 +573,29 @@ test("the wheel wizard drops a stored rest offset when the steering axis moves",
   assert.equal(disk.padAxes.steer, 1, "the wizard finished");
   assert.equal(Input.padRest(), 0, "the old axis's offset is not carried over");
   assert.equal(disk.padRest, 0, "…and not stored");
+});
+
+test("leaving the CONTROLS page aborts the wheel wizard via SettingsNav.onLeave (hunt3 1b-F1)", () => {
+  // SettingsNav.onLeave shipped (#1309/#1320) with no subscriber: BACK from
+  // CONTROLS left the wizard zeroing the pad and waiting to save padAxes.
+  let leave = null;
+  const { Input, $, fire, sb } = bootUi(true, {}, {}, (g) => { g.SettingsNav = { onLeave: (fn) => { leave = fn; } }; });
+  assert.equal(typeof leave, "function", "key-binds subscribes to the page-leave hook");
+  const { press } = fakePad(sb, fire);
+  $("pm-pad-wheel").onclick();
+  assert.equal($("pm-pad-wheel").textContent, "CANCEL");
+  leave("display");
+  assert.equal($("pm-pad-wheel").textContent, "CANCEL", "another page hiding is not the CONTROLS page");
+  leave("controls");
+  assert.equal($("pm-pad-wheel").textContent, "SET UP A WHEEL", "BACK from CONTROLS stops the wizard");
+  press(7, 1);
+  Input.poll();
+  assert.equal(Input.debugState().pad.throttle, true, "the pad drives again");
+});
+
+test("without SettingsNav.onLeave KeyBinds.create still boots", () => {
+  assert.doesNotThrow(() => bootUi(true, {}, {}, (g) => { g.SettingsNav = {}; }));
+  assert.doesNotThrow(() => bootUi(true));
 });
 
 test("CONTROLLER RESET clears wheel axes and stick rest, not only the button map", () => {
@@ -717,7 +763,47 @@ test("D-pad Left/Right on a focused <select> wraps past disabled options and fir
   assert.equal(keys.pop().key, "ArrowDown", "the cross-axis arrow is the plain synthetic keydown MenuNav walks on");
 });
 
-test("D-pad Left/Right on a focused slider steps by its step within min/max; a button gets the plain arrow", () => {
+test("D-pad Left/Right on a wrap:false <select> (LAPS) stops at its ends like the row chevrons", () => {
+  const { Input, sb, fire, navOpen } = boot();
+  const { press, release } = fakePad(sb, fire);
+  navOpen.on = true;
+  const events = [];
+  const sel = { tagName: "SELECT", disabled: false, _srLive: { wrap: false },
+    options: [{ disabled: false }, { disabled: false }, { disabled: false }], selectedIndex: 0,
+    dispatchEvent: (e) => { events.push(e.type); return true; } };
+  sb.document.activeElement = sel;
+  press(14); Input.poll(); release(14); Input.poll();         // D-pad left at the first option
+  assert.equal(sel.selectedIndex, 0, "no wrap from 3 LAPS to FULL");
+  assert.deepEqual(events, [], "…and no change fires for the no-op");
+  sel.selectedIndex = 2;
+  press(15); Input.poll(); release(15); Input.poll();         // right at the last
+  assert.equal(sel.selectedIndex, 2, "no wrap from FULL back to 3 LAPS");
+  press(14); Input.poll(); release(14); Input.poll();
+  assert.equal(sel.selectedIndex, 1, "inside the list it still steps");
+  sel._srLive = { wrap: true }; sel.selectedIndex = 0;
+  press(14); Input.poll(); release(14); Input.poll();
+  assert.equal(sel.selectedIndex, 2, "an ordinary row still wraps");
+});
+
+test("D-pad on UI SIZE (40–200, step 0.25) moves a visible amount per press, on the step grid", () => {
+  const { Input, sb, fire, navOpen } = boot();
+  const { press, release } = fakePad(sb, fire);
+  navOpen.on = true;
+  const rng = { tagName: "INPUT", type: "range", disabled: false, min: "40", max: "200", step: "0.25", value: "100", dispatchEvent: () => true };
+  sb.document.activeElement = rng;
+  press(15); Input.poll(); release(15); Input.poll();
+  assert.ok(+rng.value - 100 >= 4, `one press moved ${+rng.value - 100}, not 0.25 (640 presses end to end)`);
+  assert.equal((+rng.value * 4) % 1, 0, "the value stays on the 0.25 grid");
+  rng.value = "100"; rng.dataset = { padStep: "10" };
+  press(14); Input.poll(); release(14); Input.poll();
+  assert.equal(rng.value, "90", "data-pad-step overrides the 1/40 default");
+  const fine = { tagName: "INPUT", type: "range", disabled: false, min: "0", max: "10", step: "1", value: "5", dispatchEvent: () => true };
+  sb.document.activeElement = fine;
+  press(15); Input.poll(); release(15); Input.poll();
+  assert.equal(fine.value, "6", "a coarse slider never moves less than its own step");
+});
+
+test("D-pad Left/Right on a focused slider steps within min/max; a button gets the plain arrow", () => {
   const { Input, sb, fire, dispatched, navOpen } = boot();
   const { press, release } = fakePad(sb, fire);
   navOpen.on = true;
@@ -730,7 +816,7 @@ test("D-pad Left/Right on a focused slider steps by its step within min/max; a b
   assert.equal(rng.value, "200", "at the end nothing changes");
   assert.deepEqual(events, ["input", "change"], "…and no event fires for a no-op");
   press(14); Input.poll(); release(14); Input.poll();
-  assert.equal(rng.value, "199.75");
+  assert.equal(rng.value, "196", "a pad press covers 1/40 of the 160-wide span");
   assert.equal(dispatched.length, 0);
   sb.document.activeElement = { tagName: "BUTTON", disabled: false };
   press(15); Input.poll(); release(15); Input.poll();

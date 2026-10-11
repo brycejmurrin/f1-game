@@ -153,10 +153,10 @@ never a looser pattern or `| tail` on a live log.
 
 Use `--session <unique-id>` with `who-is-on-it.mjs --claim/--release` on hosts
 without a Claude session variable; do not share a `nosession` identity.
-Subscribe with the host's own tool: Claude Code `subscribe_pr_activity`
-(claude-code-remote MCP), Cursor `subscribe_github_ci` + `subscribe_github_pr`
-(cursor-subscriptions MCP); never call a name the host does not list (skill `session-comms`).
-If those or Monitor/send_later
+Subscribe with the host's own tool: Claude Code `subscribe_pr_activity`, Cursor `subscribe_github_ci` + `subscribe_github_pr`
+(cursor-subscriptions MCP); never call a name the host does not list (skill `session-comms`). Keep one
+timer beside it (`send_later` / `subscribe_timer`) and read CI on every wake:
+Claude's subscription can drop `check_run` completions. If those or Monitor/timers
 are absent, run the watcher as one owned background command with a log, read
 events while doing independent work, and at most one `ci-watch --sha <sha>
 --once` at a checkpoint (no shell-poll loops while subscribed). Record missing
@@ -164,3 +164,21 @@ subscription and reminder capabilities as unverified; do not claim an automation
 was armed.
 Check the active tool catalog with `tools/check/doctor.mjs --catalog <file>`; upstream
 connector availability cannot be fixed by inventing tool results.
+
+## 8. CI wake: `running` with 0 failed is not green
+
+On every CI `system_notification` or native "N checks failing" banner, re-read
+the **current** tip — not the notification commit:
+
+    SHA=$(gh pr view <N> --json headRefOid -q .headRefOid)
+    node tools/ci/ci-watch.mjs --sha "$SHA" --once
+
+- `= ci failed` → triage → fix → push → re-subscribe (never "stale" because the
+  notif SHA ≠ tip).
+- `= ci running` → do **not** claim stale or fixed; stay subscribed or re-arm a
+  ≤15m once-timer. **"0 failed" while running is not green.**
+- Only "stale / no action" when `= ci passed` on that same `headRefOid`, or a
+  proven draft→ready cancel with a live sibling still 0-failed on the same SHA.
+
+Ending the turn on mid-run `0 failed` is how tip reds sit until a human clicks
+Fix with Agent.
