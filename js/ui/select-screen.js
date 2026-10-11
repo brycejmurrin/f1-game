@@ -161,6 +161,9 @@ const vt = (fn) => {
 // Full-screen team picker: the twelve-way team choice. Its ONE host is the
 // garage's TEAM & DRIVER tab — the garage is the one place a team is chosen.
 const teamPicker = () => $("teampicker");
+// After TopModal's mirror (a MutationObserver microtask queued by the `hidden`
+// write) has run showModal()/close(): FIFO, so a later microtask sees its result.
+const afterMirror = (fn) => (typeof queueMicrotask === "function" ? queueMicrotask(fn) : Promise.resolve().then(fn));
 let previewOpenRaf = 0;
 
 function fittedLivery(t) {
@@ -218,7 +221,17 @@ function setTeamPicker(open) {
   Log.info("ui", "Menus.setTeamPicker " + (open ? "open" : "close"));
   if (open) buildTeamPicker();
   teamPicker().hidden = !open;
-  if (open) ScrollFadeRefresh();
+  if (open) {
+    ScrollFadeRefresh();
+    // FOCUS THE CURRENT TEAM, not CLOSE (#tp-close carries the sheet's
+    // autofocus): the keyboard and pad start where the player already is, as
+    // the duel picker does. A microtask, so it runs after TopModal's mirror
+    // has called showModal() (which applies autofocus).
+    afterMirror(() => {
+      const target = els.selTeams.querySelector(".team-tile.active");
+      if (target && !teamPicker().hidden) target.focus();
+    });
+  }
 }
 
 function buildTeamPicker() {
@@ -277,6 +290,14 @@ function buildTeamPicker() {
       // The garage (the one host) repaints its own 3D car for free —
       // getSetupPreviewMesh() is keyed on the team id.
       G.buildSetup();
+      // buildSetup() replaced #cs-team-card, the control that opened this
+      // sheet, so the dialog's close() focus restore aims at a dead node and
+      // lands on <body>. Put focus on the NEW card once the close has run
+      // (TopModal's mirror closes in a microtask queued before this one).
+      afterMirror(() => {
+        const card = $("cs-team-card");
+        if (card && card.isConnected && !card.disabled && teamPicker().hidden) card.focus();
+      });
     };
     els.selTeams.appendChild(b);
   });
@@ -351,12 +372,31 @@ els.selTracks.addEventListener("keydown", (e) => {
   const t = Tracks.LIST[+row.dataset.trackIdx];
   if (!t) return;
   e.preventDefault();
+  // A HELD F is one star: its auto-repeat flipped the favourite back and forth
+  // and re-announced on every repeat.
+  if (e.repeat) return;
   const on = toggleFav(t.id);
   if (G.announce) G.announce(on ? t.name.toUpperCase() + " ♥ FAVOURITE" : t.name.toUpperCase() + " REMOVED FROM FAVOURITES");
   const again = els.selTracks.querySelector('.track-row[data-track-idx="' + row.dataset.trackIdx + '"]')
     || els.selTracks.querySelector(".track-row");
   if (again) again.focus();
 });
+
+// ESCAPE IN THE SEARCH FIELD CLEARS THE SEARCH FIRST. TopModal's Escape
+// (js/ui/modal.js, document/capture) presses #select's BACK door, so with text
+// typed it threw away the whole picker instead of the query. Window CAPTURE,
+// not a listener on the input: document-capture runs before anything at the
+// target, so only window-capture is early enough. An empty field (or an IME
+// composition, where Escape cancels the candidate) lets the key through.
+window.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || e.isComposing || e.defaultPrevented) return;
+  const t = e.target;
+  if (!t || t.id !== "sel-track-search" || !t.value) return;
+  t.value = "";
+  applyTrackSearch("");
+  e.preventDefault();
+  e.stopPropagation();
+}, true);
 
 function applyTrackSearch(value) {
   trackQuery = String(value || "").trim().toLocaleLowerCase();
