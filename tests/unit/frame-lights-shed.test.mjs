@@ -113,3 +113,14 @@ test("a pause, a hitch or a hidden tab does not replay the lamp warm-up; lamps u
   run(10000, other); L.clock.t += 3000;
   assert.ok(lit(other).b < 0.8, "no frame.time: any > 1 s gap is a switch-on, as before");
 });
+
+// R3-RENDER-5 used a strong `_lampTrack = track`. Day Monza never enters
+// setFrameLights, so after Monaco's always-on tunnel lights that pin kept the
+// previous world reachable (track-switch-memory: visit2 monza aliveTracks
+// ["monaco","monza"]). The holder must be a WeakRef.
+test("setFrameLights remembers the world via WeakRef, not a strong track pin", () => {
+  const src = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
+  assert.match(src, /_lampTrackRef\s*=\s*track\s*\?\s*new WeakRef\(track\)\s*:\s*null/);
+  assert.equal(src.includes("_lampTrack = track"), false, "no strong track pin");
+  assert.match(src, /_lampTrackRef\s*&&\s*_lampTrackRef\.deref\(\)/);
+});

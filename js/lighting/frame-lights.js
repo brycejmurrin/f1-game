@@ -181,7 +181,10 @@ let _lampHid = false;
 // paused branch renders nothing), a hidden tab, or a long hitch (render dt is
 // clamped to 1/20 s a frame) all stop frame.time — the floods never went off.
 // Lamps that were unlit while frames kept rendering moved it (R3-RENDER-5).
-let _lampLastRT = -1e9, _lampTrack = null;
+// WeakRef (not a strong track pin): day Monza never enters setFrameLights, so a
+// strong `_lampTrack = monaco` after Monaco's always-on tunnel lights kept that
+// world reachable across the picker switch (track-switch-memory aliveTracks).
+let _lampLastRT = -1e9, _lampTrackRef = null;
 if (typeof document !== "undefined" && document.addEventListener)
   document.addEventListener("visibilitychange", () => { if (document.hidden) _lampHid = true; });
 // Per-lamp hash cache, keyed by the stable source offset (the sin-hash was
@@ -602,13 +605,15 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // were off, so this frame is a fresh switch-on. Per-frame copy only — the
   // baked track records are never touched.
   const rt = Number.isFinite(frame.time) ? frame.time : null;
+  const prevTrack = _lampTrackRef && _lampTrackRef.deref();
   if (tNow - _lampLastT > 1.0) {
-    const lit = rt === null || track !== _lampTrack || !(rt - _lampLastRT <= 1.0);   // a new world, or render ran dark
+    const lit = rt === null || track !== prevTrack || !(rt - _lampLastRT <= 1.0);   // a new world, or render ran dark
     if (!_lampHid && lit) _lampWarmT0 = tNow;
     _S_MAIN.rankSrc = null;
   }
   _lampHid = false;
-  _lampLastT = tNow; _lampLastRT = rt === null ? -1e9 : rt; _lampTrack = track;
+  _lampLastT = tNow; _lampLastRT = rt === null ? -1e9 : rt;
+  _lampTrackRef = track ? new WeakRef(track) : null;
   // Skip sin/hash work when intensity would be unchanged: flicker knob at 0 and
   // warmup fully settled (or warmup knob 0 = instant). Max warmDur is 8×knob.
   const flick = LT.lampFlicker || 0;
