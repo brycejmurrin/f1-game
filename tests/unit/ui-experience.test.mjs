@@ -431,3 +431,26 @@ test("PERF-4: renderHome does no per-frame teardown work while racing with Home 
   G.state = 'menu';
   assert.equal(ui.renderHome(1 / 24), true, "returning to the menu starts Home again");
 });
+
+test('track Home measures the menu pane once per scene/viewport key, not every title frame (bug-hunt 2 P8)', () => {
+  const dom = makeDom();
+  for (const id of ['photo-studio', 'pmsettings', 'pm-panel-appearance', 'carsetup']) dom.byId(id).hidden = true;
+  const panel = dom.byId('menu-buttons');
+  let rects = 0, panes = 0, begun = 0;
+  panel.getBoundingClientRect = () => { rects++; return { left: 900, top: 120, right: 1350, bottom: 780, width: 450, height: 660 }; };
+  const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, innerWidth: 1440, innerHeight: 900,
+    HomeWorld: { create: () => ({ end() {}, active: () => true, wantsTrack: () => true, begin() { begun++; return true; }, needsFrame: () => false, state: () => ({}) }) },
+    GarageExperience: { freePane: () => { panes++; return { left: 0, right: .6, top: 0, bottom: 1 }; } },
+    GameStore: { store: { get: (_key, value) => value, set() {} } }, TitleFx: { mode: () => 'on' },
+    AppearanceStudio: { scene: () => ({ mode: 'track', shot: 'hero', motion: 'still' }), homeCamera: () => 'hero', onSceneChange() {} },
+    addEventListener() {}, setTimeout, clearTimeout, Log: { warn() {} } };
+  sandbox.window = sandbox;
+  const local = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local);
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local);
+  const setupCam = { captureCamera: () => ({}), restoreCamera() {}, beginHome: () => true, endHome() {}, homeState: () => null, renderHome: () => true };
+  const ui = local.api.create({ $: dom.byId, state: 'menu', setupPreviewOn: false }, { setupCam, trackReady: () => true });
+  for (let i = 0; i < 30; i++) ui.renderHome(1 / 60);
+  assert.ok(begun > 0, 'the track Home path ran');
+  assert.ok(rects <= 1 && panes <= 1, `30 title frames measured the pane ${rects}x, allocated ${panes}x`);
+});

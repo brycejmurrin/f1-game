@@ -654,6 +654,8 @@ var RaceRadio = (function () {
       spotter: () => !!(store && store.get && store.get("spotter", false) !== false),
       setSpotter(b) { if (store && store.set) store.set("spotter", !!b); return !!b; },
       trafficBusy: () => !!(spotter && spotter.occupied()),
+      /** Which sides a car is alongside (1 left, 2 right, 3 both): the HUD's visual spotter. */
+      trafficSide: () => (spotter ? spotter.side() : 0),
       debug: () => ({ live, chat, comm, tv: live && tvLive(last), watch: !!watch, t: +t.toFixed(1),
         pending: { eng: Array.from(queue.eng.keys()), tv: Array.from(queue.tv.keys()) },
         facts: last && { pos: last.pos, n: last.n, lap: last.lap, toGo: last.toGo,

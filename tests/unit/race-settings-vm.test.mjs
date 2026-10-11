@@ -19,6 +19,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { fnSource } from "../helpers/fn-source.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import vm from "node:vm";
 
@@ -263,9 +264,8 @@ test("NEXT ROUND clamps the format distance to the next circuit's FULL, and rest
 
 // gridOrderFor() is pure over its closure: lift its source (and gridRule(),
 // which it and the flyby's menu grid share) and bind stubs.
-const GAME = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
 function gridRule(rule, o = {}) {
-  const src = fnSource(GAME, "function gridRule()") + fnSource(GAME, "function gridOrderFor(base)");
+  const src = symbolSource("function gridRule()") + symbolSource("function gridOrderFor(base)");
   const rank = (season, a, b) => (season.pts[b] || 0) - (season.pts[a] || 0) || (a < b ? -1 : 1);
   // A championship reads its OWN rule (champGrid); a one-off reads raceGrid.
   return new Function("isTimeTrial", "isChampionship", "SeasonCal", "raceGrid", "champGrid", "season", "cars", "simRnd", "netPlay", "SportingRegs",
