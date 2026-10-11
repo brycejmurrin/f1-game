@@ -159,29 +159,23 @@ test("id equality: an hwZone without `ease`, 24 of every zone list, and fraction
   const over = C.sanitize(full); over.bridges = over.bridges.concat([{ s: 0.01, halfM: 80, rise: 2 }]);
   assert.throws(() => CD.encodeBytes(over, true), /zones/);
   // (iii) 0.9999995 rounds to the lattice's 1.0 in storage; the code must not turn it into 0.
-  // (A re-sanitize of that 1.0 is CustomTracks' own idempotence — the TODO test below.)
+  // (A re-sanitize of that 1.0 is CustomTracks' own idempotence — the test below.)
   await sameId(CD, C, design({ hwZones: [{ s0: 0.95, s1: EDGE, hw: 6, ease: 0.02 }], bankZones: [{ frac: EDGE, angleDeg: 6, widthM: 80 }],
     elevations: [{ s: EDGE, halfM: 100, rise: 2 }], bridges: [{ s: EDGE, halfM: 120, rise: 3 }] }), "frac ≈ 1", false);
   await sameId(CD, C, design({ elevations: [{ s: 0, halfM: 100, rise: 2 }, { s: 1, halfM: 90, rise: 1 }] }), "frac 0 and 1");
 });
 
-// CustomTracks.sanitize's frac() (js/editor/custom-tracks.js) rounds 0.9999995
-// to 1.0 and KEEPS it, but maps a stored 1.0 to 0 on the next load — so the
-// id of such a design changes between upsert() and load(), share code or not.
-// The fix is there (wrap 65535 → 0 inside frac); TODO until it lands.
-{
-  const { C } = bootEditor();
-  const once = C.sanitize(design({ elevations: [{ s: EDGE, halfM: 100, rise: 2 }] }));
-  const idempotent = C.sanitize(once).id === once.id;
-  test("CustomTracks.sanitize is idempotent at a fraction ≈ 1 (the stored id survives a reload)",
-    { todo: idempotent ? false : "js/editor/custom-tracks.js frac(): wrap a rounded 1.0 to 0" }, async () => {
-      const { CD, C: C2 } = bootEditor();
-      const d = design({ hwZones: [{ s0: 0.95, s1: EDGE, hw: 6, ease: 0.02 }], bankZones: [{ frac: EDGE, angleDeg: 6, widthM: 80 }], elevations: [{ s: EDGE, halfM: 100, rise: 2 }] });
-      const it = C2.sanitize(d);
-      assert.equal(C2.sanitize(it).id, it.id, "sanitize(sanitize(x)) keeps the id");
-      await sameId(CD, C2, d, "frac ≈ 1, re-sanitised");
-    });
-}
+// CustomTracks.sanitize's frac() (js/editor/custom-tracks.js) must wrap a
+// fraction that rounds to 1.0 to 0 (`% 65535`); without it a stored 1.0 maps to
+// 0 on the next load, so the id of such a design changes between upsert() and
+// load(), share code or not. Strict: a regression fails here, never a TODO.
+test("CustomTracks.sanitize is idempotent at a fraction ≈ 1 (the stored id survives a reload)", async () => {
+  const { CD, C } = bootEditor();
+  const d = design({ hwZones: [{ s0: 0.95, s1: EDGE, hw: 6, ease: 0.02 }], bankZones: [{ frac: EDGE, angleDeg: 6, widthM: 80 }], elevations: [{ s: EDGE, halfM: 100, rise: 2 }] });
+  const it = C.sanitize(d);
+  assert.equal(C.sanitize(it).id, it.id, "sanitize(sanitize(x)) keeps the id");
+  await sameId(CD, C, d, "frac ≈ 1, re-sanitised");
+});
 
 test("fromHash: a malformed %-escape is null, not a URIError", () => {
   const { CD } = bootEditor();
