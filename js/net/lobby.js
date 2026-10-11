@@ -628,8 +628,8 @@ const NetLobby = (function () {
     // peerId -> profile, and peerId -> ready. A guest's one peer is the host,
     // filed under PEER_ONE; a host files each guest under its minted "gN" id.
     const PEER_ONE = "peer";
-    const HELLO_RATE = 5, EVENT_WINDOW_MS = 1000;   // per connection, per event
-    const QUALI_RATE = 12;                          // QUALI + QLIVE together, per connection
+    const HELLO_RATE = 5, EVENT_WINDOW_MS = NetPlay.EVENT_WINDOW_MS;   // per connection, per event
+    const QUALI_RATE = NetPlay.QUALI_RATE;          // QUALI + QLIVE together, per connection
     const QABORT = "qabort";   // guest→host "left quali sheet" (lobby-local until netplay owns it)
     const QGO = "qgo";         // host→guest "quali is over, I am starting the race" (additive: old clients ignore the type)
     let qualiAborted = false;  // this guest backed out of friend quali and is waiting in the room for the host

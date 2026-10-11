@@ -39,7 +39,7 @@ on:
         type: choice
         options: [llvmpipe, swiftshader]
       workers:
-        description: "Playwright workers per shard; empty means 1 (a runner has 4 vCPUs: render's own --workers=4 starved llvmpipe into 60 s capture timeouts)"
+        description: "Playwright workers per shard; empty = plan default (1 for render-heavy groups, 2 for headless-ish on llvmpipe)"
         required: false
         default: ""
         type: string
@@ -63,6 +63,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
+      workers: ${{ steps.plan.outputs.workers }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -70,12 +71,15 @@ jobs:
       # The group must name a real script: an input is text from whoever
       # dispatched, so it goes through env (never interpolated into the shell)
       # and is checked against package.json before any runner is spent.
+      # workers= is GL+group aware (tools/lib/browser-workers.mjs) when the
+      # input is empty — render-heavy stays at 1 (2026-09-30 capture timeouts).
       - name: Plan shards
         id: plan
         env:
           GROUP: ${{ inputs.group }}
           SHARDS: ${{ inputs.shards }}
           WORKERS: ${{ inputs.workers }}
+          GL: ${{ inputs.gl }}
         run: node tools/ci/remote-group.mjs --plan >> "$GITHUB_OUTPUT"
 
   group:
@@ -92,6 +96,9 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      # Cached Chromium (not the Playwright Docker image): restore ≈ install on
+      # Linux, and Mesa/Xvfb still need the host runner — see
+      # docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md §Docker.
       - name: Playwright Chromium (cached)
         uses: ./.github/actions/playwright-chromium
       - name: Mesa llvmpipe + Xvfb
@@ -101,33 +108,26 @@ jobs:
       - name: Run the group's shard (llvmpipe)
         if: inputs.gl != 'swiftshader'
         env:
-          APEX_WORKERS: 1
+          APEX_WORKERS: ${{ needs.plan.outputs.workers }}
           APEX_FAIL_ON_FLAKY: 1
           APEX_WITH_TWINNED: 1
           APEX_GL: llvmpipe
           LIBGL_ALWAYS_SOFTWARE: 1
           GROUP: ${{ inputs.group }}
           SHARD: ${{ matrix.shard }}/${{ inputs.shards }}
-          # Default 1, like APEX_WORKERS above: render's script pins --workers=4,
-          # which on a 4-vCPU runner timed out image-grade-visual "blacks" 3/3;
-          # at 1 worker it passed first try, twice
-          # (docs/notes/TESTING-FIELD-NOTES.md 2026-09-30).
-          WORKERS: ${{ inputs.workers || '1' }}
+          # Plan step resolves empty input → 1 (render-heavy) or 2 (headless-ish).
+          WORKERS: ${{ needs.plan.outputs.workers }}
         # A later --workers overrides the group script's own (last flag wins).
         run: npm run "test:${GROUP}" -- --timeout=900000 "--shard=${SHARD}" ${WORKERS:+"--workers=$WORKERS"}
       - name: Run the group's shard (SwiftShader)
         if: inputs.gl == 'swiftshader'
         env:
-          APEX_WORKERS: 1
+          APEX_WORKERS: ${{ needs.plan.outputs.workers }}
           APEX_FAIL_ON_FLAKY: 1
           APEX_WITH_TWINNED: 1
           GROUP: ${{ inputs.group }}
           SHARD: ${{ matrix.shard }}/${{ inputs.shards }}
-          # Default 1, like APEX_WORKERS above: render's script pins --workers=4,
-          # which on a 4-vCPU runner timed out image-grade-visual "blacks" 3/3;
-          # at 1 worker it passed first try, twice
-          # (docs/notes/TESTING-FIELD-NOTES.md 2026-09-30).
-          WORKERS: ${{ inputs.workers || '1' }}
+          WORKERS: ${{ needs.plan.outputs.workers }}
         # A later --workers overrides the group script's own (last flag wins).
         run: npm run "test:${GROUP}" -- --timeout=900000 "--shard=${SHARD}" ${WORKERS:+"--workers=$WORKERS"}
       - name: Failure artifacts

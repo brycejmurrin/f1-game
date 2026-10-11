@@ -186,7 +186,8 @@ test.describe("Garage — TEAM tab owns team, driver and MY TEAM", () => {
   test("a driver chip stores the driver", async ({ page }) => {
     await openTeamTab(page);
     const chips = await page.locator("#cs-driver .sel-chip").count();
-    test.skip(chips < 2, "team has a single driver");
+    // Every team races two drivers: fewer chips is a regression, not a skip (round-3 8-F5).
+    expect(chips, "the TEAM tab shows one chip per driver").toBeGreaterThanOrEqual(2);
     await page.locator("#cs-driver .sel-chip").nth(1).click();
     expect(await page.evaluate(() => localStorage.getItem("apex26.driver"))).toBe("1");
     await expect(page.locator("#cs-driver .sel-chip").nth(1)).toHaveClass(/active/);
