@@ -66,7 +66,19 @@ const TitleMenu = (function () {
       const careerBack = change.keys.some((k) => k === "careerSlot" || k.indexOf("career.") === 0);
       if (careerBack) refresh();
       const seasonBack = change.keys.indexOf("season") !== -1;
-      if (seasonBack && !G.seasonMode && !(Career.inCareer && Career.inCareer())) G.season = SeasonCal.load();
+      // Boot-only season hydrate. entrySettings() (game.js) is snapshotted when
+      // introGarage/startRace arms; assigning G.season mid-flight changes that
+      // string so live() fails and afterGarageOut titleIfBare() returns to the
+      // menu — DAILY garage-out-before-card timed out that way (CI tip 2f81ef993).
+      if (seasonBack && !G.seasonMode && !(Career.inCareer && Career.inCareer())) {
+        const doc = typeof document !== "undefined" ? document : null;
+        const rs = doc && doc.getElementById("race-settings");
+        const sel = doc && doc.getElementById("select");
+        const L = doc && doc.getElementById("loading");
+        const entering = (rs && !rs.hidden) || (sel && !sel.hidden)
+          || (L && (!L.hidden || L.dataset.phase));
+        if (!entering) G.season = SeasonCal.load();
+      }
       if (seasonBack) G.refreshCareerButton();
     });
 
