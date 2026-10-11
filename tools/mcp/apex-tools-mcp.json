@@ -27,6 +27,7 @@
     "apex_pick_tests",
     "apex_bump_cache_check",
     "apex_status",
+    "apex_catalog",
     "apex_doctor",
     "apex_eval",
     "apex_shot",
