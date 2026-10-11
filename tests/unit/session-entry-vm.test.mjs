@@ -48,6 +48,23 @@ test("a synchronous scenery preparation failure releases the pending latch", asy
   assert.equal(await p2, true);
 });
 
+test("recover runs for changed settings and for a throw, never for a superseded request", async () => {
+  const entry = vm.runInContext("SessionEntry", g.ctx).create();
+  const seen = [];
+  const recover = (e) => seen.push(e ? "error" : "recover");
+  let settings = "a";
+  const stale = entry.begin("race", "a", () => Promise.resolve(), () => "committed", () => settings === "a", recover);
+  const newer = entry.begin("race", "b", () => Promise.resolve(), () => "committed", () => true, recover);
+  assert.deepEqual([(await stale).reason, await newer], ["superseded", "committed"]);
+  assert.equal(seen.length, 0, "a superseded start leaves the screen to the newer one");
+  const changed = entry.begin("race", "a", () => { settings = "b"; }, () => "committed", () => settings === "a", recover);
+  const out = await changed;
+  assert.deepEqual([out.kind, out.reason], ["canceled", "settings changed"]);
+  assert.equal(seen.join(), "recover", "changed settings: recover (startRace quits to the menu, it never hands an old race back)");
+  await assert.rejects(entry.begin("race", "c", () => { throw new Error("boom"); }, () => true, () => true, recover), /boom/);
+  assert.equal(seen.join(), "recover,error");
+});
+
 test("quit invalidates a race whose scenery script has not arrived", async () => {
   g.G.quitToMenu(); select("bahrain");
   const h = holdScenery("bahrain");
@@ -232,4 +249,23 @@ test("commit receives a current() check that goes false after cancel()", async (
   assert.equal(whileCurrent, true, "true while this request is the live one");
   entry.cancel();
   assert.equal(seen(), false, "false once cancel() bumps the generation");
+});
+
+test("a restart that finds the season finished tears the race chrome down to the title (it set state 'menu' alone)", async () => {
+  const { document } = g.sandbox;
+  g.G.quitToMenu(); select("monza");
+  await g.G.startRace();
+  assert.equal(g.G.state, "count");
+  assert.equal(g.G.els.hud.hidden, false, "the race HUD is up");
+  assert.ok(document.body.classList.contains("in-race"));
+  g.G.seasonMode = true;
+  g.G.season = { round: g.sandbox.SeasonCal.rounds(), stage: "race" };   // a completed season: readable, never raceable
+  assert.equal(await g.G.startRace(), false);
+  assert.equal(g.G.state, "menu");
+  assert.equal(g.G.els.hud.hidden, true, "no HUD over the menu");
+  assert.equal(g.G.els.lights.hidden, true);
+  assert.equal(g.G.els.pausebtn.hidden, true);
+  assert.equal(document.body.classList.contains("in-race"), false, "no in-race class");
+  assert.equal(g.G.els.overlay.hidden, false, "the title is up");
+  g.G.quitToMenu();
 });
