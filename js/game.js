@@ -3745,10 +3745,24 @@ function flybyGridOrder() {
 // and fly. The race reuses this build; its outgoing shot never waits for shaders.
 let _introKey = "", _introRun = 0, _introSkip = 0;
 function cancelIntro() { if (_studio) studioClose(_studio.n); _introRun++; _introKey = ""; _introSkip = 0; sheetRelease(false); }
+// HIDDEN TIME DOES NOT COUNT against the intro's safety caps. The shader warm is spent in present()
+// and the drive-out advances only on rendered frames, both stopped with requestAnimationFrame in a
+// hidden tab, while the caps ran on the wall clock: tap START, switch apps for 30 s during the cold
+// build and the intro threw "Shader preparation timed out" on return (quitToMenu + PREPARATION
+// FAILED), or cut the drive-out short (bug-hunt 3, 2026-10-10). introNow() freezes while hidden.
+// The ledger is kept by the callers' own polling (every cap loop awaits a slice or a timer, which a hidden
+// tab still fires at ≥ 1 Hz), not by a visibilitychange listener: the intro is sliced into node sandboxes.
+const _hidden = { ms: 0, at: 0 };   // ms: hidden time spent so far; at: when the current hide began (0 = visible)
+function introNow() {
+  const now = performance.now(), hid = typeof document !== "undefined" && !!document.hidden;
+  if (hid && !_hidden.at) _hidden.at = now;
+  else if (!hid && _hidden.at) { _hidden.ms += now - _hidden.at; _hidden.at = 0; }
+  return now - _hidden.ms - (_hidden.at ? now - _hidden.at : 0);
+}
 async function awaitIntroWarm(current) {
-  const at = performance.now();
+  const at = introNow();
   while (current() && gfx.warming && gfx.warming()) {
-    if (performance.now() - at >= 30000) throw new Error("Shader preparation timed out");
+    if (introNow() - at >= 30000) throw new Error("Shader preparation timed out");
     await menuSlice();
   }
   return current();
@@ -3788,7 +3802,7 @@ function studioOpen(n, info) {
   const off = (real && (real.watch || real.startLap > 1)) || headlessMode || document.hidden;
   const ms = off ? 0 : setupCam.startDriveOut();
   if (ms > 0) {
-    const at = performance.now();
+    const at = introNow();
     // openAt is never reset: absolute hang ceiling = prep + 3× drive from studioOpen.
     _studio = { at, openAt: at, ms: Math.max(1, ms), n, info, cardUp: true };
     setupPreviewOn = true;
@@ -3806,7 +3820,7 @@ function studioShown() {
   const soft = gfx.softPresentState && gfx.softPresentState();
   if (soft && soft.shownGen < soft.sceneGen) return;   // WGX's first readback may belong to the previous scene
   const n = _studio.n;
-  _studio.cardUp = false; _studio.at = performance.now();
+  _studio.cardUp = false; _studio.at = introNow();
   sheetRelease(true);
   loadingScreen.garage(_studio.info, () => studioSkip(n));
 }
@@ -3829,8 +3843,8 @@ async function studioDone(live, n) {
   while (_studio && _studio.n === n && !_studio.skip && live() && (_studio.cardUp || setupCam.driveOutLeft() > 0)) {
     if (_studio.error) throw _studio.error;
     const driveCap = Math.max(_studio.ms, _studio.ms * 3);
-    const elapsed = performance.now() - _studio.at;
-    const sinceOpen = performance.now() - (_studio.openAt || _studio.at);
+    const elapsed = introNow() - _studio.at;
+    const sinceOpen = introNow() - (_studio.openAt || _studio.at);
     const cap = _studio.cardUp ? 30000 : driveCap;
     if (elapsed >= cap || sinceOpen >= 30000 + driveCap) {
       if (_studio.cardUp) throw new Error("Garage preparation timed out");
@@ -3883,9 +3897,9 @@ async function introPrepare(live, key, info, n, cold) {
     })(), (async () => {
       await Promise.resolve();
       // Same resumable bake as menuLampBake; smaller slices preserve input responsiveness.
-      const lampAt = Date.now();
+      const lampAt = introNow();
       while (lamps && current() && !lamps(3)) {
-        if (Date.now() - lampAt >= 30000) break;   // never hang the Start Race sequence on a stuck bake
+        if (introNow() - lampAt >= 30000) break;   // never hang the Start Race sequence on a stuck bake (hidden time excluded)
         await new Promise((r) => setTimeout(r, 8));
       }
     })()]);
@@ -4297,7 +4311,7 @@ function syncRotateBlocker(moveFocus) {
   // rotateBlockMql as well as the box: a DOM with no stylesheet (the node
   // game-vm harness) reads every display as shown, and would pause every race.
   if (active && rotateBlockMql.matches && !paused && (state === "race" || state === "count") && !netPlay.active()) setPaused(true, "rotate-block");
-  if (paused) els.pausemenu.hidden = active || photoMode;
+  if (paused && !(garageReturn === "pit" && !$("carsetup").hidden)) els.pausemenu.hidden = active || photoMode;   // the pit garage holds its own pause: no card over it (setPaused)
   if (active && moveFocus) requestAnimationFrame(() => {
     const first = $("rotate-controls"); if (first && getComputedStyle(box).display !== "none") first.focus();
   }); return active;
@@ -4305,6 +4319,8 @@ function syncRotateBlocker(moveFocus) {
 if (rotateBlockMql.addEventListener) rotateBlockMql.addEventListener("change", () => syncRotateBlocker(true));
 else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotateBlocker(true));
 
+// A quit from under the pit garage (WORK ON CAR, then any path to quitToMenu) takes the garage down
+// with the race: left open, the title showed RETURN TO RACE, whose closePitWork charged a dead race.
 function quitToMenu() {
   Ghost.flush(); resultsCam.reset(); replayBuf.clear(); cancelIntro();
   if (typeof InputGhost !== "undefined") InputGhost.flush();
@@ -4314,6 +4330,7 @@ function quitToMenu() {
   if (announcer.stop) announcer.stop();   // results commentary must not outlive the race
   shake = 0; hitStop = 0;
   PerfGov.sentinelArm(false); netPlay.stop("local"); hideCamPicker(); Input.unlockLandscape();   // inactive: forgets a stale disconnect reason
+  if (garageReturn === "pit") { setupCam.cancelArrival(); $("carsetup").hidden = true; setupPreviewOn = false; pitWorkSpec = null; garageReturn = "select"; }   // the pit garage goes down with the race (comment above)
   if (typeof ExtraRigs !== "undefined" && ExtraRigs.resetAuto) ExtraRigs.resetAuto();   // the auto-cut state is the race's, not the menu's
   if (qualiField) { cars = qualiField; qualiField = null; }   // a mid-quali quit: the 1-car trim is not the menu's field
   const forgetGp = !isChampionship() && !!season && season.qualiMode === "gp";   // read before setFlow: a one-off weekend ends here (RACE AGAIN never passes)
@@ -4882,20 +4899,20 @@ function updateCar(c, dt, ranked) {
   let deploy = 0;
   if (c.isPlayer && Input.consumeBoostToggle()) c.boostOn = !c.boostOn;   // BOOST is a toggle
   // Short-circuit empty battery before the LUT sample AiDrive would ignore anyway.
-  let aiWantsBoost = false;
-  if (!c.human && c.energy > 0.02) {
+  // pitHeld: lane limiter only (OT earn / flaps also gate on it). ersHeld adds box + caution for BOOST.
+  const pitHeld = pits.held(c);
+  const ersHeld = pitHeld || cautionV >= 0 || c.pitState === "box"; let aiWantsBoost = false;   // no BOOST at the limiter, in the box or under a caution cap: it only hit the cap and drained ~0.23/s
+  if (!c.human && c.energy > 0.02 && !ersHeld) {
     _aiBoost.traits = aiT; _aiBoost.energy = c.energy; _aiBoost.otActive = c.otT > 0;
     _aiBoost.kAhead60 = Tracks.curvature(track, wrapS(c.s + 60));
     _aiBoost.towCar = !!towCar; _aiBoost.towGap = towGap; _aiBoost.towSpeed = towCar ? towCar._snapSpeed : 0; _aiBoost.speed = c.speed;
     _aiBoost.chaser = !!chaser; _aiBoost.chaserGap = chaserGap; _aiBoost.chaserSpeed = chaser ? chaser._snapSpeed : 0;
     _aiBoost.team = c.team; _aiBoost.seat = c.seat; _aiBoost.stats = c.houseStats;
-    _aiBoost.ersDeploy = c.ersDeploy; _aiBoost.ersRegen = c.ersRegen; _aiBoost.vTop = vTop();
+    _aiBoost.ersDeploy = c.ersDeploy; _aiBoost.ersRegen = c.ersRegen; _aiBoost.vTop = vTop();   // closing rates ride the pace scale
     aiWantsBoost = AiDrive.wantBoost(_aiBoost);
   }
-  // The pit limiter holds the car from the entry line to the exit (pits.held): no BOOST drain in the lane either.
-  const pitHeld = pits.held(c);
-  const wantBoost = !pitHeld && ((c.human ? c.boostOn : aiWantsBoost)
-    || c.otT > 0);   // OVERTAKE deploys on its own — even with BOOST toggled off
+  const wantBoost = ((c.human ? c.boostOn : aiWantsBoost) && !ersHeld)
+    || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
   // OVERTAKE IS FREE. Its push does not come out of the battery, so an OT burst
   // costs nothing, fires on a flat ERS, and never competes with BOOST for charge.
   // It is already rationed by its own 0.5 MJ allowance per earned lap, which is what
@@ -5105,7 +5122,7 @@ function updateCar(c, dt, ranked) {
     // SQUEEZED (AiDrive.squeezeEase / squeezeBrake): touching a car we must
     // yield to, with no lane to yield into — back out under its speed, brake
     // dabbed, until we are clear. The pass latch below reads it too.
-    if (alongO && c.sbsT > AiDrive.sbsCommitT() && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5) vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.sbsEase());   // COMMIT OR YIELD: tuck in behind
+    if (alongO && c.sbsT > AiDrive.sbsCommitT() && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vTop() / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.sbsEase());   // COMMIT OR YIELD: tuck in behind
     squeezed = (c.contactT || 0) > 0 && !!alongO && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, c.kTurn) &&
         (alongDx <= 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) < AiDrive.minLatGap(hw, !!track.street);
     if (squeezed) {
@@ -8811,6 +8828,7 @@ function closePitWork() {
   const added = changed ? pits.addWork(player) : 0;
   if (added > 0 && typeof announce === "function") announce("WORK DONE — +" + added + "s", 1.8, "race");
   paused = false;
+  if (!netPlay.active()) holdRaceWake();   // a hidden tab under the garage may have released the screen lock; RETURN TO RACE holds it again
   lastFrame = performance.now();       // or the frozen minutes arrive as one dt
   if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); if (isRaining()) GameAudio.startRain(); }
 }
@@ -8927,6 +8945,11 @@ function setPaused(p, why) {
   // (hidden tab) must not run the race UNDER the garage, where the box timer
   // expires and DONE then charges nothing. Its own DONE/BACK are the only way out.
   if (!p && garageReturn === "pit" && !$("carsetup").hidden) { els.pausemenu.hidden = true; return; }
+  // …AND ON THE WAY IN. A hidden tab, an iOS call, a desktop blur or a rotate while in WORK ON CAR
+  // ran the full pause: the card stacked over the garage, QUIT then left #carsetup open on the title
+  // (RETURN TO RACE charged a dead race and droned the engine), RESUME + RETURN TO RACE ran the race
+  // with the wake lock released (bug-hunt 3, 2026-10-10). The garage is the screen; it stays paused.
+  if (p && garageReturn === "pit" && !$("carsetup").hidden) { paused = true; return; }
   if (paused !== !!p) Log.info("game", "Race " + (p ? "paused" : "resumed") + " why=" + (why || "button") + " state=" + state + " raceT=" + raceT.toFixed(1));
   paused = p; GameAudio.resetReplayScrub(); replayBuf.onPause(!!p); // REPLAY overlay while paused
   if (!netPlay.active()) { if (p) dropRaceWake(); else holdRaceWake(); UiExperience.resumeArm(G, !p && why !== "restart" && state === "race" && !realRace.isWatch()); }   // a paused screen may sleep; a networked race runs on under the card, and never holds for a resume countdown

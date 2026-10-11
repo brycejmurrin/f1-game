@@ -23,9 +23,8 @@ import { carvedFromGame, gameSource, symbolSource } from "../helpers/game-source
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 // The count of quoted `game.js` path literals under tests/ (the hunter's metric:
 // `rg -c "game\.js['\"]" tests`), less the helper that is the sanctioned reader.
-// 2026-10-11: ship #1405 / #1313 tip at 330 (hunt2-b migrated car-fields-vm +
-// game-round2-vm). #1389 sync onto that tip measures 307 — keep ship ceiling.
-const CEILING = 330;
+// 2026-10-11: after #1384/#1438 ship sync into #1389, measured 308.
+const CEILING = 308;
 const EXEMPT = new Set(["tests/helpers/game-source.mjs", "tests/unit/source-pin-hygiene.test.mjs"]);
 const RAW = /game\.js['"]/g;
 
