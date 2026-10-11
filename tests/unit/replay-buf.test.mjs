@@ -10,6 +10,7 @@ import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
@@ -216,7 +217,7 @@ test("scrubbed poses render wholly at recorded positions and yaw for every rende
   const before = field.map(c => ({ ...c }));
   // Use the game's actual render helpers: a camera-only assertion would miss
   // the body mixing the historical pose with its live interpolation endpoints.
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8"), render = vm.createContext({ _rp: {}, renderAlpha: 0, Math });
+  const game = gameSource(), render = vm.createContext({ _rp: {}, renderAlpha: 0, Math });
   for (const name of ["renderPosOf", "yawVisInterp", "headInterp"]) {
     const start = game.indexOf("function " + name + "("); assert.ok(start >= 0);
     vm.runInContext(game.slice(start, game.indexOf("\n}", start) + 2), render);
@@ -265,7 +266,7 @@ test("retirement edge auto-tags; jumpLastTag seeks; scrubbing blocks settle path
 
   // Contract: endRace / career score must refuse while scrubbing (source pin —
   // a settle spy would need the full game boot; the call sites are the gate).
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   assert.match(game, /replayBuf\.isScrubbing\(\)/);
   assert.match(game, /replayBuf\.onRaceStart|replayBuf\.reset/);
   assert.match(game, /Career\.scoreRound/);
@@ -340,7 +341,7 @@ async function bootSoloRaceForScrubAudio() {
 
 test("the replay ring is not a G expando: game.js never assigns G.replayBuf (1a-F3)", () => {
   // The façade is DECLARED, not grown by assignment (an Object.seal(G) would throw at boot); tests reach the ring above.
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   assert.ok(!/\bG\.replayBuf\s*=(?!=)/.test(game), "G.replayBuf = … is an undeclared façade member");
 });
 

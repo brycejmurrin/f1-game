@@ -38,6 +38,7 @@ import vm from "node:vm";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -297,8 +298,7 @@ test("startRaceBody aborts to the menu when the race-session bundle failed to lo
   // The loader is a closure over game.js and game-vm's onScript hook never sees the shell's scripts, so a behavioural
   // stub of ensureRaceSession is not reachable from here. Pin the guard instead: the boolean is read, and a false
   // stops the loading screen, quits to the menu, tells the player and returns before the stubs can start a race.
-  const { readFileSync } = await import("node:fs");
-  const src = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  const src = gameSource();
   const body = src.slice(src.indexOf("async function startRaceBody()"), src.indexOf("async function startRaceBody()") + 6000);
   assert.match(body, /const sessionOk = await ensureRaceSession\(\);/);
   assert.match(body, /if \(!sessionOk\) \{ loadingScreen\.stop\(\); quitToMenu\(\); announce\("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"\); return false; \}/);
