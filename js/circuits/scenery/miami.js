@@ -187,10 +187,10 @@
       // never extend into the circuit's start sector).
       const buildOverpass = (s) => {
         const k = K(s);
-        const supportGap = 4.0, supportWidth = 3.4, clearance = 10.4;
+        const supportGap = 4.0, supportWidth = 3.4, clearance = 10.8;
         overheadSpan({
           id: `turnpike-overpass-${k}`, frac: s, clearance,
-          thickness: 4.4, depth: 16, supportGap, supportWidth,
+          thickness: 4.0, depth: 16, supportGap, supportWidth,
           color: CONCRETE, required: true,
         });
         // One atomic pier per side, entirely beyond the runoff boundary.
@@ -201,10 +201,9 @@
             center: vadd(a.c, a.u, clearance / 2),
             size: [4.0, clearance, 4.0], basis: bv,
           }, (stage) => {
-            // Shaft tops out at 10.3, INSIDE the 10.0-10.4 cap: at 10.4 its top
-            // shared the cap's top plane and fought (coplanar-audit --overhead).
-            addBox(stage, vadd(a.c, a.u, 5.15), [supportWidth, 10.3, 3.4], CONCRETE, bv);
-            addBox(stage, vadd(a.c, a.u, 10.2), [4.0, 0.4, 4.0], [0.45, 0.45, 0.47], bv);
+            // Pier top ~9.85 m — deck underside at clearance (flicker-gate turnpike underside).
+            addBox(stage, vadd(a.c, a.u, 4.9), [supportWidth, 9.7, 3.4], CONCRETE, bv);
+            addBox(stage, vadd(a.c, a.u, 9.65), [4.0, 0.35, 4.0], [0.45, 0.45, 0.47], bv);
           }, { required: true });
           recordBarrier(s - 0.002, s + 0.002, side, supportGap);
         }
@@ -252,7 +251,7 @@
       // pit-straight edge, so a whole-bowl footprint test rejects every build.
       // Individual prims still go through rejBox; the silhouette is the hero.
       {
-        const a = anchor(K(0.0), 1, 155);
+        const a = anchor(K(0.0), 1, 128);
         const r = a.r, u = a.u, t = a.t;
         const RA = 132, RB = 100;
         const segC = 48;
@@ -331,7 +330,7 @@
         const ty = (typeof terrainYAt === "function" && terrainYAt(a.c[0], a.c[2]));
         const base = [a.c[0], (ty != null ? ty : a.c[1]), a.c[2]];
         modelGroup("miami-hard-rock-neon", {
-          center: vadd(base, a.u, 28), size: [18, 58, 18], basis: bv,
+          center: vadd(base, a.u, 32), size: [20, 62, 20], basis: bv,
         }, (stage) => {
           addCyl(stage, base, 4.2, 8, CONCRETE, 10, bv);
           addCyl(stage, vadd(base, a.u, 8), 3.4, 36, GREYWHITE, 10, bv);
@@ -422,8 +421,8 @@
         });
       }
       // Behind the T1 stand roofs: gap 30 put a low facade through a roof slab.
-      cityFront(0.04, 0.12, 1, 42, {
-        minH: 6, maxH: 14, depth: 14, step: 28,
+      cityFront(0.04, 0.12, 1, 52, {
+        minH: 6, maxH: 12, depth: 11, step: 32,
         palette: SKY_PAL, lit: true, windowCol: WIN_AMBER,
       });
       for (let i = 0; i < 10; i++) palm(K(0.04 + i * 0.006), 1, 14 + (i % 2) * 5, 8 + hash(i) * 2, PALM_GREEN);
@@ -432,8 +431,8 @@
       wall(0.13, 0.19, -1, 3, 1.2, CONCRETE);
       fence(0.13, 0.19,  1, 3.5, 3.5, [0.78, 0.80, 0.82]);
       // Palm tree line behind the fence — gap >= fence dist + canopy radius to avoid clipping
-      forestEdge(0.13, 0.19, 1, 8, {
-        density: 0.5, hMin: 9, hMax: 14,
+      forestEdge(0.13, 0.19, 1, 10, {
+        density: 0.45, hMin: 9, hMax: 14,
         col: PALM_GREEN, col2: PALM_DARK, pineFrac: 0.0,
       });
 
@@ -444,8 +443,8 @@
         palm(K(0.18 + (i % 6) * 0.005), 1, 28 + (i % 3) * 6, 8 + hash(i * 3) * 4,
           (i % 2) ? PALM_DARK : PALM_GREEN);
       }
-      cityFront(0.18, 0.26, -1, 42, {
-        minH: 5, maxH: 12, depth: 12, step: 26,
+      cityFront(0.18, 0.26, -1, 54, {
+        minH: 5, maxH: 10, depth: 10, step: 30,
         palette: [CORAL, PINK, TEAL, [1.0, 0.85, 0.60], GREYWHITE],
         lit: true, windowCol: WIN_AMBER,
       });
@@ -578,7 +577,7 @@
       carPark(0.4860, -1, 23, 1, 12);
       for (let i = 0; i < 10; i++) palm(K(0.43 + i * 0.005), -1, 12 + (i % 2) * 4, 8 + hash(i * 3) * 2, PALM_GREEN);
       carPark(0.47, -1, 60, 4, 18);
-      parkingDeck(0.55, 1, 70, { tiers: 4, w: 34, len: 56 });
+      parkingDeck(0.548, 1, 78, { tiers: 3, w: 28, len: 48 });
 
       {
         const a = anchor(K(0.025), 1, 82);
@@ -768,10 +767,10 @@
       const PASTEL_EXTRA = [
         [0.508, "podium",  [0.95, 0.72, 0.78], 8],
         [0.545, "slab",    [0.55, 0.85, 0.90], 7],
-        [0.580, "setback", [0.98, 0.90, 0.70], 9],
+        [0.592, "setback", [0.98, 0.90, 0.70], 7],
       ];
       for (const [s, kind, wallCol, h] of PASTEL_EXTRA) {
-        building(K(s), 1, 28, 16, h, 14, {
+        building(K(s), 1, 36, 14, h, 12, {
           kind, wall: wallCol, window: GLASS, floor: 3.6,
           lit: true, windowCol: WIN_COOL, neon: 0.4,
           roof: PASTELS[Math.floor(s * 20) % PASTELS.length],
@@ -808,16 +807,16 @@
           endWalls: true,
         });
       }
-      scaffoldStand(0.7626, 0.7774, -1, 20, {
-        rows: 6, tubeCol: [0.72, 0.74, 0.78], deckCol: [0.74, 0.72, 0.66],
+      scaffoldStand(0.758, 0.772, -1, 22, {
+        rows: 5, tubeCol: [0.72, 0.74, 0.78], deckCol: [0.74, 0.72, 0.66],
         bench: [TEAL, WHITE, CORAL], crowd: PASTELS, density: 0.6, legEvery: 1,
       });
       scaffoldStand(0.8376, 0.8524, -1, 20, {
         rows: 5, tubeCol: [0.72, 0.74, 0.78], deckCol: [0.74, 0.72, 0.66],
         bench: [PINK, WHITE, TEAL], crowd: PASTELS, density: 0.55, legEvery: 1,
       });
-      cityFront(0.76, 0.86, -1, 34, {
-        minH: 6, maxH: 14, depth: 14, step: 28,
+      cityFront(0.782, 0.86, -1, 44, {
+        minH: 5, maxH: 11, depth: 10, step: 32,
         palette: SKY_PAL_DUSKGLASS, lit: true, windowCol: WIN_AMBER,
       });
       for (let i = 0; i < 12; i++) {

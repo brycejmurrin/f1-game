@@ -82,6 +82,33 @@ test("ExtraRigs.pickRival falls back to nearest car within FALLBACK_S", () => {
   assert.equal(ExtraRigs.pickRival([player], player), null);
 });
 
+test("ExtraRigs.pickRival: RIVAL LOCK picks the same rival at OVERALL SPEED 0.469 as at pace 1; WATCH keeps real m/s (4-F6)", () => {
+  // Player P between X (22 m ahead) and Y (20 m behind), all at a 12 m/s crawl: at pace 1 neither
+  // gap is a battle (≥ 1 s on the 20 m/s floor) and the fallback frames the nearer car, Y. The same
+  // scene at pace 0.469 must agree: the floor is 20 × vTop()/VMAX, latched by tickPitAuto(G).
+  // k scales the scene (gaps and speeds); pace is the sim's OVERALL SPEED that tickPitAuto latches.
+  const rivalAt = (k, pace, broadcast, watch) => {
+    const { ExtraRigs, ctx } = loadExtraRigs();
+    ctx.PhysicsConsts = { VMAX: 72 };
+    if (broadcast) {
+      vm.runInContext(fs.readFileSync(path.join(root, "js/race/broadcast.js"), "utf8").replace(/^const\b/gm, "var"), ctx);
+    }
+    const car = (code, prog) => ({ code, prog: prog * k, s: prog * k, x: 0, speed: 12 * k, replayRate: watch ? 1 : undefined });
+    const X = car("X", 1022), P = car("P", 1000), Y = car("Y", 980);
+    ExtraRigs.tickPitAuto({ vTop: () => 72 * pace, player: P, camMode: 0 });
+    return ExtraRigs.pickRival([X, P, Y], P).code;
+  };
+  for (const broadcast of [false, true]) {
+    const tag = broadcast ? "Broadcast.battles" : "localBattles";
+    assert.equal(rivalAt(1, 1, broadcast), "Y", tag + ": pace 1 frames the nearer car (no battle)");
+    assert.equal(rivalAt(0.469, 0.469, broadcast), "Y", tag + ": pace 0.469 agrees with pace 1");
+    // WATCH: a real 5.6 m/s crawl 10-11 m apart IS a battle on the bare 20 m/s floor (X, up the
+    // order), whatever OVERALL SPEED the sim was left at — the latched scale must not reach it.
+    assert.equal(rivalAt(0.469, 1, broadcast, true), "X", tag + ": WATCH at sim pace 1");
+    assert.equal(rivalAt(0.469, 0.469, broadcast, true), "X", tag + ": WATCH at sim pace 0.469 ignores the latched scale");
+  }
+});
+
 test("ExtraRigs.solve returns finite eye/tgt/fov for rival, pitwall, drone", () => {
   const { ExtraRigs } = loadExtraRigs();
   const track = { total: 1000, pit: { side: 1 }, def: {} };
@@ -148,4 +175,20 @@ test("ExtraRigs.pitCamAuto persists through GameStore", () => {
 test("drone cornerLead is gated in CamTune.modes", () => {
   const src = fs.readFileSync(path.join(root, "js/camera/offsets.js"), "utf8");
   assert.match(src, /modes:\s*\["chase",\s*"far",\s*"drone"\]/);
+});
+
+// bug-hunt 9.8: pickRival ran every rendered frame in RIVAL mode, allocating a
+// row per car + an array + a sort; the rows are now pooled.
+test("ExtraRigs.pickRival reuses its running-car rows and array across calls", () => {
+  const { ExtraRigs, ctx } = loadExtraRigs();
+  const a = { prog: 100, speed: 50, s: 100, x: 0 };
+  const b = { prog: 80, speed: 50, s: 80, x: 0 };
+  const seen = [];
+  ctx.Broadcast = { battles(cars) { seen.push({ arr: cars, rows: cars.slice() }); return []; } };
+  ExtraRigs.pickRival([a, b], a);
+  ExtraRigs.pickRival([b, a], a);   // different order: still the same pooled rows
+  assert.equal(seen[0].arr, seen[1].arr, "the same running array is reused");
+  assert.ok(seen[1].rows.every((r) => seen[0].rows.includes(r)), "the same row objects are reused");
+  assert.equal(seen[1].arr.length, 2);
+  assert.equal(seen[1].arr[0].key, a, "rows are re-filled and re-sorted (a leads on prog)");
 });

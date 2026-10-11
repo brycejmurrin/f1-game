@@ -33,6 +33,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import vm from "node:vm";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -296,4 +301,321 @@ test("startRaceBody aborts to the menu when the race-session bundle failed to lo
   assert.match(body, /const sessionOk = await ensureRaceSession\(\);/);
   assert.match(body, /if \(!sessionOk\) \{ loadingScreen\.stop\(\); quitToMenu\(\); announce\("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"\); return false; \}/);
   assert.ok(body.indexOf("if (!sessionOk)") < body.indexOf("await ensureAudio()"), "the abort comes before anything starts the race");
+});
+
+// ---- bug-hunt 2026-10-09 (W5 game) --------------------------------------------------------
+
+const portraitPhone = (sandbox) => {   // only the rotate blocker's own query matches; every other query stays inert
+  const noop = () => {};
+  sandbox.matchMedia = (q) => ({ matches: /orientation: portrait/.test(q), media: q, onchange: null, addEventListener: noop, removeEventListener: noop, addListener: noop, removeListener: noop });
+};
+
+test("3.1 a race started on a portrait phone does not start the engine / rain under the rotate blocker", async () => {
+  const g = await createGame({ track: "monza", onSandbox: portraitPhone });
+  try {
+    const G = g.G;
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    const GA = vm.runInContext("GameAudio", g.ctx), seen = [];
+    for (const k of ["startEngine", "startRain"]) { const f = GA[k]; GA[k] = function (...a) { seen.push(k + ":" + (G.paused ? "paused" : "live")); return f.apply(this, a); }; }
+    G.raceWeather = "rain";
+    await G.startRace(); g.apex.headless(true);
+    assert.equal(G.state, "count");
+    assert.equal(G.paused, true, "the rotate blocker paused the race");
+    assert.ok(!seen.some((e) => /:paused$/.test(e)), `engine / rain were started while paused: ${seen}`);
+  } finally { g.close(); }
+});
+
+test("3.2 a real race (Data Hub JUMP IN) is never diverted into a qualifying sheet when GRID = QUALIFYING LAP", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G;
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    G.raceGrid = "quali";
+    vm.runInContext(readFileSync(join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx);
+    const Data = vm.runInContext("DataRealRace", g.ctx), Teams = vm.runInContext("Teams", g.ctx);
+    const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
+    const fixture = JSON.parse(readFileSync(join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
+    const script = Data.build(fixture, (name) => Teams.LIST.find((t) => t.name === name) || null, Tracks.LIST);
+    Real.launch(script, { seat: "STR" });
+    await g.settle(() => G.track?.def?.id === "baku" && ["count", "race"].includes(G.state), 8000);
+    assert.equal(Real.status().active, true, "the real race is staged");
+    assert.ok(["count", "race"].includes(G.state), `the race started (state ${G.state})`);
+    assert.equal(G.session, "race", "the session is the race itself, not a qualifying lap");
+  } finally { g.close(); }
+});
+
+test("3.4 practice is per-session: quitToMenu and the top of startRace clear it before the loading card reads it", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G;
+    G.daily.stop(); G.timeTrial = false;
+    G.practice = true;
+    assert.equal(G.practice, true);
+    G.quitToMenu();
+    assert.equal(G.practice, false, "a practice session quit from the pause menu is not the next GP's");
+    G.practice = true;   // armed again, then a start request (the body clears it only after several awaits)
+    const p = G.startRace();
+    assert.equal(G.practice, false, "cleared synchronously, before loadingInfo() paints the card");
+    await p;
+  } finally { g.close(); }
+});
+
+test("3.5 quitToMenu after a time trial restores the race tyre model", async () => {
+  const g = await createGame({ track: "monza", storage: { tyreWear: "real" } });
+  try {
+    const G = g.G;
+    assert.equal(G.raceTyreWear, "real");
+    await g.apex.tt("monza");   // awaitable: resolves when the time trial has started
+    assert.equal(G.tyres.on(), false, "the time trial runs with the model off");
+    G.quitToMenu();
+    assert.equal(G.tyres.on(), G.raceTyreWear !== "off", "back at the menu the GP's tyre model is back");
+    assert.equal(G.tyres.on(), true);
+  } finally { g.close(); }
+});
+
+test("3.6 the derived MIXED-weather plan is cached until a setting it reads changes; a host's assigned plan survives settings applied after it", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G;
+    G.raceChangeable = true; G.wxArcPlan = null;
+    const a = G.wxArcPlan;
+    assert.ok(a && a.to && a.dur > 0, "a changeable race has a plan");
+    assert.equal(G.wxArcPlan, a, "published twice, the same {to, dur} object (what startChangeable arms is what lobby published)");
+    G.raceLaps = G.raceLaps === 5 ? 3 : 5;
+    const b = G.wxArcPlan;
+    assert.notEqual(b, a, "a laps change re-derives (capPlanDur reads the laps)");
+    assert.equal(G.wxArcPlan, b);
+    G.raceWeather = G.raceWeather === "dry" ? "wet" : "dry";
+    assert.notEqual(G.wxArcPlan, b, "a weather change re-derives (the target is never the starting weather)");
+    G.trackIdx = G.trackIdx === 0 ? 1 : 0;
+    const c = G.wxArcPlan;
+    G.raceChangeable = false;
+    assert.equal(G.wxArcPlan, null, "no plan when the chip is not MIXED");
+    G.raceChangeable = true;
+    assert.notEqual(G.wxArcPlan, c, "toggling the chip re-derives");
+    // lobby.applySettings assigns the host's plan and THEN the weather / laps: it must not be wiped
+    G.wxArcPlan = { to: "rain", dur: 200 };
+    const host = G.wxArcPlan;
+    G.raceWeather = "dry"; G.raceLaps = 7; G.trackIdx = 2; G.raceChangeable = true;
+    assert.equal(G.wxArcPlan, host, "an assigned (host) plan is not a derived one");
+    assert.deepEqual({ ...G.wxArcPlan }, { to: "rain", dur: 200 });
+  } finally { g.close(); }
+});
+
+test("3.12 a finished or retired car's squeal / smoke / ERS cue state is zeroed by its early-out, not frozen at the last value", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const a = g.apex, G = g.G;
+    g.step(60 * 3);
+    const [A, B] = G.cars.filter((c) => !c.human);
+    const dirty = (c) => { c.skidIntensity = 0.8; c.wheelLock = 1; c.brakeDemand = 1; c.throttleDemand = 1; c.deploying = true; c.towing = 0.5; c.wake = 0.5; c.collideT = 0.35; };
+    dirty(A); A.finished = true; A.finishT = G.raceT;
+    a.retire(G.cars.indexOf(B)); dirty(B);
+    g.step(1);
+    for (const [name, c] of [["finished", A], ["retired", B]]) {
+      assert.equal(c.skidIntensity, 0, `${name}: skidIntensity`);
+      assert.equal(c.wheelLock, 0, `${name}: wheelLock`);
+      assert.equal(c.brakeDemand, 0, `${name}: brakeDemand`);
+      assert.equal(c.throttleDemand, 0, `${name}: throttleDemand`);
+      assert.equal(c.deploying, false, `${name}: deploying`);
+      assert.equal(c.towing, 0, `${name}: towing`);
+      assert.equal(c.wake, 0, `${name}: wake`);
+      assert.ok(c.collideT < 0.35, `${name}: collideT decays (${c.collideT})`);
+    }
+  } finally { g.close(); }
+});
+
+test("7.6 the AI's mistake-roll key for a braking zone just past the start line is wrapped, like its siblings", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G, a = g.apex, L = G.track.total;
+    G.track.toTurnIn.fill(30 + L / G.track.n);   // a turn-in ~30 m ahead of the car, wherever it is (attackAt subtracts the offset within the cell)
+    const i = G.cars.findIndex((c) => !c.human), c = G.cars[i];
+    a.aiPlace(i, (L - 20) / L, 60, 0);   // 20 m before the line: s + toTurnIn runs 10 m past the lap's end
+    c.zoneKey = -1; c.errT = 0;
+    g.step(1);
+    assert.ok(c.zoneKey >= 0, "the roll fires for a zone within a second of the car");
+    assert.ok(c.zoneKey < L, `the key is an arc position on THIS lap (${c.zoneKey} of ${L.toFixed(0)}), not one past the line: the first corner would get two rolls per lap`);
+  } finally { g.close(); }
+});
+
+test("3.11 race, Daily, race: stopping the Daily resumes the sim stream where it was, instead of rewinding it to the seed", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G;
+    G.daily.stop();
+    await G.startRace(); g.step(30);                 // race 1 spends draws off the stream
+    const seed = G.simSeed(), pos = G.simSeed(undefined, true);
+    assert.notEqual(pos, seed, "precondition: the stream has advanced past its start");
+    G.quitToMenu();                                  // (quitToMenu stops a daily; none is active yet)
+    assert.equal(G.simSeed(undefined, true), pos, "quitting the race does not touch the stream");
+    G.daily.select();
+    assert.notEqual(G.simSeed(), seed, "the Daily took the seed over");
+    assert.equal(G.simSeed(undefined, true), G.simSeed(), "...and restarted the stream at the day's seed (a fair, repeatable lights-out hold)");
+    G.daily.stop();
+    assert.equal(G.simSeed(), seed, "the session seed is back");
+    assert.equal(G.simSeed(undefined, true), pos, "...and so is the stream position: race 2 does not replay race 1's jitter");
+    G.seed = seed;   // the setter's own contract is unchanged: it restarts the stream
+    assert.equal(G.simSeed(undefined, true), seed);
+  } finally { g.close(); }
+});
+
+test("3.10 pause-menu RESTART does not run the old race through the async start window", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G;
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    await G.startRace(); g.apex.headless(true);
+    g.apex.go(); g.step(120);
+    assert.equal(G.state, "race");
+    const carsBefore = G.cars, t0 = G.raceT;
+    assert.ok(t0 > 1, "precondition: the old race is running");
+    g.sandbox.document.getElementById("pm-restart").onclick();   // setPaused(false) + startRace(): the body is still awaiting
+    assert.equal(G.cars, carsBefore, "precondition: the new field is not built yet");
+    let t = g.sandbox.performance.now() + 1000;
+    for (let i = 0; i < 30; i++) g.pumpFrame(t += 1000 / 60);
+    assert.equal(G.cars, carsBefore, "still the old field (the body has not run a turn)");
+    assert.equal(G.raceT, t0, "the old race's clock did not advance while the restart was loading");
+    await g.settle(() => G.cars !== carsBefore && G.state === "count", 8000);
+    assert.equal(G.state, "count", "the restart lands on the grid");
+    assert.equal(G.raceT, 0);
+    assert.equal(G.paused, false);
+    assert.equal(G.frozen, false, "the body's own reset lifts the hold");
+  } finally { g.close(); }
+});
+
+// 3.14 — the garage drive-out on the three routes that used to call startRaceCovered (card only, no garage-out, no flyby).
+// The VM has no frame pump and flushes its timer queue by hand: drive both to the first garage frame (setupPreviewOn is
+// what studioOpen raises for the drive-out) and assert that state is still "menu", i.e. before the countdown.
+async function untilGarageOrGrid(g, max = 3000) {
+  const G = g.G, seen = [];
+  let t = g.sandbox.performance.now() + 1000, garage = false;
+  for (let i = 0; i < max && !garage && G.state !== "count"; i++) {
+    seen.push(G.state);
+    await new Promise((r) => setImmediate(r));
+    if (i % 3 === 0) g.pumpFrame(t += 16);
+    g.flushTimers();
+    garage = !!G.setupPreviewOn;
+  }
+  return { garage, state: G.state, seen };
+}
+
+test("3.14 qualifying: TO THE GRID plays the garage drive-out before the countdown (state menu, then the garage), not the card straight up", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G, doc = g.sandbox.document;
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    G.quitToMenu();
+    G.raceGrid = "quali";
+    G.startRace();   // no classification yet: the sheet opens
+    await g.settle(() => !doc.getElementById("quali").hidden, 4000);
+    assert.equal(G.session, "quali");
+    doc.getElementById("q-sim").onclick();
+    doc.getElementById("q-go").onclick();
+    const r = await untilGarageOrGrid(g);
+    assert.equal(r.garage, true, `the garage drive-out ran (state ${r.state})`);
+    assert.equal(r.state, "menu", "…while the session is still in the menu, before the countdown");
+    assert.equal(G.session, "race", "TO THE GRID is the race, not another qualifying lap");
+  } finally { g.close(); }
+});
+
+test("3.14 qualifying: DRIVE plays the garage drive-out too, and stays the one-lap session", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G, doc = g.sandbox.document;
+    G.daily.stop(); G.timeTrial = false; G.practice = false;
+    G.quitToMenu();
+    G.raceGrid = "quali";
+    G.startRace();
+    await g.settle(() => !doc.getElementById("quali").hidden, 4000);
+    doc.getElementById("q-drive").onclick();
+    const r = await untilGarageOrGrid(g);
+    assert.equal(r.garage, true, `the garage drive-out ran (state ${r.state})`);
+    assert.equal(r.state, "menu");
+    assert.equal(G.session, "quali");
+  } finally { g.close(); }
+});
+
+test("3.14 season NEXT RACE with qualifying off: the garage drive-out, then the race; a headless page still starts at once", async () => {
+  for (const headless of [false, true]) {
+    const g = await createGame({ track: "monza", storage: { seasonCfg: { quali: false } } });
+    try {
+      const G = g.G, doc = g.sandbox.document;
+      G.daily.stop(); G.timeTrial = false; G.practice = false;
+      G.quitToMenu();
+      G.seasonMode = true;
+      await G.startRace();
+      g.apex.go(); g.step(60);
+      g.apex.park(0.9); g.apex.finishRace();
+      assert.equal(G.state, "results");
+      if (headless) g.apex.headless(true);
+      doc.getElementById("res-next").onclick();
+      const r = await untilGarageOrGrid(g);
+      if (headless) {
+        assert.equal(r.garage, false, "a headless page has no frames: no garage-out");
+        assert.equal(r.state, "count", "…and starts at once, as the agent / dev callers always did");
+      } else {
+        assert.equal(r.garage, true, `the garage drive-out ran (state ${r.state})`);
+        assert.equal(r.state, "menu");
+        assert.equal(G.seasonMode, true, "the championship flow is kept (quitToMenu would have reset it)");
+      }
+    } finally { g.close(); }
+  }
+});
+
+// Launch unification (bug-hunt 2): every session the player STARTS themselves plays garage drive-out, card, flyby. The routes below were
+// audited route by route; the quick restarts (RACE AGAIN / TRY AGAIN, pause RESTART, WATCH) are pinned as quick on purpose.
+test("launch: Data Hub JUMP IN (opts.intro) plays the garage drive-out before the countdown; a bare launch() still starts at once", async () => {
+  for (const intro of [true, false]) {
+    const g = await createGame({ track: "monza" });
+    try {
+      const G = g.G;
+      g.sandbox.GLX.makeFrustumPlanes = () => null;   // the VM's stub returns [] (no planes): the menu grid's rivals would index into it
+      G.daily.stop(); G.timeTrial = false; G.practice = false;
+      G.quitToMenu();   // the hub is opened from the menu (createGame leaves a race running)
+      vm.runInContext(readFileSync(join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx);
+      const Data = vm.runInContext("DataRealRace", g.ctx), Teams = vm.runInContext("Teams", g.ctx);
+      const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
+      const fixture = JSON.parse(readFileSync(join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
+      const script = Data.build(fixture, (name) => Teams.LIST.find((t) => t.name === name) || null, Tracks.LIST);
+      Real.launch(script, { seat: "STR", intro });
+      const r = await untilGarageOrGrid(g);
+      if (intro) {
+        assert.equal(r.garage, true, `JUMP IN played the garage drive-out (state ${r.state})`);
+        assert.equal(r.state, "menu", "…before the countdown");
+        assert.equal(Real.status().active, true, "the real race is staged under the intro");
+      } else {
+        assert.equal(r.garage, false, "a page probe calling launch() keeps its synchronous start");
+        assert.equal(r.state, "count");
+      }
+    } finally { g.close(); }
+  }
+});
+
+test("launch: a TIME TRIAL and the DAILY, started from RACE SETTINGS, play the garage drive-out; TRY AGAIN after a trial stays a quick restart", async () => {
+  for (const daily of [false, true]) {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G, doc = g.sandbox.document;
+    G.daily.stop(); G.practice = false;
+    G.quitToMenu();
+    G.flow = "gp"; G.session = "tt";
+    if (daily) G.daily.select("2026-09-14");   // the title's DAILY: the picker's select(), then the same sheet and GO as any trial
+    G.openRaceSettings("select");
+    assert.equal(doc.getElementById("race-settings").hidden, false);
+    doc.getElementById("rs-go").onclick();
+    const r = await untilGarageOrGrid(g);
+    assert.equal(r.garage, true, `the time trial's start played the garage drive-out (state ${r.state})`);
+    assert.equal(r.state, "menu", "…before the countdown");
+    assert.equal(G.session, "tt");
+    await g.settle(() => G.state === "count" || G.state === "race", 20000);
+    g.apex.go(); g.step(60);
+    g.apex.finishRace();
+    assert.equal(G.state, "results");
+    doc.getElementById("res-next").onclick();   // TRY AGAIN: a quick restart, left as it was
+    const q = await untilGarageOrGrid(g);
+    assert.equal(q.garage, false, "TRY AGAIN plays no garage-out");
+    assert.ok(q.state === "count" || q.state === "race", `…and starts at once (state ${q.state})`);
+  } finally { g.close(); }
+  }
 });

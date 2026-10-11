@@ -1,11 +1,27 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-10-11 — sync #1385: re-measure HUD caps after ship #1386/#1387/#1395
+
+`js/ui/hud.js` codeLines 1345 → **1393**, lines 2281 → **2377**; `css/hud.css` codeLines 1926 → **1953**, lines 2120 → **2150**. Ship tip after the visual-spotter / give-back / layout-cache HUD merges grew past both ceilings without a raise (same measure as open #1437). Deliberate sync cure on `cursor/r3-touch-hud-db7b` — not an extraction; no OWNED hud.js growth in this PR beyond the ship union.
+
+
 The line-count ratchet on the big modules lived in the `module-size` unit test
 from 2026-08 until 2026-09-03, when it became `tests/data/ratchets.json` +
 `tools/check/ratchets.mjs` (Phase 1-lite of `docs/research/TREE-RESTRUCTURE-2026-09.md`).
 Every raise and lower was recorded as a comment beside its number; those comments
 are preserved here verbatim, per file, as the record of WHY each number moved.
 The live numbers are in `ratchets.json`; nothing here is asserted.
+
+2026-10-10 the HUD joins the ratchet: `js/ui/hud.js` (codeLines **1330**, lines
+**2246**) and `css/hud.css` (codeLines **1917**, lines **2109**), at ship `107d232f1`.
+Every open HUD branch was growing the pair (the band-allocator refactor +474 net,
+#1316 +76, #1351 +56, #1366 +55) because each phone bug got its own repair pass on
+top of the last. Owner decision: a HUD replacement deletes what it replaces in the
+same PR, and growth past the 40-line absorb says why
+(`docs/notes/HUD-CODE-AUDIT-2026-10-10.md` §net-lines rule).
+Re-measured on the merged tree before landing: #1366 (Phase 0 top-band fix) merged
+first and grew the pair, so the ceilings start at **1345 / 2281** (hud.js) and
+**1926 / 2120** (hud.css), ship `325100c05`.
 
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
