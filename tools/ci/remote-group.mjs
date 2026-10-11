@@ -14,7 +14,7 @@
 //
 //   node tools/ci/remote-group.mjs ui                  # dispatch on this branch, 4 shards, watch to the verdict
 //   node tools/ci/remote-group.mjs input --shards 2
-//   node tools/ci/remote-group.mjs render --workers 2  # workers per shard (default 1: a runner has 4 vCPUs)
+//   node tools/ci/remote-group.mjs render --workers 2  # override; default is GL+group aware (browser-workers.mjs)
 //   node tools/ci/remote-group.mjs ui --gl swiftshader  # reproduce a local-only (SwiftShader) red on CI
 //   node tools/ci/remote-group.mjs ui --no-wait         # dispatch, print the run URL, exit
 //   node tools/ci/remote-group.mjs --watch <run-id>     # watch a run already dispatched
@@ -34,12 +34,19 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
+import { defaultRemoteWorkers } from "../lib/browser-workers.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const REPO = "brycejmurrin/f1-game";
 export const WORKFLOW = "browser-group.yml";
 export const SHARD_CHOICES = [1, 2, 4, 6, 8];   // browser-group.yml's `shards` options
 const say = (...a) => console.log("[remote-group]", ...a);
+
+/** Resolve workers for a group: explicit request, else GL + render-heavy heuristic. */
+export function resolveWorkers(group, gl, requested, scripts) {
+  const script = (scripts || {})[`test:${group}`] || "";
+  return defaultRemoteWorkers({ group, gl, script, requested });
+}
 
 /** The browser groups package.json defines: `test:<name>` scripts that run
  *  Playwright through run-playwright.mjs (the node-only groups are not here). */
@@ -49,13 +56,10 @@ export function browserGroups(scripts) {
     .map(([k]) => k.slice(5)).sort();
 }
 
-/** Validate a dispatch and return its shard matrix, or {error}. Pure. */
-// browser-group.yml's `workers`: empty means the workflow's default of 1 per shard.
+/** Validate an explicit workers override, or { workers: "" } when unset. */
 export function parseWorkers(w) {
   if (w == null || w === "") return { workers: "" };
-  const n = Number(w);
-  if (!Number.isInteger(n) || n < 1 || n > 8) return { error: `workers must be an integer 1-8, not ${w}` };
-  return { workers: String(n) };
+  return defaultRemoteWorkers({ requested: w });
 }
 
 export function planMatrix(group, shards, scripts) {
@@ -174,12 +178,16 @@ async function main() {
     console.log(USAGE);
     return 0;
   }
-  if (argv.includes("--plan")) {   // the workflow's plan step: validate, print the matrix
-    const p = planMatrix(process.env.GROUP, process.env.SHARDS, scripts());
+  if (argv.includes("--plan")) {   // the workflow's plan step: validate, print matrix + workers
+    const allScripts = scripts();
+    const p = planMatrix(process.env.GROUP, process.env.SHARDS, allScripts);
     if (p.error) { console.error("remote-group --plan: " + p.error); return 3; }
-    const w = parseWorkers(process.env.WORKERS);
+    const gl = process.env.GL || process.env.APEX_GL || "llvmpipe";
+    const w = resolveWorkers(p.group, gl, process.env.WORKERS, allScripts);
     if (w.error) { console.error("remote-group --plan: " + w.error); return 3; }
     console.log(`matrix=${JSON.stringify(p.matrix)}`);
+    // browser-group.yml appends this to GITHUB_OUTPUT — shards use needs.plan.outputs.workers
+    console.log(`workers=${w.workers}`);
     return 0;
   }
   const interval = Math.max(10, +opt("--interval", 30)) * 1000;
@@ -197,7 +205,8 @@ async function main() {
   if (p.error) { say("refused: " + p.error); return 3; }
   const gl = opt("--gl", "llvmpipe");
   if (!["llvmpipe", "swiftshader"].includes(gl)) { say(`refused: --gl is llvmpipe or swiftshader, not ${gl}`); return 3; }
-  const w = parseWorkers(opt("--workers", ""));
+  const allScripts = scripts();
+  const w = resolveWorkers(p.group, gl, opt("--workers", ""), allScripts);
   if (w.error) { say("refused: " + w.error); return 3; }
   const branch = opt("--ref", git("rev-parse", "--abbrev-ref", "HEAD"));
   if (!branch || branch === "HEAD") { say("refused: detached HEAD — pass --ref <pushed branch>"); return 3; }
@@ -216,8 +225,8 @@ async function main() {
   const since = Date.now();
   const d = api("POST", `actions/workflows/${WORKFLOW}/dispatches`, {
     ref: branch,
-    // Sent only when set: a ref whose browser-group.yml predates `workers` would 422 on it.
-    inputs: { group: p.group, shards: String(p.shards), gl, ...(w.workers ? { workers: w.workers } : {}) },
+    // Always pass resolved workers (GL + group aware) so empty UI input still gets the plan default.
+    inputs: { group: p.group, shards: String(p.shards), gl, workers: w.workers },
   });
   if (d.error) { say(`= group unknown — dispatch failed: ${d.error}`); return 3; }
   let runId = d.json?.workflow_run_id || null;
@@ -227,7 +236,7 @@ async function main() {
     runId = pickRun(r.json?.workflow_runs, { branch, group: p.group, sinceMs: since })?.id || null;
   }
   if (!runId) { say("= group unknown — dispatched, but no run appeared within 60 s; check the Actions tab"); return 3; }
-  say(`dispatched ${p.group} on ${branch} (${p.shards} shards, ${gl}${w.workers ? `, ${w.workers} workers` : ""}) — run ${runId}`);
+  say(`dispatched ${p.group} on ${branch} (${p.shards} shards, ${gl}, ${w.workers} workers) — run ${runId}`);
   if (argv.includes("--no-wait")) { say(`watch: node tools/ci/remote-group.mjs --watch ${runId}`); return 0; }
   return watch(runId, { interval, deadline });
 }
