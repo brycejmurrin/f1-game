@@ -1085,7 +1085,10 @@ Two always-judged checks give the gate fixed names:
 - **`CI`** (`ci-verdict` job, #480): aggregates every sibling job via
   `tools/ci/ci-verdict.mjs`, including `selected-verdict` (2026-10-04 — it
   needed only `selected`, so an all-dropped plan passed `CI` while the verdict
-  failed). A needed job skipped by its `if:` is a pass; a needed failure or
+  failed). Since 2026-10-10 (R3-CI-HEALTH-2) `selected` itself needs only
+  `select`, so the browser legs start as soon as the plan exists instead of
+  queueing behind the ~6 min guards shards; `selected-verdict`, `ci-verdict`
+  and `poke-train` still need `guards`, so a guards red still fails the gate. A needed job skipped by its `if:` is a pass; a needed failure or
   cancel fails the aggregator. Advisory jobs (`baseline-trial`) never fail it.
   It is the only check that also carries smoke, the sweeps, renderer-macos and
   xr, so branch protection should require it (an owner setting).
@@ -1119,7 +1122,10 @@ Every `pull_request` workflow uses a per-PR concurrency group with
 
 Playwright retries default to **1 under `CI`** when unset
 (`playwright.config.js`); the change-aware `selected` gate sets `--retries=0`
-so a flake is news, not a doubled bill. Under `APEX_FAIL_ON_FLAKY=1` (every
+so a flake is news, not a doubled bill — except a QUARANTINED spec, which
+`select-specs.mjs` schedules alone in its own leg with `--retries=1`
+(2026-10-10, R3-CI-HEALTH-4), so one quarantined flake cannot red an
+otherwise green leg. Under `APEX_FAIL_ON_FLAKY=1` (every
 browser job in `ci.yml`) a pass-on-retry is a red unless the spec is listed in
 `tests/data/flaky-quarantine.json` — the one `@quarantine` ledger (owner,
 since, why). Quarantined specs still run; they are excluded from blocking
