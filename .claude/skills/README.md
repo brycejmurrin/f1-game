@@ -20,6 +20,7 @@ stayed separate in the 2026-09-03 pass.
 
 | Skill | Use it when |
 |---|---|
+| **agent-fleet** | One session orchestrating sibling workers (Claude Code, Cursor, Grok): the launch template, the PR `fleet` block, `@orchestrator BLOCKED:` escalation, per-vendor spawn/message tools (`references/orchestrator.md`); the worker loop plan → verify → screenshot → draft PR → subscribe → fix (`references/worker.md`). |
 | **agent-view** | Drive Apex 26 without screenshots — `world()`, `field()`, `rollout()`, headless lap, deterministic runs; telemetry / slip-grip / field gaps / sector timing / `lightState` / the headless `reset`-`act` loop (`references/state.md`); track geometry, corners, elevation, curvature, map/bounds, wall audits, `groundY` (`references/track-geometry.md`); read-only: the fix for what it finds is new-track / survey-track. |
 | **ai-racecraft** | AI overtakes too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck AI (`caution().level` 0, `stuckT` growing; a flag or safety car stuck out is race-incidents-control), `js/physics/ai-drive.js`. |
 | **asset-pack** | Missing/wrong/garbled baked PBR materials in `assets/pack` (TLX garble included; read `__apex.assets().uploaded` first), MAT-layer mismatches, `js/render/shared/assets.js` / `tools/gen/assets.mjs`, `matTexMix` / `__apex.assets()` / `matTex()`. |
