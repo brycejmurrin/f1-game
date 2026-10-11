@@ -1815,6 +1815,10 @@ const TLX = (function () {
           try { batch.geo.dispose(); } catch (_) { /* */ }
           batch.geo = null;
         }
+        // Drop the shadow cull's private pack with the batch (R3-RENDER-6): a
+        // stale _shadowPack on a freed batch kept the Float32Array (and any
+        // lender that still pointed at it) alive across picker track switches.
+        batch._shadowPack = null; batch._shadowFresh = false;
       }
 
       function castShadowInstanced(batch, count) {

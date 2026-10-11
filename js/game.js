@@ -3573,7 +3573,7 @@ titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
-  resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf);
+  resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf); G.replayBuf = replayBuf;   // tests + pause UI (internal handle, not on the typed façade)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -4327,6 +4327,10 @@ function quitToMenu() {
   setHudUserHidden(false);   // clear clean-screen mode on exit
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
+  // Pit WORK garage: leaveGarage BEFORE closeRaceSheets resets garageReturn to
+  // "select" (and the VM harness's .screen query is incomplete without withScreens —
+  // leaveGarage is the real close; #1378 / 2-F2).
+  if (garageReturn === "pit" && !$("carsetup").hidden) { leaveGarage(); pitWorkSpec = null; garageReturn = "select"; }   // closes without closePitWork's engine start
   closeRaceSheets(); els.announce.hidden = true; announceT = 0; _annPri = 0; _annFloor = 0; _annQueue.length = 0;   // the announce drain has no state gate: a queued race message re-showed itself over the title screen
   // ...and the RADIO around that card. Its bed was stopped only by RadioVoice's
   // #announce observer, which is the VOICE's teardown and does not exist at all
@@ -4337,7 +4341,7 @@ function quitToMenu() {
   // it; update() never reaches raceRadio after state=menu. halt() cuts every channel.
   radioVoice.halt();
   GameAudio.radioStingStop();
-  $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true; if (garageReturn === "pit" && !$("carsetup").hidden) { leaveGarage(); pitWorkSpec = null; garageReturn = "select"; }   // the pit WORK garage (QUIT over its card, rotate EXIT RACE) closes without closePitWork's engine start
+  $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
   Particles.rainShow(false);
   // (#soundbtn returns with #overlay above — no write needed.)
