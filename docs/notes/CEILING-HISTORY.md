@@ -7,6 +7,82 @@ Every raise and lower was recorded as a comment beside its number; those comment
 are preserved here verbatim, per file, as the record of WHY each number moved.
 The live numbers are in `ratchets.json`; nothing here is asserted.
 
+2026-10-10 the HUD joins the ratchet: `js/ui/hud.js` (codeLines **1330**, lines
+**2246**) and `css/hud.css` (codeLines **1917**, lines **2109**), at ship `107d232f1`.
+Every open HUD branch was growing the pair (the band-allocator refactor +474 net,
+#1316 +76, #1351 +56, #1366 +55) because each phone bug got its own repair pass on
+top of the last. Owner decision: a HUD replacement deletes what it replaces in the
+same PR, and growth past the 40-line absorb says why
+(`docs/notes/HUD-CODE-AUDIT-2026-10-10.md` §net-lines rule).
+Re-measured on the merged tree before landing: #1366 (Phase 0 top-band fix) merged
+first and grew the pair, so the ceilings start at **1345 / 2281** (hud.js) and
+**1926 / 2120** (hud.css), ship `325100c05`.
+
+2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
+under Settings, removing duplicate pause controls and simplifying Help markup.
+The newer practice goals and session review remain. Shell slack is tightened to 25.
+
+2026-09-22 the portrait drawing: `shellNodes` 1751 → **1790**, a second SVG and
+the groups of a second picture. The title art is now TWO drawings: the
+landscape one is the car mesh through the garage orbit, the portrait one is the
+same pair from behind, driving up the frame with their marks trailing down it.
+A tall phone had been getting the landscape drawing cropped or shrunk to a
+strip, which is the shape problem no crop solves — the subject is 3.3x wider
+than it is tall and the slot is the other way round. The portrait half is
+TRACED off a real render rather than projected (the reason is on sceneTop), so
+it costs far fewer groups than the projected attempt it replaced, and it drops
+the bleed and ambient passes so the raise stays inside the commit hook's 40-node
+absorb — CI's ratchet-vs-base check fails a bigger raise on a direct push,
+which has no PR body to carry the reason. Only one of the two is ever rendered
+(display:none, not opacity), so the cost is bytes in the shell, not paint on
+the phone.
+
+2026-09-22 title framing: `shellNodes` 1750 → **1751**, one `<g id="tc-frame">`
+around the generated title art. The phone shapes need different framing of the
+same drawing — portrait off the left edge, landscape smaller and lower so the
+trail clears the button column — and a transform on `#title-car` itself counts
+toward `#overlay`'s scrollWidth, which is what took `ui-scale > portrait` red.
+One node inside the svg buys both, and the svg viewport clips what it moves out.
+
+2026-09-22 coverage ratchets (Track B): three new `tree` metrics, each a way a
+suite can look larger than it is. `zeroRefModules` = 0 (the census found one,
+`js/physics/body-attitude.js`; `tests/unit/body-attitude.test.mjs` closed it, and
+the ceiling starts at zero so it stays closed). `implicitAsserts` = 40 (spec tests
+whose only assertion is a `waitForFunction`; a timeout there reads as a hang, not
+a wrong value — convert as touched). `twinDebt` = 7, the portable browser specs
+still on the browser gate after the first `ADAPTED` batch (7 specs, each with a
+proven mutant; 40 before it, 22 while 16 specs briefly imported `test` from the
+fixtures — reverted, the import changes their browser run); `BROWSER_ONLY` in
+`tools/ci/twinned-specs.mjs` names the ones that must stay (with the reason), so
+this can reach zero. All three `slack: 0`: lower them, never bank headroom.
+
+# Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
+
+The line-count ratchet on the big modules lived in the `module-size` unit test
+from 2026-08 until 2026-09-03, when it became `tests/data/ratchets.json` +
+`tools/check/ratchets.mjs` (Phase 1-lite of `docs/research/TREE-RESTRUCTURE-2026-09.md`).
+Every raise and lower was recorded as a comment beside its number; those comments
+are preserved here verbatim, per file, as the record of WHY each number moved.
+The live numbers are in `ratchets.json`; nothing here is asserted.
+
+2026-10-10 the HUD joins the ratchet: `js/ui/hud.js` (codeLines **1330**, lines
+**2246**) and `css/hud.css` (codeLines **1917**, lines **2109**), at ship `107d232f1`.
+Every open HUD branch was growing the pair (the band-allocator refactor +474 net,
+#1316 +76, #1351 +56, #1366 +55) because each phone bug got its own repair pass on
+top of the last. Owner decision: a HUD replacement deletes what it replaces in the
+same PR, and growth past the 40-line absorb says why
+(`docs/notes/HUD-CODE-AUDIT-2026-10-10.md` §net-lines rule).
+Re-measured on the merged tree before landing: #1366 (Phase 0 top-band fix) merged
+first and grew the pair, so the ceilings start at **1345 / 2281** (hud.js) and
+**1926 / 2120** (hud.css), ship `325100c05`.
+2026-10-10 second re-measure, ship `33ea003c1`: #1375 landed first, then the round-3
+HUD PRs (#1395 viewport cache, #1387 give-back countdown, #1386 visual spotter) merged
+without the raises they had planned, so ship read OVER by hud.js +48 code / +96 lines
+and hud.css +27 / +30 and Structural guards went red on every PR. New ceilings:
+hud.js **1393 / 2377**, hud.css **1953 / 2150**. The same update lowered game.js
+4976 → 4974 code / 9195 → 9186 lines (it had shrunk). Owner decision: raises with a
+stated reason are fine; the allocator's own raise follows when it lands.
+
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
