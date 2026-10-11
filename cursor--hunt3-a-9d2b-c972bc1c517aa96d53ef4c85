@@ -1,1 +1,1 @@
-1791688950	Cursor Agent	steward #1389 owner marked ready; watching full-tier CI a292860; 0 failed; no AM  [cursor/hunt3-a-9d2b; session c972bc1c517aa96d53ef4c85]
+1791690658	Cursor Agent	steward #1389 CONFLICTING→sync-pr --push; full-tier was running/0-failed  [cursor/hunt3-a-9d2b; session c972bc1c517aa96d53ef4c85]
