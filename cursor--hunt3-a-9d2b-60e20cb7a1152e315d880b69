@@ -1,1 +1,1 @@
-1791705427	Cursor Agent	#1389 track-switch-memory: find retainer keeping monaco alive after visit2 monza; OWNED js/game.js js/render/three/  [cursor/hunt3-a-9d2b; session 60e20cb7a1152e315d880b69]
+1791706170	Cursor Agent	#1389 track-switch-memory FIXED: WeakRef _lampTrackRef in frame-lights.js; tip 84b85cc0c  [cursor/hunt3-a-9d2b; session 60e20cb7a1152e315d880b69]
