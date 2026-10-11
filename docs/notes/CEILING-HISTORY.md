@@ -18,6 +18,11 @@ Re-measured on the merged tree before landing: #1366 (Phase 0 top-band fix) merg
 first and grew the pair, so the ceilings start at **1345 / 2281** (hud.js) and
 **1926 / 2120** (hud.css), ship `325100c05`.
 
+2026-10-11 re-measure on ship after #1386/#1387/#1395 (and later HUD merges) grew
+the pair without raising the ceilings: hud.js **1411 / 2399**, hud.css **1960 /
+2158** (`ratchets.mjs --update` on the #1392 sync tree). Unblocks Structural
+guards on every PR whose CI merge pulls the grown HUD.
+
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
