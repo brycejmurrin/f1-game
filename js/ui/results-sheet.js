@@ -177,6 +177,10 @@ function buildResults(order, race) {
   const cars = G.cars;
   els.resultsTable.textContent = "";
   els.resultsTitle.style.color = "";   // buildChampion tints it; #res-menu never reset it
+  // A FRIEND race ends with the room still on screen but not alive: RACE AGAIN is a solo race and MENU
+  // drops the connection (game.js resNext/resMenu stop NetPlay). Name both, and offer a fresh room.
+  const friend = !!(G.netPlay && G.netPlay.active && G.netPlay.active());
+  if (els.resMenu) els.resMenu.textContent = friend ? "NEW FRIEND ROOM" : "MENU";
   const sprint = race && typeof race.sprint === "boolean" ? race.sprint
     : G.seasonMode && SeasonCal.scored() === "sprint";
   els.resultsTitle.textContent = sprint ? `SPRINT — ${track.def.name}`
@@ -440,7 +444,16 @@ function buildResults(order, race) {
     els.resNext.textContent = sprint ? "TO THE GRAND PRIX"
       : season.round >= SeasonCal.rounds() ? "VIEW CHAMPION" : "NEXT ROUND";
   } else {
-    els.resNext.textContent = watched ? "WATCH AGAIN" : "RACE AGAIN";   // a watched real race re-runs the replay, it is not a new race
+    els.resNext.textContent = watched ? "WATCH AGAIN" : friend ? "RACE AGAIN (SOLO)" : "RACE AGAIN";   // a watched real race re-runs the replay, it is not a new race
+    if (friend) {
+      const hint = document.createElement("div");
+      hint.className = "res-personal";
+      hint.setAttribute("data-results-part", "room");
+      const note = document.createElement("span");
+      note.textContent = "The friend room closes when you leave. NEW FRIEND ROOM, or VS FRIEND on the title screen, starts another.";
+      hint.appendChild(note);
+      els.resultsTable.appendChild(hint);
+    }
   }
 }
 
@@ -449,6 +462,7 @@ function buildTTResults() {
   const track = G.track;
   els.resultsTable.textContent = "";
   els.resultsTitle.style.color = "";
+  if (els.resMenu) els.resMenu.textContent = "MENU";   // a friend race's NEW FRIEND ROOM label must not outlive it
   els.resultsTitle.textContent = `${track.def.name} — TIME TRIAL`;
   const best = G.player.best;
 
