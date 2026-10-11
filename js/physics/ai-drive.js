@@ -1425,7 +1425,9 @@ const AiDrive = (function () {
     if (Math.abs(kA) > 0.004) {
       coverSide = -Math.sign(kA);
     } else {
-      const ox = ctx.other && Number.isFinite(ctx.other.x) ? ctx.other.x : 0;
+      // The tick snapshot first (update order must not decide the cover), live x as the fallback.
+      const o = ctx.other;
+      const ox = o ? (Number.isFinite(o._snapX) ? o._snapX : Number.isFinite(o.x) ? o.x : 0) : 0;
       const dx = ox - (ctx.x || 0);
       const kT = ctx.kTurn || 0;
       if (Math.abs(dx) >= 0.35) coverSide = dx > 0 ? 1 : -1;
