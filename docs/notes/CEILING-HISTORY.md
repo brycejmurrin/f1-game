@@ -2,7 +2,7 @@
 
 ## 2026-10-11 — sync #1385: re-measure HUD caps after ship #1386/#1387/#1395
 
-`js/ui/hud.js` codeLines 1345 → **1393**, lines 2281 → **2377**; `css/hud.css` codeLines 1926 → **1953**, lines 2120 → **2150**. Ship tip after the visual-spotter / give-back / layout-cache HUD merges grew past both ceilings without a raise (same measure as open #1437). Deliberate sync cure on `cursor/r3-touch-hud-db7b` — not an extraction; no OWNED hud.js growth in this PR beyond the ship union.
+`js/ui/hud.js` codeLines 1345 → **1393**, lines 2281 → **2377**; `css/hud.css` codeLines 1926 → **1953**, lines 2120 → **2150**. Ship tip after the visual-spotter / give-back / layout-cache HUD merges grew past both ceilings without a raise (same measure as open #1437). Deliberate sync cure on `cursor/r3-touch-hud-db7b` — not an extraction; no OWNED hud.js growth in this PR beyond the ship union. Also ports #1437's `--base` absorb catch-up in `tools/check/ratchets.mjs`: a ceiling raise past 40 fails only when the SOURCE file metric also grew past absorb since the base (ceiling-only remeasure → warning).
 
 
 The line-count ratchet on the big modules lived in the `module-size` unit test
