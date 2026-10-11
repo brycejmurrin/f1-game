@@ -23,6 +23,8 @@ import { carvedFromGame, gameSource, symbolSource } from "../helpers/game-source
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 // The count of quoted `game.js` path literals under tests/ (the hunter's metric:
 // `rg -c "game\.js['\"]" tests`), less the helper that is the sanctioned reader.
+// 2026-10-11 (#1378): OWNED pins migrated to gameSource(); measured 338 on the
+// synced tip (ship had raised to 355 without migrating). Ceiling only moves down.
 const CEILING = 338;
 const EXEMPT = new Set(["tests/helpers/game-source.mjs", "tests/unit/source-pin-hygiene.test.mjs"]);
 const RAW = /game\.js['"]/g;
