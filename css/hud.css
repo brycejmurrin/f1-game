@@ -116,6 +116,10 @@
 #hud-pos, #hud-lap { min-width: 5ch; }
 #hud-time, #hud-best, #hud-delta-n { min-width: 7ch; }
 #hud-delta[data-pending] { visibility: hidden; }
+/* THE LAP JUST DRIVEN: in a race the TIME box holds it for 3 s after the line
+   (js/ui/hud.js, data-hold) — green when it is a personal best. Same digits,
+   same slot: colour only, no width. */
+#hud-time[data-hold="pb"] { color: var(--faster); }
 /* POSITION CHANGE. hud.js stamps data-delta="up"/"down" on #hud-pos for ~6
    HUD ticks when the rank moves; the colour is state (kept under reduced
    motion), the scale pop is motion (not). */
@@ -784,6 +788,13 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   body:not(.desktop) #hud-tach {
     width: min(132px, 100%);
   }
+  /* Shipped touch offsets are a translate (helmet energy y:-6 is -6svh, 51px
+     on this screen). On a portrait chase that translate is still painted and
+     pulls ERS up through SPEED, and the tyre's y:-2 walks it off the top
+     (393×852 @200%, tyre y=-38). Portrait places TYRES with bottom:100% and
+     the column with flow; the translate fights both. A placed chip
+     (data-hl-user) keeps its move. */
+  body:not(.desktop) :is(#hud-energy, #hud-tyre):not([data-hl-user]) { translate: none; }
 }
 /* REAR-VIEW MIRROR. An empty frame: js/render/shared/mirror-pass.js measures
    this box every half second and the renderer paints the mirror camera into
@@ -955,11 +966,15 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    — and --dock-r-w was taken off the same stale BOOST edge. The top band got
    this fix first (`transition-property` on the --hud-z-top group above); the
    dock, the bottom band and the two top-right buttons are measured the same
-   way. RELATIVE also resets left/max-height inside syncPhoneFit: a transition
-   returns its previous rectangle until the next frame, even at 0.01ms.
-   Paint-only properties keep their 0.01ms, so nothing that was instant
-   starts moving. */
-:root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, #pausebtn, #btn-cam, #hud-rel) {
+   way. The band's children do not inherit that list — #hud-energy kept
+   transition-property:all, so leaving the helmet (its -6svh translate)
+   started a transition that a paused clock (freeze / reduced-motion)
+   held at the old offset and the bar stayed through SPEED. `.hud-bottom *`
+   is in the list for that. RELATIVE also resets left/max-height inside
+   syncPhoneFit: a transition returns its previous rectangle until the next
+   frame, even at 0.01ms. Paint-only properties keep their 0.01ms, so
+   nothing that was instant starts moving. */
+:root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, .hud-bottom *, #pausebtn, #btn-cam, #hud-rel) {
   transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
 }
 /* The flag clears the DROPPED strip, so it tracks the same measured edge: 70px
@@ -1872,6 +1887,32 @@ body[data-helmet-cam] #hud::before {
     color-mix(in oklab, var(--bg) 7%, transparent);
 }
 
+/* VISUAL SPOTTER (js/ui/hud.js syncAlong): a car alongside lights its screen
+   edge — the spotter's occupancy, shown with the voice off too, for the phone
+   player side by side into a corner who cannot see the car. ::after because
+   the helmet visor owns ::before; z-index -1 keeps it under every HUD number
+   (#hud is the stacking context). A low-alpha 24 px fade past the safe area
+   never hides track at 844x390, and it goes with the HUD when hud-hidden does.
+   Warning accent, not a team colour. The pulse is motion: none under REDUCE
+   MOTION (OS or html[data-motion]), where the glow simply holds. */
+#hud[data-along]::after {
+  --along: color-mix(in oklab, var(--spark) 45%, transparent);
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(to right, var(--along-l, transparent), transparent calc(24px + var(--sal))),
+    linear-gradient(to left, var(--along-r, transparent), transparent calc(24px + var(--sar)));
+}
+#hud[data-along~="l"]::after { --along-l: var(--along); }
+#hud[data-along~="r"]::after { --along-r: var(--along); }
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="reduce"]) #hud[data-along]::after { animation: along-pulse 0.9s ease-in-out infinite alternate; }
+}
+@keyframes along-pulse { from { opacity: 0.55; } }
+
 /* DAMAGE CHIP (#hud-damage, js/ui/hud-damage.js). DISPLAY ONLY — the record it
    draws (js/race/damage.js) feeds nothing back. Right edge, one chip-height
    under the track-limits slot so the two never stack on each other. Parts are
@@ -2029,17 +2070,23 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
      128px, which is LESS than the dock at 100% (BOOST's column is ~250px on
      844×390), so the trace sat on BOOST / OT at the shipped size (HUD survey
      2026-10-10, phoneL-cockpit: inputs × btn-boost 66×18px). The cap is now
-     the trace's own width short of the centre (max-width 120px below), so it
+     the trace's own width short of the centre, so it
      stands off any dock up to the middle of the screen and never reaches the
-     left column. vw and the inset divide by this element's zoom like every
+     left column. That width is 100px, not the 120px max-width: the trace paints
+     ~105px, and budgeting 120 made the cap bind first at HUD 150 (right edge
+     602, 9px over OT at 593) where the dock stand-off alone ends it at the plate. vw and the inset divide by this element's zoom like every
      other anchor here. */
-  right: calc(10px + var(--sar) / var(--hud-z) + min(var(--dock-r-w, 0px), calc(50vw / var(--hud-z) - 10px - var(--sar) / var(--hud-z) - 120px)));
+  /* --dock-r-w (and --hud-sec-h below) are published in the CHROME's zoom (--hud-z-top); this trace is
+     drawn in the bottom band's (--hud-z), and the two part at HUD 150% / a capped top band: the stand-off
+     was ~1.5x too wide and the trace ended 9px over OT at HUD 150 + BTN 150 (survey 2026-10-10). Both
+     convert by --hud-z-top / --hud-z, so the trace ends where the sector plate does. */
+  right: calc(10px + var(--sar) / var(--hud-z) + min(var(--dock-r-w, 0px) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z), calc(50vw / var(--hud-z) - 10px - var(--sar) / var(--hud-z) - 100px)));
   bottom: auto;
-  /* Same shape as #hud-limits (+15 after sec-h), then clear that chip's box
-     (+1.75em + 8px). A bare +12 sat 3px above limits and overlapped it when
-     both were forced on (phoneL-chase, 291px²). Parking below the slot always
-     avoids the clash when a track-limits strike lights the chip mid-race. */
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + 1.75em + 8px);
+  /* Same shape as #hud-limits: clear PAUSE/CAM via (8px + tap-hud + 4px + sat)
+     then drop by --hud-sec-h. Omitting tap-hud + 4px put the trace ~44px into
+     S1–S3 at touch --tap 52 (12 − 56 = −44 at z=1). --hud-sec-h is top-band
+     units; at phone sizes bot/top zooms meet so it still clears the box. */
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z) + 12px + var(--inputs-below-limits, 0px));
   max-width: min(120px, 22vw);
   max-height: min(18svh, 4.2em);
   overflow: hidden;
@@ -2052,11 +2099,16 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) #hud-inputs-cv {
    HUD SIZE 150% (chase 1280×720 survey). Park under the sector column like
    the touch home — right + top from the pause/sectors stack — so the bottom
    band stays the driver's. A placed chip (data-hl-user) keeps its offset. */
+/* WHILE THE TRACK-LIMITS CHIP SHOWS, INPUTS STEPS BELOW IT. Both hang from the sector box's bottom edge
+   (limits at +15px, this trace at +12px), so a strike painted one over the other in 12 of the 13
+   quick-matrix cells (survey 2026-10-10: 2.7k px² at 1280x720). The chip is ~2.6em tall (DAMAGE steps
+   the same amount, below). The reserve is only while the chip has a box. */
+body:not([data-hud-hide~="limits"]):has(#hud-limits:not([hidden])) #hud-inputs { --inputs-below-limits: calc(2.6em + 3px); }
 body.desktop #hud-inputs:not([data-hl-user]) {
   left: auto;
   right: calc(10px + var(--sar) / var(--hud-z));
   bottom: auto;
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 12px);
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z) + 12px + var(--inputs-below-limits, 0px));
 }
 /* TOUCH TYRES (LANDSCAPE): out of the centred bottom stack (it sat under
    GEAR / ERS, on the car) to the left column, sitting on top of the left dock
@@ -2080,16 +2132,13 @@ body.desktop #hud-inputs:not([data-hl-user]) {
       bottom: calc(anchor(top) + var(--gap));
       margin: 0;
     }
-    /* HELMET touch: ERS rides the same left dock column as TYRES, stacked above
-       it — not centred with y:-37 over the wheel (mid-visor float, 2026-10-07). */
-    body[data-hl-set="helmet"]:not(.desktop) #hud-tyre { anchor-name: --apex-hud-tyre; }
-    body[data-hl-set="helmet"]:not(.desktop) #hud-energy {
-      position: absolute;
-      position-anchor: --apex-hud-tyre;
-      left: anchor(left);
-      bottom: calc(anchor(top) + var(--gap));
-      margin: 0;
-    }
+    /* HELMET ERS stays in the cluster grid. Anchoring it to the tyre failed:
+       the tyre follows #hud-energy in the tree, anchor() does not resolve a
+       later sibling, and the bar fell back onto the gear plate (852×393
+       helmet, the whole bar). The shipped y:-6 translate would also make the
+       tyre an invalid anchor. Drop that translate so the dock anchor on
+       TYRES is the only shift. */
+    body[data-hl-set="helmet"]:not(.desktop) #hud-tyre[data-hl] { translate: none; }
   }
   /* TOUCH SECTORS ↔ RIGHT DOCK: no CSS anchor here. --dock-r-w is the
      painted inset from the leftmost right-dock control (fitHud), so the

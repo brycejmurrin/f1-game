@@ -107,8 +107,8 @@ const AppearanceOpts = (function () {
     return (hi + 0.05) / (lo + 0.05);
   }
   // ONE getComputedStyle flush for both token reads, cached across pickInk calls
-  // until theme/contrast attrs change (ForcedReflow 2026-10-05: readCssRgb top at
-  // 34 ms; apply() calls pickInk for menu + HUD + every preset chip).
+  // until theme/contrast attrs change (ForcedReflow 2026-10-05: the old per-token
+  // reader topped at 34 ms; apply() calls pickInk for menu + HUD + every preset chip).
   function readCssRgbFrom(cs, prop) {
     if (!cs) return null;
     const raw = cs.getPropertyValue(prop).trim();
@@ -118,15 +118,13 @@ const AppearanceOpts = (function () {
     if (rgb) return [+rgb[1] / 255, +rgb[2] / 255, +rgb[3] / 255];
     return null;
   }
-  function readCssRgb(prop) {
-    const el = root();
-    if (!el || typeof getComputedStyle !== "function") return null;
-    return readCssRgbFrom(getComputedStyle(el), prop);
-  }
   let _inkKey = "", _inkText = null, _inkBg = null;
   function themeInkPair() {
     const el = root();
-    const k = (el && el.getAttribute("data-ui-theme") || "") + "|" +
+    // SYSTEM stamps the same data-ui-theme either way: the OS scheme is part of the key.
+    let osLight = "";
+    try { osLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "L" : "D"; } catch (_) { /* harness */ }
+    const k = osLight + "|" + (el && el.getAttribute("data-ui-theme") || "") + "|" +
       (el && el.getAttribute("data-ui-contrast") || "") + "|" +
       (typeof document !== "undefined" && document.documentElement
         ? document.documentElement.className : "");

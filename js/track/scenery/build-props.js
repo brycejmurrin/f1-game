@@ -1990,7 +1990,15 @@ const TrackBuildProps = (function () {
     // the shared masts (`mast`: radius is a FLOOR there) and the pit complex's
     // canopy luminaires (`pit`, registered by SceneryPits after the build).
     const customLamps = [], mastLamps = [], pitLamps = [];
-    const CUSTOM_LAMP_CAP = 96, MAST_LAMP_CAP = 512, PIT_LAMP_CAP = 32;
+    // `customLamps` is a CANDIDATE list (a runaway loop bounds at CUSTOM_LAMP_MAX);
+    // selectCustomLamps() trims it to CUSTOM_LAMP_CAP once the scenery has run.
+    // The cap was 96 and admitted first-come-first-served: Hungaroring registers
+    // 127 (its 80 m roadside posts first, then three braking-zone clusters), so
+    // the last 31 - every cluster lamp but one - were refused and left drawn with
+    // no light. 160 is under what circuits already ship (Monaco bakes 162 posts;
+    // MAST_LAMP_CAP is 512, the density fill's cap 800) and costs no shader slots:
+    // the per-frame cull uploads only the nearest <= 48 whatever the count.
+    const CUSTOM_LAMP_CAP = 160, CUSTOM_LAMP_MAX = 512, MAST_LAMP_CAP = 512, PIT_LAMP_CAP = 32;
     const lampRec = (spec, defKind, tag) => {
       const p = spec.pos;
       const k = Number.isFinite(spec.k) ? ((Math.round(spec.k) % n) + n) % n : 0;
@@ -2011,9 +2019,49 @@ const TrackBuildProps = (function () {
         diagnostics.invalid.push({ id: spec.id || "lamp-post", reason: "non-finite lamp position" });
         return false;
       }
-      if (customLamps.length >= CUSTOM_LAMP_CAP) return false;
+      if (customLamps.length >= CUSTOM_LAMP_MAX) return false;
       customLamps.push(lampRec(spec, "led", null));
       return true;
+    };
+    // The cap, priority-aware. A circuit within CUSTOM_LAMP_CAP is returned
+    // untouched (same records, same order). Over it, lamps that matter keep their
+    // place - hand-aimed / always-on fixtures, and any lamp from LAMP_BRAKE_BEHIND
+    // m behind to LAMP_BRAKE_AHEAD m ahead of a stretch with curvature >=
+    // LAMP_CORNER_K (a braking zone or corner) - and the rest thin first, always
+    // the one with the nearest neighbour, so the survivors stay spread. The
+    // lamp's `k` is NOT trusted (circuit frame, not racing space): the position
+    // is projected onto the lap. Priority is geometric, so on a twisty lap most
+    // lamps are "near a corner" and the spacing rule does the thinning.
+    const LAMP_CORNER_K = 1 / 200, LAMP_BRAKE_AHEAD = 250, LAMP_BRAKE_BEHIND = 60;
+    const selectCustomLamps = () => {
+      const m = customLamps.length;
+      if (m <= CUSTOM_LAMP_CAP) return customLamps;
+      const L = track.total;
+      const near = (s) => {
+        for (let d = -LAMP_BRAKE_BEHIND; d <= LAMP_BRAKE_AHEAD; d += ds)
+          if (Math.abs(curvature(track, s + d)) >= LAMP_CORNER_K) return true;
+        return false;
+      };
+      const items = customLamps.map((rec, i) => {
+        const s = TrackSpline.project(track, rec.x, rec.z).s;
+        return { rec, i, s, hot: !!(rec.always || rec.aim || rec.aimAt) || near(s) };
+      });
+      const gap = (a, b) => { const d = Math.abs(a.s - b.s); return Math.min(d, L - d); };
+      let kept = items.slice().sort((a, b) => a.s - b.s || a.i - b.i);
+      while (kept.length > CUSTOM_LAMP_CAP) {
+        const pool = kept.some((it) => !it.hot) ? (it) => !it.hot : () => true;
+        let worst = -1, wg = Infinity;
+        for (let j = 0; j < kept.length; j++) {
+          if (!pool(kept[j])) continue;
+          const g = Math.min(gap(kept[j], kept[(j + 1) % kept.length]), gap(kept[j], kept[(j + kept.length - 1) % kept.length]));
+          if (g < wg || (g === wg && kept[j].i > kept[worst].i)) { wg = g; worst = j; }
+        }
+        kept.splice(worst, 1);
+      }
+      const dropped = m - kept.length, hot = items.filter((it) => it.hot).length;
+      Log.warn("scenery", def.id + ": " + m + " lamp posts registered, cap " + CUSTOM_LAMP_CAP + " - dropped " + dropped +
+        " (" + hot + " corner/braking/always lamps, " + kept.filter((it) => it.hot).length + " kept)");
+      return kept.sort((a, b) => a.i - b.i).map((it) => it.rec);
     };
     const registerMastLamp = (spec) => {
       spec = spec || {};
@@ -2222,9 +2270,10 @@ const TrackBuildProps = (function () {
         track.lampPosts.push({ k, side, x: lens[0], y: lens[1], z: lens[2], kind });
       }
     }
-    for (const lamp of customLamps) track.lampPosts.push(lamp);
+    const keptLamps = selectCustomLamps();
+    for (const lamp of keptLamps) track.lampPosts.push(lamp);
     for (const lamp of mastLamps) track.lampPosts.push(lamp);
-    track.hasAlwaysLamps = customLamps.some((lamp) => lamp.always);
+    track.hasAlwaysLamps = keptLamps.some((lamp) => lamp.always);
 
     // bridge supports: pillars from the ground up to the raised deck, set a
     // little along the deck from the exact crossing so they clear the lower road

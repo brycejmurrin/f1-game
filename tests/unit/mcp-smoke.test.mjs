@@ -137,3 +137,17 @@ test("smoke --real: tree tools only, judged on ok + a result, exit 0 in mock mod
   assert.match(r.stdout, /PASS apex_pick_tests/);
   assert.match(r.stdout, /mcp-smoke --real ok: 2\/2/);
 });
+
+// 2026-10-10: --real covered only the tree tools. --browser adds one cheap call per browser path (ui_fit, ui_shot, eval), one at a
+// time. Mock mode here: no Chromium, and the loadavg refusal (a browser call under load times the box) is skipped.
+test("smoke --real --browser adds the browser checks, opt-in, and judges them the same way", async () => {
+  const { BROWSER_CHECKS } = await import("../../tools/mcp/mcp-smoke.mjs");
+  assert.deepEqual(BROWSER_CHECKS.map(([n]) => n), ["apex_ui_fit", "apex_ui_shot", "apex_eval"]);
+  const off = run(["--real", "--no-write", "--only=apex_status"], { APEX_MCP_MOCK: "1" });
+  assert.doesNotMatch(off.stdout, /apex_ui_fit/, "no browser call without --browser");
+  const on = run(["--real", "--browser", "--no-write", "--only=apex_status,apex_ui_fit,apex_ui_shot"], { APEX_MCP_MOCK: "1" });
+  assert.equal(on.status, 0, on.stderr + on.stdout);
+  assert.match(on.stdout, /PASS apex_ui_fit/);
+  assert.match(on.stdout, /PASS apex_ui_shot/);
+  assert.match(on.stdout, /mcp-smoke --real ok: 3\/3 tools \(tree \+ browser\)/);
+});
