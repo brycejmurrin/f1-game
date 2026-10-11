@@ -27,6 +27,45 @@ test("every host's PR-subscription tool is named for its host, and none is calle
   }
 });
 
+test("a subscription never stands alone: each host's timer is named beside it", () => {
+  // anthropics/claude-code#62561: subscribe_pr_activity dropped check_run completions
+  // and sessions sat idle through a red; the timer wake that reads CI is the fallback.
+  for (const [file, text] of [["AGENTS.md", read("AGENTS.md")],
+    ["steward/SKILL.md", read(".claude/skills/steward/SKILL.md")],
+    ["agent-fleet/SKILL.md", SKILL], ["references/worker.md", WORKER]]) {
+    assert.match(text, /send_later/, `${file} names Claude Code's timer`);
+    assert.match(text, /subscribe_timer/, `${file} names Cursor's timer`);
+    assert.doesNotMatch(text, /subscribe_pr_activity`?\s*\(claude-code-remote/,
+      `${file}: subscribe_pr_activity is the GitHub MCP's tool, not claude-code-remote's`);
+  }
+  assert.match(WORKER, /ci-watch\.mjs --sha <head> --once/, "worker reads CI on every wake");
+});
+
+test("the adapter table covers each host's verified spawn path", () => {
+  const table = ORCH.match(/## Per-vendor adapters[\s\S]*?\n\| spawn \|([^\n]*)/);
+  assert.ok(table, "orchestrator.md has the adapter table with a spawn row");
+  assert.match(table[1], /create_session/, "Claude Code spawn");
+  assert.match(table[1], /environment: "cloud"/, "Cursor in-agent Task spawn");
+  assert.match(table[1], /POST \/v1\/agents/, "Cursor API spawn");
+  assert.match(table[1], /grok [^|]*-p /, "Grok Build headless spawn");
+  assert.match(ORCH, /--deny "Bash\(git push --force\*\)"/, "a Grok worker is denied force-push");
+});
+
+test("the steward card's hashes match the files it lets sessions skip", async () => {
+  const { createHash } = await import("node:crypto");
+  const card = read("docs/notes/APEX-STEWARD-CARD-2026-10-05.md");
+  const line = card.match(/^HASHES: (.*)$/m);
+  assert.ok(line, "card carries a HASHES line");
+  const files = { steward: ".claude/skills/steward/SKILL.md",
+    "check-changes": ".claude/skills/check-changes/SKILL.md",
+    "pr-template": ".github/pull_request_template.md" };
+  for (const [, key, want] of line[1].matchAll(/([a-z-]+)=([0-9a-f]{8})/g)) {
+    assert.ok(files[key], `unknown HASHES key ${key}`);
+    const got = createHash("sha256").update(fs.readFileSync(path.join(ROOT, files[key]))).digest("hex").slice(0, 8);
+    assert.equal(got, want, `card says ${key}=${want} but ${files[key]} hashes to ${got}: refresh the card`);
+  }
+});
+
 test("the fleet block keys are the same in the skill and the worker reference", () => {
   const block = SKILL.match(/```fleet\n([\s\S]*?)```/);
   assert.ok(block, "SKILL.md carries the fenced fleet block");
