@@ -25,6 +25,11 @@ hud.js **1393 / 2377**, hud.css **1953 / 2150**. The same update lowered game.js
 4976 → 4974 code / 9195 → 9186 lines (it had shrunk). Owner decision: raises with a
 stated reason are fine; the allocator's own raise follows when it lands. (#1380 sync
 onto ship absorbed the same raise as #1437 so the merge commit could land.)
+2026-10-11 third re-measure after ship tip `23641805f` (PR merge trees for #1380):
+#1351 and later HUD work grew past the second-remeasure ceilings, so Structural guards
+failed on the merge ref (hud.js +18 code / +22 lines, hud.css +7 / +8). New ceilings:
+hud.js **1411 / 2399**, hud.css **1960 / 2158**. Unit-suite floor 550+ → 600+ (605 on disk).
+
 
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.

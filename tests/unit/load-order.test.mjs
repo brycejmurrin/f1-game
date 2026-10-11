@@ -239,7 +239,7 @@ test("every js/**/*.js appears in FULL ∪ DEFERRED ∪ LAZY_AGENT (and vice ver
 });
 
 // ---- DEFERRED: js/ files with no tag, injected at runtime by game.js --------
-// The manifest is the truth; js/roster.js (game.js's loader table) and sw.js's
+// The manifest is the truth; js/roster.js (the loader table game.js uses) and sw.js's
 // optional precache seed are generated from it (the SW discovers everything
 // else by parsing tags, so a tagless file is invisible to it). A deferred
 // backend that silently 404s in production while every local run passes was
