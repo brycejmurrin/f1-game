@@ -568,6 +568,19 @@ test("the cheap stop under caution is offered only when a stop is still due", ()
   assert.equal(long.eng.senseOf(b).cheapStop, true);
 });
 
+test("pits.estimate() is re-read on a 0.25 s clock, not every physics step (bug-hunt 7.11)", () => {
+  const { eng, tyres, G } = sessionFor();
+  let calls = 0;
+  G.pits = { estimate: () => { calls++; return { lossS: 22, gapS: 2, marginS: -20 }; }, lastCue: () => null };
+  const c = carOn(tyres, { wear: 0.1 });
+  for (let i = 0; i < 120; i++) eng.update(c, 1 / 60);       // 2 s of steps
+  assert.ok(calls <= 10, `estimate ran ${calls} times in 120 steps — it should follow the 0.25 s clock`);
+  assert.ok(calls >= 2, "…but it is still refreshed");
+  const n = calls;
+  eng.senseOf(c); eng.senseOf(c);
+  assert.equal(calls, n + 2, "a one-off sense (no dt) is always fresh");
+});
+
 // ── round-2 hunt (audio F1/F6/F7/F9) ────────────────────────────────────────
 
 // F1: callFor returned ONE line, the top rung, and update() dropped it when it

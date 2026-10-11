@@ -602,7 +602,11 @@
 #sel-preview-title { min-width: 0; }
 #sel-preview-name {
   font-size: var(--fs-5); font-weight: 800; font-style: italic;
-  color: var(--text); letter-spacing: var(--ls-1); line-height: 1.05;
+  color: var(--text); letter-spacing: var(--ls-1);
+  /* 1.2 + 0.1em pad: line-height alone left 3px italic ink overhang at 130%
+     (scrollHeight−clientHeight); pad clears fit-audit; ellipsis still truncates. */
+  line-height: 1.2;
+  padding-block: 0.1em;
   text-shadow: var(--hud-halo);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }

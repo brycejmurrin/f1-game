@@ -221,12 +221,15 @@ window.UiLayers = (function () {
      still needs to move the title doors; overlay is hidden in-race. */
   function navOpen() {
     if (anyOpen()) return true;
-    const t = top();
+    // Only these two layers are gate:false, so once anyOpen() is false the old
+    // top() lookup could name nothing else. It is a 33-selector querySelectorAll
+    // and Input.pollGamepad() reaches here every frame of a race for a pad
+    // player, so ask the two elements directly instead.
     // rotate-device joins overlay here: both are gate:false layers whose
     // buttons the pad must still reach. Without it, a pad-only player in
     // portrait mid-race had d-pad/A spent on boost/shift behind the opaque
     // blocker and NO reachable way to press OPEN CONTROLS or EXIT RACE.
-    return !!(t && (t.id === "overlay" || t.id === "rotate-device"));
+    return shownLayer(document.getElementById("overlay")) || shownLayer(document.getElementById("rotate-device"));
   }
 
   /* IN A RACE means the game loop is simulating — `state === "race" || "count"`,

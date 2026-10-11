@@ -112,8 +112,11 @@ window.SpotifyMusic = (function () {
   function setMode(m) {
     const v = m === "browser" ? "browser" : "remote";
     if (v === mode()) return v;
+    // Tear down BEFORE the stored mode flips: teardown() drops the music backend, whose
+    // stop() pauses through whichever transport mode() names. Flipped first, it asked the
+    // NEW transport and the old one (a remote device) kept playing.
+    teardown();
     lsSet(K_MODE, v);
-    teardown();                       // the old transport is meaningless now
     setStatus(readToken() ? "configured" : (available() ? "configured" : "off"),
       v === "browser"
         ? "Switched to playing in this browser. Press CONNECT."
@@ -136,6 +139,11 @@ window.SpotifyMusic = (function () {
 
   function status() { return { state, message, deviceId, track }; }
   function setStatus(s, msg) { state = s; message = msg || ""; emit(); }
+  // A TRANSIENT token failure on an already connected session must not demote it: the
+  // music backend stays installed (it silences the game's own soundtrack) and active()
+  // reads state, so "configured" left the game muted until CONNECT. The long-lived
+  // refresh token survives, so the next call retries; only the message changes.
+  function keepOrConfigure(msg) { setStatus(state === "connected" ? "connected" : "configured", msg); }
   function emit() {
     for (const fn of subs) { try { fn(status()); } catch (e) { /* one subscriber's bug must not break the others */ } }
     render();
@@ -225,7 +233,7 @@ window.SpotifyMusic = (function () {
           setStatus("configured",
             "Spotify session expired or the app was revoked. Press CONNECT to sign in again.");
         } else if (current && current.refresh_token === refreshToken) {
-          setStatus("configured", "Could not refresh the Spotify session (" + refreshError + "). Try again in a moment.");
+          keepOrConfigure("Could not refresh the Spotify session (" + refreshError + "). Try again in a moment.");
         }
         return null;
       }
@@ -1004,9 +1012,10 @@ window.SpotifyMusic = (function () {
     return validToken().then((t) => {
       if (!t) {
         const retained = !!readToken();
-        setStatus("configured", retained
+        const msg = retained
           ? "Could not renew the Spotify session. Check your connection and try again."
-          : "No Spotify session on this device. Press CONNECT to sign in.");
+          : "No Spotify session on this device. Press CONNECT to sign in.";
+        if (retained) keepOrConfigure(msg); else setStatus("configured", msg);
         return { ok: false, reason: retained ? "refresh-failed" : "no-token", debug: d };
       }
       // The same FETCH_TIMEOUT_MS cap api() applies: a hung /me otherwise left

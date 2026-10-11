@@ -9,8 +9,8 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = fs.readFileSync(path.join(ROOT, "js/camera/cam-avoid.js"), "utf8");
 
-function load(FlybySeq) {
-  const ctx = { FlybySeq, Log: { info() {} } };
+function load(FlybySeq, Tracks) {
+  const ctx = { FlybySeq, Tracks, Log: { info() {} } };
   vm.runInNewContext(src + "\nthis.exported = CamAvoid;", ctx);
   return ctx.exported;
 }
@@ -66,6 +66,53 @@ test("street circuit: skips lateral step-in (corr already owns width)", () => {
   CamAvoid.freeEye({ def: { street: true } }, eye, { p: [0, 0, 0], r: [1, 0, 0], hw: 7 });
   assert.equal(eye[0], before, "street path does not shove laterally");
   assert.ok(insides >= 0);
+});
+
+// A straight road along +z through the origin (hw 8, right = +x, road at y=0)
+// and one prop box whose footprint reaches x=3: a gantry's / angled stand's AABB.
+function roadWorld(box) {
+  const FlybySeq = {
+    insideProp(track, eye, m) {
+      const M = m || 0;
+      return Math.abs(eye[0] - box.x) < box.w / 2 + M && Math.abs(eye[2] - box.z) < box.d / 2 + M &&
+        eye[1] > box.y - box.h / 2 - M && eye[1] < box.y + box.h / 2 + M ? box : null;
+    },
+    clearEye(track, eye) {
+      const hit = FlybySeq.insideProp(track, eye, 2);
+      if (hit) eye[1] = hit.y + hit.h / 2 + 2;
+      return eye;
+    },
+  };
+  const Tracks = {
+    project: (t, x, z) => ({ s: z, lat: x }),
+    sample: (t, s, out) => { out.p = [0, 0, s]; out.r = [1, 0, 0]; out.hw = 8; return out; },
+  };
+  return load(FlybySeq, Tracks);
+}
+
+test("the road is clear: an eye on the corridor is not lifted by a box over the tarmac", () => {
+  const gantry = { x: 0, y: 4.6, z: 0, w: 20, d: 3, h: 9.2 };   // spans the road
+  const CamAvoid = roadWorld(gantry);
+  const frame = { p: [0, 0, 0], r: [1, 0, 0], hw: 8 };
+  const eye = [1, 0.8, 0];
+  CamAvoid.freeEye({ def: { street: false } }, eye, frame);
+  assert.equal(eye[1], 0.8, "eye under the gantry keeps its height");
+});
+
+test("the road is clear: a box that only its 2 m margin reaches does not lift a road-edge eye", () => {
+  const stand = { x: 14, y: 5, z: 0, w: 10, d: 20, h: 10 };      // faces x = 9, eye at x = 8
+  const CamAvoid = roadWorld(stand);
+  const eye = [8, 0.8, 0];
+  CamAvoid.freeEye({ def: { street: false } }, eye, { p: [0, 0, 0], r: [1, 0, 0], hw: 8 });
+  assert.equal(eye[1], 0.8);
+});
+
+test("off the corridor a solid box still lifts the eye", () => {
+  const stand = { x: 20, y: 5, z: 0, w: 10, d: 20, h: 10 };      // spans x 15..25
+  const CamAvoid = roadWorld(stand);
+  const eye = [22, 4, 0];                                         // 14 m from the centre, past hw + 2
+  CamAvoid.freeEye({ def: { street: true } }, eye, { p: [0, 0, 0], r: [1, 0, 0], hw: 8 });
+  assert.equal(eye[1], 12, "lifted to the roof plus the 2 m margin");
 });
 
 test("vantage.js calls CamAvoid for broadcast modes after look-back", () => {

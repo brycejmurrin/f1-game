@@ -211,8 +211,21 @@ test("hostile payloads are rejected with a reason and change nothing", () => {
     [{ format: "nope", slots: [] }, "wrong-format"],
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0, data: { money: NaN } }] }, "nan-money"],
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0, data: [1, 2, 3] }] }, "slot-not-object"],
+    // A driver career filed under a MY TEAM row (and the reverse) would load as
+    // the wrong flavour in that slot set.
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "myteam", i: 2, data: save({ flavour: "driver" }) }] }, "flavour-mismatch"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0, data: save({ flavour: "myteam", team: "haas" }) }] }, "flavour-mismatch"],
     [{ format: "apex26-career-backup-v1", slots: "nope" }, "slots-not-array"],
     [{ format: "apex26-career-backup-v1", slots: [], ghost: { x: 1 } }, "ghosts-forbidden"],
+    // Two rows for one slot: apply() would write the first and then fail (or
+    // silently overwrite it), so the file is refused before any write.
+    [{ format: "apex26-career-backup-v1", slots: [
+      { flavour: "driver", i: 1, data: save({ flavour: "driver", money: 1 }) },
+      { flavour: "driver", i: 1, data: save({ flavour: "driver", money: 2 }) }] }, "duplicate-slot"],
+    // A missing flavour/index is the driver set's slot 0, so it collides with it.
+    [{ format: "apex26-career-backup-v1", slots: [
+      { data: save({ flavour: "driver", money: 1 }) },
+      { flavour: "driver", i: 0, data: save({ flavour: "driver", money: 2 }) }] }, "duplicate-slot"],
   ];
   for (const [payload, reason] of cases) {
     const r = h.CareerBackup.validate(payload);

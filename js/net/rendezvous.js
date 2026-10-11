@@ -16,6 +16,9 @@ const NetRendezvous = (function () {
   // Guest join of a fake/missing code must fail in the lobby in ~8–15 s (same
   // product target as NetNostr.JOIN_TIMEOUT_MS). Not a worker mapping TTL.
   const POLL_TIMEOUT_MS = 12000;
+  // The HOST of a private-relay room is waiting for a friend who has to be sent
+  // the code first (public Nostr hosts get 2 min too): 12 s is a guest's window.
+  const HOST_POLL_TIMEOUT_MS = 120000;
   const FETCH_TIMEOUT_MS = 8000;
 
   function baseUrl() {
@@ -393,7 +396,7 @@ const NetRendezvous = (function () {
     catch (e) { return rvLog("swap", ERR("crypto", "This browser could not protect the room code. Use the invite link instead.")); }
     const posted = await httpPut(code, slot, mine, owner);
     if (!posted.ok) return rvLog("swap", posted);
-    const got = await waitFor(code, want, token, onTick);
+    const got = await waitFor(code, want, token, onTick, HOST_POLL_TIMEOUT_MS);
     return rvLog("swap", got.ok ? { ok: true, payload: got.payload } : got);
   }
 
@@ -402,7 +405,8 @@ const NetRendezvous = (function () {
   // WAIT_TRANSIENT_MAX of these in a row, not one.
   const TRANSIENT = new Set(["rate_limited", "relay", "timeout", "offline"]);
   const WAIT_TRANSIENT_MAX = 5;
-  async function waitFor(code, slot, token, onTick) {
+  async function waitFor(code, slot, token, onTick, timeoutMs) {
+    const limit = timeoutMs > 0 ? timeoutMs : POLL_TIMEOUT_MS;
     const started = Date.now();
     let transient = 0;
     for (;;) {
@@ -413,7 +417,7 @@ const NetRendezvous = (function () {
       if (!res.ok && res.error !== "not_found") {
         if (!TRANSIENT.has(res.error) || ++transient >= WAIT_TRANSIENT_MAX) return res;
       } else transient = 0;
-      if (Date.now() - started > POLL_TIMEOUT_MS) {
+      if (Date.now() - started > limit) {
         // Lobby codeJoin already say(why.message) on !done.ok — keep this useful.
         // waitFor is the private-relay path (32-char tokens); do not claim "six".
         return ERR("expired",
@@ -425,7 +429,7 @@ const NetRendezvous = (function () {
   }
 
   return {
-    ALPHABET, CODE_LEN, PRIVATE_CODE_LEN, POLL_TIMEOUT_MS, PROTOCOL, topic, privateRoomId, STORE_KEY, DEFAULT_URL, ENVELOPE_TAG,
+    ALPHABET, CODE_LEN, PRIVATE_CODE_LEN, POLL_TIMEOUT_MS, HOST_POLL_TIMEOUT_MS, PROTOCOL, topic, privateRoomId, STORE_KEY, DEFAULT_URL, ENVELOPE_TAG,
     configured, usingPrivateRelay, setUrl, setSessionUrl, baseUrl, swap, hostRoom,
     seal, open, sealPrivate, openPrivate, verifyCode, verifyFor, VERIFY_LEN,
     makeCode, normalise, valid,

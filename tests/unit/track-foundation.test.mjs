@@ -124,6 +124,7 @@ test("Miami declares explicit racing scenery and source-mapped Turnpike elevatio
   // re-swept to keep the road where it was (peak ~0.858, within 0.065 m).
   assert.equal(miami.startFrac, 0);
   assert.ok(Math.abs(TrackSpace.toRacingFrac(miami, miami.elevations[0].s) - 0.8605) < 1e-12);
+  assert.ok(Math.abs(TrackSpace.toRacingFrac(miami, miami.elevations[1].s) - 0.662) < 1e-12);
   // Curated hero zones only (eb0b6b3 narrowed the old full-lap exclusion):
   // Hard Rock bowl horizon, marina, and beach club.
   const cityFoliage = Array.from(miami.dressingExclusions) // host-realm copy for deepEqual

@@ -89,3 +89,10 @@ test("armed unscored practice reports its finish without earned points, podium o
   assert.equal(scored.children[0].children[1].textContent, "P1 · 26 points", "real scored result keeps its actual points");
   assert.equal(scored.children.length, 2);
 });
+
+test("totals read the cumulative tally, so a trimmed history archive does not cap the record", () => {
+  const { career } = boot();
+  const c = { results: [{ p: 1 }], history: [{ wins: 1, podiums: 1, pos: 1, cPos: 1 }],
+    tally: { seasons: 14, wins: 20, podiums: 31, titles: 13, cTitles: 6, pts: 9000 } };
+  assert.deepEqual(plain(career.totals(c)), { wins: 21, podiums: 32, titles: 13, teamTitles: 6, seasons: 15 });
+});

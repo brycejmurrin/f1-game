@@ -374,3 +374,36 @@ test("a TV-director solve never perturbs the player's bend hang", () => {
   for (let i = 0; i < 40; i++)
     assert.ok(Math.abs(got[i] - want[i]) < 1e-9, `frame ${i}: player eye.x ${got[i].toFixed(4)} vs alone ${want[i].toFixed(4)}`);
 });
+
+// bug-hunt 9.5: the look-back mirror lived inside every vantage() solve, so a
+// latched rear view flipped the Director's TV shot after the flag and the
+// results chequered cut. Only the player's own solve may mirror.
+test("look-back mirrors the player's solve only; extra.noLook opts out (bug-hunt 9.5)", () => {
+  const n = 1000, total = 4000;
+  const track = { total, n, px: new Float64Array(n), py: new Float64Array(n),
+    pz: Float64Array.from({ length: n }, (_, k) => k * 4), rx: new Float64Array(n).fill(1),
+    ry: new Float64Array(n), rz: new Float64Array(n), hw: new Float64Array(n).fill(6), def: {},
+    surface: { heightAt: () => -0.12 } };
+  const at = (arr, s) => { let v = s % total; if (v < 0) v += total; const fi = v / total * n, i = Math.floor(fi) % n, j = (i + 1) % n; return arr[i] + (arr[j] - arr[i]) * (fi - Math.floor(fi)); };
+  const Tracks = {
+    sample(t, s, o) { o.p[0] = at(t.px, s); o.p[1] = at(t.py, s); o.p[2] = at(t.pz, s); o.t[0] = 0; o.t[1] = 0; o.t[2] = 1; o.r[0] = 1; o.r[1] = 0; o.r[2] = 0; o.hw = 6; return o; },
+    curvature: () => 0,
+    banking: (t, s, l, scr) => { if (scr) { scr.dy = 0; scr.roll = 0; return scr; } return { dy: 0, roll: 0 }; },
+  };
+  const solve = (back, noLook) => {
+    const ctx = vm.createContext({ Math, JSON, Object, Array, Number, Tracks,
+      Input: { lookingBack: () => back },
+      GameStore: { store: { get: (k, d) => d, set: () => true, raw: () => null, rawSet: () => true } },
+      Log: { info() {}, debug() {}, warn() {}, error() {} }, document: undefined });
+    vm.runInContext(["js/core/mat4.js", ...["drive-chase.js", "drive-broadcast.js", "drive-onboard.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage.js"]
+      .map((f) => fs.readFileSync(path.join(root, f), "utf8")).join("\n") + "\nthis.GC = GameCams;", ctx);
+    const extra = { carPos: [0, 500], carHead: 0, snap: true, att: {} };
+    if (noLook) extra.noLook = true;
+    const v = ctx.GC.vantage(track, "chase", 500, 0, 60, 0, extra);
+    return { eye: Array.from(v.eye), tgt: Array.from(v.tgt) };
+  };
+  const fwd = solve(false), mirrored = solve(true), tv = solve(true, true);
+  assert.ok(Math.abs(mirrored.tgt[2] - mirrored.eye[2] - -(fwd.tgt[2] - fwd.eye[2])) < 1e-6, "the player's own solve still mirrors");
+  assert.deepEqual(tv.tgt, fwd.tgt, "a TV/results solve (noLook) ignores a latched rear view");
+  assert.deepEqual(tv.eye, fwd.eye);
+});

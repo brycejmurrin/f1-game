@@ -33,6 +33,7 @@ function boot(sel = { teamIdx: 0, driverIdx: 0 }) {
   const saved = {};
   const store = {
     get: (k, d) => (k in saved ? saved[k] : d),
+    getStored: (k) => (Object.hasOwn(saved, k) ? saved[k] : undefined),
     set: (k, v) => { saved[k] = v; },
   };
   const Teams = { LIST: [{ id: "mclaren" }] };
@@ -51,6 +52,9 @@ function boot(sel = { teamIdx: 0, driverIdx: 0 }) {
 
 test("an empty sheet is seeded with the picked legend's period car", () => {
   const { ct, Legends, store } = boot();
+  const fallback = { engine: "fallback" };
+  assert.equal(store.get("parts.legends", fallback), fallback, "get can supply a fallback");
+  assert.equal(store.getStored("parts.legends"), undefined, "a fallback is not a stored player sheet");
   ct.syncLegendsTeam(2);                       // roster index 2 — Fangio
   const want = Legends.parts(Legends.LIST[2].id);
   assert.deepEqual(store.get("parts.legends", null), want);
@@ -115,10 +119,9 @@ test("boot rebuilds the SAVED legend, not legend 0: no Fangio sheet in Schumache
 // D2 — the FRESH-INSTALL case. js/data/garage-defaults.js ships `parts.legends`
 // (a wing-68 build) and GameStore.get answers from it on a miss, so on a first
 // boot the sheet is never "empty": seedLegendParts saw a non-empty sheet, left it,
-// and the default seat 0 (Schumacher) raced in somebody else's car. PR #1289
-// makes seedLegendParts read the RAW key (a miss is a miss), after which this
-// passes; until that change is in the tree it is a known failure, hence `todo`.
-test("a fresh install's Legends seat 0 builds the period car, not the shipped sheet", { todo: true }, () => {
+// and the default seat 0 (Schumacher) raced in somebody else's car. Since PR
+// #1289 seedLegendParts reads the RAW key (a miss is a miss); strict from here.
+test("a fresh install's Legends seat 0 builds the period car, not the shipped sheet", () => {
   const disk = new Map();
   const localStorage = { getItem: (k) => (disk.has(k) ? disk.get(k) : null), setItem: (k, v) => disk.set(k, String(v)),
     removeItem: (k) => disk.delete(k), clear: () => disk.clear(), key: (i) => [...disk.keys()][i] ?? null, get length() { return disk.size; } };

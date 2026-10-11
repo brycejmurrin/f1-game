@@ -62,7 +62,10 @@ const SetupTune = (function () {
     store.set(KEY + teamId, cur);
     return cur;
   }
-  function reset(teamId) { store.set(KEY + teamId, null); return get(teamId); }
+  // undefined REMOVES the key, so the store falls back to the shipped sheet
+  // (setup.<team> in garage-defaults) exactly as a fresh install does; null
+  // was a stored value that bypassed it.
+  function reset(teamId) { store.set(KEY + teamId, undefined); return get(teamId); }
   function isDefault(teamId) {
     const d = defaults(teamId);
     const t = get(teamId);

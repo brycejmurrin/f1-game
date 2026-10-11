@@ -154,6 +154,22 @@ test("the LAST FINGER LIFTING keeps the latch (touchend has touches.length 0 on 
   assert.equal(h.Input.throttleLatched(), false, "…but a blur still drops it");
 });
 
+test("LATCH: a second finger landing on GAS does not cancel the latch while the first is down", () => {
+  const { Input, pedal } = boot();
+  Input.setThrottleLatch(true);
+  pedal.fire("pointerdown", { pointerId: 1 });
+  assert.equal(Input.throttleLatched(), true);
+  pedal.fire("pointerdown", { pointerId: 2 });
+  assert.equal(Input.throttleLatched(), true, "only the first contact is a press edge");
+  pedal.fire("pointerup", { pointerId: 1 });
+  pedal.fire("pointerup", { pointerId: 2 });
+  assert.equal(Input.throttleLatched(), true, "releasing both fingers keeps the latch");
+  assert.ok(Input.throttle() > 0.99);
+  pedal.fire("pointerdown", { pointerId: 3 });
+  pedal.fire("pointerup", { pointerId: 3 });
+  assert.equal(Input.throttleLatched(), false, "a fresh tap still lifts it");
+});
+
 test("input hunt fixes: pad steer gated under a menu, rotation keeps the tilt zero, Ctrl/Alt reserved, lobby asks for tilt, a silent gyro falls back", () => {
   const input = fs.readFileSync(path.join(ROOT, "js/input/input.js"), "utf8");
   // The d-pad walking a friend race's pause menu no longer steers the car: the
@@ -170,4 +186,15 @@ test("input hunt fixes: pad steer gated under a menu, rotation keeps the tilt ze
     assert.match(lobby, new RegExp(`on\\("${id}", tiltToo\\(`), `${id} asks for tilt inside its click`);
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   assert.match(game, /if \(steerMode !== "tilt" \|\| Input\.gyroSeen \|\| headlessMode\) return;/, "no reading in 1.5 s: buttons, said");
+});
+
+test("a MIRROR press on the grid does not survive clearDriveEdges (it would toggle the mirror at lights-out)", () => {
+  const { Input, listeners } = boot();
+  const down = (code) => (listeners.keydown || []).forEach((f) => f({ key: code, code, repeat: false, isTrusted: true, preventDefault() {}, target: { tagName: "BODY" } }));
+  down("KeyM");
+  Input.clearDriveEdges();
+  assert.equal(Input.consumeMirror(), false, "the grid press is spent at lights-out");
+  down("KeyM");
+  assert.equal(Input.consumeMirror(), true, "a press in the running race is still consumed once");
+  assert.equal(Input.consumeMirror(), false);
 });

@@ -162,6 +162,25 @@ test("postStep clamps lateral x to wallAt during takeover", () => {
   assert.equal(cars[0].px, 5, "world pose follows the clamped (s,x)");
 });
 
+test("a car flying outward past wallAt does not trip the teleport guard (bug-hunt 7.1)", () => {
+  // The Rapier world has no barriers, so the raw body keeps going while the
+  // written-back c.px/pz is clamped at the wall. The guard must compare raw
+  // with raw: 1.5 m/tick is well under stepBound, however far past the wall.
+  const pose = { x: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: 90, vz: 0 };
+  const { sim, cars } = load({
+    pose,
+    wallAt: 8,
+    trackFrom: () => ({ s: 100, x: pose.x }),
+    worldFromTrack: (s, x) => ({ x, z: 0 }),
+  });
+  sim.notifyCar(cars[0], cars[1], 30);
+  sim.preStep(1 / 60);
+  assert.equal(sim.status().owned, 2);
+  for (let i = 0; i < 20; i++) { pose.x += 1.5; sim.postStep(1 / 60); }
+  assert.equal(sim.status().fallbacks, 0, "no anomaly handback from a wall-clamped write-back");
+  assert.equal(sim.status().owned, 2, "both cars still owned by the window");
+});
+
 test("postStep hands a finished car back instead of tracking it", () => {
   const pose = { x: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: 0, vz: 0 };
   const { sim, cars } = load({ pose });

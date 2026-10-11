@@ -817,8 +817,13 @@ const TyreModel = (function () {
       if (!(lapFrac > 0)) return;
       const slipMul = 1 + W_SLIP_SPD * clamp(slide, 0, 1);
       const dw = lapFrac * load * slipMul * LEVELS[level] / effLifeLaps(c.tyre.life, G.lapsTarget);
+      // Finite guard (temperature has one in tempInto): `x + NaN` is NaN and the
+      // next tick's `c.tyreWear || 0` reads NaN as 0, so a single bad tick (a
+      // NaN accSm through aiLoad) would wipe the set's accumulated wear.
+      if (!Number.isFinite(dw)) return;
       c.tyreWear = (c.tyreWear || 0) + dw;
-      const d = axleTilt(c, G.aTop());
+      const d0 = axleTilt(c, G.aTop());
+      const d = Number.isFinite(d0) ? d0 : 0;
       c.tyreWearF = (c.tyreWearF || 0) + dw * (1 + d);
       c.tyreWearR = (c.tyreWearR || 0) + dw * (1 - d);
     }

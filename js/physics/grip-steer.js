@@ -44,6 +44,14 @@ const GripSteer = (function () {
   }
   function labelOf(v) { return v <= 1 ? "OFF" : "GRIP " + v; }
 
+  // Where the FRONT tyre curve peaks (x = cs·α/mu). The front is rescaled to
+  // peak earlier than the nominal π/2 (TyreModel.CURVE_PEAK_X_F), and the cap
+  // aims at ITS peak slip — read at call time so load order never matters; a
+  // bare VM without TyreModel keeps the nominal π/2.
+  function frontPeakX() {
+    return (typeof TyreModel !== "undefined" && TyreModel.CURVE_PEAK_X_F) || Math.PI / 2;
+  }
+
   function smoothstep(edge0, edge1, x) {
     const t = clamp((x - edge0) / Math.max(edge1 - edge0, 1e-9), 0, 1);
     return t * t * (3 - 2 * t);
@@ -80,7 +88,7 @@ const GripSteer = (function () {
     const betaF = Math.atan2(vLat + af * r, vx);
     const betaR = Math.atan2(vLat - ar * r, vx);
     const s = Math.sign(driverDelta) || Math.sign(state.shaped) || 1;
-    const alphaPk = (Math.PI / 2) * muF / cs * TARGET;
+    const alphaPk = frontPeakX() * muF / cs * TARGET;
 
     let capIn = alphaPk + Math.max(s * betaF, -0.5 * alphaPk);
     if (state.braking) capIn *= 0.9;

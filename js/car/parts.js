@@ -726,13 +726,23 @@ const Parts = (function () {
   }
 
   const factoryCache = new Map();
+  // A team carrying its OWN factory object is cached per that object (every
+  // legend is id "legends"; custom-team swaps the team on a legend switch), so
+  // the string key below never serves one legend another's build.
+  const factoryCacheOwn = new WeakMap();
   function factoryResolved(team) {
     const id = team && team.id || "";
     // THE RULESET IS PART OF THE KEY. Without it an era would be a no-op on the
     // AI side — every factory build would be served from a cache filled before
     // the rules changed, and the player would be the only car obeying them.
     const key = `${id}|${team && team.engine || ""}|${_legalKey}`;
-    let resolved = factoryCache.get(key);
+    const own = team && team.factory;
+    let cache = factoryCache;
+    if (own && typeof own === "object") {
+      cache = factoryCacheOwn.get(own);
+      if (!cache) { cache = new Map(); factoryCacheOwn.set(own, cache); }
+    }
+    let resolved = cache.get(key);
     if (!resolved) {
       // A TEAM MAY CARRY ITS OWN FACTORY SETUP. FACTORY_PRESETS is keyed by a
       // team id this file knows, so a team minted at runtime — a legend duel
@@ -740,7 +750,7 @@ const Parts = (function () {
       // modern chassis. `team.factory` lets the team state its own build; the
       // preset table stays the answer for everyone who does not.
       resolved = resolveSetup((team && team.factory) || FACTORY_PRESETS[id] || DEFAULTS, team);
-      factoryCache.set(key, resolved);
+      cache.set(key, resolved);
     }
     return resolved;
   }

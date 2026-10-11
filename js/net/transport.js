@@ -450,10 +450,15 @@ const NetTransport = (function () {
     const EVENT_INBOX_CAP = 256;
     const INBOX_BYTE_CAP = 1024 * 1024;
     // Types whose loss breaks race flow — queue in order when the buffer is full
-    // rather than drop. Non-critical (LAP/STRATEGY/HELLO/…) may be dropped.
+    // rather than drop. Non-critical (STRATEGY/QLIVE — re-sent every second or a
+    // live preview) may be dropped. QUALI is the whole grid ("a wrong grid for the
+    // whole race" when lost), LAP carries fin/retired, SETTINGS/HELLO/READY are
+    // sent once per change and never repeated. All are a handful per session, so
+    // the queue stays small.
     const EVENT_CRITICAL = {
       go: 1, start: 1, result: 1, bye: 1,
       armed: 1, left: 1, caution: 1, model: 1,
+      quali: 1, lap: 1, settings: 1, hello: 1, ready: 1,
     };
     let inbox = [];
     let queuedState = 0;

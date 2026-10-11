@@ -186,10 +186,17 @@ it("garage sheet chrome is opaque, themed, and hides a redundant BACK", () => {
     "aero chip does not shrink under the bar (CAMERA is 0 0 auto)");
   assert.match(css, /\.cs-aero-lbl \{[^}]*flex:\s*0\s+0\s+auto/s,
     "ACTIVE AERO label never ellipsizes away under CORNER/STRAIGHT MODE");
+  assert.match(css, /\.cs-aero-val \{[^}]*flex:\s*0\s+0\s+auto/s,
+    "aero value does not shrink — CORNER↔STRAIGHT must not reflow the chip");
+  assert.match(css, /\.cs-aero-val \{[^}]*min-width:\s*14ch/s,
+    "aero value floor is STRAIGHT MODE (longest), so the chip width stays put");
   assert.match(css, /\.cs-aero-lbl \{[^}]*color:\s*color-mix\(in oklab,\s*var\(--text\)\s+62%/s,
     "ACTIVE AERO label uses the same rest colour as CAMERA");
   assert.match(css, /@media \(max-width: 820px\) \{[^]*#cs-aero \{[^}]*flex-direction:\s*column/s,
     "below the 844 phone-landscape golden, ACTIVE AERO stacks above CORNER MODE");
+  assert.match(css,
+    /@media \(orientation:\s*landscape\) and \(max-height:\s*480px\) \{[^]*#cs-cam-panel \{[^}]*max-height:\s*min\(30vh,\s*160px\)/s,
+    "short landscape caps the open cam panel harder so the turntable stays visible");
   assert.match(css,
     /:root\[data-look-garage-glass="glass"\] #carsetup #cs-inner > \.sheet-head \{[^}]*background-color:\s*var\(--carbon\)/s,
     "GLASS thins the card body only — head chrome stays carbon");

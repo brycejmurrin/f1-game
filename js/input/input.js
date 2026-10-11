@@ -589,9 +589,14 @@ const Input = (function () {
     }
     return into;
   }
-  function beginAxisCapture(cb) {
+  /* `opts.exclude` lists axes the wizard has already assigned. Step 2 snapshots
+     its rest 600 ms after steering was captured, while the wheel is still held
+     at full lock; when it springs back, axis 0 travels >= AXIS_CAPTURE_MOVE
+     from that snapshot and would win as the THROTTLE. */
+  function beginAxisCapture(cb, opts) {
     axisCaptureCb = typeof cb === "function" ? cb : null;
     axisCaptureRest = null;
+    axisCaptureSkip = new Set((opts && opts.exclude) || []);
     if (!axisCaptureCb) return;
     axisCaptureRest = snapshotRests(readPads(), new Map());
   }
@@ -606,6 +611,7 @@ const Input = (function () {
       if (!rests) { snapshotRests([p], axisCaptureRest); continue; }
       const axes = p.axes || [];
       for (let i = 0; i < axes.length; i++) {
+        if (axisCaptureSkip.has(i)) continue;
         const rest = typeof rests[i] === "number" ? rests[i] : 0;
         const d = Math.abs((axes[i] || 0) - rest);
         if (d > best) { best = d; bestI = i; bestRest = rest; bestV = axes[i] || 0; }
@@ -668,6 +674,7 @@ const Input = (function () {
   const PAD_AXIS_DEF = { steer: 0, steerInvert: 1, throttle: null, brake: null, pedalInvert: 1 };
   let padAxisMap = Object.assign({}, PAD_AXIS_DEF);
   let axisCaptureCb = null;      // armed while the wizard waits for a moved axis
+  let axisCaptureSkip = new Set(); // axes the wizard already assigned; capture ignores them
   let axisCaptureRest = null;    // resting snapshot taken when the wizard armed
   function readPadAxis(axes, i) {
     if (i == null) return 0;
@@ -813,7 +820,11 @@ const Input = (function () {
         (js/ui/layers.js) in the LIGHTING TUNER and free camera — the one place
         their documented all-the-way-out behaviour matters most. */
       const act = bindings.keyAction(e.code);
-      const inTextField = tag === "INPUT" || tag === "TEXTAREA" || !!(active && active.isContentEditable);
+      // A focused <select> takes letters for type-ahead (P → PLAYSTATION/PRO/PULL),
+      // so a printable PAUSE key is text entry there; Escape still goes through.
+      const printable = (e.key && e.key.length === 1) || /^(Key|Digit)/.test(e.code || "");
+      const inTextField = tag === "INPUT" || tag === "TEXTAREA" || !!(active && active.isContentEditable) ||
+        (tag === "SELECT" && act === "pause" && printable);
       if (down && !e.repeat && (act === "pause" || e.code === "Escape") && !inTextField) {
       if (act === "pause") {
         if (onPauseCb) onPauseCb();
@@ -842,6 +853,12 @@ const Input = (function () {
       }
       return;
     }
+    /* A COMMAND CHORD IS NOT DRIVING. Cmd+D / Cmd+S / Cmd+Left belong to the
+       browser, and on macOS the key-up of the letter never arrives while Command
+       is held, so latching it would leave the car steering or braking until the
+       key is pressed again. Placed BELOW the pause/Escape block (Escape and P are
+       never chords) and above the gate, so releases still clear their latches. */
+    if (down && (e.metaKey || e.ctrlKey)) return;
     if (menuOverlayOpen() || typing) {
       if (down) return;
       if (act === "left") keyLeft = false;
@@ -1358,7 +1375,7 @@ const Input = (function () {
     for (let i = 0; i < n; i++) padPrevButtons[i] = btnDown(pad, i);
   }
 
-  const padMenu = InputPadMenu.create({ btnDown, btnEdge, nowMs, getPadAxisMap: () => padAxisMap });
+  const padMenu = InputPadMenu.create({ btnDown, btnEdge, nowMs, getPadAxisMap: () => padAxisMap, padRest: () => padRestOffset });
 
   // A connected pad only "wins" steering when its stick is actually deflected,
   // so an idle controller never overrides tilt / touch / on-screen buttons.
@@ -1999,8 +2016,9 @@ const Input = (function () {
   /* THE DRIVE EDGES ALONE, at lights-out (game.js). Every consumer of these
      runs only once the car steps, so a press during the countdown stayed latched
      and fired on the first green frame: RECOVER re-placed the car at rescue
-     speed, a shift-up started it in 2nd. Camera, radio and mirror are left
-     alone — those work on the grid and are consumed there. */
+     speed, a shift-up started it in 2nd. Camera and radio are left alone —
+     those work on the grid and are consumed there. The mirror is NOT one of them:
+     it is only consumed in state "race", so a grid press waited for green. */
   function clearDriveEdges() {
     overtakePressed = false;
     boostTogglePressed = false;
@@ -2008,6 +2026,9 @@ const Input = (function () {
     shiftUpPressed = false;
     shiftDownPressed = false;
     recoverPressed = false;
+    // The mirror is only consumed once the race is running (mirror-pass.js render
+    // gates on state "race"), so a grid press would otherwise toggle it at green.
+    mirrorPressed = false;
   }
   function clearEdges() {
     clearDriveEdges();

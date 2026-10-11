@@ -93,3 +93,32 @@ test("style axes present, zero-mean, and excluded from overall/skill", () => {
   assert.ok(Math.abs(DR.style01(30) - 1) < 1e-9);
   assert.ok(Math.abs(DR.style01(-30) + 1) < 1e-9);
 });
+
+// fromTier() read optimism at `h >>> 30` & 31 (2 bits), so every unrated driver
+// sat at -15..-12 (~-0.45 optimistic). The style axes now come from a second hash.
+test("unrated drivers' style axes are not one-sided (optimism had only 2 bits)", () => {
+  const DR = loadDR();
+  const codes = [];
+  for (let i = 0; i < 200; i++) codes.push("U" + i.toString(36).toUpperCase() + String.fromCharCode(65 + (i * 7) % 26));
+  for (const axis of ["aggression", "optimism"]) {
+    const v = codes.map((c) => DR.style01(DR.get(c, 2)[axis]));
+    const mean = v.reduce((a, b) => a + b, 0) / v.length;
+    assert.ok(Math.abs(mean) <= 0.1, `${axis} mean ${mean.toFixed(3)} should be near zero`);
+    assert.ok(v.some((x) => x > 0.2) && v.some((x) => x < -0.2), `${axis} must span both signs`);
+  }
+  // The five quality axes keep their exact old derivation, so only style moved.
+  const a = DR.get("XYZ", 2);
+  assert.deepEqual(Object.keys(a), ["pace", "craft", "awareness", "consistency", "experience", "aggression", "optimism"]);
+  assert.deepEqual(DR.get("XYZ", 2), a, "stable per code");
+});
+
+test("a persisted code of constructor / __proto__ / toString is unrated, never NaN", () => {
+  const DR = loadDR();
+  for (const code of ["constructor", "__proto__", "toString", "hasOwnProperty"]) {
+    const r = DR.get(code, 2);
+    for (const k of [...DR.AXES, ...DR.STYLE_AXES]) assert.ok(Number.isFinite(r[k]), `${code}.${k} = ${r[k]}`);
+    assert.deepEqual(JSON.parse(JSON.stringify(r)), JSON.parse(JSON.stringify(DR.fromTier(2, code))), `${code} falls back to fromTier`);
+  }
+  assert.equal(DR.get("FER2", 0).pace, 87, "a HIRES row is still found");
+  assert.equal(DR.get("VER", 0).pace, 96, "a BASE row is still found");
+});

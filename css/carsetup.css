@@ -1255,6 +1255,16 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
     overscroll-behavior-y: contain;
   }
 }
+/* Short play-shape landscape (phone golden 844×390): open panel + chip bar
+   ate ~48% of the viewport (CDP 2026-10-10, stackH≈186). Cap harder so more
+   of the turntable stays readable while framing; the panel already scrolls
+   (overflow-y) when the five rows do not fit. Pad/gap stay on the 1000px
+   tokens — raw px here would raise the rawSpacing ratchet. */
+@media (orientation: landscape) and (max-height: 480px) {
+  #cs-cam-panel {
+    max-height: min(30vh, 160px);
+  }
+}
 /* Label column + controls. The labels are a fixed column so the three rows of
    chips line up on one left edge instead of stepping in and out with the label
    width. */
@@ -1331,8 +1341,15 @@ body:has(.screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
   color: color-mix(in oklab, var(--text) 62%, transparent);
   display: block; white-space: nowrap;
 }
+/* Value width is pinned to STRAIGHT MODE (the longer of the two strings).
+   Without a floor, CORNER MODE shrunk the chip ~12px and the bar jumped on
+   every toggle (MCP garage-next pack, 844 and 1440). 13ch under-shot once
+   letter-spacing is on (~3px left); 14ch clears STRAIGHT at fs-micro and the
+   1000px fs-2 bump. flex 0 0 auto keeps the floor; ellipsis is only a safety
+   net under extreme UI scale. */
 .cs-aero-val {
-  flex: 0 1 auto; min-width: 0;
+  flex: 0 0 auto;
+  min-width: 14ch;
   font-size: var(--fs-micro); font-weight: 800; font-style: italic; letter-spacing: var(--ls-3);
   color: var(--text);
   display: block; white-space: nowrap;

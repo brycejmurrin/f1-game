@@ -18,6 +18,10 @@ let _active = false;     // _enabled && rapier ready — the ONE boolean game.js
 let _loadState = 0;      // 0 idle | 1 loading | 2 ready | -1 failed
 let _loadErr = null;
 let _loadPromise = null; // shared by the idle kick and race-entry prerequisite
+let _loadTries = 0;      // imports started (a retry asks for a fresh URL: see _load)
+// Race entry waits on the import at most this long (Assets.modelsReady's cap):
+// debris is optional, and a stalled 2.2 MB fetch held the loading card unbounded.
+const READY_CAP_MS = 4000;
 
 // ── side-world state ────────────────────────────────────────────────────────
 let world = null;        // RAPIER.World
@@ -157,13 +161,19 @@ const _q = { x: 0, y: 0, z: 0, w: 1 };
 const _hinted = new Set();           // mirror indices hinted this tick (A1 spall dedup)
 
 // ── enable / load ───────────────────────────────────────────────────────────
-function _load() {
-  if (_loadState !== 0) return _loadPromise;
+// `retry`: a FAILED load (-1) starts again — race entry and the DEBRIS toggle
+// pass it; the idle kick and prime() do not, so a failure costs one import per
+// player action, never a loop. Engines before Chrome 156 cache a failed module
+// fetch in the module map (https://chromestatus.com/feature/5214647044145152)
+// and re-importing the same URL fails at once, so a retry asks for a fresh URL.
+function _load(retry) {
+  if (_loadState === 1 || _loadState === 2 || (_loadState === -1 && !retry)) return _loadPromise;
   _loadState = 1;
-  _loadPromise = import(RAPIER_URL)
+  const url = _loadTries++ ? RAPIER_URL + "?retry=" + _loadTries : RAPIER_URL;
+  _loadPromise = import(url)
     .then((m) => m.default.init().then(() => {
       RAPIER = m.default;
-      _loadState = 2;
+      _loadState = 2; _loadErr = null;   // a retry that lands clears the earlier failure
       _active = _enabled;
       return _active;
     }))
@@ -178,11 +188,20 @@ function _load() {
 // The entry latch awaits this alongside scenery, before it validates the
 // selected race and replaces its field. prime() then has WASM available at
 // setup even when the idle import was late; no first-green BVH construction.
-function ready() { return _enabled ? _load() : Promise.resolve(false); }
+// CAPPED at READY_CAP_MS (false = this race starts without debris): an import
+// that lands later still sets _active, and step() builds the world lazily.
+function ready() {
+  if (!_enabled) return Promise.resolve(false);
+  const load = _load(true);
+  if (_loadState !== 1) return load;
+  let timer = null;
+  const cap = new Promise((resolve) => { timer = setTimeout(() => resolve(false), READY_CAP_MS); });
+  return Promise.race([load, cap]).then((ok) => { clearTimeout(timer); return ok; });
+}
 
 function setEnabled(on) {
   _enabled = !!on;
-  if (_enabled) _load();
+  if (_enabled) _load(true);
   _active = _enabled && _loadState === 2;
   if (!_enabled) destroyWorld();
   return status();
@@ -334,7 +353,7 @@ function prime() {
   if (_enabled && _loadState === 0) _load();   // a race beat the deferred boot kick
   if (!_active || !track || !cars || !cars.length) return false;
   if (world && (_worldTrack !== track || _mirrors.length !== cars.length)) destroyWorld();
-  if (!world) buildWorld(track, cars);
+  if (!world && !_buildWorldSafe(track, cars)) return false;
   return !!world;
 }
 
@@ -373,6 +392,19 @@ function capFor() {
 function marbleCapFor() { return (G.gfx && G.gfx.mobileTier) ? MARBLE_CAP_MOBILE : MARBLE_CAP_DESKTOP; }
 function furnCapFor() { return (G.gfx && G.gfx.mobileTier) ? FURN_CAP_MOBILE : FURN_CAP_DESKTOP; }
 
+// The one Rapier chain that had no catch (step()'s trap below and _load's
+// both do): a throw from the trimesh/collider build would reject race entry
+// through prime(), or throw out of update() every frame until LoopHealth goes
+// fatal. Optional debris must never cost the player the race — degrade it off.
+function _buildWorldSafe(track, cars) {
+  try { buildWorld(track, cars); return true; }
+  catch (e) {
+    try { Log.warn("game", "[debris] world build failed — debris disabled", e); } catch (_e) { /* Log absent in isolated VM */ }
+    _active = false;
+    try { destroyWorld(); } catch (_e) { /* half-built world: nothing more to free */ }
+    return false;
+  }
+}
 function buildWorld(track, cars) {
   world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   world.timestep = FIXED_DT;
@@ -796,7 +828,7 @@ function step(dt) {
   if (!track || !cars || !cars.length) { _queue.length = 0; return; }
   // Track or field change → rebuild the whole world (deterministic order).
   if (world && (_worldTrack !== track || _mirrors.length !== cars.length)) destroyWorld();
-  if (!world) buildWorld(track, cars);
+  if (!world && !_buildWorldSafe(track, cars)) return;
   if (world.timestep !== dt) world.timestep = dt;
   // Queue or dynamic cars → straight to the solve, no pool scans at all.
   // Otherwise scan pools/furniture ONCE and share the verdicts with
@@ -828,6 +860,7 @@ function step(dt) {
     // body has no setNextKinematic* semantics). IncidentSim reads it back instead.
     if (_dynCars.has(i)) continue;
     const c = cars[i], m = _mirrors[i];
+    if (!Number.isFinite(c.s) || !Number.isFinite(c.x)) continue;   // a NaN pose must not reach wasm
     mirrorPose(track, c);
     m.setNextKinematicTranslation(_v);
     m.setNextKinematicRotation(_q);

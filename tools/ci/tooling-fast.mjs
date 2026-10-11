@@ -172,6 +172,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-ai-dev.test.mjs",
   "tests/unit/career-backup.test.mjs",
   "tests/unit/career-experience.test.mjs",
+  "tests/unit/career-hire-rating.test.mjs",
   "tests/unit/career-legends.test.mjs",
   "tests/unit/career-regulations.test.mjs",
   "tests/unit/career-seat-rollover.test.mjs",
@@ -526,6 +527,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // hut (ground-audit unsupported on monaco/spa/suzuka kiosk posts). ~0.1 s.
   "tests/unit/marshal-post-grounding.test.mjs",
   "tests/unit/mcp-cli.test.mjs",
+  "tests/unit/mcp-http-origin.test.mjs",
   "tests/unit/mcp-smoke.test.mjs",
   "tests/unit/mechanics-coherence.test.mjs",
   "tests/unit/meeting-picker-labels.test.mjs",
@@ -661,6 +663,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // tools/ci/remote-group.mjs + browser-group.yml: the group/shard validation
   // that stands between a dispatch input and a shell, and the run pick. Pure, instant.
   "tests/unit/remote-group.test.mjs",
+  "tests/unit/renderer-boot-timeout.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
   // Instant-replay ring (js/camera/replay-buf.js): budget, wrap, restore, solo/net scrub gates. ~0.05 s.
   "tests/unit/replay-buf.test.mjs",
@@ -683,6 +686,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
   "tests/unit/screen-looks.test.mjs",
+  "tests/unit/script-loader-throw.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
   "tests/unit/season-cal.test.mjs",
   // Season SETUP chrome: themed pair/stack scrollbars, balanced preset chips,
@@ -893,6 +897,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The falling rain follows WETNESS through a weather arc: shown at 0.25, the
   // storm tier and rain loop at 0.72, hidden again when a drying arc drops below
   // 0.25 — six arcs sampled at 10 points each. VM-executed weather-arc.js, ~1 s.
+  "tests/unit/weather-arc-plan.test.mjs",
   "tests/unit/weather-arc-rain.test.mjs",
   // A weather-arc step cross-fades sun, cloud, ambient and fog over WX_BLEND_S;
   // a chip or __apex.weather() still cuts. VM-executed atmosphere.js, ~0.1 s.

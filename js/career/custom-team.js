@@ -107,7 +107,9 @@ const CustomTeam = (function () {
       if (!Legends.parts) return;
       const period = Legends.parts(id);
       if (!period) return;
-      const cur = store.get("parts.legends", null);
+      // getStored, not get: garage-defaults ships a parts.legends build, so get()
+      // is never empty and a fresh install would keep that build for legend 0.
+      const cur = store.getStored("parts.legends");
       const empty = !cur || !Object.keys(cur).length;
       if (!empty && (prev == null || prev === id)) return;
       store.set("parts.legends", period);

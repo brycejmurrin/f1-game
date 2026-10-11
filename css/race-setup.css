@@ -382,6 +382,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
+  /* 1.2 + 0.1em pad: line-height alone left 3px ink overhang at 130%
+     (scrollHeight−clientHeight); pad clears fit-audit; ellipsis still truncates. */
+  line-height: 1.2;
+  padding-block: 0.1em;
 }
 /* …and the trailing chevron matches the `›` chip it stands in for. */
 #rs-duel-open > [aria-hidden="true"] {

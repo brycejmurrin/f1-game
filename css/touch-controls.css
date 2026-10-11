@@ -248,6 +248,7 @@
    bottom toolbar either way. */
 :where(body[data-shape="wide"][data-density="compact"]) #ios-install {
   right: auto;
+  bottom: calc(var(--safe-b) + 4.5rem);
   width: min(22rem, calc(50% - var(--safe-l) - var(--gap)));
   max-width: none;
   margin: 0;

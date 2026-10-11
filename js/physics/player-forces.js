@@ -102,7 +102,13 @@ const PlayerForces = (function () {
     // vStd via G.vTop: pace-scaled threshold for the THR_VK / |v| term.
     const vAbs = Math.abs(c.speed);
     const vStdNow = vAbs * (PC.VMAX || 72) / Math.max(vTopNow, 0.05);
-    const axThrDemand = onThrottle
+    // BRAKING WINS over the throttle, exactly as it does in game.js's speed
+    // integrator and axEstTarget: a held pedal (auto-throttle, tilt/touch, or W
+    // under the brake) makes no drive thrust while braking, so it must not
+    // charge the driven rear's grip either — it defeated the rear brake-by-wire
+    // (BRAKE_STAB): measured at 30 m/s, 0.75 lock, axFracR 0.39 -> 0.62.
+    const thrOn = onThrottle && !braking;
+    const axThrDemand = thrOn
       ? clamp(THR_VK / Math.max(vStdNow, 1), THR_FLOOR, THR_CAP)
           * (c.human ? throttleLvl : 1) * gearMult + Math.max(0, deploy) / LONG_GRIP
       : 0;
@@ -210,7 +216,8 @@ const PlayerForces = (function () {
     const Fyr = tyreSat(csR, slipR, muR, TyreModel.CURVE_FLOOR_R, TyreModel.CURVE_FALL_W_R, TyreModel.CURVE_HOLD_R) * sp;   // the rear's wider limit zone and gentler fall
     const cosD = Math.cos(delta);
     // Where each axle sits on its tyre curve: x = cs·α/mu, the curve's own
-    // abscissa (peak at TyreModel.CURVE_PEAK_X). MONOTONIC in slip, unlike
+    // abscissa (peak at TyreModel.CURVE_PEAK_X for the rear, CURVE_PEAK_X_F for
+    // the front — its curve is rescaled to peak earlier). MONOTONIC in slip, unlike
     // |Fy|/mu, which peaks at 1 and FALLS past the peak — a consumer keyed on
     // "utilisation > 0.9" would go quiet exactly when the driver has overdriven
     // most. So frontUtil/rearUtil below are x / peak: 1.0 = at the peak, above
@@ -270,7 +277,7 @@ const PlayerForces = (function () {
     c.lateralAccel = ay;
     c.slipFront = slipF; c.slipRear = slipR; c.steerAngle = delta;
     c.gripFront = muF; c.gripRear = muR; c.forceFront = Fyf; c.forceRear = Fyr;
-    c.frontUtil = sat / TyreModel.CURVE_PEAK_X; c.rearUtil = satR / TyreModel.CURVE_PEAK_X;
+    c.frontUtil = sat / TyreModel.CURVE_PEAK_X_F; c.rearUtil = satR / TyreModel.CURVE_PEAK_X;
     // Floored: setPhysics({yawInertia:0}) would otherwise make the rdot below
     // divide by zero and NaN the whole car state.
     const kz2 = Math.max(1e-3, af * ar * YAW_INERTIA);   // yaw inertia / mass (scaled)

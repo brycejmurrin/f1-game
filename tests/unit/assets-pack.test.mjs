@@ -330,6 +330,60 @@ test("material and model loads recover after a temporarily unavailable pack", as
   assert.equal(modelGets, 2, "a failed model fetch does not permanently cache a miss");
 });
 
+// 3-F2 (round-3 hunt): boot asks for the material arrays ONCE (game.js kickPack,
+// one idle slice, refused once tier is "off"), so one dropped strip request left
+// every race of the session on procedural materials. startRace calls
+// Assets.retry(): one more load per session, never for an unsupported backend,
+// never after an explicit unload.
+test("a failed pack load is retried once at race entry, and only once (3-F2)", async () => {
+  let stripGets = 0, drop = 1;
+  const pack = () => assetLoader({
+    async fetch(url) {
+      if (url.endsWith("manifest.json")) return { ok: true, json: async () => ({ materials: { size: 2, albedo: "a.png", layers: [{ mat: 1, scale: 1 }] } }) };
+      stripGets++;
+      if (drop > 0) { drop--; throw new TypeError("Failed to fetch"); }   // a flaky link drops the request
+      return { ok: true, blob: async () => ({ size: 1 }) };
+    },
+    async createImageBitmap() { return { close() {} }; },
+  });
+  const assets = pack();
+  assets.init({ createTextureArray: () => ({}), setMaterialMaps() {} });
+  assert.equal(await assets.load(), false, "the boot load drops its strip");
+  assert.equal(assets.state().tier, "off");
+  assert.equal(typeof assets.retry, "function", "Assets.retry exists");
+  assert.equal(assets.retry(), true, "race entry asks again");
+  await assets.load();   // shares the retry's in-flight promise
+  assert.equal(assets.state().uploaded, true, "the retry lands the pack");
+  assert.equal(assets.retry(), false, "nothing to retry once uploaded");
+
+  drop = 99; stripGets = 0;
+  const flaky = pack();
+  flaky.init({ createTextureArray: () => ({}), setMaterialMaps() {} });
+  await flaky.load();
+  assert.equal(flaky.retry(), true);
+  await flaky.load();
+  const after = stripGets;
+  assert.equal(flaky.retry(), false, "ONE retry per session: no loop on a dead link");
+  assert.equal(stripGets, after);
+
+  const off = pack(); drop = 1;
+  off.init({ createTextureArray: () => ({}), setMaterialMaps() {} });
+  await off.load();
+  off.unload();
+  assert.equal(off.retry(), false, "an explicit unload is never undone by the retry");
+
+  const nobackend = assetLoader({ async fetch() { throw new Error("must not fetch"); } });
+  nobackend.init({});
+  assert.equal(await nobackend.load(), false);
+  assert.equal(nobackend.state().error, "backend");
+  assert.equal(nobackend.retry(), false, "an unsupported backend is not retried");
+
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const startRace = game.slice(game.indexOf("function startRace() {"), game.indexOf("RaceEntryProfile.runSession(sessionEntry"));
+  assert.match(startRace, /Assets\.retry\(\)/, "startRace asks Assets for its one retry");
+  assert.doesNotMatch(startRace, /await[^;\n]*Assets\.retry/, "…and never waits on it");
+});
+
 for (const failFallback of [true, false]) {
   test(`asset loader closes every decoded bitmap when fallback ${failFallback ? "fails" : "succeeds"}`, async () => {
     const bitmaps = [];
@@ -1197,17 +1251,46 @@ test("modelsReady gives up at its cap when the pack hangs, and never rejects on 
   assert.equal(await broken.modelsReady(1000), 0, "a failing manifest resolves 0 at once, not a rejection");
 });
 
-test("ensureScenery awaits THIS circuit's models (Assets.modelsReady with the closure source) before any build", () => {
+test("ensureScenery awaits THIS circuit's models (Assets.modelsReady with the closure source) before any build", { timeout: 5000 }, async () => {
   const src = fs.readFileSync(path.join(ROOT, "js/core/lazy-bundles.js"), "utf8");
-  const i = src.indexOf("function ensureScenery(");
-  assert.ok(i >= 0, "ensureScenery lives in LazyBundles after the extract");
-  const fn = src.slice(i, src.indexOf("\n}\n", i));
-  const h = src.indexOf("function sceneryModels(");
-  assert.ok(h >= 0, "sceneryModels(def) is ensureScenery's model wait");
-  assert.match(fn, /sceneryModels\(def\)/, "ensureScenery no longer waits for the circuit's baked models");
-  assert.match(src.slice(h, src.indexOf("\n}\n", h)), /Assets\.modelsReady\(0, fn \? String\(fn\) : ""\)/, "sceneryModels no longer reads the closure source");
-  assert.match(fn, /return p\.then\(models\)/, "the models are resolved from the closure once the scenery script lands");
-  assert.match(fn, /return models\(\)\.then/, "a resident or inline scenery must still wait for its models");
+  for (const mode of ["fetched", "resident", "inline"]) {
+    const scenery = function (api) { api.bakedModel("test_model"); };
+    let releaseModels, enterModelWait;
+    const modelBarrier = new Promise((resolve) => { releaseModels = resolve; });
+    const modelWaitEntered = new Promise((resolve) => { enterModelWait = resolve; });
+    const calls = [], fetches = [];
+    const def = { id: "monza", ...(mode === "inline" ? { scenery } : {}) };
+    const ctx = vm.createContext({
+      ApexRoster: { DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
+        LAZY_RACE: [], LAZY_RACE_SESSION: [], LAZY_AUDIO: [], LAZY_DATA: [], LAZY_NET: [],
+        SCENERY_DIR: "js/circuits/scenery" },
+      Tracks: { LIST: [def], circuitPayloadResident: () => true },
+      TrackScenery: mode === "resident" ? { monza: scenery } : {},
+      Assets: { modelsReady(cap, source) {
+        calls.push({ cap, source }); enterModelWait(); return modelBarrier;
+      } },
+      Log: { warn() {} },
+    });
+    ctx.window = ctx;
+    const bundles = vm.runInContext(src + "; LazyBundles", ctx).create({
+      els: {}, loadBackendScripts: async (files) => {
+        fetches.push([...files]); ctx.TrackScenery.monza = scenery; return true;
+      },
+    });
+    let built = false;
+    const build = bundles.ensureScenery(0).then((ready) => {
+      assert.equal(ready, true, mode + ": scenery is resident"); built = true;
+    });
+    await modelWaitEntered;
+    await Promise.resolve(); await Promise.resolve();
+    assert.equal(built, false, mode + ": a build cannot pass the pending model wait");
+    assert.deepEqual(calls, [{ cap: 0, source: String(scenery) }], mode + ": wait for this closure's models");
+    assert.deepEqual(fetches, mode === "fetched" ? [["js/circuits/scenery/monza.js"]] : [],
+      mode + ": resident and inline closures need no script fetch");
+    releaseModels();
+    await build;
+    assert.equal(built, true, mode + ": releasing the models permits the build");
+  }
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   assert.doesNotMatch(game, /Assets\.loadModels\(\)/, "boot must not prefetch the whole model pack again");
 });

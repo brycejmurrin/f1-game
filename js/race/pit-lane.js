@@ -1128,6 +1128,8 @@ var PitLane = (function () {
       return (c.x || 0) * zz.side >= laneEdge(hw, zz.side) * zz.side;
     }
 
+    const _boxU = [0, 0], _laneU = [0, 0, 0, 0];   // the per-frame uniform rows: one array each, not two fresh ones a frame while a stop is armed
+
     /** The numbers the lit shaders paint THIS CAR's BOX from: how far into the
      *  window it sits, and how long it is. Null when there is no lane, or no
      *  car with a team to have a box in the row.
@@ -1140,7 +1142,8 @@ var PitLane = (function () {
       const zz = z(), t = G.track, car = G.player;
       if (!enabled() || !zz || !t || !car) return null;
       if (t.pit && !t.pit.painted) return null;
-      return [boxThroughFor(car, zz, t.total), BOX_TOL * 0.75];
+      _boxU[0] = boxThroughFor(car, zz, t.total); _boxU[1] = BOX_TOL * 0.75;
+      return _boxU;   // pooled: read by the frame's uniform upload within the same frame, never retained
     }
 
     /** The four numbers the lit shaders paint the PAINTED lane from, or null.
@@ -1153,7 +1156,8 @@ var PitLane = (function () {
       const zz = z(), t = G.track;
       if (!enabled() || !zz || !t) return null;
       if (t.pit && !t.pit.painted) return null;
-      return [zz.sIn, zz.lenM, zz.side, t.total];
+      _laneU[0] = zz.sIn; _laneU[1] = zz.lenM; _laneU[2] = zz.side; _laneU[3] = t.total;
+      return _laneU;   // pooled (see boxUniform)
     }
 
     /** How far through the commitment dwell this car is, 0-1. The HUD's cue. */
@@ -1176,6 +1180,11 @@ var PitLane = (function () {
       // intact leaves game.js applying zero speed/the limiter forever.
       if (!enabled()) { clearArm(c); c.pitNext = null; return; }
       const st = c.pitState || "none";
+      // think() guards ARMING on the last lap / a flagged leader, but an AI that
+      // armed on lap L-1 and missed its entry (it comes in next time round) was
+      // still armed past it: the stop paid nothing and was taken anyway.
+      if (!c.human && c.pitArmed && st === "none" &&
+          ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars)))) clearArm(c);
       const zz = z(), L = G.track.total;
       if (st === "out" && c.pitOutT > 0) c.pitOutT = Math.max(0, c.pitOutT - dt);   // the GO chip's clock
       // Every plan is re-cut once per lap (replan): the player's reference, and

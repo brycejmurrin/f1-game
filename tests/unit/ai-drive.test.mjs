@@ -1550,3 +1550,47 @@ test("AI heading reuses current grip without changing normal or recovery steerin
       mode + ": one current grip calculation; yaw only for the normal AI controller");
   }
 });
+
+// ── PACE-SCALED CLOSING MARGINS (round-3 4-F5, BUGS M34) ─────────────────────
+// PACE is a ground-speed scale, so a closing tolerance written as a bare m/s is
+// a different fraction of the envelope at every OVERALL SPEED setting: at pace
+// 0.469 (vTop 33.8 m/s) a 2 m/s "still closing" band is 6 % of top speed, at
+// pace 1 it is 3 %. Each band is written on the pace-5 scale and rides
+// vScale = vTop()/VMAX, the convention letPassCase and queueBrake use. At the
+// reference pace 1.0 (notch 14) vScale is exactly 1 and the AI is bit-identical;
+// the shipped default notch 11 (0.840) is one of the settings this corrects.
+for (const p of [1, 0.469]) {
+  const vTop = 72 * p, v = 62 * p;
+  test(`wantBoost: catching/defending tolerances ride the pace scale (pace ${p})`, () => {
+    // ace + 0.3 charge on a straight banks unless catching or defending, so the
+    // answer IS the gate.
+    const base = { traits: ace, energy: 0.3, kAhead60: 0.001, otActive: false, speed: v, vTop };
+    assert.equal(A.wantBoost({ ...base, chaser: true, chaserGap: 8, chaserSpeed: v - 1.5 * p }), true,
+      "a chaser 1.5 m/s (pace-5) slower is still a threat: defend");
+    assert.equal(A.wantBoost({ ...base, chaser: true, chaserGap: 8, chaserSpeed: v - 2.5 * p }), false,
+      "a chaser 2.5 m/s (pace-5) slower is falling back: bank");
+    assert.equal(A.wantBoost({ ...base, towCar: true, towGap: 12, towSpeed: v + 0.5 * p }), true,
+      "0.5 m/s (pace-5) slower than the tow car is still catching: deploy");
+    assert.equal(A.wantBoost({ ...base, towCar: true, towGap: 12, towSpeed: v + 1.5 * p }), false,
+      "1.5 m/s (pace-5) slower than the tow car is not catching: bank");
+  });
+  test(`defendPull: the not-closing gate rides the pace scale (pace ${p})`, () => {
+    const c = { ...onStraight, speed: v, vTop, other: { x: 1.4 } };
+    assert.ok(A.defendPull({ ...c, chaserSpeed: v - 2 * p }) > 0, "2 m/s (pace-5) slower, inside the window: cover");
+    assert.equal(A.defendPull({ ...c, chaserSpeed: v - 4 * p }), 0, "4 m/s (pace-5) slower: not an attack");
+  });
+  test(`brakeTarget: the attacking late-brake gate rides the pace scale (pace ${p})`, () => {
+    const ctx = { traits: ace, samples: [{ d: 50, k: 0.018, bank: 0 }], latMax: 22, brake: 22 * p, grip: 1,
+      pace: p, vmax: 72, blocker: true, blockerGap: 8, speed: v, roomL: 3, roomR: 1 };
+    const plain = A.brakeTarget({ ...ctx, blocker: false });
+    assert.ok(A.brakeTarget({ ...ctx, blockerSpeed: v + 0.5 * p }) > plain, "0.5 m/s (pace-5) slower: attacking");
+    assert.equal(A.brakeTarget({ ...ctx, blockerSpeed: v + 1.5 * p }), plain, "1.5 m/s (pace-5) slower: not attacking");
+  });
+}
+
+test("game.js hands wantBoost and defendPull the pace envelope (vTop)", () => {
+  const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  assert.match(game, /_aiBoost\.vTop = vTop\(\)/, "wantBoost's tolerances need vTop");
+  assert.match(game, /_aiDefend\.vTop = vTop\(\)/, "defendPull's not-closing gate needs vTop");
+  assert.match(game, /_aiBr\.pace = PACE; _aiBr\.vmax = VMAX/, "brakeTarget reads vScale from pace");
+});

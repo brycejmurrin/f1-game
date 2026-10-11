@@ -38,6 +38,26 @@ const DriverRatings = (function () {
     STR: [74, 72, 87, 72,  80,  -1,  -1], // pay seat
   };
 
+  // The MY TEAM free agents (Career.freeAgents(), js/career/career.js), keyed by
+  // code and kept OUT of BASE so the grid's statistics (zero-mean style, field
+  // mean pace, decorrelated columns) stay about the 22 real drivers. Without a row
+  // here get() fell back to fromTier(), which depends on the CALLER's tier: the
+  // hire tile asked with the agent's own tier and the race with the team's (a
+  // custom team is tier 2), so six of eight tiles promised a different driver
+  // than raced, and the cheapest hires raced like the dearest. An authored row
+  // answers the same whatever tier is passed; overall() rises with the asking
+  // price (pinned in tests/unit/career-hire-rating.test.mjs).
+  const HIRES = Object.freeze({
+    FER2: [87, 85, 80, 82, 70],
+    LNQ:  [85, 82, 79, 80, 64],
+    SLZ:  [82, 78, 76, 76, 58],
+    ASH:  [80, 77, 74, 75, 66],
+    NKM:  [78, 74, 72, 72, 48],
+    DVL:  [76, 73, 71, 71, 60],
+    CHD:  [75, 70, 70, 68, 40],
+    OKO:  [73, 68, 68, 66, 36],
+  });
+
   // The unrated roll, Math.min(1.0, 0.92 + simRnd() * 0.1), puts ~20% of draws
   // on the clamp for a true mean of ~0.968. SKILL_BASE/SKILL_SPAN put the
   // GRID-MEAN pace (84) back on that 0.968 — otherwise handing every driver a
@@ -58,6 +78,13 @@ const DriverRatings = (function () {
     const t = clamp(tier | 0, 0, 4);
     const h = Hash32.fnv1a(code || "???");
     const spread = (n) => ((h >>> (n * 5)) & 31) - 15;      // -15..+16, stable per code
+    // The style axes read a SECOND hash. spread(6) shifts by 30, which leaves 2
+    // bits of a 32-bit hash, so optimism was always -15..-12 and every unrated
+    // driver was ~-0.45 optimistic. Re-deriving them changes the style traits
+    // of unrated codes only (MY TEAM hires, user codes, rivals); BASE/HIRES rows
+    // and the five quality axes keep their exact values.
+    const h2 = Hash32.mix(h);
+    const spread2 = (n) => ((h2 >>> (n * 5)) & 31) - 15;
     const anchor = 88 - t * 4;
     return {
       pace:        roundClamp(anchor + spread(0) * 0.35, 60, 96),
@@ -65,14 +92,16 @@ const DriverRatings = (function () {
       awareness:   roundClamp(anchor + spread(2) * 0.50, 55, 94),
       consistency: roundClamp(anchor + spread(3) * 0.45, 55, 94),
       experience:  roundClamp(45 + spread(4) * 2.0, 5, 100),
-      // Style from the same hash — not zero-mean for unrated codes (only BASE is).
-      aggression:  clamp(spread(5), -STYLE_SCALE, STYLE_SCALE),
-      optimism:    clamp(spread(6), -STYLE_SCALE, STYLE_SCALE),
+      // Style from the second hash — not zero-mean for unrated codes (only BASE is).
+      aggression:  clamp(spread2(0), -STYLE_SCALE, STYLE_SCALE),
+      optimism:    clamp(spread2(1), -STYLE_SCALE, STYLE_SCALE),
     };
   }
 
   function get(code, tier, deltas) {
-    const row = BASE[code];
+    // Own keys only: a persisted code of "constructor" / "__proto__" resolved to
+    // a function and the rating came out NaN.
+    const row = Object.hasOwn(BASE, code) ? BASE[code] : Object.hasOwn(HIRES, code) ? HIRES[code] : null;
     const r = row
       ? {
           pace: row[0], craft: row[1], awareness: row[2], consistency: row[3], experience: row[4],
@@ -117,7 +146,7 @@ const DriverRatings = (function () {
     return sum / 4;
   }
 
-  return { AXES, STYLE_AXES, STYLE_SCALE, BASE, get, overall, fromTier, style01,
+  return { AXES, STYLE_AXES, STYLE_SCALE, BASE, HIRES, get, overall, fromTier, style01,
            buildPace, hash32: Hash32.fnv1a, skill, SKILL_BASE, SKILL_SPAN, SKILL_JITTER };
 })();
 Object.freeze(DriverRatings);

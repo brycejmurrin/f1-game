@@ -24,7 +24,10 @@ const QualiNet = (function () {
       if (fromNet.length) return fromNet;
       if (!netLobby || !netLobby.roomState) return [];
       const peers = netLobby.roomState().peers || [];
-      return peers.map((p) => p.team + ":" + (p.driver || 0)).filter((id) => id !== ":");
+      // A HELLO with no string team would id as "undefined:0" — a rival that
+      // can never post a lap, so TO THE GRID waited for it forever.
+      return peers.filter((p) => p && typeof p.team === "string" && p.team)
+        .map((p) => p.team + ":" + (p.driver || 0));
     }
 
     function reportLive(driverId, t, frac) {
