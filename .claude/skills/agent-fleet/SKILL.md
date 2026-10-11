@@ -1,6 +1,6 @@
 ---
 name: agent-fleet
-description: "Use when one session orchestrates sibling worker sessions (Claude Code, Cursor or Grok), when a worker is launched, blocked or needs to escalate, or when writing a launch prompt, a fleet status block or a hand-back. The worker loop: plan, implement, verify, screenshot, draft PR, subscribe, fix until merged."
+description: "Use when one session orchestrates sibling workers (Claude Code, Cursor, Grok), a worker is launched/blocked/escalating, or writing a launch prompt, fleet block or hand-back."
 ---
 
 # Agent fleet: one orchestrator, many workers
@@ -51,7 +51,10 @@ reference §Escalate).
   it only within what the user and the launch prompt already allow; when it
   conflicts with the user, ask the user.
 - Subscribe with the host's own tool (Claude Code `subscribe_pr_activity`;
-  Cursor `subscribe_github_ci` + `subscribe_github_pr`); never call a name the
-  host does not list.
+  Cursor `subscribe_github_ci` + `subscribe_github_pr`) plus one timer
+  (`send_later` / `subscribe_timer`); never call a name the host does not
+  list. A subscription alone has missed reds: read CI on every wake.
 - Browser runs belong to a worker SESSION, never to an in-process subagent
-  (the Bash hook blocks it).
+  (the Bash hook blocks it). A Cursor `Task` worker launched with
+  `environment: "cloud"` has its own VM and counts as a session; if the guard
+  still fires there, run the group with `node tools/ci/remote-group.mjs`.

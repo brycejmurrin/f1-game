@@ -2058,11 +2058,21 @@ jobs:
 
   selected:
     name: Selected specs (change-aware gate)
-    needs: [select, guards]
-    # Drafts skip the matrix (required name is selected-verdict). Guard red
-    # skips the legs. smoke_only Pages skips. A skipped `guards` (Pages
-    # fast_tier_run) still lets a full-tier selected run.
-    if: ${{ inputs.smoke_only != true && needs.select.outputs.any == 'true' && (needs.guards.result == 'success' || needs.guards.result == 'skipped') && !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
+    # NOT `guards` (R3-CI-HEALTH-2, 2026-10-10). Waiting on the aggregator put
+    # one more trip through the account's runner queue on the critical path:
+    # ship run 38041862767 started its 30 legs at 11.3 min instead of ~2 (the
+    # run took 20.3 min, ~9 of them that hop), and in the 07:59Z burst the
+    # 30-second aggregator itself QUEUED 26-37 min before the legs could. A
+    # guards red still fails the run: selected-verdict and ci-verdict both
+    # need `guards` and red on it (tools/ci/selected-gate-verdict.mjs), and
+    # poke-train needs it green. The price is ~70-95 job-min of browser legs
+    # on the few runs whose guards are red (4 of 100 ship runs).
+    # (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+    # — "If a job fails or is skipped, all jobs that need it are skipped".)
+    needs: [select]
+    # Drafts skip the matrix (required name is selected-verdict). smoke_only
+    # Pages skips.
+    if: ${{ inputs.smoke_only != true && needs.select.outputs.any == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -2071,7 +2081,8 @@ jobs:
     # The budget maths is tools/ci/select-budget.mjs (each spec at its own measured
     # llvmpipe rate, else a 7.5 s/test fallback since 2026-09-29 — it was a 79.7 s
     # SwiftShader figure; a TIMING-OUT test costs timeout x (1+retries)).
-    # Hence retries 0 and --timeout=180000 here — the selector's settings, not
+    # Hence retries 0 (bar a quarantined-only leg, matrix.retries — see the
+    # run step) and --timeout=180000 here — the selector's settings, not
     # smoke's gate settings (420 s, one retry): a retry only doubles the cost
     # of the news this job exists to deliver. The fixed smoke and driving-model
     # specs are excluded here because their independent blocking jobs own their
@@ -2080,8 +2091,9 @@ jobs:
     #
     # THE CAP IS DERIVED PER JOB by select-specs' shardCapMin: twice the job's
     # expected work (measured per spec in tests/data/spec-timings.json), plus
-    # --max-failures (3) per-test timeouts at the slowest timeout it carries,
-    # plus setup and margin. It was "every test at the per-test timeout" until
+    # one per-test timeout at the slowest timeout it carries, plus setup and
+    # wrap-up, under a ceiling (R3-CI-HEALTH-6: it had become ~1.6x, and two
+    # passing legs died at 10 min). It was "every test at the per-test timeout" until
     # 2026-09-29, a worst case --max-failures makes unreachable, and it split
     # tracks-walls (~3.5 min measured) across three runners to stay under 90. Both 20 and 26 were once wrong
     # here, and this workflow's header records that a job killed by its cap
@@ -2171,7 +2183,13 @@ jobs:
           # ordinary budgeted / single-file oversize rows.
           SHARD_FLAG=""
           if [ -n "${{ matrix.shard }}" ]; then SHARD_FLAG="--shard=${{ matrix.shard }}"; fi
-          npm test -- ${{ matrix.specs }} --retries=0 --timeout=180000 --max-failures=3 $SHARD_FLAG
+          # RETRIES COME FROM THE PLAN (R3-CI-HEALTH-4, 2026-10-10): 0 for every
+          # leg, except a leg select-specs built for QUARANTINED specs only
+          # (tests/data/flaky-quarantine.json), which gets 1 — so the
+          # quarantine's pass-on-retry path exists here at all, and
+          # APEX_FAIL_ON_FLAKY above still reds any un-quarantined flake. A
+          # quarantined spec never shares a leg, so nothing else is retried.
+          npm test -- ${{ matrix.specs }} --retries=${{ matrix.retries || 0 }} --timeout=180000 --max-failures=3 $SHARD_FLAG
       # The failing-spec carry-forward is written ONCE, by selected-verdict,
       # from every shard's junit (below). Each shard used to save it under one
       # shared key: run 37198214523's three `selected` jobs raced for
@@ -2201,8 +2219,15 @@ jobs:
           path: artifacts/test-results-*/junit.xml
           if-no-files-found: ignore
           retention-days: 7
+      # A CAP-KILLED LEG KEEPS ITS EVIDENCE TOO (R3-CI-HEALTH-6, 2026-10-10).
+      # `failure()` alone skipped this on the two legs killed by their job cap
+      # after `+ pass 101/104` / `+ pass 85/87` (ship 37996125261 selected-5,
+      # 38020479662 selected-2): the job is `cancelled`, not failed, so the run
+      # left no traces at all. The step above shows a status-function step
+      # still runs after a timeout cancel (its `always()` step 7 ran in both
+      # kills); `always() && !success()` reaches exactly failure + cancel.
       - name: Failure artifacts
-        if: failure()
+        if: ${{ always() && !success() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-artifacts-selected-${{ matrix.name }}-${{ strategy.job-index }}

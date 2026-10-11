@@ -210,6 +210,7 @@ export const RULES = [
   [/^js\/xr\//, ["steering-unit", "tooling-fast"], "xr-phase0.test.mjs — rig compose, input map, sessionInit, vendored XR addons"],
   [/^js\/ui\/scale\.js/, ["ui"], "ui-scale.spec.js"],
   [/^js\/ui\/dock-layout\.js/, ["steering-unit", "ui"], "dock-layout.test.mjs + ui-button-touch reposition"],
+  [/^js\/ui\/share-code\.js/, ["steering-unit", "ui"], "share-code.test.mjs — APXS/APXL/APXD + Continue lastSession"],
   [/^js\/ui\//, ["ui"], "DOM screens"],
   [/^js\/fx\//, ["ui"], "visual-only layers"],
 

@@ -118,6 +118,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/player-dyn.mjs** | Player vehicle-dynamics bench (VM): braking, accel, skidpad, step steer, trail-brake, lift-off, power-on, flick. | tune-physics |
 | **check/quick-validate.mjs** | Fast refactor gate: boots the game once and probes the critical paths (globals, race, physics, lighting) in ~30-60 s. | check-changes |
 | **check/ratchets.mjs** | Size ratchets from `tests/data/ratchets.json`: `--check` (default), `--update`, `--json`, `--base <ref>` (names raises). | — |
+| **check/replay-scrub-bench.mjs** | Benchmark wrapped replay-ring lookups with 4/24 cars and sequential/random seeks; emits JSON, no browser. | — |
 | **check/scan-globals.mjs** | Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges. | check-changes |
 | **check/shell-ids.mjs** | Every element id the JS looks up must exist: shell, runtime-created, or reported as dynamic. `--json`. | check-changes |
 | **check/skill-routing-eval.py** | Routes realistic requests through the REAL skill set via `claude -p` and scores which skill fired (correct/wrong/none). | slim-bloat |
@@ -188,7 +189,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/hud-live-sample.mjs** | Sample moved HUD pieces every few ms in an unfrozen race after position jumps; report time spent off screen. | survey-ui-matrix |
 | **shot/hud-mock.mjs** | Race-HUD layout shots on black: mocked widgets, labelled boxes, overlaps in red; one race boot per pointer type, ~1 s… | survey-ui-matrix |
 | **shot/hud-survey.mjs** | Race-HUD survey: devices x cameras x presets/themes/scale → overlaps, missing, offscreen, tiny text + shots, gallery. | survey-ui-matrix |
-| **shot/loading-probe.mjs** | Tap RACE! headless; record the loading screen's phases (build/run/card) and frame gaps. `--settle ms --invalidate`. | — |
+| **shot/loading-probe.mjs** | Tap RACE! headless; record preparation, garage, flyby and first presented race frame. `--settle ms --invalidate`. | — |
 | **shot/motion-capture.mjs** | Records a driven clip via `recordVideo` (headless rAF is frozen), extracts frames, scores per-frame flicker. | playwright-probe |
 | **shot/pit-shots.mjs** | Pit-lane shot set, one boot per circuit: entry, exit, lane overview and each team's box, from the resolved geometry. | playwright-probe |
 | **shot/probe-page.mjs** | Probe helpers: reduced-motion init, backend pick, garage open/settle, soft/#game CDP shot. | — |
@@ -207,6 +208,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **gfx/batch-visible-probe.mjs** | Read-only probe: is one instanced scenery batch (cota yellow tecpro) submitted and lit-visible on software or hardware. | — |
 | **gfx/chunk-reach.cjs** | How much chunked scenery a pass reaches, counted headlessly: re-bins triangles into 72 m cells like `createChunkedMesh`. | — |
 | **gfx/chunk-share-census.mjs** | Do adjacent chunks share a lamp list? Per baked `LampChunks` table: empty chunks, adjacent-equal pairs, longest run. | renderer-debug / lighting-tuner |
 | **gfx/frame-hitch.mjs** | Measures per-rAF-callback main-thread cost and finds PERIODIC hitches (spike train + autocorrelation). | playwright-probe / renderer-debug |
@@ -402,6 +404,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/pages-reuse-verdict.sh** | Pages gate reuse: prints `reuse=true` (+source/run) when this tree already passed CI as this commit or a parent. |
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
+| **ci/pr-board.mjs** | One read-only table of every open PR into the deploy branch, with a SUGGESTION per row for a Claude-run CI Watch. |
 | **ci/publish-shots.mjs** | Publish review screenshots to a shots/<topic> evidence branch cut from the ship tip, touching no PR branch. |
 | **ci/ready-full-cap.mjs** | Cap concurrent ready-PR full-tier CI: refuse mark-ready when ≥N ready PRs already run full CI. |
 | **ci/reuse-draft-fast.sh** | On ready_for_review, reuse a green draft fast-tier run for the same PR head SHA. |

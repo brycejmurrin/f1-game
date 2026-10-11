@@ -159,8 +159,10 @@ function bootMenus(disk = {}, o = {}) {
     { id: "spa", name: "Spa", country: "Belgium" },
     { id: "imola", name: "Imola", country: "Italy", classic: true },
   ];
+  const winListeners = [];
   const sb = uiSandbox(dom, {
-    Tracks: { LIST }, Teams: { LIST: [{ id: "t", name: "Team", drivers: [] }] }, Flags: { svg: () => "" },
+    addEventListener: (type, fn, opts) => winListeners.push({ type, fn, opts }),
+    Tracks: { LIST }, Teams: { LIST: o.teams || [{ id: "t", name: "Team", drivers: [] }] }, Flags: { svg: () => "" },
     SeasonCal: { canRace: () => true, rounds: () => 0 },
     TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], aspect: () => 1.5, elevProfile: () => null },
   });
@@ -189,7 +191,7 @@ function bootMenus(disk = {}, o = {}) {
   const tiles = () => selTracks.querySelectorAll(".track-row");
   const tile = (id) => tiles().find((r) => LIST[+r.dataset.trackIdx].id === id);
   const chips = () => dom.body.querySelectorAll(".sel-chip").filter((c) => c.dataset.filter).map((c) => c.dataset.filter);
-  return { dom, data, G, menus, tiles, tile, chips, announced, favs: () => (data.has("favTracks") ? JSON.parse(data.get("favTracks")) : null) };
+  return { dom, data, G, menus, tiles, tile, chips, announced, winListeners, favs: () => (data.has("favTracks") ? JSON.parse(data.get("favTracks")) : null) };
 }
 
 test("select titles and CTAs name Practice, Time Trial, and Race", () => {
@@ -338,6 +340,72 @@ test("FAVOURITE CIRCUITS: F on a focused tile toggles it and keeps focus; modifi
   const row = season.dom.makeElement("button"); row.className = "track-row"; row.dataset.trackIdx = "0"; cal.appendChild(row);
   season.dom.dispatch(row, { type: "keydown", key: "f", bubbles: true });
   assert.equal(season.data.has("favTracks"), false, "the calendar strip is read-only");
+});
+
+test("FAVOURITE CIRCUITS: a HELD F stars once — its auto-repeat neither flips nor re-announces", () => {
+  const h = bootMenus();
+  const press = (el, key, extra = {}) => h.dom.dispatch(el, { type: "keydown", key, bubbles: true, ...extra });
+  press(h.tile("monza"), "f");
+  assert.deepEqual(h.favs(), ["monza"]);
+  const said = h.announced.length;
+  press(h.tile("monza"), "f", { repeat: true });
+  press(h.tile("monza"), "f", { repeat: true });
+  assert.deepEqual(h.favs(), ["monza"], "the repeats did not unstar / restar it");
+  assert.equal(h.announced.length, said, "…nor announce again");
+});
+
+test("Escape in the circuit search clears the query first; an empty field lets Escape close the picker", () => {
+  const h = bootMenus();
+  const esc = h.winListeners.find((l) => l.type === "keydown" && (l.opts === true || (l.opts && l.opts.capture)));
+  assert.ok(esc, "a window-CAPTURE keydown listener — TopModal's document-capture Escape runs before any target listener");
+  const search = h.dom.byId("sel-track-search");
+  search.value = "spa"; search.oninput();
+  assert.deepEqual(h.tiles().filter((r) => !r.hidden).map((r) => LIST_ID(h, r)), ["spa"]);
+  const ev = (extra = {}) => ({ key: "Escape", target: search, defaultPrevented: false, stopped: false,
+    preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; }, ...extra });
+  const e1 = ev();
+  esc.fn(e1);
+  assert.equal(search.value, "", "the field is cleared");
+  assert.equal(h.tiles().filter((r) => r.hidden).length, 0, "every circuit is back");
+  assert.equal(e1.defaultPrevented && e1.stopped, true, "…and the key never reaches TopModal's BACK door");
+  const e2 = ev();
+  esc.fn(e2);
+  assert.equal(e2.defaultPrevented || e2.stopped, false, "empty field: Escape goes on to close the picker");
+  search.value = "mon";
+  const e3 = ev({ isComposing: true });
+  esc.fn(e3);
+  assert.equal(search.value, "mon", "an IME composition keeps its Escape");
+  const e4 = ev({ target: h.tile("monza") });
+  esc.fn(e4);
+  assert.equal(e4.defaultPrevented, false, "Escape elsewhere is not this field's");
+});
+const LIST_ID = (h, r) => ["monza", "spa", "imola"][+r.dataset.trackIdx];
+
+test("TEAM PICKER: opens on the current team, and a pick returns focus to the rebuilt garage card", async () => {
+  let card = null;
+  const h = bootMenus({}, {
+    teamIdx: 1,
+    teams: [{ id: "a", name: "A", drivers: [] }, { id: "b", name: "B", drivers: [] }],
+    // The garage rebuild replaces #cs-team-card — the sheet's opener — with a new node.
+    buildSetup: () => {
+      if (card) card.remove();
+      card = h.dom.makeElement("button", "cs-team-card");
+      h.dom.body.appendChild(card);
+    },
+  });
+  h.G.buildSetup();
+  const opener = card;
+  opener.focus();
+  h.menus.setTeamPicker(true);
+  await Promise.resolve();
+  const tiles = h.dom.byId("sel-teams").querySelectorAll(".team-tile");
+  assert.equal(tiles.length, 2);
+  assert.equal(h.dom.document.activeElement, tiles[1], "focus lands on the ACTIVE team, not CLOSE");
+  tiles[0].onclick();
+  assert.equal(h.dom.byId("teampicker").hidden, true);
+  await Promise.resolve();
+  assert.notEqual(card, opener, "the opener was rebuilt");
+  assert.equal(h.dom.document.activeElement, card, "focus is on the NEW #cs-team-card, not <body>");
 });
 
 test("circuit filter chip click/Enter keeps focus on the rebuilt active chip", () => {
@@ -1932,15 +2000,29 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   // Soft-tap polish (UI Fit): compact CLOSE painted 62×26 and HOST/JOIN 285×44
   // on ios-iphone-landscape (layout-audit 2026-10-05). --tap-paint holds 52
   // painted on touch; --tap-min was the 26px soft floor.
-  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] #vs-close', "min-height"), "var(--tap-paint)",
+  assert.equal(
+    decl(css("css/overlays.css"),
+      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close',
+      "min-height"),
+    "var(--tap-paint)",
     "compact VS Friend CLOSE floors at --tap-paint");
   assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] #vs-pick > .bigbtn', "min-height"), "var(--tap-paint)",
     "compact HOST / JOIN floor at --tap-paint");
   // Title band must clear the absolute CLOSE (ui-redesign closeInHead).
   assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] > #vs-head', "min-height"), "var(--tap-paint)",
     "compact VS Friend head clears --tap-paint CLOSE");
-  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] > .sheet-foot', "top"), "0",
+  assert.equal(
+    decl(css("css/overlays.css"),
+      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot',
+      "top"),
+    "0",
     "compact CLOSE foot sits at head top (no pad inset past the band)");
+  assert.equal(
+    decl(css("css/overlays.css"),
+      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot',
+      "padding-top"),
+    "0",
+    "compact head-parked foot zeros padding-top (selected-3 closeInHead 2026-10-11)");
   assert.equal(decl(css("css/components.css"), "#results .sheet, #standings .sheet, #customize .sheet", "--compact-at"), "480px");
 
   // VS Friend chrome (dialogs.css @layer overlays): one red primary per step,
@@ -1972,6 +2054,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     decl(vsDlg, /#vsfriend-inner\[data-density="compact"\]\[data-shape="tall"\] > \.sheet-foot(?!::)/, "position"),
     "relative",
     "narrow/tall CLOSE stays in the footer, not absolute in the head");
+  assert.equal(
+    decl(vsDlg,
+      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot',
+      "padding-top"),
+    "0",
+    "dialogs restates wide-compact zero foot pad after tall rules (closeInHead)");
 
   assert.equal(decl(css("css/career.css"), "#career-offers .sheet, #career-history .sheet, #career-guide .sheet, #quali .sheet", "--compact-at"), "480px");
   assert.equal(decl(css("css/carsetup.css"), "#cs-inner", "--pair-compact"), "off",
@@ -2233,6 +2321,21 @@ test("menu range sliders share a painted-size token that cancels UI SIZE zoom", 
       }
     }
   }
+});
+
+test("short+compact .sheet re-derives --tap-paint against the capped zoom (#1346 follow-up)", () => {
+  // #1346 capped compact short-viewport .sheet zoom at --ui-compact-scale but
+  // left --tap-paint dividing by the uncapped --ui-scale, so help chips painted
+  // ~32 px at 150%+ (time-trial Driving zoom matrix shortHelpChips). The cap
+  // and the painted floor must share one effective zoom token.
+  const sel = ':where(body[data-density="compact"]) .sheet';
+  assert.match(decl(css("css/menus.css"), sel, "--_sheet-z") || "",
+    /min\(var\(--sheet-scale,\s*var\(--ui-scale\)\),\s*var\(--ui-compact-scale\)\)/,
+    "effective zoom is min(sheet-scale, ui-compact-scale)");
+  assert.equal(decl(css("css/menus.css"), sel, "zoom"), "var(--_sheet-z)");
+  assert.match(decl(css("css/menus.css"), sel, "--tap-paint") || "",
+    /var\(--tap-paint-at\)\s*\/\s*var\(--_sheet-z\)/,
+    "--tap-paint divides by the capped zoom, not the uncapped slider");
 });
 
 test("COPY VALUES tries the synchronous copy while the click still has activation", () => {

@@ -1,5 +1,77 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-10-11 — sync #1385 again: HUD caps to current ship tip
+
+`js/ui/hud.js` → **1411 / 2399**; `css/hud.css` → **1960 / 2158** (ship tip after further HUD merges; same measure as #1437 tip). Catch-up absorb already on this branch. Source-pin raw `game.js` reads 351 → **357** (ship unit growth). Doc floors README/TESTING 550+ → **600+** (605 unit suites on disk).
+
+
+## 2026-10-11 — sync #1385: re-measure HUD caps after ship #1386/#1387/#1395
+
+`js/ui/hud.js` codeLines 1345 → **1393**, lines 2281 → **2377**; `css/hud.css` codeLines 1926 → **1953**, lines 2120 → **2150**. Ship tip after the visual-spotter / give-back / layout-cache HUD merges grew past both ceilings without a raise (same measure as open #1437). Deliberate sync cure on `cursor/r3-touch-hud-db7b` — not an extraction; no OWNED hud.js growth in this PR beyond the ship union. Also ports #1437's `--base` absorb catch-up in `tools/check/ratchets.mjs`: a ceiling raise past 40 fails only when the SOURCE file metric also grew past absorb since the base (ceiling-only remeasure → warning).
+
+
+The line-count ratchet on the big modules lived in the `module-size` unit test
+from 2026-08 until 2026-09-03, when it became `tests/data/ratchets.json` +
+`tools/check/ratchets.mjs` (Phase 1-lite of `docs/research/TREE-RESTRUCTURE-2026-09.md`).
+Every raise and lower was recorded as a comment beside its number; those comments
+are preserved here verbatim, per file, as the record of WHY each number moved.
+The live numbers are in `ratchets.json`; nothing here is asserted.
+
+2026-10-11 third re-measure after ship #1351 (phone HUD overlaps) landed on tip
+`bdbfa191a`: hud.js **1411 / 2399**, hud.css **1960 / 2158**. Prior #1437 snap to
+1393 / 2377 was already short once the merge tree carried #1351's growth.
+
+2026-10-10 the HUD joins the ratchet: `js/ui/hud.js` (codeLines **1330**, lines
+**2246**) and `css/hud.css` (codeLines **1917**, lines **2109**), at ship `107d232f1`.
+Every open HUD branch was growing the pair (the band-allocator refactor +474 net,
+#1316 +76, #1351 +56, #1366 +55) because each phone bug got its own repair pass on
+top of the last. Owner decision: a HUD replacement deletes what it replaces in the
+same PR, and growth past the 40-line absorb says why
+(`docs/notes/HUD-CODE-AUDIT-2026-10-10.md` §net-lines rule).
+Re-measured on the merged tree before landing: #1366 (Phase 0 top-band fix) merged
+first and grew the pair, so the ceilings start at **1345 / 2281** (hud.js) and
+**1926 / 2120** (hud.css), ship `325100c05`.
+
+2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
+under Settings, removing duplicate pause controls and simplifying Help markup.
+The newer practice goals and session review remain. Shell slack is tightened to 25.
+
+2026-09-22 the portrait drawing: `shellNodes` 1751 → **1790**, a second SVG and
+the groups of a second picture. The title art is now TWO drawings: the
+landscape one is the car mesh through the garage orbit, the portrait one is the
+same pair from behind, driving up the frame with their marks trailing down it.
+A tall phone had been getting the landscape drawing cropped or shrunk to a
+strip, which is the shape problem no crop solves — the subject is 3.3x wider
+than it is tall and the slot is the other way round. The portrait half is
+TRACED off a real render rather than projected (the reason is on sceneTop), so
+it costs far fewer groups than the projected attempt it replaced, and it drops
+the bleed and ambient passes so the raise stays inside the commit hook's 40-node
+absorb — CI's ratchet-vs-base check fails a bigger raise on a direct push,
+which has no PR body to carry the reason. Only one of the two is ever rendered
+(display:none, not opacity), so the cost is bytes in the shell, not paint on
+the phone.
+
+2026-09-22 title framing: `shellNodes` 1750 → **1751**, one `<g id="tc-frame">`
+around the generated title art. The phone shapes need different framing of the
+same drawing — portrait off the left edge, landscape smaller and lower so the
+trail clears the button column — and a transform on `#title-car` itself counts
+toward `#overlay`'s scrollWidth, which is what took `ui-scale > portrait` red.
+One node inside the svg buys both, and the svg viewport clips what it moves out.
+
+2026-09-22 coverage ratchets (Track B): three new `tree` metrics, each a way a
+suite can look larger than it is. `zeroRefModules` = 0 (the census found one,
+`js/physics/body-attitude.js`; `tests/unit/body-attitude.test.mjs` closed it, and
+the ceiling starts at zero so it stays closed). `implicitAsserts` = 40 (spec tests
+whose only assertion is a `waitForFunction`; a timeout there reads as a hang, not
+a wrong value — convert as touched). `twinDebt` = 7, the portable browser specs
+still on the browser gate after the first `ADAPTED` batch (7 specs, each with a
+proven mutant; 40 before it, 22 while 16 specs briefly imported `test` from the
+fixtures — reverted, the import changes their browser run); `BROWSER_ONLY` in
+`tools/ci/twinned-specs.mjs` names the ones that must stay (with the reason), so
+this can reach zero. All three `slack: 0`: lower them, never bank headroom.
+
+# Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
+
 The line-count ratchet on the big modules lived in the `module-size` unit test
 from 2026-08 until 2026-09-03, when it became `tests/data/ratchets.json` +
 `tools/check/ratchets.mjs` (Phase 1-lite of `docs/research/TREE-RESTRUCTURE-2026-09.md`).
@@ -17,13 +89,31 @@ same PR, and growth past the 40-line absorb says why
 Re-measured on the merged tree before landing: #1366 (Phase 0 top-band fix) merged
 first and grew the pair, so the ceilings start at **1345 / 2281** (hud.js) and
 **1926 / 2120** (hud.css), ship `325100c05`.
+2026-10-11 third re-measure on ship `2e1725b34` (sync of #1382 ci-health onto the
+squash absorb of #1351/#1381/#1408/#1411/#1420/#1432): round-3 HUD PRs (#1395,
+#1387, #1386) then #1351 phone-HUD overlaps merged without their planned raises,
+so ship read OVER (hud.js +66 code / +118 lines, hud.css +34 / +38) and Structural
+guards stayed red on every PR. New ceilings: hud.js **1411 / 2399**, hud.css
+**1960 / 2158**. Same `--update` lowered game.js 4976 → 4974 code / 9195 → 9186
+lines. `compareToBase` now clears a raise past the 40-line absorb when this file
+also moved (written reason = the gate; #1437 was stuck red without that).
 2026-10-10 second re-measure, ship `33ea003c1`: #1375 landed first, then the round-3
 HUD PRs (#1395 viewport cache, #1387 give-back countdown, #1386 visual spotter) merged
 without the raises they had planned, so ship read OVER by hud.js +48 code / +96 lines
 and hud.css +27 / +30 and Structural guards went red on every PR. New ceilings:
 hud.js **1393 / 2377**, hud.css **1953 / 2150**. The same update lowered game.js
 4976 → 4974 code / 9195 → 9186 lines (it had shrunk). Owner decision: raises with a
+stated reason are fine; the allocator's own raise follows when it lands. (#1380 sync
+onto ship absorbed the same raise as #1437 so the merge commit could land.)
+2026-10-11 third re-measure after ship tip `23641805f` (PR merge trees for #1380):
+#1351 and later HUD work grew past the second-remeasure ceilings, so Structural guards
+failed on the merge ref (hud.js +18 code / +22 lines, hud.css +7 / +8). New ceilings:
+hud.js **1411 / 2399**, hud.css **1960 / 2158**. Unit-suite floor 550+ → 600+ (605 on disk).
+
 stated reason are fine; the allocator's own raise follows when it lands.
+2026-10-11 third re-measure (PR #1376 sync onto ship after #1351/#1394/#1430):
+hud.js **1411 / 2399**, hud.css **1960 / 2158**. Same catch-up policy as below —
+source files unchanged on this docs PR; ceilings track already-landed ship size.
 
 2026-10-11 absorb catch-up (`tools/check/ratchets.mjs --base`): a ceiling raise
 past 40 lines fails only when the SOURCE file's metric also grew past 40 since
@@ -35,6 +125,51 @@ stated reason. Real source growth past absorb still fails on the PR run.
 2026-10-11 third re-measure after ship #1351 (phone HUD overlaps) landed on tip
 `bdbfa191a`: hud.js **1411 / 2399**, hud.css **1960 / 2158**. Prior #1437 snap to
 1393 / 2377 was already short once the merge tree carried #1351's growth.
+
+2026-10-11 ship catch-up + F-01 (#1409): after #1375, round-3 HUD PRs (#1395
+viewport cache, #1387 give-back, #1386 spotter) and then #1351 (phone HUD
+overlaps) landed without their planned raises, so ship tip / PR merge refs
+read OVER (Structural guards red). Re-measure on the synced #1409 tree
+(ship `23641805f` + F-01 `zoomDiv` feature-detect): hud.js **1412 / 2403**
+(+1 code / +4 lines over the ship-only remeasure of 1411 / 2399 — the F-01
+`_noCssZoom` const and its comment), hud.css **1960 / 2158**. Sibling #1437
+owns the ship-only remeasure; this tip needs the F-01 +1 as well. Also
+reworded four comment `game.js's` hits (source-pin ≤351). After #1437
+merged, a later sync keeps hud.js at **1412 / 2403** over ship's
+**1411 / 2399** and takes the suite floor **600+**.
+2026-10-11 absorb catch-up (`tools/check/ratchets.mjs --base`): a ceiling raise
+past 40 lines fails only when the SOURCE file's metric also grew past 40 since
+the base. A re-measure that tracks size already on the tree (file delta ≤ 40) is
+a warning, not a red — #1386/#1387/#1395 grew HUD without raising the #1375 caps,
+and every PR that re-snapped hit Structural guards with no CI override for a
+stated reason. Real source growth past absorb still fails on the PR run.
+
+2026-10-11 HUD catch-up remeasure (#1378 steward): ship tip was OVER after
+#1375 landed caps then #1386/#1387/#1395 grew HUD without raises. Remeasured
+on this tip via `ratchets.mjs --update`: **js/ui/hud.js** 1345/2281 → **1393/2377**,
+**css/hud.css** 1926/2120 → **1953/2150**; game.js lowered 4976/9195 → 4974/9186.
+Paired with the `--base` absorb catch-up so Structural guards can go green.
+
+2026-10-11 HUD remeasure after ship sync (#1378): PR merge-ref CI saw ship-grown
+HUD past the prior tip caps (Structural guards tooling A). Remeasured on the
+synced tree: **js/ui/hud.js** 1393/2377 → **1411/2399**, **css/hud.css** 1953/2150 →
+**1960/2158**. Also raise docs/TESTING.md unit-suite floor 550 → 600 (disk 605).
+2026-10-10 ship tip catch-up (#1416): after #1386 / #1387 / #1383 / #1395 landed
+HUD features without ceiling snaps, ship `33ea003c1` measured **OVER**
+(`hud.js` lines 2377 > 2281, codeLines 1393 > 1345; `hud.css` lines 2150 > 2120,
+codeLines 1953 > 1926) — Structural guards tooling-A red on the deploy branch
+itself (run `38062352465`). Snap ceilings to the merged tree:
+`hud.js` **1393 / 2377**, `hud.css` **1953 / 2150**; `game.js` lowered slightly
+(4976→4974 codeLines, 9195→9186 lines). Past the 40-line absorb on purpose:
+this is the net-lines catch-up the audit required, not new HUD code in #1416
+(tools-only: hud-mock + ui-mock-core).
+
+2026-10-11 ship tip re-snap (#1416): after #1351 (phone HUD overlaps) and further
+ship merges, tip `2e1725b34` measures `js/ui/hud.js` codeLines **1411**, lines
+**2399** and `css/hud.css` codeLines **1960**, lines **2158** (still OVER the
+#1375 caps). Ceilings snapped to those values so a PR merge with current ship
+passes absolute ratchets. `ratchets --base` past-absorb raises clear when this
+file documents the path + new ceiling (machine-checked reason).
 
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
@@ -3303,3 +3438,25 @@ Closing-chord centerline interpolation shifted start-seam props on indy/madrid/w
 `js/net/lobby.js` lines 1884 → **1887** on the feature tip (+3: two comment lines and `_peers.clear(); _ready.clear(); clashClear(); myRank = Infinity` when the room ends so relayed guest profiles do not survive into the next room), then 1891 → **1894** after syncing the deploy tip (base had already absorbed other lobby growth to 1891; the union is base + the three teardown lines).
 
 A later sync onto the deploy tip also moved `js/game.js` codeLines 4795 → **4798** and lines 8946 → **8943**, and `js/track/tracks.js` 703 → **702** (measure of the merged tree — take the base's ceilings where they lowered, raise codeLines for ship-tip growth). Deliberate lobby raise for the intentional onClose clear; the game.js codeLines raise is the sync cure, not an extraction.
+
+## 2026-10-11 — menus-hunt #1405 ship sync HUD catch-up
+
+`js/ui/hud.js` lines **2377 → 2399**, codeLines **1393 → 1411**; `css/hud.css`
+lines **2150 → 2158**, codeLines **1953 → 1960**. Re-measure after merging ship
+(incl. #1351 phone HUD overlaps). This branch does not edit the HUD sources —
+ceilings track already-landed size via the catch-up absorb in `compareToBase`
+(same policy as #1437 / #1384).
+## 2026-10-11 — HUD remeasure after #1386/#1387/#1395 (+ ship tip growth)
+
+Ship Structural guards went red after #1375 landed the HUD ratchet, then
+round-3 HUD PRs (#1395 viewport cache, #1387 give-back countdown, #1386 visual
+spotter) and later tip merges grew past the ceilings without planned raises.
+
+Measured on the synced tip (ship `2e1725b` + MCP #1400):
+- `js/ui/hud.js` → `{codeLines 1411, lines 2399}` (was 1345 / 2281)
+- `css/hud.css` → `{codeLines 1960, lines 2158}` (was 1926 / 2120)
+
+Deliberate `--update` remeasure so every PR's merge-with-ship Structural
+guards can pass. Past-absorb raise is allowed because this history entry
+moves with `tests/data/ratchets.json` (`ratchets.mjs --documented` / CI).
+
