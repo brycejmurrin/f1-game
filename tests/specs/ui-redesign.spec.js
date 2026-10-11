@@ -457,6 +457,18 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     const closeInHead = close.top >= head.top - 1 && close.bottom <= head.bottom + 2;
     return sameRow && closeInHead;
   }, null, { polling: 100, timeout: 10_000 });
+  // Head-parked CLOSE needs the deferred overlays/dialogs foot rule (padding
+  // longhands 0 + absolute top:0). selected-3 2026-10-11 asserted before the
+  // pad zero stuck and saw 0.35*pad overhang past head.bottom.
+  await page.waitForFunction(() => {
+    const inner = document.getElementById("vsfriend-inner");
+    const foot = inner && inner.querySelector(":scope > .sheet-foot");
+    if (!inner || inner.dataset.density !== "compact" || !foot) return false;
+    if (inner.dataset.shape === "tall") return true;
+    const s = getComputedStyle(foot);
+    return s.position === "absolute" && parseFloat(s.paddingTop) === 0
+      && parseFloat(s.paddingBottom) === 0;
+  }, null, { polling: 100, timeout: 10_000 });
   const versus = await page.evaluate(() => {
     const rect = (id) => document.getElementById(id).getBoundingClientRect();
     const body = rect("vs-body"), host = rect("vs-host"), join = rect("vs-join");

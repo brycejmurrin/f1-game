@@ -2000,7 +2000,11 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   // Soft-tap polish (UI Fit): compact CLOSE painted 62×26 and HOST/JOIN 285×44
   // on ios-iphone-landscape (layout-audit 2026-10-05). --tap-paint holds 52
   // painted on touch; --tap-min was the 26px soft floor.
-  assert.equal(decl(css("css/overlays.css"), '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close', "min-height"), "var(--tap-paint)",
+  assert.equal(
+    decl(css("css/overlays.css"),
+      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close',
+      "min-height"),
+    "var(--tap-paint)",
     "compact VS Friend CLOSE floors at --tap-paint");
   assert.equal(decl(css("css/overlays.css"), '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close', "height"), "var(--tap-paint)",
     "compact CLOSE height locked to --tap-paint (closeInHead settle)");
@@ -2011,10 +2015,20 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "compact VS Friend head clears --tap-paint CLOSE");
   assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] > #vs-head', "height"), "var(--tap-paint)",
     "compact head height locked with CLOSE");
-  assert.equal(decl(css("css/overlays.css"), '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot', "top"), "0",
+  assert.equal(
+    decl(css("css/overlays.css"),
+      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot',
+      "top"),
+    "0",
     "compact CLOSE foot sits at head top (no pad inset past the band)");
   assert.equal(decl(css("css/overlays.css"), '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot', "height"), "var(--tap-paint)",
     "compact CLOSE foot height locked to --tap-paint");
+  assert.equal(
+    decl(css("css/overlays.css"),
+      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot',
+      "padding-top"),
+    "0",
+    "compact head-parked foot zeros padding-top (selected-3 closeInHead 2026-10-11)");
   assert.equal(decl(css("css/components.css"), "#results .sheet, #standings .sheet, #customize .sheet", "--compact-at"), "480px");
 
   // VS Friend chrome (dialogs.css @layer overlays): one red primary per step,
@@ -2046,6 +2060,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     decl(vsDlg, /#vsfriend-inner\[data-density="compact"\]\[data-shape="tall"\] > \.sheet-foot(?!::)/, "position"),
     "relative",
     "narrow/tall CLOSE stays in the footer, not absolute in the head");
+  assert.equal(
+    decl(vsDlg,
+      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot',
+      "padding-top"),
+    "0",
+    "dialogs restates wide-compact zero foot pad after tall rules (closeInHead)");
 
   assert.equal(decl(css("css/career.css"), "#career-offers .sheet, #career-history .sheet, #career-guide .sheet, #quali .sheet", "--compact-at"), "480px");
   assert.equal(decl(css("css/carsetup.css"), "#cs-inner", "--pair-compact"), "off",
