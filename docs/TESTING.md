@@ -1085,7 +1085,10 @@ Two always-judged checks give the gate fixed names:
 - **`CI`** (`ci-verdict` job, #480): aggregates every sibling job via
   `tools/ci/ci-verdict.mjs`, including `selected-verdict` (2026-10-04 — it
   needed only `selected`, so an all-dropped plan passed `CI` while the verdict
-  failed). A needed job skipped by its `if:` is a pass; a needed failure or
+  failed). Since 2026-10-10 (R3-CI-HEALTH-2) `selected` itself needs only
+  `select`, so the browser legs start as soon as the plan exists instead of
+  queueing behind the ~6 min guards shards; `selected-verdict`, `ci-verdict`
+  and `poke-train` still need `guards`, so a guards red still fails the gate. A needed job skipped by its `if:` is a pass; a needed failure or
   cancel fails the aggregator. Advisory jobs (`baseline-trial`) never fail it.
   It is the only check that also carries smoke, the sweeps, renderer-macos and
   xr, so branch protection should require it (an owner setting).
@@ -1119,7 +1122,10 @@ Every `pull_request` workflow uses a per-PR concurrency group with
 
 Playwright retries default to **1 under `CI`** when unset
 (`playwright.config.js`); the change-aware `selected` gate sets `--retries=0`
-so a flake is news, not a doubled bill. Under `APEX_FAIL_ON_FLAKY=1` (every
+so a flake is news, not a doubled bill — except a QUARANTINED spec, which
+`select-specs.mjs` schedules alone in its own leg with `--retries=1`
+(2026-10-10, R3-CI-HEALTH-4), so one quarantined flake cannot red an
+otherwise green leg. Under `APEX_FAIL_ON_FLAKY=1` (every
 browser job in `ci.yml`) a pass-on-retry is a red unless the spec is listed in
 `tests/data/flaky-quarantine.json` — the one `@quarantine` ledger (owner,
 since, why). Quarantined specs still run; they are excluded from blocking
@@ -1574,6 +1580,7 @@ what it covers.
 | `replay-buf.test.mjs` | Instant-replay ring (`js/camera/replay-buf.js`): ≤0.7 MB at 22 cars / 20 s, wrap drops oldest, `at(t)` interpolates, scrub restore equality on captured fields, netplay scrub no-op, retirement auto-tag + `jumpLastTag`, and the `game.js` scrub gate precedes `Career.scoreRound` |
 | `results-cam.test.mjs` | Results cam (`js/camera/results-cam.js`): finite orbit pose, highlights reel budget/order, chequered→orbit phase machine, mobile/high-tier disable, and `game.js` results early-return gated on `resultsCam.live()` |
 | `ghost-share.test.mjs` | APXG1 compressed/plain codec round-trips, corrupt and unknown-track refusal, 14 KiB fragment cap with file fallback, session-only guest replay/interpolation, selective `#ghost=` consumption, results export controls, and Phase 1 boot/HUD/world wiring |
+| `share-code.test.mjs` | APXS1/APXL1/APXD1 envelopes (`js/ui/share-code.js`): setup/livery/daily round-trips, corrupt and unknown-team refusal, apply writes store without calling `startRace`, `#share=` consume clears the fragment, Continue hint priority career → daily streak → `lastSession`, and title-flow source pins that share apply never races |
 | `input-ghost.test.mjs` | deterministic local ghosts: fixed-timestep steer/throttle/brake + seed + physRev/build; PB gate; version refuse; TT wiring pins |
 | `input-ghost-replay-vm.test.mjs` | packed InputGhost tape → `__apex.setInput`+`step` is byte-identical under one seed (game-vm) |
 | `fuzz-untrusted-inputs.test.mjs` | seeded fuzz (Hash32 PRNG in `tests/helpers/seeded-fuzz.mjs`, N=2000 mutations per decoder) over every door that decodes player-shaped data: `GhostShare.decode` (`#ghost=` / pasted APXG1 / `.apexghost.json`), `LobbyCodes.codeFrom` + `NetHandshake.peekCode`/`decodeCode` (pasted invites), `NetSdp.unpack`, `NetQr.encode`, `NetSnapshot.decodeSnapshot` (peer packets), `SettingsExport.applySettings`/`applyGarage`, `SaveMigrate.migrateCareer`, and `GameStore.get` (corrupt disk). Asserts: never throws past the decoder boundary; returns the module's own `{ok:false,reason\|error}` (or null) failure shape; never writes NaN/undefined into live Career/G/store. Failures print `seed=` + trial so a regression is replayable. Budget under 10 s wall clock |
@@ -1903,6 +1910,7 @@ what it covers.
 | `ready-full-cap.test.mjs` | guards `tools/ci/ready-full-cap.mjs`, the Merge Desk refuse before mark-ready when ≥3 ready PRs already have in-progress/queued full-tier `ci.yml` (AGENTS.md §Concurrent PRs). Pins draft runs never count, ship/pages runs never count, default cap 3, `--exclude` freeing a slot, and that AGENTS.md documents the check without weakening draft=fast / ready=full |
 | `test-bg-outcome.test.mjs` | guards `tools/ci/test-bg.mjs`'s `outcomeOf`, the verdict read out of a background run's log: a non-zero `= bg exit` wins over an earlier `= run passed` or `# fail 0` (a two-command group's red second half, or a Playwright half killed before its summary, used to read as passed and `--wait` exited 0); exit 0 keeps the richer summary, and the Playwright, TAP and plain-script formats still read |
 | `ci-watch.test.mjs` | guards `tools/ci/ci-watch.mjs`, the post-push CI/Pages watcher an agent arms instead of waiting (AGENTS.md rule 12). Pure parts pinned on fixtures: the NEWEST run per workflow wins, so the push run the PR run cancels on the same SHA (rule 8's designed dedupe) is never read as a red; a failed job is a red before its run ends while the watch keeps reporting; a run that concluded failure with no failed job (a setup error) is still a red; no run yet is not green; each finished job is exactly one event (Monitor turns every line into a message), skipped jobs are silent, and a red names its failing step and URL |
+| `pr-board.test.mjs` | guards `tools/ci/pr-board.mjs`, the read-only board a Claude-run CI Watch acts from (`.claude/skills/ci-watch`). Pins every `suggest()` branch and its precedence (FOREIGN-ARM, SYNC, FIX, ARM, READY, NONE, WAIT), READY flips consuming the `ready-full-cap` slots, ci state from the runs on the head sha (live beats finished, the cancelled draft sibling is dedupe), the table rendering, paging past 100 PRs, `--pr`, every API-error path, and that no request is ever anything but a bare curl GET |
 | `ready-gate.test.mjs` | guards `tools/ci/ready-gate.mjs`, the draft→ready check (AGENTS.md §Concurrent PRs / rule 3): Structural guards success on the tip, or a local full-suite stamp after tooling-fast passed. Evidence #1111 (designer-canvas). Pure fixtures: aggregator success/fail/pending, A+B halves when the aggregator is skipped, local stamp SHA mismatch, and evaluate()'s CI-over-local precedence |
 | `bash-guard-hardening.test.mjs` | `.claude/hooks/bash-guard.sh` fails CLOSED (ledger L12/M36, 2026-10-09): RUNS the real hook on a commit hidden in `if/then/fi`, `{ }`, loops, `$((1 << n))` lines, a line continuation, `eval`, backticks and unbalanced quotes (`shellparse.py` answers `null` for the unparseable, the regex fallback also runs for `[]`), on `pkill -9f` / `-u root -f` / `--signal 9 -f` / trailing `-f`, on a `<<<` or arithmetic `<<` swallowing the next line, and `.claude/settings.json`'s push denies (`--force` after the ref, `+ref`, `HEAD:refs/heads/<deploy>`) |
 | `conflict-cure.test.mjs` | `tools/lib/conflict-cure.mjs`, the pure half of deploy/sync-pr's cure of a conflicted `index.html`/`package.json` (ledger L13): a hunk inside a `@gen-shell` span resolves, one outside stops, `package.json` merges by key (a dependency from either side survives, `scripts.test*` is the generator's); a REAL conflicted merge shows both sides' hand edits kept where `--theirs`/`--ours` dropped one |

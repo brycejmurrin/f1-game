@@ -617,6 +617,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pit-lane.test.mjs",
   // PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.
   "tests/unit/player-forces.test.mjs",
+  // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
+  "tests/unit/pr-board.test.mjs",
   // test-coverage-audit answers "is this file in SOME topical group"; this one
   // answers the question that actually bites, "does the pre-push gate RUN it" —
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
@@ -722,6 +724,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The sun shadow map's depth span holds a 250 m caster: drives the real
   // ShadowPass.sunPass on a stub renderer and projects through its light VP.
   "tests/unit/shadow-pass-depth.test.mjs",
+  "tests/unit/share-code.test.mjs",
   "tests/unit/shared-math.test.mjs",
   "tests/unit/sheet-per-screen.test.mjs",
   "tests/unit/sheetshape-density-scale.test.mjs",

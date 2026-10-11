@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Twenty-nine `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
+do the work. Thirty `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -257,11 +257,15 @@ of one `tests/unit/` file, no CLI of its own.
 black with every widget mocked and a labelled box per element, one race boot per
 pointer type then ~1 s a shot — the fast look at a layout; `apex_hud_shot` stays
 the tool when the 3D frame behind the HUD matters.
+29 → 30 on 2026-10-10 for `apex_catalog` (built-in): every valid id the other tools
+accept (tracks, cams, tods, shot presets, HUD devices/cams, job kinds, UI screens
+and viewports) in one read, sourced from the tools' own schemas so it cannot drift.
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
 |---|---|---|---|
 | `apex_status` | built-in | tree | check-changes |
+| `apex_catalog` | built-in | tree | check-changes |
 | `apex_doctor` | `check/doctor.mjs` | tree | check-changes |
 | `apex_pick_tests` | `ci/pick-tests.mjs` | tree | check-changes |
 | `apex_select_specs` | `ci/select-specs.mjs` | tree | check-changes |
