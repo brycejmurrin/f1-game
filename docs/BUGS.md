@@ -199,7 +199,7 @@ known species.
 | abudhabi | 0.1015 | |
 | donington | 0.0973 | |
 | shanghai | 0.0895 | |
-| bahrain | 0.2703 | `sceneryStartFrac` 0.2250, `startFrac` 0 (added after the 2026-09-24 census) |
+| bahrain | 0.2609 | `sceneryStartFrac` 0.2250, `startFrac` 0 (added after the 2026-09-24 census; 0.2703 was a misprint — the build and `rotate-markings.cjs --check` both measure 0.2609, 2026-10-10) |
 
 Also still large but outside those 14 (intentional anchors / reverse-source):
 monaco 0.938 (`sceneryCoordinates: "source"`, `sceneryStartFrac` 0.28);
