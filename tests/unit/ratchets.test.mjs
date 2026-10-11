@@ -5,6 +5,7 @@
 // Run: node --test tests/unit/ratchets.test.mjs   (npm run test:tooling-fast)
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { load, measure, verdict, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt } from "../../tools/check/ratchets.mjs";
 
 test("every ratcheted metric is at or under its ceiling", async () => {
@@ -177,14 +178,23 @@ test("--base names every ceiling that moved, and only a raise past the hook's ab
   assert.equal(compareToBase("HEAD", { current: raised(40), print: (l) => out.push(l) }), 0);
   assert.ok(out.some((l) => /RAISE  js\/game\.js lines: \d+ -> \d+ \(\+40\)/.test(l)), out.join("\n"));
   const big = [];
-  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => big.push(l) }), 1);
-  assert.ok(big.some((l) => /past the 40-line commit-hook absorb/.test(l)));
+  // Empty history → past-absorb still blocks (CEILING-HISTORY is the reason gate).
+  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => big.push(l), historyPath: "/dev/null" }), 1);
+  assert.ok(big.some((l) => /past the 40-line commit-hook absorb.*CEILING-HISTORY/.test(l)));
+  // Documented raise: file path + new ceiling in CEILING-HISTORY → exit 0.
+  const nowLines = head.files["js/game.js"].lines + 41;
+  const histDoc = `/tmp/ratchet-hist-doc-${process.pid}.md`;
+  fs.writeFileSync(histDoc, `js/game.js lines raised to **${nowLines}** for the unit test.\n`);
+  const doc = [];
+  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => doc.push(l), historyPath: histDoc }), 0);
+  assert.ok(doc.some((l) => /documented in CEILING-HISTORY/.test(l)), doc.join("\n"));
+  fs.unlinkSync(histDoc);
   // ADVISORY (a push run): the same raise is still named, and still says it
   // needs a reason, but the exit is 0 — a push has no PR body to carry the
   // reason, so failing there is a red that no push can clear. The PR run
   // for the same commits calls without --advisory and blocks as above.
   const adv = [];
-  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => adv.push(l), advisory: true }), 0);
+  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => adv.push(l), advisory: true, historyPath: "/dev/null" }), 0);
   assert.ok(adv.some((l) => /past the 40-line commit-hook absorb.*advisory on a push/.test(l)), adv.join("\n"));
   assert.match(adv.at(-1), /1 past the 40-line absorb \(advisory\)/);
   // An unreachable ref is a distinct exit, not a crash and not a pass.

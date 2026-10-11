@@ -7,10 +7,12 @@
 //                                      #   or on a merged tree — the deploy-merge rule)
 //   node tools/check/ratchets.mjs --json     # {ok, rows:[{file, metric, value, ceiling, over, slack}]}
 //   node tools/check/ratchets.mjs --base <ref> [--max-raise=40] [--advisory]   # --advisory: a raise past the absorb
-//                                      #   annotates instead of failing — for PUSH runs, where no PR body can carry the reason
+//                                      #   annotates instead of failing — for PUSH runs (no PR / history gate)
 //                                      # every ceiling that moved since <ref> (git show); raises are
-//                                      #   warnings, a raise past the commit hook's absorb fails —
-//                                      #   ci.yml's guards job runs this against the PR base / deploy tip
+//                                      #   warnings; a raise past the commit hook's absorb fails UNLESS
+//                                      #   docs/notes/CEILING-HISTORY.md documents that file + new ceiling
+//                                      #   (the machine-checked "reason"); ci.yml's guards job runs this
+//                                      #   against the PR base / deploy tip
 //
 // Replaced the module-size unit test on 2026-09-03 (Phase 1-lite of
 // docs/research/TREE-RESTRUCTURE-2026-09.md). The idiom is unchanged — a number
@@ -46,8 +48,26 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const DATA = path.join(ROOT, "tests/data/ratchets.json");
+export const HISTORY = path.join(ROOT, "docs/notes/CEILING-HISTORY.md");
 export const SLACK_MIN = 60;
 export const SLACK_PCT = 0.04;
+
+/** True when CEILING-HISTORY names this file (or tree metric) and the new
+ *  ceiling value close together — the documented reason for a raise past the
+ *  commit-hook absorb. Without a match, `--base` still fails the PR run. */
+export function ceilingRaiseDocumented(file, metric, now, { historyPath = HISTORY } = {}) {
+  if (now == null || !historyPath || !fs.existsSync(historyPath)) return false;
+  const text = fs.readFileSync(historyPath, "utf8");
+  const n = String(now);
+  if (file === "(tree)") {
+    const esc = String(metric).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`\\b${esc}\\b[\\s\\S]{0,500}?\\b${n}\\b`).test(text)
+      || new RegExp(`\\b${n}\\b[\\s\\S]{0,500}?\\b${esc}\\b`).test(text);
+  }
+  const esc = String(file).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`${esc}[\\s\\S]{0,500}?\\b${n}\\b`).test(text)
+    || new RegExp(`\\b${n}\\b[\\s\\S]{0,500}?${esc}`).test(text);
+}
 
 const COMMENT = /^\s*(\/\/|\*|\/\*)/;
 
@@ -274,24 +294,34 @@ export function loadAt(ref) {
  *  deleted entry whose file still exists, blocks like a raise past the absorb
  *  (15-F10). Raises are warnings
  *  (GitHub `::warning::` annotations on CI, plain lines elsewhere); a raise
- *  past `maxRaise` — the commit hook's own absorb, so only APEX_SKIP_GUARDS
- *  could have produced it — fails. Returns the exit code. */
-export function compareToBase(ref, { maxRaise = 40, current = load(), print = console.log, advisory = false } = {}) {
+ *  past `maxRaise` fails unless CEILING-HISTORY documents that file + new
+ *  ceiling (or `--advisory` on a push). Returns the exit code. */
+export function compareToBase(ref, {
+  maxRaise = 40, current = load(), print = console.log, advisory = false,
+  historyPath = HISTORY,
+} = {}) {
   let base;
   try { base = loadAt(ref); }
   catch (e) { print(`ratchets --base: cannot read tests/data/ratchets.json at ${ref} (${String(e.stderr || e.message).trim().split("\n")[0]}) — is the checkout deep enough (fetch-depth: 0)?`); return 2; }
   const rows = diffRatchets(base, current);
   const gh = process.env.GITHUB_ACTIONS === "true";
   let blocked = 0;
+  let documented = 0;
   for (const r of rows) {
     const where = `${r.file} ${r.metric}`;
     if (r.kind === "raise") {
       const over = r.delta > maxRaise;
-      if (over) blocked++;
+      const reasoned = over && ceilingRaiseDocumented(r.file, r.metric, r.now, { historyPath });
+      if (over && !reasoned) blocked++;
+      else if (reasoned) documented++;
       const msg = `RAISE  ${where}: ${r.base} -> ${r.now} (+${r.delta})` + (over
-        ? ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : "")
+        ? (reasoned
+          ? ` — past the ${maxRaise}-line commit-hook absorb: documented in CEILING-HISTORY.md`
+          : ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in CEILING-HISTORY.md (file + new ceiling)`)
+          + (advisory ? " (advisory on a push: the PR run is the gate)" : "")
         : "");
-      print(gh ? `::${over && !advisory ? "error" : "warning"} file=tests/data/ratchets.json,title=ratchet raised::${msg}` : msg);
+      const asError = over && !reasoned && !advisory;
+      print(gh ? `::${asError ? "error" : "warning"} file=tests/data/ratchets.json,title=ratchet raised::${msg}` : msg);
     } else if (r.kind === "lower") print(`LOWER  ${where}: ${r.base} -> ${r.now} (${r.delta})`);
     else if (r.kind === "new") print(`NEW    ${where}: ${r.now}`);
     else if (r.kind === "loosen") {
@@ -310,13 +340,12 @@ export function compareToBase(ref, { maxRaise = 40, current = load(), print = co
     }
   }
   const raises = rows.filter((r) => r.kind === "raise").length;
-  print(`ratchets --base ${ref}: ${rows.length} ceiling(s) moved (${raises} raised, ${rows.filter((r) => r.kind === "lower").length} lowered, ${rows.filter((r) => r.kind === "new").length} new, ${rows.filter((r) => r.kind === "gone").length} gone)` + (blocked ? ` — ${blocked} past the ${maxRaise}-line absorb${advisory ? " (advisory)" : ""}` : ""));
-  // ADVISORY ON A PUSH. The reason for a raise past the absorb lives in a PR
-  // body, and a push run has no PR — so failing there is a red that cannot
-  // be cleared by pushing again. Ten of the fourteen ci.yml failures on
-  // 2026-09-22 were this one message repeated on the same branch's pushes
-  // (eight of them on one branch), each a wasted run and a re-push into the
-  // same wall. The push run now annotates; the pull_request run still fails.
+  print(`ratchets --base ${ref}: ${rows.length} ceiling(s) moved (${raises} raised, ${rows.filter((r) => r.kind === "lower").length} lowered, ${rows.filter((r) => r.kind === "new").length} new, ${rows.filter((r) => r.kind === "gone").length} gone)`
+    + (documented ? ` — ${documented} past absorb documented in CEILING-HISTORY` : "")
+    + (blocked ? ` — ${blocked} past the ${maxRaise}-line absorb${advisory ? " (advisory)" : ""}` : ""));
+  // ADVISORY ON A PUSH. A raise past the absorb with no CEILING-HISTORY match
+  // still fails the pull_request run. Push runs annotate only — ten of fourteen
+  // ci.yml failures on 2026-09-22 were this message on the same branch's pushes.
   return blocked && !advisory ? 1 : 0;
 }
 

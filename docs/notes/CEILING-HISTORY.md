@@ -28,6 +28,13 @@ itself (run `38062352465`). Snap ceilings to the merged tree:
 this is the net-lines catch-up the audit required, not new HUD code in #1416
 (tools-only: hud-mock + ui-mock-core).
 
+2026-10-11 ship tip re-snap (#1416): after #1351 (phone HUD overlaps) and further
+ship merges, tip `2e1725b34` measures `js/ui/hud.js` codeLines **1411**, lines
+**2399** and `css/hud.css` codeLines **1960**, lines **2158** (still OVER the
+#1375 caps). Ceilings snapped to those values so a PR merge with current ship
+passes absolute ratchets. `ratchets --base` past-absorb raises clear when this
+file documents the path + new ceiling (machine-checked reason).
+
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
