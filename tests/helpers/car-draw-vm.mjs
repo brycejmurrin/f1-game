@@ -118,7 +118,7 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
   };
   const carDraw = ctx.CarDraw.create(G, {
     resolveLivery: () => ({ c1: [1, 0, 0], c2: [0, 0, 1] }), partsVisualKey: () => "111111111111",
-    // game.js's drawAeroFlaps, recorded (field-lod.test.mjs drives the real one):
+    // drawAeroFlaps in game.js, recorded (field-lod.test.mjs drives the real one):
     // `still` = the static flap set, drawn whatever the car's distance.
     drawAeroFlaps: (team, aLvl, blend, m, paint, style, only, still) =>
       rec.flaps.push({ team: team.id, blend, m: m[12] + "," + m[14], only: only || null, still: !!still }),
