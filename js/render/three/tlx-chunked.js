@@ -264,7 +264,7 @@
     let mergeK = 2;
     try { const v = +localStorage.getItem("apex26.tlxChunkMerge"); if (v >= 1 && v <= 4) mergeK = v | 0; } catch (_) { /* no storage: 1 */ }
     function build(data, cellSize) {
-      const cell = cellSize > 0 ? cellSize : 72;
+      const cell = ChunkBins.cellSize(cellSize);
       const srcIdx = data.idx;
       const vCount = data.pos.length / 3, big = vCount > 65535;
       const triCount = (srcIdx.length / 3) | 0;
@@ -299,22 +299,7 @@
       if (data._keepFullGeometry === false) {
         data.nrm = data.col = data.mat = data.trk = null;
       }
-      const buckets = new Map();
-      for (let t = 0; t < srcIdx.length; t += 3) {
-        const a = srcIdx[t], b = srcIdx[t+1], c = srcIdx[t+2];
-        const ax=pos[a*3],ay=pos[a*3+1],az=pos[a*3+2], bx=pos[b*3],by=pos[b*3+1],bz=pos[b*3+2],
-              cx=pos[c*3],cy=pos[c*3+1],cz=pos[c*3+2];
-        const gx = Math.floor(((ax+bx+cx)/3)/cell) + 1024;
-        const gz = Math.floor(((az+bz+cz)/3)/cell) + 1024;
-        const key = gx * 4096 + gz;
-        let bk = buckets.get(key);
-        if (!bk) { bk = { idx: [], mn: [Infinity,Infinity,Infinity], mx: [-Infinity,-Infinity,-Infinity] }; buckets.set(key, bk); }
-        bk.idx.push(a, b, c);
-        const mn = bk.mn, mx = bk.mx;
-        if (ax<mn[0])mn[0]=ax; if (ax>mx[0])mx[0]=ax; if (ay<mn[1])mn[1]=ay; if (ay>mx[1])mx[1]=ay; if (az<mn[2])mn[2]=az; if (az>mx[2])mx[2]=az;
-        if (bx<mn[0])mn[0]=bx; if (bx>mx[0])mx[0]=bx; if (by<mn[1])mn[1]=by; if (by>mx[1])mx[1]=by; if (bz<mn[2])mn[2]=bz; if (bz>mx[2])mx[2]=bz;
-        if (cx<mn[0])mn[0]=cx; if (cx>mx[0])mx[0]=cx; if (cy<mn[1])mn[1]=cy; if (cy>mx[1])mx[1]=cy; if (cz<mn[2])mn[2]=cz; if (cz>mx[2])mx[2]=cz;
-      }
+      const buckets = ChunkBins.bin(pos, srcIdx, cell);   // centroid cells keyed by ChunkBins.key: the cross-backend chunk identity
       pos = null;
       if (!data._keepPositions) { data.pos = null; data.idx = null; }
       const IndexArray = big ? Uint32Array : Uint16Array;
@@ -333,9 +318,9 @@
         lampCells = [];
         const merged = new Map();
         buckets.forEach((bk, key) => {
-          const gx = (key / 4096) | 0, gz = key - gx * 4096;
+          const gx = ChunkBins.gxOf(key), gz = ChunkBins.gzOf(key);
           lampCells.push({ min: bk.mn.slice(), max: bk.mx.slice(), gx, gz });
-          const mk = Math.floor(gx / mergeK) * 4096 + Math.floor(gz / mergeK);
+          const mk = ChunkBins.key(Math.floor(gx / mergeK), Math.floor(gz / mergeK));
           let m = merged.get(mk);
           if (!m) { m = { parts: [], n: 0, mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity], gx, gz }; merged.set(mk, m); }
           m.parts.push(bk.idx); m.n += bk.idx.length;
@@ -371,12 +356,12 @@
         count += arr.length;
         // KEEP THE GRID CELL, not just the AABB. The bucket key IS the chunk's
         // identity — `gx * 4096 + gz` over `cell`-sized cells, both biased by
-        // 1024 (see the binning loop above) — and it is the only exact way back
+        // 1024 (ChunkBins, js/render/shared/chunk-bins.js) — and it is the only exact way back
         // from a WORLD position to a chunk: `min`/`max` are the union of the
         // triangles' vertex AABBs, so a triangle binned by its CENTROID can push
         // them outside their own cell and two neighbours' boxes can overlap.
         // TLXLampGrid needs the exact mapping; nothing else reads these.
-        const gx = bk.gx !== undefined ? bk.gx : (key / 4096) | 0, gz = bk.gz !== undefined ? bk.gz : key - gx * 4096;
+        const gx = bk.gx !== undefined ? bk.gx : ChunkBins.gxOf(key), gz = bk.gz !== undefined ? bk.gz : ChunkBins.gzOf(key);
         chunks.push({ geo, count: arr.length, min: mn, max: mx, gx, gz,
                       wrap: { __tlx: true, geo } });
       });
