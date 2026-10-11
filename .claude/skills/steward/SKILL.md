@@ -1,6 +1,6 @@
 ---
 name: steward
-description: "Use when driving a PR to green — after a CI or Pages red (naming the failed test is ci-red-triage), a PR event or check-in, a base merge conflict, a fix push to validate. Only the Apex 26 overrides: draft/ready dedupe (`cancelled` is normal), sync-pr.mjs over a hand merge, who-is-on-it.mjs before a shared red, what live means. Pre-push is check-changes."
+description: "Use when driving a PR to green — CI/Pages red (ci-red-triage names the test), PR check-in, base conflict, fix-push validate. Apex overrides only: draft/ready dedupe, sync-pr.mjs, who-is-on-it before a shared red. Pre-push is check-changes."
 ---
 
 # Driving a PR to green in Apex 26
