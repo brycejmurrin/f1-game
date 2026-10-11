@@ -1892,6 +1892,12 @@ const AgentView = (function () {
         return fail("RaceOverError", "rollout() needs a running race (state is " + G.state + ")",
                     'start one with __apex.race("<id>") then go()');
       }
+      // Solo post-finish keeps state "race" while the field finishes (RaceControl
+      // finishDelay's post bag). The player's flag still ends THIS episode.
+      if (G.player && G.player.finished) {
+        return fail("RaceOverError", "rollout() needs a running race (player already finished)",
+                    'start one with __apex.race("<id>") then go()');
+      }
       if (o.policy != null && typeof o.policy !== "function") {
         return fail("BadArgumentError", "policy must be a function",
                     "policy is world => ({steer,throttle,brake}); use `input` for "
@@ -1936,6 +1942,8 @@ const AgentView = (function () {
       // THE SIM STOPS AT THE FLAG. Ticking on in "results" repeated the last
       // frame: 20 s asked from 0.985 of the final lap ran 3.6 s of race and
       // averaged 16 s of frozen frames into speed/offTrack. Stop, and say so.
+      // Solo post-finish can leave state "race" after the flag (field still
+      // running) — stop on player.finished too, or the digest averages post-flag ticks.
       let ran = 0, stoppedEarly = null;
 
       for (let i = 0; i < ticks; i++) {
@@ -2002,9 +2010,14 @@ const AgentView = (function () {
           }
         }
 
-        if (i % sampleEvery === 0 || i === ticks - 1 || G.state === "results") {
+        if (i % sampleEvery === 0 || i === ticks - 1 || G.state === "results" || p.finished) {
           samples.push({ t: r2(G.raceT - startT), frac: +(p.s / G.track.total).toFixed(4),
                          speedKph: r1(sp * 3.6), lateralM: r1(p.x), gear: p.gear || 1 });
+        }
+        // Player flag ends the episode even while solo post-finish keeps state "race".
+        if (p.finished) {
+          stoppedEarly = { atS: r2(G.raceT - startT), reason: "finished" };
+          break;
         }
       }
 

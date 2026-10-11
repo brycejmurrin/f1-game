@@ -128,8 +128,10 @@ test("the only human retiring retires only the AI it had already PASSED the fail
     unreached.dnfAt = 0.99; unreached.dnfWhy = "gearbox";   // drawn, but never reached: the race stops far short of it
     passed.dnfAt = 0.00001; passed.dnfWhy = "hydraulics";   // already behind the car
     G.player.dnfAt = 0.0001; G.player.dnfWhy = "engine";
-    for (let i = 0; i < 60 * 10 && G.state === "race"; i++) g.step(1);
-    assert.equal(G.state, "results", "the race ends once its only human is out");
+    // POST_FINISH_CAP: solo DNF waits for the field, then the race ends — ship
+    // assertions (passed vs unreached) still hold once the cap fires.
+    for (let i = 0; i < 60 * 90 && G.state === "race"; i++) g.step(1);
+    assert.equal(G.state, "results", "the race ends once the post-finish cap passes with its only human out");
     assert.equal(passed.retired, true, "a failure the car had passed is met, not scored past");
     assert.equal(passed.dnf, "hydraulics");
     assert.equal(unreached.retired, false, "a failure it never reached is not invented at the flag (round-2 rules #2)");
@@ -832,6 +834,68 @@ test("a red-flag restart breaks the instant-replay timeline (the re-grid is a te
     assert.equal(breaks, 1, "redFlagRestart() marks the break before the next sample");
   } finally { g.close(); }
 });
+
+async function finishedPlayerWithRunner() {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  const a = g.apex, G = g.G;
+  a.headless(true);
+  await a.race("monza", "default", "dry", { laps: 3 });
+  a.go(); g.step(60);
+  const L = G.track.total, P = G.player;
+  const ai = G.cars.filter((c) => !c.human);
+  for (const c of ai.slice(1)) a.retire(G.cars.indexOf(c));
+  const slow = ai[0];
+  slow.lap = 2; slow.s = L * 0.1; slow.prog = 2 * L + L * 0.1; slow.speed = 20; slow.x = 0; slow.dnfAt = null;
+  a.jump((L - 40) / L, 80, 0); P.lap = 3; P.prog = 3 * L - 40;
+  a.setInput({ throttle: true, steer: 0 });
+  for (let i = 0; i < 60 * 20; i++) g.step(1);
+  return { g, G, P, slow, pauseBtn: (id) => g.sandbox.document.getElementById(id) };
+}
+
+test("POST-FINISH (solo): the player's flag does not end the race while an AI is still running; SKIP settles it", async () => {
+  const { g, G, P, slow, pauseBtn } = await finishedPlayerWithRunner();
+  try {
+    assert.equal(P.finished, true, "the player took the flag");
+    assert.equal(slow.finished, false, "the AI is nowhere near its line");
+    assert.equal(G.state, "race", "the race waits for the field instead of ending 2.2 s after the player");
+    G.els.pausebtn.onclick();
+    assert.equal(pauseBtn("pm-skip-results").hidden, false, "the pause card offers SKIP TO RESULTS while the field finishes");
+    pauseBtn("pm-skip-results").onclick();
+    assert.equal(G.state, "results", "SKIP calls endRace now");
+    assert.equal(slow.finished, false, "the runner is classified by progress, as before");
+  } finally { g.close(); }
+});
+
+test("POST-FINISH (solo): QUIT TO MENU after the flag settles the result first", async () => {
+  const { g, G, P, pauseBtn } = await finishedPlayerWithRunner();
+  try {
+    assert.equal(G.state, "race");
+    assert.ok(!P.finPos, "not classified yet");
+    G.els.pausebtn.onclick();
+    pauseBtn("pm-quit").onclick();
+    assert.equal(P.finPos, 1, "endRace ran before the session was dropped: the career/season settlement is not lost");
+    assert.equal(G.state, "menu");
+  } finally { g.close(); }
+});
+
+test("PLAYER DNF (solo): the race keeps running for the field instead of ending 2.2 s later; the cap ends it as a short run", async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = g.apex, G = g.G;
+    a.headless(true);
+    await a.race("monza", "default", "dry", { laps: 10 });
+    a.go(); g.step(60);
+    for (const c of G.cars) if (!c.human) c.dnfAt = null;
+    a.retire(null);
+    g.step(60 * 10);
+    assert.equal(G.player.retired, true);
+    assert.equal(G.state, "race", "10 s after the DNF the race is still on — rivals keep racing under the TV camera");
+    g.step(60 * 80);
+    assert.equal(G.state, "results", "POST_FINISH_CAP forces the end");
+    assert.equal(G.cars.some((c) => c.finished && !c.retired), false, "nobody saw the flag: RaceControl.shortRun applies");
+  } finally { g.close(); }
+});
+
 
 // ── THE PIT GARAGE HOLDS ITS OWN PAUSE (bug-hunt 3, 2026-10-10) ───────────────
 // setPaused(true) leaves the garage's pause alone (as setPaused(false) already
