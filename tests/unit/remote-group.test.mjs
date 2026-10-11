@@ -8,7 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { browserGroups, planMatrix, parseWorkers, pickRun, failLines, groupVerdict, SHARD_CHOICES, WORKFLOW, USAGE } from "../../tools/ci/remote-group.mjs";
+import { browserGroups, planMatrix, parseWorkers, resolveWorkers, pickRun, failLines, groupVerdict, SHARD_CHOICES, WORKFLOW, USAGE } from "../../tools/ci/remote-group.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCRIPTS = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
@@ -60,17 +60,22 @@ test("the workflow offers exactly the shard counts the planner accepts, and neve
   assert.match(YML, /^run-name: "browser group \$\{\{ inputs\.group \}\} on /m);
 });
 
-test("workers: empty keeps the group's own; an integer 1-8 overrides it; the plan step rejects anything else", () => {
+test("workers: empty is left empty for parseWorkers; resolveWorkers fills the GL+group default", () => {
   assert.deepEqual(parseWorkers(""), { workers: "" });
   assert.deepEqual(parseWorkers(undefined), { workers: "" });
   assert.deepEqual(parseWorkers("1"), { workers: "1" });
   for (const bad of ["0", "9", "1.5", "x", "1; id", "$(id)"]) assert.ok(parseWorkers(bad).error, JSON.stringify(bad));
+  assert.deepEqual(resolveWorkers("render", "llvmpipe", "", SCRIPTS), { workers: "1" });
+  assert.deepEqual(resolveWorkers("physics-core", "llvmpipe", "", SCRIPTS), { workers: "2" });
+  assert.deepEqual(resolveWorkers("physics-core", "llvmpipe", "3", SCRIPTS), { workers: "3" });
   assert.match(YML, /^\s+workers:\n/m, "the workflow takes a workers input");
-  // Validated before any runner is spent, and only ever passed as one quoted argument.
-  assert.match(YML, /WORKERS: \$\{\{ inputs\.workers \}\}\n\s+run: node tools\/ci\/remote-group\.mjs --plan/);
+  // Validated before any runner is spent; plan emits workers= for the shard jobs.
+  assert.match(YML, /WORKERS: \$\{\{ inputs\.workers \}\}\n\s+GL: \$\{\{ inputs\.gl \}\}\n\s+run: node tools\/ci\/remote-group\.mjs --plan/);
+  assert.match(YML, /workers: \$\{\{ steps\.plan\.outputs\.workers \}\}/);
   assert.match(YML, /\$\{WORKERS:\+"--workers=\$WORKERS"\}/);
-  // Both run steps default to ONE worker: render's own --workers=4 starves a 4-vCPU runner.
-  assert.equal((YML.match(/WORKERS: \$\{\{ inputs\.workers \|\| '1' \}\}/g) || []).length, 2);
+  // Shard steps consume the plan output (not a hard-coded 1). APEX_WORKERS
+  // also reads the same output — match the WORKERS: key only.
+  assert.equal((YML.match(/^\s+WORKERS: \$\{\{ needs\.plan\.outputs\.workers \}\}/gm) || []).length, 2);
 });
 
 test("pickRun: the newest dispatch of THIS group on THIS branch since the dispatch", () => {

@@ -12,7 +12,50 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { parseVerdict, toMarkdown, collect } from "../../tools/ci/session-status.mjs";
+import { parseVerdict, toMarkdown, collect, ciSummary, livePrLines, fetchLivePr } from "../../tools/ci/session-status.mjs";
+
+// ── live PR state (--pr): pure formatting over mocked API answers ────────────
+const SHA = "a".repeat(40), OTHER = "b".repeat(40), AT = "2026-10-10T08:00:00Z";
+const run = (name, status, conclusion, id = 1, created_at = "2026-10-10T07:00:00Z") => ({ name, status, conclusion, id, created_at });
+
+test("ciSummary: running beats failure beats success, newest run per workflow only", () => {
+  assert.equal(ciSummary([]), "no CI run for this sha");
+  assert.equal(ciSummary([run("CI", "completed", "success")]), "success");
+  assert.equal(ciSummary([run("CI", "completed", "success"), run("Pages", "in_progress", null, 2)]), "running");
+  assert.equal(ciSummary([run("CI", "completed", "failure"), run("Pages", "completed", "success", 2)]), "failure");
+  // an old failed run superseded by a newer green one is not a red
+  assert.equal(ciSummary([run("CI", "completed", "failure", 1), run("CI", "completed", "success", 2, "2026-10-10T07:30:00Z")]), "success");
+});
+
+test("livePrLines: head, draft/ready, mergeable_state, CI — each stamped as a snapshot", () => {
+  const md = livePrLines({ at: AT, localHead: SHA, pr: { number: 7, draft: true, mergeable_state: "clean", head: { sha: SHA } }, ci: "running" }).join("\n");
+  assert.match(md, /PR #7 head\*\* `aaaaaaaaa` — draft/);
+  assert.match(md, /mergeable_state `clean`/);
+  assert.match(md, /CI.*running/);
+  assert.equal((md.match(/snapshot read 2026-10-10T08:00:00Z/g) || []).length, 3);
+  assert.match(md, /ready-gate\.mjs.*ready-full-cap\.mjs/);
+  assert.doesNotMatch(md, /LOCAL HEAD != PR HEAD/);
+});
+
+test("livePrLines: a differing local HEAD is a loud warning; ready is named ready", () => {
+  const md = livePrLines({ at: AT, localHead: OTHER, pr: { number: 7, draft: false, mergeable_state: "dirty", head: { sha: SHA } }, ci: "success" }).join("\n");
+  assert.match(md, /LOCAL HEAD != PR HEAD/);
+  assert.match(md, /ready/);
+});
+
+test("livePrLines: unavailable state is one clear line", () => {
+  assert.deepEqual(livePrLines({ at: AT, error: "no token" }), ["- **Live PR state** unavailable: no token (checked " + AT + ")"]);
+});
+
+test("fetchLivePr: mocked API; any error or missing PR degrades, never throws", () => {
+  const pr = { number: 7, draft: true, mergeable_state: "blocked", head: { sha: SHA } };
+  const ok = (p) => p.startsWith("pulls/7") ? { json: pr } : { json: { workflow_runs: [run("CI", "completed", "success")] } };
+  const r = fetchLivePr({ prArg: "7", branch: "x", request: ok });
+  assert.equal(r.pr.number, 7); assert.equal(r.ci, "success");
+  assert.match(fetchLivePr({ prArg: "7", branch: "x", request: () => ({ error: "HTTP 401" }) }).error, /HTTP 401/);
+  assert.match(fetchLivePr({ prArg: "auto", branch: "x", request: () => ({ json: [] }) }).error, /no open PR/);
+  assert.match(fetchLivePr({ prArg: "7", branch: "x", request: () => { throw new Error("boom"); } }).error, /boom/);
+});
 
 test("parseVerdict takes the LAST terminal line, never a heartbeat", () => {
   const log = [
