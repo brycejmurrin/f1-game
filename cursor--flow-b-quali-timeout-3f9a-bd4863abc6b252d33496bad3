@@ -1,1 +1,1 @@
-1791681439	Cursor Agent	BLOCKED #1423 sync on ship tooling-fast red; waiting #1376 then sync-pr --push  [cursor/flow-b-quali-timeout-3f9a; session bd4863abc6b252d33496bad3]
+1791681831	Cursor Agent	BLOCKED #1423: wait #1376+#1437 on ship then sync-pr --push  [cursor/flow-b-quali-timeout-3f9a; session bd4863abc6b252d33496bad3]
