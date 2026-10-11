@@ -230,11 +230,11 @@ const ALLOWED = [
   {
     file: "js/agent/apex.js", expr: "G.player.speed > 8",
     code: "if (G.player && G._testInput && G._testInput.throttle && next && !next.throttle && G.player.speed > 8)",
-    // setInput() reproduces js/game.js's `lifted` condition so a scripted
+    // setInput() reproduces the `lifted` condition in js/game.js so a scripted
     // throttle lift pops the exhaust the same way a real one does. It must use
     // the SAME number as the site above: normalising one and not the other would
     // make the debug hook and the driving model disagree about what a lift is.
-    why: "mirrors js/game.js's exhaustPop gate and must carry the identical number",
+    why: "mirrors the exhaustPop gate in js/game.js and must carry the identical number",
   },
   // ── the standing-start goals: the car must be STOPPED before either arms ──
   {
