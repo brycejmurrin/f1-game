@@ -418,8 +418,7 @@ body.hud-prof-broadcast #announce { top: max(calc(14svh / var(--hud-z)), calc(va
   left: calc(var(--lcol-x-limits, calc(10px * var(--hud-z) + var(--sal))) / var(--hud-z));
 }
 
-/* Must not write `:root … body` — source-integrity forbids body/html as a
-   descendant. fitHud only sets data-sectors-left off desktop anyway. */
+/* body:not(.desktop) is not needed: fitHud only sets data-sectors-left on touch landscape. */
 :root[data-sectors-left] #hud-sectors {
   /* TOUCH LANDSCAPE: S1-S3 LEAD THE LEFT COLUMN (js/ui/hud.js fitHud sets the attribute,
      placeLeftColumn the slot, in SCREEN px), as ONE ROW the width of the map, not a three-row plate
@@ -1227,14 +1226,15 @@ body[data-radio-slot="lane"] #announce,
 body[data-radio-slot="collapsed"] #announce {
   left: calc(var(--announce-lane-x) / var(--hud-z));
   transform: translateX(var(--announce-lane-shift, -50%));
+  /* …in the rows the lane was cleared for, under the map's bottom too (--announce-lane-y; HUD audit
+     2026-10-10: the card painted over the minimap). !important outranks the density / caution tops
+     (same lever as the ticker slot; a doubled #announce#announce id is dead under source-integrity).
+     Unset, it falls back to the flag's slot (--flag-slot-top). */
+  top: calc(var(--announce-lane-y, calc(var(--flag-slot-top) * var(--hud-z))) / var(--hud-z)) !important;
 }
-/* …in the rows the lane was cleared for, under the map's bottom too (--announce-lane-y; HUD audit
-   2026-10-10: the card painted over the minimap). Attribute repeated for specificity (outranks the
-   density / caution tops) — source-integrity forbids #announce#announce. Unset, falls back to
-   --flag-slot-top. */
 /* THE MESSAGE LINE (touch landscape, js/ui/hud.js radioTicker): the flag at the line's left end, the
    card after it, both directly under the timing tower / mirror, in SCREEN px over each one's --hud-z.
-   !important: the caution :has() steps and the density tops outrank a doubled attribute here. */
+   !important: the caution :has() steps and the density tops outrank a plain id here. */
 body[data-radio-slot="ticker"] #hud-flag {
   top: calc(var(--tick-y) / var(--hud-z)) !important;
   left: calc(var(--tick-flag-x) / var(--hud-z)) !important;
@@ -1268,8 +1268,6 @@ body[data-radio-slot="ticker"] #announce {
   max-width: calc(var(--tick-w) / var(--hud-z)) !important;
   min-width: 0 !important;
 }
-body[data-radio-slot="lane"][data-radio-slot="lane"] #announce,
-body[data-radio-slot="collapsed"][data-radio-slot="collapsed"] #announce { top: calc(var(--announce-lane-y, calc(var(--flag-slot-top) * var(--hud-z))) / var(--hud-z)); }
 /* The plate. Italic is the racing number's own convention, not emphasis. */
 #announce-num {
   flex: 0 0 auto;
