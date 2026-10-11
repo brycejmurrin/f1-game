@@ -7,6 +7,10 @@ Every raise and lower was recorded as a comment beside its number; those comment
 are preserved here verbatim, per file, as the record of WHY each number moved.
 The live numbers are in `ratchets.json`; nothing here is asserted.
 
+2026-10-11 third re-measure after ship #1351 (phone HUD overlaps) landed on tip
+`bdbfa191a`: hud.js **1411 / 2399**, hud.css **1960 / 2158**. Prior #1437 snap to
+1393 / 2377 was already short once the merge tree carried #1351's growth.
+
 2026-10-10 the HUD joins the ratchet: `js/ui/hud.js` (codeLines **1330**, lines
 **2246**) and `css/hud.css` (codeLines **1917**, lines **2109**), at ship `107d232f1`.
 Every open HUD branch was growing the pair (the band-allocator refactor +474 net,
