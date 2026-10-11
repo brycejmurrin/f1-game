@@ -12,9 +12,25 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { loadingProbeReady } from "../../tools/shot/loading-probe.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/perf/race-entry-profile.js"), "utf8");
+
+test("loading probe waits past countdown until a ready presentation closes the plate", () => {
+  const run = (state, hidden, names) => vm.runInNewContext('(' + loadingProbeReady.toString() + ')()', {
+    document: { getElementById: () => ({ hidden }) },
+    window: { __apex: { info: () => ({ state }), raceEntryProfile: () => ({ marks: names.map(n => ({ n })) }) } },
+  });
+  assert.equal(run('count', false, ['handoff:raise']), false);
+  assert.equal(run('count', true, ['handoff:raise']), false);
+  assert.equal(run('count', false, ['present:ready', 'handoff:lower']), false);
+  assert.equal(run('menu', true, ['present:ready', 'handoff:lower']), false);
+  assert.equal(run('count', true, ['present:ready', 'handoff:lower-lost']), false);
+  assert.equal(run('count', true, ['present:ready', 'handoff:lower']), true);
+  assert.equal(run('race', true, ['present:ready', 'handoff:lower']), true);
+});
 
 function load(env = {}) {
   const sandbox = { console, performance: { now: () => env.now ?? 1000 }, ...env };
@@ -199,7 +215,7 @@ test("hidden mirror preparation keeps the handoff up until its main present", ()
 });
 
 test("race-entry ticks pump input and network while holding physics and governor", () => {
-  const source = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const source = gameSource();
   const start = source.indexOf("function tickBody(now) {");
   const end = source.indexOf("  if (paused && !netPlay.active())", start);
   const calls = [];
