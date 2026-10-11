@@ -7,6 +7,35 @@ Every raise and lower was recorded as a comment beside its number; those comment
 are preserved here verbatim, per file, as the record of WHY each number moved.
 The live numbers are in `ratchets.json`; nothing here is asserted.
 
+2026-10-10 the HUD joins the ratchet: `js/ui/hud.js` (codeLines **1330**, lines
+**2246**) and `css/hud.css` (codeLines **1917**, lines **2109**), at ship `107d232f1`.
+Every open HUD branch was growing the pair (the band-allocator refactor +474 net,
+#1316 +76, #1351 +56, #1366 +55) because each phone bug got its own repair pass on
+top of the last. Owner decision: a HUD replacement deletes what it replaces in the
+same PR, and growth past the 40-line absorb says why
+(`docs/notes/HUD-CODE-AUDIT-2026-10-10.md` §net-lines rule).
+Re-measured on the merged tree before landing: #1366 (Phase 0 top-band fix) merged
+first and grew the pair, so the ceilings start at **1345 / 2281** (hud.js) and
+**1926 / 2120** (hud.css), ship `325100c05`.
+2026-10-10 second re-measure, ship `33ea003c1`: #1375 landed first, then the round-3
+HUD PRs (#1395 viewport cache, #1387 give-back countdown, #1386 visual spotter) merged
+without the raises they had planned, so ship read OVER by hud.js +48 code / +96 lines
+and hud.css +27 / +30 and Structural guards went red on every PR. New ceilings:
+hud.js **1393 / 2377**, hud.css **1953 / 2150**. The same update lowered game.js
+4976 → 4974 code / 9195 → 9186 lines (it had shrunk). Owner decision: raises with a
+stated reason are fine; the allocator's own raise follows when it lands.
+
+2026-10-11 absorb catch-up (`tools/check/ratchets.mjs --base`): a ceiling raise
+past 40 lines fails only when the SOURCE file's metric also grew past 40 since
+the base. A re-measure that tracks size already on the tree (file delta ≤ 40) is
+a warning, not a red — #1386/#1387/#1395 grew HUD without raising the #1375 caps,
+and every PR that re-snapped hit Structural guards with no CI override for a
+stated reason. Real source growth past absorb still fails on the PR run.
+
+2026-10-11 third re-measure after ship #1351 (phone HUD overlaps) landed on tip
+`bdbfa191a`: hud.js **1411 / 2399**, hud.css **1960 / 2158**. Prior #1437 snap to
+1393 / 2377 was already short once the merge tree carried #1351's growth.
+
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
