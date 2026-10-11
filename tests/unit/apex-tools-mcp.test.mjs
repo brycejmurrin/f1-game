@@ -1971,7 +1971,7 @@ test("apex_job_status wait holds until the job is done; a capped survey result c
     fs.writeFileSync(path.join(fake, "artifacts/survey/report.json"), JSON.stringify({ findings }));
     fs.writeFileSync(path.join(fake, "tools/track/verify-track.cjs"),
       'setTimeout(() => { const cells = Array.from({ length: 3000 }, (_, i) => ({ c: "c" + i, pad: "x".repeat(20) }));\n'
-      + 'console.log(JSON.stringify({ ok: true, report: "artifacts/survey/report.json", counts: { total: 33 }, cells })); }, 1500);\n');
+      + 'console.log(JSON.stringify({ ok: true, report: "artifacts/survey/report.json", counts: { total: 33 }, cells })); }, 3500);\n');
     const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
     const x = createExtras({ ROOT: fake, toolResult, refuse: (e, m, f) => toolResult({ ok: false, error: e, message: m, fix: f }), acquireLock: () => null, releaseLock() {},
       occupancyRefuse: () => null, assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
