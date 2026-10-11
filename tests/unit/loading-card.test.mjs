@@ -18,6 +18,7 @@
  * Run: node --test tests/unit/loading-card.test.mjs   (npm run test:tooling-fast)
  */
 import { readCssSource } from "../helpers/css-source.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -344,7 +345,7 @@ test("busy(): the card over the scrim without a circuit, no timer, no skip, not 
   assert.equal(h.screen.phase(), "run", "a live flyby is not a wait plate");
   h.screen.stop();
   assert.match(readCssSource("css/overlays.css"), /#loading\[data-phase="busy"\] #ld-card/, "the busy phase shows the card");
-  const game = read("js/game.js");
+  const game = gameSource();
   assert.match(game, /if \(!loadingScreen\.phase\(\)\) \{ loadingScreen\.building\(loadingInfo\(\)\) \|\| loadingScreen\.busy\("Starting race"\); \}/,
     "startRace raises the card before ensureScenery / stopHome");
   assert.match(game, /const rs = \$\("race-settings"\);\s*if \(rs\) \{\s*rs\.hidden = true;/,
@@ -413,7 +414,7 @@ test("handoff(): the card stays up, disarmed, until render() lowers it with the 
   // race started with no screen up — netplay, __apex.race(), pm-restart — raises
   // no stale card) and render() lowers it only after a present that painted: the
   // first countdown present on TLX starts the program warm and paints nothing.
-  const game = read("js/game.js");
+  const game = gameSource();
   const body = game.slice(game.indexOf("async function startRaceBody()"), game.indexOf("const sessionEntry ="));
   assert.match(body, /const handoff = \(loadingScreen\.active\(\) \|\| loadingScreen\.phase\(\) === "build" \|\| loadingScreen\.phase\(\) === "busy"\) && !!player;/,
     "startRaceBody still decides handoff from the screen that was up before the sweep");
@@ -825,7 +826,7 @@ test("FlybySeq.shotAt names the shot solve() cuts to, without planning it", () =
 });
 
 test("game.js hands the card its field in grid order, the flyby's shots, and the radio", () => {
-  const game = read("js/game.js");
+  const game = gameSource();
   assert.match(game, /LoadingScreen\.create\(\{[^}]*radio: \(\) => radioVoice/);
   const at = game.indexOf("function loadingInfo()");
   const li = game.slice(at, at + 2500);
@@ -871,7 +872,7 @@ test("flyMsFor(skips, wantMs): a real race's read stretches the flyby up to FLY_
   for (const bad of [NaN, "x", null, undefined, -5]) assert.equal(flyMsFor(0, bad), FLY_MS, String(bad));
   assert.equal(flyMsFor(3, 50000), SHORT_FLY_MS, "three skips in a row: they have told us what they think of waiting");
   // game.js asks with the read, before the shots are planned, and the screen runs the same budget.
-  const game = read("js/game.js");
+  const game = gameSource();
   const intro = game.slice(game.indexOf("function raceIntro(go)"), game.indexOf("function loadingInfo()"));
   assert.match(intro, /const flyMs = loadingScreen\.nextFlyMs\(info\.readMs, info\.warmReady = !\(gfx && gfx\.warming && gfx\.warming\(\)\)\);[\s\S]{0,300}FlybySeq\.setDuration\(flyMs\);/);
   assert.match(intro, /loadingScreen\.run\(info, go\);/);
@@ -937,12 +938,12 @@ test("a skip ends the announcer with the flyby, not when startRace reaches clear
 });
 
 test("RACE! over a pending warm holds the card until it ends; the sheets that skip the flyby still get the card and the handoff", () => {
-  const game = read("js/game.js");
+  const game = gameSource();
   const intro = game.slice(game.indexOf("function introWarm(go)"), game.indexOf("function loadingInfo()"));
   assert.match(intro, /if \(!gfx\.warm \|\| \(_warmKey === key && !\(gfx\.warming && gfx\.warming\(\)\)\)\) return false;/, "warmed and no warm pending: fly at once");
   assert.match(intro, /loadingScreen\.building\(loadingInfo\(\)\);/, "the card holds over the warm");
   assert.match(intro, /await introPrepare\(live, key, info, n, true\)/, "a built but unwarmed world joins planning and warm under the card before motion");
-  assert.match(intro, /const prepP = introPrepare\(live, key, info, n, false\);\s*await studioDone\(live, n\);/, "warm world: garage-out is not blocked behind prepare");
+  assert.match(intro, /const prepP = introPrepare\(live, key, info, n, false\); prepP\.catch\(\(\) => \{\}\);[^\n]*\n\s*await studioDone\(live, n\);/, "warm world: garage-out is not blocked behind prepare (its rejection handled meanwhile)");
   const prepare = game.slice(game.indexOf("async function introPrepare("), game.indexOf("// A ready, warm world"));
   assert.match(prepare, /await awaitIntroWarm\(current\)/, "shared compile bound — never fly over pending warm");
   assert.match(intro, /announce\("PREPARATION FAILED/, "a warm timeout recovers to the menu with a visible message");
@@ -963,7 +964,7 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
 });
 
 test("launch unification: every session the player starts reaches raceIntro; the quick restarts and automation stay quick", () => {
-  const game = read("js/game.js"), rs = read("js/race/race-settings.js"), real = read("js/race/real-race.js");
+  const game = gameSource(), rs = read("js/race/race-settings.js"), real = read("js/race/real-race.js");
   // Menu starts (one-off race, TIME TRIAL, DAILY, season / career round 1, practice) all end at RACE SETTINGS' GO, which hands raceIntro the sheet.
   assert.match(rs, /else if \(raceIntro\) \{[\s\S]{0,200}?try \{ raceIntro\(startRace, sheet, \$\("rs-go"\)\);/, "GO plays the pre-race screen");
   assert.match(rs, /\(!isChampionship\(\) && gridFromQuali\(\) && !qualiResults\(\)\)\) \{ dismissSheet\(\); openQuali\(\); \}/, "…except a qualifying grid, whose sheet leads to startRaceFromSheet");

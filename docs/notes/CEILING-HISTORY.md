@@ -31,6 +31,13 @@ without the raises they had planned, so ship read OVER by hud.js +48 code / +96 
 and hud.css +27 / +30 and Structural guards went red on every PR. New ceilings:
 hud.js **1393 / 2377**, hud.css **1953 / 2150**. The same update lowered game.js
 4976 → 4974 code / 9195 → 9186 lines (it had shrunk). Owner decision: raises with a
+stated reason are fine; the allocator's own raise follows when it lands. (#1380 sync
+onto ship absorbed the same raise as #1437 so the merge commit could land.)
+2026-10-11 third re-measure after ship tip `23641805f` (PR merge trees for #1380):
+#1351 and later HUD work grew past the second-remeasure ceilings, so Structural guards
+failed on the merge ref (hud.js +18 code / +22 lines, hud.css +7 / +8). New ceilings:
+hud.js **1411 / 2399**, hud.css **1960 / 2158**. Unit-suite floor 550+ → 600+ (605 on disk).
+
 stated reason are fine; the allocator's own raise follows when it lands.
 2026-10-11 third re-measure (PR #1376 sync onto ship after #1351/#1394/#1430):
 hud.js **1411 / 2399**, hud.css **1960 / 2158**. Same catch-up policy as below —
@@ -47,6 +54,23 @@ stated reason. Real source growth past absorb still fails on the PR run.
 `bdbfa191a`: hud.js **1411 / 2399**, hud.css **1960 / 2158**. Prior #1437 snap to
 1393 / 2377 was already short once the merge tree carried #1351's growth.
 
+2026-10-11 absorb catch-up (`tools/check/ratchets.mjs --base`): a ceiling raise
+past 40 lines fails only when the SOURCE file's metric also grew past 40 since
+the base. A re-measure that tracks size already on the tree (file delta ≤ 40) is
+a warning, not a red — #1386/#1387/#1395 grew HUD without raising the #1375 caps,
+and every PR that re-snapped hit Structural guards with no CI override for a
+stated reason. Real source growth past absorb still fails on the PR run.
+
+2026-10-11 HUD catch-up remeasure (#1378 steward): ship tip was OVER after
+#1375 landed caps then #1386/#1387/#1395 grew HUD without raises. Remeasured
+on this tip via `ratchets.mjs --update`: **js/ui/hud.js** 1345/2281 → **1393/2377**,
+**css/hud.css** 1926/2120 → **1953/2150**; game.js lowered 4976/9195 → 4974/9186.
+Paired with the `--base` absorb catch-up so Structural guards can go green.
+
+2026-10-11 HUD remeasure after ship sync (#1378): PR merge-ref CI saw ship-grown
+HUD past the prior tip caps (Structural guards tooling A). Remeasured on the
+synced tree: **js/ui/hud.js** 1393/2377 → **1411/2399**, **css/hud.css** 1953/2150 →
+**1960/2158**. Also raise docs/TESTING.md unit-suite floor 550 → 600 (disk 605).
 2026-10-10 ship tip catch-up (#1416): after #1386 / #1387 / #1383 / #1395 landed
 HUD features without ceiling snaps, ship `33ea003c1` measured **OVER**
 (`hud.js` lines 2377 > 2281, codeLines 1393 > 1345; `hud.css` lines 2150 > 2120,

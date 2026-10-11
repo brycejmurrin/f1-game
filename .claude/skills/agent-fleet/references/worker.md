@@ -27,7 +27,9 @@ your only escalation path besides the user; ask it instead of guessing.
    Cursor `subscribe_github_ci` + `subscribe_github_pr`), and keep one
    `send_later` check-in if your host has it.
 7. **Fix until merged**: a red is work now (`ci-red-triage` → fix at the root
-   with a failing test first → `steward`). Re-read the head SHA before every
+   with a failing test first → `steward`). On a CI wake, `ci-watch --sha
+   <current head> --once` — `= ci running (0 failed)` is **not** stale; only
+   `= ci passed` on that head dismisses. Re-read the head SHA before every
    push; merge the base in, never rebase or force-push. Mark ready only after
    `ready-gate.mjs` exits 0. The merge is CI Watch's.
 8. **Hand back**: `--release` the claim, set `state: done`, and tell the

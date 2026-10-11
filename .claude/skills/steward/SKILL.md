@@ -164,3 +164,21 @@ subscription and reminder capabilities as unverified; do not claim an automation
 was armed.
 Check the active tool catalog with `tools/check/doctor.mjs --catalog <file>`; upstream
 connector availability cannot be fixed by inventing tool results.
+
+## 8. CI wake: `running` with 0 failed is not green
+
+On every CI `system_notification` or native "N checks failing" banner, re-read
+the **current** tip — not the notification commit:
+
+    SHA=$(gh pr view <N> --json headRefOid -q .headRefOid)
+    node tools/ci/ci-watch.mjs --sha "$SHA" --once
+
+- `= ci failed` → triage → fix → push → re-subscribe (never "stale" because the
+  notif SHA ≠ tip).
+- `= ci running` → do **not** claim stale or fixed; stay subscribed or re-arm a
+  ≤15m once-timer. **"0 failed" while running is not green.**
+- Only "stale / no action" when `= ci passed` on that same `headRefOid`, or a
+  proven draft→ready cancel with a live sibling still 0-failed on the same SHA.
+
+Ending the turn on mid-run `0 failed` is how tip reds sit until a human clicks
+Fix with Agent.
