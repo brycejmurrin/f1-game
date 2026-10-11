@@ -310,7 +310,7 @@ are held by the session that owns them. Rows marked fixed-in-#NNNN are in this s
 2026-10-09**, except the last line, which has no owner yet.
 
 - M19 replay — `clear()` zeroes `prevStatus`, so every retired/finished car re-tags as a fresh event after a timeline discard. `js/camera/replay-buf.js:81` · low
-- M20 net — wire `gear` (0-15) unclamped; gear 9-15 makes `rpmFor` NaN for that rival. `js/net/netplay.js:59,396` · low
+- M20 net — wire `gear` (0-15) unclamped; gear 9-15 makes `rpmFor` NaN for that rival. `js/net/netplay.js:59,396` · low · **fixed in #1289**
 - M21 net — `EVENT_CRITICAL` omits `quali`/`settings`; a lost QUALI on a backed-up reliable channel wrecks the grid. `js/net/transport.js:454,622` · low
 - M24 data hub — switching tabs does not abort the previous tab's OpenF1 requests. `js/data/hub.js:300`, `js/data/telemetry.js:357` · low-med · **fixed in #1284**
 - M27 car — daily "standard" class builds the player mesh from SAVED parts under the FACTORY cache key; `visualSetup` is stamped once. `js/game.js:1611,1635`, `js/car/car-draw.js:24-31,915` · low
@@ -318,7 +318,7 @@ are held by the session that owns them. Rows marked fixed-in-#NNNN are in this s
 - M31 audio — race started with SOUND OFF then on never calls `setVenue`; the panel mid-race path skips `setVoice`. `js/game.js:8875,2809`, `js/audio/panel.js:49` · low
 - M32 audio — RivalAudio binds 4 voice slots, the mobile engine has 2; rivals in slots 2-3 swap voices on rank changes. `js/audio/rivals.js:20`, `js/audio/engine.js:106,2125` · low
 - M33 AI — mistake/attack zone key `Math.round(c.s + toTurnIn)` is unwrapped; a corner just past S/F rolls the mistake twice. `js/game.js:5397-5399,5479` · low
-- M34 AI — `defendPull` compares `chaserSpeed <= speed - 3` with an unscaled 3 m/s (siblings scale by PACE/vTop). `js/physics/ai-drive.js:1399` · low
+- M34 AI — `defendPull` compares `chaserSpeed <= speed - 3` with an unscaled 3 m/s (siblings scale by PACE/vTop). `js/physics/ai-drive.js:1399` · low · **fixed in `cursor/r3-ai-pace-margins`** (with its round-3 siblings: `wantBoost` catching/defending and `brakeTarget` attacking now ride vTop()/VMAX too)
 - M35 race flow — `gridUp` hashes on `raceIndex` before `raceIndex++`, `armReliability` and the AI-mistake hash after it; one-off draws disagree with B6 above. `js/game.js:1979` vs `:2757` · low
 - M38 director — after the player retires solo the director forces TV every tick; CAM/C do nothing; `setAutoSpectate` has no caller. `js/camera/director.js:144-172,215` · low
 - M39 WGX — `backendState()` returns `lost`, not `ctxLost`, so game.js never sees a WGX device loss. `js/render/webgpu/wgx.js:5722` · low · **fixed in #1281**

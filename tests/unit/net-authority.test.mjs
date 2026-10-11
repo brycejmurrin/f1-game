@@ -387,6 +387,17 @@ test("QLIVE is bound to the sender on the host the same way", () => {
   assert.deepEqual(G.caughtQLive, [{ driverId: "drv1", t: 12.4, frac: 0.2 }]);
 });
 
+test("IN-RACE phase: the host caps one connection's QUALI+QLIVE at the lobby's shared rate (bug-hunt 2)", () => {
+  const { G, s } = started("host");
+  assert.equal(typeof NetPlay.QUALI_RATE, "number", "one shared constant with the lobby");
+  for (let i = 0; i < 3; i++) s.deliver("qlive", { driverId: "drv1", t: 5 + i, frac: 0.1 });
+  assert.equal(G.caughtQLive.length, 3, "a real client's rate passes untouched");
+  for (let i = 0; i < 200; i++) s.deliver("qlive", { driverId: "drv1", t: 9, frac: 0.2 });
+  assert.equal(G.caughtQLive.length, NetPlay.QUALI_RATE, "a flood stops at the cap (got " + G.caughtQLive.length + ")");
+  for (let i = 0; i < 50; i++) s.deliver("quali", { driverId: "drv1", t: 80 });
+  assert.equal((G.caughtQuali || []).length, 0, "QUALI shares the window with QLIVE");
+});
+
 // ---- the star does not launder a guest's declaration ------------------------
 
 test("a guest's CAUTION neither applies on a two-guest host nor reaches the other guest", () => {
@@ -1198,7 +1209,7 @@ test("the host's actual AI retirement reaches a guest, including one that binds 
     car: host.cars[2], netPlay: hn, incidentSim: { release() {} }, track: host.track,
     smp: { hw: 8, t: [0, 0, 1] }, Tracks: { sample() {}, wallAt: () => 10 },
     clamp: M4.clamp, worldFromTrack: (s, x) => ({ x, z: s }), IDLE_RPM: 4000,
-    OvertakeMode: { reset() {} }, announce() {}, soundOn: false,
+    OvertakeMode: { reset() {} }, announce() {}, soundOn: false, pits: { clearArm() {} },   // retireCar clears a stale pit arm (bug-hunt 7.3)
   });
   const event = hs.sent.filter((e) => e.t === "lap" && e.d.driverId === "drv2").at(-1);
   assert.ok(event, "the host sends an AI retirement immediately");
