@@ -240,3 +240,27 @@ test("opts.storage.tyreWear turns the model on — the seam --wear rides", async
       `only ${worn.length} cars accumulated any wear over 10 s of racing`);
   } finally { w.close(); }
 });
+
+// hunt3 4-F3: the driving line's forward (exit) sweep took the bare pace-5
+// ACCEL, so below PACE 1 the ribbon expected the car to pull up to 2.1x harder
+// than it can. A DISPLAY (ribbon + brake cue): fed what the car really pulls.
+test("the driving line never gains speed faster than the car can accelerate at this pace", async () => {
+  const A = g.apex, pace0 = A.tuning().pace;
+  try {
+    await g.race("monza");
+    A.go();
+    for (const pace of [1, 0.469]) {
+      A.setPhysics({ pace });
+      A.drivingLine("full");
+      for (let i = 0; i < 3; i++) { A.step(1 / 60, 1); g.pumpFrame(); }
+      const d = A.drivingLine(), ds = g.G.track.total / d.samples;
+      assert.equal(d.built, "monza", "the line was rebuilt for this pace");
+      let maxA = 0;
+      for (let i = 1; i < d.samples; i++) {
+        const v0 = d.speedAt((i - 1) * ds), v1 = d.speedAt(i * ds);
+        maxA = Math.max(maxA, (v1 * v1 - v0 * v0) / (2 * ds));
+      }
+      assert.ok(maxA <= g.G.aTop() * 1.01, `pace ${pace}: the line gains ${maxA.toFixed(2)} m/s^2, the car pulls ${g.G.aTop()}`);
+    }
+  } finally { A.setPhysics({ pace: pace0 }); }
+});

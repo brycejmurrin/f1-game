@@ -48,6 +48,23 @@ test("a synchronous scenery preparation failure releases the pending latch", asy
   assert.equal(await p2, true);
 });
 
+test("recover runs for changed settings and for a throw, never for a superseded request", async () => {
+  const entry = vm.runInContext("SessionEntry", g.ctx).create();
+  const seen = [];
+  const recover = (e) => seen.push(e ? "error" : "recover");
+  let settings = "a";
+  const stale = entry.begin("race", "a", () => Promise.resolve(), () => "committed", () => settings === "a", recover);
+  const newer = entry.begin("race", "b", () => Promise.resolve(), () => "committed", () => true, recover);
+  assert.deepEqual([(await stale).reason, await newer], ["superseded", "committed"]);
+  assert.equal(seen.length, 0, "a superseded start leaves the screen to the newer one");
+  const changed = entry.begin("race", "a", () => { settings = "b"; }, () => "committed", () => settings === "a", recover);
+  const out = await changed;
+  assert.deepEqual([out.kind, out.reason], ["canceled", "settings changed"]);
+  assert.equal(seen.join(), "recover", "changed settings: recover (startRace quits to the menu, it never hands an old race back)");
+  await assert.rejects(entry.begin("race", "c", () => { throw new Error("boom"); }, () => true, () => true, recover), /boom/);
+  assert.equal(seen.join(), "recover,error");
+});
+
 test("quit invalidates a race whose scenery script has not arrived", async () => {
   g.G.quitToMenu(); select("bahrain");
   const h = holdScenery("bahrain");

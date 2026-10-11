@@ -113,6 +113,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `frustum.js` | `Frustum` | tag | shared frustum cull math (Frustum). |
 | `inst-cells.js` | `InstCells` | tag | InstCells: shared cell-set key cache for GLX + WGX + TLX cullInstances. |
 | `vertex-pack.js` | `VertexPack` | tag | packed world vertex channels. |
+| `chunk-bins.js` | `ChunkBins` | tag | ChunkBins: the ONE spatial binning of chunked world meshes. |
 | `gltf.js` | `GLTF` | tag | Binary glTF (.glb) loader. |
 | `assets.js` | `Assets` | tag | Assets: the baked asset pack loader. |
 | `driving-line.js` | `DrivingLine` | tag | DrivingLine: the suggested-line ribbon every racing game draws on the road, as DATA. |
@@ -218,6 +219,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `experience.js` | `UiExperience` | tag | connected menu doors, race context and bounded live garage home. |
 | `share-code.js` | `ShareCode` | tag | ShareCode: pasteable APX envelopes for setup / livery / daily (+ #share=). |
 | `title-menu.js` | `TitleMenu` | tag | TITLE MENU retention doors: career summary, direct Continue, and today's Daily Challenge. |
+| `deep-link.js` | `DeepLink` | tag | DeepLink: the installed-icon shortcuts (manifest.json `shortcuts`) land on `./?go=<door>`. |
 | `title-flow.js` | `TitleFlow` | tag | TitleFlow: title-menu session entry and shared ghost links. |
 | `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
 | `onboard.js` | `Onboard` | tag | first-run COACH MARKS: three one-shot prompts (brake, overtake, active aero) shown through the existing #announce channel the first time each situation… |
@@ -1362,6 +1364,8 @@ AGENTS.md's layout defers to (the docs-integrity guard asserts the deferral,
 not a per-file list).
 
 ## js/game.js — main
+
+Session flow (the four-state machine, how a start is entered, what the flag shows per mode): [FLOW.md](FLOW.md).
 
 The entry point (the largest file in the repo — its line ceiling is ratcheted by
 `tests/data/ratchets.json`; loop, physics, AI, race logic — the subsystems

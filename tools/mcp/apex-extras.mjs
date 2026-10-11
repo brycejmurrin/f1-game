@@ -444,7 +444,8 @@ export function createExtras(ctx) {
       // argv (buildArgv + pinOk) and hands it over under a Symbol key, which no
       // JSON caller can set, so apex_job_start never runs a caller-chosen argv.
       case "hud_shot":
-      case "hud_survey": {
+      case "hud_survey":
+      case "hud_mock": {
         const argv = a[HUD_JOB_ARGV];
         if (!Array.isArray(argv) || !argv.length) {
           throw Object.assign(new Error(kind), {
@@ -635,7 +636,9 @@ export function createExtras(ctx) {
     const memRunning = [...jobs.values()].filter((j) => j.state === "running");
     const diskRunning = listDiskJobs().filter((j) => j.state === "running" && !jobs.has(j.id));
     if (memRunning.length + diskRunning.length >= 2) {
-      return refuse("jobs_busy", `${memRunning.length + diskRunning.length} jobs already running`, "apex_job_status to watch them; apex_job_cancel to free a slot.");
+      // Name them: "2 jobs already running" sent the caller to a second tool call just to learn which, and for how long.
+      const who = [...memRunning, ...diskRunning].map((j) => `${j.id} (${j.kind}, ${Math.round((Date.now() - (j.started || Date.now())) / 1000)}s)`).join(", ");
+      return refuse("jobs_busy", `${memRunning.length + diskRunning.length} jobs already running: ${who}`, "At most 2 run at once. apex_job_status {jobId} to watch one; apex_job_cancel {jobId} to free a slot.");
     }
     if (plan.browser) { const took = acquireLock(`apex_job:${kind}`); if (took) return took; }
     fs.mkdirSync(JOB_DIR, { recursive: true });
@@ -852,6 +855,6 @@ export function createExtras(ctx) {
   };
 }
 
-export const JOB_KINDS = ["survey_track", "shot_survey", "hud_shot", "hud_survey", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all"];
+export const JOB_KINDS = ["survey_track", "shot_survey", "hud_shot", "hud_survey", "hud_mock", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all"];
 /** Key apex-tools-mcp uses to hand apex_job_start a pinned HUD argv; unreachable from JSON. */
 export const HUD_JOB_ARGV = Symbol("apex.hudJobArgv");
