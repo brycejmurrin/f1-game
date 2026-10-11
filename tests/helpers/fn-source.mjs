@@ -18,6 +18,11 @@
  * Indentation-aware since 2026-09-02, so it also reads functions nested inside
  * an IIFE (js/render/**), where the closing brace is indented and a column-0
  * search would run to the end of the module.
+ *
+ * For js/game.js use tests/helpers/game-source.mjs `symbolSource(decl)`: the
+ * same extraction over game.js AND the modules carved out of it, so a pin
+ * follows its function through an extraction instead of going red (or, for a
+ * negative pin, silently vacuous).
  */
 
 /** fnSource(src, decl) -> the full text of a top-level function, decl included.

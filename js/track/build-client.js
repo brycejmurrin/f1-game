@@ -1,8 +1,9 @@
 /* Apex 26 — the page side of the track build Worker (js/track/build-worker.js).
    Ships ON by default when Worker exists and the device reports more than one
    logical core (apex26.buildWorker "1"/"0" still forces on/off). spawn() runs
-   when RACE SETTINGS opens (or idleWarm on the title) so the worker parses the
-   build modules before RACE!; build() posts one circuit and resolves the
+   on the first build() (an in-session track switch) or when BUILD IN
+   BACKGROUND is switched on — never at the title, whose idle prefetch no longer
+   warms it (3-F4); build() posts one circuit and resolves the
    worker's answer; replay() turns its recorded uploads into real gfx calls on
    the main thread and rebuilds what could not cross (the surface sampler, the
    def, the gfx handle). Any failure answers null and the caller builds in
@@ -85,17 +86,6 @@ const TrackBuildClient = (function () {
     if (_readyRes) _readyRes(false);
     _w = null; _ready = null; _readyRes = null;
     Log.warn("track", "build worker off: " + why);
-  }
-
-  // Idle warm: parse TRACK_VM in the worker while the title is quiet so the
-  // first RACE! does not pay importScripts on the critical path. No-op when
-  // the opt-in flag is off. LazyBundles.raceAssets() calls this after boot.
-  function idleWarm() {
-    if (!enabled()) return null;
-    const kick = () => { try { spawn(); } catch (_) { /* best-effort */ } };
-    if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 3000 });
-    else setTimeout(kick, 500);
-    return _ready;
   }
 
   // Idempotent. Resolves true once every build module has loaded in the worker.
@@ -307,6 +297,6 @@ const TrackBuildClient = (function () {
   // nothing may fill it with a synchronous build meanwhile (__apex's lazy ensure).
   const busy = () => _inflight > 0;
 
-  return { enabled, set, spawn, idleWarm, build, replay, busy, KEY, defaultOn };
+  return { enabled, set, spawn, build, replay, busy, KEY, defaultOn };
 })();
 if (typeof window !== "undefined") window.TrackBuildClient = TrackBuildClient;

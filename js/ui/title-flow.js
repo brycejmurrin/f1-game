@@ -69,6 +69,7 @@ async function consumeGhostHash() {
   return shared;
 }
 consumeGhostHash();
+DeepLink.create(G);   // installed-icon shortcuts: ?go=race|daily|nextgp|garage
 window.addEventListener("hashchange", consumeGhostHash);
 // HTP section links write #htp-*; CLOSE (and Esc via data-esc-close) must drop
 // a stale hash so reopen does not jump mid-pane. Keep this off game.js: that

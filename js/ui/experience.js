@@ -111,6 +111,7 @@ const UiExperience = (function () {
     // mint { ...selected, ...enter() } and a freePane host rect every title frame.
     const _sceneScratch = { mode: "", shot: "", motion: "" };
     const _hostRect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+    let _paneKey = "";
     const _worldView = { motion: "still", shot: "hero", viewKey: "0", pane: null };
     const selectedScene = () => {
       const s = AppearanceStudio.scene();
@@ -376,12 +377,18 @@ const UiExperience = (function () {
       // every garage/night/studio title frame).
       let trackView = null;
       if (trackHome) {
-        const rect = !photoOpen && ((window.CssZoom && CssZoom.viewportRect(panel)) || panel.getBoundingClientRect());
-        _hostRect.right = innerWidth; _hostRect.bottom = innerHeight;
-        _hostRect.width = innerWidth; _hostRect.height = innerHeight;
         _worldView.motion = motion; _worldView.shot = s.shot;
         _worldView.viewKey = String(homeViewGen);
-        _worldView.pane = rect ? GarageExperience.freePane(rect, _hostRect) : null;
+        // HomeWorld.begin only reads the pane when the scene or viewKey changes, so
+        // measure the panel (a forced layout) once per that key, not every frame.
+        const paneKey = sig + ":" + homeViewGen;
+        if (paneKey !== _paneKey) {
+          _paneKey = paneKey;
+          const rect = !photoOpen && ((window.CssZoom && CssZoom.viewportRect(panel)) || panel.getBoundingClientRect());
+          _hostRect.right = innerWidth; _hostRect.bottom = innerHeight;
+          _hostRect.width = innerWidth; _hostRect.height = innerHeight;
+          _worldView.pane = rect ? GarageExperience.freePane(rect, _hostRect) : null;
+        }
         trackView = _worldView;
       }
       if (signature !== sig) {

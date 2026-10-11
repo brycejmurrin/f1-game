@@ -103,10 +103,18 @@ function entry(raw, label) {
   const ceiling = typeof raw === "number" ? raw : raw.ceiling;
   if (typeof ceiling !== "number") throw new Error(`${label}: no ceiling`);
   const dflt = Math.max(SLACK_MIN, Math.round(ceiling * SLACK_PCT));
-  if (typeof raw === "number") return { ceiling, slackMax: dflt };
-  if (raw.slack === undefined) return { ceiling, slackMax: dflt };
+  // slackRule names the rule this entry is held to, for the LOOSE message: an
+  // explicit `slack` is its own rule, never the default it tightens.
+  const rule = `max(${SLACK_MIN}, ${SLACK_PCT * 100}%) = ${dflt}`;
+  if (typeof raw === "number") return { ceiling, slackMax: dflt, slackRule: rule };
+  if (raw.slack === undefined) return { ceiling, slackMax: dflt, slackRule: rule };
   if (raw.slack > dflt) throw new Error(`${label}: slack ${raw.slack} is looser than the default ${dflt} — an entry may tighten the rule, never widen it`);
-  return { ceiling, slackMax: raw.slack };
+  return { ceiling, slackMax: raw.slack, slackRule: `the entry's own slack ${raw.slack}${raw.slack === 0 ? " (exact)" : ""}` };
+}
+
+/** One LOOSE row as a line: the slack it has and the rule it is held to. */
+export function looseLine(r) {
+  return `${r.file} ${r.metric}: ${r.value} but ceiling ${r.ceiling} (slack ${r.slack} > ${r.slackRule ?? r.slackMax})`;
 }
 
 export function load() {
@@ -123,16 +131,16 @@ export async function measure(data = load()) {
       const fn = METRICS[metric];
       if (!fn) throw new Error(`${file}: unknown metric "${metric}" (known: ${Object.keys(METRICS).join(", ")})`);
       const value = await fn(file, text);
-      const { ceiling, slackMax } = entry(raw, `${file} ${metric}`);
-      rows.push({ file, metric, value, ceiling, over: Math.max(0, value - ceiling), slack: ceiling - value, slackMax });
+      const { ceiling, slackMax, slackRule } = entry(raw, `${file} ${metric}`);
+      rows.push({ file, metric, value, ceiling, over: Math.max(0, value - ceiling), slack: ceiling - value, slackMax, slackRule });
     }
   }
   for (const [metric, raw] of Object.entries(data.tree || {})) {
     const fn = TREE_METRICS[metric];
     if (!fn) throw new Error(`tree: unknown metric "${metric}" (known: ${Object.keys(TREE_METRICS).join(", ")})`);
     const value = await fn();
-    const { ceiling, slackMax } = entry(raw, `tree ${metric}`);
-    rows.push({ file: "(tree)", metric, value, ceiling, over: Math.max(0, value - ceiling), slack: ceiling - value, slackMax, tree: true });
+    const { ceiling, slackMax, slackRule } = entry(raw, `tree ${metric}`);
+    rows.push({ file: "(tree)", metric, value, ceiling, over: Math.max(0, value - ceiling), slack: ceiling - value, slackMax, slackRule, tree: true });
   }
   return rows;
 }
@@ -278,32 +286,56 @@ export function loadAt(ref) {
   return JSON.parse(out);
 }
 
+/** True when `docs/notes/CEILING-HISTORY.md` differs from <ref> — the written
+ *  reason that lets a raise past the 40-line absorb clear on a PR (owner
+ *  decision 2026-10-10: "raises with a stated reason are fine"). Without it a
+ *  remesaure that cures a red deploy tip (#1437 / ship OVER after stacked HUD
+ *  merges) can never go green: the message says "needs a reason in the PR" but
+ *  the exit stayed 1 with no machine check for the reason. */
+export function ceilingHistoryReasoned(ref) {
+  try {
+    const out = cp.execFileSync("git", ["diff", "--name-only", `${ref}`, "--", "docs/notes/CEILING-HISTORY.md"],
+      { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    return out.trim().length > 0;
+  } catch { return false; }
+}
+
 /** `--base <ref>`: every ceiling that moved since <ref>. A loosened slack, or a
  *  deleted entry whose file still exists, blocks like a raise past the absorb
  *  (15-F10). Raises are warnings
  *  (GitHub `::warning::` annotations on CI, plain lines elsewhere); a raise
  *  past `maxRaise` — the commit hook's own absorb, so only APEX_SKIP_GUARDS
- *  could have produced it — fails. Returns the exit code. */
-export function compareToBase(ref, { maxRaise = 40, current = load(), print = console.log, advisory = false } = {}) {
+ *  could have produced it — fails UNLESS CEILING-HISTORY.md also moved
+ *  (deliberate remesaure with a written reason). Returns the exit code. */
+export function compareToBase(ref, { maxRaise = 40, current = load(), print = console.log, advisory = false, historyReasoned = undefined } = {}) {
   let base;
   try { base = loadAt(ref); }
   catch (e) { print(`ratchets --base: cannot read tests/data/ratchets.json at ${ref} (${String(e.stderr || e.message).trim().split("\n")[0]}) — is the checkout deep enough (fetch-depth: 0)?`); return 2; }
   const rows = diffRatchets(base, current);
   const gh = process.env.GITHUB_ACTIONS === "true";
-  let blocked = 0;
+  const reasoned = historyReasoned === undefined ? ceilingHistoryReasoned(ref) : !!historyReasoned;
+  let blocked = 0; // named past-absorb / loosen / gone-guard rows (summary)
+  let fatal = 0;   // rows that still fail the PR run
   for (const r of rows) {
     const where = `${r.file} ${r.metric}`;
     if (r.kind === "raise") {
       const over = r.delta > maxRaise;
-      if (over) blocked++;
+      // A raise past absorb with a CEILING-HISTORY reason is the remesaure
+      // path: still named (and annotated), but not a red — the history file
+      // carries the why. Without it (and not advisory) it stays fatal.
+      if (over) {
+        blocked++;
+        if (!advisory && !reasoned) fatal++;
+      }
       const msg = `RAISE  ${where}: ${r.base} -> ${r.now} (+${r.delta})` + (over
-        ? ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : "")
+        ? ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : reasoned ? " (reason recorded in docs/notes/CEILING-HISTORY.md)" : "")
         : "");
-      print(gh ? `::${over && !advisory ? "error" : "warning"} file=tests/data/ratchets.json,title=ratchet raised::${msg}` : msg);
+      print(gh ? `::${over && !advisory && !reasoned ? "error" : "warning"} file=tests/data/ratchets.json,title=ratchet raised::${msg}` : msg);
     } else if (r.kind === "lower") print(`LOWER  ${where}: ${r.base} -> ${r.now} (${r.delta})`);
     else if (r.kind === "new") print(`NEW    ${where}: ${r.now}`);
     else if (r.kind === "loosen") {
       blocked++;
+      if (!advisory) fatal++;
       const msg = `LOOSEN ${where}: slack ${r.base} -> ${r.now ?? "default"} — a ratchet that tightened its own slack was widened; this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : "");
       print(gh ? `::${advisory ? "warning" : "error"} file=tests/data/ratchets.json,title=ratchet loosened::${msg}` : msg);
     } else {
@@ -312,20 +344,22 @@ export function compareToBase(ref, { maxRaise = 40, current = load(), print = co
       const guardRemoved = r.file === "(tree)" || fs.existsSync(path.join(ROOT, r.file));
       if (guardRemoved) {
         blocked++;
+        if (!advisory) fatal++;
         const msg = `GONE   ${where}: was ${r.base} — the entry was deleted but ${r.file === "(tree)" ? "it is a tree metric" : "the file still exists"}; this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : "");
         print(gh ? `::${advisory ? "warning" : "error"} file=tests/data/ratchets.json,title=ratchet removed::${msg}` : msg);
       } else print(`GONE   ${where}: was ${r.base}`);
     }
   }
   const raises = rows.filter((r) => r.kind === "raise").length;
-  print(`ratchets --base ${ref}: ${rows.length} ceiling(s) moved (${raises} raised, ${rows.filter((r) => r.kind === "lower").length} lowered, ${rows.filter((r) => r.kind === "new").length} new, ${rows.filter((r) => r.kind === "gone").length} gone)` + (blocked ? ` — ${blocked} past the ${maxRaise}-line absorb${advisory ? " (advisory)" : ""}` : ""));
+  print(`ratchets --base ${ref}: ${rows.length} ceiling(s) moved (${raises} raised, ${rows.filter((r) => r.kind === "lower").length} lowered, ${rows.filter((r) => r.kind === "new").length} new, ${rows.filter((r) => r.kind === "gone").length} gone)` + (blocked ? ` — ${blocked} past the ${maxRaise}-line absorb${advisory ? " (advisory)" : reasoned ? " (history-reasoned)" : ""}` : ""));
   // ADVISORY ON A PUSH. The reason for a raise past the absorb lives in a PR
   // body, and a push run has no PR — so failing there is a red that cannot
   // be cleared by pushing again. Ten of the fourteen ci.yml failures on
   // 2026-09-22 were this one message repeated on the same branch's pushes
   // (eight of them on one branch), each a wasted run and a re-push into the
-  // same wall. The push run now annotates; the pull_request run still fails.
-  return blocked && !advisory ? 1 : 0;
+  // same wall. The push run now annotates; the pull_request run still fails
+  // unless CEILING-HISTORY.md also moved (deliberate remesaure).
+  return fatal ? 1 : 0;
 }
 
 async function main() {
@@ -370,7 +404,7 @@ async function main() {
   const where = (r) => (r.tree ? " — breakdown: node tools/check/tree-counts.mjs --offenders" : "");
   for (const r of v.over) console.log(`OVER   ${r.file} ${r.metric}: ${r.value} > ceiling ${r.ceiling} (+${r.over}) — extract, or raise it deliberately and say why in the commit${where(r)}`);
   for (const r of v.loose) {
-    const msg = `LOOSE  ${r.file} ${r.metric}: ${r.value} but ceiling ${r.ceiling} (slack ${r.slack} > ${r.slackMax}) — lower it: node tools/check/ratchets.mjs --update`
+    const msg = `LOOSE  ${looseLine(r)} — lower it: node tools/check/ratchets.mjs --update`
       + (v.looseAdvisory ? ` (advisory on ${process.env.GITHUB_EVENT_NAME}: an improvement; the PR run is the gate)` : "");
     console.log(v.looseAdvisory && process.env.GITHUB_ACTIONS === "true"
       ? `::warning file=tests/data/ratchets.json,title=ratchet loose::${msg}` : msg);

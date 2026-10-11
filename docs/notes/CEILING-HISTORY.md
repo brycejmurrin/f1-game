@@ -7,6 +7,25 @@ Every raise and lower was recorded as a comment beside its number; those comment
 are preserved here verbatim, per file, as the record of WHY each number moved.
 The live numbers are in `ratchets.json`; nothing here is asserted.
 
+2026-10-10 the HUD joins the ratchet: `js/ui/hud.js` (codeLines **1330**, lines
+**2246**) and `css/hud.css` (codeLines **1917**, lines **2109**), at ship `107d232f1`.
+Every open HUD branch was growing the pair (the band-allocator refactor +474 net,
+#1316 +76, #1351 +56, #1366 +55) because each phone bug got its own repair pass on
+top of the last. Owner decision: a HUD replacement deletes what it replaces in the
+same PR, and growth past the 40-line absorb says why
+(`docs/notes/HUD-CODE-AUDIT-2026-10-10.md` §net-lines rule).
+Re-measured on the merged tree before landing: #1366 (Phase 0 top-band fix) merged
+first and grew the pair, so the ceilings start at **1345 / 2281** (hud.js) and
+**1926 / 2120** (hud.css), ship `325100c05`.
+2026-10-11 third re-measure on ship `2e1725b34` (sync of #1382 ci-health onto the
+squash absorb of #1351/#1381/#1408/#1411/#1420/#1432): round-3 HUD PRs (#1395,
+#1387, #1386) then #1351 phone-HUD overlaps merged without their planned raises,
+so ship read OVER (hud.js +66 code / +118 lines, hud.css +34 / +38) and Structural
+guards stayed red on every PR. New ceilings: hud.js **1411 / 2399**, hud.css
+**1960 / 2158**. Same `--update` lowered game.js 4976 → 4974 code / 9195 → 9186
+lines. `compareToBase` now clears a raise past the 40-line absorb when this file
+also moved (written reason = the gate; #1437 was stuck red without that).
+
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
