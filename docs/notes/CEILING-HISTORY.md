@@ -126,6 +126,17 @@ stated reason. Real source growth past absorb still fails on the PR run.
 `bdbfa191a`: hud.js **1411 / 2399**, hud.css **1960 / 2158**. Prior #1437 snap to
 1393 / 2377 was already short once the merge tree carried #1351's growth.
 
+2026-10-11 ship catch-up + F-01 (#1409): after #1375, round-3 HUD PRs (#1395
+viewport cache, #1387 give-back, #1386 spotter) and then #1351 (phone HUD
+overlaps) landed without their planned raises, so ship tip / PR merge refs
+read OVER (Structural guards red). Re-measure on the synced #1409 tree
+(ship `23641805f` + F-01 `zoomDiv` feature-detect): hud.js **1412 / 2403**
+(+1 code / +4 lines over the ship-only remeasure of 1411 / 2399 — the F-01
+`_noCssZoom` const and its comment), hud.css **1960 / 2158**. Sibling #1437
+owns the ship-only remeasure; this tip needs the F-01 +1 as well. Also
+reworded four comment `game.js's` hits (source-pin ≤351). After #1437
+merged, a later sync keeps hud.js at **1412 / 2403** over ship's
+**1411 / 2399** and takes the suite floor **600+**.
 2026-10-11 absorb catch-up (`tools/check/ratchets.mjs --base`): a ceiling raise
 past 40 lines fails only when the SOURCE file's metric also grew past 40 since
 the base. A re-measure that tracks size already on the tree (file delta ≤ 40) is
@@ -3428,6 +3439,13 @@ Closing-chord centerline interpolation shifted start-seam props on indy/madrid/w
 
 A later sync onto the deploy tip also moved `js/game.js` codeLines 4795 → **4798** and lines 8946 → **8943**, and `js/track/tracks.js` 703 → **702** (measure of the merged tree — take the base's ceilings where they lowered, raise codeLines for ship-tip growth). Deliberate lobby raise for the intentional onClose clear; the game.js codeLines raise is the sync cure, not an extraction.
 
+## 2026-10-11 — menus-hunt #1405 ship sync HUD catch-up
+
+`js/ui/hud.js` lines **2377 → 2399**, codeLines **1393 → 1411**; `css/hud.css`
+lines **2150 → 2158**, codeLines **1953 → 1960**. Re-measure after merging ship
+(incl. #1351 phone HUD overlaps). This branch does not edit the HUD sources —
+ceilings track already-landed size via the catch-up absorb in `compareToBase`
+(same policy as #1437 / #1384).
 ## 2026-10-11 — HUD remeasure after #1386/#1387/#1395 (+ ship tip growth)
 
 Ship Structural guards went red after #1375 landed the HUD ratchet, then
