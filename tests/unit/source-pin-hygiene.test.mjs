@@ -23,10 +23,8 @@ import { carvedFromGame, gameSource, symbolSource } from "../helpers/game-source
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 // The count of quoted `game.js` path literals under tests/ (the hunter's metric:
 // `rg -c "game\.js['\"]" tests`), less the helper that is the sanctioned reader.
-// 2026-10-11: merge of ship (#1432/#1420/#1411 raised to 355; this branch 356) with
-// later ship tips that migrated sites — measured union is 347. Lower to the
-// measured count so the ratchet keeps its grip.
-const CEILING = 347;
+// 2026-10-11: after #1378 pin migrations + this PR's union, measured 331.
+const CEILING = 331;
 const EXEMPT = new Set(["tests/helpers/game-source.mjs", "tests/unit/source-pin-hygiene.test.mjs"]);
 const RAW = /game\.js['"]/g;
 

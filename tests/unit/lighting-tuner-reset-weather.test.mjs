@@ -191,7 +191,7 @@ test("M11: a blended re-apply that starts mid-strike fades from the pre-strike l
   G.raceWeather = "rain";
   atmo.applyRaceSettings();
   const base = host(G._ltBase);
-  // game.js's lightning block, mid-flash: base + spike, written in place.
+  // the lightning block in game.js, mid-flash: base + spike, written in place.
   G._ltFlash = 0.8;
   for (let i = 0; i < 3; i++) { G.frame.ambientSky[i] = base.ambientSky[i] + 0.4; G.frame.ambientGround[i] = base.ambientGround[i] + 0.3; }
   G.frame.exposure = base.exposure + 0.18;

@@ -824,6 +824,48 @@ function create(G) {
     note.setAttribute("data-help", "keep");   // HELP TEXT: HIDE keeps it — it is the only word on what LOAD does
     note.textContent = "Back up preferences, appearance profiles, tuners and control bindings with SAVE ALL. SAVE CHANGED exports only differences from the defaults. LOAD asks twice, then reloads. Photos, personal background images, career progress and accounts are not included. For cars, setups and liveries, use the file buttons in GARAGE › TEAM.";
 
+    const shareNote = document.createElement("p");
+    shareNote.className = "adv-help";
+    shareNote.setAttribute("data-help", "keep");
+    shareNote.textContent = "Paste an APXS1 / APXL1 / APXD1 share code (or a #share= link) to stage a setup, livery, or daily challenge. Ghosts still use APXG1 / #ghost=.";
+    // textarea — not <input>: settings-export tests pick the LOAD file input via
+    // querySelector("input"), and a text field here would steal that match.
+    const shareIn = document.createElement("textarea");
+    shareIn.id = "pm-share-code-in";
+    shareIn.className = "sel-chip";
+    shareIn.rows = 2;
+    shareIn.spellcheck = false;
+    shareIn.autocomplete = "off";
+    shareIn.placeholder = "paste APXS1 / APXL1 / APXD1 code";
+    shareIn.setAttribute("aria-label", "Share code");
+    const shareBtn = document.createElement("button");
+    shareBtn.type = "button";
+    shareBtn.id = "pm-share-code-import";
+    shareBtn.className = "sel-chip";
+    shareBtn.textContent = "IMPORT SHARE CODE";
+    shareBtn.onclick = () => {
+      if (typeof ShareCode === "undefined") { shareBtn.textContent = "UNAVAILABLE"; return; }
+      const started = { n: 0 };
+      const decoded = ShareCode.decode(shareIn.value);
+      if (!decoded.ok) {
+        shareBtn.textContent = "INVALID CODE";
+        setTimeout(() => { shareBtn.textContent = "IMPORT SHARE CODE"; }, 1800);
+        return;
+      }
+      const applied = ShareCode.apply(decoded, {
+        store: G.store,
+        startRace: () => { started.n++; },
+        selectTeam: (teamId) => {
+          const ti = Teams.LIST.findIndex((t) => t.id === teamId);
+          if (ti >= 0) G.teamIdx = ti;
+        },
+        openGarage: (from) => { if (G.openGarage) G.openGarage(from || "share"); },
+        openDaily: () => { if (G.openDailyPicker) G.openDailyPicker(); },
+      });
+      shareBtn.textContent = applied && applied.ok && !started.n ? "IMPORTED" : "FAILED";
+      setTimeout(() => { shareBtn.textContent = "IMPORT SHARE CODE"; }, 1800);
+    };
+
     host.append(h,
       saveBtn("pm-settings-changed", "SAVE CHANGED SETTINGS",
         "Only the settings that differ from the defaults, each with the default it replaced and where that default lives.",
@@ -834,7 +876,8 @@ function create(G) {
       loadBtn("pm-settings-load", "LOAD SETTINGS FILE",
         "Read an apex26-settings file back in. Only allowlisted keys are written; the garage, career and accounts are never touched.",
         (obj) => applySettings(obj, G), "SETTINGS"),
-      note);
+      note,
+      shareNote, shareIn, shareBtn);
   }
 
   // THE GARAGE PAIR LIVES IN THE GARAGE, not here: a player looking to back up

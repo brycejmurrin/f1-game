@@ -5,7 +5,7 @@
 // Run: node --test tests/unit/ratchets.test.mjs   (npm run test:tooling-fast)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { load, measure, verdict, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt } from "../../tools/check/ratchets.mjs";
+import { load, measure, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt } from "../../tools/check/ratchets.mjs";
 
 test("every ratcheted metric is at or under its ceiling", async () => {
   const v = verdict(await measure());
@@ -23,9 +23,21 @@ test("every ratcheted metric is at or under its ceiling", async () => {
     missing.length ? `a ratcheted file is gone — ${missing.join("; ")}` : "a ratcheted file is gone — drop its entry or fix the path");
 });
 
-test("no ceiling is left far above the value it guards (one slack rule)", async () => {
-  const v = verdict(await measure());
-  assert.deepEqual(v.loose.map(looseLine), [],
+test("no ceiling is left far above the value it guards (one slack rule)", async (t) => {
+  // ADVISORY OFF A PULL REQUEST (R3-CI-HEALTH-1 follow-up): two green PRs that
+  // each remove one item from a slack-0 metric merge to a tip below its
+  // ceiling, and this turned the deploy tip red on an improvement. On a push /
+  // schedule / Pages run the rows are printed as warnings and pass; a PR run
+  // and a local run (no GITHUB_EVENT_NAME) still fail. OVER is the test above.
+  const advisory = looseAdvisory();
+  const v = verdict(await measure(), { looseAdvisory: advisory });
+  const loose = v.loose.map(looseLine);
+  if (advisory) {
+    for (const l of loose) t.diagnostic(`LOOSE (advisory on ${process.env.GITHUB_EVENT_NAME}) ${l} — lower it with node tools/check/ratchets.mjs --update`);
+    assert.equal(v.ok, v.over.length === 0, "advisory: a LOOSE row never decides the verdict, an OVER row still does");
+    return;
+  }
+  assert.deepEqual(loose, [],
     "a ceiling drifted above its file and stopped ratcheting — node tools/check/ratchets.mjs --update");
 });
 
@@ -39,6 +51,25 @@ test("a LOOSE line names the rule the entry is held to: its own slack, or the de
   const dflt = verdict(await measure({ files: {}, tree: { bareCatches: v0 + 500 } }));
   const want = Math.max(SLACK_MIN, Math.round((v0 + 500) * SLACK_PCT));
   assert.equal(looseLine(dflt.loose[0]), `(tree) bareCatches: ${v0} but ceiling ${v0 + 500} (slack 500 > max(${SLACK_MIN}, ${SLACK_PCT * 100}%) = ${want})`);
+});
+
+test("LOOSE is advisory on push / schedule / Pages events and fatal on a PR or locally; OVER is fatal everywhere", async () => {
+  assert.equal(looseAdvisory({}), false, "a local run keeps today's behaviour");
+  assert.equal(looseAdvisory({ GITHUB_EVENT_NAME: "" }), false);
+  assert.equal(looseAdvisory({ GITHUB_EVENT_NAME: "pull_request" }), false, "the PR run is where the author can --update");
+  for (const ev of ["push", "schedule", "workflow_dispatch", "workflow_call"]) assert.equal(looseAdvisory({ GITHUB_EVENT_NAME: ev }), true, ev);
+  // The real measurement, doctored: one row below its exact ceiling (the
+  // 2026-10-10 rawColor 336/337 shape) and, separately, one row over.
+  const value = (await measure({ files: {}, tree: { cssClasses: { ceiling: 1e9, slack: SLACK_MIN } } }))[0].value;
+  const below = await measure({ files: {}, tree: { cssClasses: { ceiling: value + 1, slack: 0 } } });
+  assert.equal(verdict(below).ok, false, "below an exact ceiling is LOOSE by default");
+  assert.equal(verdict(below, { looseAdvisory: false }).ok, false);
+  const adv = verdict(below, { looseAdvisory: true });
+  assert.equal(adv.ok, true, "…and advisory off a PR: an improvement must not red the tip");
+  assert.equal(adv.loose.length, 1, "the row is still REPORTED, not hidden");
+  const over = await measure({ files: {}, tree: { cssClasses: { ceiling: value - 1, slack: 0 } } });
+  assert.equal(verdict(over, { looseAdvisory: true }).ok, false, "OVER stays fatal under the advisory");
+  assert.equal(verdict(over, { looseAdvisory: false }).ok, false);
 });
 
 test("the data names only known metrics, and game.js carries the carve metrics", () => {
@@ -167,9 +198,11 @@ test("--base names every ceiling that moved, and only a raise past the hook's ab
   // side is pinned to HEAD's copy, not the working tree's: this test runs from
   // the commit hook, where a staged auto-raise or a merge of the deploy tip
   // legitimately leaves the tree's ratchets.json ahead of HEAD.
+  // Pin historyReasoned:false so a dirty CEILING-HISTORY in the worktree cannot
+  // soft-pass the absorb cases below.
   const head = loadAt("HEAD");
   const lines = [];
-  assert.equal(compareToBase("HEAD", { current: head, print: (l) => lines.push(l) }), 0);
+  assert.equal(compareToBase("HEAD", { current: head, print: (l) => lines.push(l), historyReasoned: false }), 0);
   assert.match(lines.at(-1), /0 ceiling\(s\) moved/);
   // A raise within the absorb is reported, not fatal. Past it: fatal only when
   // the SOURCE file's metric also grew past absorb (injectable sourceGrowthFn).
@@ -178,7 +211,7 @@ test("--base names every ceiling that moved, and only a raise past the hook's ab
   // Structural guards without an admin merge.
   const raised = (n) => ({ ...head, files: { ...head.files, "js/game.js": { ...head.files["js/game.js"], lines: head.files["js/game.js"].lines + n } } });
   const out = [];
-  assert.equal(compareToBase("HEAD", { current: raised(40), print: (l) => out.push(l) }), 0);
+  assert.equal(compareToBase("HEAD", { current: raised(40), print: (l) => out.push(l), historyReasoned: false }), 0);
   assert.ok(out.some((l) => /RAISE  js\/game\.js lines: \d+ -> \d+ \(\+40\)/.test(l)), out.join("\n"));
   const catchUp = [];
   assert.equal(compareToBase("HEAD", {
@@ -187,7 +220,7 @@ test("--base names every ceiling that moved, and only a raise past the hook's ab
   assert.ok(catchUp.some((l) => /catch-up \(source lines grew 0 ≤ 40/.test(l)), catchUp.join("\n"));
   const big = [];
   assert.equal(compareToBase("HEAD", {
-    current: raised(41), print: (l) => big.push(l), sourceGrowthFn: () => 41,
+    current: raised(41), print: (l) => big.push(l), sourceGrowthFn: () => 41, historyReasoned: false,
   }), 1, "real source growth past absorb still fails");
   assert.ok(big.some((l) => /past the 40-line commit-hook absorb/.test(l)));
   // ADVISORY (a push run): the same real-growth raise is still named, and still
@@ -196,10 +229,19 @@ test("--base names every ceiling that moved, and only a raise past the hook's ab
   // for the same commits calls without --advisory and blocks as above.
   const adv = [];
   assert.equal(compareToBase("HEAD", {
-    current: raised(41), print: (l) => adv.push(l), advisory: true, sourceGrowthFn: () => 41,
+    current: raised(41), print: (l) => adv.push(l), advisory: true, sourceGrowthFn: () => 41, historyReasoned: false,
   }), 0);
   assert.ok(adv.some((l) => /past the 40-line commit-hook absorb.*advisory on a push/.test(l)), adv.join("\n"));
   assert.match(adv.at(-1), /1 past the 40-line absorb \(advisory\)/);
+  // CEILING-HISTORY reason (deliberate remesaure): same raise past absorb is
+  // named and annotated, exit 0 — the written why is the gate, not a red that
+  // no remesaure PR can clear (#1437 / stacked HUD merges on ship). Pin real
+  // source growth so catch-up does not soft-pass before the history gate runs.
+  const hist = [];
+  assert.equal(compareToBase("HEAD", {
+    current: raised(41), print: (l) => hist.push(l), sourceGrowthFn: () => 41, historyReasoned: true,
+  }), 0);
+  assert.ok(hist.some((l) => /reason recorded in docs\/notes\/CEILING-HISTORY\.md/.test(l)), hist.join("\n"));
   // An unreachable ref is a distinct exit, not a crash and not a pass.
   const nope = [];
   assert.equal(compareToBase("0000000000000000000000000000000000000000", { print: (l) => nope.push(l) }), 2);
