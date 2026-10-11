@@ -846,3 +846,16 @@ test("SOLO: the wait clock restarts when the player is no longer done (a new rac
   finishDelay([{ human: true, finished: false, retired: false }, { human: false, finished: false, retired: false }], 10, 3, 0, solo);
   assert.equal(solo.since, -1);
 });
+
+test("SOLO: a retired player keeps the race running until the field finishes or the cap", () => {
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const out = { human: true, finished: false, retired: true };
+  const ai = { human: false, finished: false, retired: false };
+  const solo = { solo: true, since: -1 };
+  assert.equal(finishDelay([out, ai], 40, 3, 0, solo), 0, "the DNF no longer ends the race for everyone");
+  assert.equal(finishDelay([out, ai], 40 + 75, 3, 0, solo), 0.1, "…until the cap forces the short run");
+  assert.equal(finishDelay([out, { ...ai, finished: true, finishT: 90 }], 91, 3, 0, { solo: true, since: -1 }), 2.2,
+    "the field home: today's 2.2 s");
+  assert.equal(finishDelay([out, { ...ai, retired: true }], 40, 3, 0, { solo: true, since: -1 }), 2.2, "nobody left: no wait");
+  assert.equal(finishDelay([out, ai], 40, 3), 2.2, "net / harnesses (no post bag) keep the 2.2 s");
+});

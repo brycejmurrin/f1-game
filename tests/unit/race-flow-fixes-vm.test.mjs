@@ -116,8 +116,8 @@ test("the only human retiring retires every AI whose failure was already drawn",
     const doomed = ai[3];
     doomed.dnfAt = 0.99; doomed.dnfWhy = "gearbox";   // drawn, but beyond where the race now stops
     G.player.dnfAt = 0.0001; G.player.dnfWhy = "engine";
-    for (let i = 0; i < 60 * 10 && G.state === "race"; i++) g.step(1);
-    assert.equal(G.state, "results", "the race ends once its only human is out");
+    for (let i = 0; i < 60 * 90 && G.state === "race"; i++) g.step(1);   // POST_FINISH_CAP: the field is waited for, then the race ends
+    assert.equal(G.state, "results", "the race ends once the post-finish cap passes with its only human out");
     assert.equal(doomed.retired, true, "a drawn failure is met, not scored past");
     assert.equal(doomed.dnf, "gearbox");
   } finally { g.close(); }
@@ -660,5 +660,23 @@ test("POST-FINISH (solo): QUIT TO MENU after the flag settles the result first",
     pauseBtn("pm-quit").onclick();
     assert.equal(P.finPos, 1, "endRace ran before the session was dropped: the career/season settlement is not lost");
     assert.equal(G.state, "menu");
+  } finally { g.close(); }
+});
+
+test("PLAYER DNF (solo): the race keeps running for the field instead of ending 2.2 s later; the cap ends it as a short run", async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = g.apex, G = g.G;
+    a.headless(true);
+    await a.race("monza", "default", "dry", { laps: 10 });
+    a.go(); g.step(60);
+    for (const c of G.cars) if (!c.human) c.dnfAt = null;
+    a.retire(null);
+    g.step(60 * 10);
+    assert.equal(G.player.retired, true);
+    assert.equal(G.state, "race", "10 s after the DNF the race is still on — rivals keep racing under the TV camera");
+    g.step(60 * 80);
+    assert.equal(G.state, "results", "POST_FINISH_CAP forces the end");
+    assert.equal(G.cars.some((c) => c.finished && !c.retired), false, "nobody saw the flag: RaceControl.shortRun applies");
   } finally { g.close(); }
 });

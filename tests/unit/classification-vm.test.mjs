@@ -158,7 +158,7 @@ test("with no finisher, the 90 % rule measures the leader still running", async 
     place(late, L - 1000, 9, 0); a.retire(G.cars.indexOf(late));     // out on lap 9: 8 >= floor(0.9 * 9)
     place(early, L - 1000, 5, 0); a.retire(G.cars.indexOf(early));   // out on lap 5: 4 of 9
     a.jump(0.3, 0, 0); P.lap = 10; P.prog = 9 * L + 0.3 * L; a.retire(null);   // the human stops on lap 10
-    for (let i = 0; i < 60 * 12 && G.state === "race"; i++) g3.step(1);
+    g3.step(60); skipPostFinish(g3);   // the human is out; SKIP freezes the snapshot (otherwise the cap, 75 s later, ends it)
     assert.equal(G.state, "results", "a retired solo human ends the race");
     assert.equal(G.cars.some((c) => c.finished && !c.retired), false, "nobody took the flag");
     assert.equal(late.classified, true, "8 of the leader's 9 laps is classified");
@@ -217,7 +217,7 @@ test("a championship round ended by the human's retirement pays the shortened-ra
     const place = (c, s, lap) => { c.lap = lap; c.s = s; c.prog = lap * L - (L - s); c.x = 0; };
     ai.forEach((c, i) => place(c, L * 0.5 - i * 30, 5));               // the leader on lap 5: 4 of 10 done (25-50 %)
     a.jump(0.3, 0, 0); P.lap = 5; P.prog = 4 * L + 0.3 * L; a.retire(null);
-    for (let i = 0; i < 60 * 12 && G.state === "race"; i++) g5.step(1);
+    g5.step(60); skipPostFinish(g5);   // the human is out; SKIP freezes the snapshot (otherwise the cap, 75 s later, ends it)
     assert.equal(G.state, "results");
     assert.equal(G.cars.some((c) => c.finished && !c.retired), false, "nobody took the flag");
     const win = G.cars.find((c) => c.finPos === 1);
