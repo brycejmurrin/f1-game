@@ -535,6 +535,8 @@ test("capture/shot.mjs clips the presented canvas instead of locator.screenshot"
   assert.ok(callers.every((n) => n === "page"),
     `screenshot callers must be page, got: ${callers.join(",")}`);
   assert.match(src, /from ["']\.{1,2}\/(?:lib\/)?harness\.mjs["']/);
+  assert.match(src, /shot-jobs\.mjs/, "batch / jpeg / raster parse stays extracted");
+  assert.match(src, /groupJobsByTrack/, "one Chromium reuses race() per track");
 });
 
 test("WGX validator distinguishes frame counts from circuit names before launching", () => {

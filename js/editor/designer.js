@@ -71,6 +71,7 @@ const TrackDesigner = (function () {
   let G = null, custom = null, root = null, built = false, openFlag = false, returnFocus = null;
   let cv = null, canvas = null;
   const ui = {};                       // named nodes, built once
+  let lineage = 0;   // which loaded design a history entry belongs to (restore)
   let design = null, verdict = null, sel = -1, span = -1, tool = "select", mode = "edit";
   // spanArm: next pick sets the span end (touch-friendly stand-in for shift-tap).
   let spanArm = false, selectionMode = "point", selectionPanel = null, heightStep = 1;
@@ -78,7 +79,6 @@ const TrackDesigner = (function () {
   // propKind: the scenery-mode props palette selection (TrackDesignerProps.KINDS).
   let propKind = "stand", scenery = null, sceneryView = false;
   const undo = [], redo = [];
-  let documentSerial = 0, documentId = 0;
   let previewT = 0, draftT = 0, confirmDel = null, msgT = 0;
   // savedSnap: the design as last loaded or saved — anything else is unsaved
   // work a load must not drop. nudge: the arrow-key run one undo entry covers.
@@ -297,7 +297,7 @@ const TrackDesigner = (function () {
 
   // ── state transitions ─────────────────────────────────────────────────────
   function snapshot() { return JSON.stringify(design); }
-  function pushUndo(snap) { undo.push({ snap, documentId }); if (undo.length > UNDO_CAP) undo.shift(); redo.length = 0; }
+  function pushUndo(snap) { undo.push(snap); if (undo.length > UNDO_CAP) undo.shift(); redo.length = 0; }
   const REMAP = /^(insert|delete|stamp:)/;
   /** Replace the design (geometry edits go through here so UNDO sees them). A
    *  run of arrow nudges on one point (or one span) inside NUDGE_MS is ONE entry. */
@@ -311,7 +311,6 @@ const TrackDesigner = (function () {
     next.pts = lattice(next.pts);
     if (REMAP.test(kind || "") && design && design.pts) next = remapZones(next, design.pts, next.pts);
     ensureHeights(next);
-    if (/^(draw|randomise|seed:)/.test(kind || "")) documentId = ++documentSerial;
     design = next;
     afterChange(kind);
     // First real edit dismisses the coach so SHAPE / mode chips stay usable.
@@ -556,15 +555,20 @@ const TrackDesigner = (function () {
     refreshControls();
     return spanArm;
   }
-  function restoreHistory(from, to, kind) {
-    if (!from.length) return false;
-    to.push({ snap: snapshot(), documentId });
-    const entry = from.pop(); documentId = entry.documentId;
-    design = ensureHeights(JSON.parse(entry.snap)); sel = -1; span = -1; nudge = null;
-    afterChange(kind); return true;
+  /** Restore a history entry. Name and library link (id / originId) are not
+   *  undoable edits — setName and SAVE write them outside commit() — so inside
+   *  one loaded design they stay as they are; an entry from ANOTHER design (the
+   *  stash load() keeps) brings its own back (`lin` marks which design it was). */
+  function restore(snap) {
+    const was = design, next = ensureHeights(JSON.parse(snap));
+    if (was && next.lin === was.lin) {
+      next.name = was.name;
+      for (const k of ["id", "originId"]) { if (was[k] === undefined) delete next[k]; else next[k] = was[k]; }
+    }
+    design = next; sel = -1; span = -1; nudge = null;
   }
-  function doUndo() { return restoreHistory(undo, redo, "undo"); }
-  function doRedo() { return restoreHistory(redo, undo, "redo"); }
+  function doUndo() { if (!undo.length) return false; redo.push(snapshot()); restore(undo.pop()); afterChange("undo"); return true; }
+  function doRedo() { if (!redo.length) return false; undo.push(snapshot()); restore(redo.pop()); afterChange("redo"); return true; }
   function setTheme(id) {
     if (!TrackThemes.has(id) || id === design.theme) return false;
     commit(Object.assign({}, design, { theme: id }), "theme");
@@ -722,7 +726,8 @@ const TrackDesigner = (function () {
   function load(item, label, origin) {
     const kept = stash();
     if (!kept) { undo.length = 0; redo.length = 0; }
-    design = copy(item); documentId = ++documentSerial;
+    design = copy(item);
+    design.lin = ++lineage;
     for (const k of ["hwZones", "bankZones", "elevations", "bridges", "turns"]) if (!Array.isArray(design[k])) design[k] = [];
     ensureHeights(design);   // old saves without heights → flat zeros
     if (origin) design.originId = origin; else delete design.originId;
@@ -755,13 +760,6 @@ const TrackDesigner = (function () {
       message(r.reason === "full" ? "MY CIRCUITS is full (" + r.limit + " circuits) — delete one in MY CIRCUITS to " + (forRace ? "race" : "save") + " this design" : "Could not save this design", true);
       Log.warn("track", "designer save refused: " + r.reason);
       return r;
-    }
-    // Content is undoable; the library record it replaces follows each save.
-    for (const history of [undo, redo]) {
-      for (const entry of history) {
-        const old = JSON.parse(entry.snap);
-        if (entry.documentId === documentId || (design.originId && old.originId === design.originId)) { old.originId = r.id; entry.snap = JSON.stringify(old); }
-      }
     }
     design.id = r.id; design.originId = r.id;
     savedSnap = snapshot();
@@ -2138,14 +2136,22 @@ const TrackDesigner = (function () {
   function textW(g, t) { const m = g.measureText(t); return m && m.width > 0 ? m.width : t.length * 6.6; }
   /** Wrap a share URL for the 640×360 card: keep `#track=` intact (never
    *  `…#trac` / `k=…`), put the host on its own line when the path is long,
-   *  and cap at three lines. Live apex8 cards broke mid-word under wrapChars. */
+   *  and cap at three lines. Live apex8 cards broke mid-word under wrapChars.
+   *  A link that does not fit is NOT cut mid-code (a prefix of a share code
+   *  decodes to nothing, yet read as a link): the host and `#track=…` stand
+   *  for it and the full link rides SHARE / the share text. */
   function wrapUrl(g, url, w) {
+    const lines = wrapUrlAll(g, url, w);
+    if (lines.length <= 3) return lines;
+    return [url.indexOf("#track=") < 0 ? lines[0] + "…" : lines[0], "#track=…", "full link: SHARE"];
+  }
+  function wrapUrlAll(g, url, w) {
     const at = url.indexOf("#track=");
     if (at < 0) {
       const lines = []; let cur = "";
       for (const ch of url) { if (cur && textW(g, cur + ch) > w) { lines.push(cur); cur = ""; } cur += ch; }
       if (cur) lines.push(cur);
-      return lines.slice(0, 3);
+      return lines;
     }
     let head = url.slice(0, at);
     const code = url.slice(at + 7);                       // after "#track="
@@ -2168,7 +2174,7 @@ const TrackDesigner = (function () {
       }
       if (cur) lines.push(cur);
     }
-    return lines.slice(0, 3);
+    return lines;
   }
   /** The 640×360 track card: the outline in the left 360², name, facts, theme,
    *  the game's mark and the share link in the right column. { canvas, url, name } | null. */
