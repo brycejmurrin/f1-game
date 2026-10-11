@@ -186,7 +186,12 @@ test("--base names every ceiling that moved, and only a raise past the hook's ab
   const adv = [];
   assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => adv.push(l), advisory: true }), 0);
   assert.ok(adv.some((l) => /past the 40-line commit-hook absorb.*advisory on a push/.test(l)), adv.join("\n"));
-  assert.match(adv.at(-1), /1 past the 40-line absorb \(advisory\)/);
+  assert.match(adv.at(-1), /1 past the 40-line absorb \(advisory\)|past-absorb raises soft \(advisory\)/);
+  // DOCUMENTED (CEILING-HISTORY.md moved with the raise): same past-absorb
+  // raise is a warning, exit 0 — the reason the CI error text always asked for.
+  const doc = [];
+  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => doc.push(l), documented: true }), 0);
+  assert.ok(doc.some((l) => /CEILING-HISTORY\.md moved with this raise/.test(l)), doc.join("\n"));
   // An unreachable ref is a distinct exit, not a crash and not a pass.
   const nope = [];
   assert.equal(compareToBase("0000000000000000000000000000000000000000", { print: (l) => nope.push(l) }), 2);

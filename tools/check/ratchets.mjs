@@ -6,8 +6,11 @@
 //   node tools/check/ratchets.mjs --update   # rewrite ratchets.json with the current values (after an extraction,
 //                                      #   or on a merged tree — the deploy-merge rule)
 //   node tools/check/ratchets.mjs --json     # {ok, rows:[{file, metric, value, ceiling, over, slack}]}
-//   node tools/check/ratchets.mjs --base <ref> [--max-raise=40] [--advisory]   # --advisory: a raise past the absorb
-//                                      #   annotates instead of failing — for PUSH runs, where no PR body can carry the reason
+//   node tools/check/ratchets.mjs --base <ref> [--max-raise=40] [--advisory] [--documented]
+//                                      # --advisory: a raise past the absorb annotates instead of failing
+//                                      #   (PUSH runs — no PR body to carry the reason)
+//                                      # --documented: past-absorb raises warn only when the PR also
+//                                      #   updates docs/notes/CEILING-HISTORY.md (the stated reason)
 //                                      # every ceiling that moved since <ref> (git show); raises are
 //                                      #   warnings, a raise past the commit hook's absorb fails —
 //                                      #   ci.yml's guards job runs this against the PR base / deploy tip
@@ -276,22 +279,28 @@ export function loadAt(ref) {
  *  (GitHub `::warning::` annotations on CI, plain lines elsewhere); a raise
  *  past `maxRaise` — the commit hook's own absorb, so only APEX_SKIP_GUARDS
  *  could have produced it — fails. Returns the exit code. */
-export function compareToBase(ref, { maxRaise = 40, current = load(), print = console.log, advisory = false } = {}) {
+export function compareToBase(ref, { maxRaise = 40, current = load(), print = console.log, advisory = false, documented = false } = {}) {
   let base;
   try { base = loadAt(ref); }
   catch (e) { print(`ratchets --base: cannot read tests/data/ratchets.json at ${ref} (${String(e.stderr || e.message).trim().split("\n")[0]}) — is the checkout deep enough (fetch-depth: 0)?`); return 2; }
   const rows = diffRatchets(base, current);
   const gh = process.env.GITHUB_ACTIONS === "true";
+  // Soften hard fails when the raise is documented (CEILING-HISTORY in the PR)
+  // or the run is advisory (push). Soften does NOT apply to LOOSEN / GONE.
+  const soft = advisory || documented;
   let blocked = 0;
   for (const r of rows) {
     const where = `${r.file} ${r.metric}`;
     if (r.kind === "raise") {
       const over = r.delta > maxRaise;
-      if (over) blocked++;
-      const msg = `RAISE  ${where}: ${r.base} -> ${r.now} (+${r.delta})` + (over
-        ? ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : "")
-        : "");
-      print(gh ? `::${over && !advisory ? "error" : "warning"} file=tests/data/ratchets.json,title=ratchet raised::${msg}` : msg);
+      if (over && !soft) blocked++;
+      const why = over
+        ? (documented && !advisory
+          ? ` — past the ${maxRaise}-line commit-hook absorb; allowed because docs/notes/CEILING-HISTORY.md moved with this raise`
+          : ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : ""))
+        : "";
+      const msg = `RAISE  ${where}: ${r.base} -> ${r.now} (+${r.delta})` + why;
+      print(gh ? `::${over && !soft ? "error" : "warning"} file=tests/data/ratchets.json,title=ratchet raised::${msg}` : msg);
     } else if (r.kind === "lower") print(`LOWER  ${where}: ${r.base} -> ${r.now} (${r.delta})`);
     else if (r.kind === "new") print(`NEW    ${where}: ${r.now}`);
     else if (r.kind === "loosen") {
@@ -310,13 +319,15 @@ export function compareToBase(ref, { maxRaise = 40, current = load(), print = co
     }
   }
   const raises = rows.filter((r) => r.kind === "raise").length;
-  print(`ratchets --base ${ref}: ${rows.length} ceiling(s) moved (${raises} raised, ${rows.filter((r) => r.kind === "lower").length} lowered, ${rows.filter((r) => r.kind === "new").length} new, ${rows.filter((r) => r.kind === "gone").length} gone)` + (blocked ? ` — ${blocked} past the ${maxRaise}-line absorb${advisory ? " (advisory)" : ""}` : ""));
+  const softTag = advisory ? " (advisory)" : documented ? " (documented)" : "";
+  print(`ratchets --base ${ref}: ${rows.length} ceiling(s) moved (${raises} raised, ${rows.filter((r) => r.kind === "lower").length} lowered, ${rows.filter((r) => r.kind === "new").length} new, ${rows.filter((r) => r.kind === "gone").length} gone)` + (blocked ? ` — ${blocked} past the ${maxRaise}-line absorb${softTag}` : (soft && rows.some((r) => r.kind === "raise" && r.delta > maxRaise) ? ` — past-absorb raises soft${softTag}` : "")));
   // ADVISORY ON A PUSH. The reason for a raise past the absorb lives in a PR
-  // body, and a push run has no PR — so failing there is a red that cannot
-  // be cleared by pushing again. Ten of the fourteen ci.yml failures on
-  // 2026-09-22 were this one message repeated on the same branch's pushes
-  // (eight of them on one branch), each a wasted run and a re-push into the
-  // same wall. The push run now annotates; the pull_request run still fails.
+  // body / CEILING-HISTORY.md, and a push run has no PR — so failing there is a
+  // red that cannot be cleared by pushing again. Ten of the fourteen ci.yml
+  // failures on 2026-09-22 were this one message repeated on the same branch's
+  // pushes (eight of them on one branch), each a wasted run and a re-push into
+  // the same wall. The push run now annotates; the pull_request run still fails
+  // unless --documented (CEILING-HISTORY.md in the PR diff).
   return blocked && !advisory ? 1 : 0;
 }
 
@@ -327,7 +338,11 @@ async function main() {
     const ref = argv[baseAt + 1];
     if (!ref || ref.startsWith("-")) { console.error("ratchets: --base needs a ref"); process.exitCode = 2; return; }
     const mr = argv.find((a) => a.startsWith("--max-raise="));
-    process.exitCode = compareToBase(ref, { maxRaise: mr ? Number(mr.split("=")[1]) || 40 : 40, advisory: argv.includes("--advisory") });
+    process.exitCode = compareToBase(ref, {
+      maxRaise: mr ? Number(mr.split("=")[1]) || 40 : 40,
+      advisory: argv.includes("--advisory"),
+      documented: argv.includes("--documented"),
+    });
     return;
   }
   if (argv.includes("--update") || argv.includes("--preview") || argv.includes("--lower-only")) {
