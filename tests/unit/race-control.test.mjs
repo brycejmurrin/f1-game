@@ -859,3 +859,20 @@ test("SOLO: a retired player keeps the race running until the field finishes or 
   assert.equal(finishDelay([out, { ...ai, retired: true }], 40, 3, 0, { solo: true, since: -1 }), 2.2, "nobody left: no wait");
   assert.equal(finishDelay([out, ai], 40, 3), 2.2, "net / harnesses (no post bag) keep the 2.2 s");
 });
+
+test("classify(): a flagged finisher below 90 % of the winner's laps stays in the order, ahead of slower unclassified cars", () => {
+  const RC = load(null);
+  const mk = (id, lap, prog, o = {}) => Object.assign({ id, lap, prog }, o);
+  const win = mk("W", 11, 11000, { finished: true });
+  const nc = mk("NC", 8, 8000, { finished: true });      // 7 done of 10: below the floor of 9
+  const nc2 = mk("NC2", 8, 7500, { finished: true });
+  const run = mk("R", 4, 4000);
+  const out = mk("O", 3, 3000, { retired: true });
+  const cars = [win, nc, nc2, run, out];
+  const order = RC.classify(cars, [win, nc, nc2], [run], [out]);
+  assert.equal(order.length, cars.length, "no car vanishes from the classification");
+  assert.equal(order[0], win);
+  assert.equal(nc.classified, false);
+  assert.deepEqual(order.map((c) => c.id), ["W", "NC", "NC2", "R", "O"],
+    "unclassified follow by laps (flagged finishers first), then distance");
+});

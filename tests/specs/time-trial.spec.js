@@ -163,7 +163,7 @@ async function ghostSaved(page, trackId) {
 
   test("drops reverse-progress samples from ghost recording and delta lookup", async ({ page }) => {
     await page.goto("/");
-    await page.waitForFunction(() => typeof Ghost !== "undefined");
+    await page.waitForFunction(() => typeof Ghost !== "undefined", null, { polling: 100 });
     await page.evaluate(() => {
       Ghost.clear("monza");
       Ghost.setTrack("monza");

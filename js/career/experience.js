@@ -47,8 +47,11 @@ const CareerExperience = (function () {
     }));
   }
 
+  // The calendar the career STAMPED at its season start (Career.calendar), else the shipped one.
+  function seasonCal() { return typeof Career !== "undefined" && Career.calendar ? Career.calendar() : Tracks.SEASON; }
+
   function raceBrief(G, c, st, team) {
-    const el = Dom.el, t = Tracks.SEASON[c.season.round];
+    const el = Dom.el, t = seasonCal()[c.season.round];
     const card = el("section", "cr-card cr-nextrace");
     card.id = "cr-nextrace";
     if (!t) return card;
@@ -76,16 +79,41 @@ const CareerExperience = (function () {
     return card;
   }
 
+  // THE ROUND'S BRIEF, LIVE, for the pause card (js/ui/experience.js raceBrief):
+  // "OBJECTIVE · TARGET P6 · NOW P8". The verdict is Career.objectiveMet on the
+  // ctx settleRound builds — the live order for the finish order — so the card
+  // and the results sheet cannot disagree about what the brief asks. A points
+  // brief reads the full points table (a shortened race pays SeasonCal's).
+  // objectiveFor(round) is the pure draw (no save write), and "" outside a
+  // career race, quali reading the brief alone.
+  function objectiveStatus(G) {
+    if (typeof Career === "undefined" || !Career.inCareer() || !Career.objectiveMet) return "";
+    const c = Career.data(), p = G.player;
+    if (!c || !c.season || !p || G.timeTrial || G.practice) return "";
+    const o = Career.objectiveFor(c.season.round), label = o ? Career.objectiveLabel(o).toUpperCase() : "";
+    if (!label) return "";
+    if (G.session !== "race") return "OBJECTIVE · " + label;
+    const ranked = G.ranked || [], at = (car) => ranked.indexOf(car) + 1 || ranked.length + 1;
+    const pos = at(p), mate = (G.cars || []).find((car) => car !== p && car.team && car.team.id === c.team);
+    const pts = (typeof Teams !== "undefined" && Teams.POINTS[pos - 1]) || 0;
+    const met = Career.objectiveMet(o, { pos, pts, player: p, mate, matePos: mate ? at(mate) : 0 });
+    if (o.type === "finish") return "OBJECTIVE · TARGET P" + o.value + " · NOW P" + pos + (met ? " ✓" : "");
+    if (o.type === "clean") return "OBJECTIVE · " + label + (met ? " · CLEAN SO FAR" : " · MISSED");
+    if (o.type === "outQualMate") return "OBJECTIVE · " + label + (met ? " ✓" : " · MISSED");
+    return "OBJECTIVE · " + label + (met ? " · ON TARGET" : " · NOT YET");
+  }
+
   function seasonStory(G, c, st, team) {
     const el = Dom.el, story = part("section", "story");
     story.setAttribute("aria-label", "Your season story");
     if (team) story.style.setProperty("--career-team", G.cssCol(team.color));
     story.appendChild(el("h3", "sel-label", c.year + " SEASON STORY"));
-    const completed = Math.min(c.season.round, Tracks.SEASON.length);
-    story.appendChild(el("p", "cr-note", completed + " of " + Tracks.SEASON.length + " rounds complete"));
+    const cal = seasonCal();
+    const completed = Math.min(c.season.round, cal.length);
+    story.appendChild(el("p", "cr-note", completed + " of " + cal.length + " rounds complete"));
     const rail = part("ol", "calendar");
     rail.setAttribute("aria-label", "Season calendar and results");
-    for (const item of calendar(c, Tracks.SEASON)) {
+    for (const item of calendar(c, cal)) {
       const tile = el("li");
       tile.dataset.stage = item.state;
       if (item.state === "next") tile.setAttribute("aria-current", "step");
@@ -156,6 +184,6 @@ const CareerExperience = (function () {
     G.$("cr-header").appendChild(nav);
   }
 
-  return { totals, calendar, garageMetadata, raceBrief, mount, clear };
+  return { totals, calendar, garageMetadata, raceBrief, objectiveStatus, mount, clear };
 })();
 Object.freeze(CareerExperience);

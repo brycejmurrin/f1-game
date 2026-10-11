@@ -413,18 +413,22 @@ var GameAudioRadioFx = (function () {
      * ducking for the clip's lifetime. MediaElementSource when CORS allows; else
      * fetch+decode into radioVoice; else plain HTMLAudio with duck only. */
     const _watchClips = new Set();
+    let _watchSeq = 0;
     function radioMediaClip(url, o) {
       if (!url || typeof url !== "string") return null;
       const vol = Math.max(0, Math.min(1, o && o.volume != null ? +o.volume || 0 : 1));
       if (!(vol > 0) || !host.enabled() || !host.sfxOk()) return null;
       let ducked = false;
+      // Its own duck source: the engineer's setRadioDuck(false) on a card replace
+      // (and another clip ending) must not lift the music under this clip.
+      const duckId = "watch:" + (++_watchSeq);
       const duck = () => {
         if (ducked) return;
-        if (typeof GameAudio !== "undefined" && GameAudio.setRadioDuck) { GameAudio.setRadioDuck(true); ducked = true; }
+        if (typeof GameAudio !== "undefined" && GameAudio.setRadioDuck) { GameAudio.setRadioDuck(true, duckId); ducked = true; }
       };
       const releaseDuck = () => {
         if (!ducked) return;
-        if (typeof GameAudio !== "undefined" && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
+        if (typeof GameAudio !== "undefined" && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false, duckId);
         ducked = false;
       };
       duck();
@@ -479,6 +483,16 @@ var GameAudioRadioFx = (function () {
         if (el) { el.onended = el.onerror = null; el = null; }
         chained = false;
       };
+      // ONE FALLBACK PER CLIP. A failing media element fires `error` AND rejects the
+      // pending play() promise; both used to run disconnectMedia + tryFetchDecode,
+      // so the clip was fetched and put on air twice (the first handle lost).
+      let fellBack = false;
+      const fallBack = () => {
+        if (dead || fellBack) return;
+        fellBack = true;
+        disconnectMedia();
+        tryFetchDecode();
+      };
       const tryFetchDecode = () => {
         if (dead || typeof fetch !== "function" || !host.context()) { plainFallback(); return; }
         fetch(url, { mode: "cors", credentials: "omit" }).then((r) => {
@@ -512,14 +526,13 @@ var GameAudioRadioFx = (function () {
         nodes = [mediaSrc, g];
         chained = true;
         el.onended = () => teardown();
-        el.onerror = () => { if (dead) return; disconnectMedia(); tryFetchDecode(); };
+        el.onerror = fallBack;
         el.src = url;
         const p = el.play();
-        if (p && p.catch) p.catch(() => { if (dead) return; disconnectMedia(); tryFetchDecode(); });
+        if (p && p.catch) p.catch(fallBack);
         return handle;
       } catch (e) {
-        disconnectMedia();
-        tryFetchDecode();
+        fallBack();
         return handle;
       }
     }
