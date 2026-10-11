@@ -26,6 +26,7 @@ const CustomTeam = (function () {
     } = hooks;
 
     let czFinish = "gloss";
+    let czPreviewKey = "";
 
     // A STORED CUSTOM TEAM IS PLAYER INPUT. It rides in a garage file, which
     // js/ui/settings-export.js reads off disk, and syncCustomTeam() pushes
@@ -45,12 +46,19 @@ const CustomTeam = (function () {
     function customTeamIndex() { return Teams.LIST.findIndex((t) => t.id === "custom"); }
 
     function syncCustomTeam() {
+      // WHICH legend is fielded, read BEFORE the splice. Mid-sync the list is
+      // [… legends, custom], so a selected MY TEAM (old index n-2) reads as
+      // "Legends is selected" and legendSeat() answered MY TEAM's driver seat:
+      // saving MY TEAM, or a foreign-tab write, flipped the pick to Schumacher
+      // and wiped its tuned build. Absent entry = BOOT: legendSeat() after the
+      // push, where the saved index names the slot about to be appended.
+      const keep = legendsTeamIndex() >= 0 ? legendSeat() : undefined;
       const i = customTeamIndex();
       if (i >= 0) Teams.LIST.splice(i, 1);
       Teams.LIST.push(loadCustomTeam());
       invalidateDecalTextures("custom");
       invalidateCustomMeshCaches();
-      syncLegendsTeam();      // …and LEGENDS stays the entry after it
+      syncLegendsTeam(keep);      // …and LEGENDS stays the entry after it
     }
 
     function legendsTeamIndex() { return Teams.LIST.findIndex((t) => t.id === "legends"); }
@@ -228,10 +236,20 @@ const CustomTeam = (function () {
         { id: "default", c1: hexToArr($("cz-color").value), c2: hexToArr($("cz-color2").value) },
         czLivFromDialog());
       setLivDraftOverride({ teamId: "custom", liv });
+      // The decal atlas (LOGO TINT / MONOGRAM / OUTLINE rows) is cached per
+      // team and was only dropped on SAVE, so those rows did nothing live.
+      // Keyed like the garage's livePreviewDraft: input events repeat.
+      const key = JSON.stringify(liv);
+      if (key !== czPreviewKey) { czPreviewKey = key; invalidateDecalTextures("custom"); }
       spMeshBust();
     }
 
-    function czClearPreview() { setLivDraftOverride(null); spMeshBust(); }
+    function czClearPreview() {
+      setLivDraftOverride(null);
+      czPreviewKey = "";
+      invalidateDecalTextures("custom");   // back to the saved atlas
+      spMeshBust();
+    }
 
     function openCustomize() {
       const ct = loadCustomTeam();

@@ -319,10 +319,11 @@ test("a sprint weekend qualifies TWICE: SPRINT QUALIFYING, then again for the GP
   const season = S.blank();
   assert.equal(S.qualiNext(season), true, "the weekend opens with sprint qualifying");
   assert.equal(S.qualiLabel(season), "SPRINT QUALIFYING");
-  season.qualiOrder = [{ id: "d0", t: 80 }]; season.qualiTrack = "bahrain";   // what quali-model persists
+  season.qualiOrder = [{ id: "d0", t: 80 }]; season.qualiTrack = "bahrain"; season.qualiMode = "season";   // what quali-model persists
   S.award(season, field(4));
   assert.equal(season.qualiOrder, undefined, "the sprint spends its session: the GP cannot grid off it");
   assert.equal(season.qualiTrack, undefined);
+  assert.equal(season.qualiMode, undefined, "S7: the mode stamp goes with the order it described");
   assert.equal(S.qualiNext(season), true, "...so the Grand Prix qualifies again");
   assert.equal(S.qualiLabel(season), "QUALIFYING");
   S.award(season, field(4));

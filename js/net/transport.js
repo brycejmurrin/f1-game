@@ -465,6 +465,7 @@ const NetTransport = (function () {
     let queuedEvents = 0;
     let queuedBytes = 0;
     let openCount = 0;
+    const opened = {};   // kind -> its channel has opened
     let eventOut = [];   // critical EVENT payloads waiting for bufferedAmount to drain
 
     function messageBytes(data) {
@@ -532,6 +533,8 @@ const NetTransport = (function () {
         ch.onbufferedamountlow = () => { flushEventOut(); };
       }
       ch.onopen = () => {
+        if (opened[kind]) return;   // counted by DISTINCT kind, never by number of opens
+        opened[kind] = true;
         if (++openCount === CHANNELS.length) {
           ep.status = "open";
           Log.info("net", "rtc open");
@@ -577,8 +580,16 @@ const NetTransport = (function () {
       adopt(pc.createDataChannel(EVENT, { ordered: true }), EVENT);
     } else {
       pc.ondatachannel = (e) => {
-        const kind = e.channel.label === STATE ? STATE : EVENT;
-        adopt(e.channel, kind);
+        // Only the two labels the host creates, each once: an unknown or duplicate
+        // channel used to be adopted as EVENT (or replace the real one), so a
+        // second `state` made the guest report open with chans[EVENT] missing.
+        const label = e.channel.label;
+        if ((label !== STATE && label !== EVENT) || chans[label]) {
+          Log.warn("net", "ignoring data channel " + String(label).slice(0, 32));
+          try { e.channel.close(); } catch (err) { /* already closing */ }
+          return;
+        }
+        adopt(e.channel, label);
       };
     }
 
