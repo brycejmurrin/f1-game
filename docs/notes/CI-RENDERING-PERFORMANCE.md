@@ -1,5 +1,9 @@
 # CI + software rendering — research notes (2026-08)
 
+Screenshot / capture / remote-group **operator knobs** landed 2026-10-10:
+`docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md` (`shot --batch`, GL-aware
+workers, why Playwright Docker was skipped).
+
 Written while the CI gate (`.github/workflows/ci.yml`) was added, after several
 local Playwright runs died to their own timeouts rather than to failures.
 

@@ -21,8 +21,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { findUnpackedBinary } from "../scripts/unpacked-bin.mjs";
+import { createRequire } from "node:module";
 
 const DESKTOP = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const { resolveSiteDir } = createRequire(import.meta.url)("../lib/site.cjs");
 
 /** Launch env: soft GL + explicit no-sandbox for CI/xvfb; never inherit ELECTRON_RUN_AS_NODE. */
 function launchEnv() {
@@ -77,7 +79,13 @@ test("packaged app: window opens, isPackaged, title/version, canvas, frames, no 
     expect(packaged).toBe(true);
 
     const version = await electronApp.evaluate(async ({ app }) => app.getVersion());
-    const build = JSON.parse(fs.readFileSync(path.join(DESKTOP, "..", "version.json"), "utf8")).build;
+    // The app is stamped from the STAGED site's version.json (scripts/set-version.mjs
+    // readBuild, run by prebuild after `npm run stage`), which since 2026-10-10 carries
+    // the Pages build (2000 + rev-list count; tools/desktop/stage.mjs pagesBuild) — not
+    // the repo-root file, frozen at 1695. Read the same file set-version does.
+    const siteVer = path.join(resolveSiteDir(DESKTOP), "version.json");
+    const verSrc = fs.existsSync(siteVer) ? siteVer : path.join(DESKTOP, "..", "version.json");
+    const build = JSON.parse(fs.readFileSync(verSrc, "utf8")).build;
     expect(version).toBe(`1.0.${build}`);
 
     const window = await electronApp.firstWindow();
