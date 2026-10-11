@@ -113,6 +113,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `frustum.js` | `Frustum` | tag | shared frustum cull math (Frustum). |
 | `inst-cells.js` | `InstCells` | tag | InstCells: shared cell-set key cache for GLX + WGX + TLX cullInstances. |
 | `vertex-pack.js` | `VertexPack` | tag | packed world vertex channels. |
+| `chunk-bins.js` | `ChunkBins` | tag | ChunkBins: the ONE spatial binning of chunked world meshes. |
 | `gltf.js` | `GLTF` | tag | Binary glTF (.glb) loader. |
 | `assets.js` | `Assets` | tag | Assets: the baked asset pack loader. |
 | `driving-line.js` | `DrivingLine` | tag | DrivingLine: the suggested-line ribbon every racing game draws on the road, as DATA. |

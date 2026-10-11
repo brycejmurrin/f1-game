@@ -143,6 +143,7 @@ const FULL = [
   "js/render/shared/frustum.js",
   "js/render/shared/inst-cells.js",  // InstCells: shared cell-set cull cache (GLX+WGX+TLX)
   "js/render/shared/vertex-pack.js",   // VertexPack: the ONE definition of how a world vertex channel is quantised — GLX's interleaved layout plus the snorm/half primitives WGX and TLX pack with
+  "js/render/shared/chunk-bins.js",    // ChunkBins: the ONE centroid->cell binning of chunked meshes; its key is the cross-backend chunk identity (call-time read by the chunked builders)
   // GLX's shaders, pass modules and renderer are DEFERRED along with TLX/WGX.
   "js/render/gfx.js",
   "js/render/renderer-boot.js", // RendererBoot: backend selection, canary and fallback boot
@@ -480,6 +481,7 @@ const CARVIEW = [
   "js/render/shared/frustum.js",
   "js/render/shared/inst-cells.js",  // InstCells: shared cell-set cull cache (GLX+WGX+TLX)
   "js/render/shared/vertex-pack.js",   // VertexPack: the ONE definition of how a world vertex channel is quantised — GLX's interleaved layout plus the snorm/half primitives WGX and TLX pack with
+  "js/render/shared/chunk-bins.js",    // ChunkBins: the ONE centroid->cell binning of chunked meshes; its key is the cross-backend chunk identity (call-time read by the chunked builders)
   "js/render/glx/chunked.js",
   "js/render/glx/glx.js",
   "js/data/teams.js",
