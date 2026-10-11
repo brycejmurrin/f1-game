@@ -35,7 +35,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
-import { fnSource } from "../helpers/fn-source.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
@@ -51,7 +51,7 @@ globalThis.NetSession = NetSession;
 const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
 
 test("a host RESULT must be a bijection before its timing mutates any guest car", () => {
-  const netOrderSource = fnSource(src("js/game.js"), "function netOrder(order)");
+  const netOrderSource = symbolSource("function netOrder(order)");
   const classify = (verdict) => {
     const cars = [{ driverId: "a", finishT: 10 }, { driverId: "b", finishT: 20 }, { driverId: "c", finishT: 30 }];
     const netPlay = { active: () => true, ownsClassification: () => false, peerResult: () => verdict };
@@ -74,7 +74,7 @@ test("a host RESULT must be a bijection before its timing mutates any guest car"
 });
 
 test("host RESULT preserves authoritative laps and NC status, with optional fields for older payloads", () => {
-  const netOrderSource = fnSource(src("js/game.js"), "function netOrder(order)");
+  const netOrderSource = symbolSource("function netOrder(order)");
   const cars = [{ driverId: "winner", lap: 11, classified: true }, { driverId: "guest", lap: 10, classified: true }];
   let verdict;
   const netPlay = { active: () => true, ownsClassification: () => true, reportResult: (rows) => { verdict = rows; } };
@@ -385,6 +385,17 @@ test("QLIVE is bound to the sender on the host the same way", () => {
   s.deliver("qlive", { driverId: "drv1", t: 12.4, frac: 0.2 });
   s.deliver("qlive", { driverId: "drv0", t: 1.0, frac: 0.9 });
   assert.deepEqual(G.caughtQLive, [{ driverId: "drv1", t: 12.4, frac: 0.2 }]);
+});
+
+test("IN-RACE phase: the host caps one connection's QUALI+QLIVE at the lobby's shared rate (bug-hunt 2)", () => {
+  const { G, s } = started("host");
+  assert.equal(typeof NetPlay.QUALI_RATE, "number", "one shared constant with the lobby");
+  for (let i = 0; i < 3; i++) s.deliver("qlive", { driverId: "drv1", t: 5 + i, frac: 0.1 });
+  assert.equal(G.caughtQLive.length, 3, "a real client's rate passes untouched");
+  for (let i = 0; i < 200; i++) s.deliver("qlive", { driverId: "drv1", t: 9, frac: 0.2 });
+  assert.equal(G.caughtQLive.length, NetPlay.QUALI_RATE, "a flood stops at the cap (got " + G.caughtQLive.length + ")");
+  for (let i = 0; i < 50; i++) s.deliver("quali", { driverId: "drv1", t: 80 });
+  assert.equal((G.caughtQuali || []).length, 0, "QUALI shares the window with QLIVE");
 });
 
 // ---- the star does not launder a guest's declaration ------------------------
@@ -896,7 +907,7 @@ test("a HOST ignores a guest's claim that one of the host's AI retired", () => {
 });
 
 test("retireCar reports the host's own AI retirements on the reliable channel, not only the local car's", () => {
-  const body = fnSource(src("js/game.js"), "function retireCar(c, reason)");
+  const body = symbolSource("function retireCar(c, reason)");
   assert.match(body, /c\.local \|\| \(!c\.human && netPlay\.ownsRaceControl\(\)\)/, "the host owns its AI's word");
   assert.match(body, /driverId: c\.driverId/, "the guest finds the AI by driverId");
 });
@@ -1194,11 +1205,11 @@ test("the host's actual AI retirement reaches a guest, including one that binds 
   const hm = hs.sent.find((e) => e.t === "model").d, gm = gs.sent.find((e) => e.t === "model").d;
   hs.deliver("model", gm); gs.deliver("model", hm);
   // Execute the game's real sender, not a reproduction of its local/host gate.
-  vm.runInNewContext(fnSource(src("js/game.js"), "function retireCar(c, reason)") + ";retireCar(car, 'engine');", {
+  vm.runInNewContext(symbolSource("function retireCar(c, reason)") + ";retireCar(car, 'engine');", {
     car: host.cars[2], netPlay: hn, incidentSim: { release() {} }, track: host.track,
     smp: { hw: 8, t: [0, 0, 1] }, Tracks: { sample() {}, wallAt: () => 10 },
     clamp: M4.clamp, worldFromTrack: (s, x) => ({ x, z: s }), IDLE_RPM: 4000,
-    OvertakeMode: { reset() {} }, announce() {}, soundOn: false,
+    OvertakeMode: { reset() {} }, announce() {}, soundOn: false, pits: { clearArm() {} },   // retireCar clears a stale pit arm (bug-hunt 7.3)
   });
   const event = hs.sent.filter((e) => e.t === "lap" && e.d.driverId === "drv2").at(-1);
   assert.ok(event, "the host sends an AI retirement immediately");

@@ -5,7 +5,7 @@
 // Run: node --test tests/unit/ratchets.test.mjs   (npm run test:tooling-fast)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { load, measure, verdict, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, diffRatchets, compareToBase, loadAt } from "../../tools/check/ratchets.mjs";
+import { load, measure, verdict, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt } from "../../tools/check/ratchets.mjs";
 
 test("every ratcheted metric is at or under its ceiling", async () => {
   const v = verdict(await measure());
@@ -25,8 +25,20 @@ test("every ratcheted metric is at or under its ceiling", async () => {
 
 test("no ceiling is left far above the value it guards (one slack rule)", async () => {
   const v = verdict(await measure());
-  assert.deepEqual(v.loose.map((r) => `${r.file} ${r.metric}: ${r.value} but ceiling ${r.ceiling} (slack ${r.slack} > max(${SLACK_MIN}, ${SLACK_PCT * 100}%))`), [],
+  assert.deepEqual(v.loose.map(looseLine), [],
     "a ceiling drifted above its file and stopped ratcheting — node tools/check/ratchets.mjs --update");
+});
+
+test("a LOOSE line names the rule the entry is held to: its own slack, or the default", async () => {
+  // A `slack: 0` entry (rawColor, …) one under its ceiling used to print
+  // "slack 1 > max(60, 4%)" — the default rule, which it is NOT held to.
+  const v0 = (await measure({ files: {}, tree: { bareCatches: 1 } }))[0].value;
+  const exact = verdict(await measure({ files: {}, tree: { bareCatches: { ceiling: v0 + 1, slack: 0 } } }));
+  assert.equal(exact.loose.length, 1, "a slack-0 entry one above its value is LOOSE");
+  assert.equal(looseLine(exact.loose[0]), `(tree) bareCatches: ${v0} but ceiling ${v0 + 1} (slack 1 > the entry's own slack 0 (exact))`);
+  const dflt = verdict(await measure({ files: {}, tree: { bareCatches: v0 + 500 } }));
+  const want = Math.max(SLACK_MIN, Math.round((v0 + 500) * SLACK_PCT));
+  assert.equal(looseLine(dflt.loose[0]), `(tree) bareCatches: ${v0} but ceiling ${v0 + 500} (slack 500 > max(${SLACK_MIN}, ${SLACK_PCT * 100}%) = ${want})`);
 });
 
 test("the data names only known metrics, and game.js carries the carve metrics", () => {
@@ -159,20 +171,33 @@ test("--base names every ceiling that moved, and only a raise past the hook's ab
   const lines = [];
   assert.equal(compareToBase("HEAD", { current: head, print: (l) => lines.push(l) }), 0);
   assert.match(lines.at(-1), /0 ceiling\(s\) moved/);
-  // A raise within the absorb is reported, not fatal; past it, fatal.
+  // A raise within the absorb is reported, not fatal. Past it: fatal only when
+  // the SOURCE file's metric also grew past absorb (injectable sourceGrowthFn).
+  // A ceiling-only bump with no source growth is catch-up — warning, exit 0 —
+  // so a re-measure after other PRs landed lines (#1437 / ship HUD) can clear
+  // Structural guards without an admin merge.
   const raised = (n) => ({ ...head, files: { ...head.files, "js/game.js": { ...head.files["js/game.js"], lines: head.files["js/game.js"].lines + n } } });
   const out = [];
   assert.equal(compareToBase("HEAD", { current: raised(40), print: (l) => out.push(l) }), 0);
   assert.ok(out.some((l) => /RAISE  js\/game\.js lines: \d+ -> \d+ \(\+40\)/.test(l)), out.join("\n"));
+  const catchUp = [];
+  assert.equal(compareToBase("HEAD", {
+    current: raised(41), print: (l) => catchUp.push(l), sourceGrowthFn: () => 0,
+  }), 0, "ceiling catch-up with no source growth must not fail");
+  assert.ok(catchUp.some((l) => /catch-up \(source lines grew 0 ≤ 40/.test(l)), catchUp.join("\n"));
   const big = [];
-  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => big.push(l) }), 1);
+  assert.equal(compareToBase("HEAD", {
+    current: raised(41), print: (l) => big.push(l), sourceGrowthFn: () => 41,
+  }), 1, "real source growth past absorb still fails");
   assert.ok(big.some((l) => /past the 40-line commit-hook absorb/.test(l)));
-  // ADVISORY (a push run): the same raise is still named, and still says it
-  // needs a reason, but the exit is 0 — a push has no PR body to carry the
-  // reason, so failing there is a red that no push can clear. The PR run
+  // ADVISORY (a push run): the same real-growth raise is still named, and still
+  // says it needs a reason, but the exit is 0 — a push has no PR body to carry
+  // the reason, so failing there is a red that no push can clear. The PR run
   // for the same commits calls without --advisory and blocks as above.
   const adv = [];
-  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => adv.push(l), advisory: true }), 0);
+  assert.equal(compareToBase("HEAD", {
+    current: raised(41), print: (l) => adv.push(l), advisory: true, sourceGrowthFn: () => 41,
+  }), 0);
   assert.ok(adv.some((l) => /past the 40-line commit-hook absorb.*advisory on a push/.test(l)), adv.join("\n"));
   assert.match(adv.at(-1), /1 past the 40-line absorb \(advisory\)/);
   // An unreachable ref is a distinct exit, not a crash and not a pass.

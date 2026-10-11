@@ -154,10 +154,15 @@ function curveTrimFromSlider(v) {
 }
 // TOUCH SENSITIVITY -> the fraction of the LONG screen edge that is full lock.
 // Inverted: a high slider means a SHORTER drag does more. 0.12 (notch 5) is
-// what the drag mode has always used, so the default is a no-op; the range
-// brackets it either side. Real Racing 3's own players cluster low-to-medium
-// on the equivalent slider, so the travel below centre is the half that gets used.
-function touchRangeFromSlider(v) { return 0.24 + (0.06 - 0.24) * (v - 1) / 9; }
+// what the drag mode has always used (input.js TOUCH_RANGE_FRAC), so the default
+// is a no-op; the range brackets it either side, 0.24 at notch 1 and 0.06 at 10.
+// Knee at the default like WEIGHT / STEER RATE: one straight line has no 0.12 at 5.
+// Real Racing 3's own players cluster low-to-medium on the equivalent slider,
+// so the travel below centre is the half that gets used.
+function touchRangeFromSlider(v) {
+  return v <= 5 ? 0.24 + (0.12 - 0.24) * (v - 1) / 4
+                : 0.12 + (0.06 - 0.12) * (v - 5) / 5;
+}
 // DRAG SMOOTHING -> One-Euro min cutoff in Hz. 1 = OFF (bypasses the filter
 // outright, bit-identical to what shipped). Lower Hz = more smoothing, so the
 // slider runs the cutoff DOWN as it goes up.

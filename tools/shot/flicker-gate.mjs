@@ -304,10 +304,16 @@ async function measureSite(page, site, opts) {
   };
 }
 
+/** The sites a run measures. With --site, in the order GIVEN (it used to be table order, so `madrid-overpass-soffit` was always
+ *  first and "measure it after another site" could not be tested); without, the whole table. */
+export function chooseSites(wanted, sites = SITES) {
+  return wanted.length ? wanted.map((id) => sites.find((s) => s.id === id)).filter(Boolean) : sites;
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.help) { console.log("see the header of tools/shot/flicker-gate.mjs"); return 0; }
-  const chosen = opts.sites.length ? SITES.filter((s) => opts.sites.includes(s.id)) : SITES;
+  const chosen = chooseSites(opts.sites);
   const unknown = opts.sites.filter((id) => !SITES.some((s) => s.id === id));
   if (unknown.length) throw new Error(`unknown --site ${unknown.join(", ")}; known: ${SITES.map((s) => s.id).join(", ")}`);
   if (opts.list) {

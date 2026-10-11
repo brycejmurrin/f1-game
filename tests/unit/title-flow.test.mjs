@@ -18,7 +18,7 @@ function boot({ ensureNet = () => Promise.resolve(true), top = () => null, racin
     $: (id) => btns[id] || (btns[id] = { id, addEventListener() {} }),
   };
   const ctx = vm.createContext({
-    Log: { info() {}, warn() {} }, Promise, GameAudio: { uiSelect() {} },
+    Log: { info() {}, warn() {} }, Promise, GameAudio: { uiSelect() {} }, DeepLink: { create() {} },
     UiLayers: { inRace: () => racing, top: () => top() },
     GhostShare: { consumeHash: async () => { if (!hash.on) return null; log.consumed++; return { ok: true, track: "monza" }; } },
     DailyChallenge: { dayKey: () => "2026-10-10" }, Tracks: { LIST: [{ id: "monza" }] },
