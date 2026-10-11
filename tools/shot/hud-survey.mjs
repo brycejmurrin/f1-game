@@ -257,6 +257,11 @@ export function probeWithTransients({ src, arg }) {
   });
   force("hud-limits", (el) => { const s = el.querySelector("span"); if (s) s.textContent = "●●●○"; });
   force("hud-flag", (el) => { if (!el.textContent.trim()) el.textContent = "YELLOW · SECTOR 2"; });
+  // Under MOTION: REDUCED (the survey's default) every HUD descendant carries a 0.01 ms `transition: all`
+  // (css/hud.css), and a style change made in THIS task starts it: a read here still returns the OLD top /
+  // left of anything that reacts to the forced chips (INPUTS stepping below the limits chip). Finish
+  // them so the probe sees the settled geometry a player sees a frame later.
+  try { for (const a of document.getAnimations()) { try { a.finish(); } catch (_) { /* infinite or detached */ } } } catch (_) { /* old engine */ }
   try { return probe(arg); }
   finally { for (const [el, hidden, html] of saved.reverse()) { el.innerHTML = html; el.hidden = hidden; } }
 }
@@ -268,6 +273,9 @@ export function hudFitState() {
   for (const k of ["--hud-z-top", "--hud-z-bot", "--hud-z-dock", "--hud-z", "--hud-scale", "--hud-top-h"]) vars[k] = root.style.getPropertyValue(k).trim();
   return {
     vars, limitsLeft: "limitsLeft" in root.dataset,
+    // fitHud's gap-strip rungs (shorten, then drop under the map): read with the caps so a tower x gaps
+    // overlap can be told apart as "the strip never dropped" vs "it dropped and still clashes".
+    gapShort: "gapShort" in root.dataset, gapDrop: "gapDrop" in root.dataset,
     layoutSet: typeof HudLayout !== "undefined" ? HudLayout.shown() : null,
     bodyHud: (document.body.className.match(/\b(hud-[a-z-]+|cockpit-cam|desktop|in-race)\b/g) || []).join(" "),
   };
@@ -416,10 +424,16 @@ async function runGroup(browser, group, plan, log) {
         // cell's caps against the previous cell's (2026-10-04: --radio-top-*
         // identical before and after the slot fix).
         await cdpShot(page, null);
+        // THREE REFRESHES, not one: fitHud settles its gap-strip rungs over consecutive ticks (shorten the
+        // strip, then drop it under the map — each change re-keys the fit), and the sim is frozen here, so
+        // the game's own 10 Hz tick never supplies them. One pass left the strip in the tower's row on a
+        // cell where play drops it (2026-10-10, phoneL-cockpit: tower x gaps, gapShort/gapDrop both false).
         await page.evaluate((frac) => {
-          try { if (window.GameHud && GameHud.invalidateFit) GameHud.invalidateFit(); } catch { /* old tree */ }
           const a = window.__apex;
-          a.freeze(false); a.jump(frac, 60, 0); if (a.step) a.step(1 / 60, 2); a.freeze(true);
+          for (let pass = 0; pass < 3; pass++) {
+            try { if (window.GameHud && GameHud.invalidateFit) GameHud.invalidateFit(); } catch { /* old tree */ }
+            a.freeze(false); a.jump(frac, 60, 0); if (a.step) a.step(1 / 60, 2); a.freeze(true);
+          }
         }, plan.frac);
         await cdpShot(page, null);
         if (plan.shots) {

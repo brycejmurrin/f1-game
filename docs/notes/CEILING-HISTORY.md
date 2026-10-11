@@ -7,6 +7,17 @@ Every raise and lower was recorded as a comment beside its number; those comment
 are preserved here verbatim, per file, as the record of WHY each number moved.
 The live numbers are in `ratchets.json`; nothing here is asserted.
 
+2026-10-10 the HUD joins the ratchet: `js/ui/hud.js` (codeLines **1330**, lines
+**2246**) and `css/hud.css` (codeLines **1917**, lines **2109**), at ship `107d232f1`.
+Every open HUD branch was growing the pair (the band-allocator refactor +474 net,
+#1316 +76, #1351 +56, #1366 +55) because each phone bug got its own repair pass on
+top of the last. Owner decision: a HUD replacement deletes what it replaces in the
+same PR, and growth past the 40-line absorb says why
+(`docs/notes/HUD-CODE-AUDIT-2026-10-10.md` §net-lines rule).
+Re-measured on the merged tree before landing: #1366 (Phase 0 top-band fix) merged
+first and grew the pair, so the ceilings start at **1345 / 2281** (hud.js) and
+**1926 / 2120** (hud.css), ship `325100c05`.
+
 2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
@@ -3274,3 +3285,8 @@ Closing-chord centerline interpolation shifted start-seam props on indy/madrid/w
 `js/net/lobby.js` lines 1884 → **1887** on the feature tip (+3: two comment lines and `_peers.clear(); _ready.clear(); clashClear(); myRank = Infinity` when the room ends so relayed guest profiles do not survive into the next room), then 1891 → **1894** after syncing the deploy tip (base had already absorbed other lobby growth to 1891; the union is base + the three teardown lines).
 
 A later sync onto the deploy tip also moved `js/game.js` codeLines 4795 → **4798** and lines 8946 → **8943**, and `js/track/tracks.js` 703 → **702** (measure of the merged tree — take the base's ceilings where they lowered, raise codeLines for ship-tip growth). Deliberate lobby raise for the intentional onClose clear; the game.js codeLines raise is the sync cure, not an extraction.
+
+## 2026-10-11 — ship sync on #1398: HUD caps after #1386/#1387/#1395 (same remeasure as #1437)
+
+`js/ui/hud.js` codeLines 1345 → **1393** (+48) and lines 2281 → **2377** (+96); `css/hud.css` codeLines 1926 → **1953** (+27) and lines 2120 → **2150** (+30). Ship tip `1a980f907` carried the larger HUD files without the raise (#1386/#1387/#1395), so Structural guards was OVER. This branch synced ship to clear CONFLICTING and re-snapped the ceilings to the measured tree — intentional remeasure, not extraction. Parallel intentional raise: #1437.
+

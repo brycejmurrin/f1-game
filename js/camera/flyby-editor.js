@@ -587,7 +587,8 @@ function flash(btn, msg) {
 function setPose(end, r) {
   const s = ensure()[sel];
   if (!s || !r || !r.shot) return "";
-  s.eye[end] = r.shot.eye[0]; s.look[end] = r.shot.look[0]; s.fov[end] = r.shot.fov[0];
+  s.eye[end] = r.shot.eye[0]; s.look[end] = r.shot.look[0];
+  s.fov[end] = Math.min(FOV.max, Math.max(FOV.min, r.shot.fov[0]));   // the free camera flies 20-110°
   edited();
   return "Shot " + (sel + 1) + (end ? " ends" : " starts") + " here (round trip: eye " + r.err.eye + " m, look " + r.err.look + " m).";
 }
