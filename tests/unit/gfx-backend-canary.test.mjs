@@ -5508,7 +5508,11 @@ test("lamp static map: car-only rebuilds copy the static props depth and draw th
   assert.match(sh, /const lampStaticRT = lampStaticOn \? makeDepthTarget\(LAMP_SIZE, "TLXLampStatic", false, true\) : null;/);
   // AUTO is WebGPU only: three's WebGL copy does five synchronous gl.getParameter
   // reads per call (census 289: 2 s of WebGL2 spike frames inside lampCarsBegin).
-  assert.match(sh, /let lampStaticOn = isWebGPU;/, "the depth copy must not default on for three's WebGL2 backend");
+  // C1 (TLX-PERF-HUNT 2026-10-11): AUTO is on for both backends; on WebGL2 it stays on only
+  // when seedUnpackCache() filled three's UNPACK_* cache with writes (no sync getParameter).
+  assert.match(sh, /let lampStaticOn = true, lampStaticForced = false;/, "the depth copy defaults on (C1)");
+  assert.match(sh, /if \(lampStaticOn && !isWebGPU && !seedUnpackCache\(\) && !lampStaticForced\) lampStaticOn = false;/,
+    "three's WebGL2 backend takes the copy only once the UNPACK_* cache is seeded (the census-289 getParameter spike)");
   // The car-only pass: copy first, then draw onto the copied depth with the clear off,
   // and autoClear restored in a finally so a throwing caster cannot leave it off.
   const cars = fnBody(sh, "lampCarsBegin");
@@ -5520,7 +5524,8 @@ test("lamp static map: car-only rebuilds copy the static props depth and draw th
   // shadow-pass: cars-only on a car-only change, the full pass otherwise, and the
   // static map refreshed after every full pass (a lamp change or the first).
   const lamp = fnBody(code("js/render/shared/shadow-pass.js"), "lampPass");
-  assert.match(lamp, /const _carsOnlyPass = _carOnly && G\.gfx\.lampCarsBegin && G\.gfx\.lampCarsBegin\(_mFlVP, flBest\);/);
+  // C2: `let` — a lamp change renders the static map first, then reassigns it to the copy + cars.
+  assert.match(lamp, /let _carsOnlyPass = _carOnly && G\.gfx\.lampCarsBegin && G\.gfx\.lampCarsBegin\(_mFlVP, flBest\);/);
   assert.match(lamp, /if \(!_carsOnlyPass\) G\.gfx\.lampShadowBegin\(_mFlVP, flBest\);/);
   assert.match(lamp, /if \(!_carsOnlyPass && G\.gfx\.lampStaticBegin && G\.gfx\.lampStaticBegin\(_mFlVP\)\) \{/);
 });

@@ -152,7 +152,9 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   assert.ok(draw, "body + wheels on _groundMat for every procedural car");
   // The caster passes live in js/render/shared/shadow-pass.js (teamMesh through deps, the player through G).
   const sp = read("js/render/shared/shadow-pass.js");
-  assert.match(sp, /if \(_hasLivePlayerShadow\) _castPlayer\(\);/);
+  // C8 (TLX-PERF-HUNT 2026-10-11): the car pass gates the player on distance like the AI cars.
+  assert.match(sp, /if \(_carPlayerIn\) _castPlayer\(\);/);
+  assert.match(sp, /const _carPlayerIn = _hasLivePlayerShadow && /);
   assert.match(sp, /G\.gfx\.castShadow\(_playerCockpit \|\| deps\.teamMesh\(G\.player\.team, G\.player, true\), _playerMat\(\)\)/,
     "the player casts the silhouette at livePlayerMat unless a first-person view resolved the cockpit body");
   assert.match(sp, /G\.gfx\.castShadow\(deps\.teamMesh\(_shadowTeams\[i\], _shadowCars\[i\], true\), _shadowMats\[i\]\)/);

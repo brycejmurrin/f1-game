@@ -3436,11 +3436,13 @@ const TLX = (function () {
 
         shadowBegin(vp) { if (shadowSys) shadowSys.shadowBegin(vp); },
         castShadow(mesh, model) { if (shadowSys) shadowSys.castShadow(mesh, model); },
-        castShadowChunked(mesh, model) {
+        // reach = [x, y, z, r] (the lamp passes, shadow-pass.js): also drop chunks
+        // whose AABB lies beyond r of that point. World space: props cast at identity.
+        castShadowChunked(mesh, model, reach) {
           if (!shadowSys) return;
           const S = shadowSys.S;
           if (mesh && mesh.chunks && chunkedSys && S.depthPassOn) {
-            const n = chunkedSys.cull(mesh, S.castCullVP || S.lightVP, null, 0);
+            const n = chunkedSys.cull(mesh, S.castCullVP || S.lightVP, reach || null, reach ? reach[3] : 0);
             const vis = chunkedSys.visList;
             for (let i = 0; i < n; i++) shadowSys.castShadow(vis[i].wrap, model);
             return;

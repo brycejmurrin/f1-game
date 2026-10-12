@@ -89,10 +89,12 @@
       lampCarOnly: 0,            // L1: car-only rebuilds served from the copy
     };
 
-    /** Depth target: color attachment unused (colorWrite off on the caster
-     * material; three's RenderTarget always carries one — its own shadow
-     * pipeline pays the same) + a compare-mode DepthTexture the lit pass
-     * samples. LinearFilter + LessEqualCompare = guaranteed hardware 2x2 PCF
+    /** Depth target: a compare-mode DepthTexture the lit pass samples, plus the
+     * colour attachment three's RenderTarget cannot omit (r186 sizes a target
+     * from textures[0]). Only the desktop-WebGL2 sun's R32F PCSS copy
+     * (hdrColor) is ever read, so every other map carries R8 — the smallest
+     * format both backends render to (r8unorm / R8), 1/4 of RGBA8's clear,
+     * store and VRAM. LinearFilter + LessEqualCompare = guaranteed hardware 2x2 PCF
      * per tap on ES 3.0, exactly GLX's setup (js/render/glx/shadow.js). */
     function makeDepthTarget(size, name, hdrColor, floatDepth) {
       const depthTexture = new THREE.DepthTexture(size, size);
@@ -109,6 +111,9 @@
         // R32F: the blocker reads this copy of the depth, and a half float
         // steps 2^-11 in [0.5,1) — a ~0.28 m PCSS error at a 570 m span.
         opts.type = THREE.FloatType;
+        opts.format = THREE.RedFormat;
+      } else {
+        opts.type = THREE.UnsignedByteType;
         opts.format = THREE.RedFormat;
       }
       const rt = new THREE.RenderTarget(size, size, opts);
@@ -129,17 +134,33 @@
     // now render into lampStaticRT when the LAMP changes; a car-only rebuild
     // copies that depth into lampRT and draws only the cars on top. lampRT stays
     // the sampled map, so no shader, sampler or backend-parity change.
-    // AUTO = WebGPU only: three's WebGL copyTextureToTexture reads five UNPACK_*
-    // states with gl.getParameter (cached after the first copy); in Chrome that
-    // first read is a synchronous GPU-process round trip, and census 289 (real
-    // Metal, WebGL2 leg) spent 2 s of spike frames in it behind the queued shader
-    // links. apex26.tlxLampStatic=0 forces the full rebuild, =1 forces on.
-    let lampStaticOn = isWebGPU;
+    // AUTO = on, both backends (phones excluded below). three's WebGL
+    // copyTextureToTexture saves and restores five UNPACK_* states through
+    // WebGLState.getParameter, which calls gl.getParameter only for a key its
+    // cache has never held; in Chrome that read is a synchronous GPU-process
+    // round trip, and census 289 (real Metal, WebGL2 leg) spent 2 s of spike
+    // frames in the first one behind the queued shader links. seedUnpackCache
+    // writes the five keys at their GL defaults through WebGLState.pixelStorei
+    // (it fills the cache with a write, no read), so no copy ever reads GL; if
+    // the seed cannot run, AUTO stays off on WebGL. Only resetState() empties
+    // that cache, and nothing calls it (a context restore reloads the page).
+    // apex26.tlxLampStatic=0 forces the full rebuild, =1 forces on.
+    function seedUnpackCache() {
+      try {
+        const be = renderer.backend, st = be && be.state, gl = be && be.gl;
+        if (!gl || !st || typeof st.pixelStorei !== "function" || !st.parameters) return false;
+        const keys = [gl.UNPACK_ROW_LENGTH, gl.UNPACK_IMAGE_HEIGHT, gl.UNPACK_SKIP_PIXELS, gl.UNPACK_SKIP_ROWS, gl.UNPACK_SKIP_IMAGES];
+        for (let i = 0; i < keys.length; i++) st.pixelStorei(keys[i], 0);
+        return keys.every((k) => st.parameters[k] === 0);
+      } catch (_) { return false; }
+    }
+    let lampStaticOn = true, lampStaticForced = false;
     try {
       const v = localStorage.getItem("apex26.tlxLampStatic");
-      if (v === "0" || v === "1") lampStaticOn = v === "1";
+      if (v === "0" || v === "1") { lampStaticOn = v === "1"; lampStaticForced = true; }
     } catch (_) { /* no storage: AUTO */ }
     if (isMobile || typeof renderer.copyTextureToTexture !== "function") lampStaticOn = false;
+    if (lampStaticOn && !isWebGPU && !seedUnpackCache() && !lampStaticForced) lampStaticOn = false;
     const lampRT = isMobile ? null : makeDepthTarget(LAMP_SIZE, "TLXLampShadow", false, lampStaticOn);
     const lampStaticRT = lampStaticOn ? makeDepthTarget(LAMP_SIZE, "TLXLampStatic", false, true) : null;
     const _lampStaticVP = new Float32Array(16);
@@ -205,13 +226,15 @@
     // Depth-only caster material: constant-black fragment, depth is the
     // payload. DoubleSide == GLX's gl.disable(CULL_FACE) in every shadow pass
     // — back faces land in the map so contact shadows don't peter-pan.
-    // NOTE: colorWrite must stay TRUE — the WebGL backend applies the next
+    // NOTE: colorWrite must stay TRUE on WebGL — that backend applies the next
     // render's CLEAR under whatever glColorMask the last draw left, so a
     // colorWrite:false caster ran the main canvas clear fully masked (black
     // sky, geometry unaffected because each lit draw re-enables the mask).
-    // The maps' color attachments are throwaway, so writing black is free.
+    // A WebGPU clear is an attachment load op no pipeline writeMask touches,
+    // so there the unread colour attachment is not written at all.
     const depthMat = new THREE.MeshBasicNodeMaterial();
     depthMat.colorNode = colorPcss ? TSL.vec4(TSL.depth, 0.0, 0.0, 1.0) : TSL.vec3(0.0);
+    depthMat.colorWrite = !isWebGPU;
     depthMat.side = THREE.DoubleSide;
     depthMat.fog = false;
     depthMat.lights = false;
@@ -561,7 +584,8 @@
       endPass(lampRT);
     }
 
-    // L1: the static half. Called on a LAMP change, after the full pass.
+    // L1: the static half. Called on a LAMP change, before the lamp map, which
+    // lampCarsBegin then builds as this depth plus the cars (shadow-pass.js).
     function lampStaticBegin(lightVP) {
       if (!lampStaticRT || !lampStaticOn) return false;
       _lampStaticValid = false;
