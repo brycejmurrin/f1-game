@@ -309,3 +309,50 @@ is too small above ~108 m SHADOW DISTANCE (unfixed: changes output).
    canvas size between a loaded and a quiet box (1152×648 vs 1280×720). A pixel A/B needs
    `backend-compare.mjs` (one deterministic scene) and the same-tree floor captured in the
    same session.
+
+## Tier 2, 2026-10-12 (PR #1447, `cursor/tlx-perf-tier2-6d1e`)
+
+Bryce: "Work on the next findings asap". Four lanes, two at a time, each look-changing
+item behind a `localStorage` kill switch; `tools/shot/backend-compare.mjs` gained `--ls`
+pins so each switch can be A/B'd on the same deterministic scene.
+
+| lane | landed | skipped (reason) |
+|---|---|---|
+| lit shader | B10 (one-flip world normal — the double flip was a BUG: r186 already flips on DoubleSide, so back faces were lit with an inverted normal vs GLX), B10b (constant env-cube uv: the default reflectVector chain was dead), B11 (analytic near-road gradient, `apex26.tlxRoadNormalV2`), B12 (cloud/mist octave-2 skip, bit-identical) | B14 (r186 `NodeBuilder._getBindGroup` keys the shared group by `nodeUniform.id`, which texture bindings lack — needs a vendor patch), B1, B5 |
+| post chain | D7 (SSAO in the godray pass's alpha, `tlxAoFold`), D6 bloom RG11B10F behind a renderability gate (`tlxBloom11`), D8 (mirror inset in the FXAA pass, `tlxMirFold`), D11 (scalar projection terms) | D4 (parity with GLX's look) |
+| shadows | the AI car-pass bound bug (box-corner reach; rivals above ~108 m SHADOW DISTANCE get their shadow back), C5 second copy, C7 moon-only cadence (`moonShadowCadence`) | C4 (WebGPU forbids a sub-region depth copy; the along-sun term is unsnapped) |
+| sky / mirror / fx | E1 cloud-noise cache (768² RGBA16F, banded re-bake, `tlxSkyCache`), E9 mirror lamp cap + held re-rank (`tlxMirLampCap`), blob-quad zero-alpha discard | E4, E8 |
+
+Passes per frame after D7/D8: desktop day 19 → 16, phone day 13 → 10. Sky: day 17 noise
+calls per sky pixel → 1 + 2–3 fetches, night 8 → 0 + 2.
+
+### Evidence
+
+- Software-sky A/B (`montreal 0.12 eye`, merged tip in a worktree vs the fix tree; day
+  floor MAD 0.589): day MAD 0.830 (B11's road texture), night 0.630 (floor); D7 alone
+  0.542, B10+B12 alone 0.068 (under the floor); night with the fold on vs off 0.014.
+- Hardware-sky A/B (`--ls apex26.tlxForceHw=sky` on BOTH trees): day MAD 0.923 / sky
+  band 0.685 against 0.638 / 0.687 between two trees whose sky code is byte-identical —
+  the cloud cache is at the floor; night MAD 1.133, mean luma −0.12.
+- Probes (plain and `tlxForceHw=1`): PASS, gpuErrors 0, only the pre-existing
+  `reading 'total'` TypeError. Remote `gfx` 4/4 and `tiny` 4/4; `ci.yml` 42 jobs green incl.
+  the Metal renderer specs; gpu-census macos-latest Verdict passed on all four legs with
+  gpuErrors 0.
+
+### Three more lessons
+
+4. **Three merges same-uuid texture nodes into one sampler, and the composite is compiled
+   once.** D7's first cut bound the godray target to both the AO and godray slots; the
+   night (unfolded) frames then read the white fallback through the godray slot and added
+   (1,1,1) to every pixel (night luma 85.6 → 175.9). The same hazard pre-existed for
+   bloom-off + godray-off (both `blackTex`). Every composite slot now holds a distinct
+   texture; an A/B with the fold on and off is the check.
+5. **A worktree runs its own copy of the tools.** The base capture for the hardware-sky
+   A/B ran the base tree's `backend-compare.mjs`, which predates `--ls`, so it silently
+   rendered the software fallback sky (no clouds) and looked like a sky regression (sky
+   band MAD 30). Copy the tool into the worktree, or pin through the init script, before
+   comparing trees.
+6. **Census `meanLuma` is tier-confounded.** The governor settles at a different tier per
+   run (tier 4 sheds post effects): the TLX/WebGL2 leg read 47.6 at tier 4 and 56.5 at
+   tier 3 for the same look. Read `gov:` next to `meanLuma`; the census is a gpuErrors +
+   Verdict gate, the frozen A/B is the look instrument.
