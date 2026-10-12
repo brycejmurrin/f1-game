@@ -1801,15 +1801,24 @@ const TLX = (function () {
         // per-batch full-size copy of srcMatrices was Σ instances x 64 B of heap
         // for a pack that lives one call. A newer shadow cull un-freshens the
         // previous owner, so a cast can never lend another batch's pack.
+        // C5 (second copy): once the batch has a shadow caster, pack STRAIGHT
+        // into its instanceMatrix.array (tlx-shadow castInstanced publishes it
+        // as _shCasterArr and skips its copy when handed that array back). The
+        // scratch only serves a batch's first shadow cull, before its caster exists.
         const src = batch.srcMatrices;
         let dst = batch.packMatrices;
         if (shadow) {
-          let sp = cullInstances._shPack;
-          if (!sp || sp.length < src.length) sp = cullInstances._shPack = new Float32Array(src.length);
-          const prev = cullInstances._shOwner;
-          if (prev && prev !== batch) { prev._shadowFresh = false; prev._shadowPack = null; }
-          cullInstances._shOwner = batch;
-          dst = batch._shadowPack = sp;
+          const ca = batch._shCasterArr;
+          if (ca && ca.length >= src.length) dst = ca;
+          else {
+            let sp = cullInstances._shPack;
+            if (!sp || sp.length < src.length) sp = cullInstances._shPack = new Float32Array(src.length);
+            const prev = cullInstances._shOwner;
+            if (prev && prev !== batch && prev._shadowPack === sp) { prev._shadowFresh = false; prev._shadowPack = null; }
+            cullInstances._shOwner = batch;
+            dst = sp;
+          }
+          batch._shadowPack = dst;
         }
         // C3b — LAMP REACH (opts.reach = [x, y, z, radius], shadow culls only): a
         // cell wholly beyond the lamp radius casts onto no receiver the lit loop
@@ -1837,8 +1846,8 @@ const TLX = (function () {
             n++;
           }
         }
-        // upload:false — CPU pack only. The sun/lamp shadow path copies
-        // _shadowPack into a SECOND InstancedMesh (castShadowInstanced);
+        // upload:false — CPU pack only, into a SECOND InstancedMesh's array
+        // (the batch's shadow caster; the scratch is copied in by castShadowInstanced);
         // writing the lit imesh here was a full setMatrixAt walk discarded
         // when the camera cull overwrote it later in the same frame.
         // Do not touch _cullPlanes: that cache means "this pack is on the

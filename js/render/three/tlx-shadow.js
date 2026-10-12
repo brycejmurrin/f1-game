@@ -348,8 +348,11 @@
         castScene.add(m);
       }
       const dst = m.instanceMatrix.array;
+      // C5: tlx.js cullInstances packs the next shadow cull of this batch
+      // straight into this array; when it already did (src === dst), no copy.
+      batch._shCasterArr = dst;
       const src = culled && batch.packMatrices ? batch.packMatrices : batch.srcMatrices;
-      if (src && src.length >= n * 16) {
+      if (src === dst) { /* packed in place by the shadow cull */ } else if (src && src.length >= n * 16) {
         for (let i = 0, o = 0; i < n; i++, o += 16) {
           for (let k = 0; k < 16; k++) dst[o + k] = src[o + k];
         }
@@ -421,6 +424,7 @@
     // The batch is gone (track switch): its caster goes with it, so a hidden
     // mesh never pins a freed geometry alive (the parkedGeo rule, per batch).
     function freeInstanced(batch) {
+      if (batch) batch._shCasterArr = null;   // C5: never pack into a freed caster
       const m = batch && iByBatch.get(batch);
       if (!m) return;
       iByBatch.delete(batch);
