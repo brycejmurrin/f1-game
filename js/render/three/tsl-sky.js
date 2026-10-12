@@ -55,7 +55,7 @@
       Fn, If, uniform,
       float, vec2, vec3, vec4,
       screenUV, screenCoordinate,
-      fract, floor, mod, dot, mix, smoothstep, clamp, pow, exp,
+      fract, floor, dot, mix, smoothstep, clamp, pow, exp,
       abs, max, min, normalize, length, sin, atan, step,
     } = TSL;
 
@@ -130,6 +130,120 @@
       lightning:     uniform(0.0),
     };
 
+    /* UNIFORM-ONLY TERMS, hoisted (TLX perf hunt E5). Every value below is a
+     * pure function of the U uniforms, so the GPU used to evaluate it once per
+     * uncovered sky pixel (~0.5 M a frame at 1080p, again in the mirror). They
+     * are derived ONCE per update() in derive(), in the same arithmetic as the
+     * per-pixel graph did (glsl-sky.js SKY_FS still spells them per pixel and
+     * stays the source of truth; only float rounding may differ in the last
+     * ulp). The noise, the ray and every per-pixel term are untouched. */
+    const v3 = () => uniform(new THREE.Vector3());
+    const v2 = () => uniform(new THREE.Vector2());
+    const D = {
+      sunE: uniform(0.0), daytime: uniform(0.0), twilight: uniform(0.0),
+      nightSky: uniform(0.0), overcast: uniform(0.0),
+      zenithO: v3(), horizonO: v3(), dayClear: uniform(0.0),
+      goldenK: uniform(0.0), goldenColor: v3(), lowK: uniform(0.0), lowColor: v3(),
+      drift1: v2(), drift2: v2(), bankDrift: v2(), thickOff: v2(),
+      covLo: uniform(0.0), cloudRich: uniform(0.0), defMix: uniform(0.0),
+      bankThresh: uniform(0.0), bankK: uniform(0.0),
+      topK: uniform(0.0), topTint: v3(), topWarm: uniform(0.0), cloudBot: v3(),
+      silverK: uniform(0.0), silverCol: v3(), washCol: v3(),
+      mieDamp: uniform(0.0), mieK: uniform(0.0),
+      sunHLen: uniform(0.0), sunHn: v2(), hGlowCol: v3(),
+      coronaDamp: uniform(0.0), golden: uniform(0.0), sunWarm: v3(), aurExp: uniform(0.0),
+      aurCol: v3(), squash: uniform(0.0), discOut: uniform(0.0), discIn: uniform(0.0),
+      discCore: v3(), starThresh: uniform(0.0), dthOff: uniform(0.0),
+    };
+    const sstep = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+    const clamp01 = (x) => Math.min(1, Math.max(0, x));
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const set3 = (u, x, y, z) => u.value.set(x, y, z);
+    function derive() {
+      const sd = U.sunDir.value, sc = U.sunColor.value, ze = U.zenith.value, ho = U.horizon.value;
+      const cloud = U.cloud.value;
+      // Sun elevation, the day / twilight / night gates and overcast (SKY_FS head).
+      const sunE = clamp01(sd.y * 1.4);
+      const night = U.stars.value >= 0.5 ? 1 : 0;   // step(0.5, uStars)
+      const day0 = sstep(0.35, 0.60, sunE);
+      const daytime = day0 * (1 - night);
+      const twilight = sstep(0.02, 0.22, sunE) * (1 - day0) * (1 - night);
+      const overcast = sstep(0.5, 1.0, cloud);
+      D.sunE.value = sunE; D.daytime.value = daytime; D.twilight.value = twilight;
+      D.nightSky.value = night; D.overcast.value = overcast;
+      // Gradient: the overcast-flattened zenith / horizon (night lid = (z+h)*1.25).
+      const kz = overcast * 0.75, kh = overcast * 0.60;
+      const lid = (a, b) => (a + b) * 1.25;
+      const gz = [lerp(0.55, lid(ze.x, ho.x), night), lerp(0.56, lid(ze.y, ho.y), night), lerp(0.58, lid(ze.z, ho.z), night)];
+      const gh = [lerp(0.58, lid(ze.x, ho.x), night), lerp(0.58, lid(ze.y, ho.y), night), lerp(0.60, lid(ze.z, ho.z), night)];
+      set3(D.zenithO, lerp(ze.x, gz[0], kz), lerp(ze.y, gz[1], kz), lerp(ze.z, gz[2], kz));
+      set3(D.horizonO, lerp(ho.x, gh[0], kh), lerp(ho.y, gh[1], kh), lerp(ho.z, gh[2], kh));
+      D.dayClear.value = daytime * (1 - overcast);
+      // Golden hour + low-sun band: the sun-only factors and colours.
+      D.goldenK.value = (1 - sstep(0.0, 0.72, sunE)) * (1 - overcast * 0.9);
+      const gc = clamp01(sunE * 2.5);
+      set3(D.goldenColor, lerp(0.70, 0.92, gc), lerp(0.22, 0.55, gc), lerp(0.04, 0.16, gc));
+      D.lowK.value = (1 - sstep(0.0, 0.60, sunE)) * (1 - overcast * 0.85);
+      const lc = clamp01(sunE * 3.0);
+      set3(D.lowColor, lerp(0.90, 1.0, lc), lerp(0.26, 0.66, lc), lerp(0.03, 0.12, lc));
+      // Clouds: drift, coverage window, enrichment gates, the lit model's colours.
+      const cT = U.time.value * U.cloudSpeed.value;
+      D.drift1.value.set(cT * 0.0028, cT * 0.0011);
+      D.drift2.value.set(cT * 0.0017, cT * 0.0023);
+      D.bankDrift.value.set(cT * 0.0028 * 1.4, cT * 0.0011 * 1.4);
+      D.thickOff.value.set(cT * 0.00035 + 3.1, 1.7);
+      D.covLo.value = 0.50 - cloud * 0.42;
+      const rich = Math.max(daytime, twilight);
+      D.cloudRich.value = rich;
+      D.defMix.value = clamp01(rich * 0.85 * U.cloudDef.value);
+      D.bankThresh.value = 0.46 - cloud * 0.30 - twilight * 0.10;
+      D.bankK.value = rich * (1 - overcast * 0.5);
+      const sunBright = Math.max(sc.x, Math.max(sc.y, sc.z));
+      const eff = lerp(sunBright, Math.min(sunBright, 0.55), overcast);
+      const golden = 1 - sstep(0.0, 0.45, sunE);   // goldenC == golden (the same expression)
+      D.golden.value = golden;
+      D.topK.value = eff * 0.62 + 0.38;
+      const tk = lerp(1.45, 2.6, golden);
+      set3(D.topTint, sc.x * tk, sc.y * tk, sc.z * tk);
+      D.topWarm.value = (1 - sunE) * (golden * 0.40 + 0.55) * (1 - overcast);
+      const bk = eff * 0.44 + 0.24, bw = golden * 0.22 * (1 - overcast) * (twilight * 1.3 + 1.0), bo = overcast * 0.60;
+      set3(D.cloudBot,
+        lerp(0.26 * bk + sc.x * 0.9 * bw, 0.19, bo),
+        lerp(0.27 * bk + sc.y * 0.42 * bw, 0.19, bo),
+        lerp(0.34 * bk + sc.z * 0.5 * bw, 0.22, bo));
+      D.silverK.value = (golden + 0.55) * (1 - overcast * 0.7);
+      const sk = (twilight * 1.6 + 1.3) * U.cloudSilver.value;
+      set3(D.silverCol, sc.x * sk, sc.y * sk, sc.z * sk);
+      const wk = twilight * 0.30 * (1 - overcast * 0.6);
+      set3(D.washCol, sc.x * wk, sc.y * wk, sc.z * wk);
+      // Mie + the horizon glow in the sun's compass direction.
+      const mieDamp = 1 - overcast * 0.85;
+      D.mieDamp.value = mieDamp;
+      D.mieK.value = 0.22 * mieDamp * U.mieScatter.value;
+      const hLen = Math.hypot(sd.x, sd.z);
+      D.sunHLen.value = hLen;
+      if (hLen > 0.05) D.sunHn.value.set(sd.x / hLen, sd.z / hLen); else D.sunHn.value.set(0, 0);
+      const hk = 0.22 * hLen * mieDamp;
+      set3(D.hGlowCol, sc.x * hk, sc.y * hk, sc.z * hk);
+      // Corona, aureole and disc.
+      const cd = (1 - overcast * 0.92) * (1 - night);
+      D.coronaDamp.value = cd;
+      const sw = [lerp(sc.x, sc.x * 1.18, golden), lerp(sc.y, sc.y * 0.52, golden), lerp(sc.z, sc.z * 0.24, golden)];
+      set3(D.sunWarm, sw[0], sw[1], sw[2]);
+      D.aurExp.value = lerp(20.0, 8.0, golden);
+      const ak = (golden * 0.55 + 0.55) * cd * U.coronaAureole.value;
+      set3(D.aurCol, sw[0] * ak, sw[1] * ak, sw[2] * ak);
+      D.squash.value = lerp(1.0, lerp(1.0, 1.6, golden), U.sunSquash.value);
+      D.discOut.value = lerp(0.018, 0.028, golden) * U.sunDiscSize.value;
+      D.discIn.value = U.sunDiscSize.value * 0.006;
+      set3(D.discCore, lerp(2.3, sw[0] * 2.8, golden), lerp(2.2, sw[1] * 2.8, golden), lerp(1.9, sw[2] * 2.8, golden));
+      // Star spawn window; the dither's time step (float32 like the GPU's floor).
+      D.starThresh.value = Math.min(0.9994, 1.0 - U.starDensity.value * (1.0 - 0.9968));
+      const step60 = Math.floor(Math.fround(Math.fround(U.time.value) * 60.0));
+      D.dthOff.value = (step60 - 64 * Math.floor(step60 / 64)) * 5.588238;   // GLSL mod(): never negative
+    }
+    derive();
+
     /** drawSky(frameSky) -> uniform values. Field names + defaults mirror the
      * js/render/glx/glx.js upload exactly (each frameSky field maps to the same-
      * named uniform; stars is the bool->float night flag). Takes whatever
@@ -166,6 +280,7 @@
       s1(U.cityGlowReach, sky.cityGlowReach, 1);
       s1(U.cloudDef, sky.cloudDef, 1);
       s1(U.lightning, sky.lightning, 0);
+      derive();
     }
 
     /* the fragment (SKY_VS ray math + SKY_FS in js/render/glx/shaders/glsl-sky.js) */
@@ -183,18 +298,15 @@
       const sd = max(dot(dir, U.sunDir), 0.0).toVar();
 
       // Sun-elevation factor: 0 = sun on/below horizon, 1 = overhead noon.
-      const sunE = clamp(U.sunDir.y.mul(1.4), 0.0, 1.0).toVar();
+      // All five gates are derive()d uniforms (SKY_FS spells them per pixel).
+      const sunE = D.sunE;
       // Bright-DAY gate (sun well up, ~25°+) + TWILIGHT gate (dawn/dusk).
-      const daytime = smoothstep(0.35, 0.60, sunE).toVar();
-      const twilight = smoothstep(0.02, 0.22, sunE).mul(daytime.oneMinus()).toVar();
       // NIGHT gate: at night uSunDir points HIGH (it doubles as the moon key
-      // light) which reads as midday to sunE — zero the sun-driven day/
-      // twilight ENRICHMENTS so no daytime sun/cumulus paint among the stars.
-      const nightSky = step(0.5, U.stars).toVar();
-      daytime.mulAssign(nightSky.oneMinus());
-      twilight.mulAssign(nightSky.oneMinus());
+      // light) which reads as midday to sunE — derive() zeroes the sun-driven
+      // day/twilight ENRICHMENTS so no daytime sun/cumulus paint among the stars.
+      const daytime = D.daytime, twilight = D.twilight, nightSky = D.nightSky;
       // Overcast factor: grey-shift + corona damping under heavy cloud.
-      const overcast = smoothstep(0.5, 1.0, U.cloud).toVar();
+      const overcast = D.overcast;
 
       // --- Sky gradient ---
       const c = vec3(0.0).toVar();
@@ -204,12 +316,8 @@
         // overcast ceiling, and overcast was the one cloud term the nightSky gate
         // never covered — a night+rain sky painted a pale grey lid ~20x the
         // authored zenith. One common target at night so it stays a FLATTEN.
-        // Mirrors js/render/glx/shaders/glsl-sky.js.
-        const nightLid = U.zenith.add(U.horizon).mul(1.25);
-        const greyZ = mix(vec3(0.55, 0.56, 0.58), nightLid, nightSky);
-        const greyH = mix(vec3(0.58, 0.58, 0.60), nightLid, nightSky);
-        const zenithO = mix(U.zenith, greyZ, overcast.mul(0.75));
-        const horizonO = mix(U.horizon, greyH, overcast.mul(0.60));
+        // Mirrors js/render/glx/shaders/glsl-sky.js (zenithO / horizonO: derive()).
+        const zenithO = D.zenithO, horizonO = D.horizonO;
         // SKY GRADIENT knob (def 0.35 = as-shipped).
         c.assign(mix(horizonO, zenithO, pow(up, U.skyGrad)));
         // Day gradient LIFE: deep saturated-blue low/mid band + faint
@@ -221,28 +329,22 @@
           const bandLM = smoothstep(0.06, 0.55, up).oneMinus().mul(smoothstep(0.0, 0.06, up));
           const deepBlue = vec3(0.10, 0.30, 0.72);
           c.assign(mix(c, mix(c, deepBlue, 0.30),
-            clamp(daytime.mul(overcast.oneMinus()).mul(bandLM).mul(U.daySkyBlue), 0.0, 1.0)));
+            clamp(D.dayClear.mul(bandLM).mul(U.daySkyBlue), 0.0, 1.0)));
           const az = vnoise(vec2(atan(dir.z, dir.x).mul(2.2), up.mul(6.0))).sub(0.5);
-          c.mulAssign(az.mul(0.05).mul(daytime).mul(overcast.oneMinus())
+          c.mulAssign(az.mul(0.05).mul(D.dayClear)
             .mul(smoothstep(0.0, 0.5, up).oneMinus()).add(1.0));
         });
         // Golden-hour + low-sun band: both amounts are 0 when sunE >= 0.72
         // (GLX SKY_FS). Default day / night moon-key skip; dawn/dusk still enter.
         If(sunE.lessThan(0.72), () => {
         // Golden-hour: warm overlay near the horizon when the sun is low.
-        const goldenAmt = smoothstep(0.0, 0.72, sunE).oneMinus()
-          .mul(smoothstep(0.0, 0.32, up).oneMinus())
-          .mul(overcast.mul(0.9).oneMinus());
-        const goldenColor = mix(vec3(0.70, 0.22, 0.04), vec3(0.92, 0.55, 0.16),
-          clamp(sunE.mul(2.5), 0.0, 1.0));
+        const goldenAmt = D.goldenK.mul(smoothstep(0.0, 0.32, up).oneMinus());
+        const goldenColor = D.goldenColor;
         c.assign(mix(c, c.mul(0.45).add(goldenColor.mul(0.55)), goldenAmt.mul(0.80)));
         // Low-sun horizon band: extra warm band just above the horizon.
-        const lowBand = smoothstep(0.0, 0.60, sunE).oneMinus()
-          .mul(smoothstep(0.0, 0.18, up).oneMinus())
-          .mul(smoothstep(0.01, 0.06, up))
-          .mul(overcast.mul(0.85).oneMinus());
-        const lowColor = mix(vec3(0.90, 0.26, 0.03), vec3(1.0, 0.66, 0.12),
-          clamp(sunE.mul(3.0), 0.0, 1.0));
+        const lowBand = D.lowK.mul(smoothstep(0.0, 0.18, up).oneMinus())
+          .mul(smoothstep(0.01, 0.06, up));
+        const lowColor = D.lowColor;
         c.assign(mix(c, lowColor, lowBand.mul(0.70)));
         });
       }).Else(() => {
@@ -258,70 +360,58 @@
       const cityThick = float(0.0).toVar();
       If(U.cloud.greaterThan(0.001).and(up.greaterThan(0.012)), () => {
         const cp = dir.xz.div(up).mul(0.42);
-        // Two independent slow drift vectors; CLOUD SPEED scales the rate.
-        const cT = U.time.mul(U.cloudSpeed).toVar();
-        const drift1 = vec2(cT.mul(0.0028), cT.mul(0.0011)).toVar();
-        const drift2 = vec2(cT.mul(0.0017), cT.mul(0.0023));
-        // Evolution: very slow warp of the second octave.
-        const evo = cT.mul(0.00035);
-        const cp1 = cp.add(drift1).toVar();
-        const cp2 = cp.add(drift2);
+        // Two independent slow drift vectors; CLOUD SPEED scales the rate
+        // (time * cloudSpeed, derive()); evolution warps the second octave.
+        const cp1 = cp.add(D.drift1).toVar();
+        const cp2 = cp.add(D.drift2);
         const f = fbm(cp1).toVar();
         // Base coverage; fade in just above the horizon.
-        const cov = smoothstep(float(0.50).sub(U.cloud.mul(0.42)), 0.84, f)
+        const cov = smoothstep(D.covLo, 0.84, f)
           .mul(smoothstep(0.013, 0.05, up)).toVar();
         // Cloudscape enrichments — bright DAY *and* TWILIGHT; night untouched.
-        const cloudRich = max(daytime, twilight).toVar();
+        const cloudRich = D.cloudRich;
         If(cloudRich.greaterThan(0.001), () => {
           // Billow: higher-frequency octave carves lumpy cumulus definition.
           const billow = fbm(cp1.mul(2.3).add(vec2(11.7, 4.3)));
           const defined = smoothstep(0.42, 0.80, f.mul(0.6).add(billow.mul(0.45)))
             .mul(smoothstep(0.013, 0.05, up));
           // CLOUD DEFINITION knob (0.85 = as-shipped blend).
-          cov.assign(mix(cov, max(cov, defined),
-            clamp(cloudRich.mul(0.85).mul(U.cloudDef), 0.0, 1.0)));
+          cov.assign(mix(cov, max(cov, defined), D.defMix));
           // Horizon cloud-bank on the compressed *0.16 plane, banded ~1-9°.
-          const bp = dir.xz.div(max(up, 0.02)).mul(0.16).add(drift1.mul(1.4));
-          const bankThresh = float(0.46).sub(U.cloud.mul(0.30)).sub(twilight.mul(0.10));
+          const bp = dir.xz.div(max(up, 0.02)).mul(0.16).add(D.bankDrift);
+          const bankThresh = D.bankThresh;
           const bankCov = smoothstep(bankThresh, 0.80, fbm(bp))
             .mul(smoothstep(0.013, 0.030, up))
             .mul(smoothstep(0.10, 0.26, up).oneMinus());
-          cov.assign(max(cov, bankCov.mul(cloudRich).mul(overcast.mul(0.5).oneMinus())));
+          cov.assign(max(cov, bankCov.mul(D.bankK)));
           // Firmer edges so cumulus look solid, not gauzy.
           cov.assign(mix(cov, smoothstep(0.18, 0.82, cov), cloudRich.mul(0.5)));
         });
         // Second FBM gives per-cloud thickness (thin = backlit, thick = dark).
-        const thick = clamp(fbm(cp2.mul(0.55).add(vec2(evo.add(3.1), 1.7)))
+        const thick = clamp(fbm(cp2.mul(0.55).add(D.thickOff))
           .mul(2.0).sub(0.55), 0.0, 1.0).toVar();
         const sl = pow(sd, 2.0).toVar();
-        const sunBright = max(U.sunColor.x, max(U.sunColor.y, U.sunColor.z));
-        // Under heavy overcast even a bright sun gives grey clouds.
-        const effSunBright = mix(sunBright, min(sunBright, 0.55), overcast).toVar();
-        const goldenC = smoothstep(0.0, 0.45, sunE).oneMinus().toVar();   // 1 near horizon
+        // Under heavy overcast even a bright sun gives grey clouds (effSunBright,
+        // goldenC == golden: derive()).
         // Sunlit tops: white in daylight, warm/red at golden hour.
         const cloudTop = mix(vec3(0.58, 0.62, 0.70), vec3(1.0, 0.97, 0.91), sl).toVar();
-        cloudTop.mulAssign(effSunBright.mul(0.62).add(0.38));
-        cloudTop.assign(mix(cloudTop, cloudTop.mul(U.sunColor).mul(mix(float(1.45), float(2.6), goldenC)),
-          sl.mul(sunE.oneMinus()).mul(goldenC.mul(0.40).add(0.55)).mul(overcast.oneMinus())));
+        cloudTop.mulAssign(D.topK);
+        cloudTop.assign(mix(cloudTop, cloudTop.mul(D.topTint), sl.mul(D.topWarm)));
         cloudTop.assign(mix(cloudTop, vec3(0.62, 0.63, 0.65), overcast.mul(0.65)));
-        // Dark undersides: cooler/dimmer, warm pink under-glow at sunset.
-        const cloudBot = vec3(0.26, 0.27, 0.34).mul(effSunBright.mul(0.44).add(0.24)).toVar();
-        cloudBot.addAssign(U.sunColor.mul(vec3(0.9, 0.42, 0.5))
-          .mul(goldenC.mul(0.22).mul(overcast.oneMinus()).mul(twilight.mul(1.3).add(1.0))));
-        cloudBot.assign(mix(cloudBot, vec3(0.19, 0.19, 0.22), overcast.mul(0.60)));
+        // Dark undersides: cooler/dimmer, warm pink under-glow at sunset —
+        // no per-pixel input at all, so the whole colour is derive()d.
+        const cloudBot = D.cloudBot;
         const capf = clamp(thick.oneMinus().mul(0.75).add(0.18), 0.0, 1.0).toVar();
         const lit = mix(cloudBot, cloudTop, capf).toVar();
         // Day: widen the top-bottom contrast (gated; twilight keeps soft grading).
         lit.assign(mix(lit, mix(cloudBot.mul(0.80), cloudTop.mul(1.14), capf), daytime.mul(0.45)));
         // Silver lining: thin sun-facing edges glow (backlit forward scatter).
-        const silver = pow(sd, 6.0).mul(thick.oneMinus()).mul(goldenC.add(0.55))
-          .mul(overcast.mul(0.7).oneMinus());
-        lit.addAssign(U.sunColor.mul(silver).mul(twilight.mul(1.6).add(1.3)).mul(U.cloudSilver));
+        const silver = pow(sd, 6.0).mul(thick.oneMinus()).mul(D.silverK);
+        lit.addAssign(D.silverCol.mul(silver));
         // Twilight: broad warm wash. twilight is a uniform — 0 on default
         // day / night (GLX SKY_FS). Dawn/dusk still enter.
         If(twilight.greaterThan(0.001), () => {
-        lit.addAssign(U.sunColor.mul(pow(sd, 2.5)).mul(twilight).mul(0.30)
-          .mul(overcast.mul(0.6).oneMinus()));
+        lit.addAssign(D.washCol.mul(pow(sd, 2.5)));
         });
         // Moon tints nearby clouds faintly blue-silver.
         If(U.moon.greaterThan(0.0), () => {
@@ -347,24 +437,21 @@
 
       // --- Mie forward scatter: glow toward the sun, strongest near horizon ---
       const upPos = max(up, 0.0).toVar();
-      const mieDamp = overcast.mul(0.85).oneMinus().toVar();
-      c.assign(mix(c, U.sunColor, clamp(pow(sd, 5.0).mul(0.22)
-        .mul(max(upPos.mul(1.5).oneMinus(), 0.0)).mul(mieDamp).mul(U.mieScatter), 0.0, 1.0)));
+      c.assign(mix(c, U.sunColor, clamp(pow(sd, 5.0)
+        .mul(max(upPos.mul(1.5).oneMinus(), 0.0)).mul(D.mieK), 0.0, 1.0)));
 
       // --- Horizon glow in the sun's compass direction ---
-      const sunH = vec2(U.sunDir.x, U.sunDir.z).toVar();
-      const sunHLen = length(sunH).toVar();
-      If(sunHLen.greaterThan(0.05), () => {
+      // sunHLen, the unit compass direction and the glow colour: derive().
+      If(D.sunHLen.greaterThan(0.05), () => {
         const dirH = vec2(dir.x, dir.z);
         const dirHLen = length(dirH).toVar();
         // select() compiles to a real ternary; the max() guards the unselected
         // divide (a 0-length dirH would put NaN in the dead branch on strict
         // drivers that evaluate both sides).
         const hdot = dirHLen.greaterThan(0.05)
-          .select(max(dot(dirH.div(max(dirHLen, 1e-5)), sunH.div(sunHLen)), 0.0), float(0.0));
+          .select(max(dot(dirH.div(max(dirHLen, 1e-5)), D.sunHn), 0.0), float(0.0));
         const hband = max(abs(up).mul(5.0).oneMinus(), 0.0);
-        c.addAssign(U.sunColor.mul(pow(hdot, 6.0)).mul(hband).mul(hband)
-          .mul(0.22).mul(sunHLen).mul(mieDamp));
+        c.addAssign(D.hGlowCol.mul(pow(hdot, 6.0)).mul(hband).mul(hband));
       });
 
       // --- Sun corona + disc (damped under overcast; nightSky gate folded in
@@ -374,23 +461,19 @@
       // when nightSky == 1. 2 pow + length + smoothstep on every uncovered
       // sky pixel. nightSky is a uniform (uStars) — no divergence.
       If(nightSky.lessThan(0.5), () => {
-        const coronaDamp = overcast.mul(0.92).oneMinus().mul(nightSky.oneMinus()).toVar();
-        const golden = smoothstep(0.0, 0.45, sunE).oneMinus().toVar();
-        const sunWarm = mix(U.sunColor, U.sunColor.mul(vec3(1.18, 0.52, 0.24)), golden).toVar();
+        const coronaDamp = D.coronaDamp;   // golden, sunWarm and the aureole's colour too: derive()
+        const sunWarm = D.sunWarm;
         // Wide aureole: broader (lower exponent) + stronger at golden hour.
-        c.addAssign(sunWarm.mul(pow(sd, mix(float(20.0), float(8.0), golden)))
-          .mul(golden.mul(0.55).add(0.55)).mul(coronaDamp).mul(cityCov.mul(0.6).oneMinus()).mul(U.coronaAureole));
+        c.addAssign(D.aurCol.mul(pow(sd, D.aurExp)).mul(cityCov.mul(0.6).oneMinus()));
         // Tight inner ring.
         // Behind the cloud deck (GLX sunClear): cityCov hides disc + ring, most of the aureole.
         c.addAssign(sunWarm.mul(pow(sd, 300.0)).mul(0.95).mul(U.sunCorona).mul(coronaDamp).mul(cityCov.oneMinus()));
         // Disc, vertically squashed near the horizon (atmospheric refraction).
         const dd = dir.sub(U.sunDir.mul(sd)).toVar();
-        const perp = length(vec2(length(dd.xz),
-          dd.y.mul(mix(float(1.0), mix(float(1.0), float(1.6), golden), U.sunSquash)))).toVar();
-        const disc = smoothstep(mix(float(0.018), float(0.028), golden).mul(U.sunDiscSize),
-          U.sunDiscSize.mul(0.006), perp).mul(coronaDamp).mul(cityCov.oneMinus()).toVar();
+        const perp = length(vec2(length(dd.xz), dd.y.mul(D.squash))).toVar();
+        const disc = smoothstep(D.discOut, D.discIn, perp).mul(coronaDamp).mul(cityCov.oneMinus()).toVar();
         // Bright HDR core (>1) so it blooms; warm-white high, deep amber low.
-        const discCore = mix(vec3(2.3, 2.2, 1.9), sunWarm.mul(2.8), golden);
+        const discCore = D.discCore;
         c.addAssign(discCore.mul(disc));
       });
 
@@ -401,7 +484,7 @@
         const cell = floor(dir.mul(SC)).toVar();
         const h = hash3(cell).toVar();
         // STAR DENSITY scales the spawn window, capped below 1.
-        If(h.greaterThan(min(0.9994, float(1.0).sub(U.starDensity.mul(1.0 - 0.9968)))), () => {
+        If(h.greaterThan(D.starThresh), () => {
           const jit = vec3(hash3(cell.add(7.1)), hash3(cell.add(13.7)), hash3(cell.add(29.3))).sub(0.5);
           const sdir = normalize(cell.add(0.5).add(jit.mul(0.8)).div(SC));
           const d = length(dir.sub(sdir));
@@ -452,8 +535,7 @@
 
       // ~1/255 time-stepped IGN dither: the night gradient spans a handful of
       // 8-bit steps and the quantisation happens right here at scene write.
-      const skyDth = ignoise(screenCoordinate.xy
-        .add(mod(floor(U.time.mul(60.0)), 64.0).mul(5.588238)));
+      const skyDth = ignoise(screenCoordinate.xy.add(D.dthOff));   // mod(floor(time*60), 64)*5.588238: derive()
       c.addAssign(skyDth.sub(0.5).mul(1.0 / 255.0));
 
       return vec4(c, 1.0);

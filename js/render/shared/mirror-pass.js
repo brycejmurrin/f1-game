@@ -142,10 +142,11 @@ const MirrorPass = (function () {
     let _mirTune = null, _mirTuneSrc;
 
     // The target for a frame of cssW x cssH CSS px: device pixels (DPR capped at
-    // 2) x the rung's res x SS — independent of the governor's render scale, so
-    // it reallocates only when the frame resizes or the rung changes.
+    // 2) x the rung's res (x the render scale, scaledRes) x SS. It reallocates
+    // when the frame resizes, the rung changes or the main frame's scale moves.
     function targetSize(cssW, cssH, res) {
       const dpr = Math.min(2, typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
+      res = scaledRes(res);
       let w = cssW * dpr * res * SS, h = cssH * dpr * res * SS;
       const k = Math.min(1, MAX_W / (w || 1), MAX_H / (h || 1));
       w = Math.round(w * k); h = Math.round(h * k);
@@ -153,6 +154,21 @@ const MirrorPass = (function () {
       return _sz;
     }
     const _sz = [0, 0];
+    // THE GOVERNOR'S RENDER SCALE (TLX perf hunt E2). PerfGov lowers the main
+    // frame's resolution first and sheds tiers only at the scale floor, so a
+    // GPU-bound desktop kept the "full" rung's 2x supersampled target while its
+    // frame ran at 0.5-0.7: (2/scale)^2 texels per inset pixel. The rung's res
+    // now follows the scale, never below the lite rung's (max(res*s, min(res,
+    // lite)) leaves lite, low, min and the PiP exactly as they were; at scale 1
+    // nothing changes). gfx.setRenderScale moves only past its 0.02 dead zone
+    // and reallocates the main targets when it does, so this target
+    // reallocates no more often than the frame's own (phones sit on lite).
+    const LITE_RES = QUALITY[1].res;
+    function scaledRes(res) {
+      const g = G.gfx;
+      const s = g && typeof g.getRenderScale === "function" ? +g.getRenderScale() : 1;
+      return s > 0 && s < 1 ? Math.max(res * s, Math.min(res, LITE_RES)) : res;
+    }
     function el() { return _el || (_el = document.getElementById("hud-mirror")); }
     function pipEl() { return _pipEl || (_pipEl = document.getElementById("bc-pip")); }
     function bcOn() { return document.body.classList.contains("bc-on"); }
