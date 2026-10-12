@@ -73,13 +73,23 @@
       Fn, If, Loop, Break, uniform, uniformArray, renderGroup, attribute, varying, texture, cubeTexture,
       textureLoad, ivec2,
       float, int, vec2, vec3, vec4, mrt,
-      positionWorld, positionGeometry, positionLocal, normalLocal, normalWorld,
+      positionWorld, positionGeometry, positionLocal, normalLocal, normalWorld, normalWorldGeometry,
       cameraPosition, frontFacing,
       fract, floor, mod, dot, cross, mix, smoothstep, step, clamp, pow, exp, sqrt,
       abs, max, min, normalize, length, reflect, select, sin, cos,
       dFdx, dFdy, fwidth,
     } = TSL;
-    const { hash21, vnoise, ignoise } = ctx.chunks;
+    const { hash21, vnoise, vnoiseGrad, ignoise } = ctx.chunks;
+    // ROAD NORMAL V2 (default ON; apex26.tlxRoadNormalV2=0 restores the old
+    // shader exactly, for an A/B): the near micro-normal and the ASPHALT bump
+    // take each octave's ANALYTIC gradient (vnoiseGrad, 4 hashes) instead of a
+    // 3-vnoise finite difference whose 0.22 step spans 0.86-5.7 lattice cells on
+    // every octave but one, i.e. a difference of unrelated values, not a slope.
+    // The per-octave weights below match the old perturbation's RMS (measured
+    // over 4e5 samples), so the relief keeps its amplitude; the pattern changes.
+    const ROAD_NORMAL_V2 = (() => {
+      try { return localStorage.getItem("apex26.tlxRoadNormalV2") !== "0"; } catch (_) { return true; }
+    })();
     // ONE base node per shadow map; the PCF taps are its .sample() clones. With
     // vendor patch 10 the clones share the base's flipY uniform, so a map's 4-8
     // taps cost one per-object update on three's WebGL2 backend, not one each.
@@ -133,7 +143,11 @@
     // every variant. CubeTextureNode has no .uv() — that is a 2D TextureNode
     // setter and threw on every chrome/env surface.
     const ENV_CUBE = ctx.envCube || null;
-    const envCubeNode = ENV_CUBE ? cubeTexture(ENV_CUBE) : null;
+    // The base carries a constant direction: every tap is a clone with its own
+    // R, but the builder still sets the base up (the clones' referenceNode),
+    // and a base with no uv emitted CubeTextureNode's default reflectVector —
+    // a dead per-fragment normalView/reflect/mat4 chain plus two varyings.
+    const envCubeNode = ENV_CUBE ? cubeTexture(ENV_CUBE, vec3(0.0, 1.0, 0.0)) : null;
     const shadowOn = !!(SHD && SHD.S.enabled && SHD.sunTex);
     const carShadowOn = !!(shadowOn && SHD.S.carEnabled && SHD.carTex);
     const lampShadowOn = !!(shadowOn && SHD.S.lampEnabled && SHD.lampTex);
@@ -199,6 +213,7 @@
       lampWallSpill:  uniform(1.0),   // LAMP WALL SPILL
       envStr:         uniform(0.0),   // live env-probe strength; set by setEnvStr() from tlx.js begin()
       numLights:      uniform(0),
+      lampCap:        uniform(MAX_LIGHTS),   // per-chunk lamp cap: MAX except in the mirror (mirror-pass E9)
       // M4 shadow uniforms (the litU.uShadow* uploads in glx.js; defaults mirror TUNE_DEFS)
       // shadowStr is the EFFECTIVE strength: knob × key-luminance fade (with
       // the MOON SHADOWS floor), computed CPU-side in updateFrame like GLX.
@@ -410,6 +425,8 @@
       const L = frame.lights;
       const nL = L ? Math.min(MAX_LIGHTS, (L.length / 15) | 0) : 0;
       U.numLights.value = nL;
+      // E9: the mirror's per-chunk cap (frame.mirrorLampCap, mirror-pass.js); every other pass runs uncapped.
+      uf1(U.lampCap, mirror && frame.mirrorLampCap > 0 ? Math.min(MAX_LIGHTS, frame.mirrorLampCap) : MAX_LIGHTS);
       const hasLB = typeof LampBake !== "undefined";
       for (let i = 0; i < nL; i++) {
         const o = i * 15;
@@ -523,10 +540,17 @@
 
     /* cloud shadows (js/render/glx/shaders/glsl-lit.js) */
     // 2-octave FBM (per-pass tuning — matches LIT's cloudFBM, unrolled).
-    const cloudFBM = (pIn) => {
-      const s1 = vnoise(pIn).mul(0.5);
-      const s2 = vnoise(pIn.mul(2.03).add(1.7)).mul(0.25);
-      return s1.add(s2);
+    // edge0 = the smoothstep's lower edge at the call site. Octave 2 adds at
+    // most 0.25, so when s1 + 0.2501 <= edge0 the smoothstep is 0 whatever it
+    // adds: return s1 (also <= edge0) and skip that vnoise. Exact — the same
+    // 0 out, and the same s1 + s2 sum otherwise. Skips 50/24/9/0 % of samples
+    // at cloud cover 0.1/0.3/0.5/>=0.7, 10 % of mist samples (no derivatives).
+    const cloudFBM = (pIn, edge0) => {
+      const c = vnoise(pIn).mul(0.5).toVar();
+      If(c.add(0.2501).greaterThan(edge0), () => {
+        c.addAssign(vnoise(pIn.mul(2.03).add(1.7)).mul(0.25));
+      });
+      return c;
     };
     const cloudShadow = Fn(([wpIn]) => {
       const wp = vec3(wpIn).toVar();
@@ -537,8 +561,9 @@
         const cT = U.time.mul(U.cloudSpeed);
         const cp = wp.xz.add(U.sunDir.xz.mul(t)).mul(0.0052)
           .add(vec2(cT.mul(0.012), cT.mul(0.005)));
-        const c = cloudFBM(cp);
-        res.assign(smoothstep(float(0.54).sub(U.cloudCover.mul(0.40)), 0.92, c).mul(U.cloudCover));
+        const lo = float(0.54).sub(U.cloudCover.mul(0.40)).toVar();
+        const c = cloudFBM(cp, lo);
+        res.assign(smoothstep(lo, 0.92, c).mul(U.cloudCover));
       });
       return res;
     });
@@ -802,7 +827,7 @@
           // The fade only ever REDUCES bump, so head-on grass/sand/rock are
           // unchanged.
           const aaG = clamp(fwGround.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
-          If(aaG.greaterThan(0.005), () => {
+          const fdBump = () => {
             const e = 0.22;
             const p0 = wp.xz;
             const h0 = matBumpHeight(mid, p0);
@@ -813,6 +838,15 @@
                         select(mid.equal(16.0), float(0.025), float(0.07))));
             N.assign(normalize(N.add(
               vec3(h0.sub(hx), 0.0, h0.sub(hz)).mul(amt.mul(bumpFade).mul(aaG).div(e)))));
+          };
+          If(aaG.greaterThan(0.005), () => {
+            if (!ROAD_NORMAL_V2) { fdBump(); return; }
+            // ASPHALT (ROAD_NORMAL_V2): -grad h, h = 0.34 vn(9p) + 0.16 vn(26p), the
+            // octaves RMS-matched to the old 2.0 / 5.7-cell differences (x0.403, x0.137).
+            If(mid.equal(16.0), () => {
+              const g = vnoiseGrad(wp.xz.mul(9.0)).yz.mul(1.233).add(vnoiseGrad(wp.xz.mul(26.0)).yz.mul(0.571));
+              N.assign(normalize(N.sub(vec3(g.x, 0.0, g.y).mul(bumpFade.mul(aaG).mul(0.025)))));
+            }).Else(fdBump);
           });
         });
       });
@@ -1265,7 +1299,13 @@
         // STANDING-RULE ANCHORS: unconditional Fn-body .toVar() on every
         // shared varying-derived node BEFORE any conditional use.
         const wp = vec3(positionWorld).toVar();               // vWorldPos
-        const Nvary = vec3(normalWorld).toVar();              // vNrm (raw varying)
+        // vNrm (raw varying). normalWorldGeometry, NOT normalWorld: r186's
+        // normalWorld is MeshBasicNodeMaterial.setupNormal() = normalViewGeometry
+        // x (frontFacing*2-1) on DoubleSide, rotated by the inverse view per
+        // fragment, so the flip below cancelled it and back faces lit with the
+        // normal pointing AWAY from the viewer (GLX flips once). This one is the
+        // world normal carried as a varying, unflipped, normalized once.
+        const Nvary = vec3(normalWorldGeometry).toVar();
         const objP = vec3(positionGeometry).toVar();          // vObjPos
         const vertexColor = vec3(attribute("color", "vec3")).toVar();
         const albedoIn = instanced
@@ -1291,7 +1331,7 @@
         const V = normalize(cameraPosition.sub(wp)).toVar();
 
         // Two-sided lighting: flip N toward the viewer on back fragments
-        // (js/render/glx/shaders/glsl-lit.js). Raw normalWorld carries no faceDirection flip.
+        // (js/render/glx/shaders/glsl-lit.js). Nvary carries no faceDirection flip.
         const N = select(frontFacing, Nvary, Nvary.negate()).toVar();
         N.assign(normalize(N));
 
@@ -1306,6 +1346,12 @@
           mnFade.mulAssign(clamp(mnFp.sub(0.15).div(0.70).oneMinus(), 0.0, 1.0));
           If(mnFade.greaterThan(0.01), () => {
             const mnp = wp.xz.mul(1.7);
+            if (ROAD_NORMAL_V2) {
+              // -grad h, h = 0.7 vn(p) + 0.3 vn(3.9p): weights 0.7*0.976 and 0.3*3.9*0.769
+              const g = vnoiseGrad(mnp).yz.mul(0.683).add(vnoiseGrad(mnp.mul(3.9)).yz.mul(0.900));
+              N.assign(normalize(N.sub(vec3(g.x, 0.0, g.y).mul(matU.detail.mul(0.4).mul(mnFade)))));
+              return;
+            }
             const e = 0.22;
             const h0 = vnoise(mnp).mul(0.7).add(vnoise(mnp.mul(3.9)).mul(0.3));
             const hx = vnoise(mnp.add(vec2(e, 0.0))).mul(0.7)
@@ -1744,7 +1790,8 @@
                          : ((i) => U.lampDir.element(i));
         // The loop still runs to MAX_LIGHTS — a TSL Loop bound must be a
         // compile-time constant — and breaks on whichever count applies.
-        const lampN = PC ? select(PC.use, PC.n, U.numLights) : U.numLights;
+        // The chunk's list is nearest-first (LampChunks), so min(n, lampCap) keeps its nearest lamps.
+        const lampN = PC ? select(PC.use, min(PC.n, U.lampCap), U.numLights) : U.numLights;
 
         Loop({ start: int(0), end: int(MAX_LIGHTS), type: "int", condition: "<" }, ({ i }) => {
           If(float(i).greaterThanEqual(lampN), () => { Break(); });
@@ -2077,7 +2124,7 @@
             const band = exp(lowH.negate().mul(float(0.09).div(max(U.mistHeight, 0.05))));
             const mp = wp.xz.mul(0.020).add(vec2(U.time.mul(0.010), U.time.mul(0.006)));
             const dRamp = clamp(vd.sub(8.0).div(45.0), 0.0, 1.0);
-            const mist = U.groundMist.mul(band).mul(smoothstep(0.35, 0.72, cloudFBM(mp))).mul(dRamp);
+            const mist = U.groundMist.mul(band).mul(smoothstep(0.35, 0.72, cloudFBM(mp, 0.35))).mul(dRamp);
             const mistSun = max(sunAmount, 1e-4);
             const mistCol = mix(vec3(U.fogColor), vec3(U.sunColor), mistSun.mul(mistSun).mul(mistSun))
               .add(lampFogC.mul(U.mistShare));

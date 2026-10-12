@@ -54,6 +54,23 @@ const MirrorPass = (function () {
     if (ie === "1") _instEvery = 1;
     else if (ie && +ie > 0) _instEvery = Math.min(4, Math.max(1, ie | 0));
   } catch (_) { /* default 2 */ }
+  // THE MIRROR'S LAMP BUDGET (TLX perf hunt E9). At night the inset ran the
+  // full per-chunk lamp loop (up to LightBudget.CHUNK = 24 per fragment) at 2x
+  // supersampling, and re-ranked every baked lamp from its own eye each frame.
+  //   GPU: frame.mirrorLampCap caps each chunk's lamp list (nearest-first, so
+  //        the cap keeps a chunk's nearest lamps) — read by tsl-lit only, so
+  //        GLX / WGX draw the mirror as before.
+  //   CPU: the re-rank (FrameLights.viewLights) is reused while the eye stays
+  //        within RERANK_M of the last rank, the aim within ~2 deg, for at most
+  //        RERANK_EVERY mirror frames; this frame's tail-lights are always fresh.
+  // apex26.tlxMirLampCap: unset = 12 (half the per-chunk cap), "0" = both off
+  // (today's mirror on every backend), 1..48 = that cap.
+  let _lampCap = 12;
+  try {
+    const lc = localStorage.getItem("apex26.tlxMirLampCap");
+    if (lc != null && lc !== "" && +lc >= 0) _lampCap = Math.min(48, +lc | 0);
+  } catch (_) { /* default 12 */ }
+  const RERANK_M = 2, RERANK_EVERY = 4, RERANK_AIM_COS = 0.9994;
   const QUALITY = [
     { name: "full", lite: false, res: 1.0, cull: 400, reach: 260, every: 1, instEvery: _instEvery },
     { name: "lite", lite: true,  res: 0.6, cull: 180, reach: 140, every: 1, instEvery: 1 },
@@ -120,9 +137,42 @@ const MirrorPass = (function () {
     if (MODES.indexOf(pipMode) < 0) pipMode = "auto";
     const _pipExtra = { bankDy: 0 };
     // The frame fields the pass swaps, saved in one reused scratch (no per-frame object).
-    const _sv = { viewProj: null, view: null, proj: null, invProj: null, invViewProj: null, eye: null, cullDist: 0, lite: undefined, freezeInst: undefined, sky: null, tune: undefined, lights: null, tailStart: 0, tailCount: 0 };
+    const _sv = { viewProj: null, view: null, proj: null, invProj: null, invViewProj: null, eye: null, cullDist: 0, lite: undefined, freezeInst: undefined, sky: null, tune: undefined, lights: null, tailStart: 0, tailCount: 0, lampCap: undefined };
     let _instFreezeSkips = 0, _instRefresh = 0;
     const _aim = [0, 0, 0];   // the pass camera's ground-plane aim, for FrameLights.viewLights
+    // E9's held re-rank: the ranked lamps (no tail-lights) of the last viewLights
+    // call, where and which way it ranked from, and how many frames it has served.
+    const _vlBuf = [], _vlEye = [0, 0, 0], _vlAim = [0, 0, 0];
+    const _vlOut = { lights: null, tailStart: 0, tailCount: 0 };
+    let _vlLamps = 0, _vlAge = Infinity, _vlTrack = null, _vlSrc = null, _vlRanks = 0, _vlHeld = 0;
+    function mirrorLights(frame) {
+      if (typeof FrameLights === "undefined" || !FrameLights.viewLights) return null;
+      const L = frame.lights;
+      if (_lampCap > 0 && L && _vlAge < RERANK_EVERY && _vlTrack === G.track && _vlSrc === L) {
+        const dx = _eye[0] - _vlEye[0], dy = _eye[1] - _vlEye[1], dz = _eye[2] - _vlEye[2];
+        const al = Math.hypot(_aim[0], _aim[2]) * Math.hypot(_vlAim[0], _vlAim[2]) || 1;
+        if (dx * dx + dy * dy + dz * dz < RERANK_M * RERANK_M
+            && (_aim[0] * _vlAim[0] + _aim[2] * _vlAim[2]) / al > RERANK_AIM_COS) {
+          _vlAge++; _vlHeld++;
+          const tc = frame.tailCount | 0, ts = tc > 0 ? frame.tailStart | 0 : (L.length / 15) | 0;
+          let j = _vlLamps * 15;
+          for (let i = ts * 15, n = (ts + tc) * 15; i < n; i++) _vlBuf[j++] = L[i];
+          _vlBuf.length = j;
+          _vlOut.lights = _vlBuf; _vlOut.tailStart = _vlLamps; _vlOut.tailCount = tc;
+          return _vlOut;
+        }
+      }
+      const vl = FrameLights.viewLights(frame, _eye, _aim);
+      _vlAge = Infinity;
+      if (!vl || !(_lampCap > 0)) return vl;
+      const n = vl.lights.length;
+      for (let i = 0; i < n; i++) _vlBuf[i] = vl.lights[i];
+      _vlBuf.length = n;
+      _vlLamps = vl.tailStart; _vlAge = 0; _vlRanks++;
+      _vlTrack = G.track; _vlSrc = L;
+      for (let i = 0; i < 3; i++) { _vlEye[i] = _eye[i]; _vlAim[i] = _aim[i]; }
+      return vl;
+    }
     // THE SUN'S VIEW-DEPENDENT TERMS STAY OUT OF THE MIRROR (a phone report:
     // "still a little flashy … sun and shadows"). The mirror is a small target
     // with no anti-aliasing of its own (FXAA runs before its composite), so
@@ -629,8 +679,10 @@ const MirrorPass = (function () {
       // lamps this camera sees — so they flashed in and out as the car moved.
       sv.lights = frame.lights; sv.tailStart = frame.tailStart; sv.tailCount = frame.tailCount;
       _aim[0] = _tgt[0] - _eye[0]; _aim[1] = 0; _aim[2] = _tgt[2] - _eye[2];
-      const vl = typeof FrameLights !== "undefined" && FrameLights.viewLights ? FrameLights.viewLights(frame, _eye, _aim) : null;
+      const vl = mirrorLights(frame);
       if (vl) { frame.lights = vl.lights; frame.tailStart = vl.tailStart; frame.tailCount = vl.tailCount; }
+      sv.lampCap = frame.mirrorLampCap;
+      frame.mirrorLampCap = _lampCap;   // tsl-lit's per-chunk cap for this pass (0 = uncapped)
       let began = false;
       try {
         began = g.mirrorBegin(frame, w, h);
@@ -650,9 +702,10 @@ const MirrorPass = (function () {
           frame.mirrorFreezeInstanced = sv.freezeInst;
           frame.tune = sv.tune;
           frame.lights = sv.lights; frame.tailStart = sv.tailStart; frame.tailCount = sv.tailCount;
+          frame.mirrorLampCap = sv.lampCap;
           frameSky.invViewProj = sv.sky;
           sv.viewProj = sv.view = sv.proj = sv.invProj = sv.invViewProj = sv.eye = sv.sky = null;
-          sv.tune = undefined; sv.freezeInst = undefined; sv.lights = null;
+          sv.tune = undefined; sv.freezeInst = undefined; sv.lights = null; sv.lampCap = undefined;
         }
       }
       return began;
@@ -708,6 +761,7 @@ const MirrorPass = (function () {
       // count, and the cockpit glass (car-draw.js glassState: live vs fallback).
       state: () => ({ mode, shown: _shown, collapsed: _collapsed, rect: _rect, cars: _cars, drawn: _drawn, cam: camId(), lite: _q.lite, quality: _q.name,
         instEvery: _q.instEvery || 1, instFreezeSkips: _instFreezeSkips, instRefresh: _instRefresh,
+        lampCap: _lampCap, lampRanks: _vlRanks, lampHeld: _vlHeld,
         preparing: !!_preparation, prepared: _prepared,
         pip: { mode: pipMode, shown: _pipShown, code: _sub ? _sub.code : null, cam: _subMode, rect: _pipRect },
         backend: G.gfx && G.gfx.mirrorState ? G.gfx.mirrorState() : null,

@@ -94,7 +94,14 @@
     shadowMat.opacityNode = Fn(() => {
       const uvv = vec2(positionGeometry.xz.mul(2.0)).toVar();   // anchor
       const r = length(uvv);
-      return smoothstep(0.25, 1.0, r).oneMinus().mul(0.45);
+      const a = smoothstep(0.25, 1.0, r).oneMinus().mul(0.45).toVar();
+      // THE QUAD'S CORNERS (r >= 1: 1 - pi/4 = 21 % of every blob quad) have
+      // alpha exactly 0: SrcAlpha/OneMinusSrcAlpha over a black colour keeps
+      // dst, and dst alpha and the ssrTag attachment are Zero/One "keep".
+      // Discarding them is bit-identical, as the particle corners (E7a); no
+      // depth write on this pass, so early-Z is unaffected.
+      if (Discard) Discard(a.lessThanEqual(0.0));
+      return a;
     })();
 
     const markFalloff = (uvv) =>
