@@ -501,9 +501,20 @@
       shaftDecay: uniform(0.82), shaftSpread: uniform(1.0),
       flareStreak: uniform(7.0), flareStreak2: uniform(0.5),
     };
+    // ONE TEXTURE PER NODE AT BUILD TIME: three keys a TextureNode's uniform by
+    // its texture's uuid (TextureNode.getUniformHash, pretty:2645 -> the
+    // getSharedNode merge, pretty:1371), so two nodes holding the SAME texture
+    // when the composite program is built collapse into one sampler, and that
+    // sampler follows the first node's value for the program's life (fixed
+    // key). The godray slot therefore gets its own "off" texture (it shared
+    // blackTex with bloom), and the folded AO is read through godrayTexN, never
+    // by binding godrayRT to ssaoTexN as well.
     const bloomTexN = texture(ctx.blackTex);
     const ssaoTexN = texture(ctx.whiteTex);
-    const godrayTexN = texture(ctx.blackTex);
+    const grOffTex = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+    grOffTex.colorSpace = THREE.NoColorSpace;
+    grOffTex.needsUpdate = true;
+    const godrayTexN = texture(grOffTex);
 
     const acesTonemap = (x0) => {
       const x = max(x0, vec3(0.0));
@@ -551,7 +562,7 @@
     }
 
     const composite = {
-      U: C, tex: { bloom: bloomTexN, ssao: ssaoTexN, godray: godrayTexN },
+      U: C, tex: { bloom: bloomTexN, ssao: ssaoTexN, godray: godrayTexN }, grOffTex,
       mat: passMaterial(Fn(() => {
         // anchors
         const suv = vec2(screenUV).toVar();
@@ -619,8 +630,12 @@
               : ai === 2 ? aoF.x.oneMinus().mul(aoF.y)
               : aoF.x.mul(aoF.y)).add(1e-4);
             const w = bw.div(abs(aoDc.sub(depthAt(auv))).mul(30.0).add(1e-4)).toVar();
-            const aoS = vec4(ssaoTexN.sample(TL(auv))).toVar();
-            aoSum.addAssign(float(select(C.aoAlpha.greaterThan(0.5), aoS.a, aoS.r)).mul(w));
+            // Folded AO (D7) is godrayRT.a, read through godrayTexN (see the
+            // one-texture-per-node note at the node declarations).
+            const aoS = float(0.0).toVar();
+            If(C.aoAlpha.greaterThan(0.5), () => { aoS.assign(godrayTexN.sample(TL(auv)).a); })
+              .Else(() => { aoS.assign(ssaoTexN.sample(TL(auv)).r); });
+            aoSum.addAssign(aoS.mul(w));
             aoW.addAssign(w);
           }
           aoV.assign(aoSum.div(aoW));

@@ -316,6 +316,7 @@
       dirtTex, whiteTex, blackTex,
       trackMaterial,
     });
+    ownTexture(P.composite && P.composite.grOffTex);   // the godray slot's own "off" black
 
     // fullscreen runner
     quad = new THREE.QuadMesh();
@@ -651,10 +652,16 @@
       C.bloomAmt.value = bloomAmt * 1.25 / Math.max(useLv - 1, 1);
       const aoGR = aoFold && haveGR;   // the AO term lives in godrayRT.a
       const aoOn = aoGR || haveAO;
-      P.composite.tex.ssao.value = aoGR ? godrayRT.texture : haveAO ? ssaoRT.texture : whiteTex;
+      // NEVER one texture in two composite slots: three merges TextureNodes by
+      // texture uuid when the program is built (fixed key, built once), and the
+      // merged sampler then follows one slot forever. Binding godrayRT to the
+      // ssao slot too made the godray add read the ssao slot's whiteTex on every
+      // later unfolded frame (the night-veil defect). The fold reads godrayRT.a
+      // through the godray slot (C.aoAlpha); godray-off has its own black.
+      P.composite.tex.ssao.value = haveAO ? ssaoRT.texture : whiteTex;
       C.aoAlpha.value = aoGR ? 1 : 0;
       C.aoTexel.value.set(aoOn ? 1 / aoW : 0, aoOn ? 1 / aoH : 0);
-      P.composite.tex.godray.value = haveGR ? godrayRT.texture : blackTex;
+      P.composite.tex.godray.value = haveGR ? godrayRT.texture : (P.composite.grOffTex || blackTex);
       C.haveGodray.value = haveGR ? 1 : 0;
       // Sun screen-UV projection + brightness gate + golden-hour flare curve:
       // PostCommon.sunScreen, shared with GLX / WGX.
