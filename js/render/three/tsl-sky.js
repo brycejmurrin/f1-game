@@ -34,25 +34,36 @@
  *
  * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
  *     TLXShaders.sky = (THREE, TSL, ctx) =>
- *         ({ node, fallbackNode, uniforms, update })
+ *         ({ node, fallbackNode, uniforms, update,
+ *            cacheStep, cacheWarm, cacheState, dispose })   // the cache four: no-ops without ctx.cache
  * fallbackNode is a zenith→horizon screen-Y mix (no ray reconstruction).
  * tlx.js arms it on software GL: the full SKY_FS node either misses
  * (fog Color → beige void) or reconstructs rays badly against the HDR
  * target. Real GPUs keep `node`.
- * ctx = { chunks } (TLXShaders.chunks(THREE, TSL); optional — ignoise falls
- * back to a local copy). NEVER touches THREE/TSL at script eval — three
+ * ctx = { chunks, cache, cacheSize } (TLXShaders.chunks(THREE, TSL); optional —
+ * ignoise falls back to a local copy; cache: build the E1 cloud cache). NEVER touches THREE/TSL at script eval — three
  * exists only inside TLX.create().
  *
  * STANDING RULE (tsl-lit.js header): every shared varying-derived node gets
  * an unconditional Fn-body .toVar() anchor before any conditional use —
  * here screenUV and the whole dir chain anchor at the top of the Fn.
+ *
+ * CLOUD NOISE CACHE (TLX perf hunt E1; ctx.cache, apex26.tlxSkyCache): see
+ * makeCache() below. The four cloud FBMs are a pure function of the cloud-
+ * plane point cp = dir.xz / up * 0.42 plus a per-channel drift TRANSLATION,
+ * so they are baked once into a 2-D cp-plane texture and looked up at
+ * cp + (drift now - drift at bake): the clouds keep moving every frame with
+ * no staleness, and the texture is re-baked (in bands, into a second target)
+ * only when that offset nears the window's margin. Everything else in the
+ * sky stays per pixel. glsl-sky.js keeps the per-pixel FBMs (the cache is a
+ * TLX-only cost change; the parity bound is in makeCache's header).
  */
 "use strict";
 
 (function () {
   function sky(THREE, TSL, ctx) {
     const {
-      Fn, If, uniform,
+      Fn, If, uniform, texture, positionGeometry,
       float, vec2, vec3, vec4,
       screenUV, screenCoordinate,
       fract, floor, dot, mix, smoothstep, clamp, pow, exp,
@@ -154,7 +165,10 @@
       coronaDamp: uniform(0.0), golden: uniform(0.0), sunWarm: v3(), aurExp: uniform(0.0),
       aurCol: v3(), squash: uniform(0.0), discOut: uniform(0.0), discIn: uniform(0.0),
       discCore: v3(), starThresh: uniform(0.0), dthOff: uniform(0.0),
+      // E1 cache lookup: on/off and the per-channel cp offset since the bake.
+      cacheOn: uniform(0.0), cD1: v2(), cD3: v2(), cDb: v2(),
     };
+    const C = ctx && ctx.cache ? makeCache() : null;
     const sstep = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
     const clamp01 = (x) => Math.min(1, Math.max(0, x));
     const lerp = (a, b, t) => a + (b - a) * t;
@@ -241,6 +255,158 @@
       D.starThresh.value = Math.min(0.9994, 1.0 - U.starDensity.value * (1.0 - 0.9968));
       const step60 = Math.floor(Math.fround(Math.fround(U.time.value) * 60.0));
       D.dthOff.value = (step60 - 64 * Math.floor(step60 / 64)) * 5.588238;   // GLSL mod(): never negative
+      if (C) cacheSync();
+    }
+
+    /* THE CLOUD NOISE CACHE (TLX perf hunt E1).
+     *
+     * WHAT IS CACHED: the four raw FBM values of the cloud block, which are all
+     * of its noise (16 of the 17 vnoise per day sky pixel; `az` stays):
+     *   R f      = fbm(cp + drift1)          G billow = fbm((cp + drift1)*2.3 + c)
+     *   B thick  = fbm((cp + drift2)*0.55 + thickOff)
+     *   A bank   = fbm(cp*AB + bankDrift)    (AB = 0.16/0.42; equal to the per-
+     *              pixel dir.xz/max(up,0.02)*0.16 wherever up >= 0.02)
+     * Every uniform-dependent step after them (coverage window, cloudRich,
+     * defMix, bank threshold, the lit colour, moon, lightning, city glow) stays
+     * per pixel, so weather, time of day and a lightning flash need no re-bake.
+     *
+     * KEYED BY THE CLOUD PLANE, not by direction: texel (s, t) of an S x S
+     * RGBA16F target holds the channels at cp_t = (screenUV*2-1)*W, baked with
+     * the drift values of the moment (F.o*). Each channel's argument is
+     * A_k*cp + o_k(time), so its value NOW is the baked texel at
+     * cp + (o_k(now) - o_k(bake))/A_k: D.cD1 (f, billow), D.cD3 (thick), D.cDb
+     * (bank), recomputed every update(). The look is never stale; only the
+     * WINDOW ages. W = R + MARGIN + 2 texels, R = the cp radius of the lowest
+     * cached elevation (up = U0). When an offset passes MARGIN/2 a re-bake
+     * starts into the back target, N_BANDS row bands a frame, then the two
+     * swap; past MARGIN (a time jump, a CLOUD SPEED edit, a new session) the
+     * sky takes the per-pixel FBMs until the swap. Below U0 (the last 3.4 deg
+     * above the horizon, where 1/up^2 packs the most noise per degree) the
+     * sky is always per pixel.
+     *
+     * NUMBERS (scratch/skycache/sim.mjs: the cloud block in float64 against a
+     * bilinear, fp16-quantised bake; 960x540, vfov 55, pitch -4, 4 yaws, ACES +
+     * sRGB luma): S 768, U0 0.06 -> R 6.99, W 7.53, texel h 0.0196 cp. The
+     * highest octave is billow's 4th, 2.3 * 2.02^3 = 18.95 cells per cp, so
+     * 2.7 texels per noise cell. Day (cloud 0.44): 0.011 LSB mean |diff| over
+     * the sky, max 0.8, signed mean -0.003. Night (0.22): 0.075 mean, max 1.8,
+     * signed -0.013. 87.5 % of the sky pixels (up > 0.012) take the cache.
+     * Drift compensation checked at dt 30 s, CLOUD SPEED 2.5 (0.065 mean).
+     * Re-bake cadence: the bank offset grows fastest (3.7x drift1, 0.011 cp/s
+     * at CLOUD SPEED 1), so MARGIN/2 = 0.25 cp comes every ~23 s (9 s at 2.5);
+     * a re-bake is 768^2 texels x 16 vnoise over 16 frames (36,864 texels a
+     * frame, ~7 % of one day 1080p sky frame's noise, for 16 frames). */
+    function makeCache() {
+      const S = (ctx.cacheSize | 0) > 0 ? ctx.cacheSize | 0 : 768, U0 = 0.06, MARGIN = 0.5, N_BANDS = 16;
+      const AB = 0.16 / 0.42;
+      const R = 0.42 * Math.sqrt(1 - U0 * U0) / U0;
+      const W = (R + MARGIN) * (1 + 4 / S);   // + 2 texels for the bilinear edge
+      const mkRT = () => {
+        const rt = new THREE.RenderTarget(S, S, {
+          type: THREE.HalfFloatType, format: THREE.RGBAFormat, depthBuffer: false, stencilBuffer: false,
+          generateMipmaps: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+          wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping,
+        });
+        rt.texture.colorSpace = THREE.NoColorSpace;
+        rt.texture.name = "tlx-sky-cache";
+        return rt;
+      };
+      // The bake's drift origins (read by the fill pass) and the band's rows.
+      const F = { o1: v2(), o2: v2(), oT: v2(), ob: v2(), y0: uniform(-1.0), y1: uniform(1.0) };
+      // The four channels at this texel's cp. sample(uv) returns the texel
+      // written at screenUV == uv on both of three's backends (GLSL flips both
+      // screenCoordinate and render-target uvs; WGSL flips neither).
+      const fill = Fn(() => {
+        const cpt = vec2(screenUV).mul(2.0).sub(1.0).mul(W).toVar();
+        const q1 = cpt.add(F.o1).toVar();
+        return vec4(fbm(q1), fbm(q1.mul(2.3).add(vec2(11.7, 4.3))),
+          fbm(cpt.add(F.o2).mul(0.55).add(F.oT)), fbm(cpt.mul(AB).add(F.ob)));
+      })();
+      const mat = new THREE.MeshBasicNodeMaterial();
+      mat.fragmentNode = fill;
+      mat.vertexNode = vec4(positionGeometry.x, mix(F.y0, F.y1, positionGeometry.y), 0.0, 1.0);
+      mat.depthTest = false; mat.depthWrite = false; mat.side = THREE.DoubleSide;
+      mat.lights = false; mat.fog = false; mat.toneMapped = false; mat.transparent = false;
+      mat.blending = THREE.NoBlending;
+      mat.customProgramCacheKey = () => "tlx-sky-cache";
+      const geo = new THREE.BufferGeometry();
+      // One band: x -1..1, y 0..1 (the vertex node maps y onto [y0, y1]).
+      geo.setAttribute("position", new THREE.Float32BufferAttribute([-1, 0, 0, 1, 0, 0, 1, 1, 0, -1, 0, 0, 1, 1, 0, -1, 1, 0], 3));
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.frustumCulled = false; mesh.matrixAutoUpdate = false;
+      const scene = new THREE.Scene();
+      scene.add(mesh);
+      const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+      const rts = [mkRT(), mkRT()];
+      return { S, U0, MARGIN, N_BANDS, AB, W, F, mat, geo, scene, cam, rts, tex: texture(rts[0].texture),
+        front: 0, valid: false, filling: false, band: 0, dead: false,
+        fo1: [0, 0], fo2: [0, 0], foT: [0, 0], fob: [0, 0], fills: 0, bands: 0, maxOff: Infinity };
+    }
+    // The front bake's offsets for THIS update's drifts, and whether they fit.
+    function cacheSync() {
+      const d1 = D.drift1.value, d2 = D.drift2.value, to = D.thickOff.value, bd = D.bankDrift.value;
+      const ax = d1.x - C.fo1[0], ay = d1.y - C.fo1[1];
+      const tx = (d2.x - C.fo2[0]) + (to.x - C.foT[0]) / 0.55, ty = (d2.y - C.fo2[1]) + (to.y - C.foT[1]) / 0.55;
+      const bx = (bd.x - C.fob[0]) / C.AB, by = (bd.y - C.fob[1]) / C.AB;
+      D.cD1.value.set(ax, ay); D.cD3.value.set(tx, ty); D.cDb.value.set(bx, by);
+      C.maxOff = Math.max(Math.abs(ax), Math.abs(ay), Math.abs(tx), Math.abs(ty), Math.abs(bx), Math.abs(by));
+      D.cacheOn.value = C.valid && !C.dead && C.maxOff <= C.MARGIN ? 1 : 0;
+    }
+    /** Once a frame (tlx.js present, before the scene pass): bake one band of
+     * the back target when a re-bake is due. A no-op with no cloud (the block
+     * is skipped), with the cache off or after a failure. Leaves the
+     * renderer's target, MRT and autoClear as it found them. */
+    function cacheStep(renderer) {
+      if (!C || C.dead || !renderer || !(U.cloud.value > 0.001)) return;
+      if (!C.filling) {
+        if (C.valid && C.maxOff <= C.MARGIN * 0.5) return;
+        C.F.o1.value.copy(D.drift1.value); C.F.o2.value.copy(D.drift2.value);
+        C.F.oT.value.copy(D.thickOff.value); C.F.ob.value.copy(D.bankDrift.value);
+        C.filling = true; C.band = 0;
+      }
+      const k = C.band, N = C.N_BANDS;
+      C.F.y0.value = -1 + 2 * k / N; C.F.y1.value = -1 + 2 * (k + 1) / N;
+      const t = renderer.getRenderTarget(), mrt = renderer.getMRT ? renderer.getMRT() : null, ac = renderer.autoClear;
+      try {
+        if (mrt) renderer.setMRT(null);
+        renderer.autoClear = false;   // the other bands stay: no clear, loadOp "load"
+        renderer.setRenderTarget(C.rts[1 - C.front]);
+        renderer.render(C.scene, C.cam);
+      } catch (e) {
+        C.dead = true; C.filling = false; D.cacheOn.value = 0;
+        throw e;
+      } finally {
+        renderer.autoClear = ac;
+        renderer.setRenderTarget(t);
+        if (mrt) renderer.setMRT(mrt);
+      }
+      C.bands++;
+      if (++C.band < N) return;
+      // Complete: swap, adopt the bake's origins, re-derive the lookup now —
+      // this frame's scene pass already samples the new front.
+      C.front = 1 - C.front; C.filling = false; C.valid = true; C.fills++;
+      C.tex.value = C.rts[C.front].texture;
+      const F = C.F;
+      C.fo1[0] = F.o1.value.x; C.fo1[1] = F.o1.value.y; C.fo2[0] = F.o2.value.x; C.fo2[1] = F.o2.value.y;
+      C.foT[0] = F.oT.value.x; C.foT[1] = F.oT.value.y; C.fob[0] = F.ob.value.x; C.fob[1] = F.ob.value.y;
+      cacheSync();
+    }
+    /** The warm (tlx.js): compile the fill program against its own target.
+     * The caller owns and restores the render target and MRT (null here). */
+    async function cacheWarm(renderer) {
+      if (!C || C.dead || !renderer || !renderer.compileAsync) return;
+      renderer.setRenderTarget(C.rts[1 - C.front]);
+      await renderer.compileAsync(C.scene, C.cam);
+    }
+    function cacheState() {
+      return C ? { size: C.S, u0: C.U0, on: D.cacheOn.value, valid: C.valid, filling: C.filling, band: C.band,
+        fills: C.fills, bands: C.bands, maxOff: +C.maxOff.toFixed(4), dead: C.dead } : null;
+    }
+    function dispose() {
+      if (!C) return;
+      C.dead = true; D.cacheOn.value = 0;
+      for (const rt of C.rts) { try { rt.dispose(); } catch (_) { /* already gone */ } }
+      try { C.geo.dispose(); C.mat.dispose(); } catch (_) { /* already gone */ }
     }
     derive();
 
@@ -364,7 +530,26 @@
         // (time * cloudSpeed, derive()); evolution warps the second octave.
         const cp1 = cp.add(D.drift1).toVar();
         const cp2 = cp.add(D.drift2);
-        const f = fbm(cp1).toVar();
+        // E1 (C): the four FBMs from the cache above U0 while its window holds
+        // (D.cacheOn), else per pixel exactly as before. Without C the graph is
+        // the pre-cache one, node for node.
+        const cpv = C ? cp.toVar() : null;
+        const useC = C ? D.cacheOn.greaterThan(0.5).and(up.greaterThanEqual(C.U0)).toVar() : null;
+        const tap = C ? (off) => C.tex.sample(cpv.add(off).mul(0.5 / C.W).add(0.5)).level(float(0.0)) : null;
+        const f = C ? float(0.0).toVar() : fbm(cp1).toVar();
+        const billowN = C ? float(0.0).toVar() : null;
+        const thickN = C ? float(0.0).toVar() : null;
+        if (C) {
+          If(useC, () => {
+            const t1 = tap(D.cD1).toVar();
+            f.assign(t1.x);
+            billowN.assign(t1.y);
+            thickN.assign(tap(D.cD3).z);
+          }).Else(() => {
+            f.assign(fbm(cp1));
+            thickN.assign(fbm(cp2.mul(0.55).add(D.thickOff)));
+          });
+        }
         // Base coverage; fade in just above the horizon.
         const cov = smoothstep(D.covLo, 0.84, f)
           .mul(smoothstep(0.013, 0.05, up)).toVar();
@@ -372,7 +557,19 @@
         const cloudRich = D.cloudRich;
         If(cloudRich.greaterThan(0.001), () => {
           // Billow: higher-frequency octave carves lumpy cumulus definition.
-          const billow = fbm(cp1.mul(2.3).add(vec2(11.7, 4.3)));
+          // Cached: billow came with f; the bank tap only where its band is
+          // non-zero (the (1 - smoothstep(0.10, 0.26, up)) factor below is
+          // exactly 0 from up 0.26, so bankN = 0 there is the same product).
+          const bankN = C ? float(0.0).toVar() : null;
+          if (C) {
+            If(useC, () => {
+              If(up.lessThan(0.26), () => { bankN.assign(tap(D.cDb).w); });
+            }).Else(() => {
+              billowN.assign(fbm(cp1.mul(2.3).add(vec2(11.7, 4.3))));
+              bankN.assign(fbm(dir.xz.div(max(up, 0.02)).mul(0.16).add(D.bankDrift)));
+            });
+          }
+          const billow = C ? billowN : fbm(cp1.mul(2.3).add(vec2(11.7, 4.3)));
           const defined = smoothstep(0.42, 0.80, f.mul(0.6).add(billow.mul(0.45)))
             .mul(smoothstep(0.013, 0.05, up));
           // CLOUD DEFINITION knob (0.85 = as-shipped blend).
@@ -380,7 +577,7 @@
           // Horizon cloud-bank on the compressed *0.16 plane, banded ~1-9°.
           const bp = dir.xz.div(max(up, 0.02)).mul(0.16).add(D.bankDrift);
           const bankThresh = D.bankThresh;
-          const bankCov = smoothstep(bankThresh, 0.80, fbm(bp))
+          const bankCov = smoothstep(bankThresh, 0.80, C ? bankN : fbm(bp))
             .mul(smoothstep(0.013, 0.030, up))
             .mul(smoothstep(0.10, 0.26, up).oneMinus());
           cov.assign(max(cov, bankCov.mul(D.bankK)));
@@ -388,7 +585,7 @@
           cov.assign(mix(cov, smoothstep(0.18, 0.82, cov), cloudRich.mul(0.5)));
         });
         // Second FBM gives per-cloud thickness (thin = backlit, thick = dark).
-        const thick = clamp(fbm(cp2.mul(0.55).add(D.thickOff))
+        const thick = clamp((C ? thickN : fbm(cp2.mul(0.55).add(D.thickOff)))
           .mul(2.0).sub(0.55), 0.0, 1.0).toVar();
         const sl = pow(sd, 2.0).toVar();
         // Under heavy overcast even a bright sun gives grey clouds (effSunBright,
@@ -550,7 +747,7 @@
       return vec4(mix(U.zenith, U.horizon, t), 1.0);
     })();
 
-    return { node, fallbackNode, uniforms: U, update };
+    return { node, fallbackNode, uniforms: U, update, cacheStep, cacheWarm, cacheState, dispose };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { sky });

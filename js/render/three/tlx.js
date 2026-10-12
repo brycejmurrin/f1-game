@@ -1367,10 +1367,17 @@ const TLX = (function () {
 
       let sky = null;
       let skyMesh = null, skyMatFull = null, skyMatFallback = null;
+      // apex26.tlxSkyCache=0 — the sky's per-pixel cloud FBMs, node for node as
+      // before the E1 cache (tsl-sky.js makeCache). Default on wherever the full
+      // sky runs with a half-float post chain (the bake is an RGBA16F target);
+      // software GL takes the fallback sky and never builds it.
+      const _skyCacheOn = (function () {
+        try { return localStorage.getItem("apex26.tlxSkyCache") !== "0"; } catch (_) { return true; }
+      })() && !softContent("sky") && !!(post && post.hdrOk && post.hdrOk());
       try {
         if (window.TLXShaders && TLXShaders.sky) {
           if (!chunks && TLXShaders.chunks) chunks = TLXShaders.chunks(THREE, TSL);
-          sky = TLXShaders.sky(THREE, TSL, { chunks });
+          sky = TLXShaders.sky(THREE, TSL, { chunks, cache: _skyCacheOn });
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: sky factory failed, flat clear only —", e); } catch (_) {}
@@ -1425,6 +1432,20 @@ const TLX = (function () {
       }
       function hideSkyMesh() {
         if (skyMesh) skyMesh.visible = false;
+      }
+      // E1: at most one band of the sky's cloud-noise bake a frame, before the
+      // scene pass (tsl-sky.js cacheStep: a no-op unless a re-bake is due). A
+      // throw retires the cache — the sky keeps its per-pixel FBMs — never the frame.
+      let _skyCacheErr = null;
+      function skyCacheStep() {
+        if (!sky || !sky.cacheStep) return;
+        try { _gpuLastOperation = "render-sky-cache"; sky.cacheStep(renderer); }
+        catch (e) {
+          if (!_skyCacheErr) {
+            _skyCacheErr = (e && e.message) || String(e);
+            try { Log.warn("gfx", "TLX: sky cloud cache failed, per-pixel clouds —", _skyCacheErr); } catch (_) { /* harness */ }
+          }
+        }
       }
 
       let fx = null;
@@ -2495,6 +2516,8 @@ const TLX = (function () {
             // real ones.
             if (warmPlusOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
             _warmStages.shadow = Math.round(performance.now() - _tStage); _tStage = performance.now();
+            // The sky's E1 cloud-bake program on its own target (MRT null), so no re-bake links it mid-race.
+            if (typeof sky !== "undefined" && sky && sky.cacheWarm) { _gpuLastOperation = "compile-sky-cache"; await sky.cacheWarm(renderer); }
             _warmStages.mirror = null;
             if (wantMirrorWarm()) {
               prepareMirrorTarget(16, 8, true);   // true: also show the mirror's own instanced meshes (A1)
@@ -3343,6 +3366,7 @@ const TLX = (function () {
         _postRebuild = false;   // lit/fx go too: no chain to rebuild for
         _cancelSoftBlits();
         try { if (deadPost && deadPost.dispose) deadPost.dispose(); } catch (_) { /* best-effort degradation */ }
+        try { if (sky && sky.dispose) sky.dispose(); } catch (_) { /* its two bake targets: best-effort */ }
         sky = null;
         hideSkyMesh();
         try { scene.backgroundNode = null; } catch (_) { /* node already gone */ }
@@ -4702,6 +4726,7 @@ const TLX = (function () {
               painted = true;   // nothing drawn this frame by design; the last blit stays up
             } else if (post && _postF.proj && !_postF.noEnv) {
               pinSkyMaterial();
+              skyCacheStep();   // E1: before the MRT goes on (its own target, MRT null)
               if (lit && lit.setSsrMrt) lit.setSsrMrt(true);
               if (fx && fx.setSsrMrt) fx.setSsrMrt(true);
               const _hadMrt = !!(TSL.mrt && renderer.setMRT);
@@ -4887,6 +4912,7 @@ const TLX = (function () {
               stars: sky ? sky.uniforms.stars.value : -1,
               cloud: sky ? sky.uniforms.cloud.value : -1,
               sunDir: sky ? sky.uniforms.sunDir.value.toArray() : null,
+              cache: sky && sky.cacheState ? sky.cacheState() : null,   // E1 cloud-noise cache (tsl-sky.js)
             };
           },
           chunkState() {

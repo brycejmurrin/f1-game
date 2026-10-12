@@ -213,6 +213,7 @@
       lampWallSpill:  uniform(1.0),   // LAMP WALL SPILL
       envStr:         uniform(0.0),   // live env-probe strength; set by setEnvStr() from tlx.js begin()
       numLights:      uniform(0),
+      lampCap:        uniform(MAX_LIGHTS),   // per-chunk lamp cap: MAX except in the mirror (mirror-pass E9)
       // M4 shadow uniforms (the litU.uShadow* uploads in glx.js; defaults mirror TUNE_DEFS)
       // shadowStr is the EFFECTIVE strength: knob × key-luminance fade (with
       // the MOON SHADOWS floor), computed CPU-side in updateFrame like GLX.
@@ -424,6 +425,8 @@
       const L = frame.lights;
       const nL = L ? Math.min(MAX_LIGHTS, (L.length / 15) | 0) : 0;
       U.numLights.value = nL;
+      // E9: the mirror's per-chunk cap (frame.mirrorLampCap, mirror-pass.js); every other pass runs uncapped.
+      uf1(U.lampCap, mirror && frame.mirrorLampCap > 0 ? Math.min(MAX_LIGHTS, frame.mirrorLampCap) : MAX_LIGHTS);
       const hasLB = typeof LampBake !== "undefined";
       for (let i = 0; i < nL; i++) {
         const o = i * 15;
@@ -1787,7 +1790,8 @@
                          : ((i) => U.lampDir.element(i));
         // The loop still runs to MAX_LIGHTS — a TSL Loop bound must be a
         // compile-time constant — and breaks on whichever count applies.
-        const lampN = PC ? select(PC.use, PC.n, U.numLights) : U.numLights;
+        // The chunk's list is nearest-first (LampChunks), so min(n, lampCap) keeps its nearest lamps.
+        const lampN = PC ? select(PC.use, min(PC.n, U.lampCap), U.numLights) : U.numLights;
 
         Loop({ start: int(0), end: int(MAX_LIGHTS), type: "int", condition: "<" }, ({ i }) => {
           If(float(i).greaterThanEqual(lampN), () => { Break(); });
