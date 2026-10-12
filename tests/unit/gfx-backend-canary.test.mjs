@@ -1539,10 +1539,14 @@ test("TLX shadow cull packs CPU-side without uploading the lit InstancedMesh", (
   // batch per shadow rebuild), so pin BOTH halves — the call passes the const,
   // and the const is still {upload:false}. Matching only the name would let the
   // value drift to true and this guard would never notice.
-  assert.match(game, /cullInstances\([^)]*planes,\s*CULL_NO_UPLOAD\)/,
+  // C3b (TLX-PERF-HUNT 2026-10-11): the lamp passes pass the reach variant, the sun pass the plain one;
+  // both are hoisted constants and both are upload:false.
+  assert.match(game, /cullInstances\([^)]*planes,\s*reach \? CULL_NO_UPLOAD_REACH : CULL_NO_UPLOAD\)/,
     "sun/lamp prop-shadow must pass the no-upload cull opts");
   assert.match(game, /const CULL_NO_UPLOAD = \{ upload: false \};/,
     "…and those opts must still be upload:false");
+  assert.match(game, /const CULL_NO_UPLOAD_REACH = \{ upload: false, reach: _flReach \};/,
+    "…and the lamp variant carries the lamp reach for the radial cell cull");
   console.log("[gfx-canary] TLX shadow cull upload:false: OK");
 });
 
@@ -5675,19 +5679,22 @@ test("TLX draw records are pooled, one fixed shape, reset through resetRecs (TLX
   const src = read("js/render/three/tlx.js");
   const stripped = code("js/render/three/tlx.js");
   assert.doesNotMatch(stripped, /drawList\.push\(\{/, "no per-draw object literal left");
-  assert.equal((stripped.match(/drawList\.length = 0/g) || []).length, 1, "the one raw reset is inside resetRecs");
+  // A5 (TLX-PERF-HUNT 2026-10-11): the list IS the pool with a cursor; no `length = 0` anywhere.
+  assert.equal((stripped.match(/drawList\.length = 0/g) || []).length, 0, "no raw length reset: the pool keeps its backing store");
+  assert.match(stripped, /const drawList = _recPool;/, "the draw list is the record pool");
   assert.ok((stripped.match(/resetRecs\(\);/g) || []).length >= 4, "begin, env-soft exit, env face end and present tail all reset through resetRecs");
   // Run the real pool: a slot reused by an FX record must not carry the previous
   // lit draw's emissive/alpha (acquireMesh tests `!== undefined`), and a reset
   // must drop every reference the slot held.
-  const a = src.indexOf("const _recPool = [];"), b = src.indexOf("drawList.length = 0;", a);
+  const a = src.indexOf("const _recPool = [];"), b = src.indexOf("drawList.n = 0;", src.indexOf("function resetRecs", a));
   const end = src.indexOf("}", b) + 1;
-  const drawList = [];
-  const lib = new Function("drawList", src.slice(a, end) + "; return { pushRec, resetRecs, pool: () => _recPool };")(drawList);
+  const lib = new Function(src.slice(a, end) + "; return { pushRec, resetRecs, pool: () => _recPool, list: () => drawList };")();
+  const drawList = lib.list();
   lib.pushRec("G1", "M1", "MAT1", 0.7, 0.4, 1, null, null);
   const slot = drawList[0];
+  assert.equal(drawList.n, 1);
   lib.resetRecs();
-  assert.equal(drawList.length, 0);
+  assert.equal(drawList.n, 0, "the cursor resets; the slot stays allocated");
   assert.equal(slot.geo, null); assert.equal(slot.mat, null); assert.equal(slot.m, null);
   lib.pushRec("G2", null, "FXMAT", undefined, undefined, 0, null, null);
   assert.equal(drawList[0], slot, "the slot is reused");

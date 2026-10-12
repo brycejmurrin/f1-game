@@ -42,6 +42,9 @@ const ShadowPass = (function () {
     // (GLX shadowIbo / WGX shadowInstBuf / TLX CPU pack) — camera ibo untouched.
     const _shEye = [0, 0, 0], _shCtr = [0, 0, 0], _flEye = [0, 0, 0], _flTgt = [0, 0, 0];
     const CULL_NO_UPLOAD = { upload: false };
+    // C3b: the lamp passes also pass the lamp reach so instanced cells beyond the
+    // radius (+8 m) skip the shadow pack — no receiver inside can see them.
+    const CULL_NO_UPLOAD_REACH = { upload: false, reach: _flReach };
     // SUN MAP DEPTH SPAN. The eye sits SUN_BACK m up the sun axis from the
     // anchor, near 1, far SUN_FAR: casters up to SUN_BACK-1 m toward the sun and
     // receivers down to SUN_FAR-SUN_BACK m away from it land in the map. The old
@@ -116,7 +119,7 @@ const ShadowPass = (function () {
     // every instanced prop's ground shadow missing, blinking back at the next cell.
     // Halving the cost of a snap-cached pass means skipping a whole rebuild, never
     // half of one.
-    function _castPropBatchesShadow() {
+    function _castPropBatchesShadow(reach) {
       const _pb = G.track.meshes.propBatches;
       if (!_pb || !G.gfx.castShadowInstanced) return;
       // Sharing _shPlanes with the camera cull is safe: backends snapshot CONTENTS.
@@ -126,7 +129,7 @@ const ShadowPass = (function () {
         if (planes && G.gfx.cullInstances) {
           // upload:false → shadow pack only. WGX/GLX use a second instance buffer;
           // TLX packs CPU-side into a second InstancedMesh. Camera ibo/cache stay.
-          G.gfx.castShadowInstanced(_pb[i], G.gfx.cullInstances(_pb[i], planes, CULL_NO_UPLOAD));
+          G.gfx.castShadowInstanced(_pb[i], G.gfx.cullInstances(_pb[i], planes, reach ? CULL_NO_UPLOAD_REACH : CULL_NO_UPLOAD));
         } else G.gfx.castShadowInstanced(_pb[i]);
       }
     }
@@ -629,7 +632,7 @@ const ShadowPass = (function () {
             _flReach[0] = L[o]; _flReach[1] = L[o + 1]; _flReach[2] = L[o + 2]; _flReach[3] = _lsR;
             if (!_carsOnlyPass && G.gfx.lampStaticBegin && G.gfx.lampStaticBegin(_mFlVP)) {
               G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT, _flReach);
-              _castPropBatchesShadow();
+              _castPropBatchesShadow(_flReach);
               G.gfx.lampStaticEnd();
               _carsOnlyPass = !!(G.gfx.lampCarsBegin && G.gfx.lampCarsBegin(_mFlVP, flBest));
             }
@@ -660,7 +663,7 @@ const ShadowPass = (function () {
             if (!_carsOnlyPass) {
               G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT, _flReach);
               // Lamp pass: cull against the lamp perspective frustum (castCullVP).
-              _castPropBatchesShadow();
+              _castPropBatchesShadow(_flReach);
             }
             G.gfx.lampShadowEnd();
             } // end lamp-shadow snap rebuild
