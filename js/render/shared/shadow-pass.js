@@ -30,6 +30,11 @@ const ShadowPass = (function () {
     const _mCView = new Float32Array(16), _mCProj = new Float32Array(16), _mCVP = new Float32Array(16);
     // Nearest-floodlight spot-shadow pass scratches (per-frame 512² lamp depth map).
     const _mFlView = new Float32Array(16), _mFlProj = new Float32Array(16), _mFlVP = new Float32Array(16);
+    // The lamp pass's caster reach [x, y, z, r] for castShadowChunked (see lampPass).
+    const _flReach = [0, 0, 0, 0];
+    // The car pass skipped its last run for want of casters (see sunPass): the
+    // map still holds an older frame's cars, so a cadence keep must not arm it.
+    let _carMapEmpty = false;
 
     const _upX = [1, 0, 0], _upY = [0, 1, 0];   // shadow-basis up choices (read-only)
     // lookAtTo() eye/target scratches — it reads all three vectors synchronously
@@ -37,6 +42,9 @@ const ShadowPass = (function () {
     // (GLX shadowIbo / WGX shadowInstBuf / TLX CPU pack) — camera ibo untouched.
     const _shEye = [0, 0, 0], _shCtr = [0, 0, 0], _flEye = [0, 0, 0], _flTgt = [0, 0, 0];
     const CULL_NO_UPLOAD = { upload: false };
+    // C3b: the lamp passes also pass the lamp reach so instanced cells beyond the
+    // radius (+8 m) skip the shadow pack — no receiver inside can see them.
+    const CULL_NO_UPLOAD_REACH = { upload: false, reach: _flReach };
     // SUN MAP DEPTH SPAN. The eye sits SUN_BACK m up the sun axis from the
     // anchor, near 1, far SUN_FAR: casters up to SUN_BACK-1 m toward the sun and
     // receivers down to SUN_FAR-SUN_BACK m away from it land in the map. The old
@@ -111,7 +119,7 @@ const ShadowPass = (function () {
     // every instanced prop's ground shadow missing, blinking back at the next cell.
     // Halving the cost of a snap-cached pass means skipping a whole rebuild, never
     // half of one.
-    function _castPropBatchesShadow() {
+    function _castPropBatchesShadow(reach) {
       const _pb = G.track.meshes.propBatches;
       if (!_pb || !G.gfx.castShadowInstanced) return;
       // Sharing _shPlanes with the camera cull is safe: backends snapshot CONTENTS.
@@ -121,7 +129,7 @@ const ShadowPass = (function () {
         if (planes && G.gfx.cullInstances) {
           // upload:false → shadow pack only. WGX/GLX use a second instance buffer;
           // TLX packs CPU-side into a second InstancedMesh. Camera ibo/cache stay.
-          G.gfx.castShadowInstanced(_pb[i], G.gfx.cullInstances(_pb[i], planes, CULL_NO_UPLOAD));
+          G.gfx.castShadowInstanced(_pb[i], G.gfx.cullInstances(_pb[i], planes, reach ? CULL_NO_UPLOAD_REACH : CULL_NO_UPLOAD));
         } else G.gfx.castShadowInstanced(_pb[i]);
       }
     }
@@ -195,6 +203,12 @@ const ShadowPass = (function () {
     function _playerMat() { return _playerCockpit ? _cockpitShadowMat : _livePlayerShadowMat; }
     function _castPlayer() {
       G.gfx.castShadow(_playerCockpit || deps.teamMesh(G.player.team, G.player, true), _playerMat());
+    }
+    // Pooled AI caster i reaches the car map's box (r2 = _csR², see sunPass). The
+    // player's pooled entry is stale and never cast: _castPlayer draws it live.
+    function _carCastable(i, r2) {
+      const m = _shadowMats[i], dx = m[12] - _shadowCtr[0], dz = m[14] - _shadowCtr[2];
+      return dx * dx + dz * dz <= r2 && !!_shadowCast[i] && _shadowCars[i] !== G.player;
     }
     // Flush all accumulated car shadows in one pass — shadowProg+shadowVAO+blend+
     // depthMask are set once for the whole field instead of ping-ponging with the
@@ -379,7 +393,7 @@ const ShadowPass = (function () {
         const _carShadowWanted = G.gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 &&
             (_hasLivePlayerShadow || _shadowCount > 0) && G.player && G.state !== "menu" &&
             (_shKeyG > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01));
-        if (_carShadowWanted && !_carShadowFrame && G.gfx.carShadowKeep) G.gfx.carShadowKeep();
+        if (_carShadowWanted && !_carShadowFrame && G.gfx.carShadowKeep && !_carMapEmpty) G.gfx.carShadowKeep();
         if (G.gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 && _carShadowFrame &&
             (_hasLivePlayerShadow || _shadowCount > 0) && G.player && G.state !== "menu") {
           const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
@@ -399,8 +413,6 @@ const ShadowPass = (function () {
             // so the bias needs to grow proportionally or the car self-shadows into acne
             // (uCarBiasScale, applied in glsl-lit.js). cBox/42 == 1 at the default, matching the
             // originally-tuned bias exactly.
-            G.gfx.carShadowBegin(_mCVP, cBox / 42);
-            if (_hasLivePlayerShadow) _castPlayer();
             // Skip casters that CANNOT reach the shadow volume. gfx.castShadow does
             // no culling of its own (js/render/glx/shadow.js): it binds the VAO,
             // uploads uModel and draws, ~22k verts per silhouette car (wheels +
@@ -419,13 +431,31 @@ const ShadowPass = (function () {
             // a caster is provably outside — no visible change, only skipped draws.
             const _csR = Math.hypot(cBox, 170) + 8;   // +8: car length + mesh extent
             const _csR2 = _csR * _csR;
-            for (let i = 0; i < _shadowCount; i++) {
-              const _sm2 = _shadowMats[i];
-              const _sdx = _sm2[12] - _shadowCtr[0], _sdz = _sm2[14] - _shadowCtr[2];
-              if (_sdx * _sdx + _sdz * _sdz > _csR2 || !_shadowCast[i]) continue;
-              if (_shadowCars[i] !== G.player) G.gfx.castShadow(deps.teamMesh(_shadowTeams[i], _shadowCars[i], true), _shadowMats[i]);
+            // THE PLAYER IS GATED TOO. It was cast unconditionally, so a TV /
+            // broadcast / replay camera far from it still drew it, clipped, into
+            // an otherwise empty map. Its bound is the box's true corner: ±cBox on
+            // BOTH perpendicular axes and up to 170 m along the sun, so no box point
+            // is farther than hypot(cBox, cBox, 170) from the anchor (+8 as above).
+            const _cpm = _playerMat();
+            const _cpdx = _cpm[12] - _shadowCtr[0], _cpdz = _cpm[14] - _shadowCtr[2];
+            const _cpR = Math.hypot(cBox, cBox, 170) + 8;
+            const _carPlayerIn = _hasLivePlayerShadow && _cpdx * _cpdx + _cpdz * _cpdz <= _cpR * _cpR;
+            let _carAny = _carPlayerIn;
+            for (let i = 0; i < _shadowCount && !_carAny; i++) _carAny = _carCastable(i, _csR2);
+            // NO CASTER, NO PASS: no clear, no submit, and no arm, so the lit
+            // shaders skip the car-map taps — exactly what an empty map returns
+            // (cleared depth 1 passes every compare, and min(sh, 1) = sh). The
+            // map then holds an OLDER frame's cars, so the cadence keep above
+            // stays off until a pass draws it again (_carMapEmpty).
+            _carMapEmpty = !_carAny;
+            if (_carAny) {
+              G.gfx.carShadowBegin(_mCVP, cBox / 42);
+              if (_carPlayerIn) _castPlayer();
+              for (let i = 0; i < _shadowCount; i++) {
+                if (_carCastable(i, _csR2)) G.gfx.castShadow(deps.teamMesh(_shadowTeams[i], _shadowCars[i], true), _shadowMats[i]);
+              }
+              G.gfx.carShadowEnd();
             }
-            G.gfx.carShadowEnd();
           }
         }
       }
@@ -584,11 +614,28 @@ const ShadowPass = (function () {
             // walls, the mast pole below the head) is farther out than that.
             M4.perspectiveTo(_mFlProj, fov, 1, 2.5, Math.max(rad, 10));
             M4.mulTo(_mFlVP, _mFlProj, _mFlView);
-            // CAR-ONLY REBUILD FROM THE STATIC MAP (TLX-PERF-PLAN L1, TLX only): the
-            // lamp is unchanged, so its static props are already in the backend's
-            // static depth map — copy it and draw the cars alone. false = no valid
-            // static map (first pass, a failed copy, GLX/WGX): the full pass below.
-            const _carsOnlyPass = _carOnly && G.gfx.lampCarsBegin && G.gfx.lampCarsBegin(_mFlVP, flBest);
+            // THE LAMP MAP = THE STATIC MAP + THE CARS (TLX-PERF-PLAN L1, TLX only).
+            // A car-only change copies the static props depth the backend already
+            // holds and draws the cars alone. Any other rebuild (a lamp change, the
+            // first, a stale static map) renders the props ONCE into the static map
+            // first and then copies it the same way: the props used to be drawn
+            // twice, into the lamp map and again, under the same planes, into the
+            // static map. false from lampCarsBegin (no valid static map, lampRT
+            // never rendered, a failed copy) and GLX/WGX, which have neither hook:
+            // the full pass below.
+            let _carsOnlyPass = _carOnly && G.gfx.lampCarsBegin && G.gfx.lampCarsBegin(_mFlVP, flBest);
+            // PROPS TAKE THE CARS' RADIAL BOUND. The cone's far corners reach ~4x
+            // rad, and the argument at the car loop below (a caster beyond rad can
+            // only occlude fragments this lamp does not light) holds for any
+            // caster, so castShadowChunked also drops a chunk whose AABB lies
+            // farther than _lsR from the lamp. GLX/WGX ignore the third argument.
+            _flReach[0] = L[o]; _flReach[1] = L[o + 1]; _flReach[2] = L[o + 2]; _flReach[3] = _lsR;
+            if (!_carsOnlyPass && G.gfx.lampStaticBegin && G.gfx.lampStaticBegin(_mFlVP)) {
+              G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT, _flReach);
+              _castPropBatchesShadow(_flReach);
+              G.gfx.lampStaticEnd();
+              _carsOnlyPass = !!(G.gfx.lampCarsBegin && G.gfx.lampCarsBegin(_mFlVP, flBest));
+            }
             if (!_carsOnlyPass) G.gfx.lampShadowBegin(_mFlVP, flBest);
             if (_playerIn) _castPlayer();
             // Distance-cull the casters, the twin of the sun pass's _csR above — the
@@ -614,19 +661,11 @@ const ShadowPass = (function () {
               if (_shadowCars[i] !== G.player) G.gfx.castShadow(deps.teamMesh(_shadowTeams[i], _shadowCars[i], true), _shadowMats[i]);
             }
             if (!_carsOnlyPass) {
-              G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT);
+              G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT, _flReach);
               // Lamp pass: cull against the lamp perspective frustum (castCullVP).
-              _castPropBatchesShadow();
+              _castPropBatchesShadow(_flReach);
             }
             G.gfx.lampShadowEnd();
-            // A full pass also refreshes the static map (props only, same VP), so
-            // the car-only rebuilds that follow under this lamp can copy it. Only
-            // on a full pass — a lamp change or the first — which is rare.
-            if (!_carsOnlyPass && G.gfx.lampStaticBegin && G.gfx.lampStaticBegin(_mFlVP)) {
-              G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT);
-              _castPropBatchesShadow();
-              G.gfx.lampStaticEnd();
-            }
             } // end lamp-shadow snap rebuild
           }
         }

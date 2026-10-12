@@ -260,3 +260,52 @@ meanLuma, gpuMs) — a day leg covers E1, night legs E9 and E11.
   mirror's instance re-pack (A1, and E's cost table).
 - Two hunters' ruled-out lists disagree with nothing in the others'; the one open
   conflict is D7 (fold SSAO into the godray target) versus D6 (RG11B10 for godray).
+
+## Fix pass, 2026-10-12 (PR #1446, `cursor/tlx-perf-fixes-3b7e`)
+
+Bryce: "Fix all". Five implementation lanes, one Opus agent each in its own worktree, two
+at a time, each limited to the pixel-identical items of one section. What landed, by
+commit:
+
+| commit | items | note |
+|---|---|---|
+| lit shader | B2, B3, B4, B6, B8, B9, B13, E12 | verified with a TSL codegen dump (GLSL + WGSL, plain / chunked / instanced) diffed per item; B1 was a false premise (r186 emits an un-`toVar`'d tap at its first use, already inside the gate), B5 is a look change |
+| post chain + vendor | D1, D2 (R16F one-channel, not R8: the composite's smoothstep ramp has real values inside it), D5a, D6 (AO R8), D10; vendor patches §11 (D3) and §12 (A2) | D9 is a no-op off OculusBrowser; D8 only the depth clear |
+| shadows | C1, C2, C3 (chunked + instanced cells), C6, C8 | C1 moves the WebGL2 lamp map to DEPTH32F (quantisation-level only) |
+| mirror / sky / fx | E2, E5, E7a | E7b skipped: the halo is 1.1 % of its centre at ±0.8 |
+| frame path | A1, A3 (sized upload: 16 KB, not 64 KB, on montreal), A4, A5, A6, A7 (3 of 4), C3b, C5 (one copy), E6 (look change in the inset only), E10 | E8 skipped: the inset samples trilinear levels 1-2+ |
+
+Not done, with the reason: B10–B12, B14, D4, D7, D11, D6-RG11B10F, A2-instancing (L), C4
+(L), C7, E1 (L), E4 (M, three backends), E9. The AI car-pass bound `hypot(cBox, 170) + 8`
+is too small above ~108 m SHADOW DISTANCE (unfixed: changes output).
+
+### Evidence
+
+- Frozen A/B, `backend-compare.mjs montreal 0.12 eye --backends three`, untouched tip in a
+  worktree vs the fix tree: day MAD 0.585 (same-tree floor 0.584; 98 vs 80 px > 32, all
+  silhouette edge jitter), night MAD 0.003 (0 px > 32), mean luma identical both legs.
+- `gfx-probe --backend three` plain, `tlxForceHw=1` and `hudMirror=on`: PASS, gpuErrors 0.
+- Remote `tiny` 4/4, `gfx` 4 llvmpipe shards; per-lane unit files all green; the WebGPU path
+  is the gpu-census macOS dispatch (no Vulkan ICD in the cloud container, so lavapipe cannot
+  boot there on any commit).
+
+### Two lessons (measured here, 2026-10-12)
+
+1. **`gfx-probe`'s PASS does not fail on a page JS error.** Its gate is a visible presented
+   canvas plus `gpuErrors`. A6's first cut threw `Cannot read properties of undefined
+   (reading 'instanced')` on EVERY frame (`drawList[-1]` from a `-1` sentinel) and the probe
+   said PASS; the error card was only visible in `page-hud.png`, and the only textual
+   evidence was `console.txt` (`[pageerror]`). After a renderer change, grep every probe's
+   `console.txt` for `pageerror|Uncaught|TypeError` and diff the count against the untouched
+   tip (the tip itself carries one pre-existing `reading 'total'`).
+2. **Software CI never runs the instanced-batch paths.** `skipBatches()` is true on
+   SwiftShader and llvmpipe unless `apex26.tlxForceHw=batches`, so the remote `tiny` and
+   `gfx` groups, the unit files and the plain probe were all green on the crashing head. A
+   change under `skipBatches()` needs a probe with `--ls apex26.tlxForceHw=1` (or the named
+   part) before it is called verified, and the census on real hardware after.
+3. **The probe's page capture is not a frozen frame.** `page-hud.png` lands on the title
+   screen or in the race depending on build time (the untouched tip captured the title
+   twice; the fix tree the race), and the perf governor's dynamic render scale changes the
+   canvas size between a loaded and a quiet box (1152×648 vs 1280×720). A pixel A/B needs
+   `backend-compare.mjs` (one deterministic scene) and the same-tree floor captured in the
+   same session.

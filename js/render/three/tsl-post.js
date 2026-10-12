@@ -352,10 +352,11 @@
           const lampAccum = vec3(0.0).toVar();
           const trans = float(1.0).toVar();            // Beer-Lambert extinction
           const groundY = grU.eye.y.sub(4.0).toVar();  // local ground datum
+          const stepT = exp(stepLen.mul(-0.010)).toVar();   // loop-invariant (same value, same order)
           Loop({ start: int(0), end: int(16), type: "int", condition: "<" }, ({ i }) => {
             const td = t0.add(stepLen.mul(float(i))).toVar();
             const p = ro.add(rd.mul(td)).toVar();
-            trans.mulAssign(exp(stepLen.mul(-0.010)));
+            trans.mulAssign(stepT);
             // SUN half: GLX/WGSL gate on uStr. Night haveGR is lampVol with
             // str=0 (moon-key sunDir.y ~0.97) — 16 shadow taps + gCloud FBM
             // were * 0. trans stays outside so lampAccum is bit-identical.
@@ -369,7 +370,10 @@
               .and(sc.z.lessThan(1.0)), () => {
               lit.assign(texture(SHD.sunTex, flipUV(sc.xy)).compare(sc.z.sub(0.002)));
             });
-            lit.mulAssign(gCloud(p).mul(0.62).oneMinus());   // SOFT crepuscular bands
+            // Shadowed step: 0 * cloud is 0 — skip the 3-octave FBM (bit-identical).
+            If(lit.greaterThan(0.0), () => {
+              lit.mulAssign(gCloud(p).mul(0.62).oneMinus());   // SOFT crepuscular bands
+            });
             accum.addAssign(lit.mul(hSun).mul(trans));
             });
             // Lamp in-scatter: nearest-6 aimed beams js/render/glx/shaders/glsl-post.js.
@@ -546,7 +550,6 @@
         });
         const scn = vec4(sceneT.sample(TL(hazeUV))).toVar();  // .rgb colour; tag is tagT
         const c = vec3(scn.rgb).toVar();
-        const tagA = float(tagT.sample(TL(hazeUV)).r).toVar();
         const caDir = vec2(vUV.sub(0.5)).toVar();
 
         // CHROMATIC ABERRATION js/render/glx/shaders/glsl-post.js — stays in the hazeUV domain.
@@ -604,7 +607,14 @@
         });
 
         // Wet-road + car-paint screen-space reflection js/render/glx/shaders/glsl-post.js
-        const carPx = smoothstep(0.42, 0.55, tagA).oneMinus().toVar();
+        // The tag is fetched only where carPx can matter: inside the SSR gate
+        // with carReflect != 0 (carTerm = carMask * carReflect). Elsewhere 0 is
+        // bit-identical — the gate's car term is false and carTerm stays 0 —
+        // and a car-SSR-off frame (mobile MEDIUM) never reads the attachment.
+        const carPx = float(0.0).toVar();
+        If(C.ssrOk.greaterThan(0.5).and(C.carReflect.notEqual(0.0)).and(vUV.y.lessThan(C.ssrTopUV)), () => {
+          carPx.assign(smoothstep(0.42, 0.55, tagT.sample(TL(hazeUV)).r).oneMinus());
+        });
         // Gate ported exactly from COMPOSITE_FS (js/render/glx/shaders/glsl-post.js):
         // car-paint pixels only march when the CAR reflection knob is live,
         // and the free top-UV compare runs before the depth fetch (generated
