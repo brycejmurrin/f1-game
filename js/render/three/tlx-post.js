@@ -8,13 +8,14 @@
  *
  * PASS ORDER (glx/post.js present() 1:1):
  *   0.  SSAO (half res)  -> separable blur H+V          (aoStr|contact gated)
- *   0b. GODRAY (half res, world-space sun-map march) -> double blur H+V x2
+ *   0b. GODRAY (half res, world-space sun-map march) -> double blur H+V x2;
+ *       with both live, SSAO rides in the godray alpha + blur pair 1 (D7)
  *   1.  BRIGHT pass  scene -> bloom level 0 (half res)  (bloomAmt gated)
  *   2.  DOWN x(n-1)  13-tap Jimenez mip chain; Karis on the first mip only
  *       UP   x(n-1)  9-tap tent, ADDITIVE into each larger level; the FINAL
  *                    pass into level 0 OVERWRITES (js/render/glx/shaders/glsl-post.js)
  *   3.  COMPOSITE    -> LDR target (all 58 uniforms; ACES/grade/SSR/flare)
- *   4.  FXAA         -> canvas
+ *   4.  FXAA         -> canvas (+ the mirror inset in the same pass, D8)
  *
  * PER-BLOCK BAIL: a disabled block allocates NOTHING — the SSAO pair, the
  *   godray pair and the bloom chain are created lazily on the first frame
@@ -88,10 +89,10 @@
     // present(opts) receives ssao/godray/bloom already zeroed by PerfGov.tier()
     // and the GRAPHICS preset, so a disabled block allocates nothing (the
     // per-block bail above). A second phone-only gate here would shadow the
-    // governor's decision rather than add to it. The one place where a phone
-    // still costs more than GLX is FORMAT, not gating: GLX uses R11F_G11F_B10F
-    // for bloom/godray, RGBA16F here (r186 has rg11b10ufloat, but it needs a
-    // renderability gate and a look A/B). The SSAO pair is R8 on both.
+    // governor's decision rather than add to it. FORMATS: the SSAO pair is R8
+    // and bloom R11F_G11F_B10F (when renderable) on both; the godray pair stays
+    // RGBA16F here (GLX: R11F_G11F_B10F) because its alpha carries the folded
+    // SSAO term (hunt D7).
     const shadow = ctx.shadow || null;
     const viz = (ctx.viz && POST_VIZ.indexOf(ctx.viz) >= 0) ? ctx.viz : null;
     // The RT the viz branch last wrote — see presentedTarget().
@@ -104,14 +105,25 @@
     // washed ground. A query that throws must not keep hdr=true on a phone
     // (incomplete HalfFloat framebuffer = black / half-black frame).
     let hdr = !!(renderer.backend && renderer.backend.isWebGPUBackend);
+    // BLOOM FORMAT (hunt D6): R11F_G11F_B10F as GLX when it is RENDERABLE (and
+    // blendable — the UP passes add): WebGL2 needs EXT_color_buffer_float (not
+    // the half-float one: iOS Safari stays RGBA16F); WebGPU the
+    // "rg11b10ufloat-renderable" feature three requests whenever the adapter
+    // has it. Every bloom reader takes .rgb only. apex26.tlxBloom11=0 reverts.
+    let bloom11 = false;
     try {
       const gl = renderer.backend && renderer.backend.gl;
       if (gl) {
-        hdr = !!(gl.getExtension("EXT_color_buffer_float")
-              || gl.getExtension("EXT_color_buffer_half_float"));
+        bloom11 = !!gl.getExtension("EXT_color_buffer_float");
+        hdr = bloom11 || !!gl.getExtension("EXT_color_buffer_half_float");
+      } else if (hdr) {
+        const dev = renderer.backend.device;
+        bloom11 = !!(dev && dev.features && dev.features.has("rg11b10ufloat-renderable"));
       }
-    } catch (_) { hdr = !!(renderer.backend && renderer.backend.isWebGPUBackend); }
+    } catch (_) { hdr = !!(renderer.backend && renderer.backend.isWebGPUBackend); bloom11 = false; }
+    try { if (localStorage.getItem("apex26.tlxBloom11") === "0") bloom11 = false; } catch (_) { /* no storage: on */ }
     const hdrType = hdr ? THREE.HalfFloatType : THREE.UnsignedByteType;
+    bloom11 = bloom11 && hdr && THREE.UnsignedInt101111Type != null && THREE.RGBFormat != null;
 
     // 1x1 no-op fallbacks (glx/post.js whiteTex/blackTex)
     function onePx(v) {
@@ -197,6 +209,9 @@
     let godrayRT = null, godrayBlurRT = null, grW = 1, grH = 1;
     let _grLite = true;   // G1 — see the godray blur loop in present()
     try { _grLite = localStorage.getItem("apex26.grLite") !== "0"; } catch (_) { /* no storage: on */ }
+    // D7: SSAO rides in the godray target's alpha when both run; =0 restores the pair.
+    let _aoFold = true;
+    try { _aoFold = localStorage.getItem("apex26.tlxAoFold") !== "0"; } catch (_) { /* no storage: on */ }
     // P2 / audit #6: fixed per-pair post materials (no .tex.value ping-pong).
     // apex26.tlxPostFixedMats=0 restores the shared-material swaps.
     let _fixedMats = true;
@@ -251,7 +266,10 @@
     function ensureBloom() {
       if (!bloomLv) {
         bloomLv = [];
-        for (let i = 0; i < BLOOM_LEVELS_MAX; i++) bloomLv.push({ rt: makeRT(1, 1, hdrType), w: 1, h: 1 });
+        for (let i = 0; i < BLOOM_LEVELS_MAX; i++) {
+          const rt = bloom11 ? makeRT(1, 1, THREE.UnsignedInt101111Type, THREE.RGBFormat) : makeRT(1, 1, hdrType);
+          bloomLv.push({ rt, w: 1, h: 1 });
+        }
         layoutBloom();
         bindFixedBloom();
       }
@@ -315,8 +333,9 @@
     }
 
     // Rear-view mirror (tlx.js mirrorBegin/End render it; present() composites
-    // it LAST, over the FXAA / SGSR output, into the rect tlx.js hands over in
-    // present-target pixels, top-left origin). null tex = no mirror this frame.
+    // it LAST — inside the FXAA pass, or over the SGSR output — into the rect
+    // tlx.js hands over in present-target pixels, top-left origin). null tex =
+    // no mirror this frame.
     let _mirTex = null, _mirHdr = true, _mirComposites = 0, _mirFlip = true;
     const _mirRect = [0, 0, 0, 0];
     let _mirPrevVP = null;   // the canvas viewport to restore (made on first use)
@@ -326,22 +345,58 @@
       _mirHdr = !!hdr;
       _mirFlip = flip !== false;
     }
+    // The rect / hdr / flip uniforms are shared by the mirror pass and the
+    // FXAA fold (tsl-post.js mirrorU); false = no mirror this frame.
+    function mirrorUniforms() {
+      const M = P.mirror;
+      if (!_mirTex || !M) return false;
+      M.U.rect.value.set(_mirRect[0], _mirRect[1], _mirRect[2], _mirRect[3]);
+      M.U.hdr.value = _mirHdr ? 1 : 0;
+      if (M.U.flip) M.U.flip.value = _mirFlip ? 1 : 0;
+      return true;
+    }
+    // D8 (TLX-PERF-HUNT): on the FXAA -> canvas path the inset is drawn inside
+    // the FXAA pass (same target, filter, implicit LOD and overwrite), so the
+    // canvas takes ONE render pass. apex26.tlxMirFold=0 restores the second
+    // pass. Returns whether the FXAA pass carries it this frame.
+    let _mirFold = true;
+    try { _mirFold = localStorage.getItem("apex26.tlxMirFold") !== "0"; } catch (_) { /* no storage: on */ }
+    function fxaaMirror(on) {
+      const FX = P.fxaa;
+      const fold = !!(on && _mirFold && FX.mirTex && mirrorUniforms());
+      FX.U.mir.value = fold ? 1 : 0;
+      FX.mirTex.value = fold ? _mirTex : blackTex;   // never hold a dead mirror target
+      return fold;
+    }
     // Viewport, not scissor: the quad covers exactly the viewport. A target's
     // own .viewport is what three reads when one is bound; the renderer's is
     // the canvas's (pixelRatio 1, tlx.js).
     function mirrorPass(dest) {
       const M = P.mirror;
-      if (!_mirTex || !M) return;
+      if (!mirrorUniforms()) return;
       M.tex.value = _mirTex;
-      M.U.rect.value.set(_mirRect[0], _mirRect[1], _mirRect[2], _mirRect[3]);
-      M.U.hdr.value = _mirHdr ? 1 : 0;
-      if (M.U.flip) M.U.flip.value = _mirFlip ? 1 : 0;
       if (dest) dest.viewport.set(_mirRect[0], _mirRect[1], _mirRect[2], _mirRect[3]);
       else { renderer.getViewport(_mirPrevVP || (_mirPrevVP = new THREE.Vector4())); renderer.setViewport(_mirRect[0], _mirRect[1], _mirRect[2], _mirRect[3]); }
       try { runPass(M.mat, dest, true); _mirComposites++; }
       finally {
         if (dest) dest.viewport.set(0, 0, dest.width, dest.height);
         else renderer.setViewport(_mirPrevVP);
+      }
+    }
+
+    // D11: the shader-side scalars of a perspective proj / invProj (tsl-post.js
+    // perspU). Anything else (skew, ortho) would break the scalar form: say so
+    // once rather than silently mis-reconstruct every SSAO / SSR tap.
+    let _perspWarned = false;
+    function setPersp(U, ip, p) {
+      U.ipXY.value.set(ip[0], ip[5], ip[12], ip[13]);
+      U.ipZW.value.set(ip[14], ip[11], ip[15]);
+      if (!p) return;
+      U.pXY.value.set(p[0], p[5], p[8], p[9]);
+      U.pW.value = p[11];
+      if (!_perspWarned && (p[1] || p[2] || p[3] || p[4] || p[6] || p[7] || p[12] || p[13] || p[15])) {
+        _perspWarned = true;
+        try { Log.warn("gfx", "TLX post: non-perspective projection; SSAO/SSR assume a perspective proj"); } catch (_) { /* harness */ }
       }
     }
 
@@ -423,11 +478,19 @@
 
       // 0) SSAO + separable blur (js/render/glx/shaders/glsl-post.js). Runs when EITHER
       // knob is live — contact shadows ride in this pass.
-      const haveAO = !!((aoStr > 0 || contactStr > 0) && F.invProj) && ensureAO();
-      if (haveAO) {
+      const wantAO = !!((aoStr > 0 || contactStr > 0) && F.invProj);
+      const sunGR = !!(S && S.enabled) && grStr > 0;
+      const wantGR = !!(P.godray && F.invVP && (sunGR || lampVol > 0));
+      // D7 (TLX-PERF-HUNT): with both blocks live the godray march writes the AO
+      // term to its target's alpha and blur pair 1 blurs it with the AO kernel:
+      // -3 half-res passes. ?viz=ssao keeps the standalone pair it blits. The
+      // warm (compileJobs) still queues the standalone pair: AO without god-rays
+      // (no sun shadow, GOD-RAY knob 0) keeps the program set it had.
+      const aoFold = _aoFold && wantAO && wantGR && viz !== "ssao";
+      const haveAO = wantAO && (!aoFold || !!compileJobs) && ensureAO();
+      if (wantAO) {
         const U = P.ssao.U;
-        U.invProj.value.fromArray(F.invProj);
-        U.proj.value.fromArray(F.proj || F.invProj);
+        setPersp(U, F.invProj, F.proj);
         const sv = F.sunVS || [0, 0, -1];
         U.sunVS.value.set(sv[0], sv[1], sv[2]);
         U.texel.value.set(1 / aoW, 1 / aoH);
@@ -435,6 +498,8 @@
         U.radius.value = gk("ssaoRadius");          // AO RADIUS knob
         const csOn = contactStr > 0 && F.proj && F.sunVS;
         U.contact.value = csOn ? contactStr : 0;
+      }
+      if (haveAO) {
         runPass(P.ssao.mat, ssaoRT);
         // Blur H (ssao -> blur) then V (blur -> ssao). Half res.
         if (_fixedMats && P.blurAOH) {
@@ -453,8 +518,7 @@
       }
 
       // 0b) Volumetric sun shafts + lamp beams (js/render/glx/shaders/glsl-post.js)
-      const sunGR = !!(S && S.enabled) && grStr > 0;
-      const haveGR = !!(P.godray && F.invVP && (sunGR || lampVol > 0)) && ensureGR();
+      const haveGR = wantGR && ensureGR();
       if (haveGR) {
         const U = P.godray.U;
         U.invVP.value.fromArray(F.invVP);
@@ -506,6 +570,7 @@
         U.lampShadowIdx.value = grLampIdx;
         U.hgAniso.value = gk("godrayAniso");       // GOD-RAY FOCUS knob
         U.hgFloor.value = gk("godrayFloor");      // GOD-RAY HAZE knob
+        U.aoOn.value = aoFold ? 1 : 0;
         runPass(P.godray.mat, godrayRT);
         // Double separable blur (H+V twice) — soft wide volumes, no stripes.
         // TLX-PERF-PLAN G1: lamp beams alone (no sun shafts) take ONE blur pair.
@@ -516,13 +581,18 @@
         // with sun shafts — avoidable day cost at lower tiers.
         const grPairs = (o.grLite || (!sunGR && _grLite)) ? 1 : 2;
         for (let bp = 0; bp < grPairs; bp++) {
+          // Pair 1 (the AO pair's spacing: aoW == grW) also blurs the folded AO.
+          const aoA = aoFold && bp === 0 ? 1 : 0;
           if (_fixedMats && P.blurGRH) {
             // H/V materials stay bound to godrayRT / godrayBlurRT (bindFixedGR).
             P.blurGRH.U.dir.value.set((1 + bp) / grW, 0);
+            P.blurGRH.U.aoA.value = aoA;
             runPass(P.blurGRH.mat, godrayBlurRT);
             P.blurGRV.U.dir.value.set(0, (1 + bp) / grH);
+            P.blurGRV.U.aoA.value = aoA;
             runPass(P.blurGRV.mat, godrayRT);
           } else {
+            P.blurGR.U.aoA.value = aoA;
             P.blurGR.tex.value = godrayRT.texture;
             P.blurGR.U.dir.value.set((1 + bp) / grW, 0);
             runPass(P.blurGR.mat, godrayBlurRT);
@@ -579,8 +649,11 @@
       P.composite.tex.bloom.value = haveBloom ? bloomLv[0].rt.texture : blackTex;
       // Normalise the mip-chain accumulation (useLv-1 summed octaves).
       C.bloomAmt.value = bloomAmt * 1.25 / Math.max(useLv - 1, 1);
-      P.composite.tex.ssao.value = haveAO ? ssaoRT.texture : whiteTex;
-      C.aoTexel.value.set(haveAO ? 1 / aoW : 0, haveAO ? 1 / aoH : 0);
+      const aoGR = aoFold && haveGR;   // the AO term lives in godrayRT.a
+      const aoOn = aoGR || haveAO;
+      P.composite.tex.ssao.value = aoGR ? godrayRT.texture : haveAO ? ssaoRT.texture : whiteTex;
+      C.aoAlpha.value = aoGR ? 1 : 0;
+      C.aoTexel.value.set(aoOn ? 1 / aoW : 0, aoOn ? 1 / aoH : 0);
       P.composite.tex.godray.value = haveGR ? godrayRT.texture : blackTex;
       C.haveGodray.value = haveGR ? 1 : 0;
       // Sun screen-UV projection + brightness gate + golden-hour flare curve:
@@ -658,8 +731,7 @@
       const reflStr = o.reflect || 0;
       const haveRefl = !!(F.invProj && F.proj && F.upVS);
       if (haveRefl) {
-        C.invProj.value.fromArray(F.invProj);
-        C.proj.value.fromArray(F.proj);
+        setPersp(C, F.invProj, F.proj);
         C.upVS.value.set(F.upVS[0], F.upVS[1], F.upVS[2]);
         const hi = F.skyHi || [0.05, 0.06, 0.09];
         const lo = F.skyLo || [0.02, 0.025, 0.05];
@@ -691,6 +763,7 @@
         P.fxaa.U.texel.value.set(1 / W, 1 / H);
         const useUpscale = !!(P.sgsr && aaRT && ctx.wantSpatialUpscale && ctx.wantSpatialUpscale());
         if (useUpscale) {
+          if (P.fxaa.mirTex) fxaaMirror(false);   // FXAA -> aaRT: the inset goes on after SGSR
           runPass(P.fxaa.mat, aaRT);
           P.sgsr.tex.value = aaRT.texture;
           P.sgsr.U.viewport.value.set(1 / W, 1 / H, W, H);
@@ -699,13 +772,15 @@
           _lastPresentRT = dest || aaRT;
           _last.sgsr = true;
         } else {
+          const mirIn = !!P.fxaa.mirTex && fxaaMirror(true);
           runPass(P.fxaa.mat, dest);
-          mirrorPass(dest);
+          if (mirIn) _mirComposites++;
+          else mirrorPass(dest);
           _lastPresentRT = dest || ldrRT;
           _last.sgsr = false;
         }
       }
-      _last.ssao = !!haveAO;
+      _last.ssao = !!(haveAO || (aoFold && haveGR));
       _last.bloom = !!haveBloom;
       _last.shafts = !!haveGR;
       _last.ssr = !!(haveRefl && reflStr > 0.001);

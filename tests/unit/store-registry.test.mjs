@@ -87,7 +87,7 @@ const WRITERLESS = new Set(`analogSpeedSteer backgroundMotion breakBarriers c1Pi
   inputDebug instCellCache marbleGrip mirrorInstEvery modelInst motion multiDraw musicStream nostrRelays padCurve
   padDeadzone padSaturation propsUnchunked r2Airborne r3Contact spatialUpscaleGather tiltCurve tlxArrayNearest
   tlxChunkMerge tlxChunkRelease tlxForceBatches tlxForceHw tlxInstPad tlxLampStatic tlxMirrorSweep tlxMobile tlxPack
-  tlxPostFixedMats tlxRoadNormalV2 tlxShadowOff tlxSharedUniforms tlxSkipBatches tlxViz tlxWarmFx tlxWarmPlus touchCurve touchRange
+  tlxAoFold tlxBloom11 tlxMirFold tlxPostFixedMats tlxRoadNormalV2 tlxShadowOff tlxSharedUniforms tlxSkipBatches tlxViz tlxWarmFx tlxWarmPlus touchCurve touchRange
   turn turnApi`.split(/\s+/).filter(Boolean));
 // Read with two defaults at 78cb4831b — mostly deliberate "is it set at all?"
 // probes (null) beside the real default, but the scan cannot tell a probe from
@@ -100,7 +100,7 @@ const listDefaults = (keys) => keys.map((k) => `  apex26.${k}:\n    ` + inv.defa
 
 test("the scanner still sees the store (health floor, not a ceiling)", (t) => {
   t.diagnostic(`${inv.keys} keys / ${inv.sites} sites; ${inv.writerless.length} writer-less; ${inv.defaults.size} with mixed defaults`);
-  assert.equal(WRITERLESS.size, 58);   // +tlxRoadNormalV2 (B11 A/B knob, TLX-PERF-HUNT tier 2)
+  assert.equal(WRITERLESS.size, 61);   // +tlxRoadNormalV2, tlxAoFold, tlxBloom11, tlxMirFold (TLX-PERF-HUNT tier 2 A/B knobs)
   assert.equal(MIXED_DEFAULTS.size, 10);
   assert.ok(inv.keys >= 200, `only ${inv.keys} apex26.* keys found (217 measured) — the scan has stopped seeing them`);
   assert.ok(inv.sites >= 480, `only ${inv.sites} call sites found (515 measured) — the scan has stopped seeing them`);
