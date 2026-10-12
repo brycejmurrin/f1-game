@@ -2108,7 +2108,7 @@ const TLX = (function () {
           b = _blob = { __tlx: true, imesh: im, instances: BLOB_CAP, visible: 0, rec: -1 };
         }
         // This pass's run is live while its record is (resetRecs nulls it).
-        const live = b.rec < drawList.n && drawList[b.rec].instanced === b;
+        const live = b.rec >= 0 && b.rec < drawList.n && drawList[b.rec].instanced === b;
         if (live) {
           if (b.rec !== drawList.n - 1 || b.visible >= BLOB_CAP) return false;
         } else {
