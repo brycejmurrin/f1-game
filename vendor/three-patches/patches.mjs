@@ -159,6 +159,62 @@ export const PATCHES = [
       },
     ],
   },
+  {
+    id: 11,
+    title: "WebGL MRT MSAA resolve blits the depth buffer once per colour attachment",
+    file: "build/three.webgpu.js",
+    why: "_resolveRenderTarget builds one blit mask (COLOR | DEPTH [| STENCIL]) and reuses it " +
+      "for every MRT attachment, so TLX's two-attachment scene target (output + ssrTag) " +
+      "resolved its MSAA depth into the same depth texture twice a frame on desktop WebGL2 " +
+      "(HIGH 2x / ULTRA 4x). The second resolve writes identical bytes; ANGLE-D3D11 runs it as " +
+      "a full-screen shader pass. Depth/stencil bits are dropped after the first blit.",
+    upstream: "unfixed on dev as of r186",
+    edits: [
+      {
+        find: "\t\t\t\t\t\tgl.blitFramebuffer( 0, 0, renderContext.width, renderContext.height, 0, 0, renderContext.width, renderContext.height, mask, gl.NEAREST );\n\n\t\t\t\t\t}\n\n\t\t\t\t}\n\n\t\t\t\tif ( isMRT ) {\n\n\t\t\t\t\t// restore attachments\n",
+        replace: "\t\t\t\t\t\tgl.blitFramebuffer( 0, 0, renderContext.width, renderContext.height, 0, 0, renderContext.width, renderContext.height, mask, gl.NEAREST );\n\n\t\t\t\t\t}\n\n\t\t\t\t\tmask &= ~ ( gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT );\n\n\t\t\t\t}\n\n\t\t\t\tif ( isMRT ) {\n\n\t\t\t\t\t// restore attachments\n",
+        count: 1,
+      },
+    ],
+  },
+  {
+    id: 12,
+    title: "uniform-array buffers re-upload on every render even when their bytes did not change",
+    file: "build/three.webgpu.js",
+    why: "A NodeUniformBuffer (uniformArray) inherits Buffer.update() === true, so every " +
+      "render-group version bump re-uploads it in full: Apex's lit frame block (4 x 48 lamp " +
+      "rows + matTexScale, ~3.3 KB in 5 bindings) went up once per builder state per render, " +
+      "~70 states x 2 passes, unchanged all day. The upload is now skipped when the CPU bytes " +
+      "equal the last bytes sent to THAT binding's GPU buffer. The copy lives in the backend's " +
+      "data for the binding, so it dies with the GPU buffer (destroyUniformBuffer deletes it), " +
+      "is per buffer when one node feeds several programs, resets when setup() swaps the typed " +
+      "array (resize), is cleared by the WebGL updateBindings full re-upload, and is bypassed " +
+      "for update ranges and anything that is not a 4-byte typed array. Bitwise compare: -0/NaN " +
+      "payloads count as changes.",
+    upstream: "unfixed on dev as of r186",
+    edits: [
+      {
+        find: "class Bindings extends DataMap {\n",
+        replace: "function _uniformBufferChanged( backend, binding ) {\n\n\tconst array = binding.buffer;\n\n\tif ( binding.isNodeUniformBuffer !== true || ! array || array.BYTES_PER_ELEMENT !== 4 || binding.updateRanges.length !== 0 ) return true;\n\n\tconst data = backend.get( binding );\n\n\tif ( data.uboSrc !== array ) {\n\n\t\tdata.uboSrc = array;\n\t\tdata.uboWords = new Uint32Array( array.buffer, array.byteOffset, array.length );\n\t\tdata.uboLast = null;\n\n\t}\n\n\tconst words = data.uboWords, last = data.uboLast;\n\n\tif ( ! last ) {\n\n\t\tdata.uboLast = words.slice();\n\t\treturn true;\n\n\t}\n\n\tfor ( let i = 0; i < words.length; i ++ ) {\n\n\t\tif ( words[ i ] !== last[ i ] ) {\n\n\t\t\tlast.set( words );\n\t\t\treturn true;\n\n\t\t}\n\n\t}\n\n\treturn false;\n\n}\n\nclass Bindings extends DataMap {\n",
+        count: 1,
+      },
+      {
+        find: "\t\t\t\t\tconst updated = binding.update();\n\n\t\t\t\t\tif ( updated ) {\n\n\t\t\t\t\t\tthis.backend.updateBinding( binding );\n",
+        replace: "\t\t\t\t\tconst updated = binding.update();\n\n\t\t\t\t\tif ( updated && _uniformBufferChanged( this.backend, binding ) ) {\n\n\t\t\t\t\t\tthis.backend.updateBinding( binding );\n",
+        count: 1,
+      },
+      {
+        find: "\t\t\t\tconst updated = binding.update();\n\n\t\t\t\tif ( updated ) {\n\n\t\t\t\t\tbackend.updateBinding( binding );\n",
+        replace: "\t\t\t\tconst updated = binding.update();\n\n\t\t\t\tif ( updated && _uniformBufferChanged( backend, binding ) ) {\n\n\t\t\t\t\tbackend.updateBinding( binding );\n",
+        count: 1,
+      },
+      {
+        find: "\t\t\t\tconst array = binding.buffer;\n\t\t\t\tconst bufferGPU = map.bufferGPU;\n",
+        replace: "\t\t\t\tconst array = binding.buffer;\n\t\t\t\tconst bufferGPU = map.bufferGPU;\n\t\t\t\tmap.uboLast = null;\n",
+        count: 1,
+      },
+    ],
+  },
 ];
 
 /** Retired patches, kept so the canary can assert the UPSTREAM form is present. */

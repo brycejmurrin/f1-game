@@ -89,10 +89,9 @@
     // and the GRAPHICS preset, so a disabled block allocates nothing (the
     // per-block bail above). A second phone-only gate here would shadow the
     // governor's decision rather than add to it. The one place where a phone
-    // still costs more than GLX is FORMAT, not gating: GLX uses R8 for the SSAO
-    // pair and R11F_G11F_B10F for bloom/godray, while three exposes neither as
-    // a render-target format — those targets are RGBA8/RGBA16F here (~4 MB more
-    // at phone resolution). Documented, accepted, not silently unnoticed.
+    // still costs more than GLX is FORMAT, not gating: GLX uses R11F_G11F_B10F
+    // for bloom/godray, RGBA16F here (r186 has rg11b10ufloat, but it needs a
+    // renderability gate and a look A/B). The SSAO pair is R8 on both.
     const shadow = ctx.shadow || null;
     const viz = (ctx.viz && POST_VIZ.indexOf(ctx.viz) >= 0) ? ctx.viz : null;
     // The RT the viz branch last wrote — see presentedTarget().
@@ -173,8 +172,14 @@
     sceneRT.texture.colorSpace = THREE.NoColorSpace;
     // Attachment 1: SSR car-paint tag (0.35). r185 cannot store that in
     // scene alpha (NoBlending → isOpaque false → output.a is coverage).
+    // Only .r is read: one channel of the SAME type (R16F / R8) holds the
+    // same bytes as RGBA's .r. A RED target makes the tag output a float, so
+    // on WebGL2 without per-attachment blending (no OES_draw_buffers_indexed)
+    // material blending would read an undefined src alpha — keep RGBA there.
     let sceneTagTex = sceneRT.texture;
+    const bk = renderer.backend || {};
     if (sceneRT.textures && sceneRT.textures[1]) {
+      if (bk.isWebGPUBackend || bk.drawBuffersIndexedExt) sceneRT.textures[1].format = THREE.RedFormat;
       sceneRT.textures[1].name = "ssrTag";
       sceneRT.textures[1].generateMipmaps = false;
       sceneRT.textures[1].colorSpace = THREE.NoColorSpace;
@@ -225,11 +230,10 @@
     }
     function ensureAO() {
       if (!ssaoRT) {
-        // R8 would match GLX byte-for-byte but r8unorm isn't a guaranteed
-        // renderable on every WebGPU adapter tier — RGBA8 (only .r consumed)
-        // keeps both backends on the safe path.
-        ssaoRT = makeRT(1, 1, THREE.UnsignedByteType);
-        ssaoBlurRT = makeRT(1, 1, THREE.UnsignedByteType);
+        // R8, as GLX: r8unorm / R8 are core renderable + filterable on both
+        // backends, and every reader (blur, composite, ?viz=ssao) uses .r only.
+        ssaoRT = makeRT(1, 1, THREE.UnsignedByteType, THREE.RedFormat);
+        ssaoBlurRT = makeRT(1, 1, THREE.UnsignedByteType, THREE.RedFormat);
         layoutHalf();
         bindFixedAO();
       }
@@ -298,10 +302,15 @@
     // fullscreen runner
     quad = new THREE.QuadMesh();
     let compileJobs = null;
-    function runPass(mat, target) {
+    // load=false CLEARS first (only called inside present(), which restores
+    // autoClear): a full-viewport NoBlending quad overwrites every pixel, so a
+    // clear is byte-identical and spares a tile GPU the read of the old target.
+    // Only the additive UP passes and the mirror inset (a viewport rect) load.
+    function runPass(mat, target, load) {
       if (compileJobs) { compileJobs.push({ mat, target }); return; }
       quad.material = mat;
       renderer.setRenderTarget(target);
+      renderer.autoClear = !load;
       quad.render(renderer);
     }
 
@@ -329,7 +338,7 @@
       if (M.U.flip) M.U.flip.value = _mirFlip ? 1 : 0;
       if (dest) dest.viewport.set(_mirRect[0], _mirRect[1], _mirRect[2], _mirRect[3]);
       else { renderer.getViewport(_mirPrevVP || (_mirPrevVP = new THREE.Vector4())); renderer.setViewport(_mirRect[0], _mirRect[1], _mirRect[2], _mirRect[3]); }
-      try { runPass(M.mat, dest); _mirComposites++; }
+      try { runPass(M.mat, dest, true); _mirComposites++; }
       finally {
         if (dest) dest.viewport.set(0, 0, dest.width, dest.height);
         else renderer.setViewport(_mirPrevVP);
@@ -391,7 +400,7 @@
       // Knob read with the TUNE_DEFS default (PostCommon.knob), never a literal.
       const gk = (id) => PostCommon.knob(GT, id);
       const prevAutoClear = renderer.autoClear;
-      renderer.autoClear = false;   // fullscreen passes overwrite; UP accumulates
+      renderer.autoClear = false;   // runPass sets it per pass (overwrite clears, UP/mirror load)
       let dest = null;
       // try/finally, not a plain restore at the end: tlx.js catches around
       // post.present() and repaints direct-to-canvas — without the finally, a
@@ -561,7 +570,7 @@
             up.tex.value = bloomLv[i].rt.texture;
           }
           up.U.texel.value.set(1 / bloomLv[i].w, 1 / bloomLv[i].h);
-          runPass(up.mat, bloomLv[i - 1].rt);
+          runPass(up.mat, bloomLv[i - 1].rt, i > 1);   // i > 1: additive, must load
         }
       }
 

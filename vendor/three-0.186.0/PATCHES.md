@@ -177,3 +177,42 @@ Patch 9's edit is left in place but is dead code once this applies (the old
 
 Upstream: PR #34552 ("TextureNode: Simplify and optimize uniforms"), r187 — RETIRE
 THIS AND PATCH 9 ON THE r187 BUMP.
+
+## 11. WebGL MRT MSAA resolve blits the depth buffer once per colour attachment
+
+`WebGLBackend._resolveRenderTarget` builds one `blitFramebuffer` mask
+(`COLOR | DEPTH [| STENCIL]`) and reuses it inside the per-attachment MRT loop, so
+TLX's two-attachment scene target (`output` + `ssrTag`, `tlx-post.js`) resolved its
+MSAA depth into the same depth texture twice a frame on desktop WebGL2 (HIGH 2x,
+ULTRA 4x). The second resolve writes identical bytes: on ANGLE-D3D11, which cannot
+`ResolveSubresource` depth, it is a whole extra full-screen shader pass. The patch
+clears the depth/stencil bits after the first blit (`mask&=~(…DEPTH_BUFFER_BIT|
+…STENCIL_BUFFER_BIT)` survives terser). A single-attachment target runs the loop once,
+so nothing else changes.
+
+Upstream: unfixed on dev as of r186.
+
+## 12. Uniform-array buffers re-upload on every render even when unchanged
+
+A `NodeUniformBuffer` (every `uniformArray`) inherits `Buffer.update() === true`, so
+each render-group version bump (every `renderer.render`) re-uploads it in full
+(`bufferData` on WebGL2, `queue.writeBuffer` on WebGPU). Apex's lit frame block
+(4 × 48 lamp rows + `matTexScale`, ~3.3 KB in five bindings, `tsl-lit.js`) went up once
+per builder state per render, ~70 states × 2 passes, unchanged all day
+(TLX-PERF-HUNT 2026-10-11 §A2).
+
+`Bindings` now asks `_uniformBufferChanged(backend, binding)` before
+`backend.updateBinding` at both call sites. It compares the CPU bytes (a `Uint32Array`
+view, bitwise, so `-0` and NaN payloads count as changes) with a copy of the last bytes
+sent to THAT binding's GPU buffer and skips an identical upload. The copy lives in the
+backend's data record for the binding (`uboSrc` / `uboWords` / `uboLast`), so:
+- it dies with the GPU buffer (`destroyUniformBuffer` deletes the record), and a fresh
+  buffer always uploads first;
+- one uniform node feeding several programs has one record per program's buffer;
+- a `setup()` that swaps the typed array (a resized array) rebuilds the view and uploads;
+- WebGL's `updateBindings` (a full re-upload on bind-group creation or a texture swap)
+  clears it;
+- update ranges, non-node uniform buffers and anything that is not a 4-byte typed array
+  bypass it (the old always-upload path).
+
+Upstream: unfixed on dev as of r186.
