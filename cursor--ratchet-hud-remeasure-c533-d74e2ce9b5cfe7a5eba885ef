@@ -1,1 +1,0 @@
-1791673282	Claude	Re-measure the hud.js/hud.css ratchet on ship 33ea003c1 (OVER +48/+96 and +27/+30 after #1375 then #1386/#1387 merged without their raises): ratchets.mjs --update, tests/data/ratchets.json + CEILING-HISTORY.md only. Do not enable auto-merge or merge.  [cursor/ratchet-hud-remeasure-c533; session d74e2ce9b5cfe7a5eba885ef]
