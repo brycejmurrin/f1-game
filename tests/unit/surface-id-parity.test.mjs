@@ -156,7 +156,9 @@ test("puddles follow the road shape on every backend — crown drains, the low s
   assert.match(glx, /smoothstep\(0\.48, 0\.88, pn \* pool\) \* wet/);
   const tlx = wet("js/render/three/tsl-lit.js", "const pn = vnoise(wp.xz", "RAIN RIPPLES");
   assert.match(tlx, /mix\(float\(0\.7\), float\(1\.2\), abs\(lat\)\)\.mul\(clamp\(float\(1\.0\)\.add\(downhill\.mul\(lat\)\.mul\(4\.0\)\), 0\.5, 1\.5\)\)/);
-  assert.match(read("js/render/three/tsl-lit.js"), /const trkRightXZ = trkA \? dFdx\(wp\.xz\)\.mul\(dFdx\(trkA\.y\)\)\.add\(dFdy\(wp\.xz\)\.mul\(dFdy\(trkA\.y\)\)\)/);
+  // B8 (TLX-PERF-HUNT 2026-10-11): the slope derivatives sit under the uniform wetness gate
+  // (dry fragments pay nothing); the expression itself is unchanged.
+  assert.match(read("js/render/three/tsl-lit.js"), /If\(U\.wetness\.greaterThan\(0\.001\), \(\) => \{\s*trkRightXZ\.assign\(dFdx\(wp\.xz\)\.mul\(dFdx\(trkA\.y\)\)\.add\(dFdy\(wp\.xz\)\.mul\(dFdy\(trkA\.y\)\)\)\)/);
   assert.match(tlx, /dot\(trkRightXZ\.div\(rl\), Ngeo\.xz\)\.negate\(\)/);
   assert.match(tlx, /smoothstep\(0\.48, 0\.88, pn\.mul\(pool\)\)\.mul\(wet\)/);
   const wgx = wet("js/render/webgpu/wgsl-chunks.js", "let pn = svnoise(in.wpos.xz", "RAIN RIPPLES");

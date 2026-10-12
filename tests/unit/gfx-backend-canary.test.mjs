@@ -544,10 +544,15 @@ test("GLX re-reads the canvas box after a viewport change, even when a frame rea
 
 test("TLX hoists crack fwidth and MAT samples before the detail/live If (WGSL derivative_uniformity)", () => {
   const lit = read("js/render/three/tsl-lit.js");
-  const at = lit.indexOf("const cr = abs(vnoise(wp.xz");
-  const gate = lit.indexOf("If(matU.detail.greaterThan(0.0)", at);
-  assert.ok(at > 0 && gate > at, "fwidth(cr) must be taken before the detail If");
-  assert.match(lit.slice(at, gate + 40), /fwidth\(cr\)/);
+  // B8 (TLX-PERF-HUNT 2026-10-11): cr and its fwidth live INSIDE the detail If — a gate on
+  // a uniform is uniform control flow, so WGSL accepts the derivative there — and BEFORE the
+  // per-fragment crackFade If, which is not.
+  const gate = lit.indexOf("If(matU.detail.greaterThan(0.0)");
+  const at = lit.indexOf("const cr = abs(vnoise(wp.xz", gate);
+  const fw = lit.indexOf("fwidth(cr)", at);
+  const perFrag = lit.indexOf("If(crackFade.greaterThan(0.01)", at);
+  assert.ok(gate > 0 && at > gate && fw > at && perFrag > fw,
+    "fwidth(cr) must sit inside the uniform detail If and before the per-fragment crackFade If");
   const nSamp = lit.indexOf("const nt = matNormalNode.sample(uv)");
   const nAfter = lit.indexOf("If(live.and(fade.greaterThan(0.005))", nSamp);
   assert.ok(nSamp > 0 && nAfter > nSamp, "MAT normal sample must sit before the live/fade If");
