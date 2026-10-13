@@ -2808,7 +2808,7 @@ const GLXBackend = (function () {
       // see-through and z-fights with no error on screen. Restored on the
       // FAULT path only, so the happy path pays nothing for the guard.
       let r;
-      try { r = PST.present(opts); PST.mirror.composite(opts); }
+      try { r = PST.present(opts); }   // the mirror inset composites inside present() (hunt 2 G12)
       catch (e) { try { gl.enable(gl.DEPTH_TEST); } catch (_) { /* context lost: nothing to restore into */ } throw e; }
       if (_softPresentWaiters.length || _softCaptureDue) softBlit();
       if (_frameWaiters.length) _frameWaiters.splice(0).forEach(function (w) { w(); });

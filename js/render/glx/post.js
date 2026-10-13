@@ -531,7 +531,7 @@ const GLXPost = (function () {
       SH.carArmed = false;
       const lampArmed = SH.lampArmed;
       SH.lampArmed = false;
-      if (!postEnabled) { _lastPath = { on: false }; core.gpuTimerEnd(); return; }
+      if (!postEnabled) { _lastPath = { on: false }; mirrorComposite(opts); core.gpuTimerEnd(); return; }
       const { width, height } = core.getSize();
       const threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
       const bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
@@ -1033,6 +1033,16 @@ const GLXPost = (function () {
       _softReadFB = null;
       _lastPath = { on: true, fxaa: useFxaa, upscale: useUpscale, toLdr: !!toLdr, bloom: bloomAmt, ao: aoStr,
         readFb: "default" };
+
+      // THE MIRROR INSET, while the canvas pass is still open (perf hunt 2 G12,
+      // TLX D8): it used to be drawn by glx.js AFTER this tail's
+      // bind(sceneFBO) + invalidate + rebind, and on a driver that closes the
+      // canvas render pass on that bind the inset reopened it with a LOAD of the
+      // whole canvas (~5.9 MB/frame on a phone). Same pixels: the inset
+      // overwrites its rect with depth test off and no blend, and nothing else
+      // draws to the canvas in between. Draw-order change only (now inside the
+      // GPU timer's span, which ends below).
+      mirrorComposite(opts);
 
       // Discard depth buffers we never read across frames (regenerated every frame
       // by the geometry pass). On tiled mobile GPUs this frees the tiler from
