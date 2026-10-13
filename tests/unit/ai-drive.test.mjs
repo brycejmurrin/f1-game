@@ -759,7 +759,8 @@ test("updateCar does not allocate AiDrive ctx literals", () => {
   // scratches (_aiBoost etc.). A new literal at those call sites is the
   // defect coming back — catch it here without a browser.
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const fn = src.match(/function updateCar\([\s\S]*?\nfunction /);
+  // updateCar AND its parts (PERF-HUNT-2 S1 moved its statements into updateCar* helpers placed after it).
+  const fn = src.match(/function updateCar\([\s\S]*?\nfunction rescuePlayer/);
   console.log("[ai-drive] updateCar body found:", !!fn);
   assert.ok(fn, "updateCar body present");
   const hits = fn[0].match(

@@ -4721,7 +4721,10 @@ function collideFx(a, b, impact) {
   Input.rumble(0.4 + impact * 0.6, 120, "handles");
 }
 
+// updateCar's per-step scratch: the locals its parts (below it) read and hand back; rewritten before every read.
+const _ucS = { vT: 0, inp: 0, roomL: 0, roomR: 0, unstuckActive: 0, queued: 0, aiT: 0, braking: 0, hw: 0, slopeSin: 0, k: 0, mods: 0, gmC: 0, perfMul: 0, vmax: 0, alongO: 0, alongDx: 0, deploy: 0, throttleLvl: 0, gearMult: 0, surfaceMu: 0, brakeDecel: 0, onThrottle: 0, steer: 0, gripScale: 0, latFac: 0, kerbGrip: 0, bankMu: 0, dd: 0, blocker: 0, blockerGap: 0, letPass: 0, aiFreeSpeed: 0, squeezed: 0, roadL: 0, roadR: 0, alongDprog: 0, chaser: 0, chaserGap: 0, nearbyN: 0, sep: 0, slopeNose: 0, trMul: 0, gm0: 0, pitV: 0, cautionV: 0, otFree: 0, brakeLvl: 0, accelCeil: 0, towCar: 0, towGap: 0 };
 function updateCar(c, dt, ranked) {
+  const S = _ucS;
   // A retirement is out of the race: no driving model, no coast, no lap timing.
   // It stays exactly where retireCar() parked it until the flag.
   if (c.retired) { c._prevS = c.s; c.skidIntensity = c.wheelLock = c.brakeDemand = c.throttleDemand = c.towing = c.wake = 0; c.deploying = false; c.collideT = Math.max(0, c.collideT - dt); return; }   // the cues below are about driving: zero them, or squeal / smoke / marks / the ERS whine freeze at the last value until the flag
@@ -4987,6 +4990,185 @@ function updateCar(c, dt, ranked) {
   c.wasArmed = c.otArmed;
 
   // --- braking / target speed ---
+  let braking; let brakeLvl; let throttleLvl; S.hw = hw; S.dd = dd; S.vT = vT; S.trMul = trMul; S.gmC = gmC; S.gm0 = gm0; S.inp = inp; S.vmax = vmax; S.pitV = pitV; S.roomL = roomL; S.roomR = roomR; S.blocker = blocker; S.blockerGap = blockerGap; S.unstuckActive = unstuckActive; S.letPass = letPass; S.aiFreeSpeed = aiFreeSpeed; S.squeezed = squeezed; S.roadL = roadL; S.roadR = roadR; S.queued = queued; S.alongO = alongO; S.alongDx = alongDx; S.alongDprog = alongDprog; S.towCar = towCar; S.towGap = towGap; S.aiT = aiT;
+  updateCarBrakePlan(c, dt, ranked, S); vmax = S.vmax, aiFreeSpeed = S.aiFreeSpeed, squeezed = S.squeezed, queued = S.queued, braking = S.braking, brakeLvl = S.brakeLvl, throttleLvl = S.throttleLvl;
+
+  // --- active aero (X-mode / Z-mode) ---
+  // Runs AFTER `braking` is known (touching the brake shuts the flaps) and
+  // BEFORE vmax is consumed by the gearbox and the speed integration, so the
+  // low-drag top speed applies on the same frame the flap opens.
+  //
+  // Note the AI needs no separate "close before the corner" rule: its braking
+  // scan looks 1.7 s ahead and the arming scan looks 3 s ahead, so the mode has
+  // already un-armed by the time the AI decides to brake for a corner.
+  // `!pitHeld`: no flaps in the lane. X_MIN_SPEED (25 vStd) already blocked
+  // most of this by accident, the limit being 22.2 vStd at every pace; what
+  // this closes is the bleed past the entry line, where a driver who merely
+  // lifts is not `braking`. Small but not zero — §4e has the count.
+  c.xArmed = !c.offroad && !braking && vStd(c.speed) > X_MIN_SPEED
+    && !c.finished && !pitHeld && state === "race" && inAeroZone(c);
+  if (c.human && raceAeroMode === "auto") {
+    // Same rule the AI runs: take every zone the circuit offers.
+    c.xOn = c.xArmed;
+  } else if (c.human) {
+    // Nothing may sit BETWEEN these two: a statement here once stole the `else`,
+    // so any local car that had not pressed the (since removed) PIT key had
+    // `c.xOn` overwritten from the raw input and the active-aero toggle stopped
+    // working entirely (tests/unit/active-aero-vm.test.mjs, 7 red).
+    if (c.local) { if (Input.consumeAeroToggle()) c.xOn = !c.xOn; }
+    else c.xOn = !!(inp && inp.aero);
+  } else {
+    // AI takes X when armed unless wantX banks Z (hold/empty battery). Catch
+    // and OT still force the open wing so a pass does not sit in high drag.
+    _aiWantX.armed = true; _aiWantX.team = c.team; _aiWantX.seat = c.seat; _aiWantX.stats = c.houseStats;
+    _aiWantX.energy = c.energy; _aiWantX.catching = !!(towCar && towGap < 28); _aiWantX.otActive = c.otT > 0;
+    c.xOn = c.xArmed && AiDrive.wantX(_aiWantX);
+  }
+  {
+    // The flap POSITION, not the switch, is what the physics reads: the mode
+    // has to travel, and the travel is asymmetric (see X_CLOSE_RATE). Holding
+    // the button through a corner therefore buys nothing — the flap is shut.
+    const want = (c.xOn && c.xArmed) ? 1 : 0;
+    // Audible latch for the LOCAL car only: the moment the flap command flips,
+    // not the (slower) travel — the click is the switch, the drag is the flap.
+    if (c.human && c.local && soundOn && want !== (c._xSndWant ?? 0)) {
+      GameAudio.xMode(want === 1);
+      c._xSndWant = want;
+    }
+    const rate = want > (c.aeroX || 0) ? X_OPEN_RATE : X_CLOSE_RATE;
+    c.aeroX = clamp((c.aeroX || 0) + Math.sign(want - (c.aeroX || 0)) * rate * dt,
+                    Math.min(c.aeroX || 0, want), Math.max(c.aeroX || 0, want));
+    // Losing the arming window drops the SWITCH too, so the flap doesn't spring
+    // back open at the exit of a corner the driver never re-armed for. Same as
+    // the real system: it re-arms, it does not re-open.
+    if (!c.xArmed) c.xOn = false;
+  }
+  // Low drag is worth top speed. This is the ONLY thrust-side effect — no
+  // engine power is added, so X-mode out of a slow corner does nothing at all.
+  vmax *= 1 + xVmaxGain(c) * c.aeroX;
+  // Stashed for physState(): the two halves of the active-aero trade are
+  // computed deep inside the per-car update and were otherwise unobservable, so
+  // "does the wing actually do anything?" could only be answered by reading this
+  // function. Driving the car to measure it does not work — full lock at 78 m/s
+  // puts it 30 m into a field, which closes the flaps and measures nothing.
+  c._vmaxNow = vmax;
+  if (state === "race" && cautionLevel() < 2 && !pits.inLane(c)) AiDrive.paceSample(paceRef(), Math.floor(c.s / track.total * track.n) % track.n, c, vmax, !blocker || blockerGap > 30, dt);
+
+  // --- gearbox (player) ---
+  // accelCeil: the speed a car ABOVE it is bled toward (never a teleport) and
+  // the one below it accelerates up to — vmax plus the ERS overspeed margin, a
+  // speed, so it rides the pace scale.
+  let gearMult = 1, accelCeil = vmax + 14 * Math.max(PACE, 0.05);
+  if (c.human) {
+    c.shiftT = Math.max(0, c.shiftT - dt);
+    const up = c.local ? Input.consumeShiftUp() : !!inp.shiftUp,
+          down = c.local ? Input.consumeShiftDown() : !!inp.shiftDown;
+    if (gearsManual()) {
+      if (up && c.gear < GEARS && c.shiftT <= 0) { c.gear++; c.shiftT = 0.1; if (soundOn && c.local) GameAudio.shift(true); }
+      if (down && c.gear > 1 && c.shiftT <= 0) { c.gear--; c.shiftT = 0.1; if (soundOn && c.local) GameAudio.shift(false); }
+      const hi = gearHi(c.gear), lo = gearLo(c.gear);
+      const frac = (c.speed - lo) / Math.max(hi - lo, 1);
+      if (c.speed >= hi && c.gear < GEARS) { gearMult = 0.08; accelCeil = Math.min(accelCeil, hi + 1.5); }  // limiter: upshift to go faster (8th has none: gearHi(8) IS vTop, so it pinned manual at vTop+1.5, short of X-mode / ERS overspeed)
+      else if (frac < 0.25) gearMult = clamp(0.7 + frac * 1.2, 0, 1);   // mild bog at low revs: downshift for best punch
+      // Brake-to-reverse sits below every forward gear band, so the bog above
+      // reads negative speed as "infinitely low revs" and clamps gearMult to 0.
+      // Throttle then cannot leave REVERSE_MAX until rescue (~1 s) jerks the
+      // car — measured: 60 frames stuck at -5 m/s with a=0 in manual 1st, while
+      // auto (gearMult=1) recovers in 0.5 s. Hold at least standstill 1st-gear
+      // bog while reversing so "throttle drives forward again" is true.
+      if (c.speed < 0) gearMult = Math.max(gearMult, 0.7);
+    }
+  }
+
+  // Classify the visible surface BEFORE applying longitudinal forces. Kerbs
+  // and the separate pit ribbon remain road, even outside the main half-width.
+  let surfaceMu; let brakeDecel; let onThrottle; S.hw = hw; S.slopeSin = slopeSin; S.slopeNose = slopeNose; S.mods = mods; S.trMul = trMul; S.gmC = gmC; S.gm0 = gm0; S.perfMul = perfMul; S.inp = inp; S.vmax = vmax; S.pitV = pitV; S.cautionV = cautionV; S.deploy = deploy; S.otFree = otFree; S.braking = braking; S.brakeLvl = brakeLvl; S.throttleLvl = throttleLvl; S.gearMult = gearMult; S.accelCeil = accelCeil;
+  updateCarLongitudinal(c, dt, ranked, S); deploy = S.deploy, surfaceMu = S.surfaceMu, brakeDecel = S.brakeDecel, onThrottle = S.onThrottle;
+
+  // --- lateral ---
+  let steer, gripScale; let latFac; let kerbGrip; let bankMu; S.hw = hw; S.k = k; S.dd = dd; S.vT = vT; S.inp = inp; S.vmax = vmax; S.roomL = roomL; S.roomR = roomR; S.blocker = blocker; S.blockerGap = blockerGap; S.unstuckActive = unstuckActive; S.letPass = letPass; S.aiFreeSpeed = aiFreeSpeed; S.squeezed = squeezed; S.roadL = roadL; S.roadR = roadR; S.alongO = alongO; S.alongDx = alongDx; S.alongDprog = alongDprog; S.chaser = chaser; S.chaserGap = chaserGap; S.nearbyN = nearbyN; S.sep = sep; S.aiT = aiT; S.braking = braking;
+  updateCarLateral(c, dt, ranked, S); steer = S.steer, gripScale = S.gripScale, latFac = S.latFac, kerbGrip = S.kerbGrip, bankMu = S.bankMu;
+  // Track-frame dynamic bicycle model for the player. c.head = real world
+  // heading (rad); c.yawRateCur/c.vLat = yaw rate and body lateral velocity.
+  // Per-axle tyre forces (from slip angles, grip-capped) drive yaw and lateral
+  // accel exactly as before — the nose keeps a true world heading so it can point
+  // off the tangent (understeer, a slide, leaning into a wall). The car's POSITION
+  // then advances directly in the track frame: build the world velocity from the
+  // heading and dot it onto the local tangent/right to step (c.s, c.x), instead of
+  // integrating a separate world point and searching for it on the centreline.
+  // No Tracks.project() round-trip means progress can't snap onto the wrong leg at
+  // a hairpin and (s, x) can't desync from a world position. c.px/c.pz are kept
+  // only as a derived mirror for debug/telemetry. See the constants block.
+  S.hw = hw; S.slopeSin = slopeSin; S.k = k; S.mods = mods; S.vT = vT; S.gmC = gmC; S.perfMul = perfMul; S.vmax = vmax; S.unstuckActive = unstuckActive; S.alongO = alongO; S.alongDx = alongDx; S.aiT = aiT; S.deploy = deploy; S.braking = braking; S.throttleLvl = throttleLvl; S.gearMult = gearMult; S.surfaceMu = surfaceMu; S.brakeDecel = brakeDecel; S.onThrottle = onThrottle; S.steer = steer; S.gripScale = gripScale; S.latFac = latFac; S.kerbGrip = kerbGrip; S.bankMu = bankMu;
+  updateCarBicycle(c, dt, ranked, S); steer = S.steer;
+  // WallClamp (js/physics/wall-clamp.js): barrier / pit / gantry hard clamp +
+  // human slide-along scrub + conditional road→world writeback when xPinned.
+  // Collide keeps the post-contact soft clamp; peers editing walls own this file.
+  _wallCtx.track = track; _wallCtx.dt = dt; _wallCtx.steer = steer; _wallCtx.soundOn = soundOn;
+  WallClamp.apply(c, _wallCtx);
+  Damage.observe(c, dt, vT);   // DISPLAY-ONLY damage readout (js/race/damage.js): barrier strikes + pit repair; nothing reads it back
+  c.brakeDemand = braking ? brakeLvl : 0; c.throttleDemand = onThrottle && !braking ? throttleLvl : 0; c.steerCommand = steer;
+  c.steerVis = damp(c.steerVis, steer, 10, dt);
+  // Visual nose yaw. The player uses its REAL heading relative to the track
+  // tangent, so the body visibly points where the car is actually aimed (turn-in,
+  // understeer, a slide) instead of just echoing the stick. AI cars have no world
+  // heading, so they lean from steer input + corner curvature (k>0 curves toward
+  // screen-left, nose yaws toward -x — hence the negative sign).
+  let yawTarget;
+  if (c.human && c.head != null) {
+    let psi = Math.atan2(smp.t[0], smp.t[2]) - c.head;   // + = nose turned right (+x)
+    while (psi > Math.PI) psi -= 2 * Math.PI;
+    while (psi < -Math.PI) psi += 2 * Math.PI;
+    // No clamp, no lag: the player's psi IS the real world heading relative to
+    // the road, and it is already smooth (world-space integration). Clamping it
+    // to +-0.7 rad meant the DRAWN car could never point more than 40 deg off the
+    // track direction — a spin rendered as a 40 deg crab — and the damp below
+    // added ~0.17 s of lag TOWARD the road. Both are the presentation quietly
+    // re-orienting the driver to the arc, the same family as the render-position
+    // and camera couplings. AI cars still damp (they have no real heading).
+    c.yawVis = psi;
+    yawTarget = psi;
+  } else {
+    yawTarget = c.steerVis * 0.35 + clamp(-k * c.speed * 0.14, -0.28, 0.28);
+  }
+  // Keep the deploy-side player-heading guard: for the player with a real
+  // world heading, c.yawVis was already set to psi above — don't re-damp it
+  // toward the road (that re-orients the driver to the arc). AI/no-head damp.
+  if (!(c.human && c.head != null)) c.yawVis = damp(c.yawVis, yawTarget, 6, dt);
+  // Chassis pitch/roll/heave (brake dive, throttle squat, cornering lean, kerb
+  // bob) now live in the C2 visual-suspension springs (js/physics/body-attitude.js),
+  // advanced per car in the render loop from axEstSm/speed/yawRateCur/kCur +
+  // road height. Render-only — see BodyAttitude.
+  // Brake-disc heat (render-only): glows up while braking at speed, cools after.
+  // Drives the emissive brake-glow rings on the player's wheels.
+  {
+    // ALL cars (the AI brake into corners too — a field of glowing discs).
+    const heating = braking && vStd(c.speed) > 12;   // vStd: a threshold, not a force — see OT_MIN_SPEED
+    c.brakeHeat = clamp((c.brakeHeat || 0) + (heating ? dt * 1.6 : -dt * 0.9), 0, 1);
+  }
+  {
+    // Combustion after-fire is a short throttle-lift transient, not a continuous
+    // arcade torch. ERS deployment is electric and never feeds this state.
+    // Every car: an AI's onThrottle is always true, so its lift is the moment
+    // it starts braking — the car ahead spits on the way into the zone.
+    const thr = c.human ? onThrottle : !braking;
+    const lifted = !!c.wasOnThrottle && !thr && c.speed > 8;
+    c.exhaustPop = lifted ? 1 : Math.max(0, (c.exhaustPop || 0) - dt * 5);
+    c.wasOnThrottle = !!thr;
+  }
+  if (c.retired || c.finished) { c.towing = 0; c.wake = 0; }   // the cue is about driving; both exits skip the block that clears it
+  c.collideT = Math.max(0, c.collideT - dt);
+  c.contactT = Math.max(0, (c.contactT || 0) - dt);
+
+  // --- advance along track ---
+  // Player s was advanced by velocity·tangent above; AI advances by speed*dt in Frenet.
+  S.vT = vT; S.inp = inp; S.roomL = roomL; S.roomR = roomR; S.unstuckActive = unstuckActive; S.queued = queued; S.aiT = aiT; S.braking = braking;
+  updateCarAdvance(c, dt, ranked, S);
+}
+// updateCar's parts, in the order it calls them: its statements moved VERBATIM (same float ops, same order),
+// each a TurboFan unit of its own instead of one 43 KB function that deopted and recompiled whole (PERF-HUNT-2 S1).
+function updateCarBrakePlan(c, dt, ranked, S) {
+  const hw = S.hw; const dd = S.dd; const vT = S.vT; const trMul = S.trMul; const gmC = S.gmC; const gm0 = S.gm0; const inp = S.inp; let vmax = S.vmax; const pitV = S.pitV; const roomL = S.roomL; const roomR = S.roomR; const blocker = S.blocker; const blockerGap = S.blockerGap; const unstuckActive = S.unstuckActive; const letPass = S.letPass; let aiFreeSpeed = S.aiFreeSpeed; let squeezed = S.squeezed; const roadL = S.roadL; const roadR = S.roadR; let queued = S.queued; const alongO = S.alongO; const alongDx = S.alongDx; const alongDprog = S.alongDprog; const towCar = S.towCar; const towGap = S.towGap; const aiT = S.aiT;
   let braking = false;
   // Pedal travel 0..1 (analog on a pad trigger, 1 on any digital source). The
   // brake force and the longitudinal-accel estimate that feeds the friction
@@ -5165,96 +5347,10 @@ function updateCar(c, dt, ranked) {
     // when wedged in/stopped, power out instead of braking
     if (unstuckActive) { braking = false; brakeLvl = 0; }
   }
-
-  // --- active aero (X-mode / Z-mode) ---
-  // Runs AFTER `braking` is known (touching the brake shuts the flaps) and
-  // BEFORE vmax is consumed by the gearbox and the speed integration, so the
-  // low-drag top speed applies on the same frame the flap opens.
-  //
-  // Note the AI needs no separate "close before the corner" rule: its braking
-  // scan looks 1.7 s ahead and the arming scan looks 3 s ahead, so the mode has
-  // already un-armed by the time the AI decides to brake for a corner.
-  // `!pitHeld`: no flaps in the lane. X_MIN_SPEED (25 vStd) already blocked
-  // most of this by accident, the limit being 22.2 vStd at every pace; what
-  // this closes is the bleed past the entry line, where a driver who merely
-  // lifts is not `braking`. Small but not zero — §4e has the count.
-  c.xArmed = !c.offroad && !braking && vStd(c.speed) > X_MIN_SPEED
-    && !c.finished && !pitHeld && state === "race" && inAeroZone(c);
-  if (c.human && raceAeroMode === "auto") {
-    // Same rule the AI runs: take every zone the circuit offers.
-    c.xOn = c.xArmed;
-  } else if (c.human) {
-    // Nothing may sit BETWEEN these two: a statement here once stole the `else`,
-    // so any local car that had not pressed the (since removed) PIT key had
-    // `c.xOn` overwritten from the raw input and the active-aero toggle stopped
-    // working entirely (tests/unit/active-aero-vm.test.mjs, 7 red).
-    if (c.local) { if (Input.consumeAeroToggle()) c.xOn = !c.xOn; }
-    else c.xOn = !!(inp && inp.aero);
-  } else {
-    // AI takes X when armed unless wantX banks Z (hold/empty battery). Catch
-    // and OT still force the open wing so a pass does not sit in high drag.
-    _aiWantX.armed = true; _aiWantX.team = c.team; _aiWantX.seat = c.seat; _aiWantX.stats = c.houseStats;
-    _aiWantX.energy = c.energy; _aiWantX.catching = !!(towCar && towGap < 28); _aiWantX.otActive = c.otT > 0;
-    c.xOn = c.xArmed && AiDrive.wantX(_aiWantX);
-  }
-  {
-    // The flap POSITION, not the switch, is what the physics reads: the mode
-    // has to travel, and the travel is asymmetric (see X_CLOSE_RATE). Holding
-    // the button through a corner therefore buys nothing — the flap is shut.
-    const want = (c.xOn && c.xArmed) ? 1 : 0;
-    // Audible latch for the LOCAL car only: the moment the flap command flips,
-    // not the (slower) travel — the click is the switch, the drag is the flap.
-    if (c.human && c.local && soundOn && want !== (c._xSndWant ?? 0)) {
-      GameAudio.xMode(want === 1);
-      c._xSndWant = want;
-    }
-    const rate = want > (c.aeroX || 0) ? X_OPEN_RATE : X_CLOSE_RATE;
-    c.aeroX = clamp((c.aeroX || 0) + Math.sign(want - (c.aeroX || 0)) * rate * dt,
-                    Math.min(c.aeroX || 0, want), Math.max(c.aeroX || 0, want));
-    // Losing the arming window drops the SWITCH too, so the flap doesn't spring
-    // back open at the exit of a corner the driver never re-armed for. Same as
-    // the real system: it re-arms, it does not re-open.
-    if (!c.xArmed) c.xOn = false;
-  }
-  // Low drag is worth top speed. This is the ONLY thrust-side effect — no
-  // engine power is added, so X-mode out of a slow corner does nothing at all.
-  vmax *= 1 + xVmaxGain(c) * c.aeroX;
-  // Stashed for physState(): the two halves of the active-aero trade are
-  // computed deep inside the per-car update and were otherwise unobservable, so
-  // "does the wing actually do anything?" could only be answered by reading this
-  // function. Driving the car to measure it does not work — full lock at 78 m/s
-  // puts it 30 m into a field, which closes the flaps and measures nothing.
-  c._vmaxNow = vmax;
-  if (state === "race" && cautionLevel() < 2 && !pits.inLane(c)) AiDrive.paceSample(paceRef(), Math.floor(c.s / track.total * track.n) % track.n, c, vmax, !blocker || blockerGap > 30, dt);
-
-  // --- gearbox (player) ---
-  // accelCeil: the speed a car ABOVE it is bled toward (never a teleport) and
-  // the one below it accelerates up to — vmax plus the ERS overspeed margin, a
-  // speed, so it rides the pace scale.
-  let gearMult = 1, accelCeil = vmax + 14 * Math.max(PACE, 0.05);
-  if (c.human) {
-    c.shiftT = Math.max(0, c.shiftT - dt);
-    const up = c.local ? Input.consumeShiftUp() : !!inp.shiftUp,
-          down = c.local ? Input.consumeShiftDown() : !!inp.shiftDown;
-    if (gearsManual()) {
-      if (up && c.gear < GEARS && c.shiftT <= 0) { c.gear++; c.shiftT = 0.1; if (soundOn && c.local) GameAudio.shift(true); }
-      if (down && c.gear > 1 && c.shiftT <= 0) { c.gear--; c.shiftT = 0.1; if (soundOn && c.local) GameAudio.shift(false); }
-      const hi = gearHi(c.gear), lo = gearLo(c.gear);
-      const frac = (c.speed - lo) / Math.max(hi - lo, 1);
-      if (c.speed >= hi && c.gear < GEARS) { gearMult = 0.08; accelCeil = Math.min(accelCeil, hi + 1.5); }  // limiter: upshift to go faster (8th has none: gearHi(8) IS vTop, so it pinned manual at vTop+1.5, short of X-mode / ERS overspeed)
-      else if (frac < 0.25) gearMult = clamp(0.7 + frac * 1.2, 0, 1);   // mild bog at low revs: downshift for best punch
-      // Brake-to-reverse sits below every forward gear band, so the bog above
-      // reads negative speed as "infinitely low revs" and clamps gearMult to 0.
-      // Throttle then cannot leave REVERSE_MAX until rescue (~1 s) jerks the
-      // car — measured: 60 frames stuck at -5 m/s with a=0 in manual 1st, while
-      // auto (gearMult=1) recovers in 0.5 s. Hold at least standstill 1st-gear
-      // bog while reversing so "throttle drives forward again" is true.
-      if (c.speed < 0) gearMult = Math.max(gearMult, 0.7);
-    }
-  }
-
-  // Classify the visible surface BEFORE applying longitudinal forces. Kerbs
-  // and the separate pit ribbon remain road, even outside the main half-width.
+  S.vmax = vmax; S.aiFreeSpeed = aiFreeSpeed; S.squeezed = squeezed; S.queued = queued; S.braking = braking; S.brakeLvl = brakeLvl; S.throttleLvl = throttleLvl;
+}
+function updateCarLongitudinal(c, dt, ranked, S) {
+  const hw = S.hw; const slopeSin = S.slopeSin; const slopeNose = S.slopeNose; const mods = S.mods; const trMul = S.trMul; const gmC = S.gmC; const gm0 = S.gm0; const perfMul = S.perfMul; const inp = S.inp; const vmax = S.vmax; const pitV = S.pitV; const cautionV = S.cautionV; let deploy = S.deploy; const otFree = S.otFree; const braking = S.braking; const brakeLvl = S.brakeLvl; const throttleLvl = S.throttleLvl; const gearMult = S.gearMult; const accelCeil = S.accelCeil;
   c.onKerb = Tracks.onKerb(track, c.s, c.x) > 0;
   c.inPitLane = Math.abs(c.x) > hw && Tracks.inPitLane(track, c.s, c.x);
   c.offroad = Math.abs(c.x) > hw && !c.onKerb && !c.inPitLane;
@@ -5445,8 +5541,10 @@ function updateCar(c, dt, ranked) {
   // Signed observed acceleration, including braking/grass, for AI lane
   // prediction. Keep the existing engine-pull accSm contract separate.
   c.corridorAccel = damp(c.corridorAccel || 0, (c.speed - longitudinalSpeed) / Math.max(dt, 1e-6), 6, dt);
-
-  // --- lateral ---
+  S.deploy = deploy; S.surfaceMu = surfaceMu; S.brakeDecel = brakeDecel; S.onThrottle = onThrottle;
+}
+function updateCarLateral(c, dt, ranked, S) {
+  const hw = S.hw; const k = S.k; const dd = S.dd; const vT = S.vT; const inp = S.inp; const vmax = S.vmax; const roomL = S.roomL; const roomR = S.roomR; const blocker = S.blocker; const blockerGap = S.blockerGap; const unstuckActive = S.unstuckActive; const letPass = S.letPass; const aiFreeSpeed = S.aiFreeSpeed; const squeezed = S.squeezed; const roadL = S.roadL; const roadR = S.roadR; const alongO = S.alongO; const alongDx = S.alongDx; const alongDprog = S.alongDprog; const chaser = S.chaser; const chaserGap = S.chaserGap; const nearbyN = S.nearbyN; let sep = S.sep; const aiT = S.aiT; const braking = S.braking;
   let steer, gripScale;
   if (c.human) {
     steer = inp ? (inp.steer ?? 0) : Input.steer(dt);   // dt: ramps advance per physics step
@@ -5776,17 +5874,10 @@ function updateCar(c, dt, ranked) {
   const bankPhys = Tracks.banking(track, c.s, 0, _bankScratchP);
   const bankRoll = bankPhys ? Math.abs(bankPhys.roll) : 0;
   const bankMu = 1 + Math.sin(bankRoll) * 0.8;
-  // Track-frame dynamic bicycle model for the player. c.head = real world
-  // heading (rad); c.yawRateCur/c.vLat = yaw rate and body lateral velocity.
-  // Per-axle tyre forces (from slip angles, grip-capped) drive yaw and lateral
-  // accel exactly as before — the nose keeps a true world heading so it can point
-  // off the tangent (understeer, a slide, leaning into a wall). The car's POSITION
-  // then advances directly in the track frame: build the world velocity from the
-  // heading and dot it onto the local tangent/right to step (c.s, c.x), instead of
-  // integrating a separate world point and searching for it on the centreline.
-  // No Tracks.project() round-trip means progress can't snap onto the wrong leg at
-  // a hairpin and (s, x) can't desync from a world position. c.px/c.pz are kept
-  // only as a derived mirror for debug/telemetry. See the constants block.
+  S.steer = steer; S.gripScale = gripScale; S.latFac = latFac; S.kerbGrip = kerbGrip; S.bankMu = bankMu;
+}
+function updateCarBicycle(c, dt, ranked, S) {
+  const hw = S.hw; const slopeSin = S.slopeSin; const k = S.k; const mods = S.mods; const vT = S.vT; const gmC = S.gmC; const perfMul = S.perfMul; const vmax = S.vmax; const unstuckActive = S.unstuckActive; const alongO = S.alongO; const alongDx = S.alongDx; const aiT = S.aiT; const deploy = S.deploy; const braking = S.braking; const throttleLvl = S.throttleLvl; const gearMult = S.gearMult; const surfaceMu = S.surfaceMu; const brakeDecel = S.brakeDecel; const onThrottle = S.onThrottle; let steer = S.steer; const gripScale = S.gripScale; const latFac = S.latFac; const kerbGrip = S.kerbGrip; const bankMu = S.bankMu;
   if (c.human) {
     if (c.px == null) {   // init world pos from current Frenet state (first frame)
       const w0 = worldFromTrack(c.s, c.x, smp);   // exact inverse of trackFrom
@@ -5987,67 +6078,10 @@ function updateCar(c, dt, ranked) {
     c.skidIntensity = c.offroad ? 0.5
       : Math.max(clamp((slipAng - 0.10) / 0.20, 0, 1), (c.wheelLock || 0) * 0.9);
   }
-  // WallClamp (js/physics/wall-clamp.js): barrier / pit / gantry hard clamp +
-  // human slide-along scrub + conditional road→world writeback when xPinned.
-  // Collide keeps the post-contact soft clamp; peers editing walls own this file.
-  _wallCtx.track = track; _wallCtx.dt = dt; _wallCtx.steer = steer; _wallCtx.soundOn = soundOn;
-  WallClamp.apply(c, _wallCtx);
-  Damage.observe(c, dt, vT);   // DISPLAY-ONLY damage readout (js/race/damage.js): barrier strikes + pit repair; nothing reads it back
-  c.brakeDemand = braking ? brakeLvl : 0; c.throttleDemand = onThrottle && !braking ? throttleLvl : 0; c.steerCommand = steer;
-  c.steerVis = damp(c.steerVis, steer, 10, dt);
-  // Visual nose yaw. The player uses its REAL heading relative to the track
-  // tangent, so the body visibly points where the car is actually aimed (turn-in,
-  // understeer, a slide) instead of just echoing the stick. AI cars have no world
-  // heading, so they lean from steer input + corner curvature (k>0 curves toward
-  // screen-left, nose yaws toward -x — hence the negative sign).
-  let yawTarget;
-  if (c.human && c.head != null) {
-    let psi = Math.atan2(smp.t[0], smp.t[2]) - c.head;   // + = nose turned right (+x)
-    while (psi > Math.PI) psi -= 2 * Math.PI;
-    while (psi < -Math.PI) psi += 2 * Math.PI;
-    // No clamp, no lag: the player's psi IS the real world heading relative to
-    // the road, and it is already smooth (world-space integration). Clamping it
-    // to +-0.7 rad meant the DRAWN car could never point more than 40 deg off the
-    // track direction — a spin rendered as a 40 deg crab — and the damp below
-    // added ~0.17 s of lag TOWARD the road. Both are the presentation quietly
-    // re-orienting the driver to the arc, the same family as the render-position
-    // and camera couplings. AI cars still damp (they have no real heading).
-    c.yawVis = psi;
-    yawTarget = psi;
-  } else {
-    yawTarget = c.steerVis * 0.35 + clamp(-k * c.speed * 0.14, -0.28, 0.28);
-  }
-  // Keep the deploy-side player-heading guard: for the player with a real
-  // world heading, c.yawVis was already set to psi above — don't re-damp it
-  // toward the road (that re-orients the driver to the arc). AI/no-head damp.
-  if (!(c.human && c.head != null)) c.yawVis = damp(c.yawVis, yawTarget, 6, dt);
-  // Chassis pitch/roll/heave (brake dive, throttle squat, cornering lean, kerb
-  // bob) now live in the C2 visual-suspension springs (js/physics/body-attitude.js),
-  // advanced per car in the render loop from axEstSm/speed/yawRateCur/kCur +
-  // road height. Render-only — see BodyAttitude.
-  // Brake-disc heat (render-only): glows up while braking at speed, cools after.
-  // Drives the emissive brake-glow rings on the player's wheels.
-  {
-    // ALL cars (the AI brake into corners too — a field of glowing discs).
-    const heating = braking && vStd(c.speed) > 12;   // vStd: a threshold, not a force — see OT_MIN_SPEED
-    c.brakeHeat = clamp((c.brakeHeat || 0) + (heating ? dt * 1.6 : -dt * 0.9), 0, 1);
-  }
-  {
-    // Combustion after-fire is a short throttle-lift transient, not a continuous
-    // arcade torch. ERS deployment is electric and never feeds this state.
-    // Every car: an AI's onThrottle is always true, so its lift is the moment
-    // it starts braking — the car ahead spits on the way into the zone.
-    const thr = c.human ? onThrottle : !braking;
-    const lifted = !!c.wasOnThrottle && !thr && c.speed > 8;
-    c.exhaustPop = lifted ? 1 : Math.max(0, (c.exhaustPop || 0) - dt * 5);
-    c.wasOnThrottle = !!thr;
-  }
-  if (c.retired || c.finished) { c.towing = 0; c.wake = 0; }   // the cue is about driving; both exits skip the block that clears it
-  c.collideT = Math.max(0, c.collideT - dt);
-  c.contactT = Math.max(0, (c.contactT || 0) - dt);
-
-  // --- advance along track ---
-  // Player s was advanced by velocity·tangent above; AI advances by speed*dt in Frenet.
+  S.steer = steer;
+}
+function updateCarAdvance(c, dt, ranked, S) {
+  const vT = S.vT; const inp = S.inp; const roomL = S.roomL; const roomR = S.roomR; const unstuckActive = S.unstuckActive; const queued = S.queued; const aiT = S.aiT; const braking = S.braking;
   let oldS = c._prevS ?? c.s;
   // AI arc = ground distance ÷ the Frenet stretch h, as trackFrom charges the player (AI-only
   // column). At speed·dt the AI got ~7 % free arc on the outside of a bend and nothing inside.

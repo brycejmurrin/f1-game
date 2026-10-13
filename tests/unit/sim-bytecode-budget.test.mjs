@@ -20,9 +20,9 @@ import { fileURLToPath } from "node:url";
 const GAME = fileURLToPath(new URL("../../js/game.js", import.meta.url));
 const TURBOFAN_CAP = 61440;            // V8 --max-optimized-bytecode-size default
 const BUDGET = 48 * 1024;              // per function: headroom for the +40-line ratchet steps
-// The fixed-step loop: update() → updateCar() per car. Every function listed must exist (a rename or a
-// split must update this list, so the guard cannot silently stop covering the step).
-const SIM_HOT = ["update", "updateCar"];
+// The fixed-step loop: update() → updateCar() per car → its parts, in call order. Every function listed must
+// exist (a rename or a split must update this list, so the guard cannot silently stop covering the step).
+const SIM_HOT = ["update", "updateCar", "updateCarBrakePlan", "updateCarLongitudinal", "updateCarLateral", "updateCarBicycle", "updateCarAdvance"];
 
 let _sizes = null;
 function bytecodeSizes() {

@@ -56,8 +56,9 @@ test("a red-flag restart is a standing start in first, and the coast estimate ma
 // a car later in cars[] saw them one step fresher than one earlier: a
 // systematic per-index bias. Every neighbour read in updateCar is the snapshot.
 test("updateCar reads neighbours only through the snapshot", () => {
+  // updateCar AND its parts (the updateCar* helpers after it, PERF-HUNT-2 S1), up to rescuePlayer.
   const start = src.indexOf("function updateCar(");
-  const end = src.indexOf("\nfunction ", start + 10);
+  const end = src.indexOf("\nfunction rescuePlayer(", start + 10);
   const fn = src.slice(start, end > start ? end : src.length);
   assert.ok(fn.length > 10000, "anti-vacuity: found the updateCar body");
   const live = fn.match(/\b(?:blocker|towCar|alongO|po|chaser|ahead|o)\.(?:x|speed|prog)\b/g) || [];
