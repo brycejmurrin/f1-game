@@ -759,7 +759,8 @@ test("updateCar does not allocate AiDrive ctx literals", () => {
   // scratches (_aiBoost etc.). A new literal at those call sites is the
   // defect coming back — catch it here without a browser.
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const fn = src.match(/function updateCar\([\s\S]*?\nfunction /);
+  // updateCar AND its parts (PERF-HUNT-2 S1 moved its statements into updateCar* helpers placed after it).
+  const fn = src.match(/function updateCar\([\s\S]*?\nfunction rescuePlayer/);
   console.log("[ai-drive] updateCar body found:", !!fn);
   assert.ok(fn, "updateCar body present");
   const hits = fn[0].match(
@@ -1625,7 +1626,9 @@ for (const p of [1, 0.469]) {
 
 test("game.js hands wantBoost and defendPull the pace envelope (vTop)", () => {
   const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
-  assert.match(game, /_aiBoost\.vTop = vTop\(\)/, "wantBoost's tolerances need vTop");
-  assert.match(game, /_aiDefend\.vTop = vTop\(\)/, "defendPull's not-closing gate needs vTop");
+  // updateCar reads vTop() once per car step into `vT` (PERF-HUNT-2 S4); either spelling is the envelope.
+  assert.match(game, /_aiBoost\.vTop = (?:vTop\(\)|vT);/, "wantBoost's tolerances need vTop");
+  assert.match(game, /_aiDefend\.vTop = (?:vTop\(\)|vT);/, "defendPull's not-closing gate needs vTop");
+  if (/\.vTop = vT;/.test(game)) assert.match(game, /\bconst vT = vTop\(\)/, "vT is vTop()");
   assert.match(game, /_aiBr\.pace = PACE; _aiBr\.vmax = VMAX/, "brakeTarget reads vScale from pace");
 });
