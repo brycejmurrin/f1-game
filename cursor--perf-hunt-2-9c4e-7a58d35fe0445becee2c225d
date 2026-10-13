@@ -1,1 +1,0 @@
-1791858690	Claude	perf hunt 2 fixes: js/game.js update()/render(), js/race/car-fields.js, js/physics/{tyre-model,aero-zones}.js, js/input/input.js, js/render/glx/**, js/track/**, js/car/car-mesh.js, js/lighting/frame-lights.js (PR for cursor/perf-hunt-2-9c4e)  [cursor/perf-hunt-2-9c4e; session 7a58d35fe0445becee2c225d]
