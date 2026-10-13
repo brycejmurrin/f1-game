@@ -259,3 +259,37 @@ test("a steady caution is equally bright at 30, 60 and 144 Hz, uses no pool slot
     assert.equal(busy.maxPool, 0);
   }
 });
+
+// perf hunt 2 F7: the nearest-16 pick is a pooled insertion select, not filter + copy + sort + slice. It must light the
+// same posts in the same order the stable sort did, ties included, under a local yellow and a full-course caution.
+test("the pooled nearest-16 select lights the same posts in the same order as the stable sort it replaced", () => {
+  const MP = load();
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let trial = 0; trial < 40; trial++) {
+    const n = 90, list = [];
+    for (let k = 0; k < n; k++) {
+      // Integer grid coordinates: many equal distances, so the tie order is exercised.
+      const x = Math.round(rnd() * 12), z = Math.round(rnd() * 12);
+      list.push({ kind: "marshalPost", k, side: 1, x, y: 1.2, z, w: 1.2, h: 2.4, d: 1.2, panel: [x, 3, z] });
+    }
+    const eye = [Math.round(rnd() * 12), 2, Math.round(rnd() * 12)];
+    for (const [lvl, sector] of [[3, -1], [1, 0], [1, 1], [1, 2]]) {
+      const g = { state: "race", frame: { eye }, track: { n, props: { list }, def: {} },
+        cautionLevel: () => lvl, cautionInfo: () => ({ level: lvl, sector }) };
+      const P = stub();
+      const mp = MP.create(g, { Particles: P });
+      mp.update(0.1);
+      const posts = mp.postsFor(g.track);
+      let want = sector >= 0 ? posts.filter((p) => p.sector === sector) : posts;
+      if (want.length > 16) want = want.slice().sort((a, b) =>
+        ((a.x - eye[0]) ** 2 + (a.z - eye[2]) ** 2) - ((b.x - eye[0]) ** 2 + (b.z - eye[2]) ** 2)).slice(0, 16);
+      assert.equal(JSON.stringify(P.calls.map((c) => [c[0], c[1], c[2]])), JSON.stringify(want.map((p) => [p.x, p.y, p.z])), `trial ${trial} level ${lvl} sector ${sector}`);
+    }
+  }
+  // showing() hands back one pooled object.
+  const g = G(2, -1), mp = MP.create(g, { Particles: stub() });
+  const a = mp.showing(0.1), col = a.col;
+  assert.equal(mp.showing(0.1), a, "no fresh object per frame");
+  assert.equal(a.col, col);
+});
