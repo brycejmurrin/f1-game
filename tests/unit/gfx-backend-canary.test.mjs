@@ -1475,6 +1475,64 @@ test("GLX lamp shadow cull honours opts.reach, re-uses an unchanged shadow pack,
   assert.equal(batch._shVao, null, "the depth VAO is freed with the batch");
 });
 
+test("GLX shared instance buffer (apex26.glxInstPerPass=0, the mobile default): lamp cast, mirror cull / freeze replay and main cull each draw their own pack (PERF-HUNT-2 G5 + G8 fallback)", () => {
+  // Replays game.js's frame order on the mock — lamp pass (reach cull + cast),
+  // mirror (cull + record, or the freeze replay through updateInstances, on
+  // the SHARED ibo), main cull — and resolves every instanced draw to the bytes
+  // bound at attribute 5, so a stale shadow pack, a depth VAO on the wrong
+  // buffer or a camera pack leaking into the lamp map would show as a mismatch.
+  const h = bootGlx({ ls: { "apex26.glxInstPerPass": "0" } });
+  assert.equal(h.GLX.instPerPass, false);
+  const N = 12, mats = new Float32Array(N * 16);
+  for (let i = 0; i < N; i++) { const o = i * 16; mats[o] = mats[o + 5] = mats[o + 10] = mats[o + 15] = 1; mats[o + 12] = i * 30; }
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const b = h.GLX.createInstancedBatch(tri, mats, new Float32Array(N * 3).fill(1), { cellSize: 50 });
+  const slab = (lo, hi) => { const P = Array.from({ length: 6 }, () => [0, 0, 0, 1e6]); P[0] = [1, 0, 0, -lo]; P[1] = [-1, 0, 0, hi]; return P; };
+  const want = (lo, hi, reach) => { const r = []; for (const c of b.cells) {
+    if (c.mx[0] < lo || c.mn[0] > hi) continue;
+    if (reach) { const dx = Math.max(c.mn[0] - reach[0], 0, reach[0] - c.mx[0]), dy = Math.max(c.mn[1], 0, -c.mx[1]), dz = Math.max(c.mn[2], 0, -c.mx[2]); if (dx * dx + dy * dy + dz * dz > reach[3] * reach[3]) continue; }
+    for (const i of c.idx) r.push(i * 30); } return r; };
+  // GL state model over the recorded stream: VAO attribute 5 -> buffer -> bytes.
+  const A = h.gl.ARRAY_BUFFER, bufs = new Map(), vaos = new Map();
+  let vao = null, arr = null, cur = 0;
+  const drawn = () => { const out = [];
+    for (; cur < h.calls.length; cur++) { const [k, a] = h.calls[cur];
+      if (k === "bindVertexArray") vao = a[0];
+      else if (k === "bindBuffer" && a[0] === A) arr = a[1];
+      else if (k === "bufferData" && a[0] === A) bufs.set(arr, typeof a[1] === "number" ? new Float32Array(a[1] / 4) : Float32Array.from(a[1]));
+      else if (k === "bufferSubData" && a[0] === A) { const d = bufs.get(arr), s = a[2], so = a[3] || 0, n = a[4] !== undefined ? a[4] : s.length - so; for (let i = 0; i < n; i++) d[a[1] / 4 + i] = s[so + i]; }
+      else if (k === "vertexAttribPointer" && a[0] === 5) vaos.set(vao, arr);
+      else if (k === "drawElementsInstanced") { const d = bufs.get(vaos.get(vao)); out.push(Array.from({ length: a[4] }, (_, i) => d[i * 16 + 12])); } }
+    return out; };
+  const lightVP = new Float32Array(16); lightVP[0] = lightVP[5] = lightVP[10] = lightVP[15] = 1;
+  let mirMats = null, mirN = 0, lastMir = null;
+  for (let f = 0; f < 8; f++) {
+    const lx = 60 + 15 * f, reach = [lx, 0, 0, 40];
+    if (f % 4 !== 3) {   // a lamp rebuild (every 4th frame is a keep)
+      h.GLX.lampShadowBegin(lightVP, 0);
+      h.GLX.castShadowInstanced(b, h.GLX.cullInstances(b, slab(lx - 120, lx + 120), { upload: false, reach }));
+      h.GLX.lampShadowEnd();
+      assert.deepEqual(drawn().pop(), want(lx - 120, lx + 120, reach), `f${f}: the lamp map casts the reach-culled pack`);
+    }
+    const freeze = f % 2 === 1, f0 = h.frame({ mirrorFreezeInstanced: freeze, mirrorLite: false });
+    assert.equal(h.GLX.mirrorBegin(f0, 256, 128), true);
+    if (freeze) h.GLX.updateInstances(b, mirMats, mirN, null);   // game.js's replay (no instPerPass)
+    else {
+      h.GLX.cullInstances(b, slab(200 - 10 * f, 330));
+      mirN = b.visible; mirMats = b.packMatrices.slice(0, mirN * 16); lastMir = want(200 - 10 * f, 330);
+    }
+    h.GLX.drawInstanced(b, {});
+    h.GLX.mirrorEnd();
+    assert.deepEqual(drawn().pop(), lastMir, `f${f}: the mirror draws its (frozen) pack`);
+    h.GLX.begin(h.frame());
+    h.GLX.cullInstances(b, slab(0, 200));
+    h.GLX.drawInstanced(b, {});
+    assert.deepEqual(drawn().pop(), want(0, 200), `f${f}: the main pass draws the camera pack`);
+  }
+  // Knob off is the base path: no mirror view (its GL call stream matched cf27b607a's byte for byte).
+  assert.equal(b._mir, undefined, "no mirror view on the shared path");
+});
+
 test("GLX instPerPass: the mirror pass culls and draws its own instance buffer, and holds it on freeze frames (PERF-HUNT-2 G8)", () => {
   // TLX A1's contract on GLX: the main and mirror passes stop ping-ponging one
   // ibo (each re-packing + re-uploading over the other's cell set every frame).

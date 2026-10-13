@@ -1413,28 +1413,34 @@ void main() {
   // inside the slot the 1-texel gutter holds the neighbours, so the bilinear
   // tap matches the full grid and never crosses into another slot. The bounce
   // layer is the same slot atlasH rows down (+0.5 v).
-  // Gated (perf hunt 2 G2, TLX B3; DECAL_FS decalPool's form): bakeW is
-  // exactly 0 when the bake is off, outside it, on an empty slot, or at
-  // N.y <= 0.55 (smoothstep(0.55, ...) == 0 there), and bE/bB are only ever read
-  // times bakeW — so the 3 dependent taps run only where the weight can be > 0.
+  // Gated (perf hunt 2 G2, TLX B3): only the 3 dependent TAPS move under the
+  // gate; every arithmetic statement below is the original text, so the
+  // compiler sees the same expressions (the first, fully-branched form moved
+  // the colour adds too and was not bit-identical on SwiftShader at night).
+  // Outside the gate bSlot stays -1, so bakeW takes its ': 0.0' arm, and bE/bB
+  // (0 here) are only ever read times bakeW: the same +0 the original added.
+  // At N.y <= 0.55 the original weight was smoothstep(0.55, ...) == 0 anyway.
   // Explicit-LOD taps, legal in non-uniform flow.
-  float bakeW = 0.0;
+  vec2 bG = bUv * uBakeGrid.xy;
+  vec2 bTile = clamp(floor(bG), vec2(0.0), max(uBakeGrid.xy - 1.0, vec2(0.0)));
+  vec2 bSlot = vec2(-1.0);
+  vec4 bT = vec4(0.0);
+  vec3 bB = vec3(0.0);
   if (uBakeOn > 0.5 && N.y > 0.55 && all(greaterThan(bUv, vec2(0.0))) && all(lessThan(bUv, vec2(1.0)))) {
-    vec2 bG = bUv * uBakeGrid.xy;
-    vec2 bTile = clamp(floor(bG), vec2(0.0), max(uBakeGrid.xy - 1.0, vec2(0.0)));
-    vec2 bSlot = texelFetch(uLampBakeIdx, ivec2(bTile), 0).xy;
+    bSlot = texelFetch(uLampBakeIdx, ivec2(bTile), 0).xy;
     if (bSlot.x >= 0.0) {
       vec2 bUvD = (bSlot + (bG - bTile) * uBakeGrid.z + 1.0) / max(uBakeAtlas, vec2(1.0));
-      vec4 bT = textureLod(uLampBake, bUvD, 0.0);
-      vec3 bE = bT.rgb * uBakeScale;
-      vec3 bB = textureLod(uLampBake, bUvD + vec2(0.0, 0.5), 0.0).rgb * uBakeScale;
-      bakeW = smoothstep(0.55, 0.85, N.y) * (1.0 - smoothstep(0.75, 2.5, abs(vWorldPos.y - bT.a)));
-      color += albedo * bE * bakeW * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
-      // Baked LAMP BOUNCE (every lamp, per unit BOUNCE); the live bounce below
-      // steps aside by the same weight.
-      color += albedo * bB * (uBounceK * bakeW) * (1.0 - metalness);
+      bT = textureLod(uLampBake, bUvD, 0.0);
+      bB = textureLod(uLampBake, bUvD + vec2(0.0, 0.5), 0.0).rgb * uBakeScale;
     }
   }
+  vec3 bE = bT.rgb * uBakeScale;
+  float bakeW = (uBakeOn > 0.5 && bSlot.x >= 0.0 && all(greaterThan(bUv, vec2(0.0))) && all(lessThan(bUv, vec2(1.0))))
+    ? smoothstep(0.55, 0.85, N.y) * (1.0 - smoothstep(0.75, 2.5, abs(vWorldPos.y - bT.a))) : 0.0;
+  color += albedo * bE * bakeW * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
+  // Baked LAMP BOUNCE (every lamp, per unit BOUNCE); the live bounce below
+  // steps aside by the same weight.
+  color += albedo * bB * (uBounceK * bakeW) * (1.0 - metalness);
   for (int i = 0; i < MAX_LIGHTS; i++) {
     if (i >= uNumLights) break;
     int li = i * 4;

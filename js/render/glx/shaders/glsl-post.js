@@ -387,13 +387,13 @@ void main() {
   //    camera, so shafts are strongest near you instead of piling up at range.
   float trans = 1.0;
   float groundY = uEye.y - 4.0;               // local ground datum
-  // Loop-invariant per-step transmittance, hoisted (hunt 2 G1 / TLX D10): the
-  // same exp() of the same argument, so trans steps through the same values.
-  float stepTrans = exp(-stepLen * 0.010);
   for (int i = 0; i < N; i++) {
     float td = t + stepLen * float(i);        // distance marched from the camera
     vec3 p = ro + rd * td;
-    trans *= stepTrans;
+    // NOT hoisted (hunt 2 G1 follow-up): a hoisted exp() is the same math but
+    // not provably the same bits through every driver's codegen, and the night
+    // lamp-beam half reads trans; drivers hoist this themselves.
+    trans *= exp(-stepLen * 0.010);
     // The SUN half of the march, gated the way the lamp half below already is.
     // accum has exactly one consumer — uSunColor * accum * phase * uStr, at the
     // end — so at uStr == 0 every shadow tap and gCloud() call here is
