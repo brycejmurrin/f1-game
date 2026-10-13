@@ -70,9 +70,85 @@ const CarFields = (function () {
   for (const g of GROUPS) for (const k of g[1]) KEYS.push(k);
   Object.freeze(KEYS);
 
-  /** Give car `c` every late-added field as `undefined` (a no-op for one it already has). Returns `c`. */
+  /** Give car `c` every late-added field as `undefined` (a no-op for one it already has). Returns `c`.
+   *
+   * NAMED stores, one per key, in KEYS order — never a loop of keyed stores `c[KEYS[i]] = undefined`.
+   * V8 caps the out-of-object fields a KEYED store may add at max(12, in-object count) before it
+   * normalizes the object (Map::TooManyFastProperties), so the loop left all 22 cars in DICTIONARY mode
+   * for the whole race (%HasFastProperties 0/22; %HaveSameMap stayed true because normalized maps are
+   * shared). Named stores go through the map-transition path and keep the cars fast: game-vm, 1500
+   * warm steps, -6 % per step, exact state digest unchanged (docs/notes/PERF-HUNT-2-2026-10-13.md S2).
+   * No `new Function`/eval in the shipped page, so the list is written out; car-fields-vm.test.mjs
+   * asserts it equals KEYS (order included) — regenerate it from GROUPS when the table changes. */
   function predeclare(c) {
-    for (let i = 0; i < KEYS.length; i++) if (!(KEYS[i] in c)) c[KEYS[i]] = undefined;
+    if (!("rank" in c)) c.rank = undefined;
+    if (!("_snapProg" in c)) c._snapProg = undefined;
+    if (!("_snapX" in c)) c._snapX = undefined;
+    if (!("_snapSpeed" in c)) c._snapSpeed = undefined;
+    if (!("kCur" in c)) c.kCur = undefined;
+    if (!("_tyreLoad" in c)) c._tyreLoad = undefined;
+    if (!("_bandNow" in c)) c._bandNow = undefined;
+    if (!("_alPrevDp" in c)) c._alPrevDp = undefined;
+    if (!("wasArmed" in c)) c.wasArmed = undefined;
+    if (!("_vmaxNow" in c)) c._vmaxNow = undefined;
+    if (!("onKerb" in c)) c.onKerb = undefined;
+    if (!("inPitLane" in c)) c.inPitLane = undefined;
+    if (!("kTurn" in c)) c.kTurn = undefined;
+    if (!("wheelLock" in c)) c.wheelLock = undefined;
+    if (!("steerSm" in c)) c.steerSm = undefined;
+    if (!("brakeDemand" in c)) c.brakeDemand = undefined;
+    if (!("throttleDemand" in c)) c.throttleDemand = undefined;
+    if (!("steerCommand" in c)) c.steerCommand = undefined;
+    if (!("brakeHeat" in c)) c.brakeHeat = undefined;
+    if (!("exhaustPop" in c)) c.exhaustPop = undefined;
+    if (!("wasOnThrottle" in c)) c.wasOnThrottle = undefined;
+    if (!("_pushD" in c)) c._pushD = undefined;
+    if (!("_secValid" in c)) c._secValid = undefined;
+    if (!("_secIdx" in c)) c._secIdx = undefined;
+    if (!("_secT0" in c)) c._secT0 = undefined;
+    if (!("_prevS" in c)) c._prevS = undefined;
+    if (!("_preColS" in c)) c._preColS = undefined;
+    if (!("_preColX" in c)) c._preColX = undefined;
+    if (!("_preColSpd" in c)) c._preColSpd = undefined;
+    if (!("_ba" in c)) c._ba = undefined;
+    if (!("baPitch" in c)) c.baPitch = undefined;
+    if (!("baRoll" in c)) c.baRoll = undefined;
+    if (!("baHeave" in c)) c.baHeave = undefined;
+    if (!("baScrape" in c)) c.baScrape = undefined;
+    if (!("_lodTier" in c)) c._lodTier = undefined;
+    if (!("wheelSpin" in c)) c.wheelSpin = undefined;
+    if (!("wheelSpinF" in c)) c.wheelSpinF = undefined;
+    if (!("_whlVis" in c)) c._whlVis = undefined;
+    if (!("vertLoad" in c)) c.vertLoad = undefined;
+    if (!("axFrac" in c)) c.axFrac = undefined;
+    if (!("axFracF" in c)) c.axFracF = undefined;
+    if (!("axFracR" in c)) c.axFracR = undefined;
+    if (!("_aeroGrip" in c)) c._aeroGrip = undefined;
+    if (!("slipFactor" in c)) c.slipFactor = undefined;
+    if (!("lateralAccel" in c)) c.lateralAccel = undefined;
+    if (!("slipFront" in c)) c.slipFront = undefined;
+    if (!("slipRear" in c)) c.slipRear = undefined;
+    if (!("steerAngle" in c)) c.steerAngle = undefined;
+    if (!("gripFront" in c)) c.gripFront = undefined;
+    if (!("gripRear" in c)) c.gripRear = undefined;
+    if (!("forceFront" in c)) c.forceFront = undefined;
+    if (!("forceRear" in c)) c.forceRear = undefined;
+    if (!("frontUtil" in c)) c.frontUtil = undefined;
+    if (!("rearUtil" in c)) c.rearUtil = undefined;
+    if (!("skidIntensity" in c)) c.skidIntensity = undefined;
+    if (!("passPlan" in c)) c.passPlan = undefined;
+    if (!("passSide" in c)) c.passSide = undefined;
+    if (!("passBest" in c)) c.passBest = undefined;
+    if (!("uslipDwell" in c)) c.uslipDwell = undefined;
+    if (!("_recross" in c)) c._recross = undefined;
+    if (!("_lapTimeAtLine" in c)) c._lapTimeAtLine = undefined;
+    if (!("incidentInvalidLap" in c)) c.incidentInvalidLap = undefined;
+    if (!("fxSparkI" in c)) c.fxSparkI = undefined;
+    if (!("oslipHapT" in c)) c.oslipHapT = undefined;
+    if (!("kerbSndT" in c)) c.kerbSndT = undefined;
+    if (!("kerbHapT" in c)) c.kerbHapT = undefined;
+    if (!("pitWorked" in c)) c.pitWorked = undefined;
+    if (!("brakeBias" in c)) c.brakeBias = undefined;
     return c;
   }
 
