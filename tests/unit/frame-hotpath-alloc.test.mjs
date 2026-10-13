@@ -187,3 +187,42 @@ test("CarMesh.getAeroFlapSet: a (record, pose) memo returns the same baked mesh 
   assert.ok(!freed.includes(again), "the memo does not hand back a freed mesh");
   assert.notEqual(again, a, "it is rebuilt");
 });
+
+// ---- perf hunt 2 F2 (2026-10-13) -----------------------------------------------------------------
+test("CarMesh.drawRearLights / drawMirrorLights: one draw per car, the old per-light offsets baked into the vertices", () => {
+  const M = loadParts();
+  const made = [], draws = [];
+  M.CarMesh.init({ createMesh: (d) => { const m = { id: made.length, d }; made.push(m); return m; }, freeMesh() {},
+    draw: (mesh, mat, opts) => draws.push({ mesh, mat: Float32Array.from(mat), em: opts.emissive }) });
+  const mat = new Float32Array([0.8, 0, -0.6, 0,  0, 1, 0, 0,  0.6, 0, 0.8, 0,  120.5, 3.25, -840.75, 1]);
+  M.CarMesh.drawRearLights(mat, 0.7);
+  M.CarMesh.drawRearLights(mat, 1);
+  assert.equal(draws.length, 2, "one draw per call (was three)");
+  assert.equal(draws[0].mesh, draws[1].mesh, "the set is built once");
+  assert.deepEqual([draws[0].em, draws[1].em], [0.7, 1]);
+  // The old path: quad (half-extents w,h at the origin) drawn through mat * T(o). The baked mesh at mat must land
+  // on the same world points.
+  const xf = (m, x, y, z) => [0, 1, 2].map((k) => m[k] * x + m[4 + k] * y + m[8 + k] * z + m[12 + k]);
+  const { ris: R, endplate: E } = M.CarMesh.REAR_LIGHTS, d = draws[0].mesh.d;
+  const quad = (w, h) => [[-w, -h], [w, -h], [w, h], [-w, h]];
+  const want = [];
+  for (const [o, w, h] of [[R, 0.068, 0.082], [[-E[0], E[1], E[2]], 0.030, 0.038], [E, 0.030, 0.038]])
+    for (const [x, y] of quad(w, h)) want.push(xf(mat, x + o[0], y + o[1], o[2]));
+  assert.equal(d.pos.length, want.length * 3);
+  for (let v = 0; v < want.length; v++) {
+    const got = xf(mat, d.pos[v * 3], d.pos[v * 3 + 1], d.pos[v * 3 + 2]);
+    for (let k = 0; k < 3; k++) assert.ok(Math.abs(got[k] - want[v][k]) < 1e-6, `vertex ${v}`);
+  }
+  assert.equal(d.idx.length, 36, "three both-wound quads");
+  assert.ok(d.idx.every((i) => i < 12));
+  // Mirror lamps: one mesh per anchors RESULT (frozen, cached per team+scale in Car3D), both sides in one draw.
+  const a = M.Car3D.mirrorLightAnchors("ferrari", 1), b = M.Car3D.mirrorLightAnchors("mercedes", 1);
+  draws.length = 0;
+  M.CarMesh.drawMirrorLights(mat, a); M.CarMesh.drawMirrorLights(mat, a); M.CarMesh.drawMirrorLights(mat, b);
+  assert.equal(draws.length, 3, "one draw per car (was two)");
+  assert.equal(draws[0].mesh, draws[1].mesh, "same anchors, same mesh");
+  assert.notEqual(draws[0].mesh, draws[2].mesh);
+  const md = draws[0].mesh.d;
+  assert.equal(md.pos.length, 24);
+  for (let s = 0; s < 2; s++) assert.ok(Math.abs(md.pos[s * 12] - a[s].x) < 1e-12 && Math.abs(md.pos[s * 12 + 1] - (a[s].y - 0.018)) < 1e-12, `side ${s} sits at its anchor`);
+});
