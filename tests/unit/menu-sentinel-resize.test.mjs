@@ -124,8 +124,8 @@ test("menuKey has no pane rect, so a resize cannot rebuild through the flyby gat
   assert.match(keySrc, /idx,\s*raceTimeOfDay,\s*raceWeather,\s*fieldSize\(\)/);
   assert.doesNotMatch(keySrc, /innerWidth|innerHeight|pane|rect|getBoundingClientRect|viewKey/);
   const fly = symbolSource("function scheduleFlybyTrack(settle)");
-  assert.match(fly, /const key = menuKey\(want\)/);
-  assert.match(fly, /_menuGate\.ready === key/);
+  assert.match(fly, /key: menuKey\(want\)/);
+  assert.match(fly, /_menuGate\.ready === prep\.key/);
   assert.match(SRC, /addEventListener\("resize",\s*scheduleGfxResize\)/);
   const boot = SRC.slice(SRC.indexOf("function scheduleGfxResize()"), SRC.indexOf("window.addEventListener(\"resize\""));
   assert.match(boot, /scheduleGfxResize/, "boot binds the coalesced listener, not a raw gfx.resize");

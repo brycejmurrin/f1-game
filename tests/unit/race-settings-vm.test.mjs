@@ -561,3 +561,71 @@ test("paintPlan hides STRATEGY when the live model is off, even if the store say
     g.G.raceTyreWear = prev;
   }
 });
+
+/* The menu's stepped pre-build keeps going while what it builds is still wanted
+ * (bug hunt 3 K5/X6). openRaceSettings() always called scheduleFlybyTrack(), and
+ * every call bumped the menu generation: a build 30 frames in was abandoned (its
+ * partial uploads freed) and started again from zero, and RACE! abandoned the
+ * second one for a third — ~2.4 builds of work for one circuit on the common
+ * tile -> NEXT -> RACE! flow. A weather chip did the same, though weather is no
+ * input to the build. Now only a change of what the build reads (circuit, a
+ * dark/light time of day, grid slots, chunking) restarts it; RACE! joins it.
+ * Own handle: the stepped build needs a browser user agent, and render() needs
+ * the GLX stub to hand back frustum planes. */
+test("tile -> SETTINGS -> weather/time chips -> RACE! builds the world once; only a build-key change restarts", async () => {
+  const h = await createGame({ track: null });
+  try {
+    const P = Array.from({ length: 6 }, () => [0, 0, 0, 1]);
+    h.ctx.GLX.makeFrustumPlanes = () => P;
+    Object.defineProperty(h.sandbox.navigator, "userAgent", { value: "Mozilla/5.0 Chrome/128.0", configurable: true });
+    const G = h.G, T = h.ctx.Tracks, doc = h.sandbox.document;
+    const starts = [], ends = [];
+    let syncBuilds = 0, live = 0;
+    const paced = T.buildPaced, build = T.build;
+    T.buildPaced = function (def, opts) {
+      starts.push(def.id + (opts.night ? ":dark" : ":light")); live++;
+      return paced.apply(this, arguments).then((r) => { live--; ends.push(r ? "done" : "abandoned"); return r; });
+    };
+    T.build = function () { syncBuilds++; return build.apply(this, arguments); };
+    let now = h.sandbox.performance.now();
+    const frame = async () => { now += 16.7; try { h.pumpFrame(now); } catch (_) { /* render: not under test */ } h.flushTimers(true); await new Promise((r) => setTimeout(r, 2)); };
+    const frames = async (n) => { for (let i = 0; i < n && live; i++) await frame(); };
+    const until = async (pred, max) => { for (let i = 0; i < max && !pred(); i++) await frame(); return pred(); };
+
+    G.raceTimeOfDay = "default"; G.raceWeather = "dry";
+    G.trackIdx = T.LIST.findIndex((d) => d.id === "spa");
+    assert.ok(!T.LIST[G.trackIdx].night, "spa is a day circuit: default and day build the same world");
+    doc.getElementById("select").hidden = false;
+    G.scheduleFlybyTrack(true);                                   // the tile
+    assert.ok(await until(() => starts.length === 1, 600), "the tile starts a build");
+    await frames(8);
+    assert.equal(live, 1, "still building (else the taps below prove nothing)");
+
+    doc.getElementById("select").hidden = true; G.openRaceSettings("select");   // SETTINGS (first open: default / dry)
+    await frames(2);
+    G.raceWeather = "rain"; G.scheduleFlybyTrack();             // weather chip: no build input
+    await frames(2);
+    G.raceTimeOfDay = "day"; G.scheduleFlybyTrack();            // default -> day on a day circuit: the same world
+    await frames(2);
+    assert.equal(live, 1, "the first build is still in flight " + JSON.stringify({ starts, ends }));
+    assert.deepEqual(starts, ["spa:light"], "SETTINGS and the chips kept the build");
+    assert.deepEqual(ends, [], "nothing was abandoned");
+
+    G.raceTimeOfDay = "night"; G.scheduleFlybyTrack();          // a dark session IS a different world
+    assert.ok(await until(() => starts.length === 2, 600), "a build-key change restarts the build");
+    assert.deepEqual(ends, ["abandoned"]);
+    await frames(8);
+    G.raceTimeOfDay = "dusk"; G.scheduleFlybyTrack();           // dark -> dark: the same world
+    await frames(2);
+    assert.equal(live, 1, "the second build is still in flight " + JSON.stringify({ starts, ends }));
+    assert.deepEqual(starts, ["spa:light", "spa:dark"]);
+
+    G.raceIntro(() => {});                                      // RACE! mid-build joins it
+    assert.ok(await until(() => !live && G.track && G.track.def.id === "spa", 3000), "the joined build lands");
+    await frames(10);
+    assert.deepEqual(starts, ["spa:light", "spa:dark"], "RACE! started no build of its own");
+    assert.deepEqual(ends, ["abandoned", "done"]);
+    assert.equal(syncBuilds, 0, "and no synchronous rebuild either: the intro reuses the joined world");
+    assert.equal(G.track.def.id, "spa");
+  } finally { h.close(); }
+});
