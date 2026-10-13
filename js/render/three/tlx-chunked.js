@@ -378,9 +378,12 @@
     // what the fog wall has hidden, height-aware (Frustum.radialCulled). Shadow
     // passes call with cullDist = 0 and no fog (an off-camera building can
     // still cast INTO view).
+    // R13 (perf hunt 3): the list is a high-water scratch. `length = 0` per cull
+    // dropped V8's backing store and the next 4-10 culls a frame regrew it; the
+    // RETURNED n is the contract (every caller loops j < n), entries past it are
+    // stale references to a live world's chunks, and free() still empties it.
     const _visList = [];
     function cull(mesh, vp, eye, cullDist, fog) {
-      _visList.length = 0;
       const chunks = mesh && mesh.chunks;
       if (!chunks || !vp) return 0;
       Frustum.extractPlanes(vp, _fcPlanes);
@@ -393,7 +396,6 @@
         if (Frustum.radialCulled(ch.min, ch.max, ex, ey, ez, cd, cf)) continue;
         _visList[n++] = ch;
       }
-      _visList.length = n;
       return n;
     }
 

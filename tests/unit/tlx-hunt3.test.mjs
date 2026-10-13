@@ -5,7 +5,8 @@
  *   R4  no env cube target / sampler while TLX is opted out of the live env probe
  *   R3  phone MEDIUM: one-attachment scene target, no ssrTag MRT, a distinct fallback in the composite's tag slot
  *   R7  dry-day SSR gate on po.reflect (game.js, every backend), behind apex26.ssrDayGate (default OFF)
- *   R9  the particle / rain stream wraps the producer's array instead of copying it per upload */
+ *   R9  the particle / rain stream wraps the producer's array instead of copying it per upload
+ *   R13 the chunk-cull scratch list keeps its backing store; refuseTab is minted once per renderer */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -193,4 +194,18 @@ test("R9: drawParticles wraps the producer's Float32Array (no per-frame copy), r
   const Q = bootParticles(false);
   Q.api.drawParticles(vertA, 360, false, true);
   assert.notEqual(Q.partStreams[0].ib.array, vertA); assert.equal(Q.partStreams[0].ib.array[359], vertA[359]);
+});
+
+test("R13: chunk cull never shrinks its scratch list; refuseTab is minted once per renderer, not per present()", () => {
+  const CH = read("js/render/three/tlx-chunked.js");
+  const cull = fnSource(CH, "function cull(mesh, vp, eye, cullDist, fog) {");
+  assert.doesNotMatch(cull, /_visList\.length\s*=/, "length = 0 / = n frees V8's backing store; the returned n is the contract");
+  assert.match(cull, /_visList\[n\+\+\] = ch;/);
+  assert.match(fnSource(CH, "function free(mesh) {"), /_visList\.length = 0;/, "a freed world still leaves module scratch");
+  for (const site of [/const n = chunkedSys\.cull\([^;]+;\s*const vis = chunkedSys\.visList;\s*for \(let (\w) = 0; \1 < n; \1\+\+\)/g])
+    assert.ok((TLX.match(site) || []).length >= 2, "every visList reader loops to the returned n");
+  const present = TLX.indexOf("        present(opts) {");
+  const rt = TLX.indexOf("const refuseTab = () => {");
+  assert.ok(rt > 0 && rt < present, "refuseTab is hoisted out of present()");
+  assert.equal((TLX.match(/const refuseTab = /g) || []).length, 1);
 });

@@ -3390,6 +3390,21 @@ const TLX = (function () {
       // written to webgl2 (session skip + reload if even classic dies).
       // postOnly: the failure may be the post chain alone and the canvas repaint
       // below still paints on TLX — then the session stays bound to three.
+      const refuseTab = () => {
+        const toGlx = _glPin === "0" || _glPin === "1" || forceWebGL || _autoStayGL;
+        try { sessionStorage.setItem(toGlx ? "apex26.gfxClaimFail" : "apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps its path */ }
+        try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* skipClaim still blocks revert */ }
+        let n;
+        try {
+          n = (parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) + 1;
+          sessionStorage.setItem("apex26.ctxLostReloads", String(n));
+        } catch (_) { n = ++_sessLostN; }
+        if (n <= 2) { try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
+        try {
+          if (typeof window.__apexReportError === "function")
+            window.__apexReportError("gfx", new Error("The graphics renderer cannot draw on this device — reload to try again, or pick another RENDERER in settings."));
+        } catch (_) { /* shell card absent */ }
+      };
       const persistFail = (e, postOnly) => {
         const reason = (e && e.message) || String(e);
         _lastFailure = { reason, at: Date.now() };
@@ -4779,22 +4794,7 @@ const TLX = (function () {
           // has nothing lower on TLX, so it binds GLX (gfxClaimFail): tlxAutoGL there reproduced the same boot for ever.
           // The reload spends the shared ctxLostReloads budget (n <= 2, like the heal path below); past it the latch is
           // still written for the player's own next reload, but nothing reloads on its own.
-          // (persistFail / paintCanvas / dropTo are hoisted above present(): one closure set per renderer, not four a frame.)
-          const refuseTab = () => {
-            const toGlx = _glPin === "0" || _glPin === "1" || forceWebGL || _autoStayGL;
-            try { sessionStorage.setItem(toGlx ? "apex26.gfxClaimFail" : "apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps its path */ }
-            try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* skipClaim still blocks revert */ }
-            let n;
-            try {
-              n = (parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) + 1;
-              sessionStorage.setItem("apex26.ctxLostReloads", String(n));
-            } catch (_) { n = ++_sessLostN; }
-            if (n <= 2) { try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
-            try {
-              if (typeof window.__apexReportError === "function")
-                window.__apexReportError("gfx", new Error("The graphics renderer cannot draw on this device — reload to try again, or pick another RENDERER in settings."));
-            } catch (_) { /* shell card absent */ }
-          };
+          // (persistFail / paintCanvas / dropTo / refuseTab are hoisted above present(): one closure set per renderer, none a frame — R13.)
           let painted = false;
           try {
             // Garage / menu frames set noEnv (setup-camera may still pass
