@@ -2,7 +2,8 @@
  * over a no-op WebGL2 context (tests/helpers/fake-webgl2.mjs) compiles the REAL tsl-lit material, so a test can
  * read the GLSL it generated (the hunt-1 codegen-dump method); the rest are source pins on tlx.js / tlx-post.js.
  * A unit test of a backend is not evidence it runs: the follow-up is gfx-probe + gpu-census.yml (macos).
- *   R4  no env cube target / sampler while TLX is opted out of the live env probe */
+ *   R4  no env cube target / sampler while TLX is opted out of the live env probe
+ *   R3  phone MEDIUM: one-attachment scene target, no ssrTag MRT, a distinct fallback in the composite's tag slot */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -19,7 +20,8 @@ installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
 const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.0/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
-for (const f of ["js/render/shared/light-budget.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"])
+for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
+  "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
   vm.runInThisContext(read(f), { filename: f });
 
 // Compile one lit mesh on a fresh renderer and return every shader source three handed GL.
@@ -64,4 +66,51 @@ test("R4: tlx.js reads the env opt-out before allocating, and allocates no cube 
   assert.equal((TLX.match(/let _envOptOut\b/g) || []).length, 1, "one declaration");
   // envFaceBegin stays the producer-side early return (an opted-in session still probes).
   assert.match(TLX, /envFaceBegin\(face, eye, frame\) \{\s*if \(_envOptOut\) return null;/);
+});
+
+// The REAL post chain (tlx-post + tsl-post) over the fake GL; warm() compiles every pass the frame would run.
+async function postChain(ssrTag) {
+  const fg = makeFakeGL(320, 180);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  const post = globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: true, chunks: globalThis.TLXShaders.chunks(THREE, TSL),
+    shadow: null, viz: null, ssrTag, softDest: () => null, wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 });
+  post.resize(320, 180);
+  const I = new THREE.Matrix4().toArray();
+  const n0 = fg.shaders.length;
+  await post.warm({ reflect: 0, carReflect: 0, bloom: 0.5, ssao: 0.5, godray: 0, exposure: 1 },
+    { proj: I, invProj: I, invVP: I, viewProj: I, time: 0, sunVS: [0, 0, -1] });
+  const samplers = fg.shaders.slice(n0).map((s) => (s.match(/uniform\s+(?:\w+\s+)?sampler2D\s+\w+/g) || []).length);
+  const out = { tagOn: post.tagOn(), attachments: post.state().attachments, textures: post.sceneTarget().textures.length,
+    maxSamplers: Math.max(...samplers) };
+  post.dispose(); renderer.dispose();
+  return out;
+}
+
+test("R3: ssrTag false builds a one-attachment scene target; the composite keeps a DISTINCT tag sampler (lesson 4)", async () => {
+  const on = await postChain(undefined), off = await postChain(false);
+  assert.equal(on.tagOn, true, "default keeps the tag (desktop, HIGH/ULTRA phones)");
+  assert.equal(on.textures, 2); assert.equal(on.attachments, 2);
+  assert.equal(off.tagOn, false);
+  assert.equal(off.textures, 1, "no ssrTag colour attachment"); assert.equal(off.attachments, 1);
+  // The composite is the pass with the most samplers. Had the tag slot fallen back to sceneRT.texture (or any
+  // texture another slot holds) three would merge the two nodes into ONE sampler and this count would drop.
+  assert.equal(off.maxSamplers, on.maxSamplers, "the tag slot is its own sampler in the tag-less composite");
+});
+
+test("R3: tlx.js sets the ssrTag MRT only on a tagged chain (present + warm), and swaps the chain when the rule moves", () => {
+  assert.match(TLX, /function _wantTag\(\) \{[\s\S]{0,400}PerfGov\.userTier\(\)[\s\S]{0,120}return !\(ut >= 2 && \(mobileTier \|\| _tagLessKnob === "1"\)\);/,
+    "the rule: tag-less only at userTier >= 2 on a mobileTier phone (or the desktop A/B knob)");
+  assert.match(TLX, /viz: vizMode, ssrTag: _wantTag\(\),/, "buildPost passes the rule to the chain");
+  const at = TLX.indexOf("const _tag = !post.tagOn || post.tagOn();");
+  assert.ok(at > 0, "present() reads the chain's tag state");
+  assert.match(TLX.slice(at, at + 400),
+    /if \(_tag && lit && lit\.setSsrMrt\) lit\.setSsrMrt\(true\);[\s\S]*if \(_tag && fx && fx\.setSsrMrt\) fx\.setSsrMrt\(true\);[\s\S]*const _hadMrt = _tag && /);
+  const warm = TLX.slice(TLX.indexOf("function startProgramWarm(opts) {"), TLX.indexOf("const ENV_PROBE_TRIES"));
+  assert.match(warm, /const useTag = usePost && \(!post\.tagOn \|\| post\.tagOn\(\)\);/);
+  assert.doesNotMatch(warm, /setSsrMrt\(usePost\)|usePost \? _ssrMrtNode\(\)/, "the warm compiles the MRT variant present() will use");
+  assert.match(TLX, /function _tagSwap\(\) \{\s*if \(!post \|\| !post\.tagOn \|\| _warmPending \|\| post\.tagOn\(\) === _wantTag\(\)\) return;[\s\S]{0,200}post = buildPost\(\); if \(post\) post\.resize\(W, H\);/,
+    "a GRAPHICS change that moves the rule rebuilds the chain");
+  const b = TLX.indexOf("        begin(frame) {");
+  assert.match(TLX.slice(b, b + 1200), /_tagSwap\(\);/, "begin() runs the swap before the scene records");
 });

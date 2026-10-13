@@ -1106,12 +1106,39 @@ const TLX = (function () {
       // The post chain's factory, callable AGAIN: a one-off throw in present()
       // retires the chain ("Post-only death") and the next render-target realloc
       // rebuilds it (applyResize) — WGX's _swapTargets re-enables its chain the same way.
+      // R3 (perf hunt 3): does the scene pass need its ssrTag attachment? Only
+      // SSR (po.reflect), car-paint SSR (po.carReflect) and the exhaust haze
+      // read it. On a mobileTier phone at GRAPHICS MEDIUM or LOW (userTier >= 2)
+      // game.js zeroes both SSR inputs (tier() >= 2) and never sends a haze, so
+      // the composite never fetches the tag: build the scene target with one
+      // attachment and present() sets no MRT. Re-evaluated every begin(): a
+      // live preset raise rebuilds the chain with the tag (one compile hitch).
+      // apex26.tlxTagLess: unset = that rule, "0" = always tag, "1" = drop it
+      // at userTier >= 2 off phones too (desktop A/B lever: there the haze
+      // still runs and reads white = "not car" over cars — the only delta).
+      let _tagLessKnob = "";
+      try { _tagLessKnob = localStorage.getItem("apex26.tlxTagLess") || ""; } catch (_) { /* no storage: auto */ }
+      function _wantTag() {
+        if (_tagLessKnob === "0") return true;
+        let ut = 0;
+        try { ut = (typeof PerfGov !== "undefined" && PerfGov.userTier) ? PerfGov.userTier() : 0; } catch (_) { ut = 0; }
+        return !(ut >= 2 && (mobileTier || _tagLessKnob === "1"));
+      }
+      // A GRAPHICS change moved the rule: swap the chain for one with/without the
+      // attachment (begin(), before the scene records). Not warmed: one compile hitch.
+      function _tagSwap() {
+        if (!post || !post.tagOn || _warmPending || post.tagOn() === _wantTag()) return;
+        const old = post; post = null;
+        _cancelSoftBlits();
+        try { if (old.dispose) old.dispose(); } catch (_) { /* best effort */ }
+        post = buildPost(); if (post) post.resize(W, H);
+      }
       function buildPost() {
       let post = null;   // shadows the session's `post`: the caller assigns the result
       try {
         if (window.TLXShaders && TLXShaders.postChain && TLXShaders.post && chunks) {
           post = TLXShaders.postChain(THREE, TSL,
-            { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode,
+            { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode, ssrTag: _wantTag(),
               softDest: function () { return softOutRT(); },
               wantSpatialUpscale, getPresentSize,
               // SCENE MSAA: on the desktop WebGL2 backend only, sized by the
@@ -2492,15 +2519,16 @@ const TLX = (function () {
         _warmStages.at = Math.round(_warmAt); _warmStages.attempts = _warmAttempts;
         const target = renderer.getRenderTarget(), mrt = renderer.getMRT();
         const usePost = !!(post && post.enabled() && _postF.proj && !vizMat);
+        const useTag = usePost && (!post.tagOn || post.tagOn());   // R3: present()'s MRT rule
         // r185 reads renderer target/MRT again AFTER awaits while building nodes.
         // Keep all render state owned by this task until compilation settles.
         _warmPending = (async () => {
           try {
             pinSkyMaterial();
             mintLateLit();
-            if (lit && lit.setSsrMrt) lit.setSsrMrt(usePost);
-            if (fx && fx.setSsrMrt) fx.setSsrMrt(usePost);
-            renderer.setMRT(usePost ? _ssrMrtNode() : null);
+            if (lit && lit.setSsrMrt) lit.setSsrMrt(useTag);
+            if (fx && fx.setSsrMrt) fx.setSsrMrt(useTag);
+            renderer.setMRT(useTag ? _ssrMrtNode() : null);
             renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
             let _tStage = performance.now();
             _gpuLastOperation = "compile-scene";
@@ -2565,7 +2593,7 @@ const TLX = (function () {
               _gpuLastOperation = "compile-mirror";
               await renderer.compileAsync(scene, camera);
               // The composite, like all post quads, draws under the main MRT.
-              renderer.setMRT(usePost ? _ssrMrtNode() : null);
+              renderer.setMRT(useTag ? _ssrMrtNode() : null);
               // So does the cockpit's live glass (drawMirrorGlass), in the scene
               // pass: compiled here on createTexMesh's layout, both winding signs
               // (the pipeline keys on the matrix's determinant), or its first
@@ -4314,6 +4342,7 @@ const TLX = (function () {
               && (typeof performance !== "undefined" ? performance.now() : Date.now()) >= _postRetryAt) {
             _postRebuild = false; post = buildPost(); if (post) post.resize(W, H);
           }
+          _tagSwap();
           _instStamp++;
           const z = frame && frame.skyZenith;
           const f = (z && z.length >= 3) ? z
@@ -4769,9 +4798,10 @@ const TLX = (function () {
             } else if (post && _postF.proj && !_postF.noEnv) {
               pinSkyMaterial();
               skyCacheStep();   // E1: before the MRT goes on (its own target, MRT null)
-              if (lit && lit.setSsrMrt) lit.setSsrMrt(true);
-              if (fx && fx.setSsrMrt) fx.setSsrMrt(true);
-              const _hadMrt = !!(TSL.mrt && renderer.setMRT);
+              const _tag = !post.tagOn || post.tagOn();   // R3: a one-attachment scene target takes no MRT
+              if (_tag && lit && lit.setSsrMrt) lit.setSsrMrt(true);
+              if (_tag && fx && fx.setSsrMrt) fx.setSsrMrt(true);
+              const _hadMrt = _tag && !!(TSL.mrt && renderer.setMRT);
               const _prevMrt = _hadMrt && renderer.getMRT ? renderer.getMRT() : null;
               if (_hadMrt) renderer.setMRT(_ssrMrtNode());
               if (post.setMirror) {
