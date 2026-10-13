@@ -1568,6 +1568,9 @@ const TLX = (function () {
       let _matHit = 0, _matMiss = 0, _matEvict = 0;
       const _matMissLog = [];   // the first 64 miss keys, for memState().matMissKeys — census 212 counted 20 misses in a 20 s drive and could not name them
       function fallbackMat(instanced) {
+        // An attribute-instanced mesh (R1 run, A2 batch) needs a NODE material to carry its instance step:
+        // the raw classic rung has none, so it draws nothing there (drawInstanced skips a null).
+        if (instanced === 2) return _drawMatMode >= 2 ? null : _aiOf(unlitInstancedMat);
         return _drawMatMode >= 2 ? rawUnlitMat : (instanced ? unlitInstancedMat : unlitMat);
       }
       const drawEm = (o) => (o && o.emissive !== undefined ? o.emissive : 0);
@@ -1632,8 +1635,9 @@ const TLX = (function () {
       }
       function materialFor(opts, chunked, instanced) {
         if (_drawMatMode || !lit) return fallbackMat(instanced);
-        if (vizMat) return vizMat;
-        if (!opts) return chunked ? defaultMatChunked : (instanced ? defaultMatInstanced : defaultMat);
+        if (vizMat) return instanced === 2 ? _aiOf(vizMat) : vizMat;
+        if (!opts) return chunked ? defaultMatChunked : instanced === 2
+          ? (_aiDefault || (_aiDefault = _attrInst(lit.makeMaterial({ instanced: true })))) : (instanced ? defaultMatInstanced : defaultMat);
         const o = opts;
         const key = matKeyFor(o, chunked, instanced);
         let m = matCache.get(key);
@@ -1804,8 +1808,11 @@ const TLX = (function () {
         // mid-lap compiled on the main thread (the probe counted 44 instanced
         // programs in five jumps). Padded, the batches share their material's
         // program. tlxInstCap stays n: count and uploads never touch the pad.
-        const cap = (window.TLXShaders && TLXShaders.uboInstCap) ? TLXShaders.uboInstCap(renderer, n) : n;
-        const imesh = new THREE.InstancedMesh(geo, unlitMat, cap);
+        // R8/A2 (perf hunt 3): with attribute instancing (_aiStream, the R1 runs' instance step) a batch is
+        // a plain Mesh at its real count, every batch shares ONE node-builder state ("M" key) and none is
+        // padded; `instanceMatrix` names its instance-rate buffer so every reader below is unchanged.
+        const cap = _aiInst ? n : (window.TLXShaders && TLXShaders.uboInstCap) ? TLXShaders.uboInstCap(renderer, n) : n;
+        const imesh = _aiInst ? _aiMesh(geo, unlitMat, n) : new THREE.InstancedMesh(geo, unlitMat, cap);
         imesh.matrixAutoUpdate = false;
         imesh.frustumCulled = false;
         imesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -1949,7 +1956,8 @@ const TLX = (function () {
         if (!batch || !batch.imesh || !batch.instances) return;
         const n = batch.visible === undefined ? batch.instances : batch.visible;
         if (n <= 0) return;
-        pushRec(null, null, materialFor(opts, false, true), drawEm(opts), drawAl(opts), 0, null, batch);
+        const mat = materialFor(opts, false, batch.imesh.isInstancedMesh ? true : 2);   // A2: the attribute-instanced variant
+        if (mat) pushRec(null, null, mat, drawEm(opts), drawAl(opts), 0, null, batch);
       }
 
       function freeInstancedBatch(batch) {
@@ -2012,10 +2020,11 @@ const TLX = (function () {
         const main = batch.imesh, src = batch.geo, n = main.userData.tlxInstCap | 0;
         const g = new THREE.BufferGeometry();
         if (src.index) g.setIndex(src.index);
-        for (const k in src.attributes) if (k !== "instanceTint") g.setAttribute(k, src.attributes[k]);
+        for (const k in src.attributes) if (k !== "instanceTint" && !_AI_ATTR.test(k)) g.setAttribute(k, src.attributes[k]);
         g.drawRange.start = src.drawRange.start; g.drawRange.count = src.drawRange.count;
         for (let i = 0; i < src.groups.length; i++) g.addGroup(src.groups[i].start, src.groups[i].count, src.groups[i].materialIndex);
-        const im = new THREE.InstancedMesh(g, main.material || unlitMat, main.instanceMatrix.count);
+        const im = main.isInstancedMesh ? new THREE.InstancedMesh(g, main.material || unlitMat, main.instanceMatrix.count)
+          : _aiMesh(g, main.material || unlitMat, main.instanceMatrix.count);   // A2: its own instance stream
         im.matrixAutoUpdate = false;
         im.frustumCulled = false;
         im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -2298,6 +2307,35 @@ const TLX = (function () {
         m.customProgramCacheKey = () => "ai-" + key();
         return m;
       }
+      // R8/A2 (perf hunt 3 §2-A2): the prop batches (createInstancedBatch and the mirror view _mirOf) on the
+      // same instance step. apex26.tlxAttrInst=0 restores the padded InstancedMesh batches.
+      let _aiInst = true;
+      try { _aiInst = localStorage.getItem("apex26.tlxAttrInst") !== "0"; } catch (_) { /* no storage: on */ }
+      const _AI_ATTR = /^iM[0-3]$/;
+      // A plain Mesh drawing `count` instances from iM0..3 over one instance-rate buffer of n mat4s. The buffer
+      // is also its `instanceMatrix` — array, updateRanges, needsUpdate, count, setUsage: the surface every
+      // batch reader (_writeInstanceMatrices, the cull pack, tlx-shadow's caster copy) already uses; three
+      // reads that property only on an InstancedMesh.
+      function _aiMesh(geo, mat, n) {
+        const ib = new THREE.InstancedInterleavedBuffer(new Float32Array(Math.max(1, n) * 16), 16, 1);
+        for (let c = 0; c < 4; c++) geo.setAttribute("iM" + c, new THREE.InterleavedBufferAttribute(ib, 4, c * 4));
+        const m = new THREE.Mesh(geo, mat);
+        m.instanceMatrix = ib; m.count = n;
+        return m;
+      }
+      // The fallback / viz rungs on the instance step (three's instancing never reaches a plain Mesh). Unlit
+      // node materials only: a lit material's per-draw packs live in userData, which clone() flattens.
+      const _aiOfMemo = new WeakMap();
+      function _aiOf(m) {
+        let a = _aiOfMemo.get(m);
+        if (!a) {
+          a = m.clone();
+          if (Object.prototype.hasOwnProperty.call(m, "customProgramCacheKey")) a.customProgramCacheKey = m.customProgramCacheKey;
+          _aiOfMemo.set(m, a = _attrInst(a));
+        }
+        return a;
+      }
+      let _aiDefault = null;   // materialFor(null, false, 2)
       function _coRun(geo, neg) {
         let pair = _coRuns.get(geo);
         if (!pair) _coRuns.set(geo, pair = [null, null]);
@@ -3632,10 +3670,12 @@ const TLX = (function () {
         for (let i = 0; i < _instRegistry.length; i++) {
           const im = _instRegistry[i];
           if (!im) continue;
-          // R1's coalesced runs are plain Meshes: three's instancing never reaches them, so a fallback
-          // material would stack every wheel at its local origin. Hidden for this retry; from the next
-          // frame _drawMatMode sends their draws down the per-record path.
-          if (im.isInstancedMesh) im.material = instMat; else im.visible = false;
+          // R1's coalesced runs and the A2 batches are plain Meshes: three's instancing never reaches them,
+          // so they take the AI copy of the instanced rung — or, on the raw classic rung, which cannot carry
+          // the instance step, are hidden (fallbackMat(2) is null there from the next frame on).
+          if (im.isInstancedMesh) im.material = instMat;
+          else if (mode >= 2) im.visible = false;
+          else im.material = _aiOf(unlitInstancedMat);
         }
       };
       // the backend object (the ~40-member seam contract)

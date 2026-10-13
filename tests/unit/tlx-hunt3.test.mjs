@@ -10,7 +10,8 @@
  *   R6  pooled wrappers hang off a pool root listing only this pass's draws
  *   R5  apex26.tlxSkyCache512 (default OFF) sizes the cloud cache
  *   R1  (lane TLX-2) the field's opaque wheel layers coalesce into one attribute-instanced run per mesh and pass
- *   B14 (lane TLX-2) the lit textures in renderGroup through vendor patch §13 (apex26.tlxSharedTex) */
+ *   B14 (lane TLX-2) the lit textures in renderGroup through vendor patch §13 (apex26.tlxSharedTex)
+ *   A2  (lane TLX-2) prop batches as attribute-instanced Meshes: one node graph, no UBO pad (apex26.tlxAttrInst) */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -330,6 +331,7 @@ async function r1Rig(t, ls = {}) {
     function buildGeometry() { throw new Error("unused"); }
     ${R1}
     return { append: _coAppend, drop: _coDrop, runs: _coRuns, stat: _coStat, drawList, resetRecs, materialFor, _instRegistry,
+      aiMesh: _aiMesh, aiOf: _aiOf, aiOn: _aiInst, unlitMat,
       show() { for (let i = 0; i < drawList.n; i++) { const r = drawList[i]; if (!r.instanced) continue;
         const b = r.instanced; b.imesh.count = b.visible; b.imesh.material = r.mat; b.imesh.userData.tlxEmissive = r.em; b.imesh.visible = true; } } };`);
   const R = mk(THREE, TSL, scene, renderer, camera, { getItem: (k) => (k in ls ? ls[k] : null) }, lit, env);
@@ -426,7 +428,7 @@ test("R1: the AI material is the lit instanced fragment on its own program key; 
   assert.match(TLX, /get coalesce\(\) \{ return _coOn && !skipBatches\(\); \}/);
   assert.match(TLX, /\(instanced === 2 \? "\|ai" : instanced \? "\|in" : ""\)/, "the material key separates the three modes");
   assert.match(TLX, /if \(instanced === 2 && m\) _attrInst\(m\);/);
-  assert.match(TLX, /if \(im\.isInstancedMesh\) im\.material = instMat; else im\.visible = false;/,
+  assert.match(TLX, /if \(im\.isInstancedMesh\) im\.material = instMat;\s*else if \(mode >= 2\) im\.visible = false;\s*else im\.material = _aiOf\(unlitInstancedMat\);/,
     "a fallback rung never puts an InstancedMesh material on a run (three's instancing does not reach a plain Mesh)");
 });
 
@@ -551,3 +553,90 @@ test("B14: tsl-lit groups the shadow, bake, lamp-grid, material-array and env-cu
   assert.ok(ids.includes(13));
 });
 function THREE_PATCH_IDS() { return JSON.parse(read("vendor/three-0.186.0/MANIFEST.json")).patches; }
+
+// R8 / A2 (lane TLX-2): the prop batches as attribute-instanced plain Meshes (tlx.js _aiMesh), on the REAL
+// R1 instance step and lit material, three r186 WebGL2 over the fake GL.
+test("A2: two batches on their own geometry each draw their own instance stream at their real count", async (t) => {
+  const { fg, renderer, scene, camera, R } = await r1Rig(t);
+  assert.equal(R.aiOn, true, "on by default");
+  const mat = R.materialFor({ roughness: 0.6 }, false, 2);
+  const mk = (n) => {
+    const g = r1Geo(), m = R.aiMesh(g, mat, n);
+    g.setAttribute("instanceTint", new THREE.InstancedBufferAttribute(new Float32Array(n * 3).fill(1), 3));   // _instColorAttr's shape
+    const im = m.instanceMatrix;
+    assert.equal(im.count, n, "instanceMatrix.count is the instance count (the cap the readers size by)");
+    assert.equal(im.array.length, n * 16, "no pad past the UBO limit");
+    for (let i = 0; i < n; i++) im.array.set(carWheel(i), i * 16);
+    im.updateRanges.push({ start: 0, count: n * 16 }); im.needsUpdate = true;
+    m.setUsageOk = typeof im.setUsage === "function";
+    m.frustumCulled = false; scene.add(m);
+    return m;
+  };
+  const a = mk(2), b = mk(3);
+  assert.ok(a.setUsageOk && !a.isInstancedMesh, "a plain Mesh with the InstancedBufferAttribute surface");
+  fg.reset(); renderer.render(scene, camera);
+  assert.equal(fg.counts.drawElementsInstanced || 0, 2, "one instanced draw per batch");
+  for (const m of [a, b]) assert.ok(renderer.backend.get(m.instanceMatrix).bufferGPU, "each batch's OWN stream reached the GPU (attributes are read by name per geometry)");
+  assert.notEqual(renderer.backend.get(a.instanceMatrix).bufferGPU, renderer.backend.get(b.instanceMatrix).bufferGPU);
+  const off = await r1Rig(t, { "apex26.tlxAttrInst": "0" });
+  assert.equal(off.R.aiOn, false, "apex26.tlxAttrInst=0: the padded InstancedMesh batches");
+});
+
+test("A2: under tlx.js's own node-builder key, N attribute batches build ONE node graph; N padded InstancedMeshes build N", async (t) => {
+  const at = TLX.indexOf("        renderer._nodes.getForRenderCacheKey = function (ro) {");
+  const end = TLX.indexOf("\n        };\n", at);
+  assert.ok(at > 0 && end > at, "the key override moved — check this test, not the code");
+  const install = new Function("renderer", "attachKey", TLX.slice(at, end + "\n        };".length));
+  const builds = async (kind) => {
+    const { fg, renderer, scene, camera, R } = await r1Rig(t);
+    install(renderer, () => "1");
+    const cnb = renderer.backend.createNodeBuilder.bind(renderer.backend);
+    let n = 0; renderer.backend.createNodeBuilder = (...a) => { n++; return cnb(...a); };
+    const mat = kind === "ai" ? R.materialFor({ roughness: 0.6 }, false, 2) : R.materialFor({ roughness: 0.6 }, false, true);
+    for (let i = 0; i < 5; i++) {
+      const g = r1Geo(), k = 3 + i;
+      g.setAttribute("instanceTint", new THREE.InstancedBufferAttribute(new Float32Array(k * 3).fill(1), 3));
+      const m = kind === "ai" ? R.aiMesh(g, mat, k) : new THREE.InstancedMesh(g, mat, 2000);
+      m.count = k; m.frustumCulled = false; scene.add(m);
+    }
+    fg.reset(); renderer.render(scene, camera);
+    assert.equal(fg.counts.drawElementsInstanced || 0, 5);
+    return n;
+  };
+  const ai = await builds("ai"), im = await builds("im");
+  t.diagnostic(`node builds for 5 batches: attribute ${ai}, padded InstancedMesh ${im}`);
+  assert.ok(im >= ai + 4, `padded InstancedMesh: one build per batch (${im} vs ${ai})`);
+});
+
+test("A2: the fallback / viz rungs get an instance-step copy that keeps the rung's program key", async (t) => {
+  const { fg, renderer, scene, camera, R } = await r1Rig(t);
+  const u = new THREE.MeshBasicNodeMaterial();
+  u.colorNode = TSL.attribute("color", "vec3").mul(TSL.attribute("instanceTint", "vec3"));
+  u.lights = false; u.customProgramCacheKey = () => "tlx-unlit-instanced";
+  const ai = R.aiOf(u);
+  assert.equal(R.aiOf(u), ai, "one copy per rung");
+  assert.notEqual(ai, u, "the InstancedMesh rung itself is untouched");
+  assert.equal(ai.customProgramCacheKey(), "ai-tlx-unlit-instanced");
+  const g = r1Geo(); g.setAttribute("instanceTint", new THREE.InstancedBufferAttribute(new Float32Array(6).fill(1), 3));
+  const m = R.aiMesh(g, ai, 2); m.frustumCulled = false; scene.add(m);
+  fg.reset(); renderer.render(scene, camera);
+  assert.ok(fg.shaders.some((s) => /\biM0\b/.test(s) && /gl_Position/.test(s)), "the unlit copy compiles the instance step");
+});
+
+test("A2: tlx.js builds batches, mirror views and their materials on the attribute path; the caster keeps its InstancedMesh", () => {
+  const cib = fnSource(TLX, "      function createInstancedBatch(data, matrices, colors, opts) {");
+  assert.match(cib, /const cap = _aiInst \? n : /, "no UBO pad on the attribute path");
+  assert.match(cib, /const imesh = _aiInst \? _aiMesh\(geo, unlitMat, n\) : new THREE\.InstancedMesh\(geo, unlitMat, cap\);/);
+  assert.match(fnSource(TLX, "      function drawInstanced(batch, opts) {"), /materialFor\(opts, false, batch\.imesh\.isInstancedMesh \? true : 2\)/);
+  const mir = fnSource(TLX, "      function _mirOf(batch) {");
+  assert.match(mir, /k !== "instanceTint" && !_AI_ATTR\.test\(k\)/, "the mirror view takes its own stream, never the main one's");
+  assert.match(mir, /: _aiMesh\(g, main\.material \|\| unlitMat, main\.instanceMatrix\.count\);/);
+  assert.match(fnSource(TLX, "      function fallbackMat(instanced) {"), /if \(instanced === 2\) return _drawMatMode >= 2 \? null : _aiOf\(unlitInstancedMat\);/);
+  assert.match(TLX, /if \(vizMat\) return instanced === 2 \? _aiOf\(vizMat\) : vizMat;/);
+  // The node-builder key keeps "I" + id for a real InstancedMesh only, so every A2 batch shares one state.
+  assert.match(TLX, /const inst = ro\.object && ro\.object\.isInstancedMesh\s*\? "I" \+ ro\.object\.id : "M";/);
+  const sh = read("js/render/three/tlx-shadow.js");
+  assert.match(sh, /if \(k !== "instanceTint" && !\/\^iM\[0-3\]\$\/\.test\(k\)\) g\.setAttribute\(k, src\.attributes\[k\]\);/, "casterGeo drops the lit stream");
+  assert.match(sh, /m = new THREE\.InstancedMesh\(casterGeo\(batch\.geo\), depthMat, sharedInstCap\(batch\.instances \| 0\)\);/, "the caster is still a padded InstancedMesh (R11 / A2 caster: not in this lane)");
+  assert.match(sh, /batch\.imesh && batch\.imesh\.instanceMatrix[\s\S]{0,200}batch\.imesh\.instanceMatrix\.array/, "its copy reads the batch's instanceMatrix alias");
+});
