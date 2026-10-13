@@ -76,3 +76,19 @@ test("nodeGrid.queryRects = query() minus the nodes outside A ∪ B, order kept"
   }
   assert.ok(nonEmpty > 100 && twoRects > 100, `the fuzz exercised the union (${nonEmpty} non-empty, ${twoRects} with B)`);
 });
+
+test("roundNormals leaves a non-array accumulator alone (no NaN integer keys)", () => {
+  const acc = E.TrackModels.scratch();
+  const v0 = 0;
+  E.TrackGeom.addBox(acc, [0, 1, 0], [2, 2, 2], [0.5, 0.5, 0.5]);
+  const keys = Object.keys(acc.nrm).length;
+  E.TrackGeom.roundNormals(acc, v0, [0, 0, 0], [0, 1, 0]);
+  assert.equal(Object.keys(acc.nrm).length, keys, "no keys were added to the accumulator");
+  // a plain array is still rounded
+  const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+  E.TrackGeom.addBox(out, [0, 1, 0], [2, 2, 2], [0.5, 0.5, 0.5]);
+  const before = out.nrm.slice();
+  E.TrackGeom.roundNormals(out, 0, [0, 0, 0], [0, 1, 0]);
+  assert.notDeepEqual(out.nrm, before, "an indexable buffer still rounds");
+  assert.ok(out.nrm.every(Number.isFinite));
+});
