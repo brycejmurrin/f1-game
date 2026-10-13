@@ -1,0 +1,1 @@
+1791925212	Claude	hunt 3 fixes: js/game.js (update gate, menu pre-build), js/agent/apex.js jump(), tests/specs helpers, js/track/build-worker test (PR for cursor/perf-hunt-3-e2a7)  [cursor/perf-hunt-3-e2a7; session 7a58d35fe0445becee2c225d]
