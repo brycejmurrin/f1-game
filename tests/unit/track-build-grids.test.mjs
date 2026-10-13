@@ -92,3 +92,37 @@ test("roundNormals leaves a non-array accumulator alone (no NaN integer keys)", 
   assert.notDeepEqual(out.nrm, before, "an indexable buffer still rounds");
   assert.ok(out.nrm.every(Number.isFinite));
 });
+
+test("hidden-face strip: a giant box (coarse grid) hides exactly what a brute-force scan says", () => {
+  const r = rng(11);
+  const geo = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+  const boxes = [];
+  const add = (c, sz) => { boxes.push({ c, h: sz.map((v) => v / 2) }); E.TrackGeom.addBox(geo, c, sz, [0.5, 0.5, 0.5]); };
+  // the giant sheets: 4 km x 20 m and 3 km x 3 km, far past BIG_CELLS 8 m cells
+  add([0, -5, 0], [4000, 10, 20]);
+  add([2500, 0, 2500], [3000, 40, 3000]);
+  // small boxes: inside a giant (hidden), straddling its edge (kept), inside
+  // another small box (the fine grid's own answer), and out in the open
+  for (let i = 0; i < 120; i++) {
+    const kind = i % 4, s = 0.5 + r() * 3;
+    if (kind === 0) add([(r() - 0.5) * 3900, -5, (r() - 0.5) * 12], [s, s, s]);
+    else if (kind === 1) add([(r() - 0.5) * 3900, 0, 10], [s, s, s]);
+    else if (kind === 2) { const c = [1200 + r() * 2600, 0, 1200 + r() * 2600]; add(c, [8, 8, 8]); add(c, [s, s, s]); }
+    else add([(r() - 0.5) * 6000, 50, -500 - r() * 500], [s, s, s]);
+  }
+  const pos = geo.pos.slice(), idx = geo.idx.slice(), T = idx.length / 3;
+  const inside = (b, p) => Math.abs(p[0] - b.c[0]) < b.h[0] - 0.01 && Math.abs(p[1] - b.c[1]) < b.h[1] - 0.01 &&
+    Math.abs(p[2] - b.c[2]) < b.h[2] - 0.01;
+  const want = [];
+  let hidden = 0;
+  for (let t = 0; t < T; t++) {
+    const P = [0, 1, 2].map((q) => pos.slice(idx[t * 3 + q] * 3, idx[t * 3 + q] * 3 + 3));
+    if (boxes.some((b) => P.every((p) => inside(b, p)))) hidden++;
+    else want.push(idx[t * 3], idx[t * 3 + 1], idx[t * 3 + 2]);
+  }
+  assert.ok(hidden > 12 * 60 && want.length > 0, `the scene exercises both grids (${hidden} hidden)`);
+  const st = E.TrackHiddenFaces.strip(geo, {});
+  assert.equal(st.boxes, boxes.length);
+  assert.equal(st.enclosed, hidden);
+  assert.deepEqual(Array.from(geo.idx), want);
+});
