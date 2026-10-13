@@ -8,7 +8,10 @@
  *   R9  the particle / rain stream wraps the producer's array instead of copying it per upload
  *   R13 the chunk-cull scratch list keeps its backing store; refuseTab is minted once per renderer
  *   R6  pooled wrappers hang off a pool root listing only this pass's draws
- *   R5  apex26.tlxSkyCache512 (default OFF) sizes the cloud cache */
+ *   R5  apex26.tlxSkyCache512 (default OFF) sizes the cloud cache
+ *   R1  (lane TLX-2) the field's opaque wheel layers coalesce into one attribute-instanced run per mesh and pass
+ *   B14 (lane TLX-2) the lit textures in renderGroup through vendor patch §13 (apex26.tlxSharedTex)
+ *   A2  (lane TLX-2) prop batches as attribute-instanced Meshes: one node graph, no UBO pad (apex26.tlxAttrInst) */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -293,4 +296,347 @@ test("R5: apex26.tlxSkyCache512 is off by default, '1' = mobileTier only, 'all' 
     assert.equal(sky.cacheState().size, want);
     sky.dispose();
   }
+});
+
+// R1 (lane TLX-2): the REAL coalescing block of tlx.js (runs, attribute instancing, the sentinel), driven over
+// the REAL tsl-lit material and three r186 on the fake GL, against the per-record draws it replaces.
+const R1 = TLX.slice(TLX.indexOf("      let _coOn = true;"), TLX.indexOf("      function ensureStream(slot, verts) {"));
+async function r1Rig(t, ls = {}) {
+  const fg = makeFakeGL();
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  t.after(() => renderer.dispose());
+  const lit = globalThis.TLXShaders.lit(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null,
+    ssrTag: false, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
+  const scene = new THREE.Scene(); scene.matrixWorldAutoUpdate = false;
+  const camera = new THREE.PerspectiveCamera(); camera.position.set(0, 0, 5); camera.updateMatrixWorld();
+  const env = { soft: false };
+  assert.match(R1, /function _coAppend\(geo, w, opts\)/, "the R1 block moved — check this test, not the code");
+  const mk = new Function("THREE", "TSL", "scene", "renderer", "camera", "localStorage", "lit", "env", `"use strict";
+    const _instRegistry = [], drawList = []; drawList.n = 0;
+    const unlitMat = new THREE.MeshBasicNodeMaterial(), _drawMatMode = 0, vizMat = null;
+    const skipBatches = () => env.soft, drawEm = (o) => (o && o.emissive !== undefined ? o.emissive : 0);
+    function setRange0(attr, count) { attr.updateRanges.length = 0; attr.updateRanges.push({ start: 0, count }); }
+    function pushRec(geo, m, mat, em, al, lg, chunked, instanced) {
+      const r = drawList[drawList.n] || (drawList[drawList.n] = {}); drawList.n++;
+      Object.assign(r, { geo, m, mat, em, al, lg, chunked, instanced });
+    }
+    function resetRecs() { for (let i = 0; i < drawList.n; i++) drawList[i].instanced = null; drawList.n = 0; }
+    const cache = new Map();
+    function materialFor(o, chunked, instanced) {
+      const k = JSON.stringify(o) + instanced;
+      if (!cache.has(k)) { const m = lit.makeMaterial(instanced ? Object.assign({ instanced: true }, o) : o); if (instanced === 2) _attrInst(m); cache.set(k, m); }
+      return cache.get(k);
+    }
+    function buildGeometry() { throw new Error("unused"); }
+    ${R1}
+    return { append: _coAppend, drop: _coDrop, runs: _coRuns, stat: _coStat, drawList, resetRecs, materialFor, _instRegistry,
+      aiMesh: _aiMesh, aiOf: _aiOf, aiOn: _aiInst, unlitMat,
+      show() { for (let i = 0; i < drawList.n; i++) { const r = drawList[i]; if (!r.instanced) continue;
+        const b = r.instanced; b.imesh.count = b.visible; b.imesh.material = r.mat; b.imesh.userData.tlxEmissive = r.em; b.imesh.visible = true; } } };`);
+  const R = mk(THREE, TSL, scene, renderer, camera, { getItem: (k) => (k in ls ? ls[k] : null) }, lit, env);
+  return { fg, renderer, scene, camera, R, env, lit };
+}
+// A wheel-like geometry and car-basis matrices: game.js basisMat is a reflection (det -1).
+function r1Geo() {
+  const g = new THREE.BufferGeometry();
+  for (const [n, k, c] of [["position", 3, 4], ["normal", 3, 4], ["color", 3, 4], ["mat", 1, 4], ["trk", 3, 4]])
+    g.setAttribute(n, new THREE.BufferAttribute(new Float32Array(k * c).fill(0.5), k));
+  g.setIndex(new THREE.BufferAttribute(new Uint16Array([0, 1, 2, 0, 2, 3]), 1));
+  return g;
+}
+function carWheel(i) {
+  const W = new THREE.Matrix4().makeRotationY(0.3 * i).multiply(new THREE.Matrix4().makeScale(-1, 1, 1))
+    .multiply(new THREE.Matrix4().makeRotationX(0.7 + i)).setPosition(812.25 + i * 3.1, 4.5, -1290.75 + i);
+  return Float32Array.from(W.elements);
+}
+
+test("R1: N same-mesh opaque draws are ONE instanced draw; R x W per instance rebuilds W exactly; front face as per record", async (t) => {
+  const { fg, renderer, scene, camera, R } = await r1Rig(t);
+  const geo = r1Geo(), opts = { roughness: 0.55, metalness: 0.3, specular: 0.45, emissive: 0.12, doubleSided: true, coalesce: true };
+  const mats = [0, 1, 2, 3, 4].map(carWheel);
+  for (const w of mats) assert.equal(R.append(geo, w, opts), true);
+  assert.equal(R.drawList.n, 1, "five draws, one record");
+  const b = R.drawList[0].instanced;
+  assert.equal(b.visible, 5);
+  assert.ok(b.imesh.matrixWorld.determinant() < 0, "a det < 0 run carries the reflection as its matrixWorld");
+  const a = b.ib.array;
+  for (let i = 0; i < 5; i++) {
+    const inst = new THREE.Matrix4().fromArray(a, i * 19), got = b.imesh.matrixWorld.clone().multiply(inst).elements;
+    for (let k = 0; k < 16; k++) assert.equal(Math.fround(got[k]), mats[i][k], `instance ${i} element ${k}: R x (R x W) == W bit for bit`);
+    assert.deepEqual([...a.subarray(i * 19 + 16, i * 19 + 19)], [1, 1, 1], "white tint");
+    assert.ok(inst.determinant() > 0, "the instance itself is a proper transform");
+  }
+  R.show();
+  const front = []; fg.gl.frontFace = (m) => front.push(m);
+  fg.reset(); renderer.render(scene, camera);
+  assert.equal(fg.counts.drawElementsInstanced || 0, 1, "one instanced draw");
+  assert.equal(fg.counts.drawElements || 0, 0);
+  const vs = fg.shaders.find((s) => /\biM0\b/.test(s) && /gl_Position/.test(s));
+  assert.ok(vs, "the vertex stage reads the named instance stream");
+  assert.match(vs, /inverse\(/, "normals through the true inverse-transpose (r186 transformNormal)");
+  // The per-record control: the same five through plain meshes at W (what TLX drew before).
+  const scene2 = new THREE.Scene(); scene2.matrixWorldAutoUpdate = false;
+  const plain = R.materialFor({ roughness: 0.55, metalness: 0.3, specular: 0.45, doubleSided: true }, false, false);
+  for (const w of mats) {
+    const m = new THREE.Mesh(geo, plain); m.matrixAutoUpdate = false; m.matrixWorldAutoUpdate = false; m.frustumCulled = false;
+    m.matrixWorld.fromArray(w); scene2.add(m);
+  }
+  const front2 = []; fg.gl.frontFace = (m) => front2.push(m);
+  fg.reset(); renderer.render(scene2, camera);
+  assert.equal(fg.counts.drawElements || 0, 5, "control: five per-record draws");
+  assert.ok(front.length > 0 && front2.length > 0, "both renders set a front face");
+  assert.equal(front[front.length - 1], front2[front2.length - 1], "the run rasterises with the per-record front face (CW for the reflected basis)");
+});
+
+test("R1: the sentinel, the fallbacks and the kill switch", async (t) => {
+  const { R, env } = await r1Rig(t);
+  const geo = r1Geo(), o = { roughness: 0.55, doubleSided: true, coalesce: true, emissive: 0 };
+  assert.equal(R.append(geo, carWheel(0), o), true);
+  assert.equal(R.append(geo, carWheel(1), Object.assign({}, o, { emissive: 0.5 })), false, "a second emissive in one run draws per record");
+  assert.equal(R.append(geo, carWheel(1), Object.assign({}, o, { roughness: 0.9 })), false, "so does a second material");
+  assert.equal(R.append(geo, carWheel(2), Object.assign({}, o, { alpha: 0.5 })), false, "alpha < 1 never joins");
+  const pos = Float32Array.from(new THREE.Matrix4().setPosition(1, 2, 3).elements);
+  assert.equal(R.append(geo, pos, o), true, "a det > 0 draw takes the other run of the same mesh");
+  assert.equal(R.drawList.n, 2);
+  assert.equal(R.runs.get(geo)[0].imesh.matrixWorld.determinant(), 1);
+  R.resetRecs();
+  assert.equal(R.append(geo, carWheel(3), o), true);
+  assert.equal(R.drawList.n, 1, "after the pass reset the run re-opens at the new list's slot (A6's sentinel)");
+  assert.equal(R.runs.get(geo)[1].visible, 1);
+  for (let i = 1; i < 128; i++) assert.equal(R.append(geo, carWheel(i & 7), o), true);
+  assert.equal(R.append(geo, carWheel(0), o), false, "past CO_CAP the rest draw per record");
+  assert.equal(R.stat.fall, 3);
+  env.soft = true;
+  R.resetRecs();
+  assert.equal(R.append(geo, carWheel(0), o), false, "software WebGPU (skipBatches) keeps the per-record path");
+  const reg = R._instRegistry.length;
+  R.drop(geo);
+  assert.equal(R.runs.has(geo), false); assert.equal(R._instRegistry.length, reg - 2, "a freed source takes both runs");
+  const off = await r1Rig(t, { "apex26.tlxCoalesce": "0" });
+  assert.equal(off.R.append(geo, carWheel(0), o), false, "apex26.tlxCoalesce=0: per record");
+});
+
+test("R1: the AI material is the lit instanced fragment on its own program key; tlx.js wires draw, warm, release and the capability", async (t) => {
+  const { R } = await r1Rig(t);
+  const ai = R.materialFor({ roughness: 0.55 }, false, 2), inst = R.materialFor({ roughness: 0.55 }, false, true);
+  assert.equal(ai.colorNode, inst.colorNode, "the same shared instanced fragment graph");
+  assert.equal(ai.customProgramCacheKey(), "ai-" + inst.customProgramCacheKey());
+  assert.match(TLX, /draw\(mesh, model, opts\) \{\s*if \(opts && opts\.coalesce && mesh && mesh\.geo && _coAppend\(mesh\.geo, model, opts\)\) return;/);
+  assert.match(fnSource(TLX, "async function warmFxPrograms() {"), /await _coWarm\(\);/);
+  assert.match(fnSource(TLX, "function releaseGeometry(geo) {"), /_coDrop\(geo\);/);
+  assert.match(TLX, /get coalesce\(\) \{ return _coOn && !skipBatches\(\); \}/);
+  assert.match(TLX, /\(instanced === 2 \? "\|ai" : instanced \? "\|in" : ""\)/, "the material key separates the three modes");
+  assert.match(TLX, /if \(instanced === 2 && m\) _attrInst\(m\);/);
+  assert.match(TLX, /if \(im\.isInstancedMesh\) im\.material = instMat;\s*else if \(mode >= 2\) im\.visible = false;\s*else im\.material = _aiOf\(unlitInstancedMat\);/,
+    "a fallback rung never puts an InstancedMesh material on a run (three's instancing does not reach a plain Mesh)");
+});
+
+test("R1: car-draw.js sends only the OPAQUE wheel layers through a coalescing sibling bag, and only to a backend that asks", () => {
+  const cd = read("js/car/car-draw.js");
+  const fn = cd.slice(cd.indexOf("    const _coSib = new WeakMap();"), cd.indexOf("    // ── decal-queue"));
+  assert.match(fn, /function coOpt\(o\)/, "coOpt moved — check this test, not the code");
+  const mk = (gfx) => new Function("G", `"use strict"; ${fn} return coOpt;`)({ gfx });
+  const o = { roughness: 0.55, emissive: 0 };
+  assert.equal(mk({})(o), o, "GLX / WGX: the caller's own bag, untouched");
+  const co = mk({ coalesce: true });
+  const s = co(o);
+  assert.notEqual(s, o); assert.equal(s.coalesce, true); assert.equal(o.coalesce, undefined, "the caller's bag is never mutated");
+  o.emissive = 0.12;
+  assert.equal(co(o), s, "one sibling per bag"); assert.equal(s.emissive, 0.12, "refreshed per call");
+  const ring = { alpha: 0.5 };
+  assert.equal(co(ring), ring, "alpha < 1 stays per record");
+  const body = fnSource(cd, "    function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale, bare) {");
+  assert.match(body, /const wo = coOpt\(opt\);/);
+  assert.match(body, /G\.gfx\.draw\(wd\.rear \? wm\.R : wm\.F, _wheelWorld, wo\);/);
+  assert.match(body, /G\.gfx\.draw\(_wqMesh\[i\], _wq\[i\], wo\);/);
+  assert.match(body, /G\.gfx\.draw\(_cqMesh\[i\], _cq\[i\], wo\);/);
+  assert.match(body, /G\.gfx\.draw\(_rqMesh\[i\] \|\| getBrakeRing\(\), _rq\[i\], ro\);/, "rings and discs: the plain blended bag");
+});
+
+// B14 / R2 (lane TLX-2): the lit textures in three's renderGroup through vendor patch §13, on the REAL
+// tsl-lit with its material arrays and lamp grid, three r186 WebGL2 over the fake GL. Plain, InstancedMesh
+// and attribute-instanced (R1) programs share one fragment graph, so this is where a key without the
+// binding NAME would hand one program another's sampler names.
+async function b14Rig(t, sharedTex) {
+  const fg = makeFakeGL();
+  const progOf = new Map(), srcOf = new Map(), locs = [], unit = new Map(), bound = [];
+  const gl = fg.gl;
+  gl.createShader = () => ({ sh: true }); gl.createProgram = () => ({ prog: true, sh: [] });
+  gl.shaderSource = (sh, src) => { srcOf.set(sh, src); fg.shaders.push(src); };
+  gl.attachShader = (p, sh) => p.sh.push(sh);
+  gl.getUniformLocation = (p, name) => { const loc = { p, name }; locs.push(loc); return loc; };
+  gl.uniform1i = (loc, i) => { if (loc) unit.set(loc, i); };
+  gl.createTexture = () => ({ tex: true }); gl.bindTexture = (target, tex) => bound.push(tex);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  t.after(() => renderer.dispose());
+  const f32 = (n) => new Float32Array(n);
+  const dt = (data, w, h, fmt) => { const x = new THREE.DataTexture(data, w, h, fmt, THREE.FloatType); x.needsUpdate = true; return x; };
+  const lampGrid = { lampTex: dt(f32(64), 4, 4, THREE.RGBAFormat), idxTex: dt(f32(16), 4, 4, THREE.RedFormat), gridTex: dt(f32(32), 4, 4, THREE.RGFormat), LAMPS: 4, IDXW: 4, G: 4 };
+  const arr = () => { const a = new THREE.DataArrayTexture(new Uint8Array(17 * 4), 1, 1, 17); a.needsUpdate = true; return a; };
+  const matMaps = { albedo: arr(), normal: arr() };
+  const prevLS = globalThis.localStorage;
+  globalThis.localStorage = { getItem: (k) => (k === "apex26.tlxSharedTex" && !sharedTex ? "0" : null) };
+  let lit;
+  try {
+    lit = globalThis.TLXShaders.lit(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null,
+      ssrTag: false, envCube: null, matMaps, lampGrid, sharedUniforms: true, maxLights: 16 });
+  } finally { if (prevLS === undefined) delete globalThis.localStorage; else globalThis.localStorage = prevLS; }
+  const attrInst = new Function("THREE", "TSL", "localStorage", `${R1.slice(0, R1.indexOf("      function _coRun("))}; return _attrInst;`)(THREE, TSL, { getItem: () => null });
+  const scene = new THREE.Scene(); scene.matrixWorldAutoUpdate = false;
+  const cam = new THREE.PerspectiveCamera(); cam.position.set(0, 0, 5); cam.updateMatrixWorld();
+  const plain = lit.makeMaterial({ roughness: 0.55 });
+  for (let i = 0; i < 20; i++) { const m = new THREE.Mesh(r1Geo(), plain); m.frustumCulled = false; scene.add(m); }
+  const ig = r1Geo(); ig.setAttribute("instanceTint", new THREE.InstancedBufferAttribute(new Float32Array(3 * 2000).fill(1), 3));
+  const im = new THREE.InstancedMesh(ig, lit.makeMaterial({ instanced: true }), 2000); im.count = 2; im.frustumCulled = false; scene.add(im);
+  const ag = r1Geo(), ib = new THREE.InstancedInterleavedBuffer(new Float32Array(19 * 2), 19, 1);
+  for (let c = 0; c < 4; c++) ag.setAttribute("iM" + c, new THREE.InterleavedBufferAttribute(ib, 4, c * 4));
+  ag.setAttribute("instanceTint", new THREE.InterleavedBufferAttribute(ib, 3, 16));
+  const am = new THREE.Mesh(ag, attrInst(lit.makeMaterial({ instanced: true }))); am.count = 2; am.frustumCulled = false; scene.add(am);
+  let texGets = 0;
+  const tg = renderer._textures.get.bind(renderer._textures);
+  renderer._textures.get = (x) => { texGets++; return tg(x); };
+  const frame = () => { texGets = 0; bound.length = 0; renderer.render(scene, cam); return texGets; };
+  frame();
+  return { fg, renderer, lit, matMaps, frame, locs, unit, srcOf, bound, progOf };
+}
+
+test("B14: the lit textures share renderGroup — walked once per render(), not per object; per-object with tlxSharedTex=0", async (t) => {
+  const on = await b14Rig(t, true), off = await b14Rig(t, false);
+  const a = on.frame(), b = off.frame();
+  // 20 plain objects x 7 textures (bake x2, lamp grid x3, material arrays x2) + 2 instanced x 4, against one
+  // walk per shared bind group per render: the plain, InstancedMesh and AI programs.
+  t.diagnostic(`texture walks per render: per-object ${b}, shared ${a}`);
+  assert.ok(b >= 20 * 7 + 2 * 4, `per-object: ${b} texture walks for 22 objects`);
+  // (measured 154 -> 21: the shared count no longer scales with the object count)
+  assert.ok(a * 5 < b && a <= 24, `shared: ${a} texture walks per render (one per bind group)`);
+});
+
+test("B14: every program's sampler units are set by names its OWN GLSL declares (the §13 key carries the binding name)", async (t) => {
+  const { locs, unit, srcOf } = await b14Rig(t, true);
+  const samplerNames = (p) => new Set(p.sh.flatMap((sh) => [...(srcOf.get(sh) || "").matchAll(/uniform\s+\w*sampler\w*\s+(\w+)\s*;/g)].map((m) => m[1])));
+  const progs = new Set(locs.map((l) => l.p));
+  assert.ok(progs.size >= 3, `three lit programs linked (${progs.size})`);
+  let n = 0;
+  for (const l of locs) {
+    if (!unit.has(l)) continue;
+    n++;
+    assert.ok(samplerNames(l.p).has(l.name), `a sampler unit set for ${l.name}, which this program does not declare`);
+  }
+  for (const p of progs) t.diagnostic(`program: ${[...samplerNames(p)].join(" ")} | set: ${locs.filter((l) => l.p === p && unit.has(l)).map((l) => l.name + "=" + unit.get(l)).join(" ")}`);
+  // plain: bake x2 + lamp grid x3 + material arrays x2; both instanced programs take no per-chunk lamps (4 each).
+  assert.ok(n >= 7 + 4 + 4, `${n} sampler units set`);
+});
+
+test("B14: a texture .value swapped between render() calls is the one bound by the next render", async (t) => {
+  const { lit, frame, bound, fg } = await b14Rig(t, true);
+  frame();
+  const before = new Set(bound);
+  const next = new THREE.DataArrayTexture(new Uint8Array(17 * 4), 1, 1, 17); next.needsUpdate = true;
+  lit.setMaterialMaps({ albedo: next });
+  frame();
+  const fresh = bound.filter((x) => !before.has(x));
+  assert.ok(fresh.length >= 1, "the swapped material array is bound in the next render");
+  assert.ok(fg.counts.texImage3D || fg.counts.texStorage3D || fg.counts.texSubImage3D, "and uploaded");
+});
+
+test("B14: tsl-lit groups the shadow, bake, lamp-grid, material-array and env-cube base nodes; the vendor key and clone pins", () => {
+  const src = read("js/render/three/tsl-lit.js");
+  assert.match(src, /function texGroup\(n\) \{ return SHARED_TEX && n \? n\.setGroup\(renderGroup\) : n; \}/);
+  assert.match(src, /const SHARED_TEX = !\(ctx && ctx\.sharedUniforms === false\) && /, "rides SHARED_UNIFORMS' ctx switch");
+  for (const re of [/const shadowMapNode = \(tex\) => texGroup\(/, /const envCubeNode = ENV_CUBE \? texGroup\(/, /const BAKE_NODE = texGroup\(/,
+    /const BAKE_IDX_NODE = texGroup\(/, /const matAlbedoNode = [^\n]*texGroup\(/, /const matNormalNode = [^\n]*texGroup\(/])
+    assert.match(src, re);
+  assert.doesNotMatch(src, /textureLoad\(LGRID\./, "the lamp-grid taps are clones of the grouped base nodes");
+  const ids = THREE_PATCH_IDS();
+  assert.ok(ids.includes(13));
+});
+function THREE_PATCH_IDS() { return JSON.parse(read("vendor/three-0.186.0/MANIFEST.json")).patches; }
+
+// R8 / A2 (lane TLX-2): the prop batches as attribute-instanced plain Meshes (tlx.js _aiMesh), on the REAL
+// R1 instance step and lit material, three r186 WebGL2 over the fake GL.
+test("A2: two batches on their own geometry each draw their own instance stream at their real count", async (t) => {
+  const { fg, renderer, scene, camera, R } = await r1Rig(t);
+  assert.equal(R.aiOn, true, "on by default");
+  const mat = R.materialFor({ roughness: 0.6 }, false, 2);
+  const mk = (n) => {
+    const g = r1Geo(), m = R.aiMesh(g, mat, n);
+    g.setAttribute("instanceTint", new THREE.InstancedBufferAttribute(new Float32Array(n * 3).fill(1), 3));   // _instColorAttr's shape
+    const im = m.instanceMatrix;
+    assert.equal(im.count, n, "instanceMatrix.count is the instance count (the cap the readers size by)");
+    assert.equal(im.array.length, n * 16, "no pad past the UBO limit");
+    for (let i = 0; i < n; i++) im.array.set(carWheel(i), i * 16);
+    im.updateRanges.push({ start: 0, count: n * 16 }); im.needsUpdate = true;
+    m.setUsageOk = typeof im.setUsage === "function";
+    m.frustumCulled = false; scene.add(m);
+    return m;
+  };
+  const a = mk(2), b = mk(3);
+  assert.ok(a.setUsageOk && !a.isInstancedMesh, "a plain Mesh with the InstancedBufferAttribute surface");
+  fg.reset(); renderer.render(scene, camera);
+  assert.equal(fg.counts.drawElementsInstanced || 0, 2, "one instanced draw per batch");
+  for (const m of [a, b]) assert.ok(renderer.backend.get(m.instanceMatrix).bufferGPU, "each batch's OWN stream reached the GPU (attributes are read by name per geometry)");
+  assert.notEqual(renderer.backend.get(a.instanceMatrix).bufferGPU, renderer.backend.get(b.instanceMatrix).bufferGPU);
+  const off = await r1Rig(t, { "apex26.tlxAttrInst": "0" });
+  assert.equal(off.R.aiOn, false, "apex26.tlxAttrInst=0: the padded InstancedMesh batches");
+});
+
+test("A2: under tlx.js's own node-builder key, N attribute batches build ONE node graph; N padded InstancedMeshes build N", async (t) => {
+  const at = TLX.indexOf("        renderer._nodes.getForRenderCacheKey = function (ro) {");
+  const end = TLX.indexOf("\n        };\n", at);
+  assert.ok(at > 0 && end > at, "the key override moved — check this test, not the code");
+  const install = new Function("renderer", "attachKey", TLX.slice(at, end + "\n        };".length));
+  const builds = async (kind) => {
+    const { fg, renderer, scene, camera, R } = await r1Rig(t);
+    install(renderer, () => "1");
+    const cnb = renderer.backend.createNodeBuilder.bind(renderer.backend);
+    let n = 0; renderer.backend.createNodeBuilder = (...a) => { n++; return cnb(...a); };
+    const mat = kind === "ai" ? R.materialFor({ roughness: 0.6 }, false, 2) : R.materialFor({ roughness: 0.6 }, false, true);
+    for (let i = 0; i < 5; i++) {
+      const g = r1Geo(), k = 3 + i;
+      g.setAttribute("instanceTint", new THREE.InstancedBufferAttribute(new Float32Array(k * 3).fill(1), 3));
+      const m = kind === "ai" ? R.aiMesh(g, mat, k) : new THREE.InstancedMesh(g, mat, 2000);
+      m.count = k; m.frustumCulled = false; scene.add(m);
+    }
+    fg.reset(); renderer.render(scene, camera);
+    assert.equal(fg.counts.drawElementsInstanced || 0, 5);
+    return n;
+  };
+  const ai = await builds("ai"), im = await builds("im");
+  t.diagnostic(`node builds for 5 batches: attribute ${ai}, padded InstancedMesh ${im}`);
+  assert.ok(im >= ai + 4, `padded InstancedMesh: one build per batch (${im} vs ${ai})`);
+});
+
+test("A2: the fallback / viz rungs get an instance-step copy that keeps the rung's program key", async (t) => {
+  const { fg, renderer, scene, camera, R } = await r1Rig(t);
+  const u = new THREE.MeshBasicNodeMaterial();
+  u.colorNode = TSL.attribute("color", "vec3").mul(TSL.attribute("instanceTint", "vec3"));
+  u.lights = false; u.customProgramCacheKey = () => "tlx-unlit-instanced";
+  const ai = R.aiOf(u);
+  assert.equal(R.aiOf(u), ai, "one copy per rung");
+  assert.notEqual(ai, u, "the InstancedMesh rung itself is untouched");
+  assert.equal(ai.customProgramCacheKey(), "ai-tlx-unlit-instanced");
+  const g = r1Geo(); g.setAttribute("instanceTint", new THREE.InstancedBufferAttribute(new Float32Array(6).fill(1), 3));
+  const m = R.aiMesh(g, ai, 2); m.frustumCulled = false; scene.add(m);
+  fg.reset(); renderer.render(scene, camera);
+  assert.ok(fg.shaders.some((s) => /\biM0\b/.test(s) && /gl_Position/.test(s)), "the unlit copy compiles the instance step");
+});
+
+test("A2: tlx.js builds batches, mirror views and their materials on the attribute path; the caster keeps its InstancedMesh", () => {
+  const cib = fnSource(TLX, "      function createInstancedBatch(data, matrices, colors, opts) {");
+  assert.match(cib, /const cap = _aiInst \? n : /, "no UBO pad on the attribute path");
+  assert.match(cib, /const imesh = _aiInst \? _aiMesh\(geo, unlitMat, n\) : new THREE\.InstancedMesh\(geo, unlitMat, cap\);/);
+  assert.match(fnSource(TLX, "      function drawInstanced(batch, opts) {"), /materialFor\(opts, false, batch\.imesh\.isInstancedMesh \? true : 2\)/);
+  const mir = fnSource(TLX, "      function _mirOf(batch) {");
+  assert.match(mir, /k !== "instanceTint" && !_AI_ATTR\.test\(k\)/, "the mirror view takes its own stream, never the main one's");
+  assert.match(mir, /: _aiMesh\(g, main\.material \|\| unlitMat, main\.instanceMatrix\.count\);/);
+  assert.match(fnSource(TLX, "      function fallbackMat(instanced) {"), /if \(instanced === 2\) return _drawMatMode >= 2 \? null : _aiOf\(unlitInstancedMat\);/);
+  assert.match(TLX, /if \(vizMat\) return instanced === 2 \? _aiOf\(vizMat\) : vizMat;/);
+  // The node-builder key keeps "I" + id for a real InstancedMesh only, so every A2 batch shares one state.
+  assert.match(TLX, /const inst = ro\.object && ro\.object\.isInstancedMesh\s*\? "I" \+ ro\.object\.id : "M";/);
+  const sh = read("js/render/three/tlx-shadow.js");
+  assert.match(sh, /if \(k !== "instanceTint" && !\/\^iM\[0-3\]\$\/\.test\(k\)\) g\.setAttribute\(k, src\.attributes\[k\]\);/, "casterGeo drops the lit stream");
+  assert.match(sh, /m = new THREE\.InstancedMesh\(casterGeo\(batch\.geo\), depthMat, sharedInstCap\(batch\.instances \| 0\)\);/, "the caster is still a padded InstancedMesh (R11 / A2 caster: not in this lane)");
+  assert.match(sh, /batch\.imesh && batch\.imesh\.instanceMatrix[\s\S]{0,200}batch\.imesh\.instanceMatrix\.array/, "its copy reads the batch's instanceMatrix alias");
 });

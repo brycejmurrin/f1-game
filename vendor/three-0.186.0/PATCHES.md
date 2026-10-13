@@ -216,3 +216,41 @@ backend's data record for the binding (`uboSrc` / `uboWords` / `uboLast`), so:
   bypass it (the old always-upload path).
 
 Upstream: unfixed on dev as of r186.
+
+## 13. Texture bindings in a SHARED uniform group (renderGroup)
+
+Every sampled texture sits in three's per-object group, so every render object of every
+pass walks each of its texture bindings in `Bindings._update` (`binding.update()`, a
+`textures.get`, a `backend.get`, a `cacheKey` string). Apex's lit shader carries ~8-11
+of them. In a shared group (`renderGroup`) `NodeManager.updateGroup` lets the first
+object of each `renderer.render()` do that walk and the rest skip it (perf hunt 3
+R2/B14; `bench-tex`: 0.7-1.6 µs per object at K = 10). Two things stopped a texture
+joining a shared group:
+
+- **(a) the cache key.** `NodeBuilder._getBindGroup` keys a shared group on
+  `binding.nodeUniform.id`, which `NodeSampledTexture` / `NodeSampler` do not have — a
+  TypeError on the first build. A texture or sampler binding is now named by its
+  texture node's id **and its binding name**: the group's binding objects are the FIRST
+  builder's, three's WebGL backend sets each program's sampler units by NAME
+  (`_setupBindings`: `getUniformLocation(program, binding.name)`), and one texture node
+  gets a different `nodeUniformN` name in different programs of one fragment graph (the
+  attribute-instanced and InstancedMesh lit programs: `nodeUniform28` vs `nodeUniform32`).
+  Keyed by id alone, the second program would have taken the first one's names and
+  sampled the wrong units. Ids also get separators now (`12`+`3` was `1`+`23`).
+- **(b) `TextureNode.clone()`** builds a fresh node, so every `.sample()`, `.compare()`,
+  `.load()` and `texture(node, …)` tap of a grouped base fell back to `objectGroup`. The
+  clone keeps its source's `groupNode` (TextureNode's own `clone()` only; the
+  `ReflectorNode` / `PassTextureNode` overrides are untouched).
+
+Nothing in three sets a group on a texture node, so both edits are inert until a caller
+opts a texture in: `tsl-lit.js` does for its shadow maps, lamp bake, material arrays,
+lamp grid and env cube under `SHARED_UNIFORMS`, with `apex26.tlxSharedTex=0` as the A/B.
+Safe because every TLX `.value` swap of those textures (`setEnvCube` around a probe face,
+`setMaterialMaps`, `updateFrame`'s `setLampBake`) happens between `render()` calls, and
+`updateGroup` re-runs the walk once per call.
+
+Upstream: unfixed on dev as of 2026-10-13 — the key moved to
+`Bindings.getSharedBindGroup` with the same `binding.nodeUniform.id`, and
+`TextureNode.clone()` still drops `groupNode`
+(https://github.com/mrdoob/three.js/blob/dev/src/renderers/common/Bindings.js,
+https://github.com/mrdoob/three.js/blob/dev/src/nodes/accessors/TextureNode.js).

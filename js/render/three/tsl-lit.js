@@ -90,11 +90,21 @@
     const ROAD_NORMAL_V2 = (() => {
       try { return localStorage.getItem("apex26.tlxRoadNormalV2") !== "0"; } catch (_) { return true; }
     })();
+    const SHARED_TEX = !(ctx && ctx.sharedUniforms === false) && (() => {
+      try { return localStorage.getItem("apex26.tlxSharedTex") !== "0"; } catch (_) { return true; }
+    })();
     // ONE base node per shadow map; the PCF taps are its .sample() clones. With
     // vendor patch 10 the clones share the base's flipY uniform, so a map's 4-8
     // taps cost one per-object update on three's WebGL2 backend, not one each.
     // setUpdateMatrix(false): the taps pass explicit UVs, never the uv matrix.
-    const shadowMapNode = (tex) => texture(tex).setUpdateMatrix(false);
+    const shadowMapNode = (tex) => texGroup(texture(tex).setUpdateMatrix(false));
+    // B14 (perf hunt 3 R2, lane TLX-2) — THE LIT TEXTURES IN renderGroup. Each sat in three's per-object
+    // group, so every render object of every pass walked ~8-11 texture bindings; in the shared group the
+    // first object of a render() call does it (vendor PATCHES.md §13 makes a texture binding keyable there
+    // and lets .sample()/.compare() clones keep the group). Every .value swap here (setEnvCube around a
+    // probe face, setMaterialMaps, updateFrame's setLampBake) lands between render() calls. Rides
+    // SHARED_UNIFORMS' ctx switch; apex26.tlxSharedTex=0 restores the per-object textures alone.
+    function texGroup(n) { return SHARED_TEX && n ? n.setGroup(renderGroup) : n; }
 
     // r184 NodeMaterial.customProgramCacheKey() hashes child-node ids, and
     // MeshBasicNodeMaterial.lights defaults TRUE. setup() mints a fresh
@@ -147,7 +157,7 @@
     // R, but the builder still sets the base up (the clones' referenceNode),
     // and a base with no uv emitted CubeTextureNode's default reflectVector —
     // a dead per-fragment normalView/reflect/mat4 chain plus two varyings.
-    const envCubeNode = ENV_CUBE ? cubeTexture(ENV_CUBE, vec3(0.0, 1.0, 0.0)) : null;
+    const envCubeNode = ENV_CUBE ? texGroup(cubeTexture(ENV_CUBE, vec3(0.0, 1.0, 0.0))) : null;
     const shadowOn = !!(SHD && SHD.S.enabled && SHD.sunTex);
     const carShadowOn = !!(shadowOn && SHD.S.carEnabled && SHD.carTex);
     const lampShadowOn = !!(shadowOn && SHD.S.lampEnabled && SHD.lampTex);
@@ -908,8 +918,10 @@
     const _bakeIdxBlank = new THREE.DataTexture(new Uint16Array(4), 1, 1, THREE.RGBAFormat, THREE.HalfFloatType);
     _bakeIdxBlank.minFilter = _bakeIdxBlank.magFilter = THREE.NearestFilter;
     _bakeIdxBlank.needsUpdate = true;
-    const BAKE_NODE = texture(_bakeBlank);
-    const BAKE_IDX_NODE = texture(_bakeIdxBlank);
+    const BAKE_NODE = texGroup(texture(_bakeBlank));
+    const BAKE_IDX_NODE = texGroup(texture(_bakeIdxBlank));
+    // The lamp grid's three fixed textures as base nodes (B14): the textureLoad taps are their clones.
+    const LG_TEX = LGRID ? { grid: texGroup(texture(LGRID.gridTex)), idx: texGroup(texture(LGRID.idxTex)), lamp: texGroup(texture(LGRID.lampTex)) } : null;
     function _halfData(data, w, h, filter) {
       const t = new THREE.DataTexture(data, w, h, THREE.RGBAFormat, THREE.HalfFloatType);
       t.minFilter = t.magFilter = filter;
@@ -954,8 +966,8 @@
       U.bakeOn.value = 1.0;
       return true;
     }
-    const matAlbedoNode = MAT_MAPS && MAT_MAPS.albedo ? texture(MAT_MAPS.albedo) : null;
-    const matNormalNode = MAT_MAPS && MAT_MAPS.normal ? texture(MAT_MAPS.normal) : null;
+    const matAlbedoNode = MAT_MAPS && MAT_MAPS.albedo ? texGroup(texture(MAT_MAPS.albedo)) : null;
+    const matNormalNode = MAT_MAPS && MAT_MAPS.normal ? texGroup(texture(MAT_MAPS.normal)) : null;
 
     // Tile coordinate + this layer's world scale. Scale 0 = "no baked layer for
     // this material", which the callers test before sampling (GLASS and FLAG
@@ -1764,7 +1776,7 @@
                            .and(cz.greaterThanEqual(0.0)).and(cz.lessThan(U.lgSize.y));
           // One fetch to enter. Clamped so the out-of-extent case reads texel 0
           // rather than sampling out of bounds; `inside` discards the result.
-          const g = textureLoad(LGRID.gridTex,
+          const g = textureLoad(LG_TEX.grid,
             ivec2(select(inside, cx, float(0.0)), select(inside, cz, float(0.0)))).toVar();
           const cnt = select(inside, g.y, float(0.0)).toVar();
           return { base: g.x.toVar(), n: cnt, use: cnt.greaterThan(0.5) };
@@ -1776,9 +1788,9 @@
         // path no iteration pays it. No .toVar() inside, or it would emit unconditionally.
         const lampRow = PC ? (i) => {
           const k = PC.base.add(float(i)), r = floor(k.div(U.lgIdxW));
-          return select(PC.use, textureLoad(LGRID.idxTex, ivec2(k.sub(r.mul(U.lgIdxW)), r)).r, float(0.0)).toVar();
+          return select(PC.use, textureLoad(LG_TEX.idx, ivec2(k.sub(r.mul(U.lgIdxW)), r)).r, float(0.0)).toVar();
         } : null;
-        const _fetch = (row, col) => textureLoad(LGRID.lampTex, ivec2(float(col), row));
+        const _fetch = (row, col) => textureLoad(LG_TEX.lamp, ivec2(float(col), row));
         const LGeo = PC ? ((i, r) => select(PC.use, _fetch(r, 3), U.lampGeo.element(i)))
                         : ((i) => U.lampGeo.element(i));
         const LPos = PC ? ((i, r) => select(PC.use, _fetch(r, 0).xyz, U.lampPos.element(i)))

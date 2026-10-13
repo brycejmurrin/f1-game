@@ -1568,6 +1568,9 @@ const TLX = (function () {
       let _matHit = 0, _matMiss = 0, _matEvict = 0;
       const _matMissLog = [];   // the first 64 miss keys, for memState().matMissKeys — census 212 counted 20 misses in a 20 s drive and could not name them
       function fallbackMat(instanced) {
+        // An attribute-instanced mesh (R1 run, A2 batch) needs a NODE material to carry its instance step:
+        // the raw classic rung has none, so it draws nothing there (drawInstanced skips a null).
+        if (instanced === 2) return _drawMatMode >= 2 ? null : _aiOf(unlitInstancedMat);
         return _drawMatMode >= 2 ? rawUnlitMat : (instanced ? unlitInstancedMat : unlitMat);
       }
       const drawEm = (o) => (o && o.emissive !== undefined ? o.emissive : 0);
@@ -1604,8 +1607,10 @@ const TLX = (function () {
           (o.depthBias ? "|db" + o.depthBias[0] + "," + o.depthBias[1] : "") +
           (o.noDepthTest ? "|nd" : "") +
           (chunked ? "|ch" : "") +
-          (instanced ? "|in" : "");
+          (instanced === 2 ? "|ai" : instanced ? "|in" : "");
       }
+      // instanced: falsy = plain, 2 = attribute-instanced (R1's coalesced runs, _attrInst), else an InstancedMesh.
+      const _instMode = (i) => (i === 2 ? 2 : i ? 1 : 0);
       function matKeyFor(o, chunked, instanced) {
         const db = o.depthBias, db0 = db ? db[0] : 0, db1 = db ? db[1] : 0;
         let c = _matKeyMemo.get(o);
@@ -1618,20 +1623,21 @@ const TLX = (function () {
           && c.cc === o.clearcoat && c.cp === o.carPaint && c.sk === o.sparkle
           && c.ds === !!o.doubleSided && c.na === !!o.noAlphaWrite && c.nd === !!o.noDepthTest
           && c.hb === !!db && c.b0 === db0 && c.b1 === db1
-          && c.ch === !!chunked && c.in === !!instanced) return c.key;
+          && c.ch === !!chunked && c.in === _instMode(instanced)) return c.key;
         if (c === undefined) { c = {}; _matKeyMemo.set(o, c); }
         c.tr = tr; c.ro = o.roughness; c.me = o.metalness;
         c.sp = o.specular; c.de = o.detail; c.cc = o.clearcoat; c.cp = o.carPaint;
         c.sk = o.sparkle; c.ds = !!o.doubleSided; c.na = !!o.noAlphaWrite;
         c.nd = !!o.noDepthTest; c.hb = !!db; c.b0 = db0; c.b1 = db1;
-        c.ch = !!chunked; c.in = !!instanced;
+        c.ch = !!chunked; c.in = _instMode(instanced);
         c.key = buildMatKey(o, chunked, instanced);
         return c.key;
       }
       function materialFor(opts, chunked, instanced) {
         if (_drawMatMode || !lit) return fallbackMat(instanced);
-        if (vizMat) return vizMat;
-        if (!opts) return chunked ? defaultMatChunked : (instanced ? defaultMatInstanced : defaultMat);
+        if (vizMat) return instanced === 2 ? _aiOf(vizMat) : vizMat;
+        if (!opts) return chunked ? defaultMatChunked : instanced === 2
+          ? (_aiDefault || (_aiDefault = _attrInst(lit.makeMaterial({ instanced: true })))) : (instanced ? defaultMatInstanced : defaultMat);
         const o = opts;
         const key = matKeyFor(o, chunked, instanced);
         let m = matCache.get(key);
@@ -1664,6 +1670,7 @@ const TLX = (function () {
           m = lit.makeMaterial(chunked
             ? Object.assign({ chunked: true }, o)
             : (instanced ? Object.assign({ instanced: true }, o) : o));
+          if (instanced === 2 && m) _attrInst(m);
           matCache.set(key, m);
         }
         if (m) m.__tlxFrame = _matFrame;
@@ -1801,8 +1808,11 @@ const TLX = (function () {
         // mid-lap compiled on the main thread (the probe counted 44 instanced
         // programs in five jumps). Padded, the batches share their material's
         // program. tlxInstCap stays n: count and uploads never touch the pad.
-        const cap = (window.TLXShaders && TLXShaders.uboInstCap) ? TLXShaders.uboInstCap(renderer, n) : n;
-        const imesh = new THREE.InstancedMesh(geo, unlitMat, cap);
+        // R8/A2 (perf hunt 3): with attribute instancing (_aiStream, the R1 runs' instance step) a batch is
+        // a plain Mesh at its real count, every batch shares ONE node-builder state ("M" key) and none is
+        // padded; `instanceMatrix` names its instance-rate buffer so every reader below is unchanged.
+        const cap = _aiInst ? n : (window.TLXShaders && TLXShaders.uboInstCap) ? TLXShaders.uboInstCap(renderer, n) : n;
+        const imesh = _aiInst ? _aiMesh(geo, unlitMat, n) : new THREE.InstancedMesh(geo, unlitMat, cap);
         imesh.matrixAutoUpdate = false;
         imesh.frustumCulled = false;
         imesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -1946,7 +1956,8 @@ const TLX = (function () {
         if (!batch || !batch.imesh || !batch.instances) return;
         const n = batch.visible === undefined ? batch.instances : batch.visible;
         if (n <= 0) return;
-        pushRec(null, null, materialFor(opts, false, true), drawEm(opts), drawAl(opts), 0, null, batch);
+        const mat = materialFor(opts, false, batch.imesh.isInstancedMesh ? true : 2);   // A2: the attribute-instanced variant
+        if (mat) pushRec(null, null, mat, drawEm(opts), drawAl(opts), 0, null, batch);
       }
 
       function freeInstancedBatch(batch) {
@@ -2009,10 +2020,11 @@ const TLX = (function () {
         const main = batch.imesh, src = batch.geo, n = main.userData.tlxInstCap | 0;
         const g = new THREE.BufferGeometry();
         if (src.index) g.setIndex(src.index);
-        for (const k in src.attributes) if (k !== "instanceTint") g.setAttribute(k, src.attributes[k]);
+        for (const k in src.attributes) if (k !== "instanceTint" && !_AI_ATTR.test(k)) g.setAttribute(k, src.attributes[k]);
         g.drawRange.start = src.drawRange.start; g.drawRange.count = src.drawRange.count;
         for (let i = 0; i < src.groups.length; i++) g.addGroup(src.groups[i].start, src.groups[i].count, src.groups[i].materialIndex);
-        const im = new THREE.InstancedMesh(g, main.material || unlitMat, main.instanceMatrix.count);
+        const im = main.isInstancedMesh ? new THREE.InstancedMesh(g, main.material || unlitMat, main.instanceMatrix.count)
+          : _aiMesh(g, main.material || unlitMat, main.instanceMatrix.count);   // A2: its own instance stream
         im.matrixAutoUpdate = false;
         im.frustumCulled = false;
         im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -2261,6 +2273,133 @@ const TLX = (function () {
         b.visible++; setRange0(im, b.visible * 16); im.needsUpdate = true;
         return true;
       }
+      // R1 (perf hunt 3) — REPEATED OPAQUE DRAWS AS ONE INSTANCED RUN PER PASS. The field's wheel layers
+      // were ~150 records over ~42 meshes on a bunched grid, one three RenderObject each (6-9 us of JS per
+      // object, census + bench). A draw whose opts carry `coalesce` (car-draw.js sets it on the opaque
+      // wheel bags when gfx.coalesce) joins the run of its (geometry, determinant sign) at the slot of that
+      // pass's FIRST such record. Not contiguous like A6/F3: the draws are opaque with depth write under
+      // LEQUAL, and three draws transparents after every opaque anyway. A run takes one material and one
+      // emissive; a mismatch, a full run, alpha < 1 or software WebGPU (skipBatches) draws per record.
+      // ATTRIBUTE INSTANCING (hunt 3 §2-A2): a run is a plain Mesh over a VIEW of the source buffers plus
+      // one instance-rate stream (mat4 + tint) read by NAME, so every run shares one node-builder state
+      // ("M" key, tlx.js getForRenderCacheKey) — no padded InstancedMesh, no per-object codegen mid-race.
+      // The car basis is a reflection (game.js MAT_REFLECT_X, det -1): three keys the front face on
+      // matrixWorld's sign, so a det < 0 run carries R = scale(-1,1,1) as its matrixWorld and R x W per
+      // instance (R x R x W = W, the negation exact); r186's instance normal is the true inverse-transpose.
+      // apex26.tlxCoalesce=0 restores the per-record draws.
+      let _coOn = true;
+      try { _coOn = localStorage.getItem("apex26.tlxCoalesce") !== "0"; } catch (_) { /* no storage: on */ }
+      const CO_CAP = 128, CO_STRIDE = 19;   // instances per run (a ring colour peaks at 88); floats each: mat4 + tint
+      const _coRuns = new Map();            // source geometry -> [run det > 0, run det < 0]
+      const _coStat = { recs: 0, inst: 0, fall: 0 };   // lifetime counters (coState)
+      const _coReflect = new THREE.Matrix4().makeScale(-1, 1, 1);
+      // three r186 NodeMaterial.setupPosition's instance step, verbatim in shape, on named attributes.
+      const _aiInstance = TSL.Fn((_, builder) => {
+        const iM = TSL.mat4(TSL.attribute("iM0", "vec4"), TSL.attribute("iM1", "vec4"),
+          TSL.attribute("iM2", "vec4"), TSL.attribute("iM3", "vec4"));
+        TSL.positionLocal.assign(iM.mul(TSL.positionLocal).xyz);
+        if (builder.hasGeometryAttribute("normal")) TSL.normalLocal.assign(TSL.transformNormal(TSL.normalLocal, iM));
+      }, "void");
+      // The lit instanced material (vertexColor x instanceTint fragment) on that instance step.
+      function _attrInst(m) {
+        const setup = m.setupPosition, key = m.customProgramCacheKey;
+        m.setupPosition = function (builder) { _aiInstance(); return setup.call(this, builder); };
+        m.customProgramCacheKey = () => "ai-" + key();
+        return m;
+      }
+      // R8/A2 (perf hunt 3 §2-A2): the prop batches (createInstancedBatch and the mirror view _mirOf) on the
+      // same instance step. apex26.tlxAttrInst=0 restores the padded InstancedMesh batches.
+      let _aiInst = true;
+      try { _aiInst = localStorage.getItem("apex26.tlxAttrInst") !== "0"; } catch (_) { /* no storage: on */ }
+      const _AI_ATTR = /^iM[0-3]$/;
+      // A plain Mesh drawing `count` instances from iM0..3 over one instance-rate buffer of n mat4s. The buffer
+      // is also its `instanceMatrix` — array, updateRanges, needsUpdate, count, setUsage: the surface every
+      // batch reader (_writeInstanceMatrices, the cull pack, tlx-shadow's caster copy) already uses; three
+      // reads that property only on an InstancedMesh.
+      function _aiMesh(geo, mat, n) {
+        const ib = new THREE.InstancedInterleavedBuffer(new Float32Array(Math.max(1, n) * 16), 16, 1);
+        for (let c = 0; c < 4; c++) geo.setAttribute("iM" + c, new THREE.InterleavedBufferAttribute(ib, 4, c * 4));
+        const m = new THREE.Mesh(geo, mat);
+        m.instanceMatrix = ib; m.count = n;
+        return m;
+      }
+      // The fallback / viz rungs on the instance step (three's instancing never reaches a plain Mesh). Unlit
+      // node materials only: a lit material's per-draw packs live in userData, which clone() flattens.
+      const _aiOfMemo = new WeakMap();
+      function _aiOf(m) {
+        let a = _aiOfMemo.get(m);
+        if (!a) {
+          a = m.clone();
+          if (Object.prototype.hasOwnProperty.call(m, "customProgramCacheKey")) a.customProgramCacheKey = m.customProgramCacheKey;
+          _aiOfMemo.set(m, a = _attrInst(a));
+        }
+        return a;
+      }
+      let _aiDefault = null;   // materialFor(null, false, 2)
+      function _coRun(geo, neg) {
+        let pair = _coRuns.get(geo);
+        if (!pair) _coRuns.set(geo, pair = [null, null]);
+        const s = neg ? 1 : 0;
+        if (pair[s]) return pair[s];
+        const v = new THREE.BufferGeometry();   // geo's own vertex/index buffers, no copy (the _mirOf pattern)
+        if (geo.index) v.setIndex(geo.index);
+        for (const k in geo.attributes) v.setAttribute(k, geo.attributes[k]);
+        v.drawRange.start = geo.drawRange.start; v.drawRange.count = geo.drawRange.count;
+        for (let i = 0; i < geo.groups.length; i++) v.addGroup(geo.groups[i].start, geo.groups[i].count, geo.groups[i].materialIndex);
+        const a = new Float32Array(CO_CAP * CO_STRIDE);
+        for (let o = 16; o < a.length; o += CO_STRIDE) a[o] = a[o + 1] = a[o + 2] = 1;   // white: albedo x 1 is exact
+        const ib = new THREE.InstancedInterleavedBuffer(a, CO_STRIDE, 1);
+        ib.setUsage(THREE.DynamicDrawUsage);
+        for (let c = 0; c < 4; c++) v.setAttribute("iM" + c, new THREE.InterleavedBufferAttribute(ib, 4, c * 4));
+        v.setAttribute("instanceTint", new THREE.InterleavedBufferAttribute(ib, 3, 16));
+        const m = new THREE.Mesh(v, unlitMat);
+        m.matrixAutoUpdate = false; m.matrixWorldAutoUpdate = false; m.frustumCulled = false;
+        if (neg) m.matrixWorld.copy(_coReflect);
+        m.visible = false;
+        scene.add(m); _instRegistry.push(m);   // _showInstanced / _hideUndrawnInstanced, like every run
+        return (pair[s] = { __tlx: true, imesh: m, ib, instances: CO_CAP, visible: 0, rec: -1 });
+      }
+      function _coAppend(geo, w, opts) {
+        if (!_coOn || !w || _drawMatMode || vizMat || !lit || (opts.alpha !== undefined && opts.alpha < 1) || skipBatches()) return false;
+        const neg = w[0] * (w[5] * w[10] - w[6] * w[9]) - w[4] * (w[1] * w[10] - w[2] * w[9]) + w[8] * (w[1] * w[6] - w[2] * w[5]) < 0;
+        const b = _coRun(geo, neg), mat = materialFor(opts, false, 2), em = drawEm(opts);
+        // This pass's run is live while its record is (resetRecs nulls it) — A6's sentinel.
+        if (b.rec >= 0 && b.rec < drawList.n && drawList[b.rec].instanced === b) {
+          const r = drawList[b.rec];
+          if (r.mat !== mat || r.em !== em || b.visible >= CO_CAP) { _coStat.fall++; return false; }
+        } else { b.visible = 0; b.rec = drawList.n; pushRec(null, null, mat, em, 1, 0, null, b); _coStat.recs++; }
+        const a = b.ib.array, o = b.visible * CO_STRIDE;
+        for (let k = 0; k < 16; k++) a[o + k] = w[k];
+        if (neg) { a[o] = -w[0]; a[o + 4] = -w[4]; a[o + 8] = -w[8]; a[o + 12] = -w[12]; }   // R x W
+        b.visible++; _coStat.inst++;
+        setRange0(b.ib, b.visible * CO_STRIDE); b.ib.needsUpdate = true;
+        return true;
+      }
+      // A freed source takes its runs (and their views) with it.
+      function _coDrop(geo) {
+        const pair = _coRuns.get(geo);
+        if (!pair) return;
+        _coRuns.delete(geo);
+        for (const b of pair) {
+          if (!b) continue;
+          const ix = _instRegistry.indexOf(b.imesh);
+          if (ix >= 0) _instRegistry.splice(ix, 1);
+          scene.remove(b.imesh);
+          b.imesh.geometry.dispose();
+          b.rec = -1;
+        }
+      }
+      // The warm (warmFxPrograms): the attribute-instanced program and its double-sided opaque pipeline on
+      // the car basis' sign, when no run was on screen for the scene warm.
+      let _coProbe = null;
+      async function _coWarm() {
+        if (!_coOn || !lit || skipBatches()) return;
+        for (const pair of _coRuns.values()) for (const b of pair) if (b && b.imesh.visible) return;
+        if (!_coProbe) _coProbe = buildGeometry({ pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 0, 1, 0, 0, 1, 0, 0, 1], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] });
+        const m = _coRun(_coProbe, true).imesh;
+        m.material = materialFor({ doubleSided: true }, false, 2); m.count = 1; m.visible = true;
+        try { await renderer.compileAsync(m, camera, scene); } finally { m.visible = false; }
+      }
       function ensureStream(slot, verts) {
         if (slot.geo && slot.cap >= verts) return false;
         const cap = Math.max(slot.cap * 2, verts, slot.min);
@@ -2481,6 +2620,7 @@ const TLX = (function () {
           try { p = renderer.compileAsync(bm, camera, scene); } finally { bm.visible = false; bm.count = cnt; }
           await p;
         }
+        await _coWarm();   // R1's coalesced runs
       }
       // LIT VARIANTS FIRST DRAWN MID-RACE. The brake-disc glow ring
       // (car-draw.js _ringOpts) is queued only once a disc is hot, so its first
@@ -2816,6 +2956,7 @@ const TLX = (function () {
         meshPool.length = w;
         meshByGeo.delete(geo);
         if (shadowSys && shadowSys.releaseGeometry) shadowSys.releaseGeometry(geo);   // its parked casters too
+        _coDrop(geo);   // R1: its coalesced runs
       }
 
       function disposeGeometry(geo) {
@@ -3527,7 +3668,14 @@ const TLX = (function () {
         // TrackGraph batch flat.
         const instMat = mode >= 2 ? mat : unlitInstancedMat;
         for (let i = 0; i < _instRegistry.length; i++) {
-          if (_instRegistry[i]) _instRegistry[i].material = instMat;
+          const im = _instRegistry[i];
+          if (!im) continue;
+          // R1's coalesced runs and the A2 batches are plain Meshes: three's instancing never reaches them,
+          // so they take the AI copy of the instanced rung — or, on the raw classic rung, which cannot carry
+          // the instance step, are hidden (fallbackMat(2) is null there from the next frame on).
+          if (im.isInstancedMesh) im.material = instMat;
+          else if (mode >= 2) im.visible = false;
+          else im.material = _aiOf(unlitInstancedMat);
         }
       };
       // the backend object (the ~40-member seam contract)
@@ -4530,6 +4678,7 @@ const TLX = (function () {
           armSkyMesh(!!(softContent("sky") && sky.fallbackNode));
         },
         draw(mesh, model, opts) {
+          if (opts && opts.coalesce && mesh && mesh.geo && _coAppend(mesh.geo, model, opts)) return;   // R1
           if (mesh && mesh.geo) pushRec(mesh.geo, poolModelMat(model), materialFor(opts, false), drawEm(opts), drawAl(opts),
             opts && opts.surfaceId === 16 ? 1 : 0, null, null);
         },
@@ -4670,6 +4819,7 @@ const TLX = (function () {
           pushRec(mesh.geo, fxMatFor(modelMat, 1, 1), mat, undefined, undefined, 0, null, null);
         },
         decalRuns: true,   // CarMesh queues its tail glows into one run (F3)
+        get coalesce() { return _coOn && !skipBatches(); },   // R1: car-draw.js flags its opaque wheel bags
         present(opts) {
           _poolBatch++;
           _kidsBegin(_kidsMain);
@@ -5108,6 +5258,12 @@ const TLX = (function () {
           },
           meshState() {
             return { mesh: _meshMade.mesh, chunked: _meshMade.chunked, tex: _meshMade.tex };
+          },
+          // R1: live?, runs held, and lifetime run records / instances / per-record fallbacks.
+          coState() {
+            let runs = 0, shown = 0;
+            for (const pair of _coRuns.values()) for (const b of pair) if (b) { runs++; if (b.imesh.visible) shown++; }
+            return { on: _coOn && !skipBatches(), runs, shown, recs: _coStat.recs, inst: _coStat.inst, fall: _coStat.fall };
           },
           // WHERE DOES THE FRAME GET DARK? The three-WebGPU luma gap has survived
           // five hypotheses (docs/notes/PERF-FINDINGS.md 2t), and every one of
