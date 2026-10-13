@@ -47,15 +47,30 @@ async function mirrorPatch(page, rect) {
 // getMirrorGlass does (pinned by cockpit-wheels.test.mjs): image u runs from
 // 0.5 + 0.1s inboard to 0.5 - 0.5s outboard (s -1 the left glass, +1 the
 // right), image v from 0.22 to 0.78; the HUD composite shows image (u, v) at
-// rect (1 - u, 1 - v), flipped left-right like glass. null without a 2-D copy;
-// { off: true } for a glass whose band leaves the canvas.
+// rect (1 - u, 1 - v), flipped left-right like glass. Read off the soft canvas,
+// or — TLX presenting straight to #game — the backend's own capturePixels()
+// readback: without it TLX, the default, was never checked, and its glass
+// shipped upside down (2026-10-13). null with neither; { off: true } for a
+// glass whose band leaves the canvas.
 async function glassBands(page, screen, rect) {
-  return page.evaluate(({ scr, r }) => {
+  return page.evaluate(async ({ scr, r }) => {
+    if (!scr || !r) return null;
     const soft = document.getElementById("game-soft");
-    if (!soft || !(soft.width > 0) || !scr || !r) return null;
-    const ctx = soft.getContext("2d");
-    if (!ctx) return null;
-    const W = soft.width, H = soft.height, img = ctx.getImageData(0, 0, W, H).data;
+    let W, H, img;
+    if (soft && soft.width > 0) {
+      const ctx = soft.getContext("2d");
+      if (!ctx) return null;
+      W = soft.width; H = soft.height; img = ctx.getImageData(0, 0, W, H).data;
+    } else {
+      const cap = typeof GLX !== "undefined" && typeof GLX.capturePixels === "function"
+        ? await GLX.capturePixels().catch(() => null) : null;
+      if (!cap || !(cap.width > 0)) return null;
+      W = cap.width; H = cap.height; img = cap.data;
+      // A cleared drawing buffer reads back black: no frame to judge, as above.
+      let lit = false;
+      for (let i = 0; i < img.length && !lit; i += 4 * 97) lit = img[i] + img[i + 1] + img[i + 2] > 24;
+      if (!lit) return null;
+    }
     const luma = (x, y) => {
       const px = Math.floor(x * W), py = Math.floor(y * H);
       if (!(px >= 0 && py >= 0 && px < W && py < H)) return null;

@@ -7,7 +7,7 @@
 (function () {
   function fx(THREE, TSL, opts) {
     const {
-      Fn, uniform, attribute, texture, materialReference, mrt, renderGroup, Discard,
+      Fn, uniform, attribute, texture, materialReference, mrt, renderGroup, Discard, uv,
       float, vec2, vec3, vec4,
       positionGeometry, positionWorld, cameraPosition, normalWorld,
       normalize, cross, dot, length, exp, max, min, mix, smoothstep, abs, floor,
@@ -356,10 +356,14 @@
     // drawMirrorGlass): the mirror target on the housings' glass, in the MAIN
     // scene pass. Unlit and OPAQUE — not an fxMaterial: it writes depth and,
     // with no mrtNode of its own, takes the scene MRT's ssrTag 1 ("not car
-    // paint"); its alpha is 1. Sampled at the mesh's (u, v) as given: three's
-    // TextureNode flips a render-target texture itself on WebGPU (setupUV,
-    // isRenderTargetTexture), so v = 0 is the image bottom on both of three's
-    // paths. One material per target texture — mirRT.texture survives setSize.
+    // paint"); its alpha is 1. Sampled at (u, 1 - v): the mesh's v = 0 is the
+    // image BOTTOM (gfx.js drawMirrorGlass, GLX's convention), but three's
+    // TextureNode puts a render target's uv.y = 0 at its TOP on BOTH paths —
+    // the GLSL builder's isFlipY() flips the sample (setupUV,
+    // isRenderTargetTexture), WebGPU stores row 0 on top — the same space
+    // tsl-post's mirrorSample reads with a top-left screenCoordinate. Sampled
+    // as given, both glasses showed the rear view upside down (2026-10-13).
+    // One material per target texture — mirRT.texture survives setSize.
     let _glassMat = null;
     function mirrorGlassMaterial(tex) {
       if (_glassMat && _glassMat.__tlxTex === tex) return _glassMat;
@@ -371,7 +375,8 @@
       m.depthTest = true;
       m.fog = false;
       m.lights = false;
-      m.colorNode = texture(tex).rgb;
+      const st = uv();
+      m.colorNode = texture(tex, vec2(st.x, st.y.oneMinus())).rgb;
       m.opacityNode = float(1.0);
       m.customProgramCacheKey = () => "tlx-fx-mirror-glass";
       m.__tlxTex = tex;
