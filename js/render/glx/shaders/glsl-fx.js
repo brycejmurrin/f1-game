@@ -21,6 +21,10 @@ out vec4 outColor;
 void main() {
   float r = length(vUV);
   float a = 0.45 * (1.0 - smoothstep(0.25, 1.0, r));
+  // The quad's corners outside the disc blend src * 0 (SRC_ALPHA /
+  // ONE_MINUS_SRC_ALPHA, depth write off): dst unchanged. Skip them (perf
+  // hunt 2 G13, TLX blob discard). Gated on a itself, so it is exact.
+  if (a <= 0.0) discard;
   outColor = vec4(0.0, 0.0, 0.0, a);
 }`;
 
@@ -232,6 +236,11 @@ void main() {
   float fall = max(1.0 - r2, 0.0);
   fall *= fall;                       // smooth soft-disc falloff, zero at the rim
   float a = vAlpha * fall;
+  // Zero-alpha texels (the 21.5 % of the quad outside the disc, or a
+  // vAlpha 0 particle) leave dst unchanged in both groups — alpha group
+  // src*0 + dst*1, additive ONE/ONE adds col*0; depth and alpha writes are off
+  // (drawParticles). Skip them (perf hunt 2 G13, TLX E7a).
+  if (a == 0.0) discard;
   vec3 col = vColor;
   if (uAdditive < 0.5) {
     vec3 lit = mix(uAmbGround, uAmbSky, vUV.y * 0.5 + 0.5) + uSunColor * 0.45;
