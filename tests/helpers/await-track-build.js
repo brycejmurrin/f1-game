@@ -39,18 +39,28 @@ export const TRACK_STALL_MS = 20000;
 // cold-runner monaco at ~60 s) so it never pre-empts the stall message.
 export const TRACK_HARD_MS = 300000;
 
-/** Wait for a track build, failing on a STALL rather than on a deadline. */
-export async function awaitTrackBuild(page, stallMs = TRACK_STALL_MS, hardMs = TRACK_HARD_MS) {
+/** Wait for a track build, failing on a STALL rather than on a deadline.
+ *
+ * `opts.raceFlag` names a window property the caller set to "pending" and then
+ * to "ok" / "err:<message>" from __apex.race()'s thenable. With it the build is
+ * ready only once THAT start settled: on a reused page `info().track` is the
+ * PREVIOUS world and is non-null at once (bug hunt 3 X1). Without it, the old
+ * predicate. */
+export async function awaitTrackBuild(page, stallMs = TRACK_STALL_MS, hardMs = TRACK_HARD_MS, opts = {}) {
   const started = Date.now();
   let lastSeen = -1, lastMoved = started;
+  const raceFlag = opts.raceFlag || null;
   for (;;) {
-    const s = await page.evaluate(() => {
+    const s = await page.evaluate((flag) => {
       let n = 0;
       try { n = (window.__apex.logs && window.__apex.logs().length) || 0; } catch (_) { n = 0; }
       let ready = false;
       try { ready = window.__apex.info().track != null; } catch (_) { ready = false; }
-      return { ready, n };
-    });
+      const done = flag ? window[flag] : "ok";
+      const err = typeof done === "string" && done.startsWith("err:") ? done.slice(4) : null;
+      return { ready: ready && done === "ok", n, err };
+    }, raceFlag);
+    if (s.err) throw new Error(`race start failed before the grid: ${s.err}`);
     if (s.ready) return;
     const now = Date.now();
     if (s.n !== lastSeen) { lastSeen = s.n; lastMoved = now; }
