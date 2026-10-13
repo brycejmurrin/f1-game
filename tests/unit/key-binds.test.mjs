@@ -848,7 +848,9 @@ test("an open menu still takes a key that was already down, and the on-screen pe
   key("KeyS", true);
   assert.equal(Input.braking(), false, "keyboard keydowns stay gated; this change is the touch path");
   const src = read("js/input/input.js");
-  assert.match(src, /function navBlocksTouch\(\) \{ return !!\(window\.UiLayers && window\.UiLayers\.anyOpen\(\)\); \}/);
+  // The gate is anyOpen(), asked live or latched once per poll() (PERF-HUNT-2 S5; throttle-latch.test.mjs).
+  assert.match(src, /function navBlocksTouchLive\(\) \{ return !!\(window\.UiLayers && window\.UiLayers\.anyOpen\(\)\); \}/);
+  assert.match(src, /function navBlocksTouch\(\) \{ return _navLatch < 0 \? navBlocksTouchLive\(\) : _navLatch === 1; \}/);
   assert.match(src, /navBlocksTouch\(\) \? 0 : buttonSteering\(\)/);
   assert.match(src, /navBlocksTouch\(\) \? 0 : analogShape\(touchSteering\(\), "touch"\)/);
   assert.match(src, /keyThrottle \|\| \(!navBlocksTouch\(\) && btnThrottle\)/);

@@ -1536,7 +1536,20 @@ const Input = (function () {
   function remoteThrottle() { return remoteActive() && remThr > REMOTE_PEDAL_ON; }
   function remoteBrake() { return remoteActive() && remBrk > REMOTE_PEDAL_ON; }
   // anyOpen() = pause/settings/sheets. navOpen() also covers title #overlay.
-  function navBlocksTouch() { return !!(window.UiLayers && window.UiLayers.anyOpen()); }
+  // LATCHED ONCE PER FRAME, at the end of poll() (PERF-HUNT-2 S5): updateCar asks
+  // throttle/braking/steer/…Level 3-6 times per physics step and each anyOpen() walks
+  // every gated layer twice (isConnected, hidden) — ~64 DOM getters a call. A layer
+  // only opens or closes in an event handler or in poll() itself (the pad-lost
+  // pause), so the end-of-poll answer holds for the frame's whole step loop. -1 =
+  // never polled (a harness stepping with no frame loop): ask live, as before.
+  // debugState() always asks live (it is a readout, not the drive path).
+  let _navLatch = -1;
+  function navBlocksTouchLive() { return !!(window.UiLayers && window.UiLayers.anyOpen()); }
+  function navBlocksTouch() { return _navLatch < 0 ? navBlocksTouchLive() : _navLatch === 1; }
+  function poll() {
+    pollGamepad();
+    _navLatch = navBlocksTouchLive() ? 1 : 0;
+  }
 
   function throttle() {
     return keyThrottle || (!navBlocksTouch() && btnThrottle) || padThrottle || remoteThrottle();
@@ -2107,6 +2120,11 @@ const Input = (function () {
   }
 
   function debugState() {
+    const latched = _navLatch;
+    _navLatch = -1;   // the readout asks the layers live (see navBlocksTouch)
+    try { return debugStateNow(); } finally { _navLatch = latched; }
+  }
+  function debugStateNow() {
     const active = document.activeElement;
     const tag = active && active.tagName || "";
     const interactive = ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(tag) || !!(active && active.isContentEditable);
@@ -2158,7 +2176,7 @@ const Input = (function () {
     keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel, keyboardSeen, activeInputSource,
     padBindings, setPadBinding, clearPadBinding, setPadMap, getPadMap, resetPad, padsAreDefault, padLabel, padCapture, padPresent,
     debugState,
-    poll: pollGamepad,
+    poll,
     rumble,
     requestGyro,
     calibrate,
