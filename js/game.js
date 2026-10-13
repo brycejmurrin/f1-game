@@ -6829,6 +6829,7 @@ function render(dt) {
   // fog wall — because its shots are whole-circuit vistas from a few hundred
   // metres up. See FlybySeq.FAR / FlybySeq.FOG for why both numbers live there.
   let cine = false;
+  const comfort = camComfort();   // once per frame: it reads localStorage (CamComfort.active) and matchMedia, and nothing in render() writes either
   if (state === "menu") {
     _plOk = false; _plBodyOk = false;
     // THE LOADING SCREEN'S FLYBY IS A SHOT SEQUENCE (js/camera/flyby-seq.js), not
@@ -6882,7 +6883,7 @@ function render(dt) {
     // interpolation the car body and playerAnchor already use.
     const rpCam = renderPosOf(player);
     camAncNX = rpCam.world ? rpCam.x : null; camAncNZ = rpCam.world ? rpCam.z : 0;   // anchor for the car-frame camera damping below
-    _vantExtra.bankDy = bankDy; _vantExtra.deploy = player.deploying; _vantExtra.reduceMotion = camComfort();   // kerb shiver off (js/camera/vantage.js)
+    _vantExtra.bankDy = bankDy; _vantExtra.deploy = player.deploying; _vantExtra.reduceMotion = comfort;   // kerb shiver off (js/camera/vantage.js)
     _vantExtra.slipLat = player.vLat || 0; _vantExtra.att = player;
     // the car's real world pose, so the chase rig can follow the CAR
     _vantExtra.carPos = rpCam.world ? (_vantCarPos[0] = rpCam.x, _vantCarPos[1] = rpCam.z, _vantCarPos) : null;
@@ -6890,7 +6891,7 @@ function render(dt) {
     // CamFeel (free-look / look-back latch / speed vignette) ticks BEFORE the
     // vantage solve so this frame's offsets land in the same eye/tgt.
     if (typeof CamFeel !== "undefined") {
-      CamFeel.tickRace(mode, dt, camComfort(), state === "race" || state === "count",
+      CamFeel.tickRace(mode, dt, comfort, state === "race" || state === "count",
         clamp(player.speed / vTop(), 0, 1));
     }
     if (typeof ExtraRigs !== "undefined") {
@@ -6905,7 +6906,7 @@ function render(dt) {
       // squared: grazes barely move, crashes slam. REDUCE MOTION zeroes the OFFSET, not the trauma
       // (cues keyed to it stay timed); CamTune.shakeOffset also applies COMFORT › HEAD BOB. SCOPE: every
       // race camera (docs/notes/CAMERA-FEEL.md). Real-time noise, fps-independent; onboard it stays in the tub.
-      if (typeof CamFeel !== "undefined") CamFeel.shake(eyeT, tgtT, CamTune.shakeOffset(shake, camComfort()), performance.now() * 0.001, CamFeel.isBuzzMode(mode));
+      if (typeof CamFeel !== "undefined") CamFeel.shake(eyeT, tgtT, CamTune.shakeOffset(shake, comfort), performance.now() * 0.001, CamFeel.isBuzzMode(mode));
     }
     // Onboard speed buzz — CamFeel.BUZZ_MODES (cockpit/hood/visor/tcam). Amp via
     // CamTune.buzzAmp (REDUCE MOTION / COMFORT › HEAD BOB). Off when wet (SSR flicker).
@@ -6914,7 +6915,7 @@ function render(dt) {
         && (typeof CamFeel !== "undefined" ? CamFeel.isBuzzMode(mode)
           : (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam"))) {
       const spV = clamp(player.speed / vTop(), 0, 1);
-      const vAmp = CamTune.buzzAmp(spV, player.deploying, camComfort(), _buzzWet);
+      const vAmp = CamTune.buzzAmp(spV, player.deploying, comfort, _buzzWet);
       if (vAmp > 0.001) {
         const tv = performance.now() * 0.001;
         const j1 = Math.sin(tv * 61.0) * 0.6 + Math.sin(tv * 97.0 + 1.7) * 0.4;
@@ -6952,9 +6953,9 @@ function render(dt) {
   // DRONE carries its own tether smooth inside ExtraRigs; comfort softens the
   // outer damp further. Chase λ18, broadcast pans at 9, rival/pit wall calmer.
   const softCam = camId === "drone" || camId === "rival" || camId === "pitwall";
-  const raceLam = softCam ? (camComfort() ? 6 : (camId === "drone" ? 12 : 14)) : ((camId === "heli" || camId === "side" || camId === "cinematic" || camId === "overhead" || camId === "low" || camId === "trackside") ? 9 : 18);
+  const raceLam = softCam ? (comfort ? 6 : (camId === "drone" ? 12 : 14)) : ((camId === "heli" || camId === "side" || camId === "cinematic" || camId === "overhead" || camId === "low" || camId === "trackside") ? 9 : 18);
   const lE = onboard ? 400 : (racing ? raceLam : 1.6) * cutEase;
-  const gentleHead = !camComfort() && onboard && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "helmet") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag; XR: HMD owns look
+  const gentleHead = !comfort && onboard && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "helmet") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag; XR: HMD owns look
   const lT = gentleHead ? 7 : onboard ? 400 : (racing ? raceLam + (softCam ? 1 : 2) : 10) * cutEase;
   // Damp HORIZONTALLY in the CAR's frame, not the world's. Damping toward a
   // MOVING target lags ~v/lambda - v*dt/2, so the car-to-camera distance
@@ -6997,7 +6998,7 @@ function render(dt) {
   // dynamic lean on top; broadcast/debug and cinematic cameras stay world-level
   // (the flyby's own roll would otherwise be whatever the last race left behind,
   // decaying over the first half-second of a shot the editor showed level).
-  if (dbgCam || cine || camComfort()) {
+  if (dbgCam || cine || comfort) {
     camRoll = (dbgCam && dbgCam.roll) || 0;   // level unless the FREE CAMERA's ROLL dial set one; XR: HMD owns roll
   } else {
     // Slip source smoothed at λ10 (τ≈0.1 s): vLat/speed are RAW 60 Hz-stepped
