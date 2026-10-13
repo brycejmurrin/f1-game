@@ -3630,7 +3630,12 @@ const TLX = (function () {
         // TrackGraph batch flat.
         const instMat = mode >= 2 ? mat : unlitInstancedMat;
         for (let i = 0; i < _instRegistry.length; i++) {
-          if (_instRegistry[i]) _instRegistry[i].material = instMat;
+          const im = _instRegistry[i];
+          if (!im) continue;
+          // R1's coalesced runs are plain Meshes: three's instancing never reaches them, so a fallback
+          // material would stack every wheel at its local origin. Hidden for this retry; from the next
+          // frame _drawMatMode sends their draws down the per-record path.
+          if (im.isInstancedMesh) im.material = instMat; else im.visible = false;
         }
       };
       // the backend object (the ~40-member seam contract)

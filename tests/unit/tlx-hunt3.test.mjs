@@ -426,6 +426,8 @@ test("R1: the AI material is the lit instanced fragment on its own program key; 
   assert.match(TLX, /get coalesce\(\) \{ return _coOn && !skipBatches\(\); \}/);
   assert.match(TLX, /\(instanced === 2 \? "\|ai" : instanced \? "\|in" : ""\)/, "the material key separates the three modes");
   assert.match(TLX, /if \(instanced === 2 && m\) _attrInst\(m\);/);
+  assert.match(TLX, /if \(im\.isInstancedMesh\) im\.material = instMat; else im\.visible = false;/,
+    "a fallback rung never puts an InstancedMesh material on a run (three's instancing does not reach a plain Mesh)");
 });
 
 test("R1: car-draw.js sends only the OPAQUE wheel layers through a coalescing sibling bag, and only to a backend that asks", () => {
