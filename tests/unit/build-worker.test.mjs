@@ -45,7 +45,7 @@ function recorder() {
   const log = [];
   const h = (a) => createHash("sha1").update(a && a.length ? Buffer.from(Float64Array.from(a).buffer) : Buffer.alloc(0)).digest("hex").slice(0, 16);
   const geo = (kind, g, extra) => {
-    log.push([kind, g && g.pos ? g.pos.length : 0, h(g && g.pos), h(g && g.nrm), h(g && g.col), h(g && g.idx), h(g && g.mat), extra || ""].join(" "));
+    log.push([kind, g && g.pos ? g.pos.length : 0, h(g && g.pos), h(g && g.nrm), h(g && g.col), h(g && g.idx), h(g && g.mat), h(g && g.trk), extra || ""].join(" "));
     return { kind };
   };
   return {
@@ -84,6 +84,13 @@ for (const id of ["monza", "vegas"]) {
     const msg = worker.posted[0];
     assert.equal(msg.type, "built", msg.message);
     assert.ok(msg.recs.length > 5 && msg.ms > 0);
+    // Road and terrain cross as typed arrays (transferred, not cloned element
+    // by element on the page; hunt 2 T7) — and still upload the same bytes.
+    for (const g of [msg.track.roadGeo, msg.track.terrainGeo]) {
+      for (const k of ["pos", "nrm", "col", "mat", "idx"]) assert.ok(ArrayBuffer.isView(g[k]), k + " is typed in the post");
+      assert.ok(g.idx instanceof Uint32Array);
+    }
+    assert.ok(ArrayBuffer.isView(msg.track.roadGeo.trk), "the road's track coords are typed too");
 
     const b = recorder();
     const tB = await main.TrackBuildClient.replay(msg, def, b.gfx);

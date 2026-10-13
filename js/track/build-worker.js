@@ -62,6 +62,28 @@ function transferables(root) {
   return [...out];
 }
 
+// Road and terrain are built as plain JS arrays (js/track/core/mesh.js); only
+// ArrayBuffers transfer, so the page used to deserialize ~1M doubles element
+// by element in one task when the answer landed (spa/monza/vegas ~28 ms here,
+// ~85-90 ms on a phone; perf hunt 2 T7). Re-typed here, off the main thread:
+// Float64Array holds the same doubles and Uint32Array the same indices, so
+// every upload and every reader (terrainY, debris trimesh, __apex) sees the
+// same numbers; a main-thread build still hands them plain arrays, so readers
+// take both. A channel holding anything but a number (or a non-u32 index) is
+// left as it is.
+const isU32 = (v) => v >= 0 && v <= 4294967295 && v === Math.floor(v);
+function typedRibbon(geo) {
+  if (!geo) return;
+  for (const k of ["pos", "nrm", "col", "mat", "trk", "idx"]) {
+    const a = geo[k];
+    if (!Array.isArray(a)) continue;
+    let ok = true;
+    if (k === "idx") { for (let i = 0; i < a.length && ok; i++) ok = isU32(a[i]); }
+    else { for (let i = 0; i < a.length && ok; i++) ok = typeof a[i] === "number"; }
+    if (ok) geo[k] = k === "idx" ? Uint32Array.from(a) : Float64Array.from(a);
+  }
+}
+
 async function build(m) {
   const recs = [];
   const rec = (op) => (...args) => {
@@ -87,6 +109,7 @@ async function build(m) {
   track._gfx = null; track.surface = null; track._nodeGrid = null; track.graph = null; track.def = null;
   // terrainGrid()'s cell lists: a pure cache the page rebuilds on first use (tracks.js).
   track._terrGrid = null;
+  typedRibbon(track.roadGeo); typedRibbon(track.terrainGeo);
   // def._sceneryShift is written onto the WORKER's def copy by buildCenterline
   // (tracks.js); the main-thread def never sees it, so every later reader there
   // (scenery reloads, frac-keyed tables, agent hooks) read 0. Send it back,
