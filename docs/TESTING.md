@@ -2016,6 +2016,7 @@ what it covers.
 | `spline-fold-diagnostics.test.mjs` | `surfaceFolds` / the `centreline` diagnostics row, the running-surface fold clamp (0 inverted quads on a synthetic hairpin), `splineAlpha` unset/0/null/NaN gives byte-identical nodes, `crc` passes through control points. |
 | `title-flow.test.mjs` | VS FRIEND writes flow/selection and opens the lobby only after the net bundle lands, and announces a refused load. |
 | `tlx-round2.test.mjs` | TLX round 2: the dead post chain retries from `begin()` on a timer, `shadowStr` is 0 when the sun pass failed, `DPR_CAP` keys on `mobileTier`, the shadow caster owns a geometry clone, `releaseGeometry` queues while warming, true-LRU material eviction, the pack `DataArrayTexture` drops its CPU copy, `window.renderer` is gated behind `?three-devtools=1`. |
+| `tlx-hunt3.test.mjs` | TLX perf hunt 3, lane TLX-1: three r186's real `WebGPURenderer({ forceWebGL })` over `tests/helpers/fake-webgl2.mjs` compiles the real `tsl-lit` material and the test reads the GLSL (R4: no `samplerCube` while the env probe is opted out); source pins on the `tlx.js` seams the lane changed. |
 | `tools-a12-guards.test.mjs` | Tooling guards: dup-keys scans `js/render/three/`, `stage.mjs` / `garage-angles` refuse an unsafe `--out`, wait-polling-lint parses script files, generators reject unknown flags, the Chromium cache key carries the runner image, `pages.yml` `fast_tier_run` expression. |
 
 ### Round-2 bug hunt, train B (2026-10-10)

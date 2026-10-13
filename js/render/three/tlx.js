@@ -1195,7 +1195,15 @@ const TLX = (function () {
           mirCam.matrixAutoUpdate = false; mirCam.matrixWorldAutoUpdate = false;
         } else if (mirRT.width !== w || mirRT.height !== h) mirRT.setSize(w, h);
       }
-      try {
+      // TLX opts out of the live env probe by default (the reason is at the
+      // envCubeCam block below). Hunt 3 R4: read the opt-out BEFORE allocating,
+      // so an opted-out session has no envRT/envDummy (2 cube targets) and the
+      // lit factory gets envCube null — ENV_CUBE compiles the cube tap and its
+      // binding out of every lit program. Pixel-identical: with the probe off
+      // uEnvStr is 0, so every tap was mix(a, cube, 0) = a.
+      let _envOptOut = true;
+      try { _envOptOut = GameStore.store.raw("apex26.tlxEnvProbe") !== "1"; } catch (_) { /* no store: stay opted out */ }
+      if (!_envOptOut) try {
         const envHdr = !!(post && post.hdrOk());
         const envOpts = {
           type: envHdr ? THREE.HalfFloatType : THREE.UnsignedByteType,
@@ -2348,8 +2356,8 @@ const TLX = (function () {
       // work, and this is one early return, not a deletion.
       // Read through GameStore like every other setting, so CAR REFLECTIONS
       // exports, imports and resets with the rest of DISPLAY.
-      let _envOptOut = true;
-      try { _envOptOut = GameStore.store.raw("apex26.tlxEnvProbe") !== "1"; } catch (_) { /* no store: stay opted out */ }
+      // `_envOptOut` itself is read up at the env-target allocation (R4): opted
+      // out, no cube target exists and the lit shader compiles the tap out.
       // OPT-IN since the real-Metal A/B (PERF-FINDINGS §2ag, censuses 243/244):
       // with it off the race compiled the same 8 scene programs and no post
       // program, because the post recompiles were ssrTag-node churn (tsl-fx.js),
