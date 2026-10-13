@@ -9,7 +9,8 @@
  *   R13 the chunk-cull scratch list keeps its backing store; refuseTab is minted once per renderer
  *   R6  pooled wrappers hang off a pool root listing only this pass's draws
  *   R5  apex26.tlxSkyCache512 (default OFF) sizes the cloud cache
- *   R1  (lane TLX-2) the field's opaque wheel layers coalesce into one attribute-instanced run per mesh and pass */
+ *   R1  (lane TLX-2) the field's opaque wheel layers coalesce into one attribute-instanced run per mesh and pass
+ *   B14 (lane TLX-2) the lit textures in renderGroup through vendor patch §13 (apex26.tlxSharedTex) */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -448,3 +449,103 @@ test("R1: car-draw.js sends only the OPAQUE wheel layers through a coalescing si
   assert.match(body, /G\.gfx\.draw\(_cqMesh\[i\], _cq\[i\], wo\);/);
   assert.match(body, /G\.gfx\.draw\(_rqMesh\[i\] \|\| getBrakeRing\(\), _rq\[i\], ro\);/, "rings and discs: the plain blended bag");
 });
+
+// B14 / R2 (lane TLX-2): the lit textures in three's renderGroup through vendor patch §13, on the REAL
+// tsl-lit with its material arrays and lamp grid, three r186 WebGL2 over the fake GL. Plain, InstancedMesh
+// and attribute-instanced (R1) programs share one fragment graph, so this is where a key without the
+// binding NAME would hand one program another's sampler names.
+async function b14Rig(t, sharedTex) {
+  const fg = makeFakeGL();
+  const progOf = new Map(), srcOf = new Map(), locs = [], unit = new Map(), bound = [];
+  const gl = fg.gl;
+  gl.createShader = () => ({ sh: true }); gl.createProgram = () => ({ prog: true, sh: [] });
+  gl.shaderSource = (sh, src) => { srcOf.set(sh, src); fg.shaders.push(src); };
+  gl.attachShader = (p, sh) => p.sh.push(sh);
+  gl.getUniformLocation = (p, name) => { const loc = { p, name }; locs.push(loc); return loc; };
+  gl.uniform1i = (loc, i) => { if (loc) unit.set(loc, i); };
+  gl.createTexture = () => ({ tex: true }); gl.bindTexture = (target, tex) => bound.push(tex);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  t.after(() => renderer.dispose());
+  const f32 = (n) => new Float32Array(n);
+  const dt = (data, w, h, fmt) => { const x = new THREE.DataTexture(data, w, h, fmt, THREE.FloatType); x.needsUpdate = true; return x; };
+  const lampGrid = { lampTex: dt(f32(64), 4, 4, THREE.RGBAFormat), idxTex: dt(f32(16), 4, 4, THREE.RedFormat), gridTex: dt(f32(32), 4, 4, THREE.RGFormat), LAMPS: 4, IDXW: 4, G: 4 };
+  const arr = () => { const a = new THREE.DataArrayTexture(new Uint8Array(17 * 4), 1, 1, 17); a.needsUpdate = true; return a; };
+  const matMaps = { albedo: arr(), normal: arr() };
+  const prevLS = globalThis.localStorage;
+  globalThis.localStorage = { getItem: (k) => (k === "apex26.tlxSharedTex" && !sharedTex ? "0" : null) };
+  let lit;
+  try {
+    lit = globalThis.TLXShaders.lit(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null,
+      ssrTag: false, envCube: null, matMaps, lampGrid, sharedUniforms: true, maxLights: 16 });
+  } finally { if (prevLS === undefined) delete globalThis.localStorage; else globalThis.localStorage = prevLS; }
+  const attrInst = new Function("THREE", "TSL", "localStorage", `${R1.slice(0, R1.indexOf("      function _coRun("))}; return _attrInst;`)(THREE, TSL, { getItem: () => null });
+  const scene = new THREE.Scene(); scene.matrixWorldAutoUpdate = false;
+  const cam = new THREE.PerspectiveCamera(); cam.position.set(0, 0, 5); cam.updateMatrixWorld();
+  const plain = lit.makeMaterial({ roughness: 0.55 });
+  for (let i = 0; i < 20; i++) { const m = new THREE.Mesh(r1Geo(), plain); m.frustumCulled = false; scene.add(m); }
+  const ig = r1Geo(); ig.setAttribute("instanceTint", new THREE.InstancedBufferAttribute(new Float32Array(3 * 2000).fill(1), 3));
+  const im = new THREE.InstancedMesh(ig, lit.makeMaterial({ instanced: true }), 2000); im.count = 2; im.frustumCulled = false; scene.add(im);
+  const ag = r1Geo(), ib = new THREE.InstancedInterleavedBuffer(new Float32Array(19 * 2), 19, 1);
+  for (let c = 0; c < 4; c++) ag.setAttribute("iM" + c, new THREE.InterleavedBufferAttribute(ib, 4, c * 4));
+  ag.setAttribute("instanceTint", new THREE.InterleavedBufferAttribute(ib, 3, 16));
+  const am = new THREE.Mesh(ag, attrInst(lit.makeMaterial({ instanced: true }))); am.count = 2; am.frustumCulled = false; scene.add(am);
+  let texGets = 0;
+  const tg = renderer._textures.get.bind(renderer._textures);
+  renderer._textures.get = (x) => { texGets++; return tg(x); };
+  const frame = () => { texGets = 0; bound.length = 0; renderer.render(scene, cam); return texGets; };
+  frame();
+  return { fg, renderer, lit, matMaps, frame, locs, unit, srcOf, bound, progOf };
+}
+
+test("B14: the lit textures share renderGroup — walked once per render(), not per object; per-object with tlxSharedTex=0", async (t) => {
+  const on = await b14Rig(t, true), off = await b14Rig(t, false);
+  const a = on.frame(), b = off.frame();
+  // 20 plain objects x 7 textures (bake x2, lamp grid x3, material arrays x2) + 2 instanced x 4, against one
+  // walk per shared bind group per render: the plain, InstancedMesh and AI programs.
+  t.diagnostic(`texture walks per render: per-object ${b}, shared ${a}`);
+  assert.ok(b >= 20 * 7 + 2 * 4, `per-object: ${b} texture walks for 22 objects`);
+  // (measured 154 -> 21: the shared count no longer scales with the object count)
+  assert.ok(a * 5 < b && a <= 24, `shared: ${a} texture walks per render (one per bind group)`);
+});
+
+test("B14: every program's sampler units are set by names its OWN GLSL declares (the §13 key carries the binding name)", async (t) => {
+  const { locs, unit, srcOf } = await b14Rig(t, true);
+  const samplerNames = (p) => new Set(p.sh.flatMap((sh) => [...(srcOf.get(sh) || "").matchAll(/uniform\s+\w*sampler\w*\s+(\w+)\s*;/g)].map((m) => m[1])));
+  const progs = new Set(locs.map((l) => l.p));
+  assert.ok(progs.size >= 3, `three lit programs linked (${progs.size})`);
+  let n = 0;
+  for (const l of locs) {
+    if (!unit.has(l)) continue;
+    n++;
+    assert.ok(samplerNames(l.p).has(l.name), `a sampler unit set for ${l.name}, which this program does not declare`);
+  }
+  for (const p of progs) t.diagnostic(`program: ${[...samplerNames(p)].join(" ")} | set: ${locs.filter((l) => l.p === p && unit.has(l)).map((l) => l.name + "=" + unit.get(l)).join(" ")}`);
+  // plain: bake x2 + lamp grid x3 + material arrays x2; both instanced programs take no per-chunk lamps (4 each).
+  assert.ok(n >= 7 + 4 + 4, `${n} sampler units set`);
+});
+
+test("B14: a texture .value swapped between render() calls is the one bound by the next render", async (t) => {
+  const { lit, frame, bound, fg } = await b14Rig(t, true);
+  frame();
+  const before = new Set(bound);
+  const next = new THREE.DataArrayTexture(new Uint8Array(17 * 4), 1, 1, 17); next.needsUpdate = true;
+  lit.setMaterialMaps({ albedo: next });
+  frame();
+  const fresh = bound.filter((x) => !before.has(x));
+  assert.ok(fresh.length >= 1, "the swapped material array is bound in the next render");
+  assert.ok(fg.counts.texImage3D || fg.counts.texStorage3D || fg.counts.texSubImage3D, "and uploaded");
+});
+
+test("B14: tsl-lit groups the shadow, bake, lamp-grid, material-array and env-cube base nodes; the vendor key and clone pins", () => {
+  const src = read("js/render/three/tsl-lit.js");
+  assert.match(src, /function texGroup\(n\) \{ return SHARED_TEX && n \? n\.setGroup\(renderGroup\) : n; \}/);
+  assert.match(src, /const SHARED_TEX = !\(ctx && ctx\.sharedUniforms === false\) && /, "rides SHARED_UNIFORMS' ctx switch");
+  for (const re of [/const shadowMapNode = \(tex\) => texGroup\(/, /const envCubeNode = ENV_CUBE \? texGroup\(/, /const BAKE_NODE = texGroup\(/,
+    /const BAKE_IDX_NODE = texGroup\(/, /const matAlbedoNode = [^\n]*texGroup\(/, /const matNormalNode = [^\n]*texGroup\(/])
+    assert.match(src, re);
+  assert.doesNotMatch(src, /textureLoad\(LGRID\./, "the lamp-grid taps are clones of the grouped base nodes");
+  const ids = THREE_PATCH_IDS();
+  assert.ok(ids.includes(13));
+});
+function THREE_PATCH_IDS() { return JSON.parse(read("vendor/three-0.186.0/MANIFEST.json")).patches; }

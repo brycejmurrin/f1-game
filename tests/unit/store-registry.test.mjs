@@ -87,7 +87,7 @@ const WRITERLESS = new Set(`analogSpeedSteer backgroundMotion breakBarriers c1Pi
   inputDebug instCellCache marbleGrip mirrorInstEvery modelInst moonShadowCadence motion multiDraw musicStream nostrRelays padCurve
   padDeadzone padSaturation propsUnchunked r2Airborne r3Contact spatialUpscaleGather tiltCurve tlxArrayNearest
   tlxChunkMerge tlxChunkRelease tlxForceBatches tlxForceHw tlxInstPad tlxLampStatic tlxMirLampCap tlxMirrorSweep tlxMobile tlxPack
-  tlxAoFold tlxBloom11 tlxMirFold tlxPostFixedMats tlxRoadNormalV2 tlxShadowOff tlxSharedUniforms tlxSkipBatches tlxSkyCache tlxTagLess tlxViz ssrDayGate tlxPartWrap tlxPoolRoot tlxSkyCache512 tlxCoalesce tlxWarmFx tlxWarmPlus touchCurve touchRange
+  tlxAoFold tlxBloom11 tlxMirFold tlxPostFixedMats tlxRoadNormalV2 tlxShadowOff tlxSharedUniforms tlxSkipBatches tlxSkyCache tlxTagLess tlxViz ssrDayGate tlxPartWrap tlxPoolRoot tlxSkyCache512 tlxCoalesce tlxSharedTex tlxWarmFx tlxWarmPlus touchCurve touchRange
   turn turnApi`.split(/\s+/).filter(Boolean));
 // Read with two defaults at 78cb4831b — mostly deliberate "is it set at all?"
 // probes (null) beside the real default, but the scan cannot tell a probe from
@@ -100,7 +100,7 @@ const listDefaults = (keys) => keys.map((k) => `  apex26.${k}:\n    ` + inv.defa
 
 test("the scanner still sees the store (health floor, not a ceiling)", (t) => {
   t.diagnostic(`${inv.keys} keys / ${inv.sites} sites; ${inv.writerless.length} writer-less; ${inv.defaults.size} with mixed defaults`);
-  assert.equal(WRITERLESS.size, 72);   // +tlxCoalesce (PERF-HUNT-3 R1, lane TLX-2); +tlxTagLess, ssrDayGate, tlxPartWrap, tlxPoolRoot, tlxSkyCache512 (PERF-HUNT-3 R3 / R7 / R9 / R6 / R5 A/B levers); +tlxRoadNormalV2, tlxAoFold, tlxBloom11, tlxMirFold, moonShadowCadence (TLX-PERF-HUNT tier 2 A/B knobs); +glxPerspScalar, glxInstPerPass (PERF-HUNT-2 G11, G8)
+  assert.equal(WRITERLESS.size, 73);   // +tlxCoalesce, tlxSharedTex (PERF-HUNT-3 R1 / R2-B14, lane TLX-2); +tlxTagLess, ssrDayGate, tlxPartWrap, tlxPoolRoot, tlxSkyCache512 (PERF-HUNT-3 R3 / R7 / R9 / R6 / R5 A/B levers); +tlxRoadNormalV2, tlxAoFold, tlxBloom11, tlxMirFold, moonShadowCadence (TLX-PERF-HUNT tier 2 A/B knobs); +glxPerspScalar, glxInstPerPass (PERF-HUNT-2 G11, G8)
   assert.equal(MIXED_DEFAULTS.size, 10);
   assert.ok(inv.keys >= 200, `only ${inv.keys} apex26.* keys found (217 measured) — the scan has stopped seeing them`);
   assert.ok(inv.sites >= 480, `only ${inv.sites} call sites found (515 measured) — the scan has stopped seeing them`);
