@@ -1220,7 +1220,7 @@ const GLXBackend = (function () {
     gl.bindVertexArray(null);
     _activeVAO = null;   // keep the bind cache in sync with the direct bind above
 
-    return { vao, vbo, ib, count: idx.length, indexType: idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT };
+    return { vao, vbo, ib, trk: !!trk, count: idx.length, indexType: idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT };
   }
 
   // Textured decal mesh: interleaved [x,y,z, nx,ny,nz, u,v], stride 32 (no colour).
@@ -2285,6 +2285,24 @@ const GLXBackend = (function () {
         // whichever frustum physically wrote the buffer (canary-pinned).
         batch.visible = batch._cullN; return batch._cullN;
       }
+      // LAMP REACH (opts.reach = [x, y, z, r], shadow culls only; hunt 2 G5 = TLX
+      // C3b): a cell wholly beyond the lamp radius occludes no receiver the lit
+      // loop or the beam march shades (both reject past rad). Then the shadow
+      // pack's own cell-set key: an unchanged set leaves shadowIbo holding these bytes.
+      if (shadow) {
+        const reach = opts.reach && opts.reach[3] > 0 ? opts.reach : null, r2 = reach ? reach[3] * reach[3] : 0;
+        if (reach) {
+          let w = 0;
+          for (let i = 0; i < cellKeyN; i++) { const c = cs[ks[i]]; if (Frustum.aabbDist2(c.mn, c.mx, reach[0], reach[1], reach[2]) <= r2) ks[w++] = ks[i]; }
+          cellKeyN = w;
+        }
+        const sk = batch._shKey;
+        if (sk && InstCells.enabled() && batch._shKeyN === cellKeyN && batch._shadowPacked && batch.shadowIbo) {
+          let same = true;
+          for (let i = 0; i < cellKeyN && same; i++) same = sk[i] === ks[i];
+          if (same) return batch._shadowN;
+        }
+      }
     }
     const src = batch.srcMatrices;
     const dst = shadow ? (_shadowPackFor(batch) || batch.packMatrices) : batch.packMatrices;
@@ -2331,6 +2349,11 @@ const GLXBackend = (function () {
         gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowIbo);
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, dst, 0, n * 16);
       }
+      if (dst === batch._shadowPacked && InstCells.enabled()) {
+        const sk = batch._shKey && batch._shKey.length >= cn ? batch._shKey : (batch._shKey = new Int32Array(cn));
+        for (let i = 0; i < cellKeyN; i++) sk[i] = ks[i];
+        batch._shKeyN = cellKeyN;
+      } else batch._shKeyN = -1;
       return n;
     }
     batch.visible = n;
@@ -2418,6 +2441,7 @@ const GLXBackend = (function () {
     if (batch.cbo) gl.deleteBuffer(batch.cbo);
     if (batch.shadowIbo) { gl.deleteBuffer(batch.shadowIbo); batch.shadowIbo = null; }
     if (batch.shadowCbo) { gl.deleteBuffer(batch.shadowCbo); batch.shadowCbo = null; }
+    if (batch._shVao) { gl.deleteVertexArray(batch._shVao); batch._shVao = null; }
     batch._shadowPacked = null;
     batch._shadowColors = null;
     freeMesh(batch);   // a hoisted same-scope declaration: no existence guard needed
@@ -2772,7 +2796,7 @@ const GLXBackend = (function () {
     begin,
     draw,
     drawChunked: (mesh, modelMat, opts) => { if (_envActive) return; CHK.drawChunked(mesh, modelMat, opts); },
-    castShadowChunked: (mesh, model) => CHK.castShadowChunked(mesh, model),
+    castShadowChunked: (mesh, model, reach) => CHK.castShadowChunked(mesh, model, reach),
     // Cull-test helpers, so a caller outside the draw path (the agent world
     // view's visible()) runs the same frustum maths the GPU path runs.
     makeFrustumPlanes: (viewProj, out) => CHK.makeFrustumPlanes(viewProj, out),

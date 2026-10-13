@@ -1441,6 +1441,40 @@ test("GLX shadow cull upload:false leaves the camera pack and cache alone", () =
   assert.equal(h.count("bufferSubData"), 0, "camera cull still hits after a shadow cull");
 });
 
+test("GLX lamp shadow cull honours opts.reach, re-uses an unchanged shadow pack, casts through a depth VAO (PERF-HUNT-2 G5)", () => {
+  // The lamp pass (shadow-pass.js CULL_NO_UPLOAD_REACH) re-culls every batch on
+  // every car-only rebuild: a cell beyond the lamp radius is dropped (TLX C3b),
+  // an unchanged surviving cell set leaves shadowIbo as it is (no repack, no
+  // upload), and the cast binds the batch's own depth VAO instead of
+  // re-pointing the lit VAO at shadowIbo and back.
+  const h = bootGlx();
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mats = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 100, 0, 0, 1]);
+  const batch = h.GLX.createInstancedBatch(tri, mats, null, { cellSize: 50 });
+  const planes = (d) => Array.from({ length: 6 }, () => [0, 0, 0, d]);
+  const reach = { upload: false, reach: [0, 0, 0, 10] };
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6), reach), 1, "the cell 100 m out is beyond a 10 m reach");
+  h.reset();
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6), reach), 1);
+  assert.equal(h.count("bufferSubData"), 0, "same surviving cell set: shadowIbo already holds the pack");
+  h.reset();
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6), { upload: false }), 2, "no reach: both cells");
+  assert.equal(h.count("bufferSubData"), 1, "a new cell set repacks and uploads");
+  const lightVP = new Float32Array(16); lightVP[0] = lightVP[5] = lightVP[10] = lightVP[15] = 1;
+  h.GLX.shadowBegin(lightVP);
+  h.reset();
+  h.GLX.castShadowInstanced(batch, 2);
+  assert.equal(h.count("drawElementsInstanced"), 1);
+  assert.equal(h.count("createVertexArray"), 1, "first light-culled cast builds the depth VAO");
+  h.reset();
+  h.GLX.castShadowInstanced(batch, 2);
+  assert.equal(h.count("drawElementsInstanced"), 1);
+  assert.equal(h.count("vertexAttribPointer"), 0, "later casts re-point nothing: the lit VAO keeps ibo");
+  h.GLX.shadowEnd();
+  h.GLX.freeInstancedBatch(batch);
+  assert.equal(batch._shVao, null, "the depth VAO is freed with the batch");
+});
+
 test("the debris pools instance behind a capability read, with the loop as fallback", () => {
   // Four per-body loops reaching 98 draws at desktop caps — and 17 every frame
   // of every lap from cones alone, which have no liveness test (PERF-FINDINGS
@@ -3136,7 +3170,8 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
     "the shadow cull uploads to shadowInstBuf and leaves the camera pack/cache alone");
   // GLX caught up (2026-09-09): same upload:false contract, WebGL2 buffer names.
   const glx = read("js/render/glx/glx.js");
-  const glxCull = glx.slice(glx.indexOf("function cullInstances(batch, planes, opts)"), glx.indexOf("function cullInstances(batch, planes, opts)") + 4200);
+  // 6000, not 4200: the lamp-reach filter + shadow cell-set key (PERF-HUNT-2 G5) sit before the shadow upload.
+  const glxCull = glx.slice(glx.indexOf("function cullInstances(batch, planes, opts)"), glx.indexOf("function cullInstances(batch, planes, opts)") + 6000);
   assert.match(glxCull, /const shadow = !!\(opts && opts\.upload === false\);/,
     "GLX cullInstances must recognise upload:false");
   assert.match(glxCull, /if \(shadow\) \{[^]*?batch\._shadowN = n;[^]*?batch\.shadowIbo/,
