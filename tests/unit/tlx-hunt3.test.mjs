@@ -209,3 +209,66 @@ test("R13: chunk cull never shrinks its scratch list; refuseTab is minted once p
   assert.ok(rt > 0 && rt < present, "refuseTab is hoisted out of present()");
   assert.equal((TLX.match(/const refuseTab = /g) || []).length, 1);
 });
+
+// R6: the REAL pool-root functions (_kidsBegin / _poolShow) and acquireMesh's parenting, driven the way
+// present() / mirrorEnd() drive them, rendered by three r186 over the fake GL: three draws exactly the
+// acquired wrappers and walks nothing else.
+test("R6: the pool root's children are exactly this pass's acquired wrappers; three draws those and only those", async (t) => {
+  const fg = makeFakeGL();
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  t.after(() => renderer.dispose());   // a failed assert must not leave three's frame loop holding the process
+  const scene = new THREE.Scene(); scene.matrixWorldAutoUpdate = false;
+  const cam = new THREE.PerspectiveCamera(); cam.position.set(0, 0, 5); cam.updateMatrixWorld();
+  const decl = TLX.slice(TLX.indexOf("      let _r6 = true;"), TLX.indexOf("      const _tmpMat4 = new THREE.Matrix4()"));
+  assert.match(decl, /function _poolShow\(\)/, "the R6 block moved — check this test, not the code");
+  const acq = fnSource(TLX, "function acquireMesh(geo, matrixArr, material, rec) {");
+  const parenting = acq.slice(acq.indexOf("        if (_r6) {"), acq.indexOf("        return m;"));
+  const mk = new Function("THREE", "scene", "localStorage", `"use strict";
+    const meshPool = []; let _poolBatch = 0;
+    ${decl}
+    function acquire(m) { m.visible = true; ${parenting} return m; }
+    return { poolRoot, begin(kind) { _poolBatch++; _kidsBegin(kind === "mir" ? _kidsMir : _kidsMain); },
+      acquire, show: _poolShow, meshPool };`);
+  const P = mk(THREE, scene, { getItem: () => null });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(9), 3));
+  const mat = new THREE.MeshBasicNodeMaterial();
+  const wrappers = Array.from({ length: 12 }, () => { const m = new THREE.Mesh(g, mat); m.frustumCulled = false; P.meshPool.push(m); return m; });
+  const raw = () => { fg.reset(); renderer.render(scene, cam); return fg.counts.drawArrays || 0; };
+  const base = raw();   // three draws its own background quad
+  const draws = () => raw() - base;
+  P.begin("main"); for (const m of wrappers) P.acquire(m); P.show();
+  assert.equal(P.poolRoot.parent, scene);
+  assert.equal(P.poolRoot.children.length, 12); assert.equal(draws(), 12);
+  P.begin("mir"); for (const m of wrappers.slice(0, 3)) P.acquire(m); P.show();
+  assert.deepEqual(P.poolRoot.children, wrappers.slice(0, 3), "the mirror pass lists its 3 — the other 9 are not walked");
+  assert.equal(draws(), 3);
+  assert.ok(wrappers.every((m) => m.parent === P.poolRoot), "parent set once, never re-added");
+  assert.equal(scene.children.length, 1, "no wrapper sits in the scene itself");
+  P.begin("main"); for (const m of wrappers.slice(4, 9)) P.acquire(m); P.show();
+  assert.equal(draws(), 5, "the main list is rebuilt per pass, in acquisition order");
+  assert.deepEqual(P.poolRoot.children, wrappers.slice(4, 9));
+  P.begin("main"); P.show();
+  assert.equal(draws(), 0, "a pass that acquired nothing draws nothing from the pool");
+  // A wrapper dropped while listed (dropWrapper: parent.remove) leaves the list.
+  P.begin("main"); for (const m of wrappers) P.acquire(m); P.show();
+  P.poolRoot.remove(wrappers[0]);
+  assert.equal(draws(), 11);
+  // The A/B handle restores the hide loop over wrappers parented to the scene.
+  const scene2 = new THREE.Scene(); scene2.matrixWorldAutoUpdate = false;
+  const Q = mk(THREE, scene2, { getItem: (k) => (k === "apex26.tlxPoolRoot" ? "0" : null) });
+  const w2 = Array.from({ length: 4 }, () => { const m = new THREE.Mesh(g, mat); m.frustumCulled = false; Q.meshPool.push(m); return m; });
+  Q.begin("main"); for (const m of w2) { m.__tlxBatch = 1; Q.acquire(m); } Q.show();
+  assert.equal(scene2.children.length, 4, "tlxPoolRoot=0: wrappers in the scene as before");
+});
+
+test("R6: every acquire site opens its kid list after its _poolBatch++ and closes it with _poolShow()", () => {
+  const sites = [["env face", "          _poolBatch++;\n          _kidsBegin(_kidsEnv);"], ["mirror", "            _poolBatch++;\n            _kidsBegin(_kidsMir);"],
+    ["main", "          _poolBatch++;\n          _kidsBegin(_kidsMain);"]];
+  for (const [what, needle] of sites) assert.equal(TLX.split(needle).length - 1, 1, what);
+  assert.equal((TLX.match(/acquireMesh\(/g) || []).length - 1, (TLX.match(/acquireMesh\([^)]*\)\.renderOrder = /g) || []).length,
+    "acquireMesh is only called from the three pass loops");
+  assert.equal((TLX.match(/_poolShow\(\);/g) || []).length, 3, "each pass loop ends in _poolShow()");
+  assert.equal((TLX.match(/pm\.__tlxBatch !== _poolBatch\) pm\.visible = false;/g) || []).length, 1, "the hide loop survives only as the A/B fallback");
+});

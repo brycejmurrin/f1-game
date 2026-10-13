@@ -2097,6 +2097,35 @@ const TLX = (function () {
       // the current batch is not being drawn and gets hidden.
       let _poolBatch = 0;
       let _pruneLast = 0;
+      // R6 (perf hunt 3) — THE POOL ROOT. Every wrapper used to sit in `scene`
+      // for 20 s after its last draw, hidden, and three's projectObject visits
+      // every child of every renderer.render(scene): the mirror walked ~430 to
+      // draw ~51 (census pool emulation), ~0.2 us each (bench). The wrappers now
+      // hang off one plain Object3D (not a Group: a Group would set groupOrder)
+      // whose `children` IS the list this pass acquired, in acquisition order —
+      // three never sees the rest. One array per pass kind, so V8 keeps each
+      // backing store at its own steady length. `parent` is set by hand once (no
+      // added/removed events: nothing listens). The instanced registry and the
+      // sky stay in `scene`. apex26.tlxPoolRoot=0 restores the hide loop.
+      let _r6 = true;
+      try { _r6 = localStorage.getItem("apex26.tlxPoolRoot") !== "0"; } catch (_) { /* no storage: on */ }
+      const poolRoot = new THREE.Object3D();
+      poolRoot.matrixAutoUpdate = false; poolRoot.matrixWorldAutoUpdate = false;
+      if (_r6) scene.add(poolRoot);
+      const _kidsMain = [], _kidsMir = [], _kidsEnv = [];
+      let _kids = _kidsMain, _kidN = 0, _kidBatch = -1;
+      // Right after the pass's _poolBatch++, before its acquire loop.
+      function _kidsBegin(arr) { _kids = arr; _kidN = 0; _kidBatch = _poolBatch; }
+      // After the acquire loop: what three may draw this pass is exactly what was acquired.
+      function _poolShow() {
+        if (!_r6) {
+          for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
+          return;
+        }
+        if (_kidBatch !== _poolBatch) _kidN = 0;
+        if (_kids.length !== _kidN) _kids.length = _kidN;
+        poolRoot.children = _kids;
+      }
       const _tmpMat4 = new THREE.Matrix4(), _tmpMat4b = new THREE.Matrix4();
       // GL→WebGPU clip depth remap — game.js builds GL projections (NDC z ∈ [-1,1]);
       // three WebGPU rasterises z ∈ [0,1]. Same Z01 as WGX (js/render/webgpu/wgx.js).
@@ -2309,7 +2338,7 @@ const TLX = (function () {
           for (let i = 0; i < meshPool.length; i++) {
             const pm = meshPool[i];
             if (pm.material !== fx.lineMat) continue;
-            out.meshes++; if (pm.visible) out.visible++; if (pm.parent === scene) out.inScene++;
+            out.meshes++; if (pm.visible) out.visible++; if (pm.parent === scene || (pm.parent === poolRoot && poolRoot.children.includes(pm))) out.inScene++;
             const g = pm.geometry;
             out.geo = { index: g.index ? g.index.count : null, indexType: g.index ? g.index.array.constructor.name : null,
               range: g.drawRange.count, pos: g.attributes.position ? g.attributes.position.count : null,
@@ -2854,7 +2883,10 @@ const TLX = (function () {
         }
         m.matrixWorldNeedsUpdate = false;
         m.visible = true;
-        if (!m.parent) scene.add(m);
+        if (_r6) {
+          if (m.parent !== poolRoot) { if (m.parent) m.parent.remove(m); m.parent = poolRoot; }
+          if (_kidBatch === _poolBatch) _kids[_kidN++] = m;
+        } else if (!m.parent) scene.add(m);
         return m;
       }
 
@@ -3900,6 +3932,7 @@ const TLX = (function () {
             return;
           }
           _poolBatch++;
+          _kidsBegin(_kidsEnv);
           _instStamp++;
           for (let i = 0; i < drawList.n; i++) {
             const rec = drawList[i];
@@ -3913,7 +3946,7 @@ const TLX = (function () {
             }
             acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
           }
-          for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
+          _poolShow();
           _hideUndrawnInstanced();
           // Baseline at the first face of each probe pass.
           if (envFacesMask === 0) { _envErrBase = _gpuErrors; _envFaceErr = false; }
@@ -4063,6 +4096,7 @@ const TLX = (function () {
           _mirActive = false;
           try {
             _poolBatch++;
+            _kidsBegin(_kidsMir);
             for (let i = 0; i < drawList.n; i++) {
               const rec = drawList[i];
               if (rec.instanced) { _showInstanced(rec, i); continue; }
@@ -4075,7 +4109,7 @@ const TLX = (function () {
               }
               acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
             }
-            for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
+            _poolShow();
             _hideUndrawnInstanced();
             if (scene.backgroundNode) pinSkyMaterial();
             renderer.setRenderTarget(mirRT);
@@ -4625,6 +4659,7 @@ const TLX = (function () {
         decalRuns: true,   // CarMesh queues its tail glows into one run (F3)
         present(opts) {
           _poolBatch++;
+          _kidsBegin(_kidsMain);
           _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();
           prunePool(_poolNow);
           flushDropped();
@@ -4782,7 +4817,7 @@ const TLX = (function () {
             }
             acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
           }
-          for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
+          _poolShow();
           // Hide InstancedMeshes that were not drawn this frame (still in scene).
           _hideUndrawnInstanced();
           // Do not render over an in-flight node build. A time budget may skip
@@ -5275,7 +5310,7 @@ const TLX = (function () {
             return o;
           },
           async shader(idx = 0) {
-            const meshes = scene.children.filter((o) => o.isMesh && o.visible);
+            const meshes = scene.children.concat(poolRoot.children).filter((o) => o.isMesh && o.visible);
             const target = meshes[idx];
             if (!target) return null;
             const out = await renderer.debug.getShaderAsync(scene, camera, target);

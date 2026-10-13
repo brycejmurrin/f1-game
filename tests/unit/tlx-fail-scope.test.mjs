@@ -96,7 +96,7 @@ test("mirrorEnd: only four CONSECUTIVE failed mirror renders retire the mirror (
     _mirActive: false, _poolBatch: 0, drawList: [], _showInstanced() {}, chunkedSys: null, acquireMesh() {}, meshPool: [],
     _hideUndrawnInstanced() {}, scene: { backgroundNode: null }, pinSkyMaterial() {}, mirRT: {}, mirCam: {}, _gpuLastOperation: "",
     _mirRenders: 0, _mirFails: 0, _mirDead: false, _mirErr: null, softOutRT: () => null, resetRecs() {},
-    _dMatUsed: 0, _fxMatUsed: 0, _instAlive: new Set(),
+    _dMatUsed: 0, _fxMatUsed: 0, _instAlive: new Set(), _kidsBegin() {}, _kidsMir: [], _poolShow() {},   // R6 pool root (hunt 3)
     renderer: { setRenderTarget() {}, render() { if (st.boom) throw new Error("stale geometry"); } },
   });
   const obj = vm.runInContext("({" + body.replace(/,\s*$/, "") + "})", ctx);
