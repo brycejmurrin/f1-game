@@ -640,7 +640,7 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   }
   _lampHid = false;
   _lampLastT = tNow; _lampLastRT = rt === null ? -1e9 : rt;
-  _lampTrackRef = track ? new WeakRef(track) : null;
+  if (track !== prevTrack) _lampTrackRef = track ? new WeakRef(track) : null;   // a new weak cell only when the track changed (hunt 2 F10)
   // Skip sin/hash work when intensity would be unchanged: flicker knob at 0 and
   // warmup fully settled (or warmup knob 0 = instant). Max warmDur is 8×knob.
   const flick = LT.lampFlicker || 0;
