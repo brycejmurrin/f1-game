@@ -4418,6 +4418,7 @@ const ranked = [], byProgDesc = (a, b) => b.prog - a.prog;   // hoisted: no comp
 const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0,
                   deploy: 0, energy: 1, ersDeploy: 0.5, throttle: 1, brake: 0, regen: 0.5 };  // setEngine reads synchronously
 let _audioParamStep = true;   // tickBody clears it on all but a frame's last physics step
+const _engAcc = { dt: 0 };   // the local car's sim time since the engineer last listened (S8: once per frame)
 function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
@@ -4766,7 +4767,10 @@ function updateCar(c, dt, ranked) {
   // keeps the characterization baseline bit-identical.
   tyres.update(c, dt);
   pits.update(c, dt);
-  engineer.update(c, dt);   // local player only; the module gates on c.local
+  // The race engineer is advice, read once per FRAME on its last step with the frame's summed sim time
+  // (like the audio params): its clocks integrate dt and its latches compare against the last call, so a
+  // 2-5 step phone frame paid it 2-5x for one answer (PERF-HUNT-2 S8). The module gates on c.local.
+  if (c.local) { _engAcc.dt += dt; if (_audioParamStep) { engineer.update(c, _engAcc.dt); _engAcc.dt = 0; } }
   // Per-car-step invariants, read ONCE (PERF-HUNT-2 S4): the tyre state was integrated just above and only
   // pits.update refits a set, the tread and the weather cannot change inside a car's step, and PACE cannot
   // either — so these were the same numbers at every one of their 4-17 call sites. Same operands, same order.
