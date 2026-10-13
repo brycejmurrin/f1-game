@@ -4676,6 +4676,7 @@ const AI_HEAD_MAX = 0.45;      // rad: the heading a car may hold off the road t
 const AI_YAW_LAT = 0.6;        // share of LAT_MAX·grip the heading change may spend (a_lat = v·yawRate)
 const AI_YAW_MAX = 1.2;        // rad/s: yaw-rate cap at crawl speeds
 const AI_BIAS_SLEW = 3.0;      // m/s: how fast a pass / defend / yield / separation bias may move the target
+const AI_LOOK_CAP = 64;        // samples the per-car look-ahead cache keeps (160 m / ~4 m nodes ≈ 41; a longer window just recomputes the tail)
 // WallClamp.apply's ctx, pooled like _aiBr: a fresh literal + addShake closure per car per tick was ~1,300 objects/s at 22 cars.
 const _wallCtx = { track: null, dt: 0, steer: 0, postLim, smp, wrapS, worldFromTrack, soundOn: false, incidentSim, addShake(d) { shake = Math.min(1, shake + d); } };
 const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1 };
@@ -5051,15 +5052,31 @@ function updateCar(c, dt, ranked) {
     // free speed in every corner, worth more than the whole easy→hard range,
     // and it flattened skill and difficulty most in the slow corners where the
     // constraint should bite hardest (docs/notes/AI-FIELD-RESEARCH.md).
-    const ss0 = Math.ceil(c.s / dsN) * dsN;
-    for (let ss = ss0, d = ss0 - c.s; d < look; ss += dsN, d += dsN) {
+    const node0 = Math.ceil(c.s / dsN), ss0 = node0 * dsN;
+    // THE WINDOW IS CACHED PER CAR (PERF-HUNT-2 S6): ~77 % of steps a car is still
+    // in the same node window, and every sample's curvature / line / bank is a
+    // pure function of its `ss`, which is a pure function of (node0, index) on one
+    // track — only `d` moves. One object per car (c._lk: never restored by the
+    // coach's primitive rewind, so key and samples cannot be split), filled
+    // contiguously; a different node, line choice or track refills from 0.
+    const lk = c._lk || (c._lk = { node: -1, on: false, track: null, n: 0, v: new Float64Array(AI_LOOK_CAP), a: new Float64Array(AI_LOOK_CAP), b: new Float64Array(AI_LOOK_CAP) });
+    if (lk.node !== node0 || lk.on !== onLine || lk.track !== track) { lk.node = node0; lk.on = onLine; lk.track = track; lk.n = 0; }
+    let lkI = 0;
+    for (let ss = ss0, d = ss0 - c.s; d < look; ss += dsN, d += dsN, lkI++) {
+      if (lkI < lk.n) {
+        if (lk.a[lkI] > kMax) kMax = lk.a[lkI];
+        AiDrive.pushLook(d, lk.v[lkI], lk.b[lkI]);
+        continue;
+      }
       // Tracks.curvature / pathK / bankAngle all wrap s themselves.
       const kk = Tracks.curvature(track, ss);
       const ak = Math.abs(kk);
       if (ak > kMax) kMax = ak;
       // |bank|: the player's bankRoll (below) takes the absolute value, so a
       // signed/adverse bank must not boost the player while it cuts the AI.
-      AiDrive.pushLook(d, onLine ? TrackLine.pathK(track, ss) : kk, Math.abs(Tracks.bankAngle(track, ss)));
+      const lkV = onLine ? TrackLine.pathK(track, ss) : kk, lkB = Math.abs(Tracks.bankAngle(track, ss));
+      AiDrive.pushLook(d, lkV, lkB);
+      if (lkI < AI_LOOK_CAP) { lk.v[lkI] = lkV; lk.a[lkI] = ak; lk.b[lkI] = lkB; lk.n = lkI + 1; }
     }
     _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = Math.min(1, dd.corner * (1 + (c._bandNow || 0)));   // the band lifts corner authority too, never past 1.0: a banded car drives like a better driver, not a faster car
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * trMul * (gmC / gm0); _aiBr.pace = PACE; _aiBr.vmax = VMAX;   // the tread's braking credit (docs/PHYSICS.md §Braking): the planner must stop as the executor below does, or it corners on wets and brakes on slicks

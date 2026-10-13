@@ -64,6 +64,8 @@ const CarFields = (function () {
       ["fxSparkI", "oslipHapT", "kerbSndT", "kerbHapT"]],
     ["pit work time accrued in the box (pit-lane.js) and the player's brake-bias setup (startRace)",
       ["pitWorked", "brakeBias"]],
+    ["AI brake look-ahead cache (game.js updateCar, PERF-HUNT-2 S6): one object per AI car, keyed on its node window",
+      ["_lk"]],
   ];
 
   const KEYS = [];
@@ -149,6 +151,7 @@ const CarFields = (function () {
     if (!("kerbHapT" in c)) c.kerbHapT = undefined;
     if (!("pitWorked" in c)) c.pitWorked = undefined;
     if (!("brakeBias" in c)) c.brakeBias = undefined;
+    if (!("_lk" in c)) c._lk = undefined;
     return c;
   }
 
