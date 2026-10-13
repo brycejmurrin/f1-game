@@ -6,7 +6,9 @@
  *   R3  phone MEDIUM: one-attachment scene target, no ssrTag MRT, a distinct fallback in the composite's tag slot
  *   R7  dry-day SSR gate on po.reflect (game.js, every backend), behind apex26.ssrDayGate (default OFF)
  *   R9  the particle / rain stream wraps the producer's array instead of copying it per upload
- *   R13 the chunk-cull scratch list keeps its backing store; refuseTab is minted once per renderer */
+ *   R13 the chunk-cull scratch list keeps its backing store; refuseTab is minted once per renderer
+ *   R6  pooled wrappers hang off a pool root listing only this pass's draws
+ *   R5  apex26.tlxSkyCache512 (default OFF) sizes the cloud cache */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -271,4 +273,24 @@ test("R6: every acquire site opens its kid list after its _poolBatch++ and close
     "acquireMesh is only called from the three pass loops");
   assert.equal((TLX.match(/_poolShow\(\);/g) || []).length, 3, "each pass loop ends in _poolShow()");
   assert.equal((TLX.match(/pm\.__tlxBatch !== _poolBatch\) pm\.visible = false;/g) || []).length, 1, "the hide loop survives only as the A/B fallback");
+});
+
+test("R5: apex26.tlxSkyCache512 is off by default, '1' = mobileTier only, 'all' = everywhere; the sky builds that size", () => {
+  const at = TLX.indexOf("      const _skyCacheSize = (function () {");
+  assert.ok(at > 0, "the knob moved — check this test, not the code");
+  const iife = TLX.slice(at + "      const _skyCacheSize = ".length, TLX.indexOf("})();", at) + 4);
+  const size = (v, mobileTier) => new Function("localStorage", "mobileTier", `"use strict"; return ${iife};`)(
+    { getItem: (k) => (k === "apex26.tlxSkyCache512" ? v : null) }, mobileTier);
+  assert.equal(size(null, true), 0, "unset: tsl-sky's own 768 — on a phone too");
+  assert.equal(size("1", false), 0, "'1' leaves desktop alone");
+  assert.equal(size("1", true), 512);
+  assert.equal(size("all", false), 512, "'all' is the desktop A/B lever");
+  assert.match(TLX, /TLXShaders\.sky\(THREE, TSL, \{ chunks, cache: _skyCacheOn, cacheSize: _skyCacheSize \}\)/);
+  // The real sky factory honours the size (its NUMBERS block derives W and the texel from S).
+  vm.runInThisContext(read("js/render/three/tsl-sky.js"), { filename: "tsl-sky.js" });
+  for (const [cacheSize, want] of [[512, 512], [0, 768]]) {
+    const sky = globalThis.TLXShaders.sky(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), cache: true, cacheSize });
+    assert.equal(sky.cacheState().size, want);
+    sky.dispose();
+  }
 });

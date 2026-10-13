@@ -1409,10 +1409,23 @@ const TLX = (function () {
       const _skyCacheOn = (function () {
         try { return localStorage.getItem("apex26.tlxSkyCache") !== "0"; } catch (_) { return true; }
       })() && !softContent("sky") && !!(post && post.hdrOk && post.hdrOk());
+      // R5 (perf hunt 3): apex26.tlxSkyCache512 — a 512² cloud cache (2 x 2.1 MB
+      // RGBA16F instead of 2 x 4.7 MB; a tile GPU loads + stores the whole target
+      // on each of a re-bake's 16 band frames). "1" = on mobileTier phones only
+      // (the shipping candidate), "all" = everywhere (the desktop A/B lever).
+      // DEFAULT OFF: a look change. Predicted (bilinear + fp16 model of tsl-sky's
+      // own fbm on the cache's cp grid, scaled from the 768 NUMBERS): day mean
+      // 0.024 LSB / max 1.9, night mean 0.16 / max 4.3 — under the frozen-A/B
+      // floor on average, NOT measured on a frame yet.
+      const _skyCacheSize = (function () {
+        let v = "";
+        try { v = localStorage.getItem("apex26.tlxSkyCache512") || ""; } catch (_) { /* no storage: 768 */ }
+        return (v === "all" || (v === "1" && mobileTier)) ? 512 : 0;   // 0: tsl-sky's own default (768)
+      })();
       try {
         if (window.TLXShaders && TLXShaders.sky) {
           if (!chunks && TLXShaders.chunks) chunks = TLXShaders.chunks(THREE, TSL);
-          sky = TLXShaders.sky(THREE, TSL, { chunks, cache: _skyCacheOn });
+          sky = TLXShaders.sky(THREE, TSL, { chunks, cache: _skyCacheOn, cacheSize: _skyCacheSize });
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: sky factory failed, flat clear only —", e); } catch (_) {}
