@@ -700,6 +700,20 @@ const CarDraw = (function () {
     // by the consumer). Bounded at 4 each: one car's wheels, drained before return.
     const _wq = [], _wqMesh = [], _rq = [], _rqEmis = [], _rqAlpha = [], _rqMesh = [];
     let _wqN = 0, _rqN = 0;
+    // R1 (perf hunt 3): on a backend that coalesces (TLX: gfx.coalesce) the OPAQUE wheel layers go out
+    // through a sibling of the caller's bag carrying `coalesce`, and the backend draws each wheel mesh
+    // of the field as one instanced run. The sibling is refreshed per call (game.js moves emissive per
+    // frame) and is never handed to GLX/WGX, whose draws stay exactly as they were. Rings and spin discs
+    // (alpha < 1) keep the plain _ringOpts path.
+    const _coSib = new WeakMap();
+    function coOpt(o) {
+      if (!o || G.gfx.coalesce !== true || (o.alpha !== undefined && o.alpha < 1)) return o;
+      let s = _coSib.get(o);
+      if (!s) { s = {}; _coSib.set(o, s); }
+      for (const k in o) s[k] = o[k];
+      s.coalesce = true;
+      return s;
+    }
     // ── decal-queue ─────────────────────────────────────────────────
     // Deferred car-decal batch (same pattern as the blob shadows above):
     // interleaving G.gfx.draw(body) with G.gfx.drawDecal per car costs ~2
@@ -1108,6 +1122,7 @@ const CarDraw = (function () {
       if (!c.human) steerA = M4.clamp(steerA - Math.atan(VIS_WHEELBASE * (c.kCur || 0)), -WSV, WSV);
       else if (G.STEER_SPEED_REF > 0) steerA /= 1 + Math.abs(c.speed || 0) * PhysicsConsts.VMAX / (G.vTop() * G.STEER_SPEED_REF);
       const ws = wScale || 1;   // widen the tyre along its axle (cockpit view)
+      const wo = coOpt(opt);    // the opaque layers' bag (R1)
       // The stop, seen (PitLane.stopAnim): a car held in its box is up on its
       // jacks and its wheels come off outward along their axles.
       const anim = c.pitState === "box" && G.pits && G.pits.stopAnim ? G.pits.stopAnim(c) : null;
@@ -1161,7 +1176,7 @@ const CarDraw = (function () {
         // Push the widened wheels outward so they don't intersect the tub.
         L[12] = wd.x + (wd.x < 0 ? -1 : 1) * ((ws - 1) * 0.16 + off); L[13] = wd.y + (wd.front ? flat : 0) + lift; L[14] = wd.z + (fwdOffset || 0); L[15] = 1;
         M4.mulTo(_wheelWorld, base, L);
-        G.gfx.draw(wd.rear ? wm.R : wm.F, _wheelWorld, opt);
+        G.gfx.draw(wd.rear ? wm.R : wm.F, _wheelWorld, wo);
         if (lite) {
           // Past the LOD distance only the rotating wheel draws, but the far
           // brake flare (40-240 m, Particles, outside the pool) is exactly this
@@ -1244,8 +1259,8 @@ const CarDraw = (function () {
       }
       // Run 1: the fixed wheel layers, one bind for up to four draws, then
       // the compound stripes (one shared ring per colour).
-      for (let i = 0; i < _wqN; i++) G.gfx.draw(_wqMesh[i], _wq[i], opt);
-      for (let i = 0; i < _cqN; i++) G.gfx.draw(_cqMesh[i], _cq[i], opt);
+      for (let i = 0; i < _wqN; i++) G.gfx.draw(_wqMesh[i], _wq[i], wo);
+      for (let i = 0; i < _cqN; i++) G.gfx.draw(_cqMesh[i], _cq[i], wo);
       _cqN = 0;
       // Run 2: the blended rings, after every opaque wheel of this car.
       const ro = _ringOpts;

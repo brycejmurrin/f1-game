@@ -8,7 +8,8 @@
  *   R9  the particle / rain stream wraps the producer's array instead of copying it per upload
  *   R13 the chunk-cull scratch list keeps its backing store; refuseTab is minted once per renderer
  *   R6  pooled wrappers hang off a pool root listing only this pass's draws
- *   R5  apex26.tlxSkyCache512 (default OFF) sizes the cloud cache */
+ *   R5  apex26.tlxSkyCache512 (default OFF) sizes the cloud cache
+ *   R1  (lane TLX-2) the field's opaque wheel layers coalesce into one attribute-instanced run per mesh and pass */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -293,4 +294,157 @@ test("R5: apex26.tlxSkyCache512 is off by default, '1' = mobileTier only, 'all' 
     assert.equal(sky.cacheState().size, want);
     sky.dispose();
   }
+});
+
+// R1 (lane TLX-2): the REAL coalescing block of tlx.js (runs, attribute instancing, the sentinel), driven over
+// the REAL tsl-lit material and three r186 on the fake GL, against the per-record draws it replaces.
+const R1 = TLX.slice(TLX.indexOf("      let _coOn = true;"), TLX.indexOf("      function ensureStream(slot, verts) {"));
+async function r1Rig(t, ls = {}) {
+  const fg = makeFakeGL();
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  t.after(() => renderer.dispose());
+  const lit = globalThis.TLXShaders.lit(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null,
+    ssrTag: false, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
+  const scene = new THREE.Scene(); scene.matrixWorldAutoUpdate = false;
+  const camera = new THREE.PerspectiveCamera(); camera.position.set(0, 0, 5); camera.updateMatrixWorld();
+  const env = { soft: false };
+  assert.match(R1, /function _coAppend\(geo, w, opts\)/, "the R1 block moved — check this test, not the code");
+  const mk = new Function("THREE", "TSL", "scene", "renderer", "camera", "localStorage", "lit", "env", `"use strict";
+    const _instRegistry = [], drawList = []; drawList.n = 0;
+    const unlitMat = new THREE.MeshBasicNodeMaterial(), _drawMatMode = 0, vizMat = null;
+    const skipBatches = () => env.soft, drawEm = (o) => (o && o.emissive !== undefined ? o.emissive : 0);
+    function setRange0(attr, count) { attr.updateRanges.length = 0; attr.updateRanges.push({ start: 0, count }); }
+    function pushRec(geo, m, mat, em, al, lg, chunked, instanced) {
+      const r = drawList[drawList.n] || (drawList[drawList.n] = {}); drawList.n++;
+      Object.assign(r, { geo, m, mat, em, al, lg, chunked, instanced });
+    }
+    function resetRecs() { for (let i = 0; i < drawList.n; i++) drawList[i].instanced = null; drawList.n = 0; }
+    const cache = new Map();
+    function materialFor(o, chunked, instanced) {
+      const k = JSON.stringify(o) + instanced;
+      if (!cache.has(k)) { const m = lit.makeMaterial(instanced ? Object.assign({ instanced: true }, o) : o); if (instanced === 2) _attrInst(m); cache.set(k, m); }
+      return cache.get(k);
+    }
+    function buildGeometry() { throw new Error("unused"); }
+    ${R1}
+    return { append: _coAppend, drop: _coDrop, runs: _coRuns, stat: _coStat, drawList, resetRecs, materialFor, _instRegistry,
+      show() { for (let i = 0; i < drawList.n; i++) { const r = drawList[i]; if (!r.instanced) continue;
+        const b = r.instanced; b.imesh.count = b.visible; b.imesh.material = r.mat; b.imesh.userData.tlxEmissive = r.em; b.imesh.visible = true; } } };`);
+  const R = mk(THREE, TSL, scene, renderer, camera, { getItem: (k) => (k in ls ? ls[k] : null) }, lit, env);
+  return { fg, renderer, scene, camera, R, env, lit };
+}
+// A wheel-like geometry and car-basis matrices: game.js basisMat is a reflection (det -1).
+function r1Geo() {
+  const g = new THREE.BufferGeometry();
+  for (const [n, k, c] of [["position", 3, 4], ["normal", 3, 4], ["color", 3, 4], ["mat", 1, 4], ["trk", 3, 4]])
+    g.setAttribute(n, new THREE.BufferAttribute(new Float32Array(k * c).fill(0.5), k));
+  g.setIndex(new THREE.BufferAttribute(new Uint16Array([0, 1, 2, 0, 2, 3]), 1));
+  return g;
+}
+function carWheel(i) {
+  const W = new THREE.Matrix4().makeRotationY(0.3 * i).multiply(new THREE.Matrix4().makeScale(-1, 1, 1))
+    .multiply(new THREE.Matrix4().makeRotationX(0.7 + i)).setPosition(812.25 + i * 3.1, 4.5, -1290.75 + i);
+  return Float32Array.from(W.elements);
+}
+
+test("R1: N same-mesh opaque draws are ONE instanced draw; R x W per instance rebuilds W exactly; front face as per record", async (t) => {
+  const { fg, renderer, scene, camera, R } = await r1Rig(t);
+  const geo = r1Geo(), opts = { roughness: 0.55, metalness: 0.3, specular: 0.45, emissive: 0.12, doubleSided: true, coalesce: true };
+  const mats = [0, 1, 2, 3, 4].map(carWheel);
+  for (const w of mats) assert.equal(R.append(geo, w, opts), true);
+  assert.equal(R.drawList.n, 1, "five draws, one record");
+  const b = R.drawList[0].instanced;
+  assert.equal(b.visible, 5);
+  assert.ok(b.imesh.matrixWorld.determinant() < 0, "a det < 0 run carries the reflection as its matrixWorld");
+  const a = b.ib.array;
+  for (let i = 0; i < 5; i++) {
+    const inst = new THREE.Matrix4().fromArray(a, i * 19), got = b.imesh.matrixWorld.clone().multiply(inst).elements;
+    for (let k = 0; k < 16; k++) assert.equal(Math.fround(got[k]), mats[i][k], `instance ${i} element ${k}: R x (R x W) == W bit for bit`);
+    assert.deepEqual([...a.subarray(i * 19 + 16, i * 19 + 19)], [1, 1, 1], "white tint");
+    assert.ok(inst.determinant() > 0, "the instance itself is a proper transform");
+  }
+  R.show();
+  const front = []; fg.gl.frontFace = (m) => front.push(m);
+  fg.reset(); renderer.render(scene, camera);
+  assert.equal(fg.counts.drawElementsInstanced || 0, 1, "one instanced draw");
+  assert.equal(fg.counts.drawElements || 0, 0);
+  const vs = fg.shaders.find((s) => /\biM0\b/.test(s) && /gl_Position/.test(s));
+  assert.ok(vs, "the vertex stage reads the named instance stream");
+  assert.match(vs, /inverse\(/, "normals through the true inverse-transpose (r186 transformNormal)");
+  // The per-record control: the same five through plain meshes at W (what TLX drew before).
+  const scene2 = new THREE.Scene(); scene2.matrixWorldAutoUpdate = false;
+  const plain = R.materialFor({ roughness: 0.55, metalness: 0.3, specular: 0.45, doubleSided: true }, false, false);
+  for (const w of mats) {
+    const m = new THREE.Mesh(geo, plain); m.matrixAutoUpdate = false; m.matrixWorldAutoUpdate = false; m.frustumCulled = false;
+    m.matrixWorld.fromArray(w); scene2.add(m);
+  }
+  const front2 = []; fg.gl.frontFace = (m) => front2.push(m);
+  fg.reset(); renderer.render(scene2, camera);
+  assert.equal(fg.counts.drawElements || 0, 5, "control: five per-record draws");
+  assert.ok(front.length > 0 && front2.length > 0, "both renders set a front face");
+  assert.equal(front[front.length - 1], front2[front2.length - 1], "the run rasterises with the per-record front face (CW for the reflected basis)");
+});
+
+test("R1: the sentinel, the fallbacks and the kill switch", async (t) => {
+  const { R, env } = await r1Rig(t);
+  const geo = r1Geo(), o = { roughness: 0.55, doubleSided: true, coalesce: true, emissive: 0 };
+  assert.equal(R.append(geo, carWheel(0), o), true);
+  assert.equal(R.append(geo, carWheel(1), Object.assign({}, o, { emissive: 0.5 })), false, "a second emissive in one run draws per record");
+  assert.equal(R.append(geo, carWheel(1), Object.assign({}, o, { roughness: 0.9 })), false, "so does a second material");
+  assert.equal(R.append(geo, carWheel(2), Object.assign({}, o, { alpha: 0.5 })), false, "alpha < 1 never joins");
+  const pos = Float32Array.from(new THREE.Matrix4().setPosition(1, 2, 3).elements);
+  assert.equal(R.append(geo, pos, o), true, "a det > 0 draw takes the other run of the same mesh");
+  assert.equal(R.drawList.n, 2);
+  assert.equal(R.runs.get(geo)[0].imesh.matrixWorld.determinant(), 1);
+  R.resetRecs();
+  assert.equal(R.append(geo, carWheel(3), o), true);
+  assert.equal(R.drawList.n, 1, "after the pass reset the run re-opens at the new list's slot (A6's sentinel)");
+  assert.equal(R.runs.get(geo)[1].visible, 1);
+  for (let i = 1; i < 128; i++) assert.equal(R.append(geo, carWheel(i & 7), o), true);
+  assert.equal(R.append(geo, carWheel(0), o), false, "past CO_CAP the rest draw per record");
+  assert.equal(R.stat.fall, 3);
+  env.soft = true;
+  R.resetRecs();
+  assert.equal(R.append(geo, carWheel(0), o), false, "software WebGPU (skipBatches) keeps the per-record path");
+  const reg = R._instRegistry.length;
+  R.drop(geo);
+  assert.equal(R.runs.has(geo), false); assert.equal(R._instRegistry.length, reg - 2, "a freed source takes both runs");
+  const off = await r1Rig(t, { "apex26.tlxCoalesce": "0" });
+  assert.equal(off.R.append(geo, carWheel(0), o), false, "apex26.tlxCoalesce=0: per record");
+});
+
+test("R1: the AI material is the lit instanced fragment on its own program key; tlx.js wires draw, warm, release and the capability", async (t) => {
+  const { R } = await r1Rig(t);
+  const ai = R.materialFor({ roughness: 0.55 }, false, 2), inst = R.materialFor({ roughness: 0.55 }, false, true);
+  assert.equal(ai.colorNode, inst.colorNode, "the same shared instanced fragment graph");
+  assert.equal(ai.customProgramCacheKey(), "ai-" + inst.customProgramCacheKey());
+  assert.match(TLX, /draw\(mesh, model, opts\) \{\s*if \(opts && opts\.coalesce && mesh && mesh\.geo && _coAppend\(mesh\.geo, model, opts\)\) return;/);
+  assert.match(fnSource(TLX, "async function warmFxPrograms() {"), /await _coWarm\(\);/);
+  assert.match(fnSource(TLX, "function releaseGeometry(geo) {"), /_coDrop\(geo\);/);
+  assert.match(TLX, /get coalesce\(\) \{ return _coOn && !skipBatches\(\); \}/);
+  assert.match(TLX, /\(instanced === 2 \? "\|ai" : instanced \? "\|in" : ""\)/, "the material key separates the three modes");
+  assert.match(TLX, /if \(instanced === 2 && m\) _attrInst\(m\);/);
+});
+
+test("R1: car-draw.js sends only the OPAQUE wheel layers through a coalescing sibling bag, and only to a backend that asks", () => {
+  const cd = read("js/car/car-draw.js");
+  const fn = cd.slice(cd.indexOf("    const _coSib = new WeakMap();"), cd.indexOf("    // ── decal-queue"));
+  assert.match(fn, /function coOpt\(o\)/, "coOpt moved — check this test, not the code");
+  const mk = (gfx) => new Function("G", `"use strict"; ${fn} return coOpt;`)({ gfx });
+  const o = { roughness: 0.55, emissive: 0 };
+  assert.equal(mk({})(o), o, "GLX / WGX: the caller's own bag, untouched");
+  const co = mk({ coalesce: true });
+  const s = co(o);
+  assert.notEqual(s, o); assert.equal(s.coalesce, true); assert.equal(o.coalesce, undefined, "the caller's bag is never mutated");
+  o.emissive = 0.12;
+  assert.equal(co(o), s, "one sibling per bag"); assert.equal(s.emissive, 0.12, "refreshed per call");
+  const ring = { alpha: 0.5 };
+  assert.equal(co(ring), ring, "alpha < 1 stays per record");
+  const body = fnSource(cd, "    function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale, bare) {");
+  assert.match(body, /const wo = coOpt\(opt\);/);
+  assert.match(body, /G\.gfx\.draw\(wd\.rear \? wm\.R : wm\.F, _wheelWorld, wo\);/);
+  assert.match(body, /G\.gfx\.draw\(_wqMesh\[i\], _wq\[i\], wo\);/);
+  assert.match(body, /G\.gfx\.draw\(_cqMesh\[i\], _cq\[i\], wo\);/);
+  assert.match(body, /G\.gfx\.draw\(_rqMesh\[i\] \|\| getBrakeRing\(\), _rq\[i\], ro\);/, "rings and discs: the plain blended bag");
 });

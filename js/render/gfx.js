@@ -192,6 +192,12 @@
  *                             mirrors — the garage floor. Pair it with
  *                             alpha<1: it must not write depth, and its clip
  *                             is the opaque draws submitted after it.
+ *   coalesce:bool             TLX only (gfx.coalesce === true; GLX/WGX have no
+ *                             such capability and are never handed it): an
+ *                             OPAQUE draw that may join one instanced run per
+ *                             (mesh, opts) at its pass's first such draw —
+ *                             order-free under depth write + LEQUAL. Set by
+ *                             car-draw.js on the wheel layers (perf hunt 3 R1).
  *
  * `opts` object consumed by present() (see GLX.present):
  *   exposure, bloom, ssao, contact, threshold, tune, ...
