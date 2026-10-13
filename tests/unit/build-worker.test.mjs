@@ -23,9 +23,16 @@ const main = Tracks._vmContext;
 main.setTimeout = setTimeout; main.performance = performance;
 
 // The worker: its own context, importScripts reading the repo, postMessage kept.
+// postMessage clones WITH the worker's transfer list, as a real one does: the
+// worker's own buffers are detached by the post (hunt 2 T7), so a build that
+// transferred a buffer it still caches would meet it detached on its NEXT build
+// in the same worker — which the two-builds test below would catch (hunt 3 X7).
 function spawnWorker() {
-  const posted = [];
-  const ctx = vm.createContext({ performance, console, URL, postMessage: (m) => posted.push(structuredClone(m)) });
+  const posted = [], transferred = [];
+  const ctx = vm.createContext({ performance, console, URL, postMessage: (m, t) => {
+    transferred.push((t || []).length);
+    posted.push(structuredClone(m, { transfer: t || [] }));
+  } });
   ctx.self = ctx;
   ctx.importScripts = (...files) => {
     for (const f of files) {
@@ -35,7 +42,7 @@ function spawnWorker() {
   };
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/track/build-worker.js"), "utf8"), ctx);
   // onmessage is async (a build awaits the model pack): send() returns it.
-  return { send: (m) => ctx.onmessage({ data: m }), posted };
+  return { send: (m) => ctx.onmessage({ data: m }), posted, transferred };
 }
 const vmFiles = MANIFEST.TRACK_VM.flatMap((e) => (e === "@circuits" ? MANIFEST.CIRCUITS.map((id) => MANIFEST.circuitPath(id)) : [e]));
 
@@ -108,6 +115,23 @@ for (const id of ["monza", "vegas"]) {
     }
   });
 }
+
+test("a second build in the SAME worker, after its buffers were transferred, still uploads exactly what build() uploads", async () => {
+  // The worker above has built monza and vegas, each post transferring its buffers.
+  for (const [seq, id] of [[11, "monza"], [12, "monza"]]) {
+    worker.posted.length = 0;
+    const before = worker.transferred.length;
+    await worker.send({ type: "build", seq, idx: MANIFEST.CIRCUITS.indexOf(id), id, opts: { chunkRibbons: true, retainGraph: false }, scenery: "http://x/" + MANIFEST.sceneryPath(id) + "?v=1" });
+    const msg = worker.posted[0];
+    assert.equal(msg.type, "built", msg.message);
+    assert.ok(worker.transferred[before] > 0, "the post carried a transfer list");
+    const def = Tracks.LIST.find((d) => d.id === id);
+    const a = recorder(), tA = Tracks.build(def, { gfx: a.gfx, chunkRibbons: true, retainGraph: false });
+    const b = recorder(), tB = await main.TrackBuildClient.replay(msg, def, b.gfx);
+    assert.deepEqual(b.log, a.log, `build ${seq}: every upload, in order, byte-identical`);
+    assert.deepEqual(physics(tB), physics(tA), `build ${seq}: the physics arrays match`);
+  }
+});
 
 test("replay stamps _keepPositions when the page asked for trackGeometry", async () => {
   const def = Tracks.LIST.find((d) => d.id === "monza");
