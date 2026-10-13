@@ -1475,6 +1475,43 @@ test("GLX lamp shadow cull honours opts.reach, re-uses an unchanged shadow pack,
   assert.equal(batch._shVao, null, "the depth VAO is freed with the batch");
 });
 
+test("GLX instPerPass: the mirror pass culls and draws its own instance buffer, and holds it on freeze frames (PERF-HUNT-2 G8)", () => {
+  // TLX A1's contract on GLX: the main and mirror passes stop ping-ponging one
+  // ibo (each re-packing + re-uploading over the other's cell set every frame).
+  const h = bootGlx();
+  assert.equal(h.GLX.instPerPass, true, "desktop tier: per-pass buffers");
+  assert.equal(bootGlx({ ls: { "apex26.glxInstPerPass": "0" } }).GLX.instPerPass, false, "the escape hatch");
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mats = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 100, 0, 0, 1]);
+  const batch = h.GLX.createInstancedBatch(tri, mats, [1, 1, 1, 1, 1, 1], { cellSize: 50 });
+  const all = Array.from({ length: 6 }, () => [0, 0, 0, 1e6]);
+  const near = all.slice(0, 5).concat([[-1, 0, 0, 50]]);   // x <= 50: the far cell is out
+  const mirror = (freeze, fn) => {
+    const f = h.frame(); f.mirrorFreezeInstanced = freeze;
+    assert.equal(h.GLX.mirrorBegin(f, 256, 128), true);
+    try { return fn(); } finally { h.GLX.mirrorEnd(); }
+  };
+  assert.equal(h.GLX.cullInstances(batch, all), 2);
+  h.reset();
+  assert.equal(mirror(false, () => h.GLX.cullInstances(batch, near)), 1);
+  assert.equal(batch.visible, 2, "the camera count survives the mirror cull");
+  assert.ok(batch._mir && batch._mir.visible === 1, "the mirror view holds its own count");
+  h.reset();
+  assert.equal(h.GLX.cullInstances(batch, all), 2);
+  assert.equal(mirror(false, () => h.GLX.cullInstances(batch, near)), 1);
+  assert.equal(h.count("bufferSubData"), 0, "each pass hits its own resident pack: no re-upload either side");
+  h.reset();
+  mirror(false, () => h.GLX.drawInstanced(batch, {}));
+  assert.ok(h.calls.some((c) => c[0] === "bindVertexArray" && c[1][0] === batch._mir.vao), "the mirror draws its own VAO");
+  assert.equal(h.calls.filter((c) => c[0] === "drawElementsInstanced").pop()[1][4], 1, "with its own count");
+  // A freeze frame keeps the view's pack (what game.js's replay re-uploaded) even for a new frustum.
+  h.reset();
+  assert.equal(mirror(true, () => h.GLX.cullInstances(batch, all)), 1);
+  assert.equal(h.count("bufferSubData"), 0);
+  h.GLX.freeInstancedBatch(batch);
+  assert.equal(batch._mir, null, "the mirror view is freed with the batch");
+});
+
 test("the debris pools instance behind a capability read, with the loop as fallback", () => {
   // Four per-body loops reaching 98 draws at desktop caps — and 17 every frame
   // of every lap from cones alone, which have no liveness test (PERF-FINDINGS

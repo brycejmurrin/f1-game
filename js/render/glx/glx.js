@@ -1688,6 +1688,7 @@ const GLXBackend = (function () {
   function mirrorBegin(frame, w, h) {
     if (!gl || ctxGone() || !PST || _envActive) return false;
     if (!PST.mirror.begin(Math.max(16, Math.min(1024, w | 0)), Math.max(8, Math.min(512, h | 0)))) return false;
+    _mirFreeze = !!frame.mirrorFreezeInstanced;   // instPerPass: hold the mirror view's pack this pass
     // begin() binds the mirror FBO while mirror.active(); the caller ends only a pass whose mirrorBegin RETURNED, so a throw lowers the flag here
     try { begin(frame); } catch (e) { PST.mirror.abort(); bindOutputViewport(); throw e; }
     return true;
@@ -2253,10 +2254,41 @@ const GLXBackend = (function () {
     // Skip allocating/uploading shadowCbo; the lit path keeps cbo for drawing.
     return batch._shadowPacked;
   }
+  // ONE INSTANCE BUFFER PER PASS (hunt 2 G8 = TLX A1; desktop tier, apex26.glxInstPerPass=0 = shared).
+  // Mirror and main packed into one ibo, each invalidating the other's cache: every visible batch was
+  // repacked + re-uploaded twice a frame. In the mirror pass a celled batch now culls/draws its VIEW (own
+  // ibo/cbo/VAO/pack/planes/key; vbo/ib, cells, source shared). game.js skips its freeze replay under
+  // gfx.instPerPass; a freeze frame keeps the view's resident pack, the bytes that replay re-uploaded.
+  let _instPerPass = !MOBILE_TIER, _mirFreeze = false;
+  try { if (localStorage.getItem("apex26.glxInstPerPass") === "0") _instPerPass = false; } catch (_) { /* no storage: on */ }
+  function _passBatch(b) {
+    if (!_instPerPass || !b.cells || !b.srcMatrices || !b.vbo || !PST || !PST.mirror.active()) return b;
+    if (b._mir) return b._mir;
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao); _activeVAO = null;
+    gl.bindBuffer(gl.ARRAY_BUFFER, b.vbo); VertexPack.bindAttribs(gl, !!b.trk);   // createMesh's layout
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, b.ib);
+    const ibo = gl.createBuffer(), cbo = b.srcColors ? gl.createBuffer() : null;   // createInstancedBatch's layout
+    gl.bindBuffer(gl.ARRAY_BUFFER, ibo); gl.bufferData(gl.ARRAY_BUFFER, b.srcMatrices, gl.DYNAMIC_DRAW);
+    for (let c = 0; c < 4; c++) { gl.enableVertexAttribArray(5 + c); gl.vertexAttribPointer(5 + c, 4, gl.FLOAT, false, 64, c * 16); gl.vertexAttribDivisor(5 + c, 1); }
+    if (cbo) { gl.bindBuffer(gl.ARRAY_BUFFER, cbo); gl.bufferData(gl.ARRAY_BUFFER, b.srcColors, gl.DYNAMIC_DRAW); gl.enableVertexAttribArray(9); gl.vertexAttribPointer(9, 3, gl.FLOAT, false, 12, 0); gl.vertexAttribDivisor(9, 1); }
+    gl.bindVertexArray(null);
+    return (b._mir = { vao, ibo, cbo, count: b.count, indexType: b.indexType, instances: b.instances, visible: b.instances, cells: b.cells,
+      srcMatrices: b.srcMatrices, srcColors: b.srcColors, packMatrices: new Float32Array(b.srcMatrices.length),
+      packColors: b.srcColors ? new Float32Array(b.srcColors.length) : null, _mirCulled: false });
+  }
   function cullInstances(batch, planes, opts) {
     if (ctxGone()) return 0;
     if (!batch || !batch.cells) return batch ? batch.instances : 0;
     const shadow = !!(opts && opts.upload === false);
+    if (!shadow) {
+      const v = _passBatch(batch);
+      if (v !== batch) {
+        if (_mirFreeze && v._mirCulled && v.visible > 0) return v.visible;   // the frozen pack is resident in v.ibo
+        v._mirCulled = true;
+        batch = v;
+      }
+    }
     // There is one camera GPU instance buffer, so only its resident pack can be
     // a hit. The shadow path never consults or writes that cache.
     let samePack = !shadow && !!batch._cullPlanes;
@@ -2418,6 +2450,7 @@ const GLXBackend = (function () {
   // translucent work through draw() instead.
   function drawInstanced(batch, opts) {
     if (ctxGone() || !batch || !batch.instances) return;
+    batch = _passBatch(batch);
     // IDENTITY model matrix: the transform lives entirely in the instance
     // columns. Passing anything else would be silently ignored by the shader and
     // mislead the next reader.
@@ -2442,6 +2475,8 @@ const GLXBackend = (function () {
     if (batch.shadowIbo) { gl.deleteBuffer(batch.shadowIbo); batch.shadowIbo = null; }
     if (batch.shadowCbo) { gl.deleteBuffer(batch.shadowCbo); batch.shadowCbo = null; }
     if (batch._shVao) { gl.deleteVertexArray(batch._shVao); batch._shVao = null; }
+    const mv = batch._mir;
+    if (mv) { gl.deleteBuffer(mv.ibo); if (mv.cbo) gl.deleteBuffer(mv.cbo); gl.deleteVertexArray(mv.vao); batch._mir = null; }
     batch._shadowPacked = null;
     batch._shadowColors = null;
     freeMesh(batch);   // a hoisted same-scope declaration: no existence guard needed
@@ -2770,6 +2805,7 @@ const GLXBackend = (function () {
     createInstancedBatch,
     cullInstances,
     updateInstances,
+    get instPerPass() { return _instPerPass; },   // game.js: no mirror freeze replay / record copies (hunt 2 G8)
     drawInstanced,
     freeInstancedBatch,
     createTexMesh,
