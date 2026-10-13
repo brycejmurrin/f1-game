@@ -3,7 +3,8 @@
  * read the GLSL it generated (the hunt-1 codegen-dump method); the rest are source pins on tlx.js / tlx-post.js.
  * A unit test of a backend is not evidence it runs: the follow-up is gfx-probe + gpu-census.yml (macos).
  *   R4  no env cube target / sampler while TLX is opted out of the live env probe
- *   R3  phone MEDIUM: one-attachment scene target, no ssrTag MRT, a distinct fallback in the composite's tag slot */
+ *   R3  phone MEDIUM: one-attachment scene target, no ssrTag MRT, a distinct fallback in the composite's tag slot
+ *   R7  dry-day SSR gate on po.reflect (game.js, every backend), behind apex26.ssrDayGate (default OFF) */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -11,6 +12,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -113,4 +115,22 @@ test("R3: tlx.js sets the ssrTag MRT only on a tagged chain (present + warm), an
     "a GRAPHICS change that moves the rule rebuilds the chain");
   const b = TLX.indexOf("        begin(frame) {");
   assert.match(TLX.slice(b, b + 1200), /_tagSwap\(\);/, "begin() runs the swap before the scene records");
+});
+
+test("R7: the dry-day SSR gate zeroes po.reflect only on a dry day below the 1/64 weight, and only when armed", () => {
+  const G = gameSource();
+  const m = G.match(/^ {2}const _ssrPo = (.+);$/m);
+  assert.ok(m, "the gated po.reflect input moved — check this test, not the code");
+  const gate = new Function("_ssrDayGate", "frame", "_ssr", `"use strict"; return ${m[1]};`);
+  const day = { lights: false, wetness: 0 }, night = { lights: true, wetness: 0 }, wet = { lights: false, wetness: 0.4 };
+  assert.equal(gate(false, day, 0.07), 0.07, "default OFF: today's value");
+  assert.equal(gate(true, day, 0.07), 0, "shipped 0.07: weight 0.0143 < 1/64 -> skipped");
+  assert.equal(gate(true, day, 0.074), 0, "the presets' 0.074 -> skipped");
+  assert.equal(gate(true, day, 0.1), 0.1, "baku's 0.1 (weight 0.0204) keeps the march");
+  assert.equal(gate(true, night, 0.08), 0.08, "dry night neon sheen untouched");
+  assert.equal(gate(true, wet, 0.05), 0.05, "a wet road never gates");
+  assert.match(G, /po\.reflect = PerfGov\.tier\(\) >= 2 \? 0 : _ssrPo;/, "the one input every backend reads");
+  assert.doesNotMatch(G, /po\.carReflect = [^;]*_ssrPo/, "car-paint SSR is not gated");
+  assert.match(G, /const _ssrDayGate = \(\(\) => \{ try \{ return localStorage\.getItem\("apex26\.ssrDayGate"\) === "1"; \}/,
+    "armed only by an explicit apex26.ssrDayGate=1");
 });

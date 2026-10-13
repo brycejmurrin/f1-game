@@ -6617,6 +6617,9 @@ try { _envProbeOff = localStorage.getItem("apex26.envProbeOff") === "1"; } catch
 // safe mode), so on desktop a GPU reset leaves nothing behind and the knob —
 // which IS persisted, in the tuner store — comes straight back on at the next
 // boot into the same configuration that just killed the context.
+// D4 / perf hunt 3 R7 — dry-DAY SSR gate, read once (po.reflect in render()). DEFAULT OFF until
+// the three + glx A/B: the march it skips carries a blend weight under 1/64 — small, not zero.
+const _ssrDayGate = (() => { try { return localStorage.getItem("apex26.ssrDayGate") === "1"; } catch (_) { return false; } })();
 let _perChunkOff = false;
 try { _perChunkOff = localStorage.getItem("apex26.perChunkOff") === "1"; } catch (_) { /* No storage (Safari private mode): the latch is unreadable, so the feature stays governed by the tier gate alone — the same fallback _envProbeOff takes two lines up. */ }
 // Hoisted material-option objects for drawWorldMeshes — the function runs up to
@@ -8264,6 +8267,11 @@ function render(dt) {
   // Now the DRY NIGHT SHEEN tuner slider (LT.ssrDryNight, default 0.08).
   const _ssr = ((frame.wetness || 0) > 0.01) ? frame.wetness * LT.ssrWetMul
              : (frame.lights ? LT.ssrDryNight : LT.ssrDryDay);
+  // D4 (hunt 1) / R7 (hunt 3): a dry DAY whose largest road-SSR blend weight (hunt 1: 0.204 x the knob,
+  // 0.0143 at 0.07) cannot reach 1/64 skips the 24+4-step march on EVERY backend — po.reflect is the
+  // one input GLX, TLX and WGX read. Keyed on the weight, so a tuner above ~0.077 brings it back;
+  // dry night (neon sheen) and car-paint SSR (po.carReflect) are untouched. apex26.ssrDayGate=1.
+  const _ssrPo = (_ssrDayGate && !frame.lights && (frame.wetness || 0) <= 0.01 && _ssr * 0.204 < 1 / 64) ? 0 : _ssr;
   // Perf: skip the SSAO pass (+ its two blur passes) at NIGHT. Night ambient is
   // near-black, so the AO darkening is invisible anyway — and night street grids
   // are where the frame budget is tightest. Gate on key BRIGHTNESS, not sunDir.y:
@@ -8301,7 +8309,7 @@ function render(dt) {
   // so a tier-4 DAYTIME frame (_cs is non-zero whenever the key is bright) would
   // still run the SSAO pass and both of its blurs after po.ssao went to 0. Shedding contact shadows is what
   // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
-  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssrPo; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
