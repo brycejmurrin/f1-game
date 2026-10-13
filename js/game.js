@@ -6884,8 +6884,7 @@ function render(dt) {
   if (state === "results" && !resultsCam.live()) return; // ResultsCam owns chequered/orbit/highlights
   // HELD GARAGE (studioDone): a world frame that kicks TLX's program warm paints nothing, so the
   // garage's last frame stays up — no hidden canvas, no black card before the flyby.
-  const heldWarm = !!(_studio && _studio.held && track && _menuGate.warm > 0);
-  if (heldWarm) _menuGate.warm--;
+  const heldWarm = !!(_studio && _studio.held && track && _menuGate.warm > 0); if (heldWarm) _menuGate.warm--;
   if (setupPreviewOn && !heldWarm) {
     if (renderSetupPreview(dt, !!(_studio && _studio.cardUp))) {
       _menuGate.garageReady = true;
@@ -6894,7 +6893,8 @@ function render(dt) {
     }
     return;
   }
-  setupCam.endGarageRes(); gfx.resize(); // first world frame: restore the garage's reduced res
+  setupCam.endGarageRes(); // first world frame: restore the garage's reduced res
+  gfx.resize();
   // No track yet (the menus build none — the flyby belongs to RACE SETTINGS, see
   // scheduleFlybyTrack): DRAW NOTHING. alpha:false composites an undrawn canvas
   // as opaque BLACK, which the blessed menu baselines encode (corners 4-9/255).
