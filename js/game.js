@@ -6527,7 +6527,7 @@ let setupPreviewOn = false;
 // paint mirrors the real surroundings). Cars/skids/rain are main-pass only.
 // _envFace cursor; after face 5, _envHold until move/sun/wet/tod/lights (audit 2026-10-05 #2).
 let _envFace = -1, _frameNo = 0, _envHold = false, _envLatchTod = null;
-const _envLatch = [NaN, NaN, NaN, NaN, NaN, NaN, NaN, -1], ENV_HOLD_MOVE_M = 4;
+const _envLatch = [NaN, NaN, NaN, NaN, NaN, NaN, NaN, -1], ENV_HOLD_MOVE_M = 4, _envEye = [0, 0, 0], _envUp = [0, 1, 0];   // pooled: the probe eye, the no-sun fallback
 // Set by GLX's webglcontextlost handler (persisted) — once a device has lost the
 // context we skip the extra per-frame env-probe pass on every subsequent load so
 // the reflection feature can't keep exhausting a memory-constrained GPU.
@@ -7522,10 +7522,10 @@ function render(dt) {
     (gfx.getRenderScale && gfx.getRenderScale() < 0.98) ||
     (PerfGov.autoShed && PerfGov.autoShed() > 0)
   )) ? 7 : 3;
-  if (player && (state === "race" || state === "count") && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & _envMask) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  if (player && (state === "race" || state === "count") && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & _envMask) === 0) && gfx.envFaceBegin && gfx.envProbeOptOut !== true && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x, _pey = smp2.p[1] + 0.9, _pez = smp2.p[2] + smp2.r[2] * player.x;
-    const _es = frame.sunDir || [0, 1, 0], _ew = frame.wetness || 0, _elg = frame.allLightsGen || 0;
+    const _es = frame.sunDir || _envUp, _ew = frame.wetness || 0, _elg = frame.lampSetGen || 0;   // the lamp SET and scale, not the flicker (hunt 2 F9)
     if (_envHold) {
       const dx = _pex - _envLatch[0], dy = _pey - _envLatch[1], dz = _pez - _envLatch[2];
       if (dx * dx + dy * dy + dz * dz > ENV_HOLD_MOVE_M * ENV_HOLD_MOVE_M
@@ -7535,7 +7535,8 @@ function render(dt) {
     }
     if (!_envHold) {
       _envFace = (_envFace + 1) % 6;
-      const _envInv = gfx.envFaceBegin(_envFace, [_pex, _pey, _pez], frame);
+      _envEye[0] = _pex; _envEye[1] = _pey; _envEye[2] = _pez;
+      const _envInv = gfx.envFaceBegin(_envFace, _envEye, frame);
       if (_envInv) {
         frameSky.invViewProj = _envInv;
         // THE `finally` IS LOAD-BEARING: envFaceBegin raises `_envActive`; envFaceEnd

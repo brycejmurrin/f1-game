@@ -4017,6 +4017,9 @@ const TLX = (function () {
         // _envGaveUp reads as READY on purpose: the caller polls this to stop
         // re-probing, and a probe that cannot succeed must stop being asked.
         // The cube stays unbound — envState() is where the difference shows.
+        // The opt-out as a capability: game.js skips its whole probe branch (a track
+        // sample, the latch bookkeeping) instead of calling a begin that returns null.
+        envProbeOptOut: _envOptOut,
         envProbeReady() { return envReady || _envGaveUp; },
         envProbeReset() {
           envFacesMask = 0; envReady = false; _envBlank = false;

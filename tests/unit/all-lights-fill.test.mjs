@@ -194,3 +194,63 @@ test("the generation counter still moves exactly when consumers need it to", () 
   fill(f2, A, 1, 1, 1, steady);
   assert.equal(f1.allLights, f2.allLights, "the pooled buffer was replaced");
 });
+
+// perf hunt 2 F4: with the clock passed in, a frame where only the flicker moved
+// (same source, same scale, same factor function) re-tints at most every 50 ms.
+test("the flicker-only re-tint is held for 50 ms of wall clock; a scale or source change lands at once", () => {
+  const fill = loadFill();
+  const A = makeSet(9, 4), B = makeSet(9, 40);
+  let step = 0;
+  const live = (o) => [1 + 0.05 * Math.sin(o + step), 1, 1];   // ONE function whose values move, like _flLive
+  const at = (src, sr, t) => { const f = {}; fill(f, src, sr, 1, 1, live, t); return f; };
+  const same = (f, want, msg) => { for (let i = 0; i < want.length; i++) assert.equal(f.allLights[i], want[i], `${msg}: lane ${i}`); };
+
+  step = 0; const f0 = at(A, 1, 10.000); same(f0, reference(A, 1, 1, 1, live), "first fill");
+  const want0 = reference(A, 1, 1, 1, live), g0 = f0.allLightsGen;
+  step = 1; const f1 = at(A, 1, 10.016);
+  assert.equal(f1.allLightsGen, g0, "16 ms later, flicker only: no new generation");
+  same(f1, want0, "…and the previous tint is kept");
+  step = 2; const f2 = at(A, 1, 10.049);
+  assert.equal(f2.allLightsGen, g0, "49 ms: still held");
+  step = 3; const f3 = at(A, 1, 10.050);
+  assert.notEqual(f3.allLightsGen, g0, "50 ms: refreshed");
+  same(f3, reference(A, 1, 1, 1, live), "the refresh is the full current tint");
+  step = 4; const f4 = at(A, 0.5, 10.051);
+  same(f4, reference(A, 0.5, 1, 1, live), "a scale change is not held");
+  step = 5; const f5 = at(B, 0.5, 10.052);
+  same(f5, reference(B, 0.5, 1, 1, live), "a source change is not held");
+  step = 6; const f6 = at(B, 0.5, 9.0);
+  same(f6, reference(B, 0.5, 1, 1, live), "a clock that went backwards refreshes");
+  const other = (o) => [0.5, 0.5, 0.5];
+  const f7 = {}; fill(f7, B, 0.5, 1, 1, other, 9.001);
+  same(f7, reference(B, 0.5, 1, 1, other), "a different factor function (flicker settled to steady) is not held");
+});
+
+test("frame.lampSetGen moves with the lamp set and its scale, never with the flicker", () => {
+  const src = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
+  let now = 1000;
+  const sb = { console: { log() {}, warn() {}, error() {} }, Math, JSON, Object, Array, Float32Array, WeakRef,
+    performance: { now: () => now }, Number };
+  sb.window = sb;
+  sb.Log = { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false };
+  sb.Tracks = { sample(t, s, o) { return o; } };
+  vm.createContext(sb);
+  vm.runInContext(readFileSync(path.join(ROOT, "js/render/shared/light-budget.js"), "utf8"), sb);
+  vm.runInContext(readFileSync(path.join(ROOT, "js/lighting/knobs.js"), "utf8"), sb);
+  vm.runInContext(src, sb);
+  const FL = vm.runInContext("FrameLights", sb), LT = vm.runInContext("LightKnobs.LT", sb);
+  LT.lampFlicker = 0.1;
+  const A = makeSet(60, 2), B = makeSet(60, 9);
+  const track = { _lights: A };
+  const frame = { time: 0, perChunkLights: 0.3 };
+  const run = (scale) => { now += 16.7; frame.time += 1 / 60; FL.setFrameLights(frame, track, [], [0, 2, 0], scale, [0, 0, 1], false); return frame.lampSetGen; };
+  const g0 = run([1, 1, 1]), gens = new Set();
+  for (let i = 0; i < 30; i++) assert.equal(run([1, 1, 1]), g0, `frame ${i}: flicker alone moved lampSetGen`);
+  for (let i = 0; i < 30; i++) { run([1, 1, 1]); gens.add(frame.allLightsGen); }
+  // 30 frames at 16.7 ms = 501 ms: the whole-set re-tint ran at <= 20 Hz (was every frame).
+  assert.ok(gens.size >= 8 && gens.size <= 11, `${gens.size} allLights generations in 30 flickering frames`);
+  const g1 = run([0.8, 0.8, 0.8]);
+  assert.notEqual(g1, g0, "a scale change moves it");
+  track._lights = B;
+  assert.notEqual(run([0.8, 0.8, 0.8]), g1, "a new lamp set moves it");
+});
