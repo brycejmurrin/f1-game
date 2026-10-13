@@ -208,12 +208,18 @@ function create(G) {
     return zones;
   }
 
+  // Per car per physics step (game.js inAeroZone). One façade read (G is a dictionary-mode
+  // object, so every G.track is a hash probe + getter call) and an indexed loop, not for…of
+  // with track.total re-read per zone (PERF-HUNT-2 S9). The live G.track read stays: a
+  // dropped world (track null) must still answer null, as it always did.
   function at(s) {
     const track = G.track;
     if (!track || !track.total) return null;
-    for (const z of zones) {
+    const L = track.total;
+    for (let i = 0; i < zones.length; i++) {
+      const z = zones[i];
       if (s >= z.start && s <= z.end) return z;
-      if (z.end > track.total && s + track.total <= z.end) return z;   // wrapped
+      if (z.end > L && s + L <= z.end) return z;   // wrapped
     }
     return null;
   }

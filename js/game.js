@@ -4681,6 +4681,10 @@ const _wallCtx = { track: null, dt: 0, steer: 0, postLim, smp, wrapS, worldFromT
 const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1 };
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0, queueT: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
+// PlayerForces.step's ctx, pooled like _wallCtx (updateCar's player bicycle model fills it every step).
+const _pfCtx = { dt: 0, driverDelta: 0, assistDelta: 0, lineDelta: 0, onThrottle: false, throttleLvl: 0, gearMult: 0, deploy: 0, braking: false,
+  surfaceMu: 0, kerbGrip: 0, bankMu: 0, modsCornering: 0, loadF: 0, loadR: 0, vertLoad: 0, af: 0, ar: 0, sp: 0, steer: 0,
+  weatherGrip: 0, aeroDf: 0, dirtyMul: 0, coastCut: 0, vTopNow: 0, tyres: null };
 const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, kTurn: 0, calm: 0, roll: 0.5, queueT: 0 };
 const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null, blockerGap: 0, kTurn: 0, toTurnIn: 0, roadL: 0, roadR: 0, x: 0, vTop: 0 };
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
@@ -5882,15 +5886,16 @@ function updateCar(c, dt, ranked) {
     const vertLoad = c.vertLoad;
     // PlayerForces (js/physics/player-forces.js): combined slip → axle µ →
     // soft tyre Fy → yaw/vLat/head. Explicit ctx bag — no new G members.
-    // Frenet world writeback (px/pz → s,x) stays below.
-    playerForces.step(c, {
-      dt, driverDelta, assistDelta, lineDelta, onThrottle, throttleLvl, gearMult, deploy, braking,
-      surfaceMu, kerbGrip, bankMu, modsCornering: mods.cornering,
-      loadF, loadR, vertLoad, af, ar, sp, steer,
-      weatherGrip: gmC, aeroDf: aeroDfMult(c),
-      dirtyMul: dirtyAirMul(c.wake || 0, c.speed),
-      coastCut: xCoastCut(c), vTopNow: vT, tyres,
-    });
+    // Frenet world writeback (px/pz → s,x) stays below. The bag is POOLED like _wallCtx
+    // (step() reads every field once at entry and keeps none): a fresh ~26-field literal per step was ~20 boxed doubles.
+    const pf = _pfCtx;
+    pf.dt = dt; pf.driverDelta = driverDelta; pf.assistDelta = assistDelta; pf.lineDelta = lineDelta; pf.onThrottle = onThrottle;
+    pf.throttleLvl = throttleLvl; pf.gearMult = gearMult; pf.deploy = deploy; pf.braking = braking;
+    pf.surfaceMu = surfaceMu; pf.kerbGrip = kerbGrip; pf.bankMu = bankMu; pf.modsCornering = mods.cornering;
+    pf.loadF = loadF; pf.loadR = loadR; pf.vertLoad = vertLoad; pf.af = af; pf.ar = ar; pf.sp = sp; pf.steer = steer;
+    pf.weatherGrip = gmC; pf.aeroDf = aeroDfMult(c); pf.dirtyMul = dirtyAirMul(c.wake || 0, c.speed);
+    pf.coastCut = xCoastCut(c); pf.vTopNow = vT; pf.tyres = tyres;
+    playerForces.step(c, pf);
     const fx = Math.sin(c.head), fz = Math.cos(c.head);
     // world velocity = forward + lateral slip along the car's RIGHT vector (-fz, fx),
     // the track's own right (tracks.js r = t×up). PlayerForces integrates +vLat as
