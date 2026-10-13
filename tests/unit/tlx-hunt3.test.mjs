@@ -4,7 +4,8 @@
  * A unit test of a backend is not evidence it runs: the follow-up is gfx-probe + gpu-census.yml (macos).
  *   R4  no env cube target / sampler while TLX is opted out of the live env probe
  *   R3  phone MEDIUM: one-attachment scene target, no ssrTag MRT, a distinct fallback in the composite's tag slot
- *   R7  dry-day SSR gate on po.reflect (game.js, every backend), behind apex26.ssrDayGate (default OFF) */
+ *   R7  dry-day SSR gate on po.reflect (game.js, every backend), behind apex26.ssrDayGate (default OFF)
+ *   R9  the particle / rain stream wraps the producer's array instead of copying it per upload */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -13,6 +14,7 @@ import vm from "node:vm";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -133,4 +135,62 @@ test("R7: the dry-day SSR gate zeroes po.reflect only on a dry day below the 1/6
   assert.doesNotMatch(G, /po\.carReflect = [^;]*_ssrPo/, "car-paint SSR is not gated");
   assert.match(G, /const _ssrDayGate = \(\(\) => \{ try \{ return localStorage\.getItem\("apex26\.ssrDayGate"\) === "1"; \}/,
     "armed only by an explicit apex26.ssrDayGate=1");
+});
+
+// R9: the particle stream (rain rides in the alpha group) wraps the producer's array instead of copying it.
+// Lifts the REAL setRange0 / ensureStream / wrapStream / uploadStream / drawParticles from tlx.js over real
+// three core classes; pushRec and the FX materials are stubs.
+function bootParticles(wrapOn = true) {
+  const fnText = (decl) => fnSource(TLX, decl);
+  const dpAt = TLX.indexOf("        drawParticles(data, floatCount, additive, dirty) {");
+  const dpEnd = TLX.indexOf("\n        },", dpAt);
+  assert.ok(dpAt > 0 && dpEnd > dpAt, "drawParticles moved — check this test, not the code");
+  const disposed = [], recs = [];
+  const body = `"use strict";
+    ${fnText("function setRange0(attr, count) {")}
+    ${fnText("function ensureStream(slot, verts) {")}
+    ${fnText("function wrapStream(slot, arr) {")}
+    ${fnText("function uploadStream(slot, floats) {")}
+    const PART_ATTRS = [["fxCorner", 2, 0], ["position", 3, 2], ["fxColor", 3, 5], ["fxSize", 1, 8], ["fxAlpha", 1, 9]];
+    const partStreams = [
+      { geo: null, ib: null, cap: 0, min: 256 * 6, stride: 10, attrs: PART_ATTRS },
+      { geo: null, ib: null, cap: 0, min: 256 * 6, stride: 10, attrs: PART_ATTRS },
+    ];
+    const fx = { particleMats: ["matA", "matB"] }, frameEye = [0, 0, 0], _fxFrame = { particles: 0 };
+    const api = { ${TLX.slice(dpAt, dpEnd).trim()} } };
+    return { api, partStreams };`;
+  const out = new Function("THREE", "disposeGeometry", "pushRec", "_wrapPart", body)(
+    THREE, (g) => disposed.push(g), (geo, m, mat) => recs.push([geo, mat]), wrapOn);
+  return { ...out, disposed, recs };
+}
+
+test("R9: drawParticles wraps the producer's Float32Array (no per-frame copy), re-wraps on reallocation, copies otherwise", () => {
+  const P = bootParticles();
+  const vertA = new Float32Array(600 * 10);
+  for (let i = 0; i < 360; i++) vertA[i] = i + 0.5;
+  P.api.drawParticles(vertA, 360, false, true);
+  const s = P.partStreams[0];
+  assert.equal(s.ib.array, vertA, "the InterleavedBuffer IS the caller's array: nothing to copy");
+  assert.deepEqual(s.ib.updateRanges.map((r) => [r.start, r.count]), [[0, 360]], "upload range = the payload");
+  assert.equal(s.geo.drawRange.count, 36);
+  assert.equal(s.geo.getAttribute("fxAlpha").getX(35), vertA[359], "attributes read the caller's floats");
+  const geo0 = s.geo;
+  vertA[0] = 42; P.api.drawParticles(vertA, 400, false, true);
+  assert.equal(s.geo, geo0, "same array: same geometry, no rebuild");
+  assert.equal(s.ib.updateRanges[0].count, 400);
+  P.api.drawParticles(vertA, 400, false, false);
+  assert.equal(s.geo, geo0, "a clean re-issue keeps the stream");
+  const vertA2 = new Float32Array(900 * 10);   // particles.js rainSeed grew the shower
+  P.api.drawParticles(vertA2, 600, false, true);
+  assert.equal(s.ib.array, vertA2, "re-wrapped");
+  assert.deepEqual(P.disposed, [geo0], "the old stream geometry is disposed exactly once");
+  // Not wrappable (not a whole number of vertices): the copy path, as before.
+  const odd = new Float32Array(16).fill(3);
+  P.api.drawParticles(odd, 10, true, true);
+  const b = P.partStreams[1];
+  assert.notEqual(b.ib.array, odd); assert.equal(b.ib.array[9], 3);
+  // The A/B handle restores the copy for every call.
+  const Q = bootParticles(false);
+  Q.api.drawParticles(vertA, 360, false, true);
+  assert.notEqual(Q.partStreams[0].ib.array, vertA); assert.equal(Q.partStreams[0].ib.array[359], vertA[359]);
 });

@@ -2233,6 +2233,22 @@ const TLX = (function () {
         slot.geo = geo; slot.ib = ib; slot.cap = cap;
         return true;
       }
+      // R9 (perf hunt 3): a stream whose producer keeps ONE long-lived Float32Array
+      // (particles.js _vertA / _vertB, rain included) is wrapped, not copied: the
+      // InterleavedBuffer IS the caller's array, so each upload is three's
+      // bufferSubData of the same bytes without the 108-156 KB set() in front of it.
+      // Re-wrapped (old geometry disposed) only when the caller reallocates.
+      function wrapStream(slot, arr) {
+        if (slot.geo && slot.ib.array === arr) return false;
+        if (slot.geo) disposeGeometry(slot.geo);
+        const geo = new THREE.BufferGeometry();
+        const ib = new THREE.InterleavedBuffer(arr, slot.stride);
+        ib.setUsage(THREE.DynamicDrawUsage);
+        for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
+        geo.setDrawRange(0, 0);
+        slot.geo = geo; slot.ib = ib; slot.cap = (arr.length / slot.stride) | 0;
+        return true;
+      }
       function uploadStream(slot, floats) {
         setRange0(slot.ib, floats);   // one cached range per stream (A7): addUpdateRange minted one per upload
         slot.ib.needsUpdate = true;
@@ -2245,6 +2261,8 @@ const TLX = (function () {
         attrs: [["position", 3, 0], ["lineAcross", 1, 3], ["lineSpeed", 1, 4], ["lineZone", 1, 5], ["lineAlong", 1, 6]] };
       const glowStream = { geo: null, ib: null, cap: 0, min: 32 * 6, stride: 9,
         attrs: [["fxCorner", 2, 0], ["position", 3, 2], ["fxColor", 3, 5], ["fxRadius", 1, 8]] };
+      let _wrapPart = true;   // R9 A/B handle: apex26.tlxPartWrap=0 restores the copy into TLX's own array
+      try { _wrapPart = localStorage.getItem("apex26.tlxPartWrap") !== "0"; } catch (_) { /* no storage: wrap */ }
       const PART_ATTRS = [["fxCorner", 2, 0], ["position", 3, 2], ["fxColor", 3, 5], ["fxSize", 1, 8], ["fxAlpha", 1, 9]];
       const partStreams = [
         { geo: null, ib: null, cap: 0, min: 256 * 6, stride: 10, attrs: PART_ATTRS },   // alpha group
@@ -4567,11 +4585,15 @@ const TLX = (function () {
           if (dirty !== false && !data) return;
           const slot = partStreams[additive ? 1 : 0];
           const verts = (floatCount / 10) | 0;
-          const fresh = ensureStream(slot, verts);
+          // R9: wrap the producer's own Float32Array when it can be the vertex buffer (a whole
+          // number of 10-float vertices, holding the payload); anything else is copied as before.
+          const wrap = !!(data && data instanceof Float32Array && data.length >= floatCount
+            && data.length % slot.stride === 0 && _wrapPart);
+          const fresh = wrap ? wrapStream(slot, data) : ensureStream(slot, verts);
           if (dirty !== false || fresh) {
             if (!data) return;
             // set() the source whole when it is exactly the payload; a subarray view only when it is longer.
-            slot.ib.array.set(data.length <= floatCount ? data : data.subarray(0, floatCount));
+            if (slot.ib.array !== data) slot.ib.array.set(data.length <= floatCount ? data : data.subarray(0, floatCount));
             uploadStream(slot, floatCount);
           }
           slot.geo.setDrawRange(0, verts);
