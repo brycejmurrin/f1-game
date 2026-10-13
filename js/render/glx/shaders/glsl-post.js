@@ -359,10 +359,13 @@ void main() {
   //    camera, so shafts are strongest near you instead of piling up at range.
   float trans = 1.0;
   float groundY = uEye.y - 4.0;               // local ground datum
+  // Loop-invariant per-step transmittance, hoisted (hunt 2 G1 / TLX D10): the
+  // same exp() of the same argument, so trans steps through the same values.
+  float stepTrans = exp(-stepLen * 0.010);
   for (int i = 0; i < N; i++) {
     float td = t + stepLen * float(i);        // distance marched from the camera
     vec3 p = ro + rd * td;
-    trans *= exp(-stepLen * 0.010);
+    trans *= stepTrans;
     // The SUN half of the march, gated the way the lamp half below already is.
     // accum has exactly one consumer — uSunColor * accum * phase * uStr, at the
     // end — so at uStr == 0 every shadow tap and gCloud() call here is
@@ -380,7 +383,10 @@ void main() {
       float lit = 1.0;
       if (sc.x > 0.0 && sc.x < 1.0 && sc.y > 0.0 && sc.y < 1.0 && sc.z < 1.0)
         lit = texture(uShadowMap, vec3(sc.xy, sc.z - 0.002));
-      lit *= 1.0 - gCloud(p) * 0.62;  // clouds break the shafts into SOFT crepuscular bands (0.9 made thin stripes)
+      // Clouds break the shafts into SOFT crepuscular bands (0.9 made thin
+      // stripes). Only where the shadow tap is lit (hunt 2 G1 / TLX D5a): at
+      // lit == 0 the product is 0 whatever gCloud returns (finite, ALU-only).
+      if (lit > 0.0) lit *= 1.0 - gCloud(p) * 0.62;
       accum += lit * hSun * trans;
     }
     // Lamp in-scatter: each nearby lamp casts a beam through the ground haze,
