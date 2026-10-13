@@ -1504,7 +1504,7 @@ test("GLX instPerPass: the mirror pass culls and draws its own instance buffer, 
   mirror(false, () => h.GLX.drawInstanced(batch, {}));
   assert.ok(h.calls.some((c) => c[0] === "bindVertexArray" && c[1][0] === batch._mir.vao), "the mirror draws its own VAO");
   assert.equal(h.calls.filter((c) => c[0] === "drawElementsInstanced").pop()[1][4], 1, "with its own count");
-  // A freeze frame keeps the view's pack (what game.js's replay re-uploaded) even for a new frustum.
+  // A freeze frame keeps the view's pack (what the game loop's replay re-uploaded) even for a new frustum.
   h.reset();
   assert.equal(mirror(true, () => h.GLX.cullInstances(batch, all)), 1);
   assert.equal(h.count("bufferSubData"), 0);
