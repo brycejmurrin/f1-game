@@ -8,6 +8,7 @@
 // apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
 // 50" arrives with the car's state and the retained log ring beside it.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { pinFactorySeat } from "../helpers/factory-seat.js";
 
 // PACE pinned: the standing-start acceleration bounds below are in M/S (20 < acc <
 // 150), and PACE is a ground-speed scale that moves them wholesale. Without this a
@@ -16,7 +17,11 @@ import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 // inheriting an OVERALL SPEED default that can move.
 const pinPace = (page) => page.evaluate(() => window.__apex.setPhysics({ pace: 1 }));
 
+// FACTORY SEAT pinned too (the VM twin's seat): this spec characterizes the
+// driving model, and the GarageDefaults Mercedes kit holds 80 m/s where the
+// factory car cannot, and grids on pole (bug hunt 3 K2).
 async function startRace(page) {
+  await pinFactorySeat(page);
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
@@ -84,15 +89,20 @@ test.describe("Apex 26 — longitudinal & grip", () => {
   test("driving onto the grass bleeds speed", async ({ page }) => {
     await startRace(page);
     const r = await page.evaluate(() => {
-      // jump well off the track surface (hw ~7), full throttle, no steer
-      window.__apex.jump(0.0, 80, 14);
+      // jump well off the track surface (hw ~7), full throttle, no steer. x = −14:
+      // the grass. +14 at Monza s = 0 is the PIT LANE (Tracks.inPitLane), tarmac
+      // with no grass drag — it only ever "passed" while the car could not hold
+      // 80 m/s on aero drag alone (bug hunt 3 K2a).
+      window.__apex.jump(0.0, 80, -14);
       window.__apex.setInput({ steer: 0, throttle: true });
       const v0 = window.__apex.probe().speed;
       for (let i = 0; i < 60; i++) window.__apex.step(1 / 60, 1);
       const p = window.__apex.probe();
+      const offroad = window.__apex.world({ detail: "full" }).physics.offroad;
       window.__apex.clearInput();
-      return { v0, v1: p.speed };
+      return { v0, v1: p.speed, offroad };
     });
+    expect(r.offroad).toBe(true);        // really on the grass, not the pit lane
     expect(r.v1).toBeLessThan(r.v0);     // grass drag dominates throttle
   });
 

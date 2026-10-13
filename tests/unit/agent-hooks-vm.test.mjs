@@ -258,3 +258,25 @@ test("a stepped race switch under go() keeps the loop alive and step() safe whil
     assert.equal(LH.state().faults, f0);
   } finally { h.close(); }
 });
+
+/* jump() under updateCarAdvance's 20 m teleport threshold (the browser's pole
+ * at Monza sits 14 m behind the line, and a rAF frame has already stamped
+ * _prevS before the spec's jump(0)): with _prevS left at the old s the next step
+ * banked the 14 m into prog a second time and crossed the line, lap 0 → 1
+ * (bug hunt 3 K2b; offtrack.spec "prog tracks s" measured |dProg − dS| = 14). */
+test("a short jump() across the line is not banked twice and counts no lap", async () => {
+  await load("monza", 0.05, 0);
+  const L = g.G.track.total;
+  g.apex.setPhysics({ drift: 0 });
+  g.apex.jump((L - 14) / L, 0, 0);            // stand 14 m behind the line, like pole
+  g.apex.step(1 / 60, 1);                     // one frame: _prevS = here
+  g.apex.jump(0, 60, 0);                      // 14 m across the line
+  const p0 = g.apex.physState();
+  for (let i = 0; i < 120; i++) { g.apex.setInput({ steer: 0, throttle: true }); g.apex.step(1 / 60, 1); }
+  const p1 = g.apex.physState();
+  g.apex.clearInput();
+  const dProg = p1.prog - p0.prog, dS = p1.s - p0.s;
+  gt(dS, 50, "drove forward");
+  lt(Math.abs(dProg - dS), 1e-6, `prog follows s exactly (dProg ${dProg}, dS ${dS})`);
+  assert.equal(p1.lap, p0.lap, "a teleport across the line is not a lap");
+});
