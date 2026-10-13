@@ -340,8 +340,11 @@ const DataTelemetryView = (function () {
             // identical key and the early return skipped the refit.
             const newR = viewRatio(view.chart);
 
+            // Read BEFORE the chart branch overwrites view.ratio: the map below compares it too, and
+            // a DPR change under an unchanged box would otherwise leave the map at the old ratio.
+            const ratioChanged = view.ratio !== newR;
             let resized = false;
-            if (view.cw !== newCW || view.ch !== newCH || view.ratio !== newR) {
+            if (view.cw !== newCW || view.ch !== newCH || ratioChanged) {
               view.ratio = newR;
               view.cw = newCW; view.ch = newCH;
               sizeCanvas(view.chart, newCW, newCH, newR);
@@ -357,7 +360,7 @@ const DataTelemetryView = (function () {
 
             if (view.map && sideArea.isConnected) {
               const sideW = sideArea.clientWidth - 24;
-              if (sideW > 0 && (view.mw !== sideW || view.ratio !== newR)) {
+              if (sideW > 0 && (view.mw !== sideW || ratioChanged)) {
                 view.mw = sideW; view.mh = sideW;
                 sizeCanvas(view.map, sideW, sideW, newR);
                 view.mapBase = makeOffscreen(sideW, sideW, newR);

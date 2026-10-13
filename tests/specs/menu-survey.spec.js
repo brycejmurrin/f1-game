@@ -205,9 +205,20 @@ test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
     await page.waitForTimeout(300);
     await page.evaluate(() => document.body.classList.add("hud-hidden"));
     await page.waitForTimeout(300);
-    // hud-hidden strips the HUD and leaves only the restore eye (css/overlays.css).
-    await expect(page.locator("#hud")).toBeHidden();
+    // hud-hidden strips the readouts and shows the restore eye (css/touch-controls.css).
+    // On .desktop the whole #hud goes. On touch the race resumes under HUD: OFF, so the
+    // dock's driving buttons and PAUSE stay; only the readouts hide (hunt3 7-F2).
     await expect(page.locator("#hud-restore")).toBeVisible();
+    if (await page.evaluate(() => document.body.classList.contains("desktop"))) {
+      await expect(page.locator("#hud")).toBeHidden();
+    } else {
+      await expect(page.locator("#hud .hud-top")).toBeHidden();
+      await expect(page.locator("#minimap")).toBeHidden();
+      await expect(page.locator("#hud-dock .hud-bottom")).toBeHidden();
+      await expect(page.locator("#hud-dock")).toBeVisible();
+      expect(await page.locator("#hud-dock .touchbtn:visible").count()).toBeGreaterThan(0);
+      await expect(page.locator("#pausebtn")).toBeVisible();
+    }
     await shot(page, "landscape-42-hud-hidden");
   });
 

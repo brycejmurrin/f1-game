@@ -438,14 +438,36 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // in 10.7s (same body passed in 36.8s the run before) after a slider-only
   // CSS merge that cannot move these boxes. SheetShape's RO had not fired.
   await page.evaluate(() => window.SheetShape?.reclassify());
+  // HOST/JOIN same-row was not enough: Selected specs packed-3 on tip 78aa471f
+  // (and a local SwiftShader pass) still saw CLOSE 5–6 px under the title band
+  // while foot padding/absolute park finished settling after compact reclassify.
+  // Wait for closeInHead too — same 10 s / 100 ms poll as the row gate.
   await page.waitForFunction(() => {
     const inner = document.getElementById("vsfriend-inner");
     const host = document.getElementById("vs-host");
     const join = document.getElementById("vs-join");
-    if (!inner || inner.dataset.density !== "compact" || !host || !join) return false;
+    const headEl = document.querySelector("#vsfriend .sheet-head");
+    const closeEl = document.getElementById("vs-close");
+    if (!inner || inner.dataset.density !== "compact" || !host || !join || !headEl || !closeEl) return false;
     const hr = host.getBoundingClientRect();
     const jr = join.getBoundingClientRect();
-    return hr.width > 0 && jr.width > 0 && Math.abs(hr.top - jr.top) < 2;
+    const head = headEl.getBoundingClientRect();
+    const close = closeEl.getBoundingClientRect();
+    const sameRow = hr.width > 0 && jr.width > 0 && Math.abs(hr.top - jr.top) < 2;
+    const closeInHead = close.top >= head.top - 1 && close.bottom <= head.bottom + 2;
+    return sameRow && closeInHead;
+  }, null, { polling: 100, timeout: 10_000 });
+  // Head-parked CLOSE needs the deferred overlays/dialogs foot rule (padding
+  // longhands 0 + absolute top:0). selected-3 2026-10-11 asserted before the
+  // pad zero stuck and saw 0.35*pad overhang past head.bottom.
+  await page.waitForFunction(() => {
+    const inner = document.getElementById("vsfriend-inner");
+    const foot = inner && inner.querySelector(":scope > .sheet-foot");
+    if (!inner || inner.dataset.density !== "compact" || !foot) return false;
+    if (inner.dataset.shape === "tall") return true;
+    const s = getComputedStyle(foot);
+    return s.position === "absolute" && parseFloat(s.paddingTop) === 0
+      && parseFloat(s.paddingBottom) === 0;
   }, null, { polling: 100, timeout: 10_000 });
   const versus = await page.evaluate(() => {
     const rect = (id) => document.getElementById(id).getBoundingClientRect();

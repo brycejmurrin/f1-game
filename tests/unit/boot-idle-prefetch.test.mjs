@@ -21,9 +21,10 @@ test("raceAssets schedules scenery on microtask and LAZY_RACE on idle", () => {
   assert.match(src, /function ensureLightPresets\(\) \{\s*if \(window\.LightPresets\) return/, "idle lights fetch is a no-op once the presets are resident");
   assert.doesNotMatch(src, /ensureCircuit\(deps\.getContext\(\)\.trackIdx\);\s*ensureScenery/,
     "no redundant ensureCircuit kick beside ensureScenery");
-  // 3-F4 (round-3 hunt): the title no longer warms the build worker; only an
-  // in-session track switch posts to it, and build() spawns it on first use.
-  assert.doesNotMatch(src.replace(/\/\/.*$/gm, ""), /TrackBuildClient\.idleWarm/, "no build worker warm from raceAssets");
+  // 3-F4 / R3-ASYNC-2: raceAssets may call idleWarm, but only with wantAgentSurface()
+  // — a player's title never pays the TRACK_VM heap; build() still spawns on first use.
+  assert.match(src.replace(/\/\/.*$/gm, ""), /TrackBuildClient\.idleWarm\(wantAgentSurface\(\)\)/,
+    "agent-gated idleWarm from raceAssets");
 });
 
 test("raceAssets microtask kicks scenery; idle injects lights", async () => {
@@ -144,11 +145,13 @@ test("the title's idle prefetch spawns no build worker on a multi-core device (3
   assert.equal(workers, 0, "no Worker is constructed at the title");
 });
 
-// 3-F4 follow-up: idleWarm lost its only caller (raceAssets) and was removed;
-// spawn() is the one entry, and it must still refuse while the worker is off.
-test("TrackBuildClient has no idleWarm; spawn() no-ops when build worker is off", () => {
+// 3-F4 / R3-ASYNC-2: idleWarm remains for the agent surface only; spawn() still
+// refuses while the worker is off.
+test("TrackBuildClient.idleWarm is agent-gated; spawn() no-ops when build worker is off", () => {
   const src = read("js/track/build-client.js");
-  assert.doesNotMatch(src, /idleWarm/, "dead idle-warm entry stays removed");
+  assert.match(src, /function idleWarm\(agentSurface\)/);   // R3-ASYNC-2: spawns only for the agent surface
+  assert.match(src, /if \(!enabled\(\)\) return null/);
+  assert.match(src, /requestIdleCallback\(kick, \{ timeout: 3000 \}\)/);
   const main = vm.createContext({
     localStorage: { getItem: () => "0", setItem() {} },
     document: { readyState: "complete", getElementById: () => null, addEventListener() {} },
@@ -161,7 +164,8 @@ test("TrackBuildClient has no idleWarm; spawn() no-ops when build worker is off"
     URL,
   });
   vm.runInContext(read("js/track/build-client.js").replace(/^const\b/gm, "var"), main);
-  assert.equal(main.TrackBuildClient.idleWarm, undefined);
+  assert.equal(typeof main.TrackBuildClient.idleWarm, "function");
+  assert.equal(main.TrackBuildClient.idleWarm(true), null, "off: idleWarm reports nothing and does not spawn");
   assert.equal(main.TrackBuildClient.spawn(), null);
 });
 

@@ -84,7 +84,14 @@ function loadHarness(options = {}) {
       LIST: [team],
       isReal: (t) => !!t && !t.custom && !t.legends,
     },
-    Tracks: { LIST: [{ id: "a" }], SEASON: [{ id: "a" }], seasonIndex: () => 0 },
+    // SEASON needs enough rounds that a restored season.round (SEC2-1 / C8 use
+    // 3–4) is still in range — SeasonCal.load() resume()s then save()s, and a
+    // single-circuit calendar restarts any round > 1 back to 0.
+    Tracks: {
+      LIST: Array.from({ length: 24 }, (_, i) => ({ id: "t" + i })),
+      SEASON: Array.from({ length: 24 }, (_, i) => ({ id: "t" + i })),
+      seasonIndex: () => 0,
+    },
     Parts: { CATALOG: [], getFactorySetup: () => ({}), getCost: () => 0, setLegality() {} },
     DriverRatings: {
       get: () => ({ pace: 50, craft: 50, awareness: 50, consistency: 50, experience: 50 }),
@@ -709,12 +716,110 @@ test("IMPORT confirmation keeps the reviewed revision and previews backup destin
   await ui.selectBackup(envelope);
   assert.equal(ui.G.$("cr-left").querySelector('[data-cr-act="import"]').textContent, "IMPORT?");
   const preview = ui.G.$("cr-left").querySelectorAll(".cr-note").map((n) => n.textContent).join(" ");
-  assert.match(preview, /Driver career · 2027 · 2 rounds completed · Destination slot 2/);
+  assert.match(preview, /Driver career · Destination slot 2/);
+  assert.match(preview, /Current: 2026 · Haas · 1 rounds completed/);
+  assert.match(preview, /Backup: 2027 · Haas · 2 rounds completed/);
+  assert.equal(h.store.get("career.driver.1").money, 100, "review does not apply the backup");
   h.disk.set("apex26.career.driver.1", JSON.stringify(save({ money: 200 })));
   h.foreign("apex26.career.driver.1");
   ui.clickImport();
   assert.equal(ui.notices.at(-1), "SAVE CONFLICT — IMPORT REFUSED");
   assert.equal(JSON.parse(h.disk.get("apex26.career.driver.1")).money, 200);
+});
+
+test("backup preview follows mode/extras scope and explains shared identity without writing", () => {
+  const h = deviceA();
+  const envelope = JSON.parse(JSON.stringify(h.CareerBackup.build()));
+  envelope.badges = { earned: ["a"] };
+  envelope.daily = { days: {} };
+  envelope.records = { laps: 1 };
+  const before = JSON.stringify([...h.disk]);
+  const first = h.CareerBackup.preview(envelope, { focusFlavour: "driver" });
+  assert.equal(first.slots.length, 0);
+  assert.ok(first.extras.some(s => s.includes("Licence badges")));
+  assert.ok(!first.extras.some(s => s.includes("identity")));
+  const second = h.CareerBackup.preview(envelope, { flavours: ["myteam"], includeProgressExtras: false });
+  assert.equal(second.slots.length, 1);
+  assert.equal(second.extras.length, 1);
+  assert.match(second.extras[0], /Shared MY TEAM identity: replace .* for all MY TEAM slots/);
+  assert.equal(h.CareerBackup.preview(envelope, { includeExtras: false }).extras.length, 0);
+  assert.equal(JSON.stringify([...h.disk]), before);
+});
+
+test("slot and extras quota failures preserve session success but never claim confirmed saving", async () => {
+  for (const failedKey of ["career.driver.1", "badges", "daily.v1", "records", "season"]) {
+    const h = loadHarness();
+    const envelope = { format: h.CareerBackup.FORMAT,
+      slots: [{ flavour: "driver", i: 1, data: save({ money: 50 }) }],
+      badges: { earned: ["a"] }, daily: { days: {} }, records: { laps: 1 }, season: { round: 1 } };
+    const put = h.ctx.localStorage.setItem;
+    h.ctx.localStorage.setItem = (k, v) => {
+      if (k === "apex26." + failedKey) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+      put(k, v);
+    };
+    const result = h.CareerBackup.apply(envelope, { focusFlavour: "driver" });
+    assert.equal(result.ok, true, failedKey);
+    assert.equal(result.durable, false, failedKey);
+    assert.equal(result.failed, 1, failedKey);
+    assert.equal(result.issues[0].key, failedKey);
+    assert.equal(h.store.get("career.driver.1").money, 50);
+    assert.equal(h.disk.has("apex26." + failedKey), false);
+    const ui = bootBackupUi(h);
+    await ui.selectBackup(envelope);
+    ui.clickImport();
+    assert.match(ui.notices.at(-1), /RESTORED FOR THIS SESSION — SAVE NOT CONFIRMED; KEEP YOUR BACKUP/);
+  }
+});
+
+test("a rejected extra after slot restoration reports partial application", async () => {
+  const h = loadHarness();
+  const write = h.store.write;
+  h.store.write = function (key, value, options) {
+    return key === "badges" ? { ok: false, durable: false, reason: "refused" } : write.call(this, key, value, options);
+  };
+  const envelope = { format: h.CareerBackup.FORMAT,
+    slots: [{ flavour: "driver", i: 1, data: save({ money: 75 }) }], badges: { earned: ["a"] } };
+  const ui = bootBackupUi(h);
+  await ui.selectBackup(envelope);
+  ui.clickImport();
+  assert.equal(h.store.get("career.driver.1").money, 75);
+  assert.equal(h.store.get("badges", null), null);
+  assert.equal(ui.notices.at(-1), "RESTORE INCOMPLETE — SOME DATA APPLIED; KEEP YOUR BACKUP");
+});
+
+test("MY TEAM identity writes contribute to the restore durability outcome", () => {
+  const envelope = JSON.parse(JSON.stringify(deviceA().CareerBackup.build()));
+  const h = loadHarness(), put = h.ctx.localStorage.setItem;
+  h.ctx.localStorage.setItem = (k, v) => {
+    if (k === "apex26.customTeam") throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+    put(k, v);
+  };
+  const result = h.CareerBackup.apply(envelope, { focusFlavour: "myteam" });
+  assert.equal(result.ok, true);
+  assert.equal(result.durable, false);
+  assert.equal(result.issues[0].key, "customTeam");
+  assert.equal(h.store.get("customTeam").name, "Murrin GP");
+  assert.equal(h.disk.has("apex26.customTeam"), false);
+});
+
+test("the other-mode preview names the incoming team and retains an earlier saving warning", async () => {
+  const a = deviceA(); a.store.set("career.driver.1", save());
+  const envelope = JSON.parse(JSON.stringify(a.CareerBackup.build()));
+  const h = loadHarness(), put = h.ctx.localStorage.setItem;
+  h.ctx.localStorage.setItem = (k, v) => {
+    if (k === "apex26.career.driver.1") throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+    put(k, v);
+  };
+  const ui = bootBackupUi(h);
+  await ui.selectBackup(envelope);
+  ui.clickImport();
+  const notes = ui.G.$("cr-left").querySelectorAll(".cr-note").map(n => n.textContent).join(" ");
+  assert.match(notes, /press ALL MODES\? to apply/);
+  assert.match(notes, /Backup: 2026 · Murrin GP/);
+  h.ctx.localStorage.setItem = put;
+  ui.clickImport();
+  assert.match(ui.notices.at(-1), /SAVE NOT CONFIRMED; KEEP YOUR BACKUP/);
+  assert.equal(h.store.get("career.myteam.0").money, 5150);
 });
 
 for (const focus of ["driver", "myteam"]) {
@@ -953,4 +1058,97 @@ test("real cached store preserves an unknown season through boot and menu loads"
   assert.equal(h.SeasonCal.save(menu).ok, false);
   assert.equal(h.disk.get("apex26.season"), raw);
   assert.deepEqual(Array.from(h.store.get("season").config.trackIds), ["a", "missing"]);
+});
+
+// SEC2-1 (round 2): season / badges / daily / records were written after only an
+// isObj() check, so a legal file could carry a 4 MB junk key into the 5 MB quota.
+function envWith(extras) {
+  const h0 = loadHarness();
+  h0.disk.set("apex26.career.driver.0", JSON.stringify(save({ money: 5 })));
+  h0.Career.load();
+  return Object.assign(h0.CareerBackup.build(), extras);
+}
+const bytesOf = (h, k) => (h.disk.has(k) ? h.disk.get(k).length : 0);
+
+test("SEC2-1: an oversized extra is refused before anything is written", () => {
+  const junk = "A".repeat(300 * 1024);
+  for (const k of ["season", "badges", "daily", "records"]) {
+    const h = loadHarness();
+    const env = envWith({ [k]: k === "badges" ? { got: { a: 1 }, junk } : { round: 1, junk } });
+    const r = h.CareerBackup.apply(env, {});
+    assert.equal(r.ok, false, k);
+    assert.equal(r.reason, k + "-too-large");
+    assert.equal(h.disk.has("apex26." + (k === "daily" ? "daily.v1" : k)), false, k + " must not be written");
+  }
+});
+
+test("SEC2-1: an extra with an own __proto__ key is refused", () => {
+  for (const [k, text] of [
+    ["season", '{"round":0,"pts":{"__proto__":{"p":1}}}'],
+    ["badges", '{"got":{"__proto__":1}}'],
+    ["daily", '{"days":{"2026-01-01":{"__proto__":{"best":1}}}}'],
+    ["records", '{"a":{"__proto__":{"x":1}}}'],
+    ["season", '{"__proto__":{"round":9}}'],
+  ]) {
+    const h = loadHarness();
+    const env = envWith({ [k]: JSON.parse(text) });
+    const r = h.CareerBackup.apply(env, {});
+    assert.equal(r.ok, false, text);
+    assert.equal(r.reason, k + "-hostile");
+  }
+});
+
+test("SEC2-1: each extra is rebuilt from its allowlist — junk keys and bad values never reach the store", () => {
+  const h = loadHarness();
+  const env = envWith({
+    season: { round: 3, pts: { "haas:0": 25, "x y": 9, bad: "NaN-ish", neg: -4 }, teamPts: { haas: 25 }, driverCodes: { "haas:0": "AAAAAAAAAAAAAAAA" },
+      finishes: { "haas:0": [1, "x", null] }, roundPts: { "haas:0": [25, -1] }, junk: "zzz", stage: "evil", seed: "7" },
+    badges: { v: 9, got: { first_win: 50, "bad id!": 5, pole: "soon", neg: -1 }, junk: [1] },
+    daily: { days: { "2026-09-21": { best: "fast", laps: "many", junk: 1 }, "not-a-day": { best: 1 }, "2026-09-22": { best: 70.5, laps: 2 } },
+      streak: { count: "9", last: 5 }, junk: 1 },
+    records: { monza: { t: 80, deep: { a: { b: { c: { d: 1 } } } } }, bad: Infinity },
+  });
+  assert.equal(h.CareerBackup.apply(env, {}).ok, true);
+  const season = JSON.parse(h.disk.get("apex26.season"));
+  assert.equal(season.round, 3);
+  assert.deepEqual(season.pts, { "haas:0": 25 });
+  assert.equal("junk" in season, false);
+  assert.equal("stage" in season, false, "only stage:'race' survives");
+  assert.equal("seed" in season, false, "a non-integer seed is dropped");
+  assert.equal(season.driverCodes["haas:0"].length, 12);
+  assert.deepEqual(season.finishes["haas:0"], [1, 0, 0]);
+  const badges = JSON.parse(h.disk.get("apex26.badges"));
+  assert.deepEqual(badges.got, { first_win: 50 });
+  assert.equal("junk" in badges, false);
+  const daily = JSON.parse(h.disk.get("apex26.daily.v1"));
+  assert.deepEqual(Object.keys(daily.days).sort(), ["2026-09-21", "2026-09-22"]);
+  assert.deepEqual(daily.days["2026-09-21"], { best: null, laps: 0 });
+  assert.equal("streak" in daily, false, "a streak with a non-integer count is dropped");
+  assert.equal("junk" in daily, false);
+  const rec = JSON.parse(h.disk.get("apex26.records"));
+  assert.equal(rec.monza.t, 80);
+  assert.equal("bad" in rec, false);
+  assert.equal("b" in rec.monza.deep.a, false, "depth is bounded");
+});
+
+test("SEC2-1: a legitimate backup's extras stay under the per-extra cap", () => {
+  const h = loadHarness();
+  const days = {};
+  for (let d = 1; d <= 28; d++) days["2026-09-" + String(d).padStart(2, "0")] = { best: 70 + d, laps: d, classes: { standard: { best: 70 + d, laps: d } } };
+  const env = envWith({ daily: { days, streak: { count: 5, last: "2026-09-28" } } });
+  assert.equal(h.CareerBackup.apply(env, {}).ok, true);
+  assert.ok(bytesOf(h, "apex26.daily.v1") < 256 * 1024);
+  assert.equal(Object.keys(JSON.parse(h.disk.get("apex26.daily.v1")).days).length, 28);
+});
+
+// C8 (round 2): the import bumps the season key under SeasonCal's armed revision.
+test("C8: a restored standalone season re-arms SeasonCal, so its next save is not a conflict", () => {
+  const h = loadHarness();
+  h.disk.set("apex26.season", JSON.stringify({ round: 0, pts: {}, teamPts: {}, driverCodes: {} }));
+  const stale = h.SeasonCal.load();
+  const env = envWith({ season: { round: 4, pts: { "haas:0": 40 }, teamPts: {}, driverCodes: {} } });
+  assert.equal(h.CareerBackup.apply(env, {}).ok, true);
+  assert.equal(JSON.parse(h.disk.get("apex26.season")).round, 4);
+  const res = h.SeasonCal.save(stale);
+  assert.notEqual(res.reason, "conflict", "SeasonCal still holds the pre-import revision");
 });

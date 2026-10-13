@@ -18,6 +18,7 @@ import vm from "node:vm";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 import { fleetFindings, variedAudit } from "../helpers/flyby-audit-rules.mjs";
@@ -250,7 +251,7 @@ test("seating the menu grid costs the sim stream nothing", () => {
   // quietly advanced it would change every race that followed a flyby, with
   // nothing to show which change did it. Source-level, because the function is
   // module-scope inside the game.js IIFE and has no seam to call.
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   const i = game.indexOf("function menuGridCars()");
   assert.ok(i > 0, "menuGridCars still exists — the flyby's last shot needs a field");
   const body = game.slice(i, game.indexOf("\nfunction ", i + 10));
@@ -272,8 +273,8 @@ test("the flyby editor keeps the world rendering while it is open", () => {
   // __apex.flybyCam() changed a camera that nothing was redrawing and the
   // player kept looking at the race they paused out of. Source-level: the gate
   // is inside tickBody's paused branch, module-scope in the game.js IIFE.
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  const i = game.indexOf("if (paused && !netPlay.active())");
+  const game = gameSource();
+  const i = game.indexOf("if ((paused || UiExperience.resumeHolding(dt)) && !netPlay.active())");
   assert.ok(i > 0, "tickBody still parks on a paused frame");
   const branch = game.slice(i, i + 2400);
   const gate = branch.match(/if \(setupPreviewOn \|\| (?:replayBuf\.isScrubbing\(\) \|\| )?\(\(state === "race" \|\| state === "count"\) &&[\s\S]{0,200}?\) \{/);
@@ -290,7 +291,7 @@ test("resuming releases the flyby editor's parked camera", () => {
   // closeFlyby() hands the camera back with __apex.view("chase"). Resume and
   // quit have to call it, or a player who resumed with the panel open drives
   // the race from a parked flyby vantage.
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   for (const fn of ["function setPaused(p, why)", "function quitToMenu()"]) {
     const i = game.indexOf(fn);
     assert.ok(i > 0, fn + " still exists");
@@ -584,7 +585,7 @@ test("no racing line in a flyby frame", () => {
   // The green driving-line chevrons are a driving aid, not scenery: every
   // cinematic frame (editor preview, __apex.flybyCam, free-cam's flyby lens)
   // skips them. The live loading flyby runs in state "menu", which already does.
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   const call = game.split("\n").find((l) => /DrivingLine\.draw\(/.test(l));
   assert.ok(call, "game.js still draws the driving line");
   assert.match(call, /!cine\b/, "the driving line is gated off in cinematic frames: " + call.trim());
@@ -648,7 +649,7 @@ test("the clearance grid index finds exactly what a full scan finds", async () =
 });
 
 test("the flyby's plans are made before it plays, not at each cut", () => {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   const warm = game.indexOf("FlybySeq.warm(track, flybyShots)"), run = game.indexOf("loadingScreen.run(info, go)");   // info: built once, before the duration (a real race's read stretches it)
   assert.ok(warm > 0 && run > warm, "raceIntro warms the flyby's plans before the loading screen runs it");
 });
@@ -660,7 +661,7 @@ test("the menu grid seats YOUR car where the race will start it, in every mode",
   // is game.js module scope: evaluate the REAL function (with the real gridRule
   // and gridOrderFor) against stubbed modes.
   const vm = await import("node:vm");
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   const fn = (name) => { const i = game.indexOf("function " + name + "("); assert.ok(i > 0, name); return game.slice(i, game.indexOf("\n}\n", i) + 3); };
   const src = fn("gridRule") + fn("gridOrderFor") + fn("flybyGridOrder") + "flybyGridOrder();";
   const mk = (n) => Array.from({ length: n }, (_, i) => ({ id: i, driverId: "d" + i, skill: i, isPlayer: i === 3 }));
@@ -714,7 +715,7 @@ test("a duel never leaks into a championship round, a time trial or a quali lap"
   // duelMode is a sticky SETTING; startRaceBody checked it before isTimeTrial()
   // with no championship guard, so after one duel a time trial ran with an AI
   // rival and a season round scored a 2-car race. Every consumer goes through duelOn().
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   assert.match(game, /const duelOn = \(\) => duelMode && !isChampionship\(\) && !isTimeTrial\(\) && !isQuali\(\);/);
   const uses = game.split("\n").filter((l) => /\bduelMode\b/.test(l) && !/^\s*\/\//.test(l));
   const bad = uses.filter((l) => !/let duelMode|const duelOn|const duelSetting|set duel\(v\)|get duel\(\)/.test(l));
@@ -727,7 +728,7 @@ test("the loading screen flies only the world built for THIS selection", () => {
   // A fast tap to RACE! before the menu's idle build ran left the previous
   // circuit in `track`: the flyby filmed it under the new circuit's card, and a
   // dark session baked its lamps twice. menuWorld() also checks the build's key.
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   assert.match(game, /const menuWorld = \(\) => !!track && _menuGate\.track === track && _menuGate\.ready === menuKey\(trackIdx\);/);
   assert.match(game, /hasWorld: menuWorld\(\),/);
   const i = game.indexOf("function raceIntro(go)"), body = game.slice(i, game.indexOf("\n}\n", i));
@@ -801,7 +802,7 @@ test("the menu plans the flyby; the loading screen reuses every plan (no plannin
 test("the menu build warms its shaders BEFORE the slow extras (lamp pre-bake, flyby plans)", () => {
   // The lamp pre-bake (seconds of slices) ran before the warm frames: a RACE! tap
   // mid-bake met cold shaders and the loading screen's flyby froze on its first frames.
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   const i = game.indexOf("async function menuFinish(current, key)"), body = game.slice(i, game.indexOf("\n}\n", i));
   assert.ok(i > 0, "menuFinish exists");
   const warm = body.indexOf("_menuGate.warm = 2"), lamp = body.indexOf("menuLampBake(current)"), plan = body.indexOf("FlybySeq.planSteps(");
@@ -826,7 +827,7 @@ test("the menu build warms its shaders BEFORE the slow extras (lamp pre-bake, fl
 });
 
 test("RACE! before the menu's build: prepare under the card, then drive out and fly", () => {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   const i = game.indexOf("function raceIntro(go)"), body = game.slice(i, game.indexOf("\n}\n", i));
   assert.match(body, /if \(!built && !menuWorld\(\) && introBuild\(go\)\) return;/, "no world: raceIntro diverts to the build");
   const j = game.indexOf("function introBuild(go)"), ib = game.slice(j, game.indexOf("\n}\n", j));
@@ -848,7 +849,7 @@ test("RACE! before the menu's build: prepare under the card, then drive out and 
 });
 
 test("intro builds cancel at async boundaries and never fly over pending compilation", async () => {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   // Slice only the cancel + await helper + introBuild — ship's introWarm(go) is a
   // separate race-start path (loading-card.test.mjs) and must not shadow the helper.
   const a = game.indexOf("function cancelIntro()"), b = game.indexOf("\nfunction introWarm(go)", a);
@@ -881,7 +882,7 @@ test("intro builds cancel at async boundaries and never fly over pending compila
       quitToMenu: () => { c.cancelIntro(); c.loadingScreen.stop(); events.push("recover"); },
       announce: () => events.push("message"), Log: { warn() {} },
       // The studio drive-out, on in every mode: no path may leave the garage preview up.
-      LoadingScreen: { SHORT_FLY_MS: 12000 }, headlessMode: false, document: { hidden: false },
+      LoadingScreen: { SHORT_FLY_MS: 12000 }, headlessMode: false, document: { hidden: false, addEventListener() {} },   // introNow()'s visibility ledger registers at load
       setupPreviewOn: false, setupCam: { startDriveOut: () => 5000, stopDriveOut() {}, driveOutLeft: () => Math.max(0, 5000 - now) } };
     vm.createContext(c); vm.runInContext(game.slice(a, b), c);
     c.introBuild(() => events.push("go"));
@@ -907,7 +908,7 @@ test("intro builds cancel at async boundaries and never fly over pending compila
 });
 
 test("cold intros await compilation before drive-out and cut directly afterward; cancellation, failure and skip omit motion", async () => {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   const planStart = game.indexOf("async function introPlan(");
   const handoff = game.slice(game.indexOf("function afterGarageOut("), game.indexOf("function studioOpen("));
   for (const flow of ["introBuild", "introWarm"]) for (const mode of ["ready", "cancel", "skip", "fail"]) for (const authored of [false, true]) {
@@ -918,7 +919,7 @@ test("cold intros await compilation before drive-out and cut directly afterward;
     const c = { trackIdx: 0, track: {}, state: "menu", _introRun: 0, _introKey: "", _introSkip: 0, _menuFly: null, flybyShots: null,
       _menuGate: { generation: 0, warm: 0 }, flybyBuildTimer: 0, _studio: null, _warmKey: "", gfx: { warm() {}, warming: () => warming },
       entrySettings: () => "settings", menuKey: () => "world", motionReduced: () => false,
-      clearTimeout() {}, setTimeout: f => f(), performance: { now: () => now }, requestAnimationFrame: f => { c._menuGate.warm--; f(); },
+      clearTimeout() {}, setTimeout: f => f(), performance: { now: () => now }, introNow: () => now, requestAnimationFrame: f => { c._menuGate.warm--; f(); },
       loadingInfo: () => ({}), loadingScreen: { nextFlyMs: () => 24000, stop() {}, building: (info, skip) => { c.skip = skip; } },
       studioSkip: n => { c._introSkip = n; }, introCover: (info, n) => c.loadingScreen.building(info, () => c.studioSkip(n)),
       studioOpen() { assert.equal(warming, false, "no outgoing motion before compilation settles"); c._studio = {}; events.push("out"); },
@@ -957,7 +958,7 @@ test("cold intros await compilation before drive-out and cut directly afterward;
 });
 
 test("raceIntro reuses identically authored prepared shots but honours edits made after planning", () => {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   const body = game.slice(game.indexOf("function raceIntro(go)"));
   const start = body.indexOf("  reloadFlybyShots();"), end = body.indexOf("  _menuFly = null;", start);
   const source = body.slice(start, end);
@@ -972,7 +973,7 @@ test("raceIntro reuses identically authored prepared shots but honours edits mad
 });
 
 test("every flyby run opens on a CUT: FlybySeq.reset() before the run and before hidden warm frames", () => {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   const i = game.indexOf("function raceIntro(go)"), body = game.slice(i, game.indexOf("\n}\n", i));
   assert.ok(body.indexOf("FlybySeq.reset();") > 0 && body.indexOf("FlybySeq.reset();") < body.indexOf("loadingScreen.run("), "raceIntro resets the sequencer before run()");
   const f = game.indexOf("async function menuFinish(current, key)"), fin = game.slice(f, game.indexOf("\n}\n", f));
@@ -980,7 +981,7 @@ test("every flyby run opens on a CUT: FlybySeq.reset() before the run and before
 });
 
 test("the world key includes the grid size, and a failed build does not keep the old id", () => {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   assert.match(game, /const menuKey = \(idx\) => \[idx, raceTimeOfDay, raceWeather, fieldSize\(\)\]\.join\("\|"\);/);
   assert.equal((game.match(/\[(trackIdx|want|idx), (raceTimeOfDay|tod), (raceWeather|weather)\]\.join\("\|"\)/g) || []).length, 0, "every menu key goes through menuKey()");
   assert.match(game, /track = null; builtTrackId = null;/, "a build that throws must force the next loadTrack to rebuild");
@@ -1030,7 +1031,7 @@ test("the grid's back is the grid that is there: a time trial is not filmed from
 test("warm() can be retired, and the race start retires it", () => {
   const seq = fs.readFileSync(path.join(ROOT, "js/camera/flyby-seq.js"), "utf8");
   assert.match(seq, /function cancelWarm\(\) \{ _warmGen\+\+; \}/);
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   assert.match(game, /function clearMenuScreens\(\) \{[\s\S]{0,300}FlybySeq\.cancelWarm\(\);/, "clearMenuScreens stops the leftover plans before the countdown");
   const i = game.indexOf("function raceIntro(go)"), body = game.slice(i, game.indexOf("\n}\n", i));
   assert.ok(body.indexOf("FlybySeq.setDuration(loadingScreen.nextFlyMs())") < body.indexOf("FlybySeq.warm("), "the run's real length is set before its shots are planned");
@@ -1044,7 +1045,7 @@ test("withoutGrid: a real race joined mid-race or watched back films no standing
     assert.ok(!out.some((id) => id.indexOf("grid") === 0), `no grid shot survives: ${out.join(",")}`);
     assert.ok(out.includes("wide") && out.includes("turn-first"), "the circuit shots stay");
     // raceIntro wires it: the slot is forgotten for any real race, the grid shots go for a join or a replay.
-    const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+    const game = gameSource();
     const body = game.slice(game.indexOf("function raceIntro(go)"), game.indexOf("function loadingInfo()"));
     assert.match(body, /const real = realRace\.intro\(\);\s*if \(real\) FlybySeq\.setPlayerSlot\(null, \(cars \|\| \[\]\)\.length\);/);
     assert.match(body, /if \(flybyShots && real && \(real\.watch \|\| real\.startLap > 1\)\) flybyShots = FlybySeq\.withoutGrid\(flybyShots\);/);
@@ -1063,7 +1064,7 @@ function introOverlapDeferred() {
   return { promise, resolve, reject };
 }
 function introOverlapHarness({ cold = true, planThrows = false, cancelDuringPlan = false, lampSlices = 0, lampThrows = false, existingWarm = false, lampFactory = null } = {}) {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   const start = game.indexOf("async function introPrepare(");
   assert.ok(start >= 0, "production preparation barrier exists");
   const source = game.slice(start, game.indexOf("\n}\n", start) + 2);
@@ -1096,6 +1097,7 @@ function introOverlapHarness({ cold = true, planThrows = false, cancelDuringPlan
     FlybySeq: { reset() { events.push("camera:reset"); } },
     requestAnimationFrame(fn) { c._menuGate.warm--; fn(); },
     awaitIntroWarm: async current => { events.push("warm:wait"); warmCurrent = current; await warm.promise; return current(); },
+    introNow: () => Date.now(),   // the intro's hidden-time-frozen clock (game.js); the sandbox is never hidden
   };
   vm.createContext(c); vm.runInContext(source, c);
   const done = c.introPrepare(() => wanted, "world", {}, 1, cold).then(
@@ -1271,7 +1273,7 @@ test("prepared night lamps make the actual synchronous flyby bake a cache hit", 
 });
 
 function introPlanBudgetHarness({ stepMs = 20, yieldMs = 10000, shotCount = 11, interrupt = null, interruptAtStep = 0 } = {}) {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   const start = game.indexOf("async function introPlan(");
   const source = game.slice(start, game.indexOf("\n}\n", start) + 2);
   let now = 0, steps = 0, yields = 0, wanted = true;
@@ -1405,7 +1407,7 @@ test("intro planning still yields after every indivisible 50ms cold shot", async
 });
 
 function menuPlanBatchHarness({ stepMs = 1, yieldMs = 32, shotCount = 11, cancelAtStep = 0, cancelAtYield = 0 } = {}) {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   const start = game.indexOf("async function menuFinish(");
   const source = game.slice(start, game.indexOf("\n}\n", start) + 2);
   let now = 0, steps = 0, yields = 0, wanted = true, warms = 0;

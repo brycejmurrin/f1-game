@@ -127,7 +127,8 @@ test("the run-up is clamped: never closer than the floor, never most of a short 
 test("the qualifying model is a flying lap too: no standing start charged", () => {
   const src = read("js/race/quali-model.js");
   assert.doesNotMatch(src, /standingLoss\(/, "both sides are flying laps now");
-  assert.match(src, /const base = lapTime\(track, cap, grip\);/);
+  // R3-RACE-INTEGRITY-1 (2026-10-10): simLap reads the PACE-anchored carLap(), still a flying lap.
+  assert.match(src, /const base = carLap\(c, track, grip\);/);
   const apex = read("js/agent/apex.js");
   assert.match(apex, /go\(\) \{\n\s+if \(G\.flyingStart\) G\.flyingStart\.stop\(\);/);
 });

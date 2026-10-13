@@ -18,6 +18,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 const ROOT = new URL("../../", import.meta.url);
@@ -267,4 +270,119 @@ test("ensureScenery: a failed fetch resolves false after one attempt; the next c
   assert.equal(fetches, 3);
   assert.equal(await w.lb.ensureScenery(0), true);
   assert.equal(fetches, 3, "resident: nothing to fetch");
+});
+
+// Perf hunt 2 T8: the closure's fetch needs only def.id, so it goes out
+// BESIDE the circuit payload rather than after it lands — one round trip on a
+// first visit, not two — and the post-payload read joins it (one fetch per ask).
+test("ensureScenery: the scenery closure is requested beside the circuit payload, not after it", async () => {
+  const asked = [], held = new Map();
+  let resident = false;
+  const w = world({
+    globals: { Tracks: { LIST: [{ id: "monza" }], circuitPayloadResident: () => resident, hydrate: () => { resident = true; return true; } } },
+    body: () => "",
+    deps: {
+      loadBackendScripts: (files) => new Promise((res) => { const f = [...files][0]; asked.push(f); held.set(f, res); }),
+    },
+  });
+  w.ctx.TrackDefs = [{ id: "monza", path: { pts: [[0, 0, 0]] } }];
+  const p = w.lb.ensureScenery(0);
+  await tick();
+  assert.deepEqual(asked.slice().sort(), ["js/circuits/monza.js", "js/circuits/scenery/monza.js"],
+    "both requests are in flight before either answers");
+  // the payload lands first, the closure after: the post-payload read must
+  // wait on the request already out, not ask again
+  held.get("js/circuits/monza.js")(true);
+  await tick(); await tick();
+  assert.equal(asked.length, 2, "no second scenery request while the first is in flight");
+  w.ctx.TrackScenery = { monza() {} };
+  held.get("js/circuits/scenery/monza.js")(true);
+  assert.equal(await p, true);
+  assert.equal(asked.length, 2, "one fetch each");
+});
+
+// ---- R3-ASYNC-2 / R3-PHONE-8 (hunt3 train) --------------------------------
+
+const ROOT_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const readPath = (rel) => fs.readFileSync(path.join(ROOT_PATH, rel), "utf8");
+function boot({ agent = false, lazyV = null } = {}) {
+  const idles = [], workers = [], links = [];
+  const ctx = vm.createContext({
+    ApexRoster: {
+      DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
+      LAZY_RACE: ["js/lighting/presets.js"], LAZY_AUDIO: ["js/audio/engine.js"], LAZY_AUDIO_EDGES: [],
+      LAZY_RACE_SESSION: [], LAZY_RACE_SESSION_EDGES: [],
+      SCENERY_DIR: "js/circuits/scenery", LAZY_SCENERY: [],
+      LAZY_DATA: [], LAZY_DATA_EDGES: [], LAZY_NET: [], LAZY_NET_EDGES: [],
+      TRACK_VM: ["js/track/core/geom.js"], TRACK_WORKER_EXTRA: [],
+    },
+    window: { __APEX_BUILD: 4100, LightPresets: {}, __TEST_MODE: agent },
+    PitLane: { _stub: true },
+    Tracks: { LIST: [{ id: "monza", custom: true, scenery: () => {} }], circuitPayloadResident: () => true },
+    Assets: { modelsReady: () => Promise.resolve(0) },
+    Log: { warn() {}, info() {}, debug() {} },
+    els: { datahub: {} }, URL, Promise, Map, Set,
+    queueMicrotask: (fn) => queueMicrotask(fn),
+    requestIdleCallback(fn, opts) { idles.push({ fn, opts }); return idles.length; },
+    setTimeout, clearTimeout,
+    localStorage: { getItem: () => null, setItem() {} },
+    location: { href: "https://apex.example/index.html", hostname: "apex.example", search: "" },
+    navigator: { hardwareConcurrency: 8, userAgent: "phone" },
+    Worker: class { constructor(u) { workers.push(u); } postMessage() {} terminate() {} },
+    document: {
+      readyState: "complete", querySelectorAll: () => [], querySelector: () => null,
+      getElementById: (id) => (id === "apex-lazy-v" && lazyV ? { textContent: JSON.stringify(lazyV) } : null),
+      createElement: () => ({ dataset: {}, remove() {} }),
+      head: { appendChild(el) { links.push(el); } },
+    },
+  });
+  vm.runInContext(readPath("js/core/script-loader.js") + "\n" + readPath("js/track/build-client.js") + "\n" + readPath("js/core/lazy-bundles.js") + `
+    globalThis.__lb = LazyBundles.create({
+      els, loadBackendScripts: ScriptLoader.create().load,
+      getContext: () => ({ trackIdx: 0 }), applyLightTuneIfReady() {},
+      bindAgent() {}, createNetwork() { return { wire() {} }; }, onAudioReady() {},
+    });
+  `, ctx);
+  return { ctx, idles, workers, links };
+}
+async function drain(idles) {
+  await new Promise((r) => setTimeout(r, 0));   // the scenery microtask
+  for (let i = 0; i < idles.length; i++) await idles[i].fn();   // every idle callback, including ones queued meanwhile
+  await new Promise((r) => setTimeout(r, 0));
+}
+
+test("a player's title idle spawns no track-build Worker (R3-ASYNC-2)", async () => {
+  const { ctx, idles, workers } = boot({ agent: false });
+  ctx.__lb.raceAssets();
+  await drain(idles);
+  assert.deepEqual(workers, [], "no Worker constructed by raceAssets()");
+});
+
+test("the agent surface still warms the worker at title idle", async () => {
+  const { ctx, idles, workers } = boot({ agent: true });
+  ctx.__lb.raceAssets();
+  await drain(idles);
+  assert.equal(workers.length, 1, "warmed for __apex track switches");
+});
+
+test("the idle audio prefetch asks for the content-hash key the loader will inject (R3-PHONE-8)", async () => {
+  const hashed = boot({ lazyV: { "js/audio/engine.js": "abcdef012345" } });
+  hashed.ctx.__lb.raceAssets();
+  await drain(hashed.idles);
+  assert.deepEqual(hashed.links.filter((l) => l.rel === "prefetch").map((l) => l.href), ["js/audio/engine.js?v=abcdef012345"]);
+  assert.equal(vm.runInContext('ScriptLoader.url("js/audio/engine.js")', hashed.ctx), "js/audio/engine.js?v=abcdef012345");
+  assert.equal(vm.runInContext('ScriptLoader.url("js/audio/panel.js")', hashed.ctx), "js/audio/panel.js?v=4100", "a file the map does not name keeps the build");
+  const dev = boot();
+  dev.ctx.__lb.raceAssets();
+  await drain(dev.idles);
+  assert.deepEqual(dev.links.filter((l) => l.rel === "prefetch").map((l) => l.href), ["js/audio/engine.js?v=4100"], "no map (dev shell): the build, as before");
+});
+
+test("a malformed or hostile map falls back to the build key", () => {
+  for (const bad of ['{"js/core/log.js":"../../evil"}', "not json", '{"js/core/log.js":123}']) {
+    const ctx = vm.createContext({ window: { __APEX_BUILD: 9 },
+      document: { getElementById: () => ({ textContent: bad }) } });
+    vm.runInContext(readPath("js/core/script-loader.js"), ctx);
+    assert.equal(vm.runInContext('ScriptLoader.url("js/core/log.js")', ctx), "js/core/log.js?v=9", bad);
+  }
 });

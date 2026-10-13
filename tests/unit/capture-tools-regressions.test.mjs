@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, mkdirSync, mkdtempSync, writeFileSync, existsSync, rmSync, symlinkSync, truncateSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, mkdirSync, mkdtempSync, writeFileSync, existsSync, rmSync, symlinkSync, truncateSync, realpathSync, statSync } from 'node:fs';
+import { resolve, join, relative, isAbsolute, basename, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import vm from 'node:vm';
 import sharp from 'sharp';
@@ -463,4 +463,50 @@ test('camera-only fixture strips remote radio audio without mutating source and 
   audioCalls = 0; play(sanitized.script.radio[0]); assert.equal(audioCalls, 0);
   const fixture = loadFixture({ fixture: 'default', track: 'baku' });
   assert.ok(fixture.offline.removedRadioUrls > 0); assert.ok(fixture.data.script.radio.every((radio) => !('url' in radio)));
+});
+
+// R3-HOSTILE-3: a diff side is a shot name or a PNG path. garage-angles took ANY existing path (apex_garage
+// `{op:"diff", diff:["/home/…/x.png","a"]}` fed an out-of-tree file to sharp); track-session's containment was a bare
+// startsWith(outDir), so a sibling `<outDir>-x/…` passed. Both closures are pulled from source (the CLIs boot Chromium).
+const closureOf = (file, head) => {
+  const src = readFileSync(resolve(ROOT, file), 'utf8');
+  const at = src.indexOf(head); assert.ok(at >= 0, `${file}: ${head}`);
+  const indent = src.slice(src.lastIndexOf('\n', at) + 1, at);
+  return src.slice(at, src.indexOf('\n' + indent + '};', at) + indent.length + 3);
+};
+const PATH_DEPS = { existsSync, readFileSync, realpathSync, statSync, mkdirSync, join, resolve, relative, isAbsolute, basename, sep };
+
+test('garage diff takes a shot name or a PNG under artifacts/ or scratch/ only, symlinks resolved', () => {
+  mkdirSync(resolve(ROOT, 'scratch'), { recursive: true });
+  const dir = mkdtempSync(resolve(ROOT, 'scratch/garage-diff-path-'));
+  try {
+    writeFileSync(resolve(dir, 'mine.png'), 'png');
+    symlinkSync(resolve(ROOT, 'package.json'), resolve(dir, 'link.png'));
+    const st = { shots: [{ png: resolve(dir, 'shot-a.png') }] };
+    const deps = { ...PATH_DEPS, st, outDir: dir, safe: (s) => String(s).replace(/[^A-Za-z0-9_.-]+/g, '_'), repoRoot: ROOT };
+    const pngOf = new Function(...Object.keys(deps), closureOf('tools/shot/garage-angles.mjs', 'const pngOf = (name) => {') + '\nreturn pngOf;')(...Object.values(deps));
+    assert.equal(pngOf('shot-a'), resolve(dir, 'shot-a.png'), 'a shot name');
+    assert.equal(pngOf('fresh'), join(dir, 'fresh.png'), 'an unknown name stays inside outDir');
+    assert.equal(realpathSync(pngOf(resolve(dir, 'mine.png'))), realpathSync(resolve(dir, 'mine.png')), 'a scratch PNG');
+    for (const bad of [resolve(ROOT, 'package.json'), '/etc/passwd', resolve(dir, 'link.png')].filter((p) => existsSync(p))) {
+      assert.throws(() => pngOf(bad), /artifacts\/ or scratch\//, bad);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('track-session diff containment is outDir + separator, not a bare prefix', () => {
+  mkdirSync(resolve(ROOT, 'scratch'), { recursive: true });
+  const dir = mkdtempSync(resolve(ROOT, 'scratch/track-diff-path-'));
+  try {
+    const outDir = resolve(dir, 'out');
+    mkdirSync(outDir); mkdirSync(outDir + '-x');
+    writeFileSync(resolve(outDir, 'a.png'), 'png'); writeFileSync(resolve(outDir + '-x', 'evil.png'), 'png');
+    const deps = { ...PATH_DEPS, shots: [{ name: 'n1', png: resolve(outDir, 'n1.png') }], outDir };
+    const pngOf = new Function(...Object.keys(deps), closureOf('tools/shot/track-session.mjs', 'const pngOf = (ref) => {') + '\nreturn pngOf;')(...Object.values(deps));
+    assert.equal(pngOf('n1'), resolve(outDir, 'n1.png'));
+    assert.equal(pngOf('a.png'), resolve(outDir, 'a.png'));
+    for (const bad of ['../out-x/evil.png', resolve(outDir + '-x', 'evil.png'), '../../../package.json', '.', 'missing.png']) {
+      assert.throws(() => pngOf(bad), /unknown shot/, bad);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

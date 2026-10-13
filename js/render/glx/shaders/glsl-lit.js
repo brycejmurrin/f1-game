@@ -485,7 +485,12 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
   float y = wp.y;
   if (mid == 1) {            // CONCRETE — patchy panels + fine speckle + form seams
     albedo *= 1.0 + (vnoise(wp.xz * 0.09 + y * 0.05) - 0.5) * 0.16 * far;
-    albedo *= 1.0 + (vnoise(vec2(hc, y) * 6.0) - 0.5) * 0.10 * near;
+    // Each "* near" / "* <fade>" noise term below runs only where its weight
+    // is > 0 (hunt 2 G4): at weight 0 the factor is 1.0 + x*0.0 == 1.0 (vnoise
+    // is ALU-only and finite). Summed terms keep their expression and take 0
+    // for the gated noise, so the rounding is unchanged. fwidth()s stay where
+    // they were.
+    if (near > 0.0) albedo *= 1.0 + (vnoise(vec2(hc, y) * 6.0) - 0.5) * 0.10 * near;
     // AA the seam: fwidth() on the PRE-fract coordinate (fract() itself has a
     // hard C0 seam that would spike the derivative) widens the transition band
     // once a screen pixel spans more world-units than the seam's fixed 0.05 —
@@ -524,24 +529,30 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
     rough = mix(rough, min(rough, 0.12), near);
   } else if (mid == 4) {     // METAL — brushed vertical streaks, glossier
     float brushFade = clamp(1.0 - (vd - 26.0) / 29.0, 0.0, 1.0);   // fade 40-cycle brushing over 26-55m (tighter than 'near') so it stops sparkling
-    albedo *= 1.0 + (vnoise(vec2(hc * 40.0, y * 2.0)) - 0.5) * 0.12 * brushFade;
+    if (brushFade > 0.0) albedo *= 1.0 + (vnoise(vec2(hc * 40.0, y * 2.0)) - 0.5) * 0.12 * brushFade;
     rough = clamp(rough - 0.15 * far, 0.05, 1.0);
   } else if (mid == 5) {     // WOOD — grain lines + plank seams
-    albedo *= 1.0 + (vnoise(vec2(hc * 3.0, y * 22.0)) - 0.5) * 0.18 * near;
+    if (near > 0.0) albedo *= 1.0 + (vnoise(vec2(hc * 3.0, y * 22.0)) - 0.5) * 0.18 * near;
     // Same normalized-space AA correction as glass's mullion grid above.
     albedo *= 1.0 - smoothstep(max(0.05, fwidth(hc / 0.35)), 0.0, abs(fract(hc / 0.35) - 0.5) - 0.46) * 0.16 * near;
   } else if (mid == 6) {     // FOLIAGE — dapple + green variation, breaks flat canopy
-    float d = vnoise(wp.xz * 2.4 + wp.y * 1.6) * 0.6 + vnoise(wp.xz * 9.0) * 0.4 * near;
+    float dN = 0.0;
+    if (near > 0.0) dN = vnoise(wp.xz * 9.0);
+    float d = vnoise(wp.xz * 2.4 + wp.y * 1.6) * 0.6 + dN * 0.4 * near;
     albedo *= 1.0 + (d - 0.5) * 0.34 * far;
     albedo.g *= 1.0 + (d - 0.5) * 0.10 * far;
   } else if (mid == 7) {     // FABRIC / CROWD / TENT — fine weave speckle
     float weaveFade = clamp(1.0 - (vd - 26.0) / 34.0, 0.0, 1.0);   // fade 26-cycle weave over 26-60m so it stops crawling mid-range
-    albedo *= 1.0 + (vnoise(vec2(hc, y) * 26.0) - 0.5) * 0.14 * weaveFade;
+    if (weaveFade > 0.0) albedo *= 1.0 + (vnoise(vec2(hc, y) * 26.0) - 0.5) * 0.14 * weaveFade;
   } else if (mid == 8) {     // SAND — fine grain + gentle dune ripple
-    albedo *= 1.0 + (vnoise(wp.xz * 5.0) - 0.5) * 0.12 * near
+    float sN = 0.5;
+    if (near > 0.0) sN = vnoise(wp.xz * 5.0);
+    albedo *= 1.0 + (sN - 0.5) * 0.12 * near
                   + sin(wp.x * 0.7 + vnoise(wp.xz * 0.2) * 6.0) * 0.05 * far;
   } else if (mid == 9) {     // GRASS — bladed clumps + tone variation
-    float g = vnoise(wp.xz * 3.5) * 0.6 + vnoise(wp.xz * 14.0) * 0.4 * near - 0.5;
+    float gN = 0.0;
+    if (near > 0.0) gN = vnoise(wp.xz * 14.0);
+    float g = vnoise(wp.xz * 3.5) * 0.6 + gN * 0.4 * near - 0.5;
     albedo *= 1.0 + g * 0.22 * far;
     albedo.g *= 1.0 + g * 0.08 * far;
   } else if (mid == 10) {    // ROCK — craggy grey-brown, multi-scale tonal variation
@@ -553,14 +564,14 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
     albedo *= 1.0 + s * 0.10 * far;
     albedo.b *= 1.0 - s * 0.05 * far;              // shaded drifts read faintly cool
     float sparkleFade = clamp(1.0 - (vd - 26.0) / 34.0, 0.0, 1.0);  // fade 24-cycle snow sparkle over 26-60m so it stops shimmering
-    albedo *= 1.0 + (vnoise(wp.xz * 24.0) - 0.5) * 0.06 * sparkleFade;
+    if (sparkleFade > 0.0) albedo *= 1.0 + (vnoise(wp.xz * 24.0) - 0.5) * 0.06 * sparkleFade;
     rough = clamp(rough - 0.10 * far, 0.05, 1.0);
   } else if (mid == 12) {    // ROOF (terracotta tile) — ridged courses, warm tone bands
     float ty = fract(y / 0.34);
     float shadeAA = clamp(1.0 - fwidth(ty) * 6.0, 0.0, 1.0);           // fade tile-ridge sine when a pixel covers >~1/6 of a tile → no shimmer
     float shade = sin(ty * 3.14159) * shadeAA;
     albedo *= 0.88 + shade * 0.16;
-    albedo *= 1.0 + (vnoise(vec2(hc * 2.0, floor(y / 0.34)) * 3.0) - 0.5) * 0.14 * near;
+    if (near > 0.0) albedo *= 1.0 + (vnoise(vec2(hc * 2.0, floor(y / 0.34)) * 3.0) - 0.5) * 0.14 * near;
     rough = min(1.0, rough + 0.10 * far);
   } else if (mid == 13) {    // STONE — irregular jittered blocks, deep mortar
     vec2 cell = floor(vec2(hc, y) * 1.3);
@@ -590,7 +601,7 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
     albedo *= 1.0 + (vnoise(wp.xz * 0.035) - 0.5) * 0.10 * far;
     // Fine aggregate grain, near field only — replaces the per-vertex hash
     // tint that buildRoad currently bakes in at 4 m node resolution.
-    albedo *= 1.0 + (vnoise(wp.xz * 7.0) - 0.5) * 0.13 * near;
+    if (near > 0.0) albedo *= 1.0 + (vnoise(wp.xz * 7.0) - 0.5) * 0.13 * near;
     // Tarmac is rough; the wet path (which runs after this) still overrides it.
     rough = min(1.0, rough + 0.10 * far);
   }
@@ -1110,7 +1121,10 @@ void main() {
     // into shimmer (and the texel footprint exceeds its wavelength anyway), so
     // distant ground settles to flat colour while near ground keeps its grain.
     float fineFade = clamp(1.0 - (vDist - 35.0) / 90.0, 0.0, 1.0);
-    float n = vnoise(wp * 0.35) * 0.60 + vnoise(wp * 2.1) * 0.40 * fineFade;
+    // Fine octave only where its weight is > 0 (hunt 2 G4); 0 * 0 keeps the sum.
+    float nF = 0.0;
+    if (fineFade > 0.0) nF = vnoise(wp * 2.1);
+    float n = vnoise(wp * 0.35) * 0.60 + nF * 0.40 * fineFade;
     albedo *= 1.0 + (n - 0.5) * uDetail;
     // Repair patches: low-frequency resurfaced blotches darken the albedo a
     // few percent (patchM also nudges roughness below - fresh asphalt is
@@ -1399,13 +1413,28 @@ void main() {
   // inside the slot the 1-texel gutter holds the neighbours, so the bilinear
   // tap matches the full grid and never crosses into another slot. The bounce
   // layer is the same slot atlasH rows down (+0.5 v).
+  // Gated (perf hunt 2 G2, TLX B3): only the 3 dependent TAPS move under the
+  // gate; every arithmetic statement below is the original text, so the
+  // compiler sees the same expressions (the first, fully-branched form moved
+  // the colour adds too and was not bit-identical on SwiftShader at night).
+  // Outside the gate bSlot stays -1, so bakeW takes its ': 0.0' arm, and bE/bB
+  // (0 here) are only ever read times bakeW: the same +0 the original added.
+  // At N.y <= 0.55 the original weight was smoothstep(0.55, ...) == 0 anyway.
+  // Explicit-LOD taps, legal in non-uniform flow.
   vec2 bG = bUv * uBakeGrid.xy;
   vec2 bTile = clamp(floor(bG), vec2(0.0), max(uBakeGrid.xy - 1.0, vec2(0.0)));
-  vec2 bSlot = texelFetch(uLampBakeIdx, ivec2(bTile), 0).xy;
-  vec2 bUvD = (bSlot + (bG - bTile) * uBakeGrid.z + 1.0) / max(uBakeAtlas, vec2(1.0));
-  vec4 bT = textureLod(uLampBake, bUvD, 0.0);
+  vec2 bSlot = vec2(-1.0);
+  vec4 bT = vec4(0.0);
+  vec3 bB = vec3(0.0);
+  if (uBakeOn > 0.5 && N.y > 0.55 && all(greaterThan(bUv, vec2(0.0))) && all(lessThan(bUv, vec2(1.0)))) {
+    bSlot = texelFetch(uLampBakeIdx, ivec2(bTile), 0).xy;
+    if (bSlot.x >= 0.0) {
+      vec2 bUvD = (bSlot + (bG - bTile) * uBakeGrid.z + 1.0) / max(uBakeAtlas, vec2(1.0));
+      bT = textureLod(uLampBake, bUvD, 0.0);
+      bB = textureLod(uLampBake, bUvD + vec2(0.0, 0.5), 0.0).rgb * uBakeScale;
+    }
+  }
   vec3 bE = bT.rgb * uBakeScale;
-  vec3 bB = textureLod(uLampBake, bUvD + vec2(0.0, 0.5), 0.0).rgb * uBakeScale;
   float bakeW = (uBakeOn > 0.5 && bSlot.x >= 0.0 && all(greaterThan(bUv, vec2(0.0))) && all(lessThan(bUv, vec2(1.0))))
     ? smoothstep(0.55, 0.85, N.y) * (1.0 - smoothstep(0.75, 2.5, abs(vWorldPos.y - bT.a))) : 0.0;
   color += albedo * bE * bakeW * (1.0 - metalness) * (1.0 - wetSheen * 0.85);

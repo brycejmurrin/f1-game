@@ -226,3 +226,40 @@ test("the extra boxes are real slots, on the grid, not degenerate quads", () => 
   assert.ok(Math.abs(w(q22) - w(q21)) < 0.5,
     `slot 22 is ${w(q22).toFixed(2)} m wide against slot 21's ${w(q21).toFixed(2)} m`);
 });
+
+// ── EVERY SLOT ON A STRAIGHT (FLEET) ─────────────────────────────────────────
+// The suites above pin the box SHAPE on two circuits; nothing asked whether the
+// boxes sit on a straight. gridSlot() lays up to 24 slots over ~200 m behind the
+// line, but tools/track/startline-probe.cjs only ever measured ±60 m — so
+// magny_cours gridded slots 5-14 in the Lycée chicane (R≈19 m), vegas sat on
+// T17 and jeddah's pole on the T27 apex, all reading "straight". This measures
+// max |curvature| over every metre from the line back past the 24th box on all
+// circuits, through the probe's own gridSpan(), against its GRID_K_BAR and
+// GRID_CURVE_ALLOW — ONE list, each entry with its reason and a ceiling. A new
+// circuit or a moved startFrac that grids in a corner fails here; so does an
+// allowlisted circuit that gets >10 % worse, and an entry that measures clean
+// (delete it). Re-deriving a startFrac needs a rendered lap, never this file.
+test("every grid slot of every circuit sits on a straight, or is allowlisted with a reason", () => {
+  const probe = require(path.join(ROOT, "tools", "track", "startline-probe.cjs"));
+  const { Tracks, TrackMesh } = ctxOnce();
+  const rows = [], bad = [];
+  for (const def of Tracks.LIST) {
+    const track = Tracks.buildCenterline(def, { line: false });
+    const grid = probe.gridSpan(Tracks, track, TrackMesh);
+    const line = probe.straightness(Tracks, track);
+    rows.push({ id: def.id, grid });
+    bad.push(...probe.allowVerdict(def.id, line, grid));
+    assert.ok(grid.spanM > 195 && grid.spanM < 210,
+      `${def.id}: grid span ${grid.spanM.toFixed(1)} m — 24 slots at the FIA 8 m pitch is ~201 m`);
+  }
+  assert.ok(rows.length >= 52, `measured ${rows.length} circuits`);
+  for (const [id, entry] of Object.entries(probe.GRID_CURVE_ALLOW)) {
+    assert.ok(rows.some((r) => r.id === id), `allowlist names "${id}", which is not a circuit`);
+    assert.ok(entry.why && entry.why.length > 20, `${id}: an allowlist entry needs its WHY`);
+  }
+  rows.sort((a, b) => b.grid.max - a.grid.max);
+  console.log("grid-span max |k|, worst 6: " + rows.slice(0, 6).map((r) =>
+    `${r.id} ${r.grid.max.toFixed(4)} (R ${(1 / r.grid.max).toFixed(0)} m, ${r.grid.atM} m back)`).join("; "));
+  assert.deepEqual(bad, [],
+    "a grid slot (or the line) in a corner: fix the startFrac with a rendered lap, or allowlist it WITH a reason in startline-probe.cjs");
+});

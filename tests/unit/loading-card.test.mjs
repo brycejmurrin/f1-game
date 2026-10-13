@@ -18,6 +18,7 @@
  * Run: node --test tests/unit/loading-card.test.mjs   (npm run test:tooling-fast)
  */
 import { readCssSource } from "../helpers/css-source.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -244,7 +245,7 @@ function harness(stored = {}, storeOverride = null, docEl = null, nav = undefine
   });
   const info = { track: { id: "monza", name: "MONZA", country: "Italy" }, laps: 5, hasWorld: true };
   return {
-    screen, saved, plays, races, els,
+    screen, saved, plays, races, els, sb,
     run: (over = {}) => screen.run(Object.assign({}, info, over), () => races.push(now)),
     skip: (ev = {}) => { for (const fn of listeners.keydown || []) fn(Object.assign({ type: "keydown", repeat: false }, ev)); },
     tick(ms) {
@@ -344,7 +345,7 @@ test("busy(): the card over the scrim without a circuit, no timer, no skip, not 
   assert.equal(h.screen.phase(), "run", "a live flyby is not a wait plate");
   h.screen.stop();
   assert.match(readCssSource("css/overlays.css"), /#loading\[data-phase="busy"\] #ld-card/, "the busy phase shows the card");
-  const game = read("js/game.js");
+  const game = gameSource();
   assert.match(game, /if \(!loadingScreen\.phase\(\)\) \{ loadingScreen\.building\(loadingInfo\(\)\) \|\| loadingScreen\.busy\("Starting race"\); \}/,
     "startRace raises the card before ensureScenery / stopHome");
   assert.match(game, /const rs = \$\("race-settings"\);\s*if \(rs\) \{\s*rs\.hidden = true;/,
@@ -413,7 +414,7 @@ test("handoff(): the card stays up, disarmed, until render() lowers it with the 
   // race started with no screen up — netplay, __apex.race(), pm-restart — raises
   // no stale card) and render() lowers it only after a present that painted: the
   // first countdown present on TLX starts the program warm and paints nothing.
-  const game = read("js/game.js");
+  const game = gameSource();
   const body = game.slice(game.indexOf("async function startRaceBody()"), game.indexOf("const sessionEntry ="));
   assert.match(body, /const handoff = \(loadingScreen\.active\(\) \|\| loadingScreen\.phase\(\) === "build" \|\| loadingScreen\.phase\(\) === "busy"\) && !!player;/,
     "startRaceBody still decides handoff from the screen that was up before the sweep");
@@ -825,7 +826,7 @@ test("FlybySeq.shotAt names the shot solve() cuts to, without planning it", () =
 });
 
 test("game.js hands the card its field in grid order, the flyby's shots, and the radio", () => {
-  const game = read("js/game.js");
+  const game = gameSource();
   assert.match(game, /LoadingScreen\.create\(\{[^}]*radio: \(\) => radioVoice/);
   const at = game.indexOf("function loadingInfo()");
   const li = game.slice(at, at + 2500);
@@ -871,7 +872,7 @@ test("flyMsFor(skips, wantMs): a real race's read stretches the flyby up to FLY_
   for (const bad of [NaN, "x", null, undefined, -5]) assert.equal(flyMsFor(0, bad), FLY_MS, String(bad));
   assert.equal(flyMsFor(3, 50000), SHORT_FLY_MS, "three skips in a row: they have told us what they think of waiting");
   // game.js asks with the read, before the shots are planned, and the screen runs the same budget.
-  const game = read("js/game.js");
+  const game = gameSource();
   const intro = game.slice(game.indexOf("function raceIntro(go)"), game.indexOf("function loadingInfo()"));
   assert.match(intro, /const flyMs = loadingScreen\.nextFlyMs\(info\.readMs, info\.warmReady = !\(gfx && gfx\.warming && gfx\.warming\(\)\)\);[\s\S]{0,300}FlybySeq\.setDuration\(flyMs\);/);
   assert.match(intro, /loadingScreen\.run\(info, go\);/);
@@ -903,6 +904,12 @@ test("metaRows: a circuit gets its facts; a real race joined mid-race gets the l
   assert.deepEqual(metaRows({ track, laps: 51, weather: "dry", tod: "day", real }, 20), [
     ["LAP", "40 / 51"], ["RUNNING", "P5 · +3.3s"], ["TYRE", "MEDIUM · 8 LAPS"], ["STOPS", "2 (L31, L36)"], ["LEADER", "RUS"], ["OUT", "6"],
     ["WEATHER", "DRY"], ["TIME", "DAY"]]);
+  // No gap to show (0 / null): "P5", never a dangling "P5 · ".
+  for (const gap of [{ s: 0, lapsDown: 0 }, null, undefined]) {
+    const r = metaRows({ track, laps: 51, weather: "dry", tod: "day", real: { ...real, story: { ...story, you: { ...story.you, gap } } } }, 20);
+    assert.deepEqual(r[1], ["RUNNING", "P5"], "empty gap: " + JSON.stringify(gap));
+  }
+  assert.deepEqual(metaRows({ track, laps: 51, weather: "dry", tod: "day", real: { ...real, story: { ...story, you: { ...story.you, gap: { s: 0, lapsDown: 2 } } } } }, 20)[1], ["RUNNING", "P5 · +2 LAPS"]);
   const sc = { ...story, cautions: [{ kind: "safety car", from: 31, to: 32, now: true }], you: { ...story.you, pos: 1, stops: [] } };
   const rows = metaRows({ track, weather: "dry", tod: "day", real: { ...real, story: sc, watch: true } });
   assert.deepEqual(rows.slice(1, 4), [["FOLLOWING", "P1"], ["TYRE", "MEDIUM · 8 LAPS"], ["STOPS", "NONE"]]);
@@ -931,12 +938,12 @@ test("a skip ends the announcer with the flyby, not when startRace reaches clear
 });
 
 test("RACE! over a pending warm holds the card until it ends; the sheets that skip the flyby still get the card and the handoff", () => {
-  const game = read("js/game.js");
+  const game = gameSource();
   const intro = game.slice(game.indexOf("function introWarm(go)"), game.indexOf("function loadingInfo()"));
   assert.match(intro, /if \(!gfx\.warm \|\| \(_warmKey === key && !\(gfx\.warming && gfx\.warming\(\)\)\)\) return false;/, "warmed and no warm pending: fly at once");
   assert.match(intro, /loadingScreen\.building\(loadingInfo\(\)\);/, "the card holds over the warm");
   assert.match(intro, /await introPrepare\(live, key, info, n, true\)/, "a built but unwarmed world joins planning and warm under the card before motion");
-  assert.match(intro, /const prepP = introPrepare\(live, key, info, n, false\);\s*await studioDone\(live, n\);/, "warm world: garage-out is not blocked behind prepare");
+  assert.match(intro, /const prepP = introPrepare\(live, key, info, n, false\); prepP\.catch\(\(\) => \{\}\);[^\n]*\n\s*await studioDone\(live, n\);/, "warm world: garage-out is not blocked behind prepare (its rejection handled meanwhile)");
   const prepare = game.slice(game.indexOf("async function introPrepare("), game.indexOf("// A ready, warm world"));
   assert.match(prepare, /await awaitIntroWarm\(current\)/, "shared compile bound — never fly over pending warm");
   assert.match(intro, /announce\("PREPARATION FAILED/, "a warm timeout recovers to the menu with a visible message");
@@ -957,7 +964,7 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
 });
 
 test("launch unification: every session the player starts reaches raceIntro; the quick restarts and automation stay quick", () => {
-  const game = read("js/game.js"), rs = read("js/race/race-settings.js"), real = read("js/race/real-race.js");
+  const game = gameSource(), rs = read("js/race/race-settings.js"), real = read("js/race/real-race.js");
   // Menu starts (one-off race, TIME TRIAL, DAILY, season / career round 1, practice) all end at RACE SETTINGS' GO, which hands raceIntro the sheet.
   assert.match(rs, /else if \(raceIntro\) \{[\s\S]{0,200}?try \{ raceIntro\(startRace, sheet, \$\("rs-go"\)\);/, "GO plays the pre-race screen");
   assert.match(rs, /\(!isChampionship\(\) && gridFromQuali\(\) && !qualiResults\(\)\)\) \{ dismissSheet\(\); openQuali\(\); \}/, "…except a qualifying grid, whose sheet leads to startRaceFromSheet");
@@ -1029,4 +1036,43 @@ test("the garage phase (the drive-out before the flyby): no card, no timer, and 
   const css = readCssSource("css/overlays.css");
   assert.match(css, /#loading\[data-phase="garage"\] \{ background: none; \}/, "no scrim over the car");
   assert.match(css, /#loading\[data-phase="garage"\] #ld-card \{ visibility: hidden; \}/, "the card is out of the accessibility tree, not just transparent");
+});
+
+test("a HIDDEN tab at run() gets the card, not the flyby: no announcer read starts unseen (bug-hunt 3, 2026-10-10)", () => {
+  // The drive-out's safety cap can carry the intro into run() with the tab in the background (START,
+  // then switch apps). The flyby timer, the announcer and the radio check would start there unseen —
+  // speechSynthesis speaks in a hidden tab, and iOS synthesis then breaks until reload.
+  const h = harness({}, null, { dataset: {} });
+  h.sb.document.hidden = true;
+  h.run();
+  assert.equal(h.els.loading.dataset.phase, "card", "hidden: the 700 ms card");
+  assert.equal(h.plays.length, 0, "no announcer read in a hidden tab");
+  h.tick(LS.CARD_MS);
+  assert.equal(h.races.length, 1, "the race starts after the card (game.js then pauses it under the hidden-tab rule)");
+  const vis = harness({}, null, { dataset: {} });
+  vis.sb.document.hidden = false;
+  vis.run();
+  assert.equal(vis.els.loading.dataset.phase, "run", "visible: the flyby as before");
+});
+
+test("the intro's safety caps run on introNow(), which freezes while the tab is hidden (bug-hunt 3, 2026-10-10)", () => {
+  // Shader warm and the drive-out advance only on rendered frames — stopped in a hidden tab — while
+  // the 30 s caps ran on the wall clock: START, 30 s in another app during a cold build, and the
+  // intro threw "Shader preparation timed out" (PREPARATION FAILED) on return, or cut the drive-out.
+  const game = read("js/game.js");
+  assert.match(game, /const _hidden = \{ ms: 0, at: 0 \};[^\n]*\nfunction introNow\(\) \{\s*const now = performance\.now\(\), hid = typeof document !== "undefined" && !!document\.hidden;\s*if \(hid && !_hidden\.at\) _hidden\.at = now;\s*else if \(!hid && _hidden\.at\) \{ _hidden\.ms \+= now - _hidden\.at; _hidden\.at = 0; \}\s*return now - _hidden\.ms - \(_hidden\.at \? now - _hidden\.at : 0\);/,
+    "introNow() keeps the hidden-time ledger by polling (no eval-time listener: the intro is sliced into node sandboxes)");
+  assert.doesNotMatch(game.slice(game.indexOf("function cancelIntro()"), game.indexOf("\nfunction introWarm(go)")), /addEventListener\("visibilitychange"/,
+    "no visibilitychange listener in the intro slice");
+  const warm = game.slice(game.indexOf("async function awaitIntroWarm("), game.indexOf("function studioOpen("));
+  assert.doesNotMatch(warm, /performance\.now\(\)|Date\.now\(\)/, "awaitIntroWarm reads the frozen clock only");
+  assert.match(warm, /introNow\(\) - at >= 30000/, "…for its 30 s cap");
+  const d0 = game.indexOf("async function studioDone(");
+  const d1 = Math.min(...["\nfunction ", "\nasync function "].map((k) => game.indexOf(k, d0 + 1)).filter((i) => i > 0));
+  const done = game.slice(d0, d1);
+  assert.doesNotMatch(done, /performance\.now\(\)|Date\.now\(\)/, "studioDone's drive-out and hang caps read the frozen clock only");
+  const shown = game.slice(game.indexOf("function studioShown()"), game.indexOf("async function studioDone("));
+  assert.match(shown, /_studio\.at = introNow\(\)/, "the drive-out's own clock starts on introNow()");
+  const prep = game.slice(game.indexOf("async function introPrepare("), game.indexOf("async function introPrepare(") + 4000);
+  assert.match(prep, /const lampAt = introNow\(\);[\s\S]*introNow\(\) - lampAt >= 30000/, "the lamp bake's cap too");
 });

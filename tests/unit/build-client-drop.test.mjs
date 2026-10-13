@@ -10,7 +10,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
+import fs from "node:fs";
 import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const src = readFileSync(new URL("../../js/track/build-client.js", import.meta.url), "utf8");
 
@@ -114,4 +117,68 @@ test("a reply whose model comparison throws still settles the build with null an
   assert.equal(workers[0].terminated, false, "one bad reply does not cost the worker");
   fire();   // the answer timer was cleared by the settle: nothing left to drop
   assert.equal(workers[0].terminated, false);
+});
+
+// ---- R3-ASYNC-2 / R3-PHONE-8 (hunt3 train) --------------------------------
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const SRC = readFileSync(path.join(ROOT, "js/track/build-client.js"), "utf8");
+
+function client({ answer = "never", lazyV = null } = {}) {
+  const mem = new Map([["apex26.buildWorker", "1"]]);
+  const made = [], idles = [];
+  const ctx = vm.createContext({ Promise, Map, Set, URL, setTimeout, clearTimeout,
+    Log: { info() {}, warn() {}, debug() {} }, window: { __APEX_BUILD: 7 }, location: { href: "http://x/index.html" },
+    document: { querySelectorAll: () => [], readyState: "loading", addEventListener() {},
+      getElementById: (id) => (id === "apex-lazy-v" && lazyV ? { textContent: JSON.stringify(lazyV) } : null) },
+    localStorage: { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)) },
+    requestIdleCallback: (fn) => { idles.push(fn); return idles.length; },
+    ApexRoster: { TRACK_VM: ["js/track/core/geom.js"], TRACK_WORKER_EXTRA: [] },
+    Worker: class {
+      constructor(u) { this.url = u; this.posted = []; this.messages = []; this.terminated = 0; made.push(this); }
+      postMessage(m) {
+        this.posted.push(m.type); this.messages.push(m);
+        if (answer !== "ok") return;
+        const reply = m.type === "init" ? { type: "ready" } : { type: "error", seq: m.seq, message: "stub" };
+        setTimeout(() => this.onmessage && this.onmessage({ data: reply }), 0);
+      }
+      terminate() { this.terminated++; }
+    } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/script-loader.js"), "utf8") + "\nthis.ScriptLoader = ScriptLoader;", ctx, { filename: "script-loader.js" });
+  vm.runInContext(SRC + "\nthis.TrackBuildClient = TrackBuildClient;", ctx, { filename: "build-client.js" });
+  return { C: ctx.TrackBuildClient, made, idles, mem };
+}
+const DEF = { id: "monza" }, OPTS = { night: false, gridSlots: 20 }, GFX = { mobileTier: false };
+const within = (p, ms) => Promise.race([p.then((v) => ({ v })), new Promise((r) => setTimeout(() => r("PENDING"), ms))]);
+
+
+test("idleWarm spawns nothing for a player; the first posted build does", async () => {
+  const { C, made, idles } = client({ answer: "ok" });
+  assert.equal(C.idleWarm(false), null, "nothing to report yet");
+  assert.equal(C.idleWarm(), null, "a bare call is safe and inert");
+  assert.equal(idles.length, 0, "no idle spawn queued");
+  assert.equal(made.length, 0, "no worker at the title");
+  assert.equal(await C.build(0, DEF, OPTS, GFX, null), null, "the stub answers an error: null, build in steps");
+  assert.equal(made.length, 1, "spawned by the posted build");
+  assert.deepEqual(made[0].posted, ["init", "build"]);
+});
+
+test("idleWarm still warms the worker for the agent surface", async () => {
+  const { C, made, idles } = client({ answer: "ok" });
+  C.idleWarm(true);
+  assert.equal(idles.length, 1);
+  idles[0]();
+  assert.equal(made.length, 1);
+  assert.equal(await C.spawn(), true, "ready before any build is posted");
+});
+
+test("the worker and its scenery import use the deploy's content-hash key (R3-PHONE-8)", async () => {
+  const lazyV = { "js/track/build-worker.js": "0123456789ab", "js/circuits/scenery/monza.js": "ba9876543210" };
+  const { C, made } = client({ answer: "ok", lazyV });
+  await C.build(0, DEF, OPTS, GFX, "js/circuits/scenery/monza.js");
+  assert.equal(made[0].url, "http://x/js/track/build-worker.js?v=0123456789ab");
+  assert.equal(made[0].messages[1].scenery, "http://x/js/circuits/scenery/monza.js?v=ba9876543210");
+  const bare = client({ answer: "ok" });
+  bare.C.spawn();
+  assert.equal(bare.made[0].url, "http://x/js/track/build-worker.js?v=7", "no map (dev shell): the build, as before");
 });

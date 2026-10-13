@@ -19,16 +19,18 @@ const HudReadouts = (function () {
     return Math.floor(dist / L);
   }
 
-  /** "▲ BEA +1L" / short "▲ +1L" — the lapped spelling of the gap chip. */
+  /** "▲ BEA +1L" / short "▼ -1L" — the lapped spelling of the gap chip. `n` is
+   *  SIGNED like HudRelative's: + = that car is a lap UP, - = a lap down. */
   function lapGapText(arrow, code, n, short) {
-    return short ? arrow + " +" + n + "L" : arrow + " " + code + " +" + n + "L";
+    const l = (n > 0 ? "+" : "") + n + "L";
+    return short ? arrow + " " + l : arrow + " " + code + " " + l;
   }
 
   // GAP DECIMALS. 2026 Overtake unlocks inside ~1.0 s, so every race HUD
   // profile needs hundredths near that threshold (0.94 vs 1.04). Under ~10 s
   // the chip / REL / tower share two decimals; above that, standard and
   // minimal drop to one (same character count as "9.94" → "10.4") while
-  // broadcast keeps TV-style hundredths. Lap-down stays "+1L" (lapGapText).
+  // broadcast keeps TV-style hundredths. Lap-down spells "-1L" (lapGapText).
   const GAP_FINE_LT = 9.95;
   /** Decimal places for a gap of `sec` seconds on HUD profile `profile`. */
   function gapDecimals(profile, sec) {
@@ -101,7 +103,9 @@ const HudReadouts = (function () {
    * `n` follows AppearanceOpts.speed when available (same rounding as settings);
    * `unit` is always the short plate form so the float cannot disagree with
    * the LCD. Pass `units` ("mph"|"kmh") to pin without reading AppearanceOpts.
+   * ONE pooled object, rewritten by the next call (the HUD paints it every frame).
    */
+  const _plate = { n: 0, unit: "" };
   function spdPlate(kph, units) {
     const u = units || spdUnits();
     const v = Number(kph);
@@ -111,7 +115,8 @@ const HudReadouts = (function () {
     } else {
       n = Math.round((Number.isFinite(v) ? v : 0) / (u === "mph" ? KPH_PER_MPH : 1));
     }
-    return { n: Number.isFinite(n) ? n : 0, unit: spdUnit(u) };
+    _plate.n = Number.isFinite(n) ? n : 0; _plate.unit = spdUnit(u);
+    return _plate;
   }
 
   // BLUE FLAG. The AI yields (AiDrive.letPassCase in js/game.js) to a chaser a

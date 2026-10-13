@@ -173,11 +173,17 @@ function fetchScenery(id) {
 // session-entry-vm holds the request to prove a start survives it); the next
 // ask fetches again, so nothing is negatively cached.
 async function ensureScenery(idx) {
-  // Path payload before scenery: Tracks.build / buildCenterline need def.path.
+  // The closure's fetch needs only def.id, so it goes out BESIDE the path
+  // payload, not after it: one round trip, not two, on a circuit's first visit
+  // (perf hunt 2 T8). Still ONE fetch per ask — the second read below awaits
+  // this one, never a new request. A custom circuit keeps the serial path.
+  const def0 = Tracks.LIST[idx];
+  const early = def0 && !def0.custom && !def0.scenery && !sceneryResident(def0.id) ? fetchScenery(def0.id) : null;
+  // Path payload before the BUILD: Tracks.build / buildCenterline need def.path.
   await ensureCircuit(idx);
   const def = Tracks.LIST[idx];
   if (def && !def.scenery && !sceneryResident(def.id)) {   // def.scenery: an inline closure (a custom circuit) — nothing to fetch
-    await fetchScenery(def.id);
+    await (early && def === def0 ? early : fetchScenery(def.id));
     if (!sceneryResident(def.id)) {
       Log.warn("track", "scenery closure did not load: " + def.id + " — the world builds bare");
       return false;
@@ -393,7 +399,8 @@ function prefetchAudio() {
   if (typeof document === "undefined" || !document.createElement) return;
   for (let i = 0; i < AUDIO_FILES.length; i++) {
     const src = AUDIO_FILES[i];
-    const href = src + "?v=" + (window.__APEX_BUILD || 0);
+    // The key inject() will ask for (content hash when deployed), so the prefetch is the hit.
+    const href = typeof ScriptLoader !== "undefined" && ScriptLoader.url ? ScriptLoader.url(src) : src + "?v=" + (window.__APEX_BUILD || 0);
     if (document.querySelector && document.querySelector('link[rel="prefetch"][href="' + href + '"]')) continue;
     const el = document.createElement("link");
     el.rel = "prefetch";
@@ -579,11 +586,13 @@ function raceAssets() {
     ensureScenery(deps.getContext().trackIdx).catch((e) => {
       Log.warn("track", "scenery prefetch failed: " + (e && e.message));
     });
-    // NO build-worker warm here. The worker (default ON on multi-core) imports
-    // all of TRACK_VM, every LAZY_CIRCUIT payload included (~1.36 MB, a ~20 MB
-    // heap), and only an IN-SESSION track switch posts to it (game.js
-    // loadTrackStepped: state race/count); cold race entry builds paced on the
-    // main thread. TrackBuildClient.build() spawns it on that first use.
+    // Build worker: warmed at the title for the AGENT SURFACE only (its
+    // __apex.race() track switches are what post builds); a player's worker is
+    // spawned by the first build actually posted (R3-ASYNC-2, build-client.js).
+    // A player title never pays the TRACK_VM heap (3-F4).
+    if (typeof TrackBuildClient !== "undefined" && TrackBuildClient.idleWarm) {
+      try { TrackBuildClient.idleWarm(wantAgentSurface()); } catch (_) { /* warm is best-effort */ }
+    }
   };
   if (typeof queueMicrotask === "function") queueMicrotask(kickScenery);
   else Promise.resolve().then(kickScenery);

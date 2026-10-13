@@ -297,6 +297,15 @@ const TLX = (function () {
       let _unstridePool = null;
       let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
       const _softPresentWaiters = [];
+      // awaitSoftPresent(ms, "frame") on a headed canvas (GLX's M15 contract): no
+      // preserveDrawingBuffer, so SAVE SCREENSHOT must read in the task that
+      // presented. Woken from inside present(); "stale" when none came (paused).
+      const _frameWaiters = [];
+      const _awaitFrame = (ms) => new Promise((resolve) => {
+        const w = () => { clearTimeout(t); resolve("frame"); };
+        const t = setTimeout(() => { const i = _frameWaiters.indexOf(w); if (i >= 0) _frameWaiters.splice(i, 1); resolve("stale"); }, ms);
+        _frameWaiters.push(w);
+      });
       // Layout/CSS size follows the VISIBLE canvas. Soft-present is a sibling
       // 2D overlay — never getContext("2d") on #game (one context type per
       // canvas for life; three's WebGPU configure is lazy on first present).
@@ -1155,6 +1164,12 @@ const TLX = (function () {
       let _mirUsed = false;
       const _mirVP = new Float32Array(16), _mirProjGpu = new Float32Array(16);
       const _mirRectScratch = [0, 0, 0, 0];   // reused every mirror/PiP frame
+      const _mirRectPx = [0, 0, 0, 0];        // present()'s setMirror rect in pixels (A7: tlx-post copies it)
+      function _mirPx(cw, ch) {
+        const r = _mirRect, px = _mirRectPx;
+        px[0] = Math.round(r[0] * cw); px[1] = Math.round(r[1] * ch); px[2] = Math.round(r[2] * cw); px[3] = Math.round(r[3] * ch);
+        return px;
+      }
       // The mirror uses no MRT; warming only the main HDR/MRT scene leaves
       // both its world and composite programs to link on the first race frame.
       function wantMirrorWarm() {
@@ -1163,7 +1178,12 @@ const TLX = (function () {
         try { mode = GameStore.store.get("hudMirror", "auto"); pip = GameStore.store.get("bcPip", "auto"); } catch (_) { /* defaults */ }
         return mode === "on" || pip === "on" || ((mode !== "off" || pip !== "off") && !softGpu() && !softwareGL);
       }
-      function prepareMirrorTarget(w, h) {
+      // forWarm: the warm compiles the scene into mirRT next, so the mirror's own
+      // instanced meshes (A1) stand in for the main ones. No restore is owed:
+      // every flush re-derives visibility (shown if drawn, else hidden), and the
+      // warm's remaining compiles are single objects, never the scene.
+      function prepareMirrorTarget(w, h, forWarm) {
+        if (forWarm && _instPerPass && !skipBatches()) _mirWarmSwap();
         if (!mirRT) {
           mirRT = new THREE.RenderTarget(w, h, {
             type: post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType,
@@ -1312,6 +1332,34 @@ const TLX = (function () {
         try { Log.warn("gfx", "TLX: lit factory failed, falling back to unlit —", e); } catch (_) {}
         lit = null;
       }
+      // A3 — A COLOUR REFRESH UPLOADS ONLY THE LAMP ROWS. At night the flicker
+      // re-colours every lamp each frame, and three r186 has no partial update
+      // for a 2-D DataTexture: it uploads the image's width x height at origin
+      // 0,0 (WebGPU queue.writeTexture, WebGL texSubImage2D; vendored
+      // Textures.updateTexture / textureUtils.updateTexture) — the whole
+      // 4 x 1024 RGBA32F lampTex, 64 KB, for ~235 lamps. So for that upload
+      // only, the image reports height = the baked lamp count rounded up to 64
+      // rows: the GPU texture keeps its full size (an initialised DataTexture is
+      // never re-created), rows past the count were zeroed by the bake and no
+      // colour refresh writes them, and the shader's textureLoad addressing is
+      // unchanged. onUpdate restores the full height after every upload, and no
+      // shrink happens while a full-height upload is owed (the texture's
+      // creation, or a bake — it rewrites every row), so both see 4 x LG_LAMPS.
+      if (lit && lampGrid && lit.setLampGrid && lit.setLampGridColors) {
+        const lt = lampGrid.lampTex, _setGrid = lit.setLampGrid, _setCols = lit.setLampGridColors;
+        let fullOwed = true;
+        lt.onUpdate = (t) => { if (t.image.height === LG_LAMPS) fullOwed = false; t.image.height = LG_LAMPS; };
+        lit.setLampGrid = function (info) {
+          lt.image.height = LG_LAMPS;
+          if (info) fullOwed = true;
+          return _setGrid.call(this, info);
+        };
+        lit.setLampGridColors = function (L) {
+          const ok = _setCols.call(this, L);
+          if (ok && !fullOwed) lt.image.height = Math.min(LG_LAMPS, Math.max(64, Math.ceil(((L.length / 15) | 0) / 64) * 64));
+          return ok;
+        };
+      }
       // Publish the compiled slot count: frame-lights.js culls against it, so the
       // tail-lights it appends LAST fit inside the 16-slot lite loop.
       const _maxLights = () => (lit && lit.MAX_LIGHTS > 0) ? lit.MAX_LIGHTS : (_liteGpu ? LightBudget.LITE : LightBudget.MAX);
@@ -1319,10 +1367,17 @@ const TLX = (function () {
 
       let sky = null;
       let skyMesh = null, skyMatFull = null, skyMatFallback = null;
+      // apex26.tlxSkyCache=0 — the sky's per-pixel cloud FBMs, node for node as
+      // before the E1 cache (tsl-sky.js makeCache). Default on wherever the full
+      // sky runs with a half-float post chain (the bake is an RGBA16F target);
+      // software GL takes the fallback sky and never builds it.
+      const _skyCacheOn = (function () {
+        try { return localStorage.getItem("apex26.tlxSkyCache") !== "0"; } catch (_) { return true; }
+      })() && !softContent("sky") && !!(post && post.hdrOk && post.hdrOk());
       try {
         if (window.TLXShaders && TLXShaders.sky) {
           if (!chunks && TLXShaders.chunks) chunks = TLXShaders.chunks(THREE, TSL);
-          sky = TLXShaders.sky(THREE, TSL, { chunks });
+          sky = TLXShaders.sky(THREE, TSL, { chunks, cache: _skyCacheOn });
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: sky factory failed, flat clear only —", e); } catch (_) {}
@@ -1377,6 +1432,20 @@ const TLX = (function () {
       }
       function hideSkyMesh() {
         if (skyMesh) skyMesh.visible = false;
+      }
+      // E1: at most one band of the sky's cloud-noise bake a frame, before the
+      // scene pass (tsl-sky.js cacheStep: a no-op unless a re-bake is due). A
+      // throw retires the cache — the sky keeps its per-pixel FBMs — never the frame.
+      let _skyCacheErr = null;
+      function skyCacheStep() {
+        if (!sky || !sky.cacheStep) return;
+        try { _gpuLastOperation = "render-sky-cache"; sky.cacheStep(renderer); }
+        catch (e) {
+          if (!_skyCacheErr) {
+            _skyCacheErr = (e && e.message) || String(e);
+            try { Log.warn("gfx", "TLX: sky cloud cache failed, per-pixel clouds —", _skyCacheErr); } catch (_) { /* harness */ }
+          }
+        }
       }
 
       let fx = null;
@@ -1553,7 +1622,6 @@ const TLX = (function () {
         return m;
       }
 
-      const drawList = [];          // {geo, matrix, material} in submission order
       // POOLED DRAW RECORDS (TLX-PERF-PLAN R1). Fresh object literals — ~150-400
       // a frame, in 4-5 shapes — made V8 see them polymorphic, and none outlives
       // the frame (every consumer reads a record
@@ -1561,20 +1629,23 @@ const TLX = (function () {
       // One fixed shape, every field written on every push: em/al stay
       // undefined for FX records (acquireMesh tests `!== undefined`).
       const _recPool = [];
-      let _recUsed = 0;
+      // THE DRAW LIST IS THE POOL (A5): record i is always _recPool[i], so the
+      // live list is drawList[0..drawList.n) — iterate to .n, never .length.
+      // A separate array reset with `length = 0` dropped its backing store and
+      // regrew it 17 -> 334 twice a frame (young-gen garbage, perf hunt A5).
+      const drawList = _recPool;    // {geo, matrix, material} in submission order
+      drawList.n = 0;
       function pushRec(geo, m, mat, em, al, lg, chunked, instanced) {
-        let r = _recPool[_recUsed];
-        if (!r) r = _recPool[_recUsed] = { geo: null, m: null, mat: null, em: undefined, al: undefined, lg: 0, chunked: null, instanced: null };
-        _recUsed++;
+        let r = _recPool[drawList.n];
+        if (!r) r = _recPool[drawList.n] = { geo: null, m: null, mat: null, em: undefined, al: undefined, lg: 0, chunked: null, instanced: null };
+        drawList.n++;
         r.geo = geo; r.m = m; r.mat = mat; r.em = em; r.al = al; r.lg = lg; r.chunked = chunked; r.instanced = instanced;
-        drawList.push(r);
       }
       // Every drawList reset goes through here: drop the records' references, so a
       // pooled slot never pins an evicted material or a freed geometry.
       function resetRecs() {
-        for (let i = 0; i < _recUsed; i++) { const r = _recPool[i]; r.geo = null; r.m = null; r.mat = null; r.chunked = null; r.instanced = null; }
-        _recUsed = 0;
-        drawList.length = 0;
+        for (let i = 0; i < drawList.n; i++) { const r = _recPool[i]; r.geo = null; r.m = null; r.mat = null; r.chunked = null; r.instanced = null; }
+        drawList.n = 0;
       }
       // Model matrices are COPIED into this per-frame pool at draw() time.
       // game.js reuses scratch Float32Arrays across draws (_wheelWorld is
@@ -1600,7 +1671,9 @@ const TLX = (function () {
         m.set(model);
         return m;
       }
-      const _instAlive = new Set();   // InstancedMesh objects shown this frame
+      // InstancedMeshes shown this pass carry __tlxShown === _instStamp; a pass
+      // start bumps the stamp (A5: a Set.clear() per pass minted a fresh table).
+      let _instStamp = 0;
       const _instRegistry = [];       // all live InstancedMeshes (hide undrawn)
 
       function _instColorAttr(imesh, cap) {
@@ -1628,12 +1701,17 @@ const TLX = (function () {
         // round trip copied every instance twice — and an UPDATE RANGE: with
         // none, needsUpdate uploads the whole cap x 64 B (+ cap x 12 B) every
         // frame the frustum moves (20 k instances = 1.5 MB/frame; audit 2026-09-02).
+        // The camera pack (batch.packMatrices / packColors) IS a view of these
+        // arrays (createInstancedBatch), so a cull writes the attribute in place
+        // and the copy is skipped; a foreign pack (DebrisWorld, the mirror
+        // freeze) is one TypedArray.set — the element loop was ~9x slower
+        // (perf hunt 2026-10-11 A4: 247 vs 27 us per 10k instances).
         const im = imesh.instanceMatrix, ia = im.array;
         const nf = drawN * 16;
-        for (let i = 0; i < nf; i++) ia[i] = matrices[i];
+        if (matrices.buffer !== ia.buffer || matrices.byteOffset !== ia.byteOffset) ia.set(matrices.length === nf ? matrices : matrices.subarray(0, nf));
         if (colors && colors.length && col) {
           const ca = col.array, nc = drawN * 3;
-          for (let i = 0; i < nc; i++) ca[i] = colors[i];
+          if (colors.buffer !== ca.buffer || colors.byteOffset !== ca.byteOffset) ca.set(colors.length === nc ? colors : colors.subarray(0, nc));
           // Dirty the TINT with the write, not beside it. `col` always exists
           // (_instColorAttr mints it), but `colors` is null on every
           // updateInstances call (DebrisWorld) and on every batch built
@@ -1695,14 +1773,17 @@ const TLX = (function () {
           imesh,
           srcMatrices: matrices,
           srcColors: colors && colors.length ? colors : null,
-          packMatrices: new Float32Array(matrices.length),
-          packColors: colors && colors.length ? new Float32Array(colors.length) : null,
+          // Views of the GPU attributes (A4): the cull packs straight into the
+          // buffer it uploads, one copy instead of two. Same length as before.
+          packMatrices: imesh.instanceMatrix.array.subarray(0, matrices.length),
+          packColors: colors && colors.length ? _instColorAttr(imesh, n).array.subarray(0, colors.length) : null,
           cells: null,
         };
         if (opts && opts.cellSize > 0 && n) {
           const cell = opts.cellSize;
           batch.cells = Frustum.bucketInstances(matrices, n, data.pos, cell, opts.radius);   // shared with GLX / WGX
         }
+        imesh.userData.tlxBatch = batch;   // the mirror warm finds the batch from its mesh (A1)
         return batch;
       }
 
@@ -1733,12 +1814,43 @@ const TLX = (function () {
         // NOT writing _cullPlanes on a hit is load-bearing: it must keep
         // describing the frustum that physically wrote imesh.
         if (useKey && InstCells.sameKey(batch, ks, kN)) { batch.visible = batch._cullN; return batch._cullN; }
-        const src = batch.srcMatrices, dst = batch.packMatrices;
-        const sc = batch.srcColors, dc = batch.packColors;
+        // A shadow cull packs into its OWN array, as GLX/WGX (_shadowPackFor):
+        // packMatrices is the camera pack that a cell-key hit leaves standing and
+        // drawWorldMeshes' mirror recorder copies (R3-RENDER-6). Casters read no colour.
+        // ONE scratch for every batch (C5), held on this function so it travels
+        // with it: shadow-pass casts each batch right after its cull, so a
+        // per-batch full-size copy of srcMatrices was Σ instances x 64 B of heap
+        // for a pack that lives one call. A newer shadow cull un-freshens the
+        // previous owner, so a cast can never lend another batch's pack.
+        // C5 (second copy): once the batch has a shadow caster, pack STRAIGHT
+        // into its instanceMatrix.array (tlx-shadow castInstanced publishes it
+        // as _shCasterArr and skips its copy when handed that array back). The
+        // scratch only serves a batch's first shadow cull, before its caster exists.
+        const src = batch.srcMatrices;
+        let dst = batch.packMatrices;
+        if (shadow) {
+          const ca = batch._shCasterArr;
+          if (ca && ca.length >= src.length) dst = ca;
+          else {
+            let sp = cullInstances._shPack;
+            if (!sp || sp.length < src.length) sp = cullInstances._shPack = new Float32Array(src.length);
+            const prev = cullInstances._shOwner;
+            if (prev && prev !== batch && prev._shadowPack === sp) { prev._shadowFresh = false; prev._shadowPack = null; }
+            cullInstances._shOwner = batch;
+            dst = sp;
+          }
+          batch._shadowPack = dst;
+        }
+        // C3b — LAMP REACH (opts.reach = [x, y, z, radius], shadow culls only): a
+        // cell wholly beyond the lamp radius casts onto no receiver the lit loop
+        // or the god-ray march shades (both reject receivers past the radius).
+        const reach = shadow && opts.reach && opts.reach[3] > 0 ? opts.reach : null, reach2 = reach ? reach[3] * reach[3] : 0;
+        const sc = batch.srcColors, dc = shadow ? null : batch.packColors;
         let n = 0;
         for (let ci = 0, cn = useKey ? kN : cs.length; ci < cn; ci++) {
           const c = useKey ? cs[ks[ci]] : cs[ci];
           if (!useKey && !TLXShaders.aabbInFrustum(planes, c.mn, c.mx)) continue;
+          if (reach && TLXShaders.aabbDist2(c.mn, c.mx, reach[0], reach[1], reach[2]) > reach2) continue;
           // Indexed for — `for…of` on c.idx minted an iterator per visible cell
           // per cull (camera + shadow). GLX/WGX already use indexed loops.
           const idx = c.idx;
@@ -1755,13 +1867,13 @@ const TLX = (function () {
             n++;
           }
         }
-        // upload:false — CPU pack only. The sun/lamp shadow path copies
-        // packMatrices into a SECOND InstancedMesh (tlx-shadow castInstanced);
+        // upload:false — CPU pack only, into a SECOND InstancedMesh's array
+        // (the batch's shadow caster; the scratch is copied in by castShadowInstanced);
         // writing the lit imesh here was a full setMatrixAt walk discarded
         // when the camera cull overwrote it later in the same frame.
         // Do not touch _cullPlanes: that cache means "this pack is on the
         // GPU", and we did not upload.
-        if (opts && opts.upload === false) return n;
+        if (opts && opts.upload === false) { batch._shadowFresh = true; return n; }
         // visible is the CAMERA count the lit draw reads; a shadow cull's n must
         // not overwrite it (GLX/WGX: the camera count survives the shadow cull).
         batch.visible = n;
@@ -1792,6 +1904,16 @@ const TLX = (function () {
       function freeInstancedBatch(batch) {
         if (!batch) return;
         if (shadowSys && shadowSys.freeInstanced) shadowSys.freeInstanced(batch);   // its keyed shadow caster
+        const mv = batch._mir;
+        if (mv) {   // the mirror's own mesh (A1): its geometry shares batch.geo's buffers, freed just below
+          batch._mir = null;
+          const ix = _instRegistry.indexOf(mv.imesh);
+          if (ix >= 0) _instRegistry.splice(ix, 1);
+          try { scene.remove(mv.imesh); } catch (_) { /* */ }
+          try { mv.imesh.dispose(); } catch (_) { /* */ }
+          try { mv.imesh.geometry.dispose(); } catch (_) { /* */ }
+          mv.imesh = null; mv.cells = null; mv.srcMatrices = mv.srcColors = mv.packMatrices = mv.packColors = null;
+        }
         if (batch.imesh) {
           const ix = _instRegistry.indexOf(batch.imesh);
           if (ix >= 0) _instRegistry.splice(ix, 1);
@@ -1803,11 +1925,80 @@ const TLX = (function () {
           try { batch.geo.dispose(); } catch (_) { /* */ }
           batch.geo = null;
         }
+        // Drop the shadow cull's private pack with the batch (R3-RENDER-6): a
+        // stale _shadowPack on a freed batch kept the Float32Array (and any
+        // lender that still pointed at it) alive across picker track switches.
+        batch._shadowPack = null; batch._shadowFresh = false;
+        if (cullInstances._shOwner === batch) cullInstances._shOwner = null;
       }
 
       function castShadowInstanced(batch, count) {
-        if (skipBatches()) return;
-        if (shadowSys && shadowSys.castInstanced) shadowSys.castInstanced(batch, count);
+        // tlx-shadow reads packMatrices for a culled cast: lend it the pack the
+        // shadow cull just wrote (only that one — a stale pack never leaks).
+        const sh = count !== undefined && batch && batch._shadowFresh ? batch._shadowPack : null, cam = sh && batch.packMatrices;
+        // The pack is the shared scratch (C5): one use, then let go of it.
+        if (batch) { batch._shadowFresh = false; batch._shadowPack = null; }
+        if (skipBatches() || !shadowSys || !shadowSys.castInstanced) return;
+        if (sh) batch.packMatrices = sh;
+        try { shadowSys.castInstanced(batch, count); } finally { if (sh) batch.packMatrices = cam; }
+      }
+
+      // A1 — ONE INSTANCE BUFFER PER PASS. The mirror and the main camera used to
+      // pack into the same instanceMatrix, so each pass invalidated the other's
+      // cell-set key (InstCells) and every visible instance was repacked and
+      // re-uploaded twice a frame on the default (helmet, AUTO mirror) camera.
+      // While a mirror pass records, cull/update/draw go to a lazily made view
+      // of the batch: its own InstancedMesh (own instanceMatrix + instanceTint,
+      // the vertex and index buffers SHARED with batch.geo — cap x 76 B), its
+      // own pack and key, the same cells and source matrices. The draws are the
+      // ones the shared buffer gave each pass. Shadow culls (upload:false) never
+      // route: their pack is the caster's. Desktop only (a phone's mirror is the
+      // lite rung, which draws no batches); gfx.instPerPass tells game.js to
+      // skip its freeze replay and record copies, which this makes redundant.
+      const _instPerPass = !isMobile;
+      function _mirOf(batch) {
+        if (batch._mir) return batch._mir;
+        const main = batch.imesh, src = batch.geo, n = main.userData.tlxInstCap | 0;
+        const g = new THREE.BufferGeometry();
+        if (src.index) g.setIndex(src.index);
+        for (const k in src.attributes) if (k !== "instanceTint") g.setAttribute(k, src.attributes[k]);
+        g.drawRange.start = src.drawRange.start; g.drawRange.count = src.drawRange.count;
+        for (let i = 0; i < src.groups.length; i++) g.addGroup(src.groups[i].start, src.groups[i].count, src.groups[i].materialIndex);
+        const im = new THREE.InstancedMesh(g, main.material || unlitMat, main.instanceMatrix.count);
+        im.matrixAutoUpdate = false;
+        im.frustumCulled = false;
+        im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        im.userData.tlxInstCap = n;
+        const tint = _instColorAttr(im, n);
+        // Starts as the main mesh started: every source instance (a batch with
+        // no cells is never packed — cullInstances returns its full count).
+        _writeInstanceMatrices(im, batch.srcMatrices, batch.srcColors, n);
+        im.visible = false;
+        scene.add(im);
+        _instRegistry.push(im);
+        return (batch._mir = {
+          __tlx: true, geo: batch.geo, instances: batch.instances, visible: batch.instances, imesh: im,
+          srcMatrices: batch.srcMatrices, srcColors: batch.srcColors,
+          packMatrices: im.instanceMatrix.array.subarray(0, batch.srcMatrices.length),
+          packColors: batch.srcColors && tint ? tint.array.subarray(0, batch.srcColors.length) : null,
+          cells: batch.cells,
+        });
+      }
+      function _passBatch(batch) {
+        return _mirActive && _instPerPass && batch && batch.imesh && batch.geo && !skipBatches() ? _mirOf(batch) : batch;
+      }
+      // The mirror warm compiles the mirror's own instanced objects — before A1
+      // it compiled the shared ones, which the mirror context drew. Swaps each
+      // visible main mesh for its view (made here if new).
+      function _mirWarmSwap() {
+        for (let i = 0, n = _instRegistry.length; i < n; i++) {
+          const im = _instRegistry[i], b = im.userData.tlxBatch;
+          if (!b || !im.visible || !b.geo) continue;
+          const v = _mirOf(b).imesh;
+          v.material = im.material; v.count = im.count;
+          v.userData.tlxEmissive = im.userData.tlxEmissive; v.userData.tlxAlpha = im.userData.tlxAlpha;
+          v.visible = true; im.visible = false;
+        }
       }
 
       function _showInstanced(rec, order) {
@@ -1820,14 +2011,15 @@ const TLX = (function () {
         b.imesh.userData.tlxAlpha = rec.al;
         b.imesh.renderOrder = order;
         b.imesh.visible = true;
-        _instAlive.add(b.imesh);
+        b.imesh.__tlxShown = _instStamp;
       }
 
       function _hideUndrawnInstanced() {
         for (let i = 0; i < _instRegistry.length; i++) {
           const im = _instRegistry[i];
-          if (!_instAlive.has(im)) im.visible = false;
+          if (im.__tlxShown !== _instStamp) im.visible = false;
         }
+        _instStamp++;   // the next flush starts clean (pass starts bump it too)
       }
       // the mesh pool is keyed on (geometry, material), NOT on draw order
       // MEASURED (docs/PERF-FINDINGS.md 2o): a flat `meshPool[poolUsed]` gave
@@ -1918,6 +2110,80 @@ const TLX = (function () {
         }
         return a;
       }
+      // A6 — BLOB SHADOWS AS ONE INSTANCED DRAW. shadowPass.flushBlobs() issues
+      // one drawShadow per car back to back, and each was its own pooled Mesh:
+      // ~22 render objects a frame, each paying three's per-object update and
+      // object-UBO upload (the WebGL2 leg's dominant JS cost, TLX-PERF-PLAN).
+      // A contiguous run now fills ONE InstancedMesh with the same quad and the
+      // same fx.shadowMat: the instance matrix is fxMatFor's model * scale(w,1,l),
+      // the opacity reads positionGeometry (untouched by instancing), and the
+      // instances draw in submission order at the run's first draw-list slot,
+      // so blending and sort order are the per-record ones. A second run in one
+      // pass, a run past the cap, or software WebGPU (skipBatches) keeps the
+      // per-record path. Capacity past the UBO limit like the prop batches.
+      const BLOB_CAP = 64;
+      let _blob = null;
+      function _blobAppend(model, w, l) {
+        if (skipBatches()) return false;
+        let b = _blob;
+        if (!b) {
+          const cap = (window.TLXShaders && TLXShaders.uboInstCap) ? TLXShaders.uboInstCap(renderer, BLOB_CAP) : BLOB_CAP;
+          const im = new THREE.InstancedMesh(getFxQuad(), fx.shadowMat, cap);
+          im.matrixAutoUpdate = false;
+          im.frustumCulled = false;
+          im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          im.visible = false;
+          scene.add(im);
+          _instRegistry.push(im);
+          b = _blob = { __tlx: true, imesh: im, instances: BLOB_CAP, visible: 0, rec: -1 };
+        }
+        // This pass's run is live while its record is (resetRecs nulls it).
+        const live = b.rec >= 0 && b.rec < drawList.n && drawList[b.rec].instanced === b;
+        if (live) {
+          if (b.rec !== drawList.n - 1 || b.visible >= BLOB_CAP) return false;
+        } else {
+          b.visible = 0; b.rec = drawList.n;
+          pushRec(null, null, fx.shadowMat, undefined, undefined, 0, null, b);
+        }
+        const im = b.imesh.instanceMatrix, a = im.array, o = b.visible * 16;
+        for (let r = 0; r < 4; r++) {
+          a[o + r] = model[r] * w;
+          a[o + 4 + r] = model[4 + r];
+          a[o + 8 + r] = model[8 + r] * l;
+          a[o + 12 + r] = model[12 + r];
+        }
+        b.visible++;
+        setRange0(im, b.visible * 16);
+        im.needsUpdate = true;
+        return true;
+      }
+      // F3 (hunt 2) — A6 FOR drawDecal: a contiguous run of opts.batch decals on one
+      // geometry and material (CarMesh's tail glows, flushed after the car loop) is ONE
+      // InstancedMesh at the run's first slot, in submission order, under A6's guards.
+      // The quad is planar (y = 0): the Y column moves no vertex and carries Z x X, the
+      // per-record inverse-transpose normal once three's faceDirection is counted (an
+      // identity matrixWorld never flips the front face for a det < 0 instance).
+      const _decalRuns = new Map();   // geometry -> run
+      function _decalAppend(geo, w, mat) {
+        if (skipBatches()) return false;
+        let b = _decalRuns.get(geo);
+        if (!b) {
+          const im = new THREE.InstancedMesh(geo, mat, (window.TLXShaders && TLXShaders.uboInstCap) ? TLXShaders.uboInstCap(renderer, BLOB_CAP) : BLOB_CAP);
+          im.matrixAutoUpdate = false; im.frustumCulled = false; im.visible = false;
+          im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          scene.add(im); _instRegistry.push(im);
+          _decalRuns.set(geo, b = { __tlx: true, imesh: im, instances: BLOB_CAP, visible: 0, rec: -1 });
+        }
+        if (b.rec >= 0 && b.rec < drawList.n && drawList[b.rec].instanced === b) {
+          if (b.rec !== drawList.n - 1 || b.visible >= BLOB_CAP || drawList[b.rec].mat !== mat) return false;
+        } else { b.visible = 0; b.rec = drawList.n; pushRec(null, null, mat, undefined, undefined, 0, null, b); }
+        const im = b.imesh.instanceMatrix, a = im.array, o = b.visible * 16;
+        for (let k = 0; k < 16; k++) a[o + k] = w[k];
+        const nx = w[9] * w[2] - w[10] * w[1], ny = w[10] * w[0] - w[8] * w[2], nz = w[8] * w[1] - w[9] * w[0];
+        a[o + 4] = nx; a[o + 5] = ny; a[o + 6] = nz; a[o + 7] = 0;
+        b.visible++; setRange0(im, b.visible * 16); im.needsUpdate = true;
+        return true;
+      }
       function ensureStream(slot, verts) {
         if (slot.geo && slot.cap >= verts) return false;
         const cap = Math.max(slot.cap * 2, verts, slot.min);
@@ -1933,8 +2199,7 @@ const TLX = (function () {
         return true;
       }
       function uploadStream(slot, floats) {
-        slot.ib.clearUpdateRanges();
-        slot.ib.addUpdateRange(0, floats);
+        setRange0(slot.ib, floats);   // one cached range per stream (A7): addUpdateRange minted one per upload
         slot.ib.needsUpdate = true;
       }
       const skidStream = { geo: null, ib: null, cap: 0, min: 120 * 6, stride: 5,
@@ -2055,6 +2320,7 @@ const TLX = (function () {
       // answers whether the guard fires, instead of a code read of a minified
       // bundle guessing where generateMipmaps is defined.
       let _envMipFn = "?", _envMipRan = 0, _envMipErr = "", _envMipWhere = "?";
+      let _envMipsAlloc = false;   // a face render has created envRT with its mip levels (E10)
       // WHAT IS ACTUALLY IN THE CUBE. envState().blank is NOT this: _envBlank is a
       // BRANCH MARKER set only on the software clear path, so on real hardware it
       // reads false after every latch by construction and has never been evidence
@@ -2109,6 +2375,16 @@ const TLX = (function () {
           const m = new THREE.Mesh(stream.geo, mat);
           m.frustumCulled = false;
           await renderer.compileAsync(m, camera, scene);
+        }
+        // The instanced blob program (A6) and decal runs (F3), if none was on screen for the scene warm.
+        for (const run of [_blob, ..._decalRuns.values()]) {
+          if (!run || run.imesh.visible) continue;
+          const bm = run.imesh, cnt = bm.count;
+          if (run === _blob) bm.material = fx.shadowMat;
+          bm.count = Math.max(1, cnt); bm.visible = true;
+          let p;
+          try { p = renderer.compileAsync(bm, camera, scene); } finally { bm.visible = false; bm.count = cnt; }
+          await p;
         }
       }
       // LIT VARIANTS FIRST DRAWN MID-RACE. The brake-disc glow ring
@@ -2269,9 +2545,11 @@ const TLX = (function () {
             // real ones.
             if (warmPlusOn() && shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
             _warmStages.shadow = Math.round(performance.now() - _tStage); _tStage = performance.now();
+            // The sky's E1 cloud-bake program on its own target (MRT null), so no re-bake links it mid-race.
+            if (typeof sky !== "undefined" && sky && sky.cacheWarm) { _gpuLastOperation = "compile-sky-cache"; await sky.cacheWarm(renderer); }
             _warmStages.mirror = null;
             if (wantMirrorWarm()) {
-              prepareMirrorTarget(16, 8);
+              prepareMirrorTarget(16, 8, true);   // true: also show the mirror's own instanced meshes (A1)
               _mirUsed = true;   // future mirror compiles still need CPU attributes
               if (lit.setSsrMrt) lit.setSsrMrt(false);
               if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
@@ -2612,7 +2890,7 @@ const TLX = (function () {
         try { return localStorage.getItem("apex26.tlxChunkRelease") === "1"; } catch (_) { return false; }
       })();
       let _mirrorSweepAt = 0;
-      const _mirrorStat = { sweeps: 0, geos: 0, freedMB: 0, drains: 0, chunks: 0, gate: "?" };
+      const _mirrorStat = { sweeps: 0, geos: 0, freedMB: 0, drains: 0, chunks: 0, gate: "?", gateBits: -1 };
       // Throttled on performance.now(), never a frame counter: a frame counter
       // is not a clock, and the first attempt at this lever shipped
       // `(++n % 90) === 0` that never once fired (PERF-FINDINGS 2m).
@@ -3117,6 +3395,7 @@ const TLX = (function () {
         _postRebuild = false;   // lit/fx go too: no chain to rebuild for
         _cancelSoftBlits();
         try { if (deadPost && deadPost.dispose) deadPost.dispose(); } catch (_) { /* best-effort degradation */ }
+        try { if (sky && sky.dispose) sky.dispose(); } catch (_) { /* its two bake targets: best-effort */ }
         sky = null;
         hideSkyMesh();
         try { scene.backgroundNode = null; } catch (_) { /* node already gone */ }
@@ -3415,11 +3694,13 @@ const TLX = (function () {
 
         shadowBegin(vp) { if (shadowSys) shadowSys.shadowBegin(vp); },
         castShadow(mesh, model) { if (shadowSys) shadowSys.castShadow(mesh, model); },
-        castShadowChunked(mesh, model) {
+        // reach = [x, y, z, r] (the lamp passes, shadow-pass.js): also drop chunks
+        // whose AABB lies beyond r of that point. World space: props cast at identity.
+        castShadowChunked(mesh, model, reach) {
           if (!shadowSys) return;
           const S = shadowSys.S;
           if (mesh && mesh.chunks && chunkedSys && S.depthPassOn) {
-            const n = chunkedSys.cull(mesh, S.castCullVP || S.lightVP, null, 0);
+            const n = chunkedSys.cull(mesh, S.castCullVP || S.lightVP, reach || null, reach ? reach[3] : 0);
             const vis = chunkedSys.visList;
             for (let i = 0; i < n; i++) shadowSys.castShadow(vis[i].wrap, model);
             return;
@@ -3550,8 +3831,8 @@ const TLX = (function () {
             return;
           }
           _poolBatch++;
-          _instAlive.clear();
-          for (let i = 0; i < drawList.length; i++) {
+          _instStamp++;
+          for (let i = 0; i < drawList.n; i++) {
             const rec = drawList[i];
             if (rec.instanced) continue;   // city batches: sub-pixel on a 64px cube
             if (rec.chunked) {
@@ -3578,7 +3859,18 @@ const TLX = (function () {
             pinSkyMaterial();
             renderer.setRenderTarget(envRT, face & 7);
             _gpuLastOperation = "render-env";
-            renderer.render(scene, faceCam);
+            // E10: with generateMipmaps on, three rebuilt the WHOLE cube's chain
+            // (6 faces x every level) after each face; the explicit pass after
+            // face 5 below covers the complete cube once. The flag is lowered
+            // only around a face render, and only once a first render (flag up)
+            // has allocated the texture with its mip levels — three sizes the
+            // level count from this flag at creation — and only when that
+            // explicit pass has a function to call.
+            const _envOneMip = _envMipsAlloc && (typeof renderer.generateMipmaps === "function"
+              || !!(renderer.backend && typeof renderer.backend.generateMipmaps === "function"));
+            if (_envOneMip) envRT.texture.generateMipmaps = false;
+            try { renderer.render(scene, faceCam); } finally { envRT.texture.generateMipmaps = true; }
+            _envMipsAlloc = true;
           } catch (e) {
             // A probe face must never strand the frame — and it must never
             // silently darken the world either. Drop the face rather than
@@ -3692,7 +3984,7 @@ const TLX = (function () {
           _mirVP.set(frame.viewProj); _mirEye = frame.eye || null; _mirCull = frame.cullDist || 0; _mirFog = frame.cullFog || null;
           scene.backgroundNode = null;
           resetRecs(); _dMatUsed = 0; _fxMatUsed = 0;
-          _instAlive.clear();
+          _instStamp++;
           _mirActive = true;
           _mirUsed = true;
           return true;
@@ -3702,7 +3994,7 @@ const TLX = (function () {
           _mirActive = false;
           try {
             _poolBatch++;
-            for (let i = 0; i < drawList.length; i++) {
+            for (let i = 0; i < drawList.n; i++) {
               const rec = drawList[i];
               if (rec.instanced) { _showInstanced(rec, i); continue; }
               if (rec.chunked) {
@@ -3730,7 +4022,6 @@ const TLX = (function () {
           try { renderer.setRenderTarget(softOutRT()); } catch (_) { /* device dying: present owns it */ }
           resetRecs();   // the main pass re-issues its own draws
           _dMatUsed = 0; _fxMatUsed = 0;
-          _instAlive.clear();
           _poolBatch++;
         },
         mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? _mirRectScratch : null; if (_mirRect) for (let i = 0; i < 4; i++) _mirRect[i] = +r[i] || 0; _mirFlip = flip !== false; },
@@ -3755,6 +4046,9 @@ const TLX = (function () {
         // _envGaveUp reads as READY on purpose: the caller polls this to stop
         // re-probing, and a probe that cannot succeed must stop being asked.
         // The cube stays unbound — envState() is where the difference shows.
+        // The opt-out as a capability: game.js skips its whole probe branch (a track
+        // sample, the latch bookkeeping) instead of calling a begin that returns null.
+        envProbeOptOut: _envOptOut,
         envProbeReady() { return envReady || _envGaveUp; },
         envProbeReset() {
           envFacesMask = 0; envReady = false; _envBlank = false;
@@ -3834,7 +4128,7 @@ const TLX = (function () {
           });
         },
         awaitSoftPresent(timeoutMs) {
-          if (!_softBlit) return Promise.resolve(_softBlitGen);
+          if (!_softBlit) return arguments[1] === "frame" ? _awaitFrame(timeoutMs != null ? timeoutMs : 8000) : Promise.resolve(_softBlitGen);
           if (!_displayCtx) return Promise.reject(new Error("no display ctx"));
           const start = _softBlitGen;
           const ms = timeoutMs != null ? timeoutMs : 15000;
@@ -3886,12 +4180,11 @@ const TLX = (function () {
         // functions (not omitted): descriptor-copy onto GLX would otherwise
         // keep dead GLX closures. See backend-surface-parity.test.mjs.
         createInstancedBatch,
-        cullInstances,
-        // NOT IMPLEMENTED, declared rather than omitted — same reason as the
-        // members above. DebrisWorld feature-tests it and keeps the per-body
-        // loop here, which is what TLX ships today. docs/PERF-FINDINGS.md 2h.
-        updateInstances,
-        drawInstanced,
+        // While the mirror records, each routes to the batch's mirror view (A1).
+        cullInstances: (b, planes, opts) => cullInstances(opts && opts.upload === false ? b : _passBatch(b), planes, opts),
+        updateInstances: (b, m, n, c) => updateInstances(_passBatch(b), m, n, c),
+        drawInstanced: (b, opts) => drawInstanced(_passBatch(b), opts),
+        instPerPass: _instPerPass,
         freeInstancedBatch,
         castShadowInstanced,
         // Request after race setup; present() compiles the prepared race frame,
@@ -4013,7 +4306,7 @@ const TLX = (function () {
               && (typeof performance !== "undefined" ? performance.now() : Date.now()) >= _postRetryAt) {
             _postRebuild = false; post = buildPost(); if (post) post.resize(W, H);
           }
-          _instAlive.clear();
+          _instStamp++;
           const z = frame && frame.skyZenith;
           const f = (z && z.length >= 3) ? z
             : ((frame && frame.fogColor) || [0.04, 0.04, 0.06]);
@@ -4139,8 +4432,9 @@ const TLX = (function () {
         // shared geometry, untouched by the scale).
         drawShadow(modelMat, w, l) {
           if (!fx || !modelMat) return;
-          pushRec(getFxQuad(), fxMatFor(modelMat, w, l), fx.shadowMat, undefined, undefined, 0, null, null);
           _fxFrame.shadows++;
+          if (_blobAppend(modelMat, w, l)) return;
+          pushRec(getFxQuad(), fxMatFor(modelMat, w, l), fx.shadowMat, undefined, undefined, 0, null, null);
         },
         drawMark(modelMat, w, l) {
           if (!fx || !modelMat) return;
@@ -4249,10 +4543,12 @@ const TLX = (function () {
         },
         drawDecal(mesh, modelMat, tex, opts) {
           if (!fx || !mesh || !mesh.geo || !tex || !tex.tex || !modelMat) return;
-          pushRec(mesh.geo, fxMatFor(modelMat, 1, 1),
-                  fx.decalMaterialFor(tex.tex, (opts && opts.glow) || 0), undefined, undefined, 0, null, null);
+          const mat = fx.decalMaterialFor(tex.tex, (opts && opts.glow) || 0);
           _fxFrame.decals++;
+          if (opts && opts.batch && _decalAppend(mesh.geo, modelMat, mat)) return;
+          pushRec(mesh.geo, fxMatFor(modelMat, 1, 1), mat, undefined, undefined, 0, null, null);
         },
+        decalRuns: true,   // CarMesh queues its tail glows into one run (F3)
         present(opts) {
           _poolBatch++;
           _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -4282,6 +4578,8 @@ const TLX = (function () {
             const AL = frameAllLights;
             const knob = framePerChunk;
             let total = 0, nrec = 0, cell = 0, cellSplit = false, first = null;
+            // Both chunked-only walks may cover the whole pool: a slot past the
+            // live count is a record resetRecs already nulled (chunked null).
             for (let k = 0; k < drawList.length; k++) {
               const ck = drawList[k].chunked;
               if (!ck || !ck.chunks || !ck.chunks.length) continue;
@@ -4359,7 +4657,7 @@ const TLX = (function () {
             }
           }
 
-          for (let i = 0; i < drawList.length; i++) {
+          for (let i = 0; i < drawList.n; i++) {
             const rec = drawList[i];
             if (rec.instanced) {
               _showInstanced(rec, i);
@@ -4462,6 +4760,7 @@ const TLX = (function () {
               painted = true;   // nothing drawn this frame by design; the last blit stays up
             } else if (post && _postF.proj && !_postF.noEnv) {
               pinSkyMaterial();
+              skyCacheStep();   // E1: before the MRT goes on (its own target, MRT null)
               if (lit && lit.setSsrMrt) lit.setSsrMrt(true);
               if (fx && fx.setSsrMrt) fx.setSsrMrt(true);
               const _hadMrt = !!(TSL.mrt && renderer.setMRT);
@@ -4469,10 +4768,8 @@ const TLX = (function () {
               if (_hadMrt) renderer.setMRT(_ssrMrtNode());
               if (post.setMirror) {
                 // Pixels of the present target (the SGSR output size when upscaling).
-                const up = wantSpatialUpscale(), cw = up ? presentW : W, ch = up ? presentH : H;
-                const r = _mirRect, ok = !!(r && mirRT && _mirRenders > 0 && !_mirDead);
-                post.setMirror(ok ? mirRT.texture : null, ok ? [Math.round(r[0] * cw), Math.round(r[1] * ch),
-                  Math.round(r[2] * cw), Math.round(r[3] * ch)] : null, ok && mirRT.texture.type === THREE.HalfFloatType, _mirFlip);
+                const up = wantSpatialUpscale(), ok = !!(_mirRect && mirRT && _mirRenders > 0 && !_mirDead);
+                post.setMirror(ok ? mirRT.texture : null, ok ? _mirPx(up ? presentW : W, up ? presentH : H) : null, ok && mirRT.texture.type === THREE.HalfFloatType, _mirFlip);
               }
               try {
                 renderer.setRenderTarget(post.sceneTarget());
@@ -4515,6 +4812,7 @@ const TLX = (function () {
           }
           _presentN++;
           _presentMs += (_presentAcc - _presentMs) * 0.1; _presentAcc = 0;
+          if (painted && _frameWaiters.length) _frameWaiters.splice(0).forEach((w) => w());
           // AUTO SELF-HEAL: a WebGPU device that rejects work early is a
           // device that is drawing part of the scene, and nothing above can
           // see that — a rejected lit pipeline throws nothing on the JS side,
@@ -4576,8 +4874,13 @@ const TLX = (function () {
           const _sweepOptIn = _mirrorSweepOptIn;   // read once at create: an A/B knob set before load
           pruneGeoRegistry(_now);
           _mirrorStat.drains++;
-          _mirrorStat.gate = (envReady ? "R" : "-") + (_envGaveUp ? "G" : "-")
-                           + (envRT ? "T" : "-") + (_sweepOptIn ? "S" : "-");
+          // The string is rebuilt only when a term moves (A7: was a concat per present).
+          const _gb = (envReady ? 1 : 0) | (_envGaveUp ? 2 : 0) | (envRT ? 4 : 0) | (_sweepOptIn ? 8 : 0);
+          if (_gb !== _mirrorStat.gateBits) {
+            _mirrorStat.gateBits = _gb;
+            _mirrorStat.gate = (envReady ? "R" : "-") + (_envGaveUp ? "G" : "-")
+                             + (envRT ? "T" : "-") + (_sweepOptIn ? "S" : "-");
+          }
           // The opt-in BYPASSES the env gate on purpose. On a phone profile that
           // gate is shut (the probe is tier-gated off), so without this the A/B
           // knob cannot A/B the configuration that broke a player's handset —
@@ -4643,6 +4946,7 @@ const TLX = (function () {
               stars: sky ? sky.uniforms.stars.value : -1,
               cloud: sky ? sky.uniforms.cloud.value : -1,
               sunDir: sky ? sky.uniforms.sunDir.value.toArray() : null,
+              cache: sky && sky.cacheState ? sky.cacheState() : null,   // E1 cloud-noise cache (tsl-sky.js)
             };
           },
           chunkState() {
@@ -4835,7 +5139,7 @@ const TLX = (function () {
           // Everything here is a COUNT or a size the renderer already tracks —
           // reporting it costs nothing and guessing costs an afternoon.
           memState() {
-            const o = { mats: matCache.size, pool: meshPool.length, draws: drawList.length,
+            const o = { mats: matCache.size, pool: meshPool.length, draws: drawList.n,
                         geoKeys: meshByGeo.size, batch: _poolBatch,
                         // The mirror sweep reports what it FREED, not that it ran:
                         // the first version of this lever never executed and read

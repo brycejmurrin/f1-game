@@ -145,14 +145,15 @@ function wheelHasScreen(style) { return !!SCREEN_WHEELS[style || wheel()]; }
 
 // The eye and the wheel mount for a wheel and a seat (default: the chosen ones).
 // Frozen and cached per pair: vantage() and the rig draw read it every frame.
-const _layouts = {};
+const _layouts = {};   // wheel -> seat -> layout: two lookups, no key string per frame
 function layout(w, s) {
-  const wk = MOUNTS[w] ? w : wheel(), sk = SEATS[s] ? s : seat(), key = wk + "|" + sk;
-  if (!_layouts[key]) {
+  const wk = MOUNTS[w] ? w : wheel(), sk = SEATS[s] ? s : seat();
+  const byW = _layouts[wk] || (_layouts[wk] = {});
+  if (!byW[sk]) {
     const st = SEATS[sk], m = MOUNTS[wk];
-    _layouts[key] = Object.freeze({ eyeF: EYE_F + st[0], eyeU: EYE_U + st[1], wheelY: m[0] + st[1], wheelZ: m[1] + st[0], wheelS: m[2] });
+    byW[sk] = Object.freeze({ eyeF: EYE_F + st[0], eyeU: EYE_U + st[1], wheelY: m[0] + st[1], wheelZ: m[1] + st[0], wheelS: m[2] });
   }
-  return _layouts[key];
+  return byW[sk];
 }
 
 // A cockpit-view consumer that must follow a change made mid-race.

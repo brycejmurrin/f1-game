@@ -178,6 +178,7 @@ const PitSigns = (function () {
    *  from the row's centre: the decal shader has no fog, and a sign that far
    *  off would float unfogged on a misty dusk. `glow` reads as a lit fascia
    *  at night (the garage's door sign draws at 0.62). */
+  const _near = (eye, a) => { const dx = eye[0] - a[0], dz = eye[2] - a[2]; return dx * dx + dz * dz <= 350 * 350; };   // hoisted: no closure per frame
   function draw(gfx, track, model, eye, night, hidden, called) {
     const m = track && track.meshes, q = track && track.pitSigns;
     _calls++;
@@ -185,9 +186,8 @@ const PitSigns = (function () {
     if (eye) {
       // Within 350 m of the row's centre OR of any board (the approach boards
       // stand up to 400 m before the row).
-      const near = (a) => { const dx = eye[0] - a[0], dz = eye[2] - a[2]; return dx * dx + dz * dz <= 350 * 350; };
-      let ok = q.centre ? near(q.centre) : !q.anchors || !q.anchors.length;
-      if (!ok && q.anchors) for (let i = 0; i < q.anchors.length && !ok; i++) ok = near(q.anchors[i]);
+      let ok = q.centre ? _near(eye, q.centre) : !q.anchors || !q.anchors.length;
+      if (!ok && q.anchors) for (let i = 0; i < q.anchors.length && !ok; i++) ok = _near(eye, q.anchors[i]);
       if (!ok) return false;
     }
     _opts.glow = night ? 0.5 : 0;

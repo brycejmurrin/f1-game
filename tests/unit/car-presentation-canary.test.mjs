@@ -152,7 +152,9 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   assert.ok(draw, "body + wheels on _groundMat for every procedural car");
   // The caster passes live in js/render/shared/shadow-pass.js (teamMesh through deps, the player through G).
   const sp = read("js/render/shared/shadow-pass.js");
-  assert.match(sp, /if \(_hasLivePlayerShadow\) _castPlayer\(\);/);
+  // C8 (TLX-PERF-HUNT 2026-10-11): the car pass gates the player on distance like the AI cars.
+  assert.match(sp, /if \(_carPlayerIn\) _castPlayer\(\);/);
+  assert.match(sp, /const _carPlayerIn = _hasLivePlayerShadow && /);
   assert.match(sp, /G\.gfx\.castShadow\(_playerCockpit \|\| deps\.teamMesh\(G\.player\.team, G\.player, true\), _playerMat\(\)\)/,
     "the player casts the silhouette at livePlayerMat unless a first-person view resolved the cockpit body");
   assert.match(sp, /G\.gfx\.castShadow\(deps\.teamMesh\(_shadowTeams\[i\], _shadowCars\[i\], true\), _shadowMats\[i\]\)/);
@@ -260,7 +262,8 @@ test("the mirror and the PiP draw rivals via teamBodyMesh + the field wheels, ne
   assert.doesNotMatch(mp, /teamMesh/, "mirror-pass.js reaches no whole-car mesh");
   assert.match(mp, /const \{ drawWorldMeshes, drawCar, /);
   assert.match(mp, /drawCar\(c, _mat, paint, night\);/, "the uncapped loop (apex26.fieldLod=0)");
-  assert.match(mp, /if \(_cKeep\[i\]\) \{ drawCar\(_cCars\[i\], _cMats\[i\], paint, night\); _cars\+\+; \}/, "the FieldLod nearest-6 loop");
+  // Hunt 2 F6: ranked on renderPosOf, so only the kept cars are posed, just before their draw.
+  assert.match(mp, /if \(_cKeep\[i\]\) \{\s*if \(!_cPosed\[i\]\) \{ pose\(_cCars\[i\]\); basisMat\(_R, _U, _F, _P, _cMats\[i\]\); \}\s*drawCar\(_cCars\[i\], _cMats\[i\], paint, night\); _cars\+\+;/, "the FieldLod nearest-6 loop");
   assert.match(game, /MirrorPass\.create\(G, \{ drawWorldMeshes, drawCar: carDraw\.drawMirrorCar,/);
   const fn = cd.match(/function drawMirrorCar\(c, mat, paint, night\) \{[\s\S]*?\n {4}\}/);
   assert.ok(fn, "CarDraw.drawMirrorCar");
@@ -522,7 +525,7 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
   G.track = { total: 5000, propTop: 20, meshes: { terrain: {}, road: {}, props: {} } };
   G.camEye = [0.31, 1.07, 1000.4]; G.camTgt = [0.2, 1, 1030];
   const sp = ctx.ShadowPass.create(G, { teamMesh: carDraw.teamMesh, vStd: (x) => x, cockpitCaster: carDraw.cockpitCaster });
-  // The grounded transform game.js's currentCarGroundMat writes (banked: its
+  // The grounded transform currentCarGroundMat in game.js writes (banked: its
   // right/up are rolled, which the camera-anchored cockpit basis is not).
   const ground = [0.995, 0.0998, 0, 0, -0.0998, 0.995, 0, 0, 0, 0, 1, 0, 0.3, 0.05, 1000.2, 1];
   const len = Math.hypot(0, 0.04, 1);
@@ -542,7 +545,7 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
     return mine[0];
   };
   const close = (a, b, msg, eps = 2e-3) => a.forEach((x, i) => assert.ok(Math.abs(x - b[i]) < eps, `${msg}: [${i}] ${x} vs ${b[i]}`));
-  // What game.js's cockpit branch draws the body at: the same call over the same inputs.
+  // What the cockpit branch in game.js draws the body at: the same call over the same inputs.
   const drawnMat = (seat) => {
     const R = [0, 0, 0], U = [0, 1, 0], F = [0, 0, 0], P = [0, 0, 0];
     ctx.GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, R, U, F, P, ctx.GameCams.seatFwd(seat), ctx.GameCams.seatUp(seat));

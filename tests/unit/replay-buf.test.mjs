@@ -10,6 +10,7 @@ import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
@@ -216,7 +217,7 @@ test("scrubbed poses render wholly at recorded positions and yaw for every rende
   const before = field.map(c => ({ ...c }));
   // Use the game's actual render helpers: a camera-only assertion would miss
   // the body mixing the historical pose with its live interpolation endpoints.
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8"), render = vm.createContext({ _rp: {}, renderAlpha: 0, Math });
+  const game = gameSource(), render = vm.createContext({ _rp: {}, renderAlpha: 0, Math });
   for (const name of ["renderPosOf", "yawVisInterp", "headInterp"]) {
     const start = game.indexOf("function " + name + "("); assert.ok(start >= 0);
     vm.runInContext(game.slice(start, game.indexOf("\n}", start) + 2), render);
@@ -265,7 +266,7 @@ test("retirement edge auto-tags; jumpLastTag seeks; scrubbing blocks settle path
 
   // Contract: endRace / career score must refuse while scrubbing (source pin —
   // a settle spy would need the full game boot; the call sites are the gate).
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   assert.match(game, /replayBuf\.isScrubbing\(\)/);
   assert.match(game, /replayBuf\.onRaceStart|replayBuf\.reset/);
   assert.match(game, /Career\.scoreRound/);
@@ -314,9 +315,81 @@ test("a grid over 22 cars (MY TEAM / LEGENDS) records instead of resetting every
   }
 });
 
+test("a red-flag re-grid (same clock, same cars) is a timeline break: two segments, never blended across", () => {
+  // R3-STATES-3: redFlagRestart() teleports every car to its grid box with
+  // raceT unchanged, so neither time heuristic fired and at() slid the field
+  // 149 m through the scenery in one 1/30 s sample (p9-redflag-replay.cjs).
+  const R = boot(), field = cars(2), api = R.create({ cars: field, netPlay: { active: () => false } });
+  api.breakTimeline();   // an empty ring has nothing to break: no-op
+  const dt = 1 / R.HZ, kA = R.HZ * 2 - 1, T = (k) => k / R.HZ;   // k / HZ: the slot gate's own FP-exact spacing
+  for (let i = 0; i <= kA; i++) {
+    for (const c of field) { c.px += 1; c.speed = 30; }
+    api.sample(T(i), field);
+  }
+  const tA = T(kA), a = field.map((c) => ({ px: c.px, pz: c.pz }));
+  // Re-grid: car 0 jumps 149 m; car 1 was 5 m from its box — under any jump gate,
+  // so only the explicit break keeps it from blending.
+  field[0].px += 149; field[1].px -= 5; field[0].speed = field[1].speed = 0;
+  api.breakTimeline();
+  assert.equal(api.sample(T(kA + 0.4), field), false, "same slot: nothing written, the break stays pending");
+  const b = field.map((c) => ({ px: c.px, pz: c.pz }));
+  assert.equal(api.sample(T(kA + 1), field), true);
+  for (let i = 2; i <= R.HZ; i++) { for (const c of field) c.px += 0.5; api.sample(T(kA + i), field); }
+  assert.equal(api.window().frames, R.HZ * 3, "both segments are kept — a break is not a clear");
+  for (const [u, want] of [[0.1, a], [0.49, a], [0.51, b], [0.9, b]]) {
+    const snap = api.at(T(kA + u));
+    for (let c = 0; c < 2; c++) {
+      assert.equal(snap.cars[c].px, want[c].px, `u=${u} car ${c}: the nearer real sample, no blend`);
+      assert.equal(snap.cars[c].pz, want[c].pz);
+    }
+  }
+  // Inside each segment the ring still interpolates.
+  assert.ok(Math.abs(api.at(T(kA - 0.5)).cars[0].px - (a[0].px - 0.5)) < 1e-4, "segment A blends");
+  assert.ok(Math.abs(api.at(T(kA + 1.5)).cars[1].px - (b[1].px + 0.25)) < 1e-4, "segment B blends");
+  // clear() drops a pending break with the history.
+  api.breakTimeline(); api.clear();
+  field[0].px = 0; api.sample(100, field); field[0].px = 1; api.sample(100 + dt, field);
+  assert.ok(Math.abs(api.at(100 + dt / 2).cars[0].px - 0.5) < 1e-4, "a fresh ring starts unbroken");
+});
+
+test("one car's teleport (RECOVER / rescue) snaps without clearing; fast or stalled driving still blends", () => {
+  // The heuristic is per car and render-only: a RECOVER after a crash must not
+  // wipe the crash from the ring, and a frame-loop stall at speed must not read
+  // as a teleport (the allowance grows with recorded speed × sample gap).
+  const R = boot(), field = cars(2), api = R.create({ cars: field, netPlay: { active: () => false } });
+  const dt = 1 / R.HZ;
+  for (let i = 0; i < R.HZ; i++) {
+    field[0].px += 3; field[0].speed = 90;   // ~90 m/s
+    field[1].px += 1; field[1].speed = 30;
+    api.sample(i / R.HZ, field);
+  }
+  api.pushTag("contact", 0.5, 1);
+  const t = (R.HZ - 1) / R.HZ, x1 = field[1].px, z1 = field[1].pz;
+  // Car 1 is rescued 60 m sideways (back to x = 0); car 0 drives 3 m.
+  field[0].px += 3; field[1].pz += 60;
+  api.sample(1, field);   // = t + dt
+  const mid = api.at(t + dt * 0.25);
+  assert.equal(mid.cars[1].pz, z1, "the rescued car shows its last real pose, not a slide through the run-off");
+  assert.equal(mid.cars[1].px, x1);
+  assert.equal(api.at(t + dt * 0.75).cars[1].pz, z1 + 60, "past half-way it shows the recovered pose");
+  assert.ok(Math.abs(mid.cars[0].px - (field[0].px - 2.25)) < 1e-4, "the other car still blends");
+  assert.equal(api.window().frames, R.HZ + 1, "no clear"); assert.equal(api.lastTag().kind, "contact");
+  // A 1 s stall at 90 m/s covers 90 m between samples — real motion, not a teleport.
+  const t2 = 2, x0 = field[0].px;
+  field[0].px += 90;
+  api.sample(t2, field);
+  assert.ok(Math.abs(api.at(t2 - 0.5).cars[0].px - (x0 + 45)) < 1e-3, "a stalled sample gap at speed blends");
+});
+
 async function bootSoloRaceForScrubAudio() {
-  let fa = null;
-  const g = await createGame({ carMeshes: false, onSandbox: (sb) => { fa = installFakeAudio(sb); } });
+  let fa = null, rb = null;
+  // The game's ring is a closure handle, never a G member (1a-F3): catch the instance ReplayBuf.create hands game.js.
+  const trapCreate = (sb) => {
+    let mod;
+    Object.defineProperty(sb, "ReplayBuf", { configurable: true, enumerable: true, get: () => mod,
+      set: (v) => { mod = Object.assign({}, v, { create: (...a) => (rb = v.create(...a)) }); } });
+  };
+  const g = await createGame({ carMeshes: false, onSandbox: (sb) => { fa = installFakeAudio(sb); trapCreate(sb); } });
   const sb = g.sandbox;
   sb.dispatchEvent({ type: "pointerdown", pointerType: "mouse" });
   await vmSettle(() => !sb.GameAudio._stub && !sb.AudioPanel._stub, 4000);
@@ -328,17 +401,23 @@ async function bootSoloRaceForScrubAudio() {
   g.apex.setInput({ throttle: true, steer: 0 });
   const t0 = sb.performance.now();
   for (let i = 1; i <= 240; i++) g.pumpFrame(t0 + i * 1000 / 60);
-  return { g, sb, G: g.G, t0, frameBase: 240 };
+  assert.ok(rb, "ReplayBuf.create was trapped");
+  return { g, sb, G: g.G, rb, t0, frameBase: 240 };
 }
 
+test("the replay ring is not a G expando: game.js never assigns G.replayBuf (1a-F3)", () => {
+  // The façade is DECLARED, not grown by assignment (an Object.seal(G) would throw at boot); tests reach the ring above.
+  const game = gameSource();
+  assert.ok(!/\bG\.replayBuf\s*=(?!=)/.test(game), "G.replayBuf = … is an undeclared façade member");
+});
+
 test("solo pause replay scrub feeds engine and rivals; rpm tracks speed; radio silent", async () => {
-  const { g, sb, G, t0, frameBase } = await bootSoloRaceForScrubAudio();
+  const { g, sb, G, rb, t0, frameBase } = await bootSoloRaceForScrubAudio();
   try {
     const doc = g.sandbox.document;
     G.els.pausebtn.onclick();
     assert.equal(G.paused, true);
     assert.equal(sb.GameAudio.debug().engineOn, false, "plain pause silences the engine");
-    const rb = G.replayBuf;
     assert.ok(rb && rb.window().frames >= 90, "need ~3 s of ring before scrub");
     let radioCalls = 0;
     const origRadio = sb.GameAudio.radioVoice.bind(sb.GameAudio);
@@ -376,17 +455,17 @@ function rivalPanWithGain(sb) {
 }
 
 test("dbgCam during replay scrub pans rivals from the free camera, not chase", async () => {
-  const { g, sb, G, t0, frameBase } = await bootSoloRaceForScrubAudio();
+  const { g, sb, G, rb, t0, frameBase } = await bootSoloRaceForScrubAudio();
   try {
     G.els.pausebtn.onclick();
-    assert.equal(G.replayBuf.beginScrub(false), true);
+    assert.equal(rb.beginScrub(false), true);
     const rival = G.cars.find((c) => c !== G.player);
     assert.ok(rival, "need a rival car");
     g.apex.headless(false);
     const saveFrustum = G.gfx.makeFrustumPlanes;
     G.gfx.makeFrustumPlanes = null;
-    const origTickScrub = G.replayBuf.tickScrub.bind(G.replayBuf);
-    G.replayBuf.tickScrub = (dt) => {
+    const origTickScrub = rb.tickScrub.bind(rb);
+    rb.tickScrub = (dt) => {
       origTickScrub(dt);
       G.player.s = 500; G.player.x = 0;
       rival.s = 502; rival.x = 0;
@@ -408,14 +487,14 @@ test("dbgCam during replay scrub pans rivals from the free camera, not chase", a
 });
 
 test("pause + free camera without scrub stays silent (#1262)", async () => {
-  const { g, sb, G, t0, frameBase } = await bootSoloRaceForScrubAudio();
+  const { g, sb, G, rb, t0, frameBase } = await bootSoloRaceForScrubAudio();
   try {
     G.els.pausebtn.onclick();
     assert.equal(G.paused, true);
     assert.equal(sb.GameAudio.debug().engineOn, false);
     g.sandbox.document.getElementById("pc-toggle").onclick();
     assert.equal(G.photoMode, true);
-    assert.equal(G.replayBuf.isScrubbing(), false);
+    assert.equal(rb.isScrubbing(), false);
     for (let i = 1; i <= 5; i++) g.pumpFrame(t0 + (frameBase + i) * 1000 / 60);
     assert.equal(sb.GameAudio.debug().engineOn, false, "plain pause + photo cam: no engine");
     assert.ok(sb.GameAudio.rivalState().every((v) => v.gain < 0.001), "no rival voices open");
@@ -423,17 +502,17 @@ test("pause + free camera without scrub stays silent (#1262)", async () => {
 });
 
 test("clearing dbgCam and resuming chase restores player-track rival pan", async () => {
-  const { g, sb, G, t0, frameBase } = await bootSoloRaceForScrubAudio();
+  const { g, sb, G, rb, t0, frameBase } = await bootSoloRaceForScrubAudio();
   try {
     G.els.pausebtn.onclick();
-    assert.equal(G.replayBuf.beginScrub(false), true);
+    assert.equal(rb.beginScrub(false), true);
     g.apex.headless(false);
     const saveFrustum = G.gfx.makeFrustumPlanes;
     G.gfx.makeFrustumPlanes = null;
     G.dbgCam = { eye: [0, 5, 0], target: [100, 5, 0], fov: 70, far: 2500 };
     g.pumpFrame(t0 + (frameBase + 1) * 1000 / 60);
     assert.equal(sb.GameCams.getListenerBasis().external, true, "dbgCam publishes external basis");
-    G.replayBuf.endScrub();
+    rb.endScrub();
     G.dbgCam = null;
     g.sandbox.document.getElementById("pm-resume").onclick();
     assert.equal(G.paused, false);

@@ -161,6 +161,9 @@ const vt = (fn) => {
 // Full-screen team picker: the twelve-way team choice. Its ONE host is the
 // garage's TEAM & DRIVER tab — the garage is the one place a team is chosen.
 const teamPicker = () => $("teampicker");
+// After TopModal's mirror (a MutationObserver microtask queued by the `hidden`
+// write) has run showModal()/close(): FIFO, so a later microtask sees its result.
+const afterMirror = (fn) => (typeof queueMicrotask === "function" ? queueMicrotask(fn) : Promise.resolve().then(fn));
 let previewOpenRaf = 0;
 
 function fittedLivery(t) {
@@ -218,7 +221,17 @@ function setTeamPicker(open) {
   Log.info("ui", "Menus.setTeamPicker " + (open ? "open" : "close"));
   if (open) buildTeamPicker();
   teamPicker().hidden = !open;
-  if (open) ScrollFadeRefresh();
+  if (open) {
+    ScrollFadeRefresh();
+    // FOCUS THE CURRENT TEAM, not CLOSE (#tp-close carries the sheet's
+    // autofocus): the keyboard and pad start where the player already is, as
+    // the duel picker does. A microtask, so it runs after TopModal's mirror
+    // has called showModal() (which applies autofocus).
+    afterMirror(() => {
+      const target = els.selTeams.querySelector(".team-tile.active");
+      if (target && !teamPicker().hidden) target.focus();
+    });
+  }
 }
 
 function buildTeamPicker() {
@@ -263,6 +276,11 @@ function buildTeamPicker() {
       // Same as the circuit row: the decision this sheet exists for clicked
       // silently while the card that OPENED it did not.
       if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();
+      // The team you already have: a dismiss, not a pick. Falling through reset
+      // the seat to the first free one (seat 1 -> 0) and, on LEGENDS, switched
+      // to Schumacher and reseeded the tuned build. The garage driver chips
+      // guard the same way (`i === G.driverIdx`).
+      if (i === G.teamIdx) { setTeamPicker(false); return; }
       // The old team's driver index means nothing here, and a flat seat 0 may
       // be the other player's seat in a friend race. Take the first seat nobody holds; the
       // seat-clash rule in js/net/lobby.js catches the simultaneous case.
@@ -277,6 +295,14 @@ function buildTeamPicker() {
       // The garage (the one host) repaints its own 3D car for free —
       // getSetupPreviewMesh() is keyed on the team id.
       G.buildSetup();
+      // buildSetup() replaced #cs-team-card, the control that opened this
+      // sheet, so the dialog's close() focus restore aims at a dead node and
+      // lands on <body>. Put focus on the NEW card once the close has run
+      // (TopModal's mirror closes in a microtask queued before this one).
+      afterMirror(() => {
+        const card = $("cs-team-card");
+        if (card && card.isConnected && !card.disabled && teamPicker().hidden) card.focus();
+      });
     };
     els.selTeams.appendChild(b);
   });
@@ -313,6 +339,12 @@ const leavePracticePick = () => {
   if (typeof UiExperience !== "undefined" && UiExperience.leavePracticePick) UiExperience.leavePracticePick();
 };
 const ttChrome = () => G.timeTrial && !practicePick();
+// The circuit whose ♥ the player just cleared while it was the selected one. It
+// stays on the strip, and selected, until another is picked or the chip changes:
+// snapping off it moved the selection under the CIRCUIT DETAIL sheet still
+// describing the old one, and NEXT then raced the new one.
+let keepActiveId = null;
+const pinnedActive = (t) => !!t && t.id === keepActiveId && Tracks.LIST[G.trackIdx] === t;
 const visibleTrackFilter = () => {
   if (((!G.timeTrial || practicePick()) && trackFilter === "daily-open") || (trackFilter === "fav" && !favList().length) || (trackFilter === "custom" && !hasCustom())) return "all";
   // The ACTIVE tile is never filtered out: RACE from the designer lands here on
@@ -329,6 +361,8 @@ function toggleFav(id) {
   const list = favList();
   const on = !list.includes(id);
   const next = on ? list.concat(id) : list.filter((x) => x !== id);
+  const cur = Tracks.LIST[G.trackIdx];
+  if (!on && cur && cur.id === id) keepActiveId = id;
   if (next.length) store.set("favTracks", next);
   else {
     // undefined removes the key through write() (rev + notify). rawDel skipped
@@ -351,12 +385,31 @@ els.selTracks.addEventListener("keydown", (e) => {
   const t = Tracks.LIST[+row.dataset.trackIdx];
   if (!t) return;
   e.preventDefault();
+  // A HELD F is one star: its auto-repeat flipped the favourite back and forth
+  // and re-announced on every repeat.
+  if (e.repeat) return;
   const on = toggleFav(t.id);
   if (G.announce) G.announce(on ? t.name.toUpperCase() + " ♥ FAVOURITE" : t.name.toUpperCase() + " REMOVED FROM FAVOURITES");
   const again = els.selTracks.querySelector('.track-row[data-track-idx="' + row.dataset.trackIdx + '"]')
     || els.selTracks.querySelector(".track-row");
   if (again) again.focus();
 });
+
+// ESCAPE IN THE SEARCH FIELD CLEARS THE SEARCH FIRST. TopModal's Escape
+// (js/ui/modal.js, document/capture) presses #select's BACK door, so with text
+// typed it threw away the whole picker instead of the query. Window CAPTURE,
+// not a listener on the input: document-capture runs before anything at the
+// target, so only window-capture is early enough. An empty field (or an IME
+// composition, where Escape cancels the candidate) lets the key through.
+window.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || e.isComposing || e.defaultPrevented) return;
+  const t = e.target;
+  if (!t || t.id !== "sel-track-search" || !t.value) return;
+  t.value = "";
+  applyTrackSearch("");
+  e.preventDefault();
+  e.stopPropagation();
+}, true);
 
 function applyTrackSearch(value) {
   trackQuery = String(value || "").trim().toLocaleLowerCase();
@@ -395,7 +448,9 @@ function trackInFilter(t, filter, favs) {
 function snapTrackToFilter() {
   const filter = visibleTrackFilter();
   const favs = favList();
-  if (trackInFilter(Tracks.LIST[G.trackIdx], filter, favs)) return;
+  const cur = Tracks.LIST[G.trackIdx];
+  if (keepActiveId && !pinnedActive(cur)) keepActiveId = null;
+  if (trackInFilter(cur, filter, favs) || pinnedActive(cur)) return;
   const i = Tracks.LIST.findIndex((t) => trackInFilter(t, filter, favs));
   if (i < 0) return;
   G.trackIdx = i;
@@ -405,6 +460,7 @@ function snapTrackToFilter() {
 
 function setTrackFilter(id, focus, keepDaily) {
   trackFilter = id;
+  keepActiveId = null;
   if (id !== "daily-open") store.set("trackFilter", id);
   if (!keepDaily && G.daily && G.daily.isActive()) G.daily.stop();
   if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();
@@ -657,7 +713,7 @@ function buildSelect() {
     const favs = favList();
     const filter = visibleTrackFilter();
     Tracks.LIST.forEach((t, i) => {
-      if (!trackInFilter(t, filter, favs)) return;
+      if (!trackInFilter(t, filter, favs) && !(i === G.trackIdx && pinnedActive(t))) return;
       const g = t.custom ? "MY CIRCUITS" : t.classic ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
       // Filter chips name the view. A vertical CLASSICS/SEASON divider squeezed
       // the ~500 strip, ate end slack, and clipped the last flag (apex7/11).

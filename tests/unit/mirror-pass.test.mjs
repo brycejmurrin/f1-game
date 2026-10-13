@@ -27,7 +27,7 @@ import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
-function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, throwInWorld = false, mobile = false, boxes = {}, docks = {}, bc = false, pipMode, clock = { t: 0 } } = {}) {
+function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, autoTier, userTier, isMobile = false, throwInWorld = false, mobile = false, boxes = {}, docks = {}, bc = false, pipMode, clock = { t: 0 }, xr = null } = {}) {
   const writes = { cls: 0, prop: 0 };   // <body> class toggles and custom-property writes
   const stored = {};
   if (mode) stored.hudMirror = mode;
@@ -56,8 +56,11 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
         style: { setProperty: (k, v) => { writes.prop++; props[k] = v; } } },
     },
     Input: { consumeMirror: () => { const v = mirrorPressed; mirrorPressed = false; return v; }, lookingBack: () => false },
-    PerfGov: { tier: () => tier },
+    // autoTier/userTier only when a test names them: the older governor shape had tier() alone.
+    PerfGov: Object.assign({ tier: () => tier }, autoTier === undefined ? {} : { autoTier: () => autoTier },
+      userTier === undefined ? {} : { userTier: () => userTier }),
     performance: { now: () => clock.t },
+    ...(xr ? { XrBoot: { comfort: () => xr.on } } : {}),
     GameCams: { vantage: (_t, m, s, x, spd) => { vant.push({ m, s, x, spd }); pooled.eye[0] = 0; pooled.eye[1] = 4; pooled.eye[2] = s - 12;
       pooled.tgt[0] = 0; pooled.tgt[1] = 1; pooled.tgt[2] = s + 20; return pooled; } },
     CamModes: { CAM_MODES: [{ id: "chase" }, { id: "far" }, { id: "drift" }, { id: "cockpit" }, { id: "helmet" }] },
@@ -74,7 +77,7 @@ function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, t
   const calls = [];
   let st = { dead: false, ready: false };
   const gfx = {
-    width: 1280, height: 720, mobileTier: mobile,
+    width: 1280, height: 720, mobileTier: mobile, isMobile: mobile || isMobile,
     softPresent: () => soft,
     mirrorBegin: (frame, w, h) => { calls.push(["begin", w, h, frame.viewProj, frame.eye.slice(), frame.cullDist]); return true; },
     mirrorEnd: () => { calls.push(["end"]); st = { dead: false, ready: true }; },
@@ -245,6 +248,25 @@ test("a phone gets the LITE pass: no prop batches, a short radius, fewer rivals,
   assert.equal(t1.mp.state().lite, true);
 });
 
+// Bug hunt 2026-10-10: on a cadence rung the first frame after the mirror was hidden could land on a skip
+// frame (same size, _drawn > 0) and composite the texture left from before it was hidden.
+test("the first frame after the mirror comes back draws, whatever the cadence", () => {
+  const begins = (h) => h.calls.filter((c) => c[0] === "begin").length;
+  const h = boot({ mode: "on", tier: 2 });
+  h.render(); h.render();   // frames 1 and 2 both draw (first frame, then 2 % 2)
+  assert.equal(begins(h), 2);
+  h.mp.setMode("off"); h.render();
+  assert.equal(h.mp.state().shown, false);
+  h.calls.length = 0;
+  h.mp.setMode("on"); h.render();   // frame 3: a skip frame on the half-rate rung
+  assert.equal(h.mp.state().shown, true);
+  assert.equal(begins(h), 1, "the look back draws a fresh pass on its first frame");
+  h.render();
+  assert.equal(begins(h), 2, "and the cadence resumes (frame 4 draws)");
+  h.render();
+  assert.equal(begins(h), 2, "frame 5 skips again");
+});
+
 test("only governor tier 2 halves the cadence", () => {
   const h = boot({ mode: "on", tier: 2 });
   for (let i = 0; i < 4; i++) h.render();
@@ -266,6 +288,18 @@ test("the quality ladder: full, lite, low (tier 2-3, half rate), min (tier 4+, a
   for (let i = 0; i < 6; i++) min.render();
   // Frame 1 always draws; then frames 3 and 6.
   assert.equal(min.calls.filter((c) => c[0] === "begin").length, 3);
+});
+
+// Bug hunt 2026-10-10: tier() folds in the GRAPHICS preset, so a phone on MEDIUM (every phone's default,
+// userTier 2) measured at tier 0 drew the half-rate "low" rung, and a phone on ULTRA (mobileTier cleared)
+// drew the desktop "full" rung. A phone's rung follows the MEASURED tier, floored at lite.
+test("a phone picks its rung from the measured tier, not the GRAPHICS preset floor", () => {
+  const rung = (opt) => { const h = boot(Object.assign({ mode: "on" }, opt)); h.render(); return h.mp.state().quality; };
+  assert.equal(rung({ tier: 2, autoTier: 0, userTier: 2, mobile: true }), "lite", "MEDIUM phone, measured 0: lite, not low");
+  assert.equal(rung({ tier: 0, autoTier: 0, userTier: 0, isMobile: true }), "lite", "ULTRA phone (no mobileTier): lite, not full");
+  assert.equal(rung({ tier: 2, autoTier: 2, userTier: 2, mobile: true }), "low", "a phone that MEASURED tier 2 still steps down");
+  assert.equal(rung({ tier: 4, autoTier: 0, userTier: 4, mobile: true }), "min", "LOW, never a default, is still the player's ask");
+  assert.equal(rung({ tier: 2, autoTier: 0, userTier: 2 }), "low", "a desktop's preset is a choice: tier() as before");
 });
 
 test("full quality freezes instanced packs every other drawn frame (audit #8)", () => {
@@ -517,6 +551,28 @@ test("standDown (the GARAGE preview frame) hides the mirror and clears the compo
   b.render();
   assert.equal(b.mp.state().shown, true, "the next race frame shows it again");
   assert.equal(b.frameEl.hidden, false);
+});
+
+// R3-RENDER-4: presentXR drops the post chain that composites the mirror, and the
+// DOM frame is not in the headset — the pass was a whole world render per frame
+// (+25 % of the stereo pair's prop triangles, scratch/hunt3-render/xr-mirror.cjs).
+test("an immersive XR session stands the mirror and the PiP down; EXIT VR brings the mirror back", () => {
+  const xr = { on: true };
+  const b = boot({ mode: "on", cam: "cockpit", xr });
+  for (let i = 0; i < 4; i++) b.render();
+  assert.equal(b.calls.filter((c) => c[0] === "begin").length, 0, "no mirror pass while presenting");
+  assert.equal(b.mp.state().shown, false);
+  assert.equal(b.frameEl.hidden, true);
+  assert.ok(b.calls.filter((c) => c[0] === "rect").every((c) => c[1] === null), "and no composite rect");
+  xr.on = false;
+  b.render();
+  assert.equal(b.calls.filter((c) => c[0] === "begin").length, 1, "the flat game draws it again");
+  assert.equal(b.mp.state().shown, true);
+  const pip = boot({ bc: true, pipMode: "on", cam: "chase", xr: { on: true } });
+  const sub = { s: 400, team: "s", code: "HAM" };
+  pip.G.cars.push(sub); pip.mp.setSubject(sub, "chase"); pip.render();
+  assert.equal(pip.mp.state().pip.shown, false, "no broadcast PiP pass in the headset either");
+  assert.equal(pip.calls.filter((c) => c[0] === "begin").length, 0);
 });
 
 test("race preparation lets the main warm run first, then draws the actual hidden rear view at its real size", async () => {

@@ -328,7 +328,7 @@ const TrackBuildProps = (function () {
     let curRec = null, curAnchor = null;
     const OWN_R = 20;
     const note = (kind, c, size, extra) => {
-      if (propList.length >= PROP_CAP) { propDropped++; return; }
+      if (propList.length >= PROP_CAP) { propDropped++; return null; }
       const r1 = (v) => Math.round(v * 10) / 10;
       const rec = { kind, x: r1(c[0]), y: r1(c[1]), z: r1(c[2]),
                     w: r1(size[0]), h: r1(size[1]), d: r1(size[2]) };
@@ -340,6 +340,17 @@ const TrackBuildProps = (function () {
       // recorded 9 m wide against a real ~5.4 m canopy, which closed up the sky
       // in frame()'s raster and over-stated every proximity query.
       curRec = rec; curAnchor = [c[0], c[1], c[2]];
+      return rec;
+    };
+    // Take back a record note() just made: the emitter's guard refused the very
+    // primitive the record stood for, so nothing ships there. The note comes FIRST
+    // on purpose (it owns the primitives that follow), so a refusal retracts it
+    // rather than leaving a phantom box in the registry.
+    const unnote = (rec) => {
+      if (!rec) return;
+      const i = propList.lastIndexOf(rec);
+      if (i >= 0) propList.splice(i, 1);
+      if (curRec === rec) { curRec = null; curAnchor = null; }
     };
     // Linear features — armco, catch fencing, tyre walls, boundary walls — are
     // emitted by along() in 3–6 m steps. Recording each step would bury the
@@ -473,6 +484,7 @@ const TrackBuildProps = (function () {
       }
       return x0 <= x1 ? { x0, x1, z0, z1 } : null;
     })();
+    const _pitRect = pitBox ? [pitBox.x0, pitBox.x1, pitBox.z0, pitBox.z1] : null, _rectA = [0, 0, 0, 0];
     const PIT_GATE_PAD = 15;
     const nearPit = (x, z, r) => !!pitBox && x + r + PIT_GATE_PAD >= pitBox.x0 && x - r - PIT_GATE_PAD <= pitBox.x1 &&
       z + r + PIT_GATE_PAD >= pitBox.z0 && z - r - PIT_GATE_PAD <= pitBox.z1;
@@ -512,7 +524,23 @@ const TrackBuildProps = (function () {
       // the exemption: a building's upper storey over the complex with its
       // ground floor superseded is the same float from the other side.
       const R = (rad > 0 ? rad + mh : __M.hypot(hx + mh, hz + mh)) + 2;
-      const _cn = grid.query(cx, cz, R, _hitCand, false);
+      let _cn;
+      if (rad > 0) _cn = grid.query(cx, cz, R, _hitCand, false);
+      else {
+        // A BOX hits the road only at a node e with |e·r| <= hx + w and
+        // |e·f| <= hz + w (r, f: its axes projected onto xz). Inverting that
+        // 2x2 bounds |ex|, |ez| — for a long thin box a strip, not the circle
+        // of its half-diagonal. The pit branch fires only on a pit node, and
+        // every pit node lies in pitBox, so the query keeps the strip's cells
+        // UNION pitBox's: query()'s list minus nodes that can hit nothing, in
+        // query()'s order, so the first hit (and _pitReject) is unchanged.
+        const det = __M.abs(arx * afz - arz * afx), A = hx + grid.maxHw, B = hz + grid.maxHw;
+        let ex = det > 1e-6 ? (__M.abs(afz) * A + __M.abs(arz) * B) / det + 1 : R;
+        let ez = det > 1e-6 ? (__M.abs(afx) * A + __M.abs(arx) * B) / det + 1 : R;
+        if (!(ex < R)) ex = R; if (!(ez < R)) ez = R;
+        _rectA[0] = cx - ex; _rectA[1] = cx + ex; _rectA[2] = cz - ez; _rectA[3] = cz + ez;
+        _cn = grid.queryRects(cx, cz, R, _rectA, _pitRect, _hitCand);
+      }
       for (let _ci = 0; _ci < _cn; _ci++) {
         const k = _hitCand[_ci];
         if (topY < py[k] - 0.3) continue;                 // sits below road here
@@ -1495,7 +1523,7 @@ const TrackBuildProps = (function () {
       hash, upOf, cross, norm, lerp, vadd,
       // semantic prop registry (see note() above) — scenery modules call this
       // after their own guards so only props that actually ship are recorded
-      note, noteSpan, noteSuppressed,
+      note, unnote, noteSpan, noteSuppressed,
       kitOf: (family, fallback) => {
         const D = TrackSceneryData.KIT_DEF || {};
         const row = def.kit || D[theme] || D.green || {};

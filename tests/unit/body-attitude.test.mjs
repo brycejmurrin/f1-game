@@ -15,10 +15,10 @@
  *     a huge dt is clamped to MAX_DT so a stalled tab does not launch the car.
  *   - OFF IS OFF. Disabled returns zeros and settles state, and the switch
  *     persists under the `apex26.` prefix.
- *   - THE PITCH SIGN. c.baPitch > 0 is a DIVE: game.js's axEstSm is NEGATIVE
+ *   - THE PITCH SIGN. c.baPitch > 0 is a DIVE: axEstSm in game.js is NEGATIVE
  *     under braking (updateCar: `braking ? -brakeDecel`) and the
  *     module negates it, which is what js/camera/vantage.js reads ("baPitch > 0
- *     = nose-down = braking"). game.js's BODY rotation took +pitch as nose-UP
+ *     = nose-down = braking"). BODY rotation in game.js took +pitch as nose-UP
  *     until 2026-10-02 — every car lifted its nose on the brakes — and this
  *     file's own fixture called axEstSm: +5 (power) a "brake dive". AI cars
  *     had no axEstSm and never pitched; they dive off corridorAccel now.
@@ -272,7 +272,7 @@ test("one pitch sign end to end: game.js dives the body for +pitch, the conventi
   // flip on either side alone puts the mesh and the camera at odds again.
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   const rot = game.match(/if \(_baPitch\) \{[\s\S]*?\n    \}/);
-  assert.ok(rot, "game.js's body pitch rotation is present");
+  assert.ok(rot, "body pitch rotation in game.js is present");
   // +p tilts forward toward −up: the nose (car-local +z) goes DOWN.
   assert.match(rot[0], /tmpF\[i\] = f \* cp - u \* sp;/);
   assert.match(rot[0], /tmpU\[i\] = u \* cp \+ f \* sp;/);

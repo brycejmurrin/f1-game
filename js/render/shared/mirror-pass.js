@@ -54,6 +54,23 @@ const MirrorPass = (function () {
     if (ie === "1") _instEvery = 1;
     else if (ie && +ie > 0) _instEvery = Math.min(4, Math.max(1, ie | 0));
   } catch (_) { /* default 2 */ }
+  // THE MIRROR'S LAMP BUDGET (TLX perf hunt E9). At night the inset ran the
+  // full per-chunk lamp loop (up to LightBudget.CHUNK = 24 per fragment) at 2x
+  // supersampling, and re-ranked every baked lamp from its own eye each frame.
+  //   GPU: frame.mirrorLampCap caps each chunk's lamp list (nearest-first, so
+  //        the cap keeps a chunk's nearest lamps) — read by tsl-lit only, so
+  //        GLX / WGX draw the mirror as before.
+  //   CPU: the re-rank (FrameLights.viewLights) is reused while the eye stays
+  //        within RERANK_M of the last rank, the aim within ~2 deg, for at most
+  //        RERANK_EVERY mirror frames; this frame's tail-lights are always fresh.
+  // apex26.tlxMirLampCap: unset = 12 (half the per-chunk cap), "0" = both off
+  // (today's mirror on every backend), 1..48 = that cap.
+  let _lampCap = 12;
+  try {
+    const lc = localStorage.getItem("apex26.tlxMirLampCap");
+    if (lc != null && lc !== "" && +lc >= 0) _lampCap = Math.min(48, +lc | 0);
+  } catch (_) { /* default 12 */ }
+  const RERANK_M = 2, RERANK_EVERY = 4, RERANK_AIM_COS = 0.9994;
   const QUALITY = [
     { name: "full", lite: false, res: 1.0, cull: 400, reach: 260, every: 1, instEvery: _instEvery },
     { name: "lite", lite: true,  res: 0.6, cull: 180, reach: 140, every: 1, instEvery: 1 },
@@ -106,7 +123,7 @@ const MirrorPass = (function () {
     let _coneTan = 1;        // tan(horizontal half-FOV) of the pass in flight (pass())
     // FIELD LOD candidate pool (drawCarsLod): a pooled matrix, car and eye
     // distance squared per rival that survives the arc / behind-eye / cone tests.
-    const _cMats = [], _cCars = [], _cD2 = [], _cKeep = [];
+    const _cMats = [], _cCars = [], _cD2 = [], _cKeep = [], _cPosed = [];
     let _q = QUALITY[0], _qi = -1, _qWant = -1, _qHeld = 0;
     // The frame's CSS box (measure()): the target is sized from THAT, not from
     // the render buffer, which the governor's dynamic resolution rescales every
@@ -120,9 +137,42 @@ const MirrorPass = (function () {
     if (MODES.indexOf(pipMode) < 0) pipMode = "auto";
     const _pipExtra = { bankDy: 0 };
     // The frame fields the pass swaps, saved in one reused scratch (no per-frame object).
-    const _sv = { viewProj: null, view: null, proj: null, invProj: null, invViewProj: null, eye: null, cullDist: 0, lite: undefined, freezeInst: undefined, sky: null, tune: undefined, lights: null, tailStart: 0, tailCount: 0 };
+    const _sv = { viewProj: null, view: null, proj: null, invProj: null, invViewProj: null, eye: null, cullDist: 0, lite: undefined, freezeInst: undefined, sky: null, tune: undefined, lights: null, tailStart: 0, tailCount: 0, lampCap: undefined };
     let _instFreezeSkips = 0, _instRefresh = 0;
     const _aim = [0, 0, 0];   // the pass camera's ground-plane aim, for FrameLights.viewLights
+    // E9's held re-rank: the ranked lamps (no tail-lights) of the last viewLights
+    // call, where and which way it ranked from, and how many frames it has served.
+    const _vlBuf = [], _vlEye = [0, 0, 0], _vlAim = [0, 0, 0];
+    const _vlOut = { lights: null, tailStart: 0, tailCount: 0 };
+    let _vlLamps = 0, _vlAge = Infinity, _vlTrack = null, _vlSrc = null, _vlRanks = 0, _vlHeld = 0;
+    function mirrorLights(frame) {
+      if (typeof FrameLights === "undefined" || !FrameLights.viewLights) return null;
+      const L = frame.lights;
+      if (_lampCap > 0 && L && _vlAge < RERANK_EVERY && _vlTrack === G.track && _vlSrc === L) {
+        const dx = _eye[0] - _vlEye[0], dy = _eye[1] - _vlEye[1], dz = _eye[2] - _vlEye[2];
+        const al = Math.hypot(_aim[0], _aim[2]) * Math.hypot(_vlAim[0], _vlAim[2]) || 1;
+        if (dx * dx + dy * dy + dz * dz < RERANK_M * RERANK_M
+            && (_aim[0] * _vlAim[0] + _aim[2] * _vlAim[2]) / al > RERANK_AIM_COS) {
+          _vlAge++; _vlHeld++;
+          const tc = frame.tailCount | 0, ts = tc > 0 ? frame.tailStart | 0 : (L.length / 15) | 0;
+          let j = _vlLamps * 15;
+          for (let i = ts * 15, n = (ts + tc) * 15; i < n; i++) _vlBuf[j++] = L[i];
+          _vlBuf.length = j;
+          _vlOut.lights = _vlBuf; _vlOut.tailStart = _vlLamps; _vlOut.tailCount = tc;
+          return _vlOut;
+        }
+      }
+      const vl = FrameLights.viewLights(frame, _eye, _aim);
+      _vlAge = Infinity;
+      if (!vl || !(_lampCap > 0)) return vl;
+      const n = vl.lights.length;
+      for (let i = 0; i < n; i++) _vlBuf[i] = vl.lights[i];
+      _vlBuf.length = n;
+      _vlLamps = vl.tailStart; _vlAge = 0; _vlRanks++;
+      _vlTrack = G.track; _vlSrc = L;
+      for (let i = 0; i < 3; i++) { _vlEye[i] = _eye[i]; _vlAim[i] = _aim[i]; }
+      return vl;
+    }
     // THE SUN'S VIEW-DEPENDENT TERMS STAY OUT OF THE MIRROR (a phone report:
     // "still a little flashy … sun and shadows"). The mirror is a small target
     // with no anti-aliasing of its own (FXAA runs before its composite), so
@@ -142,10 +192,11 @@ const MirrorPass = (function () {
     let _mirTune = null, _mirTuneSrc;
 
     // The target for a frame of cssW x cssH CSS px: device pixels (DPR capped at
-    // 2) x the rung's res x SS — independent of the governor's render scale, so
-    // it reallocates only when the frame resizes or the rung changes.
+    // 2) x the rung's res (x the render scale, scaledRes) x SS. It reallocates
+    // when the frame resizes, the rung changes or the main frame's scale moves.
     function targetSize(cssW, cssH, res) {
       const dpr = Math.min(2, typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
+      res = scaledRes(res);
       let w = cssW * dpr * res * SS, h = cssH * dpr * res * SS;
       const k = Math.min(1, MAX_W / (w || 1), MAX_H / (h || 1));
       w = Math.round(w * k); h = Math.round(h * k);
@@ -153,6 +204,21 @@ const MirrorPass = (function () {
       return _sz;
     }
     const _sz = [0, 0];
+    // THE GOVERNOR'S RENDER SCALE (TLX perf hunt E2). PerfGov lowers the main
+    // frame's resolution first and sheds tiers only at the scale floor, so a
+    // GPU-bound desktop kept the "full" rung's 2x supersampled target while its
+    // frame ran at 0.5-0.7: (2/scale)^2 texels per inset pixel. The rung's res
+    // now follows the scale, never below the lite rung's (max(res*s, min(res,
+    // lite)) leaves lite, low, min and the PiP exactly as they were; at scale 1
+    // nothing changes). gfx.setRenderScale moves only past its 0.02 dead zone
+    // and reallocates the main targets when it does, so this target
+    // reallocates no more often than the frame's own (phones sit on lite).
+    const LITE_RES = QUALITY[1].res;
+    function scaledRes(res) {
+      const g = G.gfx;
+      const s = g && typeof g.getRenderScale === "function" ? +g.getRenderScale() : 1;
+      return s > 0 && s < 1 ? Math.max(res * s, Math.min(res, LITE_RES)) : res;
+    }
     function el() { return _el || (_el = document.getElementById("hud-mirror")); }
     function pipEl() { return _pipEl || (_pipEl = document.getElementById("bc-pip")); }
     function bcOn() { return document.body.classList.contains("bc-on"); }
@@ -191,8 +257,12 @@ const MirrorPass = (function () {
     // behind full-screen. Never for performance (QUALITY scales it instead);
     // AUTO alone skips a SOFTWARE renderer, where a second world pass is
     // seconds a frame (and every CI run would pay it in the cockpit default).
+    // An immersive XR session: presentXR drops the post chain that composites the
+    // mirror, and #hud-mirror is not in the headset — the pass would be a whole
+    // world render (+25 % of the stereo pair's prop triangles) nobody sees.
+    const xrOn = () => typeof XrBoot !== "undefined" && !!XrBoot.comfort && XrBoot.comfort();
     function wanted(preparing) {
-      if (mode === "off") return false;
+      if (mode === "off" || xrOn()) return false;
       if (bcOn()) return false;   // a WATCH: the TV picture has no mirror (T-CAM is one of the director's shots); the PiP owns the target
       const g = G.gfx;
       if (!g || typeof g.mirrorBegin !== "function") return false;
@@ -210,7 +280,7 @@ const MirrorPass = (function () {
     // The PiP is wanted: a WATCH with a subject still running, the race, no debug
     // camera, the HUD up; AUTO skips a software renderer (a second world pass).
     function pipWanted() {
-      if (pipMode === "off" || !_sub || _sub.retired || !bcOn()) return false;
+      if (pipMode === "off" || !_sub || _sub.retired || !bcOn() || xrOn()) return false;
       const g = G.gfx;
       if (!g || typeof g.mirrorBegin !== "function" || _dead) return false;
       if (G.state !== "race" || !G.track || G.dbgCam) return false;
@@ -357,6 +427,11 @@ const MirrorPass = (function () {
     // view cone (+5 m for the car's half-length), and only the nearest
     // FieldLod.mirrorCap() (6) to the eye are drawn. The PiP keeps no cone (a
     // TV shot can look steeply down) and always draws its subject.
+    // The tests and the ranking read the car's DRAWN world position, which is
+    // what pose() writes to _P[0]/_P[2] whenever renderPosOf(c).world, so only
+    // the kept <= mirrorCap() are posed (a trackFrom, a sample, a banking and
+    // the trig each): posing every candidate first was hunt 2 F6. A car with no
+    // world pose yet is posed up front, as before.
     function drawCarsLod(paint, night, reach, centre, skip) {
       const track = G.track, ex = _eye[0], ez = _eye[2];
       let n = 0, force = -1;
@@ -364,19 +439,24 @@ const MirrorPass = (function () {
         if (skip && (c === skip || c.isPlayer)) continue;
         const ds = Math.abs(c.s - centre.s);
         if (Math.min(ds, track.total - ds) > reach) continue;
-        pose(c);
-        const dx = _P[0] - ex, dz = _P[2] - ez;
+        const rp = renderPosOf(c), world = rp.world;
+        let px, pz;
+        if (world) { px = rp.x; pz = rp.z; } else { pose(c); px = _P[0]; pz = _P[2]; }
+        const dx = px - ex, dz = pz - ez;
         const fwd = dx * _bx + dz * _bz;
         if (fwd < -3) continue;   // ahead of the eye: out of a rear view
         if (skip && Math.abs(dx * _bz - dz * _bx) > fwd * _coneTan + 5) continue;   // outside the mirror's cone
         const m = _cMats[n] || (_cMats[n] = new Float32Array(16));
-        basisMat(_R, _U, _F, _P, m);
+        if (!world) basisMat(_R, _U, _F, _P, m);
         if (c === centre && !skip) force = n;
-        _cCars[n] = c; _cD2[n] = dx * dx + dz * dz; n++;
+        _cCars[n] = c; _cPosed[n] = !world; _cD2[n] = dx * dx + dz * dz; n++;
       }
       FieldLod.nearest(_cD2, n, FieldLod.mirrorCap(), _cKeep, force);
       for (let i = 0; i < n; i++) {
-        if (_cKeep[i]) { drawCar(_cCars[i], _cMats[i], paint, night); _cars++; }
+        if (_cKeep[i]) {
+          if (!_cPosed[i]) { pose(_cCars[i]); basisMat(_R, _U, _F, _P, _cMats[i]); }
+          drawCar(_cCars[i], _cMats[i], paint, night); _cars++;
+        }
         _cCars[i] = null;
       }
     }
@@ -448,9 +528,23 @@ const MirrorPass = (function () {
         }
       } catch (_) { finishPreparation(job, false); }   // an optimisation cannot strand race entry
     }
+    // A PHONE picks its rung from what the governor MEASURED (autoTier: crash
+    // floor + evidence), floored at lite. tier() folds in the GRAPHICS preset,
+    // and on a phone that preset is not a statement about the mirror: MEDIUM is
+    // every phone's default (userTier 2 put a phone measured at tier 0 on the
+    // half-rate "low" rung), and ULTRA clears gfx.mobileTier, so the old
+    // `g.mobileTier` floor handed an ULTRA phone the desktop "full" rung. Only
+    // LOW, never a default, is still honoured as the player's ask for "min".
+    // A desktop keeps tier(): its preset is a choice (GRAPHICS: LOW pins min).
+    function qualityTier(g) {
+      if (!(g && (g.mobileTier || g.isMobile))) return PerfGov.tier();
+      const measured = PerfGov.autoTier ? PerfGov.autoTier() : PerfGov.tier();
+      const user = PerfGov.userTier ? PerfGov.userTier() : 0;
+      return Math.max(1, measured, user >= 4 ? 4 : 0);
+    }
     function quality(g) {
-      const tier = PerfGov.tier();
-      const qi = tier >= 4 ? 3 : tier >= 2 ? 2 : (g.mobileTier || tier >= 1) ? 1 : 0;
+      const tier = qualityTier(g);
+      const qi = tier >= 4 ? 3 : tier >= 2 ? 2 : tier >= 1 ? 1 : 0;
       if (qi !== _qWant) { _qWant = qi; _qHeld = 0; }
       if (qi !== _qi && (_qi < 0 || ++_qHeld >= Q_DWELL)) _qi = qi;
       _q = QUALITY[_qi];
@@ -474,6 +568,7 @@ const MirrorPass = (function () {
         if (e) e.hidden = !want;
         document.body.classList.toggle("hud-mirror-on", want);   // the radio card and flag clear it (css/hud.css)
         if (!want) { document.body.classList.toggle("hud-mirror-side", false); _sideFits = false; }
+        else _lastW = 0;   // the first look back draws: a cadence skip would composite the texture left from before it was hidden
         _measureAt = -Infinity;
       }
       const pip = pipWanted();
@@ -594,8 +689,10 @@ const MirrorPass = (function () {
       // lamps this camera sees — so they flashed in and out as the car moved.
       sv.lights = frame.lights; sv.tailStart = frame.tailStart; sv.tailCount = frame.tailCount;
       _aim[0] = _tgt[0] - _eye[0]; _aim[1] = 0; _aim[2] = _tgt[2] - _eye[2];
-      const vl = typeof FrameLights !== "undefined" && FrameLights.viewLights ? FrameLights.viewLights(frame, _eye, _aim) : null;
+      const vl = mirrorLights(frame);
       if (vl) { frame.lights = vl.lights; frame.tailStart = vl.tailStart; frame.tailCount = vl.tailCount; }
+      sv.lampCap = frame.mirrorLampCap;
+      frame.mirrorLampCap = _lampCap;   // tsl-lit's per-chunk cap for this pass (0 = uncapped)
       let began = false;
       try {
         began = g.mirrorBegin(frame, w, h);
@@ -615,9 +712,10 @@ const MirrorPass = (function () {
           frame.mirrorFreezeInstanced = sv.freezeInst;
           frame.tune = sv.tune;
           frame.lights = sv.lights; frame.tailStart = sv.tailStart; frame.tailCount = sv.tailCount;
+          frame.mirrorLampCap = sv.lampCap;
           frameSky.invViewProj = sv.sky;
           sv.viewProj = sv.view = sv.proj = sv.invProj = sv.invViewProj = sv.eye = sv.sky = null;
-          sv.tune = undefined; sv.freezeInst = undefined; sv.lights = null;
+          sv.tune = undefined; sv.freezeInst = undefined; sv.lights = null; sv.lampCap = undefined;
         }
       }
       return began;
@@ -673,6 +771,7 @@ const MirrorPass = (function () {
       // count, and the cockpit glass (car-draw.js glassState: live vs fallback).
       state: () => ({ mode, shown: _shown, collapsed: _collapsed, rect: _rect, cars: _cars, drawn: _drawn, cam: camId(), lite: _q.lite, quality: _q.name,
         instEvery: _q.instEvery || 1, instFreezeSkips: _instFreezeSkips, instRefresh: _instRefresh,
+        lampCap: _lampCap, lampRanks: _vlRanks, lampHeld: _vlHeld,
         preparing: !!_preparation, prepared: _prepared,
         pip: { mode: pipMode, shown: _pipShown, code: _sub ? _sub.code : null, cam: _subMode, rect: _pipRect },
         backend: G.gfx && G.gfx.mirrorState ? G.gfx.mirrorState() : null,

@@ -264,9 +264,17 @@ const TyreModel = (function () {
   // instead of straddling a range the way LOAD_REF must. Divided AFTER the
   // clamp, exactly as humanLoad does, so the two paths stay the same shape.
   const LOAD_AI_REF = 1.23;
+  // An AI car's SIGNED longitudinal accel. `accSm` is engine pull only: written
+  // on the throttle branch, never below 0 and stale under the brake, so the
+  // model never saw an AI car brake (Monza VM: accSm min 0, axle tilt pinned
+  // at AXLE_REST). `corridorAccel` (game.js) is the observed accel, braking
+  // and grass included; accSm stays the fallback for a car without one.
+  // Measured 2026-10-10, Monza 22 cars, 80 s: mean aiLoad 0.852 -> 0.866 (+1.6 %),
+  // inside the calendar spread LOAD_AI_REF was fitted to, so it stands.
+  function aiLong(c) { return fin(c.corridorAccel, fin(c.accSm, 0)); }
   function aiLoad(c, aTop) {
     const cons = clamp(fin(c.consistency, 0.75), 0, 1);
-    const lng = clamp(fin(Math.abs(fin(c.accSm, 0)) / Math.max(1, aTop), 0), 0, 1);
+    const lng = clamp(fin(Math.abs(aiLong(c)) / Math.max(1, aTop), 0), 0, 1);
     return clamp(LOAD_AI_BASE + LOAD_AI_STYLE * (1 - cons) + LOAD_AI_LONG * lng * lng
       + (c.offroad ? W_OFF : 0), LOAD_MIN, LOAD_MAX) / LOAD_AI_REF;
   }
@@ -326,7 +334,7 @@ const TyreModel = (function () {
   /** Signed longitudinal effort: -1 full braking .. +1 full traction. */
   function longSigned(c, aTop) {
     if (c.human) return ((c.axEstSm || 0) < 0 ? -1 : 1) * clamp(fin(c.axFrac, 0), 0, 1);
-    return clamp(fin(fin(c.accSm, 0) / Math.max(1, aTop), 0), -1, 1);
+    return clamp(fin(aiLong(c) / Math.max(1, aTop), 0), -1, 1);
   }
   /** [frontShare, rearShare] for this tick. Averages to exactly 1, by construction. */
   function axleShare(c, aTop) {
@@ -575,11 +583,13 @@ const TyreModel = (function () {
   // Which tread the conditions ask for: slick / intermediate / full wet. The
   // same ladder js/physics/consts.js WET_GRIP is indexed by, so "the right tyre"
   // means the one that actually wins there.
+  // Module scope, not an arrow built inside wetness(): gripMult() reads wetness for every car, several
+  // times a step, and the closure was a fresh allocation each time (PERF-HUNT-2 S10).
+  function wetValue(w) { return w === "rain" ? 1 : w === "wet" ? 0.5 : 0; }
   function wetness(weather, arc) {
-    const value = w => w === "rain" ? 1 : w === "wet" ? 0.5 : 0;
-    if (!arc) return value(weather);
+    if (!arc) return wetValue(weather);
     const f = clamp(arc.t / Math.max(1, arc.dur), 0, 1);
-    return value(arc.from) + (value(arc.to) - value(arc.from)) * f;
+    return wetValue(arc.from) + (wetValue(arc.to) - wetValue(arc.from)) * f;
   }
   function weatherGrip(tread, w) {
     const table = PhysicsConsts.WET_GRIP, t = Number.isInteger(tread) && tread >= 0 && tread <= 2 ? tread : 0;
@@ -677,8 +687,9 @@ const TyreModel = (function () {
     // severity took Austria's (1.97) sets in a 5-lap race to ~2 laps — the very
     // race MIN_LIFE_LAPS exists to cover. effLifeLaps is the one number both the
     // wear and the plan read, so they cannot disagree.
-    function effLifeLaps(life, lapsTarget) {
-      return Math.max(MIN_LIFE_LAPS, (life || LIFE_MID) * Math.max(1, lapsTarget || 1) / severity());
+    function effLifeLaps(life, lapsTarget) { return effLifeLapsAt(life, lapsTarget, severity()); }
+    function effLifeLapsAt(life, lapsTarget, sev) {
+      return Math.max(MIN_LIFE_LAPS, (life || LIFE_MID) * Math.max(1, lapsTarget || 1) / sev);
     }
     function planLaps(life, lapsTarget) {
       const k = LEVELS[level];
@@ -749,28 +760,31 @@ const TyreModel = (function () {
      *  the weather flipped, minutes before the road was wet. */
     function tAmb(w) { const t = T_AMBIENT[w]; return t == null ? T_AMBIENT.dry : t; }
     function tTrackDelta(w) { const d = T_TRACK_DELTA[w]; return d == null ? T_TRACK_DELTA.dry : d; }
-    function ambient() {
-      const arc = G.weatherArc;
+    // The *At forms take the façade's values as arguments: update() runs for every car every step and G is a
+    // dictionary-mode object (a hash probe + getter call per read), so it reads each value once and hands
+    // them down — ambient was read twice per car through trackTemp() (PERF-HUNT-2 S4/S7). Same arithmetic.
+    function ambient() { return ambientAt(G.weatherArc, G.raceWeather); }
+    function ambientAt(arc, weather) {
       if (arc && arc.dur > 0 && arc.from && arc.to) {
         const f = clamp(arc.t / arc.dur, 0, 1);
         return tAmb(arc.from) + (tAmb(arc.to) - tAmb(arc.from)) * f;
       }
-      return tAmb(G.raceWeather);
+      return tAmb(weather);
     }
     /** Asphalt temperature (°C): ambient plus a weather-keyed surface delta. */
-    function trackTemp() {
-      const arc = G.weatherArc;
+    function trackTemp() { const arc = G.weatherArc, weather = G.raceWeather; return trackTempAt(arc, weather, ambientAt(arc, weather)); }
+    function trackTempAt(arc, weather, a) {
       if (arc && arc.dur > 0 && arc.from && arc.to) {
         const f = clamp(arc.t / arc.dur, 0, 1);
-        const a = ambient();
         const d = tTrackDelta(arc.from) + (tTrackDelta(arc.to) - tTrackDelta(arc.from)) * f;
         return a + d;
       }
-      return ambient() + tTrackDelta(G.raceWeather);
+      return a + tTrackDelta(weather);
     }
 
-    function severity() {
-      const def = G.track && G.track.def;
+    function severity() { return severityAt(G.track); }
+    function severityAt(track) {
+      const def = track && track.def;
       const v = def && def.tyreSeverity;
       return v != null && isFinite(v) ? clamp(+v, 0.4, 2.0) : SEVERITY_DEFAULT;
     }
@@ -790,7 +804,8 @@ const TyreModel = (function () {
       const track = G.track;
       if (!track || !(track.total > 0) || !(dt > 0)) return;
       if (!c.tyre) fit(c, classRecord("medium"));
-      const load = (c.human ? humanLoad(c, G.LAT_MAX) : aiLoad(c, G.aTop()))
+      const aTop = G.aTop(), arc = G.weatherArc, weather = G.raceWeather;   // one façade read each (see ambientAt)
+      const load = (c.human ? humanLoad(c, G.LAT_MAX) : aiLoad(c, aTop))
         * (1 + FUEL_LOAD * fuelOf(c));
       c._tyreLoad = load;    // debug/telemetry only — see __apex.tyres()
       // TEMPERATURE FIRST, and on the CLOCK rather than on distance. Heat is a
@@ -798,8 +813,8 @@ const TyreModel = (function () {
       // parked on the grid must not stay at blanket temperature forever. This
       // ran after the distance early-return at first, which meant a stationary
       // car's tyres never changed temperature at all — measured.
-      const amb = ambient();
-      const trk = trackTemp();
+      const amb = ambientAt(arc, weather);
+      const trk = trackTempAt(arc, weather, amb);
       if (c.tyreTs == null) { c.tyreTs = amb; c.tyreTb = amb; }
       const vFrac = fin(Math.abs(fin(c.speed, 0)) / Math.max(1, G.vTop()), 0);
       // Graining needs a measured slide, which only human cars have (the same
@@ -816,13 +831,13 @@ const TyreModel = (function () {
       const lapFrac = Math.abs(fin(c.speed, 0)) * dt / track.total;
       if (!(lapFrac > 0)) return;
       const slipMul = 1 + W_SLIP_SPD * clamp(slide, 0, 1);
-      const dw = lapFrac * load * slipMul * LEVELS[level] / effLifeLaps(c.tyre.life, G.lapsTarget);
+      const dw = lapFrac * load * slipMul * LEVELS[level] / effLifeLapsAt(c.tyre.life, G.lapsTarget, severityAt(track));
       // Finite guard (temperature has one in tempInto): `x + NaN` is NaN and the
       // next tick's `c.tyreWear || 0` reads NaN as 0, so a single bad tick (a
       // NaN accSm through aiLoad) would wipe the set's accumulated wear.
       if (!Number.isFinite(dw)) return;
       c.tyreWear = (c.tyreWear || 0) + dw;
-      const d0 = axleTilt(c, G.aTop());
+      const d0 = axleTilt(c, aTop);
       const d = Number.isFinite(d0) ? d0 : 0;
       c.tyreWearF = (c.tyreWearF || 0) + dw * (1 + d);
       c.tyreWearR = (c.tyreWearR || 0) + dw * (1 - d);

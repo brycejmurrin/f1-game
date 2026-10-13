@@ -13,8 +13,8 @@
  *     peaked at ~0.7 s and decayed — a beached AI was never rescued. It now
  *     shares the player's beachedAt() test.
  *   - HUMAN DNF: the only human retiring ends the race 2.2 s later
- *     (RaceControl.finishDelay, by design); an AI whose reliability failure was
- *     already drawn used to be classified — and scored — from that snapshot.
+ *     (RaceControl.finishDelay, by design); an AI that had already PASSED its
+ *     drawn failure retires with it, one that never reached it stays a runner.
  *   - LIGHTS (review 2026-10-04): RECOVER or a shift tapped on the grid stayed
  *     latched and fired on the first green frame — a free re-place at rescue
  *     speed, or 2nd gear with no drive. Input.clearDriveEdges() at lights-out.
@@ -26,6 +26,15 @@
  *     dropped, sub-step remainder included — which carries, not drops.
  *   - WAITING FOR PLAYERS: the card re-shows every 3 s while a room waits for
  *     its shared start, and each re-show was a fresh squelch and voice line.
+ *   - PIT GARAGE PAUSE (bug-hunt 3, 2026-10-10): WORK ON CAR freezes the race
+ *     behind #carsetup without the pause card; a hidden tab / blur / rotate
+ *     ran the FULL pause over it — the card stacked, QUIT left the garage
+ *     open on the title, RESUME + RETURN TO RACE raced lock-less.
+ *   - RESUME COUNTDOWN (2026-10-10, a behaviour change): RESUME restarted the
+ *     sim on the frame it was tapped, mid-corner at race speed. A solo race
+ *     now holds ~1.2 s on the start plate (3, 2, 1); a net race does not.
+ *   - EXITS (round-3 hunt 2-F1..F3): a flag under the pause kept its tools (lt-open, photo mode) into RACE AGAIN;
+ *     QUIT left the pit WORK garage over the title; NEXT ROUND -> quali -> BACK x3 kept the old race's HUD.
  *
  * Run: node --test tests/unit/race-flow-fixes-vm.test.mjs
  */
@@ -34,13 +43,15 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
+import fs from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/lib/game-vm.cjs");
+const { createGame, settle } = require("../../tools/lib/game-vm.cjs");
 
 test("a red flag holds the field: no stuck-rescue kicks for the AI, no rescue for a player on the throttle", async () => {
   const g = await createGame({ track: "monza" });
@@ -106,20 +117,25 @@ test("finishers coast home at the floor and never collide with each other", asyn
   } finally { g.close(); }
 });
 
-test("the only human retiring retires every AI whose failure was already drawn", async () => {
+test("the only human retiring retires only the AI it had already PASSED the failure point of", async () => {
   const g = await createGame({ track: "monza" });
   try {
     const G = g.G;
     g.apex.setInput({ throttle: true, steer: 0 });   // the player must cross the line for a distance-keyed DNF to fire
     g.step(60 * 5);
     const ai = G.cars.filter((c) => !c.human && !c.retired);
-    const doomed = ai[3];
-    doomed.dnfAt = 0.99; doomed.dnfWhy = "gearbox";   // drawn, but beyond where the race now stops
+    const unreached = ai[3], passed = ai[4];
+    unreached.dnfAt = 0.99; unreached.dnfWhy = "gearbox";   // drawn, but never reached: the race stops far short of it
+    passed.dnfAt = 0.00001; passed.dnfWhy = "hydraulics";   // already behind the car
     G.player.dnfAt = 0.0001; G.player.dnfWhy = "engine";
-    for (let i = 0; i < 60 * 10 && G.state === "race"; i++) g.step(1);
-    assert.equal(G.state, "results", "the race ends once its only human is out");
-    assert.equal(doomed.retired, true, "a drawn failure is met, not scored past");
-    assert.equal(doomed.dnf, "gearbox");
+    // POST_FINISH_CAP: solo DNF waits for the field, then the race ends — ship
+    // assertions (passed vs unreached) still hold once the cap fires.
+    for (let i = 0; i < 60 * 90 && G.state === "race"; i++) g.step(1);
+    assert.equal(G.state, "results", "the race ends once the post-finish cap passes with its only human out");
+    assert.equal(passed.retired, true, "a failure the car had passed is met, not scored past");
+    assert.equal(passed.dnf, "hydraulics");
+    assert.equal(unreached.retired, false, "a failure it never reached is not invented at the flag (round-2 rules #2)");
+    assert.equal(unreached.dnf, null);
   } finally { g.close(); }
 });
 
@@ -295,12 +311,115 @@ test("startRaceBody aborts to the menu when the race-session bundle failed to lo
   // The loader is a closure over game.js and game-vm's onScript hook never sees the shell's scripts, so a behavioural
   // stub of ensureRaceSession is not reachable from here. Pin the guard instead: the boolean is read, and a false
   // stops the loading screen, quits to the menu, tells the player and returns before the stubs can start a race.
-  const { readFileSync } = await import("node:fs");
-  const src = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  const src = gameSource();
   const body = src.slice(src.indexOf("async function startRaceBody()"), src.indexOf("async function startRaceBody()") + 6000);
   assert.match(body, /const sessionOk = await ensureRaceSession\(\);/);
   assert.match(body, /if \(!sessionOk\) \{ loadingScreen\.stop\(\); quitToMenu\(\); announce\("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"\); return false; \}/);
   assert.ok(body.indexOf("if (!sessionOk)") < body.indexOf("await ensureAudio()"), "the abort comes before anything starts the race");
+});
+
+test("RESUME holds a solo race ~1.2 s on the start plate, a pause cancels it, and a net race resumes at once", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const G = g.G, $ = (id) => g.sandbox.document.getElementById(id), lights = $("lights");
+    g.apex.headless(true);
+    assert.equal(G.state, "race");
+    let t = g.sandbox.performance.now() + 1000;
+    const run = (s) => { for (let i = 0; i < Math.round(s * 60); i++) g.pumpFrame(t += 1000 / 60); };
+    // setPaused stamps lastFrame from the real clock, as a browser's next rAF stamp
+    // follows it; re-base the pumped clock there or the first frame is a 0.25 s gap.
+    const resume = () => { $("pm-resume").onclick(); t = g.sandbox.performance.now(); };
+    run(0.2);
+    $("pausebtn").onclick(); run(0.1); resume();
+    assert.equal(G.paused, false);
+    let t0 = G.raceT;
+    run(0.5);
+    assert.equal(G.raceT, t0, "no physics step in the first 0.5 s after RESUME");
+    assert.equal(lights.hidden, false, "the start plate carries the count");
+    assert.equal(lights.dataset.count, "2", "3, 2, 1 at 0.4 s a beat");
+    // A second pause mid-count cancels it cleanly; the next RESUME counts from 3 again.
+    $("pausebtn").onclick();
+    assert.equal(lights.hidden, true, "pausing drops the plate");
+    run(0.1); resume();
+    assert.equal(lights.dataset.count, "3");
+    // RECOVER CAR (PR #1385's pause tile) is setPaused(false) and then the R-key edge:
+    // the hold keeps that edge for its first live frame instead of clearing it as a pause does.
+    const p = G.player, rescued = p.rescueLastT;
+    vm.runInContext('Input.remoteEvent("recover")', g.ctx);
+    run(1.1);
+    assert.equal(G.raceT, t0, "still held at 1.1 s");
+    run(0.3);
+    assert.ok(G.raceT > t0, `the sim runs again after the count (raceT ${G.raceT} vs ${t0})`);
+    assert.equal(lights.hidden, true, "the plate clears at the end of the count");
+    assert.notEqual(p.rescueLastT, rescued, "a RECOVER pressed during the count lands when it ends");
+    // A NETWORKED race runs on under the card and never holds.
+    const active = G.netPlay.active;
+    G.netPlay.active = () => true;
+    try {
+      $("pausebtn").onclick(); resume();
+      t0 = G.raceT;
+      run(0.2);
+      assert.ok(G.raceT > t0, "a net race steps at once after RESUME");
+    } finally { G.netPlay.active = active; }
+  } finally { g.close(); }
+});
+test("a flag that falls under the pause closes the pause tools: no lt-open / photo mode / previewed night into RACE AGAIN (2-F1)", async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const G = g.G, doc = g.sandbox.document, $ = (id) => doc.getElementById(id);
+    g.step(30);
+    assert.equal(G.state, "race");
+    const tod0 = G.raceTimeOfDay;
+    $("pausebtn").onclick();
+    $("pm-lighting").onclick();   // SETTINGS > LIGHTING TUNER, then a preview and FREE CAMERA inside it
+    G.setTimeOfDay(tod0 === "night" ? "day" : "night");
+    $("pc-toggle").onclick();
+    assert.ok(doc.body.classList.contains("lt-open") && G.photoMode, "precondition: the tuner and photo mode are up");
+    assert.notEqual(G.raceTimeOfDay, tod0, "precondition: the preview moved the time of day");
+    G.endRace();   // a VS FRIEND race runs on under the card: the rival's flag (or the host's RESULT) ends it
+    assert.equal(G.state, "results");
+    assert.equal(doc.body.classList.contains("lt-open"), false, "lt-open hides #hud, #pausebtn and every .touchbtn in the next race");
+    assert.equal(G.photoMode, false, "photo mode's capture-phase key handler would eat WASD/arrows next race");
+    assert.equal($("lighting").hidden, true);
+    assert.equal(G.raceTimeOfDay, tod0, "the tuner's preview is not the next race's time of day");
+  } finally { g.close(); }
+});
+
+test("QUIT from the pit WORK garage closes it at the title without starting the engine (2-F2)", async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const sb = g.sandbox, G = g.G, $ = (id) => sb.document.getElementById(id);
+    g.step(30);
+    const p = G.player; p.pitState = "box"; p.pitT = 8; p.local = true;
+    G.els.workBtn.onclick();   // WORK ON CAR from the box
+    assert.ok(!$("carsetup").hidden && G.setupPreviewOn, "precondition: the pit garage is up");
+    let starts = 0; const orig = sb.GameAudio.startEngine.bind(sb.GameAudio);
+    sb.GameAudio.startEngine = (...a) => { starts++; return orig(...a); };
+    G.soundOn = true;
+    G.quitToMenu();   // the pause card's QUIT TO MENU (stacked by a hidden tab) and the rotate blocker's EXIT RACE
+    assert.equal(G.state, "menu");
+    assert.equal($("carsetup").hidden, true, "the garage must not stay over the title with RETURN TO RACE live");
+    assert.equal(G.setupPreviewOn, false, "the turntable stops drawing (and the Home world is eligible again)");
+    assert.equal(starts, 0, "no engine loop at the title");
+  } finally { g.close(); }
+});
+
+test("championship NEXT ROUND -> qualifying sheet hides the finished race's HUD, so BACK x3 reaches a clean title (2-F3)", async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const sb = g.sandbox, G = g.G, $ = (id) => sb.document.getElementById(id);
+    g.step(10);
+    G.flow = "season"; G.season = sb.SeasonCal.load();
+    G.endRace();
+    assert.equal(G.els.hud.hidden, false, "precondition: the results sheet keeps the HUD under its scrim");
+    G.els.resNext.onclick();   // NEXT ROUND -> qualifying
+    await g.settle(() => G.state !== "results", 15000);
+    assert.equal(G.state, "menu", "precondition: openQualiBody ran (the sheet's state)");
+    assert.equal($("quali").hidden, false, "precondition: the qualifying sheet is up");
+    // q-back -> rs-cancel -> the picker's BACK reaches #overlay, which is no .screen: the HUD showed through its 36 % wash.
+    assert.equal(G.els.hud.hidden, true);
+    assert.equal(G.els.lights.hidden, true);
+  } finally { g.close(); }
 });
 
 // ---- bug-hunt 2026-10-09 (W5 game) --------------------------------------------------------
@@ -618,4 +737,242 @@ test("launch: a TIME TRIAL and the DAILY, started from RACE SETTINGS, play the g
     assert.ok(q.state === "count" || q.state === "race", `…and starts at once (state ${q.state})`);
   } finally { g.close(); }
   }
+});
+
+// ---- R3-STATES / R3-STATES-3 (hunt3 train) --------------------------------
+// The VM DOM has no markup, so its querySelectorAll(".screen") is empty and
+// closeRaceSheets()' sweep would be inert: hand it the shell's own `.screen` list.
+const SCREEN_IDS = [...fs.readFileSync(new URL("../../index.html", import.meta.url), "utf8").matchAll(/<[a-z]+\b[^>]*>/g)]
+  .map((m) => m[0]).filter((t) => /\bclass="[^"]*\bscreen\b/.test(t)).map((t) => (/\bid="([^"]+)"/.exec(t) || [])[1]).filter(Boolean);
+function withScreens(g) {
+  const doc = g.sandbox.document, qsa = doc.querySelectorAll;
+  doc.querySelectorAll = (sel) => (sel === ".screen" ? SCREEN_IDS.map((id) => doc.getElementById(id)) : qsa(sel));
+  return doc;
+}
+test("the shell marks every pause-reachable sheet .screen (the sweep's contract)", () => {
+  for (const id of ["pausemenu", "pmsettings", "standings", "howtoplay", "track-detail", "quali", "results", "race-settings", "carsetup"])
+    assert.ok(SCREEN_IDS.includes(id), "#" + id + " is a .screen");
+  assert.ok(SCREEN_IDS.includes("loading"), "#loading is one too — closeRaceSheets leaves it to loadingScreen.stop()");
+});
+
+test("QUIT over the pit-stop garage closes it: no turntable, no stale RETURN TO RACE on the title", async () => {
+  const g = await createGame({ carMeshes: false, track: "monza" });
+  try {
+    const doc = withScreens(g), $ = (id) => doc.getElementById(id), G = g.G;
+    g.step(30);
+    G.paused = true; G.openGarage("pit"); g.flushTimers();   // openPitWork()'s two writes (it is gated on a car stopped in its box)
+    assert.equal($("cs-done").textContent, "RETURN TO RACE");
+    assert.equal(G.setupPreviewOn, true);
+    $("pm-quit").click(); g.flushTimers();   // the pause card a hidden tab stacks over the garage
+    assert.equal(G.state, "menu");
+    assert.equal($("carsetup").hidden, true, "#carsetup goes with the race");
+    assert.equal(G.setupPreviewOn, false, "the garage turntable no longer draws over the title");
+    // The "pit" return path went too: DONE on that stale screen ran closePitWork()
+    // in state "menu" (a dead race's player, the engine restarted).
+    $("race-settings").hidden = true;
+    $("cs-done").click(); g.flushTimers();
+    assert.equal($("race-settings").hidden, false, "DONE takes the picker path (garageReturn reset), not RETURN TO RACE");
+  } finally { g.close(); }
+});
+
+for (const sheet of ["pm-settings", "pm-standings", "pm-howto"]) {
+  test(`the portrait blocker's EXIT under ${sheet.slice(3).toUpperCase()} leaves no race sheet over the title`, async () => {
+    const g = await createGame({ carMeshes: false, track: "monza" });
+    try {
+      const doc = withScreens(g), $ = (id) => doc.getElementById(id), G = g.G;
+      for (const id of SCREEN_IDS) $(id).hidden = true;   // the shell's start: every sheet down
+      g.step(20); $("pausebtn").click();
+      $(sheet).click();
+      const open = { "pm-settings": "pmsettings", "pm-standings": "standings", "pm-howto": "howtoplay" }[sheet];
+      assert.equal($(open).hidden, false, "#" + open + " is up");
+      $("rotate-exit").click(); g.flushTimers();   // reachable over a sheet: only the pause CARD hides the blocker
+      assert.equal(G.state, "menu");
+      assert.equal($("overlay").hidden, false);
+      for (const id of ["pmsettings", "standings", "howtoplay", "pausemenu", "results", "race-settings"])
+        assert.equal($(id).hidden, true, "#" + id + " closed by the quit");
+    } finally { g.close(); }
+  });
+}
+
+test("NEXT ROUND's qualifying sheet hides the finished race's HUD", async () => {
+  const g = await createGame({ carMeshes: false, track: "monza" });
+  try {
+    const doc = withScreens(g), $ = (id) => doc.getElementById(id), G = g.G;
+    g.apex.go(); g.step(10); g.apex.finishRace();
+    assert.equal(G.state, "results");
+    assert.equal($("hud").hidden, false, "the results keep the race HUD");
+    G.openQualiForNet(null);   // openQuali → openQualiBody, the transition res-next makes in a season
+    await g.settle(() => G.session === "quali" && G.state === "menu" && !$("quali").hidden, 3000);
+    assert.equal($("quali").hidden, false, "the sheet is up");
+    assert.equal($("results").hidden, true);
+    assert.equal($("hud").hidden, true, "no dead HUD under the menu-state sheet");
+  } finally { g.close(); }
+});
+
+test("a red-flag restart breaks the instant-replay timeline (the re-grid is a teleport, not motion)", async () => {
+  // Ring is a closure handle, never G.replayBuf (1a-F3): trap ReplayBuf.create.
+  let rb = null;
+  const g = await createGame({
+    carMeshes: false, track: "monza",
+    onSandbox: (sb) => {
+      let mod;
+      Object.defineProperty(sb, "ReplayBuf", { configurable: true, enumerable: true, get: () => mod,
+        set: (v) => { mod = Object.assign({}, v, { create: (...a) => (rb = v.create(...a)) }); } });
+    },
+  });
+  try {
+    const G = g.G;
+    assert.ok(rb, "ReplayBuf.create was trapped");
+    let breaks = 0;
+    const real = rb.breakTimeline;
+    assert.equal(typeof real, "function", "ReplayBuf has the explicit break");
+    rb.breakTimeline = (...a) => { breaks++; return real.apply(rb, a); };
+    g.apex.setInput({ throttle: true });
+    for (let i = 0; i < 100; i++) { g.step(2); rb.onTick(G.raceT, G.cars, G.state); }   // the ring samples from tick(), which step() bypasses
+    assert.equal(breaks, 0);
+    assert.equal(g.apex.redFlag().state, "count");
+    assert.equal(breaks, 1, "redFlagRestart() marks the break before the next sample");
+  } finally { g.close(); }
+});
+
+async function finishedPlayerWithRunner() {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  const a = g.apex, G = g.G;
+  a.headless(true);
+  await a.race("monza", "default", "dry", { laps: 3 });
+  a.go(); g.step(60);
+  const L = G.track.total, P = G.player;
+  const ai = G.cars.filter((c) => !c.human);
+  for (const c of ai.slice(1)) a.retire(G.cars.indexOf(c));
+  const slow = ai[0];
+  slow.lap = 2; slow.s = L * 0.1; slow.prog = 2 * L + L * 0.1; slow.speed = 20; slow.x = 0; slow.dnfAt = null;
+  a.jump((L - 40) / L, 80, 0); P.lap = 3; P.prog = 3 * L - 40;
+  a.setInput({ throttle: true, steer: 0 });
+  for (let i = 0; i < 60 * 20; i++) g.step(1);
+  return { g, G, P, slow, pauseBtn: (id) => g.sandbox.document.getElementById(id) };
+}
+
+test("POST-FINISH (solo): the player's flag does not end the race while an AI is still running; SKIP settles it", async () => {
+  const { g, G, P, slow, pauseBtn } = await finishedPlayerWithRunner();
+  try {
+    assert.equal(P.finished, true, "the player took the flag");
+    assert.equal(slow.finished, false, "the AI is nowhere near its line");
+    assert.equal(G.state, "race", "the race waits for the field instead of ending 2.2 s after the player");
+    G.els.pausebtn.onclick();
+    assert.equal(pauseBtn("pm-skip-results").hidden, false, "the pause card offers SKIP TO RESULTS while the field finishes");
+    pauseBtn("pm-skip-results").onclick();
+    assert.equal(G.state, "results", "SKIP calls endRace now");
+    assert.equal(slow.finished, false, "the runner is classified by progress, as before");
+  } finally { g.close(); }
+});
+
+test("POST-FINISH (solo): QUIT TO MENU after the flag settles the result first", async () => {
+  const { g, G, P, pauseBtn } = await finishedPlayerWithRunner();
+  try {
+    assert.equal(G.state, "race");
+    assert.ok(!P.finPos, "not classified yet");
+    G.els.pausebtn.onclick();
+    pauseBtn("pm-quit").onclick();
+    assert.equal(P.finPos, 1, "endRace ran before the session was dropped: the career/season settlement is not lost");
+    assert.equal(G.state, "menu");
+  } finally { g.close(); }
+});
+
+test("PLAYER DNF (solo): the race keeps running for the field instead of ending 2.2 s later; the cap ends it as a short run", async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = g.apex, G = g.G;
+    a.headless(true);
+    await a.race("monza", "default", "dry", { laps: 10 });
+    a.go(); g.step(60);
+    for (const c of G.cars) if (!c.human) c.dnfAt = null;
+    a.retire(null);
+    g.step(60 * 10);
+    assert.equal(G.player.retired, true);
+    assert.equal(G.state, "race", "10 s after the DNF the race is still on — rivals keep racing under the TV camera");
+    g.step(60 * 80);
+    assert.equal(G.state, "results", "POST_FINISH_CAP forces the end");
+    assert.equal(G.cars.some((c) => c.finished && !c.retired), false, "nobody saw the flag: RaceControl.shortRun applies");
+  } finally { g.close(); }
+});
+
+
+// ── THE PIT GARAGE HOLDS ITS OWN PAUSE (bug-hunt 3, 2026-10-10) ───────────────
+// setPaused(true) leaves the garage's pause alone (as setPaused(false) already
+// did), quitToMenu takes the garage down, closePitWork re-holds the wake lock.
+// The lock mock is tests/specs/wake-lock.spec.js's: it auto-releases on hide.
+// The two tests live here and not in wake-lock-vm.test.mjs because that file is
+// the spec's TWIN and must declare exactly the spec's test count.
+async function pitGarage(g) {
+  const doc = g.sandbox.document, log = [];
+  g.sandbox.navigator.wakeLock = {
+    request: (type) => {
+      log.push("request:" + type);
+      let released = false;
+      const listeners = {};
+      const sentinel = {
+        addEventListener: (ev, cb) => { listeners[ev] = cb; },
+        release: () => { if (!released) { released = true; log.push("release"); if (listeners.release) listeners.release(); } return Promise.resolve(); },
+      };
+      doc.addEventListener("visibilitychange", () => { if (doc.hidden) sentinel.release(); });
+      return Promise.resolve(sentinel);
+    },
+  };
+  await g.race("bahrain", "day", "dry");
+  assert.ok(await settle(() => log.includes("request:screen"), 4000), "the race holds the lock");
+  // On the jacks by decree: PitLane.canWork reads pitState "box" with hold left
+  // (pit-lane-vm drives the real stop; this is about the pause, not the lane).
+  const car = g.G.cars.find((c) => c.local);
+  car.pitState = "box"; car.pitT = 5;
+  doc.getElementById("pausemenu").hidden = true;       // index.html ships the card hidden; the VM DOM does not parse the shell
+  doc.getElementById("hud-work").onclick();            // WORK ON CAR (openPitWork)
+  const tick = () => new Promise((r) => setImmediate(r));
+  const visibility = async (hidden) => { doc.hidden = hidden; doc.dispatchEvent({ type: "visibilitychange" }); await tick(); };
+  return { doc, log, car, tick, visibility, garage: doc.getElementById("carsetup"), card: doc.getElementById("pausemenu") };
+}
+
+test("a hidden tab under WORK ON CAR shows no pause card, stays the garage's pause, and QUIT takes the garage down", async () => {
+  const g = await createGame({ storage: { trackId: "bahrain" } });
+  try {
+    const h = await pitGarage(g);
+    assert.equal(h.garage.hidden, false, "precondition: the garage is up");
+    assert.equal(g.G.paused, true, "precondition: the garage's own pause");
+    assert.equal(h.card.hidden, true, "precondition: no card");
+    await h.visibility(true);
+    assert.equal(g.G.paused, true, "still paused");
+    assert.equal(h.card.hidden, true, "no pause card over the garage");
+    assert.equal(h.garage.hidden, false, "the garage is still the screen");
+    await h.visibility(false);
+    assert.equal(h.card.hidden, true, "nor after the return");
+    assert.equal(g.G.paused, true, "the garage's pause survives the round trip");
+    // Any path to quitToMenu takes the garage down with the race (PAUSE > QUIT; CONFIRM QUIT arms first).
+    const q = h.doc.getElementById("pm-quit");
+    q.click(); if (q.classList.contains("armed")) q.click();
+    await h.tick();
+    assert.equal(h.garage.hidden, true, "QUIT closes #carsetup");
+    assert.equal(g.apex.info().state, "menu");
+    assert.equal(h.log.at(-1), "release", "the lock is dropped with the race");
+  } finally { g.close(); }
+});
+
+test("the garage's pause never drops the wake lock: the return to the tab re-holds it, and RETURN TO RACE races with it held", async () => {
+  // Before: the hidden tab's setPaused(true) dropped the lock (wanted=false); RESUME from the stacked
+  // card returned early under the garage, so nothing re-held it and RETURN TO RACE ran lock-less.
+  const g = await createGame({ storage: { trackId: "bahrain" } });
+  try {
+    const h = await pitGarage(g);
+    await h.visibility(true);                       // the platform releases the sentinel on hide (the mock does the same)
+    assert.ok(await settle(() => h.log.length >= 2, 4000), "the release on hide");
+    await h.visibility(false);                      // PlatformSession: `if (!document.hidden && raceWakeLock.wanted()) hold()`
+    assert.ok(await settle(() => h.log.length >= 3, 4000), "the re-acquire on return (the lock was never un-wanted)");
+    assert.deepEqual(h.log, ["request:screen", "release", "request:screen"]);
+    h.doc.getElementById("cs-back").onclick();      // RETURN TO RACE: closePitWork's own hold coalesces with the held lock
+    await h.tick();
+    assert.deepEqual(h.log, ["request:screen", "release", "request:screen"], "held, not requested twice");
+    assert.equal(g.G.paused, false, "racing again");
+    assert.equal(h.garage.hidden, true);
+    g.apex.finishRace();
+    await h.tick();
+    assert.equal(h.log.at(-1), "release", "and the race's end releases the lock RETURN TO RACE raced under");
+  } finally { g.close(); }
 });

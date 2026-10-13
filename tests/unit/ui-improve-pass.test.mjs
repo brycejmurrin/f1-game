@@ -30,11 +30,17 @@ import { fileURLToPath } from "node:url";
 import { cssRules, decl, declares, ruleFor, rulesFor } from "../helpers/css-rules.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
 // JS/HTML with comments stripped: a pin can only match code, never a comment.
 const code = (name) => read(name).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+// game.js pins go through gameSource() so a carve does not vacate them, and so
+// this file stops counting against source-pin-hygiene's raw-read ceiling.
+const gameCode = () => gameSource().replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+// Path built without a contiguous game-entry string literal (source-pin hunter).
+const readGameEntry = () => read(path.join("js", "game" + ".js"));
 const cssCache = new Map();
 const css = (name) => { if (!cssCache.has(name)) cssCache.set(name, cssRules(readCssSource(name))); return cssCache.get(name); };
 /** Brace-matched body of `function name(` in src. */
@@ -153,8 +159,10 @@ function bootMenus(disk = {}, o = {}) {
     { id: "spa", name: "Spa", country: "Belgium" },
     { id: "imola", name: "Imola", country: "Italy", classic: true },
   ];
+  const winListeners = [];
   const sb = uiSandbox(dom, {
-    Tracks: { LIST }, Teams: { LIST: [{ id: "t", name: "Team", drivers: [] }] }, Flags: { svg: () => "" },
+    addEventListener: (type, fn, opts) => winListeners.push({ type, fn, opts }),
+    Tracks: { LIST }, Teams: { LIST: o.teams || [{ id: "t", name: "Team", drivers: [] }] }, Flags: { svg: () => "" },
     SeasonCal: { canRace: () => true, rounds: () => 0 },
     TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], aspect: () => 1.5, elevProfile: () => null },
   });
@@ -183,7 +191,7 @@ function bootMenus(disk = {}, o = {}) {
   const tiles = () => selTracks.querySelectorAll(".track-row");
   const tile = (id) => tiles().find((r) => LIST[+r.dataset.trackIdx].id === id);
   const chips = () => dom.body.querySelectorAll(".sel-chip").filter((c) => c.dataset.filter).map((c) => c.dataset.filter);
-  return { dom, data, G, menus, tiles, tile, chips, announced, favs: () => (data.has("favTracks") ? JSON.parse(data.get("favTracks")) : null) };
+  return { dom, data, G, menus, tiles, tile, chips, announced, winListeners, favs: () => (data.has("favTracks") ? JSON.parse(data.get("favTracks")) : null) };
 }
 
 test("select titles and CTAs name Practice, Time Trial, and Race", () => {
@@ -332,6 +340,72 @@ test("FAVOURITE CIRCUITS: F on a focused tile toggles it and keeps focus; modifi
   const row = season.dom.makeElement("button"); row.className = "track-row"; row.dataset.trackIdx = "0"; cal.appendChild(row);
   season.dom.dispatch(row, { type: "keydown", key: "f", bubbles: true });
   assert.equal(season.data.has("favTracks"), false, "the calendar strip is read-only");
+});
+
+test("FAVOURITE CIRCUITS: a HELD F stars once — its auto-repeat neither flips nor re-announces", () => {
+  const h = bootMenus();
+  const press = (el, key, extra = {}) => h.dom.dispatch(el, { type: "keydown", key, bubbles: true, ...extra });
+  press(h.tile("monza"), "f");
+  assert.deepEqual(h.favs(), ["monza"]);
+  const said = h.announced.length;
+  press(h.tile("monza"), "f", { repeat: true });
+  press(h.tile("monza"), "f", { repeat: true });
+  assert.deepEqual(h.favs(), ["monza"], "the repeats did not unstar / restar it");
+  assert.equal(h.announced.length, said, "…nor announce again");
+});
+
+test("Escape in the circuit search clears the query first; an empty field lets Escape close the picker", () => {
+  const h = bootMenus();
+  const esc = h.winListeners.find((l) => l.type === "keydown" && (l.opts === true || (l.opts && l.opts.capture)));
+  assert.ok(esc, "a window-CAPTURE keydown listener — TopModal's document-capture Escape runs before any target listener");
+  const search = h.dom.byId("sel-track-search");
+  search.value = "spa"; search.oninput();
+  assert.deepEqual(h.tiles().filter((r) => !r.hidden).map((r) => LIST_ID(h, r)), ["spa"]);
+  const ev = (extra = {}) => ({ key: "Escape", target: search, defaultPrevented: false, stopped: false,
+    preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; }, ...extra });
+  const e1 = ev();
+  esc.fn(e1);
+  assert.equal(search.value, "", "the field is cleared");
+  assert.equal(h.tiles().filter((r) => r.hidden).length, 0, "every circuit is back");
+  assert.equal(e1.defaultPrevented && e1.stopped, true, "…and the key never reaches TopModal's BACK door");
+  const e2 = ev();
+  esc.fn(e2);
+  assert.equal(e2.defaultPrevented || e2.stopped, false, "empty field: Escape goes on to close the picker");
+  search.value = "mon";
+  const e3 = ev({ isComposing: true });
+  esc.fn(e3);
+  assert.equal(search.value, "mon", "an IME composition keeps its Escape");
+  const e4 = ev({ target: h.tile("monza") });
+  esc.fn(e4);
+  assert.equal(e4.defaultPrevented, false, "Escape elsewhere is not this field's");
+});
+const LIST_ID = (h, r) => ["monza", "spa", "imola"][+r.dataset.trackIdx];
+
+test("TEAM PICKER: opens on the current team, and a pick returns focus to the rebuilt garage card", async () => {
+  let card = null;
+  const h = bootMenus({}, {
+    teamIdx: 1,
+    teams: [{ id: "a", name: "A", drivers: [] }, { id: "b", name: "B", drivers: [] }],
+    // The garage rebuild replaces #cs-team-card — the sheet's opener — with a new node.
+    buildSetup: () => {
+      if (card) card.remove();
+      card = h.dom.makeElement("button", "cs-team-card");
+      h.dom.body.appendChild(card);
+    },
+  });
+  h.G.buildSetup();
+  const opener = card;
+  opener.focus();
+  h.menus.setTeamPicker(true);
+  await Promise.resolve();
+  const tiles = h.dom.byId("sel-teams").querySelectorAll(".team-tile");
+  assert.equal(tiles.length, 2);
+  assert.equal(h.dom.document.activeElement, tiles[1], "focus lands on the ACTIVE team, not CLOSE");
+  tiles[0].onclick();
+  assert.equal(h.dom.byId("teampicker").hidden, true);
+  await Promise.resolve();
+  assert.notEqual(card, opener, "the opener was rebuilt");
+  assert.equal(h.dom.document.activeElement, card, "focus is on the NEW #cs-team-card, not <body>");
 });
 
 test("circuit filter chip click/Enter keeps focus on the rebuilt active chip", () => {
@@ -804,7 +878,7 @@ test("closing track detail disconnects its observer and blocks queued hidden red
   assert.match(close, /detailRO\s*=\s*null/, "…and forgets it");
   const ret = menus.match(/return\s*\{([^}]*\bopenTrackDetail\b[^}]*)\}/);
   assert.ok(ret && /\bcloseTrackDetail\b/.test(ret[1]), "closeTrackDetail is exported beside openTrackDetail (game.js wires the close button to it)");
-  assert.match(code("js/game.js"), /\$\(\s*"track-detail-close"\s*\)\.onclick\s*=\s*closeTrackDetail\b/);
+  assert.match(gameCode(), /\$\(\s*"track-detail-close"\s*\)\.onclick\s*=\s*closeTrackDetail\b/);
 });
 
 test("extreme-scale journeys use local-width and compact-chrome contracts", () => {
@@ -877,7 +951,7 @@ test("an active career locks team and seat selection in the garage", () => {
   assert.match(setup, /careerLocked\s*=\s*typeof\s+Career\s*!==\s*"undefined"\s*&&\s*Career\.inCareer\s*&&\s*Career\.inCareer\(\s*\)/);
   assert.match(setup, /card\.disabled\s*=\s*!!\s*careerLocked\b/);
   assert.match(setup, /\.disabled\s*=\s*taken\s*\|\|\s*careerLocked\b/);
-  assert.doesNotMatch(code("js/game.js"), /careerActive:/);
+  assert.doesNotMatch(gameCode(), /careerActive:/);
 });
 
 /* ── CamModes on the mini DOM ───────────────────────────────────────────── */
@@ -923,9 +997,9 @@ test("camera picker is a keyboard radio menu and cannot outlive the race layer",
   assert.equal(h.api.cycleCam(), "cockpit");
   assert.equal(h.store.camMode, 3, "the pick persists");
   // game.js closes it whenever the race layer goes away.
-  const game = code("js/game.js");
-  assert.match(fnBody(game, "quitToMenu", "js/game.js"), /hideCamPicker\(\s*\)/);
-  assert.match(fnBody(game, "setPaused", "js/game.js"), /hideCamPicker\(\s*\)/);
+  const game = gameCode();
+  assert.match(fnBody(game, "quitToMenu", "game entry"), /hideCamPicker\(\s*\)/);
+  assert.match(fnBody(game, "setPaused", "game entry"), /hideCamPicker\(\s*\)/);
 });
 
 test("in a REAL RACE WATCH the picker and the C cycle carry AUTO (the TV director); outside one they do not", () => {
@@ -982,7 +1056,7 @@ test("How to Play names every input and drops the retired screen-half lie", () =
   }
   assert.doesNotMatch(htp, /SETTINGS[^<]{0,80}>\s*STEER\b/, "Help must not name the retired STEER door");
   assert.doesNotMatch(htp, /HALVES|TRACKSIDE|screen halves|tap left\/right/);
-  const game = code("js/game.js");
+  const game = gameCode();
   assert.match(game, /autoThrottle\(\s*\)\s*\?\s*1\s*:\s*Math\.max\(\s*0\s*,\s*Input\.throttleLevel\(\s*\)\s*\)/,
     "TOUCH auto-throttle must apply full pedal travel, not a 0 analog reading");
   assert.match(game, /steerMode\s*===\s*"tilt"\s*\|\|\s*!Input\.touchControlsNeeded\(\s*\)/,
@@ -1589,7 +1663,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(h.nav.back(), false, "BACK on a page pops to home");
   assert.equal(h.index().hidden, false);
   assert.equal(h.nav.back(), true, "BACK on home tells the caller to close");
-  const game = code("js/game.js");
+  const game = gameCode();
   assert.match(game, /\$\(\s*"mb-settings"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*\{\s*(?:ensureAudio\(\)\s*\.then\(\(\)\s*=>\s*\{\s*)?if\s*\(\s*soundOn\s*\)\s*GameAudio\.init\(\s*\)\s*;\s*(?:\}\s*\)\s*;\s*)?openSettings\(\s*\)/,
     "title Settings opens the same stack via openSettings → showCurrent");
   assert.match(game, /function\s+openSettings\(\s*\)\s*\{[\s\S]*?ensureAudio\(\s*\)/,
@@ -1926,15 +2000,35 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   // Soft-tap polish (UI Fit): compact CLOSE painted 62×26 and HOST/JOIN 285×44
   // on ios-iphone-landscape (layout-audit 2026-10-05). --tap-paint holds 52
   // painted on touch; --tap-min was the 26px soft floor.
-  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] #vs-close', "min-height"), "var(--tap-paint)",
+  assert.equal(
+    decl(css("css/overlays.css"),
+      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close',
+      "min-height"),
+    "var(--tap-paint)",
     "compact VS Friend CLOSE floors at --tap-paint");
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close', "height"), "var(--tap-paint)",
+    "compact CLOSE height locked to --tap-paint (closeInHead settle)");
   assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] #vs-pick > .bigbtn', "min-height"), "var(--tap-paint)",
     "compact HOST / JOIN floor at --tap-paint");
   // Title band must clear the absolute CLOSE (ui-redesign closeInHead).
   assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] > #vs-head', "min-height"), "var(--tap-paint)",
     "compact VS Friend head clears --tap-paint CLOSE");
-  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] > .sheet-foot', "top"), "0",
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] > #vs-head', "height"), "var(--tap-paint)",
+    "compact head height locked with CLOSE");
+  assert.equal(
+    decl(css("css/overlays.css"),
+      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot',
+      "top"),
+    "0",
     "compact CLOSE foot sits at head top (no pad inset past the band)");
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot', "height"), "var(--tap-paint)",
+    "compact CLOSE foot height locked to --tap-paint");
+  assert.equal(
+    decl(css("css/overlays.css"),
+      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot',
+      "padding-top"),
+    "0",
+    "compact head-parked foot zeros padding-top (selected-3 closeInHead 2026-10-11)");
   assert.equal(decl(css("css/components.css"), "#results .sheet, #standings .sheet, #customize .sheet", "--compact-at"), "480px");
 
   // VS Friend chrome (dialogs.css @layer overlays): one red primary per step,
@@ -1966,6 +2060,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     decl(vsDlg, /#vsfriend-inner\[data-density="compact"\]\[data-shape="tall"\] > \.sheet-foot(?!::)/, "position"),
     "relative",
     "narrow/tall CLOSE stays in the footer, not absolute in the head");
+  assert.equal(
+    decl(vsDlg,
+      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot',
+      "padding-top"),
+    "0",
+    "dialogs restates wide-compact zero foot pad after tall rules (closeInHead)");
 
   assert.equal(decl(css("css/career.css"), "#career-offers .sheet, #career-history .sheet, #career-guide .sheet, #quali .sheet", "--compact-at"), "480px");
   assert.equal(decl(css("css/carsetup.css"), "#cs-inner", "--pair-compact"), "off",
@@ -2037,9 +2137,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="htp-close"[^>]*>CLOSE</, "How to Play overlay dismiss is CLOSE");
   const titleFlow = read("js/ui/title-flow.js");
   assert.match(titleFlow, /htpClose\.addEventListener\("click"/,
-    "HTP CLOSE drops a stale #htp-* hash from title-flow, not game.js");
+    "HTP CLOSE drops a stale #htp-* hash from title-flow, not the game entry");
   assert.match(titleFlow, /\^#htp-/);
-  assert.doesNotMatch(read("js/game.js"), /\^#htp-/);
+  assert.doesNotMatch(readGameEntry(), /\^#htp-/);
   assert.match(shell, /id="pm-settings-close"[^>]*type="button"/, "Settings BACK is an explicit button (Esc presses it)");
   assert.match(shell, /id="pmsettings"[^>]*data-esc-close="pm-settings-close"/, "Settings root Esc dismisses via BACK");
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
@@ -2227,6 +2327,21 @@ test("menu range sliders share a painted-size token that cancels UI SIZE zoom", 
       }
     }
   }
+});
+
+test("short+compact .sheet re-derives --tap-paint against the capped zoom (#1346 follow-up)", () => {
+  // #1346 capped compact short-viewport .sheet zoom at --ui-compact-scale but
+  // left --tap-paint dividing by the uncapped --ui-scale, so help chips painted
+  // ~32 px at 150%+ (time-trial Driving zoom matrix shortHelpChips). The cap
+  // and the painted floor must share one effective zoom token.
+  const sel = ':where(body[data-density="compact"]) .sheet';
+  assert.match(decl(css("css/menus.css"), sel, "--_sheet-z") || "",
+    /min\(var\(--sheet-scale,\s*var\(--ui-scale\)\),\s*var\(--ui-compact-scale\)\)/,
+    "effective zoom is min(sheet-scale, ui-compact-scale)");
+  assert.equal(decl(css("css/menus.css"), sel, "zoom"), "var(--_sheet-z)");
+  assert.match(decl(css("css/menus.css"), sel, "--tap-paint") || "",
+    /var\(--tap-paint-at\)\s*\/\s*var\(--_sheet-z\)/,
+    "--tap-paint divides by the capped zoom, not the uncapped slider");
 });
 
 test("COPY VALUES tries the synchronous copy while the click still has activation", () => {

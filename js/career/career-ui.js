@@ -127,22 +127,29 @@ function create(G) {
     });
     if (result.ok) {
       G.refreshCareerButton();
+      pending.unconfirmed = pending.unconfirmed || result.durable === false || !!result.failed;
+      const restored = pending.unconfirmed
+        ? "RESTORED FOR THIS SESSION — SAVE NOT CONFIRMED; KEEP YOUR BACKUP"
+        : "CAREER RESTORED";
       if (result.needsConfirm && !otherConfirmed) {
         pendingImport = pending;
         armedImport = `${focusFlavour}:other`;
-        announce("CAREER RESTORED — CONFIRM OTHER MODE?");
+        announce(restored + " — CONFIRM OTHER MODE?");
         build();
         return result;
       }
       armedImport = "";
       pendingImport = null;
-      announce("CAREER RESTORED");
+      announce(restored);
       build();
       return result;
     }
     armedImport = "";
     pendingImport = null;
-    announce(result.reason === "conflict" ? "SAVE CONFLICT — IMPORT REFUSED"
+    const partial = (result.written && result.written.length) || (result.applied && result.applied.length);
+    if (partial) G.refreshCareerButton();
+    announce(partial ? "RESTORE INCOMPLETE — SOME DATA APPLIED; KEEP YOUR BACKUP"
+      : result.reason === "conflict" ? "SAVE CONFLICT — IMPORT REFUSED"
       : ("IMPORT FAILED — " + String(result.reason || "error").toUpperCase()));
     build();
     return result;
@@ -158,7 +165,7 @@ function create(G) {
     if (s.used) {
       const who = s.flavour === "myteam" ? s.teamName : `${s.code} · ${s.teamName}`;
       open.append(
-        el("span", "cr-slot-who", who.toUpperCase()),
+        el("span", "cr-slot-who", String(who).toUpperCase()),   // a team:null slot has no name
         el("span", "cr-slot-meta",
           `${s.year} · round ${Math.min(s.round + 1, s.rounds)} of ${s.rounds}`
           + ` · ${s.money.toLocaleString()} cr`),
@@ -250,13 +257,25 @@ function create(G) {
       if (armed && pendingImport) {
         const target = otherArmed ? (s.flavour === "driver" ? "myteam" : "driver") : s.flavour;
         const mode = target === "myteam" ? "My Team" : "Driver career";
-        for (const row of pendingImport.envelope.slots) {
-          if (!row || (row.flavour === "myteam" ? "myteam" : "driver") !== target || !row.data) continue;
-          const rawRound = row.data.season && row.data.season.round;
-          const round = Number.isInteger(rawRound) && rawRound >= 0 ? rawRound : 0;
-          const year = row.data.year | 0 || 2026;
-          card.appendChild(el("div", "cr-note", `${mode} · ${year} · ${round} rounds completed · Destination slot ${(row.i | 0) + 1}`));
+        const preview = CareerBackup.preview(pendingImport.envelope, {
+          flavours: [target], includeProgressExtras: !otherArmed,
+        });
+        const summary = (c, incoming) => {
+          if (!c) return "Empty";
+          const team = teamById(c.team);
+          const identity = incoming && c.team === "custom" && pendingImport.envelope.myTeam;
+          const teamName = identity && identity.customTeam && identity.customTeam.name;
+          const round = Number.isInteger(c.season && c.season.round) ? Math.max(0, c.season.round) : 0;
+          return `${c.year | 0 || 2026} · ${teamName || (team ? team.name : c.team || "Team unspecified")} · ${round} rounds completed`;
+        };
+        card.appendChild(el("div", "cr-note", `Review restore — press ${otherArmed ? "ALL MODES?" : "IMPORT?"} to apply`));
+        for (const row of preview.slots || []) {
+          card.appendChild(el("div", "cr-note", `${mode} · Destination slot ${row.i + 1}`));
+          card.appendChild(el("div", "cr-note", "Current: " + summary(row.current)));
+          card.appendChild(el("div", "cr-note", "Backup: " + summary(row.incoming, true)));
         }
+        for (const text of preview.extras || []) card.appendChild(el("div", "cr-note", text));
+        card.appendChild(el("div", "cr-note", "Empty backup slots leave existing saves unchanged."));
       }
     }
     if (s.used) {
@@ -389,7 +408,7 @@ function create(G) {
       + "the best car on the grid.",
     ]));
     out.push(guideSection("POINTS AND THE SEASON", [
-      ["Rounds in a season", String(Tracks.SEASON.length)],
+      ["Rounds in a season", String(Career.roundsTotal ? Career.roundsTotal() : Tracks.SEASON.length)],
       [`Points, P1 down to P${Teams.POINTS.length}`, Teams.POINTS.join(" · ")],
       "Two championships run at once: the DRIVERS', which is you, and the "
       + "CONSTRUCTORS', which is both of your team's cars added together.",
@@ -870,7 +889,7 @@ function create(G) {
     const team = teamById(c.team);
     $("cr-title").textContent = `CAREER ${c.year}`;
     $("cr-sub").textContent = `${c.flavour === "myteam" ? "TEAM PRINCIPAL" : c.driver.code}`
-      + ` · ${team ? team.name.toUpperCase() : c.team.toUpperCase()}`;
+      + ` · ${team ? team.name.toUpperCase() : String(c.team == null ? "" : c.team).toUpperCase()}`;
     if (team) $("cr-sub").style.color = G.cssCol(team.color2 || team.color);
 
     if (Career.conflicted()) {
@@ -895,7 +914,8 @@ function create(G) {
     const midSeason = !st.hire && !st.offers && !Career.seasonDone();
     if (midSeason) {
       left.appendChild(head("NEXT RACE"));
-      const t = Tracks.SEASON[c.season.round];
+      const cal = Career.calendar ? Career.calendar() : Tracks.SEASON;
+      const t = cal[c.season.round];
       const nr = typeof CareerExperience !== "undefined" ? CareerExperience.raceBrief(G, c, st, team)
         : el("div", "cr-card cr-nextrace");
       nr.id = "cr-nextrace";
@@ -1176,8 +1196,9 @@ function create(G) {
         "Close out the year to see where you finished."));
     } else {
       const upcoming = [];
-      for (let i = c.season.round + 1; i < Math.min(c.season.round + 5, Tracks.SEASON.length); i++)
-        upcoming.push({ n: i + 1, t: Tracks.SEASON[i] });
+      const cal = Career.calendar ? Career.calendar() : Tracks.SEASON;
+      for (let i = c.season.round + 1; i < Math.min(c.season.round + 5, cal.length); i++)
+        upcoming.push({ n: i + 1, t: cal[i] });
       if (upcoming.length) {
         right.appendChild(head("UPCOMING"));
         for (const u of upcoming) {

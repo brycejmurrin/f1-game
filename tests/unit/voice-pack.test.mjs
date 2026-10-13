@@ -752,15 +752,20 @@ test('the engineer TEST previews the selected recorded source; SYSTEM previews s
 });
 
 
-test('engineer waits for the full spotter clip and stays written when its finish time is unknown', () => {
+test('engineer waits for the full spotter clip, and behind a still-decoding one uses a bounded lead instead of being dropped', () => {
   const long = radio({spotterLeft: 1.8});
   assert.equal(long.v.say('BOX BOX BOX', 5, 'info'), true);
   assert.ok(long.packCalls.find(c => c.id).leadS >= 1.88);
   long.v.stop();
+  // remaining() is Infinity while the spotter clip decodes; that used to make the
+  // budget -Infinity ("too-long") and the BOX line was lost with no retry.
   const pending = radio({spotterLeft: Infinity});
-  assert.equal(pending.v.say('BOX BOX BOX', 5, 'info'), false);
-  assert.equal(pending.packCalls.filter(c => c.id).length, 0);
+  assert.equal(pending.v.say('BOX BOX BOX', 5, 'info'), true);
+  const call = pending.packCalls.find(c => c.id);
+  assert.ok(call, 'the line is spoken');
+  assert.ok(call.leadS >= 0.6 && call.leadS < 1, 'behind a bounded 0.6 s lead, got ' + call.leadS);
   assert.deepEqual(pending.spoken, []);
+  pending.v.stop();
 });
 
 test('recorded decoding consumes the card budget and pending clips have no known finish time', async () => {
@@ -847,4 +852,38 @@ test("the pit garage halts every radio channel the way the pause card does", () 
   const close = game.slice(game.indexOf("function closePitWork() {"), game.indexOf("function leaveGarage() {"));
   assert.match(close, /if \(isRaining\(\)\) GameAudio\.startRain\(\)/,
     "leaving the pit garage restarts rain the way RESUME does");
+});
+
+test("the spotter's idle early-outs reset nothing: 600 steps off / in the menu / in the pits cost zero pack.stop() calls (bug-hunt 3, 2026-10-10)", () => {
+  // Before: every physics step while the spotter was OFF (the default), not racing or in the pits
+  // allocated a fresh state and called pack.stop("spotter") — 600 steps, 601 stops, each a GC churn
+  // on a phone. A state that never spoke has nothing to stop.
+  let stops = 0, on = false;
+  const pack = { stop: () => { stops++; }, busy: () => false, ensure() {}, plan: () => true, speak: () => false };
+  const G = {
+    state: "menu", paused: false, player: null, track: null, cars: null, soundOn: true, vTop: () => 90,
+    store: { get: (k, d) => (k === "spotter" ? on : d) },
+    radio: { pack, volume: () => 1, recordedPack: () => "george", busy: () => false },
+  };
+  const sp = Spotter.create(G);
+  for (let i = 0; i < 600; i++) sp.update(1 / 60, false);
+  assert.equal(stops, 0, "menu: nothing to stop");
+  // Racing with the spotter OFF: occupancy is still computed (race-radio holds routine lines in traffic)…
+  G.state = "race"; G.track = { total: 1000 };
+  G.player = { s: 500, x: 0, speed: 60, pitState: "none" };
+  G.cars = [G.player, { s: 502, x: -2.5, pitState: "none" }];
+  for (let i = 0; i < 60; i++) sp.update(1 / 60, false);
+  assert.equal(sp.occupied(), true, "race-radio still reads a car alongside with the spotter off");
+  assert.equal(stops, 0, "…and the off branch stops nothing");
+  G.player.pitState = "lane";
+  for (let i = 0; i < 60; i++) sp.update(1 / 60, false);
+  assert.equal(stops, 0, "pits: nothing to stop");
+  G.player.pitState = "none";
+  // Spotter ON with a car alongside: the state goes dirty (a side is being debounced, a call made) —
+  // now a reset IS owed, exactly once, when the race ends.
+  on = true;
+  for (let i = 0; i < 30; i++) sp.update(1 / 60, false);
+  G.state = "menu";
+  for (let i = 0; i < 60; i++) sp.update(1 / 60, false);
+  assert.equal(stops, 1, "a state that was in use is reset — once");
 });

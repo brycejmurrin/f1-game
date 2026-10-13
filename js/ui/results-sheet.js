@@ -169,14 +169,29 @@ function stintStrip(c) {
 // flag must not come from SeasonCal.scored() alone: award() returns early on a
 // save conflict and leaves the weekend's sprint marker, so a Grand Prix read
 // back as a sprint. Callers without it fall back to scored().
+function noteLastSession(session) {
+  if (typeof ShareCode === "undefined" || !ShareCode.recordSession || !G.store || !G.track) return;
+  ShareCode.recordSession(G.store, {
+    trackId: G.track.def.id,
+    trackName: G.track.def.name,
+    session: session === "tt" ? "tt" : "race",
+    flow: G.flow || "gp",
+  });
+}
+
 function buildResults(order, race) {
   Log.info("ui", `GameResults.buildResults n=${order && order.length}`);
+  noteLastSession("race");
   const els = G.els;
   const season = G.season;
   const track = G.track;
   const cars = G.cars;
   els.resultsTable.textContent = "";
   els.resultsTitle.style.color = "";   // buildChampion tints it; #res-menu never reset it
+  // A FRIEND race ends with the room still on screen but not alive: RACE AGAIN is a solo race and MENU
+  // drops the connection (game.js resNext/resMenu stop NetPlay). Name both, and offer a fresh room.
+  const friend = !!(G.netPlay && G.netPlay.active && G.netPlay.active());
+  if (els.resMenu) els.resMenu.textContent = friend ? "NEW FRIEND ROOM" : "MENU";
   const sprint = race && typeof race.sprint === "boolean" ? race.sprint
     : G.seasonMode && SeasonCal.scored() === "sprint";
   els.resultsTitle.textContent = sprint ? `SPRINT — ${track.def.name}`
@@ -440,15 +455,26 @@ function buildResults(order, race) {
     els.resNext.textContent = sprint ? "TO THE GRAND PRIX"
       : season.round >= SeasonCal.rounds() ? "VIEW CHAMPION" : "NEXT ROUND";
   } else {
-    els.resNext.textContent = "RACE AGAIN";
+    els.resNext.textContent = watched ? "WATCH AGAIN" : friend ? "RACE AGAIN (SOLO)" : "RACE AGAIN";   // a watched real race re-runs the replay, it is not a new race
+    if (friend) {
+      const hint = document.createElement("div");
+      hint.className = "res-personal";
+      hint.setAttribute("data-results-part", "room");
+      const note = document.createElement("span");
+      note.textContent = "The friend room closes when you leave. NEW FRIEND ROOM, or VS FRIEND on the title screen, starts another.";
+      hint.appendChild(note);
+      els.resultsTable.appendChild(hint);
+    }
   }
 }
 
 function buildTTResults() {
+  noteLastSession("tt");
   const els = G.els;
   const track = G.track;
   els.resultsTable.textContent = "";
   els.resultsTitle.style.color = "";
+  if (els.resMenu) els.resMenu.textContent = "MENU";   // a friend race's NEW FRIEND ROOM label must not outlive it
   els.resultsTitle.textContent = `${track.def.name} — TIME TRIAL`;
   const best = G.player.best;
 
@@ -467,6 +493,12 @@ function buildTTResults() {
   // personal-best path exactly as before.
   const guestGhost = GhostShare.hasGuest();
   const replayGhost = guestGhost ? GhostShare : Ghost;
+  if (guestGhost) {
+    const note = document.createElement("p");
+    note.className = "res-row";
+    note.textContent = GhostShare.contextNotice(GhostShare.guest().context, G.records.key());
+    els.resultsTable.appendChild(note);
+  }
   if ((guestGhost || Ghost.hasGhost()) && isFinite(best)) {
     const ghostBest = replayGhost.bestTime();
     if (isFinite(ghostBest)) {
@@ -534,6 +566,30 @@ function buildTTResults() {
       }, () => { btn.textContent = text; });
     };
     els.resultsTable.appendChild(btn);
+    if (typeof ShareCode !== "undefined" && ShareCode.encode) {
+      const codeBtn = document.createElement("button");
+      codeBtn.type = "button";
+      codeBtn.className = "sel-chip";
+      codeBtn.id = "res-daily-share-code";
+      codeBtn.textContent = "COPY DAILY CODE";
+      codeBtn.onclick = () => {
+        const p = G.daily.current() || G.daily.plan();
+        const text = G.daily.shareText();
+        const medalMatch = /\b(GOLD|SILVER|BRONZE)\b/.exec(text);
+        const encoded = ShareCode.encode("daily", {
+          day: p.day, track: p.trackId, trackName: p.trackName, weather: p.weather,
+          best: G.player && isFinite(G.player.best) ? G.player.best : undefined,
+          medal: medalMatch ? medalMatch[1].toLowerCase() : undefined,
+          streak: G.daily.liveStreak ? G.daily.liveStreak() : 0,
+          class: p.class || "standard",
+        });
+        if (!encoded.ok) { codeBtn.textContent = "UNAVAILABLE"; return; }
+        ApexClipboard.write(encoded.code).then((ok) => {
+          codeBtn.textContent = ok ? "COPIED" : encoded.code;
+        }, () => { codeBtn.textContent = encoded.code; });
+      };
+      els.resultsTable.appendChild(codeBtn);
+    }
   }
 
   // Portable PB export. The guest slot is deliberately not exported here:

@@ -378,6 +378,7 @@ const FULL = [
   "js/ui/home-world.js",
   "js/ui/photo-studio.js",
   "js/ui/experience.js",
+  "js/ui/share-code.js", // ShareCode: APXS/APXL/APXD envelopes + #share= (player-a11y slice 4)
   "js/ui/title-menu.js",
   "js/ui/deep-link.js",  // DeepLink: manifest shortcut ?go= doors, clicked once the title is live
   "js/ui/title-flow.js", // TitleFlow: main-menu race, season, career and ghost entry
@@ -395,6 +396,7 @@ const FULL = [
   // ?apex=1 ask for __apex. Not on the player boot wall (PWA memory).
   // Multiplayer wire. Pure logic with no game dependency, so position only
   // has to satisfy "before whatever consumes it" — game.js, last as always.
+  "js/race/car-fields.js", // CarFields.predeclare(car): the late-added car fields as `undefined` at spawn, so all cars share one hidden class (game.js makeCars)
   "js/car/field-lod.js",  // FieldLod: rival-car distance LOD table + selectors (wheels / flaps / flame / whole-car / shadow casters / mirror cap)
   "js/car/car-draw.js",   // car mesh/atlas caches, decal queue, cockpit rig, planted wheels (CarDraw.create(G, deps)), extracted from game.js
   "js/render/shared/shadow-pass.js",   // sun / car / lamp shadow maps, snap caches, caster pools (ShadowPass.create(G, deps)), extracted from game.js

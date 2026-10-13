@@ -164,12 +164,14 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_agent",
     "apex_bump_cache_check",
     "apex_car_audit",
+    "apex_catalog",
     "apex_ci_status",
     "apex_doctor",
     "apex_eval",
     "apex_frame_report",
     "apex_garage",
     "apex_graph_parity",
+    "apex_hud_mock",
     "apex_hud_shot",
     "apex_hud_survey",
     "apex_job_cancel",
@@ -726,7 +728,7 @@ test("the HUD survey wraps are browser tools: a held lock refuses both", () => {
   fs.mkdirSync(path.dirname(LOCK), { recursive: true });
   fs.writeFileSync(LOCK, JSON.stringify({ pid: process.pid, tool: "test", since: Date.now() }));
   try {
-    for (const name of ["apex_hud_shot", "apex_hud_survey"]) {
+    for (const name of ["apex_hud_shot", "apex_hud_survey", "apex_hud_mock"]) {
       const r = callCli(name, { dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "" });
       assert.equal(r.status, 1, r.stderr);
       assert.equal(JSON.parse(r.stdout).error, "lock_held", name);
@@ -1750,4 +1752,286 @@ test("jobs_busy names the running jobs and the limit", async () => {
     assert.match(r.message, /frame_fleet-b \(frame_fleet, \d+s\)/);
     assert.match(r.fix, /At most 2 run at once/);
   } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
+
+// apex_catalog: one read for every id the tools accept; it reads the tools' own schemas, so it cannot drift.
+test("apex_catalog lists the ids the other tools accept, from their own schemas and the UI audit catalogs", () => {
+  const r = callCli("apex_catalog", {});
+  assert.equal(r.status, 0, r.stderr);
+  const b = JSON.parse(r.stdout);
+  assert.equal(b.ok, true);
+  const list = JSON.parse(spawnSync(process.execPath, [MCP, "list-tools"], { encoding: "utf8", cwd: ROOT }).stdout);
+  const enumOf = (tool, prop) => list.find((t) => t.name === tool).inputSchema.properties[prop].enum;
+  assert.deepEqual(b.tracks, enumOf("apex_shot", "track"));
+  assert.deepEqual(b.hudDevices, enumOf("apex_hud_shot", "device"));
+  assert.deepEqual(b.shotPresets, enumOf("apex_shot_survey", "preset"));
+  assert.ok(b.uiScreens.includes("settings") && b.uiViewports.includes("ios-iphone-landscape"), "the UI audit's catalogs");
+  assert.ok(b.jobKinds.includes("ui_matrix") && b.jobKinds.includes("float_all"));
+  assert.ok(!b.uiViewports.includes("phone-landscape-844x390"), "the two viewport families stay distinct");
+});
+
+// A misspelled key used to hide behind "tool needs <required>" / the anyOf message; the typo is the likelier mistake.
+test("a misspelled key is reported with a did-you-mean before the missing required argument", () => {
+  const msg = (name, args) => { const b = JSON.parse(callCli(name, args).stdout); return `${b.message} | ${b.fix}`; };
+  assert.match(msg("apex_unit_test", { fil: "x" }), /unknown argument fil \| Did you mean "file"\?/);
+  assert.match(msg("apex_graph_parity", { bse: "HEAD", id: "monza" }), /unknown argument bse \| Did you mean "base"\?/);
+  assert.match(msg("apex_shot_survey", { trak: "monza" }), /unknown argument trak \| Did you mean "track"\?/);
+  // No typo: the missing required argument is still named.
+  assert.match(msg("apex_unit_test", {}), /tool needs file \| Pass "file"/);
+});
+
+// apex_verify_change_fast is ~10 min (tooling-fast on one job): past the host cap and its own 600 s. It runs as a job.
+test("apex_verify_change_fast routes to a background verify_change_fast job, pinned --fast --json, sync:true opts out", () => {
+  const body = (r) => JSON.parse(r.stdout);
+  const job = body(callCli("apex_job_start", { kind: "verify_change_fast", since: "HEAD~1", staged: true, dryRun: true }));
+  assert.equal(job.ok, true);
+  assert.deepEqual(job.argv.slice(1).map((a) => a.replace(/^.*\/tools\//, "tools/")), ["tools/ci/verify-change.mjs", "--fast", "--json", "--since", "HEAD~1", "--staged"]);
+  assert.equal(job.browser, false, "a tree job: no browser lock");
+  assert.match(body(callCli("apex_job_start", { kind: "verify_change_fast", since: "--wait", dryRun: true })).message, /may not start with a CLI flag|since must be a git ref/);
+  // The tool: dryRun keeps its plan; a real call routes (mock mode: no process is started).
+  assert.equal(body(callCli("apex_verify_change_fast", { dryRun: true })).out.plan, true);
+  const routed = body(callCli("apex_verify_change_fast", { since: "HEAD~1" }, { APEX_MCP_MOCK: "1" }));
+  assert.equal(routed.routed, "apex_job_start verify_change_fast", JSON.stringify(routed));
+  assert.equal(routed.kind, "verify_change_fast");
+  assert.match(routed.hint, /apex_job_status/);
+  // sync:true is still accepted (it blocks); its dryRun shows the same pinned argv.
+  const sync = body(callCli("apex_verify_change_fast", { since: "HEAD~1", sync: true, dryRun: true }));
+  assert.ok(sync.argv.includes("--fast") && sync.argv.includes("--json") && !sync.argv.includes("--wait"));
+});
+
+// verify-change --fast exits 2 for a "partial" verdict (browser groups not run, by design): the job is done, not failed.
+test("a verify_change_fast job that exits 2 (partial) is done; any other non-zero exit is failed", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const fake = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-jobs-test-"));
+  try {
+    fs.mkdirSync(path.join(fake, "tools", "ci"), { recursive: true });
+    fs.mkdirSync(path.join(fake, "tools", "track"), { recursive: true });
+    fs.writeFileSync(path.join(fake, "tools/ci/verify-change.mjs"), 'console.log(JSON.stringify({ verdict: "partial", notRun: ["browser"] })); process.exit(Number(process.env.VC_EXIT || 2));\n');
+    fs.writeFileSync(path.join(fake, "tools/track/verify-track.cjs"), "process.exit(2);\n");
+    const toolResult = (body, { isError = false } = {}) => ({ content: [{ type: "text", text: JSON.stringify(body) }], ...(isError || body.ok === false ? { isError: true } : {}) });
+    const refuse = (error, message, fix) => toolResult({ ok: false, error, message, fix });
+    const x = createExtras({ ROOT: fake, toolResult, refuse, acquireLock: () => null, releaseLock() {}, occupancyRefuse: () => null,
+      assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
+    const body = (r) => JSON.parse(r.content[0].text);
+    const settle = async (jobId) => body(await x.handlers.apex_job_status({ jobId, wait: 30 }));
+    const vc = await settle(body(x.handlers.apex_job_start({ kind: "verify_change_fast" })).jobId);
+    assert.equal(vc.state, "done", JSON.stringify(vc));
+    assert.equal(vc.exit, 2);
+    assert.equal(vc.out.verdict, "partial");
+    // The same exit 2 from another kind is a failure.
+    const other = await settle(body(x.handlers.apex_job_start({ kind: "verify_all" })).jobId);
+    assert.equal(other.state, "failed", JSON.stringify(other));
+  } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
+
+// ui_fit / ui_shot / ci_status / rotate_markings_check refine a CLI body by rewriting content[0].text; the spec's primary
+// channel is structuredContent, which used to keep the raw CLI body (ui_fit: no `clean`; ci_status: out null).
+test("syncStructured makes structuredContent match the refined text body, and leaves consistent results alone", async () => {
+  const { syncStructured } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const stale = { content: [{ type: "text", text: JSON.stringify({ ok: true, out: { clean: true } }) }], structuredContent: { ok: true, out: { rows: [1] } } };
+  assert.deepEqual(syncStructured(stale).structuredContent, { ok: true, out: { clean: true } });
+  const same = { content: [{ type: "text", text: JSON.stringify({ ok: true }) }], structuredContent: { ok: true } };
+  assert.deepEqual(syncStructured(same).structuredContent, { ok: true });
+  // No structuredContent (a refusal-free text result) and non-JSON text are untouched.
+  const bare = { content: [{ type: "text", text: "not json" }], structuredContent: { ok: true, keep: 1 } };
+  assert.deepEqual(syncStructured(bare).structuredContent, { ok: true, keep: 1 });
+  assert.deepEqual(syncStructured({ content: [{ type: "text", text: "{}" }] }), { content: [{ type: "text", text: "{}" }] });
+});
+
+// 2026-10-10: async surveys silently dropped `cams` (and cam/az/el/dist/h/side/hud/shots/cols/sheetName) and still said ok.
+// This is the class guard: for every optional argument of every dry-run-able tool, SOME value must change the dry-run plan (or the
+// call must be refused as invalid), unless the argument is exempt below WITH a reason. A new argument that does nothing fails here
+// until it is wired or exempted; an exemption that has become unnecessary fails too, so the table cannot rot.
+const ARG_BASES = {
+  apex_shot: [{ track: "monza" }],
+  apex_agent: [{ track: "monza" }],
+  apex_eval: [{ track: "monza", expr: "1" }],
+  apex_frame_report: [{ track: "monza" }],
+  apex_hud_shot: [{ track: "monza" }],
+  apex_hud_survey: [{}],
+  apex_shot_survey: [{ track: "monza" }],
+  apex_ui_fit: [{ screen: "title" }],
+  apex_ui_shot: [{ screen: "title" }],
+  apex_unit_test: [{ file: "tests/unit/a11y-pwa-pass.test.mjs" }],
+  apex_select_specs: [{ since: "HEAD~1" }],
+  apex_graph_parity: [{ base: "HEAD", id: "monza" }],
+  apex_pick_tests: [{}],
+  apex_track_audit: [{ track: "monza" }],
+  apex_car_audit: [{ check: "ladder" }, { check: "crest" }],               // teams: the crest sweep only
+  apex_garage: [{ op: "open", team: "ferrari" }, { op: "team", team: "mercedes" }, { op: "design" }, { op: "design", design: { stripe: "#ffffff" } }, { op: "shot" }, { op: "sheet" }],   // each op reads its own keys; base only with a design
+  apex_track: [{ op: "survey", track: "monza" }, { op: "shot" }, { op: "eval" }],
+  apex_job_start: ["shot_survey", "flicker_gate", "livery_contrast", "survey_track", "graph_parity_all", "ui_matrix"].map((kind) => ({ kind, track: "monza" })),
+};
+const ARG_EXEMPT = {
+  "apex_hud_shot.async": "routing only: job vs inline; never part of the pinned argv",
+  "apex_hud_shot.inlineImage": "output only: attach the PNG inline; not part of the pinned argv",
+  "apex_hud_survey.async": "routing only: job vs inline; never part of the pinned argv",
+};
+const ARG_ALWAYS = new Set(["dryRun", "target", "url", "image"]);   // transport / output flags of every tool
+const argCandidates = (spec) => {
+  if (spec.enum) return spec.enum;
+  if (spec.type === "boolean") return [true, false];
+  if (spec.type === "integer" || spec.type === "number") {
+    const lo = spec.exclusiveMinimum != null ? spec.exclusiveMinimum + 1 : (spec.minimum ?? 0) + 1;
+    return [lo, lo + 1];
+  }
+  if (spec.type === "array") return [spec.items?.enum ? [spec.items.enum[0]] : spec.items?.type === "number" ? [0.3] : spec.items?.type === "object" ? [{}] : ["a"]];
+  if (spec.type === "object") return [{ a: 1 }];
+  return [spec.pattern ? "probe-1" : "probe"];
+};
+test("every optional argument of every dry-run-able tool changes the plan (or is exempt with a reason)", () => {
+  const tools = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }]).find((m) => m.id === 1).result.tools;
+  const cases = [];
+  for (const t of tools) {
+    const bases = ARG_BASES[t.name];
+    if (!bases || !t.inputSchema.properties.dryRun) continue;
+    for (const base of bases) {
+      cases.push({ tool: t.name, base, key: null, args: base });
+      for (const [k, spec] of Object.entries(t.inputSchema.properties)) {
+        if (ARG_ALWAYS.has(k) || k in base) continue;
+        for (const v of argCandidates(spec)) cases.push({ tool: t.name, base, key: k, args: { ...base, [k]: v } });
+      }
+    }
+  }
+  const norm = (b) => JSON.stringify(b, (k, v) => (k === "durationMs" ? undefined : v)).replace(/20\d\d-\d\d-\d\dT[\d.:-]+Z?/g, "T").replace(/-[a-z0-9]{8,}-\d+/g, "");
+  const res = callTools(cases.map((c) => [c.tool, { ...c.args, dryRun: true }])).map((r) => r.body);
+  const baseline = new Map();
+  cases.forEach((c, i) => { if (c.key === null) baseline.set(c.tool + JSON.stringify(c.base), res[i]); });
+  const used = new Map();   // "tool.key" -> true once any case under any base shows an effect or a validation refusal
+  cases.forEach((c, i) => {
+    if (c.key === null) return;
+    const id = `${c.tool}.${c.key}`;
+    const b = res[i], bb = baseline.get(c.tool + JSON.stringify(c.base));
+    const effect = b && (b.ok === false || (bb && norm(b) !== norm(bb)));
+    if (!used.has(id)) used.set(id, false);
+    if (effect) used.set(id, true);
+  });
+  const dead = [...used].filter(([id, u]) => !u && !(id in ARG_EXEMPT)).map(([id]) => id);
+  assert.deepEqual(dead, [], "these optional arguments change nothing in the dry-run plan: wire them, or exempt each in ARG_EXEMPT with a reason");
+  const stale = Object.keys(ARG_EXEMPT).filter((id) => used.get(id) === true || !used.has(id));
+  assert.deepEqual(stale, [], "these exemptions are no longer needed (the argument now has an effect) or name no argument: remove them");
+});
+
+// 2026-10-10: "does the running server need a restart?" was a guess all session. apex_status now says: the server's start time, and
+// which of the files it loaded (tools/mcp/*.mjs and the tools/lib modules they import) changed after it.
+test("serverFreshness: stale only when a loaded file is newer than the server; a missing file is not stale", async () => {
+  const { serverFreshness } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const files = [path.join(ROOT, "fixture-dir", "alpha.mjs"), path.join(ROOT, "fixture-dir", "beta.mjs"), path.join(ROOT, "fixture-dir", "gone.mjs")];
+  const mt = { [files[0]]: 1000, [files[1]]: 5000 };
+  const fresh = serverFreshness(2000, [files[0], files[2]], (f) => { if (f in mt) return mt[f]; throw new Error("ENOENT"); });
+  assert.equal(fresh.stale, false);
+  assert.deepEqual(fresh.staleFiles, []);
+  assert.equal(fresh.fix, undefined);
+  const stale = serverFreshness(2000, files, (f) => { if (f in mt) return mt[f]; throw new Error("ENOENT"); });
+  assert.equal(stale.stale, true);
+  assert.deepEqual(stale.staleFiles, [path.join("fixture-dir", "beta.mjs")]);
+  assert.match(stale.fix, /restart the apex-tools MCP server/);
+});
+
+test("apex_status reports the server and the open sessions", () => {
+  const r = callCli("apex_status", {});
+  assert.equal(r.status, 0, r.stderr);
+  const b = JSON.parse(r.stdout);
+  assert.equal(b.server.stale, false, "a one-shot call is a fresh process");
+  assert.ok(b.server.watched >= 3, `watched ${b.server.watched}`);
+  assert.ok(b.server.startedAt && b.server.version);
+  assert.deepEqual(b.sessions.garage, null);
+  assert.deepEqual(b.sessions.track, null);
+});
+
+// 2026-10-10: a bad `out` on apex_shot_survey / apex_track open threw an error that carried its refusal and nothing caught it:
+// a bare JSON-RPC "path_escaped" over stdio, a stack trace from `call`.
+test("a bad `out` is the normal refusal (with its fix), not a thrown error", () => {
+  for (const [tool, args] of [["apex_shot_survey", { track: "monza", out: "probe-1", dryRun: true }], ["apex_track", { op: "open", track: "monza", out: "../etc" }]]) {
+    const r = callCli(tool, args);
+    assert.equal(r.status, 1, `${tool}: ${r.stderr}`);
+    const b = JSON.parse(r.stdout);
+    assert.equal(b.error, "path_escaped");
+    assert.match(b.fix, /under artifacts\/ or scratch\//);
+    assert.doesNotMatch(r.stderr, /at assertSafeOut|node:internal/, "no stack trace");
+  }
+});
+
+// 2026-10-10: polling apex_job_status in a loop (or a Monitor on the manifest) for a 20-50 min survey; and a capped result that
+// said only "see the log". `wait` holds the call; `topFindings` puts the worst findings in the reply.
+test("apex_job_status wait holds until the job is done; a capped survey result carries topFindings", async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const fake = fs.mkdtempSync(path.join(ROOT, "artifacts", "apex-jobs-test-"));
+  try {
+    fs.mkdirSync(path.join(fake, "tools", "track"), { recursive: true });
+    fs.mkdirSync(path.join(fake, "artifacts", "survey"), { recursive: true });
+    const findings = [
+      ...Array.from({ length: 30 }, (_, i) => ({ cell: `c${i}`, kind: "overlap", severity: "medium", detail: "m".repeat(400) })),
+      { cell: "worst", kind: "tinyText", severity: "high", detail: "h".repeat(400) },
+      { cell: "info", kind: "lead", severity: "info", detail: "i" },
+      { cell: "worst2", kind: "overlap", severity: "high", detail: "second" },
+    ];
+    fs.writeFileSync(path.join(fake, "artifacts/survey/report.json"), JSON.stringify({ findings }));
+    fs.writeFileSync(path.join(fake, "tools/track/verify-track.cjs"),
+      'setTimeout(() => { const cells = Array.from({ length: 3000 }, (_, i) => ({ c: "c" + i, pad: "x".repeat(20) }));\n'
+      + 'console.log(JSON.stringify({ ok: true, report: "artifacts/survey/report.json", counts: { total: 33 }, cells })); }, 3500);\n');
+    const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
+    const x = createExtras({ ROOT: fake, toolResult, refuse: (e, m, f) => toolResult({ ok: false, error: e, message: m, fix: f }), acquireLock: () => null, releaseLock() {},
+      occupancyRefuse: () => null, assertSafeOut: (p) => p, knownCircuits: () => ["monza"], runSpawn: null, splitOut, log() {}, mockMode: () => false });
+    const body = (r) => JSON.parse(r.content[0].text);
+    const j = body(x.handlers.apex_job_start({ kind: "verify_all" }));
+    const short = body(await x.handlers.apex_job_status({ jobId: j.jobId, wait: 1 }));
+    assert.equal(short.state, "running");
+    assert.equal(short.stillRunning, true, "a wait that ran out says so");
+    assert.ok(short.waitedS >= 1);
+    const done = body(await x.handlers.apex_job_status({ jobId: j.jobId, wait: 20 }));
+    assert.equal(done.state, "done");
+    assert.equal(done.stillRunning, undefined);
+    assert.equal(done.out.truncated, true);
+    assert.equal(done.out.findingsTotal, 33);
+    assert.equal(done.out.topFindings.length, 10, "the worst ten");
+    assert.deepEqual(done.out.topFindings.slice(0, 2).map((f) => f.cell), ["worst", "worst2"], "high before medium before info");
+    assert.ok(done.out.topFindings.every((f) => f.detail.length <= 200), "long details are cut");
+    assert.deepEqual(body(await x.handlers.apex_job_status({ jobId: j.jobId })).state, "done", "no wait: unchanged");
+  } finally { fs.rmSync(fake, { recursive: true, force: true }); }
+});
+
+// 2026-10-10 (apex_agent matrix, 17 real commands): `describe` with no id cost a ~100 s browser boot to learn "describe(id) needs an id",
+// and the reply said error:null / message:null with that text buried in `out`.
+test("apex_agent describe without an id is refused up front, with the id forms", () => {
+  const [bad, ok] = callTools([
+    ["apex_agent", { track: "monza", command: "describe", at: 0.3 }],
+    ["apex_agent", { track: "monza", command: "describe", id: "corner:T3", dryRun: true }],
+  ]).map((r) => r.body);
+  assert.equal(bad.error, "bad_args");
+  assert.match(bad.message, /describe needs id/);
+  assert.match(bad.fix, /corner:T3/);
+  assert.equal(ok.ok, true);
+  assert.deepEqual(ok.argv.slice(-4), ["monza", "describe", "--id", "corner:T3"]);
+});
+
+test("a CLI that fails with its own {error, message, fix} has them lifted out of `out`", async () => {
+  const { runSpawn } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const script = 'console.log(JSON.stringify({ ok: false, error: "BadArgumentError", message: "describe(id) needs an id", fix: "ids look like corner:T3" })); process.exit(2);';
+  const r = await runSpawn([process.execPath, "-e", script], { timeoutMs: 15000 });
+  const b = JSON.parse(r.content[0].text);
+  assert.equal(b.ok, false);
+  assert.equal(b.exit, 2);
+  assert.equal(b.error, "BadArgumentError");
+  assert.equal(b.message, "describe(id) needs an id");
+  assert.equal(b.fix, "ids look like corner:T3");
+  assert.equal(b.out.error, "BadArgumentError", "`out` still holds the CLI's own JSON");
+  // a failure whose out carries no error is untouched
+  const plain = JSON.parse((await runSpawn([process.execPath, "-e", 'console.log(JSON.stringify({ n: 1 })); process.exit(1);'], { timeoutMs: 15000 })).content[0].text);
+  assert.equal(plain.ok, false);
+  assert.equal(plain.error, undefined);
+});
+
+// 2026-10-10: apex_agent atmosphere {weather:"wet", tod:"dusk"} WORKS but took 269 s; the flat 180 s browser cap killed it (the other 14
+// apex_agent commands took 100-130 s).
+test("browserTimeoutMs: 180 s, 420 s for an apex_agent call that changes weather or time of day", async () => {
+  const { browserTimeoutMs } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  assert.equal(browserTimeoutMs("apex_agent", { command: "world" }), 180000);
+  assert.equal(browserTimeoutMs("apex_agent", { command: "atmosphere" }), 180000, "reading the atmosphere changes nothing");
+  assert.equal(browserTimeoutMs("apex_agent", { command: "atmosphere", weather: "wet" }), 420000);
+  assert.equal(browserTimeoutMs("apex_agent", { command: "atmosphere", tod: "dusk" }), 420000);
+  assert.equal(browserTimeoutMs("apex_shot", { tod: "night" }), 180000, "only apex_agent rebuilds the scene on a tod");
+  assert.ok(browserTimeoutMs("apex_agent", { weather: "wet" }) > 269000, "above the measured duration");
 });

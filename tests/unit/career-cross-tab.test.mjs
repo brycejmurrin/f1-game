@@ -401,3 +401,11 @@ test("the title menu refreshes after a restored career batch selects its slot", 
   const title = readFileSync(join(ROOT, "js/ui/title-menu.js"), "utf8");
   assert.match(title, /restoredBatch[\s\S]{0,300}refresh\(\)/);
 });
+
+test("title-menu season hydrate skips when a session entry is already open", () => {
+  const title = readFileSync(join(ROOT, "js/ui/title-menu.js"), "utf8");
+  assert.match(title, /seasonBack[\s\S]{0,400}entering/,
+    "IndexedDB season restore must not mutate G.season during select/race-settings/loading");
+  assert.match(title, /getElementById\("race-settings"\)/);
+  assert.match(title, /getElementById\("loading"\)/);
+});

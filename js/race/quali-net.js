@@ -5,9 +5,24 @@
 const QualiNet = (function () {
   "use strict";
 
+  // The gate never waits forever: a rival who BACKed out, went AFK or sits in a
+  // hidden tab keeps the connection (and the 6 s silence timeout) alive but
+  // never posts a time. After GATE_TIMEOUT_MS everyone's gate opens and the
+  // missing seat is gridded from the model; the HOST may skip the wait earlier,
+  // after OVERRIDE_AFTER_MS ("START ANYWAY"). WAIT_MS is the same bound under
+  // the Flow B name (MENU leave / unit harness).
+  const OVERRIDE_AFTER_MS = 15000;
+  const GATE_TIMEOUT_MS = 60000;
+  const WAIT_MS = GATE_TIMEOUT_MS;
+
   function create(hooks) {
     const { $, fmtTime, isQuali, getPlayer, getCars, openQuali, applyPeerQuali,
       getNetPlay, getNetLobby } = hooks;
+    // Injectable for tests; the game passes neither. Accept both naming styles
+    // (Flow B setTimer/clearTimer and NP-2 setTimeout/clearTimeout).
+    const clock = hooks.now || (() => performance.now());
+    const setTimer = hooks.setTimer || hooks.setTimeout || ((fn, ms) => setTimeout(fn, ms));
+    const clearTimer = hooks.clearTimer || hooks.clearTimeout || ((h) => clearTimeout(h));
 
     // driverId -> seconds, one entry per rival who has driven.
     let qualiPeers = new Map();
@@ -16,6 +31,15 @@ const QualiNet = (function () {
     let qualiLiveAt = 0;
     let qualiNetDone = null;
     let qualiHadRivals = false;
+    let gateSince = null;     // when the gate first held after arm (rival outstanding)
+    let gateTimedOut = false;
+    let gateTimer = null;
+    let iDone = false;        // Flow B: player's own session is on the sheet (MENU path)
+
+    function gateReset() {
+      gateSince = null; gateTimedOut = false; iDone = false;
+      if (gateTimer != null) { clearTimer(gateTimer); gateTimer = null; }
+    }
 
     function rivalDriverIds() {
       const netPlay = getNetPlay();
@@ -51,7 +75,7 @@ const QualiNet = (function () {
       return false;
     }
 
-    function waiting() {
+    function rawWaiting() {
       if (!qualiNetDone) return false;
       const rivals = rivalDriverIds();
       if (rivals.length) qualiHadRivals = true;
@@ -59,14 +83,50 @@ const QualiNet = (function () {
       return rivals.some((id) => !(qualiPeers.get(id) > 0));
     }
 
+    const isHost = () => {
+      const netLobby = getNetLobby();
+      return !!(netLobby && netLobby.roomState && netLobby.roomState().role === "host");
+    };
+
+    // The ONLY place the wait clock runs: it starts the first time the gate holds
+    // and the deadlines are measured from there.
+    function waiting() {
+      if (!rawWaiting()) { gateSince = null; return false; }
+      if (gateTimedOut) return false;
+      if (gateSince == null) gateSince = clock();
+      if (clock() - gateSince >= GATE_TIMEOUT_MS) { gateTimedOut = true; return false; }
+      // The host's START ANYWAY: the gate stops holding the host (q-go then
+      // proceeds exactly as for a complete field); guests wait out the cap.
+      return !canForce();
+    }
+
+    /** Host only, OVERRIDE_AFTER_MS into the wait. */
+    function canForce() {
+      return rawWaiting() && gateSince != null && !gateTimedOut &&
+        clock() - gateSince >= OVERRIDE_AFTER_MS && isHost();
+    }
+
+    // Nothing else re-evaluates the gate while every rival is silent, so the
+    // deadlines get their own wake-up.
+    function armGateTimer() {
+      if (gateTimer != null || gateSince == null || gateTimedOut) return;
+      const age = clock() - gateSince;
+      const next = (age < OVERRIDE_AFTER_MS ? OVERRIDE_AFTER_MS : GATE_TIMEOUT_MS) - age;
+      gateTimer = setTimer(() => { gateTimer = null; refreshQualiGate(); }, Math.max(50, next + 20));
+    }
+
     function refreshQualiGate() {
       const b = $("q-go");
       if (!b) return;
       const w = waiting();
+      if (gateSince != null) armGateTimer();
+      if (!w && canForce()) { b.disabled = false; b.textContent = "START ANYWAY"; return; }
       b.disabled = w;
       if (!w) {
+        const stillSilent = rivalDriverIds().some((id) => !(qualiPeers.get(id) > 0));
         b.textContent = (qualiNetDone && qualiHadRivals && !rivalDriverIds().length)
-          ? "RIVAL LEFT — TO THE GRID" : "TO THE GRID";
+          ? "RIVAL LEFT — TO THE GRID"
+          : (gateTimedOut && stillSilent ? "NO LAP FROM THEM — TO THE GRID" : "TO THE GRID");
         return;
       }
       const rivals = rivalDriverIds();
@@ -109,7 +169,9 @@ const QualiNet = (function () {
       // quali-model.js and a string or boolean there throws mid-sheet.
       const t = d ? Number(d.t) : NaN;
       // Infinity = NO TIME (validQuali's noTime marker): drove, no valid lap.
-      if (d && d.driverId != null && (t === Infinity || (Number.isFinite(t) && t > 0))) qualiPeers.set(d.driverId, t);
+      if (d && d.driverId != null && (t === Infinity || (Number.isFinite(t) && t > 0))) {
+        qualiPeers.set(d.driverId, t);
+      }
       if (!isQuali()) return;
       const player = getPlayer();
       const mine = player && player.lastLap > 0 ? player.lastLap
@@ -131,7 +193,14 @@ const QualiNet = (function () {
       qualiNetDone = netDone || null;
       qualiLive.clear();
       qualiHadRivals = false;
+      gateReset();
     }
+
+    /** The player's own session is run (q-done): MENU is the second door off the sheet. */
+    function markDone() { iDone = true; }
+    const timedOut = () => gateTimedOut;
+    /** BACK/Escape may leave once the gate gave up on a silent rival. */
+    const canLeave = () => gateTimedOut;
 
     function clearPeers() { qualiPeers.clear(); }
 
@@ -139,6 +208,7 @@ const QualiNet = (function () {
       qualiNetDone = null;
       qualiLive.clear();
       qualiHadRivals = false;
+      gateReset();
     }
 
     function hasArmed() { return !!qualiNetDone; }
@@ -154,15 +224,21 @@ const QualiNet = (function () {
       qualiNetDone = null;
       qualiHadRivals = false;
       qualiLive.clear();
+      gateReset();
       netLobby.cancel();
     }
 
     function resetOnBackWithAbort() {
       const netLobby = getNetLobby();
+      // Leaving the sheet without a lap is a NO TIME, said out loud: a silent
+      // BACK left every rival waiting on a seat that was never going to drive.
+      const player = getPlayer();
+      if (qualiNetDone && player && player.driverId != null) reportQuali(player.driverId, Infinity);
       qualiNetDone = null;
       qualiHadRivals = false;
       qualiPeers.clear();
       qualiLive.clear();
+      gateReset();
       netLobby.abortQuali();
     }
 
@@ -170,11 +246,12 @@ const QualiNet = (function () {
 
     return {
       onPeerQuali, onPeerQualiLive, openQualiForNet, refreshQualiGate,
-      reportLive, reportQuali, driven, waiting, arm, clearPeers, resetSoft,
+      reportLive, reportQuali, driven, waiting, canForce, arm, clearPeers, resetSoft,
       hasArmed, takeGoCallback, resetOnQuitWithCancel, resetOnBackWithAbort,
+      markDone, timedOut, canLeave, WAIT_MS,
     };
   }
 
-  return { create };
+  return { create, WAIT_MS, GATE_TIMEOUT_MS, OVERRIDE_AFTER_MS };
 })();
 Object.freeze(QualiNet);

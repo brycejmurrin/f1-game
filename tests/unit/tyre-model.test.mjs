@@ -275,8 +275,10 @@ test("the player's top speed pays for worn rubber, as the AI's does", () => {
   // The AI's vmax took tractionMul; the player's took none, and perfMul only
   // slows the climb to vmax (ACCEL·perfMul·(1 − v/vmax)), never the cap.
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  assert.match(src, /else if \(c\.human\) vmax \*= tyres\.tractionMul\(c\)/,
+  // updateCar reads tractionMul ONCE per car step into `trMul` (PERF-HUNT-2 S4); either spelling carries it.
+  assert.match(src, /else if \(c\.human\) vmax \*= (?:tyres\.tractionMul\(c\)|trMul)/,
     "the human branch of the speed target must carry the tyre's traction");
+  if (/vmax \*= trMul/.test(src)) assert.match(src, /\btrMul = tyres\.tractionMul\(c\)/, "trMul is the car's own tractionMul");
 });
 
 test("ambient temperature follows a weather arc, not the flip of raceWeather", () => {
@@ -548,6 +550,19 @@ test("braking wears the FRONT, traction wears the REAR", () => {
   const drive = T.axleShare({ human: true, axEstSm: 4, axFrac: 1 }, 7);
   assert.ok(brake[0] > brake[1] + 0.5, `braking did not load the front: ${brake}`);
   assert.ok(drive[1] > drive[0] + 0.5, `traction did not load the rear: ${drive}`);
+});
+
+// Physics hunt 2026-10-10: an AI car's accSm is engine pull only (never < 0,
+// stale under the brake), so the AI never tilted its wear onto the fronts —
+// Monza VM, 22 cars over 80 s: accSm min 0, axle tilt max exactly AXLE_REST.
+// The observed corridorAccel carries the braking.
+test("an AI car braking (corridorAccel < 0) loads its FRONT, and its load sees the stop", () => {
+  const stale = { human: false, accSm: 2, corridorAccel: -20, consistency: 0.75 };
+  const [f, r] = T.axleShare(stale, 7);
+  assert.ok(f > r + 0.5, `AI braking did not load the front: ${f} / ${r}`);
+  assert.ok(T.aiLoad(stale, 7) > T.aiLoad({ ...stale, corridorAccel: 2 }, 7), "a full stop scores more load than a part-throttle run");
+  // No corridorAccel (a bare stub): accSm is still read, unchanged.
+  assert.equal(T.axleShare({ human: false, accSm: 7 }, 7)[0], T.axleShare({ human: false, accSm: 7, corridorAccel: undefined }, 7)[0]);
 });
 
 test("a forward brake bias moves wear onto the front, a rearward one off it", () => {

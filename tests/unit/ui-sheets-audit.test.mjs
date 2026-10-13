@@ -75,7 +75,7 @@ function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true,
   vm.runInContext(src("js/ui/results-story.js"), ctx, { filename: "js/ui/results-story.js" });
   vm.runInContext(src("js/ui/results-sheet.js"), ctx, { filename: "js/ui/results-sheet.js" });
   const SeasonCal = vm.runInContext("SeasonCal", ctx);
-  const els = { resultsTable: dom.byId("results-table"), resultsTitle: dom.byId("results-title"), resNext: dom.byId("res-next") };
+  const els = { resultsTable: dom.byId("results-table"), resultsTitle: dom.byId("results-title"), resNext: dom.byId("res-next"), resMenu: dom.byId("res-menu") };
   const G = {
     $: (id) => dom.byId(id), els, season, cars, state, seasonMode, track: { def: tracks[0] },
     cssCol: (c) => "rgb(" + c.join(",") + ")", announce() {}, soundOn: false, careerSettlement: null,
@@ -572,7 +572,7 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
   // QUIT and only while music is live; it is not a menu action.
   const ids = [...pause.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]).filter((id) => !/^pm-(prev|play|skip)$/.test(id));
   // Pause exposes specific race tasks; full preferences retain the Settings index.
-  assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-strategy", "pm-review", "pm-practice", "pm-photo", "pm-howto", "pm-checkpoint-save", "pm-checkpoint-retry", "pm-checkpoint-rewind", "pm-standings", "pm-quit"]);
+  assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-strategy", "pm-review", "pm-practice", "pm-photo", "pm-howto", "pm-checkpoint-save", "pm-checkpoint-retry", "pm-checkpoint-rewind", "pm-standings", "pm-skip-results", "pm-quit"]);
   const settingsIndex = html.slice(html.indexOf('id="pm-settings-index"'), html.indexOf("</nav>", html.indexOf('id="pm-settings-index"')));
   const doors = [...settingsIndex.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files"],
@@ -806,4 +806,48 @@ test("SettingRow wrap:false clamps the LAPS chevrons at the ends", () => {
   assert.equal(laps, 57);
   built.prev.click();
   assert.equal(laps, 5);
+});
+
+// Flow B item 4: a WATCHED real race (REAL REPLAY / HIGHLIGHTS) re-runs the replay, so its button must not say RACE AGAIN.
+test("results next-button label is pinned by mode: WATCH AGAIN for a watched real race, RACE AGAIN for a driven one", () => {
+  const { cars } = tiedSeason();
+  const driven = bootResults({ season: null, cars, seasonMode: false });
+  driven.api.buildResults(cars.slice());
+  assert.equal(driven.els.resNext.textContent, "RACE AGAIN");
+  const watched = bootResults({ season: null, cars, seasonMode: false, globals: { RealRace: { status: () => ({ watch: true }) } } });
+  watched.api.buildResults(cars.slice());
+  assert.equal(watched.els.resNext.textContent, "WATCH AGAIN");
+  const raced = bootResults({ season: null, cars, seasonMode: false, globals: { RealRace: { status: () => ({ watch: false }) } } });
+  raced.api.buildResults(cars.slice());
+  assert.equal(raced.els.resNext.textContent, "RACE AGAIN", "a real-race grid the player drives is still a race");
+});
+
+// Flow B item 2: RACE AGAIN after a FRIEND race is a solo race and MENU drops the room. Say so, and offer the way back.
+test("friend-race results are honest: RACE AGAIN (SOLO), a NEW FRIEND ROOM door, and a hint that the room closed", () => {
+  const { cars } = tiedSeason();
+  const friend = bootResults({ season: null, cars, seasonMode: false, netPlay: { active: () => true, ownsClassification: () => false, peerResult: () => null } });
+  friend.api.buildResults(cars.slice());
+  assert.equal(friend.els.resNext.textContent, "RACE AGAIN (SOLO)");
+  assert.equal(friend.els.resMenu.textContent, "NEW FRIEND ROOM");
+  const hint = friend.els.resultsTable.children.find((c) => c.getAttribute("data-results-part") === "room");
+  assert.ok(hint, "the sheet says the room is gone");
+  assert.match(hint.children[0].textContent, /VS FRIEND/);
+  const solo = bootResults({ season: null, cars, seasonMode: false, netPlay: { active: () => false, ownsClassification: () => false, peerResult: () => null } });
+  solo.api.buildResults(cars.slice());
+  assert.equal(solo.els.resNext.textContent, "RACE AGAIN");
+  assert.equal(solo.els.resMenu.textContent, "MENU");
+  assert.equal(solo.els.resultsTable.children.find((c) => c.getAttribute("data-results-part") === "room"), undefined);
+});
+
+test("friend-race labels do not outlive the race: the next solo build restores MENU", () => {
+  const { cars } = tiedSeason();
+  let live = true;
+  const h = bootResults({ season: null, cars, seasonMode: false, netPlay: { active: () => live, ownsClassification: () => false, peerResult: () => null } });
+  h.api.buildResults(cars.slice());
+  assert.equal(h.els.resMenu.textContent, "NEW FRIEND ROOM");
+  live = false; clear(h.els.resultsTable);
+  h.api.buildResults(cars.slice());
+  assert.equal(h.els.resMenu.textContent, "MENU");
+  // buildTTResults needs the whole ghost stack to run here; pin its reset at the source.
+  assert.match(read("js/ui/results-sheet.js"), /function buildTTResults\(\) \{[\s\S]{0,400}resMenu\.textContent = "MENU"/);
 });

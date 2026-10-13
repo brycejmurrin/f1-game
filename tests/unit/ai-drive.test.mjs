@@ -161,6 +161,32 @@ test("wantBoost catches and defends; banks when aware and rich-not-needed", () =
   }), true);
 });
 
+// Physics hunt 2026-10-10 (item 6): the catching / defending / attacking closing
+// rates were raw m/s (towSpeed - 1, speed - 2, blockerSpeed - 1), so the same
+// situation on the standard scale flipped with OVERALL SPEED. They ride vTop now.
+test("wantBoost and the attack late-brake read the same at every PACE (closing rates ride vTop)", () => {
+  for (const pace of [0.5, 1.3]) {
+    const vTop = 72 * pace, v = (x) => x * pace;
+    // Catching: 0.8 std m/s slower than the car ahead (inside the 1 m/s band).
+    assert.equal(A.wantBoost({
+      traits: mid, energy: 0.3, kAhead60: 0.001, otActive: false, vTop,
+      towCar: true, towGap: 12, towSpeed: v(55.8), speed: v(55),
+    }), true, `catching at pace ${pace}`);
+    // Defending: a chaser 1.6 std m/s slower (inside the 2 m/s band).
+    assert.equal(A.wantBoost({
+      traits: mid, energy: 0.3, kAhead60: 0.001, otActive: false, vTop,
+      chaser: true, chaserGap: 8, chaserSpeed: v(53.4), speed: v(55),
+    }), true, `defending at pace ${pace}`);
+    // Attacking a blocker 0.8 std m/s quicker: the craft late-brake still applies.
+    const samples = [{ d: 50, k: 0.018, bank: 0 }];
+    const base = { samples, latMax: 22, brake: 22, grip: 1, pace, vmax: 72 };
+    const plain = A.brakeTarget({ ...base, traits: ace });
+    const attack = A.brakeTarget({ ...base, traits: ace, blocker: true, blockerGap: 8,
+      blockerSpeed: v(50.8), speed: v(50), roomL: 3, roomR: 1 });
+    assert.ok(attack > plain, `attacking at pace ${pace}: ${attack} vs ${plain}`);
+  }
+});
+
 // verify-physics #3 (2026-10-04): the pedal is FEED-FORWARD + a P trim. The
 // planner budgets 0.85·brake of deceleration over each sample's distance, so a
 // car riding its own envelope needs pedal 0.85 there — a pure P band (0.2 at
@@ -733,7 +759,8 @@ test("updateCar does not allocate AiDrive ctx literals", () => {
   // scratches (_aiBoost etc.). A new literal at those call sites is the
   // defect coming back — catch it here without a browser.
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const fn = src.match(/function updateCar\([\s\S]*?\nfunction /);
+  // updateCar AND its parts (PERF-HUNT-2 S1 moved its statements into updateCar* helpers placed after it).
+  const fn = src.match(/function updateCar\([\s\S]*?\nfunction rescuePlayer/);
   console.log("[ai-drive] updateCar body found:", !!fn);
   assert.ok(fn, "updateCar body present");
   const hits = fn[0].match(
@@ -1012,6 +1039,15 @@ test("on a straight the AI covers the side the attacker is lining up on", () => 
   assert.ok(fromRight > 0, `attacker on the right (+x) is covered right, got ${fromRight}`);
   assert.ok(fromLeft < 0, `attacker on the left is covered left, got ${fromLeft}`);
   assert.ok(Math.abs(fromRight - -fromLeft) < 1e-9, "and symmetrically");
+});
+
+// Physics hunt 2026-10-10 (item 7): the chaser's live .x depends on update order
+// (it may already have moved this tick); the tick-start snapshot is what every
+// car sees, as AiCorridor reads it since #1289.
+test("defendPull reads the chaser's tick snapshot, not its live x", () => {
+  assert.ok(A.defendPull({ ...onStraight, other: { x: 0, _snapX: 1.4 } }) > 0, "snapshot on the right wins");
+  assert.equal(A.defendPull({ ...onStraight, other: { x: 1.4, _snapX: 0 } }), 0, "snapshot dead behind wins");
+  assert.ok(A.defendPull({ ...onStraight, other: { x: -1.4 } }) < 0, "no snapshot: live x");
 });
 
 test("dead behind is not a move to cover — hold the line", () => {
@@ -1590,7 +1626,9 @@ for (const p of [1, 0.469]) {
 
 test("game.js hands wantBoost and defendPull the pace envelope (vTop)", () => {
   const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
-  assert.match(game, /_aiBoost\.vTop = vTop\(\)/, "wantBoost's tolerances need vTop");
-  assert.match(game, /_aiDefend\.vTop = vTop\(\)/, "defendPull's not-closing gate needs vTop");
+  // updateCar reads vTop() once per car step into `vT` (PERF-HUNT-2 S4); either spelling is the envelope.
+  assert.match(game, /_aiBoost\.vTop = (?:vTop\(\)|vT);/, "wantBoost's tolerances need vTop");
+  assert.match(game, /_aiDefend\.vTop = (?:vTop\(\)|vT);/, "defendPull's not-closing gate needs vTop");
+  if (/\.vTop = vT;/.test(game)) assert.match(game, /\bconst vT = vTop\(\)/, "vT is vTop()");
   assert.match(game, /_aiBr\.pace = PACE; _aiBr\.vmax = VMAX/, "brakeTarget reads vScale from pace");
 });

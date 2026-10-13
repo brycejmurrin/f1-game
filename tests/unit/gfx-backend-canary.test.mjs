@@ -544,10 +544,15 @@ test("GLX re-reads the canvas box after a viewport change, even when a frame rea
 
 test("TLX hoists crack fwidth and MAT samples before the detail/live If (WGSL derivative_uniformity)", () => {
   const lit = read("js/render/three/tsl-lit.js");
-  const at = lit.indexOf("const cr = abs(vnoise(wp.xz");
-  const gate = lit.indexOf("If(matU.detail.greaterThan(0.0)", at);
-  assert.ok(at > 0 && gate > at, "fwidth(cr) must be taken before the detail If");
-  assert.match(lit.slice(at, gate + 40), /fwidth\(cr\)/);
+  // B8 (TLX-PERF-HUNT 2026-10-11): cr and its fwidth live INSIDE the detail If — a gate on
+  // a uniform is uniform control flow, so WGSL accepts the derivative there — and BEFORE the
+  // per-fragment crackFade If, which is not.
+  const gate = lit.indexOf("If(matU.detail.greaterThan(0.0)");
+  const at = lit.indexOf("const cr = abs(vnoise(wp.xz", gate);
+  const fw = lit.indexOf("fwidth(cr)", at);
+  const perFrag = lit.indexOf("If(crackFade.greaterThan(0.01)", at);
+  assert.ok(gate > 0 && at > gate && fw > at && perFrag > fw,
+    "fwidth(cr) must sit inside the uniform detail If and before the per-fragment crackFade If");
   const nSamp = lit.indexOf("const nt = matNormalNode.sample(uv)");
   const nAfter = lit.indexOf("If(live.and(fade.greaterThan(0.005))", nSamp);
   assert.ok(nSamp > 0 && nAfter > nSamp, "MAT normal sample must sit before the live/fade If");
@@ -1436,6 +1441,135 @@ test("GLX shadow cull upload:false leaves the camera pack and cache alone", () =
   assert.equal(h.count("bufferSubData"), 0, "camera cull still hits after a shadow cull");
 });
 
+test("GLX lamp shadow cull honours opts.reach, re-uses an unchanged shadow pack, casts through a depth VAO (PERF-HUNT-2 G5)", () => {
+  // The lamp pass (shadow-pass.js CULL_NO_UPLOAD_REACH) re-culls every batch on
+  // every car-only rebuild: a cell beyond the lamp radius is dropped (TLX C3b),
+  // an unchanged surviving cell set leaves shadowIbo as it is (no repack, no
+  // upload), and the cast binds the batch's own depth VAO instead of
+  // re-pointing the lit VAO at shadowIbo and back.
+  const h = bootGlx();
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mats = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 100, 0, 0, 1]);
+  const batch = h.GLX.createInstancedBatch(tri, mats, null, { cellSize: 50 });
+  const planes = (d) => Array.from({ length: 6 }, () => [0, 0, 0, d]);
+  const reach = { upload: false, reach: [0, 0, 0, 10] };
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6), reach), 1, "the cell 100 m out is beyond a 10 m reach");
+  h.reset();
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6), reach), 1);
+  assert.equal(h.count("bufferSubData"), 0, "same surviving cell set: shadowIbo already holds the pack");
+  h.reset();
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6), { upload: false }), 2, "no reach: both cells");
+  assert.equal(h.count("bufferSubData"), 1, "a new cell set repacks and uploads");
+  const lightVP = new Float32Array(16); lightVP[0] = lightVP[5] = lightVP[10] = lightVP[15] = 1;
+  h.GLX.shadowBegin(lightVP);
+  h.reset();
+  h.GLX.castShadowInstanced(batch, 2);
+  assert.equal(h.count("drawElementsInstanced"), 1);
+  assert.equal(h.count("createVertexArray"), 1, "first light-culled cast builds the depth VAO");
+  h.reset();
+  h.GLX.castShadowInstanced(batch, 2);
+  assert.equal(h.count("drawElementsInstanced"), 1);
+  assert.equal(h.count("vertexAttribPointer"), 0, "later casts re-point nothing: the lit VAO keeps ibo");
+  h.GLX.shadowEnd();
+  h.GLX.freeInstancedBatch(batch);
+  assert.equal(batch._shVao, null, "the depth VAO is freed with the batch");
+});
+
+test("GLX shared instance buffer (apex26.glxInstPerPass=0, the mobile default): lamp cast, mirror cull / freeze replay and main cull each draw their own pack (PERF-HUNT-2 G5 + G8 fallback)", () => {
+  // Replays game.js's frame order on the mock — lamp pass (reach cull + cast),
+  // mirror (cull + record, or the freeze replay through updateInstances, on
+  // the SHARED ibo), main cull — and resolves every instanced draw to the bytes
+  // bound at attribute 5, so a stale shadow pack, a depth VAO on the wrong
+  // buffer or a camera pack leaking into the lamp map would show as a mismatch.
+  const h = bootGlx({ ls: { "apex26.glxInstPerPass": "0" } });
+  assert.equal(h.GLX.instPerPass, false);
+  const N = 12, mats = new Float32Array(N * 16);
+  for (let i = 0; i < N; i++) { const o = i * 16; mats[o] = mats[o + 5] = mats[o + 10] = mats[o + 15] = 1; mats[o + 12] = i * 30; }
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const b = h.GLX.createInstancedBatch(tri, mats, new Float32Array(N * 3).fill(1), { cellSize: 50 });
+  const slab = (lo, hi) => { const P = Array.from({ length: 6 }, () => [0, 0, 0, 1e6]); P[0] = [1, 0, 0, -lo]; P[1] = [-1, 0, 0, hi]; return P; };
+  const want = (lo, hi, reach) => { const r = []; for (const c of b.cells) {
+    if (c.mx[0] < lo || c.mn[0] > hi) continue;
+    if (reach) { const dx = Math.max(c.mn[0] - reach[0], 0, reach[0] - c.mx[0]), dy = Math.max(c.mn[1], 0, -c.mx[1]), dz = Math.max(c.mn[2], 0, -c.mx[2]); if (dx * dx + dy * dy + dz * dz > reach[3] * reach[3]) continue; }
+    for (const i of c.idx) r.push(i * 30); } return r; };
+  // GL state model over the recorded stream: VAO attribute 5 -> buffer -> bytes.
+  const A = h.gl.ARRAY_BUFFER, bufs = new Map(), vaos = new Map();
+  let vao = null, arr = null, cur = 0;
+  const drawn = () => { const out = [];
+    for (; cur < h.calls.length; cur++) { const [k, a] = h.calls[cur];
+      if (k === "bindVertexArray") vao = a[0];
+      else if (k === "bindBuffer" && a[0] === A) arr = a[1];
+      else if (k === "bufferData" && a[0] === A) bufs.set(arr, typeof a[1] === "number" ? new Float32Array(a[1] / 4) : Float32Array.from(a[1]));
+      else if (k === "bufferSubData" && a[0] === A) { const d = bufs.get(arr), s = a[2], so = a[3] || 0, n = a[4] !== undefined ? a[4] : s.length - so; for (let i = 0; i < n; i++) d[a[1] / 4 + i] = s[so + i]; }
+      else if (k === "vertexAttribPointer" && a[0] === 5) vaos.set(vao, arr);
+      else if (k === "drawElementsInstanced") { const d = bufs.get(vaos.get(vao)); out.push(Array.from({ length: a[4] }, (_, i) => d[i * 16 + 12])); } }
+    return out; };
+  const lightVP = new Float32Array(16); lightVP[0] = lightVP[5] = lightVP[10] = lightVP[15] = 1;
+  let mirMats = null, mirN = 0, lastMir = null;
+  for (let f = 0; f < 8; f++) {
+    const lx = 60 + 15 * f, reach = [lx, 0, 0, 40];
+    if (f % 4 !== 3) {   // a lamp rebuild (every 4th frame is a keep)
+      h.GLX.lampShadowBegin(lightVP, 0);
+      h.GLX.castShadowInstanced(b, h.GLX.cullInstances(b, slab(lx - 120, lx + 120), { upload: false, reach }));
+      h.GLX.lampShadowEnd();
+      assert.deepEqual(drawn().pop(), want(lx - 120, lx + 120, reach), `f${f}: the lamp map casts the reach-culled pack`);
+    }
+    const freeze = f % 2 === 1, f0 = h.frame({ mirrorFreezeInstanced: freeze, mirrorLite: false });
+    assert.equal(h.GLX.mirrorBegin(f0, 256, 128), true);
+    if (freeze) h.GLX.updateInstances(b, mirMats, mirN, null);   // game.js's replay (no instPerPass)
+    else {
+      h.GLX.cullInstances(b, slab(200 - 10 * f, 330));
+      mirN = b.visible; mirMats = b.packMatrices.slice(0, mirN * 16); lastMir = want(200 - 10 * f, 330);
+    }
+    h.GLX.drawInstanced(b, {});
+    h.GLX.mirrorEnd();
+    assert.deepEqual(drawn().pop(), lastMir, `f${f}: the mirror draws its (frozen) pack`);
+    h.GLX.begin(h.frame());
+    h.GLX.cullInstances(b, slab(0, 200));
+    h.GLX.drawInstanced(b, {});
+    assert.deepEqual(drawn().pop(), want(0, 200), `f${f}: the main pass draws the camera pack`);
+  }
+  // Knob off is the base path: no mirror view (its GL call stream matched cf27b607a's byte for byte).
+  assert.equal(b._mir, undefined, "no mirror view on the shared path");
+});
+
+test("GLX instPerPass: the mirror pass culls and draws its own instance buffer, and holds it on freeze frames (PERF-HUNT-2 G8)", () => {
+  // TLX A1's contract on GLX: the main and mirror passes stop ping-ponging one
+  // ibo (each re-packing + re-uploading over the other's cell set every frame).
+  const h = bootGlx();
+  assert.equal(h.GLX.instPerPass, true, "desktop tier: per-pass buffers");
+  assert.equal(bootGlx({ ls: { "apex26.glxInstPerPass": "0" } }).GLX.instPerPass, false, "the escape hatch");
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mats = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 100, 0, 0, 1]);
+  const batch = h.GLX.createInstancedBatch(tri, mats, [1, 1, 1, 1, 1, 1], { cellSize: 50 });
+  const all = Array.from({ length: 6 }, () => [0, 0, 0, 1e6]);
+  const near = all.slice(0, 5).concat([[-1, 0, 0, 50]]);   // x <= 50: the far cell is out
+  const mirror = (freeze, fn) => {
+    const f = h.frame(); f.mirrorFreezeInstanced = freeze;
+    assert.equal(h.GLX.mirrorBegin(f, 256, 128), true);
+    try { return fn(); } finally { h.GLX.mirrorEnd(); }
+  };
+  assert.equal(h.GLX.cullInstances(batch, all), 2);
+  h.reset();
+  assert.equal(mirror(false, () => h.GLX.cullInstances(batch, near)), 1);
+  assert.equal(batch.visible, 2, "the camera count survives the mirror cull");
+  assert.ok(batch._mir && batch._mir.visible === 1, "the mirror view holds its own count");
+  h.reset();
+  assert.equal(h.GLX.cullInstances(batch, all), 2);
+  assert.equal(mirror(false, () => h.GLX.cullInstances(batch, near)), 1);
+  assert.equal(h.count("bufferSubData"), 0, "each pass hits its own resident pack: no re-upload either side");
+  h.reset();
+  mirror(false, () => h.GLX.drawInstanced(batch, {}));
+  assert.ok(h.calls.some((c) => c[0] === "bindVertexArray" && c[1][0] === batch._mir.vao), "the mirror draws its own VAO");
+  assert.equal(h.calls.filter((c) => c[0] === "drawElementsInstanced").pop()[1][4], 1, "with its own count");
+  // A freeze frame keeps the view's pack (what the game loop's replay re-uploaded) even for a new frustum.
+  h.reset();
+  assert.equal(mirror(true, () => h.GLX.cullInstances(batch, all)), 1);
+  assert.equal(h.count("bufferSubData"), 0);
+  h.GLX.freeInstancedBatch(batch);
+  assert.equal(batch._mir, null, "the mirror view is freed with the batch");
+});
+
 test("the debris pools instance behind a capability read, with the loop as fallback", () => {
   // Four per-body loops reaching 98 draws at desktop caps — and 17 every frame
   // of every lap from cones alone, which have no liveness test (PERF-FINDINGS
@@ -1534,10 +1668,14 @@ test("TLX shadow cull packs CPU-side without uploading the lit InstancedMesh", (
   // batch per shadow rebuild), so pin BOTH halves — the call passes the const,
   // and the const is still {upload:false}. Matching only the name would let the
   // value drift to true and this guard would never notice.
-  assert.match(game, /cullInstances\([^)]*planes,\s*CULL_NO_UPLOAD\)/,
+  // C3b (TLX-PERF-HUNT 2026-10-11): the lamp passes pass the reach variant, the sun pass the plain one;
+  // both are hoisted constants and both are upload:false.
+  assert.match(game, /cullInstances\([^)]*planes,\s*reach \? CULL_NO_UPLOAD_REACH : CULL_NO_UPLOAD\)/,
     "sun/lamp prop-shadow must pass the no-upload cull opts");
   assert.match(game, /const CULL_NO_UPLOAD = \{ upload: false \};/,
     "…and those opts must still be upload:false");
+  assert.match(game, /const CULL_NO_UPLOAD_REACH = \{ upload: false, reach: _flReach \};/,
+    "…and the lamp variant carries the lamp reach for the radial cell cull");
   console.log("[gfx-canary] TLX shadow cull upload:false: OK");
 });
 
@@ -2447,7 +2585,12 @@ test("the vendored three matches its MANIFEST.json — generated by tools/gen/ve
   const dir = "vendor/three-0.186.0";
   const m = JSON.parse(read(`${dir}/MANIFEST.json`));
   assert.equal(m.three, "0.186.0");
-  assert.deepEqual(m.patches, [1, 4, 5, 6, 9, 10], "patch ids applied (2 and 3 retired in r186; 7 and 8 were #228's reverted skip-draw pair)");
+  assert.deepEqual(m.patches, [1, 4, 5, 6, 9, 10, 11, 12], "patch ids applied (2 and 3 retired in r186; 7 and 8 were #228's reverted skip-draw pair; 11 and 12 are the TLX-PERF-HUNT D3 / A2 pair)");
+  // §11: the WebGL MRT resolve blits depth once, not once per colour attachment.
+  assert.match(THREE_BUNDLE, /&=~\(\w+\.DEPTH_BUFFER_BIT\|\w+\.STENCIL_BUFFER_BIT\)/, "MRT resolve drops the depth/stencil bits after the first attachment (PATCHES.md §11)");
+  // §12: an unchanged uniform-array upload is skipped (bitwise compare with the last upload).
+  assert.match(THREE_BUNDLE, /\.uboLast=null/, "uniform-array last-upload cache (PATCHES.md §12)");
+  assert.match(THREE_BUNDLE, /isNodeUniformBuffer\|\|!\w+\|\|4!==\w+\.BYTES_PER_ELEMENT/, "the skip applies only to 4-byte typed uniform arrays (PATCHES.md §12)");
   const pkg = JSON.parse(read("package.json"));
   assert.equal(pkg.devDependencies.terser, m.terser, "package.json must pin the terser the manifest was generated with");
   for (const [file, rec] of Object.entries(m.files)) {
@@ -3078,13 +3221,25 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
     // buffer, or the cheap plane compare above starts claiming a pack it never
     // produced — the same "right count, wrong transforms" defect the _cullSig
     // assertion above exists to prevent, reintroduced through the side door.
-    const cellHit = body.indexOf("_cellKeyN === k");
-    if (cellHit !== -1) {
-      const hitBlock = body.slice(cellHit, cellHit + 600);
-      assert.doesNotMatch(hitBlock, /_cullPlanes\s*(=|\[)/,
-        `${file}: a cell-set cache HIT must not write the plane snapshot`);
-    }
+    // The comparison itself moved into the shared helper (InstCells.sameKey);
+    // the old needle `_cellKeyN === k` exists nowhere, and an `if (idx !== -1)`
+    // around the assertion let it go unreachable. The needle is asserted PRESENT
+    // so the guard cannot die quietly again.
+    const cellHit = body.indexOf("InstCells.sameKey(");
+    assert.notEqual(cellHit, -1, `${file}: cullInstances lost its InstCells.sameKey cell-set hit — update this guard, do not skip it`);
+    const hitEnd = body.indexOf("return", cellHit);
+    assert.notEqual(hitEnd, -1, `${file}: the cell-set hit no longer returns`);
+    const hitBlock = body.slice(cellHit, hitEnd + 60);
+    assert.doesNotMatch(hitBlock, /_cullPlanes\s*(=|\[)/,
+      `${file}: a cell-set cache HIT must not write the plane snapshot`);
   }
+  // The shared helper's own hit/record path never stamps the plane snapshot either.
+  const cells = read("js/render/shared/inst-cells.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  for (const fn of ["sameKey", "recordKey", "invalidate", "collectVisible", "scratchKeys"]) {
+    assert.doesNotMatch(fnBody(cells, fn), /_cullPlanes/,
+      `inst-cells.js ${fn}(): the cell-set key must not touch the plane snapshot`);
+  }
+  assert.match(fnBody(cells, "sameKey"), /_cellKeyN\s*!==\s*kN/, "inst-cells.js sameKey compares the cell count first");
   const glShadow = read("js/render/glx/shadow.js");
   const wgxSh = read("js/render/webgpu/wgx-shadow.js");
   assert.match(glShadow, /bufferSubData\([^]*?batch\._cullPlanes\s*=\s*null/,
@@ -3110,7 +3265,8 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
     "the shadow cull uploads to shadowInstBuf and leaves the camera pack/cache alone");
   // GLX caught up (2026-09-09): same upload:false contract, WebGL2 buffer names.
   const glx = read("js/render/glx/glx.js");
-  const glxCull = glx.slice(glx.indexOf("function cullInstances(batch, planes, opts)"), glx.indexOf("function cullInstances(batch, planes, opts)") + 4200);
+  // 6000, not 4200: the lamp-reach filter + shadow cell-set key (PERF-HUNT-2 G5) sit before the shadow upload.
+  const glxCull = glx.slice(glx.indexOf("function cullInstances(batch, planes, opts)"), glx.indexOf("function cullInstances(batch, planes, opts)") + 6000);
   assert.match(glxCull, /const shadow = !!\(opts && opts\.upload === false\);/,
     "GLX cullInstances must recognise upload:false");
   assert.match(glxCull, /if \(shadow\) \{[^]*?batch\._shadowN = n;[^]*?batch\.shadowIbo/,
@@ -3473,9 +3629,8 @@ test("the instanced prop shadow cast carries no frame-parity gate", () => {
 
 test("TLX instanced shadows consume the light-frustum packed slice", () => {
   const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const at = src.indexOf("function castShadowInstanced");
-  assert.notEqual(at, -1, "TLX castShadowInstanced moved");
-  assert.match(src.slice(at, at + 350), /castInstanced\(batch,\s*count\)/,
+  // fnBody, not a 350-char window: the wrapper now lends the shadow pack first (R3-RENDER-6).
+  assert.match(fnBody(src, "castShadowInstanced"), /castInstanced\(batch,\s*count\)/,
     "TLX wrapper must forward game.js's culled count");
   const shadow = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const castAt = shadow.indexOf("function castInstanced");
@@ -3743,8 +3898,12 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   assert.match(fetch, /_sceneryLoads\.delete\(id\)/, "and clear it on settle so a dropped fetch retries");
   const ensureAt = lazy.indexOf("async function ensureScenery(");
   assert.ok(ensureAt >= 0);
-  assert.match(lazy.slice(ensureAt, lazy.indexOf("\n}\n", ensureAt)), /await fetchScenery\(def\.id\)/,
-    "ensureScenery awaits the memoised fetch helper");
+  // Hunt 2 T8: the closure fetch goes out BESIDE the path payload (`early`), and the
+  // await below takes that same promise or the helper — never a bare fetch.
+  const ensureBody = lazy.slice(ensureAt, lazy.indexOf("\n}\n", ensureAt));
+  assert.match(ensureBody, /await \(early && def === def0 \? early : fetchScenery\(def\.id\)\)/,
+    "ensureScenery awaits the memoised fetch helper (or the early fetch it already started)");
+  assert.match(ensureBody, /const early = [^\n]*fetchScenery\(def0\.id\)/, "the early fetch goes through the same memoised helper");
   // warmCarAssets: the caches were lazy, so the first countdown frame built
   // every mesh and atlas; startRace now does it before the first render.
   // startRace() itself is a re-entrancy-latch wrapper (start-race-latch
@@ -5487,7 +5646,11 @@ test("lamp static map: car-only rebuilds copy the static props depth and draw th
   assert.match(sh, /const lampStaticRT = lampStaticOn \? makeDepthTarget\(LAMP_SIZE, "TLXLampStatic", false, true\) : null;/);
   // AUTO is WebGPU only: three's WebGL copy does five synchronous gl.getParameter
   // reads per call (census 289: 2 s of WebGL2 spike frames inside lampCarsBegin).
-  assert.match(sh, /let lampStaticOn = isWebGPU;/, "the depth copy must not default on for three's WebGL2 backend");
+  // C1 (TLX-PERF-HUNT 2026-10-11): AUTO is on for both backends; on WebGL2 it stays on only
+  // when seedUnpackCache() filled three's UNPACK_* cache with writes (no sync getParameter).
+  assert.match(sh, /let lampStaticOn = true, lampStaticForced = false;/, "the depth copy defaults on (C1)");
+  assert.match(sh, /if \(lampStaticOn && !isWebGPU && !seedUnpackCache\(\) && !lampStaticForced\) lampStaticOn = false;/,
+    "three's WebGL2 backend takes the copy only once the UNPACK_* cache is seeded (the census-289 getParameter spike)");
   // The car-only pass: copy first, then draw onto the copied depth with the clear off,
   // and autoClear restored in a finally so a throwing caster cannot leave it off.
   const cars = fnBody(sh, "lampCarsBegin");
@@ -5499,7 +5662,8 @@ test("lamp static map: car-only rebuilds copy the static props depth and draw th
   // shadow-pass: cars-only on a car-only change, the full pass otherwise, and the
   // static map refreshed after every full pass (a lamp change or the first).
   const lamp = fnBody(code("js/render/shared/shadow-pass.js"), "lampPass");
-  assert.match(lamp, /const _carsOnlyPass = _carOnly && G\.gfx\.lampCarsBegin && G\.gfx\.lampCarsBegin\(_mFlVP, flBest\);/);
+  // C2: `let` — a lamp change renders the static map first, then reassigns it to the copy + cars.
+  assert.match(lamp, /let _carsOnlyPass = _carOnly && G\.gfx\.lampCarsBegin && G\.gfx\.lampCarsBegin\(_mFlVP, flBest\);/);
   assert.match(lamp, /if \(!_carsOnlyPass\) G\.gfx\.lampShadowBegin\(_mFlVP, flBest\);/);
   assert.match(lamp, /if \(!_carsOnlyPass && G\.gfx\.lampStaticBegin && G\.gfx\.lampStaticBegin\(_mFlVP\)\) \{/);
 });
@@ -5649,19 +5813,22 @@ test("TLX draw records are pooled, one fixed shape, reset through resetRecs (TLX
   const src = read("js/render/three/tlx.js");
   const stripped = code("js/render/three/tlx.js");
   assert.doesNotMatch(stripped, /drawList\.push\(\{/, "no per-draw object literal left");
-  assert.equal((stripped.match(/drawList\.length = 0/g) || []).length, 1, "the one raw reset is inside resetRecs");
+  // A5 (TLX-PERF-HUNT 2026-10-11): the list IS the pool with a cursor; no `length = 0` anywhere.
+  assert.equal((stripped.match(/drawList\.length = 0/g) || []).length, 0, "no raw length reset: the pool keeps its backing store");
+  assert.match(stripped, /const drawList = _recPool;/, "the draw list is the record pool");
   assert.ok((stripped.match(/resetRecs\(\);/g) || []).length >= 4, "begin, env-soft exit, env face end and present tail all reset through resetRecs");
   // Run the real pool: a slot reused by an FX record must not carry the previous
   // lit draw's emissive/alpha (acquireMesh tests `!== undefined`), and a reset
   // must drop every reference the slot held.
-  const a = src.indexOf("const _recPool = [];"), b = src.indexOf("drawList.length = 0;", a);
+  const a = src.indexOf("const _recPool = [];"), b = src.indexOf("drawList.n = 0;", src.indexOf("function resetRecs", a));
   const end = src.indexOf("}", b) + 1;
-  const drawList = [];
-  const lib = new Function("drawList", src.slice(a, end) + "; return { pushRec, resetRecs, pool: () => _recPool };")(drawList);
+  const lib = new Function(src.slice(a, end) + "; return { pushRec, resetRecs, pool: () => _recPool, list: () => drawList };")();
+  const drawList = lib.list();
   lib.pushRec("G1", "M1", "MAT1", 0.7, 0.4, 1, null, null);
   const slot = drawList[0];
+  assert.equal(drawList.n, 1);
   lib.resetRecs();
-  assert.equal(drawList.length, 0);
+  assert.equal(drawList.n, 0, "the cursor resets; the slot stays allocated");
   assert.equal(slot.geo, null); assert.equal(slot.mat, null); assert.equal(slot.m, null);
   lib.pushRec("G2", null, "FXMAT", undefined, undefined, 0, null, null);
   assert.equal(drawList[0], slot, "the slot is reused");
@@ -6085,7 +6252,7 @@ test("PCSS blocker: 32-bit float and the min over the whole 4x4 source footprint
 // (headed GLX has no preserved buffer; without this the button only said NO LIVE FRAME).
 test("paused race keeps presenting while SETTINGS is open (SAVE SCREENSHOT)", () => {
   const src = read("js/game.js");
-  const gate = src.slice(src.indexOf("if (paused && !netPlay.active())"), src.indexOf("replayBuf.onTick(raceT, cars, state)"));
+  const gate = src.slice(src.indexOf("if ((paused || UiExperience.resumeHolding(dt)) && !netPlay.active())"), src.indexOf("replayBuf.onTick(raceT, cars, state)"));
   assert.match(gate, /!els\.pmsettings\.hidden/,
     "SETTINGS open during pause must call render() so headed GLX SAVE SCREENSHOT sees a frame");
 });
@@ -6121,6 +6288,54 @@ test("SAVE SCREENSHOT on headed GLX reads only a live frame and never saves a bl
   const glx = read("js/render/glx/glx.js");
   assert.match(glx, /if \(_frameWaiters\.length\) _frameWaiters\.splice\(0\)\.forEach/, "present() wakes frame waiters");
   assert.match(glx, /if \(!_softPresent\) return arguments\[1\] === "frame" \? _awaitFrame\(/);
+});
+
+// R3-RENDER-2: the M15 "frame" mode existed in glx.js only. TLX (the default
+// backend) answered awaitSoftPresent(1500, "frame") with an already-resolved
+// promise, so a HEADED TLX player's SAVE SCREENSHOT read #game a task after its
+// present — the cleared, unpreserved buffer — and said SAVED
+// (scratch/hunt3-render/shot-headed.mjs). TLX's own waiter, extracted and run.
+test("SAVE SCREENSHOT on headed TLX reads #game inside the presenting task, and says NO LIVE FRAME when paused (R3-RENDER-2)", async () => {
+  const fn = span(read("js/perf/renderer-picker.js"), "function saveScreenshot()", "function ensureAdvHost()", "saveScreenshot");
+  const tlx = read("js/render/three/tlx.js");
+  const waiters = span(tlx, "const _frameWaiters = [];", "// Layout/CSS size follows", "TLX frame waiters");
+  const early = /awaitSoftPresent\(timeoutMs\) \{\s*(if \(!_softBlit\)[^\n]*)/.exec(tlx);
+  assert.ok(early, "TLX awaitSoftPresent's headed branch");
+  const wake = /if \(painted && _frameWaiters\.length\)[^\n]*/.exec(tlx);
+  assert.ok(wake, "TLX present() wakes the frame waiters");
+  const run = async (presents) => {
+    const button = { textContent: "SAVE SCREENSHOT" };
+    const calls = { read: [], saved: 0 };
+    const timers = [];
+    let inPresent = false;
+    const ctx = vm.createContext({
+      document: { getElementById: (id) => id === "pm-save-shot" ? button : id === "game" ? { toDataURL: () => { calls.read.push(inPresent ? "present-task" : "later-task"); return "data:image/png;base64,AQID"; } } : null,
+        createElement: () => ({ click() { calls.saved++; } }) },
+      NativeDownload: { viable: () => false }, readBackend: () => "three",
+      setTimeout: (f, ms) => { timers.push({ f, ms }); return timers.length; }, clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].f = null; },
+    });
+    vm.runInContext(waiters + "\nlet _softBlit = false, _softBlitGen = 0, painted = true;"
+      + "\nvar GLX = { softPresent: () => _softBlit, awaitSoftPresent: function (timeoutMs) { " + early[1] + " } };"
+      + "\nthis.present = function () { " + wake[0] + " };\n" + fn + "\nsaveScreenshot();", ctx);
+    for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+    if (presents) {
+      inPresent = true;
+      ctx.present();
+      for (let i = 0; i < 20; i++) await Promise.resolve();   // the presenting task's microtasks
+      inPresent = false;
+    } else {
+      for (const t of timers.filter((t) => t.ms === 1500)) if (t.f) t.f();   // nothing presented in 1.5 s
+    }
+    for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r));
+    return { button, calls };
+  };
+  const live = await run(true);
+  assert.deepEqual(live.calls.read, ["present-task"], "the canvas is read before the compositor clears it");
+  assert.match(live.button.textContent, /SAVED$/);
+  const paused = await run(false);
+  assert.deepEqual(paused.calls.read, [], "no present: the cleared #game is never read");
+  assert.equal(paused.calls.saved, 0);
+  assert.match(paused.button.textContent, /NO LIVE FRAME$/);
 });
 
 // M16: SHD.lampIdx is a slot of the FORWARD frame.lights; the mirror re-ranks its own list.

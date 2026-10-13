@@ -7,7 +7,7 @@
 (function () {
   function fx(THREE, TSL, opts) {
     const {
-      Fn, uniform, attribute, texture, materialReference, mrt, renderGroup,
+      Fn, uniform, attribute, texture, materialReference, mrt, renderGroup, Discard,
       float, vec2, vec3, vec4,
       positionGeometry, positionWorld, cameraPosition, normalWorld,
       normalize, cross, dot, length, exp, max, min, mix, smoothstep, abs, floor,
@@ -94,7 +94,14 @@
     shadowMat.opacityNode = Fn(() => {
       const uvv = vec2(positionGeometry.xz.mul(2.0)).toVar();   // anchor
       const r = length(uvv);
-      return smoothstep(0.25, 1.0, r).oneMinus().mul(0.45);
+      const a = smoothstep(0.25, 1.0, r).oneMinus().mul(0.45).toVar();
+      // THE QUAD'S CORNERS (r >= 1: 1 - pi/4 = 21 % of every blob quad) have
+      // alpha exactly 0: SrcAlpha/OneMinusSrcAlpha over a black colour keeps
+      // dst, and dst alpha and the ssrTag attachment are Zero/One "keep".
+      // Discarding them is bit-identical, as the particle corners (E7a); no
+      // depth write on this pass, so early-Z is unaffected.
+      if (Discard) Discard(a.lessThanEqual(0.0));
+      return a;
     })();
 
     const markFalloff = (uvv) =>
@@ -201,6 +208,13 @@
       const soft = Fn(() => {
         const c = vec2(attribute("fxCorner", "vec2")).toVar();  // anchor
         const fall = max(float(1.0).sub(dot(c, c)), 0.0).toVar();
+        // THE CORNERS OUTSIDE THE DISC (1 - pi/4 = 21 % of every particle and
+        // rain quad) blend exactly nothing: alpha 0 under SrcAlpha/OneMinus-
+        // SrcAlpha keeps dst, col*0 under One/One adds 0, and dst alpha and the
+        // ssrTag attachment are Zero/One "keep" either way. Discarding them is
+        // bit-identical and skips the 2-attachment HDR blend (TLX perf hunt E7).
+        // No depth write on this pass, so early-Z is unaffected.
+        if (Discard) Discard(fall.lessThanEqual(0.0));
         fall.mulAssign(fall);            // soft-disc falloff, zero at the rim
         return float(attribute("fxAlpha", "float")).mul(fall);
       })();

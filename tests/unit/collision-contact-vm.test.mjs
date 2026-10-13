@@ -128,6 +128,30 @@ test("a rear-end is a bump: the closing speed is gone after one frame of contact
   assert.ok(p.speed < 50, "the player kept every m/s through a bump");
 });
 
+// Physics hunt 2026-10-10: the AI traffic scan skipped finished cars outright,
+// so a running AI ran into a finisher coasting past the line at the floor.
+// Measured before (AI at 25 m/s, finisher 30 m ahead): first contact at 1.28 s,
+// 102 contact ticks in 3 s, the AI shoved down to 9.3 m/s behind it.
+test("a finisher coasting past the line is a blocker to the AI behind, never a tow", async () => {
+  const A = g.apex;
+  await straight(0, -5);   // the player parked out of the lane
+  const [b, f] = A.rivals([{ dProg: 100, dx: 1, speed: 25 }, { dProg: 130, dx: 1, speed: 13 }]);
+  const cb = g.G.cars[b], cf = g.G.cars[f];
+  cf.finished = true; cf._coastHeld = true;
+  A.act({ steer: 0, throttle: false, brake: true }, DT, 1);
+  const Collide = vm.runInContext("Collide", g.ctx);
+  const s = Collide.scanTraffic(cb, g.G.track.total, 30, 60, 2.8, false, 9, 9);
+  assert.equal(s.blocker, cf, "the finisher is the blocker");
+  assert.notEqual(s.towCar, cf, "a coasting finisher gives no tow");
+  let contact = 0;
+  for (let i = 0; i < 180; i++) {
+    A.act({ steer: 0, throttle: false, brake: true }, DT, 1);
+    if (cb.contactT > 0) contact++;
+  }
+  A.headless(false);
+  assert.equal(contact, 0, `the AI ran into the finisher (${contact} contact ticks)`);
+});
+
 /* ── the contact NORMAL is extent-scaled, not raw least penetration ────────
  *
  * Pure arithmetic — no boot. pairContact's classification is a function of
@@ -527,11 +551,15 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
       watched[2][flag] = false;
     }
     assert.ok(watched[2].x > Tracks.wallAt(g.G.track, watched[2].s, 1), "the replay pit-lane pose lies beyond the local driving barrier");
-    const poses = () => watched.map((c) => ({ prog: c.prog, s: c.s, x: c.x, speed: c.speed, px: c.px, pz: c.pz,
+    // Pose fields the collider / RECOVER must not rewrite. Speed is intentionally
+    // zeroed while paused so engine/rival audio hear a standing car (real-replay
+    // tick); reposing resumes it from the trace — do not assert speed here.
+    const poses = () => watched.map((c) => ({ prog: c.prog, s: c.s, x: c.x, px: c.px, pz: c.pz,
       lap: c.lap, penalty: c.penalty, tyreWear: c.tyreWear }));
     // One deterministic update first: a paused replay stands its traced cars (RealReplay's
     // paused tick zeroes their speed), and the wall-clock pumpFrame above may or may not
     // have stepped after the flags cleared — on a fast runner it often does not.
+    // (Also settles the seek's pose if a loaded runner pumped camera frames with no physics step.)
     g.step(1);
     assert.ok(watched.every((c) => c.speed === 0), "a paused WATCH stands every traced car");
     const before = poses();
@@ -540,7 +568,9 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
     g.step(3);
     assert.equal(replay.status().T, 0.1, "the replay remains paused");
     assert.equal(g.G.raceT, 0.1, "ordinary simulation steps cannot advance the paused replay's HUD clock");
+    assert.ok(watched.every((c) => c.speed === 0), "paused WATCH stands the puppets for audio");
     assert.deepEqual(poses(), before, "neither the collider nor manual recovery may rewrite paused replay puppets");
+    assert.ok(watched.every((c) => c.speed === 0), "paused WATCH keeps audio standing while the pose stays frozen");
 
     replay.follow("LEC");
     const p = g.G.player, penalty = p.penalty;

@@ -19,6 +19,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -161,7 +162,7 @@ test("lockLandscape swallows a rejection (not fullscreen, iPhone, unsupported) a
 });
 
 test("game.js locks landscape after race fullscreen succeeds and unlocks on exit and quit", () => {
-  const g = read("js/ui/platform-session.js") + read("js/game.js");
+  const g = read("js/ui/platform-session.js") + gameSource();
   assert.match(g, /if \(fsElement\(\)\) \{\s*Input\.lockEscape\(\); if \(G.state === "race" \|\| G.state === "count"\) Input\.lockLandscape\(\);/);
   assert.match(g, /"fullscreenchange", syncFullscreen/);
   assert.match(g, /"webkitfullscreenchange", syncFullscreen/);

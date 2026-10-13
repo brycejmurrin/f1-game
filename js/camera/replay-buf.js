@@ -3,7 +3,10 @@
  * restores captured pose fields bit-exactly and never touches netplay authority
  * or career settlement. RAM only — never writes the Ghost best-lap store
  * (512 KiB budget). Sampling mirrors Ghost's cadence; tags come from car
- * status edges and RaceInsights-shaped pushTag calls. */
+ * status edges and RaceInsights-shaped pushTag calls. A scrub never blends
+ * across a timeline BREAK (breakTimeline(), e.g. a red-flag re-grid) or across
+ * one car's teleport (> JUMP_M beyond what its speed covers): it snaps to the
+ * nearer real sample instead. */
 "use strict";
 const ReplayBuf = (function () {
   const HZ = 30;
@@ -13,12 +16,13 @@ const ReplayBuf = (function () {
   const MAX_CARS = 24;                         // MY TEAM / LEGENDS grids run 23-24 cars
   const MAX_BYTES = 720 * 1024;               // 0.7 MB hard cap
   const TAG_CAP = 64;
+  const JUMP_M = 50;                          // pose jump past speed*dt that no car drives: a teleport
   const RATES = [0.25, 0.5, 1];
   const POSE_FIELDS = ["s", "x", "head", "speed", "px", "py", "pz", "steer", "yawVis",
     "rPrevS", "rPrevX", "rPrevPx", "rPrevPz", "rPrevHead", "rPrevYawVis"];
 
   function frameBytes(nCars) {
-    return nCars * FLOATS * 4 + nCars;        // floats + Uint8 status lane
+    return nCars * FLOATS * 4 + nCars + 1;    // floats + Uint8 status lane + segment-break flag
   }
   function budgetOk(nCars, frames) {
     return frameBytes(nCars) * frames <= MAX_BYTES;
@@ -60,7 +64,7 @@ const ReplayBuf = (function () {
     Log.info("game", "ReplayBuf.create");
     const allowed = () => (!eligible || eligible()) && !(G.netPlay && G.netPlay.active && G.netPlay.active());
     let nCars = 0, cap = 0, head = 0, count = 0, lastSlot = -1;
-    let times = null, data = null, status = null;
+    let times = null, data = null, status = null, brk = null, breakPending = false;
     let tags = [];
     let scrubbing = false, liveSnap = null;
     let scrubT = 0, scrubRate = 1, scrubPlaying = true;
@@ -72,11 +76,12 @@ const ReplayBuf = (function () {
       times = new Float64Array(cap);
       data = new Float32Array(cap * nCars * FLOATS);
       status = new Uint8Array(cap * nCars);
+      brk = new Uint8Array(cap);   // brk[f] = 1: frame f opens a new segment, never blended from the one before
       head = 0; count = 0; lastSlot = -1; tags = [];
       prevStatus = new Uint8Array(nCars);
     }
     function clear() {
-      head = 0; count = 0; lastSlot = -1; tags = [];
+      head = 0; count = 0; lastSlot = -1; tags = []; breakPending = false;
       scrubbing = false; liveSnap = null; scrubPlaying = true; scrubRate = 1;
       if (prevStatus) prevStatus.fill(0);
       hideDock();
@@ -89,6 +94,14 @@ const ReplayBuf = (function () {
       if (!count || !Number.isFinite(time)) return;
       const newest = times[(head + count - 1) % cap];
       if (time < newest || time - newest > WINDOW_S) clear();
+    }
+    /** Explicit timeline break that keeps the history: the next recorded frame
+     *  opens a new segment and at() never interpolates into it. For a re-grid
+     *  with the clock unchanged (red-flag restart), which the time heuristics
+     *  above cannot see. Deliberately untagged: every tag becomes a results
+     *  highlight clip, and one straddling the break would show the cut. */
+    function breakTimeline() {
+      if (count) breakPending = true;
     }
     function writeCar(frame, i, c) {
       const o = (frame * nCars + i) * FLOATS;
@@ -119,6 +132,8 @@ const ReplayBuf = (function () {
       lastSlot = slot;
       const frame = count < cap ? count : head;
       times[frame] = raceT;
+      brk[frame] = breakPending ? 1 : 0;
+      breakPending = false;
       const n = Math.min(nCars, cars.length);
       for (let i = 0; i < n; i++) {
         writeCar(frame, i, cars[i]);
@@ -168,15 +183,27 @@ const ReplayBuf = (function () {
       }
       const t0 = times[i0], t1 = times[i1];
       if (i1 !== i0 && t1 > t0) u = (tt - t0) / (t1 - t0);
+      // Across a break or a teleport there is no motion to blend: snap to the
+      // nearer real sample (ties keep the earlier one).
+      const snapU = u > 0.5 ? 1 : 0, cut = i1 !== i0 && brk[i1] === 1;
       const cars = [], L = (G.track && G.track.total) || 0;
       for (let c = 0; c < nCars; c++) {
         readCar(_a, i0, c);
         readCar(_b, i1, c);
-        lerpCar(_o, _a, _b, u, L);
+        let snap = cut;
+        if (!cut && i1 !== i0) {
+          // Per-car teleport (RECOVER, an AI rescue, a debug jump): a world-space
+          // step past anything its recorded speed covers in the gap. Never
+          // clears the ring — the crash that led to a RECOVER stays watchable.
+          const reach = JUMP_M + Math.max(Math.abs(_a[3]), Math.abs(_b[3])) * Math.max(0, t1 - t0);
+          snap = Math.hypot(_b[4] - _a[4], _b[6] - _a[6]) > reach;
+        }
+        if (snap) _o.set(snapU ? _b : _a);   // the recorded floats, bit-exact
+        else lerpCar(_o, _a, _b, u, L);
         cars.push({
           s: _o[0], x: _o[1], head: _o[2], speed: _o[3],
           px: _o[4], py: _o[5], pz: _o[6], steer: _o[7], yawVis: _o[8],
-          status: status[i0 * nCars + c],
+          status: status[(snap && snapU ? i1 : i0) * nCars + c],
         });
       }
       return { t: tt, cars };
@@ -377,7 +404,7 @@ const ReplayBuf = (function () {
     }
 
     return {
-      sample, clear, reset, pushTag, window: windowInfo, at,
+      sample, clear, breakTimeline, reset, pushTag, window: windowInfo, at,
       beginScrub, apply, endScrub, isScrubbing, lastTag, jumpLastTag, tags: tagsOf,
       tickScrub, status: statusOf,
       refreshButton, ensureButton,

@@ -77,6 +77,37 @@ const LightStore = (() => {
       return k && TOD_KEYED.has(id) ? k.slice(0, k.lastIndexOf("|")) + "|dry" : k;
     }
 
+    // A save from before that change still holds sun edits under the weather's
+    // own key ("monza|dawn|wet"), where the resolver no longer looks: dead, yet
+    // counted by tuned() and re-exported by persist(). Move each to its "|dry"
+    // slot when that is unambiguous (the slot lacks the id and every weather of
+    // that track x time agrees on the value); otherwise drop it. Persist once.
+    {
+      const moved = new Map();   // "<dry key>\u0000<id>" -> value, or NaN on disagreement
+      let changed = 0;
+      for (const k of Object.keys(profiles)) {
+        const parts = k.split("|");
+        if (parts.length !== 3 || parts[2] === "dry") continue;
+        for (const id of TOD_KEYED) {
+          if (!(id in profiles[k])) continue;
+          const dk = keyFor(id, k), mk = dk + "\u0000" + id, v = profiles[k][id];
+          if (!(profiles[dk] && id in profiles[dk])) moved.set(mk, moved.has(mk) && moved.get(mk) !== v ? NaN : v);
+          delete profiles[k][id]; changed++;
+        }
+        if (!Object.keys(profiles[k]).length) delete profiles[k];
+      }
+      for (const [mk, v] of moved) {
+        if (Number.isNaN(v)) continue;
+        const [dk, id] = mk.split("\u0000");
+        (profiles[dk] || (profiles[dk] = {}))[id] = v;
+      }
+      if (changed) {
+        Log.info("game", "LightStore: moved " + [...moved.values()].filter((v) => !Number.isNaN(v)).length +
+          " of " + changed + " legacy per-weather sun edits to the |dry slot");
+        store.set("lightTune", profiles);
+      }
+    }
+
     // Conditional shipped layer: LightPresets["*|<tod>"] (e.g. "*|night"),
     // resolved only when gfx.hasPerChunkLights (three.js cannot bind per-chunk
     // sets). Resolution order for most knobs: global "*", shared "*|<tod>|<wx>",
@@ -318,7 +349,9 @@ const LightStore = (() => {
       const k = key();
       if (!k) return 0;
       const s = sunSlot(k), p = s && profiles[s];
-      return Object.keys(profiles[k] || {}).length + (p ? [...TOD_KEYED].filter((id) => id in p).length : 0);
+      // In the wet, a TOD_KEYED id under the weather's own key is never resolved.
+      const own = Object.keys(profiles[k] || {}).filter((id) => !s || !TOD_KEYED.has(id));
+      return own.length + (p ? [...TOD_KEYED].filter((id) => id in p).length : 0);
     }
     function reset() {
       const k = key();

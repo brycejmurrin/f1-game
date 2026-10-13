@@ -1618,6 +1618,8 @@ for parking at sharp bends. This is **not** the curated FIA turn list — that l
 on `info().turns` / `track.def.turns`, authored in `js/circuits/<id>.js`.
 
 ### `nodeAt(frac, opts?) → {k, frac, x, y, z, tx, tz, rx, rz, hw} | null`
+A `frac` that is not a finite number (NaN, undefined, null, Infinity, a non-numeric
+string) returns `{ ok: false, error: "bad_argument" }` instead of throwing (2026-10-10).
 World position and orientation of the track node closest to lap-fraction `frac`
 (0–1), and the engine's tarmac half-width `hw` there (`track.hw[k]`, not the
 wider road mesh). Returns `null` if no track is loaded.
@@ -3056,7 +3058,9 @@ because at 5.5 m of travel per step every number genuinely changes. It pays on
 payload, and on a mostly static scene (1.55× parked). A control-loop tick at
 `brief` + `since` costs ~355 bytes — about 90 tokens.
 
-Deltas pass numbers through a deadband of `max(0.25 absolute, 2% relative)`: a
+Deltas pass numbers through a deadband of `max(0.25 absolute, 2% relative)` — except
+`ego.frac`, `energy`, `flap`, `slipFactor` and `gripMult`, which use 0.005 so a small
+but actionable change is never held back (2026-10-10): a
 change smaller than you could act on is not reported. The baseline advances only
 by what was actually sent, so the error stays bounded by one deadband instead of
 drifting. Pass no `since` for a full resync at any time.
@@ -4536,7 +4540,7 @@ driving code executes at 60 Hz.
 
 #### Layer 5 — the toolbelt
 
-> **Design sketch, partly unbuilt.** The shipped MCP toolbelt is `tools/mcp/apex-tools-mcp.mjs` (28 tools, map in
+> **Design sketch, partly unbuilt.** The shipped MCP toolbelt is `tools/mcp/apex-tools-mcp.mjs` (29 tools, map in
 > `docs/AGENT-SURFACE.md`). `apex_world`, `apex_act`, `apex_reset` and `apex_scene` below were never built; the nearest
 > shipped tools are `apex_agent` (the `tools/shot/agent.mjs` command surface) and `apex_eval`. `apex_track` and
 > `apex_eval` exist.

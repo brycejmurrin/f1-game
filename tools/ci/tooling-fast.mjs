@@ -66,6 +66,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
   // asserted instead of described; under a second.
   "tests/unit/agent-config.test.mjs",
+  // The orchestrator/worker contract (skill agent-fleet): host-correct PR
+  // subscribe tools, one fleet block, the mandated launch fields. < 0.1 s.
+  "tests/unit/agent-fleet.test.mjs",
   "tests/unit/agent-surface.test.mjs",
   "tests/unit/ai-band.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
@@ -177,6 +180,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-hire-rating.test.mjs",
   "tests/unit/career-legends.test.mjs",
   "tests/unit/career-regulations.test.mjs",
+  // Round-2 (2026-10-10) career: the save carries its calendar (calIds), beatRival offers sign the rival they show, weakerSeat before the team moves, no re-hire of the sitting hire, rep before market value, podium p>0, NEW CAREER number 1, null-team slots.
+  "tests/unit/career-round2.test.mjs",
   "tests/unit/career-seat-rollover.test.mjs",
   "tests/unit/career-settle.test.mjs",
   "tests/unit/career-ui-lazy.test.mjs",
@@ -484,11 +489,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2: the m:ss formatters round before splitting (no 1:60.00) and signed deltas never print -0.000.
   "tests/unit/lap-format-rollover.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",
+  "tests/unit/lazy-bundles-prefetch.test.mjs",
   // …and the PERIOD CAR reaching the garage SHEET, not just the team
   // record. Twelve legends share one `legends` id, so the write policy is
   // the behaviour: seed an empty sheet, reseed on a real switch, never on a
   // boot or a same-seat re-sync (that would wipe a paid-for build).
-  "tests/unit/lazy-bundles-prefetch.test.mjs",
   "tests/unit/legend-parts-seed.test.mjs",
   // The LEGENDS TEAM as a grid entry: its own id (not the custom slot), the
   // whole roster in `drivers` so the driver picker is the legend picker, and
@@ -612,8 +617,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // enough to stop in, and the COMMITMENT that replaced the pit button tells
   // a driven pit entry from a car that ran wide there. ~0.2 s.
   "tests/unit/pit-lane.test.mjs",
+  "tests/unit/platform-session-install.test.mjs",
   // PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.
   "tests/unit/player-forces.test.mjs",
+  // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
+  "tests/unit/pr-board.test.mjs",
   // test-coverage-audit answers "is this file in SOME topical group"; this one
   // answers the question that actually bites, "does the pre-push gate RUN it" —
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
@@ -696,15 +704,15 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/script-loader-throw.test.mjs",
   "tests/unit/scroll-strips.test.mjs",
   "tests/unit/season-cal.test.mjs",
-  // Season SETUP chrome: themed pair/stack scrollbars, balanced preset chips,
-  // foot clearance — css/race-setup.css + season-ui.js only.
-  "tests/unit/season-setup-chrome.test.mjs",
   "tests/unit/select-budget.test.mjs",
+  // Round-2: re-tapping the active team tile keeps the seat (Legends keeps its build); unstarring the active circuit under FAVOURITES keeps the selection.
+  "tests/unit/select-screen-fixes.test.mjs",
   "tests/unit/select-specs.test.mjs",
   "tests/unit/selected-gate-verdict.test.mjs",
   "tests/unit/session-contracts.test.mjs",
   "tests/unit/session-entry-vm.test.mjs",
   "tests/unit/session-status.test.mjs",
+  "tests/unit/session-stub-surface.test.mjs",
   "tests/unit/settings-defaults.test.mjs",
   "tests/unit/settings-export.test.mjs",
   // Round-2: MUSIC & SOUND asks the audio bundle once per open and reveals the stub page with a note when it cannot load.
@@ -719,6 +727,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The sun shadow map's depth span holds a 250 m caster: drives the real
   // ShadowPass.sunPass on a stub renderer and projects through its light VP.
   "tests/unit/shadow-pass-depth.test.mjs",
+  "tests/unit/share-code.test.mjs",
   "tests/unit/shared-math.test.mjs",
   "tests/unit/sheet-per-screen.test.mjs",
   "tests/unit/sheetshape-density-scale.test.mjs",
@@ -728,6 +737,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ship-filter-paths.test.mjs",
   // shot.mjs --batch / --jpeg / --raster parse (no Chromium).
   "tests/unit/shot-jobs.test.mjs",
+  // The physics step's functions (update, updateCar…) compile under 48 KB of bytecode — TurboFan's
+  // cap is 61,440 B and past it the whole race runs deoptimized (PERF-HUNT-2 S11); one node child, ~2 s.
+  "tests/unit/sim-bytecode-budget.test.mjs",
   // skidmarks.js lays marks per SECOND of laying (was per frame): a VM run of
   // the ring buffer at three refresh rates, ~0.1 s.
   "tests/unit/skidmarks-cadence.test.mjs",
@@ -775,6 +787,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // once owned apex26.brakeCue with incompatible types (fixed by renaming the
   // ribbon flag to lineBrakeCue); this still asks that one key means one type.
   "tests/unit/store-key-types.test.mjs",
+  "tests/unit/store-registry.test.mjs",
   "tests/unit/surface-id-parity.test.mjs",
   // APEX_SURVEY_HUD=1: flag parse (query|hash|localStorage) + HUD-visible stub without race warm. Pure, ~0.1 s.
   "tests/unit/survey-hud.test.mjs",
@@ -783,6 +796,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/team-livery.test.mjs",
   "tests/unit/team-style-relief.test.mjs",
   "tests/unit/telemetry-trace.test.mjs",
+  // Round-2: a DPR change under unchanged boxes refits the telemetry map canvas.
+  "tests/unit/telemetry-view-resize.test.mjs",
   "tests/unit/terrain-falloff.test.mjs",
   "tests/unit/terrain-normals.test.mjs",
   "tests/unit/test-bg-outcome.test.mjs",
@@ -801,6 +816,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/title-home-scene-prepaint.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
   "tests/unit/tlx-chunked-lifecycle.test.mjs",
+  "tests/unit/tlx-cull-shadow-pack.test.mjs",
   // A throw in one TLX subsystem costs that subsystem only: the car/lamp shadow
   // pass no longer clears the SUN flag; a retired post chain is rebuilt at the
   // next realloc and a post-only death keeps the bound label.
@@ -825,6 +841,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tools-a12-guards.test.mjs",
   "tests/unit/tools-runnable.test.mjs",
   "tests/unit/track-accuracy-validator.test.mjs",
+  // Perf hunt 2 (T1/T2/T4): the build's spatial short-cuts answer exactly what the slow path did. Engine prelude in a VM, < 1 s.
+  "tests/unit/track-build-grids.test.mjs",
   "tests/unit/track-build-vm-release.test.mjs",
   "tests/unit/track-build-wait.test.mjs",
   "tests/unit/track-centerline-seam.test.mjs",
@@ -904,6 +922,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The falling rain follows WETNESS through a weather arc: shown at 0.25, the
   // storm tier and rain loop at 0.72, hidden again when a drying arc drops below
   // 0.25 — six arcs sampled at 10 points each. VM-executed weather-arc.js, ~1 s.
+  // Round-2: WATCH scrub `input` events coalesce to one seek per rAF; `change` seeks at once; stop() drops a pending seek.
+  "tests/unit/watch-transport-scrub.test.mjs",
   "tests/unit/weather-arc-plan.test.mjs",
   "tests/unit/weather-arc-rain.test.mjs",
   // A weather-arc step cross-fades sun, cloud, ambient and fog over WX_BLEND_S;
@@ -914,7 +934,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The claim half of who-is-on-it (pure parse + the empty-tree commit shape)
   // and deploy --pr's REST fallback against a fake curl; both < 1 s, both
   // guard the two tools a session reaches for at push time.
+  // Round-2 WGX: buffers freed while an encoder (or the pending shadow encoder) is live retire through _retiredBufs; the swapchain self-test pops its validation scope before its first await.
+  "tests/unit/wgx-free-retire.test.mjs",
   "tests/unit/who-is-on-it.test.mjs",
+  "tests/unit/xr-backend-pin.test.mjs",
+  "tests/unit/xr-cull-union.test.mjs",
   "tests/unit/xr-opts.test.mjs",
   // ...and WebXR Phase 0: seated-rig compose, controller→remoteSample mapping,
   // sessionInit feature flags, vendored XRButton/WebGLXRFallback presence. ~0.1 s.
@@ -922,6 +946,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ...and XRPlan / XROpts (task 20): pure path selection table + bootPick
   // never writes apex26.gfxBackend. ~0.1 s.
   "tests/unit/xr-plan.test.mjs",
+  "tests/unit/xr-visibility-pause.test.mjs",
   // Speed-scaled yaw damp (local SPEED_YAW_* in player-forces): step-steer
   // overshoot ≤12% at 61.1 m/s / ≤14% at 83.3 m/s; ≤50 m/s and lift-off
   // unchanged. createGame once, ~2.5 s.
@@ -972,6 +997,48 @@ export function scheduleLongestFirst(files, timings = {}) {
   const key = (f) => { const v = timings[path.isAbsolute(f) ? path.relative(ROOT, f) : f]; return typeof v === "number" ? v : Infinity; };
   return files.map((f, i) => ({ f, i, ms: key(f) }))
     .sort((a, b) => (b.ms - a.ms) || (a.i - b.i)).map((x) => x.f);
+}
+
+/** The `# tests / # pass / # fail / # skipped / # todo / # cancelled` footer of a TAP run (null for a missing one). */
+export function tapSummary(text) {
+  const out = {};
+  for (const k of ["tests", "pass", "fail", "cancelled", "skipped", "todo"]) {
+    const m = new RegExp(`^# ${k} (\\d+)\\s*$`, "m").exec(String(text || "").replace(/\r/g, ""));
+    out[k] = m ? Number(m[1]) : null;
+  }
+  return out;
+}
+
+/** Files whose tests are LEGITIMATELY all-skipped on some machines (a precondition the runner cannot
+ *  provide). Row = repo-relative file -> why. Empty by default: a skip-everything file is a red until
+ *  somebody writes the reason down. */
+export const ALL_SKIP_OK = Object.freeze({});
+
+/**
+ * Exit 0 is not a verdict: a file that registers no test, skips every test, or calls
+ * `process.exit(0)` before its tests run all exit 0 with a green-looking TAP footer.
+ * Returns the reason a CLEAN exit does not count as a pass, or null.
+ * @param {string} text  the child's stdout+stderr
+ * @param {string} [file] repo-relative path (for the ALL_SKIP_OK opt-out)
+ */
+export function emptyRunReason(text, file = "") {
+  const s = tapSummary(text);
+  if (s.tests === null) return "no TAP footer (the file exited before the runner finished; process.exit(0)?)";
+  if (s.tests === 0) return "ran zero tests (an empty file, or process.exit(0) before the tests ran)";
+  // Measured (node v-current): a file that registers no test — an empty module, or one that calls
+  // process.exit(0) at import — is counted by `node --test` as ONE passing test named after the file.
+  if (s.tests === 1 && file) {
+    const only = /^(?:not )?ok \d+ - (.+)$/m.exec(String(text || "").replace(/\r/g, ""));
+    const base = file.split("/").pop();
+    if (only && only[1].trim().endsWith(base)) return "registered no tests (node counted the file itself as the one test; an empty module or process.exit(0) at import)";
+  }
+  const done = s.pass + s.fail + s.skipped + s.todo + s.cancelled;
+  if (done !== s.tests) return `only ${done} of ${s.tests} registered tests reported (process.exit(0) mid-run?)`;
+  if (s.pass === 0 && !Object.hasOwn(ALL_SKIP_OK, file)) {
+    return `no test passed (${s.skipped} skipped, ${s.todo} todo) — a file that skips everything verifies nothing; `
+      + "list it in ALL_SKIP_OK with the reason if the skip is legitimately conditional";
+  }
+  return null;
 }
 
 /** Pull the diagnosable TAP failure lines from a child's stdout+stderr.
@@ -1119,12 +1186,15 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
     clearTimeout(timer);
     const r = { status, stdout: out, stderr: err };
     const dur = Date.now() - t0;
-    const ok = r.status === 0 && !timedOut;
+    const cleanExit = r.status === 0 && !timedOut;
+    const empty = cleanExit ? emptyRunReason((r.stdout || "") + (r.stderr || ""), rel.replace(/\\/g, "/")) : null;
+    const ok = cleanExit && !empty;
     if (ok) passed++; else failed++;
     const verdict = ok ? "PASS" : "FAIL";
     live.delete(child);
     emit(`${verdict}  ${n}/${files.length} ${rel} duration=${fmtDur(dur)} exit=${r.status ?? signal}` +
-      `${timedOut ? ` reason=timeout (no exit within ${fmtDur(fileTimeoutMs)}; process group killed)` : ""} ${loadavgLine()}`);
+      `${timedOut ? ` reason=timeout (no exit within ${fmtDur(fileTimeoutMs)}; process group killed)` : ""}` +
+      `${empty ? ` reason=empty-run (${empty})` : ""} ${loadavgLine()}`);
     if (!ok) {
       const text = ((r.stdout || "") + (r.stderr || "")).replace(/\r/g, "");
       const notoks = text.split("\n").filter((L) => /^not ok /.test(L));

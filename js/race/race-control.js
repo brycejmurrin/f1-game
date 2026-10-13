@@ -9,7 +9,16 @@ const RaceControl = (function () {
   // AI-only harnesses retain the old "shortly after the winner" behaviour.
   // `raceT0`: where the clock started — a Data Hub JUMP IN seeds it to the real
   // race's time at the lap you join, which alone could pass the cap at once.
-  function finishDelay(cars, raceT, lapsTarget, raceT0) {
+  // SOLO (`post = { solo, since }`, game.js owns the bag): the player being done
+  // does not end the race while an AI is still on track — the field takes the
+  // flag at its next crossings and the result is a real classification, not a
+  // progress snapshot. Bounded by POST_FINISH_CAP s of race time from the
+  // player's finish OR retirement (`since`) — a DNF no longer ends the race for
+  // everyone, so season/career points use the real classification — then endRace
+  // classifies as before (RaceControl.shortRun when no car ever took the flag).
+  // Net, TT, quali and the AI-only harnesses pass no `post` and keep the rules below.
+  const POST_FINISH_CAP = 75;
+  function finishDelay(cars, raceT, lapsTarget, raceT0, post) {
     const ran = raceT - (raceT0 > 0 ? raceT0 : 0);
     let anyHuman = false, allHumansDone = true, anyFinished = false, running = false, pend = 0;
     for (const c of cars || []) {
@@ -28,6 +37,8 @@ const RaceControl = (function () {
     // running" — behind, on a result it had won. Bounded by the penalty
     // itself; the hard cap below still wins.
     if (running && raceT < pend && ran <= 360 * lapsTarget) return 0;
+    if (post) { if (!(anyHuman && allHumansDone)) post.since = -1; else if (post.since < 0) post.since = raceT; }
+    if (anyHuman && allHumansDone && post && post.solo && running) return raceT - post.since < POST_FINISH_CAP ? 0 : 0.1;
     if (anyHuman && allHumansDone) return 2.2;
     if (!anyHuman && anyFinished) return 3.5;
     if (ran > 360 * lapsTarget) return 0.1;
@@ -157,7 +168,9 @@ const RaceControl = (function () {
   // and a runner completes lap at its flag. With no finisher (the only human
   // retired) the leader on the road is the reference. Sets c.classified for
   // every car (SeasonCal.award, career settlement, the sheet's NC); the
-  // unclassified — runners and retirements alike — follow by distance.
+  // unclassified — runners, retirements and flagged finishers a lap or more
+  // short alike (a finisher missing from `order` had finPos 0) — follow by
+  // laps, then distance.
   function classify(cars, fin, run, out) {
     const lapsAt = (c) => (c.lap || 0) + (c.finished ? 0 : 1);
     const done = (c) => (c.retired ? (c.lap || 0) - 1 : lapsAt(c) - 1);
@@ -167,7 +180,8 @@ const RaceControl = (function () {
     for (const c of cars) c.classified = !c.dsq && (winDone > 0 ? done(c) >= cut : !c.retired);
     const all = fin.concat(run, out);
     return all.filter((c) => c.classified).sort((a, b) => lapsAt(b) - lapsAt(a))
-      .concat(run.concat(out).filter((c) => !c.classified && !c.dsq).sort((a, b) => (b.prog || 0) - (a.prog || 0)));
+      .concat(fin.concat(run, out).filter((c) => !c.classified && !c.dsq)
+        .sort((a, b) => (lapsAt(b) - lapsAt(a)) || ((b.prog || 0) - (a.prog || 0))));
   }
 
   // A RACE THAT NEVER SAW THE FLAG (the only human retired, or the time cap):
@@ -592,6 +606,6 @@ const RaceControl = (function () {
     return Infinity;
   }
 
-  return { create, finishDelay, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
+  return { create, finishDelay, POST_FINISH_CAP, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
 })();
 Object.freeze(RaceControl);

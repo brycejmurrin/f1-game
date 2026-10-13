@@ -79,6 +79,8 @@ export async function thumbBlock(png, width = 640) {
 export function createExtras(ctx) {
   const { ROOT, toolResult, refuse, acquireLock, releaseLock, occupancyRefuse, assertSafeOut,
     knownCircuits, runSpawn, log, mockMode } = ctx;
+  /** verify-change --fast exits 2 for a "partial" verdict (the browser groups are not run by design): a result, not a failure — the sync tool allowed 0 and 2 too. */
+  const jobExitOk = (kind, code) => code === 0 || (kind === "verify_change_fast" && code === 2);
   const nodeArgv = (rel, ...a) => [process.execPath, path.join(ROOT, "tools", rel), ...a];
   const bodyOf = (r) => JSON.parse(r.content[0].text);
   const rewrap = (r, patch) => { const b = { ...bodyOf(r), ...patch }; r.content[0].text = JSON.stringify(b); r.isError = b.ok === false ? true : undefined; if (!r.isError) delete r.isError; return r; };
@@ -96,6 +98,8 @@ export function createExtras(ctx) {
 
   // ── apex_track: one persistent track-session.mjs child ───────────────────
   let sess = null;
+  /** apex_status: the open track session, if any (it holds the browser lock until op:close). */
+  const sessionInfo = () => (sess ? { track: sess.track, uptimeS: Math.round((Date.now() - sess.started) / 1000), shots: sess.shots } : null);
   /** Close the session; the returned promise settles once its whole process
    *  tree is gone and the lock is free, so a status right after close is true. */
   function sessClose(reason) {
@@ -203,6 +207,8 @@ export function createExtras(ctx) {
     if (args.dryRun) {
       return toolResult({
         ok: true, dryRun: true, track: tracks[0], tracks, out: outRoot, ...plan,
+        // Every option the real run reads, so a dry run shows what would happen (and a test can see an option is wired).
+        options: { panel: wantPanel, index: wantIndex, resume, gl: args.gl ?? null, async: args.async ?? null, closeSession: args.closeSession !== false && !args.keepSession, keepSession: !!args.keepSession },
         estimateMs, asyncDefault: asJob, resume,
         hint: asJob
           ? "Long/multi-track: omit async:false to get a jobId via shot_survey; watch apex_job_status."
@@ -444,7 +450,8 @@ export function createExtras(ctx) {
       // argv (buildArgv + pinOk) and hands it over under a Symbol key, which no
       // JSON caller can set, so apex_job_start never runs a caller-chosen argv.
       case "hud_shot":
-      case "hud_survey": {
+      case "hud_survey":
+      case "hud_mock": {
         const argv = a[HUD_JOB_ARGV];
         if (!Array.isArray(argv) || !argv.length) {
           throw Object.assign(new Error(kind), {
@@ -470,6 +477,14 @@ export function createExtras(ctx) {
       case "livery_contrast": {
         const t = list(a.team, "team");
         return { browser: false, argv: nodeArgv("car/livery-contrast.mjs", "--json", ...(t ? [`--team=${t}`] : [])) };
+      }
+      // The sync apex_verify_change_fast outran both the host's ~180 s cap and its own 600 s (a two-commit diff, 2026-10-10).
+      // Pinned exactly like the sync tool: --fast --json, never --wait.
+      case "verify_change_fast": {
+        if (a.since != null && (typeof a.since !== "string" || a.since.startsWith("-"))) {
+          throw Object.assign(new Error("since"), { refuse: refuse("bad_args", "since must be a git ref, not a flag", 'e.g. {"since":"HEAD~2"}.') });
+        }
+        return { browser: false, argv: nodeArgv("ci/verify-change.mjs", "--fast", "--json", ...(a.since ? ["--since", String(a.since)] : []), ...(a.staged ? ["--staged"] : [])) };
       }
       case "verify_all": return { browser: false, argv: nodeArgv("track/verify-track.cjs", "--all", "--quiet") };
       case "float_all": return { browser: false, argv: nodeArgv("track/float-audit.cjs", "--all") };
@@ -522,7 +537,7 @@ export function createExtras(ctx) {
       if (/"ok"\s*:\s*true/.test(last)) exit = 0;
       else if (/"ok"\s*:\s*false/.test(last) || last) exit = exit ?? 1;
     } catch { /* empty log */ }
-    meta.state = exit === 0 ? "done" : "failed";
+    meta.state = jobExitOk(meta.kind, exit) ? "done" : "failed";
     meta.exit = exit ?? 1;
     meta.ended = meta.ended || Date.now();
     try { fs.writeFileSync(jobManifestPath(meta.id), JSON.stringify(meta, null, 2) + "\n"); } catch { /* */ }
@@ -566,6 +581,17 @@ export function createExtras(ctx) {
   /** A finished survey's parsed result can run past 100 KB (hud_survey: every cell); a client then drops the whole reply.
    *  Over the cap, keep the headline keys and point at the log, which still holds all of it. */
   const JOB_OUT_CAP = 20000;
+  const SEV = { high: 0, medium: 1, low: 2, info: 3 };
+  const topFindings = (reportPath, n = 10) => {
+    if (typeof reportPath !== "string") return null;
+    try {
+      const f = JSON.parse(fs.readFileSync(path.resolve(ROOT, reportPath), "utf8")).findings;
+      if (!Array.isArray(f) || !f.length) return null;
+      const rows = [...f].sort((a, b) => (SEV[a.severity] ?? 9) - (SEV[b.severity] ?? 9)).slice(0, n)
+        .map((x) => ({ severity: x.severity, kind: x.kind, cell: x.cell, detail: String(x.detail || "").slice(0, 200) }));
+      return { rows, total: f.length };
+    } catch { return null; }
+  };
   const capJobOut = (out, logRel) => {
     let bytes = 0;
     try { bytes = JSON.stringify(out).length; } catch { return out; }
@@ -576,7 +602,10 @@ export function createExtras(ctx) {
       let n = 0; try { n = JSON.stringify(val).length; } catch { /* */ }
       if (n <= 2000) small[k] = val;
     }
-    return { truncated: true, bytes, keys: Object.keys(o), ...small, hint: `full result: ${logRel} (jq on the log); per-cell data is in the report named above` };
+    // A survey names its report.json; its findings are what the caller wants first. Surface the worst few so nobody has to jq the log.
+    const top = topFindings(o.report);
+    return { truncated: true, bytes, keys: Object.keys(o), ...small, ...(top ? { topFindings: top.rows, findingsTotal: top.total } : {}),
+      hint: `full result: ${logRel} (jq on the log); per-cell data is in the report named above` };
   };
   const jobView = (j, full = false) => {
     // log = the CLI's stdout, where every job CLI reports; stderr beside it.
@@ -658,7 +687,7 @@ export function createExtras(ctx) {
     child.on("exit", (code, sig) => {
       j.ended = Date.now();
       j.exit = code ?? sig;
-      if (j.state === "running") j.state = code === 0 ? "done" : "failed";
+      if (j.state === "running") j.state = jobExitOk(j.kind, code) ? "done" : "failed";
       writeJobManifest(j);
       // A cancelled browser job frees the lock from jobCancel, after its tree is gone.
       if (j.browser && !j.cancelTree) releaseLock();
@@ -688,6 +717,28 @@ export function createExtras(ctx) {
     const j = jobs.get(id) || loadDiskJob(id);
     if (!j) return refuse("unknown_job", `no job ${id}`, "apex_job_status {} lists in-memory and disk manifests under artifacts/logs/apex-jobs/.");
     return toolResult({ ok: j.state !== "failed", ...jobView(j, true) }, { isError: j.state === "failed" });
+  }
+  /** `wait` (seconds, 1-300): hold the call until the job leaves "running" or the time is up, instead of the caller polling
+   *  apex_job_status in a loop. Returns the same body as without it, plus waitedS / stillRunning. A host may move a long MCP
+   *  call to the background on its own (it did at ~120 s for garage shots), so keep waits modest. */
+  function jobStatusWait(args) {
+    const wait = Math.min(Math.max(Number(args.wait) || 0, 0), 300);
+    if (!wait || !args.jobId) return jobStatus(args);   // synchronous, as before: only a wait returns a promise
+    return waitForJob(args, wait);
+  }
+  async function waitForJob(args, wait) {
+    const t0 = Date.now();
+    const state = () => { const j = jobs.get(String(args.jobId)) || loadDiskJob(String(args.jobId)); return j ? j.state : null; };
+    while (state() === "running" && Date.now() - t0 < wait * 1000) await new Promise((r) => setTimeout(r, 1000));
+    const { wait: _w, ...rest } = args;
+    const r = jobStatus(rest);
+    try {
+      const b = JSON.parse(r.content[0].text);
+      b.waitedS = Math.round((Date.now() - t0) / 1000);
+      if (b.state === "running") b.stillRunning = true;
+      r.content[0].text = JSON.stringify(b);
+    } catch { /* leave the reply as it is */ }
+    return r;
   }
   async function jobCancel(args) {
     const id = String(args.jobId || "");
@@ -840,11 +891,12 @@ export function createExtras(ctx) {
 
   return {
     thumbBlock,
+    sessionInfo,
     handlers: {
       apex_shot_survey: (a) => handleShotSurvey(a),
       apex_track: (a) => handleTrack(a),
       apex_job_start: (a) => jobStart(a),
-      apex_job_status: (a) => jobStatus(a),
+      apex_job_status: (a) => jobStatusWait(a),
       apex_job_cancel: (a) => jobCancel(a),
       apex_ui_fit: (a, o) => uiFit(a, o),
       apex_ui_shot: (a, o) => uiShot(a, o),
@@ -854,6 +906,6 @@ export function createExtras(ctx) {
   };
 }
 
-export const JOB_KINDS = ["survey_track", "shot_survey", "hud_shot", "hud_survey", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all"];
+export const JOB_KINDS = ["survey_track", "shot_survey", "hud_shot", "hud_survey", "hud_mock", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all", "verify_change_fast"];
 /** Key apex-tools-mcp uses to hand apex_job_start a pinned HUD argv; unreachable from JSON. */
 export const HUD_JOB_ARGV = Symbol("apex.hudJobArgv");
