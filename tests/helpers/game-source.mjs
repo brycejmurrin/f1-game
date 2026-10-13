@@ -41,6 +41,9 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 let _carved = null, _union = null;
 
 /** Repo-relative files of the modules game.js instantiates with `Global.create(`. */
+/** Absolute path of js/game.js, for tests that must COMPILE the file (bytecode size) rather than regex it. */
+export const GAME_PATH = path.join(ROOT, GAME);
+
 export function carvedFromGame() {
   if (_carved) return _carved.slice();
   const files = [...new Set(Object.keys(MANIFEST).filter((k) => k === "FULL" || k === "DEFERRED" || /^LAZY_[A-Z_]+$/.test(k) && !/_EDGES$/.test(k))

@@ -15,9 +15,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { GAME_PATH as GAME } from "../helpers/game-source.mjs";
 
-const GAME = fileURLToPath(new URL("../../js/game.js", import.meta.url));
 const TURBOFAN_CAP = 61440;            // V8 --max-optimized-bytecode-size default
 const BUDGET = 48 * 1024;              // per function: headroom for the +40-line ratchet steps
 // The fixed-step loop: update() → updateCar() per car → its parts, in call order. Every function listed must

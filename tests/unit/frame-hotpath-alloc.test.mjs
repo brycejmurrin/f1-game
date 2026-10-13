@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
@@ -61,14 +62,14 @@ test("GLX begin caches pit uniforms and uTime", () => {
 });
 
 test("countdown setGridIdle reuses a pooled opts bag", () => {
-  const g = read("js/game.js");
+  const g = gameSource();
   assert.match(g, /const _gridIdleOpts = \{ soundOn: false, wet: false, step: true \}/);
   assert.match(g, /GameAudio\.setGridIdle\(player, _gridIdleOpts\)/);
   assert.equal(/GameAudio\.setGridIdle\(player, \{\s*soundOn/.test(g), false);
 });
 
 test("race present sheds bloom mips + godray blur pair at MEDIUM/LOW", () => {
-  const g = read("js/game.js");
+  const g = gameSource();
   assert.match(g, /po\.bloomLevels\s*=/);
   assert.match(g, /po\.grLite\s*=/);
   assert.match(g, /userTier\(\)/);
@@ -270,5 +271,5 @@ test("TLX decal runs: A6's live-record guard, one material per run, and the norm
   assert.match(body, /a\[o \+ 4\] = nx; a\[o \+ 5\] = ny; a\[o \+ 6\] = nz; a\[o \+ 7\] = 0;/);
   assert.match(tlx, /if \(opts && opts\.batch && _decalAppend\(mesh\.geo, modelMat, mat\)\) return;/, "only batch-marked decals (livery atlases stay per record)");
   assert.match(tlx, /for \(const run of \[_blob, \.\.\._decalRuns\.values\(\)\]\)/, "a hidden run is warmed like A6's blob");
-  assert.match(read("js/game.js"), /CarMesh\.flushTailGlows\(\);[^\n]*\n(?:\s*\/\/[^\n]*\n)*\s*carDraw\.flushDecals\(night\);/, "flushed after the car loop, before the livery decals (their old relative order)");
+  assert.match(gameSource(), /CarMesh\.flushTailGlows\(\);[^\n]*\n(?:\s*\/\/[^\n]*\n)*\s*carDraw\.flushDecals\(night\);/, "flushed after the car loop, before the livery decals (their old relative order)");
 });
