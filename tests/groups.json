@@ -793,6 +793,8 @@
     "tests/unit/tools-a12-guards.test.mjs",
     "tests/unit/tools-runnable.test.mjs",
     "tests/unit/track-accuracy-validator.test.mjs",
+    "// Perf hunt 2 (T1/T2/T4): the build's spatial short-cuts answer exactly what the slow path did. Engine prelude in a VM, < 1 s.",
+    "tests/unit/track-build-grids.test.mjs",
     "tests/unit/track-build-vm-release.test.mjs",
     "tests/unit/track-build-wait.test.mjs",
     "tests/unit/track-centerline-seam.test.mjs",
