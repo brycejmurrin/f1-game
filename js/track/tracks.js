@@ -356,7 +356,16 @@ const Tracks = (function () {
         : TrackHiddenFaces.strip(propsGeo, _stripOpts);
       // ...then drop the vertices only stripped triangles used (28 B each in
       // the VBO). This one DOES move vertex ranges — see compactProps.
-      if (compactProps) propsGeo._compact = TrackHiddenFaces.compact(propsGeo);
+      if (compactProps) {
+        propsGeo._compact = TrackHiddenFaces.compact(propsGeo);
+        // A block's `from` is its STAGE buffer (plain-array pos/nrm/col/mat/idx),
+        // kept for the audit harness's stage->buffer remap (track-build-vm.cjs
+        // shipped(), which builds uncompacted). Off the harness nothing reads
+        // it, and the upload nulls the props columns but not __blocks: 0.4-3.2 MB
+        // of staged copies pinned per resident track (perf hunt 2 T6).
+        const _blocks = propsGeo.__blocks;
+        if (_blocks) for (let i = 0; i < _blocks.length; i++) _blocks[i].from = null;
+      }
       lap("propsHidden", "geo"); yield track; _t = _now();
       // THE DISCRIMINATOR (apex26.propsUnchunked, diagnostic only, default off).
       //

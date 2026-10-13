@@ -484,6 +484,7 @@ const TrackBuildProps = (function () {
       }
       return x0 <= x1 ? { x0, x1, z0, z1 } : null;
     })();
+    const _pitRect = pitBox ? [pitBox.x0, pitBox.x1, pitBox.z0, pitBox.z1] : null, _rectA = [0, 0, 0, 0];
     const PIT_GATE_PAD = 15;
     const nearPit = (x, z, r) => !!pitBox && x + r + PIT_GATE_PAD >= pitBox.x0 && x - r - PIT_GATE_PAD <= pitBox.x1 &&
       z + r + PIT_GATE_PAD >= pitBox.z0 && z - r - PIT_GATE_PAD <= pitBox.z1;
@@ -523,7 +524,23 @@ const TrackBuildProps = (function () {
       // the exemption: a building's upper storey over the complex with its
       // ground floor superseded is the same float from the other side.
       const R = (rad > 0 ? rad + mh : __M.hypot(hx + mh, hz + mh)) + 2;
-      const _cn = grid.query(cx, cz, R, _hitCand, false);
+      let _cn;
+      if (rad > 0) _cn = grid.query(cx, cz, R, _hitCand, false);
+      else {
+        // A BOX hits the road only at a node e with |e·r| <= hx + w and
+        // |e·f| <= hz + w (r, f: its axes projected onto xz). Inverting that
+        // 2x2 bounds |ex|, |ez| — for a long thin box a strip, not the circle
+        // of its half-diagonal. The pit branch fires only on a pit node, and
+        // every pit node lies in pitBox, so the query keeps the strip's cells
+        // UNION pitBox's: query()'s list minus nodes that can hit nothing, in
+        // query()'s order, so the first hit (and _pitReject) is unchanged.
+        const det = __M.abs(arx * afz - arz * afx), A = hx + grid.maxHw, B = hz + grid.maxHw;
+        let ex = det > 1e-6 ? (__M.abs(afz) * A + __M.abs(arz) * B) / det + 1 : R;
+        let ez = det > 1e-6 ? (__M.abs(afx) * A + __M.abs(arx) * B) / det + 1 : R;
+        if (!(ex < R)) ex = R; if (!(ez < R)) ez = R;
+        _rectA[0] = cx - ex; _rectA[1] = cx + ex; _rectA[2] = cz - ez; _rectA[3] = cz + ez;
+        _cn = grid.queryRects(cx, cz, R, _rectA, _pitRect, _hitCand);
+      }
       for (let _ci = 0; _ci < _cn; _ci++) {
         const k = _hitCand[_ci];
         if (topY < py[k] - 0.3) continue;                 // sits below road here

@@ -272,6 +272,35 @@ test("ensureScenery: a failed fetch resolves false after one attempt; the next c
   assert.equal(fetches, 3, "resident: nothing to fetch");
 });
 
+// Perf hunt 2 T8: the closure's fetch needs only def.id, so it goes out
+// BESIDE the circuit payload rather than after it lands — one round trip on a
+// first visit, not two — and the post-payload read joins it (one fetch per ask).
+test("ensureScenery: the scenery closure is requested beside the circuit payload, not after it", async () => {
+  const asked = [], held = new Map();
+  let resident = false;
+  const w = world({
+    globals: { Tracks: { LIST: [{ id: "monza" }], circuitPayloadResident: () => resident, hydrate: () => { resident = true; return true; } } },
+    body: () => "",
+    deps: {
+      loadBackendScripts: (files) => new Promise((res) => { const f = [...files][0]; asked.push(f); held.set(f, res); }),
+    },
+  });
+  w.ctx.TrackDefs = [{ id: "monza", path: { pts: [[0, 0, 0]] } }];
+  const p = w.lb.ensureScenery(0);
+  await tick();
+  assert.deepEqual(asked.slice().sort(), ["js/circuits/monza.js", "js/circuits/scenery/monza.js"],
+    "both requests are in flight before either answers");
+  // the payload lands first, the closure after: the post-payload read must
+  // wait on the request already out, not ask again
+  held.get("js/circuits/monza.js")(true);
+  await tick(); await tick();
+  assert.equal(asked.length, 2, "no second scenery request while the first is in flight");
+  w.ctx.TrackScenery = { monza() {} };
+  held.get("js/circuits/scenery/monza.js")(true);
+  assert.equal(await p, true);
+  assert.equal(asked.length, 2, "one fetch each");
+});
+
 // ---- R3-ASYNC-2 / R3-PHONE-8 (hunt3 train) --------------------------------
 
 const ROOT_PATH = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");

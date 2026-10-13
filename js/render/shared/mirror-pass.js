@@ -123,7 +123,7 @@ const MirrorPass = (function () {
     let _coneTan = 1;        // tan(horizontal half-FOV) of the pass in flight (pass())
     // FIELD LOD candidate pool (drawCarsLod): a pooled matrix, car and eye
     // distance squared per rival that survives the arc / behind-eye / cone tests.
-    const _cMats = [], _cCars = [], _cD2 = [], _cKeep = [];
+    const _cMats = [], _cCars = [], _cD2 = [], _cKeep = [], _cPosed = [];
     let _q = QUALITY[0], _qi = -1, _qWant = -1, _qHeld = 0;
     // The frame's CSS box (measure()): the target is sized from THAT, not from
     // the render buffer, which the governor's dynamic resolution rescales every
@@ -427,6 +427,11 @@ const MirrorPass = (function () {
     // view cone (+5 m for the car's half-length), and only the nearest
     // FieldLod.mirrorCap() (6) to the eye are drawn. The PiP keeps no cone (a
     // TV shot can look steeply down) and always draws its subject.
+    // The tests and the ranking read the car's DRAWN world position, which is
+    // what pose() writes to _P[0]/_P[2] whenever renderPosOf(c).world, so only
+    // the kept <= mirrorCap() are posed (a trackFrom, a sample, a banking and
+    // the trig each): posing every candidate first was hunt 2 F6. A car with no
+    // world pose yet is posed up front, as before.
     function drawCarsLod(paint, night, reach, centre, skip) {
       const track = G.track, ex = _eye[0], ez = _eye[2];
       let n = 0, force = -1;
@@ -434,19 +439,24 @@ const MirrorPass = (function () {
         if (skip && (c === skip || c.isPlayer)) continue;
         const ds = Math.abs(c.s - centre.s);
         if (Math.min(ds, track.total - ds) > reach) continue;
-        pose(c);
-        const dx = _P[0] - ex, dz = _P[2] - ez;
+        const rp = renderPosOf(c), world = rp.world;
+        let px, pz;
+        if (world) { px = rp.x; pz = rp.z; } else { pose(c); px = _P[0]; pz = _P[2]; }
+        const dx = px - ex, dz = pz - ez;
         const fwd = dx * _bx + dz * _bz;
         if (fwd < -3) continue;   // ahead of the eye: out of a rear view
         if (skip && Math.abs(dx * _bz - dz * _bx) > fwd * _coneTan + 5) continue;   // outside the mirror's cone
         const m = _cMats[n] || (_cMats[n] = new Float32Array(16));
-        basisMat(_R, _U, _F, _P, m);
+        if (!world) basisMat(_R, _U, _F, _P, m);
         if (c === centre && !skip) force = n;
-        _cCars[n] = c; _cD2[n] = dx * dx + dz * dz; n++;
+        _cCars[n] = c; _cPosed[n] = !world; _cD2[n] = dx * dx + dz * dz; n++;
       }
       FieldLod.nearest(_cD2, n, FieldLod.mirrorCap(), _cKeep, force);
       for (let i = 0; i < n; i++) {
-        if (_cKeep[i]) { drawCar(_cCars[i], _cMats[i], paint, night); _cars++; }
+        if (_cKeep[i]) {
+          if (!_cPosed[i]) { pose(_cCars[i]); basisMat(_R, _U, _F, _P, _cMats[i]); }
+          drawCar(_cCars[i], _cMats[i], paint, night); _cars++;
+        }
         _cCars[i] = null;
       }
     }

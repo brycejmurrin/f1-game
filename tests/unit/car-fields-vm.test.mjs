@@ -11,7 +11,10 @@
  *   3. the pre-declaration is `undefined`, never 0: a control run with steerSm = 0 diverges (game.js seeds
  *      `if (c.steerSm === undefined) c.steerSm = steer`), so a "tidy" 0 default fails here;
  *   4. all cars share one hidden class (%HaveSameMap) after the frame loop ran, and without the call they
- *      do not — so the check discriminates.
+ *      do not — so the check discriminates; and every car is still in FAST mode (%HasFastProperties) after
+ *      the frame loop — a control with the old keyed-store loop (`c[KEYS[i]] = undefined`) leaves them in
+ *      dictionary mode, which %HaveSameMap cannot see (normalized maps are shared). PERF-HUNT-2 S2;
+ *   5. predeclare's body is one NAMED store per key, in KEYS order (the source list cannot drift from GROUPS).
  * Plus the module's own contract (idempotent, never overwrites, one key list) and the manifest entry.
  *
  * Run: node --test tests/unit/car-fields-vm.test.mjs   (npm run test:game-vm)
@@ -123,7 +126,40 @@ test("every key is present on every car after the race is built, and a plain rac
     try { same = new Function("a", "b", "return %HaveSameMap(a, b)"); } catch { same = null; }
     v8.setFlagsFromString("--no-allow-natives-syntax");
     if (same) for (const c of g.G.cars) assert.ok(same(g.G.cars[0], c), `${c.code} left the shared hidden class`);
+    const fast = nativeFast();
+    if (fast) {
+      const slow = [...g.G.cars].filter((c) => !fast(c)).map((c) => c.code);   // spread: a main-realm array
+      assert.deepEqual(slow, [], "cars fell into dictionary mode after 1500 frames (a keyed store, a delete, or too many fields?)");
+    }
   } finally { g.close(); }
+});
+
+/** %HasFastProperties, compiled with natives syntax switched on for that one compile; null when unavailable. */
+function nativeFast() {
+  v8.setFlagsFromString("--allow-natives-syntax");
+  let f = null;
+  try { f = new Function("o", "return %HasFastProperties(o)"); } catch { f = null; }
+  v8.setFlagsFromString("--no-allow-natives-syntax");
+  return f;
+}
+
+test("control: the old KEYED-store predeclare leaves every car in dictionary mode (the fast check discriminates)", async () => {
+  const keyed = (c) => { for (let i = 0; i < KEYS.length; i++) if (!(KEYS[i] in c)) c[KEYS[i]] = undefined; return c; };
+  const g = await boot({ patch: () => keyed });
+  try {
+    const fast = nativeFast();
+    if (!fast) return;   // natives unavailable on this runtime
+    assert.equal(g.G.cars.filter((c) => fast(c)).length, 0, "keyed stores no longer normalize the cars: if V8 changed, retire this control");
+  } finally { g.close(); }
+});
+
+test("predeclare source: one NAMED store per key, in KEYS order", () => {
+  const from = SRC.slice(SRC.indexOf("function predeclare(c)"));
+  const body = from.slice(0, from.indexOf("return c;"));
+  const stores = [...body.matchAll(/if \(!\("(\w+)" in c\)\) c\.(\w+) = undefined;/g)];
+  for (const m of stores) assert.equal(m[1], m[2], "the `in` test and the store name differ: " + m[0]);
+  assert.deepEqual(stores.map((m) => m[1]), [...KEYS], "predeclare's named stores drifted from GROUPS: regenerate the list");
+  assert.ok(!/\[\s*KEYS\s*\[/.test(body), "predeclare must not use keyed stores (dictionary-mode cars)");
 });
 
 test("without the call the cars DO split into several hidden classes (the check discriminates)", async () => {

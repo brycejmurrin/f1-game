@@ -97,3 +97,30 @@ test("an explicit MOTION: ON wins over the touch auto-pick", () => {
   motion = "reduce";
   assert.equal(CC.active(s), true);
 });
+
+test("active() is memoised on the store's rev / rawRev: no raw read per frame, every store write re-reads", () => {
+  const CC = load();
+  const disk = new Map([["camComfortPref", "on"]]);
+  let reads = 0, motion = null;
+  const s = {
+    rev: 0, rawRev: 0,
+    raw(k) { reads++; return disk.has(k) ? disk.get(k) : null; },
+    rawSet(k, v) { this.rawRev++; disk.set(k, v); return true; },
+    rawDel(k) { this.rawRev++; disk.delete(k); return true; },
+    get(k, d) { return k === "motion" ? motion : d; },
+  };
+  assert.equal(CC.active(s), true);
+  for (let i = 0; i < 100; i++) assert.equal(CC.active(s), true);
+  assert.equal(reads, 1, "one raw read for 101 frames");
+  CC.set(s, false);
+  assert.equal(CC.active(s), false, "set() bumps rawRev");
+  assert.equal(reads, 2);
+  CC.set(s, true); motion = "on"; s.rev++;   // SETTINGS > MOTION: ON is a JSON-lane set(): rev
+  assert.equal(CC.active(s), false, "an explicit MOTION: ON still wins");
+  motion = null; s.rev++;
+  assert.equal(CC.active(s), true);
+  const plain = rawStore({ camComfortPref: "on" });   // a store with no revisions is never memoised
+  assert.equal(CC.active(plain), true);
+  plain._disk.set("camComfortPref", "off");
+  assert.equal(CC.active(plain), false);
+});

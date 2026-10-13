@@ -28,6 +28,27 @@ const GLXPost = (function () {
     let godrayW = 0, godrayH = 0;
     let _grLite = true;   // see the godray blur loop in present()
     try { _grLite = localStorage.getItem("apex26.grLite") !== "0"; } catch (_) { /* no storage: on */ }
+    // apex26.glxPerspScalar=1 (perf hunt 2 G11, default OFF: ulp-level, not
+    // bit-identical): compile the sparse-perspective scalar reconstruct into
+    // SSAO_FS / COMPOSITE_FS (PERSP_FNS in glsl-post.js). Off = the original source.
+    let _perspS = false;
+    try { _perspS = localStorage.getItem("apex26.glxPerspScalar") === "1"; } catch (_) { /* no storage: off */ }
+    const withPersp = (fs) => (_perspS ? fs.replace("#version 300 es\n", "#version 300 es\n#define GLX_PERSP_SCALAR 1\n") : fs);
+    const _PU = ["uPersp", "uIpXY", "uIpZW", "uPXY", "uPW"];
+    // Upload the scalars, or uPersp 0 (the mat4 path) when either matrix is not
+    // the sparse perspective/inverse shape. p may be null (SSAO with no proj:
+    // contact shadows are off, so projP is never reached).
+    const _IP_NZ = [1, 2, 3, 4, 6, 7, 8, 9, 10], _P_NZ = [1, 2, 3, 4, 6, 7, 12, 13, 15];
+    const _sparse = (m, idx) => { for (let i = 0; i < idx.length; i++) if (m[idx[i]] !== 0) return false; return true; };
+    function setPersp(U, ip, p) {
+      if (!_perspS || !U.uPersp) return;
+      const ok = _sparse(ip, _IP_NZ) && (!p || _sparse(p, _P_NZ));
+      gl.uniform1f(U.uPersp, ok ? 1 : 0);
+      if (!ok) return;
+      gl.uniform4f(U.uIpXY, ip[0], ip[5], ip[12], ip[13]);
+      gl.uniform3f(U.uIpZW, ip[14], ip[11], ip[15]);
+      if (p) { gl.uniform4f(U.uPXY, p[0], p[5], p[8], p[9]); gl.uniform1f(U.uPW, p[11]); }
+    }
     let ssaoW = 0, ssaoH = 0;   // SSAO runs at half res (upscaled in composite)
     let fxaaProg = null, fxaaU = null, ldrFBO = null, ldrTex = null;   // FXAA pass + its LDR input
     // Spatial upscale (SGSR1): FXAA writes here at render size when upscaling
@@ -133,8 +154,8 @@ const GLXPost = (function () {
       blurProg = link(POST_VS, BLUR_FS);
       downProg = link(POST_VS, DOWN_FS);
       upProg = link(POST_VS, UP_FS);
-      compProg = link(POST_VS, COMPOSITE_FS);
-      ssaoProg = link(POST_VS, SSAO_FS);
+      compProg = link(POST_VS, withPersp(COMPOSITE_FS));
+      ssaoProg = link(POST_VS, withPersp(SSAO_FS));
       godrayProg = link(POST_VS, GODRAY_FS);
       fxaaProg = link(POST_VS, FXAA_FS);
       if (resolveLinks) {
@@ -187,8 +208,8 @@ const GLXPost = (function () {
         }
         if (msaaSamples < 2) msaaSamples = 0;
       } catch (e) { msaaSamples = 0; }
-      compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uHaveGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uSsrTopUV", "uSsrNear", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uShaftSpread", "uFlareStreak", "uFlareStreak2"]);
-      if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"]);
+      compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uHaveGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uSsrTopUV", "uSsrNear", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uShaftSpread", "uFlareStreak", "uFlareStreak2"].concat(_perspS ? _PU : []));
+      if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"].concat(_perspS ? _PU : []));
       if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uCloudSpeed", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr", "uHgAniso", "uHgFloor", "uLampShadowMap", "uLampShadowVP", "uLampShadowIdx"]);
       // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
       whiteTex = gl.createTexture();
@@ -510,7 +531,7 @@ const GLXPost = (function () {
       SH.carArmed = false;
       const lampArmed = SH.lampArmed;
       SH.lampArmed = false;
-      if (!postEnabled) { _lastPath = { on: false }; core.gpuTimerEnd(); return; }
+      if (!postEnabled) { _lastPath = { on: false }; mirrorComposite(opts); core.gpuTimerEnd(); return; }
       const { width, height } = core.getSize();
       const threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
       const bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
@@ -587,6 +608,7 @@ const GLXPost = (function () {
         // Contact shadows ride along in the AO pass when proj + view-sun are present.
         const csOn = contactStr > 0 && F.proj && F.sunVS;
         gl.uniformMatrix4fv(ssaoU.uProj, false, F.proj || F.invProj);
+        setPersp(ssaoU, F.invProj, F.proj);
         gl.uniform3fv(ssaoU.uSunVS, F.sunVS || _NEGZ);
         gl.uniform1f(ssaoU.uContact, csOn ? contactStr : 0);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -951,6 +973,7 @@ const GLXPost = (function () {
       if (haveRefl) {
         gl.uniformMatrix4fv(compU.uInvProj, false, F.invProj);
         gl.uniformMatrix4fv(compU.uProj, false, F.proj);
+        setPersp(compU, F.invProj, F.proj);
         gl.uniform3fv(compU.uUpVS, F.upVS);
         gl.uniform3fv(compU.uReflSkyHi, F.skyHi || _SKY_HI);
         gl.uniform3fv(compU.uReflSkyLo, F.skyLo || _SKY_LO);
@@ -1010,6 +1033,16 @@ const GLXPost = (function () {
       _softReadFB = null;
       _lastPath = { on: true, fxaa: useFxaa, upscale: useUpscale, toLdr: !!toLdr, bloom: bloomAmt, ao: aoStr,
         readFb: "default" };
+
+      // THE MIRROR INSET, while the canvas pass is still open (perf hunt 2 G12,
+      // TLX D8): it used to be drawn by glx.js AFTER this tail's
+      // bind(sceneFBO) + invalidate + rebind, and on a driver that closes the
+      // canvas render pass on that bind the inset reopened it with a LOAD of the
+      // whole canvas (~5.9 MB/frame on a phone). Same pixels: the inset
+      // overwrites its rect with depth test off and no blend, and nothing else
+      // draws to the canvas in between. Draw-order change only (now inside the
+      // GPU timer's span, which ends below).
+      mirrorComposite(opts);
 
       // Discard depth buffers we never read across frames (regenerated every frame
       // by the geometry pass). On tiled mobile GPUs this frees the tiler from

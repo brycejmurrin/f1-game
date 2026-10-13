@@ -24,11 +24,20 @@ const CamComfort = (function () {
   /** True when comfort should silence shake / buzz (after boot / user choice).
    *  An explicit SETTINGS › MOTION: ON (apex26.motion = "on") is the player
    *  asking for full motion, and wins over the touch auto-pick. */
+  // render() asks every frame and raw() is a localStorage read, so the answer is
+  // memoised on the store's revisions: `rev` (set(), a foreign tab's write, a
+  // mirror restore) and `rawRev` (rawSet / rawDel — boot(), set(), a settings
+  // import). A hand edit of localStorage in devtools is the one writer that
+  // bumps neither; it is seen on the next store write or reload.
+  let _mS = null, _mRev = -1, _mRaw = -1, _mVal = false;
   function active(store) {
     const s = store || (typeof GameStore !== "undefined" ? GameStore.store : null);
     if (!s || typeof s.raw !== "function") return false;
-    if (typeof s.get === "function" && s.get("motion", null) === "on") return false;
-    return s.raw(KEY) === "on";
+    const memo = typeof s.rev === "number" && typeof s.rawRev === "number";
+    if (memo && s === _mS && s.rev === _mRev && s.rawRev === _mRaw) return _mVal;
+    const v = !(typeof s.get === "function" && s.get("motion", null) === "on") && s.raw(KEY) === "on";
+    if (memo) { _mS = s; _mRev = s.rev; _mRaw = s.rawRev; _mVal = v; }
+    return v;
   }
 
   function choice(store) {

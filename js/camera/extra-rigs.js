@@ -242,14 +242,25 @@ const ExtraRigs = (function () {
    *  player opts in: taking the camera away on every pit entry (and handing it
    *  back on exit) was reported as unwanted on 2026-10-02, so the player's own
    *  camera stays put; PIT WALL is still one press of the camera button away. */
+  let _pcStore = null, _pcRev = -1, _pcRaw = -1, _pcEnabled = false, _pitModes = null, _pitIdx = -1;
+  const _isPitwall = (m) => m.id === "pitwall";
   function tickPitAuto(G) {
     if (G && G.vTop && typeof PhysicsConsts !== "undefined") _vScale = G.vTop() / PhysicsConsts.VMAX;
     if (!G || !G.player || typeof CamModes === "undefined") return null;
     const store = G.store || (typeof GameStore !== "undefined" ? GameStore.store : null);
-    const enabled = !!store && store.get("pitCamAuto", false) === true;
+    // Both read once per change, not per frame (perf hunt 2 F10): the opt-in on
+    // the store's revisions (set(), a foreign write and a restore bump `rev`;
+    // rawSet / rawDel, e.g. a settings import, bump `rawRev`), the PIT WALL
+    // index on the mode list's identity. A store without revisions reads each call.
+    if (!store || store !== _pcStore || typeof store.rev !== "number" || store.rev !== _pcRev || store.rawRev !== _pcRaw) {
+      _pcEnabled = !!store && store.get("pitCamAuto", false) === true;
+      _pcStore = store; _pcRev = store ? store.rev : -1; _pcRaw = store ? store.rawRev : -1;
+    }
+    const enabled = _pcEnabled;
     const nowIn = inPit(G.player);
     const modes = CamModes.CAM_MODES;
-    const pitIdx = modes.findIndex((m) => m.id === "pitwall");
+    if (modes !== _pitModes) { _pitModes = modes; _pitIdx = modes.findIndex(_isPitwall); }
+    const pitIdx = _pitIdx;
     if (pitIdx < 0) { _wasInPit = nowIn; return null; }
     if (!enabled) {
       if (_autoOn) { _autoOn = false; _autoPrev = -1; }

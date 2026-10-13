@@ -48,8 +48,18 @@ const TrackGeom = (function () {
   // are pinned; hidden-faces reads mat and position only). Called by the
   // emitters' swayOff() and by the graph's replay/bake for a swaying op.
   const ROUND_K = 0.6;
+  // KNOWN GAP (perf hunt 2 T2, 2026-10-13): the fused props are written into
+  // TrackModels.scratch() accumulators, which have no index access (storage
+  // is `._data`), so for every FUSED crown this never applied: pos[i] read
+  // undefined and nrm[i] = NaN landed as integer-keyed own properties on the
+  // accumulator object — a no-op that cost 13 % of monza's props phase. Only
+  // plain-array stages and the graph's instanced bakes are rounded. The early
+  // return keeps that geometry byte-for-byte; making the fused crowns round
+  // too (read `_data`) is a LOOK change on ~40 circuits, decided separately.
   function roundNormals(out, v0, base, up, k) {
-    const pos = out.pos, nrm = out.nrm, n = pos.length / 3;
+    const pos = out.pos, nrm = out.nrm;
+    if (!Array.isArray(pos) && !ArrayBuffer.isView(pos)) return;
+    const n = pos.length / 3;
     const kk = k == null ? ROUND_K : k;
     if (kk <= 0) return;
     for (let i = v0; i < n; i++) {

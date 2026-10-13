@@ -133,8 +133,14 @@ void main() {
       // DAY SKY BLUE knob (def 1.0 = as-shipped) scales the band strength; clamp
       // keeps the blend valid when the knob pushes past 1.
       c = mix(c, mix(c, deepBlue, 0.30), clamp(daytime * (1.0 - overcast) * bandLM * uDaySkyBlue, 0.0, 1.0));
-      float az = vnoise(vec2(atan(dir.z, dir.x) * 2.2, up * 6.0)) - 0.5;
-      c *= 1.0 + az * 0.05 * daytime * (1.0 - overcast) * (1.0 - smoothstep(0.0, 0.5, up));
+      // Exact-zero gate (hunt 2 G3): (1 - smoothstep(0.0, 0.5, up)) is exactly
+      // 0 once up >= 0.5 (t clamps to 1, 1*1*(3-2*1) == 1); the 0.51 margin keeps
+      // the gate clear of a 2.5-ulp GPU divide at the edge (t = 1.02 there), and
+      // c *= 1.0 + az * ... * 0.0 is c *= 1.0. vnoise is ALU-only.
+      if (up < 0.51) {
+        float az = vnoise(vec2(atan(dir.z, dir.x) * 2.2, up * 6.0)) - 0.5;
+        c *= 1.0 + az * 0.05 * daytime * (1.0 - overcast) * (1.0 - smoothstep(0.0, 0.5, up));
+      }
     }
     // Golden-hour + low-sun band: first factor is (1-smoothstep(0, 0.72, sunE))
     // / (1-smoothstep(0, 0.60, sunE)). Both are exactly 0 when sunE >= 0.72
@@ -204,11 +210,17 @@ void main() {
       // is never a plain wash. Its own coverage + a band fade focused ~1–9°.
       // Twilight gets a fuller, lower bank so sunset/sunrise has dramatic strata
       // catching the warm light right where the player looks.
-      vec2 bp = dir.xz / max(up, 0.02) * 0.16 + drift1 * 1.4;
-      float bankThresh = 0.46 - uCloud * 0.30 - twilight * 0.10;
-      float bankCov = smoothstep(bankThresh, 0.80, fbm(bp))
-                    * smoothstep(0.013, 0.030, up) * (1.0 - smoothstep(0.10, 0.26, up));
-      cov = max(cov, bankCov * cloudRich * (1.0 - overcast * 0.5));
+      // Exact-zero gate (hunt 2 G3): the band fade (1 - smoothstep(0.10, 0.26,
+      // up)) is exactly 0 once up >= 0.26, so bankCov == 0 and max(cov, 0) is
+      // cov (cov >= 0: smoothsteps and mixes of them). 0.27 keeps a margin over
+      // the GPU divide (t = 1.0625 there). Skips the 4-octave fbm(bp).
+      if (up < 0.27) {
+        vec2 bp = dir.xz / max(up, 0.02) * 0.16 + drift1 * 1.4;
+        float bankThresh = 0.46 - uCloud * 0.30 - twilight * 0.10;
+        float bankCov = smoothstep(bankThresh, 0.80, fbm(bp))
+                      * smoothstep(0.013, 0.030, up) * (1.0 - smoothstep(0.10, 0.26, up));
+        cov = max(cov, bankCov * cloudRich * (1.0 - overcast * 0.5));
+      }
       // Firmer edges so cumulus look solid, not gauzy.
       cov = mix(cov, smoothstep(0.18, 0.82, cov), cloudRich * 0.5);
     }

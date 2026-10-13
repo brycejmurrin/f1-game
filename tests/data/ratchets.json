@@ -9,16 +9,16 @@
       "lines": 2584
     },
     "js/agent/apex.js": {
-      "codeLines": 2333,
-      "lines": 3312
+      "codeLines": 2334,
+      "lines": 3316
     },
     "js/car/car3d.js": {
       "lines": 3625
     },
     "js/game.js": {
-      "codeLines": 5021,
+      "codeLines": 5080,
       "gMembers": 290,
-      "lines": 9259,
+      "lines": 9340,
       "topLets": 155
     },
     "js/lighting/presets.js": {
@@ -28,10 +28,10 @@
       "lines": 2132
     },
     "js/render/glx/glx.js": {
-      "lines": 2910
+      "lines": 2970
     },
     "js/track/tracks.js": {
-      "lines": 748
+      "lines": 757
     },
     "js/ui/hud.js": {
       "codeLines": 1424,

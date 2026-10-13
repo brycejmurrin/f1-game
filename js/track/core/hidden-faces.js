@@ -40,6 +40,13 @@ const TrackHiddenFaces = (function () {
   const INF = 1 / 0, NAN = 0 / 0;
   const IN_EPS = 0.01, MIN_HALF = 0.03, BURY = 0.05, BOTTOM = 0.10, BOTTOM_NY = -0.95;
   const CELL = 8, TCELL = 8;
+  // A box whose XZ AABB covers more than BIG_CELLS fine cells goes to its own
+  // COARSE grid (CELL_BIG) instead of every 8 m cell it spans: Monaco's
+  // open-sea sheet (8 km boxes) made the fine grid 851,851 cells and 62 MB at
+  // the build's peak (perf hunt 2 T4). The question both grids answer is
+  // boolean — "does SOME box enclose this triangle" — so asking the fine grid
+  // and then the coarse one is the same answer as one grid holding all boxes.
+  const BIG_CELLS = 1024, CELL_BIG = 128;
   const MAT_GLASS = 3, MAT_FLAG = 15;
 
   const now = () => (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
@@ -226,31 +233,37 @@ const TrackHiddenFaces = (function () {
   // sort key. A centroid at y then only needs the entries before the first
   // bottom >= y (the rest fail `y <= bottom`), walked backwards until the
   // running top <= y (that entry and all before it fail `y >= top`).
-  function buildGrid(BB, NB) {
+  // `ks` (ascending box ids) picks the boxes this grid holds, `cell` its cell
+  // size; `next` chains the coarse grid of giant boxes (see BIG_CELLS).
+  function buildGrid(BB, NB, ks, cell) {
+    const NK = ks.length;
+    if (!NK) return { gx0: 0, gz0: 0, gnx: 0, gnz: 0, start: new Int32Array(1), list: new Int32Array(0), E: new Float64Array(0), cell, next: null };
     let gx0 = INF, gz0 = INF, gx1 = -INF, gz1 = -INF;
-    for (let k = 0; k < NB; k++) {
+    for (let q = 0; q < NK; q++) {
+      const k = ks[q];
       if (BB[k * 6] < gx0) gx0 = BB[k * 6]; if (BB[k * 6 + 1] > gx1) gx1 = BB[k * 6 + 1];
       if (BB[k * 6 + 2] < gz0) gz0 = BB[k * 6 + 2]; if (BB[k * 6 + 3] > gz1) gz1 = BB[k * 6 + 3];
     }
-    const gnx = floor((gx1 - gx0) / CELL) + 1, gnz = floor((gz1 - gz0) / CELL) + 1, NC = gnx * gnz;
-    const start = new Int32Array(NC + 1), SP = new Int32Array(NB * 4);
-    for (let k = 0; k < NB; k++) {
-      const i0 = floor((BB[k * 6] - gx0) / CELL), i1 = floor((BB[k * 6 + 1] - gx0) / CELL);
-      const j0 = floor((BB[k * 6 + 2] - gz0) / CELL), j1 = floor((BB[k * 6 + 3] - gz0) / CELL);
-      SP[k * 4] = i0; SP[k * 4 + 1] = i1; SP[k * 4 + 2] = j0; SP[k * 4 + 3] = j1;
+    const gnx = floor((gx1 - gx0) / cell) + 1, gnz = floor((gz1 - gz0) / cell) + 1, NC = gnx * gnz;
+    const start = new Int32Array(NC + 1), SP = new Int32Array(NK * 4);
+    for (let q = 0; q < NK; q++) {
+      const k = ks[q];
+      const i0 = floor((BB[k * 6] - gx0) / cell), i1 = floor((BB[k * 6 + 1] - gx0) / cell);
+      const j0 = floor((BB[k * 6 + 2] - gz0) / cell), j1 = floor((BB[k * 6 + 3] - gz0) / cell);
+      SP[q * 4] = i0; SP[q * 4 + 1] = i1; SP[q * 4 + 2] = j0; SP[q * 4 + 3] = j1;
       for (let j = j0; j <= j1; j++) for (let c = j * gnx + i0, e = j * gnx + i1; c <= e; c++) start[c + 1]++;
     }
     for (let c = 0; c < NC; c++) start[c + 1] += start[c];
     const list = new Int32Array(start[NC]);
     // start[c] doubles as cell c's fill cursor, then shifts back one slot.
-    for (let k = 0; k < NB; k++) {
-      const i0 = SP[k * 4], i1 = SP[k * 4 + 1], j0 = SP[k * 4 + 2], j1 = SP[k * 4 + 3];
+    for (let q = 0; q < NK; q++) {
+      const k = ks[q], i0 = SP[q * 4], i1 = SP[q * 4 + 1], j0 = SP[q * 4 + 2], j1 = SP[q * 4 + 3];
       for (let j = j0; j <= j1; j++) for (let c = j * gnx + i0, e = j * gnx + i1; c <= e; c++) list[start[c]++] = k;
     }
     for (let c = NC; c > 0; c--) start[c] = start[c - 1];
     start[0] = 0;
     const bot = new Float64Array(NB);
-    for (let k = 0; k < NB; k++) { const y = BB[k * 6 + 4]; bot[k] = y === y ? y : -INF; }
+    for (let q = 0; q < NK; q++) { const k = ks[q], y = BB[k * 6 + 4]; bot[k] = y === y ? y : -INF; }
     const E = new Float64Array(list.length * 8);
     for (let c = 0; c < NC; c++) {
       const s = start[c], e = start[c + 1];
@@ -268,7 +281,21 @@ const TrackHiddenFaces = (function () {
         E[w + 5] = BB[o + 4]; E[w + 6] = top; E[w + 7] = bot[k];
       }
     }
-    return { gx0, gz0, gnx, gnz, start, list, E };
+    return { gx0, gz0, gnx, gnz, start, list, E, cell, next: null };
+  }
+  // The fine grid of ordinary boxes, chaining a coarse grid of the giant ones
+  // when there are any. A NaN extent stays fine, as it always was.
+  function buildGrids(BB, NB) {
+    const small = new Int32Array(NB), big = new Int32Array(NB);
+    let ns = 0, nb = 0;
+    for (let k = 0; k < NB; k++) {
+      const cells = ((BB[k * 6 + 1] - BB[k * 6]) / CELL + 1) * ((BB[k * 6 + 3] - BB[k * 6 + 2]) / CELL + 1);
+      if (cells > BIG_CELLS) big[nb++] = k; else small[ns++] = k;
+    }
+    if (!nb) return buildGrid(BB, NB, small, CELL);
+    const G = buildGrid(BB, NB, small.subarray(0, ns), CELL);
+    G.next = buildGrid(BB, NB, big.subarray(0, nb), CELL_BIG);
+    return G;
   }
 
   // inBox(k, ·) for all three corners (pos offsets A, Bq, C) of box record
@@ -294,7 +321,11 @@ const TrackHiddenFaces = (function () {
   function enclosedTri(G, B, pos, A, Bq, C) {
     const mx = (pos[A] + pos[Bq] + pos[C]) / 3, my = (pos[A + 1] + pos[Bq + 1] + pos[C + 1]) / 3;
     const mz = (pos[A + 2] + pos[Bq + 2] + pos[C + 2]) / 3;
-    const i = floor((mx - G.gx0) / CELL), j = floor((mz - G.gz0) / CELL);
+    for (let g = G; g; g = g.next) if (enclosedIn(g, B, pos, A, Bq, C, mx, my, mz)) return true;
+    return false;
+  }
+  function enclosedIn(G, B, pos, A, Bq, C, mx, my, mz) {
+    const i = floor((mx - G.gx0) / G.cell), j = floor((mz - G.gz0) / G.cell);
     if (!(i >= 0 && j >= 0 && i < G.gnx && j < G.gnz)) return false;
     const E = G.E, list = G.list, cell = j * G.gnx + i, s = G.start[cell];
     let lo = s, hi = G.start[cell + 1];
@@ -314,9 +345,11 @@ const TrackHiddenFaces = (function () {
   // Returns enc[t]: 0 = not a box triangle, 1 = enclosed, 2 = not. A centroid
   // with a NaN coordinate stays 2: its triangle has a non-finite corner,
   // which no inBox test passes.
-  function boxEnclosure(G, B, BV, NB, firstTri, pos, idx, T) {
-    const enc = new Uint8Array(T), E = G.E, list = G.list, start = G.start;
-    const gx0 = G.gx0, gz0 = G.gz0, gnx = G.gnx, gnz = G.gnz;
+  // A chained coarse grid (G.next) runs as a second pass over the triangles
+  // the first left at 2; one enclosing box in either grid is enough.
+  function boxEnclosure(G, B, BV, NB, firstTri, pos, idx, T, encIn) {
+    const enc = encIn || new Uint8Array(T), E = G.E, list = G.list, start = G.start;
+    const gx0 = G.gx0, gz0 = G.gz0, gnx = G.gnx, gnz = G.gnz, CELL = G.cell;
     const TT = new Int32Array(12), TC = new Int32Array(12);
     const TX = new Float64Array(12), TY = new Float64Array(12), TZ = new Float64Array(12);
     for (let k = 0; k < NB; k++) {
@@ -329,7 +362,8 @@ const TrackHiddenFaces = (function () {
         const i = floor((mx - gx0) / CELL), j = floor((mz - gz0) / CELL);
         TX[q] = mx; TY[q] = my; TZ[q] = mz;
         TC[q] = (mx === mx && my === my && mz === mz && i >= 0 && j >= 0 && i < gnx && j < gnz) ? j * gnx + i : -1;
-        enc[t] = 2;
+        if (!encIn) enc[t] = 2;
+        else if (enc[t] === 1) TC[q] = -1;
       }
       for (let q = 0; q < 12; q++) {
         const cell = TC[q];
@@ -361,6 +395,7 @@ const TrackHiddenFaces = (function () {
         for (let p = q; p < 12; p++) if (TC[p] === cell) TC[p] = -1;
       }
     }
+    if (!encIn && G.next) boxEnclosure(G.next, B, BV, NB, firstTri, pos, idx, T, enc);
     return enc;
   }
 
@@ -489,7 +524,7 @@ const TrackHiddenFaces = (function () {
     const S = scanBoxes(pos, nrm, col, mat, idx, firstTri, V);
     stats.boxes = S.NB;
     active += now() - t0; yield; t0 = now();
-    const G = S.NB ? buildGrid(S.BB, S.NB) : null;
+    const G = S.NB ? buildGrids(S.BB, S.NB) : null;
     const enc = G ? boxEnclosure(G, S.B, S.BV, S.NB, firstTri, pos, idx, T) : null;
     active += now() - t0; yield; t0 = now();
     const keep = new Uint8Array(T);

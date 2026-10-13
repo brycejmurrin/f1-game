@@ -321,7 +321,7 @@ function mirrorRig(lodOn) {
   vm.runInContext(read("js/car/field-lod.js").replace(/^const\b/gm, "var"), ctx, { filename: "field-lod.js" });
   ctx.FieldLod.setEnabled(lodOn);
   vm.runInContext(read("js/render/shared/mirror-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: "mirror-pass.js" });
-  const draws = [];
+  const draws = [], posed = [];
   const gfx = { width: 1280, height: 720, softPresent: () => false, mirrorBegin: () => true, mirrorEnd: () => {}, mirrorRect: () => {},
     mirrorState: () => ({ dead: false, ready: true }), draw: (mesh) => draws.push(mesh), drawSky: () => {} };
   const player = { isPlayer: true, s: 100, x: 0, team: "me" };
@@ -332,20 +332,22 @@ function mirrorRig(lodOn) {
     store: { get: (k, d) => (k === "hudMirror" ? "on" : d), set() {} } };
   const mp = ctx.MirrorPass.create(G, {
     drawWorldMeshes: () => {}, drawCar: (c) => gfx.draw(c.team),
-    renderPosOf: (c) => ({ world: true, x: -c.x, z: c.s }), playerAnchor: (c) => ({ cS: c.s, cX: c.x }),
+    renderPosOf: (c) => ({ world: true, x: -c.x, z: c.s }), playerAnchor: (c) => { posed.push(c.team); return { cS: c.s, cX: c.x }; },
     yawVisInterp: () => 0,
     basisMat: (r, u, f, p, out) => { out.set([r[0], r[1], r[2], 0, u[0], u[1], u[2], 0, f[0], f[1], f[2], 0, p[0], p[1], p[2], 1]); return out; },
     carPaint: () => ({}),
   });
   const frame = { viewProj: new Float32Array(16), proj: null, invProj: null, invViewProj: new Float32Array(16), eye: [0, 5, 90], cullDist: 0, tune: {} };
   mp.render(frame, { invViewProj: frame.invViewProj }, false, false, 0);
-  return { draws, mp };
+  return { draws, mp, posed };
 }
 
 test("mirror: the nearest 6 rivals behind, nothing outside its cone; every car with apex26.fieldLod=0", () => {
   const on = mirrorRig(true);
   assert.deepEqual(on.draws, ["r1", "r2", "r3", "r4", "r5", "r6"]);
   assert.equal(on.mp.state().cars, 6);
+  // Hunt 2 F6: ranked on renderPosOf, so only the kept six are posed (playerAnchor + sample + banking each).
+  assert.deepEqual(on.posed.filter((t) => t !== "me"), ["r1", "r2", "r3", "r4", "r5", "r6"], "only the drawn rivals are posed (the player poses the mirror eye)");
   const off = mirrorRig(false);
   assert.deepEqual(off.draws, ["r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "wide"], "legacy: uncapped, no cone");
 });

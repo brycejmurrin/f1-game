@@ -73,8 +73,28 @@ function boot() {
   const pedal = el("btn-throttle");
   const tap = () => { pedal.fire("pointerdown"); pedal.fire("pointerup"); };
   const blur = () => (listeners.blur || []).forEach((f) => f({}));
-  return { Input, pedal, tap, blur, listeners };
+  return { Input, pedal, tap, blur, listeners, sb };
 }
+
+test("the on-screen pedal's menu gate is read once per poll(), not once per pedal read (PERF-HUNT-2 S5)", () => {
+  const { Input, pedal, sb } = boot();
+  let open = true, asks = 0;
+  sb.UiLayers = { anyOpen: () => { asks++; return open; }, navOpen: () => open };
+  pedal.fire("pointerdown");
+  assert.equal(Input.throttle(), false, "before any poll the gate is asked live: an open layer gates the pedal");
+  Input.poll();
+  assert.equal(Input.throttle(), false, "polled with the layer open: gated");
+  open = false;
+  asks = 0;
+  for (let i = 0; i < 5; i++) { Input.throttle(); Input.throttleLevel(); Input.braking(); Input.brakeLevel(); }
+  assert.equal(asks, 0, "the step loop's pedal reads must not walk the layers again");
+  assert.equal(Input.throttle(), false, "…so the frame keeps the answer its poll() latched");
+  assert.equal(Input.debugState().throttle, true, "debugState() is a live readout, never the latch");
+  Input.poll();
+  assert.equal(Input.throttle(), true, "the next poll() sees the layer closed");
+  assert.equal(Input.throttleLevel(), 1);
+  pedal.fire("pointerup");
+});
 
 test("HOLD is unchanged: the pedal follows the thumb", () => {
   const { Input, pedal } = boot();

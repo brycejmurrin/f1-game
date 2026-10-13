@@ -1169,6 +1169,15 @@ var PitLane = (function () {
     // actually put the car out there) -> BOX (held, tyres changed) -> OUT (back
     // on the road). Nothing here MOVES the car — the lane is driven, so entry and
     // exit are the driver's job and the only thing this owns is the stop itself.
+    // The commitment lands: armed, the crew told what to ready. With no
+    // button there is no other moment the compound choice becomes visible.
+    // A function of the car, not a closure built per car per update() (PERF-HUNT-2 S10).
+    function commitNow(c) {
+      c.pitCommitT = 0; c.pitCommitted = true;
+      arm(c, true);
+      const next = nextFor(c);
+      if (G.announce) G.announce("PIT ENTRY — LIMITER ON" + (next ? " — " + next.code : ""), 1.6, "race");
+    }
     function update(c, dt) {
       // A FINISHED car still runs the machine: one held in its box at the
       // flag is serviced and released, one on the lane keeps its state to the
@@ -1185,19 +1194,11 @@ var PitLane = (function () {
       // still armed past it: the stop paid nothing and was taken anyway.
       if (!c.human && c.pitArmed && st === "none" &&
           ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars)))) clearArm(c);
-      const zz = z(), L = G.track.total;
+      const zz = z(), L = zoneFor.total;   // zoneFor IS G.track here: enabled() above saw z() non-null (one façade read, PERF-HUNT-2 S7)
       if (st === "out" && c.pitOutT > 0) c.pitOutT = Math.max(0, c.pitOutT - dt);   // the GO chip's clock
       // Every plan is re-cut once per lap (replan): the player's reference, and
       // an AI's own — not a real race's scripted stops, which are the record.
       if (c.pitPlan && c.lap !== c._planLap && (c.human ? c.local : !c.pitPlan.scripted)) { c._planLap = c.lap; if ((c.lap || 0) > 1) replan(c); }
-      // The commitment lands: armed, the crew told what to ready. With no
-      // button there is no other moment the compound choice becomes visible.
-      const commitNow = () => {
-        c.pitCommitT = 0; c.pitCommitted = true;
-        arm(c, true);
-        const next = nextFor(c);
-        if (G.announce) G.announce("PIT ENTRY — LIMITER ON" + (next ? " — " + next.code : ""), 1.6, "race");
-      };
       if (!inWindowOf(c)) {
         // A serviced car keeps "out" down the EXIT ROAD past the exit line, so
         // laneX guides it off the lane where the ribbon blends back (the
@@ -1226,7 +1227,7 @@ var PitLane = (function () {
         if (c.local && roadOf(c) === "entry") {
           if (!c.pitArmed) {
             c.pitCommitT = committing(c, zz, L) ? (c.pitCommitT || 0) + dt : 0;
-            if (c.pitCommitT >= COMMIT_S) commitNow();
+            if (c.pitCommitT >= COMMIT_S) commitNow(c);
           } else if (c.pitCommitted) {
             Tracks.sample(G.track, c.s, _smp);
             c.pitAbortT = inLaneLat(c, _smp.hw || 0, zz.side) ? 0 : (c.pitAbortT || 0) + dt;
@@ -1261,7 +1262,7 @@ var PitLane = (function () {
       // into a stop here.
       if (!c.pitArmed && c.local) {
         c.pitCommitT = committing(c, zz, L) ? (c.pitCommitT || 0) + dt : 0;
-        if (c.pitCommitT >= COMMIT_S) commitNow();
+        if (c.pitCommitT >= COMMIT_S) commitNow(c);
       }
       if (!c.pitArmed && !inLane(c)) return;          // not coming in
       const at = throughM(zz, c.s, L), boxAt = boxThroughFor(c, zz, L);

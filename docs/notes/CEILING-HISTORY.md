@@ -3496,3 +3496,20 @@ Deliberate `--update` remeasure so every PR's merge-with-ship Structural
 guards can pass. Past-absorb raise is allowed because this history entry
 moves with `tests/data/ratchets.json` (`ratchets.mjs --documented` / CI).
 
+## 2026-10-13 — perf hunt 2 GLX lane (#1448): glx.js +60 for the lamp-map reach / shadow-pack key / depth VAO and per-pass instance buffers
+
+`js/render/glx/glx.js` lines 2910 → **2970** (+60). Two mechanisms the three.js backend already had
+(TLX C3 / A1 in #1446) ported to GLX in `cf27b607a` (G5: `opts.reach` cull for the night lamp map, a
+shadow-pack cell-set key so an unchanged set skips the repack + upload, a per-batch depth VAO) and
+`be1bb385f` (G8: `gfx.instPerPass`, the mirror pass culls and draws through its own instance buffer
+and VAO instead of ping-ponging the main pass's). Deliberate raise past the 40-line absorb; the
+evidence is `docs/notes/PERF-HUNT-2-2026-10-13.md` §C and the PR's frozen GLX A/B.
+## 2026-10-13 — perf hunt 2 SIM + FRAME lanes (#1448): game.js +81 lines / +59 code lines
+
+`js/game.js` lines 9259 → **9340**, codeLines 5021 → **5080**. The SIM lane's S1 split `updateCar`
+into five file-scope parts through one pooled scratch (statements moved verbatim, +34 lines of
+signatures and scratch plumbing; `updateCar` bytecode 42,644 → 9,812 B so TurboFan keeps it
+optimised), S4/S6 hoisted per-car-step invariants and the AI look-ahead cache, and the FRAME lane's
+F5/F6/F9 added the once-per-frame comfort read, the shared track sample and the env-probe latch
+(+17). Deliberate raise past the 40-line absorb; the measured gates are in
+`docs/notes/PERF-HUNT-2-2026-10-13.md` (§A, §B) and the PR body.

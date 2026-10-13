@@ -598,7 +598,10 @@ const GLXChunked = (function () {
       }
     }
 
-    function castShadowChunked(mesh, model) {
+    // reach = [x, y, z, r] (the lamp pass, shadow-pass.js _flReach; hunt 2 G5 =
+    // TLX C3): also drop chunks whose AABB lies farther than r from the lamp —
+    // a caster beyond the lamp radius occludes only receivers it does not light.
+    function castShadowChunked(mesh, model, reach) {
       const SH = core.shadow;
       if ((core.ctxGone && core.ctxGone()) || !SH.depthPassOn || !mesh) return;
       bindVAO(mesh.vao);
@@ -606,11 +609,13 @@ const GLXChunked = (function () {
       if (!mesh.chunks) { gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib); gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0); return; }
       Frustum.extractPlanes(SH.castCullVP || SH.lightVP, _fcPlanes);
       const chunks = mesh.chunks;
+      const rr = reach && reach[3] > 0 ? reach[3] * reach[3] : -1;
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib);
       let runOff = -1, runCount = 0;
       for (let i = 0; i < chunks.length; i++) {
         const ch = chunks[i];
-        if (Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max)) {
+        if (Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) &&
+            (rr < 0 || Frustum.aabbDist2(ch.min, ch.max, reach[0], reach[1], reach[2]) <= rr)) {
           if (runOff < 0) { runOff = ch.byteOffset; runCount = ch.count; }
           else runCount += ch.count;
         } else if (runOff >= 0) {

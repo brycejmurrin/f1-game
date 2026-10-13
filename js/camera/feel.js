@@ -280,16 +280,20 @@ const CamFeel = (function () {
     }
   }
 
-  // Thin game.js entry: pull look axes from Input, then tick().
+  // Thin game.js entry: pull look axes from Input, then tick(). One pooled opts
+  // bag (tick() reads it and keeps nothing): a fresh literal ran every frame.
+  const _NO_STICK = Object.freeze({ x: 0, y: 0 }), _NO_MOUSE = Object.freeze({ dx: 0, dy: 0 });
+  const _raceOpts = { mode: null, dt: 0, comfort: false, racing: false, lookHeld: false, mouseHeld: false,
+    stickX: 0, stickY: 0, mouseDx: 0, mouseDy: 0, spN: 0 };
   function tickRace(mode, dt, comfort, racing, spN) {
-    const ls = (typeof Input !== "undefined" && Input.lookStick) ? Input.lookStick() : { x: 0, y: 0 };
-    const lm = (typeof Input !== "undefined" && Input.consumeLookMouse) ? Input.consumeLookMouse() : { dx: 0, dy: 0 };
-    const held = !!(typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack());
-    const mouseHeld = !!(typeof Input !== "undefined" && Input.lookMouseHeld && Input.lookMouseHeld());
-    tick({
-      mode, dt, comfort, racing, lookHeld: held, mouseHeld,
-      stickX: ls.x, stickY: ls.y, mouseDx: lm.dx, mouseDy: lm.dy, spN,
-    });
+    const ls = (typeof Input !== "undefined" && Input.lookStick) ? Input.lookStick() : _NO_STICK;
+    const lm = (typeof Input !== "undefined" && Input.consumeLookMouse) ? Input.consumeLookMouse() : _NO_MOUSE;
+    const o = _raceOpts;
+    o.mode = mode; o.dt = dt; o.comfort = comfort; o.racing = racing;
+    o.lookHeld = !!(typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack());
+    o.mouseHeld = !!(typeof Input !== "undefined" && Input.lookMouseHeld && Input.lookMouseHeld());
+    o.stickX = ls.x; o.stickY = ls.y; o.mouseDx = lm.dx; o.mouseDy = lm.dy; o.spN = spN;
+    tick(o);
   }
   function lookingBackNow() { return lookBackOn; }
   function consumeAimSnap() { const v = aimSnap; aimSnap = false; return v; }

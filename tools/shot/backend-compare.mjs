@@ -58,6 +58,7 @@ exitIfHelp(argv, `backend-compare — same scene on GLX/TLX/WGX + pixel diff
   node tools/shot/backend-compare.mjs [track] [frac] [cam]
     [--backends webgl2,three] [--tod day] [--out DIR] [--az N] [--el N] [--dist N]
     [--ls apex26.key=value ...]   (repeatable: localStorage pins set before boot, for kill-switch A/Bs)
+    [--gov-free]                  let the perf governor shed tiers / scale during the capture (default: pinned)
 
 Default: monza 0.1 orbit → scratch/captures/backend-compare/.`);
 const positionals = [];
@@ -80,6 +81,11 @@ const lsPins = [];
 for (let i = 0; i < argv.length; i++) if (argv[i] === "--ls" && i + 1 < argv.length) lsPins.push(argv[++i]);
 const backends = flag(argv, "--backends", "webgl2,three").split(",").map((s) => s.trim()).filter(Boolean);
 const live = argv.includes("--live");   // skip headless(true): screenshot the live loop
+// The governor is PINNED by default (render scale 1, no auto-res, tier hold): SwiftShader frames are
+// slow enough that it shed lamp shadows / post tiers in the ~3 s before the freeze on some runs and not
+// others, so two captures of ONE tree differed by 1.35 mean luma (vegas night, 2026-10-13). --gov-free
+// restores the old behaviour; the manifest's state.perf records tier/scale either way.
+const govFree = argv.includes("--gov-free");
 const label = assertSafePathToken(
   flag(argv, "--label", `${safeTrackId}-${Math.round(frac * 100)}-${safeCam}-${tod}`), "label");
 const outDir = flag(argv, "--out", null)
@@ -123,6 +129,11 @@ async function captureBackend(backend) {
     });
     await page.evaluate((id) => window.__apex.race(id), safeTrackId);
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
+    if (!govFree) await page.evaluate(() => {
+      const a = window.__apex;
+      if (a.renderScale) a.renderScale(1);   // scale 1.0 and PerfGov.setAutoRes(false)
+      if (typeof PerfGov !== "undefined" && PerfGov.setTierHold) PerfGov.setTierHold(true);
+    });
     await sleep(1200);
 
     const state = await page.evaluate(({ frac, cam, az, el, dist, side, tod }) => {
@@ -143,6 +154,7 @@ async function captureBackend(backend) {
         backend: typeof GLX !== "undefined" ? (GLX.backend || "webgl2") : "none",
         diagBackend: a.diag ? (a.diag({ download: false }).env || {}).backend : null,
         camera: a.camera(),
+        perf: a.perf ? (({ tier, autoTier, autoShed, scale, userTier, tierFloor, auto }) => ({ tier, autoTier, autoShed, scale, userTier, tierFloor, auto }))(a.perf()) : null,
       };
     }, { frac, cam: safeCam, az, el, dist, side, tod });
 

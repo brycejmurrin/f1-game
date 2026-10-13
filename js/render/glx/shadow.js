@@ -243,6 +243,32 @@ const GLXShadow = (function () {
       gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
     }
 
+    // A depth-only VAO per batch over the light-culled pack (hunt 2 G5): DEPTH_VS
+    // reads aPos (0) and the instance columns (5-8) only, so the cast binds this
+    // instead of re-pointing the lit VAO at shadowIbo and back (~17 GL calls a
+    // batch per cast). The lit VAO is never touched by a shadow cast now.
+    function _shadowVAO(batch) {
+      if (batch._shVao) return batch._shVao;
+      if (!batch.vbo || !batch.ib || !batch.shadowIbo) return null;
+      const v = gl.createVertexArray();
+      if (!v) return null;
+      gl.bindVertexArray(v);
+      gl.bindBuffer(gl.ARRAY_BUFFER, batch.vbo);
+      gl.enableVertexAttribArray(0);   // VertexPack.bindAttribs' position layout
+      gl.vertexAttribPointer(0, 3, gl.FLOAT, false, batch.trk ? VertexPack.STRIDE_TRK : VertexPack.STRIDE, 0);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, batch.ib);
+      gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowIbo);
+      for (let c = 0; c < 4; c++) {
+        gl.enableVertexAttribArray(5 + c);
+        gl.vertexAttribPointer(5 + c, 4, gl.FLOAT, false, 64, c * 16);
+        gl.vertexAttribDivisor(5 + c, 1);
+      }
+      gl.bindVertexArray(null);
+      core.invalidateVAO();   // direct binds: keep glx.js's VAO bind cache honest
+      batch._shVao = v;
+      return v;
+    }
+
     function castShadowInstanced(batch, count) {
       if (gone() || !S.depthPassOn || !batch || !batch.instances) return;
       const n = count === undefined ? batch.instances : Math.min(count, batch.instances);
@@ -260,48 +286,20 @@ const GLXShadow = (function () {
         batch._cellKeyN = -1;
         // The buffer now holds the FULL set in source order — a stale repack
         // count would draw the wrong N props until the next cullInstances.
+        // (The lit VAO always points at ibo: shadow casts use _shadowVAO.)
         batch.visible = batch.instances;
-        // Ensure the VAO points at the camera ibo (a prior shadow draw may have
-        // rebound it to shadowIbo).
-        if (batch.shadowIbo) {
-          gl.bindVertexArray(batch.vao);
-          core.invalidateVAO();   // direct bind: keep glx.js's VAO bind cache honest (chunked.js does the same)
-          gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
-          for (let c = 0; c < 4; c++) {
-            gl.vertexAttribPointer(5 + c, 4, gl.FLOAT, false, 64, c * 16);
-          }
-          if (batch.cbo) {
-            gl.bindBuffer(gl.ARRAY_BUFFER, batch.cbo);
-            gl.vertexAttribPointer(9, 3, gl.FLOAT, false, 12, 0);
-          }
-        }
       } else if (count !== undefined && batch.shadowIbo && batch._shadowN === n) {
-        // Light-culled pack lives on shadowIbo — bind it for this draw only and
-        // leave the camera ibo / cell-set cache alone (upload:false contract).
-        gl.bindVertexArray(batch.vao);
-        core.invalidateVAO();   // direct bind, and this branch returns before bindVAO() runs
-        gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowIbo);
-        for (let c = 0; c < 4; c++) {
-          gl.vertexAttribPointer(5 + c, 4, gl.FLOAT, false, 64, c * 16);
+        // Light-culled pack lives on shadowIbo — draw it through the batch's
+        // depth VAO and leave the camera ibo / VAO / cell-set cache alone
+        // (upload:false contract).
+        const sv = _shadowVAO(batch);
+        if (sv) {
+          bindVAO(sv);
+          if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 1);
+          gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);
+          if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 0);
         }
-        if (batch.shadowCbo) {
-          gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowCbo);
-          gl.vertexAttribPointer(9, 3, gl.FLOAT, false, 12, 0);
-        }
-        if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 1);
-        gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);
-        if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 0);
-        // Restore the camera buffers so the lit pass does not draw from the
-        // light pack.
-        gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
-        for (let c = 0; c < 4; c++) {
-          gl.vertexAttribPointer(5 + c, 4, gl.FLOAT, false, 64, c * 16);
-        }
-        if (batch.cbo) {
-          gl.bindBuffer(gl.ARRAY_BUFFER, batch.cbo);
-          gl.vertexAttribPointer(9, 3, gl.FLOAT, false, 12, 0);
-        }
-        return;
+        return;   // no depth VAO (lost context): never fall through to the lit VAO's camera pack
       }
       bindVAO(batch.vao);
       if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 1);

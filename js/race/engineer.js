@@ -219,6 +219,8 @@ var RaceEngineer = (function () {
     function senseInto(c, out, dt) {
       const tyres = G.tyres;
       if (!tyres || !tyres.on() || !c || !c.tyre || c.retired || c.finished) return null;
+      // One façade read each: this runs every physics step and G is a dictionary-mode object (PERF-HUNT-2 S7).
+      const cars = G.cars, lapsTarget = G.lapsTarget, pits = G.pits;
       const b = bag(c);
       const wear = tyres.spent(c);
       // Which threshold has been crossed since the last call, if any. Monotonic
@@ -240,14 +242,14 @@ var RaceEngineer = (function () {
       // quarter-second old costs nothing). No dt (senseOf) = always fresh.
       let pit;
       if (dt > 0 && b.estT > 0 && "est" in b) { b.estT -= dt; pit = b.est; }
-      else { pit = G.pits && G.pits.estimate(c); b.est = pit; b.estT = EST_S; }
+      else { pit = pits && pits.estimate(c); b.est = pit; b.estT = EST_S; }
       const armed = !!c.pitArmed || (c.pitState && c.pitState !== "none");
       // …nor to one on the LAST lap (a qualifying lap is lapsTarget 1): a stop
       // there costs a place for nothing, and "BOX FOR WETS" with the flag in
       // sight is the one call that must not be obeyed.
       // A lapped car's last lap starts when the leader takes the flag, a lap
       // before its own counter says so.
-      const finalLap = (G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (!!G.cars && anyFlagged(G.cars));
+      const finalLap = (lapsTarget > 0 && (c.lap || 0) >= lapsTarget) || (!!cars && anyFlagged(cars));
       const noStop = armed || finalLap;
       if (armed) b.undercut = null;   // our own stop answers the undercut: never "BOX NOW" on the out-lap
       // "Rain in N laps" needs a lap estimate and the arc is in SECONDS. The
@@ -274,7 +276,7 @@ var RaceEngineer = (function () {
       // Resolved only when a box call can be made (a lap out or on it): this
       // runs every step, and resolving a set walks the owned tyre rows.
       const calling = nextCls != null && nextAt != null && nextAt - (c.lap || 0) <= 1;
-      const nextCode = !calling ? null : G.pits && G.pits.nextCode ? G.pits.nextCode(c) || null
+      const nextCode = !calling ? null : pits && pits.nextCode ? pits.nextCode(c) || null
         : TyreModel.AI_CLASS[nextCls] ? TyreModel.AI_CLASS[nextCls].code : null;
       let rivalBoxed = null;
       if (!b.stops) b.stops = new Map();
@@ -287,13 +289,13 @@ var RaceEngineer = (function () {
       const lossM = pit && pit.lossS != null ? pit.lossS * (lapS > 0 && G.track ? G.track.total / lapS : v) : 0;
       let ahead = null, aheadGap = Infinity, threat = null, threatGap = Infinity, rejoin = lapsToStop === 1 && lossM > 0 ? "" : null, rejoinProg = Infinity;
       const threatOn = lapsToStop != null && lapsToStop >= 1 && lapsToStop <= THREAT_REACH && wear >= 0.4 && pit && pit.lossS != null;
-      for (const o of (G.cars || [])) {
+      for (const o of (cars || [])) {
         if (o === c) continue;
         if (!o.retired && !o.finished && !(o.pitState && o.pitState !== "none")) {
           const gap = ((c.prog || 0) - (o.prog || 0)) / v;
           if (gap < 0 && -gap < PUSH_GAP_S && -gap < aheadGap) { ahead = o.code || "THE CAR"; aheadGap = -gap; }
-          if (threatOn && gap > 0 && gap < pit.lossS + 2 && gap < threatGap && G.pits && G.pits.windowOf) {
-            const w = G.pits.windowOf(o);
+          if (threatOn && gap > 0 && gap < pit.lossS + 2 && gap < threatGap && pits && pits.windowOf) {
+            const w = pits.windowOf(o);
             if (w && w[0] === "P" && +w.slice(1) - (o.lap || 0) <= 1) { threat = o.code || "RIVAL"; threatGap = gap; }
           }
           const back = (c.prog || 0) - (o.prog || 0);
@@ -323,7 +325,7 @@ var RaceEngineer = (function () {
       out.rejoin = rejoin; out.planned = !!plan;
       out.ahead = noStop ? null : ahead; out.aheadGap = ahead ? aheadGap : null;
       out.setLaps = tyres.lapsLeft ? tyres.lapsLeft(c) : null;
-      out.stintLeft = noStop ? null : lapsToStop != null ? lapsToStop : Math.max(0, (G.lapsTarget || 0) - lap + 1);
+      out.stintLeft = noStop ? null : lapsToStop != null ? lapsToStop : Math.max(0, (lapsTarget || 0) - lap + 1);
       out.marginS = pit ? pit.marginS : null;
       out.axle = wear >= AXLE_MIN_WEAR && c.tyreWearF != null ? Math.abs(c.tyreWearF - c.tyreWearR) / wear : 0;
       out.front = c.tyreWearF != null ? c.tyreWearF > c.tyreWearR : ax.f < ax.r;
@@ -337,7 +339,7 @@ var RaceEngineer = (function () {
       // Nothing about stopping is worth saying to a driver who has already
       // called one — the banner said BOX THIS LAP when they pressed it.
       out.wrongTread = !noStop && (c.tyre.tread || 0) !== wantTread;
-      out.oneCompound = !noStop && !!(G.pits && G.pits.compoundDue && G.pits.compoundDue(c));
+      out.oneCompound = !noStop && !!(pits && pits.compoundDue && pits.compoundDue(c));
       // A discounted stop needs something to gain: a part-used set.
       // The estimate includes lane travel and stationary service time — it is
       // advice with a tilde, never a promise of a free stop.
@@ -346,7 +348,7 @@ var RaceEngineer = (function () {
       // the flag. With neither, "box under the caution" is a stop the race
       // does not need, however cheap.
       const stopDue = lapsToStop != null
-        || (out.setLaps != null && G.lapsTarget > 0 && out.setLaps + 0.5 < G.lapsTarget - lap + 1);
+        || (out.setLaps != null && lapsTarget > 0 && out.setLaps + 0.5 < lapsTarget - lap + 1);
       out.cheapStop = !noStop && stopDue && cautionLvl >= 2 && cautionLvl < 4 && wear >= 0.35;
       out.wet = wantTread > 0;
       out.noStop = noStop; out.finalLap = finalLap;
