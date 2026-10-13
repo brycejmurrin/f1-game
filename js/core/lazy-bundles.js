@@ -173,11 +173,17 @@ function fetchScenery(id) {
 // session-entry-vm holds the request to prove a start survives it); the next
 // ask fetches again, so nothing is negatively cached.
 async function ensureScenery(idx) {
-  // Path payload before scenery: Tracks.build / buildCenterline need def.path.
+  // The closure's fetch needs only def.id, so it goes out BESIDE the path
+  // payload, not after it: one round trip, not two, on a circuit's first visit
+  // (perf hunt 2 T8). Still ONE fetch per ask — the second read below awaits
+  // this one, never a new request. A custom circuit keeps the serial path.
+  const def0 = Tracks.LIST[idx];
+  const early = def0 && !def0.custom && !def0.scenery && !sceneryResident(def0.id) ? fetchScenery(def0.id) : null;
+  // Path payload before the BUILD: Tracks.build / buildCenterline need def.path.
   await ensureCircuit(idx);
   const def = Tracks.LIST[idx];
   if (def && !def.scenery && !sceneryResident(def.id)) {   // def.scenery: an inline closure (a custom circuit) — nothing to fetch
-    await fetchScenery(def.id);
+    await (early && def === def0 ? early : fetchScenery(def.id));
     if (!sceneryResident(def.id)) {
       Log.warn("track", "scenery closure did not load: " + def.id + " — the world builds bare");
       return false;

@@ -623,6 +623,51 @@ const TrackMesh = (function () {
       if (doSort) for (let a = 1; a < cnt; a++) { const v = out[a]; let b = a - 1; while (b >= 0 && out[b] > v) { out[b + 1] = out[b]; b--; } out[b + 1] = v; }
       return cnt;
     };
+    // query()'s square, narrowed to the cells of rectangle A UNION rectangle B
+    // (world [x0, x1, z0, z1]; B may be null). Cells are walked in query()'s
+    // own cx-then-cz order and each cell's nodes in insertion order, so the
+    // result is query()'s candidate list with the nodes outside A ∪ B removed
+    // and nothing reordered: a first-hit caller whose hit can only lie in A ∪ B
+    // returns the same answer. A thin box 8 km long swept a 1.6 km-wide square
+    // of 10 m cells (Monaco's open-sea sheet: 73 % of its build, hunt 2 T1).
+    grid.queryRects = (x, z, R, a, b, out) => {
+      let cnt = 0;
+      const X0 = __M.floor((x - R) / CELL), X1 = __M.floor((x + R) / CELL);
+      const Z0 = __M.floor((z - R) / CELL), Z1 = __M.floor((z + R) / CELL);
+      const ax0 = __M.max(X0, __M.floor(a[0] / CELL)), ax1 = __M.min(X1, __M.floor(a[1] / CELL));
+      const az0 = __M.max(Z0, __M.floor(a[2] / CELL)), az1 = __M.min(Z1, __M.floor(a[3] / CELL));
+      let bx0 = 1, bx1 = 0, bz0 = 1, bz1 = 0;
+      if (b) {
+        bx0 = __M.max(X0, __M.floor(b[0] / CELL)); bx1 = __M.min(X1, __M.floor(b[1] / CELL));
+        bz0 = __M.max(Z0, __M.floor(b[2] / CELL)); bz1 = __M.min(Z1, __M.floor(b[3] / CELL));
+      }
+      const aOk = ax0 <= ax1 && az0 <= az1, bOk = bx0 <= bx1 && bz0 <= bz1;
+      if (!aOk && !bOk) return 0;
+      const cx0 = aOk ? (bOk ? __M.min(ax0, bx0) : ax0) : bx0, cx1 = aOk ? (bOk ? __M.max(ax1, bx1) : ax1) : bx1;
+      for (let cx = cx0; cx <= cx1; cx++) {
+        const inA = aOk && cx >= ax0 && cx <= ax1, inB = bOk && cx >= bx0 && cx <= bx1;
+        if (!inA && !inB) continue;
+        // One cz interval, or two ascending ones (merged when they touch).
+        let lo0, hi0, lo1 = 1, hi1 = 0;
+        if (inA && inB) {
+          const fa = az0 <= bz0;
+          lo0 = fa ? az0 : bz0; hi0 = fa ? az1 : bz1; lo1 = fa ? bz0 : az0; hi1 = fa ? bz1 : az1;
+          if (lo1 <= hi0 + 1) { if (hi1 > hi0) hi0 = hi1; lo1 = 1; hi1 = 0; }
+        } else if (inA) { lo0 = az0; hi0 = az1; } else { lo0 = bz0; hi0 = bz1; }
+        const key0 = (cx + OFFSET) * STRIDE + OFFSET;
+        for (let cz = lo0; cz <= hi0; cz++) {
+          const arr = map.get(key0 + cz);
+          if (!arr) continue;
+          for (let i = 0; i < arr.length; i++) out[cnt++] = arr[i];
+        }
+        for (let cz = lo1; cz <= hi1; cz++) {
+          const arr = map.get(key0 + cz);
+          if (!arr) continue;
+          for (let i = 0; i < arr.length; i++) out[cnt++] = arr[i];
+        }
+      }
+      return cnt;
+    };
     track._nodeGrid = grid;
     return grid;
   }
