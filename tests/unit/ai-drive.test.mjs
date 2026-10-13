@@ -1625,7 +1625,9 @@ for (const p of [1, 0.469]) {
 
 test("game.js hands wantBoost and defendPull the pace envelope (vTop)", () => {
   const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
-  assert.match(game, /_aiBoost\.vTop = vTop\(\)/, "wantBoost's tolerances need vTop");
-  assert.match(game, /_aiDefend\.vTop = vTop\(\)/, "defendPull's not-closing gate needs vTop");
+  // updateCar reads vTop() once per car step into `vT` (PERF-HUNT-2 S4); either spelling is the envelope.
+  assert.match(game, /_aiBoost\.vTop = (?:vTop\(\)|vT);/, "wantBoost's tolerances need vTop");
+  assert.match(game, /_aiDefend\.vTop = (?:vTop\(\)|vT);/, "defendPull's not-closing gate needs vTop");
+  if (/\.vTop = vT;/.test(game)) assert.match(game, /\bconst vT = vTop\(\)/, "vT is vTop()");
   assert.match(game, /_aiBr\.pace = PACE; _aiBr\.vmax = VMAX/, "brakeTarget reads vScale from pace");
 });

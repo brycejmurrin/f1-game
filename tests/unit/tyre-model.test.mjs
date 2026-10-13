@@ -275,8 +275,10 @@ test("the player's top speed pays for worn rubber, as the AI's does", () => {
   // The AI's vmax took tractionMul; the player's took none, and perfMul only
   // slows the climb to vmax (ACCEL·perfMul·(1 − v/vmax)), never the cap.
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  assert.match(src, /else if \(c\.human\) vmax \*= tyres\.tractionMul\(c\)/,
+  // updateCar reads tractionMul ONCE per car step into `trMul` (PERF-HUNT-2 S4); either spelling carries it.
+  assert.match(src, /else if \(c\.human\) vmax \*= (?:tyres\.tractionMul\(c\)|trMul)/,
     "the human branch of the speed target must carry the tyre's traction");
+  if (/vmax \*= trMul/.test(src)) assert.match(src, /\btrMul = tyres\.tractionMul\(c\)/, "trMul is the car's own tractionMul");
 });
 
 test("ambient temperature follows a weather arc, not the flip of raceWeather", () => {
