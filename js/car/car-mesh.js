@@ -575,14 +575,6 @@ function _flatQuadData(w, h, col) {
   out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
   return out;
 }
-// getRainLight / getEndplateLight stay PRIVATE — only drawRearLights reaches
-// them, the same way getAeroLamp / getAeroBar sit behind drawWheelExtras.
-let rainLightMesh = null;
-function getRainLight() {
-  if (rainLightMesh) return rainLightMesh;
-  rainLightMesh = _gfx.createMesh(_flatQuadData(0.068, 0.082, [1.75, 0.18, 0.12]));
-  return rainLightMesh;
-}
 const _exhaustMeshes = {};
 function getExhaustFlame(color) {
   const R = Array.isArray(color) ? color : [2.6, 1.05, 0.25];
@@ -1687,35 +1679,43 @@ function gridStrobe(countT) { return ((countT * 5.0) % 1) < 0.5; }
 // (y 0.475..0.755 at level 0, 0.525..1.105 at level 4). y 0.62 is inside the
 // plate at all five, so this needs no per-car aero lookup. z -2.705 clears the
 // face by the same 15 mm the RIS light uses against its own housing.
-let _epLightMesh = null;
-function getEndplateLight() {
-  if (_epLightMesh) return _epLightMesh;
-  _epLightMesh = _gfx.createMesh(_flatQuadData(0.030, 0.038, [1.75, 0.18, 0.12]));
-  return _epLightMesh;
+// ONE mesh, ONE draw per car: the three quads used to be three draws of two
+// meshes through a per-light matrix, three render objects per lit car. Their
+// car-local offsets are constants, so they are baked into the vertices
+// (mat * (v + o) == (mat * T(o)) * v, identical up to float32 rounding of the
+// baked position). Order inside the mesh is the old draw order: RIS, left, right.
+const REAR_LIGHTS = Object.freeze({
+  ris: Object.freeze([0, 0.50, -2.615]),        // 0.50 up, 2.615 back: 15 mm behind the baked LED face (z -2.60) — coplanar quads z-fight
+  endplate: Object.freeze([0.50, 0.62, -2.705]), // x +-0.50, see the endplate anchor note above
+});
+// Append quad `q` (a {pos,nrm,col,idx} mesh body) to `out`, translated by (ox, oy, oz).
+function _appendAt(out, q, ox, oy, oz) {
+  const base = out.pos.length / 3;
+  for (let i = 0; i < q.pos.length; i += 3) out.pos.push(q.pos[i] + ox, q.pos[i + 1] + oy, q.pos[i + 2] + oz);
+  for (let i = 0; i < q.nrm.length; i++) out.nrm.push(q.nrm[i]);
+  for (let i = 0; i < q.col.length; i++) out.col.push(q.col[i]);
+  for (let i = 0; i < q.idx.length; i++) out.idx.push(q.idx[i] + base);
+  return out;
 }
-// Its own scratch and its own opts bag ON PURPOSE. game.js's _ringWorld /
-// _rainLightOpts are shared singletons walked by the brake ring, the ERS strip
-// and the flame inside one loop iteration; a helper that wrote a field on one of
-// them would leak it into every later draw that frame.
-const _rlW = new Float32Array(16);
+let _rearLightSet = null;
+function getRearLightSet() {
+  if (_rearLightSet) return _rearLightSet;
+  const out = { pos: [], nrm: [], col: [], idx: [] }, R = REAR_LIGHTS.ris, E = REAR_LIGHTS.endplate;
+  _appendAt(out, _flatQuadData(0.068, 0.082, [1.75, 0.18, 0.12]), R[0], R[1], R[2]);   // the RIS light
+  const ep = _flatQuadData(0.030, 0.038, [1.75, 0.18, 0.12]);
+  _appendAt(out, ep, -E[0], E[1], E[2]);
+  _appendAt(out, ep, E[0], E[1], E[2]);
+  return (_rearLightSet = _gfx.createMesh(out));
+}
+// Its own opts bag ON PURPOSE. game.js's _ringWorld / _rainLightOpts are shared
+// singletons walked by the brake ring, the ERS strip and the flame inside one
+// loop iteration; a helper that wrote a field on one of them would leak it into
+// every later draw that frame. The backends copy the matrix at draw time, so
+// `mat` goes straight through.
 const _RL_FX = { emissive: 1, roughness: 0.9, specular: 0, noAlphaWrite: true };
 function drawRearLights(mat, emissive) {
   _RL_FX.emissive = emissive;
-  const W = _rlW;
-  // RIS light: 0.50 up, 2.615 back — 15 mm behind the baked LED face (z -2.60),
-  // because coplanar quads z-fight.
-  W.set(mat);
-  W[12] += W[4] * 0.50 - W[8] * 2.615;
-  W[13] += W[5] * 0.50 - W[9] * 2.615;
-  W[14] += W[6] * 0.50 - W[10] * 2.615;
-  _gfx.draw(getRainLight(), W, _RL_FX);
-  for (const s of [-1, 1]) {
-    W.set(mat);
-    W[12] += W[0] * (s * 0.50) + W[4] * 0.62 - W[8] * 2.705;
-    W[13] += W[1] * (s * 0.50) + W[5] * 0.62 - W[9] * 2.705;
-    W[14] += W[2] * (s * 0.50) + W[6] * 0.62 - W[10] * 2.705;
-    _gfx.draw(getEndplateLight(), W, _RL_FX);
-  }
+  _gfx.draw(getRearLightSet(), mat, _RL_FX);
 }
 // STRAIGHT-MODE telltale: an emissive trailing-edge strip on the top rear
 // flap (and the top front flap). Same draw path as the rain light — existing
@@ -1775,7 +1775,15 @@ function drawAeroEdge(modelMat, aLvl, style, blend) {
 // VM, a backend without decals) — the lens itself still draws either way.
 let _tgMesh = null, _tgTex = null, _tgTried = false;
 const _tgW = new Float32Array(16);
-const _TG_OPTS = { glow: 1.6 };   // one constant: glow is part of the decal program key
+// One constant: glow is part of the decal program key. `batch` lets a backend that
+// run-instances decals (TLX: gfx.decalRuns) draw the queued field as ONE object.
+const _TG_OPTS = { glow: 1.6, batch: true };
+// THE QUEUE (perf hunt 2 F3): on a decalRuns backend the matrices wait here and
+// flushTailGlows() draws them back to back after the car loop, a contiguous run
+// TLX instances (~19 render objects a night frame -> 1). Same matrices, same
+// submission order; decals write no depth. GLX / WGX draw at once, as before.
+const _tgQ = [];
+let _tgN = 0;
 function _tailGlowRes() {
   if (_tgTried) return _tgMesh && _tgTex;
   _tgTried = true;
@@ -1834,34 +1842,40 @@ function drawTailGlow(groundMat, amt, track, s) {
     W[12 + i] = groundMat[12 + i] + groundMat[4 + i] * 0.08 - groundMat[8 + i] * dc + up * rise;
   }
   W[3] = W[7] = W[11] = 0; W[15] = 1;
-  _gfx.drawDecal(_tgMesh, W, _tgTex, _TG_OPTS);
+  if (_gfx.decalRuns !== true) { _gfx.drawDecal(_tgMesh, W, _tgTex, _TG_OPTS); return; }
+  (_tgQ[_tgN] || (_tgQ[_tgN] = new Float32Array(16))).set(W);
+  _tgN++;
+}
+// After the car loop (game.js render): the queued tail glows, in queue order.
+function flushTailGlows() {
+  for (let i = 0; i < _tgN; i++) _gfx.drawDecal(_tgMesh, _tgQ[i], _tgTex, _TG_OPTS);
+  _tgN = 0;
 }
 // 2026 amber mirror lamps: a car under 20 km/h or stopped lights amber on both
 // mirror housings (The Race, 2026 rear-lights explainer). A SIDE-facing quad in
 // the yz plane — the rear lights face -z and would read edge-on here.
-let _mirrorLightMesh = null;
-function getMirrorLight() {
-  if (_mirrorLightMesh) return _mirrorLightMesh;
-  const A = [2.3, 1.25, 0.12], out = { pos: [], nrm: [], col: [], idx: [] };
+// One quad per side, baked at the anchors into one mesh per anchors RESULT:
+// Car3D.mirrorLightAnchors hands back a frozen array cached per (team, scale),
+// so its identity is the key (one draw per car, was two).
+const _mirrorLightSets = new WeakMap();
+function getMirrorLightSet(anchors) {
+  let m = _mirrorLightSets.get(anchors);
+  if (m) return m;
+  const A = [2.3, 1.25, 0.12], q = { pos: [], nrm: [], col: [], idx: [] };
   const h = 0.018, d = 0.030;
-  out.pos.push(0, -h, -d,  0, -h, d,  0, h, d,  0, h, -d);
-  for (let i = 0; i < 4; i++) { out.nrm.push(1, 0, 0); out.col.push(A[0], A[1], A[2]); }
-  out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
-  _mirrorLightMesh = _gfx.createMesh(out);
-  return _mirrorLightMesh;
+  q.pos.push(0, -h, -d,  0, -h, d,  0, h, d,  0, h, -d);
+  for (let i = 0; i < 4; i++) { q.nrm.push(1, 0, 0); q.col.push(A[0], A[1], A[2]); }
+  q.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  for (let i = 0; i < anchors.length; i++) _appendAt(out, q, anchors[i].x, anchors[i].y, anchors[i].z);
+  m = _gfx.createMesh(out);
+  _mirrorLightSets.set(anchors, m);
+  return m;
 }
 // `anchors` is Car3D.mirrorLightAnchors(teamId, scale): one {x,y,z} per side.
 function drawMirrorLights(mat, anchors) {
   _RL_FX.emissive = 1;
-  const W = _rlW;
-  for (let i = 0; i < anchors.length; i++) {
-    const a = anchors[i];
-    W.set(mat);
-    W[12] += W[0] * a.x + W[4] * a.y + W[8] * a.z;
-    W[13] += W[1] * a.x + W[5] * a.y + W[9] * a.z;
-    W[14] += W[2] * a.x + W[6] * a.y + W[10] * a.z;
-    _gfx.draw(getMirrorLight(), W, _RL_FX);
-  }
+  _gfx.draw(getMirrorLightSet(anchors), mat, _RL_FX);
 }
 // The 2026 rear-light ERS code (The Race): ONE short flash, repeating, while the
 // MGU-K deploys at full power; a RAPID flash when the battery is full and the K
@@ -1888,7 +1902,7 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, getMirrorFallback, getMirrorGlass, MIRROR_GLASS_V, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getAeroFlapSet, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawClassicTelemetry, drawRearLights, drawAeroEdge, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe,
+  return { init, getMirrorFallback, getMirrorGlass, MIRROR_GLASS_V, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getAeroFlapSet, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawClassicTelemetry, drawRearLights, REAR_LIGHTS, drawAeroEdge, drawTailGlow, flushTailGlows, drawMirrorLights, ersLightCode, gridStrobe,
     cockpitWheelRoll, WHEEL_ROLL_LAMBDA, getForearm, suitColour, forearmEnds, forearmMatrix, drawForearms, ARM_R, ARM_TAPER };
 })();
 Object.freeze(CarMesh);

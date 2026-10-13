@@ -37,6 +37,13 @@ function load(withShade, storage, search) {
   return { Car3D: grab("Car3D"), CarShade: withShade ? grab("CarShade") : null, Parts: grab("Parts"), Teams: grab("Teams") };
 }
 const { Car3D, CarShade, Parts, Teams } = load(true);
+// The rear-light offsets car-mesh.js bakes into its one-draw rear-light mesh (CarMesh.REAR_LIGHTS).
+const REAR_LIGHTS = (() => {
+  const ctx = { Math, Object, Array, Float32Array, Map, Set, WeakMap, Log: { info() {}, warn() {}, error() {}, debug() {} } };
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/car-mesh.js"), "utf8"), ctx, { filename: "js/car/car-mesh.js" });
+  return vm.runInContext("CarMesh.REAR_LIGHTS", ctx);
+})();
 
 test("the rounded section keeps the trapezoid's envelope: top, bottom and mid-flank are where the flat faces were", () => {
   const f = { z: 1, y: 0.4, w: 0.30, h: 0.12, t: 0.7, x: 0.05 };
@@ -400,7 +407,7 @@ test("the rounded car keeps what is placed against its small parts: endplate boa
     CarShade.endplate(o, ep, 1, [0, 0, 0], [1, 1, 1], null, o.tri);
     // The plate's outer face (x 0.521) holds the number board's footprint (car3d part
     // "sponsorBoard": z -2.27..-2.57) and its rear edge the endplate light (car-mesh.js
-    // drawRearLights: y 0.62 +- 0.017 at z -2.69).
+    // REAR_LIGHTS.endplate, baked into the rear-light mesh: y +- 0.017 just behind the rear face).
     const outer = o.tris.filter((t) => t.every((p) => Math.abs(p[0] - 0.521) < 1e-9));
     const inside = (z, y) => outer.some(([a, b, c]) => {
       const s = (p, q) => (q[2] - p[2]) * (y - p[1]) - (q[1] - p[1]) * (z - p[2]);
@@ -417,7 +424,9 @@ test("the rounded car keeps what is placed against its small parts: endplate boa
       assert.ok(inside(z, y), `level ${lvl}: board corner z ${z} y ${y.toFixed(3)} on the plate`);
     }
     assert.ok(held >= 3, `level ${lvl}: the flat plate held the board`);
-    for (const y of [0.603, 0.637]) assert.ok(inside(ep.rear.z + 1e-6, y), `level ${lvl}: the rear edge carries the light at y ${y}`);
+    const [epx, epy, epz] = REAR_LIGHTS.endplate;
+    assert.ok(Math.abs(epx - 0.50) < 0.03 && epz < ep.rear.z && epz > ep.rear.z - 0.02, `level ${lvl}: the endplate light sits just behind the plate's rear face`);
+    for (const y of [epy - 0.017, epy + 0.017]) assert.ok(inside(ep.rear.z + 1e-6, y), `level ${lvl}: the rear edge carries the light at y ${y}`);
     const all = o.tris.flat();
     assert.ok(Math.max(...all.map((p) => p[1])) <= ep.rear.top + 0.009 + 1e-9, `level ${lvl}: the crown stays where the flat strip was`);
     assert.ok(Math.min(...all.map((p) => p[2])) >= ep.rear.z - 1e-9, `level ${lvl}: nothing behind the plate's rear face`);

@@ -34,6 +34,11 @@ var MarshalPanels = (function () {
     const P = (deps && deps.Particles) || (typeof Particles !== "undefined" ? Particles : null);
     const _postsBy = new WeakMap();   // per track object, weakly: never pins a dropped world
     let _t = 0, _prevLevel = 0, _greenT = 0, _sector = -1, _infoT = -1;
+    // Pooled (perf hunt 2 F7): the answer showing() hands back, and the nearest-N
+    // selection's distances and post indices. A caution ran a filter, a copy, a
+    // full sort with a closure and a slice over every post, every frame.
+    const _show = { col: null, flash: 1, sector: -1 };
+    const _selD = new Float64Array(NEAREST_N), _selI = new Int32Array(NEAREST_N);
 
     // Every marshal post's panel position and sector, or null; memoised per track.
     function postsFor(track) {
@@ -64,6 +69,7 @@ var MarshalPanels = (function () {
     }
 
     // What the panels show this frame: { col, flash, sector } or null for dark.
+    // ONE pooled object, rewritten by the next call: read it before calling again.
     function showing(dt) {
       const lvl = G.cautionLevel ? G.cautionLevel() : 0;
       if (lvl === 0 && _prevLevel > 0) _greenT = GREEN_S;
@@ -71,7 +77,8 @@ var MarshalPanels = (function () {
       if (lvl === 0) {
         if (!(_greenT > 0)) return null;
         _greenT -= dt;
-        return { col: COL.green, flash: 1, sector: -1 };
+        _show.col = COL.green; _show.flash = 1; _show.sector = -1;
+        return _show;
       }
       let sector = -1;
       if (lvl === 1) {
@@ -86,7 +93,8 @@ var MarshalPanels = (function () {
       }
       const waved = lvl === 1 || lvl === 4;
       const flash = waved ? (Math.sin(_t * Math.PI * 4) > 0 ? 1 : 0.25) : 1;   // 2 Hz
-      return { col: lvl === 4 ? COL.red : COL.yellow, flash, sector };
+      _show.col = lvl === 4 ? COL.red : COL.yellow; _show.flash = flash; _show.sector = sector;
+      return _show;
     }
 
     function update(dt) {
@@ -102,14 +110,32 @@ var MarshalPanels = (function () {
       const posts = postsFor(G.track);
       if (!posts) return;
       const eye = (G.frame && G.frame.eye) || null;
-      let lit = posts;
-      if (show.sector >= 0) lit = lit.filter((p) => p.sector === show.sector);
-      if (eye && lit.length > NEAREST_N) {
-        lit = lit.slice().sort((a, b) =>
-          ((a.x - eye[0]) ** 2 + (a.z - eye[2]) ** 2) - ((b.x - eye[0]) ** 2 + (b.z - eye[2]) ** 2)).slice(0, NEAREST_N);
+      const sec = show.sector, c = show.col, a = 0.9 * show.flash;
+      const r = c[0] * GAIN, g = c[1] * GAIN, b = c[2] * GAIN;
+      let lit = 0;
+      for (let i = 0; i < posts.length; i++) if (sec < 0 || posts[i].sector === sec) lit++;
+      // Every post fits (or there is no eye to rank from): all of them, in registry order.
+      if (!eye || lit <= NEAREST_N) {
+        for (let i = 0; i < posts.length; i++) {
+          const p = posts[i];
+          if (sec < 0 || p.sector === sec) P.flare(p.x, p.y, p.z, 0.45, r, g, b, a, true);
+        }
+        return;
       }
-      const c = show.col, a = 0.9 * show.flash;
-      for (const p of lit) P.flare(p.x, p.y, p.z, 0.45, c[0] * GAIN, c[1] * GAIN, c[2] * GAIN, a, true);
+      // The NEAREST_N to the eye, nearest first: an insertion select over the
+      // candidates in registry order that places a tie AFTER its equals, so the
+      // panels and their order are exactly what the stable sort + slice gave.
+      let n = 0;
+      for (let i = 0; i < posts.length; i++) {
+        const p = posts[i];
+        if (sec >= 0 && p.sector !== sec) continue;
+        const d = (p.x - eye[0]) ** 2 + (p.z - eye[2]) ** 2;
+        if (n === NEAREST_N && !(d < _selD[n - 1])) continue;
+        let j = n < NEAREST_N ? n++ : n - 1;
+        while (j > 0 && _selD[j - 1] > d) { _selD[j] = _selD[j - 1]; _selI[j] = _selI[j - 1]; j--; }
+        _selD[j] = d; _selI[j] = i;
+      }
+      for (let k = 0; k < n; k++) { const p = posts[_selI[k]]; P.flare(p.x, p.y, p.z, 0.45, r, g, b, a, true); }
     }
 
     return { update, postsFor, showing };

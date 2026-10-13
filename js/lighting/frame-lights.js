@@ -152,6 +152,12 @@ const _lightScaleBuf = [];
 // (WGX's trackLightSBO upload) — it moves when the VALUES move.
 const _allLightsBuf = [];
 let _allLightsGen = 0;
+// frame.lampSetGen: moves when the lamp SET or its SCALE moves (a new source
+// array, a length change, a new time-of-day / LAMP LEVEL scale) and never for
+// flicker or warm-up. game.js's env-probe hold latches on it: latched on
+// allLightsGen, the hold broke on every flicker refresh and the GLX probe kept
+// re-rendering a parked car's cube all night (perf hunt 2 F9).
+let _lampSetGen = 0, _lsSrc = null, _lsLen = -1, _lsR = NaN, _lsG = NaN, _lsB = NaN;
 const _gHeap = [];             // pooled max-heap of GEOMETRIC squared distances (see gCap)
 const _byDistAsc = (a, b) => a.d - b.d;   // hoisted sort comparator (no per-frame closure)
 // The CAP-th smallest value in `buf[i].g` — the radius an UNBIASED nearest-CAP cull
@@ -302,6 +308,16 @@ function glowFade() {
 // track._lights and the next build mints a NEW array, so identity is the whole
 // key. Length is checked too, so a set that grows in place cannot slip through.
 let _alSrc = null, _alLen = -1;
+// TINT RATE (perf hunt 2 F4). When only the flicker / warm-up term moves — same
+// source, same scale, same factor function — the whole-set re-tint runs at most
+// every _AL_MIN_DT of wall clock instead of every frame. Every frame it bumped
+// _allLightsGen, which made TLX repack and upload its lamp-grid colours each
+// frame for a flicker whose fastest term is sin(t * (6 + 9 * hsh)) <= 15 rad/s
+// = 2.4 Hz: a 20 Hz sample is ~8x its Nyquist rate. A source or scale change
+// refreshes at once. frame.lights (the near, ranked set) keeps its per-frame
+// flicker; this is the per-chunk / grid twin only. tNow absent = every call.
+const _AL_MIN_DT = 0.05;
+let _alR = NaN, _alG = NaN, _alB = NaN, _alFl = null, _alT = -1e9;
 // Of the 15 lanes per lamp, TWELVE are baked-static — position, radius, cone
 // dir/cos, bleed, volW, glareW. The comment on setFrameLights says so outright:
 // positions are copied verbatim and flicker scales rgb only. This function
@@ -309,10 +325,17 @@ let _alSrc = null, _alLen = -1;
 // track, on BOTH backends, whenever per-chunk lamps are on — which after the
 // round-6 work is every preset in every condition. Copy the statics once per
 // source array; write the three that can actually move.
-function _fillAllLights(frame, src, sr, sg, sb, fl) {
+function _fillAllLights(frame, src, sr, sg, sb, fl, tNow) {
   const out = _allLightsBuf;
   const n = src.length;
   const fresh = _alSrc !== src || _alLen !== n;
+  if (!fresh && tNow != null && fl === _alFl && sr === _alR && sg === _alG && sb === _alB
+      && out.length === n && tNow - _alT >= 0 && tNow - _alT < _AL_MIN_DT) {
+    frame.allLights = out;
+    frame.allLightsGen = _allLightsGen;
+    return;
+  }
+  _alR = sr; _alG = sg; _alB = sb; _alFl = fl; _alT = tNow != null ? tNow : -1e9;
   let changed = out.length !== n;
   if (fresh) {
     if (out.length !== n) out.length = n;
@@ -591,6 +614,10 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
     if (floor > sg) sg = floor;
     if (floor > sb) sb = floor;
   }
+  if (src !== _lsSrc || src.length !== _lsLen || sr !== _lsR || sg !== _lsG || sb !== _lsB) {
+    _lampSetGen++; _lsSrc = src; _lsLen = src.length; _lsR = sr; _lsG = sg; _lsB = sb;
+  }
+  frame.lampSetGen = _lampSetGen;
   const count = src.length / 15;
   const out = _lightScaleBuf;
   // Per-lamp FLICKER, computed CPU-side each frame (zero shader cost): healthy
@@ -613,7 +640,7 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   }
   _lampHid = false;
   _lampLastT = tNow; _lampLastRT = rt === null ? -1e9 : rt;
-  _lampTrackRef = track ? new WeakRef(track) : null;
+  if (track !== prevTrack) _lampTrackRef = track ? new WeakRef(track) : null;   // a new weak cell only when the track changed (hunt 2 F10)
   // Skip sin/hash work when intensity would be unchanged: flicker knob at 0 and
   // warmup fully settled (or warmup knob 0 = instant). Max warmDur is 8×knob.
   const flick = LT.lampFlicker || 0;
@@ -647,13 +674,13 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
     out.length = j;
     lum.length = j / 15;
     frame.lights = out;
-    if (frame.perChunkLights > 0) _fillAllLights(frame, src, sr, sg, sb, fl);
+    if (frame.perChunkLights > 0) _fillAllLights(frame, src, sr, sg, sb, fl, tNow);
     return;
   }
   _rankSet(_S_MAIN, src, count, CAP, eye, fwd, sr, sg, sb, fl, tNow, out);
   _last.src = src; _last.cap = CAP; _last.sr = sr; _last.sg = sg; _last.sb = sb; _last.fl = fl; _last.tNow = tNow; _last.ranked = true;
   frame.lights = out;
-  if (frame.perChunkLights > 0) _fillAllLights(frame, src, sr, sg, sb, fl);
+  if (frame.perChunkLights > 0) _fillAllLights(frame, src, sr, sg, sb, fl, tNow);
 }
 
   return { setFrameLights, appendCarTailLights, glowFade, viewLights };

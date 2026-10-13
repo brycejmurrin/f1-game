@@ -262,7 +262,8 @@ test("the mirror and the PiP draw rivals via teamBodyMesh + the field wheels, ne
   assert.doesNotMatch(mp, /teamMesh/, "mirror-pass.js reaches no whole-car mesh");
   assert.match(mp, /const \{ drawWorldMeshes, drawCar, /);
   assert.match(mp, /drawCar\(c, _mat, paint, night\);/, "the uncapped loop (apex26.fieldLod=0)");
-  assert.match(mp, /if \(_cKeep\[i\]\) \{ drawCar\(_cCars\[i\], _cMats\[i\], paint, night\); _cars\+\+; \}/, "the FieldLod nearest-6 loop");
+  // Hunt 2 F6: ranked on renderPosOf, so only the kept cars are posed, just before their draw.
+  assert.match(mp, /if \(_cKeep\[i\]\) \{\s*if \(!_cPosed\[i\]\) \{ pose\(_cCars\[i\]\); basisMat\(_R, _U, _F, _P, _cMats\[i\]\); \}\s*drawCar\(_cCars\[i\], _cMats\[i\], paint, night\); _cars\+\+;/, "the FieldLod nearest-6 loop");
   assert.match(game, /MirrorPass\.create\(G, \{ drawWorldMeshes, drawCar: carDraw\.drawMirrorCar,/);
   const fn = cd.match(/function drawMirrorCar\(c, mat, paint, night\) \{[\s\S]*?\n {4}\}/);
   assert.ok(fn, "CarDraw.drawMirrorCar");

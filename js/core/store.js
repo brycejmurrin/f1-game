@@ -31,6 +31,7 @@ const GameStore = (function () {
     _clearRev: 0,        // storage.clear() invalidates every key without naming one
     _listeners: new Set(),
     rev: 0,              // bumped on every set — memo caches key off this to self-invalidate
+    rawRev: 0,           // bumped on every rawSet / rawDel — the raw lane's twin of `rev` for a memo over raw()
     broken: null,
     // `d` is the CALL-SITE default; js/data/settings-defaults.js outranks it when
     // it names this key, so a shipped default lives in one file instead of in
@@ -195,12 +196,14 @@ const GameStore = (function () {
     rawSet(k, v) {
       const key = fullKey(k);
       this._cache.delete(key);   // a key lives in one lane; if one ever strays, the disk wins
+      this.rawRev++;
       try { setRoomy(key, v); _writeFails.delete(key); return true; }
       catch (e) { noteBroken(e, "write " + k); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", v }); return false; }
     },
     rawDel(k) {
       const key = fullKey(k);
       this._cache.delete(key);
+      this.rawRev++;
       try { localStorage.removeItem(key); _writeFails.delete(key); return true; }
       catch (e) { noteBroken(e, "remove " + k); return false; }
     },

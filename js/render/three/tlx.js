@@ -2157,6 +2157,33 @@ const TLX = (function () {
         im.needsUpdate = true;
         return true;
       }
+      // F3 (hunt 2) — A6 FOR drawDecal: a contiguous run of opts.batch decals on one
+      // geometry and material (CarMesh's tail glows, flushed after the car loop) is ONE
+      // InstancedMesh at the run's first slot, in submission order, under A6's guards.
+      // The quad is planar (y = 0): the Y column moves no vertex and carries Z x X, the
+      // per-record inverse-transpose normal once three's faceDirection is counted (an
+      // identity matrixWorld never flips the front face for a det < 0 instance).
+      const _decalRuns = new Map();   // geometry -> run
+      function _decalAppend(geo, w, mat) {
+        if (skipBatches()) return false;
+        let b = _decalRuns.get(geo);
+        if (!b) {
+          const im = new THREE.InstancedMesh(geo, mat, (window.TLXShaders && TLXShaders.uboInstCap) ? TLXShaders.uboInstCap(renderer, BLOB_CAP) : BLOB_CAP);
+          im.matrixAutoUpdate = false; im.frustumCulled = false; im.visible = false;
+          im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          scene.add(im); _instRegistry.push(im);
+          _decalRuns.set(geo, b = { __tlx: true, imesh: im, instances: BLOB_CAP, visible: 0, rec: -1 });
+        }
+        if (b.rec >= 0 && b.rec < drawList.n && drawList[b.rec].instanced === b) {
+          if (b.rec !== drawList.n - 1 || b.visible >= BLOB_CAP || drawList[b.rec].mat !== mat) return false;
+        } else { b.visible = 0; b.rec = drawList.n; pushRec(null, null, mat, undefined, undefined, 0, null, b); }
+        const im = b.imesh.instanceMatrix, a = im.array, o = b.visible * 16;
+        for (let k = 0; k < 16; k++) a[o + k] = w[k];
+        const nx = w[9] * w[2] - w[10] * w[1], ny = w[10] * w[0] - w[8] * w[2], nz = w[8] * w[1] - w[9] * w[0];
+        a[o + 4] = nx; a[o + 5] = ny; a[o + 6] = nz; a[o + 7] = 0;
+        b.visible++; setRange0(im, b.visible * 16); im.needsUpdate = true;
+        return true;
+      }
       function ensureStream(slot, verts) {
         if (slot.geo && slot.cap >= verts) return false;
         const cap = Math.max(slot.cap * 2, verts, slot.min);
@@ -2349,10 +2376,12 @@ const TLX = (function () {
           m.frustumCulled = false;
           await renderer.compileAsync(m, camera, scene);
         }
-        // The instanced blob program (A6), if no blob was on screen for the scene warm.
-        if (_blob && !_blob.imesh.visible) {
-          const bm = _blob.imesh, cnt = bm.count;
-          bm.material = fx.shadowMat; bm.count = Math.max(1, cnt); bm.visible = true;
+        // The instanced blob program (A6) and decal runs (F3), if none was on screen for the scene warm.
+        for (const run of [_blob, ..._decalRuns.values()]) {
+          if (!run || run.imesh.visible) continue;
+          const bm = run.imesh, cnt = bm.count;
+          if (run === _blob) bm.material = fx.shadowMat;
+          bm.count = Math.max(1, cnt); bm.visible = true;
           let p;
           try { p = renderer.compileAsync(bm, camera, scene); } finally { bm.visible = false; bm.count = cnt; }
           await p;
@@ -4017,6 +4046,9 @@ const TLX = (function () {
         // _envGaveUp reads as READY on purpose: the caller polls this to stop
         // re-probing, and a probe that cannot succeed must stop being asked.
         // The cube stays unbound — envState() is where the difference shows.
+        // The opt-out as a capability: game.js skips its whole probe branch (a track
+        // sample, the latch bookkeeping) instead of calling a begin that returns null.
+        envProbeOptOut: _envOptOut,
         envProbeReady() { return envReady || _envGaveUp; },
         envProbeReset() {
           envFacesMask = 0; envReady = false; _envBlank = false;
@@ -4511,10 +4543,12 @@ const TLX = (function () {
         },
         drawDecal(mesh, modelMat, tex, opts) {
           if (!fx || !mesh || !mesh.geo || !tex || !tex.tex || !modelMat) return;
-          pushRec(mesh.geo, fxMatFor(modelMat, 1, 1),
-                  fx.decalMaterialFor(tex.tex, (opts && opts.glow) || 0), undefined, undefined, 0, null, null);
+          const mat = fx.decalMaterialFor(tex.tex, (opts && opts.glow) || 0);
           _fxFrame.decals++;
+          if (opts && opts.batch && _decalAppend(mesh.geo, modelMat, mat)) return;
+          pushRec(mesh.geo, fxMatFor(modelMat, 1, 1), mat, undefined, undefined, 0, null, null);
         },
+        decalRuns: true,   // CarMesh queues its tail glows into one run (F3)
         present(opts) {
           _poolBatch++;
           _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();

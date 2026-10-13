@@ -103,7 +103,9 @@ const HudReadouts = (function () {
    * `n` follows AppearanceOpts.speed when available (same rounding as settings);
    * `unit` is always the short plate form so the float cannot disagree with
    * the LCD. Pass `units` ("mph"|"kmh") to pin without reading AppearanceOpts.
+   * ONE pooled object, rewritten by the next call (the HUD paints it every frame).
    */
+  const _plate = { n: 0, unit: "" };
   function spdPlate(kph, units) {
     const u = units || spdUnits();
     const v = Number(kph);
@@ -113,7 +115,8 @@ const HudReadouts = (function () {
     } else {
       n = Math.round((Number.isFinite(v) ? v : 0) / (u === "mph" ? KPH_PER_MPH : 1));
     }
-    return { n: Number.isFinite(n) ? n : 0, unit: spdUnit(u) };
+    _plate.n = Number.isFinite(n) ? n : 0; _plate.unit = spdUnit(u);
+    return _plate;
   }
 
   // BLUE FLAG. The AI yields (AiDrive.letPassCase in js/game.js) to a chaser a
