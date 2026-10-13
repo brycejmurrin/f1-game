@@ -1529,6 +1529,8 @@ test("GLX shared instance buffer (apex26.glxInstPerPass=0, the mobile default): 
     h.GLX.drawInstanced(b, {});
     assert.deepEqual(drawn().pop(), want(0, 200), `f${f}: the main pass draws the camera pack`);
   }
+  // Knob off is the base path: no mirror view (its GL call stream matched cf27b607a's byte for byte).
+  assert.equal(b._mir, undefined, "no mirror view on the shared path");
 });
 
 test("GLX instPerPass: the mirror pass culls and draws its own instance buffer, and holds it on freeze frames (PERF-HUNT-2 G8)", () => {
