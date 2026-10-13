@@ -3898,8 +3898,12 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   assert.match(fetch, /_sceneryLoads\.delete\(id\)/, "and clear it on settle so a dropped fetch retries");
   const ensureAt = lazy.indexOf("async function ensureScenery(");
   assert.ok(ensureAt >= 0);
-  assert.match(lazy.slice(ensureAt, lazy.indexOf("\n}\n", ensureAt)), /await fetchScenery\(def\.id\)/,
-    "ensureScenery awaits the memoised fetch helper");
+  // Hunt 2 T8: the closure fetch goes out BESIDE the path payload (`early`), and the
+  // await below takes that same promise or the helper — never a bare fetch.
+  const ensureBody = lazy.slice(ensureAt, lazy.indexOf("\n}\n", ensureAt));
+  assert.match(ensureBody, /await \(early && def === def0 \? early : fetchScenery\(def\.id\)\)/,
+    "ensureScenery awaits the memoised fetch helper (or the early fetch it already started)");
+  assert.match(ensureBody, /const early = [^\n]*fetchScenery\(def0\.id\)/, "the early fetch goes through the same memoised helper");
   // warmCarAssets: the caches were lazy, so the first countdown frame built
   // every mesh and atlas; startRace now does it before the first render.
   // startRace() itself is a re-entrancy-latch wrapper (start-race-latch
