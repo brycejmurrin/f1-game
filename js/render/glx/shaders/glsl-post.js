@@ -153,6 +153,37 @@ void main() {
   // derivatives), then counts neighbour samples that rise above the surface
   // tangent plane — so flat ground (the road at a grazing angle) is NOT falsely
   // darkened, only real creases/contacts (car-on-tarmac, barrier feet, kerbs).
+  // PERSPECTIVE SCALARS (perf hunt 2 G11, TLX D11 perspU). game.js builds proj
+  // with M4.perspectiveTo and invProj with M4.invertTo: every entry but
+  // invProj (0, 5, 11, 12, 13, 14, 15) / proj (0, 5, 8, 9, 10, 11, 14) is an
+  // exact 0, so the mat4 x vec4 per tap reduces to a few MADs. The dropped
+  // products are +-0, but the GPU may round the remaining sum in a different
+  // order (FMA), so this is ulp-level, not bit-identical: compiled in only with
+  // apex26.glxPerspScalar=1 (GLX_PERSP_SCALAR, post.js), and per frame only
+  // while the CPU sees the sparse shape (uPersp; XR or any other matrix keeps
+  // the mat4). Without the define the source is the original expressions.
+  // Column-major: uIpXY = invProj (0, 5, 12, 13), uIpZW = invProj (14, 11, 15),
+  // uPXY = proj (0, 5, 8, 9), uPW = proj[11]. Callers never read clip .z.
+  const PERSP_FNS = `#ifdef GLX_PERSP_SCALAR
+uniform float uPersp;
+uniform vec4 uIpXY;
+uniform vec3 uIpZW;
+uniform vec4 uPXY;
+uniform float uPW;
+#endif
+vec3 invProjP(vec2 ndcXY, float nz) {
+#ifdef GLX_PERSP_SCALAR
+  if (uPersp > 0.5) return vec3(ndcXY * uIpXY.xy + uIpXY.zw, uIpZW.x) / (nz * uIpZW.y + uIpZW.z);
+#endif
+  vec4 v = uInvProj * vec4(ndcXY, nz, 1.0);
+  return v.xyz / v.w;
+}
+vec4 projP(vec3 q) {
+#ifdef GLX_PERSP_SCALAR
+  if (uPersp > 0.5) return vec4(q.x * uPXY.x + q.z * uPXY.z, q.y * uPXY.y + q.z * uPXY.w, 0.0, q.z * uPW);
+#endif
+  return uProj * vec4(q, 1.0);
+}`;
   const SSAO_FS = `#version 300 es
 precision highp float;
 in vec2 vUV;
@@ -165,11 +196,8 @@ uniform float uStrength;
 uniform float uContact;  // contact-shadow strength (0 = off)
 uniform float uRadius;   // AO world-space sample reach (def 0.6)
 out vec4 outColor;
-vec3 viewPosD(vec2 uv, float d) {
-  vec4 c = vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
-  vec4 v = uInvProj * c;
-  return v.xyz / v.w;
-}
+${PERSP_FNS}
+vec3 viewPosD(vec2 uv, float d) { return invProjP(uv * 2.0 - 1.0, d * 2.0 - 1.0); }
 vec3 viewPos(vec2 uv) { return viewPosD(uv, texture(uDepth, uv).r); }
 const vec2 K[12] = vec2[12](
   vec2(0.0,1.0), vec2(0.5,0.866), vec2(0.866,0.5),
@@ -231,7 +259,7 @@ void main() {
     float sh = 1.0;
     for (int i = 1; i <= 5; i++) {   // contact-shadow march 8→5
       vec3 q = P + uSunVS * (0.04 * float(i));   // up to ~0.32 m toward the sun
-      vec4 cp = uProj * vec4(q, 1.0);
+      vec4 cp = projP(q);
       vec2 quv = cp.xy / cp.w * 0.5 + 0.5;
       if (quv.x < 0.0 || quv.x > 1.0 || quv.y < 0.0 || quv.y > 1.0) break;
       vec3 B = viewPos(quv);                     // blocker view position
@@ -588,10 +616,10 @@ uniform float uFlareStreak2; // second thin hot-core flare streak strength (def 
 out vec4 outColor;
 
 // Reconstruct view-space position from the depth buffer at a screen UV.
+${PERSP_FNS}
 vec3 ssrViewPos(vec2 uv) {
   float d = texture(uDepth, uv).r * 2.0 - 1.0;     // window depth → NDC z
-  vec4 cp = uInvProj * vec4(uv * 2.0 - 1.0, d, 1.0);
-  return cp.xyz / cp.w;
+  return invProjP(uv * 2.0 - 1.0, d);
 }
 
 // Scene sample carrying the CHROMATIC ABERRATION radial R/B split, so the later
@@ -938,7 +966,7 @@ void main() {
         prevPos = pos;
         pos += R * stepLen;
         stepLen *= 1.16;                           // gentle growth
-        vec4 cp = uProj * vec4(pos, 1.0);
+        vec4 cp = projP(pos);
         if (cp.w <= 0.0) break;
         vec2 suv = cp.xy / cp.w * 0.5 + 0.5;
         if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) break;
@@ -951,11 +979,11 @@ void main() {
           vec3 a = prevPos, b = pos;               // binary-search refine → crisp hit
           for (int j = 0; j < 4; j++) {
             vec3 mid = (a + b) * 0.5;
-            vec4 mc = uProj * vec4(mid, 1.0);
+            vec4 mc = projP(mid);
             vec2 muv = mc.xy / mc.w * 0.5 + 0.5;
             if (ssrViewPos(muv).z - mid.z > 0.20) b = mid; else a = mid;
           }
-          vec4 fc = uProj * vec4(b, 1.0);
+          vec4 fc = projP(b);
           vec2 huv = fc.xy / fc.w * 0.5 + 0.5;
           // GRAZING SELF-REFLECTION REJECT. From a low onboard eye the reflected
           // ray leaves the tarmac at the same shallow angle the view ray arrived,
