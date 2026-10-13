@@ -1775,7 +1775,15 @@ function drawAeroEdge(modelMat, aLvl, style, blend) {
 // VM, a backend without decals) — the lens itself still draws either way.
 let _tgMesh = null, _tgTex = null, _tgTried = false;
 const _tgW = new Float32Array(16);
-const _TG_OPTS = { glow: 1.6 };   // one constant: glow is part of the decal program key
+// One constant: glow is part of the decal program key. `batch` lets a backend that
+// run-instances decals (TLX: gfx.decalRuns) draw the queued field as ONE object.
+const _TG_OPTS = { glow: 1.6, batch: true };
+// THE QUEUE (perf hunt 2 F3): on a decalRuns backend the matrices wait here and
+// flushTailGlows() draws them back to back after the car loop, a contiguous run
+// TLX instances (~19 render objects a night frame -> 1). Same matrices, same
+// submission order; decals write no depth. GLX / WGX draw at once, as before.
+const _tgQ = [];
+let _tgN = 0;
 function _tailGlowRes() {
   if (_tgTried) return _tgMesh && _tgTex;
   _tgTried = true;
@@ -1834,7 +1842,14 @@ function drawTailGlow(groundMat, amt, track, s) {
     W[12 + i] = groundMat[12 + i] + groundMat[4 + i] * 0.08 - groundMat[8 + i] * dc + up * rise;
   }
   W[3] = W[7] = W[11] = 0; W[15] = 1;
-  _gfx.drawDecal(_tgMesh, W, _tgTex, _TG_OPTS);
+  if (_gfx.decalRuns !== true) { _gfx.drawDecal(_tgMesh, W, _tgTex, _TG_OPTS); return; }
+  (_tgQ[_tgN] || (_tgQ[_tgN] = new Float32Array(16))).set(W);
+  _tgN++;
+}
+// After the car loop (game.js render): the queued tail glows, in queue order.
+function flushTailGlows() {
+  for (let i = 0; i < _tgN; i++) _gfx.drawDecal(_tgMesh, _tgQ[i], _tgTex, _TG_OPTS);
+  _tgN = 0;
 }
 // 2026 amber mirror lamps: a car under 20 km/h or stopped lights amber on both
 // mirror housings (The Race, 2026 rear-lights explainer). A SIDE-facing quad in
@@ -1887,7 +1902,7 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, getMirrorFallback, getMirrorGlass, MIRROR_GLASS_V, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getAeroFlapSet, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawClassicTelemetry, drawRearLights, REAR_LIGHTS, drawAeroEdge, drawTailGlow, drawMirrorLights, ersLightCode, gridStrobe,
+  return { init, getMirrorFallback, getMirrorGlass, MIRROR_GLASS_V, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getAeroFlapSet, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawClassicTelemetry, drawRearLights, REAR_LIGHTS, drawAeroEdge, drawTailGlow, flushTailGlows, drawMirrorLights, ersLightCode, gridStrobe,
     cockpitWheelRoll, WHEEL_ROLL_LAMBDA, getForearm, suitColour, forearmEnds, forearmMatrix, drawForearms, ARM_R, ARM_TAPER };
 })();
 Object.freeze(CarMesh);

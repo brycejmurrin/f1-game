@@ -8019,6 +8019,7 @@ function render(dt) {
     // within 60 m, FieldLod): js/car/car-draw.js drawExhaustFx.
     carDraw.drawExhaustFx(c, tmpMat, c.isPlayer && isErsDeploying(c), FieldLod.flame(_lodD2));
   }
+  CarMesh.flushTailGlows();   // the night tail glows queued above, one run (TLX instances it; hunt 2 F3)
   // Flush all accumulated car decals in one decal-program block — not
   // interleaved with the lit body draws (~2 program+state flips per car).
   carDraw.flushDecals(night);

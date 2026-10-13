@@ -226,3 +226,49 @@ test("CarMesh.drawRearLights / drawMirrorLights: one draw per car, the old per-l
   assert.equal(md.pos.length, 24);
   for (let s = 0; s < 2; s++) assert.ok(Math.abs(md.pos[s * 12] - a[s].x) < 1e-12 && Math.abs(md.pos[s * 12 + 1] - (a[s].y - 0.018)) < 1e-12, `side ${s} sits at its anchor`);
 });
+
+// ---- perf hunt 2 F3 (2026-10-13) -----------------------------------------------------------------
+function tailGlowVm(gfxExtra) {
+  const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap, Date };
+  ctx.Log = { info() {}, warn() {}, error() {}, debug() {} };
+  const g2d = { createRadialGradient: () => ({ addColorStop() {} }), fillRect() {}, fillStyle: "" };
+  ctx.document = { createElement: () => ({ width: 0, height: 0, getContext: () => g2d }) };
+  vm.createContext(ctx);
+  vm.runInContext(read("js/car/car-mesh.js"), ctx, { filename: "js/car/car-mesh.js" });
+  const CarMesh = vm.runInContext("CarMesh", ctx);
+  const decals = [];
+  CarMesh.init(Object.assign({ createMesh: () => ({}), createTexMesh: (d) => ({ geo: d }), createTexture: () => ({ tex: 1 }), draw() {},
+    drawDecal: (mesh, m, tex, opts) => decals.push({ mesh, m: Array.from(m), batch: !!opts.batch, glow: opts.glow }) }, gfxExtra));
+  return { CarMesh, decals };
+}
+test("CarMesh tail glows: a decalRuns backend gets the field back to back after the car loop, same matrices, same order", () => {
+  const ground = (x) => new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, 0.5, 2 * x, 1]);
+  const amts = [1, 0.4, 2.5];
+  const now = tailGlowVm({});   // GLX / WGX: no decalRuns, drawn at once
+  for (let i = 0; i < amts.length; i++) now.CarMesh.drawTailGlow(ground(i * 10), amts[i]);
+  assert.equal(now.decals.length, 3, "drawn as they come");
+  now.CarMesh.flushTailGlows();
+  assert.equal(now.decals.length, 3, "nothing queued");
+  const q = tailGlowVm({ decalRuns: true });   // TLX
+  for (let i = 0; i < amts.length; i++) q.CarMesh.drawTailGlow(ground(i * 10), amts[i]);
+  assert.equal(q.decals.length, 0, "queued, not drawn inside the car loop");
+  q.CarMesh.flushTailGlows();
+  assert.equal(q.decals.length, 3);
+  assert.deepEqual(q.decals.map((d) => d.m), now.decals.map((d) => d.m), "the same matrices in the same order");
+  assert.ok(q.decals.every((d) => d.batch && d.glow === 1.6 && d.mesh === q.decals[0].mesh), "one mesh, one opts bag, marked batchable");
+  q.CarMesh.flushTailGlows();
+  assert.equal(q.decals.length, 3, "a flush empties the queue");
+});
+test("TLX decal runs: A6's live-record guard, one material per run, and the normal carried in the planar quad's Y column", () => {
+  const tlx = read("js/render/three/tlx.js");
+  const body = lift(tlx, "_decalAppend");
+  assert.match(body, /b\.rec >= 0 && b\.rec < drawList\.n && drawList\[b\.rec\]\.instanced === b/, "the record sentinel guard (A6 fix)");
+  assert.match(body, /b\.rec !== drawList\.n - 1 \|\| b\.visible >= BLOB_CAP \|\| drawList\[b\.rec\]\.mat !== mat/, "contiguous, capped, one material");
+  assert.match(body, /if \(skipBatches\(\)\) return false;/);
+  // Y column := Z x X (columns X = w[0..2], Z = w[8..10]).
+  assert.match(body, /nx = w\[9\] \* w\[2\] - w\[10\] \* w\[1\], ny = w\[10\] \* w\[0\] - w\[8\] \* w\[2\], nz = w\[8\] \* w\[1\] - w\[9\] \* w\[0\]/);
+  assert.match(body, /a\[o \+ 4\] = nx; a\[o \+ 5\] = ny; a\[o \+ 6\] = nz; a\[o \+ 7\] = 0;/);
+  assert.match(tlx, /if \(opts && opts\.batch && _decalAppend\(mesh\.geo, modelMat, mat\)\) return;/, "only batch-marked decals (livery atlases stay per record)");
+  assert.match(tlx, /for \(const run of \[_blob, \.\.\._decalRuns\.values\(\)\]\)/, "a hidden run is warmed like A6's blob");
+  assert.match(read("js/game.js"), /CarMesh\.flushTailGlows\(\);[^\n]*\n(?:\s*\/\/[^\n]*\n)*\s*carDraw\.flushDecals\(night\);/, "flushed after the car loop, before the livery decals (their old relative order)");
+});
