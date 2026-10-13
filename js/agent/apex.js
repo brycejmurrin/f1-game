@@ -56,6 +56,10 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf",
   "towing", "wake", "axFrac", "axFracF", "axFracR", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
   "kerbSndT", "kerbHapT",
+  // The AI brake look-ahead cache (perf hunt 2 S6): one object per car, keyed on
+  // the node window; refilled lazily by updateCarBrakePlan, so a cold car is
+  // simply without it (CarFields predeclares it undefined).
+  "_lk",
   // Racecraft: the next corner's signed curvature (side-by-side ownership) and
   // the car alongside last frame (the swap-back lockout) — a stale _alPrev
   // would arm a lockout on the first frame of the next episode.
