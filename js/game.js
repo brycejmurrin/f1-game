@@ -4434,6 +4434,9 @@ const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0,
 let _audioParamStep = true;   // tickBody clears it on all but a frame's last physics step
 const _engAcc = { dt: 0 };   // the local car's sim time since the engineer last listened (S8: once per frame)
 function update(dt) {
+  // No world: a stepped/worker race switch dropped it (dropTrackWorld) and is still building.
+  // tickBody gates on it too; this covers __apex.step() (bug hunt 3 K1/X2).
+  if (!track) return;
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
   if ((state === "race" || state === "count") && Input.consumeCameraCycle()) cycleCam();
@@ -8464,7 +8467,7 @@ function tickBody(now) {
   // step (which would change the slip/grip behaviour). Leftover time carries to
   // the next frame; cap the substeps so a stall can't trigger a spiral of death.
   // Only where update() advances anyone — elsewhere it returns immediately.
-  if (!frozen && (state === "race" || state === "count")) {
+  if (!frozen && track && (state === "race" || state === "count")) {   // track: null mid stepped switch (K1)
     physAcc += simTime;
     let steps = 0;
     while (physAcc >= PHYS_DT && steps < 5) {

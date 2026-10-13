@@ -213,3 +213,48 @@ test("nodeAt(NaN) and other non-numbers answer {ok:false} instead of throwing", 
   assert.equal(typeof g.apex.nodeAt(0.45).k, "number");
   assert.equal(typeof g.apex.nodeAt(0).k, "number");
 });
+
+/* A stepped in-session switch drops the old world (dropTrackWorld: track = null)
+ * and builds the new one over many rAF frames. race() + go() in one breath (the
+ * gfx-probe shape) forces state "race" over that null window, and tickBody used
+ * to run update() → checkRetirements → `track.total` of null every frame: 8 such
+ * frames and LoopHealth stopped the loop for good (bug hunt 3 K1/X2/X3). Own
+ * handle: the browser's stepped build needs a non-VM user agent, and render()
+ * needs the GLX stub to return frustum planes, neither of which the shared page
+ * above should inherit. */
+test("a stepped race switch under go() keeps the loop alive and step() safe while the world is null", async () => {
+  const h = await createGame({ track: "monza" });
+  try {
+    const P = Array.from({ length: 6 }, () => [0, 0, 0, 1]);
+    h.ctx.GLX.makeFrustumPlanes = () => P;
+    Object.defineProperty(h.sandbox.navigator, "userAgent", { value: "Mozilla/5.0 Chrome/128.0", configurable: true });
+    const A = h.apex, LH = h.ctx.LoopHealth;
+    let now = h.sandbox.performance.now();
+    const frame = async () => { now += 16.7; h.pumpFrame(now); h.flushTimers(true); await new Promise((r) => setImmediate(r)); };
+    A.go(); A.jump(0.05, 60, 0);
+    for (let i = 0; i < 5; i++) await frame();
+    const f0 = LH.state().faults;
+    let done = null, nullFrames = 0, stepThrew = null;
+    Promise.resolve(A.race("spa")).then(() => { done = "ok"; }, (e) => { done = "rej " + e.message; });
+    A.go();                                    // forces state "race" while the start is in flight
+    for (let k = 0; k < 3000 && !done; k++) {
+      if (!h.G.track && h.G.state === "race") {
+        nullFrames++;
+        if (stepThrew === null) { try { A.step(1 / 60, 1); stepThrew = false; } catch (e) { stepThrew = e.message; } }
+      }
+      await frame();
+    }
+    assert.equal(done, "ok", "the switch reaches the grid");
+    gt(nullFrames, 0, "the switch really spanned frames with no world (else this test proves nothing)");
+    assert.equal(stepThrew, false, "__apex.step() with no world is a no-op, not a TypeError");
+    assert.equal(LH.state().faults, f0, "no frame faulted during the switch");
+    assert.equal(LH.state().stopped, false);
+    A.go(); A.jump(0.05, 60, 0);
+    const s0 = h.G.player.s, frames0 = LH.state().frames;
+    for (let i = 0; i < 60; i++) await frame();
+    assert.equal(h.G.track.def.id, "spa");
+    gt(h.G.player.s - s0, 10, "the loop still drives the car after the switch");
+    assert.equal(LH.state().frames - frames0, 60, "every frame finished clean");
+    assert.equal(LH.state().faults, f0);
+  } finally { h.close(); }
+});
