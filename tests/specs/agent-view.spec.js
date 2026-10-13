@@ -25,10 +25,23 @@ async function boot(page) {
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
+// Start a race and return only once THIS start has reached the grid and the new
+// world has been on screen for a frame. On the shared page `info().track` is
+// already the PREVIOUS test's world, so polling it alone returned at once while
+// the new start was still building: go()/jump() then hit the old race, and the
+// pending start went on to drop the world, re-grid the car, or (a setting
+// changed under it) cancel to the menu inside the test (bug hunt 3 K3). race()
+// returns a thenable that settles when its start does; the async wrapper is
+// what makes page.evaluate await it (CDP awaits native promises only).
+async function startAndSettle(page, trackId) {
+  await page.evaluate(async (id) => { await window.__apex.race(id); }, trackId);
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+}
+
 async function load(page, trackId = "monza", frac = 0.05, speed = 60) {
   await boot(page);
-  await page.evaluate((id) => window.__apex.race(id), trackId);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+  await startAndSettle(page, trackId);
   await page.evaluate(([f, v]) => {
     window.__apex.go();
     window.__apex.jump(f, v, 0);
@@ -58,8 +71,7 @@ test.describe("world() typed errors", () => {
 
   test("player not placed names the hook that fixes it", async ({ page }) => {
     await boot(page);
-    await page.evaluate(() => window.__apex.race("monza"));
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await startAndSettle(page, "monza");
     const r = await page.evaluate(() => window.__apex.world());
     if (r.ok === false) {
       expect(r.error).toBe("PlayerNotPlacedError");

@@ -5427,12 +5427,12 @@ test("selector preparation waits for the player's hands before the build and the
   const src = read("js/game.js");
   const body = fnBody(src, "scheduleFlybyTrack");
   // The build no longer waits for idle (2026-10): it is stepped, so it starts at once.
-  assert.match(body, /return;\s*\}\s*(\/\/[^\n]*\s*)*if \(!\(await loadTrackStepped\(want, current\)\)\) return;/,
+  assert.match(body, /return;\s*\}\s*(\/\/[^\n]*\s*)*prep\.building = true;\s*prep\.step = loadTrackStepped\(want, [^\n]*\n\s*if \(!\(await prep\.step\) \|\| !current\(\)\) return;/,
     "the build starts at once, in steps (a tap on the sheet mid-build is answered)");
   assert.ok(!/menuIdle/.test(body.slice(0, body.indexOf("loadTrackStepped("))), "no idle wait before the build");
   assert.match(body, /if \(!\(gfx\.warming && gfx\.warming\(\)\) && state === "menu" && track && Tracks\.LIST\[trackIdx\] && builtTrackId !== Tracks\.LIST\[trackIdx\]\.id\) dropTrackWorld\(\);/,
     "picking another circuit frees the last world immediately only after compilation releases it");
-  assert.equal((body.match(/await menuFinish\(current, key\);/g) || []).length, 2,
+  assert.equal((body.match(/await menuFinish\(current, (prep\.)?key\);/g) || []).length, 2,
     "both paths finish through menuFinish (car assets, warm frames, lamp pre-bake, flyby plans)");
   const fin = src.match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0];
   // warmPrograms() first: the hidden frame that follows starts TLX's program
@@ -5456,6 +5456,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
   let flybyBuildTimer = 0, trackIdx = 0, raceTimeOfDay = "default", raceWeather = "dry";
   const menuKey = (idx) => [idx, raceTimeOfDay, raceWeather, 22].join("|");   // the real one adds fieldSize()
+  const buildKey = (idx) => [idx, raceTimeOfDay === "night", 22].join("|");   // the real one: sessionDarkFor, fieldSize(), chunking
   let state = "menu", setupPreviewOn = false, track = null, compiling = false, builtTrackId = null;
   const Tracks = { LIST: [{ id: 0 }, { id: 1 }] }, drops = [];
   const dropTrackWorld = () => { drops.push(track && track.id); track = null; builtTrackId = null; _menuGate.track = null; _menuGate.ready = ""; };
@@ -5513,6 +5514,7 @@ test("selector retains a different circuit during compilation, then releases it 
   const state = "menu", setupPreviewOn = false, trackIdx = 1, raceTimeOfDay = "default", raceWeather = "dry";
   const gfx = { warming: () => compiling }, els = { select: { hidden: false } }, $ = () => ({ hidden: true });
   const menuKey = idx => [idx, raceTimeOfDay, raceWeather, 22].join("|"), fieldSize = () => 22;
+  const buildKey = idx => [idx, false, 22].join("|");
   const sessionDarkFor = () => false, trackBuildOpts = () => ({}), sceneryResident = () => false;
   const PerfGov = { sentinelArm() {} }, Log = { warn() {} };
   const freeTrackMeshes = t => { assert.equal(compiling, false, "compileAsync still owns the old geometries"); freed.push(t); };
