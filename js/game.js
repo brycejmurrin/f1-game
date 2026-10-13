@@ -480,6 +480,7 @@ const _trk = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 // Writes into the module-scope _tf (no per-frame allocation, like the rest of
 // the loop). Returns it for convenience.
 const _tf = { s: 0, x: 0 };
+const _tfSamp = { track: null, s: NaN };   // the (track, s) of _trk's last sample: sampleAt below
 function trackFrom(px, pz, sPredicted) {
   let s = wrapS(sPredicted);
   for (let i = 0; i < 2; i++) {
@@ -496,7 +497,20 @@ function trackFrom(px, pz, sPredicted) {
   const rl = Math.hypot(rx, rz) || 1; rx /= rl; rz /= rl;
   _tf.s = s;
   _tf.x = (px - _trk.p[0]) * rx + (pz - _trk.p[2]) * rz;
+  _tfSamp.track = track; _tfSamp.s = s;
   return _tf;
+}
+// Tracks.sample(track, s, out), served from trackFrom's LAST sample when it is
+// the same (track, s): every render caller of playerAnchor re-sampled exactly
+// that point (hunt 2 F6). Tracks.sample is pure and writes p/t/r/hw only, so
+// the copy is bit-identical; any other s samples as before. _trk is private to
+// trackFrom, and the key is a private copy (__apex.trackFrom hands out _tf).
+function sampleAt(s, out) {
+  if (s !== _tfSamp.s || track !== _tfSamp.track) return Tracks.sample(track, s, out);
+  const a = _trk, p = out.p, t = out.t, r = out.r;
+  p[0] = a.p[0]; p[1] = a.p[1]; p[2] = a.p[2]; t[0] = a.t[0]; t[1] = a.t[1]; t[2] = a.t[2];
+  r[0] = a.r[0]; r[1] = a.r[1]; r[2] = a.r[2]; out.hw = a.hw;
+  return out;
 }
 // The EXACT INVERSE of trackFrom's lateral step — same normalisation, so a
 // world → (s, x) → world round-trip is the identity.
@@ -2090,7 +2104,7 @@ function currentCarGroundMat(c, out) {
   else { const pa = playerAnchor(c); cS = pa.cS; cX = pa.cX; }
   // Same interpolated lateral as the body pass — no extra xVis damp.
   const renderX = cX;
-  Tracks.sample(track, cS, smp2);
+  sampleAt(cS, smp2);
   // Normalize the lerped tangent/right — same fix as the body loop: raw they
   // scale the shadow-caster basis at the 4 m node rate (see the note there).
   { const t = smp2.t, r = smp2.r;
@@ -6856,7 +6870,7 @@ function render(dt) {
     // Resolve once per frame; shadow + body reuse _plCS/_plCX (no second trackFrom).
     { const pa = playerAnchor(player); _plCS = pa.cS; _plCX = pa.cX; _plOk = true; _plBodyOk = false; }
     const pS = _plCS, px = _plCX;
-    Tracks.sample(track, pS, smp);
+    sampleAt(pS, smp);
     // NOTE: the camera rig is still built from (pS, px) inside camVantage(). That
     // is a much smaller coupling than the body had — (s, x) is now an exact
     // reading of the world position, so the rebuilt anchor lands within a
@@ -7672,7 +7686,7 @@ function render(dt) {
       tmpP[1] = p[1] + bankC.dy;
       tmpP[2] = rp.world ? rp.z : p[2] + r[2] * renderX;
     } else {
-      Tracks.sample(track, cS, smp2);
+      sampleAt(cS, smp2);
       // sample() lerps unit node vectors, so mid-segment |t|,|r| dip to cos(θ/2)
       // (up to ~4.7% on Spa's tightest) — used un-normalized they SCALE the drawn
       // car at the 4 m node rate (~21 Hz at speed): a visible width/length pulse
