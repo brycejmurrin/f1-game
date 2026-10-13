@@ -4513,8 +4513,10 @@ test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => 
   assert.match(lit, /mrtNode \? "-mrt"/,
     "program key must fork when MRT is armed — one program cannot target both RTs");
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(post, /count:\s*2/,
-    "HDR scene target must allocate the ssrTag colour attachment");
+  // Re-pointed by perf hunt 3 R3: the attachment is dropped only where tlx.js's _wantTag() says nothing
+  // can read it (phone MEDIUM/LOW); tests/unit/tlx-hunt3.test.mjs builds both shapes.
+  assert.match(post, /count:\s*tagOn \? 2 : 1/,
+    "HDR scene target must allocate the ssrTag colour attachment whenever the tag can be read");
   assert.match(post, /textures\[1\]\.name\s*=\s*"ssrTag"/,
     "MRTNode.setup matches attachments by texture.name");
   const tsl = read("js/render/three/tsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -6085,7 +6087,8 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   const tlx = code("js/render/three/tlx.js");
   assert.match(tlx, /composites: [^,]+, glass: _mirGlass,/, "mirrorState counts the glass");
   const warm = span(tlx, "if (fx && fx.mirrorGlassMaterial) {", "if (post.warmMirror) await post.warmMirror", "TLX mirror glass warm");
-  const mrt = spanBack(tlx, "renderer.setMRT(usePost ? _ssrMrtNode() : null);", "if (fx && fx.mirrorGlassMaterial) {", "TLX mirror warm MRT");
+  // useTag (perf hunt 3 R3) = usePost on a chain that has the ssrTag attachment.
+  const mrt = spanBack(tlx, "renderer.setMRT(useTag ? _ssrMrtNode() : null);", "if (fx && fx.mirrorGlassMaterial) {", "TLX mirror warm MRT");
   assert.ok(mrt.length < 200, "the scene MRT is set right before the glass compiles");
   assert.match(warm, /renderer\.setRenderTarget\(usePost \? post\.sceneTarget\(\) : softOutRT\(\)\)/,
     "the glass compiles under the scene pass's target, where it draws");

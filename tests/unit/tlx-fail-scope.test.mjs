@@ -14,6 +14,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
@@ -95,7 +96,7 @@ test("mirrorEnd: only four CONSECUTIVE failed mirror renders retire the mirror (
     _mirActive: false, _poolBatch: 0, drawList: [], _showInstanced() {}, chunkedSys: null, acquireMesh() {}, meshPool: [],
     _hideUndrawnInstanced() {}, scene: { backgroundNode: null }, pinSkyMaterial() {}, mirRT: {}, mirCam: {}, _gpuLastOperation: "",
     _mirRenders: 0, _mirFails: 0, _mirDead: false, _mirErr: null, softOutRT: () => null, resetRecs() {},
-    _dMatUsed: 0, _fxMatUsed: 0, _instAlive: new Set(),
+    _dMatUsed: 0, _fxMatUsed: 0, _instAlive: new Set(), _kidsBegin() {}, _kidsMir: [], _poolShow() {},   // R6 pool root (hunt 3)
     renderer: { setRenderTarget() {}, render() { if (st.boom) throw new Error("stale geometry"); } },
   });
   const obj = vm.runInContext("({" + body.replace(/,\s*$/, "") + "})", ctx);
@@ -124,8 +125,10 @@ function refuse(o = {}) {
     window: { __apexReportError: (w, e) => out.errors.push([w, e.message]) },
   });
   const src = read("js/render/three/tlx.js");
-  const body = src.slice(src.indexOf("const refuseTab = () => {"), src.indexOf("let painted = false;", src.indexOf("const refuseTab = () => {")));
-  assert.ok(body.startsWith("const refuseTab"), "the refuseTab needles moved — check this test, not the code");
+  // Hoisted beside persistFail by perf hunt 3 R13 (one closure per renderer, not one per present()): read
+  // the arrow function by its own closing column instead of up to present()'s `let painted`.
+  const body = fnSource(src, "const refuseTab = () => {") + ";";
+  assert.ok(body.startsWith("const refuseTab") && body.length < 2000, "the refuseTab needles moved — check this test, not the code");
   out.call = vm.runInContext(body + "\n refuseTab", ctx);
   return out;
 }

@@ -1106,12 +1106,39 @@ const TLX = (function () {
       // The post chain's factory, callable AGAIN: a one-off throw in present()
       // retires the chain ("Post-only death") and the next render-target realloc
       // rebuilds it (applyResize) — WGX's _swapTargets re-enables its chain the same way.
+      // R3 (perf hunt 3): does the scene pass need its ssrTag attachment? Only
+      // SSR (po.reflect), car-paint SSR (po.carReflect) and the exhaust haze
+      // read it. On a mobileTier phone at GRAPHICS MEDIUM or LOW (userTier >= 2)
+      // game.js zeroes both SSR inputs (tier() >= 2) and never sends a haze, so
+      // the composite never fetches the tag: build the scene target with one
+      // attachment and present() sets no MRT. Re-evaluated every begin(): a
+      // live preset raise rebuilds the chain with the tag (one compile hitch).
+      // apex26.tlxTagLess: unset = that rule, "0" = always tag, "1" = drop it
+      // at userTier >= 2 off phones too (desktop A/B lever: there the haze
+      // still runs and reads white = "not car" over cars — the only delta).
+      let _tagLessKnob = "";
+      try { _tagLessKnob = localStorage.getItem("apex26.tlxTagLess") || ""; } catch (_) { /* no storage: auto */ }
+      function _wantTag() {
+        if (_tagLessKnob === "0") return true;
+        let ut = 0;
+        try { ut = (typeof PerfGov !== "undefined" && PerfGov.userTier) ? PerfGov.userTier() : 0; } catch (_) { ut = 0; }
+        return !(ut >= 2 && (mobileTier || _tagLessKnob === "1"));
+      }
+      // A GRAPHICS change moved the rule: swap the chain for one with/without the
+      // attachment (begin(), before the scene records). Not warmed: one compile hitch.
+      function _tagSwap() {
+        if (!post || !post.tagOn || _warmPending || post.tagOn() === _wantTag()) return;
+        const old = post; post = null;
+        _cancelSoftBlits();
+        try { if (old.dispose) old.dispose(); } catch (_) { /* best effort */ }
+        post = buildPost(); if (post) post.resize(W, H);
+      }
       function buildPost() {
       let post = null;   // shadows the session's `post`: the caller assigns the result
       try {
         if (window.TLXShaders && TLXShaders.postChain && TLXShaders.post && chunks) {
           post = TLXShaders.postChain(THREE, TSL,
-            { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode,
+            { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode, ssrTag: _wantTag(),
               softDest: function () { return softOutRT(); },
               wantSpatialUpscale, getPresentSize,
               // SCENE MSAA: on the desktop WebGL2 backend only, sized by the
@@ -1195,7 +1222,15 @@ const TLX = (function () {
           mirCam.matrixAutoUpdate = false; mirCam.matrixWorldAutoUpdate = false;
         } else if (mirRT.width !== w || mirRT.height !== h) mirRT.setSize(w, h);
       }
-      try {
+      // TLX opts out of the live env probe by default (the reason is at the
+      // envCubeCam block below). Hunt 3 R4: read the opt-out BEFORE allocating,
+      // so an opted-out session has no envRT/envDummy (2 cube targets) and the
+      // lit factory gets envCube null — ENV_CUBE compiles the cube tap and its
+      // binding out of every lit program. Pixel-identical: with the probe off
+      // uEnvStr is 0, so every tap was mix(a, cube, 0) = a.
+      let _envOptOut = true;
+      try { _envOptOut = GameStore.store.raw("apex26.tlxEnvProbe") !== "1"; } catch (_) { /* no store: stay opted out */ }
+      if (!_envOptOut) try {
         const envHdr = !!(post && post.hdrOk());
         const envOpts = {
           type: envHdr ? THREE.HalfFloatType : THREE.UnsignedByteType,
@@ -1374,10 +1409,23 @@ const TLX = (function () {
       const _skyCacheOn = (function () {
         try { return localStorage.getItem("apex26.tlxSkyCache") !== "0"; } catch (_) { return true; }
       })() && !softContent("sky") && !!(post && post.hdrOk && post.hdrOk());
+      // R5 (perf hunt 3): apex26.tlxSkyCache512 — a 512² cloud cache (2 x 2.1 MB
+      // RGBA16F instead of 2 x 4.7 MB; a tile GPU loads + stores the whole target
+      // on each of a re-bake's 16 band frames). "1" = on mobileTier phones only
+      // (the shipping candidate), "all" = everywhere (the desktop A/B lever).
+      // DEFAULT OFF: a look change. Predicted (bilinear + fp16 model of tsl-sky's
+      // own fbm on the cache's cp grid, scaled from the 768 NUMBERS): day mean
+      // 0.024 LSB / max 1.9, night mean 0.16 / max 4.3 — under the frozen-A/B
+      // floor on average, NOT measured on a frame yet.
+      const _skyCacheSize = (function () {
+        let v = "";
+        try { v = localStorage.getItem("apex26.tlxSkyCache512") || ""; } catch (_) { /* no storage: 768 */ }
+        return (v === "all" || (v === "1" && mobileTier)) ? 512 : 0;   // 0: tsl-sky's own default (768)
+      })();
       try {
         if (window.TLXShaders && TLXShaders.sky) {
           if (!chunks && TLXShaders.chunks) chunks = TLXShaders.chunks(THREE, TSL);
-          sky = TLXShaders.sky(THREE, TSL, { chunks, cache: _skyCacheOn });
+          sky = TLXShaders.sky(THREE, TSL, { chunks, cache: _skyCacheOn, cacheSize: _skyCacheSize });
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: sky factory failed, flat clear only —", e); } catch (_) {}
@@ -2062,6 +2110,35 @@ const TLX = (function () {
       // the current batch is not being drawn and gets hidden.
       let _poolBatch = 0;
       let _pruneLast = 0;
+      // R6 (perf hunt 3) — THE POOL ROOT. Every wrapper used to sit in `scene`
+      // for 20 s after its last draw, hidden, and three's projectObject visits
+      // every child of every renderer.render(scene): the mirror walked ~430 to
+      // draw ~51 (census pool emulation), ~0.2 us each (bench). The wrappers now
+      // hang off one plain Object3D (not a Group: a Group would set groupOrder)
+      // whose `children` IS the list this pass acquired, in acquisition order —
+      // three never sees the rest. One array per pass kind, so V8 keeps each
+      // backing store at its own steady length. `parent` is set by hand once (no
+      // added/removed events: nothing listens). The instanced registry and the
+      // sky stay in `scene`. apex26.tlxPoolRoot=0 restores the hide loop.
+      let _r6 = true;
+      try { _r6 = localStorage.getItem("apex26.tlxPoolRoot") !== "0"; } catch (_) { /* no storage: on */ }
+      const poolRoot = new THREE.Object3D();
+      poolRoot.matrixAutoUpdate = false; poolRoot.matrixWorldAutoUpdate = false;
+      if (_r6) scene.add(poolRoot);
+      const _kidsMain = [], _kidsMir = [], _kidsEnv = [];
+      let _kids = _kidsMain, _kidN = 0, _kidBatch = -1;
+      // Right after the pass's _poolBatch++, before its acquire loop.
+      function _kidsBegin(arr) { _kids = arr; _kidN = 0; _kidBatch = _poolBatch; }
+      // After the acquire loop: what three may draw this pass is exactly what was acquired.
+      function _poolShow() {
+        if (!_r6) {
+          for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
+          return;
+        }
+        if (_kidBatch !== _poolBatch) _kidN = 0;
+        if (_kids.length !== _kidN) _kids.length = _kidN;
+        poolRoot.children = _kids;
+      }
       const _tmpMat4 = new THREE.Matrix4(), _tmpMat4b = new THREE.Matrix4();
       // GL→WebGPU clip depth remap — game.js builds GL projections (NDC z ∈ [-1,1]);
       // three WebGPU rasterises z ∈ [0,1]. Same Z01 as WGX (js/render/webgpu/wgx.js).
@@ -2198,6 +2275,22 @@ const TLX = (function () {
         slot.geo = geo; slot.ib = ib; slot.cap = cap;
         return true;
       }
+      // R9 (perf hunt 3): a stream whose producer keeps ONE long-lived Float32Array
+      // (particles.js _vertA / _vertB, rain included) is wrapped, not copied: the
+      // InterleavedBuffer IS the caller's array, so each upload is three's
+      // bufferSubData of the same bytes without the 108-156 KB set() in front of it.
+      // Re-wrapped (old geometry disposed) only when the caller reallocates.
+      function wrapStream(slot, arr) {
+        if (slot.geo && slot.ib.array === arr) return false;
+        if (slot.geo) disposeGeometry(slot.geo);
+        const geo = new THREE.BufferGeometry();
+        const ib = new THREE.InterleavedBuffer(arr, slot.stride);
+        ib.setUsage(THREE.DynamicDrawUsage);
+        for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
+        geo.setDrawRange(0, 0);
+        slot.geo = geo; slot.ib = ib; slot.cap = (arr.length / slot.stride) | 0;
+        return true;
+      }
       function uploadStream(slot, floats) {
         setRange0(slot.ib, floats);   // one cached range per stream (A7): addUpdateRange minted one per upload
         slot.ib.needsUpdate = true;
@@ -2210,6 +2303,8 @@ const TLX = (function () {
         attrs: [["position", 3, 0], ["lineAcross", 1, 3], ["lineSpeed", 1, 4], ["lineZone", 1, 5], ["lineAlong", 1, 6]] };
       const glowStream = { geo: null, ib: null, cap: 0, min: 32 * 6, stride: 9,
         attrs: [["fxCorner", 2, 0], ["position", 3, 2], ["fxColor", 3, 5], ["fxRadius", 1, 8]] };
+      let _wrapPart = true;   // R9 A/B handle: apex26.tlxPartWrap=0 restores the copy into TLX's own array
+      try { _wrapPart = localStorage.getItem("apex26.tlxPartWrap") !== "0"; } catch (_) { /* no storage: wrap */ }
       const PART_ATTRS = [["fxCorner", 2, 0], ["position", 3, 2], ["fxColor", 3, 5], ["fxSize", 1, 8], ["fxAlpha", 1, 9]];
       const partStreams = [
         { geo: null, ib: null, cap: 0, min: 256 * 6, stride: 10, attrs: PART_ATTRS },   // alpha group
@@ -2256,7 +2351,7 @@ const TLX = (function () {
           for (let i = 0; i < meshPool.length; i++) {
             const pm = meshPool[i];
             if (pm.material !== fx.lineMat) continue;
-            out.meshes++; if (pm.visible) out.visible++; if (pm.parent === scene) out.inScene++;
+            out.meshes++; if (pm.visible) out.visible++; if (pm.parent === scene || (pm.parent === poolRoot && poolRoot.children.includes(pm))) out.inScene++;
             const g = pm.geometry;
             out.geo = { index: g.index ? g.index.count : null, indexType: g.index ? g.index.array.constructor.name : null,
               range: g.drawRange.count, pos: g.attributes.position ? g.attributes.position.count : null,
@@ -2348,8 +2443,8 @@ const TLX = (function () {
       // work, and this is one early return, not a deletion.
       // Read through GameStore like every other setting, so CAR REFLECTIONS
       // exports, imports and resets with the rest of DISPLAY.
-      let _envOptOut = true;
-      try { _envOptOut = GameStore.store.raw("apex26.tlxEnvProbe") !== "1"; } catch (_) { /* no store: stay opted out */ }
+      // `_envOptOut` itself is read up at the env-target allocation (R4): opted
+      // out, no cube target exists and the lit shader compiles the tap out.
       // OPT-IN since the real-Metal A/B (PERF-FINDINGS §2ag, censuses 243/244):
       // with it off the race compiled the same 8 scene programs and no post
       // program, because the post recompiles were ssrTag-node churn (tsl-fx.js),
@@ -2484,15 +2579,16 @@ const TLX = (function () {
         _warmStages.at = Math.round(_warmAt); _warmStages.attempts = _warmAttempts;
         const target = renderer.getRenderTarget(), mrt = renderer.getMRT();
         const usePost = !!(post && post.enabled() && _postF.proj && !vizMat);
+        const useTag = usePost && (!post.tagOn || post.tagOn());   // R3: present()'s MRT rule
         // r185 reads renderer target/MRT again AFTER awaits while building nodes.
         // Keep all render state owned by this task until compilation settles.
         _warmPending = (async () => {
           try {
             pinSkyMaterial();
             mintLateLit();
-            if (lit && lit.setSsrMrt) lit.setSsrMrt(usePost);
-            if (fx && fx.setSsrMrt) fx.setSsrMrt(usePost);
-            renderer.setMRT(usePost ? _ssrMrtNode() : null);
+            if (lit && lit.setSsrMrt) lit.setSsrMrt(useTag);
+            if (fx && fx.setSsrMrt) fx.setSsrMrt(useTag);
+            renderer.setMRT(useTag ? _ssrMrtNode() : null);
             renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
             let _tStage = performance.now();
             _gpuLastOperation = "compile-scene";
@@ -2557,7 +2653,7 @@ const TLX = (function () {
               _gpuLastOperation = "compile-mirror";
               await renderer.compileAsync(scene, camera);
               // The composite, like all post quads, draws under the main MRT.
-              renderer.setMRT(usePost ? _ssrMrtNode() : null);
+              renderer.setMRT(useTag ? _ssrMrtNode() : null);
               // So does the cockpit's live glass (drawMirrorGlass), in the scene
               // pass: compiled here on createTexMesh's layout, both winding signs
               // (the pipeline keys on the matrix's determinant), or its first
@@ -2800,7 +2896,10 @@ const TLX = (function () {
         }
         m.matrixWorldNeedsUpdate = false;
         m.visible = true;
-        if (!m.parent) scene.add(m);
+        if (_r6) {
+          if (m.parent !== poolRoot) { if (m.parent) m.parent.remove(m); m.parent = poolRoot; }
+          if (_kidBatch === _poolBatch) _kids[_kidN++] = m;
+        } else if (!m.parent) scene.add(m);
         return m;
       }
 
@@ -3336,6 +3435,21 @@ const TLX = (function () {
       // written to webgl2 (session skip + reload if even classic dies).
       // postOnly: the failure may be the post chain alone and the canvas repaint
       // below still paints on TLX — then the session stays bound to three.
+      const refuseTab = () => {
+        const toGlx = _glPin === "0" || _glPin === "1" || forceWebGL || _autoStayGL;
+        try { sessionStorage.setItem(toGlx ? "apex26.gfxClaimFail" : "apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps its path */ }
+        try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* skipClaim still blocks revert */ }
+        let n;
+        try {
+          n = (parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) + 1;
+          sessionStorage.setItem("apex26.ctxLostReloads", String(n));
+        } catch (_) { n = ++_sessLostN; }
+        if (n <= 2) { try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
+        try {
+          if (typeof window.__apexReportError === "function")
+            window.__apexReportError("gfx", new Error("The graphics renderer cannot draw on this device — reload to try again, or pick another RENDERER in settings."));
+        } catch (_) { /* shell card absent */ }
+      };
       const persistFail = (e, postOnly) => {
         const reason = (e && e.message) || String(e);
         _lastFailure = { reason, at: Date.now() };
@@ -3831,6 +3945,7 @@ const TLX = (function () {
             return;
           }
           _poolBatch++;
+          _kidsBegin(_kidsEnv);
           _instStamp++;
           for (let i = 0; i < drawList.n; i++) {
             const rec = drawList[i];
@@ -3844,7 +3959,7 @@ const TLX = (function () {
             }
             acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
           }
-          for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
+          _poolShow();
           _hideUndrawnInstanced();
           // Baseline at the first face of each probe pass.
           if (envFacesMask === 0) { _envErrBase = _gpuErrors; _envFaceErr = false; }
@@ -3994,6 +4109,7 @@ const TLX = (function () {
           _mirActive = false;
           try {
             _poolBatch++;
+            _kidsBegin(_kidsMir);
             for (let i = 0; i < drawList.n; i++) {
               const rec = drawList[i];
               if (rec.instanced) { _showInstanced(rec, i); continue; }
@@ -4006,7 +4122,7 @@ const TLX = (function () {
               }
               acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
             }
-            for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
+            _poolShow();
             _hideUndrawnInstanced();
             if (scene.backgroundNode) pinSkyMaterial();
             renderer.setRenderTarget(mirRT);
@@ -4306,6 +4422,7 @@ const TLX = (function () {
               && (typeof performance !== "undefined" ? performance.now() : Date.now()) >= _postRetryAt) {
             _postRebuild = false; post = buildPost(); if (post) post.resize(W, H);
           }
+          _tagSwap();
           _instStamp++;
           const z = frame && frame.skyZenith;
           const f = (z && z.length >= 3) ? z
@@ -4530,11 +4647,15 @@ const TLX = (function () {
           if (dirty !== false && !data) return;
           const slot = partStreams[additive ? 1 : 0];
           const verts = (floatCount / 10) | 0;
-          const fresh = ensureStream(slot, verts);
+          // R9: wrap the producer's own Float32Array when it can be the vertex buffer (a whole
+          // number of 10-float vertices, holding the payload); anything else is copied as before.
+          const wrap = !!(data && data instanceof Float32Array && data.length >= floatCount
+            && data.length % slot.stride === 0 && _wrapPart);
+          const fresh = wrap ? wrapStream(slot, data) : ensureStream(slot, verts);
           if (dirty !== false || fresh) {
             if (!data) return;
             // set() the source whole when it is exactly the payload; a subarray view only when it is longer.
-            slot.ib.array.set(data.length <= floatCount ? data : data.subarray(0, floatCount));
+            if (slot.ib.array !== data) slot.ib.array.set(data.length <= floatCount ? data : data.subarray(0, floatCount));
             uploadStream(slot, floatCount);
           }
           slot.geo.setDrawRange(0, verts);
@@ -4551,6 +4672,7 @@ const TLX = (function () {
         decalRuns: true,   // CarMesh queues its tail glows into one run (F3)
         present(opts) {
           _poolBatch++;
+          _kidsBegin(_kidsMain);
           _poolNow = typeof performance !== "undefined" ? performance.now() : Date.now();
           prunePool(_poolNow);
           flushDropped();
@@ -4708,7 +4830,7 @@ const TLX = (function () {
             }
             acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
           }
-          for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
+          _poolShow();
           // Hide InstancedMeshes that were not drawn this frame (still in scene).
           _hideUndrawnInstanced();
           // Do not render over an in-flight node build. A time budget may skip
@@ -4720,22 +4842,7 @@ const TLX = (function () {
           // has nothing lower on TLX, so it binds GLX (gfxClaimFail): tlxAutoGL there reproduced the same boot for ever.
           // The reload spends the shared ctxLostReloads budget (n <= 2, like the heal path below); past it the latch is
           // still written for the player's own next reload, but nothing reloads on its own.
-          // (persistFail / paintCanvas / dropTo are hoisted above present(): one closure set per renderer, not four a frame.)
-          const refuseTab = () => {
-            const toGlx = _glPin === "0" || _glPin === "1" || forceWebGL || _autoStayGL;
-            try { sessionStorage.setItem(toGlx ? "apex26.gfxClaimFail" : "apex26.tlxAutoGL", "1"); } catch (_) { /* this tab keeps its path */ }
-            try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* skipClaim still blocks revert */ }
-            let n;
-            try {
-              n = (parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) + 1;
-              sessionStorage.setItem("apex26.ctxLostReloads", String(n));
-            } catch (_) { n = ++_sessLostN; }
-            if (n <= 2) { try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
-            try {
-              if (typeof window.__apexReportError === "function")
-                window.__apexReportError("gfx", new Error("The graphics renderer cannot draw on this device — reload to try again, or pick another RENDERER in settings."));
-            } catch (_) { /* shell card absent */ }
-          };
+          // (persistFail / paintCanvas / dropTo / refuseTab are hoisted above present(): one closure set per renderer, none a frame — R13.)
           let painted = false;
           try {
             // Garage / menu frames set noEnv (setup-camera may still pass
@@ -4761,9 +4868,10 @@ const TLX = (function () {
             } else if (post && _postF.proj && !_postF.noEnv) {
               pinSkyMaterial();
               skyCacheStep();   // E1: before the MRT goes on (its own target, MRT null)
-              if (lit && lit.setSsrMrt) lit.setSsrMrt(true);
-              if (fx && fx.setSsrMrt) fx.setSsrMrt(true);
-              const _hadMrt = !!(TSL.mrt && renderer.setMRT);
+              const _tag = !post.tagOn || post.tagOn();   // R3: a one-attachment scene target takes no MRT
+              if (_tag && lit && lit.setSsrMrt) lit.setSsrMrt(true);
+              if (_tag && fx && fx.setSsrMrt) fx.setSsrMrt(true);
+              const _hadMrt = _tag && !!(TSL.mrt && renderer.setMRT);
               const _prevMrt = _hadMrt && renderer.getMRT ? renderer.getMRT() : null;
               if (_hadMrt) renderer.setMRT(_ssrMrtNode());
               if (post.setMirror) {
@@ -5215,7 +5323,7 @@ const TLX = (function () {
             return o;
           },
           async shader(idx = 0) {
-            const meshes = scene.children.filter((o) => o.isMesh && o.visible);
+            const meshes = scene.children.concat(poolRoot.children).filter((o) => o.isMesh && o.visible);
             const target = meshes[idx];
             if (!target) return null;
             const out = await renderer.debug.getShaderAsync(scene, camera, target);

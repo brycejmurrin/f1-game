@@ -174,8 +174,17 @@
     // constructor throw still releases a partially-created depth texture.
     const sceneDepthTex = ownTexture(new THREE.DepthTexture(1, 1));
     sceneDepthTex.name = "TLXSceneDepth";
+    // R3 (perf hunt 3): ctx.ssrTag false builds the scene target with ONE
+    // colour attachment. tlx.js passes false only while nothing can read the
+    // tag for the session (phone MEDIUM: po.reflect and po.carReflect are 0 at
+    // tier >= 2, and the heat haze is mobileTier-gated off), so every scene
+    // fragment stops writing — and a tile GPU stops storing — an attachment
+    // the composite never fetches. The tag slot then binds its OWN 1x1 white
+    // ("not car", the tag's background value): three merges texture nodes
+    // that share a texture into one sampler (hunt-1 lesson 4).
+    const tagOn = ctx.ssrTag !== false;
     const sceneRT = ownRT(new THREE.RenderTarget(1, 1, {
-      type: hdrType, count: 2, depthBuffer: true, depthTexture: sceneDepthTex,
+      type: hdrType, count: tagOn ? 2 : 1, depthBuffer: true, depthTexture: sceneDepthTex,
       samples: ctx.sceneSamples || 0, resolveDepthBuffer: true,   // SCENE MSAA (header)
     }));
     ownedTextures.delete(sceneDepthTex); // sceneRT.dispose owns it from here
@@ -188,9 +197,9 @@
     // same bytes as RGBA's .r. A RED target makes the tag output a float, so
     // on WebGL2 without per-attachment blending (no OES_draw_buffers_indexed)
     // material blending would read an undefined src alpha — keep RGBA there.
-    let sceneTagTex = sceneRT.texture;
+    let sceneTagTex = tagOn ? sceneRT.texture : onePx(255);
     const bk = renderer.backend || {};
-    if (sceneRT.textures && sceneRT.textures[1]) {
+    if (tagOn && sceneRT.textures && sceneRT.textures[1]) {
       if (bk.isWebGPUBackend || bk.drawBuffersIndexedExt) sceneRT.textures[1].format = THREE.RedFormat;
       sceneRT.textures[1].name = "ssrTag";
       sceneRT.textures[1].generateMipmaps = false;
@@ -851,6 +860,7 @@
       enabled: () => true,
       hdrOk: () => hdr,
       sceneTarget: () => sceneRT,
+      tagOn: () => tagOn,   // R3: false = one colour attachment, present() must not set the ssrTag MRT
       // UnsignedByte composite (FXAA input) — the screenshot / soft-present
       // source. three's readRenderTargetPixelsAsync → backend.copyTextureToBuffer
       // + mapAsync (WebGPU Fundamentals / Explainer). Never getCurrentTexture.
@@ -871,6 +881,7 @@
       state: () => ({
         on: true,
         hdr,
+        attachments: tagOn ? 2 : 1,
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
         targets: [W, H],
