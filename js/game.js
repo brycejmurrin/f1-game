@@ -6894,8 +6894,7 @@ function render(dt) {
     }
     return;
   }
-  if (setupCam.endGarageRes) setupCam.endGarageRes();
-  gfx.resize();
+  setupCam.endGarageRes(); gfx.resize(); // first world frame: restore the garage's reduced res
   // No track yet (the menus build none — the flyby belongs to RACE SETTINGS, see
   // scheduleFlybyTrack): DRAW NOTHING. alpha:false composites an undrawn canvas
   // as opaque BLACK, which the blessed menu baselines encode (corners 4-9/255).

@@ -644,7 +644,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
-| `carReflect` | CAR REFLECTION | 0 … 1 | 0.05 | `uCarReflect` | ✓ | game.js, post.js×6 |
+| `carReflect` | CAR REFLECTION | 0 … 1 | 0.05 | `uCarReflect` | ✓ | game.js, setup-camera.js, post.js×6 |
 | `carEnvCube` | ENV REFLECTION | 0 … 1 | 0.3 | — | ✓ | game.js, glx.js×2 |
 | `carGloss` | PAINT GLOSS | 0.2 … 1.4 | 1 | `uCarGloss` | ✓ | game.js |
 | `carSpecular` | PAINT SPECULAR | 0 … 2.5 | 1 | — | ✓ | game.js |
