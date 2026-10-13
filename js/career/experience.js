@@ -28,10 +28,11 @@ const CareerExperience = (function () {
     };
   }
 
+  const GARAGE_IDLE = Object.freeze({ active: false });
   function garageMetadata() {
-    if (typeof Career === "undefined" || !Career.inCareer()) return { active: false };
+    if (typeof Career === "undefined" || !Career.inCareer()) return GARAGE_IDLE;
     const c = Career.data(), st = Career.state();
-    if (!c || !st) return { active: false };
+    if (!c || !st) return GARAGE_IDLE;
     return Object.assign({ active: true, teamId: c.team, year: c.year,
       facility: st.facility, facilityMax: Career.FACILITY_MAX,
       discount: st.facilityDiscount, points: c.season.pts[c.team + ":" + c.seat] || 0,

@@ -1223,6 +1223,25 @@ let _livSeq = 0;
 function livIdCounter() { _livSeq = (_livSeq + 1) % 1000; return String(Date.now()) + _livSeq; }
 
 let _livPreviewKey = "";
+let _livPrevDraft = null;
+// These never land in Car3D.build. A drag still invalidates the decal atlas;
+// it must not also throw away the preview mesh (a full car rebuild on a phone).
+const MESH_FREE_DRAFT = { logo: 1, logo2: 1, logo3: 1, sponsors: 1, numFont: 1, finStyle: 1, finBadge: 1, name: 1 };
+function draftSkipsMesh(prev, next) {
+  if (!prev) return false;
+  const seen = Object.create(null);
+  const keys = Object.keys(prev).concat(Object.keys(next));
+  let any = false;
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    if (seen[k]) continue;
+    seen[k] = 1;
+    if (prev[k] === next[k]) continue;
+    any = true;
+    if (!MESH_FREE_DRAFT[k]) return false;
+  }
+  return any;
+}
 let _livPreviewTimer = null, _livPreviewPending = null;
 function cancelLivPreview() {
   if (_livPreviewTimer != null) clearTimeout(_livPreviewTimer);
@@ -1247,18 +1266,21 @@ function flushLivPreview() {
 function livePreviewDraft(team, d) {
   const key = team.id + "|" + JSON.stringify(d);
   if (key === _livPreviewKey) return;
+  const skipMesh = draftSkipsMesh(_livPrevDraft, d);
   _livPreviewKey = key;
+  _livPrevDraft = Object.assign({}, d);
   if (invalidateDecalTextures) invalidateDecalTextures(team.id);
   // id:"default" keeps brand plates / markOnField on while editing — a draft
   // without an id skipped the plated-mark path and looked like a bare car.
   G.livDraftOverride = { teamId: team.id,
     liv: Object.assign({ id: "default", c1: hexToArr(d.c1), c2: hexToArr(d.c2) }, livDraftTo(d, true)) };
-  G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
+  if (!skipMesh) G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 
 function endLivPreview(team) {
   cancelLivPreview();
   _livPreviewKey = "";
+  _livPrevDraft = null;
   G.livDraftOverride = null;
   if (invalidateDecalTextures) invalidateDecalTextures(team.id);
   G._spMeshKey = "";

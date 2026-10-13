@@ -25,7 +25,7 @@ function panelCover(pr, cr, cw, ch, camTop) {
 
 // Garage present, in the same units as the race path (game.js):
 //   exposure  = base * LT.exposureMul
-//   bloom     = base * LT.bloomMul   (shed at autoTier 4, same as race)
+//   bloom     = base * LT.bloomMul   (off on a phone, and shed at autoTier 4)
 //   threshold = clamp(base + LT.threshOff, 0.4, 1.2) * baseExposure
 //   tune.sunShaftMul is FORCED OFF. The bay's "sun" is a soft roof fill
 //   (GarageScene.SKYLIGHT, dir Y≈0.86) — PostCommon.sunScreen still arms a
@@ -50,14 +50,24 @@ function _tuneNum(T, id, fallback) {
   return T && Number.isFinite(T[id]) ? T[id] : fallback;
 }
 // Reused every garage frame — gfx.present / begin consume opts synchronously.
-const _presentOpts = { exposure: 0, bloom: 0, threshold: 0, contact: 0, tune: null };
+const _presentOpts = {
+  exposure: 0, bloom: 0, threshold: 0, contact: 0, reflect: 0, carReflect: 0,
+  ssao: 0, godray: 0, bloomLevels: 0, tune: null,
+};
 const _presentTune = { sunShaftMul: 0 };
+// A phone boots GRAPHICS MEDIUM, and the governor never ticks in the bay, so
+// autoTier stays 0. Without this the present runs the full bloom mip chain
+// (bloomLevels 0 means "all of them") plus the 0.05 car-paint SSR default.
+function garagePhone() {
+  return typeof GLX !== "undefined" && !!(GLX && (GLX.isMobile || GLX.mobileTier));
+}
 function presentOpts(tune) {
   const T = tune === undefined ? liveTune() : tune;
   const exposureMul = _tuneNum(T, "exposureMul", 1);
   const bloomMul = _tuneNum(T, "bloomMul", 1);
   const threshOff = _tuneNum(T, "threshOff", 0);
-  const shed = typeof PerfGov !== "undefined" && PerfGov.autoTier && PerfGov.autoTier() >= 4;
+  const phone = garagePhone();
+  const shed = phone || (typeof PerfGov !== "undefined" && PerfGov.autoTier && PerfGov.autoTier() >= 4);
   const t = SP_THRESH + threshOff;
   const threshold = (t < 0.4 ? 0.4 : t > 1.2 ? 1.2 : t) * SP_EXPOSURE;
   // Kill screen sun-shafts regardless of the race slider / track preset.
@@ -68,6 +78,18 @@ function presentOpts(tune) {
   _presentOpts.bloom = shed ? 0 : SP_BLOOM * bloomMul;
   _presentOpts.threshold = threshold;
   _presentOpts.contact = 0;
+  // A closed bay has no wet road and no env probe. Omitted carReflect is the
+  // 0.05 tuner default, which still marches car-paint SSR and blits depth.
+  _presentOpts.reflect = 0;
+  _presentOpts.carReflect = 0;
+  _presentOpts.ssao = 0;
+  _presentOpts.godray = 0;
+  let levels = 0;
+  if (!shed && typeof PerfGov !== "undefined" && PerfGov.userTier) {
+    const ut = PerfGov.userTier() | 0, as = PerfGov.autoShed ? PerfGov.autoShed() | 0 : 0;
+    levels = (as >= 3 || ut >= 4) ? 2 : ((as >= 1 || ut >= 2) ? 3 : 0);
+  }
+  _presentOpts.bloomLevels = levels;
   _presentOpts.tune = _presentTune;
   return _presentOpts;
 }
@@ -561,10 +583,41 @@ const _spProj = new Float32Array(16), _spView = new Float32Array(16), _spVP = ne
 const _spInvProj = new Float32Array(16);
 const _spEye = [0, 0, 0], _spUp = [0, 1, 0], _spSun = [0, 0.86, 0.51];
 const _spLiv = () => resolveLivery(Teams.LIST[G.teamIdx]);   // memoised on store.rev
+// Phone fill-rate. The bay shares the race framebuffer and the governor never
+// ticks here, so renderScale stays 1 under a 1.5× DPR — including the pixels
+// hidden by the sheet. 0.72 brings a 1.5× phone back to about 1× CSS pixels.
+// Restored on the first world frame (endGarageRes). Photo studio stays sharp.
+const GARAGE_PHONE_SCALE = 0.72;
+let _resPinned = false, _resPrev = 1;
+function pinGarageRes() {
+  if (_resPinned || !(gfx.isMobile || gfx.mobileTier) || !gfx.setRenderScale || !gfx.getRenderScale) return;
+  const cur = gfx.getRenderScale();
+  _resPrev = cur;
+  _resPinned = true;
+  if (cur > GARAGE_PHONE_SCALE + 0.02) gfx.setRenderScale(GARAGE_PHONE_SCALE);
+}
+function endGarageRes() {
+  if (!_resPinned) return;
+  _resPinned = false;
+  if (gfx.setRenderScale) gfx.setRenderScale(_resPrev || 1);
+}
+// Panel coverage does not move with the turntable. Cache the rects until the
+// canvas, the sheet, the camera strip, or CSS zoom actually changes.
+const _covPr = { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 };
+const _covCr = { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 };
+let _covKey = "", _covX = 0, _covY = 0;
+function _stampRect(out, r) {
+  out.left = r.left; out.top = r.top; out.width = r.width; out.height = r.height;
+  out.right = r.right; out.bottom = r.bottom;
+  return out;
+}
 function renderSetupPreview(dt, holdDriveOut = false) {
   // The race's HUD mirror: render() never reaches its slot on a garage frame,
   // so its rect stayed set and present() composited it over the car.
   if (typeof MirrorPass !== "undefined" && MirrorPass.instance()) MirrorPass.instance().standDown();
+  // Photo studio stays at the race resolution; every other bay frame sheds.
+  if (home.active && $("photo-studio") && !$("photo-studio").hidden) endGarageRes();
+  else pinGarageRes();
   gfx.resize();
   const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt);
   if (!home.active && (!arriving || !arriving.active)) applyHeldSetupCam(dt);                               // held on-screen controls
@@ -598,18 +651,27 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   let panelFrac = 0, panelFracY = 0;
   if (!(arriving && arriving.active) && canvasEl && panelEl && canvasEl.clientWidth > 0 && canvasEl.clientHeight > 0) {
     // Visual coverage vs the unzoomed canvas (A13). viewportRect scales up on
-    // engines where gBCR is still local under CSS zoom.
-    const pr = (window.CssZoom && CssZoom.viewportRect(panelEl)) || panelEl.getBoundingClientRect();
-    if (home.active) homePane = GarageExperience.freePane(pr, canvasEl.getBoundingClientRect());
-    // Portrait: centre the car in what is left between the sheet and the OPEN
-    // camera panel (bottom of the same gap), not behind the buttons that aim it.
-    const camTop = () => {
-      const cam = home.active ? null : $("cs-cam-panel");
-      return cam && !cam.hidden && cam.offsetParent !== null
-        ? ((window.CssZoom && CssZoom.viewportRect(cam)) || cam.getBoundingClientRect()).top : canvasEl.clientHeight;
-    };
-    const cover = panelCover(pr, canvasEl.getBoundingClientRect(), canvasEl.clientWidth, canvasEl.clientHeight, camTop);
-    panelFrac = cover.x; panelFracY = cover.y;
+    // engines where gBCR is still local under CSS zoom. The dock does not move
+    // with the turntable, so a matching size/zoom key keeps the last rects.
+    const cam = home.active ? null : $("cs-cam-panel");
+    const camOn = !!(cam && !cam.hidden && cam.offsetParent !== null);
+    const zP = window.CssZoom ? CssZoom.of(panelEl) : 1;
+    const zC = window.CssZoom ? CssZoom.of(canvasEl) : 1;
+    const key = canvasEl.clientWidth + "x" + canvasEl.clientHeight
+      + "|" + panelEl.clientWidth + "x" + panelEl.clientHeight
+      + "|" + (camOn ? cam.clientWidth + "x" + cam.clientHeight : "0")
+      + "|" + zP + "|" + zC + "|" + (home.active ? 1 : 0);
+    if (key !== _covKey) {
+      const pr = _stampRect(_covPr, (window.CssZoom && CssZoom.viewportRect(panelEl)) || panelEl.getBoundingClientRect());
+      const cr = _stampRect(_covCr, canvasEl.getBoundingClientRect());
+      const camTop = () => camOn
+        ? ((window.CssZoom && CssZoom.viewportRect(cam)) || cam.getBoundingClientRect()).top
+        : canvasEl.clientHeight;
+      const cover = panelCover(pr, cr, canvasEl.clientWidth, canvasEl.clientHeight, camTop);
+      _covX = cover.x; _covY = cover.y; _covKey = key;
+    }
+    if (home.active) homePane = GarageExperience.freePane(_covPr, _covCr);
+    panelFrac = _covX; panelFracY = _covY;
   }
   // FIT THE VISIBLE REGION, NOT THE WHOLE CANVAS. SP_DIST_DEF clears the full
   // frustum — but a third of that frustum is behind the panel, so there the
@@ -902,7 +964,7 @@ return {
   captureCamera, restoreCamera,
   startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival: arrival.cancel,
   startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; },
-  renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust,
+  renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
   setSetupAim(p) { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },
   setSetupFree(on) { setupPreviewFree = !!on; },
