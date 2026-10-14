@@ -279,16 +279,18 @@
       });
       // Service roads cutting the hills (asphalt ribbons; silverstone idiom).
       // Gaps stay outside hillsideTerrace KEEP_OUT belts (≤46 m).
-      const ASPH = [0.30, 0.31, 0.32];
-      for (const [id, s, side, gap, len] of [
-        ["t1-ridge", 0.12, 1, 56, 55],
-        ["mid-shelf", 0.40, -1, 58, 70],
-        ["t11-cut", 0.58, 1, 54, 60],
-        ["final-brow", 0.80, -1, 58, 55],
-        ["paddock-link", 0.94, 1, 40, 48],
+      // Darker, thinner ribbons — thick slabs read as floating foundations on
+      // the Algarve grass (survey 2026-10-14 captures 03, 08, 12).
+      const ASPH = [0.26, 0.25, 0.24];
+      for (const [id, s, side, gap, len, samples] of [
+        ["t1-ridge", 0.12, 1, 56, 55, 8],
+        ["mid-shelf", 0.40, -1, 58, 70, 11],
+        ["t11-cut", 0.58, 1, 54, 60, 11],
+        ["final-brow", 0.80, -1, 58, 55, 8],
+        ["paddock-link", 0.94, 1, 40, 48, 8],
       ]) {
-        groundPatch(K(s), side, gap, [6.5, 0.12, len], ASPH, {
-          id: `portimao-service-${id}`, samples: 7,
+        groundPatch(K(s), side, gap, [6.5, 0.09, len], ASPH, {
+          id: `portimao-service-${id}`, samples,
         });
       }
       // Low scrub patches (ground-hugging; not bush() stems that bury in cuts).
@@ -358,12 +360,13 @@
               addCyl(stage, vadd(vadd(vadd(foot, a.t, off), a.r, -8.6), a.u, bodyH * 0.55),
                 0.14, bodyH + 4.5, [0.88, 0.88, 0.90], 6, b);
             }
-            // Algarve identity band on the track-facing fascia (DETAIL 2026-10-05).
+            // Algarve identity stripes on the lime façade — thin bands so orbit
+            // / TV shots read whitewash paddock blocks, not solid green walls.
             stage._mat = MAT.METAL;
-            addBox(stage, vadd(vadd(foot, a.r, -7.8), a.u, bodyH * 0.72),
-              [0.25, 0.85, 26], [0.16, 0.44, 0.26], b);
-            addBox(stage, vadd(vadd(vadd(foot, a.r, -7.8), a.t, 8), a.u, bodyH * 0.72),
-              [0.25, 0.85, 8], [0.76, 0.16, 0.16], b);
+            addBox(stage, vadd(vadd(foot, a.r, -7.85), a.u, bodyH * 0.58),
+              [0.22, 0.42, 26], [0.16, 0.44, 0.26], b);
+            addBox(stage, vadd(vadd(vadd(foot, a.r, -7.85), a.t, 8), a.u, bodyH * 0.66),
+              [0.22, 0.38, 8], [0.76, 0.16, 0.16], b);
             stage._mat = 0;
           }
         };
