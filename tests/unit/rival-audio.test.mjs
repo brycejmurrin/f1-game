@@ -120,6 +120,13 @@ test("rev is normalised from their own rpm", () => {
   assert.equal(got[1].rev, 1, "redline is 1");
 });
 
+test("emitFieldSfx is exported and is a no-op without GameAudio.fieldContact", () => {
+  const me = car({ s: 500 });
+  const R = load().create({ track: { total: LAP }, cars: [me, car({ s: 510, wheelLock: 1, speed: 40 })] });
+  assert.equal(typeof R.emitFieldSfx, "function");
+  assert.doesNotThrow(() => R.emitFieldSfx(me));
+});
+
 test("the returned rows are reused, so a caller must read them before the next call", () => {
   // Not a wart to fix — a contract to state. This runs beside setEngine every
   // frame, and allocating a row per car would hand the GC 21 objects a frame to

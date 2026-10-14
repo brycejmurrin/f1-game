@@ -693,6 +693,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
   "tests/unit/results-cam.test.mjs",
   "tests/unit/rival-audio.test.mjs",
+  "tests/unit/rival-contact-sfx.test.mjs",
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
   "tests/unit/road-lut-frame.test.mjs",

@@ -4699,6 +4699,7 @@ function update(dt) {
     // The field around you: panned, distance-rolled and Doppler-shifted. Before
     // this there was no opponent audio at all, so a car alongside was silent.
     GameAudio.setRivals(rivalAudio.collect(player));
+    if (rivalAudio.emitFieldSfx) rivalAudio.emitFieldSfx(player);   // Radio r9: AI lock-up / slide squeal
   }
   if (soundOn && player) carSfx.update(player);
 }
@@ -4739,7 +4740,17 @@ const _alRGB = [0, 0, 0];   // always-on lights: the per-frame colour triple
 // Collision feedback when the player is involved, scaled by impact (0..1).
 function collideFx(a, b, impact) {
   Damage.contact(a, b, impact, track.total);   // every pair, before the player-only gate: DISPLAY ONLY (js/race/damage.js)
-  if (!a.isPlayer && !b.isPlayer) return;
+  if (!a.isPlayer && !b.isPlayer) {
+    // Radio r9: rival–rival positional contact SFX. Player path below is untouched.
+    if (soundOn && state === "race" && !paused && GameAudio.fieldContact) {
+      const wx = (a.px != null && b.px != null) ? (a.px + b.px) * 0.5 : (a.px != null ? a.px : b.px);
+      const wz = (a.pz != null && b.pz != null) ? (a.pz + b.pz) * 0.5 : (a.pz != null ? a.pz : b.pz);
+      const ia = cars.indexOf(a), ib = cars.indexOf(b);
+      const key = ia >= 0 && ib >= 0 ? (ia < ib ? ia * 64 + ib : ib * 64 + ia) : (ia >= 0 ? ia : ib);
+      GameAudio.fieldContact("bump", impact, wx, wz, key);
+    }
+    return;
+  }
   const pc = a.isPlayer ? a : b;
   if (pc.collideT > 0) return;
   impact = clamp(impact, 0.12, 1);
