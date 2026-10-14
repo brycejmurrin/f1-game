@@ -2801,20 +2801,23 @@ async function startRaceBody() {
   if (PerfGov.strikes() > 0 && PerfGov.autoRes() && gfx.setRenderScale && gfx.getRenderScale)
     gfx.setRenderScale(Math.min(gfx.getRenderScale(), PerfGov.strikes() >= 2 ? 0.7 : 0.85));
   // Car meshes + debris BEFORE countdown warm presents (#1477 shape: first present
-  // must not collide with heavy sync work). Cover up first, then warm, then arm.
+  // must not collide with heavy sync work). Cover up first, then warm, settle pack,
+  // THEN arm count — FlyingStart arms on count enter and goRolling() to race; awaiting
+  // pack AFTER setState("count") burned the quali/TT run-up (prog ≈ −24 vs < −100).
   const handoff = (loadingScreen.active() || loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !!player;
   clearMenuScreens(); garagePre.release();
   if (handoff) RaceEntryProfile.raiseHandoff(loadingScreen);
   RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
-  setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
   // Gate program warm on pack settle (cold Start Race while createTextureArray runs).
+  // Still under cover / pre-count so the rAF loop cannot drive FlyingStart.
   if (!vmNoFramePump && awaitPackSettled) {
     const settled = loadingScreen.packSettled || LoadingScreen.packSettled;
     await awaitPackSettled({ yieldFn: yieldMain, stale, settled,
       getState: () => (typeof Assets !== "undefined" && Assets.state ? Assets.state() : null) });
     if (stale()) return false;
   }
+  setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
   // TLX links programs on first draw — warm during LIGHTS unless the menu already did.
   try { RaceEntryProfile.requestWarm(gfx, _warmKey === menuKey(trackIdx)); } catch (_) { /* as above */ }
   skids.reset();

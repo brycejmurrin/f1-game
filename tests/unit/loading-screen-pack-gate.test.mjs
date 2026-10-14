@@ -49,3 +49,18 @@ test("instance exposes the same packSettled gate", () => {
   assert.equal(screen.packSettled({ supported: true, uploaded: false, error: null, tier: null }), false);
   assert.equal(screen.warmPresentReady({ supported: true, uploaded: true }), true);
 });
+
+test("startRaceBody settles the pack before setState(count) — FlyingStart must not burn the run-up", () => {
+  // Quali FLYING lap (CI #1493 tip-red): awaitPackSettled after count let
+  // FlyingStart.arm → goRolling drive ~300 m of run-up while createTextureArray
+  // ran; prog landed ≈ −24 instead of < −100.
+  const game = readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const body = game.slice(
+    game.indexOf("async function startRaceBody()"),
+    game.indexOf("const sessionEntry = SessionEntry.create();"));
+  const settle = body.indexOf("await awaitPackSettled");
+  const count = body.indexOf('setState("count", "race-start")');
+  assert.ok(settle > 0, "startRaceBody awaits pack settle");
+  assert.ok(count > 0, "startRaceBody arms countdown");
+  assert.ok(settle < count, "pack settle must finish before count (FlyingStart arms on enter)");
+});
