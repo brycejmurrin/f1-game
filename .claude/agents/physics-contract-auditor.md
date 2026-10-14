@@ -29,6 +29,9 @@ stopped is safe, one that implies completeness is not.
 
 ## The job
 
+0. Read the `docs/PHYSICS.md` column table first (§Curvature channels — the
+   "arc must not reach the driver" table): it lists every approved site and why.
+   A site already in it is classified; quote its row rather than re-deriving it.
 1. Run `node tools/check/vstd-lint.mjs` on the paths the parent named (or
    `js/game.js` plus the four domain directories that carry the reads —
    `js/physics/`, `js/race/`, `js/camera/`, `js/agent/` — if none). Report
@@ -50,6 +53,13 @@ stopped is safe, one that implies completeness is not.
    A site you cannot classify without a rendered lap is `unverified` — never
    run `tools/check/check-physics.mjs` / `tools/check/physics-tune-sweep.mjs`
    to find out.
+4. Print one row per site, at most 30 (then `… N more, unlisted`):
+
+```
+SITE  file:line  symbol  column:AI-only|assist-gated|broadcast-only|surface|BLOCKER|unverified  in-table:yes|no  why: "<one clause under 140 chars>"
+```
+
+End with `vstd-invariant: pass|fail` and `covered: <paths>  not covered: <paths>`.
 
 Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
 report with its gaps named beats silence. Hitting `maxTurns` mid-tool-call
