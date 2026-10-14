@@ -6,7 +6,7 @@
 **Data:** `js/circuits/vegas.js` · `js/circuits/scenery/vegas.js` (lazy `TrackScenery.vegas`)  
 **Hero models:** `tests/data/landmarks/vegas.json` (`vegas-sphere`, `vegas-wynn-encore`, `vegas-caesars`, `vegas-bellagio`, `vegas-paris-balloon`, `vegas-grand-prix-plaza`)
 
-Screenshots live under `artifacts/shots/tracks/vegas/` (committed once the shared survey tooling PR adds the `artifacts/shots/tracks/**` gitignore exception). Captured headless GLX (`--backend webgl2`, `APEX_GL=llvmpipe`), 1280×720, night default TOD unless noted.
+**Shots:** 35 JPEGs in [`artifacts/shots/tracks/vegas/`](../../../artifacts/shots/tracks/vegas/) (1280px max, q≈80). Captured headless GLX (`webgl2`, `APEX_GL=llvmpipe`).
 
 ## Code map
 
@@ -24,7 +24,7 @@ Screenshots live under `artifacts/shots/tracks/vegas/` (committed once the share
 - **Palette:** near-black sky/asphalt; neon magenta/cyan/gold on barriers, hoardings, and facades (`docs/tracks/vegas.md` §2).
 - **Required `modelGroup` heroes:** Sphere (LED frustum stack), Wynn/Encore twins, Caesars ivory mass, Bellagio + `waterSurface` lakes + fountain jets, Paris Montgolfier balloon, Grand Prix Plaza glass podium.
 - **High Roller:** `ferrisWheel` + `vegas-high-roller` model (runtime required; not in landmarks batch window).
-- **Perf:** ~343k prop tris after compaction; heaviest circuit in fleet — expect long single-browser capture (~35 frames ≈ 1 h wall on SwiftShader; ~35 min with llvmpipe batch).
+- **Perf:** ~343k prop tris after compaction; heaviest circuit in fleet.
 
 ## Node audits (2026-10-14)
 
@@ -37,19 +37,19 @@ audit-circuit.cjs vegas → OK (float 0, clip 0, ground within baseline, coplana
 
 | ID | Severity | Topic | Evidence | Notes |
 |----|----------|--------|----------|-------|
-| V1 | Low | Day + rain sky | `wx-sphere-day-rain.png` | `street_night` circuit under `day`/`rain` blows out sky; Sphere reads flat — expect engine/theme blend, not scenery-only |
-| V2 | Low | Fog density | `wx-pit-dawn-fog.png`, `wx-strip-mid-dawn-fog.png` | Heavy ground fog at dawn; landmarks remain readable; no z-fight observed |
-| V3 | Low | Overcast flattening | `wx-bellagio-day-overcast.png` | Grey sky + muted neon; distant Sphere silhouette visible from Strip — acceptable depth cue |
+| V1 | Low | Day + rain sky | `wx-sphere-day-rain.jpg` | `street_night` circuit under `day`/`rain` blows out sky; Sphere reads flat — expect engine/theme blend, not scenery-only |
+| V2 | Low | Fog density | `wx-pit-dawn-fog.jpg`, `wx-strip-mid-dawn-fog.jpg` | Heavy ground fog at dawn; landmarks remain readable; no z-fight observed |
+| V3 | Low | Overcast flattening | `wx-bellagio-day-overcast.jpg` | Grey sky + muted neon; distant Sphere silhouette visible from Strip — acceptable depth cue |
 | V4 | Info | Palm guard drops | verify-track | Six Strip `palm()` still suppressed (hoarding clearance); gap nudged 22→25 m in scenery (2026-10-14) — count unchanged, kept for setback |
-| V5 | Info | Night wet Strip | `wx-strip-mid-night-rain.png` | Rain streaks + wet sheen on tarmac; barrier neon still pops |
+| V5 | Info | Night wet Strip | `wx-strip-mid-night-rain.jpg` | Rain streaks + wet sheen on tarmac; barrier neon still pops |
 | V6 | None | Geometry | audits | No float/clip/ground regressions; 12 coplanar spots at baseline |
 
 ## Ranked improvements (backlog)
 
-1. **After shared shot PR:** Re-run weather matrix with `weather` batch field (4 anchors × dry/overcast/rain/fog × day/dusk/night) — replace ad-hoc track-session driver.
+1. **After shared shot PR:** Re-run weather matrix with `weather` batch field (4 anchors × dry/overcast/rain/fog × day/dusk/night).
 2. **Day/rain sky (V1):** Tune circuit `pal` / theme hooks when engine exposes per-weather presets (avoid whiteout at Sphere).
 3. **Palm drops (V4):** Re-audit after hoarding mesh tweak or sparser palm cadence on Strip (do not weaken guards).
-4. **Strip gateway readability:** Add low orbit framing at `sl(0.66)` in survey set (`s3-strip-gateway-orbit.png` covers).
+4. **Strip gateway readability:** Orbit framing at `sl(0.66)` — `s3-strip-gateway-orbit.jpg`.
 5. **High Roller:** Optional landmarks.json registration when batch window allows.
 
 ## Fix applied this branch
@@ -58,29 +58,36 @@ audit-circuit.cjs vegas → OK (float 0, clip 0, ground within baseline, coplana
 
 ---
 
-## Sector panels (night dry, unless noted)
+## Sector panels (weather: dry · time: night)
 
 ### Sector 1 — Pit / Koval / T5 (`s ≈ 0.00–0.29`)
 
-| Panel | Panel | Panel |
+| | | |
 |:---:|:---:|:---:|
-| `s1-pit-plaza.png` — pit plaza orbit | `s1-main-stand.png` — main grandstand chase | `s1-t5-approach.png` — T5 approach |
-| `s1-koval-right.png` — Koval right-hander | | |
+| ![Pit plaza orbit](../../../artifacts/shots/tracks/vegas/s1-pit-plaza.jpg) | ![Main stand chase](../../../artifacts/shots/tracks/vegas/s1-main-stand.jpg) | ![T5 approach](../../../artifacts/shots/tracks/vegas/s1-t5-approach.jpg) |
+| Pit plaza · orbit · night · dry | Main stand · chase · night · dry | T5 · chase · night · dry |
+| ![Koval right](../../../artifacts/shots/tracks/vegas/s1-koval-right.jpg) | | |
+| Koval T5 · orbit · night · dry | | |
 
 ### Sector 2 — Sphere loop / Venetian (`s ≈ 0.29–0.62`)
 
-| Panel | Panel | Panel |
+| | | |
 |:---:|:---:|:---:|
-| `s2-sphere-orbit.png` — MSG Sphere orbit | `s2-sphere-chicane.png` — Sphere chicane | `s2-wynn-encore.png` — Wynn / Encore twins |
-| `s2-venetian-entry.png` — Venetian / campanile entry | | |
+| ![Sphere orbit](../../../artifacts/shots/tracks/vegas/s2-sphere-orbit.jpg) | ![Sphere chicane](../../../artifacts/shots/tracks/vegas/s2-sphere-chicane.jpg) | ![Wynn Encore](../../../artifacts/shots/tracks/vegas/s2-wynn-encore.jpg) |
+| MSG Sphere · orbit · night · dry | Sphere chicane · chase · night · dry | Wynn/Encore · orbit · night · dry |
+| ![Venetian entry](../../../artifacts/shots/tracks/vegas/s2-venetian-entry.jpg) | | |
+| Venetian · chase · night · dry | | |
 
 ### Sector 3 — Strip / Harmon / S/F (`s ≈ 0.62–1.00`)
 
-| Panel | Panel | Panel |
+| | | |
 |:---:|:---:|:---:|
-| `s3-high-roller.png` — High Roller wheel | `s3-strip-gateway.png` — Strip gateway chase | `s3-strip-gateway-orbit.png` — gateway arch orbit |
-| `s3-caesars.png` — Caesars Palace | `s3-bellagio.png` — Bellagio + lake | `s3-paris-eiffel.png` — Paris / Eiffel |
-| `s3-strip-straight.png` — Strip straight | `s3-harmon-chicane.png` — Harmon chicane | `s3-start-finish.png` — start / finish |
+| ![High Roller](../../../artifacts/shots/tracks/vegas/s3-high-roller.jpg) | ![Strip gateway chase](../../../artifacts/shots/tracks/vegas/s3-strip-gateway.jpg) | ![Strip gateway orbit](../../../artifacts/shots/tracks/vegas/s3-strip-gateway-orbit.jpg) |
+| High Roller · orbit · night · dry | Strip gateway · chase · night · dry | Strip gateway · orbit · night · dry |
+| ![Caesars](../../../artifacts/shots/tracks/vegas/s3-caesars.jpg) | ![Bellagio](../../../artifacts/shots/tracks/vegas/s3-bellagio.jpg) | ![Paris Eiffel](../../../artifacts/shots/tracks/vegas/s3-paris-eiffel.jpg) |
+| Caesars · chase · night · dry | Bellagio · chase · night · dry | Paris/Eiffel · orbit · night · dry |
+| ![Strip straight](../../../artifacts/shots/tracks/vegas/s3-strip-straight.jpg) | ![Harmon chicane](../../../artifacts/shots/tracks/vegas/s3-harmon-chicane.jpg) | ![Start/finish](../../../artifacts/shots/tracks/vegas/s3-start-finish.jpg) |
+| Strip straight · chase · night · dry | Harmon chicane · chase · night · dry | S/F · orbit · night · dry |
 
 ---
 
@@ -91,35 +98,42 @@ API: `__apex.weather('dry'|'overcast'|'rain'|'fog')`, `__apex.setTimeOfDay('day'
 
 ### Pit plaza
 
-| Panel | Panel | Panel |
+| | | |
 |:---:|:---:|:---:|
-| `wx-pit-day-overcast.png` — overcast · day | `wx-pit-day-rain.png` — rain · day | `wx-pit-dawn-fog.png` — fog · dawn |
-| `wx-pit-dusk-dry.png` — dusk · dry | | |
+| ![Pit overcast](../../../artifacts/shots/tracks/vegas/wx-pit-day-overcast.jpg) | ![Pit rain](../../../artifacts/shots/tracks/vegas/wx-pit-day-rain.jpg) | ![Pit fog](../../../artifacts/shots/tracks/vegas/wx-pit-dawn-fog.jpg) |
+| Pit · orbit · day · overcast | Pit · orbit · day · rain | Pit · orbit · dawn · fog |
+| ![Pit dusk](../../../artifacts/shots/tracks/vegas/wx-pit-dusk-dry.jpg) | | |
+| Pit · orbit · dusk · dry | | |
 
 ### MSG Sphere
 
-| Panel | Panel | Panel |
+| | | |
 |:---:|:---:|:---:|
-| `wx-sphere-day-dry.png` — day · dry | `wx-sphere-day-overcast.png` — overcast · day | `wx-sphere-day-rain.png` — rain · day |
-| `wx-sphere-dawn-fog.png` — fog · dawn | | |
+| ![Sphere day dry](../../../artifacts/shots/tracks/vegas/wx-sphere-day-dry.jpg) | ![Sphere overcast](../../../artifacts/shots/tracks/vegas/wx-sphere-day-overcast.jpg) | ![Sphere rain](../../../artifacts/shots/tracks/vegas/wx-sphere-day-rain.jpg) |
+| Sphere · orbit · day · dry | Sphere · orbit · day · overcast | Sphere · orbit · day · rain |
+| ![Sphere fog](../../../artifacts/shots/tracks/vegas/wx-sphere-dawn-fog.jpg) | | |
+| Sphere · orbit · dawn · fog | | |
 
 ### Strip mid (Las Vegas Blvd)
 
-| Panel | Panel | Panel |
+| | | |
 |:---:|:---:|:---:|
-| `wx-strip-mid-day-dry.png` — day · dry | `wx-strip-mid-day-overcast.png` — overcast · day | `wx-strip-mid-day-rain.png` — rain · day |
-| `wx-strip-mid-dawn-fog.png` — fog · dawn | `wx-strip-dusk-dry.png` — dusk · dry | `wx-strip-mid-night-rain.png` — rain · night |
+| ![Strip day dry](../../../artifacts/shots/tracks/vegas/wx-strip-mid-day-dry.jpg) | ![Strip overcast](../../../artifacts/shots/tracks/vegas/wx-strip-mid-day-overcast.jpg) | ![Strip rain day](../../../artifacts/shots/tracks/vegas/wx-strip-mid-day-rain.jpg) |
+| Strip mid · chase · day · dry | Strip mid · chase · day · overcast | Strip mid · chase · day · rain |
+| ![Strip fog](../../../artifacts/shots/tracks/vegas/wx-strip-mid-dawn-fog.jpg) | ![Strip dusk](../../../artifacts/shots/tracks/vegas/wx-strip-dusk-dry.jpg) | ![Strip night rain](../../../artifacts/shots/tracks/vegas/wx-strip-mid-night-rain.jpg) |
+| Strip mid · chase · dawn · fog | Strip mid · chase · dusk · dry | Strip mid · chase · night · rain |
 
 ### Bellagio / fountains
 
-| Panel | Panel | Panel |
+| | | |
 |:---:|:---:|:---:|
-| `wx-bellagio-day-overcast.png` — overcast · day | `wx-bellagio-day-rain.png` — rain · day | `wx-bellagio-dawn-fog.png` — fog · dawn |
-| `wx-bellagio-night-dry.png` — night · dry | | |
+| ![Bellagio overcast](../../../artifacts/shots/tracks/vegas/wx-bellagio-day-overcast.jpg) | ![Bellagio rain](../../../artifacts/shots/tracks/vegas/wx-bellagio-day-rain.jpg) | ![Bellagio fog](../../../artifacts/shots/tracks/vegas/wx-bellagio-dawn-fog.jpg) |
+| Bellagio · chase · day · overcast | Bellagio · chase · day · rain | Bellagio · chase · dawn · fog |
+| ![Bellagio night](../../../artifacts/shots/tracks/vegas/wx-bellagio-night-dry.jpg) | | |
+| Bellagio · chase · night · dry | | |
 
 ---
 
 ## Capture manifest
 
-35 PNGs + `manifest.json` / `results.json` under `artifacts/shots/tracks/vegas/`.  
-**Follow-up:** Rebase on `tools: shared shot tooling for circuit surveys` and re-capture weather rows with supported `weather` batch jobs + retries; commit PNGs when gitignore exception lands.
+**35** committed JPEGs under `artifacts/shots/tracks/vegas/`. Optional re-capture after shared shot-tooling PR (batch `weather` + retries).
