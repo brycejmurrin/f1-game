@@ -151,22 +151,23 @@ test("puddles follow the road shape on every backend — crown drains, the low s
   // normal — the same constants in every language.
   const wet = (file, start, end) => { const src = read(file); const i = src.indexOf(start); assert.ok(i >= 0, start); return src.slice(i, src.indexOf(end, i)); };
   const glx = wet("js/render/glx/shaders/glsl-lit.js", "float pn = vnoise(vWorldPos.xz", "RAIN RIPPLES");
-  assert.match(glx, /mix\(0\.7, 1\.2, abs\(lat\)\) \* clamp\(1\.0 \+ downhill \* lat \* 4\.0, 0\.5, 1\.5\)/);
+  // 2026-10-14: the crown→edge weight became a smoothstep toward the gutter (puddles.test.mjs pins every constant)
+  assert.match(glx, /mix\(0\.75, 1\.25, smoothstep\(0\.35, 0\.95, abs\(lat\)\)\) \* clamp\(1\.0 \+ downhill \* lat \* 4\.0, 0\.5, 1\.5\)/);
   assert.match(read("js/render/glx/shaders/glsl-lit.js"), /vec2 trkRightXZ = dFdx\(vWorldPos\.xz\) \* dFdx\(vTrk\.y\) \+ dFdy\(vWorldPos\.xz\) \* dFdy\(vTrk\.y\)/);
   assert.match(glx, /dot\(trkRightXZ \/ rl, Ngeo\.xz\)/);
-  assert.match(glx, /smoothstep\(0\.48, 0\.88, pn \* pool\) \* wet/);
+  assert.match(glx, /smoothstep\(plo, plo \+ 0\.20, pn \* pool\) \* pg \* upFace/);
   const tlx = wet("js/render/three/tsl-lit.js", "const pn = vnoise(wp.xz", "RAIN RIPPLES");
-  assert.match(tlx, /mix\(float\(0\.7\), float\(1\.2\), abs\(lat\)\)\.mul\(clamp\(float\(1\.0\)\.add\(downhill\.mul\(lat\)\.mul\(4\.0\)\), 0\.5, 1\.5\)\)/);
+  assert.match(tlx, /mix\(float\(0\.75\), float\(1\.25\), smoothstep\(0\.35, 0\.95, abs\(lat\)\)\)\.mul\(clamp\(float\(1\.0\)\.add\(downhill\.mul\(lat\)\.mul\(4\.0\)\), 0\.5, 1\.5\)\)/);
   // B8 (TLX-PERF-HUNT 2026-10-11): the slope derivatives sit under the uniform wetness gate
   // (dry fragments pay nothing); the expression itself is unchanged.
   assert.match(read("js/render/three/tsl-lit.js"), /If\(U\.wetness\.greaterThan\(0\.001\), \(\) => \{\s*trkRightXZ\.assign\(dFdx\(wp\.xz\)\.mul\(dFdx\(trkA\.y\)\)\.add\(dFdy\(wp\.xz\)\.mul\(dFdy\(trkA\.y\)\)\)\)/);
   assert.match(tlx, /dot\(trkRightXZ\.div\(rl\), Ngeo\.xz\)\.negate\(\)/);
-  assert.match(tlx, /smoothstep\(0\.48, 0\.88, pn\.mul\(pool\)\)\.mul\(wet\)/);
+  assert.match(tlx, /smoothstep\(plo, plo\.add\(0\.20\), pn\.mul\(pool\)\)\.mul\(pg\)\.mul\(upFace\)/);
   const wgx = wet("js/render/webgpu/wgsl-chunks.js", "let pn = svnoise(in.wpos.xz", "RAIN RIPPLES");
-  assert.match(wgx, /mix\(0\.7, 1\.2, abs\(lat\)\) \* clamp\(1\.0 \+ downhill \* lat \* 4\.0, 0\.5, 1\.5\)/);
+  assert.match(wgx, /mix\(0\.75, 1\.25, smoothstep\(0\.35, 0\.95, abs\(lat\)\)\) \* clamp\(1\.0 \+ downhill \* lat \* 4\.0, 0\.5, 1\.5\)/);
   assert.match(read("js/render/webgpu/wgsl-chunks.js"), /let trkRightXZ = dpdx\(in\.wpos\.xz\) \* dpdx\(vTrk\.y\) \+ dpdy\(in\.wpos\.xz\) \* dpdy\(vTrk\.y\)/, "WGX takes the derivatives before the first branch (uniform control flow)");
   assert.match(wgx, /-dot\(trkRightXZ \/ rl, Ngeo\.xz\)/);
-  assert.match(wgx, /smoothstep\(0\.48, 0\.88, pn \* pool\) \* wet/);
+  assert.match(wgx, /smoothstep\(plo, plo \+ 0\.20, pn \* pool\) \* pg \* upFace/);
 });
 
 test("particles are lit by the frame hemisphere and fogged by the lit pass's fog on every backend", () => {

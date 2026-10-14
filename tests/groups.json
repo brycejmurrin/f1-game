@@ -648,6 +648,8 @@
     "tests/unit/pu-harvest-audio.test.mjs",
     "// shots/<topic> evidence-branch publisher: validations, dry run, full publish into a throwaway bare repo.",
     "tests/unit/publish-shots.test.mjs",
+    "// STANDING-WATER PUDDLES: js/render/shared/puddles.js reference mask (sample pins, growth/drying, edge bias) + every constant mirrored in GLX/TLX/WGX + the PUDDLES knob plumbing. Pure, < 1 s.",
+    "tests/unit/puddles.test.mjs",
     "tests/unit/quick-validate.test.mjs",
     "tests/unit/race-control.test.mjs",
     "tests/unit/race-entry-profile.test.mjs",
