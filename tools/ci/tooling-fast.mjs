@@ -1000,6 +1000,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 6: Photo Studio #ps-* setting-row selects floor at
   // --tap-paint (portrait 114×43 soft taps; landscape already clean).
   "tests/unit/ui-fit-photostudio-tap-r6.test.mjs",
+  // ui-fit round 6: Settings ACCESSIBILITY #pm-panel-a11y pad / scroll-pad
+  // so the last colourblind help clears BACK (survey rank 8; 844×390).
+  "tests/unit/ui-fit-settings-a11y-r6.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
