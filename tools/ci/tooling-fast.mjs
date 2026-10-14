@@ -769,6 +769,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the ring buffer at three refresh rates, ~0.1 s.
   "tests/unit/skidmarks-cadence.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
+  // skill-routing-eval.py against a fake `claude` on PATH (no model calls), ~1.5 s.
+  "tests/unit/skill-routing-eval.test.mjs",
   "tests/unit/skill-smoke.test.mjs",
   // Round-2: removeTrack frees its MUSIC_CACHE slot.
   "tests/unit/soundtrack-cache.test.mjs",

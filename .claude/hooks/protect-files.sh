@@ -18,7 +18,11 @@
 #     playwright.config.js.
 #  4. A call from the track-surveyor subagent (hook input `agent_type`) writes
 #     only js/circuits/<id>.js, js/circuits/scenery/<id>.js, scratch/ and
-#     artifacts/ (2026-10-14; no escape hatch).
+#     artifacts/ (2026-10-14; no escape hatch). Via Bash, removals (rm, mv
+#     sources) count as writes and whole-tree git verbs (stash, reset --hard,
+#     clean, switch, checkout <branch>) are refused (round 2).
+# Every target is resolved with realpath first, so a symlink is judged as the
+# file it points at (round 2, 2026-10-14).
 #
 # Escape hatch for a deliberately assigned edit: `touch .claude/allow-protected`
 # at the repo root and retry (remove it when done). It lifts rules 1 and 3

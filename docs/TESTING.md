@@ -1225,6 +1225,7 @@ what it covers.
 | `renderer-boot-timeout.test.mjs` | a never-settling XR probe / backend script fetch / `Gfx.create` resolves `start()` with GLX within `BOOT_STEP_MS`; a hung create() keeps the canary armed, a slow fetch does not |
 | `script-loader-throw.test.mjs` | a throwing `prepareLazyLoad` / Promise executor settles `inject()` as a failed file instead of stalling `pump()` and the caller forever |
 | `validation-cli.test.mjs` | Validation and planning CLIs reject invalid numeric inputs, account for unclaimed paths, preserve immutable plans, validate material integrity and bound lighting proposals. |
+| `skill-routing-eval.test.mjs` | `tools/check/skill-routing-eval.py` against a fake `claude` first on PATH (canned stream-json, no model calls): strict first-tool verdict, `--grace` late Skill detection, `--alias` rescoring, `--runs` majority + k/N agreement, `--only`, `--root` cwd, the version/model header and the `--compare` base→head table (legacy bare-list input too). |
 | `skill-smoke.test.mjs` | Every canonical skill has a bounded recipe with expected results and prerequisites; skipped browser or credential work never reports as tested. |
 | `capture-tools-regressions.test.mjs` | Capture option and path bounds, plan immutability, black-scene rejection, renderer identity, and lifecycle evidence through actual cancellation and cleanup. |
 | `appearance-studio.test.mjs` | Visual-only preset/profile scopes, undo, normalization, durability and reduced motion. |
