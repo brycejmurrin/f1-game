@@ -138,6 +138,13 @@ test("the wrong tread outranks everything — it is the one that costs whole sec
   assert.match(line({ wrongTread: true, wet: false }), /BOX FOR SLICKS/);
 });
 
+test("a strong GUST is a word below every pit line, said once per gusty spell", () => {
+  assert.match(line({ gust: 7, gustKmh: 46 }), /GUSTY OUT THERE — 46 KM\/H/);
+  assert.equal(E.create({}).callFor(sense({ gust: 7, gustKmh: 46 }))[1], "gust");
+  assert.match(line({ gust: 7, gustKmh: 46, wrongTread: true, wet: true }), /BOX FOR WETS/, "the tread still comes first");
+  assert.equal(line({ gust: null }), "", "no gust, no line");
+});
+
 test("ONE COMPOUND with five laps left is called after the tread and before everything else (FIA 2026 SR B6.3.6)", () => {
   assert.match(line({ oneCompound: true, cheapStop: true, wear: 1.5, lapsToStop: 0 }), /ONE COMPOUND ONLY .* DISQUALIFIED/);
   assert.match(line({ oneCompound: true, wrongTread: true, wet: true }), /BOX FOR WETS/, "the weather still comes first");
@@ -514,8 +521,9 @@ test("senseOf stays a fresh snapshot; update's scratch sense is the same state",
   const a = eng.senseOf(c), b = eng.senseOf(c);
   assert.notEqual(a, b, "a fresh object per call");
   assert.deepEqual(a, b);
-  // 28 + the forecast's six (fc, wantTread, heavyInLaps, easeInLaps, dryInLaps, hereAt — js/race/forecast.js).
-  assert.equal(Object.keys(a).length, 34, "every field the literal had");
+  // 28 + the forecast's six (fc, wantTread, heavyInLaps, easeInLaps, dryInLaps, hereAt — js/race/forecast.js)
+  // + the wind's two (gust, gustKmh — js/race/wind.js).
+  assert.equal(Object.keys(a).length, 36, "every field the literal had");
   c.local = true;
   assert.equal(eng.update(c, 1 / 60), eng.callFor(a)[0], "update says what callFor reads off the snapshot");
 });
