@@ -36,6 +36,15 @@ body[data-density="compact"] #ps-panel input[type="file"]::file-selector-button 
 body[data-density="compact"] #ps-panel button[data-step] {
   min-height: var(--tap-paint); min-width: var(--tap-paint);
 }
+/* UI Fit r6: Photo Studio setting-row selects painted 114×43 on
+   ios-iphone-portrait (~390×844) — .set-row > div > select uses --chip-h,
+   which under sheet zoom lands ~43 and soft-flags 4 selects (#ps-subject,
+   #ps-aspect, #ps-grid-select, #ps-postcard). Floor min-height at
+   --tap-paint (52 painted on touch; --tap-min with a mouse) like #1530/#1740.
+   min-height only: landscape already met --tap and must not shrink. */
+#ps-panel :is(#ps-subject, #ps-aspect, #ps-grid-select, #ps-postcard) {
+  min-height: var(--tap-paint);
+}
 #ps-panel .tune-row { display: flex; flex-direction: column; gap: calc(var(--gap) * .5); }
 #ps-panel input[type="file"] { min-width: 0; max-width: 100%; min-height: var(--tap); padding: calc(var(--gap) * .5); font-family: var(--font-ui); font-size: var(--fs-2); color: var(--text); background: var(--surf-3); border: 1px solid var(--plate-line); border-radius: var(--r-sm); }
 #ps-panel :is(select, input, summary):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

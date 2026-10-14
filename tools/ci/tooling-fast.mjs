@@ -371,6 +371,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The flaky policy behind APEX_FAIL_ON_FLAKY=1: quarantine rows are a ledger
   // (spec exists, owner, date, why) and the verdict is pure; < 1 s.
   "tests/unit/flaky-quarantine.test.mjs",
+  // fleet-board: the derived `claimed` label, the PR closing-keyword parse and the
+  // pinned board body, all pure; < 1 s. It guards the backlog's phone view.
+  "tests/unit/fleet-board.test.mjs",
   // The rendered flicker gate's metric (tools/lib/flicker-metric.mjs) on
   // synthetic frames, plus its site table: ~0.1 s, no browser. The gate itself
   // runs only in ci.yml's non-blocking flicker-gate job.
@@ -534,6 +537,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/legends.test.mjs",
   "tests/unit/lexical-window-guard.test.mjs",
   "tests/unit/light-grid.test.mjs",
+  "tests/unit/light-presets-extreme-knobs.test.mjs",
   "tests/unit/light-presets-knob-range.test.mjs",
   "tests/unit/light-presets.test.mjs",
   "tests/unit/light-store-cond-layer.test.mjs",
@@ -556,6 +560,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // clamped out of localStorage before they reach a CSS custom property, where
   // a NaN is not an error but a silently dropped declaration.
   "tests/unit/loading-card.test.mjs",
+  "tests/unit/loading-screen-pack-gate.test.mjs",
   // answerInFlight serializes acceptAnswer so a second SDP does not start a parallel negotiation (and is not blacklisted — the guest retries).
   "tests/unit/lobby-answer-flight.test.mjs",
   // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
@@ -735,6 +740,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
   "tests/unit/results-cam.test.mjs",
   "tests/unit/rival-audio.test.mjs",
+  "tests/unit/rival-passby-pool.test.mjs",
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
   "tests/unit/road-lut-frame.test.mjs",
@@ -973,6 +979,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 6: lighting tuner compact foot / short-tab --tap-paint
   // floors (#lighting-inner / #lt-* only; camera untouched).
   "tests/unit/ui-fit-lighttune-tap-r6.test.mjs",
+  // ui-fit round 6: Photo Studio #ps-* setting-row selects floor at
+  // --tap-paint (portrait 114×43 soft taps; landscape already clean).
+  "tests/unit/ui-fit-photostudio-tap-r6.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",

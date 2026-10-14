@@ -108,14 +108,16 @@ window.LightPresets = {
   // ambientMul 1.45 across ~40 tracks → day-bright wash on wet early morning.
   // One stamp keeps cool dawn fill, fading lamps, rain sheen; per-track keeps
   // fogTint / mistHeight only (parallel to *|dusk|wet #1149).
+  // Lamp-spread extremes (beamCone/bleedMul/lampWallSpill/lampRadiusMul at
+  // range max) + ssrWetMul 0.53 made Spa dawn|wet read dry: neon bleed on
+  // trees, purple clear sky, no road glints (Lighting R4 #3). Drop the four
+  // spread pins to TUNE_DEFS defaults (1.0); stamp wet mirror like *|day|wet.
   "*|dawn|wet": {
       "ambBalance": -5.838,
       "ambTemp": -1.252,
       "ambientMul": 1.08,
-      "beamCone": 2.2,
       "blackLift": 0,
       "blacks": -0.6,
-      "bleedMul": 2.5,
       "bloomKnee": 0.904,
       "bloomMul": 0.34,
       "bounceK": 0.28325,
@@ -153,12 +155,10 @@ window.LightPresets = {
       "lampCullFade": 0.855,
       "lampLevel": 0.13,
       "lampNearClamp": 1.925,
-      "lampRadiusMul": 1.878,
       "lampTemp": -1.534,
       "lampVolBase": 0.672,
       "lampVolCap": 0.198,
       "lampVolHaze": 1.365,
-      "lampWallSpill": 2.942,
       "lampWarmup": 1.33,
       "lensDirt": 0.393,
       "liftR": 0.0535,
@@ -181,7 +181,7 @@ window.LightPresets = {
       "ssrDryDay": 0.4685,
       "ssrDryNight": 0.777,
       "ssrThick": 0.93,
-      "ssrWetMul": 0.53,
+      "ssrWetMul": 1.28,
       "sunCorona": 2.116,
       "sunDiscSize": 2.37,
       "sunShaftDecay": 0.9,
@@ -4345,6 +4345,11 @@ window.LightPresets = {
     "ssrWetMul": 1.5,
     "bloomSpread": 1.25
   },
+  // Monaco night|wet fought the shared *|night|wet stamp: sunTemp at range
+  // min (−3.3) made the moon key amber with zero blue; ssrWetMul 0.34 killed
+  // road glints; whites near max + negative toe washed the grade (Lighting R4
+  // #3 / survey bc-b90d9daa). Drop those four pins — cool moon (def 0), wet
+  // mirror (def 1.0), neutral whites/toe.
   "monaco|night|wet": {
     "blacks": -0.6,
     "bounceK": 0.28325,
@@ -4377,13 +4382,9 @@ window.LightPresets = {
     "skyRimGlow": 2.176,
     "ssrDryDay": 0.5175,
     "ssrDryNight": 0.8665,
-    "ssrWetMul": 0.34,
-    "sunTemp": -3.3,
     "surfDetail": 2.09,
-    "toe": -0.785,
     "twilightFloor": 0.06,
     "wetDark": 1.12,
-    "whites": 2.928,
     "windowSunFlash": 2.136
   },
   "montreal|dawn|dry": {
