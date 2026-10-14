@@ -662,7 +662,10 @@ test("ensureStaged fetches lap-1 engineer/spotter packs before coach and announc
   assert.ok(order.every((u) => u.includes("george.")), "only engineer fetches started");
   resolveFetch("assets/voice/george.json");
   resolveFetch("assets/voice/george.bin");
-  // Retain PR #1523: readiness precedes tier-1 URL dispatch. Wait for both.
+  // ready(george) flips ~4 microtasks before ensureStaged starts tier-1 fetches.
+  // Waiting on ready alone then asserting order.length===6 races that gap under
+  // interleaved await checkpoints (each await Promise.resolve() continuation is
+  // queued beside the pack's own .then chain). Wait until tier-1 URLs appear.
   for (let i = 0; i < 40; i++) {
     await drain();
     if (order.length >= 6 && P.ready("george")) break;
