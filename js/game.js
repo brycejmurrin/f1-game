@@ -2029,6 +2029,9 @@ function gridUp(preOrder) {
   // These are exactly the values update() would have written a tick later, so
   // nothing downstream changes; it just happens before the first frame is shot.
   seedPlayerPose();
+  // Widen the field representations the race would widen mid-lap, here, before anything is optimized: values
+  // unchanged, no deopt storm at the first lap line or pit window (js/race/car-fields.js WARM, PERF-HUNT-4 B-F1).
+  if (typeof CarFields !== "undefined") for (const c of cars) CarFields.warmShape(c);
 }
 // The player's world pose from its grid (s, x) — shared by gridUp and the red
 // flag re-grid. Heading follows the road tangent, not world +Z: `head = 0` is
