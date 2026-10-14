@@ -982,6 +982,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 5: camera tuner compact foot/preview/copy-from --tap-paint
   // floors (#camtune-inner only; lighting untouched).
   "tests/unit/ui-fit-camtune-tap-r5.test.mjs",
+  // ui-fit round 6: flyby editor compact foot / pose-select --tap-paint
+  // floors (#flyby-inner / #fb-* only; camera/lighting untouched).
+  "tests/unit/ui-fit-flyby-tap-r6.test.mjs",
   // ui-fit round 6: lighting tuner compact foot / short-tab --tap-paint
   // floors (#lighting-inner / #lt-* only; camera untouched).
   "tests/unit/ui-fit-lighttune-tap-r6.test.mjs",
