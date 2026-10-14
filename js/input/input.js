@@ -962,15 +962,33 @@ const Input = (function () {
   const TOUCH_RANGE_FRAC = 0.12;   // LONG-edge fractions of drag for full lock
   const TOUCH_DEAD_PX = 5;         // slop around the anchor: a tap is not a steer
   let touchRangeFrac = TOUCH_RANGE_FRAC;
+  // DRAG AT SPEED. 1 = the drag takes the whole ADAPTIVE BUTTONS shed
+  // (digitalRateIn / KEY_RAMP_IN). 0 is the old fixed fraction. Steer-tuning
+  // pushes the slider; 1 is the shipped default so a finger matches the keys.
+  let touchSpeedMix = 1;
+  // Safety only. The digital rate may approach 0; a drag that approaches 0
+  // cannot turn the car. 5 % of static lock is the floor, and the default
+  // assist (mix 4/9) never reaches it.
+  const TOUCH_SPEED_FLOOR = 0.05;
+
+  function touchSpeedScale() {
+    if (touchSpeedMix <= 0 || adaptiveMix <= 0) return 1;
+    const ratio = digitalRateIn() / KEY_RAMP_IN;   // 1 at rest, sheds with speed
+    const scale = 1 - touchSpeedMix * (1 - ratio);
+    return scale < TOUCH_SPEED_FLOOR ? TOUCH_SPEED_FLOOR : scale;
+  }
 
   function touchRangePx() {
     // The LONG edge, not innerWidth. Off the short edge a 393x852 phone gets
     // 47px of drag for full lock against 101px landscape — the identical
     // gesture, twice as twitchy, because the phone turned. Landscape is
     // unchanged (its long edge IS innerWidth). PERF-FINDINGS 5a.
+    // Speed widens that range by 1/touchSpeedScale(), so the same finger
+    // travel is less lock. At rest the scale is 1 and the range is the
+    // static fraction, whatever the mixes.
     const win = typeof window !== "undefined" ? window : null;
     const long = Math.max((win && win.innerWidth) || 844, (win && win.innerHeight) || 390);
-    return Math.max(40, long * touchRangeFrac);
+    return Math.max(40, long * touchRangeFrac) / touchSpeedScale();
   }
 
   function touchCmd(rec) {
@@ -1727,6 +1745,9 @@ const Input = (function () {
   function setTouchRange(frac) {
     if (typeof frac === "number" && isFinite(frac)) touchRangeFrac = clamp(frac, 0.06, 0.24);
   }
+  function setTouchSpeedMix(v) {
+    if (typeof v === "number" && isFinite(v)) touchSpeedMix = clamp(v, 0, 1);
+  }
   function setAnalogTrim(src, t) {
     if (!(src in analogTrim)) return;
     if (typeof t === "number" && isFinite(t)) analogTrim[src] = clamp(t, 0.4, 2.2);
@@ -2163,6 +2184,8 @@ const Input = (function () {
       touchActive,
       touchRangePx: touchRangePx(),
       touchRangeFrac,
+      touchSpeedMix,
+      touchSpeedScale: touchSpeedScale(),
       dragMinCutoff,
       analogTrim: Object.assign({}, analogTrim),
       analogSpeedMix,
@@ -2232,6 +2255,7 @@ const Input = (function () {
     setTiltSmoothing,
     setTiltDeadzone,
     setTouchRange,
+    setTouchSpeedMix,
     setDragSmoothing,
     setAnalogTrim,
     setAnalogSpeedMix,
