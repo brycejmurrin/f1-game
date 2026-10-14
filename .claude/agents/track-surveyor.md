@@ -79,6 +79,7 @@ that way at 10 turns, and a completed research pass at 18; track-surveyor lost
 11.6 minutes of survey at 30 (2026-09-22). Budget the hand-back, not the work.
 
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
+On the first permission denial (a denied Bash call, tool or path), stop and return your contract block marked UNREAD/UNKNOWN; never route around a denial.
 
 No other browser launch, capture or automation, including Chromium probes or
 cloudBrowser. A live test run also forbids source edits in its checkout;

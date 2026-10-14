@@ -709,7 +709,7 @@ const TyreModel = (function () {
       // being free and therefore always correct.
       c.tyreTs = T_BLANKET; c.tyreTb = T_BLANKET;
       if (quali()) { c.tyreTs = optTemp(c.tyre.life); c.tyreTb = c.tyreTs; }   // …except a qualifying set: warmed on the out-lap
-      c.tyreGrain = 0; c.tyreBlister = 0;
+      c.tyreGrain = 0; c.tyreBlister = 0; c.flatSpot = 0;
       c.tyreLap0 = c.lap || 0;
       c.tyreStints = (c.tyreStints || 0) + 1;
       // THE STINT LOG, which is what the results sheet draws. Recorded HERE

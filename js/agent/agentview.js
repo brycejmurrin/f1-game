@@ -563,11 +563,12 @@ const AgentView = (function () {
         // car still reads lap:0 — nearest-wrap then invented lapsAhead:1 with
         // rel:"behind"). Road gap is prog minus that standing, so a lapped car
         // 10 m ahead stays ahead with lapsAhead:-1 (agent-hooks-vm).
-        const raw = c.prog - p.prog;
-        const lapsAhead = (c.lap || 0) - (p.lap || 0);
+        const raw = c.prog - p.prog, lapsAhead = (c.lap || 0) - (p.lap || 0);
         let gap = raw - lapsAhead * L;  // + = ahead of us on the road
-        const ahead = gap >= 0;
-        const gapM = Math.abs(gap);
+        // prog phases may differ across the finish line. Only wrap differing
+        // standings; same-lap wide packs retain their cumulative order.
+        if (lapsAhead !== 0) gap -= Math.round(gap / L) * L;
+        const ahead = gap >= 0, gapM = Math.abs(gap);
         const lateralM = (c.x || 0) - (p.x || 0);
         // + closing = the gap is shrinking, whichever side the rival is on
         const closing = ahead ? (p.speed - c.speed) : (c.speed - p.speed);
@@ -692,8 +693,7 @@ const AgentView = (function () {
                       why: "not armed here — needs ~3 s of straight road ahead and no braking" });
       }
 
-      const wallR = Tracks.wallAt(G.track, p.s, 1);
-      const wallL = -Tracks.wallAt(G.track, p.s, -1);
+      const wallR = Tracks.wallAt(G.track, p.s, 1), wallL = -Tracks.wallAt(G.track, p.s, -1);
       const clearR = wallR - p.x, clearL = p.x - wallL;
       const ahead = rv.find((r) => r.rel === "ahead" && r.gapM < 40);
       if (ahead) {
@@ -824,8 +824,10 @@ const AgentView = (function () {
                     'call world({detail:"drive"})');
       }
 
-      const p = G.player;
-      const total = G.track.total;
+      if (o.horizonS !== undefined && (!Number.isFinite(o.horizonS) || o.horizonS <= 0)) {
+        return fail("BadArgumentError", "horizonS must be a positive finite number", "omit horizonS for the default 4 seconds");
+      }
+      const p = G.player, total = G.track.total;
       Tracks.sample(G.track, p.s, scr);
       const hw = scr.hw;
       const wallR = Tracks.wallAt(G.track, p.s, 1);
@@ -1926,10 +1928,10 @@ const AgentView = (function () {
       // side-effect-free: neither a POLICY's per-tick decision nor an open-loop
       // `input` may stay latched after it returns, so the restore is unconditional.
       const savedPayload = lastPayload, savedSeq = lastSeq, savedCounter = seq, savedInput = G._testInput;
+      try {
       if (o.input !== undefined) G._testInput = o.input || null;
 
-      const p = G.player;
-      const list = corners();
+      const p = G.player, list = corners();
       const startProg = p.prog || 0, startT = G.raceT || 0, startLap = p.lap || 0;
       const startFrac = p.s / G.track.total;
       let minSpeed = Infinity, maxSpeed = -Infinity, sumSpeed = 0;
@@ -1955,8 +1957,6 @@ const AgentView = (function () {
           let inp = null;
           try { inp = policy(world({ detail: "brief" })); }
           catch (e) {
-            lastPayload = savedPayload; lastSeq = savedSeq; seq = savedCounter;
-            G._testInput = savedInput;
             return fail("PolicyError", "the policy function threw: " + (e && e.message),
                         "fix the policy; it receives world({detail:'brief'}) and "
                         + "must return {steer,throttle,brake} or null");
@@ -2021,9 +2021,6 @@ const AgentView = (function () {
         }
       }
 
-      lastPayload = savedPayload; lastSeq = savedSeq; seq = savedCounter;
-      G._testInput = savedInput;
-
       const elapsed = (G.raceT || 0) - startT;
       const lapsDone = (p.lap || 0) - startLap;
       return {
@@ -2054,6 +2051,9 @@ const AgentView = (function () {
         note: "a digest of " + ran + " physics ticks — call world() for the "
               + "current state, this describes the interval",
       };
+      } finally {
+        lastPayload = savedPayload; lastSeq = savedSeq; seq = savedCounter; G._testInput = savedInput;
+      }
     }
 
     function render(opts) {

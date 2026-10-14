@@ -121,7 +121,9 @@ const DesignerCanvas = (function () {
 
     // ── size ────────────────────────────────────────────────────────────────
     let resizeRetry = 0;
+    let destroyed = false;
     function resize() {
+      if (destroyed) return;
       const r = canvas.getBoundingClientRect();
       const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
       /* Flex/grid can report a 0–2px box before the stage row earns height (layout-audit 2026-10-07). */
@@ -468,7 +470,8 @@ const DesignerCanvas = (function () {
     canvas.addEventListener("wheel", onWheel, { passive: false });
     canvas.addEventListener("dblclick", onDblClick);
     canvas.addEventListener("keydown", onKey);
-    canvas.addEventListener("pointerleave", () => { if (hover !== -1 && mode === "none") { hover = -1; render(); } });
+    function onLeave() { if (hover !== -1 && mode === "none") { hover = -1; render(); } }
+    canvas.addEventListener("pointerleave", onLeave);
 
     // ── render ──────────────────────────────────────────────────────────────
     function grid() {
@@ -675,6 +678,7 @@ const DesignerCanvas = (function () {
       g.fillStyle = COL.chipText; g.fillText(c.text, x + 5, y + 2);
     }
     function render() {
+      if (destroyed) return;
       // MenuNav (js/ui/menu-nav.js) reads this: a focused canvas owns the
       // arrows only while they move something.
       const arrows = (sel >= 0 && !pickOnly) ? "own" : "pass";
@@ -737,7 +741,13 @@ const DesignerCanvas = (function () {
       view,
       zoom(f) { zoomAt(f, W / 2, H / 2); render(); },
       reset,
-      destroy() { if (ro) ro.disconnect(); reset(); },
+      destroy() {
+        if (destroyed) return;
+        destroyed = true;
+        for (const [type, fn] of [["pointerdown", onDown], ["pointermove", onMove], ["pointerup", onUp], ["pointercancel", onCancel], ["lostpointercapture", onCancel], ["wheel", onWheel], ["dblclick", onDblClick], ["keydown", onKey], ["pointerleave", onLeave]]) canvas.removeEventListener(type, fn);
+        if (ro) ro.disconnect();
+        reset();
+      },
     };
     resize();
     return api;

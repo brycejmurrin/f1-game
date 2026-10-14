@@ -215,7 +215,7 @@ function snapshot() {
     logNs: logNs(),
     logLvl: logLvl(),
     fps: null, ms: null, budget: null, scale: null, tier: null, backend: "",
-    auto: null, strikes: null, tierFloor: null, gpuMs: null,
+    auto: null, strikes: null, tierFloor: null, gpuMs: null, loopStopped: null, loopFrames: null,
     // What the BOUND backend says about the device: which API three/WGX
     // actually took, how many GPU/shader errors it has raised, and the first
     // one. A phone screenshot of this panel is the evidence a "see-through
@@ -245,6 +245,12 @@ function snapshot() {
     logConsole: "", logBuffer: "", logN: 0, logShown: 0,
     logs: [],
   };
+  try {
+    if (wantGov && typeof LoopHealth !== "undefined") {
+      const h = LoopHealth.state();
+      out.loopStopped = h.stopped; out.loopFrames = h.frames;
+    }
+  } catch (_) { /* loop health not booted */ }
   try {
     if (typeof PerfGov !== "undefined") {
       const ema = PerfGov.fpsEMA && PerfGov.fpsEMA();
@@ -661,7 +667,8 @@ function paintOverlay() {
     if (narrow) {
       lines = [
         hdr,
-        pair("fps", fmt(s.fps), "ms", fmt(s.ms)),
+        pair("fps", s.loopStopped ? "STOPPED" : fmt(s.fps), "ms", fmt(s.ms)),
+        pair("loop", s.loopStopped ? "STOPPED" : "frames", "n", fmt(s.loopFrames)),
         pair("tier", fmt(s.tier), "auto", fmt(s.auto)),
         pair("gfx", fmt(s.backend || null) + (s.gfxApi ? "/" + s.gfxApi : ""), "err", fmt(s.gpuErr)),
         (s.track || "menu") + "  " + (s.caution || "GREEN"),
@@ -670,8 +677,9 @@ function paintOverlay() {
       lines = [
         hdr,
         sep(),
-        row("fps",    fmt(s.fps) + "   frame " + fmt(s.ms) + " ms" +
+        row("fps",    (s.loopStopped ? "STOPPED" : fmt(s.fps)) + "   frame " + fmt(s.ms) + " ms" +
                       (s.gpuMs != null ? "   gpu " + s.gpuMs + " ms" : "")),
+        row("loop", (s.loopStopped ? "STOPPED" : "frames") + " " + fmt(s.loopFrames)),
         row("budget", fmt(s.budget) + " ms   tier " + fmt(s.tier) +
                       (s.tierFloor != null ? " (fl " + s.tierFloor + ")" : "") +
                       "   auto " + fmt(s.auto)),
