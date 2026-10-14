@@ -674,7 +674,7 @@ function isRaining() { return trackWetness() >= 0.72; }
 // "Weather and tyres". No car => the slick column.
 function trackWetness() { return TyreModel.wetness(raceWeather, wxArc && wxArc.arc); }
 function roadWetness() { return trackWetness(); }   // alias — grip / pits / engineer
-function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? 2 : c.tread) : 0, trackWetness()); }
+function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? TyreModel.treadFor(raceWeather, trackWetness()) : c.tread) : 0, trackWetness()); }   // no fitted set (wear off): the tread the conditions call for
 
 // Pose Ghost + InputGhost start together on every TT lap arm so an incident /
 // reverse-crossing / spoiled class cannot leave the input stream attached to a

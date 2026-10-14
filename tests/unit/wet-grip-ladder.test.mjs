@@ -83,3 +83,18 @@ test("away from the crossovers, treadFor's tread is the effective-grip winner", 
     assert.equal(T.treadFor("dry", w), best, `wetness ${w}: treadFor ${T.treadFor("dry", w)}, fastest ${best}`);
   }
 });
+
+test("a car with no fitted set (wear off) grips on the tread the conditions call for, not a hard-coded full wet", () => {
+  // game.js gripMult defaulted `tread == null` to 2 (full wet). With the damp row now
+  // favouring inters that cost the wear-off AI field ~6% grip on a wet road.
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const m = src.match(/^function gripMult\(c\) \{ return (.+?); \}/m);
+  assert.ok(m, "gripMult moved — re-point this test");
+  const gripMult = new Function("TyreModel", "raceWeather", "trackWetness", "c", `return ${m[1]};`);
+  for (const [wx, w] of [["wet", 0.5], ["rain", 1], ["dry", 0]]) {
+    const got = gripMult(T, wx, () => w, {});
+    const want = grip(T.treadFor(wx, w), w);
+    assert.equal(got, want, `${wx} @ ${w}: no-set car uses treadFor's pick`);
+  }
+  assert.equal(gripMult(T, "wet", () => 0.5, { tread: 2 }), grip(2, 0.5), "a fitted set still wins");
+});
