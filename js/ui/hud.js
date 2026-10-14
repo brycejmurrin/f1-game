@@ -607,7 +607,11 @@ function laneSafeInsets(root) {
   }
   return (_laneSafe = { sal, sar });
 }
+// A card the player MOVED (MOVE & SIZE / ARRANGE HUD x or y) is out of the slots and the lane:
+// css/hud.css anchors it at a fixed point so the offset is where it sits (body[data-radio-placed]).
+const radioPlaced = () => { const b = document.body; return !!(b && b.hasAttribute && b.hasAttribute("data-radio-placed")); };
 function announceLane(root) {
+  if (radioPlaced()) { const a = document.getElementById("announce"); if (a && a.toggleAttribute) a.toggleAttribute("data-lane-collapsed", false); return; }
   const t = _hudTop ? laneRect(_hudTop) : null;
   const W = vpW(), H = vpH() || 0;
   const y0 = t ? t.bottom : 0, mid = W / 2;
@@ -703,6 +707,7 @@ function announceLaneTick(root, force) {
 function radioTopSlot(root, bcast) {
   const t = !bcast && _hudTop ? _hudTop.getBoundingClientRect() : null;
   announceLane(root);
+  if (radioPlaced()) { hToggle(document.body, "hud-radio-top", false); document.body.removeAttribute("data-radio-corner"); return; }
   let right = window.innerWidth - 10;
   const x = t ? t.right + RADIO_TOP_GAP : 0;
   // Pause / cam share the tower's rows. Dock groups bound a wrapping card
@@ -769,6 +774,7 @@ function radioUnderRight(t) {
 // after its own radioTopSlot (which alone could relight hud-radio-top over the tower until the next
 // fit tick repaired it).
 function radioPaintedCollapse(root) {
+  if (radioPlaced()) return;   // the player put it there
   // Painted guarantee: if the card still rects onto S3 or the tower, collapse
   // the hanging lane and drop the top slot. Do NOT call radioTopSlot again —
   // that re-ran announceLane, cleared data-lane-collapsed when a gap reopened,
@@ -1156,10 +1162,22 @@ function fitHud() {
   // it, so the horizontal budget is the WIDER of the two, once, against the
   // whole viewport less both insets — not a sum across a centre line.
   const bcast = document.body.classList.contains("hud-prof-broadcast");
+  // PORTRAIT PHONE (max-width 500): css/hud.css stacks #minimap / .hud-gaps
+  // UNDER .hud-top, so charging the map beside the tower against half of 390 px
+  // wrote --hud-z-top ~0.65 and painted 14 px sector/tower type at 9.1 CSS px
+  // (HUD Desk 2026-10-14). Landscape / tablet portrait keep the side-by-side
+  // model. Broadcast already stacks; this is the same idea for the default
+  // centred tower.
+  const portraitPhone = !document.body.classList.contains("desktop")
+    && typeof window !== "undefined" && window.matchMedia
+    && window.matchMedia("(orientation: portrait) and (max-width: 500px)").matches;
   const capFor = (l) => (bcast
     ? (window.innerWidth - sal - sar) / Math.max(Math.max(top, l) + right, 1)
-    : Math.min((half - sal) / Math.max(l + top / 2, 1),
-               (half - sar) / Math.max(right + top / 2, 1)));
+    : portraitPhone
+      ? Math.min((window.innerWidth - sal - sar - 2 * FIT_AIR) / Math.max(top, 1),
+                 (window.innerWidth - sar - FIT_AIR) / Math.max(right, 1))
+      : Math.min((half - sal) / Math.max(l + top / 2, 1),
+                 (half - sar) / Math.max(right + top / 2, 1)));
   // EACH RUNG IS JUDGED AGAINST THE SPELLING IT DECIDES, NOT THE ONE ON SCREEN.
   //
   // Reading the RENDERED width is a feedback loop with no fixed point wherever
@@ -1537,7 +1555,7 @@ function fitHud() {
     const stackR = _hudBottom.getBoundingClientRect();
     if (stackR.height) {
       let ceilY = FIT_AIR;
-      for (const el of [els.btnCam, els.pausebtn]) {
+      for (const el of [els.btnCam, els.pausebtn, els.hudSectors, els.hudLimits, els.flag]) {
         if (!el || el.hidden) continue;
         const r = el.getBoundingClientRect();
         if (r.width && r.height) ceilY = Math.max(ceilY, r.bottom + FIT_AIR);
@@ -1555,9 +1573,16 @@ function fitHud() {
   // own slider — css/overlays.css), which defaults to --hud-scale and is only
   // inline once the player has moved it. Comparing the dock's cap against the
   // wrong slider would either pin a cap that fits or drop one that does not.
+  // 10 CSS px over --fs-micro 14: same painted floor as the gap-chip clamp
+  // and PR #1734's touch labels. Portrait only — landscape keeps the 0.4
+  // band floor (short phones still drop the gap strip instead).
+  const READABLE_Z = 10 / 14;
   const set = (prop, cap, base) => {
     if (cap >= base) root.style.removeProperty(prop);   // fits: the player's number, untouched
-    else root.style.setProperty(prop, String(Math.max(0.4, Math.round(cap * 1000) / 1000)));
+    else {
+      const floor = (portraitPhone && prop === "--hud-z-top") ? READABLE_Z : 0.4;
+      root.style.setProperty(prop, String(Math.max(floor, Math.round(cap * 1000) / 1000)));
+    }
   };
   set("--hud-z-top", capTop, scale);
   set("--hud-z-bot", capBot, scale);
@@ -1728,7 +1753,7 @@ function fitHud() {
     const sc = els.hudSectors && !els.hudSectors.hidden ? els.hudSectors.getBoundingClientRect() : null;
     const fl = els.flag ? els.flag.getBoundingClientRect() : null;
     const flagRight = fl && fl.width ? fl.right : vpW() / 2 + 80;
-    const low = !!(sc && sc.width && sc.left < flagRight + 8);
+    const low = !!(sc && sc.width && (sc.left < flagRight + 8 || portraitPhone));
     if (low !== ("flagLow" in root.dataset)) { if (low) root.dataset.flagLow = "1"; else delete root.dataset.flagLow; }
   }
   // Fit just rewrote bands/docks — clipper boxes may have moved. Drop the lane

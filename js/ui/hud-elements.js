@@ -29,19 +29,56 @@ const HudElements = (function () {
     ["damage", "DAMAGE"],
     // OPT-IN readouts (third field "off" = shipped hidden): js/ui/hud-relative.js,
     // js/ui/hud-strategy.js, js/ui/hud-inputs.js. Stored only when it differs.
+    // REL is the one exception: BROADCAST style ships it ON (timing-board
+    // neighbour list). STANDARD / MINIMAL stay off. Fuel / tyre-temp readouts
+    // are out of scope.
     ["rel", "RELATIVE", "off"],
     ["strat", "STRATEGY", "off"],
     ["inputs", "INPUTS", "off"],
   ];
   const dflt = (e) => e[2] || "on";
+  const PROFS = { standard: 1, minimal: 1, broadcast: 1 };
 
   const store = typeof GameStore !== "undefined" ? GameStore.store : null;
   let state = readState();
 
+  /** HUD style that decides REL's shipped default. Prefers HudLayout.profile()
+   *  (live body class while racing, else the store); falls back when layout
+   *  has not loaded yet (this file is earlier in the roster). */
+  function profileOf() {
+    try {
+      // typeof on a const still in TDZ throws (HudLayout.apply at eval).
+      if (typeof HudLayout !== "undefined" && HudLayout && typeof HudLayout.profile === "function") {
+        const p = HudLayout.profile();
+        if (PROFS[p]) return p;
+      }
+    } catch (_) { /* mini-dom / eval order / TDZ during hud-layout.js init */ }
+    if (typeof document !== "undefined" && document.body && document.body.classList
+        && typeof document.body.classList.contains === "function") {
+      const c = document.body.classList;
+      if (c.contains("hud-prof-broadcast")) return "broadcast";
+      if (c.contains("hud-prof-minimal")) return "minimal";
+    }
+    if (store) {
+      const v = store.get("hudProfile", null);
+      if (PROFS[v]) return v;
+    }
+    return "standard";
+  }
+
+  /** Shipped on/off for `id` in the current (or given) style. Only `rel` cares. */
+  function shippedOf(id, prof) {
+    if (id === "rel" && (prof || profileOf()) === "broadcast") return "on";
+    for (let i = 0; i < ELEMENTS.length; i++) {
+      if (ELEMENTS[i][0] === id) return dflt(ELEMENTS[i]);
+    }
+    return "on";
+  }
+
   function readState() {
     const raw = store ? store.get(K, null) : null;
     const out = {};
-    for (let i = 0; i < ELEMENTS.length; i++) out[ELEMENTS[i][0]] = dflt(ELEMENTS[i]);
+    for (let i = 0; i < ELEMENTS.length; i++) out[ELEMENTS[i][0]] = shippedOf(ELEMENTS[i][0]);
     if (!raw || typeof raw !== "object") return out;
     for (let i = 0; i < ELEMENTS.length; i++) {
       const id = ELEMENTS[i][0];
@@ -53,12 +90,13 @@ const HudElements = (function () {
   function persist() {
     if (!store) return;
     // Store only what differs from the shipped default — compact, and a new
-    // key keeps its own default (on, or off for the opt-in readouts).
+    // key keeps its own default (on, or off for the opt-in readouts). REL's
+    // default follows the current HUD style.
     const slim = {};
     let any = false;
     for (let i = 0; i < ELEMENTS.length; i++) {
       const id = ELEMENTS[i][0];
-      if (state[id] !== dflt(ELEMENTS[i])) { slim[id] = state[id]; any = true; }
+      if (state[id] !== shippedOf(id)) { slim[id] = state[id]; any = true; }
     }
     store.set(K, any ? slim : {});
   }
@@ -73,11 +111,13 @@ const HudElements = (function () {
   }
 
   function apply() {
+    state = readState();
     if (typeof document === "undefined" || !document.body) return;
     const list = hiddenList();
     if (list.length) document.body.dataset.hudHide = list.join(" ");
     else delete document.body.dataset.hudHide;
     if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();   // an attribute the fit key cannot see
+    syncChecks();
   }
 
   function isOn(id) { return state[id] !== "off"; }
@@ -87,7 +127,6 @@ const HudElements = (function () {
     state[id] = on ? "on" : "off";
     persist();
     apply();
-    syncChecks();
     return isOn(id);
   }
 
@@ -162,13 +201,21 @@ const HudElements = (function () {
   // Eval-time apply so the first race frame respects the store.
   apply();
 
+  // REL's shipped default follows hudProfile: re-hide / re-show when the style
+  // changes (SETTINGS › DISPLAY › HUD › STYLE, or a studio preset).
+  if (store && store.subscribe) {
+    store.subscribe((c) => {
+      if (c && (c.key === "hudProfile" || (Array.isArray(c.keys) && c.keys.indexOf("hudProfile") >= 0))) apply();
+    });
+  }
+
   if (typeof document !== "undefined") {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI, { once: true });
     else initUI();
   }
 
   return {
-    K, ELEMENTS, isOn, set, apply, hiddenList, initUI,
+    K, ELEMENTS, isOn, set, apply, hiddenList, initUI, shippedOf, profileOf,
     state: () => Object.assign({}, state),
   };
 })();

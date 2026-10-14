@@ -200,7 +200,7 @@ function lazyTrackEnsure(o) {
     const fn = o[k];
     if (typeof fn !== "function") continue;   // tiltSim (namespace), f1api (module)
     // Never under the loading screen, nor over a stepped or worker build in flight:
-    // RACE!'s intro owns the build and `track` is null by design until it lands.
+    // RACE!'s intro owns the build and `track` is null by design until it lands; race()/tt() build their OWN circuit (a cold title-pick build here doubled race entry, CI 38604708051).
     // Title boots LAZY_CIRCUIT meta stubs (_metaOnly, no path): a sync loadTrack
     // here throws "has no path" before race()/startRace can await ensureCircuit.
     // Leave track null; ensureScenery → ensureCircuit hydrates, then the body builds.
@@ -209,7 +209,7 @@ function lazyTrackEnsure(o) {
       ? Tracks.circuitPayloadResident(def)
       : (def && def.path && def.path.pts && def.path.pts.length && !def._metaOnly));
     o[k] = function (...a) {
-      if (!G.track && !entering() && !Tracks.building()
+      if (k !== "race" && k !== "tt" && !G.track && !entering() && !Tracks.building()
           && !(typeof TrackBuildClient !== "undefined" && TrackBuildClient.busy())) {
         const def = Tracks.LIST[G.trackIdx];
         // LAZY_TRACK_BUILD: ensureScenery hydrates the circuit BESIDE the toolkit.

@@ -1,0 +1,12 @@
+[
+{"query":"Soft tyres at a 25-lap Monza race last almost the whole distance, so nobody ever needs to stop. Check how js/physics/tyre-model.js scales stint life to the race distance and the wear level, and make the compound choice matter.","expect":"race-weekend"},
+{"query":"the pit stop takes like 45 sec at spa, way more than real F1. is the pit lane speed limit or the stationary time wrong in pit-lane.js? want the loss closer to 18-20s","expect":"race-weekend"},
+{"query":"The STRATEGY panel on the HUD shows PIT LOSS as -- and NEXT never fills in during a race with tyre wear on. Trace where hud-strategy.js reads the estimate and the plan.","expect":"race-weekend"},
+{"query":"In qualifying the simulated field is two seconds faster than anything I can drive, and the quali sheet shows the pole time to two decimals only. Look at quali-model.js calibration and the quali-sheet formatting.","expect":"race-weekend"},
+{"query":"The five red start lights on the gantry don't come on with the countdown at Silverstone, and in time trial the flying start hands over the wheel too late before the line.","expect":"race-weekend"},
+{"query":"I finished a dry race on mediums only and got no penalty, but the two-compound rule should disqualify me. Also passing under the safety car isn't adding the 10 s. Check sporting-regs.js.","expect":"race-weekend"},
+{"query":"Set up a dynamic weather arc so a race at Interlagos starts dry and goes to rain over 20 minutes, then verify the tyre grip and track wetness follow it.","expect":"race-weekend"},
+{"query":"The safety car never deploys after a big crash at Baku, and the yellow flag stays out for the rest of the race. Debug race control.","expect":"race-incidents-control"},
+{"query":"The car feels like it has too much understeer on new soft tyres at turn-in; compare grip settings in an A/B physics sweep.","expect":"tune-physics"},
+{"query":"In the standalone Season screen I want to change the points table and turn the fastest-lap point on for every round.","expect":"season-mode"}
+]

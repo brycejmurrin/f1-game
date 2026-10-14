@@ -330,6 +330,73 @@ test("a sparse backup restores its own slots and never erases the ones it lacks"
   assert.equal(JSON.parse(b.disk.get("apex26.career.driver.2")).money, 999999);
 });
 
+test("standalone qualifying survives backup serialization and restores its driven grid", () => {
+  const a = loadHarness();
+  const qualifying = {
+    qualiOrder: [{ id: "haas:0", t: 71.2, human: true }, { id: "haas:1", t: 72.4, human: false, noTime: true }],
+    qualiTrack: "t0", qualiMode: "season", qualiSeat: "haas:0|haas",
+  };
+  a.store.set("season", { round: 0, pts: {}, teamPts: {}, driverCodes: {}, ...qualifying });
+  const text = a.CareerBackup.serialize(a.CareerBackup.build());
+  const b = loadHarness();
+  assert.equal(b.CareerBackup.apply(JSON.parse(text), { rawText: text }).ok, true);
+  const restored = b.SeasonCal.load();
+  for (const [key, value] of Object.entries(qualifying)) {
+    assert.deepEqual(JSON.parse(JSON.stringify(restored[key])), value, key);
+  }
+  // The real reader must recover the same human lap and grid, not just retain
+  // unused JSON. Its track/mode/seat checks are part of the restoration contract.
+  vm.runInContext(src("js/race/quali-model.js"), b.ctx);
+  const cars = [0, 1].map((i) => ({ driverId: "haas:" + i, team: { id: "haas" }, isPlayer: i === 0 }));
+  const model = b.ctx.Quali.create({ season: restored, seasonMode: true, cars, track: { def: { id: "t0" } } });
+  const results = model.results();
+  assert.equal(results[0].t, 71.2);
+  assert.equal(results[0].human, true);
+  assert.equal(results[1].noTime, true);
+  assert.deepEqual(Array.from(model.order(cars), (car) => car.driverId), ["haas:0", "haas:1"]);
+});
+
+test("legacy ID-only qualifying grids stay unstamped and retain their order", () => {
+  const a = loadHarness(), b = loadHarness();
+  a.store.set("season", { round: 0, pts: {}, qualiOrder: ["haas:1", "haas:0"] });
+  const text = a.CareerBackup.serialize(a.CareerBackup.build());
+  assert.equal(b.CareerBackup.apply(JSON.parse(text), { rawText: text }).ok, true);
+  const restored = b.SeasonCal.load();
+  assert.deepEqual(Array.from(restored.qualiOrder), ["haas:1", "haas:0"]);
+  for (const key of ["qualiTrack", "qualiMode", "qualiSeat"]) assert.equal(Object.hasOwn(restored, key), false, key);
+  vm.runInContext(src("js/race/quali-model.js"), b.ctx);
+  const cars = [0, 1].map((i) => ({ driverId: "haas:" + i, team: { id: "haas" }, isPlayer: i === 0 }));
+  const model = b.ctx.Quali.create({ season: restored, seasonMode: true, cars, track: { def: { id: "t0" } } });
+  assert.deepEqual(Array.from(model.order(cars), (car) => car.driverId), ["haas:1", "haas:0"]);
+});
+
+test("malformed qualifying classifications refuse the whole backup before slot or season writes", () => {
+  const valid = { round: 0, pts: {}, qualiOrder: [{ id: "haas:0", t: 71.2, human: true }],
+    qualiTrack: "t0", qualiMode: "season", qualiSeat: "haas:0|haas" };
+  const cases = [
+    { qualiOrder: {} }, { qualiOrder: [null] }, { qualiOrder: [["haas:0"]] },
+    { qualiOrder: ["haas:0", { id: "haas:0", t: 72 }] },
+    { qualiOrder: Array.from({ length: 121 }, (_, i) => "driver:" + i) },
+    { qualiOrder: [{ id: "bad id", t: 71 }] }, { qualiOrder: [{ id: "x".repeat(49), t: 71 }] },
+    ...[-1, 1e6 + 1, Infinity, NaN, "71.2", null].map((t) => ({ qualiOrder: [{ id: "haas:0", t }] })),
+    { qualiOrder: [{ id: "haas:0", human: "yes" }] }, { qualiOrder: [{ id: "haas:0", noTime: 1 }] },
+    { qualiTrack: "x".repeat(49) }, { qualiMode: "career:driver:99" }, { qualiMode: {} },
+    { qualiSeat: "haas:0" }, { qualiSeat: "haas:0|haas|other" },
+  ];
+  for (const bad of cases) {
+    const h = loadHarness();
+    h.Career.start({ teamId: "haas", seed: 1 });
+    h.store.set("season", { round: 0, pts: { "haas:0": 10 } });
+    const before = Array.from(h.disk.entries());
+    const envelope = { format: h.CareerBackup.FORMAT,
+      slots: [{ flavour: "driver", i: 1, data: save({ money: 987 }) }], season: { ...valid, ...bad } };
+    const result = h.CareerBackup.apply(envelope);
+    assert.equal(result.ok, false, JSON.stringify(bad));
+    assert.equal(result.reason, "season-invalid");
+    assert.deepEqual(Array.from(h.disk.entries()), before, "refusal cannot partially restore other saves");
+  }
+});
+
 test("import unions badges and keeps a standalone season that is further along", () => {
   const a = loadHarness();
   a.disk.set("apex26.career.driver.0", JSON.stringify(save({ money: 111 })));

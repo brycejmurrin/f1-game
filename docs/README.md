@@ -61,11 +61,18 @@ Measurements, defect registers and campaign records. **They are dated by
 design**: a note is what was true when it was measured, and it is cited for its
 evidence, never for current structure. Path-checked only — no guard counts
 anything in here.
+A note that REPLACES another starts a line with `Supersedes:` and links the
+old note; the old one gets a `Superseded by:` line linking back, and its row
+below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent grepping
+`docs/` never meets two live answers. Obsidian works as a reader of this tree
+(open `docs/` as a vault, "Use [[Wikilinks]]" OFF; `.obsidian/` is gitignored):
+[notes/SECOND-BRAIN-2026-10-14.md](notes/SECOND-BRAIN-2026-10-14.md).
 
 | Note | What it records |
 |---|---|
 | [notes/AGENT-WORK-TRACKING-2026-10-14.md](notes/AGENT-WORK-TRACKING-2026-10-14.md) | Where the fleet's backlog lives and why: GitHub Issues + sub-issues vs Linear, Jira, Plane, Notion, Beads, Backlog.md, Taskmaster, Claude Tasks, Obsidian and the agent orchestrators, scored on free / headless / phone / PR tie-in / atomic claim; the four-layer setup behind AGENTS.md §Backlog. |
 | [notes/APEX-STEWARD-CARD-2026-10-05.md](notes/APEX-STEWARD-CARD-2026-10-05.md) | Always-on steward card + hashes (skip re-read of steward / check-changes / PR template when they match); lane mutex; `cursor/<topic>-<hash>` → ship; resolve-swarm cap; tooling/docs merge-train exclusion |
+| [notes/SECOND-BRAIN-2026-10-14.md](notes/SECOND-BRAIN-2026-10-14.md) | Obsidian and agent-memory tools (Basic Memory, Mem0, Zep/Graphiti, Letta, MCP memory, Notion, Logseq) weighed for an agent fleet: keep knowledge in git, Obsidian as a human viewer only; the context-rot and memory-poisoning evidence behind the hidden-Unicode, memory `source:` and `Supersedes:` guards. |
 | [notes/BUG-HUNT-ROUND-2-REGISTER-2026-10-10.md](notes/BUG-HUNT-ROUND-2-REGISTER-2026-10-10.md) | Round-2 whole-tree hunt on the 2026-10-09 tip: 79 findings by area with where each went (merged PR, sibling #1289, handed, open), the method, and the lessons (auto-merge skips the non-required geometry sweeps; stale-baseline ratchets; test-group registration). |
 | [notes/BUG-HUNT-OPUS-2026-10-10.md](notes/BUG-HUNT-OPUS-2026-10-10.md) | Six read-only Opus hunters on the 78cb4831be tip, one per area: the race-runtime items fixed in their PR (hidden-tab intro clock, pit-garage pause, spotter churn), the renderer / track / physics / menus findings with each hunter's confidence, and the lane for each follow-up. |
 | [notes/REPO-SIZE-2026-10.md](notes/REPO-SIZE-2026-10.md) | What makes a clone big, on FULL history: 1,080 MB packed, 892 MB of it history-only (90% PNG, mostly a June 2026 screenshot burst); why a shallow agent clone measures it wrong; the 15.6 MB blobless clone; why the history rewrite is parked |

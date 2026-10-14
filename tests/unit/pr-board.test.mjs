@@ -304,11 +304,13 @@ test("ci-watch skill pins the authority, MERGE-commit-only and no-merge rules an
   assert.match(t, /ready-full-cap\.mjs/);
   assert.match(t, /## Routine prompt/);
   for (const s of SUGGESTIONS) assert.ok(t.includes(s), `ci-watch must route ${s}`);
-  for (const link of ["pr-owner", "session-comms", "ci-watcher"]) assert.ok(t.includes(link), `ci-watch must point to ${link}`);
+  // pr-owner and session-comms folded into steward / agent-fleet references (2026-10-14).
+  for (const link of ["steward", "references/ownership.md", "agent-fleet", "references/comms.md", "ci-watcher"]) assert.ok(t.includes(link), `ci-watch must point to ${link}`);
 });
 
-test("session-comms skill pins the message formats, authority and subscription names", () => {
-  const t = read(".claude/skills/session-comms/SKILL.md");
+test("agent-fleet comms reference (ex session-comms) pins the message formats, authority and subscription names", () => {
+  const t = read(".claude/skills/agent-fleet/references/comms.md");
+  assert.match(read(".claude/skills/agent-fleet/SKILL.md"), /references\/comms\.md/);
   for (const f of ["DONE <PR> <merge sha>", "BLOCKED <PR>", "HANDOFF <PR>", "STAND-DOWN <PR>"]) assert.ok(t.includes(f), f);
   assert.match(t, /permission laundering/);
   assert.match(t, /DATA/);
@@ -317,8 +319,9 @@ test("session-comms skill pins the message formats, authority and subscription n
   assert.match(t, /@parent/);
 });
 
-test("pr-owner skill pins the loop's gates and carries a spawn prompt", () => {
-  const t = read(".claude/skills/pr-owner/SKILL.md");
+test("steward ownership reference (ex pr-owner) pins the loop's gates and carries a spawn prompt", () => {
+  const t = read(".claude/skills/steward/references/ownership.md");
+  assert.match(read(".claude/skills/steward/SKILL.md"), /references\/ownership\.md/);
   assert.match(t, /re-read\s+the PR head sha/i);
   assert.match(t, /sync-pr\.mjs/);
   assert.match(t, /remote-group\.mjs/);
