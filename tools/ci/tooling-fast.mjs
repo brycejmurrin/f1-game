@@ -458,6 +458,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
   "tests/unit/html-sink-lint.test.mjs",
   "tests/unit/hud-control-clearance.test.mjs",
+  "tests/unit/hud-dock-pack.test.mjs",
   "tests/unit/hud-elements.test.mjs",
   "tests/unit/hud-feel.test.mjs",
   // fitHud zTop/#minimap zoom idempotence (Pages compact mm flip).
