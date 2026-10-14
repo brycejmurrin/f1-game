@@ -1587,7 +1587,8 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.equal(b.G.state, "race");
   assert.equal(b.G.player.s, sTest, "…onto the armed point, not the grid");
   assert.equal(b.G.player.speed, 0);
-  assert.match(read("js/game.js"), /request\.then\(\(r\) => \{ if \(r !== false\) CustomTracks\.afterStart\(\); \}/, "game.js startRace tells CustomTracks a countdown began");
+  assert.match(read("js/game.js"), /request\.outcome\.then\(\(r\) => \{ if \(r\.kind === "committed" && sessionEntry\.owns\(r\)\) CustomTracks\.afterStart\(\); \}/,
+    "game.js starts the custom-track handoff only for its owning committed session");
   // The way back: armed, so quitting reopens the designer on the same point.
   b.D.load(Object.assign({}, b.D.state().design), "library", id);   // as if something reset the selection
   b.D.close();
