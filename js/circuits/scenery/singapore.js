@@ -746,11 +746,11 @@
           modelGroup("singapore-pit-wave-roof", {
             center: vadd(a.c, a.u, 10), size: [28, 22, 62], basis: b,
           }, (stage) => {
-            seat.box(stage, a.c, [22, 12, 56], SAGE_D, b);
-            seat.box(stage, vadd(vadd(a.c, a.r, 11.1), a.u, 2), [0.4, 8, 48], GLASS, b);
+            seat.box(stage, a.c, [22, 11, 56], SAGE_D, b);
+            seat.box(stage, vadd(vadd(a.c, a.r, 11.1), a.u, 2), [0.4, 7.2, 48], GLASS, b);
             for (let i = 0; i < 5; i++) {
-              const rc = vadd(vadd(a.c, a.t, (i - 2) * 10), a.u, 12 + Math.sin(i * 1.1) * 1.8);
-              seat.box(stage, rc, [24 + i * 0.2, 1.2, 12], i % 2 ? SAGE : SAGE_D, b);
+              const rc = vadd(vadd(a.c, a.t, (i - 2) * 10), a.u, 10.5 + Math.sin(i * 1.1) * 1.6);
+              seat.box(stage, rc, [24 + i * 0.2, 1.0, 12], i % 2 ? SAGE : SAGE_D, b);
             }
             seat.box(stage, vadd(a.c, a.u, 0.2), [24, 0.6, 58], [0.22, 0.28, 0.24], b);
           }, { required: true });
@@ -1105,8 +1105,8 @@
             stage._mat = 0;
             // Cyan spout + splash burst over the bay (night-readable).
             const mouth = vadd(vadd(head, a.r, 2.4), a.u, 0.6);
-            addCone(stage, mouth, 0.9, 18, WIN_CYAN, 7, jetB);
-            addCone(stage, vadd(mouth, a.r, 16), 1.4, 3, [0.85, 0.95, 1.00], 7, jetB);
+            addCone(stage, mouth, 0.9, 14, WIN_CYAN, 7, jetB);
+            addCone(stage, vadd(mouth, a.r, 12), 1.2, 2.6, [0.85, 0.95, 1.00], 7, jetB);
             // Splash pool rim slightly ABOVE the reflective disc so the two
             // horizontal faces never share a plane (flatCoplanar).
             addCyl(stage, vadd(a.c, a.u, 0.2), 12, 0.3, [0.08, 0.16, 0.24], 14, b);
