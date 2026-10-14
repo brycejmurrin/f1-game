@@ -50,7 +50,7 @@ function boot(sel = { teamIdx: 0, driverIdx: 0 }, over = {}) {
     getLivDraftOverride: () => null, setLivDraftOverride() {},
     ...over,
   });
-  return { ct, Legends, store, saved, Teams, invalidated };
+  return { ct, Legends, store, saved, Teams, invalidated, ctx };
 }
 
 test("an empty sheet is seeded with the picked legend's period car", () => {
@@ -231,4 +231,24 @@ test("a fresh install's Legends seat 0 builds the period car, not the shipped sh
   });
   ct.syncLegendsTeam(0);                       // Legends seat 0 on a fresh store
   assert.deepEqual(JSON.parse(JSON.stringify(store.get("parts.legends", null))), JSON.parse(JSON.stringify(Legends.parts("schumacher"))));
+});
+
+test("logo uploads cannot outlive CLEAR, a newer upload or foreign replacement", () => {
+  const nodes = new Map();
+  const $ = (id) => { if (!nodes.has(id)) nodes.set(id, { addEventListener(type, fn) { this[type] = fn; }, classList: { remove() {}, add() {} } }); return nodes.get(id); };
+  const b = boot(undefined, { $ });
+  const readers = [], images = []; let foreign;
+  b.ctx.document.createElement = () => ({ getContext: () => ({ drawImage() {} }), toDataURL: () => "logo:" + images.at(-1).src });
+  b.ctx.FileReader = class { constructor() { readers.push(this); } readAsDataURL(file) { this.result = file.name; } };
+  b.ctx.Image = class { constructor() { images.push(this); this.width = this.height = 20; } };
+  b.store.subscribe = (fn) => { foreign = fn; }; b.ct.init();
+  const upload = (name) => { const input = $("cz-logofile"); input.files = [{ name }]; input.change({ target: input }); return readers.at(-1); };
+  const first = upload("A"); $("cz-logo-clear").onclick(); first.onload();
+  assert.equal(images.length, 0); assert.equal(b.saved.customLogo, null);
+  const second = upload("B"); second.onload(); const imageB = images.at(-1);
+  const third = upload("C"); third.onload(); const imageC = images.at(-1); imageC.onload(); imageB.onload();
+  assert.equal(b.saved.customLogo, "logo:C");
+  const fourth = upload("D"); fourth.onload(); const imageD = images.at(-1);
+  b.saved.customLogo = "foreign"; foreign({ foreign: true, key: "customLogo" }); imageD.onload();
+  assert.equal(b.saved.customLogo, "foreign");
 });

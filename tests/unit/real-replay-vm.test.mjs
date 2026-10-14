@@ -3,7 +3,7 @@
 // The frame fit: OpenF1's x/y for one of Russell's laps (a 2 Hz excerpt in the
 // fixture) lands on the game's centreline within the road width, mirrored and
 // turned as the feed's frame is, running the lap forward and 5.9 km long. The
-// highlights: the v4 script's passes, stops, retirements, flags, fastest lap
+// highlights: the script's passes, stops, retirements, flags, fastest lap
 // and radio in one time-ordered list, and the reel cut from it. The engine:
 // RealRace.launch({watch}) turns the field into puppets posed from traces on the
 // countdown frame, the camera on the DRIVE AS seat (nobody drives), follows any
@@ -80,8 +80,8 @@ test("the highlights list every moment of the race in time order, and the reel k
   const g = await createGame({ track: "baku" });
   try {
     const R = vm.runInContext("RealReplay", g.ctx);
-    const { script } = scriptIn(g);
-    assert.equal(script.v, 4);
+    const { D, script } = scriptIn(g);
+    assert.equal(script.v, D.SCRIPT_V);
     assert.ok(script.t0 > 0 && script.fastest && script.fastest.num === 63 && script.fastest.lap === 49, "the fastest lap: Russell's 49th");
     const list = R.highlightsFor(script);
     const kinds = {};

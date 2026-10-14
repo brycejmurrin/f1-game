@@ -290,3 +290,12 @@ test("a hostile 282-char share code of a ~990 km loop is refused before anything
   assert.equal(r.ok, false, "the base decoded this to lengthM 993532 and V.check then took 10 s / 227 MB");
   assert.equal(r.reason, "geometry");
 });
+
+ test("Unicode country labels round trip within the 32-unit storage limit", async () => {
+  const { CD, C } = bootEditor();
+  for (const country of ["é".repeat(17), "界".repeat(32), "é".repeat(32)]) {
+    const back = await CD.decode(await CD.encode(design({ country })));
+    assert.equal(back.ok, true, back.reason);
+    assert.equal(back.design.country, C.sanitizeCountry(country));
+  }
+});

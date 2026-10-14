@@ -147,10 +147,10 @@ test("other cars stamp on their own cadence, inside a capped share of the ring",
   }
   assert.equal(count(skids), 36, "12 marks each in 1 s — one shared countdown would have laid 12 in all");
   assert.equal(skids.otherCount, 24);
-  // Keep the rivals locking: they stop at the cap; the player still lays.
+  // Keep the rivals locking: they refresh marks at the cap; the player still lays.
   for (let i = 0; i < 240; i++) { skids.stampFor(a, IDENT, true, 1 / 60); skids.stampFor(b, IDENT, true, 1 / 60); }
   assert.equal(skids.otherCount, SkidMarks.AI_CAP, `other cars hold at most AI_CAP (${SkidMarks.AI_CAP}) slots`);
-  assert.equal(skids.stampFor(a, IDENT, true, 1), false, "a stamp past the cap is refused");
+  assert.equal(skids.stampFor(a, IDENT, true, 1), true, "a stamp at the cap refreshes an AI slot");
   // The player wraps the ring: overwritten rival slots are released from the share.
   for (let i = 0; i < 60 * 12; i++) skids.stamp(IDENT, true, 1 / 60);
   assert.equal(count(skids), SkidMarks.MAX_SKID);
@@ -160,4 +160,21 @@ test("other cars stamp on their own cadence, inside a capped share of the ring",
   assert.equal(count(skids), 0);
   assert.equal(skids.otherCount, 0, "reset clears the share");
   assert.equal(skids.stampFor(null, IDENT, true, 1 / 60), false, "no cadence object, no mark");
+});
+
+
+test("rival quota refreshes oldest rival marks without moving the player ring", () => {
+  const skids = make(), timer = { t: 0 }, mat = IDENT.slice();
+  for (let i = 0; i < 80; i++) { mat[12] = -1000 - i; skids.stamp(mat, true, 1); }
+  for (let i = 0; i < 600; i++) { mat[12] = i; skids.stampFor(timer, mat, true, 1); }
+  const centers = [];
+  skids.draw({ drawSkidBatch: (verts, n) => {
+    for (let i = 0; i < n * 5; i += 30) centers.push((verts[i] + verts[i + 10]) / 2);
+    return true;
+  } });
+  assert.equal(skids.otherCount, 40);
+  assert.equal(centers.filter((x) => x < 0).length, 80);
+  assert.ok(centers.includes(599), "newest rival stamp is retained");
+  mat[12] = -2000; skids.stamp(mat, true, 1);
+  assert.equal(skids.otherCount, 40, "rival replacement did not advance the player ring");
 });

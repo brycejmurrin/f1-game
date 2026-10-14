@@ -248,6 +248,19 @@ test("open() is a no-op while How to Play is visible", () => {
   assert.equal(h.DataHub.isOpen(), false);
 });
 
+test("open() is a no-op while Settings is visible", async () => {
+  // Cold DATA/WATCH → SETTINGS before ensureDataHub resolves: late open() must
+  // not reveal the hub over #pmsettings. Pause itself stays out of BLOCKING_SEL
+  // so intentional paused WATCH entry still works.
+  const h = harness();
+  h.place("pmsettings", false);
+  h.root.hidden = true;
+  h.DataHub.open("export");
+  await h.drain();
+  assert.equal(h.root.hidden, true, "hub must stay closed under Settings");
+  assert.equal(h.DataHub.isOpen(), false);
+});
+
 test("open() still works when How to Play is hidden", async () => {
   const h = harness();
   h.place("howtoplay").hidden = true;
