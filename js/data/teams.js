@@ -38,15 +38,17 @@ const Teams = (function () {
          renders (mercedesamgf1.com, 22 Jan 2026) add a SILVER NOSE TOP edged in
          teal ("the transition from iconic Mercedes silver to the team's deep
          black") — `noseStripe` — and a black shark fin carrying the stars. The
-         upper/lower silver-to-black split itself needs a zone the model does
-         not have yet. */
+         upper/lower silver-to-black split is `upper`: the chassis band above
+         the sidepod board line in silver, with PRIMARY (black) below. */
       livery: {
         // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: the W17's silver star carries a dark rim on its silver cover — 1.23:1 bare.
         // The brand colour is exact (markPalette never substitutes it); the rim
         // is what keeps it legible, the same row a player uses for the same job.
+        // UPPER: silver upper-chassis band (CarShade.upperZone) — same silver as cover / noseStripe.
         logo3: [0.06, 0.06, 0.08], cover: [0.76, 0.78, 0.82], finStyle: "stars", finShape: "standard", spineHeight: "raised",
                 spineLogo: "fade", spineSide: "starfield", coverBind: "spineOnly",
-                noseStripe: [0.76, 0.78, 0.82], fin: [0.045, 0.055, 0.065] },
+                noseStripe: [0.76, 0.78, 0.82], fin: [0.045, 0.055, 0.065],
+                upper: [0.76, 0.78, 0.82] },
       engine: "Mercedes", tier: 0,
       stats: { speed: 96, accel: 91, cornering: 93, braking: 90 },
       drivers: [

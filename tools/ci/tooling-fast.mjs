@@ -579,6 +579,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // updateCar OT ahead-scan gate: skip the O(n) walk when gapAhead is unused.
   "tests/unit/ot-ahead-scan-gate.test.mjs",
   "tests/unit/overtake-mode.test.mjs",
+  // PaceMath (js/race/pace-math.js): vTop/vStd/aStd + X-mode/ERS/gearHi pins from pre-extract goldens. ~0.1 s.
+  "tests/unit/pace-math.test.mjs",
   "tests/unit/pad-haptics.test.mjs",
   // particles.js dirty latch: parked rain skips expand/upload until eye cell moves.
   "tests/unit/particles-dirty.test.mjs",
@@ -942,6 +944,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a chip or __apex.weather() still cuts. VM-executed atmosphere.js, ~0.1 s.
   "tests/unit/weather-blend.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
+  // WET_GRIP orders the treads as treadFor picks them: inter owns the damp, full wet the storm. VM, < 0.2 s.
+  "tests/unit/wet-grip-ladder.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",
   // The claim half of who-is-on-it (pure parse + the empty-tree commit shape)
   // and deploy --pr's REST fallback against a fake curl; both < 1 s, both
@@ -963,6 +967,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // overshoot ≤12% at 61.1 m/s / ≤14% at 83.3 m/s; ≤50 m/s and lift-off
   // unchanged. createGame once, ~2.5 s.
   "tests/unit/yaw-damp-speed.test.mjs",
+  // Low-speed yaw/vLat substep (LOW_YAW_V=8): kills period-2 Δr chatter at
+  // 3–4 m/s full lock on pin + shipped seats; ≥8 m/s bit-identical. ~5 s.
+  "tests/unit/yaw-low-speed-substep.test.mjs",
   // @gen-test-groups:end
 ]);
 

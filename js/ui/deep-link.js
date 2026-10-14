@@ -40,7 +40,9 @@ function create(G) {
     btn.click();
     if (go === "nextgp") afterHubOpens(0);
   }
-  fire(0);
+  // TitleFlow installs this consumer before TitleMenu/game.js bind DAILY,
+  // DATA and GARAGE. Let that synchronous wiring finish before clicking a door.
+  setTimeout(() => fire(0), 0);
   return { go };
 }
 return { create, parse, DOORS };

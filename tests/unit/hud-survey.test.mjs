@@ -12,8 +12,9 @@ import vm from "node:vm";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { analyzeOverlap, controlClash, probeHudElements, rectHit } from "../../tools/lib/hud-geometry.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 import * as M from "../../tools/lib/hud-survey-matrix.mjs";
-import { applyCell, chromiumArgs, hudFitState, parseArgs, probeWithTransients, runExtras, shotTimeoutMs } from "../../tools/shot/hud-survey.mjs";
+import { REPAINT_FRAMES, applyCell, bootStore, chromiumArgs, hudFitState, parseArgs, probeWithTransients, repaintFrames, runExtras, shotTimeoutMs } from "../../tools/shot/hud-survey.mjs";
 import { analyzeSamples, parseArgs as parseLive, summarize } from "../../tools/shot/hud-live-sample.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -271,7 +272,7 @@ test("cells: validation, stable ids, boot keys", () => {
   const c = M.normalizeCell({ device: "phone-landscape-844x390", cam: "cockpit", preset: { map: { s: 150 } }, hudScale: 70, off: ["ot", "gear"] });
   assert.equal(M.cellId(c), M.cellId(M.normalizeCell({ off: "gear,ot", hudScale: "70", cam: "cockpit", device: "phone-landscape-844x390", preset: { map: { s: 150 } } })));
   assert.match(M.cellId(c), /^phoneL-cockpit-offsets-[a-z0-9]+-hud70-off-gear\.ot$/);
-  assert.equal(M.bootKey(c), "phone-landscape-844x390|monza|standard|full|default");
+  assert.equal(M.bootKey(c), "phone-landscape-844x390|monza|standard|full|default|race");
   assert.equal(M.bootKey({ ...c, map: "off", theme: "light" }), M.bootKey(c), "MAP / theme are live, not boot keys");
 });
 
@@ -309,7 +310,8 @@ test("expected-visible rules", () => {
   const visorDesk = E({ device: "desktop-1280", cam: "helmet" }, { desktop: true, cockpitCam: false });
   assert.deepEqual([visorDesk.ot.want, visorDesk.tyre.want, visorDesk.energy.want, visorDesk.gearbox.want, visorDesk.speed.want], [true, true, true, true, true]);
   assert.equal(M.camGroupFacts(M.normalizeCell({ cam: "helmet", map: "auto" })).layoutSet, "helmet");
-  assert.equal(E({ device: "phone-portrait-390x844" }).rotateDevice.want, true);
+  assert.equal(E({ device: "phone-portrait-390x844" }).rotateDevice.want, false, "portrait RACE (default): the rotate card is lifted");
+  assert.equal(E({ device: "phone-portrait-390x844", portrait: "gate" }).rotateDevice.want, true);
   const off = E({ off: ["pos", "gear", "limits"] });
   assert.deepEqual([off.pos.want, off.gearbox.want, off.limits.want, off.lap.want, off.speed.want], [false, false, false, true, true]);
   const hidden = E({ hud: "off" });
@@ -335,7 +337,7 @@ test("findings: the CLEAN-preset map that vanishes, overlaps by severity, offscr
   assert.ok(kinds("unsafe").some((x) => x.elements[0] === "sectors"), "x=10 < sal 47");
   assert.ok(kinds("tinyText").some((x) => x.elements[0] === "sectors" && x.severity === "high"));
   assert.ok(kinds("missing").some((x) => /touch controls/.test(x.detail)), "one touch button on a phone");
-  const portrait = { ...M.normalizeCell({ device: "phone-portrait-390x844" }), id: "pp" };
+  const portrait = { ...M.normalizeCell({ device: "phone-portrait-390x844", portrait: "gate" }), id: "pp" };
   const pf = M.classifyFindings(portrait, { ctx: { desktop: false }, records: [rec("rotateDevice", 0, 0, 390, 844, { role: "overlay" }),
     rec("tower", 50, 60, 280, 50), rec("pausebtn", 300, 60, 52, 52, { role: "ctrl" })] });
   assert.ok(pf.length && pf.every((x) => x.severity === "info"), "everything under the rotate card is info");
@@ -344,6 +346,85 @@ test("findings: the CLEAN-preset map that vanishes, overlaps by severity, offscr
   assert.ok(noEff.some((x) => x.kind === "noEffect" && x.elements[0] === "sectors"));
   const err = M.classifyFindings({ ...M.normalizeCell({}), id: "e" }, { cellError: "boom", pageErrors: ["TypeError: x"] });
   assert.equal(err.filter((x) => x.kind === "pageError").length, 2);
+});
+
+test("desktop-1440x900: a named 16:10 device, its own short id, not a matrix axis", () => {
+  assert.deepEqual(M.DEVICES["desktop-1440x900"], { w: 1440, h: 900, touch: false, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } });
+  assert.ok(M.ENUMS.device.includes("desktop-1440x900"));
+  assert.ok(!M.MATRIX_DEVICES.includes("desktop-1440x900"), "full / exhaustive keep their size");
+  const c = M.normalizeCell({ device: "desktop-1440x900", cam: "cockpit" });
+  assert.equal(M.cellId(c), "d1440-cockpit");
+  assert.equal(parseArgs(["--device", "desktop-1440x900"]).cells[0].device, "desktop-1440x900");
+  const E = M.expectedVisibility(c, { desktop: true, cockpitCam: true });
+  assert.equal(E["btn-ot"].want, false, "a desktop: no touch stack");
+  assert.equal(E.rotateDevice.want, false);
+});
+
+test("portrait mode: race by default (portraitOk at boot, findings keep their severity), gate on request", () => {
+  const P = "phone-portrait-390x844";
+  // Option parsing: plan-wide --portrait under-lays every cell; only a gated device keeps GATE.
+  const q = parseArgs(["--matrix", "quick", "--only", "phoneP-chase,chase-default"]);
+  assert.deepEqual(q.cells.map((c) => [c.id, c.portrait]), [["chase-default", "race"], ["phoneP-chase", "race"]]);
+  const g = parseArgs(["--matrix", "quick", "--only", "phoneP-chase,chase-default", "--portrait", "gate"]);
+  assert.deepEqual(g.cells.map((c) => c.portrait), ["race", "gate"], "a desktop has no gate: coerced to race");
+  assert.equal(parseArgs(["--device", P, "--portrait", "gate"]).cells[0].id, "phoneP-chase-portrait-gate");
+  assert.equal(parseArgs(["--device", P]).cells[0].id, "phoneP-chase", "the default adds nothing to the id");
+  assert.throws(() => parseArgs(["--portrait", "sideways"]), /--portrait must be race or gate/);
+  assert.throws(() => M.normalizeCell({ device: P, portrait: "x" }), M.CellError);
+  assert.equal(M.normalizeCell({ device: "tablet-portrait-820x1180", portrait: "gate" }).portrait, "race", "820 wide is past the gate's 743px");
+  assert.notEqual(M.bootKey(M.normalizeCell({ device: P })), M.bootKey(M.normalizeCell({ device: P, portrait: "gate" })), "portraitOk is read at boot");
+  // What the boot writes: apex26.portraitOk verbatim "1" (js/game.js compares the string), only for a gated race cell.
+  assert.deepEqual(bootStore(M.normalizeCell({ device: P })).raw, { portraitOk: "1" });
+  assert.deepEqual(bootStore(M.normalizeCell({ device: P, portrait: "gate" })).raw, {});
+  assert.deepEqual(bootStore(M.normalizeCell({})).raw, {}, "landscape boots stay as they were");
+  assert.deepEqual(bootStore(M.normalizeCell({ steer: "tilt" })).json, { hudProfile: "standard", hudMetricsLayout: "full", steerMode: "tilt" });
+  assert.match(gameSource(), /localStorage\.getItem\("apex26\.portraitOk"\) === "1"/, "the key and value the survey seeds");
+  // Classification: a RACE cell's findings are real; a rotate card there is a high finding, not a blanket downgrade.
+  const recs = [rec("tower", 50, 60, 280, 50, { minFontPx: 7 }), rec("pausebtn", 300, 60, 52, 52, { role: "ctrl" })];
+  const race = M.classifyFindings({ ...M.normalizeCell({ device: P }), id: "pr" }, { ctx: { desktop: false }, records: recs });
+  assert.ok(race.some((x) => x.kind === "tinyText" && x.severity === "high"), JSON.stringify(race));
+  assert.ok(race.every((x) => !/under #rotate-device/.test(x.detail)));
+  const stuck = M.classifyFindings({ ...M.normalizeCell({ device: P }), id: "ps" },
+    { ctx: { desktop: false }, records: [rec("rotateDevice", 0, 0, 390, 844, { role: "overlay" }), ...recs] });
+  const card = stuck.find((x) => x.kind === "unexpected" && x.elements[0] === "rotateDevice");
+  assert.ok(card && card.severity === "high" && /RACE IN PORTRAIT/.test(card.detail), JSON.stringify(stuck));
+  const gate = M.classifyFindings({ ...M.normalizeCell({ device: P, portrait: "gate" }), id: "pg" },
+    { ctx: { desktop: false }, records: [rec("rotateDevice", 0, 0, 390, 844, { role: "overlay" }), ...recs] });
+  assert.ok(gate.length && gate.every((x) => x.severity === "info"), "GATE keeps the old under-the-card downgrade");
+});
+
+test("classifier viewport: offscreen and lead onScreen judge the measured innerWidth x innerHeight", () => {
+  const d = { ...M.normalizeCell({ device: "desktop-1440x900" }), id: "d" };
+  const pause = rec("pausebtn", 1380, 8, 44, 44, { role: "ctrl" });
+  const wide = rec("tower", 1300, 400, 120, 40);
+  const off = (m) => M.classifyFindings(d, { ctx: { desktop: true }, records: [pause, wide], ...m }).filter((x) => x.kind === "offscreen");
+  assert.deepEqual(off({}), [], "x 1300..1420 is inside the device's 1440");
+  assert.deepEqual(off({ viewport: { w: 1440, h: 900 } }), []);
+  const small = off({ viewport: { w: 1366, h: 768 } });
+  assert.deepEqual(small.map((x) => x.elements[0]).sort(), ["pausebtn", "tower"]);
+  assert.match(small.find((x) => x.elements[0] === "tower").detail, /the 1366x768 viewport/);
+  assert.deepEqual(M.cellViewport(d, { viewport: { w: 0, h: NaN } }), { w: 1440, h: 900 }, "a junk reading falls back to the device");
+  assert.deepEqual(M.cellViewport(d, { viewport: { w: 1200, h: 700 } }), { w: 1200, h: 700 });
+  const lead = { ...M.normalizeCell({ device: "desktop-1440x900", checks: [{ type: "onScreen", keys: ["tower"] }], lead: "L" }), id: "l" };
+  const sev = (viewport) => M.evaluateChecks(lead, { records: [wide], viewport })[0].severity;
+  assert.equal(sev(undefined), "info");
+  assert.equal(sev({ w: 1366, h: 768 }), "high");
+});
+
+test("repaintFrames: the 3D loop back on, then N animation frames before the cell goes headless", async () => {
+  const calls = [];
+  let raf = 0;
+  const ctx = vm.createContext({
+    window: { __apex: { headless: (v) => calls.push(["headless", v]) } },
+    requestAnimationFrame: (cb) => { raf++; calls.push(["raf", raf]); setImmediate(cb); return raf; },
+  });
+  vm.runInContext("window.window = window; window.requestAnimationFrame = requestAnimationFrame;", ctx);
+  await vm.runInContext(`(${repaintFrames.toString()})(${REPAINT_FRAMES})`, ctx);
+  assert.deepEqual(calls[0], ["headless", false]);
+  assert.equal(raf, REPAINT_FRAMES);
+  assert.ok(REPAINT_FRAMES >= 2, "one frame can be the previous camera's");
+  const src = read("tools/shot/hud-survey.mjs");
+  assert.match(src, /if \(lit < 0\) \{ await page\.evaluate\(repaintFrames, REPAINT_FRAMES\); repainted = true; \}/, "a -1 lit check forces the repaint");
 });
 
 test("lead checks decide from the numbers, and merge re-decides across shards", () => {

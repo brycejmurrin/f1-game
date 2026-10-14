@@ -22,6 +22,9 @@ const NetLobby = (function () {
     const MAX_GUESTS = 3;
     let role = null;
     let pollTimer = null;
+    // Pending-attempt fail tag: waitForOpen prefers this over failureMsg TURN copy.
+    // 'expired' | 'no_relay' | 'ice' | null
+    let failReason = null, failReasonMsg = null;
     let statusText = "";
     // Every user-started async flow owns one generation. Camera permission,
     // relay discovery and ICE gathering can all resolve after the player has
@@ -175,8 +178,26 @@ const NetLobby = (function () {
       ]);
     }
 
+    function tagFailReason(reason, message) {
+      if ((failReason === "expired" || failReason === "no_relay") && reason === "ice") return;
+      failReason = reason;
+      if (message) failReasonMsg = message;
+    }
+    function clearFailReason() { failReason = null; failReasonMsg = null; }
+    function sayConnectFail(st, secs) {
+      if (failReason === "expired" || failReason === "no_relay") {
+        say(failReasonMsg || (failReason === "expired"
+          ? "The room code has expired — INVITE ANOTHER makes a new one."
+          : "Could not reach any room service. Use the invite link or QR instead."), true);
+        return;
+      }
+      tagFailReason("ice");
+      say(failureMsg(st, secs), true);
+    }
+
     function newTransport(asRole) {
       dropPending();
+      clearFailReason();
       role = asRole;
       pendingId = asRole === "host" ? mintGuestId() : PEER_ONE;
       transport = makeTransport({ role: asRole, name: asRole });
@@ -288,6 +309,7 @@ const NetLobby = (function () {
       consumeHandledInvite(); clearInterval(pollTimer);
       clearInterval(pumpTimer);
       pumpTimer = null;
+      clearFailReason();
       // onJoiner stamps codeReopen before waitForOpen; a failed ICE then
       // teardowns with nobody connected — leaving the string made the next
       // unrelated onConnected quietly reopen that dead room code.
@@ -387,7 +409,7 @@ const NetLobby = (function () {
             // at 4 Hz forever with no message and no failure text.
             if (Date.now() - started > CONNECT_TIMEOUT_MS) {
               clearInterval(pollTimer);
-              say(failureMsg(null, Math.round((Date.now() - started) / 1000)), true);
+              sayConnectFail(null, Math.round((Date.now() - started) / 1000));
             }
             return;
           }
@@ -407,7 +429,7 @@ const NetLobby = (function () {
         if (dead || Date.now() - started > CONNECT_TIMEOUT_MS) {
           clearInterval(pollTimer);
           Log.warn("net", "connect fail " + secs + "s");
-          say(failureMsg(st, secs), true);
+          sayConnectFail(st, secs);
           // Only this attempt. A host whose SECOND invite fails still has its
           // first guest sitting in the room, and dropping them for somebody
           // else's bad network would be its own bug.
@@ -1600,6 +1622,9 @@ const NetLobby = (function () {
             // has nothing to act on and the code silently stops working.
             if (r.advisory) { say(r.message, true); return; }
             codeRoom = null;
+            // Before dropPending clears pollTimer: empty room + armed watcher
+            // still needs the INVITE ANOTHER expiry copy (not failureMsg TURN).
+            const watcherArmed = !!pollTimer;
             // Drop the half-built invite transport/PC for THIS attempt. Leaving
             // it after expiry (or a courier fail) leaked the RTCPeerConnection,
             // kept status().pending true, and blocked a retry from the same guest.
@@ -1608,8 +1633,15 @@ const NetLobby = (function () {
             dropPending();
             // onConnected() reopens the code for the next arrival; its expiry
             // (HOST_TIMEOUT_MS ≈ 120 s) later is not a failure of a room that is already full.
-            if (r.error === "expired" && sessions.size) {
-              say("The room code has expired — INVITE ANOTHER makes a new one.");
+            if (r.error === "expired" && (sessions.size || watcherArmed)) {
+              const msg = "The room code has expired — INVITE ANOTHER makes a new one.";
+              tagFailReason("expired", msg);
+              say(msg);
+              return;
+            }
+            if (r.error === "expired" || r.error === "no_relay") {
+              tagFailReason(r.error, r.message);
+              say(r.message || "The room service went away. Use the invite link or QR instead.", true);
               return;
             }
             say(r.message || "The room service went away. Use the invite link or QR instead.", true);
@@ -1791,6 +1823,7 @@ const NetLobby = (function () {
       }
       if (!done.ok) {
         const why = (done.error === "reply_failed" && answered && !answered.ok) ? answered : done;
+        if (why.error === "expired" || why.error === "no_relay") tagFailReason(why.error, why.message);
         if (why.error !== "cancelled") say(why.message || "Could not join that room.", true);
         return why;
       }
