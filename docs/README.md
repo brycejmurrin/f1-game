@@ -64,6 +64,7 @@ anything in here.
 
 | Note | What it records |
 |---|---|
+| [notes/AGENT-WORK-TRACKING-2026-10-14.md](notes/AGENT-WORK-TRACKING-2026-10-14.md) | Where the fleet's backlog lives and why: GitHub Issues + sub-issues vs Linear, Jira, Plane, Notion, Beads, Backlog.md, Taskmaster, Claude Tasks, Obsidian and the agent orchestrators, scored on free / headless / phone / PR tie-in / atomic claim; the four-layer setup behind AGENTS.md §Backlog. |
 | [notes/APEX-STEWARD-CARD-2026-10-05.md](notes/APEX-STEWARD-CARD-2026-10-05.md) | Always-on steward card + hashes (skip re-read of steward / check-changes / PR template when they match); lane mutex; `cursor/<topic>-<hash>` → ship; resolve-swarm cap; tooling/docs merge-train exclusion |
 | [notes/BUG-HUNT-ROUND-2-REGISTER-2026-10-10.md](notes/BUG-HUNT-ROUND-2-REGISTER-2026-10-10.md) | Round-2 whole-tree hunt on the 2026-10-09 tip: 79 findings by area with where each went (merged PR, sibling #1289, handed, open), the method, and the lessons (auto-merge skips the non-required geometry sweeps; stale-baseline ratchets; test-group registration). |
 | [notes/BUG-HUNT-OPUS-2026-10-10.md](notes/BUG-HUNT-OPUS-2026-10-10.md) | Six read-only Opus hunters on the 78cb4831be tip, one per area: the race-runtime items fixed in their PR (hidden-tab intro clock, pit-garage pause, spotter churn), the renderer / track / physics / menus findings with each hunter's confidence, and the lane for each follow-up. |

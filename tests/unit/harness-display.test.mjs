@@ -73,3 +73,34 @@ test("chromiumArgsForBackend pins unsafe SwiftShader for GLX/TLX", () => {
   assert.match(src, /gotoGameBootDiag|__apex never appeared/,
     "boot timeout must name WebGL / DISPLAY, not a bare waitForFunction");
 });
+
+test("a hanging Browser close remains owned and shutdown kills its process group", async () => {
+  const { spawn } = await import("node:child_process");
+  const { once } = await import("node:events");
+  const { trackBrowserOwner, shutdown } = await import(pathToFileURL(harnessPath).href);
+  const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { detached: true, stdio: "ignore" });
+  await once(child, "spawn");
+  const exited = once(child, "exit");
+  let ownerClosed = false;
+  const browser = trackBrowserOwner({ close: () => new Promise(() => {}) }, {
+    process: () => child, close: async () => { ownerClosed = true; },
+  });
+  browser.close();
+  try {
+    await shutdown();
+    const [, signal] = await exited;
+    assert.equal(signal, "SIGKILL");
+    assert.equal(ownerClosed, false, "hung browser close never reaches graceful owner close");
+  } finally { if (child.exitCode == null && child.signalCode == null) process.kill(-child.pid, "SIGKILL"); }
+});
+
+test("graceful Browser close closes the supported process owner too", async () => {
+  const { trackBrowserOwner, shutdown } = await import(pathToFileURL(harnessPath).href);
+  const calls = [];
+  const browser = trackBrowserOwner({ close: async options => calls.push(options.reason) }, {
+    close: async () => calls.push("owner"), process: () => ({ exitCode: 0 }),
+  });
+  await browser.close({ reason: "finished" });
+  await shutdown();
+  assert.deepEqual(calls, ["finished", "owner"]);
+});

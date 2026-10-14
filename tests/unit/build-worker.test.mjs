@@ -460,6 +460,36 @@ test("synchronous init post failure and unreadable replies also settle readiness
   }
 });
 
+test("build postMessage failure clears pending timers, falls back and permits a later request", async () => {
+  const workers = [], timers = new Map();
+  let nextTimer = 0;
+  const c = smallClient({
+    setTimeout(fn) { const id = ++nextTimer; timers.set(id, fn); return id; },
+    clearTimeout(id) { timers.delete(id); },
+    Worker: class {
+      constructor() { workers.push(this); }
+      postMessage(data) {
+        if (data.type === "init") queueMicrotask(() => this.onmessage({ data: { type: "ready" } }));
+        else if (workers.length === 1) throw new Error("DataCloneError: build refused");
+        else queueMicrotask(() => this.onmessage({ data: { type: "built", seq: data.seq, id: data.id } }));
+      }
+      terminate() { this.terminated = true; }
+    },
+  });
+  assert.equal(await c.build(0, { id: "monza" }, {}, {}, null), null, "send failure uses the stepped fallback");
+  assert.equal(c.busy(), false);
+  assert.equal(timers.size, 0, "both initialization and answer timers are disposed");
+  assert.equal(workers[0].terminated, true);
+  const answer = await c.build(0, { id: "monza" }, {}, {}, null);
+  assert.equal(answer.type, "built", "later request uses a fresh worker");
+  assert.equal(workers.length, 2);
+  assert.equal(c.busy(), false);
+  assert.equal(timers.size, 0);
+  workers[0].onmessage({ data: { type: "built", seq: 1 } });
+  workers[0].onerror({ message: "late failed worker error" });
+  assert.equal(workers[1].terminated, undefined, "old worker events cannot disturb the replacement");
+});
+
 for (const failure of ["fallback", "surface", null]) {
   test(`replay owns fallback resources through reconstruction (${failure || "success"})`, async () => {
     const made = [], freed = [];

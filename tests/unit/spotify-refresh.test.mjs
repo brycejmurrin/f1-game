@@ -445,3 +445,19 @@ test("switching play mode tears the OLD transport down before the stored mode fl
   assert.ok(seen.some((u) => u.startsWith("PUT ") && u.includes("/me/player/pause")),
     "the remote device was never paused: stop() ran against the already-flipped mode");
 });
+
+
+test("browser SDK next, previous and volume handle asynchronous and synchronous failures", async () => {
+  const backendBlock = SRC.slice(SRC.indexOf("const BACKEND ="), SRC.indexOf("// Guarded on the global AND"));
+  const prevBlock = SRC.slice(SRC.indexOf("function prev()"), SRC.indexOf("function toggle()"));
+  let caught = 0;
+  const rejecting = () => { const p = Promise.reject(new Error("device unavailable")); const original = p.catch.bind(p);
+    p.catch = (fn) => { caught++; return original(fn); }; return p; };
+  const player = { nextTrack: rejecting, previousTrack: rejecting, setVolume: rejecting };
+  const ctx = vm.createContext({ player, state: "connected", ready: true, mode: () => "browser", track: "song", vol: 0.5, Math });
+  vm.runInContext(backendBlock + prevBlock + "; BACKEND.skip(); prev(); BACKEND.setVolume(0.3);", ctx);
+  await Promise.resolve();
+  assert.equal(caught, 3, "all three SDK promises attach rejection observers");
+  for (const k of Object.keys(player)) player[k] = () => { throw new Error("SDK failed synchronously"); };
+  assert.doesNotThrow(() => vm.runInContext("BACKEND.skip(); prev(); BACKEND.setVolume(0.3);", ctx));
+});

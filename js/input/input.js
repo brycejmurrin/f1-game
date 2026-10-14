@@ -23,6 +23,7 @@ const Input = (function () {
   let speedStdOverride = null;
   let speedProvider = null;
 
+  const heldKeys = new Set();
   let keyLeft = false;
   let keyRight = false;
   let keyBrake = false;
@@ -540,7 +541,7 @@ const Input = (function () {
   }
 
   const bindings = InputBindings.create({
-    onKeysChanged() { keyLeft = keyRight = keyThrottle = keyBrake = keyLookBack = false; },
+    onKeysChanged() { heldKeys.clear(); keyLeft = keyRight = keyThrottle = keyBrake = keyLookBack = false; },
     onPadBindingChanged() { padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; },
     activePad,
   });
@@ -813,6 +814,15 @@ const Input = (function () {
     return false;
   }
 
+  function heldAction(id) {
+    for (const code of heldKeys) if (bindings.keyAction(code) === id) return true;
+    return false;
+  }
+  function syncHeldKeys() {
+    keyLeft = heldAction("left"); keyRight = heldAction("right");
+    keyThrottle = heldAction("throttle"); keyBrake = heldAction("brake");
+    keyLookBack = heldAction("lookBack");
+  }
   function onKey(e, down) {
     const active = document.activeElement;
     const tag = (active && active.tagName) || (e.target && e.target.tagName) || "";
@@ -861,6 +871,7 @@ const Input = (function () {
        treating it as "let go of everything" free of side effects. Alt gets the
        same treatment for Alt+Tab on Windows, for the same reason. */
     if (down && (e.code === "MetaLeft" || e.code === "MetaRight" || e.code === "AltLeft" || e.code === "AltRight")) {
+      heldKeys.clear();
       keyLeft = keyRight = keyThrottle = keyBrake = keyLookBack = false;   // look-back is held too
     }
     /* PAUSE AND BACK ARE COMMANDS, NOT DRIVING CONTROLS, so they sit ABOVE the
@@ -916,19 +927,22 @@ const Input = (function () {
     if (down && (e.metaKey || e.ctrlKey)) return;
     if (menuOverlayOpen() || typing) {
       if (down) return;
-      if (act === "left") keyLeft = false;
-      else if (act === "right") keyRight = false;
-      else if (act === "throttle") keyThrottle = false;
-      else if (act === "brake") keyBrake = false;
-      else if (act === "lookBack") keyLookBack = false;
+      heldKeys.delete(e.code); syncHeldKeys();
+      return;
+    }
+    if (["left", "right", "throttle", "brake", "lookBack"].includes(act)) {
+      if (down) {
+        if (!heldKeys.has(e.code)) {
+          if (act === "left") keyLeftSeq = ++keySeq;
+          if (act === "right") keyRightSeq = ++keySeq;
+        }
+        heldKeys.add(e.code); e.preventDefault();
+      } else heldKeys.delete(e.code);
+      syncHeldKeys();
       return;
     }
     const edge = down && !e.repeat;
     switch (act) {
-      case "left": if (down && !keyLeft) keyLeftSeq = ++keySeq; keyLeft = down; if (down) e.preventDefault(); break;
-      case "right": if (down && !keyRight) keyRightSeq = ++keySeq; keyRight = down; if (down) e.preventDefault(); break;
-      case "throttle": keyThrottle = down; if (down) e.preventDefault(); break;
-      case "brake": keyBrake = down; if (down) e.preventDefault(); break;
       // preventDefault on both edges: the default BOOST key is Space, which
       // otherwise scrolls the page (and activates a focused button on keyup).
       case "boost": if (edge) boostTogglePressed = true; e.preventDefault(); break;
@@ -937,7 +951,6 @@ const Input = (function () {
       case "shiftUp": if (edge) shiftUpPressed = true; break;
       case "shiftDown": if (edge) shiftDownPressed = true; break;
       case "camera": if (edge) cameraCyclePressed = true; break;
-      case "lookBack": keyLookBack = down; if (down) e.preventDefault(); break;
       case "recover": if (edge) recoverPressed = true; break;
       case "radio": if (edge) radioPressed = true; break;
       case "mirror": if (edge) mirrorPressed = true; break;
@@ -1980,9 +1993,10 @@ const Input = (function () {
           const s = debugState();
           d.textContent =
             `THR ${s.throttle ? "ON " : "off"}` +
-            `  key:${+s.key.throttle} btn:${+s.btn.throttle} pad:${+s.pad.throttle}` +
+            `  key:${+s.key.throttle} btn:${+s.btn.throttle} pad:${+s.pad.throttle} remote:${s.remote.active ? s.remote.thr : 0}` +
             `\nBRK ${s.braking ? "ON " : "off"}` +
-            `  key:${+s.key.brake} btn:${+s.btn.brake} pad:${+s.pad.brake}` +
+            `  key:${+s.key.brake} btn:${+s.btn.brake} pad:${+s.pad.brake} remote:${s.remote.active ? s.remote.brk : 0}` +
+            `\nremote:${s.remote.active ? "live" : "stale"} age:${s.remote.ageMs == null ? "none" : s.remote.ageMs + "ms"} steer:${s.remote.steers ? "remote" : "local"}` +
             `\nheld ptrs [${s.holdPointers.join(",")}]` +
             `\nmode:${s.steerMode}` +
             `  auto:${(touchControlsNeeded() && s.steerMode === "touch") ? "ON" : "off"}`;
@@ -2011,6 +2025,7 @@ const Input = (function () {
       padConnected = still; padSteer = 0; padThrottle = padBrake = false;
       padThrottleVal = padBrakeVal = 0;
       padSteerAnalog = false; padLookBack = false;
+      lookStickX = 0; lookStickY = 0;
       padDpadVal = 0; padDpadT = 0;
       padDpadLeftHeld = padDpadRightHeld = false;
       padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
@@ -2034,6 +2049,7 @@ const Input = (function () {
   }
 
   function reset() {
+    heldKeys.clear();
     touches.clear();
     hideDragAnchor();
     touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
