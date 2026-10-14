@@ -237,26 +237,26 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `spline.js` | `TrackSpline` | tag | TrackSpline: pure centreline / spline math for the tracks engine. centerline() integrates an authored segment list into closed control points, cr() is… |
 | `line.js` | `TrackLine` | tag | TrackLine: the baked RACING LINE, a lateral offset per centreline node, computed once at track build beside track.curv. |
 | `mesh.js` | `TrackMesh` | tag | TrackMesh: the kerb/banking band + the road/terrain/floor mesh builders for the tracks engine. upOf() is the shared per-node up-basis, hash() the dete… |
-| `hidden-faces.js` | `TrackHiddenFaces` | tag | build-time strip of prop triangles no camera can see (enclosed in an opaque box, buried under terrain, down-facing on the ground), then compaction of the… |
 | `def.js` | `TrackDef` | tag | TrackDef: the def FACTORY. |
+| `hidden-faces.js` | `TrackHiddenFaces` | LAZY_TRACK_BUILD | build-time strip of prop triangles no camera can see (enclosed in an opaque box, buried under terrain, down-facing on the ground), then compaction of the… |
 
 **`js/track/scenery/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `data.js` | `TrackSceneryData` | tag | the GENERIC scenery data tables for js/track/tracks.js buildProps(): named colour packs, theme fallbacks, crowd/window tints, sign segments and stand liveries. |
-| `models.js` | `TrackModels` | tag | atomic and intentional scenery model helpers. |
 | `graph.js` | `TrackGraph` | tag | TrackGraph: the scenery MODEL LIBRARY + NODE GRAPH. |
-| `themes.js` | `SceneryThemes` | tag | deterministic scenery theme registry. |
-| `landmark-kit.js` | `LandmarkKit` | tag | bounded architectural forms for staged scenery geometry. |
-| `circuit-kit.js` | `CircuitKit` | tag | reusable, atomically staged circuit infrastructure. |
-| `nature.js` | `SceneryNature` | tag | SceneryNature: the nature/landscape band of the buildProps composite-model toolkit — the shared trackside anchor() plus vegetation (pine/tree/palm/con… |
-| `structures.js` | `SceneryStructures` | tag | SceneryStructures: the linear track furniture + race-infrastructure band of the buildProps composite-model toolkit — the along() node walker, the barr… |
-| `city.js` | `SceneryCity` | tag | SceneryCity: the city/building band of the buildProps composite-model toolkit — the shared neonFacade curtain wall, the building()/neonTower() massing… |
-| `identity.js` | `SceneryIdentity` | tag | SceneryIdentity: the shared circuit-identity toolkit of the buildProps composite models — underpass portals, flood masts (+ ring), LED facade bands, c… |
-| `pits.js` | `SceneryPits` | tag | SceneryPits: the pit complex's 3D furniture, built FROM TrackPit. |
-| `venue.js` | `SceneryVenue` | tag | SceneryVenue: grounded, bounded race-day facilities shared by every circuit. |
-| `build-props.js` | `TrackBuildProps` | tag | TrackBuildProps: buildProps orchestration (guards + theme dress + scenery API + lamps + pits). |
+| `models.js` | `TrackModels` | LAZY_TRACK_BUILD | atomic and intentional scenery model helpers. |
+| `themes.js` | `SceneryThemes` | LAZY_TRACK_BUILD | deterministic scenery theme registry. |
+| `landmark-kit.js` | `LandmarkKit` | LAZY_TRACK_BUILD | bounded architectural forms for staged scenery geometry. |
+| `circuit-kit.js` | `CircuitKit` | LAZY_TRACK_BUILD | reusable, atomically staged circuit infrastructure. |
+| `nature.js` | `SceneryNature` | LAZY_TRACK_BUILD | SceneryNature: the nature/landscape band of the buildProps composite-model toolkit — the shared trackside anchor() plus vegetation (pine/tree/palm/con… |
+| `structures.js` | `SceneryStructures` | LAZY_TRACK_BUILD | SceneryStructures: the linear track furniture + race-infrastructure band of the buildProps composite-model toolkit — the along() node walker, the barr… |
+| `city.js` | `SceneryCity` | LAZY_TRACK_BUILD | SceneryCity: the city/building band of the buildProps composite-model toolkit — the shared neonFacade curtain wall, the building()/neonTower() massing… |
+| `identity.js` | `SceneryIdentity` | LAZY_TRACK_BUILD | SceneryIdentity: the shared circuit-identity toolkit of the buildProps composite models — underpass portals, flood masts (+ ring), LED facade bands, c… |
+| `pits.js` | `SceneryPits` | LAZY_TRACK_BUILD | SceneryPits: the pit complex's 3D furniture, built FROM TrackPit. |
+| `venue.js` | `SceneryVenue` | LAZY_TRACK_BUILD | SceneryVenue: grounded, bounded race-day facilities shared by every circuit. |
+| `build-props.js` | `TrackBuildProps` | LAZY_TRACK_BUILD | TrackBuildProps: buildProps orchestration (guards + theme dress + scenery API + lamps + pits). |
 
 **`js/track/`**
 

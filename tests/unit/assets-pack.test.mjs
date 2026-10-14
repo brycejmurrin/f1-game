@@ -1262,10 +1262,12 @@ test("ensureScenery awaits THIS circuit's models (Assets.modelsReady with the cl
     const def = { id: "monza", ...(mode === "inline" ? { scenery } : {}) };
     const ctx = vm.createContext({
       ApexRoster: { DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
-        LAZY_RACE: [], LAZY_RACE_SESSION: [], LAZY_AUDIO: [], LAZY_DATA: [], LAZY_NET: [],
+        LAZY_RACE: [], LAZY_RACE_SESSION: [], LAZY_TRACK_BUILD: [], LAZY_TRACK_BUILD_EDGES: [],
+        LAZY_AUDIO: [], LAZY_DATA: [], LAZY_NET: [],
         SCENERY_DIR: "js/circuits/scenery" },
       Tracks: { LIST: [def], circuitPayloadResident: () => true },
       TrackScenery: mode === "resident" ? { monza: scenery } : {},
+      TrackBuildProps: { build() {} }, TrackModels: {}, TrackHiddenFaces: {},
       Assets: { modelsReady(cap, source) {
         calls.push({ cap, source }); enterModelWait(); return modelBarrier;
       } },
