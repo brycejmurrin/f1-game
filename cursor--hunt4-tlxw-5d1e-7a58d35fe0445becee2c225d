@@ -1,0 +1,1 @@
+1791956185	Claude	hunt4 lane BUGS (B-F1/F2/F4): js/race/car-fields.js (lastLap + warmShape), js/game.js gridUp call + update() finished-car rank (~10 lines), js/physics/ai-drive.js look-ahead loop, tests/unit/car-fields-vm.test.mjs + new unit tests; branch cursor/hunt4-bugs-*  [cursor/hunt4-tlxw-5d1e; session 7a58d35fe0445becee2c225d]
