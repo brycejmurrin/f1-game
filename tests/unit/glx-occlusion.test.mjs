@@ -50,6 +50,7 @@ function makeGL(opts) {
     createShader: () => ({}), shaderSource() {}, compileShader() {},
     getShaderParameter: () => o.compileFails !== true,
     getShaderInfoLog: () => "stub compile failure",
+    deleteShader() {}, deleteProgram() {},
     createProgram: () => ({}), attachShader() {}, bindAttribLocation() {}, linkProgram() {},
     getProgramParameter: () => o.linkFails !== true,
     getProgramInfoLog: () => "stub link failure",
@@ -268,4 +269,100 @@ test("the occlusion pass restores EVERY piece of context state it touched", () =
   const changed = diff(before, snapshot(gl));
   assert.deepEqual(changed, {},
     "the occlusion pass leaked context state: " + JSON.stringify(changed));
+});
+
+
+test("occlusion setup releases shaders and owns only complete draw resources", () => {
+  const gl = makeGL();
+  const made = { shader: [], program: [], vao: [], buffer: [] };
+  const deleted = { shader: [], program: [], vao: [], buffer: [] };
+  for (const [kind, create, remove] of [
+    ["shader", "createShader", "deleteShader"], ["program", "createProgram", "deleteProgram"],
+    ["vao", "createVertexArray", "deleteVertexArray"], ["buffer", "createBuffer", "deleteBuffer"],
+  ]) {
+    gl[create] = () => { const handle = {}; made[kind].push(handle); return handle; };
+    gl[remove] = (handle) => { deleted[kind].push(handle); };
+  }
+  const C = load(gl, { viewProj: WIDE_VP });
+  assert.equal(C.occlusionCull(true).supported, true);
+  assert.deepEqual(deleted.shader, made.shader);
+  assert.equal(made.shader.length, 2);
+  assert.equal(made.program.length, 1);
+  assert.equal(made.vao.length, 1);
+  assert.equal(made.buffer.length, 2);
+  for (const kind of ["program", "vao", "buffer"]) assert.equal(deleted[kind].length, 0);
+  C.occlusionCull(false); C.occlusionCull(true);
+  assert.equal(made.program.length, 1, "successful setup is reused");
+});
+
+test("each partial occlusion setup failure releases exactly its allocated handles", async (t) => {
+  for (const failure of ["program", "vertex shader", "fragment shader", "vertex compile", "fragment compile",
+                         "link", "uniform", "vao", "vertex buffer", "index buffer", "vertex upload", "index upload"]) {
+    await t.test(failure, () => {
+      const gl = makeGL();
+      const made = { shader: [], program: [], vao: [], buffer: [] };
+      const deleted = { shader: [], program: [], vao: [], buffer: [] };
+      let boundVao = null;
+      gl.bindVertexArray = (handle) => { boundVao = handle; };
+      for (const [kind, create, remove] of [
+        ["shader", "createShader", "deleteShader"], ["program", "createProgram", "deleteProgram"],
+        ["vao", "createVertexArray", "deleteVertexArray"], ["buffer", "createBuffer", "deleteBuffer"],
+      ]) {
+        gl[create] = () => {
+          const stage = kind === "shader" ? (made.shader.length ? "fragment shader" : "vertex shader") :
+                        kind === "buffer" ? (made.buffer.length ? "index buffer" : "vertex buffer") : kind;
+          if (stage === failure) return null;
+          const handle = {}; made[kind].push(handle); return handle;
+        };
+        gl[remove] = (handle) => { assert.ok(handle); deleted[kind].push(handle); };
+      }
+      gl.getShaderParameter = (handle) => failure !== (handle === made.shader[0] ? "vertex compile" : "fragment compile");
+      gl.getProgramParameter = () => failure !== "link";
+      gl.getUniformLocation = () => { if (failure === "uniform") throw new Error("uniform"); return {}; };
+      gl.bufferData = (target) => {
+        const stage = target === gl.ARRAY_BUFFER ? "vertex upload" : "index upload";
+        if (failure === stage) throw new Error(stage);
+      };
+      const C = load(gl, { viewProj: WIDE_VP });
+      assert.equal(C.occlusionCull(true).supported, false);
+      for (const kind of Object.keys(made)) {
+        assert.equal(deleted[kind].length, made[kind].length, kind + " deletion count");
+        assert.equal(new Set(deleted[kind]).size, made[kind].length, kind + " deleted once");
+        for (const handle of made[kind]) assert.ok(deleted[kind].includes(handle), kind + " ownership");
+      }
+      assert.equal(boundVao, null, "failed setup unbinds its VAO");
+      const allocations = Object.values(made).reduce((n, handles) => n + handles.length, 0);
+      assert.equal(C.occlusionCull(true).supported, false, "partial program is never published");
+      C.occlusionPass();
+      assert.equal(Object.values(made).reduce((n, handles) => n + handles.length, 0), allocations,
+        "failed setup does not retry allocations");
+      assert.equal(gl._queries, 0);
+    });
+  }
+});
+
+
+test("occlusion setup invalidates the core VAO cache after direct bindings", async (t) => {
+  for (const compileFails of [false, true]) {
+    await t.test(compileFails ? "early compile failure" : "successful setup", () => {
+      const gl = makeGL({ compileFails });
+      let actualVao = null, cachedVao = null, binds = 0;
+      gl.bindVertexArray = (vao) => { actualVao = vao; binds++; };
+      const C = load(gl, { viewProj: WIDE_VP, eye: [0, 0, 0], cullDist: 0, perChunkLights: 0 }, {
+        bindVAO(vao) {
+          if (vao !== cachedVao) { gl.bindVertexArray(vao); cachedVao = vao; }
+        },
+        invalidateVAO() { cachedVao = null; },
+      });
+      const mesh = C.createChunkedMesh(grid(6, 400), 72);
+      C.drawChunked(mesh, null, {});
+      assert.equal(actualVao, mesh.vao);
+      C.occlusionCull(true);
+      assert.equal(actualVao, null, "setup leaves the raw VAO unbound");
+      const before = binds;
+      C.drawChunked(mesh, null, {});
+      assert.equal(actualVao, mesh.vao, "drawing the previously cached mesh rebinds its VAO");
+      assert.equal(binds, before + 1);
+    });
+  }
 });
