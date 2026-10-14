@@ -917,6 +917,13 @@ body.hud-radio-top #announce:not([hidden]) {
   line-height: 1.15;
   --radio-num: 18px;
 }
+/* THE TOP-RIGHT CORNER (js/ui/hud.js radioUnderRight): the slot under the
+   tower's right end, right-aligned beside CAM, so the card anchors by its right
+   edge and a short message still sits by the camera selector. */
+body.hud-radio-top[data-radio-corner] #announce:not([hidden]) {
+  left: auto;
+  right: calc(var(--radio-top-r) / var(--hud-z));
+}
 body.hud-radio-top #announce-body {
   justify-content: center; gap: 0;
   padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.6);

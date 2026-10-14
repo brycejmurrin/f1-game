@@ -682,7 +682,10 @@ function radioTopSlot(root, bcast) {
     ? { x, y: t.top, w: right - RADIO_TOP_GAP - x, h: t.height } : null;
   if (!slot && lit) slot = radioUnderRight(t);
   hToggle(document.body, "hud-radio-top", !!slot);
+  const corner = !!(slot && slot.corner), b = document.body;   // an attribute, not a class: compare before write
+  if (b.toggleAttribute && b.hasAttribute("data-radio-corner") !== corner) b.toggleAttribute("data-radio-corner", corner);
   if (!slot) return;
+  if (slot.corner) hStyle(root, "--radio-top-r", (vpW() - slot.x - slot.w).toFixed(1) + "px");
   // MOVE & SIZE then scales the card itself (#announce, origin top left), so
   // the slot is published at 1/SIZE: the PAINTED card fills it, not s times it.
   const a = els.announce, as = a && a.style && a.hasAttribute && a.hasAttribute("data-hl") ? +a.style.getPropertyValue("--hl-s") || 1 : 1;
@@ -696,19 +699,22 @@ function radioTopSlot(root, bcast) {
 // ~70px, under RADIO_TOP_MIN, so the card fell to the lane under the tower's
 // LEFT end, over the road. This slot hangs from the tower's bottom edge,
 // right-aligned against the right column (CAM, PAUSE, the sector plate), one
-// row tall so it ends above the caution flag's row; anything else lit in those
-// rows (the HUD mirror or its chip, the gaps chip, a dock group, the flag)
-// bounds it from its own side. null when the card would be under RADIO_TOP_MIN.
-const RADIO_UNDER_H = 36, RADIO_UNDER_MAXW = 260;
+// row tall and right of the screen's centre so it clears the caution flag's
+// chip (centred, from ~y 95 on 844x390); anything else lit in those rows (the
+// HUD mirror or its chip, the gaps chip, a dock group, the flag itself) bounds
+// it from its own side. body[data-radio-corner] anchors the card by its RIGHT
+// edge (--radio-top-r), so a short message still sits beside CAM. null when
+// the card would be under RADIO_TOP_MIN.
+const RADIO_UNDER_H = 36, RADIO_UNDER_MAXW = 260, RADIO_UNDER_GAP = 4;
 function radioUnderRight(t) {
-  let R = vpW() - 10, L = t.left;
+  let R = vpW() - 10, L = Math.max(t.left, vpW() / 2 + RADIO_TOP_GAP);
   for (const el of [els.btnCam, els.pausebtn, els.hudSectors]) {
     if (!el || el.hidden) continue;
     const r = el.getBoundingClientRect();
     if (r.width && r.left > t.left + t.width / 2) R = Math.min(R, r.left);
   }
   R -= RADIO_TOP_GAP;
-  const y = t.bottom + RADIO_TOP_GAP, bot = y + RADIO_UNDER_H;
+  const y = t.bottom + RADIO_UNDER_GAP, bot = y + RADIO_UNDER_H;
   const obst = [document.getElementById("hud-mirror"), document.getElementById("hud-mirror-chip"),
     els.gapA ? els.gapA.parentNode : null, els.flag];
   for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) obst.push(g);
@@ -720,7 +726,7 @@ function radioUnderRight(t) {
     else L = Math.max(L, r.right + RADIO_TOP_GAP);
   }
   const w = Math.min(R - L, RADIO_UNDER_MAXW);
-  return w >= RADIO_TOP_MIN ? { x: R - w, y, w, h: RADIO_UNDER_H } : null;
+  return w >= RADIO_TOP_MIN ? { x: R - w, y, w, h: RADIO_UNDER_H, corner: true } : null;
 }
 // THE PAINTED GUARANTEE, one function for every caller: fitHud runs it last, invalidateFit right
 // after its own radioTopSlot (which alone could relight hud-radio-top over the tower until the next

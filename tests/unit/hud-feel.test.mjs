@@ -1124,7 +1124,10 @@ test("the radio card's top-row slot ends at #hud-sectors in the wrapping band", 
   // it instead (radioUnderRight), right-aligned against the plate, not the lane.
   const px = (k) => parseFloat(h.root.style.getPropertyValue(k));
   assert.ok(on(), "sectors in the tower's rows hand the card the slot under the tower's right end");
-  assert.equal(px("--radio-top-y"), 62 + 8, "one gap under the tower");
+  assert.equal(px("--radio-top-y"), 62 + 4, "a 4px gap under the tower, above the caution flag's row");
+  assert.ok(h.dom.body.hasAttribute("data-radio-corner"), "the corner slot anchors the card by its right edge");
+  assert.equal(px("--radio-top-r"), 800 - (650 - 8), "--radio-top-r: the viewport's right edge to the slot's");
+  assert.ok(px("--radio-top-x") >= 800 / 2 + 8, "right of the screen centre, clear of the centred flag chip");
   assert.equal(px("--radio-top-x") + w(), 650 - 8, "right-aligned one gap short of the sector plate");
   assert.ok(w() >= 96 && w() <= 260, "between RADIO_TOP_MIN and the 260px cap: " + w());
   assert.equal(px("--radio-top-h"), 36, "one row tall, above the caution flag's row");
