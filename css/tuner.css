@@ -1281,6 +1281,55 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
   min-width: var(--tap-paint);
 }
 
+/* ---------- UI Fit r7: camera tuner rail-off portrait (#camtune only) ----------
+   Survey (ui-fit-r5 REPORT): ios-iphone-portrait (390x844 / 360x740) clips the
+   static rail-off foot (#ct-close) and #ct-prev-* (MONACO). Compact
+   rail-off is a 2-col grid (`auto minmax(0,1fr)`) that never PLACES
+   #ct-previews. The unplaced item lands in the AUTO column, sizes that column
+   to the nowrap preview min-content, and overflow-x:hidden clips the sheet —
+   measured ios-iphone-portrait: #ct-close +20, #ct-prev-monaco +32,
+   #ct-modes +47. Lighting keeps the shared 2-col grid; camera already spans
+   tabs 1 / -1, so one minmax(0,1fr) column plus an explicit preview row
+   keeps #ct-* inside. House --tap / --tap-paint floors stay (no soft taps). */
+#camtune-inner[data-density="compact"][data-rail="off"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+#camtune-inner[data-rail="off"] #ct-previews {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  min-width: 0;
+  --balance-basis: 0px;
+  --balance-min: 0px;
+  flex-wrap: nowrap;
+}
+#camtune-inner[data-rail="off"] #ct-previews > button {
+  min-width: 0;
+  min-height: var(--tap-paint);
+  padding: 0 calc(var(--gap) * 0.25);
+  font-size: var(--fs-micro);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#camtune-inner[data-density="compact"][data-rail="off"] > .sheet-foot button,
+#camtune-inner[data-rail="off"] > .sheet-foot button {
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
+  flex: 1 1 0;
+  min-height: var(--tap-paint);
+}
+#camtune-inner[data-rail="off"] > .sheet-foot #ct-close {
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--tap-paint);
+}
+#camtune-inner[data-rail="off"] #ct-modes,
+#camtune-inner[data-rail="off"] #ct-rows {
+  min-width: 0;
+}
+
 } /* @layer components */
 
 /* ---------- UI Fit r6: lighting tuner compact tap floor (#lighting only) ----------

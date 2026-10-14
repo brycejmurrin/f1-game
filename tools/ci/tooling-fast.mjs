@@ -971,6 +971,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Factory/sig tyre recipes after #1190 open rims: distinct geom + cover copy needs cover:1.
   "tests/unit/tyre-recipes-open-rim.test.mjs",
   "tests/unit/ui-experience.test.mjs",
+  // ui-fit r7: camera tuner rail-off portrait — #ct-previews placed in grid
+  // row 3, one minmax column, #ct-close / #ct-prev-* --tap-paint floors
+  // (#camtune-inner / #ct-* only; lighting untouched).
+  "tests/unit/ui-fit-camtune-portrait-r7.test.mjs",
   // ui-fit round 5: camera tuner compact foot/preview/copy-from --tap-paint
   // floors (#camtune-inner only; lighting untouched).
   "tests/unit/ui-fit-camtune-tap-r5.test.mjs",
