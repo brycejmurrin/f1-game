@@ -1411,6 +1411,10 @@ var GameAudio = (function () {
     const pull = Math.max(0, ph.axStd != null ? ph.axStd : (ph.ax || 0));
     const onKerb = !!ph.onKerb;
     const wet = !!ph.wet;
+    // Throttle is read once here so the continuous overrun timbre (below) and
+    // the harvest/coast path share one value. Absent → 1 (open), matching the
+    // historical default; an explicit 0 is a closed pedal.
+    const thr = clamp01(ph.throttle != null ? ph.throttle : 1);
 
     let g01 = 0.3, gIdle = 95, gSpan = 700;
     if (typeof gear === "number" && isFinite(gear)) {
@@ -1509,6 +1513,21 @@ var GameAudio = (function () {
     // and centroid-vs-rev pins are untouched; the check's coast-vs-pull pair
     // asserts the brightening.
     const loadLift  = clamp01(pull / ((typeof PhysicsConsts !== "undefined" && PhysicsConsts.ACCEL) || 7));
+    // OVERRUN TIMBRE (continuous). The crackles further down are one-shots; this
+    // is the closed-throttle COLOUR itself. A lift at speed closes the lowpass
+    // and softens the level so the same rev reads darker than on-throttle or a
+    // pull — no new nodes, only aimParam/aimGain on the existing filter/gain.
+    // Gate matches the crackle window (revs + speed, not braking). OVERRUN trim
+    // scales the depth; the layer switch zeroes it.
+    const lifting = rev > 0.35 && s > 0.12 && (ph.ax || 0) < -0.5 && !onBrakes;
+    const overrunAmt = (lifting && layers.overrun)
+      ? clamp01(-(ph.ax || 0) / 10) * Math.min(1, tune.overrun)
+      : 0;
+    // Explicit throttle only: absent thr defaults to 1 and must not add a
+    // constant brightness offset to every legacy feed. When the feed names the
+    // pedal, an open throttle brightens a little even at ax≈0.
+    const thrOpen = (ph.throttle != null && !lifting && thr > 0.12)
+      ? clamp01((thr - 0.12) / 0.88) : 0;
 
     // The shape caps (11 k / 7.2 k) bound the REV-DRIVEN part; the trims then
     // scale it, and the FINAL value is what has to stay in range. The other way
@@ -1520,7 +1539,7 @@ var GameAudio = (function () {
     const cut = Math.min(ceil, (usingSamples
       ? Math.min(11000, 2600 + s * 5800 + rev * 2400 + b * 1500 + slipLoad * 2000 + brakeLoad * 1200)
       : Math.min(7200,  600  + s * 4200 + rev * 700  + b * 1400 + slipLoad * 1000 + brakeLoad * 600))
-      * voice.cutTrim * tune.brightness * (1 + 0.22 * loadLift));
+      * voice.cutTrim * tune.brightness * (1 + 0.22 * loadLift) * (1 + 0.10 * thrOpen) * (1 - 0.22 * overrunAmt));
     aimParam(engFilter.frequency, cut * camMix.cut, t, 0.05, 1e-4);
     // Compensate the tape-speed tilt. lastRate is the pitch ratio the core was
     // just handed, ~0.14 idle to ~0.71 redline; resampling costs roughly
@@ -1537,7 +1556,7 @@ var GameAudio = (function () {
     const lvl = (usingSamples
       ? (0.3 + s * 0.3 + rev * 0.08 + b * 0.08 + (offroad ? 0.03 : 0) + slipLoad * 0.8 + kerbLoad)
       : (0.05 + s * 0.05 + rev * 0.02 + b * 0.025 + (offroad ? 0.012 : 0) + slipLoad * 0.2 + kerbLoad * 0.3))
-      * (1 + 0.08 * loadLift);
+      * (1 + 0.08 * loadLift) * (1 - 0.08 * overrunAmt);
     // REV LIMITER. Above 98.5% the ignition cut chops the note at ~13 Hz —
     // the loudest "shift now" cue in F1 and functional feedback, not
     // decoration. limOsc feeds engGain.gain through limDepth on the audio
@@ -1636,18 +1655,12 @@ var GameAudio = (function () {
         : 0, t, 0.08);
     }
 
-    // OVERRUN. Lifting at revs is the one engine state that sounded exactly like
-    // coasting: loadLift is clamp01(pull/ACCEL), so it is ZERO the moment you come
-    // off the throttle and nothing else in the mix noticed. A real engine on a
-    // closed throttle at speed pops and crackles as unburnt fuel lights in the
-    // hot exhaust, and it is the cue that tells you the car ahead has lifted.
-    //
-    // Gated away from BRAKING (onBrakes: the pedal): hard braking is its own sound
-    // and already has brakeLoad, and stacking crackle on top of it just makes
-    // noise. The old gate was a decel literal (ax > -22) that a full pedal (-21.7)
-    // sat inside, so it crackled through every braking zone. The window is a
-    // lift with the engine still spinning.
-    const lifting = rev > 0.35 && s > 0.12 && (ph.ax || 0) < -0.5 && !onBrakes;
+    // OVERRUN CRACKLES. Continuous lift colour is overrunAmt above; these are
+    // the pops. A real engine on a closed throttle at speed crackles as unburnt
+    // fuel lights in the hot exhaust — the cue that the car ahead has lifted.
+    // Gated away from BRAKING (onBrakes): hard braking is its own sound and
+    // already has brakeLoad. The window is the same `lifting` flag as the
+    // continuous timbre so colour and crackles cannot disagree.
     if (lifting && layers.overrun) {
       if (t >= overrunT) {
         // Irregular ON PURPOSE — evenly spaced pops read as a machine gun, not
@@ -1664,7 +1677,6 @@ var GameAudio = (function () {
     }
 
     const dt = lastEngT ? Math.max(0.001, t - lastEngT) : 0;
-    const thr = clamp01(ph.throttle != null ? ph.throttle : 1);
     const brkDem = clamp01(ph.brake != null ? ph.brake : 0);
     const deploy = deploy01;
     const energy = ph.energy != null ? clamp01(ph.energy) : 1;

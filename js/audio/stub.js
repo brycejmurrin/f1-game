@@ -48,7 +48,14 @@ var GameAudioSoundtrack = { create: () => ({}) };
 var GameAudioRadioFx = { create: () => ({}), resetContext: function () {} };
 var GameAudioToneModel = { patchTune: function () {}, nameForTune: function () { return ""; } };
 var CarSfx = { create: () => ({ update: function () {}, levels: () => ({}), pitGuns: function () {} }) };
-var RivalAudio = { create: () => ({ collect: () => [], emitFieldSfx: function () {} }), sprayAhead: () => 0 };
+var RivalAudio = {
+  create: () => ({
+    collect: () => [], emitFieldSfx: function () {},
+    attach: function () {}, detach: function () {}, tick: function () {},
+    passByState: () => [], passByVoices: () => [],
+  }),
+  sprayAhead: () => 0,
+};
 var VoicePack = { create: () => null };
 var RecordedAnnouncer = { create: () => ({ play: () => false, stop: function () {} }) };
 var DrivingCues = {

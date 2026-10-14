@@ -83,3 +83,94 @@ test("manifest keeps career-ui.js in LAZY_CAREER_UI and the boot stub on FULL", 
   assert.ok(!m.FULL.includes("js/career/career-ui.js"));
   assert.deepEqual(m.LAZY_CAREER_UI, ["js/career/career-ui.js"]);
 });
+
+function delayedCareer() {
+  const dom = makeDom(), pending = [], messages = [], opened = [];
+  for (const id of ["overlay", "career", "carsetup"]) dom.byId(id).hidden = true;
+  const state = { top: null, racing: false };
+  const sb = {
+    Promise,
+    Log: { info() {}, warn() {} },
+    ApexRoster: { LAZY_CAREER_UI: ["js/career/career-ui.js"] },
+    UiLayers: { top: () => state.top, inRace: () => state.racing },
+    ScriptLoader: { create: () => ({ load: () => new Promise((resolve, reject) => pending.push({ resolve, reject })) }) },
+  };
+  vm.runInNewContext(src("js/career/career-ui-boot.js"), sb);
+  const ui = sb.CareerUI.create({
+    $: (id) => dom.byId(id), els: { overlay: dom.byId("overlay") },
+    announce: (message) => messages.push(message),
+    refreshCareerButton() {
+      dom.byId("mb-career-sub").textContent = "DRIVER CAREER · MY TEAM";
+      dom.byId("mb-career").setAttribute("aria-label", "Career modes — DRIVER CAREER · MY TEAM");
+    },
+  });
+  function complete() {
+    sb.CareerScreen = { create: () => ({
+      openSlots(origin) { opened.push(["slots", origin]); dom.byId("career").hidden = false; },
+      openHub() { opened.push(["hub"]); dom.byId("career").hidden = false; },
+      close() { dom.byId("career").hidden = true; },
+    }) };
+    pending.shift().resolve(true);
+  }
+  return { dom, pending, messages, opened, state, ui, complete };
+}
+
+for (const failure of ["refused", "rejected"]) {
+  test(`Career ${failure} download restores the menu and a later attempt loads the slots`, async () => {
+    const h = delayedCareer();
+    const opening = h.ui.openSlots("title");
+    const load = h.pending.shift();
+    if (failure === "rejected") load.reject(new Error("offline"));
+    else load.resolve(false);
+    await opening;
+    assert.equal(h.dom.byId("overlay").hidden, false, "menu returns after the title door hid it");
+    assert.equal(h.dom.byId("career").hidden, true);
+    assert.match(h.messages[0], /COULD NOT LOAD.*TRY AGAIN/);
+    assert.match(h.dom.byId("mb-career-sub").textContent, /COULD NOT LOAD.*TRY AGAIN/, "the title button carries the visible notice");
+    assert.match(h.dom.byId("mb-career").getAttribute("aria-label"), /could not load.*Try again/);
+    h.dom.byId("overlay").hidden = true;
+    const retry = h.ui.openSlots("title");
+    assert.equal(h.dom.byId("mb-career-sub").textContent, "DRIVER CAREER · MY TEAM", "retry restores the career summary");
+    assert.doesNotMatch(h.dom.byId("mb-career").getAttribute("aria-label"), /could not load/);
+    assert.equal(h.pending.length, 1, "failed promise is not cached");
+    h.complete();
+    await retry;
+    assert.equal(h.dom.byId("career").hidden, false);
+    assert.deepEqual(h.opened, [["slots", "title"]]);
+  });
+}
+
+test("Career failure recovery does not cover a newer screen or race", async () => {
+  for (const destination of ["settings", "race", "garage"]) {
+    const h = delayedCareer();
+    const opening = h.ui.openHub();
+    if (destination === "settings") h.state.top = { id: "pmsettings" };
+    if (destination === "race") h.state.racing = true;
+    if (destination === "garage") h.dom.byId("carsetup").hidden = false;
+    h.pending.shift().resolve(false);
+    await opening;
+    assert.equal(h.dom.byId("overlay").hidden, true, destination);
+    assert.deepEqual(h.messages, [], destination);
+  }
+});
+
+test("closing pending Career entry cancels it; the newest entry owns the loaded screen", async () => {
+  const h = delayedCareer();
+  const cancelled = h.ui.openHub();
+  h.ui.close();
+  h.complete();
+  await cancelled;
+  assert.deepEqual(h.opened, []);
+  const old = h.ui.openHub(), current = h.ui.openSlots("title");
+  await Promise.all([old, current]);
+  assert.deepEqual(h.opened, [["slots", "title"]]);
+});
+
+test("a successful explicit Career hub request still supports a simulated season return", async () => {
+  const h = delayedCareer();
+  h.state.racing = true;
+  const opening = h.ui.openHub();
+  h.complete();
+  await opening;
+  assert.deepEqual(h.opened, [["hub"]], "careerSim callers may reopen the hub before leaving race state");
+});

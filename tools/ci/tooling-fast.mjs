@@ -244,6 +244,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // mapping reads as 0 %, not as an error, so its filters are pinned here. ~2 s.
   "tests/unit/coverage-merge.test.mjs",
   "tests/unit/cross-file-paths.test.mjs",
+  // cross-tool-guards: Cursor/Codex reach bash-guard through one adapter; .githooks
+  // pre-push refuses deploy-branch, delete and rewrite pushes. Real git, ~2 s.
+  "tests/unit/cross-tool-guards.test.mjs",
   "tests/unit/css-comments.test.mjs",
   "tests/unit/css-critical-path.test.mjs",
   "tests/unit/css-faces.test.mjs",
@@ -343,6 +346,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // heights[]; sanitize pads missing heights to flat zeros. Pure VM, ~0.05 s.
   "tests/unit/elev-presets.test.mjs",
   "tests/unit/elevation-smoothness.test.mjs",
+  "tests/unit/engine-note-quality.test.mjs",
   // Engine rpm for net/replay puppets and finish coast (game.js updateCar early-outs). ~15 s.
   "tests/unit/engine-revs-replay-vm.test.mjs",
   // ...and the race engineer's ladder: it ADVISES and never arms a stop,
@@ -468,6 +472,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // insertAdjacentHTML writes a constant or is in the reasoned allowlist
   // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
   "tests/unit/html-sink-lint.test.mjs",
+  "tests/unit/hud-announce-lane-cache.test.mjs",
   "tests/unit/hud-control-clearance.test.mjs",
   "tests/unit/hud-dock-pack.test.mjs",
   "tests/unit/hud-elements.test.mjs",
@@ -487,6 +492,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-readouts.test.mjs",
   "tests/unit/hud-relative.test.mjs",
   "tests/unit/hud-speed-parity.test.mjs",
+  // phoneL broadcast @150%: announce/flag/LIMITS/TYRES/REL stack (queue item 1).
+  "tests/unit/hud-status-stack.test.mjs",
   "tests/unit/hud-strategy.test.mjs",
   "tests/unit/hud-survey.test.mjs",
   "tests/unit/hud-tyres.test.mjs",
@@ -497,6 +504,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/import-models.test.mjs",
   "tests/unit/incident-gate.test.mjs",
   "tests/unit/incident-rpm.test.mjs",
+  // InputBindings factory alone (conflict claim, reset/isDefault, persistence,
+  // brand labels) — no input.js. Complements key-binds.test.mjs. ~0.1 s.
+  "tests/unit/input-bindings.test.mjs",
   "tests/unit/input-ghost.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
@@ -524,6 +534,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/legends.test.mjs",
   "tests/unit/lexical-window-guard.test.mjs",
   "tests/unit/light-grid.test.mjs",
+  "tests/unit/light-presets-extreme-knobs.test.mjs",
   "tests/unit/light-presets-knob-range.test.mjs",
   "tests/unit/light-presets.test.mjs",
   "tests/unit/light-store-cond-layer.test.mjs",
@@ -695,6 +706,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ready-gate.test.mjs",
   "tests/unit/real-race-script.test.mjs",
   "tests/unit/real-race.test.mjs",
+  // Replay caption validity across seeks, reel cuts and session changes; isolated VM.
+  "tests/unit/real-replay-captions.test.mjs",
   // ...and the REAL REPLAY on the real Baku build: OpenF1's x/y fitted onto the
   // centreline, the highlights list, the field as puppets (follow, speed, a car
   // whose data ends, the flag) and the exact JUMP IN. Four game boots, ~12 s.
@@ -710,6 +723,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // tools/ci/remote-group.mjs + browser-group.yml: the group/shard validation
   // that stands between a dispatch input and a shell, and the run pick. Pure, instant.
   "tests/unit/remote-group.test.mjs",
+  // render() lighting-prep pure-move: renderLightingPrep owns sky/lightning/lamps; call-order pin. ~0.05 s.
+  "tests/unit/render-lighting-prep.test.mjs",
   "tests/unit/renderer-boot-timeout.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
   // Instant-replay ring (js/camera/replay-buf.js): budget, wrap, restore, solo/net scrub gates. ~0.05 s.
@@ -722,6 +737,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/results-cam.test.mjs",
   "tests/unit/rival-audio.test.mjs",
   "tests/unit/rival-contact-sfx.test.mjs",
+  "tests/unit/rival-passby-pool.test.mjs",
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
   "tests/unit/road-lut-frame.test.mjs",
@@ -955,6 +971,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 5: camera tuner compact foot/preview/copy-from --tap-paint
   // floors (#camtune-inner only; lighting untouched).
   "tests/unit/ui-fit-camtune-tap-r5.test.mjs",
+  // ui-fit round 6: lighting tuner compact foot / short-tab --tap-paint
+  // floors (#lighting-inner / #lt-* only; camera untouched).
+  "tests/unit/ui-fit-lighttune-tap-r6.test.mjs",
+  // ui-fit round 6: Photo Studio #ps-* setting-row selects floor at
+  // --tap-paint (portrait 114×43 soft taps; landscape already clean).
+  "tests/unit/ui-fit-photostudio-tap-r6.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
