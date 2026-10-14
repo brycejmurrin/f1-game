@@ -1,0 +1,1 @@
+1791966170	Cursor Agent	UI Fit r5: Camera tuner compact tap floor — OWNED #camtune-inner/#ct-* in css/tuner.css + tests/unit/ui-fit-camtune-tap-r5.test.mjs (+ camera-tuner.spec if needed). FORBIDDEN lighting-inner shared edits, hud.js/fitHud, experience*, data.css, title tiles. No merge.  [cursor/camtune-tap-floor-44a2; session 4f449102c5b08cec90dbbbd3]
