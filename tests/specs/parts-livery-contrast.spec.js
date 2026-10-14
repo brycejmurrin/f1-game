@@ -149,7 +149,12 @@ test.describe("Livery atlas — ink contrast", () => {
       const liv = { c1: SENTINEL.c1, c2: SENTINEL.c2, pod: SENTINEL.pod,
                     wing: SENTINEL.wing, accent: SENTINEL.accent, nose: SENTINEL.nose,
                     spineSide: "number" };
-      const mesh = Car3D.build(liv.c1, liv.c2, { livery: liv, teamId: "ferrari" });
+      // Force the non-DRS / non-board path: 2026 defaults stamp drs:1 + board:1
+      // on a bare recipe, which hoists the wing band onto the baked DRS plane
+      // (and the body-mesh probe then reports the nearest endplate paint). The
+      // next test + livery-decal-surfaces cover the DRS path.
+      const noDrs = { aero: 1, _visual: { aero: { lvl: 2, beam: 0, drs: 0, board: 0 } } };
+      const mesh = Car3D.build(liv.c1, liv.c2, { livery: liv, teamId: "ferrari", parts: noDrs });
       const board = Car3D.PANEL_COL;
       const near = (a, b) => Math.abs(a[0]-b[0]) < 0.02 && Math.abs(a[1]-b[1]) < 0.02
                           && Math.abs(a[2]-b[2]) < 0.02;
@@ -200,7 +205,7 @@ test.describe("Livery atlas — ink contrast", () => {
         const den = 1 / (va + vb + vc), v = vb * den, w = vc * den;
         return [a[0]+ab[0]*v+ac[0]*w, a[1]+ab[1]*v+ac[1]*w, a[2]+ab[2]*v+ac[2]*w];
       };
-      const data = CarMesh.carDecalData(2, null, false, "ferrari");
+      const data = CarMesh.carDecalData(2, noDrs, false, "ferrari");
       const R = LiveryTex.REGIONS, S = LiveryTex.SIZE, SH = LiveryTex.SIZE_H || S;
       const regionOfUv = (u, v) => {
         for (const [name, r] of Object.entries(R)) {
@@ -317,6 +322,9 @@ test.describe("Livery atlas — ink contrast", () => {
       tail: ["c1", "accent"],
     };
     for (const [region, slot] of Object.entries(result)) {
+      // Active-aero wing band is covered by the next test against flap geometry;
+      // a body-mesh nearest-paint probe cannot see that surface.
+      if (region === "wing") continue;
       expect(INKED_FOR[region], `region ${region} has no declared ink background`).toBeDefined();
       expect(INKED_FOR[region],
         `${region} sits on "${slot}" but buildAtlas inks it for ${INKED_FOR[region].join("+")}`)
@@ -351,7 +359,11 @@ test.describe("Livery atlas — ink contrast", () => {
   test("the wing sponsor band sits on the rear flap it is painted for", async ({ page }) => {
     await load(page);
     const r = await page.evaluate(() => {
-      const data = CarMesh.carDecalData(2, null, false, "ferrari");
+      // Non-DRS path: a bare recipe now stamps drs:1 (2026 defaults), which
+      // parks the band on the baked DRS plane — covered by livery-decal-surfaces.
+      const noDrs = { aero: 1, _visual: { aero: { lvl: 2, beam: 0, drs: 0, board: 0 } } };
+      const style = Car3D.aeroStyleOf(noDrs);
+      const data = CarMesh.carDecalData(2, noDrs, false, "ferrari");
       const R = LiveryTex.REGIONS, S = LiveryTex.SIZE, SH = LiveryTex.SIZE_H || S;
       const uL = R.wing.x / S, uR = (R.wing.x + R.wing.w) / S;
       const vB = 1 - (R.wing.y + R.wing.h) / SH, vT = 1 - R.wing.y / SH;
@@ -365,7 +377,7 @@ test.describe("Livery atlas — ink contrast", () => {
       // them at with blend 0.
       const tris = [];
       let top = null;
-      for (const fg of Car3D.aeroFlaps(2, null)) {
+      for (const fg of Car3D.aeroFlaps(2, style)) {
         if (fg.wing !== "rear") continue;
         top = fg;
         const g = Car3D.buildFlapGeom(fg, [1, 1, 1]);
@@ -409,7 +421,7 @@ test.describe("Livery atlas — ink contrast", () => {
         for (const T of tris) { const d = ptTri(p, T[0], T[1], T[2]); if (d < best) best = d; }
         if (best > worst) worst = best;
       }
-      const B = Car3D.wingBand(2, null);
+      const B = Car3D.wingBand(2, style);
       return { corners: band.length, tris: tris.length, worst, elem: B && B.elem, topId: top && top.id };
     });
     expect(r.corners, "no decal quad carries the wing region").toBeGreaterThanOrEqual(4);

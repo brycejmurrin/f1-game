@@ -101,7 +101,7 @@ const lazyBundles = LazyBundles.create({
     });
   },
 });
-const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -639,9 +639,8 @@ function isWetRoad() { return trackWetness() >= 0.25; }
 function isRaining() { return trackWetness() >= 0.72; }
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column.
-function trackWetness() { return TyreModel.wetness(raceWeather, wxArc && wxArc.arc); }
-function roadWetness() { return trackWetness(); }   // alias — grip / pits / engineer
-function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? 2 : c.tread) : 0, trackWetness()); }
+function trackWetness() { return wxArc ? wxArc.wetness() : TyreModel.wetness(raceWeather, null); } function roadWetness() { return trackWetness(); }   // the arc's lagged road state (js/race/weather-arc.js); roadWetness = alias for grip / pits / engineer
+function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? TyreModel.treadFor(raceWeather, trackWetness()) : c.tread) : 0, trackWetness()); }   // no fitted set (wear off): the tread the conditions call for
 
 // Pose Ghost + InputGhost start together on every TT lap arm so an incident /
 // reverse-crossing / spoiled class cannot leave the input stream attached to a
@@ -1997,6 +1996,9 @@ function gridUp(preOrder) {
   // These are exactly the values update() would have written a tick later, so
   // nothing downstream changes; it just happens before the first frame is shot.
   seedPlayerPose();
+  // Widen the field representations the race would widen mid-lap, here, before anything is optimized: values
+  // unchanged, no deopt storm at the first lap line or pit window (js/race/car-fields.js WARM, PERF-HUNT-4 B-F1).
+  if (typeof CarFields !== "undefined") for (const c of cars) CarFields.warmShape(c);
 }
 // The player's world pose from its grid (s, x) — shared by gridUp and the red
 // flag re-grid. Heading follows the road tangent, not world +Z: `head = 0` is
@@ -2126,11 +2128,12 @@ function dropTrackWorld() {
 // Sentinel is race-start only (startRaceBody). Menu/flyby must not arm SENT_ACTIVE.
 function raceArmedSentinel() { return state === "race" || state === "count"; }
 async function loadTrackStepped(idx, live) {
-  // LAZY_CIRCUIT: path/pal/sectors land via ensureCircuit before any build.
-  // Callers (flyby / startRace / intro) already await ensureScenery (which
-  // chains ensureCircuit); this gate covers a direct stepped load and races
-  // the in-flight memo so a meta stub never reaches Tracks.buildPaced.
-  await ensureCircuit(idx);
+  // LAZY_CIRCUIT + LAZY_TRACK_BUILD: path/pal/sectors and the build toolkit land
+  // via ensureScenery before any build. Callers (flyby / startRace / intro)
+  // already await ensureScenery; these gates cover a direct stepped load and
+  // race the in-flight memos so a meta stub / missing TrackBuildProps never
+  // reaches Tracks.buildPaced.
+  await Promise.all([ensureCircuit(idx), ensureTrackBuild()]);
   if (!live()) return false;
   const def = Tracks.LIST[idx], sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
   if (builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots) { loadTrack(idx); return true; }
@@ -3645,7 +3648,7 @@ customTeam = CustomTeam.create({
 });
 // UI SIZE / HUD SIZE + RESOLUTION (js/ui/scale.js). After Menus so the
 // first applyUiScale can refresh an already-built select preview.
-const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G);
+const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G); if (typeof HudArrange !== "undefined" && HudArrange.create) HudArrange.create(G);
 // CAREER screen — new-career setup + season hub (js/career/career-ui.js). The rules
 // and the save live in js/career/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
@@ -4415,6 +4418,17 @@ function quitToMenu() {
 // Reusable rank buffer — refilled and sorted each physics step (up to 5x per
 // rendered frame) so we don't allocate a fresh array via cars.slice() each time.
 const ranked = [], byProgDesc = (a, b) => b.prog - a.prog;   // hoisted: no comparator closure per step
+// AFTER THE FLAG a finished car keeps accruing prog in coast(), so a later but faster finisher out-progressed an
+// earlier one and took its c.rank (the HUD position, the relative board). The finishers' rank SLOTS are handed
+// back out in classification order (RaceControl.finishOrder: laps, then the clock); running cars keep theirs and
+// `ranked` stays in progress order (collisions and traffic scans read it). PERF-HUNT-4 B-F2.
+const _finRanked = [];
+function rankFinishers() {
+  _finRanked.length = 0;
+  for (let i = 0; i < ranked.length; i++) if (ranked[i].finished) _finRanked.push(ranked[i]);
+  _finRanked.sort(RaceControl.finishOrder);
+  for (let i = 0, k = 0; i < ranked.length; i++) if (ranked[i].finished) _finRanked[k++].rank = i + 1;
+}
 // Live weather (setWeatherLive/setTimeOfDay) and the dynamic weather arc live in
 // js/race/weather-arc.js — WeatherArc.create(G, deps), wired as `wxArc` above.
 
@@ -4558,9 +4572,12 @@ function update(dt) {
   ranked.length = 0;
   for (const c of cars) if (!c.retired) ranked.push(c);
   ranked.sort(byProgDesc);
+  let nFin = 0;
   for (let i = 0; i < ranked.length; i++) {
     ranked[i].rank = i + 1;
+    if (ranked[i].finished) nFin++;
   }
+  if (nFin > 1) rankFinishers();
   if (!isPractice() && !isQuali() && !realRace.owns(player)) scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
 
   // Leading human for AiBand catch-up (scripted mode ignores). Once per step.
@@ -5251,13 +5268,13 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // track — only `d` moves. One object per car (c._lk: never restored by the
     // coach's primitive rewind, so key and samples cannot be split), filled
     // contiguously; a different node, line choice or track refills from 0.
-    const lk = c._lk || (c._lk = { node: -1, on: false, track: null, n: 0, v: new Float64Array(AI_LOOK_CAP), a: new Float64Array(AI_LOOK_CAP), b: new Float64Array(AI_LOOK_CAP) });
+    const lk = c._lk || (c._lk = { node: -1, on: false, track: null, n: 0, v: new Float64Array(AI_LOOK_CAP), a: new Float64Array(AI_LOOK_CAP), b: new Float64Array(AI_LOOK_CAP), m: new Float64Array(AI_LOOK_CAP) });   // m: AiDrive.bankGrip(b), cached (PERF-HUNT-4 B-F4)
     if (lk.node !== node0 || lk.on !== onLine || lk.track !== track) { lk.node = node0; lk.on = onLine; lk.track = track; lk.n = 0; }
     let lkI = 0;
     for (let ss = ss0, d = ss0 - c.s; d < look; ss += dsN, d += dsN, lkI++) {
       if (lkI < lk.n) {
         if (lk.a[lkI] > kMax) kMax = lk.a[lkI];
-        AiDrive.pushLook(d, lk.v[lkI], lk.b[lkI]);
+        AiDrive.pushLook(d, lk.v[lkI], lk.b[lkI], lk.m[lkI]);
         continue;
       }
       // Tracks.curvature / pathK / bankAngle all wrap s themselves.
@@ -5267,8 +5284,9 @@ function updateCarBrakePlan(c, dt, ranked, S) {
       // |bank|: the player's bankRoll (below) takes the absolute value, so a
       // signed/adverse bank must not boost the player while it cuts the AI.
       const lkV = onLine ? TrackLine.pathK(track, ss) : kk, lkB = Math.abs(Tracks.bankAngle(track, ss));
-      AiDrive.pushLook(d, lkV, lkB);
-      if (lkI < AI_LOOK_CAP) { lk.v[lkI] = lkV; lk.a[lkI] = ak; lk.b[lkI] = lkB; lk.n = lkI + 1; }
+      const lkM = AiDrive.bankGrip(lkB);
+      AiDrive.pushLook(d, lkV, lkB, lkM);
+      if (lkI < AI_LOOK_CAP) { lk.v[lkI] = lkV; lk.a[lkI] = ak; lk.b[lkI] = lkB; lk.m[lkI] = lkM; lk.n = lkI + 1; }
     }
     _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = Math.min(1, dd.corner * (1 + (c._bandNow || 0)));   // the band lifts corner authority too, never past 1.0: a banded car drives like a better driver, not a faster car
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * trMul * (gmC / gm0); _aiBr.pace = PACE; _aiBr.vmax = VMAX;   // the tread's braking credit (docs/PHYSICS.md §Braking): the planner must stop as the executor below does, or it corners on wets and brakes on slicks
@@ -5905,9 +5923,9 @@ function updateCarBicycle(c, dt, ranked, S) {
     // (speedRefFromSlider in js/input/steer-tuning.js) moved with this formula —
     // see its comment.
     // HYPERBOLIC raw = 1/(1+vs/ref) (PHASE-C §2; never negative, no floor). Hold
-    // full lock for vs≤15 (hairpin), blend 15→30, raw for vs≥30 so ≥60 m/s is
-    // bit-identical to the old taper (vStd pace-cancels; SPEED STEER dial OK).
-    const vs = vStd(Math.abs(c.speed)), raw = 1 / (1 + vs / STEER_SPEED_REF), lockTaper = vs <= 15 ? 1 : (vs >= 30 ? raw : 1 + (raw - 1) * (vs - 15) / 15);
+    // 1.06× lock for vs≤15 (hairpin ≈0.371 rad at notch-7 0.35), blend 15→30,
+    // raw for vs≥30 so ≥60 m/s stays bit-identical (vStd pace-cancels; SPEED STEER OK).
+    const vs = vStd(Math.abs(c.speed)), raw = 1 / (1 + vs / STEER_SPEED_REF), lockTaper = vs <= 15 ? 1.06 : (vs >= 30 ? raw : 1.06 + (raw - 1.06) * (vs - 15) / 15);
     const driverDelta = shaped * STEER_MAX_SLIP * lockTaper;
     // DRIVING-HELP assist: the steer needed to track curvature k is the kinematic
     // term (L·k) PLUS a speed-squared understeer term — a car needs progressively
@@ -7098,20 +7116,9 @@ function render(dt) {
     fovY = dbgCam.fov * Math.PI / 180;
     if (!cine) farPlane = dbgCam.far;
   } else {
-    // camFov is a vertical FOV. On a wide (landscape) screen a fixed vertical FOV
-    // blows the horizontal field out past ~100°, which makes the car look tiny and
-    // far away. Cap the horizontal FOV so wide screens zoom in and the car stays a
-    // readable size; portrait (narrow) is unaffected.
-    fovY = camFov * Math.PI / 180;
-    // The HFOV cap keeps the CAR a readable size on a wide screen. A crane shot
-    // has no car in it, the editor previews the authored angle uncapped, and a
-    // shot authored at 60° would arrive on a 21:9 screen squeezed to 45° — so
-    // the cinematic takes the number it was framed at.
-    if (!cine) {
-      const HFOV_MAX = 86 * Math.PI / 180;
-      const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(gfx.aspect, 0.0001));
-      fovY = Math.min(fovY, fovYCap);
-    }
+    // camFov is vertical; CamFovFit caps HFOV on wide screens and floors it on
+    // portrait (js/camera/fov-fit.js). cine stays authored / uncapped.
+    fovY = CamFovFit.fitFovY(camFov * Math.PI / 180, gfx.aspect, { cine });
   }
   // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
   // precision across the scene — the biggest single lever against z-fighting /

@@ -134,8 +134,18 @@ window.PhysicsConsts = {
   // A full wet in a storm (0.97) is worth 1.35x a slick's grip, so a correct
   // call roughly matches the AI field and a wrong one costs about a quarter of
   // your cornering. These are a design choice, not a measurement.
+  //
+  // THE INTER OWNS THE DAMP (Pirelli: inters are quicker than full wets on a
+  // damp or drizzly track; the full wet wins only in standing water). A full
+  // wet on a merely wet road (0.88) runs hot and squirms below the inter (0.94),
+  // and only passes it toward heavy rain. Through weatherGrip's lerp the
+  // inter/full crossover is wetness ~0.68 on grip alone and ~0.79 once the
+  // catalog's dry stat cost (cornering 0.94 vs 0.90) is counted — bracketing
+  // TyreModel.treadFor's 0.72 switch, so "the right tyre" is the faster one.
+  // The slick/inter crossover with that stat cost is ~0.24 (treadFor: 0.25).
+  // tests/unit/wet-grip-ladder.test.mjs pins the ordering.
   WET_GRIP: {
-    wet:  [0.82, 0.94, 0.99],
+    wet:  [0.82, 0.94, 0.88],
     rain: [0.72, 0.86, 0.97],
   },
 

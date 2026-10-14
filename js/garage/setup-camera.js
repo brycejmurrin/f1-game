@@ -110,7 +110,12 @@ const { $, gfx, clamp, getTeamParts } = G;
 const { resolveLivery, partsVisualKey, drawAeroFlaps, teamDecalState, carDecalNum,
         drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X, render } = deps;
 
-const reducedMotion = () => G.store.get("motion", null) === "reduce" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const reducedMotion = () => {
+  const mv = G.store.get("motion", null);
+  if (mv === "off") return false;
+  if (mv === "reduce") return true;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+};
 const arrival = GarageArrival.create($, reducedMotion, GarageArrival.bindSettings($, G.store, { preview: startArrivalPreview }));
 // THE PRE-RACE DRIVE-OUT (GarageArrival.poseOut): this room, the car rolling out,
 // played by js/game.js on every RACE! with no card up (LoadingScreen.garage) while

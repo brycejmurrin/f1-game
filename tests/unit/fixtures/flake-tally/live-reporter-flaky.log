@@ -1,0 +1,9 @@
+2026-10-13T11:47:13.9864105Z   APEX_FAIL_ON_FLAKY: 1
+2026-10-13T11:48:07.8838909Z [11:48:07] ! retry  13/70 tests/specs/agent-view.spec.js › atmosphere() › night is dark, floodlit, and names the moon — not a high sun (0.9s)
+2026-10-13T11:48:45.3783243Z [11:48:45] ! retry  50/70 tests/specs/agent-view.spec.js › frame() › driving on track, the road dominates the lower frame (0.3s)
+2026-10-13T11:49:10.0000000Z [11:49:10] x FAIL   61/70 tests/specs/menu-keyboard.spec.js › Escape closes the native dialog (12.0s)
+2026-10-13T11:49:37.6789462Z [11:49:37] = FLAKY: 2 test(s) passed only on retry (deterministic suite — investigate)
+2026-10-13T11:49:37.6791373Z              BLOCKING     tests/specs/agent-view.spec.js › atmosphere() › night is dark, floodlit, and names the moon — not a high sun
+2026-10-13T11:49:37.6793744Z              BLOCKING     tests/specs/agent-view.spec.js › frame() › driving on track, the road dominates the lower frame
+2026-10-13T11:49:37.6795592Z [11:49:37] = APEX_FAIL_ON_FLAKY=1: 2 flaky test(s) not in tests/data/flaky-quarantine.json — the run is RED
+2026-10-13T11:49:37.6800000Z [11:49:37] = run failed  (70/70 done, 1 failed, 0 skipped)

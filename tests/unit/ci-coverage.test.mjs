@@ -1143,6 +1143,43 @@ test("gpu-census runs nightly staggered from the boot group, with the full check
     "agents without workflow_dispatch may push a request file on cursor/*");
 });
 
+test("gpu-census threads a cam input (helmet default, chase for the mirror-mip cap) to every game check (hunt 4 H5)", () => {
+  const wf = parseYAML(gpuWorkflow);
+  const inputs = wf.on.workflow_dispatch.inputs;
+  // Appended last: every earlier input keeps its name, position and default.
+  assert.deepEqual(Object.keys(inputs), ["track", "images", "census_only", "force", "ls", "clock", "tod", "cam"]);
+  assert.equal(inputs.track.default, "montreal"); assert.equal(inputs.clock.default, "12"); assert.equal(inputs.tod.default, "");
+  assert.equal(inputs.cam.type, "choice");
+  assert.deepEqual(inputs.cam.options, ["helmet", "chase"]);
+  assert.equal(inputs.cam.default, "helmet", "the default is the game's own camera, so a default dispatch measures what it did before");
+  assert.ok(Object.keys(inputs).length <= 25, "GitHub caps workflow_dispatch at 25 inputs");
+  const plan = wf.jobs.plan;
+  assert.equal(plan.outputs.cam, "${{ steps.split.outputs.cam }}");
+  const split = plan.steps.find((s) => s.id === "split");
+  assert.equal(split.env.INPUT_CAM, "${{ inputs.cam || 'helmet' }}", "a scheduled run (no inputs) gets the default");
+  assert.equal(wf.jobs.census.env.CENSUS_CAM, "${{ needs.plan.outputs.cam }}");
+  const camUses = gpuWorkflow.match(/gpu-game-check\.mjs "\$\{CENSUS_TRACK\}"[^\n]*--cam "\$\{CENSUS_CAM:-helmet\}"/g) || [];
+  assert.equal(camUses.length, 4, "every game check (three/webgpu, three/webgl2, glx, wgx) must drive the plan-resolved camera");
+  // The plan's own allowlist, executed: a push request bypasses the choice list.
+  const py = split.run.slice(split.run.indexOf("\n", split.run.indexOf("<<'PY'")) + 1).split("\nPY")[0];
+  const camOf = (env) => {
+    const r = cp.spawnSync("python3", ["-c", py], { encoding: "utf8", env: { PATH: process.env.PATH, EVENT: "workflow_dispatch", ...env } });
+    if (r.error) return null;   // no python3 on this box: the static checks above still hold
+    assert.equal(r.status, 0, r.stderr);
+    return (r.stdout.match(/^cam=(.*)$/m) || [])[1];
+  };
+  const chase = camOf({ INPUT_CAM: "chase" });
+  if (chase !== null) {
+    assert.equal(chase, "chase");
+    assert.equal(camOf({}), "helmet");
+    assert.equal(camOf({ INPUT_CAM: "drone\nimages=[\"x\"]" }), "helmet", "anything off the allowlist falls back, newline and all");
+  }
+  const ggc = fs.readFileSync(new URL("../../tools/gfx/gpu-game-check.mjs", import.meta.url), "utf8");
+  assert.match(ggc, /--cam ID {2,}player camera/, "gpu-game-check --help documents --cam");
+  assert.match(ggc, /out\.cam = await bounded\(\(\) => page\.evaluate\(/);
+  assert.ok(ggc.indexOf("out.cam = await bounded") < ggc.indexOf("out.raceCall = await bounded"), "the camera is set BEFORE race(), so race entry never draws through another one");
+});
+
 test("gpu-census has a NATIVE WGX leg with hardware gates (bound, swapchain, gpuErrors)", () => {
   // Until 2026-09-02 the "webgpu" leg was three.js on WebGPU, so js/render/webgpu/
   // had no real-GPU evidence at all. The leg must run WGX itself and the

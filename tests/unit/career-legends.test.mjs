@@ -128,6 +128,11 @@ test("an unknown team id falls back to MY TEAM, not to whatever booted last", ()
   Career.start({ flavour: "myteam", teamId: "nope", seed: 7 });
   Career.engage(true);
   const live = Career.data();
+  assert.equal(live.team, "custom");
+  assert.equal(live.deal.team, live.team);
+  assert.equal(Career.driverOverride("custom", 0).code, live.driver.code);
+  const owners = Career.driverStandings().filter((row) => row.team.id === "custom");
+  assert.deepEqual(here(owners.map((row) => row.id).sort()), ["custom:0", "custom:1"]);
   assert.notEqual(live.teamName, "legends");
   assert.ok(!JSON.stringify(live).includes('"legends"'),
     "nothing about a fresh career should mention the legends team");
