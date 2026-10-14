@@ -391,11 +391,15 @@ export async function readSoftCanvasBytes(page, {
  * `opts.clip` overrides the presented-canvas box (CSS viewport pixels).
  * `opts.preferView` prefers carview `#view` for soft capture.
  * `opts.forceCdp` skips the soft path (tests / known-bad soft).
+ * `opts.pauseRender` pauses the Apex render loop only during CDP fallback,
+ * restoring its prior headless state even when capture fails.
  */
 export async function screenshotPresentedCanvas(page, opts = {}) {
+  const started = Date.now();
   const awaitMs = opts.awaitMs != null ? opts.awaitMs
     : (opts.timeout != null ? Math.min(opts.timeout, 12000) : 8000);
   if (!opts.skipAwait) await awaitPresentedFrame(page, awaitMs);
+  const presented = Date.now();
 
   const type = opts.type === "jpeg" ? "jpeg" : "png";
   const quality = opts.quality != null ? opts.quality : 92;
@@ -409,7 +413,8 @@ export async function screenshotPresentedCanvas(page, opts = {}) {
       const via = soft.id === "view" ? "view"
         : soft.id === "game" ? "game"
         : "game-soft";
-      return { buf, bytes: buf.length, clip: opts.clip || null, id: soft.id, via };
+      return { buf, bytes: buf.length, clip: opts.clip || null, id: soft.id, via,
+        timings: { presentMs: presented - started, captureMs: Date.now() - presented } };
     }
   }
 
@@ -426,8 +431,17 @@ export async function screenshotPresentedCanvas(page, opts = {}) {
   const session = await page.context().newCDPSession(page);
   let buf;
   let timeoutHandle;
+  let headlessBefore;
   try {
+    if (opts.pauseRender) headlessBefore = await page.evaluate(() => {
+      const a = window.__apex;
+      if (!a?.headless) return null;
+      const previous = a.headless(); a.headless(true); return previous;
+    });
     const params = { format, clip, captureBeyondViewport: false };
+    // Chromium's low-compression PNG encoder is lossless. Larger files, less
+    // browser-thread encoding work; no Playwright/Chromium fork needed.
+    if (format === "png") params.optimizeForSpeed = opts.optimizeForSpeed !== false;
     if (format === "jpeg" && opts.quality != null) params.quality = opts.quality;
     const capture = session.send("Page.captureScreenshot", params)
       .then(({ data }) => Buffer.from(data, "base64"));
@@ -445,9 +459,13 @@ export async function screenshotPresentedCanvas(page, opts = {}) {
   } finally {
     if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
     try { await session.detach(); } catch (_) { /* already closed */ }
+    if (headlessBefore != null) await page.evaluate((previous) => {
+      window.__apex.headless(previous);
+    }, headlessBefore).catch(() => {}); // page may have closed on failure
   }
   if (opts.path) writeFileSync(opts.path, buf);
-  return { buf, bytes: buf.length, clip: box, id: box.id, via: "cdp" };
+  return { buf, bytes: buf.length, clip: box, id: box.id, via: "cdp",
+    timings: { presentMs: presented - started, captureMs: Date.now() - presented } };
 }
 
 /** Fade the setup panel and capture the presented canvas for a clean garage shot.

@@ -179,7 +179,7 @@ function installFetch({ failEssential = false, failOptional = false } = {}) {
     }
     if (url.pathname.endsWith("/index.html")) {
       return new Response(
-        '<link rel="stylesheet" href="css/style.css?v=321">' +
+        '<meta name="apex-build" content="321"><link rel="stylesheet" href="css/style.css?v=321">' +
           '<link rel="icon" href="assets/icon.png">' +
           '<script src="js/game.js?v=321"></script>',
         { status: 200 },
@@ -481,9 +481,9 @@ test("successful navigation remains attached to waitUntil through its cache writ
   ]);
   assert.equal(beforePut, "pending");
 
-  heldPut.resolve();
   const response = await event.responsePromise;
-  assert.equal(await response.text(), "online shell");
+  assert.equal(await response.text(), "online shell", "network response is available while put remains blocked");
+  heldPut.resolve();
   await Promise.all(event.lifetimes);
   assert.equal(
     await (await harness.stores.get("apex26-321").get(`${ORIGIN}/race`)).text(),
@@ -1434,4 +1434,44 @@ test("an unchanged hashed file is copied from the older generation, only when it
   const cur = h.stores.get("apex26-322");
   assert.equal(await cur.get(`${ORIGIN}/js/circuits/monza.js?v=${monza}`).clone().text(), "body of js/circuits/monza.js");
   assert.equal(await cur.get(`${ORIGIN}/js/circuits/spa.js?v=${spa}`).clone().text(), "body of js/circuits/spa.js");
+});
+
+
+test("install rejects mismatched or missing shell generation before opening a cache", async () => {
+  for (const meta of ['<meta name="apex-build" content="320">', '']) {
+    const ordinary = installFetch();
+    let offline = false;
+    const h = createHarness({ immediateTimeout: true, fetchImpl: (request) => offline ? Promise.reject(new Error("offline")) : requestKey(request).endsWith('/index.html')
+      ? Promise.resolve(new Response(meta + '<script src="js/game.js?v=320"></script>')) : ordinary(request) });
+    h.stores.set("apex26-320", new Map([
+      [`${ORIGIN}/index.html`, new Response("healthy old shell")],
+      [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+    ]));
+    await assert.rejects(h.lifecycleEvent("install").done(), /shell build does not match/);
+    assert.equal(h.stores.has("apex26-321"), false);
+    assert.equal(h.skipped, 0);
+    assert.deepEqual(h.deleted, []);
+    assert.equal(await (await h.stores.get("apex26-320").get(`${ORIGIN}/index.html`).clone()).text(), "healthy old shell");
+    offline = true;
+    const reload = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?offline=1` });
+    assert.equal(await (await reload.responsePromise).text(), "healthy old shell");
+    await Promise.all(reload.lifetimes);
+  }
+});
+
+test("navigation returns the network shell before generation lookup and consumes its cache clone safely", async () => {
+  const version = deferred();
+  const shell = '<meta name="apex-build" content="321">fresh shell';
+  const h = createHarness({ fetchImpl: (request) => requestKey(request).endsWith('/version.json')
+    ? version.promise : Promise.resolve(new Response(shell)) });
+  const event = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/race` });
+  const response = await event.responsePromise;
+  assert.equal(await response.text(), shell);
+  let settled = false;
+  const done = Promise.all(event.lifetimes).then(() => { settled = true; });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(settled, false);
+  version.resolve(new Response('{"build":321}'));
+  await done;
+  assert.equal(await h.stores.get("apex26-321").get(`${ORIGIN}/race`).text(), shell);
 });

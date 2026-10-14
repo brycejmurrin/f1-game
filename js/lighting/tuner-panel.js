@@ -273,8 +273,14 @@ function buildLightTunePanel() {
       inp.id = "lt-in-" + d.id;
       inp.setAttribute("aria-label", d.label);
       inp.oninput = () => {
-        setLightTune(d.id, parseFloat(inp.value));
+        if (!setLightTune(d.id, parseFloat(inp.value))) return;
         b.textContent = fmtTune(d, LT[d.id]);
+        if (d.id === "perChunkLights" || d.id === "roadChunkLamps") {
+          const other = TUNE_DEFS.find((t) => t.id === (d.id === "perChunkLights" ? "roadChunkLamps" : "perChunkLights"));
+          const value = other && $("lt-v-" + other.id);
+          if (value) value.textContent = fmtTune(other, LT[other.id]);
+        }
+        updateLtProfileLabel();
       };
       // Persist on release (range "change" fires once), not on every drag tick —
       // persistLightTune() does a synchronous JSON.stringify + localStorage.setItem
@@ -363,18 +369,30 @@ $("lt-copy").onclick = () => {
   const entry = (k) => '  "' + k + '": ' +
     JSON.stringify(S[k], null, 2).replace(/\n/g, "\n  ");
   const lines = ["window.LightEdits = {"];
+  const sunSlot = here && here.replace(/\|[^|]+$/, "|dry");
+  const sharedSun = sunSlot !== here && keys.includes(sunSlot) &&
+    ["sunElev", "sunAzim"].some((id) => Object.prototype.hasOwnProperty.call(S[sunSlot], id));
+  const current = keys.filter((k) => k === here || (sharedSun && k === sunSlot));
+  current.sort((a, b) => (a === here ? -1 : b === here ? 1 : 0));
   // THE CURRENT CONDITION FIRST, always: it is the one just tuned and the one a
   // reader checks. Key order is insertion order, so first here is first out.
-  if (here && keys.includes(here)) {
+  if (current.length) {
     const [id, tod, wx] = here.split("|");
     const name = (G.track && G.track.def && G.track.def.name) || id;
     lines.push("  // THIS CONDITION — " + [name, tod, wx].join(" · ").toUpperCase() +
-      "  (" + Object.keys(S[here]).length + " tuned)");
-    lines.push(entry(here) + (keys.length > 1 ? "," : ""));
+      "  (" + LightStore.tuned() + " tuned)");
+    current.forEach((k, i) => {
+      if (k !== here) {
+        lines.push("  // SUN ANGLES — affect this condition in every weather; stored under DRY");
+        if (Object.keys(S[k]).some((id) => id !== "sunElev" && id !== "sunAzim"))
+          lines.push("  // Other knobs in this slot affect DRY only");
+      }
+      lines.push(entry(k) + (i < keys.length - 1 ? "," : ""));
+    });
   } else {
     lines.push("  // THIS CONDITION — nothing tuned here yet");
   }
-  const rest = keys.filter((k) => k !== here);
+  const rest = keys.filter((k) => !current.includes(k));
   if (rest.length) {
     lines.push("  // EVERYTHING ELSE YOU HAVE TUNED — " + rest.length +
       (rest.length === 1 ? " condition" : " conditions"));

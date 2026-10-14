@@ -508,6 +508,27 @@ test("rain in the real race turns the sky here: the start lap's weather, then an
   assert.deepEqual(arcs(), [["dry", "rain"], ["rain", "dry"]]);
 });
 
+// The script turns back BEFORE the sky does: early in a dry→rain arc
+// raceWeather still reads "dry", so comparing against it ignored the switch
+// back and the storm arrived anyway. The arc's destination is what counts.
+test("rain that stops before the arc has turned the sky re-targets the arc back to dry", () => {
+  const { R, script, Teams } = load();
+  const wet = { ...script, rain: new Array(52).fill(false) };
+  wet.rain[20] = true;   // one wet lap
+  const cars = makeCars(Teams);
+  const { G, calls } = makeG(Teams, cars);
+  const rr = R.create(G);
+  rr.stage(wet, { seat: "RUS" });
+  G.state = "count"; rr.update(1 / 60); G.state = "race";
+  const leader = cars.find((c) => c.code === "RUS");
+  const arcs = () => calls.filter((c) => c[0] === "arc").map((c) => c.slice(1, 3));
+  leader.lap = 20; G.raceWeather = "dry"; rr.update(1 / 60);
+  assert.deepEqual(arcs(), [["dry", "rain"]]);
+  G.weatherArc = { from: "dry", to: "rain", t: 5, dur: 60 };   // the arc is live, the sky still "dry"
+  leader.lap = 21; rr.update(1 / 60);
+  assert.deepEqual(arcs(), [["dry", "rain"], ["dry", "dry"]], "the switch back reaches WeatherArc as a re-target");
+});
+
 test("the review's fixes: a filled cum row, a DSQ that saw the flag, the kept stops, the fuel lap, a done window, one stint log", () => {
   const { R, script, Teams } = load();
   // cumTable fills an untimed mid-race lap of a finisher with the field median and runs to the flag.
@@ -807,27 +828,25 @@ test("JUMP IN never lands past the seat's own retirement, and the seat's reliabi
 
 test("fetchTraces never caches a set with a failed request (a hub closed mid-load, a dropped connection)", async () => {
   const { script, ctx } = load();
-  const puts = [];
-  // A minimal IndexedDB: get() finds nothing, put() is recorded and completes.
-  ctx.indexedDB = { open() {
-    const db = { objectStoreNames: { contains: () => true }, transaction() {
-      const t = { objectStore: () => ({ get() { const rq = {}; setTimeout(() => rq.onsuccess && rq.onsuccess(), 0); return rq; },
-                                        put(v, k) { puts.push(k); setTimeout(() => t.oncomplete && t.oncomplete(), 0); } }) };
-      return t;
-    } };
-    const r = { result: db }; setTimeout(() => r.onsuccess && r.onsuccess(), 0); return r;
-  } };
+  const idb = traceIdb();
+  ctx.indexedDB = idb;
+  const puts = idb.stats.puts;
   const D = vm.runInContext("DataRealRace", ctx);
   const s = { ...script, t0: Date.UTC(2026, 8, 20, 11), drivers: script.drivers.slice(0, 3).map((d) => ({ ...d, lapStart: [0], laps: [90] })) };
   ctx.F1API = { locationData: () => Promise.reject(new Error("cancelled")) };
   await assert.rejects(D.fetchTraces(s), /did not load/, "every request failed: an error, not an empty replay");
+  const dense = Array.from({ length: 181 }, (_, i) => ({ date: s.t0 + i * 500, x: i * 10, y: i * 5 }));
   let n = 0;
-  ctx.F1API = { locationData: () => (n++ === 0 ? Promise.reject(new Error("cancelled")) : Promise.resolve([])) };
+  ctx.F1API = { locationData: () => (n++ === 0 ? Promise.reject(new Error("cancelled")) : Promise.resolve(dense)) };
   const part = await D.fetchTraces(s);
   assert.equal(Object.keys(part.cars).length, 3, "a partial set is still handed back for this session");
   assert.deepEqual(puts, [], "…but never cached");
-  ctx.F1API = { locationData: () => Promise.resolve([]) };
-  await D.fetchTraces(s);
+  assert.equal(part.complete, false);
+  assert.equal(part.failed.length, 1, "only the rejected driver's timing is unavailable");
+  ctx.F1API = { locationData: () => Promise.resolve(dense) };
+  const full = await D.fetchTraces(s, null, part);
+  assert.equal(full.complete, true);
+  assert.equal(full.cars[s.drivers[1].num], part.cars[s.drivers[1].num], "retry retains successful peers");
   assert.equal(puts.filter((k) => k !== "__lru").length, 1, "a complete set is cached");
 });
 
@@ -835,7 +854,7 @@ test("fetchTraces never caches a set with a failed request (a hub closed mid-loa
 // IDBDatabase that nothing closed. One memoised connection (closed on
 // versionchange, reopened after), and only the newest TRACE_MAX races kept.
 function traceIdb(seed = []) {
-  const rows = new Map(seed), stats = { opens: 0, closes: 0 }, dbs = [];
+  const rows = new Map(seed), stats = { opens: 0, closes: 0, puts: [] }, dbs = [];
   const later = (fn) => setTimeout(fn, 0);
   const req = (fn) => { const r = {}; later(() => { r.result = fn(); if (r.onsuccess) r.onsuccess(); }); return r; };
   const idb = { stats, rows, dbs, open() {
@@ -845,7 +864,7 @@ function traceIdb(seed = []) {
       const t = {};
       const done = () => { if (--pending === 0) later(() => t.oncomplete && t.oncomplete()); };
       const op = (fn) => { pending++; const r = req(fn); later(() => later(done)); return r; };
-      t.objectStore = () => ({ get: (k) => op(() => rows.get(k)), put: (v, k) => op(() => { rows.set(k, v); return k; }),
+      t.objectStore = () => ({ get: (k) => op(() => rows.get(k)), put: (v, k) => op(() => { stats.puts.push(k); rows.set(k, v); return k; }),
         delete: (k) => op(() => { rows.delete(k); }), getAllKeys: () => op(() => [...rows.keys()]) });
       return t;
     } };
@@ -863,7 +882,7 @@ test("race traces share one IndexedDB connection and keep only the newest TRACE_
   const D = vm.runInContext("DataRealRace", ctx);
   const N = D.TRACE_MAX + 3;
   for (let i = 0; i < N; i++) {
-    assert.equal(await D.tracePut({ v: 1, sessionKey: 500 + i, t0: 1, hz: 2, cars: { 1: [] }, failed: [] }), true);
+    assert.equal(await D.tracePut({ v: D.TRACE_V, sessionKey: 500 + i, t0: 1, hz: 2, complete: true, cars: { 1: Float32Array.from(Array.from({ length: 306 }, (_, n) => n)) }, failed: [] }), true);
     assert.ok(await D.traceGet(500 + i), "the race just stored reads back");
   }
   const races = [...idb.rows.keys()].filter((k) => k !== "__lru");

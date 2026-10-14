@@ -639,9 +639,8 @@ function isWetRoad() { return trackWetness() >= 0.25; }
 function isRaining() { return trackWetness() >= 0.72; }
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column.
-function trackWetness() { return TyreModel.wetness(raceWeather, wxArc && wxArc.arc); }
-function roadWetness() { return trackWetness(); }   // alias — grip / pits / engineer
-function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? 2 : c.tread) : 0, trackWetness()); }
+function trackWetness() { return wxArc ? wxArc.wetness() : TyreModel.wetness(raceWeather, null); } function roadWetness() { return trackWetness(); }   // the arc's lagged road state (js/race/weather-arc.js); roadWetness = alias for grip / pits / engineer
+function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? TyreModel.treadFor(raceWeather, trackWetness()) : c.tread) : 0, trackWetness()); }   // no fitted set (wear off): the tread the conditions call for
 
 // Pose Ghost + InputGhost start together on every TT lap arm so an incident /
 // reverse-crossing / spoiled class cannot leave the input stream attached to a
@@ -3645,7 +3644,7 @@ customTeam = CustomTeam.create({
 });
 // UI SIZE / HUD SIZE + RESOLUTION (js/ui/scale.js). After Menus so the
 // first applyUiScale can refresh an already-built select preview.
-const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G);
+const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G); if (typeof HudArrange !== "undefined" && HudArrange.create) HudArrange.create(G);
 // CAREER screen — new-career setup + season hub (js/career/career-ui.js). The rules
 // and the save live in js/career/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
@@ -7098,20 +7097,9 @@ function render(dt) {
     fovY = dbgCam.fov * Math.PI / 180;
     if (!cine) farPlane = dbgCam.far;
   } else {
-    // camFov is a vertical FOV. On a wide (landscape) screen a fixed vertical FOV
-    // blows the horizontal field out past ~100°, which makes the car look tiny and
-    // far away. Cap the horizontal FOV so wide screens zoom in and the car stays a
-    // readable size; portrait (narrow) is unaffected.
-    fovY = camFov * Math.PI / 180;
-    // The HFOV cap keeps the CAR a readable size on a wide screen. A crane shot
-    // has no car in it, the editor previews the authored angle uncapped, and a
-    // shot authored at 60° would arrive on a 21:9 screen squeezed to 45° — so
-    // the cinematic takes the number it was framed at.
-    if (!cine) {
-      const HFOV_MAX = 86 * Math.PI / 180;
-      const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(gfx.aspect, 0.0001));
-      fovY = Math.min(fovY, fovYCap);
-    }
+    // camFov is vertical; CamFovFit caps HFOV on wide screens and floors it on
+    // portrait (js/camera/fov-fit.js). cine stays authored / uncapped.
+    fovY = CamFovFit.fitFovY(camFov * Math.PI / 180, gfx.aspect, { cine });
   }
   // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
   // precision across the scene — the biggest single lever against z-fighting /

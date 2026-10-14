@@ -243,12 +243,16 @@ test("the cockpit lens draws the live mirror glass XOR the sky-tint fallback", (
     assert.equal(r.calls[0][1], FB);
     assert.deepEqual(r.counts, [0, 1], JSON.stringify(o));
   }
-  // The fallback's look is unchanged: the day / night emissive.
+  // The fallback's look: day emissive 0.55; night shows the dim night-env mesh
+  // at emissive ~0.85 (was 0.08 × day-sky bands + glossy specular → 7–10× too bright).
   assert.equal(run({ mp: "off" }).calls[0][2], 0.55);
-  assert.equal(run({ mp: "off", nite: true }).calls[0][2], 0.08);
+  assert.equal(run({ mp: "off", nite: true }).calls[0][2], 0.85);
   // drawCockpitRig reaches it for every procedural cockpit, and it is the ONLY fallback draw.
   assert.match(fnSource(src, "function drawCockpitRig("), /if \(!carModelBuf\) drawMirrorLens\(c, base, nite\);/);
   assert.equal(src.split("getMirrorFallback(").length - 1, 1, "getMirrorFallback is drawn from drawMirrorLens only");
+  // Matte fallback — no day-env / lamp-specular blowout on the sky-tint card.
+  assert.match(src, /roughness:\s*0\.92/);
+  assert.match(fn, /getMirrorFallback\(quads,\s*!!nite\)/);
 });
 
 // THE HUD MIRROR AND THE BROADCAST PiP draw a rival the way the main pass does:
@@ -634,7 +638,7 @@ test("the first-person caster is the whole car minus the driver, with the player
   const cx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap };
   cx.globalThis = cx; vm.createContext(cx);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/liveries.js", "js/car/helmets.js",
-    "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-materials.js", "js/car/car-shade.js", "js/car/car-body-geom.js", "js/car/car3d.js"]) vm.runInContext(read(f), cx, { filename: f });
+    "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js", "js/car/car-shade.js", "js/car/car-body-geom.js", "js/car/car3d.js"]) vm.runInContext(read(f), cx, { filename: f });
   const Car3D = vm.runInContext("Car3D", cx);
   const C1 = [0.9, 0.1, 0.1], C2 = [0.1, 0.1, 0.9];
   for (const teamId of ["ferrari", "mclaren", "redbull"]) {

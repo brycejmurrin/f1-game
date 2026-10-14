@@ -935,12 +935,12 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
     "data hub short-height chrome must use body[data-density], not viewport max-height");
   assert.ok(ruleFor(data, /^body\[data-shape="tall"\]\[data-width="narrow"\] \.dh-tabs\b/),
     "portrait 2×3 destinations use the zoom-aware shape+width flags (not @media orientation)");
-  // Live survey ~500px: TELEMETRY (7.1em) used to be the widest label; WATCH &
-  // DRIVE overflows that column with nowrap. Size the grid for the new widest
-  // and let the chip wrap instead of painting past its plate.
+  // auto-fit + minmax(11.2×fs-micro) collapsed to ONE column on 360–390px phones
+  // (label floor × 2 + gap > content width), so seven full-width tabs ate the
+  // schedule. Fixed 3 columns; white-space:normal still wraps WATCH & DRIVE.
   const tallTabs = ruleFor(data, /^body\[data-shape="tall"\]\[data-width="narrow"\] \.dh-tabs\b/);
-  assert.match(tallTabs.decls.get("grid-template-columns") || "", /11\.2 \* var\(--fs-micro\)/,
-    "tall+narrow hub columns size to WATCH & DRIVE, not TELEMETRY");
+  assert.match(tallTabs.decls.get("grid-template-columns") || "", /repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+    "tall+narrow hub tabs are a 3-column grid so schedule content stays visible");
   assert.equal(decl(data, /^body\[data-shape="tall"\]\[data-width="narrow"\] \.dh-tab\b/, "white-space"), "normal",
     "WATCH & DRIVE wraps inside the chip instead of overflowing the plate");
   assert.equal(decl(css("css/menus.css"), /^#ss-inner\[data-density="compact"\] #ss-cal \.season-upcoming-row/, "flex-wrap"), "wrap");
@@ -1626,7 +1626,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   // SettingsNav BEHAVIOUR: always land on the door index. A stored
   // settingsCategory must not reopen MORE / DISPLAY.
   const h = bootSettingsNav();
-  assert.deepEqual(Object.keys(h.nav).sort(), ["back", "show", "showCurrent"]);
+  assert.deepEqual(Object.keys(h.nav).sort(), ["back", "invalidate", "show", "showCurrent"]);
   assert.equal(h.index().hidden, false, "create() shows the door index");
   assert.equal(h.panel("controls").hidden, true);
   assert.equal(h.panel("display").hidden, true);
@@ -2239,9 +2239,16 @@ test("tool doors and lone foot actions do not stretch into banners", () => {
 function bootCopyValues(opts = {}) {
   const dom = makeDom();
   const order = [];
+  const here = opts.here || "monza|dusk|dry";
+  const store = opts.store || { "monza|dusk|dry": { exposure: 1.2 }, "spa|night|wet": { fogDensityMul: 0.5, bloom: 0.3 }, "*": {} };
   const sb = uiSandbox(dom, {
     GameAudio: { uiSelect() {}, uiTick() {} }, PerfGov: { tier: () => 0 },
     LightTune: { TUNE_DEFS: [], LT: {} },   // tuner.js destructures the registry at create()
+    LightStore: { tuned() {
+      const sunSlot = here.replace(/\|[^|]+$/, "|dry"), sunIds = ["sunElev", "sunAzim"];
+      const own = Object.keys(store[here] || {}).filter((id) => sunSlot === here || !sunIds.includes(id));
+      return own.length + (sunSlot === here ? 0 : sunIds.filter((id) => Object.hasOwn(store[sunSlot] || {}, id)).length);
+    } },
     navigator: { clipboard: { writeText: () => { order.push("clipboard"); return opts.clipboardRejects ? Promise.reject(new Error("no")) : Promise.resolve(); } } },
   });
   sb.document.execCommand = (c) => { order.push("execCommand:" + c); return !!opts.execOk; };
@@ -2250,9 +2257,9 @@ function bootCopyValues(opts = {}) {
   vm.runInContext(src("js/lighting/tuner-panel.js"), ctx, { filename: "js/lighting/tuner-panel.js" });
   const G = {
     $: (id) => dom.byId(id), gfx: {}, els: { pmsettings: {} },
-    ltKey: () => opts.here || "monza|dusk|dry", setLightTune() {}, persistLightTune() {}, applyLightTune() {},
+    ltKey: () => here, setLightTune() {}, persistLightTune() {}, applyLightTune() {},
     setTimeOfDay: () => "dusk", weather: () => "dry", exitPhotoMode() {},
-    _ltStore: opts.store || { "monza|dusk|dry": { exposure: 1.2 }, "spa|night|wet": { fogDensityMul: 0.5, bloom: 0.3 }, "*": {} },
+    _ltStore: store,
     track: { def: { name: "Monza" } },
   };
   vm.runInContext("TunerPanel", ctx).create(G);

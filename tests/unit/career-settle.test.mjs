@@ -24,7 +24,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 // `const Career` lands in the context's global LEXICAL scope, not on the global
 // object — read it back by evaluating its name (same shape as race-control).
-function load(seasonLen, raceRules = false) {
+function load(seasonLen, raceRules = false, onWrite = () => {}) {
   const stored = new Map();
   const ctx = vm.createContext({
     Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
@@ -32,7 +32,7 @@ function load(seasonLen, raceRules = false) {
       CAREER_V: 3,
       store: {
         get: (k, d) => (stored.has(k) ? stored.get(k) : d),
-        set: (k, v) => stored.set(k, v),
+        set: (k, v) => { onWrite(k); return stored.set(k, v); },
       },
       seasonDriverId: (teamId, i) => teamId + ":" + i,
       migrateCareer: (c) => c,
@@ -1351,4 +1351,19 @@ test("paceMult is clamped to [0.9, 1.1] whatever the stored tdev says", () => {
   assert.equal(Career.paceMult("d"), 1);
   assert.equal(Career.paceMult("e"), 1, "a non-finite entry is no entry");
   assert.equal(Career.paceMult("missing"), 1);
+});
+
+test("settlement persists once and saveStatus only reads the last result", () => {
+  let writes = 0;
+  const Career = load(undefined, false, (key) => { if (key.startsWith("career.")) writes++; });
+  Career.start({ flavour: "myteam", teamId: "custom", seed: 7 }); Career.engage(true);
+  Career.data().season.round = 1;
+  writes = 0;
+  const player = { team: { id: "custom" }, cuts: 0, penalty: 0, gridPos: 1 };
+  const mate = { team: { id: "custom" }, cuts: 0, penalty: 0, gridPos: 2 };
+  const result = Career.settleRound([player, mate], player);
+  assert.equal(writes, 1);
+  assert.deepEqual(Career.saveStatus(), result.save);
+  Career.saveStatus(); Career.saveStatus();
+  assert.equal(writes, 1);
 });
