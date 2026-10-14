@@ -342,18 +342,9 @@
   scroll-snap-align: none;
 }
 #cs-inner:not([data-pair="on"]) #cs-tabs .cs-tab {
-  white-space: nowrap;
+  flex: 0 0 auto; white-space: nowrap;
   scroll-snap-align: start;
   scroll-snap-stop: normal;
-  /* Exact basis so three full tabs + ≥24px of the fourth always fit the
-     strip — max-width alone left tabs naturally narrower, so SUSP still
-     ate the peek and BRAKES painted 0 wide (css-play 390×844 after).
-     Peek reserve is gap*2.75 (~33 at --gap 12) because % flex-basis + gap
-     rounding ate ~6px of a gap*2 budget (SUSP vis 18). Row gap is --gap/2. */
-  flex: 0 0 calc((100% - (var(--gap) * 2.75) - var(--gap)) / 3);
-  width: calc((100% - (var(--gap) * 2.75) - var(--gap)) / 3);
-  max-width: calc((100% - (var(--gap) * 2.75) - var(--gap)) / 3);
-  box-sizing: border-box;
 }
 /* PLAY-SHAPE GARAGE (compact, stacked, short LANDSCAPE only): a one-line head
    with CLOSE GARAGE / BACK+DONE in the header row's trailing column, then ONE
@@ -441,7 +432,7 @@
      target; keep the physical min-* pair for engines that resolve
      --tap-paint only there. Livery ⧉ chips (.cs-liv-edit) stay on
      --chip-h / the WCAG-min rung — not this rule. */
-  white-space: nowrap;
+  flex: 0 0 auto; white-space: nowrap;
   min-inline-size: var(--tap-paint, var(--tap));
   min-block-size: var(--tap-paint, var(--tap));
   min-width: var(--tap-paint, var(--tap));
@@ -450,11 +441,6 @@
   justify-content: center; align-items: center; text-align: center;
   scroll-snap-align: start;
   scroll-snap-stop: normal;
-  /* Same three-plus-peek basis as the stacked row rule above. */
-  flex: 0 0 calc((100% - (var(--gap) * 2.75) - var(--gap)) / 3);
-  width: calc((100% - (var(--gap) * 2.75) - var(--gap)) / 3);
-  max-width: calc((100% - (var(--gap) * 2.75) - var(--gap)) / 3);
-  box-sizing: border-box;
 }
 @media (orientation: landscape) {
   #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot {
