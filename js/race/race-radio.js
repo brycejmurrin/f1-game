@@ -546,8 +546,15 @@ var RaceRadio = (function () {
     // from the recorded voice only. Never in a WATCH: a replay has no engineer,
     // and the spotter is the engineer's voice calling cars round a puppet.
     const spotter = typeof Spotter !== "undefined" ? Spotter.create(G) : null;
+    // PERF-HUNT-2 S8: game.js flushes once per display frame (G._s8Stamp). A
+    // second update with the same stamp is a no-op; tests that omit the stamp
+    // keep the per-call behaviour. Spotter rides this same once-per-frame tick.
+    let _s8Done = null;
     function update(dt) {
+      const stamp = G._s8Stamp;
+      if (stamp != null && stamp === _s8Done) return;
       if (!Number.isFinite(dt) || dt <= 0) return;
+      if (stamp != null) _s8Done = stamp;
       if (spotter) spotter.update(dt, !!watch);
       // RADIO CHECK (js/input/input.js): consumed on every tick, raced or not, so
       // a press in a menu cannot fire at the next green light.

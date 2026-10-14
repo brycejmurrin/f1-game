@@ -522,7 +522,7 @@ test("clearControls keeps fit()'s edge-clamp correction when it nudges off a tou
     style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; }, getPropertyValue(k) { return props[k] || ""; } },
     setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
     // 100 wide at 800 + --hl-x vw: stored +30vw is 204 px past the right edge before the clamp.
-    getBoundingClientRect() { const x = 800 + parseFloat(props["--hl-x"] || 0) / 100 * W; return { left: x, right: x + 100, top: 500, bottom: 530, width: 100, height: 30 }; },
+    getBoundingClientRect() { const x = 800 + parseFloat(props["--hl-x"] || 0) / 100 * W + parseFloat(props["--hud-clear-x"] || 0); return { left: x, right: x + 100, top: 500, bottom: 530, width: 100, height: 30 }; },
   };
   const btn = { hidden: false, classList: { contains: () => false },
     getBoundingClientRect: () => ({ left: 900, right: 1000, top: 400, bottom: 540, width: 100, height: 140 }) };
@@ -542,12 +542,21 @@ test("clearControls keeps fit()'s edge-clamp correction when it nudges off a tou
   assert.ok(r.right <= W - 4 + 1e-6, "still on screen after the nudge: " + r.right);
   assert.ok(r.right <= btn.getBoundingClientRect().left + 1e-6, "and clear of the button");
   assert.equal(ctx.HudLayout.get("rel", "other").x, 30, "stored offset unchanged");
+  // A prior terminal placement must not bias the next edge clamp. Simulate a
+  // correction from a denser viewport before re-fitting the same saved move.
+  const stable = rel.getBoundingClientRect(), saved = JSON.stringify(written);
+  props["--hud-clear-x"] = "80px";
+  ctx.HudLayout.fit();
+  assert.deepEqual(rel.getBoundingClientRect(), stable, "edge clamp discards previous clearance before measuring");
+  ctx.HudLayout.fit();
+  assert.deepEqual(rel.getBoundingClientRect(), stable, "repeated user placement stays stable");
+  assert.equal(JSON.stringify(written), saved, "temporary correction never writes settings");
 });
 
 // ---- per-style layouts, camera groups, hidden reasons, live origin ----------
 // A harness with a body (classes + data-hud-hide), #hud (hidden = not racing),
 // :root attributes and an optional GameHud.
-function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = {}, bodyAttrs = {}, gameHud = null, mirror = null } = {}) {
+function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = {}, bodyAttrs = {}, gameHud = null, mirror = null, hudElements = null, microtasks = null } = {}) {
   const written = Object.assign({}, stored);
   const els = {};
   const byId = {};
@@ -577,6 +586,8 @@ function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = 
   const ctx = { console, document: doc,
     GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } } };
   if (gameHud) ctx.GameHud = gameHud;
+  if (hudElements) ctx.HudElements = hudElements;
+  if (microtasks) ctx.queueMicrotask = (fn) => microtasks.push(fn);
   if (mirror) {
     // MirrorPass.instance() shape used by revealMirror / mirrorMode.
     let mode = mirror.mode || "auto";
@@ -598,6 +609,25 @@ function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = 
   vm.runInContext(SRC + "; this.HudLayout = HudLayout; this.CamGroups = CamGroups;", ctx);
   return { H: ctx.HudLayout, CG: ctx.CamGroups, written, els, cls, hud, rootAttrs, bodyAttrs, byId };
 }
+
+test("queued style visibility preserves arrange ghosts and resumes after exit", () => {
+  const microtasks = [], bodyAttrs = {};
+  let applies = 0;
+  const L = load3({ bodyAttrs, microtasks, hudElements: { apply() { applies++; } } });
+  const flush = () => { while (microtasks.length) microtasks.shift()(); };
+  flush(); const before = applies;
+  L.H.set("map", { x: 3 }, "other");
+  bodyAttrs["data-hud-arrange"] = "1";
+  flush();
+  assert.equal(applies, before, "entering arrange before the microtask keeps hidden ghosts visible");
+  L.H.set("map", { x: 4 }, "other"); flush();
+  assert.equal(applies, before, "dragging while arranging does not restore the hide list");
+  L.H.set("map", { x: 5 }, "other");
+  delete bodyAttrs["data-hud-arrange"]; flush();
+  assert.equal(applies, before + 1, "normal visibility is restored after leaving arrange");
+  L.H.apply(); flush();
+  assert.equal(applies, before + 2, "ordinary profile changes still reapply visibility");
+});
 
 test("migrate: v2 {cockpit, other} becomes STANDARD's; MINIMAL and BROADCAST start shipped", () => {
   const { H } = load3();
@@ -716,7 +746,7 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     "touch TYRES sits on top of the left dock");
   assert.match(css, /body:not\(\.desktop\) #hud-sectors \{[\s\S]*?right:\s*calc\(10px \+ var\(--sar\) \/ var\(--hud-z\) \+ var\(--dock-r-w, 0px\)\)/,
     "phone sectors (tilt/touch/buttons) take the same --dock-r-w clearance as limits/damage");
-  assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x, 50% \* var\(--hud-z\)\) \/ var\(--hud-z\)\)/,
+  assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x, 50% \* var\(--hud-z\)\) \/ var\(--hud-z\)\)/,
     "touch #announce sits in the published dock lane (centred when none is published), not at 10px+sal over TILT's left dock");
   assert.doesNotMatch(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-prof-broadcast\)[^{]*#announce \{[\s\S]*?left: calc\(10px \+ var\(--sal\)/,
     "the under-map announce park is gone — it sat on BRAKE / BOOST / SHIFT");
@@ -899,4 +929,186 @@ test("touch HELMET hides only what the LCD glyph and the buttons carry; ENERGY a
   const ms = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
   assert.match(ms, /"cockpit-cam", camId === "cockpit"\s*&& \(typeof CockpitOpts === "undefined" \|\| CockpitOpts\.wheelHasScreen\(\)\)\);/);
   assert.match(ms, /toggleAttribute\("data-helmet-cam", camId === "helmet"\)/, "the visor frame stays");
+});
+
+test("measured clearance protects instruments and controls without changing saved layouts", () => {
+  const W = 844, H = 390, elements = {};
+  const make = (id, x, y, w, h) => {
+    const p = {}, attrs = {};
+    const e = { id, style: { setProperty(k, v) { p[k] = v; }, removeProperty(k) { delete p[k]; }, getPropertyValue(k) { return p[k] || ""; } },
+      setAttribute(k,v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
+      getBoundingClientRect() {
+        const left = x + parseFloat(p["--hl-x"] || 0) * W / 100 + parseFloat(p["--hud-clear-x"] || 0);
+        const top = y + parseFloat(p["--hl-y"] || 0) * H / 100 + parseFloat(p["--hud-clear-y"] || 0);
+        return { left, top, right: left + w, bottom: top + h, width: w, height: h };
+      } };
+    elements[id] = e; return e;
+  };
+  const gear = make("#hud-gearbox", 250, 210, 140, 100), speed = make("#hud-speed", 400, 210, 120, 40);
+  const tyre = make("#hud-tyre", 58, 170, 180, 90), damage = make("#hud-damage", 465, 215, 125, 48);
+  const rel = make("#hud-rel", 58, 150, 150, 60), strat = make("#hud-strat", 180, 160, 100, 60);
+  const cam = make("#btn-cam", 735, 80, 75, 44), radio = make("#announce", 585, 31, 175, 74);
+  const limits = make("#hud-limits", 590, 202, 125, 24);
+  const ot = make("#hud-ot", 250, 330, 140, 30), aero = make("#hud-aero", 400, 330, 140, 30);
+  const stored = { v: 3, standard: { other: { rel: { x: 1, y: 0, s: 100 } } } };
+  const before = JSON.stringify(stored);
+  let placedRadio = false;
+  const ctx = { console, window: { innerWidth: W, innerHeight: H },
+    document: { readyState: "loading", addEventListener() {}, getElementById: () => null,
+      body: { classList: { contains: () => false }, setAttribute() {}, hasAttribute: (k) => k === "data-radio-placed" && placedRadio },
+      querySelector: (sel) => elements[sel] || null,
+      querySelectorAll: (sel) => {
+        if (sel.includes("#pausebtn")) {
+          assert.match(sel, /#hud-ot/); assert.match(sel, /#hud-aero/); assert.match(sel, /#hud-bb/);
+          return [gear, tyre, cam, ot, aero];
+        }
+        return [gear, speed, cam];
+      } },
+    GameStore: { store: { get: (k,d) => k === "hudLayout" ? stored : d, set() {} } } };
+  vm.createContext(ctx); vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+  const overlap = (a,b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  ctx.HudLayout.clearReadouts();
+  const readouts = [limits, radio, damage, rel, strat];
+  const protectedBoxes = [gear, speed, tyre, cam, ot, aero].map((e) => e.getBoundingClientRect());
+  for (const el of readouts) {
+    const r = el.getBoundingClientRect();
+    assert.ok(protectedBoxes.every((b) => !overlap(r,b)), el.id + " clears controls and instruments");
+    assert.ok(r.left >= 4 && r.top >= 4 && r.right <= W-4 && r.bottom <= H-4, el.id + " stays on screen");
+    protectedBoxes.push(r);
+  }
+  const first = readouts.map((e) => e.getBoundingClientRect());
+  ctx.HudLayout.clearReadouts();
+  assert.deepEqual(readouts.map((e) => e.getBoundingClientRect()), first, "repeat fit is stable");
+  assert.equal(JSON.stringify(stored), before, "saved user offset remains intact");
+  placedRadio = true;
+  radio.style.setProperty("--hud-clear-x", "-240px");
+  radio.style.setProperty("--hud-clear-y", "80px");
+  limits.style.setProperty("--hl-y", String(-170 / H * 100));
+  ctx.HudLayout.clearReadouts();
+  const pinned = radio.getBoundingClientRect();
+  assert.equal(pinned.left, 585, "manual placement discards previous automatic clearance");
+  assert.equal(pinned.top, 31, "manual placement keeps the requested height");
+  assert.ok(overlap(pinned, cam.getBoundingClientRect()), "the player can deliberately place over a control");
+  assert.ok(!overlap(limits.getBoundingClientRect(), pinned), "earlier readouts also yield to the manual radio");
+  ctx.HudLayout.clearReadouts();
+  assert.deepEqual(radio.getBoundingClientRect(), pinned, "repeated fits preserve manual placement");
+  placedRadio = false;
+  ctx.HudLayout.clearReadouts();
+  assert.ok(!overlap(radio.getBoundingClientRect(), cam.getBoundingClientRect()), "RESET restores automatic clearance");
+});
+
+
+test("all temporarily corrected readouts restrict transitions to paint properties", () => {
+  const block = CSS.match(/:is\(#hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs\)\s*\{([^}]+)\}/);
+  assert.ok(block, "an unconditional rule covers every measured clearance target");
+  assert.match(block[1], /transition-property:\s*opacity, color, background-color, border-color, box-shadow, filter, text-shadow;/);
+});
+
+test("optional strategy compacts, explains a drop, and restores when space returns", () => {
+  const attrs = {}, props = {}, viewport = { innerWidth: 300, innerHeight: 200 };
+  const strat = {
+    style: { setProperty(k,v) { props[k]=v; }, removeProperty(k) { delete props[k]; }, getPropertyValue(k) { return props[k] || ""; } },
+    setAttribute(k,v) { attrs[k]=v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
+    getBoundingClientRect() {
+      const height = "data-col-drop" in attrs ? 0 : "data-col-compact" in attrs ? 25 : 90;
+      const left = 10 + parseFloat(props["--hud-clear-x"] || 0), top = 60 + parseFloat(props["--hud-clear-y"] || 0);
+      return {left,top,right:left+120,bottom:top+height,width:120,height};
+    },
+  };
+  const control = { getBoundingClientRect: () => ({left:4,top:4,right:296,bottom:150,width:292,height:146}) };
+  const ctx = { console, window: viewport,
+    document: { readyState: "loading", addEventListener() {}, getElementById: (id) => id === "hud" ? {hidden:false} : null,
+      body: {classList: {contains: () => false},setAttribute(){}}, querySelector: (sel) => sel === "#hud-strat" ? strat : null,
+      querySelectorAll: (sel) => sel.includes("#pausebtn") ? [control] : [] },
+    GameStore: {store: {get: (k,d) => d,set(){throw new Error("fit must not save");}}} };
+  vm.createContext(ctx);vm.runInContext(SRC + "; this.HudLayout = HudLayout;",ctx);
+  ctx.HudLayout.clearReadouts();
+  assert.ok(strat.hasAttribute("data-col-compact"), "one NEXT row fits the remaining strip");
+  assert.ok(!strat.hasAttribute("data-col-drop"));
+  assert.ok(strat.getBoundingClientRect().top >= 154);
+  viewport.innerHeight = 170;ctx.HudLayout.clearReadouts();
+  assert.ok(strat.hasAttribute("data-col-drop"));
+  assert.equal(ctx.HudLayout.hiddenReason("strat").reason,"not enough room");
+  viewport.innerHeight = 400;ctx.HudLayout.clearReadouts();
+  assert.ok(!strat.hasAttribute("data-col-drop") && !strat.hasAttribute("data-col-compact"), "full panel returns without changing settings");
+  assert.equal(strat.getBoundingClientRect().height,90);
+});
+
+test("clearance keeps an unobstructed readout inside hardware safe areas", () => {
+  const p = {}, attrs = {}, root = {};
+  const damage = { style: {setProperty(k,v){p[k]=v;},removeProperty(k){delete p[k];}},
+    setAttribute(k,v){attrs[k]=v;},removeAttribute(k){delete attrs[k];},hasAttribute(k){return k in attrs;},
+    getBoundingClientRect(){const left=5+parseFloat(p["--hud-clear-x"]||0),top=5+parseFloat(p["--hud-clear-y"]||0);return {left,top,right:left+80,bottom:top+30,width:80,height:30};} };
+  const ctx = {console,window:{innerWidth:300,innerHeight:200},
+    getComputedStyle: (el) => el === root ? {getPropertyValue: (k) => ({"--sal":"30px","--sar":"20px","--sat":"15px","--sab":"10px"}[k]||"")} : {display:"block",visibility:"visible"},
+    document:{readyState:"loading",documentElement:root,addEventListener(){},getElementById:()=>null,
+      body:{classList:{contains:()=>false},setAttribute(){}},querySelector:(sel)=>sel==="#hud-damage"?damage:null,querySelectorAll:()=>[]},
+    GameStore:{store:{get:(k,d)=>d,set(){throw new Error("must not save");}}}};
+  vm.createContext(ctx);vm.runInContext(SRC+";this.HudLayout=HudLayout;",ctx);
+  ctx.HudLayout.clearReadouts();
+  const r=damage.getBoundingClientRect();
+  assert.equal(r.left,34);assert.equal(r.top,19);
+  assert.ok(r.right<=276 && r.bottom<=186);
+});
+
+test("damage wraps into a narrow slot without dropping diagnostic text or saving", () => {
+  const p = {}, attrs = {};
+  const damage = {textContent:"FW R 100% SUSP",style:{setProperty(k,v){p[k]=v;},removeProperty(k){delete p[k];}},
+    setAttribute(k,v){attrs[k]=v;},removeAttribute(k){delete attrs[k];},hasAttribute(k){return k in attrs;},
+    getBoundingClientRect(){const width="data-col-compact" in attrs?96:130,height="data-col-compact" in attrs?70:50;
+      const left=40+parseFloat(p["--hud-clear-x"]||0),top=60+parseFloat(p["--hud-clear-y"]||0);return {left,top,right:left+width,bottom:top+height,width,height};}};
+  const instrument={getBoundingClientRect:()=>({left:4,top:4,right:196,bottom:296,width:192,height:292})};
+  const ctx={console,window:{innerWidth:300,innerHeight:300},document:{readyState:"loading",addEventListener(){},getElementById:()=>null,
+    body:{classList:{contains:()=>false},setAttribute(){}},querySelector:(sel)=>sel==="#hud-damage"?damage:null,
+    querySelectorAll:(sel)=>sel.includes("#pausebtn")?[instrument]:[]},GameStore:{store:{get:(k,d)=>d,set(){throw new Error("must not save");}}}};
+  vm.createContext(ctx);vm.runInContext(SRC+";this.HudLayout=HudLayout;",ctx);ctx.HudLayout.clearReadouts();
+  assert.ok(damage.hasAttribute("data-col-compact"));assert.ok(!damage.hasAttribute("data-col-drop"));
+  assert.equal(damage.textContent,"FW R 100% SUSP");
+  const r=damage.getBoundingClientRect();assert.equal(r.left,200);assert.ok(r.right<=296);
+  assert.match(CSS,/#hud-damage\[data-col-compact\] \[data-dmg-text\][^}]+overflow-wrap: anywhere/);
+});
+
+test("a collapsed radio lane reopens for measured placement without changing settings", () => {
+  const attrs={"data-lane-collapsed":""},p={};
+  const radio={hidden:false,style:{setProperty(k,v){p[k]=v;},removeProperty(k){delete p[k];}},
+    setAttribute(k,v){attrs[k]=v;},removeAttribute(k){delete attrs[k];},hasAttribute(k){return k in attrs;},
+    getBoundingClientRect(){const width="data-lane-collapsed" in attrs||!p["--announce-lane-w"]?0:120;
+      const left=20+parseFloat(p["--hud-clear-x"]||0),top=20+parseFloat(p["--hud-clear-y"]||0);return {left,top,right:left+width,bottom:top+40,width,height:40};}};
+  const control={getBoundingClientRect:()=>({left:10,top:10,right:150,bottom:100,width:140,height:90})};
+  const ctx={console,window:{innerWidth:300,innerHeight:200},document:{readyState:"loading",addEventListener(){},getElementById:()=>null,
+    body:{classList:{contains:()=>false},setAttribute(){}},querySelector:(sel)=>sel==="#announce"?radio:null,
+    querySelectorAll:(sel)=>sel.includes("#pausebtn")?[control]:[]},GameStore:{store:{get:(k,d)=>d,set(){throw new Error("must not save");}}}};
+  vm.createContext(ctx);vm.runInContext(SRC+";this.HudLayout=HudLayout;",ctx);ctx.HudLayout.clearReadouts();
+  assert.ok(!radio.hasAttribute("data-lane-collapsed")&&!radio.hasAttribute("data-col-drop"));
+  assert.equal(p["--announce-lane-w"],"292px");
+  const r=radio.getBoundingClientRect();assert.ok(r.left>=154||r.top>=104);
+  ctx.HudLayout.clearReadouts();assert.deepEqual(radio.getBoundingClientRect(),r,"local width survives repeated clearance until producer recomputes lane");
+});
+
+
+test("optional input trace yields to occupied space and restores without saving", () => {
+  const attrs = {}, props = {}, viewport = { innerWidth: 300, innerHeight: 170 };
+  const inputs = {
+    style: { setProperty(k,v) { props[k]=v; }, removeProperty(k) { delete props[k]; } },
+    setAttribute(k,v) { attrs[k]=v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
+    getBoundingClientRect() {
+      const height = "data-col-drop" in attrs ? 0 : 40;
+      const left = 10 + parseFloat(props["--hud-clear-x"] || 0), top = 60 + parseFloat(props["--hud-clear-y"] || 0);
+      return {left,top,right:left+120,bottom:top+height,width:120,height};
+    },
+  };
+  const control = { getBoundingClientRect: () => ({left:4,top:4,right:296,bottom:150,width:292,height:146}) };
+  const ctx = { console, window: viewport, document: {
+    readyState: "loading", addEventListener() {}, getElementById: id => id === "hud" ? {hidden:false} : null,
+    body: {classList: {contains: () => false},setAttribute(){}}, querySelector: sel => sel === "#hud-inputs" ? inputs : null,
+    querySelectorAll: sel => sel.includes("#pausebtn") ? [control] : [] },
+    GameStore: {store: {get: (k,d) => d,set(){throw new Error("fit must not save");}}} };
+  vm.createContext(ctx);vm.runInContext(SRC + "; this.HudLayout = HudLayout;",ctx);
+  ctx.HudLayout.clearReadouts();
+  assert.ok(inputs.hasAttribute("data-col-drop"));
+  assert.equal(ctx.HudLayout.hiddenReason("inputs").reason,"not enough room");
+  viewport.innerHeight = 400;ctx.HudLayout.clearReadouts();
+  assert.ok(!inputs.hasAttribute("data-col-drop"));
+  assert.equal(inputs.getBoundingClientRect().height,40);
+  assert.ok(inputs.getBoundingClientRect().top >= 154);
 });
