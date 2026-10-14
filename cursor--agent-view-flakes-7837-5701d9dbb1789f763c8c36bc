@@ -1,0 +1,1 @@
+1791960203	Cursor Agent	Finish PR #1457 agent-view-flakes: OWNED tests/helpers/agent-view-ready.js tests/specs/agent-view.spec.js (+ quarantine/helpers only if strictly required for hooks green). No merge.  [cursor/agent-view-flakes-7837; session 5701d9dbb1789f763c8c36bc]
