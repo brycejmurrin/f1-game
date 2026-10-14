@@ -873,12 +873,30 @@ test.describe("portrait radio card (phone-portrait-390)", () => {
         if (typeof HudElements !== "undefined") HudElements.set("rel", true);
         if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
         window.__apex.jump(0.15, 60, 0);
-        document.getElementById("announce").hidden = false;
+        const ann = document.getElementById("announce");
+        if (ann) {
+          ann.hidden = false;
+          // #1501: announceLane paints data-lane-collapsed + --announce-lane-w:0
+          // when docks are lit but S3 ate the gap. This fixture measures the
+          // laid-out card (centred fallback), so lift the collapse here.
+          ann.removeAttribute("data-lane-collapsed");
+          const root = document.documentElement;
+          for (const k of ["--announce-lane-x", "--announce-lane-shift", "--announce-lane-w"]) {
+            root.style.removeProperty(k);
+          }
+        }
       });
       const got = await page.waitForFunction(async () => {
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const ann = document.getElementById("announce");
-        if (!ann || ann.hidden) return false;
+        if (!ann) return false;
+        // A HUD tick can re-collapse the lane after the setup evaluate.
+        ann.hidden = false;
+        ann.removeAttribute("data-lane-collapsed");
+        const root = document.documentElement;
+        for (const k of ["--announce-lane-x", "--announce-lane-shift", "--announce-lane-w"]) {
+          root.style.removeProperty(k);
+        }
         const box = (el) => {
           if (!el || el.hidden) return null;
           const r = el.getBoundingClientRect();
