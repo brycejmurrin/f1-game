@@ -280,7 +280,9 @@ export const RULES = [
   // either. Without baseline here a type-metric or art change ships unseen:
   // that is incident 2026-09-16, where an 8 -> 9 px garage tab label went red
   // on the deploy branch and blocked five consecutive Pages runs.
-  [/^css\/menus\.css/, ["ui", "baseline"], "the menu chrome: only the blessed PNGs in menu-baseline.spec.js see it"],
+  // carsetup/tokens/select.css paint the same blessed screens (the garage
+  // panel, the global type and colour tokens, the picker), so they ride along.
+  [/^css\/(menus|carsetup|tokens|select)\.css/, ["ui", "baseline"], "the menu chrome: only the blessed PNGs in menu-baseline.spec.js see it"],
   [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],
   // Two rules, because "script tags + DOM shell" is LOAD-BEARING: it is one of
   // select-specs' BOOT_FALLBACK_REASONS, the strings that let node-plan.mjs

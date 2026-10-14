@@ -146,9 +146,28 @@ async function captureJob(page, job, waitMs, modelInfo) {
 
   mkdirSync(dirname(job.out), { recursive: true });
   const presentMs = Math.min(waitMs, 90000);
-  if (await awaitPresentedFrame(page, presentMs) === false) {
-    throw new Error(`no new frame presented within ${presentMs / 1000} s of the camera move — ` +
-      "refusing to save the previous blit as this frame (raise --wait on a loaded box)");
+  // TWO presents, not one. TLX's soft present is an async GPU readback
+  // (readRenderTargetPixelsAsync): one already in flight when the camera moved
+  // resolves with the PREVIOUS framing, and a single wait saved it as this job
+  // — consecutive free-cam shots on one track came out identical (2026-10-14:
+  // monaco orbit = trackside, spa cinematic = dusk orbit, singapore orbit =
+  // cinematic, and the dusk light landing one shot late). The second present
+  // is a readback started after the move.
+  for (let i = 0; i < 2; i++) {
+    if (await awaitPresentedFrame(page, presentMs) === false) {
+      throw new Error(`no new frame presented within ${presentMs / 1000} s of the camera move — ` +
+        "refusing to save the previous blit as this frame (raise --wait on a loaded box)");
+    }
+  }
+  // --hud: the HUD is DOM over the canvas, so a canvas-clipped capture can
+  // never show it — take the page instead (the soft canvas is in the page).
+  if (job.showHud) {
+    const buf = await page.screenshot({
+      path: job.out, timeout: 60000, type: job.type === "jpeg" ? "jpeg" : "png",
+      ...(job.type === "jpeg" ? { quality: job.quality ?? 85 } : {}),
+    });
+    console.log(`wrote ${job.out} (${(buf.length / 1024).toFixed(1)} KB, ${job.type}, page with HUD)`);
+    return;
   }
   const shotOpts = {
     path: job.out,

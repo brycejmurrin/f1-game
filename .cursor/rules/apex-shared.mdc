@@ -25,6 +25,13 @@ alwaysApply: true
   (CLI daemon, not attached). `tools/mcp/tinyfish-mcp.sh` is CLI-only and
   egress-blocked in-container. Map: `docs/AGENT-SURFACE.md`. The browser rules
   (one at a time, never inside a subagent) are AGENTS.md §Verification.
+- **Cursor Cloud (moved from AGENTS.md):** launch with model id `default` only. Cloud MCP is always
+  `cursor` / `cursor-cloud` / `cursor-subscriptions`, plus `apex-tools` / `chrome-devtools` /
+  `playwright-official` after Bootstrap §3; if only the three `cursor*` appear, use the CLI fallbacks
+  above, invent no namespace, and re-Save when `environment-info` shows nameless bare-`bash` allowlist
+  rows. After every PR push: `subscribe_github_ci` + `subscribe_github_pr` + `subscribe_timer`. Serve
+  locally for browser checks (the VM rarely reaches github.io). using-superpowers / brainstorming
+  hard-gates are optional references; AGENTS.md and the skills win.
 - **Token hygiene:** one skill per task; prefer `__apex` / `verify-track` /
   `test:tooling-fast` before screenshots or browser groups. Path-scoped rules
   under `.cursor/rules/` (e.g. `render-wgx.mdc`, `render-tlx.mdc`) attach by

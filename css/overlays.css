@@ -886,19 +886,24 @@ body:has(dialog:modal) #update-chip { display: none; }
 }
 
 
-/* Scale up HUD readouts on large screens so they're legible at arm's length. */
-@media (min-width: 1200px) {
+/* Scale up HUD readouts on large screens so they're legible at arm's length.
+   The second clause is a 10–11" tablet in landscape (iPad 1180x820, 1194x834):
+   a screen read at arm's length that the 1200px cut handed the phone cluster
+   (28px speed, 48px gear, 128px map). The height term keeps a desktop browser
+   dragged to 1100x600 on the phone tier it fits. */
+@media (min-width: 1200px), ((min-width: 1024px) and (min-height: 740px)) {
   .hud-box { padding: 5px 16px; }
-  .hud-value { font-size: 23px; }
+  .hud-value { font-size: calc(23px * var(--hud-text-boost, 1)); }
   .hud-label { font-size: var(--fs-micro); }
   /* minimap is 160px here — gaps dock beside it (10+160+8), top-aligned with it
-     by the base rule. */
-  .hud-gaps { left: calc(178px + var(--sal) / var(--hud-z)); }
-  /* `.hud-top` is taller here (.hud-box padding 5px 16px, .hud-value 23px): its
-     bottom sits at 68 in the widget's own zoomed units against 58 on the base
-     ladder, so the dropped state clears by the same 4px. */
-  :root[data-gap-drop] .hud-gaps { top: calc(72px + var(--sat) / var(--hud-z)); }
-  #hud-speed { font-size: 42px; }
+     by the base rule. MAP OFF keeps the map's corner (css/hud.css): this layer
+     wins the cascade whatever the specificity, so the override has to step
+     aside itself or the strip floats where the map was. */
+  body:not(.hud-hide-map) .hud-gaps { left: calc(178px + var(--sal) / var(--hud-z)); }
+  /* The dropped state reads the MEASURED --hud-top-h (css/hud.css), which is
+     taller here on its own; a 72px literal in this layer beat that measure and
+     the broadcast tower's. */
+  #hud-speed { font-size: calc(42px * var(--hud-text-boost, 1)); }
   #hud-gear  { font-size: 68px; }
   #hud-tach  { width: 150px; height: 18px; }
   #hud-energy { width: 150px; height: 16px; }
@@ -935,6 +940,23 @@ body:has(dialog:modal) #update-chip { display: none; }
    peek reveal below out-ranks these on purpose, for exactly as long as the
    peek lasts — js/ui/screen-looks.js flushes the box away when it ends. */
 #pausemenu:not([open]) { display: none; }
+/* Short phone (≤400px tall): RACE TOOLS as a 2-col grid with no empty cell.
+   experience.css's #pm-quick-doors is 3-col in this same overlays layer; the
+   #pausemenu id prefix wins on specificity. An odd leftover (REWIND & RETRY
+   alone, or RECOVER when REPLAY is absent) spans the row so the tray never
+   shows a hole. Floors stay at --tap (HUD survey bc-b3058e3a). */
+@media (max-height: 400px) {
+  #pausemenu #pm-quick-doors {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  #pausemenu #pm-quick-doors > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  #pausemenu #pm-quick-doors button,
+  #pausemenu #pm-checkpoint summary {
+    min-height: var(--tap);
+  }
+}
 #race-settings:not([open]) { display: none; }
 #standings:not([open]) { display: none; }
 #datahub:not([open]) { display: none; }
@@ -1212,14 +1234,24 @@ body:has(dialog:modal) #update-chip { display: none; }
 .res-row.you:not(.p1):not(.p2):not(.p3) { border-left: 3px solid var(--you); }
 .res-pos { width: 26px; text-align: right; color: var(--dim); font-family: var(--font-hud); font-variant-numeric: tabular-nums; }
 .res-swatch { width: 4px; height: 20px; border-radius: var(--r-xs); flex-shrink: 0; }
-/* min-width: 0 + ellipsis: a 22-char single-token MY TEAM name (the maxlength
-   the customize form allows) cannot line-break, and a flex item's default
-   min-width: auto refuses to shrink below it — pushing the fixed 62px points
-   column past the sheet edge, where .sheet's overflow: hidden clipped it
-   silently. The compact quali/history rules already wrap; this is the base. */
-.res-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* min-width: 0 + two-line clamp: a 22-char single-token MY TEAM name (the
+   maxlength the customize form allows) cannot line-break, and a flex item's
+   default min-width: auto refuses to shrink below it — pushing the fixed 62px
+   points column past the sheet edge, where .sheet's overflow: hidden clipped
+   it silently. Prefer wrap/clamp over a single-line ellipsis; drop .res-pts
+   on narrow widths first (below) so the name keeps the column. */
+.res-name {
+  flex: 1; min-width: 0; overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  white-space: normal; overflow-wrap: anywhere;
+}
 .res-name > .q-time { display: block; font-size: var(--fs-micro); }
 .res-pts { width: 62px; text-align: right; white-space: nowrap; font-family: var(--font-hud); font-variant-numeric: tabular-nums; }
+/* Narrow phone portrait (390/360): the points cell stole ~62px and cut
+   `.res-name` to "RUS  George…" — hide classification pts before the name
+   needs an ellipsis. Sibling of `.res-pos` only, so TT best-lap `.res-pts`
+   (no position cell) keeps its clock. */
+body[data-width="narrow"] #results-table > .res-row > .res-pos ~ .res-pts { display: none; }
 /* TYRE STINT STRIP (js/physics/tyre-model.js stints(), drawn by results-sheet.js
    and only while TYRE WEAR is on). A PROPORTIONAL bar, not a row of chips: each
    segment's width is its share of the car's laps, so a glance down the column

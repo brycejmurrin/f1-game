@@ -20,10 +20,14 @@ const DockLayout = (function () {
     if (!isFinite(v)) return 0;
     return v < lo ? lo : v > hi ? hi : v;
   }
+  // Toward the centre and up only: +x is inboard from the dock's home edge and
+  // +y is up from the bottom (apply), so a negative share parks pedals past
+  // the screen edge or under the home indicator, and the store keeps it until
+  // RESET. The home already sits 12px off each edge.
   function clampXY(xy) {
     return {
-      x: clamp01(xy && xy.x, -MAX, MAX),
-      y: clamp01(xy && xy.y, -MAX, MAX),
+      x: clamp01(xy && xy.x, 0, MAX),
+      y: clamp01(xy && xy.y, 0, MAX),
     };
   }
   function emptyScheme() { return { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } }; }
@@ -98,6 +102,9 @@ const DockLayout = (function () {
       const ty = (-p.y * pad.h / z).toFixed(1);
       el.style.transform = "translate(" + tx + "px, " + ty + "px)";
     }
+    // The fit (dock cap, --dock-r-w, the radio lane) budgets from the docks'
+    // rects; without this it kept the pre-drag boxes for up to 3 s.
+    if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
   }
 
   function create(G) {

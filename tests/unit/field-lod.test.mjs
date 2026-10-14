@@ -1,9 +1,10 @@
 /* field-lod — the rival-car distance LOD (js/car/field-lod.js) and the three
  * consumers that take its cuts on every backend:
- *   - the TABLE: which parts a rival draws at a camera distance (rotating wheels
- *     only past 50 m, MOVING flaps within 80 m, exhaust flame within 60 m, the
- *     whole-car mesh as one draw past 120 m), the player never reduced, and
- *     apex26.fieldLod = 0 returning every legacy gate;
+ *   - the TABLE: which parts a rival draws at a camera distance (lite past 50 m
+ *     keeps fixed disc/caliper + compound stripe, drops spin discs; far past
+ *     120 m is rotating wheels only; MOVING flaps within 80 m; exhaust flame
+ *     within 60 m), the player never reduced, and apex26.fieldLod = 0 returning
+ *     every legacy gate;
  *   - the FLAP SET: past 80 m (and at rest anywhere) the REAL game.js
  *     drawAeroFlaps draws the whole moveable set as ONE static CarMesh mesh at
  *     the nearer rest pose — the same surfaces the per-element path draws —
@@ -48,19 +49,37 @@ test("the table: a rival's parts by camera distance; the player is never reduced
     [0, true, true, true, true, true, true, true, true], "30 m: everything (the near look unchanged)");
   const p55 = L.parts(at(55), false);
   assert.deepEqual([p55.tier, p55.wheels, p55.fixedWheels, p55.compound, p55.spinDisc, p55.flaps, p55.flame, p55.castsShadow],
-    [1, true, false, false, false, true, true, false], "55 m: 4 rotating wheels, no extras, no map caster");
+    [1, true, true, true, false, true, true, false],
+    "55 m lite: fixed disc/caliper + compound stay, spin disc off, no map caster");
   const p70 = L.parts(at(70), false);
   assert.deepEqual([p70.flaps, p70.flame], [true, false], "70 m: flaps yes, flame no");
   const p100 = L.parts(at(100), false);
-  assert.deepEqual([p100.tier, p100.body, p100.flaps, p100.flapSet], [1, true, false, true],
-    "100 m: body + decal + wheels, the flap set STATIC (never none)");
+  assert.deepEqual([p100.tier, p100.body, p100.flaps, p100.flapSet, p100.fixedWheels, p100.compound, p100.spinDisc],
+    [1, true, false, true, true, true, false],
+    "100 m: body + decal + wheels + fixed/compound, flap set STATIC, no spin");
   const far = L.parts(at(130), false);
-  assert.deepEqual([far.tier, far.body, far.decal, far.wheels, far.fixedWheels], [2, true, false, true, false],
-    "130 m: the body and its 4 rotating wheels, no decal");
+  assert.deepEqual([far.tier, far.body, far.decal, far.wheels, far.fixedWheels, far.compound],
+    [2, true, false, true, false, false],
+    "130 m: the body and its 4 rotating wheels, no decal, no fixed/compound");
   const me = L.parts(at(400), true);
   assert.deepEqual([me.tier, me.fixedWheels, me.compound, me.flaps, me.flame, me.castsShadow], [0, true, true, true, true, true]);
   assert.equal(L.d2([3, 4, 0], [0, 0, 0], false), 25);
   assert.equal(L.d2([300, 0, 0], [0, 0, 0], true), 0, "the player is always at distance 0");
+});
+
+test("lite LOD keeps the fixed wheel layer (open-rim fill past WHEEL_EXTRAS_M)", () => {
+  const { FieldLod: L } = loadLod();
+  for (const m of [55, 60, 80, 100, 119]) {
+    const p = L.parts(at(m), false);
+    assert.equal(p.tier, 1, m + " m is lite");
+    assert.equal(p.fixedWheels, true, m + " m: fixed disc/caliper stays");
+    assert.equal(p.compound, true, m + " m: compound stripe stays");
+    assert.equal(p.spinDisc, false, m + " m: spin disc still dropped");
+  }
+  const far = L.parts(at(130), false);
+  assert.equal(far.tier, 2);
+  assert.equal(far.fixedWheels, false, "far tier drops fixed again");
+  assert.equal(far.compound, false, "far tier drops compound again");
 });
 
 test("apex26.fieldLod = 0 returns every legacy gate; unset or 1 is on", () => {
@@ -151,9 +170,12 @@ test("game.js: under FieldLod the caster is pushed AFTER the side-frustum test, 
   const cd = read("js/car/car-draw.js");
   // BARE (the mirror / PiP, drawMirrorCar) is lite at any distance.
   assert.match(cd, /const lite = bare \|\| \(!c\.isPlayer && \(haveTier \? lodT >= 1 : FieldLod\.wheelsLite\(camD2, G\.lens && G\.lens\.fovY\)\)\)/);
-  // lite: the rotating wheel draw, then only the far brake flare (a Particles
+  // Far / bare drop fixed+compound; lite (tier 1) keeps them (open-rim fill).
+  assert.match(cd, /const dropFixed = bare \|\| \(!c\.isPlayer && haveTier && lodT >= 2\);/);
+  // dropFixed: the rotating wheel draw, then only the far brake flare (a Particles
   // flare outside the pool, 40-240 m) before the wheel's other layers are skipped.
-  assert.match(cd, /if \(lite\) \{[\s\S]{0,600}?Particles\.flare\([\s\S]{0,200}?continue;/, "lite: the rotating wheel, the far flare, then nothing else for that wheel");
+  assert.match(cd, /if \(dropFixed\) \{[\s\S]{0,600}?Particles\.flare\([\s\S]{0,200}?continue;/,
+    "far/bare: the rotating wheel, the far flare, then nothing else for that wheel");
 });
 
 // ── the lens and the hysteresis (2026-10-04) ───────────────────────────────
