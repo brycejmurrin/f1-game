@@ -807,3 +807,23 @@ test("XrBoot.mountUi: no navigator.xr fetches nothing; an armed VR mode or a pen
   assert.equal((await mountWith({ xr, ls: { "apex26.xrEnterPending": "1" } })).length, 1);
   assert.equal(probed, 0);
 });
+
+
+test("XrInput prefers only a usable left stick and otherwise accepts the right controller", () => {
+  const { XrInput } = bootXr();
+  const right = { handedness: "right", targetRayMode: "tracked-pointer", gamepad: { axes: [0, 0, 0.8, 0], buttons: [] } };
+  const expected = XrInput.mapFrame([right]).sample.roll;
+  assert.ok(expected > 0.7);
+  for (const left of [
+    { handedness: "left" },
+    { handedness: "left", gamepad: { axes: [], buttons: [] } },
+    { handedness: "left", gamepad: { axes: [0, 0, NaN], buttons: [] } },
+    { handedness: "left", targetRayMode: "gaze", gamepad: { axes: [0, 0, -0.8], buttons: [] } },
+  ]) {
+    for (const sources of [[left, right], [right, left]]) assert.equal(XrInput.mapFrame(sources).sample.roll, expected);
+  }
+  const left = { handedness: "left", gamepad: { axes: [0, 0, -0.8], buttons: [] } };
+  for (const sources of [[left, right], [right, left]]) assert.ok(XrInput.mapFrame(sources).sample.roll < -0.7);
+  left.gamepad.axes[2] = 0;
+  assert.equal(XrInput.mapFrame([right, left]).sample.roll, 0, "a centered usable left stick retains preference");
+});

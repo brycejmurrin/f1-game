@@ -42,13 +42,14 @@ const ResultsCam = (function () {
 
   /** Pure: pick highlight windows from ReplayBuf-shaped tags inside [t0,t1]. */
   function highlightsReel(tags, t0, t1, maxS) {
+    if (!(t1 > t0) || !(maxS > 0)) return [];
     const list = (tags || []).filter((g) => g && g.t >= t0 && g.t <= t1);
     const out = [];
     let budget = maxS;
     for (let i = list.length - 1; i >= 0 && budget > 0; i--) {
       const g = list[i];
-      const dur = Math.min(HIGHLIGHT_CLIP_S, budget);
-      const start = Math.max(t0, g.t - dur * 0.55);
+      const dur = Math.min(HIGHLIGHT_CLIP_S, budget, t1 - t0);
+      const start = Math.min(Math.max(t0, g.t - dur * 0.55), t1 - dur);
       out.push({ kind: g.kind || "tag", t0: start, t1: start + dur, car: g.car | 0 });
       budget -= dur;
     }
@@ -148,8 +149,8 @@ const ResultsCam = (function () {
       const w = buf.window();
       const tags = (buf.tags && buf.tags()) || [];
       reel = highlightsReel(tags, w.t0, w.t1, HIGHLIGHT_MAX_S);
-      if (!reel.length && w.frames > 2) {
-        const dur = Math.min(HIGHLIGHT_CLIP_S, Math.max(1, w.t1 - w.t0));
+      if (!reel.length && w.frames > 2 && w.t1 > w.t0) {
+        const dur = Math.min(HIGHLIGHT_CLIP_S, w.t1 - w.t0);
         reel = [{ kind: "window", t0: w.t1 - dur, t1: w.t1, car: -1 }];   // no tagged car: film the winner
       }
       if (!reel.length || !buf.beginScrub(false)) return false;

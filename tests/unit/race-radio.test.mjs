@@ -1093,3 +1093,13 @@ test("observe ranks the field at 10 Hz, not every physics step", () => {
   }
   assert.ok(sorts.n > 0 && sorts.n <= Math.ceil(60 / 6), `ranked ${sorts.n} times in 60 steps`);
 });
+
+ test("WATCH rewind rebases cooldowns so later distinct commentary can speak", () => {
+  const r = watch(); r.G.raceT = 600; r.step(.05);
+  r.radio.replayEvent({ kind: "fastest", dur: 92 }, r.cars[0]); r.step(.05, 100);
+  const before = comm(r).length;
+  assert.ok(before > 0);
+  r.G.raceT = 60; r.step(.05); r.step(.05, 900);
+  r.radio.replayEvent({ kind: "fastest", dur: 91 }, r.cars[1]); r.step(.05, 200);
+  assert.ok(comm(r).slice(before).some(s => /1:31/.test(s.msg)), JSON.stringify(r.said));
+});

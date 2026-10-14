@@ -73,17 +73,20 @@ const InputGhost = (function () {
   function packFlags(inp) {
     let f = 0;
     if (!inp) return f;
-    if (inp.throttle || (inp.throttleLevel != null && inp.throttleLevel > 0.5)) f |= 1;
-    if (inp.brake || (inp.brakeLevel != null && inp.brakeLevel > 0.5)) f |= 2;
+    if (inp.throttle != null ? inp.throttle : (inp.throttleLevel != null && inp.throttleLevel > 0)) f |= 1;
+    if (inp.brake != null ? inp.brake : (inp.brakeLevel != null && inp.brakeLevel > 0)) f |= 2;
     return f;
   }
-  function decodeStep(steerQ, flags) {
+  function quantizePedal(level, enabled) {
+    return Math.round(clamp(Number.isFinite(level) ? level : (enabled ? 1 : 0), 0, 1) * 255);
+  }
+  function decodeStep(steerQ, flags, throttleQ, brakeQ) {
     return {
       steer: (steerQ | 0) / 127,
       throttle: !!(flags & 1),
       brake: !!(flags & 2),
-      throttleLevel: (flags & 1) ? 1 : 0,
-      brakeLevel: (flags & 2) ? 1 : 0,
+      throttleLevel: throttleQ == null ? ((flags & 1) ? 1 : 0) : throttleQ / 255,
+      brakeLevel: brakeQ == null ? ((flags & 2) ? 1 : 0) : brakeQ / 255,
     };
   }
 
@@ -93,6 +96,9 @@ const InputGhost = (function () {
     if (!(g.dt > 0) || !Number.isFinite(g.dt)) return false;
     if (typeof g.physRev !== "string" || !g.physRev) return false;
     if (!Number.isFinite(g.build)) return false;
+    if (g.v != null && g.v !== 1 && g.v !== 2) return false;
+    if (g.v === 2 && ![g.throttle, g.brake].every(a => Array.isArray(a)
+      && a.length === g.steer?.length && a.every(v => Number.isInteger(v) && v >= 0 && v <= 255))) return false;
     const st = g.steer, fl = g.flags;
     if (!Array.isArray(st) || !Array.isArray(fl) || st.length < MIN_STEPS || st.length !== fl.length)
       return false;
@@ -246,7 +252,7 @@ const InputGhost = (function () {
       build: Number.isFinite(o.build) ? (o.build >>> 0) : currentBuild(),
       dt: o.dt > 0 ? +o.dt : currentDt(),
     };
-    rec = { steer: [], flags: [], n: 0 };
+    rec = { steer: [], flags: [], throttle: [], brake: [], n: 0 };
     replayStep = 0;
   }
 
@@ -254,7 +260,10 @@ const InputGhost = (function () {
     if (!rec) return;
     if (rec.n >= MAX_LAP_S / (meta && meta.dt > 0 ? meta.dt : DEFAULT_DT)) { rec = null; return; }
     rec.steer.push(quantizeSteer(inp && inp.steer));
-    rec.flags.push(packFlags(inp));
+    const flags = packFlags(inp);
+    rec.flags.push(flags);
+    rec.throttle.push(quantizePedal(inp && inp.throttleLevel, flags & 1));
+    rec.brake.push(quantizePedal(inp && inp.brakeLevel, flags & 2));
     rec.n++;
   }
 
@@ -269,7 +278,7 @@ const InputGhost = (function () {
     // beat: it cannot be replayed, and it would otherwise block every later lap.
     if (best && compatible(best) && lapTime >= best.time) return false;
     const snap = {
-      v: 1,
+      v: 2,
       kind: "input-ghost",
       track: trackId,
       time: round(lapTime, 3),
@@ -279,6 +288,7 @@ const InputGhost = (function () {
       dt: m.dt,
       steer: done.steer,
       flags: done.flags,
+      throttle: done.throttle, brake: done.brake,
     };
     if (context != null) snap.context = context;
     if (extraMeta && typeof extraMeta === "object") snap.meta = Object.assign({}, extraMeta);
@@ -295,6 +305,8 @@ const InputGhost = (function () {
       v: best.v, kind: best.kind, track: best.track, time: best.time,
       seed: best.seed, physRev: best.physRev, build: best.build, dt: best.dt,
       steer: best.steer.slice(), flags: best.flags.slice(),
+      throttle: best.v === 2 ? best.throttle.slice() : undefined,
+      brake: best.v === 2 ? best.brake.slice() : undefined,
       context: best.context, meta: best.meta ? Object.assign({}, best.meta) : undefined,
     };
   }
@@ -306,7 +318,9 @@ const InputGhost = (function () {
     const n = best.steer.length;
     if (n === 0) return null;
     const idx = i < 0 ? 0 : (i >= n ? n - 1 : i | 0);
-    return decodeStep(best.steer[idx], best.flags[idx]);
+    return decodeStep(best.steer[idx], best.flags[idx],
+      best.v === 2 ? best.throttle[idx] : undefined,
+      best.v === 2 ? best.brake[idx] : undefined);
   }
 
   /** Begin driving the stored ghost from step 0. Returns false if incompatible. */

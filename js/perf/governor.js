@@ -391,11 +391,15 @@ function init(gfx) {
   if (gfx && gfx.isMobile) {
     const st = GameStore.store;   // raw lane: bare strings, read live, never throws
     const build = String((typeof window !== "undefined" && window.__APEX_BUILD) || 0);
+    if (st.raw(SENT_ACTIVE) === "1" && st.raw(SENT_TICKED) === "1") {
+      st.rawSet(SENT_SEEN, String((parseInt(st.raw(SENT_SEEN), 10) || 0) + 1));
+      st.rawSet(SENT_SEEN_BUILD, st.raw(SENT_BUILD) || "?");
+    }
     if (st.raw(SENT_BUILD) !== build) {
       // New code, clean slate for the LADDER: a strike is evidence about code
       // that no longer exists, so the safe-mode floor must not outlive it.
       //
-      // But the EVIDENCE is recorded first. SENT_ACTIVE is the only trace a
+      // The ticked-session evidence was recorded first. SENT_ACTIVE is the trace a
       // jetsam kill leaves, and a busy day ships a fresh build every ~8 minutes
       // (the shell version guard pushes returning players straight onto it), so
       // dropping it here wipes the record between a crash and the next launch
@@ -404,10 +408,6 @@ function init(gfx) {
       // it feeds no tier, no floor, nothing the player can feel — so it can
       // survive a deploy without the safe-mode one-way door the comment on
       // SENT_BUILD warns about.
-      if (st.raw(SENT_ACTIVE) === "1") {
-        st.rawSet(SENT_SEEN, String((parseInt(st.raw(SENT_SEEN), 10) || 0) + 1));
-        st.rawSet(SENT_SEEN_BUILD, st.raw(SENT_BUILD) || "?");
-      }
       st.rawSet(SENT_BUILD, build);
       st.rawSet(SENT_STRIKES, "0");
       st.rawDel(SENT_ACTIVE);

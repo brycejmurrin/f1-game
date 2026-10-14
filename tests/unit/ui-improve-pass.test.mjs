@@ -1626,7 +1626,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   // SettingsNav BEHAVIOUR: always land on the door index. A stored
   // settingsCategory must not reopen MORE / DISPLAY.
   const h = bootSettingsNav();
-  assert.deepEqual(Object.keys(h.nav).sort(), ["back", "show", "showCurrent"]);
+  assert.deepEqual(Object.keys(h.nav).sort(), ["back", "invalidate", "show", "showCurrent"]);
   assert.equal(h.index().hidden, false, "create() shows the door index");
   assert.equal(h.panel("controls").hidden, true);
   assert.equal(h.panel("display").hidden, true);
@@ -2239,9 +2239,16 @@ test("tool doors and lone foot actions do not stretch into banners", () => {
 function bootCopyValues(opts = {}) {
   const dom = makeDom();
   const order = [];
+  const here = opts.here || "monza|dusk|dry";
+  const store = opts.store || { "monza|dusk|dry": { exposure: 1.2 }, "spa|night|wet": { fogDensityMul: 0.5, bloom: 0.3 }, "*": {} };
   const sb = uiSandbox(dom, {
     GameAudio: { uiSelect() {}, uiTick() {} }, PerfGov: { tier: () => 0 },
     LightTune: { TUNE_DEFS: [], LT: {} },   // tuner.js destructures the registry at create()
+    LightStore: { tuned() {
+      const sunSlot = here.replace(/\|[^|]+$/, "|dry"), sunIds = ["sunElev", "sunAzim"];
+      const own = Object.keys(store[here] || {}).filter((id) => sunSlot === here || !sunIds.includes(id));
+      return own.length + (sunSlot === here ? 0 : sunIds.filter((id) => Object.hasOwn(store[sunSlot] || {}, id)).length);
+    } },
     navigator: { clipboard: { writeText: () => { order.push("clipboard"); return opts.clipboardRejects ? Promise.reject(new Error("no")) : Promise.resolve(); } } },
   });
   sb.document.execCommand = (c) => { order.push("execCommand:" + c); return !!opts.execOk; };
@@ -2250,9 +2257,9 @@ function bootCopyValues(opts = {}) {
   vm.runInContext(src("js/lighting/tuner-panel.js"), ctx, { filename: "js/lighting/tuner-panel.js" });
   const G = {
     $: (id) => dom.byId(id), gfx: {}, els: { pmsettings: {} },
-    ltKey: () => opts.here || "monza|dusk|dry", setLightTune() {}, persistLightTune() {}, applyLightTune() {},
+    ltKey: () => here, setLightTune() {}, persistLightTune() {}, applyLightTune() {},
     setTimeOfDay: () => "dusk", weather: () => "dry", exitPhotoMode() {},
-    _ltStore: opts.store || { "monza|dusk|dry": { exposure: 1.2 }, "spa|night|wet": { fogDensityMul: 0.5, bloom: 0.3 }, "*": {} },
+    _ltStore: store,
     track: { def: { name: "Monza" } },
   };
   vm.runInContext("TunerPanel", ctx).create(G);

@@ -23,6 +23,7 @@ import { failedSpecsFrom, unattributedFailuresFrom } from "../../tools/ci/junit-
 import { recall } from "../../tools/ci/select-recall.mjs";
 import { MEASURED, capacity, declaredTests } from "../../tools/ci/select-budget.mjs";
 import fs from "node:fs";
+import os from "node:os";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1545,4 +1546,26 @@ test("maxDeclaredTimeout folds `BOOT_MS + 480_000` and bills an unresolvable arg
     assert.equal(maxDeclaredTimeout(rel("b.spec.js")), 3 * SELECTED_GATE.perTestTimeoutSec * 1000, "unknown is over the cap, never free");
     assert.equal(maxDeclaredTimeout(rel("c.spec.js")), 60_001);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("helper imports and reexports propagate transitively with cycles", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "select-import-"));
+  const changed = ["tests", "helpers", "changed.js"].join("/");
+  const middle = ["tests", "helpers", "middle.js"].join("/");
+  const transitive = ["tests", "specs", "transitive.spec.js"].join("/");
+  const unrelated = ["tests", "specs", "unrelated.spec.js"].join("/");
+  try {
+    fs.mkdirSync(path.join(dir, "tests/helpers"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "tests/specs"));
+    for (const [file, src] of Object.entries({
+      [changed]: "import './middle.js';",
+      [middle]: "export * from './changed.js';",
+      [transitive]: "import '../helpers/middle.js';",
+      [unrelated]: "export const x = 1;",
+    })) fs.writeFileSync(path.join(dir, file), src);
+    assert.deepEqual(specsImporting([changed], dir), [transitive]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  const consumers = specsImporting(["tests/helpers/await-track-build.js"]);
+  assert.ok(consumers.includes("tests/specs/props-over-road.spec.js"));
+  assert.ok(consumers.length > 5, "fixtures reexport reaches indirect consumers");
 });

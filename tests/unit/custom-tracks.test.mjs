@@ -543,3 +543,18 @@ test("a TRACK DESIGNER retry after a partial load failure injects only the files
   assert.deepEqual(redeclared, [], "no file was evaluated twice (no 'already declared' overlay)");
   assert.equal(evaluated.size, LAZY_EDITOR.length, "every file ran exactly once in the end");
 });
+
+test("overlapping share-link decodes only open and strip the latest fragment", async () => {
+  const b = boot(); const pending = new Map(), opened = [], stripped = [];
+  b.ctx.ApexRoster = { LAZY_EDITOR: ["editor"], LAZY_EDITOR_EDGES: [] };
+  b.ctx.TrackDesigner = { init() {}, open: (opts) => opened.push(opts.design.name) };
+  b.ctx.TrackCodec = { fromHash: (hash) => hash.slice(7), decode: (code) => new Promise((resolve) => pending.set(code, resolve)), withoutTrack: () => "" };
+  b.ctx.location = { hash: "", pathname: "/", search: "" };
+  b.ctx.history = { replaceState: (...args) => stripped.push(args) };
+  b.C.create({}, { load: async () => true });
+  b.ctx.location.hash = "#track=A"; const first = b.C.consumeTrackHash(); await Promise.resolve(); await Promise.resolve();
+  b.ctx.location.hash = "#track=B"; const second = b.C.consumeTrackHash(); await Promise.resolve(); await Promise.resolve();
+  pending.get("B")({ ok: true, design: { name: "B" } }); assert.equal(await second, true);
+  pending.get("A")({ ok: true, design: { name: "A" } }); assert.equal(await first, false);
+  assert.deepEqual(opened, ["B"]); assert.equal(stripped.length, 1);
+});

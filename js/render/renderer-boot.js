@@ -230,7 +230,12 @@ try {
 if (!gfx) {
   // Load GLX only when selected or needed after TLX/WGX refuses. A missing
   // script must not trigger the claim-failure reload loop while offline.
-  if (typeof GLX.init !== "function") await loadBackendScripts(BACKEND_FILES.webgl2);
+  if (typeof GLX.init !== "function") {
+    try {
+      const fetched = await withTimeout(loadBackendScripts(BACKEND_FILES.webgl2), BOOT_STEP_MS, "GLX script fetch");
+      if (fetched === TIMED_OUT) { showGraphicsUnavailable(); return null; }
+    } catch (_) { showGraphicsUnavailable(); return null; }
+  }
   if (typeof GLX.init !== "function") { showGraphicsUnavailable(); return null; }
   if (!GLX.init(canvas)) {
     // A failed backend opt-in (WGX or TLX) may have already claimed the

@@ -626,6 +626,7 @@ const DataHub = (function () {
       if (!sesSel.value) return;
       const m = sesIndex[sesSel.value];
       if (!m) return;
+      cancelRealRace();
       sel.sessionKey = m.sessionKey; sel.meta = m; sel.pinned = true;
       onPick(m);
     });

@@ -393,24 +393,25 @@ test("in-race chrome and the blocker are anchored inside the safe area", () => {
 /* ── the tilt prompt and the input.js fixes it must keep ─────────────────── */
 
 const src = (p) => read(p).replace(/^const\b/gm, "var");
-function bootInput({ DeviceOrientationEvent, pads, console: con = console }) {
+function bootInput({ DeviceOrientationEvent, pads, console: con = console, debug = false }) {
+  const clock = { t: 0 }, intervals = [], nodes = [];
   const listeners = new Map();
   const on = (type, fn) => { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(fn); };
   const off = (type, fn) => { const l = listeners.get(type); if (!l) return; const i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); };
   const sb = {
     Math, console: con, Object, Array, Number, String, JSON, Map, Set, Promise, Date, Error, parseFloat, parseInt, isFinite,
-    performance: { now: () => 0 },
+    performance: { now: () => clock.t },
     document: {
       addEventListener() {}, removeEventListener() {}, getElementById: () => null, activeElement: null, readyState: "complete",
-      body: { classList: { contains: () => false }, appendChild() {} }, createElement: () => ({ style: {} }),
+      body: { classList: { contains: () => false }, appendChild(node) { nodes.push(node); } }, createElement: () => ({ style: {} }),
     },
     navigator: { getGamepads: () => pads(), maxTouchPoints: 5, userAgent: "node" },
     addEventListener: on, removeEventListener: off,
     matchMedia: () => ({ matches: true, addEventListener() {} }),
-    setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, requestAnimationFrame: () => 0,
+    setTimeout: () => 0, clearTimeout() {}, setInterval: fn => { intervals.push(fn); return intervals.length; }, requestAnimationFrame: () => 0,
     screen: { orientation: { type: "landscape-primary", angle: 0, addEventListener() {} } },
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    location: { search: "" },
+    location: { search: debug ? "?inputdebug=1" : "" },
   };
   if (DeviceOrientationEvent) sb.DeviceOrientationEvent = DeviceOrientationEvent;
   sb.window = sb;
@@ -420,7 +421,7 @@ function bootInput({ DeviceOrientationEvent, pads, console: con = console }) {
   Input.init({ addEventListener() {} }, {});
   const count = (type) => (listeners.get(type) || []).length;
   const fire = (type, e) => { for (const fn of [...(listeners.get(type) || [])]) fn(e); };
-  return { Input, count, fire };
+  return { Input, count, fire, clock, intervals, nodes };
 }
 
 test("requestGyro: a grant clears an earlier refusal, and leaving tilt detaches the sensor", async () => {
@@ -543,4 +544,49 @@ test("HUD: OFF on touch hides the readouts but keeps the driving controls (hunt3
   }
   assert.deepEqual(offending, [], "no non-.desktop body.hud-hidden rule hides the touch dock, its buttons or PAUSE");
   assert.ok(readoutsHidden, "the readouts still go: every #hud child but the dock");
+});
+
+
+test("final pad disconnect neutralizes free look immediately and through recovery probes", () => {
+  const pad = { index: 0, connected: true, mapping: "standard", id: "pad", axes: [0, 0, .8, -.7], buttons: [] };
+  let live = [pad]; const h = bootInput({ pads: () => live });
+  h.fire("gamepadconnected", { gamepad: pad }); h.Input.poll();
+  assert.ok(Math.abs(h.Input.lookStick().x) > .5);
+  live = []; h.fire("gamepaddisconnected", { gamepad: pad });
+  assert.equal(h.Input.lookStick().x, 0); assert.equal(h.Input.lookStick().y, 0);
+  for (let i = 0; i < 120; i++) h.Input.poll();
+  assert.equal(h.Input.lookStick().x, 0); assert.equal(h.Input.lookStick().y, 0);
+});
+
+
+test("opt-in input debug readout names live and stale remote pedal ownership", () => {
+  const h = bootInput({ pads: () => [], debug: true });
+  h.clock.t = 1; h.Input.remoteSample({ steer: .6, thr: .8, brk: .4 });
+  const overlay = h.nodes.find(node => node.id === "input-debug"); assert.ok(overlay);
+  for (const fn of h.intervals) fn();
+  assert.match(overlay.textContent, /remote:0.8/); assert.match(overlay.textContent, /remote:0.4/);
+  assert.match(overlay.textContent, /remote:live age:0ms steer:remote/);
+  h.clock.t = 10001; for (const fn of h.intervals) fn();
+  assert.match(overlay.textContent, /remote:stale age:10000ms steer:local/);
+  assert.doesNotMatch(overlay.textContent, /remote:0.[48]/);
+});
+
+
+test("an empty pad poll clears free look without requiring a disconnect event", () => {
+  const pad = { index: 0, connected: true, mapping: "standard", id: "pad", axes: [0, 0, .8, 0], buttons: [] };
+  let live = [pad]; const h = bootInput({ pads: () => live });
+  h.fire("gamepadconnected", { gamepad: pad }); h.Input.poll();
+  assert.ok(h.Input.lookStick().x > .5); live = []; h.Input.poll();
+  assert.equal(h.Input.lookStick().x, 0);
+});
+
+test("a spare pad disconnect preserves held action edge baselines", () => {
+  const pad = { index: 0, connected: true, mapping: "standard", id: "active", axes: [0, 0, 0, 0],
+    buttons: Array.from({ length: 16 }, (_, i) => ({ pressed: i === 8, value: i === 8 ? 1 : 0 })) };
+  const spare = { index: 1, connected: true, mapping: "standard", id: "spare", axes: [0, 0, 0, 0], buttons: [] };
+  let live = [pad, spare]; const h = bootInput({ pads: () => live });
+  h.fire("gamepadconnected", { gamepad: pad }); h.Input.poll();
+  assert.equal(h.Input.consumeCameraCycle(), true);
+  live = [pad]; h.fire("gamepaddisconnected", { gamepad: spare }); h.Input.poll();
+  assert.equal(h.Input.consumeCameraCycle(), false);
 });

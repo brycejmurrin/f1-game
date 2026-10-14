@@ -76,6 +76,37 @@ test("create: chequered → orbit; disabled on mobile / high PerfGov tier", () =
   assert.equal(api.live(), false);
 });
 
+test("highlight windows fit end tags, short recordings and the actual budget", () => {
+  const R = boot();
+  const finish = R.highlightsReel([{ t: 20 }], 0, 20, 4);
+  assert.equal(finish[0].t0, 16);
+  assert.equal(finish[0].t1, 20);
+  const short = R.highlightsReel([{ t: 10 }, { t: 10.5 }, { t: 11 }], 10, 11, 2.5);
+  assert.equal(short.length, 3, "charge each one-second clip, leaving half a second for the last");
+  assert.equal(short.reduce((sum, clip) => sum + clip.t1 - clip.t0, 0), 2.5);
+  for (const clip of short) assert.ok(clip.t0 >= 10 && clip.t1 <= 11 && clip.t1 > clip.t0);
+  assert.equal(R.highlightsReel([{ t: 10 }], 10, 10, 4).length, 0);
+  assert.equal(R.highlightsReel([{ t: 10 }], 11, 10, 4).length, 0);
+});
+
+test("untagged subsecond highlights stay inside the recording and finish promptly", () => {
+  const R = boot(), car = { finPos: 1, s: 0, px: 0, pz: 0 }, applied = [];
+  const G = { player: car, cars: [car], gfx: {},
+    camVantage: () => ({ eye: [0, 5, -10], tgt: [0, 0, 0] }) };
+  const camera = R.create(G);
+  let end = 10.2;
+  camera.attachReplay({ window: () => ({ t0: 10, t1: end, frames: 6 }), tags: () => [],
+    beginScrub: () => true, apply: (t) => applied.push(t), endScrub() {} });
+  camera.onFlag();
+  assert.equal(camera.startHighlights(), true);
+  camera.tick(.1);
+  assert.ok(applied.every((t) => t >= 10 && t <= 10.2));
+  camera.tick(.11);
+  assert.equal(camera.status().phase, "orbit", "short recording has no frozen tail");
+  end = 10;
+  assert.equal(camera.startHighlights(), false, "empty recording cannot acquire replay");
+});
+
 test("game.js gates results early-return on ResultsCam.live()", () => {
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   assert.match(game, /ResultsCam\.create\(G[,)]/);

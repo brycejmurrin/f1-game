@@ -464,7 +464,9 @@ const CustomTracks = (function () {
    *  re-open it. Mid-race it waits, fragment intact, for the menu (game.js
    *  re-reads it on quit, as it does the #ghost= link). Resolves true when a
    *  design opened, false when the link was refused or absent, null when deferred. */
+  let hashGeneration = 0;
   function consumeTrackHash() {
+    const generation = ++hashGeneration;
     // An armed test-drive return goes first: mid-race it waits (kept armed),
     // else it is taken once and the designer reopens on the same point.
     if (_ret) {
@@ -485,14 +487,15 @@ const CustomTracks = (function () {
       // A malformed fragment (`%E0%A4%A`) must not throw past here: the strip
       // below would never run and every hashchange would re-throw.
       let code = null;
-      try { code = TrackCodec.fromHash(location.hash); } catch (_) { code = null; }
+      try { code = TrackCodec.fromHash(hash); } catch (_) { code = null; }
       const r = code ? await TrackCodec.decode(code) : { ok: false, reason: "malformed" };
-      try { history.replaceState(history.state, "", location.pathname + location.search + TrackCodec.withoutTrack(location.hash)); } catch (_) { /* a sandboxed page */ }
+      if (generation !== hashGeneration || location.hash !== hash) return false;
+      try { history.replaceState(history.state, "", location.pathname + location.search + TrackCodec.withoutTrack(hash)); } catch (_) { /* a sandboxed page */ }
       if (!r.ok) { Log.warn("track", "share link refused: " + r.reason); return false; }
       Log.info("track", "share link opened " + r.id);
       TrackDesigner.open({ design: r.design, shared: true });
       return true;
-    }).catch((e) => { Log.warn("track", "share link failed: " + (e && e.message || e)); return false; });
+    }).catch((e) => { if (generation !== hashGeneration || location.hash !== hash) return false; Log.warn("track", "share link failed: " + (e && e.message || e)); return false; });
   }
   function create(G, hooks) {
     _G = G; _hooks = hooks || {};

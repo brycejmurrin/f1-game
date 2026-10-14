@@ -510,7 +510,13 @@ var RaceRadio = (function () {
       else if (now + 1 < t) {
         // A WATCH seeks and cuts (HIGHLIGHTS): the clock going back is the same
         // race, so the memory stays; only the stale lines and the facts go.
-        if (watch) { facts.reset(); queue.tv.clear(); t = now; }
+        if (watch) {
+          const shift = now - t;
+          for (const [key, at] of m.said) m.said.set(key, at + shift);
+          for (const [car, at] of m.passedBy) m.passedBy.set(car, at + shift);
+          m.eng += shift; m.tv += shift;
+          facts.reset(); queue.tv.clear(); t = now;
+        }
         else reset();
       }
       live = true;
