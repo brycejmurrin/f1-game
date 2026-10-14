@@ -151,9 +151,10 @@ test("tick: off hides the box; on, it fills rows and never writes a car", () => 
   assert.equal(root.hidden, true, "no relative in a time trial");
 });
 
-test("fitRows does not leftish-slide past aero onto the right dock", () => {
-  // After sliding past gearbox, aero.left ≈ REL.left used to match leftish and
-  // shove the card onto THROTTLE (phoneL broadcast @150%).
+test("fitRows does not slide past gearbox onto aero / the right dock", () => {
+  // Sliding past gearbox (centre CLEAR_ID) put REL at x≈404 on aero, then a
+  // failed aero slide left it on THROTTLE (phoneL broadcast @150%). Gearbox must
+  // not centre-slide; REL stays in the left column.
   const mk = () => {
     const el = { hidden: true, attrs: {}, children: [], textContent: "", className: "",
       style: { setProperty(k, v) { el.style[k] = v; }, removeProperty(k) { delete el.style[k]; } },
@@ -163,7 +164,7 @@ test("fitRows does not leftish-slide past aero onto the right dock", () => {
   };
   const root = mk();
   root.clientHeight = 40; root.scrollHeight = 80; root.currentCSSZoom = 1;
-  let relLeft = 205;
+  let relLeft = 59;
   root.getBoundingClientRect = () => ({ left: relLeft, right: relLeft + 202, top: 275, bottom: 357, width: 202, height: 82 });
   const gear = mk(); gear.hidden = false;
   gear.getBoundingClientRect = () => ({ left: 250, right: 396, top: 220, bottom: 304, width: 146, height: 84 });
@@ -177,15 +178,15 @@ test("fitRows does not leftish-slide past aero onto the right dock", () => {
     body: { classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
   const R = load({ document: doc, HudElements: { isOn: () => true }, window: doc.defaultView });
   const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
-  // Simulate style.left updating the next rect read.
   const origLeft = root.style;
   Object.defineProperty(root, "style", { value: new Proxy(origLeft, {
     set(t, k, v) { t[k] = v; if (k === "left") relLeft = parseFloat(v) || relLeft; return true; },
     get(t, k) { return t[k]; }
   }) });
   R.tick({ cars: [p, car("A1", 1100, 3, { rank: 1 })], track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } }, p);
-  const left = parseFloat(root.style.left || "0");
-  assert.ok(left > 0 && left < 500, "stops before the right dock: left=" + root.style.left);
+  const left = parseFloat(root.style.left || "0") || relLeft;
+  assert.ok(left < 250, "does not slide past gearbox into the centre cluster: left=" + left);
+  assert.ok(left + 202 < 403, "REL right edge clears aero");
   assert.ok(left + 202 < 718, "REL right edge clears THROTTLE");
 });
 

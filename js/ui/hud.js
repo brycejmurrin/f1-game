@@ -698,6 +698,9 @@ function radioPaintedCollapse(root) {
   // and re-lit hud-radio-top, so the same-key clash path forced a full fit
   // every tick. Under selected-2 load that left #minimap.currentCSSZoom on a
   // stale cap while --hud-z-top moved (compact mmCss 142 ≠ 110).
+  // Also collapse when the card still paints over SPEED/GEAR: the CSS 1.8em
+  // floor wins over a ~7px cluster budget at phoneL broadcast @150%, and
+  // announceLaneTick after fitHud can re-open a collapsed lane.
   const annPaint = typeof document !== "undefined" ? document.getElementById("announce") : null;
   if (annPaint && !annPaint.hidden) {
     const a = annPaint.getBoundingClientRect();
@@ -709,7 +712,9 @@ function radioPaintedCollapse(root) {
         && r.top < a.bottom - 0.5 && a.top < r.bottom - 0.5);
     };
     const tower = _hudTop || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
-    if (hit(els.hudSectors) || hit(tower)) {
+    const gear = typeof document !== "undefined" ? document.getElementById("hud-gearbox") : null;
+    const speed = typeof document !== "undefined" ? document.getElementById("hud-speed") : null;
+    if (hit(els.hudSectors) || hit(tower) || hit(gear) || hit(speed)) {
       hToggle(document.body, "hud-radio-top", false);
       const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();
       hStyle(root, "--announce-lane-x", (salPx + RADIO_TOP_GAP).toFixed(1) + "px");
@@ -2114,6 +2119,9 @@ function updateHud(force, dtMs) {
   // on the SAME tick (jump → wait --hud-top-h → probe, no 10 Hz wait) sat on
   // .hud-gaps on notched-landscape tilt/touch. Re-clip from the box as painted.
   announceLaneTick(document.documentElement, force);
+  // Lane re-pick can clear data-lane-collapsed; re-assert painted clearance
+  // over SPEED/GEAR (phoneL broadcast @150%).
+  radioPaintedCollapse(document.documentElement);
   paintHudDelta(player, timeTrial);
   if (typeof HudRelative !== "undefined") HudRelative.tick(G, player);   // opt-in RELATIVE box (js/ui/hud-relative.js)
   if (typeof HudStrategy !== "undefined") HudStrategy.tick(G, player);   // opt-in STRATEGY panel (js/ui/hud-strategy.js)

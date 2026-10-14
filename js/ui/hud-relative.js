@@ -202,6 +202,11 @@ const HudRelative = (function () {
   // sitting just right of a prior slide must not re-trigger it (phoneL 150%: aero
   // left≈REL left → slide past aero onto THROTTLE).
   const LEFT_SLIDE_IDS = Object.freeze(["dock-left", "btn-brake", "btn-steer-left", "btn-steer-right"]);
+  // Gearbox/speed/announce sit in the centre cluster: sliding past them shoved
+  // REL from the left column onto aero/THROTTLE (phoneL 150%). Only OT/aero —
+  // which can fully contain REL's top — may centre-slide, and only when the
+  // dock still has room.
+  const CENTRE_SLIDE_IDS = Object.freeze(["hud-ot", "hud-aero"]);
   /** Cap the card above any overlapping left-column control, then hide the
    *  outermost occupied rows until it fits. CSS max-height can miss TILT
    *  (no steer-* class; BRAKE sits in the map column). */
@@ -260,14 +265,16 @@ const HudRelative = (function () {
           // TILT parks BRAKE in the map column: slide past the pedal, else cap height.
           // Centre controls (OT/gear) that already contain REL's top: slide only
           // while the card stays on-screen (unbounded slide put REL at x≈793).
+          const id = CLEAR_IDS[i];
           const doCap = rr.top < box.top - 4;
-          const leftish = LEFT_SLIDE_IDS.indexOf(CLEAR_IDS[i]) >= 0
+          const leftish = LEFT_SLIDE_IDS.indexOf(id) >= 0
             && (box.left <= rr.left + 24 || box.right - rr.left < rr.width * 0.7);
+          const centreSlide = CENTRE_SLIDE_IDS.indexOf(id) >= 0;
           if (doCap) cap = Math.min(cap, (box.top - rr.top - 6) / z);
           if (leftish) slide = Math.max(slide, (box.right + 8) / z);
-          else if (!doCap) {
-            // Slide past gearbox/OT but stop left of the right-dock tap targets
-            // (unbounded slide landed REL on BRAKE/THROTTLE at phoneL 150%).
+          else if (centreSlide && !doCap) {
+            // Slide past OT/aero only while the card stays left of the right dock
+            // (unbounded slide landed REL on THROTTLE at phoneL 150%).
             const next = (box.right + 8) / z;
             const w = (doc.defaultView || (typeof window !== "undefined" ? window : null));
             let limit = w ? ((w.innerWidth || 0) - rr.width - 8) / z : next;
@@ -283,7 +290,9 @@ const HudRelative = (function () {
         }
         if (!hit) break;
         if (slide > 0) root.style.left = slide.toFixed(1) + "px";
-        if (Number.isFinite(cap) && cap > 28) root.style.maxHeight = cap.toFixed(1) + "px";
+        // Allow short caps so a doCap above aero (~9px at phoneL 150%) still
+        // truncates + drops rows instead of leaving the full card on AERO.
+        if (Number.isFinite(cap) && cap > 12) root.style.maxHeight = cap.toFixed(1) + "px";
       }
     }
     if (!(root.clientHeight > 0)) return;

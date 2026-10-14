@@ -32,6 +32,10 @@ test("fitHud publishes gaps-bottom and tyre-stack for the left/centre columns", 
     "tyre stack anchors from the map/gaps edge (colBot), not a leftBot that already includes TYRES");
   assert.match(HUD_JS, /--hud-tyre-max-h/,
     "fitHud caps stacked TYRES above the left dock when the map→pedal gap is short");
+  assert.match(HUD_JS, /hud-gearbox/,
+    "radioPaintedCollapse clears announce when it still paints over the gearbox");
+  assert.match(HUD_JS, /announceLaneTick[\s\S]{0,200}?radioPaintedCollapse/,
+    "painted collapse re-runs after announceLaneTick so a lane re-pick cannot undo SPEED/GEAR clearance");
 });
 
 test("CSS: flag and announce clear the gaps strip; tyre stack; strat under REL", () => {
