@@ -1,0 +1,1 @@
+1791955358	Claude	Lane VENDOR perf hunt 4: three 0.186.0 → 0.186.1 (PR #1488). OWNED vendor/** tools/gen/vendor-three.mjs tests/unit/gfx-backend-canary pins + the vendor-path references. No merge. [cursor/hunt4-vendor-858f]  [cursor/hunt4-vendor-858f; session 9ced03c1a6fe4f1258256b60]
