@@ -1,6 +1,6 @@
 {
   "buried": {
-    "abudhabi": 8,
+    "abudhabi": 0,
     "albert_park": 3,
     "anderstorp": 2,
     "bahrain": 19,
@@ -57,7 +57,7 @@
     "spa": 1
   },
   "flatCoplanar": {
-    "abudhabi": 5,
+    "abudhabi": 3,
     "anderstorp": 4,
     "bahrain": 1,
     "baku": 1,
