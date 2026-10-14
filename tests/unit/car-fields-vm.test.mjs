@@ -17,7 +17,9 @@
  *   5. predeclare's body is one NAMED store per key, in KEYS order (the source list cannot drift from GROUPS);
  *   6. warmShape (PERF-HUNT-4 B-F1, run by gridUp) changes no value, sentinel or key, and over a full lap plus a
  *      pit stop: no car field widens its value kind (integer -> fraction, undefined/null -> number ...) unless WARM
- *      names it, the simulation digest is identical with warmShape a no-op, and the cars stay in one fast map.
+ *      names it, the simulation digest is identical with warmShape a no-op, and the cars stay in one fast map;
+ *   7. MUTABLE (B-F1b: fields whose V8 constness, not representation, a late rewrite flips) is a small table of keys
+ *      every car has at the grid, and a race run to results adds no car key and leaves every car in fast mode.
  * Plus the module's own contract (idempotent, never overwrites, one key list) and the manifest entry.
  *
  * Run: node --test tests/unit/car-fields-vm.test.mjs   (npm run test:game-vm)
@@ -225,8 +227,21 @@ test("WARM table: unique keys, every group commented, one flat list", () => {
   for (const k of ["lastLap", "uslipHapT", "lockHapT"]) assert.ok(KEYS.includes(k), k + " is pre-declared (the first lap line / player haptics added it mid-race)");
 });
 
+test("MUTABLE table: unique keys, every group commented, one flat list, disjoint from WARM", () => {
+  const M = CarFieldsStandalone.MUTABLE, W = new Set(CarFieldsStandalone.WARM);
+  assert.ok(M.length > 0);
+  assert.equal(new Set(M).size, M.length, "a key listed twice");
+  for (const [why, ks] of CarFieldsStandalone.MUTABLE_GROUPS) { assert.ok(typeof why === "string" && why.length > 10); assert.ok(ks.length > 0); }
+  assert.deepEqual(M, CarFieldsStandalone.MUTABLE_GROUPS.flatMap((x) => x[1]));
+  assert.deepEqual(M.filter((k) => W.has(k)), [], "a WARM key already leaves the grid mutable (its 0.5 store)");
+  // Node 22's V8 normalizes a car on a named ADD once its map has > 128 mutable out-of-object fields; the grid sits
+  // at ~86 + this list. Growing it past ~40 makes the harness's (and netplay's) post-grid netInput add a dictionary.
+  assert.ok(M.length <= 24, "MUTABLE is for fields first rewritten LATE (laps in); see the 128-field note in car-fields.js");
+});
+
 test("warmShape: every value and sentinel back exactly, no key added, key order kept", () => {
-  const c = { prog: -14, x: 0, speed: 0, rank: undefined, aiBias: null, steerSm: undefined, flatSpot: -0, offT: NaN, other: 0 };
+  const c = { prog: -14, x: 0, speed: 0, rank: undefined, aiBias: null, steerSm: undefined, flatSpot: -0, offT: NaN, other: 0,
+    pitState: "none", pitStops: 0, boostOn: false, pitNext: null, cutWarn: -0 };
   const before = Object.keys(c).map((k) => [k, c[k]]);
   assert.equal(CarFieldsStandalone.warmShape(c), c);
   assert.deepEqual(Object.keys(c), before.map((e) => e[0]), "no key added, order kept");
@@ -253,6 +268,7 @@ async function lapAndPit(opts) {
     A.pit({ car: pitter, arm: true });
     const grid = new Map(), seen = new Map(), added = new Set();
     for (const c of G.cars) for (const k of Object.keys(c)) (grid.get(k) || grid.set(k, new Set()).get(k)).add(kindOf(c[k]));
+    const unknownMutable = CarFieldsStandalone.MUTABLE.filter((k) => !G.cars.every((c) => k in c));
     for (const [k, s] of grid) seen.set(k, new Set(s));
     const P = G.cars[pitter];
     const snap = () => G.cars.map((c) => [c.s, c.x, c.speed, c.head, c.lap, c.prog, c.energy, c.tyreWear, c.pitStops, c.rpm].join(",")).join(";");
@@ -277,7 +293,7 @@ async function lapAndPit(opts) {
     try { sameFn = new Function("a", "b", "return %HaveSameMap(a, b)"); } catch { sameFn = null; }
     v8.setFlagsFromString("--no-allow-natives-syntax");
     return {
-      digest: chain, widened, added: [...added], steps, pitted: P.pitStops || 0, done: done(),
+      digest: chain, widened, added: [...added], steps, pitted: P.pitStops || 0, done: done(), unknownMutable,
       slow: fast ? [...G.cars].filter((c) => !fast(c)).map((c) => c.code) : null,   // spread: a main-realm array
       // The AI field only: the harness's carRole() hand-over gives the player car a `netInput` key no race adds.
       same: sameFn ? [...G.cars].filter((c) => c !== G.player).every((c, i, ai) => sameFn(ai[0], c)) : null,
@@ -303,9 +319,33 @@ test("a lap plus a pit stop: warmShape changes no value, no field widens outside
   assert.deepEqual(on.widened.filter((k) => !W.has(k)), [],
     "a race widened these car fields' value kinds after the grid: add them to WARM_GROUPS in js/race/car-fields.js");
   assert.deepEqual(on.added, [], "a lap plus a pit stop added keys CarFields does not declare");
+  assert.deepEqual(on.unknownMutable, [], "MUTABLE names a field the cars do not have at the grid (renamed? drop it)");
   if (on.slow) assert.deepEqual(on.slow, [], "cars fell into dictionary mode (warmShape must never add a key)");
   if (on.same != null) assert.ok(on.same, "every car still shares one hidden class");
   const off = await lapAndPit({ warm: false });
   assert.equal(off.steps, on.steps, "the same run length with warmShape a no-op");
   assert.equal(off.digest, on.digest, "warmShape changed the simulation");
+});
+
+// ---- the finish (PERF-HUNT-4 B-F1b) -----------------------------------------------------------------------------
+// coast() gave a finished car `_coastHeld` and endRace gave every car `classified`, both as NEW keys. By the flag a
+// car's map holds > 128 mutable out-of-object fields, and Node 22's V8 (12.4, --max-fast-properties) turns an object
+// into a DICTIONARY on a named add past that: each finisher left the shared map for the rest of the race (a burst
+// of ~30 "wrong map" deopts at the first finish), and every car was a dictionary at results. CarFields declares both.
+test("a race to the flag and results adds no car key and leaves every car in fast mode", async () => {
+  const g = await boot({ storage: { tyreWear: "real", reliability: "off" }, laps: 1 });
+  try {
+    const G = g.G;
+    g.apex.carRole(G.cars.indexOf(G.player), { human: false });
+    const before = new Set(); for (const c of G.cars) Object.keys(c).forEach((k) => before.add(k));
+    let steps = 0;
+    while (G.state !== "results" && steps < 20000) { g.step(1, 1 / 60); steps++; }
+    assert.equal(G.state, "results", `the race must reach results (${steps} steps)`);
+    assert.ok(G.cars.some((c) => c._coastHeld), "a finisher coasted to the floor (else the _coastHeld path is not exercised)");
+    const added = new Set(); for (const c of G.cars) Object.keys(c).forEach((k) => { if (!before.has(k)) added.add(k); });
+    added.delete("netInput");   // the harness's carRole() hand-over, not the race
+    assert.deepEqual([...added], [], "the finish added car keys CarFields does not declare");
+    const fast = nativeFast();
+    if (fast) assert.deepEqual([...G.cars].filter((c) => !fast(c)).map((c) => c.code), [], "cars fell into dictionary mode by results");
+  } finally { g.close(); }
 });
