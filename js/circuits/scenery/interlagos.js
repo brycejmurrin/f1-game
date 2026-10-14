@@ -593,32 +593,32 @@
       marshalPost(K(0.24), 1, 8);
 
       // GUARAPIRANGA. waterSurface / waterField hard-code pyMin − 0.82 and
-      // vanish under this circuit's ribbon — do not use them. Guarapiranga is
-      // a reservoir: a FLAT waterline, not a terrain-following sheet. The old
-      // hi+0.09 / lo−0.14 span boxes on C=64 floated ~6–11 m over the banks
-      // at survey f25. Waterline = lowest nearby shore sample; skip cells
-      // whose terrain sits above it (dry bank). Off-ribbon void cells fill
-      // the open basin. C=64 keeps props-tris inside the 0.5 % ratchet.
-      // Billings (further SW) is visible in the real layout but not added.
+      // vanish under this ribbon — do not use them. Guarapiranga is a
+      // reservoir: flat waterline. The old hi+0.09 / lo−0.14 C=64 span boxes
+      // floated ~6–11 m over the banks at survey f25. Waterline = ~25th
+      // percentile of ribbon samples in the ellipse so the sheet meets the
+      // green banks; skip dry cells (lo above waterline) and steep cells
+      // (span > 3.5 m) that would bury or float. Closer anchor (420 m) keeps
+      // it readable from Reta Oposta. C=32 stays inside props-tris headroom.
       {
         const LAKE = [0.20, 0.40, 0.49];
-        const a = anchor(K(0.42), -1, 520);
+        const a = anchor(K(0.42), -1, 420);
         const LCX = a.c[0], LCZ = a.c[2];
-        const RA = 190, RB = 230, C = 64;
-        let shoreLo = 1e9, nS = 0;
-        for (let x = LCX - RA - 100; x < LCX + RA + 100; x += C) {
-          for (let z = LCZ - RB - 100; z < LCZ + RB + 100; z += C) {
-            const y = terrainYAt(x, z);
+        const RA = 150, RB = 180, C = 32;
+        const ys = [];
+        for (let x = LCX - RA; x < LCX + RA; x += C) {
+          for (let z = LCZ - RB; z < LCZ + RB; z += C) {
+            const mx = x + C / 2, mz = z + C / 2;
+            if (((mx - LCX) / RA) ** 2 + ((mz - LCZ) / RB) ** 2 > 1) continue;
+            const y = terrainYAt(mx, mz);
             if (y == null || !isFinite(y)) continue;
-            nS++;
-            if (y < shoreLo) shoreLo = y;
+            ys.push(y);
           }
         }
-        const waterY = nS ? shoreLo + 0.12 : pyMin + 0.08;
-        // Emit into `out` (not one modelGroup): the lake AABB spans other
-        // stretches of this compact lap, so a single group's emitted-box
-        // preflight rejects the whole sheet. Per-cell onTrack + first-cell
-        // required pin (no duplicate box for the id).
+        ys.sort((a, b) => a - b);
+        const waterY = ys.length
+          ? ys[Math.floor(ys.length * 0.25)] + 0.15
+          : pyMin + 0.08;
         let pin = null;
         for (let x = LCX - RA; x < LCX + RA; x += C) {
           for (let z = LCZ - RB; z < LCZ + RB; z += C) {
@@ -626,18 +626,18 @@
             const e = ((mx - LCX) / RA) ** 2 + ((mz - LCZ) / RB) ** 2;
             if (e > 1 - hash(mx * 0.31 + mz * 0.17) * 0.18) continue;
             if (onTrack(mx, mz, 20)) continue;
-            // Dry / sloping shore: any terrain sample above the waterline →
-            // skip. On C=64 Interlagos relief every ribbon cell slopes past
-            // the waterline, so the sheet lives in the off-ribbon void basin
-            // (true Guarapiranga) and no longer floats a hi+0.09 slab over
-            // the green banks at f25. Ribbon shore stays dry land.
-            let dry = false;
+            let lo = 1e9, hi = -1e9, saw = false;
             for (const fx of [0, 0.5, 1]) for (const fz of [0, 0.5, 1]) {
               const y = terrainYAt(x + fx * C, z + fz * C);
               if (y === null || !isFinite(y)) continue;
-              if (y > waterY + 0.45) dry = true;
+              saw = true;
+              if (y < lo) lo = y;
+              if (y > hi) hi = y;
             }
-            if (dry) continue;
+            if (saw) {
+              if (lo > waterY + 0.4) continue;      // dry bank
+              if (hi - lo > 3.5) continue;          // steep — would bury/float
+            }
             const top = waterY + 0.04;
             const bot = waterY - 0.18;
             const cy = (top + bot) / 2;
@@ -646,7 +646,7 @@
             else addBox(out, [mx, cy, mz], sz, LAKE, null);
           }
         }
-        if (!pin) pin = { mx: LCX, mz: LCZ, cy: waterY - 0.07, sz: [380, 0.5, 460] };
+        if (!pin) pin = { mx: LCX, mz: LCZ, cy: waterY - 0.07, sz: [280, 0.5, 340] };
         modelGroup("interlagos-guarapiranga", {
           center: [pin.mx, pin.cy, pin.mz],
           size: [pin.sz[0] + 4, pin.sz[1] + 4, pin.sz[2] + 4],
