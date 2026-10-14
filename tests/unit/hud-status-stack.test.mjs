@@ -62,7 +62,7 @@ test("CSS: flag and announce clear the gaps strip; tyre stack; strat under REL",
   assert.match(CSS, /--hud-cluster-y/,
     "announce height-caps against --hud-cluster-y");
   assert.match(CSS,
-    /:root:not\(\[data-limits-left\]\) body\.hud-prof-broadcast\[data-density="compact"\]:has\(#hud-flag:not\(\[hidden\]\)\) #hud-limits:not\(\[data-hl-user\]\)/,
+    /:root:not\(\[data-limits-left\]\) \.hud-prof-broadcast\[data-density="compact"\]:has\(#hud-flag:not\(\[hidden\]\)\) #hud-limits:not\(\[data-hl-user\]\)/,
     "broadcast compact LIMITS stacks under the centred flag when the chip is still on the right (CI 96c3536 flag+limits)");
   assert.match(CSS,
     /max\(72px \+ var\(--sat\) \/ var\(--hud-z\), var\(--hud-gaps-b, 0px\) \+ 8px, var\(--mir-bot, 0px\) \+ 8px\) \+ 40px/,
