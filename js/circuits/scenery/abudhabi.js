@@ -141,7 +141,8 @@
           const col = i % 3 === 0 ? [0.14, 0.15, 0.20]
                     : i % 3 === 1 ? [0.16, 0.17, 0.22]
                                   : [0.12, 0.14, 0.19];
-          backdrop(k, side, 110 + h * 40, [bw, bh, 26], col);
+          const dist = slots[i] === 0.14 ? 145 + h * 40 : 110 + h * 40;
+          backdrop(k, side, dist, [bw, bh, 26], col);
         }
       }
 
@@ -201,7 +202,9 @@
         // Wave-4 hero: Ferrari World — one required atomic roof + logo disc
         // (research: vast red sawtooth roof + central white/yellow Ferrari disc
         // on the desert side of the north loop). Was a bare place() + loose discs.
-        const aRoof = anchor(k, 1, 100);
+        // gap 108 (was 100): clip-audit had a 4.76 m motorhome x ferrari-world
+        // severe at frac ~0.147 when the roof mass sat one step too close inland.
+        const aRoof = anchor(k, 1, 118);
         const bRoof = [aRoof.r, aRoof.u, aRoof.t];
         modelGroup("abudhabi-ferrari-world", {
           center: vadd(aRoof.c, aRoof.u, 16), size: [190, 36, 160], basis: bRoof,
@@ -555,8 +558,8 @@
       // flatter ground further out (gap 16) and use a bleacher rake that
       // follows groundYAt rather than a banked shell.
       if (typeof bleacher === "function") {
-        bleacher(0.808, 0.848, -1, 16, {
-          rows: 7, rise: 0.72, setback: 1.0, step: 14, density: 0.55,
+        bleacher(0.808, 0.848, -1, 20, {
+          rows: 6, rise: 0.70, setback: 1.4, step: 22, density: 0.32,
           frameCol: [0.70, 0.68, 0.62], plankCol: [0.78, 0.72, 0.58],
         });
       } else {
@@ -704,10 +707,10 @@
         // team motorhome row (modern two-storey lit hospitality units) — was 3
         // stacked raw boxes per unit; now the purpose-built motorhome() model
         // (slide-out awning, window ribbon, livery accent stripe).
-        for (let i = 0; i < 10; i++) {
-          const k = K(0.985 + i * 0.010);
+        for (let i = 0; i < 8; i++) {
+          const k = K(0.988 + i * 0.011);
           const wc = (i % 2) ? WIN : WIN_WARM;
-          motorhome(k, 1, 36, 14, 8.5, 17, { window: wc, wall: [0.86, 0.87, 0.90],
+          motorhome(k, 1, 42, 14, 8.5, 17, { window: wc, wall: [0.86, 0.87, 0.90],
             accent: (i % 2) ? [0.75, 0.10, 0.10] : [0.10, 0.30, 0.72] });
         }
         // pit-lane back wall + garage roof line (more prominent)
