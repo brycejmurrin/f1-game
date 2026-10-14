@@ -2716,7 +2716,7 @@ const api = {
     const c = G.cars[idx];
     if (c.isPlayer) return false;
     const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
-    c.s    = wrapS(f01 * G.track.total);
+    c.s = c._prevS = wrapS(f01 * G.track.total);
     c.prog = (c.lap || 0) * G.track.total + f01 * G.track.total;
     if (x     !== undefined) { c.x = x; c.xVis = x; }
     if (speed !== undefined) c.speed = speed;

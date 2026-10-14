@@ -486,3 +486,15 @@ test("controls(): a selected span is walked once per redraw, not once per handle
   h.rec.arcs.length = 0; h.cv.setSelection(3, 20);
   assert.ok(h.rec.arcs.filter(r => r === 7).length >= 18, "span members still draw as selected");
 });
+
+test("destroy removes every input subscription and is idempotent", () => {
+  const h = boot();
+  const removed = [];
+  const remove = h.canvas.removeEventListener;
+  h.canvas.removeEventListener = (type, fn) => { removed.push(type); remove(type, fn); };
+  h.cv.destroy(); h.cv.destroy();
+  assert.deepEqual(removed.sort(), ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'lostpointercapture', 'keydown', 'wheel', 'dblclick', 'pointerleave'].sort());
+  const before = JSON.stringify(h.ev);
+  h.dom.dispatch(h.canvas, { type: "keydown", key: "ArrowUp" });
+  assert.equal(JSON.stringify(h.ev), before);
+});

@@ -74,3 +74,16 @@ test("onLeave(fn) is called with the page id when back() / show() hides a page",
   nav.show("display", false);
   assert.deepEqual(left, ["controls", "driving"], "re-showing the same page leaves nothing");
 });
+
+
+test("late audio completion cannot supersede newer navigation or a closed session", async () => {
+  for (const next of [h => h.nav.show("display", true), h => h.nav.back(), h => h.nav.showCurrent(), h => h.ctx.SettingsNav.invalidate(), h => { h.dom.byId("pmsettings").hidden = true; }, h => { h.dom.byId("pmsettings").hidden = true; h.nav.showCurrent(); h.dom.byId("pmsettings").hidden = false; }]) {
+    let resolve; const selections = [];
+    const h = boot({ ensure: () => new Promise(r => { resolve = r; }), onSelect: id => selections.push(id) });
+    h.dom.byId("pm-audio").onclick(); next(h);
+    const title = h.dom.byId("dlg-settings").textContent;
+    resolve(true); await tick(); await tick();
+    assert.equal(h.dom.byId("dlg-settings").textContent, title);
+    assert.equal(h.audio.hidden, true); assert.deepEqual(selections, []);
+  }
+});

@@ -559,7 +559,7 @@ async function precacheAssetLists() {
   for (const u of [...essential]) {
     if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);
   }
-  return { essential: Array.from(essential), optional: Array.from(optional), shellResponse, lazyV };
+  return { essential: Array.from(essential), optional: Array.from(optional), shellResponse, lazyV, shellBuild: (/<meta name="apex-build" content="(\d+)"/.exec(html) || [])[1] };
 }
 
 // Precache reads THROUGH the HTTP cache, deliberately. Both lists hold only
@@ -642,8 +642,9 @@ async function pooled(items, limit, fn) {
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const [name, urls] = await Promise.all([currentCacheName(), precacheAssetLists()]);
-    const cache = await openCache(name);
     const build = name.slice(CACHE_PREFIX.length);
+    if (urls.shellBuild !== build) throw new Error("Application shell build does not match cache build " + build);
+    const cache = await openCache(name);
     // GLX is the fallback renderer every device can run: when TLX/WGX are not
     // cached (or fail), an offline boot without it is "graphics unavailable".
     // So its deferred files are ESSENTIAL, stamped as loadBackendScripts asks.
@@ -864,30 +865,25 @@ self.addEventListener("fetch", (event) => {
     // shell every launch. version.json and the ?b= bust keep "no-store": they
     // are the fail-fast answers below, where the cheaper path buys nothing.
     // https://developer.mozilla.org/en-US/docs/Web/API/Request/cache
-    const network = fetch(req, { cache: isVersion || isShellBust ? "no-store" : "no-cache" }).then(async (res) => {
+    let cacheWrite = Promise.resolve();
+    const network = fetch(req, { cache: isVersion || isShellBust ? "no-store" : "no-cache" }).then((res) => {
       if (res && res.ok && !isVersion && url.search === "") {
-        // The write is awaited (the waitUntil below depends on that) but must
-        // never reject the chain: a version.json hiccup (deploy window,
-        // captive portal) or a quota-refused put was turning a SUCCESSFUL
-        // navigation into Response.error() through the online check below.
-        try {
+        // Clone before the page can consume the body. Maintenance belongs to
+        // waitUntil, so generation lookup and slow puts cannot delay navigation.
+        const copy = res.clone();
+        cacheWrite = (async () => {
           const name = await currentCacheName();
-          // The shell goes only into ITS OWN build's cache. A worker that
-          // outlived a deploy remembers the old name, and writing the new
-          // shell there served it offline beside the old build's scripts —
-          // whose ?v= hashes it no longer names, so the boot failed.
-          const m = /<meta name="apex-build" content="(\d+)"/.exec(await res.clone().text());
+          const m = /<meta name="apex-build" content="(\d+)"/.exec(await copy.clone().text());
           if (!m || CACHE_PREFIX + m[1] === name) {
             const cache = await openCache(name);
-            await cache.put(req, res.clone());
+            await cache.put(req, copy);
           }
-        } catch (e) { noteCacheWriteFail(e); /* a failed cache write must not fail a good response */ }
+        })().catch(noteCacheWriteFail);
       }
       return res;
     });
-    // If the timeout wins, respondWith() no longer protects the late refresh.
-    // Keep the worker alive until both the fetch and its cache write settle.
-    event.waitUntil(network.then(() => undefined, () => undefined));
+    // Register during dispatch, including when a cache fallback wins the race.
+    event.waitUntil(network.then(() => cacheWrite, () => undefined));
     event.respondWith((async () => {
       const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NAV_RACE_MS));
       const online = typeof navigator !== "undefined" && navigator.onLine;

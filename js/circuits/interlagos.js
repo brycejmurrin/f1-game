@@ -21,6 +21,15 @@
       // SRTM Senna-S plunge: a roadside palm at ~frac 0.02 / lat 30 m sat 13 m
       // above the valley floor once the cosine plateau went away.
       { kind: "foliage", s0: 0.01, s1: 0.04 },
+      // Circuit Yard R4: generic plantRoadsideTrees sits at 8–22 m and fills
+      // the chase/orbit lens at f08/f42/f75/f92. Authored forestEdge / every()
+      // past CAM_NEAR own the green look — suppress the generic belt on the
+      // hot camera windows (both sides).
+      { kind: "foliage", s0: 0.02, s1: 0.14 },
+      { kind: "foliage", s0: 0.36, s1: 0.50 },
+      { kind: "foliage", s0: 0.68, s1: 0.82 },
+      { kind: "foliage", s0: 0.86, s1: 1.0 },
+      { kind: "foliage", s0: 0.0, s1: 0.02 },
     ],
     pal: { zenith: [0.34, 0.54, 0.78], horizon: [0.64, 0.72, 0.62], grass: [0.30, 0.55, 0.26], fog: [0.56, 0.62, 0.56], fogDensity: 0.0018, sunDir: [0.18032487743269374, 0.8214799971933825, 0.5409746322980812], sun: [1, 0.96, 0.84], sunColor: [1, 0.94, 0.82] },
     // Elevation from SRTM bake in js/track/circuit-elevations.js

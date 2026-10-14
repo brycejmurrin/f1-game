@@ -11,6 +11,8 @@ import {
   defaultRemoteWorkers,
   scriptIsRenderHeavy,
   RENDER_HEAVY_SPEC_IDS,
+  captureCpuBudget,
+  captureChromiumArgs,
 } from "../../tools/lib/browser-workers.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -23,11 +25,35 @@ test("glStack reads APEX_GL / GL", () => {
   assert.equal(glStack({ APEX_GL: "angle,llvmpipe" }), "llvmpipe");
 });
 
-test("defaultCaptureWorkers: APEX_WORKERS wins; llvmpipe raises the floor", () => {
+test("defaultCaptureWorkers: explicit override, CPU headroom and actual jobs bound pools", () => {
   assert.equal(defaultCaptureWorkers({ env: { APEX_WORKERS: "3" }, cpus: 8 }), 3);
-  assert.equal(defaultCaptureWorkers({ env: {}, cpus: 4, defSwift: 2 }), 2);
+  assert.equal(defaultCaptureWorkers({ env: {}, cpus: 4, defSwift: 2 }), 1);
+  assert.equal(defaultCaptureWorkers({ env: {}, cpus: 8, defSwift: 2 }), 2);
   assert.equal(defaultCaptureWorkers({ env: { APEX_GL: "llvmpipe" }, cpus: 8 }), 4);
-  assert.equal(defaultCaptureWorkers({ env: { APEX_GL: "llvmpipe" }, cpus: 2 }), 2);
+  assert.equal(defaultCaptureWorkers({ env: { APEX_GL: "llvmpipe" }, cpus: 2 }), 1);
+  assert.equal(defaultCaptureWorkers({ env: {}, cpus: 1 }), 1);
+  assert.equal(defaultCaptureWorkers({ env: { APEX_WORKERS: "8" }, jobs: 1 }), 1);
+  assert.equal(defaultCaptureWorkers({ env: { APEX_GL: "llvmpipe" }, cpus: 32, jobs: 3 }), 3);
+  assert.equal(defaultCaptureWorkers({ env: {}, jobs: 0 }), 0);
+});
+
+test("capture CPU budget respects affinity and fractional cgroup quota", () => {
+  const read = (value) => () => value;
+  assert.equal(captureCpuBudget({ parallelism: 32, read: read('400000 100000') }), 4);
+  assert.equal(captureCpuBudget({ parallelism: 2, read: read('400000 100000') }), 2);
+  assert.equal(captureCpuBudget({ parallelism: 32, read: read('150000 100000') }), 1);
+  assert.equal(captureCpuBudget({ parallelism: 3, read: read('max 100000') }), 3);
+  assert.equal(captureCpuBudget({ parallelism: 3, read: () => { throw new Error('not Linux'); } }), 3);
+});
+
+test("capture launcher uses the same requested GL stack as the worker budget", () => {
+  assert.ok(captureChromiumArgs({}).includes('--use-angle=swiftshader'));
+  const args = captureChromiumArgs({ APEX_GL: 'llvmpipe' });
+  assert.ok(args.includes('--use-angle=gl'));
+  assert.ok(args.includes('--use-gl=angle'));
+  assert.ok(args.includes('--ignore-gpu-blocklist'));
+  assert.ok(!args.includes('--use-angle=swiftshader'));
+  assert.ok(!args.includes('--disable-frame-rate-limit'));
 });
 
 test("scriptIsRenderHeavy matches spec basenames, not substrings", () => {
