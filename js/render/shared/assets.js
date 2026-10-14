@@ -220,12 +220,20 @@ const Assets = (function () {
   // without blocking the main thread. readPixels into client memory is
   // "finish + round trip" (MDN WebGL best practices) — 34 of them cost 126 ms
   // mid-race on the macOS census. Here every pending layer is uploaded and its
-  // readPixels issued into ONE PIXEL_PACK_BUFFER (slot k at byte k*page), then a
-  // fenceSync + gl.flush() marks the GPU work; clientWaitSync is polled off a
-  // timer (MDN's readPixelsAsync pattern) and, once the fence has signalled,
-  // getBufferSubData copies each slot into `data` — a copy that no longer waits
-  // on the GPU. The uploads happen synchronously INSIDE this call, so a caller
-  // may close its ImageBitmaps the moment it returns (assets.js does).
+  // readPixels issued into ITS OWN PIXEL_PACK_BUFFER (one per layer, as MDN's
+  // readPixelsAsync does), then ONE fenceSync + gl.flush() marks the GPU work;
+  // clientWaitSync is polled off a timer and, once the fence has signalled,
+  // getBufferSubData copies each buffer into `data` — a copy that no longer
+  // waits on the GPU. One buffer PER LAYER is not style: Chromium keeps a
+  // single-use "shadow copy" per READ-usage buffer that the fence fills and
+  // the first getBufferSubData consumes (gles2_implementation.cc MapBufferRange
+  // + readback_buffer_shadow_tracker.cc); a second read of the same buffer
+  // falls back to a blocking round trip with "performance warning: READ-usage
+  // buffer was read back without waiting on a fence" — measured in-container:
+  // 12 warnings and a 3× slower copy with one shared buffer at slot offsets,
+  // none with one per layer (perf hunt 4, lane WGX). The uploads happen
+  // synchronously INSIDE this call, so a caller may close its ImageBitmaps the
+  // moment it returns (assets.js does).
   //   https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices#use_non-blocking_async_data_readback
   //   https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext/getBufferSubData
   // Byte / ImageData layers copy at once, as in the sync path. onLayer(i, bytes)
@@ -266,12 +274,14 @@ const Assets = (function () {
       scratch.view = view;
       scratch.page = page;
     }
-    const slots = [];   // slot k of the PBO holds layer slots[k]
-    let pbo = null, sync = null;
+    const slots = [];   // { i, pbo }: layer i's own readback buffer
+    let sync = null;
+    const freeAll = () => {
+      try { gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null); } catch (_) { /* lost */ }
+      for (const s of slots) { try { gl.deleteBuffer(s.pbo); } catch (_) { /* lost */ } }
+      if (sync) { try { gl.deleteSync(sync); } catch (_) { /* lost */ } }
+    };
     try {
-      pbo = gl.createBuffer();
-      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
-      gl.bufferData(gl.PIXEL_PACK_BUFFER, page * pending.length, gl.STREAM_READ);
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
       for (const i of pending) {
@@ -279,31 +289,28 @@ const Assets = (function () {
           gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, images[i]);
           gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
           if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) { if (onLayer) onLayer(i, null); continue; }
+          const pbo = gl.createBuffer();
+          gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
+          gl.bufferData(gl.PIXEL_PACK_BUFFER, page, gl.STREAM_READ);
           // With a PIXEL_PACK_BUFFER bound the last argument is a byte offset into it.
-          gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, slots.length * page);
-          slots.push(i);
+          gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+          gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+          slots.push({ i, pbo });
         } catch (_) { if (onLayer) onLayer(i, null); }
       }
-      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
       sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
       gl.flush();
       if (!sync) throw new Error("fenceSync");
     } catch (_) {
       // The async plumbing itself failed (a lost context, a refused PBO): hand
       // the caller the sync path while its images are still alive.
-      try { gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null); } catch (__) { /* lost */ }
-      if (pbo) { try { gl.deleteBuffer(pbo); } catch (__) { /* lost */ } }
-      if (sync) { try { gl.deleteSync(sync); } catch (__) { /* lost */ } }
+      freeAll();
       return null;
     }
     return new Promise((resolve) => {
       const ASYNC_WAIT_MS = 8000, POLL_MS = 10;
       let waited = 0;
-      const finish = () => {
-        try { gl.deleteSync(sync); } catch (_) { /* lost */ }
-        try { gl.deleteBuffer(pbo); } catch (_) { /* lost */ }
-        resolve(done.sort((a, b) => a - b));
-      };
+      const finish = () => { freeAll(); resolve(done.sort((a, b) => a - b)); };
       const poll = () => {
         let r;
         try { r = gl.clientWaitSync(sync, 0, 0); } catch (_) { r = gl.WAIT_FAILED; }
@@ -312,16 +319,14 @@ const Assets = (function () {
         }
         if (r === gl.ALREADY_SIGNALED || r === gl.CONDITION_SATISFIED) {
           try {
-            gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
-            for (let k = 0; k < slots.length; k++) {
-              const i = slots[k];
+            for (const { i, pbo } of slots) {
+              gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
               // dstOffset / length are ELEMENTS of the typed array — bytes for a Uint8Array.
-              gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, k * page, view, i * page, page);
+              gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, view, i * page, page);
               done.push(i);
               if (onLayer) onLayer(i, view.subarray(i * page, (i + 1) * page));
             }
           } catch (_) { /* a lost context mid-copy: the layers that landed still ship */ }
-          try { gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null); } catch (_) { /* lost */ }
         }
         finish();   // WAIT_FAILED / the 8 s cap / a lost context: the pack ships the layers that landed
       };

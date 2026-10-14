@@ -579,16 +579,20 @@ test("P4: readLayerBytesAsync returns byte-identical layers to readLayerBytes th
   assert.equal(async_.data[2 * page], 77, "the byte layer copied straight");
   assert.equal(async_.data[0], 0, "an absent layer is left untouched");
   assert.deepEqual(async_.landed, [[2, page], [1, page], [5, page], [9, page], [16, page]], "onLayer per layer: the byte layer at once, the rest as the copy lands");
-  // The mechanism: 4 uploads, 4 PBO reads at slot offsets, ONE fence + flush, a non-blocking poll per tick, then
-  // one getBufferSubData per slot into the layer's page — and no readPixels into client memory at all.
+  // The mechanism: 4 uploads, each into ITS OWN PBO (Chromium's shadow copy is single-use per buffer: a shared
+  // buffer read at slot offsets warned 12 times and copied 3× slower in-container), ONE fence + flush, a
+  // non-blocking poll per tick, then one whole-buffer getBufferSubData per layer into the layer's page — and no
+  // readPixels into client memory at all.
   const kinds = async_.ops.map((o) => o[0]);
   assert.equal(kinds.filter((k) => k === "readSync").length, 0, "the async path never blocks in readPixels");
-  assert.deepEqual(async_.ops.filter((o) => o[0] === "readPBO"), [["readPBO", 1, 0], ["readPBO", 5, page], ["readPBO", 9, 2 * page], ["readPBO", 16, 3 * page]], "slot k at byte k*page");
+  assert.deepEqual(async_.ops.filter((o) => o[0] === "readPBO"), [["readPBO", 1, 0], ["readPBO", 5, 0], ["readPBO", 9, 0], ["readPBO", 16, 0]], "each layer reads into its own buffer at offset 0");
+  assert.deepEqual(async_.ops.filter((o) => o[0] === "alloc"), [["alloc", page], ["alloc", page], ["alloc", page], ["alloc", page]], "one page-sized PBO per pending layer");
   assert.equal(kinds.filter((k) => k === "fence").length, 1, "one fence for the whole pack"); assert.equal(kinds[kinds.indexOf("fence") + 1], "flush", "flushed right after the fence (MDN)");
   assert.equal(busy.polls(), 4, "polled until the fence signalled (3 busy ticks, then satisfied)");
-  assert.deepEqual(async_.ops.filter((o) => o[0] === "sub"), [["sub", 0, page, page], ["sub", page, 5 * page, page], ["sub", 2 * page, 9 * page, page], ["sub", 3 * page, 16 * page, page]], "each slot lands at its layer's page");
-  assert.deepEqual(async_.ops.filter((o) => o[0] === "alloc"), [["alloc", 4 * page]], "the PBO holds the pending layers only");
-  assert.ok(kinds.includes("deleteSync") && kinds.includes("deleteBuffer"), "the fence and the PBO are released");
+  assert.deepEqual(async_.ops.filter((o) => o[0] === "sub"), [["sub", 0, page, page], ["sub", 0, 5 * page, page], ["sub", 0, 9 * page, page], ["sub", 0, 16 * page, page]], "each buffer lands whole at its layer's page");
+  assert.equal(kinds.filter((k) => k === "deleteBuffer").length, 4, "every PBO is released"); assert.ok(kinds.includes("deleteSync"), "the fence is released");
+  const firstSub = kinds.indexOf("sub"), lastFence = kinds.lastIndexOf("fence");
+  assert.ok(firstSub > lastFence && kinds.slice(lastFence, firstSub).filter((k) => k === "readPBO").length === 0, "every readPixels precedes the fence; every copy follows it");
   assert.deepEqual(sync.ops.filter((o) => o[0] === "readSync").map((o) => o[1]), [1, 5, 9, 16], "the sync path still reads each layer in place");
 });
 
