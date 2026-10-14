@@ -702,6 +702,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ready-gate.test.mjs",
   "tests/unit/real-race-script.test.mjs",
   "tests/unit/real-race.test.mjs",
+  // Replay caption validity across seeks, reel cuts and session changes; isolated VM.
+  "tests/unit/real-replay-captions.test.mjs",
   // ...and the REAL REPLAY on the real Baku build: OpenF1's x/y fitted onto the
   // centreline, the highlights list, the field as puppets (follow, speed, a car
   // whose data ends, the flag) and the exact JUMP IN. Four game boots, ~12 s.
