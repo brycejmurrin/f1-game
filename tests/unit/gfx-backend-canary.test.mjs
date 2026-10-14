@@ -1125,6 +1125,48 @@ test("GLX exports a real gpuErrors counter and the workflow fails on a missing o
     "the || 0 form treats an absent counter as zero — that was the bug");
 });
 
+test("GLX drainGpuErrors() lets the census drain ~1 Hz instead of on every present (hunt 4 I2)", () => {
+  // The census used to seed apex26.glErrDrain=1, which drains getError() on
+  // EVERY present: 4.92 ms/frame of blocking IPC on macos-latest (spa dusk,
+  // run 38502534542) that no player pays. GL error flags are sticky until
+  // read, so one explicit drain per beat keeps the gpuErrors > 0 gate whole.
+  const h = bootGlx();
+  for (let i = 0; i < 40; i++) { h.GLX.begin(h.frame()); h.GLX.present({}); }   // past the boot drain window
+  let pending = [1282];
+  h.answers.getError = () => (pending.length ? pending.shift() : 0);
+  h.GLX.begin(h.frame()); h.GLX.present({});
+  assert.equal(h.GLX.gpuErrors(), 0, "steady-state presents must not drain without apex26.glErrDrain=1");
+  assert.equal(h.GLX.drainGpuErrors(), 1, "the explicit drain reads the sticky flag the presents left");
+  assert.match(String(h.GLX.gpuFirstError()), /INVALID_OPERATION @ drain/);
+  assert.equal(h.GLX.drainGpuErrors(), 1, "a clean drain adds nothing");
+  // The old per-present behaviour stays one pin away for the census's --gl-err-drain.
+  const h2 = bootGlx({ ls: { "apex26.glErrDrain": "1" } });
+  for (let i = 0; i < 40; i++) { h2.GLX.begin(h2.frame()); h2.GLX.present({}); }
+  pending = [1281];
+  h2.answers.getError = () => (pending.length ? pending.shift() : 0);
+  h2.GLX.begin(h2.frame()); h2.GLX.present({});
+  assert.equal(h2.GLX.gpuErrors(), 1, "apex26.glErrDrain=1 still drains on every present");
+});
+
+test("GLX honours SCREENSHOTS = NATIVE under automation: no preserveDrawingBuffer, no overlay (hunt 4 I1)", () => {
+  // Under a HeadlessChrome UA GLX keeps the drawing buffer and blits to an
+  // opaque #game-soft only when a capture waits, so every census shot after
+  // the first was the same stale gen-1 frame (census 450-455). The census pins
+  // apex26.wgxCapture=0 — the key WGX and TLX already honour — to run the
+  // player's present path; this holds the pin as behaviour on the mock.
+  const h = bootGlx({ userAgent: "Mozilla/5.0 HeadlessChrome/141.0", ls: { "apex26.wgxCapture": "0" } });
+  const ctx = h.contextAttrs.find((c) => c.type === "webgl2");
+  assert.equal(ctx.attrs.preserveDrawingBuffer, false, "the native pin must drop preserveDrawingBuffer");
+  assert.equal(h.GLX.softPresent(), false, "the native pin must not arm the soft overlay");
+  assert.equal(h.GLX.backendState().softPresent, false);
+  const src = code("js/render/glx/glx.js");
+  assert.match(src, /sessionStorage\.getItem\("apex26\.wgxCapture"\)\s*\|\|\s*localStorage\.getItem\("apex26\.wgxCapture"\)/,
+    "session wins over local, as in WGX and TLX (a SETTINGS tap for this tab beats a saved pref)");
+  assert.match(src, /_softPresent\s*=\s*headlessUa && !capNative;/, "a saved \"1\" or AUTO keeps the headless soft path");
+  assert.match(src, /getContext\("2d", \{ alpha: false, willReadFrequently: true \}\)/,
+    "#game-soft is read back by ?gfxdebug=1 every rebuild — the 2D context must say so (I7), as TLX's does");
+});
+
 // The Verdict step is a `node -e` script embedded in YAML, so nothing ever ran
 // it — every guard on it was a regex over its SOURCE. That is how three
 // vacuous clauses lived in it at once. Lift the real script out and execute it
@@ -1296,6 +1338,55 @@ test("the GPU gate holds the native WGX leg to bind + swapchain, but only a HEAD
   assert.equal(r.code, 0, `a software image that cannot bring WGX up is noise:\n${r.out}`);
   r = runVerdict(script, { census: hw, legs: { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson() } });
   assert.equal(r.code, 1, "a missing wgx artifact must fail like any other missing leg");
+});
+
+test("the Verdict names stale A/B captures and the GLX drain mode (hunt 4 I1/I2)", () => {
+  // Census 450-455 shot one gen-1 soft blit for every GLX A/B capture and
+  // reported a 0.03-0.52 % "difference" that was the HUD clock. The row must
+  // now say which frames were shot, and say STALE when the gens did not move.
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const ab = (present, freshFrames) => ({
+    feature: "occlusionCull", clock: 12, clockPinned: true, simFrozen: true, freshFrames,
+    off: { median: 10, present: present(1) }, off2: { median: 10, present: present(2) }, on: { median: 9, present: present(3) },
+    paired: { off: 10, on: 9, samples: 40 }, gpuDeltaPct: -10, gpuNoisePct: 0,
+    noiseFloor: { pctDiffering: 0.1 }, pixels: { differing: 5, ofTotal: 100, pctDiffering: 5, maxChannelDelta: 9, meanAbsDelta: 0.1 },
+  });
+  const glx = (a) => ({ ...glxLegJson(), glErrDrain: "beat", present: { mode: "native" }, occlusionAB: a });
+  const legs = (g) => ({ webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: g, wgx: wgxLegJson() });
+  let r = runVerdict(script, { census: hw, legs: legs(glx(ab(() => ({ mode: "soft", gen: 1, genBefore: 1 }), false))) });
+  assert.match(r.out, /frames: off=soft@1 off2=soft@1 on=soft@1\s+<- STALE/);
+  assert.match(r.out, /glErrDrain=beat shot=native/);
+  r = runVerdict(script, { census: hw, legs: legs(glx(ab(() => ({ mode: "native" }), true))) });
+  assert.match(r.out, /frames: off=native off2=native on=native/);
+  assert.doesNotMatch(r.out, /STALE/);
+});
+
+test("the Verdict prints the driven window and a skipped A/B, not the end-of-run ring alone (hunt 4 I4)", () => {
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const wgx = { ...wgxLegJson(), window: { ms: 20000, frames: 734, fps: 36.7, msPerFrame: 27.25, p50: 26.1, p95: 41.2, p99: 60.3, max: 140.2, callbacksPerFrame: 2, source: "LoopHealth.frames" },
+    occlusionAB: { feature: "occlusionCull", skipped: true, note: "occlusionCull reports supported:false on this backend — A/B skipped" } };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: { ...glxLegJson(), window: { note: "no window bounds — the recorder never armed, or never disarmed" } }, wgx } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /window: 734 frames in 20000 ms = 36\.7 fps \(27\.25 ms\/frame\)\s+interval p50=26\.1 p95=41\.2 p99=60\.3 max=140\.2 ms\s+rAF\/frame=2\s+\[LoopHealth\.frames\]/);
+  assert.match(r.out, /window: no window bounds/, "an unmeasured window is named, not left blank");
+  assert.match(r.out, /occl  A\/B: skipped — occlusionCull reports supported:false/);
+  assert.doesNotMatch(r.out, /occl  A\/B: NOT MEASURED/);
+});
+
+test("the Verdict prints the rAF gap view the spike rows cannot see (hunt 4 §A gap ii)", () => {
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const gapWork = { gaps: 1, thresholdMs: 500, byPhase: { "race start (pre-window)": 1 },
+    summary: "1 rAF gap(s) >= 500 ms (race start (pre-window): 1); worst 4100 ms [race start (pre-window)], 3900 ms of it in the step before, 3895 ms in long tasks",
+    rows: [{ phase: "race start (pre-window)", atMs: 5000, gapMs: 4100, prevFrameMs: 3900, outsideMs: 200, longTaskMs: 3895, armed: false,
+      prev: "linkProgram=14 texImage2D=8192KB wrapped=180ms", between: "-" }] };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: { ...tlxLegJson(), gapWork }, webgl2: tlxLegJson(), glx: { ...glxLegJson(), gapWork: { gaps: 0, rows: [], summary: "no rAF gap >= 500 ms" } }, wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /gaps:  1 rAF gap\(s\) >= 500 ms/);
+  assert.match(r.out, /4100 ms \[race start \(pre-window\)\] at \+5000 ms: step before 3900 ms, long tasks 3895 ms — prev: linkProgram=14 texImage2D=8192KB wrapped=180ms \| between: -/);
+  assert.match(r.out, /gaps:  no rAF gap >= 500 ms/, "a clean leg says so rather than printing nothing");
 });
 
 test("the GPU gate fails a hardware TLX leg that stopped reporting an env count", () => {
@@ -2376,9 +2467,9 @@ test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () =>
 const TLX = read("js/render/three/tlx.js");
 const GLX = read("js/render/glx/glx.js");
 const TSL_LIT = read("js/render/three/tsl-lit.js");
-const THREE_BUNDLE = read("vendor/three-0.186.0/three.webgpu.min.js");
+const THREE_BUNDLE = read("vendor/three-0.186.1/three.webgpu.min.js");
 
-// ── The LOCAL PATCHES carried on the vendored bundle (vendor/three-0.186.0/
+// ── The LOCAL PATCHES carried on the vendored bundle (vendor/three-0.186.1/
 // PATCHES.md, applied to the readable build by tools/gen/vendor-three.mjs and
 // minified with the pinned terser). A vendor re-drop that silently reverts one
 // must fail HERE, not in production. The needles below are property names and
@@ -2435,7 +2526,7 @@ test("the vendored three carries the swizzle patch — Chromium 141 rejects r185
   // first race frame, TLX refuses the tab and reloads. The patch omits the
   // member (identity swizzle carries no information). Re-apply per PATCHES.md.
   assert.doesNotMatch(THREE_BUNDLE, /this\.swizzle="rgba"/,
-    "pristine swizzle default is back — the vendor bundle was re-dropped without the patch (see vendor/three-0.186.0/PATCHES.md §1)");
+    "pristine swizzle default is back — the vendor bundle was re-dropped without the patch (see vendor/three-0.186.1/PATCHES.md §1)");
   assert.equal(THREE_BUNDLE.split('this.swizzle=void 0').length - 1, 2,
     "the swizzle patch must cover BOTH sites (constructor + reset())");
 });
@@ -2454,7 +2545,7 @@ test("getDynamicCacheKey fills a scratch array instead of minting one per draw (
   // would make this test fail on a re-vendor that changed nothing.
   assert.match(THREE_BUNDLE,
     /getDynamicCacheKey\(\)\{[^}]*?(\w+)\[0\]=\w+,\1\[1\]=this\.camera\.isArrayCamera\?this\.camera\.cameras\.length:0,\1\[2\]=this\.object\.receiveShadow\?1:0,\1\[3\]=this\.renderer\.contextNode\.id,\1\[4\]=this\.renderer\.contextNode\.version,\w+\(\1\)/,
-    "getDynamicCacheKey no longer fills a scratch array (vendor/three-0.186.0/PATCHES.md §6)");
+    "getDynamicCacheKey no longer fills a scratch array (vendor/three-0.186.1/PATCHES.md §6)");
   // And the form it replaced must be GONE, or a half-applied patch would pass
   // the check above while still allocating on the shadow-receiving path.
   assert.doesNotMatch(THREE_BUNDLE, /getDynamicCacheKey\(\)\{[^}]*?this\.object\.receiveShadow&&/,
@@ -2467,7 +2558,7 @@ test("TextureNode clones share the BASE node's flipY / uv-matrix uniforms (PATCH
   // were 20 per-object updates per draw. The uniforms now live on getBase() and
   // update themselves; the node no longer needs an OBJECT update.
   assert.match(THREE_BUNDLE, /(\w+)=this\.getBase\(\);null===\1\._flipYUniform&&\(\1\._flipYUniform=\w+\(!1\)\.onObjectUpdate\(/,
-    "the flipY uniform is per-clone again (vendor/three-0.186.0/PATCHES.md §10)");
+    "the flipY uniform is per-clone again (vendor/three-0.186.1/PATCHES.md §10)");
   assert.match(THREE_BUNDLE, /(\w+)=this\.getBase\(\);return null===\1\._matrixUniform&&\(\1\._matrixUniform=\w+\(\1\.value\.matrix\)\.onObjectUpdate\(/,
     "the uv-matrix uniform is per-clone again (PATCHES.md §10)");
   assert.doesNotMatch(THREE_BUNDLE, /this\.updateType=null!==this\._matrixUniform\|\|null!==this\._flipYUniform/,
@@ -2491,8 +2582,9 @@ test("shadow-bug batch: lamp/car targets warmed, caster key from the cast matrix
   assert.match(lamp, /let _carKey = _playerIn \? _lampCasterKey\(1, _pm\) : 0;/, "the player is keyed from the matrix it is cast with");
   assert.match(code("js/render/shared/shadow-pass.js"), /Math\.round\(m\[8\] \* 8\)[\s\S]{0,80}Math\.round\(m\[9\] \* 8\)[\s\S]{0,80}Math\.round\(m\[10\] \* 8\)/,
     "orientation (the forward axis: heading AND pitch) is part of the lamp caster key");
-  // warm() must show the hidden casters, or compileAsync skips them.
-  assert.match(warm, /m\.visible = true; shown\.push/, "warm() compiles hidden casters too");
+  // warm() must show the hidden casters, or compileAsync skips them (showAllCasters, shared with the A-W1 drawWarm).
+  assert.match(warm, /const shown = showAllCasters\(\);/, "warm() shows the hidden casters before it compiles");
+  assert.match(sh, /function showAllCasters\(\) \{[\s\S]{0,300}m\.visible = true; shown\.push/, "warm() compiles hidden casters too");
   // Each End renders only the pass its own Begin opened.
   assert.match(sh, /function endPass\(rt\) \{[\s\S]{0,600}\(rt !== undefined && rt !== target\)\) return;/);
   assert.match(sh, /shadowEnd: \(\) => endPass\(sunRT\),/);
@@ -2520,7 +2612,7 @@ test("TextureNode.update rebuilds the UV matrix only for a node that samples thr
   // uniform, so every shadow compare / material / bake sample paid it per draw
   // (census 289: 293 ms of setUvTransform in a 21.9 s WebGL2 leg).
   assert.match(THREE_BUNDLE, /update\(\)\{const (\w+)=this\.value,(\w+)=this\._matrixUniform;null!==\2&&\(\2\.value=\1\.matrix\),null!==\2&&!0===\1\.matrixAutoUpdate&&\1\.updateMatrix\(\)/,
-    "TextureNode.update rebuilds the uv matrix without a matrix uniform again (vendor/three-0.186.0/PATCHES.md §9)");
+    "TextureNode.update rebuilds the uv matrix without a matrix uniform again (vendor/three-0.186.1/PATCHES.md §9)");
 });
 
 test("the vendored three emits render-stage node variables at FUNCTION scope (WebKit 8 KB private cap, PATCHES.md §4)", () => {
@@ -2565,7 +2657,7 @@ test("the vendored three has upstream's #33954 bind-group fix (patch 2 retired i
   // this as a local backport; r186 ships it. A re-drop of an older release
   // fails here.
   assert.match(THREE_BUNDLE, /bindGroups\.delete\(/,
-    "the #33954 fix is missing from the vendor bundle — evicted-material dispose() now leaks (vendor/three-0.186.0/PATCHES.md §2)");
+    "the #33954 fix is missing from the vendor bundle — evicted-material dispose() now leaks (vendor/three-0.186.1/PATCHES.md §2)");
 });
 test("the vendored three keys WebGPU pipelines on polygonOffset (patch 3 retired in r186, PR #34406)", () => {
   // TLX's bias-only material variants (tsl-fx road decals −4/−8, tsl-lit
@@ -2573,7 +2665,7 @@ test("the vendored three keys WebGPU pipelines on polygonOffset (patch 3 retired
   // with the other's bias. Upstream carries the three fields in the cache key
   // and in needsRenderUpdate's compare chain since r186.
   assert.match(THREE_BUNDLE, /\.stencilWriteMask,(\w+)\.polygonOffset,\1\.polygonOffsetFactor,\1\.polygonOffsetUnits,\1\.side/,
-    "cache key lacks polygonOffset* (vendor/three-0.186.0/PATCHES.md §3)");
+    "cache key lacks polygonOffset* (vendor/three-0.186.1/PATCHES.md §3)");
   assert.match(THREE_BUNDLE, /\.polygonOffset===(\w+)\.polygonOffset&&\w+\.polygonOffsetFactor===\1\.polygonOffsetFactor&&\w+\.polygonOffsetUnits===\1\.polygonOffsetUnits/,
     "needsRenderUpdate does not compare polygonOffset* (PATCHES.md §3)");
 });
@@ -2582,9 +2674,9 @@ test("the vendored three matches its MANIFEST.json — generated by tools/gen/ve
   // edit or a re-drop that skipped the generator changes a hash. The pinned
   // terser in package.json is the one the manifest names, so a regeneration on
   // another box reproduces the same bytes.
-  const dir = "vendor/three-0.186.0";
+  const dir = "vendor/three-0.186.1";
   const m = JSON.parse(read(`${dir}/MANIFEST.json`));
-  assert.equal(m.three, "0.186.0");
+  assert.equal(m.three, "0.186.1");
   assert.deepEqual(m.patches, [1, 4, 5, 6, 9, 10, 11, 12, 13], "patch ids applied (2 and 3 retired in r186; 7 and 8 were #228's reverted skip-draw pair; 11 and 12 are the TLX-PERF-HUNT D3 / A2 pair; 13 is PERF-HUNT-3 B14)");
   // §13: a shared group's cache key names texture bindings (node id + binding name), and texture clones keep their group.
   assert.match(THREE_BUNDLE, /\?"s":"t"\)\+\(\w+\.textureNode\?\w+\.textureNode\.id:""\)\+":"\+\w+\.name\+","/, "shared-group key for texture / sampler bindings (PATCHES.md §13)");
@@ -2598,7 +2690,7 @@ test("the vendored three matches its MANIFEST.json — generated by tools/gen/ve
   assert.equal(pkg.devDependencies.terser, m.terser, "package.json must pin the terser the manifest was generated with");
   for (const [file, rec] of Object.entries(m.files)) {
     const h = createHash("sha256").update(fs.readFileSync(path.join(ROOT, dir, file))).digest("hex");
-    assert.equal(h, rec.sha256, `${dir}/${file} differs from MANIFEST.json — regenerate with node tools/gen/vendor-three.mjs 0.186.0`);
+    assert.equal(h, rec.sha256, `${dir}/${file} differs from MANIFEST.json — regenerate with node tools/gen/vendor-three.mjs 0.186.1`);
   }
   for (const name of [
     "three.webgpu.min.js", "three.core.min.js", "three.tsl.min.js", "LICENSE.txt",
@@ -4691,7 +4783,7 @@ test("TLX binds on a phone by default, declines only on apex26.tlxMobile=0 with 
 // work — asserted against the VENDORED bundle so a version bump re-checks them
 // rather than letting the comment go stale.
 test("three still re-reads attribute.array after upload (why the release fix is impossible)", () => {
-  const three = read("vendor/three-0.186.0/three.webgpu.min.js");
+  const three = read("vendor/three-0.186.1/three.webgpu.min.js");
 
   // draw(): firstVertex *= index.array.BYTES_PER_ELEMENT, every indexed draw.
   assert.match(three, /\*=\s*\w+\.array\.BYTES_PER_ELEMENT/,
@@ -5023,7 +5115,7 @@ test("spatial upscale persists once through GameStore at the UI boundary", () =>
 
 // Execute the bundled API: mocks alone cannot catch a renamed/wrong owner API.
 test("TLX timing enables the bundled backend, not a shadow renderer property", async () => {
-  const THREE = await import("../../vendor/three-0.186.0/three.webgpu.min.js");
+  const THREE = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
   let _gpuTimerOn = false, _gpuMs = 12, _gpuTimerEpoch = 0;
   const _gpuSupported = () => true;
@@ -5037,7 +5129,7 @@ test("TLX timing enables the bundled backend, not a shadow renderer property", a
 });
 
 test("TLX cube readback selects all six faces of attachment zero", async () => {
-  const THREE = await import("../../vendor/three-0.186.0/three.webgpu.min.js");
+  const THREE = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
   const envRT = new THREE.CubeRenderTarget(1), ENV_SIZE = 1;
   let _envCubeRead = false, _envCube = null;
@@ -5096,6 +5188,7 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   const mintLateLit = () => { assert.equal(tag, false, "late lit variants are minted BEFORE setSsrMrt stamps the MRT"); minted = true; };
   const warmLateLit = async () => { assert.ok(minted); assert.equal(mrt, "tag", "late lit variants compile under the scene MRT"); };
   const warmPlusOn = () => true;   // apex26.tlxWarmPlus=1 or three's WebGL2 backend: the full warm
+  const drawWarmOn = () => false;   // the A-W1 draw stage (after the mirror stage) has its own rig: tlx-hunt4b.test.mjs
   // The stage timeline memState().warm reports (census 207 spent its window
   // inside the warm with no row saying so): the sandbox owns the record.
   const _warmStages = { at: 0, scene: null, post: null, shadow: null, total: null, attempts: 0, failed: 0 };
@@ -5277,7 +5370,7 @@ test("all track loaders release selector ownership before building, even on fail
 });
 
 test("three warm-up fallback yields tasks without waiting for display frames", async () => {
-  const core = read("vendor/three-0.186.0/three.core.min.js");
+  const core = read("vendor/three-0.186.1/three.core.min.js");
   const alias = core.match(/\b(\w+) as yieldToMain\b/);
   assert.ok(alias, "three.core.min.js must export yieldToMain under a minified alias");
   const body = fnBody(core, alias[1]);

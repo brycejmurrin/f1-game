@@ -80,7 +80,7 @@ var RaceRadio = (function () {
     // facts only colour it (battles, the lead gap). Hooks: nameOf(car) — the
     // REAL driver's name (a seat car can wear another roster name) — and
     // radioBusy() — a team radio clip is playing.
-    let watch = null;
+    let watch = null, timeline = 0;
     let m = null;
     const queue = { eng: new Map(), tv: new Map() };
     const log = [];
@@ -104,12 +104,25 @@ var RaceRadio = (function () {
     }
 
     function reset() {
+      timeline++;
       facts.reset();
       lines = RadioLines.create((o.seed || 1) + ((G.raceRound | 0) * 7919));
       queue.eng.clear(); queue.tv.clear();
       m = freshMemory(); evalT = 0; t = 0; last = null; live = false; log.length = 0;
     }
     reset();
+
+    // A replay cut changes the facts and clock, not the race. Drop pending
+    // copy and cooldowns from the old timeline without repeating once-only news.
+    function resetTimeline() {
+      if (!watch) return;
+      timeline++;
+      if (G.radio && G.radio.halt) G.radio.halt();
+      facts.reset(); queue.eng.clear(); queue.tv.clear();
+      m.said.clear(); m.eng = m.tv = -Infinity;
+      evalT = 0; t = G.raceT || 0;
+      last = facts.observe(G, 0).f;
+    }
 
     const gapT = RadioLines.gapText, timeT = RadioLines.timeText;
     const S = (c) => (watch && watch.nameOf && c ? watch.nameOf(c) || RadioLines.surname(c) : RadioLines.surname(c));
@@ -150,10 +163,13 @@ var RaceRadio = (function () {
     function speak(c, kind) {
       const text = lines.pick(c.key, c.vars);
       if (!text) { queue[c.ch].delete(c.id); return false; }
+      // announce() may accept a card that will not play until after a seek.
+      const gen = timeline, still = c.still;
+      const valid = watch ? () => !!watch && gen === timeline && (!still || still()) : still;
       // Refused (a full card queue): an URGENT line stays queued and is offered
       // again until its ttl — "LAST LAP" is a once line, and dropping it here
       // lost it for the race. Anything else is dropped, as before.
-      if (!G.announce(text, durFor(text), kind, c.still)) { if (c.tier < 5) queue[c.ch].delete(c.id); return false; }
+      if (!G.announce(text, durFor(text), kind, valid)) { if (c.tier < 5) queue[c.ch].delete(c.id); return false; }
       queue[c.ch].delete(c.id);
       m.said.set(c.cdKey, t);
       if (c.once) m.once.add(c.once);
@@ -508,15 +524,9 @@ var RaceRadio = (function () {
       // place — and read the re-grid as a lap of passes.
       if (G.cars !== lastCars) { reset(); lastCars = G.cars; }
       else if (now + 1 < t) {
-        // A WATCH seeks and cuts (HIGHLIGHTS): the clock going back is the same
-        // race, so the memory stays; only the stale lines and the facts go.
-        if (watch) {
-          const shift = now - t;
-          for (const [key, at] of m.said) m.said.set(key, at + shift);
-          for (const [car, at] of m.passedBy) m.passedBy.set(car, at + shift);
-          m.eng += shift; m.tv += shift;
-          facts.reset(); queue.tv.clear(); t = now;
-        }
+        // Explicit seeks reset both directions; retain this fallback for a
+        // replay clock replaced without the transport's discontinuity hook.
+        if (watch) resetTimeline();
         else reset();
       }
       live = true;
@@ -581,7 +591,7 @@ var RaceRadio = (function () {
     /** The driver asks for a status check — the one line that answers on demand. */
     function request() {
       const f = last;
-      if (!live || !f) return "";
+      if (!live || !f || watch) return "";
       const text = f.ahead && f.gapA != null && f.behind && f.gapB != null
         ? lines.pick("eng.status", { pos: f.pos, gapA: gapT(f.gapA), gapB: gapT(f.gapB) })
         : f.ahead && f.gapA != null ? "P" + f.pos + ". " + gapT(f.gapA) + " TO " + S(f.ahead)
@@ -629,6 +639,7 @@ var RaceRadio = (function () {
     }
     /** A WATCH starts (hooks {nameOf, radioBusy}) or ends (null). */
     function setWatching(hooks) {
+      timeline++;
       watch = hooks || null;
       queue.tv.clear(); queue.eng.clear();
     }
@@ -645,7 +656,7 @@ var RaceRadio = (function () {
     }
 
     return {
-      update, request, reset, setChat, setComm, replayEvent, setWatching,
+      update, request, reset, resetTimeline, setChat, setComm, replayEvent, setWatching,
       /** Commentary will speak in a WATCH (not OFF): the replay's captions stand down for it. */
       commentates: () => comm !== "off",
       chat: () => chat, comm: () => comm,

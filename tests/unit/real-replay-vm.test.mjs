@@ -623,6 +623,39 @@ test("WATCH transport pause holds the replay clock, and seek reposes ended and r
   replay.stop();
 });
 
+test("WATCH paused follow refreshes the inset before snapping without advancing playback", () => {
+  const { replay, G, cars } = transportReplay();
+  replay.tick(0.1);
+  replay.setPaused(true);
+  const before = replay.status(), pictures = [], frames = [];
+  G.setPip = (car) => pictures.push(car);
+  G.snapGameCam = () => frames.push(replay.status().broadcast.pip.code);
+  assert.equal(before.broadcast.pip.code, "BBB");
+  replay.follow("BBB");
+  assert.deepEqual(pictures, [null, cars[0]], "the newly followed inset car is replaced immediately");
+  assert.deepEqual(frames, ["AAA"], "the camera sees the refreshed inset");
+  assert.equal(replay.status().T, before.T);
+  assert.equal(replay.status().broadcast.cuts, before.broadcast.cuts);
+  assert.equal(replay.status().paused, true);
+  replay.follow("AAA");
+  assert.equal(replay.status().broadcast.pip.code, "BBB", "a second paused follow also refreshes");
+  replay.stop();
+});
+
+test("BROADCAST manual camera ownership keeps the on-air shot and AUTO baseline current", () => {
+  const { replay, G, options } = transportReplay();
+  replay.start({ ...options, camera: "heli" });
+  assert.equal(replay.status().broadcast.shot, "heli", "a fixed-camera launch reports its actual shot");
+  G.camMode = 3; replay.takePicture();
+  assert.equal(replay.status().broadcast.shot, "chase", "camera picker updates the on-air baseline");
+  G.camMode = 2; replay.setLocked(true);
+  assert.equal(replay.status().broadcast.shot, "heli", "transport camera lock updates the baseline too");
+  replay.setAuto(true);
+  replay.eventStep(1);
+  assert.notEqual(replay.status().broadcast.shot, "heli", "AUTO chooses a different shot from the viewer's actual one");
+  replay.stop();
+});
+
 test("WATCH follow lock survives director holds and event navigation, AUTO releases it, and restart clears playback state", () => {
   const { replay, G } = transportReplay();
   replay.setLocked(true);
@@ -653,6 +686,25 @@ test("WATCH paused event navigation paints the final subject and event shot in o
   assert.equal(replay.status().broadcast.shot, "chase");
   assert.equal(replay.status().paused, true);
   for (const car of cars) assert.equal(car.rPrevPx, car.px, "event navigation clears interpolation");
+  replay.stop();
+});
+
+test("WATCH timeline changes reset commentary at the new clock and pose before snapping", () => {
+  const { replay, G, options } = transportReplay();
+  const order = [];
+  G.raceRadio = { resetTimeline: () => order.push(["radio", G.raceT, G.player.prog]) };
+  G.snapGameCam = () => order.push(["snap", G.raceT, G.player.prog]);
+  for (const T of [15, 2]) {
+    order.length = 0; replay.seek(T);
+    assert.deepEqual(order, [["radio", T, T * 50], ["snap", T, T * 50]]);
+  }
+  order.length = 0; replay.eventStep(1);
+  assert.deepEqual(order, [["radio", 4, 180], ["snap", 4, 180]], "commentary sees the event's newly selected driver");
+  options.reel = true;
+  options.script.passes = [{ t: 10, by: 1, over: 2 }, { t: 20, by: 1, over: 2 }];
+  replay.start(options);
+  order.length = 0; replay.skip();
+  assert.deepEqual(order, [["radio", 12, 600], ["snap", 12, 600]], "reel cuts share the commentary reset");
   replay.stop();
 });
 
@@ -950,7 +1002,7 @@ test("WATCH toolbar exposes working pointer controls, honest event labels and ph
       addEventListener(k, fn) { listeners[k] = fn; }, dispatch(k) { if (listeners[k]) listeners[k](); } };
   }
   const body = element("body"), doc = { body, createElement: element };
-  const ctx = vm.createContext({ document: doc, CamModes: { CAM_MODES: [{ id: "chase", label: "CHASE" }, { id: "heli", label: "AERIAL" }] }, RealReplay: { LEAD_S: 8 } });
+  const ctx = vm.createContext({ document: doc, CamModes: { CAM_MODES: [{ id: "chase", label: "CHASE" }, { id: "heli", label: "AERIAL" }, { id: "tv", label: "TV" }] }, RealReplay: { LEAD_S: 8 } });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx);
   const W = vm.runInContext("WatchTransport", ctx), calls = [];
   const state = { T: 0, duration: 100, paused: false, speed: 1, follow: "AAA", broadcast: { auto: true, locked: false, manual: false } };
@@ -963,19 +1015,36 @@ test("WATCH toolbar exposes working pointer controls, honest event labels and ph
   const ui = W.create(G, api); ui.start();
   const find = (key, parent = body) => parent.dataset.wt === key ? parent : parent.children.map((n) => find(key, n)).find(Boolean);
   assert.equal(find("play").getAttribute("aria-label"), "Pause replay");
+  assert.equal(find("play").textContent, "❚❚", "pause uses the same visible bars as the main game button");
+  assert.equal(find("camera").value, "tv", "the dropdown reflects active replay AUTO ownership");
   assert.equal(find("prev").disabled, true); assert.equal(find("next").disabled, false);
   assert.match(find("event").textContent, /^NEXT · L2/, "an upcoming moment is explicitly marked NEXT");
   find("play").dispatch("click"); assert.equal(state.paused, true);
   assert.equal(find("play").getAttribute("aria-label"), "Play replay");
+  assert.equal(find("play").textContent, "\u25b6\ufe0e", "play explicitly requests text presentation");
   find("play").dispatch("click");
+  assert.equal(find("play").textContent, "❚❚", "resuming restores the visible pause glyph");
   find("speed").value = "2"; find("speed").dispatch("change"); assert.equal(state.speed, 2);
   find("driver").value = "BBB"; find("driver").dispatch("change");
   assert.equal(state.follow, "BBB"); assert.equal(state.broadcast.locked, true);
   find("camera").value = "heli"; find("camera").dispatch("change");
   assert.deepEqual(calls.slice(-2), [["camera", false], ["snap"]], "changing view is temporary and resets framing");
+  assert.equal(find("camera").value, "heli");
+  const cameraCalls = calls.length;
+  find("camera").value = "tv"; find("camera").dispatch("change");
+  assert.equal(state.broadcast.locked, false, "TV releases the viewer lock and enables the replay director");
+  assert.equal(find("auto").getAttribute("aria-pressed"), "true");
+  assert.equal(find("camera").value, "tv");
+  assert.equal(G.camMode, 1, "the inactive live-race TV rig never replaces the current replay shot");
+  assert.equal(calls.length, cameraCalls, "selecting TV does not write or snap a live-race camera");
   find("seek").value = "30"; find("seek").dispatch("input"); find("seek").dispatch("change");
   assert.equal(state.T, 30); assert.equal(find("seek").getAttribute("aria-valuetext"), "0:30 of 1:40");
   assert.equal(find("next").disabled, true);
+  assert.equal(find("event").textContent, "RACE IN PROGRESS", "running out of highlights does not finish the race");
+  state.T = state.duration; ui.paint();
+  assert.equal(find("event").textContent, "RACE IN PROGRESS", "a truncated trace endpoint is not an official flag");
+  state.finished = true; ui.paint();
+  assert.equal(find("event").textContent, "CHEQUERED FLAG");
   find("prev").dispatch("click"); assert.deepEqual(calls.at(-1), ["event", -1]);
   find("auto").dispatch("click"); assert.equal(state.broadcast.locked, false);
   find("photo").dispatch("click"); assert.deepEqual(calls.at(-1), ["photo", false], "photo owner receives the original playing state");

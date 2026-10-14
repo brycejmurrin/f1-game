@@ -1699,7 +1699,13 @@ const api = {
     // A retirement never crosses the line: it stays unfinished and classifies
     // behind everyone who did, which is the order endRace() builds for a real
     // flag. Waving one home here would hand a parked car a finish and points.
-    G.cars.forEach((c) => { if (!c.finished && !c.retired) { c.finished = true; c.finishT = G.raceT; } });
+    // go() floors raceT at 0.5 s; stamping that as finishT prints
+    // OFFICIAL WINNER ELAPSED 0:00.500 on every harness open. Only attach a
+    // finish clock when the race has actually run past that floor — finishT
+    // 0 omits the official elapsed line (results-sheet correctedFinish).
+    const ran = Number.isFinite(G.raceT) ? G.raceT : 0;
+    const clock = ran > 0.5 ? ran : 0;
+    G.cars.forEach((c) => { if (!c.finished && !c.retired) { c.finished = true; c.finishT = clock; } });
     endRace(raceOrder(G.cars));
     return { state: G.state };
   },

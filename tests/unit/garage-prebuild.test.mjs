@@ -51,11 +51,11 @@ test("blockers: never on a race start, with the garage open, a hidden tab or hea
   assert.deepEqual(why({ warming: true }), ["world-warm"], "and so does a compile they started");
 });
 
-test("blockers: the title is speculative — Save-Data, the pack, the intro and the world all gate it", () => {
+test("blockers: the title is speculative — Save-Data, the intro and the world all gate it", () => {
   const { GP } = loadModule();
   const why = (patch) => [...GP.blockers({ ...GO, ...patch })];
   assert.deepEqual(why({ saveData: true }), ["save-data"]);
-  assert.deepEqual(why({ packSettled: false }), ["pack"]);
+  assert.deepEqual(why({ packSettled: false }), [], "pack no longer blocks car/room; frames wait inside run()");
   assert.deepEqual(why({ intro: true }), ["title-intro"]);
   assert.deepEqual(why({ kind: "track" }), ["world-build"], "a circuit Home finishes its own build first");
   assert.deepEqual(why({ kind: "track", worldReady: true }), []);
@@ -272,6 +272,25 @@ test("blocked runs build nothing: Save-Data on the title, a race start anywhere"
   h.G.loadingScreen.active = () => true;
   assert.equal(await h.pre.run(owned(h), "title"), false);
   assert.deepEqual(h.built, []);
+});
+
+test("car and room build while the pack is still uploading; frames wait for packSettled", async () => {
+  const h = page();
+  let pack = { supported: true, uploaded: false, error: null, tier: null };
+  h.ctx.Assets = { state: () => pack };
+  const done = h.pre.run(owned(h), "title");
+  await h.flush(2);
+  assert.deepEqual(h.built, ["car", "room"], "CPU steps do not wait on the pack");
+  assert.equal(h.gate.garageWarm, 0, "frames stay unarmed until the pack settles");
+  assert.equal(h.warms(), 0);
+  pack = { supported: true, uploaded: true, error: null, tier: "high" };
+  await h.flush(2);
+  assert.equal(h.warms(), 1, "one warm once the pack is up");
+  assert.equal(h.gate.garageWarm, 2);
+  h.gate.garageWarm = 0; h.gate.garageReady = true;
+  await h.flush();
+  assert.equal(await done, true);
+  assert.equal(h.pre.state().last.result, "ready");
 });
 
 test("the tap-to-first-frame measure counts only the visible garage, and says whether it was prebuilt", async () => {

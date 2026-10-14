@@ -220,7 +220,7 @@ test("CONTINUE + Daily stack the save line under the label, not beside it", () =
 
 test("mid-wide title rooms keep one-line labels and air under the utility row", () => {
   // apex9 ~752–768px: 5-across rooms wrapped TRACK DESIGNER / HOW TO PLAY
-  // onto two lines while DATA HUB stayed one; WATCH REAL RACES wrapped
+  // onto two lines while DATA HUB stayed one; a long WATCH label wrapped
   // inside its tile; the row sat flush on the viewport floor.
   const menus = readCssSource("css/menus.css");
   assert.match(
@@ -236,7 +236,7 @@ test("mid-wide title rooms keep one-line labels and air under the utility row", 
   assert.match(
     menus,
     /@media \(max-width:\s*899px\) \{[\s\S]*?#menu-buttons :is\(#menu-explore, #menu-secondary\) \.bigbtn \{ white-space: nowrap/,
-    "WATCH REAL RACES / TRACK DESIGNER / HOW TO PLAY stay one line under 899px",
+    "WATCH / TRACK DESIGNER / HOW TO PLAY stay one line under 899px",
   );
   assert.match(
     menus,
@@ -309,7 +309,7 @@ const visibleText = (html) => html.replace(/<svg[\s\S]*?<\/svg>/g, "")
 
 test("title doors: the accessible name contains the visible label", () => {
   const html = read("index.html");
-  for (const id of ["mb-career", "mb-daily", "mb-race", "mb-tt", "mb-vs", "mb-season"]) {
+  for (const id of ["mb-career", "mb-daily", "mb-race", "mb-tt", "mb-vs", "mb-season", "mb-watch"]) {
     const m = new RegExp(`<button id="${id}"[^>]*aria-label="([^"]*)"[^>]*>([\\s\\S]*?)</button>`).exec(html);
     assert.ok(m, `#${id} has a static aria-label`);
     assert.ok(norm(m[1]).includes(norm(visibleText(m[2]))),
@@ -319,12 +319,27 @@ test("title doors: the accessible name contains the visible label", () => {
 
 test("title doors: the label and its sub-line are separated by a space, never abutting", () => {
   const html = read("index.html");
-  for (const id of ["mb-career", "mb-daily", "mb-continue", "mb-race", "mb-tt", "mb-vs", "mb-season"]) {
+  for (const id of ["mb-career", "mb-daily", "mb-continue", "mb-race", "mb-tt", "mb-vs", "mb-season", "mb-watch"]) {
     const m = new RegExp(`<button id="${id}"[^>]*>([\\s\\S]*?)</button>`).exec(html);
     assert.ok(m, `#${id} exists in the shell`);
     assert.doesNotMatch(m[1].replace(/<svg[\s\S]*?<\/svg>/g, ""), /[^\s>]<span[^>]*mb-[a-z-]*sub|<\/span><span[^>]*mb-[a-z-]*sub/,
       `#${id}: a bare "LABEL<span class=mb-sub>" reads as one word ("RACEONE GRAND PRIX")`);
   }
+});
+
+test("title explore: #mb-watch is WATCH with BROADCAST / REAL RACES in .mb-sub", () => {
+  // Compact-wide 844×390: "WATCH REAL RACES" overflowed the 2×2 cell
+  // (menu-fit scrollWidth 196 > clientWidth 169) while .mb-sub was 0×0
+  // under density=compact. Short main label fits; sub carries the rest
+  // when density allows (same pattern as RACE / ONE GRAND PRIX).
+  const html = read("index.html");
+  assert.match(
+    html,
+    /<button id="mb-watch"[^>]*>[\s\S]*?>WATCH <span class="mb-sub">BROADCAST \/ REAL RACES<\/span><\/span><\/button>/,
+    "#mb-watch main label is WATCH; BROADCAST / REAL RACES lives in .mb-sub",
+  );
+  assert.doesNotMatch(html, /id="mb-watch"[^>]*>[\s\S]*?WATCH REAL RACES/,
+    "must not keep the long one-line WATCH REAL RACES label");
 });
 
 test("title menu: the doors the script re-names start with their visible label", () => {

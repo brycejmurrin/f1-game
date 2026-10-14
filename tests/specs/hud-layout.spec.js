@@ -791,6 +791,57 @@ for (const v of [
   });
 }
 
+// PORTRAIT RADIO CARD (race-anyway). Every dock group is 0px tall here, so
+// announceLane publishes no lane; `left: calc(var(--announce-lane-x) / …)`
+// with no fallback went invalid-at-computed-value-time (`auto`), and the -50%
+// shift parked the card at x -72..72 on 390x844, over #minimap. The fallback
+// in css/hud.css centres it.
+test.describe("portrait radio card (phone-portrait-390)", () => {
+  test.setTimeout(300_000);
+  const v = { name: "phone-portrait-390", w: 390, h: 844, sal: 0, sar: 0, sat: 47, sab: 34 };
+  test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
+  for (const hudScale of [100, 150]) {
+    test(`HUD ${hudScale}%: the card stays on screen and clears the map, timing row and RELATIVE`, async ({ page }) => {
+      await race(page, "buttons", false, v, { hudScale, btnScale: hudScale, cam: "chase" });
+      await page.evaluate(() => {
+        document.body.classList.add("rotate-ok");
+        localStorage.setItem("apex26.portraitOk", "1");
+        if (typeof HudElements !== "undefined") HudElements.set("rel", true);
+        if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
+        window.__apex.jump(0.15, 60, 0);
+        document.getElementById("announce").hidden = false;
+      });
+      const got = await page.waitForFunction(async () => {
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const ann = document.getElementById("announce");
+        if (!ann || ann.hidden) return false;
+        const box = (el) => {
+          if (!el || el.hidden) return null;
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom } : null;
+        };
+        const a = box(ann);
+        if (!a) return false;
+        return { a, W: window.innerWidth, H: window.innerHeight, body: document.body.className,
+          others: { "#minimap": box(document.getElementById("minimap")),
+            ".hud-top": box(document.querySelector(".hud-top")),
+            "#hud-rel": box(document.getElementById("hud-rel")) } };
+      }, null, { polling: 100, timeout: 30_000 });
+      const m = await got.jsonValue();
+      const why = JSON.stringify(m);
+      expect(m.a.left, why).toBeGreaterThanOrEqual(-0.5);
+      expect(m.a.top, why).toBeGreaterThanOrEqual(-0.5);
+      expect(m.a.right, why).toBeLessThanOrEqual(m.W + 0.5);
+      expect(m.a.bottom, why).toBeLessThanOrEqual(m.H + 0.5);
+      expect(m.others["#minimap"], "the fixture shows the map: " + why).not.toBeNull();
+      const hits = Object.entries(m.others).filter(([, r]) => r
+        && r.left < m.a.right - 0.5 && m.a.left < r.right - 0.5
+        && r.top < m.a.bottom - 0.5 && m.a.top < r.bottom - 0.5).map(([k]) => k);
+      expect(hits, why).toEqual([]);
+    });
+  }
+});
+
 test.describe("track-limits chip", () => {
   test.setTimeout(300_000);
   test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });

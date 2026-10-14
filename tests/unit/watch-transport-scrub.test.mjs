@@ -34,6 +34,7 @@ function setup({ raf }) {
 
 test("50 scrub `input` events cost at most one seek (one paint) before the next frame", () => {
   const t = setup({ raf: true });
+  assert.equal(t.find("event").textContent, "RACE IN PROGRESS", "a replay without highlight events has not finished");
   const seek = t.find("seek");
   for (let i = 1; i <= 50; i++) { seek.value = String(i); seek.dispatch("input"); }
   assert.ok(t.seeks.length <= 1, `seeks before the frame: ${t.seeks.length}`);

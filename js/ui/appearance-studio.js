@@ -174,7 +174,7 @@ const AppearanceStudio = (function () {
     const body = ui.preview; body.replaceChildren();
     body.appendChild(node("div", "as-preview-brand", "APEX 26"));
     const plate = node("div", "as-preview-content");
-    if (previewPage === "home") { for (const name of ["RACE", "WATCH REAL RACES", "GARAGE", "SETTINGS"]) plate.appendChild(node("div", "as-preview-door", name)); }
+    if (previewPage === "home") { for (const name of ["RACE", "WATCH", "GARAGE", "SETTINGS"]) plate.appendChild(node("div", "as-preview-door", name)); }
     else if (previewPage === "career") { plate.append(node("h3", "", "DRIVER CAREER"), node("p", "", "NEXT RACE · MONZA"), node("div", "as-preview-door", "CONTINUE WEEKEND"), node("p", "", "DEVELOPMENT     TEAM     SEASON")); }
     else if (previewPage === "race") { plate.append(node("h3", "", "RACE SETTINGS"), node("p", "", "MONZA · GRAND PRIX")); for (const name of ["WEEKEND     RACE", "WEATHER     DRY", "LAPS     12", "START RACE"]) plate.appendChild(node("div", "as-preview-door", name)); }
     else if (previewPage === "hud") {
