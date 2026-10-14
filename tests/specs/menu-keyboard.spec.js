@@ -208,6 +208,40 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.evaluate(() => window.__apex.uiScale(null));
   });
 
+  test("PageDown on the circuit strip hands focus to a visible circuit; the next arrow does not page back", async ({ page }) => {
+    // #1789: keepFocusInView checked only top/bottom, so focus stayed on a
+    // circuit paged off the strip's left edge and ArrowRight scrolled back.
+    await page.goto("/"); await waitReady(page);
+    await openSelect(page);
+    for (const vp of [{ width: 1280, height: 800 }, { width: 844, height: 390 }]) {
+      await page.setViewportSize(vp);
+      const r = await page.evaluate(() => {
+        const list = document.getElementById("sel-tracks");
+        const key = (k) => document.activeElement.dispatchEvent(
+          new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+        const onStrip = () => {
+          const p = list.getBoundingClientRect(), a = document.activeElement.getBoundingClientRect();
+          return list.contains(document.activeElement) && a.left >= p.left - 1 && a.right <= p.right + 1;
+        };
+        list.scrollLeft = 0;
+        list.querySelector(".track-row").focus();
+        key("PageDown");
+        const paged = list.scrollLeft, visibleAfterPage = onStrip();
+        key("ArrowRight");
+        const afterArrow = list.scrollLeft, visibleAfterArrow = onStrip();
+        key("PageUp");
+        return { paged, visibleAfterPage, afterArrow, visibleAfterArrow,
+                 visibleAfterPageUp: onStrip(), max: list.scrollWidth - list.clientWidth };
+      });
+      if (r.max < 2) continue; // the strip fits: nothing to page at this viewport
+      expect(r.paged, `${vp.width}: PageDown scrolled the strip`).toBeGreaterThan(0);
+      expect(r.visibleAfterPage, `${vp.width}: focus is on a circuit inside the strip after PageDown`).toBe(true);
+      expect(r.afterArrow, `${vp.width}: ArrowRight did not undo the page`).toBeGreaterThanOrEqual(r.paged - 1);
+      expect(r.visibleAfterArrow, `${vp.width}: focus still on the strip after ArrowRight`).toBe(true);
+      expect(r.visibleAfterPageUp, `${vp.width}: focus is on a visible circuit after PageUp`).toBe(true);
+    }
+  });
+
   test("End reaches the last livery card, past the content-visibility render boundary", async ({ page }) => {
     // The livery grid rows are content-visibility:auto; rows outside the
     // render margin have zero rects, so a scope built through the shown()
