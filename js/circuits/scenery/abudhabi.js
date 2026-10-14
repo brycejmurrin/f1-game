@@ -510,13 +510,15 @@
       ledFascia(0.36, 1, 8, 60, 1);
       grandstandEx(0.48, -1, 8, 60, null, null, { livery: "darkSteel", roof: "truss" });          // SOUTH
       ledFascia(0.48, -1, 8, 60, 1);
+      // f58 survey: gap-8 bleacher sat in the paved run-off. Seat it further
+      // back (gap 22) so the apron stays clear.
       if (typeof bleacher === "function") {
-        bleacher(0.545, 0.578, 1, 8, {
+        bleacher(0.545, 0.578, 1, 22, {
           rows: 6, rise: 0.74, setback: 1.0, step: 16, density: 0.5,
           frameCol: [0.62, 0.65, 0.70], plankCol: [0.30, 0.46, 0.50],
         });
       } else {
-        grandstandEx(0.56, 1, 8, 70, null, null, { livery: "sandstone", roof: "none" });
+        grandstandEx(0.56, 1, 22, 70, null, null, { livery: "sandstone", roof: "none" });
       }
       // f83 survey: stand at gap 8 on the Marsa bank read tilted. Seat it on
       // flatter ground further out (gap 16) and use a bleacher rake that
