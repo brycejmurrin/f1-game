@@ -63,15 +63,18 @@
             // banked a.u does not tip the strip into grade.
             const gy = groundUnder(a.c[0], a.c[2]);
             const ty = terrainYAt(a.c[0], a.c[2]);
-            const baseY = Math.max(
-              gy != null ? gy : -Infinity,
-              ty != null ? ty : -Infinity,
-              a.c[1]
-            );
-            if (!Number.isFinite(baseY)) continue;
-            const foot = [a.c[0], baseY + 0.06, a.c[2]];
+            // Do not max in road-edge a.c[1]: on a hillside it sits below the
+            // rendered ribbon and buried the soil strip up to 1.7 m (ground-audit).
+            let footY = null;
+            if (gy != null && ty != null) footY = Math.max(gy, ty);
+            else if (gy != null) footY = gy;
+            else if (ty != null) footY = ty;
+            else continue;
+            const foot = [a.c[0], footY + 0.12, a.c[2]];
             const bw = flatBasis(a);
-            seat.box(out, foot, [4.6, 0.12, rowLen], SOIL, bw);
+            const worldUp = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+            // World-up soil — tilted flatBasis buried corners up to 1.6 m on grade.
+            seat.box(out, foot, [4.6, 0.12, rowLen], SOIL, worldUp);
             out._mat = MAT.FOLIAGE;
             seat.box(out, [foot[0], foot[1] + 0.12, foot[2]], [1.5, 1.5, rowLen],
                      hv < 0.5 ? VINE : VINE_DRY, bw);
@@ -173,7 +176,9 @@
       // Open through San Donato (0.10-0.18): its bowl and stands stand there.
       // Also clear Poggio Secco / Materassi outside (0.200-0.260).
       const openArea = (s) => (s >= 0.92 || s <= 0.18) || (s >= 0.36 && s <= 0.46)
-        || (s >= 0.200 && s <= 0.260);
+        || (s >= 0.200 && s <= 0.260)
+        || (s >= 0.28 && s <= 0.34)   // Casanova-Savelli terrazza bowl
+        || (s >= 0.85 && s <= 0.91);  // Bucine terrazza + gravel
       every(22, (k) => {
         const s = k / n;
         if (openArea(s)) return;
@@ -461,7 +466,8 @@
         const IN = -side;
         stage._mat = MAT.CONCRETE;
         // Raise plinth slightly so seat.box does not sink into the hillside.
-        const plinth = [a.c[0], a.c[1] + 0.15, a.c[2]];
+        const pg = groundUnder(a.c[0], a.c[2]);
+        const plinth = [a.c[0], (pg != null ? pg : a.c[1]) + 0.35, a.c[2]];
         seat.box(stage, plinth, [10, 0.4, len0], [0.70, 0.70, 0.68], b);
         for (let tier = 0; tier < tiers; tier++) {
           const lat = side * (1.2 + tier * 2.0);
