@@ -21,6 +21,8 @@ test("each host's hook config points at an executable guard that exists", () => 
   assert.match(cursor.hooks.beforeShellExecution[0].command, /\.cursor\/hooks\/shell-guard\.sh/);
   const codex = JSON.parse(fs.readFileSync(path.join(ROOT, ".codex/hooks.json"), "utf8"));
   assert.match(codex.hooks.PreToolUse[0].hooks[0].command, /\.cursor\/hooks\/shell-guard\.sh/);
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  assert.match(pkg.scripts.prepare || "", /git config core\.hooksPath \.githooks/, "npm install must activate .githooks");
   for (const f of [".cursor/hooks/shell-guard.sh", ".githooks/pre-commit", ".githooks/pre-push", ".claude/hooks/bash-guard.sh"])
     assert.ok(fs.statSync(path.join(ROOT, f)).mode & 0o111, `${f} must be executable`);
 });

@@ -79,8 +79,8 @@ Now:
   branch, no delete, no rewrite) bind any host that runs git — Grok Build
   included. pre-commit stands aside under `CLAUDECODE=1`; the adapter sets
   `APEX_COMMIT_GATE=githook` so bash-guard leaves commits to it.
-- NOT YET ACTIVE: git runs `.githooks/` only with `core.hooksPath=.githooks`.
-  Setting that automatically (an npm `prepare` script) needs Bryce's approval;
-  until then it is `git config core.hooksPath .githooks` per clone.
+- ACTIVE via package.json `prepare` (`git config core.hooksPath .githooks`),
+  which every host's `npm install` / `npm ci` runs — approved by Bryce in
+  session 2026-10-14. A clone with no install: run that one command.
   `tests/unit/cross-tool-guards.test.mjs` pins all of the above.
 
