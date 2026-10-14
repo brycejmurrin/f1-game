@@ -1428,6 +1428,19 @@ test("the Verdict prints TLX's depth-discard row and names its absence on a TLX 
   assert.doesNotMatch(r.out, /glx[^\n]*\n(?:\s{8}[^\n]*\n)*?\s+depth:/, "GLX has no TLX post: no depth row at all");
 });
 
+test("the Verdict prints the camera each leg drove and its mirror chain, and flags one not as asked (hunt 4 H5)", () => {
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const chase = { ...tlxLegJson(), cam: { asked: "chase", set: "chase", atWindowEnd: "chase" },
+    mirror: { mode: "auto", shown: false, cam: "chase", backend: { mips: 3, mipCap: 3, mipFull: false } } };
+  const lost = { ...tlxLegJson(), cam: { asked: "chase", set: "helmet", atWindowEnd: "helmet", error: "not a CamModes id: chase" } };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: chase, webgl2: lost, glx: { ...glxLegJson(), cam: { asked: null, set: "helmet", atWindowEnd: "helmet" } }, wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /cam: {3}chase \(asked chase, at window end chase\) {2}mirror=auto shown=false mips=3 cap=3 full=false\n/);
+  assert.match(r.out, /cam: {3}helmet \(asked chase, at window end helmet\)\s+<- CAMERA NOT AS ASKED: not a CamModes id: chase/);
+  assert.match(r.out, /cam: {3}helmet \(asked game default, at window end helmet\)\n/);
+});
+
 test("the GPU gate fails a hardware TLX leg that stopped reporting an env count", () => {
   // `(env.fail || 0) > 0` was the SAME banned shape as the gpuErrors fix twelve
   // lines above it in the same file, on the same object: a build that stops

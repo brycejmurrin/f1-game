@@ -132,6 +132,14 @@ The source is `docs/notes/PERF-HUNT-4-2026-10-14.md` §C (I1–I7) and §A (inst
 - `discards` counts WebGL2 invalidations only. On three's WebGPU path r186 has no lever, so 0 there is expected, and the summary says so.
 - GLX and WGX have no TLX post: `{ supported: false, note }`, and the Verdict prints no row. A TLX leg without the row prints `depth: NOT MEASURED — <why>`.
 
+**The camera is an input (H5, lane TOOLS-J).** `gpu-census.yml` has a `cam` dispatch input: a choice of `helmet` (the default, the game's own camera, so a default dispatch measures what it did before) or `chase`. A push request may carry `"cam"` too; the plan job re-checks it against the same list.
+- It reaches all four game checks as `gpu-game-check --cam <id>`, which calls `__apex.camera(id)` after boot and before `race()`, so no frame of race entry draws through another camera.
+- Helmet and cockpit glass latch TLX's full mirror mip chain for the session, so the mirror-mip cap (`apex26.tlxMirMips`, A-H5) shows only on a chase leg. In `passKinds`, expect about 8 → 2 mip passes per mirror frame.
+- `out.cam = { asked, set, atWindowEnd }`. Example: `{ asked: "chase", set: "chase", atWindowEnd: "chase" }`; `asked: null` means the game default. An unknown id comes back with `error`.
+- `out.mirror = { mode, shown, cam, drawn, backend: { ready, renders, glass, w, h, mips, mipCap, mipFull } }` is read at the window's end.
+- The Verdict prints a `cam:` row per leg and flags `CAMERA NOT AS ASKED` when the camera did not take or moved during the window.
+- In AUTO, the mirror is not drawn in chase at all (`ONBOARD` views only). To time the capped chain in chase, add `apex26.hudMirror="on"` to `ls` (a JSON-lane key: the quotes are part of the value, and a bare `on` is dropped as corrupt), and check that the `cam:` row reads `shown=true`.
+
 **Follow-up, not built (I5).** WGX `gpuMs` times only the lit pass, while GLX's covers main plus post. A per-pass GLX timer would put sequential `TIME_ELAPSED` queries around the sun, lamp, car, env, mirror, main and post groups. Only one such query may be active at a time.
 - Those groups are sequenced from `js/game.js`, which this lane may not edit, so it is not a small change behind a flag.
 - It needs a query ring per group in `glx.js`, with begin/end hooks called from the pass sites.

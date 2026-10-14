@@ -66,6 +66,10 @@ if (argv.includes("--help") || argv.includes("-h")) {
   --clock H                       hour the in-run A/B pins (default 12)
   --beats N                       driven window, one beat a second (default 15)
   --no-drive                      keep the car parked for the window
+  --cam ID                        player camera (a CamModes id: helmet, chase, ...) set at boot,
+                                  before race(); omitted = the game's default (helmet). chase
+                                  is how TLX's mirror mip cap (A-H5) shows: helmet/cockpit
+                                  glass latches the full mirror chain for the session
   --ls apex26.k=v                 extra localStorage (repeatable; after the defaults)
   --gl-err-drain                  GLX: drain getError() on EVERY present (apex26.glErrDrain=1);
                                   default drains once per beat via GLX.drainGpuErrors()
@@ -75,9 +79,16 @@ if (argv.includes("--help") || argv.includes("-h")) {
   process.exit(0);
 }
 const flag = (n, d = null) => { const i = argv.indexOf(n); return i > -1 ? argv[i + 1] : d; };
-const track = argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--json"
-  && argv[argv.indexOf(a) - 1] !== "--shot" && argv[argv.indexOf(a) - 1] !== "--backend"
-  && argv[argv.indexOf(a) - 1] !== "--path") || "montreal";
+// The track is the first bare word that is not some flag's value.
+const VALUE_FLAGS = new Set(["--json", "--shot", "--backend", "--path", "--cam", "--tod", "--clock", "--beats", "--ls",
+  "--boot-timeout", "--race-timeout"]);
+const track = argv.find((a, i) => !a.startsWith("--") && !VALUE_FLAGS.has(argv[i - 1])) || "montreal";
+// --cam ID (hunt 4 H5): the player camera, set right after boot so no frame of
+// race entry draws through another one. The default camera is helmet
+// (apex26.camMode 19), whose cockpit glass latches TLX's FULL mirror mip chain
+// for the session (A-H5), so the mirror-mip cap is invisible unless a leg
+// drives chase. Omitted = the game's own default, exactly as before.
+const cam = flag("--cam", null);
 const backend = flag("--backend", "three");
 // --ls key=value (repeatable), same contract as gfx-probe: drive a knob the
 // pins do not know about — apex26.tlxForceHw above all, which is how the
@@ -655,6 +666,16 @@ try {
       return { hasGpu: true, vendor: i.vendor, architecture: i.architecture, description: i.description };
     } catch (e) { return { hasGpu: true, error: String((e && e.message) || e) }; }
   });
+  // THE CAMERA, before race() (hunt 4 H5). camera() persists apex26.camMode,
+  // which race entry then reads; an unknown id returns false and is NAMED.
+  out.cam = await bounded(() => page.evaluate((c) => {
+    const A = window.__apex;
+    const now = () => { try { return A.camera().mode; } catch (_) { return null; } };
+    if (c == null) return { asked: null, set: now() };
+    let r = false;
+    try { r = A.camera(c); } catch (e) { return { asked: c, set: now(), error: String((e && e.message) || e).slice(0, 100) }; }
+    return r ? { asked: c, set: r.mode } : { asked: c, set: now(), error: "not a CamModes id: " + c };
+  }, cam), 10000, "camera");
 
   // race() and park() were the last unbounded evaluates. A renderer that
   // wedges DURING the track load hangs them forever, and then the beats below
@@ -941,6 +962,21 @@ try {
   // The driven window ends with the last beat (hunt 4 I4).
   await bounded(() => page.evaluate(() => window.__gcHitch && window.__gcHitch.disarm()), 10000, "disarm");
   const _depth1 = await readDepth();
+  // WHICH CAMERA THE WINDOW DROVE, and the mirror it left (hunt 4 H5): the
+  // director or a cut could have moved it, and mipFull says whether the
+  // cockpit glass latched the full chain. backend fields per gfx.mirrorState().
+  const _camEnd = await bounded(() => page.evaluate(() => {
+    const A = window.__apex;
+    let mode = null, m = null;
+    try { mode = A.camera().mode; } catch (_) { /* no camera hook */ }
+    try { m = A.mirror ? A.mirror() : null; } catch (_) { /* no mirror pass */ }
+    const b = (m && m.backend) || {};
+    const pick = (o, ks) => { const r = {}; for (const k of ks) if (o[k] !== undefined) r[k] = o[k]; return r; };
+    return { mode, mirror: m ? { ...pick(m, ["mode", "shown", "cam", "drawn"]),
+      backend: pick(b, ["ready", "renders", "glass", "w", "h", "mips", "mipCap", "mipFull"]) } : null };
+  }), 10000, "camera-end");
+  if (out.cam) out.cam.atWindowEnd = _camEnd && !_camEnd.error ? _camEnd.mode : null;
+  out.mirror = _camEnd && !_camEnd.error ? _camEnd.mirror : { note: "mirror read failed: " + ((_camEnd && _camEnd.error) || "?") };
   if (_cpu) {
     try { const { profile } = await _cpu.send("Profiler.stop"); _cpuProfile = profile; out.cpu = analyseCpu(profile, 24); }
     catch (e) { out.cpu = { note: "profile stop failed: " + String((e && e.message) || e).slice(0, 120) }; }
