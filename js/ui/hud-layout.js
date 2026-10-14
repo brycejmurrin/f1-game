@@ -442,6 +442,7 @@ const HudLayout = (function () {
   const PACK_AIR = 4;
   const PACK_SCALE_MIN = 140;
   const PACK_FIXED = Object.freeze({ announce: 1, flag: 1, map: 1, tower: 1 });
+  const PACK_DOCK = Object.freeze({ tyre: 1, gearbox: 1, speed: 1, energy: 1 });
   const PACK_MOVE = Object.freeze([
     "tyre", "gearbox", "speed", "energy",
     "rel", "strat", "inputs", "sectors", "limits",
@@ -450,11 +451,16 @@ const HudLayout = (function () {
     const by = Object.create(null);
     const fixed = Object.create(null);
     if (!boxes || !(W > 0) || !(H > 0)) return {};
+    // Portrait: keep the dock (tyre/gear/speed/ERS) planted — moving them
+    // with margin at --hud-z-bot ≈ 0.6 yeeted TYRES off the top (390×844
+    // @150%). Left-column chips still pack against the planted dock.
+    const dockFixed = H > W;
     for (let i = 0; i < boxes.length; i++) {
       const b = boxes[i];
       if (!b || !b.id || !(b.w > 0 && b.h > 0)) continue;
       by[b.id] = { id: b.id, x: +b.x, y: +b.y, w: +b.w, h: +b.h, dx: 0, dy: 0 };
       if (PACK_FIXED[b.id] || b.fixed || String(b.id).indexOf("ctrl:") === 0) fixed[b.id] = 1;
+      if (dockFixed && PACK_DOCK[b.id]) fixed[b.id] = 1;
     }
     // Survey overlaps judge the radio card with its widest forced text, which
     // sits lower/taller than the idle plate. Pad announce so packing clears
