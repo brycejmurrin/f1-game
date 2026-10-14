@@ -24,7 +24,7 @@ const HudArrange = (() => {
   const LIM = Object.freeze({ x: [-50, 50], y: [-50, 50], s: [50, 200] });   // HudLayout.LIM
   const STEP = 10;     // toolbar − / + size step, %
   const MIN_CLASH = 3; // px of overlap on BOTH axes before a pair is a clash (touching is not)
-  const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+  const clamp = M4.clamp;   // the shared one (js/core/mat4.js); a private copy is what shared-math.test forbids
 
   /** Pure: offsets {x, y} (share of the screen, %) after a drag of (dx, dy) screen px on a W x H screen. */
   function dragTo(orig, dx, dy, W, H) {

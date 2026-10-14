@@ -15,7 +15,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-arrange.js"), "utf8");
 
 function load() {
-  const ctx = { Log: { info() {}, warn() {}, debug() {}, enabled() { return false; } } };
+  const ctx = { Log: { info() {}, warn() {}, debug() {}, enabled() { return false; } },
+    M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) } };   // the shared clamp the module aliases
   vm.createContext(ctx);
   vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx);
   return ctx.HudArrange;

@@ -754,6 +754,7 @@ const HARD_EDGES = [
   ["js/lighting/profiles.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
   ["js/ui/scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
   ["js/ui/dock-layout.js", "js/game.js"], // game.js calls DockLayout.create(G) at eval time
+  ["js/core/mat4.js", "js/ui/hud-arrange.js"], // const clamp = M4.clamp at eval
   ["js/ui/hud-arrange.js", "js/game.js"], // game.js calls HudArrange.create(G) at eval time
   ["js/ui/setting-row.js", "js/game.js"],  // game.js wires the Settings rows (SettingRow.wire) at eval time
   ["js/ui/setting-row.js", "js/ui/scale.js"], // UiScale.create wires the RESOLUTION row
