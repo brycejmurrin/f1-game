@@ -75,10 +75,13 @@
       // Ascari Sopraelevata flyover + banking ruin — keep trees out of the
       // concrete (clip-audit severe cone×box at ~0.70 / 0.74).
       const flyoverClear = (s) => s >= 0.685 && s <= 0.775;
+      // Rettifilo chicane mouth — dense Rank A/B trees overlapped kerb gravel and
+      // the Curva Grande tifosi bowl (clip-audit severe cone×box @0.07–0.11).
+      const rettifiloChicane = (s) => s >= 0.068 && s <= 0.118;
       every(24, (k) => {
         const h = hash(k * 31);
         const s = k / n;
-        if (flyoverClear(s)) return;
+        if (flyoverClear(s) || rettifiloChicane(s)) return;
         const thin = openParkland(s);
         if (h < (thin ? 0.78 : 0.08)) return;
         const side = h < 0.5 ? -1 : 1;
@@ -91,7 +94,7 @@
       every(28, (k) => {
         const h = hash(k * 53 + 9);
         const s = k / n;
-        if (flyoverClear(s)) return;
+        if (flyoverClear(s) || rettifiloChicane(s)) return;
         const thin = openParkland(s);
         if (h < (thin ? 0.80 : 0.15)) return;
         const side = h < 0.5 ? -1 : 1;
@@ -104,7 +107,7 @@
       every(36, (k) => {
         const h = hash(k * 41 + 3);
         const s = k / n;
-        if (flyoverClear(s)) return;
+        if (flyoverClear(s) || rettifiloChicane(s)) return;
         const thin = openParkland(s);
         if (h < (thin ? 0.82 : 0.20)) return;
         const side = h < 0.5 ? -1 : 1;
@@ -133,7 +136,7 @@
       every(24, (k) => {
         const h = hash(k * 97 + 23);
         if (h < 0.50) return;
-        if (flyoverClear(k / n)) return;
+        if (flyoverClear(k / n) || rettifiloChicane(k / n)) return;
         bush(k, h < 0.77 ? -1 : 1, 6.5 + h * 4,
              h < 0.66 ? [0.16, 0.36, 0.16] : [0.20, 0.42, 0.18]);
         if (h > 0.82) bush(k, h > 0.91 ? -1 : 1, 5 + h * 3, [0.18, 0.40, 0.17]);
@@ -688,7 +691,10 @@
       // Cypress rank punctuating the pit-straight backdrop and Parabolica bank.
       // Pit-straight row was gap 40 at s=0.02 — clipped structures (clip-audit
       // severe cypress×box @frac 0.026). Push to 48 / skip the Rettifilo mouth.
-      for (const [s0, side, gap] of [[0.955, -1, 30], [0.028, 1, 48], [0.90, 1, 34]]) {
+      // Back-straight cypress row dropped: tifosiBowl(0.955) already owns that
+      // plane (severe cypress×crowd @0.961; a relocated row only traded clip for
+      // coplanar between adjacent cypress).
+      for (const [s0, side, gap] of [[0.028, 1, 48], [0.90, 1, 34]]) {
         for (let i = 0; i < 5; i++)
           cypress(K(s0 + i * 0.006), side, gap + (i % 2) * 4,
                   14 + hash(i * 5 + s0 * 50) * 6, CYP);
