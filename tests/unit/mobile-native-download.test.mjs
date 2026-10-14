@@ -281,6 +281,78 @@ test("renderer screenshots await native saving and report its failure", async ()
   }
 });
 
+test("blob:<a download> click refuses a non-ok fetch instead of saving the body", async () => {
+  const writes = [];
+  const logs = [];
+  let clickHandler = null;
+  const sandbox = {
+    console, Promise, Date, Math, JSON, Object, Array, String, Number, Uint8Array,
+    btoa: (s) => Buffer.from(s, "binary").toString("base64"),
+    atob: (s) => Buffer.from(s, "base64").toString("binary"),
+    Log: { info(_ch, msg) { logs.push(String(msg)); }, warn() {} },
+    document: {
+      addEventListener(type, fn) { if (type === "click") clickHandler = fn; },
+    },
+    location: { origin: "https://game.test" },
+    Capacitor: {
+      isNativePlatform: () => true,
+      getPlatform: () => "android",
+      Plugins: {
+        Filesystem: {
+          writeFile: async (args) => { writes.push(args); return { uri: "file://" + args.path }; },
+          getUri: async (args) => ({ uri: "content://cache/" + args.path }),
+        },
+        Share: { share: async () => ({}) },
+      },
+    },
+    fetch: async () => ({
+      ok: false,
+      status: 404,
+      blob: async () => { throw new Error("must not blob a non-ok response"); },
+    }),
+  };
+  sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(NATIVE_SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/core/native.js" });
+  vm.runInContext(DL_SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/core/native-download.js" });
+  assert.equal(typeof clickHandler, "function");
+  const a = {
+    tagName: "A",
+    getAttribute: (n) => (n === "href" ? "blob:https://game.test/x" : n === "download" ? "trace.json" : null),
+    href: "blob:https://game.test/x",
+  };
+  clickHandler({ target: a, preventDefault() {}, stopPropagation() {} });
+  for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(writes.length, 0, "a 404 body must not be written as the download");
+  assert.ok(logs.some((m) => /native download failed:.*HTTP 404/.test(m)), logs.join(" | "));
+});
+
+test("renderer screenshot refuses a non-ok fetch instead of saving the body", async () => {
+  const src = readFileSync(join(ROOT, "js/perf/renderer-picker.js"), "utf8");
+  const fn = src.slice(src.indexOf("function saveScreenshot()"), src.indexOf("function ensureAdvHost()"));
+  let saved = false;
+  const button = { textContent: "SAVE SCREENSHOT" };
+  const ctx = vm.createContext({
+    document: {
+      getElementById: (id) => id === "pm-save-shot" ? button
+        : id === "game" ? { toDataURL: () => "data:image/png;base64,AQID" } : null,
+      createElement() { throw new Error("non-ok fetch must not fall through to an anchor"); },
+    },
+    NativeDownload: { viable: () => true, saveBlob: async () => { saved = true; } },
+    readBackend: () => "tlx",
+    fetch: async () => ({
+      ok: false,
+      status: 503,
+      blob: async () => { throw new Error("must not blob a non-ok response"); },
+    }),
+    setTimeout() {},
+  });
+  vm.runInContext(fn + "\nsaveScreenshot();", ctx);
+  for (let i = 0; i < 40; i++) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(saved, false);
+  assert.match(button.textContent, /FAILED$/);
+});
+
 test("safeName strips path separators", () => {
   const { sandbox } = loadNative();
   assert.equal(sandbox.NativeDownload.safeName("../../x.json"), ".._.._x.json");
