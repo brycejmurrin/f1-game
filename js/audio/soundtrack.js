@@ -13,6 +13,7 @@ var GameAudioSoundtrack = (function () {
     let musicSrc = null;
     let musicToken = 0;
     const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
+    let _decodeTail = Promise.resolve();
     const _musicLoads = {};                  // url -> in-flight fetch+decode (see playIndex)
     const _bufKeys = [];                     // insertion order of cached urls (bound: MUSIC_CACHE)
     // Decoded PCM is ~90 MB per four-minute track at a 48 kHz context. Desktop
@@ -299,11 +300,20 @@ var GameAudioSoundtrack = (function () {
       // audio in the air at once, three ~225 MB, none of it bounded by the
       // MUSIC_CACHE eviction that only runs afterwards.
       if (_musicLoads[url]) { _musicLoads[url].then((b) => { if (b) playMusicBuffer(b, token); else musicLoadFailed(token); }, () => {}); return; }
+      const ctx = host.context();
       const _load = fetch(url)
         .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status + " for " + url); return r.arrayBuffer(); })
         .then((ab) => (isUser ? userDecodeGate(url, ab) : ab))
-        .then((ab) => new Promise((res, rej) => { host.context().decodeAudioData(ab, res, rej); }))
+        .then((ab) => {
+          const decode = _decodeTail.then(() => {
+            if (host.context() !== ctx || !musicOn || !PLAYLIST[musicIndex] || PLAYLIST[musicIndex].url !== url) return null;
+            return new Promise((res, rej) => { ctx.decodeAudioData(ab, res, rej); });
+          });
+          _decodeTail = decode.catch(() => null);
+          return decode;
+        })
         .then((buf) => {
+          if (!buf || host.context() !== ctx) return null;
           // Every track, builtin or uploaded, is cached under the same bound
           // (MUSIC_CACHE), rather than holding builtins for the life of the
           // context (five decoded songs) and re-fetching and re-decoding an
@@ -513,6 +523,7 @@ var GameAudioSoundtrack = (function () {
       musicResumeBuf = hidBuf; musicResumeAt = hidAt; musicResumeOff = hidOff;
     }
     function resetContext() {
+      _decodeTail = Promise.resolve();
       stopStream(true);
       try { if (musicElNode) musicElNode.disconnect(); } catch (e) { /* the old context is closing */ }
       musicEl = musicElNode = musicElUrl = null;   // bound to the dead context

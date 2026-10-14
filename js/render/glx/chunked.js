@@ -200,38 +200,58 @@ const GLXChunked = (function () {
 
     function _occInit() {
       if (_occProg || _occFailed) return !!_occProg;
+      let prog = null, vao = null, vb = null, ib = null;
+      const shaders = [];
       try {
         const mk = (type, src) => {
-          const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh);
+          const sh = gl.createShader(type);
+          if (!sh) throw new Error("shader allocation");
+          shaders.push(sh);
+          gl.shaderSource(sh, src); gl.compileShader(sh);
           if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh) || "compile");
           return sh;
         };
-        const prog = gl.createProgram();
+        prog = gl.createProgram();
+        if (!prog) throw new Error("program allocation");
         gl.attachShader(prog, mk(gl.VERTEX_SHADER, OCC_VS));
         gl.attachShader(prog, mk(gl.FRAGMENT_SHADER, OCC_FS));
         gl.bindAttribLocation(prog, 0, "aCorner");
         gl.linkProgram(prog);
         if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) || "link");
-        _occProg = prog;
-        _occU = { vp: gl.getUniformLocation(prog, "uViewProj"),
+        for (const sh of shaders) gl.deleteShader(sh);
+        shaders.length = 0;
+        const uniforms = { vp: gl.getUniformLocation(prog, "uViewProj"),
                   mn: gl.getUniformLocation(prog, "uMin"), mx: gl.getUniformLocation(prog, "uMax") };
         // Unit cube: 8 corners as 0/1 selectors, 36 indices. The vertex shader
         // mixes them between the chunk bounds, so the geometry is static.
         const corners = new Float32Array([0,0,0, 1,0,0, 1,1,0, 0,1,0, 0,0,1, 1,0,1, 1,1,1, 0,1,1]);
         const cubeIdx = new Uint16Array([0,1,2, 0,2,3, 5,4,7, 5,7,6, 4,0,3, 4,3,7,
                                          1,5,6, 1,6,2, 3,2,6, 3,6,7, 4,5,1, 4,1,0]);
-        _occVao = gl.createVertexArray();
-        gl.bindVertexArray(_occVao);
-        const vb = gl.createBuffer();
+        vao = gl.createVertexArray();
+        if (!vao) throw new Error("vertex array allocation");
+        gl.bindVertexArray(vao);
+        vb = gl.createBuffer();
+        if (!vb) throw new Error("vertex buffer allocation");
         gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, corners, gl.STATIC_DRAW);
         gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-        const ib = gl.createBuffer();
+        ib = gl.createBuffer();
+        if (!ib) throw new Error("index buffer allocation");
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cubeIdx, gl.STATIC_DRAW);
         gl.bindVertexArray(null);
+        core.invalidateVAO();
+        // Publish only complete setup; the VAO retains its two buffer bindings.
+        _occProg = prog; _occU = uniforms; _occVao = vao;
         _occStats.supported = true;
         Log.info("gfx", "GLX occlusion queries ready");
         return true;
       } catch (e) {
+        gl.bindVertexArray(null);
+        core.invalidateVAO();
+        if (ib) gl.deleteBuffer(ib);
+        if (vb) gl.deleteBuffer(vb);
+        if (vao) gl.deleteVertexArray(vao);
+        if (prog) gl.deleteProgram(prog);
+        for (const sh of shaders) gl.deleteShader(sh);
         _occFailed = true; _occStats.supported = false;
         Log.warn("gfx", "GLX occlusion queries unavailable: " + ((e && e.message) || e));
         return false;
