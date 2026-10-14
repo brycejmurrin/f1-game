@@ -4382,9 +4382,8 @@ const WGX = (function () {
       const _ssrStrEarly = o.reflect != null ? o.reflect : 0;
       const _carReflEarly = o.carReflect != null ? o.carReflect
         : PostCommon.knob(o.tune, "carReflect");   // TUNE_DEFS default (0.05) — same read as _carRefl below
-      const _wetEarly = (lastFrame && lastFrame.wetness) || 0;
       const _ssrEarly = !!(frameHaveProj && _ssrReady && (
-        (_wetEarly > 0.01 && _ssrStrEarly > 0.001) || _carReflEarly > 0.001));
+        _ssrStrEarly > 0.001 || _carReflEarly > 0.001));
       const _slEarly = frameSunColor
         ? Math.max(frameSunColor[0], frameSunColor[1], frameSunColor[2]) : 1;
       const _flareEarly = !!(frameSunDir && frameSunDir[1] > -0.02 && _slEarly > 0.35);
@@ -4448,9 +4447,8 @@ const WGX = (function () {
       const sun = _sunScreen();
       const sunUVx = sun ? sun.ux : -2, sunUVy = sun ? sun.uy : -2;
 
-      //    by COMPOSITE this same present() (binding 8). Skipped when dry.
-      const _wet = (lastFrame && lastFrame.wetness) || 0;
-      // opts.reflect is the governor's SSR shed (game.js: tier >= 2 -> 0). Gating
+      //    by COMPOSITE this same present() (binding 8). Skipped when po.reflect and car-paint SSR are both off.
+      // opts.reflect is the governor's SSR shed (game.js: tier >= 2 dry / 3 wet -> 0). Gating
       // on wetness ALONE kept dispatching the 24-step march on a shed device for
       // every wet lap — the pass ran, the LIT block multiplied its result by a
       // params4.w of 0, and the whole cost was thrown away. That is the shed the
@@ -4465,7 +4463,7 @@ const WGX = (function () {
       // LAST frame's reflections — the consume lanes must read 0, not march
       // stale mirror data onto this frame's road and paint.
       const _ssrRan = !!(_ssrReady && ssrBG && frameHaveProj &&
-          ((_wet > 0.01 && _ssrStr > 0.001) || _carRefl > 0.001));
+          (_ssrStr > 0.001 || _carRefl > 0.001));
       if (_ssrRan) {
         const s = postScratch;
         s.set(frameInvProjW, 0);
@@ -5010,9 +5008,27 @@ const WGX = (function () {
       // NOT writing _cullPlanes on a hit is load-bearing.
       const cs = batch.cells, cn = cs.length;
       const ks = InstCells.scratchKeys(batch, cn);
-      const kN = InstCells.collectVisible(planes, cs, ks, Frustum.aabbInFrustum);
+      let kN = InstCells.collectVisible(planes, cs, ks, Frustum.aabbInFrustum);
       if (!shadow && InstCells.enabled() && InstCells.sameKey(batch, ks, kN)) {
         batch.visible = batch._cullN; return batch._cullN;
+      }
+      // LAMP REACH (opts.reach = [x, y, z, r], the lamp passes' shadow culls; hunt 4 C-P1, the port of
+      // GLX's hunt-2 G5 = TLX C3b): a cell wholly beyond the lamp radius occludes no receiver the lit loop
+      // or the beam march shades (both reject past rad). Then the shadow pack's own cell-set key: an
+      // unchanged surviving set leaves shadowInstBuf holding these bytes (no repack, no writeBuffer).
+      if (shadow) {
+        const reach = opts.reach && opts.reach[3] > 0 ? opts.reach : null, r2 = reach ? reach[3] * reach[3] : 0;
+        if (reach) {
+          let w = 0;
+          for (let i = 0; i < kN; i++) { const c = cs[ks[i]]; if (Frustum.aabbDist2(c.mn, c.mx, reach[0], reach[1], reach[2]) <= r2) ks[w++] = ks[i]; }
+          kN = w;
+        }
+        const sk = batch._shKey;
+        if (sk && InstCells.enabled() && batch._shKeyN === kN && batch._shadowPacked && batch.shadowInstBuf) {
+          let same = true;
+          for (let i = 0; i < kN && same; i++) same = sk[i] === ks[i];
+          if (same) return batch._shadowN;
+        }
       }
       const src = batch.srcMatrices;
       const dst = shadow ? (_shadowPackFor(batch) || batch._instPacked) : batch._instPacked;
@@ -5038,6 +5054,13 @@ const WGX = (function () {
         if (n && batch.shadowInstBuf && dst === batch._shadowPacked) {
           device.queue.writeBuffer(batch.shadowInstBuf, 0, dst, 0, n * 20);
         }
+        // Record the set shadowInstBuf now holds (GLX parity); any other writer of that buffer
+        // (wgx-shadow castShadowInstanced's full-set pack) resets _shKeyN to -1.
+        if (dst === batch._shadowPacked && InstCells.enabled()) {
+          const sk = batch._shKey && batch._shKey.length >= cn ? batch._shKey : (batch._shKey = new Int32Array(cn));
+          for (let i = 0; i < kN; i++) sk[i] = ks[i];
+          batch._shKeyN = kN;
+        } else batch._shKeyN = -1;
         return n;
       }
       batch.visible = n;
@@ -5104,7 +5127,7 @@ const WGX = (function () {
       if (!batch) return;
       if (batch.instBuf && batch.instBuf !== identInstanceBuf) _freeBuf(batch.instBuf);
       if (batch.shadowInstBuf) { _freeBuf(batch.shadowInstBuf); batch.shadowInstBuf = null; }
-      batch._shadowPacked = null;
+      batch._shadowPacked = null; batch._shKeyN = -1;
       freeMesh(batch);
     }
     // Optional `count` matches GLX: default = all instances. Do NOT use
@@ -5869,6 +5892,7 @@ const WGX = (function () {
       clearOutputTarget: undefined,
       outputTargetState: undefined,
       setRenderSizeOverride: undefined,
+      drainGpuErrors: undefined,   // GLX's explicit GL error drain (hunt 4 I2): WebGPU reports errors through uncapturederror, nothing to drain
       // Occlusion culling is a GLX feature (js/render/glx/chunked.js) and these
       // are declared, not implemented. They exist because game.js installs a
       // backend by DESCRIPTOR-COPY onto GLX: a name WGX omits keeps GLX's own

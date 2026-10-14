@@ -185,14 +185,14 @@ test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, an
   const hud = read("js/ui/hud.js");
   const air = +(/const FIT_AIR = (\d+)/.exec(hud) || [])[1];
   assert.ok(air > 0, "hud.js declares FIT_AIR");
-  assert.equal(dock.decls.get("zoom"), "var(--hud-z-dock, max(1, var(--hud-btn-scale)))",
-    "the dock zooms by the capped value, its own BUTTON SIZE slider as fallback — floored at 1 so a setting never shrinks a tap target");
+  assert.equal(dock.decls.get("zoom"), "var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
+    "the dock zooms by the capped value, its own BUTTON SIZE slider as fallback — floored at --hud-btn-floor (the zoom at which a tap paints 44px) so a setting never shrinks a target under the HIG minimum");
   // And fitHud compares that cap against the SAME slider — against --hud-scale
   // it would either pin a cap that fits or drop one that does not, the moment a
   // player set the two apart.
   // Against what the dock actually paints at: BUTTON SIZE floored at 1 (the tap
   // floor in css/touch-controls.css), or a cap between BUTTON SIZE and 1 is dropped.
-  assert.match(hud, /set\("--hud-z-dock", capDock, Math\.max\(1, btnScale\)\)/, "the dock cap is judged against the floored BUTTON SIZE");
+  assert.match(hud, /set\("--hud-z-dock", capDock, Math\.max\(btnFloor, btnScale\)\)/, "the dock cap is judged against the floored BUTTON SIZE (--hud-btn-floor, the 44px rung)");
   // FALLS BACK TO HUD SIZE TIMES THE COARSE RATIO, not to HUD SIZE. Unset, the
   // dock is `calc(var(--hud-scale) * var(--hud-btn-mult))` — and calc() inside a
   // custom property is never reduced, so the token reads back as a literal

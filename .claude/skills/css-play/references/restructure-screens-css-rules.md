@@ -35,8 +35,8 @@ use the `autofocus` attribute on the descendant element of the dialog that the
 user is expected to immediately interact with."* On a long scrolling sheet, put
 it on `.sheet-body` (the spec's own second example). *Prevents:* focus landing
 on the last focusable element and auto-scrolling the dialog — or the whole
-document — past its own content. **This rule's fix already landed: 17
-`autofocus` attributes now exist across the 19 modal dialogs** — re-run
+document — past its own content. **This rule's fix already landed: the modal
+dialogs carry `autofocus` on purpose** — run
 `grep -c '<dialog' index.html` and `grep -c autofocus index.html` before
 treating this as an open problem, and do not "fix" (remove) an autofocus
 attribute you find; it was added on purpose.
@@ -76,9 +76,9 @@ in this repo, `css/dialogs.css` (the contexts) and `css/components.css`
 
 One class, fourteen contexts, zero variant classes. *Prevents:* class-family
 growth. **Measured:** Pico CSS ships a complete design system in **2,835 lines /
-16 classes / 251 custom properties**. This repo measures **13,426 lines /
-592 classes / 188 custom properties** (2026-09-30; `node tools/check/tree-counts.mjs`
-and restructure.md's commands refresh them) — 37x the classes on 4.7x the lines with 0.75x the
+16 classes / 251 custom properties**. Run `node tools/check/tree-counts.mjs`
+and restructure.md's commands for this repo's current lines / classes / custom
+properties: it carries several times Pico's classes on a few times the lines with fewer
 tokens. The ratio is inverted, and that is the whole finding.
 
 **9. Reject any CSS methodology that renames without reducing.** Require a
@@ -107,8 +107,8 @@ context overrides beats N variant classes.
 
 **13. Do not split a monolithic HTML file on node count alone — but this shell
 has now crossed the line it used to sit under.** Lighthouse warns at ~800 body
-nodes and errors at ~1,400; the shell measured ~969 when this rule was written,
-1,133 at the last refresh, and **1,902 on 2026-09-18, 1,984 by the ratchet on 2026-09-30** (re-run
+nodes and errors at ~1,400; the shell measured ~969 when this rule was written and has grown well past it (run
+`node tools/check/tree-counts.mjs` for the ratchet's `shellNodes`, or
 `grep -oE '<[a-zA-Z][a-zA-Z0-9-]*' index.html | wc -l`). The original argument
 was "comfortably under the error line, so leave it alone"; that premise is
 gone, and the conclusion has to be re-argued rather than restated.
@@ -122,7 +122,7 @@ from the shell's own script tags. So the answer is probably still "leave it
 alone" — but say so on the measurement, not on a stale number, and bring a
 parse-time or memory figure if you want to argue either way.
 *Prevents:* a large cross-cutting refactor bought with a benchmark nobody ran.
-The dominant cost here is still CSS selector complexity (592 classes), not node
+The dominant cost here is still CSS selector complexity (`cssClasses` in `tree-counts.mjs`), not node
 count.
 
 **14. Express height responsiveness as at most TWO breakpoints, resolved once
@@ -180,7 +180,7 @@ entries there — that test is how you prove the count went down.
 - **Fetched HTML partials on a static host** — commonly proposed, actively
   harmful here (RTT per screen, breaks the sw.js precache seed).
 - **Tailwind / Open Props / any token package** — all require a build step or
-  duplicate the ~188 custom properties this repo already has, and would fight
+  duplicate the custom properties this repo already has, and would fight
   `tests/unit/css-tokens.test.mjs`, which asserts every token has a consumer.
 
 ---

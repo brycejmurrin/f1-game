@@ -1,4 +1,4 @@
-# Bake copied LIGHTING TUNER settings and push (folded from the bake-lighting skill)
+# Bake copied LIGHTING TUNER settings and push
 
 **TWO INPUTS, TWO TOOLS. Read the first line of the paste.**
 
@@ -135,16 +135,7 @@ through the merge path above.
 
 ### Dry run (no write into js/)
 
-Both scripts locate the repo by `import.meta.url` and write `js/lighting/presets.js`
-with no `--dry-run` flag. To rehearse, build a sandbox under `scratch/` and run the copies there:
-
-```sh
-S=scratch/lt-dry; mkdir -p $S/.claude/skills/lighting-tuner $S/js/lighting
-cp -r .claude/skills/lighting-tuner/scripts $S/.claude/skills/lighting-tuner/
-cp js/lighting/presets.js js/lighting/knobs.js $S/js/lighting/
-cd $S && node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs edits.js   # writes only $S/js/…
-diff <(sed -n 1,40p ../../js/lighting/presets.js) <(sed -n 1,40p js/lighting/presets.js)
-```
+Add `--check` (alias `--dry-run`) to either script: validates and prints a receipt, writes nothing.
 
 Verdict: `Merged N incoming profile(s): W written, K knob(s).` rc 0; any error lists
 `file: key.id …` and rc 1 with nothing written. `bake.mjs` reads bare JSON or a JS

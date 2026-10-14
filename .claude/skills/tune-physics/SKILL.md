@@ -13,28 +13,29 @@ absolute magnitudes.
 
 | Param | Effect | Bigger = |
 |---|---|---|
-| `wheelbase` (`WHEELBASE` 4.2 m) | turn-in | lazier |
-| `expo` (`STEER_EXPO` ≈2.11) | input curve | gentler near centre |
-| `maxSlip` (`STEER_MAX_SLIP` ≈0.34 rad) | max steer lock | sharper low-speed |
-| `speedRef` (`STEER_SPEED_REF` 55 m/s) | lock taper | keeps lock at speed |
-| `drift` (`DRIFT` 0) | rear looseness | more tail-out (debug) |
-| `roadFollow` (`ROAD_FOLLOW` **0**, ships OFF) | curvature assist | more auto-drive |
-| `frontGrip` (`FRONT_GRIP` 0.94) | front friction bias | less understeer |
-| `playerGrip` (`PLAYER_GRIP` 1.15) | player vs AI headroom | more forgiving |
-| `yawDamp` (`YAW_DAMP` 1.0) | yaw damping | calmer |
-| `yawInertia` (`YAW_INERTIA` 0.58; 1.0 on a coarse pointer) | rotational inertia | lazier (`<1` snappier) |
-| `pace` (`PACE` 0.840) | ground-speed scale | faster everywhere |
+| `wheelbase` (`WHEELBASE`) | turn-in | lazier |
+| `expo` (`STEER_EXPO`) | input curve | gentler near centre |
+| `maxSlip` (`STEER_MAX_SLIP`, rad) | max steer lock | sharper low-speed |
+| `speedRef` (`STEER_SPEED_REF`, m/s) | lock taper | keeps lock at speed |
+| `drift` (`DRIFT`) | rear looseness | more tail-out (debug) |
+| `roadFollow` (`ROAD_FOLLOW`, ships **0** = OFF) | curvature assist | more auto-drive |
+| `frontGrip` (`FRONT_GRIP`) | front friction bias | less understeer |
+| `playerGrip` (`PLAYER_GRIP`) | player vs AI headroom | more forgiving |
+| `yawDamp` (`YAW_DAMP`) | yaw damping | calmer |
+| `yawInertia` (`YAW_INERTIA`) | rotational inertia | lazier (`<1` snappier) |
+| `pace` (`PACE`) | ground-speed scale | faster everywhere |
 | GRIP STEER (`js/physics/grip-steer.js`; notch 1 = OFF) | assist-gated steering cap at the front's peak slip | steadier front under steer |
 
 `expo` / `maxSlip` / `speedRef` are also the player's STEER sliders (LINEARITY / STEER LOCK /
 SPEED STEER): the slider UI, defaults and migration are **input-controls**; here they are A/B knobs.
-There is no "steer gain" knob: `updateCar` (js/game.js) steers `sign(s)·|s|^expo · maxSlip / (1 + vStd(speed)/speedRef)`,
-so A/B `maxSlip` (linear gain), `expo` (near centre) or `speedRef` (speed taper); turn-in understeer also
+There is no "steer gain" knob: `updateCar` (js/game.js) steers `sign(s)·|s|^expo · maxSlip · lockTaper`, where
+`lockTaper` is 1 up to 15 m/s (vStd), `1/(1 + vStd/speedRef)` from 30 m/s, and a linear blend between, so slow corners
+sit in the blend. A/B `maxSlip` (linear gain), `expo` (near centre) or `speedRef` (speed taper); turn-in understeer also
 moves with `frontGrip` and `yawInertia`.
 
-Boot-effective defaults come from `js/input/steer-tuning.js`
-`applySteerTuning()` (slider defaults in `js/ui/settings-export.js`) — game.js
-literals (`3.2 m` / `PACE 1.0`) are dead.
+Numbers are not quoted here (they drift): read the live values with `__apex.tuning()` (js/agent/apex.js). Boot-effective
+defaults come from `js/input/steer-tuning.js` `applySteerTuning()` (slider defaults in `js/ui/settings-export.js`) —
+the game.js literals are dead.
 `PACE` is a scale, not a cap; compare speeds via `vTop()`/`vStd()`/`aStd()`.
 
 **The arc must not reach the driver.** With assists off, nothing derived from
@@ -51,10 +52,9 @@ Fixed in `js/physics/consts.js` (`PhysicsConsts`, not `setPhysics`): `LONG_GRIP`
 `FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
 
 ```sh
-node tools/ci/test-bg.mjs physics-core # browser-gated — driving model (selected driving-model coverage)
-node tools/ci/test-bg.mjs collisions  # browser-gated — car-to-car + wall contact
-node tools/ci/test-bg.mjs aero         # aero-zones, active-aero, drift, understeer (~37 tests)
-node tools/ci/test-bg.mjs input        # steering + camera
+# Verify per AGENTS.md rule 4 and its table: prefer ONE spec (`npm test -- tests/specs/understeer-cue.spec.js`,
+# `physics-characterization.spec.js`) via test-bg.mjs, then `test-bg.mjs --wait --timeout 45`; cap two groups
+# (physics-core, collisions, aero, input; `pick-tests` names them); a whole group → remote-group.mjs on the pushed branch.
 node tools/check/check-physics.mjs <grip|bank|roadfollow|steer>  # browser (launchChromium) — stability probe, not an A/B
 ```
 
@@ -70,13 +70,14 @@ node --test tests/unit/player-dynamics-vm.test.mjs               # the locked SH
 `measure(g, frac)` per value — and diff the JSON (read `aF`/`aR`, `uF`/`uR`, `yaw`; front
 slip past its peak with rear settled = understeer). `physics-tune-sweep.mjs` is BROWSER + long (sharded
 DOM-slider laps, `APEX_WORKERS`): not for one setting. Verdict: a directional change in the
-same tables; stop there, then the named browser group.
+same tables; worked "understeers in slow corners" example → [references/understeer-recipe.md](references/understeer-recipe.md).
 
 If you edited `js/game.js`, `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)) before commit. Theory:
 `docs/PHYSICS.md`, `docs/research/steering-research.md`.
 
 ## Load on demand
 
+- Worked slow-corner understeer A/B → [references/understeer-recipe.md](references/understeer-recipe.md).
 - Closed-loop trial, parallel sweep (`polling: 100`), trail-brake, house-style
   assertions → [references/harness.md](references/harness.md).
 - **Game feel / juice** — which Apex system owns which channel, and the hard

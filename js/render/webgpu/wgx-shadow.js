@@ -273,7 +273,10 @@ const WGXShadow = (function () {
       core.setVB0(shadowPass, mesh.vbuf);
       core.drawGeom(shadowPass, mesh);
     }
-    function castShadowChunked(mesh, model) {
+    // reach = [x, y, z, r] (the lamp passes, shadow-pass.js _flReach; hunt 4 C-P1, the port of GLX
+    // chunked.js's hunt-2 G5): also drop a chunk whose AABB lies farther than r from the lamp — a caster
+    // beyond the lamp radius occludes only receivers the lamp does not light.
+    function castShadowChunked(mesh, model, reach) {
       if (!shadowPass || !mesh || !mesh.vbuf) return;
       if (_shadowSetModel(model) < 0) return;
       core.setVB1(shadowPass, core.identInstanceBuf);
@@ -291,13 +294,15 @@ const WGXShadow = (function () {
         return;
       }
       const cull = !!_shadowLightVP;   // planes were extracted into core.fcPlanes in shadowBegin
+      const rr = reach && reach[3] > 0 ? reach[3] * reach[3] : -1;
       // Same pooling as drawChunked's _mrRun/_mrFlush below: this ran the
       // identical per-call closure + per-state-change run object, once per
       // shadow-casting mesh per shadow pass per frame.
       const run = _srRun;
       for (let i = 0; i < mesh.chunks.length; i++) {
         const ch = mesh.chunks[i];
-        if (cull && !Frustum.aabbInFrustum(core.fcPlanes, ch.min, ch.max)) { _srFlush(); continue; }
+        if ((cull && !Frustum.aabbInFrustum(core.fcPlanes, ch.min, ch.max))
+            || (rr >= 0 && Frustum.aabbDist2(ch.min, ch.max, reach[0], reach[1], reach[2]) > rr)) { _srFlush(); continue; }
         const vbuf = ch.vbuf || mesh.vbuf;
         const ibuf = ch.ibuf || mesh.ibuf || null;
         const attrBG = ch.attrBG || mesh.attrBG;
@@ -459,6 +464,7 @@ const WGXShadow = (function () {
           }
           core.device.queue.writeBuffer(batch.shadowInstBuf, 0, dst, 0, n * 20);
           batch._shadowN = n;
+          batch._shKeyN = -1;   // the buffer now holds the source-order set: wgx.js cullInstances' shadow key must miss
           vb = batch.shadowInstBuf;
         }
       }

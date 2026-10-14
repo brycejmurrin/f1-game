@@ -45,6 +45,11 @@ const HudRelative = (function () {
 
   // The row slots: allocated once, rewritten every tick.
   const rows = [];
+  // Rows fitRows() dropped to clear a control stay dropped between fits: tick()
+  // used to un-hide every occupied row, and fitRows runs only on a key change
+  // or every 10th tick, so a half-row painted over BRAKE 9 ticks in 10 and
+  // flickered at 1 Hz (bug hunt 2026-10-14 N1). fitRows resets the mask.
+  const dropped = new Array(ROWS).fill(false);
   for (let i = 0; i < ROWS; i++) rows.push({ car: null, rel: 0, laps: 0, self: i === SELF });
   const _ac = [null, null], _ad = [0, 0], _bc = [null, null], _bd = [0, 0];
 
@@ -137,7 +142,7 @@ const HudRelative = (function () {
     for (let i = 0; i < ROWS; i++) {
       const r = rows[i], dom = built[i], c = last[i], car = r.car;
       if (!car) { if (!dom.el.hidden) dom.el.hidden = true; c.who = null; smWho[i] = null; continue; }
-      if (dom.el.hidden) dom.el.hidden = false;
+      if (dom.el.hidden && !dropped[i]) dom.el.hidden = false;
       // Write only when the displayed value changes: gap spelling includes
       // profile and precision boundaries, the rest compare their source values.
       let dirty = false;
@@ -207,6 +212,7 @@ const HudRelative = (function () {
       // that cap are an output, not the next pass's layout input.
       for (let i = 0; i < ROWS; i++) {
         const hidden = !rows[i].car;
+        dropped[i] = false;
         if (built[i].el.hidden !== hidden) built[i].el.hidden = hidden;
       }
       // Re-derive from the CSS box every pass: left / max-height are only ever
@@ -258,13 +264,16 @@ const HudRelative = (function () {
     const order = [0, 4, 1, 3];
     for (let k = 0; k < order.length && root.scrollHeight > root.clientHeight + 1; k++) {
       const dom = built[order[k]];
-      if (dom && !dom.el.hidden) dom.el.hidden = true;
+      if (dom && !dom.el.hidden) { dom.el.hidden = true; dropped[order[k]] = true; }
     }
   }
   /** The words a screen reader says for one row. */
   function rowLabel(pos, code, self, gap, ahead, tyre, laps) {
-    return pos + " " + (code || "") + (self ? ", you" : ", " + gap.slice(1) + " seconds " + (ahead ? "ahead" : "behind"))
-      + ", tyre " + tyre + (laps > 0 ? ", " + laps + " lap up" : laps < 0 ? ", " + -laps + " lap down" : "");
+    const g = gap.slice(1);
+    const dist = g === "--" ? "gap unknown" : (g === "99+" ? "over 99 seconds " : g + " seconds ") + (ahead ? "ahead" : "behind");
+    const lapWord = (n) => n + (n === 1 ? " lap" : " laps");
+    return pos + " " + (code || "") + (self ? ", you" : ", " + dist)
+      + ", tyre " + tyre + (laps > 0 ? ", " + lapWord(laps) + " up" : laps < 0 ? ", " + lapWord(-laps) + " down" : "");
   }
 
   return Object.freeze({ ROWS, SELF, relDist, lapsApart, select, fmtGap, lapText, rowLabel, tick, fitRows, rows });

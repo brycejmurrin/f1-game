@@ -8295,7 +8295,7 @@ function render(dt) {
   // 0.0143 at 0.07) cannot reach 1/64 skips the 24+4-step march on EVERY backend — po.reflect is the
   // one input GLX, TLX and WGX read. Keyed on the weight, so a tuner above ~0.077 brings it back;
   // dry night (neon sheen) and car-paint SSR (po.carReflect) are untouched. apex26.ssrDayGate=1.
-  const _ssrPo = (_ssrDayGate && !frame.lights && (frame.wetness || 0) <= 0.01 && _ssr * 0.204 < 1 / 64) ? 0 : _ssr;
+  const _ssrPo = (_ssr * 0.204 < 1 / 64 && (PerfGov.tier() >= 2 || (_ssrDayGate && !frame.lights && (frame.wetness || 0) <= 0.01))) ? 0 : _ssr;
   // Perf: skip the SSAO pass (+ its two blur passes) at NIGHT. Night ambient is
   // near-black, so the AO darkening is invisible anyway — and night street grids
   // are where the frame budget is tightest. Gate on key BRIGHTNESS, not sunDir.y:
@@ -8324,7 +8324,7 @@ function render(dt) {
   po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2) * frame.exposure; po.grade = _grade;   // exposed units (BRIGHT_FS): x the TOD exposure keeps the shipped bloom; EXPOSURE now moves it
   // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
   // passes whose cost doesn't shrink with the render target, so a device still
-  // slow at the scale floor sheds those instead. Tier 2 (user+auto) drops SSR;
+  // slow at the scale floor sheds those instead. Tier 2 (user+auto) drops dry + car-paint SSR (wet-road SSR at 3);
   // autoTier 4 drops SSAO (+2 blurs) and god-ray — not GRAPHICS: LOW alone.
   po.ssao = PerfGov.autoTier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.autoTier() >= 4 ? 0 : _gr;
@@ -8333,7 +8333,10 @@ function render(dt) {
   // so a tier-4 DAYTIME frame (_cs is non-zero whenever the key is bright) would
   // still run the SSAO pass and both of its blurs after po.ssao went to 0. Shedding contact shadows is what
   // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
-  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssrPo; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  // WET-road SSR sheds one tier later (3) than the dry sheens and car paint (2): tier 2 is every phone's
+  // GRAPHICS: MEDIUM, and rain with no mirror read as reflections broken. The governor still sheds it at 3.
+  const _ssrTier = (frame.wetness || 0) > 0.01 ? 3 : 2;
+  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= _ssrTier ? 0 : _ssrPo; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone

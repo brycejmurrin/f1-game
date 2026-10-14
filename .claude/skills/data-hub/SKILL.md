@@ -44,49 +44,27 @@ that kills DataHub.
 ## Rules
 
 - API-derived DOM: `createElement` / `textContent` only. **Never
-  `innerHTML` with API strings.**
+  `innerHTML` with API strings** (gated by `tools/check/html-sink-lint.mjs`, in `test:guards`).
 - Empty-tab copy is the `NO_LIVE_MSG` / `NO_TELEM_MSG` constants — delayed
   free data is expected, not a fetch bug.
 - Tests mock the hub (`tests/helpers/f1-api-mock.js`); a missed path
   rewrite fails **open** (empty hub, green UI).
 
-Export tab (`js/data/export.js`, `loadExport`): NOT a CSV and NOT the in-race
-trace buffer. Gather = OpenF1 only (`meetings` -> `sessionsForMeeting` ->
-`sessionDrivers` -> `fastestLap` -> `locationData`, paced 2-5 s/call, ~10 min,
-429 waits 90 s, misses retried once after 2 min) into `{circuits:{key:{trace,sf}}}`;
-Download = hand-rolled `makeZip` of `startlines-<year>.json` + `img/<circuit>.png`
-(canvas). "Empty" export = Download disabled until Gather completes, or every
-circuit logged `· no lap/loc` (OpenF1 delayed/429 - read the status box), or
-PNGs skipped (`toBlob` null). In-race samples: **agent-view**; OpenF1 vs game
-comparison is the TELEMETRY tab (`telemetry.js`, `telemetry-compare.spec.js`).
-No unit test pins zip/CRC/gather (only `data-lazy-loader` load order and a browser-ui-hunt
-"Gather prerequisite" check): a change here is browser-only unverified - say so.
-Export status is a `.dh-export-status` `<div>` (not `<pre>`).
+Export tab (`loadExport`): not a CSV, not the in-race trace buffer; OpenF1-only gather, hand-rolled zip,
+no unit test pins it (browser-only unverified: say so) → `references/export.md`.
 
-Season/year: schedule and results take NO year argument and standings take an
-OPTIONAL one. `F1API` derives the Jolpica season from the clock per call
-(`season()`, `js/data/api.js` ~L18; URL = `/<year>/driverstandings.json`;
-a past year caches 7 d). `loadStandings` (`standings.js`) asks for the current
-year and, when that table is empty (Jan to the opener), falls back to last
-season's FINAL table, headings tagged `LAST SEASON · <y> FINAL` (pinned by
-`tests/unit/data-standings.test.mjs`). Only the OpenF1 pickers carry a year
-(`hub.js` `apiYears()` / `sel.year`; `export.js` its own); the year/GP/SESSION
-picker drives RESULTS, LIVE and TELEMETRY (`invalidateOther`), never STANDINGS
-or SCHEDULE. So "standings show last year after a picker change" = the
-`LAST SEASON` tag above (intended), a wrong system clock, a stale
-`apex26.api.*` cache entry, a 60 min `MAX_AGE` node, or the mock
-(`tests/helpers/f1-api-mock.js` pins `season: "2026"` and answers EVERY
-year's path with it).
+Season/year (schedule/results take no year, standings an optional one; `LAST SEASON` tag, wrong clock,
+stale `apex26.api.*` cache, mock answering every year as 2026) → `references/season-year.md`.
 
 Start with `tests/specs/data-lifecycle.spec.js` or the telemetry comparison
-spec through `test-solo.mjs <path>` in the background with a log (parent-owned browser). Reserve the
+spec through `test-solo.mjs <path>` as one background task with a log in `artifacts/logs/`
+(parent-owned browser, AGENTS.md rule 4). Reserve the
 `test-bg.mjs hooks` group for changes that need its wider surface. Node-only, seconds, run first:
 `node --test tests/unit/data-api-status.test.mjs` (also `data-standings`, `data-results`,
 `data-schedule-tz`, `data-lazy-loader`, `telemetry-trace`). The group
 `lifecycle-unit` is `async-lifecycle` + `tlx-chunked-lifecycle` (the first
 does read `api.js`/`live.js`), not the hub spec.
 
-`pick-tests` for `js/data/` names `hooks`, `lifecycle-unit`, `tiny`,
-`tooling-fast` (there is no `api` group). An empty tab with no error is usually
+Run `pick-tests js/data/hub.js` for the groups (AGENTS.md rules 4-5). An empty tab with no error is usually
 `NO_RESULT_MSG` / `NO_LIVE_MSG` / `NO_TELEM_MSG`, not a fetch failure. Layout of
 the hub chrome → **ui-menu-a11y** / **survey-ui-matrix**.
