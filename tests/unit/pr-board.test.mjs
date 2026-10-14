@@ -60,22 +60,22 @@ test("suggest: SYNC — dirty, and it outranks FIX and ARM", () => {
 
 test("suggest: FIX — ci failed on the head, or Structural guards failed", () => {
   assert.equal(suggest({ ...base, ci: "failure" }, ctx()), "FIX");
-  assert.equal(suggest({ ...base, ci: "failure", armed: true, mergeMethod: "squash" }, ctx()), "FIX");
+  assert.equal(suggest({ ...base, ci: "failure", armed: true, mergeMethod: "merge" }, ctx()), "FIX");
   assert.equal(suggest({ ...base, draft: true, ci: "failure", gate: "failed" }, ctx()), "FIX");
   assert.equal(suggest({ ...base, ci: "in_progress", gate: "failed" }, ctx()), "FIX");
 });
 
-test("suggest: FOREIGN-ARM — armed with merge or rebase; wins over everything", () => {
-  assert.equal(suggest({ ...base, armed: true, mergeMethod: "merge" }, ctx()), "FOREIGN-ARM");
+test("suggest: FOREIGN-ARM — armed with squash or rebase (merge commits only, #1458); wins over everything", () => {
+  assert.equal(suggest({ ...base, armed: true, mergeMethod: "squash" }, ctx()), "FOREIGN-ARM");
   assert.equal(suggest({ ...base, armed: true, mergeMethod: "REBASE" }, ctx()), "FOREIGN-ARM");
-  assert.equal(suggest({ ...base, armed: true, mergeMethod: "merge", mergeableState: "dirty", ci: "failure" }, ctx()), "FOREIGN-ARM");
+  assert.equal(suggest({ ...base, armed: true, mergeMethod: "squash", mergeableState: "dirty", ci: "failure" }, ctx()), "FOREIGN-ARM");
 });
 
-test("suggest: NONE — armed with squash and healthy; never ARM again", () => {
-  const armed = { ...base, armed: true, mergeMethod: "squash" };
+test("suggest: NONE — armed with merge and healthy; never ARM again", () => {
+  const armed = { ...base, armed: true, mergeMethod: "merge" };
   assert.equal(suggest(armed, ctx()), "NONE");
   assert.equal(suggest({ ...armed, ci: "queued", gate: "pending" }, ctx()), "NONE");
-  assert.equal(suggest({ ...armed, mergeMethod: "SQUASH" }, ctx()), "NONE");
+  assert.equal(suggest({ ...armed, mergeMethod: "MERGE" }, ctx()), "NONE");
 });
 
 test("decide returns a reason with every action", () => {
@@ -109,7 +109,7 @@ test("evaluate: sorts, derives ci/gate/failing jobs, and READY flips consume the
   const items = [
     { pr: prObj(9, { draft: true }), runs: [{ id: 9, status: "completed", conclusion: "success" }], checkRuns: guard() },
     { pr: prObj(3, { draft: true }), runs: [{ id: 3, status: "completed", conclusion: "success" }], checkRuns: guard() },
-    { pr: prObj(5, { auto_merge: { merge_method: "squash" } }), runs: [{ id: 5, status: "completed", conclusion: "failure" }],
+    { pr: prObj(5, { auto_merge: { merge_method: "merge" } }), runs: [{ id: 5, status: "completed", conclusion: "failure" }],
       jobs: [{ name: "Smoke (2)", conclusion: "failure" }, { name: "lint", conclusion: "success" }, { name: "Smoke (2)", conclusion: "failure" }],
       checkRuns: guard("failure") },
     { pr: prObj(7), runs: [], checkRuns: guard() },
@@ -119,7 +119,7 @@ test("evaluate: sorts, derives ci/gate/failing jobs, and READY flips consume the
   assert.deepEqual(r.rows.map((x) => x.suggest), ["READY", "FIX", "ARM", "WAIT"], "one slot: the first draft takes it");
   assert.deepEqual(r.rows[1].failing, ["Smoke (2)"]);
   assert.equal(r.rows[1].gate, "failed");
-  assert.equal(r.rows[1].mergeMethod, "squash");
+  assert.equal(r.rows[1].mergeMethod, "merge");
   assert.equal(r.cap.room, 1);
 });
 
@@ -169,7 +169,7 @@ test("measure pages the open PR list (101 PRs) and reads every PR", () => {
 });
 
 test("measure: failing jobs come from the failed run; --pr reads one PR but still measures the cap", () => {
-  const prs = [prObj(1, { auto_merge: { merge_method: "merge" } }), prObj(2)];
+  const prs = [prObj(1, { auto_merge: { merge_method: "squash" } }), prObj(2)];
   const { request, calls } = fakeApi({
     prs,
     runsBySha: { [SHA(1)]: [{ id: 77, status: "completed", conclusion: "failure" }] },

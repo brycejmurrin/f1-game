@@ -13,12 +13,12 @@
  * itself never writes: it has no way to issue anything but a GET.
  *
  * SUGGESTION, first match wins:
- *   FOREIGN-ARM  auto-merge armed with a method other than squash
+ *   FOREIGN-ARM  auto-merge armed with a method other than merge (merge commits only, #1458)
  *   SYNC         mergeable_state dirty (merge conflict with the deploy branch)
  *   FIX          ci.yml failed on the head, or the Structural guards check failed
  *   ARM          ready, not armed, Structural guards passed, ci not failed
  *   READY        draft, ci green, Structural guards passed, a full-tier slot is free
- *   NONE         armed (squash) and healthy
+ *   NONE         armed (merge) and healthy
  *   WAIT         anything else: ci running, gate pending/absent, cap full
  * The cap is ready-full-cap.mjs's own measure (MAX_LIVE = 3); each READY in one
  * sweep consumes a slot, so a board never suggests more flips than the cap has room.
@@ -74,15 +74,15 @@ export function ciState(runs) {
 export function decide(row, ctx = {}) {
   const room = ctx.room ?? (ctx.cap ? Math.max(0, ctx.cap.cap - ctx.cap.count) : 0);
   const method = String(row.mergeMethod || "").toLowerCase();
-  if (row.armed && method !== "squash") {
-    return { action: "FOREIGN-ARM", why: `auto-merge armed with ${method || "an unknown method"}; only squash is allowed` };
+  if (row.armed && method !== "merge") {
+    return { action: "FOREIGN-ARM", why: `auto-merge armed with ${method || "an unknown method"}; only the merge method is allowed (merge commits only)` };
   }
   if (row.mergeableState === "dirty") return { action: "SYNC", why: "merge conflict with the deploy branch" };
   if (row.ci === "failure") return { action: "FIX", why: "ci.yml failed on the head" };
   if (row.gate === "failed") return { action: "FIX", why: "Structural guards failed on the head" };
   const gateOk = row.gate === "passed";
   if (!row.draft) {
-    if (row.armed) return { action: "NONE", why: "armed (squash) and healthy" };
+    if (row.armed) return { action: "NONE", why: "armed (merge) and healthy" };
     if (gateOk) return { action: "ARM", why: "ready, Structural guards passed, ci not failed" };
     return { action: "WAIT", why: `ready, Structural guards ${row.gate}` };
   }

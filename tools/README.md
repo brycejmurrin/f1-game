@@ -262,7 +262,7 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | Tool | Does | Paired skill |
 |---|---|---|
 | **car/audit-aero.mjs** | Thin alias → `render-car.mjs --preset=wing` (three wing views). Prefer the parent. | garage-parts-livery |
-| **car/audit-parts.mjs** | Renders every option of chosen part categories through `carview.html`; per-category contact sheets. | playwright-probe |
+| **car/audit-parts.mjs** | Renders every option of chosen part categories through `carview.html`; per-category contact sheets. | garage-parts-livery |
 | **car/career-economy.mjs** | Sims a career season per starting team through the real `Career.settleRound()`; reports what a year's income affords. | career-mode |
 | **car/carshot.mjs** | Cropped studio-orbit car JPEG, self-booting: `carshot.mjs [az] [tod] [teamIdx] [out]` → `artifacts/tmp/carshot.jpg`. | playwright-probe |
 | **car/cockpit-pale-sweep.mjs** | Does anything in the COCKPIT read as a blank pale slab? Ray-casts the real Car3D cockpit from the driver's eye. | playwright-probe |
@@ -290,7 +290,7 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/fit-audit.mjs** | The NUMBERS fit audit over viewports × interface scales: tap targets, legibility floor, clipped-without-scroll. | ui-menu-a11y |
 | **ui/layout-audit.mjs** | ONE CLI for menu geometry + PNG/DOM capture: clip/tap/overflow matrix, `--gallery`, `--screen=ID`, `--survey`. | survey-ui-matrix |
 | **ui/menu-capture.mjs** | Library (not a CLI): `runMenuShot` / `runMenuGallery` behind `layout-audit --gallery` / `--screen=`. | survey-ui-matrix |
-| **ui/menu-fit.mjs** | Audits every menu screen for cramped/clipped layout at a viewport; `--safe=` simulates arbitrary notch insets. | ui-menu-a11y |
+| **ui/menu-fit.mjs** | DEPRECATED except `--safe=` (arbitrary notch insets); use `ui/layout-audit.mjs` for menu fit at a viewport. | survey-ui-matrix |
 | **ui/menu-mock.mjs** | Menu-screen layout shots (menu-screens SCREENS x VIEWPORTS), 3D off, one boot per pointer shape, boxes +… | survey-ui-matrix |
 | **ui/menu-readiness.mjs** | Serializable menu readiness predicate, used with bounded Playwright polling. | — |
 | **ui/menu-screens.mjs** | Canonical `SCREENS` + `VIEWPORTS` + `OVERLAY_IDS` (library) for the layout tools. | survey-ui-matrix |
