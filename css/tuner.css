@@ -1283,6 +1283,23 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
 
 } /* @layer components */
 
+/* ---------- UI Fit r6: lighting tuner compact tap floor (#lighting only) ----------
+   Same root as r5/camera (#1530): shared rail-off / rail-on foot rules floor
+   buttons at --tap-min with padding:0, overriding the compact --tap-paint
+   floor. Survey r5 rank 2: 16 soft taps/cell = FX tab 42×52 + 12 --slider
+   ranges + RESET/COPY/DONE ~27–29 tall. Lighting-only so the r5 camera carve
+   stays untouched. */
+@layer components {
+#lighting-inner[data-density="compact"][data-rail="off"] > .sheet-foot button,
+#lighting-inner[data-density="compact"][data-rail="on"] > .sheet-foot button {
+  min-height: var(--tap-paint);
+  padding: calc(var(--gap) / 2) calc(var(--gap) * 2 / 3);
+}
+#lighting-inner #lt-tabs .lt-tab {
+  min-width: var(--tap-paint);
+}
+}
+
 /* #pc-toggle narrow/compact overrides, OUTSIDE @layer components on purpose:
    hud.css sets #pc-toggle unconditionally from inside @layer hud, and layer
    order (tokens.css: reset, base, components, hud, overlays) beats specificity

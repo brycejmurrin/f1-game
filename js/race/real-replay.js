@@ -200,6 +200,7 @@ const RealReplay = (function () {
   // ── The engine ────────────────────────────────────────────────────────────
   function create(G) {
     let run = null;   // {script, cars: Map car->{num, tr, d}, T, speed, follow, reel, reelIdx, list, fired, fit, finished, onKey, audio}
+    let captionGeneration = 0;
     let transport = null;
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
     const at = {};
@@ -280,6 +281,7 @@ const RealReplay = (function () {
 
     function stop() {
       if (!run) return;
+      captionGeneration++;
       if (transport) transport.stop();
       try { if (run.onKey) window.removeEventListener("keydown", run.onKey, true); } catch (e) { /* no window */ }
       stopRadioClip();
@@ -329,6 +331,7 @@ const RealReplay = (function () {
     // Scrubbing and reel cuts cross the same timeline boundary. Release all
     // history, pose the new subject, then reset the camera and repaint once.
     function reposition(t, highlight, paint = false) {
+      captionGeneration++;
       run.T = t; run.fired.clear();
       // A discontinuity must release the prior audio and all broadcast history.
       stopRadioClip();
@@ -447,8 +450,14 @@ const RealReplay = (function () {
         if (rr && rr.replayEvent && rr.commentates && rr.commentates() && run.speed <= SPOKEN_RATE_MAX) {
           if (rr.replayEvent(h, carOfNum(h.num), h.over != null ? carOfNum(h.over) : null)) continue;
         }
-        if (G.announce) G.announce("L" + h.lap + " · " + h.text, CAPTION_S, "race");
+        caption("L" + h.lap + " · " + h.text, "race");
       }
+    }
+    // Accepted cards may wait in the game's announcement queue beyond a seek
+    // or reel cut. Keep their lifetime local to this replay timeline.
+    function caption(text, kind) {
+      const generation = captionGeneration;
+      if (G.announce) G.announce(text, CAPTION_S, kind, () => !!run && !run.finished && generation === captionGeneration);
     }
     function carOfNum(num) {
       if (num == null) return null;
@@ -479,7 +488,7 @@ const RealReplay = (function () {
     function playRadio(h) {
       if (!h.url || typeof Audio === "undefined") return;
       const vol = G.radio && G.radio.volume ? G.radio.volume() : 0.9;
-      if (!G.soundOn || !(vol > 0)) { if (G.announce) G.announce(h.text, CAPTION_S, "info"); return; }
+      if (!G.soundOn || !(vol > 0)) { caption(h.text, "info"); return; }
       try {
         stopRadioClip();
         let clip = null;
@@ -504,7 +513,7 @@ const RealReplay = (function () {
         }
         run.audio = clip;
         if (clip.play && clip.paused) { const p = clip.play(); if (p && p.catch) p.catch(() => { /* autoplay refused */ }); }
-        if (G.announce) G.announce(h.text, CAPTION_S, "info");
+        caption(h.text, "info");
       } catch (e) { stopRadioClip(); /* no audio: silent replay */ }
     }
     function finish() {
