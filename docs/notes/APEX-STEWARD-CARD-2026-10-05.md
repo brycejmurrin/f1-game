@@ -13,6 +13,7 @@ APEX STEWARD CARD (do not re-read steward / check-changes / PR template unless H
 - PR body = session log, opened at the first commit: template fields Goal, Plan
   (live - [ ] checklist, ticked with evidence as items land, one **now:**),
   session-status --pr, Verified/Not run, Next. No committed per-session doc.
+  Backlog pick → `Closes #<n>` in the Goal (AGENTS.md §Backlog).
 - Pre-push → check-changes (spawns verify-agent). Red ci/pages → ci-red-triage
   then steward overrides only (draft/ready dedupe; sync-pr.mjs not hand merge;
   who-is-on-it before shared red; live = Pages + version.json).
@@ -22,7 +23,7 @@ APEX STEWARD CARD (do not re-read steward / check-changes / PR template unless H
   shell-poll loops while subscribed).
 - Sync only CONFLICTING/DIRTY or required tip red. Claim via who-is-on-it --claim.
 - Branch: cursor/<topic>-<hash> → ship claude/f1-game-project-26h3ng.
-HASHES: steward=ab993ba2 check-changes=42aa1fd6 pr-template=9e87c9d4
+HASHES: steward=ab993ba2 check-changes=42aa1fd6 pr-template=a0e3134a
 ```
 
 MCP: call `get_mcp_tools` / schema discovery once per session (or once per
