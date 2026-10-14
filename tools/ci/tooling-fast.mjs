@@ -554,6 +554,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // LoopHealth fault policy: RUN_CAP / TOTAL_CAP / quiet expiry / clean recovery.
   // VM-executed js/perf/loop-health.js (seedLog), controllable clock, ~0.1 s.
   "tests/unit/loop-health.test.mjs",
+  // Low-speed lock plateau pin (1.06× → ≈0.371 rad at notch 7) + high-speed
+  // Object.is vs pre-boost raw; companion to steer-lock-taper. Source + VM, ~3 s.
+  "tests/unit/low-speed-lock.test.mjs",
   // The marshal posts' light panels show race control: a waved yellow in the
   // sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.
   "tests/unit/marshal-panels.test.mjs",
@@ -802,7 +805,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // must still rise >1.05× (player-dynamics shape) but stay ≤1.25× in 0.75 s
   // at 45 m/s / lock 0.8. createGame once, ~2.5 s.
   "tests/unit/steer-feel-lift-off.test.mjs",
-  // Hairpin lock hold: lockTaper = 1 for vs≤15, blend 15–30, raw ≥30 so
+  // Hairpin lock hold: lockTaper = 1.06× for vs≤15, blend 15–30, raw ≥30 so
   // ≥60 m/s stays bit-identical to the old hyperbolic taper. Source + VM, ~3 s.
   "tests/unit/steer-lock-taper.test.mjs",
   // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
