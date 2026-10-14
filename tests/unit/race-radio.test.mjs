@@ -20,6 +20,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { gameSource } from "../helpers/game-source.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -1185,7 +1186,7 @@ test("current caution invalidates delayed TV and replay flags through the real a
   assert.equal(comm(r).length, 0, "green copy expires when local yellow replaces green");
 
   // The real game queue accepts a line now but checks still() at display time.
-  const game = readFileSync(join(ROOT, "js/game.js"), "utf8"), shown = [];
+  const game = gameSource(), shown = [];
   const ac = vm.createContext({ hudProfile: "standard", CAM_MODES: [{ id: "chase" }], camMode: 0,
     els: { announce: { dataset: {} } }, shown, announceT: 0, _annPri: 0, _annFloor: 0,
     _annQueue: [], performance: { now: () => 0 } });
@@ -1240,4 +1241,51 @@ test("last-lap urgent retries refresh the battle and retain one final-lap remind
     r.step(0.1, 20);
     assert.equal(attempts.filter((x) => x.accepted && x.kind === "race").length, 1, "last-lap reminder remains once-only");
   }
+});
+
+test("accepted live race cards cannot survive a new field or a radio reset", () => {
+  for (const boundary of ["field", "reset"]) {
+    const r = race(), accepted = [];
+    r.G.announce = (msg, dur, kind, still) => { accepted.push({ msg, kind, still }); return true; };
+    r.step(.05);
+    r.G._caution = 3;
+    r.step(.05);
+    const card = accepted.find((c) => /SAFETY CAR/.test(c.msg));
+    assert.ok(card, "urgent live safety car card was accepted");
+    assert.equal(card.still(), true, "same race and caution remain valid");
+    r.G.paused = true;
+    assert.equal(card.still(), true, "a pause preserves this race's news");
+    r.G.paused = false;
+    if (boundary === "field") {
+      r.G.cars = r.cars.map((c) => ({ ...c }));
+      r.G.player = r.G.cars.find((c) => c.isPlayer);
+      assert.equal(card.still(), false, "field replacement invalidates before the next radio tick");
+      r.step(.05);
+    } else {
+      r.radio.reset();
+      r.step(.05);
+    }
+    assert.equal(card.still(), false, "a matching caution in a new race cannot revive old copy");
+  }
+});
+
+
+test("commentary OFF permanently discards accepted WATCH copy without suppressing new news", () => {
+  const r = watch(), accepted = [];
+  r.G.announce = (msg, dur, kind, still) => { accepted.push({ msg, still }); return true; };
+  r.step(.05);
+  r.G._caution = 3;
+  r.radio.replayEvent({ kind: "sc", level: 3 });
+  r.step(.05);
+  assert.equal(accepted.length, 1);
+  assert.equal(accepted[0].still(), true);
+  r.radio.setComm("off");
+  assert.equal(accepted[0].still(), false, "OFF applies to accepted cards waiting behind other news");
+  r.radio.setComm("on");
+  assert.equal(accepted[0].still(), false, "re-enabling must not resurrect discarded copy");
+  r.G._caution = 0;
+  r.radio.replayEvent({ kind: "green" });
+  r.step(.05);
+  assert.equal(accepted.length, 2);
+  assert.equal(accepted[1].still(), true, "new commentary remains available");
 });
