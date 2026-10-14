@@ -468,6 +468,8 @@ interface GameCtx {
   // ── Debug/test scratch state ──────────────────────────────────────────────
   _lastFloodEmit: number;
   _studioRig: StudioRig | null;
+  /** PERF-HUNT-2 S8: bumped each caution/coach/radio frame flush; null until the first flush so harness update() loops are not latched. */
+  _s8Stamp: number | null;
   _testInput: TestInput | null;
   builtTrackNight: boolean | null;
 

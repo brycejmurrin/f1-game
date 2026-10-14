@@ -330,7 +330,14 @@ const RaceControl = (function () {
       return true;
     }
 
+    // PERF-HUNT-2 S8: game.js flushes once per display frame (G._s8Stamp). A
+    // second update with the same stamp is a no-op; tests that omit the stamp
+    // keep the per-call behaviour.
+    let _s8Done = null;
     function update(dt) {
+      const stamp = G._s8Stamp;
+      if (stamp != null && stamp === _s8Done) return;
+      if (stamp != null) _s8Done = stamp;   // after the match check; call sites pass finite dt
       // State reset BEFORE the ownership gate: a guest's caution mirror comes
       // from host apply(), and returning early here would leave the last flag
       // flown on its HUD after the race ended (reset() is local-only, safe for all).

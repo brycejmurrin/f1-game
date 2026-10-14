@@ -116,6 +116,10 @@ export const SCREENS = [
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-display");
       await p.waitForFunction(() => !document.getElementById("pm-panel-display").hidden, null, { polling: 100, timeout: 15000 }); } },
+  { id: "settingsa11y", name: "Settings — accessibility", root: "#pmsettings", open: async (p) => {
+      await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
+      await p.click("#pm-open-a11y");
+      await p.waitForFunction(() => !document.getElementById("pm-panel-a11y").hidden, null, { polling: 100, timeout: 15000 }); } },
   // The VS FRIEND lobby is the densest sheet in the game — two multi-hundred-
   // character code boxes, a QR, copy buttons and a room code — and it was the
   // one screen the grid did not cover. It is also all of css/overlays.css's

@@ -192,6 +192,7 @@ const HudLayout = (function () {
   let foldEl = null;         // the MOVE & SIZE <details>, once built
   let selected = null;       // the element the fold has selected (outlined while peeking)
   let onModeChange = null;   // the fold's repaint, while it is built (style / camera changed)
+  let _pub = false;          // true after this IIFE finishes its first apply (HudLayout is then readable)
 
   function num(v, k) {
     const n = Math.round(Number(v));
@@ -331,6 +332,15 @@ const HudLayout = (function () {
     // A move changes what fitHud measured: let it re-lay the bands out now
     // (js/ui/hud.js; optional — absent at eval and in node harnesses).
     if (typeof GameHud !== "undefined" && GameHud && typeof GameHud.invalidateFit === "function") GameHud.invalidateFit();
+    // REL ships ON in BROADCAST only (js/ui/hud-elements.js). Re-apply the hide
+    // list when the painted style changes so data-hud-hide~=rel tracks it.
+    // Defer until after this IIFE returns: a sync call during init reads
+    // HudLayout while the const is still in TDZ and aborts the script.
+    if (_pub && typeof HudElements !== "undefined" && HudElements && typeof HudElements.apply === "function") {
+      const run = () => { if (body && body.hasAttribute("data-hud-arrange")) return; try { HudElements.apply(); } catch (_) { /* detached / tests */ } };
+      if (typeof queueMicrotask === "function") queueMicrotask(run);
+      else setTimeout(run, 0);
+    }
   }
 
   /* KEEP MOVED PIECES ON SCREEN. An offset chosen on one screen (or at one HUD
@@ -366,6 +376,8 @@ const HudLayout = (function () {
       if (foldEl) foldEl.open = false;
       preview = null; previewProf = null; selected = null; apply();
     }
+    resetClearance();
+    clearPackMarks();
     const W = window.innerWidth, H = window.innerHeight;
     const a = all()[shown()];
     const groups = new Map();   // "x,y" offset (or "solo:id" at 0,0) -> [{ el, e, r }]
@@ -398,10 +410,8 @@ const HudLayout = (function () {
     // edge clamp, nudge those three left/up off any visible .touchbtn (and
     // INPUTS off SPEED & GEAR) so a placed chip cannot cover a tap target.
     clearControls(W, H);
-    // Phone HUD SIZE ≥ 140%: pack the left column (rel/strat/…) and the docked
-    // dash (tyre/gear/speed/ERS) so they clear each other and stay on-screen.
-    // announce/flag are FIXED — queue-1 owns their stack. Pure packer:
-    // packPhoneRects; painted only (store untouched).
+    // Pack primary instruments first, then place secondary readouts around them.
+    // Both corrections reset before measurement and never enter saved settings.
     packPhone(W, H);
     // HudRelative / HudStrategy / tyre paint AFTER fitHud in the same tick
     // (js/ui/hud.js), so the first pack often misses them. One double-rAF
@@ -651,7 +661,13 @@ const HudLayout = (function () {
       }
     }
   }
-  function packPhone(W, H) { /* PACK_MARK_Q2_4159 */
+  function packPhone(W, H) {
+    resetClearance();
+    clearPackMarks();
+    packPhonePrimary(W, H);
+    clearReadouts(W, H);
+  }
+  function packPhonePrimary(W, H) { /* PACK_MARK_Q2_4159 */
     if (!doc || !doc.body || !doc.body.classList || doc.body.classList.contains("desktop")) return;
     let pct = 100;
     if (store && typeof store.get === "function") pct = +store.get("hudScale", 100) || 100;
@@ -665,10 +681,9 @@ const HudLayout = (function () {
       try { const s = window.__apex.hudScale(); if (s && s.pct != null) pct = Math.max(pct, +s.pct || 0); } catch (_) { /* */ }
     }
     if (!(pct >= PACK_SCALE_MIN)) return;
-    clearPackMarks();
     const boxes = [];
     const want = Object.create(null);
-    for (let i = 0; i < PACK_MOVE.length; i++) want[PACK_MOVE[i]] = 1;
+    for (const id of Object.keys(PACK_DOCK)) want[id] = 1;
     want.announce = 1; want.flag = 1; want.map = 1; want.tower = 1;
     for (let i = 0; i < ELEMENTS.length; i++) {
       const [id, , sel] = ELEMENTS[i];
@@ -742,6 +757,7 @@ const HudLayout = (function () {
         if (el) _packMo.observe(el, { attributes: true, attributeFilter: ["hidden"] });
       };
       watch("hud-strat"); watch("hud-rel"); watch("hud-tyre"); watch("hud-inputs");
+      watch("hud-limits"); watch("hud-flag");
     } catch (_) { _packMo = null; }
   }
 
@@ -793,6 +809,122 @@ const HudLayout = (function () {
         el.style.setProperty("--hl-y", String(+(e.y + dy / H * 100).toFixed(2)));
         r = el.getBoundingClientRect();
       }
+    }
+  }
+
+  // Temporary screen-pixel corrections never enter the saved MOVE & SIZE layout.
+  // Controls and primary instruments reserve their space before optional panels.
+  const CLEAR_READOUTS = ["speed", "limits", "announce", "damage", "rel", "strat", "inputs"];
+  function resetClearance() {
+    if (!doc || !doc.querySelector) return;
+    for (const [id, , sel] of ELEMENTS) {
+      if (CLEAR_READOUTS.indexOf(id) < 0) continue;
+      const el = doc.querySelector(sel);
+      if (el && el.style) {
+        el.style.removeProperty("--hud-clear-x"); el.style.removeProperty("--hud-clear-y");
+        el.removeAttribute("data-col-compact"); el.removeAttribute("data-col-drop");
+      }
+    }
+  }
+  function clearReadouts(W = window.innerWidth, H = window.innerHeight) {
+    if (!doc.querySelectorAll) return;
+    resetClearance();
+    const rows = ELEMENTS.filter((e) => CLEAR_READOUTS.indexOf(e[0]) >= 0);
+    const box = (el) => {
+      if (!el || el.hidden || !el.getBoundingClientRect) return null;
+      const cs = typeof getComputedStyle === "function" ? getComputedStyle(el) : null;
+      if (cs && (cs.display === "none" || cs.visibility === "hidden")) return null;
+      const r = el.getBoundingClientRect();
+      return r.width && r.height ? r : null;
+    };
+    const safe = doc.documentElement && typeof getComputedStyle === "function" ? getComputedStyle(doc.documentElement) : null;
+    const inset = (name) => safe && safe.getPropertyValue ? Math.max(0, parseFloat(safe.getPropertyValue(name)) || 0) : 0;
+    const bounds = { left: EDGE + inset("--sal"), top: EDGE + inset("--sat"), right: W - EDGE - inset("--sar"), bottom: H - EDGE - inset("--sab") };
+    const inside = (r) => r.left >= bounds.left && r.top >= bounds.top && r.right <= bounds.right && r.bottom <= bounds.bottom;
+    const blocks = [];
+    for (const el of doc.querySelectorAll(".touchbtn, #pausebtn, #btn-cam, #hud-gearbox, #hud-tyre, #hud-energy, #hud-ot, #hud-aero, #hud-bb, .hud-top, #minimap, .hud-gaps, #hud-sectors, #hud-flag, #hud-mirror")) {
+      const r = box(el); if (r) blocks.push(r);
+    }
+    // A player-placed radio is an obstacle, never another automatic candidate.
+    const placedRadio = bodyAttr("data-radio-placed");
+    if (placedRadio) { const r = box(doc.querySelector("#announce")); if (r) blocks.push(r); }
+    const hits = (r, b) => r.left < b.right + EDGE && r.right > b.left - EDGE && r.top < b.bottom + EDGE && r.bottom > b.top - EDGE;
+    for (const id of CLEAR_READOUTS) {
+      const row = rows.find((e) => e[0] === id), el = doc.querySelector(row[2]);
+      // A stale lane collapse has no rectangle to place after rotation or a
+      // camera switch. Reopen it locally; the lane producer owns the next reset.
+      if (id === "announce" && el && el.hasAttribute("data-lane-collapsed")) {
+        el.style.setProperty("--announce-lane-w", Math.max(0, bounds.right - bounds.left) + "px");
+        el.removeAttribute("data-lane-collapsed");
+      }
+      let r = box(el); if (!r) continue;
+      if (id === "announce" && placedRadio) { blocks.push(r); continue; }
+      // SPEED moves only for the desktop visor, where its shipped vertical
+      // offset can meet the enlarged gearbox. Everywhere else it has priority.
+      if (id === "speed" && !(has("desktop") && shown() === "helmet")) { blocks.push(r); continue; }
+      const findSlot = (r) => {
+        if (inside(r) && !blocks.some((b) => hits(r, b))) return r;
+        let best = null, cost = Infinity;
+        const xs = [r.left, bounds.left, bounds.right - r.width], ys = [r.top, bounds.top, bounds.bottom - r.height];
+        for (const b of blocks) { xs.push(b.left - EDGE - r.width, b.right + EDGE); ys.push(b.top - EDGE - r.height, b.bottom + EDGE); }
+        for (const x of xs) for (const y of ys) {
+          if (x < bounds.left || y < bounds.top || x + r.width > bounds.right || y + r.height > bounds.bottom) continue;
+          const candidate = { left: x, top: y, right: x + r.width, bottom: y + r.height, width: r.width, height: r.height };
+          if (blocks.some((b) => hits(candidate, b))) continue;
+          const d = (x - r.left) ** 2 + (y - r.top) ** 2;
+          if (d < cost) { best = candidate; cost = d; }
+        }
+        return best;
+      };
+      let best = findSlot(r);
+      // A narrow dock lane can wrap a long call beyond the available height.
+      // Let placement try the card's normal width before accepting a collision.
+      if (!best && id === "announce") {
+        el.style.setProperty("--announce-lane-w", Math.max(0, bounds.right - bounds.left) + "px");
+        r = box(el);
+        best = r && findSlot(r);
+      }
+      if (!best && id === "inputs") { el.setAttribute("data-col-drop", ""); continue; }
+      if (!best && id === "damage") {
+        el.setAttribute("data-col-compact", "");
+        r = box(el);
+        best = r && findSlot(r);
+      }
+      if (!best && (id === "rel" || id === "strat")) {
+        el.setAttribute("data-col-compact", "");
+        if (id === "rel" && el.querySelectorAll) {
+          const children = el.querySelectorAll(":scope > div");
+          for (const child of children) child.removeAttribute("data-col-row");
+          const first = Array.from(children).find((child) => !child.hidden && !child.hasAttribute("data-self")) || Array.from(children).find((child) => !child.hidden);
+          if (first) first.setAttribute("data-col-row", "");
+        }
+        r = box(el);
+        best = r && findSlot(r);
+        if (!best) { el.setAttribute("data-col-drop", ""); continue; }
+      }
+      if (best) {
+        el.style.setProperty("--hud-clear-x", (best.left - r.left).toFixed(2) + "px");
+        el.style.setProperty("--hud-clear-y", (best.top - r.top).toFixed(2) + "px");
+        // Read the actual painted box: zoom, saved scale and platform layout
+        // can change the relationship between a CSS correction and its pixels.
+        const painted = box(el);
+        if (painted) blocks.push(painted);
+      } else blocks.push(r);
+    }
+  }
+
+  let clearanceObserver = null;
+  function watchReadoutSizes() {
+    if (clearanceObserver || !doc || typeof ResizeObserver !== "function") return;
+    // Text, late fonts and radio wrapping can change a box after the HUD tick.
+    // Placement must use those final dimensions, including while the race is paused.
+    clearanceObserver = new ResizeObserver(() => {
+      if (typeof window !== "undefined" && window.innerWidth) clearReadouts();
+    });
+    for (const [id, , sel] of ELEMENTS) {
+      if (CLEAR_READOUTS.indexOf(id) < 0) continue;
+      const el = doc.querySelector(sel);
+      if (el) clearanceObserver.observe(el, { box: "border-box" });
     }
   }
 
@@ -977,6 +1109,7 @@ const HudLayout = (function () {
     if (!row || !doc) return null;
     const el = doc.querySelector(row[2]);
     const live = hudLive();
+    if (live && el && el.hasAttribute && el.hasAttribute("data-col-drop")) return { reason: "not enough room", soft: true };
     if (live && drawn(el)) return null;
     const user = !!(el && el.hasAttribute && el.hasAttribute("data-hl-user"));
     const hideAttr = doc.body && doc.body.getAttribute ? String(doc.body.getAttribute("data-hud-hide") || "") : "";
@@ -1154,8 +1287,9 @@ const HudLayout = (function () {
     paintAll();
   }
 
-  function init() { apply(); build(); watchPackUnhide(); }
+  function init() { apply(); build(); watchPackUnhide(); watchReadoutSizes(); }
   apply();
+  _pub = true;
   if (doc) {
     if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", init, { once: true });
     else init();
@@ -1164,7 +1298,7 @@ const HudLayout = (function () {
   return {
     KEY, ELEMENTS, SETS, PROFILES, LIM, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS,
     PACK_AIR, PACK_SCALE_MIN, PACK_FIXED, PACK_MOVE,
-    get, set, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, build,
+    get, set, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, clearReadouts, build,
     camSet, shown: () => shown(), profile, all, migrate, presetLayout, applyPreset, presetOf,
     hiddenReason, originOf, packPhoneRects,
   };

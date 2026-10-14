@@ -333,7 +333,9 @@ node tools/garage-angles-fetch.mjs --out artifacts/garage-before
 
 `Garage before` (`.github/workflows/garage-before.yml`) captures
 `--team` shards × `--views=hero,front,side,rear,top,wingFront,wingRear`
-on macos-latest. Recapture only the AFTER angles you changed.
+on macos-latest, once a day when the watched paths moved (or on
+dispatch), so the newest pack may trail ship by up to a day; the fetch
+prints how stale it is. Recapture only the AFTER angles you changed.
 
 ## Before you run
 

@@ -81,7 +81,6 @@ jobs:
         with:
           ref: claude/f1-game-project-26h3ng
           fetch-depth: 0
-      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
 
       # START FROM THE RECORD, NOT THE DEPLOY TIP'S COPY (2026-09-24). This job
       # used to merge one run into the deploy branch's file and force-push the
@@ -130,6 +129,10 @@ jobs:
       # must match the stack that PRODUCED these numbers, not this runner: the
       # browser jobs run llvmpipe. Mixing buckets is the one thing that module's
       # header forbids, because it turns a renderer swap into a fake regression.
+      # Node 22 + npm ci only when there is junit to merge (2026-10-14): no
+      # artifacts is the normal case, and the fetch above needs only gh + git.
+      - uses: ./.github/actions/setup-apex
+        if: steps.fetch.outputs.found == 'true'
       - name: Merge into tests/data/spec-timings.json
         if: steps.fetch.outputs.found == 'true'
         env:

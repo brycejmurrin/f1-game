@@ -1610,7 +1610,7 @@ jobs:
       # above was skipped, so there is no junit and nothing to say.
       - name: Spec timings (junit — a green run's durations are the point)
         if: always() && needs.ship-filter.outputs.ships != 'false'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: spec-timings-junit-smoke-${{ matrix.shard }}
           path: artifacts/test-results-*/junit.xml
@@ -1618,7 +1618,7 @@ jobs:
           retention-days: 7
       - name: Failure artifacts
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           # Shard-scoped name: same-named artifacts from parallel matrix jobs
           # collide on upload-artifact@v4 (it hard-fails on duplicates).
@@ -1708,7 +1708,7 @@ jobs:
       # were all skipped (the ship filter) legitimately produces none.
       - name: Spec timings (junit — a green run's durations are the point)
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: spec-timings-junit-driving-model
           path: artifacts/test-results-*/junit.xml
@@ -1716,7 +1716,7 @@ jobs:
           retention-days: 7
       - name: Failure artifacts
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-artifacts-driving-model
           path: |
@@ -1913,7 +1913,7 @@ jobs:
       # 3495 (2026-09-10) was exactly that; the pictures are the whole point.
       - name: Run artifacts (report, traces, attached frames)
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-artifacts-renderer-macos
           path: |
@@ -1996,7 +1996,7 @@ jobs:
         run: npm run test:xr -- --timeout=600000
       - name: Failure artifacts
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-artifacts-xr
           path: |
@@ -2222,7 +2222,7 @@ jobs:
       - name: Mark the run step reached
         run: mkdir -p .selected-started && echo "${{ matrix.name }}" > .selected-started/marker.txt
       - name: Upload the run-step marker
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: selected-started-${{ matrix.name }}-${{ strategy.job-index }}
           path: .selected-started/marker.txt
@@ -2277,7 +2277,7 @@ jobs:
       # were all skipped (the ship filter) legitimately produces none.
       - name: Spec timings (junit — a green run's durations are the point)
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           # matrix.name is unique per plan (select-specs shards()); the job
           # index makes a repeat impossible even if that ever regresses.
@@ -2294,7 +2294,7 @@ jobs:
       # kills); `always() && !success()` reaches exactly failure + cancel.
       - name: Failure artifacts
         if: ${{ always() && !success() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-artifacts-selected-${{ matrix.name }}-${{ strategy.job-index }}
           path: |
@@ -2390,7 +2390,7 @@ jobs:
         id: dl_junit
         if: ${{ needs.selected.result != 'skipped' }}
         continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: spec-timings-junit-selected-*
           path: junit-in
@@ -2400,7 +2400,7 @@ jobs:
         id: dl_started
         if: ${{ needs.selected.result != 'skipped' }}
         continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: selected-started-*
           path: started-in
@@ -2501,7 +2501,7 @@ jobs:
       # rendered, because "it passed here once" is the evidence step (b) needs.
       - name: The rendered goldens, and any diff
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: golden-menus-runner
           path: |
@@ -2584,8 +2584,10 @@ jobs:
       # error, empty answer) pokes, as before.
       # SINGLE-FLIGHT + TIP-CI GATE (2026-10-06). Never dual-dispatch Pages while
       # a train is already queued/running. Never poke for a tip whose ship-fast
-      # CI is still pending, failed, or cancelled (Pages run 37497278920 was
-      # dispatched for 85de0ac while tip CI 37496991170 was still in_progress).
+      # CI FAILED. (Until 2026-10-14 a pending or cancelled tip blocked too —
+      # Pages run 37497278920 was dispatched for 85de0ac while tip CI
+      # 37496991170 was in_progress — but that live-locked merge bursts; see
+      # the tip-moved branch below.)
       # cancel-in-progress stays false on pages.yml — we skip the poke instead
       # of cancelling a live train.
       - name: Is this commit still the tip, or is no train moving?
@@ -2609,17 +2611,23 @@ jobs:
             echo "POKING tip ${GITHUB_SHA:0:7}: fast tier green and no train moving" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          # Tip moved: only poke when tip push CI already concluded success.
+          # Tip moved: poke unless the tip's push CI concluded FAILURE (2026-10-14).
+          # Waiting for completed/success live-locked a merge burst: every green
+          # run found a newer tip still pending, that tip's run was then
+          # cancelled as a superseded pending run, and nothing poked from 13:44
+          # (ship runs 38582717249, 38584256448 "NOT POKING ... pending/none").
+          # The train gates the TIP itself, so a poke from a superseded green
+          # commit is safe; pages-reuse-verdict.sh stops a red tip at once.
           TIP_CI=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=$GITHUB_REF_NAME&event=push&per_page=30" 2>/dev/null \
             | jq -r --arg tip "$TIP" '[.workflow_runs[] | select(.head_sha == $tip)] | .[0] | "\(.status)|\(.conclusion // "")"' || true)
           STATUS="${TIP_CI%%|*}"
           CONC="${TIP_CI#*|}"
-          if [ "$STATUS" = "completed" ] && [ "$CONC" = "success" ]; then
-            echo "poke=true" >> "$GITHUB_OUTPUT"
-            echo "POKING from a superseded commit: tip $TIP already has green ship-fast CI and no train is moving" | tee -a "$GITHUB_STEP_SUMMARY"
-          else
+          if [ "$STATUS" = "completed" ] && [ "$CONC" = "failure" ]; then
             echo "poke=false" >> "$GITHUB_OUTPUT"
-            echo "NOT POKING: tip moved to $TIP but tip CI is ${STATUS:-unknown}/${CONC:-none} (need completed/success)" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "NOT POKING: tip moved to $TIP and its ship-fast CI concluded failure" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "poke=true" >> "$GITHUB_OUTPUT"
+            echo "POKING from a superseded commit: tip $TIP ship-fast CI is ${STATUS:-unknown}/${CONC:-none} (not red) and no train is moving" | tee -a "$GITHUB_STEP_SUMMARY"
           fi
       - name: Dispatch pages.yml on this branch
         if: steps.tip.outputs.poke == 'true'

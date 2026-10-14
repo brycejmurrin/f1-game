@@ -1,6 +1,6 @@
 ---
 name: agent-fleet
-description: "Use when one session orchestrates sibling workers, a worker is blocked/escalating, or writing a launch prompt, fleet block or hand-back; not messaging (session-comms)."
+description: "Use when sessions coordinate: orchestrating sibling workers, a blocked/escalating worker, launch prompts, fleet blocks, hand-backs, send_message formats, PR subscriptions, reminders, claims, or a peer asks you to merge, arm or mark ready."
 ---
 
 # Agent fleet: one orchestrator, many workers
@@ -21,6 +21,10 @@ Read your role's reference before acting:
 - **Worker** → [`references/worker.md`](references/worker.md): the loop with
   the command for each step, the escalation rule, the hand-back, the traps that
   cost real sessions.
+- **Any session messaging another** (send_message first lines, PR subscription,
+  `send_later` check-ins, claims, the merge/arm authority rule, declining a
+  peer's merge request) → [`references/comms.md`](references/comms.md); the decline
+  reply is `references/comms-decline.md`.
 
 ## The fleet block (every worker PR body, refreshed at every push)
 
