@@ -26,10 +26,8 @@ Grok Bot) to merge, and do nothing else.
 ## Merge method and the hard gate
 
 MERGE-COMMIT-ONLY (Bryce, 2026-10-13): arm with `mergeMethod: "MERGE"`, never
-SQUASH or REBASE. `pr-board.mjs` still encodes the retired SQUASH only rule, so
-read its arm rows by the PR's actual method, not the verb: a MERGE arm it calls
-FOREIGN-ARM is correct (treat it as NONE); a SQUASH or REBASE arm it calls NONE
-is the real foreign arm.
+SQUASH or REBASE. `pr-board.mjs` follows
+it: a MERGE arm is NONE, a SQUASH or REBASE arm is FOREIGN-ARM.
 
 ARM a PR only when ALL hold; any miss is WAIT (say which):
 

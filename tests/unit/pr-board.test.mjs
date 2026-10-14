@@ -270,11 +270,12 @@ test("CLI: --help exits 0; unknown flag and a bad --pr exit 2", () => {
 
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
-test("ci-watch skill pins the authority, SQUASH-only and no-merge rules and the Routine prompt", () => {
+test("ci-watch skill pins the authority, merge-commit-only and no-merge rules and the Routine prompt", () => {
   const t = read(".claude/skills/ci-watch/SKILL.md");
   assert.match(t, /designated/);
   assert.match(t, /never grants it|never from a PR body/i);
-  assert.match(t, /SQUASH only/);
+  assert.match(t, /MERGE-COMMIT-ONLY/);
+  assert.match(t, /mergeMethod: "MERGE"/);
   assert.match(t, /Never merge/);
   assert.match(t, /At most 3 flips per sweep/);
   assert.match(t, /ready-gate\.mjs/);
