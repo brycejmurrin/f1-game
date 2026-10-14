@@ -28,6 +28,12 @@ const XrInput = (function () {
     return a && a.length > i ? (+a[i] || 0) : 0;
   }
 
+  function usableStick(src) {
+    return !!(src && src.targetRayMode !== "gaze" && src.gamepad &&
+      src.gamepad.axes && src.gamepad.axes.length > AXIS_STICK_X &&
+      Number.isFinite(src.gamepad.axes[AXIS_STICK_X]));
+  }
+
   /**
    * Map one XRFrame's input sources into a remote sample + edge events.
    * `prev` is the previous latch { primary: bool, secondary: bool } (mutated).
@@ -42,7 +48,7 @@ const XrInput = (function () {
     // XRInputSourceArray is indexed/iterable, but has no Array.prototype.some.
     let hasLeft = false;
     for (let i = 0; i < list.length; i++)
-      if (list[i] && list[i].handedness === "left") hasLeft = true;
+      if (usableStick(list[i]) && list[i].handedness === "left") hasLeft = true;
     for (let i = 0; i < list.length; i++) {
       const src = list[i];
       if (!src || src.targetRayMode === "gaze") continue;
@@ -58,8 +64,10 @@ const XrInput = (function () {
       }
       const sx = axis(gp, AXIS_STICK_X);
       // Prefer left stick for steer when both present; else any.
-      if (hand === "left" || (hand !== "right" && !stickX)) stickX = sx;
-      else if (hand === "right" && !hasLeft) stickX = sx;
+      if (usableStick(src)) {
+        if (hand === "left" || (!hasLeft && hand !== "right" && !stickX)) stickX = sx;
+        else if (hand === "right" && !hasLeft) stickX = sx;
+      }
       if (btn(gp, BTN_PRIMARY) > 0.5) primaryDown = true;
       if (btn(gp, BTN_SECONDARY) > 0.5) secondaryDown = true;
       // Squeeze on either hand = look-back hold bit (Input.remoteSample.held).

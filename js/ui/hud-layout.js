@@ -396,6 +396,351 @@ const HudLayout = (function () {
     // edge clamp, nudge those three left/up off any visible .touchbtn (and
     // INPUTS off SPEED & GEAR) so a placed chip cannot cover a tap target.
     clearControls(W, H);
+    // Phone HUD SIZE ≥ 140%: pack the left column (rel/strat/…) and the docked
+    // dash (tyre/gear/speed/ERS) so they clear each other and stay on-screen.
+    // announce/flag are FIXED — queue-1 owns their stack. Pure packer:
+    // packPhoneRects; painted only (store untouched).
+    packPhone(W, H);
+    // HudRelative / HudStrategy / tyre paint AFTER fitHud in the same tick
+    // (js/ui/hud.js), so the first pack often misses them. One double-rAF
+    // follow-up re-packs once they have boxes — without editing hud.js
+    // (open PRs own that file).
+    schedulePackFollowUp();
+  }
+  let _packFollow = 0;
+  function schedulePackFollowUp() {
+    if (_packFollow) return;
+    _packFollow = 1;
+    const run = () => {
+      _packFollow = 0;
+      if (!doc || typeof window === "undefined" || !window.innerWidth) return;
+      packPhone(window.innerWidth, window.innerHeight);
+      // Strat/rel paint on the 10 Hz HUD tick after fitHud; one more pack a
+      // beat later catches the unhide the MutationObserver may miss when the
+      // hidden flag never flipped (first race tick already showed them).
+      if (typeof setTimeout === "function") {
+        setTimeout(() => {
+          if (!doc || typeof window === "undefined" || !window.innerWidth) return;
+          packPhone(window.innerWidth, window.innerHeight);
+        }, 120);
+      }
+    };
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => requestAnimationFrame(run));
+    } else if (typeof setTimeout === "function") {
+      setTimeout(run, 32);
+    } else {
+      _packFollow = 0;
+    }
+  }
+
+  /* PHONE 150% PACKER. Pure: boxes → { id: {dx, dy} } in screen px. announce
+     and flag never move. Later MOVE ids yield to earlier ones and to FIXED.
+     Dock chips (tyre/gear/speed/ERS) rank BEFORE opt-in left-column chips so
+     REL/STRATEGY slide off the dash instead of asking TYRES to drop onto the
+     steer buttons (844×390 @150%: tyre can only fall ~7 px before ctrl:steer). */
+  const PACK_AIR = 4;
+  const PACK_SCALE_MIN = 140;
+  const PACK_FIXED = Object.freeze({ announce: 1, flag: 1, map: 1, tower: 1 });
+  const PACK_DOCK = Object.freeze({ tyre: 1, gearbox: 1, speed: 1, energy: 1 });
+  const PACK_MOVE = Object.freeze([
+    "tyre", "gearbox", "speed", "energy",
+    "rel", "strat", "inputs", "sectors", "limits",
+  ]);
+  function packPhoneRects(boxes, W, H) {
+    const by = Object.create(null);
+    const fixed = Object.create(null);
+    if (!boxes || !(W > 0) || !(H > 0)) return {};
+    // Portrait: keep the dock (tyre/gear/speed/ERS) planted — moving them
+    // with margin at --hud-z-bot ≈ 0.6 yeeted TYRES off the top (390×844
+    // @150%). Left-column chips still pack against the planted dock.
+    const dockFixed = H > W;
+    for (let i = 0; i < boxes.length; i++) {
+      const b = boxes[i];
+      if (!b || !b.id || !(b.w > 0 && b.h > 0)) continue;
+      by[b.id] = { id: b.id, x: +b.x, y: +b.y, w: +b.w, h: +b.h, dx: 0, dy: 0 };
+      if (PACK_FIXED[b.id] || b.fixed || String(b.id).indexOf("ctrl:") === 0) fixed[b.id] = 1;
+      if (dockFixed && PACK_DOCK[b.id]) fixed[b.id] = 1;
+    }
+    // Survey overlaps judge the radio card with its widest forced text, which
+    // sits lower/taller than the idle plate. Pad announce so packing clears
+    // that lane without moving announce itself (queue-1 owns its stack).
+    if (by.announce) {
+      const a = by.announce;
+      const padBottom = Math.max(a.h, Math.min(H * 0.22, a.h + 70));
+      a.h = padBottom;
+      // A high-idle card still claims the mid band the forced probe uses.
+      if (a.y + a.h < H * 0.45) a.h = Math.max(a.h, H * 0.45 - a.y);
+    }
+    const isFixed = (id) => !!fixed[id];
+    const rect = (m) => ({
+      L: m.x + m.dx, T: m.y + m.dy, R: m.x + m.dx + m.w, B: m.y + m.dy + m.h,
+    });
+    const hit = (a, b) => a.L < b.R - 0.5 && b.L < a.R - 0.5 && a.T < b.B - 0.5 && b.T < a.B - 0.5;
+    const clampOn = (m) => {
+      const r = rect(m);
+      if (r.L < PACK_AIR) m.dx += PACK_AIR - r.L;
+      if (r.T < PACK_AIR) m.dy += PACK_AIR - r.T;
+      if (r.R > W - PACK_AIR) m.dx -= r.R - (W - PACK_AIR);
+      if (r.B > H - PACK_AIR) m.dy -= r.B - (H - PACK_AIR);
+    };
+    const separate = (moverId, obstacleId) => {
+      const m = by[moverId], o = by[obstacleId];
+      if (!m || !o || isFixed(moverId)) return false;
+      let changed = false;
+      for (let n = 0; n < 10; n++) {
+        const mr = rect(m), or = rect(o);
+        if (!hit(mr, or)) break;
+        const down = or.B - mr.T + PACK_AIR;
+        const left = mr.R - or.L + PACK_AIR;
+        const right = or.R - mr.L + PACK_AIR;
+        const up = mr.B - or.T + PACK_AIR;
+        // Escape a FIXED plate (announce/flag/touch/map): left-column chips
+        // prefer LEFT (stay under the map) or UP (off a control below).
+        // Among peers: prefer a column stack — UP when the obstacle is the
+        // dock (tyre/gear) below, DOWN when stacking under a higher chip.
+        let dx = 0, dy = 0;
+        const leftCol = moverId === "strat" || moverId === "rel" || moverId === "inputs"
+          || moverId === "sectors" || moverId === "limits";
+        const dockObs = obstacleId === "tyre" || obstacleId === "gearbox"
+          || obstacleId === "speed" || obstacleId === "energy";
+        if (isFixed(obstacleId)) {
+          // Map/tower sit ABOVE the left column — escape DOWN (under them) or
+          // LEFT, never UP into the map. Touch discs below: prefer UP.
+          if (obstacleId === "map" || obstacleId === "tower") {
+            if (leftCol && left > 0 && mr.L - left >= PACK_AIR && left <= down) dx = -left;
+            else dy = down;
+          } else if (String(obstacleId).indexOf("ctrl:") === 0 && up > 0 && up <= Math.min(down, left, right)) dy = -up;
+          else if (leftCol && mr.L - left >= PACK_AIR && left <= Math.min(down, up, right) + 1) dx = -left;
+          else if (leftCol && up > 0 && up <= down) dy = -up;
+          else if (left <= down) dx = -left;
+          else dy = down;
+        } else if (leftCol && dockObs) {
+          // Opt-in chips yield to the dock: slide UP (or LEFT) off TYRES/GEAR.
+          if (up <= left && mr.T - up >= PACK_AIR) dy = -up;
+          else if (mr.L - left >= PACK_AIR) dx = -left;
+          else if (up <= right) dy = -up;
+          else dx = right;
+        } else if (leftCol && (obstacleId === "rel" || obstacleId === "strat"
+          || obstacleId === "inputs" || obstacleId === "sectors")) {
+          // Two left-column chips: slide horizontally. UP climbs into the map
+          // (measured: strat×rel → strat y=69 over the minimap). Stack DOWN
+          // only when neither side fits — the dock yield above already pulled
+          // both chips off TYRES when it could.
+          const leftFits = mr.L - left >= PACK_AIR;
+          const rightFits = mr.R + right <= W - PACK_AIR;
+          if (leftFits && (!rightFits || left <= right)) dx = -left;
+          else if (rightFits) dx = right;
+          else dy = down;
+        } else if (down <= left) {
+          dy = down;
+        } else {
+          dx = -left;
+        }
+        m.dx += dx;
+        m.dy += dy;
+        clampOn(m);
+        changed = true;
+      }
+      return changed;
+    };
+    for (let pass = 0; pass < 12; pass++) {
+      let any = false;
+      const ids = Object.keys(by);
+      for (let mi = 0; mi < PACK_MOVE.length; mi++) {
+        const id = PACK_MOVE[mi];
+        if (!by[id]) continue;
+        for (let oi = 0; oi < ids.length; oi++) {
+          const o = ids[oi];
+          if (o === id) continue;
+          const oj = PACK_MOVE.indexOf(o);
+          // Yield to FIXED and to earlier MOVE entries only.
+          if (!isFixed(o) && oj >= 0 && oj > mi) continue;
+          if (separate(id, o)) any = true;
+        }
+      }
+      if (!any) break;
+    }
+    // Reserve a TRACK LIMITS strip under the map when the fit left the chip
+    // on the left column (`data-limits-left`). Limits is often hidden until
+    // the survey forces it, so the packer never sees the box — without this
+    // pad REL climbs into the strip (844×390 @150%: limits×rel 2.4 px).
+    if (by.rel && by.map && W >= H) {
+      const limH = by.limits ? by.limits.h + PACK_AIR : 24;
+      const minT = by.map.y + by.map.dy + by.map.h + PACK_AIR + limH;
+      const r = by.rel;
+      if (r.y + r.dy < minT) r.dy = minT - r.y;
+      clampOn(r);
+    }
+    // Pocket snap (landscape only): at 150% phoneL STRATEGY cannot sit beside
+    // REL under the map (announce owns the mid band) or stack under REL
+    // (TYRES owns the dock). Park it RIGHT of the map and ABOVE the radio
+    // card. Portrait keeps the iterative pass — the landscape pocket lands
+    // under the timing tower (390×844 @150% survey).
+    if (by.strat && by.map && W >= H) {
+      const s = by.strat, m = by.map, ann = by.announce, rel = by.rel;
+      const still = (o) => o && hit(rect(s), rect(o));
+      if (still(ann) || still(rel) || still(by.tyre) || still(by.gearbox) || still(m)) {
+        const mapR = m.x + m.dx + m.w;
+        const mapT = m.y + m.dy;
+        const mapB = mapT + m.h;
+        const annT = ann ? ann.y : H * 0.45;
+        const annB = ann ? ann.y + ann.h : annT;
+        let tx = mapR + PACK_AIR;
+        // Prefer the pocket ABOVE the radio when strat fits; otherwise sit
+        // under the map to its right (idle announce is high — no room above).
+        let ty = Math.max(PACK_AIR, Math.min(mapT + PACK_AIR, annT - s.h - PACK_AIR));
+        if (!(ty + s.h <= annT - 0.5)) {
+          ty = Math.max(mapB + PACK_AIR, annB + PACK_AIR);
+          // Stay left of the radio when there is width; else hug map.R.
+          if (ann && ann.x - PACK_AIR - s.w >= mapR + PACK_AIR) tx = ann.x - PACK_AIR - s.w;
+        }
+        if (tx < W - PACK_AIR && ty + s.h <= H - PACK_AIR) {
+          s.dx = tx - s.x;
+          s.dy = ty - s.y;
+          clampOn(s);
+          for (let n = 0; n < 6; n++) {
+            let any = false;
+            for (const o of Object.keys(by)) {
+              if (o === "strat") continue;
+              const oj = PACK_MOVE.indexOf(o);
+              if (!isFixed(o) && oj >= 0 && oj > PACK_MOVE.indexOf("strat")) continue;
+              if (separate("strat", o)) any = true;
+            }
+            if (rel && !isFixed("rel")) {
+              for (const o of ["tyre", "gearbox", "announce", "map", "strat"]) {
+                if (by[o] && separate("rel", o)) any = true;
+              }
+            }
+            if (!any) break;
+          }
+        }
+      }
+    }
+    const out = Object.create(null);
+    for (const id of Object.keys(by)) {
+      const m = by[id];
+      if (isFixed(id) || String(id).indexOf("ctrl:") === 0) continue;
+      if (Math.abs(m.dx) > 0.25 || Math.abs(m.dy) > 0.25) {
+        out[id] = { dx: +m.dx.toFixed(2), dy: +m.dy.toFixed(2) };
+      }
+    }
+    return out;
+  }
+  function clearPackMarks() {
+    if (!doc || !doc.querySelectorAll) return;
+    let nodes;
+    try { nodes = doc.querySelectorAll("[data-hl-pack]"); } catch (_) { return; }
+    for (let i = 0; i < nodes.length; i++) {
+      const el = nodes[i];
+      if (!el || typeof el.removeAttribute !== "function") continue;
+      el.removeAttribute("data-hl-pack");
+      // Pack paints an inline translate/margin (important): drop them so the
+      // next measure sees the shipped box. Player MOVE & SIZE --hl-* untouched.
+      if (el.style && typeof el.style.removeProperty === "function") {
+        el.style.removeProperty("translate");
+        el.style.removeProperty("margin-left");
+        el.style.removeProperty("margin-top");
+        if (el.hasAttribute("data-hl-pack-pos")) {
+          el.style.removeProperty("left");
+          el.style.removeProperty("top");
+          el.removeAttribute("data-hl-pack-pos");
+        }
+      }
+    }
+  }
+  function packPhone(W, H) { /* PACK_MARK_Q2_4159 */
+    if (!doc || !doc.body || !doc.body.classList || doc.body.classList.contains("desktop")) return;
+    let pct = 100;
+    if (store && typeof store.get === "function") pct = +store.get("hudScale", 100) || 100;
+    try {
+      const root = doc.documentElement;
+      const cs = root && typeof getComputedStyle === "function" ? getComputedStyle(root) : null;
+      const cssScale = cs ? parseFloat(cs.getPropertyValue("--hud-scale")) : 0;
+      if (cssScale > 1) pct = Math.max(pct, Math.round(cssScale * 100));
+    } catch (_) { /* harness */ }
+    if (typeof window !== "undefined" && window.__apex && typeof window.__apex.hudScale === "function") {
+      try { const s = window.__apex.hudScale(); if (s && s.pct != null) pct = Math.max(pct, +s.pct || 0); } catch (_) { /* */ }
+    }
+    if (!(pct >= PACK_SCALE_MIN)) return;
+    clearPackMarks();
+    const boxes = [];
+    const want = Object.create(null);
+    for (let i = 0; i < PACK_MOVE.length; i++) want[PACK_MOVE[i]] = 1;
+    want.announce = 1; want.flag = 1; want.map = 1; want.tower = 1;
+    for (let i = 0; i < ELEMENTS.length; i++) {
+      const [id, , sel] = ELEMENTS[i];
+      if (!want[id]) continue;
+      const el = doc.querySelector(sel);
+      if (!el || el.hidden) continue;
+      const cs = typeof getComputedStyle === "function" ? getComputedStyle(el) : null;
+      if (cs && (cs.display === "none" || cs.visibility === "hidden")) continue;
+      const r = el.getBoundingClientRect();
+      if (!(r.width && r.height)) continue;
+      boxes.push({ id, x: r.left, y: r.top, w: r.width, h: r.height });
+    }
+    // Touch discs are FIXED obstacles so a packed tyre cannot cover steer/BRAKE.
+    try {
+      const btns = doc.querySelectorAll(".touchbtn, .steerbtn, .shiftbtn");
+      for (let i = 0; i < btns.length; i++) {
+        const el = btns[i];
+        if (!el || el.hidden) continue;
+        const r = el.getBoundingClientRect();
+        if (!(r.width && r.height)) continue;
+        boxes.push({ id: "ctrl:" + i, x: r.left, y: r.top, w: r.width, h: r.height, fixed: 1 });
+      }
+    } catch (_) { /* harness querySelectorAll stubs */ }
+    const corr = packPhoneRects(boxes, W, H);
+    if (!corr || !Object.keys(corr).length) return;
+    for (const id of Object.keys(corr)) {
+      const row = ELEMENTS.find((e) => e[0] === id);
+      if (!row) continue;
+      const el = doc.querySelector(row[2]);
+      if (!el || !el.style) continue;
+      const c = corr[id];
+      // Paint the correction. Zoomed absolute chips (#hud-strat/#hud-rel) do
+      // NOT move under an inline `translate` here (Chromium + CSS zoom: the
+      // computed translate stays on the [data-hl]/--hl path and getBounding
+      // ClientRect ignores our important translate). Nudge the used left/top
+      // by local px instead. Dock chips (tyre/gear/…) keep margin — their
+      // flow box has no absolute left/top to rewrite.
+      let z = 1;
+      if (typeof el.currentCSSZoom === "number" && el.currentCSSZoom > 0) z = el.currentCSSZoom;
+      else if (typeof getComputedStyle === "function") {
+        const zz = parseFloat(getComputedStyle(el).zoom);
+        if (zz > 0) z = zz;
+      }
+      const lx = c.dx / z, ly = c.dy / z;
+      const abs = id === "strat" || id === "rel" || id === "inputs"
+        || id === "sectors" || id === "limits" || id === "damage";
+      if (abs && typeof getComputedStyle === "function") {
+        const cs = getComputedStyle(el);
+        const curL = parseFloat(cs.left);
+        const curT = parseFloat(cs.top);
+        if (isFinite(curL)) el.style.setProperty("left", (curL + lx).toFixed(1) + "px", "important");
+        if (isFinite(curT)) el.style.setProperty("top", (curT + ly).toFixed(1) + "px", "important");
+        el.setAttribute("data-hl-pack-pos", "");
+      } else {
+        el.style.setProperty("margin-left", lx.toFixed(1) + "px", "important");
+        el.style.setProperty("margin-top", ly.toFixed(1) + "px", "important");
+      }
+      el.setAttribute("data-hl-pack", "");
+    }
+  }
+  let _packMo = null;
+  function watchPackUnhide() {
+    if (_packMo || !doc || typeof MutationObserver !== "function") return;
+    try {
+      _packMo = new MutationObserver(() => {
+        if (typeof window === "undefined" || !window.innerWidth) return;
+        packPhone(window.innerWidth, window.innerHeight);
+      });
+      const watch = (id) => {
+        const el = doc.getElementById(id);
+        if (el) _packMo.observe(el, { attributes: true, attributeFilter: ["hidden"] });
+      };
+      watch("hud-strat"); watch("hud-rel"); watch("hud-tyre"); watch("hud-inputs");
+    } catch (_) { _packMo = null; }
   }
 
   const CLEAR_CTRL = Object.freeze({ rel: 1, inputs: 1, sectors: 1 });
@@ -807,7 +1152,7 @@ const HudLayout = (function () {
     paintAll();
   }
 
-  function init() { apply(); build(); }
+  function init() { apply(); build(); watchPackUnhide(); }
   apply();
   if (doc) {
     if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", init, { once: true });
@@ -816,9 +1161,10 @@ const HudLayout = (function () {
 
   return {
     KEY, ELEMENTS, SETS, PROFILES, LIM, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS,
+    PACK_AIR, PACK_SCALE_MIN, PACK_FIXED, PACK_MOVE,
     get, set, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, build,
     camSet, shown: () => shown(), profile, all, migrate, presetLayout, applyPreset, presetOf,
-    hiddenReason, originOf,
+    hiddenReason, originOf, packPhoneRects,
   };
 })();
 Object.freeze(HudLayout);

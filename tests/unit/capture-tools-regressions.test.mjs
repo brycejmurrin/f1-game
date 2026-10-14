@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import vm from 'node:vm';
 import sharp from 'sharp';
 import { screenshotPresentedCanvas } from '../../tools/shot/probe-page.mjs';
+import { poolMap, startWorkerPool, waitCaptureFrame, openPage } from '../../tools/shot/apex-capture.mjs';
 import { parseCssPlayArgs, screenClicks, SCREENS, swapStylesheet } from '../../tools/ui/css-play.mjs';
 import { menuReady, previewMapSettled } from '../../tools/ui/menu-readiness.mjs';
 import { parseSurveyTrackArgs } from '../../tools/track/survey-track.mjs';
@@ -54,6 +55,128 @@ test('successful and rejected CDP capture clear deadline and detach session', as
     }
     assert.equal(detached, 2);
   } finally { for (const h of handles) originalClear(h); globalThis.setTimeout = originalSet; globalThis.clearTimeout = originalClear; }
+});
+
+test('CDP forwards fast PNG opt-out and explicit JPEG quality', async () => {
+  const sent = [];
+  const page = { context: () => ({ newCDPSession: async () => ({
+    send: async (method, params) => { sent.push({ method, params }); return { data: Buffer.from('png').toString('base64') }; },
+    detach: async () => {},
+  }) }) };
+  const opts = { skipAwait: true, forceCdp: true, clip: { x: 1, y: 2, width: 10, height: 20 } };
+  await screenshotPresentedCanvas(page, opts);
+  await screenshotPresentedCanvas(page, { ...opts, optimizeForSpeed: false });
+  await screenshotPresentedCanvas(page, { ...opts, type: 'jpeg', quality: 72 });
+  assert.equal(sent[0].method, 'Page.captureScreenshot');
+  assert.equal(sent[0].params.optimizeForSpeed, true);
+  assert.equal(sent[1].params.optimizeForSpeed, false);
+  assert.equal(sent[2].params.optimizeForSpeed, undefined);
+  assert.equal(sent[2].params.quality, 72);
+  assert.deepEqual(sent[0].params.clip, { ...opts.clip, scale: 1 });
+});
+
+test('dynamic capture queue stays bounded, preserves job order and keeps going after failure', async () => {
+  let active = 0, maxActive = 0;
+  const visited = [];
+  const results = await poolMap([{ id: 0 }, { id: 1 }], [0, 1, 2, 3, 4], async (_w, job) => {
+    active++; maxActive = Math.max(maxActive, active); visited.push(job);
+    await new Promise((resolve) => setImmediate(resolve));
+    active--;
+    if (job === 2) throw new Error('job failed');
+    return job * 10;
+  });
+  assert.equal(maxActive, 2); assert.equal(active, 0);
+  assert.deepEqual(visited.sort(), [0, 1, 2, 3, 4]);
+  assert.deepEqual(results, [0, 10, { job: 2, err: 'job failed' }, 30, 40]);
+});
+
+test('partial capture pool boot closes both previously ready and failed browsers', async () => {
+  let launches = 0; const closed = [];
+  await assert.rejects(startWorkerPool(3, 'http://fixture/', { width: 96, height: 64 }, {
+    launch: async () => { const id = launches++; return { id, on() {}, close: async () => { closed.push(id); } }; },
+    open: async (browser) => { if (browser.id === 1) throw new Error('boot failed'); return { on() {} }; },
+    pause: async () => {},
+  }), /boot failed/);
+  assert.equal(launches, 2); assert.deepEqual(closed.sort(), [0, 1]);
+});
+
+test('capture waits for two fresh soft presents and rejects timeout instead of saving stale pixels', async () => {
+  let calls = 0;
+  await waitCaptureFrame({ evaluate: async () => { calls++; return true; } });
+  assert.equal(calls, 3);
+  calls = 0;
+  await assert.rejects(waitCaptureFrame({ evaluate: async () => { calls++; return calls === 1; } }), /no fresh presented frame/);
+  assert.equal(calls, 2);
+  const before = 5;
+  let waited = false;
+  calls = 0;
+  await waitCaptureFrame({ evaluate: async () => { calls++; return calls === 1 ? false : before; },
+    waitForFunction: async (_fn, frame, opts) => { assert.equal(frame, before); assert.equal(opts.polling, 100); waited = true; } });
+  assert.equal(waited, true);
+});
+
+test('native frame barrier checks actual presentation capability, not an immediately resolved soft promise', async () => {
+  const previous = { GLX: globalThis.GLX, window: globalThis.window };
+  let presents = 0, waited = false;
+  globalThis.GLX = { softPresent: () => false, awaitSoftPresent: async () => { presents++; } };
+  globalThis.window = { __apex: { cameraState: () => ({ renderFrame: 17 }) } };
+  try {
+    await waitCaptureFrame({ evaluate: async (fn) => fn(), waitForFunction: async (fn, frame, opts) => {
+      assert.equal(frame, 17); assert.equal(fn(frame), false); assert.equal(opts.polling, 100);
+      globalThis.window.__apex.cameraState = () => ({ renderFrame: 19 });
+      assert.equal(fn(frame), true); waited = true;
+    } });
+    assert.equal(presents, 0); assert.equal(waited, true);
+  } finally { Object.assign(globalThis, previous); }
+});
+
+test('capture page keeps backend AUTO and closes failed context before a reused browser takes another job', async () => {
+  let closed = 0, init;
+  const page = { addInitScript: async (_fn, arg) => { init = arg; }, goto: async () => { throw new Error('navigation failed'); },
+    context: () => ({ close: async () => { closed++; } }) };
+  await assert.rejects(openPage({ newPage: async () => page }, 'http://fixture/'), /navigation failed/);
+  assert.equal(closed, 1); assert.equal(init.be, 'three'); assert.equal(init.forceGl, false);
+});
+
+test('CDP render pause restores the previous headless state on success and failure', async () => {
+  const previous = globalThis.window;
+  try {
+    for (const before of [false, true]) for (const fail of [false, true]) {
+      let headless = before;
+      globalThis.window = { __apex: { headless: (value) => value === undefined ? headless : (headless = value) } };
+      const page = { evaluate: async (fn, arg) => fn(arg), context: () => ({ newCDPSession: async () => ({
+        send: async () => { assert.equal(headless, true); if (fail) throw new Error('failed'); return { data: Buffer.from('png').toString('base64') }; },
+        detach: async () => {},
+      }) }) };
+      const capture = screenshotPresentedCanvas(page, { pauseRender: true, skipAwait: true, forceCdp: true, clip: { x: 0, y: 0, width: 10, height: 20 } });
+      if (fail) await assert.rejects(capture, /failed/); else await capture;
+      assert.equal(headless, before);
+    }
+  } finally { globalThis.window = previous; }
+});
+
+test('paused CDP deadline restores rendering and soft captures avoid the pause entirely', async () => {
+  const previous = globalThis.window;
+  let headless = false, detached = 0;
+  globalThis.window = { __apex: { headless: (value) => value === undefined ? headless : (headless = value) } };
+  try {
+    const page = { evaluate: async (fn, arg) => fn(arg), context: () => ({ newCDPSession: async () => ({
+      send: () => new Promise(() => {}), detach: async () => { detached++; },
+    }) }) };
+    await assert.rejects(screenshotPresentedCanvas(page, { pauseRender: true, skipAwait: true, forceCdp: true,
+      clip: { x: 0, y: 0, width: 10, height: 20 }, timeout: 10 }), /timed out/);
+    assert.equal(headless, false); assert.equal(detached, 1);
+    let evaluations = 0;
+    const shot = await screenshotPresentedCanvas({ evaluate: async () => {
+      evaluations++; return { b64: Buffer.from('png').toString('base64'), id: 'game-soft' };
+    }, context: () => { throw new Error('soft capture must not open CDP'); } }, { skipAwait: true, pauseRender: true });
+    assert.equal(shot.via, 'game-soft'); assert.equal(evaluations, 1); assert.equal(headless, false);
+  } finally { globalThis.window = previous; }
+});
+
+test('mode capture failures retain a printable job name', async () => {
+  const results = await poolMap([{ id: 0 }], [{ name: 'race', fn() {} }], async () => { throw new Error('capture failed'); });
+  assert.deepEqual(results, [{ job: 'race', err: 'capture failed' }]);
 });
 
 test('capture parsers reject nonfinite dimensions, scales and unknown flags; seed zero stays explicit', () => {

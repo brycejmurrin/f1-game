@@ -110,13 +110,33 @@ const CSP_DIRECTIVES = (scriptHashes) => [
   "form-action 'self'",
 ].join("; ");
 
-/** Every inline <script> body in `html` (no src=), in document order. The
- *  parser hashes the text between the tags with CRLF folded to LF. */
+/** Every inline <script> body in the shell (no src attribute), in order.
+ *  Scan HTML tokens, not script-shaped text in comments/attributes/raw text.
+ *  Never strip comments globally: <!-- inside script data belongs to its hash.
+ *  https://html.spec.whatwg.org/multipage/parsing.html#script-data-state
+ *  https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/script-src
+ */
 export function inlineScripts(html) {
   const out = [];
-  for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
-    if (/\bsrc\s*=/i.test(m[1])) continue;
-    out.push(m[2].replace(/\r\n?/g, "\n"));
+  // Quoted values can contain > or even <script>. Consume the whole tag.
+  const tokens = /<!--[\s\S]*?(?:-->|--!>|$)|<![^>]*>|<\?[^>]*>|<\/?([a-z][a-z0-9:-]*)(?=[\t\n\f\r />])((?:[^"'<>]|"[^"]*"|'[^']*')*)>/gi;
+  const rawText = new Set(["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript"]);
+  for (let m; (m = tokens.exec(html));) {
+    if (!m[1] || m[0].startsWith("</")) continue;
+    const name = m[1].toLowerCase();
+    if (name === "plaintext") break;
+    if (!rawText.has(name)) continue;
+    const start = tokens.lastIndex;
+    const end = new RegExp(`</${name}(?=[\\t\\n\\f\\r />])[^>]*>`, "gi");
+    end.lastIndex = start;
+    const close = end.exec(html);
+    const body = html.slice(start, close ? close.index : html.length);
+    tokens.lastIndex = close ? end.lastIndex : html.length;
+    if (name !== "script") continue;
+    // Attribute names, not substrings such as data-src or title="src=...".
+    const attrs = [...m[2].matchAll(/([^\s=/>]+)(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?/g)];
+    if (attrs.some((a) => a[1].toLowerCase() === "src")) continue;
+    out.push(body.replace(/\r\n?/g, "\n"));
   }
   return out;
 }

@@ -28,7 +28,7 @@ import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
-import { stale as genShellStale } from "../../tools/gen/gen-shell.mjs";
+import { stale as genShellStale, inlineScripts } from "../../tools/gen/gen-shell.mjs";
 
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../../tools/manifest.cjs");
@@ -79,7 +79,37 @@ const cspOf = (html) => {
   return { at: m.index, text: m[1], dir: Object.fromEntries(m[1].split(/;\s*/).map((d) => { const [k, ...v] = d.split(/\s+/); return [k, v]; })) };
 };
 const sha = (t) => `'sha256-${createHash("sha256").update(t.replace(/\r\n?/g, "\n"), "utf8").digest("base64")}'`;
-const inlineBodies = (html) => [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)].filter((m) => !/\bsrc\s*=/i.test(m[1])).map((m) => m[2]);
+const inlineBodies = inlineScripts;
+
+test("CSP hashing ignores HTML prose but preserves script text exactly", () => {
+  const body = '\nconst prose = "<!-- keep this -->";\nconst label = "<script>";\n';
+  assert.deepEqual(inlineScripts(`<!-- an external <script> races first paint -->
+    <!-- <script>not executable</script> -->
+    <div title="<script>also not executable</script>"></div>
+    <script data-src="inline" title="src='fake' >">${body}</script>
+    <SCRIPT SRC="external.js">ignored</SCRIPT>
+    <script src>also external</script>
+    <script>\r\nsecond();\r</script >`), [body, "\nsecond();\n"]);
+});
+
+test("CSP hashing skips script-shaped text in raw text and RCDATA elements", () => {
+  const containers = ["style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript"];
+  const html = containers.map((tag) => `<${tag}><script>fake();</script></${tag}>`).join("");
+  assert.deepEqual(inlineScripts(`${html}<script>real();</script><plaintext><script>fake();</script>`), ["real();"]);
+});
+
+test("the real prepaint preferences script has its own allowed hash", () => {
+  // Extract this exact standalone script independently of the generator's
+  // tokenizer: the preceding prose contains the literal <script> that broke it.
+  const marker = indexHtml.indexOf("<!-- BODY DENSITY, BEFORE");
+  assert.ok(marker >= 0);
+  const afterComment = indexHtml.indexOf("-->", marker) + 3;
+  const start = indexHtml.indexOf("<script>", afterComment) + "<script>".length;
+  const body = indexHtml.slice(start, indexHtml.indexOf("</script>", start));
+  assert.ok(body.includes('localStorage.getItem("apex26.motion")'));
+  assert.ok(cspOf(indexHtml).dir["script-src"].includes(sha(body)),
+    "prepaint preferences must run under the shipped CSP, without Playwright bypass");
+});
 
 test("the shell's Content-Security-Policy is generated, first, and strict where it can be", async () => {
   const { cspFor } = await import("../../tools/gen/gen-shell.mjs");

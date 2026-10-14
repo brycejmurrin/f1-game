@@ -228,11 +228,24 @@ function _flLive(o) {
   _flScr[3] = w * t0; _flScr[4] = w * t1; _flScr[5] = w * t2;
   return _flScr;
 }
-// Ranked-set cache: skip the O(count·log CAP) rebuild when the eye/fwd have not
-// moved enough to change membership. Fade still uses geometric g (not yaw).
-const _RANK_EYE_EPS2 = 0.25;   // 0.5 m eye motion → rebuild
+// Ranked-set cache: skip the O(count·log CAP) rebuild until the eye has moved
+// past a distance budget OR a time budget (whichever comes first). At racing
+// speed (≈1 m/frame) the old 0.5 m eps rebuilt every frame; the mirror then
+// ranked the same baked set again from its own eye. Fade still uses geometric
+// g (not yaw). At true standstill (eye delta ≈ 0) the age check is skipped so
+// a parked car does not churn the heap.
+const _RANK_EYE_EPS2 = 25;     // 5 m eye motion → rebuild (was 0.5 m)
 const _RANK_FWD_EPS2 = 1e-4;   // unnormalized fwd delta (yaw/aim change)
+const _RANK_MAX_MS = 100;      // or ≥100 ms since last rank while moving
+const _RANK_STILL2 = 1e-4;     // ≈0.01 m: treat as standstill for the age skip
 // (the cache itself lives on each viewpoint's state: _rankState below)
+// Rebuild counters — __apex / unit tests read these; resetRankStats() clears.
+let _rankRebuilds = 0, _rankReuses = 0, _viewRebuilds = 0, _viewReuses = 0;
+function rankStats() {
+  return { mainRebuilds: _rankRebuilds, mainReuses: _rankReuses,
+    viewRebuilds: _viewRebuilds, viewReuses: _viewReuses };
+}
+function resetRankStats() { _rankRebuilds = _rankReuses = _viewRebuilds = _viewReuses = 0; }
 // How many lights this frame may end up carrying. Named because BOTH movers need
 // the same answer — setFrameLights culls down to it, and appendCarTailLights has
 // to evict against it to make room. Measuring against the shader's literal 32
@@ -384,16 +397,24 @@ function _rankSet(S, src, count, CAP, eye, fwd, sr, sg, sb, fl, tNow, out) {
   const heap = S.heap;
   const edx = eye[0] - S.rankEyeX, edy = eye[1] - S.rankEyeY, edz = eye[2] - S.rankEyeZ;
   const fdx = fx - S.rankFwdX, fdz = fz - S.rankFwdZ;
+  const dist2 = edx * edx + edy * edy + edz * edz;
+  const ageMs = (tNow - S.rankT) * 1000;
+  // Distance OR time budget: reuse while inside both. Standstill skips age so a
+  // parked viewpoint does not rebuild on the clock alone.
+  const withinDist = dist2 < _RANK_EYE_EPS2;
+  const withinAge = dist2 < _RANK_STILL2 || ageMs < _RANK_MAX_MS;
   const reuseRank = S.rankSrc === src && S.rankCap === CAP && S.rankCount === count
     && S.rankReach === reach && S.rankBias === bias && S.rankFade === fade
     && heap.length > 0
-    && (edx * edx + edy * edy + edz * edz) < _RANK_EYE_EPS2
+    && withinDist && withinAge
     && (fdx * fdx + fdz * fdz) < _RANK_FWD_EPS2;
   let gRef, dEdge, truncated;
   if (reuseRank) {
     // Membership + geometric fade terms unchanged — only re-tint with scale/flicker.
     gRef = S.rankGRef; dEdge = S.rankDEdge; truncated = S.rankTrunc;
+    if (S === _S_MAIN) _rankReuses++; else if (S === _S_VIEW) _viewReuses++;
   } else {
+    if (S === _S_MAIN) _rankRebuilds++; else if (S === _S_VIEW) _viewRebuilds++;
     const buf = S.buf;
     for (let i = 0; i < count; i++) {
       const o = i * 15, dx = src[o] - eye[0], dy = src[o + 1] - eye[1], dz = src[o + 2] - eye[2];
@@ -508,6 +529,7 @@ function _rankSet(S, src, count, CAP, eye, fwd, sr, sg, sb, fl, tNow, out) {
     S.rankFwdX = fx; S.rankFwdZ = fz;
     S.rankGRef = gRef; S.rankDEdge = dEdge; S.rankTrunc = truncated;
     S.rankReach = reach; S.rankBias = bias; S.rankFade = fade;
+    S.rankT = tNow;
   }
   const _cullBand = gRef * fade;
   const _guardBand = dEdge * 0.08;
@@ -555,6 +577,7 @@ function _rankState() {
   return { heap: [], buf: [], lum: [], rankSrc: null, rankCap: -1, rankCount: -1,
     rankEyeX: NaN, rankEyeY: NaN, rankEyeZ: NaN, rankFwdX: NaN, rankFwdZ: NaN,
     rankGRef: 1, rankDEdge: 1, rankTrunc: false, rankReach: NaN, rankBias: NaN, rankFade: NaN,
+    rankT: -1e9,
     entrySrc: null, entryLvl: new Float32Array(0), entryStamp: new Uint32Array(0), entryFrame: 1, entryT: 0 };
 }
 const _S_MAIN = _rankState(), _S_VIEW = _rankState();
@@ -572,7 +595,10 @@ const _viewOut = { lights: null, tailStart: 0, tailCount: 0 };
  *  tests/unit/mirror-lights.test.mjs). Re-rank the same baked lamps from the
  *  mirror's own eye and aim, on their own state (cache, entry ramp), with the
  *  same lamp transform, and carry the forward set's tail-light records over.
- *  Returns null when no cull happened (frame.lights already holds every lamp). */
+ *  Returns null when no cull happened (frame.lights already holds every lamp).
+ *  Membership is shared with the forward path's budget: _rankSet reuses the
+ *  view heap across frames while the rear eye stays inside the distance/time
+ *  window, so the mirror does not rebuild every lamp every frame at speed. */
 function viewLights(frame, eye, fwd) {
   const L = frame.lights;
   if (!_last.ranked || !_last.src || !L || !eye || !fwd) return null;
@@ -683,6 +709,6 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   if (frame.perChunkLights > 0) _fillAllLights(frame, src, sr, sg, sb, fl, tNow);
 }
 
-  return { setFrameLights, appendCarTailLights, glowFade, viewLights };
+  return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats };
 })();
 Object.freeze(FrameLights);

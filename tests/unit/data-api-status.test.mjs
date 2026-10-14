@@ -831,3 +831,87 @@ test("meetings(null) uses the clock season, never ?year=null", async () => {
   await context.api.meetings(undefined);
   assert.match(path, /\/meetings\?year=\d{4}$/);
 });
+
+test("export Download: the ZIP holds the JSON then one map per circuit, with CRC-32s and a central directory that match", async () => {
+  // makeZip / crc32 are private to DataExport.create, so this drives the real
+  // path: Gather (mocked F1API) → Download → the Blob handed to createObjectURL.
+  const { crc32 } = await import("node:zlib");
+  const exportSrc = await readFile(new URL("../../js/data/export.js", import.meta.url), "utf8");
+  class El {
+    constructor(tag, cls, text) {
+      this.tagName = String(tag).toUpperCase(); this.className = cls || ""; this.textContent = text || "";
+      this.children = []; this.attrs = {}; this.on = {}; this.disabled = false;
+      const set = new Set(this.className.split(" ").filter(Boolean));
+      this.classList = { toggle: (c, v) => (v ? set.add(c) : set.delete(c)), contains: (c) => set.has(c) };
+    }
+    appendChild(c) { this.children.push(c); return c; }
+    setAttribute(k, v) { this.attrs[k] = String(v); }
+    addEventListener(t, fn) { this.on[t] = fn; }
+    click() { if (this.on.click) this.on.click(); }
+    remove() {}
+  }
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+  const noop2d = new Proxy({}, { get: () => () => {}, set: () => true });
+  let zipBlob = null;
+  const context = vm.createContext({
+    Date, setTimeout: (fn) => { queueMicrotask(fn); return 1; }, clearTimeout() {},
+    TextEncoder, Uint8Array, Uint32Array, Math, JSON, Promise, Object, Array, String, Number, isFinite, Blob,
+    Log: { info() {}, warn() {}, debug() {}, error() {} },
+    URL: { createObjectURL: (b) => { zipBlob = b; return "blob:zip"; }, revokeObjectURL() {} },
+    document: {
+      body: { appendChild() {} },
+      createElement: (tag) => tag === "canvas"
+        ? { width: 0, height: 0, getContext: () => noop2d, toBlob: (cb) => cb(new Blob([PNG])) }
+        : new El(tag),
+    },
+    F1API: {
+      meetings: async () => [{ meetingKey: 1, circuit: "Monza" }, { meetingKey: 2, circuit: "Marina Bay" }],
+      sessionsForMeeting: async () => [{ sessionKey: 9, name: "Qualifying" }],
+      sessionDrivers: async () => [{ num: 16, code: "LEC" }],
+      fastestLap: async () => ({ dateStart: "2026-07-26T14:00:00.000Z", lapDuration: 80 }),
+      locationData: async () => Array.from({ length: 40 }, (_, i) => ({ x: i, y: i * 2, date: 0 })),
+    },
+  });
+  vm.runInContext(exportSrc + ";globalThis.DataExport=DataExport", context);
+  const wrap = await context.DataExport.create({ el: (t, c, x) => new El(t, c, x), clear() {}, isOpen: () => true }).loadExport();
+  const [gather, download] = wrap.children.find((c) => c.className === "dh-export-row").children;
+  const settle = async (done) => { for (let i = 0; i < 5000 && !done(); i++) await new Promise((r) => setImmediate(r)); };
+  gather.click();
+  await settle(() => !download.disabled);
+  assert.equal(download.disabled, false, "gather finished and unlocked Download");
+  download.click();
+  await settle(() => zipBlob);
+  assert.ok(zipBlob, "Download produced a ZIP blob");
+  assert.equal(zipBlob.type, "application/zip");
+  const z = Buffer.from(await zipBlob.arrayBuffer());
+  // Local entries, in order.
+  const local = [];
+  for (let o = 0; z.readUInt32LE(o) === 0x04034b50;) {
+    const n = z.readUInt16LE(o + 26), sz = z.readUInt32LE(o + 22);
+    const name = z.toString("utf8", o + 30, o + 30 + n), data = z.subarray(o + 30 + n, o + 30 + n + sz);
+    assert.equal(z.readUInt32LE(o + 18), sz, `${name}: stored, so compressed size = size`);
+    assert.equal(z.readUInt32LE(o + 14), crc32(data), `${name}: local CRC-32`);
+    local.push({ name, offset: o, data });
+    o += 30 + n + sz;
+  }
+  assert.deepEqual(local.map((e) => e.name), ["startlines-2026.json", "img/Monza.png", "img/Marina_Bay.png"],
+    "JSON first, then one map per circuit in gather order (safeName applied)");
+  const json = JSON.parse(local[0].data.toString("utf8"));
+  assert.equal(json.year, 2026);
+  assert.deepEqual(Object.keys(json.circuits), ["Monza", "Marina Bay"]);
+  assert.deepEqual([...local[1].data], [...PNG]);
+  // End of central directory → central entries agree with the local ones.
+  const eocd = z.length - 22;
+  assert.equal(z.readUInt32LE(eocd), 0x06054b50);
+  assert.equal(z.readUInt16LE(eocd + 10), local.length);
+  let c = z.readUInt32LE(eocd + 16);
+  assert.equal(c + z.readUInt32LE(eocd + 12), eocd, "central directory ends at the EOCD record");
+  for (const e of local) {
+    assert.equal(z.readUInt32LE(c), 0x02014b50);
+    const n = z.readUInt16LE(c + 28);
+    assert.equal(z.toString("utf8", c + 46, c + 46 + n), e.name);
+    assert.equal(z.readUInt32LE(c + 16), crc32(e.data), `${e.name}: central CRC-32`);
+    assert.equal(z.readUInt32LE(c + 42), e.offset, `${e.name}: central offset points at its local header`);
+    c += 46 + n;
+  }
+});

@@ -321,14 +321,14 @@ let season = SeasonCal.load();      // standalone owner adds score maps, config 
 // here. Everything slider- or harness-tunable stays a `let` below.
 const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
         GRAVITY_SLOPE, LAT_MAX, STEER_VMAX, FRONT_WEIGHT, CS_FRONT, CS_REAR,
-        WT_LONG, LOAD_SENS, DOWNFORCE, X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, X_DF_LOSS_LO,
-        X_DF_LOSS_HI, X_COAST_CUT_LO, X_COAST_CUT_HI, X_OPEN_RATE, X_CLOSE_RATE,
+        WT_LONG, LOAD_SENS, DOWNFORCE, X_OPEN_RATE, X_CLOSE_RATE,
         X_MIN_SPEED, OT_MIN_SPEED, OFF_GRIP, ASSIST_KUS, LINE_PURSUIT,
         LONG_GRIP, THR_FLOOR, THR_CAP, THR_VK, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
-        DEPLOY_A, TAPER_LO, TAPER_HI, TAPER_FLOOR, DRAIN_LO, DRAIN_HI,
-        REGEN_LO, REGEN_HI, REGEN_FULL_V, OT_TIME_LO, OT_TIME_HI,
+        DEPLOY_A, TAPER_LO, TAPER_HI, TAPER_FLOOR, REGEN_FULL_V,
         OT_GAP, WET_GRIP, GEARS, GEAR_TOP, IDLE_RPM, MAX_RPM, DIFF, BAND_CEIL,
         TOW_RANGE, TOW_FADE, TOW_HALF_W, BLOCKER_HALF_W } = PhysicsConsts;
+// X_VMAX_GAIN_*/X_DF_LOSS_*/X_COAST_CUT_*/DRAIN_*/REGEN_LO|HI/OT_TIME_* now
+// live behind PaceMath (js/race/pace-math.js) — it reads PhysicsConsts itself.
 // Global pace multiplier on top speed AND acceleration, applied to EVERY car
 // (player + AI) so the whole field speeds up/slows down together and the racing
 // stays competitive. 1.0 = stock. Driven by the OVERALL SPEED slider.
@@ -346,22 +346,24 @@ let PACE = 1.0;
 // keeps its value and meaning, and the gearbox, tach,
 // dial and speed-driven effects span their full range at any setting. The slider
 // changes what each of those speeds MEANS on the ground, not the range.
-// PACE is floored so a setPhysics({pace:0}) can't divide by zero.
-function vTop()  { return VMAX * Math.max(PACE, 0.05); }
+// PACE / ERS math lives in js/race/pace-math.js (PaceMath.create) — pure move,
+// byte-identical. deps are getters so live `let`s (PACE, cars, track, raceCtl)
+// stay owned here; VMAX is the destructured PhysicsConsts binding.
+const {
+  vTop, vStd, aStd, xVmaxGain, paceRef, xCoastCut, xDfLoss,
+  isErsDeploying, drainFor, regenFor, otTimeFor, aeroDfMult, gearHi, rpmFor,
+} = PaceMath.create({
+  getPACE: () => PACE,
+  getVMAX: () => VMAX,
+  getCars: () => cars,
+  getTrack: () => track,
+  getRaceCtl: () => raceCtl,
+});
 // BEACHED: off the road and crawling at the grass-drag floor — the rescue gate
 // for the player AND the AI (the AI's own `offT > 0.5` read the track-limits
 // counter, which resets to -2 every 1.2 s, so its rescue could never fire).
 function beachedAt(c) { return c.offroad && c.speed < GRASS_V * 0.6 * Math.max(PACE, 0.05) + 1.5 * Math.max(PACE, 0.05); }
-function vStd(v) { return v * VMAX / vTop(); }
 function dashKph(v) { return vStd(v) * 3.6; }
-// The ACCELERATION curve carries the SAME PACE factor as the ground speed —
-// axEstTarget is `ACCEL * PACE * …` — so an acceleration compared against a
-// hard-coded number needs exactly the divisor a speed does. aStd() is vStd() for
-// m/s^2, written as the divisor rather than the VMAX/vTop() round trip so that at
-// pace 5 (PACE === 1) it is the identity to the bit. Measured: at pace 0.5 a
-// full-throttle getaway peaks at ACCEL * 0.5 = 3.5 m/s^2, so the launch-wheelspin
-// smoke's bare 4.5 floor could never fire at all — see A16.
-function aStd(a) { return a / Math.max(PACE, 0.05); }
 // And the other direction: what the car ACTUALLY pulls on the ground right now,
 // as vTop() is what it actually tops out at. Anything modelling the car from
 // outside the driving loop needs this, not the bare constant — js/race/quali-model.js
@@ -394,19 +396,9 @@ let STEER_SPEED_REF = 60;   // m/s reference for the speed-sensitive lock taper:
 // DRIFT/ROAD_FOLLOW etc. stay `let` so the pause sliders can tune them live.
 let DRIFT = 0;             // rear looseness 0..1: 0 = planted (no oversteer). Slide was
                           // removed as a player control; left settable for the debug bridge.
-// Where THIS car sits on those spans, 0..1. Defaults to the midpoint so a car
-// that never had parts resolved sits mid-span.
-function aeroLoadOf(c) { return c && c.aeroLoad != null ? c.aeroLoad : 0.5; }
-// LOW GRIP (FIA 2026 B7.1.2(b)): active aero is PARTIAL in the wet — half the
-// trade each way. Exactly 1 on a slick track, so the dry car is untouched.
-function aeroWetK() { return raceCtl && raceCtl.lowGrip() ? 0.5 : 1; }
-function xVmaxGain(c) { return aeroWetK() * lerp(X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, aeroLoadOf(c)); }
 // A car's PACE as the AI judges it: vmax less its X-mode gain, and for a HUMAN x its paceF (AiDrive.paceSample). A net-owned human never reaches updateCar's stamp, so it reads vTop().
+// xVmaxGain / paceRef / xDfLoss / xCoastCut: js/race/pace-math.js
 function paceVmax(o) { return (o._vmaxNow || (o.human ? vTop() : 0)) / (1 + xVmaxGain(o) * (o.aeroX || 0)) * (o.human ? (o.paceF || 1) : 1); }
-// The per-node AI speed/vmax profile paceSample learns, one per field (kept on the function: no new top-level state).
-function paceRef() { let r = paceRef.r; if (!r || r.cars !== cars) { r = paceRef.r = new Float32Array(track.n); r.cars = cars; } return r; }
-function xDfLoss(c) { return aeroWetK() * lerp(X_DF_LOSS_LO, X_DF_LOSS_HI, aeroLoadOf(c)); }
-function xCoastCut(c) { return aeroWetK() * lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c)); }
 // These four are `let` so the emulation/tuning harness (setPhysics) can sweep them
 // — they are the core feel levers found by emulating real drivers, not pause-menu
 // sliders. FRONT_GRIP: front friction bias (<1) for an understeer-safe default.
@@ -554,23 +546,11 @@ function deployTaper(c) {
   const t = clamp(1 - (vStd(c.speed) - TAPER_LO) / (TAPER_HI - TAPER_LO), 0, 1);
   return TAPER_FLOOR + (1 - TAPER_FLOOR) * t;
 }
-function isErsDeploying(c) {
-  if (!c) return false;
-  // Live flag from the deploy block — covers human BOOST, AI wantBoost, and
-  // free OVERTAKE. Do not re-derive from boostOn alone: AI never sets boostOn.
-  return !!c.deploying;
-}
-function ersDeployOf(c) { return c && c.ersDeploy != null ? c.ersDeploy : 0.5; }
-function ersRegenOf(c) { return c && c.ersRegen != null ? c.ersRegen : 0.5; }
-// Better deployment DRAINS SLOWER — the same press lasts longer rather than
-// pushing harder, because the push itself is what BOOST already scales.
-function drainFor(c) { return lerp(DRAIN_HI, DRAIN_LO, ersDeployOf(c)); }
-function regenFor(c) { return lerp(REGEN_LO, REGEN_HI, ersRegenOf(c)); }
+// isErsDeploying / drainFor / regenFor / otTimeFor: js/race/pace-math.js
 // Recovery is kinetic: it needs the car moving. Full rate from REGEN_FULL_V (a
 // standard-pace speed, so PACE does not move it) down to nothing at a stop, so
 // braking or coasting in the pit box cannot refill the battery (it took ~10 s).
 function regenSpeedK(c) { return clamp(vStd(c.speed) / REGEN_FULL_V, 0, 1); }   // reversing (the brake-held crawl) recovers nothing either
-function otTimeFor(c) { return lerp(OT_TIME_LO, OT_TIME_HI, ersDeployOf(c)); }   // push a full Overtake allowance buys (js/race/overtake-mode.js)
 
 let aeroZ = null;   // AeroZones.create(G), assigned once G exists (below)
 // -- ACTIVE AERO: ACTIVATION ZONES -------------------------------------------
@@ -586,11 +566,8 @@ let aeroZ = null;   // AeroZones.create(G), assigned once G exists (below)
 // comment asserting they had gone. An extraction is not done until the
 // originals are deleted.)
 function inAeroZone(c) { return !!aeroZ.at(wrapS(c.s)); }   // inside an activation zone (js/physics/aero-zones.js)
-// Live downforce multiplier on the DOWNFORCE (aero-load) term. 1 in Z-mode,
-// 1 - X_DF_LOSS with the flaps fully open. Nothing else in the grip model
-// changes: mechanical grip, kerbs, weather and the friction ellipse are
-// untouched, so opening the wing costs you exactly the wing.
-function aeroDfMult(c) { return 1 - xDfLoss(c) * (c && c.aeroX || 0); }
+// aeroDfMult: js/race/pace-math.js — live downforce multiplier on the DOWNFORCE
+// (aero-load) term. 1 in Z-mode, 1 - X_DF_LOSS with the flaps fully open.
 
 // ── seeded simulation randomness ────────────────────────────────────────────
 // Everything that FEEDS THE SIMULATION draws from here, never Math.random(), so
@@ -649,20 +626,10 @@ function simRnd() {
 // NOT playerMods.speed, so an engine upgrade still nudges you past 8th's top into
 // the rev clamp exactly as before.
 function gearLo(g) { return g > 1 ? vTop() * GEAR_TOP[g - 2] : 0; }
-function gearHi(g) { return vTop() * GEAR_TOP[g - 1]; }
+// gearHi / rpmFor: js/race/pace-math.js
 function naturalGear(speed) {
   for (let g = 1; g <= GEARS; g++) if (speed <= gearHi(g) + 0.01) return g;
   return GEARS;
-}
-function rpmFor(gear, speed) {
-  // RPM is proportional to speed / this gear's top speed: a higher gear turns the
-  // engine slower at a given speed. So an upshift drops RPM only PARTIALLY — more
-  // in the low gears (wide ratios) than the high gears (close ratios), as in a
-  // real car — instead of dropping to idle on every shift. Floored at idle,
-  // capped just past redline. (This also drives the engine pitch and the tach.)
-  const hi = gearHi(gear);
-  const rpm = MAX_RPM * (speed / Math.max(hi, 1));
-  return clamp(rpm, IDLE_RPM, MAX_RPM * 1.04);
 }
 const GAME_LAPS = 3;
 const TT_LAPS = 4;          // time trial: four flying laps (a rolling start: js/race/flying-start.js)
@@ -672,9 +639,8 @@ function isWetRoad() { return trackWetness() >= 0.25; }
 function isRaining() { return trackWetness() >= 0.72; }
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column.
-function trackWetness() { return TyreModel.wetness(raceWeather, wxArc && wxArc.arc); }
-function roadWetness() { return trackWetness(); }   // alias — grip / pits / engineer
-function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? 2 : c.tread) : 0, trackWetness()); }
+function trackWetness() { return wxArc ? wxArc.wetness() : TyreModel.wetness(raceWeather, null); } function roadWetness() { return trackWetness(); }   // the arc's lagged road state (js/race/weather-arc.js); roadWetness = alias for grip / pits / engineer
+function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? TyreModel.treadFor(raceWeather, trackWetness()) : c.tread) : 0, trackWetness()); }   // no fitted set (wear off): the tread the conditions call for
 
 // Pose Ghost + InputGhost start together on every TT lap arm so an incident /
 // reverse-crossing / spoiled class cannot leave the input stream attached to a
@@ -3678,7 +3644,7 @@ customTeam = CustomTeam.create({
 });
 // UI SIZE / HUD SIZE + RESOLUTION (js/ui/scale.js). After Menus so the
 // first applyUiScale can refresh an already-built select preview.
-const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G);
+const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G); if (typeof HudArrange !== "undefined" && HudArrange.create) HudArrange.create(G);
 // CAREER screen — new-career setup + season hub (js/career/career-ui.js). The rules
 // and the save live in js/career/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
@@ -7131,20 +7097,9 @@ function render(dt) {
     fovY = dbgCam.fov * Math.PI / 180;
     if (!cine) farPlane = dbgCam.far;
   } else {
-    // camFov is a vertical FOV. On a wide (landscape) screen a fixed vertical FOV
-    // blows the horizontal field out past ~100°, which makes the car look tiny and
-    // far away. Cap the horizontal FOV so wide screens zoom in and the car stays a
-    // readable size; portrait (narrow) is unaffected.
-    fovY = camFov * Math.PI / 180;
-    // The HFOV cap keeps the CAR a readable size on a wide screen. A crane shot
-    // has no car in it, the editor previews the authored angle uncapped, and a
-    // shot authored at 60° would arrive on a 21:9 screen squeezed to 45° — so
-    // the cinematic takes the number it was framed at.
-    if (!cine) {
-      const HFOV_MAX = 86 * Math.PI / 180;
-      const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(gfx.aspect, 0.0001));
-      fovY = Math.min(fovY, fovYCap);
-    }
+    // camFov is vertical; CamFovFit caps HFOV on wide screens and floors it on
+    // portrait (js/camera/fov-fit.js). cine stays authored / uncapped.
+    fovY = CamFovFit.fitFovY(camFov * Math.PI / 180, gfx.aspect, { cine });
   }
   // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
   // precision across the scene — the biggest single lever against z-fighting /

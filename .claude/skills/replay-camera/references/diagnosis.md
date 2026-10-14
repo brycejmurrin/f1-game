@@ -7,6 +7,10 @@
 - `js/game.js` `cameraDampingState()` (`__apex.cameraState()`): eye, target, fov,
   `previousAnchor`/`nextAnchor` (car-frame damping), `renderFrame`, `simulationTime`.
 
+## Likely causes of "old car after a seek"
+- FOLLOW LOCK is on (`setLocked(true)`): `real-replay.js` ~L341 skips the auto re-follow while `picture.locked`/`manual`.
+- The follow id was not re-pointed on seek (`setFollow` not called for the new car).
+
 ## Fields to diff per phase (probe JSON on stdout)
 `samples[].phase`, `samples[].frame.camera`, `samples[].eyeDeltaMetres` (jump between
 consecutive samples), `samples[].replay`, `preferences.restored`, `exit.replay.active`,

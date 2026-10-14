@@ -24,7 +24,8 @@ const SkidMarks = (function () {
     let idx = 0;
     const own = { t: 0 };         // the player's cadence: seconds until the next stamp may be laid
     const other = new Uint8Array(MAX_SKID);   // 1 = the slot holds another car's mark
-    let otherLive = 0;
+    let otherLive = 0, age = 0;
+    const ages = new Float64Array(MAX_SKID);
 
     const verts = new Float32Array(MAX_SKID * 6 * 5);
     let vertCount = 0;
@@ -54,7 +55,7 @@ const SkidMarks = (function () {
     // Clear the trail. Called from startRace() — marks are per-session, and a
     // second race on the same circuit must not inherit the first one's rubber.
     function reset() {
-      active = 0; idx = 0; own.t = 0; other.fill(0); otherLive = 0; dirty = true;
+      active = 0; idx = 0; own.t = 0; other.fill(0); otherLive = 0; age = 0; ages.fill(0); dirty = true;
     }
 
     // One car's cadence: true when a stamp is due. `timer.t` is its countdown.
@@ -73,6 +74,7 @@ const SkidMarks = (function () {
       other[idx] = isOther ? 1 : 0;
       if (isOther) otherLive++;
       marks[idx].set(mat);
+      ages[idx] = ++age;
       idx = (idx + 1) % MAX_SKID;
       if (active < MAX_SKID) active++;
       dirty = true;               // rebuild the batched trail next render
@@ -85,7 +87,17 @@ const SkidMarks = (function () {
     // Another car's marks, on its OWN cadence (`timer` = { t: 0 }, one per car,
     // owned by the caller) and inside the AI_CAP share. True when one was laid.
     function stampFor(timer, mat, laying, dt) {
-      if (!timer || !due(timer, laying, dt) || otherLive >= AI_CAP) return false;
+      if (!timer || !due(timer, laying, dt)) return false;
+      if (otherLive >= AI_CAP) {
+        let oldest = -1;
+        for (let i = 0; i < active; i++) {
+          if (other[i] && (oldest < 0 || ages[i] < ages[oldest])) oldest = i;
+        }
+        // A full player trail has priority over a new rival mark.
+        if (oldest < 0) return false;
+        marks[oldest].set(mat); ages[oldest] = ++age; dirty = true;
+        return true;
+      }
       lay(mat, true);
       return true;
     }

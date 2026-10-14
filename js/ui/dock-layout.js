@@ -20,14 +20,15 @@ const DockLayout = (function () {
     if (!isFinite(v)) return 0;
     return v < lo ? lo : v > hi ? hi : v;
   }
-  // Toward the centre and up only: +x is inboard from the dock's home edge and
-  // +y is up from the bottom (apply), so a negative share parks pedals past
-  // the screen edge or under the home indicator, and the store keeps it until
-  // RESET. The home already sits 12px off each edge.
+  // +x is inboard from the dock's home edge; +y is up from the bottom (apply).
+  // Negative shares are legitimate (a pack nudge back toward the home edge /
+  // down toward the home bar) and stay inside ±MAX — zeroing them dropped a
+  // saved REPOSITION that had slid a few percent past the home. Past ±MAX
+  // still clips so a drag cannot park a primary control under the notch.
   function clampXY(xy) {
     return {
-      x: clamp01(xy && xy.x, 0, MAX),
-      y: clamp01(xy && xy.y, 0, MAX),
+      x: clamp01(xy && xy.x, -MAX, MAX),
+      y: clamp01(xy && xy.y, -MAX, MAX),
     };
   }
   function emptyScheme() { return { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } }; }
