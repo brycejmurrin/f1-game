@@ -4,6 +4,10 @@ Read from `js/game.js` on the ship branch, not from memory. Function names, not 
 numbers: the lines move every day, `grep` the name. Behaviour is described, not changed — if a
 row below looks wrong, that is a finding for an issue, not an edit to this file.
 
+For player-facing action sequences and the regression checklist, see
+[USAGE-PATHS.md](USAGE-PATHS.md). Entry routes below were cross-checked against
+`f5381b40efa332211ea3973371c2c6835ae5f8d2` on 2026-10-14.
+
 ## The state machine
 
 `state` has exactly four values and ONE writer, `setState(next, why)` (it logs every
@@ -11,10 +15,10 @@ transition as `State a->b why=…`).
 
 | `state` | entered by (`why`) | left by |
 |---|---|---|
-| `menu` | `quit` (`quitToMenu`), `quali-sheet` (`openQualiBody`) | `startRaceBody` → `count` |
+| `menu` | `quit` (`quitToMenu`), `quali-sheet` (`openQualiBody`), `sheet-start` (`startRaceFromSheet`) | `startRaceBody` → `count` |
 | `count` | `race-start` (`startRaceBody`), `red-flag-restart` (`redFlagRestart`) | `lights-out` → `race`; `goRolling()` (`rolling-start`: a jump-in, WATCH from a lap, a designer test drive) → `race` |
 | `race` | `lights-out`, `restart-green` (after a red flag), `rolling-start` | `endRace` → `results`; `quitToMenu` → `menu` |
-| `results` | `endRace` (`flag`, `forced-order`, `quali-end`) | `quitToMenu` → `menu`; RACE AGAIN / TRY AGAIN / NEXT RACE → `startRace` → `count` |
+| `results` | `endRace` (`flag`, `forced-order`, `quali-end`) | `quitToMenu` → `menu`; quick retry → `count`; championship/qualifying continuation → `menu` for a sheet/intro, then `count` |
 
 ```mermaid
 stateDiagram-v2
@@ -23,16 +27,19 @@ stateDiagram-v2
   count --> race: lights-out / goRolling
   race --> count: red-flag-restart, pause RESTART
   race --> results: endRace
-  results --> count: RACE AGAIN / TRY AGAIN / NEXT RACE
+  results --> count: RACE AGAIN / TRY AGAIN (build cover)
   results --> menu: quitToMenu
+  results --> menu: startRaceFromSheet (sheet-start; intro follows)
   race --> menu: quitToMenu (pause QUIT)
   count --> menu: quitToMenu
   menu --> menu: openQualiBody (quali sheet)
 ```
 
-`quitToMenu` is the one full teardown (HUD, lights, pause, rotate blocker, audio, session
-entry, netplay, season reload, title overlay). `openQualiBody` is the one other writer of
-`menu`: no race is up while the quali sheet is, so there is nothing to tear down. (The completed-season arm of
+`quitToMenu` is the full teardown (HUD, lights, pause, rotate blocker, audio, session
+entry, netplay, season reload, title overlay). `openQualiBody` also enters
+`menu`: no race is up while the quali sheet is. `startRaceFromSheet` enters
+`menu` for an intro while preserving qualifying, flow and the built circuit.
+(The completed-season arm of
 `startRaceBody` was a second one — it left the race chrome up — until it was changed to `quitToMenu`; see
 the flow C PR "a start that finds the season finished".)
 
@@ -53,11 +60,12 @@ team, grid, season round…).
 
 | route | pre-race screen (garage → card → flyby) | calls |
 |---|---|---|
-| RACE! on RACE SETTINGS | yes (`raceIntroFromSheet`, sheet stays up as PREPARING…) | `raceIntro(startRace)` |
-| Data Hub JUMP IN / WATCH | yes (`opts.intro`) | `raceIntro(startRace)` |
+| START RACE / START TIME TRIAL / START PRACTICE on RACE SETTINGS | yes (`raceIntroFromSheet`, sheet stays up as PREPARING…); START QUALIFYING first opens its sheet | `raceIntro(startRace)` |
+| Data Hub JUMP IN / WATCH | card/flyby (`opts.intro`); outgoing garage is omitted for WATCH and mid-race JUMP IN | `raceIntro(startRace)` |
 | designer TEST HERE | yes (a solo "my racing" start) | `raceIntro(go)`; `go` = `startRace`; the car is then placed on the point (`TrackDesigner.placeTest`) |
-| qualifying GRID / DRIVE, season NEXT RACE, RACE AGAIN, TT TRY AGAIN | no — the build card covers the load | `startRaceCovered()` |
-| pause RESTART | no | `startRace()` direct (disabled in a friend race) |
+| qualifying TO THE GRID / DRIVE, championship next session/round | yes on a visible normal solo page; build cover only when hidden/headless/online or friend qualifying is armed | `startRaceFromSheet()` → `raceIntro(startRace)` or `startRaceCovered()` |
+| one-off RACE AGAIN, TT TRY AGAIN | no — the build card covers the load | `startRaceCovered()` |
+| pause RESTART | no | `startRace()` direct (disabled in an active friend race or armed friend qualifying) |
 | red flag | no — re-grids in place | `redFlagRestart()` → `count` |
 
 An intro that is abandoned (settings changed, or a stale request) ends in `titleIfBare()`:
@@ -72,7 +80,7 @@ back on the test point and goes green: TRY AGAIN and RESTART return to the point
 ## Leaving a session — what is shown at the flag, per mode
 
 `endRace` runs once per session. Three presentation pieces can follow it: the **chequered cut +
-orbit + highlights** (`ResultsCam.onFlag`), the **TV director** on the player's own car
+orbit, with optional HIGHLIGHTS** (`ResultsCam.onFlag`), the **TV director** on the player's own car
 (`Director`, `autoSpectate` once `player.finished` or `retired`), and the results surface.
 
 | mode | ResultsCam (cheq → orbit → highlights) | TV director on own car | surface |
