@@ -24,8 +24,10 @@ dpace) via `pairEdgeN`. The defender's **coverConcede** (edge × awareness ×
 experience; AI-AI only — a human chaser must keep the cover so `humanYieldT`
 still sees an intruding lean) scales `defendPull` down and returns 0 past ~0.80
 so `defendOnce` does not spend the one-move-per-straight on a lost cover —
-measured pre-fix as covers.vsAI ~1000 with ~1 % pairs stuck 100–125 s (monza
-3×3, 2026-10-14). ERS `wantBoost` catch also arms on the same pace edge when
+`CONCEDE_EDGE_FULL` 0.008 so a ≥0.8 % pair zeros cover (Done-when). Hunger
+does not raise fire/latch (reverted bump raised contact). Instead: towGain
++65 % slipstream, and a conceding defender tucks sooner (`sbsCommitT` 1.15 s,
+`sbsEase` 0.94). ERS `wantBoost` catch also arms on the same pace edge when
 live speeds are queue-levelled. Streets ignore every knob above. Unit pins:
 `tests/unit/ai-pass-complete.test.mjs`.
 

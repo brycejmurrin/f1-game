@@ -144,7 +144,9 @@ const AiDrive = (function () {
     const base = street ? 0.022 : 0.045;
     if (street) return base;
     const h = clamp((hunger || 1) - 1, 0, 1);
-    return base * (1 + h * 0.40);
+    // Slipstream pull (permanent): a hungrier car closes in the tow without
+    // raising fire rate. +55 % at full hunger — not the reverted latch/fire bump.
+    return base * (1 + h * 0.65);
   }
 
   // PASS HUNGER / COVER CONCEDE (permanent circuits only). A ≥ ~0.7 % pace edge
@@ -153,19 +155,21 @@ const AiDrive = (function () {
   // while covers.vsAI ran ~1000 (ai-tactics monza 3×3). Streets keep every
   // prior gate; monaco numbers must not move.
   const PASS_EDGE = 0.007;       // ~0.7 % of vTop — want / concede floor
-  const PASS_EDGE_FULL = 0.012;  // ~1.2 % — full hunger / full concede (stuck pairs were 0.85–1.24 %)
-  function paceEdgeN(fasterV, slowerV, vTop) {
+  const PASS_EDGE_FULL = 0.012;  // ~1.2 % — full hunger (stuck pairs were 0.85–1.24 %)
+  const CONCEDE_EDGE_FULL = 0.008; // defender cover fully yields by ≥0.8 % (Done-when)
+  function paceEdgeN(fasterV, slowerV, vTop, full) {
     const ref = vTop > 0 ? vTop : 72;
     const edge = ((fasterV || 0) - (slowerV || 0)) / ref;
     if (edge < PASS_EDGE) return 0;
-    return clamp((edge - PASS_EDGE) / (PASS_EDGE_FULL - PASS_EDGE), 0, 1);
+    const span = (full > PASS_EDGE ? full : PASS_EDGE_FULL) - PASS_EDGE;
+    return clamp((edge - PASS_EDGE) / span, 0, 1);
   }
   // Pace edge from vmax and/or scripted pace (tierV×skill — same ratio
   // ai-tactics uses for stuck-longest). Take the larger so a compressed
   // vmax still sees a real field-pace gap.
-  function pairEdgeN(fasterV, slowerV, fasterP, slowerP, vTop) {
-    const a = (fasterV > 0 && slowerV > 0) ? paceEdgeN(fasterV, slowerV, vTop) : 0;
-    const b = (fasterP > 0 && slowerP > 0) ? paceEdgeN(fasterP, slowerP, vTop) : 0;
+  function pairEdgeN(fasterV, slowerV, fasterP, slowerP, vTop, full) {
+    const a = (fasterV > 0 && slowerV > 0) ? paceEdgeN(fasterV, slowerV, vTop, full) : 0;
+    const b = (fasterP > 0 && slowerP > 0) ? paceEdgeN(fasterP, slowerP, vTop, full) : 0;
     return Math.max(a, b);
   }
   // 1..~2.2: stuck time behind a slower car → fire / latch / run / tow boost.
@@ -186,7 +190,7 @@ const AiDrive = (function () {
   function coverConcede(ctx) {
     if (!ctx || ctx.street) return 0;
     if (ctx.other && ctx.other.human) return 0;
-    const edgeN = pairEdgeN(ctx.chaserVmax, ctx.ourVmax, ctx.chaserPace, ctx.ourPace, ctx.vTop);
+    const edgeN = pairEdgeN(ctx.chaserVmax, ctx.ourVmax, ctx.chaserPace, ctx.ourPace, ctx.vTop, CONCEDE_EDGE_FULL);
     if (!edgeN) return 0;
     const t = ctx.traits || {};
     return edgeN * lerp(0.55, 1.0, t.awareness != null ? t.awareness : 0.75)
@@ -842,8 +846,32 @@ const AiDrive = (function () {
   // fights never changed the order. Past SBS_COMMIT s alongside as the
   // yielder, a car that is not clearly the faster lifts to SBS_EASE of the
   // other's speed and tucks in behind.
-  function sbsCommitT() { return 2; }
-  function sbsEase() { return 0.97; }
+  function sbsCommitT(ctx) {
+    // Defender cover-concede: tuck sooner so a ≥0.8 % pair does not sit
+    // alongside (sbs max 20–25 s). Streets and no-arg stay at 2 s.
+    if (ctx && !ctx.street) {
+      const concede = coverConcede({
+        street: false, traits: ctx.traits, vTop: ctx.vTop,
+        ourVmax: ctx.ourVmax, ourPace: ctx.ourPace,
+        chaserVmax: ctx.otherVmax, chaserPace: ctx.otherPace,
+        other: ctx.other,
+      });
+      if (concede >= 0.70) return 1.15;
+    }
+    return 2;
+  }
+  function sbsEase(ctx) {
+    if (ctx && !ctx.street) {
+      const concede = coverConcede({
+        street: false, traits: ctx.traits, vTop: ctx.vTop,
+        ourVmax: ctx.ourVmax, ourPace: ctx.ourPace,
+        chaserVmax: ctx.otherVmax, chaserPace: ctx.otherPace,
+        other: ctx.other,
+      });
+      if (concede >= 0.70) return 0.94;
+    }
+    return 0.97;
+  }
 
   // SIDE RUB: WHO YIELDS. Identical treatment of two cars alongside (sepShares
   // 50/50, contactGive cutting BOTH to 0.25-0.55, rubScrub bleeding BOTH by
@@ -1544,7 +1572,9 @@ const AiDrive = (function () {
     // so defendOnce does not spend the one-move-per-straight on a lost cause
     // (covers.vsAI ~1000 at monza with every zone covered, 2026-10-14).
     const concede = coverConcede(ctx);
-    if (concede >= 0.80) return 0;
+    // Zero the cover once concede is clearly on (≥0.70). Mid traits at 0.8 %
+    // land ~0.79 with CONCEDE_EDGE_FULL; the old 0.80 left those covers up.
+    if (concede >= 0.70) return 0;
     mag *= 1 - concede;
     const scale = (ctx.street ? 0.45 : 1) * (straight ? 0.6 : 1);
     return coverSide * Math.min(mag * scale, edgeCap);
@@ -1692,7 +1722,7 @@ const AiDrive = (function () {
     lateralScale, yawScale, cornerSpeed, traits, houseStyle, isMate, ordersMul, stuckThreshold, followTime, followGap, followBase, towGain, queueBrake, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
-    passHunger, coverConcede, paceEdgeN, pairEdgeN, PASS_EDGE, PASS_EDGE_FULL,
+    passHunger, coverConcede, paceEdgeN, pairEdgeN, PASS_EDGE, PASS_EDGE_FULL, CONCEDE_EDGE_FULL,
     defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, bankGrip, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,

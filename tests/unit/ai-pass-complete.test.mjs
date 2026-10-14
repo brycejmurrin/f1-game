@@ -62,6 +62,10 @@ test("coverConcede: streets 0; faster chaser concedes; awareness/experience rais
   const aceC = A.coverConcede({ street: false, traits: ace, vTop, ourVmax: them, chaserVmax: us });
   assert.ok(dullC > 0 && aceC > dullC, `aware/exp concede more: dull=${dullC} ace=${aceC}`);
   assert.ok(aceC >= 0.80, `ace against 1.2 % faster zeros the cover: ${aceC}`);
+  const mid08 = A.coverConcede({
+    street: false, traits: mid, vTop, ourVmax: us * (1 - 0.008), chaserVmax: us,
+  });
+  assert.ok(mid08 >= 0.70, `mid vs 0.8 % concedes enough to drop cover: ${mid08}`);
   // Human chaser: keep the cover so humanYieldT still sees an intruding lean
   // (ai-racecraft-vm "opens the gap itself").
   assert.equal(A.coverConcede({
@@ -81,6 +85,10 @@ test("defendPull: cover concede zeros the pull against a clearly faster attacker
   const beaten = A.defendPull({ ...base, ourVmax: them, chaserVmax: us });
   assert.ok(equal > 0, "equal pace still covers the lined-up side");
   assert.equal(beaten, 0, "ace beaten by 1.2 % fully concedes (no cover spend)");
+  const midBeaten = A.defendPull({
+    ...base, traits: mid, ourVmax: us * (1 - 0.008), chaserVmax: us,
+  });
+  assert.equal(midBeaten, 0, "mid beaten by 0.8 % drops the cover");
   // Streets ignore concede even with the same pace numbers.
   const street = A.defendPull({ ...base, street: true, ourVmax: them, chaserVmax: us, roomR: 3 });
   assert.ok(street > 0, "street cover unchanged by pace concede");
@@ -135,7 +143,18 @@ test("towGain: hunger lifts permanent tow; street and no-arg stay base", () => {
   assert.equal(A.towGain(true), 0.022);
   assert.ok(A.towGain(false, 1.8) > A.towGain(false));
   assert.equal(A.towGain(true, 1.8), 0.022, "street ignores hunger");
-  assert.ok(A.towGain(false, 2.5) <= 0.045 * 1.4 + 1e-9, "capped at +40 %");
+  assert.ok(A.towGain(false, 2.5) <= 0.045 * 1.65 + 1e-9, "capped at +65 %");
+});
+
+test("sbsCommitT / sbsEase: conceding defender tucks sooner; streets and no-arg stay", () => {
+  assert.equal(A.sbsCommitT(), 2);
+  assert.equal(A.sbsEase(), 0.97);
+  const beaten = { street: false, traits: mid, vTop, ourVmax: them, ourPace: them, otherVmax: us, otherPace: us };
+  assert.ok(A.sbsCommitT(beaten) < 2, "0.8 %+ concede shortens the alongside");
+  assert.ok(A.sbsEase(beaten) < 0.97, "conceding yielder eases more");
+  assert.equal(A.sbsCommitT({ ...beaten, street: true }), 2);
+  assert.equal(A.sbsEase({ ...beaten, street: true }), 0.97);
+  assert.equal(A.sbsCommitT({ ...beaten, other: { human: true } }), 2, "human alongside keeps 2 s");
 });
 
 test("wantBoost: pace edge on the tow car arms catch when live speeds are level", () => {

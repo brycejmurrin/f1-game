@@ -5420,7 +5420,15 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // SQUEEZED (AiDrive.squeezeEase / squeezeBrake): touching a car we must
     // yield to, with no lane to yield into — back out under its speed, brake
     // dabbed, until we are clear. The pass latch below reads it too.
-    if (alongO && c.sbsT > AiDrive.sbsCommitT() && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vT / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.sbsEase());   // COMMIT OR YIELD: tuck in behind
+    if (alongO && c.sbsT > AiDrive.sbsCommitT({
+      street: !!track.street, traits: aiT, vTop: vT, other: alongO,
+      ourVmax: paceVmax(c), ourPace: scriptPace(c),
+      otherVmax: paceVmax(alongO), otherPace: scriptPace(alongO),
+    }) && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vT / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.sbsEase({
+      street: !!track.street, traits: aiT, vTop: vT, other: alongO,
+      ourVmax: paceVmax(c), ourPace: scriptPace(c),
+      otherVmax: paceVmax(alongO), otherPace: scriptPace(alongO),
+    }));   // COMMIT OR YIELD: tuck in behind
     squeezed = (c.contactT || 0) > 0 && !!alongO && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, c.kTurn) &&
         (alongDx <= 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) < AiDrive.minLatGap(hw, !!track.street);
     if (squeezed) {
@@ -5680,8 +5688,8 @@ function updateCarLateral(c, dt, ranked, S) {
     const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
     // THE NEXT CORNER (AI-only reads): its curvature just past the turn-in owns the pass side and the level side-by-side; its zone's quality says whether to get a run.
     c.kTurn = _atk.toTurnIn < 400 ? AiDrive.cornerK(Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 10)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 30)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 55))) : 0;
-    c.runT = blocker && blockerGap < 40 ? AiDrive.runExtra(k, track.attackQ ? track.attackQ[Math.floor(wrapS(c.s + _atk.toTurnIn - 2) / track.total * track.n) % track.n] : 0, c.atkWant, !!track.street,
-      AiDrive.passHunger({ street: !!track.street, traits: aiT, vTop: vT, queueT: c.queueT || 0, blockerVmax: paceVmax(blocker), ourVmax: paceVmax(c), blockerPace: scriptPace(blocker), ourPace: scriptPace(c), freeSpeed: aiFreeSpeed })) : 0;
+    const _passH = blocker ? AiDrive.passHunger({ street: !!track.street, traits: aiT, vTop: vT, queueT: c.queueT || 0, blockerVmax: paceVmax(blocker), ourVmax: paceVmax(c), blockerPace: scriptPace(blocker), ourPace: scriptPace(c) }) : 1;
+    c.runT = blocker && blockerGap < 40 ? AiDrive.runExtra(k, track.attackQ ? track.attackQ[Math.floor(wrapS(c.s + _atk.toTurnIn - 2) / track.total * track.n) % track.n] : 0, c.atkWant, !!track.street, _passH) : 0;
     // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
     // Slice 4: easy/normal visibility lift lives in AiDrive.mistakeChance (DIFF.err frozen).
     // seconds with a car within 0.6 s behind; the roll is once per braking
