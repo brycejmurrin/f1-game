@@ -215,6 +215,43 @@ export const PATCHES = [
       },
     ],
   },
+  {
+    id: 13,
+    title: "texture bindings in a SHARED uniform group (renderGroup): a cache key they can be part of, and clones that keep the group",
+    file: "build/three.webgpu.js",
+    why: "Every sampled texture sits in three's per-object group, so every render object in every pass " +
+      "walks each of its texture bindings (update, two map gets, a cacheKey string) — ~8-11 on Apex's lit " +
+      "shader; a shared group is walked once per render() call (perf hunt 3 R2/B14, bench-tex: 0.7-1.6 us " +
+      "per object at K = 10). Two things stop a texture joining renderGroup. (a) NodeBuilder._getBindGroup " +
+      "keys a shared group on `binding.nodeUniform.id`, which NodeSampledTexture / NodeSampler do not " +
+      "have: a TypeError. The key now names a texture binding by its node id AND its binding name, because " +
+      "the group's binding objects come from the FIRST builder that made the key and three's WebGL backend " +
+      "sets a program's sampler units by name (_setupBindings: getUniformLocation(program, binding.name)), " +
+      "and a texture's `nodeUniformN` name differs between programs of one fragment graph (the AI and " +
+      "InstancedMesh lit programs: nodeUniform28 vs 32) — without the name a second program would bind " +
+      "the first one's names and sample the wrong units. Ids also get separators (12+3 vs 1+23). (b) " +
+      "TextureNode.clone() builds a fresh node, so every .sample() / .compare() / texture(node) tap fell " +
+      "back to objectGroup; the clone now keeps its source's group. Nothing in three sets a texture group, " +
+      "so both edits are inert until a caller opts a texture in (tsl-lit: apex26.tlxSharedTex).",
+    upstream: "unfixed on dev as of 2026-10-13 (the key moved to Bindings.getSharedBindGroup, same `binding.nodeUniform.id`; TextureNode.clone() still drops groupNode)",
+    edits: [
+      {
+        find: "\t\t\t\t\t\tcacheKeyString += uniform.nodeUniform.node.id;\n",
+        replace: "\t\t\t\t\t\tcacheKeyString += uniform.nodeUniform.node.id + ',';\n",
+        count: 1,
+      },
+      {
+        find: "\t\t\t\t} else {\n\n\t\t\t\t\tcacheKeyString += binding.nodeUniform.id;\n\n\t\t\t\t}\n",
+        replace: "\t\t\t\t} else if ( binding.nodeUniform !== undefined ) {\n\n\t\t\t\t\tcacheKeyString += 'u' + binding.nodeUniform.id + ',';\n\n\t\t\t\t} else {\n\n\t\t\t\t\tcacheKeyString += ( binding.isSampler === true ? 's' : 't' ) + ( binding.textureNode ? binding.textureNode.id : '' ) + ':' + binding.name + ',';\n\n\t\t\t\t}\n",
+        count: 1,
+      },
+      {
+        find: "\t\tconst newNode = new this.constructor( this.value, this.uvNode, this.levelNode, this.biasNode );\n\t\tnewNode.sampler = this.sampler;\n\t\tnewNode.depthNode = this.depthNode;\n\t\tnewNode.compareNode = this.compareNode;\n\t\tnewNode.gradNode = this.gradNode;\n\t\tnewNode.gatherNode = this.gatherNode;\n\t\tnewNode.offsetNode = this.offsetNode;\n\n\t\treturn newNode;\n",
+        replace: "\t\tconst newNode = new this.constructor( this.value, this.uvNode, this.levelNode, this.biasNode );\n\t\tnewNode.sampler = this.sampler;\n\t\tnewNode.depthNode = this.depthNode;\n\t\tnewNode.compareNode = this.compareNode;\n\t\tnewNode.gradNode = this.gradNode;\n\t\tnewNode.gatherNode = this.gatherNode;\n\t\tnewNode.offsetNode = this.offsetNode;\n\t\tnewNode.groupNode = this.groupNode;\n\n\t\treturn newNode;\n",
+        count: 1,
+      },
+    ],
+  },
 ];
 
 /** Retired patches, kept so the canary can assert the UPSTREAM form is present. */

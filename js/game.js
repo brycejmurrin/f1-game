@@ -2339,6 +2339,9 @@ const _menuGate = { warm: 0, generation: 0, ready: "", track: null, garageWarm: 
 // The menu build's identity: circuit, time, weather AND grid size (a team change
 // to or from MY TEAM moves the grid slots, which loadTrack rebuilds for).
 const menuKey = (idx) => [idx, raceTimeOfDay, raceWeather, fieldSize()].join("|");
+// What the BUILD reads (loadTrackStepped/trackBuildOpts): weather is not an input, time of day
+// only through sessionDarkFor. A menu build in flight for an equal key is kept (hunt 3 K5/X6).
+const buildKey = (idx) => { const d = Tracks.LIST[idx]; return d ? [idx, sessionDarkFor(d), fieldSize(), PerfGov.tier() < 3].join("|") : ""; };
 const menuWorld = () => !!track && _menuGate.track === track && _menuGate.ready === menuKey(trackIdx);
 let flybyBuildTimer = 0;
 const MENU_IDLE_MS = 1200;
@@ -2419,6 +2422,15 @@ async function menuFinish(current, key) {
 // covers a title with no circuit build).
 async function garagePrewarm(current) { await garagePre.run(current, $("race-settings").hidden ? "title" : "settings"); }
 function scheduleFlybyTrack(settle) {
+  // RACE SETTINGS, a weather chip, day<->default on a day circuit, MID-BUILD: the world in steps
+  // is still the one wanted, so RETARGET the live preparation instead of restarting it.
+  const p = _menuGate.prep;
+  if (p && p.building && trackIdx === p.want && p.bkey === buildKey(trackIdx)) {
+    const was = [p.tod, p.weather, p.key];
+    p.tod = raceTimeOfDay; p.weather = raceWeather; p.key = menuKey(p.want);
+    if (p.current()) return;
+    [p.tod, p.weather, p.key] = was;
+  }
   clearTimeout(flybyBuildTimer);
   const generation = ++_menuGate.generation;
   _menuGate.warm = 0;
@@ -2426,10 +2438,10 @@ function scheduleFlybyTrack(settle) {
   // Free a previous circuit immediately unless compilation still owns its scene.
   // The stepped loader releases it after that warm settles.
   if (!(gfx.warming && gfx.warming()) && state === "menu" && track && Tracks.LIST[trackIdx] && builtTrackId !== Tracks.LIST[trackIdx].id) dropTrackWorld();
-  const want = trackIdx, tod = raceTimeOfDay, weather = raceWeather;
-  const key = menuKey(want);
-  const current = () => generation === _menuGate.generation && state === "menu" &&
-    !setupPreviewOn && trackIdx === want && raceTimeOfDay === tod && raceWeather === weather &&
+  const want = trackIdx;
+  const prep = _menuGate.prep = { want, tod: raceTimeOfDay, weather: raceWeather, key: menuKey(want), bkey: buildKey(want), building: false, owner: null, step: null };
+  const current = prep.current = () => generation === _menuGate.generation && state === "menu" &&
+    !setupPreviewOn && trackIdx === want && raceTimeOfDay === prep.tod && raceWeather === prep.weather &&
     (!els.select.hidden || !$("race-settings").hidden || (uiExperience && uiExperience.wantsTrack()));
   const prepare = async () => {
     if (!current()) return;
@@ -2442,13 +2454,17 @@ function scheduleFlybyTrack(settle) {
       // Car assets BEFORE the warm frames: prepareMenuCarAssets slices the
       // mesh/livery work; a warm frame drawn first
       // minted and uploaded all ~22 atlases in one 3-4 s task.
-      if (_menuGate.ready === key && _menuGate.track === track) {
-        await menuFinish(current, key); await garagePrewarm(current); return;
+      if (_menuGate.ready === prep.key && _menuGate.track === track) {
+        await menuFinish(current, prep.key); await garagePrewarm(current); return;
       }
       // AT ONCE, NOT AFTER MENU_IDLE_MS: the build is stepped (~8 ms a frame), so a
       // tap on the picker or RACE SETTINGS is answered mid-build, and RACE! finds the
       // world built sooner. The warms (menuFinish) still wait for idle: they block.
-      if (!(await loadTrackStepped(want, current))) return;
+      // `owner`: RACE! (introBuild) joined this build, and its liveness rules from then on.
+      prep.building = true;
+      prep.step = loadTrackStepped(want, () => (prep.owner ? prep.owner() : current())).finally(() => { prep.building = false; });
+      if (!(await prep.step) || !current()) return;
+      const key = prep.key;
       _menuGate.ready = key; _menuGate.track = track; if (!$("race-settings").hidden) raceSettings.repaintPlan();   // the stint bar waited for THIS circuit's pit complex
       // Its own slice, like each car below: the pit-sign atlas is a 1024^2 canvas.
       await menuSlice();
@@ -3950,7 +3966,11 @@ function introBuild(go) {
   const idx = trackIdx, key = menuKey(idx), n = ++_introRun;
   const settings = entrySettings(), live = () => n === _introRun && state === "menu" && settings === entrySettings();
   if (!(idx >= 0)) return false;   // reduce-motion still builds then plays the garage-out before the card and the flyby
+  // JOIN the menu's build of this same world in flight (tile -> SETTINGS -> RACE!) rather than
+  // abandon it and start over; loadTrackStepped below then finds that world built and reuses it.
+  const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
   clearTimeout(flybyBuildTimer); _menuGate.generation++;   // the menu's own build stands down
+  if (join) mp.owner = live;
   const info0 = loadingInfo();   // its readMs: a real race's flyby is planned for the length it will run (a 24 s plan is re-planned mid-flyby)
   introCover(info0, n);
   let prepared = false;
@@ -3960,6 +3980,7 @@ function introBuild(go) {
       await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));   // the preparation card paints first
       if (!(await awaitIntroWarm(live)) || !live()) return;   // compilation retains ownership of its scene
       // In steps, a few ms per frame: the preparation card and skip remain responsive.
+      if (join) await mp.step;
       if (!(await loadTrackStepped(idx, live)) || !live()) return;
       _menuGate.ready = key; _menuGate.track = track;
       // Assets, plans and shader warm all settle before the outgoing animation.
@@ -4434,6 +4455,9 @@ const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0,
 let _audioParamStep = true;   // tickBody clears it on all but a frame's last physics step
 const _engAcc = { dt: 0 };   // the local car's sim time since the engineer last listened (S8: once per frame)
 function update(dt) {
+  // No world: a stepped/worker race switch dropped it (dropTrackWorld) and is still building.
+  // tickBody gates on it too; this covers __apex.step() (bug hunt 3 K1/X2).
+  if (!track) return;
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
   if ((state === "race" || state === "count") && Input.consumeCameraCycle()) cycleCam();
@@ -6617,6 +6641,9 @@ try { _envProbeOff = localStorage.getItem("apex26.envProbeOff") === "1"; } catch
 // safe mode), so on desktop a GPU reset leaves nothing behind and the knob —
 // which IS persisted, in the tuner store — comes straight back on at the next
 // boot into the same configuration that just killed the context.
+// D4 / perf hunt 3 R7 — dry-DAY SSR gate, read once (po.reflect in render()). DEFAULT OFF until
+// the three + glx A/B: the march it skips carries a blend weight under 1/64 — small, not zero.
+const _ssrDayGate = (() => { try { return localStorage.getItem("apex26.ssrDayGate") === "1"; } catch (_) { return false; } })();
 let _perChunkOff = false;
 try { _perChunkOff = localStorage.getItem("apex26.perChunkOff") === "1"; } catch (_) { /* No storage (Safari private mode): the latch is unreadable, so the feature stays governed by the tier gate alone — the same fallback _envProbeOff takes two lines up. */ }
 // Hoisted material-option objects for drawWorldMeshes — the function runs up to
@@ -8264,6 +8291,11 @@ function render(dt) {
   // Now the DRY NIGHT SHEEN tuner slider (LT.ssrDryNight, default 0.08).
   const _ssr = ((frame.wetness || 0) > 0.01) ? frame.wetness * LT.ssrWetMul
              : (frame.lights ? LT.ssrDryNight : LT.ssrDryDay);
+  // D4 (hunt 1) / R7 (hunt 3): a dry DAY whose largest road-SSR blend weight (hunt 1: 0.204 x the knob,
+  // 0.0143 at 0.07) cannot reach 1/64 skips the 24+4-step march on EVERY backend — po.reflect is the
+  // one input GLX, TLX and WGX read. Keyed on the weight, so a tuner above ~0.077 brings it back;
+  // dry night (neon sheen) and car-paint SSR (po.carReflect) are untouched. apex26.ssrDayGate=1.
+  const _ssrPo = (_ssrDayGate && !frame.lights && (frame.wetness || 0) <= 0.01 && _ssr * 0.204 < 1 / 64) ? 0 : _ssr;
   // Perf: skip the SSAO pass (+ its two blur passes) at NIGHT. Night ambient is
   // near-black, so the AO darkening is invisible anyway — and night street grids
   // are where the frame budget is tightest. Gate on key BRIGHTNESS, not sunDir.y:
@@ -8301,7 +8333,7 @@ function render(dt) {
   // so a tier-4 DAYTIME frame (_cs is non-zero whenever the key is bright) would
   // still run the SSAO pass and both of its blurs after po.ssao went to 0. Shedding contact shadows is what
   // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
-  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssr; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssrPo; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone
@@ -8464,7 +8496,7 @@ function tickBody(now) {
   // step (which would change the slip/grip behaviour). Leftover time carries to
   // the next frame; cap the substeps so a stall can't trigger a spiral of death.
   // Only where update() advances anyone — elsewhere it returns immediately.
-  if (!frozen && (state === "race" || state === "count")) {
+  if (!frozen && track && (state === "race" || state === "count")) {   // track: null mid stepped switch (K1)
     physAcc += simTime;
     let steps = 0;
     while (physAcc >= PHYS_DT && steps < 5) {

@@ -315,7 +315,8 @@
     function casterGeo(src) {
       const g = new THREE.BufferGeometry();
       if (src.index) g.setIndex(src.index);
-      for (const k in src.attributes) if (k !== "instanceTint") g.setAttribute(k, src.attributes[k]);
+      // ...nor the lit batch's own instance stream (iM0..3, tlx.js A2): the caster is a real InstancedMesh.
+      for (const k in src.attributes) if (k !== "instanceTint" && !/^iM[0-3]$/.test(k)) g.setAttribute(k, src.attributes[k]);
       g.drawRange.start = src.drawRange.start; g.drawRange.count = src.drawRange.count;
       for (let i = 0; i < src.groups.length; i++) g.addGroup(src.groups[i].start, src.groups[i].count, src.groups[i].materialIndex);
       g.userData.casterOf = src;

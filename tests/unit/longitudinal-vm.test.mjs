@@ -86,12 +86,15 @@ test("braking slows faster than coasting, both slower than throttle", async () =
 test("driving onto the grass bleeds speed", async () => {
   await startRace();
   const a = g.apex;
-  a.jump(0.0, 80, 14);
+  // x = −14: the grass. +14 at Monza s = 0 is the PIT LANE (Tracks.inPitLane), tarmac with no grass drag.
+  a.jump(0.0, 80, -14);
   a.setInput({ steer: 0, throttle: true });
   const v0 = a.probe().speed;
   for (let i = 0; i < 60; i++) a.step(1 / 60, 1);
   const v1 = a.probe().speed;
+  const offroad = a.world({ detail: "full" }).physics.offroad;
   a.clearInput();
+  assert.equal(offroad, true);   // really on the grass, not the pit lane
   lt(v1, v0);     // grass drag dominates throttle
 });
 

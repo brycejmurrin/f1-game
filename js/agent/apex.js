@@ -246,7 +246,10 @@ const api = {
     // arc delta rather than assigning the raw fraction, which erased whole laps
     // from the ranked order on a mid-race jump (measured: lap 1, 5930 → 2889).
     G.player.prog += sNew - G.player.s;
-    G.player.s = sNew;
+    // _prevS too: the next step measures ds from HERE. Left at the old s, a
+    // teleport under updateCarAdvance's 20 m threshold (pole → jump(0) is 14 m)
+    // was banked into prog a second time and crossed the line: lap 0 → 1.
+    G.player.s = sNew; G.player._prevS = sNew;
     if (lateral !== undefined) G.player.x = lateral;
     if (speed !== undefined) G.player.speed = speed;
     Tracks.sample(G.track, G.player.s, smp);

@@ -25,12 +25,13 @@
     9,
     10,
     11,
-    12
+    12,
+    13
   ],
   "files": {
     "three.webgpu.min.js": {
-      "sha256": "32a9eaf3d2cd96ac72156d67a72b229fd0c25ea851c55a03a6c91ffc5d53e204",
-      "bytes": 710180
+      "sha256": "3a8e42330bb5804e9803a4d52f5c5a87db8f11cb8da075be6d1b3ccfe6554b67",
+      "bytes": 710323
     },
     "three.core.min.js": {
       "sha256": "dae72ed2eea6703b95e6b57e26469ffa95733a9320675b4bfd1b5f5df1c12f8b",

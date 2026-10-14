@@ -110,3 +110,45 @@ test("fixtures.js IMPORTS the names it calls, it does not merely re-export them"
     assert.ok(!(reExportOnly && !imported), `${name} is re-exported without being imported`);
   }
 });
+
+// ── the reused page (bug hunt 3 X1) ───────────────────────────────────────
+// On the shared page `info().track` is the PREVIOUS test's world, so the bare
+// predicate is true at once while the new race() is still building. With
+// `raceFlag` the wait also needs THAT start's thenable to have settled "ok",
+// and a rejected start fails loudly instead of racing ahead. These run the
+// helper's own in-page predicate against a fake window, not a script.
+function livePage(win, onPoll) {
+  let i = 0;
+  return {
+    async evaluate(fn, arg) {
+      if (i++ > 2000) throw new Error("fake page exhausted: the wait never ended");
+      onPoll(i);
+      const prev = globalThis.window;
+      globalThis.window = win;
+      try { return fn(arg); } finally { globalThis.window = prev; }
+    },
+    async waitForTimeout() { await new Promise((r) => setImmediate(r)); },
+    get calls() { return i; },
+  };
+}
+const reusedWin = (flag) => ({ __apexLoadTrack: flag, __apex: { info: () => ({ track: "monza" }), logs: () => [] } });
+
+test("raceFlag: a reused page's old world is not ready until this start settles", { timeout: 5000 }, async () => {
+  const win = reusedWin("pending");
+  const page = livePage(win, (i) => { win.__apex.logs = () => new Array(i); if (i === 5) win.__apexLoadTrack = "ok"; });
+  await awaitTrackBuild(page, 1000, 4000, { raceFlag: "__apexLoadTrack" });
+  assert.equal(page.calls, 5, "returned before the race() thenable settled, or long after");
+});
+
+test("raceFlag: a start that rejects fails with its reason", { timeout: 5000 }, async () => {
+  const win = reusedWin("pending");
+  const page = livePage(win, (i) => { if (i === 3) win.__apexLoadTrack = "err:Race start settings changed"; });
+  await assert.rejects(() => awaitTrackBuild(page, 1000, 4000, { raceFlag: "__apexLoadTrack" }),
+    /race start failed before the grid: Race start settings changed/);
+});
+
+test("no raceFlag: the old predicate, unchanged", { timeout: 5000 }, async () => {
+  const page = livePage(reusedWin(undefined), () => {});
+  await awaitTrackBuild(page, 1000, 4000);
+  assert.equal(page.calls, 1);
+});

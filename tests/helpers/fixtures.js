@@ -492,11 +492,21 @@ const pwSharedTest = pwTest.extend({
     await use(page);
   },
 
+  // The shared page already shows the PREVIOUS test's world, so `info().track`
+  // alone is true at once: wait for THIS race() to settle (its thenable, through
+  // a page flag the stall-aware wait reads), then one presented frame of the new
+  // world, before go() (bug hunt 3 X1 — the same race as agent-view's load()).
   loadTrack: async ({ page }, use) => {
     await use(async (id = "monza", tod = "day", wx = "dry") => {
       await ensureLive(page);
-      await page.evaluate(({ i, t, w }) => window.__apex.race(i, t, w), { i: id, t: tod, w: wx });
-      await awaitTrackBuild(page);
+      await page.evaluate(({ i, t, w }) => {
+        window.__apexLoadTrack = "pending";
+        Promise.resolve(window.__apex.race(i, t, w)).then(
+          () => { window.__apexLoadTrack = "ok"; },
+          (e) => { window.__apexLoadTrack = "err:" + ((e && e.message) || e); });
+      }, { i: id, t: tod, w: wx });
+      await awaitTrackBuild(page, undefined, undefined, { raceFlag: "__apexLoadTrack" });
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
       await page.evaluate(() => window.__apex.go());
     });
   },
