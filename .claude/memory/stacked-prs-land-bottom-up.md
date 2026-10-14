@@ -4,6 +4,7 @@ description: "Landing a stack of PRs here: retarget each dependent PR by hand af
 metadata:
   node_type: memory
   type: project
+  source: user, tools/ci/sync-pr.mjs
   originSessionId: d24c35f2-4501-5b72-89d0-f1ff7f97543b
   modified: 2026-10-02T01:05:00.000Z
 ---

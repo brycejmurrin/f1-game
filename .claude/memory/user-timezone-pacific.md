@@ -4,6 +4,7 @@ description: Bryce is on US Pacific time; write cron/Routine schedules as CRON_T
 metadata:
   node_type: memory
   type: user
+  source: user
   originSessionId: 1bd7cf1a-a9c2-557e-8cf3-ad7418a51cd3
   modified: 2026-10-14T08:25:09.136Z
 ---

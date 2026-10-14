@@ -4,6 +4,7 @@ description: "Default: the agent never merges — Merge Desk / the user does; ma
 metadata:
   node_type: memory
   type: feedback
+  source: user, tools/ci/ready-gate.mjs, tools/ci/ready-full-cap.mjs
   originSessionId: 6badff43-e599-56e5-9f28-9dce5331b039
   modified: 2026-10-14T05:40:00.000Z
 ---
