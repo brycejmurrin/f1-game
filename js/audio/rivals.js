@@ -125,7 +125,9 @@ var RivalAudio = (() => {
         const lock = +c.wheelLock || 0;
         const skid = +c.skidIntensity || 0;
         const inten = Math.max(lock, skid > 0.45 ? skid : 0);
-        if (!(inten > 0.35) || Math.abs(c.speed || 0) < 8) continue;
+        // Pace-safe crawl gate: fraction of vTop, not a raw m/s literal (vstd-lint).
+        const top = (G.vTop && G.vTop()) || 1;
+        if (!(inten > 0.35) || Math.abs(+c.speed || 0) / top < 0.08) continue;
         let wx = c.px, wz = c.pz;
         if (wx == null || wz == null) {
           const w = worldXZ(track, c.s, c.x);

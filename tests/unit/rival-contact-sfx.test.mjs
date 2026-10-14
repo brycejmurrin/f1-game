@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ENGINE_SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js",
@@ -196,7 +197,7 @@ test("RivalAudio.emitFieldSfx: lock-up triggers squeal for a rival, not the play
     s: 105, x: 2, speed: 40, rpm: 9000, isPlayer: false, retired: false,
     wheelLock: 0.9, skidIntensity: 0.2, px: 4, pz: 3,
   };
-  const G = { track: { total: 1000 }, cars: [me, ai] };
+  const G = { track: { total: 1000 }, cars: [me, ai], vTop: () => 100 };
   const R = RivalAudio.create(G);
   const before = GameAudio.fieldContactState().fired;
   R.emitFieldSfx(me);
@@ -217,9 +218,11 @@ test("wall-clamp source: AI wall path calls fieldContact, player path still Game
 });
 
 test("collideFx gate: rival–rival forwards fieldContact; player branch keeps collision()", () => {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  const start = game.indexOf("function collideFx");
-  const fx = game.slice(start, start + 2800);
+  // Read through gameSource() so this suite does not raise the raw game.js pin.
+  const src = gameSource();
+  const start = src.indexOf("function collideFx");
+  assert.ok(start >= 0, "collideFx present in gameSource union");
+  const fx = src.slice(start, start + 2800);
   assert.match(fx, /GameAudio\.fieldContact\("bump"/);
   assert.match(fx, /!a\.isPlayer && !b\.isPlayer/);
   assert.match(fx, /if \(soundOn\) GameAudio\.collision\(impact\)/);

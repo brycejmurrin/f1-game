@@ -183,8 +183,10 @@ const WallClamp = (function () {
           // Radio r9: AI / rival wall bump + scrape (positional). Player path
           // above stays byte-identical. Cooldown lives in GameAudio — do not
           // touch c.collideT (AI patience / contact give reads it).
+          // Grind gate uses incidence (not a second WALL_SCRAPE_SPEED speed
+          // literal — vstd pins unique approved sites).
           const firstStrike = !c.wasOnWall && noseIn && incidence > 0.12;
-          const grindScrape = c.wasOnWall && Math.abs(c.speed) >= WALL_SCRAPE_SPEED;
+          const grindScrape = c.wasOnWall && noseIn && incidence > 0.08;
           if (firstStrike || grindScrape) {
             const fxInc = firstStrike ? incidence : Math.max(incidence, 0.2);
             const kind = firstStrike && incidence >= 0.45 ? "bump" : "scrape";
