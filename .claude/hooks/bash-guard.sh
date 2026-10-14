@@ -23,7 +23,8 @@
 #  §Verification 10 — a SUBAGENT (hook input carries agent_id / agent_type) never
 #    starts a browser run: test-bg (except --status/--tail), test-solo,
 #    run-playwright, `playwright test`, `npm test`, verify-change without
-#    --fast/--plan, the chrome daemon, `npm run test:<browser group>`.
+#    --fast/--plan, the chrome daemon, `npm run test:<browser group>`, and the
+#    Chromium capture CLIs (tools/shot, tools/ui audits, gfx-probe).
 #  A commit whose staged paths are ALL prose (docs/, *.md, .claude/skills,
 #    .claude/agents; never a generated doc) runs only docs-integrity — no
 #    ratchet raise, no test:guards.
@@ -179,6 +180,29 @@ if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}kill([[:space:]]+
   done
 fi
 
+# --- git push: no force, no mirror/delete, never the deploy branch ---------------
+# settings.json's deny globs are prefix matches on the raw text, so `git -C .
+# push -f`, `git --no-pager push --force`, `bash -c "git push --mirror"` and a
+# bare `git push` while ON the deploy branch walked past them (2026-10-14).
+# shellparse.py reads every `git … push` the way it reads commits. Untokenisable
+# text that still looks like a push is refused: it would not run as written.
+HOOKDIR="$(cd "$(dirname "$0")" && pwd)"
+PUSH_JSON=$(printf '%s' "$CMD" | python3 "$HOOKDIR/shellparse.py" push 2>/dev/null)
+if [ "$PUSH_JSON" = "null" ]; then
+  if printf '%s' "$SCAN" | grep -Eq "(^|[;&|({\`][[:space:]]*)${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|\$)"; then
+    echo "BLOCKED: this command contains a git push the guard cannot parse (an unbalanced quote?). Write the push as one plain command." >&2
+    exit 2
+  fi
+elif [ -n "$PUSH_JSON" ] && [ "$PUSH_JSON" != "[]" ]; then
+  printf '%s' "$PUSH_JSON" | python3 -c '
+import json,sys
+for x in json.load(sys.stdin):
+    sys.stderr.write("BLOCKED: `" + x["cmd"] + "` — " + "; ".join(x["why"]) + ".\n")
+' >&2
+  echo "Pushes go to your own cursor/<topic>-<hash> branch, never forced (AGENTS.md §Git branch & deploy). The deploy branch takes work only through a PR (node tools/ci/deploy.mjs --pr); a diverged branch is caught up by merging (node tools/ci/sync-pr.mjs), never a force push." >&2
+  exit 2
+fi
+
 # --- a subagent never starts a browser run --------------------------------------
 # AGENTS.md §Verification 10 was prose and a body lint; every agent carries
 # Bash, so nothing stopped a `test-bg.mjs` inside one until 2026-09-22. The
@@ -194,6 +218,12 @@ if [ "$SUBAGENT" = "1" ]; then
   # blocked for the groups that drive a browser, read from tests/groups.json.
   P='(node[[:space:]]+)?([^[:space:];&|()]*/)?'
   BROWSER="${P}(test-bg\.mjs([[:space:]]+(?!--status|--tail)[^[:space:]]+)|test-solo\.mjs|run-playwright\.mjs|verify-change\.mjs(?![^;&|]*--(fast|plan)))|(python3?[[:space:]]+)?([^[:space:];&|()]*/)?probe-mcp\.py[[:space:]]+chrome-start|npx[[:space:]]+playwright[[:space:]]+test|playwright[[:space:]]+test([[:space:]]|$)|npm[[:space:]]+test([[:space:]]|$)"
+  # 2026-10-14: the capture CLIs boot Chromium too (harness.mjs launchChromium /
+  # playwright): every tools/shot/*.mjs except the node-VM ones (frame-report,
+  # cam-corners, cam-motion), tools/ui/{layout-audit,menu-mock,css-play}.mjs and
+  # tools/gfx/gfx-probe.mjs. --help / --plan print and exit, so they stay open.
+  CAPTURE="${P}(shot/(?!(frame-report|cam-corners|cam-motion)\.mjs)[A-Za-z0-9_-]+\.mjs|ui/(layout-audit|menu-mock|css-play)\.mjs|gfx/gfx-probe\.mjs)(?![^;&|]*[[:space:]]--(help|plan)([[:space:]=]|\$))"
+  BROWSER="${BROWSER}|${CAPTURE}"
   BGROUPS=$(python3 -c '
 import json,re,sys
 try:
@@ -259,6 +289,18 @@ if [ "${C_RUN:-0}" = "1" ] && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUA
   fi
   mkdir -p "$ROOT/artifacts"
   LOG="$ROOT/artifacts/pre-commit-guards.log"
+  # A GUARD RUN THAT OUTLIVES THE HOOK MUST BLOCK, NOT PASS (2026-10-14). The
+  # hook's own timeout is 180 s (settings.json); a hook killed there used to let
+  # the commit through unguarded on a loaded box. The inner runs are capped
+  # below it and rc 124 blocks with a reason; settings.json also sets
+  # onFailure "block". APEX_GUARD_TIMEOUT (seconds) exists for the tests.
+  GUARD_T="${APEX_GUARD_TIMEOUT:-160}"
+  guard_timed_out() {
+    if [ "$1" = 124 ] || [ "$1" = 137 ]; then
+      echo "BLOCKED: $2 did not finish within ${GUARD_T} s (the box is loaded: check /proc/loadavg and any live playwright run), so this commit was NOT guarded. Retry when the box is idle; APEX_SKIP_GUARDS=1 only when the guards themselves are the change." >&2
+      exit 2
+    fi
+  }
   # DOCS-ONLY COMMITS SKIP TO docs-integrity. The deploy branch takes a lot of
   # note-only commits (one 2026-09-16 session made four), and the guards and
   # the ratchets have nothing to say about prose — worse, --auto-raise can stage
@@ -298,7 +340,9 @@ EOF
     echo "bash-guard probe: commit docs-only" >&2; exit 0
   fi
   if [ "$DOCS_ONLY" = 1 ]; then
-    if ! (cd "$ROOT" && node --test tests/unit/docs-integrity.test.mjs >"$LOG" 2>&1); then
+    (cd "$ROOT" && timeout -k 5 "$GUARD_T" node --test tests/unit/docs-integrity.test.mjs >"$LOG" 2>&1); RC=$?
+    guard_timed_out "$RC" "docs-integrity"
+    if [ "$RC" != 0 ]; then
       echo "BLOCKED: tests/unit/docs-integrity.test.mjs is red (links, index rows). Last lines of $LOG:" >&2
       grep -E 'not ok|Error|expected|actual|✖' "$LOG" | tail -20 >&2
       exit 2
@@ -357,7 +401,9 @@ EOF
     grep '^OVER' "$RLOG" >&2
     exit 2
   fi
-  if ! (cd "$ROOT" && npm run --silent test:guards >"$LOG" 2>&1); then
+  (cd "$ROOT" && timeout -k 5 "$GUARD_T" npm run --silent test:guards >"$LOG" 2>&1); RC=$?
+  guard_timed_out "$RC" "npm run test:guards"
+  if [ "$RC" != 0 ]; then
     echo "BLOCKED: npm run test:guards is red — AGENTS.md §Verification 3 forbids committing on a red guard. Last lines of $LOG:" >&2
     grep -E 'not ok|Error|expected|actual|✖' "$LOG" | tail -20 >&2
     echo "Fix the guard (or prefix with APEX_SKIP_GUARDS=1 when the guards themselves are the change under test)." >&2
