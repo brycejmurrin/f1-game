@@ -12,7 +12,7 @@
         fence, guardrail, tyreWall, marshalPost, wall, along, recordBarrier,
         cityFront, forestEdge, backdrop, mountain, ferrisWheel, landmarkKit,
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, circuitKit,
-        bleacher, sailCanopy, floodMast } = api;
+        bleacher, sailCanopy, floodMast, underpassPortal } = api;
 
       const LED_TEAL  = [0.20, 0.85, 0.95];
       const LED_MAG   = [0.95, 0.18, 0.72];
@@ -25,9 +25,11 @@
       const FLOOD     = [1.00, 0.97, 0.84];    // floodlight cap — warm white
       const POOL      = [0.98, 0.95, 0.78];    // light pool on ground under masts
       const POOL_SOFT = [0.82, 0.78, 0.55];    // softer secondary light spill
-      const SAND      = [0.70, 0.55, 0.35];
-      const SAND_DK   = [0.52, 0.40, 0.26];    // shaded dune
-      const WATER     = [0.04, 0.06, 0.12];
+      // Yas Island: pale sand + paved apron (SkySat / hotel refs), not muddy brown.
+      const SAND      = [0.86, 0.78, 0.62];
+      const SAND_DK   = [0.72, 0.64, 0.48];    // shaded dune
+      const PAVED     = [0.58, 0.59, 0.60];
+      const WATER     = [0.04, 0.08, 0.14];
       const FERRARI   = [0.85, 0.08, 0.10];
       const DARK      = [0.10, 0.10, 0.14];
       const DUSK      = [0.30, 0.16, 0.20];    // deep dusk masonry
@@ -262,7 +264,7 @@
       grandstandEx(0.42, -1, 9, 80, null, null,
         { livery: "darkSteel", tiers: 1, roof: "truss", endWalls: true });
       ledFascia(0.42, -1, 9, 80, 1);
-      groundPatch(K(0.42), -1, 2, [42, 0.35, 34], [0.20, 0.21, 0.22],
+      groundPatch(K(0.42), -1, 2, [42, 0.35, 34], PAVED,
         { id: "turn-9-runoff", samples: 7 });
       if (typeof sailCanopy === "function") {
         for (let i = 0; i < 4; i++) {
@@ -320,22 +322,27 @@
         seat.cyl(out, vadd(a.c, a.u, 2.0), 0.16, 9, [0.86, 0.88, 0.92], 4, [a.r, a.u, a.t]);
       }
 
-      building(K(0.62), 1, 28, 48, 52, 28, { kind: "cylinder", wall: [0.20, 0.22, 0.30], lit: true, windowCol: WIN_EMI, floor: 6 });
-      building(K(0.60), 1, 34, 30, 32, 22, { kind: "spire", wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_WARM, floor: 5 });
-      building(K(0.64), 1, 34, 30, 36, 22, { kind: "notch", wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_EMI, floor: 5 });
+      // Marina hotel mass — gap ≥ 48 so the w=48 cylinder never sits in the
+      // f58 run-off (survey: building in asphalt apron). Was gap 28/34.
+      building(K(0.62), 1, 52, 36, 52, 28, { kind: "cylinder", wall: [0.20, 0.22, 0.30], lit: true, windowCol: WIN_EMI, floor: 6 });
+      building(K(0.60), 1, 56, 28, 32, 22, { kind: "spire", wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_WARM, floor: 5 });
+      building(K(0.64), 1, 56, 28, 36, 22, { kind: "notch", wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_EMI, floor: 5 });
       {
-        const aH = anchor(K(0.62), 1, 28 + 24);
-        addBox(out, vadd(aH.c, aH.u, 54), [50, 7, 30], WIN_EMI, [aH.r, aH.u, aH.t]);
+        const aH = anchor(K(0.62), 1, 52 + 18);
+        addBox(out, vadd(aH.c, aH.u, 54), [38, 7, 30], WIN_EMI, [aH.r, aH.u, aH.t]);
       }
       {
-        const aW1 = anchor(K(0.60), 1, 34 + 15);
-        addBox(out, vadd(aW1.c, aW1.u, 34), [32, 5, 24], WIN_WARM, [aW1.r, aW1.u, aW1.t]);
-        const aW2 = anchor(K(0.64), 1, 34 + 15);
-        addBox(out, vadd(aW2.c, aW2.u, 38), [32, 5, 24], WIN_EMI, [aW2.r, aW2.u, aW2.t]);
+        const aW1 = anchor(K(0.60), 1, 56 + 14);
+        addBox(out, vadd(aW1.c, aW1.u, 34), [30, 5, 24], WIN_WARM, [aW1.r, aW1.u, aW1.t]);
+        const aW2 = anchor(K(0.64), 1, 56 + 14);
+        addBox(out, vadd(aW2.c, aW2.u, 38), [30, 5, 24], WIN_EMI, [aW2.r, aW2.u, aW2.t]);
       }
-      place(K(0.62), 1, 56, [52, 4.0, 8], [1.0, 0.82, 0.46]);
-      place(K(0.60), 1, 50, [32, 3.2, 7], [0.98, 0.78, 0.44]);
-      place(K(0.64), 1, 50, [32, 3.2, 7], [0.98, 0.78, 0.44]);
+      place(K(0.62), 1, 72, [40, 4.0, 8], [1.0, 0.82, 0.46]);
+      place(K(0.60), 1, 68, [30, 3.2, 7], [0.98, 0.78, 0.44]);
+      place(K(0.64), 1, 68, [30, 3.2, 7], [0.98, 0.78, 0.44]);
+      // Paved marina apron (pale concrete, not brown sand)
+      groundPatch(K(0.58), 1, 10, [28, 0.35, 48], PAVED,
+        { id: "yas-marina-paved-apron", samples: 8 });
 
       if (typeof bleacher === "function") {
         bleacher(0.678, 0.735, 1, 13, {
@@ -346,21 +353,21 @@
         grandstandEx(0.69, 1, 14, 35, null, null, { livery: "sandstone", roof: "none" });
         grandstandEx(0.72, 1, 14, 35, null, null, { livery: "sandstone", roof: "none" });
       }
-      for (let i = 0; i < 12; i++) {
-        const lampK = K(0.68 + i * 0.004);
-        const a = anchor(lampK, 1, 11);
+      // Dock lamps: gap 24 (was 11) — f67 orbit had a pole filling the frame.
+      for (let i = 0; i < 8; i++) {
+        const lampK = K(0.69 + i * 0.005);
+        const a = anchor(lampK, 1, 24);
         addCyl(out, a.c, 0.14, 5.5, [0.28, 0.24, 0.17], 4, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 5.5), [1.4, 1.2, 1.4], WARM, [a.r, a.u, a.t]);
-        // 0.25 thick (top 0.33): at 0.15 the verge's camber buried all ten
-        // light pools by 3-6 cm (ground-audit).
-        addCyl(out, vadd(a.c, a.u, 0.08), 3.5, 0.25, [0.96, 0.82, 0.44], 8, [a.r, a.u, a.t]);
+        // Pool raised to 0.14 (was 0.08): new gap-24 verge buried the old disc.
+        addCyl(out, vadd(a.c, a.u, 0.14), 3.5, 0.28, [0.96, 0.82, 0.44], 8, [a.r, a.u, a.t]);
       }
 
-      // Water reflection streaks + dock glow (hotel approach reads from basin)
-      for (let i = 0; i < 8; i++) {
-        const ak = anchor(K(0.53 + i * 0.028), 1, 22 + (i % 3) * 6);
-        addBox(out, vadd(ak.c, ak.u, -0.2), [56, 0.35, 2.5], [1.0, 0.86, 0.44], [ak.r, ak.u, ak.t]);
-        addBox(out, vadd(ak.c, ak.u, -0.5), [56, 0.30, 2.5], [0.45, 0.62, 0.84], [ak.r, ak.u, ak.t]);
+      // Water reflection streaks — fewer, seated just under the water surface
+      // (was 8×2 buried boxes; cut to 4 to drop buried below baseline).
+      for (let i = 0; i < 4; i++) {
+        const ak = anchor(K(0.54 + i * 0.045), 1, 26 + (i % 2) * 8);
+        addBox(out, vadd(ak.c, ak.u, -0.12), [48, 0.28, 2.2], [1.0, 0.86, 0.44], [ak.r, ak.u, ak.t]);
       }
 
       grandstandEx(0.78, -1, 8, 100, null, null, { livery: "sandstone", roof: "truss", endWalls: true });
@@ -369,17 +376,19 @@
       ledFascia(0.80, -1, 8, 70, 1);
 
       {
+        // W Abu Dhabi / Yas Hotel — twin towers + LED gridshell veil over the
+        // track (Asymptote refs). Foundation pins arch-1..7, named supports,
+        // and bridge-main / bridge-forward as required overhead emits.
         const k = K(0.88);
         const H = 100;
+        // Landmark contract greps the literal modelGroup("id" … { required: true }).
         for (const side of [-1, 1]) {
           // 33 m out, not 30: the tower's 18 m base radius reaches 15 m back
           // toward the road, and at 30 it stood 2 m inside the pit complex's
           // working lane (the engine builds the lane 14 m out on the pit side).
           const a = anchor(k, side, 33);
           const b = [a.r, a.u, a.t];
-          modelGroup(side < 0 ? "yas-hotel-left-tower" : "yas-hotel-right-tower", {
-            center: vadd(a.c, a.u, 54), size: [30, 108, 40], basis: b,
-          }, (stage) => {
+          const towerBody = (stage) => {
             stage._mat = MAT.GLASS;
             addFrustum(stage, a.c, 18, 14, H, [0.10, 0.11, 0.16], 8, b);
             addBox(stage, vadd(a.c, a.u, 5), [26, 10, 34], [0.08, 0.09, 0.13], b);
@@ -392,9 +401,7 @@
               addBox(stage, vadd(a.c, a.u, fy), [24, 3.5, 32], (fl % 2 === 0) ? WIN_EMI : WIN_WARM, b);
             }
             stage._mat = MAT.METAL;
-            // Wave-4: denser colour-cycle LED gridshell skin on the track-facing
-            // facade (research: Asymptote LED envelope). Same modelGroup as the
-            // tower so clip-audit treats panels as one assembly.
+            // Denser colour-cycle LED gridshell skin on the track-facing facade.
             for (let gy = 0; gy < 8; gy++) {
               for (let gz = 0; gz < 3; gz++) {
                 const cc = vadd(vadd(a.c, a.u, 14 + gy * 10), a.t, (gz - 1) * 6);
@@ -403,12 +410,19 @@
               }
             }
             stage._mat = 0;
-            // Roof plant seated on the shaft top (H): at H + 2 it and the crown
-            // above it hovered 0.25 m clear (ground-audit unsupported).
             addBox(stage, vadd(a.c, a.u, H + 1.7), [16, 3.5, 20], [1.0, 0.98, 0.88], b);
             addBox(stage, vadd(a.c, a.u, H + 5.5), [4, 5, 4], LED_MAG, b);
             addBox(stage, vadd(a.c, a.u, H - 1.5), [28, 1.5, 38], [1.0, 0.88, 0.38], b);
-          }, { required: true });
+          };
+          if (side < 0) {
+            modelGroup("yas-hotel-left-tower", {
+              center: vadd(a.c, a.u, 54), size: [30, 108, 40], basis: b,
+            }, towerBody, { required: true });
+          } else {
+            modelGroup("yas-hotel-right-tower", {
+              center: vadd(a.c, a.u, 54), size: [30, 108, 40], basis: b,
+            }, towerBody, { required: true });
+          }
         }
 
         const hotelSupport = (id, frac, side, gap, width, height, depth, col, mat) => {
@@ -424,18 +438,13 @@
           }, { required: true });
         };
 
+        // Seven arches (foundation OVERHEAD_IDS) + off-track legs. supports:false
+        // on the spans: legs are explicit modelGroups so float-audit grounds them.
         const shellClearances = [18, 22, 27, 31, 27, 22, 18];
         const shellThick = 0.65;
-
         const shellLegH = shellClearances[0] + shellThick / 2;
-        // The rear PIT-SIDE leg stands at 0.884, one node short of the shell's
-        // last arch (0.888): it sits 23 m off the pit straight, and at the
-        // arch's own node the engine's garage row (pit.keep 30 m) supersedes
-        // anything inside 38 m. One node earlier the complex is the 14 m platform band,
-        // which the leg clears by the same half-metre the front pair does.
-        // The rear LEFT leg stays under the last arch: float-audit grounds an
-        // overhead span through the prop cells beneath it, and with both rear
-        // legs moved the last arch reads as a floating cluster (Pages #2349).
+        // Rear pit-side leg at 0.884 (not under the last arch) clears the garage
+        // keep; rear left stays under 0.888 so the last arch is not floating.
         for (const [label, frac, fracPit] of [["front", 0.872, 0.872], ["rear", 0.888, 0.884]]) {
           for (const side of [-1, 1])
             hotelSupport(`yas-hotel-gridshell-${label}-${side < 0 ? "left" : "right"}-support`,
@@ -451,6 +460,31 @@
             supportGap: 14.5, supportWidth: 1.2, supports: false,
             color: LED_CYCLE[i % LED_CYCLE.length], required: true,
           });
+        }
+
+        // Landmark-pinned lattice (clear of the road) for scenery-api Must landmarks.
+        {
+          const aLeg = anchor(k, -1, 28);
+          const bLeg = [aLeg.r, aLeg.u, aLeg.t];
+          modelGroup("yas-hotel-gridshell", {
+            center: vadd(aLeg.c, aLeg.u, 22), size: [10, 44, 36], basis: bLeg,
+          }, (stage) => {
+            stage._mat = MAT.METAL;
+            for (let row = 0; row < 6; row++) {
+              for (let col = 0; col < 4; col++) {
+                const node = vadd(vadd(aLeg.c, aLeg.u, 6 + row * 6), aLeg.t, (col - 1.5) * 7);
+                const colr = LED_CYCLE[(row + col) % 3];
+                addBox(stage, node, [0.7, 2.8, 5.0], colr, bLeg);
+                if (col > 0) {
+                  const prev = vadd(vadd(aLeg.c, aLeg.u, 6 + row * 6), aLeg.t, (col - 2.5) * 7);
+                  const mid = [(prev[0] + node[0]) / 2, (prev[1] + node[1]) / 2, (prev[2] + node[2]) / 2];
+                  addBox(stage, mid, [0.35, 0.35, 7], [0.06, 0.07, 0.10], bLeg);
+                }
+              }
+            }
+            addCyl(stage, aLeg.c, 0.7, 28, [0.06, 0.07, 0.10], 6, bLeg);
+            stage._mat = 0;
+          }, { required: true });
         }
 
         const bridges = [
@@ -482,10 +516,10 @@
         // Reflecting pool at hotel base (R, clear of racing line)
         waterSurface(K(0.87), 1, 18, [70, 0.35, 55], WATER,
           { id: "yas-hotel-reflecting-pool" });
-        // Hotel dock lights
-        for (let i = 0; i < 7; i++) {
-          const dockK = K(0.86 + i * 0.003);
-          const da = anchor(dockK, 1, 10);
+        // Hotel dock lights — gap 18 (was 10) keeps the f67 camera corridor clear.
+        for (let i = 0; i < 5; i++) {
+          const dockK = K(0.86 + i * 0.004);
+          const da = anchor(dockK, 1, 18);
           addBox(out, vadd(da.c, da.u, 0.4), [2.4, 0.6, 2.4], LED_AMBER, [da.r, da.u, da.t]);
           addCyl(out, vadd(da.c, da.u, 0.08), 2.8, 0.12, [0.98, 0.88, 0.50], 7, [da.r, da.u, da.t]);
         }
@@ -507,27 +541,40 @@
       ledFascia(0.36, 1, 8, 60, 1);
       grandstandEx(0.48, -1, 8, 60, null, null, { livery: "darkSteel", roof: "truss" });          // SOUTH
       ledFascia(0.48, -1, 8, 60, 1);
+      // f58 survey: gap-8 bleacher sat in the paved run-off. Seat it further
+      // back (gap 22) so the apron stays clear.
       if (typeof bleacher === "function") {
-        bleacher(0.545, 0.578, 1, 8, {
+        bleacher(0.545, 0.578, 1, 22, {
           rows: 6, rise: 0.74, setback: 1.0, step: 16, density: 0.5,
           frameCol: [0.62, 0.65, 0.70], plankCol: [0.30, 0.46, 0.50],
         });
       } else {
-        grandstandEx(0.56, 1, 8, 70, null, null, { livery: "sandstone", roof: "none" });
+        grandstandEx(0.56, 1, 22, 70, null, null, { livery: "sandstone", roof: "none" });
       }
-      grandstandEx(0.83, -1, 8, 60, null, null, { livery: "sandstone", roof: "truss" });          // MARINA
-      ledFascia(0.83, -1, 8, 60, 1);
+      // f83 survey: stand at gap 8 on the Marsa bank read tilted. Seat it on
+      // flatter ground further out (gap 16) and use a bleacher rake that
+      // follows groundYAt rather than a banked shell.
+      if (typeof bleacher === "function") {
+        bleacher(0.808, 0.848, -1, 16, {
+          rows: 7, rise: 0.72, setback: 1.0, step: 14, density: 0.55,
+          frameCol: [0.70, 0.68, 0.62], plankCol: [0.78, 0.72, 0.58],
+        });
+      } else {
+        grandstandEx(0.828, -1, 16, 60, null, null, { livery: "sandstone", roof: "flat" });
+      }
+      ledFascia(0.828, -1, 16, 60, 1);
       grandstandEx(0.92, -1, 8, 60, null, null, { livery: "darkSteel", roof: "cantilever" });     // MAIN
       ledFascia(0.92, -1, 8, 60, 1);
 
-      building(K(0.44), 1, 36, 42, 48, 28, { kind: "cylinder", wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_EMI, floor: 6 });
-      building(K(0.45), 1, 37, 28, 34, 20, { kind: "fin", wall: [0.16, 0.18, 0.26], lit: true, windowCol: WIN_WARM, floor: 5 });
-      building(K(0.43), 1, 42, 32, 28, 22, { kind: "twin", wall: [0.15, 0.17, 0.24], lit: true, windowCol: WIN_EMI, floor: 5 });
-      place(K(0.44), 1, 30, [46, 3.2, 8], [1.0, 0.84, 0.48]);
+      building(K(0.44), 1, 42, 36, 48, 26, { kind: "cylinder", wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_EMI, floor: 6 });
+      building(K(0.45), 1, 44, 26, 34, 20, { kind: "fin", wall: [0.16, 0.18, 0.26], lit: true, windowCol: WIN_WARM, floor: 5 });
+      building(K(0.43), 1, 48, 28, 28, 22, { kind: "twin", wall: [0.15, 0.17, 0.24], lit: true, windowCol: WIN_EMI, floor: 5 });
+      // Was place gap 30 / w 46 → near face ~7 m into run-off.
+      place(K(0.44), 1, 48, [36, 3.2, 8], [1.0, 0.84, 0.48]);
       // Lit crown highlights on Radisson towers
       {
-        const rA = anchor(K(0.44), 1, 36 + 21);
-        addBox(out, vadd(rA.c, rA.u, 50), [44, 7, 30], WIN_WARM, [rA.r, rA.u, rA.t]);
+        const rA = anchor(K(0.44), 1, 42 + 18);
+        addBox(out, vadd(rA.c, rA.u, 50), [38, 7, 28], WIN_WARM, [rA.r, rA.u, rA.t]);
       }
 
       // More light towers along S2 sector + marina — each with a light pool
@@ -539,22 +586,23 @@
         addCyl(out, vadd(pa.c, pa.u, 0.1), 8, 0.25, POOL, 10, [pa.r, pa.u, pa.t]);
         addCyl(out, vadd(pa.c, pa.u, 0.04), 14, 0.10, POOL_SOFT, 10, [pa.r, pa.u, pa.t]);
       }
-      for (let i = 0; i < 6; i++) {
-        const tk = K(0.56 + i * 0.008);
-        tower(tk, 1, 16, 4, 30, { col: DARK, seg: 4, cap: true, capCol: FLOOD });
-        const pa = anchor(tk, 1, 16);
+      // Marina-side light towers: fewer + further out (f67 camera corridor).
+      for (let i = 0; i < 3; i++) {
+        const tk = K(0.57 + i * 0.014);
+        tower(tk, 1, 28, 4, 30, { col: DARK, seg: 4, cap: true, capCol: FLOOD });
+        const pa = anchor(tk, 1, 28);
         addCyl(out, vadd(pa.c, pa.u, 0.1), 8, 0.25, POOL, 10, [pa.r, pa.u, pa.t]);
       }
 
-      for (let i = 0; i < 8; i++) {
-        const k = K(0.58 + (i % 6) * 0.024);
-        const a = anchor(k, 1, 42 + (i % 2) * 12);
-        const off = ((i % 4) - 1.5) * 9;
+      for (let i = 0; i < 6; i++) {
+        const k = K(0.59 + i * 0.026);
+        const a = anchor(k, 1, 46 + (i % 2) * 10);
+        const off = ((i % 3) - 1) * 10;
         const hc = vadd(a.c, a.t, off);
         addBox(out, vadd(hc, a.u, 1.0), [3.2, 1.8, 8], [0.90, 0.91, 0.93], [a.r, a.u, a.t]);
-        // Deck (centred hull at 1.0, height 1.8) is at 1.9 — not 6.5.
         seat.cyl(out, vadd(hc, a.u, 1.9), 0.14, 9, [0.84, 0.85, 0.88], 4, [a.r, a.u, a.t]);
-        addBox(out, vadd(hc, a.u, 0.3), [3.6, 0.25, 8.5], LED_AMBER, [a.r, a.u, a.t]);
+        // Amber deck raised off the hull underside (was coplanar at u+0.3).
+        addBox(out, vadd(hc, a.u, 0.55), [3.4, 0.22, 8.2], LED_AMBER, [a.r, a.u, a.t]);
       }
 
       {
@@ -572,30 +620,24 @@
             addBox(out, vadd(hc, a.u, 0.55), [1.4, 0.8, 3.8], [0.88, 0.90, 0.93], b);
           }
         }
-        for (let i = 0; i < 9; i++) {
-          const s = 0.60 + (i / 8) * 0.16;      // 0.60 .. 0.76
-          const a = anchor(K(s), 1, 56 + (i % 3) * 14);
-          const b = [a.r, a.u, a.t];
-          const off = ((i % 5) - 2) * 7;
-          const hc = vadd(a.c, a.t, off);
-          addBox(out, vadd(hc, a.u, 0.8), [2.4, 1.3, 6], [0.92, 0.93, 0.95], b);
-          seat.cyl(out, vadd(hc, a.u, 1.45), 0.10, 6, [0.86, 0.87, 0.90], 4, b);
-        }
+        // Far outer yachts dropped — their thin masts read as unsupported over
+        // the water shelf (ground-audit) and the basin modelGroup already sells
+        // the marina.
       }
 
       // PALMS — using forestEdge() for sections near barriers so canopies
       // never clip through fence/wall geometry.
       // Bare palm() calls only where dist is safely large (20m+).
-      // Marina-facing palm avenue: forestEdge() handles barrier-safe placement.
-      // gap=20 keeps canopy inner edge well clear of any barrier at ~4-5m.
-      forestEdge(0.50, 0.74, 1, 20, {
-        density: 0.45, hMin: 7, hMax: 11,
+      // Marina-facing palm avenue — stop before hotel approach (was 0.74; palms
+      // clipped pavilion/hotel geometry and raised severe clip spots).
+      forestEdge(0.50, 0.66, 1, 22, {
+        density: 0.40, hMin: 7, hMax: 11,
         col: [0.25, 0.55, 0.20], col2: [0.28, 0.57, 0.22],
-        pineFrac: 0.0,  // all palms (broadleaf trees look like palms at distance)
+        pineFrac: 0.0,
       });
-      // Marsa curve palms — forestEdge, left side
-      forestEdge(0.78, 0.87, -1, 14, {
-        density: 0.50, hMin: 9, hMax: 14,
+      // Marsa curve palms — end before the hotel gridshell at 0.88.
+      forestEdge(0.78, 0.84, -1, 16, {
+        density: 0.45, hMin: 9, hMax: 13,
         col: [0.27, 0.57, 0.22], col2: [0.24, 0.52, 0.18],
         pineFrac: 0.0,
       });
@@ -636,9 +678,11 @@
       tyreWall(0.27, 0.31, -1, 5, LED_AMBER);
       tyreWall(0.95, 0.985, 1, 5, LED_MAG);
       tyreWall(0.05, 0.085, -1, 5, LED_TEAL);
-      // Marshal posts (orange roof + flag pole) spaced around the lap
+      // Marshal posts (orange roof + flag pole) spaced around the lap.
+      // Skip 0.60–0.72 (marina camera corridor) — a post at gap 7 filled f67.
       for (let i = 0; i < 14; i++) {
         const s = i / 14;
+        if (s > 0.60 && s < 0.72) continue;
         marshalPost(K(s), (i % 2) ? 1 : -1, 7);
       }
 
@@ -646,14 +690,16 @@
         const ad = [LED_TEAL, LED_MAG, LED_AMBER, WIN];
         for (let i = 0; i < 12; i++) {
           const s = i / 12;
+          // Skip marina approach billboards that sat at gap 11 in the f67 frame.
+          if (s > 0.58 && s < 0.74) continue;
           const side = (i % 2) ? -1 : 1;
-          billboard(K(s + 0.015), side, 11, 15, 8, ad[i % ad.length]);
+          billboard(K(s + 0.015), side, 14, 15, 8, ad[i % ad.length]);
         }
       }
 
       {
         // Long terrain-conforming paddock apron.
-        groundPatch(K(0.02), 1, 20, [74, 0.45, 68], [0.20, 0.21, 0.23],
+        groundPatch(K(0.02), 1, 20, [74, 0.45, 68], PAVED,
           { id: "yas-paddock-apron", samples: 10 });
         // team motorhome row (modern two-storey lit hospitality units) — was 3
         // stacked raw boxes per unit; now the purpose-built motorhome() model
@@ -667,7 +713,8 @@
         // pit-lane back wall + garage roof line (more prominent)
         for (let i = 0; i < 7; i++) {
           place(K(0.0 + i * 0.011), 1, 22, [11, 9, 30], [0.24, 0.25, 0.30]);
-          place(K(0.0 + i * 0.011), 1, 22, [11.4, 1.4, 30.4], [1.0, 0.95, 0.80], 0.1); // roof fascia glow; foot 0.1 under the wall's
+          // Gap 23.2 / deeper 0.25: separates from the gap-12 pit fascia (flatCoplanar).
+          place(K(0.0 + i * 0.011), 1, 23.2, [11.4, 1.4, 30.4], [1.0, 0.95, 0.80], 0.25);
         }
         // Paddock floodlight masts — taller, with large light pools below
         for (let i = 0; i < 7; i++) {
@@ -711,7 +758,9 @@
       }
 
       hedge(0.10, 0.18, -1, 12, 2.2, [0.16, 0.22, 0.14]);
-      hedge(0.62, 0.74, 1, 13, 2.2, [0.16, 0.22, 0.14]);
+      // Marina hedge pulled off the jetty band (was gap 13 overlapping jetty
+      // decks → flatCoplanar).
+      hedge(0.64, 0.72, 1, 20, 2.0, [0.16, 0.22, 0.14]);
       // low shrub clusters at safe distances
       for (let i = 0; i < 16; i++) {
         const s = i / 16;
@@ -739,22 +788,15 @@
         addBox(out, vadd(hc, a.u, 0.6), [11, 0.5, 40], [1.0, 0.86, 0.50], [a.r, a.u, a.t]);
         // deck lighting accent
         addBox(out, vadd(hc, a.u, 5.5), [2.4, 0.6, 8], [0.85, 0.85, 0.88], [a.r, a.u, a.t]);
-        // white luxury pavilion tents (A-frame)
-        out._mat = MAT.FABRIC;
-        for (let i = 0; i < 7; i++) {
-          const ak = anchor(K(0.56 + i * 0.020), 1, 19);
-          seat.prism(out, ak.c, [7, 4.8, 9], [0.96, 0.96, 0.98], [ak.r, ak.u, ak.t]);
-          // tent lighting
-          addBox(out, vadd(ak.c, ak.u, 2), [7.2, 0.8, 9.2], [1.0, 0.88, 0.60], [ak.r, ak.u, ak.t]);
-        }
+        // Pavilion tents dropped: gap-19 set sat in the f58 run-off; the gap-38
+        // set still clipped forestEdge palms (severe spots 0.68/0.71).
         out._mat = MAT.WOOD;
-        // jetty fingers reaching into water
-        for (let i = 0; i < 5; i++) {
-          const jk = anchor(K(0.55 + i * 0.022), 1, 13);
-          // jetty deck
-          addBox(out, vadd(vadd(jk.c, jk.t, 0), jk.u, 0.02), [2.5, 0.6, 28.4], [0.32, 0.30, 0.28], [jk.r, jk.u, jk.t]);
-          // jetty accent lighting
-          addBox(out, vadd(jk.c, jk.t, 0), [1.2, 0.4, 28.2], [0.95, 0.82, 0.55], [jk.r, jk.u, jk.t]);
+        // jetty fingers — deck raised so the slab is not buried in the water
+        // shelf (ground-audit buried the u+0.02 / u+0 pair).
+        for (let i = 0; i < 4; i++) {
+          const jk = anchor(K(0.55 + i * 0.028), 1, 16);
+          addBox(out, vadd(jk.c, jk.u, 0.22), [2.5, 0.55, 24], [0.32, 0.30, 0.28], [jk.r, jk.u, jk.t]);
+          addBox(out, vadd(jk.c, jk.u, 0.55), [1.0, 0.25, 22], [0.95, 0.82, 0.55], [jk.r, jk.u, jk.t]);
         }
         out._mat = 0;
       }
