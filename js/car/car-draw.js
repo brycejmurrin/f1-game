@@ -1139,21 +1139,24 @@ const CarDraw = (function () {
         camD2 = dx * dx + dy * dy + dz * dz;
       }
       // FIELD LOD: past FieldLod.T.WHEEL_EXTRAS_M (reference-lens metres: a
-      // long lens keeps them further out) a rival keeps its 4 rotating wheels
-      // only — no fixed layers, compound stripes or spin discs. The cut is the
-      // tier game.js kept on the car (c._lodTier, with FieldLod's hysteresis: the
-      // stateless test flipped these layers every frame at ~50 m); a car with no
-      // tier yet (FieldLod off, tests) takes the plain table.
+      // long lens keeps them further out) a rival drops spin discs but KEEPS
+      // the fixed disc/caliper layer and compound stripe so open rims do not
+      // read hollow (tier 1). Past NO_DECAL_M (tier 2) / bare (mirror) it is
+      // rotating wheels only. The cut is the tier game.js kept on the car
+      // (c._lodTier, with FieldLod's hysteresis); a car with no tier yet
+      // (FieldLod off, tests) takes the plain table.
       const lodT = c._lodTier, haveTier = FieldLod.on && (lodT === 0 || lodT === 1 || lodT === 2);
       const lite = bare || (!c.isPlayer && (haveTier ? lodT >= 1 : FieldLod.wheelsLite(camD2, G.lens && G.lens.fovY)));
-      const tyreCol = !lite && camD2 < 60 * 60 && c.tyre && c.tyre.colour ? c.tyre.colour : null;
+      // Drop fixed + compound only for bare (mirror) or far (tier 2). Lite
+      // (tier 1) keeps them — matches FieldLod.parts().fixedWheels / .compound.
+      const dropFixed = bare || (!c.isPlayer && haveTier && lodT >= 2);
+      const tyreCol = !dropFixed && c.tyre && c.tyre.colour
+        && (c.isPlayer || lite || camD2 < 60 * 60) ? c.tyre.colour : null;
       // SPIN BLUR (CarMesh.getSpinDisc): how far the rim turns THIS frame. Past
       // ~0.6 rad the spokes start to strobe, by 1.8 rad they alias outright, so
       // the disc fades in over that band. Per frame on purpose: a low frame
       // rate aliases sooner, and the blur has to cover what the display shows.
-      // Within 120 m of a rival; the player always. (At the 60-degree reference
-      // lens the 50 m wheel-extras cut already stops a rival's stripes and discs
-      // first; these 60 / 120 m gates only bite through a long lens.)
+      // Within 120 m of a rival; the player always. Lite (tier ≥ 1) drops it.
       const spinRate = (c.speed / PhysicsConsts.WHEEL_R) * dt;
       const blur = !lite && camD2 < 120 * 120 ? Math.min(1, Math.max(0, (Math.abs(spinRate) - 0.6) / 1.2)) : 0;
       // PAST THE RINGS (a rival beyond 40 m): one cheap additive flare per FRONT
@@ -1180,9 +1183,9 @@ const CarDraw = (function () {
         L[12] = wd.x + (wd.x < 0 ? -1 : 1) * ((ws - 1) * 0.16 + off); L[13] = wd.y + (wd.front ? flat : 0) + lift; L[14] = wd.z + (fwdOffset || 0); L[15] = 1;
         M4.mulTo(_wheelWorld, base, L);
         G.gfx.draw(wd.rear ? wm.R : wm.F, _wheelWorld, wo);
-        if (lite) {
-          // Past the LOD distance only the rotating wheel draws, but the far
-          // brake flare (40-240 m, Particles, outside the pool) is exactly this
+        if (dropFixed) {
+          // Bare (mirror) or far (tier 2): rotating wheel only. The far brake
+          // flare (40-240 m, Particles, outside the pool) is exactly this
           // range's cue, so it still fires here.
           if (flareA > 0 && wd.front) {
             const tx = (wd.x < 0 ? -1 : 1) * 0.19, W = _wheelWorld;
