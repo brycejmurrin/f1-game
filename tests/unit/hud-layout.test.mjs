@@ -931,9 +931,10 @@ test("measured clearance protects instruments and controls without changing save
   const ot = make("#hud-ot", 250, 330, 140, 30), aero = make("#hud-aero", 400, 330, 140, 30);
   const stored = { v: 3, standard: { other: { rel: { x: 1, y: 0, s: 100 } } } };
   const before = JSON.stringify(stored);
+  let placedRadio = false;
   const ctx = { console, window: { innerWidth: W, innerHeight: H },
     document: { readyState: "loading", addEventListener() {}, getElementById: () => null,
-      body: { classList: { contains: () => false }, setAttribute() {} },
+      body: { classList: { contains: () => false }, setAttribute() {}, hasAttribute: (k) => k === "data-radio-placed" && placedRadio },
       querySelector: (sel) => elements[sel] || null,
       querySelectorAll: (sel) => {
         if (sel.includes("#pausebtn")) {
@@ -958,6 +959,21 @@ test("measured clearance protects instruments and controls without changing save
   ctx.HudLayout.clearReadouts();
   assert.deepEqual(readouts.map((e) => e.getBoundingClientRect()), first, "repeat fit is stable");
   assert.equal(JSON.stringify(stored), before, "saved user offset remains intact");
+  placedRadio = true;
+  radio.style.setProperty("--hud-clear-x", "-240px");
+  radio.style.setProperty("--hud-clear-y", "80px");
+  limits.style.setProperty("--hl-y", String(-170 / H * 100));
+  ctx.HudLayout.clearReadouts();
+  const pinned = radio.getBoundingClientRect();
+  assert.equal(pinned.left, 585, "manual placement discards previous automatic clearance");
+  assert.equal(pinned.top, 31, "manual placement keeps the requested height");
+  assert.ok(overlap(pinned, cam.getBoundingClientRect()), "the player can deliberately place over a control");
+  assert.ok(!overlap(limits.getBoundingClientRect(), pinned), "earlier readouts also yield to the manual radio");
+  ctx.HudLayout.clearReadouts();
+  assert.deepEqual(radio.getBoundingClientRect(), pinned, "repeated fits preserve manual placement");
+  placedRadio = false;
+  ctx.HudLayout.clearReadouts();
+  assert.ok(!overlap(radio.getBoundingClientRect(), cam.getBoundingClientRect()), "RESET restores automatic clearance");
 });
 
 

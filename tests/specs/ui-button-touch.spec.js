@@ -843,10 +843,11 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
     const card = page.locator("#announce");
     await expect(card).toBeVisible();
-    // Drop it right of the timing tower, in the tower's row (the phone report, 2026-10-14).
+    // Drop in the tower's row (the phone report, 2026-10-14). Leave half the
+    // viewport for the card: this checks manual placement, not edge clamping.
     const tower = await page.locator(".hud-top").boundingBox();
     const a0 = await card.boundingBox();
-    const tx = tower.x + tower.width + 12, ty = tower.y;
+    const tx = Math.min(tower.x + tower.width + 12, LANDSCAPE.width / 2), ty = tower.y;
     const sx = a0.x + 20, sy = a0.y + 10;
     await page.mouse.move(sx, sy);
     await page.mouse.down();

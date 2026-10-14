@@ -834,6 +834,9 @@ const HudLayout = (function () {
     for (const el of doc.querySelectorAll(".touchbtn, #pausebtn, #btn-cam, #hud-gearbox, #hud-tyre, #hud-energy, #hud-ot, #hud-aero, #hud-bb, .hud-top, #minimap, .hud-gaps, #hud-sectors, #hud-flag, #hud-mirror")) {
       const r = box(el); if (r) blocks.push(r);
     }
+    // A player-placed radio is an obstacle, never another automatic candidate.
+    const placedRadio = bodyAttr("data-radio-placed");
+    if (placedRadio) { const r = box(doc.querySelector("#announce")); if (r) blocks.push(r); }
     const hits = (r, b) => r.left < b.right + EDGE && r.right > b.left - EDGE && r.top < b.bottom + EDGE && r.bottom > b.top - EDGE;
     for (const id of CLEAR_READOUTS) {
       const row = rows.find((e) => e[0] === id), el = doc.querySelector(row[2]);
@@ -844,6 +847,7 @@ const HudLayout = (function () {
         el.removeAttribute("data-lane-collapsed");
       }
       let r = box(el); if (!r) continue;
+      if (id === "announce" && placedRadio) { blocks.push(r); continue; }
       // SPEED moves only for the desktop visor, where its shipped vertical
       // offset can meet the enlarged gearbox. Everywhere else it has priority.
       if (id === "speed" && !(has("desktop") && shown() === "helmet")) { blocks.push(r); continue; }
