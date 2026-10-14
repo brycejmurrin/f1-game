@@ -694,68 +694,78 @@ async function enableOptIns(page) {
   }, null, { polling: 100, timeout: 30_000 });
 }
 
-// Broadcast phoneL @150%: announce / flag / LIMITS / TYRES / REL must not
-// overlap each other or the touch controls (HUD Desk queue item 1 — survey
-// before: 22 overlaps on phoneL-bcast-150-all).
-test.describe("broadcast phoneL status stack @150%", () => {
+// Broadcast phoneL: announce / flag / LIMITS / TYRES / REL must not overlap
+// each other or the touch controls (HUD Desk queue item 1 — survey before:
+// 22 overlaps on phoneL-bcast-150-all). 150% is the CI failure (run
+// 38604722503, flag+limits after #1501 dropped the flag under --hud-gaps-b).
+// 100% is the left-column LIMITS path (`data-limits-left`) so a right-column
+// stack must not steal that chip.
+test.describe("broadcast phoneL status stack", () => {
   test.setTimeout(300_000);
   test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
-  test("announce/flag/limits/tyre/rel clear each other and touch controls", async ({ page }) => {
-    const v = { name: "phone-landscape", w: 844, h: 390, sal: 47, sar: 47, sat: 0, sab: 21 };
-    await race(page, "tilt", false, v, { hudScale: 150, btnScale: 100, profile: "broadcast", cam: "chase" });
-    await page.evaluate(() => {
-      if (typeof HudElements !== "undefined") {
-        HudElements.set("rel", true);
-        HudElements.set("strat", false);
-        HudElements.set("inputs", false);
-      }
-      if (window.__apex && window.__apex.tyres) window.__apex.tyres({ level: "real" });
-      const tyre = document.getElementById("hud-tyre");
-      if (tyre) tyre.hidden = false;
-      window.__apex.jump(0.15, 60, 0);
-    });
-    await waitPhoneHudFitClearance(page, { rel: true });
-    const targets = [
-      { key: "announce", sel: "#announce", role: "hud" },
-      { key: "flag", sel: "#hud-flag", role: "hud" },
-      { key: "limits", sel: "#hud-limits", role: "hud" },
-      { key: "tyre", sel: "#hud-tyre", role: "hud" },
-      { key: "rel", sel: "#hud-rel", role: "hud" },
-      { key: "map", sel: "#minimap", role: "hud" },
-      { key: "btn-brake", sel: "btn-brake", role: "ctrl" },
-      { key: "btn-ot", sel: "btn-ot", role: "ctrl" },
-      { key: "btn-steer-left", sel: "btn-steer-left", role: "ctrl" },
-    ];
-    // Force transient status pieces + probe in ONE evaluate (same contract as
-    // the track-limits chip case / hud-survey probeWithTransients).
-    const recs = await page.evaluate(({ src, arg }) => {
-      const probe = (0, eval)("(" + src + ")");
-      const saved = [];
-      const force = (id, fill) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        saved.push([el, el.hidden, el.innerHTML]);
-        el.hidden = false;
-        fill(el);
-      };
-      force("announce", () => {
-        const who = document.getElementById("announce-who"), text = document.getElementById("announce-text");
-        if (who) who.textContent = "VERSTAPPEN · RADIO · 33";
-        if (text) text.textContent = "CAUTION — CHEAPER STOP, ABOUT 23s LOST";
+  for (const hudScale of [100, 150]) {
+    test(`HUD ${hudScale}%: announce/flag/limits/tyre/rel clear each other and touch controls`, async ({ page }) => {
+      const v = { name: "phone-landscape", w: 844, h: 390, sal: 47, sar: 47, sat: 0, sab: 21 };
+      await race(page, "tilt", false, v, { hudScale, btnScale: 100, profile: "broadcast", cam: "chase" });
+      await page.evaluate(() => {
+        if (typeof HudElements !== "undefined") {
+          HudElements.set("rel", true);
+          HudElements.set("strat", false);
+          HudElements.set("inputs", false);
+        }
+        if (window.__apex && window.__apex.tyres) window.__apex.tyres({ level: "real" });
+        const tyre = document.getElementById("hud-tyre");
+        if (tyre) tyre.hidden = false;
+        window.__apex.jump(0.15, 60, 0);
       });
-      force("hud-limits", (el) => { const s = el.querySelector("span"); if (s) s.textContent = "●●●○"; });
-      force("hud-flag", (el) => { if (!el.textContent.trim()) el.textContent = "YELLOW · SECTOR 2"; });
-      try { for (const a of document.getAnimations()) { try { a.finish(); } catch (_) { /* */ } } } catch (_) { /* */ }
-      if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
-      if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
-      try { return probe(arg); }
-      finally { for (const [el, hidden, html] of saved.reverse()) { el.innerHTML = html; el.hidden = hidden; } }
-    }, { src: probeHudElements.toString(), arg: { targets } });
-    const r = analyzeOverlap(recs.filter((x) => x.visible), v.w, v.h, v);
-    const goal = [...r.hudClash, ...r.overlaps].filter((p) =>
-      /announce|flag|limits|tyre|rel/.test(p));
-    expect(goal, JSON.stringify({ goal, hudClash: r.hudClash, overlaps: r.overlaps, boxes: recs })).toEqual([]);
-  });
+      await waitPhoneHudFitClearance(page, { rel: true });
+      const targets = [
+        { key: "announce", sel: "#announce", role: "hud" },
+        { key: "flag", sel: "#hud-flag", role: "hud" },
+        { key: "limits", sel: "#hud-limits", role: "hud" },
+        { key: "tyre", sel: "#hud-tyre", role: "hud" },
+        { key: "rel", sel: "#hud-rel", role: "hud" },
+        { key: "map", sel: "#minimap", role: "hud" },
+        { key: "btn-brake", sel: "btn-brake", role: "ctrl" },
+        { key: "btn-ot", sel: "btn-ot", role: "ctrl" },
+        { key: "btn-steer-left", sel: "btn-steer-left", role: "ctrl" },
+      ];
+      // Force transient status pieces + probe in ONE evaluate (same contract as
+      // the track-limits chip case / hud-survey probeWithTransients). Always
+      // paint the CI flag string so a short live flag cannot hide flag+limits.
+      const recs = await page.evaluate(({ src, arg }) => {
+        const probe = (0, eval)("(" + src + ")");
+        const saved = [];
+        const force = (id, fill) => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          saved.push([el, el.hidden, el.innerHTML]);
+          el.hidden = false;
+          fill(el);
+        };
+        force("announce", () => {
+          const who = document.getElementById("announce-who"), text = document.getElementById("announce-text");
+          if (who) who.textContent = "VERSTAPPEN · RADIO · 33";
+          if (text) text.textContent = "CAUTION — CHEAPER STOP, ABOUT 23s LOST";
+        });
+        force("hud-limits", (el) => { const s = el.querySelector("span"); if (s) s.textContent = "●●●○"; });
+        force("hud-flag", (el) => { el.textContent = "YELLOW · SECTOR 2"; });
+        try { for (const a of document.getAnimations()) { try { a.finish(); } catch (_) { /* */ } } } catch (_) { /* */ }
+        if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
+        if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
+        try { return probe(arg); }
+        finally { for (const [el, hidden, html] of saved.reverse()) { el.innerHTML = html; el.hidden = hidden; } }
+      }, { src: probeHudElements.toString(), arg: { targets } });
+      const r = analyzeOverlap(recs.filter((x) => x.visible), v.w, v.h, v);
+      const goal = [...r.hudClash, ...r.overlaps].filter((p) =>
+        /announce|flag|limits|tyre|rel/.test(p));
+      const flagLimits = goal.filter((p) => p.includes("flag") && p.includes("limits"));
+      expect(flagLimits, "flag must clear LIMITS on broadcast phoneL: " + JSON.stringify({
+        flagLimits, goal, hudClash: r.hudClash, boxes: recs,
+      })).toEqual([]);
+      expect(goal, JSON.stringify({ goal, hudClash: r.hudClash, overlaps: r.overlaps, boxes: recs })).toEqual([]);
+    });
+  }
 });
 
 test.describe("opt-in readouts vs touch controls", () => {
