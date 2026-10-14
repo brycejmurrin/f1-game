@@ -1868,6 +1868,12 @@ const LiveryTex = (function () {
   function buildAtlas(teamId, colors = {}, numberOverride, isPlayer, hiRes) {
     Log.info("car", "livery " + (teamId || "?"));
     const div = atlasDiv(!!isPlayer, IS_MOBILE, !!hiRes);
+    // ALWAYS the element, never an OffscreenCanvas — including the deferred hi-res paint that
+    // car-draw.js hands to createImageBitmap() (C-P3). An ImageBitmap made from an OffscreenCanvas
+    // stalled the WebGL upload on Chromium over Mesa llvmpipe (the car group's DAILY garage-out spec
+    // hung at 180 s on every attempt, PR #1494 runs 38519977495 / 38521713487); the same bitmap path
+    // from this element passes the whole group (run 38524153549), as does the element with the old
+    // synchronous upload. The element's bitmap is the safe source on every adapter.
     const canvas = IS_MOBILE ? scratchAtlas() : document.createElement("canvas");
     canvas.width = SIZE / div;
     canvas.height = SIZE_H / div;

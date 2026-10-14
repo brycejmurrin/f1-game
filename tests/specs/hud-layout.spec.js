@@ -961,3 +961,41 @@ test.describe("fitHud zoom determinism", () => {
       "published zTop must equal #minimap zoom " + JSON.stringify(b)).toBe(true);
   });
 });
+
+// SPEED PARITY (Handling survey: HUD 315 vs wheel 343 "in the same frame").
+// The game's rAF callback runs physics, then render() — which draws the wheel
+// LCD digits (CarMesh.getSpeedDigit meshes) — then updateHud(), which paints
+// #hud-speed-n. A microtask queued at a frame's first LCD digit runs after that
+// whole callback, so it reads exactly the pair the frame put on screen. Natural
+// frames under full throttle: the number moves, and the two must never split.
+test.describe("speed readouts", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false });
+  test("cockpit wheel LCD and HUD speed show one number in the same frame", async ({ page }) => {
+    await race(page, "tilt", false, { sal: 0, sar: 0, sat: 0, sab: 0 }, { cam: "cockpit" });
+    await page.evaluate(() => {
+      const a = window.__apex, gfx = window.GLX, hudN = document.getElementById("hud-speed-n");
+      const digitOf = new Map();
+      for (let d = 0; d <= 9; d++) digitOf.set(CarMesh.getSpeedDigit(d), d);
+      const pairs = window.__spdPairs = [];
+      const orig = gfx.draw;
+      let cur = null;
+      gfx.draw = function (mesh) {
+        if (digitOf.has(mesh) && pairs.length < 12) {
+          if (!cur) {
+            const rec = cur = { wheel: "", kph: a.obs().dashKph };
+            queueMicrotask(() => { rec.hud = hudN.textContent; pairs.push(rec); cur = null; if (pairs.length >= 12) gfx.draw = orig; });
+          }
+          cur.wheel += digitOf.get(mesh);
+        }
+        return orig.apply(this, arguments);
+      };
+      a.act({ throttle: true, steer: 0 }, 1 / 60, 0);
+    });
+    await page.waitForFunction(() => window.__spdPairs.length >= 12, null, { polling: 100, timeout: 120_000 });
+    const pairs = await page.evaluate(() => window.__spdPairs);
+    const why = JSON.stringify(pairs);
+    expect(pairs.every((p) => p.wheel.length > 0 && p.kph > 100), "the wheel LCD drew a speed at race pace: " + why).toBe(true);
+    expect(pairs.filter((p) => p.wheel !== p.hud), "wheel LCD vs #hud-speed-n, same frame: " + why).toEqual([]);
+  });
+});

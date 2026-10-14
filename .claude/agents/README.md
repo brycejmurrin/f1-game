@@ -2,20 +2,19 @@
 
 Markdown agents with YAML frontmatter under `.claude/agents/`. Claude Code and
 Cursor both load this path (Cursor also accepts `.cursor/agents/`; we keep the
-single Claude tree to avoid drift). Seven agents (`ci-watcher` added 2026-10-10; `ci-red-triage` added
-2026-09-22; seven until 2026-09:
-`worktree-regression-check` folded into **verify-agent** `--base`, and
+single Claude tree to avoid drift). Seven agents. Two older ones were folded
+away: `worktree-regression-check` into **verify-agent** `--base`, and
 `doc-drift-auditor` into the `total-audit` workflow's `docs-ref` / `docs-idx`
-lenses — `.claude/workflows/README.md`).
+lenses (`.claude/workflows/README.md`).
 
 | Agent | Use when |
 |---|---|
 | **deploy-research** | Post-deploy liveness, shipped-JS marker checks, public-web / track reference research via the host fetch tool (WebFetch / hosted TinyFish). Read-only; no Chrome, no Playwright, never the in-repo tinyfish wrapper (egress-blocked). |
 | **verify-agent** | Run `tools/ci/verify-change.mjs --fast` against the current tree and report the JSON verdict; `--base <ref>` repeats it on an ephemeral worktree at the session SHA / deploy tip and answers "same-red / new-on-session / already-red-on-ref". WGX edits also get `wgx-validate.mjs --static`. Read-only; never starts Playwright / `--wait` / `test-solo`; names leftover `batches` as notRun. |
-| **track-surveyor** | Survey + improve ONE circuit: writes only that circuit's def + scenery pair, in its own worktree (`isolation: worktree` — parallel surveyors never share a checkout; the parent merges the fork's branch), verifies with `verify-track.cjs`, reports baseline deltas instead of moving them. No browser runs. |
+| **track-surveyor** | Survey + improve ONE circuit: writes only circuit def + scenery files (hook-enforced through `agent_type`), in its own worktree (`isolation: worktree` — parallel surveyors never share a checkout; it commits, never pushes, and the parent merges the fork's branch), verifies with `verify-track.cjs`, reports baseline deltas instead of moving them. No browser runs. |
 | **physics-contract-auditor** | Read-only `vstd-lint` + `Tracks.curvature` column classification (AI-only / assist-gated / broadcast / surface). No Playwright. |
-| **bloat-auditor** | Read-only agent-bloat / simplify pass. `bloat-scan.mjs` + one assigned scope; returns `BLOAT` rows. No edits, no Playwright, no chrome-start. Parent applies one carve via **slim-bloat**. |
-| **ci-red-triage** | A red `ci.yml` / `pages.yml` run: reads the failed jobs' logs and junit, names the exact test title, assertion and lane, says whether the base was already red, and returns the AGENTS.md status line. Read-only; never re-runs anything locally. |
+| **bloat-auditor** | Read-only agent-bloat / simplify pass. `bloat-scan.mjs` + one assigned scope; returns `BLOAT` rows. No edits, no web, no Playwright, no chrome-start. Parent applies one carve via **slim-bloat**. |
+| **ci-red-triage** | A red `ci.yml` / `pages.yml` run: reads the failed jobs' logs and junit (GitHub MCP read tools in `tools:`), names the exact test title, assertion and lane, says whether the base was already red, and returns the AGENTS.md status line. Read-only; never re-runs anything locally. |
 | **ci-watcher** | The PR board for CI Watch: runs `tools/ci/pr-board.mjs --json` + `ready-full-cap.mjs` and returns every open PR's ARM / READY / SYNC / FIX / FOREIGN-ARM / WAIT / NONE with the exact GitHub MCP call per action. Read-only (Bash, Read, Grep, Glob); never mutates or merges. Protocol: skill `ci-watch`. |
 
 **Token routing:** prefer these over attaching fat skills. Deploy/version →
@@ -44,8 +43,8 @@ and `background: true` keeps a Claude Code agent off the foreground;
 `readonly: true` and `is_background: true` are the Cursor equivalents
 (`https://cursor.com/docs/subagents`). `model:` is a TIER, pinned by
 `tests/unit/skill-progressive.test.mjs`: `haiku` for scan-and-report agents
-(verify-agent, deploy-research, bloat-auditor, ci-watcher), `sonnet` for log triage
-(ci-red-triage), `inherit` where the job is judgement (physics-contract-auditor,
+(verify-agent, deploy-research, ci-watcher), `sonnet` for log triage and
+refactor judgement (ci-red-triage, bloat-auditor), `inherit` where the job is judgement (physics-contract-auditor,
 track-surveyor). Every agent carries `maxTurns`; the two that run repeatedly
 carry `memory: project` (`.claude/agent-memory/<name>/MEMORY.md`, tracked, one
 line per remembered fact with a SHA). The test asserts all of it.

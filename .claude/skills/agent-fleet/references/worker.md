@@ -6,7 +6,10 @@ your only escalation path besides the user; ask it instead of guessing.
 ## The loop
 
 1. **Claim and plan.** `node tools/ci/who-is-on-it.mjs`, then
-   `--claim "<task>"`. Branch `cursor/<topic>-<hash>` from the deploy branch.
+   `--claim "<task>" --session <id>` (`--session` is needed when no
+   `APEX_SESSION_ID`/`CODEX_THREAD_ID`/Claude session variable is set; reuse
+   the same id for `--release`). New work: branch `cursor/<topic>-<hash>` from
+   the deploy branch. An existing PR: `references/existing-pr.md` instead.
    `node tools/ci/pick-tests.mjs` for the groups the change needs. At the
    FIRST commit push and open the DRAFT PR (GitHub MCP `create_pull_request`,
    `draft: true`; not `deploy.mjs --pr`, which opens it ready), body from
@@ -35,7 +38,7 @@ your only escalation path besides the user; ask it instead of guessing.
    events (Claude's can drop `check_run` completions; Cursor's delivers only
    while the commit is still the branch head). Grok has neither: run
    `ci-watch.mjs --sha <head> --timeout 30` in the foreground of its job.
-7. **Fix until merged**: a red is work now (`ci-red-triage` → fix at the root
+7. **Fix until merged**: a red is work now (the `ci-red-triage` agent → fix at the root
    with a failing test first → `steward`). On a CI wake, `ci-watch --sha
    <current head> --once` — `= ci running (0 failed)` is **not** stale; only
    `= ci passed` on that head dismisses. Re-read the head SHA before every
@@ -62,7 +65,7 @@ prompt. Escalate when:
 
 Keep working on anything the blocker does not touch while you wait.
 
-## Traps that cost real sessions (2026-10-10)
+## Traps that cost real sessions
 
 - The commit hook judges the index BEFORE a `git add` in the same Bash
   command: run `git add` in its own call, then `git commit`.

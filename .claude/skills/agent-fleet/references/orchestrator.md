@@ -9,17 +9,18 @@ escalations and stop workers that stall. You do not implement, merge or arm.
    branch pushed in the last ~15 min on the same paths means that work is
    owned. Fold it into the plan instead of launching a twin.
 2. Split the work so no two workers share an OWNED glob. Lane mutexes from
-   AGENTS.md §Concurrent PRs still apply (garage CSS → UI Survey, `js/car/*` →
+   SKILL.md §Launch policy still apply (garage CSS → UI Survey, `js/car/*` →
    Cars, `js/circuits/scenery/*` → Tracks, ≤ 1 lighting worker, `js/game.js`
    needs `--claim`).
 3. Keep ≤ 2 browser-heavy workers per batch: each SwiftShader group costs
    10–40 min, and CI capacity is shared (`ready-full-cap.mjs`, cap 3 ready
    full-tier runs).
 
-## Launch template (every vendor; AGENTS.md §Concurrent PRs makes these fields mandatory)
+## Launch template (every vendor; SKILL.md §Launch policy makes these fields mandatory)
 
 ```text
 GOAL: <one sentence, the user's terms>
+      (existing PR: add "CONTINUE PR #<n> on <branch>", references/existing-pr.md)
 OWNED: <globs>          FORBIDDEN: <globs>
 DONE WHEN: <exact verify command or measured check, green on the PR head>
 CAPS: ≤ <n> screenshots/captures (default 25); ≤ 2 nested subagents; abort at
@@ -38,14 +39,15 @@ The last line limits the worker's own actions. It is not a merge veto: the
 worker must not copy it, or any "do not merge" wording, into the PR body or a
 hand-back. To hold a PR, the body carries a line starting `MERGE-HOLD:`.
 
-## Per-vendor adapters (re-verified 2026-10-11; sources in the design note)
+## Per-vendor adapters (sources in the design note)
 
 Pick the column of the host YOU run on for the orchestrator's own tools; the
-worker's column only matters for how you reach it.
+worker's column only matters for how you reach it. A Claude Code orchestrator
+launching Cursor workers uses the Cursor API column (needs a key).
 
 | need | Claude Code cloud | Cursor, from inside a Cursor cloud agent | Cursor Cloud Agents API v1 (any host with a key) | Grok Build |
 |---|---|---|---|---|
-| spawn | `create_session` (claude-code-remote MCP) with `prompt`; or a routine `/fire` | `Task` with `environment: "cloud"`, `run_in_background: true`, `cloud_base_branch` = the deploy branch (own VM + branch) | `POST /v1/agents` (`prompt.text`, `repos[].url`, `startingRef`/`prUrl`, `model.id`) | `grok --no-auto-update -p "<prompt>" -w --ref <deploy branch> --always-approve --output-format streaming-json` in a job or VM you own (no cloud API) |
+| spawn | `create_session` with `prompt`; or a routine `/fire` | `Task`, `environment: "cloud"`, `run_in_background: true`, `cloud_base_branch` = deploy branch | `POST /v1/agents` (`prompt.text`, `repos[].url`, `startingRef`/`prUrl`, `model.id`) | `grok --no-auto-update -p "<prompt>" -w --ref <deploy branch> --always-approve --output-format streaming-json` in a job you own (no cloud API) |
 | message a running worker | `send_message` (wakes an idle session) | `Task` `resume: <id>` once it has finished (fails while it runs); else a PR comment | `POST /v1/agents/{id}/runs` (one active run at a time) | `grok -r <session> -p "<msg>"` in the same job, or a PR comment |
 | worker → orchestrator | `send_message` back | the subagent's final message returns to you; mid-run only the PR | none: PR comment + fleet block | none: PR comment + fleet block |
 | status | `get_session` (`status_bucket`), `list_events` | `cursor-cloud` `list-cloud-agents` / `batch-fetch-details` | `GET /v1/agents/{id}`, `…/runs/{runId}`, `…/stream` | the job's log |
