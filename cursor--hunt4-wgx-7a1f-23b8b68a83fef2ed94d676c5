@@ -1,1 +1,0 @@
-1791953700	Claude	Lane WGX perf hunt 4: C-P2 inset-in-pass, C-P4 async pack decode, C-P6 transient attachments. OWNED js/render/webgpu/** js/render/shared/assets.js (pack decode) tests/unit/webgpu-*/assets-*/renderer-soft-lifecycle/store-registry tests/helpers/**. No merge. [cursor/hunt4-wgx-7a1f]  [cursor/hunt4-wgx-7a1f; session 23b8b68a83fef2ed94d676c5]
