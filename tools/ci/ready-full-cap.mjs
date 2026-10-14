@@ -43,8 +43,11 @@ export function api(pathQs, { run = spawnSync, env = process.env, gh } = {}) {
     "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28",
     "-H", "Cache-Control: no-cache",
     `https://api.github.com/repos/${REPO}/${pathQs}`],
-  { encoding: "utf8", input: `header = "Authorization: Bearer ${token}"\n` });
-  if (r.status !== 0) return { error: (r.stderr || "curl failed").trim() };
+  // maxBuffer: one page of 100 open PRs passed spawnSync's 1 MB default on
+  // 2026-10-14 (ENOBUFS, empty stderr → "curl failed"), so every ready flip
+  // lost its cap check.
+  { encoding: "utf8", maxBuffer: 64 << 20, input: `header = "Authorization: Bearer ${token}"\n` });
+  if (r.status !== 0) return { error: (r.stderr || r.error?.code || "curl failed").trim() };
   const out = (r.stdout || "").split("\n");
   const code = Number(out.pop());
   try { return code === 200 ? { json: JSON.parse(out.join("\n")) } : { error: `HTTP ${code}` }; }

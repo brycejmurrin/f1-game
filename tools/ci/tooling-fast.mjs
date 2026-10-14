@@ -469,6 +469,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // insertAdjacentHTML writes a constant or is in the reasoned allowlist
   // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
   "tests/unit/html-sink-lint.test.mjs",
+  "tests/unit/hud-announce-lane-cache.test.mjs",
   "tests/unit/hud-control-clearance.test.mjs",
   "tests/unit/hud-dock-pack.test.mjs",
   "tests/unit/hud-elements.test.mjs",
@@ -488,6 +489,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-readouts.test.mjs",
   "tests/unit/hud-relative.test.mjs",
   "tests/unit/hud-speed-parity.test.mjs",
+  // phoneL broadcast @150%: announce/flag/LIMITS/TYRES/REL stack (queue item 1).
+  "tests/unit/hud-status-stack.test.mjs",
   "tests/unit/hud-strategy.test.mjs",
   "tests/unit/hud-survey.test.mjs",
   "tests/unit/hud-tyres.test.mjs",
@@ -498,6 +501,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/import-models.test.mjs",
   "tests/unit/incident-gate.test.mjs",
   "tests/unit/incident-rpm.test.mjs",
+  // InputBindings factory alone (conflict claim, reset/isDefault, persistence,
+  // brand labels) — no input.js. Complements key-binds.test.mjs. ~0.1 s.
+  "tests/unit/input-bindings.test.mjs",
   "tests/unit/input-ghost.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
@@ -696,6 +702,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ready-gate.test.mjs",
   "tests/unit/real-race-script.test.mjs",
   "tests/unit/real-race.test.mjs",
+  // Replay caption validity across seeks, reel cuts and session changes; isolated VM.
+  "tests/unit/real-replay-captions.test.mjs",
   // ...and the REAL REPLAY on the real Baku build: OpenF1's x/y fitted onto the
   // centreline, the highlights list, the field as puppets (follow, speed, a car
   // whose data ends, the flag) and the exact JUMP IN. Four game boots, ~12 s.

@@ -21,7 +21,10 @@ https://code.claude.com/docs/en/hooks (PreToolUse output, MCP matchers,
   subagent, so the track-surveyor scope (below) is enforceable.
 
 ## Changes
-1. `settings.json`: `deny` merge_pull_request, delete_file, create_repository,
+1. *(Correction 2026-10-14, later the same day: `.claude/settings.json` does
+   NOT deny `merge_pull_request`; it routes it through `github-mcp-guard.sh`,
+   which asks — see the matcher on `enable_pr_auto_merge|merge_pull_request|update_pull_request`.)*
+   `settings.json`: `deny` merge_pull_request, delete_file, create_repository,
    fork_repository; `ask` push_files, create_or_update_file (an MCP commit skips
    the commit hook). `github-mcp-guard.sh` asks before enable_pr_auto_merge and
    before update_pull_request with `draft: false`, naming ready-gate.mjs and
