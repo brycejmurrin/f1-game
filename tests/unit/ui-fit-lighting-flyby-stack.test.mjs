@@ -17,8 +17,10 @@ const LT_ROWS = BOTH + " #lighting-inner[data-density=\"compact\"] #lt-rows";
 const LT_SPREAD = BOTH + " #lighting-inner[data-density=\"compact\"] #lt-spread";
 const FB_LEFT = BOTH + " #flyby-inner";
 
-test("stacked lighting+flyby shrinks the dock so two sheets can sit side by side", () => {
-  assert.equal(decl(rules, BOTH, "--dock-w"), "min(calc(40 * var(--vwz)), 360px)");
+test("wide stacked lighting+flyby shrinks the dock so two sheets can sit side by side", () => {
+  const rule = rules.find((r) => r.selector === BOTH && r.context.some((c) => c.includes("min-width: 800px")));
+  assert.ok(rule, "--dock-w shrink lives inside min-width: 800px (portrait stays full dock)");
+  assert.equal(rule.decls.get("--dock-w"), "min(calc(40 * var(--vwz)), 360px)");
 });
 
 test("stacked compact #lt-rows floors at three slider rows and hides COPY ALL", () => {

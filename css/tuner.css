@@ -1390,9 +1390,6 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
    lighting / camera / flyby keep their own carves; this block matches only
    when BOTH #lighting and #flyby are open. Flyby tap floors (#1774) stay. */
 @layer components {
-  body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) {
-    --dock-w: min(calc(40 * var(--vwz)), 360px);
-  }
   body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) #lighting-inner {
     z-index: 43;
   }
@@ -1403,6 +1400,9 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
     min-height: max(132px, calc(3 * 44px));
   }
   @media (min-width: 800px) {
+    body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) {
+      --dock-w: min(calc(40 * var(--vwz)), 360px);
+    }
     body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) #flyby-inner {
       left: calc((var(--sal) + 8px) / var(--sheet-eff-scale, var(--ui-scale)));
       right: auto;
