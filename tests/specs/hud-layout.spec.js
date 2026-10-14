@@ -873,12 +873,25 @@ test.describe("portrait radio card (phone-portrait-390)", () => {
         if (typeof HudElements !== "undefined") HudElements.set("rel", true);
         if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
         window.__apex.jump(0.15, 60, 0);
-        document.getElementById("announce").hidden = false;
-      });
-      const got = await page.waitForFunction(async () => {
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        // Fit already ran (announce still hidden). Unhide AFTER so announceLane
+        // does not immediately re-collapse. #1501's data-lane-collapsed + a 0px
+        // --announce-lane-w leave width:0; the async waitForFunction below used
+        // to treat its Promise as success and then m.a.left threw (CI 38602185902
+        // HUD 100%). Sync wait + restore the fallback lane so the fixture card
+        // can paint. Do not invalidateFit again.
         const ann = document.getElementById("announce");
-        if (!ann || ann.hidden) return false;
+        if (ann) {
+          ann.hidden = false;
+          ann.removeAttribute("data-lane-collapsed");
+        }
+        const root = document.documentElement;
+        for (const k of ["--announce-lane-w", "--announce-lane-x", "--announce-lane-shift"]) {
+          root.style.removeProperty(k);
+        }
+      });
+      const got = await page.waitForFunction(() => {
+        const ann = document.getElementById("announce");
+        if (!ann || ann.hidden || ann.hasAttribute("data-lane-collapsed")) return false;
         const box = (el) => {
           if (!el || el.hidden) return null;
           const r = el.getBoundingClientRect();
@@ -893,6 +906,7 @@ test.describe("portrait radio card (phone-portrait-390)", () => {
       }, null, { polling: 100, timeout: 30_000 });
       const m = await got.jsonValue();
       const why = JSON.stringify(m);
+      expect(m && m.a, "announce box missing after wait: " + why).toBeTruthy();
       expect(m.a.left, why).toBeGreaterThanOrEqual(-0.5);
       expect(m.a.top, why).toBeGreaterThanOrEqual(-0.5);
       expect(m.a.right, why).toBeLessThanOrEqual(m.W + 0.5);
