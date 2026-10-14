@@ -705,6 +705,8 @@ const CarDraw = (function () {
       }
       Log.info("gfx", "race car assets ready", { cars: cars.length, casters, lodWarm, cpuMs: Math.round(cpuMs),
         maxStepMs: Math.round(maxStepMs), yields, wallMs: Math.round(performance.now() - at) });
+      // The census reads RaceEntryProfile marks, not Log.info: one mark carries the step stats.
+      if (typeof RaceEntryProfile !== "undefined") RaceEntryProfile.mark("warmCarAssets:steps yields=" + yields + " maxStepMs=" + Math.round(maxStepMs) + " cpuMs=" + Math.round(cpuMs));
       return true;
     }
     // https://developer.chrome.com/blog/use-scheduler-yield — a continuation that keeps
