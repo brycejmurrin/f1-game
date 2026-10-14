@@ -24,9 +24,10 @@
  * `bake-synthetic` has NO dependencies and needs NO network: it generates every
  * material layer from multi-octave noise, encoded to PNG with node's own zlib.
  * That is what makes the whole runtime path testable in CI and in a sandbox
- * with no egress.  The committed pack is a hybrid: the Poly Haven CC0
- * photoscan for ASPHALT (the racing surface), plus generated 4x4 atlas
- * tiles (`bake-atlas --preset generated`) for every other scenery slot.
+ * with no egress.  The committed pack is ALL `bake-synthetic` output: every
+ * material layer in assets/pack/manifest.json, ASPHALT included, reads
+ * `source: "procedural:tools/gen/assets.mjs"`, licence Apex26-Procedural (no
+ * photoscan; `bake-atlas` would stamp `generated:<file>#col,row` instead).
  * `fetch`/`bake-material` are the offline re-bake path (network + sharp)
  * that mirrors webbake's mean-normalised Diffuse/nor_gl/arm packing.
  */
@@ -114,8 +115,8 @@ const ATLAS_PRESETS = {
       "variety-albedo": "atlas-variety-albedo.png",
       "variety-normal": "atlas-variety-normal.png",
     },
-    // ASPHALT stays on the Poly Haven photoscan — do not replace the racing
-    // surface. Every other scenery slot comes from the generated sheets.
+    // ASPHALT is deliberately absent: this preset re-skins the scenery slots
+    // only and leaves whatever racing-surface layer the pack already holds.
     // Coords are 0-based (col, row); row 0 is the PNG top.
     layers: [
       { mat: "CONCRETE", albedo: ["arch-albedo", 2, 0], normal: ["arch-normal", 2, 0] },

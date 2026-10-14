@@ -73,8 +73,8 @@ test("compact-wide live Home grid-places #menu-secondary under the brand", () =>
   );
   assert.match(
     menus,
-    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \{[\s\S]*grid-column:\s*1;[\s\S]*grid-row:\s*2;[\s\S]*height:\s*var\(--tap\)/,
-    "parks #menu-secondary under the brand as a --tap row",
+    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \{[\s\S]*grid-column:\s*1;[\s\S]*grid-row:\s*2;[\s\S]*min-height:\s*var\(--tap\)/,
+    "parks #menu-secondary under the brand with a --tap floor (#1537: height auto for 2-line labels)",
   );
   assert.match(
     menus,
@@ -83,8 +83,8 @@ test("compact-wide live Home grid-places #menu-secondary under the brand", () =>
   );
   assert.match(
     menus,
-    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*white-space:\s*nowrap/,
-    "under-brand room labels stay on one line (no wrap clip)",
+    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*white-space:\s*normal/,
+    "#1537: under-brand rooms wrap (TRACK DESIGNER / HOW TO PLAY) instead of nowrap-clip",
   );
   assert.match(
     menus,
@@ -95,10 +95,6 @@ test("compact-wide live Home grid-places #menu-secondary under the brand", () =>
     menus,
     /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[\s\S]*padding-inline:\s*var\(--gap\)/,
     "CAREER skew tip clears #menu-buttons overflow-x via inline pad",
-  );
-  assert.doesNotMatch(
-    menus,
-    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*white-space:\s*normal/,
   );
   const secondaryBlock = menus.match(
     /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \{[^}]+\}/,

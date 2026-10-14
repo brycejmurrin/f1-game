@@ -219,6 +219,7 @@ const FULL = [
   "js/car/helmets.js",
   "js/car/car-geometry.js",
   "js/car/car-wheels.js",
+  "js/car/car-material-shade.js", // CarMaterialShade: carbon/gloss/matte/metal response contract (finish pass)
   "js/car/car-materials.js", // CarMaterials: SURFACES / FINISH / palette + paint helpers (split from car3d)
   "js/car/car-shade.js",   // CarShade: rounded body sections + smooth shading for Car3D (apex26.carSmooth / ?carsmooth=0 opts out, default ON)
   "js/car/car-body-geom.js", // CarBodyGeom: wings / fins / chassis / pods / cover builders (split from car3d)
@@ -313,6 +314,7 @@ const FULL = [
   "js/fx/car-fx.js",           // CarFx.create(G, { skids }): plank sparks + AI lock-up marks (after skidmarks + particles)
   "js/race/race-control.js",
   "js/race/overtake-mode.js",
+  "js/race/pace-math.js",      // PaceMath.create(deps): vTop/vStd/aStd + X-mode/ERS/gearHi/rpmFor (game.js wires)
   "js/race/sporting-regs.js",  // pure 2026 SR rules (two compounds, SC passes, champ grid); game.js creates its pass watch at eval
   "js/race/broadcast.js",      // Broadcast.create(G, replay): the WATCH timing tower + AUTO director (RealReplay.create makes one)
   "js/camera/director.js",     // Director.create(G): live TV director (CAM_MODES "tv"); reuses Broadcast pure cut policy
@@ -347,6 +349,7 @@ const FULL = [
   "js/camera/feel.js",
   "js/ui/driving-line-opts.js",
   "js/ui/appearance-opts.js",
+  "js/ui/a11y-opts.js",      // SETTINGS › ACCESSIBILITY (reduce motion row + focus + colourblind cues)
   "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])
   "js/ui/hud-tyres.js",      // cold/ok/hot tyre temperature state for GameHud
   "js/ui/hud-damage.js",     // the DAMAGE chip on #hud-damage (paints Damage; display only)
@@ -357,12 +360,14 @@ const FULL = [
   "js/ui/hud-inputs.js",     // opt-in INPUTS trace: throttle/brake/steer ring buffer on a canvas + gear — for GameHud
   "js/camera/cam-groups.js", // CamGroups: ONBOARD / COCKPIT_LAYOUT camera tables (hud-layout + hud.js read at eval)
   "js/ui/hud-layout.js",     // per-element HUD move/size (profile x cockpit/other layouts); builds DISPLAY › HUD › MOVE & SIZE
+  "js/ui/hud-arrange.js",    // ARRANGE HUD: the on-screen drag / pinch editor for the same MOVE & SIZE layout (pause card)
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT
   "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
   "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
   "js/ui/debris-opts.js",
   "js/perf/metrics-overlay.js",
   "js/camera/cam-comfort.js", // touch/XR auto comfort preset (before mode-switch boots it)
+  "js/camera/fov-fit.js",     // CamFovFit.fitFovY: HFOV cap (wide) + floor (portrait); pure
   "js/camera/vantage.js",
   "js/camera/mode-switch.js",
   // WebXR boot half: SETTINGS › VR rows (call-time; hidden unless caps.vr) and
@@ -494,6 +499,7 @@ const CARVIEW = [
   "js/car/helmets.js",
   "js/car/car-geometry.js",
   "js/car/car-wheels.js",
+  "js/car/car-material-shade.js",
   "js/car/car-materials.js",
   "js/car/car-shade.js",
   "js/car/car-body-geom.js",
@@ -562,6 +568,7 @@ const HARD_EDGES = [
   ["js/ui/platform-session.js", "js/game.js"],
   ["js/car/car-geometry.js", "js/car/car3d.js"],
   ["js/car/car-wheels.js", "js/car/car3d.js"],
+  ["js/car/car-material-shade.js", "js/car/car-materials.js"],
   ["js/car/car-materials.js", "js/car/car-body-geom.js"],
   ["js/car/car-materials.js", "js/car/car3d.js"],
   ["js/car/car-geometry.js", "js/car/car-body-geom.js"],
@@ -592,6 +599,9 @@ const HARD_EDGES = [
   ["js/core/store.js", "js/ui/driving-line-opts.js"],
   ["js/core/store.js", "js/ui/appearance-opts.js"],
   ["js/ui/setting-row.js", "js/ui/appearance-opts.js"],
+  ["js/core/store.js", "js/ui/a11y-opts.js"],
+  ["js/ui/setting-row.js", "js/ui/a11y-opts.js"],
+  ["js/ui/title-fx.js", "js/ui/a11y-opts.js"],   // wires REDUCE MOTION through TitleFx.choice/setChoice
   ["js/core/store.js", "js/ui/hud-elements.js"],
   ["js/core/store.js", "js/ui/hud-layout.js"],    // binds GameStore.store and applies the layout at eval
   ["js/camera/cam-groups.js", "js/ui/hud-layout.js"], // camSet reads CamGroups.COCKPIT_LAYOUT at eval
@@ -687,6 +697,9 @@ const HARD_EDGES = [
   ["js/garage/prebuild.js", "js/game.js"],           // game.js calls GaragePrebuild.create(G) at eval time
   ["js/data/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
+  ["js/physics/consts.js", "js/race/pace-math.js"], // PaceMath reads X_*/DRAIN_*/REGEN_*/OT_TIME_*/GEAR_* at create
+  ["js/core/mat4.js", "js/race/pace-math.js"],      // PaceMath aliases M4.clamp / M4.lerp at eval
+  ["js/race/pace-math.js", "js/game.js"],           // game.js calls PaceMath.create(deps) at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
   ["js/data/teams.js", "js/career/save-migrate.js"], // remapPoints reads Teams (call time; keep ordered)
   ["js/car/parts.js", "js/career/regulations.js"],   // bannedIds() derives the ban from Parts.CATALOG (call time; keep ordered)
@@ -762,6 +775,8 @@ const HARD_EDGES = [
   ["js/lighting/profiles.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
   ["js/ui/scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
   ["js/ui/dock-layout.js", "js/game.js"], // game.js calls DockLayout.create(G) at eval time
+  ["js/core/mat4.js", "js/ui/hud-arrange.js"], // const clamp = M4.clamp at eval
+  ["js/ui/hud-arrange.js", "js/game.js"], // game.js calls HudArrange.create(G) at eval time
   ["js/ui/setting-row.js", "js/game.js"],  // game.js wires the Settings rows (SettingRow.wire) at eval time
   ["js/ui/setting-row.js", "js/ui/scale.js"], // UiScale.create wires the RESOLUTION row
   ["js/ui/onboard.js", "js/game.js"],    // game.js calls Onboard.create(G) at eval time

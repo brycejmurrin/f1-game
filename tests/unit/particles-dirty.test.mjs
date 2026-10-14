@@ -78,3 +78,35 @@ test("pool update dirties so moving smoke keeps uploading", () => {
   assert.equal(P.stats().expands, 2, "live pool particles re-expand every update");
   assert.ok(uploads.every((u) => u.dirty === true));
 });
+
+
+test("one-frame flares refresh additive data while clean rain reuses alpha", () => {
+  const uploads = [], P = make(uploads), eye = [100, 5, -30];
+  P.rainSeed(false); P.rainShow(true); P.rainUpdate(0.001, eye, true); P.draw();
+  const floats = uploads[0].floats;
+  P.resetStats(); uploads.length = 0;
+  P.flare(100, 5, -30, 1, 1, 0, 0, 1, true);
+  P.rainUpdate(0.001, eye, true); P.draw();
+  assert.equal(uploads.find((u) => !u.additive).dirty, false);
+  assert.equal(uploads.find((u) => u.additive).dirty, true);
+  assert.equal(P.stats().uploadFloats, 60);
+  assert.equal(P.stats().alphaExpands, 0); assert.equal(P.stats().additiveExpands, 1);
+  uploads.length = 0; P.rainUpdate(0.001, eye, true); P.draw();
+  assert.equal(uploads.length, 1, "removed flare is absent from the next frame");
+  assert.equal(uploads[0].floats, floats); assert.equal(uploads[0].dirty, false);
+});
+
+test("rain offsets wrap across several widths in either camera direction", () => {
+  const uploads = [], P = make(uploads);
+  P.rainSeed(false); P.rainShow(true);
+  let eye = [0, 0, 0]; P.rainUpdate(0.01, eye, true); P.draw();
+  for (const next of [[30, 0, 0], [0, 30, 0], [-30, 0, 0], [-30, -30, 0], [-30, -30, 30]]) {
+    uploads.length = 0; eye = next; P.rainUpdate(0.01, eye, true); P.draw();
+    const u = uploads[0]; assert.ok(u);
+    for (let i = 0; i < u.floats; i += 60) {
+      const center = (k) => (u.data[i + k] + u.data[i + 20 + k]) / 2 - eye[k - 2];
+      assert.ok(Math.abs(center(2)) <= 9.0001); assert.ok(Math.abs(center(4)) <= 9.0001);
+      assert.ok(center(3) >= -3.0001 && center(3) <= 5.0001);
+    }
+  }
+});

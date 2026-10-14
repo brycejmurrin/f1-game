@@ -71,6 +71,8 @@ node -e '
     console.log(`COVERED BY MANUAL OPT-IN (env-gated; not a selected-gate verdict): ${s.file} (${s.tests} tests)`);
   for (const s of (r.unreachable || []))
     console.log(`::warning::UNREACHABLE by this gate (declares ${s.tests} tests, over the whole ${r.secFit} s budget): ${s.file}`);
+  for (const s of (r.unreadable || []))
+    console.log(`::error::DROPPED (unreadable selected spec): ${s.file}`);
   for (const s of (r.overflow || []))
     console.log(`OVERFLOW (routed; packed into the plan past the budget): ${s.file} (${s.tests} tests)`);
   for (const s of (r.spill || []))
@@ -91,7 +93,7 @@ node -e '
   // specs declaring 240-540 s against a 180 s cap, so a js/render diff emptied
   // the plan and poked the train with nothing having booted a backend.
   const dropped = (r.overBudgetSpecs || []).length + (r.unreachable || []).length
-    + (r.skipped || []).length;
+    + (r.skipped || []).length + (r.unreadable || []).length;
   console.log(`dropped ${dropped} routed spec(s) this plan cannot run`);
   require("fs").appendFileSync(process.env.GITHUB_OUTPUT,
     `specs=${specs}\nshards=${JSON.stringify(shards)}\nany=${shards.length ? "true" : "false"}\n`

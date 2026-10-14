@@ -367,7 +367,7 @@ test("CSS: every non-default answer and every range token has a rule; every peek
 });
 
 /* ── the GENERAL fold ─────────────────────────────────────────────────── */
-test("shell: GENERAL wraps the preview, COLOURS, READABILITY and MOTION, before PAUSE MENU", () => {
+test("shell: GENERAL wraps the preview, COLOURS and READABILITY, before PAUSE MENU", () => {
   const a = SHELL.indexOf('<section id="pm-panel-appearance"');
   const look = SHELL.slice(a, SHELL.indexOf("</section>", a));
   const g = look.indexOf('<details id="pm-general"');
@@ -375,8 +375,9 @@ test("shell: GENERAL wraps the preview, COLOURS, READABILITY and MOTION, before 
   assert.match(look, /<summary class="adv-more-btn" id="pm-general-sum">GENERAL · /);
   const end = look.indexOf("</details>", g);
   const fold = look.slice(g, end);
-  for (const id of ["pm-appearance-preview", "pm-uitheme", "pm-menuaccent", "pm-hudaccent", "pm-uiscale", "pm-textsize", "pm-contrast", "pm-units", "pm-helptext", "pm-motion"])
+  for (const id of ["pm-appearance-preview", "pm-uitheme", "pm-menuaccent", "pm-hudaccent", "pm-uiscale", "pm-textsize", "pm-contrast", "pm-units", "pm-helptext"])
     assert.ok(fold.includes(`id="${id}"`), `${id} inside GENERAL`);
+  assert.ok(!fold.includes('id="pm-motion"'), "REDUCE MOTION lives under ACCESSIBILITY");
   assert.ok(end < look.indexOf('<details id="pm-pausemenu"'), "before PAUSE MENU");
 });
 
