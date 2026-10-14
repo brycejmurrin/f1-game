@@ -198,6 +198,10 @@ const HudRelative = (function () {
   // OT / announce (phoneL broadcast survey) while only the pedals were cleared.
   const CLEAR_IDS = Object.freeze(["dock-left", "btn-brake", "btn-throttle", "btn-steer-left", "btn-steer-right",
     "hud-gearbox", "hud-ot", "hud-aero", "hud-speed", "announce"]);
+  // Only these use the TILT/left-column slide heuristic; centre widgets (gear/OT/aero)
+  // sitting just right of a prior slide must not re-trigger it (phoneL 150%: aero
+  // left≈REL left → slide past aero onto THROTTLE).
+  const LEFT_SLIDE_IDS = Object.freeze(["dock-left", "btn-brake", "btn-steer-left", "btn-steer-right"]);
   /** Cap the card above any overlapping left-column control, then hide the
    *  outermost occupied rows until it fits. CSS max-height can miss TILT
    *  (no steer-* class; BRAKE sits in the map column). */
@@ -257,7 +261,8 @@ const HudRelative = (function () {
           // Centre controls (OT/gear) that already contain REL's top: slide only
           // while the card stays on-screen (unbounded slide put REL at x≈793).
           const doCap = rr.top < box.top - 4;
-          const leftish = box.left <= rr.left + 24 || box.right - rr.left < rr.width * 0.7;
+          const leftish = LEFT_SLIDE_IDS.indexOf(CLEAR_IDS[i]) >= 0
+            && (box.left <= rr.left + 24 || box.right - rr.left < rr.width * 0.7);
           if (doCap) cap = Math.min(cap, (box.top - rr.top - 6) / z);
           if (leftish) slide = Math.max(slide, (box.right + 8) / z);
           else if (!doCap) {

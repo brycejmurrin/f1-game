@@ -1240,9 +1240,9 @@ function fitHud() {
     const tHpx = Math.max(tBox.height, 36);
     const dockTopPx = dockL && dockL.height ? dockL.top : vpH();
     const naturalTopPx = dockTopPx - tHpx - 8;
-    const minTopPx = colBot + 4;
-    const roomPx = Math.max(0, dockTopPx - minTopPx - 4);
-    if (naturalTopPx < minTopPx - 0.5 && roomPx >= 14) {
+    const minTopPx = colBot + 2;
+    const roomPx = Math.max(0, dockTopPx - minTopPx - 2);
+    if (naturalTopPx < minTopPx - 0.5 && roomPx >= 12) {
       hStyle(root, "--hud-tyre-top", minTopPx.toFixed(1) + "px");
       if (roomPx < tHpx - 0.5) hStyle(root, "--hud-tyre-max-h", roomPx.toFixed(1) + "px");
       else hUnstyle(root, "--hud-tyre-max-h");
@@ -1289,10 +1289,10 @@ function fitHud() {
       && !(tyreEl.hasAttribute && tyreEl.hasAttribute("data-hl-user")) && !tyreStack) {
     const tBox = tyreEl.getBoundingClientRect();
     const tHpx = Math.max(tBox.height, 36);
-    const minTopPx = colBot + 4;
+    const minTopPx = colBot + 2;
     const dockTopPx = dockL && dockL.height ? dockL.top : vpH();
-    const roomPx = Math.max(0, dockTopPx - minTopPx - 4);
-    if (roomPx >= 14) {
+    const roomPx = Math.max(0, dockTopPx - minTopPx - 2);
+    if (roomPx >= 12) {
       hStyle(root, "--hud-tyre-top", minTopPx.toFixed(1) + "px");
       if (roomPx < tHpx - 0.5) hStyle(root, "--hud-tyre-max-h", roomPx.toFixed(1) + "px");
       else hUnstyle(root, "--hud-tyre-max-h");
