@@ -350,6 +350,35 @@ test("brake planner carries the public corner envelope across consecutive pace s
   }
 });
 
+test("brake budget scales with skill: a top driver stops shorter, a mid driver stays near 0.85", () => {
+  const k = 0.02, brake = 22, approach = 68;
+  const ctx = { latMax: 22, brake, grip: 1, pace: 1, vmax: 72 };
+  // Distance at which the entry limit equals `approach`: the start of the stop.
+  const stopDistance = (traits) => {
+    let lo = 1, hi = 500;
+    for (let i = 0; i < 50; i++) {
+      const d = (lo + hi) / 2;
+      const v = A.brakeTarget({ ...ctx, traits, samples: [{ d, k, bank: 0 }] });
+      if (v < approach) lo = d; else hi = d;
+    }
+    return (lo + hi) / 2;
+  };
+  const dLow = stopDistance({ ...mid, skill: 0.90 });
+  const dTop = stopDistance({ ...mid, skill: 1 });
+  assert.ok(dTop < dLow, `top ${dTop.toFixed(2)} m should stop shorter than low ${dLow.toFixed(2)} m`);
+  // Experience pulls the same direction, skill held at the mid-grid value.
+  const dRaw = stopDistance({ ...mid, experience: 0.12 });
+  const dVet = stopDistance({ ...mid, experience: 1 });
+  assert.ok(dVet < dRaw, `experienced ${dVet.toFixed(2)} m should stop shorter than raw ${dRaw.toFixed(2)} m`);
+  // The mid-grid driver keeps the old 0.85 budget. Late-brake and optimism
+  // are off here (no blocker, optimism 0), so this is the distance term alone.
+  const d = 60;
+  const vLim = A.brakeTarget({ ...ctx, traits: mid, samples: [{ d, k, bank: 0 }] });
+  const vC = A.cornerSpeed(k, 22, 1, 72) * mid.skill;
+  const frac = (vLim * vLim - vC * vC) / (2 * brake * d);
+  assert.ok(Math.abs(frac - 0.85) < 0.005, `mid brake fraction ${frac} should stay about 0.85`);
+});
+
 test("adaptLane nudges toward the freer side under density", () => {
   const a = A.adaptLane(0, {
     traits: mid, nearby: 3, roomL: 0.5, roomR: 3.5, baseLane: 0,

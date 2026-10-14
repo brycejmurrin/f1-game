@@ -432,10 +432,19 @@ const AiDrive = (function () {
     const vs = Math.max(0.05, ctx.pace === undefined ? 1 : ctx.pace);   // vTop()/VMAX
     const V = vs * Math.max(1, ctx.vmax === undefined ? 72 : ctx.vmax), vSq = V * V;
     let vLimSq = Infinity, bVC = 0, bD = 1;
-    const scrub = 2 * brake * 0.85;   // the same ((2·brake)·0.85)·d product as before, so bit-identical
+    // Braking authority, as a fraction of `brake`. Skill (clamped to the
+    // 0.90..1.0 pace band) and experience move the old 0.85 across
+    // lerp(0.80, 0.90): a low driver budgets a long stop, a top driver a
+    // short one. The mid-grid driver (skill 0.97, experience 0.75) stays on
+    // 0.85 — written as an offset from that constant so the product is
+    // bit-identical for them (lerp(0.80, 0.90, 0.5) is one ulp off).
+    const sk = clamp(skill, 0.90, 1);
+    const exp = clamp(t.experience != null ? t.experience : 0.75, 0, 1);
+    const u = clamp(0.5 + (sk - 0.97) / 0.06 + (exp - 0.75) * 0.6, 0, 1);
+    const scrub = 2 * brake * (0.85 + (u - 0.5) * 0.10);
     for (let i = 0; i < samples.length; i++) {
       const s = samples[i];
-      // Distance budget: can scrub ~0.85·BRAKE over d metres (arcade, not perfect).
+      // Distance budget: scrub that fraction of BRAKE over d metres (arcade, not perfect).
       const d = Math.max(s.d || 0, 1);
       const dSq = scrub * d;
       // EXACT SKIP (PERF-HUNT-4 B-F4): entrySq = vC² + dSq >= dSq, so once the distance term alone reaches
@@ -493,11 +502,12 @@ const AiDrive = (function () {
     if (excessStd > soft) {
       braking = true;
       // FEED-FORWARD + P trim (verify-physics #3, 2026-10-04). The planner
-      // budgets 0.85·brake of deceleration, but a pure P band reaches pedal
-      // 0.85 only at ~6 m/s of standing overspeed, so the AI arrived 12-41 %
-      // above its own planned corner speed (VM, monza) and braked into the
-      // apex. aNeed is the deceleration that lands the binding sample's speed
-      // at its distance — on the envelope it IS 0.85·brake — and scale-free
+      // budgets the skill-scaled fraction of brake (0.85 for a mid-grid
+      // driver), but a pure P band reaches pedal 0.85 only at ~6 m/s of
+      // standing overspeed, so the AI arrived 12-41 % above its own planned
+      // corner speed (VM, monza) and braked into the apex. aNeed is the
+      // deceleration that lands the binding sample's speed at its distance —
+      // on the envelope it IS that fraction — and scale-free
       // against the executor (game.js decelerates at brake·brakeLvl).
       const brake = ctx.brake || 22, vC = _bind.vC, d = Math.max(_bind.d, 1);
       ff = Math.max(0, (speed * speed - vC * vC) / (2 * d * brake));
