@@ -1234,6 +1234,7 @@ function fitHud() {
   const tyreEl = els.tyre;
   // colBot: map/gaps edge only (leftBot+tyre latched into the safe area).
   const colBot = leftBot;
+  const tyreZ = zBotPub || scale || 1;
   let tyreStack = false;
   if (phone && tyreEl && !tyreEl.hidden && !(tyreEl.hasAttribute && tyreEl.hasAttribute("data-hl-user"))) {
     const tBox = tyreEl.getBoundingClientRect();
@@ -1243,8 +1244,9 @@ function fitHud() {
     const minTopPx = colBot + 2;
     const roomPx = Math.max(0, dockTopPx - minTopPx - 2);
     if (naturalTopPx < minTopPx - 0.5 && roomPx >= 12) {
-      hStyle(root, "--hud-tyre-top", minTopPx.toFixed(1) + "px");
-      if (roomPx < tHpx - 0.5) hStyle(root, "--hud-tyre-max-h", roomPx.toFixed(1) + "px");
+      // Divide by .hud-bottom zoom so painted screen y == minTopPx.
+      hStyle(root, "--hud-tyre-top", (minTopPx / tyreZ).toFixed(1) + "px");
+      if (roomPx < tHpx - 0.5) hStyle(root, "--hud-tyre-max-h", (roomPx / tyreZ).toFixed(1) + "px");
       else hUnstyle(root, "--hud-tyre-max-h");
       if (tyreEl.dataset) {
         if (roomPx < 48) tyreEl.dataset.tyreCompact = "1";
@@ -1293,8 +1295,8 @@ function fitHud() {
     const dockTopPx = dockL && dockL.height ? dockL.top : vpH();
     const roomPx = Math.max(0, dockTopPx - minTopPx - 2);
     if (roomPx >= 12) {
-      hStyle(root, "--hud-tyre-top", minTopPx.toFixed(1) + "px");
-      if (roomPx < tHpx - 0.5) hStyle(root, "--hud-tyre-max-h", roomPx.toFixed(1) + "px");
+      hStyle(root, "--hud-tyre-top", (minTopPx / tyreZ).toFixed(1) + "px");
+      if (roomPx < tHpx - 0.5) hStyle(root, "--hud-tyre-max-h", (roomPx / tyreZ).toFixed(1) + "px");
       else hUnstyle(root, "--hud-tyre-max-h");
       if (tyreEl.dataset) {
         if (roomPx < 48) tyreEl.dataset.tyreCompact = "1";

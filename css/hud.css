@@ -2212,11 +2212,12 @@ body.desktop #hud-inputs:not([data-hl-user]) {
       bottom: calc(anchor(top) + var(--gap));
       margin: 0;
     }
-    /* hud-tyre-stack: screen-px top, zoom:1 escapes .hud-bottom --hud-z-bot. */
+    /* hud-tyre-stack: top/max-h are .hud-bottom zoom units (fitHud ÷ --hud-z-bot).
+       zoom:1 on the child does NOT escape the parent's zoom. */
     body.hud-tyre-stack:not(.desktop) #hud-tyre:not([data-hl-user]) {
-      position: fixed; position-anchor: none; zoom: 1;
+      position: fixed; position-anchor: none;
       top: var(--hud-tyre-top); bottom: auto;
-      left: calc(10px + var(--sal)); right: auto;
+      left: calc(10px + var(--sal) / var(--hud-z)); right: auto;
       max-height: var(--hud-tyre-max-h, none); overflow: hidden;
     }
     body.hud-tyre-stack #hud-tyre[data-tyre-compact] #hud-plan { display: none; }
