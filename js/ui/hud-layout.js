@@ -329,6 +329,9 @@ const HudLayout = (function () {
     // A move changes what fitHud measured: let it re-lay the bands out now
     // (js/ui/hud.js; optional — absent at eval and in node harnesses).
     if (typeof GameHud !== "undefined" && GameHud && typeof GameHud.invalidateFit === "function") GameHud.invalidateFit();
+    // REL ships ON in BROADCAST only (js/ui/hud-elements.js). Re-apply the hide
+    // list when the painted style changes so data-hud-hide~=rel tracks it.
+    if (typeof HudElements !== "undefined" && HudElements && typeof HudElements.apply === "function") HudElements.apply();
   }
 
   /* KEEP MOVED PIECES ON SCREEN. An offset chosen on one screen (or at one HUD
