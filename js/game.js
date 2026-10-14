@@ -101,7 +101,7 @@ const lazyBundles = LazyBundles.create({
     });
   },
 });
-const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface, awaitPackSettled } = lazyBundles;
+const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -2801,25 +2801,27 @@ async function startRaceBody() {
   if (PerfGov.strikes() > 0 && PerfGov.autoRes() && gfx.setRenderScale && gfx.getRenderScale)
     gfx.setRenderScale(Math.min(gfx.getRenderScale(), PerfGov.strikes() >= 2 ? 0.7 : 0.85));
   // Car meshes + debris BEFORE countdown warm presents (#1477 shape: first present
-  // must not collide with heavy sync work). Cover up first, then warm, settle pack,
-  // THEN arm count — FlyingStart arms on count enter and goRolling() to race; awaiting
-  // pack AFTER setState("count") burned the quali/TT run-up (prog ≈ −24 vs < −100).
+  // must not collide with heavy sync work). Cover → warm → arm count immediately.
+  // Do NOT await pack settle here: a 30 s wait after setState("count") burned the
+  // FlyingStart run-up (#1493 quali), and awaiting BEFORE count inflated every
+  // race entry enough to kill 18 m selected shards (hud-layout / packed-1).
+  // Gate requestWarm synchronously — warm menu already has packSettled; cold
+  // Start Race skips program warm until the pack lands (first draws compile).
   const handoff = (loadingScreen.active() || loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !!player;
   clearMenuScreens(); garagePre.release();
   if (handoff) RaceEntryProfile.raiseHandoff(loadingScreen);
   RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
-  // Gate program warm on pack settle (cold Start Race while createTextureArray runs).
-  // Still under cover / pre-count so the rAF loop cannot drive FlyingStart.
-  if (!vmNoFramePump && awaitPackSettled) {
-    const settled = loadingScreen.packSettled || LoadingScreen.packSettled;
-    await awaitPackSettled({ yieldFn: yieldMain, stale, settled,
-      getState: () => (typeof Assets !== "undefined" && Assets.state ? Assets.state() : null) });
-    if (stale()) return false;
-  }
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
-  // TLX links programs on first draw — warm during LIGHTS unless the menu already did.
-  try { RaceEntryProfile.requestWarm(gfx, _warmKey === menuKey(trackIdx)); } catch (_) { /* as above */ }
+  // TLX links programs on first draw — warm during LIGHTS only when the pack is
+  // already settled (or unsupported/off), else createTextureArray owns the thread.
+  {
+    const settled = loadingScreen.packSettled || LoadingScreen.packSettled;
+    const packState = (typeof Assets !== "undefined" && Assets.state) ? Assets.state() : null;
+    if (!settled || settled(packState)) {
+      try { RaceEntryProfile.requestWarm(gfx, _warmKey === menuKey(trackIdx)); } catch (_) { /* as above */ }
+    }
+  }
   skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;

@@ -51,14 +51,16 @@ test("instance exposes the same packSettled gate", () => {
   assert.equal(screen.warmPresentReady({ supported: true, uploaded: true }), true);
 });
 
-test("startRaceBody settles the pack before setState(count) — FlyingStart must not burn the run-up", () => {
-  // Quali FLYING lap (CI #1493 tip-red): awaitPackSettled after count let
-  // FlyingStart.arm → goRolling drive ~300 m of run-up while createTextureArray
-  // ran; prog landed ≈ −24 instead of < −100.
+test("startRaceBody arms count without awaiting pack; requestWarm is packSettled-gated", () => {
+  // #1493: await after count burned FlyingStart; await before count inflated
+  // selected shards past the 18 m job cap (hud-layout / packed-1). Gate is sync.
   const body = symbolSource("async function startRaceBody()");
-  const settle = body.indexOf("await awaitPackSettled");
+  assert.equal(body.includes("await awaitPackSettled"), false,
+    "startRaceBody must not await pack settle (FlyingStart + CI wall)");
   const count = body.indexOf('setState("count", "race-start")');
-  assert.ok(settle > 0, "startRaceBody awaits pack settle");
+  const warm = body.indexOf("RaceEntryProfile.requestWarm");
   assert.ok(count > 0, "startRaceBody arms countdown");
-  assert.ok(settle < count, "pack settle must finish before count (FlyingStart arms on enter)");
+  assert.ok(warm > count, "requestWarm follows count");
+  const gate = body.indexOf("settled(packState)", count);
+  assert.ok(gate > 0 && gate < warm, "requestWarm is gated on packSettled(packState)");
 });
