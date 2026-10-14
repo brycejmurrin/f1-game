@@ -52,7 +52,9 @@ var GameAudioToneModel = (function () {
   // the rpm dropping under a dead ignition. BOOST is two: `boost` the level of
   // the ERS whine and the deploy whoosh, `boostPitch` the rev lift under
   // deploy (4% stock). `harvest`, `wind`, `screech` and `rivals` are levels
-  // for layers that only had a switch.
+  // for layers that only had a switch. `overrun` scales BOTH the lift crackles
+  // and the continuous closed-throttle colour in setEngine (filter close +
+  // level softens) — still a fixed multiplier, never a function of rev.
   // The SHIPPED voice, no longer a pure identity trim over the sample core:
   // pitch down and the rev range widened so the climb to the limiter is
   // longer, detune off (the chorus that blurred the top end; on the sample
