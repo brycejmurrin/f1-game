@@ -401,6 +401,13 @@ const Particles = (function () {
     if (!on) _rainEyeOk = false;
   }
   function rainActive() { return _rainN > 0; }
+  // The storm scale the NEXT rainSeed uses ({count, speed, len, alpha}; null or
+  // all-1 = RAIN). Set by the weather path before it reseeds.
+  let _rainK = null;
+  function rainIntensity(k) {
+    _rainK = k && k.count > 0 && !(k.count === 1 && k.speed === 1 && k.len === 1 && k.alpha === 1) ? k : null;
+    return _rainK ? _rainK.count : 1;
+  }
 
   function _rainDirtyFromEye(eye) {
     const cx = Math.floor(eye[0] / RAIN_CELL_M);
@@ -438,7 +445,10 @@ const Particles = (function () {
     // after a shower is seeded.
     const wetCap = (_gfx && _gfx.mobileTier) ? 140 : 1000;
     const base = LT.rainCount != null ? LT.rainCount : 360;
-    const count = Math.max(0, Math.min(wetCap, Math.round(base * (drizzle ? dzCount : 1))));
+    // STORM (js/race/storm.js RAIN_K, set through rainIntensity): more, faster,
+    // longer, denser streaks than RAIN. Never the drizzle tier.
+    const hk = drizzle ? null : _rainK;
+    const count = Math.max(0, Math.min(wetCap, Math.round(base * (drizzle ? dzCount : 1) * (hk ? hk.count : 1))));
     if (!_rox || _rox.length < count) {
       _rox = new Float32Array(count); _roy = new Float32Array(count); _roz = new Float32Array(count);
       _rspd = new Float32Array(count); _rlen = new Float32Array(count); _ralpha = new Float32Array(count);
@@ -447,9 +457,9 @@ const Particles = (function () {
     for (let i = 0; i < count; i++) {
       _rainScatter(i);
       // 6.5-9.5 m/s is terminal velocity for 1.5-4 mm drops; the knobs scale it.
-      _rspd[i] = (6.5 + Math.random() * 3.0) * (drizzle ? dzSpeed : 1) * (LT.rainSpeed != null ? LT.rainSpeed : 1);
-      _rlen[i] = (0.75 + Math.random() * 0.5) * (LT.rainStreak != null ? LT.rainStreak : 1) * (drizzle ? dzLen : 1);
-      _ralpha[i] = 0.16 + Math.random() * 0.34;
+      _rspd[i] = (6.5 + Math.random() * 3.0) * (drizzle ? dzSpeed : 1) * (LT.rainSpeed != null ? LT.rainSpeed : 1) * (hk ? hk.speed : 1);
+      _rlen[i] = (0.75 + Math.random() * 0.5) * (LT.rainStreak != null ? LT.rainStreak : 1) * (drizzle ? dzLen : 1) * (hk ? hk.len : 1);
+      _ralpha[i] = (0.16 + Math.random() * 0.34) * (hk ? hk.alpha : 1);
     }
     _rainLastShown = count;
     _rainEyeOk = false;
@@ -571,6 +581,6 @@ const Particles = (function () {
   }
 
   return { init, clear, count, capacity, update, draw, tyreSmoke, sparks, scrape, kickup, spray,
-           flare, flareCount, rainShow, rainSeed, rainUpdate, rainActive, stats, resetStats, markDirty };
+           flare, flareCount, rainShow, rainSeed, rainUpdate, rainActive, rainIntensity, stats, resetStats, markDirty };
 })();
 Object.freeze(Particles);

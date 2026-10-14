@@ -1,8 +1,9 @@
 name: Deploy to GitHub Pages
 
 on:
-  # THE RELEASE TRAIN (2026-09-10). Not on push. This branch takes 140-300
-  # commits a day from several agents; a deploy per push meant a 14-job gate
+  # THE RELEASE TRAIN (2026-09-10). Not on push. This branch takes 3-131
+  # commits a day (measured 2026-10-14; 140-300 when the train was designed)
+  # from several agents; a deploy per push meant a 14-job gate
   # and a Pages deployment per commit, gates cancelling each other in bursts,
   # and the account's 20 job slots spent on re-testing trees that were one
   # commit apart. The train takes the tip, gates it once, and publishes
@@ -16,10 +17,14 @@ on:
   # cancels. The cron below is the BACKSTOP.
   # The cron is not a clock here:
   # GitHub's scheduler runs this repository's schedules hours late (ci.yml's
-  # 03:17 nightly is created around 08:00 every day), so three ticks an hour
-  # is what we ask for, not what we get. A manual dispatch is "deploy now".
+  # 03:17 nightly is created around 08:00 every day), and the old three ticks
+  # an hour arrived ~4.5 times a day (2026-10-14 audit), so one tick an hour
+  # asks for no less than we got. The train RE-ARMS itself instead (the
+  # `rearm` job below): a commit whose fast tier went green while a train ran
+  # was told "NOT POKING" by poke-train and then waited for that cron —
+  # 20 % of commits shipped 18-239 min late. A manual dispatch is "deploy now".
   schedule:
-    - cron: "7,27,47 * * * *"
+    - cron: "41 * * * *"
   workflow_dispatch:
 
 env:
@@ -28,10 +33,13 @@ env:
   # dispatch from another branch cannot publish it.
   DEPLOY_BRANCH: claude/f1-game-project-26h3ng
 
+# Least privilege (2026-10-14): pages: write + id-token: write live on the
+# `deploy` job only, the one job deploy-pages runs in
+# (https://github.com/actions/deploy-pages#security-considerations); every
+# other job names its own, and a job that names any permission gets only those
+# (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions).
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # SINGLE-FLIGHT TRAIN (2026-10-06). Workflow-level group so only one Pages
 # run occupies runners at a time on this branch (plus at most one pending
@@ -46,7 +54,8 @@ concurrency:
 # THE CONTRACT (2026-09-10): a run tests ONE commit, stages THAT commit, and
 # publishes THAT artifact — never the branch tip, never anything its own gate
 # did not see. Three rules make that livable under this branch's push rate
-# (ci is ~13 minutes; pushes have landed every ~6):
+# (the gate's median is 20.5 minutes, gated publish 23 min median / 73 p90,
+# measured 2026-10-14; pushes land in bursts minutes apart):
 #
 #   1. ONE TRAIN AT A TIME. The `ci` job carries a per-branch concurrency
 #      group WITHOUT cancel-in-progress: a running gate finishes, the next
@@ -254,6 +263,12 @@ jobs:
     # the job is a full-history checkout, staging and deploy-pages, whose own
     # deployment `timeout` input defaults to 10 minutes — this sits above it.
     timeout-minutes: 25
+    # The only job that needs a Pages token: deploy-pages requests the
+    # deployment with pages: write and authenticates with an OIDC token.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -287,8 +302,9 @@ jobs:
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       # Stage ONLY the runtime files. Uploading the repo root shipped a ~174 MB
       # artifact (142 MB of tests/ visual-regression snapshots + node_modules)
-      # for a ~14 MB site — slow enough to hit the 10-minute Pages deployment
-      # timeout.
+      # for what was then a ~14 MB site — slow enough to hit the 10-minute
+      # Pages deployment timeout. The staged artifact is ~140 MB today
+      # (run 38574398206, 2026-10-14), 97 MB of it assets/voice.
       #
       # vendor/ IS a runtime directory and was missing here until build 893.
       # Everything reached by dynamic import lives in it — trystero (room
@@ -403,3 +419,43 @@ jobs:
               "" \
               "Opened automatically by pages.yml verify-live.")" \
             --label ci || echo "::warning::could not open the issue (label missing or token scope); the failure above still stands"
+
+  # RE-ARM THE TRAIN (2026-10-14, Actions audit T3). poke-train is
+  # single-flight: a fast tier that goes green while a train runs is told
+  # "NOT POKING", and before this job nothing poked again until the cron. Last
+  # job of every run, whatever happened above: when the branch tip moved past
+  # the commit THIS run took, the tip's fast tier concluded success, and no
+  # OTHER pages.yml run is queued or running (the same listing poke-train
+  # reads), dispatch one train for the tip. Never on this run's own sha, so a
+  # red gate does not loop; any API doubt is "no" — a second dispatch would
+  # replace a pending train (one pending run per concurrency group,
+  # https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
+  # A GITHUB_TOKEN dispatch does start a run
+  # (https://docs.github.com/en/actions/concepts/security/github_token); it
+  # queues behind this run in `pages-train-*`. tools/ci/pages-train.mjs.
+  rearm:
+    name: Re-arm the train for a newer green tip
+    needs: [verdict, ci, publishable, deploy, verify-live]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/ci
+      - name: Did the tip move on, green, with no train waiting?
+        id: r
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/ci/pages-train.mjs rearm "$GITHUB_SHA" | tee -a "$GITHUB_STEP_SUMMARY" >> "$GITHUB_OUTPUT"
+      - name: Dispatch pages.yml on the deploy branch
+        if: steps.r.outputs.rearm == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref "$DEPLOY_BRANCH"
+          echo "Re-armed pages.yml on \`$DEPLOY_BRANCH\` after \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
