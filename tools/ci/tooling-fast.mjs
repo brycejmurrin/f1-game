@@ -742,6 +742,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/report-server.test.mjs",
   // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
   "tests/unit/results-cam.test.mjs",
+  "tests/unit/rival-attach-init.test.mjs",
   "tests/unit/rival-audio.test.mjs",
   "tests/unit/rival-passby-pool.test.mjs",
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
@@ -986,6 +987,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
+  // ui-fit round 6: Track Designer tool-strip labels wrap+balance and
+  // floor taps at --tap (survey r5 rank 4; 36–57px clip on 390×844 / 844×390).
+  "tests/unit/ui-fit-trackdesigner-toolbar-r6.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/ui-journey-career.test.mjs",
   "tests/unit/ui-journey-race.test.mjs",
