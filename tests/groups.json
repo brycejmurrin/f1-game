@@ -926,6 +926,9 @@
     "tests/unit/tyre-peak-slip.test.mjs",
     "// Factory/sig tyre recipes after #1190 open rims: distinct geom + cover copy needs cover:1.",
     "tests/unit/tyre-recipes-open-rim.test.mjs",
+    "// Job 4: slip-driven tyre squeal — threshold, lat/long monotonic gain+pitch,",
+    "// setTargetAtTime ramps, zero per-frame nodes. Fake-audio VM, < 1 s.",
+    "tests/unit/tyre-squeal-slip.test.mjs",
     "tests/unit/ui-experience.test.mjs",
     "// ui-fit r7: camera tuner rail-off portrait — #ct-previews placed in grid",
     "// row 3, one minmax column, #ct-close / #ct-prev-* --tap-paint floors",
@@ -978,6 +981,9 @@
     "// Round-2 WGX: buffers freed while an encoder (or the pending shadow encoder) is live retire through _retiredBufs; the swapchain self-test pops its validation scope before its first await.",
     "tests/unit/wgx-free-retire.test.mjs",
     "tests/unit/who-is-on-it.test.mjs",
+    "// Job 4: speed-scaled wind — crawl gate, monotonic gain+cutoff, pit-lane",
+    "// quiet vs top-speed rush, setTargetAtTime ramps, zero per-frame nodes.",
+    "tests/unit/wind-speed.test.mjs",
     "tests/unit/xr-backend-pin.test.mjs",
     "tests/unit/xr-cull-union.test.mjs",
     "tests/unit/xr-opts.test.mjs",
@@ -1040,7 +1046,9 @@
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-passby-pool.test.mjs",
         "tests/unit/spotify-refresh.test.mjs",
-        "tests/unit/voice-pack.test.mjs"
+        "tests/unit/tyre-squeal-slip.test.mjs",
+        "tests/unit/voice-pack.test.mjs",
+        "tests/unit/wind-speed.test.mjs"
       ],
       "kind": "node"
     },
