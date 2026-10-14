@@ -1,5 +1,13 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-10-14 — title retention icons (cursor/title-tile-icons-a2a1)
+
+`shellNodes` 2173 → **2181** (+8). CONTINUE and DAILY TIME TRIAL were the last
+title tiles without Lucide `.btn-ico` strokes; the two inline SVGs add eight
+tags (`circle-play` = svg+circle+polygon, `calendar` = svg+3×path+rect). No
+markup elsewhere grew. Deliberate raise so every title door matches the
+play-now / explore / rooms icon pattern.
+
 ## 2026-10-14 — PR #1460 (cursor/hud-adapt-3f9a): the phone HUD sizing pass, two rounds
 
 `js/ui/hud.js` codeLines 1424 → **1445** (+21), lines 2426 → **2489** (+63); `css/hud.css` codeLines

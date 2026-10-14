@@ -1615,6 +1615,7 @@ body:has(.dock .touchbtn:not([hidden])) :is(#hud-ot, #hud-aero)[data-hl] {
 body[data-hud-arrange] [data-hl-arr] { pointer-events: auto; cursor: move; touch-action: none; outline: 2px dashed var(--dim); outline-offset: 3px; }
 body[data-hud-arrange] [data-hl-arr][data-hl-clash] { outline: 2px solid var(--slower); }
 body[data-hud-arrange] #hud-dock .touchbtn { opacity: 0.35; }
+body[data-hud-arrange] [data-hl-arr][data-hl-off] { opacity: 0.35; outline-style: dotted; }   /* hidden in the race: a ghost while arranging */
 #photo-controls > * { pointer-events: auto; }
 /* UI SIZE APPLIES TO THE FLY-CAM CONTROLS TOO. They sit beside the LIGHTING
    TUNER, which is a `.sheet` and therefore carries `zoom: var(--ui-scale)`
