@@ -308,6 +308,38 @@ test("offline-precache-check --help prints usage and does not launch Chromium", 
   assert.doesNotMatch(r.stdout, /\(raced online\)/, "must exit before the server/Chromium path");
 });
 
+test("garage-angles / render-car reject an unknown flag (exit 2 + usage) before Chromium; hud-mock -h is help", () => {
+  // A bare `--dry-run` used to be ignored and both tools went on to boot a
+  // browser for a multi-minute shoot. The 10 s timeout is the "no browser"
+  // assertion: a launch would not answer with exit 2 that fast.
+  const run = (file, ...args) => spawnSync(process.execPath, [tool(file), ...args],
+    { encoding: "utf8", cwd: ROOT, timeout: 10000 });
+  for (const [file, args] of [
+    ["garage-angles.mjs", ["--bogus"]],
+    ["garage-angles.mjs", ["--dry-run", "--team=redbull"]],
+    ["render-car.mjs", ["--bogus"]],
+    ["render-car.mjs", ["--tema=redbull"]],
+  ]) {
+    const r = run(file, ...args);
+    assert.equal(r.status, 2, `${file} ${args.join(" ")}: exit ${r.status} ${r.stderr}`);
+    assert.match(r.stderr, /unknown flag/, file);
+    assert.match(r.stderr, new RegExp(file.replace(".", "\\.")), `${file}: usage on stderr`);
+  }
+  // A livery field (--k=v) stays an open axis on garage-angles: --plan still plans.
+  assert.equal(run("garage-angles.mjs", "--plan", "--team=redbull", "--spineLogo=wrap").status, 0);
+  const h = run("hud-mock.mjs", "-h");
+  assert.equal(h.status, 0, h.stderr);
+  assert.match(h.stdout, /--devices/);
+  assert.equal(run("hud-mock.mjs", "--bogus").status, 1, "hud-mock: makeFlags rejects an unknown flag");
+  // render-car's allow-list must cover every flag the file reads.
+  const src = fs.readFileSync(tool("render-car.mjs"), "utf8");
+  const set = src.match(/const RC_FLAGS = new Set\(\[([\s\S]*?)\]\)/);
+  assert.ok(set, "render-car RC_FLAGS");
+  const listed = new Set([...set[1].matchAll(/'([A-Za-z0-9]+)'/g)].map((m) => m[1]));
+  const read = [...new Set([...src.matchAll(/\barg\('([A-Za-z0-9]+)'/g)].map((m) => m[1]))];
+  assert.deepEqual(read.filter((k) => !listed.has(k)), [], "an arg('…') name missing from RC_FLAGS");
+});
+
 test("chrome-devtools-mcp.sh reports its state without launching Chrome", () => {
   // `status` is the one command that must work on a box where the local clone
   // was never built — it is how you find out that is the case.

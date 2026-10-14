@@ -40,3 +40,13 @@ test("gitignore ignores generated THIRD-PARTY-NOTICES.txt not the entitlements",
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+
+test("consolidated notices include each bundled font's actual OFL text", () => {
+  const text = buildNoticesText(ROOT);
+  for (const font of ["titillium-web", "barlow-condensed", "saira"]) {
+    const rel = `assets/fonts/${font}-OFL.txt`;
+    assert.ok(NOTICE_SOURCES.includes(rel));
+    assert.ok(text.includes(fs.readFileSync(path.join(ROOT, rel), "utf8").trimEnd()));
+  }
+});

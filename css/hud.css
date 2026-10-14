@@ -1585,6 +1585,14 @@ body:has(.dock .touchbtn:not([hidden])) :is(#hud-ot, #hud-aero)[data-hl] {
   visibility: visible;
 }
 :root[data-appearance-peek="hud"] [data-hl-sel] { outline: 2px dashed var(--you); outline-offset: 3px; }
+/* ARRANGE HUD (js/ui/hud-arrange.js): while the editor is on, every MOVE & SIZE
+   piece takes the pointer (#hud is pointer-events: none) and shows its handle;
+   a pair the editor measured as overlapping (each other, or a touch control)
+   turns red. touch-action: none keeps a drag from scrolling or zooming the
+   page on a phone. */
+body[data-hud-arrange] [data-hl-arr] { pointer-events: auto; cursor: move; touch-action: none; outline: 2px dashed var(--dim); outline-offset: 3px; }
+body[data-hud-arrange] [data-hl-arr][data-hl-clash] { outline: 2px solid var(--slower); }
+body[data-hud-arrange] #hud-dock .touchbtn { opacity: 0.35; }
 #photo-controls > * { pointer-events: auto; }
 /* UI SIZE APPLIES TO THE FLY-CAM CONTROLS TOO. They sit beside the LIGHTING
    TUNER, which is a `.sheet` and therefore carries `zoom: var(--ui-scale)`

@@ -45,11 +45,12 @@ const TYRES = Parts.CATALOG.find((c) => c.id === "tyres").options;
 test("fitting a set owns explicit tread and rebuilds modifiers without accumulation", () => {
   const s = ctxFor();
   const base = { speed: 1.1, accel: 0.9, cornering: 1.05, braking: 1.02 };
-  const car = { lap: 3, tread: 0, tyreBaseMods: base, mods: {} };
+  const car = { lap: 3, flatSpot: 0.8, tread: 0, tyreBaseMods: base, mods: {} };
   const wet = T.optionRecord(TYRES.find((o) => o.id === "wet_full"));
   const soft = T.optionRecord(TYRES.find((o) => o.id === "soft"));
 
   s.fit(car, wet);
+  assert.equal(car.flatSpot, 0, "fresh tyres clear flat-spot damage");
   assert.equal(car.tread, 2, "the fitted set, not the garage choice, owns weather grip");
   assert.equal(car.mods.speed, base.speed * 0.88);
   assert.equal(car.mods.cornering, base.cornering * 0.90);

@@ -132,3 +132,15 @@ test("desktop never enters safe mode at all", () => {
   assert.equal(PerfGov.strikes(), 0);
   assert.equal(PerfGov.tierFloor(), 0);
 });
+
+test("lifetime evidence counts ticked crashes once across same/new builds, excluding menus", () => {
+  for (const next of [900, 901]) for (const ticked of [false, true]) {
+    const store = { "apex26.crashStrikesBuild": "900", "apex26.raceActive": "1", "apex26.crashSeen": "2" };
+    if (ticked) store["apex26.raceTicked"] = "1";
+    const g = boot(store, next);
+    assert.equal(g.crashSeen().seen, ticked ? 3 : 2);
+    assert.equal(g.strikes(), ticked && next === 900 ? 1 : 0);
+    if (ticked) assert.equal(g.crashSeen().lastBuild, "900");
+    assert.equal(boot(store, next).crashSeen().seen, ticked ? 3 : 2);
+  }
+});
