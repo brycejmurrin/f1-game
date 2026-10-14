@@ -57,3 +57,26 @@ test(".dh-content cancels sf-thumb width (no dead horizontal scroll)", () => {
     /translateX\(calc\(var\(--gap\) \/ 6 - var\(--sf-pr/,
   );
 });
+
+test("narrow standings names wrap with a floor (no 0px constructor collapse)", () => {
+  assert.match(
+    DATA_CSS,
+    /body\[data-width="narrow"\]\s+\.dh-row\s+\.dh-name[\s\S]*?min-width:\s*6\.5em/,
+  );
+  assert.match(
+    DATA_CSS,
+    /body\[data-width="narrow"\]\s+\.dh-row\s+\.dh-name[\s\S]*?white-space:\s*normal/,
+  );
+  assert.match(
+    DATA_CSS,
+    /body\[data-width="narrow"\]\s+\.dh-h2h-wrap\s*\{[^}]*flex:\s*1\s+1\s+100%/,
+  );
+});
+
+test(".dh-content.sf-b paints a bottom more-below cue (CSS only)", () => {
+  assert.match(DATA_CSS, /\.dh-content\.sf-b\s*\{[^}]*box-shadow:\s*inset/);
+  assert.match(
+    DATA_CSS,
+    /prefers-reduced-motion:\s*reduce\)[\s\S]*?\.dh-content\.sf-b\s*\{[^}]*box-shadow:\s*inset/,
+  );
+});

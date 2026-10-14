@@ -265,6 +265,19 @@ body[data-shape="tall"][data-width="narrow"] .dh-tab {
   margin-right: -6px;
   transform: translateX(calc(var(--gap) / 6 - var(--sf-pr, 0px)));
 }
+/* MORE-BELOW CUE. ScrollFade already toggles .sf-b when content continues, but
+   the shared mask fade is near the noise floor on the translucent hub panel
+   (390×844 standings, 2026-10-14). An inset shadow stays pinned to the
+   scrollport edge — CSS only, no new JS. Reduced-motion keeps a static edge
+   mark (no animated shimmer either way). */
+.dh-content.sf-b {
+  box-shadow: inset 0 -36px 28px -20px color-mix(in oklab, var(--carbon) 72%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dh-content.sf-b {
+    box-shadow: inset 0 -3px 0 0 color-mix(in oklab, var(--text) 22%, transparent);
+  }
+}
 .dh-content::-webkit-scrollbar { display: none; }
 body[data-width="narrow"] .dh-content { padding: var(--gap) calc(var(--gap) * 7 / 6); }
 body[data-width="wide"][data-density="normal"] .dh-content {
@@ -906,9 +919,36 @@ body[data-density="compact"] .dh-gap { min-width: 30px; }
    negotiate: min-width: 0 defers to the ellipsis the names already carry. */
 body[data-width="narrow"] .dh-row { flex-wrap: wrap; }
 body[data-width="narrow"] .dh-live-gapwrap { min-width: 60px; }
-body[data-width="narrow"] .dh-cons-main { min-width: 0; }
+body[data-width="narrow"] .dh-cons-main { min-width: 0; flex-wrap: wrap; }
 
-/* NARROW/COMPACT STANDINGS: allow driver names to wrap instead of ellipsizing.
+/* NARROW STANDINGS NAMES. Constructor .dh-name was flex:0 1 auto and shrank to
+   0px on phones (Mercedes/RB → "M." / "R…" via the chip alone — 390×844 probe
+   2026-10-14). Give the name a real floor, wrap on spaces, park the H2H bar on
+   its own row, and slim pts/gap so "Alpine F1 Team" fits before any ellipsis. */
+body[data-width="narrow"] .dh-row .dh-name,
+body[data-width="narrow"] .dh-cons-main .dh-name {
+  flex: 1 1 7em;
+  min-width: 6.5em;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: normal;
+  word-break: normal;
+  line-height: 1.25;
+}
+body[data-width="narrow"] .dh-pts { min-width: 2.75ch; padding-inline: 0; }
+body[data-width="narrow"] .dh-gap { min-width: 2.5ch; }
+body[data-width="narrow"] .dh-h2h-wrap {
+  flex: 1 1 100%;
+  min-width: 0;
+  max-width: none;
+  align-items: stretch;
+  order: 2;
+}
+body[data-width="narrow"] .dh-cons-main { order: 1; }
+body[data-width="narrow"] .dh-codechip { min-width: 0; padding-inline: calc(var(--gap) / 3); }
+
+/* NARROW/COMPACT RESULTS TABLE: allow driver names to wrap instead of ellipsizing.
    Long names like "Andrea Kimi Antonelli" truncate in the narrow column. With
    white-space:normal the name wraps to 2 lines; the table-layout:fixed column
    grows to content and the codechip stays on the first baseline. */
