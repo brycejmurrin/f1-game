@@ -55,6 +55,10 @@
       // new-hooks Madrid foundation spec pins these two zones).
       { kinds: ["city", "foliage"], s0: 0.95, s1: 0.06 },
       { kinds: ["city", "foliage", "lighting"], s0: 0.68, s1: 0.83 },
+      // Generic plane trees through bespoke urbanBlock mid-rises (clip-audit
+      // 2 m @ s≈0.47, 2026-10-14 survey). Olive furniture stays on the plains.
+      { kinds: ["foliage"], s0: 0.26, s1: 0.58 },
+      { kinds: ["foliage"], s0: 0.87, s1: 0.93 },
     ],
     pal: {
       zenith: [0.30, 0.58, 0.90],

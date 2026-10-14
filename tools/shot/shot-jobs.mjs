@@ -6,6 +6,7 @@ import { assertSafePathToken, resolveRepoDefault } from "../lib/output-paths.mjs
 import { parseCaptureOptions, captureViewport, captureScreenshotOptions } from "./capture-options.mjs";
 
 const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
+const WX = new Set(["dry", "wet", "rain", "overcast", "fog"]);
 
 export function flag(argv, name, fallback) {
   const i = argv.indexOf(name);
@@ -53,6 +54,7 @@ export function normalizeJob(raw, defaults = {}) {
   const dist = parseFloat(raw.dist ?? defaults.dist ?? 45);
   const side = parseInt(raw.side ?? defaults.side ?? 1, 10) || 1;
   const tod = String(raw.tod ?? defaults.tod ?? "day");
+  const wx = String(raw.wx ?? raw.weather ?? defaults.wx ?? "dry");
   const showHud = !!(raw.hud ?? raw.showHud ?? defaults.showHud);
   const team = raw.team ?? defaults.team ?? null;
   const baseCapture = defaults.capture || parseCaptureOptions([]);
@@ -68,6 +70,7 @@ export function normalizeJob(raw, defaults = {}) {
   const backend = String(raw.backend ?? defaults.backend ?? "three");
   if (!["three", "webgl2", "webgpu"].includes(backend)) throw new Error(`unknown backend "${backend}"`);
   if (!["day", "dusk", "dawn", "night"].includes(tod)) throw new Error(`unknown time of day "${tod}"`);
+  if (!WX.has(wx)) throw new Error(`unknown weather "${wx}" — dry|wet|rain|overcast|fog`);
   const jpegFlag = !!(raw.jpeg ?? defaults.jpeg);
   let out = raw.out ? resolve(String(raw.out)) : null;
   const fmtHint = capture.type ? captureScreenshotOptions(capture) : out ? imageFormatFor(out, { jpegFlag }) : imageFormatFor("", { jpegFlag: jpegFlag || !!defaults.jpeg });
@@ -76,7 +79,7 @@ export function normalizeJob(raw, defaults = {}) {
   }
   const format = capture.type ? captureScreenshotOptions(capture) : imageFormatFor(out, { jpegFlag: jpegFlag || fmtHint.type === "jpeg" });
   return {
-    trackId, frac, cam, az, el, dist, side, tod, showHud, team, out, backend, capture, viewport,
+    trackId, frac, cam, az, el, dist, side, tod, wx, showHud, team, out, backend, capture, viewport,
     type: format.type,
     quality: format.type === "jpeg" ? capture.quality ?? format.quality ?? 85 : undefined,
     raster: !!(raw.raster ?? defaults.raster),
@@ -158,7 +161,7 @@ export function groupJobsByTrack(jobs) {
   const order = [];
   const map = new Map();
   for (const [index, j] of jobs.entries()) {
-    const key = JSON.stringify([shotSessionKey(j), j.trackId, j.tod, j.capture?.isolated ? index : null]);
+    const key = JSON.stringify([shotSessionKey(j), j.trackId, j.tod, j.wx, j.capture?.isolated ? index : null]);
     if (!map.has(key)) {
       map.set(key, []);
       order.push(key);
@@ -175,5 +178,6 @@ export const SHOT_USAGE = `usage: node tools/shot/shot.mjs <trackId> <frac> [cam
   --gpu swiftshader|llvmpipe|hardware|lavapipe --browser auto|chromium|shell
   --backend three|webgl2|webgpu --trace[=path] --cache-assets --isolated --seed N
   cam: park | eye | orbit | cinematic | trackside.
+  Batch job fields: wx or weather = dry|wet|rain|overcast|fog (default dry).
   --jpeg / .jpg → JPEG q85 (human review). --raster → __apex.render view only (no PNG).
   Default out: scratch/captures/playwright-probe/<track>-<frac%>-<cam>.png`;

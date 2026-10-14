@@ -80,8 +80,11 @@ async function pinTeam(page, team) {
   }, idx);
 }
 
-async function raceTrack(page, trackId, waitMs) {
-  await page.evaluate((id) => { window.__apex.headless(false); return window.__apex.race(id); }, trackId);
+async function raceTrack(page, trackId, waitMs, tod = "day", wx = "dry") {
+  await page.evaluate(({ id, tod, wx }) => {
+    window.__apex.headless(false);
+    return window.__apex.race(id, tod, wx);
+  }, { id: trackId, tod, wx });
   await page.waitForFunction(
     (id) => window.__apex.info().track === id,
     trackId, { timeout: waitMs, polling: 100 },
@@ -90,13 +93,14 @@ async function raceTrack(page, trackId, waitMs) {
 
 async function frameCamera(page, job) {
   return mutateCaptureScene(page,
-    ({ frac, cam, az, el, dist, side, tod, showHud }) => {
+    ({ frac, cam, az, el, dist, side, tod, wx, showHud }) => {
       const a = window.__apex;
       a.headless(false);
       a.go();
       a.park(frac);
       a.freeze(true);
       if (a.setTimeOfDay && a.setTimeOfDay() !== tod) a.setTimeOfDay(tod);
+      if (wx && a.weather && a.weather() !== wx) a.weather(wx);
       if (a.hud) a.hud(!!showHud);
 
       if (cam === "eye") a.eyeAt(frac, 0, 2.5);
@@ -207,14 +211,14 @@ try {
   if (plan.mode === "batch") {
     console.error(`[shot] batch: ${plan.jobs.length} job(s), ${groups.length} compatible scene group(s), one Chromium`);
   }
-  let context, page, sessionKey, modelInfo, currentTrack;
+  let context, page, sessionKey, modelInfo, currentTrack, currentSession;
   for (const group of groups) {
     const first = group.jobs[0];
     if (!context || group.sessionKey !== sessionKey || first.capture.isolated) {
       if (context) await context.close();
       context = await browser.newContext(captureContextOptions(first.capture, { width: 1280, height: 720 }));
       page = await context.newPage();
-      sessionKey = group.sessionKey; currentTrack = null;
+      sessionKey = group.sessionKey; currentTrack = null; currentSession = null;
       await installProbeInit(page, { backend: first.backend, tlxForceGL: plan.capture.gpu === "llvmpipe" });
       await pinTeam(page, first.team);
       const url = new URL(srv.snapshotUrl || srv.url);
@@ -228,9 +232,11 @@ try {
         catch (e) { return { n: 0, err: String(e) }; }
       });
     }
-    if (currentTrack !== group.trackId) {
-      await raceTrack(page, group.trackId, plan.waitMs);
+    const sessionId = `${group.trackId}|${first.tod}|${first.wx}`;
+    if (currentSession !== sessionId) {
+      await raceTrack(page, group.trackId, plan.waitMs, first.tod, first.wx);
       currentTrack = group.trackId;
+      currentSession = sessionId;
     }
     for (const job of group.jobs) {
       try { await captureJob(page, job, plan.waitMs, modelInfo, diagnostics); }
