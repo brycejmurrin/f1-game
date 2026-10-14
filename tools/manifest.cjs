@@ -179,24 +179,14 @@ const FULL = [
   "js/track/scenery/data.js",
   "js/track/core/space.js",
   "js/track/core/surface.js",
-  "js/track/scenery/models.js",
+  // models / themes / kits / nature / structures / city / identity / pits /
+  // venue / hidden-faces / build-props → LAZY_TRACK_BUILD (ensureScenery before
+  // the first Tracks.build). TRACK_VM still loads them for verify-track.
   "js/track/scenery/graph.js",
-  "js/track/scenery/themes.js",
-  "js/track/scenery/landmark-kit.js",
-  "js/track/scenery/circuit-kit.js",
   "js/track/core/spline.js",
   "js/track/core/line.js",
   "js/track/core/mesh.js",
-  "js/track/core/hidden-faces.js",
   "js/track/core/def.js",   // TrackDef: raw def → LIST entry (palettes, realPoints, fromRaw); tracks.js destructures it at eval
-  "js/track/scenery/nature.js",
-  "js/track/scenery/structures.js",
-  "js/track/scenery/city.js",
-  "js/track/scenery/identity.js",
-  "js/track/scenery/pits.js",
-  "js/track/scenery/venue.js",
-  // buildProps orchestration (guards nested for a later peel). Tracks.build calls it.
-  "js/track/scenery/build-props.js",
   CIRCUIT_META, // GENERATED meta — full defs are LAZY_CIRCUIT
   // RACE SESSION STUB — pit / radio / coach / reliability (~320 KB) is
   // LAZY_RACE_SESSION (loaded before startRace / idle prefetch). The stub keeps
@@ -219,6 +209,7 @@ const FULL = [
   "js/car/helmets.js",
   "js/car/car-geometry.js",
   "js/car/car-wheels.js",
+  "js/car/car-material-shade.js", // CarMaterialShade: carbon/gloss/matte/metal response contract (finish pass)
   "js/car/car-materials.js", // CarMaterials: SURFACES / FINISH / palette + paint helpers (split from car3d)
   "js/car/car-shade.js",   // CarShade: rounded body sections + smooth shading for Car3D (apex26.carSmooth / ?carsmooth=0 opts out, default ON)
   "js/car/car-body-geom.js", // CarBodyGeom: wings / fins / chassis / pods / cover builders (split from car3d)
@@ -313,6 +304,7 @@ const FULL = [
   "js/fx/car-fx.js",           // CarFx.create(G, { skids }): plank sparks + AI lock-up marks (after skidmarks + particles)
   "js/race/race-control.js",
   "js/race/overtake-mode.js",
+  "js/race/pace-math.js",      // PaceMath.create(deps): vTop/vStd/aStd + X-mode/ERS/gearHi/rpmFor (game.js wires)
   "js/race/sporting-regs.js",  // pure 2026 SR rules (two compounds, SC passes, champ grid); game.js creates its pass watch at eval
   "js/race/broadcast.js",      // Broadcast.create(G, replay): the WATCH timing tower + AUTO director (RealReplay.create makes one)
   "js/camera/director.js",     // Director.create(G): live TV director (CAM_MODES "tv"); reuses Broadcast pure cut policy
@@ -347,6 +339,7 @@ const FULL = [
   "js/camera/feel.js",
   "js/ui/driving-line-opts.js",
   "js/ui/appearance-opts.js",
+  "js/ui/a11y-opts.js",      // SETTINGS › ACCESSIBILITY (reduce motion row + focus + colourblind cues)
   "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])
   "js/ui/hud-tyres.js",      // cold/ok/hot tyre temperature state for GameHud
   "js/ui/hud-damage.js",     // the DAMAGE chip on #hud-damage (paints Damage; display only)
@@ -357,12 +350,14 @@ const FULL = [
   "js/ui/hud-inputs.js",     // opt-in INPUTS trace: throttle/brake/steer ring buffer on a canvas + gear — for GameHud
   "js/camera/cam-groups.js", // CamGroups: ONBOARD / COCKPIT_LAYOUT camera tables (hud-layout + hud.js read at eval)
   "js/ui/hud-layout.js",     // per-element HUD move/size (profile x cockpit/other layouts); builds DISPLAY › HUD › MOVE & SIZE
+  "js/ui/hud-arrange.js",    // ARRANGE HUD: the on-screen drag / pinch editor for the same MOVE & SIZE layout (pause card)
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT
   "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
   "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
   "js/ui/debris-opts.js",
   "js/perf/metrics-overlay.js",
   "js/camera/cam-comfort.js", // touch/XR auto comfort preset (before mode-switch boots it)
+  "js/camera/fov-fit.js",     // CamFovFit.fitFovY: HFOV cap (wide) + floor (portrait); pure
   "js/camera/vantage.js",
   "js/camera/mode-switch.js",
   // WebXR boot half: SETTINGS › VR rows (call-time; hidden unless caps.vr) and
@@ -494,6 +489,7 @@ const CARVIEW = [
   "js/car/helmets.js",
   "js/car/car-geometry.js",
   "js/car/car-wheels.js",
+  "js/car/car-material-shade.js",
   "js/car/car-materials.js",
   "js/car/car-shade.js",
   "js/car/car-body-geom.js",
@@ -562,6 +558,7 @@ const HARD_EDGES = [
   ["js/ui/platform-session.js", "js/game.js"],
   ["js/car/car-geometry.js", "js/car/car3d.js"],
   ["js/car/car-wheels.js", "js/car/car3d.js"],
+  ["js/car/car-material-shade.js", "js/car/car-materials.js"],
   ["js/car/car-materials.js", "js/car/car-body-geom.js"],
   ["js/car/car-materials.js", "js/car/car3d.js"],
   ["js/car/car-geometry.js", "js/car/car-body-geom.js"],
@@ -592,6 +589,9 @@ const HARD_EDGES = [
   ["js/core/store.js", "js/ui/driving-line-opts.js"],
   ["js/core/store.js", "js/ui/appearance-opts.js"],
   ["js/ui/setting-row.js", "js/ui/appearance-opts.js"],
+  ["js/core/store.js", "js/ui/a11y-opts.js"],
+  ["js/ui/setting-row.js", "js/ui/a11y-opts.js"],
+  ["js/ui/title-fx.js", "js/ui/a11y-opts.js"],   // wires REDUCE MOTION through TitleFx.choice/setChoice
   ["js/core/store.js", "js/ui/hud-elements.js"],
   ["js/core/store.js", "js/ui/hud-layout.js"],    // binds GameStore.store and applies the layout at eval
   ["js/camera/cam-groups.js", "js/ui/hud-layout.js"], // camSet reads CamGroups.COCKPIT_LAYOUT at eval
@@ -617,7 +617,9 @@ const HARD_EDGES = [
   ["js/roster.js", "js/game.js"],                          // game.js reads ApexRoster's rosters at eval
   ["js/core/mat4.js", "js/track/core/spline.js"],
   ["js/core/mat4.js", "js/track/core/line.js"],                    // TrackLine aliases M4.clamp/lerp at eval
-  ["js/core/mat4.js", "js/track/scenery/structures.js"],
+  // ["js/core/mat4.js", "js/track/scenery/structures.js"] was here. structures.js
+  // is LAZY_TRACK_BUILD now (ensureScenery); mat4.js is already FULL before any
+  // inject, same construction-time guarantee as the LAZY_DATA telemetry note.
   // ["js/core/mat4.js", "js/data/telemetry.js"] was here. telemetry.js is LAZY_DATA
   // now, so the pair crosses rosters and HARD_EDGES cannot order it. The
   // dependency is real and satisfied by CONSTRUCTION rather than by position:
@@ -661,21 +663,10 @@ const HARD_EDGES = [
   ["js/track/core/mesh.js", "js/track/tracks.js"],               // tracks destructures TrackMesh at eval
   ["js/track/core/geom.js", "js/track/core/def.js"],             // def destructures TrackGeom.norm at eval (palettes)
   ["js/track/core/def.js", "js/track/tracks.js"],                // tracks destructures TrackDef at eval (LIST = DEFS.map(fromRaw))
-  // build-props.js owns Tracks.buildProps orchestration (Phase 1 peel).
-  ["js/core/mat4.js", "js/track/scenery/build-props.js"],        // destructures M4.lerp at eval
-  ["js/track/core/geom.js", "js/track/scenery/build-props.js"],  // destructures TrackGeom at eval
-  ["js/track/core/spline.js", "js/track/scenery/build-props.js"],
-  ["js/track/core/mesh.js", "js/track/scenery/build-props.js"],
-  ["js/track/scenery/graph.js", "js/track/scenery/build-props.js"],   // TrackGraph.create at build
-  ["js/track/scenery/nature.js", "js/track/scenery/build-props.js"],  // Scenery*.create at build
-  ["js/track/scenery/structures.js", "js/track/scenery/build-props.js"],
-  ["js/track/scenery/city.js", "js/track/scenery/build-props.js"],
-  ["js/track/scenery/identity.js", "js/track/scenery/build-props.js"],
-  ["js/track/scenery/pits.js", "js/track/scenery/build-props.js"],    // SceneryPits.build last
-  ["js/track/scenery/venue.js", "js/track/scenery/build-props.js"],
-  ["js/track/scenery/build-props.js", "js/track/tracks.js"],          // Tracks.build → TrackBuildProps.build
+  // build-props / kits / nature band → LAZY_TRACK_BUILD_EDGES (left FULL).
+  // Tracks.build reads TrackBuildProps / TrackHiddenFaces / TrackModels at
+  // CALL time after ensureScenery; no eval-time HARD_EDGE to tracks.js.
   ["js/track/core/space.js", "js/track/core/surface.js"],
-  ["js/track/scenery/models.js", "js/track/scenery/circuit-kit.js"],
   ["js/track/tracks.js", "js/ui/track-maps.js"],               // maps calls Tracks.buildCenterline
   // js/data's own eval-time edges moved to LAZY_DATA_EDGES when the hub left
   // FULL — HARD_EDGES pairs must both be IN FULL to be orderable.
@@ -687,6 +678,9 @@ const HARD_EDGES = [
   ["js/garage/prebuild.js", "js/game.js"],           // game.js calls GaragePrebuild.create(G) at eval time
   ["js/data/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
+  ["js/physics/consts.js", "js/race/pace-math.js"], // PaceMath reads X_*/DRAIN_*/REGEN_*/OT_TIME_*/GEAR_* at create
+  ["js/core/mat4.js", "js/race/pace-math.js"],      // PaceMath aliases M4.clamp / M4.lerp at eval
+  ["js/race/pace-math.js", "js/game.js"],           // game.js calls PaceMath.create(deps) at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
   ["js/data/teams.js", "js/career/save-migrate.js"], // remapPoints reads Teams (call time; keep ordered)
   ["js/car/parts.js", "js/career/regulations.js"],   // bannedIds() derives the ban from Parts.CATALOG (call time; keep ordered)
@@ -762,6 +756,8 @@ const HARD_EDGES = [
   ["js/lighting/profiles.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
   ["js/ui/scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
   ["js/ui/dock-layout.js", "js/game.js"], // game.js calls DockLayout.create(G) at eval time
+  ["js/core/mat4.js", "js/ui/hud-arrange.js"], // const clamp = M4.clamp at eval
+  ["js/ui/hud-arrange.js", "js/game.js"], // game.js calls HudArrange.create(G) at eval time
   ["js/ui/setting-row.js", "js/game.js"],  // game.js wires the Settings rows (SettingRow.wire) at eval time
   ["js/ui/setting-row.js", "js/ui/scale.js"], // UiScale.create wires the RESOLUTION row
   ["js/ui/onboard.js", "js/game.js"],    // game.js calls Onboard.create(G) at eval time
@@ -1053,6 +1049,41 @@ const LAZY_CAREER_UI = [
   "js/career/career-ui.js",   // CareerScreen
 ];
 const LAZY_CAREER_UI_EDGES = [];
+
+// TRACK BUILD toolkit (~535 KB raw / ~170 KB gzip). Title never runs a byte of
+// these — only Tracks.build / buildPaced (after ensureScenery) does. Order IS
+// the eval order. TRACK_VM keeps the same files for verify-track / the build
+// worker (unaffected). No boot stub: nothing outside js/track/ reads these at
+// eval (hunt-2 T5). Race-only scripts (driving-coach, race-insights,
+// real-replay, flyby-seq) stay FULL.
+const LAZY_TRACK_BUILD = [
+  "js/track/scenery/models.js",
+  "js/track/scenery/themes.js",
+  "js/track/scenery/landmark-kit.js",
+  "js/track/scenery/circuit-kit.js",
+  "js/track/core/hidden-faces.js",
+  "js/track/scenery/nature.js",
+  "js/track/scenery/structures.js",
+  "js/track/scenery/city.js",
+  "js/track/scenery/identity.js",
+  "js/track/scenery/pits.js",
+  "js/track/scenery/venue.js",
+  "js/track/scenery/build-props.js",
+];
+const LAZY_TRACK_BUILD_EDGES = [
+  ["js/track/scenery/models.js", "js/track/scenery/circuit-kit.js"],
+  ["js/track/scenery/nature.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/structures.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/city.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/identity.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/pits.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/venue.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/themes.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/landmark-kit.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/circuit-kit.js", "js/track/scenery/build-props.js"],
+  ["js/track/core/hidden-faces.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/models.js", "js/track/scenery/build-props.js"],
+];
 
 // MULTIPLAYER (js/net/*). 241 KB of WebRTC — nostr/rendezvous signalling, SDP,
 // QR, the transport, handshake, snapshot codec, session, netplay and the VS
@@ -1460,6 +1491,7 @@ module.exports = {
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
   LAZY_XR, LAZY_XR_EDGES, LAZY_CAM_EDITOR, LAZY_CAM_EDITOR_EDGES,
   LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES,
+  LAZY_TRACK_BUILD, LAZY_TRACK_BUILD_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath, isCircuitDefFile,
 };

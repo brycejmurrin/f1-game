@@ -80,7 +80,7 @@ test("WATCH downloads cannot launch a replaced view and keep the seat selected w
     assert.equal(typeof resolveLocation, "function");
     tab.setSeat("BBB");
     if (detached) { slot.isConnected = false; open = false; open = true; }
-    resolveLocation([{ date: 100000, x: 0, y: 0 }, { date: 101000, x: 10, y: 10 }]);
+    resolveLocation(Array.from({ length: 102 }, (_, i) => ({ date: 100000 + i * 1000, x: i * 10, y: i * 10 })));
     for (let i = 0; i < 30; i++) await Promise.resolve();
     assert.equal(closed, detached ? 0 : 1);
     assert.equal(launches.length, detached ? 0 : 1);
@@ -333,7 +333,7 @@ test("pending WATCH snapshots its seat, camera, session and lap before positions
   await h.flush();
   assert.equal(h.requests.length, 1);
   h.tab.setSeat("BBB"); h.tab.setWatchCamera("chase"); h.tab.setStartLap(1);
-  h.requests[0]([]);
+  h.requests[0](Array.from({ length: 102 }, (_, i) => ({ date: script.t0 + i * 1000, x: i * 10, y: i * 10 })));
   await h.flush();
   assert.equal(h.launches.length, 1);
   const launch = h.launches[0];
@@ -352,10 +352,10 @@ test("cancel/reopen and session replacement discard stale WATCH completions", as
   h.tab.watch(h.script(11), null, 2, false);
   await h.flush();
   assert.equal(h.requests.length, 2);
-  h.requests[0]([]); await h.flush();
+  h.requests[0](Array.from({ length: 102 }, (_, i) => ({ date: h.script(10).t0 + i * 1000, x: i * 10, y: i * 10 }))); await h.flush();
   assert.equal(h.launches.length, 0);
   assert.equal(h.tab.traces(), null, "stale positions must not replace current state");
-  h.requests[1]([]); await h.flush();
+  h.requests[1](Array.from({ length: 102 }, (_, i) => ({ date: h.script(11).t0 + i * 1000, x: i * 10, y: i * 10 }))); await h.flush();
   assert.equal(h.launches.length, 1);
   assert.equal(h.launches[0].script.sessionKey, 11);
   const second = pendingWatchHarness();
@@ -639,19 +639,19 @@ test("real position retries retain successful cars, report partial failures, and
   const F1API = { locationData: async (session, num) => {
     requested.push([session, num]);
     if (num === 2 && rejectSecond) throw new Error("network interrupted");
-    return [{ date: t0, x: 100, y: 200 }, { date: t0 + 1000, x: 200, y: 300 }];
+    return Array.from({ length: 102 }, (_, i) => ({ date: t0 + i * 1000, x: 100 + i, y: 200 + i }));
   } };
   const { D } = load({ F1API });
   const script = { sessionKey: 7, t0, drivers: [{ num: 1, lapStart: [0], laps: [30] }, { num: 2, lapStart: [0], laps: [30] }] };
   const partial = await D.fetchTraces(script, (done, total) => progress.push([done, total]));
   assert.deepEqual(host(partial.failed), [2]);
-  assert.equal(partial.cars[1].length, 6); assert.equal(partial.cars[2].length, 0);
+  assert.equal(partial.cars[1].length, 306); assert.equal(partial.cars[2].length, 0);
   assert.deepEqual(progress, [[1, 2], [2, 2]], "progress reports stable totals despite a failed car request");
   rejectSecond = false;
   const ready = await D.fetchTraces(script, null, partial);
   assert.deepEqual(requested, [[7, 1], [7, 2], [7, 2]], "retry downloads only the failed driver");
   assert.equal(ready.cars[1], partial.cars[1], "the successful car's positions are retained");
-  assert.equal(ready.cars[2].length, 6); assert.deepEqual(host(ready.failed), []);
+  assert.equal(ready.cars[2].length, 306); assert.deepEqual(host(ready.failed), []);
   await D.fetchTraces({ ...script, sessionKey: 8 }, null, ready);
   assert.deepEqual(requested.slice(-2), [[8, 1], [8, 2]], "another race gets its own positions");
   rejectSecond = true;
@@ -665,7 +665,7 @@ test("position caches refresh when race coverage grows, and never persist unfini
     queueMicrotask(() => {
       rq.result = { transaction() {
         const tx = { objectStore: () => ({
-          get(key) { const read = {}; queueMicrotask(() => { read.result = records.get(key); read.onsuccess(); }); return read; },
+          get(key) { const read = {}; queueMicrotask(() => { read.result = records.get(key); read.onsuccess(); queueMicrotask(() => { if (tx.oncomplete) tx.oncomplete(); }); }); return read; },
           put(value, key) { records.set(key, value); queueMicrotask(() => tx.oncomplete()); },
         }) }; return tx;
       } }; rq.onsuccess();
@@ -676,16 +676,16 @@ test("position caches refresh when race coverage grows, and never persist unfini
     drivers: [{ num: 1, lapStart: Array.from({ length: laps }, (_, i) => i * 60), laps: Array(laps).fill(60) }] });
   const { D } = load({ indexedDB, F1API: { locationData: async (_key, num, start, end, options) => {
     requested.push({ num, start, end, options });
-    return [{ date: t0, x: 100, y: 200 }, { date: Date.parse(end), x: 200, y: 300 }];
+    return Array.from({ length: 102 }, (_, i) => ({ date: t0 + (Date.parse(end) - t0) * i / 101, x: 100 + i, y: 200 + i }));
   } } });
   const early = await D.fetchTraces(script(1, false));
-  assert.equal(early.cars[1][3], 150);
+  assert.equal(early.cars[1][303], 150);
   assert.equal(records.size, 0, "an unfinished race remains usable but is not persisted");
   // A legacy IndexedDB record is what existing players already have installed.
   records.set("123", { v: D.TRACE_V, sessionKey: 123, t0, cars: early.cars });
   const fullScript = script(10, true), full = await D.fetchTraces(fullScript, null, early);
   assert.equal(requested.length, 2, "neither the legacy DB record nor incomplete in-memory retry wins");
-  assert.equal(full.cars[1][3], 690, "the complete race has its complete request window");
+  assert.equal(full.cars[1][303], 690, "the complete race has its complete request window");
   assert.ok(requested.every((r) => r.options.cache === false), "raw HTTP cache cannot reintroduce truncated positions");
   await D.fetchTraces(fullScript);
   assert.equal(requested.length, 2, "a completed matching cache avoids another download");
@@ -703,7 +703,7 @@ test("WATCH and JUMP IN reject stale in-memory coverage; reopening drops unfinis
   const calls = [], launches = [], flush = () => new Promise((resolve) => setImmediate(resolve));
   const t0 = Date.parse("2026-10-04T12:00:00Z");
   const { D } = load({ F1API: { locationData: async (_key, _num, _start, end) => {
-    calls.push(end); return [{ date: t0, x: 100, y: 200 }, { date: Date.parse(end), x: 200, y: 300 }];
+    calls.push(end); return Array.from({ length: 102 }, (_, i) => ({ date: t0 + (Date.parse(end) - t0) * i / 101, x: 100 + i, y: 200 + i }));
   } }, RealRace: { launch: (_script, options) => { launches.push(options); return true; } } });
   const earlyScript = { sessionKey: 42, t0, complete: false, laps: 1, drivers: [{ num: 1, lapStart: [0], laps: [60] }] };
   const fullScript = { ...earlyScript, complete: true, laps: 10, drivers: [{ num: 1, lapStart: [0], laps: [600] }] };
@@ -713,7 +713,7 @@ test("WATCH and JUMP IN reject stale in-memory coverage; reopening drops unfinis
   assert.equal(launches.at(-1).traces, null, "JUMP IN never seeds cars from the earlier race window");
   tab.watch(fullScript, null, 1, false); await flush();
   assert.equal(calls.length, 2, "WATCH refetches instead of immediately launching stale memory");
-  assert.equal(launches.at(-1).traces.cars[1][3], 690);
+  assert.equal(launches.at(-1).traces.cars[1][303], 690);
   tab.watch(fullScript, null, 1, false); await flush();
   assert.equal(calls.length, 2, "matching completed memory still reuses positions");
   tab.setTraces(early); tab.jumpIn(earlyScript, "AAA");
@@ -729,4 +729,96 @@ test("race scripts read lane_duration after OpenF1 removes pit_duration", () => 
     { driver_number: 63, lap_number: 36, pit_duration: 23.4 }];
   const script = host(D.build(raw, findTeam, TRACKS));
   assert.deepEqual(script.drivers.find((d) => d.num === 63).pitDur, [22.2, 23.4]);
+});
+
+
+test("complete timing covers every classified distance, including retired and explicitly untimed laps", () => {
+  const { D, findTeam } = load();
+  const raw = host(FIXTURE);
+  assert.equal(D.build(raw, findTeam, TRACKS).complete, true);
+  const winner = raw.result.find((r) => r.position === 1).driver_number;
+  raw.laps = raw.laps.filter((l) => l.driver_number === winner);
+  assert.equal(D.build(raw, findTeam, TRACKS).complete, false, "the winner alone cannot poison the cache");
+  const valid = host(FIXTURE);
+  valid.laps.find((l) => l.lap_number === 1).lap_duration = null;
+  assert.equal(D.build(valid, findTeam, TRACKS).complete, true, "a published untimed lap is still coverage");
+  const placeholder = host(valid);
+  placeholder.laps.find((l) => l.driver_number === winner && l.lap_number === 2).lap_duration = null;
+  assert.equal(D.build(placeholder, findTeam, TRACKS).complete, false, "mid-race placeholders must refetch");
+  const dns = valid.drivers[1].driver_number;
+  const result = valid.result.find((r) => r.driver_number === dns);
+  result.dns = true; result.number_of_laps = 0;
+  valid.laps = valid.laps.filter((l) => l.driver_number !== dns);
+  assert.equal(D.build(valid, findTeam, TRACKS).complete, true, "DNS needs no lap timing");
+});
+
+test("empty and two-point location responses cannot become a complete replay cache", async () => {
+  const t0 = Date.parse("2026-09-20T11:00:00Z");
+  const script = { sessionKey: 7, t0, complete: true, drivers: [{ num: 1, laps: [60], lapStart: [0] }, { num: 2, dns: true, laps: [], lapStart: [] }] };
+  let rows = [], requests = [];
+  const { D } = load({ F1API: { locationData: async (_, num) => { requests.push(num); return rows; } } });
+  await assert.rejects(D.fetchTraces(script), /positions did not load/);
+  rows = [{ date: t0, x: 0, y: 0 }, { date: t0 + 1000, x: 100, y: 100 }];
+  await assert.rejects(D.fetchTraces(script), /positions did not load/);
+  rows = Array.from({ length: 102 }, (_, i) => ({ date: t0 + i * 1000, x: i * 10, y: i * 10 }));
+  assert.equal((await D.fetchTraces(script)).complete, true);
+  assert.deepEqual(requests, [1, 1, 1], "DNS is exempt and unavailable responses retry");
+});
+
+
+test("reading an old trace cache refreshes recency before capacity eviction", async () => {
+  const records = new Map(), requested = [];
+  const indexedDB = { open() {
+    const rq = {};
+    queueMicrotask(() => { rq.result = { transaction() {
+      const tx = { abort() { tx.onabort?.(); } };
+      const request = (value) => { const r = {}; queueMicrotask(() => { r.result = value; r.onsuccess?.(); }); return r; };
+      tx.objectStore = () => ({ get: (k) => request(records.get(k)),
+        put: (v, k) => { records.set(k, v); return request(k); }, delete: (k) => { records.delete(k); return request(k); },
+        getAllKeys: () => request([...records.keys()]),
+      });
+      setImmediate(() => tx.oncomplete?.()); return tx;
+    } }; rq.onsuccess(); }); return rq;
+  } };
+  const t0 = 100000;
+  const script = (sessionKey) => ({ sessionKey, t0, complete: true, drivers: [{ num: 1, laps: [120], lapStart: [0] }] });
+  const { D } = load({ indexedDB, F1API: { locationData: async (key) => {
+    requested.push(key); return Array.from({ length: 102 }, (_, i) => ({ date: t0 + i * 1000, x: i * 10, y: i * 10 }));
+  } } });
+  for (let k = 1; k <= 8; k++) await D.fetchTraces(script(k));
+  const old = records.get("1"); await D.fetchTraces(script(1));
+  await D.fetchTraces(script(9));
+  assert.equal(records.get("1"), old, "reading recency does not rewrite the large body");
+  assert.equal(records.has("2"), false, "the unread oldest race is evicted");
+  assert.deepEqual(requested, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+});
+
+test("session picker cancels owned WATCH requests before selecting and repainting", async () => {
+  const dom = makeDom(), order = []; let deps;
+  const ctx = vm.createContext({
+    Dom: { el: (...args) => { const node = dom.el(...args); node.classList = { toggle() {} }; return node; } },
+    F1API: { meetings: async () => [{ meetingKey: 42 }], sessionsForMeeting: async () => [{ sessionKey: 1, type: "race" }, { sessionKey: 2, type: "practice" }] },
+    DataSchedule: { create: () => ({}) }, DataStandings: { create: () => ({}) }, DataResults: { create: () => ({}) },
+    DataLive: { create: () => ({}) }, DataTelemetry: { create: () => ({}) }, DataExport: { create: () => ({}) },
+    DataRealRace: { create: (d) => { deps = d; return { cancel: () => order.push(["cancel", deps.sel.sessionKey]) }; } },
+  });
+  vm.runInContext(fs.readFileSync(new URL("../../js/data/hub.js", import.meta.url), "utf8"), ctx);
+  const picker = deps.buildPicker((m) => order.push(["paint", m.sessionKey]));
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  const session = find(picker, (n) => n.tag === "select")[1];
+  session.value = "2"; session.fire("change");
+  assert.deepEqual(order, [["cancel", 1], ["paint", 2]], "cancel transport before advancing the selected session");
+});
+
+
+test("a dense winner cannot permanently cache a full-distance peer's sparse positions", async () => {
+  const t0 = 100000, requests = []; let sparse = true;
+  const script = { sessionKey: 8, t0, complete: true, drivers: [1, 2].map((num) => ({ num, lapStart: [0], laps: [600] })) };
+  const { D } = load({ F1API: { locationData: async (_, num) => {
+    requests.push(num); return Array.from({ length: num === 2 && sparse ? 2 : 102 }, (_, i) => ({ date: t0 + i * 1000, x: i * 10, y: i * 10 }));
+  } } });
+  const partial = await D.fetchTraces(script);
+  assert.equal(partial.complete, false); assert.deepEqual(host(partial.failed), [2]);
+  sparse = false; const full = await D.fetchTraces(script, null, partial);
+  assert.equal(full.complete, true); assert.deepEqual(requests, [1, 2, 2]);
 });

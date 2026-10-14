@@ -378,3 +378,31 @@ test("re-entering TILT zeroes on a fresh reading, not the lean the player left t
     assert.equal(st.steerMode, "tilt");
   });
 });
+
+
+test("alternate held bindings release independently, including after focus changes", () => {
+  for (const [action, codes, state] of [
+    ["throttle", ["KeyW", "ArrowUp"], "throttle"],
+    ["brake", ["KeyS", "ArrowDown"], "brake"],
+    ["left", ["KeyA", "ArrowLeft"], "left"],
+    ["right", ["KeyD", "ArrowRight"], "right"],
+    ["lookBack", ["KeyB", "KeyN"], "lookBack"],
+  ]) for (const reverse of [false, true]) {
+    const { Input, key, sb } = boot();
+    Input.setKeyBinding(action, 0, codes[0]); Input.setKeyBinding(action, 1, codes[1]);
+    const held = () => state === "lookBack" ? Input.lookingBack() : Input.debugState().key[state];
+    key(codes[0], true); key(codes[1], true);
+    sb.document.activeElement = { tagName: "BUTTON" };
+    key(codes[reverse ? 0 : 1], false);
+    assert.equal(held(), true, action + " retains its other binding");
+    key(codes[reverse ? 1 : 0], false); assert.equal(held(), false);
+  }
+});
+
+test("held-code state is cleared by reset, modifier teardown and rebind", () => {
+  for (const clear of [h => h.Input.reset(), h => h.key("MetaLeft", true), h => h.Input.setKeyBinding("throttle", 0, "KeyN")]) {
+    const h = boot(); h.key("KeyW", true); clear(h);
+    h.key("ArrowUp", true); h.key("ArrowUp", false);
+    assert.equal(h.Input.throttle(), false);
+  }
+});

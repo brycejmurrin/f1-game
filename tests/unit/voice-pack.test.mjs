@@ -887,3 +887,27 @@ test("the spotter's idle early-outs reset nothing: 600 steps off / in the menu /
   for (let i = 0; i < 60; i++) sp.update(1 / 60, false);
   assert.equal(stops, 1, "a state that was in use is reset — once");
 });
+
+
+test("a stalled pack body times out, releases staged tiers, and respects retry delay", async () => {
+  const timers = new Map(), calls = []; let now = 0, timerId = 0, late;
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    Date: { now: () => now }, AbortController,
+    setTimeout: (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; },
+    clearTimeout: (id) => timers.delete(id),
+    fetch: async (url) => { calls.push(url); return { ok: true,
+      json: async () => ({ clips: { hello: [0, 4, 1] } }),
+      arrayBuffer: () => url.includes("george") ? new Promise((res) => { late = res; }) : Promise.resolve(new ArrayBuffer(4)),
+    }; },
+  });
+  const drain = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
+  const P = sb.VoicePack.create({}); P.ensureStaged([["george"], ["heart"]]); await drain();
+  assert.equal(calls.length, 2);
+  const timeout = [...timers.values()].find((t) => t.ms === 15000); assert.ok(timeout);
+  timeout.fn(); await drain();
+  assert.equal(P.ready("heart"), true, "lower tiers proceed after fetch or body timeout");
+  late(new ArrayBuffer(4)); await drain();
+  assert.equal(P.ready("george"), false, "late body cannot revive a failed attempt");
+  P.ensure("george"); await drain(); assert.equal(calls.length, 4);
+  now = 120000; P.ensure("george"); await drain(); assert.equal(calls.length, 6);
+});

@@ -1,0 +1,30 @@
+name: Bug
+description: Something in the game is wrong — what you saw and how to get there.
+labels: ["bug", "ready"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead. A screenshot helps.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to get there
+      description: Mode, circuit, car, settings, the steps.
+  - type: dropdown
+    id: device
+    attributes:
+      label: Device
+      options:
+        - Phone (landscape)
+        - Phone (portrait)
+        - Tablet
+        - Desktop
+  - type: input
+    id: build
+    attributes:
+      label: Build
+      description: The live site, or a PR / branch.

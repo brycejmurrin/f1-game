@@ -1389,6 +1389,77 @@ test("the Verdict prints the rAF gap view the spike rows cannot see (hunt 4 §A 
   assert.match(r.out, /gaps:  no rAF gap >= 500 ms/, "a clean leg says so rather than printing nothing");
 });
 
+test("the Verdict names the race-entry span each long task fell in, from the saved marks (hunt 4 B-F3.3)", async () => {
+  // Hunter B inferred warmCarAssets' 1.1-2.1 s single tasks from timing: the
+  // census saved raceProfile() legs as durations and never the marks. The
+  // fixture is the analyser's OWN output, so the row and the JSON cannot drift.
+  const { analyseRaceEntrySpans } = await import("../../tools/gfx/frame-hitch.mjs");
+  const ggc = read("tools/gfx/gpu-game-check.mjs");
+  assert.match(ggc, /out\.raceEntryProfile = await bounded\(/, "the tool must save the raceEntryProfile snapshot");
+  assert.match(ggc, /winT0: s\.windowMs > 0 \? \+\(\(a \+ b\) \/ 2 - s\.windowMs\)/, "marks are relative: the window origin must be joined to the page clock");
+  assert.match(ggc, /out\.raceEntrySpans = d \? analyseRaceEntrySpans\(/);
+  const raceEntrySpans = analyseRaceEntrySpans({
+    rep: { winT0: 100, legs: [{ n: "resets", ms: 500 }], marks: [{ n: "warmCarAssets:start", t: 600 }, { n: "warmCarAssets:end", t: 2700 }, { n: "end", t: 2800 }] },
+    censusMarks: { raceCall: 100 }, longTasks: [[705, 2090], [3000, 80]], gaps: [] });
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: { ...tlxLegJson(), raceEntrySpans }, webgl2: tlxLegJson(),
+    glx: { ...glxLegJson(), raceEntrySpans: { note: "no raceEntryProfile snapshot — no __apex.raceEntryProfile — this build predates it" } }, wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /marks: 1 long task\(s\) \(2090 ms\) \+ 0 rAF gap\(s\) in 2800 ms of race entry; warmCarAssets 2090 ms\/1/);
+  assert.match(r.out, /2090 ms longtask at \+605 ms -> warmCarAssets \(100%\) \| after warmCarAssets:start \(\+5 ms\), before warmCarAssets:end/);
+  assert.match(r.out, /marks: no raceEntryProfile snapshot — no __apex\.raceEntryProfile/, "an unmeasured leg says why");
+});
+
+test("the Verdict prints TLX's depth-discard row and names its absence on a TLX leg (hunt 4 A-P1)", async () => {
+  const { analyseDepthDiscard } = await import("../../tools/gfx/frame-hitch.mjs");
+  const ggc = read("tools/gfx/gpu-game-check.mjs");
+  assert.match(ggc, /const _depth0 = await readDepth\(\);\s*\n\s*try \{ await page\.evaluate\(\(\) => window\.__gcHitch && window\.__gcHitch\.arm\(\)\)/,
+    "the first depth read sits at arm(), so the count is the window's own");
+  assert.match(ggc, /out\.depth = analyseDepthDiscard\(_depth0, _depth1, /);
+  const depth = analyseDepthDiscard({ on: true, discard: true, kept: false, discards: 10 }, { on: true, discard: true, kept: false, discards: 410 }, 400);
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: tlxLegJson(), webgl2: { ...tlxLegJson(), depth },
+    glx: { ...glxLegJson(), depth: analyseDepthDiscard(null, null, 400) }, wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /depth: 400 of 400 window frames discarded depth \(100%\); last frame dropped it/);
+  assert.match(r.out, /webgpu[^\n]*\n(?:[^\n]*\n)*?\s+depth: NOT MEASURED — the leg wrote no depth row/, "a TLX leg with no row says so");
+  assert.doesNotMatch(r.out, /glx[^\n]*\n(?:\s{8}[^\n]*\n)*?\s+depth:/, "GLX has no TLX post: no depth row at all");
+});
+
+test("the Verdict prints the camera each leg drove and its mirror chain, and flags one not as asked (hunt 4 H5)", () => {
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const chase = { ...tlxLegJson(), cam: { asked: "chase", set: "chase", atWindowEnd: "chase" },
+    mirror: { mode: "auto", shown: false, cam: "chase", backend: { mips: 3, mipCap: 3, mipFull: false } } };
+  const lost = { ...tlxLegJson(), cam: { asked: "chase", set: "helmet", atWindowEnd: "helmet", error: "not a CamModes id: chase" } };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: chase, webgl2: lost, glx: { ...glxLegJson(), cam: { asked: null, set: "helmet", atWindowEnd: "helmet" } }, wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /cam: {3}chase \(asked chase, at window end chase\) {2}mirror=auto shown=false mips=3 cap=3 full=false\n/);
+  assert.match(r.out, /cam: {3}helmet \(asked chase, at window end helmet\)\s+<- CAMERA NOT AS ASKED: not a CamModes id: chase/);
+  assert.match(r.out, /cam: {3}helmet \(asked game default, at window end helmet\)\n/);
+});
+
+test("the census labels which work each backend's GPU timer spans (hunt 4 I5)", () => {
+  // WGX times the lit pass only, GLX main + post, TLX three's summed render
+  // passes: three different numbers under one name. The per-pass timer is not
+  // built (MEASURING-GPU-PERF §7); the label keeps the three from being compared.
+  const ggc = read("tools/gfx/gpu-game-check.mjs");
+  assert.match(ggc, /out\.gpuFrame\.span = be \? \{ tlx: "three-render-passes", wgx: "lit-pass", glx: "main\+post" \}\[be\] : null;/);
+  for (const [site, file, re] of [["WGX litPass timestampWrites", "js/render/webgpu/wgx.js", /rp\.timestampWrites = \{ querySet: _gpuQuerySet/],
+    ["GLX timer opens in begin()", "js/render/glx/glx.js", /function begin\(frame\) \{\s*if \(ctxGone\(\)\) return false;\s*_gpuTimerBegin\(\);/],
+    ["TLX resolves three's render timestamps", "js/render/three/tlx.js", /renderer\.resolveTimestampsAsync\("render"\)/]]) {
+    assert.match(read(file), re, `${site}: the span label no longer matches the backend — re-measure and relabel`);
+  }
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: tlxLegJson(), webgl2: tlxLegJson(),
+    glx: { ...glxLegJson(), gpuFrame: { medianMs: 9.1, samples: 20, scale: 1, span: "main+post" } }, wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /gpu: {3}median=9\.1ms over 20 samples {2}scale=1 {2}span=main\+post \(compare within a backend only\)/);
+});
+
 test("the GPU gate fails a hardware TLX leg that stopped reporting an env count", () => {
   // `(env.fail || 0) > 0` was the SAME banned shape as the gpuErrors fix twelve
   // lines above it in the same file, on the same object: a build that stops
@@ -5629,8 +5700,9 @@ test("selector retains a different circuit during compilation, then releases it 
   };
   const _loadTrackBody = (idx, def, built) => { track = built; builtTrackId = def.id; };
   const dropTrackWorld = eval("(function(){" + fnBody(src, "dropTrackWorld") + "})");
-  // LAZY_CIRCUIT: stepped loader awaits ensureCircuit before Tracks.buildPaced.
+  // LAZY_CIRCUIT + LAZY_TRACK_BUILD: stepped loader awaits both before buildPaced.
   const ensureCircuit = async () => {};
+  const ensureTrackBuild = async () => true;
   const loadTrackStepped = eval("(async function(idx, live){" + fnBody(src, "loadTrackStepped") + "})");
   const ensureScenery = async () => {}, menuSlice = async () => {}, menuFinish = async () => {}, garagePrewarm = async () => {};
   const menuIdle = () => { throw new Error("the stepped build must not wait for menu idle"); };
@@ -5801,7 +5873,8 @@ const game = source("js/render/renderer-boot.js");
 const begin = game.indexOf("\nif (!gfx) {");
 const end = game.indexOf("\nreturn { gfx, bound:", begin);
 assert.ok(begin > 0 && end > begin, "boot's GLX fallback must remain identifiable");
-const fallback = `(async function () { let gfx = null; ${game.slice(begin, end).replace(/return null;/g, "return;")} return gfx; })()`;
+const timeoutHelpers = span(game, "const BOOT_STEP_MS", "function showGraphicsUnavailable", "boot timeout helpers");
+const fallback = `(async function () { ${timeoutHelpers} let gfx = null; ${game.slice(begin, end).replace(/return null;/g, "return;")} return gfx; })()`;
 
 test("the eager GLX handle preserves eval-time mobile tier and live backend getters", () => {
   const storage = new Map([["apex26.forceMobileTier", "1"]]);
@@ -5842,6 +5915,7 @@ test("GLX implementation is deferred and ordered, while the facade precedes its 
 function bootScenario({ install = true, init = true, pref = "webgl2", skip = false, blocked = false } = {}) {
   const events = [], storage = new Map();
   const context = vm.createContext({
+    setTimeout, clearTimeout,
     navigator: { userAgent: "", maxTouchPoints: 0 },
     localStorage: { getItem: () => null, removeItem: (k) => events.push(`remove:${k}`) },
     sessionStorage: {

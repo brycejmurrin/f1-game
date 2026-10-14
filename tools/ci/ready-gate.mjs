@@ -56,15 +56,16 @@ export function api(pathQs, { run = spawnSync, env = process.env, gh } = {}) {
   catch { return { error: "bad JSON" }; }
 }
 
-/** Newest check-run per name (by completed_at, then id). */
+/** Newest check-run per name (by attempt id, with started_at as the fallback). */
 export function newestByName(checkRuns) {
   const by = new Map();
   for (const c of checkRuns || []) {
     if (!c || !c.name) continue;
     const cur = by.get(c.name);
-    const t = Date.parse(c.completed_at || c.started_at || "") || 0;
-    const ct = cur ? (Date.parse(cur.completed_at || cur.started_at || "") || 0) : -Infinity;
-    if (!cur || t > ct || (t === ct && (c.id || 0) > (cur.id || 0))) by.set(c.name, c);
+    const t = Date.parse(c.started_at || "") || 0;
+    const ct = cur ? (Date.parse(cur.started_at || "") || 0) : -Infinity;
+    const hasIds = c.id > 0 && cur?.id > 0;
+    if (!cur || (hasIds ? c.id > cur.id : t > ct)) by.set(c.name, c);
   }
   return by;
 }
@@ -197,7 +198,17 @@ export function evaluate({ sha, localOnly = false, request = api, localOpts } = 
   const local = localVerdict(sha, localOpts);
   if (localOnly) return { ...local, sha, source: "local" };
 
-  const checks = request(`commits/${encodeURIComponent(sha)}/check-runs?per_page=100`);
+  const list = [];
+  let checks, page = 1;
+  do {
+    checks = request(`commits/${encodeURIComponent(sha)}/check-runs?per_page=100${page > 1 ? `&page=${page}` : ""}`);
+    if (checks.error) break;
+    const batch = checks.json?.check_runs || [];
+    list.push(...batch);
+    if (!batch.length || (checks.json?.total_count != null
+      ? list.length >= checks.json.total_count : batch.length < 100)) break;
+    page++;
+  } while (true);
   if (checks.error) {
     // Fall back to local stamp when the API is unavailable — still better than silent flip.
     if (local.state === "passed") {
@@ -205,7 +216,6 @@ export function evaluate({ sha, localOnly = false, request = api, localOpts } = 
     }
     return { state: "unknown", evidence: checks.error, code: 3, sha, source: "api" };
   }
-  const list = checks.json?.check_runs || [];
   const remote = guardsVerdict(list);
   if (remote.state === "passed") return { ...remote, sha, source: "ci" };
   if (remote.state === "failed") return { ...remote, sha, source: "ci" };
