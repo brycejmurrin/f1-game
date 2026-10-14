@@ -1375,6 +1375,20 @@ test("the Verdict prints the driven window and a skipped A/B, not the end-of-run
   assert.doesNotMatch(r.out, /occl  A\/B: NOT MEASURED/);
 });
 
+test("the Verdict prints the rAF gap view the spike rows cannot see (hunt 4 §A gap ii)", () => {
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const gapWork = { gaps: 1, thresholdMs: 500, byPhase: { "race start (pre-window)": 1 },
+    summary: "1 rAF gap(s) >= 500 ms (race start (pre-window): 1); worst 4100 ms [race start (pre-window)], 3900 ms of it in the step before, 3895 ms in long tasks",
+    rows: [{ phase: "race start (pre-window)", atMs: 5000, gapMs: 4100, prevFrameMs: 3900, outsideMs: 200, longTaskMs: 3895, armed: false,
+      prev: "linkProgram=14 texImage2D=8192KB wrapped=180ms", between: "-" }] };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: { ...tlxLegJson(), gapWork }, webgl2: tlxLegJson(), glx: { ...glxLegJson(), gapWork: { gaps: 0, rows: [], summary: "no rAF gap >= 500 ms" } }, wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /gaps:  1 rAF gap\(s\) >= 500 ms/);
+  assert.match(r.out, /4100 ms \[race start \(pre-window\)\] at \+5000 ms: step before 3900 ms, long tasks 3895 ms — prev: linkProgram=14 texImage2D=8192KB wrapped=180ms \| between: -/);
+  assert.match(r.out, /gaps:  no rAF gap >= 500 ms/, "a clean leg says so rather than printing nothing");
+});
+
 test("the GPU gate fails a hardware TLX leg that stopped reporting an env count", () => {
   // `(env.fail || 0) > 0` was the SAME banned shape as the gpuErrors fix twelve
   // lines above it in the same file, on the same object: a build that stops

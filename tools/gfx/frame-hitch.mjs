@@ -336,6 +336,56 @@ export function analyseWindow(win, gameFrameT, callbacks) {
   return r;
 }
 
+// THE GAP VIEW (hunt 4 §A gap ii). analyseSpikeWork keys on callbacks of
+// >= thresholdMs, so a 4 s first-draw stall in which NO callback ran is
+// invisible to it. gpu-game-check records, from page load, every rendering
+// step that began >= 500 ms after the previous one: { at, gapMs, prevFrameMs
+// (summed callback time of the step before), prevWork (its wrapped calls,
+// <kind>Ms and <kind>KB), between (work done outside any callback since),
+// armed }. This ranks them, labels the phase from the page marks and the
+// window, joins the long tasks that overlap each gap, and says how much of
+// it no callback accounts for.
+export function analyseGapWork(gaps, { marks = {}, win = null, longTasks = [] } = {}, topN = 12) {
+  if (!Array.isArray(gaps)) return { note: "no gap series recorded" };
+  const thresholdMs = 500;
+  if (!gaps.length) return { gaps: 0, thresholdMs, rows: [], summary: `no rAF gap >= ${thresholdMs} ms` };
+  const m = marks || {};
+  const phaseOf = (at) => {
+    if (m.raceCall != null && at < m.raceCall) return "before race()";
+    if (m.trackReady != null && at < m.trackReady) return "track build";
+    if (win && win.t0 != null && at < win.t0) return "race start (pre-window)";
+    if (win && win.t0 != null && (win.t1 == null || at <= win.t1)) return "driven window";
+    if (win && win.t1 != null) return "after window";
+    return "?";
+  };
+  const fmt = (o, n = 5) => {
+    if (!o) return "-";
+    const short = (k) => k.replace(/^gpu\.|^gl\./, "");
+    const counts = Object.keys(o).filter((k) => !/(Ms|KB)$/.test(k)).sort((a, b) => o[b] - o[a]).slice(0, n)
+      .map((k) => `${short(k)}=${Math.round(o[k])}`);
+    const kb = Object.keys(o).filter((k) => /KB$/.test(k)).sort((a, b) => o[b] - o[a]).slice(0, 3)
+      .map((k) => `${short(k).replace(/KB$/, "")}=${Math.round(o[k])}KB`);
+    const ms = o["gpu.wrappedMs"] != null ? [`wrapped=${o["gpu.wrappedMs"].toFixed(0)}ms`] : [];
+    return [...counts, ...kb, ...ms].join(" ") || "-";
+  };
+  const lt = Array.isArray(longTasks) ? longTasks : [];
+  const rows = gaps.map((g) => {
+    const end = g.at + g.gapMs;
+    let ltMs = 0;
+    for (const [s, d] of lt) { const o = Math.min(end, s + d) - Math.max(g.at, s); if (o > 0) ltMs += o; }
+    const prev = g.prevFrameMs || 0;
+    return { phase: phaseOf(g.at), atMs: +((m.raceCall != null ? g.at - m.raceCall : g.at)).toFixed(0),
+      gapMs: +g.gapMs.toFixed(0), prevFrameMs: +prev.toFixed(1), outsideMs: +Math.max(0, g.gapMs - prev).toFixed(0),
+      longTaskMs: +ltMs.toFixed(0), armed: !!g.armed, prev: fmt(g.prevWork), between: fmt(g.between) };
+  }).sort((a, b) => b.gapMs - a.gapMs);
+  const byPhase = {};
+  for (const r of rows) byPhase[r.phase] = (byPhase[r.phase] || 0) + 1;
+  const w = rows[0];
+  return { gaps: rows.length, thresholdMs, byPhase, rows: rows.slice(0, topN),
+    summary: `${rows.length} rAF gap(s) >= ${thresholdMs} ms (${Object.entries(byPhase).map(([k, v]) => `${k}: ${v}`).join(", ")}); `
+      + `worst ${w.gapMs} ms [${w.phase}], ${w.prevFrameMs} ms of it in the step before, ${w.longTaskMs} ms in long tasks` };
+}
+
 // WHICH PASSES THE SPIKE FRAMES RUN. The recorder fingerprints every render
 // pass of every frame by target size, format and load op; analysePassKinds
 // compares the wide frames with the median. This compares the SPIKE frames

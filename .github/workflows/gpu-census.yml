@@ -588,6 +588,18 @@ jobs:
               } else if (_sc && _sc.note) {
                 rows.push(`${" ".repeat(8)}spike: ${_sc.note}`);
               }
+              // THE GAPS (hunt 4 §A gap ii): rAF intervals >= 500 ms since page
+              // load, which the spike rows (callbacks >= 100 ms) cannot see —
+              // the opening first-draw stall is time in which nothing ran.
+              const _gw = g.gapWork;
+              if (_gw && _gw.rows && _gw.rows.length) {
+                rows.push(`${" ".repeat(8)}gaps:  ${_gw.summary}`);
+                for (const x of _gw.rows.slice(0, 6)) {
+                  rows.push(`${" ".repeat(8)}  ${String(x.gapMs).padStart(6)} ms [${x.phase}] at +${x.atMs} ms: step before ${x.prevFrameMs} ms, long tasks ${x.longTaskMs} ms — prev: ${x.prev} | between: ${x.between}`);
+                }
+              } else if (_gw && (_gw.summary || _gw.note)) {
+                rows.push(`${" ".repeat(8)}gaps:  ${_gw.summary || _gw.note}`);
+              }
               // THE DRIVEN WINDOW (hunt 4 I4), in game frames from LoopHealth:
               // the number to compare across legs and runs. The gov row below
               // is the END-of-run ring, which also holds the frozen A/B frames

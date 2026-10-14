@@ -35,7 +35,7 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow } from "./frame-hitch.mjs";
+import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork } from "./frame-hitch.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
 // `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
@@ -229,8 +229,25 @@ try {
     // frames made them. One record per callback that made any call.
     let _hWorkCur = null;
     const _hWorkFrames = [];
+    // THE GAP VIEW (hunt 4 §A gap ii). analyseSpikeWork keys on a CALLBACK of
+    // >= 100 ms, so it never sees a 4 s rAF GAP — the opening first-draw stall
+    // is time in which no callback ran at all. Always on (armed or not, from
+    // page load): every rendering step (callbacks sharing one rAF timestamp)
+    // keeps its wrapped-call work and summed callback time, work done between
+    // steps is kept apart, and a step that starts >= 500 ms after the previous
+    // one records both, so the stall names the frame before it.
+    const GAP_MS = 500;
+    let _gFrameTs = null, _gFrameStart = -1, _gFrameDur = 0, _gFrameWork = null, _gBetween = null, _gInCb = false;
+    const _gGaps = [];
+    const _gapAdd = (k, n) => {
+      const o = _gInCb ? (_gFrameWork || (_gFrameWork = {})) : (_gBetween || (_gBetween = {}));
+      o[k] = (o[k] || 0) + n;
+    };
     const _bumpWorkN = (k, n) => {
+      _gapAdd(k, n);
       if (!_hArmed) return;
+      // Window totals carry the BYTES as well as the counts (upload KB).
+      if (k.endsWith("KB")) _hWork.set(k, (_hWork.get(k) || 0) + n);
       if (_hWorkCur === null) _hWorkCur = {};
       _hWorkCur[k] = (_hWorkCur[k] || 0) + n;
       // Every timed kind also feeds one per-frame total, so the analyser can
@@ -238,7 +255,7 @@ try {
       if (k.endsWith("Ms") && k !== "gpu.wrappedMs") _hWorkCur["gpu.wrappedMs"] = (_hWorkCur["gpu.wrappedMs"] || 0) + n;
     };
     const _bumpWork = (k) => {
-      if (!_hArmed) return;
+      if (!_hArmed) { _gapAdd(k, 1); return; }
       _hWork.set(k, (_hWork.get(k) || 0) + 1);
       _bumpWorkN(k, 1);
       if (!STACK_KINDS[k] || _hStackBudget <= 0) return;
@@ -329,6 +346,44 @@ try {
       wrapCall(G2, "linkProgram", "gl.linkProgram");
       wrapCall(G2, "compileShader", "gl.compileShader");
       wrapCall(G2, "getProgramParameter", "gl.getProgramParameter");
+      // THE WebGL2 UPLOAD SIDE (hunt 4 §A gap i). The three/WebGL2 and GLX legs
+      // reported "no resource calls observed" because only the compile calls
+      // were wrapped, while three's DynamicDraw rule re-uploads instance
+      // buffers every pass. Count, time and size the uploads the way
+      // GPUQueue.writeBuffer is: <kind>, <kind>Ms and <kind>KB per frame.
+      // Sizes are exact for typed arrays; an image source is counted at
+      // 4 B/texel and a PBO offset upload at w*h*4 (both marked estimates in
+      // the docs, never mistaken for zero).
+      const viewBytes = (v, srcOffset, length) => {
+        if (!v || typeof v.byteLength !== "number") return 0;
+        const per = v.BYTES_PER_ELEMENT || 1;
+        return length ? length * per : v.byteLength - (srcOffset || 0) * per;
+      };
+      const srcTexels = (s) => (s ? (s.naturalWidth || s.videoWidth || s.displayWidth || s.width || 0)
+        * (s.naturalHeight || s.videoHeight || s.displayHeight || s.height || 0) : 0);
+      // pixels: a typed array (exact), null (allocation only), a number (PBO
+      // offset) or an image source; w*h*d texels otherwise at 4 B each.
+      const texBytes = (p, srcOffset, texels) => (p == null ? 0
+        : (typeof p === "object" && typeof p.byteLength === "number") ? viewBytes(p, srcOffset) : texels * 4);
+      const GL_BYTES = {
+        bufferData: (a) => (typeof a[1] === "number" ? 0 : viewBytes(a[1], a[3], a[4])),   // a size alone uploads nothing
+        bufferSubData: (a) => viewBytes(a[2], a[3], a[4]),
+        texImage2D: (a) => (a.length === 6 ? srcTexels(a[5]) * 4 : texBytes(a[8], a[9], a[3] * a[4])),
+        texSubImage2D: (a) => (a.length === 7 ? srcTexels(a[6]) * 4 : texBytes(a[8], a[9], a[4] * a[5])),
+        texImage3D: (a) => texBytes(a[9], a[10], a[3] * a[4] * a[5]),
+        texSubImage3D: (a) => texBytes(a[10], a[11], a[5] * a[6] * a[7]),
+      };
+      for (const name of Object.keys(GL_BYTES)) {
+        if (!G2 || typeof G2[name] !== "function") continue;
+        const orig = G2[name], kind = "gl." + name, bytesOf = GL_BYTES[name];
+        G2[name] = function () {
+          _bumpWork(kind);
+          try { const b = bytesOf(arguments); if (b > 0) _bumpWorkN(kind + "KB", b / 1024); } catch (_) { /* the count stands */ }
+          const t = performance.now();
+          try { return orig.apply(this, arguments); } finally { _bumpWorkN(kind + "Ms", performance.now() - t); }
+        };
+      }
+      wrapCall(G2, "generateMipmap", "gl.generateMipmap");
     } catch (_) { /* a frozen prototype leaves this column absent, not zero */ }
     try {
       const TP = window.GPUTexture && window.GPUTexture.prototype;
@@ -460,7 +515,17 @@ try {
       window.requestAnimationFrame = function (cb) {
         return _raf(function (ts) {
           const a = performance.now();
+          if (ts !== _gFrameTs) {
+            // A new rendering step: was the one before it followed by a gap?
+            if (_gFrameStart >= 0 && a - _gFrameStart >= GAP_MS && _gGaps.length < 64) {
+              _gGaps.push({ at: _gFrameStart, gapMs: a - _gFrameStart, prevFrameMs: _gFrameDur,
+                prevWork: _gFrameWork, between: _gBetween, armed: _hArmed });
+            }
+            _gFrameTs = ts; _gFrameStart = a; _gFrameDur = 0; _gFrameWork = null; _gBetween = null;
+          }
+          _gInCb = true;
           try { return cb(ts); } finally {
+            _gInCb = false; _gFrameDur += performance.now() - a;
             if (_hArmed && _hN < _hCAP) {
               _hT[_hN] = a; _hD[_hN] = performance.now() - a;
               _hP[_hN] = _hPass > 32767 ? 32767 : _hPass;
@@ -481,6 +546,7 @@ try {
         // follow never enter the per-frame series or the spike analysis.
         disarm() { if (!_hArmed) return; _hArmed = false; _win.t1 = performance.now(); _win.f1 = _lhFrames(); },
         dump: () => ({ win: Object.assign({}, _win), gameFrameT: Array.from(_gfT.subarray(0, _gfN)),
+                       gaps: _gGaps, marks: window.__apexMarks || {}, longTasks: window.__apexLongTasks || [],
                        t0: Array.from(_hT.subarray(0, _hN)), dur: Array.from(_hD.subarray(0, _hN)),
                        passes: Array.from(_hP.subarray(0, _hN)), passSig: _hSig,
                        work: [..._hWork.entries()].sort((a, b) => b[1] - a[1]),
@@ -868,6 +934,10 @@ try {
     // READ THE WINDOW, NOT THE GOVERNOR'S END STATE (hunt 4 I4): frames, fps
     // and frame-interval percentiles over the driven window only.
     out.window = d ? analyseWindow(d.win, d.gameFrameT || [], (d.dur || []).length) : { note: "no recorder on this leg" };
+    // THE GAPS: every rAF interval >= 500 ms since page load, keyed to the
+    // work of the step before it (hunt 4 §A gap ii), whether or not armed.
+    out.gapWork = d ? analyseGapWork(d.gaps || [], { marks: d.marks, win: d.win, longTasks: d.longTasks })
+      : { note: "no recorder on this leg" };
     if (!d || !d.dur || d.dur.length < 30) return { note: "no rAF series — the recorder never armed, or the leg drew too few frames" };
     const a = analyse(d.t0, d.dur);
     // The pass census rides the same series: same frames, same window, so

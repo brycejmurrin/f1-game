@@ -19,7 +19,8 @@
 // to contain the thing, and the right verdict about one built not to.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow } from "../../tools/gfx/frame-hitch.mjs";
+import fs from "node:fs";
+import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork } from "../../tools/gfx/frame-hitch.mjs";
 
 // A frame series: `spikeEvery` frames apart, `spikeMs` long, `baseMs` otherwise.
 function series(frames, baseMs, spikeEvery, spikeMs) {
@@ -333,4 +334,54 @@ test("analyseWindow reads the driven window in GAME frames, not callbacks or the
   // A window that never closed is named, never a zero.
   assert.match(analyseWindow({ t0: 5, t1: null, f0: 1, f1: null }, [], 0).note, /never disarmed/);
   assert.match(analyseWindow(null, [], 0).note, /never armed/);
+});
+
+test("analyseGapWork attributes a multi-second rAF gap to the step before it and its phase (hunt 4 §A gap ii)", () => {
+  // The shape census 452 could not read: a 4.1 s first-draw stall right after
+  // the race gate, in which no callback ran, so the >= 100 ms CALLBACK filter
+  // of analyseSpikeWork saw nothing at all.
+  const marks = { raceCall: 1000, trackReady: 3000 };
+  const win = { t0: 5000, t1: 25000 };
+  const gaps = [
+    { at: 2000, gapMs: 700, prevFrameMs: 12, prevWork: null, between: { "gl.bufferData": 900, "gl.bufferDataKB": 40960, "gpu.wrappedMs": 210 }, armed: false },
+    { at: 6000, gapMs: 4100, prevFrameMs: 3900, armed: true,
+      prevWork: { "gl.linkProgram": 14, "gl.texImage2D": 6, "gl.texImage2DKB": 8192, "gl.linkProgramMs": 120, "gpu.wrappedMs": 180 }, between: null },
+    { at: 26000, gapMs: 650, prevFrameMs: 30, prevWork: null, between: null, armed: false },
+  ];
+  const longTasks = [[6010, 3895], [100, 50]];
+  const g = analyseGapWork(gaps, { marks, win, longTasks });
+  assert.equal(g.gaps, 3);
+  assert.deepEqual(g.byPhase, { "track build": 1, "driven window": 1, "after window": 1 });
+  const w = g.rows[0];
+  assert.equal(w.gapMs, 4100); assert.equal(w.phase, "driven window"); assert.equal(w.atMs, 5000);
+  assert.equal(w.prevFrameMs, 3900); assert.equal(w.outsideMs, 200); assert.equal(w.longTaskMs, 3895);
+  assert.match(w.prev, /linkProgram=14/); assert.match(w.prev, /texImage2D=8192KB/); assert.match(w.prev, /wrapped=180ms/);
+  assert.equal(w.between, "-");
+  assert.match(g.rows[1].between, /bufferData=900 bufferData=40960KB wrapped=210ms/);
+  assert.match(g.summary, /^3 rAF gap\(s\) >= 500 ms .*worst 4100 ms \[driven window\], 3900 ms of it in the step before, 3895 ms in long tasks/);
+  assert.match(analyseGapWork([], {}).summary, /no rAF gap/);
+  assert.match(analyseGapWork(null).note, /no gap series/);
+});
+
+test("the census sizes WebGL2 uploads from the call's own arguments (hunt 4 §A gap i)", () => {
+  // The byte rules live inside gpu-game-check's page init script, which only
+  // a browser runs; lift exactly that block and run it here.
+  const src = fs.readFileSync(new URL("../../tools/gfx/gpu-game-check.mjs", import.meta.url), "utf8");
+  const a = src.indexOf("const viewBytes = ");
+  const b = src.indexOf("for (const name of Object.keys(GL_BYTES))");
+  assert.ok(a > 0 && b > a, "the GL_BYTES block moved — re-anchor this test, do not drop it");
+  const GL = new Function(src.slice(a, b) + "\nreturn GL_BYTES;")();
+  const f32 = new Float32Array(256);          // 1024 B
+  assert.equal(GL.bufferData([0, f32, 0]), 1024);
+  assert.equal(GL.bufferData([0, 4096, 0]), 0, "a size-only bufferData allocates, uploads nothing");
+  assert.equal(GL.bufferData([0, f32, 0, 16, 32]), 128, "srcOffset/length are elements");
+  assert.equal(GL.bufferSubData([0, 0, f32]), 1024);
+  assert.equal(GL.bufferSubData([0, 0, f32, 64]), 768);
+  assert.equal(GL.texImage2D([0, 0, 0, 0, 0, { width: 64, height: 32 }]), 64 * 32 * 4, "6-arg TexImageSource form");
+  assert.equal(GL.texImage2D([0, 0, 0, 16, 16, 0, 0, 0, new Uint8Array(1024)]), 1024);
+  assert.equal(GL.texImage2D([0, 0, 0, 16, 16, 0, 0, 0, null]), 0, "null pixels: allocation only");
+  assert.equal(GL.texSubImage2D([0, 0, 0, 0, 0, 0, { naturalWidth: 10, naturalHeight: 10 }]), 400);
+  assert.equal(GL.texSubImage2D([0, 0, 0, 0, 8, 8, 0, 0, new Uint8Array(256)]), 256);
+  assert.equal(GL.texImage3D([0, 0, 0, 4, 4, 2, 0, 0, 0, new Uint8Array(128)]), 128);
+  assert.equal(GL.texSubImage3D([0, 0, 0, 0, 0, 4, 4, 3, 0, 0, { width: 4, height: 4 }]), 4 * 4 * 3 * 4, "image source per layer at 4 B/texel");
 });
