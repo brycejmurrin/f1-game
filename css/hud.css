@@ -1281,7 +1281,7 @@ body:not(.desktop) #announce {
   min-width: 0;
   max-width: min(440px, calc(72 * var(--vwzh)), calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
   width: min(100%, max-content, calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
-  max-height: min(4.5em, calc((var(--hud-cluster-y, 100vh) - 8px) / var(--hud-z) - 5.5em));
+  max-height: min(4.5em, calc((var(--hud-cluster-y, 100svh) - 8px) / var(--hud-z) - 5.5em));
 }
 /* Collapsed dock lane (js/ui/hud.js announceLane): flex min-content from
    #announce-num kept a painted box at width:0; hide the card so it cannot

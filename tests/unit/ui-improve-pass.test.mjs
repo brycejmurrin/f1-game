@@ -2088,8 +2088,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "compact radio cards sit right under the timing row, like every other density");
   assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce', "top"), "calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px)",
     "…and step below the flag chip while a caution shows, never on top of it");
-  assert.equal(decl(css("css/hud.css"), ":root[data-gap-drop] #announce", "--flag-slot-top"), "calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px)",
-    "gap-drop raises --flag-slot-top so announce steps from the dropped flag edge");
+  assert.equal(decl(css("css/hud.css"), ":root[data-gap-drop] #announce", "--flag-slot-top"), "max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px), calc(var(--hud-gaps-b, 0px) + 8px))",
+    "gap-drop raises --flag-slot-top so announce steps from the dropped flag edge (and clears --hud-gaps-b)");
   // ONE formula for the phone INPUTS top (HUD PR review 2026-10-10): --hud-sec-h is published in the chrome's
   // zoom (--hud-z-top) and converted into this band's (--hud-z); the step below the #hud-limits chip is
   // conditional (--inputs-below-limits, set only while the chip shows) rather than a permanent +1.75em+8px.
