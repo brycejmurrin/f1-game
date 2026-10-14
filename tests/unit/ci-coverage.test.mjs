@@ -18,6 +18,7 @@ import { report, ALL_SPECS, expand, groupSpecs } from "../../tools/ci/ci-coverag
 // moved on, which is the drift it exists to catch pointing the wrong way. The
 // selector owns the value; this file checks ci.yml agrees with the selector.
 import { SELECTED_GATE } from "../../tools/ci/select-specs.mjs";
+import { pickFastTier, treeOnlyGreen, rearmDecision, parseJobPages } from "../../tools/ci/pages-train.mjs";
 
 const SELECTED_TIMEOUT_MS = SELECTED_GATE.perTestTimeoutSec * 1000;
 
@@ -611,15 +612,19 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     '#!/usr/bin/env bash\n[ "${FAKE_GH:-}" = fail ] && exit 1\nurl="$2"\n' +
     'case "$url" in */jobs*) id="${url%/jobs*}"; id="${id##*/}"; node -e \'const m=JSON.parse(process.env.FAKE_JOBS||"{}");console.log(JSON.stringify({jobs:m[process.argv[1]]||[]}))\' "$id"; exit 0;; esac\n' +
     'sha="${url#*head_sha=}"; sha="${sha%%&*}"\n' +
-    'node -e \'const m=JSON.parse(process.env.FAKE_RUNS||"{}");console.log(JSON.stringify({workflow_runs:m[process.argv[1]]||[]}))\' "$sha"\n');
+    'node -e \'const m=JSON.parse(process.env.FAKE_RUNS||"{}");console.log(JSON.stringify({workflow_runs:(m[process.argv[1]]||[]).map((r)=>({head_sha:process.argv[1],...r}))}))\' "$sha"\n');
   fs.chmodSync(path.join(bin, "gh"), 0o755);
   const script = new URL("../../tools/ci/pages-reuse-verdict.sh", import.meta.url).pathname;
   // A READY PR's run / a full Pages gate: CI, sweeps, selected verdict and
   // smoke all ran and passed (a draft's sweeps and smoke are skipped).
+  // The tree-only rows (guards halves + aggregator, unit plan, node suites,
+  // driving model) are what a fast tier must show before it is fast_run.
   const gateJobs = (prefix = "", over = {}) => [
     ["CI", "success"], ["Per-circuit geometry sweeps", "success"], ["Selected specs (verdict)", "success"],
     ["Smoke (page boots, __apex responds) (1)", "success"], ["Structural guards", "success"],
-  ].map(([name, conclusion]) => ({ name: prefix + name, conclusion: over[name] || conclusion }));
+    ["Structural guards (tooling A)", "success"], ["Structural guards (tooling B)", "success"], ["Plan node unit slices", "success"],
+    ["Pure-node unit suites (vm-a1)", "success"], ["Pure-node unit suites (page)", "success"], ["Driving model (characterization traces)", "skipped"],
+  ].map(([name, conclusion]) => ({ name: prefix + name, status: "completed", conclusion: name in over ? over[name] : conclusion }));
   const fullJobs = {
     7: gateJobs(),
     // Pages run 3112 (37689226760): ship_only smoke, sweeps/selection/guards skipped.
@@ -630,6 +635,14 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     11: gateJobs("ci / "),
     12: gateJobs("ci / ", { "Smoke (page boots, __apex responds) (1)": "cancelled" }),
     13: gateJobs("", { "Selected specs (verdict)": "skipped" }),
+    // T1 (2026-10-14): the run that POKED this train, still in progress — its
+    // tree-only jobs are done and green, CI has not run yet.
+    20: gateJobs("", { CI: null, "Per-circuit geometry sweeps": "skipped", "Smoke (page boots, __apex responds) (1)": "skipped" })
+      .map((j) => (j.name === "CI" ? { ...j, status: "queued" } : j)),
+    // A fast tier still running its node suites: not reusable yet.
+    21: gateJobs("", { "Pure-node unit suites (page)": null }).map((j) => (j.conclusion === null ? { ...j, status: "in_progress" } : j)),
+    // A fast tier whose aggregator has not been created yet (its halves still run).
+    22: gateJobs("").filter((j) => j.name !== "Structural guards"),
   };
   const run = (over) => ({ id: 7, status: "completed", conclusion: "success", path: ".github/workflows/ci.yml", event: "pull_request", head_branch: "feature", html_url: "https://example.test/run/7", ...over });
   const verdict = (sha, runs, env = {}) => Object.fromEntries(cp.execFileSync("bash", [script, sha], {
@@ -673,8 +686,31 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     "a cancelled smoke shard is not a pass");
   assert.equal(verdict(M2, { [D]: [run({ id: 13 })] }).reuse, "false", "a skipped selected verdict is not a pass");
   assert.equal(verdict(M2, { [D]: [run({ id: 14, event: "merge_group" })] }).reuse, "false", "merge_group needs its gate jobs too (no jobs on record: not a gate)");
-  assert.equal(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy", conclusion: "failure" })] }).fast_run, "",
-    "a red fast tier is not reused");
+  // T1: the poking run is in progress when the train starts; its tree-only jobs count.
+  assert.deepEqual(verdict(M2, { [M2]: [run({ id: 20, event: "push", head_branch: "deploy", status: "in_progress", conclusion: null })] }),
+    { reuse: "false", source: "", run: "", fast_run: "20", ship_only: "false" },
+    "an IN-PROGRESS exact-sha fast tier whose tree-only jobs all passed is fast_run (71 of 82 poked trains re-ran them)");
+  assert.equal(verdict(M2, { [M2]: [run({ id: 21, event: "push", head_branch: "deploy", status: "in_progress", conclusion: null })] }).fast_run, "",
+    "a node suite still running: not reused");
+  assert.equal(verdict(M2, { [M2]: [run({ id: 22, event: "push", head_branch: "deploy", status: "in_progress", conclusion: null })] }).fast_run, "",
+    "the guards aggregator not yet listed: not reused");
+  assert.equal(verdict(M2, { [M2]: [run({ id: 20, event: "push", head_branch: "feature", status: "in_progress", conclusion: null })] }).fast_run, "",
+    "only a DEPLOY-branch push run is the fast tier");
+  assert.equal(verdict(M2, { [M2]: [run({ id: 20, event: "push", head_branch: "deploy", conclusion: "cancelled" })] }).fast_run, "",
+    "a cancelled fast tier is neither reused nor red");
+  // T4: a red tip stops the train at the verdict, before any gate or tree-equal reuse.
+  const red = (runs) => cp.spawnSync("bash", [script, M2], {
+    cwd: dir, encoding: "utf8",
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "deploy", FAKE_RUNS: JSON.stringify(runs), FAKE_JOBS: JSON.stringify(fullJobs), GITHUB_STEP_SUMMARY: "" },
+  });
+  const r1 = red({ [M2]: [run({ id: 31, event: "push", head_branch: "deploy", conclusion: "failure", html_url: "https://example.test/run/31" })] });
+  assert.equal(r1.status, 1, "a tip whose fast tier concluded failure fails the verdict at once");
+  assert.match(r1.stderr, /tip fast tier red: run 31 https:\/\/example\.test\/run\/31/);
+  assert.doesNotMatch(r1.stdout, /reuse=/, "no verdict lines: the gate must not run");
+  assert.equal(red({ [M2]: [run({ id: 31, event: "push", head_branch: "deploy", conclusion: "failure" })], [D]: [run()] }).status, 1,
+    "a red tip is not published through a tree-equal parent's green gate either");
+  assert.equal(red({ [M2]: [run({ id: 32, event: "push", head_branch: "deploy", status: "in_progress", conclusion: null }), run({ id: 31, event: "push", head_branch: "deploy", conclusion: "failure" })] }).status, 0,
+    "only the NEWEST run on the sha decides (a re-run in progress is not red)");
   assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }, { DEPLOY_BRANCH: "" }).reuse, "false",
     "without DEPLOY_BRANCH no push run can be told from the fast tier: fail safe into the gate");
   assert.equal(verdict(M2, { [D]: [run({ path: ".github/workflows/pages.yml", event: "schedule" })] }).reuse, "true", "a train tick that deployed the same tree counts");
@@ -690,6 +726,84 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   assert.equal(verdict(M2, { [D]: [run()] }, { FAKE_GH: "fail" }).reuse, "false", "an API failure runs the gate rather than guessing");
   assert.equal(verdict(M2, {}).reuse, "false", "no run on record: the gate runs");
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("pages-train.mjs: the tip's fast tier, in progress or done, and the re-arm decision (audit T1/T3/T4)", () => {
+  const ci = (over) => ({ id: 5, path: ".github/workflows/ci.yml", event: "push", head_branch: "deploy", head_sha: "abc", status: "completed", conclusion: "success", html_url: "u5", ...over });
+  const opts = { sha: "abc", deployBranch: "deploy" };
+  assert.equal(pickFastTier([ci()], opts).state, "green");
+  assert.equal(pickFastTier([ci({ status: "in_progress", conclusion: null })], opts).state, "running");
+  assert.equal(pickFastTier([ci({ status: "queued", conclusion: null })], opts).state, "running");
+  assert.deepEqual(pickFastTier([ci({ conclusion: "failure" })], opts), { state: "red", id: "5", url: "u5" });
+  assert.equal(pickFastTier([ci({ conclusion: "cancelled" })], opts).state, "none", "cancelled is neither green nor red");
+  assert.equal(pickFastTier([ci({ head_branch: "feature" })], opts).state, "none", "a topic-branch push is not the fast tier");
+  assert.equal(pickFastTier([ci({ event: "pull_request" })], opts).state, "none");
+  assert.equal(pickFastTier([ci({ path: ".github/workflows/pages.yml" })], opts).state, "none");
+  assert.equal(pickFastTier([ci({ head_sha: "def" })], opts).state, "none", "another sha's run never counts");
+  assert.equal(pickFastTier([ci()], { sha: "abc", deployBranch: "" }).state, "none", "no DEPLOY_BRANCH: fail safe");
+  assert.equal(pickFastTier([ci({ id: 6, status: "in_progress", conclusion: null }), ci({ conclusion: "failure" })], opts).state, "running",
+    "the newest run decides");
+
+  const job = (name, conclusion = "success", status = "completed") => ({ name, status, conclusion });
+  const green = ["Structural guards (tooling A)", "Structural guards (tooling B)", "Structural guards", "Plan node unit slices",
+    "Pure-node unit suites (vm-a1)", "Pure-node unit suites (page)"].map((n) => job(n));
+  assert.deepEqual(treeOnlyGreen([...green, job("Driving model (characterization traces)", "skipped")]), { ok: true, missing: [] },
+    "driving model skipped by unit-plan's path filter is a pass (as in ci-verdict and poke-train)");
+  assert.equal(treeOnlyGreen([...green.map((j) => ({ ...j, name: `ci / ${j.name}` })), job("ci / Driving model (characterization traces)")]).ok, true,
+    "a reusable-call prefix is stripped");
+  assert.equal(treeOnlyGreen(green).ok, false, "driving model not listed yet: not done");
+  assert.deepEqual(treeOnlyGreen([...green, job("Driving model (characterization traces)", null, "in_progress")]).missing, ["Driving model (characterization traces)"]);
+  assert.deepEqual(treeOnlyGreen([...green.slice(0, 2), ...green.slice(3), job("Driving model (characterization traces)")]).missing, ["Structural guards"],
+    "the aggregator must exist and be green, not just its halves");
+  assert.equal(treeOnlyGreen([...green, job("Pure-node unit suites (slow)", "failure"), job("Driving model (characterization traces)")]).ok, false);
+  assert.equal(treeOnlyGreen([...green.slice(0, 4), job("Pure-node unit suites (${{ matrix.slice }})", "skipped"), job("Driving model (characterization traces)")]).ok, false,
+    "a job-level-skipped node-suites matrix (one unexpanded row) is not a pass");
+  assert.equal(treeOnlyGreen([...green, job("Driving model (characterization traces)", "failure")]).ok, false);
+  assert.equal(treeOnlyGreen([]).ok, false, "no jobs listed (a queued run): not reusable");
+  assert.equal(parseJobPages('{"total_count":2,"jobs":[{"name":"a"}]}{"total_count":2,"jobs":[{"name":"b"}]}').length, 2, "--paginate pages concatenate");
+
+  const base = { ref: "deploy", deployBranch: "deploy", sha: "aaaaaaaaaa", tip: "bbbbbbbbbb", active: 0, tipFast: { state: "green", id: "9" } };
+  assert.equal(rearmDecision(base).rearm, true, "tip moved on, its fast tier green, no train moving: re-arm");
+  assert.equal(rearmDecision({ ...base, tip: base.sha }).rearm, false, "this run took the tip — a red gate must not loop on its own tree");
+  assert.equal(rearmDecision({ ...base, active: 1 }).rearm, false, "single-flight: never dual-dispatch Pages");
+  assert.equal(rearmDecision({ ...base, active: null }).rearm, false, "an unreadable run listing is a no, not a guess");
+  assert.equal(rearmDecision({ ...base, tip: "" }).rearm, false, "an unreadable tip is a no");
+  assert.equal(rearmDecision({ ...base, tipFast: { state: "running" } }).rearm, false, "a pending tip pokes itself when it goes green");
+  assert.equal(rearmDecision({ ...base, tipFast: { state: "red" } }).rearm, false);
+  assert.equal(rearmDecision({ ...base, tipFast: null }).rearm, false);
+  assert.equal(rearmDecision({ ...base, ref: "feature" }).rearm, false, "a run off the deploy branch never dispatches the train");
+});
+
+test("pages.yml re-arms the train once, after everything, and holds its Pages token on deploy only", () => {
+  const pages = parseYAML(pagesWorkflow);
+  // T6 least privilege: deploy-pages needs pages: write + id-token: write on
+  // the deploying job (https://github.com/actions/deploy-pages); nothing else does.
+  assert.deepEqual(pages.permissions, { contents: "read" }, "no Pages token at workflow level");
+  assert.deepEqual(pages.jobs.deploy.permissions, { contents: "read", pages: "write", "id-token": "write" });
+  for (const [id, job] of Object.entries(pages.jobs)) {
+    if (id === "deploy") continue;
+    assert.ok(job.permissions, `${id} must name its own permissions (it would inherit only contents: read, but say so)`);
+    assert.equal(job.permissions.pages, undefined, `${id} holds no pages token`);
+    assert.equal(job.permissions["id-token"], undefined, `${id} holds no OIDC token`);
+  }
+  // T3: the re-arm. Last job, runs whatever happened above (never on cancel),
+  // single-flight through pages-train.mjs, dispatches the deploy branch only.
+  const rearm = pages.jobs.rearm;
+  assert.ok(rearm, "the train must re-arm itself for a tip that went green while it ran");
+  assert.deepEqual(rearm.needs, ["verdict", "ci", "publishable", "deploy", "verify-live"]);
+  assert.equal(rearm.if, "${{ !cancelled() }}");
+  assert.deepEqual(rearm.permissions, { actions: "write", contents: "read" });
+  const steps = rearm.steps.map((st) => st.run || "").join("\n");
+  assert.match(steps, /node tools\/ci\/pages-train\.mjs rearm "\$GITHUB_SHA"/);
+  assert.match(steps, /gh workflow run pages\.yml --repo "\$GITHUB_REPOSITORY" --ref "\$DEPLOY_BRANCH"/);
+  assert.equal(rearm.steps.find((st) => /gh workflow run/.test(st.run || "")).if, "steps.r.outputs.rearm == 'true'",
+    "the dispatch runs only on the script's yes");
+  // spec-timings: npm ci only when there is junit to merge.
+  const timings = parseYAML(fs.readFileSync(new URL("../../.github/workflows/spec-timings.yml", import.meta.url), "utf8"));
+  const tsteps = timings.jobs.merge.steps;
+  const setup = tsteps.findIndex((st) => st.uses === "./.github/actions/setup-apex");
+  assert.ok(setup > tsteps.findIndex((st) => st.id === "fetch"), "npm ci comes after the junit fetch");
+  assert.equal(tsteps[setup].if, "steps.fetch.outputs.found == 'true'", "no junit (the normal case): no npm ci");
 });
 
 test("every ROOT html page is named in the Stage site whitelist", async () => {
@@ -1306,14 +1420,16 @@ test("a green fast-tier run pokes the train; a red or called one never does", ()
 });
 
 test("pages.yml is a release train: schedule + dispatch, one deploy branch, nothing-new short-circuit", () => {
-  // THE TRAIN (2026-09-10). A deploy per push at 140-300 pushes a day meant a
+  // THE TRAIN (2026-09-10). A deploy per push at 140-300 pushes a day (3-131 in 2026-10) meant a
   // 14-job gate per commit and gates cancelling each other in bursts. The
   // train ticks three times an hour off the hour, refuses any other branch,
   // stops in one slot when the live site already serves the tip, and hands
   // the gate the live commit as its diff base.
   const onBlock = pagesWorkflow.slice(pagesWorkflow.indexOf("\non:\n"), pagesWorkflow.indexOf("\npermissions:"));
   assert.doesNotMatch(onBlock, /^\s+push:/m, "the train must not run on push");
-  assert.match(onBlock, /schedule:\s*\n\s+- cron: "7,27,47 \* \* \* \*"/, "three ticks an hour, off the hour");
+  // Hourly since 2026-10-14: three ticks an hour were delivered ~4.5 times a
+  // day, and the train now re-arms itself (`rearm`), so the cron is a backstop.
+  assert.match(onBlock, /schedule:\s*\n\s+- cron: "41 \* \* \* \*"/, "one tick an hour, off the hour");
   assert.match(onBlock, /workflow_dispatch:/, "a dispatch is 'deploy now'");
   assert.match(onBlock, /^\s+DEPLOY_BRANCH: claude\/f1-game-project-26h3ng\s*$/m, "the one declaration of the deploy branch");
 

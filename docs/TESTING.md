@@ -1017,8 +1017,9 @@ the line.
 
 ### Release train (2026-09-10)
 
-`pages.yml` no longer runs on push. The deploy branch takes 140-300 commits a
-day from several agents, and a deploy per push meant a 14-job gate and a Pages
+`pages.yml` no longer runs on push. The deploy branch took 140-300 commits a
+day from several agents when the train was designed (3-131 a day measured
+2026-10-14), and a deploy per push meant a 14-job gate and a Pages
 deployment per commit, gates cancelling each other in bursts, and the account's
 20 job slots spent re-testing trees one commit apart. Two tiers replace it:
 
@@ -1032,7 +1033,8 @@ deployment per commit, gates cancelling each other in bursts, and the account's
   is the answer to "did my push break anything".
 - **The train** (`pages.yml`; started by `ci.yml`'s `poke-train` job when a
   deploy-branch push's fast tier goes green, by a manual `workflow_dispatch`
-  = "deploy now", and by the cron `7,27,47 * * * *` as a backstop — GitHub's
+  = "deploy now", by its own `rearm` job when the tip moved on to a green
+  fast tier while it ran, and by the hourly cron `41 * * * *` as a backstop — GitHub's
   scheduler runs this repository's crons HOURS late: the 03:17 nightly is
   created between 07:54 and 08:18 on each of its last five days, and the
   train's first three ticks on 2026-09-10 never arrived at all): `verdict`
@@ -1041,10 +1043,18 @@ deployment per commit, gates cancelling each other in bursts, and the account's
   the tip is already live, otherwise hands the live commit to `ci.yml` as
   `before_sha` (so the sweeps, smoke and selection filters diff against exactly
   what is live) and skips the gate when the tip's tree already has a green run
-  (`tools/ci/pages-reuse-verdict.sh`). The gate group never cancels: a running
+  (`tools/ci/pages-reuse-verdict.sh`). The tip's own fast tier counts while its
+  run is still in progress once the tree-only jobs are green (the poking run
+  always is), and a tip whose fast tier concluded `failure` stops the train at
+  the verdict (`tools/ci/pages-train.mjs`). The gate group never cancels: a running
   gate finishes, the next tick waits, a later tick replaces the waiting one.
   Then `publishable`, `deploy` (exact artifact, monotonic) and `verify-live` as
-  before. Push→live is bounded by a tick plus one gate, ~35 min worst case.
+  before. Measured 2026-10-14: the gate's median is 20.5 min and a gated
+  publish (dispatch to live) 23 min median, 73 min p90 — queue waits in the
+  03-08 UTC bursts, not the tests, make the tail. After a train, `rearm`
+  dispatches one more for a tip that went green while it ran (only when no
+  other pages.yml run is queued or running), so a commit no longer waits for
+  the cron.
 
 Inside `ci.yml` a Pages call is recognised by its `concurrency_key` (the
 caller's event is `schedule` or `workflow_dispatch` there, never `push`): the
