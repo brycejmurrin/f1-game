@@ -2,11 +2,25 @@
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
+/** Boot wait: one reload if `__apex.race` misses BOOT_MS (title menu up, API absent).
+ *  Packed-2 tip-red on #1493 run 38554083150: prop-over-road hit TimeoutError at BOOT_MS
+ *  after menu-traversal; re-run + local packed-2 order green. Do not widen BOOT_MS. */
+async function awaitApexRace(page) {
+  try {
+    await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
+  } catch (err) {
+    const msg = err && typeof err === "object" && "message" in err ? String(err.message) : "";
+    if (!/Timeout/i.test(msg)) throw err;
+    await page.reload();
+    await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
+  }
+}
+
 test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ page }) => {
   test.setTimeout(300_000);
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
+  await awaitApexRace(page);
 
   const result = await page.evaluate(async () => {
     const definition = window.TrackDefs.find((entry) => entry.id === "monaco");
@@ -181,7 +195,7 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
 test("Monaco remains within the 1.4 m prop-over-road cap", async ({ page }) => {
   test.setTimeout(180_000);
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
+  await awaitApexRace(page);
   const max = await page.evaluate(async () => {
     window.__apex.trackGeometry(true);
     await window.__apex.race("monaco", "day", "dry");   // thenable — see the note above

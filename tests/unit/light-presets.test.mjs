@@ -146,30 +146,83 @@ test("no lit condition ships the crushing stamp: ambientMul ≥ 0.15 and keyMul 
   assert.deepEqual(bad, [], "a non-night preset crushes ambient or switches the sun off");
 });
 
+/** Fleet-identical dawn|dry knobs hoisted to *|dawn|dry (Lighting R4 #5a). */
+const DAWN_DRY_HOIST = Object.freeze({
+  ambientMul: 0.5,
+  keyMul: 0.29,
+  bloomMul: 0.115,
+  sunTemp: -0.42,
+  sunElev: -2.7,
+  grMul: 2.279,
+  mistDensity: 1.25,
+  tint: 0.16,
+  beamCone: 1.831,
+  bleedMul: 2.425,
+  bounceK: 0.11025,
+  floodEmitMul: 0.18,
+  fogDensityMul: 2.037,
+  glowAmp: 1.765,
+  godrayAniso: 0.943,
+  godrayBase: 0,
+  godrayFloor: 0.055,
+  godrayLowBoost: 0.612,
+  lampFlicker: 0.011,
+  lampLevel: 0.093,
+  lampRadiusMul: 0.894,
+  poolEnergy: 0.762,
+  roadRough: 1.175,
+  shadowStr: 1.22,
+  ssrDryDay: 0.074,
+  ssrDryNight: 0.014,
+  ssrWetMul: 0.13,
+  wetDark: 1.375,
+});
+
 test("shared *|dawn|dry stamp supplies the fleet dawn fill", () => {
   const P = presets();
   const shared = P["*|dawn|dry"];
   assert.ok(shared, "expected LightPresets['*|dawn|dry']");
-  assert.equal(shared.ambientMul, 0.5);
-  assert.equal(shared.keyMul, 0.29);
-  assert.equal(shared.bloomMul, 0.115);
-  const pinned = Object.keys(P).filter((k) => {
-    if (!/\|dawn\|dry$/.test(k) || k.startsWith("*")) return false;
-    const o = P[k];
-    return Object.prototype.hasOwnProperty.call(o, "ambientMul")
-      || Object.prototype.hasOwnProperty.call(o, "keyMul");
-  });
-  assert.deepEqual(pinned, [], "per-track dawn|dry must defer ambientMul/keyMul to *|dawn|dry");
-  const bloomRedundant = [];
+  for (const [id, want] of Object.entries(DAWN_DRY_HOIST)) {
+    assert.equal(shared[id], want, `*|dawn|dry.${id}`);
+  }
+  assert.equal(shared.sunAzim, undefined,
+    "sunAzim stays per-track (paul_ricard 144.5 vs fleet 128.5)");
+  const redundant = [];
   for (const key of Object.keys(P)) {
     if (!/\|dawn\|dry$/.test(key) || key.startsWith("*")) continue;
     const o = P[key];
-    if (Object.prototype.hasOwnProperty.call(o, "bloomMul") && o.bloomMul === shared.bloomMul) {
-      bloomRedundant.push(`${key}.bloomMul=${o.bloomMul}`);
+    for (const [id, want] of Object.entries(DAWN_DRY_HOIST)) {
+      if (Object.prototype.hasOwnProperty.call(o, id) && o[id] === want) {
+        redundant.push(`${key}.${id}=${o[id]}`);
+      }
     }
   }
-  assert.deepEqual(bloomRedundant, [],
-    "per-track dawn|dry must not re-pin bloomMul at the same value as *|dawn|dry");
+  assert.deepEqual(redundant, [],
+    "per-track dawn|dry must not re-pin a knob at the same value as *|dawn|dry");
+});
+
+test("*|dawn|dry hoisted knobs resolve identically on every track", () => {
+  // Shipped resolver only (no player profiles): * → *|tod|wx → track|tod|wx → *|tod.
+  // A hoist that changed any cell would make two tracks disagree on a fleet knob
+  // or disagree with the stamp — this is the zero-diff pin for R4 #5a.
+  const P = presets();
+  const circuits = fs.readdirSync(path.join(ROOT, "js/circuits"))
+    .filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
+  assert.ok(circuits.length >= 52, `only ${circuits.length} circuit files`);
+  const shared = P["*|dawn|dry"];
+  const drift = [];
+  for (const track of circuits) {
+    const pin = P[`${track}|dawn|dry`] || {};
+    for (const [id, want] of Object.entries(DAWN_DRY_HOIST)) {
+      const resolved = (typeof pin[id] === "number") ? pin[id]
+        : (typeof shared[id] === "number") ? shared[id]
+        : (P["*"] && typeof P["*"][id] === "number") ? P["*"][id]
+        : undefined;
+      if (resolved !== want) drift.push(`${track}|dawn|dry.${id}=${resolved} want ${want}`);
+    }
+  }
+  assert.deepEqual(drift, [],
+    "every track must resolve the hoisted dawn|dry knobs to the shared stamp");
 });
 
 test("shared *|night|dry stamp supplies the fleet night authenticity knobs", () => {

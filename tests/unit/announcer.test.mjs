@@ -663,6 +663,80 @@ test("recorded introductions preserve voice identity, skip unknown stories and c
   a.stop(); assert.equal(a.speaking(), false);
 });
 
+function recordedLifecycle() {
+  const clock = fakeClock(), spoken = [], pending = [], stops = [];
+  const document = { hidden: false };
+  const G = { soundOn: true, paused: false, radio: { recordedVoice: () => "bella", volume: () => 0.8, pack: {
+    load: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
+    stop: (channel) => stops.push(channel), plan: () => ({ secs: 1 }),
+    speak: (_id, text, options) => { spoken.push({ text, options }); return true; },
+  } } };
+  const sb = vm.createContext({ Promise, Date: clock.Date, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, document });
+  vm.runInContext(read("js/audio/announcer-recorded.js"), sb);
+  return { a: sb.RecordedAnnouncer.create(G), clock, spoken, pending, stops, G, document };
+}
+
+test("recorded preview aborts release ownership at every asynchronous gate", async (t) => {
+  for (const state of ["paused", "hidden", "muted"]) {
+    for (const stage of ["load", "rejection", "timer", "decode", "end"]) {
+      await t.test(`${state} during ${stage}`, async () => {
+        const { a, clock, spoken, pending, stops, G, document } = recordedLifecycle();
+        a.play(["first", "second"], 0, false);
+        if (!["load", "rejection"].includes(stage)) {
+          pending[0].resolve(true); await Promise.resolve();
+          if (stage !== "timer") clock.tick(0);
+        }
+        if (state === "paused") G.paused = true;
+        else if (state === "hidden") document.hidden = true;
+        else G.soundOn = false;
+        const before = spoken.length;
+        if (stage === "load") pending[0].resolve(true);
+        else if (stage === "rejection") pending[0].reject(new Error("load failed"));
+        else if (stage === "decode") assert.equal(spoken[0].options.valid(), false);
+        else if (stage === "end") spoken[0].options.onEnd();
+        await Promise.resolve(); await Promise.resolve(); clock.tick(0);
+        assert.equal(a.speaking(), false, "an aborted unbudgeted preview releases its ownership");
+        assert.deepEqual(stops, ["intro", "intro"], "abort stops the owned channel once");
+        G.paused = false; document.hidden = false; G.soundOn = true;
+        clock.tick(10000);
+        assert.equal(spoken.length, before, "resume cannot restart the abandoned read");
+        a.play(["replacement"], 0, false);
+        pending[1].resolve(true); await Promise.resolve(); clock.tick(0);
+        assert.equal(spoken.at(-1).text, "replacement");
+        spoken.at(-1).options.onEnd(); clock.tick(250);
+        assert.equal(a.speaking(), false, "a subsequent preview completes normally");
+      });
+    }
+  }
+});
+
+test("stale recorded callbacks cannot release a replacement preview", async (t) => {
+  for (const stage of ["load", "rejection", "decode", "end"]) {
+    await t.test(stage, async () => {
+      const { a, clock, spoken, pending, stops, G } = recordedLifecycle();
+      a.play(["old"], 0, false);
+      if (["decode", "end"].includes(stage)) {
+        pending[0].resolve(true); await Promise.resolve(); clock.tick(0);
+      }
+      const old = spoken[0];
+      a.play(["replacement"], 0, false);
+      pending[1].resolve(true); await Promise.resolve(); clock.tick(0);
+      const current = spoken.at(-1), count = spoken.length, stopCount = stops.length;
+      G.paused = true;
+      if (stage === "load") pending[0].resolve(true);
+      else if (stage === "rejection") pending[0].reject(new Error("old load failed"));
+      else if (stage === "decode") assert.equal(old.options.valid(), false);
+      else old.options.onEnd();
+      await Promise.resolve(); await Promise.resolve(); clock.tick(1000);
+      assert.equal(a.speaking(), true, "only the current generation can release ownership");
+      assert.equal(stops.length, stopCount, "old callbacks cannot stop the current channel");
+      assert.equal(spoken.length, count, "old callbacks cannot schedule another line");
+      G.paused = false; current.options.onEnd(); clock.tick(250);
+      assert.equal(a.speaking(), false);
+    });
+  }
+});
+
 test("recorded introductions reserve the closing cue before adding optional colour", async () => {
   const clock = fakeClock(), calls = [];
   const duration = { welcome: 2, venue: 3, colour: 3, closing: 2 };

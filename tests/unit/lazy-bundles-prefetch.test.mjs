@@ -391,3 +391,35 @@ test("a malformed or hostile map falls back to the build key", () => {
     assert.equal(vm.runInContext('ScriptLoader.url("js/core/log.js")', ctx), "js/core/log.js?v=9", bad);
   }
 });
+
+test("awaitPackSettled: yields until the pack uploads, then resolves true", async () => {
+  const w = world({ body: () => "" });
+  let pack = { supported: true, uploaded: false, error: null, tier: null };
+  let yields = 0;
+  const done = w.lb.awaitPackSettled({
+    getState: () => pack,
+    yieldFn: async () => { yields++; if (yields >= 2) pack = { supported: true, uploaded: true, error: null, tier: "high" }; },
+    timeoutMs: 5000,
+  });
+  assert.equal(await done, true);
+  assert.ok(yields >= 2, "waited across yields while uploading");
+});
+
+test("awaitPackSettled: respects stale and timeout without hanging", async () => {
+  const w = world({ body: () => "" });
+  const pack = { supported: true, uploaded: false, error: null, tier: null };
+  let stale = false;
+  const p = w.lb.awaitPackSettled({
+    getState: () => pack,
+    stale: () => stale,
+    yieldFn: async () => { stale = true; },
+    timeoutMs: 5000,
+  });
+  assert.equal(await p, false, "stale abort leaves unsettled");
+  const timed = await w.lb.awaitPackSettled({
+    getState: () => pack,
+    yieldFn: async () => {},
+    timeoutMs: 0,
+  });
+  assert.equal(timed, false, "zero timeout exits unsettled");
+});

@@ -1,29 +1,28 @@
 ---
 name: survey-track
-context: fork
-agent: track-surveyor
-description: "Use when one circuit needs an end-to-end accuracy or grounding pass (gaps, terrain-over-road, channels/steps, sunk water). Worker analysis is browser-free with parent captures; reusable or parallel multi-track campaigns → track-realism; prop implementation → scenery-dress; geometry hooks only → agent-view."
+argument-hint: "<circuit ids…> [target year]"
+description: "Use when a circuit needs an end-to-end accuracy or grounding pass (gaps, terrain-over-road, channels/steps, sunk water), or a multi-circuit realism campaign (/survey-track spa monza: dated evidence, one surveyor per circuit). Props → scenery-dress; geometry hooks only → agent-view."
 ---
 
 # Survey & update a track
 
-Browser-free worker workflow for one assigned circuit's end-to-end accuracy
-pass. The parent owns web research, captures, shared engine work and integration.
-For a reusable or parallel multi-track campaign, the parent uses the
-[track-realism workflow](../track-realism/SKILL.md).
+Runs in the PARENT (no fork): the parent owns web research, captures, shared
+engine work and integration, and spawns ONE **track-surveyor** subagent per
+circuit with [the delegation prompt](references/delegation.md). The surveyor
+does the browser-free measurements and source diagnosis, edits only that
+circuit's pair of files in its OWN worktree (`isolation: worktree`, so disjoint
+circuits run in parallel), and stops at `verify-track` — engine work and the
+fleet gate below are the PARENT's, after it returns.
 
-Runs FORKED as the **track-surveyor** subagent (`context: fork`,
-`agent: track-surveyor`): the browser-free measurements and source diagnosis stay in the
-fork; the parent captures survey framings. The fork edits only that circuit's
-pair of files, in its OWN worktree (`isolation: worktree`, so a campaign can run
-two surveyors at once), and it stops at `verify-track` — engine work and the
-fleet gate below are the PARENT's, after the fork returns.
+Several circuits (`$ARGUMENTS` = circuit ids, optional target year; every id in
+`Tracks.LIST`): the campaign procedure is [references/campaign.md](references/campaign.md)
+(research and budgets: `references/campaign-workflow.md`).
 
 ## Hand-back
 
-The fork's edits are on its worktree branch, not in this checkout. Its report
+The surveyor's edits are on its worktree branch, not in this checkout. Its report
 names the branch and path; merge it before verifying here
-(`git merge --no-ff <fork-branch>`, then `verify-track` on the merged tree), and
+(`git merge --no-ff <surveyor-branch>`, then `verify-track` on the merged tree), and
 remove the worktree once merged (`git worktree remove <path>`).
 
 ```sh
@@ -39,7 +38,7 @@ For centreline measurements, load `buildContext()` from
 `tools/track/verify-track.cjs`, select the def by id, then call
 `Tracks.buildCenterline(def, { line: false })`. For retained road/terrain/prop
 geometry use `tools/lib/track-build-vm.cjs`; read its API before use. No browser
-launch/capture/automation in the fork, including `survey-track.mjs`,
+launch/capture/automation in the surveyor, including `survey-track.mjs`,
 `ground-profile.mjs`, `tools/shot/` commands and cloudBrowser. A numerical-only
 output does not make a Chromium-backed tool browser-free.
 
@@ -70,7 +69,7 @@ hands over to **new-track**, not dressing; routing is in the description.
 1. Read the brief, source pair and parent evidence — select 3–5 fixes supported
    by a measured defect or dated source.
 2. Read the parent's baseline captures and record camera framings alongside
-   Node VM measurements. Request missing views in the hand-back; the fork
+   Node VM measurements. Request missing views in the hand-back; the surveyor
    never captures them. Parent probes may include aerial/orbit/EYE and obliques.
 3. Edit dressing in `js/circuits/scenery/<id>.js` (the closure; the def
    `js/circuits/<id>.js` is the other half of the pair). Complete all pair edits
@@ -80,7 +79,7 @@ hands over to **new-track**, not dressing; routing is in the description.
 4. `verify-track.cjs <id>` — a THROW strands the game on the menu.
 5. Return changes, before/after numbers, source/year evidence, baseline deltas
    and uncertainties. Parent captures the same framings after integration.
-6. The fork stops after `audit-circuit`. Parent integration, browser checks and
+6. The surveyor stops after `audit-circuit`. Parent integration, browser checks and
    shipping follow **check-changes**.
 
 Montreal already ships `flatTerrain: true` + `terrainOuter: 70` — survey
@@ -90,7 +89,7 @@ before re-applying that fix.
 
 - Probe flags, Montreal worked example, gotchas, and the PARENT-only steps
   (browser survey, re-survey, ship) → [references/loop.md](references/loop.md);
-  the fork reads only its "Fork steps".
+  the surveyor reads only its "Surveyor steps".
 
 Per-circuit research briefs describe the reference place; verify implementation
 claims against source. The baked PBR asset pack ships ON and degrades to the

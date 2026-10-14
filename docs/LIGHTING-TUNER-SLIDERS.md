@@ -562,7 +562,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `lampFlicker` | LAMP FLICKER | 0 … 0.6 | 0.1 | — | ✓ | frame-lights.js |
 | `beamCone` | BEAM CONE WIDTH | 0.08 … 2.2 | 1 | — | ✓ | track-lights.js×3 |
 | `beamCore` | BEAM CORE | 0.3 … 1.5 | 1 | — | ✓ | track-lights.js |
-| `lampWallSpill` | LAMP WALL SPILL | 0 … 3 | 1 | `uLampWallSpill` | ✓ | glx.js×2 |
+| `lampWallSpill` | LAMP WALL SPILL | 0 … 3 | 1 | `uLampWallSpill` |   | glx.js×2 |
 
 ### BEHAVIOUR
 
