@@ -8333,7 +8333,10 @@ function render(dt) {
   // so a tier-4 DAYTIME frame (_cs is non-zero whenever the key is bright) would
   // still run the SSAO pass and both of its blurs after po.ssao went to 0. Shedding contact shadows is what
   // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
-  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssrPo; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  // WET-road SSR sheds one tier later (3) than the dry sheens and car paint (2): tier 2 is every phone's
+  // GRAPHICS: MEDIUM, and rain with no mirror read as reflections broken. The governor still sheds it at 3.
+  const _ssrTier = (frame.wetness || 0) > 0.01 ? 3 : 2;
+  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= _ssrTier ? 0 : _ssrPo; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone

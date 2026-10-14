@@ -4450,7 +4450,7 @@ const WGX = (function () {
 
       //    by COMPOSITE this same present() (binding 8). Skipped when dry.
       const _wet = (lastFrame && lastFrame.wetness) || 0;
-      // opts.reflect is the governor's SSR shed (game.js: tier >= 2 -> 0). Gating
+      // opts.reflect is the governor's SSR shed (game.js: tier >= 2 dry / 3 wet -> 0). Gating
       // on wetness ALONE kept dispatching the 24-step march on a shed device for
       // every wet lap — the pass ran, the LIT block multiplied its result by a
       // params4.w of 0, and the whole cost was thrown away. That is the shed the
