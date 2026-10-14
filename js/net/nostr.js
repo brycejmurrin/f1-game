@@ -20,6 +20,10 @@ const NetNostr = (function () {
   const MAX_SEEN = 64;
   const MAX_SEEN_CHARS = MAX_CONTENT_CHARS * 2;
   const MAX_HEARD_ACTIVE = 4;
+  // REQ strips `since` (device clock skew). Without a local floor a relay that
+  // replays an earlier host session's offer would be answered. ~30 s slack
+  // covers modest skew between hostStartedAt and the offer's created_at.
+  const OFFER_CREATED_SLACK_S = 30;
 
   let modPromise = null;
 
@@ -153,7 +157,7 @@ const NetNostr = (function () {
     catch (e) { return { close: false, message: null }; }
   }
 
-  function createBoundedInbox(consume) {
+  function createBoundedInbox(consume, minCreatedAt) {
     const seen = new Set();
     let seenChars = 0, active = 0, failed = 0;
     const remember = (content) => {
@@ -166,12 +170,15 @@ const NetNostr = (function () {
         seenChars -= oldest.length;
       }
     };
-    // Verdicts: true = handled (new or duplicate), "busy" = over the decrypt
-    // cap — DROP the message but keep the socket (a relay replaying history in
-    // a burst must not cost us every connection mid-handshake), false =
-    // poison (non-string / empty / oversize) — the caller closes that relay.
-    const accept = (content) => {
+    // Verdicts: true = handled (new, duplicate, or stale-by-created_at), "busy"
+    // = over the decrypt cap — DROP the message but keep the socket (a relay
+    // replaying history in a burst must not cost us every connection
+    // mid-handshake), false = poison (non-string / empty / oversize) — the
+    // caller closes that relay.
+    const accept = (content, createdAt) => {
       if (typeof content !== "string" || !content || content.length > MAX_CONTENT_CHARS) return false;
+      // Stale: older than hostStartedAt − slack. Keep the socket; do not decrypt.
+      if (minCreatedAt != null && typeof createdAt === "number" && createdAt < minCreatedAt) return true;
       if (seen.has(content)) return true;
       if (active >= MAX_HEARD_ACTIVE) return "busy";
       remember(content);
@@ -366,7 +373,11 @@ const NetNostr = (function () {
         message: "Nobody answered that code. Check the six characters, or ask "
                + "your friend for a fresh one — if it keeps happening, both "
                + "reload the game and try a new code." });
-      const inbox = createBoundedInbox(heard);
+      // Session start (unix s). Offers with created_at before this − slack are
+      // ignored — `since` stays stripped so a fast phone clock still hears a
+      // live host, but a relay replaying an earlier host session is not answered.
+      const hostStartedAt = Math.floor(Date.now() / 1000);
+      const inbox = createBoundedInbox(heard, hostStartedAt - OFFER_CREATED_SLACK_S);
 
       // Guest: once answering, stop the looking tick — lobby onTick used to
       // overwrite Connected during the 5.2 s answer re-post (build 14296).
@@ -442,7 +453,7 @@ const NetNostr = (function () {
             return;
           }
           if (m[0] === "EVENT" && m[2] && typeof m[2].content === "string" &&
-              inbox.accept(m[2].content) === false) {
+              inbox.accept(m[2].content, m[2].created_at) === false) {
             try { w.close(); } catch (e) { /* already closing */ }
           }
         };

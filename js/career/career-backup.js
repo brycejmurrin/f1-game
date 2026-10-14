@@ -297,6 +297,42 @@ const CareerBackup = (function () {
       drop: num(c.drop, 0, 5) | 0,
     };
   }
+  function cleanQualifying(raw, out) {
+    if (raw.qualiOrder == null) return;
+    // A grid is one classification: never truncate/filter a bad row into a
+    // different field. Match the season's bounded driver map (120 entries),
+    // retaining legacy ID-only rows that Quali.restoreFromSeason still accepts.
+    const order = raw.qualiOrder;
+    if (!Array.isArray(order) || order.length > 120) throw new Error("invalid qualifying order");
+    const seen = new Set();
+    out.qualiOrder = Array.from(order, (row) => {
+      const old = typeof row === "string", entry = old ? null : plain(row);
+      const id = old ? row : entry && entry.id;
+      if (typeof id !== "string" || !ID_RE.test(id) || seen.has(id)) throw new Error("invalid qualifying driver");
+      seen.add(id);
+      if (old) return id;
+      const cleaned = { id };
+      if (own(entry, "t")) {
+        if (num(entry.t, 0, 1e6) == null) throw new Error("invalid qualifying time");
+        cleaned.t = entry.t;
+      }
+      for (const key of ["human", "noTime"]) if (own(entry, key)) {
+        if (typeof entry[key] !== "boolean") throw new Error("invalid qualifying flag");
+        cleaned[key] = entry[key];
+      }
+      return cleaned;
+    });
+    // Keep the ownership stamps with the grid: dropping one could apply a
+    // valid result to the wrong circuit, mode or player seat after restoring.
+    const stamp = (key, valid) => {
+      if (raw[key] == null) return;   // older backups have no stamps
+      if (typeof raw[key] !== "string" || !valid(raw[key])) throw new Error("invalid qualifying stamp");
+      out[key] = raw[key];
+    };
+    stamp("qualiTrack", (v) => ID_RE.test(v));
+    stamp("qualiMode", (v) => /^(?:gp|season|career:(?:driver|myteam):[0-2])$/.test(v));
+    stamp("qualiSeat", (v) => { const ids = v.split("|"); return ids.length === 2 && ids.every((id) => ID_RE.test(id)); });
+  }
   function cleanSeason(raw) {
     const r = plain(raw);
     const out = {
@@ -312,6 +348,7 @@ const CareerBackup = (function () {
     if (r.stage === "race") out.stage = "race";
     if (typeof r.lastFl === "string" && ID_RE.test(r.lastFl)) out.lastFl = r.lastFl;
     if (Number.isInteger(r.seed) && r.seed > 0 && r.seed <= 0xFFFFFFFF) out.seed = r.seed;
+    cleanQualifying(r, out);
     return out;
   }
   function cleanBadges(raw) {

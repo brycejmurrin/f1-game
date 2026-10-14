@@ -22,6 +22,10 @@ function ensureScreen() {
       return false;
     }
     return true;
+  }).catch((e) => {
+    _load = null;
+    Log.warn("ui", "the career UI bundle did not load: " + (e && e.message || e));
+    return false;
   });
   return _load;
 }
@@ -30,6 +34,8 @@ function create(G) {
   Log.info("ui", "CareerUI.create");
   const { $ } = G;
   let real = null;
+  let entryGeneration = 0;
+  let entryFailed = false;
   function ensure() {
     if (real) return Promise.resolve(real);
     return ensureScreen().then((ok) => {
@@ -48,6 +54,30 @@ function create(G) {
   // rebinds these once the real screen mounts.
   function defer(fn) {
     return () => { ensure().then((r) => { if (r) fn(r); }); };
+  }
+  function openEntry(method, origin) {
+    if (entryFailed && G.refreshCareerButton) G.refreshCareerButton();
+    entryFailed = false;
+    const generation = ++entryGeneration;
+    return ensure().then((r) => {
+      if (generation !== entryGeneration) return;
+      const cs = $("carsetup");
+      if (cs && !cs.hidden) return;
+      if (r) { r[method](origin); return; }
+      if (typeof UiLayers !== "undefined") {
+        if (UiLayers.inRace()) return;
+        const top = UiLayers.top();
+        if (top && top.id !== "overlay" && top.id !== "career") return;
+      }
+      // The title door hides its overlay before the lazy bundle settles. A
+      // failed fetch must leave a usable menu, and the next tap retries it.
+      if (G.els && G.els.overlay) G.els.overlay.hidden = false;
+      entryFailed = true;
+      const sub = $("mb-career-sub"), button = $("mb-career");
+      if (sub) sub.textContent = "COULD NOT LOAD · TRY AGAIN";
+      if (button) button.setAttribute("aria-label", "Career modes — could not load. Try again.");
+      if (G.announce) G.announce("CAREER COULD NOT LOAD — PLEASE TRY AGAIN", 4, "warning");
+    });
   }
   if ($("cr-garage")) $("cr-garage").onclick = defer((r) => {
     if (r.close) r.close();
@@ -70,20 +100,9 @@ function create(G) {
     build: () => ensure().then((r) => { if (r && r.build) r.build(); }),
     // Do not reveal #career until CareerScreen has built — a premature show()
     // made the shell visible with no slots/title while the fetch was in flight.
-    openHub: () => ensure().then((r) => {
-      if (!r) return;
-      // A racy #cr-garage tap may already have opened the garage; do not cover it.
-      const cs = $("carsetup");
-      if (cs && !cs.hidden) return;
-      r.openHub();
-    }),
-    openSlots: (origin) => ensure().then((r) => {
-      if (!r) return;
-      const cs = $("carsetup");
-      if (cs && !cs.hidden) return;
-      r.openSlots(origin);
-    }),
-    close: () => { if (real) real.close(); else { const n = $("career"); if (n) n.hidden = true; } },
+    openHub: () => openEntry("openHub"),
+    openSlots: (origin) => openEntry("openSlots", origin),
+    close: () => { ++entryGeneration; if (real) real.close(); else { const n = $("career"); if (n) n.hidden = true; } },
     openOffers: () => ensure().then((r) => { if (r && r.openOffers) r.openOffers(); }),
     closeOffers: () => { if (real && real.closeOffers) real.closeOffers(); },
     openHistory: () => ensure().then((r) => { if (r && r.openHistory) r.openHistory(); }),

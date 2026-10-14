@@ -277,6 +277,56 @@ function realCamScene() {
   return { Director, CamFeel, G, bend, ctx, Tracks, api: Director.create(G) };
 }
 
+test("post-finish shots frame signed bank lift at the final interpolated pose, including unbanked and raw fallback poses", () => {
+  const { G, Tracks, api } = realCamScene();
+  G.player.finished = true;
+  G.camMode = 0;
+  let pose, bankCall, directorScratch;
+  G.camPoseOf = () => pose;
+  Tracks.banking = (track, s, x, scratch, smooth) => {
+    bankCall = { track, s, x, scratch, smooth };
+    if (s === 920) return null; // Leaving a bank must not retain the previous lift.
+    scratch.dy = x * 0.5;
+    scratch.roll = Math.atan(0.5);
+    return scratch;
+  };
+  const vantage = G.camVantage;
+  let expected;
+  G.camVantage = (mode, s, x, speed, now, extra) => {
+    assert.ok(bankCall, "Director samples the subject's bank before solving the shot");
+    assert.equal(bankCall.track, G.track);
+    assert.equal(bankCall.s, expected.s, "banking uses the resolved pose, not the raw physics s");
+    assert.equal(bankCall.x, expected.x, "banking uses the resolved lateral offset");
+    assert.equal(bankCall.smooth, true, "match the normal camera's smooth lift sampling");
+    if (directorScratch) assert.equal(bankCall.scratch, directorScratch, "reuse the bank scratch across shots and held frames");
+    directorScratch = bankCall.scratch;
+    assert.equal(extra.bankDy, expected.dy);
+    return vantage(mode, s, x, speed, now, extra);
+  };
+  for (expected of [{ s: 900, x: 4, dy: 2 }, { s: 900, x: -4, dy: -2 },
+    { s: 920, x: 4, dy: 0 }, { s: 1000, x: -4, dy: -2, raw: true }]) {
+    pose = expected.raw ? null : { s: expected.s, x: expected.x, carPos: [expected.x, expected.s], carHead: 0 };
+    G.player.x = expected.raw ? expected.x : 0;
+    G.player.px = G.player.x;
+    for (const shot of ["chase", "side", "heli", "cinematic"]) {
+      bankCall = null;
+      api.tick(15);
+      assert.equal(api.status().shot, shot);
+      assert.ok(Math.abs(G.dbgCam.target[1] - (7.5 + expected.dy + 0.8)) < 1e-9,
+        `${shot} aims at the car's bank-adjusted height (${expected.dy} m lift)`);
+      bankCall = null;
+      api.tick(1 / 60);
+    }
+  }
+  delete Tracks.banking;
+  G.camVantage = (...args) => {
+    assert.equal(args[5].bankDy, 0, "tracks without banking retain the unbanked camera");
+    return vantage(...args);
+  };
+  api.tick(1 / 60);
+  assert.ok(Math.abs(G.dbgCam.target[1] - 8.3) < 1e-9);
+});
+
 test("a side-of-the-bend flip mid-shot pans the TV eye: a few % of the flip a frame, never a teleport", () => {
   const { G, bend, api, CamFeel } = realCamScene();
   const dt = 1 / 60;
