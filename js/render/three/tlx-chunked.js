@@ -32,7 +32,9 @@
     // WHICH kind refused to quantise, how many vertices it cost, and the worst
     // value that pushed it out of range. "29 stayed wide" is not actionable;
     // "unorm, 3.1 M values, max 3.87" says the colours carry emissive above 1.
-    half: 0, wideBy: {}, wideMax: {}, wideLen: {} };
+    half: 0, wideBy: {}, wideMax: {}, wideLen: {},
+    // A-W2: attributes widened to a 4-byte stride on WebGL2, and the MB that cost.
+    pad4On: null, pad4: 0, pad4MB: 0 };
   // float32 -> float16 bits. three exports Float16BufferAttribute but no
   // converter, so this is ours, with the subnormal and overflow cases handled
   // rather than wrapped.
@@ -110,8 +112,60 @@
     return out;
   };
 
+  // A-W2 (perf hunt 4): 4-BYTE STRIDES ON THREE'S WEBGL2 BACKEND. ANGLE on
+  // Metal converts, at the first draw that binds it, every vertex buffer whose
+  // stride is not a multiple of 4 (Metal requires 4; ANGLE VertexArrayMtl
+  // syncDirtyAttrib -> convertVertexBufferCPU, on the CPU for half floats).
+  // layouts.cjs measured montreal's WebGL2 pack at 12.6 of 30.4 MB in such
+  // strides: normal Int16x3n (6 B), colour Uint8x3n (3 B) / Float16x3 (6 B),
+  // mat Float16x1 (2 B). So on WebGL2 (`fmt24 === false`, both shipping call
+  // sites) the packed result is widened to a 4-byte stride with the SAME
+  // values the shader reads:
+  //   x3 -> x4 of the same type. w = 0 for a unit normal (read as vec3, the
+  //   fmt24 pad); w = 1.0 for a colour (Uint8 255 / half 0x3C00), so the one
+  //   reader that takes RGBA — three's vertexColor() on rawUnlitMat — sees
+  //   alpha 1, exactly what three pads a 3-wide colour with (NodeBuilder
+  //   format vec3 -> vec4(x, 1.0)); tsl-lit and the unlit mats read "vec3"
+  //   (the .xyz of a vec4 input).
+  //   a 1-wide half (mat) -> Float32 of the DECODED half: the shader gets the
+  //   bit-identical float the half gave it (a half is exact in f32), not the
+  //   source value (MAT 15.4 stays 15.3984375).
+  // +5 B a vertex (normal +2, colour +1, mat +2). WebGPU (fmt24 true) already
+  // has only 2-/4-wide 8/16-bit formats; an undefined fmt24 (the
+  // tools/gfx/tlx-pack-check.cjs lift) keeps the raw pack.
+  // apex26.tlxPad4="0" restores the narrow strides.
+  const pad4On = (function () {
+    try { return localStorage.getItem("apex26.tlxPad4") !== "0"; } catch (_) { return true; }
+  })();
+  packStats.pad4On = pad4On;
+  function _fromHalf(h) {
+    const s = (h & 0x8000) ? -1 : 1, e = (h >> 10) & 0x1f, m = h & 0x3ff;
+    if (e === 0) return s * m * 5.960464477539063e-8;                 // 2^-24
+    if (e === 31) return m ? NaN : s * Infinity;
+    return s * (1 + m / 1024) * Math.pow(2, e - 15);
+  }
+  // x3 -> x4, same element type, w in the fourth lane.
+  function _widen4(a, w) {
+    const n = a.length / 3, out = new a.constructor(n * 4);
+    for (let i = 0; i < n; i++) {
+      out[i * 4] = a[i * 3]; out[i * 4 + 1] = a[i * 3 + 1]; out[i * 4 + 2] = a[i * 3 + 2]; out[i * 4 + 3] = w;
+    }
+    packStats.pad4++; packStats.pad4MB += (n * a.BYTES_PER_ELEMENT) / 1048576;
+    return out;
+  }
+  // A packed half attribute at a 4-byte stride: x3 -> x4 (w 1.0 for a colour), x1 -> Float32 of the decode.
+  function _halfAttr(THREE, h, itemSize, kind) {
+    if (itemSize === 3) return new THREE.Float16BufferAttribute(_widen4(h, kind === "unorm" ? 0x3c00 : 0), 4);
+    const f = new Float32Array(h.length);
+    for (let i = 0; i < h.length; i++) f[i] = _fromHalf(h[i]);
+    packStats.pad4++; packStats.pad4MB += (h.length * 2) / 1048576;
+    return new THREE.BufferAttribute(f, itemSize);
+  }
+
   function packAttr(THREE, src, len, itemSize, kind, fmt24) {
     let ok = src && src.length === len;
+    // W2: only a 3-wide 8/16-bit or a 1-wide 16-bit result misses 4 bytes (itemSize 2 of 16 bits is 4 B).
+    const pad = fmt24 === false && pad4On && (itemSize === 3 || itemSize === 1);
     if (fmt24 && itemSize === 3 && ok && kind === "unit") {
       src = pad4(src, len); len = (len / 3) * 4; itemSize = 4;
     }
@@ -185,6 +239,7 @@
         const h = new Uint16Array(len);
         for (let i = 0; i < len; i++) h[i] = _toHalf(src[i]);
         packStats.savedMB += (len * 2) / 1048576;
+        if (pad) return _halfAttr(THREE, h, itemSize, kind);
         // Constructor, NOT a post-hoc `.array =`: BufferAttribute derives
         // `count` from the array it is GIVEN, so assigning afterwards leaves
         // count 0 and the mesh draws nothing.
@@ -205,6 +260,7 @@
         a[i] = q < -32767 ? -32767 : q > 32767 ? 32767 : q;
       }
       packStats.savedMB += (len * 2) / 1048576;
+      if (pad && itemSize === 3) return new THREE.BufferAttribute(_widen4(a, 0), 4, true);   // W2: snorm16x4, w 0
       return new THREE.BufferAttribute(a, itemSize, true);            // normalized
     }
     if (kind === "id") {
@@ -222,11 +278,13 @@
       const h = new Uint16Array(len);
       for (let i = 0; i < len; i++) h[i] = _toHalf(src[i]);
       packStats.savedMB += (len * 2) / 1048576;
+      if (pad) return _halfAttr(THREE, h, itemSize, kind);   // W2: mat Float16x1 -> Float32 of the decoded half
       return new THREE.Float16BufferAttribute(h, itemSize);
     }
     const a = new Uint8Array(len);
     for (let i = 0; i < len; i++) a[i] = Math.round(src[i] * 255);
     packStats.savedMB += (len * 3) / 1048576;
+    if (pad && itemSize === 3) return new THREE.BufferAttribute(_widen4(a, 255), 4, true);   // W2: unorm8x4, alpha 1.0
     return new THREE.BufferAttribute(a, itemSize, true);              // unorm: normalized = a float input
   }
   // Uint16 indices wherever the vertex count allows — three picks the GL type
