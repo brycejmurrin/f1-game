@@ -448,6 +448,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-interior-gate.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
   "tests/unit/garage-panel-side.test.mjs",
+  // The garage personality: shutter swell, drive-out engine, rain light, pit-exit radio line.
+  "tests/unit/garage-personality.test.mjs",
   // The garage pre-built while the title idles (js/garage/prebuild.js): the gate,
   // the keyed car/room/frames sequence and the tap-to-first-frame measure. VM, ~0.3 s.
   "tests/unit/garage-prebuild.test.mjs",

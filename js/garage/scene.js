@@ -553,6 +553,19 @@ function live(liv, now, ctx) {
     rig[o + 3] = GANTRY_TINT[0] * ge; rig[o + 4] = GANTRY_TINT[1] * ge; rig[o + 5] = GANTRY_TINT[2] * ge;
     rig[o + 14] = nightNow ? 1.2 : 0;
   }
+  // THE SHUTTER SWELL: the two team-colour dado uplights rise to ~3x and fall
+  // back as the door lifts on an arrival or the RACE! drive-out (ctx.door, 0..1;
+  // absent or 1 on every other frame), so the team's colour floods the bay at
+  // the moment it opens. Written in place: the rig is rebuilt only on a new c1.
+  {
+    const c1 = rgb(liv && liv.c1, [0.4, 0.45, 0.55]), m = Math.max(c1[0], c1[1], c1[2]) || 1;
+    const d = ctx && Number.isFinite(ctx.door) ? Math.max(0, Math.min(1, ctx.door)) : 1;
+    const ue = (3.0 / m) * E * (1 + 2.2 * Math.sin(d * Math.PI));
+    for (let k = 0; k < 2; k++) {
+      const o = (FIXTURES.length + k) * 15;
+      rig[o + 3] = c1[0] * ue; rig[o + 4] = c1[1] * ue; rig[o + 5] = c1[2] * ue;
+    }
+  }
   // TOP hides the ceiling housings, so their glare orbs must go with them.
   for (let i = 0; i < FIXTURES.length; i++)
     rig[i * 15 + 14] = spotName === "top" ? 0 : FIXTURES[i][12];
