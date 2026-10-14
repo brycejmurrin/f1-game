@@ -63,6 +63,7 @@ const ResultsCam = (function () {
     let reel = [], reelIdx = 0, clipAge = 0;
     let replayApi = null;
     const anchor = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+    const bankScratch = { dy: 0, roll: 0 };
     const allowed = () => enabled(G) && (!eligible || eligible()) &&
       !(G.netPlay && G.netPlay.active && G.netPlay.active());
     function endHighlights() {
@@ -108,7 +109,11 @@ const ResultsCam = (function () {
       const pose = G.camPoseOf ? G.camPoseOf(p) : null;
       const extra = chequeredExtra(p);
       if (pose) { extra.carPos = pose.carPos; extra.carHead = pose.carHead; }
-      const v = G.camVantage("side", pose ? pose.s : (p.s || 0), pose ? pose.x : (p.x || 0), p.speed || 0, 0, extra);
+      const s = pose ? pose.s : (p.s || 0), x = pose ? pose.x : (p.x || 0);
+      // Match the side rig's smooth bank lift, including replayed highlight poses.
+      const bank = G.track && typeof Tracks !== "undefined" && Tracks.banking ? Tracks.banking(G.track, s, x, bankScratch, true) : null;
+      extra.bankDy = bank ? bank.dy : 0;
+      const v = G.camVantage("side", s, x, p.speed || 0, 0, extra);
       if (!v || !v.eye) return null;
       return { eye: v.eye, target: v.tgt || v.target || [p.px, p.py || 1, p.pz], fov: v.fov || 58 };
     }
