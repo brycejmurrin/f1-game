@@ -194,7 +194,19 @@ const HudRelative = (function () {
     }
     return k;
   }
-  const CLEAR_IDS = Object.freeze(["dock-left", "btn-brake", "btn-throttle", "btn-steer-left", "btn-steer-right"]);
+  // Also clear the bottom cluster / radio card: at HUD 150% REL sat on GEAR /
+  // OT / announce (phoneL broadcast survey) while only the pedals were cleared.
+  const CLEAR_IDS = Object.freeze(["dock-left", "btn-brake", "btn-throttle", "btn-steer-left", "btn-steer-right",
+    "hud-gearbox", "hud-ot", "hud-aero", "hud-speed", "announce"]);
+  // Only these use the TILT/left-column slide heuristic; centre widgets (gear/OT/aero)
+  // sitting just right of a prior slide must not re-trigger it (phoneL 150%: aero
+  // left≈REL left → slide past aero onto THROTTLE).
+  const LEFT_SLIDE_IDS = Object.freeze(["dock-left", "btn-brake", "btn-steer-left", "btn-steer-right"]);
+  // Gearbox/speed/announce sit in the centre cluster: sliding past them shoved
+  // REL from the left column onto aero/THROTTLE (phoneL 150%). Only OT/aero —
+  // which can fully contain REL's top — may centre-slide, and only when the
+  // dock still has room.
+  const CENTRE_SLIDE_IDS = Object.freeze(["hud-ot", "hud-aero"]);
   /** Cap the card above any overlapping left-column control, then hide the
    *  outermost occupied rows until it fits. CSS max-height can miss TILT
    *  (no steer-* class; BRAKE sits in the map column). */
@@ -251,13 +263,36 @@ const HudRelative = (function () {
           if (!hitX || !hitY) continue;
           hit = true;
           // TILT parks BRAKE in the map column: slide past the pedal, else cap height.
-          if (box.left <= rr.left + 24 || box.right - rr.left < rr.width * 0.7)
-            slide = Math.max(slide, (box.right + 8) / z);
-          if (rr.top < box.top - 4) cap = Math.min(cap, (box.top - rr.top - 6) / z);
+          // Centre controls (OT/gear) that already contain REL's top: slide only
+          // while the card stays on-screen (unbounded slide put REL at x≈793).
+          const id = CLEAR_IDS[i];
+          const doCap = rr.top < box.top - 4;
+          const leftish = LEFT_SLIDE_IDS.indexOf(id) >= 0
+            && (box.left <= rr.left + 24 || box.right - rr.left < rr.width * 0.7);
+          const centreSlide = CENTRE_SLIDE_IDS.indexOf(id) >= 0;
+          if (doCap) cap = Math.min(cap, (box.top - rr.top - 6) / z);
+          if (leftish) slide = Math.max(slide, (box.right + 8) / z);
+          else if (centreSlide && !doCap) {
+            // Slide past OT/aero only while the card stays left of the right dock
+            // (unbounded slide landed REL on THROTTLE at phoneL 150%).
+            const next = (box.right + 8) / z;
+            const w = (doc.defaultView || (typeof window !== "undefined" ? window : null));
+            let limit = w ? ((w.innerWidth || 0) - rr.width - 8) / z : next;
+            const dockIds = ["btn-throttle", "btn-brake", "btn-ot", "btn-aero", "btn-boost"];
+            for (let d = 0; d < dockIds.length; d++) {
+              const de = doc.getElementById(dockIds[d]);
+              if (!de || de.hidden || !de.getBoundingClientRect) continue;
+              const db = de.getBoundingClientRect();
+              if (db.width && db.height) limit = Math.min(limit, (db.left - rr.width - 8) / z);
+            }
+            if (next <= limit) slide = Math.max(slide, next);
+          }
         }
         if (!hit) break;
         if (slide > 0) root.style.left = slide.toFixed(1) + "px";
-        if (Number.isFinite(cap) && cap > 28) root.style.maxHeight = cap.toFixed(1) + "px";
+        // Apply any positive doCap (phoneL 150%: OT/aero room is ~6–15px — the
+        // old >28 gate left the full card painted on OT after the leftish slide).
+        if (Number.isFinite(cap) && cap > 0) root.style.maxHeight = cap.toFixed(1) + "px";
       }
     }
     if (!(root.clientHeight > 0)) return;

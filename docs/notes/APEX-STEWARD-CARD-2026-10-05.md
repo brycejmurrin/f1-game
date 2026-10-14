@@ -23,7 +23,7 @@ APEX STEWARD CARD (do not re-read steward / check-changes / PR template unless H
   shell-poll loops while subscribed).
 - Sync only CONFLICTING/DIRTY or required tip red. Claim via who-is-on-it --claim.
 - Branch: cursor/<topic>-<hash> → ship claude/f1-game-project-26h3ng.
-HASHES: steward=ef3a8cd2 check-changes=42aa1fd6 pr-template=a0e3134a
+HASHES: steward=45020d81 check-changes=42aa1fd6 pr-template=a0e3134a
 ```
 
 MCP: call `get_mcp_tools` / schema discovery once per session (or once per
@@ -62,8 +62,8 @@ tooling/doc fixes into one PR. CI red on that class: one optional sync+re-run,
 no swarm. A docs change that ships with player-facing `js/`/`css/` stays on
 the normal train once green.
 
-Only CI Watch arms auto-merge (SQUASH only) on ready PRs; agents/sessions/tools
-never arm or merge — mark ready at tip-green. Disable any foreign MERGE/REBASE
-arm and tell CI Watch + Grok Bot. Sync by merging
+Only Merge Desk arms auto-merge (MERGE commit only; squash retired 2026-10-13)
+on ready PRs; agents/sessions/tools never arm or merge — mark ready at
+tip-green. Disable any SQUASH/REBASE arm and tell Merge Desk. Sync by merging
 origin/ship; never rebase or force-push. Launch prompts carry
 `Do not enable auto-merge or merge.`

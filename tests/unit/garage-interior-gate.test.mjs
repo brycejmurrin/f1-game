@@ -284,11 +284,11 @@ describe("the interior gate on a cleared-buffer frame", () => {
       "page.screenshot waits for fonts and timed out on GHA after freeze");
     const shot = probe.slice(probe.indexOf("export async function screenshotGameCanvas"),
       probe.indexOf("export async function screenshotGameCanvas") + 2800);
-    const awaitAt = shot.indexOf("awaitPresentedFrame");
+    const awaitAt = shot.indexOf("awaitCaptureReady");
     const softAt = shot.indexOf("readSoftCanvasBytes");
     const freezeAt = shot.indexOf("__apex.headless(true)");
     assert.ok(awaitAt >= 0 && softAt > awaitAt,
-      "awaitPresentedFrame then soft toDataURL — multi-shot fast path");
+      "strict capture readiness precedes soft toDataURL — multi-shot fast path");
     assert.ok(freezeAt < 0 || freezeAt > softAt,
       "freeze+CDP is fallback only after the soft overlay path");
   });

@@ -1142,21 +1142,33 @@ test("gpu-census runs nightly staggered from the boot group, with the full check
   assert.equal(trackUses.length, 4, "every game check (three/webgpu, three/webgl2, glx, wgx) must use the plan-resolved track");
 });
 
-test("gpu-census is dispatch + nightly only: the push-request path is gone and a second dispatch queues", () => {
-  // G2 (ACTIONS-AUDIT-2026-10-14): 37 push runs, 30 no-ops, none since
-  // 2026-10-05 — every request is a dispatch. A push trigger would come back
-  // with no request file to read.
+test("gpu-census: agents may still request by push; dispatches queue, push requests never cancel each other", () => {
+  // The push-request path (2026-09-09) is how sessions WITHOUT dispatch rights
+  // reach the real GPU (a GH App token gets 403 on workflow_dispatch), and it
+  // is in daily use (2026-10-14: runs 38603534048, 38610120171, 38611116514).
   const wf = parseYAML(gpuWorkflow);
-  assert.deepEqual(Object.keys(wf.on).sort(), ["schedule", "workflow_dispatch"], "gpu-census must not run on push");
-  assert.ok(!fs.readdirSync(new URL("../../.github/", import.meta.url)).includes("gpu-census-request.json"), "the push-request file is retired");
-  assert.doesNotMatch(gpuWorkflow, /gpu-census-request\.json"\]|open\("\.github\/gpu-census-request/, "nothing reads a request file");
-  // ONE run per ref, and a second dispatch QUEUES instead of cancelling a
-  // census in flight (A/B arms used to cancel each other seconds in). Only the
-  // nightly — in its own group — may cancel, and it never shares a group with
-  // a person's dispatch.
-  assert.equal(wf.concurrency.group, "gpu-census-${{ github.event_name == 'schedule' && 'nightly' || github.ref }}");
+  assert.deepEqual(Object.keys(wf.on).sort(), ["push", "schedule", "workflow_dispatch"]);
+  assert.match(gpuWorkflow, /paths: \["\.github\/gpu-census-request\.json"\]/,
+    "agents without workflow_dispatch may push a request file on cursor/*");
+  assert.deepEqual(wf.on.push.branches, ["cursor/**", "claude/**"]);
+  const req = JSON.parse(fs.readFileSync(new URL("../../.github/gpu-census-request.json", import.meta.url), "utf8"));
+  assert.ok(req && typeof req === "object", "the request file must stay valid JSON — the plan job json.load()s it");
+  const split = wf.jobs.plan.steps.find((s) => s.id === "split");
+  assert.match(split.run, /if os\.environ\.get\("EVENT"\) == "push":\n\s+with open\("\.github\/gpu-census-request\.json"/, "a push request reads ITS commit's file");
+  assert.equal(split.env.EVENT, "${{ github.event_name }}");
+  // DISPATCH: one run per ref, and a second dispatch QUEUES instead of
+  // cancelling a census in flight (A/B arms used to cancel each other).
+  // PUSH: one group per run_id, so two request legs never cancel or queue.
+  // NIGHTLY: its own group, the only one that cancels.
+  assert.equal(wf.concurrency.group, "gpu-census-${{ (github.event_name == 'push' && format('{0}-{1}', github.ref, github.run_id)) || (github.event_name == 'schedule' && 'nightly') || github.ref }}");
   assert.equal(wf.concurrency["cancel-in-progress"], "${{ github.event_name == 'schedule' }}");
   assert.equal(wf.concurrency.queue, undefined, "queue: max cannot combine with a cancel-in-progress that may be true");
+  // INHERITED REQUESTS DO NOT RUN (2026-09-24): only the branch's own
+  // first-parent, non-merge commits that edited the file. Executed against a
+  // scratch repo in tests/unit/census-verdict.test.mjs.
+  const gate = wf.jobs.plan.steps.find((s) => s.id === "gate");
+  assert.match(gate.run, /git log --first-parent --no-merges --format=%h "\$BASE\.\.\$GITHUB_SHA" -- "\$F"/);
+  assert.match(gate.run, /if \[ "\$EVENT" = "push" \] && \[ "\$BRANCH" != "claude\/f1-game-project-26h3ng" \]; then/, "the deploy branch always runs");
 });
 
 test("gpu-census: the nightly skips an unchanged renderer, fail-safe; legs time out inside the job cap", () => {
@@ -1166,10 +1178,11 @@ test("gpu-census: the nightly skips an unchanged renderer, fail-safe; legs time 
   // against a scratch repo in tests/unit/census-verdict.test.mjs.
   const gate = wf.jobs.plan.steps.find((s) => s.id === "gate");
   assert.ok(gate, "the nightly gate step is gone");
-  assert.equal(gate.if, "${{ github.event_name == 'schedule' }}", "only the nightly may skip; a dispatch always runs");
+  assert.equal(gate.if, undefined, "the gate runs on every event and decides by EVENT");
+  assert.match(gate.run, /if \[ "\$EVENT" != "schedule" \]; then echo "run=true" >> "\$GITHUB_OUTPUT"; exit 0; fi/, "a dispatch always runs");
   assert.match(gate.run, /PATHS="js\/render js\/lighting tools\/gfx vendor \.github\/workflows\/gpu-census\.yml"/);
   assert.match(gate.run, /event=schedule&status=success&branch=\$BRANCH&per_page=1/, "the base is the last GREEN nightly");
-  assert.equal((gate.run.match(/echo "run=false"/g) || []).length, 1, "exactly one path skips");
+  assert.equal((gate.run.match(/echo "run=false"/g) || []).length, 2, "exactly two paths skip: an inherited push request, an unchanged nightly");
   assert.equal(wf.jobs.plan.permissions.actions, "read");
   assert.equal(wf.jobs.census.if, "${{ needs.plan.outputs.run != 'false' }}", "an empty gate output (dispatch) must run");
   // G3: each leg ends red inside the job's 30-min cap, so a hang names its leg
@@ -1202,7 +1215,7 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
   assert.equal(wf.jobs.census.env.CENSUS_CAM, "${{ needs.plan.outputs.cam }}");
   const camUses = gpuWorkflow.match(/gpu-game-check\.mjs "\$\{CENSUS_TRACK\}"[^\n]*--cam "\$\{CENSUS_CAM:-helmet\}"/g) || [];
   assert.equal(camUses.length, 4, "every game check (three/webgpu, three/webgl2, glx, wgx) must drive the plan-resolved camera");
-  // The plan's own allowlist, executed: a raw API dispatch bypasses the choice list.
+  // The plan's own allowlist, executed: a push request bypasses the choice list.
   const py = split.run.slice(split.run.indexOf("\n", split.run.indexOf("<<'PY'")) + 1).split("\nPY")[0];
   const camOf = (env) => {
     const r = cp.spawnSync("python3", ["-c", py], { encoding: "utf8", env: { PATH: process.env.PATH, EVENT: "workflow_dispatch", ...env } });

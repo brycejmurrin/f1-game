@@ -4,6 +4,7 @@ description: A push to a draft PR while its previous ci.yml run is still live so
 metadata:
   node_type: memory
   type: project
+  source: .github/workflows/ci.yml, tools/ci/ci-watch.mjs
   originSessionId: 68324bb7-ccf2-5110-9138-07c5c330db6c
   modified: 2026-10-01T22:10:20.145Z
 ---

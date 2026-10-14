@@ -1,6 +1,6 @@
 ---
 name: slim-bloat
-description: "Use when files, skills, docs, or the tree have grown too large for agents — fat SKILL.md, saturated size ratchet, dead or duplicate code, stale comments, extract/split candidates, or \"simplify this / too much context\". Claude-simplify analog. Not for physics tune, circuit accuracy, CSS restructure (css-play), or pre-push verify (check-changes)."
+description: "Use when files, docs or the tree have grown too large for agents — saturated size ratchet, dead or duplicate code, stale comments, extract/split candidates, or \"simplify this / too much context\". Not physics tune, circuit accuracy, CSS restructure (css-play), skill hygiene (agent-config) or pre-push verify (check-changes)."
 ---
 
 # Cut agent bloat (Claude-simplify for Apex 26)
@@ -53,7 +53,7 @@ locksteps; if `tools/manifest.cjs` changed, run `node tools/gen/gen-shell.mjs`
 5. **Never "simplify" physics, the timestep, or `updateCar`/`render()`.**
    See do-not.md.
 
-After a skill / agent / AGENTS.md edit, review the unit with the `agent-surface-reviewer` subagent.
+Editing a skill's description, routing queries, an agent, a hook or AGENTS.md (budgets, the routing A/B) → **agent-config**.
 CSS/DOM count work → **css-play** (`references/restructure.md`). Pre-push →
 **check-changes** / `verify-agent`.
 

@@ -297,6 +297,133 @@ export async function awaitPresentedFrame(page, timeoutMs = 8000) {
   }, timeoutMs);
 }
 
+const pendingCaptureTokens = new WeakMap();
+
+// Serialized into the page; keep this function independent of module locals.
+function captureTokenInPage() {
+  const gfx = typeof GLX === "undefined" ? null : GLX;
+  const soft = !!gfx?.softPresent?.();
+  const first = gfx?.softPresentState?.() || {};
+  const token = { soft, epoch: first.epoch ?? null, display: first.display || null };
+  if (soft && Number.isFinite(first.submittedGen) && Number.isFinite(first.shownGen)) {
+    return { ...token, mode: "source-generation", submitted: first.submittedGen, required: first.submittedGen + 1 };
+  }
+  if (soft && Number.isFinite(first.seq) && Number.isFinite(first.shown)) {
+    if (!gfx.invalidateSoftPresent) throw new Error("probe: copy-generation renderer cannot request a fresh scene");
+    // Bump WGX's scene token without discarding its pending map. Record this
+    // exactly once, alongside the mutation rather than in a later round-trip.
+    gfx.invalidateSoftPresent();
+    return { ...token, mode: "copy-generation", submitted: first.seq, required: first.seq + 1 };
+  }
+  if (soft && "maxPx" in first && "post" in first && Number.isFinite(first.gen)) {
+    return { ...token, mode: "synchronous-generation", submitted: first.gen, required: first.gen + 1 };
+  }
+  if (soft) return { ...token, mode: "legacy-two-presents", required: 2, before: Number.isFinite(first.gen) ? first.gen : 0 };
+  const before = window.__apex?.cameraState?.()?.renderFrame;
+  return { ...token, mode: "native-frame", required: 2, before: Number.isFinite(before) ? before : null };
+}
+
+/** Run a trusted Page.evaluate callback and mark its requested scene atomically.
+ * Returns the callback's original result, including awaited async results.
+ * Like Page.evaluate, the callback cannot reference Node-side closure values.
+ * The next awaitCaptureReady consumes the marker; repeated mutations replace it.
+ */
+export async function mutateCaptureScene(page, fn, arg) {
+  if (typeof fn !== "function") throw new Error("probe: capture scene mutation needs a function callback");
+  pendingCaptureTokens.delete(page);
+  const receipt = await page.evaluate(async ({ callback, argument, readToken }) => {
+    const mutate = new Function("return (" + callback + ")")();
+    const mark = new Function("return (" + readToken + ")")();
+    const value = await mutate(argument);
+    return { value, token: mark() };
+  }, { callback: fn.toString(), argument: arg, readToken: captureTokenInPage.toString() });
+  pendingCaptureTokens.set(page, receipt.token);
+  return receipt.value;
+}
+
+/** Strict scene freshness after camera/settings mutations, before freezing.
+ * TLX tags the rendered source of each async read, WGX tags encoded copies,
+ * and GLX reads synchronously. An older in-flight blit cannot satisfy the
+ * requested generation. Older async backends retain the two-present fallback.
+ * Native renderers must advance the game render clock or signal real presents.
+ */
+export async function awaitCaptureReady(page, { timeoutMs = 30000 } = {}) {
+  if (!(Number.isFinite(timeoutMs) && timeoutMs > 0)) throw new Error("probe: capture readiness needs a positive timeout");
+  const token = pendingCaptureTokens.get(page) || null;
+  pendingCaptureTokens.delete(page);
+  return page.evaluate(async ({ ms, token: marked, readToken }) => {
+    const gfx = typeof GLX === "undefined" ? null : GLX;
+    const soft = !!gfx?.softPresent?.();
+    const state = () => gfx?.softPresentState?.() || {};
+    const first = state();
+    // A resize, reload or renderer replacement can invalidate a marker. In
+    // that case request freshness against the current source instead.
+    const currentSubmitted = marked?.mode === "source-generation" ? first.submittedGen
+      : marked?.mode === "copy-generation" ? first.seq : first.gen;
+    const sameDisplay = !marked?.display || (Array.isArray(first.display)
+      && marked.display[0] === first.display[0] && marked.display[1] === first.display[1]);
+    const usable = marked && marked.soft === soft && sameDisplay
+      && (marked.epoch == null || marked.epoch === first.epoch)
+      && (marked.submitted == null || (Number.isFinite(currentSubmitted) && currentSubmitted >= marked.submitted));
+    const request = usable ? marked : new Function("return (" + readToken + ")")()();
+    const { mode, required } = request;
+    const deadline = Date.now() + ms;
+    const remaining = () => {
+      const budget = deadline - Date.now();
+      if (budget <= 0) throw new Error("probe: capture readiness timed out after " + ms + "ms (" + mode + ")");
+      return budget;
+    };
+    const waitSoft = async () => {
+      if (!gfx?.awaitSoftPresent) throw new Error("probe: software renderer has no presentation clock");
+      const result = await gfx.awaitSoftPresent(remaining());
+      if (!Number.isFinite(result)) throw new Error("probe: software renderer did not present a fresh frame");
+      return result;
+    };
+    let watchdog;
+    try {
+      return await Promise.race([
+        (async () => {
+          if (mode === "native-frame") {
+            const clock = () => window.__apex?.cameraState?.()?.renderFrame;
+            const now = clock();
+            const before = Number.isFinite(request.before) && now >= request.before ? request.before : now;
+            if (Number.isFinite(before)) {
+              while (!(clock() >= before + 2)) {
+                await new Promise((resolve) => setTimeout(resolve, Math.min(100, remaining())));
+              }
+              return { mode, before, shown: clock() };
+            }
+            if (!gfx?.awaitSoftPresent) throw new Error("probe: native renderer has no usable presentation clock");
+            for (let i = 0; i < required; i++) {
+              if (await gfx.awaitSoftPresent(remaining(), "frame") !== "frame")
+                throw new Error("probe: native renderer has no usable presentation clock");
+            }
+            return { mode, presents: required };
+          }
+          if (mode === "legacy-two-presents") {
+            let last = request.before;
+            for (let i = 0; i < required; i++) {
+              const gen = await waitSoft();
+              if (!(gen > last)) throw new Error("probe: software renderer returned a stale presentation generation");
+              last = gen;
+            }
+            return { mode, presents: required, shown: last };
+          }
+          const shown = () => {
+            const s = state();
+            return mode === "source-generation" ? s.shownGen
+              : mode === "copy-generation" ? s.shown : s.gen;
+          };
+          while (!(shown() >= required)) await waitSoft();
+          return { mode, required, shown: shown() };
+        })(),
+        new Promise((_, reject) => { watchdog = setTimeout(() => reject(new Error(
+          "probe: capture readiness timed out after " + ms + "ms (" + mode + ")")), ms); }),
+      ]);
+    } finally { clearTimeout(watchdog); }
+  }, { ms: timeoutMs, token, readToken: captureTokenInPage.toString() });
+}
+
 /**
  * Clip of the canvas the compositor actually shows.
  * HeadlessChrome GLX (and TLX-WebGPU) hide #game and blit onto #game-soft;
@@ -397,8 +524,8 @@ export async function readSoftCanvasBytes(page, {
 export async function screenshotPresentedCanvas(page, opts = {}) {
   const started = Date.now();
   const awaitMs = opts.awaitMs != null ? opts.awaitMs
-    : (opts.timeout != null ? Math.min(opts.timeout, 12000) : 8000);
-  if (!opts.skipAwait) await awaitPresentedFrame(page, awaitMs);
+    : (opts.timeout != null ? Math.min(opts.timeout, 30000) : 30000);
+  if (!opts.skipAwait) await awaitCaptureReady(page, { timeoutMs: awaitMs });
   const presented = Date.now();
 
   const type = opts.type === "jpeg" ? "jpeg" : "png";
@@ -478,7 +605,7 @@ export async function screenshotGameCanvas(page, outPath, opts = {}) {
     if (c) c.style.opacity = "0";
   });
   if (!opts.skipVisible) await waitGameVisible(page);
-  if (!opts.skipAwait) await awaitPresentedFrame(page, opts.awaitMs ?? 8000);
+  if (!opts.skipAwait) await awaitCaptureReady(page, { timeoutMs: opts.awaitMs ?? Math.min(opts.timeout ?? 30000, 30000) });
   const soft = await readSoftCanvasBytes(page, { type: "png" });
   if (soft) {
     const buf = Buffer.from(soft.b64, "base64");
@@ -486,14 +613,10 @@ export async function screenshotGameCanvas(page, outPath, opts = {}) {
     return { bytes: buf.length, clip: null, via: "game-soft" };
   }
   // FREEZE across CDP capture — live GLX keeps the main thread hot enough that
-  // Playwright's screenshot path starved on fonts. Restored in finally.
-  await page.evaluate(() => { try { window.__apex.headless(true); } catch (_) {} });
-  try {
-    const shot = await screenshotPresentedCanvas(page, {
-      path: outPath, skipAwait: true, forceCdp: true, timeout: opts.timeout ?? 60000,
-    });
-    return { bytes: shot.bytes, clip: shot.clip, via: shot.via || shot.id || "cdp" };
-  } finally {
-    await page.evaluate(() => { try { window.__apex.headless(false); } catch (_) {} });
-  }
+  // Playwright's screenshot path starved on fonts. The shared CDP path restores
+  // the previous pause state, including callers that were already frozen.
+  const shot = await screenshotPresentedCanvas(page, {
+    path: outPath, skipAwait: true, forceCdp: true, pauseRender: true, timeout: opts.timeout ?? 60000,
+  });
+  return { bytes: shot.bytes, clip: shot.clip, via: shot.via || shot.id || "cdp" };
 }

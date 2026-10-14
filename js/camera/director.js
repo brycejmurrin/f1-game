@@ -86,6 +86,7 @@ const Director = (function () {
     let ownCamera = null, autoSpectate = true, forcedTv = false, prevMode = -1;
     let spectating = false;
     const scratchEye = [0, 0, 0], scratchTgt = [0, 0, 0];
+    const bankScratch = { dy: 0, roll: 0 };
 
     function camIdx(id) {
       const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
@@ -146,6 +147,9 @@ const Director = (function () {
         extra.carPos = [car.px, car.pz];
         extra.carHead = car.head || 0;
       }
+      // Match the normal camera's smooth bank lift at the final rendered pose.
+      const bank = typeof Tracks !== "undefined" && Tracks.banking ? Tracks.banking(G.track, s, x, bankScratch, true) : null;
+      extra.bankDy = bank ? bank.dy : 0;
       const solve = () => G.camVantage(shot, s, x, car.speed || 0, 0, extra);
       const v = typeof CamFeel !== "undefined" && CamFeel.scoped ? CamFeel.scoped("tv:", solve) : solve();
       if (!v || !v.eye || !v.tgt) return false;

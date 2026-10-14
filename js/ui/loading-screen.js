@@ -76,6 +76,14 @@ const LoadingScreen = (function () {
     return Math.min(FLY_MAX_MS, Math.max(FLY_MS, Math.round(want)));
   }
 
+  /** Settled = uploaded, failed, or unsupported (Assets.state()). Same predicate
+   *  as GaragePrebuild.packSettled — race-entry warm presents must not start
+   *  while createTextureArray is still on the main thread (#1477 collision). */
+  function packSettled(s) {
+    return !s || s.supported === false || !!s.uploaded || !!s.error || s.tier === "off";
+  }
+  function warmPresentReady(assetsState) { return packSettled(assetsState); }
+
   /* THE CARD'S FACTS. A circuit gets laps, length, turns, weather and time. A
    * REAL RACE joined mid-race gets where it stands instead — the lap, your
    * place and gap, your tyres and stops, who leads, the flag if one is out —
@@ -867,6 +875,8 @@ const LoadingScreen = (function () {
 
     return {
       run, stop, hold, building, prep, garage, handoff, busy, lowerWaitPlate,
+      /** Material-pack settle gate for race-entry warm presents (garage #1477). */
+      packSettled, warmPresentReady,
       /** The next flyby's length (the short cut for a habitual skipper), so its
        *  shots are planned for the seconds they will actually have. Pass
        *  warmReady=false to keep FLY_MS while the backend is still compiling. */
@@ -894,6 +904,7 @@ const LoadingScreen = (function () {
   }
 
   return { create, isAutomation, FLY_MS, SHORT_FLY_MS, FLY_MAX_MS, SKIP_GRACE_MS, SKIP_STREAK, flyMsFor, metaRows, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars,
+    packSettled, warmPresentReady,
     gridLayout, gridField, gridColour, gridInk, isGridShot, GRID_ROW_MIN };
 })();
 Object.freeze(LoadingScreen);

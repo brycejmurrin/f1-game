@@ -25,19 +25,24 @@ name: GPU census
 #                overlay. Same hooks the overlay prints for a player, so a CI
 #                answer and a pasted player answer compare directly.
 #
-# Dispatch and NIGHTLY — never on push. Every request is a dispatch
-# (`gh workflow run gpu-census.yml --ref <branch> -f images=macos-latest`, or
-# the GitHub MCP `actions_run_trigger`); the 2026-09-09 push-request path
-# (.github/gpu-census-request.json) was retired 2026-10-14 after 37 push runs,
-# 30 of them no-ops and none since 2026-10-05 (ACTIONS-AUDIT-2026-10-14).
+# Three ways in, never an ordinary push:
+#   dispatch  — `gh workflow run gpu-census.yml --ref <branch> -f images=…`, or
+#               the GitHub MCP `actions_run_trigger`.
+#   request   — agent push-request (2026-09-09). Agents' GH App tokens cannot
+#               workflow_dispatch (403); they CAN push an edit of
+#               .github/gpu-census-request.json on a cursor/** or claude/**
+#               branch, which runs THAT branch's tree with the file's inputs.
+#               Still in daily use (runs 38603534048, 38610120171, 38611116514
+#               on 2026-10-14).
+#   nightly   — staggered from ci.yml's boot group (ci.yml 04:17 UTC, this
+#               05:47; PROCESS-SPEEDUP-2026-09 §4.5), and SKIPPED when nothing
+#               under the renderer paths changed since the last green nightly
+#               (the plan job's `gate` step; an unknown base runs).
 #
-# The nightly is staggered from ci.yml's boot group (ci.yml 04:17 UTC, this
-# 05:47; PROCESS-SPEEDUP-2026-09 §4.5) and SKIPS itself when nothing under the
-# renderer paths changed since the last green nightly (the plan job's `gate`
-# step; an unknown base runs). A scheduled run has NO inputs — every
-# `inputs.*` reads as the empty string — so each input carries its dispatch
-# default inline (`|| 'x'`) and the schedule gates on exactly what a default
-# dispatch gates on. The schedule runs on the default branch only.
+# A scheduled run has NO inputs — every `inputs.*` reads as the empty string —
+# so each input carries its dispatch default inline (`|| 'x'`) and the schedule
+# gates on exactly what a default dispatch gates on. The schedule runs on the
+# default branch only (GitHub's rule).
 #
 # The Verdict is tools/gfx/census-verdict.mjs (fixture tests in
 # tests/unit/census-verdict.test.mjs and gfx-backend-canary.test.mjs).
@@ -86,24 +91,31 @@ on:
         required: false
         default: "helmet"
 
+  push:
+    branches: ["cursor/**", "claude/**"]
+    paths: [".github/gpu-census-request.json"]
+
 permissions:
   contents: read
 
-# ONE census per ref at a time, and a second dispatch QUEUES instead of
-# cancelling the first (an A/B arm dispatched behind another used to cancel it
-# seconds in: runs 38530816497, 38518364574, 38464070445). GitHub keeps at most
-# ONE pending run per group (`queue: single`, the default), so a THIRD dispatch
-# replaces the queued second: dispatch A/B arms one at a time. The nightly has
-# its own group and may cancel a stuck previous nightly; it never cancels a
-# person's dispatch.
+# DISPATCH: one census per ref at a time, and a second dispatch QUEUES instead
+# of cancelling the first (an A/B arm dispatched behind another used to cancel
+# it seconds in: runs 38530816497, 38518364574, 38464070445). GitHub keeps at
+# most ONE pending run per group (`queue: single`, the default), so a THIRD
+# dispatch replaces the queued second: dispatch A/B arms one at a time.
+# PUSH REQUESTS: one group per run_id, so two request legs (baseline /
+# variant) never cancel or queue behind each other.
+# NIGHTLY: its own group, the only one that cancels (a stuck previous nightly);
+# it never cancels a person's dispatch.
 # https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
 concurrency:
-  group: gpu-census-${{ github.event_name == 'schedule' && 'nightly' || github.ref }}
+  group: gpu-census-${{ (github.event_name == 'push' && format('{0}-{1}', github.ref, github.run_id)) || (github.event_name == 'schedule' && 'nightly') || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'schedule' }}
 
 jobs:
   # The input is a string; turn it into the matrix the next job fans out over,
   # so a dispatcher can pick images without editing the file.
+  # Push requests read .github/gpu-census-request.json from THIS commit.
   plan:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -122,26 +134,52 @@ jobs:
       run: ${{ steps.gate.outputs.run }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: ${{ github.event_name == 'schedule' }}
+        if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
         with:
           persist-credentials: false
           fetch-depth: 0
           filter: blob:none
-      # A NIGHTLY THAT TESTS SOMETHING (audit G1). Every night re-ran the same
-      # tree whether or not a renderer path had moved. Skip only when the diff
-      # from the last GREEN nightly's commit is KNOWN and touches none of the
-      # renderer paths; anything unknown (no green nightly, an API error, a
-      # commit missing from this clone, a failed diff) runs. A red or cancelled
-      # nightly is not green, so the next night runs again. Dispatches never
-      # reach this step (their `run` output is empty, which runs).
+      # ONE gate, by event; a dispatch always runs.
+      #
+      # PUSH — INHERITED REQUESTS DO NOT RUN (2026-09-24). `paths:` matches
+      # the pushed RANGE, so a session branch that merges the deploy tip
+      # re-fired the census for every request someone else already measured
+      # there: 40 of 74 push runs in 48 h. A push runs the census only when a
+      # NON-MERGE commit on the branch's own first-parent line in this push
+      # edited the request. The deploy branch always runs.
+      #
+      # SCHEDULE — A NIGHTLY THAT TESTS SOMETHING (audit G1). Skip only when
+      # the diff from the last GREEN nightly's commit is KNOWN and touches none
+      # of the renderer paths; anything unknown (no green nightly, an API
+      # error, a commit missing from this clone, a failed diff) runs. A red or
+      # cancelled nightly is not green, so the next night runs again.
       # https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-workflow
       - id: gate
-        if: ${{ github.event_name == 'schedule' }}
         env:
+          EVENT: ${{ github.event_name }}
+          BRANCH: ${{ github.ref_name }}
+          BEFORE: ${{ github.event.before }}
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          BRANCH: ${{ github.ref_name }}
         run: |
+          if [ "$EVENT" = "push" ] && [ "$BRANCH" != "claude/f1-game-project-26h3ng" ]; then
+            F=.github/gpu-census-request.json
+            if [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -q '^0*$' && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              BASE="$BEFORE"
+            else
+              BASE=$(git merge-base origin/claude/f1-game-project-26h3ng "$GITHUB_SHA" 2>/dev/null || echo "")
+            fi
+            OWN=$( [ -n "$BASE" ] && git log --first-parent --no-merges --format=%h "$BASE..$GITHUB_SHA" -- "$F" || echo "unknown")
+            if [ -n "$OWN" ]; then
+              echo "run=true" >> "$GITHUB_OUTPUT"
+              echo "census: this push's own commit(s) edited the request: $OWN"
+            else
+              echo "run=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::gpu-census skipped: the request change arrived by merge (already measured where it was made). Edit the request on this branch, or dispatch, to measure this tree."
+            fi
+            exit 0
+          fi
+          if [ "$EVENT" != "schedule" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           PATHS="js/render js/lighting tools/gfx vendor .github/workflows/gpu-census.yml"
           LAST=$(gh api "repos/$REPO/actions/workflows/gpu-census.yml/runs?event=schedule&status=success&branch=$BRANCH&per_page=1" \
             --jq '.workflow_runs[0].head_sha // empty' 2>/dev/null || true)
@@ -164,36 +202,44 @@ jobs:
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json, os
+          req = {}
+          if os.environ.get("EVENT") == "push":
+            with open(".github/gpu-census-request.json", encoding="utf-8") as f:
+              req = json.load(f)
           allow = {"ubuntu-latest", "ubuntu-24.04", "macos-latest", "macos-15", "macos-14",
                    "macos-13", "windows-latest", "windows-2022"}
-          raw = str(os.environ.get("INPUT_IMAGES") or "macos-latest")
-          # One line per key: a dispatch value carrying a newline would add
-          # its own `key=` lines to GITHUB_OUTPUT.
+          raw = str(req.get("images") or os.environ.get("INPUT_IMAGES") or "macos-latest")
+          # One line per key: a value carrying a newline (a pushed request file,
+          # a dispatch input) would add its own `key=` lines to GITHUB_OUTPUT.
           one = lambda v: " ".join(str(v).splitlines()).strip()
           picked = [i.strip() for i in raw.split(",") if i.strip() in allow]
           print("images=" + json.dumps(picked or ["macos-latest"]))
-          print("track=" + one(os.environ.get("INPUT_TRACK") or "montreal"))
-          print("ls=" + one(os.environ.get("INPUT_LS") or ""))
+          print("track=" + one(req.get("track") or os.environ.get("INPUT_TRACK") or "montreal"))
+          print("ls=" + one(req.get("ls") or os.environ.get("INPUT_LS") or ""))
           # The HOUR the in-run A/B pins: 12 (noon, no lamps) measures the
           # PLAIN draw branch, 2 (night) the per-chunk lamp branch (census 146).
-          try: ck = int(os.environ.get("INPUT_CLOCK") or 12)
+          try: ck = int(req.get("clock", os.environ.get("INPUT_CLOCK") or 12))
           except (TypeError, ValueError): ck = 12
           print("clock=" + str(ck if 0 <= ck <= 23 else 12))
           # The time of day the track is BUILT with — what bakes the lamps.
-          td = str(os.environ.get("INPUT_TOD") or "")
+          td = str(req.get("tod") or os.environ.get("INPUT_TOD") or "")
           print("tod=" + (td if td in ("day", "night", "dawn", "dusk") else ""))
-          print("force=" + one(os.environ.get("INPUT_FORCE") or ""))
-          co = (os.environ.get("INPUT_CENSUS_ONLY") or "").lower() in ("true", "1")
+          print("force=" + one(req.get("force") or os.environ.get("INPUT_FORCE") or ""))
+          co = req.get("census_only")
+          if co is None:
+            co = (os.environ.get("INPUT_CENSUS_ONLY") or "").lower() in ("true", "1")
           print("census_only=" + ("true" if co else "false"))
-          # The player camera (hunt 4 H5), allowlisted here as well as by the
-          # dispatch form's choice list, so a raw API dispatch cannot widen it.
-          cm = str(os.environ.get("INPUT_CAM") or "helmet").strip()
+          # The player camera (hunt 4 H5). A push request bypasses the
+          # dispatch form's choice list, so the allowlist is enforced here too.
+          cm = str(req.get("cam") or os.environ.get("INPUT_CAM") or "helmet").strip()
           print("cam=" + (cm if cm in ("helmet", "chase") else "helmet"))
           PY
         env:
-          # Dispatch/schedule defaults — a schedule leaves inputs empty.
-          # macos-latest is the DEFAULT for both (2026-10-14; the nightly since
-          # 2026-09-29): ubuntu-latest and windows-latest have no hardware
+          EVENT: ${{ github.event_name }}
+          # Dispatch/schedule defaults — a schedule leaves inputs empty; a push
+          # request's own fields win over these.
+          # macos-latest is the DEFAULT for all three (2026-10-14; the nightly
+          # since 2026-09-29): ubuntu-latest and windows-latest have no hardware
           # adapter, and their four software game checks ended `cancelled` at
           # the 30-minute job cap on every run measured. Their adapter answer
           # is a census_only dispatch away.

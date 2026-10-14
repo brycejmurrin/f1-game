@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @doc Offline-fixture live-render camera discontinuity probe across replay entry, seek, follow, exit and reentry.
-// @skill replay-camera
+// @skill f1-animation-cameras
 import { readFileSync, statSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import vm from 'node:vm';

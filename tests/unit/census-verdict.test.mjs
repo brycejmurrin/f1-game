@@ -179,9 +179,9 @@ test("the Verdict step runs the tool with the image and the job's CENSUS_LS", ()
   assert.deepEqual(jsons, LEGS);
 });
 
-// The nightly gate (audit G1), executed: skip only on a KNOWN, EMPTY diff over
+// The plan gate, executed. Nightly (audit G1): skip only on a KNOWN, EMPTY diff over
 // the renderer paths from the last green nightly; every unknown runs.
-test("the nightly gate skips an unchanged renderer and runs on any change or any unknown", (t) => {
+test("the plan gate: the nightly skips an unchanged renderer, an inherited push request skips, every unknown runs", (t) => {
   const gate = WF.jobs.plan.steps.find((s) => s.id === "gate");
   const git = (cwd, ...a) => spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...a], { cwd, encoding: "utf8" });
   if (git(ROOT, "--version").status !== 0) { t.skip("no git on this box"); return; }
@@ -208,10 +208,28 @@ test("the nightly gate skips an unchanged renderer and runs on any change or any
       assert.equal(r.status, 0, r.stdout + r.stderr);
       return (fs.readFileSync(out, "utf8").match(/^run=(\w+)$/m) || [])[1];
     };
-    assert.equal(gateRun(B, { FAKE_LAST: A }), "false", "nothing under the renderer paths moved: skip");
-    assert.equal(gateRun(C, { FAKE_LAST: A }), "true", "a renderer change since the last green nightly: run");
-    assert.equal(gateRun(B, { FAKE_LAST: "" }), "true", "no green nightly yet: run");
-    assert.equal(gateRun(B, { FAKE_LAST: "0123456789abcdef0123456789abcdef01234567" }), "true", "a base this clone lacks: run");
-    assert.equal(gateRun(B, { FAKE_FAIL: "1" }), "true", "the API failed: run");
+    const nightly = (sha, env) => gateRun(sha, { EVENT: "schedule", ...env });
+    assert.equal(nightly(B, { FAKE_LAST: A }), "false", "nothing under the renderer paths moved: skip");
+    assert.equal(nightly(C, { FAKE_LAST: A }), "true", "a renderer change since the last green nightly: run");
+    assert.equal(nightly(B, { FAKE_LAST: "" }), "true", "no green nightly yet: run");
+    assert.equal(nightly(B, { FAKE_LAST: "0123456789abcdef0123456789abcdef01234567" }), "true", "a base this clone lacks: run");
+    assert.equal(nightly(B, { FAKE_FAIL: "1" }), "true", "the API failed: run");
+    assert.equal(gateRun(B, { EVENT: "workflow_dispatch" }), "true", "a dispatch always runs");
+
+    // THE PUSH REQUEST (2026-09-24 rule): only the branch's own first-parent,
+    // non-merge commits that edited the request run; one inherited by merge
+    // does not; the deploy branch always runs.
+    fs.mkdirSync(path.join(repo, ".github"), { recursive: true });
+    const D = commit(".github/gpu-census-request.json", "{\"leg\":\"d\"}");
+    const push = (before, sha, branch = "cursor/x-1234") => gateRun(sha, { EVENT: "push", BEFORE: before, BRANCH: branch });
+    assert.equal(push(C, D), "true", "this push's own commit edited the request");
+    assert.equal(git(repo, "checkout", "-q", "-b", "side").status, 0);
+    commit(".github/gpu-census-request.json", "{\"leg\":\"e\"}");
+    assert.equal(git(repo, "checkout", "-q", "-").status, 0);
+    const F = commit("notes.txt", "f");
+    assert.equal(git(repo, "merge", "-q", "--no-ff", "--no-edit", "side").status, 0);
+    const M = git(repo, "rev-parse", "HEAD").stdout.trim();
+    assert.equal(push(F, M), "false", "a request that arrived by merge was measured where it was made");
+    assert.equal(push(F, M, "claude/f1-game-project-26h3ng"), "true", "the deploy branch always runs");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

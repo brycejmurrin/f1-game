@@ -743,27 +743,48 @@ Store settings that use JSON decoding as JSON (for example
 
 ### Request the hardware check on the exact fixed tree
 
-Push the feature branch, then DISPATCH `.github/workflows/gpu-census.yml` on it —
+Two routes; both run THAT branch's tree. Push the feature branch first.
+
+**Dispatch** (when the token may `workflow_dispatch`):
 `gh workflow run gpu-census.yml --ref <branch> -f images=macos-latest` (add
 `-f track=spa -f tod=night -f ls="apex26.<knob>=0" -f cam=chase` as needed), or the
 GitHub MCP `actions_run_trigger` with `workflow_id: gpu-census.yml`, `ref` and
-`inputs`. The default images are `macos-latest` alone (the one real GPU; the
-software images need `census_only`). The 2026-09-09 push-request file
-(`.github/gpu-census-request.json`) was retired 2026-10-14: 37 push runs, 30
-no-ops, none after 2026-10-05.
+`inputs`. One census runs per branch at a time: a second dispatch QUEUES behind a
+running one instead of cancelling it, but GitHub keeps one pending run per group,
+so a third dispatch replaces the queued second — dispatch A/B arms one at a time.
 
-One census runs per branch at a time. A second dispatch QUEUES behind a running
-one instead of cancelling it, but GitHub keeps one pending run per group, so a
-third dispatch replaces the queued second — dispatch A/B arms one at a time.
-Match the run's `head_sha` to the pushed commit and read its **Verdict** step
-(`tools/gfx/census-verdict.mjs`) plus the `gpu-census-macos-latest` artifact
-(kept 7 days). The full census checks GLX, WGX, TLX WebGPU and TLX WebGL2 and
-fails on missing or unfinished legs, GPU/shader errors, failed env-probe faces,
-and — on hardware — absent counts, `softAdapter` true, WGX not bound, or a TLX
-`softBlit` / WGX `softPresent` that is not false while every leg's
-`apex26.wgxCapture=0` pin is in force (a dispatch `ls` that overrides the pin
-makes those two report-only). Inspect adapter identity. Do not call census FPS a
-player-performance measurement or compare legs with different presentation paths.
+**Push request** (agent GH App tokens get a 403 on `workflow_dispatch`): on a
+`claude/*` or `cursor/*` feature branch, change `.github/gpu-census-request.json`
+in the same commit as the code:
+
+```json
+{
+  "images": "macos-latest",
+  "track": "montreal",
+  "census_only": false,
+  "force": "",
+  "ls": "",
+  "leg": "unique-description-of-this-check"
+}
+```
+
+`leg` is a request label that makes repeated requests a file change; it does not
+select graphics settings. Only a non-merge commit on the branch's own first-parent
+line that edits the file runs the census (a request inherited by merge does not),
+and each push request has its own concurrency group, so two legs never cancel
+each other.
+
+The default images are `macos-latest` alone (the one real GPU; the software
+images need `census_only`). Match the run's `head_sha` to the pushed commit and
+read its **Verdict** step (`tools/gfx/census-verdict.mjs`) plus the
+`gpu-census-macos-latest` artifact (kept 7 days). The full census checks GLX, WGX,
+TLX WebGPU and TLX WebGL2 and fails on missing or unfinished legs, GPU/shader
+errors, failed env-probe faces, and — on hardware — absent counts, `softAdapter`
+true, WGX not bound, or a TLX `softBlit` / WGX `softPresent` that is not false
+while every leg's `apex26.wgxCapture=0` pin is in force (an `ls` that overrides
+the pin makes those two report-only). Inspect adapter identity. Do not call census
+FPS a player-performance measurement or compare legs with different presentation
+paths.
 
 Primary references: [Playwright browser selection](https://playwright.dev/docs/browsers),
 [Chrome headless modes](https://developer.chrome.com/docs/automation-and-testing/headless),

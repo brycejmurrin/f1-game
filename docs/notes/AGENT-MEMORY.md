@@ -49,3 +49,14 @@ Supersedes the "auto memory structurally cannot persist here" finding in
 
 Sources: [memory docs](https://code.claude.com/docs/en/memory),
 [tools reference](https://code.claude.com/docs/en/tools-reference).
+
+## Citing the evidence (2026-10-14)
+
+A memory may carry `source: <path>[, <path>…]` in its frontmatter (top level
+or under `metadata:`): the file the fact rests on. `agent-config.test.mjs`
+fails when a cited path is gone, so a memory whose evidence moved is rewritten
+or deleted instead of recalled — the static half of GitHub Copilot Memory's
+citation check. Non-path entries (`user`, `#1519`) are allowed and unchecked.
+The same test file rejects zero-width and bidi characters in every memory and
+instruction file (the "Rules File Backdoor" vector). Why:
+[SECOND-BRAIN-2026-10-14.md](SECOND-BRAIN-2026-10-14.md).
