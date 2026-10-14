@@ -628,6 +628,12 @@ jobs:
               } else if (_win && _win.note) {
                 rows.push(`${" ".repeat(8)}window: ${_win.note}`);
               }
+              // THE DEPTH-DISCARD ROW (hunt 4 A-P1): TLX post.state().depth over
+              // the driven window. GLX/WGX have no TLX post; a TLX leg that lost
+              // the row says why rather than printing nothing.
+              const _dd = g.depth;
+              if (_dd && _dd.supported) rows.push(`${" ".repeat(8)}depth: ${_dd.summary}`);
+              else if (tlxLeg) rows.push(`${" ".repeat(8)}depth: NOT MEASURED — ${(_dd && _dd.note) || "the leg wrote no depth row"}`);
               rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
                 `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face} frames=${(gov.open && gov.open.frames) != null ? gov.open.frames : "?"}`
                 // ...and the OTHER way this column lies. floorMs 16.6 is 1/60 s,

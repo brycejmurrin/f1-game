@@ -126,6 +126,12 @@ The source is `docs/notes/PERF-HUNT-4-2026-10-14.md` §C (I1–I7) and §A (inst
 - Example: `{ kind: "longtask", atMs: 2425, ms: 2090, span: "warmCarAssets", share: 1, after: "warmCarAssets:start (+5 ms)", before: "warmCarAssets:end" }`.
 - Not split: the `loadTrack` leg's build phases (`buildProfile` rows carry no timestamps) and the sky cache warm, which `tlx.js` folds into `warm:mirror` (its stage clock starts after the shadow stage) and leaves untimed when the mirror warm is off (then only the `warm (other)` envelope covers it).
 
+**Depth discard (A-P1, lane TOOLS-J).** `out.depth` reads TLX's `post.state().depth` (`{ discard, kept, discards }`, lane TLX-W) at `arm()` and again at the end of the driven window, so the count is the window's own.
+- Fields: `supported`, `discard` (the `apex26.tlxDepthDiscard` knob), `keptLastFrame`, `discards` (cumulative), `windowDiscards`, `windowFrames` (LoopHealth), `discardShare`, `summary`.
+- Example: `{ supported: true, discard: true, keptLastFrame: false, discards: 500, windowDiscards: 380, windowFrames: 400, discardShare: 0.95 }`.
+- `discards` counts WebGL2 invalidations only. On three's WebGPU path r186 has no lever, so 0 there is expected, and the summary says so.
+- GLX and WGX have no TLX post: `{ supported: false, note }`, and the Verdict prints no row. A TLX leg without the row prints `depth: NOT MEASURED — <why>`.
+
 **Follow-up, not built (I5).** WGX `gpuMs` times only the lit pass, while GLX's covers main plus post. A per-pass GLX timer would put sequential `TIME_ELAPSED` queries around the sun, lamp, car, env, mirror, main and post groups. Only one such query may be active at a time.
 - Those groups are sequenced from `js/game.js`, which this lane may not edit, so it is not a small change behind a flag.
 - It needs a query ring per group in `glx.js`, with begin/end hooks called from the pass sites.

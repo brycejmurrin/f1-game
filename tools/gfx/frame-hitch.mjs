@@ -386,6 +386,27 @@ export function analyseGapWork(gaps, { marks = {}, win = null, longTasks = [] } 
       + `worst ${w.gapMs} ms [${w.phase}], ${w.prevFrameMs} ms of it in the step before, ${w.longTaskMs} ms in long tasks` };
 }
 
+// THE DEPTH-DISCARD ROW (hunt 4 A-P1). TLX's post chain reports
+// `post.state().depth = { discard, kept, discards }`: the apex26.tlxDepthDiscard
+// knob, whether the LAST frame kept its scene depth, and a cumulative count of
+// frames whose depth was invalidated (WebGL2 only — three r186 has no lever on
+// WebGPU, so there it stays 0 by design). `d0`/`d1` are reads at arm() and at
+// the end of the driven window; `frames` the window's game frames. Null-safe:
+// GLX and WGX have no TLX post, and a build before A-P1 has no depth row.
+export function analyseDepthDiscard(d0, d1, frames) {
+  if (!d1 || d1.error) return { supported: false, note: "no TLX post state on this leg (GLX/WGX, or the read failed)" + (d1 && d1.error ? ": " + d1.error : "") };
+  if (d1.on === false) return { supported: false, note: "TLX post chain is off — no scene depth to discard" };
+  if (typeof d1.discards !== "number") return { supported: false, note: "post.state() has no depth row — this build predates A-P1" };
+  const r = { supported: true, discard: !!d1.discard, keptLastFrame: !!d1.kept, discards: d1.discards };
+  if (d0 && typeof d0.discards === "number") r.windowDiscards = d1.discards - d0.discards;
+  if (r.windowDiscards != null && frames > 0) { r.windowFrames = frames; r.discardShare = +(r.windowDiscards / frames).toFixed(3); }
+  r.summary = !r.discard ? "knob OFF (apex26.tlxDepthDiscard=0): depth always kept"
+    : `${r.windowDiscards != null ? r.windowDiscards : "?"} of ${r.windowFrames != null ? r.windowFrames : "?"} window frames discarded depth`
+      + (r.discardShare != null ? ` (${Math.round(100 * r.discardShare)}%)` : "") + `; last frame ${r.keptLastFrame ? "KEPT" : "dropped"} it`
+      + (r.windowDiscards === 0 && !r.keptLastFrame ? " — 0 invalidations with depth unneeded: the WebGPU path (no lever in r186) or no provable scene FBO" : "");
+  return r;
+}
+
 // RACE-ENTRY SPANS (hunt 4 B-F3.3). Hunter B read `warmCarAssets` as 1.1-2.1 s
 // single tasks from TIMING alone: the census saved RaceEntryProfile's legs as
 // durations and never its marks, so no long task or rAF gap could be placed in

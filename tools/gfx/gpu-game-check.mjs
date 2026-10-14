@@ -35,7 +35,7 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans } from "./frame-hitch.mjs";
+import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseDepthDiscard } from "./frame-hitch.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
 // `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
@@ -843,6 +843,15 @@ try {
   // Arm AFTER the track build and the boot ladder: an opening stall is a
   // different report (out.raceProfile answers that one) and counting it here
   // would put one 1.4 s frame in the spike list and call the run periodic.
+  // THE DEPTH-DISCARD ROW (hunt 4 A-P1): TLX post.state().depth at both ends of
+  // the window, so the count is the window's own. null on GLX/WGX (no TLX post).
+  const readDepth = () => bounded(() => page.evaluate(() => {
+    const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null;
+    if (!t || typeof t.postState !== "function") return null;
+    const s = t.postState();
+    return s ? Object.assign({ on: s.on !== false }, s.depth || {}) : null;
+  }), 10000, "depth-read");
+  const _depth0 = await readDepth();
   try { await page.evaluate(() => window.__gcHitch && window.__gcHitch.arm()); } catch (_) { /* no recorder on this leg */ }
   // WHERE THE CPU TIME GOES over the same window, by function. Census 201
   // moved every lazy pipeline compile off the main thread (createRenderPipeline
@@ -931,6 +940,7 @@ try {
   }
   // The driven window ends with the last beat (hunt 4 I4).
   await bounded(() => page.evaluate(() => window.__gcHitch && window.__gcHitch.disarm()), 10000, "disarm");
+  const _depth1 = await readDepth();
   if (_cpu) {
     try { const { profile } = await _cpu.send("Profiler.stop"); _cpuProfile = profile; out.cpu = analyseCpu(profile, 24); }
     catch (e) { out.cpu = { note: "profile stop failed: " + String((e && e.message) || e).slice(0, 120) }; }
@@ -952,8 +962,7 @@ try {
     const d = await page.evaluate(() => (window.__gcHitch ? window.__gcHitch.dump() : null));
     // READ THE WINDOW, NOT THE GOVERNOR'S END STATE (hunt 4 I4): frames, fps
     // and frame-interval percentiles over the driven window only.
-    out.window = d ? analyseWindow(d.win, d.gameFrameT || [], (d.dur || []).length) : { note: "no recorder on this leg" };
-    // THE GAPS: every rAF interval >= 500 ms since page load, keyed to the
+    out.window = d ? analyseWindow(d.win, d.gameFrameT || [], (d.dur || []).length) : { note: "no recorder on this leg" };    // THE GAPS: every rAF interval >= 500 ms since page load, keyed to the
     // work of the step before it (hunt 4 §A gap ii), whether or not armed.
     out.gapWork = d ? analyseGapWork(d.gaps || [], { marks: d.marks, win: d.win, longTasks: d.longTasks })
       : { note: "no recorder on this leg" };
@@ -979,6 +988,8 @@ try {
     out.spikePasses = analyseSpikePassKinds(d.passSig || [], d.dur, 100);
     return a;
   }, 30000, "hitch-series").catch((e) => ({ note: "hitch read failed: " + String((e && e.message) || e).slice(0, 80) }));
+  // Outside the hitch read, so a failed series still leaves the depth row.
+  out.depth = analyseDepthDiscard(_depth0, _depth1, out.window && out.window.frames);
   checkpoint("settled");
 
   // THE RACE-ENTRY WINDOW: race() called -> the track is there. Everything the

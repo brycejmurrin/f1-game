@@ -20,7 +20,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, raceEntrySpanList } from "../../tools/gfx/frame-hitch.mjs";
+import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, raceEntrySpanList, analyseDepthDiscard } from "../../tools/gfx/frame-hitch.mjs";
 
 // A frame series: `spikeEvery` frames apart, `spikeMs` long, `baseMs` otherwise.
 function series(frames, baseMs, spikeEvery, spikeMs) {
@@ -407,6 +407,24 @@ test("analyseRaceEntrySpans names the race-entry span each long task and rAF gap
   assert.match(analyseRaceEntrySpans({ rep: { note: "no __apex.raceEntryProfile" } }).note, /no raceEntryProfile snapshot — no __apex/);
   assert.match(analyseRaceEntrySpans({ rep: { winT0: null } }).note, /never armed/);
   assert.match(analyseRaceEntrySpans().note, /not read/);
+});
+
+test("analyseDepthDiscard reads TLX's depth row over the window only, and is null-safe off TLX (hunt 4 A-P1)", () => {
+  // WebGL2 with nothing reading depth: 380 of 400 window frames invalidated it.
+  const d = analyseDepthDiscard({ on: true, discard: true, kept: false, discards: 120 }, { on: true, discard: true, kept: false, discards: 500 }, 400);
+  assert.deepEqual(d, { supported: true, discard: true, keptLastFrame: false, discards: 500, windowDiscards: 380, windowFrames: 400, discardShare: 0.95,
+    summary: "380 of 400 window frames discarded depth (95%); last frame dropped it" });
+  // WebGPU: depth unneeded, but r186 has no lever — zero invalidations is expected, and said.
+  assert.match(analyseDepthDiscard({ on: true, discard: true, kept: false, discards: 0 }, { on: true, discard: true, kept: false, discards: 0 }, 300).summary,
+    /^0 of 300 window frames discarded depth \(0%\); last frame dropped it — 0 invalidations with depth unneeded: the WebGPU path/);
+  assert.match(analyseDepthDiscard(null, { on: true, discard: false, kept: true, discards: 0 }, 300).summary, /knob OFF/);
+  const noStart = analyseDepthDiscard(null, { on: true, discard: true, kept: true, discards: 7 }, 300);
+  assert.equal(noStart.windowDiscards, undefined, "no arm-time read: no window count, never a cumulative one passed off as it");
+  // GLX/WGX (null), a failed read, post off, a pre-A-P1 build: named, never a zero.
+  assert.equal(analyseDepthDiscard(null, null, 300).supported, false);
+  assert.match(analyseDepthDiscard(null, { error: "depth-read timeout" }, 300).note, /read failed\): depth-read timeout/);
+  assert.match(analyseDepthDiscard(null, { on: false }, 300).note, /post chain is off/);
+  assert.match(analyseDepthDiscard(null, { on: true }, 300).note, /predates A-P1/);
 });
 
 test("the census sizes WebGL2 uploads from the call's own arguments (hunt 4 §A gap i)", () => {

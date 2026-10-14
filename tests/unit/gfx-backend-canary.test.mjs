@@ -1411,6 +1411,23 @@ test("the Verdict names the race-entry span each long task fell in, from the sav
   assert.match(r.out, /marks: no raceEntryProfile snapshot — no __apex\.raceEntryProfile/, "an unmeasured leg says why");
 });
 
+test("the Verdict prints TLX's depth-discard row and names its absence on a TLX leg (hunt 4 A-P1)", async () => {
+  const { analyseDepthDiscard } = await import("../../tools/gfx/frame-hitch.mjs");
+  const ggc = read("tools/gfx/gpu-game-check.mjs");
+  assert.match(ggc, /const _depth0 = await readDepth\(\);\s*\n\s*try \{ await page\.evaluate\(\(\) => window\.__gcHitch && window\.__gcHitch\.arm\(\)\)/,
+    "the first depth read sits at arm(), so the count is the window's own");
+  assert.match(ggc, /out\.depth = analyseDepthDiscard\(_depth0, _depth1, /);
+  const depth = analyseDepthDiscard({ on: true, discard: true, kept: false, discards: 10 }, { on: true, discard: true, kept: false, discards: 410 }, 400);
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: tlxLegJson(), webgl2: { ...tlxLegJson(), depth },
+    glx: { ...glxLegJson(), depth: analyseDepthDiscard(null, null, 400) }, wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /depth: 400 of 400 window frames discarded depth \(100%\); last frame dropped it/);
+  assert.match(r.out, /webgpu[^\n]*\n(?:[^\n]*\n)*?\s+depth: NOT MEASURED — the leg wrote no depth row/, "a TLX leg with no row says so");
+  assert.doesNotMatch(r.out, /glx[^\n]*\n(?:\s{8}[^\n]*\n)*?\s+depth:/, "GLX has no TLX post: no depth row at all");
+});
+
 test("the GPU gate fails a hardware TLX leg that stopped reporting an env count", () => {
   // `(env.fail || 0) > 0` was the SAME banned shape as the gpuErrors fix twelve
   // lines above it in the same file, on the same object: a build that stops
