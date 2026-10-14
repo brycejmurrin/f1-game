@@ -739,6 +739,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/report-server.test.mjs",
   // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
   "tests/unit/results-cam.test.mjs",
+  "tests/unit/rival-attach-init.test.mjs",
   "tests/unit/rival-audio.test.mjs",
   "tests/unit/rival-passby-pool.test.mjs",
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
@@ -971,6 +972,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Factory/sig tyre recipes after #1190 open rims: distinct geom + cover copy needs cover:1.
   "tests/unit/tyre-recipes-open-rim.test.mjs",
   "tests/unit/ui-experience.test.mjs",
+  // ui-fit r7: camera tuner rail-off portrait — #ct-previews placed in grid
+  // row 3, one minmax column, #ct-close / #ct-prev-* --tap-paint floors
+  // (#camtune-inner / #ct-* only; lighting untouched).
+  "tests/unit/ui-fit-camtune-portrait-r7.test.mjs",
   // ui-fit round 5: camera tuner compact foot/preview/copy-from --tap-paint
   // floors (#camtune-inner only; lighting untouched).
   "tests/unit/ui-fit-camtune-tap-r5.test.mjs",

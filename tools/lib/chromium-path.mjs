@@ -170,10 +170,22 @@ function resolveShell(roots, rev) {
  * which rung answered (`env:PW_CHROMIUM`, `browsers.json:<rev>`,
  * `newest:<rev>`, `PATH:<name>` or `system`).
  */
-export function resolveChromium({ env = process.env, roots = browserRoots(env), systemPaths = SYSTEM_CHROMIUM_PATHS } = {}) {
+export function normalizeBrowserFlavor(flavor = "auto") {
+  if (flavor === "full") return "chromium";
+  if (flavor === "headless-shell") return "shell";
+  if (!["auto", "chromium", "shell"].includes(flavor)) {
+    throw new Error(`browserFlavor must be auto, chromium/full or shell/headless-shell, not ${flavor}`);
+  }
+  return flavor;
+}
+
+export function resolveChromium({ env = process.env, roots = browserRoots(env), systemPaths = SYSTEM_CHROMIUM_PATHS, browserFlavor = "auto" } = {}) {
+  const flavor = normalizeBrowserFlavor(browserFlavor);
   for (const key of ["PW_CHROMIUM", "CHROME"]) {
     if (env[key]) return { path: env[key], source: `env:${key}` };
   }
+  const shellRev = browsersJsonRevision("chromium-headless-shell") || browsersJsonRevision("chromium");
+  if (flavor === "shell") return resolveShell(roots, shellRev);
   const rev = browsersJsonRevision("chromium");
   if (rev) {
     for (const root of roots) {
@@ -190,8 +202,10 @@ export function resolveChromium({ env = process.env, roots = browserRoots(env), 
       if (exe) return { path: exe, source: `newest:${revOf(d)} under ${root}${rev ? ` (browsers.json wants ${rev}, not installed)` : ""}` };
     }
   }
-  const shell = resolveShell(roots, rev);
-  if (shell) return shell;
+  if (flavor === "auto") {
+    const shell = resolveShell(roots, shellRev);
+    if (shell) return shell;
+  }
   return systemChromium({ env, paths: systemPaths });
 }
 
@@ -199,18 +213,22 @@ export function resolveChromium({ env = process.env, roots = browserRoots(env), 
 export const chromiumPath = (opts) => resolveChromium(opts)?.path;
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const flag = process.argv[2];
+  const args = process.argv.slice(2);
+  const flavorArg = args.find((a) => a.startsWith("--flavor="));
+  const flag = args.find((a) => a !== flavorArg);
   if (["--help", "-h"].includes(flag)) {
-    console.log("Usage: node tools/lib/chromium-path.mjs [--path|--cache-path]\nRead-only executable/cache discovery; never launches a browser.");
+    console.log("Usage: node tools/lib/chromium-path.mjs [--path|--cache-path] [--flavor=auto|chromium|shell]\nRead-only executable/cache discovery; never launches a browser.");
     process.exit(0);
   }
-  if (process.argv.length > 3 || (flag && !["--path", "--cache-path"].includes(flag))) {
+  if (args.length > (flavorArg ? 2 : 1) || (flag && !["--path", "--cache-path"].includes(flag))) {
     console.error("Unknown arguments; use --help"); process.exit(2);
   }
   if (flag === "--cache-path") {
     const cache = browserCachePath(); if (cache) console.log(cache); process.exit(cache ? 0 : 1);
   }
-  const r = resolveChromium();
+  let r;
+  try { r = resolveChromium({ browserFlavor: flavorArg ? flavorArg.slice("--flavor=".length) : "auto" }); }
+  catch (err) { console.error(err.message); process.exit(2); }
   if (flag === "--path") { if (r) console.log(r.path); process.exit(r ? 0 : 1); }
   console.log(`browsers.json chromium revision: ${browsersJsonRevision("chromium") || "(playwright-core not installed)"}`);
   console.log(`roots: ${browserRoots().join(", ") || "(none exist)"}`);

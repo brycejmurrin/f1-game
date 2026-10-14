@@ -34,6 +34,8 @@ export const DEVICES = Object.freeze({
   // Chromium reports env(safe-area-inset-*) as 0.
   "phone-landscape-844x390": { w: 844, h: 390, touch: true, ins: { sal: 47, sar: 47, sat: 0, sab: 21 } },
   "phone-portrait-390x844": { w: 390, h: 844, touch: true, ins: { sal: 0, sar: 0, sat: 47, sab: 34 } },
+  // iPhone 15/16 Pro Max portrait (lead-only; HUD Desk readable-floor shots).
+  "phone-portrait-430x932": { w: 430, h: 932, touch: true, ins: { sal: 0, sar: 0, sat: 59, sab: 34 } },
   // iPad Air landscape: no notch, a 20px home indicator.
   "tablet-1180x820": { w: 1180, h: 820, touch: true, ins: { sal: 0, sar: 0, sat: 0, sab: 20 } },
   // Lead-only shapes (the static audit's short landscapes); not matrix axes.

@@ -3,7 +3,7 @@ import { readFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { launchChromium, startStaticServer, shutdown, registerTeardownResource } from '../lib/harness.mjs';
-import { chromiumArgsForBackend, installProbeInit, gotoGame, awaitPresentedFrame, screenshotGameCanvas } from './probe-page.mjs';
+import { chromiumArgsForBackend, installProbeInit, gotoGame, awaitCaptureReady, screenshotGameCanvas } from './probe-page.mjs';
 import { ROOT, pixelEvidence, rendererEvidence } from './capture-contract.mjs';
 export function visibleScreen() {
   const shown = (element) => {
@@ -31,8 +31,8 @@ export async function runBoundedCapture(work, { timeoutMs = 300000, cleanup = sh
   catch (err) { failure = err; err.captureContext = context; throw err; }
   finally {
     clearTimeout(timer);
-    // Harness shutdown owns a five-second force fallback. Calling browser.close
-    // first would remove that browser from the registry before the fallback ran.
+    // Harness shutdown owns a five-second force fallback and keeps ownership
+    // registered until an explicit browser.close has finished.
     try { await cleanup(); }
     catch (err) {
       context.teardownError = String(err.message || err);
@@ -136,13 +136,13 @@ export async function stageRace(page, track) {
   await page.evaluate((id) => window.__apex.race(id), track);
   await page.waitForFunction((id) => window.__apex.info().track === id, track, { polling: 100, timeout: 60000 });
   await page.evaluate(() => { window.__apex.go(); window.__apex.hud(false); window.__apex.headless(false); });
-  await awaitPresentedFrame(page, 30000);
+  await awaitCaptureReady(page, { timeoutMs: 30000 });
 }
 export async function recordCapture(page, path, requestedBackend, context) {
   const phase = context?.phase || "capture";
   const operationStart = context?.operationTimings?.length || 0;
   if (context) context.phase = phase + ":present";
-  await captureOperation(context, 'present', 30000, (budget) => awaitPresentedFrame(page, budget));
+  await captureOperation(context, 'present', 30000, (budget) => awaitCaptureReady(page, { timeoutMs: budget }));
   if (context) context.phase = phase + ":state-snapshot";
   const snapshot = await captureOperation(context, 'state-snapshot', 30000, () => page.evaluate(() => {
     const a = window.__apex, diag = a.diag({ download: false }), cameraState = a.cameraState();
