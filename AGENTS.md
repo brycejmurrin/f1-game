@@ -156,7 +156,7 @@ code / fat skill → skill `slim-bloat` and agent `bloat-auditor`; PR sweeps →
 WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change, or using an API you have not checked this session, read the current docs (`WebSearch`, `WebFetch`, Context7 for library APIs) and cite the URLs in the commit, PR body or `docs/notes/`; memory of a CLI flag, limit or default is not evidence. Bulk or post-deploy web reading goes to agent `deploy-research`.
 
 Hooks (`.claude/hooks/`, wired by `.claude/settings.json`): `session-start.sh` installs deps and prints the orientation line; `protect-files.sh` blocks generated-file edits and source edits during a live browser run (Write/Edit and Bash writes);
-`bash-guard.sh` runs the guards on the STAGED commit, blocks `pkill -f`, PID kills of a test-bg run and a browser run inside a subagent (`mcp-browser-guard.sh` for the MCP browser tools); `github-mcp-guard.sh` gates merge, arm and draft→ready calls; `post-edit.sh` (advisory) flags a `js/` edit that does not parse or staled a generated file;
+`bash-guard.sh` runs the guards on the STAGED commit (so `git add` first, then commit in a separate command), blocks `pkill -f`, PID kills of a test-bg run and a browser run inside a subagent (`mcp-browser-guard.sh` for the MCP browser tools); `github-mcp-guard.sh` denies squash/rebase and asks a person before merge, arm and draft→ready calls; `post-edit.sh` (advisory) flags a `js/` edit that does not parse or staled a generated file;
 `stop-guard.sh` nudges once when a turn would end over a live run (`live-run.py`); `memory-sync.sh` carries auto memory across cloud containers (`docs/notes/AGENT-MEMORY.md`). `touch .claude/allow-protected` lifts every edit rule except the live-run one. Never duplicate skills or agents under `.cursor/`.
 
 Cloud agent stall abort, handoff fields, and merge-not-rebase: `docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md`.
@@ -178,6 +178,12 @@ It prints the branch's last ci/pages conclusions first, so an INHERITED red is v
 Shipping is a RELEASE TRAIN: a green fast tier pokes `pages.yml`, which gates the tip once and publishes exactly that
 commit (dispatch = "deploy now"; ≤ ~25 min; one green tip → one train, never dual-dispatch Pages). "Live?" = ancestor
 of the live `apex-sha` (agent `deploy-research`; `docs/TESTING.md` §Release train).
+
+### Backlog
+Work no session has started is a GitHub issue (`.github/ISSUE_TEMPLATE/`; why: `docs/notes/AGENT-WORK-TRACKING-2026-10-14.md`); the PR body stays the in-flight log, memory stays for facts.
+With no task from the user, take one from the ready queue: `list_issues` with `labels: ["ready"]`, skipping any also labelled `claimed` or `blocked`.
+Claim it (`who-is-on-it.mjs --claim "#<n> <text>"`, then label it `claimed` and comment your branch); the draft PR body says `Closes #<n>`, which closes it on merge (the deploy branch is the default branch).
+Work found mid-task becomes a sub-issue (`parent_issue_number`), not scope on your PR; work that waits on another issue gets `blocked` plus "Blocked by #<n>".
 
 ### Concurrent PRs
 Three rules bind every session. Fleet launch policy (launch prompts, lanes, caps) is skill `agent-fleet` §Launch policy; Merge Desk procedure is skill `ci-watch`; detail in `docs/TESTING.md` §Merge train and `docs/notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md`.

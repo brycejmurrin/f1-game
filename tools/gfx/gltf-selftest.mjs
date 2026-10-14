@@ -301,6 +301,77 @@ console.log("TEST 5: mirrored node (scale -1 on x) flips winding, normals stay o
 
 // --- summary ---
 console.log("");
+// Adoption must reject malformed topology/attributes before creating a mesh.
+{
+  const triangle = () => GLTF.parseGLB(makeTriangleGLB([0,0,0, 1,0,0, 0,1,0], [0,1,2], [1,1,1], true));
+  const reject = (edit) => {
+    const p = triangle(); edit(p.json, p.bin);
+    let rejected = false;
+    try { GLTF.toMesh(buildGLB(p.json, p.bin)); } catch (_) { rejected = true; }
+    if (!rejected) throw new Error("GLTF accepted malformed primitive");
+  };
+  reject((j) => { j.accessors[2].type = "VEC3"; j.accessors[2].count = 1; });
+  reject((j) => { j.accessors[2].componentType = 5122; });
+  reject((j) => { j.accessors[2].normalized = true; });
+  reject((j) => { j.accessors[2].count = 2; });
+  reject((j, bin) => { new DataView(bin.buffer, bin.byteOffset).setUint16(j.bufferViews[2].byteOffset, 3, true); });
+  reject((j) => { j.accessors[0].type = "VEC2"; });
+  reject((j) => { j.accessors[1].count = 2; });
+  reject((j) => { j.meshes[0].primitives[0].attributes.COLOR_0 = 2; });
+  reject((j) => { j.accessors[1].type = "VEC2"; });
+  for (const type of [5121, 5123, 5126]) {
+    for (const components of [3, 4]) {
+      const p = triangle(), bytes = type === 5121 ? 1 : type === 5123 ? 2 : 4;
+      const bin = new Uint8Array(p.bin.length + 3 * components * bytes); bin.set(p.bin);
+      const off = p.bin.length, view = new DataView(bin.buffer);
+      for (let i = 0; i < 3 * components; i++) {
+        if (bytes === 1) view.setUint8(off + i, 255);
+        else if (type === 5123) view.setUint16(off + i * bytes, 65535, true);
+        else view.setFloat32(off + i * bytes, 1, true);
+      }
+      p.json.bufferViews.push({ buffer: 0, byteOffset: off, byteLength: 3 * components * bytes });
+      p.json.accessors.push({ bufferView: 3, componentType: type, count: 3,
+        type: "VEC" + components, normalized: type !== 5126 });
+      p.json.meshes[0].primitives[0].attributes.COLOR_0 = 3;
+      p.json.buffers[0].byteLength = bin.length;
+      const mesh = GLTF.toMesh(buildGLB(p.json, bin));
+      if (mesh.col.some((v) => v !== 1)) throw new Error("valid normalized/float colors rejected");
+    }
+  }
+  // KHR_mesh_quantization legitimately permits integer POSITION and signed normalized NORMAL.
+  {
+    const p = triangle(); p.json.extensionsUsed = ["KHR_mesh_quantization"];
+    const bin = new Uint8Array(p.bin.length + 24); bin.set(p.bin);
+    const off = p.bin.length;
+    bin.set([0,0,0, 1,0,0, 0,1,0], off);
+    bin.set([0,0,127, 0,0,127, 0,0,127], off + 12);
+    p.json.bufferViews[0] = { buffer: 0, byteOffset: off, byteLength: 9 };
+    p.json.bufferViews[1] = { buffer: 0, byteOffset: off + 12, byteLength: 9 };
+    p.json.accessors[0].componentType = 5121;
+    p.json.accessors[1].componentType = 5120; p.json.accessors[1].normalized = true;
+    p.json.buffers[0].byteLength = bin.length;
+    const mesh = GLTF.toMesh(buildGLB(p.json, bin));
+    if (mesh.pos[3] !== 1 || mesh.nrm[2] !== 1) throw new Error("valid quantized attributes rejected");
+  }
+  const nonIndexed = triangle(); delete nonIndexed.json.meshes[0].primitives[0].indices;
+  const sequential = GLTF.toMesh(buildGLB(nonIndexed.json, nonIndexed.bin));
+  if (sequential.idx.join(",") !== "0,1,2") throw new Error("valid nonindexed triangle rejected");
+  for (const type of [5121, 5123, 5125]) {
+    const p = triangle(), bytes = type === 5121 ? 1 : type === 5123 ? 2 : 4;
+    const bin = new Uint8Array(p.bin.length + 12); bin.set(p.bin);
+    const off = p.bin.length, view = new DataView(bin.buffer);
+    for (let i = 0; i < 3; i++) {
+      if (bytes === 1) view.setUint8(off + i, i);
+      else if (bytes === 2) view.setUint16(off + i * bytes, i, true);
+      else view.setUint32(off + i * bytes, i, true);
+    }
+    p.json.bufferViews[2] = { buffer: 0, byteOffset: off, byteLength: 3 * bytes };
+    p.json.accessors[2].componentType = type; p.json.buffers[0].byteLength = bin.length;
+    const mesh = GLTF.toMesh(buildGLB(p.json, bin));
+    if (mesh.idx.length !== 3 || mesh.idx[2] !== 2) throw new Error("valid unsigned index rejected");
+  }
+}
+
 if (failures === 0) {
   console.log("ALL TESTS PASSED");
   process.exit(0);

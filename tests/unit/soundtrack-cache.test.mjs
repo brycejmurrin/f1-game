@@ -24,7 +24,7 @@ function boot(opts = {}) {
       createGain: () => node("gain"), createBiquadFilter: () => node("biquad"), createOscillator: () => node("osc"), createBufferSource: () => node("src"),
       createDynamicsCompressor: () => Object.assign(node("comp"), { threshold: param(0), knee: param(0), ratio: param(0), attack: param(0), release: param(0) }),
       createBuffer: (ch, len, sr) => { const b = { sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }; buffers.push(b); return b; },
-      decodeAudioData: (ab, res, rej) => (decoded.push(ab._url || ""), opts.badDecode && opts.badDecode(ab) ? rej(new Error("EncodingError")) : res({ duration: 4, length: 32000, sampleRate: 8000, numberOfChannels: 1, getChannelData: () => new Float32Array(32000) })),
+      decodeAudioData: (ab, res, rej) => opts.decode ? opts.decode(ab, res, rej) : (decoded.push(ab._url || ""), opts.badDecode && opts.badDecode(ab) ? rej(new Error("EncodingError")) : res({ duration: 4, length: 32000, sampleRate: 8000, numberOfChannels: 1, getChannelData: () => new Float32Array(32000) })),
       resume: () => { resumes++; return Promise.resolve(); }, suspend: () => { ctx.state = "suspended"; return Promise.resolve(); }, close: () => { ctx.state = "closed"; return Promise.resolve(); } };
     if (opts.mediaSource) ctx.createMediaElementSource = (el) => { mediaEls.push(el); return node("mediaEl"); };
     contexts.push(ctx);
@@ -77,4 +77,27 @@ test("removeTrack frees its LRU slot: a live cached buffer is not evicted early"
   assert.equal(afterZ, before + 1, "z decoded once");
   await play(x);                                      // x was cached and live: no re-decode
   assert.equal(decodes(), afterZ, "x was evicted early by the stale slot of the removed track");
+});
+
+
+test("distinct music loads serialize decoding and skip superseded queued tracks", async () => {
+  const pending = [], decoded = []; let active = 0, maxActive = 0;
+  const { A, started } = boot({ decode: (ab, resolve) => {
+    if (!String(ab._url).includes("assets/music/")) { resolve({ duration: 0.1 }); return; }
+    active++; maxActive = Math.max(active, maxActive); decoded.push(ab._url);
+    pending.push(() => { active--; resolve({ duration: 4 }); });
+  } });
+  A.init(); await flush();
+  const tracks = A.tracks().filter((t) => t.builtin);
+  A.playTrackId(tracks[0].id); await flush();
+  assert.equal(pending.length, 1);
+  A.playTrackId(tracks[1].id); await flush();
+  A.playTrackId(tracks[2].id); await flush();
+  assert.equal(pending.length, 1, "queued URLs cannot decode beside the current PCM allocation");
+  pending.shift()(); await flush();
+  assert.equal(pending.length, 1, "only the latest queued track decodes");
+  assert.equal(decoded.at(-1), "assets/music/" + tracks[2].id.slice("builtin:".length) + ".mp3");
+  pending.shift()(); await flush();
+  assert.equal(maxActive, 1);
+  assert.equal(started.filter((n) => n.buffer && n.buffer.duration === 4).length, 1, "superseded decode never plays");
 });

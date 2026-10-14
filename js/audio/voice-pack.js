@@ -127,14 +127,24 @@ var VoicePack = (() => {
       if (v.state === "failed" && Date.now() - v.failedAt > RETRY_MS) v.state = "idle";
       if (v.state !== "idle" || typeof fetch !== "function") return v.state;
       v.state = "loading";
-      const get = (f, t) => fetch(base + f).then((r) => { if (!r.ok) throw new Error(f + " " + r.status); return r[t](); });
-      v.loading = Promise.all([get(id + ".json", "json"), get(id + ".bin", "arrayBuffer")])
+      const controller = typeof AbortController === "function" ? new AbortController() : null;
+      let timer;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => { reject(new Error("pack fetch timed out")); if (controller) { try { controller.abort(); } catch (_) { /* abort is best effort */ } } }, 15000);
+      });
+      const get = (f, t) => {
+        try { return Promise.resolve(fetch(base + f, controller ? { signal: controller.signal } : undefined))
+          .then((r) => { if (!r.ok) throw new Error(f + " " + r.status); return r[t](); }); }
+        catch (e) { return Promise.reject(e); }
+      };
+      v.loading = Promise.race([timeout, Promise.all([get(id + ".json", "json"), get(id + ".bin", "arrayBuffer")])])
         .then(([man, bin]) => {
           if (!man || !man.clips || !(bin && bin.byteLength)) throw new Error("empty pack");
           v.man = man; v.bin = bin; v.state = "ready";
           Log.info("audio", "VoicePack " + id + " ready: " + Object.keys(man.clips).length + " clips");
         })
-        .catch((e) => { v.state = "failed"; v.failedAt = Date.now(); Log.info("audio", "VoicePack " + id + " unavailable: " + (e && e.message)); });
+        .catch((e) => { v.state = "failed"; v.failedAt = Date.now(); Log.info("audio", "VoicePack " + id + " unavailable: " + (e && e.message)); })
+        .finally(() => clearTimeout(timer));
       return v.state;
     }
     /** Lap-1 radio: the engineer and spotter share one pack; it must win bandwidth

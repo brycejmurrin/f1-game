@@ -5867,7 +5867,8 @@ const game = source("js/render/renderer-boot.js");
 const begin = game.indexOf("\nif (!gfx) {");
 const end = game.indexOf("\nreturn { gfx, bound:", begin);
 assert.ok(begin > 0 && end > begin, "boot's GLX fallback must remain identifiable");
-const fallback = `(async function () { let gfx = null; ${game.slice(begin, end).replace(/return null;/g, "return;")} return gfx; })()`;
+const timeoutHelpers = span(game, "const BOOT_STEP_MS", "function showGraphicsUnavailable", "boot timeout helpers");
+const fallback = `(async function () { ${timeoutHelpers} let gfx = null; ${game.slice(begin, end).replace(/return null;/g, "return;")} return gfx; })()`;
 
 test("the eager GLX handle preserves eval-time mobile tier and live backend getters", () => {
   const storage = new Map([["apex26.forceMobileTier", "1"]]);
@@ -5908,6 +5909,7 @@ test("GLX implementation is deferred and ordered, while the facade precedes its 
 function bootScenario({ install = true, init = true, pref = "webgl2", skip = false, blocked = false } = {}) {
   const events = [], storage = new Map();
   const context = vm.createContext({
+    setTimeout, clearTimeout,
     navigator: { userAgent: "", maxTouchPoints: 0 },
     localStorage: { getItem: () => null, removeItem: (k) => events.push(`remove:${k}`) },
     sessionStorage: {

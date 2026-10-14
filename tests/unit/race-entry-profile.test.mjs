@@ -454,3 +454,13 @@ test("false commit, invalid settings, and failures release only their active obs
     assert.equal(h.failures.length, mode === "false" ? 0 : 1, mode + ": recovery runs once");
   }
 });
+
+test("ended duration stays fixed and a new window resets its terminal clock", () => {
+  let t = 1000;
+  const P = load({ performance: { now: () => t } });
+  P.begin("race"); t = 1500; P.end();
+  assert.equal(P.snapshot().windowMs, 500);
+  t = 61500; P.end(); assert.equal(P.snapshot().windowMs, 500);
+  P.begin("next"); t += 20; assert.equal(P.snapshot().windowMs, 20);
+  P.end(); t += 1000; assert.equal(P.snapshot().windowMs, 20);
+});

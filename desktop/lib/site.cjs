@@ -29,6 +29,7 @@ function isCurrentStage(dir, head) {
 /**
  * Staged site for extraResources → resources/site.
  * Default is desktop/dist-site (npm run stage). Override with APEX_SITE_DIR.
+ * Default dist-site must be stamped from HEAD; restage stale trees.
  * If dist-site is missing, artifacts/site is used only when it was stamped
  * from HEAD (`isCurrentStage`); a stale one is ignored.
  */
@@ -38,9 +39,12 @@ function resolveSiteDir(desktopRoot, opts = {}) {
   }
   const distSite = path.join(desktopRoot, "dist-site");
   const artifacts = path.join(desktopRoot, "..", "artifacts", "site");
-  if (fs.existsSync(path.join(distSite, "version.json"))) return distSite;
+  const head = opts.head !== undefined ? opts.head : repoHead(path.join(desktopRoot, ".."));
+  if (fs.existsSync(path.join(distSite, "version.json"))) {
+    if (!isCurrentStage(distSite, head)) throw new Error("desktop prebuild: stale dist-site — run: npm run stage");
+    return distSite;
+  }
   if (fs.existsSync(path.join(artifacts, "version.json"))) {
-    const head = opts.head !== undefined ? opts.head : repoHead(path.join(desktopRoot, ".."));
     if (isCurrentStage(artifacts, head)) return artifacts;
   }
   return distSite;
