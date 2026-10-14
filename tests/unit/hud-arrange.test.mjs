@@ -33,6 +33,15 @@ test("dragTo: screen px become a share of the screen, rounded to 0.1 and clamped
   assert.deepEqual(plain(A.dragTo({ x: 0, y: 0 }, 10, 10, 0, 0)), { x: 50, y: 50 }, "a zero-size screen cannot divide by zero");
 });
 
+test("placedOrig: an auto-placed radio card's first drag starts from where it sits, measured from the fixed point", () => {
+  const A = load();
+  // 844x390: the fixed point is (422, 97.5). A card at (633, 117) is +25 % across and +5 % down from it.
+  assert.deepEqual(plain(A.placedOrig({ x: 0, y: 0, s: 100 }, 633, 117, 844, 390)), { x: 25, y: 5, s: 100 });
+  assert.deepEqual(plain(A.placedOrig({ x: 10, y: -4, s: 120 }, 633, 117, 844, 390)), { x: 10, y: -4, s: 120 }, "an already moved card keeps its offset");
+  const back = A.dragTo(A.placedOrig({ x: 0, y: 0, s: 100 }, 211, 97.5, 844, 390), 0, 0, 844, 390);
+  assert.deepEqual(plain(back), { x: -25, y: 0 }, "a still press leaves it in place");
+});
+
 test("pinchTo: a pinch scales the size on 5 % steps between 50 and 200; a zero distance is ignored", () => {
   const A = load();
   assert.equal(A.pinchTo(100, 100, 150), 150);
@@ -95,7 +104,7 @@ test("create: inert without a document or HudLayout; the pure API is frozen", ()
 });
 
 // Exercise the real editor listeners with a tiny DOM and a controllable frame queue.
-function editor() {
+function editor(pieceId = "piece") {
   const ids = new Map(), listeners = {}, frames = new Map(), writes = [], observers = [];
   let frame = 0, set = 'chase', profile = 'standard';
   class El {
@@ -106,19 +115,19 @@ function editor() {
     appendChild(e) { this.children.push(e); e.parentNode = this; return e; }
     insertBefore(e) { return this.appendChild(e); }
     contains(e) { return this === e || this.children.some(c => c.contains(e)); }
-    closest(sel) { return sel === '#piece' && this.id === 'piece' ? this : null; }
+    closest(sel) { return sel === "#" + pieceId && this.id === pieceId ? this : null; }
     getBoundingClientRect() { return { left: 10, top: 10, right: 30, bottom: 30, width: 20, height: 20 }; }
     focus() { doc.activeElement = this; }
   }
   const body = new El(), doc = { body, createElement: tag => new El(tag), activeElement: null,
     getElementById: id => ids.get(id), querySelector: sel => ids.get(sel.slice(1)), querySelectorAll: () => [],
     addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); } };
-  for (const id of ['piece', 'pmsettings', 'pausemenu', 'pm-hud-details', 'pm-hud-details-sum', 'rotate-device']) { const e = new El(); e.id = id; body.appendChild(e); }
+  for (const id of [pieceId, 'pmsettings', 'pausemenu', 'pm-hud-details', 'pm-hud-details-sum', 'rotate-device']) { const e = new El(); e.id = id; body.appendChild(e); }
   ids.get('rotate-device').setAttribute('aria-hidden', 'true');
   const values = new Map();
   const key = (sn = set, pn = profile) => sn + ':' + pn;
   const get = (id, sn, pn) => ({ x: 0, y: 0, s: 100, ...values.get(key(sn, pn)) });
-  const layout = { ELEMENTS: [['piece', 'Piece', '#piece']], shown: () => set, profile: () => profile, get,
+  const layout = { ELEMENTS: [[pieceId, 'Piece', '#' + pieceId]], shown: () => set, profile: () => profile, get,
     set(id, v, sn, pn) { writes.push({ id, v: { ...v }, sn, pn }); values.set(key(sn, pn), { ...get(id, sn, pn), ...v }); }, resetEl() {} };
   const ctx = { document: doc, window: { innerWidth: 1000, innerHeight: 500, addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); } },
     HudLayout: layout, M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) }, Log: { info() {} },
@@ -126,7 +135,7 @@ function editor() {
     MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} } };
   vm.createContext(ctx); vm.runInContext(SRC.replace(/^const\b/gm, 'var'), ctx);
   const api = ctx.HudArrange.create({ $: id => ids.get(id) });
-  const fire = (name, args = {}) => { const e = { target: ids.get('piece'), pointerId: 1, clientX: 100, clientY: 100, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, ...args }; for (const fn of listeners[name] || []) fn(e); };
+  const fire = (name, args = {}) => { const e = { target: ids.get(pieceId), pointerId: 1, clientX: 100, clientY: 100, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, ...args }; for (const fn of listeners[name] || []) fn(e); };
   const tick = () => { const todo = [...frames.values()]; frames.clear(); for (const fn of todo) fn(); };
   return { api, fire, tick, writes, ids, frames, doc, get, observers, context(sn, pn = profile) { set = sn; profile = pn; for (const fn of observers) fn(); } };
 }
@@ -172,4 +181,17 @@ test('editor: resize and rotation prompt end editing and preserve pending moveme
     else { e.ids.get('rotate-device').setAttribute('aria-hidden', 'false'); for (const fn of e.observers) fn(); }
     assert.equal(e.api.isEditing(), false); assert.equal(e.writes.at(-1).v.x, 5); assert.equal(e.frames.size, 0);
   }
+});
+
+
+test("editor: a radio pinch rebases the remaining finger from its painted position", () => {
+  const e = editor("announce"); e.api.setEditing(true);
+  e.fire("pointerdown", { pointerId: 1, clientX: 100 });
+  e.fire("pointerdown", { pointerId: 2, clientX: 120 });
+  e.fire("pointermove", { pointerId: 2, clientX: 140 }); e.tick();
+  assert.equal(e.get("announce").s, 200);
+  e.fire("pointerup", { pointerId: 2 });
+  e.fire("pointermove", { pointerId: 1, clientX: 101 }); e.tick();
+  assert.equal(e.get("announce").x, -48.9, "one pixel follows the measured radio origin, not the unplaced zero");
+  assert.equal(e.get("announce").y, -23);
 });

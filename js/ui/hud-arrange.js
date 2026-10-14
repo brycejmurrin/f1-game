@@ -32,6 +32,13 @@ const HudArrange = (() => {
     const y = clamp((orig && orig.y || 0) + (dy / Math.max(1, H)) * 100, LIM.y[0], LIM.y[1]);
     return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
   }
+  /** Pure: the offset that keeps an auto-placed radio card where it is (left/top screen px) once moving it
+   *  hangs it from css/hud.css's fixed point (50vw, 25svh) instead. Its first drag starts from here. */
+  function placedOrig(orig, left, top, W, H) {
+    if (orig && (orig.x || orig.y)) return orig;
+    const w = Math.max(1, W), h = Math.max(1, H);
+    return Object.assign({}, orig, { x: (left - w / 2) / w * 100, y: (top - h / 4) / h * 100 });
+  }
   /** Pure: size s0 (%) after a pinch from finger distance d0 to d1, on the slider's 5 % steps. */
   function pinchTo(s0, d0, d1) {
     if (!(d0 > 0) || !(d1 > 0)) return s0;
@@ -220,6 +227,11 @@ const HudArrange = (() => {
       paintBar(markClashes());
     }
     const current = (id) => HudLayout.get(id, context.set, context.profile);
+    function dragOrig(id) {
+      const orig = current(id), el = id === "announce" ? elOf(id) : null;
+      const r = el && el.getBoundingClientRect();
+      return r ? placedOrig(orig, r.left, r.top, window.innerWidth, window.innerHeight) : orig;
+    }
     function flush() {
       if (raf) {
         if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(raf);
@@ -413,7 +425,8 @@ const HudArrange = (() => {
       }
       flush();
       selected = id;
-      drag = { id, pid: e.pointerId, startX: e.clientX, startY: e.clientY, orig: current(id) };
+      let orig = dragOrig(id);
+      drag = { id, pid: e.pointerId, startX: e.clientX, startY: e.clientY, orig };
       pinch = null;
       try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
       paintBar(markClashes());
@@ -437,7 +450,7 @@ const HudArrange = (() => {
         const pid = e.pointerId === pinch.pid ? drag.pid : pinch.pid;
         const point = pointers.get(pid), id = drag.id;
         pinch = null;
-        drag = point ? { id, pid, startX: point.x, startY: point.y, orig: current(id) } : null;
+        drag = point ? { id, pid, startX: point.x, startY: point.y, orig: dragOrig(id) } : null;
         after(); return;
       }
       if (drag && e.pointerId === drag.pid) { drag = null; after(); }
@@ -482,6 +495,6 @@ const HudArrange = (() => {
     return Object.freeze({ setEditing, isEditing: () => editing, selected: () => selected });
   }
 
-  return Object.freeze({ LIM, STEP, MIN_CLASH, VIS, visIds, visShown, dragTo, pinchTo, stepSize, clashes, create });
+  return Object.freeze({ LIM, STEP, MIN_CLASH, VIS, visIds, visShown, dragTo, placedOrig, pinchTo, stepSize, clashes, create });
 })();
 Object.freeze(HudArrange);
