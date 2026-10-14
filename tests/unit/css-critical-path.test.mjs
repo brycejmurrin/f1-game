@@ -117,8 +117,9 @@ test("blocking and preload byte census stay under the post-cut ceilings", () => 
   // nest (2026-10-07 UI Fit) adds ~2 KiB more in the same blocking sheet.
   // B1 (2026-10-10): CAREER skew pad + under-brand flex-start (~140 B).
   // Title footer fit (2026-10-14): rooms 2×2 + desktop icon flex row (~0.7 KiB).
-  assert.ok(blocking < 219300, `blocking CSS is ${blocking} B; want < 219300`);
-  assert.ok(preload < 219300, `preload CSS is ${preload} B; want < 219300`);
+  // Title icons + #1537 phone wrap/clamp (2026-10-14): ~2.7 KiB in menus.css.
+  assert.ok(blocking < 222500, `blocking CSS is ${blocking} B; want < 222500`);
+  assert.ok(preload < 222500, `preload CSS is ${preload} B; want < 222500`);
   const settingsBytes = SETTINGS_FOUC.reduce((n, f) => n + fs.statSync(path.join(ROOT, f)).size, 0);
   assert.ok(settingsBytes > 70000, "the dropped preload still exists as print→all bytes");
 });
