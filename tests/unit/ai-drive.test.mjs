@@ -62,6 +62,36 @@ test("look sample pool reuses rows across beginLook", () => {
   assert.equal(second[0].k, 0.03);
 });
 
+test("brakeTarget: a cached bank grip and the distance-term skip change no result (PERF-HUNT-4 B-F4)", () => {
+  // The pooled sample carries mu = bankGrip(bank) (game.js caches it per node in c._lk); a hand-built one may not.
+  // The loop skips a sample whose distance term alone reaches the tightest budget so far — exact, and with
+  // `continue` the minimum stays independent of sample order.
+  let seed = 11; const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296;
+  for (let n = 0; n < 400; n++) {
+    const rows = [];
+    for (let j = 0, m = 4 + ((rnd() * 36) | 0); j < m; j++) {
+      rows.push({ d: j * 4 + rnd() * 4, k: (rnd() < 0.3 ? rnd() * 0.03 : rnd() * 0.001) * (rnd() < 0.5 ? -1 : 1), bank: rnd() < 0.3 ? rnd() * 0.15 : 0 });
+    }
+    const ctx = { traits: mid, latMax: 22, brake: 18 + rnd() * 8, grip: 0.9 + rnd() * 0.2, pace: 1, vmax: 92, diffCorner: 1, aeroLoad: 0.5, speed: 70 };
+    A.beginLook(); for (const r of rows) A.pushLook(r.d, r.k, r.bank);
+    const pooled = A.brakeTarget({ ...ctx, samples: A.endLook() });
+    A.beginLook(); for (const r of rows) A.pushLook(r.d, r.k, r.bank, A.bankGrip(r.bank));
+    assert.ok(Object.is(A.brakeTarget({ ...ctx, samples: A.endLook() }), pooled), "a cached mu must equal the computed one");
+    assert.ok(Object.is(A.brakeTarget({ ...ctx, samples: rows }), pooled), "a hand-built sample without mu computes it");
+    assert.ok(Object.is(A.brakeTarget({ ...ctx, samples: rows.slice().reverse() }), pooled), "order-independent");
+    // The reference: every sample solved, no skip (the loop before B-F4).
+    let ref = Infinity;
+    for (const s of rows) {
+      const vC = A.cornerSpeed(Math.max(Math.abs(s.k), 1e-5), 22 * (1 + Math.sin(s.bank) * 0.8) * ctx.grip, 1, 92) * mid.skill;
+      const e = vC * vC + 2 * ctx.brake * 0.85 * Math.max(s.d, 1);
+      if (e >= 0 && e < ref) ref = e;
+    }
+    assert.ok(Math.abs(pooled - Math.sqrt(ref)) < 1e-9 * Math.sqrt(ref), `skip changed the tightest sample: ${pooled} vs ${Math.sqrt(ref)}`);
+  }
+  assert.equal(A.bankGrip(0), 1);
+  assert.equal(A.bankGrip(undefined), 1);
+});
+
 test("awareness shortens the stuck dig-out threshold", () => {
   assert.ok(A.stuckThreshold(ace) < A.stuckThreshold(rook));
   assert.ok(A.stuckThreshold(mid) > 0.4 && A.stuckThreshold(mid) < 1.2);

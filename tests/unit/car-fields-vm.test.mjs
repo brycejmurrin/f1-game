@@ -14,7 +14,10 @@
  *      do not — so the check discriminates; and every car is still in FAST mode (%HasFastProperties) after
  *      the frame loop — a control with the old keyed-store loop (`c[KEYS[i]] = undefined`) leaves them in
  *      dictionary mode, which %HaveSameMap cannot see (normalized maps are shared). PERF-HUNT-2 S2;
- *   5. predeclare's body is one NAMED store per key, in KEYS order (the source list cannot drift from GROUPS).
+ *   5. predeclare's body is one NAMED store per key, in KEYS order (the source list cannot drift from GROUPS);
+ *   6. warmShape (PERF-HUNT-4 B-F1, run by gridUp) changes no value, sentinel or key, and over a full lap plus a
+ *      pit stop: no car field widens its value kind (integer -> fraction, undefined/null -> number ...) unless WARM
+ *      names it, the simulation digest is identical with warmShape a no-op, and the cars stay in one fast map.
  * Plus the module's own contract (idempotent, never overwrites, one key list) and the manifest entry.
  *
  * Run: node --test tests/unit/car-fields-vm.test.mjs   (npm run test:game-vm)
@@ -39,7 +42,7 @@ const KEYS = CarFieldsStandalone.KEYS;
 /** Boot the game. `predeclare` false swaps the module's call for a no-op BEFORE the race is built. Until
  * the manifest lists the file the module is injected the way the manifest would (the manifest test below
  * is what fails in that case, so the wiring cannot be forgotten). */
-async function boot({ predeclare = true, storage = {}, patch } = {}) {
+async function boot({ predeclare = true, storage = {}, patch, warm, laps } = {}) {
   const g = await createGame({
     storage,
     onSandbox(sandbox, ctx) {
@@ -49,7 +52,11 @@ async function boot({ predeclare = true, storage = {}, patch } = {}) {
   g.ctx.GLX.makeFrustumPlanes = undefined;
   if (!predeclare) g.ctx.CarFields.predeclare = (c) => c;
   else if (patch) g.ctx.CarFields.predeclare = patch(g.ctx.CarFields.predeclare);
-  await g.race("monza");
+  // warm: false swaps warmShape for a no-op; a function wraps it (called with the original).
+  if (warm === false) g.ctx.CarFields.warmShape = (c) => c;
+  else if (warm) g.ctx.CarFields.warmShape = warm(g.ctx.CarFields.warmShape);
+  if (laps) await g.race("monza", "day", "dry", { laps });
+  else await g.race("monza");
   return g;
 }
 
@@ -191,4 +198,114 @@ test("control: steerSm pre-declared as 0 (not undefined) moves the simulation", 
   const base = await simHash({ predeclare: true }, STEPS);
   const zero = await simHash({ predeclare: true, patch: (orig) => (c) => { orig(c); c.steerSm = 0; return c; } }, STEPS);
   assert.notEqual(zero, base, "steerSm = 0 no longer changes the sim: if game.js dropped the `=== undefined` seed, relax this control");
+});
+
+// ---- warmShape (PERF-HUNT-4 B-F1) -------------------------------------------------------------------------------
+
+/** The value kinds whose mix decides a V8 field representation: Smi < Double < Tagged; HeapObject < Tagged. */
+const kindOf = (v) => {
+  if (typeof v === "number") return Number.isInteger(v) && !Object.is(v, -0) && v >= -(2 ** 30) && v < 2 ** 30 ? "smi" : "dbl";
+  if (v === undefined || v === null || typeof v === "boolean") return "odd";
+  return typeof v === "string" ? "str" : "obj";
+};
+/** Generalized representation rank of a set of kinds (higher = wider). */
+function repRank(set) {
+  const num = set.has("smi") || set.has("dbl"), heap = set.has("odd") || set.has("str") || set.has("obj");
+  if (num && heap) return 3;
+  if (num) return set.has("dbl") ? 1 : 0;
+  return set.size === 1 && set.has("obj") ? 0.5 : 2;
+}
+
+test("WARM table: unique keys, every group commented, one flat list", () => {
+  const W = CarFieldsStandalone.WARM;
+  assert.ok(W.length >= 60, "the probe found ~110 fields; a short table means it was not rerun");
+  assert.equal(new Set(W).size, W.length, "a key listed twice");
+  for (const [why, ks] of CarFieldsStandalone.WARM_GROUPS) { assert.ok(typeof why === "string" && why.length > 10); assert.ok(ks.length > 0); }
+  assert.deepEqual(W, CarFieldsStandalone.WARM_GROUPS.flatMap((x) => x[1]));
+  for (const k of ["lastLap", "uslipHapT", "lockHapT"]) assert.ok(KEYS.includes(k), k + " is pre-declared (the first lap line / player haptics added it mid-race)");
+});
+
+test("warmShape: every value and sentinel back exactly, no key added, key order kept", () => {
+  const c = { prog: -14, x: 0, speed: 0, rank: undefined, aiBias: null, steerSm: undefined, flatSpot: -0, offT: NaN, other: 0 };
+  const before = Object.keys(c).map((k) => [k, c[k]]);
+  assert.equal(CarFieldsStandalone.warmShape(c), c);
+  assert.deepEqual(Object.keys(c), before.map((e) => e[0]), "no key added, order kept");
+  for (const [k, v] of before) assert.ok(Object.is(c[k], v), k + " changed");
+  assert.deepEqual(Object.keys(CarFieldsStandalone.warmShape({})), [], "a field the car does not have is never added");
+});
+
+test("game.js gridUp calls CarFields.warmShape for every car", () => {
+  const src = gameSource();
+  assert.equal((src.match(/CarFields\.warmShape\(/g) || []).length, 1);
+  const body = src.slice(src.indexOf("function gridUp("), src.indexOf("function seedPlayerPose("));
+  assert.ok(/for \(const c of cars\) CarFields\.warmShape\(c\)/.test(body), "the call lives in gridUp, over every car");
+});
+
+/** A full lap plus a pit stop on monza (the player handed to the AI, one AI car's stop called at the start).
+ * Returns the digest chain, `widened` (every field whose value kind generalized after the grid), `added` (keys a
+ * car gained), and the fast-mode / one-map verdicts after the run. */
+async function lapAndPit(opts) {
+  const g = await boot({ storage: { tyreWear: "real", reliability: "off" }, laps: 3, ...opts });
+  try {
+    const G = g.G, A = g.apex;
+    A.carRole(G.cars.indexOf(G.player), { human: false });
+    const pitter = G.cars.findIndex((c) => !c.human && c !== G.player && c.gridPos === 3);
+    A.pit({ car: pitter, arm: true });
+    const grid = new Map(), seen = new Map(), added = new Set();
+    for (const c of G.cars) for (const k of Object.keys(c)) (grid.get(k) || grid.set(k, new Set()).get(k)).add(kindOf(c[k]));
+    for (const [k, s] of grid) seen.set(k, new Set(s));
+    const P = G.cars[pitter];
+    const snap = () => G.cars.map((c) => [c.s, c.x, c.speed, c.head, c.lap, c.prog, c.energy, c.tyreWear, c.pitStops, c.rpm].join(",")).join(";");
+    const done = () => (P.pitStops || 0) >= 1 && (P.pitState || "none") === "none" && G.cars.every((c) => c.retired || c.lap >= 2);
+    let chain = "", steps = 0;
+    while (steps < 12000 && !done()) {
+      g.step(1, 1 / 60); steps++;
+      if (steps % 300 === 0) chain += snap() + "|";
+      if (steps % 3) continue;
+      for (const c of G.cars) for (const k of Object.keys(c)) {
+        let s = seen.get(k);
+        if (!s) { s = new Set(); seen.set(k, s); added.add(k); }
+        s.add(kindOf(c[k]));
+      }
+    }
+    chain += snap();
+    const widened = [];
+    for (const [k, g0] of grid) if (repRank(seen.get(k)) > repRank(g0)) widened.push(k);
+    const fast = nativeFast();
+    v8.setFlagsFromString("--allow-natives-syntax");
+    let sameFn = null;
+    try { sameFn = new Function("a", "b", "return %HaveSameMap(a, b)"); } catch { sameFn = null; }
+    v8.setFlagsFromString("--no-allow-natives-syntax");
+    return {
+      digest: chain, widened, added: [...added], steps, pitted: P.pitStops || 0, done: done(),
+      slow: fast ? [...G.cars].filter((c) => !fast(c)).map((c) => c.code) : null,   // spread: a main-realm array
+      // The AI field only: the harness's carRole() hand-over gives the player car a `netInput` key no race adds.
+      same: sameFn ? [...G.cars].filter((c) => c !== G.player).every((c, i, ai) => sameFn(ai[0], c)) : null,
+    };
+  } finally { g.close(); }
+}
+
+test("a lap plus a pit stop: warmShape changes no value, no field widens outside WARM, the sim is identical", async () => {
+  const bad = [];
+  const on = await lapAndPit({
+    warm: (orig) => (c) => {
+      const before = Object.keys(c).map((k) => [k, c[k]]);
+      orig(c);
+      if (Object.keys(c).join() !== before.map((e) => e[0]).join()) bad.push(c.code + ": keys changed");
+      for (const [k, v] of before) if (!Object.is(c[k], v)) bad.push(c.code + "." + k);
+      return c;
+    },
+  });
+  assert.deepEqual(bad, [], "warmShape changed a value or a key");
+  assert.ok(on.done, `the run must reach a full lap and a completed stop (${on.steps} steps, ${on.pitted} stop)`);
+  const W = new Set(CarFieldsStandalone.WARM);
+  assert.ok(on.widened.length > 10, `the scan must see the race widen fields (${on.widened.length}), or the next check proves nothing`);
+  assert.deepEqual(on.widened.filter((k) => !W.has(k)), [],
+    "a race widened these car fields' value kinds after the grid: add them to WARM_GROUPS in js/race/car-fields.js");
+  assert.deepEqual(on.added, [], "a lap plus a pit stop added keys CarFields does not declare");
+  if (on.slow) assert.deepEqual(on.slow, [], "cars fell into dictionary mode (warmShape must never add a key)");
+  if (on.same != null) assert.ok(on.same, "every car still shares one hidden class");
+  const off = await lapAndPit({ warm: false });
+  assert.equal(off.steps, on.steps, "the same run length with warmShape a no-op");
+  assert.equal(off.digest, on.digest, "warmShape changed the simulation");
 });
