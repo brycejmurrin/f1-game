@@ -4382,9 +4382,8 @@ const WGX = (function () {
       const _ssrStrEarly = o.reflect != null ? o.reflect : 0;
       const _carReflEarly = o.carReflect != null ? o.carReflect
         : PostCommon.knob(o.tune, "carReflect");   // TUNE_DEFS default (0.05) — same read as _carRefl below
-      const _wetEarly = (lastFrame && lastFrame.wetness) || 0;
       const _ssrEarly = !!(frameHaveProj && _ssrReady && (
-        (_wetEarly > 0.01 && _ssrStrEarly > 0.001) || _carReflEarly > 0.001));
+        _ssrStrEarly > 0.001 || _carReflEarly > 0.001));
       const _slEarly = frameSunColor
         ? Math.max(frameSunColor[0], frameSunColor[1], frameSunColor[2]) : 1;
       const _flareEarly = !!(frameSunDir && frameSunDir[1] > -0.02 && _slEarly > 0.35);
@@ -4448,9 +4447,8 @@ const WGX = (function () {
       const sun = _sunScreen();
       const sunUVx = sun ? sun.ux : -2, sunUVy = sun ? sun.uy : -2;
 
-      //    by COMPOSITE this same present() (binding 8). Skipped when dry.
-      const _wet = (lastFrame && lastFrame.wetness) || 0;
-      // opts.reflect is the governor's SSR shed (game.js: tier >= 2 -> 0). Gating
+      //    by COMPOSITE this same present() (binding 8). Skipped when po.reflect and car-paint SSR are both off.
+      // opts.reflect is the governor's SSR shed (game.js: tier >= 2 dry / 3 wet -> 0). Gating
       // on wetness ALONE kept dispatching the 24-step march on a shed device for
       // every wet lap — the pass ran, the LIT block multiplied its result by a
       // params4.w of 0, and the whole cost was thrown away. That is the shed the
@@ -4465,7 +4463,7 @@ const WGX = (function () {
       // LAST frame's reflections — the consume lanes must read 0, not march
       // stale mirror data onto this frame's road and paint.
       const _ssrRan = !!(_ssrReady && ssrBG && frameHaveProj &&
-          ((_wet > 0.01 && _ssrStr > 0.001) || _carRefl > 0.001));
+          (_ssrStr > 0.001 || _carRefl > 0.001));
       if (_ssrRan) {
         const s = postScratch;
         s.set(frameInvProjW, 0);

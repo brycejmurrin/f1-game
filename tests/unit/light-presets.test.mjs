@@ -364,6 +364,17 @@ test("shared *|night|wet stamp supplies the fleet wet-night authenticity knobs",
   assert.deepEqual(pinned, [], "per-track night|wet must defer core authenticity knobs to *|night|wet");
 });
 
+test("spa|night|wet lamp spread matches its dry twin (no amber flood)", () => {
+  // Maxed beamCone/bleedMul/lampWallSpill/lampRadiusMul washed the whole wet
+  // night amber (road luma ~0.42 vs Monaco night|wet ~0.14); #1403 trimmed
+  // only spa|night|dry.
+  const P = presets(), wet = P["spa|night|wet"], dry = P["spa|night|dry"];
+  for (const id of ["beamCone", "bleedMul", "lampWallSpill", "lampRadiusMul"]) {
+    assert.equal(wet[id], dry[id], `spa|night|wet.${id} drifted from spa|night|dry`);
+    assert.equal(P["*|night|wet"][id], undefined, `*|night|wet.${id} now stamped — re-check this test`);
+  }
+});
+
 test("no preset sets a condition-gated knob where its gate is shut (dead entries)", () => {
   // Two knobs are read only under one condition, so a value anywhere else is
   // dead weight that a reader takes for a live setting:

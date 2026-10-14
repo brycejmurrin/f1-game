@@ -266,8 +266,8 @@ const VERIFY_COOL = 5000;   // ms: the wait after a step that made things worse
 // tier at a time — cheapest visual loss first — and restore them only under
 // clear sustained headroom at FULL resolution, so the ladder can't oscillate:
 //   1  env probe off        (car paint falls back to the analytic sky mirror)
-//   2  lamp spot shadow + SSR march off (wet-road + car-paint)
-//   3  car sun-shadow map off (the blob contact shadow remains)
+//   2  lamp spot shadow + SSR march off (dry sheens + car-paint; wet-road SSR survives)
+//   3  car sun-shadow map off (the blob contact shadow remains) + wet-road SSR off
 //   4  SSAO + god rays + bloom off
 
 // Crash sentinel.
@@ -473,7 +473,9 @@ function sentinelArm(on) {
             // equally invalid against the new race's reset averages.
             _govT = 0; _govCool = 0; _govCoolMs = 0; _pendingVerify = null;
             _sinceUp = -1; _scaleCap = Infinity; _capProbeMs = CLIMB_SURVIVE_MS;
-            _scaleMoves = 0; _degradeArm = 0; } else _live = false;
+            _scaleMoves = 0; _degradeArm = 0;
+            // A futile ladder measured in a DRY race must not block the next (wet) race's shed.
+            _tierFutile = false; _scaleFutile = false; } else _live = false;
   if (!_gfx || !_gfx.isMobile) return;
   if (on) {
     _raceTicked = false;
@@ -493,7 +495,7 @@ function cleanRace() {
     // RECOMPUTE THE FLOOR. Paying a strike down must move the floor, not just
     // the counter, or _perfTierFloor stays at whatever init() derived for the
     // WHOLE session. One strike floors the tier at 2, and tier() >= 2 is exactly
-    // the gate that sheds SSR (WET MIRROR / the dry sheens) and lamp shadows,
+    // the gate that sheds SSR (the dry sheens; the WET MIRROR at 3) and lamp shadows,
     // while tier() >= 1 sheds PER-CHUNK LAMPS and the env probe — so a single
     // crash (or one sentinel trip that was never a crash) would pin those
     // features off until a reload, whatever GRAPHICS says. On mobile only ULTRA

@@ -176,8 +176,8 @@
     sceneDepthTex.name = "TLXSceneDepth";
     // R3 (perf hunt 3): ctx.ssrTag false builds the scene target with ONE
     // colour attachment. tlx.js passes false only while nothing can read the
-    // tag for the session (phone MEDIUM: po.reflect and po.carReflect are 0 at
-    // tier >= 2, and the heat haze is mobileTier-gated off), so every scene
+    // tag for the session (phone MEDIUM: po.carReflect is 0 at tier >= 2, the
+    // wet-road march never reads the tag, and the heat haze is mobileTier-gated off), so every scene
     // fragment stops writing — and a tile GPU stops storing — an attachment
     // the composite never fetches. The tag slot then binds its OWN 1x1 white
     // ("not car", the tag's background value): three merges texture nodes

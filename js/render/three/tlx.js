@@ -1107,9 +1107,9 @@ const TLX = (function () {
       // retires the chain ("Post-only death") and the next render-target realloc
       // rebuilds it (applyResize) — WGX's _swapTargets re-enables its chain the same way.
       // R3 (perf hunt 3): does the scene pass need its ssrTag attachment? Only
-      // SSR (po.reflect), car-paint SSR (po.carReflect) and the exhaust haze
-      // read it. On a mobileTier phone at GRAPHICS MEDIUM or LOW (userTier >= 2)
-      // game.js zeroes both SSR inputs (tier() >= 2) and never sends a haze, so
+      // car-paint SSR (po.carReflect) and the exhaust haze read it; the wet-road
+      // march does not. On a mobileTier phone at GRAPHICS MEDIUM or LOW (userTier
+      // >= 2) game.js zeroes po.carReflect (tier() >= 2) and never sends a haze, so
       // the composite never fetches the tag: build the scene target with one
       // attachment and present() sets no MRT. Re-evaluated every begin(): a
       // live preset raise rebuilds the chain with the tag (one compile hitch).

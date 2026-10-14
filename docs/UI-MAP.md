@@ -4,6 +4,11 @@ This is the lookup map for Apex 26's menu web: where a title-screen action
 leads, which overlays can appear along the way, and which stable DOM roots an
 agent can inspect.
 
+For the current end-to-end routes and repeatable regression journeys, use
+[USAGE-PATHS.md](USAGE-PATHS.md). The dated navigation observations below are
+historical; in particular, current Garage forward/back and newer title doors
+are traced in that map.
+
 > **Source date:** 2026-09-18
 >
 > **Live walk:** [brycejmurrin.github.io/f1-game/](https://brycejmurrin.github.io/f1-game/)
