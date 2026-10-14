@@ -83,7 +83,7 @@
             for (let t = 0; t < 4; t++) {
               const a = anchor(K(0.0), side, gap0 + t * 4.2);
               const b = [a.r, a.u, a.t];
-              const h = 1.8 + t * 2.2;
+              const h = 1.82 + t * 2.2;
               const len = FACE * 0.30 - t * 1.0;
               const c = vadd(a.c, a.t, along);
               stage._mat = MAT.CONCRETE;
@@ -375,7 +375,7 @@
       // (coplanar-audit, 3 pairs on the first outside pass, 2026-10-05).
       let slab = 0;
       along(0.765, 0.140, 9, (k, spacing) => {
-        const a = anchor(k, OUT, 1.4 + (slab++ & 1) * 0.03);
+        const a = anchor(k, OUT, 1.4 + (slab++ & 1) * 0.048);
         addBox(out, vadd(a.c, a.u, 1.05), [0.6, 2.1, spacing], [0.93, 0.93, 0.92], [a.r, a.u, a.t]);
       });
       // Catch fence just behind it, in front of the stand bank (gap 18).
@@ -410,7 +410,7 @@
       for (let i = 0; i < 10; i++) {
         const s = (0.780 + i * 0.038) % 1;
         if (s > 0.985 || s < 0.015) continue;   // SF window: Pagoda / main stands
-        floodMast(K(s), OUT, 48, { h: 34, cool: true, arms: 3, light: false, pool: false });
+        floodMast(K(s), OUT, 56, { h: 32, cool: true, arms: 3, light: false, pool: false });
       }
       // Infield viewing mound at the banked oval Turn 1 sector (OSM spectator
       // mounds; Stand H / South Vista road-course seating).
