@@ -825,6 +825,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tlx-hunt3.test.mjs",
   // TLX perf hunt 4 (lane RENDER-S, A-H1): bufferSubData bytes over three r186 on the fake WebGL2 — the plain-Mesh instance streams (batches, mirror views, R1 runs, FX streams) upload 0 B unchanged and exactly the written range when written; the real InstancedMesh caster keeps Dynamic.
   "tests/unit/tlx-hunt4.test.mjs",
+  // TLX perf hunt 4 (lane TLX-W): A-W2 4-byte vertex strides on three's WebGL2 path (the real packer, both ways; the lit GLSL reads the widened colour as vec3).
+  "tests/unit/tlx-hunt4b.test.mjs",
   // TLX's instanced cull reuses its resident pack by surviving CELL SET
   // (InstCells, GLX/WGX parity); lifts the real cullInstances/updateInstances.
   "tests/unit/tlx-inst-cells.test.mjs",
