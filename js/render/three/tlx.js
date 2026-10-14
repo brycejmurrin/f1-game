@@ -1730,6 +1730,24 @@ const TLX = (function () {
       // start bumps the stamp (A5: a Set.clear() per pass minted a fresh table).
       let _instStamp = 0;
       const _instRegistry = [];       // all live InstancedMeshes (hide undrawn)
+      // A-H1 (perf hunt 4) — STREAM, NOT DYNAMIC, ON THE PLAIN-MESH INSTANCE-RATE BUFFERS. three r186's
+      // Attributes.update uploads when `version < attribute.version || usage === DynamicDrawUsage`, and with an
+      // empty updateRanges list (the previous upload cleared it) that upload is the WHOLE array: a Dynamic buffer
+      // was re-sent in full on every render() that drew it, changed or not (bench-dyn, 10 batches x 500 over 2
+      // passes: 742 KB/frame unchanged vs 0; census model 1.9-4.9 MB/frame) — which defeated the A1 cell-set key
+      // and the skid / line / particle dirty flags. A usage is a hint (same buffer, same bytes): a Stream buffer
+      // uploads when a write bumps its version, and exactly the range that write pushed. EVERY write site of these
+      // buffers does both (setRange0 + needsUpdate): _writeInstanceMatrices, _coAppend, uploadStream.
+      // apex26.tlxDynUsage=1 restores Dynamic on every one of them (the A/B handle).
+      // NOT on an InstancedMesh (_instUsageOf): see there.
+      let _instUsage = THREE.StreamDrawUsage;
+      try { if (localStorage.getItem("apex26.tlxDynUsage") === "1") _instUsage = THREE.DynamicDrawUsage; } catch (_) { /* no storage: stream */ }
+      // An InstancedMesh KEEPS DynamicDrawUsage (blob / decal runs, the tlx-shadow casters, the tlxAttrInst=0
+      // batches): three relays its instanceMatrix into the buffer it draws once per FRAME per render object (the
+      // BEFORE_FRAME node update, Instance.js), so a Stream one rewritten and drawn again by the same pass in one
+      // frame draws the earlier matrices (the real caster: 0 B re-sent, tlx-hunt4.test.mjs). Only Dynamic re-sends
+      // it per render(). They move to Stream with the attribute path (A-H4), not before.
+      const _instUsageOf = (mesh) => (mesh.isInstancedMesh ? THREE.DynamicDrawUsage : _instUsage);
 
       function _instColorAttr(imesh, cap) {
         const need = Math.max(1, cap | 0);
@@ -1743,7 +1761,8 @@ const TLX = (function () {
         // NodeMaterial would multiply it into colorNode and bind a second
         // instance-rate slot (slot 5, 12 B when setColorAt lazily allocated 1).
         const next = new THREE.InstancedBufferAttribute(new Float32Array(need * 3), 3);
-        next.setUsage(THREE.DynamicDrawUsage);
+        // A-H1: a geometry attribute read by name, never relayed — Stream on an InstancedMesh's geometry too.
+        next.setUsage(_instUsage);
         next.array.fill(1);
         geo.setAttribute("instanceTint", next);
         return next;
@@ -1815,7 +1834,7 @@ const TLX = (function () {
         const imesh = _aiInst ? _aiMesh(geo, unlitMat, n) : new THREE.InstancedMesh(geo, unlitMat, cap);
         imesh.matrixAutoUpdate = false;
         imesh.frustumCulled = false;
-        imesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        imesh.instanceMatrix.setUsage(_instUsageOf(imesh));   // A-H1: Stream on the attribute path only
         imesh.userData.tlxInstCap = n;
         _instColorAttr(imesh, n);
         _writeInstanceMatrices(imesh, matrices, colors, n);
@@ -2027,7 +2046,7 @@ const TLX = (function () {
           : _aiMesh(g, main.material || unlitMat, main.instanceMatrix.count);   // A2: its own instance stream
         im.matrixAutoUpdate = false;
         im.frustumCulled = false;
-        im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        im.instanceMatrix.setUsage(_instUsageOf(im));   // A-H1: Stream on the attribute path only
         im.userData.tlxInstCap = n;
         const tint = _instColorAttr(im, n);
         // Starts as the main mesh started: every source instance (a batch with
@@ -2220,6 +2239,8 @@ const TLX = (function () {
           const im = new THREE.InstancedMesh(getFxQuad(), fx.shadowMat, cap);
           im.matrixAutoUpdate = false;
           im.frustumCulled = false;
+          // A-H1: an InstancedMesh stays Dynamic — the run is rewritten per pass, and three relays its
+          // matrices into the draw buffer once per frame per render object (_instUsageOf).
           im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
           im.visible = false;
           scene.add(im);
@@ -2259,7 +2280,7 @@ const TLX = (function () {
         if (!b) {
           const im = new THREE.InstancedMesh(geo, mat, (window.TLXShaders && TLXShaders.uboInstCap) ? TLXShaders.uboInstCap(renderer, BLOB_CAP) : BLOB_CAP);
           im.matrixAutoUpdate = false; im.frustumCulled = false; im.visible = false;
-          im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);   // A-H1: InstancedMesh, per-pass rewrites (_instUsageOf)
           scene.add(im); _instRegistry.push(im);
           _decalRuns.set(geo, b = { __tlx: true, imesh: im, instances: BLOB_CAP, visible: 0, rec: -1 });
         }
@@ -2349,7 +2370,7 @@ const TLX = (function () {
         const a = new Float32Array(CO_CAP * CO_STRIDE);
         for (let o = 16; o < a.length; o += CO_STRIDE) a[o] = a[o + 1] = a[o + 2] = 1;   // white: albedo x 1 is exact
         const ib = new THREE.InstancedInterleavedBuffer(a, CO_STRIDE, 1);
-        ib.setUsage(THREE.DynamicDrawUsage);
+        ib.setUsage(_instUsage);   // A-H1: a plain Mesh, versioned per render(); _coAppend pushes each range
         for (let c = 0; c < 4; c++) v.setAttribute("iM" + c, new THREE.InterleavedBufferAttribute(ib, 4, c * 4));
         v.setAttribute("instanceTint", new THREE.InterleavedBufferAttribute(ib, 3, 16));
         const m = new THREE.Mesh(v, unlitMat);
@@ -2408,7 +2429,7 @@ const TLX = (function () {
         if (slot.geo) disposeGeometry(slot.geo);
         const geo = new THREE.BufferGeometry();
         const ib = new THREE.InterleavedBuffer(new Float32Array(cap * slot.stride), slot.stride);
-        ib.setUsage(THREE.DynamicDrawUsage);
+        ib.setUsage(_instUsage);   // A-H1: uploads only through uploadStream (a dirty producer)
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
         slot.geo = geo; slot.ib = ib; slot.cap = cap;
@@ -2424,7 +2445,7 @@ const TLX = (function () {
         if (slot.geo) disposeGeometry(slot.geo);
         const geo = new THREE.BufferGeometry();
         const ib = new THREE.InterleavedBuffer(arr, slot.stride);
-        ib.setUsage(THREE.DynamicDrawUsage);
+        ib.setUsage(_instUsage);   // A-H1, as ensureStream
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
         slot.geo = geo; slot.ib = ib; slot.cap = (arr.length / slot.stride) | 0;
