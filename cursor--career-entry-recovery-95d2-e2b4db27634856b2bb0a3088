@@ -1,1 +1,0 @@
-1791988750	Bryce Murrin	OWNED PR1517 finish under explicit user Push and merge authorization, including queue override. Resolve current CONFLICTING state through sync-pr, retain Career recovery/qualifying backups. Generated ratchets only; no unrelated product fixes or competing branches.  [cursor/career-entry-recovery-95d2; session e2b4db27634856b2bb0a3088]
