@@ -5,8 +5,8 @@
 /**
  * vendor-three.mjs — the ONE way a three.js version enters vendor/.
  *
- *   node tools/gen/vendor-three.mjs 0.186.0                       # npm pack into scratch/, patch, minify, write vendor/three-0.186.0/
- *   node tools/gen/vendor-three.mjs 0.186.0 --tarball scratch/three-0.186.0.tgz
+ *   node tools/gen/vendor-three.mjs 0.186.1                       # npm pack into scratch/, patch, minify, write vendor/three-0.186.1/
+ *   node tools/gen/vendor-three.mjs 0.186.1 --tarball scratch/three-0.186.1.tgz
  *   node tools/gen/vendor-three.mjs --check                        # no network: every vendor/three-* /MANIFEST.json still matches its files
  *
  * Why this exists: three.js stopped shipping minified builds in r186 (PR #33893,
