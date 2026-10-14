@@ -409,6 +409,48 @@ test("auto memory is on, synced, and its tracked copy stays small, typed and sec
   }
 });
 
+// docs/notes/SECOND-BRAIN-2026-10-14.md: GitHub Copilot Memory stores the code
+// location each fact rests on and re-checks it before use, so a fact whose
+// evidence moved stops being served. Ours is the static half of that: a
+// memory MAY carry `source: <path>[, <path>…]` (top level or under metadata:),
+// and a cited path that no longer exists fails here — the memory is stale and
+// must be rewritten or deleted, not silently recalled. Entries that are not
+// paths (`user`, `#1519`, a test name) are allowed and not checked.
+test("a memory's source: paths still exist", () => {
+  const dir = path.join(ROOT, ".claude/memory");
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".md") && n !== "MEMORY.md")) {
+    const fm = read(`.claude/memory/${f}`).match(/^---\n([\s\S]*?)\n---/)?.[1] || "";
+    const line = fm.match(/^\s*source:\s*(.+)$/m);
+    if (!line) continue;
+    for (const raw of line[1].split(",")) {
+      const rel = raw.trim().replace(/^["'`]|["'`]$/g, "").replace(/(#.*|:\d+(-\d+)?)$/, "");
+      if (!/\/|\.[a-z]{1,5}$/i.test(rel)) continue;
+      assert.ok(exists(rel), `.claude/memory/${f} cites source ${raw.trim()}, which no longer exists — rewrite or delete the memory`);
+    }
+  }
+});
+
+// Instructions are an attack surface: the 2025 "Rules File Backdoor" hid
+// prompts in agent rules files with zero-width and bidi characters that render
+// as nothing in review (docs/notes/SECOND-BRAIN-2026-10-14.md). Nothing a
+// session loads as instructions or memory may carry one.
+test("no instruction or memory file carries invisible or bidi-control characters", () => {
+  const HIDDEN = /[​-‏‪-‮⁠-⁤⁦-⁩﻿]|[\u{E0000}-\u{E007F}]/u;
+  const files = spawnSync("git", ["ls-files", "AGENTS.md", "CLAUDE.md", "*/AGENTS.md", "*/CLAUDE.md",
+    ".claude/rules", ".claude/skills", ".claude/agents", ".claude/memory", ".claude/agent-memory",
+    ".cursor/rules", ".github/pull_request_template.md"], { cwd: ROOT, encoding: "utf8" })
+    .stdout.split("\n").filter((f) => /\.(md|mdc)$/.test(f));
+  assert.ok(files.length > 20, "the instruction-file listing came back nearly empty");
+  for (const rel of files) {
+    if (fs.lstatSync(path.join(ROOT, rel)).isSymbolicLink()) continue;
+    const text = read(rel);
+    const i = text.search(HIDDEN);
+    if (i < 0) continue;
+    const ln = text.slice(0, i).split("\n").length;
+    assert.fail(`${rel}:${ln} holds U+${text.codePointAt(i).toString(16).toUpperCase().padStart(4, "0")}, an invisible/bidi control — delete it (it hides text from review)`);
+  }
+});
+
 test("the edit guard treats tests/data/ratchets.json as tool-written", () => {
   // A ceiling moves through ratchets.mjs (--auto-raise in the commit hook,
   // --update with a reason); a hand edit was unblocked until 2026-09-22.
