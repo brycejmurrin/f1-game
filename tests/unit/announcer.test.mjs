@@ -424,6 +424,26 @@ test("a cancel from OUTSIDE the announcer ends its read instead of skipping to t
   assert.equal(spoken(synth).length, first, "an interrupted line ends the chain");
 });
 
+for (const firstEvent of ["end", "error"]) {
+  test(`a system utterance settled by ${firstEvent} cannot disturb its successor`, () => {
+    const { A, G, synth } = load();
+    const ann = A.create(G);
+    ann.preview(info());
+    const first = synth.calls.find((c) => c.m === "speak").u;
+    if (firstEvent === "end") first.onend();
+    else first.onerror({ error: "network" });
+    assert.equal(spoken(synth).length, 2, "a terminal event starts exactly the next line");
+    first.onend();
+    first.onerror({ error: "network" });
+    first.onerror({ error: "interrupted" });
+    assert.equal(spoken(synth).length, 2, "settled line events cannot skip or queue later lines");
+    assert.equal(ann.speaking(), true, "a settled line cannot retire the active line");
+    finishLine(synth);
+    assert.equal(spoken(synth).length, 3, "the active line still owns progression");
+    ann.stop();
+  });
+}
+
 test("the announcer may use a network voice; the race radio may not", () => {
   /* The rule that made the announcer worse. A remote voice's lead-in is
    * unbounded, which is disqualifying for a line budgeted against a card — and

@@ -809,13 +809,18 @@ var Announcer = (function () {
       const say = () => {
         const u = new Utter(parts[i++]);
         u.voice = voice; u.pitch = tune.pitch; u.rate = tune.rate; u.volume = vol;
-        u.onend = () => { if (gen === generation) next(); };
+        // A terminal callback belongs to this line, even after next() hands
+        // the synth another one. Late/duplicate events must not advance or
+        // cancel its successor in the same read.
+        let settled = false;
+        u.onend = () => { if (gen === generation && !settled) { settled = true; next(); } };
         // A cancel from OUTSIDE (RadioVoice's hide handler shares the one
         // speechSynthesis) arrives as an interrupted/canceled error and does
         // not bump `generation` — advancing on it read the NEXT line into a
         // hidden tab. That ends the chain; any other error skips the line.
         u.onerror = (e) => {
-          if (gen !== generation) return;
+          if (gen !== generation || settled) return;
+          settled = true;
           const why = e && e.error;
           if (why === "interrupted" || why === "canceled") { speaking = null; generation++; return; }
           next();
