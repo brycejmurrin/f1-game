@@ -35,7 +35,7 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork } from "./frame-hitch.mjs";
+import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseDepthDiscard } from "./frame-hitch.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
 // `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
@@ -66,6 +66,10 @@ if (argv.includes("--help") || argv.includes("-h")) {
   --clock H                       hour the in-run A/B pins (default 12)
   --beats N                       driven window, one beat a second (default 15)
   --no-drive                      keep the car parked for the window
+  --cam ID                        player camera (a CamModes id: helmet, chase, ...) set at boot,
+                                  before race(); omitted = the game's default (helmet). chase
+                                  is how TLX's mirror mip cap (A-H5) shows: helmet/cockpit
+                                  glass latches the full mirror chain for the session
   --ls apex26.k=v                 extra localStorage (repeatable; after the defaults)
   --gl-err-drain                  GLX: drain getError() on EVERY present (apex26.glErrDrain=1);
                                   default drains once per beat via GLX.drainGpuErrors()
@@ -75,9 +79,16 @@ if (argv.includes("--help") || argv.includes("-h")) {
   process.exit(0);
 }
 const flag = (n, d = null) => { const i = argv.indexOf(n); return i > -1 ? argv[i + 1] : d; };
-const track = argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--json"
-  && argv[argv.indexOf(a) - 1] !== "--shot" && argv[argv.indexOf(a) - 1] !== "--backend"
-  && argv[argv.indexOf(a) - 1] !== "--path") || "montreal";
+// The track is the first bare word that is not some flag's value.
+const VALUE_FLAGS = new Set(["--json", "--shot", "--backend", "--path", "--cam", "--tod", "--clock", "--beats", "--ls",
+  "--boot-timeout", "--race-timeout"]);
+const track = argv.find((a, i) => !a.startsWith("--") && !VALUE_FLAGS.has(argv[i - 1])) || "montreal";
+// --cam ID (hunt 4 H5): the player camera, set right after boot so no frame of
+// race entry draws through another one. The default camera is helmet
+// (apex26.camMode 19), whose cockpit glass latches TLX's FULL mirror mip chain
+// for the session (A-H5), so the mirror-mip cap is invisible unless a leg
+// drives chase. Omitted = the game's own default, exactly as before.
+const cam = flag("--cam", null);
 const backend = flag("--backend", "three");
 // --ls key=value (repeatable), same contract as gfx-probe: drive a knob the
 // pins do not know about — apex26.tlxForceHw above all, which is how the
@@ -655,6 +666,16 @@ try {
       return { hasGpu: true, vendor: i.vendor, architecture: i.architecture, description: i.description };
     } catch (e) { return { hasGpu: true, error: String((e && e.message) || e) }; }
   });
+  // THE CAMERA, before race() (hunt 4 H5). camera() persists apex26.camMode,
+  // which race entry then reads; an unknown id returns false and is NAMED.
+  out.cam = await bounded(() => page.evaluate((c) => {
+    const A = window.__apex;
+    const now = () => { try { return A.camera().mode; } catch (_) { return null; } };
+    if (c == null) return { asked: null, set: now() };
+    let r = false;
+    try { r = A.camera(c); } catch (e) { return { asked: c, set: now(), error: String((e && e.message) || e).slice(0, 100) }; }
+    return r ? { asked: c, set: r.mode } : { asked: c, set: now(), error: "not a CamModes id: " + c };
+  }, cam), 10000, "camera");
 
   // race() and park() were the last unbounded evaluates. A renderer that
   // wedges DURING the track load hangs them forever, and then the beats below
@@ -796,6 +817,25 @@ try {
     const m = t && t.memState ? t.memState() : null;
     return m && m.warm ? m.warm : null;
   }), 10000, "warm-read").catch(() => null);
+  // THE RACE-ENTRY MARKS (hunt 4 B-F3.3). raceProfile() below keeps the legs as
+  // durations only, so hunter B could name warmCarAssets' 1.1-2.1 s tasks from
+  // timing alone. Save the whole snapshot — legs, marks (ms from the window's
+  // begin) — with the window origin on the page clock, which the snapshot does
+  // not carry: windowMs is now() - winT0 at the read, so winT0 is the read's
+  // midpoint minus windowMs, good to clockErrMs. analyseRaceEntrySpans (below,
+  // with the gaps) then names the span each long task and rAF gap fell in.
+  // Read here, after the race gate: the window has ended (present:ready + 2
+  // frames) and nothing later in this run begins another.
+  out.raceEntryProfile = await bounded(() => page.evaluate(() => {
+    const A = window.__apex;
+    if (!A || typeof A.raceEntryProfile !== "function") return { note: "no __apex.raceEntryProfile — this build predates it" };
+    const a = performance.now(); const s = A.raceEntryProfile(); const b = performance.now();
+    if (!s) return { note: "raceEntryProfile() returned null — RaceEntryProfile is not loaded" };
+    return { supported: s.supported, armed: s.armed, windowMs: s.windowMs,
+      winT0: s.windowMs > 0 ? +((a + b) / 2 - s.windowMs).toFixed(2) : null, clockErrMs: +((b - a) / 2).toFixed(3),
+      blockMs: s.blockMs, maxBlockMs: s.maxBlockMs, longTasks: Array.isArray(s.longTasks) ? s.longTasks.length : null,
+      legs: s.legs || [], marks: s.marks || [] };
+  }), 10000, "race-entry-profile");
   if (drive && out.race.reached) {
     out.race.driver = await bounded(() => page.evaluate(() => {
       if (!window.__gcDrive) return "absent";
@@ -824,6 +864,15 @@ try {
   // Arm AFTER the track build and the boot ladder: an opening stall is a
   // different report (out.raceProfile answers that one) and counting it here
   // would put one 1.4 s frame in the spike list and call the run periodic.
+  // THE DEPTH-DISCARD ROW (hunt 4 A-P1): TLX post.state().depth at both ends of
+  // the window, so the count is the window's own. null on GLX/WGX (no TLX post).
+  const readDepth = () => bounded(() => page.evaluate(() => {
+    const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null;
+    if (!t || typeof t.postState !== "function") return null;
+    const s = t.postState();
+    return s ? Object.assign({ on: s.on !== false }, s.depth || {}) : null;
+  }), 10000, "depth-read");
+  const _depth0 = await readDepth();
   try { await page.evaluate(() => window.__gcHitch && window.__gcHitch.arm()); } catch (_) { /* no recorder on this leg */ }
   // WHERE THE CPU TIME GOES over the same window, by function. Census 201
   // moved every lazy pipeline compile off the main thread (createRenderPipeline
@@ -912,6 +961,22 @@ try {
   }
   // The driven window ends with the last beat (hunt 4 I4).
   await bounded(() => page.evaluate(() => window.__gcHitch && window.__gcHitch.disarm()), 10000, "disarm");
+  const _depth1 = await readDepth();
+  // WHICH CAMERA THE WINDOW DROVE, and the mirror it left (hunt 4 H5): the
+  // director or a cut could have moved it, and mipFull says whether the
+  // cockpit glass latched the full chain. backend fields per gfx.mirrorState().
+  const _camEnd = await bounded(() => page.evaluate(() => {
+    const A = window.__apex;
+    let mode = null, m = null;
+    try { mode = A.camera().mode; } catch (_) { /* no camera hook */ }
+    try { m = A.mirror ? A.mirror() : null; } catch (_) { /* no mirror pass */ }
+    const b = (m && m.backend) || {};
+    const pick = (o, ks) => { const r = {}; for (const k of ks) if (o[k] !== undefined) r[k] = o[k]; return r; };
+    return { mode, mirror: m ? { ...pick(m, ["mode", "shown", "cam", "drawn"]),
+      backend: pick(b, ["ready", "renders", "glass", "w", "h", "mips", "mipCap", "mipFull"]) } : null };
+  }), 10000, "camera-end");
+  if (out.cam) out.cam.atWindowEnd = _camEnd && !_camEnd.error ? _camEnd.mode : null;
+  out.mirror = _camEnd && !_camEnd.error ? _camEnd.mirror : { note: "mirror read failed: " + ((_camEnd && _camEnd.error) || "?") };
   if (_cpu) {
     try { const { profile } = await _cpu.send("Profiler.stop"); _cpuProfile = profile; out.cpu = analyseCpu(profile, 24); }
     catch (e) { out.cpu = { note: "profile stop failed: " + String((e && e.message) || e).slice(0, 120) }; }
@@ -933,11 +998,13 @@ try {
     const d = await page.evaluate(() => (window.__gcHitch ? window.__gcHitch.dump() : null));
     // READ THE WINDOW, NOT THE GOVERNOR'S END STATE (hunt 4 I4): frames, fps
     // and frame-interval percentiles over the driven window only.
-    out.window = d ? analyseWindow(d.win, d.gameFrameT || [], (d.dur || []).length) : { note: "no recorder on this leg" };
-    // THE GAPS: every rAF interval >= 500 ms since page load, keyed to the
+    out.window = d ? analyseWindow(d.win, d.gameFrameT || [], (d.dur || []).length) : { note: "no recorder on this leg" };    // THE GAPS: every rAF interval >= 500 ms since page load, keyed to the
     // work of the step before it (hunt 4 §A gap ii), whether or not armed.
     out.gapWork = d ? analyseGapWork(d.gaps || [], { marks: d.marks, win: d.win, longTasks: d.longTasks })
       : { note: "no recorder on this leg" };
+    // THE SAME GAPS AND LONG TASKS, NAMED BY RACE-ENTRY SPAN (hunt 4 B-F3.3).
+    out.raceEntrySpans = d ? analyseRaceEntrySpans({ rep: out.raceEntryProfile, warm: out.race && out.race.warm,
+      censusMarks: d.marks, gaps: d.gaps || [], longTasks: d.longTasks || [], win: d.win }) : { note: "no recorder on this leg" };
     if (!d || !d.dur || d.dur.length < 30) return { note: "no rAF series — the recorder never armed, or the leg drew too few frames" };
     const a = analyse(d.t0, d.dur);
     // The pass census rides the same series: same frames, same window, so
@@ -957,6 +1024,8 @@ try {
     out.spikePasses = analyseSpikePassKinds(d.passSig || [], d.dur, 100);
     return a;
   }, 30000, "hitch-series").catch((e) => ({ note: "hitch read failed: " + String((e && e.message) || e).slice(0, 80) }));
+  // Outside the hitch read, so a failed series still leaves the depth row.
+  out.depth = analyseDepthDiscard(_depth0, _depth1, out.window && out.window.frames);
   checkpoint("settled");
 
   // THE RACE-ENTRY WINDOW: race() called -> the track is there. Everything the
@@ -1289,6 +1358,19 @@ try {
   if (out.gfx && out.gfx.error) out.gfxReadFailed = "read failed: " + out.gfx.error;
   else if (out.gfx && out.gfx.glx === false) out.gfxReadFailed = "GLX was undefined in the page";
   if (out.overlay && out.overlay.error) out.overlayReadFailed = "read failed: " + out.overlay.error;
+  // WHAT THE GPU TIMER SPANS (hunt 4 I5). The three backends' gpuMs time
+  // different work, so gpuFrame.medianMs is comparable within a backend only.
+  // The per-pass timer that would make them comparable is not built (the
+  // MEASURING-GPU-PERF note §7 says why); this labels the span the number has.
+  if (out.gpuFrame && out.gpuFrame.medianMs != null && out.gfx && !out.gfx.error) {
+    const be = out.gfx.backendState ? "tlx" : out.gfx.wgx ? "wgx" : out.gfx.glx ? "glx" : null;
+    out.gpuFrame.span = be ? { tlx: "three-render-passes", wgx: "lit-pass", glx: "main+post" }[be] : null;
+    out.gpuFrame.spanNote = be ? {
+      tlx: "three's summed render-pass timestamps per frame (resolveTimestampsAsync('render'))",
+      wgx: "the lit scene pass only (timestampWrites on litPass): no shadow, env, mirror or post",
+      glx: "one TIME_ELAPSED query from begin() to the end of post: main scene + post; sun/lamp/car shadow, env and mirror passes run before begin()",
+    }[be] : "bound backend unknown";
+  }
   checkpoint("gfx-read");
   const shot = flag("--shot", null);
   if (shot) {
