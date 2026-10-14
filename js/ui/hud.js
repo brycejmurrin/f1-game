@@ -600,8 +600,10 @@ function announceLane(root) {
   clip(gaps && !gaps.hidden ? gaps.getBoundingClientRect() : null, false);
   // The opt-in readouts (MOVE & SIZE places them) and the track-limits chip: a
   // STRATEGY box in the left column and the INPUTS trace under the sector box
-  // share the card's rows on a phone.
-  for (const el of [document.getElementById("hud-rel"), document.getElementById("hud-strat"), document.getElementById("hud-inputs"), document.getElementById("hud-damage"), els.hudLimits]) {
+  // share the card's rows on a phone. TYRES too: it is anchored on the left
+  // dock, and a full-size dock at HUD 150% / BUTTON 200% lifts it into the
+  // card's rows (hud-mock 2026-10-14, announce x tyre on 740x360 and 844x390).
+  for (const el of [document.getElementById("hud-rel"), document.getElementById("hud-strat"), document.getElementById("hud-inputs"), document.getElementById("hud-damage"), els.hudLimits, els.tyre]) {
     if (el && !el.hidden && el.getBoundingClientRect) clip(el.getBoundingClientRect(), false);
   }
   const x = left + RADIO_TOP_GAP, w = right - RADIO_TOP_GAP - x;
@@ -936,6 +938,12 @@ function fitHud() {
   // tick ≈ 3 s between forced layout reads while nothing changed.
   if (key !== _fitKey) _fitClashRun = 0;
   _fitKey = key; _fitWait = 30;
+  // The dock paints at max(--hud-btn-floor, BUTTON SIZE) (css/touch-controls.css:
+  // 0.82, 0.92 on the narrow tier), so the base the cap is judged against and
+  // the divisor for its measured widths are that floor, not 1 — a flat 1 here
+  // would read a 0.82 dock as 18 % wider than it paints. Read AFTER the
+  // same-key return above: a steady tick must not pay a computed-style pass.
+  let btnFloor = 1;
   // SINGLE SOURCE: the published band zooms, not el.currentCSSZoom.
   // Under load currentCSSZoom lags --hud-z-top by a frame (Pages
   // 37714419183: rect 87.11 = 110×zTop 0.792 while #minimap zoom read 0.704;
@@ -946,7 +954,7 @@ function fitHud() {
   // divide by pub (hud-pins F-01). Only DOM-less mini-dom harnesses fall back to 1.
   const zTopPub = +root.style.getPropertyValue("--hud-z-top") || scale;
   const zBotPub = +root.style.getPropertyValue("--hud-z-bot") || scale;
-  const zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(1, btnScale);
+  let zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
   const zoomDiv = (el, pub) => (el && (el.currentCSSZoom > 0 || _noCssZoom) ? (pub || 1) : 1);
   const wide = (el, pub) => {
     if (!el) return 0;
@@ -954,10 +962,18 @@ function fitHud() {
     if (!r.width) return 0;
     return r.width / zoomDiv(el, pub);
   };
+  // A child positioned OUT of the flow is not part of the cluster: landscape
+  // touch anchors #hud-tyre on the LEFT DOCK (css/hud.css @supports anchor), so
+  // counting it made the "cluster" span from the steer arrows to AERO, the bar's
+  // width budget read ~480px for a 244px cluster, and the dock cap fell to 0.70
+  // at the SHIPPED settings on 844x390 chase: 50px pedals, 38px taps in tilt
+  // (hud-mock 2026-10-14). The tyre keeps its own clearance pass below.
+  const outOfFlow = (c) => { try { const p = getComputedStyle(c).position; return p === "absolute" || p === "fixed"; } catch (_) { return false; } };
   const span = (el, pub) => {
     if (!el) return 0;
     let lo = Infinity, hi = -Infinity;
     for (const c of el.children) {
+      if (c.id === "hud-tyre" && outOfFlow(c)) continue;
       const r = layoutRect(c);
       if (!r.width) continue;
       if (r.left < lo) lo = r.left;
@@ -980,6 +996,10 @@ function fitHud() {
     if (++_fitRetry <= 30) _fitKey = "";
     return;
   }
+  // The dock's painted floor (declared above): read past the nothing-laid-out retry, which a
+  // harness without rects takes every tick, so the bail stays free of computed-style passes.
+  try { const v = parseFloat(getComputedStyle(root).getPropertyValue("--hud-btn-floor")); if (Number.isFinite(v) && v > 0 && v <= 1) btnFloor = v; } catch (_) { /* mini-dom */ }
+  zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
   const half = window.innerWidth / 2;
   const map = wide(els.minimap, zTopPub), gaps = wide(els.gapA && els.gapA.parentNode, zTopPub);
   // THE SAFE-AREA INSET IS PART OF THE BUDGET. `.hud-gaps` and `#minimap` are
@@ -1394,9 +1414,9 @@ function fitHud() {
   if (_hudTop) void _hudTop.offsetHeight;
   if (els.minimap) void els.minimap.offsetHeight;
   hStyle(root, "--hud-top-h", topHPub.toFixed(1) + "px");
-  // The dock paints at max(1, BUTTON SIZE) (css/overlays.css tap floor), so a
-  // cap between BUTTON SIZE and 1 still has to be written.
-  set("--hud-z-dock", capDock, Math.max(1, btnScale));
+  // The dock paints at max(--hud-btn-floor, BUTTON SIZE) (css/touch-controls.css),
+  // so a cap between BUTTON SIZE and that floor still has to be written.
+  set("--hud-z-dock", capDock, Math.max(btnFloor, btnScale));
   // Publish --dock-r-w in the FINAL chrome zoom, after dock/top caps land.
   // CSS: right = 10px + sar/--hud-z + --dock-r-w (dock-r-w is NOT re-divided).
   // Use the LEFTMOST painted right-dock control / BOOST — wrap-reverse
@@ -2406,6 +2426,13 @@ function invalidateFit() {
   mirrorClear(root);
 }
 _invalidateFit = invalidateFit;
+// fonts-hud.css loads late (media="print" swap, index.html), so the first fit
+// measured the gap spellings in the fallback face and kept those widths: the
+// fit key carries no font signal, so the wrong rung held until the 3 s backoff
+// (F-16). Forget the measured widths and refit once the faces are in.
+if (typeof document !== "undefined" && document.fonts && document.fonts.ready && typeof document.fonts.ready.then === "function") {
+  document.fonts.ready.then(() => { _gapW[0] = _gapW[1] = 0; invalidateFit(); }, () => {});
+}
 function syncPhoneFit() {
   syncComputedRootVars();
   phoneFitStampSync(+document.documentElement.style.getPropertyValue("--hud-scale") || _cssScale, true);

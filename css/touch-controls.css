@@ -371,7 +371,11 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   #hud-gearbox { gap: calc(var(--gap) / 6); padding: calc(var(--gap) * 0.25) calc(var(--gap) * 0.5); }
   #hud-gear { font-size: 48px; min-width: 44px; }
   #hud-tach { width: 96px; height: 13px; }
-  #hud-speed { font-size: 28px; }
+  /* x --hud-text-boost (css/tokens.css TEXT SIZE): these fixed px beat the
+     base rule's boosted 34px in layer order, so Large / Larger reached the
+     labels (--fs-micro) and never the digits — an 18px label over a 22px
+     value (F-10, docs/notes/HUD-CODE-AUDIT-2026-10-10.md). */
+  #hud-speed { font-size: calc(28px * var(--hud-text-boost, 1)); }
   #hud-energy { width: 132px; height: 15px; }
   .hud-unit { font-size: var(--fs-micro); margin-left: calc(var(--gap) / 6); }
   /* THE LAP BOXES ARE PART OF THE HUD TOO. POS/LAP/TIME/BEST sat at the 9px
@@ -381,7 +385,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      keeps the base sizes; this is the touch notch they never had. */
   body:not(.desktop) .hud-box { padding: 5px 13px; }
   body:not(.desktop) .hud-label { font-size: var(--fs-micro); }
-  body:not(.desktop) .hud-value { font-size: 22px; }
+  body:not(.desktop) .hud-value { font-size: calc(22px * var(--hud-text-boost, 1)); }
   /* manual: keep everything on the right — shifts in the outer column, BOOST/OT
      in a second column just inboard (vertical space is too short to stack four).
      Override shift positions so both columns align at the same row heights. */
@@ -494,10 +498,22 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
        viewport from 150% and put BRAKE off the top edge. Same mechanism as
        the --hud-z-top/bot caps on the readout clusters; absent when the
        player's setting fits. */
-    zoom: var(--hud-z-dock, max(1, var(--hud-btn-scale)));
+    zoom: var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
   }
+  /* …DOWN TO THE 44px RUNG, NOT TO 1. The floor above was a flat 1, so the
+     BUTTON SIZE slider (40–300%, index.html) did nothing below 100% — on a
+     coarse pointer that is everything under the 1.25 default's 80% mark,
+     while its help text promises that smaller buttons buy the readouts room.
+     The floor is now the zoom at which the 54px tap paints 44px (Apple HIG /
+     WCAG 2.5.5); the 72px holds paint 59. The narrow tier below restates it
+     for its 48px taps. js/ui/hud.js reads the same token to size the dock cap. */
+  :root { --hud-btn-floor: 0.82; }
+  /* The label is bounded by the circle: TEXT SIZE Larger lifts --fs-micro to
+     18px, and BOOST at 800 weight is ~59px wide at that size — past a 54px
+     (narrow tier: 48px) tap with no padding. 0.28 of the tap is --fs-micro at
+     the default and shrinks only when the token outgrows the button. */
   body:not(.desktop) .dock .touchbtn,
-  body.desktop .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: var(--fs-micro); }
+  body.desktop .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: min(var(--fs-micro), calc(var(--tap) * 0.28)); }
   body:not(.desktop) .dock .pedal,
   body:not(.desktop) .dock .steerbtn,
   body:not(.desktop) .dock .shiftbtn,
@@ -506,6 +522,12 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   body.desktop .dock .shiftbtn { width: var(--hold); height: var(--hold); font-size: var(--fs-micro); }
   body:not(.desktop) .dock .shiftbtn,
   body.desktop .dock .shiftbtn { font-size: 15px; }
+  /* The steer arrows are the largest buttons and carried the smallest glyph:
+     the dock rule above put ◀ ▶ at --fs-micro (14px) in a 72px hold, under the
+     22px the fixed-ladder .steerbtn ships. 0.3 of the hold is 21.6px at the
+     base size and grows with BUTTON SIZE. */
+  body:not(.desktop) .dock .steerbtn,
+  body.desktop .dock .steerbtn { font-size: calc(var(--hold) * 0.3); }
   /* HELD CONTROLS RIDE HIGHER THAN TAPPED ONES. The pedals, the shift column
      and the steering arrows are what a thumb rests on for a whole lap, so they
      sit a little up from the screen edge where the thumb actually lands; the
@@ -543,8 +565,12 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     column-gap: max(var(--r-lg), var(--gap));
     row-gap: calc(var(--gap) * 2 / 3);
   }
-  /* Small landscape (an iPhone SE is 667 wide) — one notch down. */
-  @media (max-width: 700px) {
+  /* Small landscape (an iPhone SE is 667 wide) — one notch down. HEIGHT TOO:
+     vertical room is the scarce axis, and a 740x360 Android is 15px shorter
+     than the SE yet took the 54/72 sizes (67/90 painted), which fitHud then
+     had to cap back (hud-mock 2026-10-14: 9.7px pedal labels at HUD 150%). */
+  @media (max-width: 700px), (max-height: 380px) {
+    :root { --hud-btn-floor: 0.92; }   /* 48px taps paint 44 */
     /* Same HUD-axis floor as the base dock values above. */
     body:not(.desktop) .dock,
     body.desktop .dock:has(.touchbtn:not([hidden])) {
@@ -559,6 +585,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     body.desktop .dock .pedal,
     body.desktop .dock .steerbtn,
     body.desktop .dock .shiftbtn { font-size: var(--fs-micro); }
+    body:not(.desktop) .dock .steerbtn,
+    body.desktop .dock .steerbtn { font-size: calc(var(--hold) * 0.3); }
   }
 
   /* ---- THE INSTRUMENT CLUSTER ----
@@ -612,7 +640,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      cluster jump a row taller and back as the car approached a zone. */
   #hud-ot,
   #hud-aero {
-    white-space: nowrap; font-size: 14px; padding: 5px 10px;
+    white-space: nowrap; font-size: var(--fs-micro); padding: 5px 10px;
   }
 
   /* ---- DESKTOP: THE SAME PARTS, LAID OUT FLAT ----
@@ -643,9 +671,9 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     body.desktop #hud-gear { font-size: 58px; min-width: 44px; }
     body.desktop #hud-tach { width: 172px; height: 18px; }
     body.desktop #hud-energy { width: auto; justify-self: stretch; height: 18px; min-width: 0; }
-    body.desktop #hud-speed { font-size: 42px; }
+    body.desktop #hud-speed { font-size: calc(42px * var(--hud-text-boost, 1)); }
     body.desktop .hud-unit { font-size: var(--fs-micro); margin-left: calc(var(--gap) / 3); }
-    body.desktop #hud-ot, body.desktop #hud-aero { font-size: 15px; padding: calc(var(--gap) * 2 / 3) calc(var(--gap) * 7 / 6); }
+    body.desktop #hud-ot, body.desktop #hud-aero { font-size: calc(15px * var(--hud-text-boost, 1)); padding: calc(var(--gap) * 2 / 3) calc(var(--gap) * 7 / 6); }
   }
   /* console steer: arrows bottom-left, side by side (left thumb home) */
   #btn-steer-left  { left: calc(16px + var(--sal)); bottom: calc(12px + var(--sab)); }
@@ -720,11 +748,11 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     #hud-gear { font-size: 40px; }
     #hud-tach { width: 84px; }
     body:not(.desktop) #hud-energy { width: 108px; }
-    body:not(.desktop) #hud-speed { font-size: 24px; }
+    body:not(.desktop) #hud-speed { font-size: calc(24px * var(--hud-text-boost, 1)); }
     body:not(.desktop) #hud-ot,
     body:not(.desktop) #hud-aero { font-size: var(--fs-micro); padding: calc(var(--gap) / 3) calc(var(--gap) * 2 / 3); }
     body:not(.desktop) .hud-label { font-size: var(--fs-micro); }
-    body:not(.desktop) .hud-value { font-size: 20px; }
+    body:not(.desktop) .hud-value { font-size: calc(20px * var(--hud-text-boost, 1)); }
   }
   /* touch: BRAKE left corner, BOOST/OT right corner */
   /* touch mode differs only in BRAKE dropping to the left corner (no GAS) —
@@ -783,7 +811,9 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
    dock, and the instrument cluster inside it; the docks keep their buttons. */
 body.hud-hidden.desktop #hud,
 body.hud-hidden #hud > :not(#hud-dock),
-body.hud-hidden #hud-dock > .hud-bottom { display: none !important; }
+/* …but WORK ON CAR stays: it lives in the cluster (index.html), and a stop
+   with the HUD off left the pit crew waiting for a button nobody could see. */
+body.hud-hidden #hud-dock > .hud-bottom > :not(#hud-work) { display: none !important; }
 body.hud-hidden #lights,
 body.hud-hidden #announce,
 body.hud-hidden #campicker,

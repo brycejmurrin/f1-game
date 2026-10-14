@@ -73,6 +73,11 @@
   --hud-btn-z: max(1, var(--hud-z-top, var(--hud-scale)));
   --tap-hud: calc(var(--tap) * var(--hud-btn-z));
 }
+/* KNOWN: on :root, var(--tap) is :root's 44px, not the touch body's 52, so CAM
+   and PAUSE paint 44px on a phone. Restating it on body:not(.desktop) was tried
+   (2026-10-14): the 8px moves the whole right column, flag and radio card down,
+   and on a 390px phone at HUD 150% that put the card on the gearbox. HIG floor
+   met; the band is worth more than the 8px. */
 .hud-bottom { --hud-z: var(--hud-z-bot, var(--hud-scale)); zoom: var(--hud-z); }
 /* Re-derive the compensated vw against the band's EFFECTIVE zoom: the :root
    token divides by the raw slider, but these subtrees paint at the fitHud-
@@ -175,8 +180,13 @@
      The `min()` is the adaptive half: it caps the ON-SCREEN size at 16px no
      matter how far HUD SIZE is pushed. Left to grow with the zoom the pair
      rendered as a slab about as wide as the minimap — a banner, not telemetry.
-     Now it grows 12 -> 16px screen across 100 -> 150% and then holds. */
-  text-align: left; font-size: min(12px, calc(16px / var(--hud-z)));
+     Now it grows 12 -> 16px screen across 100 -> 150% and then holds.
+     THE FLOOR IS THE OTHER HALF: 12px authored painted 8.4px at HUD SIZE 70%
+     (hud-mock 2026-10-14, 56 of 168 cells), under any readable size for a
+     glance in motion. clamp()'s minimum holds the painted size at 10px (the
+     14px micro token over 1.4, so TEXT SIZE lifts the floor with it) however
+     far the slider or a capped top band shrinks the band. */
+  text-align: left; font-size: clamp(calc(var(--fs-micro) / 1.4 / var(--hud-z)), 12px, calc(16px / var(--hud-z)));
   font-weight: 700; letter-spacing: 0.02em; color: var(--text);
   line-height: 1.3;
   font-family: var(--font-hud); font-variant-numeric: tabular-nums;
@@ -1115,6 +1125,13 @@ body[data-density="compact"] #announce {
    raises it to the dropped-strip edge so caution steps from the painted flag
    (MCP survey B3 phoneL-chase). */
 body[data-density="compact"] #announce { --flag-slot-top: calc(72px + var(--sat) / var(--hud-z)); }
+/* A PHONE CARD IS THREE LINES. The message has no height limit, and in a
+   narrow dock lane (HUD/BUTTON SIZE 150% on 740x360 or 844x390) a coach tip
+   wrapped to five lines of 15px and painted over GEAR and SPEED (hud-mock
+   2026-10-14, 2.3k px²). Clamped to three lines with an ellipsis: the number
+   plate and the WHO line still read in full, and the card stays in the band
+   under the tower. The box model is the one every engine ships for clamping. */
+body[data-density="compact"] #announce-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 :root[data-gap-drop] #announce { --flag-slot-top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px); }
 body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
 body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
@@ -1820,7 +1837,7 @@ body.bc-on[data-helmet-cam] #hud::before { content: none; }
 #bc-tower .bc-rows { list-style: none; margin: 0; padding: 0; }
 #bc-tower .bc-row button {
   display: grid; grid-template-columns: 18px 3px 34px 1fr 12px; align-items: center; gap: 4px;
-  width: 100%; min-height: 17px; padding: 0 5px 0 4px; border: 0; background: none;
+  width: 100%; min-height: max(17px, calc(24px / var(--hud-z))); padding: 0 5px 0 4px; border: 0; background: none;
   color: inherit; font: inherit; font-size: 12px; line-height: 17px; text-align: left; cursor: pointer;
 }
 #bc-tower .bc-row:nth-child(odd) button { background: rgba(255, 255, 255, 0.04); }
@@ -1926,7 +1943,7 @@ body[data-helmet-cam] #hud::before {
    shots, 2026-10-05). */
 #hud-damage {
   position: fixed;
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + 2.6em);
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + var(--rc-limits-h, 0px) + var(--rc-inputs-h, 0px));
   right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
   display: flex;
   align-items: center;
@@ -1941,6 +1958,20 @@ body[data-helmet-cam] #hud::before {
   color: var(--text);
 }
 #hud-damage[hidden] { display: none; }
+/* THE RIGHT COLUMN IS A STACK: sectors, LIMITS, the INPUTS trace, this chip,
+   and on desktop RELATIVE under them. A lower piece reserves a higher piece's
+   height ONLY while it has a box. This chip added a flat 2.6em for the limits
+   slot and INPUTS reserved the same slot (--inputs-below-limits), so the two
+   shared a row whenever the trace was on: 84 of 168 hud-mock cells (2026-10-14).
+   Heights in the column's shared top-band zoom: limits 2.6em (the chip's old
+   literal; +3px put it on SPEED at HUD 150%); the trace its canvas + padding
+   (touch 32 + 4px, desktop 48 + 6px); this chip 2.9em of svg + 0.6 --gap. A
+   limits chip crossed left (data-limits-left) still reserves its slot here, as
+   INPUTS always did. */
+body:not([data-hud-hide~="limits"]):has(#hud-limits:not([hidden])) :is(#hud-damage, #hud-rel) { --rc-limits-h: 2.6em; }
+body:not([data-hud-hide~="inputs"]):has(#hud-inputs:not([hidden])) :is(#hud-damage, #hud-rel) { --rc-inputs-h: calc(2.6em + 3px); }
+body.desktop:not([data-hud-hide~="inputs"]):has(#hud-inputs:not([hidden])) :is(#hud-damage, #hud-rel) { --rc-inputs-h: calc(3.9em + 3px); }
+body:not([data-hud-hide~="damage"]):has(#hud-damage:not([hidden])) #hud-rel { --rc-damage-h: 3.3em; }
 #hud-damage svg { width: 1.6em; height: 2.9em; flex: none; }
 #hud-damage [data-part] { fill: color-mix(in srgb, var(--text) 18%, transparent); stroke: color-mix(in srgb, var(--text) 55%, transparent); stroke-width: 0.6; }
 #hud-damage [data-part="body"] { fill: none; }
@@ -1962,7 +1993,12 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
    box; nothing here animates, so REDUCE MOTION has nothing to take out (the
    trace itself swaps to still bars in JS). */
 #hud-rel, #hud-strat { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
-#hud-inputs { --hud-z: var(--hud-z-bot, var(--hud-scale)); zoom: var(--hud-z); }
+/* INPUTS rides the TOP band (2026-10-14; the bottom band's was its old
+   bottom-left home): it hangs from the sector box now, and a trace zoomed by
+   another band stepped 1.5x its neighbours' offsets at HUD 150% on a capped
+   phone, so DAMAGE landed inside it. One zoom per column (the z-top / z
+   conversions below are identities). */
+#hud-inputs { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
 #hud-rel, #hud-strat, #hud-inputs {
   position: absolute;
   background: var(--plate-opaque);
@@ -1976,7 +2012,11 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 }
 #hud-rel {
   right: calc(10px + var(--sar) / var(--hud-z));
-  top: calc(38svh / var(--hud-z));
+  /* 38svh is the desktop home; at HUD SIZE 150% on 1280x720 the right column
+     (sectors, limits, INPUTS, DAMAGE) reaches 346px and the home at 274px put
+     RELATIVE under DAMAGE and the trace (15.6k px², hud-mock 2026-10-14). The
+     stack's own bottom edge is the floor — same terms as #hud-damage above. */
+  top: max(calc(38svh / var(--hud-z)), calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + var(--rc-limits-h, 0px) + var(--rc-inputs-h, 0px) + var(--rc-damage-h, 0px) + 4px));
   border-left: 3px solid var(--dim);
 }
 #hud-rel > div {
@@ -2035,12 +2075,12 @@ body:not(.desktop) #hud-rel:not([data-hl-user]) {
   left: calc(10px + var(--sal) / var(--hud-z));
   right: auto;
   top: calc(var(--hud-left-h, 152px) + 8px);
-  max-width: min(240px, 46vw);
+  max-width: min(240px, 46vw, calc(46vw / var(--hud-z)));
   line-height: 1.2;
   /* Without the left-dock anchor (engines that lack CSS Anchor Positioning),
      keep the card from eating the whole column at HUD 150% — five rows used
      to paint over the steer arrows / BRAKE (2026-10-07 survey, up to ~6k px²). */
-  max-height: min(42svh, 11.5em);
+  max-height: min(42svh, 11.5em, calc(42svh / var(--hud-z)));   /* the /z twin caps the PAINTED size */
   overflow: hidden;
 }
 body:not(.desktop) #hud-strat {
@@ -2087,8 +2127,8 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
      S1–S3 at touch --tap 52 (12 − 56 = −44 at z=1). --hud-sec-h is top-band
      units; at phone sizes bot/top zooms meet so it still clears the box. */
   top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z) + 12px + var(--inputs-below-limits, 0px));
-  max-width: min(120px, 22vw);
-  max-height: min(18svh, 4.2em);
+  max-width: min(120px, 22vw, calc(22vw / var(--hud-z)));
+  max-height: min(18svh, 4.2em, calc(18svh / var(--hud-z)));
   overflow: hidden;
 }
 body:not(.desktop) #hud-inputs:not([data-hl-user]) #hud-inputs-cv {

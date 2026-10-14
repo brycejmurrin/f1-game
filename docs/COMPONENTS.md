@@ -201,6 +201,10 @@ file changes a screen owned by another.
   their zoom and anchors around its side or bottom dock while it is open.
 - `.dock` — `hud` + `overlays`. The touch-controls dock: defined in `overlays`,
   hidden by a `hud` rule when the pause card is up.
+- `.hud-hide-map` — `hud` + `overlays`. Body class for MAP OFF: `hud` parks the
+  gap strip in the map's corner; the ≥1200px tier in `overlays` (which wins the
+  layer order whatever the specificity) steps aside with `body:not(.hud-hide-map)`
+  so its 178px beside-the-map anchor cannot leave the strip floating.
 - `.steer-touch` / `.steer-buttons` — `touch-controls` + `hud`. Body classes from
   `js/game.js` for touch-steer vs on-screen pedals (tilt is unmarked): layout
   differs in `touch-controls`, and phone `#hud-sectors` takes `--dock-r-w`
