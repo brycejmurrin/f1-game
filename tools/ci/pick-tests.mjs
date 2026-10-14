@@ -193,6 +193,7 @@ export const RULES = [
   [/^js\/camera\/cockpit-opts\.js/, ["ui"], "DOM screens"],
   [/^js\/camera\//, ["input"], "camera vantage, offsets and mode switching"],
   [/^js\/audio\/spotify\.js/, ["ui", "audio-unit", "lifecycle-unit"], "token refresh races + browser integration"],
+  [/^js\/audio\/battle-earcon\.js$/, ["audio-unit"], "finite battle motifs: selection, readiness and cancellation in its own unit suite"],
   [/^js\/audio\/radio-voice\.js/, ["audio-unit", "ui"], "the spoken radio: its own policy suite, and the mixer panel that toggles it"],
   [/^js\/audio\/voice-pack\.js/, ["audio-unit"], "the recorded radio voice: its composer, pack coverage and the RadioVoice hand-off"],
   [/^js\/audio\/announcer\.js/, ["audio-unit", "ui"], "the pre-race announcer: its own script+voice suite, and the loading screen and settings sheet that drive it"],
