@@ -229,7 +229,7 @@ test("a folded skill's trigger words live in the hub description", () => {
     "css-play": [/restructur/i, /BEM|CUBE|ITCSS/],
     "agent-view": [/geometry/i, /curvature/i, /groundY/i],
     "f1-animation-cameras": [/replay/i, /anchor/i, /seek/i],
-    "steward": [/owning PRs/i, /push once per green cycle/i],
+    "steward": [/own, pick up or are handed a PR/i, /push once per green cycle/i],
     "agent-fleet": [/send_message/i, /subscriptions/i, /claims/i, /merge, arm/i],
     "survey-track": [/multi-circuit/i, /campaign/i],
   };

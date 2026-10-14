@@ -42,7 +42,7 @@ description: "Use when editing AGENTS.md or CLAUDE.md, a SKILL.md or its descrip
 4. A/B the routing (one `claude -p` per query — budget it):
    ```sh
    git worktree add ../wt-base origin/claude/f1-game-project-26h3ng
-   python3 tools/check/skill-routing-eval.py --queries tests/data/skill-routing/queries --root ../wt-base --out artifacts/route-base.json --only <skill>,<neighbour>
+   python3 tools/check/skill-routing-eval.py --queries tests/data/skill-routing/queries --root ../wt-base --out artifacts/route-base.json --only <skill>,<neighbour> --runs 3 --grace 2
    python3 tools/check/skill-routing-eval.py --queries tests/data/skill-routing/queries --out artifacts/route-head.json --only <skill>,<neighbour> --runs 3 --grace 2
    python3 tools/check/skill-routing-eval.py --compare artifacts/route-base.json artifacts/route-head.json
    ```

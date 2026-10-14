@@ -1,6 +1,6 @@
 ---
 name: steward
-description: "Use when owning PRs: claim, subscribe, fix reds on head, push once per green cycle; or a PR or the deploy branch is red, cancelled, conflicting, or its CI watch expired: name the failing test, who-is-on-it, sync-pr. Pre-push → check-changes."
+description: "Use when you own, pick up or are handed a PR, or a PR or the deploy branch is red, cancelled, conflicting or its CI watch expired: check out its branch, keep its body and Plan current, name the failing test, who-is-on-it, sync-pr, push once per green cycle. Pre-push → check-changes."
 ---
 
 # Driving a PR to green in Apex 26
