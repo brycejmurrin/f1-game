@@ -145,31 +145,47 @@ test("snapshot cache pins immutable bytes, keeps absolute requests consistent an
   const { startStaticServer } = await import(pathToFileURL(harnessPath).href);
   const dir = mkdtempSync(join(ROOT, "scratch", "server-snapshot-"));
   mkdirSync(join(dir, "assets"));
-  writeFileSync(join(dir, "index.html"), "<script src='assets/a.js?v=dev'></script>");
+  const assetA = ["assets", "a.js"].join("/"), assetB = ["assets", "b.js"].join("/");
+  writeFileSync(join(dir, "index.html"), "<script src='" + assetA + "?v=dev'></script>");
   writeFileSync(join(dir, "assets", "a.js"), "old bytes");
   writeFileSync(join(dir, "assets", "b.js"), "unread bytes");
   let server;
   try {
     server = await startStaticServer(dir, { immutableAssets: { namespace: "fixture-v1" } });
     assert.match(server.snapshotUrl, /\/__apex_snapshot\/fixture-v1\/$/);
-    const response = await fetch(server.snapshotUrl + "assets/a.js?v=dev");
+    const response = await fetch(server.snapshotUrl + assetA + "?v=dev");
     assert.equal(await response.text(), "old bytes");
     assert.equal(response.headers.get("content-type"), "application/javascript; charset=utf-8");
     assert.match(response.headers.get("cache-control"), /immutable/);
     const etag = response.headers.get("etag"); assert.ok(etag);
     writeFileSync(join(dir, "assets", "a.js"), "edited bytes");
     writeFileSync(join(dir, "assets", "b.js"), "edited unread bytes");
-    const absolute = await fetch(server.url + "assets/a.js?v=dev");
+    const absolute = await fetch(server.url + assetA + "?v=dev");
     assert.equal(await absolute.text(), "old bytes"); assert.equal(absolute.headers.get("cache-control"), "no-store");
-    const edited = await fetch(server.snapshotUrl + "assets/b.js");
+    const edited = await fetch(server.snapshotUrl + assetB);
     assert.equal(edited.status, 409); assert.equal(edited.headers.get("cache-control"), "no-store");
-    assert.equal((await fetch(server.snapshotUrl + "assets/a.js", { headers: { "If-None-Match": etag } })).status, 304);
-    assert.equal((await fetch(server.snapshotUrl + "assets/a.js", { method: "HEAD" })).headers.get("content-length"), "9");
-    assert.equal((await fetch(server.url + "__apex_snapshot/wrong/assets/a.js")).status, 404);
+    assert.equal((await fetch(server.snapshotUrl + assetA, { headers: { "If-None-Match": etag } })).status, 304);
+    assert.equal((await fetch(server.snapshotUrl + assetA, { method: "HEAD" })).headers.get("content-length"), "9");
+    assert.equal((await fetch(server.url + "__apex_snapshot/wrong/" + assetA)).status, 404);
     await server.close();
     server = await startStaticServer(dir);
-    const live = await fetch(server.url + "assets/a.js");
+    const live = await fetch(server.url + assetA);
     assert.equal(await live.text(), "edited bytes"); assert.equal(live.headers.get("cache-control"), "no-store");
     assert.equal(server.snapshotUrl, null);
   } finally { await server?.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+
+test("explicit launch environments clear dead local DISPLAY without mutating caller state", async () => {
+  const { launchChromium } = await import(pathToFileURL(harnessPath).href);
+  const f = fakeChromium(), env = { DISPLAY: ":9999999", APEX_KEEP_DISPLAY: "0", PATH: "/fixture/bin" };
+  const browser = await launchChromium({ executablePath: "/fixture/chrome", env }, f);
+  const launch = f.calls.find(([name]) => name === "launchServer")[1];
+  assert.equal(launch.env.DISPLAY, undefined);
+  assert.equal(launch.env.PATH, env.PATH); assert.equal(env.DISPLAY, ":9999999");
+  await browser.close();
+  const kept = fakeChromium();
+  const headed = await launchChromium({ executablePath: "/fixture/chrome", headless: false, env }, kept);
+  assert.equal(kept.calls.find(([name]) => name === "launchServer")[1].env.DISPLAY, env.DISPLAY);
+  await headed.close();
 });

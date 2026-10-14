@@ -354,7 +354,9 @@ export async function launchChromium(opts = {}, {
   // Headless defaults true when omitted — same as Playwright. A dead DISPLAY
   // must be cleared before launch or WebGL never comes up (see clearDeadDisplay).
   const headed = opts.headless === false;
-  clearDeadDisplay({ headed });
+  const launchEnv = launchOptions.env ? { ...launchOptions.env } : process.env;
+  clearDeadDisplay({ headed, env: launchEnv });
+  if (launchOptions.env) launchOptions.env = launchEnv;
   const owner = await chromium.launchServer({
     ...(exe ? { executablePath: exe } : {}),
     // We own SIGINT/SIGTERM/SIGHUP (see file header): playwright's handlers close
