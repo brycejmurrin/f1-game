@@ -555,12 +555,23 @@ const HudLayout = (function () {
       }
       if (!any) break;
     }
-    // Pocket snap: at 150% phoneL STRATEGY cannot sit beside REL under the
-    // map (announce owns the mid band) or stack under REL (TYRES owns the
-    // dock). Park it in the pocket RIGHT of the map and ABOVE the radio
-    // card — may share the map's x-band in screen space as long as its
-    // bottom clears announce.T (vertically free of the FIXED plate).
-    if (by.strat && by.map) {
+    // Reserve a TRACK LIMITS strip under the map when the fit left the chip
+    // on the left column (`data-limits-left`). Limits is often hidden until
+    // the survey forces it, so the packer never sees the box — without this
+    // pad REL climbs into the strip (844×390 @150%: limits×rel 2.4 px).
+    if (by.rel && by.map && W >= H) {
+      const limH = by.limits ? by.limits.h + PACK_AIR : 24;
+      const minT = by.map.y + by.map.dy + by.map.h + PACK_AIR + limH;
+      const r = by.rel;
+      if (r.y + r.dy < minT) r.dy = minT - r.y;
+      clampOn(r);
+    }
+    // Pocket snap (landscape only): at 150% phoneL STRATEGY cannot sit beside
+    // REL under the map (announce owns the mid band) or stack under REL
+    // (TYRES owns the dock). Park it RIGHT of the map and ABOVE the radio
+    // card. Portrait keeps the iterative pass — the landscape pocket lands
+    // under the timing tower (390×844 @150% survey).
+    if (by.strat && by.map && W >= H) {
       const s = by.strat, m = by.map, ann = by.announce, rel = by.rel;
       const still = (o) => o && hit(rect(s), rect(o));
       if (still(ann) || still(rel) || still(by.tyre) || still(by.gearbox) || still(m)) {
