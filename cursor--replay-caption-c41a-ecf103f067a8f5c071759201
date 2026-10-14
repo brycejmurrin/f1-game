@@ -1,0 +1,1 @@
+1791960493	Bryce Murrin	Replay/announcer follow-up integration: OWNED tests/groups.json registration for real-replay-captions.test.mjs, docs/TESTING.md single coverage row, generated package test scripts only; integrating workers after their release. No renderer/HUD/game.js edits.  [cursor/replay-caption-c41a; session ecf103f067a8f5c071759201]
