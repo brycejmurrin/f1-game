@@ -553,6 +553,94 @@ test("the always-on instruction surface stays inside its budget", () => {
     `${skills.length} skill descriptions cost ~${descWords} always-on words (budget 1600) — tighten one, or retire a skill`);
 });
 
+// ── BYTE AND ROUTING BUDGETS (2026-10-14, docs/notes/AGENT-GUARDS-2026-10-14.md) ──
+// Lines and words are gameable (one 2 KB line is "one line"); the hosts cap
+// BYTES and CHARS. Codex concatenates AGENTS.md from the repo root down to the
+// working directory and stops adding files at project_doc_max_bytes, 32 KiB
+// by default (https://learn.chatgpt.com/docs/agent-configuration/agents-md),
+// so a long root file silently truncates the nested one — js/track's carries
+// the test-frozen scenery contract. Caps sit at today's size: lower them as
+// the AGENTS.md trim lands (target 30,000 B root, 32,256 B chain).
+const AGENTS_MAX = 30200;
+const CHAIN_MAX = 32768;
+const nestedAgents = () => spawnSync("git", ["ls-files", "*/AGENTS.md"], { cwd: ROOT, encoding: "utf8" })
+  .stdout.split("\n").filter(Boolean);
+
+test("AGENTS.md and every root-to-nested AGENTS.md chain fit Codex's project-doc byte cap", () => {
+  const rootBytes = fs.statSync(path.join(ROOT, "AGENTS.md")).size;
+  assert.ok(rootBytes <= AGENTS_MAX, `AGENTS.md is ${rootBytes} B (cap ${AGENTS_MAX}) — move a rule to a hook, a test or a skill`);
+  const nested = nestedAgents();
+  assert.ok(nested.length >= 2, "js/track and js/circuits carry nested AGENTS.md");
+  for (const rel of nested) {
+    // the chain is every AGENTS.md from the root down to this directory, joined by a blank line
+    const parts = rel.split("/").slice(0, -1);
+    const chain = ["AGENTS.md"];
+    for (let i = 1; i <= parts.length; i++) {
+      const p = [...parts.slice(0, i), "AGENTS.md"].join("/");
+      if (exists(p)) chain.push(p);
+    }
+    const bytes = chain.reduce((n, p) => n + fs.readFileSync(fs.realpathSync(path.join(ROOT, p))).length, 0) + 2 * (chain.length - 1);
+    assert.ok(bytes <= CHAIN_MAX, `${chain.join(" + ")} = ${bytes} B > ${CHAIN_MAX}: Codex truncates ${rel}`);
+  }
+});
+
+test("nested AGENTS.md files are symlinks to their sibling CLAUDE.md (one copy per directory)", () => {
+  for (const rel of nestedAgents()) {
+    const st = fs.lstatSync(path.join(ROOT, rel));
+    assert.ok(st.isSymbolicLink(), `${rel} must be a symlink, not a copy`);
+    assert.equal(fs.readlinkSync(path.join(ROOT, rel)), "CLAUDE.md", `${rel} must point at its sibling CLAUDE.md`);
+    assert.ok(exists(path.join(path.dirname(rel), "CLAUDE.md")), `${rel}: sibling CLAUDE.md missing`);
+  }
+});
+
+test("skill descriptions: a char budget, every arrow resolves, every skill has routing queries", () => {
+  const skills = fs.readdirSync(path.join(ROOT, ".claude/skills"), { withFileTypes: true })
+    .filter((d) => d.isDirectory() && exists(`.claude/skills/${d.name}/SKILL.md`)).map((d) => d.name);
+  const agents = fs.readdirSync(path.join(ROOT, ".claude/agents")).filter((f) => f.endsWith(".md") && f !== "README.md")
+    .map((f) => f.replace(/\.md$/, ""));
+  let chars = 0;
+  for (const name of skills) {
+    const desc = parseYAML(stripFrontmatter(read(`.claude/skills/${name}/SKILL.md`)).fm).description;
+    // The Agent Skills spec caps a description at 1,024 characters.
+    assert.ok(desc.length <= 1024, `${name}: description is ${desc.length} chars (spec max 1,024)`);
+    chars += desc.length;
+    for (const m of desc.matchAll(/(?:→|->)\s*(?:agent\s+)?\**`?([a-z0-9][a-z0-9-]*)/g))
+      assert.ok(skills.includes(m[1]) || agents.includes(m[1]), `${name}: "→ ${m[1]}" names no skill or agent`);
+    assert.ok(exists(`tests/data/skill-routing/queries/${name}.json`),
+      `${name} has no tests/data/skill-routing/queries/${name}.json (5 should-fire + 3 near-miss queries)`);
+  }
+  // 11,986 chars on 2026-10-14, rounded up to the next 100. Trim one to add one.
+  assert.ok(chars <= 12000, `${skills.length} skill descriptions are ${chars} chars (budget 12,000)`);
+  for (const f of fs.readdirSync(path.join(ROOT, "tests/data/skill-routing/queries"))) {
+    const rows = JSON.parse(read(`tests/data/skill-routing/queries/${f}`));
+    assert.ok(skills.includes(f.replace(/\.json$/, "")), `${f}: no such skill`);
+    for (const r of rows) assert.ok(skills.includes(r.expect) || agents.includes(r.expect), `${f}: expect "${r.expect}" is not a skill or agent`);
+  }
+});
+
+test("settings.json denies GitHub-MCP merge and repo surgery, asks before MCP pushes", () => {
+  const perms = JSON.parse(read(".claude/settings.json")).permissions;
+  for (const t of ["mcp__github__merge_pull_request", "mcp__github__delete_file", "mcp__github__create_repository", "mcp__github__fork_repository"])
+    assert.ok(perms.deny.includes(t), `permissions.deny must hold ${t} (AGENTS.md: agents never merge)`);
+  for (const t of ["mcp__github__push_files", "mcp__github__create_or_update_file"])
+    assert.ok((perms.ask || []).includes(t), `permissions.ask must hold ${t} (a commit that skips the commit hook)`);
+  for (const t of [...perms.deny, ...(perms.ask || [])])
+    assert.ok(!perms.allow.includes(t), `${t} is both allowed and gated`);
+  const pre = JSON.parse(read(".claude/settings.json")).hooks.PreToolUse;
+  assert.ok(pre.some((g) => g.hooks.some((h) => h.command.includes("github-mcp-guard.sh"))),
+    "enable_pr_auto_merge and draft:false go through github-mcp-guard.sh");
+});
+
+test(".cursor/environment.json allowlists exactly the .mcp.json servers, with their launch lines", () => {
+  const servers = JSON.parse(read(".mcp.json")).mcpServers;
+  const allow = JSON.parse(read(".cursor/environment.json")).mcpServerAllowlist;
+  assert.deepEqual(allow.map((a) => a.name).sort(), Object.keys(servers).sort());
+  for (const a of allow) {
+    const s = servers[a.name];
+    assert.equal(a.command, `*${s.command} ${s.args.join(" ")}`, `${a.name}: allowlist command drifted from .mcp.json`);
+  }
+});
+
 // ── A MEMORY STORE THAT CANNOT EXPIRE IS A RATCHET ──────────────────────────
 // .claude/agent-memory/<name>/ is the one memory store that survives here: it is
 // in the repo and tracked (!.claude/agent-memory/ in .gitignore), unlike Claude

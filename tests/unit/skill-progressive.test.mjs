@@ -310,7 +310,7 @@ test("every custom subagent declares name, description, and model", () => {
   // Model tiering (2026-09-22): a scan-and-report agent runs on a cheaper
   // tier; judgement stays on the session's model. Anything else is a typo.
   const TIER = {
-    "bloat-auditor.md": "haiku", "deploy-research.md": "haiku", "verify-agent.md": "haiku",
+    "bloat-auditor.md": "sonnet", "deploy-research.md": "haiku", "verify-agent.md": "haiku",
     "ci-red-triage.md": "sonnet", "ci-watcher.md": "haiku", "physics-contract-auditor.md": "inherit", "track-surveyor.md": "inherit",
   };
   const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.";
@@ -440,6 +440,22 @@ test("readonly review agents stay --fast and never start Playwright", () => {
     "deploy-research must not run the in-repo tinyfish wrapper");
   assert.doesNotMatch(deploy, /probe-mcp\.py call tinyfish_/);
   assert.match(frontmatter(deploy).tools, /WebFetch/);
+});
+
+// A `tools:` allowlist hides every tool it omits, so a body that tells the agent
+// to call an MCP tool its list lacks sends it to a fallback (ci-red-triage fell
+// back to unauthenticated curl; survey 2026-10-14). Calls written for the PARENT
+// sit in a block opened by "calls for the PARENT" and are exempt.
+test("every mcp__ tool an agent body names is in its tools: list", () => {
+  for (const f of fs.readdirSync(AGENTS).filter((x) => x.endsWith(".md") && x !== "README.md")) {
+    const text = fs.readFileSync(path.join(AGENTS, f), "utf8");
+    const fm = frontmatter(text);
+    const tools = new Set(String(fm.tools || "").split(/[,\s]+/).filter(Boolean));
+    const body = text.replace(/^---\n[\s\S]*?\n---\n/, "").split(/\n\s*\n/)
+      .filter((para) => !/calls for the PARENT/i.test(para)).join("\n\n");
+    const named = new Set(body.match(/\bmcp__[A-Za-z0-9_-]+__[A-Za-z0-9_]+/g) || []);
+    for (const t of named) assert.ok(!fm.tools || tools.has(t), `${f}: the body names ${t}, but tools: omits it`);
+  }
 });
 
 test("do not grow a parallel Cursor skills or agents tree", () => {
