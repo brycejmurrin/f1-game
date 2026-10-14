@@ -127,17 +127,23 @@ var Spotter = (() => {
         if (pack.plan && !pack.plan(voice, KEYS[key])) return false;
         if (key !== "still there" && G.radio.yieldToSpotter) G.radio.yieldToSpotter();
         if (pack.busy() || (synth && synth.speaking) || (G.radio.busy && G.radio.busy())) return false;
-        const state = st;
+        const state = st, before = { ...st };
+        let validated = false;
         const expected = key === "clear" ? 0 : key === "three wide" ? 3 : key === "car left" ? LEFT : key === "car right" ? RIGHT : st.cur;
         spoke = true;
         return pack.speak(voice, KEYS[key], { channel: "spotter", volume: G.radio.volume ? G.radio.volume() : 1,
+          // Decode failure/watchdog calls onEnd without valid(): roll back the
+          // unheard transition so it can retry, retaining any earlier heard side
+          // and the attempt's call gap to avoid decoding again every physics tick.
+          onEnd: () => { if (!validated && st === state) st = { ...before, t: st.t, lastCallT: st.lastCallT }; },
           // Recheck after decoding: a late "car left" is worse than silence.
           valid: () => { const valid = G.state === "race" && !G.paused && G.player === p && !p.finished && !p.retired && on() && G.soundOn
             && !(p.pitState && p.pitState !== "none") && Math.abs(p.speed || 0) >= G.vTop() * 0.12
             && G.track && occupancy(p, G.cars, G.track.total, occupied) === expected;
             // A discarded warning was never heard: do not follow it with "clear".
             if (!valid && st === state) st = fresh();
-            return !!valid; } });
+            validated = !!valid;
+            return validated; } });
       };
       const key = step(st, occupied, dt, speak);
       return key;
