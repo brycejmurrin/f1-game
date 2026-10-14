@@ -129,14 +129,19 @@ test("R7: the dry-day SSR gate zeroes po.reflect only on a dry day below the 1/6
   const G = gameSource();
   const m = G.match(/^ {2}const _ssrPo = (.+);$/m);
   assert.ok(m, "the gated po.reflect input moved — check this test, not the code");
-  const gate = new Function("_ssrDayGate", "frame", "_ssr", `"use strict"; return ${m[1]};`);
+  const gateT = new Function("_ssrDayGate", "frame", "_ssr", "PerfGov", `"use strict"; return ${m[1]};`);
+  const gate = (armed, frame, ssr, tier = 0) => gateT(armed, frame, ssr, { tier: () => tier });
   const day = { lights: false, wetness: 0 }, night = { lights: true, wetness: 0 }, wet = { lights: false, wetness: 0.4 };
   assert.equal(gate(false, day, 0.07), 0.07, "default OFF: today's value");
   assert.equal(gate(true, day, 0.07), 0, "shipped 0.07: weight 0.0143 < 1/64 -> skipped");
   assert.equal(gate(true, day, 0.074), 0, "the presets' 0.074 -> skipped");
   assert.equal(gate(true, day, 0.1), 0.1, "baku's 0.1 (weight 0.0204) keeps the march");
   assert.equal(gate(true, night, 0.08), 0.08, "dry night neon sheen untouched");
-  assert.equal(gate(true, wet, 0.05), 0.05, "a wet road never gates");
+  assert.equal(gate(true, wet, 0.05), 0.05, "a wet road never gates at tier 0");
+  // Tier >= 2 (phone MEDIUM): a near-dry wet frame whose blend weight cannot reach 1/64 skips the march.
+  assert.equal(gate(false, { lights: false, wetness: 0.02 }, 0.02 * 1.28, 2), 0, "drying road at tier 2: invisible, skipped");
+  assert.equal(gate(false, wet, 0.4 * 1.28, 2), 0.4 * 1.28, "a properly wet road keeps its mirror at tier 2");
+  assert.equal(gate(false, wet, 0.02, 0), 0.02, "tier 0 never applies the weight gate unless armed");
   assert.match(G, /po\.reflect = PerfGov\.tier\(\) >= _ssrTier \? 0 : _ssrPo;/, "the one input every backend reads");
   assert.doesNotMatch(G, /po\.carReflect = [^;]*_ssrPo/, "car-paint SSR is not gated");
   assert.match(G, /const _ssrDayGate = \(\(\) => \{ try \{ return localStorage\.getItem\("apex26\.ssrDayGate"\) === "1"; \}/,
