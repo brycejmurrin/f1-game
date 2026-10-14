@@ -18,17 +18,21 @@
       const JACARANDA = [0.56, 0.44, 0.74];
 
       // Camera corridor (Circuit Yard R4 — survey f08 / f42 / f75 / f92).
-      // Scenery orbit sits on +1 at dist≈45 m (eye ~15–22 m past the edge);
-      // chase is closer. Keep +1 trunks past that wedge so canopies do not
-      // fill the lens. Hot windows match the flagged frames (± a little).
-      const CAM_NEAR = 24;
+      // Scenery orbit sits on +1 at dist≈45 m; chase is closer. After the
+      // first pass, f42/f75/f92 still put canopies in the lens — Interlagos
+      // folds so −1 trunks near the rail sit in the same wedge. Hot windows
+      // clear +1 past survey orbit and −1 through the mid ring.
+      const CAM_NEAR = 28;
       const camHot = (k) => {
         const f = ((k / n) % 1 + 1) % 1;
         return (f >= 0.02 && f <= 0.14) || (f >= 0.36 && f <= 0.50) ||
                (f >= 0.68 && f <= 0.82) || (f >= 0.86 || f <= 0.02);
       };
-      const blocksOrbitView = (side, dist, k) =>
-        side === 1 && (camHot(k) ? dist < 64 : dist < 38);
+      const blocksOrbitView = (side, dist, k) => {
+        if (!camHot(k)) return side === 1 && dist < 42;
+        if (side === 1) return dist < 78;          // past survey orbit (45)
+        return dist < 58;                          // fold-adjacent −1 canopy
+      };
 
       // Vivid favela palette (terracotta, sunflower, teal, coral, sage, ochre…)
       const FAV = [
@@ -687,16 +691,25 @@
         }
       }
 
-      // Dense shoreline forestEdge — guaranteed no barrier clipping
-      forestEdge(0.28, 0.48, -1, 28, { density: 0.80, hMin: 10, hMax: 18,
+      // Shoreline forestEdge — was gap 28 / density 0.80 and filled the orbit
+      // lens at f42 (fold puts −1 mid-ring in camera). Past the hot clear.
+      forestEdge(0.28, 0.48, -1, 62, { density: 0.45, hMin: 9, hMax: 15,
                                         col: [0.18, 0.42, 0.18], col2: [0.22, 0.46, 0.18], pineFrac: 0 });
-      // Shoreline dressing densify (DETAIL): more palms + broadleaf at the rim.
+      // Shoreline palms / broadleaf past the orbit ring (skip if still hot).
       for (const s of [0.30, 0.33, 0.36, 0.38, 0.40, 0.42, 0.44, 0.46]) {
         const k = K(s);
-        palm(k, -1, 52 + hash(k * 7) * 22, 12 + hash(k * 11) * 5, [0.24, 0.46, 0.20]);
-        palm(k, -1, 70 + hash(k * 13) * 18, 10 + hash(k * 17) * 4, [0.26, 0.48, 0.22]);
-        tree(k, -1, 48 + hash(k * 19) * 14, 9 + hash(k * 23) * 4, [0.22, 0.46, 0.20]);
-        bush(k, -1, 42 + hash(k * 29) * 10, [0.26, 0.50, 0.24]);
+        const d1 = 64 + hash(k * 7) * 20;
+        const d2 = 82 + hash(k * 13) * 16;
+        const d3 = 66 + hash(k * 19) * 14;
+        const d4 = 60 + hash(k * 29) * 12;
+        if (!blocksOrbitView(-1, d1, k))
+          palm(k, -1, d1, 12 + hash(k * 11) * 5, [0.24, 0.46, 0.20]);
+        if (!blocksOrbitView(-1, d2, k))
+          palm(k, -1, d2, 10 + hash(k * 17) * 4, [0.26, 0.48, 0.22]);
+        if (!blocksOrbitView(-1, d3, k))
+          tree(k, -1, d3, 9 + hash(k * 23) * 4, [0.22, 0.46, 0.20]);
+        if (!blocksOrbitView(-1, d4, k))
+          bush(k, -1, d4, [0.26, 0.50, 0.24]);
       }
 
       // DESCIDA DO LAGO / FERRADURA (bankZones frac 0.4547, both mid): the
@@ -819,25 +832,18 @@
       tyreWall(0.615, 0.67, -1, 4, [0.92, 0.80, 0.22]);
       marshalPost(K(0.625), 1, 8);
       marshalPost(K(0.665), -1, 8);
-      // Treeline framing Bico de Pato through Junção — one continuous run
-      // over the corner cluster.
-      // gap 7, not 18: this run is on the INSIDE of the Bico de Pato/Mergulho
-      // loop and the lap folds back on itself, so a canopy pushed 18 m into the
-      // infield reaches the frac~0.85 leg on the far side. forestEdge clears
-      // barriers and tree() clears its own trunk point, but neither sees a
-      // canopy overhanging a DIFFERENT part of the circuit — props-over-road
-      // measured 2.88 m of intrusion at f=84.5 from trees authored at f~70.
-      forestEdge(0.61, 0.76, -1, 7, { density: 0.55, hMin: 9, hMax: 14,
+      // Treeline framing Bico de Pato through Junção. Was gap 7 / density 0.55
+      // — correct for props-over-road on the fold, but it filled the orbit
+      // lens at f75. Gap 58 keeps trunks past the survey orbit ring; density
+      // thinned so the green banks remain without a canopy wall in camera.
+      forestEdge(0.61, 0.76, -1, 58, { density: 0.32, hMin: 8, hMax: 12,
                                         col: [0.18, 0.40, 0.18], col2: [0.20, 0.44, 0.18], pineFrac: 0 });
-      // Accent trees go on the OUTSIDE (-1) only. Side +1 through here is the
-      // inside of the Bico de Pato / Mergulho loop, and the lap folds back on
-      // itself tightly enough that a canopy 22-38 m into the infield hangs over
-      // the frac~0.62 leg — tree() guards a single anchor point, not the 5 m
-      // canopy, so nothing catches it. props-over-road measured 4.43 m of
-      // intrusion from exactly this cluster.
+      // Accent trees on −1 only, past the orbit ring (was 24–38 — clipped f75).
       for (const s of [0.63, 0.66, 0.70, 0.735]) {
         const k = K(s);
-        tree(k, -1, 24 + hash(k * 5) * 14, 10 + hash(k * 7) * 6, [0.20, 0.44, 0.20]);
+        const d = 62 + hash(k * 5) * 16;
+        if (blocksOrbitView(-1, d, k)) continue;
+        tree(k, -1, d, 10 + hash(k * 7) * 6, [0.20, 0.44, 0.20]);
       }
 
       const kj = K(0.7414);
@@ -884,24 +890,31 @@
       every(90, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 91 + side) > 0.48) continue;
-          // Past chase/orbit corridor (was 30–90 m — +1 ranks at 30–55 filled
-          // the lens at f42/f75/f92). Hot +1 skips the orbit ring entirely.
-          const d = CAM_NEAR + hash(k * 92 + side) * 55;
+          // Past chase/orbit corridor. Hot fracs: start beyond the cleared
+          // wedge so we do not reseed inside blocksOrbitView then no-op.
+          // Cap ~95 m — further out the ribbon ends and bush/tree feet go
+          // unsupported (ground-audit after the first corridor push).
+          const hot = camHot(k);
+          const base = hot ? (side === 1 ? 80 : 60) : CAM_NEAR;
+          const d = Math.min(95, base + hash(k * 92 + side) * (hot ? 28 : 50));
           if (blocksOrbitView(side, d, k)) continue;
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 8)) continue;
+          const gy = terrainYAt(p.c[0], p.c[2]);
+          if (gy == null || !isFinite(gy)) continue;
           const r = hash(k * 93 + side);
           // Subtropical Atlantic-forest mix, no conifers (survey 2026-10-05:
           // the pine() cones here read as alpine). Lobed broadleaf for the
           // dense bushy canopy; ~1 in 5 of those is a jacaranda in its
-          // Sep-Nov bloom, which is when the GP runs. Hot +1: thinner so the
-          // green São Paulo banks remain without re-seeding the wedge.
-          if (side === 1 && camHot(k) && r < 0.55) continue;
+          // Sep-Nov bloom, which is when the GP runs. Hot: thinner.
+          if (hot && r < 0.58) continue;
           if      (r > 0.62) tree(k, side, d, 10 + hash(k * 94 + side) * 6, [0.22, 0.46, 0.22]);
           else if (r > 0.31) broadleafFall(k, side, d, 11 + hash(k * 95 + side) * 6,
                                hash(k * 96 + side) > 0.80 ? JACARANDA : BROAD[(k + side + 2) % BROAD.length],
                                { lobes: 4, spread: 1.15, barkCol: [0.34, 0.28, 0.22] });
-          else               bush(k, side, d, [0.24, 0.48, 0.24]);
+          // No bush() here: at the corridor setbacks their feet sit ~0.45 m
+          // unsupported on this ribbon (ground-audit). Understory stays on the
+          // Senna / shoreline bush() calls closer in.
         }
       });
 
