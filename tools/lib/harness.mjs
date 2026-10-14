@@ -163,11 +163,11 @@ export function shutdown() {
     pending = (async () => {
       do {
         const entries = [...resources];
-        resources.clear();
         await Promise.all(entries.map(async (r) => {
           // A wedged browser must not block the exit path — force-kill after 5 s.
           try { await Promise.race([r.close(), timeout(5000)]); } catch {}
           try { r.force(); } catch {}
+          resources.delete(r);
         }));
         // A launch may resolve while prior closes await their deadline. Drain
         // that new owner too instead of forgetting it behind the pending promise.
@@ -250,8 +250,9 @@ export async function startStaticServer(root, {
 }
 
 // ---- browser ------------------------------------------------------------
-function killGroup(browser) {
-  const pid = browser.process?.()?.pid;
+function killGroup(owner) {
+  const child = owner.process();
+  const pid = child.exitCode == null && child.signalCode == null ? child.pid : null;
   if (!pid) return;
   // Playwright spawns the browser detached, so the negative pid reaps the whole
   // group — renderers, GPU process and chrome_crashpad included.
@@ -259,7 +260,18 @@ function killGroup(browser) {
   catch { try { process.kill(pid, "SIGKILL"); } catch {} }
 }
 
-/** chromium.launch() with the sandbox executable, tracked for teardown. */
+/** Retain the supported BrowserServer owner until graceful close settles. */
+export function trackBrowserOwner(browser, owner, entry = track({ close: () => owner.close(), force: () => killGroup(owner) })) {
+  const close = browser.close.bind(browser);
+  entry.close = () => browser.close();
+  browser.close = async (...args) => {
+    try { await close(...args); await owner.close(); }
+    finally { killGroup(owner); resources.delete(entry); }
+  };
+  return browser;
+}
+
+/** Owned Chromium server with a connected Browser facade and bounded teardown. */
 export async function launchChromium(opts = {}) {
   const { chromium } = require("playwright");
   const exe = pickChromium();
@@ -267,7 +279,7 @@ export async function launchChromium(opts = {}) {
   // must be cleared before launch or WebGL never comes up (see clearDeadDisplay).
   const headed = opts.headless === false;
   clearDeadDisplay({ headed });
-  const browser = await chromium.launch({
+  const owner = await chromium.launchServer({
     ...(exe ? { executablePath: exe } : {}),
     // We own SIGINT/SIGTERM/SIGHUP (see file header): playwright's handlers close
     // the browser but never exit, which is how these tools ended up wedged.
@@ -276,8 +288,13 @@ export async function launchChromium(opts = {}) {
     handleSIGHUP: false,
     ...opts,
   });
-  const entry = track({ close: () => browser.close(), force: () => killGroup(browser) });
-  const close = browser.close.bind(browser);
-  browser.close = async (...a) => { resources.delete(entry); try { await close(...a); } finally { killGroup(browser); } };
-  return browser;
+  const entry = track({ close: () => owner.close(), force: () => killGroup(owner) });
+  try {
+    const browser = await chromium.connect(owner.wsEndpoint());
+    return trackBrowserOwner(browser, owner, entry);
+  } catch (error) {
+    killGroup(owner);
+    resources.delete(entry);
+    throw error;
+  }
 }

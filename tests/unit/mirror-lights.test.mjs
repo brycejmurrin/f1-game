@@ -73,21 +73,21 @@ for (const [spacing, mobile] of [[25, 1], [12, 0], [12, 1]]) {
   });
 }
 
-test("the forward camera's lamps are unchanged by the viewLights refactor (bit-for-bit against the previous module)", () => {
-  // The cull moved into _rankSet(state, …); the forward path must produce the
-  // very same records it did before, with or without a mirror pass in between.
-  const prev = path.join(ROOT, "tests/data/frame-lights.pre-viewlights.txt");
-  assert.ok(fs.existsSync(prev), "baseline copy of the pre-refactor module");
-  const mk = (src) => {
+test("a mirror viewLights pass does not disturb the forward set (bit-for-bit)", () => {
+  // Two copies of the CURRENT module: one forward-only, one with viewLights
+  // interleaved. The forward records must match. (The pre-viewlights golden
+  // used a 0.5 m rank eps; the distance/time budget intentionally changes
+  // membership cadence, so that golden is no longer the forward oracle.)
+  const mk = () => {
     const clock = { now: 0 };
     const ctx = { performance: { now: () => clock.now }, Math, Float32Array, Uint32Array, Array, Object,
       LightKnobs: { LT: { lampWarmup: 0, lampFlicker: 0.3 } }, PerfGov: { tier: () => 0 } };
     vm.createContext(ctx);
     vm.runInContext(read("js/render/shared/light-budget.js") + "\n;globalThis.LightBudget = LightBudget;", ctx);
-    vm.runInContext(src + "\n;globalThis.FrameLights = FrameLights;", ctx);
+    vm.runInContext(read("js/lighting/frame-lights.js") + "\n;globalThis.FrameLights = FrameLights;", ctx);
     return { FL: ctx.FrameLights, clock };
   };
-  const a = mk(fs.readFileSync(prev, "utf8")), b = mk(read("js/lighting/frame-lights.js"));
+  const a = mk(), b = mk();
   const track = { _lights: street(12) }, cars = new Array(10).fill({});
   const fa = {}, fb = {};
   for (let f = 0; f < 300; f++) {

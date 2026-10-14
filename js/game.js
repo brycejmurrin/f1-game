@@ -3646,7 +3646,7 @@ customTeam = CustomTeam.create({
 });
 // UI SIZE / HUD SIZE + RESOLUTION (js/ui/scale.js). After Menus so the
 // first applyUiScale can refresh an already-built select preview.
-const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G);
+const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G); if (typeof HudArrange !== "undefined" && HudArrange.create) HudArrange.create(G);
 // CAREER screen — new-career setup + season hub (js/career/career-ui.js). The rules
 // and the save live in js/career/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
@@ -4423,10 +4423,8 @@ const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0,
                   deploy: 0, energy: 1, ersDeploy: 0.5, throttle: 1, brake: 0, regen: 0.5 };  // setEngine reads synchronously
 let _audioParamStep = true;   // tickBody clears it on all but a frame's last physics step
 const _engAcc = { dt: 0 };   // the local car's sim time since the engineer last listened (S8: once per frame)
-const _s8Pres = { dt: 0 };   // caution + coach + race-radio: summed sim dt since last frame flush (PERF-HUNT-2 S8)
-// null until the first frame flush — 0 is a real stamp value, and `stamp != null`
-// would latch every direct coach.update() harness call (mechanics-integration-vm).
-let _s8Stamp = null;
+// S8 presentation dt; stamp null until first flush (0 would latch harness coach.update loops).
+const _s8Pres = { dt: 0 }; let _s8Stamp = null;
 function update(dt) {
   // No world: a stepped/worker race switch dropped it (dropTrackWorld) and is still building.
   // tickBody gates on it too; this covers __apex.step() (bug hunt 3 K1/X2).
@@ -7111,20 +7109,9 @@ function render(dt) {
     fovY = dbgCam.fov * Math.PI / 180;
     if (!cine) farPlane = dbgCam.far;
   } else {
-    // camFov is a vertical FOV. On a wide (landscape) screen a fixed vertical FOV
-    // blows the horizontal field out past ~100°, which makes the car look tiny and
-    // far away. Cap the horizontal FOV so wide screens zoom in and the car stays a
-    // readable size; portrait (narrow) is unaffected.
-    fovY = camFov * Math.PI / 180;
-    // The HFOV cap keeps the CAR a readable size on a wide screen. A crane shot
-    // has no car in it, the editor previews the authored angle uncapped, and a
-    // shot authored at 60° would arrive on a 21:9 screen squeezed to 45° — so
-    // the cinematic takes the number it was framed at.
-    if (!cine) {
-      const HFOV_MAX = 86 * Math.PI / 180;
-      const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(gfx.aspect, 0.0001));
-      fovY = Math.min(fovY, fovYCap);
-    }
+    // camFov is vertical; CamFovFit caps HFOV on wide screens and floors it on
+    // portrait (js/camera/fov-fit.js). cine stays authored / uncapped.
+    fovY = CamFovFit.fitFovY(camFov * Math.PI / 180, gfx.aspect, { cine });
   }
   // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
   // precision across the scene — the biggest single lever against z-fighting /

@@ -51,7 +51,7 @@ const DataHub = (function () {
   // work. Not UiLayers.LAYER_IDS — that list includes overlay + datahub.
   // Literal selector (not getElementById(variable)): dynamicIdReads is shrink-only.
   const BLOCKING_SEL = (
-    "#howtoplay,#career,#career-offers,#career-history,#career-guide,#select," +
+    "#howtoplay,#pmsettings,#career,#career-offers,#career-history,#career-guide,#select," +
     "#teampicker,#vsfriend,#carsetup,#photo-studio,#season-setup,#track-detail," +
     "#race-settings,#customize,#trackdesigner,#standings,#quali,#spotifypanel," +
     "#lighting,#camtune,#flyby,#freecam,#garrival,#duel-picker"
@@ -626,6 +626,7 @@ const DataHub = (function () {
       if (!sesSel.value) return;
       const m = sesIndex[sesSel.value];
       if (!m) return;
+      cancelRealRace();
       sel.sessionKey = m.sessionKey; sel.meta = m; sel.pinned = true;
       onPick(m);
     });

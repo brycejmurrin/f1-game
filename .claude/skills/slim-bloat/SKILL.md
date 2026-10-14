@@ -34,7 +34,8 @@ range that opens mid-function exits 1 on a bare `SyntaxError` that reads like a
 broken file rather than a badly chosen range.
 
 Spawn `bloat-auditor` with a **named scope** (one file, one skill, or
-`HEAD` / last-touched). It returns `BLOAT` rows only. The parent edits and
+`HEAD` / last-touched). It returns `BLOAT` rows only. Seed its scope with `prior-art-scout`
+(rejected / already-fixed items) and run `finding-verifier` on dead-code rows before the carve. The parent edits and
 locksteps; if `tools/manifest.cjs` changed, run `node tools/gen/gen-shell.mjs`
 ([shell/cache](../check-changes/references/bump.md)).
 
@@ -52,6 +53,7 @@ locksteps; if `tools/manifest.cjs` changed, run `node tools/gen/gen-shell.mjs`
 5. **Never "simplify" physics, the timestep, or `updateCar`/`render()`.**
    See do-not.md.
 
+After a skill / agent / AGENTS.md edit, review the unit with the `agent-surface-reviewer` subagent.
 CSS/DOM count work → **css-play** (`references/restructure.md`). Pre-push →
 **check-changes** / `verify-agent`.
 
