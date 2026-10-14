@@ -72,6 +72,97 @@ var RivalAudio = (() => {
   }
   const out = [];
 
+  // Shared pass-by graph: GameAudio.init() calls RivalAudio.attach(ctx, dest)
+  // and every create() instance aims the same four voices. Per-instance voices
+  // left the pool silent — collect() ran on game.js's instance, attach on another.
+  // Lazy first-bind: engine.js may init() before this file evaluates (LAZY_AUDIO
+  // order) and stash dest on the stub as _pendingAttach; we consume it below.
+  const pending = (typeof RivalAudio !== "undefined" && RivalAudio._pendingAttach) || null;
+  const voiced = new Array(SLOTS).fill(false);
+  let actx = null, voices = null;
+
+  function attach(ctx, bus) {
+    if (!ctx) return;
+    if (voices && actx === ctx) return;
+    if (voices) detach();
+    actx = ctx;
+    const dest = bus || ctx.destination;
+    const noise = noiseBuffer(ctx);
+    voices = [];
+    for (let i = 0; i < SLOTS; i++) {
+      const src = ctx.createBufferSource();
+      src.buffer = noise;
+      src.loop = true;
+      const filt = ctx.createBiquadFilter();
+      filt.type = "lowpass";
+      if (filt.frequency) filt.frequency.value = 4000;
+      const g = ctx.createGain();
+      if (g.gain) g.gain.value = 0;
+      const p = ctx.createStereoPanner();
+      if (p.pan) p.pan.value = 0;
+      src.connect(filt);
+      filt.connect(g);
+      g.connect(p);
+      if (dest) p.connect(dest);
+      try { src.start(0); } catch (e) { /* already started */ }
+      voices.push({ src, filt, gain: g, pan: p, dist: 0, key: -1 });
+    }
+  }
+
+  function applyPassBy(rows) {
+    if (!voices || !actx) return;
+    const t = actx.currentTime || 0;
+    for (let i = 0; i < SLOTS; i++) voiced[i] = false;
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const sl = Number.isInteger(r.slot) && r.slot >= 0 && r.slot < SLOTS ? r.slot : i;
+      if (voiced[sl] || sl >= voices.length) continue;
+      voiced[sl] = true;
+      const v = voices[sl];
+      const dist = r.dist != null ? +r.dist : Math.hypot(+r.lat || 0, +r.arc || 0);
+      aimParam(v.gain.gain, passByGain(dist, r.arc), t, 0.10);
+      aimParam(v.src.playbackRate, passByDoppler(r.approach), t, 0.08);
+      aimParam(v.pan.pan, passByPan(r.lat, r.arc), t, 0.06);
+      const cut = Math.max(700, Math.min(12000,
+        12000 * Math.pow(REF / Math.max(dist, REF), 0.35)));
+      aimParam(v.filt.frequency, cut, t, 0.12);
+      v.dist = dist;
+      v.key = r.key;
+    }
+    for (let i = 0; i < voices.length; i++) {
+      if (voiced[i]) continue;
+      aimParam(voices[i].gain.gain, 0, t, 0.12);
+      voices[i].dist = 0;
+      voices[i].key = -1;
+    }
+  }
+
+  function detach() {
+    if (!voices) return;
+    const t = actx ? actx.currentTime || 0 : 0;
+    for (let i = 0; i < voices.length; i++) {
+      const v = voices[i];
+      try { if (v.gain.gain) v.gain.gain.setTargetAtTime(0, t, 0.06); } catch (e) { /* gone */ }
+      try { v.src.stop(t + 0.3); } catch (e) { /* already stopped */ }
+    }
+    voices = null;
+    actx = null;
+  }
+
+  function passByState() {
+    if (!voices) return [];
+    return voices.map((v, i) => ({
+      slot: i,
+      gain: +(v.gain.gain && v.gain.gain.value) || 0,
+      rate: +(v.src.playbackRate && v.src.playbackRate.value) || 0,
+      pan: +(v.pan.pan && v.pan.pan.value) || 0,
+      dist: v.dist,
+      key: v.key,
+    }));
+  }
+
+  function passByVoices() { return voices || []; }
+
   function create(G) {
     const { clamp } = M4;
     const { IDLE_RPM, MAX_RPM } = PhysicsConsts;
@@ -80,8 +171,6 @@ var RivalAudio = (() => {
     // second create() (a new race) starts with every voice free.
     const bound = new Array(SLOTS).fill(null);
     const taken = new Array(SLOTS).fill(false);
-    const voiced = new Array(SLOTS).fill(false);
-    let actx = null, voices = null;
 
     /** The nearest rivals to `player`, nearest first. The returned array and the
      *  objects in it are REUSED between calls — read them before the next one.
@@ -156,86 +245,6 @@ var RivalAudio = (() => {
       return out;
     }
 
-    function attach(ctx, bus) {
-      if (!ctx || voices) return;
-      actx = ctx;
-      const dest = bus || ctx.destination;
-      const noise = noiseBuffer(ctx);
-      voices = [];
-      for (let i = 0; i < SLOTS; i++) {
-        const src = ctx.createBufferSource();
-        src.buffer = noise;
-        src.loop = true;
-        const filt = ctx.createBiquadFilter();
-        filt.type = "lowpass";
-        if (filt.frequency) filt.frequency.value = 4000;
-        const g = ctx.createGain();
-        if (g.gain) g.gain.value = 0;
-        const p = ctx.createStereoPanner();
-        if (p.pan) p.pan.value = 0;
-        src.connect(filt);
-        filt.connect(g);
-        g.connect(p);
-        if (dest) p.connect(dest);
-        try { src.start(0); } catch (e) { /* already started */ }
-        voices.push({ src, filt, gain: g, pan: p, dist: 0, key: -1 });
-      }
-    }
-
-    function applyPassBy(rows) {
-      if (!voices || !actx) return;
-      const t = actx.currentTime || 0;
-      for (let i = 0; i < SLOTS; i++) voiced[i] = false;
-      for (let i = 0; i < rows.length; i++) {
-        const r = rows[i];
-        const sl = Number.isInteger(r.slot) && r.slot >= 0 && r.slot < SLOTS ? r.slot : i;
-        if (voiced[sl] || sl >= voices.length) continue;
-        voiced[sl] = true;
-        const v = voices[sl];
-        const dist = r.dist != null ? +r.dist : Math.hypot(+r.lat || 0, +r.arc || 0);
-        aimParam(v.gain.gain, passByGain(dist, r.arc), t, 0.10);
-        aimParam(v.src.playbackRate, passByDoppler(r.approach), t, 0.08);
-        aimParam(v.pan.pan, passByPan(r.lat, r.arc), t, 0.06);
-        const cut = Math.max(700, Math.min(12000,
-          12000 * Math.pow(REF / Math.max(dist, REF), 0.35)));
-        aimParam(v.filt.frequency, cut, t, 0.12);
-        v.dist = dist;
-        v.key = r.key;
-      }
-      for (let i = 0; i < voices.length; i++) {
-        if (voiced[i]) continue;
-        aimParam(voices[i].gain.gain, 0, t, 0.12);
-        voices[i].dist = 0;
-        voices[i].key = -1;
-      }
-    }
-
-    function detach() {
-      if (!voices) return;
-      const t = actx ? actx.currentTime || 0 : 0;
-      for (let i = 0; i < voices.length; i++) {
-        const v = voices[i];
-        try { if (v.gain.gain) v.gain.gain.setTargetAtTime(0, t, 0.06); } catch (e) { /* gone */ }
-        try { v.src.stop(t + 0.3); } catch (e) { /* already stopped */ }
-      }
-      voices = null;
-      actx = null;
-    }
-
-    function passByState() {
-      if (!voices) return [];
-      return voices.map((v, i) => ({
-        slot: i,
-        gain: +(v.gain.gain && v.gain.gain.value) || 0,
-        rate: +(v.src.playbackRate && v.src.playbackRate.value) || 0,
-        pan: +(v.pan.pan && v.pan.pan.value) || 0,
-        dist: v.dist,
-        key: v.key,
-      }));
-    }
-
-    function passByVoices() { return voices || []; }
-
     return { collect, attach, tick: collect, detach, passByState, passByVoices };
   }
 
@@ -257,5 +266,9 @@ var RivalAudio = (() => {
     return best;
   }
 
-  return { create, sprayAhead, passByGain, passByDoppler, passByPan, SLOTS };
+  if (pending && pending.ctx) {
+    try { attach(pending.ctx, pending.dest); } catch (e) { /* stub dest already gone */ }
+  }
+
+  return { create, attach, detach, sprayAhead, passByGain, passByDoppler, passByPan, passByVoices, SLOTS };
 })();
