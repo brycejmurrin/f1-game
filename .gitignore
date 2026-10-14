@@ -15,9 +15,7 @@ node_modules/
 node_modules
 # Regenerable output
 scratch/
-artifacts/*
-!artifacts/shots/
-!artifacts/shots/**
+artifacts/
 # tools/ci/queue-depth.mjs --write: a live gauge, never committed
 apex-status/
 # Run screenshots. A June 2026 lap audit committed ~1,700 versions of these in

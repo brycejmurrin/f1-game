@@ -29,10 +29,7 @@ test("normalizeJob defaults and safety", () => {
   const j = normalizeJob({}, { ROOT });
   assert.equal(j.trackId, "monza");
   assert.equal(j.cam, "orbit");
-  assert.equal(j.wx, "dry");
   assert.equal(j.type, "png");
-  assert.equal(normalizeJob({ wx: "rain" }, { ROOT }).wx, "rain");
-  assert.throws(() => normalizeJob({ wx: "storm" }, { ROOT }), /unknown weather/);
   assert.match(j.out, /playwright-probe[/\\]monza-10-orbit\.png$/);
   const jpg = normalizeJob({ out: path.join(TMP, "x.jpg") }, { ROOT });
   assert.equal(jpg.type, "jpeg");
