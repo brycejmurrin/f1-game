@@ -775,6 +775,12 @@ function vantage(track, mode, s, x, spd, now, extra) {
       ? CamFeel.modeFov(far ? "far" : "chase", spFov, dep)
       : lerp(57, 63, spFov) + (far ? 4 : 0) + dep * 3;
   }
+  // Start coverage on the body; explicit tuner aim and local look remain additive.
+  if (extra.frameSubject && (mode === "chase" || mode === "side" || mode === "heli" || mode === "cinematic")) {
+    tgt[0] = extra.carPos ? extra.carPos[0] : p[0];
+    tgt[1] = p[1] + 0.8;
+    tgt[2] = extra.carPos ? extra.carPos[1] : p[2];
+  }
   // Per-mode HEIGHT/DISTANCE/SIDE/PITCH/YAW/FOV nudges from js/camera/offsets.js,
   // applied to the solved rig rather than baked into each branch — one place to
   // reason about, and every mode gets the same six knobs for free. A no-op (an
