@@ -70,7 +70,11 @@ const MirrorPass = (function () {
     const lc = localStorage.getItem("apex26.tlxMirLampCap");
     if (lc != null && lc !== "" && +lc >= 0) _lampCap = Math.min(48, +lc | 0);
   } catch (_) { /* default 12 */ }
-  const RERANK_M = 2, RERANK_EVERY = 4, RERANK_AIM_COS = 0.9994;
+  // Align with FrameLights' distance/time budget (5 m / ~100 ms): holding here
+  // means the mirror often never calls viewLights, and when it does _rankSet
+  // reuses the view heap. Was 2 m / 4 frames — at 60 m/s that still re-ranked
+  // every other frame on top of the forward cull.
+  const RERANK_M = 5, RERANK_EVERY = 8, RERANK_AIM_COS = 0.9994;
   const QUALITY = [
     { name: "full", lite: false, res: 1.0, cull: 400, reach: 260, every: 1, instEvery: _instEvery },
     { name: "lite", lite: true,  res: 0.6, cull: 180, reach: 140, every: 1, instEvery: 1 },
@@ -162,6 +166,8 @@ const MirrorPass = (function () {
           return _vlOut;
         }
       }
+      // viewLights reuses its heap while the rear eye stays inside FrameLights'
+      // distance/time budget — so this call is usually a re-tint, not a rebuild.
       const vl = FrameLights.viewLights(frame, _eye, _aim);
       _vlAge = Infinity;
       if (!vl || !(_lampCap > 0)) return vl;

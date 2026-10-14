@@ -115,14 +115,17 @@ Load from the SKILL.md index when the task needs this detail.
    ```
    The single browser check is that circuit's `tests/specs/<id>-foundation.spec.js`
    (AGENTS.md verification table; hyphenated file names, e.g. `albert-park-`), run via
-   `test-bg.mjs` in the background (AGENTS.md rules 4-5). A whole group is the parent's call.
+   `test-bg.mjs` in the background (AGENTS.md rules 4-5). Only 16 circuits have one (madrid does not):
+   with none, run what `pick-tests` names, plus `tests/specs/f1-track-accuracy.spec.js` and `terrain-over-road.spec.js`
+   when geometry moved. A whole group is the parent's call.
    The `terrain-over-road.spec.js` audit (part of the full suite) catches terrain
    triangles rendering above the racing line — re-run it if you changed elevation
    or a street/terrain flag.
 
 ## Editing an existing circuit (no browser; verified on monza)
 
-Before an edit, read `docs/tracks/<id>.md` (and `docs/tracks/START-LINES.md`), then:
+Before an edit, read `docs/tracks/<id>.md` (and `docs/tracks/START-LINES.md`); a hero-landmark edit also touches
+`tests/data/landmarks/<id>.json` (rules in `js/circuits/AGENTS.md`). Then:
 ```sh
 node tools/track/verify-track.cjs <id>                 # ~6 s; OK line + guard drops (monza: suppressed 2 is the baseline, not a fail)
 node tools/track/clip-audit.cjs <id>                   # severe-spot count vs tools/track/clip-baseline.json

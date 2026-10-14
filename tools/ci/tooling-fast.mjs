@@ -60,6 +60,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 (2026-10-10): visible text is contained in every control's accessible name (WCAG 2.5.3); static shell scan.
   "tests/unit/a11y-label-in-name.test.mjs",
   "tests/unit/a11y-pwa-pass.test.mjs",
+  // 2026 aero defaults for catalog options that omit beam/drs/board (item 4).
+  "tests/unit/aero-defaults-2026.test.mjs",
   "tests/unit/aero-flap-travel.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
@@ -168,6 +170,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2: decal LRU trims by bytes, the hi-res grave is reaped on the garage path, failed hi-res builds stop retrying.
   "tests/unit/car-draw-decal-budget.test.mjs",
   "tests/unit/car-fx.test.mjs",
+  "tests/unit/car-materials.test.mjs",
   "tests/unit/car-mesh-anchors.test.mjs",
   "tests/unit/car-mesh-crew-cache.test.mjs",
   "tests/unit/car-multi-shot-tools.test.mjs",
@@ -294,6 +297,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // → onContext, the stamp tool's ghost polyline, the drag / span measurement
   // chip, the wider touch hit radius. Recording 2D context, hand-driven timers.
   "tests/unit/designer-canvas.test.mjs",
+  // Headless designer share-code CLI (tools/track/designer-code.mjs): decode via
+  // editor-vm + TrackValidate/TrackInsight; exit 1 on corrupt or RED geometry. ~1 s.
+  "tests/unit/designer-code-cli.test.mjs",
   // The designer's elevation strip (js/editor/profile.js) alone: tap adds a hill,
   // a grip drag sets height (8 % cap) / place / Shift length and commits once,
   // long-press and Delete remove, data-arrows own/pass, the hill's aria-label.
@@ -352,6 +358,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/finish-coast-rev-vm.test.mjs",
   "tests/unit/fixture-consumer-audit.test.mjs",
   "tests/unit/flags.test.mjs",
+  // Nightly flake tally (tools/ci/flake-tally.mjs): report.json / live-reporter
+  // / junit parsers + exact-name artifact URL shape; fixture-only, < 0.2 s.
+  "tests/unit/flake-tally.test.mjs",
   // The flaky policy behind APEX_FAIL_ON_FLAKY=1: quarantine rows are a ledger
   // (spec exists, owner, date, why) and the verdict is pure; < 1 s.
   "tests/unit/flaky-quarantine.test.mjs",
@@ -371,6 +380,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/flyby-shots.test.mjs",
   "tests/unit/flying-start.test.mjs",
   "tests/unit/font-digits.test.mjs",
+  // Portrait HFOV floor + landscape HFOV cap (js/camera/fov-fit.js); pure VM, <0.1 s.
+  "tests/unit/fov-fit.test.mjs",
   // The FRAMING REPORT fleet diff (tools/lib/frame-fleet.mjs): frame identity across
   // a shot-list edit, flag-name comparison, worst-frame summary. Pure, ~0.1 s.
   "tests/unit/frame-fleet.test.mjs",
@@ -381,6 +392,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // poolModelMat, GLX shadow colour skip + uf4 pit/uTime cache, countdown
   // setGridIdle opts pool. Source pins, no browser, ~0.1 s.
   "tests/unit/frame-hotpath-alloc.test.mjs",
+  // Ranked-set cache distance/time budget: at 60 m/s the heap is not rebuilt
+  // every frame, the mirror viewLights shares that budget, standstill does not
+  // churn on the clock, and the rear window stays flash-free. ~0.2 s.
+  "tests/unit/frame-lights-rank-cache.test.mjs",
   "tests/unit/frame-lights-shed.test.mjs",
   // The FRAMING REPORT's math (tools/lib/frame-math.mjs): projection handedness,
   // ray-vs-box, occlusion, horizon, motion and the flags an agent acts on without
@@ -451,6 +466,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
   "tests/unit/html-sink-lint.test.mjs",
   "tests/unit/hud-control-clearance.test.mjs",
+  "tests/unit/hud-dock-pack.test.mjs",
   "tests/unit/hud-elements.test.mjs",
   "tests/unit/hud-feel.test.mjs",
   // fitHud zTop/#minimap zoom idempotence (Pages compact mm flip).
@@ -557,6 +573,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/menu-sentinel-resize.test.mjs",
   "tests/unit/merge-hygiene.test.mjs",
   "tests/unit/metrics.test.mjs",
+  // Night sky-tint fallback on the cockpit mirror glass: dim env bands + matte
+  // material so Monaco night glass no longer reads 7–10× the road. ~0.1 s.
+  "tests/unit/mirror-glass-night.test.mjs",
   "tests/unit/mirror-lights.test.mjs",
   // The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:
   // when it shows, the pass order, and the main camera handed back. ~0.1 s.
@@ -750,6 +769,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the ring buffer at three refresh rates, ~0.1 s.
   "tests/unit/skidmarks-cadence.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
+  // skill-routing-eval.py against a fake `claude` on PATH (no model calls), ~1.5 s.
+  "tests/unit/skill-routing-eval.test.mjs",
   "tests/unit/skill-smoke.test.mjs",
   // Round-2: removeTrack frees its MUSIC_CACHE slot.
   "tests/unit/soundtrack-cache.test.mjs",
@@ -833,6 +854,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tlx-hunt4.test.mjs",
   // TLX perf hunt 4 (lane TLX-W): A-W2 4-byte vertex strides on three's WebGL2 path (the real packer, both ways; the lit GLSL reads the widened colour as vec3); A-H5 the mirror target's capped mip chain (the real prepareMirrorTarget over three r186); A-P1 the scene depth invalidated on frames whose post reads none of it (the real post chain); A-W1 the program warm's draw stage (the real startProgramWarm: 1x1 draws, never the canvas, state restored).
   "tests/unit/tlx-hunt4b.test.mjs",
+  // TLX perf hunt 4 (lane TLX-H4): A-H4 the real tlx-shadow caster as a plain attribute-instanced Mesh (Stream, no UBO pad) over three r186 on the fake WebGL2 with a GPU-buffer model — each pass's draw reads its own rows, bytes = rows written, 0 on a render that wrote none; apex26.tlxCasterAttr=0 is the padded Dynamic InstancedMesh.
+  "tests/unit/tlx-hunt4c.test.mjs",
   // TLX's instanced cull reuses its resident pack by surviving CELL SET
   // (InstCells, GLX/WGX parity); lifts the real cullInstances/updateInstances.
   "tests/unit/tlx-inst-cells.test.mjs",
@@ -918,6 +941,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Factory/sig tyre recipes after #1190 open rims: distinct geom + cover copy needs cover:1.
   "tests/unit/tyre-recipes-open-rim.test.mjs",
   "tests/unit/ui-experience.test.mjs",
+  // ui-fit round 5: camera tuner compact foot/preview/copy-from --tap-paint
+  // floors (#camtune-inner only; lighting untouched).
+  "tests/unit/ui-fit-camtune-tap-r5.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
@@ -944,6 +970,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a chip or __apex.weather() still cuts. VM-executed atmosphere.js, ~0.1 s.
   "tests/unit/weather-blend.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
+  // WET_GRIP orders the treads as treadFor picks them: inter owns the damp, full wet the storm. VM, < 0.2 s.
+  "tests/unit/wet-grip-ladder.test.mjs",
   "tests/unit/wgsl-bindings.test.mjs",
   // The claim half of who-is-on-it (pure parse + the empty-tree commit shape)
   // and deploy --pr's REST fallback against a fake curl; both < 1 s, both

@@ -47,7 +47,7 @@ function boot() {
   const audio = { on: false };
   ctx.GameAudio = { startRain() { audio.on = true; }, stopRain() { audio.on = false; } };
   let wa = null;
-  const wetness = () => TM.wetness(G.raceWeather, wa && wa.arc);
+  const wetness = () => wa.wetness ? wa.wetness() : TM.wetness(G.raceWeather, wa && wa.arc);   // game.js trackWetness (guarded below); the fallback is the pre-2026-10-14 lerp
   const G = {
     raceWeather: "dry", soundOn: true, track: null, announce() {}, applyRaceSettings() {},
     simSeed: () => 1, raceRound: 0, lapsTarget: 3, raceLaps: 3,
@@ -66,7 +66,7 @@ function boot() {
     P.draw();
     return drawn;
   }
-  return { G, wa, P, audio, frame, wetness };
+  return { G, wa, P, TM, audio, frame, wetness };
 }
 
 // What the frame should show at wetness w: no rain, the drizzle tier
@@ -82,23 +82,24 @@ function walk(from, to) {
   wa.startArc(from, to, DUR);
   const rows = [];
   let t = 0;
-  for (const f of [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95, 1.1]) {
+  for (const f of [0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95, 1.1, 1.5, 2, 3, 4]) {   // past dur: a drying road settles laps later
     let drops = 0;
     while (t < f * DUR - 1e-9) { drops = frame(DT); t += DT; }
     const w = wetness();
     rows.push({ f, w: +w.toFixed(3), weather: G.raceWeather, want: want(w), saw: saw(drops), audio: audio.on });
   }
-  return rows;
+  return { rows, wa };
 }
 
 for (const [from, to] of [["rain", "dry"], ["dry", "rain"], ["overcast", "rain"], ["rain", "overcast"], ["fog", "rain"], ["rain", "fog"]]) {
   test(`${from} → ${to}: the rain shown, its tier and the rain loop follow wetness at every point of the race`, () => {
-    const rows = walk(from, to);
+    const { rows, wa } = walk(from, to);
     for (const r of rows) {
       assert.equal(r.saw, r.want, `f=${r.f} (${r.weather}, wetness ${r.w}): drew ${r.saw}, wetness says ${r.want}\n${JSON.stringify(rows, null, 1)}`);
       assert.equal(r.audio, r.w >= STORM, `f=${r.f} wetness ${r.w}: the rain loop is ${r.audio ? "on" : "off"}`);
     }
     assert.equal(rows[rows.length - 1].weather, to, "the arc lands on its target");
+    assert.equal(wa.arc, null, "and ends once the road has settled");
     assert.ok(new Set(rows.map((r) => r.want)).size >= 2, "the walk crosses at least one line");
   });
 }
@@ -121,7 +122,7 @@ test("source guard: the VM's predicates and drizzle seed are game.js's, and the 
   const game = read("js/game.js");
   assert.match(game, /function isWetRoad\(\) \{ return trackWetness\(\) >= 0\.25; \}/);
   assert.match(game, /function isRaining\(\) \{ return trackWetness\(\) >= 0\.72; \}/);
-  assert.match(game, /function trackWetness\(\) \{ return TyreModel\.wetness\(raceWeather, wxArc && wxArc\.arc\); \}/);
+  assert.match(game, /function trackWetness\(\) \{ return wxArc \? wxArc\.wetness\(\) : TyreModel\.wetness\(raceWeather, null\); \}/);
   assert.match(game, /Particles\.rainSeed\(isWetRoad\(\) && !isRaining\(\)\);/);
   assert.match(game, /if \(isWetRoad\(\) && Particles\.rainActive\(\)\) Particles\.rainUpdate\(dt, camEye, isRaining\(\)\);/);
 });
@@ -166,4 +167,109 @@ test("source guard: MIXED plans go through capPlanDur; host wxArc.dur does not",
   assert.match(src, /function capPlanDur\(dur\)/);
   assert.match(src, /const dur = capPlanDur\(120 \+ Math\.floor\(r\("dur"\) \* 300\)\);/);
   assert.match(src, /never recapped/);
+});
+
+// ── 2026-10-14: the arc on the shared clock, the sky off the road, re-target, drying ──
+// Each failed on the pre-fix weather-arc.js (arc.t summed sim dt, the stage
+// flipped at fixed thirds of the arc, startArc refused from === to, and
+// wetness was the arc's pure linear ramp — as fast drying as wetting).
+
+/** A race-clocked boot: G.raceT is the shared clock game.js advances. */
+function raced(from) {
+  const b = boot();
+  b.G.raceT = 0; b.G.state = "race";
+  b.G.raceWeather = from; b.wa.setWeatherLive(from);
+  return b;
+}
+
+test("fix 1 — two peers on one shared clock see the same wetness and stage, however many sim steps each ran", () => {
+  const host = raced("dry"), guest = raced("dry");
+  host.wa.startArc("dry", "rain", 120); guest.wa.startArc("dry", "rain", 120);
+  // The host steps every 1/60 s. The guest's tab was backgrounded: it ran only
+  // every 20th step (the 5-step cap dropped the rest) and game.js snapped its
+  // raceT to the shared wall clock (netGreen).
+  const rows = [];
+  for (let i = 1; i <= 60 * 150; i++) {
+    host.G.raceT = i / 60; host.wa.tick(1 / 60);
+    if (i % 20 === 0) { guest.G.raceT = i / 60; guest.wa.tick(1 / 60); }
+    if (i % 1200 === 0) rows.push({ t: i / 60, host: host.wetness(), guest: guest.wetness(), hw: host.G.raceWeather, gw: guest.G.raceWeather });
+  }
+  for (const r of rows) {
+    assert.ok(Math.abs(r.host - r.guest) < 1e-9, `t=${r.t}: host wetness ${r.host} vs guest ${r.guest}`);
+    assert.equal(r.gw, r.hw, `t=${r.t}: stage`);
+  }
+});
+
+test("fix 2 — the sky never reads dry over an inter-wet road (stage = TyreModel.treadFor of wetness)", () => {
+  const stageOf = ["dry", "wet", "rain"];
+  for (const [from, to] of [["dry", "rain"], ["rain", "dry"], ["dry", "wet"], ["wet", "rain"]]) {
+    const { G, wa, TM, wetness } = raced(from);
+    wa.startArc(from, to, 90);
+    for (let i = 1; i <= 60 * 400; i++) {
+      G.raceT = i / 60; wa.tick(1 / 60);
+      const w = wetness(), tread = TM.treadFor(null, w);
+      assert.equal(G.raceWeather, stageOf[tread], `${from}→${to} t=${(i / 60).toFixed(2)}: wetness ${w.toFixed(3)} (tread ${tread}) under a "${G.raceWeather}" sky`);
+    }
+    assert.equal(G.raceWeather, to);
+  }
+});
+
+test("fix 2 — the engineer's wetIn is the second the sky turns wet", () => {
+  const { G, wa } = raced("dry");
+  const arc = wa.startArc("dry", "rain", 120);
+  assert.ok(arc.wetIn > 0 && arc.wetIn < 120, "wetIn " + arc.wetIn);
+  let i = 0;
+  while ((i + 1) / 100 < arc.wetIn - 0.02) { i++; G.raceT = i / 100; wa.tick(0.01); }
+  assert.equal(G.raceWeather, "dry", "just before wetIn");
+  while (i / 100 < arc.wetIn + 0.02) { i++; G.raceT = i / 100; wa.tick(0.01); }
+  assert.equal(G.raceWeather, "wet", "just after wetIn");
+});
+
+test("fix 3 — a dry→rain arc sent back to dry while the sky still reads dry re-targets without a grip jump", () => {
+  const { G, wa, wetness } = raced("dry");
+  wa.startArc("dry", "rain", 100);
+  for (let i = 1; i <= 60 * 20; i++) { G.raceT = i / 60; wa.tick(1 / 60); }
+  assert.equal(G.raceWeather, "dry", "fixture: 20 s in, the sky still reads dry");
+  const before = wetness();
+  assert.ok(before > 0.05, "fixture: the road has started to wet (" + before + ")");
+  wa.startArc(G.raceWeather, "dry", 60);   // what real-race.js tickWeather sends
+  assert.ok(wa.arc && wa.arc.to === "dry", "the live arc now heads for dry, not the storm");
+  assert.ok(Math.abs(wetness() - before) < 1e-9, `no jump: ${before} → ${wetness()}`);
+  let peak = before;
+  for (let i = 60 * 20 + 1; i <= 60 * 400; i++) { G.raceT = i / 60; wa.tick(1 / 60); peak = Math.max(peak, wetness()); }
+  assert.ok(peak < 0.25, "the road never reached inter-wet (peak " + peak + ")");
+  assert.equal(G.raceWeather, "dry");
+  assert.equal(wa.arc, null);
+});
+
+test("fix 4 — the road dries slower than it wets, frame-rate independent, and resets", () => {
+  const timeTo = (from, to, cross) => {
+    const { G, wa, wetness } = raced(from);
+    wa.startArc(from, to, 90);
+    for (let i = 1; i <= 60 * 600; i++) { G.raceT = i / 60; wa.tick(1 / 60); if (cross(wetness())) return i / 60; }
+    return Infinity;
+  };
+  const wetIn = timeTo("dry", "rain", (w) => w >= 0.72);   // bone dry → storm-wet
+  const dryIn = timeTo("rain", "dry", (w) => w < 0.28);    // the same 0.72 swing back
+  assert.ok(dryIn > 90 + 5, `a storm must not be dry when a 90 s arc ends (dry in ${dryIn} s)`);
+  assert.ok(dryIn > wetIn * 1.3, `drying (${dryIn} s) is slower than wetting (${wetIn} s)`);
+  // One clock, different step sizes → the same wetness.
+  const at = (dt) => {
+    const { G, wa, wetness } = raced("rain");
+    wa.startArc("rain", "dry", 90);
+    const n = Math.round(150 / dt);
+    for (let i = 1; i <= n; i++) { G.raceT = i * dt; wa.tick(dt); }
+    return wetness();
+  };
+  const ws = [1 / 240, 1 / 60, 0.25, 5, 150].map(at);
+  for (const w of ws) assert.ok(Math.abs(w - ws[0]) < 1e-9, `step-size independent: ${ws.join(", ")}`);
+  // endSession drops the lagged state with the arc.
+  const { G, wa, wetness } = raced("dry");
+  wa.startArc("dry", "rain", 60);
+  for (let i = 1; i <= 60 * 50; i++) { G.raceT = i / 60; wa.tick(1 / 60); }
+  assert.ok(wetness() > 0.25);
+  G.netPlay = { active: () => false };
+  wa.endSession();
+  G.raceWeather = "dry";
+  assert.equal(wetness(), 0, "endSession: no wet road leaks into the next race");
 });
