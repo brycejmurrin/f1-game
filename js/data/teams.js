@@ -121,9 +121,11 @@ const Teams = (function () {
       /* spineTint must clear the blue cover (≥2:1). Launch pink #FF87BC is only
          ~1.56:1 on #0093CC and made every crown band invisible to cover-legibility,
          so a prior pass shipped WHITE. That reads as a white stripe on a BWT car.
-         Restore a PINK crown with a lighter tint #FFD6E7 (~2.65:1 on #0093CC) so
+         Restore a PINK crown with a lighter tint #FFB3D1 (~2.08:1 on #0093CC) so
          the band stays visible and still reads as BWT pink (SI/OnSI 23 Jan 2026
-         names “a strip of the engine cover” among the pink zones).
+         names “a strip of the engine cover” among the pink zones). #FFD6E7 was
+         ≥2:1 but soft-render Δ vs white stayed under the garage pixelDiff
+         threshold (>24/channel) — use a deeper pink so the stripe is measurable.
          PINK WHERE THE A526 WEARS IT, not wherever c2 falls: a pink nose top
          ("pink surface on the nose", Motorsport.com), the halo, and the big pink
          sponsor lettering on otherwise blue sidepods ("the sidepods return to
@@ -134,7 +136,7 @@ const Teams = (function () {
         // The brand colour is exact (markPalette never substitutes it); the rim
         // is what keeps it legible, the same row a player uses for the same job.
         logo3: [0.06, 0.06, 0.08], finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "band",
-                spineTint: [1.0, 0.839, 0.906], pod: [1.0, 0.529, 0.737], noseStripe: [1.0, 0.529, 0.737],
+                spineTint: [1.0, 0.702, 0.820], pod: [1.0, 0.529, 0.737], noseStripe: [1.0, 0.529, 0.737],
                 halo: [1.0, 0.529, 0.737], wing: [0.0, 0.576, 0.8] },
       color: [0.0, 0.576, 0.8], color2: [1.0, 0.529, 0.737],       /* blue #0093CC / pink #FF87BC */
       engine: "Mercedes", tier: 3,
