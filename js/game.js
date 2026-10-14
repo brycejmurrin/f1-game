@@ -2084,7 +2084,7 @@ const _bankScratchCam = { dy: 0, roll: 0 };
 // Pooled camVantage extras + damp anchors — vantage() reads synchronously, keeps no reference.
 const _vantCarPos = [0, 0];
 const _vantExtra = { bankDy: 0, deploy: false, slipLat: 0, att: null, carPos: null, carHead: 0, reduceMotion: false,
-  rival: null, playerProg: 0, snap: false };
+  rival: null, playerProg: 0, snap: false, frameSubject: false };
 const _camAP = [0, 0, 0], _camAN = [0, 0, 0];
 
 function cameraBankScale(mode) {
@@ -2553,7 +2553,7 @@ function snapGameCam(paint) {
     carHead: player.head || 0,
     rival: (typeof ExtraRigs !== "undefined") ? ExtraRigs.pickRival(cars, player) : null,
     playerProg: player.prog || 0,
-    snap: true, reduceMotion: camComfort(),
+    snap: true, reduceMotion: camComfort(), frameSubject: realRace.isWatch(),
   });
   camEye[0] = v.eye[0]; camEye[1] = v.eye[1]; camEye[2] = v.eye[2];
   camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
@@ -6992,7 +6992,7 @@ function render(dt) {
     _vantExtra.slipLat = player.vLat || 0; _vantExtra.att = player;
     // the car's real world pose, so the chase rig can follow the CAR
     _vantExtra.carPos = rpCam.world ? (_vantCarPos[0] = rpCam.x, _vantCarPos[1] = rpCam.z, _vantCarPos) : null;
-    _vantExtra.carHead = headInterp(player); _vantExtra.dt = dt;
+    _vantExtra.carHead = headInterp(player); _vantExtra.dt = dt; _vantExtra.frameSubject = realRace.isWatch();
     // CamFeel (free-look / look-back latch / speed vignette) ticks BEFORE the
     // vantage solve so this frame's offsets land in the same eye/tgt.
     if (typeof CamFeel !== "undefined") {
@@ -7709,7 +7709,7 @@ function render(dt) {
   // depth write). Drawn against the PLAYER's speed for the dynamic colour.
   // Never in a flyby frame (`cine`: the editor preview, flybyCam, free-cam's flyby lens).
   if (state !== "menu" && !cine && track && player) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
-  // cars — skip AI cars more than 550 m of track arc from the player (past fog)
+  // Driving fog culls by player arc; camera overrides use the view frustum below.
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
   // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
   // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
@@ -7756,7 +7756,7 @@ function render(dt) {
     // Still nothing after quitToMenu: that leaves the loading screen inactive,
     // which is the same break as before.
     if (state === "menu" && !loadingScreen.active()) break;
-    if (!c.isPlayer && player) {
+    if (!c.isPlayer && player && !dbgCam) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;
     }
@@ -8333,7 +8333,10 @@ function render(dt) {
   // so a tier-4 DAYTIME frame (_cs is non-zero whenever the key is bright) would
   // still run the SSAO pass and both of its blurs after po.ssao went to 0. Shedding contact shadows is what
   // tier 4 is FOR — it has already dropped bloom, god-rays and SSR by then.
-  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= 2 ? 0 : _ssrPo; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
+  // WET-road SSR sheds one tier later (3) than the dry sheens and car paint (2): tier 2 is every phone's
+  // GRAPHICS: MEDIUM, and rain with no mirror read as reflections broken. The governor still sheds it at 3.
+  const _ssrTier = (frame.wetness || 0) > 0.01 ? 3 : 2;
+  po.contact = PerfGov.autoTier() >= 4 ? 0 : _cs; po.reflect = PerfGov.tier() >= _ssrTier ? 0 : _ssrPo; po.carReflect = PerfGov.tier() >= 2 ? 0 : undefined; po.lampVol = PerfGov.autoTier() >= 4 ? 0 : _lampVol; po.mist = _mist;
   // Camera-aware wet-road SSR extent. The shader confines SSR to a screen band
   // (top cutoff + a near-field view-Z fade) tuned for the chase eye: high and
   // ~6 m back, so the whole wet road sits inside the band and the near dead-zone

@@ -11,9 +11,16 @@
        - [ ] todo — one verifiable step each; add work you discover as you go
        - [ ] **now:** the step in progress (exactly one), so a pickup knows where you stopped
        - [ ] ~~dropped~~ — strike it and say why; never delete an item
-     Tick an item only with its evidence; "should work" is a [ ]. -->
+     Tick an item only with its evidence; "should work" is a [ ]. Marking ready and
+     merging are not Plan items: `ready-gate.mjs --pr <n>` refuses while one stays open. -->
 - [ ] **now:**
 - [ ]
+
+<!-- Merge hold: to block merging AND arming, add a line that STARTS with
+     `MERGE-HOLD: <reason>` right here, outside this comment; delete that line as
+     soon as the hold is over. It is the ONLY veto. "do not merge", "do not enable
+     auto-merge" or any other wording is NOT a veto: never paste such lines here.
+     Every merge is a merge commit (AGENTS.md §Cursor Cloud specific instructions). -->
 
 ## Status
 <!-- Paste `node tools/ci/session-status.mjs --pr` output here and refresh it at every push.

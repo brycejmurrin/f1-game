@@ -137,7 +137,7 @@ test("R7: the dry-day SSR gate zeroes po.reflect only on a dry day below the 1/6
   assert.equal(gate(true, day, 0.1), 0.1, "baku's 0.1 (weight 0.0204) keeps the march");
   assert.equal(gate(true, night, 0.08), 0.08, "dry night neon sheen untouched");
   assert.equal(gate(true, wet, 0.05), 0.05, "a wet road never gates");
-  assert.match(G, /po\.reflect = PerfGov\.tier\(\) >= 2 \? 0 : _ssrPo;/, "the one input every backend reads");
+  assert.match(G, /po\.reflect = PerfGov\.tier\(\) >= _ssrTier \? 0 : _ssrPo;/, "the one input every backend reads");
   assert.doesNotMatch(G, /po\.carReflect = [^;]*_ssrPo/, "car-paint SSR is not gated");
   assert.match(G, /const _ssrDayGate = \(\(\) => \{ try \{ return localStorage\.getItem\("apex26\.ssrDayGate"\) === "1"; \}/,
     "armed only by an explicit apex26.ssrDayGate=1");

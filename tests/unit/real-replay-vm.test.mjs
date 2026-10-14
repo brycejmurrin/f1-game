@@ -339,6 +339,46 @@ test("BROADCAST director rules: the tightest battle up the order first, the next
   } finally { g.close(); }
 });
 
+test("BROADCAST holds an event through its aftermath and keeps the wall-clock minimum at every replay rate", () => {
+  for (const speed of [0.25, 1, 8]) {
+    const ctx = vm.createContext({ Log: { info() {}, debug() {} },
+      CamModes: { CAM_MODES: ["side", "heli", "chase", "tcam", "cinematic", "low"].map((id) => ({ id })) } });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8"), ctx);
+    const B = vm.runInContext("Broadcast", ctx), cuts = [];
+    const cars = [{ code: "AAA" }, { code: "BBB" }];
+    const G = { camMode: 0, setCamMode: (m) => { G.camMode = m; } };
+    const bc = B.create(G, { setFollow: (c) => cuts.push(c.code) });
+    const eventAt = 5 * speed + 6 * Math.max(1, speed);
+    const st = { script: { drivers: [] }, T: 0, speed, reel: false, follow: cars[0],
+      list: [{ t: eventAt, kind: "pass", num: 1 }, { t: eventAt + 3, kind: "pit", num: 2 }],
+      isOut: () => false, carOf: (n) => cars[n - 1], running: () => [] };
+    const advance = (dt) => { st.T += dt * speed; bc.tick(dt, st); };
+    bc.start({ auto: true, tower: false });
+    advance(5);
+    assert.deepEqual(cuts, ["AAA"], speed + "x selects the upcoming pass");
+    advance(4.9);
+    assert.equal(cuts.length, 1, speed + "x retains the five wall-second minimum");
+    advance(0.1);
+    advance((eventAt + 2 - st.T) / speed - 0.01);
+    assert.equal(cuts.length, 1, speed + "x keeps the pass through its aftermath");
+    advance(0.02);
+    assert.deepEqual(cuts, ["AAA", "BBB"], speed + "x can cover the next event after the hold");
+    bc.setLocked(true); bc.setLocked(false);
+    st.list.push({ t: st.T + 5 * speed + 1, kind: "pass", num: 1 });
+    advance(5.1);
+    assert.equal(cuts.at(-1), "AAA", "a released viewer lock does not retain the old event hold");
+    bc.resetTiming(); st.T = 0;
+    st.list = [{ t: 1, kind: "pass", num: 2 }];
+    advance(0.01);
+    assert.equal(cuts.at(-1), "BBB", "a seek releases the old event hold");
+    bc.manual(); bc.setAuto(true);
+    st.list.push({ t: 1, kind: "pit", num: 1 });
+    advance(0.01);
+    assert.equal(cuts.at(-1), "AAA", "AUTO immediately releases the viewer's hold");
+    bc.stop();
+  }
+});
+
 test("BROADCAST battles: reuses one pooled array across calls (Director / PiP / ExtraRigs hot path)", async () => {
   const g = await createGame({ track: "baku" });
   try {
@@ -548,7 +588,7 @@ test("BROADCAST PiP in WATCH: two cars 8 m apart put the partner in the inset (l
 function transportReplay(extra = {}) {
   const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
     Log: { info() {}, warn() {}, debug() {} },
-    CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "side" }, { id: "heli" }] },
+    CamModes: { CAM_MODES: ["cockpit", "side", "heli", "chase", "tcam", "cinematic", "low"].map((id) => ({ id })) },
     Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } }, ...extra });
   for (const file of ["js/race/broadcast.js", "js/race/real-replay.js"]) vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx);
   const cars = [{ code: "AAA" }, { code: "BBB" }], snaps = [];
@@ -600,6 +640,51 @@ test("WATCH follow lock survives director holds and event navigation, AUTO relea
   replay.stop();
   assert.equal(G.camMode, 0, "exit restores the player's driving camera");
   assert.equal(replay.status(), null);
+});
+
+test("WATCH paused event navigation paints the final subject and event shot in one camera snap", () => {
+  const { replay, G, cars } = transportReplay();
+  const frames = [];
+  G.snapGameCam = (paint) => frames.push({ paint, car: G.player.code, prog: G.player.prog,
+    camera: G.camMode, T: G.raceT });
+  replay.setPaused(true);
+  replay.eventStep(1);
+  assert.deepEqual(frames, [{ paint: true, car: "BBB", prog: 180, camera: 3, T: 4 }]);
+  assert.equal(replay.status().broadcast.shot, "chase");
+  assert.equal(replay.status().paused, true);
+  for (const car of cars) assert.equal(car.rPrevPx, car.px, "event navigation clears interpolation");
+  replay.stop();
+});
+
+test("HIGHLIGHTS opens with the event's shot and preserves manual subject and camera across cuts", () => {
+  for (const automatic of [false, true]) {
+    const { replay, G, options } = transportReplay();
+    options.reel = true;
+    options.script.passes = [{ t: 10, by: 2, over: 1 }, { t: 50, by: 1, over: 2 }];
+    options.traces.cars = { 1: line(0, 50, 0, 0, 100), 2: line(0, 45, 0, 0, 100) };
+    const frames = [];
+    G.snapGameCam = (paint) => frames.push({ paint, car: G.player.code, camera: G.camMode });
+    replay.start(options);
+    assert.equal(replay.status().follow, "BBB", "opening follows the first event's driver");
+    assert.equal(replay.status().broadcast.shot, "chase", "opening gets the pass shot");
+    assert.equal(frames.at(-1).camera, 3, "entry snap includes the event camera");
+    G.camMode = 2; // A viewer-picked HELI camera, with the current driver retained.
+    replay.takePicture();
+    if (automatic) replay.tick(14); else { replay.setPaused(true); replay.skip(); }
+    assert.equal(replay.status().T, 42);
+    assert.equal(replay.status().follow, "BBB", "manual hold retains the viewer's driver");
+    assert.equal(G.camMode, 2, "manual hold retains the viewer's camera");
+    assert.equal(replay.status().broadcast.manual, true);
+    assert.equal(frames.at(-1).car, "BBB");
+    assert.equal(frames.at(-1).camera, 2);
+    replay.setAuto(true);
+    assert.equal(replay.status().broadcast.manual, false, "AUTO releases the manual hold");
+    replay.setPaused(true);
+    replay.eventStep(-1);
+    replay.eventStep(1);
+    assert.equal(replay.status().follow, "AAA", "AUTO can follow events again");
+    replay.stop();
+  }
 });
 
 test("WATCH paused seek repaints the timing tower and race clock without advancing the director", () => {

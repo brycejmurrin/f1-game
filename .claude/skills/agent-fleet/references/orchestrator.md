@@ -34,6 +34,10 @@ Mark ready only after ready-gate.mjs exits 0 and ready-full-cap.mjs allows it.
 Do not enable auto-merge or merge.
 ```
 
+The last line limits the worker's own actions. It is not a merge veto: the
+worker must not copy it, or any "do not merge" wording, into the PR body or a
+hand-back. To hold a PR, the body carries a line starting `MERGE-HOLD:`.
+
 ## Per-vendor adapters (re-verified 2026-10-11; sources in the design note)
 
 Pick the column of the host YOU run on for the orchestrator's own tools; the

@@ -23,9 +23,9 @@ const ResultsCam = (function () {
   /** Pure: finish-line side vantage extras for camVantage("side", …). */
   function chequeredExtra(player) {
     return {
-      px: player && player.px, pz: player && player.pz,
-      head: player && player.head, py: player && player.py,
-      noLook: true,   // the player's look-back / glance never steers the cut
+      carPos: player && player.px != null ? [player.px, player.pz] : null,
+      carHead: player && player.head,
+      noLook: true, frameSubject: true, snap: true,
     };
   }
 
@@ -61,6 +61,7 @@ const ResultsCam = (function () {
     let age = 0, orbitYaw = 0, frameAcc = 0;
     let reel = [], reelIdx = 0, clipAge = 0;
     let replayApi = null;
+    const anchor = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
     const allowed = () => enabled(G) && (!eligible || eligible()) &&
       !(G.netPlay && G.netPlay.active && G.netPlay.active());
     function endHighlights() {
@@ -103,14 +104,25 @@ const ResultsCam = (function () {
     }
     function cheqPose(p = subject()) {
       if (!p || !G.camVantage) return null;
-      const mode = "side";
-      const v = G.camVantage(mode, p.s || 0, p.x || 0, p.speed || 0, 0, chequeredExtra(p));
+      const pose = G.camPoseOf ? G.camPoseOf(p) : null;
+      const extra = chequeredExtra(p);
+      if (pose) { extra.carPos = pose.carPos; extra.carHead = pose.carHead; }
+      const v = G.camVantage("side", pose ? pose.s : (p.s || 0), pose ? pose.x : (p.x || 0), p.speed || 0, 0, extra);
       if (!v || !v.eye) return null;
       return { eye: v.eye, target: v.tgt || v.target || [p.px, p.py || 1, p.pz], fov: v.fov || 58 };
     }
     function doOrbit(p = subject()) {
       if (!p) return null;
-      return orbitPose(p.px || 0, p.py || 0, p.pz || 0, orbitYaw);
+      const pose = G.camPoseOf ? G.camPoseOf(p) : null;
+      let y = p.py || 0;
+      if (G.track && typeof Tracks !== "undefined") {
+        const s = pose ? pose.s : p.s, x = pose ? pose.x : p.x;
+        Tracks.sample(G.track, s, anchor);
+        const bank = Tracks.banking ? Tracks.banking(G.track, s, x) : null;
+        y = anchor.p[1] + (bank ? bank.dy : 0);
+      }
+      const pos = pose && pose.carPos;
+      return orbitPose(pos ? pos[0] : (p.px || 0), y, pos ? pos[1] : (p.pz || 0), orbitYaw);
     }
     function onFlag() {
       reset();
