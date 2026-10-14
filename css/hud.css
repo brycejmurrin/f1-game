@@ -61,16 +61,11 @@
      behind the published cap under CI load → fitHud flipped caps. */
   transition-property: opacity, color, background-color, box-shadow, filter, text-shadow;
 }
-/* THE CAM AND PAUSE BUTTONS FOLLOW HUD SIZE TOO — by size, not by `zoom`,
-   because they are tap targets: --hud-btn-z is the top band's zoom floored at
-   1, so HUD SIZE can grow them beside the timing tower but never shrink them
-   under --tap. Every offset derived from their box (#btn-cam beside #pausebtn,
-   #campicker under them, #hud-sectors / #hud-limits below them, the portrait
-   stack in css/track-detail.css) reads --tap-hud, not --tap. They used to stay
-   at --tap while the tower beside them scaled — small buttons next to a big
-   HUD. Declared on :root, where fitHud writes --hud-z-top. */
+/* CAM / PAUSE follow BUTTON SIZE independently of HUD fitting. Cap the
+   top-row buttons at 150% so their own requested size cannot consume the
+   full timing lane; readouts clear their measured rectangles. */
 :root {
-  --hud-btn-z: max(1, var(--hud-z-top, var(--hud-scale)));
+  --hud-btn-z: clamp(1, var(--hud-btn-scale, 1), 1.5);
   --tap-hud: calc(var(--tap) * var(--hud-btn-z));
 }
 /* KNOWN: on :root, var(--tap) is :root's 44px, not the touch body's 52, so CAM
@@ -847,8 +842,9 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   }
   /* A readable sector plate and the centred caution banner cannot share a
      390 px row. Stack the flag under the plate (the data-flag-low slot). */
-  body:not(.desktop) #hud-flag {
+  body:not(.desktop):not(.hud-prof-broadcast):has(#hud-sectors) #hud-flag {
     top: max(
+      calc(var(--hud-sec-bottom, 0px) / var(--hud-z) + 8px),
       calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 8px),
       calc(var(--mir-bot, 0px) + 8px)
     );
@@ -1238,8 +1234,8 @@ body[data-density="compact"] #announce { --flag-slot-top: max(calc(72px + var(--
 body[data-density="compact"] #announce-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 :root[data-gap-drop] #announce { --flag-slot-top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px), calc(var(--hud-gaps-b, 0px) + 8px)); }
 :root[data-flag-low] #announce { --flag-slot-top: max(calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 8px), calc(var(--hud-gaps-b, 0px) + 8px)); }
-body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
-body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
+body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):not([data-radio-placed]):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
+body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):not([data-radio-placed]):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
 
 /* ---------- start lights ---------- */
 /* The gantry is driven purely by `els.lights.hidden = true/false` in
@@ -1616,8 +1612,14 @@ body:has(#pmsettings:not([hidden]) #pm-panel-display:not([hidden])) :is(.hud-top
    element's band zoom keeps a 10% move 10% of the screen at every HUD SIZE.
    `translate`/`scale` compose with the translateX(-50%) the centred pieces
    already carry; --hl-o keeps a corner piece growing away from its corner. */
-[data-hl] {
-  translate: calc(var(--hl-x, 0) * 1vw / var(--hud-z, 1)) calc(var(--hl-y, 0) * 1svh / var(--hud-z, 1));
+/* These rectangles are read immediately after fit() writes clearance. Geometry
+   must never transition, including when reduced motion is not selected. */
+:is(#hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs) {
+  transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
+}
+/* fit() publishes screen-pixel clearance independently of the saved layout. */
+:is(#hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs), [data-hl] {
+  translate: calc((var(--hl-x, 0) * 1vw + var(--hud-clear-x, 0px)) / var(--hud-z, 1)) calc((var(--hl-y, 0) * 1svh + var(--hud-clear-y, 0px)) / var(--hud-z, 1));
   scale: var(--hl-s, 1);
   transform-origin: var(--hl-o, center);
 }
@@ -1958,14 +1960,16 @@ body.bc-on[data-helmet-cam] #hud::before { content: none; }
 #bc-tower .bc-row button {
   display: grid; grid-template-columns: 18px 3px 34px 1fr 12px; align-items: center; gap: 4px;
   width: 100%; min-height: max(17px, calc(24px / var(--hud-z))); padding: 0 5px 0 4px; border: 0; background: none;
-  color: inherit; font: inherit; font-size: 12px; line-height: 17px; text-align: left; cursor: pointer;
+  /* Keep a ten-pixel painted floor when HUD fitting shrinks this band;
+     TEXT SIZE raises it with the same micro/1.4 floor as the gap readout. */
+  color: inherit; font: inherit; font-size: max(12px, calc(var(--fs-micro) / 1.4 / var(--hud-z))); line-height: max(17px, 1.2em); text-align: left; cursor: pointer;
 }
 #bc-tower .bc-row:nth-child(odd) button { background: rgba(255, 255, 255, 0.04); }
 #bc-tower .bc-pos { text-align: right; font-weight: 700; color: var(--dim); }
 #bc-tower .bc-team { height: 12px; border-radius: 1px; }
 #bc-tower .bc-code { font-weight: 800; letter-spacing: 0.04em; }
-#bc-tower .bc-gap { text-align: right; font-size: 11px; color: var(--dim); white-space: nowrap; }
-#bc-tower .bc-tyre { font-size: 10px; font-weight: 800; text-align: center; }
+#bc-tower .bc-gap { text-align: right; font-size: max(11px, calc(var(--fs-micro) / 1.4 / var(--hud-z))); color: var(--dim); white-space: nowrap; }
+#bc-tower .bc-tyre { font-size: max(10px, calc(var(--fs-micro) / 1.4 / var(--hud-z))); font-weight: 800; text-align: center; }
 #bc-tower .bc-tyre[data-c="S"] { color: #ff3b3b; }
 #bc-tower .bc-tyre[data-c="M"] { color: #ffd12e; }
 #bc-tower .bc-tyre[data-c="H"] { color: #f2f2f2; }
@@ -2077,6 +2081,14 @@ body[data-helmet-cam] #hud::before {
   letter-spacing: 0.06em;
   color: var(--text);
 }
+/* A narrow diagnostic keeps every word and the diagram at the same font
+   size; wrapping buys a slot before optional panels are considered. */
+#hud-damage[data-col-compact] {
+  width: calc(96px / var(--hud-z));
+  box-sizing: border-box;
+  align-items: flex-start;
+}
+#hud-damage[data-col-compact] [data-dmg-text] { min-width: 0; overflow-wrap: anywhere; }
 #hud-damage[hidden] { display: none; }
 /* THE RIGHT COLUMN IS A STACK: sectors, LIMITS, the INPUTS trace, this chip,
    and on desktop RELATIVE under them. A lower piece reserves a higher piece's
@@ -2147,6 +2159,10 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
   border-left: 3px solid var(--rel-team, transparent);
   padding-left: calc(var(--gap) / 3);
 }
+/* Optional panels retain their text size when space only holds one row. */
+#hud-rel[data-col-compact] > div:not([data-col-row]),
+#hud-strat[data-col-compact] > div:not([data-k="next"]) { display: none; }
+:is(#hud-rel, #hud-strat, #hud-inputs)[data-col-drop] { display: none !important; }
 #hud-rel [data-k="gap"] { text-align: right; }
 #hud-rel [data-k="code"] { font-weight: 800; letter-spacing: 0.04em; }
 #hud-rel [data-k="lap"] { font-weight: 800; }

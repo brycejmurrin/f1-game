@@ -305,7 +305,11 @@ export const MAX_SELECTED_JOB_MIN = 18;
 // at 6 min (~46 s/test). spec-timings still reflect fake-shard leftovers
 // so billed seconds are a lie; floor the plan and the kill timer here.
 export const FAT_UI_SEC_PER_TEST = 45;
-export const FAT_UI_SELECTED_JOB_MIN = 18;
+// HUD46 tests bill17.25 minutes before setup. CI38623761327 completed all
+// assertions but was cancelled at18m27: the packed-leg18min ceiling left no
+// wrap-up margin. Let the existing2x-work + timeout + setup formula grant
+// headroom, bounded at50min; retries and max-failures stay unchanged.
+export const FAT_UI_SELECTED_JOB_MIN = 50;
 // Over-budget / high-timeout specs with NO CI measurement: Playwright --shard
 // so each leg has this many tests, not one 30-minute packed file. A spec with
 // a measured median is split by its measured TIME instead (shards(),

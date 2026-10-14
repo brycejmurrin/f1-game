@@ -303,6 +303,16 @@ test("fitHud: portrait phone does not charge the stacked map beside the tower, a
   assert.ok(z > 0.85, "portrait must not use the landscape half-width map+tower sum (z=" + z + ")");
 });
 
+test("portrait flag follows the sector plate after packing, then clears a hidden plate", () => {
+  const h = bootFlipHarness(PORTRAIT_PHONE), sectors = h.$("hud-sectors");
+  h.sb.HudLayout = { fit() { sectors._rect = h.R(248, 170, 38, 50); } };
+  h.invalidate(); h.tick();
+  assert.equal(h.root.style.getPropertyValue("--hud-sec-bottom"), "220.0px");
+  h.sb.HudLayout.fit = () => { sectors.hidden = true; };
+  h.invalidate(); h.tick();
+  assert.equal(h.root.style.getPropertyValue("--hud-sec-bottom"), "0.0px");
+});
+
 /** A painted S3 x BOOST clash the fit cannot resolve: BOOST on the right half,
  *  the sectors plate hard over it, and no pass moves either rect. */
 function forceUnresolvableClash(h) {

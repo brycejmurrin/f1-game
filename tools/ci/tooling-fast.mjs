@@ -748,6 +748,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/results-cam.test.mjs",
   "tests/unit/rival-attach-init.test.mjs",
   "tests/unit/rival-audio.test.mjs",
+  "tests/unit/rival-contact-sfx.test.mjs",
   "tests/unit/rival-passby-pool.test.mjs",
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
@@ -994,12 +995,19 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 6: flyby editor compact foot / pose-select --tap-paint
   // floors (#flyby-inner / #fb-* only; camera/lighting untouched).
   "tests/unit/ui-fit-flyby-tap-r6.test.mjs",
+  // ui-fit round 6: Garage LIVERY grid chips floor at --tap/--tap-paint
+  // (survey rank 1; 26×26 vs 52, 82 soft taps) and SATIN/CHROME tags do
+  // not ellipsis (20 trunc). css/carsetup.css #cs-options.cs-liv-grid only.
+  "tests/unit/ui-fit-garage-livery-r6.test.mjs",
   // ui-fit round 6: lighting tuner compact foot / short-tab --tap-paint
   // floors (#lighting-inner / #lt-* only; camera untouched).
   "tests/unit/ui-fit-lighttune-tap-r6.test.mjs",
   // ui-fit round 6: Photo Studio #ps-* setting-row selects floor at
   // --tap-paint (portrait 114×43 soft taps; landscape already clean).
   "tests/unit/ui-fit-photostudio-tap-r6.test.mjs",
+  // ui-fit round 6: Settings ACCESSIBILITY #pm-panel-a11y pad / scroll-pad
+  // so the last colourblind help clears BACK (survey rank 8; 844×390).
+  "tests/unit/ui-fit-settings-a11y-r6.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",

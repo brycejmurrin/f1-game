@@ -126,6 +126,21 @@
 #pm-panel-driving :is(#pm-incident-log, #pm-ai-decisions) { padding-inline-start: 1.5em; }
 #pm-badges-list { list-style: none; padding-inline-start: 0; }
 
+/* UI Fit r6: Settings ACCESSIBILITY — last colourblind help sat under BACK
+   at 844×390 (survey rank 8). The region stays overflow:visible (no second
+   scroller). Pad the panel so #pm-settings-body can scroll #pm-cbcues-help
+   fully above .sheet-foot; scroll-padding keeps a focused row off the foot. */
+#pm-panel-a11y {
+  padding-bottom: calc(var(--tap) + var(--pad));
+  scroll-padding-bottom: calc(var(--tap) + var(--pad));
+}
+#pmsettings:has(#pm-panel-a11y:not([hidden])) #pm-settings-body {
+  scroll-padding-bottom: calc(var(--tap) + var(--pad));
+}
+#pmsettings:has(#pm-panel-a11y:not([hidden])) #pmsettings-inner > .sheet-foot {
+  min-height: var(--tap);
+}
+
 /* APPEARANCE — same setting-row chrome as the rest of SETTINGS; colour wells
    match MY TEAM / garage (floored chip height, plate-line border). Live
    preview + preset swatches sit above/beside the selects so dual accents are

@@ -947,6 +947,7 @@ function fitHarness(opts = {}) {
   b.sb.innerHeight = 400;
   const { dom } = b, root = dom.documentElement;
   root.style.setProperty("--hud-scale", "1.5");
+  root.style.setProperty("--hud-btn-scale", "1.5");
   const mk = (cls, parent) => { const e = dom.document.createElement("div"); e.className = cls; (parent || dom.body).appendChild(e); return e; };
   const top = mk("hud-top"), bottom = mk("hud-bottom"), bar = dom.document.createElement("div");
   bar.id = "hud-dock"; dom.body.appendChild(bar);
@@ -1042,9 +1043,9 @@ test("a dropped gap strip carries the radio card's caution step down with the fl
   assert.match(css, /:root\[data-gap-drop\] #hud-flag \{\s*top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 44px\)/);
   assert.match(css, /:root\[data-gap-drop\] #announce \{ --flag-slot-top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 44px\), calc\(var\(--hud-gaps-b, 0px\) \+ 8px\)\); \}/,
     "the dropped strip raises the card's flag slot to the chip's edge");
-  assert.match(css, /body:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 38px\); \}/,
+  assert.match(css, /body:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\[data-radio-placed\]\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 38px\); \}/,
     "the card sits 38px under the flag slot, wherever the chip is");
-  assert.match(css, /body\[data-density="compact"\]:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 34px\); \}/,
+  assert.match(css, /body\[data-density="compact"\]:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\[data-radio-placed\]\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 34px\); \}/,
     "compact keeps its tighter step under the chip");
   assert.doesNotMatch(css, /body\[data-gap-drop\]/, "no body[data-gap-drop] twin: the slot token is the one writer");
   assert.doesNotMatch(hud, /body\.(setAttribute|removeAttribute|hasAttribute)\("data-gap-drop"/, "gapForm no longer mirrors the drop onto body");
@@ -1105,7 +1106,7 @@ test("the radio card's top-row slot ends at a touch dock group in the tower's ro
   h.dom.byId("dock-right").appendChild(boost);
   boost._rect = { left: 700, top: 30, right: 788, bottom: 118, width: 88, height: 88 };   // BOOST, up in the tower's rows
   h.refit();
-  assert.ok(on(), "a 134px strip is still a slot"); assert.equal(w(), 700 - 8 - 558, "the strip ends at BOOST's left edge");
+  assert.ok(!on(), "a 134px strip is too narrow for a readable radio card");
   boost._rect = { left: 540, top: 30, right: 628, bottom: 118, width: 88, height: 88 };   // over the slot's start
   h.refit();
   assert.ok(!on(), "a dock group over the slot's start leaves no top-row slot");
@@ -1133,8 +1134,23 @@ test("the radio card's top-row slot ends at #hud-sectors in the wrapping band", 
   assert.equal(px("--radio-top-h"), 36, "one row tall, above the caution flag's row");
   h.els.hudSectors._rect = { left: 700, top: 8, right: 790, bottom: 80, width: 90, height: 72 };
   h.refit();
-  assert.ok(on(), "a 134px strip past sectors is still a slot");
-  assert.equal(w(), 700 - 8 - 558, "the strip ends at the sector box's left edge");
+  assert.ok(!on(), "a 134px strip past sectors uses the wider radio lane");
+});
+
+test("a previous radio clearance cannot collapse a newly measured lane", () => {
+  const h = fitHarness(), ann = h.dom.byId("announce");
+  ann.hidden = false;
+  ann.getBoundingClientRect = () => {
+    const left = 158 + (parseFloat(ann.style.getPropertyValue("--hud-clear-x")) || 0);
+    const top = 70 + (parseFloat(ann.style.getPropertyValue("--hud-clear-y")) || 0);
+    return { left, top, right: left + 200, bottom: top + 50, width: 200, height: 50 };
+  };
+  ann.style.setProperty("--hud-clear-x", "492px");
+  ann.style.setProperty("--hud-clear-y", "60px");
+  h.refit();
+  assert.equal(ann.hasAttribute("data-lane-collapsed"), false,
+    "previous placement over sectors is removed before the painted guard");
+  assert.notEqual(h.root.style.getPropertyValue("--announce-lane-w"), "0px");
 });
 
 test("the top-right corner slot: the HUD mirror in its rows ends it on the left; no room, no slot", () => {
@@ -1224,7 +1240,7 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
   const strat = h.dom.document.createElement("div"); strat.id = "hud-strat"; h.dom.body.appendChild(strat);
   strat._rect = { left: 10, top: 150, right: 330, bottom: 190, width: 320, height: 40 };
   h.refit();
-  assert.equal(laneLeft(), "338.0px", "a readout in the card's rows starts the lane");
+  assert.equal(laneLeft(), "318.0px", "optional readouts cannot narrow a higher-priority radio call");
   strat._rect = { left: 10, top: 180, right: 330, bottom: 220, width: 320, height: 40 };
   h.refit();
   assert.equal(laneLeft(), "318.0px", "one below them (band ends at tower.bottom + 8 + 96) does not");
@@ -1240,11 +1256,12 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
     h.els.flag.hidden = true; h.els.flag._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
     h.refit();
   }
-  // INPUTS (opt-in, under the sector box on touch) ends the lane when it shares the rows.
+  // Optional INPUTS is placed around the radio card, rather than narrowing it.
+  const beforeInputs = lane();
   const inputs = h.dom.document.createElement("div"); inputs.id = "hud-inputs"; h.dom.body.appendChild(inputs);
   inputs._rect = { left: 540, top: 120, right: 640, bottom: 156, width: 100, height: 36 };
   h.refit();
-  assert.equal(lane(), (540 - 8 - 318).toFixed(1) + "px", "INPUTS in the card's rows ends the lane at its left edge");
+  assert.equal(lane(), beforeInputs, "INPUTS does not shrink the radio lane");
   h.dom.body.removeChild(inputs);
   const src = read("js/ui/hud.js");
   assert.ok(src.indexOf("announceLaneTick(document.documentElement, force)") > src.indexOf("hText(els.gapA"),
@@ -1360,6 +1377,7 @@ test("the caution step-aside needs the card's other slot to really apply; TEXT L
   const caution = rules.filter((r) => /:has\(#hud-flag:not\(\[hidden\]\)\) #announce$/.test(r.selector));
   assert.equal(caution.length, 2, "base and compact caution rules — the dropped-gap-strip case rides --flag-slot-top, not a twin rule");
   for (const r of caution) assert.match(r.selector, /:not\(\.hud-mirror-on\.hud-mirror-side\)/, r.selector);
+  for (const r of caution) assert.match(r.selector, /:not\(\[data-radio-placed\]\)/, "automatic caution placement cannot move a manually positioned radio");
   const tok = read("css/tokens.css");
   for (const size of ["large", "larger"]) {
     const fs = +new RegExp(`:root\\[data-text-size="${size}"\\] \\{[^}]*--fs-micro: (\\d+)px`).exec(tok)[1];
@@ -1397,4 +1415,27 @@ test("a car alongside lights its screen edge: trafficSide → #hud[data-along], 
   assert.equal(anim.length, 1, "one pulse rule");
   assert.ok(anim[0].context.some((c) => /prefers-reduced-motion: no-preference/.test(c)), "only when motion is allowed by the OS");
   assert.match(anim[0].selector, /^:root:not\(\[data-motion="reduce"\]\) /, "…and by SETTINGS › MOTION");
+});
+
+test("dock size does not follow race readouts or HUD SIZE", () => {
+  const h = fitHarness();
+  const before = h.root.style.getPropertyValue("--hud-z-dock");
+  for (const scale of [0.7, 2, 1]) {
+    h.root.style.setProperty("--hud-scale", String(scale));
+    h.els.gapA.textContent = "VERSTAPPEN +123.4s";
+    h.els.hudSectors.hidden = !h.els.hudSectors.hidden;
+    h.refit();
+    assert.equal(h.root.style.getPropertyValue("--hud-z-dock"), before, "only controls and viewport set their fit");
+  }
+});
+
+
+test("broadcast height fitting reserves control space without changing button zoom", () => {
+  const h = fitHarness(), base = h.snap();
+  h.dom.body.classList.add("hud-prof-broadcast");
+  const got = h.refit();
+  assert.equal(got["--hud-z-dock"], base["--hud-z-dock"], "the readout column never changes control size");
+  assert.ok(+got["--hud-z-top"] <= 1, "the tall broadcast column is capped into the viewport");
+  assert.ok(+got["--hud-z-top"] >= 1 / 1.4 - .001, "14px text retains an approximately 10px painted floor");
+  assert.equal(h.refit()["--hud-z-dock"], base["--hud-z-dock"], "repeated fits keep the controls independent");
 });

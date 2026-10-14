@@ -723,7 +723,10 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.addInitScript(() => localStorage.removeItem("apex26.hudLayout"));
     await page.goto("/");
     await waitReady(page);
-    await openPauseControls(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openPauseSettings(page);
+    await page.locator("#pm-open-display").click();
+    await page.locator("#pm-hud-details > summary").click();
     const btn = page.locator("#pm-hud-arrange");
     await expect(btn).toBeVisible();
     await expect(btn).toHaveAttribute("aria-pressed", "false");
@@ -783,11 +786,16 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.addInitScript(() => { localStorage.removeItem("apex26.hudLayout"); localStorage.removeItem("apex26.hudElements"); });
     await page.goto("/");
     await waitReady(page);
-    await openPauseControls(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openPauseSettings(page);
+    await page.locator("#pm-open-display").click();
+    await page.locator("#pm-hud-details > summary").click();
     await page.locator("#pm-hud-arrange").click();
     await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
     const vis = page.locator("#hud-arrange-vis");
-    await expect(vis, "nothing selected: no piece to hide").toBeDisabled();
+    // Keyboard access starts with the first visible piece selected.
+    await expect(page.locator("#hud-arrange-name")).toContainText("TIMING TOWER");
+    await expect(vis).toBeEnabled();
     // Touch the sector plate (a press with no movement selects it).
     const sec = await page.locator("#hud-sectors").boundingBox();
     expect(sec).not.toBeNull();
@@ -827,15 +835,19 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.addInitScript(() => localStorage.removeItem("apex26.hudLayout"));
     await page.goto("/");
     await waitReady(page);
-    await openPauseControls(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openPauseSettings(page);
+    await page.locator("#pm-open-display").click();
+    await page.locator("#pm-hud-details > summary").click();
     await page.locator("#pm-hud-arrange").click();
     await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
     const card = page.locator("#announce");
     await expect(card).toBeVisible();
-    // Drop it right of the timing tower, in the tower's row (the phone report, 2026-10-14).
+    // Drop in the tower's row (the phone report, 2026-10-14). Leave half the
+    // viewport for the card: this checks manual placement, not edge clamping.
     const tower = await page.locator(".hud-top").boundingBox();
     const a0 = await card.boundingBox();
-    const tx = tower.x + tower.width + 12, ty = tower.y;
+    const tx = Math.min(tower.x + tower.width + 12, LANDSCAPE.width / 2), ty = tower.y;
     const sx = a0.x + 20, sy = a0.y + 10;
     await page.mouse.move(sx, sy);
     await page.mouse.down();
@@ -870,7 +882,10 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
   test("Escape ends arranging without driving the car", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
-    await openPauseControls(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openPauseSettings(page);
+    await page.locator("#pm-open-display").click();
+    await page.locator("#pm-hud-details > summary").click();
     await page.locator("#pm-hud-arrange").click();
     await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
     // A press on GAS while arranging is the editor's, never the pedal's (THROTTLE = LATCH would launch the car).
