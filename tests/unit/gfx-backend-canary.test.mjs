@@ -5229,6 +5229,9 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   const lit = { setSsrMrt: v => { tag = v; } }, fx = null;
   const pinSkyMaterial = () => {}, _ssrMrtNode = () => "tag", softOutRT = () => null, Log = { warn() {} };
   const body = fnBody(code("js/render/three/tlx.js"), "startProgramWarm");
+  // B-F3.1: the sky show and the mirror stage are helpers the deferred mirror warm shares — evaluated from source too.
+  const warmShowSky = eval("(function(){" + fnBody(code("js/render/three/tlx.js"), "warmShowSky") + "})");
+  const warmMirrorStage = eval("(async function(usePost, useTag){" + fnBody(code("js/render/three/tlx.js"), "warmMirrorStage") + "})");
   // Source pins for the same order: exactly one setMRT(null), between the post
   // warm and the caster warm, and the caster warm still guarded on the module.
   const iPost = body.indexOf("await post.warm(opts, _postF)"), iNull = body.indexOf("renderer.setMRT(null)"),
@@ -6002,13 +6005,19 @@ test("TLX mirror preparation skips software AUTO and off settings, but honours f
   let mode = "auto", pip = "auto", softwareGL = false, soft = false;
   const GameStore = { store: { get: key => key === "hudMirror" ? mode : pip } };
   const softGpu = () => soft;
+  // B-F3.1 (tlx-hunt4c.test.mjs): hardware AUTO now OWES the stage to the first mirror demand; =0 is the old answer.
+  let _mirWarmLazy = false, _mirWarmOwed = false, _mirWarmReq = false, _mirUsed = false;
+  const _warmStages = {};
   const want = eval("(function(){" + fnBody(code("js/render/three/tlx.js"), "wantMirrorWarm") + "})");
-  assert.equal(want(), true, "hardware AUTO prepares the race-only passes");
-  softwareGL = true; assert.equal(want(), false);
-  softwareGL = false; soft = true; assert.equal(want(), false);
-  mode = "on"; assert.equal(want(), true);
+  assert.equal(want(), true, "hardware AUTO prepares the race-only passes (apex26.tlxMirWarmLazy=0)");
+  _mirWarmLazy = true;
+  assert.equal(want(), false, "lazy: hardware AUTO skips the stage at the lights...");
+  assert.ok(_mirWarmOwed && _mirUsed && _warmStages.mirrorDeferred, "...and owes it (CPU attribute mirrors kept)");
+  softwareGL = true; assert.equal(want(), false); assert.equal(_mirWarmOwed, false, "software AUTO owes nothing");
+  softwareGL = false; soft = true; assert.equal(want(), false); assert.equal(_mirWarmOwed, false);
+  mode = "on"; assert.equal(want(), true); assert.equal(_mirWarmOwed, false, "an explicit ON warms at the lights");
   mode = "off"; pip = "on"; assert.equal(want(), true);
-  pip = "off"; soft = false; assert.equal(want(), false);
+  pip = "off"; soft = false; assert.equal(want(), false); assert.equal(_mirWarmOwed, false, "both OFF: nothing owed (today's cold path)");
 });
 
 test("TLX mirror composite warm holds its destination and real texture across awaits and restores on failure", async () => {
@@ -6033,6 +6042,7 @@ test("TLX mirror composite warm holds its destination and real texture across aw
 test("TLX mirror honours software readback backpressure and resumes when the read finishes", () => {
   let _softBlit = true, _softReadPending = true, opened = 0;
   const _mirDead = false, _warmPending = null, _envActive = false, lit = {};
+  const mirrorWarmGate = () => false;   // B-F3.1's gate (tlx-hunt4c.test.mjs): nothing owed here
   const body = fnBody(code("js/render/three/tlx.js"), "mirrorBegin");
   const setup = body.indexOf("w = Math.max");
   assert.ok(setup > 0, "the mirror entry guard precedes target setup");
