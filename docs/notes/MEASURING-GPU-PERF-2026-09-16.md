@@ -145,6 +145,18 @@ The source is `docs/notes/PERF-HUNT-4-2026-10-14.md` §C (I1–I7) and §A (inst
 - It needs a query ring per group in `glx.js`, with begin/end hooks called from the pass sites.
 - WGX would need `timestampWrites` that begin on the first pass and end on the last.
 
+**I5 re-checked by lane TOOLS-J: still not built, and only labelled.** The per-pass timer is renderer work, not census work, for three reasons:
+- The span edges are in renderer and engine files. The GLX query opens in `glx.js` `begin()` and closes at the end of post (`post.js`, `core.gpuTimerEnd()`). The shadow, env and mirror passes run before `begin()`, sequenced from `js/game.js` (claim required). WGX's query is the `timestampWrites` on `litPass` in `wgx.js`. A tools lane can read these spans, not move them.
+- GLX allows one active `TIME_ELAPSED` query at a time, so a per-group mode needs a query ring per group and begin/end hooks at each pass site. That is a new `gpuTimer` mode with its own disjoint handling, not a flag.
+- The real-GPU runner cannot time WGX's other passes anyway: hunt 4 G3 found no `timestamp-query` there, so a WGX per-pass mode would read null on the one machine that matters.
+
+What landed instead is a label. Every leg's `gpuFrame` carries `span` and `spanNote`, and the Verdict's `gpu:` row prints `span=… (compare within a backend only)`:
+- `main+post` on GLX: one query from `begin()` to the end of post.
+- `lit-pass` on WGX: the lit scene pass only.
+- `three-render-passes` on TLX: three's summed render-pass timestamps for the latest frame, via `resolveTimestampsAsync('render')`, which includes shadow, mirror and post.
+
+`gfx-backend-canary` pins the three source sites, so a backend that moves its timer fails the label test instead of silently mislabelling.
+
 ## Sources
 
 - [EXT_disjoint_timer_query_webgl2 specification](https://registry.khronos.org/webgl/extensions/EXT_disjoint_timer_query_webgl2/)

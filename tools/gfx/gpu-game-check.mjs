@@ -1358,6 +1358,19 @@ try {
   if (out.gfx && out.gfx.error) out.gfxReadFailed = "read failed: " + out.gfx.error;
   else if (out.gfx && out.gfx.glx === false) out.gfxReadFailed = "GLX was undefined in the page";
   if (out.overlay && out.overlay.error) out.overlayReadFailed = "read failed: " + out.overlay.error;
+  // WHAT THE GPU TIMER SPANS (hunt 4 I5). The three backends' gpuMs time
+  // different work, so gpuFrame.medianMs is comparable within a backend only.
+  // The per-pass timer that would make them comparable is not built (the
+  // MEASURING-GPU-PERF note §7 says why); this labels the span the number has.
+  if (out.gpuFrame && out.gpuFrame.medianMs != null && out.gfx && !out.gfx.error) {
+    const be = out.gfx.backendState ? "tlx" : out.gfx.wgx ? "wgx" : out.gfx.glx ? "glx" : null;
+    out.gpuFrame.span = be ? { tlx: "three-render-passes", wgx: "lit-pass", glx: "main+post" }[be] : null;
+    out.gpuFrame.spanNote = be ? {
+      tlx: "three's summed render-pass timestamps per frame (resolveTimestampsAsync('render'))",
+      wgx: "the lit scene pass only (timestampWrites on litPass): no shadow, env, mirror or post",
+      glx: "one TIME_ELAPSED query from begin() to the end of post: main scene + post; sun/lamp/car shadow, env and mirror passes run before begin()",
+    }[be] : "bound backend unknown";
+  }
   checkpoint("gfx-read");
   const shot = flag("--shot", null);
   if (shot) {

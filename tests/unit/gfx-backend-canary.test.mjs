@@ -1441,6 +1441,25 @@ test("the Verdict prints the camera each leg drove and its mirror chain, and fla
   assert.match(r.out, /cam: {3}helmet \(asked game default, at window end helmet\)\n/);
 });
 
+test("the census labels which work each backend's GPU timer spans (hunt 4 I5)", () => {
+  // WGX times the lit pass only, GLX main + post, TLX three's summed render
+  // passes: three different numbers under one name. The per-pass timer is not
+  // built (MEASURING-GPU-PERF §7); the label keeps the three from being compared.
+  const ggc = read("tools/gfx/gpu-game-check.mjs");
+  assert.match(ggc, /out\.gpuFrame\.span = be \? \{ tlx: "three-render-passes", wgx: "lit-pass", glx: "main\+post" \}\[be\] : null;/);
+  for (const [site, file, re] of [["WGX litPass timestampWrites", "js/render/webgpu/wgx.js", /rp\.timestampWrites = \{ querySet: _gpuQuerySet/],
+    ["GLX timer opens in begin()", "js/render/glx/glx.js", /function begin\(frame\) \{\s*if \(ctxGone\(\)\) return false;\s*_gpuTimerBegin\(\);/],
+    ["TLX resolves three's render timestamps", "js/render/three/tlx.js", /renderer\.resolveTimestampsAsync\("render"\)/]]) {
+    assert.match(read(file), re, `${site}: the span label no longer matches the backend — re-measure and relabel`);
+  }
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: tlxLegJson(), webgl2: tlxLegJson(),
+    glx: { ...glxLegJson(), gpuFrame: { medianMs: 9.1, samples: 20, scale: 1, span: "main+post" } }, wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /gpu: {3}median=9\.1ms over 20 samples {2}scale=1 {2}span=main\+post \(compare within a backend only\)/);
+});
+
 test("the GPU gate fails a hardware TLX leg that stopped reporting an env count", () => {
   // `(env.fail || 0) > 0` was the SAME banned shape as the gpuErrors fix twelve
   // lines above it in the same file, on the same object: a build that stops

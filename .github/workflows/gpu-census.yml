@@ -775,7 +775,9 @@ jobs:
               } else if (gf.medianMs != null) {
                 const px = gf.canvas && gf.canvas.w ? gf.canvas.w * gf.canvas.h : null;
                 rows.push(`${" ".repeat(8)}gpu:   median=${gf.medianMs}ms over ${gf.samples} samples  scale=${gf.scale}`
-                  + (px ? `  canvas=${gf.canvas.w}x${gf.canvas.h} (${(px / 1e6).toFixed(2)} MP)` : ""));
+                  + (px ? `  canvas=${gf.canvas.w}x${gf.canvas.h} (${(px / 1e6).toFixed(2)} MP)` : "")
+                  // hunt 4 I5: the backends time different work; compare within one span only.
+                  + (gf.span ? `  span=${gf.span} (compare within a backend only)` : ""));
               }
             // Occlusion culling: counted, never timed.
               const oc = g.occlusion || {};
