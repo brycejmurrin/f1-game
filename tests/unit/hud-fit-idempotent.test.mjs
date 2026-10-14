@@ -59,7 +59,14 @@ function bootFlipHarness(o = {}) {
     TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"] },
     setTimeout: () => 1, clearTimeout: () => {},
     performance: { now: () => 1000 },
-    matchMedia: () => ({ matches: false, addListener() {}, removeListener() {} }),
+    matchMedia: (q) => {
+      const query = String(q || "");
+      const maxW = /max-width:\s*(\d+)/.exec(query);
+      const matches = !!o.portrait
+        && /orientation:\s*portrait/.test(query)
+        && (!maxW || W <= +maxW[1]);
+      return { matches, addListener() {}, removeListener() {} };
+    },
     getComputedStyle: () => ({
       getPropertyValue: (k) => (o.tokens && k in o.tokens ? o.tokens[k] : (ALL_TOKENS[k] || "")),
       columnGap: "0px", rowGap: "0px", transform: "none",
@@ -267,6 +274,33 @@ test("fitHud: hiding the sector plate frees the row (touch), and a plate level w
   const level = bootFlipHarness({ ...PHONE, plateTop: 8 });
   for (let i = 0; i < 6; i++) { level.paintAt(level.pub()); level.invalidate(); level.tick(); }
   assert.ok(level.pub() > 0.95, "a plate level with the tower is not a row to clear (" + level.pub() + ")");
+});
+
+/** 390×844 phone portrait @ HUD 150%. CSS stacks #minimap / .hud-gaps UNDER
+ *  .hud-top (css/hud.css @media portrait and max-width 500px). The landscape
+ *  capFor still charged map+gaps beside the tower against half the 390 px
+ *  width and wrote --hud-z-top ~0.55 → 14×0.55 = 7.7 CSS px sector/tower type. */
+const PORTRAIT_PHONE = {
+  W: 390, H: 844, scale: 1.5, sal: 0, plateTop: 64, plateInset: 0, towerH: 50,
+  portrait: true,
+  // Real touch minimap is 128; four timing tiles are ~300 unzoomed. Landscape
+  // capFor on this pair writes ~0.65 (14×0.65 = 9.1 px). The stacked portrait
+  // path must beat the 10/14 floor.
+  intrinsic: { map: 128, top: 300, sectors: 80, gaps: 75 },
+};
+
+test("fitHud: portrait phone does not charge the stacked map beside the tower, and keeps a 10 CSS px floor", () => {
+  const h = bootFlipHarness(PORTRAIT_PHONE);
+  for (let i = 0; i < 6; i++) { h.paintAt(h.pub()); h.invalidate(); h.tick(); }
+  const z = h.pub();
+  const painted = 14 * z;   // --fs-micro 14px × published --hud-z-top
+  assert.ok(z >= 10 / 14 - 1e-9,
+    "portrait --hud-z-top must stay at the 10/14 readable floor; got " + z + " (" + painted.toFixed(2) + "px)");
+  assert.ok(painted >= 10 - 0.05,
+    "tower / sector type at --fs-micro 14 must paint ≥ 10 CSS px; got " + painted.toFixed(2) + " at z=" + z);
+  // Landscape capFor on this geometry is ~0.65. The stacked portrait budget
+  // must beat that (map is under the tower, not in the half-width sum).
+  assert.ok(z > 0.85, "portrait must not use the landscape half-width map+tower sum (z=" + z + ")");
 });
 
 /** A painted S3 x BOOST clash the fit cannot resolve: BOOST on the right half,

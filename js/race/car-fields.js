@@ -70,6 +70,10 @@ const CarFields = (function () {
       ["pitWorked", "brakeBias"]],
     ["AI brake look-ahead cache (game.js updateCar, PERF-HUNT-2 S6): one object per AI car, keyed on its node window",
       ["_lk"]],
+    ["race end, every race: coast() holding the speed floor after the flag (game.js), endRace's classification " +
+      "(race-control.js). Added late, each turned a finished car into a DICTIONARY object for the rest of the race " +
+      "(Node 22's V8 normalizes a named add once a map has > 128 mutable out-of-object fields; PERF-HUNT-4 B-F1b)",
+      ["_coastHeld", "classified"]],
   ];
 
   const KEYS = [];
@@ -105,6 +109,31 @@ const CarFields = (function () {
   const WARM = [];
   for (const g of WARM_GROUPS) for (const k of g[1]) WARM.push(k);
   Object.freeze(WARM);
+
+  // MUTABLE: fields whose representation never widens but whose CONSTNESS does (PERF-HUNT-4 B-F1b). V8 tracks a
+  // field written once (at spawn) as `const`; TurboFan code that read it registers on that, and the first REWRITE of
+  // the field — by any car, with any value, the same one included — flips the shared map's field to `mutable` in
+  // place and deopts every such function ("marking dependent code ... code dependencies"). These are first rewritten
+  // at the first pit window or later (Node 22 game-vm, %DebugPrint of a car per 1,500 steps: monza 12 laps AI,
+  // montreal 10 and spa 6 wet scripted; monza --trace-generalization: pitState + pitArmed alone deopted 23 hot
+  // functions at the first stop — updateCar, updateCarLongitudinal, updateCarAdvance, observe ...). warmShape()
+  // writes each back unchanged at the grid. Fields first rewritten in the race's opening seconds (gear, offroad,
+  // passOf ... ~40) are NOT listed: nothing is optimized yet, and Node 22's V8 (12.4) turns an object into a
+  // dictionary on any later named ADD once its map has > 128 mutable out-of-object fields (--max-fast-properties;
+  // the cars sit at ~86 at the grid, ~122 after the opening seconds) — this list keeps the grid at ~101.
+  // https://v8.dev/blog/react-cliff (shapes and field tracking), V8 src/objects/lookup.cc CanStayConst,
+  // src/objects/map-updater.cc GeneralizeField (kFieldConstGroup).
+  const MUTABLE_GROUPS = [
+    ["the first pit stop (pit-lane.js): its state machine, arming, reason, abort timer, commit, box slot, fitted set, " +
+      "next plan, count, replans, the rival-stop note — and the boost flag the stop clears",
+      ["pitState", "pitArmed", "pitWhy", "pitAbortT", "pitCommitted", "pitPos0", "pitFitted", "pitNext", "pitStops",
+      "pitReplans", "_rivalStop", "boostOn"]],
+    ["the first track-limits warning and the first AI mistake (laps in, not seconds)",
+      ["cutWarn", "errCount"]],
+  ];
+  const MUTABLE = [];
+  for (const g of MUTABLE_GROUPS) for (const k of g[1]) MUTABLE.push(k);
+  Object.freeze(MUTABLE);
 
   /** Give car `c` every late-added field as `undefined` (a no-op for one it already has). Returns `c`.
    *
@@ -189,12 +218,15 @@ const CarFields = (function () {
     if (!("pitWorked" in c)) c.pitWorked = undefined;
     if (!("brakeBias" in c)) c.brakeBias = undefined;
     if (!("_lk" in c)) c._lk = undefined;
+    if (!("_coastHeld" in c)) c._coastHeld = undefined;
+    if (!("classified" in c)) c.classified = undefined;
     return c;
   }
 
   /** Settle car `c`'s field representations at the grid: for each WARM field it HAS, store a double and put the
-   * original value straight back. Values, sentinels (undefined, null, -0, NaN) and key order are unchanged — only
-   * V8's field representation widens, once, where the race would widen it mid-lap. Never adds a key (a keyed ADD
+   * original value straight back; for each MUTABLE field it HAS, store its own value. Values, sentinels (undefined,
+   * null, -0, NaN) and key order are unchanged — only V8's field representation and constness move, once, where
+   * the race would move them mid-lap. Never adds a key (a keyed ADD
    * is what normalized the cars in PERF-HUNT-2 S2; a keyed store to an existing field is a plain map update).
    * game.js gridUp() calls it for every car after the grid is laid out. Returns `c`. */
   function warmShape(c) {
@@ -205,8 +237,13 @@ const CarFields = (function () {
       c[k] = 0.5;
       c[k] = v;
     }
+    // MUTABLE: the same value back, so only the constness moves (a 0.5 would widen a Smi or string field too).
+    for (let i = 0; i < MUTABLE.length; i++) {
+      const k = MUTABLE[i];
+      if (k in c) c[k] = c[k];
+    }
     return c;
   }
 
-  return { predeclare, warmShape, KEYS, GROUPS, WARM, WARM_GROUPS };
+  return { predeclare, warmShape, KEYS, GROUPS, WARM, WARM_GROUPS, MUTABLE, MUTABLE_GROUPS };
 })();

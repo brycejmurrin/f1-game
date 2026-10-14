@@ -739,6 +739,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/report-server.test.mjs",
   // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
   "tests/unit/results-cam.test.mjs",
+  "tests/unit/rival-attach-init.test.mjs",
   "tests/unit/rival-audio.test.mjs",
   "tests/unit/rival-contact-sfx.test.mjs",
   "tests/unit/rival-passby-pool.test.mjs",
@@ -971,7 +972,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tyre-peak-slip.test.mjs",
   // Factory/sig tyre recipes after #1190 open rims: distinct geom + cover copy needs cover:1.
   "tests/unit/tyre-recipes-open-rim.test.mjs",
+  // Job 4: slip-driven tyre squeal — threshold, lat/long monotonic gain+pitch,
+  // setTargetAtTime ramps, zero per-frame nodes. Fake-audio VM, < 1 s.
+  "tests/unit/tyre-squeal-slip.test.mjs",
   "tests/unit/ui-experience.test.mjs",
+  // ui-fit r7: camera tuner rail-off portrait — #ct-previews placed in grid
+  // row 3, one minmax column, #ct-close / #ct-prev-* --tap-paint floors
+  // (#camtune-inner / #ct-* only; lighting untouched).
+  "tests/unit/ui-fit-camtune-portrait-r7.test.mjs",
   // ui-fit round 5: camera tuner compact foot/preview/copy-from --tap-paint
   // floors (#camtune-inner only; lighting untouched).
   "tests/unit/ui-fit-camtune-tap-r5.test.mjs",
@@ -984,6 +992,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
+  // ui-fit round 6: Track Designer tool-strip labels wrap+balance and
+  // floor taps at --tap (survey r5 rank 4; 36–57px clip on 390×844 / 844×390).
+  "tests/unit/ui-fit-trackdesigner-toolbar-r6.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/ui-journey-career.test.mjs",
   "tests/unit/ui-journey-race.test.mjs",
@@ -1016,6 +1027,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 WGX: buffers freed while an encoder (or the pending shadow encoder) is live retire through _retiredBufs; the swapchain self-test pops its validation scope before its first await.
   "tests/unit/wgx-free-retire.test.mjs",
   "tests/unit/who-is-on-it.test.mjs",
+  // Job 4: speed-scaled wind — crawl gate, monotonic gain+cutoff, pit-lane
+  // quiet vs top-speed rush, setTargetAtTime ramps, zero per-frame nodes.
+  "tests/unit/wind-speed.test.mjs",
   "tests/unit/xr-backend-pin.test.mjs",
   "tests/unit/xr-cull-union.test.mjs",
   "tests/unit/xr-opts.test.mjs",

@@ -1,8 +1,10 @@
-/* sporting-regs.test.mjs — the three 2026 Sporting Regulations the player is
- * held to (js/race/sporting-regs.js), in a VM: the two-dry-compound verdict at
- * the flag (B6.3.6), the give-back window for a place gained under the Safety
- * Car / VSC (B5.12.2(c), B5.13.2(c); priced per the 2026 Penalty Guidelines),
- * and the championship-order grid when no qualifying is held (B2.5.4(a)).
+/* sporting-regs.test.mjs — the 2026 Sporting Regulations the player is held
+ * to (js/race/sporting-regs.js), in a VM: the two-dry-compound verdict at the
+ * flag (B6.3.6), the give-back window for a place gained under the Safety Car
+ * / VSC (B5.12.2(c), B5.13.2(c); priced per the 2026 Penalty Guidelines), the
+ * championship-order grid when no qualifying is held (B2.5.4(a)), and blue-
+ * flag compliance while being lapped (App. H 2.5.5(e) / App. L Ch. IV 2(a);
+ * Driving Standards §K; Penalty Guidelines Flag Signals → +5 s).
  *
  * The module is pure over the car records it is handed, so a car here is a
  * plain object: {prog, retired, finished, pitState, tyreLog, penalty}.
@@ -210,6 +212,14 @@ test("game.js hands the pass watch its stricken-car predicate", () => {
   assert.match(def, /rescueT/, "a car being rescued as stuck may be passed");
   assert.match(def, /offroad/, "a beached car may be passed");
   assert.match(def, /vTop\(\) \* 0\.05/, "a car all but stopped on track may be passed");
+  // Blue-flag watch (same stricken predicate, same raw game.js read — do not
+  // add a second game.js['"] site; source-pin-hygiene ceiling is shrink-only).
+  assert.match(src, /const blueWatch = SportingRegs\.createBlueFlagWatch\(stricken\);/);
+  assert.match(src, /function blueFlagCall\(ev\)/);
+  assert.match(src, /announce\("BLUE FLAG WARNING"/);
+  assert.match(src, /announce\("\+" \+ ev\.sec \+ "s IGNORING BLUE FLAGS"/);
+  assert.match(src, /blueWatch\.tick\(player, ranked/);
+  assert.match(src, /blueWatch\.reset\(\)/);
 });
 
 test("a passed car that then pits or takes the flag drops the standing debt: no penalty", () => {
@@ -307,4 +317,96 @@ test("a lapped finisher gains no position by crossing before a car one lap ahead
   Object.assign(ahead, { lap: 5, prog: 4000.1, finished: true, finishT: 100.02 });
   assert.equal(w.tick(player, cars, 3, DT), null, "the later crossing remains one lap ahead in the classification");
   assert.equal(w.info().owed, 0);
+});
+
+// ── 4. BLUE FLAGS (being lapped) ────────────────────────────────────────────
+
+const L = 5000;
+const VREF = 72;
+/** Player at prog P with a lapping car `back` metres behind on the road. */
+function blueField(back, extras = {}) {
+  const p = { id: "p", prog: 1000, pitState: "none", speed: 50, ...extras.p };
+  // Lap up: prog ahead by > L/2; physically behind by `back` on the road.
+  const lapper = {
+    id: "lap", code: "VER", pitState: "none", speed: 60,
+    prog: p.prog - back + L,
+    ...extras.lapper,
+  };
+  return { p, lapper, all: [p, lapper], ctx: { total: L, vRef: VREF, caution: 0, race: true } };
+}
+function blueRun(w, f, seconds) {
+  const evs = [];
+  for (let t = 0; t < seconds - 1e-9; t += DT) {
+    const e = w.tick(f.p, f.all, f.ctx, DT);
+    if (e) evs.push(e);
+  }
+  return evs;
+}
+
+test("blueFlagCar: only a car a lap up, physically just behind, within the time window", () => {
+  const f = blueField(40);                          // 40 m / 60 m/s ≈ 0.67 s < 1.2 s
+  assert.equal(R.blueFlagCar(f.p, f.all, f.ctx), f.lapper);
+  assert.equal(R.blueFlagCar(f.p, f.all, { ...f.ctx, total: 0 }), null);
+  const far = blueField(200);                       // 200 / 60 ≈ 3.3 s — past the window
+  assert.equal(R.blueFlagCar(far.p, far.all, far.ctx), null);
+  const sameLap = blueField(40);
+  sameLap.lapper.prog = sameLap.p.prog - 40;        // behind, but not a lap up
+  assert.equal(R.blueFlagCar(sameLap.p, sameLap.all, sameLap.ctx), null);
+});
+
+test("no blue flag → no warning and no penalty", () => {
+  const w = R.createBlueFlagWatch(), f = blueField(40);
+  f.lapper.prog = f.p.prog - 40;                    // same lap: no flag
+  assert.deepEqual(blueRun(w, f, 10), []);
+  assert.equal(w.info().hold, 0);
+});
+
+test("sustained blocking: WARNING at 4 s, then +5 s IGNORING BLUE FLAGS at 8 s", () => {
+  const w = R.createBlueFlagWatch(), f = blueField(40);
+  const evs = blueRun(w, f, 9);
+  const warn = evs.find((e) => e.type === "warn");
+  const pen = evs.find((e) => e.type === "penalty");
+  assert.ok(warn, "warn: " + JSON.stringify(evs));
+  assert.equal(warn.code, "VER");
+  assert.ok(pen, "penalty: " + JSON.stringify(evs));
+  assert.equal(pen.sec, 5);
+  assert.equal(pen.code, "VER");
+  assert.equal(evs.filter((e) => e.type === "warn").length, 1);
+  assert.equal(evs.filter((e) => e.type === "penalty").length, 1, "one penalty per episode");
+  // Still blue after the penalty: no second charge in the same episode.
+  assert.deepEqual(blueRun(w, f, 10).filter((e) => e.type === "penalty"), []);
+});
+
+test("letting the lapper through clears the episode; a new hold-up can warn again", () => {
+  const w = R.createBlueFlagWatch(), f = blueField(40);
+  assert.equal(blueRun(w, f, 4.1).find((e) => e.type === "warn").type, "warn");
+  f.lapper.prog = f.p.prog + 10;                    // past the player on the road
+  assert.equal(w.tick(f.p, f.all, f.ctx, DT), null);
+  assert.equal(w.info().hold, 0, "cleared when the flag drops");
+  f.lapper.prog = f.p.prog - 40 + L;                // comes round again
+  const again = blueRun(w, f, 4.1);
+  assert.ok(again.some((e) => e.type === "warn"), "a new episode can warn");
+});
+
+test("exemptions: caution, pit, finished/retired, troubled player, and non-race", () => {
+  const cases = [
+    ["caution VSC", (f) => { f.ctx.caution = 2; }],
+    ["caution SC", (f) => { f.ctx.caution = 3; }],
+    ["caution red", (f) => { f.ctx.caution = 4; }],
+    ["player in pit", (f) => { f.p.pitState = "lane"; }],
+    ["player finished", (f) => { f.p.finished = true; }],
+    ["player retired", (f) => { f.p.retired = true; }],
+    ["lapper finished", (f) => { f.lapper.finished = true; }],
+    ["lapper retired", (f) => { f.lapper.retired = true; }],
+    ["quali / TT", (f) => { f.ctx.race = false; }],
+  ];
+  for (const [label, hit] of cases) {
+    const w = R.createBlueFlagWatch(), f = blueField(40);
+    hit(f);
+    assert.deepEqual(blueRun(w, f, 10), [], label);
+  }
+  const stuck = new Set();
+  const w = R.createBlueFlagWatch((o) => stuck.has(o)), f = blueField(40);
+  stuck.add(f.p);
+  assert.deepEqual(blueRun(w, f, 10), [], "troubled / stuck player");
 });

@@ -359,18 +359,18 @@ test("the built-in playlist is silent under a backend and comes back when it goe
 
   await installStubBackend(page);
 
-  // Async setMusicBackend / built-in teardown can land after installStubBackend()
-  // cleared the log on a loaded CI shard — wait for quiescence, then drain (sibling test).
-  let priorCalls = null;
-  await expect.poll(async () => {
-    const snap = await page.evaluate(() => window.__mb.calls.join("\0"));
-    if (priorCalls === snap) return true;
-    priorCalls = snap;
-    return false;
-  }, { timeout: 10000 }).toBe(true);
-  await page.evaluate(() => { window.__mb.calls.length = 0; });
+  // Built-in must be silenced before we assert backend ownership (sync product
+  // invariant of setMusicBackend → stopInternal). Do not trust a call-log
+  // quiescence poll across Playwright round-trips: a late macrotask can push
+  // setVolume/start between a clear evaluate and a startMusic evaluate.
+  await expect.poll(async () => page.evaluate(() =>
+    GameAudio.musicBackend() === window.__stub && GameAudio.currentTrackId() === null
+  ), { timeout: 10000 }).toBe(true);
 
+  // Clear + deliberate startMusic in ONE evaluate (same pattern as the sibling
+  // backend-delegation test) so no host macrotask can interleave into __mb.calls.
   const underBackend = await page.evaluate(() => {
+    window.__mb.calls.length = 0;
     GameAudio.startMusic();
     return {
       current: GameAudio.currentTrackId(),
