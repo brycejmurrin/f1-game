@@ -1,6 +1,6 @@
 ---
 name: apex-feature-budgets
-description: "Use when scoping or running a harness lane, cloud worker, or long agent session: shot/time/message caps, lane mutexes, and when to abort or escalate. Launch prompt fields → agent-fleet references/launch-policy.md; merge/ready caps → apex-merge-hard-gate."
+description: "Use when scoping a harness lane: shot/time/message caps; Lighting ≤1. launch-policy → agent-fleet; merge → apex-merge-hard-gate."
 ---
 
 # Apex feature budgets (harness + cloud lanes)

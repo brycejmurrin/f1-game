@@ -1,6 +1,6 @@
 ---
 name: who-is-on-it
-description: "Use when a harness or fleet lane starts work: claim OWNED paths before editing, list open draft PRs and live claims, refuse an overlapping owner, and record the claim on the claims board plus the PR fleet block. Not fixing a shared deploy red without a claim → steward; Merge Desk merge rules → apex-merge-hard-gate."
+description: "Use when a harness lane starts: claim OWNED globs, refuse overlap, record claim. Deploy red → steward; merge → apex-merge-hard-gate."
 ---
 
 # Who is on it (lane claim)

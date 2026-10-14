@@ -1,0 +1,10 @@
+[
+{"query":"Harness lane starting: I own js/lighting/** only. Run who-is-on-it --claim before I edit and refuse if another draft PR already owns that path.","expect":"who-is-on-it"},
+{"query":"Before this cloud worker touches .claude/skills/foo/, claim the OWNED globs, list open draft PRs with their fleet owned lines, and stand down on overlap.","expect":"who-is-on-it"},
+{"query":"What command records a lane claim on the claims board and what line goes in the PR body under the fleet block?","expect":"who-is-on-it"},
+{"query":"Another session has a live claim on my paths. Should I still push a fix to the deploy branch?","expect":"who-is-on-it"},
+{"query":"Twin guard: same OWNED globs as an open draft PR — do I proceed or escalate?","expect":"who-is-on-it"},
+{"query":"Sweep open PRs as Merge Desk and arm MERGE auto-merge on the green ones.","expect":"ci-watch"},
+{"query":"pages.yml went red on deploy and I did not cause it — check who's on it before fixing.","expect":"steward"},
+{"query":"Launch four cloud workers with disjoint OWNED globs and collect fleet blocks.","expect":"agent-fleet"}
+]

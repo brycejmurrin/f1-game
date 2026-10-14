@@ -1,6 +1,6 @@
 ---
 name: apex-merge-hard-gate
-description: "Use when something asks to merge, arm auto-merge, or mark a PR ready: the binding checklist before Merge Desk arms or Grok Bot merges. Only Merge Desk arms; only Grok Bot merges. Day-to-day CI Watch sweeps → ci-watch; worker PR loop → steward."
+description: "Use when asked to merge or arm auto-merge: Merge Desk arms MERGE, Grok merges. Sweeps → ci-watch; workers → steward."
 ---
 
 # Apex merge hard gate

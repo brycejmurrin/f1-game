@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseClaims, claimCommit, claimSlug, sessionId, parseBoard, nextBoard, readBoard, pushBoard, parseCatFileBatch, parseRefs, fetchRefCache, CLAIMS_BOARD, BOARD_MAX_MIN, CLAIMS_PREFIX, RELEASED, STALE_MIN, EMPTY_TREE } from "../../tools/ci/who-is-on-it.mjs";
+import { globsOverlap, parseOwnedGlobs, findOverlaps } from "../../.claude/skills/who-is-on-it/lane.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const NOW = 1_800_000_000;
@@ -196,6 +197,16 @@ test("the listing hides STALE claims behind a count line; --all shows them; the 
   assert.doesNotMatch(out, /ago {2}STALE /, "no stale row without --all");
   const all = execFileSync(process.execPath, ["tools/ci/who-is-on-it.mjs", "--no-fetch", "--hours", "1", "--all"], { cwd: ROOT, encoding: "utf8" });
   assert.doesNotMatch(all, /hidden — older than/, "--all hides nothing");
+});
+
+test("lane globs overlap refuses shared owned paths", () => {
+  assert.ok(globsOverlap("owned-a/**", "owned-a/leaf"));
+  assert.ok(!globsOverlap("owned-a/**", "owned-b/**"));
+  const owned = parseOwnedGlobs("```fleet\nowned: lane-a/**\n```");
+  assert.deepEqual(owned, ["lane-a/**"]);
+  const hits = findOverlaps(["lane-a/**"], { drafts: [{ number: 1, branch: "cursor/x", title: "t", owned: ["lane-a/leaf"] }] }, []);
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].kind, "draft-pr");
 });
 
 test("against real git: the commits-only mirror lists every branch of the origin", () => {

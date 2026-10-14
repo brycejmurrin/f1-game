@@ -1,0 +1,10 @@
+[
+{"query":"How many Playwright or shot captures may this harness job run before it must stop and report?","expect":"apex-feature-budgets"},
+{"query":"Lighting lane mutex: how many concurrent lighting agents are allowed?","expect":"apex-feature-budgets"},
+{"query":"We hit 400 messages with no OWNED push — what is the abort procedure?","expect":"apex-feature-budgets"},
+{"query":"ready-full-cap and MAX_ARMED numbers for marking ready and arming merges.","expect":"apex-feature-budgets"},
+{"query":"Can I launch three nested subagents in one Cursor cloud agent for this task?","expect":"apex-feature-budgets"},
+{"query":"Claim OWNED paths before editing js/game.js in a harness lane.","expect":"who-is-on-it"},
+{"query":"Orchestrator launch template: OWNED FORBIDDEN and done-when fields.","expect":"agent-fleet"},
+{"query":"Before merge, is CI green and merge commit only?","expect":"apex-merge-hard-gate"}
+]

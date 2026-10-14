@@ -1,0 +1,10 @@
+[
+{"query":"Can I enable squash auto-merge on PR #1500? I'm not Merge Desk.","expect":"apex-merge-hard-gate"},
+{"query":"List every check that must pass before Merge Desk may arm MERGE auto-merge on a ready PR.","expect":"apex-merge-hard-gate"},
+{"query":"A PR has auto-merge armed with REBASE. As CI Watch, what do I do?","expect":"apex-merge-hard-gate"},
+{"query":"Is a cancelled ci.yml run with zero failures always safe to merge?","expect":"apex-merge-hard-gate"},
+{"query":"Worker launch prompt says do not merge — does that block Merge Desk from arming?","expect":"apex-merge-hard-gate"},
+{"query":"My draft PR is red; drive it back to green and watch CI.","expect":"steward"},
+{"query":"You are CI Watch today: sweep pr-board and arm MERGE where the hard gate holds.","expect":"ci-watch"},
+{"query":"What shot and message caps apply to this cloud launch?","expect":"apex-feature-budgets"}
+]

@@ -56,6 +56,60 @@
       "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
     },
     {
+      "skill": "apex-feature-budgets",
+      "task": "Exercise launch policy carries shot and message caps",
+      "fixture": "tests/unit/agent-fleet.test.mjs",
+      "pattern": "the\\ launch\\ template\\ carries\\ every\\ field\\ the\\ agent-fleet\\ launch\\ policy\\ requires",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "apex-merge-hard-gate",
+      "task": "Exercise ARM waits at MAX_ARMED",
+      "fixture": "tests/unit/pr-board.test.mjs",
+      "pattern": "ARM\\ waits\\ on\\ a\\ MERGE-HOLD\\ line\\ and\\ at\\ MAX_ARMED\\ armed\\ repo-wide",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
       "skill": "ai-racecraft",
       "task": "Exercise traits defaults match the mid-grid fallback",
       "fixture": "tests/unit/ai-drive.test.mjs",
@@ -708,6 +762,33 @@
       "task": "Exercise step writes axle/force/yaw fields without NaN",
       "fixture": "tests/unit/player-forces.test.mjs",
       "pattern": "step\\ writes\\ axle/force/yaw\\ fields\\ without\\ NaN",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "who-is-on-it",
+      "task": "Exercise lane globs overlap refuses shared owned paths",
+      "fixture": "tests/unit/who-is-on-it.test.mjs",
+      "pattern": "lane\\ globs\\ overlap\\ refuses\\ shared\\ owned\\ paths",
       "expected": {
         "minPass": 1,
         "maxFail": 0
