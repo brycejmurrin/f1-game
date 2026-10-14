@@ -24,6 +24,7 @@ var GameAudio = (function () {
     musicBackend: noop, setSessionType: noop, profile: () => "team",
     sourceCounts: () => ({ builtin: 0, user: 0 }),
     setRadioFx: noop, radioFxLevel: noop0, setRadioPreset: noop,
+    setRadioFocusDb: (v) => [0, 4, 8, 12].indexOf(v) >= 0 ? v : 0, getRadioFocusDb: noop0, setVoiceFocusHold: noop,
     setRadioDuck: noop, radioLeadS: noop0, radioSting: noop, radioStingStop: noop,
     startMusic: noop, stopMusic: noop, startEngine: noop, stopEngine: noop,
     startRain: noop, stopRain: noop, setEngine: noop, setSkid: noop,

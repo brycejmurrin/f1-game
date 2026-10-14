@@ -587,6 +587,7 @@ var RadioVoice = (function () {
     }
     /** The words only: the hiss bed is the CARD's, and may already be the next one's. */
     function stopVoice() {
+      if (current && GameAudio && GameAudio.setVoiceFocusHold) GameAudio.setVoiceFocusHold(false, current);
       previewGen++;
       clearPending();
       clearDeadline();
@@ -672,11 +673,13 @@ var RadioVoice = (function () {
         return false;
       }
       const u = new Utter(p.text);
+      const focusGen = GameAudio && GameAudio.ctxGen ? GameAudio.ctxGen() : null;
       u.voice = voiceFor(p.speaker, true);   // speakPlanned only ever carries a card line (say())
       u.rate = p.rate; u.pitch = p.pitch; u.volume = p.volume;
       // Only the LIVE line may release the duck and the deadline — see `current`.
       u.onend = u.onerror = () => {
         ours.delete(u);
+        if (GameAudio && GameAudio.setVoiceFocusHold) GameAudio.setVoiceFocusHold(false, u);
         if (u !== current) return;
         current = null;
         clearDeadline();
@@ -689,7 +692,12 @@ var RadioVoice = (function () {
       // leave the music down with nothing speaking until the deadline healed it.
       // Down-then-up is also simply the right order for the ear.
       current = u;
-      u.onstart = () => { started++; };
+      u.onstart = () => {
+        started++;
+        if (u === current && p.squelchEpoch === squelchEpoch && enabled && G.soundOn && volume > 0 && u.volume > 0
+            && (!GameAudio.ctxGen || GameAudio.ctxGen() === focusGen)
+            && GameAudio && GameAudio.setVoiceFocusHold) GameAudio.setVoiceFocusHold(true, u);
+      };
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
       try {
         asked++;
@@ -697,6 +705,7 @@ var RadioVoice = (function () {
         timed("speak", () => synth.speak(u));
       } catch (e) {
         ours.delete(u);
+        if (GameAudio && GameAudio.setVoiceFocusHold) GameAudio.setVoiceFocusHold(false, u);
         current = null;
         if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
         Log.info("audio", "RadioVoice speak failed");
@@ -908,7 +917,10 @@ var RadioVoice = (function () {
       },
       setVolume(v) {
         volume = Math.max(0, Math.min(1, +v || 0));
-        if (!volume) { squelchEpoch++; stopSquelch(true); }
+        if (!volume) {
+          squelchEpoch++; stopSquelch(true);
+          if (current && GameAudio && GameAudio.setVoiceFocusHold) GameAudio.setVoiceFocusHold(false, current);
+        }
         return volume;
       },
       available: () => true,

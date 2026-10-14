@@ -1157,7 +1157,7 @@ function squelchClock() {
     }
     time = until; actx.currentTime = time / 1000;
   }
-  return { v: R.create(G), actx, timers, sources, peaks, synth, advance };
+  return { v: R.create(G), actx, timers, sources, peaks, synth, advance, ctx, G };
 }
 
 test("setting radio volume to zero stops its live squelch and cannot revive a stale close", (t) => {
@@ -1210,4 +1210,25 @@ test("mute invalidates squelch for accepted speech still waiting on its lead", (
   advance(1400); assert.equal(sources.length, 0);
   assert.equal(v.say("TYRES AT 50%", 3, "info"), true); advance(1400);
   assert.equal(sources.length, 1, "fresh positive-volume speech can arm its frame");
+});
+
+
+test("selective focus follows actual audible synth start and rejects stale mute/context callbacks", (t) => {
+  const { v, ctx, G, synth, advance } = squelchClock(); t.after(() => v.stop());
+  const held = new Set(), utterances = []; let gen = 1;
+  ctx.GameAudio.ctxGen = () => gen;
+  ctx.GameAudio.setVoiceFocusHold = (on, owner) => on ? held.add(owner) : held.delete(owner);
+  synth.speak = (u) => utterances.push(u);
+  assert.equal(v.say("BOX BOX BOX", 3, "info"), true); advance(0);
+  assert.equal(held.size, 0, "accepted speech has not started");
+  const first = utterances[0]; first.onstart(); assert.equal(held.size, 1);
+  v.setVolume(0); assert.equal(held.size, 0); v.setVolume(0.8);
+  first.onstart(); assert.equal(held.size, 0, "mute invalidates late start even after unmute");
+  v.say("TYRES AT 50%", 3, "info"); advance(0);
+  const next = utterances.at(-1); next.onstart(); assert.equal(held.size, 1);
+  first.onend(); assert.ok(held.has(next), "stale end cannot release replacement");
+  gen++; held.clear(); next.onstart(); assert.equal(held.size, 0, "rebuilt context rejects old onstart");
+  v.setVolume(0); v.say("BOX BOX BOX", 3, "info"); advance(0);
+  utterances.at(-1).onstart(); assert.equal(held.size, 0, "zero-volume synth never focuses");
+  v.setVolume(0.8); G.soundOn = false; utterances.at(-1).onstart(); assert.equal(held.size, 0);
 });

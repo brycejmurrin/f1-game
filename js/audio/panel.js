@@ -61,6 +61,14 @@ var AudioPanel = (() => {
     // reader user hears every card twice if we default this on.
     let radioOn = store.get("radioVoice", false);
     let radioVol = store.get("volRadio", 0.8);
+    const FOCUS_VALUES = [[0, "STANDARD"], [4, "4 dB"], [8, "8 dB"], [12, "12 dB"]];
+    const focusNow = () => {
+      const value = !GameAudio._stub && GameAudio.getRadioFocusDb ? GameAudio.getRadioFocusDb() : store.get("radioFocusDb", 0);
+      return [0, 4, 8, 12].indexOf(value) >= 0 ? value : 0;
+    };
+    function restoreFocus() {
+      if (GameAudio.setRadioFocusDb) GameAudio.setRadioFocusDb(store.get("radioFocusDb", 0));
+    }
     /* The announcer's switch is READ FROM THE MODULE, never mirrored here. It
      * is the one spoken setting a second surface also flips — the flyby editor
      * previews it — and a `let annOn` in this closure would have gone stale the
@@ -369,6 +377,7 @@ var AudioPanel = (() => {
       SettingRow.paint($("as-rpack"), packNow(), PACK_VALUES);
       if (GameAudio.radioPresets) SettingRow.paint($("as-rpreset"), GameAudio.radioPreset(), GameAudio.radioPresets());
       SettingRow.paint($("as-spot"), spotNow(), ONOFF);
+      SettingRow.paint($("as-focus"), focusNow(), FOCUS_VALUES);
       SettingRow.paint($("as-battle"), battleNow() ? "on" : "off", ONOFF);
       const battleStatus = $("as-battle-status");
       if (battleStatus && battleNow() && battleStatus.textContent === "Battle tones are off. RADIO CHECK gives the usual status.") {
@@ -523,6 +532,13 @@ var AudioPanel = (() => {
         else battleNote("The sample could not play. Check sound and voice volume.");
       };
     }
+    SettingRow.wire("as-focus", { values: FOCUS_VALUES, read: focusNow,
+      write: (v) => {
+        const db = +v, value = [0, 4, 8, 12].indexOf(db) >= 0 ? db : 0;
+        store.set("radioFocusDb", value);   // store first: a lazy stub must not lose this choice
+        if (GameAudio.setRadioFocusDb) GameAudio.setRadioFocusDb(value);
+        syncAudioPanel();
+      } });
     SettingRow.wire("as-comm", { values: COMM_VALUES, read: commNow,
       write: (v) => { if (rr()) rr().setComm(v); else store.set("commentary", v); GameAudio.uiTick(); syncAudioPanel(); } });
     // THE PRE-RACE ANNOUNCER (js/audio/announcer.js). Same shape, same master
@@ -941,6 +957,7 @@ var AudioPanel = (() => {
       // on its first frame. Restoring after would run one race's worth of
       // frames on the default voice and only correct on the next setEngine.
       applyStoredTone();
+      restoreFocus();
       // setMusic BEFORE setSound: setSound starts the menu track, and the
       // soundtrack's own switch defaults ON — a MUSIC OFF player would fetch and
       // decode menu.mp3 at boot before the switch was ever set.

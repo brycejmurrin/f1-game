@@ -367,18 +367,84 @@ var GameAudio = (function () {
   const MIX_DUCK_ATTACK_TAU = 0.08;
   const MIX_DUCK_RELEASE_TAU = 0.4;
   let mixDuckOn = false;
+  // Optional selective focus. STANDARD (0) keeps the legacy whole-SFX mix.
+  let radioFocusDb = 0, focusBus = null;
+  const focusVoices = new Map();
+  let focusCurve = { at: 0, value: 1, events: [] }, sfxCurve = { at: 0, value: 1, events: [] };
+  function curveValue(curve, time) {
+    let value = curve.value, at = curve.at, target = value, tau = 1;
+    for (const e of curve.events) {
+      if (e.at > time) break;
+      value = target + (value - target) * Math.exp(-(e.at - at) / tau);
+      at = e.at; target = e.target; tau = e.tau;
+    }
+    return target + (value - target) * Math.exp(-Math.max(0, time - at) / tau);
+  }
+  function writeCurve(param, curve, events) {
+    const t = ctx.currentTime, value = curveValue(curve, t);
+    if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(t);
+    else { param.cancelScheduledValues(t); param.setValueAtTime(value, t); }
+    curve.at = t; curve.value = value; curve.events = events;
+    for (const e of events) param.setTargetAtTime(e.target, e.at, e.tau);
+  }
   function sfxBusTarget() {
     if (!sfxEnabled) return 0;
-    return sfxVol * (mixDuckOn ? MIX_DUCK_LIN : 1);
+    return sfxVol * (!radioFocusDb && mixDuckOn ? MIX_DUCK_LIN : 1);
+  }
+  function writeSfx(tau) {
+    if (sfxBus && ctx) writeCurve(sfxBus.gain, sfxCurve,
+      [{ at: ctx.currentTime, target: sfxBusTarget(), tau }]);
+  }
+  function refreshFocus(tau) {
+    if (!focusBus || !ctx) return;
+    const t = ctx.currentTime, spans = [], base = sfxEnabled ? sfxVol : 0;
+    if (!radioFocusDb) {
+      const target = sfxBusTarget();
+      if (focusCurve.events.length === 1 && focusCurve.events[0].target === target) return;
+      writeCurve(focusBus.gain, focusCurve, [{ at: t, target, tau: tau || (target < curveValue(focusCurve, t) ? MIX_DUCK_ATTACK_TAU : MIX_DUCK_RELEASE_TAU) }]);
+      return;
+    }
+    for (const [owner, v] of focusVoices) {
+      if (v.context !== ctx || v.end <= t) { focusVoices.delete(owner); continue; }
+      if (radioFocusDb) spans.push([Math.max(t, v.start), v.end]);
+    }
+    spans.sort((a, b) => a[0] - b[0]);
+    const merged = [];
+    for (const span of spans) {
+      const prev = merged[merged.length - 1];
+      if (prev && span[0] <= prev[1]) prev[1] = Math.max(prev[1], span[1]);
+      else merged.push(span.slice());
+    }
+    const lin = base * 10 ** (-radioFocusDb / 20), events = [];
+    if (!merged.length || merged[0][0] > t) events.push({ at: t, target: base, tau: tau || MIX_DUCK_RELEASE_TAU });
+    for (const span of merged) {
+      events.push({ at: span[0], target: lin, tau: span[0] === t ? (tau || (lin < curveValue(focusCurve, t) ? MIX_DUCK_ATTACK_TAU : MIX_DUCK_RELEASE_TAU)) : MIX_DUCK_ATTACK_TAU });
+      if (Number.isFinite(span[1])) events.push({ at: span[1], target: base, tau: MIX_DUCK_RELEASE_TAU });
+    }
+    writeCurve(focusBus.gain, focusCurve, events);
+  }
+  function setVoiceFocusSpan(owner, start, end, context) {
+    if (context !== ctx || !ctx || !Number.isFinite(start) || !Number.isFinite(end) || !(end > start)) return false;
+    focusVoices.set(owner, { context, start, end }); refreshFocus(); return true;
+  }
+  function setVoiceFocusHold(on, owner) {
+    if (!owner) return false;
+    if (on && ctx) focusVoices.set(owner, { context: ctx, start: ctx.currentTime, end: Infinity });
+    else focusVoices.delete(owner);
+    refreshFocus(); return !!on && !!ctx;
+  }
+  function setRadioFocusDb(value) {
+    const db = [0, 4, 8, 12].indexOf(value) >= 0 ? value : 0;
+    if (db === radioFocusDb) return radioFocusDb;   // repeated lazy/panel restore is inert
+    radioFocusDb = db;
+    const lowering = ctx && sfxBusTarget() < curveValue(sfxCurve, ctx.currentTime);
+    writeSfx(lowering ? MIX_DUCK_ATTACK_TAU : MIX_DUCK_RELEASE_TAU);
+    refreshFocus(); return radioFocusDb;
   }
   function applySfxDuck(on) {
-    const want = !!on;
-    const changed = want !== mixDuckOn;
+    const want = !!on, changed = want !== mixDuckOn;
     mixDuckOn = want;
-    if (!sfxBus || !ctx || !changed) return mixDuckOn;
-    const t = ctx.currentTime;
-    sfxBus.gain.cancelScheduledValues(t);
-    sfxBus.gain.setTargetAtTime(sfxBusTarget(), t, want ? MIX_DUCK_ATTACK_TAU : MIX_DUCK_RELEASE_TAU);
+    if (changed) { writeSfx(want ? MIX_DUCK_ATTACK_TAU : MIX_DUCK_RELEASE_TAU); refreshFocus(); }
     return mixDuckOn;
   }
   function applyMusicDuck() {
@@ -397,7 +463,7 @@ var GameAudio = (function () {
   }
   const radio = GameAudioRadioFx.create({
     context: () => ctx, master: () => master, bus: () => sfxBus, enabled, sfxOk, now,
-    setSpotterDuck,
+    setSpotterDuck, setVoiceFocusHold, setVoiceFocusSpan,
   }, signal);
   const { decodeClip, radioVoice, radioSting, radioStingStop, setRadioFx } = radio;
   let ctxGen = 0;
@@ -436,7 +502,7 @@ var GameAudio = (function () {
         // "suspended" event armed. Healthy, so nothing to rebuild.
         if (deviceRebuildTimer && staleStateRebuild(deviceRebuildTimerWhy)) { clearTimeout(deviceRebuildTimer); deviceRebuildTimer = null; }
         if (staleStateRebuild(deviceRebuildPending)) deviceRebuildPending = "";
-        applyMusicDuck();
+        applyMusicDuck(); refreshFocus();
       }
       if (!document.hidden && (ctx.state === "interrupted" || ctx.state === "suspended")) {
         scheduleOutputDeviceRebuild("state-" + ctx.state);
@@ -458,6 +524,9 @@ var GameAudio = (function () {
     mixDuckOn = radioDuckHolds.size > 0 || spotterDuckHold;
     sfxBus.gain.value = sfxBusTarget();
     sfxBus.connect(master);
+    focusBus = ctx.createGain(); focusBus.gain.value = sfxBusTarget(); focusBus.connect(master);
+    focusCurve = { at: ctx.currentTime, value: sfxBusTarget(), events: [] };
+    sfxCurve = { at: ctx.currentTime, value: sfxBusTarget(), events: [] };
     attachRivalPassBy();
 
     // iOS Safari starts contexts suspended; resume inside the gesture.
@@ -617,10 +686,10 @@ var GameAudio = (function () {
       if (typeof RivalAudio === "undefined") return;
       if (typeof RivalAudio.attach === "function") {
         if (rivalPassByCtx === ctx) return;
-        RivalAudio.attach(ctx, sfxBus);
+        RivalAudio.attach(ctx, focusBus);
         rivalPassByCtx = ctx;
       } else {
-        RivalAudio._pendingAttach = { ctx, dest: sfxBus };
+        RivalAudio._pendingAttach = { ctx, dest: focusBus };
       }
     } catch (e) { /* stub / mid-teardown */ }
   }
@@ -714,7 +783,7 @@ var GameAudio = (function () {
     } catch (e) { /* already closed */ }
     ctx = null;
     master = null;
-    sfxBus = null;
+    sfxBus = null; focusBus = null; focusVoices.clear();
     limiter = null;
     rainStopping = false;
     rainPending = null;
@@ -931,10 +1000,10 @@ var GameAudio = (function () {
       voiceFormant.frequency.value = voice.formantHz;
       voiceFormant.Q.value = 1.1;
       voiceFormant.gain.value = voice.formantGain;
-      engFilter.connect(voiceFormant).connect(tiltEq).connect(engGain).connect(sfxBus);
+      engFilter.connect(voiceFormant).connect(tiltEq).connect(engGain).connect(focusBus);
     } else {
       voiceFormant = null;
-      engFilter.connect(tiltEq).connect(engGain).connect(sfxBus);
+      engFilter.connect(tiltEq).connect(engGain).connect(focusBus);
     }
 
     // The debug analyser tap is created LAZILY in centroidHz() — a 16384-fft
@@ -1011,7 +1080,7 @@ var GameAudio = (function () {
       subOctOsc.type = "sine";
       subOctOsc.frequency.value = 60;
       subOctGain.gain.value = 0;
-      subOctOsc.connect(subOctGain).connect(sfxBus);
+      subOctOsc.connect(subOctGain).connect(focusBus);
     }
 
     // REVERB SEND. Fed from the engine output and the rival voices, returned to
@@ -1027,7 +1096,7 @@ var GameAudio = (function () {
       convolver = ctx.createConvolver();
       revSend = ctx.createGain(); revSend.gain.value = 1;
       revReturn = ctx.createGain(); revReturn.gain.value = 0;
-      revSend.connect(convolver).connect(revReturn).connect(sfxBus);
+      revSend.connect(convolver).connect(revReturn).connect(focusBus);
       engGain.connect(revSend);
       applyVenue();
     }
@@ -1055,7 +1124,7 @@ var GameAudio = (function () {
         filt.type = "lowpass"; filt.frequency.value = 2000;
         const gain = ctx.createGain(); gain.gain.value = 0;
         const pan = ctx.createStereoPanner(); pan.pan.value = 0;
-        filt.connect(gain).connect(pan).connect(sfxBus);
+        filt.connect(gain).connect(pan).connect(focusBus);
         if (revSend) pan.connect(revSend);   // a rival in a tunnel echoes too
         const v = { filt, gain, pan, detune: RIVAL_DETUNE[i % RIVAL_DETUNE.length],
                     src: null, oscs: null, start: null, stop: null, setPitch: null };
@@ -1115,7 +1184,7 @@ var GameAudio = (function () {
     whineOsc.type = "sine";
     whineOsc.frequency.value = 1500;
     whineGain.gain.value = 0;
-    whineOsc.connect(whineGain).connect(sfxBus);
+    whineOsc.connect(whineGain).connect(focusBus);
 
     // MGU-K harvest whirr: resonant noise, gated in by deceleration
     harvSrc = ctx.createBufferSource();
@@ -1127,7 +1196,7 @@ var GameAudio = (function () {
     harvFilter.Q.value = 6;
     harvGain = ctx.createGain();
     harvGain.gain.value = 0;
-    harvSrc.connect(harvFilter).connect(harvGain).connect(sfxBus);
+    harvSrc.connect(harvFilter).connect(harvGain).connect(focusBus);
 
     // ERS deploy whine: electric-motor rise while the battery is actually
     // deploying. Triangle through a highpass — a different waveform and a
@@ -1140,7 +1209,7 @@ var GameAudio = (function () {
     ersHp.type = "highpass";
     ersHp.frequency.value = 1600;
     ersGain.gain.value = 0;
-    ersOsc.connect(ersHp).connect(ersGain).connect(sfxBus);
+    ersOsc.connect(ersHp).connect(ersGain).connect(focusBus);
 
     // offroad wobble: 8 Hz LFO into oscillator detune (cents)
     lfo = ctx.createOscillator();
@@ -2771,12 +2840,12 @@ var GameAudio = (function () {
      glide, glideLevel), so a slider moves the level while it is being dragged. */
   function setSfxVolume(v) {
     sfxVol = clamp01(typeof v === "number" ? v : 1);
-    if (sfxBus) glideLevel(sfxBus.gain, sfxBusTarget());
+    writeSfx(LEVEL_TAU); refreshFocus(LEVEL_TAU);
     return sfxVol;
   }
   function setSfxEnabled(b) {
     sfxEnabled = !!b;
-    if (sfxBus) glideLevel(sfxBus.gain, sfxBusTarget());
+    writeSfx(LEVEL_TAU); refreshFocus(LEVEL_TAU);
     // A race that started with SFX off wanted rain but built no nodes
     // (startRain returns on !sfxOk()); turning SFX on must start it.
     if (sfxEnabled && rainWanted && !rainSrc) startRain();
@@ -2797,7 +2866,7 @@ var GameAudio = (function () {
   return {
     onInterrupted,
     init,
-    setRadioDuck,
+    setRadioDuck, setRadioFocusDb, getRadioFocusDb: () => radioFocusDb, setVoiceFocusHold,
     decodeClip,
     now,
     radioVoice,
@@ -2923,6 +2992,9 @@ var GameAudio = (function () {
     mixDuck() {
       return {
         on: mixDuckOn,
+        focusDb: radioFocusDb, focusHolds: focusVoices.size,
+        focusValue: ctx ? curveValue(focusCurve, ctx.currentTime) : 1,
+        focusEvents: focusCurve.events.map((e) => ({ ...e })),
         holds: radioDuckHolds.size + (spotterDuckHold ? 1 : 0),
         lin: MIX_DUCK_LIN,
         attackTau: MIX_DUCK_ATTACK_TAU,

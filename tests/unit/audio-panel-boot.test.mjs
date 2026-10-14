@@ -23,7 +23,7 @@ function boot({ soundOn, musicEnabled, raceRadio, data = {}, extra = {} }) {
   const spied = { setMusicEnabled: (b) => calls.push("setMusicEnabled:" + b), startMusic: () => calls.push("startMusic"),
                   setEnabled: (b) => calls.push("setEnabled:" + b) };
   const GameAudio = new Proxy({}, {
-    get: (t, k) => (k in t ? t[k] : spied[k]) || ((v) => (typeof v === "number" ? v : undefined)),
+    get: (t, k) => k in t ? t[k] : (spied[k] || ((v) => (typeof v === "number" ? v : undefined))),
   });
   Object.assign(GameAudio, {
     musicSource: () => "all", setMusicSource: (v) => v, sourceCounts: () => ({ builtin: 0, user: 0 }),
@@ -48,7 +48,7 @@ function boot({ soundOn, musicEnabled, raceRadio, data = {}, extra = {} }) {
   const panel = ctx.__audioPanel.create(G);
   calls.length = 0;
   panel.init();
-  return { calls, wired, data, dom, G };
+  return { calls, wired, data, dom, G, GameAudio, panel };
 }
 
 test("init sets the music switch before setSound can start the menu track", () => {
@@ -123,4 +123,22 @@ test("default-off and system-announcer speech suppress battle sample playback", 
   r.data.battleEarcon = true; r.G.announcer = { speaking: () => true };
   sample.onclick(); assert.equal(plays, 0, "system TEST speech owns the audio moment too");
   r.G.announcer.speaking = () => false; sample.onclick(); assert.equal(plays, 1);
+});
+
+
+test("radio focus native choice persists through lazy stub replacement and reload without lifting master mute", () => {
+  const data = {}, r = boot({ soundOn: false, musicEnabled: false, data });
+  r.GameAudio._stub = true;
+  r.wired.get("as-focus").write("8");
+  assert.equal(data.radioFocusDb, 8); assert.equal(typeof data.radioFocusDb, "number");
+  assert.equal(r.wired.get("as-focus").read(), 8); assert.equal(r.G.soundOn, false);
+  let applied = 0;
+  r.GameAudio._stub = false;
+  r.GameAudio.setRadioFocusDb = (v) => { applied = [0, 4, 8, 12].includes(v) ? v : 0; return applied; };
+  r.GameAudio.getRadioFocusDb = () => applied;
+  r.panel.init(); assert.equal(applied, 8); assert.equal(r.wired.get("as-focus").read(), 8);
+  assert.equal(r.G.soundOn, false, "rehydration is not a sound-enable gesture");
+  const reload = boot({ soundOn: false, musicEnabled: false, data: { radioFocusDb: data.radioFocusDb } });
+  assert.equal(reload.wired.get("as-focus").read(), 8);
+  reload.wired.get("as-focus").write("9"); assert.equal(reload.data.radioFocusDb, 0);
 });
