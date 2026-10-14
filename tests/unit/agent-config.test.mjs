@@ -717,3 +717,20 @@ test("every skill reference is linked from its SKILL.md and, past 100 lines, ope
   }
   assert.deepEqual(problems, [], problems.join("\n"));
 });
+
+// 2026-10-13 retired squash: Merge Desk arms MERGE-commit auto-merge only
+// (AGENTS.md §Concurrent PRs, github-mcp-guard.sh). A day later the Merge Desk
+// subagent, Bugbot's rules, the Cursor/Grok plugin, the steward card and
+// deploy.mjs's PR notes still said "arms SQUASH" — each tool read a different
+// rule. Nothing any agent reads may tell it to squash again.
+test("no agent-facing file tells an agent to arm or merge with SQUASH", () => {
+  const files = spawnSync("git", ["ls-files", "AGENTS.md", ".claude/agents", ".claude/skills", ".claude/rules",
+    ".cursor", "cursor-plugins", ".codex", ".agents", "docs/notes/APEX-STEWARD-CARD-2026-10-05.md", "tools/ci/deploy.mjs"],
+    { cwd: ROOT, encoding: "utf8" }).stdout.split("\n").filter(Boolean)
+    .filter((f) => !fs.lstatSync(path.join(ROOT, f)).isSymbolicLink());
+  assert.ok(files.length > 20, "the agent-facing file listing came back nearly empty");
+  const STALE = /mergeMethod:\s*"SQUASH"|arms?\s+(auto-merge\s*\()?SQUASH\b|SQUASH only\b|\*\*SQUASH only\*\*/i;
+  const bad = [];
+  for (const f of files) read(f).split("\n").forEach((l, i) => { if (STALE.test(l) && !/retired/i.test(l)) bad.push(`${f}:${i + 1}: ${l.trim()}`); });
+  assert.deepEqual(bad, [], "squash is retired — Merge Desk arms MERGE (merge commit) only");
+});

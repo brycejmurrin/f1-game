@@ -101,7 +101,7 @@ const lazyBundles = LazyBundles.create({
     });
   },
 });
-const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -1996,6 +1996,9 @@ function gridUp(preOrder) {
   // These are exactly the values update() would have written a tick later, so
   // nothing downstream changes; it just happens before the first frame is shot.
   seedPlayerPose();
+  // Widen the field representations the race would widen mid-lap, here, before anything is optimized: values
+  // unchanged, no deopt storm at the first lap line or pit window (js/race/car-fields.js WARM, PERF-HUNT-4 B-F1).
+  if (typeof CarFields !== "undefined") for (const c of cars) CarFields.warmShape(c);
 }
 // The player's world pose from its grid (s, x) — shared by gridUp and the red
 // flag re-grid. Heading follows the road tangent, not world +Z: `head = 0` is
@@ -2125,11 +2128,12 @@ function dropTrackWorld() {
 // Sentinel is race-start only (startRaceBody). Menu/flyby must not arm SENT_ACTIVE.
 function raceArmedSentinel() { return state === "race" || state === "count"; }
 async function loadTrackStepped(idx, live) {
-  // LAZY_CIRCUIT: path/pal/sectors land via ensureCircuit before any build.
-  // Callers (flyby / startRace / intro) already await ensureScenery (which
-  // chains ensureCircuit); this gate covers a direct stepped load and races
-  // the in-flight memo so a meta stub never reaches Tracks.buildPaced.
-  await ensureCircuit(idx);
+  // LAZY_CIRCUIT + LAZY_TRACK_BUILD: path/pal/sectors and the build toolkit land
+  // via ensureScenery before any build. Callers (flyby / startRace / intro)
+  // already await ensureScenery; these gates cover a direct stepped load and
+  // race the in-flight memos so a meta stub / missing TrackBuildProps never
+  // reaches Tracks.buildPaced.
+  await Promise.all([ensureCircuit(idx), ensureTrackBuild()]);
   if (!live()) return false;
   const def = Tracks.LIST[idx], sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
   if (builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots) { loadTrack(idx); return true; }
@@ -3644,7 +3648,7 @@ customTeam = CustomTeam.create({
 });
 // UI SIZE / HUD SIZE + RESOLUTION (js/ui/scale.js). After Menus so the
 // first applyUiScale can refresh an already-built select preview.
-const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G);
+const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G); if (typeof HudArrange !== "undefined" && HudArrange.create) HudArrange.create(G);
 // CAREER screen — new-career setup + season hub (js/career/career-ui.js). The rules
 // and the save live in js/career/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
@@ -4414,6 +4418,17 @@ function quitToMenu() {
 // Reusable rank buffer — refilled and sorted each physics step (up to 5x per
 // rendered frame) so we don't allocate a fresh array via cars.slice() each time.
 const ranked = [], byProgDesc = (a, b) => b.prog - a.prog;   // hoisted: no comparator closure per step
+// AFTER THE FLAG a finished car keeps accruing prog in coast(), so a later but faster finisher out-progressed an
+// earlier one and took its c.rank (the HUD position, the relative board). The finishers' rank SLOTS are handed
+// back out in classification order (RaceControl.finishOrder: laps, then the clock); running cars keep theirs and
+// `ranked` stays in progress order (collisions and traffic scans read it). PERF-HUNT-4 B-F2.
+const _finRanked = [];
+function rankFinishers() {
+  _finRanked.length = 0;
+  for (let i = 0; i < ranked.length; i++) if (ranked[i].finished) _finRanked.push(ranked[i]);
+  _finRanked.sort(RaceControl.finishOrder);
+  for (let i = 0, k = 0; i < ranked.length; i++) if (ranked[i].finished) _finRanked[k++].rank = i + 1;
+}
 // Live weather (setWeatherLive/setTimeOfDay) and the dynamic weather arc live in
 // js/race/weather-arc.js — WeatherArc.create(G, deps), wired as `wxArc` above.
 
@@ -4557,9 +4572,12 @@ function update(dt) {
   ranked.length = 0;
   for (const c of cars) if (!c.retired) ranked.push(c);
   ranked.sort(byProgDesc);
+  let nFin = 0;
   for (let i = 0; i < ranked.length; i++) {
     ranked[i].rank = i + 1;
+    if (ranked[i].finished) nFin++;
   }
+  if (nFin > 1) rankFinishers();
   if (!isPractice() && !isQuali() && !realRace.owns(player)) scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
 
   // Leading human for AiBand catch-up (scripted mode ignores). Once per step.
@@ -5250,13 +5268,13 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // track — only `d` moves. One object per car (c._lk: never restored by the
     // coach's primitive rewind, so key and samples cannot be split), filled
     // contiguously; a different node, line choice or track refills from 0.
-    const lk = c._lk || (c._lk = { node: -1, on: false, track: null, n: 0, v: new Float64Array(AI_LOOK_CAP), a: new Float64Array(AI_LOOK_CAP), b: new Float64Array(AI_LOOK_CAP) });
+    const lk = c._lk || (c._lk = { node: -1, on: false, track: null, n: 0, v: new Float64Array(AI_LOOK_CAP), a: new Float64Array(AI_LOOK_CAP), b: new Float64Array(AI_LOOK_CAP), m: new Float64Array(AI_LOOK_CAP) });   // m: AiDrive.bankGrip(b), cached (PERF-HUNT-4 B-F4)
     if (lk.node !== node0 || lk.on !== onLine || lk.track !== track) { lk.node = node0; lk.on = onLine; lk.track = track; lk.n = 0; }
     let lkI = 0;
     for (let ss = ss0, d = ss0 - c.s; d < look; ss += dsN, d += dsN, lkI++) {
       if (lkI < lk.n) {
         if (lk.a[lkI] > kMax) kMax = lk.a[lkI];
-        AiDrive.pushLook(d, lk.v[lkI], lk.b[lkI]);
+        AiDrive.pushLook(d, lk.v[lkI], lk.b[lkI], lk.m[lkI]);
         continue;
       }
       // Tracks.curvature / pathK / bankAngle all wrap s themselves.
@@ -5266,8 +5284,9 @@ function updateCarBrakePlan(c, dt, ranked, S) {
       // |bank|: the player's bankRoll (below) takes the absolute value, so a
       // signed/adverse bank must not boost the player while it cuts the AI.
       const lkV = onLine ? TrackLine.pathK(track, ss) : kk, lkB = Math.abs(Tracks.bankAngle(track, ss));
-      AiDrive.pushLook(d, lkV, lkB);
-      if (lkI < AI_LOOK_CAP) { lk.v[lkI] = lkV; lk.a[lkI] = ak; lk.b[lkI] = lkB; lk.n = lkI + 1; }
+      const lkM = AiDrive.bankGrip(lkB);
+      AiDrive.pushLook(d, lkV, lkB, lkM);
+      if (lkI < AI_LOOK_CAP) { lk.v[lkI] = lkV; lk.a[lkI] = ak; lk.b[lkI] = lkB; lk.m[lkI] = lkM; lk.n = lkI + 1; }
     }
     _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = Math.min(1, dd.corner * (1 + (c._bandNow || 0)));   // the band lifts corner authority too, never past 1.0: a banded car drives like a better driver, not a faster car
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * trMul * (gmC / gm0); _aiBr.pace = PACE; _aiBr.vmax = VMAX;   // the tread's braking credit (docs/PHYSICS.md §Braking): the planner must stop as the executor below does, or it corners on wets and brakes on slicks
@@ -5904,9 +5923,9 @@ function updateCarBicycle(c, dt, ranked, S) {
     // (speedRefFromSlider in js/input/steer-tuning.js) moved with this formula —
     // see its comment.
     // HYPERBOLIC raw = 1/(1+vs/ref) (PHASE-C §2; never negative, no floor). Hold
-    // full lock for vs≤15 (hairpin), blend 15→30, raw for vs≥30 so ≥60 m/s is
-    // bit-identical to the old taper (vStd pace-cancels; SPEED STEER dial OK).
-    const vs = vStd(Math.abs(c.speed)), raw = 1 / (1 + vs / STEER_SPEED_REF), lockTaper = vs <= 15 ? 1 : (vs >= 30 ? raw : 1 + (raw - 1) * (vs - 15) / 15);
+    // 1.06× lock for vs≤15 (hairpin ≈0.371 rad at notch-7 0.35), blend 15→30,
+    // raw for vs≥30 so ≥60 m/s stays bit-identical (vStd pace-cancels; SPEED STEER OK).
+    const vs = vStd(Math.abs(c.speed)), raw = 1 / (1 + vs / STEER_SPEED_REF), lockTaper = vs <= 15 ? 1.06 : (vs >= 30 ? raw : 1.06 + (raw - 1.06) * (vs - 15) / 15);
     const driverDelta = shaped * STEER_MAX_SLIP * lockTaper;
     // DRIVING-HELP assist: the steer needed to track curvature k is the kinematic
     // term (L·k) PLUS a speed-squared understeer term — a car needs progressively
@@ -6814,456 +6833,10 @@ function armBackendProbe() {
     catch (_) { /* no probe: a jetsam in the arming window will not auto-revert */ }
   }
 }
-/** True when the bound backend reports a lost context/device (its cheap ctxLost(); backendState() is the diagnostic fallback). */
-function gfxContextLost() {
-  try { if (gfx && gfx.ctxLost) return !!gfx.ctxLost(); const s = gfx && gfx.backendState && gfx.backendState(); return !!(s && s.ctxLost); }
-  catch (_) { return false; }
-}
-function render(dt) {
-  // Headless presents nothing, so the handoff card (below, after present) would wait forever: down at once, as before it existed.
-  if (headlessMode) { mirrorPass.cancelPreparation(); loadingScreen.lowerWaitPlate(); return; }
-  if (state === "race") loadingScreen.lowerWaitPlate();   // busy/handoff must not hide HUD docks after lights-out (hud-layout / hud-audit)
-  // Context / device loss: shadow+begin already no-op, but render used to return
-  // before afterPresent (begin===false / stuck warm) and leave handoff up forever.
-  // Inline the stop (not RaceEntryProfile) so tests/unit/garage-arrival's render
-  // prefix extract stays self-contained; afterPresent still marks lower-lost when
-  // a later present path reaches it.
-  if (gfxContextLost()) {
-    try { mirrorPass.cancelPreparation(); } catch (_) { /* harness */ }
-    if (loadingScreen.phase() === "handoff") loadingScreen.stop();
-    return;
-  }
-  // Warming used to return before the visibility pass. openGarage's Home→bay
-  // gap hides #game via menuBlank; if a program warm then latched, the lid
-  // stayed up until an unrelated present (a panel click) cleared warming.
-  // Intro staging (_studio.cardUp) must keep both canvases hidden under
-  // PREPARING until the first successful garage present (garage-arrival).
-  if (gfx.warming && gfx.warming()) {
-    if (setupPreviewOn && !(_studio && _studio.cardUp)) {
-      if (canvas.style.visibility === "hidden") canvas.style.visibility = "";
-      if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
-      if (_softEl && _softEl.style.visibility === "hidden") _softEl.style.visibility = "";
-    }
-    return;
-  }
-  if (uiExperience && uiExperience.renderHome(dt)) { if (loadingScreen.phase() === "busy" && els.overlay && els.overlay.dataset.homeReady) loadingScreen.stop(); return; }
-  if (loadingScreen.phase() === "busy" && !setupPreviewOn && els.overlay && !els.overlay.hidden) loadingScreen.stop();
-  // The live Home garage returned above. Other menus hide undrawn canvases
-  // so a previous garage/race frame cannot leak behind a new screen. Loading
-  // cinematics and garage previews retain their existing covered warm-up.
-  const homeTrack = !!(uiExperience && uiExperience.trackActive());
-  const menuBlank = (state === "menu" && !setupPreviewOn && !homeTrack && (!track || !loadingScreen.active() || !menuWorld()))
-    || ((loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !setupPreviewOn);   // the no-world card must not show the LAST circuit; nor may a build card over the results (startRaceCovered)
-  const vis = menuBlank || (_studio && _studio.cardUp) ? "hidden" : "";
-  if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
-  // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep
-  // its visibility in lockstep with #game or a blank menu still shows the last blit.
-  if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");   // only a soft-presenting backend creates it (at init); cached once found
-  if (_softEl && _softEl.style.visibility !== vis) _softEl.style.visibility = vis;
-  // A freshly pre-built world draws its first frames HIDDEN (scheduleFlybyTrack
-  // owes them): shaders, textures and shadow maps warm up under the picker, not
-  // in front of the player the instant race settings opens.
-  // ...and the garage pre-warm (garagePrewarm): its frames drawn hidden too.
-  if (menuBlank && _menuGate.garageWarm > 0 && state === "menu") { _menuGate.garageWarm--; if (renderSetupPreview(dt)) _menuGate.garageReady = true; return; }
-  if (menuBlank && !(track && _menuGate.warm > 0)) return;
-  // The last hidden warm frame is the one observable "this world has drawn":
-  // tools/lib/mem-census.mjs waits on this record (a census taken before it read
-  // 10 render objects on llvmpipe, CI run 37330132243), and __apex is off-limits
-  // while a picker build is in flight (lazyTrackEnsure).
-  if (menuBlank && --_menuGate.warm === 0) Log.info("gfx", "menu warm drawn " + (track.def && track.def.id));
-  // RESULTS: physics and PerfGov already stop; the sheet is translucent over
-  // #game by design (tokens.css). Re-drawing an identical frozen world every
-  // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the
-  // last race present and return. Race-settings flyby and live race still draw.
-  if (state === "results" && !resultsCam.live()) return; // ResultsCam owns chequered/orbit/highlights
-  // HELD GARAGE (studioDone): a world frame that kicks TLX's program warm paints nothing, so the
-  // garage's last frame stays up — no hidden canvas, no black card before the flyby.
-  const heldWarm = !!(_studio && _studio.held && track && _menuGate.warm > 0); if (heldWarm) _menuGate.warm--;
-  if (setupPreviewOn && !heldWarm) {
-    if (renderSetupPreview(dt, !!(_studio && _studio.cardUp))) {
-      _menuGate.garageReady = true;
-      if (!_studio || _studio.softReady !== false) studioShown();
-      if (_studio && !_studio.cardUp) { canvas.style.visibility = ""; if (_softEl) _softEl.style.visibility = ""; }
-    }
-    return;
-  }
-  setupCam.endGarageRes(); // first world frame: restore the garage's reduced res
-  gfx.resize();
-  // No track yet (the menus build none — the flyby belongs to RACE SETTINGS, see
-  // scheduleFlybyTrack): DRAW NOTHING. alpha:false composites an undrawn canvas
-  // as opaque BLACK, which the blessed menu baselines encode (corners 4-9/255).
-  if (!track) return;
-  _frameNo++;
-  // camera
-  let eyeT, tgtT, fovT, roadCamRoll = 0;
-  // Is THIS frame the pre-race cinematic? It is rendered like photo mode rather
-  // than like gameplay — far plane out, fog thinned, scenery not culled to the
-  // fog wall — because its shots are whole-circuit vistas from a few hundred
-  // metres up. See FlybySeq.FAR / FlybySeq.FOG for why both numbers live there.
-  let cine = false;
-  const comfort = camComfort();   // once per frame: it reads localStorage (CamComfort.active) and matchMedia, and nothing in render() writes either
-  if (state === "menu") {
-    _plOk = false; _plBodyOk = false;
-    // THE LOADING SCREEN'S FLYBY IS A SHOT SEQUENCE (js/camera/flyby-seq.js), not
-    // a crawl down the centreline. The old path solved camVantage("cinematic")
-    // around an `s` that advanced with the wall clock; that rig clamps its
-    // lateral offset only on STREET circuits, so on an open circuit it sat 22 m
-    // off the racing line with nothing checking what was standing there, and
-    // flew through buildings. The sequencer places every eye against the props
-    // registry instead. It is driven by PROGRESS through the flyby phase, so the
-    // sequence keeps its shape whatever the phase is retuned to.
-    const fb = (homeTrack && uiExperience.trackCamera(dt)) || FlybySeq.solve(track, flybyProgress(), flybyShots);
-    eyeT = fb.eye; tgtT = fb.tgt; fovT = fb.fov; camAncNX = null;
-    // A shot boundary is a CUT. Without this the λ1.6 menu damping below smears
-    // the change of angle into a long swim between two vantages, which reads as
-    // one broken move rather than two shots.
-    if (fb.cut) camSnapNext = true;
-    cine = true;
-  } else {
-    if (!player) return;
-    // Anchor the camera to the SAME (s, x) the car body samples — playerAnchor
-    // derives it from the drawn WORLD position, shared with currentCarGroundMat
-    // and the body loop, so camera and car move as one (no fore/aft slide, no
-    // backwards jolt, no height/orientation jitter). Pre-jump/menu → arc interp.
-    // Resolve once per frame; shadow + body reuse _plCS/_plCX (no second trackFrom).
-    { const pa = playerAnchor(player); _plCS = pa.cS; _plCX = pa.cX; _plOk = true; _plBodyOk = false; }
-    const pS = _plCS, px = _plCX;
-    sampleAt(pS, smp);
-    // NOTE: the camera rig is still built from (pS, px) inside camVantage(). That
-    // is a much smaller coupling than the body had — (s, x) is now an exact
-    // reading of the world position, so the rebuilt anchor lands within a
-    // centimetre of the car, versus the 0.1 s lateral LAG the mesh carried. Left
-    // alone deliberately rather than reworked blind.
-    // ride the bank with the car so the camera doesn't sink into the banked road
-    const bankCam = Tracks.banking(track, pS, px, _bankScratchCam, true);  // true = SMOOTH lift, camera only (mesh.js banking)
-    const bankDy = bankCam ? bankCam.dy : 0;
-    // Optional pit-entry/exit auto-cut onto PIT WALL (ExtraRigs) — before we
-    // read camMode so this frame's vantage matches the cut.
-    if (typeof ExtraRigs !== "undefined") ExtraRigs.tickPitAuto(G);
-    const mode = CAM_MODES[camMode].id;
-    roadCamRoll = bankCam ? -bankCam.roll * cameraBankScale(mode) : 0;
-    // All per-mode framing lives in camVantage() so the live cam, snapCam() and the
-    // previewCam() debug hook stay identical. bankDy keeps the eye riding the bank.
-    // The free-world chase/onboard rig needs the car's world pose too — but
-    // INTERPOLATED like everything else here, not raw. Raw px/pz/head only
-    // update once per 60 Hz physics tick, so reading them straight in a
-    // per-frame render loop snaps a full tick every frame instead of gliding
-    // by renderAlpha: on a display whose refresh doesn't line up 1:1 with the
-    // physics rate (common — 90/120 Hz, or ordinary vsync jitter at 60), that
-    // reads as a held-then-jump stutter whose size scales with speed × dt —
-    // "vibrates, worse the faster I go". renderPosOf/headInterp are the same
-    // interpolation the car body and playerAnchor already use.
-    const rpCam = renderPosOf(player);
-    camAncNX = rpCam.world ? rpCam.x : null; camAncNZ = rpCam.world ? rpCam.z : 0;   // anchor for the car-frame camera damping below
-    _vantExtra.bankDy = bankDy; _vantExtra.deploy = player.deploying; _vantExtra.reduceMotion = comfort;   // kerb shiver off (js/camera/vantage.js)
-    _vantExtra.slipLat = player.vLat || 0; _vantExtra.att = player;
-    // the car's real world pose, so the chase rig can follow the CAR
-    _vantExtra.carPos = rpCam.world ? (_vantCarPos[0] = rpCam.x, _vantCarPos[1] = rpCam.z, _vantCarPos) : null;
-    _vantExtra.carHead = headInterp(player); _vantExtra.dt = dt; _vantExtra.frameSubject = realRace.isWatch();
-    // CamFeel (free-look / look-back latch / speed vignette) ticks BEFORE the
-    // vantage solve so this frame's offsets land in the same eye/tgt.
-    if (typeof CamFeel !== "undefined") {
-      CamFeel.tickRace(mode, dt, comfort, state === "race" || state === "count",
-        clamp(player.speed / vTop(), 0, 1));
-    }
-    if (typeof ExtraRigs !== "undefined") {
-      _vantExtra.rival = (mode === "rival") ? ExtraRigs.pickRival(cars, player) : null;
-      _vantExtra.playerProg = player.prog || 0;
-      _vantExtra.snap = false;
-    }
-    const vant = camVantage(mode, pS, px, player.speed, performance.now(), _vantExtra);
-    eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov; if (vant.cut) camSnapNext = true;
-    if (shake > 0) {
-      shake = Math.max(0, shake - dt * 1.6);
-      // squared: grazes barely move, crashes slam. REDUCE MOTION zeroes the OFFSET, not the trauma
-      // (cues keyed to it stay timed); CamTune.shakeOffset also applies COMFORT › HEAD BOB. SCOPE: every
-      // race camera (docs/notes/CAMERA-FEEL.md). Real-time noise, fps-independent; onboard it stays in the tub.
-      if (typeof CamFeel !== "undefined") CamFeel.shake(eyeT, tgtT, CamTune.shakeOffset(shake, comfort), performance.now() * 0.001, CamFeel.isBuzzMode(mode));
-    }
-    // Onboard speed buzz — CamFeel.BUZZ_MODES (cockpit/hood/visor/tcam). Amp via
-    // CamTune.buzzAmp (REDUCE MOTION / COMFORT › HEAD BOB). Off when wet (SSR flicker).
-    const _buzzWet = 1.0 - clamp((frame.wetness || 0) * 2.0, 0.0, 1.0);
-    if (state === "race" && _buzzWet > 0.01
-        && (typeof CamFeel !== "undefined" ? CamFeel.isBuzzMode(mode)
-          : (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam"))) {
-      const spV = clamp(player.speed / vTop(), 0, 1);
-      const vAmp = CamTune.buzzAmp(spV, player.deploying, comfort, _buzzWet);
-      if (vAmp > 0.001) {
-        const tv = performance.now() * 0.001;
-        const j1 = Math.sin(tv * 61.0) * 0.6 + Math.sin(tv * 97.0 + 1.7) * 0.4;
-        const j2 = Math.sin(tv * 73.0 + 0.9) * 0.6 + Math.sin(tv * 111.0 + 2.3) * 0.4;
-        eyeT[0] += j1 * vAmp; eyeT[1] += j2 * vAmp * 0.7;
-        tgtT[0] += j1 * vAmp * 0.35; tgtT[1] += j2 * vAmp * 0.25;
-      }
-    }
-  }
-  // Sky-view override: __apex.sky() positions the camera to show the horizon
-  // and clouds instead of the normal low chase angle.
-  if (frozen && skyViewOverride) {
-    eyeT = skyViewOverride.eye;
-    tgtT = skyViewOverride.tgt;
-    fovT = skyViewOverride.fov;
-  }
-  // High lambda in-race: the anchor already follows the car along the track,
-  // so we only smooth bumps — no speed lag. Low lambda for the menu flyby.
-  // Onboard cams ride ON the car (cockpit/hood/tcam), so they need very high
-  // lambda or the eye lags behind/into the bodywork at speed.
-  const racing = state === "race" || state === "count";
-  const camId = CAM_MODES[camMode].id;
-  const onboard = racing && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "helmet" || camId === "tcam");
-  // Just after a cut, ease the external cams in with a gentler lambda so the angle
-  // sweeps to its new vantage instead of snapping. Onboard cams ignore it (must lock).
-  const cutEase = camCutT > 0 ? (camCutT = Math.max(0, camCutT - dt), 0.4) : 1;
-  // Onboard cams LOCK to the car (λ400 ≈ instant): at λ40 the exponential
-  // smoothing left a steady-state lag of ~0.7-1 m at top speed, which slid the
-  // cockpit eye backwards INSIDE the engine cover / shark fin — the "black
-  // rectangle fills the screen at sustained speed" bug. The EYE must stay
-  // locked, but the look-AHEAD target (camVantage curves it toward upcoming
-  // corners) locking too made the head "snap" toward every apex instead of
-  // panning — cockpit/hood ease the target gently, like a driver's eyes
-  // leading into a corner rather than their whole head whipping around.
-  // DRONE carries its own tether smooth inside ExtraRigs; comfort softens the
-  // outer damp further. Chase λ18, broadcast pans at 9, rival/pit wall calmer.
-  const softCam = camId === "drone" || camId === "rival" || camId === "pitwall";
-  const raceLam = softCam ? (comfort ? 6 : (camId === "drone" ? 12 : 14)) : ((camId === "heli" || camId === "side" || camId === "cinematic" || camId === "overhead" || camId === "low" || camId === "trackside") ? 9 : 18);
-  const lE = onboard ? 400 : (racing ? raceLam : 1.6) * cutEase;
-  const gentleHead = !comfort && onboard && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "helmet") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag; XR: HMD owns look
-  const lT = gentleHead ? 7 : onboard ? 400 : (racing ? raceLam + (softCam ? 1 : 2) : 10) * cutEase;
-  // Damp HORIZONTALLY in the CAR's frame, not the world's. Damping toward a
-  // MOVING target lags ~v/lambda - v*dt/2, so the car-to-camera distance
-  // breathes with frame time: MEASURED, a 16-38 ms vsync wobble swings it
-  // 28.7 cm at 320 km/h, 4.7 cm at 150 — it scales with SPEED, hence "the car
-  // vibrates, worse the faster I go", and a heavier resolution (longer,
-  // jitterier frames) makes it worse. Damping the OFFSET cancels the velocity
-  // term exactly: 0.0000 cm at every speed, and the chase distance stops
-  // inflating (13.2 m back to the intended 8.0 m at 320). y stays world-frame.
-  const ancX = camAncNX, ancZ = camAncNZ;
-  if (ancX === null || camAncX === null) { camAncX = ancX; camAncZ = ancZ; }   // first frame / no world pose: no jump
-  const aP = _camAP, aN = _camAN;   // pooled, filled in place
-  aP[0] = camAncX === null ? 0 : camAncX; aP[2] = camAncZ;
-  aN[0] = ancX === null ? 0 : ancX; aN[2] = ancZ;
-  const fixedEye = camId === "trackside" || camId === "pitwall";   // CAM-1: a world-fixed eye damped in the car's frame is dragged v/lambda (8 m at 80 m/s) down-track
-  for (let i = 0; i < 3; i++) {
-    camEye[i] = fixedEye ? damp(camEye[i], eyeT[i], lE, dt) : aN[i] + damp(camEye[i] - aP[i], eyeT[i] - aN[i], lE, dt);
-    camTgt[i] = aN[i] + damp(camTgt[i] - aP[i], tgtT[i] - aN[i], lT, dt);
-  }
-  camAncX = ancX; camAncZ = ancZ;
-  camFov = damp(camFov, fovT, onboard ? 4 : 4 * cutEase, dt);
-  if (typeof CamFeel !== "undefined" && CamFeel.consumeAimSnap()) { for (let i = 0; i < 3; i++) camTgt[i] = tgtT[i]; camRoll = -camRoll; }   // LOOK BACK flipped: a cut for the AIM, roll mirrored (feel.js)
-  // A CUT LANDS WHOLE. Damping exists to smooth a moving vantage; across a shot
-  // boundary there is nothing to smooth — the two vantages are unrelated, and
-  // easing between them turns a cut into a long swim through whatever lies
-  // between. Set by the flyby sequencer at a shot boundary only.
-  if (camSnapNext) {
-    for (let i = 0; i < 3; i++) { camEye[i] = eyeT[i]; camTgt[i] = tgtT[i]; }
-    camFov = fovT;
-    camSnapNext = false;
-  }
-  // The EDITOR's preview is the same cinematic, parked (js/agent/apex.js stamps
-  // `cine` on its dbgCam). From here down, everything gated on `cine` is a thing
-  // the live screen and the preview have to do IDENTICALLY — that is the whole
-  // point of the flag, and the reason it is widened here rather than read as two
-  // separate conditions at four sites that can drift apart one at a time.
-  if (dbgCam && dbgCam.cine) cine = true;
-  // Car-follow cameras counter-rotate by the road bank so the car and asphalt
-  // read level while the horizon carries the banking cue. Slip adds a small
-  // dynamic lean on top; broadcast/debug and cinematic cameras stay world-level
-  // (the flyby's own roll would otherwise be whatever the last race left behind,
-  // decaying over the first half-second of a shot the editor showed level).
-  if (dbgCam || cine || comfort) {
-    camRoll = (dbgCam && dbgCam.roll) || 0;   // level unless the FREE CAMERA's ROLL dial set one; XR: HMD owns roll
-  } else {
-    // Slip source smoothed at λ10 (τ≈0.1 s): vLat/speed are RAW 60 Hz-stepped
-    // physics values, and feeding them straight into screen roll printed every
-    // physics step onto the horizon — the most visible jitter class. λ7 on the
-    // roll itself matches the old linear dt/0.15 blend at 60 fps
-    // (1−e^(−7/60) ≈ 0.110 ≈ (1/60)/0.15) but is frame-rate independent, so
-    // 30 and 120 Hz devices converge at the same real-time rate. COMFORT › ROLL
-    // LEAN scales via CamTune.rollTarget (camComfort still forces level above).
-    const slipRaw = player && player.speed > 1 ? (player.vLat || 0) / player.speed : 0;
-    camSlipSm = damp(camSlipSm, clamp(slipRaw, -1, 1), 10, dt);
-    camRoll = damp(camRoll, (typeof CamFeel !== "undefined" && CamFeel.lookingBackNow() ? -1 : 1) * CamTune.rollTarget(roadCamRoll, camSlipSm, (onboard && player ? (player.baRoll || 0) * 0.85 : 0), false), 7, dt);
-  }
-  // Debug free camera (set via __apex.view) overrides the chase cam — instant
-  // (no damping), uncapped FOV, far plane and fog pushed out — for inspecting
-  // whole-track layouts and trackside scenery from any angle.
-  // RENDER DISTANCE knob: scales the far clip plane (and, below, the chunked-
-  // scenery draw-distance cull that derives from it). dbgCam overwrites
-  // farPlane with its own value right below, so debug/photo-mode is untouched.
-  let fovY, farPlane = 900 * (LT.renderDistMul != null ? LT.renderDistMul : 1);
-  if (cine) farPlane = FlybySeq.FAR;   // flat, not scaled by RENDER DISTANCE: the editor previews ONE number
-  if (dbgCam) {
-    GameCams.applyFreeCam(dbgCam, camEye, camTgt);
-    fovY = dbgCam.fov * Math.PI / 180;
-    if (!cine) farPlane = dbgCam.far;
-  } else {
-    // camFov is a vertical FOV. On a wide (landscape) screen a fixed vertical FOV
-    // blows the horizontal field out past ~100°, which makes the car look tiny and
-    // far away. Cap the horizontal FOV so wide screens zoom in and the car stays a
-    // readable size; portrait (narrow) is unaffected.
-    fovY = camFov * Math.PI / 180;
-    // The HFOV cap keeps the CAR a readable size on a wide screen. A crane shot
-    // has no car in it, the editor previews the authored angle uncapped, and a
-    // shot authored at 60° would arrive on a 21:9 screen squeezed to 45° — so
-    // the cinematic takes the number it was framed at.
-    if (!cine) {
-      const HFOV_MAX = 86 * Math.PI / 180;
-      const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(gfx.aspect, 0.0001));
-      fovY = Math.min(fovY, fovYCap);
-    }
-  }
-  // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
-  // precision across the scene — the biggest single lever against z-fighting /
-  // shadow flicker. Capped at 0.3 (not higher): the cockpit rig keeps the wheel /
-  // dash fascia a proven 0.46 m from the eye (COCKPIT_EYE_FWD + _rigT), so 0.3
-  // still clears it with ~9 cm to spare while raising the far/near precision
-  // floor ~1.5x vs 0.2.
-  // Per-camera near plane. Depth precision is governed by the near:far RATIO,
-  // and a 0.3 m near against a 900 m far spends almost all of it in the first
-  // few metres — which is why distant coplanar geometry z-fights. The near
-  // plane CANNOT simply be raised globally: the cockpit rig sits 0.46 m from
-  // the eye (see _rigT), so anything above ~0.35 slices the steering wheel and
-  // fascia out of frame. Only cockpit/hood views have geometry that close, so
-  // they keep 0.3 and every other view takes a near plane that buys back a lot
-  // of depth resolution for free.
-  const _projMode = CAM_MODES[camMode] ? CAM_MODES[camMode].id : "chase";
-  const _nearM = (_projMode === "cockpit" || _projMode === "hood" || _projMode === "visor" || _projMode === "helmet") ? 0.3 : 0.9;
-  const _near = cine ? FlybySeq.NEAR : (dbgCam ? 0.3 : _nearM);
-  M4.perspectiveTo(_mProj, fovY, gfx.aspect, _near, farPlane);
-  if (homeTrack && !dbgCam) { const view = uiExperience.trackCamera(); _mProj[8] = view.shiftX; _mProj[9] = view.shiftY; }
-  // Tilt the up vector by camRoll to roll the camera into corners. Inlined into
-  // module-scope scratch vectors (no per-frame V3 array allocation); same math.
-  {
-    let bx = camEye[0] - camTgt[0], by = camEye[1] - camTgt[1], bz = camEye[2] - camTgt[2];
-    let bl = Math.hypot(bx, by, bz) || 1; bx /= bl; by /= bl; bz /= bl;
-    // right = normalize(worldUp × back), worldUp = (0,1,0)
-    let rx = 1 * bz - 0 * by, ry = 0 * bx - 0 * bz, rz = 0 * by - 1 * bx;
-    let rl = Math.hypot(rx, ry, rz) || 1; rx /= rl; ry /= rl; rz /= rl;
-    // up = normalize(worldUp + right*sin(roll))
-    const s = Math.sin(camRoll);
-    let ux = rx * s, uy = 1 + ry * s, uz = rz * s;
-    let ul = Math.hypot(ux, uy, uz) || 1;
-    _camUp[0] = ux / ul; _camUp[1] = uy / ul; _camUp[2] = uz / ul;
-  }
-  M4.lookAtTo(_mView, camEye, camTgt, _camUp);
-  M4.mulTo(_mVP, _mProj, _mView);
-  // inv VP: sky rays always; god-rays when live. inv Proj: SSAO only — both post
-  // consumers shed at autoTier>=4 (see po.ssao/godray below).
-  M4.invertTo(_mInvVP, _mVP);
-  if (PerfGov.autoTier() < 4) M4.invertTo(_mInvProj, _mProj);
-  // Sun direction in VIEW space (for screen-space contact shadows): mat3(view)·sunDir.
-  {
-    const sd = frame.sunDir || [0, 1, 0];
-    let x = _mView[0]*sd[0] + _mView[4]*sd[1] + _mView[8]*sd[2];
-    let y = _mView[1]*sd[0] + _mView[5]*sd[1] + _mView[9]*sd[2];
-    let z = _mView[2]*sd[0] + _mView[6]*sd[1] + _mView[10]*sd[2];
-    const l = Math.hypot(x, y, z) || 1;
-    _sunVS[0] = x/l; _sunVS[1] = y/l; _sunVS[2] = z/l;
-  }
-  // The ROAD PLANE's normal in VIEW space. Used by the wet-road SSR to pick out
-  // road pixels AND — the part that matters — as the plane its reflection ray is
-  // flattened onto (post.js: Nr = mix(Nv, upVSn, 0.85)).
-  //
-  // This was world-up (0,1,0), i.e. mat3(view)'s second column, which is only the
-  // road's normal ON THE FLAT. On a gradient θ the two differ by θ, the flatten
-  // carries 0.85 of that error into the reflection normal, and a reflection
-  // DOUBLES angular error — so a 10° climb threw the reflected ray ~17° off. At
-  // grazing incidence that ray only leaves the surface at 2-5°, so being 17° out
-  // either dives it into the tarmac (mirroring asphalt) or throws it clear over
-  // the scene (a miss). That is why the wet road went patchy specifically on
-  // elevation. Sampling the real road normal costs one track sample per frame.
-  //
-  // r is bank-rotated at build time (tracks.js), so n = r × t carries CAMBER too,
-  // not just gradient — the same basis the cockpit rig builds.
-  {
-    let nx = 0, ny = 1, nz = 0;
-    if (track && player && player.s != null) {
-      Tracks.sample(track, player.s, _smpRoad);
-      const t = _smpRoad.t, r = _smpRoad.r;
-      const ux = r[1]*t[2] - r[2]*t[1],
-            uy = r[2]*t[0] - r[0]*t[2],
-            uz = r[0]*t[1] - r[1]*t[0];
-      const ul = Math.hypot(ux, uy, uz);
-      if (ul > 1e-6) { nx = ux/ul; ny = uy/ul; nz = uz/ul; }   // else keep world-up
-    }
-    // mat3(view) * n  (column-major: column j is elements 4j..4j+2)
-    const x = _mView[0]*nx + _mView[4]*ny + _mView[8]*nz,
-          y = _mView[1]*nx + _mView[5]*ny + _mView[9]*nz,
-          z = _mView[2]*nx + _mView[6]*ny + _mView[10]*nz;
-    const l = Math.hypot(x, y, z) || 1;
-    _upVS[0] = x/l; _upVS[1] = y/l; _upVS[2] = z/l;
-  }
-  frame.viewProj = _mVP;
-  frame.proj = _mProj;
-  frame.invProj = _mInvProj;
-  frame.invViewProj = _mInvVP;
-  frame.sunViewDir = _sunVS;
-  frame.upViewDir = _upVS;
-  frame.eye = camEye;
-  const _xrEyes = XrBoot.applyEyes(frame, camEye, camTgt, _camUp);   // null when flat
-  // Radial draw-distance cull for chunked scenery, in two halves every backend's
-  // chunk loop applies together (Frustum.radialCulled, js/render/shared/frustum.js).
-  // frame.cullDist, the HARD radius. Free/debug camera and cinematic: mobile caps
-  // at 700 m (a pushed-out photo-mode far plane frames a whole ~5 M-vert city and
-  // jetsam-kills the tab; the cinematic runs seconds after the build's transient
-  // peak), desktop keeps the full vista. Feature-shedding tier 3+ caps at the far
-  // plane (scenery vertex/draw load is the one big cost class the resolution
-  // scale and shed passes don't touch). Otherwise the sphere that contains the
-  // frustum (far-plane corners sit farther than farPlane) — look-identical.
-  // frame.cullFog, the FOG WALL: [density, height falloff] as the SHADER renders
-  // them (frame.fogDensity * FOG DENSITY — off the raw base, FOG DENSITY 0 still
-  // culled scenery at 250 m with no fog drawn). A chunk goes once even its
-  // nearest point raised to its top is 99.99 % fogged: HEIGHT-AWARE, because one
-  // eye-level radius (3/density, 750 m at night) culled floodlights, hotels and
-  // hills while only 65-70 % fogged. Off (density 0) under dbgCam/cine: they
-  // render a THINNED fog (_fogMul, read by gfx.begin() far below), and culling
-  // at frame.fogDensity's unthinned wall is a hard edge of missing world.
-  const _fogMul = cine ? FlybySeq.FOG
-    : (dbgCam ? (dbgCam.fog != null ? dbgCam.fog : 0.15) : null);
-  const _cullFog = frame.cullFog || (frame.cullFog = [0, 0]);
-  _cullFog[0] = (dbgCam || cine) ? 0 : (frame.fogDensity || 0) * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
-  _cullFog[1] = LT.fogHeight != null ? LT.fogHeight : (frame.fogHeight || 0);   // uFogHeight's own fallback
-  const _farCull = farPlane * Math.hypot(1, Math.tan(fovY * 0.5) * Math.hypot(1, gfx.aspect || 1));
-  frame.cullDist = (dbgCam || cine) ? (gfx.isMobile ? 700 : 0) : (PerfGov.tier() >= 3 ? farPlane : _farCull);
-  // WHAT THIS FRAME WAS ACTUALLY BUILT WITH, for __apex.camState().lens. Not a
-  // debug nicety: the live flyby and the EDITOR'S preview of the same shot ran
-  // different lenses for months with nothing able to see it, because every hook
-  // reported where the camera POINTED. Written after all five are resolved.
-  _lens.near = _near; _lens.far = farPlane; _lens.fovY = fovY;
-  _lens.fog = _fogMul; _lens.cull = frame.cullDist; _lens.cine = cine;
-  // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
-  // moon, fading out as cloud rolls in or the road gets wet, forced 0 in fog.
-  // glx.js floors its key-dim shadow fade with LT.moonShadow * frame.moonGate, so
-  // moonlight casts soft shadows on clear nights only — fog/overcast/rain
-  // nights stay shadowless, UNLESS the MOON SHADOWS knob is pushed past 0.5 (see
-  // moonGate below), a player-facing escape hatch. Computed BEFORE the shadow
-  // pass because the prop and car caster gates below feed the snap-cached map
-  // from it. Mirrors the frameSky.moon / frame.cloud plumbing further down
-  // (values persist across frames, so first-frame staleness only delays the
-  // gate by one recentre).
-  {
-    const _mAmt = (raceTimeOfDay === "default" && track && track.def && track.def.night)
-      ? 0.85 * LT.moonBright : (frameSky.moon || 0);
-    const _mCl = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
-    let _cf = (_mCl - 0.35) / 0.25;                    // smoothstep(0.35, 0.6, cloud)
-    _cf = _cf < 0 ? 0 : _cf > 1 ? 1 : _cf;
-    _cf = _cf * _cf * (3 - 2 * _cf);
-    frame.moonK = raceWeather === "fog" ? 0
-      : clamp(_mAmt / 0.85, 0, 1) * (1 - _cf) * (1 - clamp((frame.wetness || 0) * 2, 0, 1));
-    // MOON SHADOWS knob above 0.5 overrides the weather gate above (clear/dry/
-    // no-fog) so a player who wants shadows at night through cloud/fog/wet can
-    // have them — ramps from moonK (at 0.5, no change) to fully open (at 1.0).
-    const _msh = LT.moonShadow != null ? LT.moonShadow : 0.25;
-    frame.moonGate = Math.max(frame.moonK, clamp((_msh - 0.5) * 2, 0, 1));
-  }
-  // Resolve the moving player before any shadow-map pass (first-person views cast
-  // the cockpit body where the car loop draws it). AI keeps the pooled matrices
-  // from the preceding frame; only the player's shadow makes that latency visible.
-  const _hasLivePlayerShadow = !!(player && state !== "menu");
-  if (_hasLivePlayerShadow) { currentCarGroundMat(player, shadowPass.livePlayerMat); shadowPass.resolvePlayer(_smpPlayer, yawVisInterp(player)); }
-  // Sun / car shadow maps: js/render/shared/shadow-pass.js (snap-cached static map,
-  // per-frame car map). The live player matrix was resolved above.
-  if (!XrBoot.comfort()) shadowPass.sunPass(frame, _frameNo, _hasLivePlayerShadow);   // XR: skip maps
+// Lighting-prep phase of render() — sky knobs, wetness/rain, lightning, lamps,
+// lamp spot-shadow, lamp fog + frame.tune. PURE MOVE (zero behavior change);
+// Lighting owns this domain. Returns `wet` for the draw path below.
+function renderLightingPrep(dt, hasLivePlayerShadow) {
   // ── Sky animation & weather FX ──────────────────────────────────────────
   // Advance the render clock regardless of physics freeze so the sky always
   // animates (cloud drift, star twinkle) — unless a capture holds it.
@@ -7556,7 +7129,7 @@ function render(dt) {
   }
   // ── Nearest-floodlight SPOT shadow pass ─────────────────────────────────
   // Nearest-floodlight spot shadow map (night): js/render/shared/shadow-pass.js.
-  if (!XrBoot.comfort()) shadowPass.lampPass(frame, _frameNo, _hasLivePlayerShadow);
+  if (!XrBoot.comfort()) shadowPass.lampPass(frame, _frameNo, hasLivePlayerShadow);
   // GLOWING FOG driver: on whenever lamps are lit, swelling with haze so a
   // fog-weather night is the money shot while a clear night keeps only a hint.
   // Day / lights-off => 0, so daytime fog stays a pure sun tint. Faded by SUN
@@ -7572,6 +7145,450 @@ function render(dt) {
   frame.lampFog = frame.lights ? Math.min(0.9, LT.lampFogBase + LT.lampFogHaze * (frame.groundMist || 0) * LT.mistDensity) * _lfGate : 0;
   // Shader-side tunables ride along on the frame (glx begin() uploads them).
   frame.tune = LT;
+  return wet;
+}
+
+/** True when the bound backend reports a lost context/device (its cheap ctxLost(); backendState() is the diagnostic fallback). */
+function gfxContextLost() {
+  try { if (gfx && gfx.ctxLost) return !!gfx.ctxLost(); const s = gfx && gfx.backendState && gfx.backendState(); return !!(s && s.ctxLost); }
+  catch (_) { return false; }
+}
+function render(dt) {
+  // Headless presents nothing, so the handoff card (below, after present) would wait forever: down at once, as before it existed.
+  if (headlessMode) { mirrorPass.cancelPreparation(); loadingScreen.lowerWaitPlate(); return; }
+  if (state === "race") loadingScreen.lowerWaitPlate();   // busy/handoff must not hide HUD docks after lights-out (hud-layout / hud-audit)
+  // Context / device loss: shadow+begin already no-op, but render used to return
+  // before afterPresent (begin===false / stuck warm) and leave handoff up forever.
+  // Inline the stop (not RaceEntryProfile) so tests/unit/garage-arrival's render
+  // prefix extract stays self-contained; afterPresent still marks lower-lost when
+  // a later present path reaches it.
+  if (gfxContextLost()) {
+    try { mirrorPass.cancelPreparation(); } catch (_) { /* harness */ }
+    if (loadingScreen.phase() === "handoff") loadingScreen.stop();
+    return;
+  }
+  // Warming used to return before the visibility pass. openGarage's Home→bay
+  // gap hides #game via menuBlank; if a program warm then latched, the lid
+  // stayed up until an unrelated present (a panel click) cleared warming.
+  // Intro staging (_studio.cardUp) must keep both canvases hidden under
+  // PREPARING until the first successful garage present (garage-arrival).
+  if (gfx.warming && gfx.warming()) {
+    if (setupPreviewOn && !(_studio && _studio.cardUp)) {
+      if (canvas.style.visibility === "hidden") canvas.style.visibility = "";
+      if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
+      if (_softEl && _softEl.style.visibility === "hidden") _softEl.style.visibility = "";
+    }
+    return;
+  }
+  if (uiExperience && uiExperience.renderHome(dt)) { if (loadingScreen.phase() === "busy" && els.overlay && els.overlay.dataset.homeReady) loadingScreen.stop(); return; }
+  if (loadingScreen.phase() === "busy" && !setupPreviewOn && els.overlay && !els.overlay.hidden) loadingScreen.stop();
+  // The live Home garage returned above. Other menus hide undrawn canvases
+  // so a previous garage/race frame cannot leak behind a new screen. Loading
+  // cinematics and garage previews retain their existing covered warm-up.
+  const homeTrack = !!(uiExperience && uiExperience.trackActive());
+  const menuBlank = (state === "menu" && !setupPreviewOn && !homeTrack && (!track || !loadingScreen.active() || !menuWorld()))
+    || ((loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !setupPreviewOn);   // the no-world card must not show the LAST circuit; nor may a build card over the results (startRaceCovered)
+  const vis = menuBlank || (_studio && _studio.cardUp) ? "hidden" : "";
+  if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
+  // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep
+  // its visibility in lockstep with #game or a blank menu still shows the last blit.
+  if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");   // only a soft-presenting backend creates it (at init); cached once found
+  if (_softEl && _softEl.style.visibility !== vis) _softEl.style.visibility = vis;
+  // A freshly pre-built world draws its first frames HIDDEN (scheduleFlybyTrack
+  // owes them): shaders, textures and shadow maps warm up under the picker, not
+  // in front of the player the instant race settings opens.
+  // ...and the garage pre-warm (garagePrewarm): its frames drawn hidden too.
+  if (menuBlank && _menuGate.garageWarm > 0 && state === "menu") { _menuGate.garageWarm--; if (renderSetupPreview(dt)) _menuGate.garageReady = true; return; }
+  if (menuBlank && !(track && _menuGate.warm > 0)) return;
+  // The last hidden warm frame is the one observable "this world has drawn":
+  // tools/lib/mem-census.mjs waits on this record (a census taken before it read
+  // 10 render objects on llvmpipe, CI run 37330132243), and __apex is off-limits
+  // while a picker build is in flight (lazyTrackEnsure).
+  if (menuBlank && --_menuGate.warm === 0) Log.info("gfx", "menu warm drawn " + (track.def && track.def.id));
+  // RESULTS: physics and PerfGov already stop; the sheet is translucent over
+  // #game by design (tokens.css). Re-drawing an identical frozen world every
+  // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the
+  // last race present and return. Race-settings flyby and live race still draw.
+  if (state === "results" && !resultsCam.live()) return; // ResultsCam owns chequered/orbit/highlights
+  // HELD GARAGE (studioDone): a world frame that kicks TLX's program warm paints nothing, so the
+  // garage's last frame stays up — no hidden canvas, no black card before the flyby.
+  const heldWarm = !!(_studio && _studio.held && track && _menuGate.warm > 0); if (heldWarm) _menuGate.warm--;
+  if (setupPreviewOn && !heldWarm) {
+    if (renderSetupPreview(dt, !!(_studio && _studio.cardUp))) {
+      _menuGate.garageReady = true;
+      if (!_studio || _studio.softReady !== false) studioShown();
+      if (_studio && !_studio.cardUp) { canvas.style.visibility = ""; if (_softEl) _softEl.style.visibility = ""; }
+    }
+    return;
+  }
+  setupCam.endGarageRes(); // first world frame: restore the garage's reduced res
+  gfx.resize();
+  // No track yet (the menus build none — the flyby belongs to RACE SETTINGS, see
+  // scheduleFlybyTrack): DRAW NOTHING. alpha:false composites an undrawn canvas
+  // as opaque BLACK, which the blessed menu baselines encode (corners 4-9/255).
+  if (!track) return;
+  _frameNo++;
+  // camera
+  let eyeT, tgtT, fovT, roadCamRoll = 0;
+  // Is THIS frame the pre-race cinematic? It is rendered like photo mode rather
+  // than like gameplay — far plane out, fog thinned, scenery not culled to the
+  // fog wall — because its shots are whole-circuit vistas from a few hundred
+  // metres up. See FlybySeq.FAR / FlybySeq.FOG for why both numbers live there.
+  let cine = false;
+  const comfort = camComfort();   // once per frame: it reads localStorage (CamComfort.active) and matchMedia, and nothing in render() writes either
+  if (state === "menu") {
+    _plOk = false; _plBodyOk = false;
+    // THE LOADING SCREEN'S FLYBY IS A SHOT SEQUENCE (js/camera/flyby-seq.js), not
+    // a crawl down the centreline. The old path solved camVantage("cinematic")
+    // around an `s` that advanced with the wall clock; that rig clamps its
+    // lateral offset only on STREET circuits, so on an open circuit it sat 22 m
+    // off the racing line with nothing checking what was standing there, and
+    // flew through buildings. The sequencer places every eye against the props
+    // registry instead. It is driven by PROGRESS through the flyby phase, so the
+    // sequence keeps its shape whatever the phase is retuned to.
+    const fb = (homeTrack && uiExperience.trackCamera(dt)) || FlybySeq.solve(track, flybyProgress(), flybyShots);
+    eyeT = fb.eye; tgtT = fb.tgt; fovT = fb.fov; camAncNX = null;
+    // A shot boundary is a CUT. Without this the λ1.6 menu damping below smears
+    // the change of angle into a long swim between two vantages, which reads as
+    // one broken move rather than two shots.
+    if (fb.cut) camSnapNext = true;
+    cine = true;
+  } else {
+    if (!player) return;
+    // Anchor the camera to the SAME (s, x) the car body samples — playerAnchor
+    // derives it from the drawn WORLD position, shared with currentCarGroundMat
+    // and the body loop, so camera and car move as one (no fore/aft slide, no
+    // backwards jolt, no height/orientation jitter). Pre-jump/menu → arc interp.
+    // Resolve once per frame; shadow + body reuse _plCS/_plCX (no second trackFrom).
+    { const pa = playerAnchor(player); _plCS = pa.cS; _plCX = pa.cX; _plOk = true; _plBodyOk = false; }
+    const pS = _plCS, px = _plCX;
+    sampleAt(pS, smp);
+    // NOTE: the camera rig is still built from (pS, px) inside camVantage(). That
+    // is a much smaller coupling than the body had — (s, x) is now an exact
+    // reading of the world position, so the rebuilt anchor lands within a
+    // centimetre of the car, versus the 0.1 s lateral LAG the mesh carried. Left
+    // alone deliberately rather than reworked blind.
+    // ride the bank with the car so the camera doesn't sink into the banked road
+    const bankCam = Tracks.banking(track, pS, px, _bankScratchCam, true);  // true = SMOOTH lift, camera only (mesh.js banking)
+    const bankDy = bankCam ? bankCam.dy : 0;
+    // Optional pit-entry/exit auto-cut onto PIT WALL (ExtraRigs) — before we
+    // read camMode so this frame's vantage matches the cut.
+    if (typeof ExtraRigs !== "undefined") ExtraRigs.tickPitAuto(G);
+    const mode = CAM_MODES[camMode].id;
+    roadCamRoll = bankCam ? -bankCam.roll * cameraBankScale(mode) : 0;
+    // All per-mode framing lives in camVantage() so the live cam, snapCam() and the
+    // previewCam() debug hook stay identical. bankDy keeps the eye riding the bank.
+    // The free-world chase/onboard rig needs the car's world pose too — but
+    // INTERPOLATED like everything else here, not raw. Raw px/pz/head only
+    // update once per 60 Hz physics tick, so reading them straight in a
+    // per-frame render loop snaps a full tick every frame instead of gliding
+    // by renderAlpha: on a display whose refresh doesn't line up 1:1 with the
+    // physics rate (common — 90/120 Hz, or ordinary vsync jitter at 60), that
+    // reads as a held-then-jump stutter whose size scales with speed × dt —
+    // "vibrates, worse the faster I go". renderPosOf/headInterp are the same
+    // interpolation the car body and playerAnchor already use.
+    const rpCam = renderPosOf(player);
+    camAncNX = rpCam.world ? rpCam.x : null; camAncNZ = rpCam.world ? rpCam.z : 0;   // anchor for the car-frame camera damping below
+    _vantExtra.bankDy = bankDy; _vantExtra.deploy = player.deploying; _vantExtra.reduceMotion = comfort;   // kerb shiver off (js/camera/vantage.js)
+    _vantExtra.slipLat = player.vLat || 0; _vantExtra.att = player;
+    // the car's real world pose, so the chase rig can follow the CAR
+    _vantExtra.carPos = rpCam.world ? (_vantCarPos[0] = rpCam.x, _vantCarPos[1] = rpCam.z, _vantCarPos) : null;
+    _vantExtra.carHead = headInterp(player); _vantExtra.dt = dt; _vantExtra.frameSubject = realRace.isWatch();
+    // CamFeel (free-look / look-back latch / speed vignette) ticks BEFORE the
+    // vantage solve so this frame's offsets land in the same eye/tgt.
+    if (typeof CamFeel !== "undefined") {
+      CamFeel.tickRace(mode, dt, comfort, state === "race" || state === "count",
+        clamp(player.speed / vTop(), 0, 1));
+    }
+    if (typeof ExtraRigs !== "undefined") {
+      _vantExtra.rival = (mode === "rival") ? ExtraRigs.pickRival(cars, player) : null;
+      _vantExtra.playerProg = player.prog || 0;
+      _vantExtra.snap = false;
+    }
+    const vant = camVantage(mode, pS, px, player.speed, performance.now(), _vantExtra);
+    eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov; if (vant.cut) camSnapNext = true;
+    if (shake > 0) {
+      shake = Math.max(0, shake - dt * 1.6);
+      // squared: grazes barely move, crashes slam. REDUCE MOTION zeroes the OFFSET, not the trauma
+      // (cues keyed to it stay timed); CamTune.shakeOffset also applies COMFORT › HEAD BOB. SCOPE: every
+      // race camera (docs/notes/CAMERA-FEEL.md). Real-time noise, fps-independent; onboard it stays in the tub.
+      if (typeof CamFeel !== "undefined") CamFeel.shake(eyeT, tgtT, CamTune.shakeOffset(shake, comfort), performance.now() * 0.001, CamFeel.isBuzzMode(mode));
+    }
+    // Onboard speed buzz — CamFeel.BUZZ_MODES (cockpit/hood/visor/tcam). Amp via
+    // CamTune.buzzAmp (REDUCE MOTION / COMFORT › HEAD BOB). Off when wet (SSR flicker).
+    const _buzzWet = 1.0 - clamp((frame.wetness || 0) * 2.0, 0.0, 1.0);
+    if (state === "race" && _buzzWet > 0.01
+        && (typeof CamFeel !== "undefined" ? CamFeel.isBuzzMode(mode)
+          : (mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "tcam"))) {
+      const spV = clamp(player.speed / vTop(), 0, 1);
+      const vAmp = CamTune.buzzAmp(spV, player.deploying, comfort, _buzzWet);
+      if (vAmp > 0.001) {
+        const tv = performance.now() * 0.001;
+        const j1 = Math.sin(tv * 61.0) * 0.6 + Math.sin(tv * 97.0 + 1.7) * 0.4;
+        const j2 = Math.sin(tv * 73.0 + 0.9) * 0.6 + Math.sin(tv * 111.0 + 2.3) * 0.4;
+        eyeT[0] += j1 * vAmp; eyeT[1] += j2 * vAmp * 0.7;
+        tgtT[0] += j1 * vAmp * 0.35; tgtT[1] += j2 * vAmp * 0.25;
+      }
+    }
+  }
+  // Sky-view override: __apex.sky() positions the camera to show the horizon
+  // and clouds instead of the normal low chase angle.
+  if (frozen && skyViewOverride) {
+    eyeT = skyViewOverride.eye;
+    tgtT = skyViewOverride.tgt;
+    fovT = skyViewOverride.fov;
+  }
+  // High lambda in-race: the anchor already follows the car along the track,
+  // so we only smooth bumps — no speed lag. Low lambda for the menu flyby.
+  // Onboard cams ride ON the car (cockpit/hood/tcam), so they need very high
+  // lambda or the eye lags behind/into the bodywork at speed.
+  const racing = state === "race" || state === "count";
+  const camId = CAM_MODES[camMode].id;
+  const onboard = racing && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "helmet" || camId === "tcam");
+  // Just after a cut, ease the external cams in with a gentler lambda so the angle
+  // sweeps to its new vantage instead of snapping. Onboard cams ignore it (must lock).
+  const cutEase = camCutT > 0 ? (camCutT = Math.max(0, camCutT - dt), 0.4) : 1;
+  // Onboard cams LOCK to the car (λ400 ≈ instant): at λ40 the exponential
+  // smoothing left a steady-state lag of ~0.7-1 m at top speed, which slid the
+  // cockpit eye backwards INSIDE the engine cover / shark fin — the "black
+  // rectangle fills the screen at sustained speed" bug. The EYE must stay
+  // locked, but the look-AHEAD target (camVantage curves it toward upcoming
+  // corners) locking too made the head "snap" toward every apex instead of
+  // panning — cockpit/hood ease the target gently, like a driver's eyes
+  // leading into a corner rather than their whole head whipping around.
+  // DRONE carries its own tether smooth inside ExtraRigs; comfort softens the
+  // outer damp further. Chase λ18, broadcast pans at 9, rival/pit wall calmer.
+  const softCam = camId === "drone" || camId === "rival" || camId === "pitwall";
+  const raceLam = softCam ? (comfort ? 6 : (camId === "drone" ? 12 : 14)) : ((camId === "heli" || camId === "side" || camId === "cinematic" || camId === "overhead" || camId === "low" || camId === "trackside") ? 9 : 18);
+  const lE = onboard ? 400 : (racing ? raceLam : 1.6) * cutEase;
+  const gentleHead = !comfort && onboard && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "helmet") && (typeof CockpitOpts === "undefined" || CockpitOpts.turnChase());   // gentle easing is ONLY for a curved aim; a nose-locked aim must not lag; XR: HMD owns look
+  const lT = gentleHead ? 7 : onboard ? 400 : (racing ? raceLam + (softCam ? 1 : 2) : 10) * cutEase;
+  // Damp HORIZONTALLY in the CAR's frame, not the world's. Damping toward a
+  // MOVING target lags ~v/lambda - v*dt/2, so the car-to-camera distance
+  // breathes with frame time: MEASURED, a 16-38 ms vsync wobble swings it
+  // 28.7 cm at 320 km/h, 4.7 cm at 150 — it scales with SPEED, hence "the car
+  // vibrates, worse the faster I go", and a heavier resolution (longer,
+  // jitterier frames) makes it worse. Damping the OFFSET cancels the velocity
+  // term exactly: 0.0000 cm at every speed, and the chase distance stops
+  // inflating (13.2 m back to the intended 8.0 m at 320). y stays world-frame.
+  const ancX = camAncNX, ancZ = camAncNZ;
+  if (ancX === null || camAncX === null) { camAncX = ancX; camAncZ = ancZ; }   // first frame / no world pose: no jump
+  const aP = _camAP, aN = _camAN;   // pooled, filled in place
+  aP[0] = camAncX === null ? 0 : camAncX; aP[2] = camAncZ;
+  aN[0] = ancX === null ? 0 : ancX; aN[2] = ancZ;
+  const fixedEye = camId === "trackside" || camId === "pitwall";   // CAM-1: a world-fixed eye damped in the car's frame is dragged v/lambda (8 m at 80 m/s) down-track
+  for (let i = 0; i < 3; i++) {
+    camEye[i] = fixedEye ? damp(camEye[i], eyeT[i], lE, dt) : aN[i] + damp(camEye[i] - aP[i], eyeT[i] - aN[i], lE, dt);
+    camTgt[i] = aN[i] + damp(camTgt[i] - aP[i], tgtT[i] - aN[i], lT, dt);
+  }
+  camAncX = ancX; camAncZ = ancZ;
+  camFov = damp(camFov, fovT, onboard ? 4 : 4 * cutEase, dt);
+  if (typeof CamFeel !== "undefined" && CamFeel.consumeAimSnap()) { for (let i = 0; i < 3; i++) camTgt[i] = tgtT[i]; camRoll = -camRoll; }   // LOOK BACK flipped: a cut for the AIM, roll mirrored (feel.js)
+  // A CUT LANDS WHOLE. Damping exists to smooth a moving vantage; across a shot
+  // boundary there is nothing to smooth — the two vantages are unrelated, and
+  // easing between them turns a cut into a long swim through whatever lies
+  // between. Set by the flyby sequencer at a shot boundary only.
+  if (camSnapNext) {
+    for (let i = 0; i < 3; i++) { camEye[i] = eyeT[i]; camTgt[i] = tgtT[i]; }
+    camFov = fovT;
+    camSnapNext = false;
+  }
+  // The EDITOR's preview is the same cinematic, parked (js/agent/apex.js stamps
+  // `cine` on its dbgCam). From here down, everything gated on `cine` is a thing
+  // the live screen and the preview have to do IDENTICALLY — that is the whole
+  // point of the flag, and the reason it is widened here rather than read as two
+  // separate conditions at four sites that can drift apart one at a time.
+  if (dbgCam && dbgCam.cine) cine = true;
+  // Car-follow cameras counter-rotate by the road bank so the car and asphalt
+  // read level while the horizon carries the banking cue. Slip adds a small
+  // dynamic lean on top; broadcast/debug and cinematic cameras stay world-level
+  // (the flyby's own roll would otherwise be whatever the last race left behind,
+  // decaying over the first half-second of a shot the editor showed level).
+  if (dbgCam || cine || comfort) {
+    camRoll = (dbgCam && dbgCam.roll) || 0;   // level unless the FREE CAMERA's ROLL dial set one; XR: HMD owns roll
+  } else {
+    // Slip source smoothed at λ10 (τ≈0.1 s): vLat/speed are RAW 60 Hz-stepped
+    // physics values, and feeding them straight into screen roll printed every
+    // physics step onto the horizon — the most visible jitter class. λ7 on the
+    // roll itself matches the old linear dt/0.15 blend at 60 fps
+    // (1−e^(−7/60) ≈ 0.110 ≈ (1/60)/0.15) but is frame-rate independent, so
+    // 30 and 120 Hz devices converge at the same real-time rate. COMFORT › ROLL
+    // LEAN scales via CamTune.rollTarget (camComfort still forces level above).
+    const slipRaw = player && player.speed > 1 ? (player.vLat || 0) / player.speed : 0;
+    camSlipSm = damp(camSlipSm, clamp(slipRaw, -1, 1), 10, dt);
+    camRoll = damp(camRoll, (typeof CamFeel !== "undefined" && CamFeel.lookingBackNow() ? -1 : 1) * CamTune.rollTarget(roadCamRoll, camSlipSm, (onboard && player ? (player.baRoll || 0) * 0.85 : 0), false), 7, dt);
+  }
+  // Debug free camera (set via __apex.view) overrides the chase cam — instant
+  // (no damping), uncapped FOV, far plane and fog pushed out — for inspecting
+  // whole-track layouts and trackside scenery from any angle.
+  // RENDER DISTANCE knob: scales the far clip plane (and, below, the chunked-
+  // scenery draw-distance cull that derives from it). dbgCam overwrites
+  // farPlane with its own value right below, so debug/photo-mode is untouched.
+  let fovY, farPlane = 900 * (LT.renderDistMul != null ? LT.renderDistMul : 1);
+  if (cine) farPlane = FlybySeq.FAR;   // flat, not scaled by RENDER DISTANCE: the editor previews ONE number
+  if (dbgCam) {
+    GameCams.applyFreeCam(dbgCam, camEye, camTgt);
+    fovY = dbgCam.fov * Math.PI / 180;
+    if (!cine) farPlane = dbgCam.far;
+  } else {
+    // camFov is vertical; CamFovFit caps HFOV on wide screens and floors it on
+    // portrait (js/camera/fov-fit.js). cine stays authored / uncapped.
+    fovY = CamFovFit.fitFovY(camFov * Math.PI / 180, gfx.aspect, { cine });
+  }
+  // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
+  // precision across the scene — the biggest single lever against z-fighting /
+  // shadow flicker. Capped at 0.3 (not higher): the cockpit rig keeps the wheel /
+  // dash fascia a proven 0.46 m from the eye (COCKPIT_EYE_FWD + _rigT), so 0.3
+  // still clears it with ~9 cm to spare while raising the far/near precision
+  // floor ~1.5x vs 0.2.
+  // Per-camera near plane. Depth precision is governed by the near:far RATIO,
+  // and a 0.3 m near against a 900 m far spends almost all of it in the first
+  // few metres — which is why distant coplanar geometry z-fights. The near
+  // plane CANNOT simply be raised globally: the cockpit rig sits 0.46 m from
+  // the eye (see _rigT), so anything above ~0.35 slices the steering wheel and
+  // fascia out of frame. Only cockpit/hood views have geometry that close, so
+  // they keep 0.3 and every other view takes a near plane that buys back a lot
+  // of depth resolution for free.
+  const _projMode = CAM_MODES[camMode] ? CAM_MODES[camMode].id : "chase";
+  const _nearM = (_projMode === "cockpit" || _projMode === "hood" || _projMode === "visor" || _projMode === "helmet") ? 0.3 : 0.9;
+  const _near = cine ? FlybySeq.NEAR : (dbgCam ? 0.3 : _nearM);
+  M4.perspectiveTo(_mProj, fovY, gfx.aspect, _near, farPlane);
+  if (homeTrack && !dbgCam) { const view = uiExperience.trackCamera(); _mProj[8] = view.shiftX; _mProj[9] = view.shiftY; }
+  // Tilt the up vector by camRoll to roll the camera into corners. Inlined into
+  // module-scope scratch vectors (no per-frame V3 array allocation); same math.
+  {
+    let bx = camEye[0] - camTgt[0], by = camEye[1] - camTgt[1], bz = camEye[2] - camTgt[2];
+    let bl = Math.hypot(bx, by, bz) || 1; bx /= bl; by /= bl; bz /= bl;
+    // right = normalize(worldUp × back), worldUp = (0,1,0)
+    let rx = 1 * bz - 0 * by, ry = 0 * bx - 0 * bz, rz = 0 * by - 1 * bx;
+    let rl = Math.hypot(rx, ry, rz) || 1; rx /= rl; ry /= rl; rz /= rl;
+    // up = normalize(worldUp + right*sin(roll))
+    const s = Math.sin(camRoll);
+    let ux = rx * s, uy = 1 + ry * s, uz = rz * s;
+    let ul = Math.hypot(ux, uy, uz) || 1;
+    _camUp[0] = ux / ul; _camUp[1] = uy / ul; _camUp[2] = uz / ul;
+  }
+  M4.lookAtTo(_mView, camEye, camTgt, _camUp);
+  M4.mulTo(_mVP, _mProj, _mView);
+  // inv VP: sky rays always; god-rays when live. inv Proj: SSAO only — both post
+  // consumers shed at autoTier>=4 (see po.ssao/godray below).
+  M4.invertTo(_mInvVP, _mVP);
+  if (PerfGov.autoTier() < 4) M4.invertTo(_mInvProj, _mProj);
+  // Sun direction in VIEW space (for screen-space contact shadows): mat3(view)·sunDir.
+  {
+    const sd = frame.sunDir || [0, 1, 0];
+    let x = _mView[0]*sd[0] + _mView[4]*sd[1] + _mView[8]*sd[2];
+    let y = _mView[1]*sd[0] + _mView[5]*sd[1] + _mView[9]*sd[2];
+    let z = _mView[2]*sd[0] + _mView[6]*sd[1] + _mView[10]*sd[2];
+    const l = Math.hypot(x, y, z) || 1;
+    _sunVS[0] = x/l; _sunVS[1] = y/l; _sunVS[2] = z/l;
+  }
+  // The ROAD PLANE's normal in VIEW space. Used by the wet-road SSR to pick out
+  // road pixels AND — the part that matters — as the plane its reflection ray is
+  // flattened onto (post.js: Nr = mix(Nv, upVSn, 0.85)).
+  //
+  // This was world-up (0,1,0), i.e. mat3(view)'s second column, which is only the
+  // road's normal ON THE FLAT. On a gradient θ the two differ by θ, the flatten
+  // carries 0.85 of that error into the reflection normal, and a reflection
+  // DOUBLES angular error — so a 10° climb threw the reflected ray ~17° off. At
+  // grazing incidence that ray only leaves the surface at 2-5°, so being 17° out
+  // either dives it into the tarmac (mirroring asphalt) or throws it clear over
+  // the scene (a miss). That is why the wet road went patchy specifically on
+  // elevation. Sampling the real road normal costs one track sample per frame.
+  //
+  // r is bank-rotated at build time (tracks.js), so n = r × t carries CAMBER too,
+  // not just gradient — the same basis the cockpit rig builds.
+  {
+    let nx = 0, ny = 1, nz = 0;
+    if (track && player && player.s != null) {
+      Tracks.sample(track, player.s, _smpRoad);
+      const t = _smpRoad.t, r = _smpRoad.r;
+      const ux = r[1]*t[2] - r[2]*t[1],
+            uy = r[2]*t[0] - r[0]*t[2],
+            uz = r[0]*t[1] - r[1]*t[0];
+      const ul = Math.hypot(ux, uy, uz);
+      if (ul > 1e-6) { nx = ux/ul; ny = uy/ul; nz = uz/ul; }   // else keep world-up
+    }
+    // mat3(view) * n  (column-major: column j is elements 4j..4j+2)
+    const x = _mView[0]*nx + _mView[4]*ny + _mView[8]*nz,
+          y = _mView[1]*nx + _mView[5]*ny + _mView[9]*nz,
+          z = _mView[2]*nx + _mView[6]*ny + _mView[10]*nz;
+    const l = Math.hypot(x, y, z) || 1;
+    _upVS[0] = x/l; _upVS[1] = y/l; _upVS[2] = z/l;
+  }
+  frame.viewProj = _mVP;
+  frame.proj = _mProj;
+  frame.invProj = _mInvProj;
+  frame.invViewProj = _mInvVP;
+  frame.sunViewDir = _sunVS;
+  frame.upViewDir = _upVS;
+  frame.eye = camEye;
+  const _xrEyes = XrBoot.applyEyes(frame, camEye, camTgt, _camUp);   // null when flat
+  // Radial draw-distance cull for chunked scenery, in two halves every backend's
+  // chunk loop applies together (Frustum.radialCulled, js/render/shared/frustum.js).
+  // frame.cullDist, the HARD radius. Free/debug camera and cinematic: mobile caps
+  // at 700 m (a pushed-out photo-mode far plane frames a whole ~5 M-vert city and
+  // jetsam-kills the tab; the cinematic runs seconds after the build's transient
+  // peak), desktop keeps the full vista. Feature-shedding tier 3+ caps at the far
+  // plane (scenery vertex/draw load is the one big cost class the resolution
+  // scale and shed passes don't touch). Otherwise the sphere that contains the
+  // frustum (far-plane corners sit farther than farPlane) — look-identical.
+  // frame.cullFog, the FOG WALL: [density, height falloff] as the SHADER renders
+  // them (frame.fogDensity * FOG DENSITY — off the raw base, FOG DENSITY 0 still
+  // culled scenery at 250 m with no fog drawn). A chunk goes once even its
+  // nearest point raised to its top is 99.99 % fogged: HEIGHT-AWARE, because one
+  // eye-level radius (3/density, 750 m at night) culled floodlights, hotels and
+  // hills while only 65-70 % fogged. Off (density 0) under dbgCam/cine: they
+  // render a THINNED fog (_fogMul, read by gfx.begin() far below), and culling
+  // at frame.fogDensity's unthinned wall is a hard edge of missing world.
+  const _fogMul = cine ? FlybySeq.FOG
+    : (dbgCam ? (dbgCam.fog != null ? dbgCam.fog : 0.15) : null);
+  const _cullFog = frame.cullFog || (frame.cullFog = [0, 0]);
+  _cullFog[0] = (dbgCam || cine) ? 0 : (frame.fogDensity || 0) * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
+  _cullFog[1] = LT.fogHeight != null ? LT.fogHeight : (frame.fogHeight || 0);   // uFogHeight's own fallback
+  const _farCull = farPlane * Math.hypot(1, Math.tan(fovY * 0.5) * Math.hypot(1, gfx.aspect || 1));
+  frame.cullDist = (dbgCam || cine) ? (gfx.isMobile ? 700 : 0) : (PerfGov.tier() >= 3 ? farPlane : _farCull);
+  // WHAT THIS FRAME WAS ACTUALLY BUILT WITH, for __apex.camState().lens. Not a
+  // debug nicety: the live flyby and the EDITOR'S preview of the same shot ran
+  // different lenses for months with nothing able to see it, because every hook
+  // reported where the camera POINTED. Written after all five are resolved.
+  _lens.near = _near; _lens.far = farPlane; _lens.fovY = fovY;
+  _lens.fog = _fogMul; _lens.cull = frame.cullDist; _lens.cine = cine;
+  // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
+  // moon, fading out as cloud rolls in or the road gets wet, forced 0 in fog.
+  // glx.js floors its key-dim shadow fade with LT.moonShadow * frame.moonGate, so
+  // moonlight casts soft shadows on clear nights only — fog/overcast/rain
+  // nights stay shadowless, UNLESS the MOON SHADOWS knob is pushed past 0.5 (see
+  // moonGate below), a player-facing escape hatch. Computed BEFORE the shadow
+  // pass because the prop and car caster gates below feed the snap-cached map
+  // from it. Mirrors the frameSky.moon / frame.cloud plumbing further down
+  // (values persist across frames, so first-frame staleness only delays the
+  // gate by one recentre).
+  {
+    const _mAmt = (raceTimeOfDay === "default" && track && track.def && track.def.night)
+      ? 0.85 * LT.moonBright : (frameSky.moon || 0);
+    const _mCl = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
+    let _cf = (_mCl - 0.35) / 0.25;                    // smoothstep(0.35, 0.6, cloud)
+    _cf = _cf < 0 ? 0 : _cf > 1 ? 1 : _cf;
+    _cf = _cf * _cf * (3 - 2 * _cf);
+    frame.moonK = raceWeather === "fog" ? 0
+      : clamp(_mAmt / 0.85, 0, 1) * (1 - _cf) * (1 - clamp((frame.wetness || 0) * 2, 0, 1));
+    // MOON SHADOWS knob above 0.5 overrides the weather gate above (clear/dry/
+    // no-fog) so a player who wants shadows at night through cloud/fog/wet can
+    // have them — ramps from moonK (at 0.5, no change) to fully open (at 1.0).
+    const _msh = LT.moonShadow != null ? LT.moonShadow : 0.25;
+    frame.moonGate = Math.max(frame.moonK, clamp((_msh - 0.5) * 2, 0, 1));
+  }
+  // Resolve the moving player before any shadow-map pass (first-person views cast
+  // the cockpit body where the car loop draws it). AI keeps the pooled matrices
+  // from the preceding frame; only the player's shadow makes that latency visible.
+  const _hasLivePlayerShadow = !!(player && state !== "menu");
+  if (_hasLivePlayerShadow) { currentCarGroundMat(player, shadowPass.livePlayerMat); shadowPass.resolvePlayer(_smpPlayer, yawVisInterp(player)); }
+  // Sun / car shadow maps: js/render/shared/shadow-pass.js (snap-cached static map,
+  // per-frame car map). The live player matrix was resolved above.
+  if (!XrBoot.comfort()) shadowPass.sunPass(frame, _frameNo, _hasLivePlayerShadow);   // XR: skip maps
+  const wet = renderLightingPrep(dt, _hasLivePlayerShadow);
+
 
   const night = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
   // Pre-race grid: rear lights strobe on the countdown clock. countT, NOT raceT

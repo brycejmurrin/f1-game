@@ -104,10 +104,12 @@ function yawDampFromSlider(v) {
 }
 function lockFromSlider(v)   { return 0.18 + (0.435 - 0.18) * (v - 1) / 9; } // rad, .18..0.435, v5≈0.293, v7=0.35
 // SPEED STEER -> STEER_SPEED_REF, the reference speed for the lock taper in
-// js/game.js. That taper is now `1 / (1 + v/ref)` (hyperbolic — see the comment
-// at lockTaper in game.js), so ref only needs to be in the same NEIGHBOURHOOD as
-// real speeds to matter. 15..75 m/s is the hyperbolic-law range: every notch
-// does something at every speed. See docs/research/PHASE-C-SLIDER-DESIGN.md §2.
+// js/game.js. Low speed (vStd≤15) holds a 1.06× plateau on that lock (so notch 7
+// applies ≈0.371 rad at hairpins); 15→30 blends onto the hyperbolic
+// `1/(1+v/ref)`, and vs≥30 is raw so high-speed lock stays bit-identical. Ref
+// only needs to be in the same NEIGHBOURHOOD as real speeds. 15..75 m/s is the
+// hyperbolic-law range: every notch does something at every speed. See
+// docs/research/PHASE-C-SLIDER-DESIGN.md §2.
 function speedRefFromSlider(v) { return 15 + (75 - 15) * (v - 1) / 9; } // 15..75, v5≈41.7
 // RACE PACE -> the ground-speed scale G.PACE. GEOMETRIC: a fixed 6.0 % per notch
 // over 19 notches. Pace is a MULTIPLIER on ground speed, so a ratio is its

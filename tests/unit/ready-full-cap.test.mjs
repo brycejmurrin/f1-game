@@ -143,3 +143,13 @@ test("15-F11: measure pages ci.yml's pull_request runs, so a queued ready run pa
   assert.equal(v.ok, false, "three ready full-tier runs fill the cap of 3");
   assert.ok(calls.every((c) => c.startsWith("pulls?") || c.startsWith("actions/workflows/ci.yml/runs?event=pull_request&")), calls.join("\n"));
 });
+
+test("api() reads past spawnSync's 1 MB default (ENOBUFS on 100 open PRs, 2026-10-14)", async () => {
+  const { api } = await import("../../tools/ci/ready-full-cap.mjs");
+  let opts;
+  const run = (_c, _a, o) => { opts = o; return { status: 0, stdout: "{}\n200", stderr: "" }; };
+  api("pulls", { run, env: { GH_TOKEN: "t" } });
+  assert.ok(opts.maxBuffer >= 16 << 20, `maxBuffer ${opts.maxBuffer} — a page of PR JSON exceeds 1 MB`);
+  const failed = api("pulls", { run: () => ({ status: null, stdout: "", stderr: "", error: { code: "ENOBUFS" } }), env: { GH_TOKEN: "t" } });
+  assert.match(failed.error, /ENOBUFS/, "a spawn error is named, not reported as a bare curl failure");
+});

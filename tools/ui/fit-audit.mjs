@@ -108,7 +108,7 @@ const SCREENS = [
   ["audioset", `document.getElementById('mb-settings').click(); await until('#pmsettings:not([hidden])',3000); document.getElementById('pm-audio').click()`, "#audioset", {}],
   ["advanced", `document.getElementById('mb-settings').click(); await until('#pmsettings:not([hidden])',3000); document.getElementById('pm-advanced').click()`, "#advanced", {}],
   ["datahub", `document.getElementById('mb-data').click(); await until('.dh-race, .dh-empty, .dh-error')`, "#datahub", { mock: 1 }],
-  ["datahub-standings", `document.getElementById('mb-data').click(); document.getElementById('dh-tab-standings').click(); await until('.dh-row, .dh-empty, .dh-error')`, "#datahub", { mock: 1 }],
+  ["datahub-standings", `document.getElementById('mb-data').click(); await until('#dh-tab-standings'); document.getElementById('dh-tab-standings').click(); await until('.dh-row, .dh-empty, .dh-error')`, "#datahub", { mock: 1 }],
 ];
 
 // Thresholds. 44 is Apple's HIG figure and WCAG 2.5.5 (AAA); 24 is the WCAG 2.2

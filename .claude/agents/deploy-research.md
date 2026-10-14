@@ -28,17 +28,22 @@ return a short summary with citations (URLs + live vs local build numbers).
 1. **Post-deploy liveness. THE VERDICT IS THE SHA, NOT THE BUILD NUMBER.**
    The live shell's `<meta name="apex-sha">` is the one thing that knows what
    is published. `tools/ci/pages-live-sha.sh` prints it (curl + sed, never
-   fails, empty on an unreadable site):
+   fails, empty on an unreadable site). Issue each as its OWN plain Bash call
+   (no `$(...)`, `&&`, `if`/`for` chains, pipes or variables: a compound command
+   never matches a prefix allowlist), then compare the printed values yourself:
    ```sh
-   LIVE=$(bash tools/ci/pages-live-sha.sh https://brycejmurrin.github.io/f1-game/)
+   bash tools/ci/pages-live-sha.sh https://brycejmurrin.github.io/f1-game/
    git fetch origin claude/f1-game-project-26h3ng
-   TIP=$(git rev-parse origin/claude/f1-game-project-26h3ng)
-   [ "$LIVE" = "$TIP" ] && echo OK          # live IS the tip
-   git merge-base --is-ancestor <my sha> "$LIVE"   # is MY commit live?
+   git rev-parse origin/claude/f1-game-project-26h3ng
+   git cat-file -e <live sha>
+   git merge-base --is-ancestor <live sha> origin/claude/f1-game-project-26h3ng
+   git merge-base --is-ancestor <my sha> <live sha>
    ```
-   Verdict: **OK** when `LIVE` == tip; **STALE** when `LIVE` is an older
+   (The first prints LIVE, the third prints TIP; `cat-file`/`is-ancestor` answer
+   by exit code.)
+   Verdict: **OK** when the first and third outputs are equal; **STALE** when `LIVE` is an older
    ancestor of it; **UNKNOWN** when `LIVE` is empty (site unreadable, meta
-   missing) or not in this clone's history (`git cat-file -e "$LIVE"` fails on a
+   missing) or not in this clone's history (`git cat-file -e <live sha>` fails on a
    shallow clone; `git fetch --depth=200 origin claude/f1-game-project-26h3ng`
    once, then say UNKNOWN if still absent). Never guess STALE from an empty read. Pages is a RELEASE TRAIN (poked by each green fast-tier
    `ci.yml` run, ~6 min after the push, then a ~10-15 min gate unless the tree
@@ -84,5 +89,6 @@ that way at 10 turns, and a completed research pass at 18; track-surveyor lost
 11.6 minutes of survey at 30 (2026-09-22). Budget the hand-back, not the work.
 
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
+On the first permission denial (a denied Bash call, tool or path), stop and return your contract block marked UNREAD/UNKNOWN; never route around a denial.
 If the task needs a live canvas or working-tree probe, stop and tell the
 parent to use `mcp-probe` chrome recipes in the main session instead.

@@ -220,7 +220,9 @@ test("terrain and ordinary parts leftovers use only spare over-budget capacity (
   assert.equal(measuredCheap(terrain, db), true, "terrain remains eligible for the ordinary measured cut first");
   const full = plan(MAX_OVER_BUDGET_SHARDS);
   assert.equal(full.oversize.length, MAX_OVERSIZE_SHARDS);
-  assert.deepEqual(full.spill.map((s) => s.file), leftovers.slice(0, 5).map(([file]) => file));
+  // WHICH specs spill, not their order: the spill packs ties by per-test rate, and that rate moves with
+  // a real spec's case count (adding cases to ui-button-touch reordered it past tracks-walls-b).
+  assert.deepEqual(full.spill.map((s) => s.file).sort(), leftovers.slice(0, 5).map(([file]) => file).sort());
   // Per-test rate rounding changes with the real specs' case counts. Assert
   // the saturated capacity boundary, not a historical rounded total.
   const spillSec = full.spill.reduce((n, s) => n + s.sec, 0);
@@ -312,7 +314,8 @@ test("a saturated wide plan runs props-over-road and parts-physics without displ
     { db, rank, spillShards, overBudgetShards });
   const old = plan(2, 0); // Disable the later spare-pool fallback to isolate the original spill defect.
   assert.equal(old.oversize.length, MAX_OVERSIZE_SHARDS, "all oversize slots are occupied");
-  assert.deepEqual(old.spill.map((s) => s.file), leftovers.slice(0, 4).map(([file]) => file));
+  assert.deepEqual(old.spill.map((s) => s.file).sort(), leftovers.slice(0, 4).map(([file]) => file).sort(),
+    "which specs spill, not their order (ties pack by per-test rate, which moves with real case counts)");
   assert.deepEqual(old.skipped.map((s) => s.file), [props, parts], "reproduces both CI omissions");
   const oldSpillRoom = 2 * TARGET_SHARD_SEC - old.spill.reduce((n, s) => n + s.sec, 0);
   assert.ok(oldSpillRoom >= 0 && old.skipped.every((s) => s.sec > oldSpillRoom),
