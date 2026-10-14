@@ -747,6 +747,7 @@ const HudLayout = (function () {
         if (el) _packMo.observe(el, { attributes: true, attributeFilter: ["hidden"] });
       };
       watch("hud-strat"); watch("hud-rel"); watch("hud-tyre"); watch("hud-inputs");
+      watch("hud-limits"); watch("hud-flag");
     } catch (_) { _packMo = null; }
   }
 
