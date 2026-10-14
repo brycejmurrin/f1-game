@@ -577,10 +577,19 @@ const HudLayout = (function () {
       if (still(ann) || still(rel) || still(by.tyre) || still(by.gearbox) || still(m)) {
         const mapR = m.x + m.dx + m.w;
         const mapT = m.y + m.dy;
+        const mapB = mapT + m.h;
         const annT = ann ? ann.y : H * 0.45;
-        const tx = mapR + PACK_AIR;
-        const ty = Math.max(PACK_AIR, Math.min(mapT + PACK_AIR, annT - s.h - PACK_AIR));
-        if (ty + s.h <= annT - 0.5 && tx < W - PACK_AIR) {
+        const annB = ann ? ann.y + ann.h : annT;
+        let tx = mapR + PACK_AIR;
+        // Prefer the pocket ABOVE the radio when strat fits; otherwise sit
+        // under the map to its right (idle announce is high — no room above).
+        let ty = Math.max(PACK_AIR, Math.min(mapT + PACK_AIR, annT - s.h - PACK_AIR));
+        if (!(ty + s.h <= annT - 0.5)) {
+          ty = Math.max(mapB + PACK_AIR, annB + PACK_AIR);
+          // Stay left of the radio when there is width; else hug map.R.
+          if (ann && ann.x - PACK_AIR - s.w >= mapR + PACK_AIR) tx = ann.x - PACK_AIR - s.w;
+        }
+        if (tx < W - PACK_AIR && ty + s.h <= H - PACK_AIR) {
           s.dx = tx - s.x;
           s.dy = ty - s.y;
           clampOn(s);
