@@ -60,6 +60,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 (2026-10-10): visible text is contained in every control's accessible name (WCAG 2.5.3); static shell scan.
   "tests/unit/a11y-label-in-name.test.mjs",
   "tests/unit/a11y-pwa-pass.test.mjs",
+  // 2026 aero defaults for catalog options that omit beam/drs/board (item 4).
+  "tests/unit/aero-defaults-2026.test.mjs",
   "tests/unit/aero-flap-travel.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
