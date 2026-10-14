@@ -91,7 +91,9 @@ const SPEC = [
   { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = follows hudScale)" },
   { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
   { k: "hudPanelOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js PANEL OPACITY (null = 100%; HIGH CONTRAST keeps plates solid)" },
-  { k: "motion", lane: "json", group: "appearance", def: null, src: "js/ui/title-fx.js (null = follows the OS prefers-reduced-motion)", oneOf: ["on", "reduce"] },
+  { k: "motion", lane: "json", group: "a11y", def: null, src: "js/ui/title-fx.js REDUCE MOTION (null/auto = follow OS; reduce=ON; off; legacy on → auto)", oneOf: ["auto", "reduce", "off", "on"] },
+  { k: "focusRing", lane: "json", group: "a11y", def: "high", src: "js/ui/a11y-opts.js KEYBOARD FOCUS", oneOf: ["standard", "high"] },
+  { k: "cbCues", lane: "json", group: "a11y", def: "off", src: "js/ui/a11y-opts.js COLOURBLIND CUES", oneOf: ["off", "on"] },
   { k: "titleIntro", lane: "json", group: "appearance", def: "full", src: "js/ui/title-fx.js TITLE INTRO (full | quick | off)", oneOf: ["full", "quick", "off"] },
   { k: "menuWash", lane: "json", group: "appearance", def: "full", src: "js/ui/title-fx.js MENU WASH (full | soft | off)", oneOf: ["full", "soft", "off"] },
   { k: "titleArt", lane: "json", group: "appearance", def: "on", src: "js/ui/title-fx.js TITLE ART (on | soft | off)", oneOf: ["on", "soft", "off"] },
@@ -390,6 +392,11 @@ function typeOk(v, def) {
 function applySettings(file, G) {
   if (!file || file.format !== FORMAT) return { ok: false, reason: `not an ${FORMAT} file`, applied: 0, skipped: 0 };
   const groups = file.settings || {};
+  // Legacy: REDUCE MOTION lived under appearance before ACCESSIBILITY.
+  if (groups.appearance && Object.prototype.hasOwnProperty.call(groups.appearance, "motion")
+      && !(groups.a11y && Object.prototype.hasOwnProperty.call(groups.a11y, "motion"))) {
+    (groups.a11y ||= {}).motion = groups.appearance.motion;
+  }
   let applied = 0, skipped = 0, failed = 0;
   for (const row of SPEC) {
     // A migration VERSION is context in the file and must never be written
