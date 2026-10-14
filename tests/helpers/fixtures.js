@@ -140,6 +140,16 @@ async function installMocks(context) {
     // that the shipped default enables the lane is asserted in
     // tests/unit/tyre-model.test.mjs, which costs nothing to run.
     try { localStorage.setItem("apex26.tyreWear", JSON.stringify("off")); } catch (_) {}
+    // Factory McLaren, empty sheet — same pin as tests/helpers/factory-seat.js.
+    // GarageDefaults Mercedes signature kit has made startRace()/__apex.race()
+    // return false ("Race start did not reach the grid") on sharedTest loadTrack
+    // (hooks shard 4/4 run 38510191253: logging.spec.js track-build case) and on
+    // debris/time-trial boots (CI 37401839190). Specs that need a kit set it
+    // themselves; game-vm already seeds this envelope.
+    try {
+      localStorage.setItem("apex26.team", "2");
+      localStorage.setItem("apex26.parts.mclaren", "{}");
+    } catch (_) {}
   }, LOG_SPEC);
   await context.route("https://api.jolpi.ca/**", (route) =>
     route.fulfill({
