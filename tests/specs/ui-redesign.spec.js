@@ -315,18 +315,13 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   });
   expect(stackedGarage.pair).not.toBe("on");
   expect(["auto", "scroll"]).not.toContain(stackedGarage.tabsOY);
-  // Two contracts, chosen by density. A COMPACT tall sheet (a 393x659 phone:
-  // a tall garage compacts under 560 own px of room) is the same one pan-x
-  // strip as above — #cs-tabs scrolls sideways, the rows are `display:
-  // contents`. A roomy tall sheet (this 390x844 window) keeps two named rows,
-  // each its own sideways strip inside a clipped #cs-tabs.
-  if (stackedGarage.density === "compact") {
-    expect(["auto", "scroll"]).toContain(stackedGarage.tabsOX);
-    expect(stackedGarage.rowDisplay.every((d) => d === "contents")).toBe(true);
-  } else {
-    expect(stackedGarage.tabsOX).toBe("hidden");
-    expect(stackedGarage.rowOX.every((v) => ["auto", "scroll"].includes(v))).toBe(true);
-  }
+  // Tall stacked is ONE pan-x strip at every density: #cs-tabs scrolls
+  // sideways and both named rows are `display: contents`. A roomy tall sheet
+  // (this 390×844 window) used to keep two sideways rows inside a clipped
+  // #cs-tabs — measured SUSP mid-clip + #cs-options 145px with DRIVER on
+  // CLOSE. Compact already used the strip; tall extends it (css/carsetup.css).
+  expect(["auto", "scroll"]).toContain(stackedGarage.tabsOX);
+  expect(stackedGarage.rowDisplay.every((d) => d === "contents")).toBe(true);
   expect(["auto", "scroll", "overlay"]).toContain(stackedGarage.optsOY);
   expect(["auto", "scroll"]).not.toContain(stackedGarage.bodyOY);
   expect(stackedGarage.tabsSf).toBe(false);

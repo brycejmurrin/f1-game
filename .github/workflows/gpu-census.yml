@@ -333,8 +333,14 @@ jobs:
         shell: bash
         run: |
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
+          # wgxCapture=0 = SCREENSHOTS NATIVE, which GLX honours since hunt 4
+          # I1: no preserveDrawingBuffer and no opaque #game-soft overlay — the
+          # present path a player has. Under the headless UA GLX otherwise blits
+          # to that overlay only when a capture waits, so census 450-455 shot
+          # one gen-1 frame for every A/B capture. A dispatcher's ls (after
+          # this pin) can override it; the A/B rows print the mode and gens.
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
-            --beats 20 --backend webgl2 $LS \
+            --beats 20 --ls apex26.wgxCapture=0 --backend webgl2 $LS \
             --json "game-glx-${{ matrix.image }}.json" \
             --shot "game-glx-${{ matrix.image }}.png"
 
@@ -342,8 +348,9 @@ jobs:
       # Until 2026-09-02 the "webgpu" leg above was three.js on WebGPU (TLX), so
       # a WGX shader or present-path change had NO real-GPU evidence at all: the
       # in-container Dawn validates but never executes (tools/gfx/wgx-validate.mjs).
-      # The Verdict holds this leg to: WGX actually bound (GLX.softPresent is
-      # exported by WGX only), the swapchain path on hardware (softPresent
+      # The Verdict holds this leg to: WGX actually bound (gfx.wgx — GLX exports
+      # softPresent too, so gpu-game-check also requires backendState().api
+      # "webgpu"), the swapchain path on hardware (softPresent
       # false — the CPU blit is the SwiftShader path and the "WebGPU is laggy"
       # class), and gpuErrors 0.
       - name: Game check — WGX / WebGPU (native, opt-in)
@@ -353,8 +360,15 @@ jobs:
         shell: bash
         run: |
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
+          # wgxCapture=0 (hunt 4 I3), as on the other three legs: without it WGX
+          # soft-presents every frame under the headless UA — copyTextureToBuffer,
+          # a fresh 2.4-3.7 MB MAP_READ buffer, mapAsync, a JS loop and
+          # putImageData — which no player pays. Pinned by hand on spa dusk:
+          # 20.8 -> 36.7 fps in the driven window, busy 11.7 -> 7.5 ms/frame.
+          # The HeadlessChrome UA still forces MSAA 1 via _softAdapter
+          # (wgx.js), which this pin does not undo.
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
-            --beats 20 --backend webgpu $LS \
+            --beats 20 --ls apex26.wgxCapture=0 --backend webgpu $LS \
             --json "game-wgx-${{ matrix.image }}.json" \
             --shot "game-wgx-${{ matrix.image }}.png"
 
@@ -425,7 +439,11 @@ jobs:
                 `gpuErrors=${gfx.gpuErrors} envFail=${env.fail} envReady=${env.ready} ` +
                 `envBlank=${env.blank} gaveUp=${env.gaveUp} softAdapter=${be.softAdapter} ` +
                 `headless=${be.headless} meanLuma=${frame.meanLuma != null ? frame.meanLuma : "n/a"}` +
-                (g.softBlitAtShot ? ` blit=${g.softBlitAtShot}/${g.softBlitWaitMs}ms` : ""));
+                (g.softBlitAtShot ? ` blit=${g.softBlitAtShot}/${g.softBlitWaitMs}ms` : "") +
+                // HOW gpuErrors was drained on GLX: "beat" = ~1 Hz explicit drain
+                // (the default since hunt 4 I2), "present" = --gl-err-drain.
+                (path3 === "glx" && g.glErrDrain ? ` glErrDrain=${g.glErrDrain}` : "") +
+                (g.present ? ` shot=${g.present.mode}${g.present.gen != null ? "@" + g.present.gen : ""}` : ""));
             // The SECOND row is what makes an appearance number readable. A
             // meanLuma comparison between two legs is only a comparison if both
             // ran the same content: tier decides whether the env probe (rung 1)
@@ -570,6 +588,32 @@ jobs:
               } else if (_sc && _sc.note) {
                 rows.push(`${" ".repeat(8)}spike: ${_sc.note}`);
               }
+              // THE GAPS (hunt 4 §A gap ii): rAF intervals >= 500 ms since page
+              // load, which the spike rows (callbacks >= 100 ms) cannot see —
+              // the opening first-draw stall is time in which nothing ran.
+              const _gw = g.gapWork;
+              if (_gw && _gw.rows && _gw.rows.length) {
+                rows.push(`${" ".repeat(8)}gaps:  ${_gw.summary}`);
+                for (const x of _gw.rows.slice(0, 6)) {
+                  rows.push(`${" ".repeat(8)}  ${String(x.gapMs).padStart(6)} ms [${x.phase}] at +${x.atMs} ms: step before ${x.prevFrameMs} ms, long tasks ${x.longTaskMs} ms — prev: ${x.prev} | between: ${x.between}`);
+                }
+              } else if (_gw && (_gw.summary || _gw.note)) {
+                rows.push(`${" ".repeat(8)}gaps:  ${_gw.summary || _gw.note}`);
+              }
+              // THE DRIVEN WINDOW (hunt 4 I4), in game frames from LoopHealth:
+              // the number to compare across legs and runs. The gov row below
+              // is the END-of-run ring, which also holds the frozen A/B frames
+              // (three/WebGL2 read "42.4 fps, tier 0" there against 18.9 in
+              // the window on census454).
+              const _win = g.window;
+              if (_win && _win.frames != null) {
+                rows.push(`${" ".repeat(8)}window: ${_win.frames} frames in ${_win.ms} ms = ${_win.fps} fps` +
+                  (_win.msPerFrame != null ? ` (${_win.msPerFrame} ms/frame)` : "") +
+                  (_win.p50 != null ? `  interval p50=${_win.p50} p95=${_win.p95} p99=${_win.p99} max=${_win.max} ms` : "") +
+                  (_win.callbacksPerFrame != null ? `  rAF/frame=${_win.callbacksPerFrame}` : "") + `  [${_win.source}]`);
+              } else if (_win && _win.note) {
+                rows.push(`${" ".repeat(8)}window: ${_win.note}`);
+              }
               rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
                 `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face} frames=${(gov.open && gov.open.frames) != null ? gov.open.frames : "?"}`
                 // ...and the OTHER way this column lies. floorMs 16.6 is 1/60 s,
@@ -712,7 +756,9 @@ jobs:
               for (const ab of [g.occlusionAB, g.multiDrawAB]) {
               if (!ab) continue;
               const tag = (ab.feature === "multiDraw" ? "mdraw" : "occl ").padEnd(5);
-              if (ab.note || ab.error) {
+              if (ab.skipped) {
+                rows.push(`${" ".repeat(8)}${tag} A/B: skipped — ${ab.note}`);
+              } else if (ab.note || ab.error) {
                 rows.push(`${" ".repeat(8)}${tag} A/B: NOT MEASURED — ${ab.note || ab.error}`);
               } else if (ab.off && ab.on) {
                 const pr = ab.paired || {};
@@ -726,6 +772,14 @@ jobs:
                 const nf = ab.noiseFloor || {}, px = ab.pixels || {};
                 if (nf.pctDiffering != null) {
                   rows.push(`${" ".repeat(8)}       floor:  same state twice -> ${nf.pctDiffering}% of pixels, gpu ${ab.gpuNoisePct}%`);
+                }
+            // WHICH FRAMES WERE SHOT (hunt 4 I1). native = the live canvas two
+            // rAFs after the toggle; soft = a blit awaited after invalidate,
+            // with its generation. Equal gens are one frame shot three times.
+                const pv = ["off", "off2", "on"].map((k) => (ab[k] && ab[k].present) || null);
+                if (pv.some(Boolean)) {
+                  rows.push(`${" ".repeat(8)}       frames: ${pv.map((p, i) => `${["off", "off2", "on"][i]}=${p ? p.mode + (p.gen != null ? "@" + p.gen : "") + (p.error ? "(" + p.error + ")" : "") : "?"}`).join(" ")}`
+                    + (ab.freshFrames === false ? "   <- STALE: the captures are not fresh frames; the pixel rows below compare the HUD" : ""));
                 }
                 if (px.error) rows.push(`${" ".repeat(8)}       pixels: diff FAILED — ${px.error}`);
                 else if (px.differing != null) {
@@ -863,7 +917,7 @@ jobs:
               // The WGX leg: gpu-game-check reports wgx (GLX.softPresent exists,
               // i.e. WGX bound rather than falling back to GLX) and wgxSoftPresent.
               if (path3 === "wgx") {
-                rows.push(`${" ".repeat(8)}wgx:   bound=${gfx.wgx} softPresent=${gfx.wgxSoftPresent} headlessUa=${gfx.headlessUa}${gfx.wgxSoftPresent === true && gfx.headlessUa === true ? " (expected: WGX blits under a headless UA by design)" : ""}`);
+                rows.push(`${" ".repeat(8)}wgx:   bound=${gfx.wgx} softPresent=${gfx.wgxSoftPresent} headlessUa=${gfx.headlessUa}${gfx.wgxSoftPresent === true && gfx.headlessUa === true ? " (expected: WGX blits under a headless UA by design — but this leg pins apex26.wgxCapture=0, so a blit here means the pin was overridden or no longer honoured)" : ""}`);
                 if (hardware && gfx.wgx !== true) bad.push(`wgx: WGX did not bind on a hardware adapter (fell back to GLX, or the surface stopped reporting) — this leg proved nothing about js/render/webgpu/`);
                 // Run 19 (2026-09-02) failed here on macos-latest: WGX sniffs a
                 // HeadlessChrome UA as software (wgx.js, measured black swapchain

@@ -531,6 +531,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lobby-codes.test.mjs",
   "tests/unit/lobed-trees.test.mjs",
   "tests/unit/log-namespaces.test.mjs",
+  // LoopHealth fault policy: RUN_CAP / TOTAL_CAP / quiet expiry / clean recovery.
+  // VM-executed js/perf/loop-health.js (seedLog), controllable clock, ~0.1 s.
+  "tests/unit/loop-health.test.mjs",
   // The marshal posts' light panels show race control: a waved yellow in the
   // sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.
   "tests/unit/marshal-panels.test.mjs",
@@ -825,6 +828,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tlx-fail-scope.test.mjs",
   // TLX perf hunt 3 (lane TLX-1): three's real WebGPURenderer over a no-op WebGL2 compiles the real lit material; GLSL pins (no env cube when opted out) + tlx.js source pins.
   "tests/unit/tlx-hunt3.test.mjs",
+  // TLX perf hunt 4 (lane RENDER-S, A-H1): bufferSubData bytes over three r186 on the fake WebGL2 — the plain-Mesh instance streams (batches, mirror views, R1 runs, FX streams) upload 0 B unchanged and exactly the written range when written; the real InstancedMesh caster keeps Dynamic.
+  "tests/unit/tlx-hunt4.test.mjs",
   // TLX's instanced cull reuses its resident pack by surviving CELL SET
   // (InstCells, GLX/WGX parity); lifts the real cullInstances/updateInstances.
   "tests/unit/tlx-inst-cells.test.mjs",

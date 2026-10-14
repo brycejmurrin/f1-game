@@ -67,8 +67,8 @@ helped asset fetch; they are not the current harness.
    ```
 3. **Free ports**, don't hardcode — bind `:0` and read back the port, or you'll
    collide with a leftover server.
-4. **Wait for readiness**: every rendering-page `waitForFunction` needs
-   `{ polling: 100 }` (default rAF polling starves under SwiftShader):
+4. **Wait for readiness**: `{ polling: 100 }` on every rendering-page `waitForFunction`
+   (AGENTS.md rule 9; `tools/check/wait-polling-lint.mjs`):
    `waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS })` then
    `race(id)` then
    `waitForFunction(t => __apex.info().track === t, id, { polling: 100, timeout: BOOT_MS })` then a
@@ -153,3 +153,15 @@ test('example', async ({ page, pageErrors, racePage }) => {
 `racePage` navigates to `/` and waits for `window.__apex` (`BOOT_MS` from the fixtures) before
 handing the page to the test. `pageErrors` collects every `pageerror` event.
 ```
+
+## Tunnel before/after (Monaco bore, GLX and TLX)
+
+`park` is the chase rig and sits behind the car; use `eye` or `cinematic` inside a bore. Mid-bore fracs
+come from `flicker-gate.mjs --list` (`monaco-tunnel-vault` 0.47, `monaco-tunnel-top` 0.49).
+
+```sh
+node tools/shot/backend-compare.mjs monaco 0.47 eye --backends webgl2,three --out artifacts/cmp/before --label tunnel-mid
+# apply the edit (or git stash), then the SAME command with --out artifacts/cmp/after
+```
+Read each run's `tunnel-mid-manifest.json` (per-backend console errors, GLX-vs-TLX MAD), then view
+`before/` and `after/` PNGs for the same backend side by side.

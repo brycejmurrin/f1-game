@@ -3,6 +3,13 @@
 Load this when adding a DEFERRED file, debugging a stale install, or a
 Playwright hang after a mid-run `version.json` bump.
 
+## Contents
+
+- Workflow
+- Common mistakes
+- Trace: "WGX/TLX not available offline after install"
+- Diagnose: players still get the old shell until hard-refresh
+
 ## Workflow
 
 1. **Identify what changed.**
@@ -32,7 +39,8 @@ Playwright hang after a mid-run `version.json` bump.
    node tools/gen/gen-shell.mjs
    ```
    Tags in the committed shell read `?v=dev`. `bump-cache --apply` refuses on
-   this repo. Never edit `version.json` during a Playwright run.
+   this repo. `version.json` is a generated file (the edit hook blocks a hand edit);
+   a deploy-side bump mid-run reloads every open page, so do not deploy during a run.
 
 5. **Test offline behaviour.**
    ```sh
@@ -41,17 +49,16 @@ Playwright hang after a mid-run `version.json` bump.
    Manual: install PWA, go offline, reload — shell and tagged assets should
    serve from `apex26-{build}`.
 
-6. **Pre-push.** `sw.js` edits: `pick-tests` routes to `service-worker`.
-   Shell-only (`index.html` / generated roster): also run
-   `npm run test:service-worker` manually when the change touches precache
-   discovery — pick-tests may route those paths to `tooling-fast` only.
+6. **Pre-push.** `pick-tests` routes `sw.js` / `manifest.json` to `service-worker`
+   only; for shell-only edits (`index.html` / generated roster) that touch precache
+   discovery, also run `npm run test:service-worker` yourself.
 
 ## Common mistakes
 
 - Hand-maintaining a precache manifest parallel to `index.html`.
 - Hand-bumping numeric `?v=N` or only `version.json`.
-- **Bumping `version.json` mid Playwright run** — shell guard reloads every
-  open page → timeouts.
+- **A build bump landing mid Playwright run** — shell guard reloads every
+  open page → timeouts (see step 4).
 - **Stale pause menu after deploy** — pause/settings DOM is inline in
   `index.html` (not `?v=` JS). If buttons/layout are old while in-race HUD
   updated, the installed shell did not reload.
@@ -83,3 +90,20 @@ optional-miss tolerance = `service-worker.test.mjs`. Install VM tests also pin G
 `node tools/gen/gen-shell.mjs --check`. Verdict to record: seed present + check
 clean = precache list is fine; a remaining miss is a stamping/timeout
 (`OPTIONAL_ASSET_MS` 4 s) issue, verified only by the browser check.
+
+## Diagnose: players still get the old shell until hard-refresh
+
+Run in order; stop at the first mismatch. Live URL: https://brycejmurrin.github.io/f1-game/
+1. `bash tools/ci/pages-live-sha.sh <url>` = the deployed commit. Not the tip? Pages has not
+   published it yet (deploy-research); nothing to fix in the shell.
+2. `curl -s <url>/version.json` vs `curl -s <url>/index.html | grep apex-build`: build in
+   version.json should be >= the meta. Equal = clients are current; a higher json build
+   means the guard should reload them once.
+3. Guard fired? In the page, `sessionStorage['apex26.shellReloadedTo']` holds the build it
+   already tried; a stale value equal to the live build means one reload was spent (clear it
+   to retest). The reload URL gains `?b=<build>`.
+4. Registered worker: `navigator.serviceWorker.getRegistration()` → `active.scriptURL` should
+   end `sw.js?v=<build>`; the cache `apex26-<build>` should exist.
+5. Fixed only by hard-refresh = the navigation came from the HTTP cache or CDN, not the worker
+   (hard-refresh skips both): compare `curl -sI <url>/index.html` cache headers, and check the
+   guard's `version.json` fetch is `no-store`.

@@ -32,8 +32,7 @@ GameAudio.centroidHz()              // spectral centroid of live engine
 ```sh
 node tools/ci/test-solo.mjs tests/specs/audio-smoke.spec.js  # focused browser check; parent only
 # Add music-library.spec.js for library behavior; ui is a broader group.
-python3 -m http.server 3456         # start this matching server first
-node tools/check/audio-test.cjs http://localhost:3456  # LAUNCHES CHROMIUM, objective pitch probe
+node tools/check/audio-test.cjs     # LAUNCHES CHROMIUM, objective pitch probe; starts its own static server (a <baseURL> arg reuses one)
 ```
 
 `tests/specs/audio-smoke.spec.js` covers init, re-enable during a race, and a

@@ -61,7 +61,7 @@ Check `/proc/loadavg` (< 3) and for a live `playwright test` process first.
 
 ## Push
 
-Push your `claude/<topic>` branch; the deploy branch is
+Push your `cursor/<topic>-<hash>` branch; the deploy branch is
 `claude/f1-game-project-26h3ng` — never push there without review. Run
 `deploy.mjs --gate-only` first, then commit + `git push -u origin <branch>`.
 

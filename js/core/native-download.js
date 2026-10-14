@@ -96,7 +96,10 @@ const NativeDownload = (function () {
     if (name == null || name === "") return;
     ev.preventDefault();
     ev.stopPropagation();
-    fetch(href).then(function (res) { return res.blob(); }).then(function (blob) {
+    fetch(href).then(function (res) {
+      if (!res.ok) throw new Error("native download HTTP " + res.status);
+      return res.blob();
+    }).then(function (blob) {
       return saveBlob(blob, name);
     }).catch(function (err) {
       log("native download failed: " + (err && err.message ? err.message : err));

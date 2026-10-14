@@ -30,14 +30,16 @@ node tools/shot/apex-eval.mjs monaco "a.lightState()"
 node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw
 ```
 
-Monza has `night:false` — prefer vegas/singapore for night probes.
+Monza has `night:false` — prefer vegas/singapore for night probes. Night Singapore:
+`node tools/shot/apex-eval.mjs singapore "(a.setTimeOfDay('night'), a.lightState())" --raw` (`numLights` 0 on a dark track = floodlight row below).
+These launch Chromium: parent only (AGENTS.md rule 10).
 
 ## Before/after a code change
 
 ```sh
 node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/before.json
 # edit applyRaceSettings (js/lighting/atmosphere.js) or a TUNE_DEFS default
-# no cache bump (check-changes/references/bump.md); then:
+# (no cache bump: AGENTS.md cache busting); then:
 node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/after.json
 diff artifacts/tmp/before.json artifacts/tmp/after.json
 ```
@@ -60,11 +62,13 @@ A timing sleep alone does not prove presented pixels.
 | Symptom | Field | Likely fix |
 |---|---|---|
 | Night looks like day | `ambientSky` too bright, `numLights` = 0 | Inspect shipped `LightPresets["track\|tod\|weather"]` first; then `lightTune({ambientMul})` / night ambient cap. Track may not trigger a dark rebuild |
-| Floodlights not firing | `numLights === 0` on a dark track | No `def.night` guard in `buildTrackLights` (every circuit gets lamps). The gate is `isFloodActiveSession()` (game.js: tod night/dusk/dawn, or `default` + `def.night`) `\|\| LT.floodDay > 0`; `raceTimeOfDay` must be set BEFORE `applyRaceSettings`. Then dusk/dawn level = `lampLevel` x max(`twilightFloor` 0.30, 1-sunY*`twilightRamp`) — a shipped `"<track>\|dusk\|<wx>"` row with low `lampLevel` or `twilightFloor` reads as off. Caps: `lampCull` 40 of 48 slots (24 phone), `lampDensity` fill 800 posts, `lampBake`. `slider-effect.mjs --group LAMPS` lists them (no browser) |
+| Floodlights not firing | `numLights === 0` on a dark track | No `def.night` guard in `buildTrackLights` (every circuit gets lamps). The gate is `isFloodActiveSession()` (game.js: tod night/dusk/dawn, or `default` + `def.night`) `\|\| LT.floodDay > 0`; `raceTimeOfDay` must be set BEFORE `applyRaceSettings`. |
+| Floodlights dim at dusk/dawn | `numLights` > 0 but pools weak | Then dusk/dawn level = `lampLevel` x max(`twilightFloor`, 1-sunY*`twilightRamp`); a shipped `"<track>\|dusk\|<wx>"` row with low `lampLevel` or `twilightFloor` reads as off. Caps: `lampCull`, `lampDensity`, `lampBake`. `slider-effect.mjs --group LAMPS` lists them (no browser) |
 | Floodlight masts invisible | `floodEmit === 0` | Night emissive in `buildProps`; `lightTune({floodEmitMul})` |
 | Dawn sun too high | `sunY` close to 1.0 | `lightTune({sunElev: -N})`; structural default in `applyRaceSettings` |
 | Washed out / bloom too strong | `exposure` / bloom knobs hot | `lightTune({exposureMul, bloomMul, threshOff, bloomKnee})`; check shipped presets |
-| Night washed out (milky, lifted blacks) | `ambientSky/Ground` high, `exposure` up | Read the shipped `LightPresets["<track>|night|<wx>"]` first: Singapore ships `nightAmbLift` 2.26, `glowAmp` 2.2, `mistDensity` 1.28, `bloomMul` 1.4. Pull `nightAmbLift` ("how dark is night" master, def 1), then `mistDensity`/`fogDensityMul`, `bloomMul`/`bloomKnee`, `cityGlowMul`/`cityGlowTint`, `exposureMul`. `node tools/lighting/slider-effect.mjs --gate night` lists the night knobs (no browser) |
+| Night washed out (milky, lifted blacks) | `ambientSky/Ground` high, `exposure` up | Read the shared `LightPresets["*|night|dry"]` stamp, then the track row (`singapore|night|dry` only pins `mistDensity`, `bloomKnee`, `fogTint`, ...; it inherits the stamp's `nightAmbLift`, `bloomMul`, `glowAmp`). |
+| Night washed out: which knob | night knob order | Pull `nightAmbLift` ("how dark is night" master, def 1), then `mistDensity`/`fogDensityMul`, `bloomMul`/`bloomKnee`, `cityGlowMul`/`cityGlowTint`, `exposureMul`. `node tools/lighting/slider-effect.mjs --gate night` lists the night knobs (no browser) |
 | Ambient wash | `ambientGround` too bright | `lightTune({ambientMul})`; night branch caps ambient |
 | Lamps too bright / dim | pool blow-out or dark valleys | `lightTune({lampLevel, poolEnergy, bleedMul})` |
 | Sun/moon too warm/cold | `sunColor` skew | `lightTune({sunTemp: ±N})` — key light only, `-2..2` |
@@ -80,14 +84,10 @@ the lamp/mist/star knobs together.
 
 ## Contract tests
 
-Day/night **light counts and exposure**:
-
-```sh
-node tools/ci/test-bg.mjs gfx      # lighting-ab + tuner-grade + webgl-probes + tlx
-npm test -- tests/specs/lighting-ab.spec.js   # lighting-ab only
-```
+Day/night **light counts and exposure**: `npm test -- tests/specs/lighting-ab.spec.js`
+(whole group: `test-bg.mjs gfx`, see SKILL.md).
 
 `tests/specs/lighting-tuner-grade.spec.js` is **IMAGE & COLOUR UI grading
 only** — it does not check `numLights` or day/night ambient. After any
-`applyRaceSettings` edit, run `npm test -- tests/specs/lighting-ab.spec.js` first (accidentally lighting the
+`applyRaceSettings` edit, run `lighting-ab` first (accidentally lighting the
 night scene like day).

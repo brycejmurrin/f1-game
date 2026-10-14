@@ -86,11 +86,24 @@ test.describe("Parts persistence — localStorage writes", () => {
   test("selecting a gearbox part saves it to localStorage", async ({ page }) => {
     await openSetup(page);
 
+    // FREE BUILD off + budget-reject (setup-sheet.js) swallows unaffordable
+    // clicks without writing storage. sequential_pro (90) fits an empty 780
+    // sheet, but shared-worker residue can leave spend high — flip FREE BUILD
+    // on so this persistence assertion cannot be budget-gated.
+    await page.evaluate(() => {
+      const b = document.getElementById("cs-unlimited");
+      if (b && !b.classList.contains("on")) b.click();
+    });
+
     const teamId = await getTeamId(page);
     await pickOpt(page, "gearbox", "sequential_pro");
 
-    const stored = await getStoredParts(page, teamId);
-    expect(stored?.gearbox).toBe("sequential_pro");
+    await expect(page.locator('#cs-options [data-cs-opt="sequential_pro"]'))
+      .toHaveClass(/active/);
+    await expect.poll(
+      () => getStoredParts(page, teamId).then((p) => p?.gearbox),
+      { polling: 100 }
+    ).toBe("sequential_pro");
   });
 
   test("selecting a fuel part saves it to localStorage", async ({ page }) => {
