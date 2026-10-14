@@ -203,7 +203,8 @@ test("phone portrait parks the minimap under the timing tower; other shapes keep
   assert.ok(baseMap, "shipped #minimap rule");
   assert.match(baseMap[1], /top:\s*calc\(8px \+ var\(--sat\) \/ var\(--hud-z\)\);/);
   assert.doesNotMatch(baseMap[1], /--hud-top-h/, "landscape/desktop map stays in the top-left corner");
-  assert.equal((src.match(/@media \(orientation: portrait\) and \(max-width: 500px\)/g) || []).length, 1);
+  assert.equal((src.match(/@media \(orientation: portrait\) and \(max-width: 500px\)/g) || []).length, 2,
+    "tower/map stack plus the unpublished-lane radio fallback, both after the rules they beat");
 });
 
 // Empty .hud-gaps collapses (css/hud.css). The COMPACT metrics test must seed
