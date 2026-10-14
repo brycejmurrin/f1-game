@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs';
 const context = vm.createContext({});
 vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), context);
 const Arrival = vm.runInContext('GarageArrival', context);
+vm.runInContext(readFileSync(new URL('../../js/track/core/pit.js', import.meta.url), 'utf8'), context);
+const TrackPit = vm.runInContext('TrackPit', context);
 function harness(reduced = false) {
   const elements = new Map();
   const $ = id => {
@@ -79,8 +81,8 @@ test('reduce-motion Start Race plays the drive-out at the tuner\'s own pace: no 
   assert.ok(!/reducedMotion\(\)/.test(out), 'startDriveOut reads no motion flag: reduce plays the same drive-out');
   assert.match(out, /const play = Object\.assign\(\{\}, cfg, \{ enabled: true \}\);\s*driveOut = \{ t: 0, cfg: play \};\s*return Math\.round\(GarageArrival\.OUT_DURATION \* 1000 \/ play\.speed\);/, 'wall ms at cfg.speed');
   assert.match(out, /if \(!cfg\.enabled\) return 0;/, 'only the tuner can turn it off for a player');
-  // Player pace: speed 1 (the default) → OUT_DURATION, ~7.6 s, never trimmed.
-  assert.ok(Math.abs(Arrival.OUT_DURATION * 1000 / Arrival.settings(null).speed - 7600) <= 400, 'the default drive-out is the tuned ~7.6 s');
+  // Player pace: speed 1 (the default) → OUT_DURATION, ~9.6 s, never trimmed.
+  assert.ok(Math.abs(Arrival.OUT_DURATION * 1000 / Arrival.settings(null).speed - 9600) <= 400, 'the default drive-out is the tuned ~9.6 s');
   // Automation (the harness) skips it through the ONE shared gate, nothing else.
   assert.match(out, /if \(typeof LoadingScreen !== "undefined" && LoadingScreen\.isAutomation && LoadingScreen\.isAutomation\(\)\) return 0;/, 'harness launches skip the drive-out via LoadingScreen.isAutomation');
   assert.ok(!/webdriver/.test(out), 'no scattered navigator.webdriver check: the shared gate decides');
@@ -123,7 +125,7 @@ test('once out of the door the car turns into the pit lane, away from the camera
       px = p.x; pyaw = p.yaw;
     }
     const end = Arrival.poseOut(Arrival.OUT_DURATION, cfg);
-    assert.ok(side * end.yaw > 1.0 && side * end.yaw < Math.PI / 2, 'turned roughly 60-90 degrees, never back on itself');
+    assert.ok(side * end.yaw > 1.0 && side * end.yaw <= Math.PI / 2 + 1e-9, 'squared into the lane, never back on itself');
     assert.ok(side * end.x > 2, 'and off to the side, away from the camera (the eye stands at x ' + Math.sign(cfg.angle === 'right' ? 1 : -1) + ')');
     assert.ok(Math.sign(end.aim[0]) === side, 'the camera follows it round');
   }
@@ -296,7 +298,10 @@ test('PREVIEW IN / OUT: plays the saved settings to the end, then hands the canv
     assert.ok(Math.abs(n - dur / 0.2) <= 2, `${dir}: SPEED 2 plays it in half the time (${n} steps)`);
     assert.equal(last.active, true, 'the last frame holds the final pose');
     if (dir === 'in') assert.equal(last.z, 0, 'parked');
-    else assert.ok(last.z >= Arrival.poseOut(dur).z && last.z <= Arrival.poseOut(Arrival.OUT_SETTLE).z, 'out of the door, still coasting');
+    else {
+      const end = Arrival.poseOut(Arrival.OUT_SETTLE, Arrival.settings({ angle: 'right' }));
+      assert.deepEqual([last.x, last.z], [end.x, end.z], 'gone down the lane, held out of frame');
+    }
     assert.equal(h.G.setupPreviewOn, false, 'setupPreviewOn restored');
     assert.equal(h.$('garrival-inner').hidden, false, 'the panel is back');
     assert.equal(btn.focused, true, 'focus returns to the PREVIEW button');
@@ -383,14 +388,33 @@ test('the car out, the garage HOLDS until the flyby where the backend warms (TLX
   assert.match(game, /FlybySeq\.reset\(\); warmPrograms\(\); _menuGate\.warm = 2;/, 'cold world frames run under the preparation card before motion');
   assert.match(game, /prepared = true;   \/\/ afterGarageOut closes the held garage, then the race\/session card/, 'introWarm hands off through afterGarageOut');
 });
-test('the drive-out coasts on past OUT_DURATION (the held garage), and settles without a jump', () => {
-  const cfg = Arrival.DEFAULT, at = (t) => Arrival.poseOut(t, cfg);
-  assert.ok(Arrival.OUT_SETTLE > Arrival.OUT_DURATION);
-  assert.ok(at(Arrival.OUT_DURATION + 0.5).z > at(Arrival.OUT_DURATION).z, 'still rolling while RACE! loads');
-  const end = at(Arrival.OUT_SETTLE);
-  assert.deepEqual([at(Arrival.OUT_SETTLE + 30).x, at(Arrival.OUT_SETTLE + 30).z], [end.x, end.z], 'then it holds');
-  const step = Math.hypot(end.x - at(Arrival.OUT_SETTLE - 0.02).x, end.z - at(Arrival.OUT_SETTLE - 0.02).z);
-  assert.ok(step < 0.02, `the last 20 ms moves ${step.toFixed(4)} m: no stop jerk`);
+// Where a car corner's sight line from the eye crosses the door plane: inside the
+// aperture (|x| < doorW / 2) it is seen through the door, outside it the front wall hides it.
+function seenThroughDoor(p) {
+  const [ex, , ez] = p.eye, DOOR_Z = TrackPit.BAY.depth / 2, HW = TrackPit.BAY.doorW / 2;
+  const c = Math.cos(p.yaw), s = Math.sin(p.yaw);
+  return [[2.8, 1], [2.8, -1], [-2.8, 1], [-2.8, -1]].some(([along, across]) => {
+    const cx = p.x + along * s + across * c, cz = p.z + along * c - across * s;
+    return Math.abs(ex + (cx - ex) * (DOOR_Z - ez) / (cz - ez)) < HW;
+  });
+}
+test('the drive-out does not stop in view: it drives down the lane behind the front wall, then holds', () => {
+  for (const angle of ['cut', 'left', 'right']) {
+    const cfg = Arrival.settings({ angle }), at = (t) => Arrival.poseOut(t, cfg);
+    assert.ok(Arrival.OUT_SETTLE < Arrival.OUT_DURATION, 'gone before the shot ends: a beat on the empty lane');
+    const turned = Arrival.OUT_SETTLE - 2.0;   // the turn's end, before the run down the lane
+    assert.ok(seenThroughDoor(at(turned)), angle + ': in the doorway as it squares into the lane');
+    assert.ok(!seenThroughDoor(at(Arrival.OUT_SETTLE)), angle + ': behind the front wall when it settles, out of frame');
+    let speed = 0;
+    for (let t = turned; t + 0.1 <= Arrival.OUT_SETTLE + 1e-9; t += 0.1) {
+      const v = Math.hypot(at(t + 0.1).x - at(t).x, at(t + 0.1).z - at(t).z) / 0.1;
+      assert.ok(v >= speed - 1e-6, 'it pulls away down the lane, never slowing in view');
+      speed = v;
+    }
+    const end = at(Arrival.OUT_SETTLE);
+    assert.deepEqual([at(Arrival.OUT_SETTLE + 30).x, at(Arrival.OUT_SETTLE + 30).z], [end.x, end.z], 'then it holds, out of sight');
+    assert.ok(Math.abs(end.aim[0]) <= 3.5 + 1e-9, 'the camera holds on the doorway, not on the wall it went behind');
+  }
 });
 test('START from race settings: the sheet covers preparation (PREPARING…), never the card over black, and gives way to the garage', async () => {
   const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
@@ -492,7 +516,7 @@ function garageEntryRegressionHarness() {
     endHome() {}, uiExperience: { renderHome: () => false, trackActive: () => false },
     headlessMode: false, settings: 'same-entry', flybyShots: null,
     _menuFly: null, _menuGate: { warm: 0, garageWarm: 0, garageReady: false, generation: 0 },
-    _warmKey: 'world', flybyBuildTimer: 0,
+    _warmKey: 'world', flybyBuildTimer: 0, _carWarm: { busy: false },
     canvas: { style: {} }, _softEl: { style: {} },
     document: { hidden: false, getElementById: () => null },
     performance: { now: () => now },

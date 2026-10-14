@@ -1119,15 +1119,10 @@
               <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b><button type="button" id="pm-hudscale-r" class="tune-revert" hidden>reset</button></span>
                 <input id="pm-hudscale" type="range" min="70" max="200" step="0.25" value="100" aria-label="HUD size"></label>
               <p class="adv-help">Scales the race readouts: speed, position, timing and the map. The sample below shows the size.</p>
-              <!-- BUTTON SIZE is its own knob because the dock and the readouts
-                   compete for the same edges: shrinking the pedals is how a
-                   player buys the readouts room back, and one slider could only
-                   trade both at once. Unset it FOLLOWS HUD SIZE (css/tokens.css
-                   declares --hud-btn-scale as var(--hud-scale)), so an untouched
-                   slider changes nothing. -->
-              <label class="tune-row"><span class="tune-label">BUTTON SIZE <b id="pm-btnscale-v">100%</b><button type="button" id="pm-btnscale-r" class="tune-revert" hidden>follow HUD size</button></span>
+              <!-- Independent touch-control preference. -->
+              <label class="tune-row"><span class="tune-label">BUTTON SIZE <b id="pm-btnscale-v">100%</b><button type="button" id="pm-btnscale-r" class="tune-revert" hidden>reset button size</button></span>
                 <input id="pm-btnscale" type="range" min="40" max="300" step="0.25" value="100" aria-label="Touch button size"></label>
-              <p class="adv-help">The on-screen pedals, arrows and race buttons. Follows HUD SIZE until you move it; smaller buttons leave the readouts more room.</p>
+              <p class="adv-help">The on-screen pedals, arrows and race buttons. Independent of HUD SIZE; only the screen limits their size.</p>
               <!-- BUTTON OPACITY. XAG 104 asks for an adjustable backing behind
                    anything read over live gameplay, and the dock sits over a
                    bright, moving 3D scene. Its own 20-100 range, not the size
@@ -2623,7 +2618,7 @@
           <select id="rs-weather-sel" aria-labelledby="rs-weather-label" aria-describedby="rs-weather-help"></select>
           <button id="rs-weather-next" type="button" data-step="1" aria-label="Next weather">&rsaquo;</button>
         </div>
-        <p id="rs-weather-help" class="adv-help">Conditions at the start. WET is a damp track in drizzle, RAIN a full downpour with less grip; CLOUDY and FOG change the light and visibility.</p>
+        <p id="rs-weather-help" class="adv-help">Conditions at the start. WET is a damp track in drizzle, RAIN a full downpour with less grip; STORM is rain at its worst, with lightning, heavy spray and a safety-car start; CLOUDY and FOG change the light and visibility.</p>
       </div>
       <div id="rs-mixed" class="set-row" role="group" aria-labelledby="rs-mixed-label">
         <span class="tune-label" id="rs-mixed-label">CONDITIONS</span>
@@ -3623,6 +3618,7 @@
 <script defer crossorigin="anonymous" src="js/physics/aero-zones.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/skidmarks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/car-fx.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/storm.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-control.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/overtake-mode.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/pace-math.js?v=dev"></script>
@@ -3633,6 +3629,7 @@
 <script defer crossorigin="anonymous" src="js/race/real-replay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-race.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/weather-arc.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/forecast.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-kit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/free-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-cam.js?v=dev"></script>

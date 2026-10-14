@@ -176,7 +176,7 @@ SYNC ONLY WHEN YOU MUST: GitHub reports CONFLICTING/DIRTY or a required tip chec
 `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge → `test:tooling-fast` → ci.yml's node suites → `verify-track` → push; it cures generated-file conflicts and stops on any other).
 It prints the branch's last ci/pages conclusions first, so an INHERITED red is visible before you blame your push (`--pr` opens a PR, `--plan` prints the union, `--gate-only` gates and stops, `--train` adds the nightly rota).
 Shipping is a RELEASE TRAIN: a green fast tier pokes `pages.yml`, which gates the tip once and publishes exactly that
-commit (dispatch = "deploy now"; ≤ ~25 min; one green tip → one train, never dual-dispatch Pages). "Live?" = ancestor
+commit (dispatch = "deploy now"; gated publish median 23 min, p90 73; a train re-arms itself for a tip that went green mid-run; one green tip → one train, never dual-dispatch Pages). "Live?" = ancestor
 of the live `apex-sha` (agent `deploy-research`; `docs/TESTING.md` §Release train).
 
 ### Backlog

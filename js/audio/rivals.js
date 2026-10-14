@@ -245,7 +245,33 @@ var RivalAudio = (() => {
       return out;
     }
 
-    return { collect, attach, tick: collect, detach, passByState, passByVoices };
+    /** Short tyre squeal for AI / rival lock-up & slide. Positional via
+     *  GameAudio.fieldContact; per-car cooldown and the 3-voice cap live there.
+     *  Skips the player (CarSfx owns that path). Safe every frame. */
+    function emitFieldSfx(player) {
+      if (!player || typeof GameAudio === "undefined" || !GameAudio.fieldContact) return;
+      const track = G.track, cars = G.cars;
+      if (!track || !cars) return;
+      for (let i = 0; i < cars.length; i++) {
+        const c = cars[i];
+        if (!c || c === player || c.isPlayer || c.retired) continue;
+        const lock = +c.wheelLock || 0;
+        const skid = +c.skidIntensity || 0;
+        const inten = Math.max(lock, skid > 0.45 ? skid : 0);
+        // Pace-safe crawl gate: fraction of vTop, not a raw m/s literal (vstd-lint).
+        const top = (G.vTop && G.vTop()) || 1;
+        if (!(inten > 0.35) || Math.abs(+c.speed || 0) / top < 0.08) continue;
+        let wx = c.px, wz = c.pz;
+        if (wx == null || wz == null) {
+          const w = worldXZ(track, c.s, c.x);
+          if (!w) continue;
+          wx = w[0]; wz = w[1];
+        }
+        GameAudio.fieldContact("squeal", inten, wx, wz, i);
+      }
+    }
+
+    return { collect, emitFieldSfx, attach, tick: collect, detach, passByState, passByVoices };
   }
 
   /** Wet-spray wake: nearest rival ahead within 40 m → 0..1 (1 = on your gearbox).

@@ -245,6 +245,14 @@ const RaceControl = (function () {
     // it (hold(0)) hands the flag back to the hazard loop, which lowers it at
     // its next query. Never the red flag: that runs its own procedure.
     let held = 0, heldCause = "";
+    // `held` is the MAX of two holders: the script's (hold()) and the STORM's
+    // (stormTick). Each keeps its own level; rehold() combines them.
+    let scriptHeld = 0, scriptCause = "", wxHeld = 0;
+    // STORM: the shared race clock when the storm arrived, and whether it was
+    // there at the start (a storm START runs behind the SC for SC_START_S; one
+    // rolling in mid-race is neutralised until it eases back to rain, capped
+    // at SC_ROLL_S). null = no storm now.
+    let stormSince = null, stormAtStart = false;
     // Last state broadcast to a guest, so only CHANGES are sent.
     let sent = "";
     const savedCaution = store.get("caution", false);
@@ -253,6 +261,7 @@ const RaceControl = (function () {
     function reset() {
       caution = blank();
       held = 0; heldCause = "";
+      scriptHeld = 0; scriptCause = ""; wxHeld = 0; stormSince = null; stormAtStart = false;
       queryT = 0;
       capHoldT = 0; capHoldLevel = 0;
       restartWanted = false;
@@ -321,7 +330,14 @@ const RaceControl = (function () {
       return true;
     }
 
+    // PERF-HUNT-2 S8: game.js flushes once per display frame (G._s8Stamp). A
+    // second update with the same stamp is a no-op; tests that omit the stamp
+    // keep the per-call behaviour.
+    let _s8Done = null;
     function update(dt) {
+      const stamp = G._s8Stamp;
+      if (stamp != null && stamp === _s8Done) return;
+      if (stamp != null) _s8Done = stamp;   // after the match check; call sites pass finite dt
       // State reset BEFORE the ownership gate: a guest's caution mirror comes
       // from host apply(), and returning early here would leave the last flag
       // flown on its HUD after the race ended (reset() is local-only, safe for all).
@@ -342,6 +358,7 @@ const RaceControl = (function () {
         if (lowGripNoted) Log.info("race", "Overtake disabled why=low-grip raceT=" + (+G.raceT || 0).toFixed(1));
       }
       if (!G.netPlay.ownsRaceControl()) return;
+      stormTick();
       // A held flag flies whether or not the hazard loop is switched on: the
       // player's CAUTIONS setting governs debris, not a race replayed by script.
       if (held > caution.level && caution.level !== 4) {
@@ -480,10 +497,18 @@ const RaceControl = (function () {
     // hold) steps straight down to the new level rather than waiting on the
     // hazard loop — which with debris off, or the switch off, never lowers it.
     function hold(level, cause) {
+      scriptHeld = Math.max(0, Math.min(3, level | 0));
+      scriptCause = scriptHeld ? (typeof cause === "string" && cause ? cause.slice(0, 64) : LABEL[scriptHeld]) : "";
+      if (scriptHeld) Log.info("game", "RaceControl hold " + LABEL[scriptHeld] + " (" + scriptCause + ")");
+      rehold();
+      return scriptHeld;
+    }
+    // Combine the two holders into `held`, and step a flag the OLD hold raised
+    // straight down to the new one (hold()'s rule, for either holder).
+    function rehold() {
       const prevHeld = held;
-      held = Math.max(0, Math.min(3, level | 0));
-      heldCause = held ? (typeof cause === "string" && cause ? cause.slice(0, 64) : LABEL[held]) : "";
-      if (held) Log.info("game", "RaceControl hold " + LABEL[held] + " (" + heldCause + ")");
+      held = Math.max(scriptHeld, wxHeld);
+      heldCause = !held ? "" : scriptHeld >= wxHeld ? scriptCause : "STORM";
       if (held < caution.level && caution.level <= prevHeld && caution.level < 4) {
         if (held === 0) dropToGreen();
         else {
@@ -495,6 +520,39 @@ const RaceControl = (function () {
         publish();
       }
       return held;
+    }
+
+    // STORM → SAFETY CAR (js/race/storm.js). Heavy rain takes the drivers'
+    // VISIBILITY, so race control does what the FIA does: a race STARTED in a
+    // storm runs behind the safety car (2025 Belgian GP — formation lap, red
+    // for visibility, restart behind the SC), and a storm rolling in mid-race
+    // brings it out until the storm eases back to rain. Bounded both ways
+    // (Storm.SC_START_S / SC_ROLL_S) so a race that STAYS a storm still races.
+    // Read off raceWeather — on the shared clock in a friend race — and only on
+    // the race-control owner, so it is deterministic and a guest mirrors it.
+    // The existing hold machinery flies it: exempt from the SC cap, raised
+    // regardless of CAUTIONS (weather is not debris), the AI queue and the
+    // Overtake rule (B7.2.2c) follow the level as for any safety car.
+    function stormTick() {
+      const S = typeof Storm !== "undefined" ? Storm : null;
+      const t = typeof G.raceT === "number" && Number.isFinite(G.raceT) ? G.raceT : 0;
+      if (!S || !S.is(G.raceWeather)) {
+        if (stormSince != null) Log.info("race", "storm eased raceT=" + t.toFixed(1));
+        stormSince = null;
+        if (wxHeld) { wxHeld = 0; rehold(); if (typeof G.announce === "function") G.announce("STORM EASING — SAFETY CAR IN THIS LAP", 3, "info"); }
+        return;
+      }
+      if (stormSince == null) {
+        stormSince = t; stormAtStart = t < 2;
+        wxHeld = 3; rehold();
+        Log.info("race", "storm SC deployed start=" + stormAtStart + " raceT=" + t.toFixed(1));
+        if (typeof G.announce === "function") G.announce(stormAtStart ? "STORM — START BEHIND THE SAFETY CAR" : "STORM — SAFETY CAR DEPLOYED", 3, "warning");
+        return;
+      }
+      if (wxHeld && t - stormSince >= (stormAtStart ? S.SC_START_S : S.SC_ROLL_S)) {
+        wxHeld = 0; rehold();
+        Log.info("race", "storm SC in (visibility window over) raceT=" + t.toFixed(1));
+      }
     }
 
     // The one-shot restart request at the end of a red-flag procedure.

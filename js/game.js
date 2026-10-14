@@ -2372,6 +2372,7 @@ let _menuFly = null;
 // (SwiftShader) and linked NOTHING — a held card for nothing
 // (23 links, all in the menu and the flyby).
 let _warmKey = "";
+const _carWarm = { busy: false };   // the stepped race car warm (startRaceBody): render() draws nothing, as under gfx.warming()
 // ONE WARM PER WORLD PER SESSION (`_warmed`; "|lit" is a dark world's second one).
 // Its programs stay built, and a repeat links nothing yet holds TLX's presents for
 // seconds: on a phone, RACE! on a circuit already raced met it pending, so the
@@ -2795,7 +2796,12 @@ async function startRaceBody() {
   const handoff = (loadingScreen.active() || loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !!player;
   clearMenuScreens(); garagePre.release();
   if (handoff) RaceEntryProfile.raiseHandoff(loadingScreen);
-  RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
+  // Meshes HERE, not on the first countdown frame — stepped (≤ 1 heavy piece per task, apex26.carWarmSlice; 0 = one sync task).
+  // game-vm pumps no timers: an endless slice there never yields (like yieldMain above).
+  // A frame drawn between steps built the not-yet-warmed cars itself (census 502/503: GLX ~1 s tasks, steps <= 199 ms).
+  _carWarm.busy = true;
+  try { await RaceEntryProfile.spanAsync("warmCarAssets", () => warmCarAssetsAsync(() => !stale(), vmNoFramePump ? Infinity : 8)); } finally { _carWarm.busy = false; }
+  if (stale()) return false;
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
   // TLX links programs on first draw — warm during LIGHTS only when the pack is
@@ -3265,6 +3271,8 @@ const G = {
   get raceLineAssist() { return raceLineAssist; }, set raceLineAssist(v) { raceLineAssist = v; },
   get _lastFloodEmit() { return _lastFloodEmit; }, set _lastFloodEmit(v) { _lastFloodEmit = v; },
   get _studioRig() { return _studioRig; }, set _studioRig(v) { _studioRig = v; },
+  get _s8Stamp() { return _s8Stamp; },
+  set _s8Stamp(v) { _s8Stamp = v == null ? null : (v | 0); },   // PERF-HUNT-2 S8 once-per-frame
   get _testInput() { return _testInput; }, set _testInput(v) { _testInput = v; },
   get builtTrackNight() { return builtTrackNight; }, set builtTrackNight(v) { builtTrackNight = v; },
   get camEye() { return camEye; }, set camEye(v) { camEye = v; },
@@ -3627,7 +3635,7 @@ const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setT
 const carDraw = CarDraw.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali });
 const { teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh, teamDecalState, carDecalNum,
         drawCarDecals, queueCarDecals, drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig,
-        warmCarAssets, prepareMenuCarAssets } = carDraw;
+        warmCarAssetsAsync, prepareMenuCarAssets } = carDraw;
 _pitCrewDrawn = pitCrewDrawn;   // __apex.pit() reads G.pitCrewDrawn to prove the crew mesh submitted
 
 // The garage setup-preview camera and its #cs-view controls
@@ -4459,6 +4467,8 @@ const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0,
                   deploy: 0, energy: 1, ersDeploy: 0.5, throttle: 1, brake: 0, regen: 0.5 };  // setEngine reads synchronously
 let _audioParamStep = true;   // tickBody clears it on all but a frame's last physics step
 const _engAcc = { dt: 0 };   // the local car's sim time since the engineer last listened (S8: once per frame)
+// S8 presentation dt; stamp null until first flush (0 would latch harness coach.update loops).
+const _s8Pres = { dt: 0 }; let _s8Stamp = null;
 function update(dt) {
   // No world: a stepped/worker race switch dropped it (dropTrackWorld) and is still building.
   // tickBody gates on it too; this covers __apex.step() (bug hunt 3 K1/X2).
@@ -4649,9 +4659,17 @@ function update(dt) {
   incidentSim.postStep(dt);
   RaceControl.endLineStep();
 
-  // B1 — debris caution: consume hazards() and drive the local-yellow / VSC / SC
-  // flag state (READ-ONLY; never slows or moves a car). Self-guarding + throttled.
-  updateCaution(dt); coach.update(dt); raceRadio.update(dt);
+  // B1 — debris caution + driving coach + race radio: presentation only
+  // (announce / audio). Once per FRAME on the last physics step with the
+  // frame's summed sim dt — same pattern as engineer / _audioParamStep
+  // (PERF-HUNT-2 S8). Modules also guard on G._s8Stamp so a second call in the
+  // same frame is a no-op. carSfx stays per-step (edge detectors).
+  _s8Pres.dt += dt;
+  if (_audioParamStep) {
+    _s8Stamp = (_s8Stamp == null ? 0 : _s8Stamp) + 1;
+    updateCaution(_s8Pres.dt); coach.update(_s8Pres.dt); raceRadio.update(_s8Pres.dt);
+    _s8Pres.dt = 0;
+  }
 
   // Race-control owns the finish policy as well as neutralisation rules. In a
   // human race an AI/other player crossing first must NOT start a 3.5 s result
@@ -4714,6 +4732,7 @@ function update(dt) {
     // The field around you: panned, distance-rolled and Doppler-shifted. Before
     // this there was no opponent audio at all, so a car alongside was silent.
     GameAudio.setRivals(rivalAudio.collect(player));
+    if (rivalAudio.emitFieldSfx) rivalAudio.emitFieldSfx(player);   // Radio r9: AI lock-up / slide squeal
   }
   if (soundOn && player) carSfx.update(player);
 }
@@ -4754,7 +4773,16 @@ const _alRGB = [0, 0, 0];   // always-on lights: the per-frame colour triple
 // Collision feedback when the player is involved, scaled by impact (0..1).
 function collideFx(a, b, impact) {
   Damage.contact(a, b, impact, track.total);   // every pair, before the player-only gate: DISPLAY ONLY (js/race/damage.js)
-  if (!a.isPlayer && !b.isPlayer) return;
+  if (!a.isPlayer && !b.isPlayer) {
+    // Radio r9: rival–rival positional contact SFX. Player path below is untouched.
+    if (soundOn && state === "race" && !paused && GameAudio.fieldContact) {
+      const wx = (a.px != null && b.px != null) ? (a.px + b.px) * 0.5 : (a.px != null ? a.px : b.px);
+      const wz = (a.pz != null && b.pz != null) ? (a.pz + b.pz) * 0.5 : (a.pz != null ? a.pz : b.pz);
+      const ia = cars.indexOf(a), ib = cars.indexOf(b), key = ia >= 0 && ib >= 0 ? (ia < ib ? ia * 64 + ib : ib * 64 + ia) : (ia >= 0 ? ia : ib);
+      GameAudio.fieldContact("bump", impact, wx, wz, key);
+    }
+    return;
+  }
   const pc = a.isPlayer ? a : b;
   if (pc.collideT > 0) return;
   impact = clamp(impact, 0.12, 1);
@@ -6930,16 +6958,12 @@ function renderLightingPrep(dt, hasLivePlayerShadow) {
   const wet = isWetRoad();      // wet-road material applies to "wet" AND "rain"
   const raining = isRaining();  // falling rain, lightning + thunder only in "rain"
   if (raining && _ltBase && LT.lightning > 0) {
-    // Count down to the next strike
-    _ltNextT -= dt;
-    if (_ltNextT <= 0) {
-      // Trigger a new flash: intensity 1 → decays at ~8×/s
-      _ltFlash = 1.0;
-      // Next strike in 4–12 s, scaled by the LIGHTNING FREQ knob (higher = sooner).
-      _ltNextT = (4 + Math.random() * 8) / LT.lightning;
-      // Queue thunder to lag the flash (sound travels slower than light): a
-      // near strike cracks ~0.3 s later, a distant one rumbles up to ~2 s later.
-      _thunderT = _thunderDelay = 0.3 + Math.random() * 1.7;
+    // Strikes are a pure function of (sim seed, race clock) — js/race/storm.js: same sky on a replay or a peer. _ltNextT = the clock the last window ended at.
+    const ltNow = state === "race" ? raceT : _skyT, strike = Storm.strikeIn(simSeed(), _ltNextT, ltNow, LT.lightning, raceWeather);
+    _ltNextT = ltNow;
+    if (strike) {
+      if (Storm.flashOk(motionReduced())) _ltFlash = 1.0;   // no strobe under REDUCED MOTION; decays at ~8×/s
+      _thunderT = _thunderDelay = strike.delay;   // sound lags light 1–6 s (a strike 0.3–2 km out)
     }
     if (_thunderT >= 0) {
       _thunderT -= dt;
@@ -6948,7 +6972,7 @@ function renderLightingPrep(dt, hasLivePlayerShadow) {
         // whatever was left before this frame's decrement — between 0 and one
         // frame — so it would always give ~1.0 - 0.008 and clamp to full
         // volume: a 2 s distant rumble as loud as a 0.3 s overhead strike.
-        GameAudio.thunder(clamp(1.0 - _thunderDelay / 2.0, 0.15, 1.0));
+        GameAudio.thunder(clamp(1.0 - (_thunderDelay - 1) / 5, 0.15, 1.0));
       }
     }
     if (_ltFlash > 0.001) {
@@ -7203,7 +7227,7 @@ function render(dt) {
   // stayed up until an unrelated present (a panel click) cleared warming.
   // Intro staging (_studio.cardUp) must keep both canvases hidden under
   // PREPARING until the first successful garage present (garage-arrival).
-  if (gfx.warming && gfx.warming()) {
+  if ((gfx.warming && gfx.warming()) || _carWarm.busy) {
     if (setupPreviewOn && !(_studio && _studio.cardUp)) {
       if (canvas.style.visibility === "hidden") canvas.style.visibility = "";
       if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
@@ -7998,7 +8022,7 @@ function render(dt) {
         // and full spray was unreachable, at pace 1.3 it was pinned at 1 down
         // every straight. The particle VELOCITY stays real m/s (A16).
         if (wet && vStd(c.speed) > 15) {
-          const str = clamp((vStd(c.speed) - 15) / 45, 0, 1) * (raceWeather === "rain" ? 1 : 0.6);
+          const str = clamp((vStd(c.speed) - 15) / 45, 0, 1) * Storm.sprayK(raceWeather);   // storm 1.35 / rain 1 / wet 0.6
           const sxo = Math.random() < 0.5 ? -0.6 : 0.6;   // behind either rear tyre (str > 0: vStd > 15)
           Particles.spray(
             tmpMat[12] + tmpMat[0] * sxo - tmpF[0] * 2.1,

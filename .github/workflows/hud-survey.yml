@@ -119,7 +119,10 @@ jobs:
   merge:
     name: Merge reports
     needs: [shard]
-    if: always()
+    # Merge whatever shards reported (a red shard still uploads), but not after
+    # a cancel or a failed plan (shard skipped: nothing to merge). `always()`
+    # also ran it then. https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#status-check-functions
+    if: ${{ !cancelled() && needs.shard.result != 'skipped' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
