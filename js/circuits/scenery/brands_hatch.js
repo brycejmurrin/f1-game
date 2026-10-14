@@ -109,7 +109,7 @@
             if (!clear(k, side, d, 11)) continue;
             const a = anchor(k, side, d);
             const gy = terrainYAt(a.c[0], a.c[2]);
-            if (gy != null && Math.abs(a.c[1] - gy) > 0.35) continue;
+            if (gy != null && Math.abs(a.c[1] - gy) > 0.28) continue;
             place(k, side, d, [1.85, 1.45, 4.3],
               CAR_COLS[(k + r * 3) % CAR_COLS.length]);
           }
@@ -179,7 +179,7 @@
       // by feet on the steep bits. groundPatch so they follow the bank instead
       // of hovering as a slab, and varied in size so they read as wear.
       for (const [s, d, w, l] of [
-        [0.030, 15, 15, 17], [0.020, 21, 9, 11], [0.044, 17, 11, 13],
+        [0.044, 17, 11, 13],
         [0.072, 15, 15, 17], [0.066, 24, 12, 14], [0.084, 20, 10, 12],
         [0.195, 15, 15, 17], [0.186, 23, 11, 13], [0.206, 19, 9, 11],
         [0.360, 15, 15, 17], [0.330, 22, 12, 16], [0.852, 15, 15, 17],
@@ -560,7 +560,12 @@
       // Its terrace, which looks straight down into Paddock Hill.
       groundPatch(K(sl(0.016)), 1, 33, [14, 0.24, 18], ASPH);
       if (clear(K(sl(0.008)), 1, 34, 10)) {
-        house(K(sl(0.008)), 1, 34, 8, 3.4, 7, {});
+        const kKent = K(sl(0.008));
+        const aKent = anchor(kKent, 1, 34);
+        const gyKent = terrainYAt(aKent.c[0], aKent.c[2]);
+        if (gyKent == null || aKent.c[1] >= gyKent - 0.15) {
+          house(kKent, 1, 34, 8, 3.4, 7, {});
+        }
       }
 
       // Paddock / team area, stepping down the hill behind the pits:
