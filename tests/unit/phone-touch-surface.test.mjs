@@ -544,3 +544,69 @@ test("HUD: OFF on touch hides the readouts but keeps the driving controls (hunt3
   assert.deepEqual(offending, [], "no non-.desktop body.hud-hidden rule hides the touch dock, its buttons or PAUSE");
   assert.ok(readoutsHidden, "the readouts still go: every #hud child but the dock");
 });
+
+/* ── touch-control LABEL floor (GAS/BRAKE/BOOST/OT/PAUSE/CAM) ───────────────
+ * fitHud writes --hud-z-dock (js/ui/hud.js, not touched here). The dock then
+ * `zoom`s, so an authored --fs-micro (14px) paints at 9.7px on a 390px-tall
+ * landscape phone at HUD 150% (css/touch-controls.css, 2026-10-14). The floor
+ * is a font-size max() that divides 10 CSS px by that zoom — width/height stay
+ * on --tap/--hold, so hit areas do not grow. */
+const LABEL_FLOOR_PX = 10;
+
+function paintedLabelPx(authoredPx, dockZoom) {
+  const z = Math.max(0.4, +dockZoom || 1);
+  return Math.max(authoredPx, LABEL_FLOOR_PX / z) * z;
+}
+
+test("dock touch labels keep a 10 CSS-px painted floor under --hud-z-dock", () => {
+  const ov = css("css/touch-controls.css");
+  const land = { context: /orientation:\s*landscape/ };
+  assert.equal(decl(ov, ":root", "--touch-label-floor"), "10px",
+    "--touch-label-floor is the 10 CSS-px painted minimum");
+
+  const dock = ruleFor(ov, /body:not\(\.desktop\) \.dock/, "zoom", land);
+  assert.ok(dock, "landscape dock publishes zoom");
+  assert.equal(dock.decls.get("--touch-label-z"),
+    "var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
+    "the label-z token tracks the dock's own zoom (capped or slider)");
+
+  const tapFont = decl(ov, /body:not\(\.desktop\) \.dock \.touchbtn/, "font-size", land);
+  assert.match(String(tapFont), /max\(/, "tap labels clamp with max()");
+  assert.match(String(tapFont), /var\(--touch-label-floor\)/, "tap labels consume the 10px floor");
+  assert.match(String(tapFont), /var\(--touch-label-z/, "tap labels divide the floor by dock zoom");
+  assert.doesNotMatch(String(tapFont), /\bwidth\b|\bheight\b/, "the font rule does not restyle hit boxes");
+
+  const holdFont = decl(ov, /body:not\(\.desktop\) \.dock \.pedal/, "font-size", land);
+  assert.match(String(holdFont), /max\(/);
+  assert.match(String(holdFont), /var\(--touch-label-floor\)/);
+  assert.match(String(holdFont), /var\(--touch-label-z/);
+
+  const shiftFont = decl(ov, /^body:not\(\.desktop\) \.dock \.shiftbtn, body\.desktop \.dock \.shiftbtn$/, "font-size", land);
+  assert.match(String(shiftFont), /max\(15px/);
+  assert.match(String(shiftFont), /var\(--touch-label-floor\)/);
+
+  const pauseFont = decl(ov, "#pausebtn", "font-size");
+  assert.match(String(pauseFont), /var\(--touch-label-floor\)/, "PAUSE keeps the same 10px floor");
+  const camFont = decl(ov, "#btn-cam", "font-size");
+  assert.match(String(camFont), /var\(--touch-label-floor\)/, "CAM keeps the same 10px floor");
+
+  // The 9.7px case: authored 14px × dock zoom 0.69. Without the floor that
+  // paints 9.66; with it, 10. Width/height stay on --tap/--hold (not asserted
+  // as a computed box here — the selectors above never mention them).
+  assert.ok(paintedLabelPx(14, 0.69) >= LABEL_FLOOR_PX - 1e-9, "14px @ 0.69 zoom paints ≥ 10");
+  assert.ok(paintedLabelPx(14, 0.69) < 14 * 0.69 + 1, "the floor does not enlarge labels that already clear 10px by much");
+  for (const z of [0.4, 0.5, 0.69, 0.82, 1, 1.25, 1.5]) {
+    for (const authored of [11, 14, 15, 18]) {
+      assert.ok(paintedLabelPx(authored, z) + 1e-9 >= LABEL_FLOOR_PX,
+        `${authored}px × zoom ${z} must paint ≥ ${LABEL_FLOOR_PX} (got ${paintedLabelPx(authored, z)})`);
+    }
+  }
+
+  // Hit-area tokens stay size tokens — the floor must not leak into --tap/--hold.
+  const tap = dock.decls.get("--tap");
+  const hold = dock.decls.get("--hold");
+  assert.match(String(tap), /^max\(54px/);
+  assert.match(String(hold), /^max\(72px/);
+  assert.doesNotMatch(String(tap), /touch-label-floor/);
+  assert.doesNotMatch(String(hold), /touch-label-floor/);
+});
