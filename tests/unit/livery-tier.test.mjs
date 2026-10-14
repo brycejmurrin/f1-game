@@ -528,7 +528,7 @@ test("C-P3: ImageBitmap upload == canvas upload, byte for byte (Chromium, APEX_L
       let real = null;
       try {
         const team = (Teams && Teams.LIST && Teams.LIST[0]) || { id: "ferrari" };
-        const atlas = LiveryTex.buildAtlas(team.id, {}, 16, true, true);   // the real deferred hi-res paint (2048x2560, OffscreenCanvas when available)
+        const atlas = LiveryTex.buildAtlas(team.id, {}, 16, true, true);   // the real deferred hi-res paint (2048x2560, the element canvas: an OffscreenCanvas bitmap stalled llvmpipe, see liverytex.js)
         real = Object.assign({ team: team.id, offscreen: typeof OffscreenCanvas === "function" && atlas instanceof OffscreenCanvas }, await compare(atlas));
       } catch (e) { real = { error: String(e && e.message || e) }; }
       return { synthetic, real, ua: navigator.userAgent.replace(/^.*Chrome\//, "Chrome/").split(" ")[0] };
