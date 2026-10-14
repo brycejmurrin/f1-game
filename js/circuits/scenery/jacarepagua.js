@@ -434,10 +434,12 @@
       }
       every(48, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
-        if (!(s > 0.90 || s < 0.05) || h < 0.55) return;
+        // Keep RVs off the paddock modelGroups (0.91–0.96); clip baseline is motorhome-internals.
+        if (!(s > 0.90 || s < 0.05) || s > 0.89 && s < 0.97 || h < 0.55) return;
         motorhome(k, 1, 62 + h * 10, 10, 4, 6, { wall: [0.72 + h * 0.18, 0.72, 0.72] });
       });
-      broadcastCompound(K(0.908), 1, 78, { vans: 2, dishes: 2, mastH: 9 });
+      // Paddock massifs reject a wide compound at gap ~78; park it past the RV row.
+      broadcastCompound(K(0.898), 1, 96, { vans: 2, dishes: 2, mastH: 9, spacing: 5.2 });
       // Period 1978–89 boards: green / gold / blue / white, eight along the
       // pit straight (the old pass had three). Offset from the flag rank at
       // dist 7 so they sit behind the poles, not through them.
