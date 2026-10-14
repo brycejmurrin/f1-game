@@ -692,23 +692,32 @@ const HudLayout = (function () {
       const el = doc.querySelector(row[2]);
       if (!el || !el.style) continue;
       const c = corr[id];
-      // Paint in SCREEN px via important translate. Do NOT write --hl-* or
-      // rewrite left/top: zoomed absolute chips (#hud-strat/#hud-rel) lost the
-      // left/top rewrite to the cascade, and --hl translate is divided by
-      // --hud-z which double-counted when combined with a left rewrite.
-      // css/hud.css forces `translate: none` on #hud-tyre without data-hl-user
-      // — important beats that. Margin twin covers engines that ignore translate.
+      // Paint the correction. Zoomed absolute chips (#hud-strat/#hud-rel) do
+      // NOT move under an inline `translate` here (Chromium + CSS zoom: the
+      // computed translate stays on the [data-hl]/--hl path and getBounding
+      // ClientRect ignores our important translate). Nudge the used left/top
+      // by local px instead. Dock chips (tyre/gear/…) keep margin — their
+      // flow box has no absolute left/top to rewrite.
       let z = 1;
       if (typeof el.currentCSSZoom === "number" && el.currentCSSZoom > 0) z = el.currentCSSZoom;
       else if (typeof getComputedStyle === "function") {
         const zz = parseFloat(getComputedStyle(el).zoom);
         if (zz > 0) z = zz;
       }
-      // translate on a zoomed element is in local px; screen dx → local / z.
-      // Important beats css/hud.css `translate: none` on #hud-tyre. No margin
-      // twin — margin + translate would double-shift.
       const lx = c.dx / z, ly = c.dy / z;
-      el.style.setProperty("translate", lx.toFixed(1) + "px " + ly.toFixed(1) + "px", "important");
+      const abs = id === "strat" || id === "rel" || id === "inputs"
+        || id === "sectors" || id === "limits" || id === "damage";
+      if (abs && typeof getComputedStyle === "function") {
+        const cs = getComputedStyle(el);
+        const curL = parseFloat(cs.left);
+        const curT = parseFloat(cs.top);
+        if (isFinite(curL)) el.style.setProperty("left", (curL + lx).toFixed(1) + "px", "important");
+        if (isFinite(curT)) el.style.setProperty("top", (curT + ly).toFixed(1) + "px", "important");
+        el.setAttribute("data-hl-pack-pos", "");
+      } else {
+        el.style.setProperty("margin-left", lx.toFixed(1) + "px", "important");
+        el.style.setProperty("margin-top", ly.toFixed(1) + "px", "important");
+      }
       el.setAttribute("data-hl-pack", "");
     }
   }
