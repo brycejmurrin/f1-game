@@ -39,17 +39,12 @@ sweeper or a double-apex often registers as multiple peaks, so the count is
 When someone asks "how many corners does Spa have?", answer with `info().turns` /
 `trackInfo`, not `corners().length`.
 
-**Corners have no real names — don't invent "Eau Rouge" or "Casino Square."**
-each def's `turns` (`js/circuits/<id>.js`) is a raw array of apex
-FRACTIONS per track (`turns: [0.0432, 0.1524, ...]`) — no name, direction, or
-radius field lives there at all; it is the curated seed list, nothing else.
-Everything in `trackInfo({what:"corners"})` — the `dir` (`"L"`/`"R"`/`"straight"`),
-`radiusM`, `apexSpeedKph`, etc. — is computed geometrically by `buildCorners()`
-in `js/agent/agentview.js` off those fractions, and the only identifier it
-attaches is `turn: "T" + (i+1)` (`"T1"`, `"T2"`, …, in driving order). If a
-real-world corner name is needed for a caption or a scenery placement, it has to
-come from outside this API (e.g. circuit research/docs) — the game itself does
-not know one.
+**The API does not know corner names.** `turns` (`js/circuits/<id>.js`) is a raw array of apex fractions; `trackInfo({what:"corners"})`
+computes `dir`, `radiusM`, `apexSpeedKph` in `buildCorners()` (`js/agent/agentview.js`) and labels corners only `T1`, `T2`, ... in driving order.
+For a named corner (Eau Rouge, Raidillon), take the frac from the circuit file's comments, e.g.
+`grep -n "Eau Rouge\|Raidillon" js/circuits/spa.js` (floor ~0.14, Raidillon peak ~0.165, racing frac), say that is the source, then probe
+`groundY(f, lat)` / `trackProfile` around it (sweep recipe: debug-tracks-sweeps.md). Authoring-frame tables (`elevations`, `bankZones`) are
+keyed by `def._sceneryShift`-shifted fracs: read the comment for which frame a number is in, and never feed a raw table `frac` to the hooks.
 
 ## No browser: Node-VM route (verified 2026-09-30)
 
@@ -67,7 +62,3 @@ Note `trackInfo().cornerCount` (monza 10, spa 15) can be lower than `info().turn
 
 - Street half-width loop, multi-track sweep, one-off `apex-eval` recipes,
   visual validate → [references/debug-tracks-sweeps.md](debug-tracks-sweeps.md).
-
----
-
-_Folded into `agent-view` on 2026-09-03 (tree restructure Phase 5). Selection trigger it carried, now merged into `agent-view`'s description: Use when the user asks about track geometry, corners, elevation, curvature, map/bounds, wall/barrier audits, terrain-over-road gaps, groundY/scan/wallStats, comparing circuits, or whether terrain is poking through the road in Apex 26._

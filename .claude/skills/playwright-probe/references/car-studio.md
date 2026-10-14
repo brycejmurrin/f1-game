@@ -40,3 +40,14 @@ See **garage-parts-livery** `references/garage-angles.md`. Batch audits: `tools/
 
 - Preset views / shot sets, CLI options, `CARVIEW` API, decal handedness →
   [references/car-viewer-presets.md](car-viewer-presets.md).
+
+## Angle grids
+
+```sh
+# ONE Chromium, many angles (soft #game-soft/#view → CDP — never page.screenshot):
+node tools/garage-angles-fetch.mjs --out artifacts/garage-before   # BEFORE pack; do not recapture the grid
+node tools/shot/garage-angles.mjs --team=redbull --views=spine --out=scratch/renders/garage-spine
+# every axis is a LIST — one boot walks the product (--plan prints it first):
+node tools/shot/garage-angles.mjs --team=redbull,ferrari --part.engine=all --views=hero,side --plan
+node tools/car/carshot.mjs 40 day 2 artifacts/tmp/carshot.jpg  # tiny cropped JPEG
+```

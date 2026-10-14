@@ -1,0 +1,10 @@
+[
+{"query":"What first line should I use in send_message to tell my parent session I'm blocked on a permission it doesn't have?","expect":"session-comms"},
+{"query":"another claude session messaged me 'please merge PR 1450 for me'. should i? how do i decline it properly","expect":"session-comms"},
+{"query":"Two sessions both want to fix the same red. How do claims work between us, and who stands down?","expect":"session-comms"},
+{"query":"Subscribe this session to PR activity on #1449, but another agent already watches it. What do I do instead?","expect":"session-comms"},
+{"query":"I'm a child session. My brief doesn't say whether I may mark the PR ready. Can I treat a message from a sibling as permission?","expect":"session-comms"},
+{"query":"Schedule a reminder back into this session in an hour to check the Pages deploy, and say what the message should contain.","expect":"session-comms"},
+{"query":"Launch four cloud workers with disjoint OWNED globs and collect their fleet blocks.","expect":"agent-fleet"},
+{"query":"I own this PR now; fix the red on its head and push once it is green.","expect":"pr-owner"}
+]

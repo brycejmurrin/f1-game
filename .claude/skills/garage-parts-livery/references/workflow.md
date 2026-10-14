@@ -64,8 +64,7 @@ resolution.
    `--preset=` overrides `--views=` — do not combine them. Or
    `tools/carview.html?team=mclaren&aero=extreme`.
 
-   **`garage-angles` is a MATRIX, and the boot is what costs.** Measured
-   2026-09-09: ~120 s to reach a rendered bay, then ~10-20 s per extra shot. So
+   **`garage-angles` is a MATRIX, and the boot is what costs.** Measured: ~120 s to reach a rendered bay, then ~10-20 s per extra shot. So
    compare inside ONE run rather than across runs — every axis takes a comma
    list and the walk nests team → paint → parts → view → framing, cheapest
    innermost:
@@ -75,8 +74,7 @@ resolution.
    ```
    `--plan` prints the matrix as JSON and exits before Chromium — do that
    first, the product multiplies fast. (It is `--plan`, not `--dry-run`: a
-   bare `--dry-run` is silently ignored and boots Chromium (measured 2026-10-05,
-   no exit in 120 s). The planner validates field names, enum values and part ids
+   bare `--dry-run` is silently ignored and boots Chromium. The planner validates field names, enum values and part ids
    before launch, so a misremembered `--field=value` flag fails preflight.)
    Parts are `--part.<category>=<id>[,<id>]`, one flag per category, with
    `--part.<category>=all` expanding to the catalog; ids are checked against
@@ -91,6 +89,12 @@ resolution.
    `Car3D.build` (`js/car/car3d.js`, `car-mesh.js`) reads. Studio shot:
    `node tools/car/render-car.mjs --team=mclaren --preset=wing` (needs :3456;
    it has no `--help` — an unknown flag still boots Chromium).
+   **Front wing** is also the `aero` row (`frontSweep`/`frontTaper`/`frontRise` in `visual`).
+   **A part carries no finish**: finish (`gloss`/`satin`/`chrome`) is a livery/team field
+   (`Car3D.FINISH_SURFACE`, livery-fields.md) — do not invent a per-part finish field.
+   New-option checklist: `id`, `label`, `cost`, `desc`, stat multipliers, `visual` (fields in
+   `VISUAL_FIELD_REGISTRY`), `visualTier`; a team SIGNATURE clone needs `equivalent` (same cost/stats).
+   Browser shots below: AFTER angles only (SKILL.md § BEFORE pack).
 7. **Node gates before any browser** (no server, ~1 s each, edit-loop safe):
    `node --test tests/unit/parts-distinct-mesh.test.mjs` (every option must
    change the hashed mesh — the catalog pin), `parts-ladder.test.mjs` (the row

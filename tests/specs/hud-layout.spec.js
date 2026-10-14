@@ -791,6 +791,57 @@ for (const v of [
   });
 }
 
+// PORTRAIT RADIO CARD (race-anyway). Every dock group is 0px tall here, so
+// announceLane publishes no lane; `left: calc(var(--announce-lane-x) / …)`
+// with no fallback went invalid-at-computed-value-time (`auto`), and the -50%
+// shift parked the card at x -72..72 on 390x844, over #minimap. The fallback
+// in css/hud.css centres it.
+test.describe("portrait radio card (phone-portrait-390)", () => {
+  test.setTimeout(300_000);
+  const v = { name: "phone-portrait-390", w: 390, h: 844, sal: 0, sar: 0, sat: 47, sab: 34 };
+  test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
+  for (const hudScale of [100, 150]) {
+    test(`HUD ${hudScale}%: the card stays on screen and clears the map, timing row and RELATIVE`, async ({ page }) => {
+      await race(page, "buttons", false, v, { hudScale, btnScale: hudScale, cam: "chase" });
+      await page.evaluate(() => {
+        document.body.classList.add("rotate-ok");
+        localStorage.setItem("apex26.portraitOk", "1");
+        if (typeof HudElements !== "undefined") HudElements.set("rel", true);
+        if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
+        window.__apex.jump(0.15, 60, 0);
+        document.getElementById("announce").hidden = false;
+      });
+      const got = await page.waitForFunction(async () => {
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const ann = document.getElementById("announce");
+        if (!ann || ann.hidden) return false;
+        const box = (el) => {
+          if (!el || el.hidden) return null;
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom } : null;
+        };
+        const a = box(ann);
+        if (!a) return false;
+        return { a, W: window.innerWidth, H: window.innerHeight, body: document.body.className,
+          others: { "#minimap": box(document.getElementById("minimap")),
+            ".hud-top": box(document.querySelector(".hud-top")),
+            "#hud-rel": box(document.getElementById("hud-rel")) } };
+      }, null, { polling: 100, timeout: 30_000 });
+      const m = await got.jsonValue();
+      const why = JSON.stringify(m);
+      expect(m.a.left, why).toBeGreaterThanOrEqual(-0.5);
+      expect(m.a.top, why).toBeGreaterThanOrEqual(-0.5);
+      expect(m.a.right, why).toBeLessThanOrEqual(m.W + 0.5);
+      expect(m.a.bottom, why).toBeLessThanOrEqual(m.H + 0.5);
+      expect(m.others["#minimap"], "the fixture shows the map: " + why).not.toBeNull();
+      const hits = Object.entries(m.others).filter(([, r]) => r
+        && r.left < m.a.right - 0.5 && m.a.left < r.right - 0.5
+        && r.top < m.a.bottom - 0.5 && m.a.top < r.bottom - 0.5).map(([k]) => k);
+      expect(hits, why).toEqual([]);
+    });
+  }
+});
+
 test.describe("track-limits chip", () => {
   test.setTimeout(300_000);
   test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
@@ -908,5 +959,43 @@ test.describe("fitHud zoom determinism", () => {
       .toBe(a.dockRW);
     expect(Math.abs((b.zoom || 1) - b.want) < 1e-3,
       "published zTop must equal #minimap zoom " + JSON.stringify(b)).toBe(true);
+  });
+});
+
+// SPEED PARITY (Handling survey: HUD 315 vs wheel 343 "in the same frame").
+// The game's rAF callback runs physics, then render() — which draws the wheel
+// LCD digits (CarMesh.getSpeedDigit meshes) — then updateHud(), which paints
+// #hud-speed-n. A microtask queued at a frame's first LCD digit runs after that
+// whole callback, so it reads exactly the pair the frame put on screen. Natural
+// frames under full throttle: the number moves, and the two must never split.
+test.describe("speed readouts", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false });
+  test("cockpit wheel LCD and HUD speed show one number in the same frame", async ({ page }) => {
+    await race(page, "tilt", false, { sal: 0, sar: 0, sat: 0, sab: 0 }, { cam: "cockpit" });
+    await page.evaluate(() => {
+      const a = window.__apex, gfx = window.GLX, hudN = document.getElementById("hud-speed-n");
+      const digitOf = new Map();
+      for (let d = 0; d <= 9; d++) digitOf.set(CarMesh.getSpeedDigit(d), d);
+      const pairs = window.__spdPairs = [];
+      const orig = gfx.draw;
+      let cur = null;
+      gfx.draw = function (mesh) {
+        if (digitOf.has(mesh) && pairs.length < 12) {
+          if (!cur) {
+            const rec = cur = { wheel: "", kph: a.obs().dashKph };
+            queueMicrotask(() => { rec.hud = hudN.textContent; pairs.push(rec); cur = null; if (pairs.length >= 12) gfx.draw = orig; });
+          }
+          cur.wheel += digitOf.get(mesh);
+        }
+        return orig.apply(this, arguments);
+      };
+      a.act({ throttle: true, steer: 0 }, 1 / 60, 0);
+    });
+    await page.waitForFunction(() => window.__spdPairs.length >= 12, null, { polling: 100, timeout: 120_000 });
+    const pairs = await page.evaluate(() => window.__spdPairs);
+    const why = JSON.stringify(pairs);
+    expect(pairs.every((p) => p.wheel.length > 0 && p.kph > 100), "the wheel LCD drew a speed at race pace: " + why).toBe(true);
+    expect(pairs.filter((p) => p.wheel !== p.hud), "wheel LCD vs #hud-speed-n, same frame: " + why).toEqual([]);
   });
 });

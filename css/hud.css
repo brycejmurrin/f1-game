@@ -73,6 +73,11 @@
   --hud-btn-z: max(1, var(--hud-z-top, var(--hud-scale)));
   --tap-hud: calc(var(--tap) * var(--hud-btn-z));
 }
+/* KNOWN: on :root, var(--tap) is :root's 44px, not the touch body's 52, so CAM
+   and PAUSE paint 44px on a phone. Restating it on body:not(.desktop) was tried
+   (2026-10-14): the 8px moves the whole right column, flag and radio card down,
+   and on a 390px phone at HUD 150% that put the card on the gearbox. HIG floor
+   met; the band is worth more than the 8px. */
 .hud-bottom { --hud-z: var(--hud-z-bot, var(--hud-scale)); zoom: var(--hud-z); }
 /* Re-derive the compensated vw against the band's EFFECTIVE zoom: the :root
    token divides by the raw slider, but these subtrees paint at the fitHud-
@@ -115,7 +120,13 @@
    half a box wide after lap 1. */
 #hud-pos, #hud-lap { min-width: 5ch; }
 #hud-time, #hud-best, #hud-delta-n { min-width: 7ch; }
-#hud-delta[data-pending] { visibility: hidden; }
+/* DESKTOP: the labelled plate stays, only its value is invisible, so the four
+   live boxes read centred (an invisible 5th box left them 56px off the flag's
+   axis). TOUCH: the pending plate leaves the layout — its ~95px capped the
+   top band at ~0.95 and dropped the gap chip on every phone (hud-mock
+   2026-10-14); fitHud's key carries the flip, so the tower re-centres once. */
+#hud-delta[data-pending] #hud-delta-n { visibility: hidden; }
+body:not(.desktop) #hud-delta[data-pending] { display: none !important; }
 /* THE LAP JUST DRIVEN: in a race the TIME box holds it for 3 s after the line
    (js/ui/hud.js, data-hold) — green when it is a personal best. Same digits,
    same slot: colour only, no width. */
@@ -175,8 +186,15 @@
      The `min()` is the adaptive half: it caps the ON-SCREEN size at 16px no
      matter how far HUD SIZE is pushed. Left to grow with the zoom the pair
      rendered as a slab about as wide as the minimap — a banner, not telemetry.
-     Now it grows 12 -> 16px screen across 100 -> 150% and then holds. */
-  text-align: left; font-size: min(12px, calc(16px / var(--hud-z)));
+     Now it grows 14 -> 18px screen across 100 -> 129% and then holds (14 and
+     3px 8px of padding, up from 12 and 1px 7px: at 11.4px painted it was the
+     smallest number on screen beside a 128px map, visual review 2026-10-14).
+     THE FLOOR IS THE OTHER HALF: 12px authored painted 8.4px at HUD SIZE 70%
+     (hud-mock 2026-10-14, 56 of 168 cells), under any readable size for a
+     glance in motion. clamp()'s minimum holds the painted size at 10px (the
+     14px micro token over 1.4, so TEXT SIZE lifts the floor with it) however
+     far the slider or a capped top band shrinks the band. */
+  text-align: left; font-size: clamp(calc(var(--fs-micro) / 1.4 / var(--hud-z)), 14px, calc(18px / var(--hud-z)));
   font-weight: 700; letter-spacing: 0.02em; color: var(--text);
   line-height: 1.3;
   font-family: var(--font-hud); font-variant-numeric: tabular-nums;
@@ -188,7 +206,7 @@
      pushed the count over.) When BOTH children are empty the plate collapses
      — see `.hud-gaps:not(:has(…))` below — so a ~10×10 junk chip does not sit
      under the minimap on portrait cockpit with nobody ahead/behind. */
-  background: rgb(8 8 14 / calc(0.55 * var(--hud-panel-a-eff))); padding: 1px 7px; border-radius: var(--r-sm);
+  background: rgb(8 8 14 / calc(0.55 * var(--hud-panel-a-eff))); padding: 3px 8px; border-radius: var(--r-sm);
   /* no backdrop-filter — over the live canvas (see .hud-box) */
   text-shadow: 0 1px 3px rgba(0,0,0,0.9);   /* legible over a bright sky/sand/snow scene, like #hud-speed */
 }
@@ -491,7 +509,10 @@ body.hud-met-compact #hud-box-best { display: none !important; }
    session has tyre wear on. Same trap as #lights, #nogl and the dock groups;
    caught at merge by the guard in tests/unit/css-layers.test.mjs. */
 #hud-tyre[hidden] { display: none; }
-#hud-tyre { width: 130px; display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 2); margin-bottom: calc(var(--gap) * 2 / 3); }
+/* A PLATE, like every other cluster readout: unframed, the dim PLAN line under the
+   bar did not read as part of the chip over sky or tarmac (visual review 2026-10-14). */
+#hud-tyre { width: 130px; box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 2); margin-bottom: calc(var(--gap) * 2 / 3);
+  background: color-mix(in srgb, var(--look-hud-bg) calc(77% * var(--hud-panel-a-eff)), transparent); padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.5); border-radius: var(--r-sm); }
 /* TYRE TEMPERATURE (js/ui/hud-tyres.js): one state painted on the compound
    letter — cold / working / hot vs the compound window. Semantic tokens, so
    COLOUR VISION (data-cvd) remaps them. Declared before the pit rules below,
@@ -688,7 +709,7 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   min-width: 1.1em; text-align: center;
   color: var(--text); text-shadow: var(--hud-halo);
 }
-.hud-energy-label { position: absolute; inset: 0; font-size: var(--fs-micro); letter-spacing: 0.2em; display: flex; align-items: center; justify-content: center; color: var(--text); text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
+.hud-energy-label { position: absolute; inset: 0; font-size: var(--fs-micro); letter-spacing: 0.06em; font-weight: 800; display: flex; align-items: center; justify-content: center; color: var(--text); text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
 /* TEXT LARGER GROWS THE BAR. The label rides --fs-micro (16/18px at LARGE /
    LARGER) inside a bar whose height every layout pins in px (14-18), so the
    ERS label was cut in half: scroll 22 vs client 16 at 1280x720, 20 vs 13 on
@@ -708,23 +729,29 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
    sitting above a blue button reads as two unrelated systems, which is what
    made the old palette hard to learn: the state you were in and the control
    you press for it were never the same colour. */
-#hud-ot.ot-off { color: var(--dim); border: 1px solid var(--plate-line); }
-#hud-ot.ot-armed { color: #2b2400; background: #ffd21a; animation: pulse var(--hud-pulse) infinite; }
+/* IDLE = A STRIPE, NOT AN OUTLINE. The full 1px outline was the CHASE / PAUSE
+   button look, beside round OT / AERO buttons of the same name — the chips read
+   as disabled buttons. A left stripe in the chip's own hue is the tower's and
+   sector plate's "readout" mark (visual review 2026-10-14). */
+#hud-ot { --ot-hue: #ffd21a; }   /* the OT button's yellow (css/overlays.css), declared once */
+#hud-ot.ot-off { color: var(--dim); border-left: 3px solid color-mix(in srgb, var(--ot-hue) 50%, transparent); }
+#hud-ot.ot-armed { color: #2b2400; background: var(--ot-hue); animation: pulse var(--hud-pulse) infinite; }
 #hud-ot.ot-active { color: #ffeeae; background: #7e5c00; box-shadow: 0 0 14px rgba(225,175,20,0.55); }
-#hud-ot.ot-cool { color: var(--dim); border: 1px solid var(--plate-line); opacity: 0.5; }
+#hud-ot.ot-cool { color: var(--dim); border-left: 3px solid color-mix(in srgb, var(--ot-hue) 50%, transparent); opacity: 0.5; }
 /* Same chip metrics as #hud-ot so the pair stacks evenly in the cluster. */
 #hud-aero {
   font-size: var(--fs-micro); font-weight: 800; font-style: italic;
   padding: 5px 10px; border-radius: var(--r-sm);
 }
-#hud-aero.ax-off { color: var(--dim); border: 1px solid var(--plate-line); }
+#hud-aero { --aero-hue: #26a5f5; }   /* the AERO button's blue, declared once */
+#hud-aero.ax-off { color: var(--dim); border-left: 3px solid color-mix(in srgb, var(--aero-hue) 50%, transparent); }
 /* BRAKE BIAS: a set-up fact, not a state — quiet ink, no fill, half a chip. */
 #hud-bb {
   font-size: var(--fs-micro); font-weight: 700; font-variant-numeric: tabular-nums;
   padding: calc(var(--gap) / 6) calc(var(--gap) * 2 / 3); margin-top: calc(var(--gap) * 0.5); border-radius: var(--r-sm);
   color: var(--dim); border: 1px solid var(--plate-line); text-shadow: var(--hud-halo);
 }
-#hud-aero.ax-armed { color: #04202e; background: #26a5f5; }
+#hud-aero.ax-armed { color: #04202e; background: var(--aero-hue); }
 #hud-aero.ax-open { color: #d6efff; background: #083e78; box-shadow: 0 0 14px rgba(50,175,255,0.55); }
 /* A circuit with no qualifying straight has no activation zone and therefore no
    active aero at all — Monaco. Struck through, because the difference between
@@ -977,10 +1004,20 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
 :root[data-motion="reduce"] :is(#hud-dock, #hud-dock .dock, #hud-dock .dock *, .hud-bottom, .hud-bottom *, #pausebtn, #btn-cam, #hud-rel) {
   transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
 }
-/* The flag clears the DROPPED strip, so it tracks the same measured edge: 70px
-   below it is the clearance the old pair of literals (62 / 132) encoded. */
+/* The flag clears the DROPPED strip, so it tracks the same measured edge. 44px:
+   the strip sits 4px under the band and a two-line strip is ~33px tall, so this
+   clears it by 7px. The old 74px (the 62 / 132 literal pair) left the flag and
+   the radio card ~30px lower than needed, mid-road on every phone (visual
+   review 2026-10-14). */
 :root[data-gap-drop] #hud-flag {
-  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px), calc(var(--mir-bot, 0px) + 8px));
+  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px), calc(var(--mir-bot, 0px) + 8px));
+}
+/* …and under the SECTOR PLATE when that plate reaches the flag's columns (fitHud
+   sets data-flag-low: a wide dock inset on a narrow phone), the same measured
+   --hud-sec-h stack LIMITS and DAMAGE hang from. Later than the gap-drop rule,
+   so it wins where both apply. */
+:root[data-flag-low] #hud-flag {
+  top: max(calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 8px), calc(var(--mir-bot, 0px) + 8px));
 }
 #hud-sectors {
   position: fixed;
@@ -1013,7 +1050,7 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
   font-family: var(--font-hud);
   font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
-  line-height: 1.6;
+  line-height: 1.4;   /* 1.6 made the 3-row plate the tallest thing in its column; --hud-sec-h is measured, so LIMITS / DAMAGE follow */
   border-left: 3px solid var(--accent-dim);
 }
 /* EMPTY PLATE: index.html ships <div id="hud-sectors"></div> and buildSecRows
@@ -1115,7 +1152,15 @@ body[data-density="compact"] #announce {
    raises it to the dropped-strip edge so caution steps from the painted flag
    (MCP survey B3 phoneL-chase). */
 body[data-density="compact"] #announce { --flag-slot-top: calc(72px + var(--sat) / var(--hud-z)); }
-:root[data-gap-drop] #announce { --flag-slot-top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px); }
+/* A PHONE CARD IS THREE LINES. The message has no height limit, and in a
+   narrow dock lane (HUD/BUTTON SIZE 150% on 740x360 or 844x390) a coach tip
+   wrapped to five lines of 15px and painted over GEAR and SPEED (hud-mock
+   2026-10-14, 2.3k px²). Clamped to three lines with an ellipsis: the number
+   plate and the WHO line still read in full, and the card stays in the band
+   under the tower. The box model is the one every engine ships for clamping. */
+body[data-density="compact"] #announce-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+:root[data-gap-drop] #announce { --flag-slot-top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px); }
+:root[data-flag-low] #announce { --flag-slot-top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 8px); }
 body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
 body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
 
@@ -1219,11 +1264,10 @@ body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-
    element, so left divides here: a calc embedding var(--hud-z) on :root is
    invalid at computed-value time and left fell back to 50% while transform
    was none — the card's left edge sat at centre (hud-layout CI:
-   #announce+btn-boost at x426 on 852, broadcast+cockpit). Unpublished
-   --announce-lane-x invalidates that left, so the centred #announce
-   { left: 50% } wins; --announce-lane-shift falls back to -50%. The
-   beside-the-mirror and top-row slots outweigh this. Desktop (.desktop:
-   empty docks) is untouched. */
+   #announce+btn-boost at x426 on 852, broadcast+cockpit). No lit dock (portrait: 0px groups) publishes no
+   lane; a fallback-less var() then made left `auto`, not 50%, and the -50% shift put the card over #minimap
+   (x -72..72 on 390x844). The fallback centres it. The beside-the-mirror and top-row slots outweigh this.
+   Desktop (.desktop: empty docks) is untouched. */
 body:not(.desktop) #announce {
   /* min-width must not exceed the lane: a bare 200px floor outgrew a tight
      --announce-lane-w and painted over #hud-sectors (oversize CI workers=2). */
@@ -1244,7 +1288,7 @@ body:not(.desktop) #announce {
   visibility: hidden;
 }
 body:not(.desktop):not(.hud-radio-top):not(.hud-mirror-side) #announce {
-  left: calc(var(--announce-lane-x) / var(--hud-z));
+  left: calc(var(--announce-lane-x, 50% * var(--hud-z)) / var(--hud-z));
   transform: translateX(var(--announce-lane-shift, -50%));
 }
 /* The plate. Italic is the racing number's own convention, not emphasis. */
@@ -1820,7 +1864,7 @@ body.bc-on[data-helmet-cam] #hud::before { content: none; }
 #bc-tower .bc-rows { list-style: none; margin: 0; padding: 0; }
 #bc-tower .bc-row button {
   display: grid; grid-template-columns: 18px 3px 34px 1fr 12px; align-items: center; gap: 4px;
-  width: 100%; min-height: 17px; padding: 0 5px 0 4px; border: 0; background: none;
+  width: 100%; min-height: max(17px, calc(24px / var(--hud-z))); padding: 0 5px 0 4px; border: 0; background: none;
   color: inherit; font: inherit; font-size: 12px; line-height: 17px; text-align: left; cursor: pointer;
 }
 #bc-tower .bc-row:nth-child(odd) button { background: rgba(255, 255, 255, 0.04); }
@@ -1926,7 +1970,7 @@ body[data-helmet-cam] #hud::before {
    shots, 2026-10-05). */
 #hud-damage {
   position: fixed;
-  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + 2.6em);
+  top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + var(--rc-limits-h, 0px) + var(--rc-inputs-h, 0px));
   right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
   display: flex;
   align-items: center;
@@ -1941,6 +1985,20 @@ body[data-helmet-cam] #hud::before {
   color: var(--text);
 }
 #hud-damage[hidden] { display: none; }
+/* THE RIGHT COLUMN IS A STACK: sectors, LIMITS, the INPUTS trace, this chip,
+   and on desktop RELATIVE under them. A lower piece reserves a higher piece's
+   height ONLY while it has a box. This chip added a flat 2.6em for the limits
+   slot and INPUTS reserved the same slot (--inputs-below-limits), so the two
+   shared a row whenever the trace was on: 84 of 168 hud-mock cells (2026-10-14).
+   Heights in the column's shared top-band zoom: limits 2.6em (the chip's old
+   literal; +3px put it on SPEED at HUD 150%); the trace its canvas + padding
+   (touch 32 + 4px, desktop 48 + 6px); this chip 2.9em of svg + 0.6 --gap. A
+   limits chip crossed left (data-limits-left) still reserves its slot here, as
+   INPUTS always did. */
+body:not([data-hud-hide~="limits"]):has(#hud-limits:not([hidden])) :is(#hud-damage, #hud-rel) { --rc-limits-h: 2.6em; }
+body:not([data-hud-hide~="inputs"]):has(#hud-inputs:not([hidden])) :is(#hud-damage, #hud-rel) { --rc-inputs-h: calc(2.6em + 3px); }
+body.desktop:not([data-hud-hide~="inputs"]):has(#hud-inputs:not([hidden])) :is(#hud-damage, #hud-rel) { --rc-inputs-h: calc(3.9em + 3px); }
+body:not([data-hud-hide~="damage"]):has(#hud-damage:not([hidden])) #hud-rel { --rc-damage-h: 3.3em; }
 #hud-damage svg { width: 1.6em; height: 2.9em; flex: none; }
 #hud-damage [data-part] { fill: color-mix(in srgb, var(--text) 18%, transparent); stroke: color-mix(in srgb, var(--text) 55%, transparent); stroke-width: 0.6; }
 #hud-damage [data-part="body"] { fill: none; }
@@ -1962,7 +2020,12 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
    box; nothing here animates, so REDUCE MOTION has nothing to take out (the
    trace itself swaps to still bars in JS). */
 #hud-rel, #hud-strat { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
-#hud-inputs { --hud-z: var(--hud-z-bot, var(--hud-scale)); zoom: var(--hud-z); }
+/* INPUTS rides the TOP band (2026-10-14; the bottom band's was its old
+   bottom-left home): it hangs from the sector box now, and a trace zoomed by
+   another band stepped 1.5x its neighbours' offsets at HUD 150% on a capped
+   phone, so DAMAGE landed inside it. One zoom per column (the z-top / z
+   conversions below are identities). */
+#hud-inputs { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
 #hud-rel, #hud-strat, #hud-inputs {
   position: absolute;
   background: var(--plate-opaque);
@@ -1976,7 +2039,11 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 }
 #hud-rel {
   right: calc(10px + var(--sar) / var(--hud-z));
-  top: calc(38svh / var(--hud-z));
+  /* 38svh is the desktop home; at HUD SIZE 150% on 1280x720 the right column
+     (sectors, limits, INPUTS, DAMAGE) reaches 346px and the home at 274px put
+     RELATIVE under DAMAGE and the trace (15.6k px², hud-mock 2026-10-14). The
+     stack's own bottom edge is the floor — same terms as #hud-damage above. */
+  top: max(calc(38svh / var(--hud-z)), calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px + var(--rc-limits-h, 0px) + var(--rc-inputs-h, 0px) + var(--rc-damage-h, 0px) + 4px));
   border-left: 3px solid var(--dim);
 }
 #hud-rel > div {
@@ -2035,12 +2102,12 @@ body:not(.desktop) #hud-rel:not([data-hl-user]) {
   left: calc(10px + var(--sal) / var(--hud-z));
   right: auto;
   top: calc(var(--hud-left-h, 152px) + 8px);
-  max-width: min(240px, 46vw);
+  max-width: min(240px, 46vw, calc(46vw / var(--hud-z)));
   line-height: 1.2;
   /* Without the left-dock anchor (engines that lack CSS Anchor Positioning),
      keep the card from eating the whole column at HUD 150% — five rows used
      to paint over the steer arrows / BRAKE (2026-10-07 survey, up to ~6k px²). */
-  max-height: min(42svh, 11.5em);
+  max-height: min(42svh, 11.5em, calc(42svh / var(--hud-z)));   /* the /z twin caps the PAINTED size */
   overflow: hidden;
 }
 body:not(.desktop) #hud-strat {
@@ -2087,8 +2154,8 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) {
      S1–S3 at touch --tap 52 (12 − 56 = −44 at z=1). --hud-sec-h is top-band
      units; at phone sizes bot/top zooms meet so it still clears the box. */
   top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z) + 12px + var(--inputs-below-limits, 0px));
-  max-width: min(120px, 22vw);
-  max-height: min(18svh, 4.2em);
+  max-width: min(120px, 22vw, calc(22vw / var(--hud-z)));
+  max-height: min(18svh, 4.2em, calc(18svh / var(--hud-z)));
   overflow: hidden;
 }
 body:not(.desktop) #hud-inputs:not([data-hl-user]) #hud-inputs-cv {

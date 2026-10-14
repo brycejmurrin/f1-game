@@ -67,20 +67,13 @@ Hooks:
 Commands:
 
 ```sh
-npm run test:tooling-fast
-node --test tests/unit/race-control.test.mjs   # focused rules tests, <1 s; also incident-gate, reliability (4 tests), debris-*.test.mjs
-node tools/ci/test-bg.mjs physics-core   # race-control.spec rides here; background
+npm run test:tooling-fast                      # background, AGENTS.md rule 4
+node --test tests/unit/race-control.test.mjs   # focused rules tests, <1 s; also incident-gate, reliability, debris-*.test.mjs
+npm test -- tests/specs/race-control.spec.js   # one spec, background (AGENTS.md rules 4-5); whole group: tools/ci/remote-group.mjs physics-core
 ```
-
-Deep references:
-
-- Headers of `js/physics/debris-world.js`, `js/physics/incident-sim.js`,
-  `js/race/race-control.js`.
-- `docs/DEBUG-HOOKS.md` sections for `caution()` and `retirements()`.
-
-
----
 
 ## Load on demand
 
 - Workflow, takeovers/cautions, common mistakes → [references/workflow.md](references/workflow.md).
+- DNF on lap 1 / every race → [references/reliability-trace.md](references/reliability-trace.md).
+- Module headers: `js/physics/debris-world.js`, `js/physics/incident-sim.js`, `js/race/race-control.js`; `docs/DEBUG-HOOKS.md` `caution()`/`retirements()`.

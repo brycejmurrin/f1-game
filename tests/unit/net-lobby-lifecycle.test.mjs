@@ -1707,3 +1707,86 @@ test("a quali sheet that did open keeps the room armed", async () => {
     assert.equal(h.lobby.status().guests, 1);
   } finally { h.lobby.cancel(); }
 });
+
+// ── codeHost must not leak a dead room code before invite+publish (2026-10-14) ──
+// ACCEPTANCE: guests who copy the six-letter code during "Preparing…" used to
+// burn JOIN_TIMEOUT on an empty topic. Reveal #vs-code-value and enable COPY
+// only after createInvite.ok AND the first hostRoom publish resolve.
+function codeHostRevealHarness({ inviteGate, publishGate, inviteOk = true, publishOk = true } = {}) {
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }),
+    handshake: {
+      createInvite: async () => {
+        if (inviteGate) await inviteGate.promise;
+        return inviteOk
+          ? { ok: true, code: "invite-1" }
+          : { ok: false, error: "invite_failed", message: "invite failed" };
+      },
+    },
+    rendezvous: {
+      usingPrivateRelay: () => false,
+      makeCode: () => "ABC234",
+      hostRoom: async () => {
+        if (publishGate) await publishGate.promise;
+        return publishOk
+          ? { ok: true, stop() {}, rotate() {} }
+          : { ok: false, error: "no_relay", message: "Could not reach any room service." };
+      },
+    },
+  });
+  for (const id of ["vs-code-share", "vs-code-copy"]) {
+    const el = {
+      id, hidden: false, disabled: false, value: "", textContent: "",
+      focus() {}, setAttribute() {}, removeAttribute() {},
+    };
+    h.elements.set(id, el);
+  }
+  return h;
+}
+
+test("codeHost does not set #vs-code-value or enable COPY until invite.ok and the first publish", async () => {
+  const inviteGate = deferred();
+  const publishGate = deferred();
+  const h = codeHostRevealHarness({ inviteGate, publishGate });
+  try {
+    const pending = h.lobby.codeHost();
+    await new Promise((r) => setImmediate(r));
+    // Still inside createInvite — Preparing…, no shareable code.
+    assert.equal(h.elements.get("vs-code-value").textContent, "", "code hidden while invite is prepared");
+    assert.equal(h.elements.get("vs-code-copy").disabled, true, "COPY disabled while invite is prepared");
+    assert.equal(h.elements.get("vs-code-share").disabled, true, "SHARE disabled while invite is prepared");
+    assert.match(h.status.textContent, /Preparing/i);
+
+    inviteGate.resolve();
+    await new Promise((r) => setImmediate(r));
+    // Invite done; first publish still gated — still must not leak the code.
+    assert.equal(h.elements.get("vs-code-value").textContent, "", "code still hidden until the first publish");
+    assert.equal(h.elements.get("vs-code-copy").disabled, true);
+    assert.doesNotMatch(h.status.textContent, /Waiting for them/i);
+
+    publishGate.resolve();
+    const res = await pending;
+    assert.equal(res.ok, true);
+    assert.equal(h.elements.get("vs-code-value").textContent, "ABC234", "code revealed after invite+publish");
+    assert.equal(h.elements.get("vs-code-copy").disabled, false, "COPY enabled after invite+publish");
+    assert.equal(h.elements.get("vs-code-share").disabled, false);
+    assert.match(h.status.textContent, /Waiting for them/i);
+  } finally { h.lobby.cancel(); }
+});
+
+test("codeHost never reveals a dead code when invite or publish fails", async () => {
+  const inviteFail = codeHostRevealHarness({ inviteOk: false });
+  try {
+    assert.equal((await inviteFail.lobby.codeHost()).ok, false);
+    assert.equal(inviteFail.elements.get("vs-code-value").textContent, "");
+    assert.equal(inviteFail.elements.get("vs-code-copy").disabled, true);
+  } finally { inviteFail.lobby.cancel(); }
+
+  const publishFail = codeHostRevealHarness({ publishOk: false });
+  try {
+    assert.equal((await publishFail.lobby.codeHost()).ok, false);
+    assert.equal(publishFail.elements.get("vs-code-value").textContent, "");
+    assert.equal(publishFail.elements.get("vs-code-copy").disabled, true);
+    assert.doesNotMatch(publishFail.status.textContent, /Waiting for them/i);
+  } finally { publishFail.lobby.cancel(); }
+});

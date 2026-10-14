@@ -51,7 +51,7 @@ function dockEl() {
 test("clampXY rejects offsets past MAX", () => {
   const c = DL.clampXY({ x: 2, y: -2 });
   assert.equal(c.x, DL.MAX);
-  assert.equal(c.y, -DL.MAX);
+  assert.equal(c.y, 0, "a negative share is off the pad (past the edge / under the home bar): floored at the home");
   // Property-wise: vm-realm objects fail deepStrictEqual on prototype identity.
   const junk = DL.clampXY({ x: "no", y: null });
   assert.equal(junk.x, 0);
@@ -70,11 +70,11 @@ test("load/save round-trip keeps schemes independent", () => {
   const store = memStore();
   const bag = DL.normalize({});
   bag.buttons.L = { x: 0.2, y: 0.1 };
-  bag.tilt.R = { x: -0.15, y: 0.05 };
+  bag.tilt.R = { x: 0.15, y: 0.05 };
   DL.save(store, bag);
   const loaded = DL.load(store);
   assert.equal(loaded.buttons.L.x, 0.2);
-  assert.equal(loaded.tilt.R.x, -0.15);
+  assert.equal(loaded.tilt.R.x, 0.15);
   assert.equal(loaded.touch.L.x, 0);
   assert.ok(DL.isIdentity(loaded.touch));
   assert.equal(DL.isIdentity(loaded.buttons), false);

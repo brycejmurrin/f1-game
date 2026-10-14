@@ -1,16 +1,19 @@
 ---
 name: pr-owner
-description: "Use when your session owns PRs: claim, subscribe, fix reds on the current head, push once per green cycle, report."
+description: "Use when your session owns PRs or its push went red: claim, subscribe, fix reds, push once per green cycle. Overrides: steward."
 ---
 
 # Owning PRs in Apex 26
 
 The loop for a session that owns PRs. Rules live in `AGENTS.md` (rules 2-5, 8,
-9, 11, 12; §Concurrent PRs; §Git branch & deploy); `steward` carries the six
+9, 11, 12; §Concurrent PRs; §Git branch & deploy); `steward` carries the
 repo overrides; messaging, claims, subscriptions and authority are
 `session-comms`. This file orders them.
 
 ## Loop
+
+Already own the PR and a push went red: start at step 3, then 4
+(`node tools/ci/ci-watch.mjs --sha <head> --once` lists the failed jobs).
 
 1. **Claim and read.** `node tools/ci/who-is-on-it.mjs`, read the open draft PRs,
    then `--claim "<PR/topic>"` (`--release` at the end). Overlap with a live
@@ -31,9 +34,10 @@ repo overrides; messaging, claims, subscriptions and authority are
 5. **Fix, verify once, push once.** All edits first (rule 2); then
    `node tools/ci/tooling-fast.mjs --jobs=3 > artifacts/logs/tooling-fast.log 2>&1`
    as ONE background task (rule 4); the change-aware pick from `pick-tests`;
-   `node tools/ci/deploy.mjs --gate-only` before the push. Browser groups only
-   as `node tools/ci/remote-group.mjs <group>` on the pushed branch (rule 4
-   table), never a local group while Actions is healthy. Commit, then one push
+   `node tools/ci/deploy.mjs --gate-only > artifacts/logs/gate.log 2>&1`
+   (background, rule 4) before the push; `apex-status/queue-depth.json` hold:
+   commit locally only. Browser groups only as
+   `node tools/ci/remote-group.mjs <group>` AFTER the push (rule 4 table), never a local group while Actions is healthy. Commit, then one push
    per green cycle. Never a force-push or rebase; catch up only when GitHub says
    CONFLICTING or a required check is red, with `node tools/ci/sync-pr.mjs
    <branch>` (merge ship).
@@ -47,16 +51,19 @@ repo overrides; messaging, claims, subscriptions and authority are
    AND `node tools/ci/ready-full-cap.mjs` exit 0 (cap full: wait, never
    force). Then flip draft to ready only if your brief delegates it. Arming
    auto-merge and merging are NEVER yours unless the user designated this
-   session; otherwise report DONE-ready and leave it to CI Watch (`ci-watch`).
+   session; otherwise report DONE-ready and leave arming to Merge Desk
+   (`ci-watch`; merge commit only). To hold the PR, add a body line starting
+   `MERGE-HOLD:` and delete it when the hold ends; never write "do not merge"
+   or "do not enable auto-merge" in the body — that wording is not a veto.
 8. **Report** with the `session-comms` formats: `DONE <PR> <merge sha>` once it
    merged, `BLOCKED`, `HANDOFF`, `STAND-DOWN`. One report per transition, no
-   status chatter. Arm a `send_later` safety net (~50 min, then ~4 h).
+   status chatter. After every push arm the rule 12 timer check-in (~1 h, re-armed).
 
 ## Stop when
 
 The PR is merged or closed (unsubscribe, `--release`, send DONE); a
 BLOCKED needs the user; you hit a ~120-message or two-tip-moves-without-progress
-stall (AGENTS.md §Concurrent PRs: stop and report); or another live session
+stall (skill `agent-fleet` §Launch policy: stop and report); or another live session
 starts pushing your paths (STAND-DOWN).
 
 ## Spawn prompt (parent fills the angle brackets, sends via `create_session`)
@@ -73,3 +80,6 @@ Extra constraints: <caps, groups not to run, deadlines>.
 Do not enable auto-merge or merge. Do not rebase or force-push.
 Report to @parent with DONE/BLOCKED/HANDOFF/STAND-DOWN first lines only.
 ```
+
+The "Do not enable auto-merge" line binds the child only; it never goes into a
+PR body or handoff (the body's only hold is a `MERGE-HOLD:` line).

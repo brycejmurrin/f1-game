@@ -253,8 +253,8 @@ const RealReplay = (function () {
       for (const [c, f] of cars) if (f.tr && f.d && f.d.code === o.follow) follow = c;
       if (!follow) for (const [c, f] of cars) if (f.tr && !follow) follow = c;
       setFollow(follow);
-      if (reel && reel.length) cutTo(reel[0]);
       if (bc) bc.start({ auto, tower: o.tower !== false });
+      if (reel && reel.length) cutTo(reel[0]);
       // THE COMMENTARY (js/race/race-radio.js): the replay's highlights are the
       // news, told with the REAL drivers' names, never over a team radio clip.
       if (G.raceRadio && G.raceRadio.setWatching) G.raceRadio.setWatching({
@@ -292,11 +292,12 @@ const RealReplay = (function () {
 
     function owns(c) { return !!run && run.cars.has(c); }
 
-    function setFollow(c) {
+    function setFollow(c, snap = true) {
       if (!run || !c) return;
       run.follow = c;
       if (G.followCar) G.followCar(c);
-      if (G.snapGameCam) G.snapGameCam();
+      if (snap && bc) bc.refresh(bcState);   // paused follow changes must update the tower and remove a self-following inset before the camera
+      if (snap && G.snapGameCam) G.snapGameCam();
       if (G.refreshHud) G.refreshHud(true);
     }
     /** follow(+1 / -1): the next car up or down the running order; follow("VER"): by code. */
@@ -317,10 +318,13 @@ const RealReplay = (function () {
       return setSpeed(SPEEDS[clamp(i + dir, 0, SPEEDS.length - 1)]);
     }
     function seek(t) {
+      seekTo(t, null);
+    }
+    function seekTo(t, highlight) {
       if (!run || !Number.isFinite(t)) return;
       const T = clamp(t, -30, run.duration);
       if (run.reel) { const i = run.reel.findIndex((h) => h.t + HOLD_S >= T); run.reelIdx = i < 0 ? Math.max(0, run.reel.length - 1) : i; }
-      reposition(T, null, true);
+      reposition(T, highlight, true);
     }
     // Scrubbing and reel cuts cross the same timeline boundary. Release all
     // history, pose the new subject, then reset the camera and repaint once.
@@ -333,10 +337,12 @@ const RealReplay = (function () {
       if (bc) bc.resetTiming();
       if (highlight) {
         const c = carOfNum(highlight.num);
-        if (c && !c.retired && !(bc && bc.status() && bc.status().locked)) setFollow(c);
+        const picture = bc && bc.status();
+        if (c && !c.retired && !(picture && (picture.locked || picture.manual))) setFollow(c, false);
         else if (!run.follow) follow(+1);
         if (bc) bc.onCut(highlight.kind);
       }
+      if (G.raceRadio && G.raceRadio.resetTimeline) G.raceRadio.resetTimeline();
       if (bc) bc.refresh(bcState);
       if (G.refreshHud) G.refreshHud(true);
       if (G.snapGameCam) G.snapGameCam(paint);
@@ -357,9 +363,7 @@ const RealReplay = (function () {
       const list = run.events;
       const h = dir < 0 ? list.slice().reverse().find((e) => e.t - LEAD_S < run.T - 1) : list.find((e) => e.t - LEAD_S > run.T + 1);
       if (!h) return null;
-      seek(h.t - LEAD_S);
-      if (bc && !bc.status().locked) { const c = carOfNum(h.num); if (c && !c.retired) setFollow(c); bc.onCut(h.kind); }
-      if (transport) transport.paint();
+      seekTo(h.t - LEAD_S, h);
       return h.text;
     }
 

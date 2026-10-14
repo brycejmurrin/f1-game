@@ -1,25 +1,24 @@
 ---
 name: steward
-description: "Use when driving a PR to green — CI/Pages red (ci-red-triage names the test), PR check-in, base conflict, fix-push validate. Apex overrides only: draft/ready dedupe, sync-pr.mjs, who-is-on-it before a shared red. Pre-push is check-changes."
+description: "Use when driving a PR to green: CI/Pages red, conflicts, check-in, fix-push validate. Apex overrides: draft/ready dedupe, sync-pr.mjs, who-is-on-it before a shared red. Loop is pr-owner; pre-push check-changes."
 ---
 
 # Driving a PR to green in Apex 26
 
 **This file is the OVERRIDES, not the protocol.** Generic PR-stewardship rules
-are right about most things and wrong about six specific to this repo, each of
+are right about most things and wrong about the specifics below, each of
 which has cost a session before. Everything not listed here: `AGENTS.md`.
 
-Routes: a red `ci.yml` / `pages.yml` run → `ci-red-triage` (read-only, returns
+Routes: a red `ci.yml` / `pages.yml` run → agent `ci-red-triage` (read-only, returns
 the status line). Pre-push validation → `check-changes`. Live `version.json` or
-anything on github.io → `deploy-research` (the only thing here that reaches it).
+anything on github.io → agent `deploy-research` (the only thing here that reaches it).
 
 ## 1. `cancelled` means three different things — read the jobs, not the conclusion
 
 A draft PR's fast-tier run and its `ready_for_review` run land in the same
 concurrency group (`ci-…head.ref`) with `cancel-in-progress`, so marking the PR
 ready cancels the fast run on the same `head_sha` seconds after it starts
-(ci.yml runs on push for the deploy branch only since 2026-09-24; before that
-a branch push and its PR run did the same). **A live sibling on
+(ci.yml runs on push for the deploy branch only). **A live sibling on
 that SHA is dedupe, not a red.** Do not re-run it and do not report it as a
 failure. (Dispatch/schedule use `run_id`; deploy-branch pushes share ONE
 no-cancel group, `ship-fast`, since 2026-10-03: the run in progress finishes and
@@ -32,7 +31,7 @@ The other two look identical from the conclusion alone:
 
 - **A job that hit `timeout-minutes` reports `cancelled`** with zero failures
   and every test green right up to the kill — that is a real red. It blocked
-  two deploys on Pages #1959/#1961 and is why `node-suites` is its own job (six slices now, `vm-a1 vm-a2 vm-b1 vm-b2 page slow`, 25 min cap each; the slice names are required checks).
+  two deploys on Pages #1959/#1961 and is why `node-suites` is its own job (matrix slices, each with its own cap; the slice names are required checks — see ci.yml).
 - Anywhere else, `cancelled` with zero failures is a timeout until proven
   otherwise (AGENTS.md rule 8).
 
@@ -57,11 +56,11 @@ A PR that ends `cancelled` twice, zero failures — the recipe:
     node tools/ci/sync-pr.mjs <branch> --push   # fresh verified sync, when publication is intended
 
 **Do not sync on every tip move.** Branch protection (2026-09-30) requires
-the 12 fast-tier checks green on the PR's own head, NOT an up-to-date
-branch, and every re-sync is a fresh PR run (the account was 20 slots, now 40) — re-syncs
-were ~80 % of the deploy branch's commits on 2026-09-29. Sync when GitHub
+the fast-tier checks green on the PR's own head, NOT an up-to-date
+branch, and every re-sync is a fresh PR run. Sync when GitHub
 reports a conflict, or when a required check is red on the tip and the fix
-is already there. A green PR merges as it stands.
+is already there. A green PR merges as it stands. **Red AND conflicting:** fix the red on the branch first, then sync once, then ONE push (two pushes cancel the live run — AGENTS.md rule 4).
+Bare `sync-pr <branch>` (no flag) does the real merge and pushes nothing.
 
 Every base merge conflicts on `tests/data/ratchets.json` and the generated
 files; `sync-pr` cures both and a hand merge does not. It leaves you ON
@@ -80,11 +79,12 @@ no fetch or merge-tree) → `who-is-on-it.mjs` if the base file is not yours →
 <branch> && git merge origin/claude/f1-game-project-26h3ng` → keep BOTH sides'
 intent in each hand-written file → generated leftovers at the source + `npm
 run gen` → `git add`/commit → `deploy.mjs --gate-only` → plain `git push`
-(never force). Record the files and the resolution in the PR body.
+(never force). Record the files and the resolution in the PR body: a ticked
+Plan item with the merge sha (AGENTS.md rule 12).
 
 Resolve a generated-file conflict at the SOURCE and run `npm run gen`; never
 hand-edit one (the edit hook blocks it, and `gen:check` names drift). The list
-is AGENTS.md §Critical conventions rule 11.
+is AGENTS.md Session shape rule 11.
 
 ## 3. A red you did not cause → find out who is on it FIRST
 
@@ -138,32 +138,27 @@ A green PR does not prove Pages. Poll by `head_sha` — `node tools/ci/ci-watch.
 failing step and annotations inline; AGENTS.md rule 12); `pages.yml` gates the tip
 once and publishes exactly that commit (dispatch = "deploy now", ≤ ~25 min).
 **Live means your commit is an ANCESTOR of the live `apex-sha`** — ask
-`deploy-research` for it. Do not conflate PR CI, ship-push CI and Pages, and
-never curl github.io from the main context.
+`deploy-research` for it. Do not conflate PR CI, ship-push CI and Pages
+(`pages.yml`, workflow id `295002043`), and never curl github.io from the main
+context. After every push list all check runs on the head (ready-state jobs
+included), read every failed log and fix at the root; on red name the exact
+test, assertion and lane. `deploy.mjs --train` prints the last ci/pages
+conclusions and the nightly rota BY JOB (a `cancelled` run can hide a FAILED
+one); the rota is the only scheduled coverage for the specs `select-specs`
+never picks. Fetch MCP tool schemas once per session and reuse them.
 
 ## Browser runs, if a fix needs one
 
-ONE Playwright process, ONE group per batch, via `node tools/ci/test-bg.mjs
-<group>`. Stop it with `--stop`, never a PID kill and never `pkill -f` (both
-hook-blocked). Never hand a subagent a browser run — report it unverified
-instead. Anchor a verdict on `grep -E '^= (run (passed|failed|timedout|interrupted)|bg exit)'`,
-never a looser pattern or `| tail` on a live log.
+Via `node tools/ci/test-bg.mjs <group>` only; AGENTS.md rules 5, 6 and 10 (one run, `--stop`, never in a subagent —
+report it unverified).
 
 ## Host-neutral watch and claims
 
-Use `--session <unique-id>` with `who-is-on-it.mjs --claim/--release` on hosts
-without a Claude session variable; do not share a `nosession` identity.
-Subscribe with the host's own tool: Claude Code `subscribe_pr_activity`, Cursor `subscribe_github_ci` + `subscribe_github_pr`
-(cursor-subscriptions MCP); never call a name the host does not list (skill `session-comms`). Keep one
-timer beside it (`send_later` / `subscribe_timer`) and read CI on every wake:
-Claude's subscription can drop `check_run` completions. If those or Monitor/timers
-are absent, run the watcher as one owned background command with a log, read
-events while doing independent work, and at most one `ci-watch --sha <sha>
---once` at a checkpoint (no shell-poll loops while subscribed). Record missing
-subscription and reminder capabilities as unverified; do not claim an automation
-was armed.
-Check the active tool catalog with `tools/check/doctor.mjs --catalog <file>`; upstream
-connector availability cannot be fixed by inventing tool results.
+Use `--session <unique-id>` with `who-is-on-it.mjs --claim/--release` on hosts without a Claude session variable.
+Subscribe with the host's own tool: Claude Code `subscribe_pr_activity`, Cursor `subscribe_github_ci` +
+`subscribe_github_pr`; never call a name the host does not list (skill `session-comms`). Keep one timer beside it
+(`send_later` / `subscribe_timer`) and read CI on every wake: the subscription can drop `check_run` completions. Without
+subscription or timers: `references/host-watch.md`. Record missing capabilities as unverified.
 
 ## 8. CI wake: `running` with 0 failed is not green
 

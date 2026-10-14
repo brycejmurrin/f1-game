@@ -21,7 +21,9 @@ re-runs. The parent decides and acts; the protocol is
 2. `node tools/ci/ready-full-cap.mjs --json`; if `ok` is false or room is 0, say
    which PRs hold the slots and that no READY may be recommended.
 3. For each row whose `suggest` is READY, run `node tools/ci/ready-gate.mjs --pr <n>`
-   and report its exit code; READY is recommended only on exit 0.
+   and report its exit code; READY is recommended only on exit 0. Batch the gate
+   checks in ONE Bash call (`for n in 12 34; do node tools/ci/ready-gate.mjs --pr $n; echo "#$n rc=$?"; done`):
+   one call per PR spends the `maxTurns` budget.
 4. For SYNC or FIX rows, run `node tools/ci/who-is-on-it.mjs` once and name the
    live session or recent pusher if one owns the branch (then the action is a
    message, not a push). For FIX, name the failing job names the board gives.
@@ -36,7 +38,7 @@ BOARD <n> open · full-tier slots <count>/<cap> · <time>
   call: <exact call, or "none">
 ```
 
-Exact calls (owner `brycejmurrin`, repo `f1-game`):
+Exact calls for the PARENT to make (you have no GitHub tools; owner `brycejmurrin`, repo `f1-game`):
 - READY: `mcp__github__update_pull_request {pullNumber: <n>, draft: false}`
 - ARM: `mcp__github__enable_pr_auto_merge {pullNumber: <n>, mergeMethod: "SQUASH"}`
 - FOREIGN-ARM: `mcp__github__disable_pr_auto_merge {pullNumber: <n>}`
