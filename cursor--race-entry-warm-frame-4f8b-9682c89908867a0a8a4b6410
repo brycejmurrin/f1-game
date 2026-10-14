@@ -1,1 +1,1 @@
-1791980111	Cursor Agent	TIP-RED #1493: monaco boot flake harden + sync CONFLICTING; no merge  [cursor/race-entry-warm-frame-4f8b; session 9682c89908867a0a8a4b6410]
+1791984088	Cursor Agent	PR #1493 CI green but CONFLICTING: sync ship tip; tooling-fast; push; no arm/merge  [cursor/race-entry-warm-frame-4f8b; session 9682c89908867a0a8a4b6410]
