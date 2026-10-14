@@ -286,17 +286,14 @@
   max-width: 100%;
   text-align: center;
 }
-/* Tall / narrow portrait: prefer an even 2×2 (two equal tracks) so the four
-   presets never squeeze into one colliding row when UI scale grows the type.
-   Drop the <small> captions there — title + caption are both --fs-micro, so on
-   a ~150px tile the caption still reads as jammed against FULL WEEKEND /
-   ENDURANCE even with a 3px flex gap (measured 390×844 after the wrap fix). */
-body[data-shape="tall"] #rs-presets {
-  --balance-basis: calc(50% - var(--gap) * 0.5);
-  --balance-min: calc(50% - var(--gap) * 0.5);
-}
-body[data-shape="tall"] #rs-presets > .preset-btn small { display: none; }
-@media (max-width: 480px) and (orientation: portrait) {
+/* Narrow sheets (phone portrait ~390, not landscape 844): even 2×2 tracks and
+   no <small> captions. Title + caption are both --fs-micro, so on a ~150px tile
+   the caption still reads as jammed against FULL WEEKEND / ENDURANCE even with
+   a 3px flex gap (measured 390×844 after the wrap fix).
+   Max-width only — not orientation:portrait and not body[data-shape=tall]
+   #rs-* (ui-improve-pass pins those out of the menus.css family this file is
+   inlined into via readCssSource). */
+@media (max-width: 480px) {
   #rs-presets {
     --balance-basis: calc(50% - var(--gap) * 0.5);
     --balance-min: calc(50% - var(--gap) * 0.5);
