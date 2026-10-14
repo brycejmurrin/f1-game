@@ -390,6 +390,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/flyby-shots.test.mjs",
   "tests/unit/flying-start.test.mjs",
   "tests/unit/font-digits.test.mjs",
+  // The weather FORECAST (js/race/forecast.js): timeline off the arc's own road lag (drift-guarded against
+  // weather-arc.js), bounded seeded uncertainty, and the engineer's early / 2-lap / 1-lap / here / drying calls. VM, < 0.5 s.
+  "tests/unit/forecast.test.mjs",
   // Portrait HFOV floor + landscape HFOV cap (js/camera/fov-fit.js); pure VM, <0.1 s.
   "tests/unit/fov-fit.test.mjs",
   // The FRAMING REPORT fleet diff (tools/lib/frame-fleet.mjs): frame identity across
@@ -853,6 +856,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ribbon flag to lineBrakeCue); this still asks that one key means one type.
   "tests/unit/store-key-types.test.mjs",
   "tests/unit/store-registry.test.mjs",
+  // STORM (js/race/storm.js): above rain on the arc ladder, rain's grip and tread, heavier rain,
+  // a seeded frame-rate-independent lightning schedule, the storm safety car, no STORM chip in rooms. VM, < 1 s.
+  "tests/unit/storm-weather.test.mjs",
   "tests/unit/surface-id-parity.test.mjs",
   // APEX_SURVEY_HUD=1: flag parse (query|hash|localStorage) + HUD-visible stub without race warm. Pure, ~0.1 s.
   "tests/unit/survey-hud.test.mjs",
@@ -892,7 +898,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tlx-hunt4.test.mjs",
   // TLX perf hunt 4 (lane TLX-W): A-W2 4-byte vertex strides on three's WebGL2 path (the real packer, both ways; the lit GLSL reads the widened colour as vec3); A-H5 the mirror target's capped mip chain (the real prepareMirrorTarget over three r186); A-P1 the scene depth invalidated on frames whose post reads none of it (the real post chain); A-W1 the program warm's draw stage (the real startProgramWarm: 1x1 draws, never the canvas, state restored).
   "tests/unit/tlx-hunt4b.test.mjs",
-  // TLX perf hunt 4 (lane TLX-H4): A-H4 the real tlx-shadow caster as a plain attribute-instanced Mesh (Stream, no UBO pad) over three r186 on the fake WebGL2 with a GPU-buffer model — each pass's draw reads its own rows, bytes = rows written, 0 on a render that wrote none; apex26.tlxCasterAttr=0 is the padded Dynamic InstancedMesh.
+  // TLX perf hunt 4 (lane TLX-H4): A-H4 the real tlx-shadow caster as a plain attribute-instanced Mesh (Stream, no UBO pad) over three r186 on the fake WebGL2 with a GPU-buffer model — each pass's draw reads its own rows, bytes = rows written, 0 on a render that wrote none; apex26.tlxCasterAttr=0 is the padded Dynamic InstancedMesh. B-F3.1 the real program warm defers the mirror stage on AUTO to the first mirrorBegin (apex26.tlxMirWarmLazy=0 eager).
   "tests/unit/tlx-hunt4c.test.mjs",
   // TLX's instanced cull reuses its resident pack by surviving CELL SET
   // (InstCells, GLX/WGX parity); lifts the real cullInstances/updateInstances.

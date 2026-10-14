@@ -61,7 +61,9 @@ const LightStore = (() => {
       if (!track || !track.def) return null;
       let tod = G.raceTimeOfDay;
       if (tod === "default") tod = track.def.night ? "night" : "day";
-      return track.def.id + "|" + tod + "|" + G.raceWeather;
+      // A STORM resolves (and tunes) the RAIN profile: it is rain's look darkened
+      // by Atmosphere's storm block, not a sixth set of 50 shipped presets.
+      return track.def.id + "|" + tod + "|" + (G.raceWeather === "storm" ? "rain" : G.raceWeather);
     }
 
     // WEATHER DOES NOT MOVE THE SUN. The sun's direction is keyed by track x
