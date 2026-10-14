@@ -12,6 +12,7 @@ which has cost a session before. Everything not listed here: `AGENTS.md`.
 Routes: a red `ci.yml` / `pages.yml` run → agent `ci-red-triage` (read-only, returns
 the status line). Pre-push validation → `check-changes`. Live `version.json` or
 anything on github.io → agent `deploy-research` (the only thing here that reaches it).
+Review, hunt or survey findings on the PR → agent `finding-verifier` before you fix any of them.
 
 ## 1. `cancelled` means three different things — read the jobs, not the conclusion
 
