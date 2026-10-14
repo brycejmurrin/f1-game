@@ -423,7 +423,7 @@ test("the reopen, watch and clash timers are all owned and cancellable", () => {
   // built — the old early return skipped the timeout check and the poll spun
   // at 4 Hz forever with no message.
   assert.match(SOURCE,
-    /if \(!watched\) \{\s*\n[\s\S]{0,700}?CONNECT_TIMEOUT_MS\) \{\s*\n\s*clearInterval\(pollTimer\);\s*\n\s*say\(failureMsg\(null,/,
+    /if \(!watched\) \{\s*\n[\s\S]{0,700}?CONNECT_TIMEOUT_MS\) \{\s*\n\s*clearInterval\(pollTimer\);\s*\n\s*sayConnectFail\(null,/,
     "the never-materialised branch must hit the deadline");
   // grace(): the re-render timer rides the clashSince record and every
   // teardown path goes through clashDrop/clashClear.
@@ -1434,6 +1434,125 @@ test("host onFail during a half-built join closes that peer PC and clears pendin
     assert.equal(ts[1].status, "new");
     assert.equal(ts[1].pc.closed, 0);
     assert.equal(h.lobby.status().pending, true);
+  } finally {
+    h.lobby.cancel();
+  }
+});
+
+// ACCEPTANCE: room-code expiry (or courier death) during connect must not leave
+// the lobby on failureMsg's TURN/network copy. waitForOpen used to overwrite
+// the expiry line after dropPending closed the pending PC. Pure ICE failures
+// still use the unchanged failureMsg / __apex.lobbyFailure text.
+test("room-code expiry while watching keeps expiry copy, not TURN; pure ICE still uses failureMsg", async () => {
+  const EXPIRE_MSG = "Nobody answered that code. Check the six characters, or ask "
+    + "your friend for a fresh one — if it keeps happening, both "
+    + "reload the game and try a new code.";
+  const TURN_STATS = {
+    ice: "failed", connection: "failed", turn: true,
+    candidates: { host: 1, srflx: 1, relay: 1 },
+  };
+  let transport = null;
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }),
+    teams: TWO_TEAMS,
+    handshake: {
+      acceptInvite: async () => ({ ok: true, code: "answer", peer: null }),
+    },
+    rendezvous: {
+      usingPrivateRelay: () => false,
+      normalise: (c) => String(c || "").toUpperCase().replace(/[^0-9A-Z]/g, ""),
+      valid: (c) => /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$/.test(String(c || "").toUpperCase()),
+      swap: async (o) => {
+        const out = await o.reply("host-invite");
+        assert.ok(out, "guest answered before courier expiry");
+        return { ok: false, error: "expired", message: EXPIRE_MSG };
+      },
+    },
+  });
+  h.lobby.setTransportFactory(() => {
+    transport = {
+      status: "connecting",
+      onClose() {},
+      close() { transport.status = "closed"; },
+      // Stats that make failureMsg paint the TURN/network diagnosis.
+      stats: () => TURN_STATS,
+    };
+    return transport;
+  });
+  try {
+    const result = await h.lobby.codeJoin("ABC234");
+    assert.equal(result.ok, false);
+    assert.equal(result.error, "expired");
+    assert.match(h.status.textContent, /Nobody answered that code/,
+      "expiry copy lands when the courier dies");
+
+    // dropPending while waitForOpen is still armed: close the pending PC the
+    // way onFail/teardown does. On tip, the next poll tick overwrites with TURN.
+    assert.equal(h.lobby.status().pending, true, "watcher still owns the pending transport");
+    transport.close();
+    // Poll is 250 ms — wait past at least two ticks so waitForOpen can fire.
+    await new Promise((r) => setTimeout(r, 700));
+
+    assert.match(h.status.textContent, /Nobody answered that code|room code has expired/i,
+      "expiry copy must survive dropPending + waitForOpen");
+    assert.doesNotMatch(h.status.textContent,
+      /relay was offered|apex26\.turnApi|needs a relay|No relay is configured/i,
+      "must not show failureMsg TURN/network copy after room-code expiry");
+
+    // Pure ICE failure diagnosis is unchanged (same surface as __apex.lobbyFailure).
+    const iceCopy = h.lobby.failureMsg(TURN_STATS, 30);
+    assert.match(iceCopy, /relay was offered and did not carry it/,
+      "pure ICE still uses today's TURN copy via failureMsg / lobbyFailure");
+    assert.match(iceCopy, /apex26\.turnApi/);
+  } finally {
+    h.lobby.cancel();
+  }
+});
+
+test("host onFail expiry with watcher armed and empty room uses INVITE ANOTHER copy", async () => {
+  const made = [], rooms = [], ts = [];
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made),
+    handshake: { acceptAnswer: async () => ({ ok: true, peer: null }) },
+    rendezvous: {
+      usingPrivateRelay: () => false, makeCode: () => "ABC234",
+      hostRoom: async (o) => {
+        const room = {
+          code: o.code, onJoiner: o.onJoiner, onFail: o.onFail,
+          stopped: 0, stop() { room.stopped++; }, rotate() {},
+        };
+        rooms.push(room);
+        return { ok: true, stop: () => room.stop(), rotate: () => {} };
+      },
+    },
+  });
+  h.lobby.setTransportFactory(() => {
+    const t = {
+      status: "connecting",
+      onClose() {},
+      close() { t.status = "closed"; },
+      stats: () => ({
+        ice: "failed", connection: "failed", turn: true,
+        candidates: { host: 1, srflx: 1, relay: 1 },
+      }),
+    };
+    ts.push(t);
+    return t;
+  });
+  try {
+    assert.equal((await h.lobby.codeHost()).ok, true);
+    // Arm the connect watcher as onJoiner does after acceptAnswer.
+    h.lobby.watchForOpen();
+    assert.equal(typeof rooms[0].onFail, "function");
+    rooms[0].onFail({
+      ok: false, error: "expired",
+      message: "Nobody answered that code. Check the six characters.",
+    });
+    assert.match(h.status.textContent, /room code has expired|INVITE ANOTHER/i,
+      "empty room + armed watcher must use the INVITE ANOTHER expiry copy");
+    assert.doesNotMatch(h.status.textContent,
+      /relay was offered|apex26\.turnApi|needs a relay/i);
   } finally {
     h.lobby.cancel();
   }

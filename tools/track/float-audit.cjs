@@ -26,6 +26,7 @@
 //
 // Usage:
 //   node tools/track/float-audit.cjs <trackId> [--json] [--all-clusters]
+//   node tools/track/float-audit.cjs <trackId> --why   # the scenery source line behind each flagged cluster
 //   node tools/track/float-audit.cjs --all [--top N]
 //
 // Exit code 1 if any UNSUPPORTED cluster is found (CI-usable).
@@ -450,7 +451,7 @@ function audit(id) {
 
 const args = process.argv.slice(2);
 if (args.includes("--help") || args.includes("-h")) {
-  console.log("usage: node tools/track/float-audit.cjs <trackId>|--all [--json] [--all-clusters] [--top N]\n  Exhaustive floating-scenery detector: builds the circuit in a VM and reports prop clusters above/under the ground.");
+  console.log("usage: node tools/track/float-audit.cjs <trackId>|--all [--json] [--all-clusters] [--top N]\n       node tools/track/float-audit.cjs <trackId> --why   (the emitting scenery source line per flagged cluster)\n  Exhaustive floating-scenery detector: builds the circuit in a VM and reports prop clusters above/under the ground.");
   process.exit(0);
 }
 const asJson = args.includes("--json");

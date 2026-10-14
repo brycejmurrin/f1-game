@@ -13,9 +13,16 @@ import json, os, re, subprocess, sys
 try:
     d = json.load(sys.stdin)
 except Exception:
+    sys.stderr.write("protect-files: WARNING could not read the hook payload; the edit guard did NOT run.\n")
     sys.exit(0)
 ti = d.get("tool_input") or {}
 tool = d.get("tool_name") or ""
+# Hook input names the subagent a call comes from (`agent_type`, documented at
+# https://code.claude.com/docs/en/hooks). track-surveyor is the one agent with
+# write tools; rule 4 below scopes it to circuit pairs (2026-10-14).
+agent = str(d.get("agent_type") or "")
+SURVEYOR = agent == "track-surveyor" or agent.endswith(":track-surveyor")
+SURVEYOR_OK = re.compile(r"^(js/circuits/(scenery/)?[a-z0-9_-]+\.js|scratch/.+|artifacts/.+)$")
 
 
 def git(*args, cwd):
@@ -152,6 +159,15 @@ def check(file, tool, ti, proposed=None, how=""):
     base = os.path.basename(file)
     via = f" (via Bash: {how})" if tool == "Bash" else ""
 
+    # 4. track-surveyor writes only circuit defs and their scenery closures
+    # (js/circuits/<id>.js, js/circuits/scenery/<id>.js) plus scratch/ and
+    # artifacts/; no escape hatch. Which circuit is the parent's brief — a
+    # hook cannot read it — so any id passes and the parent's diff check stays.
+    if SURVEYOR and not rel.startswith("..") and not SURVEYOR_OK.match(rel.replace(os.sep, "/")):
+        block(f"{rel}{via}: track-surveyor writes only js/circuits/<id>.js, js/circuits/scenery/<id>.js, "
+              "scratch/ and artifacts/ (.claude/agents/track-surveyor.md). Report the change for the parent instead.",
+              root, hatch=False)
+
     if re.match(r"(js|css)/", rel) or rel == "index.html":
         if live_playwright_in(root):
             block(f"{rel}{via}: a Playwright run is live and tests serve js/, css/ and index.html from the "
@@ -228,7 +244,11 @@ if tool == "Bash":
     try:
         import shellparse
         targets = shellparse.write_targets(cmd, d.get("cwd") or os.getcwd())
-    except Exception:
+    except Exception as e:
+        # Fail open, but LOUDLY (2026-10-14): a parser bug must not silently
+        # leave every Bash write unguarded.
+        sys.stderr.write(f"protect-files: WARNING shellparse failed ({type(e).__name__}: {e}); "
+                         "this command's file writes were NOT checked.\n")
         sys.exit(0)
     for t in targets:
         proposed = None

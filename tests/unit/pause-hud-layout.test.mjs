@@ -60,6 +60,15 @@ test("compact pause stack tightens without changing type tokens", () => {
   assert.match(css, /#pausemenu\s+\.sheet\[data-density="compact"\]\s+\.stack\s+button[^}]*min-height:\s*max\(36px,\s*var\(--tap-min\)\)/);
 });
 
+test("short phone pause (≤400px) caps the sheet and uses a 2-col tray with no holes", () => {
+  const dialogs = readCssSource("css/dialogs.css");
+  assert.match(dialogs, /@media\s*\(max-height:\s*400px\)[\s\S]*?#pausemenu\s*>\s*\.sheet\s*\{[^}]*max-height:\s*min\(100%,\s*calc\(100\s*\*\s*var\(--svhz\)/);
+  assert.match(dialogs, /@media\s*\(max-height:\s*400px\)\s*\{[\s\S]*?#pausemenu\s+\.sheet-body\.stack\s*>\s*button:not\(\.as-tbtn\)\s*\{[^}]*min-height:\s*var\(--tap\)/);
+  const overlays = fs.readFileSync(path.join(ROOT, "css/overlays.css"), "utf8");
+  assert.match(overlays, /@media\s*\(max-height:\s*400px\)\s*\{[\s\S]*?#pausemenu\s+#pm-quick-doors\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/);
+  assert.match(overlays, /#pausemenu\s+#pm-quick-doors\s*>\s*:last-child:nth-child\(odd\)\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/);
+});
+
 test("a queued INFO card older than ANN_STALE_MS is dropped at the drain; a warning never is", () => {
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   const priorities = game.match(/const ANN_PRI = [^;]+;/)[0];

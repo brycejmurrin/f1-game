@@ -280,9 +280,10 @@ export const MAX_OVER_BUDGET_SHARDS = 8;
 // failures). The old cap assumed all N tests would time out (N x 180 s), which
 // sharded tracks-walls — 63 tests, ~3.5 min measured on llvmpipe — across three
 // runners to keep a kill timer under 90 minutes that no run could reach.
-// Every job costs one of the account's 20 concurrent slots (docs/notes/
-// CI-CAPACITY-2026-09-29.md: 200-290 jobs queued for 7 h on 2026-09-29), so a
-// split that buys nothing is paid for in queue time by every other PR.
+// Every job costs one of the account's concurrent slots — 20 on 2026-09-29
+// (docs/notes/CI-CAPACITY-2026-09-29.md: 200-290 jobs queued for 7 h), 40
+// standard / 5 macOS since the GitHub Pro upgrade of 2026-09-30 — so a split
+// that buys nothing is paid for in queue time by every other PR.
 export const MAX_FAILURES = 3;
 // A job's EXPECTED work before shards() splits or stops packing: close to the
 // fixed gate's own critical path (vm-a, ~6 min), so the selection is rarely
@@ -722,7 +723,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
  *  few jobs as fit TARGET_SHARD_SEC each. Before this, each oversize spec was
  *  its own job and a loop-expanded one was split by a worst case no run could
  *  reach: a typical circuit PR asked for 3-7 selected jobs doing 0.2-1.5 min
- *  of work apiece, each holding one of 20 slots behind a 26-minute queue.
+ *  of work apiece, each holding one of 20 slots (40 since Pro, 2026-09-30) behind a 26-minute queue.
  *
  *  Three kinds of item never share a job: a `--shard` piece (the flag applies
  *  to the whole command), a spec carrying menu-baseline (its goldens are
@@ -866,7 +867,7 @@ export const TRACKED = [
 ];
 
 // A CIRCUIT-SCOPED CHANGE (2026-09-29). Most of the branches racing for the
-// 20 runner slots on 2026-09-29 were circuit waves: every file they touched
+// 20 runner slots on 2026-09-29 (40 standard / 5 macOS since 2026-09-30) were circuit waves: every file they touched
 // was one circuit's def, its scenery callback, or that circuit's rows in a
 // per-circuit baseline. The routing saw `test:circuits` — 25 specs across 52
 // circuits — plus, for the baseline, an "infra" warning, and then EXCLUDED

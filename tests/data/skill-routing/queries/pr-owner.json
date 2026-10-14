@@ -1,0 +1,10 @@
+[
+{"query":"You own PRs #1452 and #1455 for this session. Claim them, subscribe to their activity, fix any red on the current head, and push once per green cycle.","expect":"pr-owner"},
+{"query":"pick up my open PR on cursor/kerb-feel-3a1f: check out the branch, re-read the head sha, and keep it green until it merges","expect":"pr-owner"},
+{"query":"I'm handing you ownership of the draft PR for the audio fix. Keep its body updated from the template at every push and report when it's ready.","expect":"pr-owner"},
+{"query":"Own the PR end to end: who-is-on-it claim, subscribe_pr_activity, a timer check-in, and release the claim when it's merged.","expect":"pr-owner"},
+{"query":"another session pushed to my PR branch while I was fixing it; what do I do before my next push so I don't cancel its CI run?","expect":"pr-owner"},
+{"query":"Sweep all open PRs as the designated CI Watch and arm squash auto-merge on the ready green ones.","expect":"ci-watch"},
+{"query":"The ci.yml run on my PR is red; which test and assertion failed, and was the base already red?","expect":"steward"},
+{"query":"What message format should I use to tell my parent session that I'm blocked?","expect":"session-comms"}
+]

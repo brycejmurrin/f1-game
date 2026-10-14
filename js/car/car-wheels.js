@@ -301,8 +301,12 @@ const CarWheels = (function () {
           addTri(out, ctr, [xc0, cy + hcR*Math.cos(a0), cz + hcR*Math.sin(a0)],
                            [xc0, cy + hcR*Math.cos(a1), cz + hcR*Math.sin(a1)], HUBCAP, SURFACES.metal);   // single face (cull-off → opaque both sides)
         }
-        const nutCol = (wheelStyle && wheelStyle.nut) || NUT;
-        const gunNut = wheelStyle && wheelStyle.gunNut ? 1 : 0;
+        // Tyre recipes may own open-rim identity (spokes / dish / nut / gunNut)
+        // when the wheel part leaves them unset — coverVanes alone never builds
+        // a cover after #1190, so factory/sig tyres retarget here. Wheel wins
+        // when it sets a value (factory rim signatures stay intact).
+        const nutCol = (wheelStyle && wheelStyle.nut) || (tyreStyle && tyreStyle.nut) || NUT;
+        const gunNut = (wheelStyle && wheelStyle.gunNut) || (tyreStyle && tyreStyle.gunNut) ? 1 : 0;
         if (!gunNut) {
           addBox(out, ss[0] - dir * 0.002, cy, cz, 0.026, Math.max(hcR * 0.55, rimR * 0.12), Math.max(hcR * 0.55, rimR * 0.12), nutCol, SURFACES.metal);
         } else {
@@ -332,7 +336,10 @@ const CarWheels = (function () {
         // Rim SPOKES: extruded blades (front + back + long edges) from hub to rim.
         // Open default fills spokes:0 with OPEN_SPOKES so factory cars are not
         // bare hoops; cover path keeps recipe spokes (often 0 — ribs dress the dish).
-        const spokeReq = Math.max(0, Math.min(8, Math.round((wheelStyle && wheelStyle.spokes) || 0)));
+        // Tyre.spokes fills in only when the wheel recipe leaves spokes at 0.
+        const spokeWheel = Math.round((wheelStyle && wheelStyle.spokes) || 0);
+        const spokeTyre = Math.round((tyreStyle && tyreStyle.spokes) || 0);
+        const spokeReq = Math.max(0, Math.min(8, spokeWheel || spokeTyre));
         const spokeN = useCover ? spokeReq : (spokeReq > 0 ? spokeReq : OPEN_SPOKES);
         for (let k = 0; k < spokeN; k++) {
           const a = (k / spokeN) * Math.PI * 2 + 0.4;
@@ -363,7 +370,9 @@ const CarWheels = (function () {
             addQuad(out, [bx0, y0, z0], [bx1, y0, z0], [bx1, y1, z1], [bx0, y1, z1], tc, SURFACES.metal);
           }
         }
-        const dish = Math.max(0, Math.min(2, Math.round((wheelStyle && wheelStyle.dish) || 0)));
+        const dishWheel = Math.round((wheelStyle && wheelStyle.dish) || 0);
+        const dishTyre = Math.round((tyreStyle && tyreStyle.dish) || 0);
+        const dish = Math.max(0, Math.min(2, dishWheel || dishTyre));
         if (dish > 0) {
           const dr = rimR * (dish === 2 ? 0.80 : 0.88);
           const dxOut = ss[0] + dir * 0.014;
