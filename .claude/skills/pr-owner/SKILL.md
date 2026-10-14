@@ -37,9 +37,12 @@ repo overrides; messaging, claims, subscriptions and authority are
    per green cycle. Never a force-push or rebase; catch up only when GitHub says
    CONFLICTING or a required check is red, with `node tools/ci/sync-pr.mjs
    <branch>` (merge ship).
-6. **Refresh the PR body at every push** from `.github/pull_request_template.md`:
-   Goal, `node tools/ci/session-status.mjs` output, Verified / Not run (name
-   every unrun group and every flake), Next step. The body is the session log.
+6. **Keep the PR body live** from `.github/pull_request_template.md`: Goal,
+   Plan checklist (tick each item with its evidence the moment it lands, add
+   discovered work, one **now:** item — `update_pull_request`, no push needed),
+   `node tools/ci/session-status.mjs --pr` output at every push, Verified / Not
+   run (name every unrun group and every flake), Next step. The body is the
+   session log.
 7. **Ready flow** at tip-green: `node tools/ci/ready-gate.mjs --pr <n>` exit 0
    AND `node tools/ci/ready-full-cap.mjs` exit 0 (cap full: wait, never
    force). Then flip draft to ready only if your brief delegates it. Arming
