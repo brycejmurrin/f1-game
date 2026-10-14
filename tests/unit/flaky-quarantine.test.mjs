@@ -148,8 +148,13 @@ test("the selected gate honours the quarantine: its specs get a leg of their own
   // Without the quarantine row, the same spec is an ordinary leg again.
   assert.ok(shards(r, { specs: {} }, new Set()).every((j) => j.retries === 0));
   // The REAL ledger: every row the planner can route lands on a retrying leg of its own.
+  // VM-twinned specs (e.g. logging.spec.js) are coveredByVmTwin and never enter
+  // selected/oversize legs — quarantine still silences APEX_FAIL_ON_FLAKY on
+  // browser-group runs; the selected-gate retry split does not apply to them.
   for (const spec of loadQuarantine()) {
-    const real = shards(fit([spec, plain], 30, { rank: () => 0, db: { specs: {} } }), { specs: {} });
+    const fitted = fit([spec, plain], 30, { rank: () => 0, db: { specs: {} } });
+    if ((fitted.coveredByVmTwin || []).some((s) => s.file === spec)) continue;
+    const real = shards(fitted, { specs: {} });
     const legs = real.filter((j) => j.specs.split(" ").includes(spec));
     assert.ok(legs.length >= 1 && legs.every((j) => j.retries >= 1 && j.specs === spec), `${spec}: ${JSON.stringify(legs)}`);
   }
