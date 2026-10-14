@@ -1,0 +1,1 @@
+1791960323	Bryce Murrin	Coordinated with root: replay queued-caption lifecycle guard. OWNED js/race/real-replay.js ONLY for now; tests/unit/real-replay-vm.test.mjs excluded pending #1496 coordination. No browser/merge/push.  [cursor/replay-caption-c41a; session 5a5f135d01b8cee56f7b2dc7]
