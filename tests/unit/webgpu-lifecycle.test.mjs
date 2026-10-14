@@ -9,6 +9,7 @@ const ROOT = new URL("../..", import.meta.url);
 const MANIFEST = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs");
 const P = MANIFEST.PATHS;
 const CSS_SIZE_SOURCE = await readFile(new URL("js/render/shared/canvas-css-size.js", ROOT), "utf8");
+const MAT4_SOURCE = await readFile(new URL("js/core/mat4.js", ROOT), "utf8");   // envFaceBegin's view matrices (P6)
 const DEFERRED_WEBGPU = MANIFEST.DEFERRED.webgpu;
 const deferredWebgpuSources = await Promise.all(
   DEFERRED_WEBGPU.map((rel) => readFile(new URL(rel, ROOT), "utf8")),
@@ -102,6 +103,7 @@ function makeGpuHarness(opts = {}) {
   const textures = [];
   const buffers = [];
   const writes = [];
+  const textureWrites = [];   // queue.writeTexture calls: { texture, origin, bytes } (P4 pins layer order)
   const pipelines = [];
   let textureCalls = 0;
   let viewCalls = 0;
@@ -159,8 +161,8 @@ function makeGpuHarness(opts = {}) {
         const values = Array.from(data).slice(dataOffset, size == null ? undefined : dataOffset + size);
         writes.push({ buffer, offset, values });
       },
-      writeTexture() {},
-      copyExternalImageToTexture() {},
+      writeTexture(dst, bytes) { textureWrites.push({ texture: dst && dst.texture, origin: dst && dst.origin, bytes }); },
+      copyExternalImageToTexture(src, dst) { textureWrites.push({ texture: dst && dst.texture, origin: dst && dst.origin, bytes: null, source: src && src.source }); },
       submit() {},
     },
     createSampler: () => ({}),
@@ -197,7 +199,9 @@ function makeGpuHarness(opts = {}) {
     createCommandEncoder: () => {
       if (failEncoder) throw new Error("injected encoder failure");
       return {
-        beginRenderPass: () => pass,
+        // recordPass also logs each pass OPEN with its descriptor, so a test can
+        // count the passes of a frame and read every attachment's load/store ops.
+        beginRenderPass: (desc) => { if (opts.recordPass) passCalls.push(["beginRenderPass", [desc]]); return pass; },
         resolveQuerySet() {},
         copyBufferToBuffer() {},
         finish: () => ({}),
@@ -208,6 +212,14 @@ function makeGpuHarness(opts = {}) {
       if (textureCalls === failTextureAt) throw new Error("injected texture failure");
       const texture = {
         desc,
+        // opts.reflectTextures: the spec's reflected attributes, so _generateMips (which reads width /
+        // mipLevelCount / format off the texture) RUNS in the mock. Off by default: the historical mock
+        // reflected nothing, and the failure-injection tests count views from that baseline.
+        ...(opts.reflectTextures ? {
+          width: Array.isArray(desc.size) ? desc.size[0] : (desc.size && desc.size.width) || 0,
+          height: Array.isArray(desc.size) ? desc.size[1] : (desc.size && desc.size.height) || 0,
+          mipLevelCount: desc.mipLevelCount || 1, format: desc.format,
+        } : {}),
         destroyed: false,
         destroy() { this.destroyed = true; },
         createView(viewDesc) {
@@ -351,7 +363,10 @@ function makeGpuHarness(opts = {}) {
         getPreferredCanvasFormat: () => opts.preferredFormat || "bgra8unorm",
       },
     },
-    GPUTextureUsage: { RENDER_ATTACHMENT: 1, TEXTURE_BINDING: 2, COPY_DST: 4, COPY_SRC: 8 },
+    // opts.textureUsage: a browser's own flag set (Chrome 146 adds TRANSIENT_ATTACHMENT: 32) — P6 feature-detects it.
+    GPUTextureUsage: opts.textureUsage || { RENDER_ATTACHMENT: 1, TEXTURE_BINDING: 2, COPY_DST: 4, COPY_SRC: 8 },
+    // opts.assets: a stand-in for the shared Assets loader (P4's readLayerBytesAsync seam); absent = no WebGL2 readback.
+    ...(opts.assets ? { Assets: opts.assets } : {}),
     GPUBufferUsage: { UNIFORM: 1, COPY_DST: 2, STORAGE: 4, VERTEX: 8, INDEX: 16, QUERY_RESOLVE: 32, MAP_READ: 64, COPY_SRC: 128 },
     GPUShaderStage: { VERTEX: 1, FRAGMENT: 2 },
     GPUColorWrite: { RED: 1, GREEN: 2, BLUE: 4, ALL: 15 },
@@ -371,6 +386,7 @@ function makeGpuHarness(opts = {}) {
   vm.runInContext(`${VERTEX_PACK_SOURCE.replace(/^const\b/gm, "var")}\nwindow.VertexPack = VertexPack;`, context);
   vm.runInContext(`${INST_CELLS_SOURCE.replace(/^const\b/gm, "var")}\nwindow.InstCells = InstCells;`, context);
   vm.runInContext(`${CSS_SIZE_SOURCE.replace(/^const\b/gm, "var")}\nwindow.CanvasCssSize = CanvasCssSize;`, context);
+  vm.runInContext(`${MAT4_SOURCE.replace(/^const\b/gm, "var")}\nwindow.M4 = M4;`, context);
   // GLX-seam modules (must precede wgx.js). Eval as separate scripts — the
   // WGX_BUNDLE used for source-text pins would redeclare WGSLChunks/Post/Fx.
   vm.runInContext(`${WGX_SHADOW_SOURCE}\nwindow.WGXShadow = WGXShadow;`, context);
@@ -384,6 +400,7 @@ function makeGpuHarness(opts = {}) {
     textures,
     buffers,
     writes,
+    textureWrites,
     passCalls,
     pipelineDescs,
     asyncDescs,
@@ -3043,4 +3060,240 @@ test("WGX per-chunk lamp table: freeing a track's meshes rewinds the allocator i
   const t2 = track(); drawAll(t2);
   assert.equal(API.ciCursor, one, "the next track starts from zero, not from the sum of its predecessors");
   assert.ok(API.ciCursor < core.CHUNK_IDX_CAP, "no table ever overflowed");
+});
+
+// ── PERF-HUNT-4 lane WGX (hunter C's P2 / P4 / P6) ─────────────────────────────
+
+// P2: the mirror inset used to open a SECOND render pass on the drawable with loadOp "load" after the FXAA /
+// SGSR pass had stored it — a full-drawable load + store per frame (7.4 MB at 1280×720, 16.6 MB at 1080p),
+// the WGX twin of hunt-2 G12. It now rides the final pass: the same four calls (viewport, pipeline, bind
+// group, draw) in the same order into the same target, before that pass's end(). apex26.wgxInsetInPass=0
+// restores the second pass (the A/B handle). Pixel truth is wgx-capture before/after (MAD 0.000 expected).
+test("P2: the WGX mirror inset is drawn inside the frame's final pass — one render pass fewer, same draw sequence", async () => {
+  const frame = async (storage) => {
+    const h = makeGpuHarness({ recordPass: true, storage });
+    const gfx = await h.create();
+    gfx.resize();
+    gfx.mirrorRect([0.4, 0.1, 0.2, 0.06]);
+    assert.equal(gfx.mirrorBegin({}, 64, 16), true);
+    gfx.mirrorEnd();
+    assert.equal(gfx.begin({}), true);
+    h.passCalls.length = 0;
+    gfx.present({ exposure: 1, tune: {} });
+    const calls = h.passCalls.map(([k, a]) => k === "beginRenderPass" ? ["begin", a[0]] : [k, a]);
+    const opens = calls.filter(([k]) => k === "begin");
+    // The inset is the only draw with a sub-target viewport: find it and what surrounds it.
+    const vp = calls.findIndex(([k]) => k === "setViewport");
+    assert.ok(vp >= 0, "the inset's viewport call");
+    const inset = calls.slice(vp, vp + 4).map(([k]) => k);
+    assert.deepEqual(inset, ["setViewport", "setPipeline", "setBindGroup", "draw"], "viewport, pipeline, bind group, draw — in that order");
+    // The pass the inset landed in: the last "begin" before it.
+    let passAt = vp; while (passAt >= 0 && calls[passAt][0] !== "begin") passAt--;
+    const st = gfx.mirrorState();
+    return { opens: opens.length, inset, passDesc: calls[passAt][1], draws: calls.filter(([k]) => k === "draw" || k === "drawIndexed").length,
+      insetLast: calls.slice(vp + 4).every(([k]) => k === "end" || k === "begin" || k === "setPipeline" || k === "setBindGroup" || k === "draw" || k === "setViewport"),
+      composites: st.composites, inPass: st.inPass };
+  };
+  const on = await frame(null);                                                  // default: in-pass
+  const off = await frame(new Map([["apex26.gfxPreset", JSON.stringify("ultra")], ["apex26.wgxInsetInPass", "0"]]));
+  assert.equal(on.composites, 1, "the inset composited once (knob on)");
+  assert.equal(off.composites, 1, "…and once with the knob off");
+  assert.equal(on.inPass, 1, "knob on: it rode the final pass");
+  assert.equal(off.inPass, 0, "knob off: it opened its own pass, as before");
+  assert.equal(on.opens, off.opens - 1, `one render pass fewer per frame with the inset in-pass (${on.opens} vs ${off.opens})`);
+  assert.equal(on.draws, off.draws, "the same number of draws either way");
+  assert.deepEqual(on.inset, off.inset, "the same four inset calls in the same order");
+  // Knob off: the inset's pass is the old one — loadOp "load" on the drawable. Knob on: it is inside a pass that
+  // CLEARS the drawable (FXAA / SGSR / the fallback blit), so no load of the previous contents happens at all.
+  assert.equal(off.passDesc.colorAttachments[0].loadOp, "load", "knob off: the second pass reloads the drawable");
+  assert.equal(on.passDesc.colorAttachments[0].loadOp, "clear", "knob on: the inset sits in the pass that wrote the drawable");
+  assert.ok(on.passDesc.colorAttachments[0].view && on.passDesc.colorAttachments[0].view.swapchain, "…which targets the swapchain view");
+  // The source: both final passes and the fallback blit take the inset before end(); the after-pass call stays as the
+  // knob-off path, and a post-chain throw re-arms the inset for the blit that redraws the drawable.
+  assert.match(WGX_SOURCE, /if \(!useUpscale\) _mirrorComposite\(exposure, o\.tune, o, p\);[^\n]*\n\s*p\.end\(\);/, "FXAA → drawable: inset before end()");
+  assert.match(WGX_SOURCE, /_mirrorComposite\(exposure, o\.tune, o, p2\);[^\n]*\n\s*p2\.end\(\);/, "SGSR → drawable: inset before end()");
+  assert.match(WGX_SOURCE, /_mirrorComposite\(exposure, _TONE_STANDIN, null, bp\);[^\n]*\n\s*bp\.end\(\);/, "the fallback blit: inset before end()");
+  assert.match(WGX_SOURCE, /_mirDone = false;[^\n]*\n\s*_tonemapBlit\(exposure\);/, "a post-chain throw re-arms the inset for the blit");
+  assert.match(WGX_SOURCE, /if \(pass && !_insetInPass\) return;\s*if \(_mirDone\) return;/, "knob off = in-pass call is a no-op; drawn once per frame");
+});
+
+// P6: on ULTRA (MSAA 4) the MSAA colour target, the mirror depth and the env depth are pass-local — clear in, discard
+// out, never sampled, never a resolve target — so where the browser has GPUTextureUsage.TRANSIENT_ATTACHMENT
+// (WebGPU spec §6.1.2; Chrome 146) they carry it and can live in tile memory (66 MB of MSAA colour at 1080p on
+// Apple / tile GPUs). The spec's rules: usage EXACTLY RENDER|TRANSIENT, 2d, one mip, one layer, loadOp clear +
+// storeOp discard, not a resolveTarget. The MSAA depth is sampled by the depth resolve and stays plain.
+test("P6: WGX marks the MSAA colour, mirror depth and env depth TRANSIENT_ATTACHMENT when the browser has the flag", async () => {
+  const USAGE = { RENDER_ATTACHMENT: 1, TEXTURE_BINDING: 2, COPY_DST: 4, COPY_SRC: 8, TRANSIENT_ATTACHMENT: 32 };
+  const boot = async (opts) => {
+    const h = makeGpuHarness({ recordPass: true, ...opts });
+    const gfx = await h.create();
+    gfx.resize();
+    assert.equal(gfx.msaa(), 4, "ULTRA: the MSAA colour target exists");
+    gfx.mirrorRect([0.4, 0.1, 0.2, 0.06]);
+    // The mirror and env depth textures are whatever THOSE passes bind as depth: read them off the pass descriptors.
+    const passAt = () => h.passCalls.filter(([k]) => k === "beginRenderPass").length;
+    const m0 = passAt(); assert.equal(gfx.mirrorBegin({}, 64, 16), true); gfx.mirrorEnd();
+    const e0 = passAt(); assert.ok(gfx.envFaceBegin(0, [0, 0, 0], {}), "the env face pass opens"); gfx.envFaceEnd();
+    assert.equal(gfx.begin({}), true); gfx.present({});
+    const opens = h.passCalls.filter(([k]) => k === "beginRenderPass").map(([, a]) => a[0]);
+    const by = (pred) => h.textures.filter((t) => pred(t.desc));
+    const msColor = by((d) => d.sampleCount === 4 && !/depth/.test(d.format));
+    const msDepth = by((d) => d.sampleCount === 4 && /depth/.test(d.format));
+    const mirDepth = [opens[m0].depthStencilAttachment.view.texture], envDepth = [opens[e0].depthStencilAttachment.view.texture];
+    assert.equal(msColor.length, 1, "one MSAA colour target"); assert.equal(msDepth.length, 1);
+    assert.deepEqual([...mirDepth[0].desc.size], [64, 16], "the mirror pass's depth is the mirror depth");   // spread: the vm realm's Array
+    assert.ok(/depth/.test(envDepth[0].desc.format) && envDepth[0] !== mirDepth[0], "the env face pass's depth is the env depth");
+    // Every pass on a transient target clears in and discards out (the spec's rule), and the MSAA colour resolves
+    // into a NON-transient texture.
+    const onView = (tex) => opens.flatMap((d) => [...(d.colorAttachments || []), d.depthStencilAttachment].filter((a) => a && a.view && a.view.texture === tex));
+    for (const [name, tex] of [["MSAA colour", msColor[0]], ["mirror depth", mirDepth[0]], ["env depth", envDepth[0]]]) {
+      const atts = onView(tex);
+      assert.ok(atts.length >= 1, `${name}: bound by a pass this frame`);
+      for (const a of atts) {
+        assert.equal(a.loadOp || a.depthLoadOp, "clear", `${name}: loadOp clear`);
+        assert.equal(a.storeOp || a.depthStoreOp, "discard", `${name}: storeOp discard`);
+        if (a.resolveTarget) assert.equal(a.resolveTarget.texture.desc.usage & USAGE.TRANSIENT_ATTACHMENT, 0, `${name}: the resolve target is not transient`);
+      }
+    }
+    return { msColor: msColor[0].desc, msDepth: msDepth[0].desc, mirDepth: mirDepth[0].desc, envDepth: envDepth[0].desc };
+  };
+  const T = USAGE.RENDER_ATTACHMENT | USAGE.TRANSIENT_ATTACHMENT;
+  const withFlag = await boot({ textureUsage: USAGE });
+  for (const [k, d] of Object.entries(withFlag)) {
+    if (k === "msDepth") { assert.equal(d.usage & USAGE.TRANSIENT_ATTACHMENT, 0, "the MSAA depth is sampled by the depth resolve: never transient"); continue; }
+    assert.equal(d.usage, T, `${k}: usage is EXACTLY RENDER_ATTACHMENT | TRANSIENT_ATTACHMENT`);
+    assert.ok(!d.mipLevelCount || d.mipLevelCount === 1, `${k}: one mip`);
+    assert.ok(!Array.isArray(d.size) || d.size.length === 2 || d.size[2] === 1, `${k}: one layer`);
+    assert.ok(!d.viewFormats, `${k}: no viewFormats`);
+  }
+  const noFlag = await boot({});   // the harness default flag set has no TRANSIENT_ATTACHMENT (every browser before Chrome 146)
+  for (const [k, d] of Object.entries(noFlag)) assert.equal(d.usage & ~USAGE.TRANSIENT_ATTACHMENT, d.usage, `${k}: no stray bit without the flag`);
+  assert.equal(noFlag.msColor.usage, USAGE.RENDER_ATTACHMENT, "no flag: the MSAA colour keeps RENDER_ATTACHMENT only");
+  assert.equal(noFlag.mirDepth.usage, USAGE.RENDER_ATTACHMENT); assert.equal(noFlag.envDepth.usage, USAGE.RENDER_ATTACHMENT);
+  const knobOff = await boot({ textureUsage: USAGE, storage: new Map([["apex26.gfxPreset", JSON.stringify("ultra")], ["apex26.wgxTransient", "0"]]) });
+  assert.equal(knobOff.msColor.usage, USAGE.RENDER_ATTACHMENT, "apex26.wgxTransient=0: the old usage even where the flag exists");
+  assert.equal(knobOff.mirDepth.usage, USAGE.RENDER_ATTACHMENT); assert.equal(knobOff.envDepth.usage, USAGE.RENDER_ATTACHMENT);
+  assert.match(WGX_SOURCE, /"TRANSIENT_ATTACHMENT" in GPUTextureUsage/, "feature-detected the way the Chrome sample does");
+});
+
+// P4: the pack's 34 layers came back through 34 synchronous scratch-WebGL2 readPixels — "finish + round trip"
+// each, 126 ms on the main thread mid-race on the macOS census. With apex26.wgxPackAsync on, createTextureArray
+// hands the bytes to Assets.readLayerBytesAsync (a PIXEL_PACK_BUFFER + fenceSync readback; the byte-equality
+// proof is in assets-pack.test.mjs), returns its token at once with `pending` + `ready`, writes each layer as its
+// bytes land, and builds the mips when all have. setMaterialMaps holds a pending token back; a superseding bind
+// or a freeTexture in flight drops the rest. The knob off restores the synchronous path.
+test("P4: WGX fills the material array as the async readback lands, and never binds a half-filled array", async () => {
+  const size = 2, page = size * size * 4, n = 17;
+  const makeAssets = () => {
+    const calls = { async: 0, sync: 0 };
+    let release = null;
+    const assets = {
+      readLayerBytes(sz, images, nn, data) { calls.sync++; const done = []; for (let i = 0; i < nn; i++) if (images[i]) { data.fill(10 + i, i * page, (i + 1) * page); done.push(i); } return done; },
+      readLayerBytesAsync(sz, images, nn, data, onLayer) {
+        calls.async++;
+        for (let i = 0; i < nn; i++) if (images[i] && images[i].bad) onLayer(i, null);   // refused at enqueue time: the caller's fallback, image alive
+        return new Promise((resolve) => {
+          release = () => {
+            const done = [];
+            for (let i = 0; i < nn; i++) if (images[i] && !images[i].bad) {
+              data.fill(10 + i, i * page, (i + 1) * page); done.push(i); onLayer(i, data.subarray(i * page, (i + 1) * page));
+            }
+            resolve(done);
+          };
+        });
+      },
+      release: () => release && release(),
+      calls,
+    };
+    return assets;
+  };
+  const settle = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
+  const images = []; images[1] = { fill: 1 }; images[4] = { fill: 4 }; images[7] = { bad: true }; images[16] = { fill: 16 };
+  const scales = new Float32Array(n); scales[1] = 4; scales[4] = 2; scales[16] = 1;
+
+  // 1. The async path: token at once, nothing written, bind held back, then layers in order + mips + bound.
+  {
+    const assets = makeAssets();
+    const h = makeGpuHarness({ assets, reflectTextures: true });
+    const gfx = await h.create();
+    const w0 = h.textureWrites.length;
+    const albedo = gfx.createTextureArray(size, images, n);
+    assert.ok(albedo && albedo.texture && albedo.view, "the token returns synchronously");
+    assert.equal(albedo.pending, true); assert.ok(albedo.ready && typeof albedo.ready.then === "function", "…with a ready promise");
+    assert.equal(assets.calls.async, 1); assert.equal(assets.calls.sync, 0, "the sync readback never ran");
+    assert.equal(h.textureWrites.length - w0, 1, "only the refused layer's own fallback upload ran synchronously (image alive)");
+    assert.equal(h.textureWrites[w0].origin[2], 7); assert.equal(h.textureWrites[w0].bytes, null, "…via copyExternalImageToTexture");
+    const submitsBefore = h.textures.filter((t) => t.destroyed).length;
+    gfx.setMaterialMaps({ albedo, normal: null, scales });
+    let st = gfx.materialMapState();
+    assert.equal(st.albedo, false, "a pending array is NOT bound");
+    assert.equal(st.layers, 0); assert.equal(st.pending, 2, "one array filling + one bind held back");
+    assets.release();
+    assert.equal(await albedo.ready, true, "every readable layer landed");
+    await settle();
+    const ws = h.textureWrites.slice(w0 + 1);
+    assert.deepEqual(ws.map((w) => w.origin[2]), [1, 4, 16], "writeTexture per layer, in layer order, as the bytes land");
+    for (const w of ws) { assert.equal(w.bytes.length, page); assert.equal(w.bytes[0], 10 + w.origin[2], "the bytes the readback delivered, not a copy"); }
+    assert.equal(albedo.pending, false);
+    st = gfx.materialMapState();
+    assert.equal(st.albedo, true, "bound once ready"); assert.equal(st.layers, 3); assert.equal(st.pending, 0);
+    assert.equal(h.textures.filter((t) => t.destroyed).length, submitsBefore, "nothing destroyed");
+    assert.ok(albedo.texture.__wgxMipLadder, "the mips were built after the last layer");
+  }
+  // 2. Freed in flight (a superseded load): the remaining writes are dropped and the texture retires.
+  {
+    const assets = makeAssets();
+    const h = makeGpuHarness({ assets });
+    const gfx = await h.create();
+    const albedo = gfx.createTextureArray(size, images, n);
+    const w0 = h.textureWrites.length;
+    gfx.freeTexture(albedo);
+    assets.release();
+    assert.equal(await albedo.ready, false, "freed before the bytes landed: never ready");
+    assert.equal(h.textureWrites.length, w0, "no writeTexture after the free");
+    assert.equal(gfx.begin({}), true); gfx.present({});
+    assert.equal(albedo.texture.destroyed, true, "the texture retired with the frame's submit");
+  }
+  // 3. A superseding bind (unload) while the first is held back: the pending token is retired, never bound.
+  {
+    const assets = makeAssets();
+    const h = makeGpuHarness({ assets });
+    const gfx = await h.create();
+    const albedo = gfx.createTextureArray(size, images, n);
+    gfx.setMaterialMaps({ albedo, normal: null, scales });
+    gfx.setMaterialMaps(null);   // Assets.unload() — the player turned the pack off before it landed
+    assets.release(); await albedo.ready; await settle();
+    assert.equal(gfx.materialMapState().albedo, false, "the superseded bind never happened");
+    assert.equal(gfx.begin({}), true); gfx.present({});
+    assert.equal(albedo.texture.destroyed, true, "…and its never-owned texture was retired, not leaked");
+  }
+  // 4. Nothing fills (every layer refused by the readback AND no image to fall back on): ready false, texture retired, nothing bound.
+  {
+    const assets = makeAssets();
+    assets.readLayerBytesAsync = (sz, imgs, nn, data, onLayer) => Promise.resolve([]);
+    const h = makeGpuHarness({ assets });
+    const gfx = await h.create();
+    const albedo = gfx.createTextureArray(size, images, n);
+    gfx.setMaterialMaps({ albedo, normal: null, scales });
+    assert.equal(await albedo.ready, false, "no layer landed");
+    await settle();
+    assert.equal(gfx.materialMapState().albedo, false);
+    assert.equal(gfx.begin({}), true); gfx.present({});
+    assert.equal(albedo.texture.destroyed, true, "an empty array is retired");
+  }
+  // 5. Knob off, or a loader without the async seam (null = "take the sync path now, the images are alive"): the old path.
+  for (const [label, opts] of [["apex26.wgxPackAsync=0", { storage: new Map([["apex26.gfxPreset", JSON.stringify("ultra")], ["apex26.wgxPackAsync", "0"]]) }], ["readLayerBytesAsync → null", { nullAsync: true }]]) {
+    const assets = makeAssets();
+    if (opts.nullAsync) assets.readLayerBytesAsync = () => null;
+    const h = makeGpuHarness({ assets, storage: opts.storage });
+    const gfx = await h.create();
+    const w0 = h.textureWrites.length;
+    const albedo = gfx.createTextureArray(size, images, n);
+    assert.ok(albedo && !albedo.pending && !albedo.ready, `${label}: a plain token`);
+    assert.equal(assets.calls.sync, 1, `${label}: the sync readback ran`);
+    assert.deepEqual(h.textureWrites.slice(w0).map((w) => w.origin[2]), [1, 4, 7, 16], `${label}: every layer written before return`);
+    gfx.setMaterialMaps({ albedo, normal: null, scales });
+    assert.equal(gfx.materialMapState().albedo, true, `${label}: bound at once`);
+  }
+  assert.match(WGX_SOURCE, /_packAsync && typeof Assets !== "undefined" && Assets\.readLayerBytesAsync/, "the knob gates the seam");
 });

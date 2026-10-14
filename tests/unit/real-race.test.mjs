@@ -508,6 +508,27 @@ test("rain in the real race turns the sky here: the start lap's weather, then an
   assert.deepEqual(arcs(), [["dry", "rain"], ["rain", "dry"]]);
 });
 
+// The script turns back BEFORE the sky does: early in a dry→rain arc
+// raceWeather still reads "dry", so comparing against it ignored the switch
+// back and the storm arrived anyway. The arc's destination is what counts.
+test("rain that stops before the arc has turned the sky re-targets the arc back to dry", () => {
+  const { R, script, Teams } = load();
+  const wet = { ...script, rain: new Array(52).fill(false) };
+  wet.rain[20] = true;   // one wet lap
+  const cars = makeCars(Teams);
+  const { G, calls } = makeG(Teams, cars);
+  const rr = R.create(G);
+  rr.stage(wet, { seat: "RUS" });
+  G.state = "count"; rr.update(1 / 60); G.state = "race";
+  const leader = cars.find((c) => c.code === "RUS");
+  const arcs = () => calls.filter((c) => c[0] === "arc").map((c) => c.slice(1, 3));
+  leader.lap = 20; G.raceWeather = "dry"; rr.update(1 / 60);
+  assert.deepEqual(arcs(), [["dry", "rain"]]);
+  G.weatherArc = { from: "dry", to: "rain", t: 5, dur: 60 };   // the arc is live, the sky still "dry"
+  leader.lap = 21; rr.update(1 / 60);
+  assert.deepEqual(arcs(), [["dry", "rain"], ["dry", "dry"]], "the switch back reaches WeatherArc as a re-target");
+});
+
 test("the review's fixes: a filled cum row, a DSQ that saw the flag, the kept stops, the fuel lap, a done window, one stint log", () => {
   const { R, script, Teams } = load();
   // cumTable fills an untimed mid-race lap of a finisher with the field median and runs to the flag.

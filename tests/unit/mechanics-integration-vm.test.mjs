@@ -36,9 +36,9 @@ test("weather grip is continuous through the old discrete transition boundaries"
   await g.race("monza");g.apex.headless(true);
   g.apex.weatherArc("dry","rain",60);
   const samples=[], configuration=g.G.records.current();
-  for(const t of [0,19.999,20,20.001,39.999,40,40.001,60]) {
+  for(const t of [0,19.999,20,20.001,39.999,40,40.001,60,400]) {   // 400: the road lags the ramp (WeatherArc wetAt) and settles past dur
     g.G.weatherArc.t=t;
-    g.G.raceWeather=t<20?"dry":t<40?"wet":"rain";
+    g.G.raceWeather=t<20?"dry":t<40?"wet":"rain";   // an enum poke: the tick re-reads the stage off wetness
     assert.equal(g.G.records.current(),configuration,"scheduled weather progress keeps the same event identity");
     g.apex.step(0,1);   // A3: settle frame.wetness to the lerp (look=drive)
     const w=g.G.trackWetness();

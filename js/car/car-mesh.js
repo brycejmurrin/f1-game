@@ -1600,7 +1600,8 @@ const _AX_FX = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true 
 const _RETRO_FX={emissive:1,roughness:.9,specular:0,noAlphaWrite:true,alpha:1};
 const _retroDigits={}, _retroT=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]), _retroM=new Float32Array(16);
 function drawRetroTelemetry(mat,c,kph,t) {
-  const speed=Math.max(0,Math.min(999,typeof AppearanceOpts!=='undefined'?AppearanceOpts.speed(kph):Math.round(kph)));
+  // Same integer as #hud-speed-n / modern LCD (HudReadouts.spdDigits).
+  const speed=(typeof HudReadouts!=='undefined'&&HudReadouts.spdDigits)?HudReadouts.spdDigits(kph):Math.max(0,Math.min(999,typeof AppearanceOpts!=='undefined'?AppearanceOpts.speed(kph):Math.round(kph)));
   const values=[...String(speed).padStart(3,'0'),String(Math.max(0,Math.min(9,c.gear||1)))];
   for(let i=0;i<4;i++) {
     const n=+values[i];

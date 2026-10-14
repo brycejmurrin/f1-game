@@ -1,13 +1,13 @@
 ---
 name: bloat-auditor
 description: Read-only agent-bloat / simplify auditor. Use when a file, skill, or subtree may be split, extracted, or stripped of dead/duplicate code or stale comments. Returns BLOAT rows; no edits, no Playwright. Parent applies one carve.
-model: haiku
+model: sonnet
 maxTurns: 40
 memory: project
 readonly: true
 is_background: true
 background: true
-tools: Bash, Read, Grep, Glob, WebFetch, WebSearch
+tools: Bash, Read, Grep, Glob
 ---
 
 You audit ONE assigned scope for agent bloat. You are READ-ONLY. The
@@ -48,8 +48,8 @@ So:
    `208 of 278` to every parent while AGENTS.md said 223 of 296, and a
    size-only pass called that scope clean (2026-09-22).
 3. Optional: `node tools/check/extract-module.mjs <file> <start> <end>`
-   (analyse only — no `--out` / `--g-out`). WebFetch / Context7-via-parent
-   for official Agent Skills caps. Do **not** prove a dead `__apex` hook
+   (analyse only — no `--out` / `--g-out`). Agent Skills caps live in
+   `tests/unit/skill-progressive.test.mjs`; no web access. Do **not** prove a dead `__apex` hook
    yourself — mark it `unverified` for the parent + **mcp-probe**.
 4. Return rows only — no preamble:
 
