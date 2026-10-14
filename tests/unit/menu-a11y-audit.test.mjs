@@ -637,6 +637,36 @@ test("ScrollFade.SCREENS and AriaState.ROOTS cover every UiLayers layer that scr
   for (const id of [...screens, ...roots]) assert.ok(layers.includes(id), `#${id} is a UiLayers layer`);
 });
 
+test("circuit tiles announce the chosen one: .track-row buttons get aria-pressed from AriaState", () => {
+  // select-screen.js never writes aria-pressed on a tile itself: trackTile
+  // builds a plain <button class="track-row[ active]"> and AriaState (watching
+  // #select) mirrors `.active` onto aria-pressed. Pin both halves of that chain.
+  const tile = code("js/ui/select-screen.js").match(/function trackTile\([\s\S]*?\n}\n/);
+  assert.ok(tile, "trackTile in js/ui/select-screen.js");
+  assert.match(tile[0], /createElement\(opts && opts\.readOnly \? "div" : "button"\)/, "a pickable tile is a <button>");
+  assert.match(tile[0], /"track-row" \+ \(opts && opts\.active \? " active" : ""\)/, "the chosen tile carries .active");
+  assert.doesNotMatch(tile[0], /aria-selected|aria-checked|aria-pressed|"role"|data-aria-toggle/,
+    "a tile that claims its own semantics is skipped by AriaState (claimed())");
+  assert.match(HTML, /<div id="select"[\s\S]*?<div id="sel-tracks"/, "#sel-tracks sits inside #select");
+  // Behaviour: AriaState over a #select strip of three tiles.
+  const dom = makeDom();
+  const strip = dom.makeElement("div", "sel-tracks");
+  dom.byId("select").appendChild(strip);
+  const tiles = [0, 1, 2].map((i) => {
+    const b = dom.makeElement("button");
+    b.className = "track-row" + (i === 1 ? " active" : "");
+    for (const c of b.className.split(" ")) b.classList.add(c);
+    strip.appendChild(b);
+    return b;
+  });
+  const sb = sandbox(dom, { MutationObserver: moShim().MutationObserver });
+  vm.runInNewContext(src("js/ui/aria-state.js"), sb, { filename: "js/ui/aria-state.js" });
+  assert.deepEqual(tiles.map((b) => b.getAttribute("aria-pressed")), ["false", "true", "false"]);
+  tiles[1].classList.remove("active"); tiles[2].classList.add("active");
+  sb.AriaState.sync();
+  assert.deepEqual(tiles.map((b) => b.getAttribute("aria-pressed")), ["false", "false", "true"], "the state follows a new pick");
+});
+
 /* ── 5 + touch targets: measured from the rules, not the screen ──────────── */
 
 function lum(hex) {

@@ -9,11 +9,9 @@ import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { toMenu } from "../helpers/shared-page.js";
 
 async function clickId(page, id) {
-  await page.evaluate((i) => {
-    const el = document.getElementById(i);
-    if (!el) throw new Error("garage-out-before-card: missing #" + i);
-    el.click();
-  }, id);
+  // A readiness probe can precede preparation disabling GO. Native clicks
+  // wait for actionability instead of silently doing nothing on a disabled button.
+  await page.locator(`#${id}`).click({ timeout: 60_000 });
 }
 
 /** Arm a timeline of loading phase + #ld-card visibility + garageCam.on. */
@@ -133,7 +131,18 @@ async function awaitGarageThenCard(page) {
     }, null, { polling: 100, timeout: 180_000 });
   } catch (e) {
     const tl = await stopTimeline(page);
-    throw new Error((e && e.message) + " timeline=" + JSON.stringify(tl.filter((s, i) => i < 4 || s.phase === "garage" || s.cardShown || s.garageOn).slice(0, 50)));
+    const snapshot = await page.evaluate(() => {
+      const go = document.getElementById("rs-go");
+      return {
+        goDisabled: go ? go.disabled : null,
+        goText: go ? go.textContent : null,
+        visibilityState: document.visibilityState,
+        hasFocus: document.hasFocus(),
+      };
+    });
+    throw new Error((e && e.message) + " snapshot=" + JSON.stringify({
+      ...snapshot, rawTimelineCount: tl.length, rawTimelineTail: tl.slice(-12),
+    }) + " timeline=" + JSON.stringify(tl.filter((s, i) => i < 4 || s.phase === "garage" || s.cardShown || s.garageOn).slice(0, 50)));
   }
   return stopTimeline(page);
 }
