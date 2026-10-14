@@ -340,11 +340,37 @@ var GameAudio = (function () {
    * when a spotter clip ends while an engineer line is still on air.
    * THE RADIO HOLD IS PER SOURCE TOO: the engineer, every WATCH clip and the
    * real-replay fallback pass their own id (default "radio" = the engineer), so
-   * one of them letting go cannot lift the music under another still on air. */
+   * one of them letting go cannot lift the music under another still on air.
+   *
+   * MIX DUCK (Job 5). Radio already emits via setRadioDuck(on, src) — this
+   * block only SUBSCRIBES. Music still dips through soundtrack.setRadioDuck
+   * (0.35 ≈ −9 dB). The SFX bus dips here (−8 dB, 80 ms attack / 400 ms
+   * release via setTargetAtTime). Overlapping holds do not re-ramp (no pump).
+   * Engine stays on sfxBus at ~0.4 — audible, not muted. Zero new nodes. */
   const radioDuckHolds = new Set();
   let spotterDuckHold = false;
+  const MIX_DUCK_LIN = 10 ** (-8 / 20);   // ≈ 0.3981, mid of −6…−10 dB
+  const MIX_DUCK_ATTACK_TAU = 0.08;
+  const MIX_DUCK_RELEASE_TAU = 0.4;
+  let mixDuckOn = false;
+  function sfxBusTarget() {
+    if (!sfxEnabled) return 0;
+    return sfxVol * (mixDuckOn ? MIX_DUCK_LIN : 1);
+  }
+  function applySfxDuck(on) {
+    const want = !!on;
+    const changed = want !== mixDuckOn;
+    mixDuckOn = want;
+    if (!sfxBus || !ctx || !changed) return mixDuckOn;
+    const t = ctx.currentTime;
+    sfxBus.gain.cancelScheduledValues(t);
+    sfxBus.gain.setTargetAtTime(sfxBusTarget(), t, want ? MIX_DUCK_ATTACK_TAU : MIX_DUCK_RELEASE_TAU);
+    return mixDuckOn;
+  }
   function applyMusicDuck() {
-    return soundtrackRadioDuck(radioDuckHolds.size > 0 || spotterDuckHold);
+    const on = radioDuckHolds.size > 0 || spotterDuckHold;
+    applySfxDuck(on);
+    return soundtrackRadioDuck(on);
   }
   function setRadioDuck(on, src) {
     const id = src == null ? "radio" : String(src);
@@ -382,6 +408,11 @@ var GameAudio = (function () {
       // (support.apple.com/guide/iphone/answer-or-decline-incoming-calls-iph3c9947bf/ios).
       if (ctx.state === "closed") return;
       if (ctx.state === "interrupted" && _onInterrupted) { try { _onInterrupted(); } catch (_) { /* a listener must not stop the resume below */ } }
+      if (ctx.state === "interrupted") {
+        // Session taken: release the SFX dip so a recovered graph is not stuck
+        // under a ghost line. Holds stay; `running` re-latches via applyMusicDuck.
+        applySfxDuck(false);
+      }
       if (ctx.state === "running" && ctxSampleRate && ctx.sampleRate !== ctxSampleRate) {
         scheduleOutputDeviceRebuild("sampleRate");
       }
@@ -391,6 +422,7 @@ var GameAudio = (function () {
         // "suspended" event armed. Healthy, so nothing to rebuild.
         if (deviceRebuildTimer && staleStateRebuild(deviceRebuildTimerWhy)) { clearTimeout(deviceRebuildTimer); deviceRebuildTimer = null; }
         if (staleStateRebuild(deviceRebuildPending)) deviceRebuildPending = "";
+        applyMusicDuck();
       }
       if (!document.hidden && (ctx.state === "interrupted" || ctx.state === "suspended")) {
         scheduleOutputDeviceRebuild("state-" + ctx.state);
@@ -409,7 +441,8 @@ var GameAudio = (function () {
     limiter.attack.value = 0.003; limiter.release.value = 0.15;
     master.connect(limiter).connect(ctx.destination);
     sfxBus = ctx.createGain();
-    sfxBus.gain.value = sfxEnabled ? sfxVol : 0;
+    mixDuckOn = radioDuckHolds.size > 0 || spotterDuckHold;
+    sfxBus.gain.value = sfxBusTarget();
     sfxBus.connect(master);
     attachRivalPassBy();
 
@@ -680,6 +713,7 @@ var GameAudio = (function () {
     // holds so a mid-clip rebuild cannot leave the music stuck under a ghost.
     radioDuckHolds.clear();
     spotterDuckHold = false;
+    mixDuckOn = false;
     // Timestamps from the closed context's clock: revFlare's decay would read a
     // dt against the new (near-0) clock, and limSince would hold the cut open.
     revFlare = 0; revFlareT = 0; limSince = null;
@@ -2597,12 +2631,12 @@ var GameAudio = (function () {
      glide, glideLevel), so a slider moves the level while it is being dragged. */
   function setSfxVolume(v) {
     sfxVol = clamp01(typeof v === "number" ? v : 1);
-    if (sfxBus) glideLevel(sfxBus.gain, sfxEnabled ? sfxVol : 0);
+    if (sfxBus) glideLevel(sfxBus.gain, sfxBusTarget());
     return sfxVol;
   }
   function setSfxEnabled(b) {
     sfxEnabled = !!b;
-    if (sfxBus) glideLevel(sfxBus.gain, sfxEnabled ? sfxVol : 0);
+    if (sfxBus) glideLevel(sfxBus.gain, sfxBusTarget());
     // A race that started with SFX off wanted rain but built no nodes
     // (startRain returns on !sfxOk()); turning SFX on must start it.
     if (sfxEnabled && rainWanted && !rainSrc) startRain();
@@ -2742,6 +2776,18 @@ var GameAudio = (function () {
     sourceCounts,
     setSfxVolume,
     setSfxEnabled,
+    // Test hook: mix-duck latch under announcer/radio (Job 5). sfx is the
+    // composed bus target; lin / attackTau / releaseTau are the ramp contract.
+    mixDuck() {
+      return {
+        on: mixDuckOn,
+        holds: radioDuckHolds.size + (spotterDuckHold ? 1 : 0),
+        lin: MIX_DUCK_LIN,
+        attackTau: MIX_DUCK_ATTACK_TAU,
+        releaseTau: MIX_DUCK_RELEASE_TAU,
+        sfx: sfxBus ? +sfxBus.gain.value : 0,
+      };
+    },
     setMusicVolume,
     volumes,
     // Test hook: the airflow layer's live gain. It sits on sfxBus, so

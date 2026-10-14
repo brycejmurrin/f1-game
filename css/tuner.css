@@ -760,7 +760,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 #flyby-inner[data-density="compact"] > .sheet-foot button {
   flex: 1 1 auto; min-width: 0;
   padding: calc(var(--gap) / 2) calc(var(--gap) * 5 / 6);
-  font-size: var(--fs-micro); min-height: var(--tap-min);
+  font-size: var(--fs-micro); min-height: var(--tap-paint);
 }
 body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="compact"][data-rail="on"]) {
   --dock-w: min(calc(70 * var(--vwz)), 560px);
@@ -793,7 +793,7 @@ body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="comp
   margin: 0; min-width: 0;
   padding: calc(var(--gap) * 5 / 12) calc(var(--gap) / 2);
   font-size: var(--fs-micro);
-  min-height: var(--tap-min);
+  min-height: var(--tap-paint);
 }
 #flyby-inner[data-density="compact"][data-rail="on"] #fb-shots.lt-tabs {
   display: flex; flex-wrap: wrap;
@@ -1381,5 +1381,25 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
   @container sheet (max-width: 220px) {
     :is(#lighting-inner, #camtune-inner) #pc-toggle { width: 100%; min-width: 0; }
   }
+}
+
+/* ---------- UI Fit r6: flyby editor compact tap floor (#flyby / #fb-* only) ----------
+   Same root as r5/camera (#1530) and r6/lighting (#1740): compact flyby foot
+   sat on --tap-min (RESET/COPY/DONE 80–156×36–38) and pose selects
+   #fb-in-ease / #fb-in-eye*-at painted 104×26. Camera/lighting keep their
+   own carves; these selectors are flyby-only. */
+@layer components {
+#flyby-inner[data-density="compact"] > .sheet-foot button,
+#flyby-inner[data-density="compact"][data-rail="on"] > .sheet-foot button {
+  min-height: var(--tap-paint);
+  padding: calc(var(--gap) / 2) calc(var(--gap) * 2 / 3);
+}
+#flyby-inner > .sheet-foot button {
+  min-height: var(--tap-paint);
+}
+#flyby-inner #fb-rows select,
+#flyby-inner :is(#fb-in-ease, [id^="fb-in-eye"][id$="-at"], [id^="fb-in-look"][id$="-at"]) {
+  min-height: var(--tap-paint);
+}
 }
 
