@@ -5,9 +5,9 @@ Claude Code auto memory for this repo, synced by `.claude/hooks/memory-sync.sh`
 topic file. User preferences and corrections only — a measured lesson belongs in
 `docs/notes/`, a rule in a hook or test. An entry that contradicts the current
 code or AGENTS.md is stale: fix or delete it, do not follow it.
-- [PR auto-merge](pr-auto-merge.md) — never arm auto-merge or merge; mark ready at tip-green; only CI Watch arms (SQUASH)
+- [PR auto-merge](pr-auto-merge.md) — never arm or merge on my own; Merge Desk arms MERGE-commit only (squash retired 2026-10-13); `MERGE-HOLD:` is the only veto line, never paste "do not merge"
 - [Small steps for API analysis](small-steps-for-api-analysis.md) — prefer small incremental queries over bulk fetch scripts
-- [Merge fast, verify on CI](merge-fast-verify-on-ci.md) — on an explicit "merge asap": fast tier + ready-gate green, squash-merge via MCP, skip the 1 h gate and say so (js/ PRs too since 2026-10-14); otherwise agents never merge
+- [Merge fast, verify on CI](merge-fast-verify-on-ci.md) — on an explicit "merge asap": fast tier + ready-gate green, merge-commit via MCP (never squash), skip the 1 h gate and say so (js/ PRs too since 2026-10-14); otherwise agents never merge
 - [One subagent per skill](one-subagent-per-skill.md) — skill reviews: one Sonnet subagent per skill, never grouped
 - [GitHub Pro: 40 concurrent jobs](github-plan-pro-40-jobs.md) — account upgraded 2026-09-30; size CI against 40 standard / 5 macOS slots, not 20
 - [Stacked PRs land bottom-up](stacked-prs-land-bottom-up.md) — retarget by hand after each merge (no branch auto-delete), sync-pr on ratchets conflicts, ready one at a time (CI Watch arms, never the agent)
