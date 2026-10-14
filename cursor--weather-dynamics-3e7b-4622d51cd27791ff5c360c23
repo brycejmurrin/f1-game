@@ -1,1 +1,1 @@
-1791959922	Claude	weather fixes: js/race/weather-arc.js (arc clock on raceT, stage from wetness, wet/dry rates), js/race/real-race.js retarget, js/physics/consts.js WET_GRIP inters vs wets; NOT tyre-model.js  [cursor/weather-dynamics-3e7b; session 4622d51cd27791ff5c360c23]
+1791962942	Claude	weather fixes: js/race/weather-arc.js, js/race/real-race.js, js/physics/consts.js WET_GRIP, js/game.js gripMult line 677 only (tread==null -> treadFor); NOT tyre-model.js  [cursor/weather-dynamics-3e7b; session 4622d51cd27791ff5c360c23]
