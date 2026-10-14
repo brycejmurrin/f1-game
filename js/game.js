@@ -6977,16 +6977,12 @@ function renderLightingPrep(dt, hasLivePlayerShadow) {
   const wet = isWetRoad();      // wet-road material applies to "wet" AND "rain"
   const raining = isRaining();  // falling rain, lightning + thunder only in "rain"
   if (raining && _ltBase && LT.lightning > 0) {
-    // Count down to the next strike
-    _ltNextT -= dt;
-    if (_ltNextT <= 0) {
-      // Trigger a new flash: intensity 1 → decays at ~8×/s
-      _ltFlash = 1.0;
-      // Next strike in 4–12 s, scaled by the LIGHTNING FREQ knob (higher = sooner).
-      _ltNextT = (4 + Math.random() * 8) / LT.lightning;
-      // Queue thunder to lag the flash (sound travels slower than light): a
-      // near strike cracks ~0.3 s later, a distant one rumbles up to ~2 s later.
-      _thunderT = _thunderDelay = 0.3 + Math.random() * 1.7;
+    // Strikes are a pure function of (sim seed, race clock) — js/race/storm.js: same sky on a replay or a peer. _ltNextT = the clock the last window ended at.
+    const ltNow = state === "race" ? raceT : _skyT, strike = Storm.strikeIn(simSeed(), _ltNextT, ltNow, LT.lightning, raceWeather);
+    _ltNextT = ltNow;
+    if (strike) {
+      if (Storm.flashOk(motionReduced())) _ltFlash = 1.0;   // no strobe under REDUCED MOTION; decays at ~8×/s
+      _thunderT = _thunderDelay = strike.delay;   // sound lags light 1–6 s (a strike 0.3–2 km out)
     }
     if (_thunderT >= 0) {
       _thunderT -= dt;
@@ -6995,7 +6991,7 @@ function renderLightingPrep(dt, hasLivePlayerShadow) {
         // whatever was left before this frame's decrement — between 0 and one
         // frame — so it would always give ~1.0 - 0.008 and clamp to full
         // volume: a 2 s distant rumble as loud as a 0.3 s overhead strike.
-        GameAudio.thunder(clamp(1.0 - _thunderDelay / 2.0, 0.15, 1.0));
+        GameAudio.thunder(clamp(1.0 - (_thunderDelay - 1) / 5, 0.15, 1.0));
       }
     }
     if (_ltFlash > 0.001) {
@@ -8045,7 +8041,7 @@ function render(dt) {
         // and full spray was unreachable, at pace 1.3 it was pinned at 1 down
         // every straight. The particle VELOCITY stays real m/s (A16).
         if (wet && vStd(c.speed) > 15) {
-          const str = clamp((vStd(c.speed) - 15) / 45, 0, 1) * (raceWeather === "rain" ? 1 : 0.6);
+          const str = clamp((vStd(c.speed) - 15) / 45, 0, 1) * Storm.sprayK(raceWeather);   // storm 1.35 / rain 1 / wet 0.6
           const sxo = Math.random() < 0.5 ? -0.6 : 0.6;   // behind either rear tyre (str > 0: vStd > 15)
           Particles.spray(
             tmpMat[12] + tmpMat[0] * sxo - tmpF[0] * 2.1,

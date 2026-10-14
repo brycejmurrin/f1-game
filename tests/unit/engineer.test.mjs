@@ -514,7 +514,8 @@ test("senseOf stays a fresh snapshot; update's scratch sense is the same state",
   const a = eng.senseOf(c), b = eng.senseOf(c);
   assert.notEqual(a, b, "a fresh object per call");
   assert.deepEqual(a, b);
-  assert.equal(Object.keys(a).length, 28, "every field the literal had");
+  // 28 + the forecast's six (fc, wantTread, heavyInLaps, easeInLaps, dryInLaps, hereAt — js/race/forecast.js).
+  assert.equal(Object.keys(a).length, 34, "every field the literal had");
   c.local = true;
   assert.equal(eng.update(c, 1 / 60), eng.callFor(a)[0], "update says what callFor reads off the snapshot");
 });

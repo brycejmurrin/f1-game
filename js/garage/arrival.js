@@ -79,26 +79,28 @@ const GarageArrival = (function () {
    * follows it. No circuit is needed — this is the setup screen's own room —
    * so it plays the moment START is pressed, while the circuit builds behind it.
    * ONCE OUT IT TURNS INTO THE PIT LANE: straight to OUT_STRAIGHT (clear of the
-   * door at z 6.4), then an arc of OUT_R metres through OUT_TURN radians, away
-   * from the camera so the car sweeps across the doorway rather than out of it.
+   * door at z 6.4), then a quarter arc of OUT_R metres, away from the camera, so
+   * it sweeps across the doorway and squares up in the fast lane.
    * x and yaw ride the pose (setup-camera.js builds the car matrix from them). */
-  const OUT_HOLD = 1.1, OUT_RUN = 4.4, OUT_DURATION = DOOR_S + OUT_HOLD + OUT_RUN + 0.3;
+  const OUT_HOLD = 1.1, OUT_RUN = 4.4, OUT_STRAIGHT = 8, OUT_R = 5, OUT_TURN = Math.PI / 2;
+  // THEN IT LEAVES (2026-10-14: it used to coast to a stop at the door jamb, half
+  // in frame, for the whole load). Off the turn it accelerates down the lane at
+  // OUT_GO m/s2 for OUT_EXIT s, behind the garage's front wall and out of frame;
+  // the pose holds there, unseen, while RACE!'s load finishes behind the empty
+  // lane (studioDone holds the garage past OUT_DURATION).
   // Reduce-motion Start Race plays it too, AT THE TUNER'S PACE: the 4x short cut
   // (~1.9 s) read as a glitch, not a leave (2026-10-09), and the card, the flyby
   // and the announcer always follow it (js/ui/loading-screen.js run).
-  const OUT_STRAIGHT = 8, OUT_R = 5, OUT_TURN = 1.3;   // ~75 degrees
-  // PACE: it pulls away (OUT_ACCEL s), holds its speed through the turn, and leaves
-  // it still rolling, then coasts OUT_COAST m on down the pit lane and eases to a
-  // stop, so the shot is still moving while RACE!'s load finishes behind it
-  // (studioDone holds the garage past OUT_DURATION).
-  const OUT_PATH = OUT_STRAIGHT + OUT_R * OUT_TURN, OUT_ACCEL = 1.2, OUT_COAST = 2.5;
-  const OUT_V = OUT_PATH / (OUT_RUN - OUT_ACCEL / 2), OUT_TAU = OUT_COAST / OUT_V;
-  const OUT_SETTLE = DOOR_S + OUT_HOLD + OUT_RUN + 4 * OUT_TAU;   // the coast's end (98 %): the pose holds from here
+  const OUT_EXIT = 2.0, OUT_GO = 3.2, OUT_ACCEL = 1.2, OUT_PATH = OUT_STRAIGHT + OUT_R * OUT_TURN;
+  const OUT_V = OUT_PATH / (OUT_RUN - OUT_ACCEL / 2);
+  const OUT_SETTLE = DOOR_S + OUT_HOLD + OUT_RUN + OUT_EXIT;   // gone: the pose holds from here
+  const OUT_DURATION = OUT_SETTLE + 0.3;                         // a beat on the empty lane
   function outDistance(tm) {
     if (tm <= 0) return 0;
     if (tm < OUT_ACCEL) return OUT_V * tm * tm / (2 * OUT_ACCEL);
     if (tm < OUT_RUN) return OUT_V * (tm - OUT_ACCEL / 2);
-    return OUT_PATH + OUT_COAST * (1 - Math.exp(-(tm - OUT_RUN) / OUT_TAU));
+    const e = Math.min(tm, OUT_RUN + OUT_EXIT) - OUT_RUN;
+    return OUT_PATH + OUT_V * e + OUT_GO * e * e / 2;
   }
   function poseOut(seconds, config = DEFAULT) {
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
@@ -112,7 +114,8 @@ const GarageArrival = (function () {
     return { active: t < OUT_DURATION, fov: config.fov, door, x, z, yaw,
       label: opening ? "OPENING GARAGE" : "LEAVING THE GARAGE",
       eye: right ? [4.1, 2.25, -4.9] : [-3.8, 2.1, -4.8],
-      aim: [x * 0.7, 0.8, opening ? 6.2 : Math.min(9, 1.2 + z * 0.62)] };
+      // The aim follows it round to the jamb and holds on the doorway as it goes.
+      aim: [side * Math.min(side * x * 0.7, 3.5), 0.8, opening ? 6.2 : Math.min(9, 1.2 + z * 0.62)] };
   }
   function create($, reducedMotion, readSettings = () => DEFAULT) {
     let state = null, time = 0, config = DEFAULT;

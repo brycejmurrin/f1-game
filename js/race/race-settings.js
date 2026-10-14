@@ -5,7 +5,14 @@
 const RaceSettings = (function () {
   "use strict";
 
-  const RS_WEATHER = [["dry", "☀ DRY"], ["wet", "💧 WET"], ["rain", "🌧 RAIN"], ["overcast", "☁ CLOUDY"], ["fog", "🌫 FOG"]];
+  const RS_WEATHER = [["dry", "☀ DRY"], ["wet", "💧 WET"], ["rain", "🌧 RAIN"], ["storm", "⛈ STORM"], ["overcast", "☁ CLOUDY"], ["fog", "🌫 FOG"]];
+  // STORM IS SOLO-ONLY for now: js/net/lobby.js validates SETTINGS weather
+  // (and a MIXED plan's wxArc.to) against the five pre-storm names and drops
+  // the WHOLE packet on anything else, so a room never offers it, and a storm
+  // picked solo comes into a room as RAIN (setNetRoom). The chip returns in
+  // rooms once the lobby's WEATHER set lists "storm".
+  const weatherOpts = (room) => (room ? RS_WEATHER.filter(([id]) => id !== "storm") : RS_WEATHER);
+  const roomWeather = (w) => (w === "storm" ? "rain" : w);
   const RS_CONDITIONS = [["stable", "STABLE"], ["mixed", "MIXED"]];
   const RS_TIME = [["default", "DEFAULT"], ["dawn", "DAWN"], ["day", "DAY"], ["dusk", "DUSK"], ["night", "NIGHT"]];
   const RS_DIFF = [["easy", "EASY"], ["normal", "NORMAL"], ["hard", "HARD"]];
@@ -177,7 +184,8 @@ const RaceSettings = (function () {
         else { raceLaps = full; G.raceLaps = full; }
       }
       SettingRow.paint("rs-laps", raceLaps, lapOpts.map((n) => [n, !tt && n === full ? full + " (FULL)" : String(n)]));
-      SettingRow.paint("rs-weather", G.raceWeather, RS_WEATHER);
+      if (netRoom && G.raceWeather !== roomWeather(G.raceWeather)) G.raceWeather = roomWeather(G.raceWeather);
+      SettingRow.paint("rs-weather", G.raceWeather, weatherOpts(netRoom));
       SettingRow.disable("rs-laps", !!daily);
       SettingRow.disable("rs-weather", !!daily);
       $("rs-mixed").hidden = tt;
@@ -507,7 +515,17 @@ const RaceSettings = (function () {
     // Another writer staged laps/weather/time of day (a room's host, the Daily):
     // the next open re-stages rather than keep them as this track's draft.
     function resetDraft() { draftKey = ""; }
-    function setNetRoom(on) { if (netRoom !== !!on) resetDraft(); netRoom = !!on; }
+    function setNetRoom(on) {
+      if (netRoom !== !!on) resetDraft();
+      netRoom = !!on;
+      if (!netRoom) return;
+      // Into a room: nothing the lobby would refuse may be left staged for its
+      // SETTINGS — a solo STORM pick races as RAIN, and a MIXED plan already
+      // drawn toward a storm is re-drawn (planFor never draws one in a room).
+      if (G.raceWeather === "storm") G.raceWeather = "rain";
+      const p = G.wxArcPlan;
+      if (p && p.to === "storm") G.wxArcPlan = null;
+    }
 
     function openRaceSetup() {
       $("vsfriend").hidden = true;
@@ -618,6 +636,6 @@ const RaceSettings = (function () {
   /* duelOpts/duelValue are EXPORTED, not private, so the DUEL row's rules can be
    * tested without a DOM: the inert VM DOM does not build SettingRow children,
    * so painting the row asserts nothing (tests/unit/duel-row.test.mjs). */
-  return { create, duelOpts, duelValue, presetValues, matchPreset, sheetTitle, draftOf, draftFor };
+  return { create, duelOpts, duelValue, presetValues, matchPreset, sheetTitle, draftOf, draftFor, weatherOpts, roomWeather };
 })();
 Object.freeze(RaceSettings);

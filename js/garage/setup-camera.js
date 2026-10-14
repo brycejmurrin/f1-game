@@ -128,7 +128,7 @@ function startDriveOut() {
   driveOut = null;
   if (!cfg.enabled) return 0;
   // AUTOMATION skips it (LoadingScreen.isAutomation, the one gate #1294's 700 ms
-  // card uses): a harness launch on software GL spent the 7.6 s drive-out (up to 3x
+  // card uses): a harness launch on software GL spent the ~9.6 s drive-out (up to 3x
   // on a stalled clock) plus awaitSoftPresent on top of a 30-90 s build and blew
   // the specs' 45 s grid wait (steering, quali). No drive-out means no studio and no
   // soft-present wait: game.js introGarage flies straight on, as with the tuner off.

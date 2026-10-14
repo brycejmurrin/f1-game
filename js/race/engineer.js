@@ -104,7 +104,14 @@ var RaceEngineer = (function () {
         case "caution": return "c" + b.cEp;                     // once per caution
         case "undercut": return s.rivalBoxed;
         case "threat": return s.threat;
-        case "rain": case "rainplan": return s.rainInLaps;
+        // FORECAST lines (js/race/forecast.js) are news at three distances, not every lap: an early call
+        // (3+ laps out), a refresh ~2 laps out and ~1 lap out. The count is latched monotone per arc
+        // (senseInto), so a stated time that converges on the truth never re-opens a bucket.
+        case "rain": case "rainplan": return lapBucket(s.rainInLaps);
+        case "heavy": return lapBucket(s.heavyInLaps);
+        case "drying": return lapBucket(s.dryInLaps);
+        case "easing": return lapBucket(s.easeInLaps);
+        case "here": return s.hereAt;
         case "plan0": case "plan1": return s.lap + ":" + s.nextCode;
         case "gone": return s.lap;
         case "manage": return s.stintLeft;
@@ -113,11 +120,19 @@ var RaceEngineer = (function () {
       }
     }
 
+    function lapBucket(n) { return n == null ? "" : n >= 3 ? "far" : String(n); }
+
     /** Clear a car's engineer state. Called from gridUp with the rest. */
-    function reset(c) { if (c) c._eng = null; }
+    function reset(c) { if (c) c._eng = null; if (c && c.local && typeof Forecast !== "undefined") Forecast.publish(null); }
 
     // What the WEATHER wants on the car right now, and what is on it.
-    const WET = ["wet", "rain"];
+    const WET = ["wet", "rain", "storm"];   // "storm": a heavier stage another session is adding to weather-arc.js
+    const TREAD_WORD = ["SLICKS", "INTERS", "WETS"];   // TyreModel.treadFor's 0 / 1 / 2
+    // How long after the road turns inter-wet "RAIN IS HERE" is still news, and the forecast's re-read clock.
+    const HERE_S = 45, FC_S = 0.5;
+    const NO_FC = Object.freeze({});
+    // The lap estimate before the car has a lap of its own: Monza measured ~130 s on 5793 m in the VM (~45 m/s).
+    const FALLBACK_MPS = 45;
 
     // The ladder, top rung first, offering each applicable line to `take(msg,
     // key)` until it returns true — pure, so the whole ladder is testable
@@ -133,7 +148,10 @@ var RaceEngineer = (function () {
       // it; the player has an engineer and decides for themselves, which is the
       // §11 "live, not pre-planned" call made good. So nothing below arms a
       // stop — every one of these is a sentence.
-      if (s.wrongTread && take(s.wet ? "RAIN — BOX FOR WETS" : "TRACK IS DRY — BOX FOR SLICKS", "tread")) return;
+      // The tread the weather wants is TyreModel.treadFor's: inters in the damp, full wets above 0.72 — a sense
+      // that carries `wantTread` names it; one without keeps the old "WETS".
+      if (s.wrongTread && take(s.wet ? (s.hereAt != null ? "RAIN IS HERE — BOX FOR " : "RAIN — BOX FOR ") + (s.wantTread === 1 ? "INTERS" : "WETS")
+        : "TRACK IS DRY — BOX FOR SLICKS", "tread")) return;
       // SAID ONCE per set (update() spends the key for good): a warning, not a nag.
       if (s.oneCompound && take("ONE COMPOUND ONLY — BOX FOR A DIFFERENT TYRE OR BE DISQUALIFIED", "compound")) return;
       // THE PLAN-AWARE LINES (the player's reference plan, PitLane.planFor),
@@ -153,9 +171,20 @@ var RaceEngineer = (function () {
       if (s.threat && take(s.threat + " CAN UNDERCUT — BOX NEXT LAP TO COVER", "threat")) return;
       if (s.rainInLaps != null) {
         if (s.lapsToStop != null && s.rainInLaps <= s.lapsToStop) {
-          if (take("RAIN BEFORE THE STOP — BOX LAP " + ((s.lap || 0) + s.rainInLaps) + " FOR WETS", "rainplan")) return;
-        } else if (take("RAIN IN " + s.rainInLaps + (s.rainInLaps === 1 ? " LAP" : " LAPS") + " — BE READY", "rain")) return;
+          // The box lap is the forecast's own (the lap the stated onset falls on — a grid start is lap 0), and
+          // the tread is the one treadFor wants at the onset (0.25: inters), not "wets" by default.
+          if (take("RAIN BEFORE THE STOP — BOX LAP " + (s.fc && s.fc.rain && s.fc.rain.lap != null ? Math.max(s.fc.rain.lap, (s.lap || 0) + 1) : (s.lap || 0) + s.rainInLaps) + " FOR "
+            + (s.fc && s.fc.rain ? TREAD_WORD[s.fc.rain.tread] : "WETS") + fcTail(s, "rain"), "rainplan")) return;
+        } else if (take("RAIN IN " + s.rainInLaps + (s.rainInLaps === 1 ? " LAP" : " LAPS") + fcTail(s, "rain") + " — BE READY", "rain")) return;
       }
+      // The NEXT tread change, said to a car on the tread it will make wrong: heavy rain to a car on inters,
+      // and the way back — a drying arc's full-wet → inter step, then the slick crossover. The box call
+      // itself is still the tread rung above, when the road actually gets there.
+      if (s.heavyInLaps != null && take("HEAVY RAIN IN ~" + s.heavyInLaps + (s.heavyInLaps === 1 ? " LAP" : " LAPS") + fcTail(s, "heavy") + " — FULL WETS NEXT", "heavy")) return;
+      if (s.easeInLaps != null && take("RAIN EASING — INTERS IN ~" + s.easeInLaps + (s.easeInLaps === 1 ? " LAP" : " LAPS") + fcTail(s, "easing"), "easing")) return;
+      if (s.dryInLaps != null && take("IT'S DRYING — SLICKS IN ~" + s.dryInLaps + (s.dryInLaps === 1 ? " LAP" : " LAPS") + fcTail(s, "drying"), "drying")) return;
+      // The onset itself, to a car already on the right rubber (on the wrong one the tread rung said it).
+      if (s.hereAt != null && !s.wrongTread && !s.noStop && take("RAIN IS HERE — " + (s.wantTread > 0 ? TREAD_WORD[s.wantTread] + " ARE RIGHT, " : "") + "KEEP IT ON THE ROAD", "here")) return;
       if (s.blistering >= BLISTER_CALL && take("BLISTERS — THAT SET IS DONE", "blister")) return;
       if (s.wear >= 1 && !s.noStop && take("TYRES ARE GONE — BOX WHEN YOU CAN", "gone")) return;
       // THE PIT CALL IS THE REAL ONE. On a Formula 1 radio the word is "box",
@@ -192,6 +221,18 @@ var RaceEngineer = (function () {
       if (s.planned && s.setLaps != null && s.stintLeft != null && s.setLaps >= s.stintLeft + PUSH_SPARE && s.ahead
         && take("TYRES ARE GOOD — PUSH, " + s.ahead + " IS " + s.aheadGap.toFixed(1) + "s AHEAD", "push")) return;
       if (s.step >= 0) take("TYRES AT " + Math.round((1 - WEAR_STEPS[s.step]) * 100) + "%", "wear" + s.step);
+    }
+
+    // The forecast detail a lap-count line carries when js/race/forecast.js stated it: the clock time and the
+    // confidence (F1's forecaster speaks in minutes, iRacing's grows less sure with lead), plus — on a rain
+    // call 2+ laps out — when it turns heavy. Nothing for a hand-built sense (the pure ladder tests).
+    function fcTail(s, kind) {
+      const f = s.fc && s.fc[kind];
+      if (!f) return "";
+      const t = f.in < 90 ? "~" + Math.max(10, Math.round(f.in / 10) * 10) + "s" : "~" + (f.in < 300 ? Math.round(f.in / 30) / 2 : Math.round(f.in / 60)) + " MIN";
+      const heavy = kind === "rain" && s.rainInLaps >= 2 && s.fc.heavy && s.fc.heavy.lap != null
+        ? ", " + (s.fc.heavy.what === "heavy rain/storm" ? "STORM" : "HEAVY") + " BY LAP " + s.fc.heavy.lap : "";
+      return " (" + t + ", " + Math.round(f.confidence * 100) + "%" + heavy + ")";
     }
 
     // The top line of the ladder, as [msg, key] (or "" when nothing applies) —
@@ -266,7 +307,13 @@ var RaceEngineer = (function () {
       if (arc && arc.seq) {
         for (let i = 0; i < arc.seq.length; i++) { if (WET.indexOf(arc.seq[i]) >= 0) { wetAt = i / arc.seq.length; break; } }
       }
-      const left = arc ? Math.max(0, (Number.isFinite(arc.wetIn) ? arc.wetIn : arc.dur * wetAt) - arc.t) : 0;
+      const rainT = arc ? (Number.isFinite(arc.wetIn) ? arc.wetIn : arc.dur * wetAt) : 0;
+      const left = arc ? Math.max(0, rainT - arc.t) : 0;
+      // THE FORECAST (js/race/forecast.js): the same onset, STATED with an error that shrinks as it nears, on
+      // a lap estimate that exists from the green (the car's own last lap once it has one). Re-read on a 0.5 s
+      // clock; published for UI/tests as Forecast.current().
+      const lapF = lapS > 0 ? lapS : (G.track && G.track.total > 0 ? G.track.total / FALLBACK_MPS : 0);
+      const fc = forecastFor(c, b, arc, lapF, rainT, dt);
       // THE PLAN: the next planned stop lap and the compound it fits; and THE
       // UNDERCUT — a rival BEHIND, inside pit loss plus two seconds, whose stop
       // count rose since the last tick (remembered per rival in the bag).
@@ -354,10 +401,52 @@ var RaceEngineer = (function () {
       out.cheapStop = !noStop && stopDue && cautionLvl >= 2 && cautionLvl < 4 && wear >= 0.35;
       out.wet = wantTread > 0;
       out.noStop = noStop; out.finalLap = finalLap;
-      out.rainInLaps = !noStop && arc && WET.indexOf(arc.to) >= 0 && lapS > 0 && left > 0
-        ? Math.max(1, Math.round(left / lapS)) : null;
+      const byKind = (fc && b.fcKinds) || NO_FC;   // built once per forecast read (forecastFor), not per step
+      out.fc = byKind;
+      out.wantTread = wantTread;
+      if (b.fcArc !== arc) { b.fcArc = arc; b.fcMin = {}; }
+      const tread = c.tyre.tread || 0;
+      out.rainInLaps = !noStop && arc && WET.indexOf(arc.to) >= 0 && left > 0
+        ? (byKind.rain ? latchLaps(b, "rain", byKind.rain, lapF) : lapS > 0 ? Math.max(1, Math.round(left / lapS)) : null) : null;
+      out.heavyInLaps = !noStop && tread === 1 && !byKind.rain && byKind.heavy ? latchLaps(b, "heavy", byKind.heavy, lapF) : null;
+      out.easeInLaps = !noStop && tread >= 2 && byKind.easing ? latchLaps(b, "easing", byKind.easing, lapF) : null;
+      out.dryInLaps = !noStop && tread >= 1 && !byKind.easing && byKind.drying ? latchLaps(b, "drying", byKind.drying, lapF) : null;
+      // "Here" is the road's own verdict (treadFor wants rubber for water now), inside HERE_S of the arc's onset —
+      // not `arc.t >= wetIn`, which a bisected wetIn can miss by a hair on the very step it turns.
+      out.hereAt = arc && wantTread > 0 && Number.isFinite(arc.wetIn) && arc.wetIn > 0 && arc.t - arc.wetIn <= HERE_S
+        ? Math.round(arc.wetIn) : null;
       return out;
     }
+
+    // The forecast for the car, re-read on FC_S (dt 0 = senseOf, always fresh) and published from the local car.
+    // Seeded from the sim seed solo (a replay hears the same) and 0 in a friend race, where the HOST's plan the
+    // arc was armed from is the whole key, so both peers hear the same error.
+    function forecastFor(c, b, arc, lapF, rainT, dt) {
+      if (typeof Forecast === "undefined" || !Forecast || !arc || !arc.to) {
+        if (c.local && b.fc && typeof Forecast !== "undefined") Forecast.publish(null);
+        b.fc = null; return null;
+      }
+      if (dt > 0 && b.fcT > 0 && b.fcFor === arc) { b.fcT -= dt; return b.fc; }
+      const net = G.netPlay && G.netPlay.active && G.netPlay.active();
+      const seed = net ? 0 : (typeof G.simSeed === "function" ? G.simSeed() : 0);
+      const tot = G.track && G.track.total > 0 ? G.track.total : 0;
+      const lapPos = tot > 0 && c.prog != null ? (((c.prog % tot) + tot) % tot) / tot : 0;
+      b.fc = Forecast.compute({ arc, raceT: G.raceT, lapS: lapF, lap: c.lap || 0, lapPos, seed, rainAt: rainT });
+      b.fcT = FC_S; b.fcFor = arc;
+      const k = b.fcKinds = {};
+      if (b.fc) for (let i = 0; i < b.fc.events.length; i++) k[b.fc.events[i].kind] = b.fc.events[i];
+      if (c.local) Forecast.publish(b.fc);
+      return b.fc;
+    }
+    // A forecast event's stated lead in laps, LATCHED monotone per arc: a count only ever falls, so a refreshed
+    // estimate (or a slower last lap) never re-opens a bucket stateOf already spent.
+    function latchLaps(b, k, e, lapF) {
+      if (!(lapF > 0)) return null;
+      const n = Math.max(1, Math.round(e.in / lapF)), m = b.fcMin[k];
+      return (b.fcMin[k] = m != null && m < n ? m : n);
+    }
+    /** The local car's current forecast (null in a stable-weather race) — the read-only accessor for UI/tests. */
+    function forecast() { return typeof Forecast !== "undefined" && Forecast ? Forecast.current() : null; }
 
     // update()'s `take`: the first rung not yet said at its current state. The
     // quiet timer holds the reports but NOT the pit calls — a BOX with a lap to
@@ -407,7 +496,7 @@ var RaceEngineer = (function () {
       // A QUEUED line is re-checked when its turn comes: a BOX that waited out a
       // card, after the car has already pitted, is a call to do what is done.
       let still;
-      if (BOX_CALLS.indexOf(key) >= 0 || key === "rain" || key === "rainplan" || key === "undercut") {
+      if (BOX_CALLS.indexOf(key) >= 0 || key === "rain" || key === "rainplan" || key === "undercut" || key === "drying" || key === "easing" || key === "heavy") {
         const lap = key === "plan1" ? c.lap : -1;   // "next lap" is wrong a lap later
         still = () => stopOpen(c) && (lap < 0 || c.lap === lap);
       }
@@ -421,7 +510,7 @@ var RaceEngineer = (function () {
       return msg;
     }
 
-    return { update, reset, callFor, senseOf };
+    return { update, reset, callFor, senseOf, forecast };
   }
 
   return { create, WEAR_STEPS, AXLE_SPLIT, GRAIN_CALL, BLISTER_CALL, COLD_CALL, QUIET_S, DIRECTIONAL, BOX_CALLS };

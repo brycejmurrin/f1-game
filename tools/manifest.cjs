@@ -304,6 +304,7 @@ const FULL = [
   "js/physics/aero-zones.js",
   "js/fx/skidmarks.js",
   "js/fx/car-fx.js",           // CarFx.create(G, { skids }): plank sparks + AI lock-up marks (after skidmarks + particles)
+  "js/race/storm.js",          // Storm: the weather above rain — lightning schedule, SC timings, rain/spray scale (pure; before race-control)
   "js/race/race-control.js",
   "js/race/overtake-mode.js",
   "js/race/pace-math.js",      // PaceMath.create(deps): vTop/vStd/aStd + X-mode/ERS/gearHi/rpmFor (game.js wires)
@@ -315,6 +316,7 @@ const FULL = [
   "js/race/real-race.js",      // RealRace.create(G): a real Grand Prix replayed from its timing script (after race-control: it holds its flags)
   // flying-start / start-lights / marshal-panels → LAZY_RACE_SESSION
   "js/race/weather-arc.js",
+  "js/race/forecast.js",       // Forecast: pure timed + uncertain forecast off a weather arc (engineer speaks it; Forecast.current())
   "js/camera/photo-kit.js",    // free-cam grids / DoF / bookmarks (before free-cam)
   "js/camera/free-cam.js",
   "js/camera/photo-cam.js",

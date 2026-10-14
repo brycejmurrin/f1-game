@@ -354,6 +354,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // graining and blistering say different things (one heals, one does not),
   // the axle call names an end of the car, and it does not nag. ~0.1 s.
   "tests/unit/engineer.test.mjs",
+  // The Cloud Agent bootstrap contract (.cursor/environment.json). The one docs-guards
+  // file tooling-fast lacked (ACTIONS-AUDIT-2026-10-14 finding 5), ~0.3 s.
+  "tests/unit/environment-json.test.mjs",
   "tests/unit/evaluate-scope-lint.test.mjs",
   "tests/unit/extra-rigs.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
@@ -393,6 +396,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/followup-platform.test.mjs",
   "tests/unit/followup-update-check.test.mjs",
   "tests/unit/font-digits.test.mjs",
+  // The weather FORECAST (js/race/forecast.js): timeline off the arc's own road lag (drift-guarded against
+  // weather-arc.js), bounded seeded uncertainty, and the engineer's early / 2-lap / 1-lap / here / drying calls. VM, < 0.5 s.
+  "tests/unit/forecast.test.mjs",
   // Portrait HFOV floor + landscape HFOV cap (js/camera/fov-fit.js); pure VM, <0.1 s.
   "tests/unit/fov-fit.test.mjs",
   // The FRAMING REPORT fleet diff (tools/lib/frame-fleet.mjs): frame identity across
@@ -859,6 +865,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ribbon flag to lineBrakeCue); this still asks that one key means one type.
   "tests/unit/store-key-types.test.mjs",
   "tests/unit/store-registry.test.mjs",
+  // STORM (js/race/storm.js): above rain on the arc ladder, rain's grip and tread, heavier rain,
+  // a seeded frame-rate-independent lightning schedule, the storm safety car, no STORM chip in rooms. VM, < 1 s.
+  "tests/unit/storm-weather.test.mjs",
   "tests/unit/surface-id-parity.test.mjs",
   // APEX_SURVEY_HUD=1: flag parse (query|hash|localStorage) + HUD-visible stub without race warm. Pure, ~0.1 s.
   "tests/unit/survey-hud.test.mjs",
