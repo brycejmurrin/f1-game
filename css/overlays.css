@@ -886,19 +886,24 @@ body:has(dialog:modal) #update-chip { display: none; }
 }
 
 
-/* Scale up HUD readouts on large screens so they're legible at arm's length. */
-@media (min-width: 1200px) {
+/* Scale up HUD readouts on large screens so they're legible at arm's length.
+   The second clause is a 10–11" tablet in landscape (iPad 1180x820, 1194x834):
+   a screen read at arm's length that the 1200px cut handed the phone cluster
+   (28px speed, 48px gear, 128px map). The height term keeps a desktop browser
+   dragged to 1100x600 on the phone tier it fits. */
+@media (min-width: 1200px), ((min-width: 1024px) and (min-height: 740px)) {
   .hud-box { padding: 5px 16px; }
-  .hud-value { font-size: 23px; }
+  .hud-value { font-size: calc(23px * var(--hud-text-boost, 1)); }
   .hud-label { font-size: var(--fs-micro); }
   /* minimap is 160px here — gaps dock beside it (10+160+8), top-aligned with it
-     by the base rule. */
-  .hud-gaps { left: calc(178px + var(--sal) / var(--hud-z)); }
-  /* `.hud-top` is taller here (.hud-box padding 5px 16px, .hud-value 23px): its
-     bottom sits at 68 in the widget's own zoomed units against 58 on the base
-     ladder, so the dropped state clears by the same 4px. */
-  :root[data-gap-drop] .hud-gaps { top: calc(72px + var(--sat) / var(--hud-z)); }
-  #hud-speed { font-size: 42px; }
+     by the base rule. MAP OFF keeps the map's corner (css/hud.css): this layer
+     wins the cascade whatever the specificity, so the override has to step
+     aside itself or the strip floats where the map was. */
+  body:not(.hud-hide-map) .hud-gaps { left: calc(178px + var(--sal) / var(--hud-z)); }
+  /* The dropped state reads the MEASURED --hud-top-h (css/hud.css), which is
+     taller here on its own; a 72px literal in this layer beat that measure and
+     the broadcast tower's. */
+  #hud-speed { font-size: calc(42px * var(--hud-text-boost, 1)); }
   #hud-gear  { font-size: 68px; }
   #hud-tach  { width: 150px; height: 18px; }
   #hud-energy { width: 150px; height: 16px; }
