@@ -80,6 +80,17 @@ on:
         description: "Time of day the track is BUILT with (day|night|dawn|dusk). This is what bakes the lamps, and so what decides whether the per-chunk lamp branch can run at all. Empty = the circuit's own default."
         required: false
         default: ""
+      # Appended LAST so every earlier input keeps its position (hunt 4 H5).
+      # The game's default camera is helmet, whose cockpit glass latches
+      # TLX's full mirror mip chain, so the mirror-mip cap (apex26.tlxMirMips)
+      # only shows on a chase leg. A choice input (GitHub caps a dispatch at
+      # 25 inputs; this is the 8th) — the plan job re-checks it for push requests.
+      cam:
+        description: "Player camera for ALL game checks: helmet (the game's default, as before) or chase (shows TLX's mirror-mip cap; helmet latches the full chain)"
+        type: choice
+        options: ["helmet", "chase"]
+        required: false
+        default: "helmet"
   push:
     branches: ["cursor/**", "claude/**"]
     paths: [".github/gpu-census-request.json"]
@@ -106,6 +117,7 @@ jobs:
       tod: ${{ steps.split.outputs.tod }}
       force: ${{ steps.split.outputs.force }}
       census_only: ${{ steps.split.outputs.census_only }}
+      cam: ${{ steps.split.outputs.cam }}
       run: ${{ steps.gate.outputs.run }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -179,6 +191,10 @@ jobs:
           if co is None:
             co = (os.environ.get("INPUT_CENSUS_ONLY") or "").lower() in ("true", "1")
           print("census_only=" + ("true" if co else "false"))
+          # The player camera (hunt 4 H5). A push request bypasses the
+          # dispatch form's choice list, so the allowlist is enforced here too.
+          cm = str(req.get("cam") or os.environ.get("INPUT_CAM") or "helmet").strip()
+          print("cam=" + (cm if cm in ("helmet", "chase") else "helmet"))
           PY
         env:
           EVENT: ${{ github.event_name }}
@@ -197,6 +213,7 @@ jobs:
           INPUT_TOD: ${{ inputs.tod || '' }}
           INPUT_FORCE: ${{ inputs.force || '' }}
           INPUT_CENSUS_ONLY: ${{ inputs.census_only || false }}
+          INPUT_CAM: ${{ inputs.cam || 'helmet' }}
 
   census:
     needs: plan
@@ -214,6 +231,7 @@ jobs:
       CENSUS_TOD: ${{ needs.plan.outputs.tod }}
       CENSUS_FORCE: ${{ needs.plan.outputs.force }}
       CENSUS_ONLY: ${{ needs.plan.outputs.census_only }}
+      CENSUS_CAM: ${{ needs.plan.outputs.cam }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -297,7 +315,7 @@ jobs:
           # 46.9-vs-66.2 gap straight off it). "0" = NATIVE keeps three's
           # swapchain; the `path:` row below prints softBlit so a regression
           # here is visible rather than silently re-measured.
-          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" \
             --backend three --path webgpu --ls apex26.wgxCapture=0 --beats 20 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgpu-${{ matrix.image }}.json" \
@@ -315,7 +333,7 @@ jobs:
           # short-circuits _softBlit. Written anyway so the two TLX legs differ
           # in exactly ONE variable — the three path — which is the only thing
           # that makes this a control.
-          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" \
             --backend three --path webgl2 --ls apex26.wgxCapture=0 --beats 20 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgl2-${{ matrix.image }}.json" \
@@ -339,7 +357,7 @@ jobs:
           # to that overlay only when a capture waits, so census 450-455 shot
           # one gen-1 frame for every A/B capture. A dispatcher's ls (after
           # this pin) can override it; the A/B rows print the mode and gens.
-          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" \
             --beats 20 --ls apex26.wgxCapture=0 --backend webgl2 $LS \
             --json "game-glx-${{ matrix.image }}.json" \
             --shot "game-glx-${{ matrix.image }}.png"
@@ -367,7 +385,7 @@ jobs:
           # 20.8 -> 36.7 fps in the driven window, busy 11.7 -> 7.5 ms/frame.
           # The HeadlessChrome UA still forces MSAA 1 via _softAdapter
           # (wgx.js), which this pin does not undo.
-          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" \
             --beats 20 --ls apex26.wgxCapture=0 --backend webgpu $LS \
             --json "game-wgx-${{ matrix.image }}.json" \
             --shot "game-wgx-${{ matrix.image }}.png"
@@ -600,6 +618,20 @@ jobs:
               } else if (_gw && (_gw.summary || _gw.note)) {
                 rows.push(`${" ".repeat(8)}gaps:  ${_gw.summary || _gw.note}`);
               }
+              // RACE ENTRY BY NAMED SPAN (hunt 4 B-F3.3): each long task and rAF
+              // gap from race() to the end of race entry, placed in the
+              // RaceEntryProfile leg / mark span / TLX warm stage it overlaps
+              // most — measured, where hunter B had to infer it from timing.
+              const _rs = g.raceEntrySpans;
+              if (_rs && _rs.events) {
+                rows.push(`${" ".repeat(8)}marks: ${_rs.summary}`);
+                for (const x of _rs.events.slice(0, 6)) {
+                  rows.push(`${" ".repeat(8)}  ${String(x.ms).padStart(7)} ms ${x.kind.padEnd(8)} at +${x.atMs} ms -> ${x.span ? `${x.span} (${Math.round(100 * x.share)}%)` : "(no span)"}` +
+                    (x.also && x.also.length ? ` also ${x.also.join(", ")}` : "") + ` | after ${x.after || "-"}, before ${x.before || "-"}`);
+                }
+              } else if (_rs && _rs.note) {
+                rows.push(`${" ".repeat(8)}marks: ${_rs.note}`);
+              }
               // THE DRIVEN WINDOW (hunt 4 I4), in game frames from LoopHealth:
               // the number to compare across legs and runs. The gov row below
               // is the END-of-run ring, which also holds the frozen A/B frames
@@ -613,6 +645,23 @@ jobs:
                   (_win.callbacksPerFrame != null ? `  rAF/frame=${_win.callbacksPerFrame}` : "") + `  [${_win.source}]`);
               } else if (_win && _win.note) {
                 rows.push(`${" ".repeat(8)}window: ${_win.note}`);
+              }
+              // THE DEPTH-DISCARD ROW (hunt 4 A-P1): TLX post.state().depth over
+              // the driven window. GLX/WGX have no TLX post; a TLX leg that lost
+              // the row says why rather than printing nothing.
+              const _dd = g.depth;
+              if (_dd && _dd.supported) rows.push(`${" ".repeat(8)}depth: ${_dd.summary}`);
+              else if (tlxLeg) rows.push(`${" ".repeat(8)}depth: NOT MEASURED — ${(_dd && _dd.note) || "the leg wrote no depth row"}`);
+              // THE CAMERA THE WINDOW DROVE (hunt 4 H5) and the mirror chain it
+              // left: helmet/cockpit glass latches the full mip chain (mipFull),
+              // so only a chase leg shows the apex26.tlxMirMips cap.
+              const _cam = g.cam, _mir = g.mirror || {}, _mb = _mir.backend || {};
+              if (_cam) {
+                const off = _cam.error || (_cam.asked && _cam.set !== _cam.asked) || (_cam.atWindowEnd && _cam.set && _cam.atWindowEnd !== _cam.set);
+                rows.push(`${" ".repeat(8)}cam:   ${_cam.set || "?"} (asked ${_cam.asked || "game default"}, at window end ${_cam.atWindowEnd || "?"})` +
+                  (_mir.mode !== undefined ? `  mirror=${_mir.mode} shown=${_mir.shown}` : "") +
+                  (_mb.mips !== undefined ? ` mips=${_mb.mips} cap=${_mb.mipCap} full=${_mb.mipFull}` : "") +
+                  (off ? `   <- CAMERA NOT AS ASKED${_cam.error ? ": " + _cam.error : ""}` : ""));
               }
               rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
                 `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face} frames=${(gov.open && gov.open.frames) != null ? gov.open.frames : "?"}`
@@ -726,7 +775,9 @@ jobs:
               } else if (gf.medianMs != null) {
                 const px = gf.canvas && gf.canvas.w ? gf.canvas.w * gf.canvas.h : null;
                 rows.push(`${" ".repeat(8)}gpu:   median=${gf.medianMs}ms over ${gf.samples} samples  scale=${gf.scale}`
-                  + (px ? `  canvas=${gf.canvas.w}x${gf.canvas.h} (${(px / 1e6).toFixed(2)} MP)` : ""));
+                  + (px ? `  canvas=${gf.canvas.w}x${gf.canvas.h} (${(px / 1e6).toFixed(2)} MP)` : "")
+                  // hunt 4 I5: the backends time different work; compare within one span only.
+                  + (gf.span ? `  span=${gf.span} (compare within a backend only)` : ""));
               }
             // Occlusion culling: counted, never timed.
               const oc = g.occlusion || {};
