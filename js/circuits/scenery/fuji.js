@@ -91,14 +91,16 @@
       for (let i = 0, cnt = Math.floor(GAR_LEN / GAR_STEP); i < cnt; i++) {
         const k = (GAR_K + i * GAR_N) % n, h = hash(i * 7.3);
         const wall = [CLAD, CLAD_L, CLAD_W, CLAD_D][i % 4];
-        // Garage hall: w is RADIAL depth, d length down the road.
+        // Garage hall: default building() path (no kind) so floor-banded
+        // window rails fire — kind/neonTower at orbit distance read as a
+        // blank slab. Pale wall luma > 0.45 keeps the authored tone.
         building(k, 1, 12, 14, 9.2 + h * 0.6, GAR_STEP * 0.92,
-          { kind: KINDS[i % KINDS.length], wall, window: GLASS, neon: 0, floor: 4.2, lit: false });
+          { wall, window: GLASS, floor: 3.6, lit: false });
         // Hospitality set back — every OTHER bay (cut tris + avoid tower clip).
         const dT = Math.abs(k - K(0.028));
         if ((i & 1) === 0 && Math.min(dT, n - dT) >= GAR_N && i !== cnt - 2)
           building(k, 1, 28, 12, 14.0, GAR_STEP * 0.70,
-            { kind: "clad", wall: (i >> 1) % 2 ? CLAD_L : CLAD, window: GLASS, neon: 0, floor: 4.0, lit: false });
+            { wall: (i >> 1) % 2 ? CLAD_L : CLAD, window: GLASS, floor: 3.8, lit: false });
       }
       // The modern control tower over the start line, and the timing block.
       tower(K(0.028), 1, 30, 15, 36,
@@ -197,11 +199,14 @@
       const fx = fA.c[0] + ux * FAR, fz = fA.c[2] + uz * FAR;
       const FUJI_BASE = pyMin - 40, FUJI_W = 2400, FUJI_H = 880;
       const emitFuji = (stage) => {
-        addFrustum(stage, [fx, FUJI_BASE - 2, fz], FUJI_W * 0.58, FUJI_W * 0.38, FUJI_H * 0.16,
-          [0.14, 0.26, 0.18], 8, null);
+        // Narrow foot skirt — keep it rock-grey, not forest green, so the cone
+        // does not read as a solid green hill under soft blit.
+        addFrustum(stage, [fx, FUJI_BASE - 2, fz], FUJI_W * 0.48, FUJI_W * 0.32, FUJI_H * 0.12,
+          [0.36, 0.35, 0.38], 8, null);
         addMountain(stage, [fx, FUJI_BASE, fz], FUJI_W * 0.5, FUJI_H, {
-          seg: 16, seed: 11, rough: 0.07, snowline: 0.48,
-          snow: [0.96, 0.97, 1.00], rock: [0.34, 0.33, 0.36], forest: [0.14, 0.26, 0.18],
+          // snowline 0.28 → pure snow above ~0.32 (was 0.48; survey read as green).
+          seg: 16, seed: 11, rough: 0.06, snowline: 0.28,
+          snow: [0.97, 0.98, 1.00], rock: [0.42, 0.40, 0.44], forest: [0.18, 0.28, 0.18],
         });
       };
       modelGroup("fuji-mount-fuji", {
@@ -241,10 +246,13 @@
       // 5. PADDOCK, THEN THE HOTEL AND MOTORSPORTS MUSEUM  [0.150 +1 40]
       //    Team transporters: sparse near-apron only (a dense double row here
       //    buried 23 prims into the infield rise; leave the hotel mass clear).
+      // Gap 62 / skip 0.048: hospitality at gap 28 shared a roof plane
+      // (flatCoplanar), and gap 48 landed on the race-control annex at 0.048
+      // (coplanar 22 m² motorhome × neonTower). Transporters sit clear of both.
       for (const [s, accent] of [
-        [0.048, [0.72, 0.16, 0.16]], [0.078, CLAD_L], [0.108, [0.20, 0.26, 0.52]],
+        [0.068, [0.72, 0.16, 0.16]], [0.098, CLAD_L], [0.128, [0.20, 0.26, 0.52]],
       ]) {
-        motorhome(K(s), 1, 32, 6.5, 3.6, 11, { accent, roof: true });
+        motorhome(K(s), 1, 62, 6.5, 3.6, 11, { accent, roof: true });
       }
       broadcastCompound(K(0.088), 1, 62, { vans: 6, dishes: 3, spacing: 9 });
       // Fuji Speedway Hotel (Hyatt Unbound Collection) + Fuji Motorsports
