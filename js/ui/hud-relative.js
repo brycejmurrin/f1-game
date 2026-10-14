@@ -290,9 +290,9 @@ const HudRelative = (function () {
         }
         if (!hit) break;
         if (slide > 0) root.style.left = slide.toFixed(1) + "px";
-        // Allow short caps so a doCap above aero (~9px at phoneL 150%) still
-        // truncates + drops rows instead of leaving the full card on AERO.
-        if (Number.isFinite(cap) && cap > 12) root.style.maxHeight = cap.toFixed(1) + "px";
+        // Apply any positive doCap (phoneL 150%: OT/aero room is ~6–15px — the
+        // old >28 gate left the full card painted on OT after the leftish slide).
+        if (Number.isFinite(cap) && cap > 0) root.style.maxHeight = cap.toFixed(1) + "px";
       }
     }
     if (!(root.clientHeight > 0)) return;
