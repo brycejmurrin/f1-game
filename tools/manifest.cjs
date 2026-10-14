@@ -219,6 +219,7 @@ const FULL = [
   "js/car/helmets.js",
   "js/car/car-geometry.js",
   "js/car/car-wheels.js",
+  "js/car/car-material-shade.js", // CarMaterialShade: carbon/gloss/matte/metal response contract (finish pass)
   "js/car/car-materials.js", // CarMaterials: SURFACES / FINISH / palette + paint helpers (split from car3d)
   "js/car/car-shade.js",   // CarShade: rounded body sections + smooth shading for Car3D (apex26.carSmooth / ?carsmooth=0 opts out, default ON)
   "js/car/car-body-geom.js", // CarBodyGeom: wings / fins / chassis / pods / cover builders (split from car3d)
@@ -359,6 +360,7 @@ const FULL = [
   "js/ui/hud-inputs.js",     // opt-in INPUTS trace: throttle/brake/steer ring buffer on a canvas + gear — for GameHud
   "js/camera/cam-groups.js", // CamGroups: ONBOARD / COCKPIT_LAYOUT camera tables (hud-layout + hud.js read at eval)
   "js/ui/hud-layout.js",     // per-element HUD move/size (profile x cockpit/other layouts); builds DISPLAY › HUD › MOVE & SIZE
+  "js/ui/hud-arrange.js",    // ARRANGE HUD: the on-screen drag / pinch editor for the same MOVE & SIZE layout (pause card)
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT
   "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
   "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
@@ -496,6 +498,7 @@ const CARVIEW = [
   "js/car/helmets.js",
   "js/car/car-geometry.js",
   "js/car/car-wheels.js",
+  "js/car/car-material-shade.js",
   "js/car/car-materials.js",
   "js/car/car-shade.js",
   "js/car/car-body-geom.js",
@@ -564,6 +567,7 @@ const HARD_EDGES = [
   ["js/ui/platform-session.js", "js/game.js"],
   ["js/car/car-geometry.js", "js/car/car3d.js"],
   ["js/car/car-wheels.js", "js/car/car3d.js"],
+  ["js/car/car-material-shade.js", "js/car/car-materials.js"],
   ["js/car/car-materials.js", "js/car/car-body-geom.js"],
   ["js/car/car-materials.js", "js/car/car3d.js"],
   ["js/car/car-geometry.js", "js/car/car-body-geom.js"],
@@ -770,6 +774,8 @@ const HARD_EDGES = [
   ["js/lighting/profiles.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
   ["js/ui/scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
   ["js/ui/dock-layout.js", "js/game.js"], // game.js calls DockLayout.create(G) at eval time
+  ["js/core/mat4.js", "js/ui/hud-arrange.js"], // const clamp = M4.clamp at eval
+  ["js/ui/hud-arrange.js", "js/game.js"], // game.js calls HudArrange.create(G) at eval time
   ["js/ui/setting-row.js", "js/game.js"],  // game.js wires the Settings rows (SettingRow.wire) at eval time
   ["js/ui/setting-row.js", "js/ui/scale.js"], // UiScale.create wires the RESOLUTION row
   ["js/ui/onboard.js", "js/game.js"],    // game.js calls Onboard.create(G) at eval time

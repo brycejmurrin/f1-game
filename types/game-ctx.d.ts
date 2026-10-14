@@ -898,6 +898,7 @@ declare const SteerTuning: GameModuleFactory;
 declare const TunerPanel: GameModuleFactory;
 declare const UiScale: GameModuleFactory;
 declare const DockLayout: GameModuleFactory;
+declare const HudArrange: GameModuleFactory;
 declare const KeyBinds: GameModuleFactory;
 declare const SettingsExport: GameModuleFactory;
 

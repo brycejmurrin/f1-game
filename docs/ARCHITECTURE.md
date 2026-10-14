@@ -207,6 +207,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `hud-strategy.js` | `HudStrategy` | tag | the opt-in STRATEGY panel for GameHud. |
 | `hud-inputs.js` | `HudInputs` | tag | the opt-in INPUTS trace for GameHud (learning braking points). |
 | `hud-layout.js` | `HudLayout` | tag | HudLayout: move and size each race HUD element, as a player setting under SETTINGS › DISPLAY › HUD › MOVE & SIZE. |
+| `hud-arrange.js` | `HudArrange` | tag | HudArrange: ARRANGE HUD, the on-screen editor for MOVE & SIZE. |
 | `title-layout.js` | `TitleLayout` | tag | TitleLayout: where the title screen's three pieces sit and how big they are, as a player setting under SETTINGS › APPEARANCE › TITLE SCREEN › TITLE LAYOUT. |
 | `pause-opts.js` | `PauseOpts` | tag | PauseOpts: the PAUSE MENU fold under SETTINGS › APPEARANCE, and the two-press confirm on its QUIT TO MENU / RESTART RACE buttons. |
 | `screen-looks.js` | `ScreenLooks` | tag | ScreenLooks: one engine for every per-screen fold under SETTINGS › APPEARANCE (PAUSE MENU's extra knobs, DATA HUB, TRACK SELECTOR, RACE SETTINGS, CAREER,… |
@@ -338,6 +339,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `helmets.js` | `Helmets` | tag | Helmets: one painted helmet design per driver. |
 | `car-geometry.js` | `CarGeometry` | tag | shared car mesh primitives and foil surfaces; create receives the owner’s surface and palette identities. |
 | `car-wheels.js` | `CarWheels` | tag | wheel geometry and rotating/fixed layers; create receives shared primitive builders and palette references. |
+| `car-material-shade.js` | `CarMaterialShade` | tag | car surface SHADE CONTRACT: the numbers the three lit backends (GLX / TLX / WGX) must keep in lockstep for carbon, gloss paint, matte paint, and metal/titanium. |
 | `car-materials.js` | `CarMaterials` | tag | car surface ids, finish remaps, palette colours, and paint helpers for Car3D. |
 | `car-shade.js` | `CarShade` | tag | CAR SHADE: rounded body sections and smooth shading for the procedural car (js/car/car3d.js). |
 | `car-body-geom.js` | `CarBodyGeom` | tag | car body geometry builders (wings, fins, chassis, pods, cover, part recipes). create() receives palette + mesh primitives + chassis datums from Car3D. |
