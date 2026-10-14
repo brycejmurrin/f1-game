@@ -29,6 +29,7 @@ var GameAudio = (function () {
     startRain: noop, stopRain: noop, setEngine: noop, setSkid: noop,
     setRivals: noop, setGridIdle: noop, feedReplayScrub: noop, syncReplayRpms: noop, resetReplayScrub: noop, setVoice: noop, setVenue: noop,
     setCameraMix: noop, setCarSfx: noop, brakeCue: noop, shift: noop,
+    fieldContact: () => false, fieldContactState: () => ({ armed: false, voices: 0, live: 0, fired: 0, deniedCd: 0, deniedCap: 0, deniedGate: 0, cooldown: 0.25 }),
     collision: noop, penalty: noop, finish: noop, lap: noop, offtrack: noop,
     rumble: noop, lightOn: noop, lightsOut: noop, deployBoost: noop,
     overtakeReady: noop, xMode: noop, thunder: noop, uiTick: noop,
@@ -47,7 +48,14 @@ var GameAudioSoundtrack = { create: () => ({}) };
 var GameAudioRadioFx = { create: () => ({}), resetContext: function () {} };
 var GameAudioToneModel = { patchTune: function () {}, nameForTune: function () { return ""; } };
 var CarSfx = { create: () => ({ update: function () {}, levels: () => ({}), pitGuns: function () {} }) };
-var RivalAudio = { create: () => ({ collect: () => [] }), sprayAhead: () => 0 };
+var RivalAudio = {
+  create: () => ({
+    collect: () => [], emitFieldSfx: function () {},
+    attach: function () {}, detach: function () {}, tick: function () {},
+    passByState: () => [], passByVoices: () => [],
+  }),
+  sprayAhead: () => 0,
+};
 var VoicePack = { create: () => null };
 var RecordedAnnouncer = { create: () => ({ play: () => false, stop: function () {} }) };
 var DrivingCues = {

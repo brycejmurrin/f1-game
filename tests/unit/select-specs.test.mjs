@@ -1315,6 +1315,19 @@ test("a spec this tool cannot READ is reported, never silently dropped", () => {
   }
 });
 
+test("full HUD leg has its modeled timeout margin through artifact cleanup", () => {
+  // CI38623761327:46 assertions passed, then the18min job cap cancelled cleanup.
+  const file = "tests/specs/hud-layout.spec.js";
+  const [job] = shards(fit([file], 30, { rank: () => 0, db: EMPTY }), EMPTY)
+    .filter((j) => j.specs.includes(file));
+  const modeled = 2 * Math.ceil(job.sec / 60) + Math.ceil(job.perTest / 60)
+    + SELECTED_SETUP_MIN + SELECTED_WRAP_MIN;
+  assert.ok(job.timeout >= modeled,
+    `HUD job requires ${modeled}min for work/timeout/setup/wrap, got ${job.timeout}`);
+  assert.ok(job.timeout * 60 > job.sec + (SELECTED_SETUP_MIN + SELECTED_WRAP_MIN) * 60,
+    "setup and artifact cleanup cannot consume the test work budget");
+});
+
 test("career / hud-layout run 2 workers a leg, and split by native --shard only when one leg cannot fit its cap", () => {
   // Two workers per leg, billed at FAT_UI_SEC_PER_TEST (PR #1075 37446472987).
   // ONE leg while it fits; C4 (2026-10-14): ship 38525816649's
@@ -1368,25 +1381,40 @@ test("career / hud-layout run 2 workers a leg, and split by native --shard only 
     `terrain job cap ${tJobs.map((j) => j.timeout)} exceeds ${MAX_SELECTED_JOB_MIN}`);
 });
 
-test("C4: the measured hud-layout leg (945 s, 2 workers) splits so every piece fits its 18 min cap", () => {
+test("C4: a fat-UI leg that cannot fit its cap splits into native --shard pieces; one that fits stays one leg", () => {
   // Ship 38525816649 / 38522250272: oversize-hud-layout expected 945 / 923 s
-  // and was killed by the 18 min job cap (39/42 and still running, 0 failed);
-  // the verdict then read "left no junit". Reproduce the plan from a
-  // measured history at that rate: 42 tests x 45 s / 2 workers = 945 s.
+  // and was killed by the then-18 min job cap (39/42 and still running, 0
+  // failed); the verdict then read "left no junit". ff0e80e9d later raised
+  // FAT_UI_SELECTED_JOB_MIN so that measured leg now fits ONE leg; the split
+  // must still engage for any fat leg whose work + setup + wrap-up exceeds
+  // whatever the cap is. Both halves are planned from a measured history.
   const hud = "tests/specs/hud-layout.spec.js";
   const n = declaredTests(hud);
-  const db = { specs: { [hud]: { s: [1, 2, 3].map((i) => [`2026-10-1${i}T00:00:00Z`, "llvmpipe", 1890 * n / 42, n]) } } };
-  const jobs = shards({ selected: [], oversize: [{ file: hud, tests: n, rank: 0 }] }, db, new Set());
+  const room = FAT_UI_SELECTED_JOB_MIN - SELECTED_SETUP_MIN - SELECTED_WRAP_MIN;
+  const plan = (billedSec) => {
+    const db = { specs: { [hud]: { s: [1, 2, 3].map((i) => [`2026-10-1${i}T00:00:00Z`, "llvmpipe", 2 * billedSec, n]) } } };
+    return shards({ selected: [], oversize: [{ file: hud, tests: n, rank: 0 }] }, db, new Set());
+  };
+  // The measured 945 s leg: fits the current cap, so one leg with no --shard.
+  if (945 / 60 <= room) {
+    const one = plan(945);
+    assert.equal(one.length, 1, `945 s fits ${FAT_UI_SELECTED_JOB_MIN} min with setup and wrap-up: one leg`);
+    assert.equal(one[0].shard, "", "one leg carries no --shard");
+  }
+  // A leg ~2.2x the room cannot fit: it splits, bills the whole spec, every piece fits.
+  const big = Math.round(room * 60 * 2.2);
+  const jobs = plan(big);
   const total = jobs.reduce((t, j) => t + j.sec, 0);
-  assert.ok(total >= 945 * n / 42 - jobs.length, `the plan still bills the whole spec (${total}s)`);
-  assert.ok(jobs.length >= 2, `a 945 s fat leg cannot fit ${FAT_UI_SELECTED_JOB_MIN} min with setup and wrap-up: ${jobs.length} leg(s)`);
+  assert.ok(total >= big - jobs.length, `the plan still bills the whole spec (${total}s of ${big}s)`);
+  assert.ok(jobs.length >= 2, `a ${big} s fat leg cannot fit ${FAT_UI_SELECTED_JOB_MIN} min with setup and wrap-up: ${jobs.length} leg(s)`);
+  assert.equal(jobs.length, piecesToFitCap(big, n, FAT_UI_SELECTED_JOB_MIN), "no more pieces than the cap needs");
   for (const j of jobs) {
     assert.ok(Math.ceil(j.sec / 60) + SELECTED_SETUP_MIN + SELECTED_WRAP_MIN <= j.timeout, `${j.name}: ${j.sec}s + setup + wrap > ${j.timeout} min`);
+    assert.ok(j.timeout <= FAT_UI_SELECTED_JOB_MIN, `${j.name}: cap ${j.timeout} above the fat-UI ceiling`);
     assert.match(j.shard, /^\d+\/\d+$/, "a native Playwright shard, not a re-packed file list");
     assert.equal(j.workers, 2);
   }
-  // Never by a longer cap: the ceiling is unchanged.
-  assert.equal(FAT_UI_SELECTED_JOB_MIN, 18);
+  // The packed-leg ceiling is unchanged by this split; only ff0e80e9d moved the fat-UI one.
   assert.equal(MAX_SELECTED_JOB_MIN, 18);
 });
 

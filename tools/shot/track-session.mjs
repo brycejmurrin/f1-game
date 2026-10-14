@@ -21,16 +21,23 @@
 // pitch (view() free-look); without it eye looks ahead as before. The first
 // line it prints is {"ready":true,…}; stdin EOF closes the browser. Usage:
 //   node tools/shot/track-session.mjs --serve --track spa --out artifacts/track-session
+import { randomUUID } from "node:crypto";
 import { mkdirSync, existsSync } from "node:fs";
 import { join, resolve, basename, relative, isAbsolute, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
-import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
-import { awaitPresentedFrame, screenshotPresentedCanvas } from "./probe-page.mjs";
+import { pixelEvidence } from "./capture-contract.mjs";
+import { launchChromium, shutdown, startStaticServer, chromiumLaunchInfo } from "../lib/harness.mjs";
+import { awaitCaptureReady, mutateCaptureScene, installProbeInit, screenshotPresentedCanvas } from "./probe-page.mjs";
+
+import { parseCaptureOptions, captureContextOptions, captureLaunchOptions, captureScreenshotOptions,
+  captureExtension, applyCaptureProfile } from "./capture-options.mjs";
+import { captureBrowserDiagnostics, assertCaptureGpuCapability, startCaptureTrace } from "./capture-diagnostics.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
-const argv = process.argv.slice(2);
+const options = parseCaptureOptions(process.argv.slice(2));
+const argv = options.positionals;
 const flag = (n, d) => { const i = argv.indexOf(n); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d; };
 const BOOT_MS = 45000, TRACK_MS = 60000, PRESENT_MS = 90000;
 const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
@@ -38,7 +45,7 @@ const TODS = new Set(["day", "dusk", "dawn", "night"]);
 const NAME_RE = /^[A-Za-z0-9._-]{1,80}$/;
 
 if (!argv.includes("--serve")) {
-  console.error("usage: track-session.mjs --serve --track <id> [--out <dir under artifacts/ or scratch/>]");
+  console.error("usage: track-session.mjs --serve --track <id> [--out <dir under artifacts/ or scratch/>] [--profile preview|comparison] [--scope scene|page] [--gpu swiftshader|llvmpipe|hardware|lavapipe] [--browser auto|chromium|shell] [--trace] [--cache-assets]");
   process.exit(2);
 }
 const outDir = resolve(ROOT, flag("--out", "artifacts/track-session"));
@@ -47,13 +54,26 @@ const send = (o) => process.stdout.write(JSON.stringify(o) + "\n");
 
 const started = Date.now();
 const shots = [];                  // {name, png, frac, cam, tod}
-let page = null, track = null;
+let page = null, track = null, trace = null, diagnostics = null;
+
+// The scene stays resident while idle; each rendering op restores the caller's state.
+async function withRendering(fn) {
+  const previous = await page.evaluate(() => {
+    const a = window.__apex, before = a.headless(); a.headless(false); return before;
+  });
+  try { return await fn(); }
+  finally { await page.evaluate((before) => window.__apex.headless(before), previous); }
+}
+async function closeSession() {
+  try { if (trace) send({ trace: await trace.stop() }); }
+  catch (error) { send({ traceError: String(error.message || error) }); process.exitCode = 1; }
+  finally { await shutdown(); }
+}
 
 async function buildTrack(id) {
   const t0 = Date.now();
   await page.evaluate((t) => window.__apex.race(t), id);
   await page.waitForFunction((t) => window.__apex.info().track === t, id, { timeout: TRACK_MS, polling: 100 });
-  await sleep(1200);   // mesh build settles, as shot.mjs
   track = id;
   return Date.now() - t0;
 }
@@ -78,10 +98,10 @@ async function shot(op) {
   for (const k of ["az", "el", "dist", "h"]) {
     if (args[k] != null && !Number.isFinite(args[k])) throw new Error(`${k} must be a finite number`);
   }
-  const frame = await page.evaluate((o) => {
+  const frame = await mutateCaptureScene(page, (o) => {
     const a = window.__apex;
     a.go(); a.park(o.frac); a.freeze(true);
-    if (a.setTimeOfDay) a.setTimeOfDay(o.tod);
+    if (a.setTimeOfDay && a.setTimeOfDay() !== o.tod) a.setTimeOfDay(o.tod);
     if (a.hud) a.hud(o.hud);
     if (o.cam === "eye") {
       const r = a.eyeAt(o.frac, 0, o.h == null ? 2.5 : o.h);
@@ -98,19 +118,14 @@ async function shot(op) {
     const vs = a.viewState ? a.viewState() : null, cs = a.camState ? a.camState() : null;
     return { dbgCamActive: !!(vs && vs.dbgCamActive) || !!(cs && cs.debug), camState: cs };
   }, args);
-  await sleep(300);
-  // A NEW frame or no file — the stale-blit guard shot.mjs carries (#780) —
-  // waited for TWICE. In a live session a present is usually already in
-  // flight from the previous camera; the first wait resolves on it and the
-  // capture was the last shot again (orbit and eye shots 0.5 % apart,
-  // 2026-10-03). The second present is rendered after the move.
-  for (let i = 0; i < 2; i++) {
-    if (await awaitPresentedFrame(page, PRESENT_MS) === false) {
-      throw new Error(`no new frame within ${PRESENT_MS / 1000} s of the camera move`);
-    }
-  }
-  const png = join(outDir, `${name}.png`);
-  const cap = await screenshotPresentedCanvas(page, { path: png, skipAwait: true, timeout: 60000 });
+  const readiness = await awaitCaptureReady(page, { timeoutMs: PRESENT_MS });
+  const png = join(outDir, `${name}.${captureExtension(options)}`);
+  const { scope, ...imageOptions } = captureScreenshotOptions(options);
+  const cap = scope === "page" || args.hud
+    ? await screenshotPresentedCanvas(page, { path: png, ...imageOptions, skipAwait: true, forceCdp: true, pauseRender: true, clip: { x: 0, y: 0, ...page.viewportSize() }, timeout: 60000 })
+    : await screenshotPresentedCanvas(page, { path: png, ...imageOptions, skipAwait: true, timeout: 60000 });
+  const pixels = await pixelEvidence(cap.buf);
+  if (!pixels.meaningful) throw new Error(`frame scene evidence is ${pixels.classification}`);
   const st = await sharp(cap.buf).stats();
   const spread = Math.max(...st.channels.slice(0, 3).map((c) => c.stdev));
   if ((st.channels.length >= 4 && st.channels[3].max === 0) || spread < 2) {
@@ -119,7 +134,7 @@ async function shot(op) {
   const prev = shots.findIndex((s) => s.name === name);
   const rec = { name, png, frac, cam, tod, track };
   if (prev >= 0) shots[prev] = rec; else shots.push(rec);
-  return { png, spread: +spread.toFixed(1), kb: +(cap.buf.length / 1024).toFixed(1), frame };
+  return { png, spread: +spread.toFixed(1), kb: +(cap.buf.length / 1024).toFixed(1), frame, readiness, pixels, scope: scope === "page" || args.hud ? "page" : "scene", profile: options.profile };
 }
 
 const pngOf = (ref) => {
@@ -169,10 +184,10 @@ async function diff(a, b) {
 }
 
 async function handle(op) {
-  if (op.status) return { track, shots: shots.length, uptimeMs: Date.now() - started };
+  if (op.status) return { track, shots: shots.length, uptimeMs: Date.now() - started, profile: options.profile, diagnostics };
   if (op.track) {
     if (!/^[a-z0-9_]{2,40}$/.test(String(op.track))) throw new Error("bad track id");
-    return { track: op.track, buildMs: await buildTrack(String(op.track)) };
+    return { track: op.track, buildMs: await withRendering(() => buildTrack(String(op.track))) };
   }
   if (op.eval != null) {
     const r = await page.evaluate(async (expr) => {
@@ -186,28 +201,35 @@ async function handle(op) {
   }
   if (op.sheet) return sheet(op.sheet === true ? "sheet" : String(op.sheet), Number(op.cols) || 0);
   if (op.diff) return diff(op.diff[0], op.diff[1]);
-  if (op.shot != null || op.frac != null || op.cam != null) return shot(op);
+  if (op.shot != null || op.frac != null || op.cam != null) return withRendering(() => shot(op));
   throw new Error("unknown op: send shot | eval | track | sheet | diff | status");
 }
 
 (async () => {
   const id = String(flag("--track", "monza"));
-  const srv = await startStaticServer(ROOT);
+  const srv = await startStaticServer(ROOT, options.cacheAssets ? { immutableAssets: { namespace: randomUUID() } } : {});
   try {
-    // APEX_GL=llvmpipe: Mesa GL via ANGLE (same pin as playwright.config.js) —
-    // ~2–3× faster software frames when Mesa dri is installed; SwiftShader default.
-    const angle = process.env.APEX_GL === "llvmpipe" ? "gl" : "swiftshader";
-    const browser = await launchChromium({ args: [`--use-angle=${angle}`, "--enable-unsafe-webgpu", "--disable-background-timer-throttling"] });
-    page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-    await page.goto(srv.url);
+    const browser = await launchChromium(captureLaunchOptions(options, { backend: String(flag("--backend", "three")) }));
+    diagnostics = await captureBrowserDiagnostics(browser, {
+      requested: { gpu: options.gpu, flavor: options.browser }, executable: chromiumLaunchInfo(browser),
+    });
+    assertCaptureGpuCapability(diagnostics, options);
+    if (options.trace) trace = await startCaptureTrace(browser, { path: options.tracePath || join(outDir, `capture-${Date.now()}.trace.json`) });
+    page = await browser.newPage(captureContextOptions(options, { width: 1280, height: 720 }));
+    await installProbeInit(page, { backend: String(flag("--backend", "three")), tlxForceGL: options.gpu === "llvmpipe" });
+    const url = new URL(srv.snapshotUrl || srv.url);
+    if (options.seed != null) url.searchParams.set("seed", options.seed);
+    await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: BOOT_MS });
     await page.waitForFunction(() => window.__apex != null, null, { timeout: BOOT_MS, polling: 100 });
+    await applyCaptureProfile(page, options);
     // Models resident BEFORE the build, so scenery's bakedModel() emits (shot.mjs).
     await page.evaluate(async () => { try { if (typeof Assets !== "undefined" && Assets.loadModels) await Assets.loadModels(); } catch (_) { /* procedural look */ } });
     const buildMs = await buildTrack(id);
-    send({ ready: true, track, out: outDir, bootMs: Date.now() - started, buildMs });
+    await page.evaluate(() => window.__apex.headless(true));
+    send({ ready: true, track, out: outDir, bootMs: Date.now() - started, buildMs, profile: options.profile, diagnostics });
   } catch (e) {
     send({ ready: false, error: String(e.message || e) });
-    await shutdown();
+    await closeSession();
     process.exit(1);
   }
   // Ops run strictly in order: one page, one camera.
@@ -222,5 +244,5 @@ async function handle(op) {
       catch (e) { send({ id: op.id, ok: false, error: String(e.message || e) }); }
     });
   });
-  rl.on("close", async () => { await chain; await shutdown(); process.exit(0); });
+  rl.on("close", async () => { await chain; await closeSession(); process.exit(process.exitCode || 0); });
 })();

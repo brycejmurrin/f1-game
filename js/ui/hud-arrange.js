@@ -32,6 +32,13 @@ const HudArrange = (() => {
     const y = clamp((orig && orig.y || 0) + (dy / Math.max(1, H)) * 100, LIM.y[0], LIM.y[1]);
     return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
   }
+  /** Pure: the offset that keeps an auto-placed radio card where it is (left/top screen px) once moving it
+   *  hangs it from css/hud.css's fixed point (50vw, 25svh) instead. Its first drag starts from here. */
+  function placedOrig(orig, left, top, W, H) {
+    if (orig && (orig.x || orig.y)) return orig;
+    const w = Math.max(1, W), h = Math.max(1, H);
+    return Object.assign({}, orig, { x: (left - w / 2) / w * 100, y: (top - h / 4) / h * 100 });
+  }
   /** Pure: size s0 (%) after a pinch from finger distance d0 to d1, on the slider's 5 % steps. */
   function pinchTo(s0, d0, d1) {
     if (!(d0 > 0) || !(d1 > 0)) return s0;
@@ -74,15 +81,15 @@ const HudArrange = (() => {
     Log.info("ui", "HudArrange.create");
     const { $ } = G;   // game.js's literal-id lookup (no dynamic getElementById here: tree ratchet)
     const ELEMENTS = HudLayout.ELEMENTS;   // [id, label, selector, origin]
-    let editing = false, built = false;
+    let editing = false;
     let drag = null;       // { id, pid, startX, startY, orig }
     let pinch = null;      // { id, pid, d0, s0 } — the second pointer
     const pointers = new Map();   // pointerId -> {x, y}
     let selected = null;   // the id last touched; the toolbar's − / + / RESET act on it
-    let raf = 0, pending = null;
+    let raf = 0, pending = null, context = null, opener = null;
     let shown = null;      // dialogs WE hid: { settings, pause }
     let revealed = [];     // [{ el, hidden, text:[{el, text}] }] pieces we unhid with sample content
-    let bar = null, nameEl = null, hintEl = null, visBtn = null;
+    let bar = null, nameEl = null, hintEl = null, picker = null, visBtn = null;
     const hasEls = () => typeof HudElements !== "undefined" && HudElements && typeof HudElements.isOn === "function";
 
     const elOf = (id) => { const row = ELEMENTS.find((e) => e[0] === id); return row ? document.querySelector(row[2]) : null; };
@@ -102,8 +109,8 @@ const HudArrange = (() => {
       bar.setAttribute("role", "toolbar");
       bar.setAttribute("aria-label", "Arrange HUD");
       bar.style.cssText = "position:fixed;z-index:9999;" +
-        "display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;" +
-        "background:var(--bg,#111);color:var(--text,#fff);border:2px solid var(--text,#fff);font:inherit;font-size:13px;max-width:calc(100vw - 24px);";
+        "display:flex;flex-wrap:wrap;box-sizing:border-box;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;" +
+        "background:var(--bg,#111);color:var(--text,#fff);border:2px solid var(--text,#fff);font:inherit;font-size:13px;width:max-content;max-width:calc(100vw - 24px);max-height:calc(100svh - 24px);overflow:auto;";
       const mk = (txt, aria, fn, id) => {
         const b = document.createElement("button");
         b.type = "button"; b.textContent = txt; b.id = id;
@@ -119,11 +126,18 @@ const HudArrange = (() => {
       hintEl.id = "hud-arrange-hint";
       hintEl.setAttribute("aria-live", "polite");
       hintEl.style.cssText = "color:var(--dim,#bbb);white-space:nowrap;max-width:30vw;overflow:hidden;text-overflow:ellipsis;";
+      picker = document.createElement("select");
+      picker.id = "hud-arrange-element";
+      picker.setAttribute("aria-label", "HUD element; use arrow keys on the Move button to position");
+      picker.style.cssText = "min-height:44px;max-width:100%;font:inherit;background:var(--bg,#111);color:inherit;";
+      picker.onchange = () => { flush(); selected = picker.value; after(); };
+      bar.appendChild(picker);
+      bar.appendChild(mk("MOVE", "Move selected element with arrow keys; Shift moves faster", () => {}, "hud-arrange-move"));
       bar.appendChild(nameEl);
       bar.appendChild(hintEl);
       bar.appendChild(mk("−", "Smaller", () => size(-1), "hud-arrange-smaller"));
       bar.appendChild(mk("+", "Larger", () => size(1), "hud-arrange-larger"));
-      bar.appendChild(mk("RESET", "Reset this element to the shipped layout", () => { if (selected) { HudLayout.resetEl(selected); after(); } }, "hud-arrange-reset"));
+      bar.appendChild(mk("RESET", "Reset this element to the shipped layout", () => { if (selected) { flush(); HudLayout.resetEl(selected, context.set, context.profile); after(); } }, "hud-arrange-reset"));
       visBtn = mk("HIDE", "Hide or show this element in the race", toggleVis, "hud-arrange-vis");
       bar.appendChild(visBtn);
       bar.appendChild(mk("DONE", "Done arranging the HUD", () => setEditing(false), "hud-arrange-done"));
@@ -160,7 +174,8 @@ const HudArrange = (() => {
     }
     function paintBar(clash) {
       if (!bar) return;
-      const cur = selected ? HudLayout.get(selected) : null;
+      const cur = selected ? current(selected) : null;
+      if (picker && selected) picker.value = selected;
       nameEl.textContent = selected ? labelOf(selected) + (cur ? " " + cur.s + "%" : "") : "ARRANGE HUD";
       const off = selected && hasEls() && !visShown(selected, HudElements.isOn);
       hintEl.textContent = clash && clash.length ? "OVERLAP: " + clash.slice(0, 2).map((p) => p.map(labelOf).join(" × ")).join(", ")
@@ -211,14 +226,30 @@ const HudArrange = (() => {
       if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
       paintBar(markClashes());
     }
-    /* One HudLayout.set per frame while a finger moves: set() saves and re-applies the whole layout. */
+    const current = (id) => HudLayout.get(id, context.set, context.profile);
+    function dragOrig(id) {
+      const orig = current(id), el = id === "announce" ? elOf(id) : null;
+      const r = el && el.getBoundingClientRect();
+      return r ? placedOrig(orig, r.left, r.top, window.innerWidth, window.innerHeight) : orig;
+    }
+    function flush() {
+      if (raf) {
+        if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(raf);
+        else clearTimeout(raf);
+      }
+      raf = 0;
+      const p = pending; pending = null;
+      if (p) HudLayout.set(p.id, p.v, p.set, p.profile);
+    }
+    /* Bind queued edits to the layout visible when the gesture started. */
     function queue(id, v) {
-      pending = { id, v: Object.assign(pending && pending.id === id ? pending.v : {}, v) };
+      if (pending && pending.id !== id) flush();
+      pending = { id, set: context.set, profile: context.profile,
+        v: Object.assign(pending ? pending.v : {}, v) };
       if (raf) return;
       raf = (typeof requestAnimationFrame === "function" ? requestAnimationFrame : (fn) => setTimeout(fn, 16))(() => {
-        raf = 0;
-        const p = pending; pending = null;
-        if (p) { HudLayout.set(p.id, p.v); after(); }
+        flush();
+        if (editing) after();
       });
     }
     /* HIDDEN PIECES STAY REACHABLE WHILE ARRANGING. body[data-hud-hide] hides a
@@ -247,7 +278,8 @@ const HudArrange = (() => {
     }
     function size(dir) {
       if (!selected) return;
-      HudLayout.set(selected, { s: stepSize(HudLayout.get(selected).s, dir) });
+      flush();
+      HudLayout.set(selected, { s: stepSize(current(selected).s, dir) }, context.set, context.profile);
       after();
     }
 
@@ -302,15 +334,24 @@ const HudArrange = (() => {
       editing = !!on;
       if (editing && !was) {
         ensureBar();
+        opener = document.activeElement;
+        context = { set: HudLayout.shown(), profile: HudLayout.profile() };
         hideDialogs();
         reveal();
         for (const [, , sel] of ELEMENTS) { const el = document.querySelector(sel); if (el) el.setAttribute("data-hl-arr", ""); }
         document.body.setAttribute("data-hud-arrange", "1");
-        selected = null;
         ghosts();
+        selected = ELEMENTS.find(([id]) => visible(elOf(id)))?.[0] || null;
+        picker.textContent = "";
+        for (const [id, label] of ELEMENTS) {
+          if (!visible(elOf(id))) continue;
+          const option = document.createElement("option"); option.value = id; option.textContent = label;
+          picker.appendChild(option);
+        }
         after();
       }
       if (!editing && was) {
+        flush();
         document.body.removeAttribute("data-hud-arrange");
         for (const [, , sel] of ELEMENTS) {
           const el = document.querySelector(sel);
@@ -326,17 +367,22 @@ const HudArrange = (() => {
         if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
       }
       if (bar) bar.hidden = !editing;
+      if (editing && !was && picker) picker.focus();
       const btn = $("pm-hud-arrange");
       if (btn) {
         btn.setAttribute("aria-pressed", editing ? "true" : "false");
-        if (was && !editing && restore !== false && btn.focus) btn.focus();
+        if (was && !editing && restore !== false) {
+          const target = opener && opener.isConnected ? opener : btn;
+          if (target.focus) target.focus();
+        }
       }
     }
 
     /* ---- the pause-card button, beside REPOSITION TOUCH CONTROLS ---- */
     (function ensureControls() {
       if ($("pm-hud-arrange")) return;
-      const anchor = $("pm-dock-reset") || $("pm-dock-reposition-help") || $("pm-mirror");
+      const hudHost = $("pm-hud-details");
+      const anchor = hudHost ? $("pm-hud-details-sum") : ($("pm-dock-reset") || $("pm-dock-reposition-help") || $("pm-mirror"));
       const host = anchor && anchor.parentNode;
       if (!host) return;
       const btn = document.createElement("button");
@@ -371,13 +417,16 @@ const HudArrange = (() => {
       if (e.stopImmediatePropagation) e.stopImmediatePropagation();
       if (drag && drag.id === id && !pinch) {
         // second finger on the same piece: a pinch
+        flush();
         const p0 = pointers.get(drag.pid);
-        pinch = { id, pid: e.pointerId, d0: p0 ? dist(p0, { x: e.clientX, y: e.clientY }) : 0, s0: HudLayout.get(id).s };
+        pinch = { id, pid: e.pointerId, d0: p0 ? dist(p0, { x: e.clientX, y: e.clientY }) : 0, s0: current(id).s };
         try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
         return;
       }
+      flush();
       selected = id;
-      drag = { id, pid: e.pointerId, startX: e.clientX, startY: e.clientY, orig: HudLayout.get(id) };
+      let orig = dragOrig(id);
+      drag = { id, pid: e.pointerId, startX: e.clientX, startY: e.clientY, orig };
       pinch = null;
       try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
       paintBar(markClashes());
@@ -395,9 +444,16 @@ const HudArrange = (() => {
     }
     function onPointerUp(e) {
       if (!editing) return;
+      flush();
       pointers.delete(e.pointerId);
-      if (pinch && e.pointerId === pinch.pid) { pinch = null; return; }
-      if (drag && e.pointerId === drag.pid) { drag = null; pinch = null; after(); }
+      if (pinch && drag && (e.pointerId === pinch.pid || e.pointerId === drag.pid)) {
+        const pid = e.pointerId === pinch.pid ? drag.pid : pinch.pid;
+        const point = pointers.get(pid), id = drag.id;
+        pinch = null;
+        drag = point ? { id, pid, startX: point.x, startY: point.y, orig: dragOrig(id) } : null;
+        after(); return;
+      }
+      if (drag && e.pointerId === drag.pid) { drag = null; after(); }
     }
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("pointermove", onPointerMove, true);
@@ -408,19 +464,37 @@ const HudArrange = (() => {
       const mo = new MutationObserver(() => { if (editing && watched.some((el) => !el.hidden)) setEditing(false, false); });
       for (const el of watched) mo.observe(el, { attributes: true, attributeFilter: ["hidden"] });
     }
+    if (typeof MutationObserver !== "undefined") {
+      const rotate = $("rotate-device");
+      const mo = new MutationObserver(() => {
+        if (!editing) return;
+        if (HudLayout.shown() !== context.set || HudLayout.profile() !== context.profile) setEditing(false);
+        else if (rotate && rotate.getAttribute("aria-hidden") === "false") setEditing(false, false);
+      });
+      mo.observe(document.body, { attributes: true, attributeFilter: ["class", "data-hl-set"] });
+      if (rotate) mo.observe(rotate, { attributes: true, attributeFilter: ["aria-hidden"] });
+    }
     document.addEventListener("keydown", (e) => {
-      if (!editing || e.key !== "Escape") return;
+      if (!editing) return;
+      const dirs = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+      if (dirs[e.key] && selected && e.target && e.target.id === "hud-arrange-move") {
+        e.preventDefault(); e.stopPropagation(); flush();
+        const cur = current(selected), d = dirs[e.key], step = e.shiftKey ? 5 : 1;
+        HudLayout.set(selected, { x: clamp(cur.x + d[0] * step, -50, 50), y: clamp(cur.y + d[1] * step, -50, 50) }, context.set, context.profile);
+        after(); return;
+      }
+      if (e.key !== "Escape") return;
       e.preventDefault();
       e.stopPropagation();
       setEditing(false);
     }, true);
     if (typeof window !== "undefined" && window.addEventListener) {
-      window.addEventListener("resize", () => { if (editing) after(); }, { passive: true });
+      window.addEventListener("resize", () => { if (editing) setEditing(false); }, { passive: true });
     }
 
     return Object.freeze({ setEditing, isEditing: () => editing, selected: () => selected });
   }
 
-  return Object.freeze({ LIM, STEP, MIN_CLASH, VIS, visIds, visShown, dragTo, pinchTo, stepSize, clashes, create });
+  return Object.freeze({ LIM, STEP, MIN_CLASH, VIS, visIds, visShown, dragTo, placedOrig, pinchTo, stepSize, clashes, create });
 })();
 Object.freeze(HudArrange);

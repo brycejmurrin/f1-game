@@ -665,9 +665,9 @@ function pushWithRetry(oursProse = false) {
    curl (through the agent proxy) but no gh, which left --pr printing a compare
    URL and the session merging by hand (PR #178, 2026-09-22). Same steps as the
    gh path — find an open PR for the head, or create one from the branch's last
-   real commit — over REST only. Never arm auto-merge: only CI Watch arms
-   SQUASH on ready PRs (2026-10-06). The token travels as a curl config on
-   stdin, never on the argv.
+   real commit — over REST only. Never arm auto-merge: only Merge Desk arms
+   MERGE-commit auto-merge on ready PRs (squash retired 2026-10-13). The token
+   travels as a curl config on stdin, never on the argv.
 
    NOT GraphQL (2026-09-22, measured): `api.github.com/graphql` is refused from
    Claude Code sessions. Historical auto-merge arming via CCR REST was removed
@@ -702,7 +702,7 @@ export function openPrRest(branch, token) {
   if (!list.ok) throw new Error(`PR lookup failed (HTTP ${list.status}): ${JSON.stringify(list.json).slice(0, 200)}`);
   const open = list.json;
   if (Array.isArray(open) && open[0]?.html_url) {
-    return { pr: open[0].html_url, note: "PR already open; the push updated it. Do not arm auto-merge — CI Watch arms SQUASH on ready tip-green" };
+    return { pr: open[0].html_url, note: "PR already open; the push updated it. Do not arm auto-merge — Merge Desk arms MERGE on ready tip-green" };
   }
   // The title comes from the branch's last REAL commit, not from HEAD: a
   // deploy merges the base tip before it opens the PR, so HEAD is almost
@@ -718,7 +718,7 @@ export function openPrRest(branch, token) {
   const [title, body] = head.split("\0");
   const pr = ghApi(token, "POST", `${api}/pulls`, { title, body, head: branch, base: DEPLOY_BRANCH }).json;
   if (!pr?.html_url) throw new Error("REST pr create failed: " + JSON.stringify(pr).slice(0, 300));
-  return { pr: pr.html_url, note: "PR opened; do not arm auto-merge — CI Watch arms SQUASH on ready tip-green" };
+  return { pr: pr.html_url, note: "PR opened; do not arm auto-merge — Merge Desk arms MERGE on ready tip-green" };
 }
 
 function openPr(branch) {
@@ -730,12 +730,12 @@ function openPr(branch) {
     return { pr: null, note: `gh not installed and no GH_TOKEN/GITHUB_TOKEN — open https://github.com/${REPO}/compare/${DEPLOY_BRANCH}...${branch}?expand=1` };
   }
   const existing = spawnSync("gh", ["pr", "list", "--head", branch, "--base", DEPLOY_BRANCH, "--json", "url", "-q", ".[0].url"], { cwd: ROOT, encoding: "utf8" }).stdout.trim();
-  if (existing) return { pr: existing, note: "PR already open; the push updated it. Do not arm auto-merge — CI Watch arms SQUASH on ready tip-green" };
+  if (existing) return { pr: existing, note: "PR already open; the push updated it. Do not arm auto-merge — Merge Desk arms MERGE on ready tip-green" };
   const created = spawnSync("gh", ["pr", "create", "--base", DEPLOY_BRANCH, "--head", branch, "--fill"], { cwd: ROOT, encoding: "utf8" });
   if (created.status !== 0) throw new Error("gh pr create failed: " + created.stderr);
   const url = created.stdout.trim().split("\n").pop();
-  // Never arm auto-merge here (2026-10-06): only CI Watch arms SQUASH on ready PRs.
-  return { pr: url, note: "PR opened; do not arm auto-merge — CI Watch arms SQUASH on ready tip-green" };
+  // Never arm auto-merge here (2026-10-06): only Merge Desk arms MERGE on ready PRs (squash retired 2026-10-13).
+  return { pr: url, note: "PR opened; do not arm auto-merge — Merge Desk arms MERGE on ready tip-green" };
 }
 
 /* THE GATE, WITHOUT THE DEPLOY. `npm run test:tooling-fast` is the documented

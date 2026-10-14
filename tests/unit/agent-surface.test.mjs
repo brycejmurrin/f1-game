@@ -290,8 +290,10 @@ test("every agent and skill frontmatter key is one a host documents", () => {
    a UI matrix walk, a circuit survey): the parent gets the report, not the
    dumps (2026-09-22). */
 const BUILTIN_AGENTS = new Set(["general-purpose", "Explore", "Plan"]);
-// Browser workflows run in the parent; only the offline track census may fork.
-const FORKED_SKILLS = ["survey-track"];
+// Browser workflows run in the parent. survey-track stopped forking on 2026-10-14
+// when it absorbed the multi-circuit campaign (track-realism), which the parent
+// must run: the parent spawns one track-surveyor subagent per circuit instead.
+const FORKED_SKILLS = [];
 test("every skill with agent: names an existing subagent or a builtin, and forks", () => {
   const agents = new Set(fs.readdirSync(path.join(ROOT, ".claude/agents"))
     .filter((n) => n.endsWith(".md") && n !== "README.md").map((n) => n.replace(/\.md$/, "")));

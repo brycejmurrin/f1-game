@@ -801,36 +801,27 @@ before touching `js/car/ghost.js`.
 here — it is fourteen specs in a file this change does not touch, and folding a
 speculative rewrite of them into a tyre commit would bury both.
 
-**2026-09-14 — `debris.spec.js › enabled by default` fails on `rapierFetches`. OPEN.**
+**2026-09-14 — `debris.spec.js › enabled by default` fails on `rapierFetches`. FIXED (2026-10-14).**
 Found while gating the tyre thermal layer; **pre-existing**, and proven so
 rather than assumed — the same single spec fails identically on a worktree at
-the parent commit `a28b77d`, on the same assertion line.
+the parent commit `a28b77d`, on the same assertion line. Recurred as a full-tier
+flake on PR #1529 (`1c696bb28`, oversize-debris attempt 1) after the default-off
+rename: `opt in via apex26.debris='1'` still asserted `rapierFetches > 0` while
+`ready`/`stepped`/`live` passed; attempt 2 on the same SHA was green.
 
 ```
-tests/specs/debris.spec.js:76
+tests/specs/debris.spec.js (opt-in)
   expect(r.rapierFetches).toBeGreaterThan(0);
   Expected: > 0   Received: 0
 ```
 
-**What is NOT wrong.** The three assertions above it pass: `active`, `enabled`,
-`ready`, `stepped > 0` and `live > 0`. So Rapier loaded, the side-world ran, and
-the seeded burst spawned debris — the physics under test is fine. What fails is
-only the test's attempt to OBSERVE the load, via
-`performance.getEntriesByType("resource")` filtered on `rapier`.
+**What is NOT wrong.** `active`, `enabled`, `ready`, `stepped > 0` and `live > 0`
+pass — Rapier loaded and the side-world ran. Only the Resource Timing observation
+was empty (SW/precache or a late lazy import after the buffer closed).
 
-So the likely cause is in the observation, not the subsystem: a resource served
-from the service-worker precache (or the bfcache) produces no Resource Timing
-entry, and a slow boot on a loaded box can overflow the default 250-entry
-resource buffer before the assertion reads it — this box takes ~80 s for the
-test. Either would leave a working side-world with an empty fetch list.
-
-**The fix is a test fix, not a source fix**, and it should assert the thing it
-means: that Rapier is loaded (`ready` already says so) rather than that a
-network entry was recorded. If the fetch really must be observed, the page needs
-`performance.setResourceTimingBufferSize()` raised at boot and a
-cache-state-independent probe. Not attempted here — it is nothing to do with
-tyres, and a speculative edit to a spec this session cannot re-run cheaply
-would be worse than the honest record.
+**Fix:** the opt-in test asserts `DebrisWorld.rapierReady()` (cache-independent)
+instead of a `performance` resource entry. Buffer raise in `boot()` stays for the
+"off by default → no rapier fetch" direction.
 
 **2026-09-14 — `tools/check/quick-validate.mjs` was red on a CLEAN tree. FIXED.**
 Found while building the tyre/pit phases and confirmed not caused by them (the

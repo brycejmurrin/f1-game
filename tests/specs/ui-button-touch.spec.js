@@ -723,7 +723,10 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.addInitScript(() => localStorage.removeItem("apex26.hudLayout"));
     await page.goto("/");
     await waitReady(page);
-    await openPauseControls(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openPauseSettings(page);
+    await page.locator("#pm-open-display").click();
+    await page.locator("#pm-hud-details > summary").click();
     const btn = page.locator("#pm-hud-arrange");
     await expect(btn).toBeVisible();
     await expect(btn).toHaveAttribute("aria-pressed", "false");
@@ -783,11 +786,16 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.addInitScript(() => { localStorage.removeItem("apex26.hudLayout"); localStorage.removeItem("apex26.hudElements"); });
     await page.goto("/");
     await waitReady(page);
-    await openPauseControls(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openPauseSettings(page);
+    await page.locator("#pm-open-display").click();
+    await page.locator("#pm-hud-details > summary").click();
     await page.locator("#pm-hud-arrange").click();
     await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
     const vis = page.locator("#hud-arrange-vis");
-    await expect(vis, "nothing selected: no piece to hide").toBeDisabled();
+    // Keyboard access starts with the first visible piece selected.
+    await expect(page.locator("#hud-arrange-name")).toContainText("TIMING TOWER");
+    await expect(vis).toBeEnabled();
     // Touch the sector plate (a press with no movement selects it).
     const sec = await page.locator("#hud-sectors").boundingBox();
     expect(sec).not.toBeNull();
@@ -823,10 +831,61 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     expect(await page.evaluate(() => (document.body.dataset.hudHide || "").split(" "))).not.toContain("sectors");
   });
 
+  test("a dragged radio card leaves auto-placement and stays where it was dropped; RESET hands it back", async ({ page }) => {
+    await page.addInitScript(() => localStorage.removeItem("apex26.hudLayout"));
+    await page.goto("/");
+    await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openPauseSettings(page);
+    await page.locator("#pm-open-display").click();
+    await page.locator("#pm-hud-details > summary").click();
+    await page.locator("#pm-hud-arrange").click();
+    await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
+    const card = page.locator("#announce");
+    await expect(card).toBeVisible();
+    // Drop in the tower's row (the phone report, 2026-10-14). Leave half the
+    // viewport for the card: this checks manual placement, not edge clamping.
+    const tower = await page.locator(".hud-top").boundingBox();
+    const a0 = await card.boundingBox();
+    const tx = Math.min(tower.x + tower.width + 12, LANDSCAPE.width / 2), ty = tower.y;
+    const sx = a0.x + 20, sy = a0.y + 10;
+    await page.mouse.move(sx, sy);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) await page.mouse.move(sx + (tx - a0.x) * i / 10, sy + (ty - a0.y) * i / 10);
+    await page.mouse.up();
+    await page.waitForFunction(() => document.body.hasAttribute("data-radio-placed"), null, { polling: 100, timeout: BOOT_MS });
+    const placed = await page.evaluate(() => ({ top: document.body.classList.contains("hud-radio-top"), corner: document.body.hasAttribute("data-radio-corner") }));
+    expect(placed, "no auto slot once moved").toEqual({ top: false, corner: false });
+    const a1 = await card.boundingBox();
+    expect(Math.abs(a1.x - tx), "dropped where the finger let go (x)").toBeLessThanOrEqual(6);
+    expect(Math.abs(a1.y - ty), "dropped where the finger let go (y)").toBeLessThanOrEqual(6);
+    await page.locator("#hud-arrange-done").click();
+    await page.waitForFunction(() => !document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
+    // A race message after DONE, through a refit, shows at the drop point.
+    await page.evaluate(() => {
+      document.getElementById("announce-who").textContent = "RACE CONTROL";
+      document.getElementById("announce-text").textContent = "TRACK LIMITS 2/4";
+      document.getElementById("announce").hidden = false;
+      if (window.GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
+    });
+    await page.waitForFunction(([x, y]) => {
+      const r = document.getElementById("announce").getBoundingClientRect();
+      return Math.abs(r.left - x) <= 6 && Math.abs(r.top - y) <= 6;
+    }, [tx, ty], { polling: 100, timeout: 5000 }).catch(() => {});
+    const a2 = await card.boundingBox();
+    expect(Math.abs(a2.x - tx), "message at the drop point (x)").toBeLessThanOrEqual(6);
+    expect(Math.abs(a2.y - ty), "message at the drop point (y)").toBeLessThanOrEqual(6);
+    await page.evaluate(() => HudLayout.resetEl("announce"));
+    await page.waitForFunction(() => !document.body.hasAttribute("data-radio-placed"), null, { polling: 100, timeout: BOOT_MS });
+  });
+
   test("Escape ends arranging without driving the car", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
-    await openPauseControls(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openPauseSettings(page);
+    await page.locator("#pm-open-display").click();
+    await page.locator("#pm-hud-details > summary").click();
     await page.locator("#pm-hud-arrange").click();
     await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
     // A press on GAS while arranging is the editor's, never the pedal's (THROTTLE = LATCH would launch the car).

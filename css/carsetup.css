@@ -702,12 +702,15 @@
    menu survey (~86 screens at 150% landscape). A denser text list made it
    worse; a swatch grid with the name in aria-label/title is the measured win.
    CREATE stays full-width; edit/del float over the swatch. */
+/* UI Fit r6: Garage LIVERY tap floor + finish tags */
 #cs-options.cs-liv-grid {
   display: grid;
-  /* min(72px, 100%), not a bare 72px — the auto-fill floor policy stated at
-     the #sel-teams grid (a bare px floor is also a ceiling and overflows a
-     box narrower than itself). Last bare-px auto-fill floor in css/. */
-  grid-template-columns: repeat(auto-fill, minmax(min(72px, 100%), 1fr));
+  /* Two house-tap chips sit on one card (copy, or edit+delete on a custom
+     row). A 72px auto-fill floor packed 26×26 --tap-min chips and clipped
+     SATIN/CHROME (ui-fit r6: 82 soft taps / 20 trunc at 390×844). Floor the
+     column at 2× --tap so both chips and the finish tag fit; min(..., 100%)
+     keeps the #sel-teams rule (a bare px floor is also a ceiling). */
+  grid-template-columns: repeat(auto-fill, minmax(min(max(72px, calc(var(--tap) * 2)), 100%), 1fr));
   gap: 6px;
   align-content: start;
 }
@@ -745,8 +748,11 @@
 }
 #cs-options.cs-liv-grid .cs-opt-dot,
 #cs-options.cs-liv-grid .cs-opt-cost { display: none; }
-#cs-options.cs-liv-grid .cs-liv-swatch {
-  width: 56px; height: 52px; align-self: center;
+#cs-options.cs-liv-grid > .cs-liv-row .cs-liv-swatch {
+  /* Fill the tap-wide CARD so SATIN/CHROME paint in full (was 56px, CHROME
+     measured scrollWidth 80). Not the CREATE row — that swatch stays a plus
+     chip. Height stays the house tap, not a 52px literal. */
+  width: 100%; height: var(--tap); align-self: center;
 }
 #cs-options.cs-liv-grid .cs-liv-swatch canvas {
   display: block; width: 100%; height: 100%;
@@ -779,22 +785,15 @@
   margin-left: 0;
   pointer-events: none;
   z-index: 1;
-  /* SIZED TO THE SWATCH IT SITS IN, which is 56px and clips. At the inherited
-     --fs-micro bold with --ls-4 tracking and 5px of padding, CHROME measured
-     ~73px and ran 17px past its own overflow:hidden parent, sliced mid-glyph
-     (2026-09-16: 7 tiles each on ios-ipad-landscape and desktop-narrow-860x560).
-     Swept in the browser: 11px with 4px of padding and --ls-1 tracking would FIT
-     the 54px interior outright (the only tags this grid carries are SATIN and
-     CHROME). NOT TAKEN: --fs-micro is 14px and the bottom of the scale, so an
-     11px literal is a new `subFloorFontSize` offender, and that ratchet carries
-     slack: 0 precisely because "a migration must lower them, not bank headroom"
-     (see tests/data/ratchets). Ellipsising costs the last two glyphs of one
-     tag; a sub-floor literal costs a guard the whole tree is held to. If the
-     scale ever gains a rung below --fs-micro, this is the rule to revisit. */
-  max-width: calc(100% - 2px);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* UI Fit r6: do not ellipsis SATIN/CHROME. The card is now ≥ 2× --tap and
+     the swatch is 100% of it, so --fs-micro + --ls-1 fit without a sub-floor
+     font. max-width/ellipsis was the 20-trunc carve (390×844). Padding stays
+     the inherited .cs-opt-tag token-adjacent 1px 5px (no new rawSpacing). */
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
   white-space: nowrap;
+  letter-spacing: var(--ls-1);
 }
 #cs-options.cs-liv-grid .cs-liv-swatch .cs-opt-tag + .cs-opt-tag {
   left: auto;
@@ -804,26 +803,16 @@
 #cs-options.cs-liv-grid .cs-liv-del {
   position: absolute;
   top: 2px;
-  /* 24, NOT 22 — WCAG 2.2 SC 2.5.8 (AA) is a 24x24 CSS px CONFORMANCE floor,
-     and at 22 these were the only sub-24 targets left in the whole matrix: 69
-     of them, the same two buttons on every livery row, reported in all five
-     viewports that reach this tab. Two pixels each.
-     The spacing exception does not rescue them. It applies when a 24px circle
-     centred on the target touches no other target's circle, and EDIT and
-     DELETE sit at opposite ends of the same 2px-inset row with the row itself
-     clickable underneath — adjacent targets by construction. Nor the
-     "equivalent control" exception: nothing else on this screen customises or
-     deletes a livery.
-     Kept as an explicit min-width/min-height pair as well as width/height so a
-     narrow grid column cannot shrink them back under the floor — the box is a
-     conformance floor, not a preference, which is why it is not --tap.
-     --tap-min, not a literal 24px: the literal is only 24 PAINTED px at 100%.
-     At UI SIZE 40% it painted 10x10 (68 findings, the whole @40 tinyTaps
-     column of the 2026-08-21 sweep); the token divides by the zoom so the
-     painted box never drops below the conformance floor. */
+  /* UI Fit r6: house --tap / --tap-paint floor (survey rank 1). The old
+     --tap-min carve painted 26×26 vs body --tap 52 (82 soft taps at 390×844).
+     Content box stays --tap-min so the glyph/fill stay compact; padding is
+     the hit slop that lifts getBoundingClientRect to max(--tap, --tap-paint)
+     (52 on touch, 44 with a mouse). */
+  box-sizing: content-box;
   width: var(--tap-min); height: var(--tap-min);
   min-width: var(--tap-min); min-height: var(--tap-min);
-  padding: 0;
+  padding: calc((max(var(--tap), var(--tap-paint)) - var(--tap-min)) / 2);
+  background-clip: content-box;
   font-size: var(--fs-micro);
   z-index: 1;
   opacity: 0.92;

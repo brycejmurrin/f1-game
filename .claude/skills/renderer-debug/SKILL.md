@@ -1,6 +1,6 @@
 ---
 name: renderer-debug
-description: "Use when any renderer looks wrong on TLX (three.js), GLX (WebGL2) or WGX (WebGPU): blank/dark/black canvas or screen, missing road/world, NaN-white surfaces, lights wrong, shadow acne, bloom wrong, HDR/hdrMode or MSAA/HDR format issues, GL_INVALID_OPERATION, shader/WGSL compile or GPU validation errors, device lost or frozen frame, silent fallback to WebGL2, transparent cars, wgx-validate. Washed-out night → lighting-tuner; garbled or wrong-colour PBR material on any backend → asset-pack; shimmer while driving → playwright-probe."
+description: "Use when any renderer looks wrong on TLX (three.js), GLX (WebGL2) or WGX (WebGPU): blank/dark/black canvas or screen, missing road/world, NaN-white surfaces, lights wrong, shadow acne, bloom wrong, HDR/hdrMode or MSAA/HDR format issues, GL_INVALID_OPERATION, shader/WGSL compile or GPU validation errors, device lost or frozen frame, silent fallback to WebGL2, transparent cars, wgx-validate, WebXR/VR (js/xr/). Washed-out night → lighting-tuner; garbled or wrong-colour PBR material on any backend → asset-pack; shimmer while driving → playwright-probe."
 ---
 
 # Debug the renderer — TLX, GLX or WGX
@@ -85,3 +85,8 @@ derivative_uniformity (NaN-white road) / MSAA+HDR defects and the device-loss
 ladder: [references/wgx-defects.md](references/wgx-defects.md). WebKit/Safari/iOS:
 `IS_WEBKIT` forces `WGX_LITE`; its WGSL rules: `.claude/rules/render-wgx.md`. A
 textured-vs-procedural material look on WGX is **asset-pack**.
+
+## WebXR / VR
+
+`js/xr/` (ENTER VR, `XrBoot` / `XrSession`, the WebGL2-default VR path, Quest
+controllers, `test:xr` under IWER): [references/xr.md](references/xr.md).

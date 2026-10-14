@@ -288,8 +288,15 @@ const DrivingCoach = (function () {
       const how = end === "FRONTS" ? "BRAKE EARLIER, LESS STEERING" : end === "REARS" ? "SMOOTHER ON THE THROTTLE" : "EASE THE SLIDES";
       return { turn: best.turn, text: "TURN " + best.turn + " IS EATING THE " + end + " — " + how };
     }
+    // PERF-HUNT-2 S8: game.js flushes once per display frame (G._s8Stamp). A
+    // second update with the same stamp is a no-op; tests that omit the stamp
+    // keep the per-call behaviour.
+    let _s8Done = null;
     function update(dt) {
+      const stamp = G._s8Stamp;
+      if (stamp != null && stamp === _s8Done) return;
       if (!Number.isFinite(dt) || dt <= 0 || G.paused) return;
+      if (stamp != null) _s8Done = stamp;
       // A suspended frame is not sustained driving evidence.
       const step = Math.min(dt, 0.1);
       clock += step; elapsed += step; quiet = Math.max(0, quiet - step);

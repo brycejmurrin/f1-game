@@ -197,6 +197,8 @@ export const RULES = [
   [/^js\/audio\/voice-pack\.js/, ["audio-unit"], "the recorded radio voice: its composer, pack coverage and the RadioVoice hand-off"],
   [/^js\/audio\/announcer\.js/, ["audio-unit", "ui"], "the pre-race announcer: its own script+voice suite, and the loading screen and settings sheet that drive it"],
   [/^js\/audio\/panel\.js/, ["ui"], "mixer panel: audio behaviour + menu DOM"],
+  [/^js\/audio\/rivals\.js/, ["audio-unit"], "rival-audio.test.mjs and the pass-by voice pool"],
+  [/^js\/audio\/engine\.js/, ["audio-unit"], "GameAudio init attach of the rival pass-by pool"],
   [/^js\/audio\//, ["ui", "lifecycle-unit"], ""],
   [/^js\/perf\/governor\.js/, ["hooks", "modes", "state-unit"], ""],
   [/^js\/perf\//, ["ui"], "the quality preset, renderer picker and the overlays — DOM screens"],

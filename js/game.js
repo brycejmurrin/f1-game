@@ -752,6 +752,10 @@ const stricken = (o) => incidentSim.owns(o) || (o.rescueT || 0) > 0.25 || (!!o.o
   || (!(o.pitState && o.pitState !== "none") && (o.speed || 0) < vTop() * 0.05);
 const cautionFair = (o) => SportingRegs.exempt(o) || stricken(o);   // a car it is legal to pass under a caution
 const scWatch = SportingRegs.createPassWatch(0, stricken);
+// BLUE FLAGS for the player (AI yields via AiDrive.letPassCase): sustained
+// hold-up while being lapped → warning, then +5 s (js/race/sporting-regs.js;
+// ISC App. H 2.5.5(e) / App. L Ch. IV 2(a); 2026 Penalty Guidelines).
+const blueWatch = SportingRegs.createBlueFlagWatch(stricken);
 function scPassCall(ev) {
   if (!ev || !player) return; Log.info("game", "Caution pass " + ev.type + " n=" + (ev.n || 0) + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap + " level=" + raceCtl.level); if (ev.type === "cleared") { announce("POSITION RETURNED — NO PENALTY", 1.5, "penalty-warn"); return; }
   if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn", () => scWatch.info().owed > 0); return; }
@@ -760,6 +764,15 @@ function scPassCall(ev) {
   // re-read it so a time penalty that reorders the finish is served first.
   resultT = 0;
   announce("+" + ev.sec + "s PENALTY — OVERTAKING UNDER CAUTION", 3, "penalty-hit");
+  if (soundOn) GameAudio.penalty();
+}
+function blueFlagCall(ev) {
+  if (!ev || !player) return;
+  Log.info("game", "Blue flag " + ev.type + (ev.code ? " code=" + ev.code : "") + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap);
+  if (ev.type === "warn") { announce("BLUE FLAG WARNING", 2, "penalty-warn"); return; }
+  player.penalty += ev.sec;
+  resultT = 0;
+  announce("+" + ev.sec + "s IGNORING BLUE FLAGS", 3, "penalty-hit");
   if (soundOn) GameAudio.penalty();
 }
 // The cue phases that turn the pit ENTRANCE lamps green (SceneryPits): you are
@@ -1915,6 +1928,7 @@ function gridUp(preOrder) {
   // it is: the collision it exists to fix can only happen on the P12 branch.
   gridPreOrdered = !!(preOrder && preOrder.length === cars.length);
   scWatch.reset();
+  blueWatch.reset();
   const order = preOrder && preOrder.length === cars.length ? preOrder.slice() : (() => {
     // grid jitter: ONE simRnd() draw per car, BEFORE the sort — a random
     // comparator is inconsistent and its draw count engine-defined.
@@ -1950,7 +1964,7 @@ function gridUp(preOrder) {
     c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.prog = -(14 + i * 8); c.lap = 0; c.fuelLap = 0; c.fuelRestartLaps = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
     OvertakeMode.reset(c); c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
-    c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; delete c._coastHeld;   // last race's classification: makeCars' values; a race re-arms via armReliability
+    c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; c._coastHeld = undefined;   // last race's classification: makeCars' values (CarFields declares _coastHeld; a delete would make the car a dictionary); a race re-arms via armReliability
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
@@ -2771,19 +2785,30 @@ async function startRaceBody() {
   PerfGov.sentinelArm(true);
   if (PerfGov.strikes() > 0 && PerfGov.autoRes() && gfx.setRenderScale && gfx.getRenderScale)
     gfx.setRenderScale(Math.min(gfx.getRenderScale(), PerfGov.strikes() >= 2 ? 0.7 : 0.85));
+  // Car meshes + debris BEFORE countdown warm presents (#1477 shape: first present
+  // must not collide with heavy sync work). Cover → warm → arm count immediately.
+  // Do NOT await pack settle here: a 30 s wait after setState("count") burned the
+  // FlyingStart run-up (#1493 quali), and awaiting BEFORE count inflated every
+  // race entry enough to kill 18 m selected shards (hud-layout / packed-1).
+  // Gate requestWarm synchronously — warm menu already has packSettled; cold
+  // Start Race skips program warm until the pack lands (first draws compile).
+  const handoff = (loadingScreen.active() || loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !!player;
+  clearMenuScreens(); garagePre.release();
+  if (handoff) RaceEntryProfile.raiseHandoff(loadingScreen);
+  RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
+  RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
-  // TLX links programs synchronously on first draw — warm them during the LIGHTS,
-  // unless the menu's warm already ran for this world (warmPrograms, _warmKey).
-  // Optimisation only; GLX/WGX have no warm and no-op.
-  try { RaceEntryProfile.requestWarm(gfx, _warmKey === menuKey(trackIdx)); } catch (_) { /* as above */ }
+  // TLX links programs on first draw — warm during LIGHTS only when the pack is
+  // already settled (or unsupported/off), else createTextureArray owns the thread.
+  {
+    const settled = loadingScreen.packSettled || LoadingScreen.packSettled;
+    const packState = (typeof Assets !== "undefined" && Assets.state) ? Assets.state() : null;
+    if (!settled || settled(packState)) {
+      try { RaceEntryProfile.requestWarm(gfx, _warmKey === menuKey(trackIdx)); } catch (_) { /* as above */ }
+    }
+  }
   skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
-  // THE PRE-RACE SCREEN OUTLIVES THE SWEEP when it was up: the warm above paints
-  // nothing until it is done, so it is raised again, disarmed, and render()
-  // lowers it with the first frame the backend presents (LoadingScreen.handoff).
-  const handoff = (loadingScreen.active() || loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !!player;   // "build"/"busy": startRaceCovered + Start Race cover
-  clearMenuScreens(); garagePre.release();  // garage GPU set is not the race's (js/garage/prebuild.js); next idle title rebuilds it
-  if (handoff) RaceEntryProfile.raiseHandoff(loadingScreen);
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
   setHudUserHidden(false);   // start every race with the HUD shown (+ resets the toggle label)
@@ -2808,10 +2833,8 @@ async function startRaceBody() {
   // restart after a changeable race had arced into rain kept playing it dry.
   if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
   holdRaceWake(); syncRotateBlocker(true);   // AFTER the audio: on a portrait phone this pauses (stops engine/rain, drops the wake), and setPaused(false) on rotate restarts them
-  if (!vmNoFramePump) await yieldMain(); if (stale()) return false;   // do not glue car-mesh warm onto the settings/grid sync stretch
+  if (!vmNoFramePump) await yieldMain(); if (stale()) return false;
   if (gfxContextLost()) { loadingScreen.stop(); quitToMenu(); return false; }
-  RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
-  RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
 
   // Warm the actual rear view at its HUD size while the grid is covered.
   // startRace's promise includes this so multiplayer cannot arm green early.
@@ -3242,6 +3265,8 @@ const G = {
   get raceLineAssist() { return raceLineAssist; }, set raceLineAssist(v) { raceLineAssist = v; },
   get _lastFloodEmit() { return _lastFloodEmit; }, set _lastFloodEmit(v) { _lastFloodEmit = v; },
   get _studioRig() { return _studioRig; }, set _studioRig(v) { _studioRig = v; },
+  get _s8Stamp() { return _s8Stamp; },
+  set _s8Stamp(v) { _s8Stamp = v == null ? null : (v | 0); },   // PERF-HUNT-2 S8 once-per-frame
   get _testInput() { return _testInput; }, set _testInput(v) { _testInput = v; },
   get builtTrackNight() { return builtTrackNight; }, set builtTrackNight(v) { builtTrackNight = v; },
   get camEye() { return camEye; }, set camEye(v) { camEye = v; },
@@ -4436,6 +4461,8 @@ const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0,
                   deploy: 0, energy: 1, ersDeploy: 0.5, throttle: 1, brake: 0, regen: 0.5 };  // setEngine reads synchronously
 let _audioParamStep = true;   // tickBody clears it on all but a frame's last physics step
 const _engAcc = { dt: 0 };   // the local car's sim time since the engineer last listened (S8: once per frame)
+// S8 presentation dt; stamp null until first flush (0 would latch harness coach.update loops).
+const _s8Pres = { dt: 0 }; let _s8Stamp = null;
 function update(dt) {
   // No world: a stepped/worker race switch dropped it (dropTrackWorld) and is still building.
   // tickBody gates on it too; this covers __apex.step() (bug hunt 3 K1/X2).
@@ -4578,7 +4605,15 @@ function update(dt) {
     if (ranked[i].finished) nFin++;
   }
   if (nFin > 1) rankFinishers();
-  if (!isPractice() && !isQuali() && !realRace.owns(player)) scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
+  if (!isPractice() && !isQuali() && !realRace.owns(player)) {
+    scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
+    // Race only (TT/quali already gated): blue-flag compliance for the player.
+    if (session === "race" && track) {
+      blueFlagCall(blueWatch.tick(player, ranked, {
+        total: track.total, vRef: vTop(), caution: raceCtl.level, race: true,
+      }, dt));
+    }
+  }
 
   // Leading human for AiBand catch-up (scripted mode ignores). Once per step.
   _leadHuman = null;
@@ -4618,9 +4653,17 @@ function update(dt) {
   incidentSim.postStep(dt);
   RaceControl.endLineStep();
 
-  // B1 — debris caution: consume hazards() and drive the local-yellow / VSC / SC
-  // flag state (READ-ONLY; never slows or moves a car). Self-guarding + throttled.
-  updateCaution(dt); coach.update(dt); raceRadio.update(dt);
+  // B1 — debris caution + driving coach + race radio: presentation only
+  // (announce / audio). Once per FRAME on the last physics step with the
+  // frame's summed sim dt — same pattern as engineer / _audioParamStep
+  // (PERF-HUNT-2 S8). Modules also guard on G._s8Stamp so a second call in the
+  // same frame is a no-op. carSfx stays per-step (edge detectors).
+  _s8Pres.dt += dt;
+  if (_audioParamStep) {
+    _s8Stamp = (_s8Stamp == null ? 0 : _s8Stamp) + 1;
+    updateCaution(_s8Pres.dt); coach.update(_s8Pres.dt); raceRadio.update(_s8Pres.dt);
+    _s8Pres.dt = 0;
+  }
 
   // Race-control owns the finish policy as well as neutralisation rules. In a
   // human race an AI/other player crossing first must NOT start a 3.5 s result
@@ -4683,6 +4726,7 @@ function update(dt) {
     // The field around you: panned, distance-rolled and Doppler-shifted. Before
     // this there was no opponent audio at all, so a car alongside was silent.
     GameAudio.setRivals(rivalAudio.collect(player));
+    if (rivalAudio.emitFieldSfx) rivalAudio.emitFieldSfx(player);   // Radio r9: AI lock-up / slide squeal
   }
   if (soundOn && player) carSfx.update(player);
 }
@@ -4723,7 +4767,16 @@ const _alRGB = [0, 0, 0];   // always-on lights: the per-frame colour triple
 // Collision feedback when the player is involved, scaled by impact (0..1).
 function collideFx(a, b, impact) {
   Damage.contact(a, b, impact, track.total);   // every pair, before the player-only gate: DISPLAY ONLY (js/race/damage.js)
-  if (!a.isPlayer && !b.isPlayer) return;
+  if (!a.isPlayer && !b.isPlayer) {
+    // Radio r9: rival–rival positional contact SFX. Player path below is untouched.
+    if (soundOn && state === "race" && !paused && GameAudio.fieldContact) {
+      const wx = (a.px != null && b.px != null) ? (a.px + b.px) * 0.5 : (a.px != null ? a.px : b.px);
+      const wz = (a.pz != null && b.pz != null) ? (a.pz + b.pz) * 0.5 : (a.pz != null ? a.pz : b.pz);
+      const ia = cars.indexOf(a), ib = cars.indexOf(b), key = ia >= 0 && ib >= 0 ? (ia < ib ? ia * 64 + ib : ib * 64 + ia) : (ia >= 0 ? ia : ib);
+      GameAudio.fieldContact("bump", impact, wx, wz, key);
+    }
+    return;
+  }
   const pc = a.isPlayer ? a : b;
   if (pc.collideT > 0) return;
   impact = clamp(impact, 0.12, 1);
@@ -6833,6 +6886,321 @@ function armBackendProbe() {
     catch (_) { /* no probe: a jetsam in the arming window will not auto-revert */ }
   }
 }
+// Lighting-prep phase of render() — sky knobs, wetness/rain, lightning, lamps,
+// lamp spot-shadow, lamp fog + frame.tune. PURE MOVE (zero behavior change);
+// Lighting owns this domain. Returns `wet` for the draw path below.
+function renderLightingPrep(dt, hasLivePlayerShadow) {
+  // ── Sky animation & weather FX ──────────────────────────────────────────
+  // Advance the render clock regardless of physics freeze so the sky always
+  // animates (cloud drift, star twinkle) — unless a capture holds it.
+  if (!_skyHold) _skyT += dt;
+  frameSky.time = _skyT;
+  // STAR BRIGHTNESS / CLOUD SPEED tuner knobs ride on the sky object.
+  frameSky.starBright = LT.starBright;
+  frameSky.cloudSpeed = LT.cloudSpeed;
+  // SKY GRADIENT / STAR DENSITY / DAY SKY BLUE knobs also ride the sky object.
+  frameSky.skyGrad     = LT.skyGrad;
+  frameSky.starDensity = LT.starDensity;
+  frameSky.daySkyBlue  = LT.daySkyBlue;
+  // MIE SCATTER / CLOUD SILVER / CORONA AUREOLE / SUN DISC SIZE knobs (sky pass).
+  frameSky.mieScatter    = LT.mieScatter;
+  frameSky.cloudSilver   = LT.cloudSilver;
+  frameSky.coronaAureole = LT.coronaAureole;
+  frameSky.sunDiscSize   = LT.sunDiscSize;
+  // STAR SIZE / TWINKLE, MOON DISC SIZE / HALO, SUN CORONA / SQUASH, CITY GLOW
+  // REACH and CLOUD DEFINITION knobs also ride the sky object (sky pass).
+  frameSky.starSize      = LT.starSize;
+  frameSky.starTwinkle   = LT.starTwinkle;
+  frameSky.moonDiscSize  = LT.moonDiscSize;
+  frameSky.moonHalo      = LT.moonHalo;
+  frameSky.sunCorona     = LT.sunCorona;
+  frameSky.sunSquash     = LT.sunSquash;
+  frameSky.cityGlowReach = LT.cityGlowReach;
+  frameSky.cloudDef      = LT.cloudDef;
+  // Feed the same clock + cloud cover to the lit shader for drifting cloud shadows.
+  frame.time = _skyT;
+  frame.cloud = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
+  // Same cloud-speed knob the SKY uses, so the ground cloud-shadow dapple + the
+  // godray shafts freeze/slow in lockstep with the visible sky (0 = frozen sky).
+  frame.cloudSpeed = LT.cloudSpeed;
+  // THE PAINTED PIT LANE, as (entry s, window length, side, lap length). The
+  // lane is a fragment-shader marking rather than geometry — one ribbon, one
+  // arc coordinate, so a road that branches and rejoins cannot be built here
+  // (js/race/pit-lane.js says what that cost). null until the tyre setting
+  // arms a lane, and the shaders test the zero LENGTH, so nothing paints.
+  frame.pitLane = pits.laneUniform();
+  frame.pitBox = pits.boxUniform();   // where YOUR box is, for roadMarkings to draw
+  // frame.wetness: WeatherArc.syncWetness (wxArc.tick stands in only when
+  // headless, so it ramps once). LT.wetness ≥ 0 is the live tuner pin only — never a preset.
+  if (wxArc) wxArc.syncWetness(dt);
+  // Falling rain, for the puddle RIPPLES in the lit shaders (uRain / U.rain /
+  // params4.z): 1 in a storm, a third under the DRIZZLE tier, 0 dry — ramped at
+  // the same 0.8/s as wetness so the rings fade in and out rather than pop.
+  {
+    const rainTarget = isRaining() ? 1 : isWetRoad() ? 0.35 : 0;
+    const cur = frame.rain || 0;
+    frame.rain = cur + (rainTarget - cur) * Math.min(1, dt * 0.8);
+  }
+  // Moon: use the value set by applyRaceSettings; pass through for default
+  // night tracks that didn't go through the explicit raceTimeOfDay branch.
+  // (frameSky.moon is already set in applyRaceSettings for non-default modes;
+  // here we make sure default+track.night also gets a moon each frame.)
+  if (raceTimeOfDay === "default" && track && track.def && track.def.night) {
+    frameSky.moon = 0.85 * LT.moonBright;
+  }
+  // ── Lightning (active rain only) ─────────────────────────────────────────
+  const wet = isWetRoad();      // wet-road material applies to "wet" AND "rain"
+  const raining = isRaining();  // falling rain, lightning + thunder only in "rain"
+  if (raining && _ltBase && LT.lightning > 0) {
+    // Count down to the next strike
+    _ltNextT -= dt;
+    if (_ltNextT <= 0) {
+      // Trigger a new flash: intensity 1 → decays at ~8×/s
+      _ltFlash = 1.0;
+      // Next strike in 4–12 s, scaled by the LIGHTNING FREQ knob (higher = sooner).
+      _ltNextT = (4 + Math.random() * 8) / LT.lightning;
+      // Queue thunder to lag the flash (sound travels slower than light): a
+      // near strike cracks ~0.3 s later, a distant one rumbles up to ~2 s later.
+      _thunderT = _thunderDelay = 0.3 + Math.random() * 1.7;
+    }
+    if (_thunderT >= 0) {
+      _thunderT -= dt;
+      if (_thunderT < 0 && typeof GameAudio !== "undefined" && GameAudio.thunder) {
+        // The DRAWN delay, not the countdown's remainder. `_thunderT + dt` is
+        // whatever was left before this frame's decrement — between 0 and one
+        // frame — so it would always give ~1.0 - 0.008 and clamp to full
+        // volume: a 2 s distant rumble as loud as a 0.3 s overhead strike.
+        GameAudio.thunder(clamp(1.0 - _thunderDelay / 2.0, 0.15, 1.0));
+      }
+    }
+    if (_ltFlash > 0.001) {
+      // Decay: fast leading edge, then slow dying glow (LIGHTNING DECAY, def 8).
+      _ltFlash *= Math.exp(-(LT.lightningDecay != null ? LT.lightningDecay : 8) * dt);
+      if (_ltFlash < 0.001) _ltFlash = 0;
+    }
+    if (_ltFlash > 0) {
+      // Spike ambient to a cool blue-white; the decay reads as a natural flash.
+      // A brief exposure lift too, so the whole frame bleaches for the strike.
+      // Written IN PLACE (no per-frame array allocation — this ran every rain
+      // frame, exactly when the frame is already heaviest). LIGHTNING FLASH (def
+      // 1) scales the ambient spike + exposure lift together; def reproduces the
+      // shipped 0.55/0.40/0.22 exactly.
+      const lf = LT.lightningFlash != null ? LT.lightningFlash : 1;
+      const f = _ltFlash, aS = frame.ambientSky, aG = frame.ambientGround;
+      for (let i = 0; i < 3; i++) {
+        aS[i] = Math.min(1, _ltBase.ambientSky[i] + 0.55 * f * lf);
+        aG[i] = Math.min(1, _ltBase.ambientGround[i] + 0.40 * f * lf);
+      }
+      // SET from the saved base (was `+=`: it accumulated every frame of the
+      // ~0.9 s flash and was never restored — each strike permanently brightened
+      // the scene by ~+1.65 exposure, washing a stormy race out to white).
+      frame.exposure = _ltBase.exposure + 0.22 * f * lf;
+    } else {
+      // Restore base ambient + exposure so normal ticks aren't tinted (in place).
+      const aS = frame.ambientSky, aG = frame.ambientGround;
+      for (let i = 0; i < 3; i++) { aS[i] = _ltBase.ambientSky[i]; aG[i] = _ltBase.ambientGround[i]; }
+      frame.exposure = _ltBase.exposure;
+    }
+  } else if (_ltFlash > 0) {
+    // Weather flipped dry mid-flash: the decay above is inside the raining gate,
+    // so without this the flash froze >0 and frameSky.lightning (set uncondition-
+    // ally each frame) kept the sky partially bleached until the next storm.
+    _ltFlash *= Math.exp(-(LT.lightningDecay != null ? LT.lightningDecay : 8) * dt);
+    if (_ltFlash < 0.001) {   // the gate closed MID-flash (dry, LIGHTNING 0): the spiked ambient/exposure is not the base
+      _ltFlash = 0;
+      if (_ltBase) { for (let i = 0; i < 3; i++) { frame.ambientSky[i] = _ltBase.ambientSky[i]; frame.ambientGround[i] = _ltBase.ambientGround[i]; } frame.exposure = _ltBase.exposure; }
+    }
+  }
+  // Lamps: EVERY track has them (see buildTrackLights); they're fed to the
+  // shader whenever the scene is dark enough to read them — night, dusk, or dawn
+  // on any circuit, or a night-default track in default mode. In bright day the
+  // sun dominates so they're normally left off (no washed-out daylight pools) —
+  // UNLESS the DAYTIME LAMPS knob (LT.floodDay) is turned up, which lights the
+  // pools under a blue sky for a lit-stadium look (handled in the else-branch).
+  const _floodActive = isFloodActiveSession();
+  // Daytime lamps: only when the session isn't already a dark one AND the knob is
+  // up. Brightness = floodDay × LAMP LEVEL (neutral white, no twilight warmth ramp).
+  const _floodDayLvl = (!_floodActive && LT.floodDay > 0) ? LT.floodDay : 0;
+  // Cleared every frame, set only by the flood branch: `frame` outlives a
+  // night->day time-of-day flip (rebuilt only in loadTrack), and a stale
+  // allLights kept chunked geometry binding per-chunk night lamps in daylight.
+  frame.allLights = null; frame.lampBake = null; frame.perChunkLights = 0; frame.roadChunkLamps = 0; frame.tailStart = 0; frame.tailCount = 0;
+  if (_floodActive || _floodDayLvl > 0) {
+    // Rebuild if empty (not just undefined): a light set built before the track
+    // centreline finished is empty; retry until it yields lights. Tracks always
+    // produce a full set once complete, so this self-heals in a frame.
+    if (!track._lights || track._lights.length === 0) track._lights = buildTrackLights(track);
+    // Time-dependent lamps: brightness + COLOUR ramp with sun elevation.
+    // At twilight (sun near/just below horizon) the lamps are dim and WARM, as if
+    // freshly switched on / still warming up; by deep night they reach full
+    // brightness and cool to their neutral tint. Smooth, no hard dusk/night step.
+    // The dusk sky sits at a near-constant ~10-20 degree sun elevation for the
+    // WHOLE session (see the dusk sunDir above) — a (0.07-sy)/0.22 ramp pins
+    // at nightF=0 the entire time, stuck at a fixed 0.34 floor no matter how
+    // bright that golden-hour sky still is. Lamps that bright, fed
+    // through the wet-road SSR mirror, blew out the whole reflected scene.
+    // Full "night" sessions deliberately keep sunY slightly positive for the sky
+    // glow (see _floodEmit below) — ramp by elevation ONLY for dusk/dawn, and
+    // stay at full brightness for a real night session, same branching as
+    // _floodEmit uses.
+    // LAMP TEMPERATURE: a signed white-balance layered over each lamp's own
+    // colour + the automatic twilight warmth ramp. −1 warm (sodium ~2700K),
+    // +1 cool (LED/broadcast ~6500K). Green held near-constant; red↑/blue↓ warm.
+    // Shared by the night and daytime-flood paths.
+    const _lt = LT.lampTemp || 0;
+    const _ltr = 1 + Math.max(0, -_lt) * 0.18 - Math.max(0, _lt) * 0.12;
+    const _ltg = 1 - Math.abs(_lt) * 0.02;
+    const _ltb = 1 - Math.max(0, -_lt) * 0.30 + Math.max(0, _lt) * 0.20;
+    frame.glowLights = null;   // appendCarTailLights sets it; stale otherwise (TAIL-LIGHT EMIT 0)
+    frame.lampBake = null;     // BAKED LAMP POOLS: set below whenever the flood set is lit (night or day floods)
+    if (_floodActive) {
+      const _sy = frame.sunDir ? frame.sunDir[1] : -1;
+      // Floor the twilight ramp at 0.30: the dusk sunDir sits slightly higher than
+      // dawn's, so a bare `clamp(1 - _sy*6, 0)` pinned dusk floods at the 5% floor
+      // for the whole session (the LAMPS sliders had no authority at dusk).
+      // The floor lands dusk at dawn's ~0.30 level so both twilights are usable.
+      // TWILIGHT FLOOR + TWILIGHT RAMP knobs: the dawn/dusk floor level and how
+      // steeply floods climb to full as the sun sets (def 0.30 / 6 = as-shipped).
+      const nightF = (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
+        ? Math.max(LT.twilightFloor != null ? LT.twilightFloor : 0.30,
+                   clamp(1 - _sy * (LT.twilightRamp != null ? LT.twilightRamp : 6), 0, 1))
+        : 1;                                              // night / default-night: full ramp
+      // Overall dimmer: the per-lamp base intensities (floodColor) are tuned as
+      // raw physical HDR values (16-20) — at full ceiling they overpowered the
+      // scene (blown-out wet-road SSR mirror, washed neon night city, blown-white
+      // barrier walls beside close-mounted masts). Cap the ceiling well below 1.0,
+      // on top of the twilight ramp above.
+      const lvl  = (0.05 + 0.95 * nightF) * LT.lampLevel;
+      const warmth = (1 - nightF) * (LT.twilightWarm != null ? LT.twilightWarm : 1);
+      _floodRGB[0] = lvl * (1 + warmth * 0.14) * _ltr;
+      _floodRGB[1] = lvl * _ltg;
+      _floodRGB[2] = lvl * (1 - warmth * 0.22) * _ltb;
+    } else {
+      const lvl = _floodDayLvl * LT.lampLevel;
+      _floodRGB[0] = lvl * _ltr; _floodRGB[1] = lvl * _ltg; _floodRGB[2] = lvl * _ltb;
+    }
+    _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
+    // Resolved BEFORE setFrameLights: it builds the scaled full set for the
+    // per-chunk path and needs these already on the frame (they are cleared
+    // above, so reading them earlier always saw 0).
+    // ADAPTIVE: autoShed() is the crash floor + the governor's MEASURED shed
+    // WITHOUT the GRAPHICS user floor (js/perf/governor.js `_autoShed`), so LOW does
+    // not disable this while a device missing frames still sheds it. A tier()>=1
+    // gate locks out MEDIUM although the shipped 0.3 measured 18.6%/23.5% FASTER
+    // (docs/PERF-FINDINGS.md §R5); autoTier() leaks the preset back in.
+    // SHED TO THE CHEAP SETTING, NOT OFF. At autoShed 1 the knob is capped at
+    // 0.3 (8 lamps a chunk) — the setting §R5 measured FASTER than off — and
+    // only autoShed 2 turns it off. Switching it off at the first shed handed a
+    // struggling phone the camera-culled set: slower, and the lamps ahead
+    // popping on as they entered it.
+    const _pcShed = PerfGov.autoShed();
+    // Wet phone floor: on a wet road ~half a lamp's light is its live reflection,
+    // and at a 16-24 slot cap 35-39 % of it comes from lamps outside the set
+    // (docs/notes/LAMP-POPPING-PLAN-2026-09-24.md, b) — so they pop. Per-chunk
+    // lamps, road included, cover them; the governor shed still wins.
+    const _pcWet = gfx.mobileTier && (frame.wetness || 0) > 0.75 ? 0.6 : 0;   // 0.75: rain/wet only — dry sheen is ssrDryNight, not wetness
+    frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || _pcShed >= 2) ? 0
+      : (_pcShed >= 1 ? Math.min(0.3, Math.max(_pcWet, +LT.perChunkLights || 0)) : Math.max(_pcWet, +LT.perChunkLights || 0));
+    frame.roadChunkLamps = (frame.perChunkLights > 0 && (LT.roadChunkLamps || _pcWet > 0)) ? 1 : 0;
+    setFrameLights(camEye, _floodRGB, _lightFwd);
+    // BAKED LAMP POOLS (js/lighting/lamp-bake.js): the whole track set's ground
+    // pools at base colour, scaled per frame by the same _floodRGB the live set gets.
+    // Paint-mode tails only: emitting tails ride the live loop, whose diffuse
+    // (lampSh - bakeW) would erase their unbaked pool on the road.
+    if (LT.lampBake > 0 && gfx.hasLampBake && !(LT.tailLightEmit > 0)) {
+      frame.lampBake = LampBake.forTrack(track, track._lights, LT.lampNearClamp, undefined, false, LampBake.budget(gfx));
+      frame.lampBakeScale = _floodRGB;
+    }
+    // PER-CHUNK LAMPS (experimental): hand the renderer the FULL baked lamp list
+    // alongside the globally-culled frame.lights, so GLXChunked can bind each
+    // chunk its own nearest-24 instead of every chunk sharing this one set.
+    // frame.lights stays authoritative for the car and everything non-chunked.
+    // setFrameLights fills allLights with the SCALED full set when per-chunk is
+    // on; off, nothing consumes it, so leave it null rather than the raw list.
+    if (!(frame.perChunkLights > 0)) { frame.allLights = null; frame.allLightsGen = 0; }
+    // Pass the knob's VALUE, not a flag. PER-CHUNK LAMPS is a 0..1 amount: > 0
+    // turns per-chunk lamp sets on and doubles as the track-lamp intensity
+    // scale, because the feature genuinely delivers more light per fragment
+    // (each chunk gets up to 24 lamps that actually reach it instead of sharing
+    // one global cull) and needs a dimmer to be usable at the shipped LAMP LEVEL.
+    // SHEDS AT TIER 1 — the ladder every other expensive feature is already on
+    // (SSR at 2, car shadows at 3, SSAO/god-rays/bloom/lampVol at 4). PER-CHUNK
+    // LAMPS was the one discretionary renderer feature with NO tier gate at
+    // all, so a device that could not afford it had no way out except the
+    // player noticing.
+    //
+    // It needs the EARLIEST rung, not the latest, because its cost is
+    // per-fragment and unbounded rather than a fixed pass. The lit shader loops
+    // the bound lamp slots per fragment; without per-chunk most slots hold lamps
+    // nowhere near it, so the range reject fires at once and they cost almost
+    // nothing. Per-chunk deliberately fills those slots with lamps that DO
+    // reach — the whole point of the feature — so far more iterations run the
+    // full lighting path. Cockpit view compounds it: the camera sits against
+    // near geometry and now carries reflective mirror surfaces.
+    //
+    // MEASURED, by accident: every camera mode rendered 20 frames
+    // in seconds, then cockpit + night + perChunkLights=1 held 380% CPU for 22
+    // MINUTES on 40 frames in the same harness. On real hardware a frame that
+    // cannot finish inside the driver's watchdog is a GPU reset — context lost,
+    // page dead, which a player reports as a crash rather than as slowness.
+    // (Distinct from the merged-draw watchdog theory considered and dismissed
+    // earlier: that was ONE large draw, single-digit ms. This is sustained
+    // per-fragment cost across the whole frame.)
+    //
+    // Composes with the crash sentinel in js/perf/governor.js: a player who has
+    // already hit a hard failure comes back at a floored tier, which now has
+    // the feature off, so the sentinel can actually rescue this case instead of
+    // watching it repeat.
+    // (both resolved above, before setFrameLights.)
+    // Car tail-lights are an after-dark cue only — skip them under daytime floods.
+    // They are appended to frame.lights AFTER the static cull, so they sit
+    // outside track._lights and a per-chunk set built from allLights would drop
+    // them. Record the appended range so GLXChunked can add them to every chunk.
+    if (_floodActive) appendCarTailLights();   // sets the real tailStart/tailCount range
+  } else if (track.hasAlwaysLamps) {
+    // ALWAYS-ON FIXTURES in a bright session. A circuit can register lamps that
+    // burn regardless of the hour (lampPost({always:true}) — Monaco's tunnel
+    // luminaires). Those live in a SEPARATE baked set, so a day race lights the
+    // one place the sun cannot reach without switching the whole circuit's
+    // street lighting on. Same cull, same knobs; no twilight ramp and no car
+    // tail-lights, both of which are after-dark cues.
+    if (!track._alwaysLights || track._alwaysLights.length === 0)
+      track._alwaysLights = buildTrackLights(track, true);
+    if (track._alwaysLights.length) {
+      const _al = LT.lampLevel;
+      _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
+      _alRGB[0] = _alRGB[1] = _alRGB[2] = _al;   // pooled — this ran once per frame
+      setFrameLights(camEye, _alRGB, _lightFwd, track._alwaysLights);
+    } else frame.lights = null;
+  } else {
+    frame.lights = null;
+  }
+  // Studio rig override: replaces the session lamps with the inspection ring.
+  if (_studioRig) {
+    const rig = buildStudioRig();
+    if (rig) { frame.lights = rig; frame.lampBake = null; }   // the rig is not in the bake
+  }
+  // ── Nearest-floodlight SPOT shadow pass ─────────────────────────────────
+  // Nearest-floodlight spot shadow map (night): js/render/shared/shadow-pass.js.
+  if (!XrBoot.comfort()) shadowPass.lampPass(frame, _frameNo, hasLivePlayerShadow);
+  // GLOWING FOG driver: on whenever lamps are lit, swelling with haze so a
+  // fog-weather night is the money shot while a clear night keeps only a hint.
+  // Day / lights-off => 0, so daytime fog stays a pure sun tint. Faded by SUN
+  // BRIGHTNESS (not elevation - the night key stays above the horizon for sky
+  // glow): at dawn/dusk the sun in-scatter already lights the mist, and lamp
+  // glow on top blew the dawn mist band out.
+  const _lfSun = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+  const _lfGate = clamp((0.55 - _lfSun) / 0.30, 0, 1);
+  // The GROUND MIST knob scales here too — the shader-side mist band already
+  // rides uGroundMist * LT.mistDensity, so the lamp-fog swell must follow the
+  // same tuned amount (reading the raw value left lamps glowing "in mist" with
+  // the mist slider at 0, and refusing to swell with it turned up).
+  frame.lampFog = frame.lights ? Math.min(0.9, LT.lampFogBase + LT.lampFogHaze * (frame.groundMist || 0) * LT.mistDensity) * _lfGate : 0;
+  // Shader-side tunables ride along on the frame (glx begin() uploads them).
+  frame.tune = LT;
+  return wet;
+}
+
 /** True when the bound backend reports a lost context/device (its cheap ctxLost(); backendState() is the diagnostic fallback). */
 function gfxContextLost() {
   try { if (gfx && gfx.ctxLost) return !!gfx.ctxLost(); const s = gfx && gfx.backendState && gfx.backendState(); return !!(s && s.ctxLost); }
@@ -7272,314 +7640,8 @@ function render(dt) {
   // Sun / car shadow maps: js/render/shared/shadow-pass.js (snap-cached static map,
   // per-frame car map). The live player matrix was resolved above.
   if (!XrBoot.comfort()) shadowPass.sunPass(frame, _frameNo, _hasLivePlayerShadow);   // XR: skip maps
-  // ── Sky animation & weather FX ──────────────────────────────────────────
-  // Advance the render clock regardless of physics freeze so the sky always
-  // animates (cloud drift, star twinkle) — unless a capture holds it.
-  if (!_skyHold) _skyT += dt;
-  frameSky.time = _skyT;
-  // STAR BRIGHTNESS / CLOUD SPEED tuner knobs ride on the sky object.
-  frameSky.starBright = LT.starBright;
-  frameSky.cloudSpeed = LT.cloudSpeed;
-  // SKY GRADIENT / STAR DENSITY / DAY SKY BLUE knobs also ride the sky object.
-  frameSky.skyGrad     = LT.skyGrad;
-  frameSky.starDensity = LT.starDensity;
-  frameSky.daySkyBlue  = LT.daySkyBlue;
-  // MIE SCATTER / CLOUD SILVER / CORONA AUREOLE / SUN DISC SIZE knobs (sky pass).
-  frameSky.mieScatter    = LT.mieScatter;
-  frameSky.cloudSilver   = LT.cloudSilver;
-  frameSky.coronaAureole = LT.coronaAureole;
-  frameSky.sunDiscSize   = LT.sunDiscSize;
-  // STAR SIZE / TWINKLE, MOON DISC SIZE / HALO, SUN CORONA / SQUASH, CITY GLOW
-  // REACH and CLOUD DEFINITION knobs also ride the sky object (sky pass).
-  frameSky.starSize      = LT.starSize;
-  frameSky.starTwinkle   = LT.starTwinkle;
-  frameSky.moonDiscSize  = LT.moonDiscSize;
-  frameSky.moonHalo      = LT.moonHalo;
-  frameSky.sunCorona     = LT.sunCorona;
-  frameSky.sunSquash     = LT.sunSquash;
-  frameSky.cityGlowReach = LT.cityGlowReach;
-  frameSky.cloudDef      = LT.cloudDef;
-  // Feed the same clock + cloud cover to the lit shader for drifting cloud shadows.
-  frame.time = _skyT;
-  frame.cloud = frameSky.cloud !== undefined ? frameSky.cloud : _cloudBase;
-  // Same cloud-speed knob the SKY uses, so the ground cloud-shadow dapple + the
-  // godray shafts freeze/slow in lockstep with the visible sky (0 = frozen sky).
-  frame.cloudSpeed = LT.cloudSpeed;
-  // THE PAINTED PIT LANE, as (entry s, window length, side, lap length). The
-  // lane is a fragment-shader marking rather than geometry — one ribbon, one
-  // arc coordinate, so a road that branches and rejoins cannot be built here
-  // (js/race/pit-lane.js says what that cost). null until the tyre setting
-  // arms a lane, and the shaders test the zero LENGTH, so nothing paints.
-  frame.pitLane = pits.laneUniform();
-  frame.pitBox = pits.boxUniform();   // where YOUR box is, for roadMarkings to draw
-  // frame.wetness: WeatherArc.syncWetness (wxArc.tick stands in only when
-  // headless, so it ramps once). LT.wetness ≥ 0 is the live tuner pin only — never a preset.
-  if (wxArc) wxArc.syncWetness(dt);
-  // Falling rain, for the puddle RIPPLES in the lit shaders (uRain / U.rain /
-  // params4.z): 1 in a storm, a third under the DRIZZLE tier, 0 dry — ramped at
-  // the same 0.8/s as wetness so the rings fade in and out rather than pop.
-  {
-    const rainTarget = isRaining() ? 1 : isWetRoad() ? 0.35 : 0;
-    const cur = frame.rain || 0;
-    frame.rain = cur + (rainTarget - cur) * Math.min(1, dt * 0.8);
-  }
-  // Moon: use the value set by applyRaceSettings; pass through for default
-  // night tracks that didn't go through the explicit raceTimeOfDay branch.
-  // (frameSky.moon is already set in applyRaceSettings for non-default modes;
-  // here we make sure default+track.night also gets a moon each frame.)
-  if (raceTimeOfDay === "default" && track && track.def && track.def.night) {
-    frameSky.moon = 0.85 * LT.moonBright;
-  }
-  // ── Lightning (active rain only) ─────────────────────────────────────────
-  const wet = isWetRoad();      // wet-road material applies to "wet" AND "rain"
-  const raining = isRaining();  // falling rain, lightning + thunder only in "rain"
-  if (raining && _ltBase && LT.lightning > 0) {
-    // Count down to the next strike
-    _ltNextT -= dt;
-    if (_ltNextT <= 0) {
-      // Trigger a new flash: intensity 1 → decays at ~8×/s
-      _ltFlash = 1.0;
-      // Next strike in 4–12 s, scaled by the LIGHTNING FREQ knob (higher = sooner).
-      _ltNextT = (4 + Math.random() * 8) / LT.lightning;
-      // Queue thunder to lag the flash (sound travels slower than light): a
-      // near strike cracks ~0.3 s later, a distant one rumbles up to ~2 s later.
-      _thunderT = _thunderDelay = 0.3 + Math.random() * 1.7;
-    }
-    if (_thunderT >= 0) {
-      _thunderT -= dt;
-      if (_thunderT < 0 && typeof GameAudio !== "undefined" && GameAudio.thunder) {
-        // The DRAWN delay, not the countdown's remainder. `_thunderT + dt` is
-        // whatever was left before this frame's decrement — between 0 and one
-        // frame — so it would always give ~1.0 - 0.008 and clamp to full
-        // volume: a 2 s distant rumble as loud as a 0.3 s overhead strike.
-        GameAudio.thunder(clamp(1.0 - _thunderDelay / 2.0, 0.15, 1.0));
-      }
-    }
-    if (_ltFlash > 0.001) {
-      // Decay: fast leading edge, then slow dying glow (LIGHTNING DECAY, def 8).
-      _ltFlash *= Math.exp(-(LT.lightningDecay != null ? LT.lightningDecay : 8) * dt);
-      if (_ltFlash < 0.001) _ltFlash = 0;
-    }
-    if (_ltFlash > 0) {
-      // Spike ambient to a cool blue-white; the decay reads as a natural flash.
-      // A brief exposure lift too, so the whole frame bleaches for the strike.
-      // Written IN PLACE (no per-frame array allocation — this ran every rain
-      // frame, exactly when the frame is already heaviest). LIGHTNING FLASH (def
-      // 1) scales the ambient spike + exposure lift together; def reproduces the
-      // shipped 0.55/0.40/0.22 exactly.
-      const lf = LT.lightningFlash != null ? LT.lightningFlash : 1;
-      const f = _ltFlash, aS = frame.ambientSky, aG = frame.ambientGround;
-      for (let i = 0; i < 3; i++) {
-        aS[i] = Math.min(1, _ltBase.ambientSky[i] + 0.55 * f * lf);
-        aG[i] = Math.min(1, _ltBase.ambientGround[i] + 0.40 * f * lf);
-      }
-      // SET from the saved base (was `+=`: it accumulated every frame of the
-      // ~0.9 s flash and was never restored — each strike permanently brightened
-      // the scene by ~+1.65 exposure, washing a stormy race out to white).
-      frame.exposure = _ltBase.exposure + 0.22 * f * lf;
-    } else {
-      // Restore base ambient + exposure so normal ticks aren't tinted (in place).
-      const aS = frame.ambientSky, aG = frame.ambientGround;
-      for (let i = 0; i < 3; i++) { aS[i] = _ltBase.ambientSky[i]; aG[i] = _ltBase.ambientGround[i]; }
-      frame.exposure = _ltBase.exposure;
-    }
-  } else if (_ltFlash > 0) {
-    // Weather flipped dry mid-flash: the decay above is inside the raining gate,
-    // so without this the flash froze >0 and frameSky.lightning (set uncondition-
-    // ally each frame) kept the sky partially bleached until the next storm.
-    _ltFlash *= Math.exp(-(LT.lightningDecay != null ? LT.lightningDecay : 8) * dt);
-    if (_ltFlash < 0.001) {   // the gate closed MID-flash (dry, LIGHTNING 0): the spiked ambient/exposure is not the base
-      _ltFlash = 0;
-      if (_ltBase) { for (let i = 0; i < 3; i++) { frame.ambientSky[i] = _ltBase.ambientSky[i]; frame.ambientGround[i] = _ltBase.ambientGround[i]; } frame.exposure = _ltBase.exposure; }
-    }
-  }
-  // Lamps: EVERY track has them (see buildTrackLights); they're fed to the
-  // shader whenever the scene is dark enough to read them — night, dusk, or dawn
-  // on any circuit, or a night-default track in default mode. In bright day the
-  // sun dominates so they're normally left off (no washed-out daylight pools) —
-  // UNLESS the DAYTIME LAMPS knob (LT.floodDay) is turned up, which lights the
-  // pools under a blue sky for a lit-stadium look (handled in the else-branch).
-  const _floodActive = isFloodActiveSession();
-  // Daytime lamps: only when the session isn't already a dark one AND the knob is
-  // up. Brightness = floodDay × LAMP LEVEL (neutral white, no twilight warmth ramp).
-  const _floodDayLvl = (!_floodActive && LT.floodDay > 0) ? LT.floodDay : 0;
-  // Cleared every frame, set only by the flood branch: `frame` outlives a
-  // night->day time-of-day flip (rebuilt only in loadTrack), and a stale
-  // allLights kept chunked geometry binding per-chunk night lamps in daylight.
-  frame.allLights = null; frame.lampBake = null; frame.perChunkLights = 0; frame.roadChunkLamps = 0; frame.tailStart = 0; frame.tailCount = 0;
-  if (_floodActive || _floodDayLvl > 0) {
-    // Rebuild if empty (not just undefined): a light set built before the track
-    // centreline finished is empty; retry until it yields lights. Tracks always
-    // produce a full set once complete, so this self-heals in a frame.
-    if (!track._lights || track._lights.length === 0) track._lights = buildTrackLights(track);
-    // Time-dependent lamps: brightness + COLOUR ramp with sun elevation.
-    // At twilight (sun near/just below horizon) the lamps are dim and WARM, as if
-    // freshly switched on / still warming up; by deep night they reach full
-    // brightness and cool to their neutral tint. Smooth, no hard dusk/night step.
-    // The dusk sky sits at a near-constant ~10-20 degree sun elevation for the
-    // WHOLE session (see the dusk sunDir above) — a (0.07-sy)/0.22 ramp pins
-    // at nightF=0 the entire time, stuck at a fixed 0.34 floor no matter how
-    // bright that golden-hour sky still is. Lamps that bright, fed
-    // through the wet-road SSR mirror, blew out the whole reflected scene.
-    // Full "night" sessions deliberately keep sunY slightly positive for the sky
-    // glow (see _floodEmit below) — ramp by elevation ONLY for dusk/dawn, and
-    // stay at full brightness for a real night session, same branching as
-    // _floodEmit uses.
-    // LAMP TEMPERATURE: a signed white-balance layered over each lamp's own
-    // colour + the automatic twilight warmth ramp. −1 warm (sodium ~2700K),
-    // +1 cool (LED/broadcast ~6500K). Green held near-constant; red↑/blue↓ warm.
-    // Shared by the night and daytime-flood paths.
-    const _lt = LT.lampTemp || 0;
-    const _ltr = 1 + Math.max(0, -_lt) * 0.18 - Math.max(0, _lt) * 0.12;
-    const _ltg = 1 - Math.abs(_lt) * 0.02;
-    const _ltb = 1 - Math.max(0, -_lt) * 0.30 + Math.max(0, _lt) * 0.20;
-    frame.glowLights = null;   // appendCarTailLights sets it; stale otherwise (TAIL-LIGHT EMIT 0)
-    frame.lampBake = null;     // BAKED LAMP POOLS: set below whenever the flood set is lit (night or day floods)
-    if (_floodActive) {
-      const _sy = frame.sunDir ? frame.sunDir[1] : -1;
-      // Floor the twilight ramp at 0.30: the dusk sunDir sits slightly higher than
-      // dawn's, so a bare `clamp(1 - _sy*6, 0)` pinned dusk floods at the 5% floor
-      // for the whole session (the LAMPS sliders had no authority at dusk).
-      // The floor lands dusk at dawn's ~0.30 level so both twilights are usable.
-      // TWILIGHT FLOOR + TWILIGHT RAMP knobs: the dawn/dusk floor level and how
-      // steeply floods climb to full as the sun sets (def 0.30 / 6 = as-shipped).
-      const nightF = (raceTimeOfDay === "dusk" || raceTimeOfDay === "dawn")
-        ? Math.max(LT.twilightFloor != null ? LT.twilightFloor : 0.30,
-                   clamp(1 - _sy * (LT.twilightRamp != null ? LT.twilightRamp : 6), 0, 1))
-        : 1;                                              // night / default-night: full ramp
-      // Overall dimmer: the per-lamp base intensities (floodColor) are tuned as
-      // raw physical HDR values (16-20) — at full ceiling they overpowered the
-      // scene (blown-out wet-road SSR mirror, washed neon night city, blown-white
-      // barrier walls beside close-mounted masts). Cap the ceiling well below 1.0,
-      // on top of the twilight ramp above.
-      const lvl  = (0.05 + 0.95 * nightF) * LT.lampLevel;
-      const warmth = (1 - nightF) * (LT.twilightWarm != null ? LT.twilightWarm : 1);
-      _floodRGB[0] = lvl * (1 + warmth * 0.14) * _ltr;
-      _floodRGB[1] = lvl * _ltg;
-      _floodRGB[2] = lvl * (1 - warmth * 0.22) * _ltb;
-    } else {
-      const lvl = _floodDayLvl * LT.lampLevel;
-      _floodRGB[0] = lvl * _ltr; _floodRGB[1] = lvl * _ltg; _floodRGB[2] = lvl * _ltb;
-    }
-    _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
-    // Resolved BEFORE setFrameLights: it builds the scaled full set for the
-    // per-chunk path and needs these already on the frame (they are cleared
-    // above, so reading them earlier always saw 0).
-    // ADAPTIVE: autoShed() is the crash floor + the governor's MEASURED shed
-    // WITHOUT the GRAPHICS user floor (js/perf/governor.js `_autoShed`), so LOW does
-    // not disable this while a device missing frames still sheds it. A tier()>=1
-    // gate locks out MEDIUM although the shipped 0.3 measured 18.6%/23.5% FASTER
-    // (docs/PERF-FINDINGS.md §R5); autoTier() leaks the preset back in.
-    // SHED TO THE CHEAP SETTING, NOT OFF. At autoShed 1 the knob is capped at
-    // 0.3 (8 lamps a chunk) — the setting §R5 measured FASTER than off — and
-    // only autoShed 2 turns it off. Switching it off at the first shed handed a
-    // struggling phone the camera-culled set: slower, and the lamps ahead
-    // popping on as they entered it.
-    const _pcShed = PerfGov.autoShed();
-    // Wet phone floor: on a wet road ~half a lamp's light is its live reflection,
-    // and at a 16-24 slot cap 35-39 % of it comes from lamps outside the set
-    // (docs/notes/LAMP-POPPING-PLAN-2026-09-24.md, b) — so they pop. Per-chunk
-    // lamps, road included, cover them; the governor shed still wins.
-    const _pcWet = gfx.mobileTier && (frame.wetness || 0) > 0.75 ? 0.6 : 0;   // 0.75: rain/wet only — dry sheen is ssrDryNight, not wetness
-    frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || _pcShed >= 2) ? 0
-      : (_pcShed >= 1 ? Math.min(0.3, Math.max(_pcWet, +LT.perChunkLights || 0)) : Math.max(_pcWet, +LT.perChunkLights || 0));
-    frame.roadChunkLamps = (frame.perChunkLights > 0 && (LT.roadChunkLamps || _pcWet > 0)) ? 1 : 0;
-    setFrameLights(camEye, _floodRGB, _lightFwd);
-    // BAKED LAMP POOLS (js/lighting/lamp-bake.js): the whole track set's ground
-    // pools at base colour, scaled per frame by the same _floodRGB the live set gets.
-    // Paint-mode tails only: emitting tails ride the live loop, whose diffuse
-    // (lampSh - bakeW) would erase their unbaked pool on the road.
-    if (LT.lampBake > 0 && gfx.hasLampBake && !(LT.tailLightEmit > 0)) {
-      frame.lampBake = LampBake.forTrack(track, track._lights, LT.lampNearClamp, undefined, false, LampBake.budget(gfx));
-      frame.lampBakeScale = _floodRGB;
-    }
-    // PER-CHUNK LAMPS (experimental): hand the renderer the FULL baked lamp list
-    // alongside the globally-culled frame.lights, so GLXChunked can bind each
-    // chunk its own nearest-24 instead of every chunk sharing this one set.
-    // frame.lights stays authoritative for the car and everything non-chunked.
-    // setFrameLights fills allLights with the SCALED full set when per-chunk is
-    // on; off, nothing consumes it, so leave it null rather than the raw list.
-    if (!(frame.perChunkLights > 0)) { frame.allLights = null; frame.allLightsGen = 0; }
-    // Pass the knob's VALUE, not a flag. PER-CHUNK LAMPS is a 0..1 amount: > 0
-    // turns per-chunk lamp sets on and doubles as the track-lamp intensity
-    // scale, because the feature genuinely delivers more light per fragment
-    // (each chunk gets up to 24 lamps that actually reach it instead of sharing
-    // one global cull) and needs a dimmer to be usable at the shipped LAMP LEVEL.
-    // SHEDS AT TIER 1 — the ladder every other expensive feature is already on
-    // (SSR at 2, car shadows at 3, SSAO/god-rays/bloom/lampVol at 4). PER-CHUNK
-    // LAMPS was the one discretionary renderer feature with NO tier gate at
-    // all, so a device that could not afford it had no way out except the
-    // player noticing.
-    //
-    // It needs the EARLIEST rung, not the latest, because its cost is
-    // per-fragment and unbounded rather than a fixed pass. The lit shader loops
-    // the bound lamp slots per fragment; without per-chunk most slots hold lamps
-    // nowhere near it, so the range reject fires at once and they cost almost
-    // nothing. Per-chunk deliberately fills those slots with lamps that DO
-    // reach — the whole point of the feature — so far more iterations run the
-    // full lighting path. Cockpit view compounds it: the camera sits against
-    // near geometry and now carries reflective mirror surfaces.
-    //
-    // MEASURED, by accident: every camera mode rendered 20 frames
-    // in seconds, then cockpit + night + perChunkLights=1 held 380% CPU for 22
-    // MINUTES on 40 frames in the same harness. On real hardware a frame that
-    // cannot finish inside the driver's watchdog is a GPU reset — context lost,
-    // page dead, which a player reports as a crash rather than as slowness.
-    // (Distinct from the merged-draw watchdog theory considered and dismissed
-    // earlier: that was ONE large draw, single-digit ms. This is sustained
-    // per-fragment cost across the whole frame.)
-    //
-    // Composes with the crash sentinel in js/perf/governor.js: a player who has
-    // already hit a hard failure comes back at a floored tier, which now has
-    // the feature off, so the sentinel can actually rescue this case instead of
-    // watching it repeat.
-    // (both resolved above, before setFrameLights.)
-    // Car tail-lights are an after-dark cue only — skip them under daytime floods.
-    // They are appended to frame.lights AFTER the static cull, so they sit
-    // outside track._lights and a per-chunk set built from allLights would drop
-    // them. Record the appended range so GLXChunked can add them to every chunk.
-    if (_floodActive) appendCarTailLights();   // sets the real tailStart/tailCount range
-  } else if (track.hasAlwaysLamps) {
-    // ALWAYS-ON FIXTURES in a bright session. A circuit can register lamps that
-    // burn regardless of the hour (lampPost({always:true}) — Monaco's tunnel
-    // luminaires). Those live in a SEPARATE baked set, so a day race lights the
-    // one place the sun cannot reach without switching the whole circuit's
-    // street lighting on. Same cull, same knobs; no twilight ramp and no car
-    // tail-lights, both of which are after-dark cues.
-    if (!track._alwaysLights || track._alwaysLights.length === 0)
-      track._alwaysLights = buildTrackLights(track, true);
-    if (track._alwaysLights.length) {
-      const _al = LT.lampLevel;
-      _lightFwd[0] = camTgt[0] - camEye[0]; _lightFwd[2] = camTgt[2] - camEye[2];
-      _alRGB[0] = _alRGB[1] = _alRGB[2] = _al;   // pooled — this ran once per frame
-      setFrameLights(camEye, _alRGB, _lightFwd, track._alwaysLights);
-    } else frame.lights = null;
-  } else {
-    frame.lights = null;
-  }
-  // Studio rig override: replaces the session lamps with the inspection ring.
-  if (_studioRig) {
-    const rig = buildStudioRig();
-    if (rig) { frame.lights = rig; frame.lampBake = null; }   // the rig is not in the bake
-  }
-  // ── Nearest-floodlight SPOT shadow pass ─────────────────────────────────
-  // Nearest-floodlight spot shadow map (night): js/render/shared/shadow-pass.js.
-  if (!XrBoot.comfort()) shadowPass.lampPass(frame, _frameNo, _hasLivePlayerShadow);
-  // GLOWING FOG driver: on whenever lamps are lit, swelling with haze so a
-  // fog-weather night is the money shot while a clear night keeps only a hint.
-  // Day / lights-off => 0, so daytime fog stays a pure sun tint. Faded by SUN
-  // BRIGHTNESS (not elevation - the night key stays above the horizon for sky
-  // glow): at dawn/dusk the sun in-scatter already lights the mist, and lamp
-  // glow on top blew the dawn mist band out.
-  const _lfSun = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
-  const _lfGate = clamp((0.55 - _lfSun) / 0.30, 0, 1);
-  // The GROUND MIST knob scales here too — the shader-side mist band already
-  // rides uGroundMist * LT.mistDensity, so the lamp-fog swell must follow the
-  // same tuned amount (reading the raw value left lamps glowing "in mist" with
-  // the mist slider at 0, and refusing to swell with it turned up).
-  frame.lampFog = frame.lights ? Math.min(0.9, LT.lampFogBase + LT.lampFogHaze * (frame.groundMist || 0) * LT.mistDensity) * _lfGate : 0;
-  // Shader-side tunables ride along on the frame (glx begin() uploads them).
-  frame.tune = LT;
+  const wet = renderLightingPrep(dt, _hasLivePlayerShadow);
+
 
   const night = raceTimeOfDay === "night" || (raceTimeOfDay === "default" && track.def.night);
   // Pre-race grid: rear lights strobe on the countdown clock. countT, NOT raceT

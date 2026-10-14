@@ -53,6 +53,20 @@ var GameAudio = (function () {
   let pitGunFired = 0, surfSched = 0;
   let pitLimLvl = 0;                                          // 0..1 from setCarSfx; applied in setEngine
 
+  // FIELD CONTACT (Radio r9): positional bump / scrape / squeal for AI & rivals.
+  // Cap CONTACT_VOICES; per-car cooldown ≥250 ms; pooled looping noise — no
+  // per-fire BufferSource alloc. Player GameAudio.collision() stays untouched.
+  const CONTACT_VOICES_DESKTOP = 3, CONTACT_VOICES_MOBILE = 2;
+  const CONTACT_COOLDOWN = 0.25;
+  const CONTACT_RANGE = 120;
+  const CONTACT_REF = 8;
+  let contactVoices = [];   // { src, filt, gain, pan, freeAt }
+  const _contactCdKeys = new Int32Array(24);
+  const _contactCdUntil = new Float64Array(24);
+  let _contactCdN = 0;
+  let fieldArmed = false;   // true only while setRivals runs (race); false on grid/pause/stop
+  let contactFired = 0, contactDeniedCd = 0, contactDeniedCap = 0, contactDeniedGate = 0;
+
   // RIVAL ENGINES. The game had no opponent audio at all and no panner anywhere
   // in the graph, so a car alongside was silent and the only cue you had for it
   // was the mirror. This is the one audio layer that changes how the game PLAYS
@@ -276,6 +290,27 @@ var GameAudio = (function () {
     return M4.clamp(Number.isFinite(v) ? v : 0, 0, 1);
   }
 
+  // Job 4 — slip → tyre squeal, speed → wind. Pure so the VM tests pin the
+  // curve without a graph. Below SQUEAL_THRESH the tyre is still in the grip
+  // well (silent). Below WIND_GATE the car is crawling (pit-entry / grid).
+  const SQUEAL_THRESH = 0.10;
+  function squealFromSlip(lat01, long01, wet) {
+    const lat = clamp01(lat01), long = clamp01(long01);
+    const raw = Math.min(1, Math.sqrt(lat * lat + long * long));
+    const over = raw <= SQUEAL_THRESH ? 0 : (raw - SQUEAL_THRESH) / (1 - SQUEAL_THRESH);
+    return {
+      gain: over * (wet ? 0.10 : 0.16),
+      hz: (wet ? 480 : 760) + over * 320 + (over > 0 ? long * 120 : 0),
+      lfo: over > 0 ? 60 : 0
+    };
+  }
+  const WIND_GATE = 0.04;
+  function windFromSpeed(s01) {
+    const s = clamp01(s01);
+    const u = s <= WIND_GATE ? 0 : (s - WIND_GATE) / (1 - WIND_GATE);
+    return { gain: 0.036 * u * u, hz: 450 + u * 1450 };
+  }
+
   /* ---------------- iOS audio session ----------------
      "playback" plays through the ring/silent switch like a game should — but on
      iOS it is EXCLUSIVE: the first sound this game makes interrupts whatever
@@ -319,11 +354,37 @@ var GameAudio = (function () {
    * when a spotter clip ends while an engineer line is still on air.
    * THE RADIO HOLD IS PER SOURCE TOO: the engineer, every WATCH clip and the
    * real-replay fallback pass their own id (default "radio" = the engineer), so
-   * one of them letting go cannot lift the music under another still on air. */
+   * one of them letting go cannot lift the music under another still on air.
+   *
+   * MIX DUCK (Job 5). Radio already emits via setRadioDuck(on, src) — this
+   * block only SUBSCRIBES. Music still dips through soundtrack.setRadioDuck
+   * (0.35 ≈ −9 dB). The SFX bus dips here (−8 dB, 80 ms attack / 400 ms
+   * release via setTargetAtTime). Overlapping holds do not re-ramp (no pump).
+   * Engine stays on sfxBus at ~0.4 — audible, not muted. Zero new nodes. */
   const radioDuckHolds = new Set();
   let spotterDuckHold = false;
+  const MIX_DUCK_LIN = 10 ** (-8 / 20);   // ≈ 0.3981, mid of −6…−10 dB
+  const MIX_DUCK_ATTACK_TAU = 0.08;
+  const MIX_DUCK_RELEASE_TAU = 0.4;
+  let mixDuckOn = false;
+  function sfxBusTarget() {
+    if (!sfxEnabled) return 0;
+    return sfxVol * (mixDuckOn ? MIX_DUCK_LIN : 1);
+  }
+  function applySfxDuck(on) {
+    const want = !!on;
+    const changed = want !== mixDuckOn;
+    mixDuckOn = want;
+    if (!sfxBus || !ctx || !changed) return mixDuckOn;
+    const t = ctx.currentTime;
+    sfxBus.gain.cancelScheduledValues(t);
+    sfxBus.gain.setTargetAtTime(sfxBusTarget(), t, want ? MIX_DUCK_ATTACK_TAU : MIX_DUCK_RELEASE_TAU);
+    return mixDuckOn;
+  }
   function applyMusicDuck() {
-    return soundtrackRadioDuck(radioDuckHolds.size > 0 || spotterDuckHold);
+    const on = radioDuckHolds.size > 0 || spotterDuckHold;
+    applySfxDuck(on);
+    return soundtrackRadioDuck(on);
   }
   function setRadioDuck(on, src) {
     const id = src == null ? "radio" : String(src);
@@ -361,6 +422,11 @@ var GameAudio = (function () {
       // (support.apple.com/guide/iphone/answer-or-decline-incoming-calls-iph3c9947bf/ios).
       if (ctx.state === "closed") return;
       if (ctx.state === "interrupted" && _onInterrupted) { try { _onInterrupted(); } catch (_) { /* a listener must not stop the resume below */ } }
+      if (ctx.state === "interrupted") {
+        // Session taken: release the SFX dip so a recovered graph is not stuck
+        // under a ghost line. Holds stay; `running` re-latches via applyMusicDuck.
+        applySfxDuck(false);
+      }
       if (ctx.state === "running" && ctxSampleRate && ctx.sampleRate !== ctxSampleRate) {
         scheduleOutputDeviceRebuild("sampleRate");
       }
@@ -370,6 +436,7 @@ var GameAudio = (function () {
         // "suspended" event armed. Healthy, so nothing to rebuild.
         if (deviceRebuildTimer && staleStateRebuild(deviceRebuildTimerWhy)) { clearTimeout(deviceRebuildTimer); deviceRebuildTimer = null; }
         if (staleStateRebuild(deviceRebuildPending)) deviceRebuildPending = "";
+        applyMusicDuck();
       }
       if (!document.hidden && (ctx.state === "interrupted" || ctx.state === "suspended")) {
         scheduleOutputDeviceRebuild("state-" + ctx.state);
@@ -388,8 +455,10 @@ var GameAudio = (function () {
     limiter.attack.value = 0.003; limiter.release.value = 0.15;
     master.connect(limiter).connect(ctx.destination);
     sfxBus = ctx.createGain();
-    sfxBus.gain.value = sfxEnabled ? sfxVol : 0;
+    mixDuckOn = radioDuckHolds.size > 0 || spotterDuckHold;
+    sfxBus.gain.value = sfxBusTarget();
     sfxBus.connect(master);
+    attachRivalPassBy();
 
     // iOS Safari starts contexts suspended; resume inside the gesture.
     // Guard the promise: resume() rejects (NotAllowed/InvalidState) on mobile at
@@ -536,10 +605,31 @@ var GameAudio = (function () {
     setSfxEnabled(sfxEnabled);
   }
 
+  // Bind the rival pass-by pool (PR #1735) to this context's SFX bus. Idempotent:
+  // same ctx is a no-op; a rebuilt ctx detaches the dead graph first. Lazy
+  // first-bind: engine.js evaluates before rivals.js, so the first init() may
+  // only see the stub — stash dest, and also retry when init() runs again after
+  // the real module lands. Missing attach (title stub) is silence, not a throw.
+  let rivalPassByCtx = null;
+  function attachRivalPassBy() {
+    if (!ctx || !sfxBus) return;
+    try {
+      if (typeof RivalAudio === "undefined") return;
+      if (typeof RivalAudio.attach === "function") {
+        if (rivalPassByCtx === ctx) return;
+        RivalAudio.attach(ctx, sfxBus);
+        rivalPassByCtx = ctx;
+      } else {
+        RivalAudio._pendingAttach = { ctx, dest: sfxBus };
+      }
+    } catch (e) { /* stub / mid-teardown */ }
+  }
+
   function init() {
     // init is only ever called from a user gesture
     if (ctx) {
       resumeIfNeeded(true);
+      attachRivalPassBy();
       Log.info("audio", "GameAudio.init state=" + (ctx && ctx.state));
       return;
     }
@@ -637,6 +727,7 @@ var GameAudio = (function () {
     // holds so a mid-clip rebuild cannot leave the music stuck under a ghost.
     radioDuckHolds.clear();
     spotterDuckHold = false;
+    mixDuckOn = false;
     // Timestamps from the closed context's clock: revFlare's decay would read a
     // dt against the new (near-0) clock, and limSince would hold the cut open.
     revFlare = 0; revFlareT = 0; limSince = null;
@@ -1186,6 +1277,27 @@ var GameAudio = (function () {
     spraySrc.start();
     windSrc.start();
     brakeSrc.start();
+    // FIELD CONTACT pool (Radio r9): osc + filter + gain + panner.
+    // Oscillators (not looping BufferSources) so the six harvest/skid/scrub/
+    // surface/wind/brake loop contract stays intact. Built once at startEngine;
+    // fieldContact only schedules envelopes. Mobile 2 / desktop 3.
+    contactVoices = [];
+    _contactCdN = 0;
+    contactFired = contactDeniedCd = contactDeniedCap = contactDeniedGate = 0;
+    if (ctx.createStereoPanner && sfxOk()) {
+      const nContact = lowPower() ? CONTACT_VOICES_MOBILE : CONTACT_VOICES_DESKTOP;
+      for (let ci = 0; ci < nContact; ci++) {
+        const cOsc = ctx.createOscillator();
+        cOsc.type = "sawtooth"; cOsc.frequency.value = 120;
+        const cFilt = ctx.createBiquadFilter();
+        cFilt.type = "bandpass"; cFilt.frequency.value = 900; cFilt.Q.value = 1.2;
+        const cGain = ctx.createGain(); cGain.gain.value = 0;
+        const cPan = ctx.createStereoPanner(); cPan.pan.value = 0;
+        cOsc.connect(cFilt).connect(cGain).connect(cPan).connect(sfxBus);
+        contactVoices.push({ osc: cOsc, filt: cFilt, gain: cGain, pan: cPan, freeAt: 0 });
+        cOsc.start(0);
+      }
+    }
 
     lastSpeed = 0;
     lastEngT = 0;
@@ -1275,6 +1387,9 @@ var GameAudio = (function () {
     stopAt(whineOsc, t0 + 0.35);
     stopAt(subOctOsc, t0 + 0.35);
     for (const v of rivalVoices) { try { v.gain.gain.setTargetAtTime(0, t0, 0.06); v.stop(t0 + 0.35); } catch (e) { /* already stopped */ } }
+    for (const v of contactVoices) {
+      try { v.gain.gain.setTargetAtTime(0, t0, 0.04); stopAt(v.osc, t0 + 0.35); } catch (e) { /* already stopped */ }
+    }
     stopAt(harvSrc, t0 + 0.35);
     stopAt(ersOsc, t0 + 0.35);
     stopAt(windSrc, t0 + 0.35);
@@ -1313,6 +1428,7 @@ var GameAudio = (function () {
                   revSend, convolver, revReturn, deadPitLim, deadCylCut, scrubFilter, scrubGain, lockFilter, lockGain,
                   surfFilter, surfGain, kerbFilter, kerbGain, sprayFilter, sprayGain];
     for (const v of rivalVoices) { dead.push(v.filt, v.gain, v.pan); }
+    for (const v of contactVoices) { dead.push(v.filt, v.gain, v.pan); }
     queueDying(dead);
     engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = skidLfo = skidLfoGain = lfoG = null;
     voiceFormant = ersHp = ersGain = windFilter = windGain = tiltEq = null;
@@ -1323,6 +1439,9 @@ var GameAudio = (function () {
     subOctOsc = subOctGain = null;
     convolver = revSend = revReturn = null;
     rivalVoices = [];
+    contactVoices = [];
+    fieldArmed = false;
+    _contactCdN = 0;
     idleGainRamped = false;
     rateFresh = false;
     lastGearSeen = NaN;
@@ -1714,22 +1833,20 @@ var GameAudio = (function () {
       cylCutGain._apexCylTgt = cylDepth;
     }
 
-    // AIRFLOW. Quadratic in speed (drag goes with v^2, and it keeps the layer
-    // out of the way at pit-lane pace while it swells down a straight), gated
-    // like the turbo whine so a stationary car is silent. Kerbs and grass add
-    // buffeting, rain adds spray hiss, and a hard lift/brake gusts briefly as
-    // the air unloads — that decel term IS harvLevel, the smoothed derivative
-    // the harvest layer just computed (lastSpeed is overwritten above, so
-    // recomputing it here would read a difference of exactly zero). Peak stays ~0.04, an order under the
-    // engine core, per the level budget the other bus layers keep to.
-    const windOpen = s > 0.04 ? 1 : 0;
-    const gust = harvLevel;   // already the smoothed decel signal, computed above
+    // AIRFLOW. Quadratic in *opened* speed (windFromSpeed): silent at the
+    // crawl gate, quiet at pit-lane, full rush near vTop. Kerbs/grass buffet,
+    // rain hisses, a hard lift gusts (harvLevel). Peak ~0.036, an order under
+    // the engine core. lastSpeed is overwritten above, so the gust is the
+    // harvest smoother, not a re-diff of speed.
+    const wf = windFromSpeed(s);
+    const windOpen = s > WIND_GATE ? 1 : 0;
+    const gust = harvLevel;
     const rough = (offroad ? 0.5 : 0) + (onKerb ? 0.35 : 0);
-    const tow = clamp01(ph.tow || 0);   // in a slipstream the air is already moving: less wind
+    const tow = clamp01(ph.tow || 0);
     aimGain(windGain,
-      layers.wind ? (0.006 + 0.030 * s * s) * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * windOpen * tune.wind * camMix.wind : 0,
+      layers.wind ? wf.gain * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * windOpen * tune.wind * camMix.wind : 0,
       t, 0.10);
-    aimParam(windFilter.frequency, 450 + s * 1450 + rough * 260, t, 0.12, 1e-4);
+    aimParam(windFilter.frequency, wf.hz + rough * 260, t, 0.12, 1e-4);
 
     // BRAKES (see startEngine). Level follows how hard the car is stopping
     // (brakeFrac: PhysicsConsts.BRAKE is the full pedal) and how fast it is going — the
@@ -1830,6 +1947,7 @@ var GameAudio = (function () {
   // at LIGHTS OUT. Stationary (speed 0) keeps wind and whine gated. game.js
   // calls this on the countdown return; `_audioParamStep` still gates it.
   function setGridIdle(player, opts) {
+    fieldArmed = false;   // countdown: field contact SFX stay silent (intentional)
     const o = opts || {};
     if (!player || o.soundOn === false || o.step === false) return;
     const idle = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.IDLE_RPM) || 5000;
@@ -1942,33 +2060,35 @@ var GameAudio = (function () {
     } catch (e) { rainStopping = false; rainPending = null; }
   }
 
-  // x 0..1; looped bandpass noise follows it.
-  // wet=true shifts the centre frequency down — water spray has a lower
-  // spectral character than hot dry-rubber screech.
-  function setSkid(x, wet) {
+  // Tyre squeal from LATERAL (cornering past grip) and LONGITUDINAL
+  // (wheelspin / lock-up) slip. `x` is the combined 0..1 intensity the
+  // live caller already mixes (skidIntensity); pass `{ lat, long, wet }`
+  // or a third `extra` bag when the axes are separate. Silent at or
+  // below SQUEAL_THRESH. Glide, not a `.value =` step — this runs once
+  // per rendered frame and the slide input is unsmoothed.
+  function setSkid(x, wet, extra) {
     if (!engineOn || !skidGain) return;
-    const v = clamp01(x || 0);
-    // A GLIDE, not a `.value =` step. This runs once per rendered frame and the
-    // slide input is unsmoothed (offroad is a 0 -> 0.5 step), so direct writes
-    // stair-stepped the gain of broadband noise at the frame rate: crackle.
-    // tau 0.02 s (glideLevel) is fast enough that a slide still bites and the
-    // hard 0 still lands within ~60 ms. Scheduled only on a change: a timeline
-    // insertion every frame, 0 onto 0 on every frame not sliding, is what the
-    // guard was for. An exact value (the hard 0) always lands; a sub-1e-4
-    // wobble (~-80 dBFS) does not.
-    const sv = layers.screech ? v * (wet ? 0.10 : 0.16) * tune.screech : 0;   // wetter = quieter, sibilant
+    let lat, long;
+    if (x && typeof x === "object") {
+      wet = x.wet; extra = x;
+      lat = x.lat != null ? x.lat : (x.slip || 0);
+      long = x.long || 0;
+    } else {
+      lat = extra && extra.lat != null ? extra.lat : (x || 0);
+      long = extra && extra.long != null ? extra.long : 0;
+    }
+    const q = squealFromSlip(lat, long, wet);
+    const sv = layers.screech ? q.gain * tune.screech : 0;
     const sp = skidGain._apexSkidV;
     if (sp !== sv && (sv === 0 || sp === undefined || Math.abs(sp - sv) >= 1e-4)) { glideLevel(skidGain.gain, sv); skidGain._apexSkidV = sv; }
-    if (v > 0) {
-      const base = wet ? 480 : 760;                    // wet: lower splash vs dry: screech
-      const centre = base + v * 320;
-      if (Math.abs((skidFilter.frequency._apexSkidBase ?? -1) - centre) >= 1) {
-        skidFilter.frequency.setTargetAtTime(centre, now(), LEVEL_TAU);
-        skidFilter.frequency._apexSkidBase = centre;
+    if (q.lfo > 0) {
+      if (Math.abs((skidFilter.frequency._apexSkidBase ?? -1) - q.hz) >= 1) {
+        skidFilter.frequency.setTargetAtTime(q.hz, now(), LEVEL_TAU);
+        skidFilter.frequency._apexSkidBase = q.hz;
       }
-      if (skidLfoGain && (skidLfoGain._apexDepth ?? 0) !== 60) {
-        skidLfoGain.gain.setTargetAtTime(60, now(), LEVEL_TAU);
-        skidLfoGain._apexDepth = 60;
+      if (skidLfoGain && (skidLfoGain._apexDepth ?? 0) !== q.lfo) {
+        skidLfoGain.gain.setTargetAtTime(q.lfo, now(), LEVEL_TAU);
+        skidLfoGain._apexDepth = q.lfo;
       }
     } else if (skidLfoGain && (skidLfoGain._apexDepth ?? 0) !== 0) {
       skidLfoGain.gain.setTargetAtTime(0, now(), LEVEL_TAU);
@@ -2275,11 +2395,15 @@ var GameAudio = (function () {
     return s.b;
   }
   function setRivals(list) {
+    // Race (and instant-replay scrub) call this; countdown uses setGridIdle instead.
+    // Arm field contact only while the engine graph is live — stopEngine already
+    // clears fieldArmed; a post-stop setRivals([]) (scrub exit) must not re-arm.
     // Spray wake: nearest rival ahead within 40 m → 0..1 (RivalAudio owns the
     // geometry; engine only stores the scalar for setEngine's wet spray bed).
     sprayAhead = (typeof RivalAudio !== "undefined" && RivalAudio.sprayAhead)
       ? RivalAudio.sprayAhead(list) : 0;
     if (!engineOn || !rivalVoices.length) return;
+    fieldArmed = true;
     const t = now();
     const dt = _rivalRevSmT > 0 ? Math.min(0.05, t - _rivalRevSmT) : 1 / 60;
     _rivalRevSmT = t;
@@ -2416,6 +2540,99 @@ var GameAudio = (function () {
     blip(150, "sine", 0.34 * (0.4 + 0.6 * k), 0.005, 0.25, 45);
     noise(0.26 * (0.4 + 0.6 * k), 0.18, 900);
     if (k > 0.6) blip(70, "sine", 0.3 * (k - 0.6) / 0.4, 0.004, 0.3, 40);   // the bang under a real hit
+  }
+
+  // ── FIELD CONTACT (Radio r9) ───────────────────────────────────────────
+  // Positional one-shots for rival–rival / wall / slide. Player collision()
+  // above is byte-identical. Voices are pooled at startEngine; this only
+  // schedules pan + filter + gain envelopes (no per-fire node alloc).
+  function contactCdHit(key, t) {
+    if (key == null || key < 0) return false;
+    for (let i = 0; i < _contactCdN; i++) {
+      if (_contactCdKeys[i] === key) return _contactCdUntil[i] > t;
+    }
+    return false;
+  }
+  function contactCdMark(key, t) {
+    if (key == null || key < 0) return;
+    const until = t + CONTACT_COOLDOWN;
+    for (let i = 0; i < _contactCdN; i++) {
+      if (_contactCdKeys[i] === key) { _contactCdUntil[i] = until; return; }
+    }
+    if (_contactCdN < _contactCdKeys.length) {
+      _contactCdKeys[_contactCdN] = key; _contactCdUntil[_contactCdN] = until; _contactCdN++;
+      return;
+    }
+    let oldest = 0;
+    for (let i = 1; i < _contactCdN; i++) if (_contactCdUntil[i] < _contactCdUntil[oldest]) oldest = i;
+    _contactCdKeys[oldest] = key; _contactCdUntil[oldest] = until;
+  }
+  /** kind: "bump" | "scrape" | "squeal". impact 0..1. wx/wz world metres. carKey for cooldown. */
+  function fieldContact(kind, impact, wx, wz, carKey) {
+    if (!sfxOk() || !engineOn || !fieldArmed || !contactVoices.length) {
+      contactDeniedGate++; return false;
+    }
+    const t = now();
+    const key = carKey | 0;
+    if (contactCdHit(key, t)) { contactDeniedCd++; return false; }
+    let pan = 0, dist = CONTACT_REF;
+    const basis = typeof GameCams !== "undefined" && GameCams.getListenerBasis
+      ? GameCams.getListenerBasis() : null;
+    if (basis && wx != null && wz != null && isFinite(+wx) && isFinite(+wz)) {
+      const dx = +wx - basis.x, dz = +wz - basis.z;
+      dist = Math.hypot(dx, dz);
+      const lat = dx * basis.rightX + dz * basis.rightZ;
+      const arc = dx * basis.fwdX + dz * basis.fwdZ;
+      pan = rivalPanPlayerFrame(lat, arc);
+    }
+    if (!(dist < CONTACT_RANGE)) { contactDeniedGate++; return false; }
+    let v = null;
+    for (let i = 0; i < contactVoices.length; i++) {
+      if (contactVoices[i].freeAt <= t) { v = contactVoices[i]; break; }
+    }
+    if (!v) { contactDeniedCap++; return false; }
+    const k = clamp01(impact != null ? impact : 0.5);
+    const near = CONTACT_REF / (CONTACT_REF + 1.15 * Math.max(0, dist - CONTACT_REF));
+    const kd = kind || "bump";
+    let peak, attack, decay, freq, q, fType;
+    if (kd === "scrape") {
+      peak = 0.10 + 0.16 * k; attack = 0.02; decay = 0.18 + 0.12 * k;
+      freq = 2400; q = 1.2; fType = "bandpass";
+    } else if (kd === "squeal") {
+      peak = 0.08 + 0.14 * k; attack = 0.01; decay = 0.12 + 0.10 * k;
+      freq = 1800 + 600 * k; q = 6; fType = "bandpass";
+    } else {
+      peak = 0.16 + 0.22 * k; attack = 0.005; decay = 0.14 + 0.12 * k;
+      freq = 420 + 180 * k; q = 0.9; fType = "lowpass";
+    }
+    peak *= near * 0.9;
+    if (!(peak > 0.001)) return false;
+    v.filt.type = fType;
+    v.filt.Q.value = q;
+    v.filt.frequency.cancelScheduledValues(t);
+    v.filt.frequency.setValueAtTime(freq, t);
+    v.osc.type = kd === "squeal" ? "triangle" : kd === "scrape" ? "sawtooth" : "sine";
+    v.osc.frequency.cancelScheduledValues(t);
+    v.osc.frequency.setValueAtTime(kd === "bump" ? Math.max(55, freq * 0.35) : freq * 0.55, t);
+    v.pan.pan.cancelScheduledValues(t);
+    v.pan.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), t);
+    env(v.gain, t, peak, attack, decay);
+    v.freeAt = t + attack + decay + 0.05;
+    contactCdMark(key, t);
+    contactFired++;
+    return true;
+  }
+  function fieldContactState() {
+    return {
+      armed: fieldArmed,
+      voices: contactVoices.length,
+      live: contactVoices.filter((v) => v.freeAt > now()).length,
+      fired: contactFired,
+      deniedCd: contactDeniedCd,
+      deniedCap: contactDeniedCap,
+      deniedGate: contactDeniedGate,
+      cooldown: CONTACT_COOLDOWN,
+    };
   }
   function offtrack() {
     noise(0.14, 0.14, 480);
@@ -2554,12 +2771,12 @@ var GameAudio = (function () {
      glide, glideLevel), so a slider moves the level while it is being dragged. */
   function setSfxVolume(v) {
     sfxVol = clamp01(typeof v === "number" ? v : 1);
-    if (sfxBus) glideLevel(sfxBus.gain, sfxEnabled ? sfxVol : 0);
+    if (sfxBus) glideLevel(sfxBus.gain, sfxBusTarget());
     return sfxVol;
   }
   function setSfxEnabled(b) {
     sfxEnabled = !!b;
-    if (sfxBus) glideLevel(sfxBus.gain, sfxEnabled ? sfxVol : 0);
+    if (sfxBus) glideLevel(sfxBus.gain, sfxBusTarget());
     // A race that started with SFX off wanted rain but built no nodes
     // (startRain returns on !sfxOk()); turning SFX on must start it.
     if (sfxEnabled && rainWanted && !rainSrc) startRain();
@@ -2607,6 +2824,10 @@ var GameAudio = (function () {
     syncReplayRpms,
     resetReplayScrub,
     setSkid,
+    squealFromSlip,
+    windFromSpeed,
+    skidPitch() { return skidFilter ? +(skidFilter.frequency._apexSkidBase ?? skidFilter.frequency.value) : 0; },
+    windCutoff() { return windFilter ? +(windFilter.frequency._apexAimTgt ?? windFilter.frequency.value) : 0; },
     setCarSfx,
     pitGun,
     setCameraMix,
@@ -2634,6 +2855,8 @@ var GameAudio = (function () {
     setProfile,
     setLayer,
     setRivals,
+    fieldContact,
+    fieldContactState,
     setVenue,
     venue() { return { name: venueName, level: revReturn ? +revReturn.gain.value.toFixed(4) : 0, decay: venue.decay }; },
     // Test hooks: each rival voice's live pan/level/pitch. They sit behind their
@@ -2695,6 +2918,18 @@ var GameAudio = (function () {
     sourceCounts,
     setSfxVolume,
     setSfxEnabled,
+    // Test hook: mix-duck latch under announcer/radio (Job 5). sfx is the
+    // composed bus target; lin / attackTau / releaseTau are the ramp contract.
+    mixDuck() {
+      return {
+        on: mixDuckOn,
+        holds: radioDuckHolds.size + (spotterDuckHold ? 1 : 0),
+        lin: MIX_DUCK_LIN,
+        attackTau: MIX_DUCK_ATTACK_TAU,
+        releaseTau: MIX_DUCK_RELEASE_TAU,
+        sfx: sfxBus ? +sfxBus.gain.value : 0,
+      };
+    },
     setMusicVolume,
     volumes,
     // Test hook: the airflow layer's live gain. It sits on sfxBus, so
