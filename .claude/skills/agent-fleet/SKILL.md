@@ -23,7 +23,10 @@ Read your role's reference before acting:
 
 ## The fleet block (every worker PR body, refreshed at every push)
 
-Put it under **Next step / handoff** of `.github/pull_request_template.md`:
+The PR opens at the worker's first commit with the template's live **Plan**
+checklist (AGENTS.md rule 12); the orchestrator reads the Plan for progress and
+this block for state. Put it under **Next step / handoff** of
+`.github/pull_request_template.md`:
 
 ```fleet
 worker: <host>:<session or agent id>     # e.g. claude:session_01ABC…, cursor:bc-…

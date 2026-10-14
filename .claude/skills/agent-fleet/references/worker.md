@@ -7,8 +7,11 @@ your only escalation path besides the user; ask it instead of guessing.
 
 1. **Claim and plan.** `node tools/ci/who-is-on-it.mjs`, then
    `--claim "<task>"`. Branch `cursor/<topic>-<hash>` from the deploy branch.
-   `node tools/ci/pick-tests.mjs` for the groups the change needs. Write the
-   plan (3–6 lines) into the first commit message or the draft PR body.
+   `node tools/ci/pick-tests.mjs` for the groups the change needs. At the
+   FIRST commit push and open the DRAFT PR (GitHub MCP `create_pull_request`,
+   `draft: true`; not `deploy.mjs --pr`, which opens it ready), body from
+   `.github/pull_request_template.md` plus the fleet block (SKILL.md): Goal,
+   and the plan as the **Plan** checklist (3–6 `- [ ]` items, one **now:**).
 2. **Implement** with the domain skill the change matches (`.claude/skills/README.md`).
    Make every source edit first, then verify once (AGENTS.md rule 2).
 3. **Verify** with `check-changes`: `tooling-fast --jobs=3` in the background,
@@ -20,9 +23,11 @@ your only escalation path besides the user; ask it instead of guessing.
    Until a publishing tool exists: commit the PNGs (each < 400 KB) to a
    separate `shots/<pr>` branch cut from the deploy branch, never the PR
    branch, and list each file with what it proves in the PR body.
-5. **Draft PR**: GitHub MCP `create_pull_request` with `draft: true`, body from
-   `.github/pull_request_template.md` plus the fleet block (SKILL.md). Not
-   `deploy.mjs --pr`: it opens a ready PR.
+5. **Keep the PR body live** (AGENTS.md rule 12): tick each Plan item with its
+   evidence the moment it lands (`update_pull_request`, no push needed), add
+   discovered work, strike dropped items with why; refresh Status and the
+   fleet block at every push. `ready-gate.mjs --pr <n>` refuses while a Plan
+   item is still open.
 6. **Subscribe** with your host's tool (Claude Code `subscribe_pr_activity`;
    Cursor `subscribe_github_ci` + `subscribe_github_pr`) AND keep one timer
    (`send_later` / `subscribe_timer`, ~1 h). On every wake run
