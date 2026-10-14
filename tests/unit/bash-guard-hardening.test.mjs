@@ -385,24 +385,34 @@ test("guards that fail open say so on stderr", () => {
     "a shellparse crash must warn before failing open");
 });
 
-test("github-mcp-guard asks before auto-merge and the draft→ready flip, and passes other PR edits", () => {
-  const run = (tool_name, tool_input = {}) => hook("github-mcp-guard.sh", { tool_name, tool_input });
+test("github-mcp-guard: merge commits only, asks before merge/arm and the draft→ready flip, passes other PR edits", () => {
+  const run = (tool_name, tool_input = {}, env = { APEX_MERGE_DESK: "" }) => hook("github-mcp-guard.sh", { tool_name, tool_input }, { env });
   const decision = (r) => { assert.equal(r.status, 0, r.stderr); return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput : null; };
   for (const [name, input] of [["mcp__github__enable_pr_auto_merge", { pullNumber: 1, mergeMethod: "SQUASH" }],
+    ["mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "squash" }], ["mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "rebase" }]]) {
+    for (const env of [{ APEX_MERGE_DESK: "" }, { APEX_MERGE_DESK: "1" }]) {
+      const d = decision(run(name, input, env));
+      assert.equal(d?.permissionDecision, "deny", `${name} ${JSON.stringify(input)} ${JSON.stringify(env)}`);
+      assert.match(d.permissionDecisionReason, /MERGE-COMMIT-ONLY/);
+    }
+  }
+  for (const [name, input] of [["mcp__github__enable_pr_auto_merge", { pullNumber: 1, mergeMethod: "MERGE" }],
+    ["mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge" }], ["mcp__github__merge_pull_request", { pullNumber: 1 }],
     ["mcp__github__update_pull_request", { pullNumber: 1, draft: false }], ["mcp__github__update_pull_request", { pullNumber: 1, draft: "false" }]]) {
     const d = decision(run(name, input));
     assert.equal(d?.hookEventName, "PreToolUse");
     assert.equal(d?.permissionDecision, "ask", `${name} ${JSON.stringify(input)}`);
     assert.match(d.permissionDecisionReason, /ready-gate\.mjs[\s\S]*ready-full-cap\.mjs/);
-    assert.match(d.permissionDecisionReason, /CI Watch/);
+    assert.equal(decision(run(name, input, { APEX_MERGE_DESK: "1" })), null, `Merge Desk passes ${name}`);
   }
   for (const input of [{ pullNumber: 1, body: "x" }, { pullNumber: 1, title: "t" }, { pullNumber: 1, draft: true }])
     assert.equal(decision(run("mcp__github__update_pull_request", input)), null, `silent pass: ${JSON.stringify(input)}`);
   assert.equal(decision(hook("github-mcp-guard.sh", "not json")).permissionDecision, "ask", "an unreadable payload asks");
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
+  assert.ok(!settings.permissions.deny.includes("mcp__github__merge_pull_request"), "merges are gated by the hook, not denied (Grok Bot may merge)");
   const g = settings.hooks.PreToolUse.find((x) => x.hooks.some((h) => h.command.includes("github-mcp-guard.sh")));
   const re = new RegExp(g.matcher);
-  for (const n of ["mcp__github__enable_pr_auto_merge", "mcp__github__update_pull_request"]) assert.ok(re.test(n), n);
-  for (const n of ["mcp__github__update_pull_request_branch", "mcp__github__disable_pr_auto_merge", "mcp__github__merge_pull_request"])
+  for (const n of ["mcp__github__enable_pr_auto_merge", "mcp__github__update_pull_request", "mcp__github__merge_pull_request"]) assert.ok(re.test(n), n);
+  for (const n of ["mcp__github__update_pull_request_branch", "mcp__github__disable_pr_auto_merge"])
     assert.ok(!re.test(n), `matcher must not catch ${n}`);
 });

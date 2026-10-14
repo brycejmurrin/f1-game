@@ -90,7 +90,6 @@
       "Bash(node tools/ci/bump-cache.mjs --apply*)",
       "Bash(node tools/gen/assets.mjs bake*)",
       "Bash(node tools/track/rotate-markings.cjs --write*)",
-      "mcp__github__merge_pull_request",
       "mcp__github__delete_file",
       "mcp__github__create_repository",
       "mcp__github__fork_repository"
@@ -159,7 +158,7 @@
         ]
       },
       {
-        "matcher": "^mcp__github__(enable_pr_auto_merge|update_pull_request)$",
+        "matcher": "^mcp__github__(enable_pr_auto_merge|merge_pull_request|update_pull_request)$",
         "hooks": [
           {
             "type": "command",
