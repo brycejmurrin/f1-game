@@ -193,23 +193,26 @@ test("default body and cockpit stay under the absolute triangle ceilings", () =>
   // busiest of the 22 designs measured 6572, and the ceiling has to clear the
   // WHOLE FIELD, not the default livery. The cockpit ceiling below does NOT
   // move: the helmet is not built in that pass (measured 1428, unchanged).
-  assert.ok(body <= 6800, `default body ${body} > 6800`);
+  // 6800 -> 7100: 2026 aero defaults (board:1 + drs:1) on the recipe-less
+  // body — in-wash bargeboard and active-flap hinges that factory signatures
+  // already carried (#1198). Default measured 5848; busiest helmet #1 at 6886.
+  assert.ok(body <= 7100, `default body ${body} > 7100`);
   // ...AND FOR EVERY DRIVER, not just the default livery. The helmet paint is
   // per-design, so the busiest of the 22 costs more triangles than the
-  // generated default this test builds: #1 at 6398 against a default of 5360.
+  // generated default this test builds: #1 at 6886 against a default of 5848.
   // (The 6572 in the raise note above was measured before the doodle replaced
   // the cell speckle, which shortened the paint boundary; this assertion is
   // now the live number and that one is history.) That gap lived only in a
   // COMMENT, which is the same "documented
   // but not asserted" hole the parts-physics duplicate above was deleted for —
-  // a design could have grown past 6800 with every test green.
+  // a design could have grown past 7100 with every test green.
   let worst = { num: null, tris: 0 };
   for (const t of Teams.LIST)
     for (const d of t.drivers) {
       const n = tris(Car3D.build(C1, C2, { noWheels: true, num: d.num }));
       if (n > worst.tris) worst = { num: d.num, tris: n };
     }
-  assert.ok(worst.tris <= 6800, `#${worst.num} body ${worst.tris} over the ceiling — the busiest helmet design, which the default build does not reach`);
+  assert.ok(worst.tris <= 7100, `#${worst.num} body ${worst.tris} over the ceiling — the busiest helmet design, which the default build does not reach`);
   // 1500 -> 1580: arched two-loft plate + always-on crown rail + foot fence.
   // First-person still carries the exterior cascade. Measured 1552.
   assert.ok(cockpit <= 1580, `cockpit ${cockpit} > 1580`);
@@ -290,9 +293,11 @@ test("2026 duct/board/slot knobs are inert at 0 and each deforms the mesh", () =
   });
   const same = (a, b) => a.idx.length === b.idx.length
     && a.pos.every((v, i) => Math.abs(v - b.pos[i]) < 1e-6);
+  // 2026 defaults: active flaps + in-wash bargeboard (board:1, drs:1). duct/slot
+  // still default off — those two alone must match the bare body when left at 0.
   const neutral = {
-    lvl: 2, beam: 0, drs: 0, vane: 1, plate: 1, casc: null, swan: 0, tvane: null,
-    duct: 0, board: 0, slot: 0,
+    lvl: 2, beam: 0, drs: 1, vane: 1, plate: 1, casc: null, swan: 0, tvane: null,
+    duct: 0, board: 1, slot: 0,
     frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
     rearSweep: 0.03, rearTaper: 0.98, floorEdge: 1, floorCut: 0.04, diffuserRise: 1,
   };
@@ -300,6 +305,8 @@ test("2026 duct/board/slot knobs are inert at 0 and each deforms the mesh", () =
   assert.ok(!same(probe({ ...neutral, duct: 2 }), bare), "duct 2 should add the upper ram");
   assert.ok(!same(probe({ ...neutral, board: 2 }), bare), "board 2 should add the wakeboard");
   assert.ok(!same(probe({ ...neutral, slot: 1 }), bare), "slot 1 should cut the floor corner");
+  assert.ok(!same(probe({ ...neutral, board: 0, drs: 0 }), bare),
+    "pre-2026 board:0/drs:0 must no longer match the default body");
   const aero = Parts.CATALOG.find((c) => c.id === "aero").options;
   for (const id of ["wake_board", "pod_duct", "reg26_concept"]) {
     assert.ok(aero.some((o) => o.id === id), `missing aero option ${id}`);
