@@ -542,7 +542,7 @@ test("C-P3: ImageBitmap upload == canvas upload, byte for byte (Chromium, APEX_L
     assert.equal(out.real.flagsIgnoredForBitmap.bytesDiffering, 0, "real atlas: unpack flags ignored for the bitmap");
     assert.ok(out.real.unflipped.maxAbs <= 1, "real atlas: the unflipped bitmap mirrors the canvas upload");
   } finally {
-    await browser.close().catch(() => {});
+    await browser.close();   // a close that throws is a real failure, not one to swallow (assert-audit)
     shutdown();
   }
 });
