@@ -485,6 +485,21 @@ function buildSandbox(opts) {
   return { ctx, sandbox, record, timers, rafQueue, dom };
 }
 
+const SEATS = Object.freeze({
+  pin: Object.freeze({ team: 2, "parts.mclaren": {} }),
+  shipped: Object.freeze({}),
+});
+
+// What the boot actually seated: the team the game resolved and the parts
+// sheet it reads for that team (game.js getTeamParts outside a career).
+function seatReport(name, sandbox, G) {
+  const Teams = sandbox.Teams, GS = sandbox.GameStore;
+  const idx = G && typeof G.teamIdx === "number" ? G.teamIdx : null;
+  const team = idx != null && Teams && Teams.LIST[idx] ? Teams.LIST[idx].id : null;
+  const parts = team && GS ? JSON.parse(JSON.stringify(GS.store.get("parts." + team, {}))) : null;
+  return { name, teamIdx: idx, team, parts };
+}
+
 function safeStr(x) { try { return typeof x === "object" ? JSON.stringify(x) : String(x); } catch (_) { return String(x); } }
 
 // ---------------------------------------------------------------------------
@@ -553,7 +568,9 @@ async function settle(pred, maxTurns) {
  *           first manifest file — the VM's equivalent of page.addInitScript
  *   carMeshes false stubs Car3D's builders (~1 s a process; see stubCarMeshes)
  *           — OPT-IN, and never on a parity twin
- *   handle  { apex, G, ctx, sandbox, step(n, dt), race(id, tod, wx, opts), aiOnly(),
+ *   seat    "pin" (default: McLaren, empty parts sheet) | "shipped" (no garage
+ *           seed — the GarageDefaults car a fresh browser boots)
+ *   handle  { apex, G, ctx, sandbox, seat, step(n, dt), race(id, tod, wx, opts), aiOnly(),
  *             settle(pred), flushTimers(), record, bootMs, trackMs }
  */
 async function createGame(opts) {
@@ -591,10 +608,16 @@ async function createGame(opts) {
   //
   // FACTORY SEAT, same idea: js/data/garage-defaults.js makes a miss-path
   // player Mercedes with a signature parts kit, which moves stopping envelopes,
-  // tyre peaks, and AI racecraft. This harness pins McLaren + an empty sheet
-  // (the pre-GarageDefaults car) so characterization stays on the driving
-  // model. Callers that want the shipped garage pass storage themselves.
-  const seed = Object.assign({ tyreWear: "off", team: 2, "parts.mclaren": {} },
+  // tyre peaks, and AI racecraft. `seat: "pin"` (the default) pins McLaren +
+  // an empty sheet (the pre-GarageDefaults car) so characterization stays on
+  // the driving model. `seat: "shipped"` writes no garage key at all, so every
+  // team/parts./setup. read takes GameStore's miss path into GarageDefaults —
+  // the car a fresh browser boots, chosen by the game's own code. handle.seat
+  // reports what was seated either way.
+  const seatName = opts.seat == null ? "pin" : String(opts.seat);
+  if (!Object.prototype.hasOwnProperty.call(SEATS, seatName))
+    throw new Error(`game-vm: unknown seat "${seatName}" (want ${Object.keys(SEATS).join("|")})`);
+  const seed = Object.assign({ tyreWear: "off" }, SEATS[seatName],
                              opts.track ? { trackId: opts.track } : {}, opts.storage || {});
   for (const k of Object.keys(seed)) {
     sandbox.localStorage.setItem(k.startsWith("apex26.") ? k : "apex26." + k, JSON.stringify(seed[k]));
@@ -666,6 +689,7 @@ async function createGame(opts) {
     const handle = {
       apex, ctx, sandbox, record, bootMs, trackMs: 0,
       get G() { return G; },
+      get seat() { return seatReport(seatName, sandbox, G); },
       // Same shape the specs use: race(id, tod, wx) → wait info().track → go().
       async race(id, tod, wx, opts) {
         const t1 = performance.now();
@@ -718,7 +742,7 @@ async function createGame(opts) {
   }
 }
 
-module.exports = { createGame, settle, ROOT, SKIP };
+module.exports = { createGame, settle, ROOT, SKIP, SEATS };
 
 if (require.main === module) {
   (async () => {
