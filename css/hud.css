@@ -1234,8 +1234,8 @@ body[data-density="compact"] #announce { --flag-slot-top: max(calc(72px + var(--
 body[data-density="compact"] #announce-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 :root[data-gap-drop] #announce { --flag-slot-top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px), calc(var(--hud-gaps-b, 0px) + 8px)); }
 :root[data-flag-low] #announce { --flag-slot-top: max(calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 8px), calc(var(--hud-gaps-b, 0px) + 8px)); }
-body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
-body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
+body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):not([data-radio-placed]):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
+body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):not([data-radio-placed]):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
 
 /* ---------- start lights ---------- */
 /* The gantry is driven purely by `els.lights.hidden = true/false` in
