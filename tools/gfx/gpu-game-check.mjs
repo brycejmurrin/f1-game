@@ -520,6 +520,35 @@ try {
     fn(),
     new Promise((_, rj) => setTimeout(() => rj(new Error(label + " timeout")), ms)),
   ]).catch((err) => ({ error: String((err && err.message) || err).slice(0, 120) }));
+  // A FRESH FRAME BEFORE EVERY CAPTURE (hunt 4 I1). Under a headless UA GLX
+  // keeps an opaque #game-soft over the live canvas and blits to it only when
+  // a capture is waiting, so every census screenshot after the first was the
+  // same gen-1 frame and the A/B pixel verdicts compared HUD text. Where the
+  // backend soft-presents: invalidate, then await a NEWER blit. Where it
+  // presents natively (the census pins apex26.wgxCapture=0): two rAFs. Either
+  // way the manifest carries the mode and the blit generation, so a stale
+  // capture is visible (gen equal across off/off2/on) rather than inferred.
+  const freshFrame = (label) => bounded(() => page.evaluate(async () => {
+    const g = typeof GLX !== "undefined" ? GLX : null;
+    const st = () => { try { const s = g && g.softPresentState ? g.softPresentState() : null;
+      return s ? (s.gen != null ? s.gen : (s.shownGen != null ? s.shownGen : s.seq)) : null; } catch (_) { return null; } };
+    let soft = false;
+    try { soft = !!(g && typeof g.softPresent === "function" && g.softPresent()); } catch (_) { /* no hook */ }
+    const t0 = performance.now();
+    if (!soft) {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return { mode: "native", waitMs: Math.round(performance.now() - t0) };
+    }
+    const genBefore = st();
+    try {
+      if (typeof g.invalidateSoftPresent === "function") g.invalidateSoftPresent();
+      await g.awaitSoftPresent(8000);
+      return { mode: "soft", genBefore, gen: st(), waitMs: Math.round(performance.now() - t0) };
+    } catch (e) {
+      return { mode: "soft", genBefore, gen: st(), waitMs: Math.round(performance.now() - t0),
+        error: String((e && e.message) || e).slice(0, 100) };
+    }
+  }), 15000, "fresh-" + label);
 
   await page.goto(`http://127.0.0.1:${port}/index.html?gfxdebug=1`,
     { waitUntil: "domcontentloaded", timeout: 120000 });
@@ -1034,6 +1063,7 @@ try {
       A[key].stats = await page.evaluate((f) => window.__apex[f](), feature);
       A[key].frames = await page.evaluate(() => window.__abFrames | 0);
       if (shotBase) {
+        A[key].present = await freshFrame("ab-" + key);
         A[key].shot = shotBase.replace(/\.png$/, "") + "." + feature + "-" + key + ".png";
         const r = await bounded(() => page.screenshot({ path: A[key].shot }), 30000, "ab-shot");
         if (r && r.error) A[key].shotError = r.error;
@@ -1060,6 +1090,13 @@ try {
       };
       A.noiseFloor = await diffOf(A.off.shot, A.off2.shot);   // same state twice
       A.pixels = await diffOf(A.off.shot, A.on.shot);
+      // STALE CAPTURES SAY SO. Three soft captures at one blit generation are
+      // one frame shot three times: the diff is then the HUD, not the flag.
+      const gens = ["off", "off2", "on"].map((k) => A[k].present || {});
+      if (gens.every((p) => p.mode === "soft")) {
+        A.freshFrames = gens.every((p) => p.gen != null && p.genBefore != null && p.gen > p.genBefore)
+          && new Set(gens.map((p) => p.gen)).size === 3;
+      } else if (gens.every((p) => p.mode === "native")) A.freshFrames = true;
       if (A.pixels.pctDiffering != null && A.noiseFloor.pctDiffering != null) {
         A.aboveFloor = A.pixels.pctDiffering > Math.max(0.01, A.noiseFloor.pctDiffering * 2);
       }
@@ -1153,6 +1190,7 @@ try {
     // non-zero pixel (the overlay's own test), bounded, and SAY whether it
     // came: a frame that is really black still reads black, a blank canvas
     // now reads as blank.
+    out.present = await freshFrame("shot");   // hunt 4 I1: mode + blit gen of the final capture
     const t0 = Date.now();
     out.softBlitAtShot = await page.waitForFunction(() => {
       const c = document.getElementById("game-soft");

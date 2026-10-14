@@ -1148,6 +1148,25 @@ test("GLX drainGpuErrors() lets the census drain ~1 Hz instead of on every prese
   assert.equal(h2.GLX.gpuErrors(), 1, "apex26.glErrDrain=1 still drains on every present");
 });
 
+test("GLX honours SCREENSHOTS = NATIVE under automation: no preserveDrawingBuffer, no overlay (hunt 4 I1)", () => {
+  // Under a HeadlessChrome UA GLX keeps the drawing buffer and blits to an
+  // opaque #game-soft only when a capture waits, so every census shot after
+  // the first was the same stale gen-1 frame (census 450-455). The census pins
+  // apex26.wgxCapture=0 — the key WGX and TLX already honour — to run the
+  // player's present path; this holds the pin as behaviour on the mock.
+  const h = bootGlx({ userAgent: "Mozilla/5.0 HeadlessChrome/141.0", ls: { "apex26.wgxCapture": "0" } });
+  const ctx = h.contextAttrs.find((c) => c.type === "webgl2");
+  assert.equal(ctx.attrs.preserveDrawingBuffer, false, "the native pin must drop preserveDrawingBuffer");
+  assert.equal(h.GLX.softPresent(), false, "the native pin must not arm the soft overlay");
+  assert.equal(h.GLX.backendState().softPresent, false);
+  const src = code("js/render/glx/glx.js");
+  assert.match(src, /sessionStorage\.getItem\("apex26\.wgxCapture"\)\s*\|\|\s*localStorage\.getItem\("apex26\.wgxCapture"\)/,
+    "session wins over local, as in WGX and TLX (a SETTINGS tap for this tab beats a saved pref)");
+  assert.match(src, /_softPresent\s*=\s*headlessUa && !capNative;/, "a saved \"1\" or AUTO keeps the headless soft path");
+  assert.match(src, /getContext\("2d", \{ alpha: false, willReadFrequently: true \}\)/,
+    "#game-soft is read back by ?gfxdebug=1 every rebuild — the 2D context must say so (I7), as TLX's does");
+});
+
 // The Verdict step is a `node -e` script embedded in YAML, so nothing ever ran
 // it — every guard on it was a regex over its SOURCE. That is how three
 // vacuous clauses lived in it at once. Lift the real script out and execute it
@@ -1319,6 +1338,28 @@ test("the GPU gate holds the native WGX leg to bind + swapchain, but only a HEAD
   assert.equal(r.code, 0, `a software image that cannot bring WGX up is noise:\n${r.out}`);
   r = runVerdict(script, { census: hw, legs: { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson() } });
   assert.equal(r.code, 1, "a missing wgx artifact must fail like any other missing leg");
+});
+
+test("the Verdict names stale A/B captures and the GLX drain mode (hunt 4 I1/I2)", () => {
+  // Census 450-455 shot one gen-1 soft blit for every GLX A/B capture and
+  // reported a 0.03-0.52 % "difference" that was the HUD clock. The row must
+  // now say which frames were shot, and say STALE when the gens did not move.
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const ab = (present, freshFrames) => ({
+    feature: "occlusionCull", clock: 12, clockPinned: true, simFrozen: true, freshFrames,
+    off: { median: 10, present: present(1) }, off2: { median: 10, present: present(2) }, on: { median: 9, present: present(3) },
+    paired: { off: 10, on: 9, samples: 40 }, gpuDeltaPct: -10, gpuNoisePct: 0,
+    noiseFloor: { pctDiffering: 0.1 }, pixels: { differing: 5, ofTotal: 100, pctDiffering: 5, maxChannelDelta: 9, meanAbsDelta: 0.1 },
+  });
+  const glx = (a) => ({ ...glxLegJson(), glErrDrain: "beat", present: { mode: "native" }, occlusionAB: a });
+  const legs = (g) => ({ webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: g, wgx: wgxLegJson() });
+  let r = runVerdict(script, { census: hw, legs: legs(glx(ab(() => ({ mode: "soft", gen: 1, genBefore: 1 }), false))) });
+  assert.match(r.out, /frames: off=soft@1 off2=soft@1 on=soft@1\s+<- STALE/);
+  assert.match(r.out, /glErrDrain=beat shot=native/);
+  r = runVerdict(script, { census: hw, legs: legs(glx(ab(() => ({ mode: "native" }), true))) });
+  assert.match(r.out, /frames: off=native off2=native on=native/);
+  assert.doesNotMatch(r.out, /STALE/);
 });
 
 test("the GPU gate fails a hardware TLX leg that stopped reporting an env count", () => {

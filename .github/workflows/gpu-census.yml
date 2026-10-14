@@ -333,8 +333,14 @@ jobs:
         shell: bash
         run: |
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
+          # wgxCapture=0 = SCREENSHOTS NATIVE, which GLX honours since hunt 4
+          # I1: no preserveDrawingBuffer and no opaque #game-soft overlay — the
+          # present path a player has. Under the headless UA GLX otherwise blits
+          # to that overlay only when a capture waits, so census 450-455 shot
+          # one gen-1 frame for every A/B capture. A dispatcher's ls (after
+          # this pin) can override it; the A/B rows print the mode and gens.
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
-            --beats 20 --backend webgl2 $LS \
+            --beats 20 --ls apex26.wgxCapture=0 --backend webgl2 $LS \
             --json "game-glx-${{ matrix.image }}.json" \
             --shot "game-glx-${{ matrix.image }}.png"
 
@@ -428,7 +434,8 @@ jobs:
                 (g.softBlitAtShot ? ` blit=${g.softBlitAtShot}/${g.softBlitWaitMs}ms` : "") +
                 // HOW gpuErrors was drained on GLX: "beat" = ~1 Hz explicit drain
                 // (the default since hunt 4 I2), "present" = --gl-err-drain.
-                (path3 === "glx" && g.glErrDrain ? ` glErrDrain=${g.glErrDrain}` : ""));
+                (path3 === "glx" && g.glErrDrain ? ` glErrDrain=${g.glErrDrain}` : "") +
+                (g.present ? ` shot=${g.present.mode}${g.present.gen != null ? "@" + g.present.gen : ""}` : ""));
             // The SECOND row is what makes an appearance number readable. A
             // meanLuma comparison between two legs is only a comparison if both
             // ran the same content: tier decides whether the env probe (rung 1)
@@ -729,6 +736,14 @@ jobs:
                 const nf = ab.noiseFloor || {}, px = ab.pixels || {};
                 if (nf.pctDiffering != null) {
                   rows.push(`${" ".repeat(8)}       floor:  same state twice -> ${nf.pctDiffering}% of pixels, gpu ${ab.gpuNoisePct}%`);
+                }
+            // WHICH FRAMES WERE SHOT (hunt 4 I1). native = the live canvas two
+            // rAFs after the toggle; soft = a blit awaited after invalidate,
+            // with its generation. Equal gens are one frame shot three times.
+                const pv = ["off", "off2", "on"].map((k) => (ab[k] && ab[k].present) || null);
+                if (pv.some(Boolean)) {
+                  rows.push(`${" ".repeat(8)}       frames: ${pv.map((p, i) => `${["off", "off2", "on"][i]}=${p ? p.mode + (p.gen != null ? "@" + p.gen : "") + (p.error ? "(" + p.error + ")" : "") : "?"}`).join(" ")}`
+                    + (ab.freshFrames === false ? "   <- STALE: the captures are not fresh frames; the pixel rows below compare the HUD" : ""));
                 }
                 if (px.error) rows.push(`${" ".repeat(8)}       pixels: diff FAILED — ${px.error}`);
                 else if (px.differing != null) {
