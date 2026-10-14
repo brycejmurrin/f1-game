@@ -1,0 +1,1 @@
+1791965938	Cursor Agent	OWNED: grid/team/driver data under js/data/** + tests (names, lineups, numbers, engines). FORBIDDEN: css/**, feed fetch, HUD, render, workflows, AGENTS.md. Not livery colours.  [claude/f1-game-project-26h3ng; session cbe0945913624533fc1466f8]
