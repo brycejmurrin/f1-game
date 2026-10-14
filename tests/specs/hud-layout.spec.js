@@ -14,7 +14,7 @@
 // env(safe-area-inset-*) as 0, so a notched phone is otherwise untestable, and
 // the notch is exactly where a 59px inset eats the width these rules assume.
 import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+import { BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 import { analyzeOverlap, probeHudElements } from "../../tools/lib/hud-geometry.mjs";
 
 const VIEWS = [
@@ -1032,11 +1032,47 @@ test.describe("fitHud zoom determinism", () => {
 // #hud-speed-n. A microtask queued at a frame's first LCD digit runs after that
 // whole callback, so it reads exactly the pair the frame put on screen. Natural
 // frames under full throttle: the number moves, and the two must never split.
+//
+// Do NOT boot through race() above. That helper polls info().track for BOOT_MS
+// (45 s) after firing __apex.race() without awaiting its thenable, then freezes
+// for HUD-fit probes. Pages 38604708051 oversize-hud-layout (last of 43, 2
+// workers): that wait expired at 47.4 s while bahrain scenery was still
+// logging at 50.5 s (phys:null — go() never ran). Same class as fixtures.js
+// awaitTrackBuild: a slow box is not a wedge. This block waits on Log progress
+// and the race() thenable, and leaves the loop unfrozen so LCD frames arrive.
 test.describe("speed readouts", () => {
   test.setTimeout(300_000);
   test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false });
+
+  async function bootCockpitMonza(page) {
+    await page.addInitScript(PIN_PREVIOUS_LOOK);
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => {
+      localStorage.setItem("apex26.steerMode", JSON.stringify("tilt"));
+      localStorage.setItem("apex26.manual", JSON.stringify(false));
+    });
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => {
+      window.__spdRace = "pending";
+      Promise.resolve(window.__apex.race("monza")).then(
+        () => { window.__spdRace = "ok"; },
+        (e) => { window.__spdRace = "err:" + ((e && e.message) || e); });
+    });
+    await awaitTrackBuild(page, undefined, undefined, { raceFlag: "__spdRace" });
+    await page.evaluate(() => {
+      const a = window.__apex;
+      a.freeze(false);
+      a.headless(false);
+      a.go();
+      a.camera("cockpit");
+      a.jump(0.1, 60, 0);
+    });
+  }
+
   test("cockpit wheel LCD and HUD speed show one number in the same frame", async ({ page }) => {
-    await race(page, "tilt", false, { sal: 0, sar: 0, sat: 0, sab: 0 }, { cam: "cockpit" });
+    await bootCockpitMonza(page);
     await page.evaluate(() => {
       const a = window.__apex, gfx = window.GLX, hudN = document.getElementById("hud-speed-n");
       const digitOf = new Map();
@@ -1054,9 +1090,24 @@ test.describe("speed readouts", () => {
         }
         return orig.apply(this, arguments);
       };
+      // n=0: latch throttle on _testInput without a manual step. Natural rAF
+      // frames then draw the LCD under that held input.
       a.act({ throttle: true, steer: 0 }, 1 / 60, 0);
     });
-    await page.waitForFunction(() => window.__spdPairs.length >= 12, null, { polling: 100, timeout: 120_000 });
+    try {
+      await page.waitForFunction(() => (window.__spdPairs || []).length >= 12, null, {
+        polling: 100, timeout: 120_000,
+      });
+    } catch (err) {
+      const diag = await page.evaluate(() => {
+        let track = null, frozen = null, headless = null;
+        try { track = window.__apex.info().track; } catch (_) { /* */ }
+        try { frozen = window.__apex.freeze(); } catch (_) { /* */ }
+        try { headless = window.__apex.headless(); } catch (_) { /* */ }
+        return { n: (window.__spdPairs || []).length, track, frozen, headless };
+      });
+      throw new Error(`speed pairs never reached 12: ${JSON.stringify(diag)}\n${err.message}`);
+    }
     const pairs = await page.evaluate(() => window.__spdPairs);
     const why = JSON.stringify(pairs);
     expect(pairs.every((p) => p.wheel.length > 0 && p.kph > 100), "the wheel LCD drew a speed at race pace: " + why).toBe(true);
