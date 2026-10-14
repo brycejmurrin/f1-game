@@ -75,12 +75,16 @@
 
       const { K } = api;            // the contract's frac -> node index (normalised for negatives)
       const RAIL = 3.2;                   // armco gap: hard against the tarmac
-      const CAM_NEAR = 20;
-      const inOrbitRing = (dist) => dist >= 34 && dist <= 56;
+      const CAM_NEAR = 22;                // first rank past chase + canopy
+      const inOrbitRing = (dist) => dist >= 30 && dist <= 60; // scenery-orbit ~45 m
       const camHot = (k) => {
         const f = k / n;
-        return (f >= 0.38 && f <= 0.55) || (f >= 0.68 && f <= 0.80);
+        return (f >= 0.38 && f <= 0.56) || (f >= 0.66 && f <= 0.82);
       };
+      // Clear the car→orbit wedge on +1: default orbit dist is 30 m (eye ~15–22 m
+      // past the edge at az 45); scenery survey uses 45 m. Hot fracs clear further.
+      const blocksOrbitView = (side, dist, k) =>
+        side === 1 && (camHot(k) ? dist < 62 : dist < 36);
       // Heading of the road at k, for world-space ridges/banks.
       const heading = (k, side, dist) => {
         const a = anchor((k + 4) % n, side, dist);
@@ -213,7 +217,7 @@
             const h = hash(k * 29 + r * 137 + (side + 2) * 61);
             if (r > 0 && h < (hot ? 0.28 : 0.16)) continue; // ragged, thinner on hot
             const dist = base + r * 6.2 + h * 3.5;
-            if (side === 1 && inOrbitRing(dist)) continue;
+            if (blocksOrbitView(side, dist, k)) continue;
             const a = anchor(k, side, dist);
             // 5 m of clearance, not 2.2: a trunk any closer to a fold of the
             // lap is what the engine's tree guard was dropping.
@@ -230,21 +234,25 @@
                          r === 0 ? (h < 0.4 ? PINE : PINE2) : (h < 0.5 ? PINE : PINE3));
           }
           // In a hardwood stand the wall has an UNDERSTORY too — young maple
-          // and birch crowding the light at the rail, under the big trunks.
+          // and birch crowding the light past the chase corridor.
           const hu = hash(k * 311 + (side + 2) * 47);
           if (st > 0.46 && hu > 0.42) {
             const du = base + 1.4 + hu * 2.2;
-            const au = anchor(k, side, du);
-            if (!onTrack(au.c[0], au.c[2], 4.0) &&
-                minEdge(au.c[0], au.c[2]) >= du * 0.85)
-              tree(k, side, du, 4.5 + hu * 3.5, hu < 0.7 ? HARD2 : HARD);
+            if (!blocksOrbitView(side, du, k)) {
+              const au = anchor(k, side, du);
+              if (!onTrack(au.c[0], au.c[2], 4.0) &&
+                  minEdge(au.c[0], au.c[2]) >= du * 0.85)
+                tree(k, side, du, 4.5 + hu * 3.5, hu < 0.7 ? HARD2 : HARD);
+            }
           }
           // Undergrowth at the foot of the wall: the ditch is never bare.
           const hb = hash(k * 7 + side);
           if (hb > 0.58) {
             const bd = base - 1.0;
-            const ab = anchor(k, side, bd);
-            if (!onTrack(ab.c[0], ab.c[2], 3.0)) bush(k, side, bd, hb > 0.82 ? FERN : SCRUB);
+            if (!blocksOrbitView(side, bd, k)) {
+              const ab = anchor(k, side, bd);
+              if (!onTrack(ab.c[0], ab.c[2], 3.0)) bush(k, side, bd, hb > 0.82 ? FERN : SCRUB);
+            }
           }
         }
       });
@@ -271,7 +279,7 @@
           const ranks = hot ? (h > 0.55 ? 2 : 1) : (h > 0.48 ? 3 : 2);
           for (let r = 0; r < ranks; r++) {
             const dist = 22 + r * 10.5 + h * 9;
-            if (side === 1 && inOrbitRing(dist)) continue;
+            if (blocksOrbitView(side, dist, k)) continue;
             const a = anchor(k, side, dist);
             if (onTrack(a.c[0], a.c[2], 6)) continue;
             if (minEdge(a.c[0], a.c[2]) < dist * 0.85) continue;
@@ -298,7 +306,8 @@
           for (let r = 0; r < 3; r++) {
             const g = hash(k * 191 + r * 59 + (side + 2) * 13);
             if (g < 0.15) continue;
-            const dist = 58 + r * 24 + g * 18;
+            const dist = 62 + r * 24 + g * 18; // past orbit wedge on hot +1
+            if (blocksOrbitView(side, dist, k)) continue;
             const a = anchor(k, side, dist);
             if (onTrack(a.c[0], a.c[2], 8)) continue;
             if (minEdge(a.c[0], a.c[2]) < dist * 0.85) continue;
@@ -374,14 +383,14 @@
         for (const side of [-1, 1]) {
           const h = hash(k * 41 + (side + 2) * 23);
           const dist = CAM_NEAR + h * 4;
-          if (side === 1 && inOrbitRing(dist)) continue;
+          if (blocksOrbitView(side, dist, k)) continue;
           const a = anchor(k, side, dist);
           if (!onTrack(a.c[0], a.c[2], 1.0) &&
               minEdge(a.c[0], a.c[2]) >= dist * 0.85) {
             tree(k, side, dist, 17 + h * 8, h < 0.5 ? HARD : HARD2);
           }
           const d2 = CAM_NEAR + 8 + h * 5;
-          if (!(side === 1 && inOrbitRing(d2))) {
+          if (!blocksOrbitView(side, d2, k)) {
             const b = anchor(k, side, d2);
             if (!onTrack(b.c[0], b.c[2], 1.2) &&
                 minEdge(b.c[0], b.c[2]) >= d2 * 0.85)
@@ -615,8 +624,9 @@
       every(12, (k) => {
         if (!within(k, 0.396, 0.428)) return;
         const h = hash(k * 43);
+        // Past the scenery-orbit eye (~45 m on +1) — was 34-58 and clipped f42.
         for (let r = 0; r < 2; r++) {
-          const dist = 34 + r * 14 + h * 10;
+          const dist = 58 + r * 12 + h * 10;
           const a = anchor(k, 1, dist);
           if (onTrack(a.c[0], a.c[2], 5)) continue;
           if (minEdge(a.c[0], a.c[2]) < dist * 0.85) continue;
@@ -651,7 +661,7 @@
       {
         const LAKE = [0.10, 0.28, 0.38];
         waterBand(0.400, 0.520, -1, 92, 310, 16, LAKE, {
-          id: "tremblant-lac-ouimet", required: true,
+          id: "tremblant-lac-ouimet",
         });
         indexSolid(0.400, 0.520, -1, 88, 230);
       }
@@ -667,7 +677,7 @@
       every(8, (k) => {
         if (!within(k, 0.479, 0.536)) return;
         const h = hash(k * 67);
-        for (let r = 0; r < 4; r++) {
+        for (let r = 0; r < 3; r++) {
           const dist = CAM_NEAR + 1.8 + r * 7.2 + h * 3.1;
           if (dist > 78) continue;
           const a = anchor(k, -1, dist);
@@ -736,7 +746,7 @@
         for (const side of [-1, 1]) {
           const h = hash(k * 83 + (side + 2) * 29);
           const dist = CAM_NEAR + 2.6 + h * 4.5 + (side > 0 ? 1.7 : 0);
-          if (side === 1 && inOrbitRing(dist)) continue;
+          if (blocksOrbitView(side, dist, k)) continue;
           const a = anchor(k, side, dist);
           if (onTrack(a.c[0], a.c[2], 1.0)) continue;
           if (minEdge(a.c[0], a.c[2]) < dist * 0.85) continue;
