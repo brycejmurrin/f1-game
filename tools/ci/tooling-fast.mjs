@@ -748,6 +748,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/results-cam.test.mjs",
   "tests/unit/rival-attach-init.test.mjs",
   "tests/unit/rival-audio.test.mjs",
+  "tests/unit/rival-contact-sfx.test.mjs",
   "tests/unit/rival-passby-pool.test.mjs",
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
