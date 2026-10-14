@@ -634,7 +634,7 @@ test("the first-person caster is the whole car minus the driver, with the player
   const cx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap };
   cx.globalThis = cx; vm.createContext(cx);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/liveries.js", "js/car/helmets.js",
-    "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-materials.js", "js/car/car-shade.js", "js/car/car-body-geom.js", "js/car/car3d.js"]) vm.runInContext(read(f), cx, { filename: f });
+    "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js", "js/car/car-shade.js", "js/car/car-body-geom.js", "js/car/car3d.js"]) vm.runInContext(read(f), cx, { filename: f });
   const Car3D = vm.runInContext("Car3D", cx);
   const C1 = [0.9, 0.1, 0.1], C2 = [0.1, 0.1, 0.9];
   for (const teamId of ["ferrari", "mclaren", "redbull"]) {

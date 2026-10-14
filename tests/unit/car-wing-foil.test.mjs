@@ -26,7 +26,7 @@ function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite });
   seedLog(ctx);
   // Deliberately omit car-shade.js: this suite pins the flat-loft car; car-shade.test covers rounding.
-  for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/helmets.js", "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-materials.js", "js/car/car-body-geom.js", "js/car/car3d.js"]) {
+  for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/helmets.js", "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js", "js/car/car-body-geom.js", "js/car/car3d.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   }
   return vm.runInContext("({ Car3D, Parts, Teams })", ctx);
