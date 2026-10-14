@@ -296,6 +296,7 @@ const RealReplay = (function () {
       if (!run || !c) return;
       run.follow = c;
       if (G.followCar) G.followCar(c);
+      if (snap && bc) bc.refresh(bcState);   // paused follow changes must update the tower and remove a self-following inset before the camera
       if (snap && G.snapGameCam) G.snapGameCam();
       if (G.refreshHud) G.refreshHud(true);
     }
@@ -341,6 +342,7 @@ const RealReplay = (function () {
         else if (!run.follow) follow(+1);
         if (bc) bc.onCut(highlight.kind);
       }
+      if (G.raceRadio && G.raceRadio.resetTimeline) G.raceRadio.resetTimeline();
       if (bc) bc.refresh(bcState);
       if (G.refreshHud) G.refreshHud(true);
       if (G.snapGameCam) G.snapGameCam(paint);
