@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { bootGlx } from "../helpers/glx-mock.mjs";
 
 const ROOT = new URL("../..", import.meta.url);
 const MANIFEST = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs");
@@ -110,7 +111,10 @@ function makeGpuHarness(opts = {}) {
   let failBindGroupAt = Infinity;
   let now = 10_000;
 
-  const pass = new Proxy({}, { get: () => () => {} });
+  // opts.recordPass: every render-pass call lands in passCalls ([name, args]) — the draws a pass recorded.
+  const passCalls = [];
+  const pass = opts.recordPass ? new Proxy({}, { get: (_, k) => (...a) => { passCalls.push([k, a]); } })
+    : new Proxy({}, { get: () => () => {} });
   const pipeline = { getBindGroupLayout: () => ({}) };
   const pipelineDescs = [];
   // Optional persistent/session storage backing (Maps) so the loss-escalation
@@ -380,6 +384,7 @@ function makeGpuHarness(opts = {}) {
     textures,
     buffers,
     writes,
+    passCalls,
     pipelineDescs,
     asyncDescs,
     configureCalls,
@@ -2719,6 +2724,85 @@ test("WGX shadow cull packs into the batch's OWN buffer and leaves the camera pa
   assert.equal(batch.visible, camVisible, "the camera count survives the shadow cull");
   assert.equal(gfx.cullInstances(batch, planes(2e6)), 2);
   assert.equal(instWrites(), camWrites, "…so the next camera cull with the same cells is still a cache hit");
+});
+
+// C-P1 (perf hunt 4): WGX's lamp shadow map ignored the lamp's reach — castShadowChunked dropped shadow-pass.js's
+// third argument and the cullInstances shadow branch had no opts.reach test (hunt 2 G5 was ported to GLX only;
+// hunter C's VM count at vegas night: 2076 instances per rebuild without the reach, 531 with it). Both now take
+// the GLX rule, and this drives the REAL WGX and the REAL GLX (tests/helpers/glx-mock.mjs) over the same data.
+test("C-P1: the WGX lamp shadow pass drops instanced cells and chunks beyond the lamp reach, exactly as GLX does", async () => {
+  const h = makeGpuHarness({ recordPass: true });
+  const gfx = await h.create();
+  const g = bootGlx();
+  const N = 12, mats = new Float32Array(N * 16);
+  for (let i = 0; i < N; i++) { const o = i * 16; mats[o] = mats[o + 5] = mats[o + 10] = mats[o + 15] = 1; mats[o + 12] = i * 30; }
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const wb = gfx.createInstancedBatch(tri, mats, null, { cellSize: 50 });
+  const gb = g.GLX.createInstancedBatch(tri, mats, null, { cellSize: 50 });
+  const all = Array.from({ length: 6 }, () => [0, 0, 0, 1e6]);
+  const xs = (pack, stride, n) => Array.from({ length: n }, (_, i) => pack[i * stride + 12]).sort((a, b) => a - b);
+  // The rule itself (Frustum.aabbDist2 against the cell box): which instances a reach keeps.
+  const want = (reach) => { const r = []; for (const c of wb.cells) {
+    const d = [0, 1, 2].map((a) => Math.max(c.mn[a] - reach[a], 0, reach[a] - c.mx[a]));
+    if (d[0] * d[0] + d[1] * d[1] + d[2] * d[2] <= reach[3] * reach[3]) for (const i of c.idx) r.push(i * 30); }
+    return r.sort((a, b) => a - b); };
+  const shWrites = () => h.writes.filter((w) => w.buffer === wb.shadowInstBuf).length;
+  for (const reach of [[0, 0, 0, 40], [150, 0, 0, 40], [150, 0, 0, 100], [2000, 0, 0, 40]]) {
+    const o = { upload: false, reach };
+    const nw = gfx.cullInstances(wb, all, o), ng = g.GLX.cullInstances(gb, all, o);
+    assert.equal(nw, ng, `reach ${reach}: WGX keeps as many instances as GLX`);
+    assert.deepEqual(xs(wb._shadowPacked, 20, nw), xs(gb._shadowPacked, 16, ng), `reach ${reach}: the same instances`);
+    assert.deepEqual(xs(wb._shadowPacked, 20, nw), want(reach), `reach ${reach}: exactly the cells within the reach`);
+    assert.ok(nw < N, `reach ${reach}: some cells are beyond it`);
+  }
+  assert.equal(gfx.cullInstances(wb, all, { upload: false, reach: [150, 0, 0, 0] }), N, "reach radius 0 = no reach (the GLX guard)");
+  assert.equal(gfx.cullInstances(wb, all, { upload: false }), N, "the sun / car culls (no reach) keep every cell");
+  // The shadow pack's own cell-set key (GLX parity): an unchanged surviving set re-uses shadowInstBuf as written.
+  const lamp = { upload: false, reach: [150, 0, 0, 40] };
+  const n1 = gfx.cullInstances(wb, all, lamp), w1 = shWrites();
+  assert.equal(gfx.cullInstances(wb, all, lamp), n1, "same set, same count");
+  assert.equal(shWrites(), w1, "same surviving cell set: no repack, no writeBuffer");
+  // A full-set cast (count undefined) packs shadowInstBuf in source order, so the key must miss after it.
+  const VP = new Float32Array(16); VP[0] = VP[5] = VP[10] = 1 / 4000; VP[15] = 1;
+  gfx.lampShadowBegin(VP, 0);
+  gfx.castShadowInstanced(wb);
+  gfx.lampShadowEnd();
+  assert.equal(wb._shKeyN, -1, "castShadowInstanced's full-set pack invalidates the shadow key");
+  const w2 = shWrites();
+  assert.equal(gfx.cullInstances(wb, all, lamp), n1);
+  assert.equal(shWrites(), w2 + 1, "…so the next reach cull repacks instead of drawing the source-order bytes");
+
+  // Chunks: a 3000-triangle strip along x in 72 m cells, cast into the lamp map with and without the reach.
+  const strip = () => { const pos = [], nrm = [], col = [], idx = [];
+    for (let q = 0, v = 0; q < 1500; q++, v += 4) { const x = q * 0.4;
+      pos.push(x, 0, 0, x + 0.3, 0, 0, x + 0.3, 0, 1, x, 0, 1); idx.push(v, v + 1, v + 2, v, v + 2, v + 3);
+      for (let k = 0; k < 4; k++) { nrm.push(0, 1, 0); col.push(1, 1, 1); } }
+    return { pos, nrm, col, idx }; };
+  const wm = gfx.createChunkedMesh(strip(), 72), gm = g.GLX.createChunkedMesh(strip(), 72);
+  assert.ok(wm.chunks && wm.chunks.length > 4 && gm.chunks && gm.chunks.length > 4, "the strip spans several chunks");
+  const IDENT = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const wgxIdx = (reach) => {
+    h.passCalls.length = 0;
+    gfx.lampShadowBegin(VP, 0); gfx.castShadowChunked(wm, IDENT, reach); gfx.lampShadowEnd();
+    return h.passCalls.filter(([k]) => k === "drawIndexed" || k === "draw").reduce((t, [, a]) => t + a[0], 0);
+  };
+  const glxIdx = (reach) => {
+    g.GLX.lampShadowBegin(VP, 0); g.reset(); g.GLX.castShadowChunked(gm, IDENT, reach);
+    const n = g.calls.filter(([k]) => k === "drawElements").reduce((t, [, a]) => t + a[1], 0);
+    g.GLX.lampShadowEnd(); return n;
+  };
+  const full = wgxIdx(undefined);
+  assert.equal(full, 3000 * 3, "no reach: every chunk");
+  assert.equal(glxIdx(undefined), full, "GLX: every chunk");
+  for (const reach of [[0, 0, 0, 40], [300, 0, 0, 60], [590, 0, 0, 30], [5000, 0, 0, 40]]) {
+    const w = wgxIdx(reach), gl = glxIdx(reach);
+    const keep = wm.chunks.filter((c) => { const d = [0, 1, 2].map((a) => Math.max(c.min[a] - reach[a], 0, reach[a] - c.max[a]));
+      return d[0] * d[0] + d[1] * d[1] + d[2] * d[2] <= reach[3] * reach[3]; }).reduce((t, c) => t + c.count, 0);
+    assert.equal(w, keep, `reach ${reach}: WGX casts exactly the chunks within the reach`);
+    assert.equal(w, gl, `reach ${reach}: the GLX count`);
+    assert.ok(w < full, `reach ${reach}: chunks beyond it are dropped`);
+  }
+  assert.ok(wgxIdx([300, 0, 0, 60]) > 0, "a chunk inside the reach is kept");
 });
 
 test("the lamp bake light map is freed after ~2 s of bake-off frames (GLX _bakeOffN parity)", async () => {
