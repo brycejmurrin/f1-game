@@ -699,6 +699,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ~instant.
   "tests/unit/race-step-snap.test.mjs",
   "tests/unit/radio-voice.test.mjs",
+  // LOCALIZED RAIN: a drifting shower over a window of the lap, per-segment closed-form lag, lap mean = old global. VM, ~0.3 s.
+  "tests/unit/rain-cells.test.mjs",
   "tests/unit/ratchets.test.mjs",
   // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.
   "tests/unit/ready-full-cap.test.mjs",

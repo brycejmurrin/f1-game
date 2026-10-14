@@ -640,7 +640,7 @@ function isRaining() { return trackWetness() >= 0.72; }
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column.
 function trackWetness() { return wxArc ? wxArc.wetness() : TyreModel.wetness(raceWeather, null); } function roadWetness() { return trackWetness(); }   // the arc's lagged road state (js/race/weather-arc.js); roadWetness = alias for grip / pits / engineer
-function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? TyreModel.treadFor(raceWeather, trackWetness()) : c.tread) : 0, trackWetness()); }   // no fitted set (wear off): the tread the conditions call for
+function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? TyreModel.treadFor(raceWeather, trackWetness()) : c.tread) : 0, c && wxArc ? wxArc.wetnessAt(c.s) : trackWetness()); }   // grip: the SURFACE under the car (a local shower, js/race/rain-cells.js; docs/PHYSICS.md); tread: the lap mean
 
 // Pose Ghost + InputGhost start together on every TT lap arm so an incident /
 // reverse-crossing / spoiled class cannot leave the input stream attached to a
@@ -6884,7 +6884,8 @@ function renderLightingPrep(dt, hasLivePlayerShadow) {
   // params4.z): 1 in a storm, a third under the DRIZZLE tier, 0 dry — ramped at
   // the same 0.8/s as wetness so the rings fade in and out rather than pop.
   {
-    const rainTarget = isRaining() ? 1 : isWetRoad() ? 0.35 : 0;
+    const vw = wxArc ? wxArc.viewWetness() : trackWetness();   // the camera's road: a local shower falls where you are
+    const rainTarget = vw >= 0.72 ? 1 : vw >= 0.25 ? 0.35 : 0;
     const cur = frame.rain || 0;
     frame.rain = cur + (rainTarget - cur) * Math.min(1, dt * 0.8);
   }

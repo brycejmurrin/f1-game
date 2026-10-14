@@ -68,7 +68,7 @@ const Forecast = (function () {
   function timeline(a) {
     if (!a || !a.to) return [];
     const w0 = typeof a.w0 === "number" ? a.w0 : wetOf(a.from);
-    const sig = [a.from, a.to, a.dur, w0, a.wetIn].join("|");
+    const sig = [a.from, a.to, a.dur, w0, a.wetIn, !!a.cell].join("|");
     const hit = _tl.get(a);
     if (hit && hit.sig === sig) return hit.out;
     const w1 = wetOf(a.to), t0 = treadOf(w0), t1 = treadOf(w1), out = [];
@@ -79,7 +79,11 @@ const Forecast = (function () {
       for (let i = 0; i < 40; i++) { const m = (lo + h) / 2; if (pred(treadOf(wetAt(a, m)))) h = m; else lo = m; }
       return h;
     };
-    if (t1 > t0) {
+    // A LOCAL SHOWER (js/race/rain-cells.js): tread advice follows the LAP MEAN, which this global mirror does
+    // not model — so the only event is WeatherArc's own wetIn (the mean's inter crossing), when there is one.
+    if (a.cell) {
+      if (t0 < 1 && Number.isFinite(a.wetIn)) out.push({ kind: "rain", T: a.wetIn });
+    } else if (t1 > t0) {
       if (t0 < 1) out.push({ kind: "rain", T: Number.isFinite(a.wetIn) ? a.wetIn : first((t) => t >= 1) });
       if (t1 >= 2) out.push({ kind: "heavy", T: first((t) => t >= 2) });
     } else if (t1 < t0) {
@@ -137,7 +141,9 @@ const Forecast = (function () {
    *    plan    the MIXED plan {to, dur} before the green (with `from`, the chip's weather) when no arc is armed;
    *    raceT   the shared race clock (s) — `at` is stated on it; defaults to the arc's own elapsed time;
    *    lapS    an expected lap time (s); lap / lapPos the car's lap and fraction through it, to place events;
-   *    seed    the sim seed solo, 0 in a friend race; rainAt  an override for the rain onset (arc seconds) }.
+   *    seed    the sim seed solo, 0 in a friend race; rainAt  an override for the rain onset (arc seconds);
+   *    where   the sectors a local shower is over now (1-based), when the arc carries a rain cell;
+   *    wetNow  the live lap-mean wetness, used in place of the global mirror for such an arc }.
    *  Returns null when nothing changes the weather (no arc, no plan — a stable race), else
    *  { events:[{kind, what, at, in, lap, confidence, spread, tread}], text, wetNow, treadNow }. */
   function compute(o) {
@@ -167,8 +173,12 @@ const Forecast = (function () {
         confidence: confidenceFor(lead), spread: Math.round(bound), tread: KINDS[ev.kind].tread,
       });
     }
-    const wetNow = wetAt(a, elapsed);
-    return { events, text: textOf(events, a, wetNow), wetNow, treadNow: treadOf(wetNow), to: a.to, from: a.from };
+    // A local shower's road is a grid this mirror does not model: the caller passes the lap mean (o.wetNow).
+    const wetNow = a.cell && Number.isFinite(o.wetNow) ? o.wetNow : wetAt(a, elapsed);
+    // o.where: the sectors a local shower is over now (the engineer reads G.rainSectors) — "rain at sector 2".
+    const where = Array.isArray(o.where) && o.where.length ? o.where.slice() : null;
+    const text = textOf(events, a, wetNow) + (where ? " · rain at sector " + where.join(" & ") : "");
+    return { events, text, wetNow, treadNow: treadOf(wetNow), to: a.to, from: a.from, where };
   }
 
   // The last forecast the local car's engineer computed: the read-only accessor for UI and tests.
