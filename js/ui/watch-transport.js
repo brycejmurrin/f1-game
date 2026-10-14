@@ -43,13 +43,14 @@ const WatchTransport = (function () {
       root = node("section"); root.className = "watch-transport";
       root.setAttribute("aria-label", "Race replay controls");
       const top = node("div", "controls");
-      action(top, "play", "Pause replay", "Ⅱ", () => { const s = replay.status(); if (s) replay.setPaused(!s.paused); });
+      action(top, "play", "Pause replay", "❚❚", () => { const s = replay.status(); if (s) replay.setPaused(!s.paused); });
       action(top, "prev", "Previous race event", "Ⅰ‹", () => replay.eventStep(-1));
       action(top, "next", "Next race event", "›Ⅰ", () => replay.eventStep(1));
       select(top, "speed", "SPEED", desc.speeds.map((s) => [String(s), s + "×"]), (v) => replay.setSpeed(+v));
       select(top, "driver", "FOLLOWED DRIVER", desc.drivers.map((d) => [d.code, d.code + " · " + d.name]), (v) => { replay.follow(v); replay.setLocked(true); });
       const cameras = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
-      select(top, "camera", "CAMERA", cameras.map((c) => [c.id, c.label || c.id.toUpperCase()]), (id) => {
+      select(top, "camera", "CAMERA", cameras.map((c) => [c.id, c.id === "tv" ? "TV AUTO" : c.label || c.id.toUpperCase()]), (id) => {
+        if (id === "tv") { replay.setAuto(true); return; }   // WATCH owns its director; the live-race TV rig is inactive here
         const idx = cameras.findIndex((c) => c.id === id);
         if (idx >= 0 && G.setCamMode) { G.setCamMode(idx, { persist: false }); replay.setLocked(true); if (G.snapGameCam) G.snapGameCam(true); }
       });
@@ -103,7 +104,7 @@ const WatchTransport = (function () {
       // PLAY/PAUSE is an action button whose LABEL says what it does — not a
       // toggle: aria-pressed=paused ("Play replay, pressed") said the opposite,
       // and painted the button in the pressed red while paused.
-      setText(refs.play, s.paused ? "▶" : "Ⅱ");
+      setText(refs.play, s.paused ? "▶︎" : "❚❚");
       setAttr(refs.play, "aria-label", s.paused ? "Play replay" : "Pause replay");
       if (!scrubbing) setVal(refs.seek, String(Math.max(0, s.T)));
       // The timeline's spoken value follows the clock only while a reader is not
@@ -114,13 +115,14 @@ const WatchTransport = (function () {
       setText(refs.time, clock(s.T)); setVal(refs.speed, String(s.speed));
       if (s.follow) setVal(refs.driver, s.follow);
       const cams = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
-      if (cams[G.camMode]) setVal(refs.camera, cams[G.camMode].id);
       const b = s.broadcast;
-      setAttr(refs.auto, "aria-pressed", String(!!(b && b.auto && !b.locked && !b.manual)));
+      const auto = !!(b && b.auto && !b.locked && !b.manual);
+      if (cams[G.camMode]) setVal(refs.camera, auto && cams.some((c) => c.id === "tv") ? "tv" : cams[G.camMode].id);
+      setAttr(refs.auto, "aria-pressed", String(auto));
       setAttr(refs.lock, "aria-pressed", String(!!(b && b.locked)));
       setText(refs.director, b && b.locked ? "FOLLOW LOCKED" : b && b.manual && b.auto ? "AUTO IN " + Math.ceil(b.manualRemaining) + "s" : b && b.auto ? "TV DIRECTOR" : "MANUAL CAMERA");
       const current = desc.events.find((e) => e.t >= s.T - 5);
-      setText(refs.event, current ? (current.t > s.T ? "NEXT · " : "") + "L" + current.lap + " · " + current.text : "CHEQUERED FLAG");
+      setText(refs.event, current ? (current.t > s.T ? "NEXT · " : "") + "L" + current.lap + " · " + current.text : s.finished ? "CHEQUERED FLAG" : "RACE IN PROGRESS");
       const lead = typeof RealReplay !== "undefined" ? RealReplay.LEAD_S : 8;
       refs.prev.disabled = !desc.events.some((e) => e.t - lead < s.T - 1);
       refs.next.disabled = !desc.events.some((e) => e.t - lead > s.T + 1);

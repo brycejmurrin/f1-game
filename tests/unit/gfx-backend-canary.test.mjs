@@ -2582,8 +2582,9 @@ test("shadow-bug batch: lamp/car targets warmed, caster key from the cast matrix
   assert.match(lamp, /let _carKey = _playerIn \? _lampCasterKey\(1, _pm\) : 0;/, "the player is keyed from the matrix it is cast with");
   assert.match(code("js/render/shared/shadow-pass.js"), /Math\.round\(m\[8\] \* 8\)[\s\S]{0,80}Math\.round\(m\[9\] \* 8\)[\s\S]{0,80}Math\.round\(m\[10\] \* 8\)/,
     "orientation (the forward axis: heading AND pitch) is part of the lamp caster key");
-  // warm() must show the hidden casters, or compileAsync skips them.
-  assert.match(warm, /m\.visible = true; shown\.push/, "warm() compiles hidden casters too");
+  // warm() must show the hidden casters, or compileAsync skips them (showAllCasters, shared with the A-W1 drawWarm).
+  assert.match(warm, /const shown = showAllCasters\(\);/, "warm() shows the hidden casters before it compiles");
+  assert.match(sh, /function showAllCasters\(\) \{[\s\S]{0,300}m\.visible = true; shown\.push/, "warm() compiles hidden casters too");
   // Each End renders only the pass its own Begin opened.
   assert.match(sh, /function endPass\(rt\) \{[\s\S]{0,600}\(rt !== undefined && rt !== target\)\) return;/);
   assert.match(sh, /shadowEnd: \(\) => endPass\(sunRT\),/);
@@ -5187,6 +5188,7 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   const mintLateLit = () => { assert.equal(tag, false, "late lit variants are minted BEFORE setSsrMrt stamps the MRT"); minted = true; };
   const warmLateLit = async () => { assert.ok(minted); assert.equal(mrt, "tag", "late lit variants compile under the scene MRT"); };
   const warmPlusOn = () => true;   // apex26.tlxWarmPlus=1 or three's WebGL2 backend: the full warm
+  const drawWarmOn = () => false;   // the A-W1 draw stage (after the mirror stage) has its own rig: tlx-hunt4b.test.mjs
   // The stage timeline memState().warm reports (census 207 spent its window
   // inside the warm with no row saying so): the sandbox owns the record.
   const _warmStages = { at: 0, scene: null, post: null, shadow: null, total: null, attempts: 0, failed: 0 };
