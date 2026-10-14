@@ -26,8 +26,8 @@ drives it.
 ## The area docs (load one on demand)
 
 | Doc | Covers |
-| [ui-experience-studio.md](ui-experience-studio.md) | Appearance profiles, real rendered Home scenes, WATCH controls, contextual pause, career/results and Photo Studio contracts with design research. |
 |---|---|
+| [ui-experience-studio.md](ui-experience-studio.md) | Appearance profiles, real rendered Home scenes, WATCH controls, contextual pause, career/results and Photo Studio contracts with design research. |
 | [FLOW.md](FLOW.md) | The session state machine, the routes into a start (which play the garage/flyby intro), and the finish presentation per mode. |
 | [USAGE-PATHS.md](USAGE-PATHS.md) | End-to-end player journeys: every title door, Garage forward/back, restart, qualifying, championship, TV finishes, WATCH, multiplayer, designer and recovery paths; a regression checklist with source evidence. |
 | [PHYSICS.md](PHYSICS.md) | The driving model and its tuning variables, combined slip, active aero / X-mode, the overtake gate, and the world-space rigid-body authority. **Two rules bind everywhere** — see `AGENTS.md` §Physics. |
@@ -43,7 +43,7 @@ drives it.
 | [PLATFORM.md](PLATFORM.md) | iOS/Safari quirks, controller support, and what a static GitHub Pages host does and does not give you. |
 | [PACKAGING.md](PACKAGING.md) | Desktop (Electron) packaging — frozen appId, version `1.0.<build>`, electron-builder — and Android (Capacitor) sideload APK loop / WebView unknowns. |
 | [BUGS.md](BUGS.md) | Current verified open/fixed shortlist from architecture/bug-hunt passes (not the full chronological ledger). |
-| [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | Contributor orientation: boot, layers, data flow, edit map (complements the full contract in ARCHITECTURE.md). |
+| [TESTING.md](TESTING.md) | Playwright groups, the `node --test` ladder, background runs, CI tiers, and the lookup tables — the full testing reference (reading order points at §1–2 only). |
 
 ## Agent surface and hooks
 
