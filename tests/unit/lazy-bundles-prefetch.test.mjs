@@ -40,6 +40,7 @@ function world({ roster = {}, failOnce = [], body, globals = {}, deps = {} }) {
     ApexRoster: {
       DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [], LAZY_RACE: [],
       LAZY_RACE_SESSION: [], LAZY_RACE_SESSION_EDGES: [], LAZY_AUDIO: [], LAZY_AUDIO_EDGES: [],
+      LAZY_TRACK_BUILD: [], LAZY_TRACK_BUILD_EDGES: [],
       LAZY_DATA: [], LAZY_DATA_EDGES: [], LAZY_NET: [], LAZY_NET_EDGES: [],
       SCENERY_DIR: "js/circuits/scenery", ...roster,
     },
@@ -48,6 +49,8 @@ function world({ roster = {}, failOnce = [], body, globals = {}, deps = {} }) {
     location: { search: "", hostname: "example.com" },
     Log: { warn() {}, info() {}, error(_ns, m) { logged.push(m); } },
     els: {},
+    // Empty LAZY_TRACK_BUILD: stubs keep ensureScenery from failing the toolkit gate.
+    TrackBuildProps: { build() {} }, TrackModels: {}, TrackHiddenFaces: {},
     ...globals,
   });
   ctx.window = ctx;
@@ -312,11 +315,13 @@ function boot({ agent = false, lazyV = null } = {}) {
       DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
       LAZY_RACE: ["js/lighting/presets.js"], LAZY_AUDIO: ["js/audio/engine.js"], LAZY_AUDIO_EDGES: [],
       LAZY_RACE_SESSION: [], LAZY_RACE_SESSION_EDGES: [],
+      LAZY_TRACK_BUILD: [], LAZY_TRACK_BUILD_EDGES: [],
       SCENERY_DIR: "js/circuits/scenery", LAZY_SCENERY: [],
       LAZY_DATA: [], LAZY_DATA_EDGES: [], LAZY_NET: [], LAZY_NET_EDGES: [],
       TRACK_VM: ["js/track/core/geom.js"], TRACK_WORKER_EXTRA: [],
     },
     window: { __APEX_BUILD: 4100, LightPresets: {}, __TEST_MODE: agent },
+    TrackBuildProps: { build() {} }, TrackModels: {}, TrackHiddenFaces: {},
     PitLane: { _stub: true },
     Tracks: { LIST: [{ id: "monza", custom: true, scenery: () => {} }], circuitPayloadResident: () => true },
     Assets: { modelsReady: () => Promise.resolve(0) },

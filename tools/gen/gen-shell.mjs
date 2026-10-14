@@ -216,6 +216,7 @@ export function swOptionalFiles() {
   return [
     ...Object.values(MANIFEST.DEFERRED).flat(),
     ...MANIFEST.LAZY_RACE, ...(MANIFEST.LAZY_RACE_SESSION || []),
+    ...(MANIFEST.LAZY_TRACK_BUILD || []),
     ...MANIFEST.LAZY_CIRCUIT, ...MANIFEST.LAZY_SCENERY, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
     ...(MANIFEST.LAZY_AUDIO || []),
     ...MANIFEST.LAZY_WORKER, ...MANIFEST.LAZY_EDITOR, ...(MANIFEST.LAZY_XR || []),
@@ -235,6 +236,7 @@ function swOptionalBlock() {
     ["DEFERRED renderer backends (no <script> tag; injected on opt-in)", Object.values(MANIFEST.DEFERRED).flat()],
     ["LAZY_RACE + LAZY_CIRCUIT + LAZY_SCENERY — race payload; a miss builds a bare/meta circuit offline", [...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_CIRCUIT, ...MANIFEST.LAZY_SCENERY]],
     ["LAZY_RACE_SESSION — pit/radio/reliability behind startRace (title boots stub)", MANIFEST.LAZY_RACE_SESSION || []],
+    ["LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build", MANIFEST.LAZY_TRACK_BUILD || []],
     ["LAZY_AUDIO — engine/panel/voice behind first sound gesture or race start", MANIFEST.LAZY_AUDIO || []],
     ["LAZY_DATA — the data hub bundle behind the DATA button", MANIFEST.LAZY_DATA],
     ["LAZY_NET — the multiplayer stack behind VS FRIEND", MANIFEST.LAZY_NET],
@@ -274,6 +276,7 @@ function rosterSource() {
     ["LAZY_XR", MANIFEST.LAZY_XR], ["LAZY_XR_EDGES", MANIFEST.LAZY_XR_EDGES],
     ["LAZY_CAM_EDITOR", MANIFEST.LAZY_CAM_EDITOR], ["LAZY_CAM_EDITOR_EDGES", MANIFEST.LAZY_CAM_EDITOR_EDGES],
     ["LAZY_CAREER_UI", MANIFEST.LAZY_CAREER_UI], ["LAZY_CAREER_UI_EDGES", MANIFEST.LAZY_CAREER_UI_EDGES],
+    ["LAZY_TRACK_BUILD", MANIFEST.LAZY_TRACK_BUILD], ["LAZY_TRACK_BUILD_EDGES", MANIFEST.LAZY_TRACK_BUILD_EDGES],
     // The build Worker's importScripts list, "@circuits" expanded in page order
     // so the worker's Tracks.LIST indexes exactly as the page's does.
     ["TRACK_VM", MANIFEST.TRACK_VM.flatMap((e) => (e === "@circuits" ? MANIFEST.CIRCUITS.map(MANIFEST.circuitPath) : [e]))],

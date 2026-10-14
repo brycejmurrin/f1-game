@@ -21,7 +21,10 @@ https://code.claude.com/docs/en/hooks (PreToolUse output, MCP matchers,
   subagent, so the track-surveyor scope (below) is enforceable.
 
 ## Changes
-1. `settings.json`: `deny` merge_pull_request, delete_file, create_repository,
+1. *(Correction 2026-10-14, later the same day: `.claude/settings.json` does
+   NOT deny `merge_pull_request`; it routes it through `github-mcp-guard.sh`,
+   which asks — see the matcher on `enable_pr_auto_merge|merge_pull_request|update_pull_request`.)*
+   `settings.json`: `deny` merge_pull_request, delete_file, create_repository,
    fork_repository; `ask` push_files, create_or_update_file (an MCP commit skips
    the commit hook). `github-mcp-guard.sh` asks before enable_pr_auto_merge and
    before update_pull_request with `draft: false`, naming ready-gate.mjs and
@@ -57,6 +60,28 @@ https://code.claude.com/docs/en/hooks (PreToolUse output, MCP matchers,
    each <= 1,024. Five new routing-query files (5 should-fire + 3 near-miss).
 9. pick-tests routes css/{carsetup,tokens,select}.css to `baseline`;
    cloudflared downloads to scratch/browser-http/; capacity comments say 40/5.
+
+## Every host (2026-10-14, later)
+
+The guards above were Claude Code hooks only, so Cursor, Codex and Grok Build
+sessions committed and pushed unguarded (the multi-tool audit's top gap).
+Now:
+
+- `.cursor/hooks.json` (`beforeShellExecution`, which Cursor cloud agents also
+  run from the repo — cursor.com/docs/agent/hooks) and `.codex/hooks.json`
+  (`PreToolUse` on `Bash`; Codex loads project hooks only once the project
+  and hook are trusted — third-party docs, not yet verified on Codex itself)
+  run `.cursor/hooks/shell-guard.sh`, which feeds `bash-guard.sh` Claude's
+  payload shape. Exit 2 blocks in all three hosts.
+- `.githooks/pre-commit` (the commit gate: docs-only → docs-integrity, else
+  ratchet auto-raise + `test:guards`) and `.githooks/pre-push` (no deploy
+  branch, no delete, no rewrite) bind any host that runs git — Grok Build
+  included. pre-commit stands aside under `CLAUDECODE=1`; the adapter sets
+  `APEX_COMMIT_GATE=githook` so bash-guard leaves commits to it.
+- ACTIVE via package.json `prepare` (`git config core.hooksPath .githooks`),
+  which every host's `npm install` / `npm ci` runs — approved by Bryce in
+  session 2026-10-14. A clone with no install: run that one command.
+  `tests/unit/cross-tool-guards.test.mjs` pins all of the above.
 
 ## Not done
 - Hook tests for stop-guard / post-edit / session-start (survey A10).

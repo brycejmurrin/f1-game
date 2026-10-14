@@ -779,6 +779,50 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     expect(prof, "the drag is in apex26.hudLayout").toBeTruthy();
   });
 
+  test("HIDE removes a piece from the race, it stays a ghost while arranging, SHOW brings it back", async ({ page }) => {
+    await page.addInitScript(() => { localStorage.removeItem("apex26.hudLayout"); localStorage.removeItem("apex26.hudElements"); });
+    await page.goto("/");
+    await waitReady(page);
+    await openPauseControls(page);
+    await page.locator("#pm-hud-arrange").click();
+    await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
+    const vis = page.locator("#hud-arrange-vis");
+    await expect(vis, "nothing selected: no piece to hide").toBeDisabled();
+    // Touch the sector plate (a press with no movement selects it).
+    const sec = await page.locator("#hud-sectors").boundingBox();
+    expect(sec).not.toBeNull();
+    await page.mouse.move(sec.x + sec.width / 2, sec.y + sec.height / 2);
+    await page.mouse.down();
+    await page.mouse.up();
+    await expect(page.locator("#hud-arrange-name")).toContainText("SECTORS");
+    await expect(vis).toBeEnabled();
+    await expect(vis).toHaveText("HIDE");
+    await vis.click();
+    // Stored as hidden, yet still on screen as a ghost so it can be touched again.
+    expect(await page.evaluate(() => HudElements.isOn("sectors"))).toBe(false);
+    await expect(page.locator("#hud-sectors")).toHaveAttribute("data-hl-off", "");
+    await expect(page.locator("#hud-sectors")).toBeVisible();
+    await expect(vis).toHaveText("SHOW");
+    // DONE: the race hide list is back and the plate is gone from the race.
+    await page.locator("#hud-arrange-done").click();
+    await page.waitForFunction(() => !document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
+    expect(await page.evaluate(() => (document.body.dataset.hudHide || "").split(" "))).toContain("sectors");
+    await expect(page.locator("#hud-sectors")).toBeHidden();
+    // Back in: SHOW restores it.
+    await page.locator("#pm-hud-arrange").click();
+    await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
+    const sec2 = await page.locator("#hud-sectors").boundingBox();
+    await page.mouse.move(sec2.x + sec2.width / 2, sec2.y + sec2.height / 2);
+    await page.mouse.down();
+    await page.mouse.up();
+    await expect(vis).toHaveText("SHOW");
+    await vis.click();
+    expect(await page.evaluate(() => HudElements.isOn("sectors"))).toBe(true);
+    await page.locator("#hud-arrange-done").click();
+    await page.waitForFunction(() => !document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
+    expect(await page.evaluate(() => (document.body.dataset.hudHide || "").split(" "))).not.toContain("sectors");
+  });
+
   test("Escape ends arranging without driving the car", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);

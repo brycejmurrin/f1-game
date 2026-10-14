@@ -79,7 +79,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy — the MCP lock oracle; an idle server is not busy. | check-changes |
 | **ci/prune-branches.mjs** | Lists or deletes merged/absorbed branches with no open PR; --also verdicts are archived to refs/archive/* first. | check-changes |
 | **ci/ready-gate.mjs** | Gate for marking a PR ready: require green tooling-fast / Structural guards on the tip SHA. | steward |
-| **ci/remote-group.mjs** | One test:* browser group on 4 llvmpipe runners (browser-group.yml); a line per shard, then `= group`. | check-changes |
+| **ci/remote-group.mjs** | One test:* browser group on 4 llvmpipe runners (browser-group.yml), shards packed by measured time; a line per shard,… | check-changes |
 | **ci/repo-size.mjs** | Full-history size report: largest blobs ever committed and on-disk totals per top-level directory (repo-size.yml). | check-changes |
 | **ci/run-group.mjs** | PR-only topical runner: drop TOOLING_FAST_FILES so always-on vm-b1 riders do not double-bill. | — |
 | **ci/session-status.mjs** | Prints the branch's handoff block (sessions, commits, dirty/unpushed, test verdicts, live run); `--pr` adds live PR… | check-changes |

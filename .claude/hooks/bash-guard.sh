@@ -307,6 +307,10 @@ fi
 read -r _C_N C_RUN C_ALL C_GITDIR C_PATHS <<EOF
 $COMMIT_LINE
 EOF
+# Another host's adapter (.cursor/hooks/shell-guard.sh, used by Cursor and
+# Codex) sets APEX_COMMIT_GATE=githook when core.hooksPath is .githooks: the
+# git pre-commit hook runs this same gate there, so it is not run twice.
+[ "${APEX_COMMIT_GATE:-}" = githook ] && C_RUN=0
 if [ "${C_RUN:-0}" = "1" ] && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUARDS=1'; then
   # `git -C <dir> commit` commits in <dir>'s tree, not the hook's cwd.
   if [ -n "$C_GITDIR" ] && [ "$C_GITDIR" != "-" ]; then

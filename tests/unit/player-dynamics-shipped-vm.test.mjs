@@ -6,18 +6,19 @@
  *
  * The pin twin locks the driving model's SHAPES on an empty-sheet McLaren; this
  * one locks what the player actually drives. Measured on this tree (monza,
- * FRAC 0, `node tools/check/player-dyn.mjs --json --seat shipped`):
+ * FRAC 0, `node tools/check/player-dyn.mjs --json --seat shipped`) after the
+ * capacity-scaled brake ellipse fix (trail-brake-turnin):
  *   brake from vTop 60.5 m/s   3.39 g, 1.82 s, 54.3 m
  *   accel                      t100 4.02 s, t200 14.37 s
  *   step steer 50 m/s / 0.5    final yaw 0.447 rad/s
- *   turn-in 55 m/s / 0.75      yaw 1.037 coasting vs -0.224 braking
+ *   turn-in 55 m/s / 0.75      yaw 1.037 coasting vs 0.965 braking (≥0.6×)
  *   skidpad 60 m/s / 0.8       5.35 g
  *   full lock 45 m/s           yawMax 1.60 rad/s, rear slip max 12.5°
  * The bands below sit ~8-15 % around those, so a deliberate retune or a new
- * GarageDefaults export moves them on purpose, not by noise. Two pin shapes do
- * NOT hold here and are recorded as measured, not asserted away: trail braking
- * at 55 m/s rotates the car LESS than coasting (the kit's brakes take the rear's
- * whole circle), and at 45 m/s full lock the front never reaches its force peak.
+ * GarageDefaults export moves them on purpose, not by noise. One pin shape
+ * still does NOT hold here: at 45 m/s full lock the front never reaches its
+ * force peak (recorded, not asserted away). Trail-brake turn-in now meets the
+ * ≥0.6× coasting target on this seat (was −0.224 vs 1.037 before the fix).
  *
  * Run: node --test tests/unit/player-dynamics-shipped-vm.test.mjs
  */
@@ -69,15 +70,18 @@ test("braking and acceleration sit in the shipped car's measured bands", () => {
 test("cornering sits in the shipped car's measured bands", () => {
   within(m.stepSteer.final, 0.40, 0.50, "step-steer final yaw");
   within(m.turnIn_coast.yaw, 0.93, 1.15, "turn-in coasting yaw");
-  within(m.turnIn_brake.yaw, -0.45, 0.10, "turn-in braking yaw");
+  within(m.turnIn_brake.yaw, 0.80, 1.10, "turn-in braking yaw");
   const sk = m.skidpad.find((r) => r.v === 60 && r.steer === 0.8);
   within(sk.ay_g, 4.8, 5.9, "skidpad 60 m/s / 0.8 ay_g");
   within(m.fullLock.yawMax, 1.4, 1.8, "full-lock yawMax");
 });
 
-test("trail braking at 55 m/s rotates the shipped car less than coasting (measured, the reverse of the pin)", () => {
-  assert.ok(m.turnIn_brake.yaw < m.turnIn_coast.yaw, `brake ${m.turnIn_brake.yaw} vs coast ${m.turnIn_coast.yaw}`);
-  assert.ok(m.turnIn_brake.axFracF > 0.3 && m.turnIn_brake.axFracR > 0.3, "the pedal charges both axles");
+test("trail braking at 55 m/s keeps at least 0.6× coasting yaw (capacity-scaled ellipse)", () => {
+  assert.ok(m.turnIn_brake.yaw >= m.turnIn_coast.yaw * 0.6,
+    `brake ${m.turnIn_brake.yaw} vs coast ${m.turnIn_coast.yaw}`);
+  assert.ok(m.turnIn_brake.axFracF > 0.3 && m.turnIn_brake.axFracF < 0.9,
+    `full pedal must not empty the front circle (axFracF=${m.turnIn_brake.axFracF})`);
+  assert.ok(m.turnIn_brake.axFracR > 0.1, "the pedal still charges the rear");
   assert.equal(m.turnIn_coast.axFracF, 0, "coasting (engine braking) charges only the rear");
 });
 
@@ -91,8 +95,8 @@ test("the throttle charges the driven rear axle, never the undriven front", () =
 
 test("a stamp on the brakes mid-corner does not spin the shipped car toward the apex", () => {
   const co = m.midCorner_coast, br = m.midCorner_brake;
-  assert.ok(br.aRmax < co.aRmax * 2.6, `rear slip ${br.aRmax}° braking vs ${co.aRmax}° coasting`);
-  assert.ok(br.yawMean < co.yawMean * 1.25, `yaw ${br.yawMean} braking vs ${co.yawMean} coasting`);
+  assert.ok(br.aRmax <= 8, `rear slip ${br.aRmax}° (want ≤8°)`);
+  assert.ok(br.yawMean <= co.yawMean * 1.15, `yaw rise ${br.yawMean} vs coast ${co.yawMean} (want ≤15%)`);
 });
 
 test("full lock at 45 m/s stays bounded and never spins", () => {

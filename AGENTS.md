@@ -39,7 +39,7 @@ feedback, not extra safety (`docs/TESTING.md`; the measurements behind every rul
 | one subsystem with its own spec | that spec — `npm test -- tests/specs/<file>.spec.js`; prefer single specs over their whole group |
 | `js/render/webgpu/` or `js/render/three/` | the path-scoped rule in `.claude/rules/` says what to run; software probes are not evidence about a player's GPU, so dispatch `gpu-census.yml` on `macos-latest` and read its Verdict step |
 | engine / physics / `js/game.js` | the groups `pick-tests` names, capped at two browser groups: run the two most specific, name the rest as not-run in the PR |
-| a whole browser group (not one spec) | `node tools/ci/remote-group.mjs <group>` on the PUSHED branch (`browser-group.yml`, four llvmpipe shards, ~5 min instead of 30–45 locally); `test-bg.mjs` stays for one spec, or when Actions is jammed |
+| a whole browser group (not one spec) | `node tools/ci/remote-group.mjs <group>` on the PUSHED branch (`browser-group.yml`, four llvmpipe shards packed by measured time; ~5 min of test work per shard, 10–15 min wall with runner queueing, instead of 30–45 locally); `test-bg.mjs` stays for one spec, or when Actions is jammed |
 | geometry pushed to the deploy branch, or a group this box cannot time | `npm run test:sweeps` when the diff reaches the FLEET build (`tools/ci/geometry-paths.mjs`); a lighting, car, debris-world or driving-line edit needs only its TARGETED suite (`--targeted`), which ci.yml and `deploy.mjs` run. Else dispatch `ci.yml` with `group: <name>` and read the four Smoke jobs |
 
 Session shape — twelve rules that control wall time, waiting and handoff:

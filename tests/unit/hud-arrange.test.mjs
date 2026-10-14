@@ -69,6 +69,24 @@ test("clashes: only pairs overlapping by more than the margin on BOTH axes; touc
   assert.equal(A.MIN_CLASH, 3);
 });
 
+test("visIds / visShown: which HUD ELEMENTS toggles a piece maps to, and when it reads as shown", () => {
+  const A = load();
+  assert.deepEqual(plain(A.visIds("tower")), ["pos", "lap", "time", "best"], "the tower is its four boxes together");
+  assert.deepEqual(plain(A.visIds("gearbox")), ["gear"]);
+  for (const id of ["map", "gaps", "mirror", "flag", "announce", "nope"]) assert.deepEqual(plain(A.visIds(id)), [], id + " has no toggle here");
+  const off = new Set(["pos", "lap", "time", "best", "speed"]);
+  const isOn = (v) => !off.has(v);
+  assert.equal(A.visShown("tower", isOn), false, "all four tower boxes off: hidden");
+  assert.equal(A.visShown("speed", isOn), false);
+  assert.equal(A.visShown("sectors", isOn), true);
+  assert.equal(A.visShown("map", isOn), true, "a piece with no toggle always reads as shown");
+  off.delete("lap");
+  assert.equal(A.visShown("tower", isOn), true, "any tower box on: shown");
+  // Every toggle id the editor writes is one js/ui/hud-elements.js declares.
+  const elSrc = fs.readFileSync(path.join(ROOT, "js/ui/hud-elements.js"), "utf8");
+  for (const ids of Object.values(A.VIS)) for (const v of ids) assert.match(elSrc, new RegExp('\\["' + v + '", "'), v + " is a HudElements id");
+});
+
 test("create: inert without a document or HudLayout; the pure API is frozen", () => {
   const A = load();
   assert.equal(A.create({}), null, "no document, no editor");

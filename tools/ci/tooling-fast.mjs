@@ -59,6 +59,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // source, no browser, ~0.2 s.
   // Round-2 (2026-10-10): visible text is contained in every control's accessible name (WCAG 2.5.3); static shell scan.
   "tests/unit/a11y-label-in-name.test.mjs",
+  // SETTINGS › ACCESSIBILITY: reduce motion Auto/On/Off, high focus ring,
+  // colourblind S/M/H/I/W cues. VM + shell pins, < 0.2 s.
+  "tests/unit/a11y-opts.test.mjs",
   "tests/unit/a11y-pwa-pass.test.mjs",
   // 2026 aero defaults for catalog options that omit beam/drs/board (item 4).
   "tests/unit/aero-defaults-2026.test.mjs",
@@ -241,6 +244,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // mapping reads as 0 %, not as an error, so its filters are pinned here. ~2 s.
   "tests/unit/coverage-merge.test.mjs",
   "tests/unit/cross-file-paths.test.mjs",
+  // cross-tool-guards: Cursor/Codex reach bash-guard through one adapter; .githooks
+  // pre-push refuses deploy-branch, delete and rewrite pushes. Real git, ~2 s.
+  "tests/unit/cross-tool-guards.test.mjs",
   "tests/unit/css-comments.test.mjs",
   "tests/unit/css-critical-path.test.mjs",
   "tests/unit/css-faces.test.mjs",
@@ -340,6 +346,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // heights[]; sanitize pads missing heights to flat zeros. Pure VM, ~0.05 s.
   "tests/unit/elev-presets.test.mjs",
   "tests/unit/elevation-smoothness.test.mjs",
+  "tests/unit/engine-note-quality.test.mjs",
   // Engine rpm for net/replay puppets and finish coast (game.js updateCar early-outs). ~15 s.
   "tests/unit/engine-revs-replay-vm.test.mjs",
   // ...and the race engineer's ladder: it ADVISES and never arms a stop,
@@ -468,6 +475,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // insertAdjacentHTML writes a constant or is in the reasoned allowlist
   // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
   "tests/unit/html-sink-lint.test.mjs",
+  "tests/unit/hud-announce-lane-cache.test.mjs",
   "tests/unit/hud-control-clearance.test.mjs",
   "tests/unit/hud-dock-pack.test.mjs",
   "tests/unit/hud-elements.test.mjs",
@@ -487,6 +495,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-readouts.test.mjs",
   "tests/unit/hud-relative.test.mjs",
   "tests/unit/hud-speed-parity.test.mjs",
+  // phoneL broadcast @150%: announce/flag/LIMITS/TYRES/REL stack (queue item 1).
+  "tests/unit/hud-status-stack.test.mjs",
   "tests/unit/hud-strategy.test.mjs",
   "tests/unit/hud-survey.test.mjs",
   "tests/unit/hud-tyres.test.mjs",
@@ -497,6 +507,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/import-models.test.mjs",
   "tests/unit/incident-gate.test.mjs",
   "tests/unit/incident-rpm.test.mjs",
+  // InputBindings factory alone (conflict claim, reset/isDefault, persistence,
+  // brand labels) — no input.js. Complements key-binds.test.mjs. ~0.1 s.
+  "tests/unit/input-bindings.test.mjs",
   "tests/unit/input-ghost.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
@@ -510,6 +523,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lap-format-rollover.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",
   "tests/unit/lazy-bundles-prefetch.test.mjs",
+  "tests/unit/lazy-track-build.test.mjs",
   // …and the PERIOD CAR reaching the garage SHEET, not just the team
   // record. Twelve legends share one `legends` id, so the write policy is
   // the behaviour: seed an empty sheet, reseed on a real switch, never on a
@@ -523,6 +537,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/legends.test.mjs",
   "tests/unit/lexical-window-guard.test.mjs",
   "tests/unit/light-grid.test.mjs",
+  "tests/unit/light-presets-extreme-knobs.test.mjs",
   "tests/unit/light-presets-knob-range.test.mjs",
   "tests/unit/light-presets.test.mjs",
   "tests/unit/light-store-cond-layer.test.mjs",
@@ -554,6 +569,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // LoopHealth fault policy: RUN_CAP / TOTAL_CAP / quiet expiry / clean recovery.
   // VM-executed js/perf/loop-health.js (seedLog), controllable clock, ~0.1 s.
   "tests/unit/loop-health.test.mjs",
+  // Low-speed lock plateau pin (1.06× → ≈0.371 rad at notch 7) + high-speed
+  // Object.is vs pre-boost raw; companion to steer-lock-taper. Source + VM, ~3 s.
+  "tests/unit/low-speed-lock.test.mjs",
   // The marshal posts' light panels show race control: a waved yellow in the
   // sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.
   "tests/unit/marshal-panels.test.mjs",
@@ -691,6 +709,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ready-gate.test.mjs",
   "tests/unit/real-race-script.test.mjs",
   "tests/unit/real-race.test.mjs",
+  // Replay caption validity across seeks, reel cuts and session changes; isolated VM.
+  "tests/unit/real-replay-captions.test.mjs",
   // ...and the REAL REPLAY on the real Baku build: OpenF1's x/y fitted onto the
   // centreline, the highlights list, the field as puppets (follow, speed, a car
   // whose data ends, the flag) and the exact JUMP IN. Four game boots, ~12 s.
@@ -706,6 +726,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // tools/ci/remote-group.mjs + browser-group.yml: the group/shard validation
   // that stands between a dispatch input and a shell, and the run pick. Pure, instant.
   "tests/unit/remote-group.test.mjs",
+  // render() lighting-prep pure-move: renderLightingPrep owns sky/lightning/lamps; call-order pin. ~0.05 s.
+  "tests/unit/render-lighting-prep.test.mjs",
   "tests/unit/renderer-boot-timeout.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
   // Instant-replay ring (js/camera/replay-buf.js): budget, wrap, restore, solo/net scrub gates. ~0.05 s.
@@ -802,7 +824,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // must still rise >1.05× (player-dynamics shape) but stay ≤1.25× in 0.75 s
   // at 45 m/s / lock 0.8. createGame once, ~2.5 s.
   "tests/unit/steer-feel-lift-off.test.mjs",
-  // Hairpin lock hold: lockTaper = 1 for vs≤15, blend 15–30, raw ≥30 so
+  // Hairpin lock hold: lockTaper = 1.06× for vs≤15, blend 15–30, raw ≥30 so
   // ≥60 m/s stays bit-identical to the old hyperbolic taper. Source + VM, ~3 s.
   "tests/unit/steer-lock-taper.test.mjs",
   // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
@@ -926,6 +948,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Wrap-aware arc buckets vs the O(n) updateCar traffic / slipstream / OT-ahead
   // walks (collide.js helper). Seeded 22-car old-vs-new characterization, no browser.
   "tests/unit/traffic-arc-buckets.test.mjs",
+  // Trail-brake turn-in: pedal + yaw damp scale by max(1, mods.braking) so
+  // shipped kits keep ≥0.6× coasting yaw (was −0.224). createGame×2 ~5 s.
+  "tests/unit/trail-brake-turnin.test.mjs",
   "tests/unit/tree-counts-catch.test.mjs",
   "tests/unit/trim-comments.test.mjs",
   // TUMFTM racetrack-database CSV → designer envelope (tools/track/tumftm-import.mjs).
@@ -947,6 +972,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 5: camera tuner compact foot/preview/copy-from --tap-paint
   // floors (#camtune-inner only; lighting untouched).
   "tests/unit/ui-fit-camtune-tap-r5.test.mjs",
+  // ui-fit round 6: lighting tuner compact foot / short-tab --tap-paint
+  // floors (#lighting-inner / #lt-* only; camera untouched).
+  "tests/unit/ui-fit-lighttune-tap-r6.test.mjs",
+  // ui-fit round 6: Photo Studio #ps-* setting-row selects floor at
+  // --tap-paint (portrait 114×43 soft taps; landscape already clean).
+  "tests/unit/ui-fit-photostudio-tap-r6.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",

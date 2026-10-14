@@ -1548,7 +1548,7 @@ function bootSettingsNav() {
   const sb = uiSandbox(dom, { ResizeObserver: class { observe() {} }, ScrollFade: { refresh() {} } });
   vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
   const index = dom.byId("pm-settings-index");
-  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files"])
+  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-advanced", "pm-audio", "pm-open-files"])
     index.appendChild(dom.byId(id));
   const stale = dom.document.createElement("button");
   stale.hidden = true;
@@ -1602,7 +1602,7 @@ test("Settings index DRIVING subtitle rebuilds badges once (empty coach select)"
   });
   vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
   const index = dom.byId("pm-settings-index");
-  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files"])
+  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-advanced", "pm-audio", "pm-open-files"])
     index.appendChild(dom.byId(id));
   const drv = dom.byId("pm-open-driving");
   const small = dom.document.createElement("small");
@@ -2088,8 +2088,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "compact radio cards sit right under the timing row, like every other density");
   assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce', "top"), "calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px)",
     "…and step below the flag chip while a caution shows, never on top of it");
-  assert.equal(decl(css("css/hud.css"), ":root[data-gap-drop] #announce", "--flag-slot-top"), "calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px)",
-    "gap-drop raises --flag-slot-top so announce steps from the dropped flag edge");
+  assert.equal(decl(css("css/hud.css"), ":root[data-gap-drop] #announce", "--flag-slot-top"), "max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px), calc(var(--hud-gaps-b, 0px) + 8px))",
+    "gap-drop raises --flag-slot-top so announce steps from the dropped flag edge (and clears --hud-gaps-b)");
   // ONE formula for the phone INPUTS top (HUD PR review 2026-10-10): --hud-sec-h is published in the chrome's
   // zoom (--hud-z-top) and converted into this band's (--hud-z); the step below the #hud-limits chip is
   // conditional (--inputs-below-limits, set only while the chip shows) rather than a permanent +1.75em+8px.
@@ -2098,7 +2098,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "phone INPUTS park under the sector plate, and below the #hud-limits chip only while it shows");
   assert.equal(decl(css("css/hud.css"), 'body:not([data-hud-hide~="limits"]):has(#hud-limits:not([hidden])) #hud-inputs', "--inputs-below-limits"), "calc(2.6em + 3px)",
     "the limits step is the chip's own rule");
-  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #hud-flag', "top"), "max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px))");
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #hud-flag', "top"), "max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px), calc(var(--hud-gaps-b, 0px) + 8px))",
+    "compact flag clears --hud-gaps-b (72px alone sat inside the gaps strip at phoneL 150%)");
   assert.equal(decl(css("css/career.css"), '#quali .sheet[data-density="compact"] #q-foot', "display"), "grid");
   assert.equal(decl(css("css/career.css"), '#quali.q-done .sheet[data-density="compact"] #q-foot #q-go', "grid-column"), "1 / -1");
   const selectJs = code("js/ui/select-screen.js");
@@ -2147,9 +2148,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="sp-close"[^>]*>CLOSE</, "sp-close overlay dismiss is CLOSE");
   assert.match(shell, /id="pm-advanced">STEERING &amp; ASSISTS/, "settings door is STEERING & ASSISTS");
   const settingsIndex = shell.slice(shell.indexOf('id="pm-settings-index"'), shell.indexOf("</nav>", shell.indexOf('id="pm-settings-index"')));
-  assert.deepEqual([...settingsIndex.matchAll(/<button id="(pm-(?:open-controls|open-driving|open-display|open-appearance|advanced|audio|open-files))"/g)].map((m) => m[1]),
-    ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files"],
-    "Settings home has the seven primary doors in order");
+  assert.deepEqual([...settingsIndex.matchAll(/<button id="(pm-(?:open-controls|open-driving|open-display|open-appearance|open-a11y|advanced|audio|open-files))"/g)].map((m) => m[1]),
+    ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-advanced", "pm-audio", "pm-open-files"],
+    "Settings home has the eight primary doors in order");
   const pause = shell.slice(shell.indexOf('id="pausemenu"'), shell.indexOf("</dialog>", shell.indexOf('id="pausemenu"')));
   assert.doesNotMatch(pause, /<button id="pm-driving"/, "DRIVING is a Settings page, not a pause shortcut");
   assert.match(shell, /id="pm-panel-driving"/, "DRIVING has a dedicated Settings page");
