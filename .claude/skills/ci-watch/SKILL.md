@@ -26,10 +26,11 @@ else.
 ## Merge method and the hard gate
 
 MERGE-COMMIT-ONLY (Bryce, 2026-10-13): arm with `mergeMethod: "MERGE"`, never
-SQUASH or REBASE. `pr-board.mjs` still encodes the retired SQUASH only rule, so
-read its arm rows by the PR's actual method, not the verb: a MERGE arm it calls
-FOREIGN-ARM is correct (treat it as NONE); a SQUASH or REBASE arm it calls NONE
-is the real foreign arm.
+SQUASH or REBASE (the retired SQUASH only rule is gone from `pr-board.mjs`
+too): the board calls a MERGE arm NONE and a SQUASH or REBASE arm FOREIGN-ARM,
+holds ARM at WAIT on a `MERGE-HOLD:` line or once 2 PRs are armed, holds READY
+at WAIT while the draft's Plan has open items, and shows the Plan as PLAN
+(done/items, `-` when the body has none).
 
 ARM a PR only when ALL hold; any miss is WAIT (say which):
 
@@ -53,11 +54,11 @@ ARM a PR only when ALL hold; any miss is WAIT (say which):
 |---|---|
 | READY | Confirm `node tools/ci/ready-gate.mjs --pr <n>` exits 0 AND `node tools/ci/ready-full-cap.mjs` exits 0, then `mcp__github__update_pull_request` `draft: false`. At most 3 flips per sweep; the board already spends the cap room, a Bryce-named PR may waive the cap only when he named it. |
 | ARM | Only if the hard gate above holds: `mcp__github__enable_pr_auto_merge` `mergeMethod: "MERGE"`. MERGE only. |
-| FOREIGN-ARM | Read the method first. MERGE: nothing (correct arm). SQUASH/REBASE: `mcp__github__disable_pr_auto_merge`, then re-arm with MERGE only if the hard gate holds. Tell the user which actor armed it if known. |
+| FOREIGN-ARM | A SQUASH or REBASE arm: `mcp__github__disable_pr_auto_merge`, then re-arm with MERGE only if the hard gate holds. Tell the user which actor armed it if known. |
 | SYNC | Not yours to push. If a live session owns the PR (`node tools/ci/who-is-on-it.mjs`, recent pushes), `send_message` it `HANDOFF`/`BLOCKED` per `session-comms`. Otherwise `node tools/ci/sync-pr.mjs <branch>` (merge ship, never rebase or force-push; `--push` only after it verified). Run it in a worktree, not a checkout another session uses. Never arm it while DIRTY. |
 | FIX | Same ownership check. A live owner gets the failing job names by message. Otherwise hand to the `ci-red-triage` agent for the test and assertion, then fix per `steward`/`pr-owner`. A `cancelled` with a live sibling is the draft/ready dedupe, not a red (`steward` §1). |
 | WAIT | Nothing. Cap full, CI running, gate pending, 2 already armed, `MERGE-HOLD:` set. |
-| NONE | Nothing, unless the arm's method is SQUASH/REBASE (then FOREIGN-ARM above). |
+| NONE | Nothing: armed with MERGE and healthy. |
 
 3. Stand down on any PR a live session is actively pushing (a push inside the
    last ~10 min, or a live `who-is-on-it` claim): no flip, no sync, no arm race

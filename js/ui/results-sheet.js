@@ -82,6 +82,24 @@ function seasonTable(cars, season) {
 }
 function seatColor(G, c) { return c.team && c.team.color ? G.cssCol(c.team.color) : "#555"; }
 
+// Bring the player's classification row into the sheet body after open. Sticky
+// top alone only helps once the row has scrolled past the fold — on open a
+// mid/back-field finish still sits below #results-table (landscape 844x390).
+// Double-rAF: endRace shows #results after buildResults returns.
+function revealYouRow(table) {
+  if (!table || typeof table.querySelector !== "function") return;
+  const you = table.querySelector(".res-row.you");
+  if (!you || typeof you.scrollIntoView !== "function") return;
+  const run = () => { try { you.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (_) { /* jsdom */ } };
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => requestAnimationFrame(run));
+  } else if (typeof setTimeout === "function") {
+    setTimeout(run, 0);
+  } else {
+    run();
+  }
+}
+
 function rankRow(container, i, color, name, ptsText, extraClass) {
   const row = document.createElement("div");
   row.className = `res-row${extraClass || ""}`;
@@ -466,6 +484,7 @@ function buildResults(order, race) {
       els.resultsTable.appendChild(hint);
     }
   }
+  revealYouRow(els.resultsTable);
 }
 
 function buildTTResults() {
