@@ -542,33 +542,6 @@
       "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
     },
     {
-      "skill": "replay-camera",
-      "task": "Validate offline replay fixture, track identity, frame bounds and read-only plan before live entry/seek/follow/exit/reentry",
-      "fixture": "tests/unit/capture-tools-regressions.test.mjs",
-      "pattern": "replay fixture plan is offline and bounded",
-      "expected": {
-        "minPass": 1,
-        "maxFail": 0
-      },
-      "timeoutMs": 15000,
-      "prerequisites": [
-        "Node.js and npm install; repository test fixture only"
-      ],
-      "followups": [
-        {
-          "kind": "browser",
-          "status": "unverified",
-          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
-        },
-        {
-          "kind": "hardware",
-          "status": "unverified",
-          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
-        }
-      ],
-      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
-    },
-    {
       "skill": "scenery-dress",
       "task": "Exercise api.K wraps negative and over-lap fracs",
       "fixture": "tests/unit/scenery-api-contract.test.mjs",
@@ -812,91 +785,10 @@
       "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
     },
     {
-      "skill": "track-realism",
-      "task": "Exercise the frozen scenery API used by delegated circuit upgrades",
-      "fixture": "tests/unit/scenery-api-contract.test.mjs",
-      "pattern": "^buildProps sceneryApi surface matches the frozen contract$",
-      "expected": {
-        "minPass": 1,
-        "maxFail": 0
-      },
-      "timeoutMs": 15000,
-      "prerequisites": [
-        "Node.js and installed repository dependencies; offline Node VM fixture"
-      ],
-      "followups": [
-        {
-          "kind": "browser",
-          "status": "unverified",
-          "prerequisites": "Parent-owned serialized before/after circuit captures and targeted foundation specification"
-        },
-        {
-          "kind": "hardware",
-          "status": "unverified",
-          "prerequisites": "Native target GPU/device for renderer and performance claims"
-        }
-      ],
-      "evidenceScope": "Only the frozen offline scenery API contract; excludes campaign execution, real-world accuracy, browser and hardware verification"
-    },
-    {
       "skill": "ci-watch",
       "task": "Exercise suggest: FOREIGN-ARM",
       "fixture": "tests/unit/pr-board.test.mjs",
       "pattern": "suggest:\\ FOREIGN-ARM",
-      "expected": {
-        "minPass": 1,
-        "maxFail": 0
-      },
-      "timeoutMs": 15000,
-      "prerequisites": [
-        "Node.js and npm install; repository test fixture only"
-      ],
-      "followups": [
-        {
-          "kind": "browser",
-          "status": "unverified",
-          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
-        },
-        {
-          "kind": "hardware",
-          "status": "unverified",
-          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
-        }
-      ],
-      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
-    },
-    {
-      "skill": "session-comms",
-      "task": "Exercise session-comms skill pins the message formats",
-      "fixture": "tests/unit/pr-board.test.mjs",
-      "pattern": "session-comms\\ skill\\ pins",
-      "expected": {
-        "minPass": 1,
-        "maxFail": 0
-      },
-      "timeoutMs": 15000,
-      "prerequisites": [
-        "Node.js and npm install; repository test fixture only"
-      ],
-      "followups": [
-        {
-          "kind": "browser",
-          "status": "unverified",
-          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
-        },
-        {
-          "kind": "hardware",
-          "status": "unverified",
-          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
-        }
-      ],
-      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
-    },
-    {
-      "skill": "pr-owner",
-      "task": "Exercise pr-owner skill pins the loop",
-      "fixture": "tests/unit/pr-board.test.mjs",
-      "pattern": "pr-owner\\ skill\\ pins",
       "expected": {
         "minPass": 1,
         "maxFail": 0

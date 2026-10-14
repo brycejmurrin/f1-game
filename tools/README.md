@@ -194,7 +194,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/pit-shots.mjs** | Pit-lane shot set, one boot per circuit: entry, exit, lane overview and each team's box, from the resolved geometry. | playwright-probe |
 | **shot/probe-page.mjs** | Probe helpers: reduced-motion init, backend pick, garage open/settle, soft/#game CDP shot. | — |
 | **shot/profile-gameloop.mjs** | Headless V8 CPU profile of the game loop → a `.cpuprofile` for Chrome DevTools. | playwright-probe |
-| **shot/replay-camera-probe.mjs** | Offline-fixture live-render camera discontinuity probe across replay entry, seek, follow, exit and reentry. | replay-camera |
+| **shot/replay-camera-probe.mjs** | Offline-fixture live-render camera discontinuity probe across replay entry, seek, follow, exit and reentry. | f1-animation-cameras |
 | **shot/repro-shot.mjs** | Render a player's exact frame from an `__apex.repro()` blob. Its COCKPIT output is WRONG — read the header. | playwright-probe |
 | **shot/shot-jobs.mjs** | Pure helpers for shot.mjs: CLI/batch job parse, output format, track grouping. | — |
 | **shot/shot-survey.mjs** | Multi-track shot survey CLI (job backend): track-session boots, resume, progress/findings JSON. | survey-track |
