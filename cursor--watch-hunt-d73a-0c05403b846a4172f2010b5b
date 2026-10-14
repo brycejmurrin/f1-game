@@ -1,1 +1,0 @@
-1792015365	Bryce Murrin	Parent delegated ResultsCam highlights sheet visibility: js/camera/results-cam.js existingunit + css/overlays.css RESULTS-scoped selectors only. No HUD/appearance/tuner/general overlay edits. Parent integrates and owns browser.  [cursor/watch-hunt-d73a; session 0c05403b846a4172f2010b5b]
