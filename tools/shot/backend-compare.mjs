@@ -59,6 +59,8 @@ exitIfHelp(argv, `backend-compare — same scene on GLX/TLX/WGX + pixel diff
     [--backends webgl2,three] [--tod day] [--out DIR] [--az N] [--el N] [--dist N]
     [--ls apex26.key=value ...]   (repeatable: localStorage pins set before boot, for kill-switch A/Bs)
     [--gov-free]                  let the perf governor shed tiers / scale during the capture (default: pinned)
+    [--lamps-live]                keep the lamp warm-up ramp and flicker (default: pinned off — a night capture
+                                  otherwise carries whichever warm-up stage its first presented frame hit)
 
 Default: monza 0.1 orbit → scratch/captures/backend-compare/.`);
 const positionals = [];
@@ -86,6 +88,14 @@ const live = argv.includes("--live");   // skip headless(true): screenshot the l
 // others, so two captures of ONE tree differed by 1.35 mean luma (vegas night, 2026-10-13). --gov-free
 // restores the old behaviour; the manifest's state.perf records tier/scale either way.
 const govFree = argv.includes("--gov-free");
+// The lamp WARM-UP and FLICKER are pinned off by default (lightTune lampWarmup 0, lampFlicker 0): a night
+// capture is the first frame presented after the time-of-day flip, and js/lighting/frame-lights.js ramps
+// every lamp from a dim sodium strike to full over 4-8 s of wall clock. SwiftShader presents a crowded
+// night grid every 6-12 s at tier 0, so the stage that frame carries depends on how slow the tree under
+// test renders — two trees that match at MAD 0.000 with the ramp pinned differed by 13 mean luma with it
+// live (montreal grid chase night, 2026-10-14). --lamps-live keeps the ramp; the manifest's state.lamps
+// says which.
+const lampsLive = argv.includes("--lamps-live");
 const label = assertSafePathToken(
   flag(argv, "--label", `${safeTrackId}-${Math.round(frac * 100)}-${safeCam}-${tod}`), "label");
 const outDir = flag(argv, "--out", null)
@@ -136,12 +146,20 @@ async function captureBackend(backend) {
     });
     await sleep(1200);
 
-    const state = await page.evaluate(({ frac, cam, az, el, dist, side, tod }) => {
+    // The time-of-day flip settles over frames: set it before the freeze and wait until the game reports
+    // it, or the shot can be the previous time of day on a slow software frame.
+    if (tod) for (let i = 0; i < 20; i++) {
+      const ok = await page.evaluate((tod) => { const a = window.__apex; if (!a.setTimeOfDay) return true; a.setTimeOfDay(tod); return a.setTimeOfDay() === tod; }, tod);
+      if (ok) break;
+      await sleep(250);
+    }
+    const state = await page.evaluate(({ frac, cam, az, el, dist, side, tod, lampsLive }) => {
       const a = window.__apex;
       a.go();
       a.park(frac);
       a.freeze(true);
       if (a.setTimeOfDay) a.setTimeOfDay(tod);
+      if (!lampsLive && a.lightTune) a.lightTune({ lampWarmup: 0, lampFlicker: 0 });
       if (a.hud) a.hud(false);
       if (cam === "eye") a.eyeAt(frac, 0, 2.5);
       else if (cam === "orbit") a.orbit(frac, az, el, dist);
@@ -155,8 +173,10 @@ async function captureBackend(backend) {
         diagBackend: a.diag ? (a.diag({ download: false }).env || {}).backend : null,
         camera: a.camera(),
         perf: a.perf ? (({ tier, autoTier, autoShed, scale, userTier, tierFloor, auto }) => ({ tier, autoTier, autoShed, scale, userTier, tierFloor, auto }))(a.perf()) : null,
+        lamps: lampsLive ? "live" : "pinned",
+        tod: a.setTimeOfDay ? a.setTimeOfDay() : null,
       };
-    }, { frac, cam: safeCam, az, el, dist, side, tod });
+    }, { frac, cam: safeCam, az, el, dist, side, tod, lampsLive });
 
     await sleep(1500); // present a few frames with the final framing
     // The chase cam auto-cuts to a broadcast angle after ~2 s idle (mcp-probe
