@@ -5537,6 +5537,9 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
     // The shadow casters (warmCarAssets' gate): OFF for the cancel matrix, ON below.
     let casters = false;
     const shadowCastersWanted = () => casters;
+    // apex26.carWarmSlice=0: the prep's own matrix, without the FieldLod steps
+    // (those are car-presentation-canary.test.mjs's, over the real CarDraw).
+    const carWarmSliceOn = () => false;
     const teamMesh = (t, c, sil) => calls.push(["caster", c.num, sil, c.visSh || "sh"]);
     const cockpitShadowMesh = (t, c, key) => calls.push(["fpCaster", c.num, key]);   // the first-person caster (car-draw.js)
     const WORKS = { aero: "w", tyres: "w" };
