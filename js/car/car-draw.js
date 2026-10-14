@@ -1417,13 +1417,15 @@ const CarDraw = (function () {
       drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, drawExhaustFx, glassState, drawMirrorCar,
       warmCarAssets, prepareMenuCarAssets, loadCarModel, buildCarData,
       setPlayerParts, invalidateCustomMeshCaches, invalidateFactoryMeshCaches,
-      WHEELS,
+      WHEELS, coOpt,
       get modelBuf() { return carModelBuf; },
       get playerVisualKey() { return playerVisualKey; },
     });
   }
   // The live instance, for mirror-pass.js state().glass — game.js creates exactly one.
   let _instance = null;
-  return { create, carVisual, instance: () => _instance };
+  // A-H3 (perf hunt 4): game.js drawAeroFlaps routes the opaque flap bag through R1's seam exactly as the
+  // wheel layers do; before create() (or on a backend without gfx.coalesce) the bag comes back untouched.
+  return { create, carVisual, instance: () => _instance, coOpt: (o) => (_instance ? _instance.coOpt(o) : o) };
 })();
 Object.freeze(CarDraw);
