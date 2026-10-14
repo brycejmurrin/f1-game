@@ -399,9 +399,7 @@ let DRIFT = 0;             // rear looseness 0..1: 0 = planted (no oversteer). S
 // A car's PACE as the AI judges it: vmax less its X-mode gain, and for a HUMAN x its paceF (AiDrive.paceSample). A net-owned human never reaches updateCar's stamp, so it reads vTop().
 // xVmaxGain / paceRef / xDfLoss / xCoastCut: js/race/pace-math.js
 function paceVmax(o) { return (o._vmaxNow || (o.human ? vTop() : 0)) / (1 + xVmaxGain(o) * (o.aeroX || 0)) * (o.human ? (o.paceF || 1) : 1); }
-// Scripted field pace (tierV×skill) — same ratio ai-tactics uses for stuck dpace.
-// Feeds AiDrive.pairEdgeN alongside paceVmax (pass-completion). paceRef / xDfLoss /
-// xCoastCut live in js/race/pace-math.js (ship extract).
+// Scripted field pace (tierV×skill) for AiDrive.pairEdgeN (pass-completion).
 function scriptPace(o) { return (o && o.tierV > 0 && o.skill > 0) ? o.tierV * o.skill : 0; }
 // These four are `let` so the emulation/tuning harness (setPhysics) can sweep them
 // — they are the core feel levers found by emulating real drivers, not pause-menu
@@ -3648,7 +3646,7 @@ customTeam = CustomTeam.create({
 });
 // UI SIZE / HUD SIZE + RESOLUTION (js/ui/scale.js). After Menus so the
 // first applyUiScale can refresh an already-built select preview.
-const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G);
+const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G); if (typeof HudArrange !== "undefined" && HudArrange.create) HudArrange.create(G);
 // CAREER screen — new-career setup + season hub (js/career/career-ui.js). The rules
 // and the save live in js/career/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
@@ -4938,12 +4936,9 @@ function updateCar(c, dt, ranked) {
     _aiBoost.chaser = !!chaser; _aiBoost.chaserGap = chaserGap; _aiBoost.chaserSpeed = chaser ? chaser._snapSpeed : 0;
     _aiBoost.team = c.team; _aiBoost.seat = c.seat; _aiBoost.stats = c.houseStats;
     _aiBoost.ersDeploy = c.ersDeploy; _aiBoost.ersRegen = c.ersRegen; _aiBoost.vTop = vT;   // closing rates ride the pace scale
-    // Pace-scaled catch (#1401 / pass-completion): edge over the tow car arms ERS
-    // even when the queue cap levels live speeds. Streets leave catchEdge off.
-    _aiBoost.street = !!track.street;
-    _aiBoost.towVmax = towCar ? paceVmax(towCar) : 0;
-    _aiBoost.ourVmax = paceVmax(c); _aiBoost.ourPace = scriptPace(c);
-    _aiBoost.towPace = towCar ? scriptPace(towCar) : 0;
+    // Pace-scaled catch (#1401): edge over the tow car arms ERS when queue-levelled.
+    _aiBoost.street = !!track.street; _aiBoost.towVmax = towCar ? paceVmax(towCar) : 0;
+    _aiBoost.ourVmax = paceVmax(c); _aiBoost.ourPace = scriptPace(c); _aiBoost.towPace = towCar ? scriptPace(towCar) : 0;
     aiWantsBoost = AiDrive.wantBoost(_aiBoost);
   }
   const wantBoost = ((c.human ? c.boostOn : aiWantsBoost) && !ersHeld)
@@ -5751,10 +5746,9 @@ function updateCarLateral(c, dt, ranked, S) {
       _aiDefend.chaser = true; _aiDefend.chaserGap = chaserGap; _aiDefend.chaserSpeed = chaser._snapSpeed;
       _aiDefend.kA = kA; _aiDefend.roomL = roomL; _aiDefend.roomR = roomR; _aiDefend.other = chaser; _aiDefend.x = c.x; _aiDefend.vTop = vT;
       _aiDefend.blocker = blocker; _aiDefend.blockerGap = blockerGap; _aiDefend.kTurn = c.kTurn; _aiDefend.toTurnIn = _atk.toTurnIn; _aiDefend.roadL = roadL; _aiDefend.roadR = roadR;
-      // Cover concede (permanent): chaser pace edge → defender yields the cover.
+      // Cover concede (permanent, AI-AI): chaser pace edge → defender yields cover.
       _aiDefend.chaserVmax = paceVmax(chaser); _aiDefend.ourVmax = paceVmax(c);
-      _aiDefend.chaserPace = scriptPace(chaser); _aiDefend.ourPace = scriptPace(c);
-      defend = AiDrive.defendPull(_aiDefend);
+      _aiDefend.chaserPace = scriptPace(chaser); _aiDefend.ourPace = scriptPace(c); defend = AiDrive.defendPull(_aiDefend);
     }
     // One defensive move per straight (AiDrive.defendOnce); the side resets in
     // the braking zone, where defending is over anyway (holdLine below).
@@ -7123,20 +7117,9 @@ function render(dt) {
     fovY = dbgCam.fov * Math.PI / 180;
     if (!cine) farPlane = dbgCam.far;
   } else {
-    // camFov is a vertical FOV. On a wide (landscape) screen a fixed vertical FOV
-    // blows the horizontal field out past ~100°, which makes the car look tiny and
-    // far away. Cap the horizontal FOV so wide screens zoom in and the car stays a
-    // readable size; portrait (narrow) is unaffected.
-    fovY = camFov * Math.PI / 180;
-    // The HFOV cap keeps the CAR a readable size on a wide screen. A crane shot
-    // has no car in it, the editor previews the authored angle uncapped, and a
-    // shot authored at 60° would arrive on a 21:9 screen squeezed to 45° — so
-    // the cinematic takes the number it was framed at.
-    if (!cine) {
-      const HFOV_MAX = 86 * Math.PI / 180;
-      const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(gfx.aspect, 0.0001));
-      fovY = Math.min(fovY, fovYCap);
-    }
+    // camFov is vertical; CamFovFit caps HFOV on wide screens and floors it on
+    // portrait (js/camera/fov-fit.js). cine stays authored / uncapped.
+    fovY = CamFovFit.fitFovY(camFov * Math.PI / 180, gfx.aspect, { cine });
   }
   // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
   // precision across the scene — the biggest single lever against z-fighting /

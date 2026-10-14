@@ -16,7 +16,7 @@ re-runs. The parent decides and acts; the protocol is
 
 ## The job
 
-1. `node tools/ci/pr-board.mjs --json` (add `--pr <n>` when the parent names one).
+1. `node tools/ci/pr-board.mjs --json` (add `--pr <n>` when the parent names one). Get the header time from `date -u +%FT%TZ` (a separate plain Bash call).
    Exit 3 = no token or API error: return that line and stop, do not guess.
 2. `node tools/ci/ready-full-cap.mjs --json`; if `ok` is false or room is 0, say
    which PRs hold the slots and that no READY may be recommended.
@@ -33,14 +33,14 @@ re-runs. The parent decides and acts; the protocol is
 ## Return format
 
 ```
-BOARD <n> open · full-tier slots <count>/<cap> · <time>
+BOARD <n> open · full-tier slots <count>/<cap> · <date -u +%FT%TZ output>
 #<pr> <draft|ready> <sha7> <mergeable_state> ci=<state> gate=<state> armed=<method|-> → <SUGGEST>
   call: <exact call, or "none">
 ```
 
 Exact calls for the PARENT to make (you have no GitHub tools; owner `brycejmurrin`, repo `f1-game`):
 - READY: `mcp__github__update_pull_request {pullNumber: <n>, draft: false}`
-- ARM: `mcp__github__enable_pr_auto_merge {pullNumber: <n>, mergeMethod: "SQUASH"}`
+- ARM: `mcp__github__enable_pr_auto_merge {pullNumber: <n>, mergeMethod: "MERGE"}`
 - FOREIGN-ARM: `mcp__github__disable_pr_auto_merge {pullNumber: <n>}`
 - SYNC: `node tools/ci/sync-pr.mjs <branch>` (or message the live owner)
 - FIX: hand to `ci-red-triage` with the head sha (or message the live owner)
@@ -55,3 +55,4 @@ board with its gaps named beats silence; hitting `maxTurns` mid-tool-call
 returns NOTHING to the parent.
 
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
+On the first permission denial (a denied Bash call, tool or path), stop and return your contract block marked UNREAD/UNKNOWN; never route around a denial.
