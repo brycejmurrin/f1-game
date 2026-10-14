@@ -133,7 +133,8 @@ const TLX = (function () {
       // The warm's stage timeline, read by memState().warm: the lights hold for
       // exactly this long on a player's GPU, and the census beats sample it —
       // gpu-census 207 spent its whole window inside the warm and no row said so.
-      const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0 };
+      const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0,
+        mirrorDeferred: false, mirrorLazy: null };   // B-F3.1: the AUTO warm skipped the mirror; the deferred stage's { ms, drawn, ok }
       const GPU_ERR_LOG_CAP = 8;
       // Heal-gate counters live HERE, not by the gate: the error hooks install
       // during bootRenderer's await, and on the WebGPU -> WebGL2 fallback an
@@ -1210,13 +1211,38 @@ const TLX = (function () {
         px[0] = Math.round(r[0] * cw); px[1] = Math.round(r[1] * ch); px[2] = Math.round(r[2] * cw); px[3] = Math.round(r[3] * ch);
         return px;
       }
-      // The mirror uses no MRT; warming only the main HDR/MRT scene leaves
-      // both its world and composite programs to link on the first race frame.
+      // B-F3.1 (perf hunt 4) — THE MIRROR WARM, DEFERRED TO ITS FIRST DEMAND. The mirror uses no MRT; warming
+      // only the main HDR/MRT scene leaves its world and composite programs to link on its first frame. That stage
+      // cost 2.9-6.0 s of race entry on every three.js leg of the macos census, and AUTO (the default) shows no
+      // mirror in the default chase camera (mirror-pass.js: onboard views only). So only an explicit ON (HUD
+      // MIRROR or the broadcast PiP) warms it at the lights; an AUTO warm skips it and OWES it: the first
+      // mirrorBegin (a cockpit view, the M key, a WATCH's PiP) refuses its pass and requests startMirrorWarm, which
+      // runs the same compiles and W1's 4x4 mirror draw under the same ownership as the entry warm (present()
+      // paints nothing and game.js pauses while warming()), so no frame shows the mirror before its programs exist.
+      // A cockpit camera at the lights takes it as a second warm inside mirror-pass's race preparation. _mirUsed
+      // still latches here, so the CPU attribute mirrors are kept exactly as an eager warm keeps them. Per race:
+      // every entry warm re-decides. OPT-IN (apex26.tlxMirWarmLazy=1): the default camera is helmet, an onboard view
+      // that shows the mirror at the lights, so the default player saves nothing and a chase player who switches
+      // onboard mid-race would pay the stage as a pause; the eager stage stays the default until a census measures it.
+      let _mirWarmLazy = false;
+      try { _mirWarmLazy = localStorage.getItem("apex26.tlxMirWarmLazy") === "1"; } catch (_) { /* no storage: eager */ }
+      let _mirWarmOwed = false, _mirWarmReq = false;
       function wantMirrorWarm() {
+        _mirWarmOwed = false; _mirWarmReq = false; _warmStages.mirrorDeferred = false;
         if (!_warmFx || !post || !post.enabled() || _mirDead || !lit || vizMat) return false;
         let mode = "auto", pip = "auto";
         try { mode = GameStore.store.get("hudMirror", "auto"); pip = GameStore.store.get("bcPip", "auto"); } catch (_) { /* defaults */ }
-        return mode === "on" || pip === "on" || ((mode !== "off" || pip !== "off") && !softGpu() && !softwareGL);
+        if (mode === "on" || pip === "on") return true;
+        if (!((mode !== "off" || pip !== "off") && !softGpu() && !softwareGL)) return false;
+        if (!_mirWarmLazy) return true;
+        _mirWarmOwed = true; _mirUsed = true; _warmStages.mirrorDeferred = true;
+        return false;
+      }
+      // mirrorBegin's gate: the deferred stage is owed — request it (present() starts it) and refuse this pass.
+      function mirrorWarmGate() {
+        if (!_mirWarmOwed) return false;
+        _mirWarmReq = true;
+        return true;
       }
       // forWarm: the warm compiles the scene into mirRT next, so the mirror's own
       // instanced meshes (A1) stand in for the main ones. No restore is owed:
@@ -2821,7 +2847,7 @@ const TLX = (function () {
       let _drawWarmKnob = null;
       try { const v = localStorage.getItem("apex26.tlxDrawWarm"); _drawWarmKnob = v === "1" ? true : v === "0" ? false : null; } catch (_) { /* no storage: auto */ }
       const drawWarmOn = () => (_drawWarmKnob !== null ? _drawWarmKnob : !(softGpu() || softwareGL));
-      function drawWarmStage(usePost, useTag, opts, mirrorWarmed) {
+      function drawWarmStage(usePost, useTag, opts, mirrorWarmed, mirrorOnly) {   // mirrorOnly: startMirrorWarm (B-F3.1)
         const drawn = { mirror: 0, scene: 0, post: 0, casts: 0 };
         if (!usePost || !post || !post.sceneTarget) { _mirWarmUnswap(); return drawn; }
         const autoClear0 = renderer.autoClear, sc0 = renderer.getScissorTest();
@@ -2840,6 +2866,7 @@ const TLX = (function () {
             renderer.render(scene, camera); drawn.mirror++;
           }
           _mirWarmUnswap();
+          if (mirrorOnly) return drawn;   // the rest was drawn by the entry warm (the finally restores the state)
           if (lit && lit.setSsrMrt) lit.setSsrMrt(useTag);
           if (fx && fx.setSsrMrt) fx.setSsrMrt(useTag);
           renderer.setMRT(useTag ? _ssrMrtNode() : null);   // exactly as present() sets it
@@ -2888,6 +2915,51 @@ const TLX = (function () {
         } catch (_) { /* no settle on this backend */ }
         return Promise.resolve();
       }
+      // The late sky mesh is hidden until drawSky. compileAsync skips invisible objects, which would leave the
+      // first painted frame to build the sky program. Show it for the warm's compiles only; begin() hides it again
+      // before the next paint.
+      function warmShowSky() {
+        if (typeof skyMesh !== "undefined" && skyMesh) {
+          skyMesh.material = (softContent("sky") && skyMatFallback) ? skyMatFallback : skyMatFull;
+          skyMesh.visible = true;
+        }
+      }
+      // The mirror stage: its world into mirRT's context (no MRT), the cockpit glass and the composite (under the
+      // main MRT). Shared by the entry warm (an explicit ON) and the deferred startMirrorWarm (B-F3.1).
+      async function warmMirrorStage(usePost, useTag) {
+        prepareMirrorTarget(16, 8, true);   // true: also show the mirror's own instanced meshes (A1)
+        _mirUsed = true;   // future mirror compiles still need CPU attributes
+        if (lit.setSsrMrt) lit.setSsrMrt(false);
+        if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
+        renderer.setMRT(null);   // the entry warm's caster stage left it null; the deferred warm sets it the same
+        renderer.setRenderTarget(mirRT);
+        _gpuLastOperation = "compile-mirror";
+        await renderer.compileAsync(scene, camera);
+        // The composite, like all post quads, draws under the main MRT.
+        renderer.setMRT(useTag ? _ssrMrtNode() : null);
+        // So does the cockpit's live glass (drawMirrorGlass), in the scene
+        // pass: compiled here on createTexMesh's layout, both winding signs
+        // (the pipeline keys on the matrix's determinant), or its first
+        // mirror frame would build it mid-race.
+        if (fx && fx.mirrorGlassMaterial) {
+          renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
+          if (!_glassProbeGeo) {
+            _glassProbeGeo = new THREE.BufferGeometry();
+            _glassProbeGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3));
+            _glassProbeGeo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array([0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1]), 3));
+            _glassProbeGeo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), 2));
+            _glassProbeGeo.setIndex(new THREE.BufferAttribute(new Uint32Array([0, 1, 2, 0, 2, 3]), 1));
+          }
+          const gm = fx.mirrorGlassMaterial(mirRT.texture);
+          for (const sx of [1, -1]) {
+            const m = new THREE.Mesh(_glassProbeGeo, gm);
+            m.frustumCulled = false;
+            m.scale.x = sx; m.updateMatrixWorld(true);
+            await renderer.compileAsync(m, camera, scene);
+          }
+        }
+        if (post.warmMirror) await post.warmMirror(mirRT.texture);
+      }
       function startProgramWarm(opts) {
         _warmRequested = false;
         if (typeof renderer.compileAsync !== "function") return;
@@ -2908,14 +2980,7 @@ const TLX = (function () {
             renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
             let _tStage = performance.now();
             _gpuLastOperation = "compile-scene";
-            // The late sky mesh is hidden until drawSky. compileAsync skips
-            // invisible objects, which would leave the first painted frame to
-            // build the sky program. Show it for this compile only; begin()
-            // hides it again before the next paint.
-            if (typeof skyMesh !== "undefined" && skyMesh) {
-              skyMesh.material = (softContent("sky") && skyMatFallback) ? skyMatFallback : skyMatFull;
-              skyMesh.visible = true;
-            }
+            warmShowSky();   // the late sky mesh, shown for the compiles (the note there)
             await renderer.compileAsync(scene, camera);
             _warmStages.scene = Math.round(performance.now() - _tStage); _tStage = performance.now();
             _gpuLastOperation = "compile-fx";
@@ -2961,37 +3026,7 @@ const TLX = (function () {
             if (typeof sky !== "undefined" && sky && sky.cacheWarm) { _gpuLastOperation = "compile-sky-cache"; await sky.cacheWarm(renderer); }
             _warmStages.mirror = null;
             if (wantMirrorWarm()) {
-              prepareMirrorTarget(16, 8, true);   // true: also show the mirror's own instanced meshes (A1)
-              _mirUsed = true;   // future mirror compiles still need CPU attributes
-              if (lit.setSsrMrt) lit.setSsrMrt(false);
-              if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
-              renderer.setRenderTarget(mirRT);
-              _gpuLastOperation = "compile-mirror";
-              await renderer.compileAsync(scene, camera);
-              // The composite, like all post quads, draws under the main MRT.
-              renderer.setMRT(useTag ? _ssrMrtNode() : null);
-              // So does the cockpit's live glass (drawMirrorGlass), in the scene
-              // pass: compiled here on createTexMesh's layout, both winding signs
-              // (the pipeline keys on the matrix's determinant), or its first
-              // mirror frame would build it mid-race.
-              if (fx && fx.mirrorGlassMaterial) {
-                renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
-                if (!_glassProbeGeo) {
-                  _glassProbeGeo = new THREE.BufferGeometry();
-                  _glassProbeGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3));
-                  _glassProbeGeo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array([0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1]), 3));
-                  _glassProbeGeo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), 2));
-                  _glassProbeGeo.setIndex(new THREE.BufferAttribute(new Uint32Array([0, 1, 2, 0, 2, 3]), 1));
-                }
-                const gm = fx.mirrorGlassMaterial(mirRT.texture);
-                for (const sx of [1, -1]) {
-                  const m = new THREE.Mesh(_glassProbeGeo, gm);
-                  m.frustumCulled = false;
-                  m.scale.x = sx; m.updateMatrixWorld(true);
-                  await renderer.compileAsync(m, camera, scene);
-                }
-              }
-              if (post.warmMirror) await post.warmMirror(mirRT.texture);
+              await warmMirrorStage(usePost, useTag);
               _warmStages.mirror = Math.round(performance.now() - _tStage);
             }
             _tStage = performance.now();
@@ -3019,6 +3054,43 @@ const TLX = (function () {
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
           }
         })().finally(() => { _warmPending = null; _warmDone = true; });
+      }
+      // B-F3.1: THE DEFERRED MIRROR STAGE ALONE, requested by the first mirrorBegin after an AUTO entry warm skipped
+      // it (wantMirrorWarm / mirrorWarmGate). The same compiles and W1's 4x4 mirror draw, owned the way the entry
+      // warm owns them: _warmPending holds present() (nothing painted over a node build in flight) and warming()
+      // pauses game.js — the sim waits rather than jumping, and mirrorBegin refuses until it settles, so the first
+      // mirror frame draws compiled programs. Its cost is the mirror stage's own, paid once per race, only by a race
+      // that shows the mirror. Reported as memState().warm.mirrorLazy { ms, drawn, ok }; the entry warm keeps its own.
+      function startMirrorWarm(opts) {
+        _mirWarmReq = false;
+        if (!_mirWarmOwed || typeof renderer.compileAsync !== "function") { _mirWarmOwed = false; return; }
+        _mirWarmOwed = false;   // one attempt: a failure leaves the next mirrorBegin to the cold path (no loop)
+        const t0 = performance.now(), target = renderer.getRenderTarget(), mrt = renderer.getMRT();
+        const usePost = !!(post && post.enabled() && _postF.proj && !vizMat);
+        const useTag = usePost && (!post.tagOn || post.tagOn());
+        _warmStages.mirrorLazy = null;
+        _warmPending = (async () => {
+          let drawn = 0, ok = false;
+          try {
+            pinSkyMaterial();
+            warmShowSky();
+            await warmMirrorStage(usePost, useTag);
+            if (drawWarmOn()) {
+              _gpuLastOperation = "warm-draw";
+              drawn = drawWarmStage(usePost, useTag, opts, true, true).mirror;
+              await _gpuSettled(5000);
+            }
+            ok = true;
+          } catch (e) {
+            try { Log.warn("gfx", "TLX deferred mirror warm failed", String(e)); } catch (_) { /* logging is optional */ }
+          } finally {
+            _mirWarmUnswap();   // drawWarmStage unswaps; this covers drawWarm off and a throw (idempotent)
+            _warmStages.mirrorLazy = { ms: Math.round(performance.now() - t0), drawn, ok };
+            if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
+            if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
+            renderer.setMRT(mrt); renderer.setRenderTarget(target);
+          }
+        })().finally(() => { _warmPending = null; });
       }
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
@@ -4441,6 +4513,7 @@ const TLX = (function () {
           // while a read waits defeats present()'s backpressure and starves it.
           if (_softBlit && _softReadPending) return false;
           if (_mirDead || _warmPending || _envActive || !lit || !frame || !frame.proj || !frame.view || !frame.viewProj) return false;
+          if (mirrorWarmGate()) return false;   // B-F3.1: its programs first (startMirrorWarm), never a cold link mid-frame
           w = Math.max(16, Math.min(1024, w | 0)); h = Math.max(8, Math.min(512, h | 0));
           try {
             prepareMirrorTarget(w, h);
@@ -5213,7 +5286,7 @@ const TLX = (function () {
           _hideUndrawnInstanced();
           // Do not render over an in-flight node build. A time budget may skip
           // later warm passes, but cannot cancel a compile already in flight.
-          if (_warmRequested && !_warmPending && !_deviceLost) startProgramWarm(opts);
+          if (!_warmPending && !_deviceLost) { if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); }
           if (_warmPending) return;
           // The last rung: even rawUnlitMat throws. AUTO on three's WebGPU takes three WebGL2 next boot (tlxAutoGL, a
           // different configuration). A boot that is ALREADY three WebGL2 (forceWebGL / _autoStayGL) or an explicit pin
@@ -5679,6 +5752,7 @@ const TLX = (function () {
             // pending/done say whether a census beat is inside it (207 was, all 15).
             o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow, mirror: _warmStages.mirror,
                        draw: _warmStages.draw, drawn: _warmStages.drawn,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
+                       mirrorDeferred: _warmStages.mirrorDeferred, mirrorLazy: _warmStages.mirrorLazy,   // B-F3.1
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
                        pending: !!_warmPending, done: _warmDone };
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count
