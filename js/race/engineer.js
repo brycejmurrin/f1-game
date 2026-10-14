@@ -259,12 +259,14 @@ var RaceEngineer = (function () {
       const lapS = c.lastLap > 0 ? c.lastLap : 0;
       // …to the FIRST WET STAGE, not the end of the arc: dry→rain walks
       // [dry, wet, rain] and the road is wet a third of the way in (WeatherArc
-      // arcSeq). An arc without a stage list counts to its end.
+      // arcSeq). An arc without a stage list counts to its end. A WeatherArc arc
+      // carries `wetIn`: the second its lagged road wetness turns inter-wet,
+      // which is also when its sky flips to "wet" — count to that.
       let wetAt = 1;
       if (arc && arc.seq) {
         for (let i = 0; i < arc.seq.length; i++) { if (WET.indexOf(arc.seq[i]) >= 0) { wetAt = i / arc.seq.length; break; } }
       }
-      const left = arc ? Math.max(0, arc.dur * wetAt - arc.t) : 0;
+      const left = arc ? Math.max(0, (Number.isFinite(arc.wetIn) ? arc.wetIn : arc.dur * wetAt) - arc.t) : 0;
       // THE PLAN: the next planned stop lap and the compound it fits; and THE
       // UNDERCUT — a rival BEHIND, inside pit loss plus two seconds, whose stop
       // count rose since the last tick (remembered per rival in the bag).
