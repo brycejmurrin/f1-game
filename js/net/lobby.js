@@ -22,12 +22,9 @@ const NetLobby = (function () {
     const MAX_GUESTS = 3;
     let role = null;
     let pollTimer = null;
-    // Why THIS pending attempt died — waitForOpen prefers this over failureMsg's
-    // TURN/network diagnosis so a room-code expiry (or courier death) is not
-    // overwritten by "a relay was offered…" after dropPending closes the PC.
+    // Pending-attempt fail tag: waitForOpen prefers this over failureMsg TURN copy.
     // 'expired' | 'no_relay' | 'ice' | null
-    let failReason = null;
-    let failReasonMsg = null;
+    let failReason = null, failReasonMsg = null;
     let statusText = "";
     // Every user-started async flow owns one generation. Camera permission,
     // relay discovery and ICE gathering can all resolve after the player has
@@ -182,24 +179,16 @@ const NetLobby = (function () {
     }
 
     function tagFailReason(reason, message) {
-      // A specific courier/expiry reason must not be replaced by a later ICE tag.
       if ((failReason === "expired" || failReason === "no_relay") && reason === "ice") return;
       failReason = reason;
       if (message) failReasonMsg = message;
     }
     function clearFailReason() { failReason = null; failReasonMsg = null; }
     function sayConnectFail(st, secs) {
-      if (failReason === "expired") {
-        say(failReasonMsg || (role === "host"
+      if (failReason === "expired" || failReason === "no_relay") {
+        say(failReasonMsg || (failReason === "expired"
           ? "The room code has expired — INVITE ANOTHER makes a new one."
-          : "Nobody answered that code. Check the six characters, or ask "
-            + "your friend for a fresh one — if it keeps happening, both "
-            + "reload the game and try a new code."), true);
-        return;
-      }
-      if (failReason === "no_relay") {
-        say(failReasonMsg || "Could not reach any room service — this network may be blocking it."
-          + " Use the invite link or QR instead.", true);
+          : "Could not reach any room service. Use the invite link or QR instead."), true);
         return;
       }
       tagFailReason("ice");
@@ -440,7 +429,6 @@ const NetLobby = (function () {
         if (dead || Date.now() - started > CONNECT_TIMEOUT_MS) {
           clearInterval(pollTimer);
           Log.warn("net", "connect fail " + secs + "s");
-          // Prefer a tagged courier/expiry reason over failureMsg's TURN copy.
           sayConnectFail(st, secs);
           // Only this attempt. A host whose SECOND invite fails still has its
           // first guest sitting in the room, and dropping them for somebody
@@ -1634,8 +1622,8 @@ const NetLobby = (function () {
             // has nothing to act on and the code silently stops working.
             if (r.advisory) { say(r.message, true); return; }
             codeRoom = null;
-            // Capture before dropPending clears pollTimer — an armed watcher
-            // means a join was mid-connect even when nobody is in sessions yet.
+            // Before dropPending clears pollTimer: empty room + armed watcher
+            // still needs the INVITE ANOTHER expiry copy (not failureMsg TURN).
             const watcherArmed = !!pollTimer;
             // Drop the half-built invite transport/PC for THIS attempt. Leaving
             // it after expiry (or a courier fail) leaked the RTCPeerConnection,
@@ -1645,23 +1633,15 @@ const NetLobby = (function () {
             dropPending();
             // onConnected() reopens the code for the next arrival; its expiry
             // (HOST_TIMEOUT_MS ≈ 120 s) later is not a failure of a room that is already full.
-            // Also when the room is still empty but waitForOpen was armed: the
-            // expiry copy must win over failureMsg's TURN/network diagnosis.
             if (r.error === "expired" && (sessions.size || watcherArmed)) {
               const msg = "The room code has expired — INVITE ANOTHER makes a new one.";
               tagFailReason("expired", msg);
               say(msg);
               return;
             }
-            if (r.error === "expired") {
-              tagFailReason("expired", r.message);
+            if (r.error === "expired" || r.error === "no_relay") {
+              tagFailReason(r.error, r.message);
               say(r.message || "The room service went away. Use the invite link or QR instead.", true);
-              return;
-            }
-            if (r.error === "no_relay") {
-              tagFailReason("no_relay", r.message);
-              say(r.message || "Could not reach any room service — this network may be blocking it."
-                + " Use the invite link or QR instead.", true);
               return;
             }
             say(r.message || "The room service went away. Use the invite link or QR instead.", true);
@@ -1843,10 +1823,7 @@ const NetLobby = (function () {
       }
       if (!done.ok) {
         const why = (done.error === "reply_failed" && answered && !answered.ok) ? answered : done;
-        // Tag before say: waitForOpen may still be armed and must not replace
-        // this with failureMsg's TURN copy when the pending PC drops.
-        if (why.error === "expired") tagFailReason("expired", why.message);
-        else if (why.error === "no_relay") tagFailReason("no_relay", why.message);
+        if (why.error === "expired" || why.error === "no_relay") tagFailReason(why.error, why.message);
         if (why.error !== "cancelled") say(why.message || "Could not join that room.", true);
         return why;
       }
