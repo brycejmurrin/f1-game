@@ -1,1 +1,0 @@
-1791960477	Bryce Murrin	Coordinated root replay caption lifetime fix. OWNED js/race/real-replay.js + NEW tests/unit/real-replay-captions.test.mjs. Excludes real-replay-vm.test.mjs owned #1496. No browser/merge/push; root registers test and integrates.  [cursor/replay-caption-c41a; session 5a5f135d01b8cee56f7b2dc7]
