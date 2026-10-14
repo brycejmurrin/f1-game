@@ -588,6 +588,20 @@ jobs:
               } else if (_sc && _sc.note) {
                 rows.push(`${" ".repeat(8)}spike: ${_sc.note}`);
               }
+              // THE DRIVEN WINDOW (hunt 4 I4), in game frames from LoopHealth:
+              // the number to compare across legs and runs. The gov row below
+              // is the END-of-run ring, which also holds the frozen A/B frames
+              // (three/WebGL2 read "42.4 fps, tier 0" there against 18.9 in
+              // the window on census454).
+              const _win = g.window;
+              if (_win && _win.frames != null) {
+                rows.push(`${" ".repeat(8)}window: ${_win.frames} frames in ${_win.ms} ms = ${_win.fps} fps` +
+                  (_win.msPerFrame != null ? ` (${_win.msPerFrame} ms/frame)` : "") +
+                  (_win.p50 != null ? `  interval p50=${_win.p50} p95=${_win.p95} p99=${_win.p99} max=${_win.max} ms` : "") +
+                  (_win.callbacksPerFrame != null ? `  rAF/frame=${_win.callbacksPerFrame}` : "") + `  [${_win.source}]`);
+              } else if (_win && _win.note) {
+                rows.push(`${" ".repeat(8)}window: ${_win.note}`);
+              }
               rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
                 `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face} frames=${(gov.open && gov.open.frames) != null ? gov.open.frames : "?"}`
                 // ...and the OTHER way this column lies. floorMs 16.6 is 1/60 s,
@@ -730,7 +744,9 @@ jobs:
               for (const ab of [g.occlusionAB, g.multiDrawAB]) {
               if (!ab) continue;
               const tag = (ab.feature === "multiDraw" ? "mdraw" : "occl ").padEnd(5);
-              if (ab.note || ab.error) {
+              if (ab.skipped) {
+                rows.push(`${" ".repeat(8)}${tag} A/B: skipped — ${ab.note}`);
+              } else if (ab.note || ab.error) {
                 rows.push(`${" ".repeat(8)}${tag} A/B: NOT MEASURED — ${ab.note || ab.error}`);
               } else if (ab.off && ab.on) {
                 const pr = ab.paired || {};

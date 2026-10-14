@@ -300,6 +300,42 @@ export function analyseSpikeWork(workFrames, dur, thresholdMs) {
     wrappedMs: { spike: +wrappedSpike.toFixed(1), rest: +wrappedRest.toFixed(1), spikeDur: +spikeDur.toFixed(1), restDur: +restDur.toFixed(1) }, remainder };
 }
 
+// THE DRIVEN WINDOW, IN GAME FRAMES (hunt 4 I4). gpu-game-check's governor
+// snapshot is a 2048-frame ring read at the END of the run, after the
+// frozen-sim A/B phases, and its rAF series counts every wrapped callback
+// (~2 per game frame on the WebGPU legs). `win` is {t0, t1, f0, f1}: the page
+// clock and LoopHealth's finished-frame count at arm() and disarm();
+// `gameFrameT` the page time of every callback that finished a game frame.
+// Without LoopHealth (f0 < 0) the callbacks stand in, and the row says so.
+export function analyseWindow(win, gameFrameT, callbacks) {
+  if (!win || win.t0 == null || win.t1 == null || !(win.t1 > win.t0)) {
+    return { note: "no window bounds — the recorder never armed, or never disarmed" };
+  }
+  const ms = win.t1 - win.t0;
+  const r = { ms: Math.round(ms), callbacks: callbacks == null ? null : callbacks };
+  if (win.f0 == null || win.f0 < 0 || win.f1 == null || win.f1 < 0) {
+    r.source = "rAF callbacks (no LoopHealth — may count >1 per game frame)";
+    r.frames = callbacks == null ? null : callbacks;
+    r.fps = callbacks ? +(callbacks * 1000 / ms).toFixed(1) : null;
+    return r;
+  }
+  r.source = "LoopHealth.frames";
+  r.frames = win.f1 - win.f0;
+  r.fps = +(r.frames * 1000 / ms).toFixed(1);
+  r.msPerFrame = r.frames > 0 ? +(ms / r.frames).toFixed(2) : null;
+  r.callbacksPerFrame = r.frames > 0 && callbacks != null ? +(callbacks / r.frames).toFixed(2) : null;
+  const t = Array.isArray(gameFrameT) ? gameFrameT : [];
+  const iv = [];
+  for (let i = 1; i < t.length; i++) iv.push(t[i] - t[i - 1]);
+  iv.sort((a, b) => a - b);
+  if (iv.length) {
+    const q = (p) => +iv[Math.min(iv.length - 1, Math.floor(p * iv.length))].toFixed(1);
+    r.p50 = q(0.5); r.p95 = q(0.95); r.p99 = q(0.99); r.max = +iv[iv.length - 1].toFixed(1);
+    r.intervals = iv.length;
+  }
+  return r;
+}
+
 // WHICH PASSES THE SPIKE FRAMES RUN. The recorder fingerprints every render
 // pass of every frame by target size, format and load op; analysePassKinds
 // compares the wide frames with the median. This compares the SPIKE frames

@@ -1362,6 +1362,19 @@ test("the Verdict names stale A/B captures and the GLX drain mode (hunt 4 I1/I2)
   assert.doesNotMatch(r.out, /STALE/);
 });
 
+test("the Verdict prints the driven window and a skipped A/B, not the end-of-run ring alone (hunt 4 I4)", () => {
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const wgx = { ...wgxLegJson(), window: { ms: 20000, frames: 734, fps: 36.7, msPerFrame: 27.25, p50: 26.1, p95: 41.2, p99: 60.3, max: 140.2, callbacksPerFrame: 2, source: "LoopHealth.frames" },
+    occlusionAB: { feature: "occlusionCull", skipped: true, note: "occlusionCull reports supported:false on this backend — A/B skipped" } };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: { ...glxLegJson(), window: { note: "no window bounds — the recorder never armed, or never disarmed" } }, wgx } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /window: 734 frames in 20000 ms = 36\.7 fps \(27\.25 ms\/frame\)\s+interval p50=26\.1 p95=41\.2 p99=60\.3 max=140\.2 ms\s+rAF\/frame=2\s+\[LoopHealth\.frames\]/);
+  assert.match(r.out, /window: no window bounds/, "an unmeasured window is named, not left blank");
+  assert.match(r.out, /occl  A\/B: skipped — occlusionCull reports supported:false/);
+  assert.doesNotMatch(r.out, /occl  A\/B: NOT MEASURED/);
+});
+
 test("the GPU gate fails a hardware TLX leg that stopped reporting an env count", () => {
   // `(env.fail || 0) > 0` was the SAME banned shape as the gpuErrors fix twelve
   // lines above it in the same file, on the same object: a build that stops

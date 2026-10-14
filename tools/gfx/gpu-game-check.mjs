@@ -35,7 +35,7 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds } from "./frame-hitch.mjs";
+import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow } from "./frame-hitch.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
 // `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
@@ -443,6 +443,18 @@ try {
                         offRoadFrames: _dOff, error: _dErr }),
       };
     } catch (_) { /* no driver: the window measures a parked car, and the race: row says PARKED */ }
+    // THE DRIVEN WINDOW IN GAME FRAMES (hunt 4 I4). The governor's end
+    // snapshot is a 2048-frame ring that also holds the frozen-sim A/B
+    // phases, and the rAF series counts ~2 callbacks per game frame on the
+    // WebGPU legs. LoopHealth.state().frames moves once per FINISHED game
+    // frame, so its delta over arm()..disarm() is the window's frame count and
+    // the callbacks that move it time the frame intervals.
+    const _lhFrames = () => {
+      try { return typeof LoopHealth !== "undefined" && LoopHealth.state ? LoopHealth.state().frames : -1; } catch (_) { return -1; }
+    };
+    const _gfT = new Float64Array(_hCAP);
+    let _gfN = 0, _lhLast = -1;
+    const _win = { t0: null, t1: null, f0: null, f1: null };
     try {
       const _raf = window.requestAnimationFrame.bind(window);
       window.requestAnimationFrame = function (cb) {
@@ -455,14 +467,21 @@ try {
               if (_hN < 4000) _hSig.push(_hSigCur);
               if (_hWorkCur !== null && _hWorkFrames.length < 4000) _hWorkFrames.push([_hN, _hWorkCur]);
               _hN++;
+              const lf = _lhFrames();
+              if (lf >= 0 && lf !== _lhLast && _gfN < _hCAP) { _gfT[_gfN++] = performance.now(); _lhLast = lf; }
             }
             _hPass = 0; _hSigCur = []; _hWorkCur = null;
           }
         });
       };
       window.__gcHitch = {
-        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hWork.clear(); _hStacks.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null; },
-        dump: () => ({ t0: Array.from(_hT.subarray(0, _hN)), dur: Array.from(_hD.subarray(0, _hN)),
+        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hWork.clear(); _hStacks.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null;
+          _gfN = 0; _lhLast = _lhFrames(); _win.t0 = performance.now(); _win.f0 = _lhLast; _win.t1 = _win.f1 = null; },
+        // Close the window where the DRIVING stops, so the A/B phases that
+        // follow never enter the per-frame series or the spike analysis.
+        disarm() { if (!_hArmed) return; _hArmed = false; _win.t1 = performance.now(); _win.f1 = _lhFrames(); },
+        dump: () => ({ win: Object.assign({}, _win), gameFrameT: Array.from(_gfT.subarray(0, _gfN)),
+                       t0: Array.from(_hT.subarray(0, _hN)), dur: Array.from(_hD.subarray(0, _hN)),
                        passes: Array.from(_hP.subarray(0, _hN)), passSig: _hSig,
                        work: [..._hWork.entries()].sort((a, b) => b[1] - a[1]),
                        workFrames: _hWorkFrames,
@@ -825,6 +844,8 @@ try {
     }
     await new Promise((r) => setTimeout(r, 1000));
   }
+  // The driven window ends with the last beat (hunt 4 I4).
+  await bounded(() => page.evaluate(() => window.__gcHitch && window.__gcHitch.disarm()), 10000, "disarm");
   if (_cpu) {
     try { const { profile } = await _cpu.send("Profiler.stop"); _cpuProfile = profile; out.cpu = analyseCpu(profile, 24); }
     catch (e) { out.cpu = { note: "profile stop failed: " + String((e && e.message) || e).slice(0, 120) }; }
@@ -844,6 +865,9 @@ try {
   // crashed leaves every later evaluate hanging for ever.
   out.hitch = await bounded(async () => {
     const d = await page.evaluate(() => (window.__gcHitch ? window.__gcHitch.dump() : null));
+    // READ THE WINDOW, NOT THE GOVERNOR'S END STATE (hunt 4 I4): frames, fps
+    // and frame-interval percentiles over the driven window only.
+    out.window = d ? analyseWindow(d.win, d.gameFrameT || [], (d.dur || []).length) : { note: "no recorder on this leg" };
     if (!d || !d.dur || d.dur.length < 30) return { note: "no rAF series — the recorder never armed, or the leg drew too few frames" };
     const a = analyse(d.t0, d.dur);
     // The pass census rides the same series: same frames, same window, so
@@ -979,6 +1003,14 @@ try {
     const A = { feature, clock: abClock };
     const has = await page.evaluate((f) => !!(window.__apex && window.__apex[f] && window.__apex.gpuTimer), feature);
     if (!has) return { note: "no " + feature + "/gpuTimer hooks" };
+    // NOTHING TO A/B (hunt 4 I4). Both features are GLX-only: WGX and the two
+    // three.js legs report supported:false, yet each still spent three
+    // captures and 40 interleaved samples per feature with the sim frozen —
+    // frames that then sat in the governor ring the end snapshot reads.
+    const st0 = await page.evaluate((f) => { try { return window.__apex[f](); } catch (e) { return { error: String(e && e.message) }; } }, feature);
+    if (st0 && st0.supported === false) {
+      return { feature, skipped: true, stats: st0, note: feature + " reports supported:false on this backend — A/B skipped" };
+    }
     // Pin the clock FIRST: everything below depends on the two captures being
     // the same instant of weather.
     A.clockPinned = await page.evaluate((h) => {

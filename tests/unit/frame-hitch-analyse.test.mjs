@@ -19,7 +19,7 @@
 // to contain the thing, and the right verdict about one built not to.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds } from "../../tools/gfx/frame-hitch.mjs";
+import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow } from "../../tools/gfx/frame-hitch.mjs";
 
 // A frame series: `spikeEvery` frames apart, `spikeMs` long, `baseMs` otherwise.
 function series(frames, baseMs, spikeEvery, spikeMs) {
@@ -309,4 +309,28 @@ test("analyseSpikePassKinds ranks the pass kinds that spike frames run and norma
   assert.match(k.summary, /^2048x2048\/depth:clear: 4\/4 spike frames, 1\/f vs 0\/f/);
   assert.match(analyseSpikePassKinds(passSig, dur.map(() => 16), 100).note, /no rendering frame/);
   assert.match(analyseSpikePassKinds(null, dur, 100).note, /no per-frame pass/);
+});
+
+test("analyseWindow reads the driven window in GAME frames, not callbacks or the end-of-run ring (hunt 4 I4)", () => {
+  // 20 s window, 400 game frames at a steady 50 ms with one 500 ms frame, and
+  // two wrapped rAF callbacks per game frame (the WebGPU legs' shape): fps must
+  // come from the frame count (20.0), not the 800 callbacks (40.0).
+  const t = [];
+  let at = 1000;
+  for (let i = 0; i < 400; i++) { at += i === 200 ? 500 : 50; t.push(at); }
+  const w = analyseWindow({ t0: 1000, t1: 21000, f0: 120, f1: 520 }, t, 800);
+  assert.equal(w.source, "LoopHealth.frames");
+  assert.equal(w.frames, 400);
+  assert.equal(w.fps, 20);
+  assert.equal(w.msPerFrame, 50);
+  assert.equal(w.callbacksPerFrame, 2);
+  assert.equal(w.p50, 50); assert.equal(w.p95, 50); assert.equal(w.max, 500);
+  assert.equal(w.intervals, 399);
+  // No LoopHealth: the callbacks stand in, and the source says they may over-count.
+  const cb = analyseWindow({ t0: 0, t1: 10000, f0: -1, f1: -1 }, [], 600);
+  assert.equal(cb.frames, 600); assert.equal(cb.fps, 60);
+  assert.match(cb.source, /rAF callbacks/);
+  // A window that never closed is named, never a zero.
+  assert.match(analyseWindow({ t0: 5, t1: null, f0: 1, f1: null }, [], 0).note, /never disarmed/);
+  assert.match(analyseWindow(null, [], 0).note, /never armed/);
 });
