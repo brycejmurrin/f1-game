@@ -352,6 +352,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/finish-coast-rev-vm.test.mjs",
   "tests/unit/fixture-consumer-audit.test.mjs",
   "tests/unit/flags.test.mjs",
+  // Nightly flake tally (tools/ci/flake-tally.mjs): report.json / live-reporter
+  // / junit parsers + exact-name artifact URL shape; fixture-only, < 0.2 s.
+  "tests/unit/flake-tally.test.mjs",
   // The flaky policy behind APEX_FAIL_ON_FLAKY=1: quarantine rows are a ledger
   // (spec exists, owner, date, why) and the verdict is pure; < 1 s.
   "tests/unit/flaky-quarantine.test.mjs",
@@ -919,6 +922,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Factory/sig tyre recipes after #1190 open rims: distinct geom + cover copy needs cover:1.
   "tests/unit/tyre-recipes-open-rim.test.mjs",
   "tests/unit/ui-experience.test.mjs",
+  // ui-fit round 5: camera tuner compact foot/preview/copy-from --tap-paint
+  // floors (#camtune-inner only; lighting untouched).
+  "tests/unit/ui-fit-camtune-tap-r5.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
