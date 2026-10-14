@@ -602,7 +602,9 @@ function saveScreenshot() {
       if (!href) { done(false, "BLANK"); return; }
       const name = "apex26-" + readBackend() + ".png";
       if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
-        await NativeDownload.saveBlob(await (await fetch(href)).blob(), name);
+        const res = await fetch(href);
+        if (!res.ok) throw new Error("screenshot fetch HTTP " + res.status);
+        await NativeDownload.saveBlob(await res.blob(), name);
         done(true); return;
       }
       const a = document.createElement("a");
