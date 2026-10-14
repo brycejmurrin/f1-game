@@ -294,6 +294,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // → onContext, the stamp tool's ghost polyline, the drag / span measurement
   // chip, the wider touch hit radius. Recording 2D context, hand-driven timers.
   "tests/unit/designer-canvas.test.mjs",
+  // Headless designer share-code CLI (tools/track/designer-code.mjs): decode via
+  // editor-vm + TrackValidate/TrackInsight; exit 1 on corrupt or RED geometry. ~1 s.
+  "tests/unit/designer-code-cli.test.mjs",
   // The designer's elevation strip (js/editor/profile.js) alone: tap adds a hill,
   // a grip drag sets height (8 % cap) / place / Shift length and commits once,
   // long-press and Delete remove, data-arrows own/pass, the hill's aria-label.

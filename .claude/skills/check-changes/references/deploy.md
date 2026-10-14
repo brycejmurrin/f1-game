@@ -55,17 +55,12 @@ git merge-base --is-ancestor origin/claude/f1-game-project-26h3ng HEAD \
   && echo "already contains deploy — push will fast-forward"
 ```
 
-Measured 2026-08-17: an interim silverstone coplanar re-baseline 15→16 was
-obsoleted within the hour by the deploy session's real geometry fix putting it
-back to 15.
-
 ### Union verification
 
 - `npm run test:tooling-fast` — always.
 - `npm run test:sweeps` — when EITHER side touched what the fleet build reads
   (`tools/ci/geometry-paths.mjs`, derived from `TRACK_VM`). Per-circuit clip/float/coplanar baselines are exact in BOTH
-  directions; geometry green on each lineage alone can be red on their union
-  (measured 2026-08-14: one engine fix moved clip counts on 8 circuits).
+  directions; geometry green on each lineage alone can be red on their union.
 - A grown count needs `node tools/track/coplanar-audit.cjs <id>` and a dated note in
   the test file before the baseline moves.
 - A shrunk count means the baseline must come DOWN (the anti-staleness
@@ -74,13 +69,12 @@ back to 15.
 ### Push and live check
 
 ```sh
-git push origin HEAD:claude/f1-game-project-26h3ng   # REFUSED since 2026-09-30 (GH006): land through `deploy.mjs --pr`
+node tools/ci/deploy.mjs --pr   # a direct push to the deploy branch is refused (GH006)
 ```
 
 Live `version.json`: subagent **deploy-research**, or
 `https://brycejmurrin.github.io/f1-game/version.json` via MCP fetch / WebFetch —
-or `curl`, which DOES reach github.io from this container (HTTP 200 in 0.36 s,
-measured 2026-09-18; this line used to say it does not). For "is MY commit
+or `curl`, which reaches github.io from this container. For "is MY commit
 live?" curl is the only option that works, because the answer is a `<meta
 name="apex-sha">` in the shell and the fetch tool drops every meta tag:
 `curl -sS <site>/index.html | grep -oE '<meta name="apex-sha"[^>]*>'`. Pages runs take up to ~25 min. A NEWER push to the
