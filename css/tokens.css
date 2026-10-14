@@ -1291,6 +1291,13 @@ button:disabled:active { background: var(--plate); }
   outline: max(2px, calc(2px / var(--ui-scale, 1))) solid var(--focus);
   outline-offset: calc(-1 * max(2px, calc(2px / var(--ui-scale, 1))));
 }
+/* SETTINGS › ACCESSIBILITY › KEYBOARD FOCUS: HIGH — thicker inset ring so
+   Tab / arrows stay obvious on every menu and settings control. */
+:root[data-focus="high"] :focus-visible {
+  outline-width: max(3px, calc(3px / var(--ui-scale, 1)));
+  outline-offset: calc(-1 * max(3px, calc(3px / var(--ui-scale, 1))));
+  box-shadow: inset 0 0 0 max(1px, calc(1px / var(--ui-scale, 1))) color-mix(in srgb, var(--focus) 55%, transparent);
+}
 /* THE density switch. A landscape phone is ~390-430px tall and that is the
    whole constraint: the same menus, tighter. Nothing here changes layout —
    only how much room each part takes.
