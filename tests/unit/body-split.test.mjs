@@ -1,9 +1,12 @@
-/* body-split.test.mjs — the two whole-body colour splits.
+/* body-split.test.mjs — the whole-body colour splits.
  *   liv.bodySplit "lr": left c1 / right c2 (Cadillac).
- *   liv.lower: UPPER/LOWER two-tone — the body below a fixed line along the
- *   sidepods (pod fraction 0.80, z -2.00..+1.05) in `lower`, triangles CUT
- *   along the line (CarShade.lowerZone). It runs only where CarShade is loaded,
- *   as in the game, so those cases build through loadParts({ shade: true }).
+ *   liv.lower: the body below a fixed line along the sidepods (pod fraction
+ *   0.80, z -2.00..+1.05) in `lower`, triangles CUT along the line
+ *   (CarShade.lowerZone).
+ *   liv.upper: the body ABOVE that same line (CarShade.upperZone) — the W17
+ *   silver upper-chassis band. Absent = today's car for every other team.
+ *   Both height zones run only where CarShade is loaded, as in the game, so
+ *   those cases build through loadParts({ shade: true }).
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -276,4 +279,81 @@ test("lower is ignored by the cockpit and silhouette builds, and under bodySplit
     livery: Object.assign({}, cad.livery, extra), teamId: "cadillac", num: 11, parts: cParts, noWheels: true });
   assert.equal(cad.livery.bodySplit, "lr");
   assert.ok(same(b({}), b({ lower: LOW }), ALL), "bodySplit lr must win over lower");
+});
+
+/* ── UPPER CHASSIS BAND (liv.upper) — W17 silver-over-black ───────────────── */
+
+const mer = S.Teams.LIST.find((t) => t.id === "mercedes");
+const merParts = S.Parts.getVisualTiers(S.Parts.defaults ? S.Parts.defaults() : {}, mer);
+const UP = [0.21, 0.83, 0.37];   // probe colour distinct from Mercedes silver / black
+const MER_C1 = mer.color.map((v) => Math.min(v, 1));
+const buildMer = (upper, opts) => {
+  const livery = Object.assign({}, mer.livery);
+  delete livery.upper;
+  delete livery.lower;
+  if (upper !== undefined) livery.upper = upper;
+  return S.Car3D.build(mer.color, mer.color2, Object.assign({
+    livery, teamId: "mercedes", num: 63, parts: merParts, noWheels: true, measure: true }, opts));
+};
+
+test("Mercedes ships an upper body colour matching its cover silver", () => {
+  assert.ok(Array.isArray(mer.livery.upper) && mer.livery.upper.length === 3);
+  assert.deepEqual(mer.livery.upper, mer.livery.cover, "W17 upper band is the same silver as the engine cover");
+});
+
+test("upper: the body above the line takes it, below stays primary", () => {
+  const plain = buildMer(undefined, { smooth: false });
+  const two = buildMer(UP, { smooth: false });
+  const end = liveryEnd(two);
+  let up = 0, primBelow = 0;
+  for (let v = 0; v < end; v++) {
+    const y = two.pos[v * 3 + 1], z = two.pos[v * 3 + 2];
+    if (is(two, v, UP)) {
+      up++;
+      assert.equal(two.mat[v], PAINT, "only paint takes the upper colour");
+      // Same exclusive-vert rule as lowerZone: shared verts may sit on the seam.
+      assert.ok(signed(y, z, false) >= -1e-6 || Math.abs(z - FRONT) < 1e-6,
+        `upper vertex below the line at y ${y.toFixed(4)} z ${z.toFixed(4)}`);
+    } else if (is(two, v, MER_C1) && two.mat[v] === PAINT && z < FRONT - 1e-6 && z > -2.00
+               && signed(y, z, false) < -1e-6) {
+      primBelow++;
+    }
+  }
+  assert.ok(up > 200, `only ${up} upper vertices: the zone did not run`);
+  assert.ok(primBelow > 100, `only ${primBelow} primary verts below the line — lower chassis vanished`);
+  // Absent upper must match a build that never set it (byte-identical path).
+  assert.ok(same(plain, buildMer(null, { smooth: false }), ALL), "upper: null changed the build");
+});
+
+test("upper absent leaves every non-Mercedes factory car byte-identical to today", () => {
+  // Defaults: no other team authors `upper`, so the zone must not run. Compare
+  // each factory build against one with upper explicitly deleted (and against
+  // Mercedes stripped of upper for the control that the zone IS the only delta).
+  for (const t of S.Teams.LIST) {
+    if (t.id === "mercedes" || t.id === "custom") continue;
+    const parts = S.Parts.getVisualTiers(S.Parts.defaults ? S.Parts.defaults() : {}, t);
+    const liv = Object.assign({}, t.livery || {});
+    assert.equal(liv.upper, undefined, `${t.id} must not ship upper (FORBIDDEN team edits)`);
+    const a = S.Car3D.build(t.color, t.color2, {
+      livery: liv, teamId: t.id, num: 1, parts, noWheels: true, measure: true, smooth: false });
+    const b = S.Car3D.build(t.color, t.color2, {
+      livery: Object.assign({}, liv, { upper: null }), teamId: t.id, num: 1, parts, noWheels: true,
+      measure: true, smooth: false });
+    assert.ok(same(a, b, ALL), `${t.id}: upper:null changed a team that never set upper`);
+  }
+  // Mercedes WITH upper differs from WITHOUT.
+  const withU = buildMer(mer.livery.upper, { smooth: false });
+  const without = buildMer(undefined, { smooth: false });
+  assert.equal(same(withU, without, ["col"]), false, "Mercedes upper must recolour the body");
+});
+
+test("upper is ignored by the cockpit and silhouette builds, and under bodySplit lr", () => {
+  for (const o of [{ cockpit: true }, { silhouette: true }]) {
+    assert.ok(same(buildMer(undefined, o), buildMer(UP, o), ALL), `${Object.keys(o)[0]}: upper changed the build`);
+  }
+  const cad = S.Teams.LIST.find((t) => t.id === "cadillac");
+  const cParts = S.Parts.getVisualTiers(S.Parts.defaults ? S.Parts.defaults() : {}, cad);
+  const b = (extra) => S.Car3D.build(cad.color, cad.color2, {
+    livery: Object.assign({}, cad.livery, extra), teamId: "cadillac", num: 11, parts: cParts, noWheels: true });
+  assert.ok(same(b({}), b({ upper: UP }), ALL), "bodySplit lr must win over upper");
 });

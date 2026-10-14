@@ -24,7 +24,11 @@
 #    starts a browser run: test-bg (except --status/--tail), test-solo,
 #    run-playwright, `playwright test`, `npm test`, verify-change without
 #    --fast/--plan, the chrome daemon, `npm run test:<browser group>`, and the
-#    Chromium capture CLIs (tools/shot, tools/ui audits, gfx-probe).
+#    Chromium capture CLIs (tools/shot, tools/ui audits, gfx-probe), read from
+#    the parsed argv (round 2, see "one parse" below).
+#  git push / gh — force, mirror, delete, deploy-branch pushes are blocked;
+#    `gh pr merge --squash|--rebase` is denied and other merges / ready flips
+#    ask (merge_policy.py, shared with github-mcp-guard.sh).
 #  A commit whose staged paths are ALL prose (docs/, *.md, .claude/skills,
 #    .claude/agents; never a generated doc) runs only docs-integrity — no
 #    ratchet raise, no test:guards.
@@ -103,17 +107,6 @@ while i<n:
         res.append(c); i+=1
 sys.stdout.write("".join(res))
 ')
-# A subagent never starts a browser run (AGENTS.md §Verification 10). Hook input
-# names the agent when the call comes from one (agent_id / agent_type, or a
-# transcript under subagents/); the main session carries none of those.
-SUBAGENT=$(printf '%s' "$INPUT" | python3 -c '
-import json,sys
-try:
-    d=json.load(sys.stdin)
-    print("1" if (d.get("agent_id") or d.get("agent_type") or "/subagents/" in str(d.get("transcript_path") or "")) else "")
-except Exception:
-    print("")
-')
 # Prefixes that carry the verb: wrappers, a shell -c, an absolute path.
 # 15-F7: `timeout 5 pkill -f chrome` and `xargs pkill -f` are the same kill (timeout,
 # xargs and their flags/duration are wrappers; setsid/doas/stdbuf likewise).
@@ -180,51 +173,58 @@ if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}kill([[:space:]]+
   done
 fi
 
-# --- git push: no force, no mirror/delete, never the deploy branch ---------------
-# settings.json's deny globs are prefix matches on the raw text, so `git -C .
-# push -f`, `git --no-pager push --force`, `bash -c "git push --mirror"` and a
-# bare `git push` while ON the deploy branch walked past them (2026-10-14).
-# shellparse.py reads every `git … push` the way it reads commits. Untokenisable
-# text that still looks like a push is refused: it would not run as written.
+# --- one parse: push, gh, subagent browser ban, and the commit reading -----------
+# ROUND 2 (2026-10-14 red-team, docs/notes/AGENT-GUARDS-2026-10-14.md): every
+# rule below reads the command through shellparse.py ONCE (`guard` mode), on the
+# PARSED argv — quotes removed; `sh|bash -c [--]`, `-ec`, `-o opt`, eval,
+# here-strings, `echo '…' | bash`, env/setsid/flock/timeout/nice/xargs wrappers
+# and `cd X &&` resolved; `git -c alias.X=…` expanded — instead of a regex on the
+# quote-blanked SCAN, which `node "tools/ci/test-bg.mjs"` and `npx playwright
+# 'test'` walked past. One python process instead of five also halves latency.
+#
+#  git push — no force (any unambiguous `--forc…` prefix), --mirror, --delete,
+#    --all/--branches, --prune, glob or `:dst` refspecs, never the deploy branch
+#    (`refs/heads/`, `heads/`, a bare/HEAD/@ push while on it), never a config
+#    that widens a push (`-c push.default=matching|current`, `-c remote.*.push`,
+#    `-c remote.*.mirror`, or that config in git for a bare push). settings.json's
+#    deny globs are prefix matches on raw text and miss all of these.
+#  gh — `gh pr merge --squash|--rebase` and a gh api merge naming squash/rebase
+#    are DENIED; any other `gh pr merge` (incl. --auto), `gh pr ready`, `gh api`
+#    …/pulls/<n>/merge or GraphQL merge/auto-merge/ready mutation ASKS, unless
+#    APEX_MERGE_DESK=1 (merge_policy.py: the same words as github-mcp-guard.sh).
+#    No settings.json `ask` rule for these: it would also prompt Merge Desk.
+#  subagent browser ban (§Verification 10) — test-bg (but --status/--tail),
+#    test-solo, run-playwright, verify-change without --fast/--plan, `playwright
+#    test` however launched (npx [--yes], npm exec, node_modules/.bin, cli.js),
+#    `npm test|t|tst`, `npm run|run-script test|test:<browser group>`, the
+#    Chromium capture CLIs (tools/shot/*.mjs but frame-report/cam-*, tools/ui
+#    audits, gfx-probe, mcp-cli) unless --help/--plan, the chrome daemon, and
+#    `apex-tools-mcp.sh call <browser apex_* tool>`. Node-only checks stay open.
+# Text the parser cannot tokenise (an unbalanced quote) falls back to the regexes
+# on SCAN below: it would not run as written, so a false positive costs nothing.
 HOOKDIR="$(cd "$(dirname "$0")" && pwd)"
-PUSH_JSON=$(printf '%s' "$CMD" | python3 "$HOOKDIR/shellparse.py" push 2>/dev/null)
-if [ "$PUSH_JSON" = "null" ]; then
+GUARD_OUT=$(printf '%s' "$INPUT" | python3 "$HOOKDIR/shellparse.py" guard "$ROOT"); GUARD_RC=$?
+[ "$GUARD_RC" = 2 ] && exit 2
+COMMIT_LINE=$(printf '%s\n' "$GUARD_OUT" | sed -n 1p)
+PARSE=$(printf '%s\n' "$GUARD_OUT" | sed -n 2p)
+GH_DECISION=$(printf '%s\n' "$GUARD_OUT" | sed -n '3,$p')
+if [ "$GUARD_RC" != 0 ] || [ "$PARSE" != "PARSE ok" ]; then
+  # Unparseable (or the parser crashed): the regex fallbacks, all fail-closed.
   if printf '%s' "$SCAN" | grep -Eq "(^|[;&|({\`][[:space:]]*)${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|\$)"; then
     echo "BLOCKED: this command contains a git push the guard cannot parse (an unbalanced quote?). Write the push as one plain command." >&2
     exit 2
   fi
-elif [ -n "$PUSH_JSON" ] && [ "$PUSH_JSON" != "[]" ]; then
-  printf '%s' "$PUSH_JSON" | python3 -c '
-import json,sys
-for x in json.load(sys.stdin):
-    sys.stderr.write("BLOCKED: `" + x["cmd"] + "` — " + "; ".join(x["why"]) + ".\n")
-' >&2
-  echo "Pushes go to your own cursor/<topic>-<hash> branch, never forced (AGENTS.md §Git branch & deploy). The deploy branch takes work only through a PR (node tools/ci/deploy.mjs --pr); a diverged branch is caught up by merging (node tools/ci/sync-pr.mjs), never a force push." >&2
-  exit 2
-fi
-
-# --- a subagent never starts a browser run --------------------------------------
-# AGENTS.md §Verification 10 was prose and a body lint; every agent carries
-# Bash, so nothing stopped a `test-bg.mjs` inside one until 2026-09-22. The
-# browser starters, at command position: test-bg (anything but --status),
-# test-solo, run-playwright, `playwright test`, `npm test`, verify-change
-# --wait, the chrome daemon. Node-only groups (`npm run test:tooling-fast`,
-# `node --test`) stay open — that is what verify-agent runs.
-if [ "$SUBAGENT" = "1" ]; then
-  # Any path prefix (./tools/ci/, an absolute path) — `(tools/ci/)?` alone let
-  # `node ./tools/ci/test-bg.mjs smoke` through. test-bg is open only for the
-  # read-only verbs (--status, --tail). verify-change is open only for --fast /
-  # --plan: its bare form starts batch 1 through test-bg. `npm run test:<g>` is
-  # blocked for the groups that drive a browser, read from tests/groups.json.
-  P='(node[[:space:]]+)?([^[:space:];&|()]*/)?'
-  BROWSER="${P}(test-bg\.mjs([[:space:]]+(?!--status|--tail)[^[:space:]]+)|test-solo\.mjs|run-playwright\.mjs|verify-change\.mjs(?![^;&|]*--(fast|plan)))|(python3?[[:space:]]+)?([^[:space:];&|()]*/)?probe-mcp\.py[[:space:]]+chrome-start|npx[[:space:]]+playwright[[:space:]]+test|playwright[[:space:]]+test([[:space:]]|$)|npm[[:space:]]+test([[:space:]]|$)"
-  # 2026-10-14: the capture CLIs boot Chromium too (harness.mjs launchChromium /
-  # playwright): every tools/shot/*.mjs except the node-VM ones (frame-report,
-  # cam-corners, cam-motion), tools/ui/{layout-audit,menu-mock,css-play}.mjs and
-  # tools/gfx/gfx-probe.mjs. --help / --plan print and exit, so they stay open.
-  CAPTURE="${P}(shot/(?!(frame-report|cam-corners|cam-motion)\.mjs)[A-Za-z0-9_-]+\.mjs|ui/(layout-audit|menu-mock|css-play)\.mjs|gfx/gfx-probe\.mjs)(?![^;&|]*[[:space:]]--(help|plan)([[:space:]=]|\$))"
-  BROWSER="${BROWSER}|${CAPTURE}"
-  BGROUPS=$(python3 -c '
+  SUBAGENT=$(printf '%s' "$INPUT" | grep -Eq '"(agent_id|agent_type)"[[:space:]]*:[[:space:]]*"[^"]|/subagents/' && echo 1)
+  if [ "$SUBAGENT" = "1" ]; then
+    P='(node[[:space:]]+)?([^[:space:];&|()]*/)?'
+    BROWSER="${P}(test-bg\.mjs([[:space:]]+(?!--status|--tail)[^[:space:]]+)|test-solo\.mjs|run-playwright\.mjs|verify-change\.mjs(?![^;&|]*--(fast|plan)))|(python3?[[:space:]]+)?([^[:space:];&|()]*/)?probe-mcp\.py[[:space:]]+chrome-start|npx[[:space:]]+playwright[[:space:]]+test|playwright[[:space:]]+test([[:space:]]|$)|npm[[:space:]]+test([[:space:]]|$)"
+    # 2026-10-14: the capture CLIs boot Chromium too (harness.mjs launchChromium /
+    # playwright): every tools/shot/*.mjs except the node-VM ones (frame-report,
+    # cam-corners, cam-motion), tools/ui/{layout-audit,menu-mock,css-play}.mjs and
+    # tools/gfx/gfx-probe.mjs. --help / --plan print and exit, so they stay open.
+    CAPTURE="${P}(shot/(?!(frame-report|cam-corners|cam-motion)\.mjs)[A-Za-z0-9_-]+\.mjs|ui/(layout-audit|menu-mock|css-play)\.mjs|gfx/gfx-probe\.mjs)(?![^;&|]*[[:space:]]--(help|plan)([[:space:]=]|\$))"
+    BROWSER="${BROWSER}|${CAPTURE}"
+    BGROUPS=$(python3 -c '
 import json,re,sys
 try:
     g=json.load(open(sys.argv[1]))["groups"]
@@ -233,12 +233,46 @@ try:
 except Exception:
     print("")
 ' "$ROOT/tests/groups.json")
-  [ -n "$BGROUPS" ] && BROWSER="${BROWSER}|npm[[:space:]]+run([[:space:]]+-[-a-z]+)*[[:space:]]+test:(${BGROUPS})([[:space:]]|\$)"
-  if printf '%s' "$SCAN" | grep -Pq "(^|[;&|(][[:space:]]*)${PRE}(${BROWSER})"; then
-    echo "BLOCKED: a subagent never starts a browser run (AGENTS.md §Verification 10) — one group saturates this box and the parent owns the only Playwright process. Run the node-only checks (verify-change.mjs --fast, node --test, verify-track.cjs) and report the browser groups as NOT RUN; the parent starts them." >&2
-    exit 2
+    [ -n "$BGROUPS" ] && BROWSER="${BROWSER}|npm[[:space:]]+run([[:space:]]+-[-a-z]+)*[[:space:]]+test:(${BGROUPS})([[:space:]]|\$)"
+    if printf '%s' "$SCAN" | grep -Pq "(^|[;&|(][[:space:]]*)${PRE}(${BROWSER})"; then
+      echo "BLOCKED: a subagent never starts a browser run (AGENTS.md §Verification 10), and this command could not be parsed. Run the node-only checks and report the browser groups as NOT RUN." >&2
+      exit 2
+    fi
+  fi
+  if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}gh[[:space:]].*(pr[[:space:]]+(merge|ready)|api[[:space:]])"; then
+    GH_DECISION='{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask", "permissionDecisionReason": "bash-guard could not parse this gh call; confirm it by hand."}}'
   fi
 fi
+# ONE JSON object on the way out (stdout is parsed as JSON only when it is a
+# single object): the gh ask/deny, and COMMIT_CTX — which path a PASSING commit
+# took and how long it ran. stderr is hidden on exit 0, so a successful commit
+# used to leave the model unable to tell docs-integrity-only from test:guards.
+# Per https://code.claude.com/docs/en/hooks, hookSpecificOutput.additionalContext
+# reaches the model (a system reminder next to the tool result) and systemMessage
+# is shown to the user; neither changes the allow. Printed only on exit 0, so a
+# later exit-2 rule (the commit guards) still wins over a gh ask.
+COMMIT_CTX=""
+emit_on_exit() {
+  rc=$?
+  [ "$rc" = 0 ] || return
+  [ -n "$GH_DECISION$COMMIT_CTX" ] || return
+  GH_DECISION="$GH_DECISION" COMMIT_CTX="$COMMIT_CTX" python3 -c '
+import json, os
+d = {}
+try:
+    d = json.loads(os.environ.get("GH_DECISION") or "{}")
+except Exception:
+    d = {}
+ctx = os.environ.get("COMMIT_CTX") or ""
+if ctx:
+    h = d.setdefault("hookSpecificOutput", {"hookEventName": "PreToolUse"})
+    h["additionalContext"] = ctx
+    d["systemMessage"] = ctx
+print(json.dumps(d))
+'
+}
+trap emit_on_exit EXIT
+if [ -n "$GH_DECISION" ] && printf '%s' "$GH_DECISION" | grep -q '"deny"'; then exit 0; fi
 
 # --- guards before git commit ---------------------------------------------------
 # WHICH COMMANDS ARE COMMITS (2026-10-04). The regex this replaced matched
@@ -257,25 +291,21 @@ fi
 # (reserved words allowed before the verb) that, if it sees a commit the parser
 # did not, treats it as a real `-a` commit. A guard run on a false positive is
 # only 25 s; a commit that skips the guards is the failure being closed.
-HOOKDIR="$(cd "$(dirname "$0")" && pwd)"
-COMMIT_JSON=$(printf '%s' "$CMD" | python3 "$HOOKDIR/shellparse.py" commit 2>/dev/null)
-if [ -z "$COMMIT_JSON" ] || [ "$COMMIT_JSON" = "null" ] || [ "$COMMIT_JSON" = "[]" ]; then
+# FOUND is how many `git … commit` the parser read (dry runs included); 0 or NULL
+# is where the broad fallback regex decides.
+case "$COMMIT_LINE" in "0 "*|NULL|"") C_FOUND=0 ;; *) C_FOUND=1 ;; esac
+if [ "$C_FOUND" = 0 ]; then
   if printf '%s' "$SCAN" | grep -Eq "(^|[;&|({\`][[:space:]]*)((if|then|else|elif|while|until|do|time|!)[[:space:]]+)*${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+commit([[:space:]]|\$)"; then
-    COMMIT_JSON='[{"all":true,"paths":[],"include":false,"dry":false,"skip":false,"gitdir":null}]'
+    COMMIT_LINE="1 1 1 -"
   else
-    COMMIT_JSON='[]'
+    COMMIT_LINE="0 0 0 -"
   fi
 fi
-# One line: RUN ALL GITDIR PATHS… — RUN=1 when any commit is real (not
-# --dry-run), ALL=1 when any is -a/--all, PATHS the union of pathspecs.
-read -r C_RUN C_ALL C_GITDIR C_PATHS <<EOF
-$(printf '%s' "$COMMIT_JSON" | python3 -c '
-import json,sys
-c=[x for x in json.load(sys.stdin) if not x.get("dry") and not x.get("skip")]
-paths=sorted({p for x in c for p in x.get("paths") or []})
-gd=next((x["gitdir"] for x in c if x.get("gitdir")), "") or "-"
-print("1" if c else "0", "1" if any(x.get("all") for x in c) else "0", gd, " ".join(paths))
-' 2>/dev/null)
+# One line: FOUND RUN ALL GITDIR PATHS… — RUN=1 when any commit is real (not
+# --dry-run, not APEX_SKIP_GUARDS=1), ALL=1 when any is -a/--all, PATHS the
+# union of pathspecs (shellparse.py guard prints it).
+read -r _C_N C_RUN C_ALL C_GITDIR C_PATHS <<EOF
+$COMMIT_LINE
 EOF
 # Another host's adapter (.cursor/hooks/shell-guard.sh, used by Cursor and
 # Codex) sets APEX_COMMIT_GATE=githook when core.hooksPath is .githooks: the
@@ -344,6 +374,7 @@ EOF
     echo "bash-guard probe: commit docs-only" >&2; exit 0
   fi
   if [ "$DOCS_ONLY" = 1 ]; then
+    T0=$(date +%s)
     (cd "$ROOT" && timeout -k 5 "$GUARD_T" node --test tests/unit/docs-integrity.test.mjs >"$LOG" 2>&1); RC=$?
     guard_timed_out "$RC" "docs-integrity"
     if [ "$RC" != 0 ]; then
@@ -352,6 +383,7 @@ EOF
       exit 2
     fi
     echo "docs-only commit: ran docs-integrity only (no ratchet raise, no test:guards)." >&2
+    COMMIT_CTX="bash-guard: docs-only commit — ran tests/unit/docs-integrity.test.mjs only (green, $(( $(date +%s) - T0 )) s); no ratchet raise, no test:guards."
     exit 0
   fi
   # THE GUARDS MEASURE THE WORKING TREE; THE COMMIT IS THE INDEX (2026-10-04).
@@ -405,6 +437,7 @@ EOF
     grep '^OVER' "$RLOG" >&2
     exit 2
   fi
+  T0=$(date +%s)
   (cd "$ROOT" && timeout -k 5 "$GUARD_T" npm run --silent test:guards >"$LOG" 2>&1); RC=$?
   guard_timed_out "$RC" "npm run test:guards"
   if [ "$RC" != 0 ]; then
@@ -413,5 +446,7 @@ EOF
     echo "Fix the guard (or prefix with APEX_SKIP_GUARDS=1 when the guards themselves are the change under test)." >&2
     exit 2
   fi
+  RAISED=$(grep -c '^RAISED\|^LOWERED' "$RLOG" 2>/dev/null)
+  COMMIT_CTX="bash-guard: code commit — ratchets --auto-raise (${RAISED:-0} raised/lowered) then npm run test:guards (green, $(( $(date +%s) - T0 )) s; log $LOG)."
 fi
 exit 0

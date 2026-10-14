@@ -38,8 +38,13 @@
       ambientSky:    [0.50, 0.54, 0.58],
       ambientGround: [0.26, 0.28, 0.24],
       fogColor:      [0.62, 0.66, 0.68],
-      fogDensity:    0.0030,
-      grass:         [0.18, 0.38, 0.18],
+      // 0.0022 (was 0.0030): at 0.003 the fog wall is ~1 km and the compressed
+      // Mount Fuji cone washed into sky haze on every main-straight survey.
+      fogDensity:    0.0022,
+      // Green grass + green runoff (dayPal default runoff is brown dirt
+      // [0.55,0.42,0.28] — that was the brown infield on the before survey).
+      grass:         [0.16, 0.40, 0.18],
+      runoff:        [0.22, 0.34, 0.18],
       sunDir:        [0.50, 0.52, 0.42],
     },
 

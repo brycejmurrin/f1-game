@@ -873,11 +873,15 @@ const CarBodyGeom = (function () {
   }
   function buildAeroParts(recipe, tier) {
     const lvl = tier === 0 ? 0 : tier === 2 ? 4 : 2;
+    // 2026 regulation defaults (factory signatures already stamp these in
+    // parts.js — #1198): no beam wing, universal active flaps, mandated
+    // in-wash bargeboard. Catalog options that omit the fields inherit here;
+    // `beam_wing` keeps an explicit beam:1 for career/fantasy picks.
     return mergeRecipe({
-      lvl, beam: tier === 2 ? 1 : 0, drs: 0,
+      lvl, beam: 0, drs: 1,
       vane: lvl >= 4 ? 3 : lvl >= 3 ? 2 : lvl >= 1 ? 1 : 0,
       plate: 1, casc: null, swan: 0, tvane: null,
-      duct: 0, board: 0, slot: 0,
+      duct: 0, board: 1, slot: 0,
       frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
       rearSweep: 0.03, rearTaper: 0.98,
       floorEdge: 1, floorCut: 0.04, diffuserRise: 1, fin: 1,

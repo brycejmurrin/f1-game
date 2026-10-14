@@ -52,7 +52,9 @@ test("InputGhost open-loop pack replays identically under one seed", () => {
   const raw = [];
   for (let i = 0; i < 180; i++) {
     const inp = {
-      steer: Math.sin(i / 20) * 0.35,
+      steer: Math.round(Math.sin(i / 20) * 0.35 * 127) / 127,
+      throttleLevel: 64 / 255,
+      brakeLevel: 51 / 255,
       throttle: i < 150,
       brake: i >= 150 && i < 165,
     };
@@ -66,7 +68,11 @@ test("InputGhost open-loop pack replays identically under one seed", () => {
   const packed = [];
   for (let i = 0; i < IG.steps(); i++) packed.push(IG.atStep(i));
 
+  const original = episodeFromInputs(99, raw);
   const a = episodeFromInputs(99, packed);
+  assert.equal(a, original, "decoded partial-pedal tape differs from the original physics");
+  assert.notEqual(episodeFromInputs(99, packed.map(i => ({ ...i, throttleLevel: 1, brakeLevel: 1 }))), original,
+    "losing pedal travel must change the physics");
   const b = episodeFromInputs(99, packed);
   assert.equal(b, a, "second replay of the packed tape diverged");
   const dig = JSON.parse(a);

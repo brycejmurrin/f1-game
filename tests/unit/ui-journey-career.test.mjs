@@ -10,6 +10,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -120,4 +121,19 @@ test("NEW CAREER START is gated on name / 3-letter code / number 1–99", () => 
   assert.match(js, /Number must be 1–99/);
   assert.match(js, /\/\^\[A-Z\]\{3\}\$\//);
   assert.match(js, /draftFieldErr = errs/);
+});
+
+test("save retry explicitly persists the career before reading its status", () => {
+  const source = read("js/ui/select-screen.js");
+  const retry = source.slice(source.indexOf("const retrySave ="), source.indexOf("const exportRecovery ="));
+  for (const durable of [true, false]) {
+    const calls = [];
+    const ctx = {
+      Career: { data: () => ({}), save: () => calls.push("save"), saveStatus: () => { calls.push("status"); return { durable, reason: "quota" }; } },
+      G: {}, store: { retryFailed: () => ({ retried: 0 }), broken: "quota" },
+      hideSaveWarning: () => calls.push("restored"), showSaveWarning: () => calls.push("failed"),
+    };
+    vm.runInNewContext(retry + "retrySave();", ctx);
+    assert.deepEqual(calls, ["save", "status", durable ? "restored" : "failed"]);
+  }
 });

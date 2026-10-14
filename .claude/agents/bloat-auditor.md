@@ -31,7 +31,7 @@ So:
   stop searching and write what you have, whatever state it is in.
 - Breadth-first recon over a whole tree is the failure mode. Take the
   parent's file list; if it gave none, pick the few largest files in scope
-  and say in your report which you covered and which you did not.
+  and say on the `COVERED:` line which you covered and which you did not.
 - "N turns, no verified finding" is a legitimate, useful answer. Say it
   plainly rather than returning a narration of searching.
 
@@ -51,21 +51,21 @@ So:
    (analyse only — no `--out` / `--g-out`). Agent Skills caps live in
    `tests/unit/skill-progressive.test.mjs`; no web access. Do **not** prove a dead `__apex` hook
    yourself — mark it `unverified` for the parent + **mcp-probe**.
-4. Return rows only — no preamble:
+4. Return rows, then one `COVERED:` line (no other preamble); plain text, no HTML entities (write `<`, `>`, `&`, never `&lt;`):
 
 ```
 BLOAT  kind:extract|split|dead|dup|comment|skill|doc  file:line  cost:<n>  why: "…"  carve: "…"  do-not: none|<rule>
 ```
 
 `why` and `carve` are each one clause under 140 characters — a row, not a
-paragraph. `cost` is estimated lines or tokens removed. `do-not` is the table row
+paragraph. `kind` is EXACTLY one of extract, split, dead, dup (restating AGENTS.md or another file), comment, skill, doc (a stale number/path/tool name); no other values. `cost` is estimated lines or tokens removed and at least 1: never emit a `cost:0` row. `do-not` is the table row
 that forbids the carve, or `none`. If the scope is clean:
 
 ```
 BLOAT none
 ```
 
-plus the three most likely future sites (file + why).
+plus the three most likely future sites (file + why), then the `COVERED:` line.
 
 Project memory (`.claude/agent-memory/bloat-auditor/MEMORY.md`, tracked): one
 line per finding the parent REJECTED — `file:line — kind — why not`. Read it
@@ -90,3 +90,4 @@ that way at 10 turns, and a completed research pass at 18; track-surveyor lost
 11.6 minutes of survey at 30 (2026-09-22). Budget the hand-back, not the work.
 
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
+On the first permission denial (a denied Bash call, tool or path), stop and return your contract block marked UNREAD/UNKNOWN; never route around a denial.

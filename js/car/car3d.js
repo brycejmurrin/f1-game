@@ -187,7 +187,8 @@ const Car3D = (function () {
     // today's look. Airbox mesh lips use airboxMeshColour (wrap sun > cover).
     // BODY SPLIT (liv.bodySplit === "lr"): Cadillac-style L/R body. Left (x<0)
     // keeps c1, right (x>=0) takes c2. Applied as a paint-only recolour over the
-    // chassis→livery sections so carbon / wings / glass stay untouched. It wins over `lower` (CarShade.lowerZone).
+    // chassis→livery sections so carbon / wings / glass stay untouched. It wins
+    // over `lower` / `upper` (CarShade.lowerZone / upperZone).
     const bodySplitLR = liv.bodySplit === "lr";
     const haloTint = _ckAcc(liv.halo) || null;
     const T = (opts && opts.parts) || {};
@@ -1004,7 +1005,13 @@ const Car3D = (function () {
     const camPod = anchors.noseAt(1.55);
     addBox(out, 0, camPod.top + 0.045, 1.55, 0.06, 0.08, 0.15, DARK);
 
-    if (bodySplitLR) CarMaterials.applyBodySplit(out, bodySplitFrom, out.pos.length / 3, c1, c2); else if (liv.lower && !ckpt && !(opts && opts.silhouette) && typeof CarShade !== "undefined") CarShade.lowerZone(out, bodySplitFrom, out.pos.length / 3, c1, liv.lower, anchors, SURFACES.paint);   // two-tone body (CarShade.lowerZone)
+    // Two-tone body (CarShade): `lower` below the sidepod board line, `upper`
+    // above it. bodySplit lr wins; cockpit / silhouette builds skip both.
+    if (bodySplitLR) CarMaterials.applyBodySplit(out, bodySplitFrom, out.pos.length / 3, c1, c2);
+    else if (!ckpt && !(opts && opts.silhouette) && typeof CarShade !== "undefined") {
+      if (liv.lower) CarShade.lowerZone(out, bodySplitFrom, out.pos.length / 3, c1, liv.lower, anchors, SURFACES.paint);
+      if (liv.upper) CarShade.upperZone(out, bodySplitFrom, out.pos.length / 3, c1, liv.upper, anchors, SURFACES.paint);
+    }
 
     part("cockpit");
     // Exterior head surround stays out of the dedicated driver-eye mesh.
@@ -1533,8 +1540,10 @@ const Car3D = (function () {
       for (const s of [-1, 1])
         addBox(out, s*0.84, 0.55, 2.30, 0.035, 0.20, 0.48, wingCol, wingSurf);
     }
-    const aBeam = aeroStyle ? (aeroStyle.beam || 0) : (aeroT === 2 ? 1 : 0);
-    const aDrs  = aeroStyle ? (aeroStyle.drs  || 0) : 0;
+    // 2026: no beam by default (tier-2 used to imply beam:1). Active flaps
+    // (drs) come from aeroStyleOf / buildAeroParts when a recipe omits them.
+    const aBeam = aeroStyle ? (aeroStyle.beam || 0) : 0;
+    const aDrs  = aeroStyle ? (aeroStyle.drs  || 0) : 1;
     const frontSweep = Math.max(-0.08, Math.min(0.22, aeroStyle.frontSweep));
     const frontTaper = Math.max(0.72, Math.min(1.08, aeroStyle.frontTaper));
     const frontRise = Math.max(-0.03, Math.min(0.16, aeroStyle.frontRise));

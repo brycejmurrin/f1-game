@@ -112,11 +112,13 @@ test("every livery field a team names is one the renderer knows", () => {
   //   VCARB 03's bare-carbon flaps. Both are read by Car3D.build.
   //   lower (2026-10-03): the body below the sidepod line in a second colour
   //   (CarShade.lowerZone) — the MCL40's anthracite, the VF-26's black.
+  //   upper (2026-10-14): the body ABOVE that line (CarShade.upperZone) — the
+  //   W17's silver upper-chassis band over a black PRIMARY.
   const KNOWN = new Set(["cover", "finStyle", "finBadge", "finShape", "finArt", "fin",
     "sideTint", "spineHeight", "spineLogo", "spineSide", "spineTint", "saddleTint",
     "coverBind", "finHandoff", "tcam", "coverVents", "stripe",
     "noseStripe", "accent", "nose", "pod", "wing", "halo", "logo", "logo2", "logo3",
-    "finish", "numFont", "sponsors", "bodySplit", "rearWing", "wingCarbon", "lower"]);
+    "finish", "numFont", "sponsors", "bodySplit", "rearWing", "wingCarbon", "lower", "upper"]);
   for (const t of M.Teams.LIST) {
     if (!t.livery) continue;
     for (const k of Object.keys(t.livery)) {

@@ -24,6 +24,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -35,7 +36,7 @@ const DEFS = [
   { id: "sunAzim", def: 0, min: -180, max: 180 },
   { id: "lampLevel", def: 0.2, min: 0, max: 1 },
 ];
-function loadStore(weather, saved = null) {
+function loadStore(weather, saved = null, defs = DEFS) {
   const stored = { lightTune: saved }, writes = [];
   const st = { weather };
   const G = {
@@ -47,7 +48,7 @@ function loadStore(weather, saved = null) {
     state: "race", applyRaceSettings() {}, isWetRoad: () => true, initRainDrops() {},
   };
   const ctx = vm.createContext({
-    window: { LightPresets: {} }, LightTune: { TUNE_DEFS: DEFS, LT: {} },
+    window: { LightPresets: {} }, LightTune: { TUNE_DEFS: defs, LT: {} },
     Tracks: { LIST: [G.track.def] }, Math, JSON, Object, Array, Number, isFinite, console,
   });
   seedLog(ctx);
@@ -55,8 +56,96 @@ function loadStore(weather, saved = null) {
   const LS = vm.runInContext("LightStore", ctx);
   const store = LS.create(G);
   store.apply();
-  return { LS, store, st, stored, writes, LT: vm.runInContext("LightTune.LT", ctx) };
+  return { LS, store, st, stored, writes, ctx, G, LT: vm.runInContext("LightTune.LT", ctx) };
 }
+
+function bootTuner(weather = "wet", saved = null) {
+  const defs = [...DEFS, { id: "perChunkLights", def: 0, min: 0, max: 1 },
+    { id: "roadChunkLamps", def: 1, min: 0, max: 1 }]
+    .map((d) => ({ ...d, group: "LAMPS", label: d.id, step: 0.1 }));
+  const h = loadStore(weather, saved, defs), nodes = new Map(), storage = new Map();
+  const element = () => ({ children: [], dataset: {}, textContent: "", hidden: false,
+    classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {},
+    appendChild(child) { this.children.push(child); if (child.id) nodes.set(child.id, child); },
+    scrollIntoView() {}, focus() {}, setSelectionRange() {} });
+  const $ = (id) => { if (!nodes.has(id)) nodes.set(id, element()); return nodes.get(id); };
+  h.ctx.document = { createElement: element, getElementById: $, body: element() };
+  h.ctx.localStorage = { getItem: (k) => storage.get(k), removeItem: (k) => storage.delete(k) };
+  h.ctx.PerfGov = { autoShed: () => h.tier || 0 };
+  h.ctx.setTimeout = () => 1; h.ctx.clearTimeout = () => {};
+  h.ctx.ApexClipboard = { write: () => Promise.resolve(true) };
+  h.ctx.ltStore = h.store; h.ctx.LT = h.LT; h.ctx.gfx = { hasPerChunkLights: true }; h.ctx._perChunkOff = false;
+  // Exercise the real game setter's rising-edge latch clearing with the real store.
+  vm.runInContext(symbolSource("function setLightTune(id, v)"), h.ctx);
+  Object.assign(h.G, { $, els: {}, ltKey: h.store.key, setLightTune: h.ctx.setLightTune,
+    persistLightTune: h.store.persist, applyLightTune: h.store.apply,
+    setTimeOfDay: () => "dusk", weather: () => h.st.weather, gfx: h.ctx.gfx });
+  h.G._ltStore = h.store.profiles;
+  vm.runInContext(read("js/lighting/tuner-panel.js"), h.ctx);
+  h.panel = vm.runInContext("TunerPanel", h.ctx).create(h.G);
+  h.panel.buildLightTunePanel();
+  h.$ = $; h.storage = storage;
+  h.input = (id, value) => { const input = $("lt-in-" + id); input.value = String(value); input.oninput(); };
+  return h;
+}
+
+test("lighting-1: drag updates profile count and returning to baseline restores defaults without persistence", () => {
+  const h = bootTuner();
+  assert.match(h.$("lt-profile").textContent, /\(defaults\)/);
+  h.input("lampLevel", 0.6);
+  assert.match(h.$("lt-profile").textContent, /\(1 tuned\)/);
+  h.input("lampLevel", 0.2);
+  assert.match(h.$("lt-profile").textContent, /\(defaults\)/);
+  assert.deepEqual(h.writes, [], "input ticks do not persist");
+  h.$("lt-in-lampLevel").onchange();
+  assert.equal(h.writes.length, 1, "release persists once");
+});
+
+test("lighting-2: shared sun slot exports next to wet edits, distinguishes dry knobs, and loads once per key", () => {
+  for (const own of [false, true]) {
+    const saved = { "other|night|dry": { lampLevel: 0.4 }, "monaco|dusk|dry": { sunElev: 5, lampLevel: 0.8 } };
+    if (own) saved["monaco|dusk|wet"] = { lampLevel: 0.5 };
+    const h = bootTuner("wet", saved);
+    h.$("lt-copy").onclick();
+    const source = h.$("lt-json").value, ctx = vm.createContext({ window: {} });
+    vm.runInContext(source, ctx);
+    assert.deepEqual(host(ctx.window.LightEdits), saved, "storage keys and values are preserved");
+    assert.match(source, new RegExp(`THIS CONDITION[^\\n]*\\(${own ? 2 : 1} tuned\\)`));
+    assert.match(source, /SUN ANGLES[^\n]*every weather/);
+    assert.match(source, /Other knobs in this slot affect DRY only/);
+    assert.ok(source.indexOf('"monaco|dusk|dry"') < source.indexOf("EVERYTHING ELSE"));
+    if (own) assert.ok(source.indexOf('"monaco|dusk|wet"') < source.indexOf('"monaco|dusk|dry"'));
+    assert.equal(source.split('"monaco|dusk|dry"').length - 1, 1);
+  }
+});
+
+test("lighting-3: chunk knob edits refresh dependent notes, clear latch on rising edges, and keep gate precedence", () => {
+  const h = bootTuner();
+  assert.match(h.$("lt-v-roadChunkLamps").textContent, /needs PER-CHUNK LAMPS/);
+  h.input("perChunkLights", 0.5);
+  assert.doesNotMatch(h.$("lt-v-roadChunkLamps").textContent, /needs/);
+  h.input("perChunkLights", 0);
+  assert.match(h.$("lt-v-roadChunkLamps").textContent, /needs/);
+  h.ctx._perChunkOff = true; h.storage.set("apex26.perChunkOff", "1");
+  h.input("perChunkLights", 0.5);
+  assert.doesNotMatch(h.$("lt-v-roadChunkLamps").textContent, /held|needs/);
+  h.ctx._perChunkOff = true; h.storage.set("apex26.perChunkOff", "1");
+  h.panel.refreshLightTunePanel();
+  h.input("roadChunkLamps", 0); h.input("roadChunkLamps", 1);
+  assert.doesNotMatch(h.$("lt-v-perChunkLights").textContent, /held/);
+  h.tier = 2; h.ctx.gfx.hasPerChunkLights = false;
+  h.storage.set("apex26.perChunkOff", "1");
+  h.input("perChunkLights", 0.6);
+  assert.match(h.$("lt-v-roadChunkLamps").textContent, /not supported/);
+  h.ctx.gfx.hasPerChunkLights = true;
+  h.input("perChunkLights", 0.7);
+  assert.match(h.$("lt-v-roadChunkLamps").textContent, /display reset/);
+  h.storage.delete("apex26.perChunkOff");
+  h.input("perChunkLights", 0.8);
+  assert.match(h.$("lt-v-roadChunkLamps").textContent, /shed two tiers/);
+  assert.equal(h.$("lt-in-perChunkLights").value, "0.8", "active input is not reset");
+  assert.deepEqual(h.writes, [], "no persistence on drag ticks");
+});
 
 test("L8: RESET in the wet clears the sun edit the tuner filed under |dry, and the count agrees", () => {
   const h = loadStore("wet");
