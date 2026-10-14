@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { STAGE_DIRS, STAGE_ROOT_FILES } from "../../tools/desktop/stage-files.mjs";
 import {
@@ -67,5 +68,32 @@ test("stampStaged rewrites ?v=dev tags to content hashes", () => {
       "the public iframe must ship with the same content-hash policy as the game");
   } finally {
     fs.rmSync(dest, { recursive: true, force: true });
+  }
+});
+
+
+test("default desktop stages must match HEAD while explicit overrides stay intentional", () => {
+  const { resolveSiteDir } = createRequire(import.meta.url)("../../desktop/lib/site.cjs");
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-site-freshness-"));
+  const desktop = path.join(tmp, "desktop");
+  const dist = path.join(desktop, "dist-site");
+  const head = "a".repeat(40);
+  const prior = process.env.APEX_SITE_DIR;
+  delete process.env.APEX_SITE_DIR;
+  try {
+    fs.mkdirSync(dist, { recursive: true });
+    fs.writeFileSync(path.join(dist, "version.json"), '{"build":321}');
+    for (const stamp of ["", "b".repeat(40)]) {
+      fs.writeFileSync(path.join(dist, "index.html"), `<meta name="apex-sha" content="${stamp}">`);
+      assert.throws(() => resolveSiteDir(desktop, { head }), /stale dist-site.*npm run stage/);
+    }
+    fs.writeFileSync(path.join(dist, "index.html"), `<meta name="apex-sha" content="${head}">`);
+    assert.equal(resolveSiteDir(desktop, { head }), dist);
+    process.env.APEX_SITE_DIR = dist;
+    assert.equal(resolveSiteDir(desktop, { head: "b".repeat(40) }), dist);
+  } finally {
+    if (prior === undefined) delete process.env.APEX_SITE_DIR;
+    else process.env.APEX_SITE_DIR = prior;
+    fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
