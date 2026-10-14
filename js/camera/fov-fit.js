@@ -65,3 +65,4 @@ const CamFovFit = (function () {
     FOVY_MAX,
   };
 })();
+Object.freeze(CamFovFit);
