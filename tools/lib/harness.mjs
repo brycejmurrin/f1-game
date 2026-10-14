@@ -39,12 +39,13 @@
 // Dead local DISPLAY (:N with no /tmp/.X11-unix/XN) makes headless WebGL return
 // null — launchChromium clears it via clearDeadDisplay() unless headed or
 // APEX_KEEP_DISPLAY=1.
-import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { extname, join, normalize, relative, resolve, sep } from "node:path";
 
-import { chromiumPath } from "./chromium-path.mjs";
+import { chromiumPath, normalizeBrowserFlavor, resolveChromium } from "./chromium-path.mjs";
 
 const require = createRequire(import.meta.url);
 const _wgpuArgs = require("./webgpu-chrome-args.cjs");
@@ -129,6 +130,7 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const resources = new Set();
 let handlersInstalled = false;
 let pending = null;
+let shutdownEpoch = 0;
 
 function installHandlers() {
   if (handlersInstalled) return;
@@ -151,6 +153,19 @@ function track(entry) {
 
 const timeout = (ms) => new Promise((r) => { const t = setTimeout(r, ms); t.unref?.(); });
 
+async function boundedClose(close, force, ms = 5000) {
+  let timer;
+  try {
+    await Promise.race([
+      Promise.resolve().then(close),
+      new Promise((resolve) => { timer = setTimeout(resolve, ms); }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+    force();
+  }
+}
+
 /** Register an owned teardown resource (also supports bounded non-browser probes). */
 export function registerTeardownResource(entry) {
   if (!entry || typeof entry.close !== "function" || typeof entry.force !== "function") throw new TypeError("teardown resource requires close and force functions");
@@ -160,6 +175,7 @@ export function registerTeardownResource(entry) {
 /** Tear down every tracked server/browser, including resources acquired during shutdown. */
 export function shutdown() {
   if (!pending) {
+    shutdownEpoch++;
     pending = (async () => {
       do {
         const entries = [...resources];
@@ -178,19 +194,53 @@ export function shutdown() {
 }
 
 // ---- static server ------------------------------------------------------
+const stamp = (s) => [s.dev, s.ino, s.size, s.mtimeMs, s.ctimeMs].join(":");
+
+function snapshotFiles(base) {
+  const files = new Map();
+  const visit = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.name.startsWith(".") || ["node_modules", "artifacts", "scratch"].includes(e.name)) continue;
+      const file = join(dir, e.name);
+      if (e.isDirectory()) visit(file);
+      else if (e.isFile()) files.set(relative(base, file).split(sep).join("/"), stamp(statSync(file)));
+    }
+  };
+  visit(base);
+  return files;
+}
+
 /**
- * Serve `root` over HTTP from THIS process (async, unlike `python -m
- * http.server`, which serialises requests). Returns { port, url, close }.
+ * Serve `root` over HTTP from THIS process. Defaults to live bytes/no-store.
+ * Opt-in immutableAssets pins static file metadata, then verified in-memory
+ * bytes on first read. Its namespaced snapshotUrl permits immutable caching;
+ * absolute/root URLs still serve the same pinned bytes with no-store, so a
+ * game's absolute asset fetch cannot mix a mutable file into a snapshot run.
+ * Changed-before-first-read files fail 409. Start a new server/namespace after
+ * edits. Dynamic routes remain caller-owned and are never snapshot-cached.
+ * Returns { port, url, snapshotUrl, close }.
  */
 export async function startStaticServer(root, {
   port = 0,
   host = "127.0.0.1",
   route = null,
   allowPath = null,
+  immutableAssets = null,
 } = {}) {
   const base = resolve(root);
   const prefix = base + sep;
+  let snapshotPrefix = null, snapshot = null;
+  const cache = new Map();
+  if (immutableAssets) {
+    const namespace = immutableAssets.namespace ?? randomUUID();
+    if (typeof namespace !== "string" || !/^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$/.test(namespace)) {
+      throw new Error("immutableAssets.namespace must be a safe nonempty URL token");
+    }
+    snapshotPrefix = `/__apex_snapshot/${namespace}/`;
+    snapshot = snapshotFiles(base);
+  }
   const server = createServer((req, res) => {
+    res.setHeader("Cache-Control", "no-store");
     try {
       const url = new URL(req.url || "/", "http://127.0.0.1");
       // A caller-owned route gets first refusal — it is how a tool adds a
@@ -198,7 +248,11 @@ export async function startStaticServer(root, {
       // table and the path-escape check below. Returning true claims the
       // request; anything else falls through to the static path.
       if (route && route(req, res, url) === true) return;
-      const rel = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
+      const pinned = snapshotPrefix && url.pathname.startsWith(snapshotPrefix);
+      if (url.pathname.startsWith("/__apex_snapshot/") && !pinned) { res.writeHead(404).end("not found"); return; }
+      let rel = pinned ? url.pathname.slice(snapshotPrefix.length) : url.pathname;
+      if (!rel || rel === "/") rel = "/index.html";
+      else rel = decodeURIComponent(rel);
       const file = normalize(join(base, rel));
       if (!file.startsWith(prefix) && file !== base) { res.writeHead(403).end("forbidden"); return; }
       const local = relative(base, file).split(sep).join("/");
@@ -211,6 +265,27 @@ export async function startStaticServer(root, {
       }
       if (allowPath && allowPath(local, req, url) !== true) {
         res.writeHead(404).end("not found"); return;
+      }
+      if (snapshot) {
+        if (!["GET", "HEAD"].includes(req.method)) { res.writeHead(405, { "Cache-Control": "no-store" }).end("GET or HEAD required"); return; }
+        let item = cache.get(local);
+        if (!item) {
+          const expected = snapshot.get(local);
+          if (!expected) { res.writeHead(404).end("not in snapshot"); return; }
+          let current;
+          try { current = stamp(statSync(file)); } catch { current = null; }
+          if (current !== expected) { res.writeHead(409, { "Cache-Control": "no-store" }).end("snapshot changed; start a new snapshot"); return; }
+          const bytes = readFileSync(file);
+          if (stamp(statSync(file)) !== expected) { res.writeHead(409, { "Cache-Control": "no-store" }).end("snapshot changed during read"); return; }
+          item = { bytes, etag: `"${createHash("sha256").update(bytes).digest("hex")}"` };
+          cache.set(local, item);
+        }
+        const headers = { "Content-Type": MIME[extname(file).toLowerCase()] || "application/octet-stream",
+          "Cache-Control": pinned ? "private, max-age=31536000, immutable" : "no-store", ETag: item.etag };
+        if (req.headers["if-none-match"] === item.etag) { res.writeHead(304, headers).end(); return; }
+        res.writeHead(200, { ...headers, "Content-Length": item.bytes.length });
+        res.end(req.method === "HEAD" ? undefined : item.bytes);
+        return;
       }
       const st = statSync(file);
       if (!st.isFile()) { res.writeHead(404).end("not found"); return; }
@@ -245,40 +320,84 @@ export async function startStaticServer(root, {
   return {
     port: actual,
     url: `http://127.0.0.1:${actual}/`,
+    snapshotUrl: snapshotPrefix ? `http://127.0.0.1:${actual}${snapshotPrefix}` : null,
     async close() { resources.delete(entry); await entry.close(); },
   };
 }
 
 // ---- browser ------------------------------------------------------------
-function killGroup(owner) {
-  const child = owner.process();
-  const pid = child.exitCode == null && child.signalCode == null ? child.pid : null;
-  if (!pid) return;
+function killGroup(child, kill = process.kill.bind(process)) {
+  const pid = child?.pid;
+  if (!pid || child.exitCode != null || child.signalCode != null) return;
   // Playwright spawns the browser detached, so the negative pid reaps the whole
   // group — renderers, GPU process and chrome_crashpad included.
-  try { process.kill(-pid, "SIGKILL"); }
-  catch { try { process.kill(pid, "SIGKILL"); } catch {} }
+  try { kill(-pid, "SIGKILL"); }
+  catch { try { child.kill("SIGKILL"); } catch {} }
 }
 
-/** Retain the supported BrowserServer owner until graceful close settles. */
-export function trackBrowserOwner(browser, owner, entry = track({ close: () => owner.close(), force: () => killGroup(owner) })) {
-  const close = browser.close.bind(browser);
-  entry.close = () => browser.close();
-  browser.close = async (...args) => {
-    try { await close(...args); await owner.close(); }
-    finally { killGroup(owner); resources.delete(entry); }
+const browserLaunches = new WeakMap();
+export const chromiumLaunchInfo = (browser) => browserLaunches.get(browser) || null;
+const browserOwners = new WeakMap();
+
+/** Register ownership before connect, and retain it through graceful/forced close. */
+function ownBrowserServer(owner, { entry = null, closeTimeoutMs = 5000,
+  kill = process.kill.bind(process) } = {}) {
+  const existing = browserOwners.get(owner);
+  if (existing) return existing;
+  const child = owner.process();
+  let browserClose = null, closing = null, attached = null;
+  const force = () => {
+    killGroup(child, kill);
+    // BrowserServer.kill also releases its websocket listener. The owned child
+    // handle permits synchronous group cleanup in an exit handler.
+    try { Promise.resolve(owner.kill?.()).catch(() => {}); } catch {}
   };
-  return browser;
+  const close = (...args) => closing ||= boundedClose(async () => {
+    try { if (browserClose) await browserClose(...args); }
+    finally { await owner.close(); }
+  }, force, closeTimeoutMs).finally(() => resources.delete(entry));
+  entry ||= {};
+  entry.close = close; entry.force = force;
+  track(entry);
+  const control = { child, entry, close, get closing() { return closing; },
+    attach(browser) {
+      if (attached === browser) return browser;
+      if (attached) throw new Error("BrowserServer already owns another Browser facade");
+      attached = browser;
+      browserClose = browser.close.bind(browser);
+      browser.close = close;
+      browser.on?.("disconnected", () => { close().catch(() => {}); });
+      return browser;
+    } };
+  browserOwners.set(owner, control);
+  return control;
 }
 
-/** Owned Chromium server with a connected Browser facade and bounded teardown. */
-export async function launchChromium(opts = {}) {
-  const { chromium } = require("playwright");
-  const exe = pickChromium();
+/** Retain the supported BrowserServer owner until graceful close settles.
+ * A caller may pass its already-registered pre-connect entry. */
+export function trackBrowserOwner(browser, owner, entry) {
+  return ownBrowserServer(owner, { entry }).attach(browser);
+}
+
+/** Own BrowserServer's supported process handle while returning the usual Browser.
+ * https://playwright.dev/docs/api/class-browserserver#browser-server-process
+ * https://playwright.dev/docs/api/class-browsertype#browser-type-launch-server */
+export async function launchChromium(opts = {}, {
+  chromium = require("playwright").chromium, closeTimeoutMs = 5000, kill = process.kill.bind(process),
+} = {}) {
+  const startedEpoch = shutdownEpoch;
+  const { browserFlavor = "auto", ...launchOptions } = opts;
+  const flavor = normalizeBrowserFlavor(browserFlavor);
+  const selected = launchOptions.executablePath ? { path: launchOptions.executablePath, source: "option:executablePath" }
+    : resolveChromium({ browserFlavor: flavor });
+  if (!selected && flavor !== "auto") throw new Error(`requested ${flavor} browser is not installed`);
+  const exe = selected?.path;
   // Headless defaults true when omitted — same as Playwright. A dead DISPLAY
   // must be cleared before launch or WebGL never comes up (see clearDeadDisplay).
   const headed = opts.headless === false;
-  clearDeadDisplay({ headed });
+  const launchEnv = launchOptions.env ? { ...launchOptions.env } : process.env;
+  clearDeadDisplay({ headed, env: launchEnv });
+  if (launchOptions.env) launchOptions.env = launchEnv;
   const owner = await chromium.launchServer({
     ...(exe ? { executablePath: exe } : {}),
     // We own SIGINT/SIGTERM/SIGHUP (see file header): playwright's handlers close
@@ -286,15 +405,17 @@ export async function launchChromium(opts = {}) {
     handleSIGINT: false,
     handleSIGTERM: false,
     handleSIGHUP: false,
-    ...opts,
+    ...launchOptions,
+    host: "127.0.0.1",
   });
-  const entry = track({ close: () => owner.close(), force: () => killGroup(owner) });
-  try {
-    const browser = await chromium.connect(owner.wsEndpoint());
-    return trackBrowserOwner(browser, owner, entry);
-  } catch (error) {
-    killGroup(owner);
-    resources.delete(entry);
-    throw error;
-  }
+  const control = ownBrowserServer(owner, { closeTimeoutMs, kill });
+  let browser;
+  if (startedEpoch !== shutdownEpoch) { await control.close().catch(() => {}); throw new Error("browser acquisition interrupted by shutdown"); }
+  try { browser = await chromium.connect(owner.wsEndpoint(), { timeout: launchOptions.timeout || 30000 }); }
+  catch (err) { await control.close().catch(() => {}); throw err; }
+  if (control.closing) { await control.closing.catch(() => {}); throw new Error("browser acquisition interrupted by shutdown"); }
+  trackBrowserOwner(browser, owner, control.entry);
+  browserLaunches.set(browser, Object.freeze({ requestedFlavor: flavor, executablePath: exe || null,
+    source: selected?.source || "playwright-default", flavor: exe ? (/headless[-_]shell/.test(exe) ? "shell" : "chromium") : "playwright-default", pid: control.child.pid }));
+  return browser;
 }

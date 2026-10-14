@@ -13,6 +13,7 @@ import {
   RENDER_HEAVY_SPEC_IDS,
   captureCpuBudget,
   captureChromiumArgs,
+  captureGpuOptions,
 } from "../../tools/lib/browser-workers.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -54,6 +55,33 @@ test("capture launcher uses the same requested GL stack as the worker budget", (
   assert.ok(args.includes('--ignore-gpu-blocklist'));
   assert.ok(!args.includes('--use-angle=swiftshader'));
   assert.ok(!args.includes('--disable-frame-rate-limit'));
+});
+
+test("explicit GPU stacks avoid fallback pins and divide Mesa threads across workers", () => {
+  const hardware = captureGpuOptions({ gpu: 'hardware', env: { LIBGL_ALWAYS_SOFTWARE: '1', GALLIUM_DRIVER: 'llvmpipe', VK_DRIVER_FILES: '/lvp.json' } });
+  assert.ok(!hardware.args.some((arg) => arg.includes('swiftshader')));
+  assert.equal(hardware.env.LIBGL_ALWAYS_SOFTWARE, undefined);
+  assert.equal(hardware.env.GALLIUM_DRIVER, undefined);
+  assert.equal(hardware.env.VK_DRIVER_FILES, undefined);
+  const mesa = captureGpuOptions({ gpu: 'llvmpipe', env: {}, cpus: 8, workers: 4 });
+  assert.equal(mesa.env.LP_NUM_THREADS, '2');
+  assert.equal(mesa.env.LIBGL_ALWAYS_SOFTWARE, '1');
+  assert.equal(mesa.env.GALLIUM_DRIVER, 'llvmpipe');
+  assert.ok(mesa.args.includes('--use-angle=gl'));
+  assert.equal(captureGpuOptions({ gpu: 'llvmpipe', env: { LP_NUM_THREADS: '3' }, cpus: 8, workers: 4 }).env.LP_NUM_THREADS, '3');
+  assert.throws(() => captureGpuOptions({ gpu: 'llvmpipe', env: { LP_NUM_THREADS: 'bogus' } }), /LP_NUM_THREADS/);
+  assert.equal(defaultCaptureWorkers({ env: { APEX_GPU: 'hardware' }, cpus: 8 }), 4);
+  assert.equal(defaultCaptureWorkers({ env: { APEX_GPU: 'lavapipe' }, cpus: 4 }), 1);
+});
+
+test("lavapipe uses the current Vulkan loader override and rejects missing ICD", () => {
+  const gpu = captureGpuOptions({ gpu: 'lavapipe', env: { VK_ICD_FILENAMES: '/old.json' }, lavapipeIcd: '/lvp.json', exists: (file) => file === '/lvp.json', cpus: 4, workers: 2 });
+  assert.equal(gpu.env.VK_DRIVER_FILES, '/lvp.json');
+  assert.equal(gpu.env.VK_ICD_FILENAMES, undefined);
+  assert.equal(gpu.env.LP_NUM_THREADS, '2');
+  assert.ok(gpu.args.includes('--use-angle=vulkan'));
+  assert.throws(() => captureGpuOptions({ gpu: 'lavapipe', env: {}, exists: () => false }), /installed Mesa Vulkan ICD/);
+  assert.throws(() => captureGpuOptions({ gpu: 'other', env: {} }), /unsupported GPU/);
 });
 
 test("scriptIsRenderHeavy matches spec basenames, not substrings", () => {
