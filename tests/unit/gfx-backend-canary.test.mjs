@@ -6094,7 +6094,10 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   assert.match(glass, /m\.transparent = false;/);
   assert.match(glass, /m\.depthWrite = true;/);
   assert.match(glass, /m\.side = THREE\.DoubleSide;/);
-  assert.match(glass, /m\.colorNode = texture\(tex\)\.rgb;/, "sampled at the mesh uv: three flips a render target itself on WebGPU");
+  // three puts a render target's uv.y = 0 at its TOP on both paths; the mesh's
+  // v = 0 is the image bottom (gfx.js drawMirrorGlass) — sampled as given, the
+  // glass showed the rear view upside down (2026-10-13).
+  assert.match(glass, /m\.colorNode = texture\(tex, vec2\(st\.x, st\.y\.oneMinus\(\)\)\)\.rgb;/, "sampled at (u, 1 - v): a render target's uv.y = 0 is its top in three");
   assert.match(glass, /m\.opacityNode = float\(1\.0\);/);
   assert.doesNotMatch(glass, /trackFx|fxMaterial\(/, "not an FX material: no blend, no keep-dst ssrTag — the scene MRT's tag 1");
 });
