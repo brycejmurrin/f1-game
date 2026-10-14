@@ -920,9 +920,12 @@ body.hud-radio-top #announce:not([hidden]) {
 /* THE TOP-RIGHT CORNER, SECOND CHOICE (js/ui/hud.js radioUnderRight): under
    the tower's right end, beside CAM, anchored by its RIGHT edge so a short
    message still sits by the camera selector. body[data-radio-corner], not
-   hud-radio-top (see radioTopSlot); the doubled attribute outranks the caution
-   rules' :has(#hud-flag) step-down — the slot already clears the flag chip. */
-body[data-radio-corner][data-radio-corner] #announce:not([hidden]):not([data-lane-collapsed]) {
+   hud-radio-top (see radioTopSlot). It must outrank the caution rules'
+   :has(#hud-flag:not([hidden])) step-down, up to (2,5,1) under compact density
+   and later in the file: the same :has() term plus a quadrupled attribute make
+   this (2,6,1). The slot already clears the
+   flag chip, so stepping down under it would land the card on INPUTS. */
+body[data-radio-corner][data-radio-corner][data-radio-corner][data-radio-corner]:has(#hud-flag) #announce:not([hidden]):not([data-lane-collapsed]) {
   top: calc(var(--radio-top-y) / var(--hud-z));
   left: auto;
   right: calc(var(--radio-top-r) / var(--hud-z));
