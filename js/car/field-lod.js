@@ -16,7 +16,7 @@
 
 const FieldLod = (function () {
   const T = Object.freeze({
-    WHEEL_EXTRAS_M: 50,   // beyond: the 4 rotating wheels only (no fixed layers, spin discs, compound stripes)
+    WHEEL_EXTRAS_M: 50,   // beyond: drop spin discs; keep the fixed disc/caliper + compound stripe (open-rim fill) until NO_DECAL_M
     FLAPS_M: 80,          // MOVING active-aero flaps within (was 150); beyond, one static set (never none)
     FLAME_M: 60,          // throttle-lift exhaust flame within (was ungated)
     NO_DECAL_M: 120,      // beyond: no livery decal (body + the 4 rotating wheels). Not a whole-car
@@ -65,8 +65,10 @@ const FieldLod = (function () {
     if (!sticky) return d2 > sq(m);
     return beyond ? d2 >= sq(m) * HYST_IN : d2 > sq(m) * HYST_OUT;
   }
-  // 0 full detail, 1 lite wheels (beyond WHEEL_EXTRAS_M), 2 lite wheels and no
-  // decal (beyond NO_DECAL_M) — in reference-lens metres when fovY is given.
+  // 0 full detail, 1 lite wheels (beyond WHEEL_EXTRAS_M: no spin discs; fixed
+  // disc/caliper + compound stripe stay for the open-rim look), 2 lite wheels
+  // and no decal (beyond NO_DECAL_M: rotating wheels only) — in reference-lens
+  // metres when fovY is given.
   function tier(dist2, fovY, car) {
     if (!on) return 0;
     const d2 = dist2 * lensK2(fovY);
@@ -97,12 +99,19 @@ const FieldLod = (function () {
     return kept;
   }
   // What a rival at dist2 draws — the table above as one record (tests, __apex).
+  // Lite (tier 1) keeps the fixed brake disc/caliper layer and the compound
+  // sidewall stripe so open-rim spokes do not read hollow past WHEEL_EXTRAS_M;
+  // spin discs stay near-only. Far (tier 2) drops fixed + compound again.
   function parts(dist2, isPlayer) {
     const t = isPlayer ? 0 : tier(dist2), lite = !isPlayer && wheelsLite(dist2);
+    const keepFixed = isPlayer || t < 2;   // tiers 0+1; far (2) = rotating wheels only
     return {
       tier: t, body: true, decal: t < 2, wheels: true,
-      fixedWheels: !lite, spinDisc: !lite && (isPlayer || dist2 < sq(120)),
-      compound: !lite && (isPlayer || dist2 < sq(60)),
+      fixedWheels: keepFixed,
+      spinDisc: !lite && (isPlayer || dist2 < sq(120)),
+      // Near (tier 0): compound within 60 m (long-lens near can sit past 50 m).
+      // Lite (tier 1): always — the open-rim sidewall cue at mid range.
+      compound: keepFixed && (isPlayer || t > 0 || dist2 < sq(60)),
       flaps: isPlayer || dist2 < sq(flapsM()), flapSet: true,   // flaps: can MOVE; the set: always drawn
       flame: isPlayer || flame(dist2),
       castsShadow: isPlayer || castsShadow(dist2),
