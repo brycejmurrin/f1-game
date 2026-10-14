@@ -99,6 +99,10 @@ function delayedCareer() {
   const ui = sb.CareerUI.create({
     $: (id) => dom.byId(id), els: { overlay: dom.byId("overlay") },
     announce: (message) => messages.push(message),
+    refreshCareerButton() {
+      dom.byId("mb-career-sub").textContent = "DRIVER CAREER · MY TEAM";
+      dom.byId("mb-career").setAttribute("aria-label", "Career modes — DRIVER CAREER · MY TEAM");
+    },
   });
   function complete() {
     sb.CareerScreen = { create: () => ({
@@ -122,8 +126,12 @@ for (const failure of ["refused", "rejected"]) {
     assert.equal(h.dom.byId("overlay").hidden, false, "menu returns after the title door hid it");
     assert.equal(h.dom.byId("career").hidden, true);
     assert.match(h.messages[0], /COULD NOT LOAD.*TRY AGAIN/);
+    assert.match(h.dom.byId("mb-career-sub").textContent, /COULD NOT LOAD.*TRY AGAIN/, "the title button carries the visible notice");
+    assert.match(h.dom.byId("mb-career").getAttribute("aria-label"), /could not load.*Try again/);
     h.dom.byId("overlay").hidden = true;
     const retry = h.ui.openSlots("title");
+    assert.equal(h.dom.byId("mb-career-sub").textContent, "DRIVER CAREER · MY TEAM", "retry restores the career summary");
+    assert.doesNotMatch(h.dom.byId("mb-career").getAttribute("aria-label"), /could not load/);
     assert.equal(h.pending.length, 1, "failed promise is not cached");
     h.complete();
     await retry;
