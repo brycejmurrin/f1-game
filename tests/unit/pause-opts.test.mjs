@@ -164,9 +164,9 @@ test("shell declares the PAUSE MENU fold shell; rows mount via SettingRow.build"
     assert.doesNotMatch(SHELL, new RegExp(`id="${id}"`), id + " stays out of the shell");
   }
   assert.doesNotMatch(SHELL, /id="pm-pausemenu-help"/);
-  // Placed after MOTION and before the TITLE SCREEN fold, inside APPEARANCE.
+  // Placed after GENERAL and before the TITLE SCREEN fold, inside APPEARANCE.
   const at = (s) => SHELL.indexOf(s);
-  assert.ok(at('id="pm-motion-help"') < at('id="pm-pausemenu"'));
+  assert.ok(at('id="pm-general"') < at('id="pm-pausemenu"'));
   assert.ok(at('id="pm-pausemenu"') < at('id="pm-titlescreen"'));
   assert.ok(at('id="pm-panel-appearance"') < at('id="pm-pausemenu"'));
 });
