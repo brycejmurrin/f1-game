@@ -1,1 +1,0 @@
-1791962637	Bryce Murrin	Root coordinated bank-height camera fix. OWNED js/camera/director.js + tests/unit/director.test.mjs ONLY. Excludes results-cam.js (#1496), game.js, generated/contracts. No browser/merge/push.  [cursor/director-bank-c41a; session 24a5f5fcb941f9ab14a0daf6]
