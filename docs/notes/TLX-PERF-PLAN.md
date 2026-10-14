@@ -142,7 +142,7 @@ young-gen garbage per frame, in 4-5 shapes (polymorphic).
 L0 → L1 (L1b only if needed) → G1 → R1 → P2. Every step: `npm run test:tooling-fast`,
 the braking compile probe (`scratch/compile-attrib-probe.mjs`: lap sync compiles stay 0),
 frozen A/B, then a census. The census driven window is DAY montreal; L0, L1 and G1 need a
-night leg (`"tod": "night"` in `.github/gpu-census-request.json`).
+night leg (dispatch with `-f tod=night`).
 
 ## Results log
 

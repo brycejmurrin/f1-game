@@ -192,6 +192,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-settle.test.mjs",
   "tests/unit/career-ui-lazy.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
+  // gpu-census.yml's real-GPU Verdict as functions (tools/gfx/census-verdict.mjs)
+  // plus its nightly skip gate executed on a scratch repo; < 1 s, no browser.
+  "tests/unit/census-verdict.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
   "tests/unit/change-kind.test.mjs",
   "tests/unit/changed-files.test.mjs",

@@ -18,4 +18,4 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [User plays on a phone](user-plays-on-phone.md) — reproduce HUD/UI reports at phone-landscape-844x390 with touch first, not desktop
 - [Parallel survey and review](parallel-survey-and-review.md) — UI/HUD reports: background apex survey job + ≤2 read-only review agents in parallel; plan as a docs/notes file on the PR branch
 - [Foreground wait loop killed (137)](foreground-wait-loop-killed.md) — never block a foreground Bash on a multi-minute background run; end the turn and take the notification
-- [gpu-census: one run per branch](gpu-census-one-run-per-branch.md) — a second dispatch cancels the first; dispatch A/B arms sequentially, pair ≥2 runs per arm, read counts not fps
+- [gpu-census: one run per branch](gpu-census-one-run-per-branch.md) — a second dispatch queues, a third replaces it; dispatch A/B arms sequentially, pair ≥2 runs per arm, read counts not fps

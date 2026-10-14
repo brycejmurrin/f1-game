@@ -148,10 +148,10 @@ already written down.
 - **`macos-latest` is real hardware.** The census measured it: apple/Metal,
   `anyHardware: true`, 2 GiB `maxBufferSize` against SwiftShader's 1,
   `shader-f16` and `subgroups` present (`CI-RENDERING-PERFORMANCE.md`).
-- **An agent can trigger it.** `workflow_dispatch` is a 403 for a GitHub App
-  token, but `gpu-census.yml` also fires on a push of
-  `.github/gpu-census-request.json` to a `claude/**` branch, and runs THAT
-  branch's tree.
+- **An agent can trigger it.** Dispatch `gpu-census.yml` on the branch
+  (`gh workflow run` or the GitHub MCP `actions_run_trigger`); it runs THAT
+  branch's tree. (The 2026-09-09 push-request file was retired 2026-10-14 —
+  every request had become a dispatch.)
 
 And a framing correction the workflow's name invites: **this gate is about
 main-thread JavaScript, not the GPU.** Conditions 1 and 3 need only a real CPU.
