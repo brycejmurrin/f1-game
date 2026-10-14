@@ -2781,7 +2781,8 @@ async function startRaceBody() {
   const handoff = (loadingScreen.active() || loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !!player;
   clearMenuScreens(); garagePre.release();
   if (handoff) RaceEntryProfile.raiseHandoff(loadingScreen);
-  RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
+  // Meshes HERE, not on the first countdown frame — stepped (≤ 1 heavy piece per task, apex26.carWarmSlice; 0 = one sync task).
+  await RaceEntryProfile.spanAsync("warmCarAssets", () => warmCarAssetsAsync(() => !stale())); if (stale()) return false;
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
   // TLX links programs on first draw — warm during LIGHTS only when the pack is
@@ -3613,7 +3614,7 @@ const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setT
 const carDraw = CarDraw.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali });
 const { teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh, teamDecalState, carDecalNum,
         drawCarDecals, queueCarDecals, drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig,
-        warmCarAssets, prepareMenuCarAssets } = carDraw;
+        warmCarAssetsAsync, prepareMenuCarAssets } = carDraw;
 _pitCrewDrawn = pitCrewDrawn;   // __apex.pit() reads G.pitCrewDrawn to prove the crew mesh submitted
 
 // The garage setup-preview camera and its #cs-view controls
