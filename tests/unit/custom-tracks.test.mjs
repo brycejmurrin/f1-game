@@ -558,3 +558,33 @@ test("overlapping share-link decodes only open and strip the latest fragment", a
   pending.get("A")({ ok: true, design: { name: "A" } }); assert.equal(await first, false);
   assert.deepEqual(opened, ["B"]); assert.equal(stripped.length, 1);
 });
+
+test("share-link decode that finishes mid-race keeps the fragment for a later title return", async () => {
+  const b = boot(); const pending = new Map(), opened = [], stripped = [];
+  let racing = false;
+  b.ctx.ApexRoster = { LAZY_EDITOR: ["editor"], LAZY_EDITOR_EDGES: [] };
+  b.ctx.UiLayers = { inRace: () => racing };
+  b.ctx.TrackDesigner = { init() {}, open: (opts) => opened.push(opts.design.name) };
+  b.ctx.TrackCodec = {
+    fromHash: (hash) => hash.slice(7),
+    decode: (code) => new Promise((resolve) => pending.set(code, resolve)),
+    withoutTrack: () => "",
+  };
+  b.ctx.location = { hash: "#track=SAME", pathname: "/", search: "" };
+  b.ctx.history = { replaceState: (...args) => stripped.push(args) };
+  b.C.create({}, { load: async () => true });
+  const hold = b.C.consumeTrackHash();
+  await Promise.resolve(); await Promise.resolve();
+  racing = true;
+  pending.get("SAME")({ ok: true, id: "SAME", design: { name: "SAME" } });
+  assert.equal(await hold, null, "deferred while a race owns the layer");
+  assert.deepEqual(opened, [], "designer must not open over a live race");
+  assert.equal(stripped.length, 0, "fragment stays for quitToMenu re-consume");
+  assert.equal(b.ctx.location.hash, "#track=SAME");
+  racing = false;
+  const again = b.C.consumeTrackHash();
+  await Promise.resolve(); await Promise.resolve();
+  pending.get("SAME")({ ok: true, id: "SAME", design: { name: "SAME" } });
+  assert.equal(await again, true);
+  assert.deepEqual(opened, ["SAME"]);
+});

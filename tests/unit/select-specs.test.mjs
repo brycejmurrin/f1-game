@@ -1066,6 +1066,19 @@ test("partitionMegaSweepArgs peels terrain-over-road out of a packed circuits ar
   assert.deepEqual(megaSoloFlags(packed), ["--timeout=900000", "--workers=1"]);
 });
 
+test("megaSoloFlags keeps separate flag/value pairs after dropping --shard", () => {
+  // Space-form values must survive peel; equals-form stays a single token.
+  const aero = "tests/specs/aero-zones.spec.js";
+  assert.deepEqual(
+    megaSoloFlags(["--workers=1", "--grep-invert", "x", "--shard=2/4", aero]),
+    ["--workers=1", "--grep-invert", "x"],
+  );
+  assert.deepEqual(
+    megaSoloFlags(["--shard", "1/3", "--retries", "0", "--timeout=180000"]),
+    ["--retries", "0", "--timeout=180000"],
+  );
+});
+
 test("solo oversize mega keeps --shard (selected gate does not peel itself)", () => {
   // PR #1113 / #1109: select-specs already shards tlx-probes 1/3. Peeling the
   // lone file dropped --shard (megaSoloFlags) and ran all 17 tests on shard 1

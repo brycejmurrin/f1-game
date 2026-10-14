@@ -167,6 +167,33 @@ test("a retained highlights control cannot acquire an online session", () => {
   assert.equal(replay.isScrubbing(), false);
 });
 
+test("HIGHLIGHTS button stays hidden when ReplayBuf has no scrubbable footage", () => {
+  const nodes = new Map();
+  const menu = { parentNode: { insertBefore(el) { nodes.set(el.id, el); } } };
+  nodes.set("res-menu", menu);
+  const document = {
+    getElementById: (id) => nodes.get(id) || null,
+    createElement: (tag) => ({
+      tagName: tag, id: "", hidden: false, disabled: false, title: "",
+      type: "", textContent: "", onclick: null,
+    }),
+  };
+  const R = boot({ document });
+  const car = { finPos: 1, s: 0, px: 0, pz: 0 };
+  const G = { player: car, cars: [car], gfx: {},
+    camVantage: () => ({ eye: [0, 5, -10], tgt: [0, 0, 0] }) };
+  const camera = R.create(G);
+  camera.attachReplay({ window: () => ({ t0: 0, t1: 0, frames: 0 }), tags: () => [],
+    beginScrub: () => true, apply() {}, endScrub() {} });
+  camera.onFlag();
+  const btn = nodes.get("res-highlights");
+  assert.ok(btn, "ensureHighlightsButton creates the control");
+  assert.equal(btn.hidden, true, "empty ReplayBuf must not offer HIGHLIGHTS");
+  assert.equal(btn.disabled, true);
+  assert.match(btn.title, /No recorded footage/i);
+  assert.equal(camera.startHighlights(), false);
+});
+
 test("highlights frame the tagged car after posing, including a retirement, then return to the winner", () => {
   const R = boot(), winner = { finPos: 1, s: 10, px: 10, pz: 0 }, retired = { finPos: 2, retired: true, s: 800, px: 800, pz: 0 };
   const G = { player: winner, cars: [winner, retired], gfx: {},

@@ -473,6 +473,11 @@ const CustomTracks = (function () {
       if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) return Promise.resolve(null);
       const r = _ret; _ret = null;
       return ensureEditor().then((ok) => {
+        // Mid-race after the await: re-arm and wait; do not open the designer.
+        if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) {
+          _ret = r;
+          return null;
+        }
         if (!ok || typeof TrackDesigner === "undefined") return false;
         Log.info("track", "back from the test drive on " + r.id);
         TrackDesigner.open({ resume: r });
@@ -489,6 +494,12 @@ const CustomTracks = (function () {
       let code = null;
       try { code = TrackCodec.fromHash(hash); } catch (_) { code = null; }
       const r = code ? await TrackCodec.decode(code) : { ok: false, reason: "malformed" };
+      // A race that started while we awaited must keep the fragment for a later
+      // title return — same ownership check as the pre-await gate above.
+      if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) {
+        Log.info("track", "share link deferred: racing after decode");
+        return null;
+      }
       if (generation !== hashGeneration || location.hash !== hash) return false;
       try { history.replaceState(history.state, "", location.pathname + location.search + TrackCodec.withoutTrack(hash)); } catch (_) { /* a sandboxed page */ }
       if (!r.ok) { Log.warn("track", "share link refused: " + r.reason); return false; }

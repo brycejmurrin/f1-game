@@ -409,7 +409,8 @@ export function megasForThisShard(args, mega, db) {
 }
 
 /** Flags to keep when launching a peeled mega solo (drop --shard so Playwright
- *  does not skip the only file). */
+ *  does not skip the only file). Separate flag/value pairs (--grep-invert x)
+ *  stay paired; equals-form (--workers=1) is unchanged. */
 export function megaSoloFlags(args) {
   const out = [];
   const list = args || [];
@@ -419,7 +420,12 @@ export function megaSoloFlags(args) {
       if (a === "--shard") i++;
       continue;
     }
-    if (a.startsWith("-")) out.push(a);
+    if (!String(a).startsWith("-")) continue;
+    out.push(a);
+    // Non-equals long/short flags take the next bare token as their value.
+    if (!/=/.test(a) && i + 1 < list.length && !String(list[i + 1]).startsWith("-")) {
+      out.push(list[++i]);
+    }
   }
   return out;
 }

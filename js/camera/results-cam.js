@@ -201,15 +201,30 @@ const ResultsCam = (function () {
       }
       return false;
     }
+    /** True when ReplayBuf has a scrubbable window startHighlights can acquire. */
+    function footageReady() {
+      const buf = replayApi;
+      if (!buf || !buf.window) return false;
+      const w = buf.window();
+      return !!(w && w.frames > 2 && w.t1 > w.t0);
+    }
     function ensureHighlightsButton() {
       if (typeof document === "undefined") return;
+      const show = live() && allowed() && footageReady();
       const existing = document.getElementById("res-highlights");
-      if (existing) { existing.hidden = !live() || !allowed(); return; }
+      if (existing) {
+        existing.hidden = !show;
+        existing.disabled = !show;
+        existing.title = show ? "" : "No recorded footage for highlights";
+        return;
+      }
       const menu = document.getElementById("res-menu");
       if (!menu || !menu.parentNode) return;
       const b = document.createElement("button");
       b.id = "res-highlights";
-      b.hidden = !live() || !allowed();
+      b.hidden = !show;
+      b.disabled = !show;
+      b.title = show ? "" : "No recorded footage for highlights";
       b.type = "button";
       b.textContent = "HIGHLIGHTS";
       b.onclick = () => { startHighlights(); };
