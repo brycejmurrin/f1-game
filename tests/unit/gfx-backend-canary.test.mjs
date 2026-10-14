@@ -1389,6 +1389,28 @@ test("the Verdict prints the rAF gap view the spike rows cannot see (hunt 4 §A 
   assert.match(r.out, /gaps:  no rAF gap >= 500 ms/, "a clean leg says so rather than printing nothing");
 });
 
+test("the Verdict names the race-entry span each long task fell in, from the saved marks (hunt 4 B-F3.3)", async () => {
+  // Hunter B inferred warmCarAssets' 1.1-2.1 s single tasks from timing: the
+  // census saved raceProfile() legs as durations and never the marks. The
+  // fixture is the analyser's OWN output, so the row and the JSON cannot drift.
+  const { analyseRaceEntrySpans } = await import("../../tools/gfx/frame-hitch.mjs");
+  const ggc = read("tools/gfx/gpu-game-check.mjs");
+  assert.match(ggc, /out\.raceEntryProfile = await bounded\(/, "the tool must save the raceEntryProfile snapshot");
+  assert.match(ggc, /winT0: s\.windowMs > 0 \? \+\(\(a \+ b\) \/ 2 - s\.windowMs\)/, "marks are relative: the window origin must be joined to the page clock");
+  assert.match(ggc, /out\.raceEntrySpans = d \? analyseRaceEntrySpans\(/);
+  const raceEntrySpans = analyseRaceEntrySpans({
+    rep: { winT0: 100, legs: [{ n: "resets", ms: 500 }], marks: [{ n: "warmCarAssets:start", t: 600 }, { n: "warmCarAssets:end", t: 2700 }, { n: "end", t: 2800 }] },
+    censusMarks: { raceCall: 100 }, longTasks: [[705, 2090], [3000, 80]], gaps: [] });
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: { ...tlxLegJson(), raceEntrySpans }, webgl2: tlxLegJson(),
+    glx: { ...glxLegJson(), raceEntrySpans: { note: "no raceEntryProfile snapshot — no __apex.raceEntryProfile — this build predates it" } }, wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /marks: 1 long task\(s\) \(2090 ms\) \+ 0 rAF gap\(s\) in 2800 ms of race entry; warmCarAssets 2090 ms\/1/);
+  assert.match(r.out, /2090 ms longtask at \+605 ms -> warmCarAssets \(100%\) \| after warmCarAssets:start \(\+5 ms\), before warmCarAssets:end/);
+  assert.match(r.out, /marks: no raceEntryProfile snapshot — no __apex\.raceEntryProfile/, "an unmeasured leg says why");
+});
+
 test("the GPU gate fails a hardware TLX leg that stopped reporting an env count", () => {
   // `(env.fail || 0) > 0` was the SAME banned shape as the gpuErrors fix twelve
   // lines above it in the same file, on the same object: a build that stops

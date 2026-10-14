@@ -600,6 +600,20 @@ jobs:
               } else if (_gw && (_gw.summary || _gw.note)) {
                 rows.push(`${" ".repeat(8)}gaps:  ${_gw.summary || _gw.note}`);
               }
+              // RACE ENTRY BY NAMED SPAN (hunt 4 B-F3.3): each long task and rAF
+              // gap from race() to the end of race entry, placed in the
+              // RaceEntryProfile leg / mark span / TLX warm stage it overlaps
+              // most — measured, where hunter B had to infer it from timing.
+              const _rs = g.raceEntrySpans;
+              if (_rs && _rs.events) {
+                rows.push(`${" ".repeat(8)}marks: ${_rs.summary}`);
+                for (const x of _rs.events.slice(0, 6)) {
+                  rows.push(`${" ".repeat(8)}  ${String(x.ms).padStart(7)} ms ${x.kind.padEnd(8)} at +${x.atMs} ms -> ${x.span ? `${x.span} (${Math.round(100 * x.share)}%)` : "(no span)"}` +
+                    (x.also && x.also.length ? ` also ${x.also.join(", ")}` : "") + ` | after ${x.after || "-"}, before ${x.before || "-"}`);
+                }
+              } else if (_rs && _rs.note) {
+                rows.push(`${" ".repeat(8)}marks: ${_rs.note}`);
+              }
               // THE DRIVEN WINDOW (hunt 4 I4), in game frames from LoopHealth:
               // the number to compare across legs and runs. The gov row below
               // is the END-of-run ring, which also holds the frozen A/B frames

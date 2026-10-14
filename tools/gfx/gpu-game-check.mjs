@@ -35,7 +35,7 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork } from "./frame-hitch.mjs";
+import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans } from "./frame-hitch.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
 // `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
@@ -796,6 +796,25 @@ try {
     const m = t && t.memState ? t.memState() : null;
     return m && m.warm ? m.warm : null;
   }), 10000, "warm-read").catch(() => null);
+  // THE RACE-ENTRY MARKS (hunt 4 B-F3.3). raceProfile() below keeps the legs as
+  // durations only, so hunter B could name warmCarAssets' 1.1-2.1 s tasks from
+  // timing alone. Save the whole snapshot — legs, marks (ms from the window's
+  // begin) — with the window origin on the page clock, which the snapshot does
+  // not carry: windowMs is now() - winT0 at the read, so winT0 is the read's
+  // midpoint minus windowMs, good to clockErrMs. analyseRaceEntrySpans (below,
+  // with the gaps) then names the span each long task and rAF gap fell in.
+  // Read here, after the race gate: the window has ended (present:ready + 2
+  // frames) and nothing later in this run begins another.
+  out.raceEntryProfile = await bounded(() => page.evaluate(() => {
+    const A = window.__apex;
+    if (!A || typeof A.raceEntryProfile !== "function") return { note: "no __apex.raceEntryProfile — this build predates it" };
+    const a = performance.now(); const s = A.raceEntryProfile(); const b = performance.now();
+    if (!s) return { note: "raceEntryProfile() returned null — RaceEntryProfile is not loaded" };
+    return { supported: s.supported, armed: s.armed, windowMs: s.windowMs,
+      winT0: s.windowMs > 0 ? +((a + b) / 2 - s.windowMs).toFixed(2) : null, clockErrMs: +((b - a) / 2).toFixed(3),
+      blockMs: s.blockMs, maxBlockMs: s.maxBlockMs, longTasks: Array.isArray(s.longTasks) ? s.longTasks.length : null,
+      legs: s.legs || [], marks: s.marks || [] };
+  }), 10000, "race-entry-profile");
   if (drive && out.race.reached) {
     out.race.driver = await bounded(() => page.evaluate(() => {
       if (!window.__gcDrive) return "absent";
@@ -938,6 +957,9 @@ try {
     // work of the step before it (hunt 4 §A gap ii), whether or not armed.
     out.gapWork = d ? analyseGapWork(d.gaps || [], { marks: d.marks, win: d.win, longTasks: d.longTasks })
       : { note: "no recorder on this leg" };
+    // THE SAME GAPS AND LONG TASKS, NAMED BY RACE-ENTRY SPAN (hunt 4 B-F3.3).
+    out.raceEntrySpans = d ? analyseRaceEntrySpans({ rep: out.raceEntryProfile, warm: out.race && out.race.warm,
+      censusMarks: d.marks, gaps: d.gaps || [], longTasks: d.longTasks || [], win: d.win }) : { note: "no recorder on this leg" };
     if (!d || !d.dur || d.dur.length < 30) return { note: "no rAF series — the recorder never armed, or the leg drew too few frames" };
     const a = analyse(d.t0, d.dur);
     // The pass census rides the same series: same frames, same window, so

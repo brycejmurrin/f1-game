@@ -386,6 +386,113 @@ export function analyseGapWork(gaps, { marks = {}, win = null, longTasks = [] } 
       + `worst ${w.gapMs} ms [${w.phase}], ${w.prevFrameMs} ms of it in the step before, ${w.longTaskMs} ms in long tasks` };
 }
 
+// RACE-ENTRY SPANS (hunt 4 B-F3.3). Hunter B read `warmCarAssets` as 1.1-2.1 s
+// single tasks from TIMING alone: the census saved RaceEntryProfile's legs as
+// durations and never its marks, so no long task or rAF gap could be placed in
+// a named span. This builds absolute spans from the snapshot gpu-game-check
+// saves (`rep`: { winT0, legs [{n, ms}], marks [{n, t}] }, t relative to
+// winT0) and from TLX's warm timeline (`warm`: { at, scene, fx, post, shadow,
+// mirror, draw, total }, sequential stage ms from `at`), then names, for every
+// long task and every rAF gap between race() and the end of race entry, the
+// span it overlaps most (ties go to the SHORTER span, so a mark span nested in
+// a leg wins; the warm's own envelope only when no stage overlaps). Legs are
+// cumulative from winT0: RaceEntryProfile.lap() times each leg from the
+// previous one, and begin() starts that clock at winT0. `censusMarks` are
+// gpu-game-check's own page marks (raceCall, trackReady, parked). Every event
+// also names the marks either side of it, so one in no span is still placed.
+const LEG_LABEL = { resets: "resets (ensureRaceSession + ensureAudio lazy bundles)", settings: "settings (applyRaceSettings)",
+  loadTrack: "loadTrack (paced build)", scenery: "scenery (ensureScenery + yield)" };
+const WARM_STAGES = ["scene", "fx", "post", "shadow", "mirror", "draw"];
+export function raceEntrySpanList(rep, warm) {
+  const spans = [], points = [];
+  if (rep && typeof rep.winT0 === "number") {
+    let cum = rep.winT0;
+    for (const l of Array.isArray(rep.legs) ? rep.legs : []) {
+      if (!l || !(l.ms >= 0)) continue;
+      spans.push({ n: "leg:" + (LEG_LABEL[l.n] || l.n), kind: "leg", t0: cum, t1: cum + l.ms });
+      cum += l.ms;
+    }
+    const marks = (Array.isArray(rep.marks) ? rep.marks : []).filter((m) => m && typeof m.t === "number")
+      .map((m) => ({ n: String(m.n), at: rep.winT0 + m.t }));
+    const lastAt = marks.length ? marks[marks.length - 1].at : rep.winT0;
+    marks.forEach((m, i) => {
+      points.push(m);
+      if (!/:start$/.test(m.n)) return;
+      const base = m.n.slice(0, -6);
+      const e = marks.slice(i + 1).find((x) => x.n === base + ":end");
+      // An unclosed span (the run died inside it) runs to the last mark, flagged open.
+      spans.push(e ? { n: base, kind: "span", t0: m.at, t1: e.at } : { n: base, kind: "span", t0: m.at, t1: lastAt, open: true });
+    });
+  }
+  if (warm && typeof warm.at === "number" && warm.at > 0) {
+    let cum = warm.at;
+    for (const k of WARM_STAGES) {
+      const v = warm[k];
+      if (typeof v !== "number" || !(v >= 0)) continue;
+      spans.push({ n: "warm:" + k, kind: "warm", t0: cum, t1: cum + v });
+      cum += v;
+    }
+    if (typeof warm.total === "number") spans.push({ n: "warm (other)", kind: "envelope", t0: warm.at, t1: warm.at + warm.total });
+  }
+  return { spans, points };
+}
+export function analyseRaceEntrySpans({ rep = null, warm = null, censusMarks = {}, gaps = [], longTasks = [], win = null } = {}, topN = 12) {
+  if (!rep || rep.note || rep.error) return { note: "no raceEntryProfile snapshot — " + ((rep && (rep.note || rep.error)) || "not read") };
+  if (typeof rep.winT0 !== "number") return { note: "raceEntryProfile has no window origin (never armed) — nothing to place events in" };
+  const { spans, points } = raceEntrySpanList(rep, warm);
+  const cm = censusMarks || {};
+  for (const k of Object.keys(cm)) if (typeof cm[k] === "number") points.push({ n: "census:" + k, at: cm[k] });
+  points.sort((a, b) => a.at - b.at);
+  // From race() (RACE!) to the later of the profile's last mark (present:ready,
+  // end) and the census arming its window: the whole of race entry.
+  const from = typeof cm.raceCall === "number" ? cm.raceCall : rep.winT0;
+  const ends = [rep.winT0 + (Array.isArray(rep.marks) ? rep.marks : []).reduce((m, x) => (x && typeof x.t === "number" && x.t > m ? x.t : m), 0)];
+  if (win && typeof win.t0 === "number") ends.push(win.t0);
+  const to = Math.max(...ends);
+  const events = [];
+  for (const t of Array.isArray(longTasks) ? longTasks : []) {
+    if (Array.isArray(t) && t[0] + t[1] > from && t[0] < to) events.push({ kind: "longtask", t0: t[0], t1: t[0] + t[1] });
+  }
+  for (const g of Array.isArray(gaps) ? gaps : []) {
+    if (g && g.at + g.gapMs > from && g.at < to) events.push({ kind: "gap", t0: g.at, t1: g.at + g.gapMs, prevFrameMs: g.prevFrameMs });
+  }
+  const r1 = (x) => +x.toFixed(1);
+  const bySpan = {};
+  let taskMs = 0, unattributedMs = 0;
+  const rows = events.map((e) => {
+    const ms = e.t1 - e.t0;
+    const hits = spans.map((s) => ({ s, o: Math.min(e.t1, s.t1) - Math.max(e.t0, s.t0) })).filter((h) => h.o > 0)
+      .sort((a, b) => (a.s.kind === "envelope") - (b.s.kind === "envelope") || b.o - a.o || (a.s.t1 - a.s.t0) - (b.s.t1 - b.s.t0));
+    const top = hits[0] || null;
+    let after = null, before = null;
+    for (const p of points) { if (p.at <= e.t0) after = p; else if (!before) before = p; }
+    const row = { kind: e.kind, atMs: r1(e.t0 - from), ms: r1(ms), span: top ? top.s.n : null, spanKind: top ? top.s.kind : null,
+      overlapMs: top ? r1(top.o) : 0, share: top ? +(top.o / ms).toFixed(2) : 0,
+      also: hits.slice(1, 4).map((h) => `${h.s.n} ${Math.round(h.o)}ms`),
+      after: after ? `${after.n} (+${Math.round(e.t0 - after.at)} ms)` : null, before: before ? before.n : null };
+    if (e.kind === "gap" && e.prevFrameMs != null) row.prevFrameMs = r1(e.prevFrameMs);
+    // Long tasks carry the per-span totals; a gap is the SAME blocked time seen
+    // from rAF, so summing both would count it twice.
+    if (e.kind === "longtask") {
+      taskMs += ms;
+      if (top) {
+        const b = bySpan[top.s.n] || (bySpan[top.s.n] = { tasks: 0, ms: 0, longestMs: 0 });
+        b.tasks++; b.ms = r1(b.ms + top.o); if (ms > b.longestMs) b.longestMs = r1(ms);
+      } else unattributedMs += ms;
+    }
+    return row;
+  }).sort((a, b) => b.ms - a.ms);
+  const ranked = Object.entries(bySpan).sort((a, b) => b[1].ms - a[1].ms);
+  const nTask = rows.filter((x) => x.kind === "longtask").length, nGap = rows.length - nTask;
+  return { fromMark: typeof cm.raceCall === "number" ? "census:raceCall" : "begin", windowMs: Math.round(to - from),
+    spans: spans.map((s) => ({ n: s.n, kind: s.kind, atMs: r1(s.t0 - from), ms: r1(s.t1 - s.t0), ...(s.open ? { open: true } : {}) })),
+    events: rows.slice(0, topN), eventCount: rows.length, bySpan: Object.fromEntries(ranked),
+    unattributedMs: Math.round(unattributedMs),
+    summary: `${nTask} long task(s) (${Math.round(taskMs)} ms) + ${nGap} rAF gap(s) in ${Math.round(to - from)} ms of race entry; `
+      + (ranked.length ? ranked.slice(0, 4).map(([n, b]) => `${n} ${Math.round(b.ms)} ms/${b.tasks}`).join(", ") : "no long task in a named span")
+      + (unattributedMs ? `; ${Math.round(unattributedMs)} ms in no span` : "") };
+}
+
 // WHICH PASSES THE SPIKE FRAMES RUN. The recorder fingerprints every render
 // pass of every frame by target size, format and load op; analysePassKinds
 // compares the wide frames with the median. This compares the SPIKE frames

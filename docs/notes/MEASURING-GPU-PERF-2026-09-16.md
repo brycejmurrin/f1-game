@@ -118,6 +118,14 @@ The source is `docs/notes/PERF-HUNT-4-2026-10-14.md` §C (I1–I7) and §A (inst
 - For each gap it names the phase, the work of the rendering step before it, the work done between steps, and the long tasks that overlap it.
 - A 4 s first-draw stall is attributable this way. `spikeWork`, which keys on callbacks of 100 ms or more, cannot see it.
 
+**Race-entry marks (B-F3.3, lane TOOLS-J).** `out.raceEntryProfile` saves `__apex.raceEntryProfile()` right after the race gate: `legs` (`{n, ms}`), `marks` (`{n, t}`, ms from the window's begin), `blockMs`, `maxBlockMs`, `supported`, and `winT0`, the window origin on the page clock.
+- The snapshot carries no origin, so the census derives it: `windowMs` is `now() - winT0` at the read, so `winT0` is the read's midpoint minus `windowMs`, good to `clockErrMs` (microseconds).
+- `out.raceEntrySpans` joins every long task and every rAF gap from `race()` to the end of race entry to a named span: a leg (cumulative from `winT0`; `resets` = the `ensureRaceSession` / `ensureAudio` lazy bundles, `settings` = `applyRaceSettings`), a `:start`/`:end` mark pair (`warmCarAssets`, `debrisPrime`, `mirrorPrepare`, `ensureScenery`), or a TLX warm stage (`warm:scene/fx/post/shadow/mirror/draw`, sequential from `memState().warm.at`).
+- Each event names the span it overlaps most, its share, up to three other overlaps, and the marks either side. A tie goes to the shorter span, so a mark span nested in a leg wins.
+- `bySpan` sums long-task time per span; gaps are listed but not summed (they are the same blocked time seen from rAF). The Verdict prints a `marks:` row and the six longest events.
+- Example: `{ kind: "longtask", atMs: 2425, ms: 2090, span: "warmCarAssets", share: 1, after: "warmCarAssets:start (+5 ms)", before: "warmCarAssets:end" }`.
+- Not split: the `loadTrack` leg's build phases (`buildProfile` rows carry no timestamps) and the sky cache warm, which `tlx.js` folds into `warm:mirror` (its stage clock starts after the shadow stage) and leaves untimed when the mirror warm is off (then only the `warm (other)` envelope covers it).
+
 **Follow-up, not built (I5).** WGX `gpuMs` times only the lit pass, while GLX's covers main plus post. A per-pass GLX timer would put sequential `TIME_ELAPSED` queries around the sun, lamp, car, env, mirror, main and post groups. Only one such query may be active at a time.
 - Those groups are sequenced from `js/game.js`, which this lane may not edit, so it is not a small change behind a flag.
 - It needs a query ring per group in `glx.js`, with begin/end hooks called from the pass sites.
