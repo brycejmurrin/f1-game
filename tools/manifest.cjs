@@ -314,6 +314,7 @@ const FULL = [
   "js/race/real-race.js",      // RealRace.create(G): a real Grand Prix replayed from its timing script (after race-control: it holds its flags)
   // flying-start / start-lights / marshal-panels → LAZY_RACE_SESSION
   "js/race/weather-arc.js",
+  "js/race/forecast.js",       // Forecast: pure timed + uncertain forecast off a weather arc (engineer speaks it; Forecast.current())
   "js/camera/photo-kit.js",    // free-cam grids / DoF / bookmarks (before free-cam)
   "js/camera/free-cam.js",
   "js/camera/photo-cam.js",
