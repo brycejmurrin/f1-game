@@ -937,6 +937,15 @@ body[data-radio-corner][data-radio-corner][data-radio-corner][data-radio-corner]
   line-height: 1.15;
   --radio-num: 18px;
 }
+/* A RADIO CARD THE PLAYER MOVED (body[data-radio-placed], js/ui/hud-layout.js): no slot, no lane.
+   It hangs from one fixed point, the top-centre quarter (50vw, 25svh), so MOVE & SIZE's --hl-x/-y
+   (±50 % of the screen) is where it sits and reaches every edge of the top three quarters. Outranks
+   the caution step-down and the touch lane: five attributes plus :has(#hud-flag) are (2,6,1). */
+body[data-radio-placed][data-radio-placed][data-radio-placed][data-radio-placed][data-radio-placed]:has(#hud-flag) #announce:not([hidden]) {
+  top: calc(25svh / var(--hud-z)); left: calc(50vw / var(--hud-z)); right: auto;
+  transform: none; min-width: 0; width: max-content;
+  max-width: calc(min(360px, 45vw) / var(--hud-z));
+}
 body:is(.hud-radio-top, [data-radio-corner]) #announce-body {
   justify-content: center; gap: 0;
   padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.6);
