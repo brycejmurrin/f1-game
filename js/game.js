@@ -5931,9 +5931,9 @@ function updateCarBicycle(c, dt, ranked, S) {
     // (speedRefFromSlider in js/input/steer-tuning.js) moved with this formula —
     // see its comment.
     // HYPERBOLIC raw = 1/(1+vs/ref) (PHASE-C §2; never negative, no floor). Hold
-    // full lock for vs≤15 (hairpin), blend 15→30, raw for vs≥30 so ≥60 m/s is
-    // bit-identical to the old taper (vStd pace-cancels; SPEED STEER dial OK).
-    const vs = vStd(Math.abs(c.speed)), raw = 1 / (1 + vs / STEER_SPEED_REF), lockTaper = vs <= 15 ? 1 : (vs >= 30 ? raw : 1 + (raw - 1) * (vs - 15) / 15);
+    // 1.06× lock for vs≤15 (hairpin ≈0.371 rad at notch-7 0.35), blend 15→30,
+    // raw for vs≥30 so ≥60 m/s stays bit-identical (vStd pace-cancels; SPEED STEER OK).
+    const vs = vStd(Math.abs(c.speed)), raw = 1 / (1 + vs / STEER_SPEED_REF), lockTaper = vs <= 15 ? 1.06 : (vs >= 30 ? raw : 1.06 + (raw - 1.06) * (vs - 15) / 15);
     const driverDelta = shaped * STEER_MAX_SLIP * lockTaper;
     // DRIVING-HELP assist: the steer needed to track curvature k is the kinematic
     // term (L·k) PLUS a speed-squared understeer term — a car needs progressively
