@@ -17,6 +17,19 @@
       const BROAD = [[0.20, 0.42, 0.18], [0.24, 0.47, 0.20], [0.18, 0.38, 0.17]];
       const JACARANDA = [0.56, 0.44, 0.74];
 
+      // Camera corridor (Circuit Yard R4 — survey f08 / f42 / f75 / f92).
+      // Scenery orbit sits on +1 at dist≈45 m (eye ~15–22 m past the edge);
+      // chase is closer. Keep +1 trunks past that wedge so canopies do not
+      // fill the lens. Hot windows match the flagged frames (± a little).
+      const CAM_NEAR = 24;
+      const camHot = (k) => {
+        const f = ((k / n) % 1 + 1) % 1;
+        return (f >= 0.02 && f <= 0.14) || (f >= 0.36 && f <= 0.50) ||
+               (f >= 0.68 && f <= 0.82) || (f >= 0.86 || f <= 0.02);
+      };
+      const blocksOrbitView = (side, dist, k) =>
+        side === 1 && (camHot(k) ? dist < 64 : dist < 38);
+
       // Vivid favela palette (terracotta, sunflower, teal, coral, sage, ochre…)
       const FAV = [
         [0.88, 0.42, 0.30], [0.94, 0.80, 0.28], [0.30, 0.55, 0.80], [0.86, 0.46, 0.34],
@@ -480,7 +493,10 @@
       marshalPost(K(0.05),   1, 8);
       marshalPost(K(0.085), -1, 8);
 
-      forestEdge(0.04, 0.10,  1, 14, { density: 0.78, hMin: 10, hMax: 16,
+      // +1 Senna forest was gap 14 / density 0.78 — inside the orbit wedge at
+      // f08. Push past CAM_NEAR+hot clear and thin so the corridor stays green
+      // without filling the chase/orbit lens.
+      forestEdge(0.04, 0.10,  1, 68, { density: 0.42, hMin: 10, hMax: 15,
                                         col: [0.18, 0.42, 0.18], col2: [0.24, 0.48, 0.24], pineFrac: 0 });
       forestEdge(0.04, 0.10, -1, 18, { density: 0.58, hMin: 11, hMax: 17,
                                         col: [0.20, 0.44, 0.20], col2: [0.26, 0.50, 0.24], pineFrac: 0 });
@@ -489,11 +505,19 @@
         backdrop(K(s), 1, 28, [22, 8, 18], HILL);
         backdrop(K(s), -1, 34, [20, 7, 16], HILL2);
       }
-      // Scattered palms for tropical character
+      // Scattered palms for tropical character — +1 past the orbit wedge.
       for (const [s, side] of [[0.04, 1], [0.06, -1], [0.08, 1], [0.10, -1]]) {
         const k = K(s);
-        palm(k, side, 26 + hash(k * 9) * 10, 11 + hash(k * 13) * 5, [0.26, 0.48, 0.22]);
-        bush(k, side, 18 + hash(k * 11) * 8, [0.26, 0.50, 0.24]);
+        const dPalm = side === 1
+          ? CAM_NEAR + 44 + hash(k * 9) * 12
+          : 26 + hash(k * 9) * 10;
+        const dBush = side === 1
+          ? CAM_NEAR + 10 + hash(k * 11) * 8
+          : 18 + hash(k * 11) * 8;
+        if (!blocksOrbitView(side, dPalm, k))
+          palm(k, side, dPalm, 11 + hash(k * 13) * 5, [0.26, 0.48, 0.22]);
+        if (!blocksOrbitView(side, dBush, k))
+          bush(k, side, dBush, [0.26, 0.50, 0.24]);
       }
 
       every(120, (k) => {
@@ -564,23 +588,18 @@
       crowdBank(0.275, -1, 31, 78, 6);
       marshalPost(K(0.24), 1, 8);
 
-      // GUARAPIRANGA. The old waterSurface(K(0.42), -1, 520, [380,0.5,460])
-      // sat at pyMin - 0.82 (~-40.7 m) while the terrain ribbon over the same
-      // footprint reads about -27…-39 m (measured), so the sheet was ~6–13 m
-      // under the ground and invisible from the circuit. waterSurface /
-      // waterField both hard-code that pyMin floor in the engine — do not
-      // change them. Same pattern as Buenos Aires' park lake: terrain-
-      // following thin cells via addBox (models.waterSurface is not on the
-      // scenery api). Off-ribbon void cells use the lowest nearby shore
-      // sample so the open basin still reads as water. A dirt rim was tried
-      // and dropped — it blew the props-tris 0.5 % ratchet. Billings
-      // (further SW) is visible in the real layout but not added here.
+      // GUARAPIRANGA. waterSurface / waterField hard-code pyMin − 0.82 and
+      // vanish under this circuit's ribbon — do not use them. Guarapiranga is
+      // a reservoir: a FLAT waterline, not a terrain-following sheet. The old
+      // hi+0.09 / lo−0.14 span boxes on C=64 floated ~6–11 m over the banks
+      // at survey f25. Waterline = lowest nearby shore sample; skip cells
+      // whose terrain sits above it (dry bank). Off-ribbon void cells fill
+      // the open basin. C=64 keeps props-tris inside the 0.5 % ratchet.
+      // Billings (further SW) is visible in the real layout but not added.
       {
         const LAKE = [0.20, 0.40, 0.49];
         const a = anchor(K(0.42), -1, 520);
         const LCX = a.c[0], LCZ = a.c[2];
-        // C=64 keeps the sheet inside the props-tris 0.5 % ratchet (finer
-        // cells + a dirt rim blew it; C=56 was still ~170 over the cap).
         const RA = 190, RB = 230, C = 64;
         let shoreLo = 1e9, nS = 0;
         for (let x = LCX - RA - 100; x < LCX + RA + 100; x += C) {
@@ -591,12 +610,11 @@
             if (y < shoreLo) shoreLo = y;
           }
         }
-        const voidY = nS ? shoreLo + 0.08 : pyMin + 0.08;
+        const waterY = nS ? shoreLo + 0.12 : pyMin + 0.08;
         // Emit into `out` (not one modelGroup): the lake AABB spans other
         // stretches of this compact lap, so a single group's emitted-box
-        // preflight rejects the whole sheet. Per-cell onTrack + Buenos Aires
-        // addBox is the same pattern; the first cell is the required pin so
-        // we do not pay a duplicate box for the id.
+        // preflight rejects the whole sheet. Per-cell onTrack + first-cell
+        // required pin (no duplicate box for the id).
         let pin = null;
         for (let x = LCX - RA; x < LCX + RA; x += C) {
           for (let z = LCZ - RB; z < LCZ + RB; z += C) {
@@ -604,29 +622,27 @@
             const e = ((mx - LCX) / RA) ** 2 + ((mz - LCZ) / RB) ** 2;
             if (e > 1 - hash(mx * 0.31 + mz * 0.17) * 0.18) continue;
             if (onTrack(mx, mz, 20)) continue;
-            let lo = 1e9, hi = -1e9, any = false;
+            // Dry / sloping shore: any terrain sample above the waterline →
+            // skip. On C=64 Interlagos relief every ribbon cell slopes past
+            // the waterline, so the sheet lives in the off-ribbon void basin
+            // (true Guarapiranga) and no longer floats a hi+0.09 slab over
+            // the green banks at f25. Ribbon shore stays dry land.
+            let dry = false;
             for (const fx of [0, 0.5, 1]) for (const fz of [0, 0.5, 1]) {
               const y = terrainYAt(x + fx * C, z + fz * C);
               if (y === null || !isFinite(y)) continue;
-              any = true;
-              if (y < lo) lo = y;
-              if (y > hi) hi = y;
+              if (y > waterY + 0.45) dry = true;
             }
-            let top, bot;
-            if (any) {
-              top = hi + 0.09;
-              bot = lo - 0.14;
-            } else {
-              top = voidY + 0.05;
-              bot = voidY - 0.2;
-            }
+            if (dry) continue;
+            const top = waterY + 0.04;
+            const bot = waterY - 0.18;
             const cy = (top + bot) / 2;
             const sz = [C, Math.max(0.2, top - bot), C];
             if (!pin) pin = { mx, mz, cy, sz };
             else addBox(out, [mx, cy, mz], sz, LAKE, null);
           }
         }
-        if (!pin) pin = { mx: LCX, mz: LCZ, cy: voidY - 0.25, sz: [380, 0.5, 460] };
+        if (!pin) pin = { mx: LCX, mz: LCZ, cy: waterY - 0.07, sz: [380, 0.5, 460] };
         modelGroup("interlagos-guarapiranga", {
           center: [pin.mx, pin.cy, pin.mz],
           size: [pin.sz[0] + 4, pin.sz[1] + 4, pin.sz[2] + 4],
@@ -868,14 +884,19 @@
       every(90, (k) => {
         for (const side of [-1, 1]) {
           if (hash(k * 91 + side) > 0.48) continue;
-          const d = 30 + hash(k * 92 + side) * 60;
+          // Past chase/orbit corridor (was 30–90 m — +1 ranks at 30–55 filled
+          // the lens at f42/f75/f92). Hot +1 skips the orbit ring entirely.
+          const d = CAM_NEAR + hash(k * 92 + side) * 55;
+          if (blocksOrbitView(side, d, k)) continue;
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 8)) continue;
           const r = hash(k * 93 + side);
           // Subtropical Atlantic-forest mix, no conifers (survey 2026-10-05:
           // the pine() cones here read as alpine). Lobed broadleaf for the
           // dense bushy canopy; ~1 in 5 of those is a jacaranda in its
-          // Sep-Nov bloom, which is when the GP runs.
+          // Sep-Nov bloom, which is when the GP runs. Hot +1: thinner so the
+          // green São Paulo banks remain without re-seeding the wedge.
+          if (side === 1 && camHot(k) && r < 0.55) continue;
           if      (r > 0.62) tree(k, side, d, 10 + hash(k * 94 + side) * 6, [0.22, 0.46, 0.22]);
           else if (r > 0.31) broadleafFall(k, side, d, 11 + hash(k * 95 + side) * 6,
                                hash(k * 96 + side) > 0.80 ? JACARANDA : BROAD[(k + side + 2) % BROAD.length],
