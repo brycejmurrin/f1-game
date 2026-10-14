@@ -1,34 +1,36 @@
-# Silverstone — circuit survey (2026-10-14, expanded)
+# Silverstone — circuit survey (2026-10-14)
 
 **Live:** https://brycejmurrin.github.io/f1-game/  
 **Branch:** `cursor/silverstone-survey-745b`  
-**Captures:** 42 headless frames (`APEX_GL=llvmpipe`, `tools/shot/shot.mjs --backend webgl2 --wait 12`), committed under `artifacts/shots/tracks/silverstone/`. Batch source: `capture-jobs.json` → `batch.json`.
+**Frames:** 36 committed under `artifacts/shots/tracks/silverstone/` (18 sector landmarks · day, 18 hero lighting/weather variants on five signatures).
 
-## Weather and time-of-day (engine)
+### Capture status (course correction)
 
-| Control | API / CLI | Values |
+- **In this PR:** sector sweep + hero variants captured headless (`APEX_GL=llvmpipe`, `shot.mjs --backend webgl2 --tod`). Rain/wet frames used a **local-only** batch `weather` field — **not** merged here; shared tooling PR *tools: shared shot tooling for circuit surveys* will land `weather` batch support, retries, and `artifacts/shots/tracks/**` gitignore. **Follow-up:** rebase on that PR, re-run the weather matrix (4–6 heroes × dry/dusk/night/rain/wet/overcast/fog), trim to the fleet cap.
+- **Circuit edits only:** `js/circuits/silverstone.js` pair — T2 hangars inward, museum/marshal/helipad grounding.
+
+## Weather and time-of-day (engine reference)
+
+| Control | API | Values |
 |---|---|---|
-| Time of day | `__apex.setTimeOfDay(tod)`, shot `--tod` / job `tod` | `dawn`, `day`, `dusk`, `night` |
-| Weather | `__apex.weather(wx)`, shot job `weather` (added this survey) | `dry`, `wet`, `rain`, `overcast`, `fog` |
-| Circuit flag | `js/circuits/silverstone.js` | `night: false` (menu default day; night still drivable via TOD) |
-
-Reference: `js/game.js` (`raceWeather`), `tools/shot/agent.mjs --weather`, `docs/tracks/silverstone.md` (British overcast palette).
+| Time of day | `__apex.setTimeOfDay`, shot `--tod` | `dawn`, `day`, `dusk`, `night` |
+| Weather | `__apex.weather(wx)` | `dry`, `wet`, `rain`, `overcast`, `fog` |
+| Def | `night: false` | Menu-default day circuit; night still probe-able |
 
 ## Code map
 
-| Layer | Path | Role |
-|---|---|---|
-| Circuit def | `js/circuits/silverstone.js` | OSM centreline, `startFrac: 0.5224`, `sceneryStartFrac: 0.0200`, `flatTerrain`, `terrainOuter: 110`, bank zones, Wing `roofProfile` |
-| Scenery | `js/circuits/scenery/silverstone.js` | Hedgerows, campsites, Wing/T2 hangars, grandstands, marshal bays, museum |
-| Brief | `docs/tracks/silverstone.md` | Landmarks + four horizon campsite bands |
-| Landmarks | `tests/data/landmarks/silverstone.json` | Wing wave roof, control tower, T2 hangars |
+| Layer | Path |
+|---|---|
+| Def | `js/circuits/silverstone.js` — `startFrac 0.5224`, `sceneryStartFrac 0.02`, `flatTerrain`, `terrainOuter 110` |
+| Scenery | `js/circuits/scenery/silverstone.js` — Wing, T2 hangars, campsites, grandstands |
+| Brief | `docs/tracks/silverstone.md` |
+| Landmarks | `tests/data/landmarks/silverstone.json` |
 
 ## Sector and landmark coverage (dry · day)
 
-Racing sectors ≈ `[0.30, 0.62]` on lap; scenery-frame `s` below. Shots live in-repo at `artifacts/shots/tracks/silverstone/`.
+Racing sector splits ≈ `[0.30, 0.62]`. Scenery-frame fractions below.
 
-
-### Sector 1 — Copse through Hangar Straight
+### Sector 1 — Copse → Hangar
 
 | | | |
 |---|---|---|
@@ -37,7 +39,7 @@ Racing sectors ≈ `[0.30, 0.62]` on lap; scenery-frame `s` below. Shots live in
 | ![](../../../artifacts/shots/tracks/silverstone/s1-hangar-wide__day-dry.jpg) | ![](../../../artifacts/shots/tracks/silverstone/s1-maggotts__day-dry.jpg) |   |
 | s1-hangar-wide · day-dry | s1-maggotts · day-dry |
 
-### Sector 2 — Stowe through Hamilton Straight
+### Sector 2 — Stowe → Hamilton
 
 | | | |
 |---|---|---|
@@ -46,7 +48,7 @@ Racing sectors ≈ `[0.30, 0.62]` on lap; scenery-frame `s` below. Shots live in
 | ![](../../../artifacts/shots/tracks/silverstone/s2-stowe__day-dry.jpg) | ![](../../../artifacts/shots/tracks/silverstone/s2-vale__day-dry.jpg) | ![](../../../artifacts/shots/tracks/silverstone/s2-wing-hero__day-dry.jpg) |
 | s2-stowe · day-dry | s2-vale · day-dry | s2-wing-hero · day-dry |
 
-### Sector 3 — Abbey through Woodcote + landmarks
+### Sector 3 — Abbey → Woodcote + landmarks
 
 | | | |
 |---|---|---|
@@ -57,16 +59,16 @@ Racing sectors ≈ `[0.30, 0.62]` on lap; scenery-frame `s` below. Shots live in
 | ![](../../../artifacts/shots/tracks/silverstone/s3-woodcote__day-dry.jpg) |   |   |
 | s3-woodcote · day-dry |
 
-## Hero viewpoints — weather and lighting matrix
+## Hero viewpoints — lighting and weather (5 signatures)
 
-Repeated framing at six signatures: Copse, Maggotts (cinematic), Hangar/T2, Wing, Abbey, Village Loop.
+Copse, Maggotts, Hangar/T2, Wing, Abbey, Village — subset of dusk/night/rain/wet retained (36-frame cap). Full matrix after shared shot PR.
 
 ### abbey
 
 | | | |
 |---|---|---|
-| ![](../../../artifacts/shots/tracks/silverstone/hero-abbey__dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/silverstone/hero-abbey__night-dry.jpg) | ![](../../../artifacts/shots/tracks/silverstone/hero-abbey__day-overcast.jpg) |
-| dusk · dry | night · dry | day · overcast |
+| ![](../../../artifacts/shots/tracks/silverstone/hero-abbey__dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/silverstone/hero-abbey__night-dry.jpg) |   |
+| dusk · dry | night · dry |
 
 ### copse
 
@@ -74,8 +76,8 @@ Repeated framing at six signatures: Copse, Maggotts (cinematic), Hangar/T2, Wing
 |---|---|---|
 | ![](../../../artifacts/shots/tracks/silverstone/hero-copse__dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/silverstone/hero-copse__night-dry.jpg) | ![](../../../artifacts/shots/tracks/silverstone/hero-copse__day-rain.jpg) |
 | dusk · dry | night · dry | day · rain |
-| ![](../../../artifacts/shots/tracks/silverstone/hero-copse__day-wet.jpg) | ![](../../../artifacts/shots/tracks/silverstone/hero-copse__day-overcast.jpg) | ![](../../../artifacts/shots/tracks/silverstone/hero-copse__day-fog.jpg) |
-| day · wet | day · overcast | day · fog |
+| ![](../../../artifacts/shots/tracks/silverstone/hero-copse__day-wet.jpg) |   |   |
+| day · wet |
 
 ### hangar
 
@@ -83,8 +85,6 @@ Repeated framing at six signatures: Copse, Maggotts (cinematic), Hangar/T2, Wing
 |---|---|---|
 | ![](../../../artifacts/shots/tracks/silverstone/hero-hangar__dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/silverstone/hero-hangar__night-dry.jpg) | ![](../../../artifacts/shots/tracks/silverstone/hero-hangar__day-rain.jpg) |
 | dusk · dry | night · dry | day · rain |
-| ![](../../../artifacts/shots/tracks/silverstone/hero-hangar__day-fog.jpg) |   |   |
-| day · fog |
 
 ### maggotts
 
@@ -92,15 +92,13 @@ Repeated framing at six signatures: Copse, Maggotts (cinematic), Hangar/T2, Wing
 |---|---|---|
 | ![](../../../artifacts/shots/tracks/silverstone/hero-maggotts__day-dry.jpg) | ![](../../../artifacts/shots/tracks/silverstone/hero-maggotts__dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/silverstone/hero-maggotts__night-dry.jpg) |
 | day · dry | dusk · dry | night · dry |
-| ![](../../../artifacts/shots/tracks/silverstone/hero-maggotts__day-rain.jpg) |   |   |
-| day · rain |
 
 ### village
 
 | | | |
 |---|---|---|
-| ![](../../../artifacts/shots/tracks/silverstone/hero-village__dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/silverstone/hero-village__night-dry.jpg) | ![](../../../artifacts/shots/tracks/silverstone/hero-village__day-fog.jpg) |
-| dusk · dry | night · dry | day · fog |
+| ![](../../../artifacts/shots/tracks/silverstone/hero-village__dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/silverstone/hero-village__night-dry.jpg) |   |
+| dusk · dry | night · dry |
 
 ### wing
 
@@ -111,33 +109,34 @@ Repeated framing at six signatures: Copse, Maggotts (cinematic), Hangar/T2, Wing
 | ![](../../../artifacts/shots/tracks/silverstone/hero-wing__day-wet.jpg) |   |   |
 | day · wet |
 
-## Findings (visual + audits)
+## Findings
 
 ### Strengths
-- **0 surface folds**, **0 float**, **0 severe clip** (`audit-circuit` 2026-10-14 post-fix).
-- Wing + Hamilton grandstand pairing reads on `s2-wing-hero__day-dry` and `s2-pit-park__day-dry`.
-- Horizon campsites visible on Hangar Straight wide shots; T2 hangars improved after ~10 m inward move.
+- `audit-circuit`: 0 folds, 0 float, 0 severe clip; props ~428k tris.
+- Wing + Hamilton read on `s2-wing-hero__day-dry` / `s2-pit-park__day-dry`.
+- T2 hangars moved ~10 m inward (F1 fix).
 
-### Weather / lighting backlog
+### Weather / lighting backlog (not fixed this PR)
 
-| ID | Severity | Evidence | Note |
-|---|---|---|---|
-| W1 | Med | `hero-hangar__night-dry`, `hero-village__night-dry` | Outfield and campsites fall off to black; only pit-straight doubles and corner towers carry night read |
-| W2 | Low | `hero-wing__night-dry` | Hand-placed pit lamps and Wing emissive bands work; distant backdrop hills do not pick up moon fill |
-| W3 | Low | `hero-wing__day-rain`, `hero-maggotts__day-rain` | Rain particles + grey sky read; tarmac lacks strong wet specular (engine-wide) |
-| W4 | Low | `hero-copse__day-overcast` vs `s1-copse__day-dry` | Circuit already applies `ATM.britishOvercast` — extra `weather:overcast` is subtle |
-| W5 | Low | `hero-copse__day-fog` | Authored mountain haze + fog weather stacks to soft horizon (not z-fight) |
-| W6 | Info | `night: false` on def | No circuit-specific night lamp cap; acceptable for UK summer GP default |
-
-### Geometry backlog (circuit-scoped fixes)
-
-| ID | Status | Note |
+| ID | Evidence | Note |
 |---|---|---|
-| F1 T2 hangar distance | **Fixed** | Hangars 88–92 m (was 96–104 m) |
-| F2 Museum fascia coplanar | **Fixed** | Fascia band lifted; flatCoplanar 6→5 |
-| F3 Marshal bay roof | **Fixed** | Orange strip raised |
-| F4 Helipad markings | **Fixed** | H boxes raised |
-| F5 Legacy infield campsites | Open | `silverstone-camping-field-*` duplicates horizon fields; blocked by `scenery-api-contract` test |
+| W1 | `hero-hangar__night-dry` | Outfield black; pit doubles carry night |
+| W2 | `hero-wing__day-rain` | Rain particles; weak wet specular (engine) |
+| W3 | `hero-copse__day-wet` | Wet road read subtle vs authored green runoff |
+| W4 | def `night: false` | No circuit-specific night lamp pass |
+| W5 | — | **Pending shared shot PR** for reproducible weather batch + committed `artifacts/shots/**` |
+
+### Circuit fixes (this PR)
+
+| Item | Change |
+|---|---|
+| T2 hangars | dist 88–92 m (was 96–104 m) |
+| Heritage museum | fascia band lifted (flatCoplanar ↓) |
+| Marshal bay | orange roof raised |
+| Helipad | H markings raised |
+
+### Deferred
+- Legacy infield `silverstone-camping-field-*` (blocked by `scenery-api-contract` test).
 
 ## Verification
 
@@ -145,5 +144,3 @@ Repeated framing at six signatures: Copse, Maggotts (cinematic), Hangar/T2, Wing
 node tools/track/verify-track.cjs silverstone
 node tools/track/audit-circuit.cjs silverstone
 ```
-
-Props: **427709** tris · buried **37** · flatCoplanar **5** (within baseline).

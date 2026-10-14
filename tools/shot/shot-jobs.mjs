@@ -53,11 +53,6 @@ export function normalizeJob(raw, defaults = {}) {
   const dist = parseFloat(raw.dist ?? defaults.dist ?? 45);
   const side = parseInt(raw.side ?? defaults.side ?? 1, 10) || 1;
   const tod = String(raw.tod ?? defaults.tod ?? "day");
-  const weather = raw.weather != null ? String(raw.weather) : (defaults.weather ?? null);
-  if (weather != null) {
-    const WX = new Set(["dry", "wet", "rain", "overcast", "fog"]);
-    if (!WX.has(weather)) throw new Error(`unknown weather "${weather}" — dry|wet|rain|overcast|fog`);
-  }
   const showHud = !!(raw.hud ?? raw.showHud ?? defaults.showHud);
   const team = raw.team ?? defaults.team ?? null;
   const baseCapture = defaults.capture || parseCaptureOptions([]);
@@ -81,7 +76,7 @@ export function normalizeJob(raw, defaults = {}) {
   }
   const format = capture.type ? captureScreenshotOptions(capture) : imageFormatFor(out, { jpegFlag: jpegFlag || fmtHint.type === "jpeg" });
   return {
-    trackId, frac, cam, az, el, dist, side, tod, weather, showHud, team, out, backend, capture, viewport,
+    trackId, frac, cam, az, el, dist, side, tod, showHud, team, out, backend, capture, viewport,
     type: format.type,
     quality: format.type === "jpeg" ? capture.quality ?? format.quality ?? 85 : undefined,
     raster: !!(raw.raster ?? defaults.raster),
