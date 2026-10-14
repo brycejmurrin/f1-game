@@ -35,6 +35,7 @@ function create(G) {
   const { $ } = G;
   let real = null;
   let entryGeneration = 0;
+  let entryFailed = false;
   function ensure() {
     if (real) return Promise.resolve(real);
     return ensureScreen().then((ok) => {
@@ -55,6 +56,8 @@ function create(G) {
     return () => { ensure().then((r) => { if (r) fn(r); }); };
   }
   function openEntry(method, origin) {
+    if (entryFailed && G.refreshCareerButton) G.refreshCareerButton();
+    entryFailed = false;
     const generation = ++entryGeneration;
     return ensure().then((r) => {
       if (generation !== entryGeneration) return;
@@ -69,6 +72,10 @@ function create(G) {
       // The title door hides its overlay before the lazy bundle settles. A
       // failed fetch must leave a usable menu, and the next tap retries it.
       if (G.els && G.els.overlay) G.els.overlay.hidden = false;
+      entryFailed = true;
+      const sub = $("mb-career-sub"), button = $("mb-career");
+      if (sub) sub.textContent = "COULD NOT LOAD · TRY AGAIN";
+      if (button) button.setAttribute("aria-label", "Career modes — could not load. Try again.");
       if (G.announce) G.announce("CAREER COULD NOT LOAD — PLEASE TRY AGAIN", 4, "warning");
     });
   }
