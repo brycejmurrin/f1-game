@@ -390,6 +390,7 @@ var GameAudio = (function () {
     sfxBus = ctx.createGain();
     sfxBus.gain.value = sfxEnabled ? sfxVol : 0;
     sfxBus.connect(master);
+    attachRivalPassBy();
 
     // iOS Safari starts contexts suspended; resume inside the gesture.
     // Guard the promise: resume() rejects (NotAllowed/InvalidState) on mobile at
@@ -536,10 +537,31 @@ var GameAudio = (function () {
     setSfxEnabled(sfxEnabled);
   }
 
+  // Bind the rival pass-by pool (PR #1735) to this context's SFX bus. Idempotent:
+  // same ctx is a no-op; a rebuilt ctx detaches the dead graph first. Lazy
+  // first-bind: engine.js evaluates before rivals.js, so the first init() may
+  // only see the stub — stash dest, and also retry when init() runs again after
+  // the real module lands. Missing attach (title stub) is silence, not a throw.
+  let rivalPassByCtx = null;
+  function attachRivalPassBy() {
+    if (!ctx || !sfxBus) return;
+    try {
+      if (typeof RivalAudio === "undefined") return;
+      if (typeof RivalAudio.attach === "function") {
+        if (rivalPassByCtx === ctx) return;
+        RivalAudio.attach(ctx, sfxBus);
+        rivalPassByCtx = ctx;
+      } else {
+        RivalAudio._pendingAttach = { ctx, dest: sfxBus };
+      }
+    } catch (e) { /* stub / mid-teardown */ }
+  }
+
   function init() {
     // init is only ever called from a user gesture
     if (ctx) {
       resumeIfNeeded(true);
+      attachRivalPassBy();
       Log.info("audio", "GameAudio.init state=" + (ctx && ctx.state));
       return;
     }

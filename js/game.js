@@ -752,6 +752,10 @@ const stricken = (o) => incidentSim.owns(o) || (o.rescueT || 0) > 0.25 || (!!o.o
   || (!(o.pitState && o.pitState !== "none") && (o.speed || 0) < vTop() * 0.05);
 const cautionFair = (o) => SportingRegs.exempt(o) || stricken(o);   // a car it is legal to pass under a caution
 const scWatch = SportingRegs.createPassWatch(0, stricken);
+// BLUE FLAGS for the player (AI yields via AiDrive.letPassCase): sustained
+// hold-up while being lapped → warning, then +5 s (js/race/sporting-regs.js;
+// ISC App. H 2.5.5(e) / App. L Ch. IV 2(a); 2026 Penalty Guidelines).
+const blueWatch = SportingRegs.createBlueFlagWatch(stricken);
 function scPassCall(ev) {
   if (!ev || !player) return; Log.info("game", "Caution pass " + ev.type + " n=" + (ev.n || 0) + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap + " level=" + raceCtl.level); if (ev.type === "cleared") { announce("POSITION RETURNED — NO PENALTY", 1.5, "penalty-warn"); return; }
   if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn", () => scWatch.info().owed > 0); return; }
@@ -760,6 +764,15 @@ function scPassCall(ev) {
   // re-read it so a time penalty that reorders the finish is served first.
   resultT = 0;
   announce("+" + ev.sec + "s PENALTY — OVERTAKING UNDER CAUTION", 3, "penalty-hit");
+  if (soundOn) GameAudio.penalty();
+}
+function blueFlagCall(ev) {
+  if (!ev || !player) return;
+  Log.info("game", "Blue flag " + ev.type + (ev.code ? " code=" + ev.code : "") + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap);
+  if (ev.type === "warn") { announce("BLUE FLAG WARNING", 2, "penalty-warn"); return; }
+  player.penalty += ev.sec;
+  resultT = 0;
+  announce("+" + ev.sec + "s IGNORING BLUE FLAGS", 3, "penalty-hit");
   if (soundOn) GameAudio.penalty();
 }
 // The cue phases that turn the pit ENTRANCE lamps green (SceneryPits): you are
@@ -1915,6 +1928,7 @@ function gridUp(preOrder) {
   // it is: the collision it exists to fix can only happen on the P12 branch.
   gridPreOrdered = !!(preOrder && preOrder.length === cars.length);
   scWatch.reset();
+  blueWatch.reset();
   const order = preOrder && preOrder.length === cars.length ? preOrder.slice() : (() => {
     // grid jitter: ONE simRnd() draw per car, BEFORE the sort — a random
     // comparator is inconsistent and its draw count engine-defined.
@@ -4587,7 +4601,15 @@ function update(dt) {
     if (ranked[i].finished) nFin++;
   }
   if (nFin > 1) rankFinishers();
-  if (!isPractice() && !isQuali() && !realRace.owns(player)) scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
+  if (!isPractice() && !isQuali() && !realRace.owns(player)) {
+    scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
+    // Race only (TT/quali already gated): blue-flag compliance for the player.
+    if (session === "race" && track) {
+      blueFlagCall(blueWatch.tick(player, ranked, {
+        total: track.total, vRef: vTop(), caution: raceCtl.level, race: true,
+      }, dt));
+    }
+  }
 
   // Leading human for AiBand catch-up (scripted mode ignores). Once per step.
   _leadHuman = null;

@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { resolve, extname } from "node:path";
 import { assertSafePathToken, resolveRepoDefault } from "../lib/output-paths.mjs";
 
+import { parseCaptureOptions, captureViewport, captureScreenshotOptions } from "./capture-options.mjs";
+
 const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
 
 export function flag(argv, name, fallback) {
@@ -53,17 +55,30 @@ export function normalizeJob(raw, defaults = {}) {
   const tod = String(raw.tod ?? defaults.tod ?? "day");
   const showHud = !!(raw.hud ?? raw.showHud ?? defaults.showHud);
   const team = raw.team ?? defaults.team ?? null;
+  const baseCapture = defaults.capture || parseCaptureOptions([]);
+  const captureArgs = ["--profile", String(raw.profile ?? baseCapture.profile)];
+  for (const key of ["width", "height", "dpr", "scope", "gpu", "browser", "type", "quality", "seed"]) {
+    const value = raw[key] ?? (raw.profile == null ? baseCapture[key] : key === "width" || key === "height" || key === "type" || key === "quality" ? null : baseCapture[key]);
+    if (value != null) captureArgs.push(`--${key}`, String(value));
+  }
+  if (raw.isolated ?? baseCapture.isolated) captureArgs.push("--isolated");
+  const capture = parseCaptureOptions(captureArgs);
+  capture.gpuExplicit = raw.gpu != null || baseCapture.gpuExplicit;
+  const viewport = captureViewport(capture, { width: 1280, height: 720 });
+  const backend = String(raw.backend ?? defaults.backend ?? "three");
+  if (!["three", "webgl2", "webgpu"].includes(backend)) throw new Error(`unknown backend "${backend}"`);
+  if (!["day", "dusk", "dawn", "night"].includes(tod)) throw new Error(`unknown time of day "${tod}"`);
   const jpegFlag = !!(raw.jpeg ?? defaults.jpeg);
   let out = raw.out ? resolve(String(raw.out)) : null;
-  const fmtHint = out ? imageFormatFor(out, { jpegFlag }) : imageFormatFor("", { jpegFlag: jpegFlag || !!defaults.jpeg });
+  const fmtHint = capture.type ? captureScreenshotOptions(capture) : out ? imageFormatFor(out, { jpegFlag }) : imageFormatFor("", { jpegFlag: jpegFlag || !!defaults.jpeg });
   if (!out) {
     out = defaultOutPath(defaults.ROOT, { trackId, frac, cam, type: fmtHint.type });
   }
-  const format = imageFormatFor(out, { jpegFlag: jpegFlag || fmtHint.type === "jpeg" });
+  const format = capture.type ? captureScreenshotOptions(capture) : imageFormatFor(out, { jpegFlag: jpegFlag || fmtHint.type === "jpeg" });
   return {
-    trackId, frac, cam, az, el, dist, side, tod, showHud, team, out,
+    trackId, frac, cam, az, el, dist, side, tod, showHud, team, out, backend, capture, viewport,
     type: format.type,
-    quality: format.quality,
+    quality: format.type === "jpeg" ? capture.quality ?? format.quality ?? 85 : undefined,
     raster: !!(raw.raster ?? defaults.raster),
   };
 }
@@ -90,13 +105,15 @@ export function loadBatchFile(path) {
 
 /** Single-shot positionals + flags → one job. */
 export function parseShotArgv(argv, ROOT) {
+  const capture = parseCaptureOptions(argv);
+  argv = capture.positionals;
   const batchPath = flag(argv, "--batch", null);
   const raster = has(argv, "--raster");
   const jpeg = has(argv, "--jpeg");
   const TEAM = flag(argv, "--team", null);
   const WAIT_MS = Math.max(5, parseFloat(flag(argv, "--wait", "120"))) * 1000;
   const defaults = {
-    ROOT,
+    ROOT, capture, backend: flag(argv, "--backend", "three"),
     az: flag(argv, "--az", "45"),
     el: flag(argv, "--el", "18"),
     dist: flag(argv, "--dist", "45"),
@@ -111,7 +128,7 @@ export function parseShotArgv(argv, ROOT) {
   if (batchPath) {
     const jobs = loadBatchFile(resolve(batchPath)).map((raw) => normalizeJob(raw, defaults));
     if (!jobs.length) throw new Error("batch file has no jobs");
-    return { mode: "batch", jobs, waitMs: WAIT_MS, team: TEAM, raster };
+    return { mode: "batch", jobs, waitMs: WAIT_MS, team: TEAM, raster, capture };
   }
 
   const positionals = [];
@@ -127,26 +144,36 @@ export function parseShotArgv(argv, ROOT) {
   const job = normalizeJob({
     trackId, frac: fracArg, cam, out: outArg || undefined,
   }, defaults);
-  return { mode: "single", jobs: [job], waitMs: WAIT_MS, team: TEAM, raster };
+  return { mode: "single", jobs: [job], waitMs: WAIT_MS, team: TEAM, raster, capture };
 }
 
-/** Stable order: same track consecutive so race() runs once per track. */
+/** Team/backend/viewport boundaries require a fresh isolated browser context. */
+export function shotSessionKey(job) {
+  return JSON.stringify([job.team ?? null, job.backend ?? "three", job.viewport?.width ?? 1280,
+    job.viewport?.height ?? 720, job.capture?.dpr ?? 1, job.capture?.profile ?? "custom", job.capture?.seed ?? null]);
+}
+
+/** Stable grouping keeps compatible scenes warm without changing another team's boot. */
 export function groupJobsByTrack(jobs) {
   const order = [];
   const map = new Map();
-  for (const j of jobs) {
-    if (!map.has(j.trackId)) {
-      map.set(j.trackId, []);
-      order.push(j.trackId);
+  for (const [index, j] of jobs.entries()) {
+    const key = JSON.stringify([shotSessionKey(j), j.trackId, j.tod, j.capture?.isolated ? index : null]);
+    if (!map.has(key)) {
+      map.set(key, []);
+      order.push(key);
     }
-    map.get(j.trackId).push(j);
+    map.get(key).push(j);
   }
-  return order.map((id) => ({ trackId: id, jobs: map.get(id) }));
+  return order.map((key) => ({ trackId: map.get(key)[0].trackId, sessionKey: shotSessionKey(map.get(key)[0]), jobs: map.get(key) }));
 }
 
 export const SHOT_USAGE = `usage: node tools/shot/shot.mjs <trackId> <frac> [cam] [out.png|out.jpg]
        node tools/shot/shot.mjs --batch <jobs.json|jsonl> [--jpeg] [--raster] [--wait S]
-  One Chromium boot; --batch reuses the race() per track (many frames without relaunch).
+  One Chromium boot; --batch groups compatible track/team/tod/backend/viewport jobs.
+  --profile preview|comparison --width N --height N --dpr N --scope scene|page
+  --gpu swiftshader|llvmpipe|hardware|lavapipe --browser auto|chromium|shell
+  --backend three|webgl2|webgpu --trace[=path] --cache-assets --isolated --seed N
   cam: park | eye | orbit | cinematic | trackside.
   --jpeg / .jpg → JPEG q85 (human review). --raster → __apex.render view only (no PNG).
   Default out: scratch/captures/playwright-probe/<track>-<frac%>-<cam>.png`;
