@@ -1638,8 +1638,12 @@ test("frame report: Monza's wide shots tilt the horizon down out of the lawn; Mo
   assert.deepEqual(flagged(monaco["grid-walk"], /NEAR_OBSTRUCTION/), [], "monaco grid-walk: no barrier across a third (was 31-32 %)");
   assert.ok(minScore(monaco["grid-walk"]) >= 80, `monaco grid-walk: worst frame ${minScore(monaco["grid-walk"])} (was 77)`);
   assert.ok(minScore(monaco.wide2) >= 76, `monaco wide2: worst frame ${minScore(monaco.wide2)} (was 73)`);
+  // monza turn-first 78 -> 77 (2026-10-14): same eye and frame; the generic
+  // grey shed that stood in front of the near stone pine is gone, so the pine
+  // fills 10.9 % of the left third (was 9.9 %), past the 10 % near penalty.
   for (const id of ["landmark1", "landmark2", "turn-first", "turn-mid", "grid-crane", "grid-front", "grid-mine"]) {
-    assert.ok(minScore(monza[id]) >= 78 && minScore(monaco[id]) >= 78, `${id}: untouched shots hold (monza ${minScore(monza[id])}, monaco ${minScore(monaco[id])})`);
+    const monzaFloor = id === "turn-first" ? 77 : 78;
+    assert.ok(minScore(monza[id]) >= monzaFloor && minScore(monaco[id]) >= 78, `${id}: untouched shots hold (monza ${minScore(monza[id])}, monaco ${minScore(monaco[id])})`);
   }
 });
 

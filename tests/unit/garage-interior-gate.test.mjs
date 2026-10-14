@@ -91,26 +91,29 @@ it("compact #cs-tabs category tabs keep the tap floor (no tap-min 2-row crush)",
     css,
     /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\][^{]*#cs-tabs[^{]*\.cs-tab\s*\{[^}]*min-height:\s*0\s*;/s,
     "compact .cs-tab must not zero min-height over the components.css floor");
+  // Compact and tall+stacked share one strip rule (comma-grouped selectors).
+  const stripTab = /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs \.cs-tab\s*,\s*#cs-inner:not\(\[data-pair="on"\]\)\[data-shape="tall"\] #cs-tabs \.cs-tab\s*\{/;
+  const stripPane = /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs\s*,\s*#cs-inner:not\(\[data-pair="on"\]\)\[data-shape="tall"\] #cs-tabs\s*\{/;
   assert.match(
     css,
-    /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs \.cs-tab\s*\{[^}]*min-block-size:\s*var\(--tap-paint,\s*var\(--tap\)\)/s,
-    "compact category tabs floor block size at --tap-paint / --tap");
+    new RegExp(stripTab.source + /[^}]*min-block-size:\s*var\(--tap-paint,\s*var\(--tap\)\)/s.source, "s"),
+    "compact/tall category tabs floor block size at --tap-paint / --tap");
   assert.match(
     css,
-    /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs \.cs-tab\s*\{[^}]*min-height:\s*var\(--tap-paint,\s*var\(--tap\)\)/s,
-    "compact category tabs also keep physical min-height at the tap rung");
+    new RegExp(stripTab.source + /[^}]*min-height:\s*var\(--tap-paint,\s*var\(--tap\)\)/s.source, "s"),
+    "compact/tall category tabs also keep physical min-height at the tap rung");
   assert.match(
     css,
-    /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs \.cs-tab\s*\{[^}]*min-width:\s*var\(--tap-paint,\s*var\(--tap\)\)/s,
-    "compact category tabs also floor width at the tap rung");
+    new RegExp(stripTab.source + /[^}]*min-width:\s*var\(--tap-paint,\s*var\(--tap\)\)/s.source, "s"),
+    "compact/tall category tabs also floor width at the tap rung");
   assert.match(
     css,
-    /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs\s*\{[^}]*scroll-snap-type:\s*x\s+mandatory/s,
-    "compact strip snaps so a category is not half-clipped beside BACK");
+    new RegExp(stripPane.source + /[^}]*scroll-snap-type:\s*x\s+mandatory/s.source, "s"),
+    "compact/tall strip snaps so a category is not half-clipped beside BACK");
   assert.match(
     css,
-    /#cs-inner:not\(\[data-pair="on"\]\)\[data-density="compact"\] #cs-tabs \.cs-tab\s*\{[^}]*scroll-snap-align:\s*start/s,
-    "each compact category tab is a snap stop");
+    new RegExp(stripTab.source + /[^}]*scroll-snap-align:\s*start/s.source, "s"),
+    "each compact/tall category tab is a snap stop");
   // Livery ⧉ chips stay on the chip / WCAG-min rung — do not hoist them to --tap.
   assert.match(
     css,

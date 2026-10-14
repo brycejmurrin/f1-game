@@ -15,7 +15,7 @@ __apex.lightTune({ lampLevel: 0.4 })
 ```
 
 Precedence, lowest→highest: `TUNE_DEFS.def` → shipped
-`js/lighting/presets.js` `"*"` → shipped `"track|tod|weather"` →
+`js/lighting/presets.js` `"*"` → shipped `"*|tod|wx"` (shared stamp, e.g. `"*|night|dry"`) → shipped `"track|tod|weather"` →
 shipped `"*|tod"` when `gfx.hasPerChunkLights` (all presets/device classes) → localStorage `"*"` → localStorage **`track|tod|weather`**. Live slider edits
 write the **current condition** key (`LightStore.set` → `profiles[key()]`),
 not global `"*"`. Ship a look by merging the COPY VALUES `LightEdits` delta into
@@ -90,6 +90,6 @@ Full reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools.
   COPY VALUES) → [references/bake.md](references/bake.md) — `scripts/bake.mjs`
   is a FULL REPLACE, `scripts/merge-proposals.mjs` merges a delta.
 
-The conditional layer is capability-gated; inspect CPU per-chunk light telemetry
-before assuming a shipped condition applies to every backend/preset. COPY VALUES
-exports `LightEdits` deltas; merged `lightState()` is observation, not a full export.
+The `"*|tod"` layer applies only when `gfx.hasPerChunkLights`. COPY VALUES exports
+`LightEdits` deltas; merged `lightState()` is observation, not a full export.
+The `apex-eval`/`slider-effect --live`/capture commands boot Chromium: parent session only, never a subagent (AGENTS.md rule 10).

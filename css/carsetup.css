@@ -325,10 +325,26 @@
   overflow-y: hidden;
   overscroll-behavior-x: contain; touch-action: pan-x;
   scrollbar-width: none; scrollbar-gutter: auto;
+  /* SNAP + PEEK. Without snap, a category parks mid-glyph at the trailing
+     edge (390×844: SUSP 53/80 painted, BRAKES at 0 wide) and ScrollFade's
+     sf-r alone does not read as "more this way". Mandatory x + start align
+     matches the compact #cs-tabs strip; 24px end padding is the minimum
+     leading edge of the next tab that must stay visible (UI Fit). */
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline-end: calc(var(--gap) * 2);
 }
 #cs-tabs .cs-tab-row::-webkit-scrollbar { display: none; }
+/* Trailing spacer: last tab can snap fully in; also keeps ≥24px of empty
+   track after the final category so End does not jam under the fade. */
+#cs-tabs .cs-tab-row::after {
+  content: "";
+  flex: 0 0 calc(var(--gap) * 2);
+  scroll-snap-align: none;
+}
 #cs-inner:not([data-pair="on"]) #cs-tabs .cs-tab {
   flex: 0 0 auto; white-space: nowrap;
+  scroll-snap-align: start;
+  scroll-snap-stop: normal;
 }
 /* PLAY-SHAPE GARAGE (compact, stacked, short LANDSCAPE only): a one-line head
    with CLOSE GARAGE / BACK+DONE in the header row's trailing column, then ONE
@@ -367,8 +383,13 @@
    62 px box over 2832 px (50.7 screens). With the portrait --compact-at (the
    orientation block near the end) the portrait phone takes the compact head and this one 52-tall strip, and the
    list gets ~280 own. Each tab is floored at 52 painted in BOTH axes: ERS and
-   FUEL measured 44 and 51 wide in the landscape strip on 42cb42fbf. */
-#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs {
+   FUEL measured 44 and 51 wide in the landscape strip on 42cb42fbf.
+
+   ALSO tall+stacked at NORMAL density (390×844 roomy portrait): two named
+   rows still cost 124px and left #cs-options at 145px — TEAM's DRIVER label
+   sat on CLOSE (y≈475 vs y≈518). Same strip, density still owns head chrome. */
+#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs,
+#cs-inner:not([data-pair="on"])[data-shape="tall"] #cs-tabs {
   display: flex; flex-wrap: nowrap; align-items: stretch;
   gap: calc(var(--gap) * 0.5);
   max-height: none; min-width: 0;
@@ -376,19 +397,31 @@
   overflow-x: auto; overflow-y: hidden;
   overscroll-behavior-x: contain; touch-action: pan-x;
   scrollbar-width: none; scrollbar-gutter: auto;
-  /* SNAP EACH CATEGORY. Compact flattens both .cs-tab-row into this one
-     scroller (display: contents). Without snap, mid-strip labels park
-     half-clipped at the right edge beside BACK — measured Pages/live
-     ios-iphone-landscape-safari 852×344 compact LIVERY, 2026-10-05
+  /* SNAP EACH CATEGORY. Compact (and tall stacked) flattens both .cs-tab-row
+     into this one scroller (display: contents). Without snap, mid-strip
+     labels park half-clipped at the right edge beside BACK — measured
+     Pages/live ios-iphone-landscape-safari 852×344 compact LIVERY, 2026-10-05
      (AERO right past #cs-tabs client edge). MWG css-layout / scroll-snap:
      mandatory x + align start. ScrollFade (#cs-tabs in SEL) paints sf-l /
      sf-r for the "more this way" edge (scrollability-affordance-hints). */
   scroll-snap-type: x mandatory;
   scroll-padding-inline: var(--pad);
+  scroll-padding-inline-end: max(calc(var(--gap) * 2), var(--pad));
 }
-#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs::-webkit-scrollbar { display: none; }
-#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs .cs-tab-row { display: contents; }
-#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs .cs-tab {
+#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs::-webkit-scrollbar,
+#cs-inner:not([data-pair="on"])[data-shape="tall"] #cs-tabs::-webkit-scrollbar { display: none; }
+#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs .cs-tab-row,
+#cs-inner:not([data-pair="on"])[data-shape="tall"] #cs-tabs .cs-tab-row { display: contents; }
+/* Rows are display:contents — their ::after spacer never boxes. Put the
+   peek pad on the strip that actually scrolls. */
+#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs::after,
+#cs-inner:not([data-pair="on"])[data-shape="tall"] #cs-tabs::after {
+  content: "";
+  flex: 0 0 calc(var(--gap) * 2);
+  scroll-snap-align: none;
+}
+#cs-inner:not([data-pair="on"])[data-density="compact"] #cs-tabs .cs-tab,
+#cs-inner:not([data-pair="on"])[data-shape="tall"] #cs-tabs .cs-tab {
   /* TAP FLOOR — never crush. Live Pages (v=13789 / carsetup 0450d166aebf)
      still shipped the pre-#924 short-landscape 2-row grid sized from the
      WCAG-min rung (+4px) with category tabs zeroing min-height, painting
@@ -457,6 +490,24 @@
 #cs-options {
   flex: 1 1 auto; min-height: 0;
   display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5);
+}
+/* TALL STACKED: the options pane is the catalogue — keep flex:1 and a floor
+   tall enough for the TEAM card + DRIVER control above a compact foot.
+   Measured 390×844 before the one-strip: options h=145 / scrollH=648, DRIVER
+   label at y=475 against CLOSE at y=518. Floor = team card (~tap*1.6) +
+   label + driver chip (--tap-paint) + gaps. */
+#cs-inner:not([data-pair="on"])[data-shape="tall"] #cs-options {
+  flex: 1 1 auto;
+  min-height: calc(var(--tap-paint, var(--tap)) * 3.25);
+}
+#cs-inner:not([data-pair="on"])[data-shape="tall"] > .sheet-foot {
+  flex: 0 0 auto;
+  padding-top: calc(var(--gap) * 0.25);
+  padding-bottom: calc(var(--gap) * 0.25);
+}
+#cs-inner:not([data-pair="on"])[data-shape="tall"] > .sheet-foot > .bigbtn {
+  min-height: var(--tap-paint, var(--tap));
+  min-block-size: var(--tap-paint, var(--tap));
 }
 /* Rows must NOT shrink. As flex children they default to flex-shrink:1, so the
    moment the list was taller than the pane every row was squeezed a few pixels

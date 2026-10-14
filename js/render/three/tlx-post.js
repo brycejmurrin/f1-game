@@ -176,8 +176,8 @@
     sceneDepthTex.name = "TLXSceneDepth";
     // R3 (perf hunt 3): ctx.ssrTag false builds the scene target with ONE
     // colour attachment. tlx.js passes false only while nothing can read the
-    // tag for the session (phone MEDIUM: po.reflect and po.carReflect are 0 at
-    // tier >= 2, and the heat haze is mobileTier-gated off), so every scene
+    // tag for the session (phone MEDIUM: po.carReflect is 0 at tier >= 2, the
+    // wet-road march never reads the tag, and the heat haze is mobileTier-gated off), so every scene
     // fragment stops writing — and a tile GPU stops storing — an attachment
     // the composite never fetches. The tag slot then binds its OWN 1x1 white
     // ("not car", the tag's background value): three merges texture nodes
@@ -334,8 +334,23 @@
     // autoClear): a full-viewport NoBlending quad overwrites every pixel, so a
     // clear is byte-identical and spares a tile GPU the read of the old target.
     // Only the additive UP passes and the mirror inset (a viewport rect) load.
+    // A-W1 draw warm (drawWarm below): every pass DRAWS once into its own
+    // target under a 1x1 scissor, so the driver's first-draw work (ANGLE-Metal's
+    // pipeline state, vertex/format conversion) lands in the warm, not on the
+    // race's first frames. Never the canvas (target null): a draw there would
+    // present a fresh, black drawing buffer for the rest of the warm.
+    let _scissorWarm = false, _warmDraws = 0, _warmSc = null;   // the scissor scratch, made on the first warm draw
     function runPass(mat, target, load) {
       if (compileJobs) { compileJobs.push({ mat, target }); return; }
+      if (_scissorWarm) {
+        if (!target) return;
+        (_warmSc || (_warmSc = target.scissor.clone())).copy(target.scissor); target.scissor.set(0, 0, 1, 1);
+        quad.material = mat;
+        renderer.setRenderTarget(target);
+        renderer.autoClear = false;   // a clear (WebGPU loadOp) ignores the scissor
+        try { quad.render(renderer); _warmDraws++; } finally { target.scissor.copy(_warmSc); }
+        return;
+      }
       quad.material = mat;
       renderer.setRenderTarget(target);
       renderer.autoClear = !load;
@@ -809,6 +824,60 @@
       }
     }
 
+    // A-P1 (perf hunt 4): SCENE DEPTH, DISCARDED WHEN NO PASS READS IT. The
+    // scene target's depth is stored for SSAO (+ contact, + the composite's AO
+    // upsample), the godray march, SSR (road and car paint) and the lens
+    // flare's sun-occlusion tap — and for nothing else. At autoTier 4, at night
+    // or on a dry phone frame every one of those is off, yet a tile GPU still
+    // writes a full-res depth surface back to memory (~4 B/px, ~12 % of the
+    // phone post chain's traffic). GLX's rule exactly (glx/post.js needDepth,
+    // which invalidates the same way), evaluated per frame from the SAME
+    // opts/F the chain is about to read, so a frame whose post reads depth
+    // always has it: identical pixels by construction (the next scene pass
+    // clears depth). On WebGL2: invalidateFramebuffer(DEPTH) on the scene FBO
+    // while its pass is still open (ANGLE-Metal: store action DontCare), and on
+    // an MSAA target the depth resolve blit is skipped instead
+    // (resolveDepthBuffer). three r186 has no lever on WebGPU: it stores a
+    // single-sample depth whatever its usage (WebGPUBackend discardDepth is
+    // MSAA-only), so a rebuild with a non-sampled depth would buy nothing there.
+    // apex26.tlxDepthDiscard="0" always keeps it.
+    let _depthDiscard = true;
+    try { _depthDiscard = localStorage.getItem("apex26.tlxDepthDiscard") !== "0"; } catch (_) { /* no storage: on */ }
+    let _depthKeep = true, _depthDiscards = 0, _invDepth = null;
+    function needsDepth(opts, F) {
+      const o = opts || {};
+      if (viz) return true;
+      if (((o.ssao !== undefined ? o.ssao : 0) > 0 || (o.contact !== undefined ? o.contact : 0) > 0) && F.invProj) return true;   // SSAO, contact, AO upsample
+      const S = shadow ? shadow.S : null;
+      const lampVol = (o.mist || 0) > 0 ? (o.lampVol || 0) : 0;
+      if (P.godray && F.invVP && ((!!(S && S.enabled) && (o.godray !== undefined ? o.godray : 0) > 0) || lampVol > 0)) return true;
+      const car = o.carReflect != null ? o.carReflect : PostCommon.knob(o.tune || null, "carReflect");
+      if (F.invProj && F.proj && F.upVS && ((o.reflect || 0) > 0.001 || car > 0.001)) return true;   // SSR's depthAt gate
+      const sun = PostCommon.sunScreen(F.sunDir, F.viewProj, F.sunColor, _sunScr);   // present() recomputes it
+      return !!(sun.visible && sun.flare * (o.flareMul != null ? o.flareMul : 1) > 0);   // the flare's depthAt(sunUV)
+    }
+    // Before the scene pass (tlx.js present): decide, and tell an MSAA target whether to resolve depth.
+    function depthBegin(opts, F) {
+      _depthKeep = !_depthDiscard || needsDepth(opts, F);
+      sceneRT.resolveDepthBuffer = _depthKeep;
+      return _depthKeep;
+    }
+    // After the scene pass, before present(): drop the depth this frame does not read (WebGL2 only).
+    function depthEnd() {
+      if (_depthKeep) return false;
+      const be = renderer.backend, gl = be && be.gl, st = be && be.state;
+      if (!gl || typeof gl.invalidateFramebuffer !== "function" || !st || !st.currentBoundFramebuffers) return false;
+      const d = be.get(sceneRT), msaa = (sceneRT.samples | 0) > 0;
+      // Only the FBO three just rendered the scene into (and, under MSAA, resolved out of) — never a guess.
+      const target = msaa ? gl.READ_FRAMEBUFFER : gl.DRAW_FRAMEBUFFER;
+      const fb = st.currentBoundFramebuffers[target];
+      const ours = msaa ? (fb && fb === d.msaaFrameBuffer) : (fb && d.framebuffers && Object.values(d.framebuffers).indexOf(fb) >= 0);
+      if (!ours) return false;
+      gl.invalidateFramebuffer(target, _invDepth || (_invDepth = [gl.DEPTH_ATTACHMENT]));
+      _depthDiscards++;
+      return true;
+    }
+
     async function warm(opts, frame) {
       // Collect enabled passes first, then compile serially with stable targets.
       const jobs = [], target = renderer.getRenderTarget(), mrt = renderer.getMRT();
@@ -839,6 +908,26 @@
         Object.assign(_last, last); _lastPresentRT = lastRT; _vizDest = vizDest;
         renderer.setMRT(mrt); renderer.setRenderTarget(target);
       }
+    }
+
+    // A-W1: present() itself, every pass drawn under the 1x1 scissor into its
+    // own target (runPass). Every target the chain draws is fully rewritten by
+    // the next real present() before anything reads it (no pass reads a
+    // previous frame), so the pixels the player sees are identical. Returns the
+    // number of passes drawn; the chain's last-frame state is restored.
+    function drawWarm(opts, frame) {
+      const last = { ..._last }, lastRT = _lastPresentRT, vizDest = _vizDest, mc = _mirComposites, n0 = _warmDraws;
+      const sc0 = renderer.getScissorTest();
+      try {
+        _scissorWarm = true;
+        renderer.setScissorTest(true);
+        present(opts, frame);
+      } finally {
+        _scissorWarm = false;
+        renderer.setScissorTest(sc0);
+        Object.assign(_last, last); _lastPresentRT = lastRT; _vizDest = vizDest; _mirComposites = mc;
+      }
+      return _warmDraws - n0;
     }
 
     async function warmMirror(tex) {
@@ -872,7 +961,9 @@
       spatialOk: () => !!(P && P.sgsr && P.sgsr.mat),
       resize,
       warm,
+      drawWarm,   // A-W1
       warmMirror,
+      needsDepth, depthBegin, depthEnd,   // A-P1
       present,
       dispose,
       viz,
@@ -882,6 +973,7 @@
         on: true,
         hdr,
         attachments: tagOn ? 2 : 1,
+        depth: { discard: _depthDiscard, kept: _depthKeep, discards: _depthDiscards },   // A-P1: the last frame's call
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
         targets: [W, H],

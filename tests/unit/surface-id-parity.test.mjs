@@ -65,19 +65,20 @@ test("classifiedCar's upper bound covers every id each backend branches on", () 
 });
 
 test("every id the shaders branch on is a real Car3D surface, and vice versa", () => {
-  const car3d = read("js/car/car3d.js");
-  const block = car3d.slice(car3d.indexOf("const SURFACES = Object.freeze({"));
+  // SURFACES / FINISH_SURFACE live in car-materials.js (pure-moved from car3d); Car3D re-exports them.
+  const mats = read("js/car/car-materials.js");
+  const block = mats.slice(mats.indexOf("const SURFACES = Object.freeze({"));
   const declared = new Set([...block.slice(0, block.indexOf("});")).matchAll(/:\s*(\d+)/g)]
     .map((m) => Number(m[1])).filter((n) => n >= 20));
-  const finish = car3d.slice(car3d.indexOf("const FINISH_SURFACE = Object.freeze({"));
+  const finish = mats.slice(mats.indexOf("const FINISH_SURFACE = Object.freeze({"));
   for (const m of finish.slice(0, finish.indexOf("});")).matchAll(/:\s*(\d+)/g)) declared.add(Number(m[1]));
   assert.ok(declared.size >= 8, `only ${declared.size} car surfaces parsed — the scanner stopped matching`);
 
   const shader = idsIn(BACKENDS.GLX).ids;
   const ghosts = [...shader].filter((id) => id >= 20 && !declared.has(id)).sort((a, b) => a - b);
-  assert.deepEqual(ghosts, [], `the shaders branch on surface id ${ghosts.join(", ")}, which car3d.js never assigns`);
+  assert.deepEqual(ghosts, [], `the shaders branch on surface id ${ghosts.join(", ")}, which car-materials.js never assigns`);
   const unhandled = [...declared].filter((id) => !shader.has(id)).sort((a, b) => a - b);
-  assert.deepEqual(unhandled, [], `car3d.js assigns surface id ${unhandled.join(", ")}, which no shader branches on`);
+  assert.deepEqual(unhandled, [], `car-materials.js assigns surface id ${unhandled.join(", ")}, which no shader branches on`);
 });
 
 test("the visor's dielectric reflection constants agree across the three backends", () => {
