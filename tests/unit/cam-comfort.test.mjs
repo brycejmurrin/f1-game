@@ -86,13 +86,13 @@ test("boot drops the old XR auto value on a non-touch device, keeps it on touch"
   assert.equal(phone.raw(CC.KEY), "on");
 });
 
-test("an explicit MOTION: ON wins over the touch auto-pick", () => {
+test("an explicit REDUCE MOTION: OFF wins over the touch auto-pick", () => {
   const CC = load();
   const s = rawStore({ [CC.KEY]: "on" });
   let motion = null;
   s.get = (k, d) => (k === "motion" && motion !== null ? motion : d);
   assert.equal(CC.active(s), true);
-  motion = "on";
+  motion = "off";
   assert.equal(CC.active(s), false);
   motion = "reduce";
   assert.equal(CC.active(s), true);
@@ -115,8 +115,8 @@ test("active() is memoised on the store's rev / rawRev: no raw read per frame, e
   CC.set(s, false);
   assert.equal(CC.active(s), false, "set() bumps rawRev");
   assert.equal(reads, 2);
-  CC.set(s, true); motion = "on"; s.rev++;   // SETTINGS > MOTION: ON is a JSON-lane set(): rev
-  assert.equal(CC.active(s), false, "an explicit MOTION: ON still wins");
+  CC.set(s, true); motion = "off"; s.rev++;   // SETTINGS > REDUCE MOTION: OFF is a JSON-lane set(): rev
+  assert.equal(CC.active(s), false, "an explicit REDUCE MOTION: OFF still wins");
   motion = null; s.rev++;
   assert.equal(CC.active(s), true);
   const plain = rawStore({ camComfortPref: "on" });   // a store with no revisions is never memoised

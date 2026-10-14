@@ -22,8 +22,9 @@ const CamComfort = (function () {
   }
 
   /** True when comfort should silence shake / buzz (after boot / user choice).
-   *  An explicit SETTINGS › MOTION: ON (apex26.motion = "on") is the player
-   *  asking for full motion, and wins over the touch auto-pick. */
+   *  An explicit SETTINGS › ACCESSIBILITY › REDUCE MOTION: OFF (apex26.motion
+   *  = "off") is the player asking for full motion, and wins over the touch
+   *  auto-pick. Legacy MOTION: ON stored as "on" is treated as AUTO (not OFF). */
   // render() asks every frame and raw() is a localStorage read, so the answer is
   // memoised on the store's revisions: `rev` (set(), a foreign tab's write, a
   // mirror restore) and `rawRev` (rawSet / rawDel — boot(), set(), a settings
@@ -35,7 +36,7 @@ const CamComfort = (function () {
     if (!s || typeof s.raw !== "function") return false;
     const memo = typeof s.rev === "number" && typeof s.rawRev === "number";
     if (memo && s === _mS && s.rev === _mRev && s.rawRev === _mRaw) return _mVal;
-    const v = !(typeof s.get === "function" && s.get("motion", null) === "on") && s.raw(KEY) === "on";
+    const v = !(typeof s.get === "function" && s.get("motion", null) === "off") && s.raw(KEY) === "on";
     if (memo) { _mS = s; _mRev = s.rev; _mRaw = s.rawRev; _mVal = v; }
     return v;
   }

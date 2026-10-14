@@ -1,44 +1,46 @@
-/* steer-lock-taper.test.mjs — low-speed lock hold in js/game.js lockTaper.
+/* steer-lock-taper.test.mjs — low-speed lock plateau in js/game.js lockTaper.
  *
  * Fail-before: hyperbolic 1/(1+vs/ref) alone strips lock at hairpin speed
  * (Monaco Loews ~10 m/s needs ~0.39 rad Ackermann; notch-7 applied ~0.28).
- * Hold full lock for vs≤15, blend 15→30, raw taper for vs≥30 so racing
- * speeds (≥60 m/s) stay bit-identical to the pre-fix formula.
+ * Hold a 1.06× plateau for vs≤15 (≈0.371 rad at notch-7 0.35), blend 15→30,
+ * raw taper for vs≥30 so racing speeds (≥60 m/s) stay bit-identical to the
+ * pre-boost formula.
  *
  * Run: node --test tests/unit/steer-lock-taper.test.mjs
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { gameSource } from "../helpers/game-source.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
 
-/** Pre-fix hyperbolic taper (bit-identical reference for vs ≥ 30). */
+/** Pre-boost hyperbolic taper (bit-identical reference for vs ≥ 30). */
 function rawTaper(vs, ref) {
   return 1 / (1 + vs / ref);
 }
 
-/** Shipped lockTaper: plateau ≤15, blend 15–30, raw ≥30. */
+const LOW_PLATEAU = 1.06;
+
+/** Shipped lockTaper: 1.06× plateau ≤15, blend 15–30, raw ≥30. */
 function lockTaper(vs, ref) {
   const raw = rawTaper(vs, ref);
-  return vs <= 15 ? 1 : (vs >= 30 ? raw : 1 + (raw - 1) * (vs - 15) / 15);
+  return vs <= 15 ? LOW_PLATEAU : (vs >= 30 ? raw : LOW_PLATEAU + (raw - LOW_PLATEAU) * (vs - 15) / 15);
 }
 
-test("game.js ships the vs≤15 hold / 15–30 blend / raw≥30 lockTaper", () => {
-  const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  assert.match(src, /const vs = vStd\(Math\.abs\(c\.speed\)\),\s*raw = 1 \/ \(1 \+ vs \/ STEER_SPEED_REF\),\s*lockTaper = vs <= 15 \? 1 : \(vs >= 30 \? raw : 1 \+ \(raw - 1\) \* \(vs - 15\) \/ 15\)/);
+test("game.js ships the vs≤15 1.06 plateau / 15–30 blend / raw≥30 lockTaper", () => {
+  const src = gameSource();
+  assert.match(src, /const vs = vStd\(Math\.abs\(c\.speed\)\),\s*raw = 1 \/ \(1 \+ vs \/ STEER_SPEED_REF\),\s*lockTaper = vs <= 15 \? 1\.06 : \(vs >= 30 \? raw : 1\.06 \+ \(raw - 1\.06\) \* \(vs - 15\) \/ 15\)/);
   assert.equal(/const lockTaper = 1 \/ \(1 \+ vStd\(Math\.abs\(c\.speed\)\) \/ STEER_SPEED_REF\);/.test(src), false,
     "old one-line hyperbolic lockTaper must be gone");
+  assert.equal(/lockTaper = vs <= 15 \? 1 : \(vs >= 30 \? raw : 1 \+ \(raw - 1\) \* \(vs - 15\) \/ 15\)/.test(src), false,
+    "pre-boost plateau=1 lockTaper must be gone");
 });
 
-test("vs ≤ 15 holds full lock (taper = 1)", () => {
+test("vs ≤ 15 holds the 1.06× low-speed plateau", () => {
   const ref = 55;
   for (const vs of [0, 5, 8, 10, 12, 15]) {
-    assert.equal(lockTaper(vs, ref), 1, `vs=${vs}`);
+    assert.equal(lockTaper(vs, ref), LOW_PLATEAU, `vs=${vs}`);
   }
 });
 
@@ -53,7 +55,7 @@ test("vs ≥ 30 is bit-identical to the old hyperbolic taper", () => {
 
 test("blend 15–30 is monotone and lands on the endpoints", () => {
   const ref = 55;
-  assert.equal(lockTaper(15, ref), 1);
+  assert.equal(lockTaper(15, ref), LOW_PLATEAU);
   assert.ok(Object.is(lockTaper(30, ref), rawTaper(30, ref)));
   let prev = lockTaper(15, ref);
   for (let vs = 16; vs <= 30; vs++) {
@@ -64,7 +66,7 @@ test("blend 15–30 is monotone and lands on the endpoints", () => {
   }
 });
 
-test("applied full-lock delta: hairpin holds STEER_MAX_SLIP; ≥60 m/s matches old taper", async () => {
+test("applied full-lock delta: hairpin holds 1.06×STEER_MAX_SLIP; ≥60 m/s matches old taper", async () => {
   const { createGame } = require("../../tools/lib/game-vm.cjs");
   const DT = 1 / 60;
   const g = await createGame({ track: "monza", storage: { difficulty: "normal", autoThrottle: false } });
@@ -91,8 +93,9 @@ test("applied full-lock delta: hairpin holds STEER_MAX_SLIP; ≥60 m/s matches o
   const vStd = (v) => g.G.vStd ? g.G.vStd(v) : v / Math.max(g.G.PACE || 1, 0.05);
 
   const d10 = measure(10);
-  assert.ok(Math.abs(d10 - lock) < 0.01,
-    `at 10 m/s full lock ≈ STEER_MAX_SLIP (${lock}), got ${d10}`);
+  const expect10 = lock * LOW_PLATEAU;
+  assert.ok(Math.abs(d10 - expect10) < 0.01,
+    `at 10 m/s full lock ≈ 1.06×STEER_MAX_SLIP (${expect10}), got ${d10}`);
 
   const d60 = measure(60);
   const vs60 = vStd(Math.abs(P.speed));
