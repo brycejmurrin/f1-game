@@ -219,6 +219,7 @@ const FULL = [
   "js/car/helmets.js",
   "js/car/car-geometry.js",
   "js/car/car-wheels.js",
+  "js/car/car-material-shade.js", // CarMaterialShade: carbon/gloss/matte/metal response contract (finish pass)
   "js/car/car-materials.js", // CarMaterials: SURFACES / FINISH / palette + paint helpers (split from car3d)
   "js/car/car-shade.js",   // CarShade: rounded body sections + smooth shading for Car3D (apex26.carSmooth / ?carsmooth=0 opts out, default ON)
   "js/car/car-body-geom.js", // CarBodyGeom: wings / fins / chassis / pods / cover builders (split from car3d)
@@ -365,6 +366,7 @@ const FULL = [
   "js/ui/debris-opts.js",
   "js/perf/metrics-overlay.js",
   "js/camera/cam-comfort.js", // touch/XR auto comfort preset (before mode-switch boots it)
+  "js/camera/fov-fit.js",     // CamFovFit.fitFovY: HFOV cap (wide) + floor (portrait); pure
   "js/camera/vantage.js",
   "js/camera/mode-switch.js",
   // WebXR boot half: SETTINGS › VR rows (call-time; hidden unless caps.vr) and
@@ -496,6 +498,7 @@ const CARVIEW = [
   "js/car/helmets.js",
   "js/car/car-geometry.js",
   "js/car/car-wheels.js",
+  "js/car/car-material-shade.js",
   "js/car/car-materials.js",
   "js/car/car-shade.js",
   "js/car/car-body-geom.js",
@@ -564,6 +567,7 @@ const HARD_EDGES = [
   ["js/ui/platform-session.js", "js/game.js"],
   ["js/car/car-geometry.js", "js/car/car3d.js"],
   ["js/car/car-wheels.js", "js/car/car3d.js"],
+  ["js/car/car-material-shade.js", "js/car/car-materials.js"],
   ["js/car/car-materials.js", "js/car/car-body-geom.js"],
   ["js/car/car-materials.js", "js/car/car3d.js"],
   ["js/car/car-geometry.js", "js/car/car-body-geom.js"],
