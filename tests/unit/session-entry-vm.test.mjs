@@ -4,6 +4,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import vm from "node:vm";
+import { gameSource } from "../helpers/game-source.mjs";
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 let g;
@@ -287,8 +288,7 @@ test("explicit outcomes preserve legacy values and suppress late canceled commit
 });
 
 test("paced track completion abandons canceled and superseded worlds before adoption", async () => {
-  const { readFileSync } = await import("node:fs");
-  const source = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  const source = gameSource();
   const start = source.indexOf("async function loadTrackStepped(");
   const end = source.indexOf("\nfunction loadTrack(", start);
   for (const mode of ["accepted", "canceled", "superseded"]) {
@@ -316,8 +316,7 @@ test("paced track completion abandons canceled and superseded worlds before adop
 });
 
 test("custom-track production observer runs only once the committed entry still owns the generation", async () => {
-  const { readFileSync } = await import("node:fs");
-  const source = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  const source = gameSource();
   const observer = source.slice(source.indexOf("  if (!_customTrackStarts.has(request))"), source.indexOf("  request.catch", source.indexOf("  if (!_customTrackStarts.has(request))")));
   const entry = vm.runInContext("SessionEntry", g.ctx).create();
   let hooks = 0;

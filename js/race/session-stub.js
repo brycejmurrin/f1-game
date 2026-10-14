@@ -115,7 +115,7 @@ var SessionRecords = {
   PHYS: "",
   create: () => ({
     _stub: true,
-    begin: function () {}, current: () => null, config: () => ({}), sample: function () {},
+    begin: function () {}, current: () => null, config: () => ({}), sample: function () {}, sampleInput: function () {},
     accept: () => false, board: () => [], invalidate: function () {}, finish: function () {},
     prepareDaily: function () {}, restoreDaily: function () {}, key: () => "",
   }),

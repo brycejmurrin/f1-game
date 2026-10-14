@@ -129,12 +129,32 @@ test("TLX-08: eviction picks the least recently DRAWN material, never one used t
   assert.match(TLX, /const k = lruVictim\(matCache, _matFrame\);/, "the miss path uses it");
 });
 
-test("TLX-01: begin() retries a dead post chain on a 2 s timer, 3-strike cap kept", () => {
-  assert.match(TLX, /_postRebuild = \+\+_postStrikes <= 3;\s*_postRetryAt = [^;]*\+ 2000;/, "the death site arms the timer");
-  const bi = TLX.indexOf("        begin(frame) {");
-  const b = TLX.slice(bi, TLX.indexOf("scene.background.setRGB", bi));
-  assert.match(b, /_postRebuild && !post && !_warmPending[\s\S]*?>= _postRetryAt/, "begin() retries off the timer, not mid-warm");
-  assert.match(b, /_postRebuild = false; post = buildPost\(\); if \(post\) post\.resize\(W, H\);/);
+test("TLX-01: begin() retries a dead post chain on a 2 s timer, 3-strike cap and truthful health kept", () => {
+  const stateStart=TLX.indexOf("      let _postStrikes ="), stateEnd=TLX.indexOf("      const ENV_SIZE",stateStart);
+  const deathStart=TLX.indexOf("          if (!painted && post) {",TLX.indexOf("// Post-only death:"));
+  const deathEnd=TLX.indexOf("          if (!painted) {",deathStart);
+  const bi=TLX.indexOf("        begin(frame) {"), retryStart=TLX.indexOf("          if (_postRebuild && !post && !_warmPending",bi);
+  const retryEnd=TLX.indexOf("          _tagSwap();",retryStart);
+  assert.ok(stateStart>0&&stateEnd>stateStart&&deathStart>0&&deathEnd>deathStart&&retryStart>bi&&retryEnd>retryStart,"post lifecycle extraction anchors remain production-owned");
+  let now=100, builds=0, resizes=0, disposals=0, direct=0;
+  const candidate=()=>({dispose(){disposals++;},resize(w,h){assert.equal(w,640);assert.equal(h,360);resizes++;}});
+  const c=vm.createContext({post:candidate(),painted:false,_warmPending:null,W:640,H:360,
+    performance:{now:()=>now},_cancelSoftBlits(){},paintCanvas(){direct++;},persistFail(){},buildPost(){builds++;return candidate();}});
+  vm.runInContext(TLX.slice(stateStart,stateEnd)+";globalThis.status=()=>({strikes:_postStrikes,rebuild:_postRebuild,retryAt:_postRetryAt,health:_postHealth});",c);
+  for(let strike=1;strike<=4;strike++){
+    c.post=candidate();c.painted=false;
+    vm.runInContext(TLX.slice(deathStart,deathEnd),c);
+    const state=c.status();assert.equal(state.strikes,strike);assert.equal(state.rebuild,strike<=3);
+    assert.equal(state.retryAt,now+2000,"each post death arms the exact 2 s deadline");
+    assert.equal(state.health.state,strike<=3?"recovering":"degraded");
+    assert.equal(disposals,strike,"each failed chain retires exactly once");assert.equal(direct,strike,"direct presentation continues after post failure");
+    const previousBuilds=builds;
+    now=state.retryAt-1;vm.runInContext(TLX.slice(retryStart,retryEnd),c);assert.equal(builds,previousBuilds,"not before deadline");
+    now=state.retryAt;c._warmPending=true;vm.runInContext(TLX.slice(retryStart,retryEnd),c);assert.equal(builds,previousBuilds,"never during shared program warm");
+    c._warmPending=null;vm.runInContext(TLX.slice(retryStart,retryEnd),c);
+    assert.equal(builds,previousBuilds+(strike<=3?1:0));assert.equal(resizes,builds,"successful retry sizes the replacement");
+    vm.runInContext(TLX.slice(retryStart,retryEnd),c);assert.equal(builds,previousBuilds+(strike<=3?1:0),"one rebuild per armed death");
+  }
 });
 
 test("TLX-02: a dead sun pass zeroes the lit shadow strength every frame", () => {

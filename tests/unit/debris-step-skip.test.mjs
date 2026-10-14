@@ -203,7 +203,8 @@ test("idle Rapier mirrors start incidents at the current human and AI pose", asy
       return out;
     }, wallAt: () => 7 },
   });
-  for (const file of ["js/core/mat4.js", "js/race/race-control.js", "js/physics/incident-sim.js"])
+  for (const file of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js",
+    "js/race/race-control.js", "js/physics/incident-sim.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx);
   // Only substitute module loading; promotion, stepping and handback use the
   // shipped DebrisWorld, IncidentSim and vendored Rapier WASM implementation.
