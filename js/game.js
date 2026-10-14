@@ -2373,6 +2373,7 @@ let _menuFly = null;
 // (SwiftShader) and linked NOTHING — a held card for nothing
 // (23 links, all in the menu and the flyby).
 let _warmKey = "";
+const _carWarm = { busy: false };   // the stepped race car warm (startRaceBody): render() draws nothing, as under gfx.warming()
 // ONE WARM PER WORLD PER SESSION (`_warmed`; "|lit" is a dark world's second one).
 // Its programs stay built, and a repeat links nothing yet holds TLX's presents for
 // seconds: on a phone, RACE! on a circuit already raced met it pending, so the
@@ -2796,7 +2797,12 @@ async function startRaceBody() {
   const handoff = (loadingScreen.active() || loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !!player;
   clearMenuScreens(); garagePre.release();
   if (handoff) RaceEntryProfile.raiseHandoff(loadingScreen);
-  RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
+  // Meshes HERE, not on the first countdown frame — stepped (≤ 1 heavy piece per task, apex26.carWarmSlice; 0 = one sync task).
+  // game-vm pumps no timers: an endless slice there never yields (like yieldMain above).
+  // A frame drawn between steps built the not-yet-warmed cars itself (census 502/503: GLX ~1 s tasks, steps <= 199 ms).
+  _carWarm.busy = true;
+  try { await RaceEntryProfile.spanAsync("warmCarAssets", () => warmCarAssetsAsync(() => !stale(), vmNoFramePump ? Infinity : 8)); } finally { _carWarm.busy = false; }
+  if (stale()) return false;
   RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
   // TLX links programs on first draw — warm during LIGHTS only when the pack is
@@ -3630,7 +3636,7 @@ const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setT
 const carDraw = CarDraw.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali });
 const { teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh, teamDecalState, carDecalNum,
         drawCarDecals, queueCarDecals, drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig,
-        warmCarAssets, prepareMenuCarAssets } = carDraw;
+        warmCarAssetsAsync, prepareMenuCarAssets } = carDraw;
 _pitCrewDrawn = pitCrewDrawn;   // __apex.pit() reads G.pitCrewDrawn to prove the crew mesh submitted
 
 // The garage setup-preview camera and its #cs-view controls
@@ -7231,7 +7237,7 @@ function render(dt) {
   // stayed up until an unrelated present (a panel click) cleared warming.
   // Intro staging (_studio.cardUp) must keep both canvases hidden under
   // PREPARING until the first successful garage present (garage-arrival).
-  if (gfx.warming && gfx.warming()) {
+  if ((gfx.warming && gfx.warming()) || _carWarm.busy) {
     if (setupPreviewOn && !(_studio && _studio.cardUp)) {
       if (canvas.style.visibility === "hidden") canvas.style.visibility = "";
       if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");

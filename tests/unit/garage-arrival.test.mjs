@@ -516,7 +516,7 @@ function garageEntryRegressionHarness() {
     endHome() {}, uiExperience: { renderHome: () => false, trackActive: () => false },
     headlessMode: false, settings: 'same-entry', flybyShots: null,
     _menuFly: null, _menuGate: { warm: 0, garageWarm: 0, garageReady: false, generation: 0 },
-    _warmKey: 'world', flybyBuildTimer: 0,
+    _warmKey: 'world', flybyBuildTimer: 0, _carWarm: { busy: false },
     canvas: { style: {} }, _softEl: { style: {} },
     document: { hidden: false, getElementById: () => null },
     performance: { now: () => now },
