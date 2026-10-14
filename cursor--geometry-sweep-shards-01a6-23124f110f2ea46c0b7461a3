@@ -1,0 +1,1 @@
+1791954165	Cursor Agent	Sweep shards: split ci.yml 'Per-circuit geometry sweeps' into parallel shards. OWNED .github/workflows/ci.yml tools/ci/** (planner only) package.json scripts if strictly required. No pages.yml. No merge. [cursor/geometry-sweep-shards-01a6]  [cursor/geometry-sweep-shards-01a6; session 23124f110f2ea46c0b7461a3]
