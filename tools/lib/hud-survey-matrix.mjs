@@ -9,10 +9,10 @@
 //     presetProf (the HUD STYLE whose layout the preset is written into:
 //     "shown" = the style on screen at the time, else a style name), theme,
 //     cvd, contrast, textSize, hudScale, uiScale, btnScale, tyres, hud, tod,
-//     off: [HudElements ids switched OFF] }
+//     portrait (race|gate), off: [HudElements ids switched OFF] }
 // BOOT KEYS need a fresh page: device (the viewport), track (one race build
-// per page) and the two store keys js/game.js reads once at eval —
-// hudProfile and hudMetricsLayout. Every other knob is applied LIVE per cell
+// per page) and the store keys js/game.js reads once at eval —
+// hudProfile, hudMetricsLayout, steerMode and portraitOk. Every other knob is applied LIVE per cell
 // on the same page; bootKey() is what the runner groups (and shards) by.
 //
 // THE EXPECTED-VISIBLE RULES are this file's main claim. A HUD element that
@@ -27,6 +27,8 @@ import { analyzeOverlap } from "./hud-geometry.mjs";
 export const DEVICES = Object.freeze({
   "desktop-1280": { w: 1280, h: 720, touch: false, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
   "desktop-1920": { w: 1920, h: 1080, touch: false, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
+  // A 16:10 laptop (MacBook Air class): named cells and --device only, not a matrix axis.
+  "desktop-1440x900": { w: 1440, h: 900, touch: false, ins: { sal: 0, sar: 0, sat: 0, sab: 0 } },
   // iPhone 12-14 landscape: 47px of notch each side, 21px home indicator.
   // Injected as --sal/--sar/--sat/--sab like hud-layout.spec.js: headless
   // Chromium reports env(safe-area-inset-*) as 0.
@@ -52,6 +54,8 @@ export const DEVICES = Object.freeze({
 // The device AXIS of every generated matrix; the lead shapes are named cells.
 export const MATRIX_DEVICES = Object.freeze(["desktop-1280", "desktop-1920", "phone-landscape-844x390",
   "phone-portrait-390x844", "tablet-1180x820"]);
+/** css/overlays.css: the #rotate-device gate's media query (portrait, coarse, ≤743 wide, ≤956 tall). */
+export const portraitBlocked = (dev) => !!dev && dev.touch && dev.h > dev.w && dev.w <= 743 && dev.h <= 956;
 
 // CamModes ids (js/camera/mode-switch.js CAM_MODES) — the unit test locksteps it.
 export const CAMS = Object.freeze(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse",
@@ -103,6 +107,9 @@ export const ENUMS = Object.freeze({
   // A LIVE profile switch (its SETTINGS row) after the boot profile and the
   // cell's MOVE & SIZE writes: lead 5's "move, then switch to BROADCAST".
   profileLive: ["none", "standard", "minimal", "broadcast"],
+  // A portrait phone: RACE = the player tapped RACE IN PORTRAIT (apex26.portraitOk, read at boot), so the
+  // HUD is what they race with; GATE = the #rotate-device card covers it. Coerced to race on other devices.
+  portrait: ["race", "gate"],
 });
 // HudLayout.PRESETS ids and what each one PLACES (writes a non-shipped value
 // for), which matters on touch cockpit: a placed chip carries data-hl-user and
@@ -125,9 +132,9 @@ export const TRACK_RE = /^[a-z][a-z0-9_-]{0,39}$/;
 export const DEFAULT_CELL = Object.freeze({
   device: "desktop-1280", track: "monza", cam: "chase", profile: "standard", layout: "full", map: "on", gaps: "on",
   mirror: "auto", preset: "shipped", presetSet: "cam", presetProf: "shown", theme: "dark", cvd: "off", contrast: "off", textSize: "normal",
-  hudScale: null, uiScale: null, btnScale: null, tyres: "on", hud: "on", tod: "day", steer: "default", profileLive: "none", off: Object.freeze([]),
+  hudScale: null, uiScale: null, btnScale: null, tyres: "on", hud: "on", tod: "day", steer: "default", profileLive: "none", portrait: "race", off: Object.freeze([]),
 });
-export const BOOT_KNOBS = Object.freeze(["device", "track", "profile", "layout", "steer"]);
+export const BOOT_KNOBS = Object.freeze(["device", "track", "profile", "layout", "steer", "portrait"]);
 
 // What the probe measures. role ctrl = a tap target, hud = a readout,
 // overlay = measured for context, never paired.
@@ -217,10 +224,13 @@ export function normalizeCell(raw, base = DEFAULT_CELL) {
       c[k] = v;
     } else bad(`unknown cell knob ${k}`);
   }
+  if (!ENUMS.portrait.includes(c.portrait)) bad(`portrait must be one of ${ENUMS.portrait.join(", ")} (got ${JSON.stringify(c.portrait)})`);
+  // No gate to race past: a GATE cell elsewhere would only split a boot group.
+  if (!portraitBlocked(DEVICES[c.device])) c.portrait = "race";
   return c;
 }
 
-const short = { "desktop-1280": "d1280", "desktop-1920": "d1920", "phone-landscape-844x390": "phoneL",
+const short = { "desktop-1280": "d1280", "desktop-1920": "d1920", "desktop-1440x900": "d1440", "phone-landscape-844x390": "phoneL",
   "phone-portrait-390x844": "phoneP", "tablet-1180x820": "tablet" };
 function hash6(s) {
   let h = 2166136261;
@@ -232,7 +242,7 @@ export function cellId(c) {
   if (c.name) return c.name;
   const parts = [short[c.device] || c.device, c.cam];
   if (c.track !== DEFAULT_CELL.track) parts.push(c.track);
-  for (const k of ["profile", "layout", "map", "gaps", "mirror", "theme", "cvd", "contrast", "textSize", "tyres", "hud", "tod", "steer", "profileLive"]) {
+  for (const k of ["profile", "layout", "map", "gaps", "mirror", "theme", "cvd", "contrast", "textSize", "tyres", "hud", "tod", "steer", "profileLive", "portrait"]) {
     if (c[k] !== DEFAULT_CELL[k]) parts.push(`${k}-${c[k]}`);
   }
   if (typeof c.preset === "object") parts.push("offsets-" + hash6(JSON.stringify(c.preset)));
@@ -282,9 +292,9 @@ export const FULL_DIMS = Object.freeze({
   tod: ["day", "night"],
 });
 export const FULL_CAP = 80;
-/** Constraints, on PARTIAL cells (undefined = free): portrait racing is
- *  blocked outright (#rotate-device, css/responsive.css), so one camera there
- *  is enough; BUTTON SIZE only exists on a touch device. */
+/** Constraints, on PARTIAL cells (undefined = free): the portrait phone keeps
+ *  one camera to bound the page count (named cells and --device cover the
+ *  rest); BUTTON SIZE only exists on a touch device. */
 export function fullValid(c) {
   if (c.device === "phone-portrait-390x844" && c.cam !== undefined && c.cam !== "chase") return false;
   if (c.device !== undefined && c.btnScale != null && !DEVICES[c.device].touch) return false;
@@ -514,7 +524,7 @@ export function evaluateChecks(cell, rec, byId = () => null) {
   const out = [];
   const add = (detail, severity, elements = []) => out.push({ cell: cell.id || cellId(cell), kind: "lead", elements, detail: `${cell.lead ? cell.lead + " — " : ""}${detail}`, severity });
   if (!rec || !rec.records) return out;
-  const dev = DEVICES[cell.device];
+  const dev = cellViewport(cell, rec);
   const vars = (r) => (r && r.state && r.state.vars) || {};
   const pick = (r, key, pool) => ((pool === "transient" ? r.transientRecords : r.records) || []).find((e) => e.key === key);
   (cell.checks || []).forEach((ch, i) => {
@@ -701,14 +711,16 @@ export function expectedVisibility(cell, ctx = {}) {
   // TOUCH_PRESET_HOLD: it sets no data-hl-user on them), so they stay hidden; inline offsets are placements.
   const hold = !dev.touch || typeof cell.preset === "object" ? null : TOUCH_PRESET_HOLD[HudSetOf(cam)];
   if (hold) for (const id of Object.keys(hold)) placed.delete(id);
-  const portraitBlock = dev.touch && dev.h > dev.w && dev.w <= 743 && dev.h <= 956;
+  const portraitBlock = portraitBlocked(dev) && cell.portrait === "gate";
+  const gateWhy = portraitBlocked(dev) ? `portrait ${cell.portrait}: ${portraitBlock ? "the rotate card blocks the race" : "RACE IN PORTRAIT (apex26.portraitOk) lifts the rotate card"} (css/overlays.css)`
+    : "no portrait gate at this size (css/overlays.css)";
   const E = {};
   const want = (key, v, why) => { E[key] = { want: v, why }; };
   const camRule = (key, v, why) => want(key, dynamic ? null : v, dynamic ? `camera ${cam} cuts between rigs` : why);
 
   if (cell.hud === "off") {
     for (const t of HUD_TARGETS) if (t.role === "hud") want(t.key, false, "HUD hidden (__apex.hud(false))");
-    want("rotateDevice", portraitBlock, "portrait racing is blocked (css/responsive.css)");
+    want("rotateDevice", portraitBlock, gateWhy);
     return E;
   }
   want("tower", true, "no setting hides the timing tower (css/hud.css)");
@@ -748,7 +760,7 @@ export function expectedVisibility(cell, ctx = {}) {
   // Touch controls: desktop shows only the pause button (hud-layout.spec "desktop").
   want("pausebtn", true, "the pause button shows in every race");
   for (const id of TOUCH_BUTTONS) if (desktop) want(id, false, "a desktop hides the whole touch stack");
-  want("rotateDevice", portraitBlock, "portrait racing is blocked on a phone (css/responsive.css)");
+  want("rotateDevice", portraitBlock, gateWhy);
   return E;
 }
 
@@ -757,11 +769,20 @@ export const SEVERITY = Object.freeze({ high: 3, medium: 2, low: 1, info: 0 });
 const r1 = (v) => Math.round(v * 10) / 10;
 const box = (e) => `[${r1(e.x)},${r1(e.y)} ${r1(e.w)}x${r1(e.h)}]`;
 
+/** The viewport a cell was measured in: the page's own innerWidth x innerHeight
+ *  when the runner recorded it (m.viewport), else the device table's size. */
+export function cellViewport(cell, m = {}) {
+  const v = m && m.viewport, dev = DEVICES[cell.device];
+  const ok = (n) => typeof n === "number" && Number.isFinite(n) && n > 0;
+  return v && ok(v.w) && ok(v.h) ? { w: v.w, h: v.h } : { w: dev.w, h: dev.h };
+}
+
 /** Findings for one measured cell. m = { records, transientRecords?, ctx,
- *  pageErrors?, cellError? }. Records follow tools/lib/hud-geometry.mjs. */
+ *  viewport?, pageErrors?, cellError? }. Records follow tools/lib/hud-geometry.mjs. */
 export function classifyFindings(cell, m, { minFontPx = 10, analyze = analyzeOverlap } = {}) {
   const dev = DEVICES[cell.device];
-  const W = dev.w, H = dev.h, ins = dev.ins;
+  const { w: W, h: H } = cellViewport(cell, m);
+  const ins = dev.ins;
   const id = cell.id || cellId(cell);
   const out = [];
   const add = (kind, elements, detail, severity) => out.push({ cell: id, kind, elements, detail, severity });
@@ -778,8 +799,9 @@ export function classifyFindings(cell, m, { minFontPx = 10, analyze = analyzeOve
       add("missing", [key], `${key} expected (${why}) but ${!r || !r.exists ? "not in the DOM" : r.fadedByAncestor ? "an ancestor is at opacity 0" : "hidden by " + r.hiddenBy}`, "high");
     } else if (want === false && shown(r)) {
       const toggled = (cell.off || []).some((t) => ELEMENT_TOGGLES[t] === key);
+      // A rotate card in a RACE cell hides the whole HUD it was asked to measure.
       add("unexpected", [key], `${key} visible at ${box(r)} though hidden is expected (${why})`,
-        toggled ? "high" : TOUCH_BUTTONS.includes(key) ? "medium" : "low");
+        toggled || key === "rotateDevice" ? "high" : TOUCH_BUTTONS.includes(key) ? "medium" : "low");
     }
   }
   // A MOVE & SIZE offset on an element these settings hide does nothing on
@@ -957,6 +979,9 @@ export function selfTest(analyze = analyzeOverlap) {
   check("touch cockpit hides TYRES unless placed", pc.tyre.want === false && cock.tyre.want === true);
   const offGear = expectedVisibility(normalizeCell({ off: ["gear"] }), { desktop: true });
   check("HudElements gear OFF hides the gearbox only", offGear.gearbox.want === false && offGear.speed.want === true);
+  const pRace = expectedVisibility(normalizeCell({ device: "phone-portrait-390x844" }), { desktop: false });
+  const pGate = expectedVisibility(normalizeCell({ device: "phone-portrait-390x844", portrait: "gate" }), { desktop: false });
+  check("portrait races past the rotate card by default; GATE keeps it", pRace.rotateDevice.want === false && pGate.rotateDevice.want === true);
   const L = expandMatrix("leads");
   check("leads expand with checks, and exhaustive carries them", L.cells.length >= 25 && L.cells.every((c) => c.lead)
     && L.cells.every((c) => x.cells.some((e) => e.id === c.id)), `${L.cells.length} leads`);

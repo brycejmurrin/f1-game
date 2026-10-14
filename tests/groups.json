@@ -919,7 +919,10 @@
     "// Speed-scaled yaw damp (local SPEED_YAW_* in player-forces): step-steer",
     "// overshoot ≤12% at 61.1 m/s / ≤14% at 83.3 m/s; ≤50 m/s and lift-off",
     "// unchanged. createGame once, ~2.5 s.",
-    "tests/unit/yaw-damp-speed.test.mjs"
+    "tests/unit/yaw-damp-speed.test.mjs",
+    "// Low-speed yaw/vLat substep (LOW_YAW_V=8): kills period-2 Δr chatter at",
+    "// 3–4 m/s full lock on pin + shipped seats; ≥8 m/s bit-identical. ~5 s.",
+    "tests/unit/yaw-low-speed-substep.test.mjs"
   ],
   "groups": {
     "test": {
