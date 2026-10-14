@@ -363,7 +363,8 @@
       //    closing immediately behind its top row. Behind and beside it: the
       //    commentary box, a scoreboard, the sponsor run at the stand foot and
       //    a pair of open terraces where the covered bank runs out.
-      grandstandEx(0.015, -1, 10, 110, null, null);
+      // survey 2026-10: agent survey propsOverRoad 7.6 m at dist 10 — push outside armco+fence
+      grandstandEx(0.015, -1, 18, 110, null, null);
       forestEdge(0.985, 0.075, -1, 30, { col: LEAF, h: 12, rows: 2 });
       hill(0.030, -1, 62, 150, 34, 14, [0.27, 0.39, 0.22]);
       hill(0.010, -1, 62, 120, 26, 11, [0.29, 0.41, 0.23]);
@@ -623,7 +624,7 @@
       //     covered bank, a terraced cut below, and a bamboo crest behind.
       tyreWall(0.618, 0.650, -1, 5, [0.84, 0.78, 0.22]);
       clayCut(0.614, 0.654, -1, 9, 6.0, CLAY, CLAY_R);
-      grandstandEx(0.6322, -1, 20, 55, null, null);
+      grandstandEx(0.6322, -1, 22, 55, null, null);
       grandstandEx(0.6560, -1, 18, 34, null, null);
       spectatorHill(0.604, 0.616, -1, 18, { h: 6.5, col: GRASS_D, steps: 2 });
       cameraTower(K(0.6450), -1, 18);
