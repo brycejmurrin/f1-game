@@ -8,8 +8,8 @@ import vm from "node:vm";
 const source = fs.readFileSync(new URL("../../js/ui/title-flow.js", import.meta.url), "utf8").replace(/^const TitleFlow/m, "var TitleFlow");
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
-function boot({ ensureNet = () => Promise.resolve(true), top = () => null, racing = false, link = false } = {}) {
-  const hash = { on: link };
+function boot({ ensureNet = () => Promise.resolve(true), top = () => null, racing = false, link = false, queuedVt = false } = {}) {
+  const hash = { on: link }, transitions = [];
   const btns = {}, listeners = {}, log = { announce: [], vt: 0, builds: 0, opened: 0, consumed: 0, restore: 0, flyby: 0, dailySelect: 0 };
   const G = {
     flow: "title", session: "none", soundOn: false, trackIdx: 0, announce: (...a) => log.announce.push(a),
@@ -26,9 +26,9 @@ function boot({ ensureNet = () => Promise.resolve(true), top = () => null, racin
     window: { addEventListener: (n, f) => { listeners[n] = f; } }, location: { hash: "" },
   });
   vm.runInContext(source, ctx);
-  const api = ctx.TitleFlow.create(G, { vt: (f) => { log.vt++; f(); }, restoreFreePlaySelection: () => { log.restore++; },
-    careerUi: {}, refreshTitle() {}, ensureNet });
-  return { G, btns, listeners, log, api, hash };
+  const api = ctx.TitleFlow.create(G, { vt: (f) => { log.vt++; if (queuedVt) transitions.push(f); else f(); }, restoreFreePlaySelection: () => { log.restore++; },
+    careerUi: { openSlots() {} }, refreshTitle() {}, ensureNet });
+  return { G, btns, listeners, log, api, hash, transitions };
 }
 
 test("M5: VS FRIEND leaves flow/selection alone and announces when the net bundle is refused", async () => {
@@ -72,6 +72,67 @@ test("VS FRIEND loading cannot open the lobby over a newer title sheet or race p
       await tick();
       assert.equal(h.log.opened, 1, "a fresh VS request works after returning to the title");
     }
+  }
+});
+
+test("a queued title transition owns navigation before its DOM callback runs", async () => {
+  for (const door of ["mb-race", "mb-tt"]) {
+    let ready;
+    const h = boot({ queuedVt: true, ensureNet: () => new Promise((resolve) => { ready = resolve; }) });
+    h.btns["mb-vs"].onclick();
+    h.btns[door].onclick();
+    assert.equal(h.G.els.overlay.hidden, false, "normal-motion VT has not changed the DOM yet");
+    assert.equal(h.transitions.length, 1);
+    const before = { session: h.G.session, restore: h.log.restore, builds: h.log.builds };
+    ready(true);
+    await tick();
+    assert.equal(h.log.opened, 0, "the delayed lobby cannot take the pending transition");
+    assert.deepEqual({ session: h.G.session, restore: h.log.restore, builds: h.log.builds }, before);
+    h.transitions.shift()();
+    assert.equal(h.G.els.overlay.hidden, true);
+    h.G.els.overlay.hidden = false; h.G.els.select.hidden = true;
+    h.btns["mb-vs"].onclick(); ready(true);
+    await tick();
+    assert.equal(h.log.opened, 1, "transition ownership clears after its DOM callback finishes");
+  }
+});
+
+test("a superseded VS load stays cancelled even after the player returns to the title", async () => {
+  let ready;
+  const h = boot({ queuedVt: true, ensureNet: () => new Promise((resolve) => { ready = resolve; }) });
+  h.btns["mb-vs"].onclick();
+  h.btns["mb-tt"].onclick();
+  h.transitions.shift()();
+  h.G.els.overlay.hidden = false; h.G.els.select.hidden = true;
+  ready(true);
+  await tick();
+  assert.equal(h.log.opened, 0, "BACK does not resurrect a superseded lobby request");
+  assert.equal(h.G.session, "tt");
+});
+
+test("overlapping queued title transitions cannot release or apply another transition's ownership", async () => {
+  for (const newerFirst of [false, true]) {
+    let ready;
+    const h = boot({ queuedVt: true, ensureNet: () => new Promise((resolve) => { ready = resolve; }) });
+    h.btns["mb-race"].onclick();
+    h.api.openCareerSlots();
+    const [older, newer] = h.transitions;
+    if (!newerFirst) {
+      older();
+      assert.equal(h.G.els.overlay.hidden, false, "a superseded swap never applies");
+      h.btns["mb-vs"].onclick(); ready(true);
+      await tick();
+      assert.equal(h.log.opened, 0, "the older callback cannot release the newer ownership");
+    }
+    newer();
+    assert.equal(h.G.els.overlay.hidden, true);
+    assert.equal(h.G.els.select.hidden, true, "the latest career door wins over Race");
+    h.G.els.overlay.hidden = false;   // BACK from the completed transition
+    older();
+    assert.equal(h.G.els.overlay.hidden, false, "an out-of-order stale callback stays inert after BACK");
+    h.btns["mb-vs"].onclick(); ready(true);
+    await tick();
+    assert.equal(h.log.opened, 1, "the title accepts fresh work after completion");
   }
 });
 

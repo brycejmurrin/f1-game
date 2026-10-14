@@ -4,9 +4,26 @@ const TitleFlow = (function () {
 "use strict";
 function create(G, deps) {
 const { $, els } = G;
-const { vt, restoreFreePlaySelection, careerUi, refreshTitle, ensureNet } = deps;
+const { restoreFreePlaySelection, careerUi, refreshTitle, ensureNet } = deps;
+let titleTransition = 0, titleTransitionSerial = 0;
+function vt(fn) {
+  // Normal-motion snapshots defer the DOM swap. Claim the title now, before
+  // an older async link/lobby load can mistake the still-visible title for idle.
+  const mine = ++titleTransitionSerial;
+  titleTransition = mine;
+  try {
+    deps.vt(() => {
+      if (titleTransition !== mine) return;   // a newer navigation owns the swap
+      try { fn(); }
+      finally { if (titleTransition === mine) titleTransition = 0; }
+    });
+  } catch (error) {
+    if (titleTransition === mine) titleTransition = 0;
+    throw error;
+  }
+}
 function titleIsLive(top = UiLayers.top()) {
-  return !UiLayers.inRace() && !els.overlay.hidden && (!top || top.id === "overlay");
+  return !titleTransition && !UiLayers.inRace() && !els.overlay.hidden && (!top || top.id === "overlay");
 }
 $("mb-race").onclick = () => {
   G.flow = "gp"; G.session = "race";
@@ -24,8 +41,9 @@ if ($("mb-vs")) $("mb-vs").onclick = () => {
   // lands before the screen does; ensureNet() wires the real lobby. Flow and
   // selection are written only once it has: a refused/offline load must leave
   // the title untouched and say so.
+  const navigation = titleTransitionSerial;
   Promise.resolve(ensureNet()).then((ok) => ok, () => false).then((ok) => {
-    if (!titleIsLive()) return;   // a newer sheet/race owns navigation now
+    if (navigation !== titleTransitionSerial || !titleIsLive()) return;   // a newer sheet/race owns navigation now
     if (!ok) { G.announce("COULD NOT LOAD — CHECK YOUR CONNECTION OR RELOAD", 4, "warning"); return; }
     G.flow = "gp"; G.session = "race";
     restoreFreePlaySelection();

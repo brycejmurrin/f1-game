@@ -18,6 +18,7 @@ const fixture = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/ghost
 
 const titleSource = fs.readFileSync(path.join(ROOT, "js/ui/title-flow.js"), "utf8");
 function titleConsume(ctx) {
+  ctx.titleTransition = 0;   // standalone consumption has no queued title navigation
   return vm.runInContext(fnSource(titleSource, "function titleIsLive(") + "\n(" +
     fnSource(titleSource, "async function consumeGhostHash()") + ")", ctx);
 }
@@ -388,7 +389,7 @@ function titleLinkHarness() {
   const ShareCode = vm.runInContext("ShareCode", ctx);
   const consume = titleConsume(ctx);
   return {
-    ...h, G, bag, overlay, observers, ShareCode, consume,
+    ...h, G, bag, overlay, observers, ShareCode, consume, ctx,
     opens: () => opens,
     cover(id) { top = { id }; return top; },
     setHash(hash) { h.location.hash = hash; h.location.href = h.location.origin + h.location.pathname + hash; },
@@ -402,6 +403,57 @@ function titleLinkHarness() {
     },
   };
 }
+
+async function queuedTitleLinkHarness() {
+  const h = titleLinkHarness(), buttons = new Map(), transitions = [];
+  h.G.els = h.ctx.els;
+  h.G.$ = (id) => {
+    if (!buttons.has(id)) buttons.set(id, { id, addEventListener() {} });
+    return buttons.get(id);
+  };
+  h.ctx.window = { addEventListener() {} };
+  h.ctx.DeepLink = { create() {} };
+  h.ctx.deps = { vt: (fn) => transitions.push(() => h.ctx.vt(fn)),
+    restoreFreePlaySelection() {}, careerUi: {}, refreshTitle() {}, ensureNet() {} };
+  vm.runInContext(titleSource, h.ctx);
+  const api = vm.runInContext("TitleFlow.create(G, deps)", h.ctx);
+  await Promise.resolve();   // settle create's initial no-link read before setting a test link
+  return { ...h, api, consume: api.consumeGhostHash, transitions };
+}
+
+test("queued Race navigation defers real ghost/setup links before the title DOM changes", async () => {
+  for (const kind of ["ghost", "share"]) {
+    const h = await queuedTitleLinkHarness();
+    const encoded = kind === "ghost"
+      ? await h.GhostShare.encode(fixture, { track: "monza" })
+      : h.ShareCode.encode("setup", { team: "ferrari", tune: { arbF: 7, arbR: 6, rideF: 22, rideR: 62, brakeBias: 56 } });
+    const hash = "#" + kind + "=" + encoded.code;
+    h.setHash(hash);
+    const pending = h.consume();
+    h.G.$("mb-race").onclick();
+    assert.equal(h.overlay.hidden, false, "the title remains visible until the queued VT callback");
+    assert.equal(h.transitions.length, 1);
+    await pending;
+    assert.equal(h.G.session, "race");
+    assert.equal(h.opens(), 1, "only the requested race picker is built");
+    assert.equal(h.GhostShare.guest(), null);
+    assert.equal(h.bag.size, 0);
+    assert.equal(h.notices.length, 0);
+    assert.equal(h.location.hash, hash);
+    h.transitions.shift()();
+    assert.equal(h.overlay.hidden, true);
+    await h.back();
+    assert.equal(h.location.hash, "", "BACK replays the deferred link after ownership clears");
+    assert.equal(h.opens(), 2);
+    assert.equal(h.notices.length, 1);
+    if (kind === "ghost") {
+      assert.equal(h.G.session, "tt");
+      assert.equal(h.GhostShare.guest().track, "monza");
+      assert.equal(h.transitions.length, 1, "the deferred ghost stages its own transition");
+      h.transitions.shift()();
+    } else assert.equal(h.bag.has("setup.ferrari"), true);
+  }
+});
 
 test("Settings opened during ghost decoding defers both valid and corrupt links until BACK", async () => {
   for (const corrupt of [false, true]) {
