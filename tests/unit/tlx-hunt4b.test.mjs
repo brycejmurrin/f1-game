@@ -3,7 +3,9 @@
  * backend is not evidence it runs: the follow-up is a frozen TLX A/B and gpu-census.yml (macos).
  *   A-W2  4-byte vertex strides on three's WebGL2 backend (apex26.tlxPad4): every packed attribute that missed a
  *         4-byte stride (normal Int16x3n, colour Uint8x3n / Float16x3, mat Float16x1) is widened with the values
- *         the shader reads unchanged; WebGPU (fmt24) and the tools' raw pack are untouched. */
+ *         the shader reads unchanged; WebGPU (fmt24) and the tools' raw pack are untouched.
+ *   A-H5  the mirror target's mip chain capped (apex26.tlxMirMips, default 3 levels) at what the HUD inset's implicit
+ *         LOD can reach; the cockpit glass latches the full chain. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -132,4 +134,95 @@ test("A-W2: the lit program reads a widened colour as vec3 and a Float32 mat as 
   assert.ok(vs, "the vertex stage declares the widened colour as a vec4 input");
   assert.match(vs, /\bcolor\.xyz\b/, "and reads its .xyz (attribute(\"color\", \"vec3\"))");
   assert.match(vs, /\bin\s+float\s+mat\b/, "mat is a float input either way");
+});
+
+// ── A-H5 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+const TLX = read("js/render/three/tlx.js");
+const tslice = (from, to) => {
+  const a = TLX.indexOf(from), b = TLX.indexOf(to, a);
+  assert.ok(a > 0 && b > a, `tlx.js block "${from.trim()}" moved — check this test, not the code`);
+  return TLX.slice(a, b);
+};
+// prepareMirrorTarget and the H5 level rule, verbatim, over three r186 on the fake WebGL2; the surroundings are
+// stand-ins. rect() is mirrorRect's canvas fractions at a 1280 x 720 render size.
+async function mirrorRig(t, ls = {}) {
+  const fg = makeFakeGL(1280, 720);
+  const storage = [];
+  let mips = 0;
+  fg.gl.texStorage2D = (...a) => { storage.push(a[1]); };
+  fg.gl.generateMipmap = () => { mips++; };
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  t.after(() => renderer.dispose());
+  const mk = new Function("THREE", "localStorage", `"use strict";
+    let mirRT = null, mirCam = null, _mirRect = null;
+    const W = 1280, H = 720, presentW = 1280, presentH = 720;
+    const _instPerPass = true, skipBatches = () => false, _mirWarmSwap = () => {}, wantSpatialUpscale = () => false;
+    const post = { hdrOk: () => true };
+    ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
+    return { prepareMirrorTarget, rt: () => mirRT, rect(r) { _mirRect = r; }, glass() { _mirGlassSeen = true; } };`);
+  const M = mk(THREE, { getItem: (k) => (k in ls ? ls[k] : null) });
+  const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera();
+  // One mirror frame: mirrorBegin's prepareMirrorTarget(w, h), then mirrorEnd's render into the target.
+  const frame = (w, h) => {
+    M.prepareMirrorTarget(w, h);
+    renderer.setRenderTarget(M.rt()); renderer.render(scene, cam); renderer.setRenderTarget(null);
+  };
+  return { M, frame, storage, mipCount: () => mips };
+}
+// The census's helmet-cam mirror: a 461 x 132 target (SS 2) over its 230 x 66 px HUD rect — ratio 2.004, LOD ~1.
+const RECT = [0.4, 0.02, 230.4 / 1280, 66 / 720];
+
+test("A-H5: the mirror target stores and regenerates 3 levels, not 9, while only the inset reads it", async (t) => {
+  const h = await mirrorRig(t);
+  h.M.rect(RECT);
+  h.frame(461, 132);
+  const rt = h.M.rt();
+  assert.equal(rt.texture.mipmaps.length, 3, "texture.mipmaps.length is the count three's Textures.getMipLevels takes");
+  assert.equal(h.storage[0], 3, "texStorage2D allocates 3 colour levels (a 461 px chain is 9)");
+  assert.ok(h.mipCount() >= 1, "the levels still regenerate after the mirror render");
+  assert.equal(rt.texture.generateMipmaps, true);
+  assert.equal(rt.texture.minFilter, THREE.LinearMipmapLinearFilter, "the same sampling state");
+  // A rect the target over-samples further (ratio 7.7, LOD up to ~2.9): levels 0..3 can be touched, +slop -> 5.
+  const h2 = await mirrorRig(t);
+  h2.M.rect([0.4, 0.02, 60 / 1280, 17 / 720]);
+  h2.frame(461, 132);
+  assert.equal(h2.M.rt().texture.mipmaps.length, 5, "the cap yields to every level the inset's LOD can reach");
+  // Same size, a rect that asks for more later: the target grows (and is re-allocated), never shrinks.
+  h.M.rect([0.4, 0.02, 60 / 1280, 17 / 720]);
+  h.frame(461, 132);
+  assert.equal(h.M.rt().texture.mipmaps.length, 5);
+  assert.equal(h.storage.filter((n) => n > 1).length, 2, "one re-allocation");
+  h.M.rect(RECT); h.frame(461, 132);
+  assert.equal(h.M.rt().texture.mipmaps.length, 5, "no shrink at the same size (no churn)");
+});
+
+test("A-H5: the cockpit glass latches the full chain; apex26.tlxMirMips=0 is the old chain, =N pins N under the glass", async (t) => {
+  const h = await mirrorRig(t);
+  h.M.rect(RECT);
+  h.frame(461, 132);
+  assert.equal(h.M.rt().texture.mipmaps.length, 3);
+  h.M.glass();   // drawMirrorGlass ran
+  h.frame(461, 132);
+  assert.equal(h.M.rt().texture.mipmaps.length, 0, "the full chain again (an empty mipmaps array = three's own rule)");
+  assert.equal(h.storage.filter((n) => n > 1).at(-1), 9, "re-allocated with all 9 levels");
+  h.frame(500, 140);
+  assert.equal(h.M.rt().texture.mipmaps.length, 0, "latched for the session, across a resize");
+
+  const off = await mirrorRig(t, { "apex26.tlxMirMips": "0" });
+  off.M.rect(RECT); off.frame(461, 132);
+  assert.equal(off.M.rt().texture.mipmaps.length, 0);
+  assert.equal(off.storage[0], 9, "knob 0: the full chain, as before");
+
+  const pin = await mirrorRig(t, { "apex26.tlxMirMips": "2" });
+  pin.M.rect(RECT); pin.frame(461, 132);
+  assert.equal(pin.M.rt().texture.mipmaps.length, 3, "a pinned cap below the inset's need is raised to it");
+  pin.M.glass(); pin.frame(461, 132);
+  assert.equal(pin.M.rt().texture.mipmaps.length, 3, "pinned: the glass does not latch the full chain (the A/B lever)");
+});
+
+test("A-H5: tlx.js wiring — the glass latch in drawMirrorGlass, mirrorState reports the levels", () => {
+  assert.match(TLX, /_mirGlass\+\+;\s*_mirGlassSeen = true;/);
+  assert.match(TLX, /mips: mirRT \? _mirLevelsNow\(mirRT\.width, mirRT\.height\) : 0, mipCap: _mirMipCap/);
+  assert.match(TLX, /localStorage\.getItem\("apex26\.tlxMirMips"\)/);
 });

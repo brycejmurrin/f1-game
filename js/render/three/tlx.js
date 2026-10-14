@@ -1211,6 +1211,7 @@ const TLX = (function () {
       // warm's remaining compiles are single objects, never the scene.
       function prepareMirrorTarget(w, h, forWarm) {
         if (forWarm && _instPerPass && !skipBatches()) _mirWarmSwap();
+        const lv = _mirLevels(w, h);
         if (!mirRT) {
           mirRT = new THREE.RenderTarget(w, h, {
             type: post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType,
@@ -1218,9 +1219,52 @@ const TLX = (function () {
             generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
           });
           mirRT.texture.colorSpace = THREE.NoColorSpace;
+          _mirSetLevels(lv, w, h);
           mirCam = new THREE.PerspectiveCamera();
           mirCam.matrixAutoUpdate = false; mirCam.matrixWorldAutoUpdate = false;
-        } else if (mirRT.width !== w || mirRT.height !== h) mirRT.setSize(w, h);
+        } else if (mirRT.width !== w || mirRT.height !== h) { _mirSetLevels(lv, w, h); mirRT.setSize(w, h); }   // setSize re-allocates
+        else if (lv > _mirLevelsNow(w, h)) { _mirSetLevels(lv, w, h); mirRT.dispose(); }   // grow only: the next render re-allocates
+      }
+      // A-H5 (perf hunt 4): THE MIRROR'S MIP CHAIN, CAPPED. three builds the
+      // full chain on a mipmapped target — 9 levels for a 461 px mirror — and
+      // regenerates it after every mirror render: one render pass per level on
+      // WebGPU (6.35-7.1 of ~27 passes a frame on the macos census), one
+      // generateMipmap on WebGL2. The HUD inset / PiP (tsl-post mirrorSample)
+      // samples with the IMPLICIT LOD of a screen-space rect, log2(target px /
+      // rect px) — ~1 at the SS=2 target — so it reads levels 0..ceil(that).
+      // Textures.getMipLevels takes the level count from texture.mipmaps.length
+      // when it is non-zero (storage and generation stop there), so the cap is
+      // that array's length: apex26.tlxMirMips levels (default 3), raised to
+      // ceil(log2 ratio + 0.25) + 1 (the highest level a trilinear tap at that
+      // LOD can touch, with a quarter level of LOD-rounding slop; the rect's
+      // derivatives are axis-aligned, so max-norm and length agree) when the
+      // rect asks for more. IDENTICAL for the inset by construction.
+      // THE COCKPIT GLASS (drawMirrorGlass) maps the target on a small,
+      // foreshortened 3-D quad whose LOD is not bounded, so the first glass draw
+      // latches the full chain for the session (unset knob); the glass frame
+      // that latches it still reads the capped chain once (a camera cut into a
+      // cockpit view). An explicit apex26.tlxMirMips=N caps under the glass too
+      // (the A/B lever for that look); "0" = the full chain always (the old way).
+      let _mirMipCap = 3, _mirMipPinned = false, _mirGlassSeen = false;
+      try {
+        const v = localStorage.getItem("apex26.tlxMirMips");
+        if (v !== null && v !== "" && +v >= 0) { _mirMipCap = Math.floor(+v); _mirMipPinned = true; }
+      } catch (_) { /* no storage: the default cap */ }
+      const _mirFull = (w, h) => Math.floor(Math.log2(Math.max(w, h, 1))) + 1;
+      function _mirLevels(w, h) {
+        const full = _mirFull(w, h);
+        if (_mirMipCap <= 0 || (_mirGlassSeen && !_mirMipPinned)) return full;
+        let need = _mirMipCap;
+        if (_mirRect) {
+          const up = wantSpatialUpscale(), cw = up ? presentW : W, ch = up ? presentH : H;
+          const r = Math.max(w / Math.max(1, Math.round(_mirRect[2] * cw)), h / Math.max(1, Math.round(_mirRect[3] * ch)));
+          need = Math.max(need, Math.ceil(Math.log2(r) + 0.25) + 1);   // the top level a trilinear tap can touch, +0.25 LOD of slop
+        }
+        return Math.min(full, need);
+      }
+      const _mirLevelsNow = (w, h) => (mirRT && mirRT.texture.mipmaps.length) || _mirFull(w, h);
+      function _mirSetLevels(lv, w, h) {
+        mirRT.texture.mipmaps = lv >= _mirFull(w, h) ? [] : Array.from({ length: lv }, () => ({}));
       }
       // TLX opts out of the live env probe by default (the reason is at the
       // envCubeCam block below). Hunt 3 R4: read the opt-out BEFORE allocating,
@@ -4313,7 +4357,8 @@ const TLX = (function () {
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
             hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
-            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr };
+            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr,
+            mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned };   // A-H5
         },
         // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js mirror.glass): mirRT,
         // rendered in mirrorEnd before this pass records, on the glass mesh as
@@ -4326,6 +4371,7 @@ const TLX = (function () {
               || !mesh || !mesh.geo || !model) return false;
           pushRec(mesh.geo, poolModelMat(model), fx.mirrorGlassMaterial(mirRT.texture), undefined, undefined, 0, null, null);
           _mirGlass++;
+          _mirGlassSeen = true;   // A-H5: the next mirrorBegin grows the target to the full chain
           return true;
         },
         // _envGaveUp reads as READY on purpose: the caller polls this to stop
