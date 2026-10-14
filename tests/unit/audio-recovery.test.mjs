@@ -132,8 +132,8 @@ test("a context rebuild replaces cached noise and keeps the delayed sample fallb
   assert.equal(A.uiEnabled(), false, "context replacement preserves upstream menu-sound preference");
   const fresh = contexts[1];
   const noise = started.filter((n) => n.kind === "src" && n.loop && fresh.buffers.includes(n.buffer) && n.buffer.duration < 1);
-  assert.equal(noise.length, 6);
-  assert.equal(new Set(noise.map((n) => n.buffer)).size, 6);
+  assert.equal(noise.length, 8, "harvest, skid, scrub, surface, kerb, spray, wind, brake");
+  assert.equal(new Set(noise.map((n) => n.buffer)).size, 8);
   assert.ok(fresh.buffers.every((b) => !oldBuffers.has(b)), "all prepared PCM belongs to the new context");
   assert.equal(A.debug().engineOn, true);
   assert.equal(A.debug().usingSamples, false, "the new context starts on the synth while decoding is pending");
