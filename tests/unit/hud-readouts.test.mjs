@@ -542,9 +542,10 @@ test("PERF-2: a steady tick does not re-run announceLane's layout reads; a chang
   cs = 0;
   for (let i = 0; i < 10; i++) nat();
   assert.equal(cs, 0, "steady ticks: no getComputedStyle / rect pass from the lane");
-  rival.prog = player.prog + 100;       // the gap string changes length: "+1L" -> "2.00s"
+  // Gap DIGIT / format rolloff must NOT re-key (#1723) — only empty↔non-empty.
+  rival.prog = player.prog + 100;       // "+1L" → "2.00s" (both nonempty)
   nat();
-  assert.equal(cs, 1, "a changed gap string re-clips the lane once");
+  assert.equal(cs, 0, "gap digit/format rolloff does not re-clip the lane");
   cs = 0;
   sb.innerWidth = 900; nat();
   assert.ok(cs >= 1, "a resized viewport re-clips it");
