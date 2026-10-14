@@ -5,7 +5,7 @@ Claude Code auto memory for this repo, synced by `.claude/hooks/memory-sync.sh`
 topic file. User preferences and corrections only — a measured lesson belongs in
 `docs/notes/`, a rule in a hook or test. An entry that contradicts the current
 code or AGENTS.md is stale: fix or delete it, do not follow it.
-- [PR auto-merge](pr-auto-merge.md) — never arm auto-merge or merge; mark ready at tip-green; only CI Watch arms (SQUASH)
+- [PR auto-merge](pr-auto-merge.md) — merge commits only since 2026-10-14 (never squash); agents never merge unless the owner asks, then MERGE method; read AGENTS.md on the deploy tip first
 - [Small steps for API analysis](small-steps-for-api-analysis.md) — prefer small incremental queries over bulk fetch scripts
 - [Merge fast, verify on CI](merge-fast-verify-on-ci.md) — tooling PRs may be expedited to ready at tip-green on request; the agent still never merges
 - [One subagent per skill](one-subagent-per-skill.md) — skill reviews: one Sonnet subagent per skill, never grouped

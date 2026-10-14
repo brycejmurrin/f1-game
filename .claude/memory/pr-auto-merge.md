@@ -1,15 +1,15 @@
 ---
 name: pr-auto-merge
-description: "Never arm auto-merge or merge; mark ready at tip-green; CI Watch arms SQUASH only"
+description: "Merge commits only (never squash); agents never arm or merge — Merge Desk / Grok Bot do; re-read AGENTS.md on the deploy tip before any merge"
 metadata:
   node_type: memory
   type: feedback
   originSessionId: cad46118-e9a8-51ea-bba9-8753c2445b4c
-  modified: 2026-10-06T22:35:00.000Z
+  modified: 2026-10-14T07:15:00.000Z
 ---
 
-Agents, sessions and tools never arm auto-merge or merge. Open DRAFT PRs; when the tip is green and `ready-gate.mjs` exits 0, mark ready. Only CI Watch arms auto-merge, and only SQUASH, on ready PRs.
+The rule FLIPPED on 2026-10-14 05:10 UTC (`007219315`, deploy-branch AGENTS.md): merge commits only, never squash or rebase-merge. Only the designated Merge Desk arms auto-merge (MERGE method) and Grok Bot may merge a green non-draft PR; every other agent never arms or merges (`github-mcp-guard.sh` denies squash/rebase and asks before a merge / arm / draft→ready). Before 2026-10-14 the rule was the opposite (CI Watch, SQUASH only).
 
-**Why:** 2026-10-06 Bryce: foreign MERGE arms (#1134 armed MERGE five times; #1135 landed as a MERGE commit). Sole armer is CI Watch (Grok bot outside the repo), squash-only.
+**Why:** the session that wrote this squash-merged #1460 at 06:08 UTC on the owner's "merge all asap", an hour after the flip, because its feature branch still carried the old AGENTS.md and this memory said SQUASH.
 
-**How to apply:** after a verified push, keep or open a draft PR; mark ready at tip-green; do not run `gh pr merge --auto`, CCR `auto_merge`, or any merge. Re-sync with `sync-pr.mjs` when the deploy branch creates a ratchets.json conflict.
+**How to apply:** before any merge or arm, read AGENTS.md from `origin/claude/f1-game-project-26h3ng`, not the branch checkout. When the owner explicitly asks an agent to merge, use the MERGE method and let the guard's prompt be the owner's confirmation; never squash. Otherwise mark ready at tip-green and leave merging to Merge Desk / Grok Bot. See [[merge-fast-verify-on-ci]].
