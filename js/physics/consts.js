@@ -100,6 +100,16 @@ window.PhysicsConsts = {
   LINE_PURSUIT: 2.6,
 
   LONG_GRIP: 34,
+  // LOCK-UP (render + feel only; js/physics/player-forces.js). Gated on the
+  // brake-bias-scaled front fraction afF, not raw axFracF, so a forward bias
+  // can push a hard stop over the threshold while BB_REF dry peaks (~0.638 afF)
+  // stay below it. Onset eases at high vStd (vAbs·VMAX/vTop) and rises at crawl
+  // speed so a full pedal at town speeds does not grow flat spots. Rain raises
+  // axFracF and will lock more aggressively — by design.
+  WHEEL_LOCK_ONSET: 0.66,
+  WHEEL_LOCK_RANGE: 0.05,
+  WHEEL_LOCK_ONSET_SLOW: 0.022,   // extra onset when vStdNow < WHEEL_LOCK_V_HIGH
+  WHEEL_LOCK_V_HIGH: 45,          // m/s on the vStdNow scale used in player-forces
   // Power-on friction-circle cost, charged to the DRIVEN (rear) axle only —
   // the undriven front spends nothing on the throttle, so a planted pedal on a
   // slow exit lightens the rear's lateral grip and the car rotates (power-on

@@ -132,15 +132,6 @@ const PlayerForces = (function () {
     const axFrac = Math.max(axFracF, axFracR);
     c.axFrac = axFrac;
     c.axFracF = axFracF; c.axFracR = axFracR;
-    // LOCK-UP (render + feel only): braking at the top of the friction budget
-    // stops the fronts turning; a lock leaves a flat spot that wobbles the
-    // wheel once per revolution and heals over ~90 s of rolling. The grip
-    // model above is untouched — this is what the wheels SHOW.
-    c.wheelLock = braking && c.speed > 0 && axFracF > 0.60 ? clamp((axFracF - 0.60) / 0.08, 0, 1) : 0;   // 0.92 is unreachable and the per-axle rewrite did not move it: measured peak axFracF 0.638 dry / 0.887 rain on a straight-line full stop, and 0.638 again at 62 % front bias, so no dry stop ever locked a wheel and the flat-spot system below (wobble, 90 s heal) was dead code
-    c.flatSpot = clamp((c.flatSpot || 0) + c.wheelLock * dt * 0.4 - dt / 90, 0, 1);
-    // LOCK-UP HAPTIC: left-trigger rumble when the pad supports trigger-rumble
-    // (falls back to dual-rumble). Cadence matches the slide cues below.
-    if (c.isPlayer && c.wheelLock > 0.25 && (c.lockHapT = (c.lockHapT || 0) - dt) <= 0) { Input.rumble(0.25 + c.wheelLock * 0.45, 90, "brake"); c.lockHapT = 0.14; }
     // --- friction limit per axle (the grip circle). Everything scales with the
     // same surface/weather grip the rest of the sim uses.
     // Aero load (rises with v²) sets the speed dependence, and the surface the
@@ -180,6 +171,22 @@ const PlayerForces = (function () {
     // (bbSlip*, not slipF/slipR — those names are the axles' SLIP ANGLES below.)
     const afF = bb ? Math.min(1, axFracF * bb.f) : axFracF;
     const afR = bb ? Math.min(1, Math.max(engine + pedal * beta * bb.r, axThrDemand)) : axFracR;
+    // LOCK-UP (render + feel only): uses afF after the setup brake-bias split so
+    // forward bias can reach the threshold while BB_REF dry peaks (~0.64 axFracF)
+    // stay below it. Onset eases at high vStdNow and rises at crawl speed; easing
+    // the pedal drops afF and wheelLock together (recoverable). Wet weather raises
+    // axFracF and locks more aggressively. Not the grip model — flat spot heals
+    // at dt/90 while rolling.
+    const lockOn = PC.WHEEL_LOCK_ONSET
+      + PC.WHEEL_LOCK_ONSET_SLOW * clamp(1 - vStdNow / Math.max(PC.WHEEL_LOCK_V_HIGH, 1), 0, 1);
+    const lockRange = PC.WHEEL_LOCK_RANGE;
+    c.wheelLock = braking && c.speed > 0 && afF > lockOn
+      ? clamp((afF - lockOn) / lockRange, 0, 1) : 0;
+    c.flatSpot = clamp((c.flatSpot || 0) + c.wheelLock * dt * 0.4 - dt / 90, 0, 1);
+    if (c.isPlayer && c.wheelLock > 0.25 && (c.lockHapT = (c.lockHapT || 0) - dt) <= 0) {
+      Input.rumble(0.25 + c.wheelLock * 0.45, 90, "brake");
+      c.lockHapT = 0.14;
+    }
     const bbSlipF = Math.sqrt(Math.max(0, 1 - afF * afF));
     const bbSlipR = Math.sqrt(Math.max(0, 1 - afR * afR));
     c.slipFactor = bbSlipR;   // the DRIVEN axle's circle: setEngine() reads it for slip01; unassigned it read a constant 1

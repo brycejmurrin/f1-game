@@ -110,7 +110,7 @@ const ALLOWED = [
   },
   {
     file: "js/physics/player-forces.js", expr: "c.speed > 0",
-    code: "c.wheelLock = braking && c.speed > 0 && axFracF > 0.60 ? clamp((axFracF - 0.60) / 0.08, 0, 1) : 0;   // 0.92 is unreachable and the per-axle rewrite did not move it: measured peak axFracF 0.638 dry / 0.887 rain on a straight-line full stop, and 0.638 again at 62 % front bias, so no dry stop ever locked a wheel and the flat-spot system below (wobble, 90 s heal) was dead code",
+    code: "c.wheelLock = braking && c.speed > 0 && afF > lockOn",
     why: "sign test — wheels lock only while rolling forwards; brake-held reverse is not a lock-up",
   },
   {
