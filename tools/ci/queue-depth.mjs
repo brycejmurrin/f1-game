@@ -2,7 +2,7 @@
 /**
  * @doc Actions queue gauge: queued + running JOBS by OS vs the 40 Linux / 5 macOS slots; `= queue ok|hold`.
  * @section runner
- * @skill pr-owner
+ * @skill steward
  *
  * AGENTS.md rule 4's push hold. The old rule counted queued RUNS (">15"), but a
  * run's own queue wait is 0 for 95 % of runs — the backlog lives at JOB level.

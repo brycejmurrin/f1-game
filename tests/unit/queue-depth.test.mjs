@@ -101,7 +101,7 @@ test("the written status file is gitignored and the docs cite the tool and JOBS"
   const agents = fs.readFileSync(path.join(ROOT, "AGENTS.md"), "utf8");
   assert.match(agents, /tools\/ci\/queue-depth\.mjs/);
   assert.doesNotMatch(agents, />15 runs/);
-  for (const f of [".claude/skills/pr-owner/SKILL.md",
+  for (const f of [".claude/skills/steward/references/ownership.md",
     "cursor-plugins/apex-f1-game/skills/apex-ci-and-pages-watch/SKILL.md",
     "cursor-plugins/apex-f1-game/skills/apex-cloud-agent-launch/SKILL.md"]) {
     const s = fs.readFileSync(path.join(ROOT, f), "utf8");
