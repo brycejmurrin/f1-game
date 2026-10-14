@@ -1120,11 +1120,35 @@ test("the radio card's top-row slot ends at #hud-sectors in the wrapping band", 
   assert.ok(on()); assert.equal(w(), 790 - 8 - 558, "sectors below the wrapping band leave the default slot");
   h.els.hudSectors._rect = { left: 650, top: 8, right: 790, bottom: 80, width: 140, height: 72 };
   h.refit();
-  assert.ok(!on(), "sectors in the tower's rows leave no 96px top-row slot");
+  // No 96px strip right of the tower: the card takes the TOP-RIGHT CORNER under
+  // it instead (radioUnderRight), right-aligned against the plate, not the lane.
+  const px = (k) => parseFloat(h.root.style.getPropertyValue(k));
+  assert.ok(on(), "sectors in the tower's rows hand the card the slot under the tower's right end");
+  assert.equal(px("--radio-top-y"), 62 + 8, "one gap under the tower");
+  assert.equal(px("--radio-top-x") + w(), 650 - 8, "right-aligned one gap short of the sector plate");
+  assert.ok(w() >= 96 && w() <= 260, "between RADIO_TOP_MIN and the 260px cap: " + w());
+  assert.equal(px("--radio-top-h"), 36, "one row tall, above the caution flag's row");
   h.els.hudSectors._rect = { left: 700, top: 8, right: 790, bottom: 80, width: 90, height: 72 };
   h.refit();
   assert.ok(on(), "a 134px strip past sectors is still a slot");
   assert.equal(w(), 700 - 8 - 558, "the strip ends at the sector box's left edge");
+});
+
+test("the top-right corner slot: the HUD mirror in its rows ends it on the left; no room, no slot", () => {
+  const h = fitHarness(), w = () => parseFloat(h.root.style.getPropertyValue("--radio-top-w"));
+  const px = (k) => parseFloat(h.root.style.getPropertyValue(k));
+  const on = () => h.dom.body.classList.contains("hud-radio-top");
+  h.els.hudSectors._rect = { left: 650, top: 8, right: 790, bottom: 80, width: 140, height: 72 };
+  const mir = h.dom.document.createElement("div"); mir.id = "hud-mirror";
+  h.dom.body.appendChild(mir);
+  mir._rect = { left: 330, top: 66, right: 480, bottom: 106, width: 150, height: 40 };   // cockpit HUD mirror under the tower
+  h.refit();
+  assert.ok(on(), "a 154px corner right of the mirror is still a slot");
+  assert.equal(px("--radio-top-x"), 480 + 8, "the mirror ends the corner slot on its left");
+  assert.equal(px("--radio-top-x") + w(), 650 - 8);
+  mir._rect = { left: 330, top: 66, right: 600, bottom: 106, width: 270, height: 40 };   // leaves 34px
+  h.refit();
+  assert.ok(!on(), "under RADIO_TOP_MIN the card keeps its lane");
 });
 
 test("on touch the radio card is left-aligned in the gap between the dock groups", () => {
