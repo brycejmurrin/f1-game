@@ -2,11 +2,14 @@
 
 **[Play live on GitHub Pages &rarr;](https://brycejmurrin.github.io/f1-game/)**
 
-An unofficial Formula 1 fan game and data hub built with raw WebGL2 — no
-frameworks, no dependencies, no build step. Pure JS/CSS/HTML, runs in any
-modern browser on desktop or mobile. A sibling of
-[Neon Drift](https://github.com/brycejmurrin/driving-game): same
-zero-dependency philosophy, this time in true 3D.
+An unofficial Formula 1 fan game and data hub in pure JS/CSS/HTML — no app
+framework, no build step. WebGL2 and optional WebGPU renderers (default
+renderer vendors [three.js](https://threejs.org/) under `vendor/`; a few other
+libraries sit there too). Runs in any modern browser on desktop or mobile. A
+sibling of [Neon Drift](https://github.com/brycejmurrin/driving-game): same
+static-site spirit, this time in true 3D.
+
+Recent merges: [CHANGELOG.md](CHANGELOG.md).
 
 ## The game
 
@@ -28,10 +31,10 @@ Night races run under floodlights.
 - **Overtake Mode** — be within 1 second of the car ahead at the circuit's
   detection line and the OT light arms for the following lap; trigger it for
   a 3–5 second push of full, taper-free deployment. The DRS replacement.
-- **Manual gearbox** (optional, toggle in the pause menu) — an 8-speed
-  'box with a live gear readout and tachometer. Shift up near the redline,
-  down for corner exits; the limiter makes you upshift to reach top speed.
-  Auto mode shifts for you.
+- **Manual gearbox** (optional, SETTINGS › CONTROLS › GEARS: MANUAL) — an
+  8-speed 'box with a live gear readout and tachometer. Shift up near the
+  redline, down for corner exits; the limiter makes you upshift to reach top
+  speed. Auto mode shifts for you.
 - Five red lights, lights out. Real points (25-18-15-12-10-8-6-4-2-1).
 - **Season mode**: all 24 rounds in order with persistent
   championship standings.
@@ -74,11 +77,13 @@ angle and saturates at a friction limit, so cornering is grip-limited — overco
 a corner and the front washes wide (understeer); loosen the rear and it steps out
 (oversteer). Brake for the corners; the car rewards a tidy line.
 
-**STEERING…** in the pause menu opens **STEERING & ASSISTS** —
-**RELAX / STANDARD / PRO** presets, **STEERING** feel, **TILT SENSITIVITY**,
-**DRIVING HELP**, **RACING LINE**, **ADAPTIVE BUTTONS** (keys / on-screen
-arrows; default ON) and **BRAKE CUE** (a tick, never a takeover) — with lock,
-speed steer and the rest tucked behind an **ADVANCED** disclosure.
+**SETTINGS** (from the pause menu or title) opens pages for **CONTROLS**,
+**DRIVING**, **DISPLAY**, **APPEARANCE**, **STEERING & ASSISTS**, **MUSIC &
+SOUND**, and **BACKUP & RESTORE**. **STEERING & ASSISTS** has **RELAX /
+STANDARD / PRO** presets, **STEERING** feel, **TILT SENSITIVITY**, **DRIVING
+HELP**, **RACING LINE**, and **ADAPTIVE BUTTONS** (keys / on-screen arrows;
+default ON) — with lock, speed steer and the rest tucked behind an
+**ADVANCED** disclosure. **BRAKE CUE** lives under **SETTINGS › DRIVING**.
 
 ### Car Setup
 
@@ -153,8 +158,8 @@ logic). Load order is defined in `tools/manifest.cjs`.
 
 ## Testing & development
 
-The project ships a **Playwright test suite** — 120+ Playwright specs — plus
-600+ `node --test` unit suites, covering rendering, physics, UI across screens,
+The project ships a **Playwright test suite** — 130+ Playwright specs — plus
+630+ `node --test` unit suites, covering rendering, physics, UI across screens,
 multiplayer, career and visual regression. The whole thing is ~40
 minutes of software rendering, so the workflow is: ask which groups a change
 needs, run those in the background, tail the log.
@@ -166,7 +171,7 @@ tail -f artifacts/logs/smoke.log             # watch one live
 node tools/ci/test-bg.mjs --status              # running / how each ended
 
 npm run test:tiny                            # start here: page loads, __apex responds
-npm run test:physics-core                    # the driving model (browser; ~35 tests, mostly fast)
+npm run test:physics-core                    # the driving model (browser; ~45 tests, mostly fast)
 npm run test:collisions                      # car-to-car + wall contact (browser; ~32 tests, the slowest set)
 npm run test:aero                            # aero-zones, active-aero, drift, understeer (browser; ~37 tests)
 npm test -- tests/specs/autopilot.spec.js          # single file
