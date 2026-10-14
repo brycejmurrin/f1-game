@@ -17,8 +17,11 @@ Log.info("game", "Atmosphere.create");
 // the chip; road look / FX / grip use G.isWetRoad (wetness) elsewhere.
 const { clamp, satAdjust, isFloodActiveSession,
         _nightAmbientBand, applyLightTune } = G;
-const wxWet = () => G.raceWeather === "wet" || G.raceWeather === "rain";
-const wxRain = () => G.raceWeather === "rain";
+// STORM (js/race/storm.js) is rain and then some: every rain branch applies,
+// then the storm block in the wet branch darkens and thickens it.
+const wxWet = () => G.raceWeather === "wet" || G.raceWeather === "rain" || G.raceWeather === "storm";
+const wxRain = () => G.raceWeather === "rain" || G.raceWeather === "storm";
+const wxStorm = () => G.raceWeather === "storm";
 const { LT, buildTrackLights } = LightTune;
 const TUNE_DEFS = LightTune.TUNE_DEFS || [];
 
@@ -111,6 +114,8 @@ function applyRaceSettings(blendS) {
 function _applyRaceBody() {
   Log.info("game", "Atmosphere.applyRaceSettings tod=" + G.raceTimeOfDay + " wx=" + G.raceWeather);
   if (typeof applyLightTune === "function") applyLightTune(true, _hold ? { holdRebuild: true } : undefined);
+  // The storm's heavier rain, for whichever caller reseeds the streaks next (startRace, a knob reinit).
+  if (typeof Particles !== "undefined" && Particles.rainIntensity && typeof Storm !== "undefined") Particles.rainIntensity(Storm.rainK(G.raceWeather));
   const isNightSession = G.raceTimeOfDay === "night" ||
     (G.raceTimeOfDay === "default" && G.track && G.track.def && G.track.def.night);
   // City light-pollution SKYGLOW: at night the lit circuit domes the horizon —
@@ -406,6 +411,23 @@ function _applyRaceBody() {
     G.frame.exposure = isNightSession
       ? Math.max(G.frame.exposure != null ? G.frame.exposure : 0.90, 0.95)
       : Math.max(G.frame.exposure != null ? G.frame.exposure : 1.0, _storm ? 1.03 : 1.00);
+    // STORM: a near-black deck, a sun all but gone, a darker frame and the
+    // spray-and-cloudburst murk — visibility is what a storm costs
+    // (https://www.the-race.com/formula-1/why-f1-cant-solve-its-wet-weather-problem/).
+    // Scales the rain look above, so a tuned rain preset carries into it.
+    if (wxStorm()) {
+      G._cloudBase = Math.min(0.98, G._cloudBase + 0.10);
+      G.frameSky.cloud = G._cloudBase;
+      G.frame.sunColor = G.frame.sunColor.map((v) => v * _mute(0.55));
+      G.frameSky.sunColor = G.frameSky.sunColor.map((v) => v * _mute(0.6));
+      G.frame.ambientSky = G.frame.ambientSky.map((v) => v * 0.82);
+      G.frame.ambientGround = G.frame.ambientGround.map((v) => v * 0.80);
+      if (G.frameSky.zenith) G.frame.skyZenith = G.frameSky.zenith = G.frameSky.zenith.map((v) => v * 0.7);
+      if (G.frameSky.horizon) G.frame.skyHorizon = G.frameSky.horizon = G.frameSky.horizon.map((v) => v * 0.78);
+      if (G.frame.fogColor) G.frame.fogColor = G.frame.fogColor.map((v) => v * 0.78);
+      G.frame.fogDensity = (G.frame.fogDensity || 0.0016) * 2.2;
+      G.frame.exposure *= 0.86;
+    }
   } else if (G.raceWeather === "overcast") {
     // Dry but heavy grey cloud: flat, soft, shadow-light. No rain, dry grip.
     G._cloudBase = Math.min(0.90, G._cloudBase + 0.50);
@@ -475,7 +497,7 @@ function _applyRaceBody() {
     if (G.raceTimeOfDay === "dawn") gm = 0.40;
     else if (G.raceTimeOfDay === "dusk") gm = 0.22;
     else if (isNightSession) gm = 0.16;
-    if (wxWet()) gm = Math.max(gm, wxRain() ? 0.18 : 0.12);
+    if (wxWet()) gm = Math.max(gm, wxStorm() ? 0.30 : wxRain() ? 0.18 : 0.12);
     else if (G.raceWeather === "overcast") gm = Math.max(gm, 0.34);
     else if (G.raceWeather === "fog") gm = Math.max(gm, 0.58);
     const _mb = G.track && G.track.def ? _trackAtmoBias(G.track.def) : 0;   // +overcast/humid, -arid
@@ -543,7 +565,7 @@ function _applyRaceBody() {
   // tuner drag tick for the _APPLY_RACE_IDS knobs, and unconditionally
   // re-arming here kept pushing the strike 3-8 s away, so lightning never
   // fired while a sun/ambient slider was being dragged in the rain.
-  if (!(G._ltNextT > 0)) { G._ltFlash = 0; G._ltNextT = 3 + Math.random() * 5; }
+  if (!(G._ltNextT > 0)) { G._ltFlash = 0; G._ltNextT = 0; }   // a strike window opens at clock 0 — Storm.strikeIn is seeded, never Math.random (peers/replays agree)
   // Resolve the prop-emissive ramp NOW, not only on the next rendered frame:
   // stars/moon/ambient above land synchronously, and a read between a night→day
   // rebuild and the first day frame used to pair the day sky with the night's

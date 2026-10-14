@@ -390,6 +390,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/flyby-shots.test.mjs",
   "tests/unit/flying-start.test.mjs",
   "tests/unit/font-digits.test.mjs",
+  // The weather FORECAST (js/race/forecast.js): timeline off the arc's own road lag (drift-guarded against
+  // weather-arc.js), bounded seeded uncertainty, and the engineer's early / 2-lap / 1-lap / here / drying calls. VM, < 0.5 s.
+  "tests/unit/forecast.test.mjs",
   // Portrait HFOV floor + landscape HFOV cap (js/camera/fov-fit.js); pure VM, <0.1 s.
   "tests/unit/fov-fit.test.mjs",
   // The FRAMING REPORT fleet diff (tools/lib/frame-fleet.mjs): frame identity across
@@ -853,6 +856,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ribbon flag to lineBrakeCue); this still asks that one key means one type.
   "tests/unit/store-key-types.test.mjs",
   "tests/unit/store-registry.test.mjs",
+  // STORM (js/race/storm.js): above rain on the arc ladder, rain's grip and tread, heavier rain,
+  // a seeded frame-rate-independent lightning schedule, the storm safety car, no STORM chip in rooms. VM, < 1 s.
+  "tests/unit/storm-weather.test.mjs",
   "tests/unit/surface-id-parity.test.mjs",
   // APEX_SURVEY_HUD=1: flag parse (query|hash|localStorage) + HUD-visible stub without race warm. Pure, ~0.1 s.
   "tests/unit/survey-hud.test.mjs",
