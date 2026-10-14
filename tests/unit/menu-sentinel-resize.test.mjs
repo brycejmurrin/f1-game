@@ -75,8 +75,10 @@ test("loadTrackStepped matches loadTrack: menu skip, race/count arm", async () =
     function dropTrackWorld() {}
     function freeTrackMeshes() {}
     const sceneryResident = () => false;
-    // loadTrackStepped awaits ensureCircuit before build (LAZY_CIRCUIT gate).
+    // loadTrackStepped awaits ensureCircuit + ensureTrackBuild (LAZY_CIRCUIT /
+    // LAZY_TRACK_BUILD gates) before build.
     const ensureCircuit = async () => {};
+    const ensureTrackBuild = async () => true;
     let adopted = 0;
     const _loadTrackBody = () => { adopted++; };
     const load = eval("(async function(idx, live){" + fnBody(SRC, "loadTrackStepped") + "})");

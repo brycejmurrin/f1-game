@@ -1040,7 +1040,7 @@ test("a dropped gap strip carries the radio card's caution step down with the fl
   // --flag-slot-top, which the root flag raises (#1345) — ONE formula, no body mirror (the #1366 twins were
   // dropped at the ship sync: HUD PR review 2026-10-10).
   assert.match(css, /:root\[data-gap-drop\] #hud-flag \{\s*top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 44px\)/);
-  assert.match(css, /:root\[data-gap-drop\] #announce \{ --flag-slot-top: calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 44px\); \}/,
+  assert.match(css, /:root\[data-gap-drop\] #announce \{ --flag-slot-top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 44px\), calc\(var\(--hud-gaps-b, 0px\) \+ 8px\)\); \}/,
     "the dropped strip raises the card's flag slot to the chip's edge");
   assert.match(css, /body:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 38px\); \}/,
     "the card sits 38px under the flag slot, wherever the chip is");
@@ -1120,11 +1120,46 @@ test("the radio card's top-row slot ends at #hud-sectors in the wrapping band", 
   assert.ok(on()); assert.equal(w(), 790 - 8 - 558, "sectors below the wrapping band leave the default slot");
   h.els.hudSectors._rect = { left: 650, top: 8, right: 790, bottom: 80, width: 140, height: 72 };
   h.refit();
-  assert.ok(!on(), "sectors in the tower's rows leave no 96px top-row slot");
+  // No 96px strip right of the tower: the card takes the TOP-RIGHT CORNER under
+  // it instead (radioUnderRight), right-aligned against the plate, not the lane.
+  const px = (k) => parseFloat(h.root.style.getPropertyValue(k));
+  assert.ok(h.dom.body.hasAttribute("data-radio-corner"), "sectors in the tower's rows hand the card the slot under the tower's right end");
+  assert.ok(!on(), "the corner is the data-radio-corner attribute, not hud-radio-top (class-keyed fit memos)");
+  assert.equal(px("--radio-top-y"), 62 + 4, "a 4px gap under the tower, above the caution flag's row");
+  assert.equal(px("--radio-top-r"), 800 - (650 - 8), "--radio-top-r: the viewport's right edge to the slot's");
+  assert.ok(px("--radio-top-x") >= 800 / 2 + 8, "right of the screen centre, clear of the centred flag chip");
+  assert.equal(px("--radio-top-x") + w(), 650 - 8, "right-aligned one gap short of the sector plate");
+  assert.ok(w() >= 96 && w() <= 260, "between RADIO_TOP_MIN and the 260px cap: " + w());
+  assert.equal(px("--radio-top-h"), 36, "one row tall, above the caution flag's row");
   h.els.hudSectors._rect = { left: 700, top: 8, right: 790, bottom: 80, width: 90, height: 72 };
   h.refit();
   assert.ok(on(), "a 134px strip past sectors is still a slot");
   assert.equal(w(), 700 - 8 - 558, "the strip ends at the sector box's left edge");
+});
+
+test("the top-right corner slot: the HUD mirror in its rows ends it on the left; no room, no slot", () => {
+  const h = fitHarness(), w = () => parseFloat(h.root.style.getPropertyValue("--radio-top-w"));
+  const px = (k) => parseFloat(h.root.style.getPropertyValue(k));
+  const on = () => h.dom.body.hasAttribute("data-radio-corner");
+  h.els.hudSectors._rect = { left: 650, top: 8, right: 790, bottom: 80, width: 140, height: 72 };
+  const mir = h.dom.document.createElement("div"); mir.id = "hud-mirror";
+  h.dom.body.appendChild(mir);
+  mir._rect = { left: 330, top: 66, right: 480, bottom: 106, width: 150, height: 40 };   // cockpit HUD mirror under the tower
+  h.refit();
+  assert.ok(on(), "a 154px corner right of the mirror is still a slot");
+  assert.equal(px("--radio-top-x"), 480 + 8, "the mirror ends the corner slot on its left");
+  assert.equal(px("--radio-top-x") + w(), 650 - 8);
+  mir.hidden = true;
+  h.els.flag.hidden = false;
+  h.els.flag._rect = { left: 330, top: 92, right: 490, bottom: 118, width: 160, height: 26 };   // caution chip, centred
+  h.refit();
+  assert.ok(on(), "a caution chip in the corner's rows still leaves a corner slot");
+  assert.equal(px("--radio-top-x"), 490 + 8, "the card steps right of the centred flag chip");
+  h.els.flag.hidden = true;
+  mir.hidden = false;
+  mir._rect = { left: 330, top: 66, right: 600, bottom: 106, width: 270, height: 40 };   // leaves 34px
+  h.refit();
+  assert.ok(!on(), "under RADIO_TOP_MIN the card keeps its lane");
 });
 
 test("on touch the radio card is left-aligned in the gap between the dock groups", () => {

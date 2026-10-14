@@ -40,8 +40,16 @@ Two long straights (a 1km+ run) punctuated by tight hairpins and chicane-tight c
 - Ring the lap with tall **light-tower boxes** (dark pole, bright cap) to justify the night lighting.
 
 
-## Research pass — verified, already covered
+## Research pass — Circuit Yard R4 (2026-10)
 
-Yas Marina, the marina itself, Ferrari World, the dunes, and the hero **W Yas
-Hotel** — twin towers under a continuous colour-cycling **LED gridshell veil**
-spanning the track — are all modelled. **Nothing added.**
+Refs: Commons SkySat aerial (2018), Ales Jungmann Yas Hotel gridshell photo,
+North Grandstand photo; Architect Magazine / Asymptote LED veil notes.
+
+- **W Yas Hotel** rebuilt as required `yas-hotel-left-tower` /
+  `yas-hotel-right-tower` + `yas-hotel-gridshell` (LED lattice over the track)
+  with `underpassPortal` bridge decks — survey f83–f92 no longer miss the hotel.
+- Marina hotel mass / pavilion tents moved out of the f58 run-off; dock lamps
+  and marina-corridor poles cleared from the f67 camera; Marsa stand at f83
+  leveled via bleacher at gap 16.
+- Palette: pale sand + paved run-off (def `pal.grass` / `pal.runoff`); marina
+  water kept dark.

@@ -1787,11 +1787,11 @@ const TLX = (function () {
       // NOT on an InstancedMesh (_instUsageOf): see there.
       let _instUsage = THREE.StreamDrawUsage;
       try { if (localStorage.getItem("apex26.tlxDynUsage") === "1") _instUsage = THREE.DynamicDrawUsage; } catch (_) { /* no storage: stream */ }
-      // An InstancedMesh KEEPS DynamicDrawUsage (blob / decal runs, the tlx-shadow casters, the tlxAttrInst=0
-      // batches): three relays its instanceMatrix into the buffer it draws once per FRAME per render object (the
-      // BEFORE_FRAME node update, Instance.js), so a Stream one rewritten and drawn again by the same pass in one
-      // frame draws the earlier matrices (the real caster: 0 B re-sent, tlx-hunt4.test.mjs). Only Dynamic re-sends
-      // it per render(). They move to Stream with the attribute path (A-H4), not before.
+      // An InstancedMesh KEEPS DynamicDrawUsage (blob / decal runs, the tlxCasterAttr=0 shadow casters, the
+      // tlxAttrInst=0 batches): three relays its instanceMatrix into the buffer it draws once per FRAME per render
+      // object (the BEFORE_FRAME node update, Instance.js), so a Stream one rewritten and drawn again by the same pass
+      // in one frame draws the earlier matrices (tlx-hunt4 / hunt4c tests). Only Dynamic re-sends it per render().
+      // The casters moved to Stream with the attribute path (A-H4, tlx-shadow attrCaster); blob / decal have not.
       const _instUsageOf = (mesh) => (mesh.isInstancedMesh ? THREE.DynamicDrawUsage : _instUsage);
 
       function _instColorAttr(imesh, cap) {

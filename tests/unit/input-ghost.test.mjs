@@ -220,3 +220,22 @@ test("game.js and session-records wire InputGhost beside pose Ghost", () => {
   const man = readFileSync(join(ROOT, "tools", "manifest.cjs"), "utf8");
   assert.match(man, /js\/car\/input-ghost\.js/);
 });
+
+ test("v2 pedal travel survives serialization and legacy v1 remains binary", () => {
+  const { InputGhost: IG } = createHarness();
+  IG.setTrack("analog"); IG.startLap({ seed: 7 });
+  for (let i = 0; i < 40; i++) IG.record({ steer: 0, throttle: true, brake: true, throttleLevel: .25, brakeLevel: .2 });
+  IG.finishLap(8);
+  const env = IG.envelope();
+  assert.equal(env.v, 2);
+  assert.equal(IG.atStep(0).throttleLevel, 64 / 255);
+  assert.equal(IG.atStep(0).brakeLevel, 51 / 255);
+  assert.equal(IG.valid(JSON.parse(JSON.stringify(IG.snapshot()))), true);
+  env.v = 1;
+  env.throttle = { 0: NaN }; env.brake = ["invalid"];
+  assert.equal(IG.compatible(env), true);
+  assert.equal(IG.atStep(0).throttleLevel, 1);
+  assert.equal(IG.atStep(0).brakeLevel, 1);
+  assert.equal(IG.snapshot().throttle, undefined, "legacy extra fields are ignored on export");
+  assert.equal(IG.snapshot().brake, undefined);
+});

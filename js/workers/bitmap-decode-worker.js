@@ -19,7 +19,9 @@ self.onmessage = async (e) => {
     if (!blob) throw new Error("decode: missing blob");
     const opts = m.opts ? Object.assign({}, DEFAULT_OPTS, m.opts) : DEFAULT_OPTS;
     let bmp;
-    if (m.crop && m.crop.length === 4) {
+    if (m.crop != null && (!Array.isArray(m.crop) || m.crop.length !== 4 ||
+        !m.crop.every(Number.isFinite) || m.crop[2] <= 0 || m.crop[3] <= 0)) throw new Error("bitmap decode: invalid crop");
+    if (m.crop != null) {
       const [sx, sy, sw, sh] = m.crop;
       bmp = await createImageBitmap(blob, sx, sy, sw, sh, opts);
     } else {

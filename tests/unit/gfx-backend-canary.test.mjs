@@ -3968,8 +3968,10 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // mid-race); freeing the batch must release its caster and geometry.
   assert.match(sh, /const iByBatch = new Map\(\)/, "instanced casters are keyed per batch, not a slot pool");
   assert.doesNotMatch(sh, /iPool/, "no instanced slot pool");
-  assert.match(sh, /function freeInstanced\(batch\) \{[\s\S]*?iByBatch\.delete\(batch\);[\s\S]*?castScene\.remove\(m\);[\s\S]*?m\.dispose\(\)/,
+  assert.match(sh, /function freeInstanced\(batch\) \{[\s\S]*?iByBatch\.delete\(batch\);[\s\S]*?castScene\.remove\(m\);[\s\S]*?disposeCaster\(m\)/,
     "freeInstanced drops the batch's caster from the cast scene and disposes it");
+  // A-H4: an InstancedMesh caster (tlxCasterAttr=0) disposes; the attribute Mesh has no dispose(), so its event.
+  assert.match(sh, /function disposeCaster\(m\) \{\s*try \{ if \(m\.isInstancedMesh\) m\.dispose\(\); else m\.dispatchEvent\(\{ type: "dispose" \}\); \}/);
   const tlxSrc = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(tlxSrc, /function freeInstancedBatch\(batch\) \{\s*if \(!batch\) return;\s*if \(shadowSys && shadowSys\.freeInstanced\) shadowSys\.freeInstanced\(batch\);/,
     "and TLX frees it with the batch");
@@ -5695,8 +5697,9 @@ test("selector retains a different circuit during compilation, then releases it 
   };
   const _loadTrackBody = (idx, def, built) => { track = built; builtTrackId = def.id; };
   const dropTrackWorld = eval("(function(){" + fnBody(src, "dropTrackWorld") + "})");
-  // LAZY_CIRCUIT: stepped loader awaits ensureCircuit before Tracks.buildPaced.
+  // LAZY_CIRCUIT + LAZY_TRACK_BUILD: stepped loader awaits both before buildPaced.
   const ensureCircuit = async () => {};
+  const ensureTrackBuild = async () => true;
   const loadTrackStepped = eval("(async function(idx, live){" + fnBody(src, "loadTrackStepped") + "})");
   const ensureScenery = async () => {}, menuSlice = async () => {}, menuFinish = async () => {}, garagePrewarm = async () => {};
   const menuIdle = () => { throw new Error("the stepped build must not wait for menu idle"); };
@@ -5867,7 +5870,8 @@ const game = source("js/render/renderer-boot.js");
 const begin = game.indexOf("\nif (!gfx) {");
 const end = game.indexOf("\nreturn { gfx, bound:", begin);
 assert.ok(begin > 0 && end > begin, "boot's GLX fallback must remain identifiable");
-const fallback = `(async function () { let gfx = null; ${game.slice(begin, end).replace(/return null;/g, "return;")} return gfx; })()`;
+const timeoutHelpers = span(game, "const BOOT_STEP_MS", "function showGraphicsUnavailable", "boot timeout helpers");
+const fallback = `(async function () { ${timeoutHelpers} let gfx = null; ${game.slice(begin, end).replace(/return null;/g, "return;")} return gfx; })()`;
 
 test("the eager GLX handle preserves eval-time mobile tier and live backend getters", () => {
   const storage = new Map([["apex26.forceMobileTier", "1"]]);
@@ -5908,6 +5912,7 @@ test("GLX implementation is deferred and ordered, while the facade precedes its 
 function bootScenario({ install = true, init = true, pref = "webgl2", skip = false, blocked = false } = {}) {
   const events = [], storage = new Map();
   const context = vm.createContext({
+    setTimeout, clearTimeout,
     navigator: { userAgent: "", maxTouchPoints: 0 },
     localStorage: { getItem: () => null, removeItem: (k) => events.push(`remove:${k}`) },
     sessionStorage: {

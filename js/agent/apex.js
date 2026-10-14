@@ -212,7 +212,13 @@ function lazyTrackEnsure(o) {
       if (!G.track && !entering() && !Tracks.building()
           && !(typeof TrackBuildClient !== "undefined" && TrackBuildClient.busy())) {
         const def = Tracks.LIST[G.trackIdx];
-        if (payloadReady(def)) loadTrack(G.trackIdx);
+        // LAZY_TRACK_BUILD: ensureScenery hydrates the circuit BESIDE the toolkit.
+        // Sync loadTrack here while the toolkit is still in flight throws
+        // "TrackBuildProps is not defined" (new-hooks "before a track is loaded"
+        // vs idle menu prep). Leave track null until the toolkit is resident —
+        // race()/startRace await ensureScenery; hooks then return null correctly.
+        const toolkitReady = typeof TrackBuildProps !== "undefined" && !!TrackBuildProps;
+        if (payloadReady(def) && toolkitReady) loadTrack(G.trackIdx);
       }
       return fn.apply(this, a);
     };
@@ -2710,7 +2716,7 @@ const api = {
     const c = G.cars[idx];
     if (c.isPlayer) return false;
     const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
-    c.s    = wrapS(f01 * G.track.total);
+    c.s = c._prevS = wrapS(f01 * G.track.total);
     c.prog = (c.lap || 0) * G.track.total + f01 * G.track.total;
     if (x     !== undefined) { c.x = x; c.xVis = x; }
     if (speed !== undefined) c.speed = speed;

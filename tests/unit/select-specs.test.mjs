@@ -23,6 +23,7 @@ import { failedSpecsFrom, unattributedFailuresFrom } from "../../tools/ci/junit-
 import { recall } from "../../tools/ci/select-recall.mjs";
 import { MEASURED, capacity, declaredTests } from "../../tools/ci/select-budget.mjs";
 import fs from "node:fs";
+import os from "node:os";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -219,7 +220,9 @@ test("terrain and ordinary parts leftovers use only spare over-budget capacity (
   assert.equal(measuredCheap(terrain, db), true, "terrain remains eligible for the ordinary measured cut first");
   const full = plan(MAX_OVER_BUDGET_SHARDS);
   assert.equal(full.oversize.length, MAX_OVERSIZE_SHARDS);
-  assert.deepEqual(full.spill.map((s) => s.file), leftovers.slice(0, 5).map(([file]) => file));
+  // WHICH specs spill, not their order: the spill packs ties by per-test rate, and that rate moves with
+  // a real spec's case count (adding cases to ui-button-touch reordered it past tracks-walls-b).
+  assert.deepEqual(full.spill.map((s) => s.file).sort(), leftovers.slice(0, 5).map(([file]) => file).sort());
   // Per-test rate rounding changes with the real specs' case counts. Assert
   // the saturated capacity boundary, not a historical rounded total.
   const spillSec = full.spill.reduce((n, s) => n + s.sec, 0);
@@ -311,7 +314,8 @@ test("a saturated wide plan runs props-over-road and parts-physics without displ
     { db, rank, spillShards, overBudgetShards });
   const old = plan(2, 0); // Disable the later spare-pool fallback to isolate the original spill defect.
   assert.equal(old.oversize.length, MAX_OVERSIZE_SHARDS, "all oversize slots are occupied");
-  assert.deepEqual(old.spill.map((s) => s.file), leftovers.slice(0, 4).map(([file]) => file));
+  assert.deepEqual(old.spill.map((s) => s.file).sort(), leftovers.slice(0, 4).map(([file]) => file).sort(),
+    "which specs spill, not their order (ties pack by per-test rate, which moves with real case counts)");
   assert.deepEqual(old.skipped.map((s) => s.file), [props, parts], "reproduces both CI omissions");
   const oldSpillRoom = 2 * TARGET_SHARD_SEC - old.spill.reduce((n, s) => n + s.sec, 0);
   assert.ok(oldSpillRoom >= 0 && old.skipped.every((s) => s.sec > oldSpillRoom),
@@ -1065,6 +1069,41 @@ test("partitionMegaSweepArgs peels terrain-over-road out of a packed circuits ar
   assert.deepEqual(megaSoloFlags(packed), ["--timeout=900000", "--workers=1"]);
 });
 
+test("megaSoloFlags keeps separate flag/value pairs after dropping --shard", () => {
+  // Space-form values must survive peel; equals-form stays a single token.
+  const aero = "tests/specs/aero-zones.spec.js";
+  assert.deepEqual(
+    megaSoloFlags(["--workers=1", "--grep-invert", "x", "--shard=2/4", aero]),
+    ["--workers=1", "--grep-invert", "x"],
+  );
+  assert.deepEqual(
+    megaSoloFlags(["--shard", "1/3", "--retries", "0", "--timeout=180000"]),
+    ["--retries", "0", "--timeout=180000"],
+  );
+});
+
+test("megaSoloFlags does not consume specs after boolean or bare optional flags", () => {
+  const spec = "tests/specs/aero-zones.spec.js";
+  for (const flag of ["--headed", "--debug", "--list", "-x", "--fully-parallel"]) {
+    assert.deepEqual(megaSoloFlags([flag, spec, "--shard=1/2"]), [flag]);
+  }
+  assert.deepEqual(megaSoloFlags(["--debug", "cli", spec]), ["--debug", "cli"]);
+  assert.deepEqual(megaSoloFlags(["-u", "changed", spec]), ["-u", "changed"]);
+});
+
+test("megaSoloFlags retains declared option values and drops positionals", () => {
+  const spec = "tests/specs/aero-zones.spec.js";
+  assert.deepEqual(
+    megaSoloFlags([spec, "-c", "playwright.config.js", "-g", "race", "-G", "skip", "-j", "2", spec]),
+    ["-c", "playwright.config.js", "-g", "race", "-G", "skip", "-j", "2"],
+  );
+  assert.deepEqual(
+    megaSoloFlags(["--grep-invert", "x", "--workers=1", "--shard", "1/3", spec, "--timeout=180000"]),
+    ["--grep-invert", "x", "--workers=1", "--timeout=180000"],
+  );
+  assert.deepEqual(megaSoloFlags(["--headed", "--", spec, "--list"]), ["--headed"]);
+});
+
 test("solo oversize mega keeps --shard (selected gate does not peel itself)", () => {
   // PR #1113 / #1109: select-specs already shards tlx-probes 1/3. Peeling the
   // lone file dropped --shard (megaSoloFlags) and ran all 17 tests on shard 1
@@ -1545,4 +1584,26 @@ test("maxDeclaredTimeout folds `BOOT_MS + 480_000` and bills an unresolvable arg
     assert.equal(maxDeclaredTimeout(rel("b.spec.js")), 3 * SELECTED_GATE.perTestTimeoutSec * 1000, "unknown is over the cap, never free");
     assert.equal(maxDeclaredTimeout(rel("c.spec.js")), 60_001);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("helper imports and reexports propagate transitively with cycles", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "select-import-"));
+  const changed = ["tests", "helpers", "changed.js"].join("/");
+  const middle = ["tests", "helpers", "middle.js"].join("/");
+  const transitive = ["tests", "specs", "transitive.spec.js"].join("/");
+  const unrelated = ["tests", "specs", "unrelated.spec.js"].join("/");
+  try {
+    fs.mkdirSync(path.join(dir, "tests/helpers"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "tests/specs"));
+    for (const [file, src] of Object.entries({
+      [changed]: "import './middle.js';",
+      [middle]: "export * from './changed.js';",
+      [transitive]: "import '../helpers/middle.js';",
+      [unrelated]: "export const x = 1;",
+    })) fs.writeFileSync(path.join(dir, file), src);
+    assert.deepEqual(specsImporting([changed], dir), [transitive]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  const consumers = specsImporting(["tests/helpers/await-track-build.js"]);
+  assert.ok(consumers.includes("tests/specs/props-over-road.spec.js"));
+  assert.ok(consumers.length > 5, "fixtures reexport reaches indirect consumers");
 });

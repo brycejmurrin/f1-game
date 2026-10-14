@@ -651,8 +651,14 @@ test("ensureStaged fetches lap-1 engineer/spotter packs before coach and announc
   assert.ok(order.every((u) => u.includes("george.")), "only engineer fetches started");
   resolveFetch("assets/voice/george.json");
   resolveFetch("assets/voice/george.bin");
-  await drain();
-  for (let i = 0; i < 20; i++) { await drain(); if (P.ready("george")) break; }
+  // ready(george) flips ~4 microtasks before ensureStaged starts tier-1 fetches.
+  // Waiting on ready alone then asserting order.length===6 races that gap under
+  // interleaved await checkpoints (each await Promise.resolve() continuation is
+  // queued beside the pack's own .then chain). Wait until tier-1 URLs appear.
+  for (let i = 0; i < 40; i++) {
+    await drain();
+    if (order.length >= 6 && P.ready("george")) break;
+  }
   assert.equal(order.length, 6, "every pack fetch started once engineer tier settled");
   const idx = (id, ext) => order.findIndex((u) => u.endsWith(`${id}.${ext}`));
   assert.ok(idx("george", "json") >= 0 && idx("george", "bin") >= 0, "engineer pack started");
@@ -665,8 +671,10 @@ test("ensureStaged fetches lap-1 engineer/spotter packs before coach and announc
   assert.equal(P.ready("fable"), false, "announcer still pending when engineer is ready");
   assert.equal(pending.size, 4, "tier-1 fetches still in flight");
   for (const url of [...pending.keys()]) resolveFetch(url);
-  await drain();
-  for (let i = 0; i < 20; i++) { await drain(); if (P.ready("heart") && P.ready("fable")) break; }
+  for (let i = 0; i < 40; i++) {
+    await drain();
+    if (P.ready("heart") && P.ready("fable")) break;
+  }
   assert.equal(P.ready("heart"), true, "coach ready after tier 1 settles");
   assert.equal(P.ready("fable"), true, "announcer ready after tier 1 settles");
   assert.deepEqual([...new Set(order)].sort(), ["assets/voice/fable.bin", "assets/voice/fable.json",
@@ -886,4 +894,28 @@ test("the spotter's idle early-outs reset nothing: 600 steps off / in the menu /
   G.state = "menu";
   for (let i = 0; i < 60; i++) sp.update(1 / 60, false);
   assert.equal(stops, 1, "a state that was in use is reset — once");
+});
+
+
+test("a stalled pack body times out, releases staged tiers, and respects retry delay", async () => {
+  const timers = new Map(), calls = []; let now = 0, timerId = 0, late;
+  const sb = sandbox(["js/audio/voice-pack.js"], {
+    Date: { now: () => now }, AbortController,
+    setTimeout: (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; },
+    clearTimeout: (id) => timers.delete(id),
+    fetch: async (url) => { calls.push(url); return { ok: true,
+      json: async () => ({ clips: { hello: [0, 4, 1] } }),
+      arrayBuffer: () => url.includes("george") ? new Promise((res) => { late = res; }) : Promise.resolve(new ArrayBuffer(4)),
+    }; },
+  });
+  const drain = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
+  const P = sb.VoicePack.create({}); P.ensureStaged([["george"], ["heart"]]); await drain();
+  assert.equal(calls.length, 2);
+  const timeout = [...timers.values()].find((t) => t.ms === 15000); assert.ok(timeout);
+  timeout.fn(); await drain();
+  assert.equal(P.ready("heart"), true, "lower tiers proceed after fetch or body timeout");
+  late(new ArrayBuffer(4)); await drain();
+  assert.equal(P.ready("george"), false, "late body cannot revive a failed attempt");
+  P.ensure("george"); await drain(); assert.equal(calls.length, 4);
+  now = 120000; P.ensure("george"); await drain(); assert.equal(calls.length, 6);
 });

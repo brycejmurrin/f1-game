@@ -1,6 +1,6 @@
 ---
 name: ci-watch
-description: "Use when designated Merge Desk: sweep PRs with pr-board.mjs; ready green drafts, arm MERGE-commit auto-merge, never squash."
+description: "Use when you are the designated Merge Desk / CI Watch: sweep open PRs with pr-board.mjs, ready green drafts when ready-full-cap has room, disable foreign SQUASH/REBASE arms, arm MERGE-method auto-merge."
 ---
 
 # Merge Desk (Claude-run; this skill kept its old `ci-watch` name)
@@ -8,8 +8,8 @@ description: "Use when designated Merge Desk: sweep PRs with pr-board.mjs; ready
 The repo's Merge Desk role (AGENTS.md §Concurrent PRs holds the three universal
 rules; pacing detail below), run by a Claude session or Routine. There is no CI Watch
 workflow in the repo. One sweep reads the board, acts per row, reports once.
-Companion skills: `pr-owner` (the session that owns a PR), `session-comms`
-(messages, claims, subscriptions, authority); read-only board agent:
+Companion skills: `steward` (`references/ownership.md`: the session that owns a PR), `agent-fleet`
+(`references/comms.md`: messages, claims, subscriptions, authority); read-only board agent:
 `.claude/agents/ci-watcher.md`.
 
 ## Authority — read first
@@ -73,8 +73,8 @@ ARM a PR only when ALL hold; any miss is WAIT (say which):
 | READY | Confirm `node tools/ci/ready-gate.mjs --pr <n>` exits 0 AND `node tools/ci/ready-full-cap.mjs` exits 0, then `mcp__github__update_pull_request` `draft: false`. At most 3 flips per sweep, never more than the board's `cap.room`; no waiver, `--cap`/`--exclude` only on the user's explicit say. |
 | ARM | Only if the hard gate above holds: `mcp__github__enable_pr_auto_merge` `mergeMethod: "MERGE"`. MERGE only. |
 | FOREIGN-ARM | A SQUASH or REBASE arm: `mcp__github__disable_pr_auto_merge`, then re-arm with MERGE only if the hard gate holds. Tell the user which actor armed it if known. |
-| SYNC | Not yours to push. If a live session owns the PR (`node tools/ci/who-is-on-it.mjs`, recent pushes), `send_message` it `HANDOFF`/`BLOCKED` per `session-comms`. Otherwise `node tools/ci/sync-pr.mjs <branch>` (merge ship, never rebase or force-push; `--push` only after it verified). Run it in a worktree, not a checkout another session uses. Never arm it while DIRTY. |
-| FIX | Same ownership check. A live owner gets the failing job names by message. Otherwise hand to the `ci-red-triage` agent for the test and assertion, then fix per `steward`/`pr-owner`. A `cancelled` with a live sibling is the draft/ready dedupe, not a red (`steward` §1). |
+| SYNC | Not yours to push. If a live session owns the PR (`node tools/ci/who-is-on-it.mjs`, recent pushes), `send_message` it `HANDOFF`/`BLOCKED` per `agent-fleet` `references/comms.md`. Otherwise `node tools/ci/sync-pr.mjs <branch>` (merge ship, never rebase or force-push; `--push` only after it verified). Run it in a worktree, not a checkout another session uses. Never arm it while DIRTY. |
+| FIX | Same ownership check. A live owner gets the failing job names by message. Otherwise hand to the `ci-red-triage` agent for the test and assertion, then fix per `steward` (and its `references/ownership.md`). A `cancelled` with a live sibling is the draft/ready dedupe, not a red (`steward` §1). |
 | WAIT | Nothing. Cap full, CI running, gate pending, 2 already armed, `MERGE-HOLD:` set. |
 | NONE | Nothing: armed with MERGE and healthy. |
 

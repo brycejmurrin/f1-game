@@ -40,6 +40,7 @@ function world({ roster = {}, failOnce = [], body, globals = {}, deps = {} }) {
     ApexRoster: {
       DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [], LAZY_RACE: [],
       LAZY_RACE_SESSION: [], LAZY_RACE_SESSION_EDGES: [], LAZY_AUDIO: [], LAZY_AUDIO_EDGES: [],
+      LAZY_TRACK_BUILD: [], LAZY_TRACK_BUILD_EDGES: [],
       LAZY_DATA: [], LAZY_DATA_EDGES: [], LAZY_NET: [], LAZY_NET_EDGES: [],
       SCENERY_DIR: "js/circuits/scenery", ...roster,
     },
@@ -48,6 +49,8 @@ function world({ roster = {}, failOnce = [], body, globals = {}, deps = {} }) {
     location: { search: "", hostname: "example.com" },
     Log: { warn() {}, info() {}, error(_ns, m) { logged.push(m); } },
     els: {},
+    // Empty LAZY_TRACK_BUILD: stubs keep ensureScenery from failing the toolkit gate.
+    TrackBuildProps: { build() {} }, TrackModels: {}, TrackHiddenFaces: {},
     ...globals,
   });
   ctx.window = ctx;
@@ -312,11 +315,13 @@ function boot({ agent = false, lazyV = null } = {}) {
       DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [],
       LAZY_RACE: ["js/lighting/presets.js"], LAZY_AUDIO: ["js/audio/engine.js"], LAZY_AUDIO_EDGES: [],
       LAZY_RACE_SESSION: [], LAZY_RACE_SESSION_EDGES: [],
+      LAZY_TRACK_BUILD: [], LAZY_TRACK_BUILD_EDGES: [],
       SCENERY_DIR: "js/circuits/scenery", LAZY_SCENERY: [],
       LAZY_DATA: [], LAZY_DATA_EDGES: [], LAZY_NET: [], LAZY_NET_EDGES: [],
       TRACK_VM: ["js/track/core/geom.js"], TRACK_WORKER_EXTRA: [],
     },
     window: { __APEX_BUILD: 4100, LightPresets: {}, __TEST_MODE: agent },
+    TrackBuildProps: { build() {} }, TrackModels: {}, TrackHiddenFaces: {},
     PitLane: { _stub: true },
     Tracks: { LIST: [{ id: "monza", custom: true, scenery: () => {} }], circuitPayloadResident: () => true },
     Assets: { modelsReady: () => Promise.resolve(0) },
@@ -385,4 +390,36 @@ test("a malformed or hostile map falls back to the build key", () => {
     vm.runInContext(readPath("js/core/script-loader.js"), ctx);
     assert.equal(vm.runInContext('ScriptLoader.url("js/core/log.js")', ctx), "js/core/log.js?v=9", bad);
   }
+});
+
+test("awaitPackSettled: yields until the pack uploads, then resolves true", async () => {
+  const w = world({ body: () => "" });
+  let pack = { supported: true, uploaded: false, error: null, tier: null };
+  let yields = 0;
+  const done = w.lb.awaitPackSettled({
+    getState: () => pack,
+    yieldFn: async () => { yields++; if (yields >= 2) pack = { supported: true, uploaded: true, error: null, tier: "high" }; },
+    timeoutMs: 5000,
+  });
+  assert.equal(await done, true);
+  assert.ok(yields >= 2, "waited across yields while uploading");
+});
+
+test("awaitPackSettled: respects stale and timeout without hanging", async () => {
+  const w = world({ body: () => "" });
+  const pack = { supported: true, uploaded: false, error: null, tier: null };
+  let stale = false;
+  const p = w.lb.awaitPackSettled({
+    getState: () => pack,
+    stale: () => stale,
+    yieldFn: async () => { stale = true; },
+    timeoutMs: 5000,
+  });
+  assert.equal(await p, false, "stale abort leaves unsettled");
+  const timed = await w.lb.awaitPackSettled({
+    getState: () => pack,
+    yieldFn: async () => {},
+    timeoutMs: 0,
+  });
+  assert.equal(timed, false, "zero timeout exits unsettled");
 });

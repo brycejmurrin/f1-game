@@ -935,12 +935,12 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
     "data hub short-height chrome must use body[data-density], not viewport max-height");
   assert.ok(ruleFor(data, /^body\[data-shape="tall"\]\[data-width="narrow"\] \.dh-tabs\b/),
     "portrait 2×3 destinations use the zoom-aware shape+width flags (not @media orientation)");
-  // Live survey ~500px: TELEMETRY (7.1em) used to be the widest label; WATCH &
-  // DRIVE overflows that column with nowrap. Size the grid for the new widest
-  // and let the chip wrap instead of painting past its plate.
+  // auto-fit + minmax(11.2×fs-micro) collapsed to ONE column on 360–390px phones
+  // (label floor × 2 + gap > content width), so seven full-width tabs ate the
+  // schedule. Fixed 3 columns; white-space:normal still wraps WATCH & DRIVE.
   const tallTabs = ruleFor(data, /^body\[data-shape="tall"\]\[data-width="narrow"\] \.dh-tabs\b/);
-  assert.match(tallTabs.decls.get("grid-template-columns") || "", /11\.2 \* var\(--fs-micro\)/,
-    "tall+narrow hub columns size to WATCH & DRIVE, not TELEMETRY");
+  assert.match(tallTabs.decls.get("grid-template-columns") || "", /repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+    "tall+narrow hub tabs are a 3-column grid so schedule content stays visible");
   assert.equal(decl(data, /^body\[data-shape="tall"\]\[data-width="narrow"\] \.dh-tab\b/, "white-space"), "normal",
     "WATCH & DRIVE wraps inside the chip instead of overflowing the plate");
   assert.equal(decl(css("css/menus.css"), /^#ss-inner\[data-density="compact"\] #ss-cal \.season-upcoming-row/, "flex-wrap"), "wrap");
@@ -1548,7 +1548,7 @@ function bootSettingsNav() {
   const sb = uiSandbox(dom, { ResizeObserver: class { observe() {} }, ScrollFade: { refresh() {} } });
   vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
   const index = dom.byId("pm-settings-index");
-  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files"])
+  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-advanced", "pm-audio", "pm-open-files"])
     index.appendChild(dom.byId(id));
   const stale = dom.document.createElement("button");
   stale.hidden = true;
@@ -1602,7 +1602,7 @@ test("Settings index DRIVING subtitle rebuilds badges once (empty coach select)"
   });
   vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
   const index = dom.byId("pm-settings-index");
-  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files"])
+  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-advanced", "pm-audio", "pm-open-files"])
     index.appendChild(dom.byId(id));
   const drv = dom.byId("pm-open-driving");
   const small = dom.document.createElement("small");
@@ -1626,7 +1626,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   // SettingsNav BEHAVIOUR: always land on the door index. A stored
   // settingsCategory must not reopen MORE / DISPLAY.
   const h = bootSettingsNav();
-  assert.deepEqual(Object.keys(h.nav).sort(), ["back", "show", "showCurrent"]);
+  assert.deepEqual(Object.keys(h.nav).sort(), ["back", "invalidate", "show", "showCurrent"]);
   assert.equal(h.index().hidden, false, "create() shows the door index");
   assert.equal(h.panel("controls").hidden, true);
   assert.equal(h.panel("display").hidden, true);
@@ -2088,8 +2088,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "compact radio cards sit right under the timing row, like every other density");
   assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce', "top"), "calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px)",
     "…and step below the flag chip while a caution shows, never on top of it");
-  assert.equal(decl(css("css/hud.css"), ":root[data-gap-drop] #announce", "--flag-slot-top"), "calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px)",
-    "gap-drop raises --flag-slot-top so announce steps from the dropped flag edge");
+  assert.equal(decl(css("css/hud.css"), ":root[data-gap-drop] #announce", "--flag-slot-top"), "max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px), calc(var(--hud-gaps-b, 0px) + 8px))",
+    "gap-drop raises --flag-slot-top so announce steps from the dropped flag edge (and clears --hud-gaps-b)");
   // ONE formula for the phone INPUTS top (HUD PR review 2026-10-10): --hud-sec-h is published in the chrome's
   // zoom (--hud-z-top) and converted into this band's (--hud-z); the step below the #hud-limits chip is
   // conditional (--inputs-below-limits, set only while the chip shows) rather than a permanent +1.75em+8px.
@@ -2098,7 +2098,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "phone INPUTS park under the sector plate, and below the #hud-limits chip only while it shows");
   assert.equal(decl(css("css/hud.css"), 'body:not([data-hud-hide~="limits"]):has(#hud-limits:not([hidden])) #hud-inputs', "--inputs-below-limits"), "calc(2.6em + 3px)",
     "the limits step is the chip's own rule");
-  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #hud-flag', "top"), "max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px))");
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #hud-flag', "top"), "max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px), calc(var(--hud-gaps-b, 0px) + 8px))",
+    "compact flag clears --hud-gaps-b (72px alone sat inside the gaps strip at phoneL 150%)");
   assert.equal(decl(css("css/career.css"), '#quali .sheet[data-density="compact"] #q-foot', "display"), "grid");
   assert.equal(decl(css("css/career.css"), '#quali.q-done .sheet[data-density="compact"] #q-foot #q-go', "grid-column"), "1 / -1");
   const selectJs = code("js/ui/select-screen.js");
@@ -2147,9 +2148,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="sp-close"[^>]*>CLOSE</, "sp-close overlay dismiss is CLOSE");
   assert.match(shell, /id="pm-advanced">STEERING &amp; ASSISTS/, "settings door is STEERING & ASSISTS");
   const settingsIndex = shell.slice(shell.indexOf('id="pm-settings-index"'), shell.indexOf("</nav>", shell.indexOf('id="pm-settings-index"')));
-  assert.deepEqual([...settingsIndex.matchAll(/<button id="(pm-(?:open-controls|open-driving|open-display|open-appearance|advanced|audio|open-files))"/g)].map((m) => m[1]),
-    ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files"],
-    "Settings home has the seven primary doors in order");
+  assert.deepEqual([...settingsIndex.matchAll(/<button id="(pm-(?:open-controls|open-driving|open-display|open-appearance|open-a11y|advanced|audio|open-files))"/g)].map((m) => m[1]),
+    ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-advanced", "pm-audio", "pm-open-files"],
+    "Settings home has the eight primary doors in order");
   const pause = shell.slice(shell.indexOf('id="pausemenu"'), shell.indexOf("</dialog>", shell.indexOf('id="pausemenu"')));
   assert.doesNotMatch(pause, /<button id="pm-driving"/, "DRIVING is a Settings page, not a pause shortcut");
   assert.match(shell, /id="pm-panel-driving"/, "DRIVING has a dedicated Settings page");
@@ -2239,9 +2240,16 @@ test("tool doors and lone foot actions do not stretch into banners", () => {
 function bootCopyValues(opts = {}) {
   const dom = makeDom();
   const order = [];
+  const here = opts.here || "monza|dusk|dry";
+  const store = opts.store || { "monza|dusk|dry": { exposure: 1.2 }, "spa|night|wet": { fogDensityMul: 0.5, bloom: 0.3 }, "*": {} };
   const sb = uiSandbox(dom, {
     GameAudio: { uiSelect() {}, uiTick() {} }, PerfGov: { tier: () => 0 },
     LightTune: { TUNE_DEFS: [], LT: {} },   // tuner.js destructures the registry at create()
+    LightStore: { tuned() {
+      const sunSlot = here.replace(/\|[^|]+$/, "|dry"), sunIds = ["sunElev", "sunAzim"];
+      const own = Object.keys(store[here] || {}).filter((id) => sunSlot === here || !sunIds.includes(id));
+      return own.length + (sunSlot === here ? 0 : sunIds.filter((id) => Object.hasOwn(store[sunSlot] || {}, id)).length);
+    } },
     navigator: { clipboard: { writeText: () => { order.push("clipboard"); return opts.clipboardRejects ? Promise.reject(new Error("no")) : Promise.resolve(); } } },
   });
   sb.document.execCommand = (c) => { order.push("execCommand:" + c); return !!opts.execOk; };
@@ -2250,9 +2258,9 @@ function bootCopyValues(opts = {}) {
   vm.runInContext(src("js/lighting/tuner-panel.js"), ctx, { filename: "js/lighting/tuner-panel.js" });
   const G = {
     $: (id) => dom.byId(id), gfx: {}, els: { pmsettings: {} },
-    ltKey: () => opts.here || "monza|dusk|dry", setLightTune() {}, persistLightTune() {}, applyLightTune() {},
+    ltKey: () => here, setLightTune() {}, persistLightTune() {}, applyLightTune() {},
     setTimeOfDay: () => "dusk", weather: () => "dry", exitPhotoMode() {},
-    _ltStore: opts.store || { "monza|dusk|dry": { exposure: 1.2 }, "spa|night|wet": { fogDensityMul: 0.5, bloom: 0.3 }, "*": {} },
+    _ltStore: store,
     track: { def: { name: "Monza" } },
   };
   vm.runInContext("TunerPanel", ctx).create(G);

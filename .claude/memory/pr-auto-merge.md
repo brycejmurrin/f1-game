@@ -4,6 +4,7 @@ description: "Never arm auto-merge or merge on my own; mark ready at tip-green; 
 metadata:
   node_type: memory
   type: feedback
+  source: user, .claude/hooks/github-mcp-guard.sh
   originSessionId: cad46118-e9a8-51ea-bba9-8753c2445b4c
   modified: 2026-10-14T05:07:14.164Z
 ---

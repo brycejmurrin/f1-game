@@ -179,11 +179,11 @@ export function shutdown() {
     pending = (async () => {
       do {
         const entries = [...resources];
-        resources.clear();
         await Promise.all(entries.map(async (r) => {
           // A wedged browser must not block the exit path — force-kill after 5 s.
           try { await Promise.race([r.close(), timeout(5000)]); } catch {}
           try { r.force(); } catch {}
+          resources.delete(r);
         }));
         // A launch may resolve while prior closes await their deadline. Drain
         // that new owner too instead of forgetting it behind the pending promise.
@@ -337,6 +337,47 @@ function killGroup(child, kill = process.kill.bind(process)) {
 
 const browserLaunches = new WeakMap();
 export const chromiumLaunchInfo = (browser) => browserLaunches.get(browser) || null;
+const browserOwners = new WeakMap();
+
+/** Register ownership before connect, and retain it through graceful/forced close. */
+function ownBrowserServer(owner, { entry = null, closeTimeoutMs = 5000,
+  kill = process.kill.bind(process) } = {}) {
+  const existing = browserOwners.get(owner);
+  if (existing) return existing;
+  const child = owner.process();
+  let browserClose = null, closing = null, attached = null;
+  const force = () => {
+    killGroup(child, kill);
+    // BrowserServer.kill also releases its websocket listener. The owned child
+    // handle permits synchronous group cleanup in an exit handler.
+    try { Promise.resolve(owner.kill?.()).catch(() => {}); } catch {}
+  };
+  const close = (...args) => closing ||= boundedClose(async () => {
+    try { if (browserClose) await browserClose(...args); }
+    finally { await owner.close(); }
+  }, force, closeTimeoutMs).finally(() => resources.delete(entry));
+  entry ||= {};
+  entry.close = close; entry.force = force;
+  track(entry);
+  const control = { child, entry, close, get closing() { return closing; },
+    attach(browser) {
+      if (attached === browser) return browser;
+      if (attached) throw new Error("BrowserServer already owns another Browser facade");
+      attached = browser;
+      browserClose = browser.close.bind(browser);
+      browser.close = close;
+      browser.on?.("disconnected", () => { close().catch(() => {}); });
+      return browser;
+    } };
+  browserOwners.set(owner, control);
+  return control;
+}
+
+/** Retain the supported BrowserServer owner until graceful close settles.
+ * A caller may pass its already-registered pre-connect entry. */
+export function trackBrowserOwner(browser, owner, entry) {
+  return ownBrowserServer(owner, { entry }).attach(browser);
+}
 
 /** Own BrowserServer's supported process handle while returning the usual Browser.
  * https://playwright.dev/docs/api/class-browserserver#browser-server-process
@@ -367,28 +408,14 @@ export async function launchChromium(opts = {}, {
     ...launchOptions,
     host: "127.0.0.1",
   });
-  const child = owner.process();
-  const force = () => {
-    killGroup(child, kill);
-    // Server.kill also releases its websocket listener. The process handle is
-    // available synchronously for exit handlers where awaiting is impossible.
-    try { Promise.resolve(owner.kill()).catch(() => {}); } catch {}
-  };
-  let closing = null, browser;
-  const closeOwner = (...args) => closing ||= boundedClose(async () => {
-    try { if (browserClose) await browserClose(...args); }
-    finally { await owner.close(); }
-  }, force, closeTimeoutMs).finally(() => resources.delete(entry));
-  const entry = track({ close: closeOwner, force });
-  let browserClose;
-  if (startedEpoch !== shutdownEpoch) { await closeOwner().catch(() => {}); throw new Error("browser acquisition interrupted by shutdown"); }
+  const control = ownBrowserServer(owner, { closeTimeoutMs, kill });
+  let browser;
+  if (startedEpoch !== shutdownEpoch) { await control.close().catch(() => {}); throw new Error("browser acquisition interrupted by shutdown"); }
   try { browser = await chromium.connect(owner.wsEndpoint(), { timeout: launchOptions.timeout || 30000 }); }
-  catch (err) { await closeOwner().catch(() => {}); throw err; }
-  browserClose = browser.close.bind(browser);
-  if (closing) { await closing.catch(() => {}); throw new Error("browser acquisition interrupted by shutdown"); }
-  browser.close = closeOwner;
-  browser.on("disconnected", () => { closeOwner().catch(() => {}); });
+  catch (err) { await control.close().catch(() => {}); throw err; }
+  if (control.closing) { await control.closing.catch(() => {}); throw new Error("browser acquisition interrupted by shutdown"); }
+  trackBrowserOwner(browser, owner, control.entry);
   browserLaunches.set(browser, Object.freeze({ requestedFlavor: flavor, executablePath: exe || null,
-    source: selected?.source || "playwright-default", flavor: exe ? (/headless[-_]shell/.test(exe) ? "shell" : "chromium") : "playwright-default", pid: child.pid }));
+    source: selected?.source || "playwright-default", flavor: exe ? (/headless[-_]shell/.test(exe) ? "shell" : "chromium") : "playwright-default", pid: control.child.pid }));
   return browser;
 }

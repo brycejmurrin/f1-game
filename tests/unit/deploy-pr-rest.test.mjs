@@ -5,8 +5,8 @@
 //     argv to every process on the box);
 //   - the PR title comes from the branch's last NON-merge commit (#182 shipped
 //     titled "Merge remote-tracking branch …");
-//   - auto-merge is NEVER armed from deploy (2026-10-06): only CI Watch arms
-//     SQUASH on ready PRs — no CCR auto_merge, no `gh pr merge --auto`.
+//   - auto-merge is NEVER armed from deploy (2026-10-06): only Merge Desk arms
+//     MERGE (merge commit) on ready PRs — no CCR auto_merge, no `gh pr merge --auto`.
 // Under a second.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -120,8 +120,8 @@ test("a non-2xx PR lookup is an ERROR, not an empty list", () => {
 });
 
 test("deploy never arms auto-merge: no CCR route, no gh --auto --merge", () => {
-  // 2026-10-06: foreign MERGE arms from agents/tools (#1134/#1135). Only CI
-  // Watch arms SQUASH on ready PRs. Pinned by source for the gh path (needs
+  // 2026-10-06: foreign arms from agents/tools (#1134/#1135). Only Merge Desk
+  // arms, MERGE commit only (squash retired 2026-10-13). Pinned by source for the gh path (needs
   // real gh to exercise) and by the fake-curl exit-24 for the REST path.
   const src = fs.readFileSync(new URL("../../tools/ci/deploy.mjs", import.meta.url), "utf8");
   assert.doesNotMatch(src, /ccr\/auto_merge/, "REST path must not call CCR auto_merge");
@@ -134,5 +134,5 @@ test("deploy never arms auto-merge: no CCR route, no gh --auto --merge", () => {
   const fn = openPr.match(/^function openPr\(branch\) \{[\s\S]*?\n\}/m)?.[0] || body;
   assert.doesNotMatch(fn, /"pr", "merge"/, "gh path must not call gh pr merge");
   assert.doesNotMatch(fn, /--auto/, "gh path must not pass --auto");
-  assert.match(fn, /CI Watch arms SQUASH/, "gh path must point at CI Watch squash arm");
+  assert.match(fn, /Merge Desk arms MERGE/, "gh path must point at Merge Desk's MERGE arm");
 });

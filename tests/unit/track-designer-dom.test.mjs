@@ -2398,3 +2398,45 @@ test("DESIGNED, USE and MORE LIKE THIS judge on a clean base and USE commits a f
   assert.deepEqual(plain([d.hwZones, d.bankZones, d.elevations, d.bridges, d.turns]), [[], [], [], [], []], "DRAW clears the old loop's zones and bridges");
   assert.equal(d.props, undefined);
 });
+
+test("export uses one snapshot while edits and replacements continue", async () => {
+  const b = bootScreen(); b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.load(design({ name: "BEFORE" }));
+  let finish; let encoded;
+  const encode = b.ctx.TrackCodec.encode;
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: (item) => { encoded = plain(item); return new Promise((resolve) => { finish = resolve; }); } };
+  const pending = b.D.exportEnvelope();
+  b.D.setName("AFTER"); b.D.load(design({ name: "REPLACEMENT", pts: ellipse(400, 250) }));
+  finish(await encode(encoded));
+  const env = await pending;
+  assert.equal(env.design.name, "BEFORE");
+  assert.deepEqual(plain(env.design.pts), encoded.pts);
+  const back = await b.CD.decode(env.code);
+  assert.deepEqual(plain(back.design.pts), encoded.pts);
+  assert.equal(back.design.name, env.design.name);
+  b.D.close();
+});
+
+test("hidden-page lifecycle flushes a pending draft before its debounce", () => {
+  const b = bootScreen(); b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.load(design()); b.D.setName("LAST EDIT");
+  let flushes = 0; b.ctx.GameStore.store.mirrorFlush = () => { flushes++; };
+  b.dom.document.visibilityState = "hidden";
+  b.dom.document.dispatchEvent({ type: "visibilitychange" });
+  assert.equal(b.C.draft().name, "LAST EDIT"); assert.equal(flushes, 1);
+  b.dom.document.dispatchEvent({ type: "visibilitychange" }); assert.equal(flushes, 1);
+  b.D.close();
+});
+
+test("newer imports and manual edits supersede pending decodes", async () => {
+  const b = bootScreen(); b.D.init(b.G, { custom: b.C, root: b.root }); b.D.load(design());
+  const completions = new Map();
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, decode: (code) => new Promise((resolve) => completions.set(code, resolve)) };
+  const old = b.D.loadFrom("old"), latest = b.D.loadFrom("latest");
+  completions.get("latest")({ ok: true, design: design({ name: "LATEST" }) }); assert.equal(await latest, true);
+  completions.get("old")({ ok: false, reason: "old failure" }); assert.equal(await old, false);
+  assert.equal(b.D.state().design.name, "LATEST");
+  const edited = b.D.loadFrom("edited"); b.D.setName("MANUAL");
+  completions.get("edited")({ ok: true, design: design({ name: "STALE" }) }); assert.equal(await edited, false);
+  assert.equal(b.D.state().design.name, "MANUAL"); b.D.close();
+});
