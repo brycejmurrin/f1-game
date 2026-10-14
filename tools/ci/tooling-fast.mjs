@@ -605,6 +605,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:
   // when it shows, the pass order, and the main camera handed back. ~0.1 s.
   "tests/unit/mirror-pass.test.mjs",
+  // Job 5: mix duck under announcer/radio. Fake-audio VM: SFX bus −8 dB
+  // via setTargetAtTime (80 ms / 400 ms), overlap hold, interrupt/rebuild
+  // restore, zero per-frame nodes. ~0.2 s.
+  "tests/unit/mix-duck-radio.test.mjs",
   // Capacitor Android (task 45): frozen identity, config shape, manifest,
   // Gradle version wiring, sync-web stamp gate, NativeDownload via Plugins.
   "tests/unit/mobile-config.test.mjs",
