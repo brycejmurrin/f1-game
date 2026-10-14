@@ -117,7 +117,7 @@ test("fieldContact: a bump fires a voice and arms the pool (≤3)", () => {
   assert.equal(st.armed, true);
   assert.ok(st.voices >= 2 && st.voices <= 3, `voice cap 2..3, got ${st.voices}`);
   assert.equal(st.fired, 1);
-  assert.equal(counts.src, beforeSrc, "no BufferSource alloc on fire (pooled at startEngine)");
+  assert.equal(counts.src, beforeSrc, "no BufferSource alloc on fire (osc pool, no loop PCM)");
 });
 
 test("fieldContact: per-car cooldown ≥250 ms holds a second bump", () => {

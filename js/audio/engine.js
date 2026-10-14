@@ -1167,25 +1167,25 @@ var GameAudio = (function () {
     surfSrc.start();
     windSrc.start();
     brakeSrc.start();
-    // FIELD CONTACT pool (Radio r9): looping noise + filter + gain + panner.
-    // Built here so startEngine is the only allocator; fieldContact only
-    // schedules envelopes. Mobile gets 2 voices; desktop the 3-voice cap.
+    // FIELD CONTACT pool (Radio r9): osc + filter + gain + panner.
+    // Oscillators (not looping BufferSources) so the six harvest/skid/scrub/
+    // surface/wind/brake loop contract stays intact. Built once at startEngine;
+    // fieldContact only schedules envelopes. Mobile 2 / desktop 3.
     contactVoices = [];
     _contactCdN = 0;
     contactFired = contactDeniedCd = contactDeniedCap = contactDeniedGate = 0;
     if (ctx.createStereoPanner && sfxOk()) {
       const nContact = lowPower() ? CONTACT_VOICES_MOBILE : CONTACT_VOICES_DESKTOP;
-      const cBuf = loopNoise("fieldContact", 0.5);
       for (let ci = 0; ci < nContact; ci++) {
-        const cSrc = ctx.createBufferSource();
-        cSrc.buffer = cBuf; cSrc.loop = true;
+        const cOsc = ctx.createOscillator();
+        cOsc.type = "sawtooth"; cOsc.frequency.value = 120;
         const cFilt = ctx.createBiquadFilter();
         cFilt.type = "bandpass"; cFilt.frequency.value = 900; cFilt.Q.value = 1.2;
         const cGain = ctx.createGain(); cGain.gain.value = 0;
         const cPan = ctx.createStereoPanner(); cPan.pan.value = 0;
-        cSrc.connect(cFilt).connect(cGain).connect(cPan).connect(sfxBus);
-        contactVoices.push({ src: cSrc, filt: cFilt, gain: cGain, pan: cPan, freeAt: 0 });
-        cSrc.start(0, (ci / Math.max(1, nContact)) * 0.4);
+        cOsc.connect(cFilt).connect(cGain).connect(cPan).connect(sfxBus);
+        contactVoices.push({ osc: cOsc, filt: cFilt, gain: cGain, pan: cPan, freeAt: 0 });
+        cOsc.start(0);
       }
     }
 
@@ -1272,7 +1272,7 @@ var GameAudio = (function () {
     stopAt(subOctOsc, t0 + 0.35);
     for (const v of rivalVoices) { try { v.gain.gain.setTargetAtTime(0, t0, 0.06); v.stop(t0 + 0.35); } catch (e) { /* already stopped */ } }
     for (const v of contactVoices) {
-      try { v.gain.gain.setTargetAtTime(0, t0, 0.04); stopAt(v.src, t0 + 0.35); } catch (e) { /* already stopped */ }
+      try { v.gain.gain.setTargetAtTime(0, t0, 0.04); stopAt(v.osc, t0 + 0.35); } catch (e) { /* already stopped */ }
     }
     stopAt(harvSrc, t0 + 0.35);
     stopAt(ersOsc, t0 + 0.35);
@@ -2440,6 +2440,9 @@ var GameAudio = (function () {
     v.filt.Q.value = q;
     v.filt.frequency.cancelScheduledValues(t);
     v.filt.frequency.setValueAtTime(freq, t);
+    v.osc.type = kd === "squeal" ? "triangle" : kd === "scrape" ? "sawtooth" : "sine";
+    v.osc.frequency.cancelScheduledValues(t);
+    v.osc.frequency.setValueAtTime(kd === "bump" ? Math.max(55, freq * 0.35) : freq * 0.55, t);
     v.pan.pan.cancelScheduledValues(t);
     v.pan.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), t);
     env(v.gain, t, peak, attack, decay);
