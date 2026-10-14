@@ -861,6 +861,14 @@ for (const v of [
         localStorage.setItem("apex26.portraitOk", "1");
         const plan = document.getElementById("hud-plan");
         if (plan && !plan.textContent) plan.textContent = "PLAN NO STOP";
+        // race() unhides #announce with a long radio line for the landscape
+        // card tests. Portrait race-anyway keeps that slot collapsed until a
+        // message; leave it collapsed so we assert the shipped announce area.
+        const ann = document.getElementById("announce");
+        if (ann) {
+          ann.hidden = true;
+          ann.setAttribute("data-lane-collapsed", "");
+        }
         if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
         window.__apex.jump(0.15, 60, 0);
       });
