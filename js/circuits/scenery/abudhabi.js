@@ -377,12 +377,12 @@
 
       {
         // W Abu Dhabi / Yas Hotel — twin towers + LED gridshell veil over the
-        // track (Asymptote refs). Thin arch spans alone did not read as the
-        // hotel at survey f83–f92; rebuild as required landmark groups + canopy.
+        // track (Asymptote refs). Foundation pins arch-1..7, named supports,
+        // and bridge-main / bridge-forward as required overhead emits.
         const k = K(0.88);
         const H = 100;
         // Landmark contract greps the literal modelGroup("id" … { required: true }).
-        for (const [id, side] of [["yas-hotel-left-tower", -1], ["yas-hotel-right-tower", 1]]) {
+        for (const side of [-1, 1]) {
           // 33 m out, not 30: the tower's 18 m base radius reaches 15 m back
           // toward the road, and at 30 it stood 2 m inside the pit complex's
           // working lane (the engine builds the lane 14 m out on the pit side).
@@ -401,11 +401,12 @@
               addBox(stage, vadd(a.c, a.u, fy), [24, 3.5, 32], (fl % 2 === 0) ? WIN_EMI : WIN_WARM, b);
             }
             stage._mat = MAT.METAL;
-            for (let gy = 0; gy < 5; gy++) {
-              for (let gz = 0; gz < 2; gz++) {
-                const cc = vadd(vadd(a.c, a.u, 18 + gy * 14), a.t, (gz - 0.5) * 8);
+            // Denser colour-cycle LED gridshell skin on the track-facing facade.
+            for (let gy = 0; gy < 8; gy++) {
+              for (let gz = 0; gz < 3; gz++) {
+                const cc = vadd(vadd(a.c, a.u, 14 + gy * 10), a.t, (gz - 1) * 6);
                 const col = LED_CYCLE[(gy + gz + (side > 0 ? 1 : 0)) % 3];
-                addBox(stage, vadd(cc, a.r, -side * 12), [0.55, 4.2, 6.0], col, b);
+                addBox(stage, vadd(cc, a.r, -side * 12), [0.55, 3.6, 4.5], col, b);
               }
             }
             stage._mat = 0;
@@ -424,23 +425,45 @@
           }
         }
 
-        // LED gridshell veil OVER the track must use overheadSpan (modelGroup
-        // preflight rejects any footprint that covers tarmac). Five thick
-        // colour-cycled arches + off-track lattice legs as the landmark group.
+        const hotelSupport = (id, frac, side, gap, width, height, depth, col, mat) => {
+          const sk = K(frac);
+          const a = anchor(sk, side, gap + width / 2);
+          const b = [a.r, a.u, a.t];
+          const size = [width, height, depth];
+          const center = vadd(a.c, a.u, height / 2);
+          modelGroup(id, { center, size, basis: b }, (stage) => {
+            stage._mat = mat;
+            addBox(stage, center, size, col, b);
+            stage._mat = 0;
+          }, { required: true });
+        };
+
+        // Seven arches (foundation OVERHEAD_IDS) + off-track legs. supports:false
+        // on the spans: legs are explicit modelGroups so float-audit grounds them.
+        const shellClearances = [18, 22, 27, 31, 27, 22, 18];
+        const shellThick = 0.65;
+        const shellLegH = shellClearances[0] + shellThick / 2;
+        // Rear pit-side leg at 0.884 (not under the last arch) clears the garage
+        // keep; rear left stays under 0.888 so the last arch is not floating.
+        for (const [label, frac, fracPit] of [["front", 0.872, 0.872], ["rear", 0.888, 0.884]]) {
+          for (const side of [-1, 1])
+            hotelSupport(`yas-hotel-gridshell-${label}-${side < 0 ? "left" : "right"}-support`,
+              side > 0 ? fracPit : frac, side, 14.5, 1.2, shellLegH, 2.2, [0.06, 0.07, 0.10], MAT.METAL);
+        }
+
+        for (let i = 0; i < shellClearances.length; i++) {
+          const frac = 0.872 + i * (0.016 / (shellClearances.length - 1));
+          overheadSpan({
+            id: `yas-hotel-gridshell-arch-${i + 1}`,
+            frac, clearance: shellClearances[i], minimumClearance: 4.8,
+            thickness: shellThick, depth: 2.2, span: 56,
+            supportGap: 14.5, supportWidth: 1.2, supports: false,
+            color: LED_CYCLE[i % LED_CYCLE.length], required: true,
+          });
+        }
+
+        // Landmark-pinned lattice (clear of the road) for scenery-api Must landmarks.
         {
-          const shellClearances = [20, 26, 32, 26, 20];
-          for (let i = 0; i < shellClearances.length; i++) {
-            const frac = 0.874 + i * (0.012 / (shellClearances.length - 1));
-            overheadSpan({
-              id: `yas-hotel-gridshell-arch-${i + 1}`,
-              frac, clearance: shellClearances[i], minimumClearance: 4.8,
-              thickness: 1.15, depth: 5.5, span: 58,
-              supportGap: 15, supportWidth: 1.5, supports: true,
-              color: LED_CYCLE[i % LED_CYCLE.length], required: true,
-            });
-          }
-          // Landmark-pinned lattice legs (clear of the road) so the hotel
-          // reads as a gridshell even when the arches are thin from one cam.
           const aLeg = anchor(k, -1, 28);
           const bLeg = [aLeg.r, aLeg.u, aLeg.t];
           modelGroup("yas-hotel-gridshell", {
@@ -464,28 +487,36 @@
           }, { required: true });
         }
 
-        // Monocoque bridge deck — cars pass under.
-        if (typeof underpassPortal === "function") {
-          underpassPortal(0.88, {
-            h: 9.5, thick: 2.4, depth: 28, pierGap: 2.4, pierW: 2.0,
-            col: [0.08, 0.09, 0.12],
-          });
-        } else {
+        const bridges = [
+          { id: "yas-hotel-bridge-main", frac: 0.88, clearance: 9.5,
+            thickness: 2.4, depth: 32, span: 27, gap: 2.2, pierW: 2.0,
+            col: [0.08, 0.09, 0.12] },
+          { id: "yas-hotel-bridge-forward", frac: 0.875, clearance: 9.2,
+            thickness: 1.8, depth: 22, span: 26, gap: 2.2, pierW: 1.8,
+            col: [0.10, 0.11, 0.14] },
+        ];
+        for (const bridge of bridges) {
           overheadSpan({
-            id: "yas-hotel-bridge-main", frac: 0.88, clearance: 9.5,
-            minimumClearance: 4.8, thickness: 2.4, depth: 28, span: 28,
-            supportGap: 2.4, supportWidth: 2.0, supports: true,
-            color: [0.08, 0.09, 0.12], required: true,
+            id: bridge.id, frac: bridge.frac, clearance: bridge.clearance,
+            minimumClearance: 4.8, thickness: bridge.thickness,
+            depth: bridge.depth, span: bridge.span,
+            supportGap: bridge.gap, supportWidth: bridge.pierW, supports: false,
+            color: bridge.col, required: true,
           });
-        }
-        for (const side of [-1, 1]) {
-          recordBarrier(0.872, 0.890, side, 2.4);
+          for (const side of [-1, 1]) {
+            hotelSupport(`${bridge.id}-${side < 0 ? "left" : "right"}-pier`,
+              bridge.frac, side, bridge.gap, bridge.pierW,
+              bridge.clearance + bridge.thickness * 0.5,
+              bridge.depth * 0.55, bridge.col, MAT.CONCRETE);
+            recordBarrier(bridge.frac - bridge.depth / 2 / 5300,
+              bridge.frac + bridge.depth / 2 / 5300, side, bridge.gap);
+          }
         }
 
         // Reflecting pool at hotel base (R, clear of racing line)
         waterSurface(K(0.87), 1, 18, [70, 0.35, 55], WATER,
           { id: "yas-hotel-reflecting-pool" });
-        // Hotel dock lights — clear of the racing sightline (gap 18, was 10).
+        // Hotel dock lights — gap 18 (was 10) keeps the f67 camera corridor clear.
         for (let i = 0; i < 5; i++) {
           const dockK = K(0.86 + i * 0.004);
           const da = anchor(dockK, 1, 18);
