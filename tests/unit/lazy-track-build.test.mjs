@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import vm from "node:vm";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -43,6 +44,15 @@ test("ensureScenery awaits ensureTrackBuild before returning", () => {
   const ensure = body.slice(body.indexOf("async function ensureScenery"), body.indexOf("// LAZY_DATA"));
   assert.match(ensure, /ensureTrackBuild\(/);
   assert.match(ensure, /await buildP/);
+});
+
+test("loadTrackStepped and lazyTrackEnsure gate on the track-build toolkit", () => {
+  // game.js via symbolSource — source-pin-hygiene forbids raw reads under tests/.
+  assert.match(symbolSource("async function loadTrackStepped(idx, live)"), /ensureTrackBuild\(/);
+  const apex = src("js/agent/apex.js");
+  const lazy = apex.slice(apex.indexOf("function lazyTrackEnsure"), apex.indexOf("return o;\n}\n\n// Clear the starting-lights"));
+  assert.match(lazy, /TrackBuildProps/);
+  assert.match(lazy, /toolkitReady/);
 });
 
 test("ensureTrackBuild injects LAZY_TRACK_BUILD and marks TrackBuildProps resident", async () => {
