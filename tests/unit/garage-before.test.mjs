@@ -12,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { parse as parseYAML } from "yaml";
 import {
   SHIP_BRANCH, WORKFLOW_FILE, WORKFLOW_NAME, ARTIFACT_PREFIX, RETENTION_DAYS,
   VIEWS, PRESET_FOR_VIEW, TEAM_SHARDS, TEAMS, WATCH_PATHS,
@@ -62,7 +63,7 @@ test("watched paths cover car/garage/render, teams.js and the capture tools", ()
   assert.ok(WATCH_PATHS.some((p) => p.startsWith("js/car")));
 });
 
-test("decideCapture: dispatch always; Pages only on watched-path delta", () => {
+test("decideCapture: dispatch always; schedule / Pages only on watched-path delta", () => {
   assert.deepEqual(decideCapture({ event: "workflow_dispatch" }), { capture: true, reason: "dispatch" });
   assert.deepEqual(decideCapture({ event: "workflow_run", conclusion: "failure" }),
     { capture: false, reason: "pages-not-success" });
@@ -73,6 +74,13 @@ test("decideCapture: dispatch always; Pages only on watched-path delta", () => {
   assert.deepEqual(decideCapture({ event: "workflow_run", conclusion: "success", lastPack: { sha: "a" }, watched: ["js/car/car3d.js"] }),
     { capture: true, reason: "watched-paths-changed" });
   assert.deepEqual(decideCapture({ event: "workflow_run", conclusion: "success", lastPack: { sha: "a" }, watched: [] }),
+    { capture: false, reason: "unchanged-since-pack" });
+  // The daily schedule (2026-10-14) takes the same skip-when-unchanged path.
+  assert.deepEqual(decideCapture({ event: "schedule", exactPack: { sha: "a" } }), { capture: false, reason: "pack-exists" });
+  assert.deepEqual(decideCapture({ event: "schedule" }), { capture: true, reason: "no-pack-yet" });
+  assert.deepEqual(decideCapture({ event: "schedule", lastPack: { sha: "a" }, watched: ["js/car/car3d.js"] }),
+    { capture: true, reason: "watched-paths-changed" });
+  assert.deepEqual(decideCapture({ event: "schedule", lastPack: { sha: "a" }, watched: [] }),
     { capture: false, reason: "unchanged-since-pack" });
 });
 
@@ -124,8 +132,6 @@ test("captureArgs and MANIFEST map team-cam.png onto preset names", () => {
 
 test("workflow is Garage before, not an extension of Car shot", () => {
   assert.match(YML, /^name: Garage before$/m);
-  assert.match(YML, /workflows: \["Deploy to GitHub Pages"\]/);
-  assert.match(YML, /branches: \[claude\/f1-game-project-26h3ng\]/);
   assert.match(YML, /default: "claude\/f1-game-project-26h3ng"/);
   assert.match(YML, /runs-on: macos-latest/);
   assert.doesNotMatch(YML, /runs-on: ubuntu-latest\n    timeout-minutes: 25/, "capture is macos, not ubuntu");
@@ -133,7 +139,6 @@ test("workflow is Garage before, not an extension of Car shot", () => {
   assert.match(YML, /retention-days: 30/);
   assert.match(YML, /name: garage-before-\$\{\{ needs\.plan\.outputs\.sha \}\}/);
   assert.match(YML, /cancel-in-progress: false/);
-  assert.match(YML, /group: garage-before-\$\{\{ needs\.plan\.outputs\.sha \}\}/);
   assert.match(YML, /node tools\/shot\/garage-angles\.mjs/);
   assert.doesNotMatch(YML, /node tools\/car\/render-car\.mjs/);
   const runBlocks = YML.split("\n").filter((l) => /^\s+(run:|node )/.test(l) || /garage-angles\.mjs/.test(l));
@@ -147,6 +152,47 @@ test("workflow is Garage before, not an extension of Car shot", () => {
     assert.ok(!/\$\{\{\s*(inputs|github\.event)\./.test(l), `input interpolated into a shell line: ${l.trim()}`);
   }
   assert.match(YML, /NOT A GATE/);
+});
+
+// ACTIONS-AUDIT-2026-10-14 finding 1: a per-sha group on the 4-shard capture
+// MATRIX let one shard run, parked one and cancelled two, so 0 of 65 runs packed.
+test("workflow: single-flight per run, never a concurrency group on a matrix job", () => {
+  const wf = parseYAML(YML);
+  const jobs = Object.entries(wf.jobs);
+  const matrixJobs = jobs.filter(([, j]) => j.strategy && j.strategy.matrix);
+  assert.ok(matrixJobs.length >= 1, "capture is still a matrix");
+  for (const [id, j] of matrixJobs) {
+    assert.equal(j.concurrency, undefined, `${id}: concurrency on a matrix job cancels its shards`);
+  }
+  assert.equal(wf.jobs.capture.strategy["max-parallel"], 2, "capture holds at most 2 of the 5 macOS slots");
+  assert.equal(wf.jobs.capture["runs-on"], "macos-latest");
+  // The run holds the group; a newer run waits instead of discarding a pack.
+  assert.match(String(wf.concurrency?.group), /^garage-before-\$\{\{ inputs\.ref \|\| 'claude\/f1-game-project-26h3ng' \}\}$/);
+  assert.equal(wf.concurrency["cancel-in-progress"], false);
+  // pack keeps its own per-sha group, distinct from the run-level one (no self-deadlock).
+  assert.equal(wf.jobs.pack.concurrency.group, "garage-before-pack-${{ needs.plan.outputs.sha }}");
+  assert.equal(wf.jobs.pack.concurrency["cancel-in-progress"], false);
+  assert.notEqual(wf.jobs.pack.concurrency.group, wf.concurrency.group);
+  assert.match(String(wf.jobs.pack.if), /needs\.capture\.result == 'success'/);
+  // Daily schedule + dispatch, not after every train publish.
+  const on = wf.on;
+  assert.deepEqual(Object.keys(on).sort(), ["schedule", "workflow_dispatch"]);
+  assert.equal(on.schedule.length, 1);
+  assert.match(on.schedule[0].cron, /^\d{1,2} \d{1,2} \* \* \*$/, "once a day");
+  assert.doesNotMatch(on.schedule[0].cron, /^0 /, "off the top-of-hour schedule delay");
+  assert.doesNotMatch(YML, /^\s+workflow_run:/m);
+});
+
+// Car shot's ubuntu control hit its 20-min cap twice on SwiftShader
+// (37094281675, 37087026592): Linux gets Mesa llvmpipe, which render-car reads.
+test("car-shot: the Linux control runs on Mesa llvmpipe, macOS on the host GPU", () => {
+  assert.match(CAR_SHOT, /if: runner\.os == 'Linux'\n\s+uses: \.\/\.github\/actions\/mesa-xvfb/);
+  assert.match(CAR_SHOT, /APEX_GL: \$\{\{ runner\.os == 'Linux' && 'llvmpipe' \|\| '' \}\}/);
+  assert.match(CAR_SHOT, /RUNNER_OS" != "Linux" \]; then ARGS="\$ARGS --gpu=1"/);
+  const src = fs.readFileSync(path.join(ROOT, "tools/car/render-car.mjs"), "utf8");
+  assert.match(src, /glStack\(\) === 'llvmpipe'/, "render-car honours APEX_GL=llvmpipe");
+  assert.match(src, /'--use-angle=gl', '--use-gl=angle'/);
+  assert.match(src, /\['--use-angle=swiftshader'\]/, "SwiftShader stays the default pin");
 });
 
 test("garage-before.mjs and fetch --help exit 0 without network", () => {

@@ -52,7 +52,7 @@ export const TEAM_SHARDS = Object.freeze([
 ]);
 export const TEAMS = Object.freeze(TEAM_SHARDS.flat());
 
-/** Recapture when any of these moved since the last pack (workflow_run gate). */
+/** Recapture when any of these moved since the last pack (the scheduled-run gate). */
 export const WATCH_PATHS = Object.freeze([
   "js/car/",
   "js/garage/",
@@ -111,7 +111,7 @@ export function captureArgs({ teams, out, views } = {}) {
   ];
 }
 
-/** Dispatch always captures. A Pages-triggered run captures only when watched paths moved. */
+/** Dispatch always captures. A scheduled (or legacy workflow_run) run captures only when watched paths moved. */
 export function decideCapture({ event, conclusion, exactPack, lastPack, watched }) {
   if (event === "workflow_run" && conclusion && conclusion !== "success") {
     return { capture: false, reason: "pages-not-success" };

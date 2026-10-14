@@ -13,6 +13,9 @@ name: Docs guards
 # file, never retyped. A prose-only PR runs the group (~1 min of node); a
 # mixed PR exits before `npm ci`, because ci.yml's guards job runs
 # tooling-fast, a superset, on it.
+# REDUNDANT SINCE 2026-10-14: tooling-fast now holds all of this group's files
+# (environment-json was the last; ACTIONS-AUDIT-2026-10-14 finding 5), but
+# deleting this file waits on Bryce removing its required status check first.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
