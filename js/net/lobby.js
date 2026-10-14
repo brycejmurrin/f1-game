@@ -46,7 +46,7 @@ const NetLobby = (function () {
       codeInputWrap: $("vs-code-input"), codeIn: $("vs-code-in"),
       raceSummary: $("vs-race-summary"), raceNote: $("vs-race-note"),
       editRace: $("vs-edit-race"), editCar: $("vs-edit-car"),
-      me: $("vs-me"), them: $("vs-them"),
+      roster: $("vs-roster"), playerCount: $("vs-player-count"),
       ready: $("vs-ready"), start: $("vs-start"), inviteMore: $("vs-invite-more"),
       invite: $("vs-invite"), inviteIn: $("vs-invite-in"),
       answer: $("vs-answer"), answerIn: $("vs-answer-in"),
@@ -1083,24 +1083,47 @@ const NetLobby = (function () {
       return el;
     }
 
-    function driverLine(profile, label, ready) {
+    const ROOM_SEATS = MAX_GUESTS + 1;
+
+    function rosterDriverName(profile) {
       const team = TEAM_OF(profile);
+      if (!team) return "Choosing…";
       const seat = profile ? (profile.driver || 0) : 0;
-      const d = team && team.drivers ? team.drivers[seat] : null;
-      const who = team ? `${team.short} · ${d ? (d.code || d.name) : "—"}` : "choosing a car…";
-      const full = team ? `${team.name}${d ? " · " + d.name : ""}` : "still choosing";
+      const d = team.drivers ? team.drivers[seat] : null;
+      return d ? (d.name || d.code || "—") : "—";
+    }
+
+    function rosterTeamShort(profile) {
+      const team = TEAM_OF(profile);
+      return team ? team.short : "—";
+    }
+
+    function rosterSeatRow(profile, ready, peerId) {
+      const team = TEAM_OF(profile);
+      const full = team
+        ? `${team.name}${profile && team.drivers
+          ? " · " + ((team.drivers[profile.driver || 0] && team.drivers[profile.driver || 0].name) || "")
+          : ""}`
+        : "Still choosing a car";
+      const li = document.createElement("li");
+      li.className = "vs-driver vs-roster-seat";
+      const dot = document.createElement("span");
+      dot.className = "vs-roster-dot" + (ready ? " on" : "");
+      dot.setAttribute("aria-label", ready ? "Ready" : "Not ready");
+      const who = span("vs-who", peerId == null ? "You" : rosterTeamShort(profile));
       const frag = document.createDocumentFragment();
-      frag.appendChild(span("vs-who", label));
+      frag.appendChild(dot);
+      frag.appendChild(who);
       if (team) {
         const swatch = span("vs-swatch", "");
         swatch.style.background = css(team.color);
         frag.appendChild(swatch);
       }
-      const car = span("vs-car", who);
+      const car = span("vs-car", rosterDriverName(profile));
       car.title = full;
       frag.appendChild(car);
-      frag.appendChild(span("vs-ready" + (ready ? " on" : ""), ready ? "READY" : "choosing"));
-      return frag;
+      li.appendChild(frag);
+      return peerId != null ? verifyRow(li, peerId) : li;
     }
 
     function replace(el, node) {
@@ -1144,30 +1167,22 @@ const NetLobby = (function () {
           : "The host chooses the circuit and conditions. If they leave, their rivals continue as AI.";
         e.raceNote.hidden = host;
       }
-      if (e.me) replace(e.me, driverLine(localProfile(), "You", selfReady));
-      // A row per other player. #vs-them is a LIST now, so this builds one
-      // .vs-driver per peer rather than overwriting a single fixed row — with
-      // one peer it renders exactly what it always did.
-      //
-      // Iterated over peerIds(), not _peers: somebody who has said READY but
-      // whose profile has not arrived is still in the room, and showing nothing
-      // for them is how you get a START that will not enable with no visible
-      // reason why. That ordering is not hypothetical — it is the bug the
-      // READY specs caught.
-      if (e.them) {
-        const ids = [...peerIds()];
-        const row = (inner) => {
-          const el = document.createElement("div");
-          el.className = "vs-driver";
-          el.appendChild(inner);
-          return el;
-        };
+      const ids = [...peerIds()];
+      const seated = 1 + ids.length;
+      if (e.playerCount) e.playerCount.textContent = seated + "/" + ROOM_SEATS;
+      if (e.roster) {
         const rows = document.createDocumentFragment();
-        if (ids.length) ids.forEach((k, i) => rows.appendChild(verifyRow(row(driverLine(
-              willYield(k) ? null : (_peers.get(k) || null),
-              ids.length > 1 ? "P" + (i + 2) : "Them", !!_ready.get(k))), k)));
-        else rows.appendChild(row(driverLine(null, "Them", false)));
-        replace(e.them, rows);
+        rows.appendChild(rosterSeatRow(localProfile(), selfReady, null));
+        // Iterated over peerIds(), not _peers: somebody who has said READY but
+        // whose profile has not arrived is still in the room, and showing nothing
+        // for them is how you get a START that will not enable with no visible
+        // reason why. That ordering is not hypothetical — it is the bug the
+        // READY specs caught.
+        ids.forEach((k) => rows.appendChild(rosterSeatRow(
+          willYield(k) ? null : (_peers.get(k) || null),
+          !!_ready.get(k),
+          k)));
+        replace(e.roster, rows);
       }
       if (e.inviteMore) {
         e.inviteMore.hidden = !host;

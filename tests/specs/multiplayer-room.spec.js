@@ -105,15 +105,46 @@ test.describe("the waiting room", () => {
     await expect(page.locator("#vs-start")).toBeDisabled();
   });
 
+  test("the seat roster shows N/4, names, teams and ready dots", async ({ page }) => {
+    await enterRoom(page, "host");
+    await expect(page.locator("#vs-player-count")).toHaveText("1/4");
+    await expect(page.locator("#vs-roster .vs-roster-seat")).toHaveCount(1);
+    await expect(page.locator("#vs-roster .vs-roster-dot.on")).toHaveCount(0);
+
+    await peerSays(page, EV.HELLO, { team: "ferrari", driver: 0 });
+    await expect(page.locator("#vs-player-count")).toHaveText("2/4", { timeout: 5000 });
+    await expect(page.locator("#vs-roster .vs-roster-seat")).toHaveCount(2);
+    await expect(page.locator("#vs-roster .vs-roster-seat").nth(1).locator(".vs-car")).toContainText(/Leclerc|Hamilton/i);
+
+    await peerSays(page, EV.READY, { ready: true });
+    await expect(page.locator("#vs-roster .vs-roster-dot.on")).toHaveCount(1, { timeout: 5000 });
+    await page.click("#vs-ready");
+    await expect(page.locator("#vs-roster .vs-roster-dot.on")).toHaveCount(2, { timeout: 5000 });
+
+    await page.click("#vs-ready");
+    await expect(page.locator("#vs-roster .vs-roster-dot.on")).toHaveCount(1, { timeout: 5000 });
+  });
+
+  test("four seats when the host relays three other drivers (guest view)", async ({ page }) => {
+    await enterRoom(page, "guest");
+    await peerSays(page, EV.HELLO, { team: "mclaren", driver: 0 });
+    await peerSays(page, EV.HELLO, { team: "ferrari", driver: 0, from: "g1" });
+    await peerSays(page, EV.HELLO, { team: "redbull", driver: 1, from: "g2" });
+    await expect(page.locator("#vs-player-count")).toHaveText("4/4", { timeout: 5000 });
+    await expect(page.locator("#vs-roster .vs-roster-seat")).toHaveCount(4);
+    await peerSays(page, EV.READY, { ready: true, from: "g1" });
+    await expect(page.locator("#vs-roster .vs-roster-dot.on")).toHaveCount(1, { timeout: 5000 });
+  });
+
   test("the rival's car shows up, and the LATEST choice wins", async ({ page }) => {
     // The profile is re-sent every time someone leaves the garage, so keeping
     // the FIRST hello would race them in whatever they had when the connection
     // opened rather than what they picked.
     await enterRoom(page, "host");
     await peerSays(page, EV.HELLO, { team: "ferrari", driver: 0 });
-    await expect(page.locator("#vs-them")).toContainText("FER", { timeout: 5000 });
+    await expect(page.locator("#vs-roster .vs-roster-seat").nth(1).locator(".vs-who")).toContainText("FER", { timeout: 5000 });
     await peerSays(page, EV.HELLO, { team: "mclaren", driver: 1 });
-    await expect(page.locator("#vs-them")).toContainText("MCL", { timeout: 5000 });
+    await expect(page.locator("#vs-roster .vs-roster-seat").nth(1).locator(".vs-who")).toContainText("MCL", { timeout: 5000 });
     expect(await page.evaluate(() => window.__apex.lobbyRoom().peer.team)).toBe("mclaren");
   });
 

@@ -586,6 +586,18 @@ test("host: a finishing LAP relays the owner's lap so guest B does not finish ea
 
 // M41 (skidIntensity): retireCar never cleared it, so the screech loop (GameAudio.setSkid(player.skidIntensity))
 // and the tyre smoke ran on the parked car for the rest of the race.
+test("the VS FRIEND waiting room renders a seat roster with an N/4 player count", () => {
+  const lobby = src("js/net/lobby.js");
+  const shell = src("index.html");
+  assert.match(shell, /id="vs-roster"/);
+  assert.match(shell, /id="vs-player-count"/);
+  assert.match(lobby, /\$\("vs-roster"\)/);
+  assert.match(lobby, /vs-player-count/);
+  assert.match(lobby, /ROOM_SEATS\s*=\s*MAX_GUESTS\s*\+\s*1/);
+  assert.match(lobby, /rosterSeatRow\(/);
+  assert.match(lobby, /vs-roster-dot/);
+});
+
 test("retireCar clears the car's skid intensity so a parked car does not screech", () => {
   const car = { x: 1, s: 100, lap: 1, code: "YOU", speed: 55, skidIntensity: 0.8, local: false, human: false };
   vm.runInNewContext(symbolSource("function retireCar(c, reason)") + ";retireCar(car, 'engine');", {
