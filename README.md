@@ -28,16 +28,49 @@ Night races run under floodlights.
 - **Electric boost** — hold BOOST to deploy battery energy; deployment tapers
   away at high speed, exactly like the 2026 power units. Recharge by braking
   and lifting.
-- **Overtake Mode** — be within 1 second of the car ahead at the circuit's
-  detection line and the OT light arms for the following lap; trigger it for
-  a 3–5 second push of full, taper-free deployment. The DRS replacement.
+- **Active Aero** — in MANUAL, press **Z** (or **AERO** on screen) inside an
+  activation zone to open the wings (**STRAIGHT MODE**): less drag and grip;
+  braking or leaving the zone closes them. **SETTINGS › CONTROLS › ACTIVE
+  AERO: AUTO** handles the wings; the HUD shows mode and zone status. Some
+  circuits have no zones.
+- **Overtake Mode** — stay within one second of the car ahead at the circuit's
+  detection line to earn it; the allowance arms at the start/finish line for
+  that lap, then toggle **OVERTAKE** for about 3–5 seconds of taper-free
+  electric deployment (the DRS replacement). Unavailable on lap one until the
+  leader starts lap two, under safety car or red flag, in low grip, or until
+  you are close enough at the detection line—the HUD shows **OVERTAKE READY**
+  when you may deploy.
+- **Pit stops & tyre wear** — **RACE SETTINGS › TYRE WEAR** defaults to
+  **REAL** (full wear; stops matter). **LIGHT** wears about half as fast;
+  **OFF** removes the pit lane entirely. There is no pit button—hold the car
+  in the pit lane at the entry for about half a second to call the stop.
+- **Race control** — yellow flags, virtual safety car, safety car and red flag
+  are **off** by default. Turn them on in **RACE SETTINGS › CAUTIONS**.
 - **Manual gearbox** (optional, SETTINGS › CONTROLS › GEARS: MANUAL) — an
   8-speed 'box with a live gear readout and tachometer. Shift up near the
   redline, down for corner exits; the limiter makes you upshift to reach top
   speed. Auto mode shifts for you.
 - Five red lights, lights out. Real points (25-18-15-12-10-8-6-4-2-1).
-- **Season mode**: all 24 rounds in order with persistent
-  championship standings.
+
+### Modes
+
+Menu routes and regression journeys: [docs/USAGE-PATHS.md](docs/USAGE-PATHS.md).
+
+- **Season** — race the calendar in order with saved championship progress;
+  **SEASON SETUP** picks rounds, qualifying and sprint weekends.
+- **Career** — **DRIVER CAREER** or **MY TEAM**: qualify, race, contracts,
+  R&D and prize money across seasons ([docs/CAREER.md](docs/CAREER.md)).
+- **Multiplayer** — private **RACE A FRIEND** sessions for 2–4 players over
+  WebRTC ([docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)).
+- **WATCH** — broadcast-style replays and real-race playback from the title
+  menu; **DATA HUB › RACE IT** loads a real Grand Prix to **WATCH**,
+  **HIGHLIGHTS**, or **JUMP IN** as a real driver.
+- **REAL RACE (Data Hub RACE IT)** — OpenF1 timing drives the grid, gaps,
+  stops and safety-car windows while you drive one real driver's seat
+  ([docs/notes/REAL-RACE-2026-09-27.md](docs/notes/REAL-RACE-2026-09-27.md)).
+- **Photo Studio** — frame and capture stills from Home, the garage, a paused
+  race or a replay, with optional backgrounds (**CAPTURE & BACKGROUNDS** on
+  the title menu).
 
 **Build your own circuit** in the TRACK DESIGNER (title menu): RANDOMISE or
 draw a loop, drag its points, stamp corners, hairpins and chicanes, pick a
