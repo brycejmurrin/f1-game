@@ -33,6 +33,15 @@ test("dragTo: screen px become a share of the screen, rounded to 0.1 and clamped
   assert.deepEqual(plain(A.dragTo({ x: 0, y: 0 }, 10, 10, 0, 0)), { x: 50, y: 50 }, "a zero-size screen cannot divide by zero");
 });
 
+test("placedOrig: an auto-placed radio card's first drag starts from where it sits, measured from the fixed point", () => {
+  const A = load();
+  // 844x390: the fixed point is (422, 97.5). A card at (633, 117) is +25 % across and +5 % down from it.
+  assert.deepEqual(plain(A.placedOrig({ x: 0, y: 0, s: 100 }, 633, 117, 844, 390)), { x: 25, y: 5, s: 100 });
+  assert.deepEqual(plain(A.placedOrig({ x: 10, y: -4, s: 120 }, 633, 117, 844, 390)), { x: 10, y: -4, s: 120 }, "an already moved card keeps its offset");
+  const back = A.dragTo(A.placedOrig({ x: 0, y: 0, s: 100 }, 211, 97.5, 844, 390), 0, 0, 844, 390);
+  assert.deepEqual(plain(back), { x: -25, y: 0 }, "a still press leaves it in place");
+});
+
 test("pinchTo: a pinch scales the size on 5 % steps between 50 and 200; a zero distance is ignored", () => {
   const A = load();
   assert.equal(A.pinchTo(100, 100, 150), 150);

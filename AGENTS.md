@@ -73,7 +73,7 @@ Session shape — twelve rules that control wall time, waiting and handoff:
     Open a DRAFT PR into the deploy branch at the FIRST commit, before the work is verified (GitHub MCP, `draft: true`; with no PR a topic-branch push starts no CI, a draft gets the fast tier, ready the full tier; `deploy.mjs --pr` is the gated, ready form).
     The body (`.github/pull_request_template.md`) IS the session log, written for an agent arriving cold: Goal (the user's ask and the intended change), Plan (a `- [ ]` checklist, one verifiable step per item, exactly one marked now:), Status (`node tools/ci/session-status.mjs --pr`), Verified / Not run (an exact verify command or measured check), Next step.
     Keep the Plan live with `update_pull_request` (no push needed): tick an item with its evidence (sha, verdict line), add discovered work, strike a dropped item with why, never delete one; refresh Status at every push. `ready-gate.mjs --pr <n>` refuses draft→ready while an item is open. No committed per-session doc, no work log in memory.
-    AFTER EVERY CODE PUSH, WATCH IT: subscribe on the PR — Claude Code `subscribe_pr_activity` (it can drop `check_run` completions, so the timer is not optional), Cursor `subscribe_github_ci` + `subscribe_github_pr`; never call a name your host does not list (skill `session-comms`).
+    AFTER EVERY CODE PUSH, WATCH IT: subscribe on the PR — Claude Code `subscribe_pr_activity` (it can drop `check_run` completions, so the timer is not optional), Cursor `subscribe_github_ci` + `subscribe_github_pr`; never call a name your host does not list (skill `agent-fleet`).
     Arm a `Monitor` on `node tools/ci/ci-watch.mjs --sha <pushed sha> --timeout 30` (one event per job; re-arm on expiry until the `= ci …` line; `--pages` after a deploy-branch push), no shell-poll loops; one timer check-in ~1 h out (`send_later` / `subscribe_timer`), re-armed until the PR is merged or closed.
     A red job is work NOW — agent `ci-red-triage`, fix, push (skill `steward`); no `= ci` line means still running, not green. Before starting, read `who-is-on-it.mjs` and the open draft PRs; to continue one, check out its branch.
 
@@ -150,8 +150,8 @@ when matched. Subagents (`.claude/agents/`) isolate noisy work; `docs/AGENT-SURF
 wrapped as `apex_*`. Routes: live canvas → skill `mcp-probe`; pre-push or deploy → skill `check-changes` (spawns agent
 `verify-agent`; `--base <ref>` is the "was it already red?" check); live `version.json` → agent `deploy-research`; dead
 code / fat skill → skill `slim-bloat` and agent `bloat-auditor`; PR sweeps → skill `ci-watch` + `tools/ci/pr-board.mjs`
-(agent `ci-watcher` returns the board); owning PRs → skill `pr-owner`; messaging, claims and authority between sessions
-→ skill `session-comms`; failed-CI triage → agent `ci-red-triage`; PR-driving overrides → skill `steward`.
+(agent `ci-watcher` returns the board); owning PRs → skill `steward`; messaging, claims and authority between sessions
+→ skill `agent-fleet`; failed-CI triage → agent `ci-red-triage`; PR-driving overrides → skill `steward`.
 
 WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change, or using an API you have not checked this session, read the current docs (`WebSearch`, `WebFetch`, Context7 for library APIs) and cite the URLs in the commit, PR body or `docs/notes/`; memory of a CLI flag, limit or default is not evidence. Bulk or post-deploy web reading goes to agent `deploy-research`.
 
@@ -182,7 +182,7 @@ of the live `apex-sha` (agent `deploy-research`; `docs/TESTING.md` §Release tra
 ### Backlog
 Work no session has started is a GitHub issue (`.github/ISSUE_TEMPLATE/`; why: `docs/notes/AGENT-WORK-TRACKING-2026-10-14.md`); the PR body stays the in-flight log, memory stays for facts.
 With no task from the user, take one from the ready queue: `list_issues` with `labels: ["ready"]`, skipping any also labelled `claimed` or `blocked`.
-Claim it (`who-is-on-it.mjs --claim "#<n> <text>"`, then label it `claimed` and comment your branch); the draft PR body says `Closes #<n>`, which closes it on merge (the deploy branch is the default branch).
+Claim it (`who-is-on-it.mjs --claim "#<n> <text>"`); the draft PR body says `Closes #<n>`, which closes it on merge (the deploy branch is the default branch). `fleet.yml` derives the `claimed` label from both and keeps the pinned Fleet board issue.
 Work found mid-task becomes a sub-issue (`parent_issue_number`), not scope on your PR; work that waits on another issue gets `blocked` plus "Blocked by #<n>".
 
 ### Concurrent PRs

@@ -937,6 +937,15 @@ body[data-radio-corner][data-radio-corner][data-radio-corner][data-radio-corner]
   line-height: 1.15;
   --radio-num: 18px;
 }
+/* A RADIO CARD THE PLAYER MOVED (body[data-radio-placed], js/ui/hud-layout.js): no slot, no lane.
+   It hangs from one fixed point, the top-centre quarter (50vw, 25svh), so MOVE & SIZE's --hl-x/-y
+   (±50 % of the screen) is where it sits and reaches every edge of the top three quarters. Outranks
+   the caution step-down and the touch lane: five attributes plus :has(#hud-flag) are (2,6,1). */
+body[data-radio-placed][data-radio-placed][data-radio-placed][data-radio-placed][data-radio-placed]:has(#hud-flag) #announce:not([hidden]) {
+  top: calc(25svh / var(--hud-z)); left: calc(50vw / var(--hud-z)); right: auto;
+  transform: none; min-width: 0; width: max-content;
+  max-width: calc(min(360px, 45vw) / var(--hud-z));
+}
 body:is(.hud-radio-top, [data-radio-corner]) #announce-body {
   justify-content: center; gap: 0;
   padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.6);
@@ -949,7 +958,9 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
   --mir-bot: calc((8px + var(--sat) + var(--tap)) / var(--hud-z));
 }
 #hud-flag {
-  position: absolute; top: max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)); left: 50%; transform: translateX(-50%);
+  /* --hud-gaps-b: broadcast gaps strip bottom (fitHud). Without it the flag sat
+     on PER / gapAhead at phoneL HUD 150% (survey 2026-10-14). */
+  position: absolute; top: max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px), calc(var(--hud-gaps-b, 0px) + 8px)); left: 50%; transform: translateX(-50%);
   padding: calc(var(--gap) * 0.5) calc(var(--gap) * 4 / 3); border-radius: var(--r-sm); font-weight: 800;
   background: #ffd600; color: #000;
   letter-spacing: 0.06em; white-space: nowrap;
@@ -1030,14 +1041,14 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    the radio card ~30px lower than needed, mid-road on every phone (visual
    review 2026-10-14). */
 :root[data-gap-drop] #hud-flag {
-  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px), calc(var(--mir-bot, 0px) + 8px));
+  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px), calc(var(--mir-bot, 0px) + 8px), calc(var(--hud-gaps-b, 0px) + 8px));
 }
 /* …and under the SECTOR PLATE when that plate reaches the flag's columns (fitHud
    sets data-flag-low: a wide dock inset on a narrow phone), the same measured
    --hud-sec-h stack LIMITS and DAMAGE hang from. Later than the gap-drop rule,
    so it wins where both apply. */
 :root[data-flag-low] #hud-flag {
-  top: max(calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 8px), calc(var(--mir-bot, 0px) + 8px));
+  top: max(calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 8px), calc(var(--mir-bot, 0px) + 8px), calc(var(--hud-gaps-b, 0px) + 8px));
 }
 #hud-sectors {
   position: fixed;
@@ -1150,7 +1161,8 @@ body[data-density="compact"].hud-hide-map .hud-gaps {
 body[data-density="compact"] #hud-sectors { font-size: var(--fs-micro); padding: calc(var(--gap) * 0.375) calc(var(--gap) * 0.75); }
 body[data-density="compact"] .hud-bottom { gap: calc(var(--gap) * 0.25); }
 body[data-density="compact"] #hud-flag {
-  top: max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px));
+  /* gaps-b: compact 72px floor alone sat in the strip (phoneL 150%, 72×1.5=108). */
+  top: max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px), calc(var(--hud-gaps-b, 0px) + 8px));
   font-size: var(--fs-micro);
   padding: calc(var(--gap) * 0.35) var(--gap);
 }
@@ -1171,7 +1183,7 @@ body[data-density="compact"] #announce {
 /* --flag-slot-top is declared on the main #announce rule (below). data-gap-drop
    raises it to the dropped-strip edge so caution steps from the painted flag
    (MCP survey B3 phoneL-chase). */
-body[data-density="compact"] #announce { --flag-slot-top: calc(72px + var(--sat) / var(--hud-z)); }
+body[data-density="compact"] #announce { --flag-slot-top: max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--hud-gaps-b, 0px) + 8px)); }
 /* A PHONE CARD IS THREE LINES. The message has no height limit, and in a
    narrow dock lane (HUD/BUTTON SIZE 150% on 740x360 or 844x390) a coach tip
    wrapped to five lines of 15px and painted over GEAR and SPEED (hud-mock
@@ -1179,8 +1191,8 @@ body[data-density="compact"] #announce { --flag-slot-top: calc(72px + var(--sat)
    plate and the WHO line still read in full, and the card stays in the band
    under the tower. The box model is the one every engine ships for clamping. */
 body[data-density="compact"] #announce-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
-:root[data-gap-drop] #announce { --flag-slot-top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px); }
-:root[data-flag-low] #announce { --flag-slot-top: calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 8px); }
+:root[data-gap-drop] #announce { --flag-slot-top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px), calc(var(--hud-gaps-b, 0px) + 8px)); }
+:root[data-flag-low] #announce { --flag-slot-top: max(calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 8px), calc(var(--hud-gaps-b, 0px) + 8px)); }
 body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
 body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
 
@@ -1257,9 +1269,9 @@ body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-
 }
 #announce {
   /* Undropped flag home; gap-drop / compact override --flag-slot-top above. */
-  --flag-slot-top: calc(100px + var(--sat) / var(--hud-z));
+  --flag-slot-top: max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--hud-gaps-b, 0px) + 8px));
   position: fixed;
-  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 10px), calc(var(--mir-bot, 0px) + 8px));
+  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 10px), calc(var(--mir-bot, 0px) + 8px), calc(var(--hud-gaps-b, 0px) + 8px));
   left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: row; align-items: stretch;
   min-width: 200px;
@@ -1278,6 +1290,9 @@ body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-
   z-index: 15;
   --radio-num: 26px;   /* a HUD digit readout: off the body type scale on purpose (css/tokens.css) */
 }
+body:not(.desktop) #announce-text {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+}
 /* ON TOUCH THE CARD STAYS IN THE DOCK LANE. --announce-lane-x / -shift / -w
    (js/ui/hud.js announceLane) are the gap the dock groups leave under the
    tower, already inset by --sal/--sar, in SCREEN px. --hud-z lives on this
@@ -1287,13 +1302,17 @@ body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-
    #announce+btn-boost at x426 on 852, broadcast+cockpit). No lit dock (portrait: 0px groups) publishes no
    lane; a fallback-less var() then made left `auto`, not 50%, and the -50% shift put the card over #minimap
    (x -72..72 on 390x844). The fallback centres it. The beside-the-mirror and top-row slots outweigh this.
-   Desktop (.desktop: empty docks) is untouched. */
+   Desktop (.desktop: empty docks) is untouched.
+   max-height: above SPEED/GEAR (--hud-cluster-y) so a tall transient card cannot
+   cover LIMITS / the gearbox at HUD 150% (phoneL broadcast survey). */
 body:not(.desktop) #announce {
   /* min-width must not exceed the lane: a bare 200px floor outgrew a tight
      --announce-lane-w and painted over #hud-sectors (oversize CI workers=2). */
   min-width: 0;
   max-width: min(440px, calc(72 * var(--vwzh)), calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
   width: min(100%, max-content, calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
+  /* flag-slot+40 budgets the lit-flag +38px step; 1.8em keeps a type floor. */
+  max-height: min(4.5em, max(1.8em, calc((var(--hud-cluster-y, 100svh) - 8px) / var(--hud-z) - var(--flag-slot-top, 5.5em) - 40px)));
 }
 /* Collapsed dock lane (js/ui/hud.js announceLane): flex min-content from
    #announce-num kept a painted box at width:0; hide the card so it cannot
@@ -2151,8 +2170,11 @@ body:not(.desktop) #hud-strat {
 :root[data-limits-left] #hud-rel:not([data-hl-user]) {
   top: calc(max(var(--hud-left-h, 152px), var(--hud-metrics-b, 0px)) + 8px + 2.6em + 8px);
 }
+/* STRATEGY under REL (was a 168px sidestep that sat on REL at HUD 150%). */
+body:not([data-hud-hide~="rel"]):has(#hud-rel:not([hidden])) #hud-strat { --rc-rel-h: 7.2em; }
 body:not(.desktop):has(#hud-rel:not([hidden])) #hud-strat:not([data-hl-user]) {
-  left: calc(168px + var(--sal) / var(--hud-z));
+  left: calc(10px + var(--sal) / var(--hud-z));
+  top: calc(var(--hud-left-h, 152px) + 8px + var(--rc-rel-h, 7.2em));
 }
 body:not(.desktop) #hud-inputs:not([data-hl-user]) {
   /* Same containing block as #hud-sectors / #hud-limits: position-anchor on an
@@ -2228,6 +2250,15 @@ body.desktop #hud-inputs:not([data-hl-user]) {
       bottom: calc(anchor(top) + var(--gap));
       margin: 0;
     }
+    /* hud-tyre-stack: top/max-h are .hud-bottom zoom units (fitHud ÷ --hud-z-bot).
+       zoom:1 on the child does NOT escape the parent's zoom. */
+    body.hud-tyre-stack:not(.desktop) #hud-tyre:not([data-hl-user]) {
+      position: fixed; position-anchor: none;
+      top: var(--hud-tyre-top); bottom: auto;
+      left: calc(10px + var(--sal) / var(--hud-z)); right: auto;
+      max-height: var(--hud-tyre-max-h, none); overflow: hidden;
+    }
+    body.hud-tyre-stack #hud-tyre[data-tyre-compact] #hud-plan { display: none; }
     /* HELMET ERS stays in the cluster grid. Anchoring it to the tyre failed:
        the tyre follows #hud-energy in the tree, anchor() does not resolve a
        later sibling, and the bar fell back onto the gear plate (852×393

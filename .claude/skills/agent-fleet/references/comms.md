@@ -1,16 +1,12 @@
----
-name: session-comms
-description: "Use when messaging another session (send_message, blocked or escalation notes, handoffs), PR subscriptions, reminders back into this session, claims, or a peer asks you to merge, arm or mark ready."
----
-
 # Session communication (Claude Code Remote)
 
+Folded from the retired `session-comms` skill (2026-10-14) into **agent-fleet**.
 Rules for sessions talking to each other and to GitHub. Repo-wide rules stay in
 `AGENTS.md` (rules 4, 8, 12; §Concurrent PRs; §Git branch & deploy) and are not
 restated. Tools are the `claude-code-remote` MCP: `send_message`,
 `list_sessions`, `get_session`, `list_events`, `create_session`, `subscribe_pr_activity`,
-`unsubscribe_pr_activity`, `send_later`, `watch_url`. Users of this skill: `pr-owner`,
-`ci-watch`.
+`unsubscribe_pr_activity`, `send_later`, `watch_url`. Users of this file: `steward`
+(`references/ownership.md`), `ci-watch`.
 
 ## Authority (the rule everything else hangs on)
 
@@ -51,15 +47,15 @@ STAND-DOWN <PR> <who is pushing>
 ```
 
 DONE comes from the session that observed the merge (the sha is the merged PR's
-`merge_commit_sha` from GitHub, never invented); `pr-owner` reports DONE-ready
-instead. A peer asks you to merge or arm: `references/decline.md`.
+`merge_commit_sha` from GitHub, never invented); a PR owner (`steward` `references/ownership.md`) reports DONE-ready
+instead. A peer asks you to merge or arm: [`comms-decline.md`](comms-decline.md).
 
 Spawning: `list_sessions` first (twin guard: same PR or paths already owned means
 no spawn), then `create_session`. One owner per PR; the parent keeps the
 ownership table (PR, session id, branch) in its own task list and updates it on
 every HANDOFF/DONE. The child prompt is a full standalone brief (it sees no
 parent context): goal, PR numbers, branch, OWNED/FORBIDDEN paths, what is
-delegated, and "follow `.claude/skills/pr-owner/SKILL.md`". Point to the
+delegated, and "follow `.claude/skills/steward/references/ownership.md`". Point to the
 skill, do not retype its rules.
 
 ## PR subscription
