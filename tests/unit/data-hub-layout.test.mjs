@@ -32,3 +32,25 @@ test(".dh-content hides native scrollbar; ScrollFade owns the thumb", () => {
 test("session/GP selects meet the card tap-paint floor", () => {
   assert.equal(decl(rules, ".dh-pick-select", "min-height"), "var(--tap-paint)");
 });
+
+test("schedule/standings meta ink uses --dim (WCAG AA on hub panel)", () => {
+  // Soft greys in these roles failed 4.5:1 on --panel composites; --dim clears it.
+  for (const sel of [".dh-footnote", ".dh-race-time", ".dh-gap", ".dh-gdrs-pill"]) {
+    assert.equal(decl(rules, sel, "color"), "var(--dim)", `${sel} meta color`);
+  }
+});
+
+test("tall-narrow hub tabs are a 3-column grid (not one full-width column)", () => {
+  assert.match(
+    DATA_CSS,
+    /body\[data-shape="tall"\]\[data-width="narrow"\]\s+\.dh-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+  );
+});
+
+test(".dh-content clips sideways overflow (no dead horizontal scroll)", () => {
+  const d = ruleFor(rules, /^\.dh-content$/);
+  assert.ok(d, ".dh-content rule");
+  // css-rules keeps the last overflow-x when duplicated (hidden then clip).
+  assert.match(DATA_CSS, /\.dh-content\s*\{[^}]*overflow-x:\s*clip/, "overflow-x: clip present");
+  assert.equal(decl(rules, ".dh-content", "touch-action"), "pan-y");
+});
