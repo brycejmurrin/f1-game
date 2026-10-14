@@ -1,0 +1,1 @@
+1791953832	Bryce Murrin	Commentary follow-up under root orchestrator: OWNED js/audio/announcer*.js js/race/race-radio.js js/race/radio-lines.js tests/unit/announcer.test.mjs tests/unit/race-radio.test.mjs. Lifecycle and selection correctness only; worktree f1-commentary-followup; root integrates combined PR.  [cursor/commentary-followup-b93e; session c0690fb7c5438f9d7c9e2977]
