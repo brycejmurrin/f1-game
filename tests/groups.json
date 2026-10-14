@@ -1540,6 +1540,7 @@
         "tests/unit/driving-cues.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/grip-steer.test.mjs",
+        "tests/unit/hud-arrange.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/onboard.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
