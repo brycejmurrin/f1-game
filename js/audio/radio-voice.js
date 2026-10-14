@@ -439,7 +439,11 @@ var RadioVoice = (function () {
       lastSquelch = q;
       if (!q.play) return;
       const leadMs = Math.max(0, +p.leadMs || 0);
-      squelchOpenT = setTimeout(() => { squelchOpenT = null; fireSquelch("open"); }, leadMs);
+      // Zero lead is the words starting NOW: fire the key-up in this task.
+      // A nested setTimeout(0) after say()'s own deferral lost the race to a
+      // 5 ms flush on a loaded CI box (Structural guards B / vm-b1 on #1739).
+      if (leadMs <= 0) fireSquelch("open");
+      else squelchOpenT = setTimeout(() => { squelchOpenT = null; fireSquelch("open"); }, leadMs);
       squelchCloseT = setTimeout(() => { squelchCloseT = null; fireSquelch("close"); }, leadMs + q.atClose * 1000);
     }
     /* OFF THE FRAME. speechSynthesis calls are synchronous IPC to the platform
