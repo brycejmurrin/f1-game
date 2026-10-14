@@ -8313,7 +8313,7 @@ function render(dt) {
   // 0.0143 at 0.07) cannot reach 1/64 skips the 24+4-step march on EVERY backend — po.reflect is the
   // one input GLX, TLX and WGX read. Keyed on the weight, so a tuner above ~0.077 brings it back;
   // dry night (neon sheen) and car-paint SSR (po.carReflect) are untouched. apex26.ssrDayGate=1.
-  const _ssrPo = (_ssrDayGate && !frame.lights && (frame.wetness || 0) <= 0.01 && _ssr * 0.204 < 1 / 64) ? 0 : _ssr;
+  const _ssrPo = (_ssr * 0.204 < 1 / 64 && (PerfGov.tier() >= 2 || (_ssrDayGate && !frame.lights && (frame.wetness || 0) <= 0.01))) ? 0 : _ssr;
   // Perf: skip the SSAO pass (+ its two blur passes) at NIGHT. Night ambient is
   // near-black, so the AO darkening is invisible anyway — and night street grids
   // are where the frame budget is tightest. Gate on key BRIGHTNESS, not sunDir.y:
@@ -8342,7 +8342,7 @@ function render(dt) {
   po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2) * frame.exposure; po.grade = _grade;   // exposed units (BRIGHT_FS): x the TOD exposure keeps the shipped bloom; EXPOSURE now moves it
   // Feature-shedding tiers (see perfGovernor): resolution scaling can't rescue
   // passes whose cost doesn't shrink with the render target, so a device still
-  // slow at the scale floor sheds those instead. Tier 2 (user+auto) drops SSR;
+  // slow at the scale floor sheds those instead. Tier 2 (user+auto) drops dry + car-paint SSR (wet-road SSR at 3);
   // autoTier 4 drops SSAO (+2 blurs) and god-ray — not GRAPHICS: LOW alone.
   po.ssao = PerfGov.autoTier() >= 4 ? 0 : _ao;
   po.godray = PerfGov.autoTier() >= 4 ? 0 : _gr;

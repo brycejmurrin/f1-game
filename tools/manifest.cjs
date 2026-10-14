@@ -219,7 +219,9 @@ const FULL = [
   "js/car/helmets.js",
   "js/car/car-geometry.js",
   "js/car/car-wheels.js",
+  "js/car/car-materials.js", // CarMaterials: SURFACES / FINISH / palette + paint helpers (split from car3d)
   "js/car/car-shade.js",   // CarShade: rounded body sections + smooth shading for Car3D (apex26.carSmooth / ?carsmooth=0 opts out, default ON)
+  "js/car/car-body-geom.js", // CarBodyGeom: wings / fins / chassis / pods / cover builders (split from car3d)
   "js/car/car3d.js",
   "js/input/tilt-roll.js",  // TiltRoll: the one roll-from-orientation function; input.js and controller.html both call it
   "js/input/bindings.js",
@@ -492,7 +494,9 @@ const CARVIEW = [
   "js/car/helmets.js",
   "js/car/car-geometry.js",
   "js/car/car-wheels.js",
+  "js/car/car-materials.js",
   "js/car/car-shade.js",
+  "js/car/car-body-geom.js",
   "js/car/car3d.js",
   "js/car/liveries.js",
   "js/car/crest-paths.js",
@@ -558,6 +562,10 @@ const HARD_EDGES = [
   ["js/ui/platform-session.js", "js/game.js"],
   ["js/car/car-geometry.js", "js/car/car3d.js"],
   ["js/car/car-wheels.js", "js/car/car3d.js"],
+  ["js/car/car-materials.js", "js/car/car-body-geom.js"],
+  ["js/car/car-materials.js", "js/car/car3d.js"],
+  ["js/car/car-geometry.js", "js/car/car-body-geom.js"],
+  ["js/car/car-body-geom.js", "js/car/car3d.js"],
   ["js/car/livery-graphics.js", "js/car/liverytex.js"],
   ["js/input/bindings.js", "js/input/input.js"],
   ["js/input/pad-menu.js", "js/input/input.js"],
@@ -567,6 +575,7 @@ const HARD_EDGES = [
   // engine/panel stack left FULL (HARD_EDGES needs both ends in FULL).
   ["js/audio/stub.js", "js/game.js"],   // game.js calls AudioPanel/RadioVoice/Announcer/RivalAudio/CarSfx at eval
   ["js/audio/stub.js", "js/input/steer-tuning.js"], // SteerTuning.create calls DrivingCues.create when present
+  ["js/car/car-shade.js", "js/car/car-body-geom.js"],
   ["js/car/car-shade.js", "js/car/car3d.js"],
   ["js/core/store.js", "js/ui/appearance-studio.js"],
   ["js/ui/watch-transport.js", "js/race/real-replay.js"],

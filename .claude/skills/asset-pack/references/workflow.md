@@ -25,10 +25,6 @@ silently reads `0.0` (GLX) or is dropped (TLX/WGX).
 **Never bake:** `GLASS`, `FLAG`, `FLAT` — glass needs mirror read; flags are
 vertex-displaced; FLAT is the no-material id.
 
-**Backends:** GLX, TLX, **and WGX** implement `createTextureArray` /
-`setMaterialMaps` / `matTexMix` (WGX parity 2026-08). A `supported: false` on
-WGX is a device/feature miss, not "WGX has no arrays."
-
 ## Workflow
 
 1. **Inspect live state** after a track load:
@@ -40,7 +36,7 @@ WGX is a device/feature miss, not "WGX has no arrays."
 
 2. **Check the pack offline** (Node only, ~2 s, writes nothing; expect
    `verify: OK`, ~4.1 MB of 8 MB; `tests/unit/assets-pack.test.mjs` is the
-   43-test guard incl. MAT-id lockstep) — or **regenerate synthetic pack**
+   guard incl. MAT-id lockstep) — or **regenerate synthetic pack**
    (no network; rewrites `assets/pack/`, `git checkout -- assets/pack` undoes):
    ```sh
    node tools/gen/assets.mjs bake-synthetic
@@ -63,8 +59,8 @@ WGX is a device/feature miss, not "WGX has no arrays."
 
 4. **Slice a generated 4×4 atlas** onto scenery MAT slots (`bake-atlas`
    leaves ASPHALT unmapped; NB the committed manifest currently lists all 14
-   layers, ASPHALT included, as `Apex26-Procedural` — no Poly Haven layer is
-   in the pack today, whatever the `assets.mjs` header comment says):
+   layers, ASPHALT included, as `Apex26-Procedural`; the `assets.mjs` header
+   comment still says Poly Haven, so trust the manifest):
    ```sh
    node tools/gen/assets.mjs bake-atlas --preset generated
    node tools/gen/assets.mjs verify
@@ -97,6 +93,10 @@ does `tex = array[layer = MAT id]`, `uv = wp.xz / scale[mid]` (wall-like ids
 1,2,4,5,7,12,13,14 use `(wp.x|wp.z, wp.y)`), `albedo * tex.rgb * 2`, only for
 mid 1..16 with scale > 0 — the same numbers in `glsl-lit.js` `matTexUV`,
 `wgsl-chunks.js` `matTexUV`/`matUvLit`, `tsl-lit.js` `matTexUV`/`matTexLayer`.
+Whole road/surface wrong colour (single id, e.g. tarmac = MAT 16, not a seam)? First A/B
+`matTex(0)` vs `matTex(1)` per backend (Workflow step 3), then check the per-track tarmac
+tint, `colorSpace = NoColorSpace` on the array (no sRGB decode), and the TLX road draw
+(`opts.surfaceId === 16` in `tlx.js`, `lgRoad` in `tsl-lit.js`). Mixed-id seams:
 Diff these seams, in order:
 1. **Layer index**: TLX `surfaceId = floor(matA + 0.5)` where `matA` is a SMOOTH
    `attribute("mat")` (GLX/WGX: `flat vMat`), so a triangle spanning two
@@ -108,7 +108,9 @@ Diff these seams, in order:
    Pinned by `gfx-backend-canary.test.mjs` "TLX placeholder material arrays…".
 3. **Pixel bytes**: TLX reads the PNGs back through a scratch WebGL2 context
    (`readbackTextureLayers`; 2d-canvas readback is colour-managed and neutralises
-   the pack). A wrong-but-not-flat pack = check FLIP_Y false there and in GLX/WGX.
+   the pack). A wrong-but-not-flat pack = check the readback and the layer order. The array is a
+   `DataArrayTexture` (no `flipY`; GLX resets `UNPACK_FLIP_Y` to false for `texSubImage3D`). The `flipY = true`
+   in `createTexture` is the decal-atlas path, not the pack.
 4. **Bake side**: the layer itself (`tools/gen/assets.mjs` GRASS row of
    `ATLAS_PRESETS.generated`, `SCALES`). If GLX/WGX look right it is not this.
 
@@ -124,8 +126,6 @@ backend, `__apex.assets()` `uploaded:true`. Record which of 1-4 was ruled out.
 - Assuming upload alone changes the render — `matTexMix` must be > 0
   (shipped default 1.0). The pack is fetched at boot regardless (game.js
   `Assets.load()`); at 0 it is uploaded but blends nothing.
-- Treating WGX `supported: false` as "WGX has no arrays" — check
-  `createTextureArray` on the live device and `__apex.assets()`.
 - MAT id drift — grep `TrackGeom.MAT`, `tools/gen/assets.mjs` `MAT`, and
   manifest `layers` together.
 - Baking GLASS/FLAG/FLAT.

@@ -612,6 +612,18 @@ function _stampRect(out, r) {
   return out;
 }
 function renderSetupPreview(dt, holdDriveOut = false) {
+  // SETUP bay only (not title Home): wait out an in-flight material-pack upload
+  // before the first garage present. Measured on tip a52e9108 at 4× CPU: tapping
+  // #mb-garage while Assets.createTextureArray was still uploading produced one
+  // 5–12 s long task (pack upload + setup present colliding on the main thread);
+  // the same pack on the idle title alone was ~0.4–0.6 s. The sheet (openSetup)
+  // is already up; returning false keeps firstFrame unmarked until a later tick
+  // draws after packSettled. Home keeps drawing through the upload — that path
+  // never showed the multi-second stall.
+  if (G.setupPreviewOn && !home.active && typeof GaragePrebuild !== "undefined" && GaragePrebuild.packSettled) {
+    const pack = typeof Assets !== "undefined" && Assets.state ? Assets.state() : null;
+    if (!GaragePrebuild.packSettled(pack)) return false;
+  }
   // The race's HUD mirror: render() never reaches its slot on a garage frame,
   // so its rect stayed set and present() composited it over the car.
   if (typeof MirrorPass !== "undefined" && MirrorPass.instance()) MirrorPass.instance().standDown();

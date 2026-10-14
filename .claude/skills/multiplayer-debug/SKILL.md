@@ -70,6 +70,7 @@ npm run test:net-unit
 node tools/ci/test-bg.mjs net
 node tools/net/rtc-e2e.mjs
 node tools/net/rtc-e2e-3p.mjs
+npm run rtc:e2e-3p-relay   # relay-only ICE
 ```
 
 Read first:
@@ -82,4 +83,5 @@ Read first:
 
 ## Load on demand
 
+- Phone pairing, corporate NAT, TURN over TCP, nostr-probe → [references/phone-nat.md](references/phone-nat.md).
 - Layer-classify workflow, loopback-first, ICE/TURN, three-player star, common mistakes → [references/workflow.md](references/workflow.md).
