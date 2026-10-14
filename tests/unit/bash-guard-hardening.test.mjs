@@ -561,7 +561,7 @@ test("round 2 protect-files: a symlink resolves before the rules; surveyor remov
     assert.match(w.stderr, /version\.json.*GENERATED/);
     const surv = (command) => run({ tool_name: "Bash", tool_input: { command }, agent_id: "s1", agent_type: "track-surveyor" });
     for (const c of ["mv js/game.js scratch/g.js", "rm -rf js/track", "rm docs/PHYSICS.md", "git stash", "git stash pop",
-      "git reset --hard", "git clean -fd", "git switch main", "git checkout -b x", "unlink js/game.js"])
+      "git reset --hard", "git clean -fd", "git switch main", "git checkout -b x", "unlink js/game.js "])
       assert.equal(surv(c).status, 2, `surveyor must not: ${c}`);
     for (const c of ["rm scratch/x.txt", "mv scratch/a js/circuits/monza.js", "git stash list", "git clean -n", "rm -rf artifacts/old",
       "git status", "cp scratch/x js/circuits/scenery/monza.js"])
