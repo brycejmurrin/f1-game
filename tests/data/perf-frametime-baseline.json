@@ -1,0 +1,35 @@
+{
+  "scenario": {
+    "track": "monza",
+    "tod": "night",
+    "wx": "clear",
+    "seed": 4242,
+    "startFrac": 0.002,
+    "gfxPreset": "high",
+    "viewport": {
+      "width": 844,
+      "height": 390
+    },
+    "warmMs": 5000,
+    "sampleMs": 20000,
+    "renderScale": 1,
+    "cars": 22,
+    "trackBuilt": "monza"
+  },
+  "metrics": {
+    "p50": 5783.1,
+    "p95": 16366.1,
+    "p99": 16366.1,
+    "max": 16366.1,
+    "frames": 6,
+    "longTasks": 20,
+    "heapUsedMB": 69.96,
+    "heapTotalMB": 72.19
+  },
+  "_blessed": {
+    "sha": "73ee2c9e4bf394c42a399a532c774fd723586163",
+    "reason": "initial SwiftShader frametime lane on Monza night seed 4242",
+    "at": "2026-10-14T23:22:24.708Z",
+    "hash": "f3ac5096de716a228ce8863dff516130d8b14cd4b635a672f7f2a9a351cc23f3"
+  }
+}

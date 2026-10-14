@@ -1143,6 +1143,59 @@ function scheduleSubmenu() {
 }
 scheduleSubmenu();
 
+// Read-only Playwright seam: PerfGov.frameStats() + a longtask ring for
+// tests/specs/perf-frametime.spec.js. Does not touch gameplay; reset only
+// clears the governor's diagnostic history.
+let _ftLt = 0;
+let _ftObs = null;
+
+function frametimeBenchReset() {
+  try {
+    if (typeof PerfGov !== "undefined" && PerfGov.resetFrameStats) PerfGov.resetFrameStats();
+  } catch (_) { /* pre-boot harness */ }
+  _ftLt = 0;
+  if (_ftObs) {
+    try { _ftObs.disconnect(); } catch (_) { /* gone */ }
+    _ftObs = null;
+  }
+  if (typeof PerformanceObserver !== "function") return;
+  try {
+    const types = PerformanceObserver.supportedEntryTypes;
+    if (!types || types.indexOf("longtask") < 0) return;
+    _ftObs = new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) _ftLt++;
+    });
+    _ftObs.observe({ type: "longtask", buffered: true });
+  } catch (_) {
+    _ftObs = null;
+  }
+}
+
+function frametimeBenchSnapshot() {
+  const ft = (typeof PerfGov !== "undefined" && PerfGov.frameStats)
+    ? PerfGov.frameStats()
+    : { frames: 0, p50: 0, p95: 0, p99: 0, maxMs: 0 };
+  let heapUsedMB = null;
+  let heapTotalMB = null;
+  try {
+    const m = performance.memory;
+    if (m) {
+      heapUsedMB = +(m.usedJSHeapSize / (1024 * 1024)).toFixed(2);
+      heapTotalMB = +(m.totalJSHeapSize / (1024 * 1024)).toFixed(2);
+    }
+  } catch (_) { /* no performance.memory */ }
+  return {
+    p50: +(+ft.p50 || 0).toFixed(3),
+    p95: +(+ft.p95 || 0).toFixed(3),
+    p99: +(+ft.p99 || 0).toFixed(3),
+    max: +(+ft.maxMs || 0).toFixed(3),
+    frames: ft.frames || 0,
+    longTasks: _ftLt,
+    heapUsedMB,
+    heapTotalMB,
+  };
+}
+
 return {
   KEY, PAGE_KEY, POS_KEY, SIZE_KEY, LOG_NS_KEY, LOG_LVL_KEY,
   PAGES, POSITIONS, SIZES, LOG_NS, LOG_LVLS,
@@ -1151,6 +1204,7 @@ return {
   size, setSize, nextSize,
   logNs, setLogNs, nextLogNs, logLvl, setLogLvl, nextLogLvl,
   snapshot, PANEL_STYLE, setTelemetryLoader,
+  frametimeBenchReset, frametimeBenchSnapshot,
 };
 })();
 Object.freeze(GameMetrics);
