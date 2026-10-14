@@ -401,7 +401,10 @@ test("composite skips dummy SSAO / bloom / godray fetches", () => {
   assert.match(wgx, /if\s*\(\s*_needDepth\s*&&\s*_passSamples\s*>\s*1\s*&&\s*pDepthResolve/);
   // The omitted-carReflect default is the TUNE_DEFS def (0.05) via PostCommon.knob.
   assert.match(wgx, /_carReflEarly\s*=\s*o\.carReflect\s*!=\s*null\s*\?\s*o\.carReflect[\s\S]{0,120}?:\s*PostCommon\.knob\(o\.tune, "carReflect"\)/, "WGX omitted carReflect is the tuner default");
-  assert.match(wgx, /_wetEarly\s*>\s*0\.01\s*&&\s*_ssrStrEarly\s*>\s*0\.001\s*\)\s*\|\|\s*_carReflEarly\s*>\s*0\.001/);
+  // Road SSR gates on po.reflect alone (game.js sheds it), so a dry-night sheen marches as on GLX/TLX.
+  assert.match(wgx, /_ssrEarly = !!\(frameHaveProj && _ssrReady && \(\s*_ssrStrEarly\s*>\s*0\.001\s*\|\|\s*_carReflEarly\s*>\s*0\.001\)\)/);
+  assert.match(wgx, /\(_ssrStr\s*>\s*0\.001\s*\|\|\s*_carRefl\s*>\s*0\.001\)\)/);
+  assert.doesNotMatch(wgx, /_wetEarly|_wet\s*>\s*0\.01\s*&&\s*_ssrStr/, "no wetness-only road gate on WGX");
   // Skipped SSAO / bloom / godray no longer pay a dummy clear.
   assert.doesNotMatch(wgx, /_clearTarget\(\s*(?:godrayView|ssaoView|bloomLv)/);
 

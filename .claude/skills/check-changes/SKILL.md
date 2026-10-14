@@ -28,7 +28,6 @@ node tools/ci/verify-change.mjs --plan       # what this change needs (JSON); ex
 node tools/ci/verify-change.mjs --fast       # no browsers — default for verify-agent
 node tools/ci/verify-change.mjs              # fast gate + start batch 1 (background)
 node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the parent asked
-# Optional Playwright smoke only — do NOT fork the pre-push path onto quick-validate.mjs
 ```
 
 **BEFORE A PUSH, `--fast` IS NOT THE TOP RUNG.** AGENTS.md rule 3 is a ladder
@@ -45,26 +44,16 @@ Use `verify-change --fast` in the edit loop and for a subagent verdict; run
 `--gate-only` once before you push. Green on rung 2 never means green on
 rung 3 (`docs/notes/PREPUSH-GATE-LADDER.md`).
 
-`--wait` blocks for the full queue. Subagents and the default loop use
-`--fast` or a single started batch, then read `artifacts/logs/*.log` for the
-reporter's terminal line `= run <status>  (N/M done, K failed)` — match it with
-`grep -E '^= (run (passed|failed|timedout|interrupted)|bg exit)'` (ERE
-alternation; a fixed-string or BRE grep never matches; `= bg exit N` is
-test-bg's own trailer, the only line a run that died before the reporter's
-summary still writes). The waiter is `node tools/ci/test-bg.mjs --wait
---timeout <min>` as ONE background task (AGENTS.md rule 4).
-
-Push once per VERIFIED BATCH: a push over a live run cancels it, and a killed
-job runs no `if: always()` step, so its failures are lost (9 of 59 sampled runs
-were cancelled by a newer push; two of three inspected hid a real failure).
-`verify-change` says so at verdict time when it can see a live run.
+`--wait` blocks for the full queue. Subagents and the default loop use `--fast` or a single
+started batch, then read the log's `= run …` verdict line (anchor and waiter: `references/triage.md` §Rules
+that prevent the class; AGENTS.md rules 4-5). Push once per verified batch: a push over a live run cancels it.
 
 Is the tree already red? Not a `--plan` question: `node tools/ci/deploy.mjs --train`
 prints the deploy branch's last ci / pages / nightly conclusions; before blaming your
 change, `verify-agent` with `--base <ref>` answers `DELTA: same-red | new-on-session |
 already-red-on-ref`; before fixing a red you did not cause, `node tools/ci/who-is-on-it.mjs`.
 Scale the plan to AGENTS.md §Verification's table: its `batches` can list more browser
-groups than the cap (engine / physics: the two most specific, name the rest not-run).
+groups than the cap; the engine / physics recipe is `references/engine-physics.md`.
 
 Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
 
@@ -78,34 +67,16 @@ node tools/track/verify-track.cjs monza          # one circuit (plain CLI; no wr
 ./tools/mcp/apex-tools-mcp.sh smoke
 ```
 
-## After `sync-pr.mjs`: you are NOT on your own branch
-
-`sync-pr.mjs <branch>` verifies on a temp branch and **checks it out**. Without
-`--push` it pushes nothing and returns with `HEAD` on `sync-pr-<branch>`. Its
-last line says so; the trap is that everything looks finished. An existing
-temp branch is preserved and a fresh sync refuses. Do not rerun `--push` on an
-existing result: use the printed manual push command after reviewing it, or
-inspect/rename the branch before a fresh sync. `--plan` reads cached refs only;
-`conflicts:null`/`conflictsChecked:false` means conflicts were not checked.
-
-```sh
-node tools/ci/sync-pr.mjs <branch>              # verifies, leaves HEAD on sync-pr-<branch>
-git rev-parse --abbrev-ref HEAD                 # CHECK THIS before anything else
-git checkout <branch> && git merge --ff-only sync-pr-<branch>
-git branch -D sync-pr-<branch>                  # then push / deploy as normal
-```
-
-Why it matters: running `deploy.mjs` from the temp branch pushes the RIGHT tree
-to the deploy branch and leaves your own branch behind without the sync merge —
-so what shipped and what your branch says shipped disagree. `--push` avoids the
-dance entirely when you already intend to publish.
-
 ## Load on demand
 
 - Gate contracts, ratchets, reading a failure → [`references/guards.md`](references/guards.md)
 - A test timed out / hangs / `--wait --timeout` exited 124 / passes solo but not loaded (or vice versa) —
   step 0 (read-only load + log anchors), the decision tree and `test-solo.mjs` → [`references/triage.md`](references/triage.md)
 - No cache bump after a `js/`/`css/` edit (`?v=dev`; the deploy stamps hashes); `gen-shell` after a manifest change (last
-  edit before commit; `--merge <ref>` across lineages) → [`references/bump.md`](references/bump.md)
+  edit before commit) → [`references/bump.md`](references/bump.md)
+- Engine / physics / `js/game.js` change: which two groups, the master gate, ratchets, vstd-lint →
+  [`references/engine-physics.md`](references/engine-physics.md)
+- After `sync-pr.mjs` (HEAD is left on `sync-pr-<branch>`, not your branch) →
+  [`references/sync-pr.md`](references/sync-pr.md)
 - Merging with / pushing to the deploy branch, union sweeps, baseline
   grow/shrink rules, Pages concurrency → [`references/deploy.md`](references/deploy.md)

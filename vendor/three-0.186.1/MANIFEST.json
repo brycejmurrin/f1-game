@@ -1,6 +1,6 @@
 {
   "generatedBy": "tools/gen/vendor-three.mjs",
-  "three": "0.186.0",
+  "three": "0.186.1",
   "terser": "5.51.2",
   "terserOptions": {
     "module": true,
@@ -9,11 +9,11 @@
     }
   },
   "tarball": {
-    "name": "three-0.186.0.tgz",
-    "sha256": "61eeff9d7616005c9a481c796f52287d81fbbbc0d55eaca5565322924252c1aa"
+    "name": "three-0.186.1.tgz",
+    "sha256": "8cd068708ea44f2c73c944b1cead2ba2f0d5c15c8fc194e5700f4e4f4a033fe7"
   },
   "pristine": {
-    "build/three.webgpu.js": "a78400fa1d359e81fcc12b84ed0a89a7fbecb4b8373e28ae8f9d2b11f6ea13bc",
+    "build/three.webgpu.js": "15cfce5c653541704fd9a3463c39d3e8b854bb6265ccd854d7cfe74090625cc6",
     "build/three.core.js": "9edde002b066a9a05676a6127f67735b62baf399bdea529f2f7e31657da769e6",
     "build/three.tsl.js": "6e6b92d8ce467818944f73815a96abadc6392fb34de577d479a23810b6aeeed0"
   },
@@ -30,8 +30,8 @@
   ],
   "files": {
     "three.webgpu.min.js": {
-      "sha256": "3a8e42330bb5804e9803a4d52f5c5a87db8f11cb8da075be6d1b3ccfe6554b67",
-      "bytes": 710323
+      "sha256": "2f4b590b5dc28caeb0cfdd4bca906bb402e8b5b49761a5c85d3497e1c4ee1b05",
+      "bytes": 710349
     },
     "three.core.min.js": {
       "sha256": "dae72ed2eea6703b95e6b57e26469ffa95733a9320675b4bfd1b5f5df1c12f8b",

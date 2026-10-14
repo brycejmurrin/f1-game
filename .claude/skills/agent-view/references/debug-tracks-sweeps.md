@@ -1,7 +1,7 @@
 # Track debug sweeps and one-off recipes
 
 Load this when comparing circuits, auditing street half-widths, or capturing
-orbit PNGs. The SKILL.md index is the hook tables and corner-name rules.
+orbit PNGs. The hook tables and corner-name rules are in track-geometry.md.
 
 ## One-off queries
 
@@ -37,15 +37,9 @@ Compute min/max/mean of `hw` from the profile array; compare against `w.minOverH
 
 Use `createGame({track})` from `tools/lib/game-vm.cjs` for numeric profiles,
 close each game in `finally`, and process tracks sequentially. Browser fallbacks
-are parent-owned and serialized; geometry alone needs no Chromium. Illustrative output of a
-profile sweep (the elev figures are stale: `max y − min y` over `trackProfile(1000)` now measures spa 102 m, monza 6 m; recompute, do not quote):
-
-```
-suzuka  18 official / 37 peaks  elev 12.0 m   maxk 0.042
-monaco  19 official / 29 peaks  elev 27.5 m   maxk 0.060
-spa     20 official / 42 peaks  elev 23.4 m   maxk 0.044
-vegas   17 official / 27 peaks  elev  4.0 m   maxk 0.030   (night-default → numLights 32)
-```
+are parent-owned and serialized; geometry alone needs no Chromium. Recompute elevation each time (`max y - min y` over `trackProfile(1000)`); do not quote old figures.
+Does terrain clip a section? Sweep `groundY` over a frac window and lateral offsets, print the worst `overRoad`:
+see [terrain-sweep](#terrain-over-road-sweep-vm) below.
 
 `lightState().numLights` is a quick night/floodlit tell (>0 = dark session with
 floodlights built; 0 = bright day).
@@ -60,3 +54,15 @@ The manifest flags any `blank:true` render. For geometry regressions the full
 suite's `terrain-over-road.spec.js` and `tracks-walls.spec.js` are the assertions;
 these hooks are how you investigate a failure. After any `js/circuits/*` edit, run
 `node tools/track/verify-track.cjs <id>` first (see the **new-track** skill).
+
+## Terrain-over-road sweep (VM)
+
+Script under `scratch/`; `f` is the RACING frac (`s = f * total`, already past `_sceneryShift`), `lat` is metres, +right.
+```js
+const {createGame}=require("../tools/lib/game-vm.cjs");
+(async()=>{const g=await createGame({track:"spa"}),a=g.apex;let w={overRoad:-9};
+for(let f=0.13;f<=0.18;f+=0.0025)for(const lat of [-12,-6,0,6,12]){const r=a.groundY(f,lat);
+if(r&&r.overRoad!=null&&r.overRoad>w.overRoad)w={f,lat,overRoad:r.overRoad};}
+console.log(w);process.exit(0);})();
+```
+`overRoad > 0` is terrain above the banked surface (a defect). Pick lat values inside the half-width (`trackProfile(n)[i].hw`).

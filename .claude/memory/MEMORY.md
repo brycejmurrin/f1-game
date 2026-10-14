@@ -7,7 +7,7 @@ topic file. User preferences and corrections only — a measured lesson belongs 
 code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [PR auto-merge](pr-auto-merge.md) — never arm auto-merge or merge; mark ready at tip-green; only CI Watch arms (SQUASH)
 - [Small steps for API analysis](small-steps-for-api-analysis.md) — prefer small incremental queries over bulk fetch scripts
-- [Merge fast, verify on CI](merge-fast-verify-on-ci.md) — CI/tooling PRs: open ready, merge on request, watch the fast tier; never for js/ without the gate
+- [Merge fast, verify on CI](merge-fast-verify-on-ci.md) — tooling PRs may be expedited to ready at tip-green on request; the agent still never merges
 - [One subagent per skill](one-subagent-per-skill.md) — skill reviews: one Sonnet subagent per skill, never grouped
 - [GitHub Pro: 40 concurrent jobs](github-plan-pro-40-jobs.md) — account upgraded 2026-09-30; size CI against 40 standard / 5 macOS slots, not 20
 - [Stacked PRs land bottom-up](stacked-prs-land-bottom-up.md) — retarget by hand after each merge (no branch auto-delete), sync-pr on ratchets conflicts, ready one at a time (CI Watch arms, never the agent)
@@ -17,3 +17,4 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [Survey then fix](survey-then-fix.md) — after an audit, land the ranked gap list the same session; the user asks "fix all of those"
 - [User plays on a phone](user-plays-on-phone.md) — reproduce HUD/UI reports at phone-landscape-844x390 with touch first, not desktop
 - [Parallel survey and review](parallel-survey-and-review.md) — UI/HUD reports: background apex survey job + ≤2 read-only review agents in parallel; plan as a docs/notes file on the PR branch
+- [Foreground wait loop killed (137)](foreground-wait-loop-killed.md) — never block a foreground Bash on a multi-minute background run; end the turn and take the notification

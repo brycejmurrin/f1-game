@@ -1158,6 +1158,18 @@ test("gpu-census has a NATIVE WGX leg with hardware gates (bound, swapchain, gpu
   const check = fs.readFileSync(new URL("../../tools/gfx/gpu-game-check.mjs", import.meta.url), "utf8");
   assert.match(check, /r\.wgx = typeof g\.softPresent === "function";/);
   assert.match(check, /r\.wgxSoftPresent = !!g\.softPresent\(\)/);
+  // GLX exports softPresent too, so "has softPresent" alone read WGX-bound on a
+  // WGX leg that fell back to GLX (hunt 4 I3): the bound api must say webgpu.
+  assert.match(check, /if \(r\.wgx && r\.api === "webgl2" && !g\.__tlx\) r\.wgx = false;/);
+  // THE PLAYER'S PRESENT PATH on every leg (hunt 4 I1/I3): the WGX and GLX
+  // legs pin SCREENSHOTS = NATIVE like the two three.js legs, BEFORE $LS so a
+  // dispatcher can still override it. Without it WGX soft-presented every
+  // frame (20.8 vs 36.7 fps pinned, spa dusk) and GLX shot one stale blit.
+  const pinned = gpuWorkflow.match(/^\s+--[^\n]*--ls apex26\.wgxCapture=0 [^\n]*$/gm) || [];
+  assert.equal(pinned.length, 4, `every game-check leg pins apex26.wgxCapture=0 on its command line, found ${pinned.length}`);
+  for (const line of pinned) {
+    if (line.includes("$LS")) assert.ok(line.indexOf("wgxCapture=0") < line.indexOf("$LS"), "the pin must precede $LS so a dispatch can override it");
+  }
 });
 
 test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {

@@ -10,12 +10,17 @@
 //
 //   node tools/ci/ready-gate.mjs                 # HEAD
 //   node tools/ci/ready-gate.mjs --sha <sha>
-//   node tools/ci/ready-gate.mjs --pr <n>        # use that PR's head sha
+//   node tools/ci/ready-gate.mjs --pr <n>        # that PR's head sha AND its Plan checklist
 //   node tools/ci/ready-gate.mjs --json
 //   node tools/ci/ready-gate.mjs --local         # local stamp only (no API)
 //
-// Exit: 0 green, 1 red / pending / no evidence, 3 no token / API error
-// (unless --local). Prints one `= ready-gate <state>` line.
+// With --pr the PR body's `## Plan` checklist (AGENTS.md rule 12, the
+// template's live checklist) must be closed too: an item neither ticked nor
+// struck is work the PR says is not done, so a green tip still reads
+// `plan-open`. A body with no Plan section (opened before #1451) only warns.
+//
+// Exit: 0 green, 1 red / pending / no evidence / Plan open, 3 no token / API
+// error (unless --local). Prints one `= ready-gate <state>` line.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -176,7 +181,7 @@ export function resolveSha({ sha, pr, git = spawnSync, request = api } = {}) {
     if (one.error) return { sha: null, error: `PR #${n}: ${one.error}` };
     const head = one.json?.head?.sha;
     if (!head || !/^[0-9a-f]{40}$/i.test(head)) return { sha: null, error: `PR #${n}: no head sha` };
-    return { sha: head, error: null, pr: n };
+    return { sha: head, error: null, pr: n, body: one.json?.body || "" };
   }
   const r = git("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" });
   if (r.status !== 0) return { sha: null, error: "git rev-parse HEAD failed" };
@@ -209,6 +214,41 @@ export function evaluate({ sha, localOnly = false, request = api, localOpts } = 
   return { ...remote, sha, source: "ci" };
 }
 
+/** The PR body's `## Plan` checklist (AGENTS.md rule 12). An item is OPEN when
+ *  it is neither ticked (`[x]`) nor struck (`~~dropped~~ — why`); an empty
+ *  `- [ ]` (the template's placeholder) is open. HTML comments — where the
+ *  template keeps its example items — are not part of the list.
+ *  @returns {{ state: "none"|"open"|"done", items: number, open: string[] }} */
+export function planVerdict(body) {
+  const text = String(body || "").replace(/<!--[\s\S]*?-->/g, "");
+  const head = /^##[ \t]+Plan\b.*$/m.exec(text);
+  if (!head) return { state: "none", items: 0, open: [] };
+  const rest = text.slice(head.index + head[0].length);
+  const next = /^##[ \t]/m.exec(rest);
+  const section = next ? rest.slice(0, next.index) : rest;
+  const items = [...section.matchAll(/^[ \t]*[-*][ \t]+\[([ xX])\][ \t]*(.*)$/gm)];
+  if (!items.length) return { state: "none", items: 0, open: [] };
+  const open = items
+    .filter(([, mark, t]) => mark === " " && !/^~~/.test(t.trim()))
+    .map(([, , t]) => t.trim() || "(empty item)");
+  return { state: open.length ? "open" : "done", items: items.length, open };
+}
+
+/** Fold the Plan into a green verdict: open items refuse (exit 1); no Plan
+ *  section passes with a `planWarning`. A red / pending verdict is returned
+ *  as is — it already refuses, and says why. */
+export function withPlan(v, body) {
+  if (!v || v.code !== 0 || body == null) return v;
+  const p = planVerdict(body);
+  if (p.state === "open") {
+    const shown = p.open.slice(0, 3).map((t) => `"${t.length > 60 ? t.slice(0, 57) + "..." : t}"`).join(", ");
+    return { ...v, state: "plan-open", code: 1, plan: p,
+      evidence: `${p.open.length} of ${p.items} Plan item(s) open: ${shown}${p.open.length > 3 ? ", ..." : ""} — tick each with its evidence or strike it with why (AGENTS.md rule 12)` };
+  }
+  if (p.state === "none") return { ...v, plan: p, planWarning: "PR body has no ## Plan checklist (AGENTS.md rule 12)" };
+  return { ...v, plan: p };
+}
+
 /** Write LOCAL_STAMP after a green full suite (called from tooling-fast): the
  *  head the run STARTED on, plus `tree` — the hash of the tree it measured. */
 export function stampReadySha(sha, { tree = "", stampPath = LOCAL_STAMP, write = fs.writeFileSync, mkdir = fs.mkdirSync } = {}) {
@@ -220,7 +260,8 @@ export function stampReadySha(sha, { tree = "", stampPath = LOCAL_STAMP, write =
 }
 
 const USAGE = `usage: node tools/ci/ready-gate.mjs [--sha <sha|ref>] [--pr <n>] [--local] [--json]
-  Exit 0 only when tooling-fast / Structural guards is green on the tip (AGENTS.md §Concurrent PRs).
+  Exit 0 only when tooling-fast / Structural guards is green on the tip (AGENTS.md §Concurrent PRs)
+  and, with --pr, every item of the PR body's ## Plan checklist is ticked or struck (rule 12).
   Evidence: #1111 designer-canvas Structural guards red that local tooling-fast would have caught.
   --local uses artifacts/logs/tooling-fast-ready.sha + tooling-fast-suite.log only (no GitHub API).`;
 
@@ -239,9 +280,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     say(`= ready-gate unknown — ${resolved.error}`);
     process.exit(3);
   }
-  const v = evaluate({ sha: resolved.sha, localOnly });
+  const v = withPlan(evaluate({ sha: resolved.sha, localOnly }), resolved.body);
   const line = `= ready-gate ${v.state} — ${v.evidence} sha=${(v.sha || "").slice(0, 7)} source=${v.source || "—"}`;
   if (asJson) console.log(JSON.stringify({ ...v, pr: resolved.pr || null }, null, 2));
-  else say(line);
+  else {
+    if (v.planWarning) say(`warning: ${v.planWarning}`);
+    say(line);
+  }
   process.exit(v.code);
 }

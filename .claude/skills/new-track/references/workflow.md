@@ -10,6 +10,11 @@ Load from the SKILL.md index when the task needs this detail.
 
 ## Workflow
 
+0. **Already registered?** Before adding anything:
+   `ls js/circuits/<id>.js; grep -n '"<id>"' tools/manifest.cjs; grep -n '<id>' tools/track/import-circuit-path.mjs`
+   and read `docs/tracks/<id>.md` if it exists. If the id is present (madrid, for one), skip to
+   "Editing an existing circuit" below.
+
 1. **Create / edit** `js/circuits/<id>.js` with the schema above. Copy a similar
    existing track (`js/circuits/spa.js` for a green/forest road course,
    `js/circuits/monaco.js` for a street circuit, `js/circuits/monza.js` for a parkland
@@ -20,9 +25,9 @@ Load from the SKILL.md index when the task needs this detail.
    projection the committed `path`s use (verify with `--self-check`
    before trusting a new entry):
    ```sh
-   node tools/track/import-circuit-path.mjs --self-check            # re-projects the ~40 ids it maps (24 rounds + 16 classics), not every circuit
+   node tools/track/import-circuit-path.mjs --self-check            # re-projects the ids in COMMITTED + CLASSICS, not every circuit
    node tools/track/import-circuit-path.mjs <gameId>:<featureId>     # emit one new `path:` line
-   node tools/track/import-circuit-path.mjs --classics               # emit all 16 retired-circuit traces at once
+   node tools/track/import-circuit-path.mjs --classics               # emit every CLASSICS trace at once
    ```
    Paste the emitted `path: { len, pts }` line into the new def. Then author
    `turns` (and `sectors` if researched), `furniture`, `kit`, `standSet` and —
@@ -50,17 +55,15 @@ Load from the SKILL.md index when the task needs this detail.
 
    - **Season circuits** (24 rounds): append in calendar order at the end of the
      season block (before the `classic: true` section).
-   - **Retired circuits**: set `classic: true` in the def and append after the 24
-     season rounds (see the `// ── retired / off-calendar ──` comment in
+   - **Retired circuits**: set `classic: true` in the def and append after the
+     season rounds (see the `// ── appended circuits … ──` comment in
      `manifest.cjs`).
    - **The roster count is asserted, in two places.**
      `tests/unit/shared-track-foundation-characterization.test.cjs` and
      `tests/unit/circuit-def-fields.test.mjs` both pin `Tracks.LIST.length`
-     (52 as of 2026-09-18). It is a forcing function, not a budget — raise it
-     deliberately, in the commit that adds the circuit, and say why. It read 40
-     until eleven circuits were recovered from OpenStreetMap
-     (`tools/track/osm-circuits.json`).
-     Raising it means updating, in the same commit:
+     (read the current value in the test). It is a forcing function, not a
+     budget — raise it deliberately, in the commit that adds the circuit, and say
+     why. Raising it means updating, in the same commit:
      1. the two `Tracks.LIST.length` assertions (`SEASON.length` stays 24),
      2. `tests/specs/f1-track-accuracy.spec.js` — the `waitForFunction` count, a
         `CIRCUIT_MAP` row, AND a matching feature in
@@ -76,7 +79,9 @@ Load from the SKILL.md index when the task needs this detail.
         three `CAMERA_FRACTIONS`,
      6. `js/ui/flags.js` if the country is new — `tests/unit/flags.test.mjs`
         fails on a circuit whose country has no drawn flag,
-     7. the `tools/track/*-baseline.json` audits (clip, coplanar, float; props-tris is a ratchet) at EXACTLY the measured
+     7. `tests/data/landmarks/<id>.json` for a hero landmark (`js/circuits/AGENTS.md`),
+        and a `docs/tracks/<id>.md` note,
+     8. the `tools/track/*-baseline.json` audits (clip, coplanar, float; props-tris is a ratchet) at EXACTLY the measured
         value. A cap above the measurement fails as loudly as one below, and an
         absent id means a cap of 0 — so omit the row when the circuit measures
         clean rather than writing a 0.
@@ -106,8 +111,11 @@ Load from the SKILL.md index when the task needs this detail.
 6. **Tests**:
    ```sh
    node tools/track/verify-track.cjs <id>   # default gate (no browser)
-   # optional parent ship only: node tools/ci/test-bg.mjs circuits
+   node tools/ci/pick-tests.mjs             # which groups the change needs
    ```
+   The single browser check is that circuit's `tests/specs/<id>-foundation.spec.js`
+   (AGENTS.md verification table; hyphenated file names, e.g. `albert-park-`), run via
+   `test-bg.mjs` in the background (AGENTS.md rules 4-5). A whole group is the parent's call.
    The `terrain-over-road.spec.js` audit (part of the full suite) catches terrain
    triangles rendering above the racing line — re-run it if you changed elevation
    or a street/terrain flag.
@@ -125,15 +133,24 @@ node tools/track/rotate-markings.cjs --check           # read-only proposed tran
 ```
 Green = each count equals its `"<id>"` row in `tools/track/{clip,coplanar,float}-baseline.json` (an absent float row = 0); `props-tris-baseline.json` is a ratchet ceiling, so a lower measure is fine. Read the rows, never a number quoted in prose. Re-run after the edit;
 a geometry/scenery edit that moves a count means updating that baseline row to the measured value, in the same commit.
-`import-circuit-path.mjs --self-check` exits 1 today on one known row, `FAIL miami err=3.79 m` ("1 over the 2 m bar"): committed path drift, the standing state, not yours (`docs/plans/skilltest-content-pipeline.md`). Any other FAIL row is yours.
+`import-circuit-path.mjs --self-check` can exit 1 on a known committed-path drift row (see `docs/plans/skilltest-content-pipeline.md`); a FAIL row for the circuit you touched is yours.
 
 ## Adding a bridge or an elevation bump to an existing def (walked read-only on zandvoort)
 
 Both are cosine bumps `{ s, halfM, rise }` (full width 2 x halfM, peak `rise` m), added to the road height in `buildCenterline` (`js/track/tracks.js` (`buildCenterline`)).
-- **`elevations`** — terrain follows the road. Silently DROPPED (`js/track/core/def.js` (`fromRaw`)) when the id has a profile in `js/track/circuit-elevations.js` (SRTM bake; check registered ids, including whether zandvoort is present, which has one authored bump `s 0.56 halfM 300 rise 8`): edit the bake (`tools/gen/bake-elevation.mjs`) there, not the def. Check first: `grep -c "^    <id>:" js/track/circuit-elevations.js`.
+- **`elevations`** — terrain follows the road.
+  - Silently DROPPED (`js/track/core/def.js` `fromRaw`) when the id has a profile in `js/track/circuit-elevations.js` (SRTM bake).
+  - Then edit the bake (`tools/gen/bake-elevation.mjs`), not the def. Check first: `grep -c "^    <id>:" js/track/circuit-elevations.js`.
 - **`bridges`** — road lifts, `js/track/core/surface.js` (~L74) carves the ground back flat under the deck, `js/track/scenery/build-props.js` (~L2209) adds four pillar pairs. Only suzuka has one; pick `s` from the real crossover (a bridge over nothing is a bare hump), and keep `halfM` short.
-- **`s` frame:** authored against `sceneryStartFrac` (else `startFrac`), remapped to racing frac by `materializeListPoints`, then shifted by `def._sceneryShift` at every consumer (road, ground carve, pillars). `_sceneryShift` is nonzero ONLY when the def names `sceneryStartFrac`. Zandvoort names none (its header says do not re-add), so `s` there is a plain racing-lap fraction. A def WITH it nets `racing = authored + _sceneryShift - sceneryStartFrac` (imola: 0.5094 - 0.495, so authored s = racing s - 0.014). Never add `sceneryStartFrac` to compensate; never read `b.s`/`e.s` raw in new code, add `+ (def._sceneryShift || 0)`.
-- **Audits that move** (all no-browser except the last): `verify-track <id>` (throws), `clip-audit` and `coplanar-audit` (a bridge deck adds overhead coplanar faces; `coplanar-audit.cjs --overhead`), `float-audit` and `props-tris` (pillars, re-seated props on the new height), `tests/unit/elevation-smoothness.test.mjs` (grade cap; only baked ids, and it skips bridge windows), `tests/unit/track-foundation.test.mjs` / `circuit-def-fields.test.mjs` (def shape). Baselines: the `"zandvoort"` rows of `tools/track/*-baseline.json` (props-tris is a ceiling; float absent = 0). Node-VM twin (heavy, ~200 s, load < 3): `tests/unit/elevation-tracks-vm.test.mjs`. Browser-only: `terrain-over-road.spec.js`, `elevation-tracks.spec.js`, `<id>-foundation.spec.js` (e.g. `zandvoort-foundation.spec.js`); name them not-run in the PR when you skip them. `undulate` ripple is added after the bumps, so measure `py` from `Tracks.build(def)`, not from the numbers you typed.
+- **`s` frame:** authored against `sceneryStartFrac` (else `startFrac`), remapped to racing frac by `materializeListPoints`, then shifted by `def._sceneryShift` at every consumer (road, ground carve, pillars).
+  - `_sceneryShift` is nonzero ONLY when the def names `sceneryStartFrac`; with none, `s` is a plain racing-lap fraction.
+  - With it: `racing = authored + _sceneryShift - sceneryStartFrac` (read imola's def for a worked case).
+  - Never add `sceneryStartFrac` to compensate; never read `b.s`/`e.s` raw in new code, add `+ (def._sceneryShift || 0)`.
+- **Audits that move** (no browser): `verify-track <id>` (throws); `clip-audit` and `coplanar-audit` (a bridge deck adds overhead faces: `--overhead`); `float-audit` and `props-tris` (pillars, re-seated props); `tests/unit/elevation-smoothness.test.mjs` (grade cap; baked ids only, skips bridge windows); `tests/unit/track-foundation.test.mjs` / `circuit-def-fields.test.mjs` (def shape).
+  - Baselines: the `"<id>"` rows of `tools/track/*-baseline.json` (props-tris is a ceiling; float absent = 0).
+  - Node-VM twin (heavy, ~200 s, load < 3): `tests/unit/elevation-tracks-vm.test.mjs`.
+  - Browser-only: `terrain-over-road.spec.js`, `elevation-tracks.spec.js`, `<id>-foundation.spec.js`; name them not-run in the PR when skipped.
+  - `undulate` ripple is added after the bumps, so measure `py` from `Tracks.build(def)`, not the numbers you typed.
 - **Reading heights/curvature with no browser:** `require("tools/lib/track-build-vm.cjs").buildContext().Tracks.buildCenterline(def)` returns `{n,total,py,curv,...}` (`py[k]`, `curv[k]` per point; `__apex.trackProfile()` is the browser twin). Mutating `def.elevations` on the VM's def before the call previews a bump without editing the circuit.
 - **Hand-off note** to leave in the PR: which key, `s`/`halfM`/`rise`, the measured audit counts before and after, and which baseline rows you updated.
 
@@ -150,12 +167,12 @@ Both are cosine bumps `{ s, halfM, rise }` (full width 2 x halfM, peak `rise` m)
 - **`turns` are RACING-LAP fractions**, never fmap'd: when `startFrac` moves the
   line, re-seat them with `tools/track/rotate-markings.cjs --check` / `--write` (once
   per circuit). A def without `turns` falls back to **curvature-peak**
-  `__apex.corners()` for corner boards — not the curated FIA apexes. The 28
+  `__apex.corners()` for corner boards — not the curated FIA apexes. The
   `classic: true` circuits carry `turns` (the N strongest curvature peaks,
   N = the real turn count). Every def now carries `sectors`; where no FIA
   split was researched they sit at ~1/3 and ~2/3, snapped to the nearest
-  straight (a missing key still falls back to thirds). (The 16 in `import-circuit-path --classics` are the
-  subset that tool holds traces for, not the classic roster.)
+  straight (a missing key still falls back to thirds). (`import-circuit-path --classics` covers only
+  the subset that tool holds traces for, not the classic roster.)
 - **`apex26.track` is a positional index** into `Tracks.LIST` (same order as
   `tools/manifest.cjs` `CIRCUITS`). Do not reorder the circuit block casually —
   saved track picks and season routing will point at the wrong def.

@@ -6,7 +6,6 @@
 - Divide ownership and schedule
 - Add detail that carries the place
 - Acceptance and handoff
-- Skill format references
 
 ## Establish the baseline
 
@@ -148,10 +147,3 @@ broaden only when shared geometry or new failures require it. Keep source,
 offline-contract, rendered and native-device evidence separate. Update the
 packet at the integrated SHA, then put status and not-run coverage in the draft
 PR using the repository template. Do not merge or publish as part of this skill.
-
-## Skill format references
-
-Checked 2026-10-04: [Agent Skills specification](https://agentskills.io/specification)
-for frontmatter and progressive disclosure; [Claude Code skills](https://code.claude.com/docs/en/skills)
-for project discovery, invocation and fork semantics. Repository AGENTS.md
-and the existing linked skills govern local ownership and verification.

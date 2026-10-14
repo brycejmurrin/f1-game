@@ -646,7 +646,8 @@ const ShadowPass = (function () {
             // rad, and the argument at the car loop below (a caster beyond rad can
             // only occlude fragments this lamp does not light) holds for any
             // caster, so castShadowChunked also drops a chunk whose AABB lies
-            // farther than _lsR from the lamp. GLX/WGX ignore the third argument.
+            // farther than _lsR from the lamp. All three backends honour the third argument
+            // (TLX C3, GLX hunt-2 G5, WGX hunt-4 C-P1).
             _flReach[0] = L[o]; _flReach[1] = L[o + 1]; _flReach[2] = L[o + 2]; _flReach[3] = _lsR;
             if (!_carsOnlyPass && G.gfx.lampStaticBegin && G.gfx.lampStaticBegin(_mFlVP)) {
               G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT, _flReach);

@@ -23,8 +23,7 @@ uses. `def._sceneryShift` is the single arc number between them.
 - **`K(s)` is authored-frame and passes straight through.** Never pre-shift it.
   The wrapped `(k, side, …)` helpers (`anchor`, `tree`, `place`, `building`, …)
   apply the shift themselves, exactly once.
-- **`along()` hands authored-frame `k` to the callback** (fixed 2026-09-24 —
-  `sceneryNodeToAuthored`). Wrapped helpers inside an `along` span apply the
+- **`along()` hands authored-frame `k` to the callback** (`sceneryNodeToAuthored`). Wrapped helpers inside an `along` span apply the
   shift once. Table reads like `blocked(k / n)` still need care: prefer
   authored fracs / `K(s)` when testing against authored windows.
 - **`bakedModel(id, k, side, dist, opts)` remaps correctly on shifted
@@ -67,7 +66,7 @@ oriented footprint** covers tarmac at **any** node it rises above, the
 
 `place`/`prop`/`anchor` sit on raycast terrain when available, else
 `groundYAt`. Props >120 m out or on street circuits can float/sink — pull
-them in or use `anchor()` and read `c[1]`.
+them in or use `anchor()` and read `c[1]`. Float/sunk fixes: [float-fix.md](float-fix.md).
 
 ## Reverse circuits
 
@@ -76,11 +75,7 @@ trace direction.
 
 ## Vertex budget — increment, not a ceiling
 
-Shipped circuits run roughly **170k–690k** prop verts (`verify-track --all`,
-2026-10-05: catalunya ~170k, spa ~191k, zandvoort ~343k, suzuka ~360k, monaco
-~376k, watkins_glen ~491k, miami ~586k; **mexico ~692k is the current ceiling —
-do not grow it**). Rule:
-`verify-track.cjs <id>` before and after; keep the edit at or below the existing count unless you can say why.
+Per-circuit prop size: `node tools/track/props-tris.cjs <id>` (`--all`); `tests/unit/props-tri-ratchet.test.mjs` fails past its +0.5 % margin. Also `verify-track.cjs <id>` before and after; keep the edit at or below the existing count unless you can say why.
 `every(20)` for sparse features, `every(5)` only for hero sections; jitter
 with `hash()`; double-place at two distances instead of doubling density.
 
