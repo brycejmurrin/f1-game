@@ -151,6 +151,44 @@ test("tick: off hides the box; on, it fills rows and never writes a car", () => 
   assert.equal(root.hidden, true, "no relative in a time trial");
 });
 
+test("fitRows does not leftish-slide past aero onto the right dock", () => {
+  // After sliding past gearbox, aero.left ≈ REL.left used to match leftish and
+  // shove the card onto THROTTLE (phoneL broadcast @150%).
+  const mk = () => {
+    const el = { hidden: true, attrs: {}, children: [], textContent: "", className: "",
+      style: { setProperty(k, v) { el.style[k] = v; }, removeProperty(k) { delete el.style[k]; } },
+      setAttribute(k, v) { el.attrs[k] = String(v); }, removeAttribute(k) { delete el.attrs[k]; },
+      appendChild(c) { el.children.push(c); return c; } };
+    return el;
+  };
+  const root = mk();
+  root.clientHeight = 40; root.scrollHeight = 80; root.currentCSSZoom = 1;
+  let relLeft = 205;
+  root.getBoundingClientRect = () => ({ left: relLeft, right: relLeft + 202, top: 275, bottom: 357, width: 202, height: 82 });
+  const gear = mk(); gear.hidden = false;
+  gear.getBoundingClientRect = () => ({ left: 250, right: 396, top: 220, bottom: 304, width: 146, height: 84 });
+  const aero = mk(); aero.hidden = false;
+  aero.getBoundingClientRect = () => ({ left: 403, right: 586, top: 315, bottom: 359, width: 183, height: 44 });
+  const throttle = mk(); throttle.hidden = false;
+  throttle.getBoundingClientRect = () => ({ left: 718, right: 785, top: 283, bottom: 350, width: 67, height: 67 });
+  const els = { "hud-rel": root, "hud-gearbox": gear, "hud-aero": aero, "btn-throttle": throttle };
+  const documentElement = { style: { getPropertyValue: () => "1" } };
+  const doc = { documentElement, defaultView: { innerWidth: 844, innerHeight: 390 },
+    body: { classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
+  const R = load({ document: doc, HudElements: { isOn: () => true }, window: doc.defaultView });
+  const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
+  // Simulate style.left updating the next rect read.
+  const origLeft = root.style;
+  Object.defineProperty(root, "style", { value: new Proxy(origLeft, {
+    set(t, k, v) { t[k] = v; if (k === "left") relLeft = parseFloat(v) || relLeft; return true; },
+    get(t, k) { return t[k]; }
+  }) });
+  R.tick({ cars: [p, car("A1", 1100, 3, { rank: 1 })], track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } }, p);
+  const left = parseFloat(root.style.left || "0");
+  assert.ok(left > 0 && left < 500, "stops before the right dock: left=" + root.style.left);
+  assert.ok(left + 202 < 718, "REL right edge clears THROTTLE");
+});
+
 test("fitRows slides past OT when REL top already sits inside the control", () => {
   // phoneL broadcast @150%: REL top ≈357 inside OT (315..359). Height-cap needs
   // rr.top < box.top - 4, which never fires — must slide right instead.
