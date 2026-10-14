@@ -133,8 +133,52 @@ const AiDrive = (function () {
 
   // Slipstream vmax gain. Streets get a half-size tow: with none, the 8 m train
   // can never close, and half still fits inside the follow cap.
-  function towGain(street) {
-    return street ? 0.022 : 0.045;
+  // `hunger` (passHunger, ≥1) lifts the permanent tow only — a faster car stuck
+  // behind a slower one needs the run on the straight to finish the pass
+  // (ai-tactics 2026-10-14: ~1 % edge trailing 100–125 s). Streets ignore it.
+  function towGain(street, hunger) {
+    const base = street ? 0.022 : 0.045;
+    if (street) return base;
+    const h = clamp((hunger || 1) - 1, 0, 1);
+    return base * (1 + h * 0.40);
+  }
+
+  // PASS HUNGER / COVER CONCEDE (permanent circuits only). A ≥ ~0.7 % pace edge
+  // that sits in the queue for seconds should fire more and cover less — the
+  // field's stuck-longest pairs were 0.85–1.24 % trailing for a whole race
+  // while covers.vsAI ran ~1000 (ai-tactics monza 3×3). Streets keep every
+  // prior gate; monaco numbers must not move.
+  const PASS_EDGE = 0.007;       // ~0.7 % of vTop — want / concede floor
+  const PASS_EDGE_FULL = 0.012;  // ~1.2 % — full hunger / full concede (stuck pairs were 0.85–1.24 %)
+  function paceEdgeN(fasterV, slowerV, vTop) {
+    const ref = vTop > 0 ? vTop : 72;
+    const edge = ((fasterV || 0) - (slowerV || 0)) / ref;
+    if (edge < PASS_EDGE) return 0;
+    return clamp((edge - PASS_EDGE) / (PASS_EDGE_FULL - PASS_EDGE), 0, 1);
+  }
+  // 1..~2.2: stuck time behind a slower car → fire / latch / run / tow boost.
+  // Needs ourVmax + blockerVmax (pace, not live speed): a 1 m/s live delta is
+  // common in the tow and must not look like a 1.4 % pace edge.
+  function passHunger(ctx) {
+    if (!ctx || ctx.street) return 1;
+    if (!(ctx.ourVmax > 0) || !(ctx.blockerVmax > 0)) return 1;
+    const edgeN = paceEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.vTop);
+    if (!edgeN) return 1;
+    const stuckN = clamp((ctx.queueT || 0) / 12, 0, 1);
+    const craft = lerp(0.75, 1.15, ctx.traits ? ctx.traits.craft : 0.75);
+    return 1 + edgeN * Math.max(stuckN, 0.25) * 1.15 * craft;
+  }
+  // 0..1: defender yields the cover against a clearly faster attacker.
+  // Awareness / experience decide how soon they recognise they are beaten.
+  // Pace vmax only — live chaserSpeed > speed is ordinary closing, not concede.
+  function coverConcede(ctx) {
+    if (!ctx || ctx.street) return 0;
+    if (!(ctx.chaserVmax > 0) || !(ctx.ourVmax > 0)) return 0;
+    const edgeN = paceEdgeN(ctx.chaserVmax, ctx.ourVmax, ctx.vTop);
+    if (!edgeN) return 0;
+    const t = ctx.traits || {};
+    return edgeN * lerp(0.55, 1.0, t.awareness != null ? t.awareness : 0.75)
+      * lerp(0.55, 1.0, t.experience != null ? t.experience : 0.75);
   }
 
   // FULL BRAKES AT +3 m/s, AT ANY GAP, was the shape on permanents — and it
@@ -331,7 +375,9 @@ const AiDrive = (function () {
     const aggrMul = 1 + clamp(t.aggression != null ? t.aggression : 0, -1, 1) * 0.22;
     const house = houseMulCtx(ctx, 0.88, 1.12, "attack");
     const orders = ordersMul(ctx.team, ctx.seat, ctx.other, "ot");
-    return clamp(0.55 * situ * craftMul * awareMul * expMul * aggrMul * house * orders, 0.08, 2.4);
+    // Pass hunger (permanent only): stuck behind a slower car raises λ, capped.
+    const hunger = passHunger(ctx);
+    return clamp(0.55 * situ * craftMul * awareMul * expMul * aggrMul * house * orders * hunger, 0.08, 2.8);
   }
 
   // roll is the caller's simRnd() — only invoke when otArmed (short-circuit).
@@ -348,8 +394,14 @@ const AiDrive = (function () {
     const straight = kAhead < 0.006;
     if (!straight) return false;
     // The 1 / 2 m/s closing tolerances are pace-5 m/s: they ride vScale = vTop()/VMAX (as letPassCase).
+    // Catch also arms on a clear pace edge (#1401 / pass-completion): the queue
+    // cap levels live speeds, so a faster car stuck in the tow still wants ERS.
     const vs = ctx.vTop > 0 ? ctx.vTop / 72 : 1;
-    const catching = !!(ctx.towCar && ctx.towGap < 28 && (ctx.speed || 0) >= (ctx.towSpeed || 0) - 1 * vs);
+    const ref = ctx.vTop > 0 ? ctx.vTop : 72;
+    const catchEdge = !ctx.street && ctx.towVmax > 0 && ctx.ourVmax > 0
+      && paceEdgeN(ctx.ourVmax, ctx.towVmax, ref) > 0;
+    const catching = !!(ctx.towCar && ctx.towGap < 28 && (
+      (ctx.speed || 0) >= (ctx.towSpeed || 0) - 1 * vs || catchEdge));
     const defending = !!(ctx.chaser && ctx.chaserGap < 14 && (ctx.chaserSpeed || 0) > (ctx.speed || 0) - 2 * vs);
     const hs = houseStyle(ctx.team, ctx.seat, ctx.stats);
     const dep = ctx.ersDeploy != null ? ctx.ersDeploy : 0.5;
@@ -561,10 +613,18 @@ const AiDrive = (function () {
     // QUEUE PRESSURE lowers the bar: a car held behind the same car for its
     // patience window will take a 2 % edge (the tow alone is 4.5 %), not 7 %.
     // Aggression shrinks the pace edge needed to want the move (fire half).
+    // A clear pace edge (≥ ~0.7 %) on a permanent also lowers the bar so a
+    // 1 % faster car does not wait out its whole patience for a 7 % margin
+    // the field's own spread can never produce (pass-completion, 2026-10-14).
     const aggr = clamp(ctx.traits && ctx.traits.aggression != null ? ctx.traits.aggression : 0, -1, 1);
-    const margin = (street ? 0.055 : 0.07) * ref * lerp(1, 0.3, queuePress(ctx))
-      * lerp(1.10, 0.88, (aggr + 1) * 0.5);
     const bv = ctx.blockerVmax > 0 ? ctx.blockerVmax : (ctx.blockerSpeed || 0);
+    // Pace-edge cut needs explicit ourVmax (game.js wires paceVmax); freeSpeed
+    // alone must not look like an edge or the 7 %-of-vTop margin pin breaks.
+    const edgeN = (!street && ctx.ourVmax > 0 && ctx.blockerVmax > 0)
+      ? paceEdgeN(ctx.ourVmax, ctx.blockerVmax, ref) : 0;
+    let margin = (street ? 0.055 : 0.07) * ref * lerp(1, 0.3, queuePress(ctx))
+      * lerp(1.10, 0.88, (aggr + 1) * 0.5);
+    if (edgeN) margin *= lerp(1, 0.42, edgeN);
     // A car under ~12 % of the top speed is an OBSTACLE whatever its pace: the
     // follower behind it sits on the queue crawl floor, which is below the
     // closing margin, so neither test below could ever fire — measured as an
@@ -582,7 +642,11 @@ const AiDrive = (function () {
     const press = queuePress(ctx);
     const clear = Math.max(ctx.roomL || 0, ctx.roomR || 0) >= (street ? 2.2 : 2.8);
     const impatient = press >= 1 && clear && (ctx.freeSpeed || 0) + 0.005 * ref >= bv;
-    return crawling || closing || held || impatient;
+    // Pace-edge want: a ≥ ~0.7 % car with some queue time and a clear side does
+    // not wait for a 7 % margin the field's spread can never produce.
+    const edgeHeld = edgeN > 0 && clear && press >= 0.25
+      && (ctx.freeSpeed || ctx.ourVmax || 0) + 0.002 * ref >= bv;
+    return crawling || closing || held || impatient || edgeHeld;
   }
 
   // THE LAUNCH. Real lights-out is a reaction (a driver-dependent fraction of a
@@ -721,18 +785,25 @@ const AiDrive = (function () {
   // Permanent circuits only, like latchLate, the side bonus and the lane
   // look-ahead: on a street every one of them cost monaco passes (the street
   // ablation, docs/notes/AI-FIELD-RESEARCH.md 2026-10-01).
-  function runExtra(kHere, qNext, want, street) {
-    return !street && want && Math.abs(kHere || 0) > 0.004 && qNext >= 0.4 ? RUN_T : 0;
+  // `hunger` (passHunger) stretches the hang-back so a faster car exits with a
+  // real run; streets stay at zero.
+  function runExtra(kHere, qNext, want, street, hunger) {
+    if (street || !want || Math.abs(kHere || 0) <= 0.004 || qNext < 0.4) return 0;
+    const h = clamp((hunger || 1) - 1, 0, 1);
+    return RUN_T * (1 + h * 0.85);
   }
   // "On the gearbox" is the tight follow gap (FOLLOW_TIGHT) plus a little. A
   // car held for its whole patience goes anyway: at racing speed two cars
   // accelerate alike, so a 4 % car may never close the last metres in the tow
   // (measured: requiring it, a 4 % faster car never passed in 50 s at monza).
+  // Pass hunger also latches: a ≥ ~0.7 % car that has sat in the queue long
+  // enough does not wait for a closing rate the queue cap itself forbids.
   function latchLate(ctx) {
     if (ctx.street) return true;
     if (!(ctx.toTurnIn > 150) || Math.abs(ctx.kAhead || 0) > 0.004) return true;   // the zone is near, or not a straight
     const ref = ctx.vTop > 0 ? ctx.vTop : 72;
     if ((ctx.blockerSpeed || 0) < 0.12 * ref || queuePress(ctx) >= 1) return true;
+    if (passHunger(ctx) >= 1.35) return true;
     return (ctx.speed || 0) - (ctx.blockerSpeed || 0) >= 0.015 * ref
       || (ctx.blockerGap || 0) <= 6 + (FOLLOW_TIGHT + 0.03) * (ctx.speed || 0);
   }
@@ -806,7 +877,9 @@ const AiDrive = (function () {
     q *= 1 - (1 - START_ATTACK) * (ctx.calm || 0);   // the first lap: not lap 20 into turn 1 (startCalm)
     // A queued car can never show a closing rate — the queue cap pins it to the
     // blocker's speed — so time held behind stands in for it (queuePress).
-    return q * Math.max(closing, deficit, 0.7 * queuePress(ctx)) * craft * roll >= 0.32 && passReach(ctx);
+    // Pass hunger (permanent) stands in the same way for a clear pace edge.
+    const hunger = passHunger(ctx);
+    return q * Math.max(closing, deficit, 0.7 * queuePress(ctx), 0.55 * (hunger - 1)) * craft * roll >= 0.32 && passReach(ctx);
   }
 
   // CAN IT BE HALF ALONGSIDE BY THE TURN-IN? game.js abandons a pass that is
@@ -1442,12 +1515,19 @@ const AiDrive = (function () {
     // ROAD edge (roomL/R reach into the run-off on a permanent circuit).
     const road = coverSide > 0 ? ctx.roadR : ctx.roadL;
     const edgeCap = road != null ? Math.max(0, road - 2.5) : Infinity;
-    const mag = lerp(0.2, 1.1, ctx.traits.craft)
+    let mag = lerp(0.2, 1.1, ctx.traits.craft)
       * clamp(1 - gT / winT, 0, 1) * clamp(coverRoom / 2, 0, 1)
       * houseMulCtx(ctx, 0.90, 1.12, "hold")
       * ordersMul(ctx.team, ctx.seat, ctx.other, "defend");
     // A straight cover is a lane move, not a chop: three fifths of the corner
     // pull, and defendOnce still spends it once per straight.
+    // COVER CONCEDE: against a clearly faster attacker the defender yields —
+    // awareness/experience recognise they are beaten. Full concede returns 0
+    // so defendOnce does not spend the one-move-per-straight on a lost cause
+    // (covers.vsAI ~1000 at monza with every zone covered, 2026-10-14).
+    const concede = coverConcede(ctx);
+    if (concede >= 0.80) return 0;
+    mag *= 1 - concede;
     const scale = (ctx.street ? 0.45 : 1) * (straight ? 0.6 : 1);
     return coverSide * Math.min(mag * scale, edgeCap);
   }
@@ -1594,6 +1674,7 @@ const AiDrive = (function () {
     lateralScale, yawScale, cornerSpeed, traits, houseStyle, isMate, ordersMul, stuckThreshold, followTime, followGap, followBase, towGain, queueBrake, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
+    passHunger, coverConcede, paceEdgeN, PASS_EDGE, PASS_EDGE_FULL,
     defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
