@@ -1,5 +1,18 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-10-14 — PR #1460 (cursor/hud-adapt-3f9a): the phone HUD sizing pass, two rounds
+
+`js/ui/hud.js` codeLines 1424 → **1445** (+21), lines 2426 → **2489** (+63); `css/hud.css` codeLines
+1960 → **2019** (+59), lines 2158 → **2226** (+68). Deliberate raise past the 40-line absorb. The code
+growth is the fixes themselves — the cluster span that skips the dock-anchored TYRES (the dock cap bit to
+0.70 at the shipped settings on every chase phone), the right column as one stack with one zoom, the
+BUTTON SIZE floor token, `data-flag-low`, the RELATIVE drop mask, the OVERTAKE gate order, the pit arrow
+cache, the DELTA refit — and the rest is the comments that carry the hud-mock measurements each fix was
+judged by (168 cells before / after: 86 → 22 red cells, 40 → 0 capped docks, 56 → 0 sub-10px text;
+`docs/notes/HUD-ADAPT-2026-10-14.md`). Nothing in either file was replaced wholesale, so there was nothing
+to delete against it; the structural shrink is the band allocator (`HUD-PHONE-LAYOUT-PLAN-2026-10-10.md`),
+which replaces the fit's hand-stacked offsets in one PR.
+
 ## 2026-10-11 — sync #1385 again: HUD caps to current ship tip
 
 `js/ui/hud.js` → **1411 / 2399**; `css/hud.css` → **1960 / 2158** (ship tip after further HUD merges; same measure as #1437 tip). Catch-up absorb already on this branch. Source-pin raw `game.js` reads 351 → **357** (ship unit growth). Doc floors README/TESTING 550+ → **600+** (605 unit suites on disk).
