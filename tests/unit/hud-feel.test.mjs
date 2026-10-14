@@ -1217,9 +1217,30 @@ test("on touch the radio card is left-aligned in the gap between the dock groups
   assert.match(rule[0], /max-width: min\(440px, calc\(72 \* var\(--vwzh\)\), calc\(var\(--announce-lane-w, 9999px\) \/ var\(--hud-z\)\)\)/);
   assert.match(rule[0], /min-width:\s*0/);
   assert.match(rule[0], /width:\s*min\(100%, max-content, calc\(var\(--announce-lane-w/);
-  assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x\) \/ var\(--hud-z\)\)/);
+  assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x, 50% \* var\(--hud-z\)\) \/ var\(--hud-z\)\)/,
+    "an unpublished lane must resolve left to 50%, not invalid-at-computed-value-time auto (portrait: card over #minimap)");
   assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?transform: translateX\(var\(--announce-lane-shift, -50%\)\)/);
   assert.doesNotMatch(css, /body\.desktop[^{]*#announce[^{]*\{[^}]*announce-lane/, "desktop never reads the lane");
+});
+
+test("a dock lane that goes dark and lights again republishes every lane var (hStyle cache)", () => {
+  // hStyle skips a write equal to its cached last value. Clearing the lane with a bare
+  // removeProperty left '0%' cached, so the republish skipped --announce-lane-shift and
+  // the card snapped to the -50% fallback after any lane off -> on (landscape too).
+  const h = fitHarness();
+  const vars = () => Object.fromEntries(["--announce-lane-x", "--announce-lane-shift", "--announce-lane-w"]
+    .map((k) => [k, h.root.style.getPropertyValue(k)]));
+  const groups = [...h.dom.byId("dock-left").children, ...h.dom.byId("dock-right").children];
+  const lit = groups.map((g) => g._rect);
+  const published = vars();
+  assert.equal(published["--announce-lane-shift"], "0%", "the fixture publishes a lane: " + JSON.stringify(published));
+  for (const g of groups) g._rect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+  h.refit();
+  assert.deepEqual(vars(), { "--announce-lane-x": "", "--announce-lane-shift": "", "--announce-lane-w": "" },
+    "dark docks clear the lane");
+  groups.forEach((g, i) => { g._rect = lit[i]; });
+  h.refit();
+  assert.deepEqual(vars(), published, "relit docks republish x, shift AND w");
 });
 
 test("MOVE & SIZE on the tower re-derives the radio card's slot at invalidateFit, not a tick later", () => {

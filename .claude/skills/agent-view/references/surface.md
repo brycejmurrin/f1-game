@@ -1,6 +1,6 @@
 # Agent-view surface — tools, driving policy, staging
 
-Load this when driving a lap, writing a policy, or debugging a typed error. The SKILL.md index is the entry points only.
+Load this when driving a lap, writing a policy, or debugging a typed error. SKILL.md holds the entry points only.
 
 
 ## Contents

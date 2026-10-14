@@ -61,9 +61,9 @@ const GLXBackend = (function () {
   // drain on EVERY present serialised the JS thread behind the GPU process
   // every frame. Its consumers are the real-GPU gate (tools/gpu-game-check,
   // PERF-FINDINGS 2e) and gpuErrors(): drain for the first presents after
-  // boot (shader/pipeline errors surface there) and whenever the diagnostic
-  // flag is set (tools/gpu-game-check seeds it) — never on a steady-state
-  // frame. gpuErrors() stays a pure read: the counter is drained at present().
+  // boot (shader/pipeline errors surface there) and, per present, only under
+  // apex26.glErrDrain=1 — never on a steady-state frame. Flags are sticky until
+  // read, so the census drains ~1 Hz through drainGpuErrors() (hunt 4 I2).
   // 30 presents, not 120: shader/pipeline errors surface in the first handful,
   // and on Safari's out-of-process GPU each drain is a blocking IPC — 120 of
   // them after every track switch was three seconds of serialised frames.
@@ -544,7 +544,7 @@ const GLXBackend = (function () {
       + "display:block;opacity:0;pointer-events:none;z-index:1;touch-action:none";
     if (canvas.parentNode) canvas.parentNode.insertBefore(_displayCanvas, canvas.nextSibling);
     else if (document.body) document.body.appendChild(_displayCanvas);
-    _displayCtx = _displayCanvas.getContext("2d", { alpha: false });
+    _displayCtx = _displayCanvas.getContext("2d", { alpha: false, willReadFrequently: true });   // read back by ?gfxdebug=1, as TLX's
     // Keep #game opacity at 1 — hiding it broke element screenshots and
     // visibility waits. The overlay sits on top with opaque putImageData.
     try { Log.info("gfx", "GLX soft-present on"); } catch (_) { /* harness */ }
@@ -677,19 +677,19 @@ const GLXBackend = (function () {
     canvas = canvasEl;
     LightBudget.setSlots(MAX_LIGHTS);   // the cull (frame-lights.js) budgets against the bound backend's slots
     watchCanvasSize();
-    // HeadlessChrome's CDP / Playwright page screenshots race the cleared
-    // backbuffer when preserveDrawingBuffer is false — and even with it true,
-    // SwiftShader often never composites the WebGL layer (readPixels has the
-    // car; chrome_take_screenshot is a black gap). WGX soft-presents under the
-    // same UA sniff; GLX does both: keep the buffer AND blit to a 2D overlay.
-    // Headed players stay on the fast default (no overlay, no PDB).
-    // Playwright's Desktop Chrome *project* spoofs a headed UA (no
-    // HeadlessChrome) but sets navigator.webdriver — arm soft there too so
-    // smoke/capture do not fall through to a minutes-long CDP grab.
+    // HeadlessChrome's CDP / Playwright page screenshots race the cleared backbuffer
+    // without preserveDrawingBuffer — and even with it, SwiftShader often never
+    // composites the WebGL layer (a black gap). GLX keeps the buffer AND blits.
+    // Headed players stay on the fast default (no overlay, no PDB). Playwright's
+    // Desktop Chrome project spoofs a headed UA but sets navigator.webdriver.
+    // SCREENSHOTS = NATIVE (apex26.wgxCapture "0", session then local, the key
+    // WGX/TLX read) keeps the player's path under automation: the real-GPU census.
     const headlessUa = typeof navigator !== "undefined"
       && (/HeadlessChrome/i.test(navigator.userAgent || "")
         || !!navigator.webdriver);
-    _softPresent = headlessUa;
+    let capNative = false;
+    try { capNative = (sessionStorage.getItem("apex26.wgxCapture") || localStorage.getItem("apex26.wgxCapture")) === "0"; } catch (_) { /* AUTO */ }
+    _softPresent = headlessUa && !capNative;
     gl = canvas.getContext("webgl2", {
       // antialias:true makes the BROWSER allocate its own multisampled backbuffer
       // (Apple GPUs round the request up to 4×) — pure waste: the post path
@@ -698,7 +698,7 @@ const GLXBackend = (function () {
       antialias: false,
       alpha: false,
       powerPreference: "high-performance",
-      preserveDrawingBuffer: headlessUa,
+      preserveDrawingBuffer: headlessUa && !capNative,
       // xrCompatible only when navigator.xr (task 20); omit otherwise (Safari/SwiftShader).
       ...(typeof navigator !== "undefined" && navigator.xr ? { xrCompatible: true } : {}),
     });
@@ -2890,6 +2890,7 @@ const GLXBackend = (function () {
     awaitSoftPresent,
     invalidateSoftPresent,
     gpuErrors: () => _glErrors,
+    drainGpuErrors: () => { drainGlErrors("drain"); return _glErrors; },   // explicit (census ~1 Hz), never per present
     gpuFirstError: () => _glFirstError || null,
     // The bound backend's account of itself, one shape on all three (TLX
     // carries the three.js decision tree, WGX the rung). Read by the GOV

@@ -6,7 +6,7 @@ description: "Use when asked for batch headless screenshots or evals of a track 
 # Headless Playwright probing
 
 The parent owns one browser session and serialized captures. Subagents may inspect
-source, plan recipes or review artifacts; they never launch Chromium or Playwright.
+source, plan recipes or review artifacts; they never launch a browser (AGENTS.md rule 10, hook-enforced).
 Write captures under `artifacts/` and return paths plus explicit unverified cells.
 
 ## Prerequisites
@@ -36,7 +36,7 @@ cover most needs; drop to a custom harness for bespoke sweeps.
 #   ./tools/mcp/apex-tools-mcp.sh call apex_eval '{"track":"monza","expr":"a.info()"}'
 #   ./tools/mcp/apex-tools-mcp.sh call apex_shot '{"track":"monza","frac":0.1}'
 #   ./tools/mcp/apex-tools-mcp.sh call apex_hud_shot '{"cam":"cockpit","preset":"clean"}'   # race HUD: shot + boxes + findings (survey-ui-matrix)
-# Plain CLIs (no wrap since 2026-09): tools/car/carshot.mjs, tools/check/quick-validate.mjs
+# Plain CLIs (no MCP wrap): tools/car/carshot.mjs, tools/check/quick-validate.mjs. The wraps cannot pin a backend.
 # One-off: boot the game, evaluate an __apex expression, print JSON.
 node tools/shot/apex-eval.mjs <track> "<expr>"        # `a` = __apex; async ok; --raw for full JSON
 node tools/shot/apex-eval.mjs monaco "a.camera()"
@@ -54,14 +54,6 @@ node tools/shot/apex-capture.mjs tracks  [outdir] [id ...]
 
 # SAME framed scene on GLX vs TLX (+ numeric pixel diff, per-backend console errors):
 node tools/shot/backend-compare.mjs monaco 0.52 park --backends webgl2,three --out artifacts/cmp/before --label tunnel-exit
-
-# ONE Chromium, many angles (soft #game-soft/#view → CDP — never page.screenshot):
-node tools/garage-angles-fetch.mjs --out artifacts/garage-before   # BEFORE pack; do not recapture the grid
-node tools/car/render-car.mjs --team=redbull --preset=spine   # needs :3456
-node tools/shot/garage-angles.mjs --team=redbull --views=spine --out=scratch/renders/garage-spine
-# every axis is a LIST — one boot walks the product (--plan prints it first):
-node tools/shot/garage-angles.mjs --team=redbull,ferrari --part.engine=all --views=hero,side --plan
-node tools/car/carshot.mjs 40 day 2 artifacts/tmp/carshot.jpg  # tiny cropped JPEG
 ```
 
 `garage-angles` boots its own static server (no `:3456` serve). A dead local
@@ -92,10 +84,9 @@ Speed notes: `docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md`.
 `turns:` has no tunnel/bridge entries: read the circuit file's comments (Monaco bore
 racing 0.449-0.524) or `flicker-gate.mjs --list` (sites carry racing/scenery fracs).
 
-**Before/after:** the tools serve the working tree, so shoot A to `artifacts/…/before.png`,
-apply the edit (or `git stash`), shoot B to `…/after.png` with the SAME args, then
-compare. Per renderer (GLX AND TLX) use `backend-compare.mjs` once per side with
-`--out`/`--label` (its default label rounds frac to a percent, so two close fracs collide).
+**Before/after:** the tools serve the working tree: shoot A, apply the edit (or `git stash`), shoot B with
+the SAME args. `backend-compare` diffs GLX vs TLX within one run, not A vs B; compare the two runs'
+PNGs/manifests (`<label>-manifest.json`) yourself. Recipe: [references/recipes.md](references/recipes.md) §Tunnel before/after.
 Car-only: `garage-angles.mjs --against=<git ref>` does both in one run.
 
 ## Motion and profiling (still this harness)
@@ -114,6 +105,7 @@ both references say what the numbers mean before you A/B on them.
 
 - UI/DOM shots, camera fanout, env gotchas, harness skeletons →
   [references/recipes.md](references/recipes.md).
+- Car-only garage/angle grids (`garage-angles`, `garage-angles-fetch`) → [references/car-studio.md](references/car-studio.md).
 - Flicker / z-fighting / shadow shimmer while driving — why headless rAF
   freezes, the `recordVideo` fix, reading `p90` →
   [references/motion-capture.md](references/motion-capture.md).

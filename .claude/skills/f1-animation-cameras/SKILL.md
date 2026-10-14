@@ -13,11 +13,9 @@ measure the transition that prompted the change with a deterministic fixture.
 the local chase-rig contract. Replay transitions use **replay-camera**; camera
 modes and still framing use **playwright-probe** `references/cameras.md`.
 Flyby framing (cover, occlusion, sky, motion) has a no-browser node-VM report:
-`node tools/shot/frame-report.mjs --track monza --frames 6` (MCP `apex_frame_report`).
+`node tools/shot/frame-report.mjs --track monza --frames 6` (MCP `apex_frame_report`); it covers Flyby only, not the director or mode cuts.
 WATCH/HIGHLIGHTS loading the wrong driver or race is **data-hub**. Garage mesh/ownership uses **garage-parts-livery**. The parent owns every
 browser; subagents can inspect fixture, source and recorded evidence.
 
-The local guide is usable without a hosted skill package. External host skill
-resources still require that host's callable adapter; local files do not repair
-an inaccessible connector. `doctor.mjs --json --catalog <catalog.json>` records
-which external capabilities were supplied and which remain unverified.
+Camera file owners and the cut-jump recipe: [references/cut-jump.md](references/cut-jump.md).
+Host-adapter or connector gaps: `node tools/check/doctor.mjs --json --catalog <catalog.json>`.

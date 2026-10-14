@@ -13,6 +13,7 @@ answered now.
 - What still needs a browser
 - Judging garage framing from a capture — read this before calling it a defect
 - garage-angles shots are not reproducible across runs
+- Cover-design guards
 
 ## The colour half is in CI
 
@@ -262,3 +263,34 @@ a comma list for exactly this reason. A cross-run PNG diff is not evidence of
 anything. That mistake already cost one optimisation cycle: a change measured as
 a 43% regression, reverted, and the reverted code then reproduced the same 43%
 against its own baseline.
+
+## Cover-design guards
+
+`cover-legibility.test.mjs` scores whether a design SEPARATES from the cover it
+lands on — the half that varies per team. Whether it lands anywhere worth
+looking is a different question, and you answer it on the cheapest surface that
+can: `node tools/car/spine-station.mjs --team=redbull` measures where every
+flank design's ink actually falls (`v` 0 = shoulder crease, 1 = sidepod line;
+`u` front → rear) in 0.2 s with no browser, `--occlude` adds what the car's own
+tyres and bodywork cover from a garage camera, the `(crown)` row measures the
+crown's OWN flank graphic (the wrap's bull) which no side row can see,
+`--team=all` runs one crown across the grid, `--png` rasterises the flat art,
+and only foreshortening / lighting / racing distance need `tools/shot/garage-angles.mjs`
+(every camera number is a LIST with ranges — `--az=50deg..130deg:9 --target=crown
+--lamp=off,side` — and `--oracle` records per shot how much of the flank mark the
+car hides at that camera; `--plan` warns when a design flag cannot paint) or
+`shot.mjs --team`. Placement/fin gates live in `fin-design.test.mjs`; cover-legibility
+and livery-contrast are separate unit suites — a green fin-design is not proof
+those two are green.
+
+
+**A NUMBER / MARK unreadable on its paint** is `crest-marks.test.mjs` (mark + outline +
+halo per background; the number board and fin badge cases) and the ink pickers in
+`liverytex.js` (`inkOn` → `haloFor`, `drawNumber`, `buildAtlas`'s `ink`/`finNum`/flank
+picks), not `livery-contrast`: `tools/car/livery-contrast.mjs` and its test score only
+panels where one op owns >= 15 % of a region (bands, suns, saddles), so a green run says
+nothing about a glyph. Team-authored fix = `logo3` in `js/data/teams.js`; a picker fix
+touches `liverytex.js` and reruns `crest-marks`, `cover-legibility`, `livery-contrast`,
+`fill-gating`, `team-livery`. The lit check is browser-only (`parts-livery-contrast.spec.js`,
+`garage-angles`). `livery-contrast.mjs --team=X` is a node run (full sweep ~80 s idle; one team
+ran >2 min at loadavg 8): background it, and skip it above loadavg 4.

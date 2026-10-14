@@ -129,14 +129,19 @@ test("R7: the dry-day SSR gate zeroes po.reflect only on a dry day below the 1/6
   const G = gameSource();
   const m = G.match(/^ {2}const _ssrPo = (.+);$/m);
   assert.ok(m, "the gated po.reflect input moved — check this test, not the code");
-  const gate = new Function("_ssrDayGate", "frame", "_ssr", `"use strict"; return ${m[1]};`);
+  const gateT = new Function("_ssrDayGate", "frame", "_ssr", "PerfGov", `"use strict"; return ${m[1]};`);
+  const gate = (armed, frame, ssr, tier = 0) => gateT(armed, frame, ssr, { tier: () => tier });
   const day = { lights: false, wetness: 0 }, night = { lights: true, wetness: 0 }, wet = { lights: false, wetness: 0.4 };
   assert.equal(gate(false, day, 0.07), 0.07, "default OFF: today's value");
   assert.equal(gate(true, day, 0.07), 0, "shipped 0.07: weight 0.0143 < 1/64 -> skipped");
   assert.equal(gate(true, day, 0.074), 0, "the presets' 0.074 -> skipped");
   assert.equal(gate(true, day, 0.1), 0.1, "baku's 0.1 (weight 0.0204) keeps the march");
   assert.equal(gate(true, night, 0.08), 0.08, "dry night neon sheen untouched");
-  assert.equal(gate(true, wet, 0.05), 0.05, "a wet road never gates");
+  assert.equal(gate(true, wet, 0.05), 0.05, "a wet road never gates at tier 0");
+  // Tier >= 2 (phone MEDIUM): a near-dry wet frame whose blend weight cannot reach 1/64 skips the march.
+  assert.equal(gate(false, { lights: false, wetness: 0.02 }, 0.02 * 1.28, 2), 0, "drying road at tier 2: invisible, skipped");
+  assert.equal(gate(false, wet, 0.4 * 1.28, 2), 0.4 * 1.28, "a properly wet road keeps its mirror at tier 2");
+  assert.equal(gate(false, wet, 0.02, 0), 0.02, "tier 0 never applies the weight gate unless armed");
   assert.match(G, /po\.reflect = PerfGov\.tier\(\) >= _ssrTier \? 0 : _ssrPo;/, "the one input every backend reads");
   assert.doesNotMatch(G, /po\.carReflect = [^;]*_ssrPo/, "car-paint SSR is not gated");
   assert.match(G, /const _ssrDayGate = \(\(\) => \{ try \{ return localStorage\.getItem\("apex26\.ssrDayGate"\) === "1"; \}/,
@@ -153,6 +158,7 @@ function bootParticles(wrapOn = true) {
   assert.ok(dpAt > 0 && dpEnd > dpAt, "drawParticles moved — check this test, not the code");
   const disposed = [], recs = [];
   const body = `"use strict";
+    ${H1_USAGE}
     ${fnText("function setRange0(attr, count) {")}
     ${fnText("function ensureStream(slot, verts) {")}
     ${fnText("function wrapStream(slot, arr) {")}
@@ -301,6 +307,8 @@ test("R5: apex26.tlxSkyCache512 is off by default, '1' = mobileTier only, 'all' 
 // R1 (lane TLX-2): the REAL coalescing block of tlx.js (runs, attribute instancing, the sentinel), driven over
 // the REAL tsl-lit material and three r186 on the fake GL, against the per-record draws it replaces.
 const R1 = TLX.slice(TLX.indexOf("      let _coOn = true;"), TLX.indexOf("      function ensureStream(slot, verts) {"));
+// The hunt-4 A-H1 usage knob the runs read (_coRun's ib.setUsage(_instUsage)), from tlx.js too.
+const H1_USAGE = TLX.slice(TLX.indexOf("      let _instUsage = THREE.StreamDrawUsage;"), TLX.indexOf("      function _instColorAttr(imesh, cap) {"));
 async function r1Rig(t, ls = {}) {
   const fg = makeFakeGL();
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
@@ -312,6 +320,7 @@ async function r1Rig(t, ls = {}) {
   const camera = new THREE.PerspectiveCamera(); camera.position.set(0, 0, 5); camera.updateMatrixWorld();
   const env = { soft: false };
   assert.match(R1, /function _coAppend\(geo, w, opts\)/, "the R1 block moved — check this test, not the code");
+  assert.match(H1_USAGE, /^      let _instUsage = THREE\.StreamDrawUsage;[\s\S]*const _instUsageOf = /, "the A-H1 knob moved — check this test, not the code");
   const mk = new Function("THREE", "TSL", "scene", "renderer", "camera", "localStorage", "lit", "env", `"use strict";
     const _instRegistry = [], drawList = []; drawList.n = 0;
     const unlitMat = new THREE.MeshBasicNodeMaterial(), _drawMatMode = 0, vizMat = null;
@@ -329,6 +338,7 @@ async function r1Rig(t, ls = {}) {
       return cache.get(k);
     }
     function buildGeometry() { throw new Error("unused"); }
+    ${H1_USAGE}
     ${R1}
     return { append: _coAppend, drop: _coDrop, runs: _coRuns, stat: _coStat, drawList, resetRecs, materialFor, _instRegistry,
       aiMesh: _aiMesh, aiOf: _aiOf, aiOn: _aiInst, unlitMat,
