@@ -75,12 +75,16 @@ const AiDrive = (function () {
   const _look = [];
   const _lookPool = [];
   function beginLook() { _look.length = 0; }
-  function pushLook(d, k, bank) {
+  // `mu` is bankGrip(bank), passed in by a caller that caches it per node (game.js c._lk); omitted, it is
+  // computed here. brakeTarget reads `mu` and never re-takes the sine (PERF-HUNT-4 B-F4).
+  function pushLook(d, k, bank, mu) {
     let s = _lookPool[_look.length];
-    if (!s) s = _lookPool[_look.length] = { d: 0, k: 0, bank: 0 };
-    s.d = d; s.k = k; s.bank = bank;
+    if (!s) s = _lookPool[_look.length] = { d: 0, k: 0, bank: 0, mu: 1 };
+    s.d = d; s.k = k; s.bank = bank; s.mu = mu === undefined ? bankGrip(bank) : mu;
     _look.push(s);
   }
+  // The bank's lateral-grip factor for the brake planner: a banked node holds 1 + sin(bank)·0.8 of the flat grip.
+  function bankGrip(bank) { return 1 + Math.sin(bank || 0) * 0.8; }
   function endLook() { return _look; }
 
   // High awareness digs out sooner (sees the box); low awareness sits longer.
@@ -488,14 +492,20 @@ const AiDrive = (function () {
     const vs = Math.max(0.05, ctx.pace === undefined ? 1 : ctx.pace);   // vTop()/VMAX
     const V = vs * Math.max(1, ctx.vmax === undefined ? 72 : ctx.vmax), vSq = V * V;
     let vLimSq = Infinity, bVC = 0, bD = 1;
+    const scrub = 2 * brake * 0.85;   // the same ((2·brake)·0.85)·d product as before, so bit-identical
     for (let i = 0; i < samples.length; i++) {
       const s = samples[i];
-      const k = Math.max(Math.abs(s.k || 0), 1e-5);
-      const bankMu = 1 + Math.sin(s.bank || 0) * 0.8;
-      const vC = cornerSpeedEnvelope(k, Math.max(0, latMax * bankMu * grip), V, vSq) * skill * (ctx.diffCorner || 1);
       // Distance budget: can scrub ~0.85·BRAKE over d metres (arcade, not perfect).
       const d = Math.max(s.d || 0, 1);
-      const entrySq = vC * vC + 2 * brake * 0.85 * d;
+      const dSq = scrub * d;
+      // EXACT SKIP (PERF-HUNT-4 B-F4): entrySq = vC² + dSq >= dSq, so once the distance term alone reaches
+      // the tightest budget so far this sample cannot win — skip its corner solve. `continue`, not `break`:
+      // the result stays independent of sample order. A NaN dSq falls through to the original test.
+      if (dSq >= vLimSq) continue;
+      const k = Math.max(Math.abs(s.k || 0), 1e-5);
+      const bankMu = s.mu !== undefined ? s.mu : bankGrip(s.bank);   // pooled samples carry it; hand-built ones may not
+      const vC = cornerSpeedEnvelope(k, Math.max(0, latMax * bankMu * grip), V, vSq) * skill * (ctx.diffCorner || 1);
+      const entrySq = vC * vC + dSq;
       if (entrySq >= 0 && entrySq < vLimSq) { vLimSq = entrySq; bVC = vC; bD = d; }
     }
     // sqrt is monotonic: choose the tightest entry budget before taking it.
@@ -1684,7 +1694,7 @@ const AiDrive = (function () {
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     passHunger, coverConcede, paceEdgeN, pairEdgeN, PASS_EDGE, PASS_EDGE_FULL,
     defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
-    wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
+    wallAiScrub, beginLook, pushLook, endLook, bankGrip, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
     otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, passSideBonus, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,

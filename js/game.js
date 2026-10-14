@@ -1998,6 +1998,9 @@ function gridUp(preOrder) {
   // These are exactly the values update() would have written a tick later, so
   // nothing downstream changes; it just happens before the first frame is shot.
   seedPlayerPose();
+  // Widen the field representations the race would widen mid-lap, here, before anything is optimized: values
+  // unchanged, no deopt storm at the first lap line or pit window (js/race/car-fields.js WARM, PERF-HUNT-4 B-F1).
+  if (typeof CarFields !== "undefined") for (const c of cars) CarFields.warmShape(c);
 }
 // The player's world pose from its grid (s, x) — shared by gridUp and the red
 // flag re-grid. Heading follows the road tangent, not world +Z: `head = 0` is
@@ -4416,6 +4419,17 @@ function quitToMenu() {
 // Reusable rank buffer — refilled and sorted each physics step (up to 5x per
 // rendered frame) so we don't allocate a fresh array via cars.slice() each time.
 const ranked = [], byProgDesc = (a, b) => b.prog - a.prog;   // hoisted: no comparator closure per step
+// AFTER THE FLAG a finished car keeps accruing prog in coast(), so a later but faster finisher out-progressed an
+// earlier one and took its c.rank (the HUD position, the relative board). The finishers' rank SLOTS are handed
+// back out in classification order (RaceControl.finishOrder: laps, then the clock); running cars keep theirs and
+// `ranked` stays in progress order (collisions and traffic scans read it). PERF-HUNT-4 B-F2.
+const _finRanked = [];
+function rankFinishers() {
+  _finRanked.length = 0;
+  for (let i = 0; i < ranked.length; i++) if (ranked[i].finished) _finRanked.push(ranked[i]);
+  _finRanked.sort(RaceControl.finishOrder);
+  for (let i = 0, k = 0; i < ranked.length; i++) if (ranked[i].finished) _finRanked[k++].rank = i + 1;
+}
 // Live weather (setWeatherLive/setTimeOfDay) and the dynamic weather arc live in
 // js/race/weather-arc.js — WeatherArc.create(G, deps), wired as `wxArc` above.
 
@@ -4559,9 +4573,12 @@ function update(dt) {
   ranked.length = 0;
   for (const c of cars) if (!c.retired) ranked.push(c);
   ranked.sort(byProgDesc);
+  let nFin = 0;
   for (let i = 0; i < ranked.length; i++) {
     ranked[i].rank = i + 1;
+    if (ranked[i].finished) nFin++;
   }
+  if (nFin > 1) rankFinishers();
   if (!isPractice() && !isQuali() && !realRace.owns(player)) scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
 
   // Leading human for AiBand catch-up (scripted mode ignores). Once per step.
@@ -5260,13 +5277,13 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // track — only `d` moves. One object per car (c._lk: never restored by the
     // coach's primitive rewind, so key and samples cannot be split), filled
     // contiguously; a different node, line choice or track refills from 0.
-    const lk = c._lk || (c._lk = { node: -1, on: false, track: null, n: 0, v: new Float64Array(AI_LOOK_CAP), a: new Float64Array(AI_LOOK_CAP), b: new Float64Array(AI_LOOK_CAP) });
+    const lk = c._lk || (c._lk = { node: -1, on: false, track: null, n: 0, v: new Float64Array(AI_LOOK_CAP), a: new Float64Array(AI_LOOK_CAP), b: new Float64Array(AI_LOOK_CAP), m: new Float64Array(AI_LOOK_CAP) });   // m: AiDrive.bankGrip(b), cached (PERF-HUNT-4 B-F4)
     if (lk.node !== node0 || lk.on !== onLine || lk.track !== track) { lk.node = node0; lk.on = onLine; lk.track = track; lk.n = 0; }
     let lkI = 0;
     for (let ss = ss0, d = ss0 - c.s; d < look; ss += dsN, d += dsN, lkI++) {
       if (lkI < lk.n) {
         if (lk.a[lkI] > kMax) kMax = lk.a[lkI];
-        AiDrive.pushLook(d, lk.v[lkI], lk.b[lkI]);
+        AiDrive.pushLook(d, lk.v[lkI], lk.b[lkI], lk.m[lkI]);
         continue;
       }
       // Tracks.curvature / pathK / bankAngle all wrap s themselves.
@@ -5276,8 +5293,9 @@ function updateCarBrakePlan(c, dt, ranked, S) {
       // |bank|: the player's bankRoll (below) takes the absolute value, so a
       // signed/adverse bank must not boost the player while it cuts the AI.
       const lkV = onLine ? TrackLine.pathK(track, ss) : kk, lkB = Math.abs(Tracks.bankAngle(track, ss));
-      AiDrive.pushLook(d, lkV, lkB);
-      if (lkI < AI_LOOK_CAP) { lk.v[lkI] = lkV; lk.a[lkI] = ak; lk.b[lkI] = lkB; lk.n = lkI + 1; }
+      const lkM = AiDrive.bankGrip(lkB);
+      AiDrive.pushLook(d, lkV, lkB, lkM);
+      if (lkI < AI_LOOK_CAP) { lk.v[lkI] = lkV; lk.a[lkI] = ak; lk.b[lkI] = lkB; lk.m[lkI] = lkM; lk.n = lkI + 1; }
     }
     _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = Math.min(1, dd.corner * (1 + (c._bandNow || 0)));   // the band lifts corner authority too, never past 1.0: a banded car drives like a better driver, not a faster car
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * trMul * (gmC / gm0); _aiBr.pace = PACE; _aiBr.vmax = VMAX;   // the tread's braking credit (docs/PHYSICS.md §Braking): the planner must stop as the executor below does, or it corners on wets and brakes on slicks
