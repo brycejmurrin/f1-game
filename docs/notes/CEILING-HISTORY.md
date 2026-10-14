@@ -3,6 +3,13 @@
 ## 2026-10-14 — sync #1501 onto ship tip `151cc6569`: absorb game.js +1
 
 `js/game.js` codeLines 5099 → **5100**, lines 9376 → **9377**. Sync of `cursor/hud-announce-stack-577d` onto ship after #1462/#1469/#1486/#1497; ship tip alone grew past both ceilings by 1. Deliberate sync absorb (`ratchets.mjs --update`) — not an OWNED extraction. Also took ship lower on `js/lighting/presets.js` lines 8341 → **8251**.
+## 2026-10-14 — title retention icons (cursor/title-tile-icons-a2a1)
+
+`shellNodes` 2173 → **2181** (+8). CONTINUE and DAILY TIME TRIAL were the last
+title tiles without Lucide `.btn-ico` strokes; the two inline SVGs add eight
+tags (`circle-play` = svg+circle+polygon, `calendar` = svg+3×path+rect). No
+markup elsewhere grew. Deliberate raise so every title door matches the
+play-now / explore / rooms icon pattern.
 
 ## 2026-10-14 — PR #1460 (cursor/hud-adapt-3f9a): the phone HUD sizing pass, two rounds
 
