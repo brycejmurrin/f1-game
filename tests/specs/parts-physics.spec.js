@@ -1750,10 +1750,13 @@ test.describe("Wet compounds are a trade, not a penalty", () => {
 
     for (const w of ["wet", "rain"]) {
       const [slick, inter, full] = t.table[w];
-      expect(full).toBeGreaterThan(inter);
-      expect(inter).toBeGreaterThan(slick);
-      expect(full).toBeLessThanOrEqual(1);   // no wet tyre beats a dry road
+      expect(Math.min(inter, full)).toBeGreaterThan(slick);   // any wet tread beats a slick in the wet
+      expect(Math.max(inter, full)).toBeLessThanOrEqual(1);   // no wet tyre beats a dry road
     }
+    // The inter owns the damp, the full wet the storm (Pirelli; the crossover
+    // against treadFor's 0.72 is pinned in tests/unit/wet-grip-ladder.test.mjs).
+    expect(t.table.wet[1]).toBeGreaterThan(t.table.wet[2]);
+    expect(t.table.rain[2]).toBeGreaterThan(t.table.rain[1]);
 
     // 2. THE ADDITIVE INVARIANT, at its source: the slick column is the old
     //    weather-only gripMult(), value for value. That is why a car on slicks
