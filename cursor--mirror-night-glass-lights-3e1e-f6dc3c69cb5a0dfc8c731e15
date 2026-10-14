@@ -1,1 +1,1 @@
-1791965813	Cursor Agent	perf+fix mirror/frame-lights: js/lighting/frame-lights.js js/render/shared/mirror-pass.js mirror glass env (car-draw/tsl-fx/glx post glass) + tests  [cursor/mirror-night-glass-lights-3e1e; session f6dc3c69cb5a0dfc8c731e15]
+1791969524	Cursor Agent	perf+fix mirror/frame-lights: sync ratchets + CI tip  [cursor/mirror-night-glass-lights-3e1e; session f6dc3c69cb5a0dfc8c731e15]
