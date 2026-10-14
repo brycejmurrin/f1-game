@@ -152,7 +152,8 @@
 #menu-buttons :is(#menu-primary, #menu-explore).balanced-row > .bigbtn,
 #menu-buttons #menu-secondary.balanced-row > #mb-phonepad { min-width: min-content; }
 /* apex9 ~752–768: 5-across rooms wrapped TRACK DESIGNER / HOW TO PLAY
-   onto two lines; WATCH REAL RACES wrapped inside its tile. nowrap +
+   onto two lines; #mb-watch used to say WATCH REAL RACES and wrap inside
+   its tile (now WATCH + .mb-sub BROADCAST / REAL RACES). nowrap +
    min-content on every room is mid-wide only — on 1440 it forced
    PHOTO STUDIO onto a leftover banner and dropped SETTINGS (6%
    title-desktop, CI 37371854254). */
@@ -161,9 +162,10 @@
   #menu-buttons :is(#menu-explore, #menu-secondary) .bigbtn { white-space: nowrap; }
 }
 /* 844×390 compact-wide (menu-baseline phone): the ≤899 min-content rule
-   wraps RACE A FRIEND onto two lines inside the 2×2 cell, WATCH REAL
-   RACES becomes a banner, and GARAGE clips (CI 37469163266). 734×343
-   (min-height 370 misses it) keeps wrap-the-door. */
+   wraps RACE A FRIEND onto two lines inside the 2×2 cell, a long WATCH
+   label became a banner, and GARAGE clips (CI 37469163266). 734×343
+   (min-height 370 misses it) keeps wrap-the-door. #1238's 2×2 explore
+   subgrid + tap floors stay; only the door copy shortened. */
 @media (max-width: 899px) and (min-height: 370px) {
   #menu-buttons :is(#menu-primary, #menu-explore, #menu-secondary).balanced-row > .bigbtn { min-width: 0; }
   #menu-buttons #menu-primary.balanced-row > .bigbtn { white-space: nowrap; }
