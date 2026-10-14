@@ -2,7 +2,7 @@
 
 1. Find it: `node tools/track/float-audit.cjs <id> --why` names each unsupported cluster's emitting
    source line (reports a prop base > `THRESH` above ground that nothing beneath supports; the constants
-   sit at the top of the tool, so a smaller hover is invisible to it). Buried/unsupported prims:
+   sit at the top of the tool; `THRESH` is 1.2 m (`float-audit.cjs:43`), so a 0.5 m hover reads clean). Buried/unsupported prims:
    `ground-audit.cjs <id> --why`.
 2. Read the call in `js/circuits/scenery/<id>.js` (grep the helper name at that frac).
 3. Footing: `place`/`prop`/`anchor` use raycast terrain, else `groundYAt`; `grandstandEx`

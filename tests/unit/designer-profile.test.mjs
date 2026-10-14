@@ -227,3 +227,15 @@ test("span elev: selection API + Up/Down offset every grip in the group by the s
   const flat = plain(commits(h.ev).at(-1).all);
   for (let i = 2; i <= 5; i++) assert.equal(flat[i], 0, "span flattened");
 });
+
+test("destroy removes every input subscription and is idempotent", () => {
+  const h = boot();
+  const removed = [];
+  const remove = h.canvas.removeEventListener;
+  h.canvas.removeEventListener = (type, fn) => { removed.push(type); remove(type, fn); };
+  h.pr.destroy(); h.pr.destroy();
+  assert.deepEqual(removed.sort(), ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'lostpointercapture', 'keydown'].sort());
+  const before = JSON.stringify(h.ev);
+  h.dom.dispatch(h.canvas, { type: "keydown", key: "ArrowUp" });
+  assert.equal(JSON.stringify(h.ev), before);
+});

@@ -218,7 +218,8 @@ const TrackCodec = (function () {
         if (b >> 6 || t >= L.time.length || tr >= L.trees.length || c >= L.crowd.length) return { ok: false, reason: "bounds" };
         design.look = { time: L.time[t], trees: L.trees[tr], crowd: L.crowd[c] };
       }
-      if (flags & FLAG.country) { const n = r.u8(); if (n > 32) return { ok: false, reason: "bounds" }; design.country = new TextDecoder().decode(r.bytes(n)); }
+      // 32 UTF-16 units can occupy up to 96 UTF-8 bytes.
+      if (flags & FLAG.country) { const n = r.u8(); if (n > 96) return { ok: false, reason: "bounds" }; design.country = new TextDecoder().decode(r.bytes(n)); }
       if (flags & FLAG.heights) {
         const heights = [];
         let y = r.zz(), dy = 0;

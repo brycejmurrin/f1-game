@@ -1,7 +1,8 @@
 ## Goal
 <!-- Written when the PR opens, before the work is done; edit only if the ask changes.
      What the user asked for, in their words, and the change this branch makes to
-     deliver it — enough for an agent arriving cold to continue without the chat. -->
+     deliver it — enough for an agent arriving cold to continue without the chat.
+     Picked from the backlog? Add `Closes #<n>` (AGENTS.md §Backlog). -->
 
 ## Plan
 <!-- The LIVING checklist — the first thing a pickup agent reads. Write it when the
