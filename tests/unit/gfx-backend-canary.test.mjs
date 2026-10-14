@@ -6083,7 +6083,7 @@ test("TLX mirror preparation skips software AUTO and off settings, but honours f
   let _mirWarmLazy = false, _mirWarmOwed = false, _mirWarmReq = false, _mirUsed = false;
   const _warmStages = {};
   const want = eval("(function(){" + fnBody(code("js/render/three/tlx.js"), "wantMirrorWarm") + "})");
-  assert.equal(want(), true, "hardware AUTO prepares the race-only passes (apex26.tlxMirWarmLazy=0)");
+  assert.equal(want(), true, "hardware AUTO prepares the race-only passes (the default; apex26.tlxMirWarmLazy=1 opts in to the deferral)");
   _mirWarmLazy = true;
   assert.equal(want(), false, "lazy: hardware AUTO skips the stage at the lights...");
   assert.ok(_mirWarmOwed && _mirUsed && _warmStages.mirrorDeferred, "...and owes it (CPU attribute mirrors kept)");

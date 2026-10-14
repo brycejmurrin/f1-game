@@ -10,7 +10,7 @@
  *           padded Dynamic InstancedMesh (apex26.tlxCasterAttr=0 restores that exactly).
  *   B-F3.1  an AUTO mirror setting skips the program warm's mirror stage (and W1's 4x4 mirror draw) at the lights and
  *           owes it to the first mirrorBegin, which refuses its pass and has present() run it alone, owned like the
- *           entry warm; an explicit ON warms it eagerly; apex26.tlxMirWarmLazy=0 restores the eager stage. */
+ *           entry warm; an explicit ON warms it eagerly; OPT-IN since the B-F3.1 decision: unset (or "0") is the eager stage, apex26.tlxMirWarmLazy=1 defers it. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -263,6 +263,7 @@ const tslice = (from, to) => {
 // bcPip), the sky, the late-lit / FX compiles, the instance registry, the soft-adapter verdicts, and the two call
 // sites — mirrorBegin's refusal order and present()'s warm dispatch, both pinned to the real source below.
 async function mirrorWarmRig(t, { ls = {}, store = {}, soft = false } = {}) {
+  ls = { "apex26.tlxMirWarmLazy": "1", ...ls };   // opt-in since the B-F3.1 decision: these cases exercise the lazy path
   const fg = makeFakeGL(320, 180);
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
@@ -375,8 +376,8 @@ test("B-F3.1: the first mirrorBegin refuses, present() runs the mirror stage alo
   assert.equal(h.R.present(h.OPTS), true, "and nothing more is warmed");
 });
 
-test("B-F3.1: apex26.tlxMirWarmLazy=0, an explicit ON, a PiP ON warm eagerly; OFF and a software GPU owe nothing (today)", async (t) => {
-  for (const [name, opt] of [["knob 0", { ls: { "apex26.tlxMirWarmLazy": "0" } }], ["hudMirror on", { store: { hudMirror: "on" } }],
+test("B-F3.1: the default (unset), apex26.tlxMirWarmLazy=0, an explicit ON, a PiP ON warm eagerly; OFF and a software GPU owe nothing (today)", async (t) => {
+  for (const [name, opt] of [["default (unset)", { ls: { "apex26.tlxMirWarmLazy": null } }], ["knob 0", { ls: { "apex26.tlxMirWarmLazy": "0" } }], ["hudMirror on", { store: { hudMirror: "on" } }],
     ["bcPip on", { store: { bcPip: "on" } }]]) {
     const h = await mirrorWarmRig(t, opt);
     await h.entry();
@@ -417,7 +418,7 @@ test("B-F3.1: tlx.js wiring — mirrorBegin's gate after the in-flight refusal, 
   assert.ok(mb.indexOf("mirrorWarmGate()") < mb.indexOf("prepareMirrorTarget(w, h)"));
   assert.match(TLX, /\n\s*if \(!_warmPending && !_deviceLost\) \{ if \(_warmRequested\) startProgramWarm\(opts\); else if \(_mirWarmReq\) startMirrorWarm\(opts\); \}\n\s*if \(_warmPending\) return;/,
     "present() starts it where it starts the entry warm, and paints nothing while it runs");
-  assert.match(TLX, /let _mirWarmLazy = true;\s*try \{ _mirWarmLazy = localStorage\.getItem\("apex26\.tlxMirWarmLazy"\) !== "0"; \}/);
+  assert.match(TLX, /let _mirWarmLazy = false;\s*try \{ _mirWarmLazy = localStorage\.getItem\("apex26\.tlxMirWarmLazy"\) === "1"; \}/, "opt-in: unset is the eager stage");
   assert.equal((TLX.match(/localStorage\.getItem\("apex26\.tlxMirWarmLazy"\)/g) || []).length, 1, "read once");
   assert.match(TLX, /mirrorDeferred: _warmStages\.mirrorDeferred, mirrorLazy: _warmStages\.mirrorLazy/, "memState().warm reports both");
   // The mirror stage is ONE function shared by both warms (no drift between the eager and the deferred compiles).

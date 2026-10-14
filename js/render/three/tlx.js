@@ -1208,9 +1208,11 @@ const TLX = (function () {
       // paints nothing and game.js pauses while warming()), so no frame shows the mirror before its programs exist.
       // A cockpit camera at the lights takes it as a second warm inside mirror-pass's race preparation. _mirUsed
       // still latches here, so the CPU attribute mirrors are kept exactly as an eager warm keeps them. Per race:
-      // every entry warm re-decides. apex26.tlxMirWarmLazy=0 restores the eager stage.
-      let _mirWarmLazy = true;
-      try { _mirWarmLazy = localStorage.getItem("apex26.tlxMirWarmLazy") !== "0"; } catch (_) { /* no storage: lazy */ }
+      // every entry warm re-decides. OPT-IN (apex26.tlxMirWarmLazy=1): the default camera is helmet, an onboard view
+      // that shows the mirror at the lights, so the default player saves nothing and a chase player who switches
+      // onboard mid-race would pay the stage as a pause; the eager stage stays the default until a census measures it.
+      let _mirWarmLazy = false;
+      try { _mirWarmLazy = localStorage.getItem("apex26.tlxMirWarmLazy") === "1"; } catch (_) { /* no storage: eager */ }
       let _mirWarmOwed = false, _mirWarmReq = false;
       function wantMirrorWarm() {
         _mirWarmOwed = false; _mirWarmReq = false; _warmStages.mirrorDeferred = false;
