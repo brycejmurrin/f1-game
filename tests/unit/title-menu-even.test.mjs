@@ -186,6 +186,8 @@ test("CONTINUE + Daily stack the save line under the label, not beside it", () =
   // "2026 · ROU…" / "MONTREA…". Compact-wide already stacked. An
   // unscoped column flex also moved 1440 title-desktop.png (6%,
   // CI 37371854254) — keep the stack under 1366px only.
+  // Label-over-sub lives on `> span` (column). The button stays row so the
+  // leading .btn-ico sits beside that stack instead of above it.
   const menus = readCssSource("css/menus.css");
   assert.match(
     menus,
@@ -194,8 +196,8 @@ test("CONTINUE + Daily stack the save line under the label, not beside it", () =
   );
   assert.match(
     menus,
-    /#menu-retention \.bigbtn \{[^}]*flex-direction:\s*column/,
-    "retention chips stack label over sub under that cap",
+    /#menu-retention \.bigbtn > span \{[^}]*flex-direction:\s*column|#menu-retention \.bigbtn > span,\s*\n?#menu-primary \.bigbtn > span,\s*\n?#menu-explore \.bigbtn > span \{[^}]*flex-direction:\s*column/,
+    "retention chips stack label over sub via the inner span column",
   );
   assert.match(
     menus,
@@ -348,6 +350,19 @@ test("title explore doors carry leading .btn-ico like the play-now row", () => {
   // TIME TRIAL / etc. had Lucide strokes — desktop title looked uneven.
   const html = read("index.html");
   for (const id of ["mb-watch", "mb-practice", "mb-photo", "mb-garage"]) {
+    assert.match(
+      html,
+      new RegExp(`<button id="${id}"[^>]*>\\s*<svg class="btn-ico"`),
+      `#${id} opens with a leading .btn-ico`,
+    );
+  }
+});
+
+test("title retention doors carry leading .btn-ico like the play-now row", () => {
+  // CONTINUE / DAILY TIME TRIAL were the last title tiles without Lucide
+  // strokes while CAREER / RACE / explore / rooms all had them.
+  const html = read("index.html");
+  for (const id of ["mb-continue", "mb-daily"]) {
     assert.match(
       html,
       new RegExp(`<button id="${id}"[^>]*>\\s*<svg class="btn-ico"`),

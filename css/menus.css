@@ -44,11 +44,16 @@
    returning save can show ROUND + circuit (CI 37371854254 leaked
    column flex into the 1440 golden — 6%). Compact-wide already stacks. */
 @media (max-width: 1366px) {
+  /* Icon beside the label stack. The span (not the button) is column so
+     CONTINUE / DAILY keep label-over-sub; column on the button would park
+     .btn-ico above the text and grow height. */
   #menu-retention .bigbtn {
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
     gap: 0.15em;
   }
-  #menu-retention .bigbtn > span { max-width: 100%; }
+  #menu-retention .bigbtn .btn-ico { margin: 0; flex: none; }
+  #menu-retention .bigbtn > span { max-width: 100%; min-width: 0; }
   #menu-retention .mb-sub {
     overflow: visible;
     text-overflow: clip;
@@ -238,7 +243,7 @@
   #menu-buttons :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn:hover::before { opacity: 1; }
 }
 #menu-buttons :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn:active::before { opacity: 1; }
-#menu-buttons :is(#menu-primary, #menu-explore) .bigbtn .btn-ico { color: color-mix(in oklab, var(--red) 88%, var(--text)); }
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn .btn-ico { color: color-mix(in oklab, var(--red) 88%, var(--text)); }
 /* The hero keeps its red and its resting glow, but its hover heat is now the
    same opacity fade: the hot gradient lives on ::before, the face stays on
    --grad-primary, and box-shadow no longer TRANSITIONS (a gradient never
@@ -881,10 +886,28 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
    height after boot (docs/PERF-FINDINGS.md 4a). Tight leading and a quarter-gap of
    block padding keep the cost to ~8 own px over the one-line chip. */
 :where(body[data-shape="wide"][data-density="compact"]) #menu-retention .bigbtn {
-  flex-direction: column; gap: 0;
+  /* Row: .btn-ico beside the label/sub stack (span is column). Column here
+     used to be a no-op with one child; with icons it would grow tile height. */
+  flex-direction: row; align-items: center; gap: 0;
   padding-block: calc(var(--gap) * 0.25);
 }
-:where(body[data-shape="wide"][data-density="compact"]) #menu-retention .bigbtn > span { max-width: 100%; line-height: 1.15; }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-retention .bigbtn > span { max-width: 100%; min-width: 0; line-height: 1.15; }
+/* Live-home `padding: var(--gap)` outranks the :where rule above — pin icon
+   budget here so DAILY TIME TRIAL (~153px) still fits one line on a half-width
+   chip beside CONTINUE (183 − 8 pad − 14 ico ≈ 161). */
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn {
+  flex-direction: row; align-items: center; gap: 0;
+  /* letter-spacing makes DAILY TIME TRIAL ~165px; 183−4 pad−12 ico ≈ 167.
+     Token pad (not raw px) so the rawSpacing ratchet stays flat. */
+  padding-inline: calc(var(--gap) / 8);
+}
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn .btn-ico {
+  margin: 0; flex: none; width: 0.6em; height: 0.6em;
+}
+/* Desktop live-home: drop .btn-ico's 0.5em margin so the label keeps width. */
+html[data-home-live] :where(body[data-shape="wide"]:not([data-density="compact"])) #overlay #menu-retention .bigbtn .btn-ico {
+  margin: 0; flex: none;
+}
 
 /* HIGH UI SIZE ON A CONSTRAINED VIEWPORT
    --------------------------------------
