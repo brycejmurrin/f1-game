@@ -343,18 +343,21 @@ const GLXChunked = (function () {
       // that is not a multiple of 4. ANGLE-Metal's kIndexBufferOffsetAlignment
       // is 4, so convertIndexBuffer copies the WHOLE buffer once per (buffer,
       // modulo) and draws those chunks from the copy (+232/+235 KB on montreal,
-      // plus a first-draw GPU compute conversion while a pass is open). Pad
-      // each chunk that would start on an odd index with one degenerate
-      // triangle (0,0,0) so every range's byteOffset is 4-byte aligned. A
-      // zero-area triangle draws no pixels. Uint32 is already 4-byte. Default
-      // ON; apex26.glxChunkAlign="0" restores the old unaligned ranges.
+      // plus a first-draw GPU compute conversion while a pass is open). After
+      // any chunk that would leave the next start on an odd index, append one
+      // degenerate triangle (0,0,0) to THIS range so every byteOffset is
+      // 4-byte aligned AND neighbours stay contiguous. The plain drawElements
+      // merge sums counts from the first offset (no gap check); a pad sitting
+      // BETWEEN ranges made that path submit different indices than multi-draw.
+      // A zero-area triangle draws no pixels. Uint32 is already 4-byte.
+      // Default ON; apex26.glxChunkAlign="0" restores the old unaligned ranges.
       let align = true;
       try { if (localStorage.getItem("apex26.glxChunkAlign") === "0") align = false; } catch (_) { /* no storage: align */ }
       const needAlign = !big && align;
       let total = 0;
       buckets.forEach((bk) => {
-        if (needAlign && (total % 2 !== 0)) total += 3;   // pad to even index
         total += bk.idx.length;
+        if (needAlign && (total % 2 !== 0)) total += 3;   // pad after this chunk
       });
       const ibo = gl.createBuffer();
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
@@ -363,16 +366,17 @@ const GLXChunked = (function () {
       let off = 0;                             // running offset, in INDICES
       const pad = needAlign ? new Uint16Array([0, 0, 0]) : null;
       buckets.forEach((bk) => {
-        if (needAlign && (off % 2 !== 0)) {
-          gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, off * BPI, pad);
-          off += 3;
-        }
+        const start = off;
         const arr = new IndexArray(bk.idx);
         bk.idx = null;   // uploaded below — drop the growable JS array now so buckets
                          // don't all stay resident while the rest are converted
         gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, off * BPI, arr);
-        chunks.push({ byteOffset: off * BPI, count: arr.length, indexType, min: bk.mn, max: bk.mx });
         off += arr.length;
+        if (needAlign && (off % 2 !== 0)) {
+          gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, off * BPI, pad);
+          off += 3;
+        }
+        chunks.push({ byteOffset: start * BPI, count: off - start, indexType, min: bk.mn, max: bk.mx });
       });
       gl.bindVertexArray(null);
       core.invalidateVAO();   // keep glx.js's VAO bind cache in sync with the direct bind above

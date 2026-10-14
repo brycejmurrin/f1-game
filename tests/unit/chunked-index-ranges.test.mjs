@@ -454,7 +454,9 @@ test("the per-chunk merge only extends a run under all four guards", () => {
 
 // C-P7: Uint16 chunk ranges must start on a 4-byte boundary so ANGLE-Metal
 // does not convert the whole index buffer on first draw. Pads are degenerate
-// (0,0,0) triangles that draw nothing; the real indices are unchanged.
+// (0,0,0) triangles appended to the previous range (so neighbours stay
+// contiguous for drawElements merge / multi-draw); the real indices are
+// unchanged.
 test("C-P7: Uint16 chunk ranges start on 4-byte boundaries when aligned", () => {
   const gl = makeGL();
   const C = loadChunked(gl, true);   // apex26.glxChunkAlign=1
@@ -462,19 +464,28 @@ test("C-P7: Uint16 chunk ranges start on 4-byte boundaries when aligned", () => 
   assert.ok(mesh.chunks && mesh.chunks.length > 1);
   if (mesh.indexType === gl.UNSIGNED_INT) return;   // Uint32 is already aligned
   const bpi = 2;
+  let expect = 0;
   for (const ch of mesh.chunks) {
     assert.equal(ch.byteOffset % 4, 0, "Uint16 chunk byteOffset must be a multiple of 4");
     assert.equal(ch.count % 3, 0);
+    assert.equal(ch.byteOffset, expect * bpi, "aligned ranges must stay contiguous — a gap breaks drawElements merge");
+    expect += ch.count;
   }
-  // The buffer may be larger than the source because of pads; the ranges
-  // themselves still hold only the original indices.
+  assert.equal(expect, mesh.count, "aligned ranges must still tile the whole buffer");
+  // Pads live at the end of a range whose unpadded count was odd. Strip those
+  // trailing (0,0,0) triples and the remaining sequence is the source.
   const all = readIndices(gl, mesh);
   const src = makeGrid(6, 6, 30);
   const srcIdx = Array.from(src.idx);
   const got = [];
   for (const ch of mesh.chunks) {
     const from = ch.byteOffset / bpi;
-    for (let i = from; i < from + ch.count; i++) got.push(all[i]);
+    let n = ch.count;
+    if (n >= 3 && n % 2 === 0 &&
+        all[from + n - 1] === 0 && all[from + n - 2] === 0 && all[from + n - 3] === 0) {
+      n -= 3;
+    }
+    for (let i = from; i < from + n; i++) got.push(all[i]);
   }
   assert.deepEqual(got, srcIdx, "alignment pads must not alter the real index sequence");
 });
