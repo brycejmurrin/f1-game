@@ -21,11 +21,12 @@ multiplies `otFireRate`, lowers `otWant`'s margin, latches early (`latchLate`),
 stretches `runExtra`, and lifts `towGain` on the straight. Edge is the larger of
 `paceVmax` and scripted pace (`tierV×skill`, same ratio as `ai-tactics` stuck
 dpace) via `pairEdgeN`. The defender's **coverConcede** (edge × awareness ×
-experience) scales `defendPull` down and returns 0 past ~0.80 so `defendOnce`
-does not spend the one-move-per-straight on a lost cover — measured pre-fix as
-covers.vsAI ~1000 with ~1 % pairs stuck 100–125 s (monza 3×3, 2026-10-14). ERS
-`wantBoost` catch also arms on the same pace edge when live speeds are
-queue-levelled. Streets ignore every knob above. Unit pins:
+experience; AI-AI only — a human chaser must keep the cover so `humanYieldT`
+still sees an intruding lean) scales `defendPull` down and returns 0 past ~0.80
+so `defendOnce` does not spend the one-move-per-straight on a lost cover —
+measured pre-fix as covers.vsAI ~1000 with ~1 % pairs stuck 100–125 s (monza
+3×3, 2026-10-14). ERS `wantBoost` catch also arms on the same pace edge when
+live speeds are queue-levelled. Streets ignore every knob above. Unit pins:
 `tests/unit/ai-pass-complete.test.mjs`.
 
 ## Lap-1 / Turn-1 melee (cars racing each other into contact)

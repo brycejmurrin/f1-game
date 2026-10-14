@@ -176,8 +176,12 @@ const AiDrive = (function () {
   }
   // 0..1: defender yields the cover against a clearly faster attacker.
   // Awareness / experience decide how soon they recognise they are beaten.
+  // AI-AI only: a human chaser must not zero the cover — that drops the AI
+  // onto a held lane inside the clear gap, where humanYieldT arms at HOLD_RATE
+  // only, and "opens the gap itself" overshoots 1.2 s (ai-racecraft-vm).
   function coverConcede(ctx) {
     if (!ctx || ctx.street) return 0;
+    if (ctx.other && ctx.other.human) return 0;
     const edgeN = pairEdgeN(ctx.chaserVmax, ctx.ourVmax, ctx.chaserPace, ctx.ourPace, ctx.vTop);
     if (!edgeN) return 0;
     const t = ctx.traits || {};

@@ -62,6 +62,12 @@ test("coverConcede: streets 0; faster chaser concedes; awareness/experience rais
   const aceC = A.coverConcede({ street: false, traits: ace, vTop, ourVmax: them, chaserVmax: us });
   assert.ok(dullC > 0 && aceC > dullC, `aware/exp concede more: dull=${dullC} ace=${aceC}`);
   assert.ok(aceC >= 0.80, `ace against 1.2 % faster zeros the cover: ${aceC}`);
+  // Human chaser: keep the cover so humanYieldT still sees an intruding lean
+  // (ai-racecraft-vm "opens the gap itself").
+  assert.equal(A.coverConcede({
+    street: false, traits: ace, vTop, ourVmax: them, chaserVmax: us,
+    other: { human: true, x: 1.4 },
+  }), 0, "human chaser never cover-concedes");
 });
 
 test("defendPull: cover concede zeros the pull against a clearly faster attacker", () => {
