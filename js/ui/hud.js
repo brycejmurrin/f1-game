@@ -607,7 +607,11 @@ function laneSafeInsets(root) {
   }
   return (_laneSafe = { sal, sar });
 }
+// A card the player MOVED (MOVE & SIZE / ARRANGE HUD x or y) is out of the slots and the lane:
+// css/hud.css anchors it at a fixed point so the offset is where it sits (body[data-radio-placed]).
+const radioPlaced = () => { const b = document.body; return !!(b && b.hasAttribute && b.hasAttribute("data-radio-placed")); };
 function announceLane(root) {
+  if (radioPlaced()) { const a = document.getElementById("announce"); if (a && a.toggleAttribute) a.toggleAttribute("data-lane-collapsed", false); return; }
   const t = _hudTop ? laneRect(_hudTop) : null;
   const W = vpW(), H = vpH() || 0;
   const y0 = t ? t.bottom : 0, mid = W / 2;
