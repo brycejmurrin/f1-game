@@ -17,9 +17,11 @@ Load this when the engine is silent, pitch is flat, or a mute toggle did the
 |---|---|
 | Engine (sample core) | `assets/sfx/f1_engine.mp3` looped and pitched via `playbackRate` (`f1_rev.mp3` is on disk but nothing loads it) |
 | Engine (synth fallback) | Three detuned oscillators (saw×2 + square) through a speed-tracking lowpass until samples decode |
-| Pitch curve | sample core: `(RATE_IDLE·idle + RATE_SPAN·revRange·rev^curve)·(1 + 0.04·boost·boostPitch)·rateTrim·pitch·(1 + 0.05·revFlare)`, `RATE_IDLE` 0.17, `RATE_SPAN` 0.5115 (`engine.js`); no gear term, so one rev is one note in every gear (the synth fallback does use per-gear `gIdle`/`gSpan`). `rev` is `rpmFor(gear, speed)` normalised, so it pins at 1 in the top of each gear. `GameAudio.rate()` reads the result |
+| Pitch curve | sample core: `(RATE_IDLE·idle + RATE_SPAN·revRange·rev^curve)·(1 + 0.04·boost·boostPitch)·rateTrim·pitch·(1 + 0.05·revFlare)` (`baseRate()` in `engine.js` holds `RATE_IDLE` / `RATE_SPAN`) |
+| Pitch, per gear | The sample core has no gear term, so one rev is one note in every gear (the synth fallback does use per-gear `gIdle`/`gSpan`). `rev` is `rpmFor(gear, speed)` normalised, so it pins at 1 in the top of each gear. `GameAudio.rate()` reads the result |
 | Gravel | Sine at the crank rate (`f0/3`, 18–140 Hz) into `engGain.gain`; depth `(1-rev)²` × GRAVEL trim; `gravelDepth()` / `gravelHz()` |
-| Rev limiter | 13 Hz square into `engGain.gain` above 98.5% revs, and into the core's detune for the pitch sag; DEPTH / RATE / PITCH SAG trims; `limiterDepth()` / `limiterHz()` / `limiterCents()`. In TOP gear the cut is a 0.5 s burst fading over 0.5 s to a steady note (`limiterHeld()` is the clock) — a car pinned at top speed has no gear to shift into. Below top gear it never fades |
+| Rev limiter | 13 Hz square into `engGain.gain` above 98.5% revs, and into the core's detune for the pitch sag; DEPTH / RATE / PITCH SAG trims; `limiterDepth()` / `limiterHz()` / `limiterCents()` |
+| Limiter, top gear | The cut is a 0.5 s burst fading over 0.5 s to a steady note (`limiterHeld()` is the clock) — a car pinned at top speed has no gear to shift into. Below top gear it never fades |
 | Turbo whine + wastegate | Sine ~1500 Hz tracking rev; a falling hiss once per lift after ≥0.5 s under load (`wastegateState()`) |
 | MGU-K harvest / ERS deploy | Filtered noise when decelerating (HARVEST trim) / triangle whine while deploying + the deploy whoosh (BOOST level) and a rev lift under deploy (BOOST rev lift) |
 | Brakes | Bandpass noise, gain = deceleration × speed; `brakeLevel()` |
@@ -28,7 +30,8 @@ Load this when the engine is silent, pitch is flat, or a mute toggle did the
 | Wind / tyre screech / sub | Speed² bandpass noise / slip-driven bandpass noise / sine an octave under `f0` |
 | Collision thud | White-noise burst scaled to impact `dv` |
 | Rivals / space | Panned, Doppler-shifted voice pool / generated-IR convolver per venue (desktop only) |
-| Team radio FX | `radioSting(channel, seconds)` — key click, a 300 Hz–3.4 kHz hiss bed held for the card's life, squelch tail. Fired from `showAnnounce` (race/count only), channel from `RadioVoice.SPEAKERS`; `coach` is deliberately silent. Level `setRadioFx` / `radioFxLevel()`, store `apex26.radioFx`. NOT a filter on the voice — speechSynthesis has no node in this graph and no browser exposes its output |
+| Team radio FX | `radioSting(channel, seconds)` — key click, a 300 Hz–3.4 kHz hiss bed held for the card's life, squelch tail. Fired from `showAnnounce` (race/count only), channel from `RadioVoice.SPEAKERS`; `coach` is deliberately silent. |
+| Team radio level | `setRadioFx` / `radioFxLevel()`, store `apex26.radioFx`. NOT a filter on the voice — speechSynthesis has no node in this graph and no browser exposes its output |
 | Music | CC0 tracks (`assets/music/`) via `startMusic()` / `stopMusic()`. Desktop decodes each to PCM (2 cached); a phone STREAMS through one `<audio>` → `createMediaElementSource` → `musicGain` (`streamMusic()` in `soundtrack.js`; `localStorage apex26.musicStream` `"1"`/`"0"` overrides for an A/B). `sw.js` leaves `Range` music requests to the network (Safari needs 206) |
 
 Every tune knob is a constant multiplier, never a function of rev: pitch stays
@@ -36,7 +39,7 @@ monotonic in rev by construction. `__apex.audio()` / `audioTune()` are the
 hooks; `tests/unit/audio-tune.test.mjs` sweeps every profile and slider end.
 
 Signal path: engine/SFX → `sfxBus` → `master` → destination; music →
-`musicGain` → `master`. Muting music does **not** silence the engine.
+`musicGain` → `master`.
 
 ## In-race mute (not `#soundbtn`)
 
@@ -86,8 +89,10 @@ GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);
 6. Flat only at top speed: that is `rev` pinned at 1 (`rpmFor` caps at
    `MAX_RPM·1.04`, `revFrac` is clamped), not a bug in the curve. Above 98.5%
    revs the limiter chops, and in top gear it fades to a steady note after
-   `LIM_HOLD` 0.5 s + `LIM_FADE` 0.5 s (`limiterHeld()`, `limiterDepth()`). Read
-   `GameAudio.rate()` at two speeds in top gear: equal = pinned by design. To
+   `LIM_HOLD` + `LIM_FADE` (`limiterHeld()`, `limiterDepth()`). Read
+   `GameAudio.rate()` (or `__apex.audio().rate`) at two speeds in top gear:
+   equal = pinned by design. `apex_eval` boots Chromium (parent only); the
+   Node VM has no AudioContext, so `rate()` is 0 there. To
    widen the top, raise `__apex.audioTune({ revRange })` or bend `curve`.
 
 The AudioContext itself is a private var — not exposed. Use

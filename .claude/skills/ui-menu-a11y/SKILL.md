@@ -18,11 +18,9 @@ on top, and route Escape/back through the same button path a player would use.
 - A cramped / clipped / cut-off single screen, a short landscape phone, UI scale:
   this skill owns the diagnosis and fix; **css-play** only supplies the edit loop.
 
-Do **not** use for in-race driving input (unless a menu leaks keys) —
-**input-controls**. Data-hub tab logic → **data-hub**. Renderer/canvas
-visuals outside menu/HUD layout are out. Whole-matrix review →
-**survey-ui-matrix**. One-screen CSS try-on → **css-play**. Restructure
-decisions → **css-play** (`references/restructure.md`).
+Not for in-race driving input, hub tab logic, whole-matrix review or restructure:
+see the description for the owning skills (restructure: css-play
+`references/restructure.md`).
 
 ## Quick Reference
 
@@ -39,14 +37,15 @@ decisions → **css-play** (`references/restructure.md`).
 ```sh
 node tools/ci/pick-tests.mjs js/ui/layers.js js/ui/modal.js css/components.css
 node --test tests/unit/menu-a11y-audit.test.mjs   # Escape/door/layer pins, no browser
-node tools/ci/test-bg.mjs ui               # BROWSER (10-40 min): one group, background
+npm test -- tests/specs/menu-keyboard.spec.js   # BROWSER, background (AGENTS.md rules 4-5); also ui-button-touch, ui-scale
+node tools/ci/remote-group.mjs ui          # the whole `ui` group, on the PUSHED branch
 node tools/ci/test-bg.mjs gallery          # BROWSER: ui-audit captures — read the PNGs
 npm run test:tooling-fast
 ```
 
 `tests/specs/ui-audit.spec.js` asserts nothing — it is a capture harness.
 Deep refs: `docs/research/PLATFORM-INPUT-NOTES.md`,
-`../../../docs/notes/ARCHITECTURE-REVIEW.md`.
+`docs/notes/ARCHITECTURE-REVIEW.md` (repo root).
 
 ## Load on demand
 

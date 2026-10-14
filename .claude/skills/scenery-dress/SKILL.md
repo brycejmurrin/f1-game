@@ -6,7 +6,7 @@ description: "Use when asked to add/edit track scenery, dress a circuit, add bui
 # Dress a circuit's scenery
 
 `buildProps` (`js/track/scenery/*.js`, orchestrated by `js/track/tracks.js`;
-the 114-member `api` surface is frozen by
+the `api` surface is frozen by
 `tests/unit/scenery-api-contract.test.mjs`) calls `def.scenery(api)` then
 merges one mesh. Full reference: `docs/SCENERY-API.md`.
 
@@ -18,7 +18,7 @@ Node-based helpers take `(k, side, dist, …)`:
 - `dist` — metres **beyond the road edge**.
 - `s` — lap fraction `0 → 1` where helpers take it.
 
-**Forgetting `out` is the #1 crash** — destructure it from `api` first.
+Destructure `out` from `api` first; `verify-track` catches a `scenery()` throw.
 
 `K(s)` is AUTHORED-frame: pass it straight through, never pre-shift it. On a
 shifted circuit, wrapped helpers and `along()` callbacks both expect authored
@@ -44,7 +44,7 @@ shifted circuit, wrapped helpers and `along()` callbacks both expect authored
 
 ```sh
 node tools/track/verify-track.cjs <id>     # must print OK; catches scenery() THROW
-node tools/track/float-audit.cjs <id>       # node-VM, ~1 s: floating props; "clean" = none
+node tools/track/float-audit.cjs <id>       # node-VM, ~1 s: floating props; `--why` names the emitting source line
 node tools/track/ground-audit.cjs <id> --why  # ~12 s: buried / unsupported prims (--all --gate = ratchet)
 node tools/track/clip-audit.cjs <id> --why    # ~3 s: prop-vs-prop clipping; `--all --gate` = tools/track/clip-baseline.json
 node tools/track/props-tris.cjs <id>          # ~3 s: post-strip props tris; tests/unit/props-tri-ratchet.test.mjs fails past +0.5 %
@@ -58,12 +58,12 @@ accuracy / floating-tree survey → **survey-track** (Montreal already ships
 
 ## Load on demand
 
+- Floating/sunk prop fix (find the emitter, footing, engine-fix gates) →
+  [references/float-fix.md](references/float-fix.md).
 - Rejection / `rejBox` / `RAW.*` / vertex budget / trees vs `blockAt` →
   [references/rules.md](references/rules.md).
 - `TrackGraph.instance` migration, `apex_graph_parity` / `BASE=` parity,
   `batches()` / `bakeOnly`, `__apex.trackGraph()` stats →
   [references/instancing.md](references/instancing.md).
 
-Node helpers use `(k,side,dist,...)`; `grandstand` / `grandstandEx` instead take
-a lap fraction `(s,side,...)`, range helpers take fraction endpoints, and raw
-primitives take world coordinates. Use `api.K(s)` for wrapped node indices.
+`grandstand` / `grandstandEx` take a lap fraction `(s,side,...)`; range helpers take fraction endpoints; raw primitives take world coordinates.

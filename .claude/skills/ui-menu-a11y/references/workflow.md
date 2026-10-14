@@ -14,7 +14,8 @@ geometry bug.
    place, inspect `UiLayers.top()` / `UiLayers.anyOpen()` before touching
    individual modules. New full-screen overlays must be added to the internal
    `DEFS` array in `js/ui/layers.js` (only `LAYER_IDS` is exported — do
-   not assign `UiLayers.DEFS`).
+   not assign `UiLayers.DEFS`). Modal rank comes from managed opening order,
+   never `querySelectorAll` document order.
 
 2. **Use the declared close door.** For real dialogs, let `TopModal` mirror
    `hidden` to `showModal()`/`close()`. Add
@@ -49,7 +50,7 @@ geometry bug.
    pointer only; use `any-pointer` when the question is "does any attached
    input exist?"
 
-8. **Verify.** `npm run test:tooling-fast`, then `node tools/ci/test-bg.mjs ui`.
+8. **Verify.** `npm run test:tooling-fast`, then the one spec for the surface (`menu-keyboard`, `ui-button-touch`, `ui-scale`) or `remote-group.mjs ui` on the pushed branch (AGENTS.md verification table).
    If JS/CSS changed, `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump) before commit.
 
 ### Pause settings overlay
@@ -59,15 +60,22 @@ Escape routes through `data-esc-close="pm-settings-close"` (browser ladder in
 `tests/specs/ui-button-touch.spec.js`). Scroll region:
 `#pmsettings-inner .sheet-body.pane`.
 
-Back-stack (Escape/BACK goes to the wrong screen): Escape -> `TopModal`
-`cancel`/`onEscape` (`js/ui/modal.js`) -> clicks `#pm-settings-close` ->
-`js/game.js` `if (settingsNav.back()) closeSettings()`. `SettingsNav.back()`
-(`js/ui/settings-tabs.js`) pops a page to `home` and returns `false`; only on
-`home` does it return `true`, and `closeSettings()` then unhides `#pausemenu`
-**only if `paused`** (title-menu settings, `#mb-settings`, has no pause menu to
-return to, so it closes to the title). The pause key takes the same path via
-`Input.init` `onPause` (`js/ui/platform-session.js` `initInput`). Suspect `paused` / `state` first, then whether
-`hidden` on `#pmsettings` was flipped by something other than the door.
+Back-stack (Escape/BACK goes to the wrong screen or closes too much). Suspects in order:
+1. Held key: `onEscape` (`js/ui/modal.js`) swallows `e.repeat`, and `Input` ignores
+   repeats for the pause switch, so a held Escape is one press. A repeat that got
+   through walks BACK -> close -> RESUME.
+2. Nested dialog: `topModalInside(layer)` makes the layer stand aside so an inner
+   `showModal()` dialog (Data Hub telemetry popup) cancels itself; if the whole hub
+   closes, that inner dialog is not a `:modal` inside the layer.
+3. The chain: `TopModal` `cancel`/`onEscape` -> clicks the `data-esc-close` control
+   (`#pm-settings-close`) -> `js/game.js` `if (settingsNav.back()) closeSettings()`.
+   `SettingsNav.back()` (`js/ui/settings-tabs.js`) pops a page to `home` and returns
+   `false`; only on `home` does it return `true`, and `closeSettings()` unhides
+   `#pausemenu` **only if `paused`** (title settings, `#mb-settings`, closes to the
+   title). The pause key takes the same path via `Input.init` `onPause`
+   (`js/ui/platform-session.js` `initInput`).
+4. Then `paused` / `state`, and whether `hidden` on `#pmsettings` was flipped by
+   something other than the door.
 Node-level pins (no browser, run singly):
 `node --test tests/unit/menu-a11y-audit.test.mjs` (Escape/door lockstep, "repeated
 keyboard Escape advances one dialog page"), `tests/unit/ui-improve-pass.test.mjs`
@@ -91,8 +99,8 @@ a chip whose parent is not the button group (`syncGroup` walks direct children);
 a root missing from `ROOTS`. Pins (no browser): `menu-a11y-audit.test.mjs`
 ("ScrollFade.SCREENS and AriaState.ROOTS cover every UiLayers layer",
 "#announce is a live region", MenuNav landing on `aria-pressed='true'`) —
-NOTHING node-level asserts that `select-screen.js` writes `aria-pressed` on the
-tiles; the browser ladder is `tests/specs/menu-keyboard.spec.js`. A fix there
+grep that file for a `select-screen.js` `aria-pressed` pin before assuming one
+exists; the browser ladder is `tests/specs/menu-keyboard.spec.js`. A fix there
 should add a source-regex pin to that unit file.
 
 ### Cramped single screen (phone shape, UI scale)
@@ -105,7 +113,8 @@ row names, elevation, and the `.track-row` `min-height` (deliberately below the
 `max(N, 24px / --ui-scale)`. Pins: `menu-a11y-audit.test.mjs` (tap/chip rungs
 and the `.sel-chip` boxes), `ui-improve-pass.test.mjs` ("compact catalogue
 keeps a pannable toolbar"), `sheetshape-density-scale.test.mjs` (zoom-aware
-density). Measured fit is BROWSER-only (`tools/ui/menu-fit.mjs`,
+density). Measured fit is BROWSER-only (`tools/ui/layout-audit.mjs`;
+`menu-fit.mjs` is deprecated, kept only for `--safe=` notch insets;
 `ui-scale-axis.mjs`, `ui-scale.spec.js`); record the cell (viewport, scale,
 pointer) and the unrun tool in the PR.
 
