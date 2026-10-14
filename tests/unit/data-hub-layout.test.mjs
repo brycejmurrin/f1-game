@@ -32,3 +32,51 @@ test(".dh-content hides native scrollbar; ScrollFade owns the thumb", () => {
 test("session/GP selects meet the card tap-paint floor", () => {
   assert.equal(decl(rules, ".dh-pick-select", "min-height"), "var(--tap-paint)");
 });
+
+test("schedule/standings meta ink uses --dim (WCAG AA on hub panel)", () => {
+  // Soft greys in these roles failed 4.5:1 on --panel composites; --dim clears it.
+  for (const sel of [".dh-footnote", ".dh-race-time", ".dh-gap", ".dh-gdrs-pill"]) {
+    assert.equal(decl(rules, sel, "color"), "var(--dim)", `${sel} meta color`);
+  }
+});
+
+test("tall-narrow hub tabs are a 3-column grid (not one full-width column)", () => {
+  assert.match(
+    DATA_CSS,
+    /body\[data-shape="tall"\]\[data-width="narrow"\]\s+\.dh-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+  );
+});
+
+test(".dh-content cancels sf-thumb width (no dead horizontal scroll)", () => {
+  assert.equal(decl(rules, ".dh-content", "touch-action"), "pan-y");
+  assert.equal(decl(rules, ".dh-content", "overscroll-behavior-x"), "none");
+  // Sticky .sf-scroll::before is 6px in-flow; cancel it like height's margin-bottom.
+  assert.equal(decl(rules, ".dh-content.sf-scroll::before", "margin-right"), "-6px");
+  assert.match(
+    decl(rules, ".dh-content.sf-scroll::before", "transform") || "",
+    /translateX\(calc\(var\(--gap\) \/ 6 - var\(--sf-pr/,
+  );
+});
+
+test("narrow standings names wrap with a floor (no 0px constructor collapse)", () => {
+  assert.match(
+    DATA_CSS,
+    /body\[data-width="narrow"\]\s+\.dh-row\s+\.dh-name[\s\S]*?min-width:\s*6\.5em/,
+  );
+  assert.match(
+    DATA_CSS,
+    /body\[data-width="narrow"\]\s+\.dh-row\s+\.dh-name[\s\S]*?white-space:\s*normal/,
+  );
+  assert.match(
+    DATA_CSS,
+    /body\[data-width="narrow"\]\s+\.dh-h2h-wrap\s*\{[^}]*flex:\s*1\s+1\s+100%/,
+  );
+});
+
+test(".dh-content.sf-b paints a bottom more-below cue (CSS only)", () => {
+  assert.match(DATA_CSS, /\.dh-content\.sf-b\s*\{[^}]*box-shadow:\s*inset/);
+  assert.match(
+    DATA_CSS,
+    /prefers-reduced-motion:\s*reduce\)[\s\S]*?\.dh-content\.sf-b\s*\{[^}]*box-shadow:\s*inset/,
+  );
+});

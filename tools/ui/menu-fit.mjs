@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // menu-fit — audit every menu screen for cramped / clipped layout at a given
-// @doc Audits every menu screen for cramped/clipped layout at a viewport; `--safe=` simulates arbitrary notch insets.
-// @skill ui-menu-a11y
+// @doc DEPRECATED except `--safe=` (arbitrary notch insets); use `ui/layout-audit.mjs` for menu fit at a viewport.
+// @skill survey-ui-matrix
 // @deprecated Prefer tools/ui/layout-audit.mjs for the matrix. This CLI remains
 //   ONLY for `--safe=` notch-inset simulation (layout-audit does not yet own that).
 //   survey-ui-matrix / css-play: use layout-audit; reach here when you need --safe=.
@@ -110,14 +110,16 @@ const SCREENS = [
 
   // ── F1 DATA HUB (#datahub — markup is built entirely by js/data/hub.js) ──
   ["datahub", `document.getElementById('mb-data').click(); await until('.dh-race, .dh-empty, .dh-error')`, "#datahub", { mock: 1 }],
-  ["datahub-standings", `document.getElementById('mb-data').click(); document.getElementById('dh-tab-standings').click(); await until('.dh-row, .dh-empty, .dh-error')`, "#datahub", { mock: 1 }],
-  ["datahub-results", `document.getElementById('mb-data').click(); document.getElementById('dh-tab-results').click(); await until('.dh-table, .dh-empty, .dh-error')`, "#datahub", { mock: 1 }],
-  ["datahub-live", `document.getElementById('mb-data').click(); document.getElementById('dh-tab-live').click(); await until('.dh-wx-cell, .dh-empty, .dh-error')`, "#datahub", { mock: 1 }],
-  ["datahub-telemetry", `document.getElementById('mb-data').click(); document.getElementById('dh-tab-telemetry').click(); await until('.dh-dchip, .dh-empty, .dh-error')`, "#datahub", { mock: 1 }],
-  ["datahub-export", `document.getElementById('mb-data').click(); document.getElementById('dh-tab-export').click(); await until('.dh-export')`, "#datahub", { mock: 1 }],
+  // Hub builds tabs after open — wait for the button before click (null → setup fail).
+  ["datahub-standings", `document.getElementById('mb-data').click(); await until('#dh-tab-standings'); document.getElementById('dh-tab-standings').click(); await until('.dh-row, .dh-empty, .dh-error')`, "#datahub", { mock: 1 }],
+  ["datahub-results", `document.getElementById('mb-data').click(); await until('#dh-tab-results'); document.getElementById('dh-tab-results').click(); await until('.dh-table, .dh-empty, .dh-error')`, "#datahub", { mock: 1 }],
+  ["datahub-live", `document.getElementById('mb-data').click(); await until('#dh-tab-live'); document.getElementById('dh-tab-live').click(); await until('.dh-wx-cell, .dh-empty, .dh-error')`, "#datahub", { mock: 1 }],
+  ["datahub-telemetry", `document.getElementById('mb-data').click(); await until('#dh-tab-telemetry'); document.getElementById('dh-tab-telemetry').click(); await until('.dh-dchip, .dh-empty, .dh-error')`, "#datahub", { mock: 1 }],
+  ["datahub-export", `document.getElementById('mb-data').click(); await until('#dh-tab-export'); document.getElementById('dh-tab-export').click(); await until('.dh-export')`, "#datahub", { mock: 1 }],
   // The lap player is a second overlay stacked on the hub — its own root.
   ["datahub-telem-popup", `
      document.getElementById('mb-data').click();
+     await until('#dh-tab-telemetry');
      document.getElementById('dh-tab-telemetry').click();
      await until('.dh-dchip');
      const chips = document.querySelectorAll('.dh-dchip');

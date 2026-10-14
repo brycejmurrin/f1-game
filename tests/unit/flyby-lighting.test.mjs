@@ -150,10 +150,9 @@ test("both the live screen and the editor's preview read them", () => {
     "circuit arrives as a wall of fog");
   assert.match(body, /const _fogMul = cine \? FlybySeq\.FOG/,
     "the live flyby renders at the session's full fog density while the editor previews it thinned");
-  // The wide-screen FOV cap keeps the CAR a readable size. A crane shot has no
-  // car in it, the editor previews the authored angle, and an 80 deg shot on a
-  // 2:1 screen would arrive squeezed to 50 — MEASURED live before this landed.
-  assert.match(body, /if \(!cine\) \{[\s\S]{0,200}fovYCap/,
+  // Aspect fit (HFOV cap on wide, floor on portrait) lives in CamFovFit; cine
+  // must passthrough so a crane/editor shot keeps the authored angle.
+  assert.match(body, /CamFovFit\.fitFovY\([\s\S]{0,80}\{ cine \}/,
     "the cinematic must fly the angle it was framed at, not the gameplay cap");
 
   const apex = fs.readFileSync(new URL("../../js/agent/apex.js", import.meta.url), "utf8");

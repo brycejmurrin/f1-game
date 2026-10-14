@@ -79,6 +79,7 @@ const TrackDesigner = (function () {
   // propKind: the scenery-mode props palette selection (TrackDesignerProps.KINDS).
   let propKind = "stand", scenery = null, sceneryView = false;
   const undo = [], redo = [];
+  let replacementGeneration = 0, lifecycleWired = false;
   let previewT = 0, draftT = 0, confirmDel = null, msgT = 0;
   // savedSnap: the design as last loaded or saved — anything else is unsaved
   // work a load must not drop. nudge: the arrow-key run one undo entry covers.
@@ -302,6 +303,7 @@ const TrackDesigner = (function () {
   /** Replace the design (geometry edits go through here so UNDO sees them). A
    *  run of arrow nudges on one point (or one span) inside NUDGE_MS is ONE entry. */
   function commit(next, kind) {
+    ++replacementGeneration;
     const now = Date.now();
     const nudgeKind = kind === "nudge" || kind === "nudge-span";
     const sameNudge = nudge && nudge.sel === sel && nudge.span === span && nudge.kind === kind && now - nudge.t < NUDGE_MS && undo.length;
@@ -343,7 +345,7 @@ const TrackDesigner = (function () {
     for (const b of [ui.save, ui.race, ui.tt]) if (b) { b.disabled = blocked; b.setAttribute("aria-disabled", blocked ? "true" : "false"); }
     return verdict;
   }
-  function scheduleDraft() { clearTimeout(draftT); draftT = setTimeout(saveDraft, DRAFT_MS); }
+  function scheduleDraft() { ++replacementGeneration; clearTimeout(draftT); draftT = setTimeout(saveDraft, DRAFT_MS); }
   function saveDraft() { clearTimeout(draftT); draftT = 0; if (design && custom && design.pts.length) custom.setDraft(design); }
   /** The CHECKS list is not a live region (it is rebuilt every preview); the
    *  status line says only when the red / amber counts change. */
@@ -660,7 +662,7 @@ const TrackDesigner = (function () {
     commit(Object.assign({}, design, { baseHW: hw }), "width");
     return true;
   }
-  function setName(s) { design.name = CustomTracks.sanitizeName(s); scheduleDraft(); if (ui.name && ui.name.value !== design.name && document.activeElement !== ui.name) ui.name.value = design.name; }
+  function setName(s) { ++replacementGeneration; design.name = CustomTracks.sanitizeName(s); scheduleDraft(); if (ui.name && ui.name.value !== design.name && document.activeElement !== ui.name) ui.name.value = design.name; }
   /** The ghost a stamp would lay down from control i, in world metres from
    *  that point's pose (the canvas draws it under the pointer). */
   function ghost(i) {
@@ -724,6 +726,7 @@ const TrackDesigner = (function () {
    *  SAVE replaces instead of adding a copy per geometry change (it rides the
    *  design as `originId`; sanitize drops it, so it never reaches the id). */
   function load(item, label, origin) {
+    ++replacementGeneration;
     const kept = stash();
     if (!kept) { undo.length = 0; redo.length = 0; }
     design = copy(item);
@@ -1208,15 +1211,17 @@ const TrackDesigner = (function () {
   }
   /** The `apex26.track` file envelope for the current design (what EXPORT writes). */
   async function exportEnvelope() {
-    const code = await shareCode();
+    if (!design || !design.pts.length) return null;
+    const d = copy(design);
+    const code = await TrackCodec.encode(d);
     if (!code) return null;
-    const d = copy(design); delete d.originId;   // this player's library link, not the circuit
+    delete d.originId;   // this player's library link, not the circuit
     return TrackCodec.fileEnvelope(d, code);
   }
   async function exportFile() {
     const env = await exportEnvelope();
     if (!env) { message("Nothing to export yet", true); return false; }
-    const name = fileStem() + ".apextrack.json";
+    const name = fileStem(env.design) + ".apextrack.json";
     const blob = new Blob([JSON.stringify(env, null, 2)], { type: "application/json" });
     try {
       await saveFile(blob, name);
@@ -1249,12 +1254,13 @@ const TrackDesigner = (function () {
     catch (_) { message("Could not read the library file. Nothing imported.", true); return false; }
   }
   async function importFile(file) {
+    const generation = ++replacementGeneration;
     // An exported circuit is a few KB; never read a large file into memory to find out it is not one.
     if (!file || !(file.size <= IMPORT_MAX)) { message("That file is too big to be an Apex 26 circuit (" + (IMPORT_MAX >> 10) + " KB max)", true); return false; }
-    try { return await loadFrom(await file.text()); } catch (e) { message("Could not read that file", true); return false; }
+    try { const text = await file.text(); return generation === replacementGeneration ? await loadFrom(text, generation) : false; } catch (e) { if (generation === replacementGeneration) message("Could not read that file", true); return false; }
   }
   /** Load a design from any of: a share link, a bare APXT1 code, or an exported file's JSON. */
-  async function loadFrom(text) {
+  async function loadFrom(text, generation = ++replacementGeneration) {
     const s = String(text || "").trim();
     if (!s) { message("Paste a share code or link first", true); return false; }
     let code = null, raw = null;
@@ -1272,6 +1278,7 @@ const TrackDesigner = (function () {
     if (code) {
       let r = null;
       try { r = await TrackCodec.decode(code); } catch (_) { r = null; }
+      if (generation !== replacementGeneration) return false;
       if (!r) { message("That share code could not be read", true); return false; }
       if (!r.ok) { message("That share code was refused (" + r.reason + ")", true); return false; }
       it = r.design;
@@ -1471,6 +1478,12 @@ const TrackDesigner = (function () {
     root = (deps && deps.root) || document.getElementById("trackdesigner");
     if (!root || !custom) { Log.warn("track", "track designer: no #trackdesigner dialog in this shell"); return false; }
     build();
+    if (!lifecycleWired) {
+      const flush = () => { if (!draftT) return; saveDraft(); if (typeof GameStore !== "undefined" && GameStore.store && GameStore.store.mirrorFlush) GameStore.store.mirrorFlush(); };
+      if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("pagehide", flush);
+      if (document.addEventListener) document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); });
+      lifecycleWired = true;
+    }
     return true;
   }
   function onBack(ev) {
@@ -1493,6 +1506,7 @@ const TrackDesigner = (function () {
     if (first) first.focus();
   }
   function open(opts) {
+    ++replacementGeneration;
     if (!built && !init()) return false;
     // A share link opened while the screen is up (hashchange) must not make
     // close() hand focus back into the hidden dialog.
@@ -2098,7 +2112,7 @@ const TrackDesigner = (function () {
 
   // ── files, the share card, the test drive ─────────────────────────────────
   /** "apex26-track-<name>": the stem EXPORT and CARD name their files with. */
-  const fileStem = () => "apex26-track-" + (design && design.name || "circuit").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const fileStem = (item = design) => "apex26-track-" + (item && item.name || "circuit").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   /** A blob onto the player's device: the native share sheet where the app
    *  shell has one (NativeDownload), else an <a download>. Throws what they throw. */
   async function saveFile(blob, name) {
