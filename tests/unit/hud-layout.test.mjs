@@ -718,6 +718,8 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     "phone sectors (tilt/touch/buttons) take the same --dock-r-w clearance as limits/damage");
   assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x, 50% \* var\(--hud-z\)\) \/ var\(--hud-z\)\)/,
     "touch #announce sits in the published dock lane (centred when none is published), not at 10px+sal over TILT's left dock");
+  assert.match(css, /@media \(orientation: portrait\) and \(max-width: 500px\) \{[\s\S]*?body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x, 34% \* var\(--hud-z\)\) \/ var\(--hud-z\)\)/,
+    "portrait unpublished-lane fallback pins left past the map column so HUD 150% on 390 clears #minimap");
   assert.doesNotMatch(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-prof-broadcast\)[^{]*#announce \{[\s\S]*?left: calc\(10px \+ var\(--sal\)/,
     "the under-map announce park is gone — it sat on BRAKE / BOOST / SHIFT");
   assert.doesNotMatch(css,
