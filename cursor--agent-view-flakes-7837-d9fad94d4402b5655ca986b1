@@ -1,0 +1,1 @@
+1791963750	Cursor Agent	Finish PR #1457 TIP-RED: revert installMocks factory pin (broke menu-baseline/parts-persistence); quarantine logging.spec.js for hooks flake. No merge.  [cursor/agent-view-flakes-7837; session d9fad94d4402b5655ca986b1]
