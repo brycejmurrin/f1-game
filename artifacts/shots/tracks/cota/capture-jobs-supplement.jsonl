@@ -1,0 +1,6 @@
+{"trackId":"cota","frac":0.00,"cam":"cinematic","dist":65,"el":18,"tod":"day","out":"artifacts/shots/tracks/cota/sector-s1-gantry-000-day-dry.png"}
+{"trackId":"cota","frac":0.108,"cam":"trackside","side":-1,"dist":48,"el":16,"tod":"day","out":"artifacts/shots/tracks/cota/sector-s2-bigred-108-day-dry.png"}
+{"trackId":"cota","frac":0.55,"cam":"orbit","az":75,"el":26,"dist":90,"tod":"day","out":"artifacts/shots/tracks/cota/sector-s4-crest-550-day-dry.png"}
+{"trackId":"cota","frac":0.68,"cam":"trackside","side":-1,"dist":36,"el":11,"tod":"day","out":"artifacts/shots/tracks/cota/sector-s5-hairpin-exit-680-day-dry.png"}
+{"trackId":"cota","frac":0.42,"cam":"orbit","az":15,"el":32,"dist":140,"tod":"day","out":"artifacts/shots/tracks/cota/overview-infield-420-day-dry.png"}
+{"trackId":"cota","frac":0.78,"cam":"eye","tod":"day","out":"artifacts/shots/tracks/cota/landmark-tower-eye-780-day-dry.png"}
