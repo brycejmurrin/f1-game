@@ -207,14 +207,14 @@ function pushClaim(text, branch, session) {
 
 export function main(argv = process.argv.slice(2)) {
   if (argv.includes("--help") || argv.includes("-h")) {
-    console.log('usage: node tools/ci/who-is-on-it.mjs [--hours N] [--session ID] [--no-fetch] [--json] [--claim "<text>" | --release] [path ...]');
+    console.log('usage: node tools/ci/who-is-on-it.mjs [--hours N] [--session ID] [--no-fetch] [--json] [--all] [--claim "<text>" | --release] [path ...]');
     return 0;
   }
   const opt = (name, dflt) => {
     const i = argv.indexOf(name);
     return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
   };
-  const known = new Set(["--hours", "--session", "--claim", "--release", "--no-fetch", "--json"]);
+  const known = new Set(["--hours", "--session", "--claim", "--release", "--no-fetch", "--json", "--all"]);
   for (let i = 0; i < argv.length; i++) {
     if (argv[i].startsWith("-") && !known.has(argv[i])) { console.error(`Unknown option: ${argv[i]}`); return 1; }
     if (["--hours", "--session", "--claim"].includes(argv[i])) {
@@ -226,6 +226,7 @@ export function main(argv = process.argv.slice(2)) {
   if (!Number.isFinite(hours) || hours <= 0 || hours > 8760) { console.error("--hours must be in (0, 8760]"); return 1; }
   const session = argv.includes("--session") ? sessionId({ APEX_SESSION_ID: opt("--session") }) : sessionId();
   const json = argv.includes("--json");
+  const all = argv.includes("--all");
   const noFetch = argv.includes("--no-fetch");
   const claim = opt("--claim", "");
   const release = argv.includes("--release");
@@ -259,7 +260,13 @@ export function main(argv = process.argv.slice(2)) {
   const claims = [...parseBoard(readBoard(`refs/remotes/origin/${CLAIMS_BOARD}`)),
     ...parseClaims(git("for-each-ref", "--format=%(committerdate:unix)%09%(refname)%09%(authorname)%09%(subject)",
       `refs/remotes/origin/${CLAIMS_PREFIX}`))].sort((a, b) => b.at - a.at);
-  const active = claims.filter((c) => !c.released);
+  // A claim past BOARD_MAX_MIN is EXPIRED: the board drops it at the next
+  // write, but a quiet board and the legacy claude/claims/* branches kept 64 of
+  // them in every listing on 2026-10-14 (some 300 h old), burying the live
+  // ones. They stay in --json and under --all; the listing counts them.
+  const unreleased = claims.filter((c) => !c.released);
+  const active = all ? unreleased : unreleased.filter((c) => c.ageMin <= BOARD_MAX_MIN);
+  const expired = unreleased.length - active.length;
 
   // One row per commit: a commit on the deploy branch is reachable from every
   // topic branch cut from it, so a per-branch log listed it once per branch.
@@ -302,6 +309,7 @@ export function main(argv = process.argv.slice(2)) {
       ? '(none — nobody has claimed anything; --claim "<text>" to say what you are on)'
       : "(no claims in stale local refs — re-run with the network up before trusting this)");
   }
+  if (expired) console.log(`  (${expired} expired claim(s) older than ${BOARD_MAX_MIN / 60} h hidden — --all lists them)`);
   const mine = session ? claimSlug(branch, session) : null;
   for (const c of active) console.log(`${ago(c.ageMin).padStart(7)} ago  ${c.stale ? "STALE " : "      "}${c.slug}${c.slug === mine ? "  [you]" : ""}  — ${c.who}: ${c.text}`);
   if (paths.length) {
