@@ -238,8 +238,13 @@ test("mid-wide title rooms keep one-line labels and air under the utility row", 
   );
   assert.match(
     menus,
-    /@media \(max-width:\s*899px\) \{[\s\S]*?#menu-buttons :is\(#menu-explore, #menu-secondary\) \.bigbtn \{ white-space: nowrap/,
-    "WATCH / TRACK DESIGNER / HOW TO PLAY stay one line under 899px",
+    /@media \(max-width:\s*899px\) \{[\s\S]*?#menu-buttons :is\(#menu-explore, #menu-secondary\) \.bigbtn \{[\s\S]*?white-space:\s*normal/,
+    "#1537: WATCH / TRACK DESIGNER / HOW TO PLAY wrap (not nowrap-clip) under 899px",
+  );
+  assert.match(
+    menus,
+    /text-wrap:\s*balance/,
+    "#1537: phone title doors use balanced wrap before any ellipsis",
   );
   assert.match(
     menus,

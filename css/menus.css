@@ -162,15 +162,18 @@
    title-desktop, CI 37371854254). */
 @media (max-width: 899px) {
   #menu-buttons :is(#menu-primary, #menu-explore, #menu-secondary).balanced-row > .bigbtn { min-width: min-content; }
-  #menu-buttons :is(#menu-explore, #menu-secondary) .bigbtn { white-space: nowrap; }
+  /* #1537: wrap+balance — nowrap clipped TRACK DES / HOW TO P under overflow:hidden. */
+  #menu-buttons :is(#menu-explore, #menu-secondary) .bigbtn {
+    white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.15;
+  }
 }
-/* 844×390 compact-wide (menu-baseline phone): the ≤899 min-content rule
-   wraps RACE A FRIEND onto two lines inside the 2×2 cell, a long WATCH
-   label became a banner, and GARAGE clips (CI 37469163266). 734×343
-   (min-height 370 misses it) keeps wrap-the-door. */
+/* 844×390: ≤899 min-content wrapped RACE A FRIEND / dropped GARAGE (CI 37469163266).
+   #1537: wrap+balance (not nowrap) so RACE A FRIEN / PHOTO STUDI stay full. */
 @media (max-width: 899px) and (min-height: 370px) {
   #menu-buttons :is(#menu-primary, #menu-explore, #menu-secondary).balanced-row > .bigbtn { min-width: 0; }
-  #menu-buttons #menu-primary.balanced-row > .bigbtn { white-space: nowrap; }
+  #menu-buttons #menu-primary.balanced-row > .bigbtn {
+    white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.15;
+  }
 }
 /* Secondary: same skewed family, dialled down — smaller type, thinner box, and
    no red glow, so the eye still lands on the modes first. */
@@ -430,26 +433,25 @@ html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #ov
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-primary { grid-column: 2; grid-row: 2; gap: calc(var(--gap) * 0.3); }
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-explore { grid-column: 2; grid-row: 3; gap: calc(var(--gap) * 0.3); }
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary {
-  /* Row 2 col 1 — under brand (sibling paints below #menu-buttons). */
+  /* Row 2 col 1 under brand. #1537: height auto for 2-line labels; --tap floor stays. */
   grid-column: 1; grid-row: 2; display: flex; flex-wrap: nowrap; align-items: stretch;
-  gap: calc(var(--gap) * 0.15); min-height: var(--tap); height: var(--tap); max-height: var(--tap);
+  gap: calc(var(--gap) * 0.15); min-height: var(--tap); height: auto; max-height: none;
   --balance-basis: 0%; --balance-min: 0%;
 }
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary.balanced-row > :not([hidden]) {
   flex: 1 1 0; min-width: 0; width: auto;
 }
-/* One line per room: column wrap was clipping DESIGNER / PLAY under --tap.
-   0.72× micro + zero tracking fits TRACK DESIGNER; overflow hidden kills 200% sideways scroll. */
+/* #1537: clamp+wrap — nowrap ellipsis clipped TRACK DES / HOW TO P in ~74px cells. */
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
-  /* Leading-edge icons: center+overflow clipped .btn-ico (B1). */
   display: inline-flex; flex-direction: row; justify-content: flex-start; align-items: center;
-  gap: calc(var(--gap) / 8); min-height: var(--tap-paint); height: 100%; max-height: 100%;
-  padding: 0 calc(var(--gap) / 8) 0 calc(var(--gap) / 4); font-size: calc(var(--fs-micro) * 0.72);
-  letter-spacing: 0; line-height: 1; white-space: nowrap; overflow: hidden;
-  text-overflow: ellipsis; text-align: start; min-width: 0;
+  gap: calc(var(--gap) / 8); min-height: var(--tap-paint); height: auto; max-height: none;
+  padding: calc(var(--gap) / 10) calc(var(--gap) / 8) calc(var(--gap) / 10) calc(var(--gap) / 4);
+  font-size: clamp(0.55rem, calc(1.7 * var(--vwz)), calc(var(--fs-micro) * 0.78));
+  letter-spacing: 0; line-height: 1.1; white-space: normal; text-wrap: balance;
+  overflow-wrap: anywhere; overflow: hidden; text-overflow: clip; text-align: start; min-width: 0;
 }
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn .btn-ico {
-  width: 0.9em; height: 0.9em; flex: none; margin: 0;
+  width: 0.85em; height: 0.85em; flex: none; margin: 0;
 }
 html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-buttons .bigbtn {
   min-height: var(--tap); padding-block: calc(var(--gap) / 2);
@@ -462,7 +464,7 @@ html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #ov
   padding-block: calc(var(--gap) * 0.4);
 }
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
-  min-height: var(--tap-paint); height: 100%; max-height: 100%;
+  min-height: var(--tap-paint); height: auto; max-height: none;
 }
 html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
 /* Live Home on tall: drop #title-car from the grid before data-home-ready (deferred
@@ -673,8 +675,10 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
     display: flex; align-items: center; justify-content: center;
     gap: 0.45em;
     padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.6) calc(var(--gap) * 0.5) calc(var(--gap) * 0.8);
-    font-size: var(--fs-3);
+    /* #1537: clamp+wrap so RACE A FRIEND / PHOTO STUDIO stay inside the cell. */
+    font-size: clamp(0.75rem, calc(3.2 * var(--vwz)), var(--fs-3));
     min-height: max(calc(var(--tap) * 0.9), var(--tap-paint));
+    white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.15;
   }
   :where(body[data-shape="tall"]) :is(#menu-primary, #menu-explore) .bigbtn .btn-ico { margin: 0; }
   :where(body[data-shape="tall"]) :is(#menu-primary, #menu-explore) .mb-sub { display: none; }
@@ -687,6 +691,8 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
   :where(body[data-shape="tall"]) #menu-secondary .bigbtn {
     padding-block: calc(var(--gap) * 0.3);
     min-height: max(calc(var(--tap) * 0.85), var(--tap-paint));
+    white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.1;
+    font-size: clamp(0.7rem, calc(2.8 * var(--vwz)), var(--fs-micro));
   }
 
   /* THE CARS, IN THE CLEAR. The side-on drawing, not the tall one: a portrait
@@ -860,6 +866,13 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
 :where(body[data-shape="wide"][data-density="compact"]) :is(#menu-primary, #menu-explore) .bigbtn {
   display: flex; align-items: center; justify-content: center;
   gap: 0.4em;
+  /* #1537: clamp+wrap — nowrap clipped RACE A FRIEN / PHOTO STUDI. */
+  font-size: clamp(0.7rem, calc(2.6 * var(--vwz)), calc(var(--fs-4) * var(--ui-compact-text, 1)));
+  white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.15;
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-secondary .bigbtn {
+  white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.1;
+  font-size: clamp(0.6rem, calc(2.0 * var(--vwz)), var(--fs-micro));
 }
 /* Four rooms in the narrower column wrap 3 + 1 from the 5.5rem basis, which
    stretches the leftover into a banner; a forced 2x2 costs one ~30px row
