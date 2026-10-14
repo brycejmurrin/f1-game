@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # skill-routing-eval.py — which project skill fires for a realistic request? (2026-09-30)
 # @doc Routes realistic requests through the REAL skill set via `claude -p` and scores which skill fired (correct/wrong/none).
-# @skill slim-bloat
+# @skill agent-config
 #
 #   python3 tools/check/skill-routing-eval.py --queries tests/data/skill-routing/queries --out artifacts/skill-routing.json --model <session model>
 #   ... --root ../wt-base --alias old=new --runs 3 --grace 2 --only agent-view,slim-bloat

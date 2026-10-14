@@ -77,8 +77,9 @@ passing diagnostic. Keep skipped work and actual browser/GPU proof explicit.
 
 The capture and lifecycle commands accept `--plan` for validated inputs without
 creating outputs. Browser captures must run serially in the parent agent. The
-replay-camera and f1-animation-cameras repository skills provide the local
-workflow and reference files; the latter does not repair a hosted skill package.
+f1-animation-cameras repository skill (`references/replay.md`, which absorbed the
+retired replay-camera skill on 2026-10-14) provides the local workflow and
+reference files; it does not repair a hosted skill package.
 
 The replay probe uses compositor recording to drive headless frames and requires
 Playwright's FFmpeg binary in the selected writable browser cache. Its camera-only

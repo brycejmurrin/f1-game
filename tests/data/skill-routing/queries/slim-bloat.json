@@ -1,6 +1,6 @@
 [
 {"query":"js/game.js has hit its size ratchet and every metric in tests/data/ratchets.json shows zero slack. Find a self-contained block I can extract into its own module, check its free references, and lower the ratchet afterwards without changing behaviour.","expect":"slim-bloat"},
-{"query":"the skill files r getting huge, agents burn like half their context just loading them. can u find the fat ones and trim whats duplicated w/ the docs?","expect":"slim-bloat"},
+{"query":"tools/ and js/ have piles of near-duplicate helpers and dead branches nobody calls; agents burn context reading them. find the duplicated or dead code and cut it safely.","expect":"slim-bloat"},
 {"query":"Every session starts slow and the model keeps losing track because there is just too much to read across the repo. Figure out what is dead, duplicated or stale and cut it down safely.","expect":"slim-bloat"},
 {"query":"Look through js/circuits and js/render for comments that describe behaviour we removed months ago and helper functions nothing calls any more, then remove them without touching runtime output.","expect":"slim-bloat"},
 {"query":"AGENTS.md and docs/ have grown repetitive: the same twelve rules appear in three places with slightly different numbers. Consolidate to one canonical copy and point the others at it.","expect":"slim-bloat"},
