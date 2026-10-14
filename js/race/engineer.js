@@ -117,6 +117,7 @@ var RaceEngineer = (function () {
         case "gone": return s.lap;
         case "manage": return s.stintLeft;
         case "push": return s.ahead;
+        case "gust": return s.gust;                              // one call per gusty spell (Wind.gustCall's ~90 s bucket)
         default: return "";
       }
     }
@@ -224,6 +225,8 @@ var RaceEngineer = (function () {
         && take("MANAGE THE TYRES — " + s.stintLeft + " LAPS TO THE FLAG ON THAT SET", "manage")) return;
       if (s.planned && s.setLaps != null && s.stintLeft != null && s.setLaps >= s.stintLeft + PUSH_SPARE && s.ahead
         && take("TYRES ARE GOOD — PUSH, " + s.ahead + " IS " + s.aheadGap.toFixed(1) + "s AHEAD", "push")) return;
+      // WIND (js/race/wind.js): a strong gust is worth a word, below everything a driver can act on in the pits.
+      if (s.gust != null && take("GUSTY OUT THERE — " + s.gustKmh + " KM/H, CAREFUL ON THE BRAKES", "gust")) return;
       if (s.step >= 0) take("TYRES AT " + Math.round((1 - WEAR_STEPS[s.step]) * 100) + "%", "wear" + s.step);
     }
 
@@ -419,6 +422,8 @@ var RaceEngineer = (function () {
       // "Here" is the road's own verdict (treadFor wants rubber for water now), inside HERE_S of the arc's onset —
       // not `arc.t >= wetIn`, which a bisected wetIn can miss by a hair on the very step it turns.
       out.rainWhere = arc && arc.cell && fc ? b.where || null : null;
+      out.gust = typeof Wind !== "undefined" ? Wind.gustCall() : null;
+      out.gustKmh = out.gust != null ? Wind.state().kmh : null;
       out.hereAt = arc && wantTread > 0 && Number.isFinite(arc.wetIn) && arc.wetIn > 0 && arc.t - arc.wetIn <= HERE_S
         ? Math.round(arc.wetIn) : null;
       return out;

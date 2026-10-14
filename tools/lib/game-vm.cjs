@@ -617,7 +617,7 @@ async function createGame(opts) {
   const seatName = opts.seat == null ? "pin" : String(opts.seat);
   if (!Object.prototype.hasOwnProperty.call(SEATS, seatName))
     throw new Error(`game-vm: unknown seat "${seatName}" (want ${Object.keys(SEATS).join("|")})`);
-  const seed = Object.assign({ tyreWear: "off" }, SEATS[seatName],
+  const seed = Object.assign({ tyreWear: "off", wind: "off" }, SEATS[seatName],
                              opts.track ? { trackId: opts.track } : {}, opts.storage || {});
   for (const k of Object.keys(seed)) {
     sandbox.localStorage.setItem(k.startsWith("apex26.") ? k : "apex26." + k, JSON.stringify(seed[k]));
