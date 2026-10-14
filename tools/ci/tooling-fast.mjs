@@ -334,6 +334,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/driver-ratings-personality.test.mjs",
   "tests/unit/driving-coach.test.mjs",
   "tests/unit/driving-cues.test.mjs",
+  // Droplets lens overlay gates (rain rate, onboard-only, caps, reduced motion, LOW off) + spray scaling / nearest-N. ~0.2 s.
+  "tests/unit/droplets-spray.test.mjs",
   // …and the DUEL ROW that reaches it: one control carrying OFF / ON / a
   // named legend has to round-trip through two setters, and the inert VM DOM
   // builds no SettingRow children, so painting the row would assert nothing.

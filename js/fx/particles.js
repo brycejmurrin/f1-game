@@ -78,7 +78,7 @@ const Particles = (function () {
     _dirty = true; _flareDirty = false; _lastPa = _lastPb = 0;
   }
 
-  function clear() { _n = 0; _flN = 0; _dirty = true; _flareDirty = false; _lastPa = _lastPb = 0; }
+  function clear() { _sprK = 0; _sprThr = Infinity; _n = 0; _flN = 0; _dirty = true; _flareDirty = false; _lastPa = _lastPb = 0; }
   function count() { return _n; }
   function capacity() { return MAX; }
   function stats() { return { uploadFloats: _statUpload, expands: _statExpand, alphaExpands: _statAlphaExpand, additiveExpands: _statAddExpand, skips: _statSkip }; }
@@ -231,30 +231,81 @@ const Particles = (function () {
   }
   function flareCount() { return _flN; }
 
-  // RAIN SPRAY: a lingering plume, not a puff. Each drop-cloud lives 1.1-1.9 s
-  // (was 0.50-0.85), starts bigger, keeps rising (buoyant, lighter drag), so
-  // the wall of mist behind a car stretches tens of metres and partly hides
-  // it from the car following — the wet-race look. The caller's emission rate
-  // came DOWN to match (game.js), so the live count per car stays near what
-  // the puffs cost. Pool discipline: spray never takes the pool's last quarter
-  // (sparks and smoke keep room), sheds with the governor like the rain
-  // streaks, and on the mobile tier the plume is shorter-lived and smaller —
-  // it is the one alpha effect big enough to cost real overdraw.
+  // RAIN SPRAY: a lingering plume, not a puff — and THE wet-race visibility
+  // problem: most of an F1 car's spray comes off the floor and diffuser, not
+  // the tyres (https://www.the-race.com/formula-1/why-f1-cant-solve-its-wet-weather-problem/),
+  // and F1 24's was reviewed as "particularly average"
+  // (https://traxion.gg/time-to-box-box-box-f1-24-review/). Three layers per call:
+  //  · PLUME — drop-clouds living 1.1-1.9 s, buoyant, growing to ~3.5 m;
+  //  · ROOSTER TAIL — a tight jet thrown UP and BACK off the diffuser, its
+  //    height and life scaling with strength (speed × wetness × Storm.sprayK);
+  //  · MIST — a few big, slow 3-4.5 s clouds left hanging where the car
+  //    passed, so a FOLLOWING camera drives into a grey wall it must see through.
+  // Pool discipline: spray never takes the pool's last quarter (sparks and
+  // smoke keep room), sheds with the governor like the
+  // rain streaks, and on the mobile tier everything is shorter-lived and
+  // smaller — the one alpha effect big enough to cost real overdraw.
   function spray(x, y, z, bvx, bvz, strength, count) {
     const m = mul(); if (m <= 0) return;
-    const lifeK = _mobile ? 0.7 : 1, sizeK = _mobile ? 0.8 : 1;
+    const lifeK = _mobile ? 0.7 : 1, sizeK = _mobile ? 0.8 : 1, s1 = Math.min(strength, 1.35), s0 = Math.min(strength, 1);
     for (let n = nOf((count === undefined ? 1 : count) * Math.min(m, 2) / shedDiv()); n > 0 && _n < MAX * 0.75; n--) {
-      spawn(x + rnd(0.4), y + rnd(0.12), z + rnd(0.4),
-        bvx + rnd(1.4), 1.2 + Math.random() * 1.8, bvz + rnd(1.4),
-        (1.1 + Math.random() * 0.8) * lifeK,
-        (0.5 + Math.random() * 0.25) * sizeK, 1.9 * sizeK,   // ~3.5 m half-size by the end
-        0.74, 0.77, 0.82,
-        0.10 + 0.22 * strength,
-        1.5, -0.9, 0);
+      const roll = Math.random();
+      if (roll < 0.35) {                                   // rooster tail: up to ~7 m/s up, a tall arc
+        spawn(x + rnd(0.25), y + 0.1, z + rnd(0.25),
+          bvx * 1.15 + rnd(0.8), 2.2 + s1 * 2.8 + Math.random() * 1.2, bvz * 1.15 + rnd(0.8),
+          (0.8 + 0.6 * s1 + Math.random() * 0.4) * lifeK,
+          0.32 * sizeK, 1.5 * sizeK, 0.80, 0.83, 0.88,
+          0.12 + 0.20 * strength, 1.1, 0.6, 0);
+      } else if (roll < 0.35 + 0.12 * s0) {                // hanging mist (long-lived: ~30 % of live spray)
+        spawn(x + rnd(1.0), y + 0.4 + Math.random() * 0.6, z + rnd(1.0),
+          bvx * 0.15 + rnd(0.4), 0.25 + Math.random() * 0.3, bvz * 0.15 + rnd(0.4),
+          (3.0 + Math.random() * 1.5) * lifeK,
+          1.2 * sizeK, 1.3 * sizeK, 0.72, 0.75, 0.80,
+          0.05 + 0.08 * s0, 0.8, -0.05, 0);
+      } else {                                             // plume
+        spawn(x + rnd(0.4), y + rnd(0.12), z + rnd(0.4),
+          bvx + rnd(1.4), 1.2 + Math.random() * 1.8, bvz + rnd(1.4),
+          (1.1 + Math.random() * 0.8) * lifeK,
+          (0.5 + Math.random() * 0.25) * sizeK, 1.9 * sizeK,   // ~3.5 m half-size by the end
+          0.74, 0.77, 0.82,
+          0.10 + 0.22 * strength,
+          1.5, -0.9, 0);
+      }
     }
   }
 
+  // Spray STRENGTH for one car: the speed term (vs = vStd(speed): starts at
+  // ~21 % of the envelope, full at ~83 %) × the weather's sprayK (storm 1.35 /
+  // rain 1 / wet 0.6) × road wetness (0.25 wet threshold → 0.55, ≥ 0.8 → 1).
+  function sprayStr(vs, k, wetness) {
+    const sp = Math.max(0, Math.min(1, (vs - 15) / 45));
+    const wk = Math.max(0, Math.min(1, ((wetness || 0) - 0.25) / 0.55));
+    return sp * k * (0.55 + 0.45 * wk);
+  }
+  // Emission rate (/s) for a strength: denser than the old 9 + 21·str.
+  function sprayRate(str) { return 10 + 26 * str; }
+
+  // NEAREST-N gate: only the N cars closest to the camera spray (phones 3,
+  // desktop 6). Each call reports its squared camera distance; update() rolls
+  // the frame and the N-th smallest becomes NEXT frame's threshold (one frame
+  // late, invisible, and no per-car ids or sorting inside the car loop).
+  const _sprD = new Float32Array(32);
+  let _sprK = 0, _sprThr = Infinity;
+  function sprayCars() { return _mobile ? 3 : 6; }
+  function sprayAdmit(d2) {
+    if (_sprK < _sprD.length) _sprD[_sprK++] = d2;
+    return d2 <= _sprThr;
+  }
+  function _sprayRoll() {
+    const N = sprayCars();
+    if (_sprK <= N) { _sprThr = Infinity; _sprK = 0; return; }
+    const a = Array.prototype.slice.call(_sprD, 0, _sprK).sort((p, q) => p - q);
+    _sprThr = a[N - 1] * 1.05;   // 5 % hysteresis: two cars at equal range do not flicker
+    _sprK = 0;
+  }
+
   function update(dt) {
+    if (dt > 0) _sprayRoll();
     if (!_n || !(dt > 0)) return;
     if (dt > 0.1) dt = 0.1;      // tab-back / hitch: don't teleport particles
     _dirty = true;
@@ -580,7 +631,7 @@ const Particles = (function () {
     return p;
   }
 
-  return { init, clear, count, capacity, update, draw, tyreSmoke, sparks, scrape, kickup, spray,
+  return { init, clear, count, capacity, update, draw, tyreSmoke, sparks, scrape, kickup, spray, sprayStr, sprayRate, sprayAdmit, sprayCars,
            flare, flareCount, rainShow, rainSeed, rainUpdate, rainActive, rainIntensity, stats, resetStats, markDirty };
 })();
 Object.freeze(Particles);

@@ -141,12 +141,17 @@ test("embers and spray leave pool headroom; the plume lingers; a flare is drawn 
   P.clear();
   for (let i = 0; i < 200; i++) P.spray(0, 0.3, 0, 0, -20, 1, 4);
   assert.ok(P.count() <= MAX * 0.75 + 4 && P.count() >= MAX * 0.75, `spray stops at 75 % of the pool: ${P.count()}`);
-  // The plume lingers: after a second every cloud is still alive (puffs died by 0.85 s).
+  // The plume lingers: after a second most clouds are still alive (puffs died
+  // by 0.85 s; the rooster tail's shortest jets, 0.8 s at strength 0, may go);
+  // the hanging mist (js/fx/particles.js spray, 3-4.5 s) outlives the old
+  // 1.9 s plume, and everything is gone by ~4.5 s.
   const n1 = P.count();
   for (let i = 0; i < 60; i++) P.update(DT);
-  assert.equal(P.count(), n1, "spray clouds live past one second");
+  assert.ok(P.count() >= n1 * 0.7, `most spray clouds live past one second: ${P.count()}/${n1}`);
   for (let i = 0; i < 70; i++) P.update(DT);
-  assert.equal(P.count(), 0, "…and are gone by ~2 s");
+  assert.ok(P.count() > 0, "the mist still hangs at ~2.2 s");
+  for (let i = 0; i < 145; i++) P.update(DT);
+  assert.equal(P.count(), 0, "…and is gone by ~4.6 s");
   // Flares: one frame, outside the pool, capped.
   P.clear();
   draws.length = 0;
@@ -177,7 +182,7 @@ test("the mobile tier keeps a smaller pool, a shorter plume and fewer flares", (
   for (let i = 0; i < 6; i++) P.spray(0, 0.3, 0, 0, -20, 1, 4);
   const n = P.count();
   assert.ok(n > 0);
-  for (let i = 0; i < 82; i++) P.update(DT);   // 1.37 s: past 1.9 s × 0.7 = 1.33 s
+  for (let i = 0; i < 191; i++) P.update(DT);   // 3.18 s: past the mist's 4.5 s × 0.7 = 3.15 s
   assert.equal(P.count(), 0, "mobile spray clouds live ×0.7");
   let ok = 0;
   for (let i = 0; i < 40; i++) if (P.flare(0, 0, 0, 0.2, 1, 1, 1, 1)) ok++;
