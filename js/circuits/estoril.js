@@ -27,6 +27,9 @@
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.92, s1: 0.10 },
       { kind: "foliage", s0: 0.34, s1: 0.46 },
+      // Engine broad-tree pass clips into estoril-aldeia (clip-audit @ s≈0.338).
+      { kind: "foliage", s0: 0.18, s1: 0.37 },
+      { kind: "foliage", s0: 0.45, s1: 0.53 },
     ],
     pal: {
       zenith:        [0.24, 0.46, 0.78],
