@@ -55,14 +55,17 @@ test("a weather arc keeps look and grip on the continuous lerp", async () => {
   settleWetness();
   g.apex.weatherArc("dry", "rain", 60);
   g.G.weatherArc.t = 30;
-  g.G.raceWeather = "wet";   // mid-arc stage flip (enum) while lerp is 0.5
-  assert.ok(Math.abs(g.G.trackWetness() - 0.5) < 1e-9);
+  g.G.raceWeather = "wet";   // mid-arc stage flip (enum) while the ramp target is 0.5
+  // The road LAGS the arc's ramp (WeatherArc wetAt: wets with τ 8 s), so half
+  // way through it is a little short of 0.5 — continuous, never an enum pin.
+  const w = g.G.trackWetness();
+  assert.ok(w > 0.3 && w < 0.5, "lagged mid-arc wetness, got " + w);
   settleWetness();
-  assert.ok(Math.abs(g.G.frame.wetness - 0.5) < 1e-6,
-    "frame.wetness must follow the lerp, not a discrete wet/rain pin");
+  assert.ok(Math.abs(g.G.frame.wetness - g.G.trackWetness()) < 1e-6,
+    "frame.wetness must follow the road's wetness, not a discrete wet/rain pin");
   const grip = g.G.gripMult({ tread: 0 });
-  // Mid wetness 0.5 → weatherGrip at the wet tier for slicks (WET_GRIP.wet[0]=0.82).
-  assert.ok(Math.abs(grip - 0.82) < 1e-6, "grip at mid-arc wetness must be the wet-tier slick value, got " + grip);
+  const want = g.ctx.TyreModel.weatherGrip(0, g.G.trackWetness());
+  assert.ok(Math.abs(grip - want) < 1e-6 && grip > 0.82 && grip < 1, "grip at mid-arc wetness is the continuous slick value, got " + grip);
   g.apex.weather("dry");
 });
 
