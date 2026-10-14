@@ -573,13 +573,30 @@ const RADIO_TOP_MIN = 96, RADIO_TOP_GAP = 8;
 // viewport (desktop's empty docks never do); it bounds the lane only from the
 // card's rows, as the map, the gaps chip and the opt-in readouts do.
 const LANE_ROWS = 96;
-function announceLane(root) {
-  const t = _hudTop ? _hudTop.getBoundingClientRect() : null;
-  const W = vpW(), H = vpH() || 0;
-  const y0 = t ? t.bottom : 0, mid = W / 2;
-  const under = (el) => { if (!el || el.hidden || !el.getBoundingClientRect) return 0; const r = el.getBoundingClientRect(); return r.width && r.height ? r.bottom : 0; };
-  // Under a caution the card steps below the flag chip too (css/hud.css: the caution rules).
-  const bandTop = Math.max(y0, under(document.getElementById("hud-mirror")), under(document.getElementById("hud-mirror-chip")), under(els.flag)) + RADIO_TOP_GAP, bandBot = bandTop + LANE_ROWS;
+// PERF (#1723 / ledger PERF-GAMEPLAY-HITCHES-2026-10-14): announceLane's
+// getBoundingClientRect reads were ~21% of spike CPU at 4× throttle. Cache the
+// clipper rects; invalidate only on a real layout change (resize / orientation,
+// HUD scale / style / camera set, HudLayout / MOVE&SIZE → invalidateFit, fitHud
+// full pass, announce show/hide or content, clipper hide flags, gaps empty↔on).
+// Gap DIGIT rolloff must not re-key the memo — that was the periodic hitch.
+let _laneKey = "", _laneWait = 0, _laneRects = null, _laneSafe = null, _laneRectMisses = 0;
+function invalidateLaneRects() {
+  _laneRects = null;
+  _laneSafe = null;
+  _laneKey = "";
+  _laneWait = 0;
+}
+function laneRect(el) {
+  if (!el || typeof el.getBoundingClientRect !== "function") return null;
+  if (!_laneRects) _laneRects = new Map();
+  else if (_laneRects.has(el)) return _laneRects.get(el);
+  _laneRectMisses++;   // cache miss → real getBoundingClientRect (test/probe surface)
+  const r = el.getBoundingClientRect();
+  _laneRects.set(el, r);
+  return r;
+}
+function laneSafeInsets(root) {
+  if (_laneSafe) return _laneSafe;
   let sal = 0, sar = 0;
   if (typeof getComputedStyle === "function" && root) {
     try {
@@ -588,6 +605,16 @@ function announceLane(root) {
       sar = parseFloat(cs.getPropertyValue("--sar")) || 0;
     } catch (_) { /* mini-dom / detached root */ }
   }
+  return (_laneSafe = { sal, sar });
+}
+function announceLane(root) {
+  const t = _hudTop ? laneRect(_hudTop) : null;
+  const W = vpW(), H = vpH() || 0;
+  const y0 = t ? t.bottom : 0, mid = W / 2;
+  const under = (el) => { if (!el || el.hidden) return 0; const r = laneRect(el); return r && r.width && r.height ? r.bottom : 0; };
+  // Under a caution the card steps below the flag chip too (css/hud.css: the caution rules).
+  const bandTop = Math.max(y0, under(document.getElementById("hud-mirror")), under(document.getElementById("hud-mirror-chip")), under(els.flag)) + RADIO_TOP_GAP, bandBot = bandTop + LANE_ROWS;
+  const { sal, sar } = laneSafeInsets(root);
   let left = sal, right = W - sar, any = false;
   const clip = (r, counts) => {
     if (!r || !r.width || !r.height) return;
@@ -596,28 +623,28 @@ function announceLane(root) {
     if ((r.left + r.right) / 2 >= mid) right = Math.min(right, r.left);
     else left = Math.max(left, r.right);
   };
-  for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) clip(g.getBoundingClientRect(), true);
+  for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) clip(laneRect(g), true);
   // SECTORS always end the RIGHT of the lane. After #1191 the plate takes
   // --dock-r-w on buttons (and #1212 on every phone steer); a wide wrap-reverse
   // dock can push its centre left of mid, so the mid-based clip() above would
   // treat it as LEFT chrome and leave --announce-lane-w spanning into S1–S3
   // (Pages gate: #hud-sectors+#announce on notched-landscape buttons).
   const sec = els.hudSectors;
-  const secR = sec && !sec.hidden ? sec.getBoundingClientRect() : null;
+  const secR = sec && !sec.hidden ? laneRect(sec) : null;
   // Clip the RIGHT to sectors without setting `any` — desktop empty docks must
   // still clear the lane vars (CSS falls back to centred). Phone docks set
   // `any` via the group loop above.
   if (secR && secR.width && secR.height) right = Math.min(right, secR.left);
-  clip(els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null, false);
+  clip(els.minimap && !els.minimap.hidden ? laneRect(els.minimap) : null, false);
   const gaps = document.querySelector(".hud-gaps");
-  clip(gaps && !gaps.hidden ? gaps.getBoundingClientRect() : null, false);
+  clip(gaps && !gaps.hidden ? laneRect(gaps) : null, false);
   // The opt-in readouts (MOVE & SIZE places them) and the track-limits chip: a
   // STRATEGY box in the left column and the INPUTS trace under the sector box
   // share the card's rows on a phone. TYRES too: it is anchored on the left
   // dock, and a full-size dock at HUD 150% / BUTTON 200% lifts it into the
   // card's rows (hud-mock 2026-10-14, announce x tyre on 740x360 and 844x390).
   for (const el of [document.getElementById("hud-rel"), document.getElementById("hud-strat"), document.getElementById("hud-inputs"), document.getElementById("hud-damage"), els.hudLimits, els.tyre]) {
-    if (el && !el.hidden && el.getBoundingClientRect) clip(el.getBoundingClientRect(), false);
+    if (el && !el.hidden) clip(laneRect(el), false);
   }
   const x = left + RADIO_TOP_GAP, w = right - RADIO_TOP_GAP - x;
   const on = any && w > 0;
@@ -639,20 +666,37 @@ function announceLane(root) {
   const annEl = typeof document !== "undefined" ? document.getElementById("announce") : null;
   if (annEl && annEl.toggleAttribute) annEl.toggleAttribute("data-lane-collapsed", !!collapsed);
 }
-// PERF-2: updateHud re-clips the lane at ~10 Hz, and each pass reads ~6 layout
-// rects + a computed style after the tick's text writes. Memo on the same
-// layout-free facts the fit key reads (viewport, body classes, the fit key, every
-// clipper's hidden flag, the gap strings' length) with fitHud's 3 s backstop.
-let _laneKey = "", _laneWait = 0;
+// Layout-free key for the lane memo. Gaps are empty/non-empty only — digit
+// rolloff used to re-key every tick and force a full rect pass (#1723).
+function announceLaneLayoutKey() {
+  const ann = typeof document !== "undefined" ? document.getElementById("announce") : null;
+  const gapBit = (el) => (el && (el.textContent || "").length ? "1" : "0");
+  const hid = (el) => (el && !el.hidden ? "1" : "0");
+  // Announce: show/hide only. Content length does not move the clippers the
+  // lane reads (radioPaintedCollapse owns painted size); putting length in the
+  // key re-measured every radio line and defeated the cache.
+  let k = vpW() + "x" + vpH() + "|" + _fitKey + "|" + document.body.className + "|"
+    + (els.hudSectors && els.hudSectors.hidden ? "s" : "S")
+    + (els.minimap && els.minimap.hidden ? "m" : "M")
+    + gapBit(els.gapA) + gapBit(els.gapB)
+    + (ann && !ann.hidden ? "A" : "a")
+    + hid(els.flag) + hid(els.hudLimits) + hid(els.tyre);
+  for (const id of ["hud-rel", "hud-strat", "hud-inputs", "hud-damage", "hud-mirror", "hud-mirror-chip"]) {
+    const el = typeof document !== "undefined" ? document.getElementById(id) : null;
+    k += hid(el);
+  }
+  for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) k += g.hidden ? "h" : "v";
+  return k;
+}
 function announceLaneTick(root, force) {
   // Use the cached viewport (vpW/vpH), not window.innerWidth — a per-tick live
   // read defeats 5-perf F2 and forces layout on Android (#1395).
-  let k = vpW() + "x" + vpH() + "|" + _fitKey + "|" + document.body.className + "|"
-    + (els.hudSectors && els.hudSectors.hidden ? "s" : "S") + (els.minimap && els.minimap.hidden ? "m" : "M")
-    + (els.gapA ? (els.gapA.textContent || "").length : 0) + "." + (els.gapB ? (els.gapB.textContent || "").length : 0);
-  for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) k += g.hidden ? "h" : "v";
+  const k = announceLaneLayoutKey();
   // A forced refresh (jump / camera / probes) re-clips: it measures on the same tick.
   if (!force && k === _laneKey && --_laneWait > 0) return;
+  // Key change or force → drop the rect cache. Same-key 3 s backstop keeps it
+  // (re-apply CSS vars from cached rects; 0 getBoundingClientRect).
+  if (force || k !== _laneKey) { _laneRects = null; _laneSafe = null; }
   _laneKey = k; _laneWait = 30;
   announceLane(root);
 }
@@ -1687,6 +1731,9 @@ function fitHud() {
     const low = !!(sc && sc.width && sc.left < flagRight + 8);
     if (low !== ("flagLow" in root.dataset)) { if (low) root.dataset.flagLow = "1"; else delete root.dataset.flagLow; }
   }
+  // Fit just rewrote bands/docks — clipper boxes may have moved. Drop the lane
+  // rect cache so radioTopSlot / announceLane re-measure once, then warm it.
+  _laneRects = null; _laneSafe = null;
   radioTopSlot(root, bcast);
   announceLane(root);
   // Bottom cluster top (SPEED / GEAR / ERS). CSS caps #announce with
@@ -2564,6 +2611,7 @@ function resetRace() {
 // for the tick.
 function invalidateFit() {
   _fitKey = ""; _fitRetry = 0;
+  invalidateLaneRects();   // MOVE & SIZE / HUD ELEMENTS / scale — clippers moved
   if (!_hudTop || document.body.classList.contains("hud-hidden")) return;
   const root = document.documentElement;
   hStyle(root, "--hud-fit-stamp", "");
@@ -2587,7 +2635,12 @@ function syncPhoneFit() {
   return !phonePaintedClash() && /^\d+$/.test(stamp);
 }
 _syncPhoneFit = syncPhoneFit;
-return { updateHud, invalidateMap, flashSector, resetRace, invalidateFit, syncPhoneFit };
+return {
+  updateHud, invalidateMap, flashSector, resetRace, invalidateFit, syncPhoneFit,
+  // PERF probe: announceLane cache-miss count (tests/unit/hud-announce-lane-cache.test.mjs).
+  laneRectMisses: () => _laneRectMisses,
+  resetLaneRectMisses: () => { _laneRectMisses = 0; },
+};
 }
 
 return {

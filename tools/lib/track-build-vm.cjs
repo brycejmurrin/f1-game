@@ -24,10 +24,13 @@ const ROOT = path.resolve(__dirname, "../..");
 // Engine load order comes from tools/manifest.cjs (TRACK_VM) — the same source
 // of truth the load-order test asserts index.html against, so a file added to
 // the engine cannot silently go missing here. "@circuits" expands to every
-// circuit definition. `build-props.js` and `tracks.js` run AFTER the emitter
-// wrappers below: both destructure TrackGeom at load time, and the wrappers
-// must already be installed (otherwise RAW / guarded add* bind the unwrapped
-// originals and audits see ~0 prop primitives).
+// circuit definition. LAZY_TRACK_BUILD (models/themes/kits/nature/…/build-props)
+// stays on TRACK_VM even though the page loads it via ensureScenery — a harness
+// that built from FULL alone would miss the toolkit (hunt-2 T5). `build-props.js`
+// and `tracks.js` run AFTER the emitter wrappers below: both destructure
+// TrackGeom at load time, and the wrappers must already be installed (otherwise
+// RAW / guarded add* bind the unwrapped originals and audits see ~0 prop
+// primitives).
 const MANIFEST = require("../manifest.cjs");
 const BUILD_PROPS_ENTRY = "js/track/scenery/build-props.js";
 const TRACKS_ENTRY = "js/track/tracks.js";

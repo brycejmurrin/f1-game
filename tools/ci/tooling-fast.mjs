@@ -343,6 +343,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // heights[]; sanitize pads missing heights to flat zeros. Pure VM, ~0.05 s.
   "tests/unit/elev-presets.test.mjs",
   "tests/unit/elevation-smoothness.test.mjs",
+  "tests/unit/engine-note-quality.test.mjs",
   // Engine rpm for net/replay puppets and finish coast (game.js updateCar early-outs). ~15 s.
   "tests/unit/engine-revs-replay-vm.test.mjs",
   // ...and the race engineer's ladder: it ADVISES and never arms a stop,
@@ -468,6 +469,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // insertAdjacentHTML writes a constant or is in the reasoned allowlist
   // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
   "tests/unit/html-sink-lint.test.mjs",
+  "tests/unit/hud-announce-lane-cache.test.mjs",
   "tests/unit/hud-control-clearance.test.mjs",
   "tests/unit/hud-dock-pack.test.mjs",
   "tests/unit/hud-elements.test.mjs",
@@ -499,6 +501,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/import-models.test.mjs",
   "tests/unit/incident-gate.test.mjs",
   "tests/unit/incident-rpm.test.mjs",
+  // InputBindings factory alone (conflict claim, reset/isDefault, persistence,
+  // brand labels) — no input.js. Complements key-binds.test.mjs. ~0.1 s.
+  "tests/unit/input-bindings.test.mjs",
   "tests/unit/input-ghost.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
@@ -512,6 +517,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lap-format-rollover.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",
   "tests/unit/lazy-bundles-prefetch.test.mjs",
+  "tests/unit/lazy-track-build.test.mjs",
   // …and the PERIOD CAR reaching the garage SHEET, not just the team
   // record. Twelve legends share one `legends` id, so the write policy is
   // the behaviour: seed an empty sheet, reseed on a real switch, never on a
@@ -955,6 +961,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 5: camera tuner compact foot/preview/copy-from --tap-paint
   // floors (#camtune-inner only; lighting untouched).
   "tests/unit/ui-fit-camtune-tap-r5.test.mjs",
+  // ui-fit round 6: lighting tuner compact foot / short-tab --tap-paint
+  // floors (#lighting-inner / #lt-* only; camera untouched).
+  "tests/unit/ui-fit-lighttune-tap-r6.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
