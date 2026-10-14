@@ -20,6 +20,7 @@
     11  esses exit, gravel spill               row  0.255
     12  T4 apex + spectator bank               row  0.412
     13  T5 outside, hardwood run-off           row  0.456
+    13b Lac Ouimet (SE outfield water sheet)   fracs 0.40-0.52 −1
     14  the Carousel                           row  0.503
     15  back straight / the Hump crest         row  0.560
     16  T8-T9 climbing 90s                     row  0.626
@@ -44,7 +45,7 @@
         pine, tree, bush, forestEdge, building, grandstandEx, spectatorHill,
         guardrail, fence, tyreWall, marshalPost, cameraTower, billboard,
         motorhome, groundPatch, ridge, mountain, terrainYAt, addBox,
-        indexSolid } = api;
+        indexSolid, waterBand } = api;
 
       // ---------------------------------------------------------------- 1.
       // PALETTE + HELPERS. Deep summer green; the presets do the season.
@@ -74,6 +75,16 @@
 
       const { K } = api;            // the contract's frac -> node index (normalised for negatives)
       const RAIL = 3.2;                   // armco gap: hard against the tarmac
+      const CAM_NEAR = 22;                // first rank past chase + canopy
+      const inOrbitRing = (dist) => dist >= 30 && dist <= 60; // scenery-orbit ~45 m
+      const camHot = (k) => {
+        const f = k / n;
+        return (f >= 0.38 && f <= 0.56) || (f >= 0.66 && f <= 0.82);
+      };
+      // Clear the car→orbit wedge on +1: default orbit dist is 30 m (eye ~15–22 m
+      // past the edge at az 45); scenery survey uses 45 m. Hot fracs clear further.
+      const blocksOrbitView = (side, dist, k) =>
+        side === 1 && (camHot(k) ? dist < 62 : dist < 36);
       // Heading of the road at k, for world-space ridges/banks.
       const heading = (k, side, dist) => {
         const a = anchor((k + 4) % n, side, dist);
@@ -186,25 +197,33 @@
         return f >= 0.980 || f <= 0.068 || (f >= 0.690 && f <= 0.788);
       };
 
-      // every(14) and a 15 m base, not every(9) and 4-7 m. THIS is the block
-      // that made the circuit invisible — four ranks a side, starting inside the
-      // verge, every 36 m of lap. The comment below calls it "ragged, not a
-      // fence"; at 4 m it was a fence. Mont-Tremblant runs through forest, but
-      // the trees begin past the barrier and the runoff.
+      // every(14) and a CAM_NEAR (20-24 m) base: past the chase/orbit corridor,
+      // not inside the verge. Mont-Tremblant runs through forest, but the trees
+      // begin past the barrier and the runoff — and clear the camera.
       every(14, (k) => {
         const st = stand(k);
         for (const side of [-1, 1]) {
           if (blocked(k, side)) continue;
-          const base = 15 + hash(k * 13 + (side + 2) * 91) * 4;     // 15-19 m
-          const ranks = 3;
+          // Lac Ouimet / carousel outfield owns this strip.
+          if (side === -1 && within(k, 0.390, 0.536)) continue;
+          // T8-T9 climbing 90s owns its own pine ranks.
+          if (within(k, 0.608, 0.668)) continue;
+          const base = CAM_NEAR + hash(k * 13 + (side + 2) * 91) * 4; // 20-24 m
+          // Hot infield: thinner (2 ranks) — no reseed. Orbit ring skipped on
+          // ALL +1 (not only hot): wall + Band A otherwise stack canopies.
+          const hot = side === 1 && camHot(k);
+          const ranks = hot ? 2 : 3;
           for (let r = 0; r < ranks; r++) {
             const h = hash(k * 29 + r * 137 + (side + 2) * 61);
-            if (r > 0 && h < 0.16) continue;            // ragged, not a fence
+            if (r > 0 && h < (hot ? 0.28 : 0.16)) continue; // ragged, thinner on hot
             const dist = base + r * 6.2 + h * 3.5;
+            if (blocksOrbitView(side, dist, k)) continue;
             const a = anchor(k, side, dist);
             // 5 m of clearance, not 2.2: a trunk any closer to a fold of the
             // lap is what the engine's tree guard was dropping.
             if (onTrack(a.c[0], a.c[2], 5.0)) continue;
+            // Fold guard: pine×pine coplanar when the lap folds back on itself.
+            if (minEdge(a.c[0], a.c[2]) < dist * 0.85) continue;
             // Hardwood takes the LIT edge inside a stand; spruce and fir hold
             // the rest and everything behind the first rank.
             const hw = r === 0 ? (st > 0.38 && h > 0.18)
@@ -215,20 +234,25 @@
                          r === 0 ? (h < 0.4 ? PINE : PINE2) : (h < 0.5 ? PINE : PINE3));
           }
           // In a hardwood stand the wall has an UNDERSTORY too — young maple
-          // and birch crowding the light at the rail, under the big trunks.
+          // and birch crowding the light past the chase corridor.
           const hu = hash(k * 311 + (side + 2) * 47);
           if (st > 0.46 && hu > 0.42) {
             const du = base + 1.4 + hu * 2.2;
-            const au = anchor(k, side, du);
-            if (!onTrack(au.c[0], au.c[2], 4.0))
-              tree(k, side, du, 4.5 + hu * 3.5, hu < 0.7 ? HARD2 : HARD);
+            if (!blocksOrbitView(side, du, k)) {
+              const au = anchor(k, side, du);
+              if (!onTrack(au.c[0], au.c[2], 4.0) &&
+                  minEdge(au.c[0], au.c[2]) >= du * 0.85)
+                tree(k, side, du, 4.5 + hu * 3.5, hu < 0.7 ? HARD2 : HARD);
+            }
           }
           // Undergrowth at the foot of the wall: the ditch is never bare.
           const hb = hash(k * 7 + side);
           if (hb > 0.58) {
             const bd = base - 1.0;
-            const ab = anchor(k, side, bd);
-            if (!onTrack(ab.c[0], ab.c[2], 3.0)) bush(k, side, bd, hb > 0.82 ? FERN : SCRUB);
+            if (!blocksOrbitView(side, bd, k)) {
+              const ab = anchor(k, side, bd);
+              if (!onTrack(ab.c[0], ab.c[2], 3.0)) bush(k, side, bd, hb > 0.82 ? FERN : SCRUB);
+            }
           }
         }
       });
@@ -240,20 +264,25 @@
       // Three bands, each stepping back, lighter and taller, all in pine and
       // ridge so the depth is free in prop verts (see COST MODEL above).
 
-      // Band A, 17-48 m: the body of the wood, still legible as trunks.
+      // Band A, 22-50 m: the body of the wood, still legible as trunks.
       every(11, (k) => {
         for (const side of [-1, 1]) {
           if (blocked(k, side)) continue;
           // Row 0.560: the outfield over the Hump is the ONE place the lap
           // breathes — block 15 sets the treeline there and this band keeps off.
           if (side === -1 && within(k, 0.546, 0.598)) continue;
+          if (side === -1 && within(k, 0.390, 0.536)) continue;
+          if (within(k, 0.608, 0.668)) continue;
           const h = hash(k * 53 + (side + 2) * 17);
           if (h < 0.09) continue;
-          const ranks = h > 0.48 ? 3 : 2;
+          const hot = side === 1 && camHot(k);
+          const ranks = hot ? (h > 0.55 ? 2 : 1) : (h > 0.48 ? 3 : 2);
           for (let r = 0; r < ranks; r++) {
-            const dist = 17.5 + r * 10.5 + h * 9;
+            const dist = 22 + r * 10.5 + h * 9;
+            if (blocksOrbitView(side, dist, k)) continue;
             const a = anchor(k, side, dist);
             if (onTrack(a.c[0], a.c[2], 6)) continue;
+            if (minEdge(a.c[0], a.c[2]) < dist * 0.85) continue;
             const g = hash(k * 97 + r * 31 + (side + 2) * 7);
             if (g > 0.78 && stand(k) > 0.44)
               tree(k, side, dist, 12 + g * 9, g < 0.89 ? HARD : HARD2);
@@ -263,7 +292,7 @@
         }
       });
 
-      // Band B, 55-125 m: canopy only — tall, sparse, hazier. This is the band
+      // Band B, 58-125 m: canopy only — tall, sparse, hazier. This is the band
       // that shows over the near ranks from the crests.
       every(23, (k) => {
         for (const side of [-1, 1]) {
@@ -271,14 +300,17 @@
           // Row 0.150 is skyline, not roadside: nothing in the middle distance
           // on the infield where the massif has to show over the T1 crest.
           if (side === 1 && within(k, 0.126, 0.188)) continue;
+          if (side === -1 && within(k, 0.390, 0.530)) continue;
           const h = hash(k * 131 + (side + 2) * 37);
           if (h < 0.10) continue;
           for (let r = 0; r < 3; r++) {
             const g = hash(k * 191 + r * 59 + (side + 2) * 13);
             if (g < 0.15) continue;
-            const dist = 56 + r * 24 + g * 18;
+            const dist = 62 + r * 24 + g * 18; // past orbit wedge on hot +1
+            if (blocksOrbitView(side, dist, k)) continue;
             const a = anchor(k, side, dist);
             if (onTrack(a.c[0], a.c[2], 8)) continue;
+            if (minEdge(a.c[0], a.c[2]) < dist * 0.85) continue;
             pine(k, side, dist, 19 + r * 2.5 + g * 13, g < 0.5 ? PINE3 : PINE2);
           }
         }
@@ -291,6 +323,7 @@
         const f = (i + 0.5) / 46;
         const k = K(f);
         const side = i % 2 ? -1 : 1;
+        if (side === -1 && f >= 0.390 && f <= 0.530) continue;
         const h = hash(i * 257 + 11);
         if (h < 0.12) continue;
         ridgeAt(k, side, 210 + h * 120, 300 + h * 180, 130 + h * 70,
@@ -311,20 +344,9 @@
       // (row 0.020), runs the whole downhill sweep with nothing built at all
       // (row 0.330), walks up to both Bridge abutments (row 0.776), and holds
       // the outfield to the line past Paddock Bend (row 0.897).
-      // GAP 15-19 m, not 4.0-5.5: a 4.5 m gap puts the trunks inside the
-      // runoff, so the canopy fills the camera from every roadside view and
-      // hides the circuit. Mont-Tremblant is carved through forest, but the
-      // treeline stands beyond the verge, not on it. `spacing` thins them from
-      // the 4 m default to a woodland you can see the track through.
-      forestEdge(0.036, 0.088, -1, 17, { spacing: 13 });
-      forestEdge(0.290, 0.398, -1, 16, { spacing: 13 });
-      forestEdge(0.430, 0.500, -1, 15, { spacing: 12 });
-      forestEdge(0.505, 0.552, -1, 18, { spacing: 14 });
-      forestEdge(0.660, 0.770, -1, 17, { spacing: 13 });
-      forestEdge(0.660, 0.770, 1, 19, { spacing: 14 });
-      forestEdge(0.782, 0.828, -1, 16, { spacing: 13 });
-      forestEdge(0.782, 0.828, 1, 18, { spacing: 14 });
-      forestEdge(0.900, 0.985, -1, 17, { spacing: 13 });
+      // forestEdge removed: coplanar-audit still found fold fights with −1
+      // edges at ≥48 m (pine×pine same-facing). Depth comes from the ranked
+      // wall + bands A/B instead.
 
       // ---------------------------------------------------------------- 6.
       // THE CUTTING AND THE ESSES (T2-T3, row 0.205). Earth banks either side,
@@ -355,20 +377,25 @@
                  h < 0.5 ? ROCK : ROCK2, [a.r, a.u, a.t]);
         }
       }
-      // every(13) and 16 m out: at 4.6 m, right on top of the rail, the
-      // circuit shows nothing but trunks. The forest stands back from the barrier.
+      // every(13) and CAM_NEAR out: past the chase corridor, not on the rail.
       every(13, (k) => {
         if (!within(k, ES0, ES1)) return;
         for (const side of [-1, 1]) {
           const h = hash(k * 41 + (side + 2) * 23);
-          const dist = 16 + h * 4;                    // beyond the rail and the verge
+          const dist = CAM_NEAR + h * 4;
+          if (blocksOrbitView(side, dist, k)) continue;
           const a = anchor(k, side, dist);
-          if (!onTrack(a.c[0], a.c[2], 1.0)) {
+          if (!onTrack(a.c[0], a.c[2], 1.0) &&
+              minEdge(a.c[0], a.c[2]) >= dist * 0.85) {
             tree(k, side, dist, 17 + h * 8, h < 0.5 ? HARD : HARD2);
           }
-          const d2 = 23 + h * 5;
-          const b = anchor(k, side, d2);
-          if (!onTrack(b.c[0], b.c[2], 1.2)) pine(k, side, d2, 19 + h * 9, PINE);
+          const d2 = CAM_NEAR + 8 + h * 5;
+          if (!blocksOrbitView(side, d2, k)) {
+            const b = anchor(k, side, d2);
+            if (!onTrack(b.c[0], b.c[2], 1.2) &&
+                minEdge(b.c[0], b.c[2]) >= d2 * 0.85)
+              pine(k, side, d2, 19 + h * 9, PINE);
+          }
           // Ferns and scrub hold the foot of the bank in the damp of the cut.
           if (h > 0.55) {
             const d3 = 5.6 + h * 1.2;
@@ -479,6 +506,7 @@
       {
         // Control tower — behind the garage block, clear of the spruce wall
         // (clip-audit: modelGroup × tree at frac 0.063).
+        indexSolid(sl(0.000), sl(0.030), 1, 48, 40);
         const a0 = anchor(K(sl(0.012)), 1, 64);
         const gy = terrainYAt(a0.c[0], a0.c[2]);
         const a = {
@@ -513,6 +541,7 @@
           const dist = 92 + r * 15 + h * 12;
           const a = anchor(k, 1, dist);
           if (onTrack(a.c[0], a.c[2], 7)) continue;
+          if (minEdge(a.c[0], a.c[2]) < dist * 0.85) continue;
           pine(k, 1, dist, 17 + r * 3 + h * 10, r ? PINE3 : PINE2);
         }
       });
@@ -539,6 +568,7 @@
           const dist = 30 + r * 13 + h * 9;
           const a = anchor(k, -1, dist);
           if (onTrack(a.c[0], a.c[2], 6)) continue;
+          if (minEdge(a.c[0], a.c[2]) < dist * 0.85) continue;
           pine(k, -1, dist, 18 + r * 3 + h * 10, r ? PINE3 : PINE);
         }
       });
@@ -571,9 +601,10 @@
       every(9, (k) => {
         if (!within(k, 0.250, 0.292)) return;
         const h = hash(k * 19);
-        const dist = 4.2 + h * 2.4;
+        const dist = CAM_NEAR + h * 3.5;
         const a = anchor(k, 1, dist);
         if (onTrack(a.c[0], a.c[2], 1.2)) return;
+        if (minEdge(a.c[0], a.c[2]) < dist * 0.85) return;
         if (h < 0.55) pine(k, 1, dist, 13 + h * 10, PINE);
         else tree(k, 1, dist, 10 + h * 6, HARD);
       });
@@ -593,49 +624,65 @@
       every(12, (k) => {
         if (!within(k, 0.396, 0.428)) return;
         const h = hash(k * 43);
+        // Past the scenery-orbit eye (~45 m on +1) — was 34-58 and clipped f42.
         for (let r = 0; r < 2; r++) {
-          const dist = 34 + r * 14 + h * 10;
+          const dist = 58 + r * 12 + h * 10;
           const a = anchor(k, 1, dist);
           if (onTrack(a.c[0], a.c[2], 5)) continue;
+          if (minEdge(a.c[0], a.c[2]) < dist * 0.85) continue;
           pine(k, 1, dist, 15 + r * 3 + h * 10, r ? PINE3 : PINE);
         }
       });
 
       // --------------------------------------------------------------- 13.
-      // T5 OUTSIDE (row 0.456). Armco with hardwood ranks 4 m beyond it. No
-      // gravel trap, no tarmac apron — the trees are the run-off.
+      // T5 OUTSIDE (row 0.456). Armco with hardwood ranks past the camera
+      // corridor. No gravel trap, no tarmac apron — the trees are the run-off.
       guardrail(0.444, 0.472, -1, 2.6, ARMCO);
-      every(7, (k) => {
-        if (!within(k, 0.442, 0.478)) return;
+      every(8, (k) => {
+        if (!within(k, 0.442, 0.477)) return;
         const h = hash(k * 59);
         for (let r = 0; r < 2; r++) {
-          const dist = 4.2 + r * 5.5 + h * 2.0;
+          const dist = CAM_NEAR + r * 6.5 + h * 2.0;
+          if (dist > 78) continue;
           const a = anchor(k, -1, dist);
           if (onTrack(a.c[0], a.c[2], 1.0)) continue;
+          if (minEdge(a.c[0], a.c[2]) < dist * 0.85) continue;
           tree(k, -1, dist, 13 + h * 8, r ? HARD2 : HARD);
         }
         if (h > 0.6) {
-          const d = 3.8 + h * 0.8;
+          const d = 6.5 + h * 0.8;
           const a = anchor(k, -1, d);
           if (!onTrack(a.c[0], a.c[2], 1.0)) bush(k, -1, d, FERN);
         }
       });
 
+      // --------------------------------------------------------------- 13b.
+      // LAC OUIMET — SE outfield water sheet beside the carousel arc.
+      {
+        const LAKE = [0.10, 0.28, 0.38];
+        waterBand(0.400, 0.520, -1, 92, 310, 16, LAKE, {
+          id: "tremblant-lac-ouimet",
+        });
+        indexSolid(0.400, 0.520, -1, 88, 230);
+      }
+
       // --------------------------------------------------------------- 14.
       // THE CAROUSEL (row 0.503). Marshal post and a camera tower inside with
       // a billboard pair; the OUTSIDE is a solid wall of pine following the
-      // whole arc.
+      // whole arc (past CAM_NEAR; no infield reseed).
       marshalPost(K(0.498), 1, 12);
       cameraTower(K(0.508), 1, 13, {});
       billboard(K(0.494), 1, 14, 8, 3, [0.88, 0.72, 0.12]);
       billboard(K(0.514), 1, 14, 8, 3, [0.14, 0.52, 0.28]);
-      every(6, (k) => {
-        if (!within(k, 0.478, 0.536)) return;
+      every(8, (k) => {
+        if (!within(k, 0.479, 0.536)) return;
         const h = hash(k * 67);
-        for (let r = 0; r < 4; r++) {
-          const dist = 4.2 + r * 5.5 + h * 2.4;
+        for (let r = 0; r < 3; r++) {
+          const dist = CAM_NEAR + 1.8 + r * 7.2 + h * 3.1;
+          if (dist > 78) continue;
           const a = anchor(k, -1, dist);
           if (onTrack(a.c[0], a.c[2], 1.0)) continue;
+          if (minEdge(a.c[0], a.c[2]) < dist * 0.85) continue;
           pine(k, -1, dist, 16 + r * 1.6 + h * 11, r % 2 ? PINE2 : PINE);
         }
       });
@@ -653,6 +700,7 @@
         const dist = 22 + h * 12;
         const a = anchor(k, -1, dist);
         if (onTrack(a.c[0], a.c[2], 2)) return;
+        if (minEdge(a.c[0], a.c[2]) < dist * 0.85) return;
         pine(k, -1, dist, 13 + h * 9, PINE2);
         if (h > 0.7) bush(k, -1, dist - 9, SCRUB);
       });
@@ -693,16 +741,16 @@
       marshalPost(K(0.620), 1, 7);
       tyreWall(0.632, 0.646, 1, 5, TYRE);
       marshalPost(K(0.650), 1, 7);
-      every(6, (k) => {
-        if (!within(k, 0.608, 0.668)) return;
+      every(12, (k) => {
+        if (!within(k, 0.608, 0.658)) return;
         for (const side of [-1, 1]) {
           const h = hash(k * 83 + (side + 2) * 29);
-          for (let r = 0; r < 3; r++) {
-            const dist = 4.2 + r * 5.0 + h * 2.2;
-            const a = anchor(k, side, dist);
-            if (onTrack(a.c[0], a.c[2], 1.0)) continue;
-            pine(k, side, dist, 15 + r * 2.0 + h * 11, r % 2 ? PINE2 : PINE);
-          }
+          const dist = CAM_NEAR + 2.6 + h * 4.5 + (side > 0 ? 1.7 : 0);
+          if (blocksOrbitView(side, dist, k)) continue;
+          const a = anchor(k, side, dist);
+          if (onTrack(a.c[0], a.c[2], 1.0)) continue;
+          if (minEdge(a.c[0], a.c[2]) < dist * 0.85) continue;
+          pine(k, side, dist, 15 + h * 11, side > 0 ? PINE2 : PINE);
         }
       });
 
@@ -805,8 +853,15 @@
         const dist = 32 + h * 12;
         const a = anchor(k, -1, dist);
         if (onTrack(a.c[0], a.c[2], 2)) return;
+        if (minEdge(a.c[0], a.c[2]) < dist * 0.85) return;
         tree(k, -1, dist, 12 + h * 8, h < 0.5 ? HARD : HARD2);
-        if (h > 0.6) pine(k, -1, dist + 9, 16 + h * 8, PINE);
+        if (h > 0.6) {
+          const d2 = dist + 9;
+          const b = anchor(k, -1, d2);
+          if (!onTrack(b.c[0], b.c[2], 2) &&
+              minEdge(b.c[0], b.c[2]) >= d2 * 0.85)
+            pine(k, -1, d2, 16 + h * 8, PINE);
+        }
       });
       // Depth over the top of the bank, so the hairpin is framed by wood and
       // not by sky: two more ranks stepping back from the spectators.
@@ -817,6 +872,7 @@
           const dist = 54 + r * 17 + h * 12;
           const a = anchor(k, -1, dist);
           if (onTrack(a.c[0], a.c[2], 7)) continue;
+          if (minEdge(a.c[0], a.c[2]) < dist * 0.85) continue;
           pine(k, -1, dist, 19 + r * 3 + h * 11, r ? PINE3 : PINE2);
         }
       });
@@ -863,6 +919,7 @@
           const dist = 46 + r * 16 + h * 11;
           const a = anchor(k, 1, dist);
           if (onTrack(a.c[0], a.c[2], 7)) continue;
+          if (minEdge(a.c[0], a.c[2]) < dist * 0.85) continue;
           pine(k, 1, dist, 18 + r * 3 + h * 10, r ? PINE3 : PINE2);
         }
       });
