@@ -378,6 +378,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/flyby-shots.test.mjs",
   "tests/unit/flying-start.test.mjs",
   "tests/unit/font-digits.test.mjs",
+  // Portrait HFOV floor + landscape HFOV cap (js/camera/fov-fit.js); pure VM, <0.1 s.
+  "tests/unit/fov-fit.test.mjs",
   // The FRAMING REPORT fleet diff (tools/lib/frame-fleet.mjs): frame identity across
   // a shot-list edit, flag-name comparison, worst-frame summary. Pure, ~0.1 s.
   "tests/unit/frame-fleet.test.mjs",
