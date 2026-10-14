@@ -5,8 +5,8 @@ export const meta = {
   phases: [
     { title: 'Prior art', detail: 'prior-art-scout — seeds the do-not-re-report list when args.known is empty (one call)', model: 'haiku' },
     { title: 'Recon', detail: 'haiku — run the static checkers, tabulate the real reference graph', model: 'haiku' },
-    { title: 'Find 1', detail: '29 code-hunter slices — effort low on 4 data-shaped slices, medium on domains, high on engine, renderers, net, audio' },
-    { title: 'Verify 1', detail: 'finding-verifier reachability + intent lenses per ≤15-claim chunk, finding-verifier tiebreak (effort high) on high-severity splits' },
+    { title: 'Find 1', detail: '29 code-hunter slices — haiku+low effort on 4 data-shaped slices, sonnet+medium on domains, opus+high on engine, renderers, net, audio' },
+    { title: 'Verify 1', detail: 'finding-verifier reachability + intent lenses per ≤15-claim chunk, finding-verifier tiebreak (opus, effort high) on high-severity splits' },
     { title: 'Critic', detail: 'opus — names the cross-cutting lenses no scope slice covered', model: 'opus' },
     { title: 'Find 2', detail: 'critic-driven code-hunter gap finders (effort high for engine-adjacent gaps)' },
     { title: 'Verify 2', detail: 'same adversarial panel' },
@@ -147,6 +147,11 @@ const COMMON = `${COMMON_BASE}
 KNOWN FINDINGS — already recorded, queued, or deliberately deferred. Do NOT re-report these or trivial variants:
 ${KNOWN}${FOCUS}`
 
+// The agent definitions pin one model (code-hunter: opus); a slice's tier still
+// picks it, so data-shaped slices stay cheap: low → haiku, medium → sonnet,
+// high → opus (the pre-agentType tiers, kept for cost).
+const TIER_MODEL = { low: 'haiku', medium: 'sonnet', high: 'opus' }
+
 // ───────────────────────── round-1 slices, effort-tiered ─────────────────────
 // Every slice goes to agent code-hunter (its definition pins the model), so
 // the tier is EFFORT, chosen by the SHAPE of the reading, not by file size:
@@ -249,7 +254,7 @@ async function verifyBatch(fresh, round) {
     // A high-severity finding the two lenses SPLIT on gets a high-effort decider.
     if (f.severity === 'high' && heard[i] === 2 && refutes[i] === 1) {
       const tie = await agent(`${refutePrompt([compact[i]], { lens: 'TIEBREAK — two skeptics split on this claim, one refuted it, one did not. You are the decider. Apply BOTH lenses: is the code genuinely reachable/hot as claimed, AND is it a defect rather than a deliberate design choice (AGENTS.md, the relevant docs/ page)? Decide on the merits, not by splitting the difference.' })}\n\nThe refuting skeptic said: ${JSON.stringify(why[i])}`,
-        { label: `tiebreak${round}:${f.file.split('/').pop()}:${f.line}`, phase: ph, agentType: 'finding-verifier', effort: 'high', schema: VERDICTS_SCHEMA })
+        { label: `tiebreak${round}:${f.file.split('/').pop()}:${f.line}`, phase: ph, agentType: 'finding-verifier', model: 'opus', effort: 'high', schema: VERDICTS_SCHEMA })
       const t = tie && tie.verdicts && tie.verdicts[0]
       if (t) { heard[i]++; if (t.refuted) { refutes[i]++; why[i].push(`[tiebreak] ${t.reason}`) } }
     }
@@ -295,7 +300,7 @@ for (let round = 1; round <= MAX_ROUNDS; round++) {
   // skeptics while the other finders are still reading.
   const roundOut = await pipeline(
     prompts,
-    (p) => agent(p.text, { label: p.label, phase: `Find ${round}`, agentType: 'code-hunter', effort: p.effort, schema: FINDINGS_SCHEMA }),
+    (p) => agent(p.text, { label: p.label, phase: `Find ${round}`, agentType: 'code-hunter', model: TIER_MODEL[p.effort], effort: p.effort, schema: FINDINGS_SCHEMA }),
     (res, p) => {
       if (!res) { log(`${p.label}: finder returned nothing`); return [] }
       if (res.coverageNote) coverageNotes.push(`${p.label}: ${res.coverageNote}`)
