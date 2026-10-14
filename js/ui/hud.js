@@ -698,6 +698,9 @@ function radioPaintedCollapse(root) {
   // and re-lit hud-radio-top, so the same-key clash path forced a full fit
   // every tick. Under selected-2 load that left #minimap.currentCSSZoom on a
   // stale cap while --hud-z-top moved (compact mmCss 142 ≠ 110).
+  // Also collapse when the card still paints over SPEED/GEAR: the CSS 1.8em
+  // floor wins over a ~7px cluster budget at phoneL broadcast @150%, and
+  // announceLaneTick after fitHud can re-open a collapsed lane.
   const annPaint = typeof document !== "undefined" ? document.getElementById("announce") : null;
   if (annPaint && !annPaint.hidden) {
     const a = annPaint.getBoundingClientRect();
@@ -709,7 +712,9 @@ function radioPaintedCollapse(root) {
         && r.top < a.bottom - 0.5 && a.top < r.bottom - 0.5);
     };
     const tower = _hudTop || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
-    if (hit(els.hudSectors) || hit(tower)) {
+    const gear = typeof document !== "undefined" ? document.getElementById("hud-gearbox") : null;
+    const speed = typeof document !== "undefined" ? document.getElementById("hud-speed") : null;
+    if (hit(els.hudSectors) || hit(tower) || hit(gear) || hit(speed)) {
       hToggle(document.body, "hud-radio-top", false);
       const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();
       hStyle(root, "--announce-lane-x", (salPx + RADIO_TOP_GAP).toFixed(1) + "px");
@@ -1224,6 +1229,45 @@ function fitHud() {
   let leftBot = bcast && _hudTop ? layoutRect(_hudTop).bottom : 0;
   if (mmR && mmR.width) leftBot = Math.max(leftBot, mmR.bottom);
   if (gapsR && gapsR.width) leftBot = Math.max(leftBot, gapsR.bottom);
+  // Gaps strip alone (centre flag clears it; TYRES must not lift the flag).
+  hStyle(root, "--hud-gaps-b", ((gapsR && gapsR.width ? gapsR.bottom : 0) / chromeZ).toFixed(1) + "px");
+  const dockL = _dockL ? _dockL.getBoundingClientRect() : null;
+  // Phone landscape: when the dock-top TYRES anchor would cover the map (HUD
+  // 150% broadcast survey), stack TYRES under the left column and extend
+  // --hud-left-h so REL / STRATEGY follow. MOVE & SIZE (data-hl-user) wins.
+  const phone = !document.body.classList.contains("desktop");
+  const tyreEl = els.tyre;
+  // colBot: map/gaps edge only (leftBot+tyre latched into the safe area).
+  const colBot = leftBot;
+  const tyreZ = zBotPub || scale || 1;
+  let tyreStack = false;
+  if (phone && tyreEl && !tyreEl.hidden && !(tyreEl.hasAttribute && tyreEl.hasAttribute("data-hl-user"))) {
+    const tBox = tyreEl.getBoundingClientRect();
+    const tHpx = Math.max(tBox.height, 36);
+    const dockTopPx = dockL && dockL.height ? dockL.top : vpH();
+    const naturalTopPx = dockTopPx - tHpx - 8;
+    const minTopPx = colBot + 2;
+    const roomPx = Math.max(0, dockTopPx - minTopPx - 2);
+    if (naturalTopPx < minTopPx - 0.5 && roomPx >= 12) {
+      // Divide by .hud-bottom zoom so painted screen y == minTopPx.
+      hStyle(root, "--hud-tyre-top", (minTopPx / tyreZ).toFixed(1) + "px");
+      if (roomPx < tHpx - 0.5) hStyle(root, "--hud-tyre-max-h", (roomPx / tyreZ).toFixed(1) + "px");
+      else hUnstyle(root, "--hud-tyre-max-h");
+      if (tyreEl.dataset) {
+        if (roomPx < 48) tyreEl.dataset.tyreCompact = "1";
+        else delete tyreEl.dataset.tyreCompact;
+      }
+      leftBot = Math.max(leftBot, minTopPx + Math.min(tHpx, roomPx));
+      tyreStack = true;
+    } else {
+      hUnstyle(root, "--hud-tyre-top"); hUnstyle(root, "--hud-tyre-max-h");
+      if (tyreEl.dataset) delete tyreEl.dataset.tyreCompact;
+    }
+  } else {
+    hUnstyle(root, "--hud-tyre-top"); hUnstyle(root, "--hud-tyre-max-h");
+    if (tyreEl && tyreEl.dataset) delete tyreEl.dataset.tyreCompact;
+  }
+  if (document.body.classList) document.body.classList.toggle("hud-tyre-stack", tyreStack);
   hStyle(root, "--hud-left-h", (leftBot / chromeZ).toFixed(1) + "px");
   // THE SAME EDGE IN SCREEN PIXELS. #hud-limits reads --hud-left-h from INSIDE
   // the chrome zoom, so it wants the divided value. #game-metrics is OUTSIDE it
@@ -1240,12 +1284,36 @@ function fitHud() {
   const gmR = gmEl && !gmEl.hidden ? gmEl.getBoundingClientRect() : null;
   const gmBot = gmR && gmR.width ? gmR.bottom : 0;
   hStyle(root, "--hud-metrics-b", (gmBot / chromeZ).toFixed(1) + "px");
-  const dockL = _dockL ? _dockL.getBoundingClientRect() : null;
   // The metrics panel is part of what fills this column now, so the room test
   // measures from whichever is lower — the map/strip edge or the panel's bottom.
   const leftFilled = Math.max(leftBot, gmBot);
   const leftRoom = !(dockL && dockL.width && leftFilled + (8 + CHIP_H) * chromeZ > dockL.top);
   const limLeft = hitsRight && leftRoom;
+  // LIMITS on the left lands under --hud-left-h; a dock-top TYRES still sits
+  // in that slot at HUD ≤125% (phoneL survey: limits×tyre). Stack TYRES under
+  // the map/gaps edge and re-publish so the chip hangs below it.
+  if (limLeft && phone && tyreEl && !tyreEl.hidden
+      && !(tyreEl.hasAttribute && tyreEl.hasAttribute("data-hl-user")) && !tyreStack) {
+    const tBox = tyreEl.getBoundingClientRect();
+    const tHpx = Math.max(tBox.height, 36);
+    const minTopPx = colBot + 2;
+    const dockTopPx = dockL && dockL.height ? dockL.top : vpH();
+    const roomPx = Math.max(0, dockTopPx - minTopPx - 2);
+    if (roomPx >= 12) {
+      hStyle(root, "--hud-tyre-top", (minTopPx / tyreZ).toFixed(1) + "px");
+      if (roomPx < tHpx - 0.5) hStyle(root, "--hud-tyre-max-h", (roomPx / tyreZ).toFixed(1) + "px");
+      else hUnstyle(root, "--hud-tyre-max-h");
+      if (tyreEl.dataset) {
+        if (roomPx < 48) tyreEl.dataset.tyreCompact = "1";
+        else delete tyreEl.dataset.tyreCompact;
+      }
+      leftBot = Math.max(leftBot, minTopPx + Math.min(tHpx, roomPx));
+      tyreStack = true;
+      if (document.body.classList) document.body.classList.toggle("hud-tyre-stack", true);
+      hStyle(root, "--hud-left-h", (leftBot / chromeZ).toFixed(1) + "px");
+      hStyle(root, "--hud-left-px", leftBot.toFixed(1) + "px");
+    }
+  }
   if (limLeft !== ("limitsLeft" in root.dataset)) {
     if (limLeft) root.dataset.limitsLeft = "1";
     else delete root.dataset.limitsLeft;
@@ -1587,6 +1655,14 @@ function fitHud() {
   }
   radioTopSlot(root, bcast);
   announceLane(root);
+  // Bottom cluster top (SPEED / GEAR / ERS). CSS caps #announce with
+  // cluster/z − flag-slot − 40px so a caution step cannot cover the gearbox
+  // (JS-measured room went stale when the flag was forced on after fitHud).
+  {
+    const bot = document.querySelector(".hud-bottom");
+    const br = bot && !bot.hidden ? bot.getBoundingClientRect() : null;
+    hStyle(root, "--hud-cluster-y", (br && br.height ? br.top : vpH()).toFixed(1) + "px");
+  }
   radioPaintedCollapse(root);   // terminal: nothing after it may re-run radioTopSlot (hud-metrics-layout.test)
   mirrorClear(root);
   if (els.minimap) void els.minimap.offsetHeight;
@@ -2043,6 +2119,9 @@ function updateHud(force, dtMs) {
   // on the SAME tick (jump → wait --hud-top-h → probe, no 10 Hz wait) sat on
   // .hud-gaps on notched-landscape tilt/touch. Re-clip from the box as painted.
   announceLaneTick(document.documentElement, force);
+  // Lane re-pick can clear data-lane-collapsed; re-assert painted clearance
+  // over SPEED/GEAR (phoneL broadcast @150%).
+  radioPaintedCollapse(document.documentElement);
   paintHudDelta(player, timeTrial);
   if (typeof HudRelative !== "undefined") HudRelative.tick(G, player);   // opt-in RELATIVE box (js/ui/hud-relative.js)
   if (typeof HudStrategy !== "undefined") HudStrategy.tick(G, player);   // opt-in STRATEGY panel (js/ui/hud-strategy.js)
