@@ -883,12 +883,25 @@ test.describe("portrait radio card (phone-portrait-390)", () => {
         if (typeof HudElements !== "undefined") HudElements.set("rel", true);
         if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
         window.__apex.jump(0.15, 60, 0);
-        document.getElementById("announce").hidden = false;
-      });
-      const got = await page.waitForFunction(async () => {
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        // Fit already ran (announce still hidden). Unhide AFTER so announceLane
+        // does not immediately re-collapse. #1501's data-lane-collapsed + a 0px
+        // --announce-lane-w leave width:0; the async waitForFunction below used
+        // to treat its Promise as success and then m.a.left threw (CI 38602185902
+        // HUD 100%). Sync wait + restore the fallback lane so the fixture card
+        // can paint. Do not invalidateFit again.
         const ann = document.getElementById("announce");
-        if (!ann || ann.hidden) return false;
+        if (ann) {
+          ann.hidden = false;
+          ann.removeAttribute("data-lane-collapsed");
+        }
+        const root = document.documentElement;
+        for (const k of ["--announce-lane-w", "--announce-lane-x", "--announce-lane-shift"]) {
+          root.style.removeProperty(k);
+        }
+      });
+      const got = await page.waitForFunction(() => {
+        const ann = document.getElementById("announce");
+        if (!ann || ann.hidden || ann.hasAttribute("data-lane-collapsed")) return false;
         const box = (el) => {
           if (!el || el.hidden) return null;
           const r = el.getBoundingClientRect();
@@ -903,6 +916,7 @@ test.describe("portrait radio card (phone-portrait-390)", () => {
       }, null, { polling: 100, timeout: 30_000 });
       const m = await got.jsonValue();
       const why = JSON.stringify(m);
+      expect(m && m.a, "announce box missing after wait: " + why).toBeTruthy();
       expect(m.a.left, why).toBeGreaterThanOrEqual(-0.5);
       expect(m.a.top, why).toBeGreaterThanOrEqual(-0.5);
       expect(m.a.right, why).toBeLessThanOrEqual(m.W + 0.5);
@@ -915,6 +929,85 @@ test.describe("portrait radio card (phone-portrait-390)", () => {
     });
   }
 });
+
+// PORTRAIT RACE-ANYWAY: tower rows + sector times must stay ≥ 10 CSS px
+// (same floor as PR #1734 / the gap-chip clamp) and must not paint over
+// each other, the gear/speed dash, PLAN, or the radio card. The VIEWS
+// loop above skips `.hud-top` / `#hud-sectors` on portrait (rotate-device
+// overlay); this is the rotate-ok path the player actually races.
+for (const v of [
+  { name: "phone-portrait-390", w: 390, h: 844, sal: 0, sar: 0, sat: 47, sab: 34 },
+  { name: "phone-portrait-430", w: 430, h: 932, sal: 0, sar: 0, sat: 59, sab: 34 },
+]) {
+  test.describe(`portrait tower/sectors readable (${v.name})`, () => {
+    test.setTimeout(300_000);
+    test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
+    test("HUD 150%: tower and sectors stay ≥ 10 CSS px and clear dash/plan/announce", async ({ page }) => {
+      await race(page, "tilt", false, v, { hudScale: 150, btnScale: 150, cam: "chase" });
+      await page.evaluate(() => {
+        document.body.classList.add("rotate-ok");
+        localStorage.setItem("apex26.portraitOk", "1");
+        const plan = document.getElementById("hud-plan");
+        if (plan && !plan.textContent) plan.textContent = "PLAN NO STOP";
+        // race() unhides #announce with a long radio line for the landscape
+        // card tests. Portrait race-anyway keeps that slot collapsed until a
+        // message; leave it collapsed so we assert the shipped announce area.
+        const ann = document.getElementById("announce");
+        if (ann) {
+          ann.hidden = true;
+          ann.setAttribute("data-lane-collapsed", "");
+        }
+        if (typeof GameHud !== "undefined" && GameHud.invalidateFit) GameHud.invalidateFit();
+        window.__apex.jump(0.15, 60, 0);
+      });
+      const got = await page.waitForFunction(() => {
+        const tower = document.querySelector(".hud-top");
+        const sectors = document.getElementById("hud-sectors");
+        const label = tower && tower.querySelector(".hud-label");
+        const secVal = sectors && (sectors.querySelector(".sec-val") || sectors);
+        if (!tower || !sectors || !label || sectors.hidden) return false;
+        const zOf = (el) => el.currentCSSZoom || 1;
+        const painted = (el) => parseFloat(getComputedStyle(el).fontSize) * zOf(el);
+        const box = (el) => {
+          if (!el || el.hidden) return null;
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0
+            ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom } : null;
+        };
+        const t = box(tower), s = box(sectors);
+        if (!t || !s) return false;
+        return {
+          labelPx: painted(label), secPx: painted(secVal),
+          zTop: document.documentElement.style.getPropertyValue("--hud-z-top"),
+          t, s,
+          others: {
+            "#hud-gearbox": box(document.getElementById("hud-gearbox")),
+            "#hud-speed": box(document.getElementById("hud-speed")),
+            "#hud-plan": box(document.getElementById("hud-plan")),
+            "#announce": box(document.getElementById("announce")),
+          },
+        };
+      }, null, { polling: 100, timeout: 30_000 });
+      const m = await got.jsonValue();
+      const why = JSON.stringify(m);
+      expect(m.labelPx, "tower label painted px: " + why).toBeGreaterThanOrEqual(10);
+      expect(m.secPx, "sector time painted px: " + why).toBeGreaterThanOrEqual(10);
+      const hits = Object.entries({ ".hud-top": m.t, "#hud-sectors": m.s, ...m.others })
+        .filter(([, r]) => r);
+      const clashes = [];
+      for (let i = 0; i < hits.length; i++) {
+        for (let j = i + 1; j < hits.length; j++) {
+          const a = hits[i][1], b = hits[j][1];
+          if (a.left < b.right - 0.5 && b.left < a.right - 0.5
+              && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5) {
+            clashes.push(hits[i][0] + "+" + hits[j][0]);
+          }
+        }
+      }
+      expect(clashes, why).toEqual([]);
+    });
+  });
+}
 
 test.describe("track-limits chip", () => {
   test.setTimeout(300_000);
