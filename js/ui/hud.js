@@ -681,9 +681,8 @@ function radioTopSlot(root, bcast) {
   let slot = lit && right - RADIO_TOP_GAP - x >= RADIO_TOP_MIN
     ? { x, y: t.top, w: right - RADIO_TOP_GAP - x, h: t.height } : null;
   if (!slot && lit) slot = radioUnderRight(t);
-  // The corner is an ATTRIBUTE, not hud-radio-top: body.className keys the fit,
-  // lane and root-var memos, and a class flipping with the slot between passes
-  // broke the same-input fit's idempotence (hud-fit-idempotent: --dock-r-w).
+  // The corner is an ATTRIBUTE, not hud-radio-top: body.className keys the fit/lane/root-var
+  // memos, and a class flipping between passes broke hud-fit-idempotent (--dock-r-w).
   const corner = !!(slot && slot.corner), b = document.body;
   hToggle(b, "hud-radio-top", !!slot && !corner);
   if (b.toggleAttribute && b.hasAttribute("data-radio-corner") !== corner) b.toggleAttribute("data-radio-corner", corner);
@@ -697,25 +696,16 @@ function radioTopSlot(root, bcast) {
   hStyle(root, "--radio-top-w", (slot.w / as).toFixed(1) + "px");
   hStyle(root, "--radio-top-h", (slot.h / as).toFixed(1) + "px");
 }
-// THE TOP-RIGHT CORNER, SECOND CHOICE (Bryce on a phone, 2026-10-14: "top
-// right by the camera selector"). On 844x390 the strip right of the tower is
-// ~70px, under RADIO_TOP_MIN, so the card fell to the lane under the tower's
-// LEFT end, over the road. This slot hangs from the tower's bottom edge,
-// right-aligned against the right column (CAM, PAUSE, the sector plate), one
-// row tall and right of the screen's centre so it clears the caution flag's
-// chip (centred, from ~y 95 on 844x390); anything else lit in those rows (the
-// HUD mirror or its chip, the gaps chip, a dock group, the flag itself) bounds
-// it from its own side. body[data-radio-corner] anchors the card by its RIGHT
-// edge (--radio-top-r), so a short message still sits beside CAM. null when
-// the card would be under RADIO_TOP_MIN.
+// THE TOP-RIGHT CORNER, SECOND CHOICE ("top right by the camera selector", 2026-10-14): on 844x390 the
+// strip right of the tower is ~70px. Hangs from the tower's bottom, right of centre (clears the centred
+// flag chip), right-aligned against CAM / PAUSE / the sector plate; anything lit in those rows (HUD mirror
+// or chip, gaps chip, dock groups, the flag) bounds it from its side. Anchored by its RIGHT edge
+// (--radio-top-r) so a short message sits beside CAM; null under RADIO_TOP_MIN.
 const RADIO_UNDER_H = 36, RADIO_UNDER_MAXW = 260, RADIO_UNDER_GAP = 4;
 function radioUnderRight(t) {
   let R = vpW() - 10, L = Math.max(t.left, vpW() / 2 + RADIO_TOP_GAP);
-  for (const el of [els.btnCam, els.pausebtn, els.hudSectors]) {
-    if (!el || el.hidden) continue;
-    const r = el.getBoundingClientRect();
-    if (r.width && r.left > t.left + t.width / 2) R = Math.min(R, r.left);
-  }
+  for (const el of [els.btnCam, els.pausebtn, els.hudSectors]) { if (!el || el.hidden) continue;
+    const r = el.getBoundingClientRect(); if (r.width && r.left > t.left + t.width / 2) R = Math.min(R, r.left); }
   R -= RADIO_TOP_GAP;
   const y = t.bottom + RADIO_UNDER_GAP, bot = y + RADIO_UNDER_H;
   const obst = [document.getElementById("hud-mirror"), document.getElementById("hud-mirror-chip"),
@@ -2198,8 +2188,7 @@ function updateHud(force, dtMs) {
       }
     }
     if (_blue !== !!blueCar) { _blue = !!blueCar; hData(els.flag, "flag", _blue ? "blue" : null); }
-    // A flag chip appearing or going re-picks the radio slot: the top-right
-    // corner card (radioUnderRight) steps right of the centred chip, not under it.
+    // A flag chip appearing or going re-picks the radio slot (radioUnderRight steps right of it).
     if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; if (_invalidateFit) _invalidateFit(); }
   }
   // Stamp only after REL, sector rows and announce lane for this tick — fitHud
