@@ -5100,7 +5100,9 @@ const TLX = (function () {
               try {
                 renderer.setRenderTarget(post.sceneTarget());
                 _gpuLastOperation = "render-scene";
+                if (post.depthBegin) post.depthBegin(opts, _postF);   // A-P1: does this frame's post read the depth?
                 _renderTimed(scene, camera);
+                if (post.depthEnd) post.depthEnd();
                 _gpuLastOperation = "render-post";
                 post.present(opts, _postF);
               } finally {
