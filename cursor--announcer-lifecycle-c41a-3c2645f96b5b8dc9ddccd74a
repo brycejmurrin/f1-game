@@ -1,0 +1,1 @@
+1791960475	Bryce Murrin	Recorded announcer lifecycle follow-up under root: OWNED js/audio/announcer-recorded.js tests/unit/announcer.test.mjs; clean asynchronous pause/hidden/mute aborts and isolate stale callbacks. No browser or publish; root integrates.  [cursor/announcer-lifecycle-c41a; session 3c2645f96b5b8dc9ddccd74a]
