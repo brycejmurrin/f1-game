@@ -1,0 +1,1 @@
+1791950160	Cursor Agent	tyre recipes: parts.js factory/sig visual + cover:1 / open-rim retarget; OWNED js/car/parts.js (+ car-wheels hook if needed) + related tests. No merge. Forbidden: car3d.js field-lod teams.js physics grip.  [claude/f1-game-project-26h3ng; session 229f83fe956e14220dce3db6]
