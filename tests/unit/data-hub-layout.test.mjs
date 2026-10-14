@@ -47,10 +47,13 @@ test("tall-narrow hub tabs are a 3-column grid (not one full-width column)", () 
   );
 });
 
-test(".dh-content clips sideways overflow (no dead horizontal scroll)", () => {
-  const d = ruleFor(rules, /^\.dh-content$/);
-  assert.ok(d, ".dh-content rule");
-  // css-rules keeps the last overflow-x when duplicated (hidden then clip).
-  assert.match(DATA_CSS, /\.dh-content\s*\{[^}]*overflow-x:\s*clip/, "overflow-x: clip present");
+test(".dh-content cancels sf-thumb width (no dead horizontal scroll)", () => {
   assert.equal(decl(rules, ".dh-content", "touch-action"), "pan-y");
+  assert.equal(decl(rules, ".dh-content", "overscroll-behavior-x"), "none");
+  // Sticky .sf-scroll::before is 6px in-flow; cancel it like height's margin-bottom.
+  assert.equal(decl(rules, ".dh-content.sf-scroll::before", "margin-right"), "-6px");
+  assert.match(
+    decl(rules, ".dh-content.sf-scroll::before", "transform") || "",
+    /translateX\(calc\(var\(--gap\) \/ 6 - var\(--sf-pr/,
+  );
 });

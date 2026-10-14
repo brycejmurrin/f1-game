@@ -231,20 +231,23 @@ body[data-shape="tall"][data-width="narrow"] .dh-tab {
   width: 100%; min-width: 0; padding-inline: calc(var(--gap) / 3);
   min-height: var(--tap-paint);
   font-size: var(--fs-micro);
+  /* Wrap on spaces (WATCH & DRIVE) only — overflow-wrap:anywhere split
+     TELEMETRY into TELEMETR/Y on a 3-col 360px grid (after shot 2026-10-14). */
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
+  letter-spacing: var(--ls-4);
   line-height: 1.15;
 }
 
 .dh-content {
   flex: 1 1 auto;
-  /* overflow-x: clip (with hidden fallback) — panel scrollWidth was 6–10px past
-     clientWidth with nothing to reveal (menu-fit hOverflow / dead sideways pan on
-     schedule+standings). hidden still allowed scrollLeft; clip does not. */
-  overflow-y: auto; overflow-x: hidden; overflow-x: clip;
+  overflow-y: auto; overflow-x: hidden;
   /* a flick at the end of a long standings table shouldn't rubber-band the page
-     behind the hub; pan-y keeps a vertical flick from nudging the phantom x-axis */
+     behind the hub; pan-y + overscroll-x:none keep a vertical flick from
+     nudging a phantom x-axis (the sf thumb used to inflate scrollWidth). */
   overscroll-behavior-y: contain;
+  overscroll-behavior-x: none;
   touch-action: pan-y;
   /* ScrollFade draws .sf-scroll::before; hide the native gutter so desktop does
      not show a grey bar beside the orange thumb (settings #pm-settings-body). */
@@ -252,6 +255,15 @@ body[data-shape="tall"][data-width="narrow"] .dh-tab {
   scrollbar-gutter: auto;
   padding: calc(var(--gap) * 4 / 3) calc(var(--gap) * 1.5);
   display: flex; flex-direction: column;  /* so flex:1 children (loading/error) expand */
+}
+/* Sticky sf thumb is in-flow (6px wide) and inflated .dh-content scrollWidth by
+   exactly that width — menu-fit hOverflow / dead scrollLeft on every size
+   (360→1440). Height already cancels via margin-bottom on .sf-scroll::before
+   (components.css); cancel width the same way, then translate into the padding
+   lane (--sf-pr from ScrollFade) so the thumb still clears row text. */
+.dh-content.sf-scroll::before {
+  margin-right: -6px;
+  transform: translateX(calc(var(--gap) / 6 - var(--sf-pr, 0px)));
 }
 .dh-content::-webkit-scrollbar { display: none; }
 body[data-width="narrow"] .dh-content { padding: var(--gap) calc(var(--gap) * 7 / 6); }
