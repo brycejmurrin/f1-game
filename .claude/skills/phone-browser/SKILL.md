@@ -1,6 +1,6 @@
 ---
 name: phone-browser
-description: "Use when the user is on a phone and wants the game in Chromium through the custom Grok connector, or that public address has stopped answering. Not for chrome-devtools, Playwright tests, or a desktop shell."
+description: "Use when the user is on a phone and wants the game in Chromium through the Grok connector, or the connector link stopped working. Not for chrome-devtools, Playwright tests, or desktop."
 ---
 
 # Phone browser
@@ -22,6 +22,8 @@ node tools/mcp/browser-http-up.mjs
 A line that starts `phone-browser reuse` means the address they already pasted still works. Say nothing about a new address.
 
 A line that starts `phone-browser new` means the public host changed. Give them that one URL and tell them to open grok.com/connectors, edit the custom connector, and paste it. That is the only step they do.
+
+The script throws, takes long, or a URL needs checking (`browser_status`, `orientation`): `references/failures.md`.
 
 ## Do not
 

@@ -340,6 +340,11 @@
         m = new THREE.InstancedMesh(casterGeo(batch.geo), depthMat, sharedInstCap(batch.instances | 0));
         m.matrixAutoUpdate = false;
         m.frustumCulled = false;
+        // DYNAMIC, not Stream (tlx.js A-H1 moved the plain-Mesh batches to Stream): three relays an
+        // InstancedMesh's instanceMatrix into its draw buffer once per frame per render object, and a caster
+        // is rewritten per cast — a Stream caster redrawn by the same pass after a rewrite keeps the earlier
+        // rows (measured, tlx-hunt4.test.mjs). Only Dynamic re-sends it per render(); the price is the whole
+        // padded array on every draw after a pass's first of the frame (A-H4 moves the caster to Stream).
         m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         // Do not set instanceColor. The lit batch already carries an
         // InstancedBufferAttribute `color` on the shared geometry; a second

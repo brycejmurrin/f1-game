@@ -27,10 +27,13 @@ names the branch and path; merge it before verifying here
 remove the worktree once merged (`git worktree remove <path>`).
 
 ```sh
-node tools/track/verify-track.cjs <id>            # baseline; again after all pair edits
-node tools/track/float-audit.cjs <id> --json      # props, not terrain-over-road/water
-node tools/track/coplanar-audit.cjs <id>         # when overlapping faces matter
+node tools/track/audit-circuit.cjs <id> --json   # ONE offline call: verify/float/clip/coplanar/props/ground vs baselines
+node tools/track/audit-circuit.cjs <id> --checks verify,ground   # a subset; run once as baseline, again after all pair edits
 ```
+
+`ground` (`ground-audit.cjs`) covers buried/unsupported props; `float-audit` is
+props only, so terrain-over-road and sunk water still need the parent's
+survey captures. The checks are browser-free.
 
 For centreline measurements, load `buildContext()` from
 `tools/track/verify-track.cjs`, select the def by id, then call
@@ -40,12 +43,8 @@ launch/capture/automation in the fork, including `survey-track.mjs`,
 `ground-profile.mjs`, `tools/shot/` commands and cloudBrowser. A numerical-only
 output does not make a Chromium-backed tool browser-free.
 
-Related workflows, coordinated by the parent: **scenery-dress** (`js/circuits/scenery/<id>.js` `scenery(api)`),
-**new-track** (the def itself — `path`, `turns`/`sectors`, elevation, banking,
-widths: a survey that finds the LAYOUT wrong hands over here, not to dressing),
-**agent-view** (geometry hooks), **playwright-probe** (`shot.mjs`),
-**check-changes** (ship). Subagent: **track-surveyor** (writes only that
-circuit's pair — def + scenery closure; no browser runs).
+Subagent: **track-surveyor** (writes only that circuit's pair). A LAYOUT defect
+hands over to **new-track**, not dressing; routing is in the description.
 
 ## Where the truth lives
 
@@ -81,18 +80,17 @@ circuit's pair — def + scenery closure; no browser runs).
 4. `verify-track.cjs <id>` — a THROW strands the game on the menu.
 5. Return changes, before/after numbers, source/year evidence, baseline deltas
    and uncertainties. Parent captures the same framings after integration.
-6. The fork stops after verify-track / applicable coplanar / float-audit.
-   Parent integration, targeted browser checks and shipping follow
-   **check-changes**, after the fork returns. New fields, landmark registries,
-   baselines and tests remain parent-owned.
+6. The fork stops after `audit-circuit`. Parent integration, browser checks and
+   shipping follow **check-changes**.
 
 Montreal already ships `flatTerrain: true` + `terrainOuter: 70` — survey
 before re-applying that fix.
 
 ## Load on demand
 
-- Full loop, probe flags, Montreal worked example, gotchas →
-  [references/loop.md](references/loop.md).
+- Probe flags, Montreal worked example, gotchas, and the PARENT-only steps
+  (browser survey, re-survey, ship) → [references/loop.md](references/loop.md);
+  the fork reads only its "Fork steps".
 
 Per-circuit research briefs describe the reference place; verify implementation
 claims against source. The baked PBR asset pack ships ON and degrades to the

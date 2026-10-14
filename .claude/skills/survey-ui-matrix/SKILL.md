@@ -10,17 +10,9 @@ browser-free catalog checks and artifact analysis. Subagents return defect table
 with screenshot paths and missing cells; the parent applies fixes via `css-play`
 or `ui-menu-a11y`. This follows AGENTS.md rule 10.
 
-## Prerequisites (always)
+## Prerequisites
 
-Playwright MCP + Chromium must be installed before interactive resize/DOM work:
-
-```bash
-bash tools/env/cloud-agent-install.sh      # AGENTS.md §Verification 1
-bash tools/mcp/playwright-mcp.sh status 2>/dev/null || true
-```
-
-Missing browsers / wrapper: the SessionStart hook installs them (AGENTS.md
-§Verification 1); fallback `bash tools/env/cloud-agent-install.sh`.
+Browsers and Playwright MCP come from the SessionStart hook (AGENTS.md rule 1).
 
 A layout bug is never "on a screen" — it is a **cell of a matrix**: screen ×
 viewport × scale × pointer. **One CLI:** `tools/ui/layout-audit.mjs`.
@@ -28,7 +20,7 @@ viewport × scale × pointer. **One CLI:** `tools/ui/layout-audit.mjs`.
 ```sh
 # BROWSER-FREE (safe anywhere; exits before any launch): --help, --list, --report
 node tools/ui/layout-audit.mjs --help
-node tools/ui/layout-audit.mjs --list            # screens × viewports catalog (browser-free; 49×11 as of 2026-10-01)
+node tools/ui/layout-audit.mjs --list            # screens × viewports catalog (browser-free; counts are in its output)
 # BROWSER-ONLY (launch Chromium: check /proc/loadavg < 3, no Playwright run live):
 node tools/ui/layout-audit.mjs --survey          # title-path + shots (npm run ui:survey)
 node tools/ui/layout-audit.mjs --gallery         # fast PNG+DOM all menus (npm run ui:gallery)
@@ -36,26 +28,14 @@ node tools/ui/layout-audit.mjs --screen=settings # one cell
 node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run ui:audit)
 # Numbers companion (type/spacing floors): node tools/ui/fit-audit.mjs
 # Notch insets only: node tools/ui/menu-fit.mjs 852x393 --safe=59,0,59,21
-# Both of those LAUNCH CHROMIUM unless `--help` is passed (added 2026-10-01);
+# Both of those LAUNCH CHROMIUM unless `--help` is passed;
 # a bare probe for usage used to start a browser. Prefer `layout-audit.mjs --list`
 # for the catalog without launching.
 ```
 
-## Fastest look at the RACE HUD layout: `tools/shot/hud-mock.mjs` (~1 s a shot)
-
-The HUD on BLACK with every widget mocked (radio card, flag, limits chip, damage), a labelled box per
-element (readouts cyan, taps yellow, overlapping pairs RED), report.json + index.md + sheet.jpg. One race
-boot per pointer type (~37 s), then DOM-only cells: 48 shots in 143 s. Use it FIRST to see a layout or
-to before/after a CSS change; use hud-survey (below) when the 3D frame behind matters (occlusion).
-
-```sh
-node tools/shot/hud-mock.mjs                                              # phone 844x390: 5 cams x shipped/all-on
-node tools/shot/hud-mock.mjs --devices phone-se-667x375,phone-max-932x430 --cams cockpit,chase --hud-scale 70,200
-node tools/shot/hud-mock.mjs --matrix scratch/cells.json                  # hud-survey cell schema
-```
-Approximate by design: the mirror frame follows its own show rule (no rendered frame, no side placement).
-`--format jpeg` is ~5x smaller; a cell whose definition AND `js/` `css/` `index.html` are unchanged is served from
-`artifacts/ui-mock-cache` (`--no-cache` re-shoots), so a re-run after a docs/tools edit costs ~1 s.
+Phone landscape 844x390 touch (NOT the default `ios-iphone-landscape`, 852x393):
+`node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape-844 --screens='*'`.
+Which tool: menu-mock = look fast; layout-audit = numbers of record; fit-audit = type/spacing floors; menu-fit = free-form size.
 
 ## Fastest look at the MENUS and sheets: `tools/ui/menu-mock.mjs` (~1-2 s a cell)
 
@@ -71,32 +51,6 @@ node tools/ui/menu-mock.mjs --screens='*' --viewports=ios-iphone-landscape-844 -
 ```
 Shared pieces (held rAF, boxes, CDP capture, contact sheet, content-hash cache) live in `tools/lib/ui-mock-core.mjs`.
 
-## Fast path for the RACE HUD: `apex_hud_survey` / `tools/shot/hud-survey.mjs`
-
-The menus above are `layout-audit`; the in-race HUD (devices × cameras × MOVE &
-SIZE presets × theme / CVD / contrast / text × HUD / UI / BUTTON size × MAP /
-GAPS / MIRROR × HudElements toggles × night × track) is one CLI that boots a
-race, measures every HUD box (overlap, missing-vs-expected, offscreen, unsafe,
-tiny text, page errors) and writes `report.json`, `findings.md`, `index.html`
-and contact sheets under `artifacts/hud-survey/<stamp>/`. Browser-free first:
-
-```sh
-node tools/shot/hud-survey.mjs --self-test               # pure logic, no browser
-node tools/shot/hud-survey.mjs --list --matrix leads     # cells + cost, no browser
-node tools/shot/hud-survey.mjs --matrix quick --only chase-default   # 1 boot, ~2 min
-node tools/shot/hud-survey.mjs --matrix quick            # 13 cells / 3 boots, ~10 min
-node tools/shot/hud-survey.mjs --matrix quick --no-shots --gl llvmpipe   # MEASURE FIRST: 5.4 min, then --only <cells with findings> for pixels
-node tools/shot/hud-survey.mjs --matrix leads            # static-audit repros with numeric checks
-# full ≈ 45 min (pairwise); exhaustive ≈ 4 h → shard it: --shard i/n, then --merge <dirs>,
-# or dispatch .github/workflows/hud-survey.yml (llvmpipe shards + one merged artifact)
-```
-
-MCP: `apex_hud_shot` (one cell's knobs → `structuredContent` {shot, findings,
-measurements} + a `resource_link` to the PNG) and `apex_hud_survey` (`matrix`,
-`only`, `shard`, `noShots` → findings summary + links to findings.md /
-index.html). Both take `scratch/apex-browser.lock` — `apex_status` first. A
-`missing` finding is the point: an element the settings promise but the page
-hides (the expected-visible rules live in `tools/lib/hud-survey-matrix.mjs`).
 
 This skill is the **interactive** complement: Playwright MCP for resize / DOM /
 CSS survey (`tools/mcp/playwright-mcp.sh`) or Chrome DevTools MCP; enumerate screens from source, measure each cell, capture.
@@ -109,7 +63,7 @@ Flags (header of `layout-audit.mjs`): `--screens=a,b` / `--viewports=ios-*`
 `--scale` takes a PERCENT (`--scale=125`; `1.25` throws). Viewports are catalog
 names only (`VIEWPORTS`, `menu-screens.mjs`; shortest is 852x344), so a free-form
 size such as 568x320 is `menu-fit.mjs 568x320 --scale=125` (its own 18 screens,
-not the 49) or `fit-audit.mjs --sizes=568x320 --scale=125` (12), or a new
+not the full catalog) or `fit-audit.mjs --sizes=568x320 --scale=125` (12), or a new
 `VIEWPORTS` row for the full catalog.
 
 Order: 1. `--list` and diff against `index.html` dialogs (browser-free, setup.md
@@ -128,6 +82,8 @@ scope, compare rows by hand or `jq`. Pass rule: the geometry run always exits 0 
 (6 pixel PNGs) for identity. Record baseline path, scope, bad-count before/after.
 
 ## Load on demand
+
+- Race HUD: [`references/hud-mock.md`](references/hud-mock.md) (look-fast), [`references/hud-survey.md`](references/hud-survey.md) (devices x cameras x settings; MCP `apex_hud_survey` / `apex_hud_shot` / `apex_hud_mock`)
 
 - Probe recipes and viewport catalogue: [`references/probes.md`](references/probes.md)
 - Environment setup (browsers, MCP): [`references/setup.md`](references/setup.md)

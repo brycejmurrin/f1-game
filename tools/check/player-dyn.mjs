@@ -13,6 +13,7 @@
  *
  *   node tools/check/player-dyn.mjs                # table
  *   node tools/check/player-dyn.mjs --json         # raw JSON (diffable)
+ *   node tools/check/player-dyn.mjs --seat shipped # the default boot car, not the pin
  *   TRACK=monza FRAC=0.0                            # which straight to pin to
  *
  * `measure(g)` is exported for tests/unit/player-dynamics-vm.test.mjs, which
@@ -23,7 +24,7 @@
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
-const { createGame } = require("../lib/game-vm.cjs");
+const { createGame, SEATS } = require("../lib/game-vm.cjs");
 
 const DT = 1 / 60, G_ = 9.81, DEG = 180 / Math.PI;
 const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
@@ -161,13 +162,23 @@ async function main() {
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
     console.log(`player-dyn — player vehicle-dynamics bench (VM, no browser)
 
-  TRACK=monza FRAC=0.0 node tools/check/player-dyn.mjs [--json]
+  TRACK=monza FRAC=0.0 node tools/check/player-dyn.mjs [--json] [--seat pin|shipped]
+
+  --seat pin      (default) McLaren on an empty parts sheet — the driving model
+  --seat shipped  the car a fresh browser boots (GarageDefaults team + kit)
 
 Owned by tune-physics.`);
     process.exit(0);
   }
   const track = process.env.TRACK || "monza", frac = +(process.env.FRAC || 0);
-  const g = await createGame({ track, storage: { difficulty: "normal", autoThrottle: false } });
+  const si = process.argv.indexOf("--seat");
+  const seatArg = process.argv.find((a) => a.startsWith("--seat="));
+  const seat = seatArg ? seatArg.slice(7) : si >= 0 ? process.argv[si + 1] : "pin";
+  if (!Object.prototype.hasOwnProperty.call(SEATS, seat || "")) {
+    console.error(`player-dyn: --seat must be ${Object.keys(SEATS).join("|")} (got ${seat})`);
+    process.exit(2);
+  }
+  const g = await createGame({ track, seat, storage: { difficulty: "normal", autoThrottle: false } });
   await g.race(track);
   const out = measure(g, frac);
   g.close();

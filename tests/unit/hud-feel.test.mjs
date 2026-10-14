@@ -210,6 +210,13 @@ test("the OVERTAKE chip spells every state differently and reads the 2026 allowa
   player.otT = 0; tick();
   assert.equal(els.ot.textContent, "OT READY 0.31 MJ", "paused below the speed floor is still an allowance, not a lockout");
 
+  // N2 (2026-10-14): a grant HELD behind a closed gate (the lap-0 grant overtake-mode.js keeps, or any
+  // grant under a safety car) must not pulse the yellow "ready" plate while the text and the button say
+  // it is unavailable — the class follows the gate like the text does.
+  player.otE = 0.125; player.otArmed = true; G.otEnabled = () => false; tick();
+  assert.equal(els.ot.className, "ot-off", "a held grant behind a closed gate is not 'ready'");
+  assert.equal(els.ot.textContent, "OT · LAP 1");
+  player.otArmed = false;
   player.otE = 0; G.otEnabled = () => false; tick();
   assert.equal(els.ot.textContent, "OT · LAP 1", "opening lap explains the race-wide gate");
   assert.equal(els.btnOT.getAttribute("aria-disabled"), "true");
@@ -1032,8 +1039,8 @@ test("a dropped gap strip carries the radio card's caution step down with the fl
   // The flag chip steps down under :root[data-gap-drop]; the card's caution step reads the same slot through
   // --flag-slot-top, which the root flag raises (#1345) — ONE formula, no body mirror (the #1366 twins were
   // dropped at the ship sync: HUD PR review 2026-10-10).
-  assert.match(css, /:root\[data-gap-drop\] #hud-flag \{\s*top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 74px\)/);
-  assert.match(css, /:root\[data-gap-drop\] #announce \{ --flag-slot-top: calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 74px\); \}/,
+  assert.match(css, /:root\[data-gap-drop\] #hud-flag \{\s*top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 44px\)/);
+  assert.match(css, /:root\[data-gap-drop\] #announce \{ --flag-slot-top: calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 44px\); \}/,
     "the dropped strip raises the card's flag slot to the chip's edge");
   assert.match(css, /body:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 38px\); \}/,
     "the card sits 38px under the flag slot, wherever the chip is");

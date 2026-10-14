@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-ahIIg+W6KliuhOKnEcN9KqkAm5pzec8nCfsXuXb5m2Y=' 'sha256-fsFU0C3h0SGNa9Hq7GhQUKahoDMg2CiZrjDpTd7Kun4=' 'sha256-YNcj4XnIOSHuKTKMwoiMcAg530BS4cqIpbwXcg3Smuk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-ahIIg+W6KliuhOKnEcN9KqkAm5pzec8nCfsXuXb5m2Y=' 'sha256-fsFU0C3h0SGNa9Hq7GhQUKahoDMg2CiZrjDpTd7Kun4=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -612,10 +612,10 @@
            to press by accident at 300 km/h, which is why it only exists for the
            two seconds the car is stationary. -->
       <button id="hud-work" type="button" hidden>WORK ON CAR</button>
-      <div id="hud-ot" class="ot-off">OVERTAKE</div>
-      <div id="hud-aero" class="ax-off">CORNER MODE</div>
+      <div id="hud-ot" class="ot-off" role="img">OVERTAKE</div>
+      <div id="hud-aero" class="ax-off" role="img">CORNER MODE</div>
       <!-- BRAKE BIAS, the set-up sheet's front share (c.brakeBias). -->
-      <div id="hud-bb">BB 56%</div>
+      <div id="hud-bb" role="img">BB 56%</div>
     </div>
     <div id="dock-right" class="dock"></div>
   </div>
@@ -2135,7 +2135,7 @@
          banner and Garage is not a leftover utility chip. SECONDARY stays
          the chrome rooms (standings + controller when shown). -->
     <div id="menu-explore" class="balanced-row">
-    <button id="mb-watch" class="bigbtn" type="button"><span>WATCH REAL RACES <span class="mb-sub">BROADCAST &amp; REPLAY</span></span></button>
+    <button id="mb-watch" class="bigbtn" type="button" aria-label="Watch — Broadcast / real races"><span>WATCH <span class="mb-sub">BROADCAST / REAL RACES</span></span></button>
     <button id="mb-practice" class="bigbtn" type="button"><span>PRACTICE <span class="mb-sub">GOALS &amp; CHECKPOINTS</span></span></button>
     <button id="mb-photo" class="bigbtn" type="button"><span>PHOTO STUDIO <span class="mb-sub">CAPTURE &amp; BACKGROUNDS</span></span></button>
     <button id="mb-garage" class="bigbtn" type="button"><span>GARAGE <span class="mb-sub">SETUP &amp; LIVERY</span></span></button>
@@ -3456,10 +3456,10 @@
 <script type="importmap">
 {
   "imports": {
-    "three": "./vendor/three-0.186.0/three.webgpu.min.js",
-    "three/webgpu": "./vendor/three-0.186.0/three.webgpu.min.js",
-    "three/tsl": "./vendor/three-0.186.0/three.tsl.min.js",
-    "three/addons/": "./vendor/three-0.186.0/addons/",
+    "three": "./vendor/three-0.186.1/three.webgpu.min.js",
+    "three/webgpu": "./vendor/three-0.186.1/three.webgpu.min.js",
+    "three/tsl": "./vendor/three-0.186.1/three.tsl.min.js",
+    "three/addons/": "./vendor/three-0.186.1/addons/",
     "@trystero-p2p/core": "./vendor/trystero-0.25.4/core/index.js",
     "@trystero-p2p/nostr": "./vendor/trystero-0.25.4/nostr/index.js",
     "@noble/secp256k1": "./vendor/trystero-0.25.4/noble-secp256k1.js"
@@ -3546,7 +3546,9 @@
 <script defer crossorigin="anonymous" src="js/car/helmets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-geometry.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-wheels.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/car-materials.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-shade.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/car-body-geom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car3d.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/tilt-roll.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/bindings.js?v=dev"></script>
