@@ -1,1 +1,1 @@
-1791977577	Cursor Agent	PR #1501 re-sync: tip moved during prior sync (#1490/#1723); CONFLICTING; merge commit only; leave #1490/#1725 alone; no arm  [cursor/hud-announce-stack-577d; session da00c8f0f96d5b31b029bc6b]
+1791979591	Cursor Agent	PR #1501 tip re-sync after e709 push; tip moved during gate; CONFLICTING; merge-only; no arm  [cursor/hud-announce-stack-577d; session da00c8f0f96d5b31b029bc6b]
