@@ -15,7 +15,7 @@ const CHIP = "#trackdesigner .td-stage > .td-chips[data-role=\"toolbar\"] .sel-c
 test("Track Designer toolbar chips wrap+balance labels (r6)", () => {
   assert.equal(decl(rules, CHIP, "white-space"), "normal");
   assert.equal(decl(rules, CHIP, "text-wrap"), "balance");
-  assert.equal(decl(rules, CHIP, "overflow-wrap"), "anywhere");
+  assert.equal(decl(rules, CHIP, "overflow-wrap"), "break-word");
   assert.equal(decl(rules, CHIP, "overflow"), "visible");
 });
 

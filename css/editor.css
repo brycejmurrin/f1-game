@@ -538,7 +538,7 @@
 #trackdesigner[data-mode="scenery"] .td-stage > .td-chips[data-role="toolbar"] .sel-chip {
   white-space: normal;
   text-wrap: balance;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   text-align: center;
   line-height: 1.15;
   overflow: visible;
