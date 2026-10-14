@@ -1979,8 +1979,7 @@ const Input = (function () {
     // has no console, so this puts that answer ON SCREEN. Opt-in only:
     // ?inputdebug=1 in the URL, or localStorage apex26.inputDebug = "1".
     try {
-      const want = /[?&]inputdebug=1/.test(location.search) ||
-        localStorage.getItem("apex26.inputDebug") === "1";
+      const want = typeof DevFlags !== "undefined" && !!DevFlags.get("inputdebug");
       if (want) {
         const d = document.createElement("div");
         d.id = "input-debug";

@@ -3065,6 +3065,12 @@ const api = {
     return Log.level();
   },
 
+  // flags() — every DevFlags registry entry and its resolved value (query → hash → storage).
+  flags() {
+    if (typeof DevFlags === "undefined") return {};
+    return DevFlags.flags();
+  },
+
   // persistState() — is localStorage actually storing anything?
   //
   //   { ok, broken, keys, rev, foreign, mirror: { supported, restored, flushed, failed, pending } }

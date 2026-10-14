@@ -33,6 +33,7 @@ const GENERATORS = [
   { tool: "tools/gen/gen-tools-readme.mjs", target: "tools/README.md" },
   { tool: "tools/gen/gen-slider-doc.mjs", target: "docs/LIGHTING-TUNER-SLIDERS.md" },
   { tool: "tools/gen/gen-hooks-table.mjs", target: "docs/DEBUG-HOOKS.md" },
+  { tool: "tools/gen/gen-flags-table.mjs", target: "docs/DEBUG-HOOKS.md" },
   // No gen-ladder-figures here: since 2026-09-30 it only REPORTS (the ladder
   // sizes are not committed — they made every two test-adding PRs conflict).
 ];

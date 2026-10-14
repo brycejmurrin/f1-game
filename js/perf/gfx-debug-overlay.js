@@ -27,8 +27,7 @@ const GfxDebug = (() => {
 
   function wanted() {
     try {
-      if (/[?&]gfxdebug=1/.test(location.search)) return true;
-      return localStorage.getItem("apex26.gfxDebug") === "1";
+      return typeof DevFlags !== "undefined" && !!DevFlags.get("gfxdebug");
     } catch (_) { return false; }
   }
 

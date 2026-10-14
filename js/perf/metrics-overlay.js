@@ -96,6 +96,7 @@ function qFlag(re) {
 }
 
 function read() {
+  if (typeof DevFlags !== "undefined") return !!DevFlags.get("metrics");
   const q = qFlag(/[?&]metrics=(1|0|on|off|true|false)/i);
   if (q) return /^(1|on|true)$/i.test(q[1]);
   return GameStore.store.raw(KEY) === "1";
