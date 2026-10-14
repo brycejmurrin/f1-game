@@ -1,6 +1,6 @@
 ---
 name: new-track
-description: "Use when asked to add a track/circuit, edit Monza/Spa/etc. layout, change circuit geometry/metadata/palette/theme/bridges (flyover, overpass, figure-8 crossover)/elevation (add a hill, crest or dip), or register a new circuit in js/circuits/. Read-only corner/terrain/elevation diagnosis (does the road clip, what is the grade) → agent-view; picture-driven accuracy → survey-track; scenery(api) props and floating/sunken props → scenery-dress."
+description: "Use when asked to add a track/circuit, edit Monza/Spa/etc. layout, change circuit geometry/metadata/palette/theme/bridges (flyover, overpass, figure-8 crossover)/elevation (add a hill, crest or dip), register a circuit in js/circuits/, or the in-game TRACK DESIGNER (js/editor/, custom circuits, share codes). Read-only corner/terrain/grade diagnosis → agent-view; picture-driven accuracy → survey-track; scenery(api) and floating/sunken props → scenery-dress."
 ---
 
 # Author or edit a track
@@ -79,3 +79,4 @@ Coordinates are +Y up, arc position `s` in metres (0 → `track.total`), lateral
 ## Load on demand
 
 - Add/edit workflow and the measured gotchas → [references/workflow.md](references/workflow.md). Start at its step 0: check the id is not already registered (madrid is).
+- The in-game TRACK DESIGNER (`js/editor/`: custom circuits, share codes, the WYSIWYG validator, themes/props) → [references/editor.md](references/editor.md).
