@@ -11,6 +11,7 @@ import path from "node:path";
 import {
   GUARDS_A, GUARDS_B, GUARDS_JOB,
   guardsVerdict, localVerdict, evaluate, shaPrefixMatch, stampReadySha, newestByName,
+  planVerdict, withPlan, resolveSha,
 } from "../../tools/ci/ready-gate.mjs";
 
 const run = (name, status, conclusion, id = 1) => ({
@@ -264,4 +265,61 @@ test("workTreeId sees a same-size rewrite that git's stat cache would call clean
     fs.utimesSync(index, X - 10, X - 10);
     assert.notEqual(workTreeId(dir), before, "a same-size rewrite in a racy window must still move the tree id");
   } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+});
+
+// THE PLAN CHECKLIST (AGENTS.md rule 12): with --pr, a green tip still refuses
+// while the PR body's ## Plan has an item neither ticked nor struck.
+const TEMPLATE = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "../../.github/pull_request_template.md"), "utf8");
+const body = (plan) => `## Goal\nfix it\n\n## Plan\n${plan}\n\n## Status\n- [ ] not a plan item\n`;
+const GREEN = { state: "passed", evidence: "Structural guards success", code: 0, sha: "a".repeat(40), source: "ci" };
+
+test("planVerdict: ticked and struck items close; unticked ones stay open", () => {
+  const v = planVerdict(body("- [x] edit — abc1234\n- [ ] ~~drop it~~ — superseded\n- [ ] **now:** run tests\n* [X] push"));
+  assert.equal(v.state, "open");
+  assert.equal(v.items, 4);
+  assert.deepEqual(v.open, ["**now:** run tests"]);
+  assert.equal(planVerdict(body("- [x] a — sha\n- [ ] ~~b~~ — why")).state, "done");
+});
+
+test("planVerdict: only the Plan section counts, and HTML comments are not items", () => {
+  const v = planVerdict(body("<!-- - [ ] example in a comment -->\n- [x] real"));
+  assert.equal(v.state, "done", "the Status section's [ ] and the commented example are ignored");
+  assert.equal(v.items, 1);
+});
+
+test("planVerdict: the untouched template is open (empty placeholders count)", () => {
+  const v = planVerdict(TEMPLATE);
+  assert.equal(v.state, "open");
+  assert.deepEqual(v.open, ["**now:**", "(empty item)"], "the template's two placeholder items, not its commented examples");
+});
+
+test("planVerdict: no Plan section, or a Plan with no items, is none", () => {
+  assert.equal(planVerdict("## Goal\nx\n## Status\ny").state, "none");
+  assert.equal(planVerdict(body("prose only")).state, "none");
+  assert.equal(planVerdict(null).state, "none");
+});
+
+test("withPlan: an open Plan turns a green tip into plan-open (exit 1)", () => {
+  const v = withPlan(GREEN, body("- [x] a — sha\n- [ ] **now:** b"));
+  assert.equal(v.state, "plan-open");
+  assert.equal(v.code, 1);
+  assert.match(v.evidence, /1 of 2 Plan item\(s\) open: "\*\*now:\*\* b"/);
+});
+
+test("withPlan: a closed Plan passes; no Plan passes with a warning; red and no-PR are untouched", () => {
+  assert.equal(withPlan(GREEN, body("- [x] a — sha")).code, 0);
+  const none = withPlan(GREEN, "## Goal\nolder PR");
+  assert.equal(none.code, 0);
+  assert.match(none.planWarning, /no ## Plan/);
+  const red = { ...GREEN, state: "failed", code: 1 };
+  assert.equal(withPlan(red, body("- [ ] open")), red, "a red verdict keeps its own reason");
+  assert.equal(withPlan(GREEN, undefined), GREEN, "--sha / HEAD: no PR body, no Plan check");
+});
+
+test("resolveSha --pr returns the PR body alongside its head sha", () => {
+  const head = "b".repeat(40);
+  const r = resolveSha({ pr: "7", request: () => ({ json: { head: { sha: head }, body: "## Plan\n- [x] a" } }) });
+  assert.equal(r.sha, head);
+  assert.equal(r.pr, 7);
+  assert.equal(r.body, "## Plan\n- [x] a");
 });

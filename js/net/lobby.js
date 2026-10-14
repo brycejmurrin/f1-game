@@ -1525,6 +1525,20 @@ const NetLobby = (function () {
       if (e.codeValue) e.codeValue.setAttribute("data-private", String(privateRelay));
     }
 
+    // Paint the six-letter (or private) code into #vs-code-value and arm
+    // SHARE/COPY only when the invite is live on the relay. A code shown
+    // earlier during createInvite left guests burning JOIN_TIMEOUT on an
+    // empty topic while the host still said "Preparing…".
+    function paintHostCode(code) {
+      const e = els();
+      if (e.codeValue) e.codeValue.textContent = code || "";
+      if (e.codeShow) e.codeShow.hidden = !code;
+      for (const id of ["vs-code-share", "vs-code-copy"]) {
+        const b = $(id);
+        if (b) b.disabled = !code;
+      }
+    }
+
     // HOST: make a code, publish the invite under it, wait for the answer.
     // opts.code   reopen the SAME room after a guest connected (see onJoiner)
     // opts.quiet   do not repaint the code step — we are already past it
@@ -1547,8 +1561,9 @@ const NetLobby = (function () {
         const privateRelay = NetRendezvous.usingPrivateRelay();
         showCodeStep("show", privateRelay ? "Your private room token" : "Your room code",
           privateRelay ? "Copy or share this token with your friend, who needs the same private relay configured. Keep it private." : "Read this to your friend.");
-        const e = els();
-        if (e.codeValue) e.codeValue.textContent = code;
+        // Keep SHARE/COPY dark and the digits blank until createInvite AND the
+        // first offer publish both succeed — never hand out a dead code.
+        paintHostCode("");
         say("Preparing… (this can take a few seconds)");
       }
 
@@ -1558,7 +1573,6 @@ const NetLobby = (function () {
       if (!operationCurrent(gen) || transport !== initialTransport) return cancelledResult();
       if (!invite.ok) { say(invite.message || "Could not create an invite.", true); return invite; }
 
-      say("Waiting for them to join…");
       codeWait = { cancelled: false };
 
       if (!NetRendezvous.usingPrivateRelay()) {
@@ -1679,10 +1693,20 @@ const NetLobby = (function () {
         }
         if (!sub.ok) { say(sub.message || "Could not open that room.", true); return sub; }
         codeRoom = sub;
+        // First publish path returned ok — safe to share the code now.
+        if (!opts.quiet) {
+          paintHostCode(code);
+          say("Waiting for them to join…");
+        }
         return { ok: true, code, subscribed: true };
       }
 
       // PRIVATE RELAY: a mailbox with two slots, so one guest. Unchanged.
+      // Reveal once the invite exists; swap() posts the offer as its first step.
+      if (!opts.quiet) {
+        paintHostCode(code);
+        say("Waiting for them to join…");
+      }
       const got = await NetRendezvous.swap({
         code, mine: invite.code, slot: "offer", want: "answer",
         token: codeWait,
@@ -1692,6 +1716,7 @@ const NetLobby = (function () {
       });
       if (!operationCurrent(gen) || transport !== initialTransport) return cancelledResult();
       if (!got.ok) {
+        if (!opts.quiet) paintHostCode("");
         if (got.error !== "cancelled") say(got.message, true);
         return got;
       }

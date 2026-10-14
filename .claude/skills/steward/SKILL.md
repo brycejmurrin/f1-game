@@ -80,7 +80,8 @@ no fetch or merge-tree) → `who-is-on-it.mjs` if the base file is not yours →
 <branch> && git merge origin/claude/f1-game-project-26h3ng` → keep BOTH sides'
 intent in each hand-written file → generated leftovers at the source + `npm
 run gen` → `git add`/commit → `deploy.mjs --gate-only` → plain `git push`
-(never force). Record the files and the resolution in the PR body.
+(never force). Record the files and the resolution in the PR body: a ticked
+Plan item with the merge sha (AGENTS.md rule 12).
 
 Resolve a generated-file conflict at the SOURCE and run `npm run gen`; never
 hand-edit one (the edit hook blocks it, and `gen:check` names drift). The list

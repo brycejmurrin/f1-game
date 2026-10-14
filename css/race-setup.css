@@ -258,11 +258,48 @@
 }
 #rs-presets {
   grid-column: 1 / -1;
+  /* 8rem wraps to 2×2 on a phone sheet (~305px) and stays one row on landscape /
+     desktop. Measured fail on a52e9108b @ 390×844: .preset-row .preset-btn's
+     `flex: 1; min-width: 0` (css/tuner.css) packed all four into ~70px columns
+     so FULL WEEKEND / ENDURANCE titles and their <small> painted through each
+     other (weekend scrollW 73 > clientW 68; endurance 82 > 68). */
   --balance-basis: 8rem;
   --balance-min: 6rem;
   margin: 0;
 }
-#rs-presets > .preset-btn { min-height: var(--chip-h); }
+/* Beat `.preset-row .preset-btn { flex: 1; min-width: 0 }` so the balance
+   contract binds (same 0,2,0; this sheet loads after tuner.css). Tap floor is
+   --tap, not the secondary --chip-h. */
+#rs-presets.balanced-row > .preset-btn {
+  flex: 1 1 var(--balance-basis);
+  min-width: min(100%, var(--balance-min));
+  min-height: var(--tap);
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+#rs-presets > .preset-btn small {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  max-width: 100%;
+  text-align: center;
+}
+/* Narrow sheets (phone portrait ~390, not landscape 844): even 2×2 tracks and
+   no <small> captions. Title + caption are both --fs-micro, so on a ~150px tile
+   the caption still reads as jammed against FULL WEEKEND / ENDURANCE even with
+   a 3px flex gap (measured 390×844 after the wrap fix).
+   Max-width only — not orientation:portrait and not body[data-shape=tall]
+   #rs-* (ui-improve-pass pins those out of the menus.css family this file is
+   inlined into via readCssSource). */
+@media (max-width: 480px) {
+  #rs-presets {
+    --balance-basis: calc(50% - var(--gap) * 0.5);
+    --balance-min: calc(50% - var(--gap) * 0.5);
+  }
+  #rs-presets > .preset-btn small { display: none; }
+}
 /* CUSTOM is a display-only sentinel (no data-rs-preset): it lights when the
    live draft matches no named preset (default 3-lap open). Same selected
    plate as QUICK / WEEKEND / ENDURANCE; not a fourth writable choice. */
