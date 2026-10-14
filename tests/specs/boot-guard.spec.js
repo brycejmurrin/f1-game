@@ -31,6 +31,58 @@ const overlayText = (page) => page.evaluate(() => {
   return d && d.style.display !== "none" ? d.textContent.replace(/\s+/g, " ") : null;
 });
 
+test("production CSP allows prepaint preferences before deferred modules load", async ({ browser, baseURL }) => {
+  // The ordinary suite bypasses CSP for injected test helpers. This context
+  // uses the production policy and storageState, with no injected scripts.
+  // https://playwright.dev/docs/api/class-browser#browser-new-context-option-bypass-csp
+  const origin = new URL(baseURL).origin;
+  const context = await browser.newContext({
+    bypassCSP: false,
+    viewport: { width: 1280, height: 720 },
+    reducedMotion: "no-preference",
+    storageState: { cookies: [], origins: [{ origin, localStorage: [
+      { name: "apex26.gfxBackend", value: "webgl2" },
+      ...Object.entries({ motion: "reduce", titleIntro: "off", menuWash: "off", titleArt: "off", homeScene: "static", pauseLayout: "compact" })
+        .map(([key, value]) => ({ name: `apex26.${key}`, value: JSON.stringify(value) })),
+    ] }] },
+  });
+  let releaseScripts;
+  const deferred = new Promise((resolve) => { releaseScripts = resolve; });
+  try {
+    const page = await context.newPage();
+    const cspErrors = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error" && /Content Security Policy|Content-Security-Policy/i.test(msg.text())) cspErrors.push(msg.text());
+    });
+    await page.route("**/js/**", async (route) => { await deferred; await route.continue(); });
+    await page.goto(`${origin}/`, { waitUntil: "commit" });
+    // The DOM parser can finish while deferred modules are held. This proves
+    // the inline first-paint script worked, rather than its later JS owners.
+    await page.locator("#overlay").waitFor({ state: "attached" });
+    const beforeModules = await page.evaluate(() => ({
+      attrs: { ...document.documentElement.dataset },
+      density: document.body.dataset.density,
+      shape: document.body.dataset.shape,
+      uiLoaded: typeof UiLayers !== "undefined",
+    }));
+    expect(beforeModules.uiLoaded).toBe(false);
+    expect(beforeModules.attrs).toMatchObject({ motion: "reduce", titleIntro: "off", menuWash: "off", titleArt: "off", homeScene: "static", pauseLayout: "compact" });
+    expect(beforeModules.density).toBe("normal");
+    expect(beforeModules.shape).toBe("wide");
+    releaseScripts();
+    await page.waitForLoadState("domcontentloaded");
+    await page.waitForFunction(() => typeof window.__apex?.info === "function",
+      undefined, { timeout: 45_000, polling: 100 });
+    await page.locator("#mb-settings").click();
+    await expect(page.locator("#pmsettings")).toBeVisible();
+    expect(await overlayText(page)).toBeNull();
+    expect(cspErrors).toEqual([]);
+  } finally {
+    releaseScripts();
+    await context.close();
+  }
+});
+
 test.describe("Boot guard — a module that failed to load", () => {
   test("a ONE-OFF 404 is repaired: one reload, then the game boots", async ({ page }) => {
     const navs = trackNavs(page);
