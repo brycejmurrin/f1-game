@@ -5,7 +5,8 @@
    Brief: docs/tracks/fuji.md. A conifer plateau on the eastern foothills of
    Mount Fuji; 2005-present layout, clockwise, infield +1. Two things identify
    the place and nothing else has to: the 1.475 km pit straight (s 0.00-0.25,
-   ONE continuous built frontage, not a row of objects) and the volcano itself.
+   pale-clad kind-formed frontage) and the volcano itself (compressed ~3.2 km
+   west so fog still reads the snow cap).
 
    Block -> §4 brief rows implemented:
      1  MAIN STRAIGHT, PIT SIDE ........ 0.005 +1 12   0.960 +1 15
@@ -47,11 +48,14 @@
       const SUGI_D  = [0.09, 0.21, 0.16];
       const SUGI_L  = [0.16, 0.33, 0.22];
       const SUGI_B  = [0.10, 0.23, 0.22];   // the blue-shifted far rank
-      const SCRUB   = [0.19, 0.30, 0.19];
-      // Modern dark-clad paddock.
-      const CLAD    = [0.15, 0.16, 0.19];
-      const CLAD_L  = [0.24, 0.25, 0.29];
-      const CLAD_W  = [0.21, 0.20, 0.21];   // a warmer grey in the same family
+      const SCRUB   = [0.18, 0.36, 0.18];
+      // Modern silver/white paddock (real Fuji pits are pale-clad, not dark
+      // charcoal). Luma > 0.45 so building()'s day path keeps the authored
+      // tone instead of lifting dark walls to untextured grey concrete.
+      const CLAD    = [0.62, 0.64, 0.68];
+      const CLAD_L  = [0.72, 0.74, 0.78];
+      const CLAD_W  = [0.58, 0.59, 0.62];
+      const CLAD_D  = [0.48, 0.50, 0.54];
       const GLASS   = [0.30, 0.42, 0.52];
       const STEEL   = [0.74, 0.76, 0.79];
       const CONC    = [0.66, 0.66, 0.64];
@@ -62,10 +66,7 @@
       const ROOF_D  = [0.24, 0.25, 0.29];
       const TARMAC  = [0.30, 0.31, 0.33];
       const ASPH    = [0.25, 0.26, 0.28];
-      // Muted garage-door bands: the frontage is one block, the doors are the
-      // only thing that gives 35 identical bays a beat.
-      const DOORS = [[0.62, 0.15, 0.14], [0.17, 0.26, 0.46], [0.80, 0.80, 0.78],
-                     [0.13, 0.36, 0.28], [0.72, 0.53, 0.12], [0.28, 0.29, 0.33]];
+      const KINDS   = ["clad", "hall", "setback", "podium"];
 
       const W = (s) => ((s % 1) + 1) % 1;              // wrap a lap fraction
       const TOTAL = 4554;                              // lap metres (def.lengthKm)
@@ -77,57 +78,43 @@
       };
 
       // 1. THE MAIN STRAIGHT — PIT SIDE (+1)  [0.005 +1 12 · 0.960 +1 15]
-      //    1.475 km of ONE dark-clad block: garages, then the control tower,
-      //    closing the loop at pit exit. Built as abutting units so the eye
-      //    reads a frontage, not a sequence of sheds.
-      // Bays step in WHOLE NODES, not metres: `run` rounds each bay's centre to
-      // the nearest ~4 m node, so metre-stepped 38 m bays landed 36-40 m apart
-      // and a 0.97-length box overlapped its neighbour on every short pitch —
-      // 18 same-facing coplanar facade pairs down the frontage (2026-09-22,
-      // coplanar-audit --why). A node-exact pitch leaves the 3 % gap real.
-      // Rounded UP (10 nodes, ~40 m): 33 bays still end where the 35 did, by
-      // Turn 1; a 9-node pitch needs a 36th bay the guard refuses there.
+      //    1.475 km of ONE pale-clad frontage: garages, then the control tower,
+      //    closing the loop at pit exit. Before (2026-10 survey): dark wall
+      //    luma < 0.45 lifted to untextured grey concrete, plus prop() door
+      //    bands and fascia slabs that read as grey boxes at f17. Now: fewer
+      //    kind-formed halls (clad/hall/setback/podium), no prop slabs.
+      // Bays step in WHOLE NODES (see prior coplanar note, 2026-09-22).
+      // Pitch doubled (~76 m): half the mass, still a continuous frontage.
       const GAR_S = 0.962, GAR_LEN = 1330;
-      const GAR_N = Math.ceil(38 * n / TOTAL), GAR_STEP = GAR_N * TOTAL / n;
+      const GAR_N = Math.ceil(76 * n / TOTAL), GAR_STEP = GAR_N * TOTAL / n;
       const GAR_K = K(GAR_S) + (GAR_N >> 1);
       for (let i = 0, cnt = Math.floor(GAR_LEN / GAR_STEP); i < cnt; i++) {
         const k = (GAR_K + i * GAR_N) % n, h = hash(i * 7.3);
-        // Garage box: w is the RADIAL depth, d the length down the road.
-        building(k, 1, 12, 13, 8.4 + h * 0.5, GAR_STEP * 0.97,
-          { wall: [CLAD, CLAD_L, CLAD_W][i % 3], window: GLASS, floor: 4.2, lit: false });
-        // Door band across the face of each bay.
-        prop(k, 1, 6.6, [0.4, 2.8, GAR_STEP * 0.60], DOORS[i % DOORS.length]);
-        // Second storey / hospitality deck set back behind it.
-        // One unit PER BAY, not a 1.9-bay slab every other bay: building()'s
-        // crown radius is max(w, d)/2, so a 76 m slab asked for a 38 m cap
-        // that the road guard refused, leaving its roof plant floating 14 m up
-        // (float-audit, 2026-09-23). Two 0.95-bay units cover the same run.
-        // Skipped: inside the control tower's footprint (0.028; a unit there
-        // clipped its deck ring), and bay cnt-2, where the frontage bends
-        // into Turn 1 and the road guard refuses the unit.
+        const wall = [CLAD, CLAD_L, CLAD_W, CLAD_D][i % 4];
+        // Garage hall: default building() path (no kind) so floor-banded
+        // window rails fire — kind/neonTower at orbit distance read as a
+        // blank slab. Pale wall luma > 0.45 keeps the authored tone.
+        building(k, 1, 12, 14, 9.2 + h * 0.6, GAR_STEP * 0.92,
+          { wall, window: GLASS, floor: 3.6, lit: false });
+        // Hospitality set back — every OTHER bay (cut tris + avoid tower clip).
         const dT = Math.abs(k - K(0.028));
-        if (Math.min(dT, n - dT) >= GAR_N && i !== cnt - 2)
-          building(k, 1, 27, 11, 12.6, GAR_STEP * 0.95, { wall: (i >> 1) % 2 ? CLAD_L : CLAD_W, window: GLASS, floor: 4.0, lit: false });
+        if ((i & 1) === 0 && Math.min(dT, n - dT) >= GAR_N && i !== cnt - 2)
+          building(k, 1, 28, 12, 14.0, GAR_STEP * 0.70,
+            { wall: (i >> 1) % 2 ? CLAD_L : CLAD, window: GLASS, floor: 3.8, lit: false });
       }
-      // Continuous fascia band along the garage roofline + the pit wall.
-      run(GAR_S, GAR_LEN, 48, (s) => {
-        prop(K(s), 1, 11.4, [1.1, 1.6, 47], CLAD);          // roof fascia
-        prop(K(s), 1, 5.4, [0.5, 1.05, 47], [0.80, 0.80, 0.83]);  // pit wall
-      });
       // The modern control tower over the start line, and the timing block.
       tower(K(0.028), 1, 30, 15, 36,
         { col: CLAD_L, glassCol: GLASS, deckCol: CLAD, cap: true, capCol: CLAD, seg: 8 });
       building(K(0.012), 1, 27, 14, 17, 46,
-        { wall: CLAD, window: GLASS, floor: 4.0, lit: false });
-      // Race control annex and the media centre, stepped back behind the tower
-      // so the pit block has thickness instead of being a single facade.
+        { kind: "podium", wall: CLAD, window: GLASS, neon: 0, floor: 4.0, lit: false });
+      // Race control annex and the media centre, stepped back behind the tower.
       building(K(0.048), 1, 48, 20, 14, 64,
-        { wall: CLAD_L, window: GLASS, floor: 3.9, lit: false });
+        { kind: "clad", wall: CLAD_L, window: GLASS, neon: 0, floor: 3.9, lit: false });
       building(K(0.082), 1, 46, 16, 10, 50,
-        { wall: CLAD_W, window: GLASS, floor: 3.9, lit: false });
+        { kind: "hall", wall: CLAD_W, window: GLASS, neon: 0, floor: 3.9, lit: false });
       // Pit exit: the scrutineering bay closes the block  [0.960 +1 15]
       building(K(0.950), 1, 15, 12, 7.2, 36,
-        { wall: CLAD_L, window: GLASS, floor: 3.6, lit: false });
+        { kind: "setback", wall: CLAD_L, window: GLASS, neon: 0, floor: 3.6, lit: false });
       groundPatch(K(0.944), 1, 27, [26, 0.16, 54], TARMAC);
 
       // 2. THE MAIN STRAIGHT — GRANDSTAND WALL (-1)  [0.005 -1 20 · 0.060 -1 26]
@@ -147,21 +134,21 @@
       });
       // Hospitality over the start line, behind the terrace bank.
       building(K(0.016), -1, 74, 22, 16, 118,
-        { wall: CLAD, window: GLASS, floor: 4.0, lit: false });
+        { kind: "clad", wall: CLAD, window: GLASS, neon: 0, floor: 4.0, lit: false });
       building(K(0.062), -1, 76, 18, 12, 92,
-        { wall: CLAD_L, window: GLASS, floor: 4.0, lit: false });
+        { kind: "podium", wall: CLAD_L, window: GLASS, neon: 0, floor: 4.0, lit: false });
       // A set-back upper rank behind the terrace bank: the 110,000 reads as
       // seating stacked back from the wall, not one tall row.
       for (const t of [0.104, 0.152, 0.200]) {
         grandstandEx(t, -1, 78, 146, null, null,
           { tiers: 2, h: 17, roof: "cantilever", roofCol: ROOF_D, fasciaCol: CLAD_W });
       }
-      // Back-of-house behind the seating wall: short dark sheds on the flatter
-      // apron (was gap 106 / h≈12 / d=74 — 24 buried prims, worst 4.78 m into the
-      // outfield hill). Closer + shorter keeps them above terrainY.
-      run(0.98, 1200, 160, (s, i) => {
+      // Back-of-house behind the seating wall: short sheds on the flatter
+      // apron (was gap 106 / h≈12 / d=74 — 24 buried prims). Step 220 (was 160)
+      // and kind forms cut grey-box mass + tris.
+      run(0.98, 1200, 220, (s, i) => {
         building(K(s), -1, 86, 11, 5.5 + hash(i * 3.1) * 1.8, 42,
-          { wall: i % 2 ? CLAD_L : [0.34, 0.35, 0.37], window: GLASS, lit: false });
+          { kind: "hall", wall: i % 2 ? CLAD_L : CLAD_D, window: GLASS, neon: 0, lit: false });
       });
       // Spectator car parks and the cedar edge closing off the outfield.
       for (const s of [0.028, 0.086, 0.146, 0.204])
@@ -193,42 +180,33 @@
       cameraTower(K(0.120), -1, 34, { h: 12 });
 
       // 4. MOUNT FUJI  [0.120 — 900]
-      //    The identifying object of the whole place: ONE very large, very
-      //    distant snow-capped cone on the WESTERN skyline, dominating the
-      //    view back down the straight.
+      //    The identifying object of the whole place: ONE snow-capped cone on
+      //    the WESTERN skyline, dominating the view back down the straight.
       //
-      //    A TRUE COMPASS BEARING, not the straight's outboard normal: the
-      //    normal tracks the ROAD's heading, which at K(0.120) points 321.2°
-      //    (north-west, measured). The circuit is at 35.3714 N 138.9267 E and
-      //    the summit at 35.3581 N 138.7311 E, so the real mountain sits at
-      //    266.1° — 18.2 km almost due west (hence "eastern foothills" in this
-      //    file's header). 55° out puts the cone off the shoulder of the view
-      //    back down the straight instead of down the middle of it.
+      //    Bearing 266.1° (true west of the circuit — summit 35.3581 N
+      //    138.7311 E vs track 35.3714 N 138.9267 E). +X is WEST, +Z NORTH, so
+      //    θ clockwise from north is (x, z) = (-sin θ, cos θ).
       //
-      //    +X is WEST and +Z is NORTH (tools/track/import-circuit-path.mjs),
-      //    so a bearing θ clockwise from north is (x, z) = (-sin θ, cos θ).
+      //    Distance compressed hard: fogDensity 0.0022 → fog wall ~1.4 km at
+      //    eye level; 9400 m placed the cone past every survey frame (washed
+      //    or culled). 3200 m at 880 m relief subtends ~15° — readable snow
+      //    cap, never intersects the lap (lap radius ≪ 2 km).
       const FUJI_BEARING = 266.1 * Math.PI / 180;
       const ux = -Math.sin(FUJI_BEARING), uz = Math.cos(FUJI_BEARING);
-      // The world perpendicular to that sightline — what "along the range"
-      // means for the Hoei bump and the flanking foothills below. It has to
-      // rotate with the bearing, or they splay off a line the cone no longer
-      // stands on.
       const tx = -uz, tz = ux;
       const fA = anchor(K(0.120), -1, 0);
-      // Still short of the real 18.2 km: past ~10 km this circuit's fog
-      // (0.0030) has eaten the cone entirely, so the distance is compressed
-      // and the height with it — 1760 m at 9400 m subtends 10.6°, against
-      // 10.0° for the real 3196 m of relief at 18.2 km. Same silhouette,
-      // through half the fog.
-      const FAR = 9400;
+      const FAR = 3200;
       const fx = fA.c[0] + ux * FAR, fz = fA.c[2] + uz * FAR;
-      const FUJI_BASE = pyMin - 46, FUJI_W = 6400, FUJI_H = 1760;
+      const FUJI_BASE = pyMin - 40, FUJI_W = 2400, FUJI_H = 880;
       const emitFuji = (stage) => {
-        addFrustum(stage, [fx, FUJI_BASE - 2, fz], FUJI_W * 0.62, FUJI_W * 0.42, FUJI_H * 0.18,
-          [0.14, 0.24, 0.20], 9, null);
+        // Narrow foot skirt — keep it rock-grey, not forest green, so the cone
+        // does not read as a solid green hill under soft blit.
+        addFrustum(stage, [fx, FUJI_BASE - 2, fz], FUJI_W * 0.48, FUJI_W * 0.32, FUJI_H * 0.12,
+          [0.36, 0.35, 0.38], 8, null);
         addMountain(stage, [fx, FUJI_BASE, fz], FUJI_W * 0.5, FUJI_H, {
-          seg: 28, seed: 11, rough: 0.085, snowline: 0.55,
-          snow: [0.95, 0.96, 1.00], rock: [0.33, 0.32, 0.36], forest: [0.14, 0.24, 0.20],
+          // snowline 0.28 → pure snow above ~0.32 (was 0.48; survey read as green).
+          seg: 16, seed: 11, rough: 0.06, snowline: 0.28,
+          snow: [0.97, 0.98, 1.00], rock: [0.42, 0.40, 0.44], forest: [0.18, 0.28, 0.18],
         });
       };
       modelGroup("fuji-mount-fuji", {
@@ -236,43 +214,45 @@
         size: [FUJI_W, FUJI_H + 4, FUJI_W],
         basis: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
       }, emitFuji, { required: true });
-      // Hoei — the crater bump on the south-east flank, below the snowline and
-      // the one thing that stops the cone reading as a generic triangle.
-      mountain(fA.c[0] + ux * (FAR - 900) + tx * 1650,
-        fA.c[2] + uz * (FAR - 900) + tz * 1650, pyMin - 44, 2300, 880,
-        { seg: 18, seed: 23, rough: 0.13, snowline: 1.35,
-          rock: [0.31, 0.30, 0.33], forest: [0.13, 0.23, 0.19] });
-      // Foothills flanking it, low and dark, so the cone reads as the big one.
+      // Hoei — SE flank bump below the snowline (keeps the cone from reading
+      // as a generic triangle). Closer with the compressed cone.
+      mountain(fA.c[0] + ux * (FAR - 420) + tx * 780,
+        fA.c[2] + uz * (FAR - 420) + tz * 780, pyMin - 36, 980, 320,
+        { seg: 10, seed: 23, rough: 0.12, snowline: 1.35,
+          rock: [0.31, 0.30, 0.33], forest: [0.13, 0.24, 0.18] });
+      // Foothills flanking it — four only (was six + a 24-ring; tri cut).
       for (const [along, dOut, w, h, sd] of [
-        [-4200, 7200, 1500, 250, 3], [3900, 7000, 1350, 210, 5],
-        [-7600, 6400, 1250, 180, 8], [7400, 6600, 1100, 165, 2],
-        [-2100, 8300, 1700, 300, 14], [5600, 8100, 1450, 265, 17],
+        [-1800, 2600, 720, 140, 3], [1600, 2500, 640, 120, 5],
+        [-900, 3000, 800, 170, 8], [1100, 2900, 700, 150, 2],
       ]) {
         mountain(fA.c[0] + ux * dOut + tx * along, fA.c[2] + uz * dOut + tz * along,
-          pyMin - 34, w, h,
-          { seg: 12, seed: sd, rough: 0.30, snowline: 1.4,
-            forest: [0.13, 0.22, 0.18], rock: [0.30, 0.30, 0.31] });
+          pyMin - 28, w, h,
+          { seg: 8, seed: sd, rough: 0.28, snowline: 1.4,
+            forest: [0.13, 0.24, 0.18], rock: [0.30, 0.30, 0.31] });
       }
-      // A low hazed ring of forested foothills closing the rest of the horizon.
+      // Low hazed ring of forested foothills — 12 (was 24).
       {
         const { cx, cz, radius } = lapBounds();
-        for (let i = 0; i < 24; i++) {
-          const h = hash(i * 13.9), a = (i + h * 0.5) / 24 * 6.2832;
-          const rr = radius + 760 + h * 460;
-          mountain(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr, pyMin - 16,
-            420 + h * 260, 76 + h * 64,
-            { seg: 8, seed: i * 5 + 3, rough: 0.36, snowline: 1.6,
-              forest: [0.13 + h * 0.03, 0.24 + h * 0.05, 0.19], rock: [0.30, 0.31, 0.30] });
+        for (let i = 0; i < 12; i++) {
+          const h = hash(i * 13.9), a = (i + h * 0.5) / 12 * 6.2832;
+          const rr = radius + 700 + h * 400;
+          mountain(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr, pyMin - 14,
+            380 + h * 220, 70 + h * 56,
+            { seg: 6, seed: i * 5 + 3, rough: 0.34, snowline: 1.6,
+              forest: [0.13 + h * 0.03, 0.26 + h * 0.05, 0.18], rock: [0.30, 0.31, 0.30] });
         }
       }
 
       // 5. PADDOCK, THEN THE HOTEL AND MOTORSPORTS MUSEUM  [0.150 +1 40]
       //    Team transporters: sparse near-apron only (a dense double row here
       //    buried 23 prims into the infield rise; leave the hotel mass clear).
+      // Gap 62 / skip 0.048: hospitality at gap 28 shared a roof plane
+      // (flatCoplanar), and gap 48 landed on the race-control annex at 0.048
+      // (coplanar 22 m² motorhome × neonTower). Transporters sit clear of both.
       for (const [s, accent] of [
-        [0.048, [0.72, 0.16, 0.16]], [0.078, CLAD_L], [0.108, [0.20, 0.26, 0.52]],
+        [0.068, [0.72, 0.16, 0.16]], [0.098, CLAD_L], [0.128, [0.20, 0.26, 0.52]],
       ]) {
-        motorhome(K(s), 1, 32, 6.5, 3.6, 11, { accent, roof: true });
+        motorhome(K(s), 1, 62, 6.5, 3.6, 11, { accent, roof: true });
       }
       broadcastCompound(K(0.088), 1, 62, { vans: 6, dishes: 3, spacing: 9 });
       // Fuji Speedway Hotel (Hyatt Unbound Collection) + Fuji Motorsports
@@ -371,8 +351,8 @@
         conc: CONC_D, concAlt: CONC });
       // Spectator village behind the T1 bank: food units, toilets, a screen.
       for (const [s1, g, w, h1, d] of [[0.198, 114, 12, 5, 26], [0.216, 118, 14, 6, 30],
-                                       [0.236, 112, 11, 5, 22], [0.254, 120, 13, 6, 28]])
-        building(K(s1), -1, g, w, h1, d, { wall: CLAD_W, window: GLASS, lit: false });
+                                       [0.236, 112, 11, 5, 22]])
+        building(K(s1), -1, g, w, h1, d, { kind: "hall", wall: CLAD_W, window: GLASS, neon: 0, lit: false });
       // 52 m long, not 90: it ran well into the 0.204 car park (same flat
       // ground, same asphalt) and the two drapes shared a plane there.
       groundPatch(K(0.222), -1, 138, [40, 0.16, 52], ASPH);
@@ -405,7 +385,7 @@
         rows: 6, rise: 1.5, depth: 2.8, grass: SCRUB, density: 0.36,
       });
       // Small spectator terrace service block and the corner's own screen.
-      building(K(0.366), -1, 54, 14, 7, 34, { wall: CLAD_W, window: GLASS, lit: false });
+      building(K(0.366), -1, 54, 14, 7, 34, { kind: "hall", wall: CLAD_W, window: GLASS, neon: 0, lit: false });
       billboard(K(0.380), -1, 40, 16, 7, [0.72, 0.13, 0.14], { style: "monopole" });
       forestEdge(0.320, 0.372, -1, 34, { hMin: 13, hMax: 24, col: SUGI, col2: SUGI_D, pineFrac: 0.92, density: 0.2 });
       // Fully onto the conifer plateau: dense sugi both sides.
@@ -468,11 +448,11 @@
       billboard(K(0.742), 1, 20, 14, 5, [0.90, 0.74, 0.10], { style: "monopole" });
       gantry(0.732, 6.9, [0.90, 0.74, 0.10]);            // the corner's sponsor arch
       for (const [s1, g] of [[0.733, 17], [0.741, 16], [0.749, 17]])
-        prop(K(s1), 1, g, [1.7, 1.2, 4.2], [0.09, 0.09, 0.10]);   // stacked spares
+        prop(K(s1), 1, g, [1.7, 1.2, 4.2], [0.28, 0.28, 0.30]);   // stacked spares
       // Marshal hut and a tyre store behind the hairpin bank (was buried 0.32 m
       // at gap 38 — seat on the flatter near apron).
-      building(K(0.744), 1, 28, 9, 4.5, 18, { wall: CLAD_W, window: GLASS, lit: false });
-      prop(K(0.750), 1, 30, [3.4, 1.9, 9], [0.10, 0.10, 0.11]);
+      building(K(0.744), 1, 28, 9, 4.5, 18, { kind: "hall", wall: CLAD_W, window: GLASS, neon: 0, lit: false });
+      prop(K(0.750), 1, 30, [3.4, 1.9, 9], [0.22, 0.22, 0.24]);
       // Starts at 0.724, not 0.716: across the 300R fold a tall cedar from
       // 0.716-0.724 lands ~12 m off the 0.690 road, where the guard culls its
       // trunk and lower tier and leaves the crown floating 15 m up
@@ -494,14 +474,14 @@
       //     [0.877 +1 16 · 0.897 -1 14]
       //     The lap turns back toward the paddock, then the final slow right
       //     onto the straight with the grandstand wall resuming outside it.
-      building(K(0.877), 1, 26, 14, 9, 44, { wall: CLAD_L, window: GLASS, lit: false });
-      building(K(0.898), 1, 30, 13, 11, 52, { wall: CLAD, window: GLASS, lit: false });
-      building(K(0.920), 1, 34, 15, 8, 40, { wall: [0.36, 0.37, 0.39], window: GLASS, lit: false });
+      building(K(0.877), 1, 26, 14, 9, 44, { kind: "clad", wall: CLAD_L, window: GLASS, neon: 0, lit: false });
+      building(K(0.898), 1, 30, 13, 11, 52, { kind: "podium", wall: CLAD, window: GLASS, neon: 0, lit: false });
+      building(K(0.920), 1, 34, 15, 8, 40, { kind: "hall", wall: CLAD_D, window: GLASS, neon: 0, lit: false });
       // Infield service yard behind them: the paddock coming back into view.
-      building(K(0.862), 1, 34, 14, 8, 40, { wall: CLAD_W, window: GLASS, lit: false });
+      building(K(0.862), 1, 34, 14, 8, 40, { kind: "hall", wall: CLAD_W, window: GLASS, neon: 0, lit: false });
       // Was gap 52 / h 12 — upper floors sat 13 m unsupported once the
       // flicker cedars that false-supported them were culled (ground-audit).
-      building(K(0.936), 1, 28, 14, 7, 36, { wall: CLAD_L, window: GLASS, floor: 3.9, lit: false });
+      building(K(0.936), 1, 28, 14, 7, 36, { kind: "setback", wall: CLAD_L, window: GLASS, neon: 0, floor: 3.9, lit: false });
       groundPatch(K(0.905), 1, 22, [34, 0.16, 44], [0.30, 0.31, 0.33]);
       // Was gap 58 / 30×62: two 2.5 m unsupported slabs where the infield
       // drops off the apron (ground-audit, 2026-10-05). Closer + shorter.
@@ -515,7 +495,7 @@
       terrace(0.904, 0.940, -1, 52, { rows: 6, rise: 1.5, depth: 2.7, density: 0.4,
         conc: CONC_D, concAlt: CONC, step: 12 });
       // Depth behind the last corner's seating.
-      building(K(0.912), -1, 84, 16, 9, 66, { wall: [0.34, 0.35, 0.37], window: GLASS, lit: false });
+      building(K(0.912), -1, 84, 16, 9, 66, { kind: "hall", wall: CLAD_D, window: GLASS, neon: 0, lit: false });
       // Skips 0.866-0.873: the 120 m rank there reaches ~12 m off the 0.771
       // road (the flick doubles back), leaving a culled cedar's crown 18 m up.
       // Skips 0.888-0.952: Panasonic terraces / last-corner stands (clip 0.907-0.939).
@@ -525,15 +505,15 @@
       cameraTower(K(0.896), -1, 32, { h: 12 });
       billboard(K(0.884), -1, 30, 18, 8, [0.06, 0.07, 0.09], { style: "monopole" });
 
-      // 13. THE CEDAR PLATEAU — ranks, not scatter. Tall, narrow, dark sugi at
-      //     THREE distances over the whole back three quarters; the straight is
-      //     built frontage and stays clear.
+      // 13. THE CEDAR PLATEAU — ranks, not scatter. Tall, narrow, dark sugi.
+      //     every(32) + skip far rank on sparse hashes (was every(22) × 3
+      //     ranks): largest single tri cut while keeping a wall of cedar.
       const TINTS = [SUGI, SUGI_D, SUGI_L, SUGI_B];
-      every(22, (k) => {
+      every(32, (k) => {
         const f = k / n;
         if (f < 0.245 || f > 0.965) return;
         const h = hash(k * 17.3);
-        if (h < 0.20) return;
+        if (h < 0.28) return;
         for (const side of [-1, 1]) {
           // Infield buildings resume at GR Supra / Panasonic — a near cedar
           // rank here grew through the blocks (clip-audit 2.0 m at 0.860/0.874).
@@ -542,30 +522,25 @@
           const near = 30 + h * 20 + (side < 0 ? 5 : 0);
           const mid = 78 + hash(k * 5.1 + side) * 54;
           const far = 158 + hash(k * 2.7 + side) * 96;
+          const ranks = yard ? [mid, far] : (h > 0.55 ? [near, mid, far] : [near, mid]);
           let j = 0;
-          for (const dist of yard ? [mid, far] : [near, mid, far]) {
+          for (const dist of ranks) {
             const a = anchor(k, side, dist);
             j++;
             if (onTrack(a.c[0], a.c[2], 9)) continue;
             pine(k, side, dist, 15 + h * 12 + j * 1.5,
               TINTS[(k + j * 2 + (side < 0 ? 1 : 0)) % 4], { slim: true });
           }
-          if (!yard && h > 0.7) tree(k, side, near + 12, 9 + h * 5, SUGI_L);
-          if (!yard && h > 0.82) bush(k, side, near - 10, SCRUB);
-          if (h > 0.55) {
-            const b = anchor(k, side, mid - 16);
-            if (!onTrack(b.c[0], b.c[2], 8)) bush(k, side, mid - 16, SCRUB);
-          }
+          if (!yard && h > 0.78) tree(k, side, near + 12, 9 + h * 5, SUGI_L);
+          if (!yard && h > 0.88) bush(k, side, near - 10, SCRUB);
         }
       });
-      // Hazed cedar backdrop mass well beyond the ranks. The infield cannot
-      // take these (measured: every +1 backdrop is refused), so they ring the
-      // outfield only, out past 420 m where nothing else competes.
-      for (let i = 0; i < 30; i++) {
-        const f = 0.25 + (i / 30) * 0.72, k = K(f), h = hash(i * 9.7);
+      // Hazed cedar backdrop mass — 14 (was 30); outfield only past 420 m.
+      for (let i = 0; i < 14; i++) {
+        const f = 0.25 + (i / 14) * 0.72, k = K(f), h = hash(i * 9.7);
         backdrop(k, -1, 430 + h * 160,
           [110 + h * 70, 34 + h * 26, 80 + h * 40],
-          [0.14 + h * 0.03, 0.26 + h * 0.05, 0.21 + h * 0.03]);
+          [0.14 + h * 0.03, 0.28 + h * 0.05, 0.18 + h * 0.03]);
       }
 
       // 14. BARRIERS, POSTS AND CAMERAS — the continuous furniture pass.
