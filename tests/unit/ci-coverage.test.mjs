@@ -774,6 +774,36 @@ test("pages-train.mjs: the tip's fast tier, in progress or done, and the re-arm 
   assert.equal(rearmDecision({ ...base, ref: "feature" }).rearm, false, "a run off the deploy branch never dispatches the train");
 });
 
+test("poke-train: a superseded green run pokes unless the tip is RED (merge-burst live-lock, 2026-10-14)", () => {
+  // From 13:44 on 2026-10-14 nothing poked: green ship runs 38582717249 and
+  // 38584256448 each found a newer tip whose CI was still pending, logged
+  // "NOT POKING", and that tip's run was then cancelled as a superseded
+  // pending run. The train gates the TIP, so only a red tip may block a poke.
+  const step = parseYAML(ciWorkflow).jobs["poke-train"].steps.find((st) => st.id === "tip").run;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "poke-tip-"));
+  const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, "gh"),
+    '#!/usr/bin/env bash\ncase "$2" in\n  */branches/*) echo "$FAKE_TIP" ;;\n  */pages.yml/runs*) echo "$FAKE_ACTIVE" ;;\n  */ci.yml/runs*) echo "$FAKE_CI" ;;\nesac\n');
+  fs.chmodSync(path.join(bin, "gh"), 0o755);
+  const poke = ({ tip = "bbb", active = "0", tipRun = null }) => {
+    const out = path.join(dir, "out"); fs.writeFileSync(out, "");
+    cp.execFileSync("bash", ["-c", step], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: {
+      ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", GITHUB_REF_NAME: "deploy", GITHUB_SHA: "aaa",
+      GITHUB_OUTPUT: out, GITHUB_STEP_SUMMARY: path.join(dir, "summary"), FAKE_TIP: tip, FAKE_ACTIVE: active,
+      FAKE_CI: JSON.stringify({ workflow_runs: tipRun ? [{ head_sha: tip, ...tipRun }] : [] }) } });
+    return fs.readFileSync(out, "utf8").trim();
+  };
+  assert.equal(poke({ tip: "aaa" }), "poke=true", "the tip itself pokes");
+  assert.equal(poke({ active: "1" }), "poke=false", "single-flight: a queued or running train blocks every poke");
+  assert.equal(poke({ tipRun: { status: "in_progress", conclusion: null } }), "poke=true", "a PENDING tip no longer blocks (the live-lock)");
+  assert.equal(poke({ tipRun: { status: "queued", conclusion: null } }), "poke=true");
+  assert.equal(poke({}), "poke=true", "no run on record for the tip yet: poke");
+  assert.equal(poke({ tipRun: { status: "completed", conclusion: "success" } }), "poke=true");
+  assert.equal(poke({ tipRun: { status: "completed", conclusion: "cancelled" } }), "poke=true", "a cancelled tip run is not red");
+  assert.equal(poke({ tipRun: { status: "completed", conclusion: "failure" } }), "poke=false", "a RED tip never gets a train (T4)");
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("pages.yml re-arms the train once, after everything, and holds its Pages token on deploy only", () => {
   const pages = parseYAML(pagesWorkflow);
   // T6 least privilege: deploy-pages needs pages: write + id-token: write on

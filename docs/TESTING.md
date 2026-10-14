@@ -1054,7 +1054,9 @@ deployment per commit, gates cancelling each other in bursts, and the account's
   03-08 UTC bursts, not the tests, make the tail. After a train, `rearm`
   dispatches one more for a tip that went green while it ran (only when no
   other pages.yml run is queued or running), so a commit no longer waits for
-  the cron.
+  the cron; and `poke-train` pokes from a superseded green commit unless the
+  tip's fast tier is red (a still-pending tip used to block every poke in a
+  merge burst, 2026-10-14).
 
 Inside `ci.yml` a Pages call is recognised by its `concurrency_key` (the
 caller's event is `schedule` or `workflow_dispatch` there, never `push`): the
