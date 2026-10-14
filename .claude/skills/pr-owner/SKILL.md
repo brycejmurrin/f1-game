@@ -44,7 +44,10 @@ repo overrides; messaging, claims, subscriptions and authority are
    AND `node tools/ci/ready-full-cap.mjs` exit 0 (cap full: wait, never
    force). Then flip draft to ready only if your brief delegates it. Arming
    auto-merge and merging are NEVER yours unless the user designated this
-   session; otherwise report DONE-ready and leave it to CI Watch (`ci-watch`).
+   session; otherwise report DONE-ready and leave arming to Merge Desk
+   (`ci-watch`; merge commit only). To hold the PR, add a body line starting
+   `MERGE-HOLD:` and delete it when the hold ends; never write "do not merge"
+   or "do not enable auto-merge" in the body — that wording is not a veto.
 8. **Report** with the `session-comms` formats: `DONE <PR> <merge sha>` once it
    merged, `BLOCKED`, `HANDOFF`, `STAND-DOWN`. One report per transition, no
    status chatter. Arm a `send_later` safety net (~50 min, then ~4 h).
@@ -70,3 +73,6 @@ Extra constraints: <caps, groups not to run, deadlines>.
 Do not enable auto-merge or merge. Do not rebase or force-push.
 Report to @parent with DONE/BLOCKED/HANDOFF/STAND-DOWN first lines only.
 ```
+
+The "Do not enable auto-merge" line binds the child only; it never goes into a
+PR body or handoff (the body's only hold is a `MERGE-HOLD:` line).
