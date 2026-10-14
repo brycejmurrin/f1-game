@@ -672,7 +672,7 @@ function isWetRoad() { return trackWetness() >= 0.25; }
 function isRaining() { return trackWetness() >= 0.72; }
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column.
-function trackWetness() { return TyreModel.wetness(raceWeather, wxArc && wxArc.arc); }
+function trackWetness() { return wxArc ? wxArc.wetness() : TyreModel.wetness(raceWeather, null); }   // the arc's lagged road state (js/race/weather-arc.js)
 function roadWetness() { return trackWetness(); }   // alias — grip / pits / engineer
 function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? 2 : c.tread) : 0, trackWetness()); }
 
