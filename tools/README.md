@@ -237,6 +237,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/barrier-jumps.cjs** | Pure helpers: max adjacent \|Δbar\| / wallAt step on a barrier table (run-off terminus teleports). | check-changes |
 | **track/clip-audit.cjs** | PROP-VS-PROP interpenetration detector (emission-order adjacency); `--gate` ratchets against `clip-baseline.json`. | scenery-dress |
 | **track/coplanar-audit.cjs** | Z-fighting detector — same-facing coplanar faces (`dot ≥ 0.999`); `--gate` ratchets against `coplanar-baseline.json`. | scenery-dress |
+| **track/designer-code.mjs** | Headless designer share-code checker: decode APXT1/APXT2 via editor-vm, validate + insight summary; `--json`. | new-track |
 | **track/float-audit.cjs** | Exhaustive FLOATING-scenery detector — wraps `TrackGeom` emitters and reports props above/under the ground; `--all`. | survey-track |
 | **track/graph-parity.cjs** | Scene-graph migration gate: builds every circuit twice (baseline ref vs tree) and diffs prop geometry vertex for vertex. | scenery-dress |
 | **track/ground-audit.cjs** | Buried slabs, unsupported prims, flat coplanar faces; `--all --gate`/`--update` ratchet `scenery-audit-baseline.json`. | scenery-dress |
