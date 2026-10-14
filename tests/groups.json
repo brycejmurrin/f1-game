@@ -1528,6 +1528,7 @@
         "tests/specs/career-hub.spec.js",
         "tests/specs/career-season.spec.js",
         "tests/specs/career.spec.js",
+        "tests/specs/jump-start.spec.js",
         "tests/specs/quali.spec.js",
         "tests/specs/real-race.spec.js",
         "tests/specs/season-format.spec.js",

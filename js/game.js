@@ -775,6 +775,43 @@ function blueFlagCall(ev) {
   announce("+" + ev.sec + "s IGNORING BLUE FLAGS", 3, "penalty-hit");
   if (soundOn) GameAudio.penalty();
 }
+// FALSE START (FIA 2026 SR B5.11.1; js/race/sporting-regs.js): throttle at green
+// or a launch faster than the minimum reaction window. Grid physics stay locked
+// until lights-out — detection runs at green and in the first REACT_S of the race.
+function jumpStartThrottleLevel(c) {
+  if (!c || !c.human) return 0;
+  if (autoThrottle()) return 0;
+  const inp = inputOf(c);
+  if (inp) return inp.throttle ? (inp.throttleLevel ?? 1) : 0;
+  return Math.max(0, Input.throttleLevel());
+}
+function fineJumpStart(c) {
+  if (!c || c.jumpStartFined || c.retired || c.finished || session !== "race" || isQuali() || isTimeTrial()) return;
+  c.jumpStartFined = true;
+  c.penalty += SportingRegs.JUMP_START_PEN_S;
+  c.penaltyWhy = c.penaltyWhy ? c.penaltyWhy + "; " + SportingRegs.JUMP_START_WHY : SportingRegs.JUMP_START_WHY;
+  Log[c.isPlayer ? "info" : "debug"]("game", "Jump start car=" + c.code + " +5s total=" + c.penalty + "s");
+  if (!c.isPlayer) return;
+  resultT = 0;
+  announce("+5s FALSE START", 2.5, "penalty-hit");
+  if (soundOn) GameAudio.penalty();
+}
+function tickJumpStartAtGreen(c) {
+  if (!track || !c || c.jumpStartFined || c.retired || c.finished || session !== "race" || isQuali() || isTimeTrial()) return;
+  if (c.human && SportingRegs.jumpStartEarlyThrottle(jumpStartThrottleLevel(c), autoThrottle())) fineJumpStart(c);
+}
+function tickJumpStartReaction(c) {
+  if (!track || !c || c.jumpStartFined || c.retired || c.finished || session !== "race" || isQuali() || isTimeTrial()) return;
+  const t = raceT - launchT0;
+  if (t > SportingRegs.JUMP_START_REACT_S) return;
+  const vRef = vTop();
+  if (c.human) {
+    if (SportingRegs.jumpStartFastLaunch(t, c.speed || 0, vRef)) fineJumpStart(c);
+    return;
+  }
+  if (c.launchOn && c.launch && t < c.launch.react
+      && SportingRegs.jumpStartFastLaunch(t, c.speed || 0, vRef)) fineJumpStart(c);
+}
 // The cue phases that turn the pit ENTRANCE lamps green (SceneryPits): you are
 // called in and still on your way to the box. Not `out`/`served`/`merge` — by
 // then you are leaving, and not `missed`.
@@ -1906,6 +1943,7 @@ function redFlagRestart() {
     const rh = DriverRatings.hash32(simSeed() + ":restart:" + i + ":" + c.skill);
     c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (rh & 0xffff) / 65536);
     c.launchOn = !c.human;
+    c.jumpStartFined = false; c.penaltyWhy = null;
     c.incidentInvalidLap = true;   // a lap with a red flag in it is not a timed lap
   });
   seedPlayerPose();
@@ -1965,7 +2003,7 @@ function gridUp(preOrder) {
     OvertakeMode.reset(c); c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; c._coastHeld = undefined;   // last race's classification: makeCars' values (CarFields declares _coastHeld; a delete would make the car a dictionary); a race re-arms via armReliability
-    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
+    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.penaltyWhy = null; c.jumpStartFined = false; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
@@ -4557,6 +4595,7 @@ function update(dt) {
       // every later race and suppresses quali flying laps. Ledger 2026-09-22.
       const wasRestart = restartPending;
       restartPending = false;
+      for (const c of cars) tickJumpStartAtGreen(c);
       // Nothing consumes RECOVER/shift/boost edges before green, so a tap on the grid fired at lights-out (a free ~58 km/h re-place, or 2nd gear with no drive).
       Input.clearDriveEdges();
       announce("LIGHTS OUT!", 1.4, "race");
@@ -4566,6 +4605,14 @@ function update(dt) {
       // reaches the gantry, and then the lap is driven from the line.
       if (isQuali() && !wasRestart) launchFlyingLap();
     }
+    ranked.length = 0;
+    for (const c of cars) if (!c.retired) ranked.push(c);
+    ranked.sort(byProgDesc);
+    for (let i = 0; i < cars.length; i++) {
+      const c = cars[i];
+      c._snapProg = c.prog; c._snapX = c.x; c._snapSpeed = c.speed;
+    }
+    for (const c of cars) updateCar(c, dt, ranked);
     _gridIdleOpts.soundOn = soundOn; _gridIdleOpts.wet = isWetRoad(); _gridIdleOpts.step = _audioParamStep;
     GameAudio.setGridIdle(player, _gridIdleOpts); return;
   }
@@ -4633,6 +4680,9 @@ function update(dt) {
   if (track && ranked.length) Collide.fillArcBuckets(ranked, track.total, TRAFFIC_BUCKET_M, _snapProgOf);
   RaceControl.beginLineStep(cars);
   for (const c of cars) updateCar(c, dt, ranked);
+  if (raceT - launchT0 <= SportingRegs.JUMP_START_REACT_S) {
+    for (const c of cars) tickJumpStartReaction(c);
+  }
   RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
 
   collide.resolveCollisions(ranked, dt);
