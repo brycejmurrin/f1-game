@@ -651,8 +651,14 @@ test("ensureStaged fetches lap-1 engineer/spotter packs before coach and announc
   assert.ok(order.every((u) => u.includes("george.")), "only engineer fetches started");
   resolveFetch("assets/voice/george.json");
   resolveFetch("assets/voice/george.bin");
-  await drain();
-  for (let i = 0; i < 20; i++) { await drain(); if (P.ready("george")) break; }
+  // ready(george) flips ~4 microtasks before ensureStaged starts tier-1 fetches.
+  // Waiting on ready alone then asserting order.length===6 races that gap under
+  // interleaved await checkpoints (each await Promise.resolve() continuation is
+  // queued beside the pack's own .then chain). Wait until tier-1 URLs appear.
+  for (let i = 0; i < 40; i++) {
+    await drain();
+    if (order.length >= 6 && P.ready("george")) break;
+  }
   assert.equal(order.length, 6, "every pack fetch started once engineer tier settled");
   const idx = (id, ext) => order.findIndex((u) => u.endsWith(`${id}.${ext}`));
   assert.ok(idx("george", "json") >= 0 && idx("george", "bin") >= 0, "engineer pack started");
@@ -665,8 +671,10 @@ test("ensureStaged fetches lap-1 engineer/spotter packs before coach and announc
   assert.equal(P.ready("fable"), false, "announcer still pending when engineer is ready");
   assert.equal(pending.size, 4, "tier-1 fetches still in flight");
   for (const url of [...pending.keys()]) resolveFetch(url);
-  await drain();
-  for (let i = 0; i < 20; i++) { await drain(); if (P.ready("heart") && P.ready("fable")) break; }
+  for (let i = 0; i < 40; i++) {
+    await drain();
+    if (P.ready("heart") && P.ready("fable")) break;
+  }
   assert.equal(P.ready("heart"), true, "coach ready after tier 1 settles");
   assert.equal(P.ready("fable"), true, "announcer ready after tier 1 settles");
   assert.deepEqual([...new Set(order)].sort(), ["assets/voice/fable.bin", "assets/voice/fable.json",
