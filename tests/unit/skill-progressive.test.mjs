@@ -304,14 +304,17 @@ test("every custom subagent declares name, description, and model", () => {
   // does not silently pick a different model; readonly / is_background optional.
   const files = fs.readdirSync(AGENTS).filter((f) => f.endsWith(".md") && f !== "README.md");
   assert.deepEqual(files.sort(), [
-    "bloat-auditor.md", "ci-red-triage.md", "ci-watcher.md", "deploy-research.md", "physics-contract-auditor.md",
-    "track-surveyor.md", "verify-agent.md",
-  ], "seven agents since 2026-10-10 (ci-watcher added; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
+    "bloat-auditor.md", "ci-red-triage.md", "ci-watcher.md", "code-hunter.md", "deploy-research.md", "finding-verifier.md",
+    "physics-contract-auditor.md", "prior-art-scout.md", "track-surveyor.md", "verify-agent.md",
+  ], "ten agents since 2026-10-14 (code-hunter, finding-verifier, prior-art-scout added; ci-watcher 2026-10-10; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
   // Model tiering (2026-09-22): a scan-and-report agent runs on a cheaper
   // tier; judgement stays on the session's model. Anything else is a typo.
   const TIER = {
     "bloat-auditor.md": "sonnet", "deploy-research.md": "haiku", "verify-agent.md": "haiku",
     "ci-red-triage.md": "sonnet", "ci-watcher.md": "haiku", "physics-contract-auditor.md": "sonnet", "track-surveyor.md": "inherit",
+    // 2026-10-14: hunt agents. code-hunter is the ONE opus pin (depth is the
+    // product, 4 of 11 hunt campaigns asked for opus); verify on sonnet, recall on haiku.
+    "code-hunter.md": "opus", "finding-verifier.md": "sonnet", "prior-art-scout.md": "haiku",
   };
   const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.";
   for (const f of files) {
@@ -403,7 +406,8 @@ test("coverage skills exist for input, season, data-hub, and AI", () => {
 });
 
 test("readonly review agents stay --fast and never start Playwright", () => {
-  for (const id of ["physics-contract-auditor", "bloat-auditor", "verify-agent", "deploy-research", "ci-red-triage", "ci-watcher"]) {
+  for (const id of ["physics-contract-auditor", "bloat-auditor", "verify-agent", "deploy-research", "ci-red-triage", "ci-watcher",
+    "code-hunter", "finding-verifier", "prior-art-scout"]) {
     const file = path.join(AGENTS, `${id}.md`);
     assert.ok(fs.existsSync(file), `missing .claude/agents/${id}.md`);
     const text = fs.readFileSync(file, "utf8");
@@ -412,7 +416,8 @@ test("readonly review agents stay --fast and never start Playwright", () => {
     assert.equal(fm.readonly, true, `${id} must be readonly`);
     assert.doesNotMatch(fm.tools || "", /\b(Write|Edit|MultiEdit|NotebookEdit)\b/,
       `${id}: readonly is Cursor's field; Claude Code enforces it through tools:`);
-    assert.match(fm.model, /^(inherit|haiku|sonnet)$/);
+    // opus only where the TIER map pins it (code-hunter); every other readonly agent stays cheaper.
+    assert.match(fm.model, id === "code-hunter" ? /^opus$/ : /^(inherit|haiku|sonnet)$/);
     assert.doesNotMatch(text, /verify-change\.mjs --wait/);
     assert.doesNotMatch(text, /test-solo\.mjs/);
     assert.doesNotMatch(text, /npx playwright test/);
