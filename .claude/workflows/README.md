@@ -17,6 +17,11 @@ parsing as an async function body instead.
 owns drift, contradictions and docs truth; `code-survey` owns dead code, runtime
 bugs and frame budget, and is the one that reads tests/ and tools/ for defects.
 
+Single-slice hunts do not need a workflow: agent `prior-art-scout` builds the
+`known` list (also the input for either script's `known` arg), one
+`code-hunter` per slice finds, and `finding-verifier` re-checks the rows (the
+skeptic step) before anything is fixed (`.claude/agents/README.md`).
+
 Ground rules baked into every script: agents are read-only (or worktree-
 isolated), NEVER run browser/Playwright tests (4-core box — suites run in the
 main loop, serially), and findings face adversarial verification before they

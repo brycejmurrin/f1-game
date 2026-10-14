@@ -111,7 +111,7 @@ test("an install where controller.html 404s still completes (optional, not essen
     fetchImpl: async (r) => {
       const u = new URL(typeof r === "string" ? r : r.url, `${ORIGIN}/`);
       if (u.pathname.endsWith("/version.json")) return new Response('{"build":321}');
-      if (u.pathname.endsWith("/index.html")) return new Response('<script src="js/game.js?v=321"></script>');
+      if (u.pathname.endsWith("/index.html")) return new Response('<meta name="apex-build" content="321"><script src="js/game.js?v=321"></script>');
       if (u.pathname.endsWith("/controller.html")) return new Response("nope", { status: 404 });
       return new Response("asset");
     },

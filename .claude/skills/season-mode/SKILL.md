@@ -35,7 +35,8 @@ node tools/ci/test-bg.mjs modes              # BROWSER group (season.spec.js, se
 Sprint points are scored in `SeasonCal.award()` (`SPRINT_POINTS`, `stage()`); the
 results sheet reads `race.sprint` in `js/ui/results-sheet.js` `buildResults`.
 Start with `a sprint scores its own table`; a green fixture does not exclude
-other scoring defects. Inspect `award()` return, stage/config, classification
+other scoring defects. Inspect `award()` return (null = refused: `seasonConflict` or
+`!canRace`), stage/config (`fmtActive()` gates the format rules), classification
 and save conflict before checking the sheet/standings.
 
 Sprint on/off:

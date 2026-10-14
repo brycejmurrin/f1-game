@@ -270,6 +270,9 @@ most-shared class in the project and had no entry at all:
   standings / results wrap the shared points cell instead of ellipsizing it.
 - `.season-upcoming-row` — `components` + `menus`
 - `.sf-scroll` — `components` + `tuner`
+- `.sf-b` — `components` + `data`. ScrollFade's more-below class; `data` paints an
+  inset box-shadow on `.dh-content.sf-b` because the shared mask fade is too weak
+  on the translucent hub panel (phones).
 - `.sheet-foot` — `career` + `carsetup` + `components` + `menus` + `overlays` + `tuner`
 - `.sheet-head` — `components` + `overlays`
 - `.sheet-body` — `components` + `overlays`. How to Play, Career guide, and

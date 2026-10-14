@@ -16,6 +16,6 @@ Hook repro (owned lost after slot reload):
 1. `__apex.career({flavour:"driver"})`, `careerGrant(n)`, buy a part; note `__apex.career().owned` (list, not the count).
 2. `__apex.persistState()` — `ok:false` / `broken` means the write never persisted; check `mirror.failed`.
 3. `__apex.careerSlots("driver", other)` then back (switching saves the leaving career first); re-read `career().owned`.
-4. Reload and re-read; diff against step 1 to see which of the causes above fired.
+4. Reload (`page.reload()`, then wait for `__apex`) and re-read; diff against step 1 to see which of the causes above fired.
 
 Pins: `tests/unit/career-backup.test.mjs`, `career-cross-tab.test.mjs`, `apex-career-delete.test.mjs`, `career-settle.test.mjs`.
