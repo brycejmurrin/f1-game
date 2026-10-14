@@ -39,6 +39,13 @@ var GameAudio = (function () {
   let scrubSrc = null, scrubFilter = null, scrubGain = null; // front tyres scrubbing past the grip peak
   let lockFilter = null, lockGain = null;                    // locked-wheel squeal (rides scrubSrc)
   let surfSrc = null, surfFilter = null, surfGain = null;    // grass / gravel rumble off the road
+  // Continuous kerb rumble (Radio r9): speed-keyed loop that owns the sound while
+  // onKerb, so the old rumble() one-shot is muted for the duration. Wet-road tyre
+  // spray is a separate filtered-noise bed — gain ~ speed², never a pitch trim.
+  let kerbSrc = null, kerbFilter = null, kerbGain = null;
+  let spraySrc = null, sprayFilter = null, sprayGain = null;
+  let kerbLive = false;                                       // true while continuous kerb owns rumble()
+  let sprayAhead = 0;                                         // 0..1 from rivals ahead ≤40 m (setRivals)
   let pitLimOsc = null, pitLimGain = null;                   // pit-limiter chop: square AM into engGain.gain
   let cylCutOsc = null, cylCutGain = null;                   // ERS/part-throttle ignition-cut texture (2026 PU)
   let revFlare = 0, revFlareT = 0;                           // downshift throttle-blip overshoot (see shift)
@@ -1106,6 +1113,30 @@ var GameAudio = (function () {
     surfGain = ctx.createGain(); surfGain.gain.value = 0;
     surfSrc.connect(surfFilter).connect(surfGain).connect(sfxBus);
 
+    // KERB RUMBLE (Radio r9). The one-shot rumble() was re-armed every 70 ms from
+    // game.js and read as a fixed burst regardless of speed. This loop's gain,
+    // playbackRate and brightness all climb with speed01; off the kerb it is
+    // exactly 0. While it is live, rumble() is a no-op so the two do not stack.
+    kerbSrc = ctx.createBufferSource();
+    kerbSrc.buffer = loopNoise("kerb", 0.45);
+    kerbSrc.loop = true;
+    kerbSrc.playbackRate.value = 0.85;
+    kerbFilter = ctx.createBiquadFilter();
+    kerbFilter.type = "bandpass"; kerbFilter.frequency.value = 320; kerbFilter.Q.value = 0.85;
+    kerbGain = ctx.createGain(); kerbGain.gain.value = 0;
+    kerbSrc.connect(kerbFilter).connect(kerbGain).connect(sfxBus);
+
+    // WET TYRE SPRAY. Filtered noise whose gain is proportional to speed² and
+    // capped; dry reads exactly 0. Rain must not retune pitch — only this gain
+    // (and an optional quieter wake when a rival is within 40 m ahead).
+    spraySrc = ctx.createBufferSource();
+    spraySrc.buffer = loopNoise("spray", 0.55);
+    spraySrc.loop = true;
+    sprayFilter = ctx.createBiquadFilter();
+    sprayFilter.type = "bandpass"; sprayFilter.frequency.value = 2200; sprayFilter.Q.value = 0.7;
+    sprayGain = ctx.createGain(); sprayGain.gain.value = 0;
+    spraySrc.connect(sprayFilter).connect(sprayGain).connect(sfxBus);
+
     // AIRFLOW. The only speed-coupled continuous sounds were the engine and
     // the skid, so a 320 km/h straight sounded like a 120 km/h one with a
     // higher engine note. Broadband noise through a bandpass that opens with
@@ -1151,6 +1182,8 @@ var GameAudio = (function () {
     skidSrc.start();
     scrubSrc.start();
     surfSrc.start();
+    kerbSrc.start();
+    spraySrc.start();
     windSrc.start();
     brakeSrc.start();
 
@@ -1201,7 +1234,11 @@ var GameAudio = (function () {
     if (scrubGain) scrubGain.gain.setTargetAtTime(0, t0, 0.04);
     if (lockGain) lockGain.gain.setTargetAtTime(0, t0, 0.04);
     if (surfGain) surfGain.gain.setTargetAtTime(0, t0, 0.06);
+    if (kerbGain) kerbGain.gain.setTargetAtTime(0, t0, 0.06);
+    if (sprayGain) sprayGain.gain.setTargetAtTime(0, t0, 0.06);
     if (brakeGain) brakeGain.gain.setTargetAtTime(0, t0, 0.06);
+    kerbLive = false;
+    sprayAhead = 0;
     const stopAt = (n, t) => { try { if (n) n.stop(t); } catch (e) { /* already stopped */ } };
     if (usingSamples) {
       if (engGainIdle) engGainIdle.gain.setTargetAtTime(0, t0, 0.06);
@@ -1231,7 +1268,9 @@ var GameAudio = (function () {
     if (cylCutOsc) { stopAt(cylCutOsc, t0 + 0.35); cylCutOsc = null; cylCutGain = null; }
     stopAt(scrubSrc, t0 + 0.35);
     stopAt(surfSrc, t0 + 0.35);
-    scrubSrc = surfSrc = null;
+    stopAt(kerbSrc, t0 + 0.35);
+    stopAt(spraySrc, t0 + 0.35);
+    scrubSrc = surfSrc = kerbSrc = spraySrc = null;
     stopAt(brakeSrc, t0 + 0.35);
     stopAt(whineOsc, t0 + 0.35);
     stopAt(subOctOsc, t0 + 0.35);
@@ -1272,13 +1311,14 @@ var GameAudio = (function () {
                   voiceFormant, ersHp, ersGain, windFilter, windGain, deadSub, subOctGain,
                   deadIdleGain, deadLimGain, deadLimPitch, deadGravGain, brakeFilter, brakeGain,
                   revSend, convolver, revReturn, deadPitLim, deadCylCut, scrubFilter, scrubGain, lockFilter, lockGain,
-                  surfFilter, surfGain];
+                  surfFilter, surfGain, kerbFilter, kerbGain, sprayFilter, sprayGain];
     for (const v of rivalVoices) { dead.push(v.filt, v.gain, v.pan); }
     queueDying(dead);
     engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = skidLfo = skidLfoGain = lfoG = null;
     voiceFormant = ersHp = ersGain = windFilter = windGain = tiltEq = null;
     brakeFilter = brakeGain = null;
     scrubFilter = scrubGain = lockFilter = lockGain = surfFilter = surfGain = null;
+    kerbFilter = kerbGain = sprayFilter = sprayGain = null;
     revFlare = 0; pitLimLvl = 0;
     subOctOsc = subOctGain = null;
     convolver = revSend = revReturn = null;
@@ -1290,7 +1330,11 @@ var GameAudio = (function () {
   }
 
   function setEngine(rev01, boost01, offroad, speed01, gear, physics) {
-    if (!engineOn || !sfxOk()) return;
+    if (!engineOn || !sfxOk()) {
+      // SFX off: continuous kerb must not keep rumble() muted after the bus is silent.
+      if (!sfxOk()) kerbLive = false;
+      return;
+    }
     // UPGRADE TO THE SAMPLES WHEN THEY LAND. `usingSamples` is decided once,
     // in startEngine(); a race whose lights went out before f1_engine.mp3 had
     // decoded (cold cache on a phone) ran its whole distance on the synth
@@ -1704,6 +1748,40 @@ var GameAudio = (function () {
         if (Math.abs((brakeFilter.frequency._apexHz ?? -1) - bf) > 20) {
           brakeFilter.frequency.setTargetAtTime(bf, t, 0.08);
           brakeFilter.frequency._apexHz = bf;
+        }
+      }
+    }
+
+    // KERB RUMBLE (Radio r9). Continuous layer driven by the onKerb + speed01
+    // setEngine already receives — no game.js change. Gain, rate and brightness
+    // all rise with speed; off the kerb every target is 0. kerbLive mutes the
+    // legacy one-shot so the 70 ms re-arm from game.js does not stack on top.
+    kerbLive = onKerb;
+    if (kerbGain) {
+      const kerbLvl = onKerb ? (0.010 + 0.070 * s) : 0;
+      aimGain(kerbGain, kerbLvl, t, 0.05);
+      if (onKerb && kerbSrc && kerbFilter) {
+        aimParam(kerbSrc.playbackRate, 0.80 + 1.10 * s, t, 0.06, 1e-4);
+        const khz = 260 + 640 * s;
+        if (Math.abs((kerbFilter.frequency._apexHz ?? -1) - khz) > 8) {
+          kerbFilter.frequency.setTargetAtTime(khz, t, 0.08);
+          kerbFilter.frequency._apexHz = khz;
+        }
+      }
+    }
+
+    // WET TYRE SPRAY. Gain ~ speed² (capped); dry is exactly 0. A quieter wake
+    // from a rival ahead within 40 m rides sprayAhead (filled in setRivals).
+    // Never a pitch trim — rain must not retune the engine note.
+    if (sprayGain) {
+      const own = wet ? Math.min(0.045, 0.055 * s * s) : 0;
+      const wake = wet ? sprayAhead * 0.018 * Math.min(1, 0.35 + s) : 0;
+      aimGain(sprayGain, own + wake, t, 0.08);
+      if ((own + wake) > 0 && sprayFilter) {
+        const shz = 1600 + 1400 * s;
+        if (Math.abs((sprayFilter.frequency._apexHz ?? -1) - shz) > 20) {
+          sprayFilter.frequency.setTargetAtTime(shz, t, 0.12);
+          sprayFilter.frequency._apexHz = shz;
         }
       }
     }
@@ -2197,6 +2275,10 @@ var GameAudio = (function () {
     return s.b;
   }
   function setRivals(list) {
+    // Spray wake: nearest rival ahead within 40 m → 0..1 (RivalAudio owns the
+    // geometry; engine only stores the scalar for setEngine's wet spray bed).
+    sprayAhead = (typeof RivalAudio !== "undefined" && RivalAudio.sprayAhead)
+      ? RivalAudio.sprayAhead(list) : 0;
     if (!engineOn || !rivalVoices.length) return;
     const t = now();
     const dt = _rivalRevSmT > 0 ? Math.min(0.05, t - _rivalRevSmT) : 1 / 60;
@@ -2340,8 +2422,10 @@ var GameAudio = (function () {
     blip(95, "square", 0.14, 0.01, 0.1, 60);
   }
 
-  // short low rattle for riding a kerb; call repeatedly (throttled) for a rumble
+  // Legacy kerb one-shot. While the continuous kerb layer is live (onKerb from
+  // setEngine), this is a no-op so the 70 ms re-arm in game.js does not stack.
   function rumble() {
+    if (kerbLive) return;
     noise(0.09, 0.05, 320);
   }
 
@@ -2528,6 +2612,17 @@ var GameAudio = (function () {
     setCameraMix,
     cameraMix: () => ({ kind: camKind, ...camMix }),
     carSfx: () => ({ ...carSfxLast, pitGuns: pitGunFired, revFlare: +revFlare.toFixed(4), pitDepth: pitLimGain ? pitLimGain._apexTgt || 0 : 0 }),
+    // Test hook: continuous kerb rumble + wet spray targets (Radio r9).
+    kerbSpray() {
+      return {
+        kerb: kerbGain ? +(kerbGain._apexAimTgt ?? kerbGain.gain.value).toFixed(5) : 0,
+        kerbRate: kerbSrc ? +(kerbSrc.playbackRate._apexAimTgt ?? kerbSrc.playbackRate.value).toFixed(4) : 0,
+        kerbHz: kerbFilter ? Math.round(kerbFilter.frequency._apexHz ?? kerbFilter.frequency.value) : 0,
+        spray: sprayGain ? +(sprayGain._apexAimTgt ?? sprayGain.gain.value).toFixed(5) : 0,
+        sprayAhead: +sprayAhead.toFixed(4),
+        kerbLive: !!kerbLive,
+      };
+    },
     shift,
     lightOn,
     lightsOut,

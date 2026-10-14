@@ -95,7 +95,7 @@ fn paintPeelN(N: vec3<f32>, objPos: vec3<f32>, vDist: f32, amt: f32) -> vec3<f32
   let pby = (svnoise(puv + vec2<f32>(0.0, pe)) * 0.6 + svnoise(fuv + vec2<f32>(0.0, pe * 3.8)) * 0.4) - pb0;
   let pT = normalize(cross(N, vec3<f32>(0.0, 1.0, 0.001)) + vec3<f32>(1e-4));
   let pB = cross(N, pT);
-  return normalize(N + (pT * pbx + pB * pby) * (0.22 * amt * pFade));
+  return normalize(N + (pT * pbx + pB * pby) * (0.28 * amt * pFade));
 }
 fn matScale(mid: i32) -> f32 {
   if (mid < 0 || mid > 16) { return 0.0; }
@@ -1053,7 +1053,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   var wvT = vec2<f32>(0.0);
   if (carbonFinish || carbonSurface) {
     let wv = in.objPos.xz * 190.0 + vec2<f32>(in.objPos.y * 190.0);
-    let wvFade = clamp(1.0 - (vDist - 8.0) / 8.0, 0.0, 1.0);
+    let wvFade = clamp(1.0 - (vDist - 10.0) / 10.0, 0.0, 1.0);
     weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y) * wvFade;
     wvT = vec2<f32>(cos(wv.x) * sin(wv.y), sin(wv.x) * cos(wv.y)) * wvFade;
   }
@@ -1072,8 +1072,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       carPaint = 0.0;
       clearcoat = select(0.0, D.mat1.z * 0.45, glassSurface || visorSurface);
       if (matteSurface) { clearcoat = 0.0; }
-      // Carbon: a thin lacquer (min 0.30) — glsl-lit.js. No env mirror (carPaint 0).
-      if (carbonSurface || carbonFinish) { clearcoat = min(D.mat1.z, 0.30); }
+      // Carbon: a thin lacquer (min 0.42) — glsl-lit.js / CarMaterialShade.CARBON.
+      if (carbonSurface || carbonFinish) { clearcoat = min(D.mat1.z, 0.42); }
     }
   }
   let envSurface = (carPaint > 0.001 || glassSurface || visorSurface) && clearcoat > 0.001;
@@ -1116,7 +1116,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (carbonFinish || carbonSurface) {
     let wT = normalize(cross(N, vec3<f32>(0.0, 1.0, 0.001)) + vec3<f32>(1e-4));
     let wB = cross(N, wT);
-    N = normalize(N + (wT * wvT.x + wB * wvT.y) * 0.18);
+    N = normalize(N + (wT * wvT.x + wB * wvT.y) * 0.26);
   }
   // Wall/MAT bump AFTER detail + peel, matching GLX glsl-lit.js. Lighting
   // still uses the bumped N; SAA does not (Nsaa / geo+peel mix).
@@ -1141,7 +1141,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   var rough     = clamp(D.mat0.z, 0.04, 1.0);
   let keyMul    = F.params1.x;
   if (classifiedCar) {
-    metalness = select(0.0, max(D.mat0.w, 0.78), metalSurface);
+    metalness = select(0.0, max(D.mat0.w, 0.82), metalSurface);
     if (mirrorSurface) { metalness = max(D.mat0.w, 0.55); }
     if (carbonSurface || carbonFinish) { metalness = 0.08; }
     // PAINT gets metalness rather than the 0.0 base — mirrors
@@ -1157,18 +1157,18 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (carbonSurface || carbonFinish) { specular = 0.48; }
     if (panelSurface) { specular = 0.35; }
     if (satinMetalSurface) { specular = 0.82; }
-    if (matteSurface) { specular = 0.16; }
+    if (matteSurface) { specular = 0.11; }
     emissive = select(0.0, D.mat0.x, paintLike);
     if (emissiveSurface) { emissive = max(D.mat0.x, 1.0); }
-    if (carbonSurface || carbonFinish) { rough = max(rough, 0.56) + (weave - 0.5) * 0.10; }   // the twill's roughness ripple
+    if (carbonSurface || carbonFinish) { rough = max(rough, 0.52) + (weave - 0.5) * 0.12; }   // the twill's roughness ripple
     if (rubberSurface) { rough = max(rough, 0.90); }
     if (sidewallSurface) { rough = clamp(rough, 0.55, 0.65); }   // satin wall vs the matte tread
-    if (metalSurface) { rough = min(rough, 0.16); }
+    if (metalSurface) { rough = min(rough, 0.18); }
     if (glassSurface || visorSurface) { rough = min(rough, 0.13); }
     if (emissiveSurface) { rough = max(rough, 0.32); }
     if (panelSurface) { rough = max(rough, 0.72); }
     if (mirrorSurface) { rough = min(rough, 0.09); }
-    if (matteSurface) { rough = max(rough, 0.88); }
+    if (matteSurface) { rough = max(rough, 0.92); }
     if (satinMetalSurface) { rough = clamp(rough, 0.24, 0.40); }
     if (iriSurface) { rough = min(rough, 0.22); }
   }
@@ -1205,9 +1205,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // the team tint. sin*sin, so no derivative and no control-flow hazard.
   if (carbonFinish) {
     albedo = mix(albedo * 0.16 + vec3<f32>(0.030, 0.031, 0.035), albedo * 0.28, vec3<f32>(0.25));
-    albedo = albedo * (0.86 + 0.28 * weave);
+    albedo = albedo * (0.84 + 0.32 * weave);
   } else if (carbonSurface) {
-    albedo = albedo * (0.93 + 0.14 * weave);
+    albedo = albedo * (0.88 + 0.24 * weave);
   }
   if (iriSurface) {
     let fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
@@ -1701,7 +1701,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       envMet = mix(envMet, textureSampleLevel(envCube, envCubeSamp, vec3<f32>(Rm.x, -Rm.y, Rm.z), rough * 2.5).rgb,
                    vec3<f32>(clamp(envProbeStr, 0.0, 1.0)));
     }
-    let metAdd = envMet * F_Schlick(NoV, albedo, 1.0 - rough * 0.5) * (metalness * (1.0 - rough * 0.7) * ccTrans);
+    var metAdd = envMet * F_Schlick(NoV, albedo, 1.0 - rough * 0.5) * (metalness * (1.0 - rough * 0.7) * ccTrans);
+    // Dark metals (halo titanium, exhaust) — CarMaterialShade.METAL.darkEnvBoost.
+    if (metalSurface) {
+      let metLum = dot(albedo, vec3<f32>(0.299, 0.587, 0.114));
+      metAdd = metAdd * (1.0 + (1.0 - clamp(metLum * 4.0, 0.0, 1.0)) * 0.32);
+    }
     color = color + metAdd / (1.0 + max(max(metAdd.r, metAdd.g), metAdd.b));
   }
 

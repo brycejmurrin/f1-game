@@ -278,12 +278,12 @@ test("car materials: wet look, ground AO, metal env, sidewall and carbon agree o
     sidewallRough: { GLX: /if \(sidewallSurface\) rough = clamp\(rough, 0\.55, 0\.65\);/,
                      TLX: /If\(sidewallSurface, \(\) => \{ rough\.assign\(clamp\(rough, 0\.55, 0\.65\)\); \}\)/,
                      WGX: /if \(sidewallSurface\) \{ rough = clamp\(rough, 0\.55, 0\.65\); \}/ },
-    carbonLacquer: { GLX: /\(carbonSurface \|\| carbonFinish\) \? min\(uClearcoat, 0\.30\)/,
-                     TLX: /select\(carbonSurface\.or\(carbonFinish\), min\(matU\.clearcoat, 0\.30\)/,
-                     WGX: /if \(carbonSurface \|\| carbonFinish\) \{ clearcoat = min\(D\.mat1\.z, 0\.30\); \}/ },
-    weaveNormal: { GLX: /N = normalize\(N \+ \(wT \* wvT\.x \+ wB \* wvT\.y\) \* 0\.18\);/,
-                   TLX: /N\.assign\(normalize\(N\.add\(wT\.mul\(wvT\.x\)\.add\(wB\.mul\(wvT\.y\)\)\.mul\(0\.18\)\)\)\)/,
-                   WGX: /N = normalize\(N \+ \(wT \* wvT\.x \+ wB \* wvT\.y\) \* 0\.18\);/ },
+    carbonLacquer: { GLX: /\(carbonSurface \|\| carbonFinish\) \? min\(uClearcoat, 0\.42\)/,
+                     TLX: /select\(carbonSurface\.or\(carbonFinish\), min\(matU\.clearcoat, 0\.42\)/,
+                     WGX: /if \(carbonSurface \|\| carbonFinish\) \{ clearcoat = min\(D\.mat1\.z, 0\.42\); \}/ },
+    weaveNormal: { GLX: /N = normalize\(N \+ \(wT \* wvT\.x \+ wB \* wvT\.y\) \* 0\.26\);/,
+                   TLX: /N\.assign\(normalize\(N\.add\(wT\.mul\(wvT\.x\)\.add\(wB\.mul\(wvT\.y\)\)\.mul\(0\.26\)\)\)\)/,
+                   WGX: /N = normalize\(N \+ \(wT \* wvT\.x \+ wB \* wvT\.y\) \* 0\.26\);/ },
   };
   for (const [what, by] of Object.entries(pins))
     for (const [name, re] of Object.entries(by))

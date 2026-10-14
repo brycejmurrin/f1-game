@@ -1410,7 +1410,7 @@
         const wvT = vec2(0.0).toVar();
         If(carbonFinish.or(carbonSurface), () => {
           const wv = objP.xz.mul(190.0).add(objP.y.mul(190.0)).toVar();
-          const wvFade = clamp(vd.sub(8.0).div(8.0).oneMinus(), 0.0, 1.0).toVar();
+          const wvFade = clamp(vd.sub(10.0).div(10.0).oneMinus(), 0.0, 1.0).toVar();
           weave.assign(wv.x.sin().mul(wv.y.sin()).mul(wvFade).mul(0.5).add(0.5));
           wvT.assign(vec2(wv.x.cos().mul(wv.y.sin()), wv.x.sin().mul(wv.y.cos())).mul(wvFade));
         });
@@ -1426,12 +1426,12 @@
               select(iriSurface, max(matU.clearcoat, 0.70),
                 select(satinMetalSurface, min(matU.clearcoat, 0.25),
                   select(matteSurface, float(0.0),
-                    // carbon: a thin lacquer (min 0.30) — glsl-lit.js
-                    select(carbonSurface.or(carbonFinish), min(matU.clearcoat, 0.30),
+                    // carbon: a thin lacquer (min 0.42) — glsl-lit.js / CarMaterialShade.CARBON
+                    select(carbonSurface.or(carbonFinish), min(matU.clearcoat, 0.42),
                       select(glassSurface.or(visorSurface), matU.clearcoat.mul(0.45), float(0.0)))))))),
           matU.clearcoat).toVar();
         const metalness = select(classifiedCar,
-          select(metalSurface, max(matU.metalness, 0.78),
+          select(metalSurface, max(matU.metalness, 0.82),
             select(mirrorSurface, max(matU.metalness, 0.55),
               select(satinMetalSurface, max(matU.metalness, 0.60),
                 select(matteSurface, float(0.0),
@@ -1455,7 +1455,7 @@
             select(sidewallSurface, float(0.35),
             select(metalSurface.or(mirrorSurface), float(1.0),
               select(satinMetalSurface, float(0.82),
-                select(matteSurface, float(0.16),
+                select(matteSurface, float(0.11),
                   select(carbonSurface.or(carbonFinish), float(0.48),
                     select(panelSurface, float(0.35), matU.specular))))))),
           matU.specular).toVar();
@@ -1481,7 +1481,7 @@
             const pT = normalize(cross(N, vec3(0.0, 1.0, 0.001)).add(vec3(1e-4)));
             const pB = cross(N, pT);
             N.assign(normalize(N.add(pT.mul(pbx).add(pB.mul(pby))
-              .mul(carPaint.mul(pFade).mul(0.22)))));
+              .mul(carPaint.mul(pFade).mul(0.28)))));
           });
         });
 
@@ -1493,7 +1493,7 @@
         If(carbonFinish.or(carbonSurface), () => {
           const wT = normalize(cross(N, vec3(0.0, 1.0, 0.001)).add(vec3(1e-4)));
           const wB = cross(N, wT);
-          N.assign(normalize(N.add(wT.mul(wvT.x).add(wB.mul(wvT.y)).mul(0.18))));
+          N.assign(normalize(N.add(wT.mul(wvT.x).add(wB.mul(wvT.y)).mul(0.26))));
         });
 
         // per-material procedural bump (before V/L/H/NoL — js/render/glx/shaders/glsl-lit.js)
@@ -1535,15 +1535,15 @@
 
         // roughness resolution + car-surface clamps (js/render/glx/shaders/glsl-lit.js)
         const rough = clamp(matU.roughness, 0.04, 1.0).toVar();
-        If(carbonSurface.or(carbonFinish), () => { rough.assign(max(rough, 0.56).add(weave.sub(0.5).mul(0.10))); });   // the twill's roughness ripple
+        If(carbonSurface.or(carbonFinish), () => { rough.assign(max(rough, 0.52).add(weave.sub(0.5).mul(0.12))); });   // the twill's roughness ripple
         If(rubberSurface, () => { rough.assign(max(rough, 0.90)); });
         If(sidewallSurface, () => { rough.assign(clamp(rough, 0.55, 0.65)); });   // satin wall vs the matte tread
-        If(metalSurface, () => { rough.assign(min(rough, 0.16)); });
+        If(metalSurface, () => { rough.assign(min(rough, 0.18)); });
         If(glassSurface.or(visorSurface), () => { rough.assign(min(rough, 0.13)); });
         If(emissiveSurface, () => { rough.assign(max(rough, 0.32)); });
         If(panelSurface, () => { rough.assign(max(rough, 0.72)); });
         If(mirrorSurface, () => { rough.assign(min(rough, 0.09)); });
-        If(matteSurface, () => { rough.assign(max(rough, 0.88)); });
+        If(matteSurface, () => { rough.assign(max(rough, 0.92)); });
         If(satinMetalSurface, () => { rough.assign(clamp(rough, 0.24, 0.40)); });
         If(iriSurface, () => { rough.assign(min(rough, 0.22)); });
         // PEARLESCENT / FLIP PAINT (mirrors js/render/glx/shaders/glsl-lit.js): rotate
@@ -1553,9 +1553,9 @@
         // CARBON FINISH (mirrors js/render/glx/shaders/glsl-lit.js).
         If(carbonFinish, () => {
           albedo.assign(mix(albedo.mul(0.16).add(vec3(0.030, 0.031, 0.035)), albedo.mul(0.28), 0.25));
-          albedo.assign(albedo.mul(weave.mul(0.28).add(0.86)));
+          albedo.assign(albedo.mul(weave.mul(0.32).add(0.84)));
         }).ElseIf(carbonSurface, () => {
-          albedo.assign(albedo.mul(weave.mul(0.14).add(0.93)));
+          albedo.assign(albedo.mul(weave.mul(0.24).add(0.88)));
         });
         If(iriSurface, () => {
           const fres = clamp(dot(N, V), 0.0, 1.0).oneMinus().toVar();
@@ -2071,6 +2071,11 @@
           }
           const metAdd = envMet.mul(F_Schlick(NoV, albedo, rough.mul(0.5).oneMinus()))
             .mul(metalness.mul(rough.mul(0.7).oneMinus()).mul(ccTrans)).toVar();
+          // Dark metals (halo titanium, exhaust) — CarMaterialShade.METAL.darkEnvBoost.
+          If(metalSurface, () => {
+            const metLum = dot(albedo, vec3(0.299, 0.587, 0.114));
+            metAdd.mulAssign(clamp(metLum.mul(4.0), 0.0, 1.0).oneMinus().mul(0.32).add(1.0));
+          });
           color.addAssign(metAdd.div(max(max(metAdd.r, metAdd.g), metAdd.b).add(1.0)));
         });
 
