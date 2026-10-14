@@ -878,7 +878,12 @@ const CarDraw = (function () {
     const _rigA = new Float32Array(16), _rigB = new Float32Array(16);
     const _digT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
     const _digM = new Float32Array(16);
-    const _mirrorFbOpts = { doubleSided: true, roughness: 0.08, specular: 0.7, emissive: 0.55 };
+    // Sky-tint fallback is a MATTE card of the current TOD env — not a shiny
+    // dielectric. roughness 0.08 / specular 0.7 made it pick up lamp speculars
+    // and a stale day env cube so Monaco night glass read luma 0.39–0.58 against
+    // a 0.05 road (Lighting 2026-10-14). Matte + night mesh colours keep it
+    // within ~1.5× of the scene.
+    const _mirrorFbOpts = { doubleSided: true, roughness: 0.92, specular: 0.06, emissive: 0.55, clearcoat: 0 };
     // THE HOUSINGS' GLASS: the HUD mirror's own rear view, LIVE, while that pass
     // is drawing — gfx.drawMirrorGlass maps the target the pass rendered before
     // this frame's begin() onto the lens (car-mesh.js getMirrorGlass), no second
@@ -894,8 +899,14 @@ const CarDraw = (function () {
       _glassQuads = quads; _glassBase.set(base);
       const mesh = mp && mp.drawing() && typeof gfx.drawMirrorGlass === "function" ? getMirrorGlass(quads) : null;
       if (mesh && gfx.drawMirrorGlass(mesh, base, null)) { _glassLive++; return true; }
-      _mirrorFbOpts.emissive = nite ? 0.08 : 0.55;
-      gfx.draw(getMirrorFallback(quads), base, _mirrorFbOpts);
+      // Night mesh already holds the current night env colours; emissive near 1
+      // just shows them (the old 0.08 × day-sky bands still read as a bright
+      // card once lamp specular hit the glossy material). Day keeps the legacy
+      // 0.55 lift on the brighter sky bands.
+      _mirrorFbOpts.emissive = nite ? 0.85 : 0.55;
+      _mirrorFbOpts.roughness = 0.92;
+      _mirrorFbOpts.specular = 0.06;
+      gfx.draw(getMirrorFallback(quads, !!nite), base, _mirrorFbOpts);
       _glassFb++;
       return false;
     }
@@ -920,6 +931,9 @@ const CarDraw = (function () {
     const _glassOpts = { alpha: 0.16, roughness: 0.05, specular: 0.9, doubleSided: true, noAlphaWrite: true };
     const _rigFx = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true }, _rigFxA = { doubleSided: true, emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };
     function drawCockpitRig(c, base, dt, paint, noWheel) {
+      // Match game.js sessionDarkFor / skyNight: an explicit night, or a night
+      // circuit on the default TOD. (Was the same check; kept next to the glass
+      // so a wrong flag cannot leave the day sky-tint mesh on at night.)
       const nite = G.raceTimeOfDay === "night" || (G.raceTimeOfDay === "default" && G.track.def.night);
       _cockpitOpts.emissive = nite ? 0.20 : 0.14;
       const opt = _cockpitOpts;

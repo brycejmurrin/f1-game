@@ -1,6 +1,6 @@
 ---
 name: session-comms
-description: "Use when sessions coordinate: send_message, PR subscription, handoffs, claims, or a peer asks you to merge or arm a PR."
+description: "Use when messaging another session (send_message, blocked or escalation notes, handoffs), PR subscriptions, reminders back into this session, claims, or a peer asks you to merge, arm or mark ready."
 ---
 
 # Session communication (Claude Code Remote)

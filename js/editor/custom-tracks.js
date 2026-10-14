@@ -464,13 +464,20 @@ const CustomTracks = (function () {
    *  re-open it. Mid-race it waits, fragment intact, for the menu (game.js
    *  re-reads it on quit, as it does the #ghost= link). Resolves true when a
    *  design opened, false when the link was refused or absent, null when deferred. */
+  let hashGeneration = 0;
   function consumeTrackHash() {
+    const generation = ++hashGeneration;
     // An armed test-drive return goes first: mid-race it waits (kept armed),
     // else it is taken once and the designer reopens on the same point.
     if (_ret) {
       if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) return Promise.resolve(null);
       const r = _ret; _ret = null;
       return ensureEditor().then((ok) => {
+        // Mid-race after the await: re-arm and wait; do not open the designer.
+        if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) {
+          _ret = r;
+          return null;
+        }
         if (!ok || typeof TrackDesigner === "undefined") return false;
         Log.info("track", "back from the test drive on " + r.id);
         TrackDesigner.open({ resume: r });
@@ -485,14 +492,21 @@ const CustomTracks = (function () {
       // A malformed fragment (`%E0%A4%A`) must not throw past here: the strip
       // below would never run and every hashchange would re-throw.
       let code = null;
-      try { code = TrackCodec.fromHash(location.hash); } catch (_) { code = null; }
+      try { code = TrackCodec.fromHash(hash); } catch (_) { code = null; }
       const r = code ? await TrackCodec.decode(code) : { ok: false, reason: "malformed" };
-      try { history.replaceState(history.state, "", location.pathname + location.search + TrackCodec.withoutTrack(location.hash)); } catch (_) { /* a sandboxed page */ }
+      // A race that started while we awaited must keep the fragment for a later
+      // title return — same ownership check as the pre-await gate above.
+      if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) {
+        Log.info("track", "share link deferred: racing after decode");
+        return null;
+      }
+      if (generation !== hashGeneration || location.hash !== hash) return false;
+      try { history.replaceState(history.state, "", location.pathname + location.search + TrackCodec.withoutTrack(hash)); } catch (_) { /* a sandboxed page */ }
       if (!r.ok) { Log.warn("track", "share link refused: " + r.reason); return false; }
       Log.info("track", "share link opened " + r.id);
       TrackDesigner.open({ design: r.design, shared: true });
       return true;
-    }).catch((e) => { Log.warn("track", "share link failed: " + (e && e.message || e)); return false; });
+    }).catch((e) => { if (generation !== hashGeneration || location.hash !== hash) return false; Log.warn("track", "share link failed: " + (e && e.message || e)); return false; });
   }
   function create(G, hooks) {
     _G = G; _hooks = hooks || {};

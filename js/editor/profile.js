@@ -76,7 +76,9 @@ const DesignerProfile = (function () {
       return { x: X(sM), y: Y(shown) };
     }
 
+    let destroyed = false;
     function resize() {
+      if (destroyed) return;
       const bw = canvas.clientWidth, bh = canvas.clientHeight;
       if (bw > 0 && bh > 0) { W = bw; H = bh; }
       const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
@@ -251,6 +253,7 @@ const DesignerProfile = (function () {
       for (let k = 0; k <= n; k++) { const x = X(k / n * tr.total), y = Y(hs[k % n]); k ? g.lineTo(x, y) : g.moveTo(x, y); }
     }
     function render() {
+      if (destroyed) return;
       const arrows = sel >= 0 ? "own" : "pass";
       if (canvas.dataset && canvas.dataset.arrows !== arrows) canvas.dataset.arrows = arrows;
       const name = label();
@@ -370,7 +373,13 @@ const DesignerProfile = (function () {
       fit() { viewStart = 0; viewSpan = 1; render(); },
       view() { return { start: viewStart, span: viewSpan }; },
       resize, render, reset,
-      destroy() { if (ro) ro.disconnect(); reset(); },
+      destroy() {
+        if (destroyed) return;
+        destroyed = true;
+        for (const [type, fn] of [["pointerdown", onDown], ["pointermove", onMove], ["pointerup", onUp], ["pointercancel", onCancel], ["lostpointercapture", onCancel], ["keydown", onKey]]) canvas.removeEventListener(type, fn);
+        if (ro) ro.disconnect();
+        reset();
+      },
     };
     resize();
     return api;

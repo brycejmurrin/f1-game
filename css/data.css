@@ -209,7 +209,11 @@ body[data-shape="tall"][data-width="narrow"] .dh-race-sub {
    which is wrong at non-100% zoom. Width still uses the zoom-aware body flag. */
 body[data-shape="tall"][data-width="narrow"] .dh-tabs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(11.2 * var(--fs-micro))), 1fr));
+  /* Fixed 3 columns — auto-fit + minmax(11.2×fs-micro) collapsed to ONE column
+     on 360–390px phones (11.2×16 ≈ 179px × 2 + gap > ~310px content), so seven
+     full-width tabs ate ~270px and left the schedule a footnote-only strip
+     (layout-audit / menu-fit 2026-10-14). Labels wrap via white-space:normal. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow-x: hidden;
   overscroll-behavior-x: auto;
   touch-action: pan-y;
@@ -219,18 +223,20 @@ body[data-shape="tall"][data-width="narrow"] .dh-tabs {
   gap: calc(var(--gap) * 0.4);
   padding: calc(var(--gap) * 0.5) var(--gap);
 }
-/* 11.2 fonts above is WATCH & DRIVE, the widest label (TELEMETRY was 7.1
-   and overflowed the plate at ~500px). The column must never be narrower
-   than the label it holds; white-space:normal is the fallback if a cell
-   still shrinks. */
+/* white-space:normal on .dh-tab below is the fallback when a 3-col cell is
+   narrower than WATCH & DRIVE / TELEMETRY. */
 /* --tap-paint, not --tap-min: the portrait tabs painted 110x38 on a 393x659
    phone (layout-audit 2026-10-05), under the 52 touch floor. */
 body[data-shape="tall"][data-width="narrow"] .dh-tab {
   width: 100%; min-width: 0; padding-inline: calc(var(--gap) / 3);
   min-height: var(--tap-paint);
   font-size: var(--fs-micro);
+  /* Wrap on spaces (WATCH & DRIVE) only — overflow-wrap:anywhere split
+     TELEMETRY into TELEMETR/Y on a 3-col 360px grid (after shot 2026-10-14). */
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
+  letter-spacing: var(--ls-4);
   line-height: 1.15;
 }
 
@@ -238,14 +244,39 @@ body[data-shape="tall"][data-width="narrow"] .dh-tab {
   flex: 1 1 auto;
   overflow-y: auto; overflow-x: hidden;
   /* a flick at the end of a long standings table shouldn't rubber-band the page
-     behind the hub */
+     behind the hub; pan-y + overscroll-x:none keep a vertical flick from
+     nudging a phantom x-axis (the sf thumb used to inflate scrollWidth). */
   overscroll-behavior-y: contain;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
   /* ScrollFade draws .sf-scroll::before; hide the native gutter so desktop does
      not show a grey bar beside the orange thumb (settings #pm-settings-body). */
   scrollbar-width: none;
   scrollbar-gutter: auto;
   padding: calc(var(--gap) * 4 / 3) calc(var(--gap) * 1.5);
   display: flex; flex-direction: column;  /* so flex:1 children (loading/error) expand */
+}
+/* Sticky sf thumb is in-flow (6px wide) and inflated .dh-content scrollWidth by
+   exactly that width — menu-fit hOverflow / dead scrollLeft on every size
+   (360→1440). Height already cancels via margin-bottom on .sf-scroll::before
+   (components.css); cancel width the same way, then translate into the padding
+   lane (--sf-pr from ScrollFade) so the thumb still clears row text. */
+.dh-content.sf-scroll::before {
+  margin-right: -6px;
+  transform: translateX(calc(var(--gap) / 6 - var(--sf-pr, 0px)));
+}
+/* MORE-BELOW CUE. ScrollFade already toggles .sf-b when content continues, but
+   the shared mask fade is near the noise floor on the translucent hub panel
+   (390×844 standings, 2026-10-14). An inset shadow stays pinned to the
+   scrollport edge — CSS only, no new JS. Reduced-motion keeps a static edge
+   mark (no animated shimmer either way). */
+.dh-content.sf-b {
+  box-shadow: inset 0 -36px 28px -20px color-mix(in oklab, var(--carbon) 72%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dh-content.sf-b {
+    box-shadow: inset 0 -3px 0 0 color-mix(in oklab, var(--text) 22%, transparent);
+  }
 }
 .dh-content::-webkit-scrollbar { display: none; }
 body[data-width="narrow"] .dh-content { padding: var(--gap) calc(var(--gap) * 7 / 6); }
@@ -308,7 +339,10 @@ body[data-density="compact"] .dh-error { padding: 14px var(--gap); }
    --tap grows with the setting the same way sheet controls do. */
 .dh-retry { padding: calc(var(--gap) * 2 / 3) var(--pad); min-height: var(--tap); }
 .dh-empty { padding: 30px var(--gap); text-align: center; color: var(--dim); font-size: var(--fs-4); }
-.dh-footnote { margin-top: calc(var(--gap) * 4 / 3); padding-top: calc(var(--gap) * 2 / 3); border-top: 1px solid rgba(255,255,255,0.05); font-size: var(--fs-2); color: #6a6a75; text-align: right; }
+/* Meta ink: #6a6a75 / #7a7a85 were WCAG AA fails on the hub panel (~3.7:1 and
+   ~4.1–4.4:1 on --panel composites). --dim (#9a9aa8) clears 4.5:1 — same
+   migration as --steel (steel-role.test.mjs). */
+.dh-footnote { margin-top: calc(var(--gap) * 4 / 3); padding-top: calc(var(--gap) * 2 / 3); border-top: 1px solid rgba(255,255,255,0.05); font-size: var(--fs-2); color: var(--dim); text-align: right; }
 
 /* schedule rows */
 .dh-race {
@@ -320,7 +354,7 @@ body[data-density="compact"] .dh-error { padding: 14px var(--gap); }
 .dh-race-main { flex: 1; min-width: 0; }
 .dh-race-name { font-size: var(--fs-4); color: var(--text); display: flex; align-items: center; gap: calc(var(--gap) * 0.5); flex-wrap: wrap; line-height: 1.3; }
 .dh-race-sub { font-size: var(--fs-2); color: var(--dim); margin-top: calc(var(--gap) * 0.25); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dh-race-time { font-size: var(--fs-1); color: #7a7a85; margin-top: calc(var(--gap) / 6); }
+.dh-race-time { font-size: var(--fs-1); color: var(--dim); margin-top: calc(var(--gap) / 6); }
 .dh-race-date { font-size: var(--fs-2); color: #c4c4c8; flex: 0 0 auto; text-align: right; min-width: 50px; white-space: nowrap; }
 /* Hide local time on very narrow phones to save vertical space */
 body[data-width="narrow"] .dh-race-time { display: none; }
@@ -389,7 +423,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-cons-main .dh-name { flex: 0 1 auto; }
 .dh-wins { font-size: var(--fs-2); color: #f6d200; font-weight: 700; flex: 0 0 auto; }
 .dh-pts { font-family: var(--font-hud); min-width: 44px; text-align: right; font-weight: 800; flex: 0 0 auto; color: var(--text); font-variant-numeric: tabular-nums; }
-.dh-gap { font-size: var(--fs-2); color: #6a6a75; flex: 0 0 auto; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+.dh-gap { font-size: var(--fs-2); color: var(--dim); flex: 0 0 auto; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* last race */
 #dh-lr-head { margin-bottom: var(--gap); }
@@ -704,7 +738,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
 .dh-gspeed .dh-gval { color: #39d0ff; }
 .dh-gbar { height: 8px; border-radius: var(--r-sm); background: rgba(255, 255, 255, 0.09); overflow: hidden; margin-top: auto; }
 .dh-gfill { height: 100%; width: 0%; border-radius: var(--r-sm); transition: width 0.05s linear; }
-.dh-gdrs-pill { font-size: var(--fs-4); font-weight: 800; letter-spacing: var(--ls-3); color: #5a5a65; line-height: 1; margin-top: calc(var(--gap) / 6); display: inline-block; margin-right: calc(var(--gap) * 2 / 3); }
+.dh-gdrs-pill { font-size: var(--fs-4); font-weight: 800; letter-spacing: var(--ls-3); color: var(--dim); line-height: 1; margin-top: calc(var(--gap) / 6); display: inline-block; margin-right: calc(var(--gap) * 2 / 3); }
 .dh-gdrs-pill.dh-on { color: #00e0c0; text-shadow: 0 0 8px rgba(0, 224, 192, 0.6); }
 /* compare-mode dual gauges: primary value/bar first, compare second */
 .dh-gvalrow { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
@@ -885,9 +919,36 @@ body[data-density="compact"] .dh-gap { min-width: 30px; }
    negotiate: min-width: 0 defers to the ellipsis the names already carry. */
 body[data-width="narrow"] .dh-row { flex-wrap: wrap; }
 body[data-width="narrow"] .dh-live-gapwrap { min-width: 60px; }
-body[data-width="narrow"] .dh-cons-main { min-width: 0; }
+body[data-width="narrow"] .dh-cons-main { min-width: 0; flex-wrap: wrap; }
 
-/* NARROW/COMPACT STANDINGS: allow driver names to wrap instead of ellipsizing.
+/* NARROW STANDINGS NAMES. Constructor .dh-name was flex:0 1 auto and shrank to
+   0px on phones (Mercedes/RB → "M." / "R…" via the chip alone — 390×844 probe
+   2026-10-14). Give the name a real floor, wrap on spaces, park the H2H bar on
+   its own row, and slim pts/gap so "Alpine F1 Team" fits before any ellipsis. */
+body[data-width="narrow"] .dh-row .dh-name,
+body[data-width="narrow"] .dh-cons-main .dh-name {
+  flex: 1 1 7em;
+  min-width: 6.5em;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: normal;
+  word-break: normal;
+  line-height: 1.25;
+}
+body[data-width="narrow"] .dh-pts { min-width: 2.75ch; padding-inline: 0; }
+body[data-width="narrow"] .dh-gap { min-width: 2.5ch; }
+body[data-width="narrow"] .dh-h2h-wrap {
+  flex: 1 1 100%;
+  min-width: 0;
+  max-width: none;
+  align-items: stretch;
+  order: 2;
+}
+body[data-width="narrow"] .dh-cons-main { order: 1; }
+body[data-width="narrow"] .dh-codechip { min-width: 0; padding-inline: calc(var(--gap) / 3); }
+
+/* NARROW/COMPACT RESULTS TABLE: allow driver names to wrap instead of ellipsizing.
    Long names like "Andrea Kimi Antonelli" truncate in the narrow column. With
    white-space:normal the name wraps to 2 lines; the table-layout:fixed column
    grows to content and the codechip stays on the first baseline. */
