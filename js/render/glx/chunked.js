@@ -339,14 +339,34 @@ const GLXChunked = (function () {
       // than concatenating on the CPU first: that keeps the transient peak at
       // one bucket's index array, exactly as before. On a ~5 M-vert street
       // circuit the whole-mesh array would be tens of MB held at once.
+      // C-P7 (hunt 4): half of the Uint16 chunk ranges start at a byte offset
+      // that is not a multiple of 4. ANGLE-Metal's kIndexBufferOffsetAlignment
+      // is 4, so convertIndexBuffer copies the WHOLE buffer once per (buffer,
+      // modulo) and draws those chunks from the copy (+232/+235 KB on montreal,
+      // plus a first-draw GPU compute conversion while a pass is open). Pad
+      // each chunk that would start on an odd index with one degenerate
+      // triangle (0,0,0) so every range's byteOffset is 4-byte aligned. A
+      // zero-area triangle draws no pixels. Uint32 is already 4-byte. Default
+      // ON; apex26.glxChunkAlign="0" restores the old unaligned ranges.
+      let align = true;
+      try { if (localStorage.getItem("apex26.glxChunkAlign") === "0") align = false; } catch (_) { /* no storage: align */ }
+      const needAlign = !big && align;
       let total = 0;
-      buckets.forEach((bk) => { total += bk.idx.length; });
+      buckets.forEach((bk) => {
+        if (needAlign && (total % 2 !== 0)) total += 3;   // pad to even index
+        total += bk.idx.length;
+      });
       const ibo = gl.createBuffer();
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, total * BPI, gl.STATIC_DRAW);
       const chunks = [];
       let off = 0;                             // running offset, in INDICES
+      const pad = needAlign ? new Uint16Array([0, 0, 0]) : null;
       buckets.forEach((bk) => {
+        if (needAlign && (off % 2 !== 0)) {
+          gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, off * BPI, pad);
+          off += 3;
+        }
         const arr = new IndexArray(bk.idx);
         bk.idx = null;   // uploaded below — drop the growable JS array now so buckets
                          // don't all stay resident while the rest are converted

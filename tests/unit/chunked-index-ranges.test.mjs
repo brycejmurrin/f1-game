@@ -96,12 +96,16 @@ const VP = (() => {
   return ctx.__P;
 })();
 
-function loadChunked(gl) {
+function loadChunked(gl, align) {
   const code = fs.readFileSync(SRC, "utf8");
   const ctx = { console };
   vm.createContext(ctx);
   seedLog(ctx);
   seedFrustum(ctx);
+  // Stub localStorage so the C-P7 knob can be forced on or off.
+  ctx.localStorage = {
+    getItem: (k) => (k === "apex26.glxChunkAlign" ? (align ? "1" : "0") : null),
+  };
   // The REAL vertex packer, not a stand-in: these tests assert the bytes that
   // reach the GPU, so a reimplementation here would only prove itself.
   vm.runInContext(fs.readFileSync(PACK_SRC, "utf8") +
@@ -446,4 +450,31 @@ test("the per-chunk merge only extends a run under all four guards", () => {
   // silently stop merging (a perf regression nothing goes red for).
   const sl = src.slice(src.indexOf("function _sameList("));
   assert.match(sl, /a\[i\] !== b\[i\]/, "_sameList must compare elements, not only object identity");
+});
+
+// C-P7: Uint16 chunk ranges must start on a 4-byte boundary so ANGLE-Metal
+// does not convert the whole index buffer on first draw. Pads are degenerate
+// (0,0,0) triangles that draw nothing; the real indices are unchanged.
+test("C-P7: Uint16 chunk ranges start on 4-byte boundaries when aligned", () => {
+  const gl = makeGL();
+  const C = loadChunked(gl, true);   // apex26.glxChunkAlign=1
+  const mesh = C.createChunkedMesh(makeGrid(6, 6, 30), 72);
+  assert.ok(mesh.chunks && mesh.chunks.length > 1);
+  if (mesh.indexType === gl.UNSIGNED_INT) return;   // Uint32 is already aligned
+  const bpi = 2;
+  for (const ch of mesh.chunks) {
+    assert.equal(ch.byteOffset % 4, 0, "Uint16 chunk byteOffset must be a multiple of 4");
+    assert.equal(ch.count % 3, 0);
+  }
+  // The buffer may be larger than the source because of pads; the ranges
+  // themselves still hold only the original indices.
+  const all = readIndices(gl, mesh);
+  const src = makeGrid(6, 6, 30);
+  const srcIdx = Array.from(src.idx);
+  const got = [];
+  for (const ch of mesh.chunks) {
+    const from = ch.byteOffset / bpi;
+    for (let i = from; i < from + ch.count; i++) got.push(all[i]);
+  }
+  assert.deepEqual(got, srcIdx, "alignment pads must not alter the real index sequence");
 });
