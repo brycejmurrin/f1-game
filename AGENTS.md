@@ -182,7 +182,7 @@ of the live `apex-sha` (agent `deploy-research`; `docs/TESTING.md` §Release tra
 ### Backlog
 Work no session has started is a GitHub issue (`.github/ISSUE_TEMPLATE/`; why: `docs/notes/AGENT-WORK-TRACKING-2026-10-14.md`); the PR body stays the in-flight log, memory stays for facts.
 With no task from the user, take one from the ready queue: `list_issues` with `labels: ["ready"]`, skipping any also labelled `claimed` or `blocked`.
-Claim it (`who-is-on-it.mjs --claim "#<n> <text>"`); the draft PR body says `Closes #<n>`, which closes it on merge (the deploy branch is the default branch). `fleet.yml` derives the `claimed` label from both and keeps the pinned Fleet board issue.
+Claim it (`who-is-on-it.mjs --claim "#<n> <text>"`, then label it `claimed` and comment your branch); the draft PR body says `Closes #<n>`, which closes it on merge (the deploy branch is the default branch).
 Work found mid-task becomes a sub-issue (`parent_issue_number`), not scope on your PR; work that waits on another issue gets `blocked` plus "Blocked by #<n>".
 
 ### Concurrent PRs
