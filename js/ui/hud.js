@@ -573,7 +573,11 @@ const RADIO_TOP_MIN = 96, RADIO_TOP_GAP = 8;
 // viewport (desktop's empty docks never do); it bounds the lane only from the
 // card's rows, as the map, the gaps chip and the opt-in readouts do.
 const LANE_ROWS = 96;
+// A card the player MOVED (MOVE & SIZE / ARRANGE HUD x or y) is out of the slots and the lane:
+// css/hud.css anchors it at a fixed point so the offset is where it sits (body[data-radio-placed]).
+const radioPlaced = () => { const b = document.body; return !!(b && b.hasAttribute && b.hasAttribute("data-radio-placed")); };
 function announceLane(root) {
+  if (radioPlaced()) { const a = document.getElementById("announce"); if (a && a.toggleAttribute) a.toggleAttribute("data-lane-collapsed", false); return; }
   const t = _hudTop ? _hudTop.getBoundingClientRect() : null;
   const W = vpW(), H = vpH() || 0;
   const y0 = t ? t.bottom : 0, mid = W / 2;
@@ -659,6 +663,7 @@ function announceLaneTick(root, force) {
 function radioTopSlot(root, bcast) {
   const t = !bcast && _hudTop ? _hudTop.getBoundingClientRect() : null;
   announceLane(root);
+  if (radioPlaced()) { hToggle(document.body, "hud-radio-top", false); document.body.removeAttribute("data-radio-corner"); return; }
   let right = window.innerWidth - 10;
   const x = t ? t.right + RADIO_TOP_GAP : 0;
   // Pause / cam share the tower's rows. Dock groups bound a wrapping card
@@ -725,6 +730,7 @@ function radioUnderRight(t) {
 // after its own radioTopSlot (which alone could relight hud-radio-top over the tower until the next
 // fit tick repaired it).
 function radioPaintedCollapse(root) {
+  if (radioPlaced()) return;   // the player put it there
   // Painted guarantee: if the card still rects onto S3 or the tower, collapse
   // the hanging lane and drop the top slot. Do NOT call radioTopSlot again —
   // that re-ran announceLane, cleared data-lane-collapsed when a gap reopened,
