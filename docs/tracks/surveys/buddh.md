@@ -28,9 +28,9 @@ Centreline: OpenStreetMap stitch; ~5138 m; `reverse: false` (projected CCW for r
 
 - **Tool:** `node tools/shot/shot.mjs --batch` (stock CLI; `tod` only — no `weather` batch field until shared survey tooling lands).
 - **Renderer:** TLX / SwiftShader headless; local `npx serve -l 3456`.
-- **Count:** 33 frames under `artifacts/shots/tracks/buddh/` (target 30–36).
+- **Count:** 33 JPEG frames under `artifacts/shots/tracks/buddh/` (max width 1280 px, q≈80, target 30–36).
 - **Time-of-day:** `day`, `dusk`, `night`, `dawn` on six key landmarks; other sector views **day only**.
-- **Weather:** `dry` only in filenames (`*-dry.png`). **Deferred:** `wet`, `rain`, `overcast`, `fog`, `storm` (engine supports via `__apex.race(id, tod, wx)` — see `js/race/weather-arc.js` `VALID` list). Re-capture after rebasing on PR *tools: shared shot tooling for circuit surveys*.
+- **Weather:** `dry` only in filenames (`*-dry.jpg`). **Deferred:** `wet`, `rain`, `overcast`, `fog`, `storm` (engine supports via `__apex.race(id, tod, wx)` — see `js/race/weather-arc.js` `VALID` list). Re-capture after rebasing on PR *tools: shared shot tooling for circuit surveys*.
 
 **Note:** `night: false` on the def; night TOD still runs for lighting survey — flood lamps and grandstand read darker; no wet-line or storm particles in this pass.
 
@@ -40,15 +40,15 @@ Centreline: OpenStreetMap stitch; ~5138 m; `reverse: false` (projected CCW for r
 
 | | | |
 |:---:|:---:|:---:|
-| ![Overview](../../../artifacts/shots/tracks/buddh/overview-track-picker-day-dry.png) | ![Pit day](../../../artifacts/shots/tracks/buddh/s1-pit-day-dry.png) | ![Pit dusk](../../../artifacts/shots/tracks/buddh/s1-pit-dusk-dry.png) |
+| ![Overview](../../../artifacts/shots/tracks/buddh/overview-track-picker-day-dry.jpg) | ![Pit day](../../../artifacts/shots/tracks/buddh/s1-pit-day-dry.jpg) | ![Pit dusk](../../../artifacts/shots/tracks/buddh/s1-pit-dusk-dry.jpg) |
 | *overview / picker* | *s0.005 pit block* | *pit dusk* |
-| ![Grandstand day](../../../artifacts/shots/tracks/buddh/s1-grandstand-day-dry.png) | ![Grandstand dusk](../../../artifacts/shots/tracks/buddh/s1-grandstand-dusk-dry.png) | ![Grandstand night](../../../artifacts/shots/tracks/buddh/s1-grandstand-night-dry.png) |
+| ![Grandstand day](../../../artifacts/shots/tracks/buddh/s1-grandstand-day-dry.jpg) | ![Grandstand dusk](../../../artifacts/shots/tracks/buddh/s1-grandstand-dusk-dry.jpg) | ![Grandstand night](../../../artifacts/shots/tracks/buddh/s1-grandstand-night-dry.jpg) |
 | *main grandstand* | *golden hour* | *night lamps* |
-| ![Grandstand dawn](../../../artifacts/shots/tracks/buddh/s1-grandstand-dawn-dry.png) | ![T1 brake day](../../../artifacts/shots/tracks/buddh/s1-t1-brake-day-dry.png) | ![T1 dusk](../../../artifacts/shots/tracks/buddh/s1-t1-brake-dusk-dry.png) |
+| ![Grandstand dawn](../../../artifacts/shots/tracks/buddh/s1-grandstand-dawn-dry.jpg) | ![T1 brake day](../../../artifacts/shots/tracks/buddh/s1-t1-brake-day-dry.jpg) | ![T1 dusk](../../../artifacts/shots/tracks/buddh/s1-t1-brake-dusk-dry.jpg) |
 | *dawn* | *T1 braking zone* | *T1 dusk* |
-| ![T1 night](../../../artifacts/shots/tracks/buddh/s1-t1-brake-night-dry.png) | ![T3 day](../../../artifacts/shots/tracks/buddh/s1-t3-day-dry.png) | ![Outfield day](../../../artifacts/shots/tracks/buddh/s1-outfield-day-dry.png) |
+| ![T1 night](../../../artifacts/shots/tracks/buddh/s1-t1-brake-night-dry.jpg) | ![T3 day](../../../artifacts/shots/tracks/buddh/s1-t3-day-dry.jpg) | ![Outfield day](../../../artifacts/shots/tracks/buddh/s1-outfield-day-dry.jpg) |
 | *T1 night* | *T2–3 infield* | *farmstead / temple band* |
-| ![Outfield dusk](../../../artifacts/shots/tracks/buddh/s1-outfield-dusk-dry.png) | | |
+| ![Outfield dusk](../../../artifacts/shots/tracks/buddh/s1-outfield-dusk-dry.jpg) | | |
 | *outfield dusk* | | |
 
 ---
@@ -57,11 +57,11 @@ Centreline: OpenStreetMap stitch; ~5138 m; `reverse: false` (projected CCW for r
 
 | | | |
 |:---:|:---:|:---:|
-| ![T6 day](../../../artifacts/shots/tracks/buddh/s2-t6-day-dry.png) | ![Drop day](../../../artifacts/shots/tracks/buddh/s2-drop-day-dry.png) | ![Drop dusk](../../../artifacts/shots/tracks/buddh/s2-drop-dusk-dry.png) |
+| ![T6 day](../../../artifacts/shots/tracks/buddh/s2-t6-day-dry.jpg) | ![Drop day](../../../artifacts/shots/tracks/buddh/s2-drop-day-dry.jpg) | ![Drop dusk](../../../artifacts/shots/tracks/buddh/s2-drop-dusk-dry.jpg) |
 | *T6–7 earthwork* | *run into bowl* | *drop dusk* |
-| ![Drop night](../../../artifacts/shots/tracks/buddh/s2-drop-night-dry.png) | ![Double apex day](../../../artifacts/shots/tracks/buddh/s2-double-apex-day-dry.png) | ![Double apex dusk](../../../artifacts/shots/tracks/buddh/s2-double-apex-dusk-dry.png) |
+| ![Drop night](../../../artifacts/shots/tracks/buddh/s2-drop-night-dry.jpg) | ![Double apex day](../../../artifacts/shots/tracks/buddh/s2-double-apex-day-dry.jpg) | ![Double apex dusk](../../../artifacts/shots/tracks/buddh/s2-double-apex-dusk-dry.jpg) |
 | *drop night* | *T10–11 terrace* | *double apex dusk* |
-| ![Double apex night](../../../artifacts/shots/tracks/buddh/s2-double-apex-night-dry.png) | ![T12 day](../../../artifacts/shots/tracks/buddh/s2-t12-day-dry.png) | ![T12 dusk](../../../artifacts/shots/tracks/buddh/s2-t12-dusk-dry.png) |
+| ![Double apex night](../../../artifacts/shots/tracks/buddh/s2-double-apex-night-dry.jpg) | ![T12 day](../../../artifacts/shots/tracks/buddh/s2-t12-day-dry.jpg) | ![T12 dusk](../../../artifacts/shots/tracks/buddh/s2-t12-dusk-dry.jpg) |
 | *double apex night* | *climb out* | *T12 dusk* |
 
 ---
@@ -70,13 +70,13 @@ Centreline: OpenStreetMap stitch; ~5138 m; `reverse: false` (projected CCW for r
 
 | | | |
 |:---:|:---:|:---:|
-| ![Haze day](../../../artifacts/shots/tracks/buddh/s3-haze-day-dry.png) | ![Haze dusk](../../../artifacts/shots/tracks/buddh/s3-haze-dusk-dry.png) | ![East stands day](../../../artifacts/shots/tracks/buddh/s3-east-stands-day-dry.png) |
+| ![Haze day](../../../artifacts/shots/tracks/buddh/s3-haze-day-dry.jpg) | ![Haze dusk](../../../artifacts/shots/tracks/buddh/s3-haze-dusk-dry.jpg) | ![East stands day](../../../artifacts/shots/tracks/buddh/s3-east-stands-day-dry.jpg) |
 | *outfield haze band* | *haze dusk* | *east grandstands* |
-| ![East dusk](../../../artifacts/shots/tracks/buddh/s3-east-stands-dusk-dry.png) | ![East night](../../../artifacts/shots/tracks/buddh/s3-east-stands-night-dry.png) | ![Final day](../../../artifacts/shots/tracks/buddh/s3-final-day-dry.png) |
+| ![East dusk](../../../artifacts/shots/tracks/buddh/s3-east-stands-dusk-dry.jpg) | ![East night](../../../artifacts/shots/tracks/buddh/s3-east-stands-night-dry.jpg) | ![Final day](../../../artifacts/shots/tracks/buddh/s3-final-day-dry.jpg) |
 | *east dusk* | *east night* | *final corner* |
-| ![Final dusk](../../../artifacts/shots/tracks/buddh/s3-final-dusk-dry.png) | ![Final night](../../../artifacts/shots/tracks/buddh/s3-final-night-dry.png) | ![Main straight day](../../../artifacts/shots/tracks/buddh/s3-main-straight-day-dry.png) |
+| ![Final dusk](../../../artifacts/shots/tracks/buddh/s3-final-dusk-dry.jpg) | ![Final night](../../../artifacts/shots/tracks/buddh/s3-final-night-dry.jpg) | ![Main straight day](../../../artifacts/shots/tracks/buddh/s3-main-straight-day-dry.jpg) |
 | *final dusk* | *final night* | *main straight* |
-| ![Straight dusk](../../../artifacts/shots/tracks/buddh/s3-main-straight-dusk-dry.png) | ![Straight night](../../../artifacts/shots/tracks/buddh/s3-main-straight-night-dry.png) | |
+| ![Straight dusk](../../../artifacts/shots/tracks/buddh/s3-main-straight-dusk-dry.jpg) | ![Straight night](../../../artifacts/shots/tracks/buddh/s3-main-straight-night-dry.jpg) | |
 | *straight dusk* | *straight night* | |
 
 ---
@@ -85,12 +85,12 @@ Centreline: OpenStreetMap stitch; ~5138 m; `reverse: false` (projected CCW for r
 
 | View | Day | Dusk | Night | Dawn |
 |------|-----|------|-------|------|
-| Main grandstand | ![](../../../artifacts/shots/tracks/buddh/s1-grandstand-day-dry.png) | ![](../../../artifacts/shots/tracks/buddh/s1-grandstand-dusk-dry.png) | ![](../../../artifacts/shots/tracks/buddh/s1-grandstand-night-dry.png) | ![](../../../artifacts/shots/tracks/buddh/s1-grandstand-dawn-dry.png) |
-| T1 brake | ![](../../../artifacts/shots/tracks/buddh/s1-t1-brake-day-dry.png) | ![](../../../artifacts/shots/tracks/buddh/s1-t1-brake-dusk-dry.png) | ![](../../../artifacts/shots/tracks/buddh/s1-t1-brake-night-dry.png) | — |
-| Double apex | ![](../../../artifacts/shots/tracks/buddh/s2-double-apex-day-dry.png) | ![](../../../artifacts/shots/tracks/buddh/s2-double-apex-dusk-dry.png) | ![](../../../artifacts/shots/tracks/buddh/s2-double-apex-night-dry.png) | — |
-| East stands | ![](../../../artifacts/shots/tracks/buddh/s3-east-stands-day-dry.png) | ![](../../../artifacts/shots/tracks/buddh/s3-east-stands-dusk-dry.png) | ![](../../../artifacts/shots/tracks/buddh/s3-east-stands-night-dry.png) | — |
-| Final corner | ![](../../../artifacts/shots/tracks/buddh/s3-final-day-dry.png) | ![](../../../artifacts/shots/tracks/buddh/s3-final-dusk-dry.png) | ![](../../../artifacts/shots/tracks/buddh/s3-final-night-dry.png) | — |
-| Main straight | ![](../../../artifacts/shots/tracks/buddh/s3-main-straight-day-dry.png) | ![](../../../artifacts/shots/tracks/buddh/s3-main-straight-dusk-dry.png) | ![](../../../artifacts/shots/tracks/buddh/s3-main-straight-night-dry.png) | — |
+| Main grandstand | ![](../../../artifacts/shots/tracks/buddh/s1-grandstand-day-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s1-grandstand-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s1-grandstand-night-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s1-grandstand-dawn-dry.jpg) |
+| T1 brake | ![](../../../artifacts/shots/tracks/buddh/s1-t1-brake-day-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s1-t1-brake-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s1-t1-brake-night-dry.jpg) | — |
+| Double apex | ![](../../../artifacts/shots/tracks/buddh/s2-double-apex-day-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s2-double-apex-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s2-double-apex-night-dry.jpg) | — |
+| East stands | ![](../../../artifacts/shots/tracks/buddh/s3-east-stands-day-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s3-east-stands-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s3-east-stands-night-dry.jpg) | — |
+| Final corner | ![](../../../artifacts/shots/tracks/buddh/s3-final-day-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s3-final-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s3-final-night-dry.jpg) | — |
+| Main straight | ![](../../../artifacts/shots/tracks/buddh/s3-main-straight-day-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s3-main-straight-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s3-main-straight-night-dry.jpg) | — |
 
 ---
 
