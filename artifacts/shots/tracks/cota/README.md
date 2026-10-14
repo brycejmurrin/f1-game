@@ -1,13 +1,16 @@
-# COTA survey captures (branch `cursor/cota-survey-fc61`)
+# COTA survey captures (`cursor/cota-survey-fc61`)
 
-30 PNG frames for `docs/tracks/surveys/cota.md`. Paths are gitignored under `artifacts/` until the fleet adds `!artifacts/shots/tracks/**`; commit with `git add -f artifacts/shots/tracks/cota/*.png`.
-
-- **Day · dry sector tour:** sector-* and landmark-* plus anchor-*-day-dry.
-- **Time of day (dry):** dawn/dusk/night on four anchors (`anchor-*-{dawn,dusk,night}-dry.png`).
-- **Weather** (`wet`, `rain`, `overcast`, `fog`): deferred — re-capture after rebasing on shared shot tooling PR.
-
-Regenerate supplement only:
+**30** JPEG frames (`q≈80`, max width 1280 px, each &lt;300 KB). Commit with:
 
 ```sh
-node tools/shot/shot.mjs --batch artifacts/shots/tracks/cota/capture-jobs-supplement.jsonl --wait 150
+git add -f artifacts/shots/tracks/cota/*.jpg
 ```
+
+Parent `artifacts/` is gitignored; force-add is required until the fleet `!artifacts/shots/tracks/**` exception lands.
+
+- **Weather:** dry only (wx matrix after shared shot tooling PR).
+- **Regenerate from PNG sources:** use `sharp` resize 1280 + JPEG q80 (see survey commit) or re-run `capture-jobs-supplement.jsonl` with `shot.mjs --jpeg`.
+
+Raw GitHub URL pattern:
+
+`https://raw.githubusercontent.com/brycejmurrin/f1-game/cursor/cota-survey-fc61/artifacts/shots/tracks/cota/<file>.jpg`
