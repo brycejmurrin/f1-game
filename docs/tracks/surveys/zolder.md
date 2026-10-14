@@ -1,93 +1,118 @@
 # Zolder — circuit survey (2026-10-14)
 
-**Layout:** 4.010 km OSM trace (2002–present), 10 turns, clockwise, `theme: green`, day.  
-**Evidence:** local TLX headless captures (`npx serve -l 3456`, `shot.mjs` batch); node VM audits.  
+**Layout:** 4.010 km OSM trace (2002–present), 10 turns, clockwise, `theme: green`, day default.  
+**Evidence:** `../../../artifacts/shots/tracks/zolder/*.png` (TLX headless, `shot.mjs` batch, local serve :3456); node VM audits.  
 **Brief:** `docs/tracks/zolder.md` · **Data:** `js/circuits/zolder.js` · **Dressing:** `js/circuits/scenery/zolder.js`
+
+> **Weather batch capture:** Game supports `raceWeather` `dry|wet|rain|overcast|fog` and `raceTimeOfDay` `day|dawn|dusk|night` (`js/game.js`). Batch **time-of-day** shots below use existing `shot.mjs` `--tod`. **Rain/overcast/fog matrix** is deferred until rebase on the shared tooling PR (*tools: shared shot tooling for circuit surveys*) so `artifacts/shots/tracks/**` can be committed and weather fields apply reliably. Two early `wx-*` frames in this folder were taken during a partial batch before that split; treat as provisional.
 
 ## Code map
 
 | Piece | Role |
 | --- | --- |
-| `js/circuits/zolder.js` | `TrackDefs` entry: OSM centreline, `startFrac: 0.1226`, `sceneryStartFrac: 0`, `ownPitStraight: true`, `terrainOuter: 110`, Limburg palette, 10 `turns[]` apex fractions, `furniture.tree: "fir"`. |
-| `js/circuits/scenery/zolder.js` | Lazy `TrackScenery.zolder(api)` — global heath (sand verges, pine ranks, `forestEdge`, armco, depth plantation), then 16 named blocks + fast-sweeper pass + distant `mountain()` terril. |
-| `js/track/tracks.js` | Registers `zolder` in `Tracks.LIST`; `buildProps` loads scenery closure; applies generic furniture unless def overrides. |
-| `tests/data/landmarks/zolder.json` | Required `modelGroup` ids: `zolder-main-grandstand`, `zolder-sf-museum`, `zolder-villeneuve-poles`, `zolder-sterrenwacht`. |
-| Shared builders | `js/track/scenery/nature.js` (`pine`, `forestEdge`, `spectatorHill` / `crowdBank`), `city.js` (`building`, facade `detail`), `structures.js` (`guardrail`, `tyreWall`, `grandstandEx`). |
-| Frame debt | `_sceneryShift ≈ 0.844`: pit/S/F props use `sl()`; corner landmarks use authored `K()`. Sterrenwacht clubhouse is intentionally behind pit offices on the racing fold (`docs/tracks/zolder.md` §6). |
+| `js/circuits/zolder.js` | `TrackDefs` entry: OSM centreline, `startFrac: 0.1226`, `sceneryStartFrac: 0`, `ownPitStraight: true`, `terrainOuter: 110`, Limburg palette, 10 `turns[]` apex fractions, `furniture.tree: "fir"`, `furniture.lamp: "none"`. |
+| `js/circuits/scenery/zolder.js` | Lazy `TrackScenery.zolder(api)` — global heath, 16 named blocks, fast sweeper pass, terril `mountain()`. |
+| `js/track/tracks.js` | `Tracks.LIST` registration; `buildProps` → scenery closure. |
+| `tests/data/landmarks/zolder.json` | Required models: `zolder-main-grandstand`, `zolder-sf-museum`, `zolder-villeneuve-poles`, `zolder-sterrenwacht`. |
+| Frame debt | `_sceneryShift ≈ 0.844`: pit/S/F use `sl()`; corners use authored `K()`. |
 
 ## Theme and models
 
-- **Identity:** pale sand run-off on Scots pine heath; club-circuit greys, not glamour.
-- **Hero models (required):** open-rake S/F tribune (`emitOpenStand` in `zolder-main-grandstand`), museum hall, five-pole Villeneuve paddock memorial, Sterrenwacht drum building.
-- **Kit:** armco rails, mesh debris fence, stacked tyres, panel hoardings; no night lamps (`furniture.lamp: "none"`).
-- **Skyline:** soft `mountain()` terril NW of outer loop (~s 0.14, gap 280 m) — bearing uncertain, reads in paddock orbit shots.
+Pale sand + Scots pine heath; club greys; four required landmarks; distant mine terril (`mountain()` ~s 0.14). No circuit floodlight masts (`lamp: "none"`).
 
-## Screenshots (≤15)
+---
 
-Captured at `/opt/cursor/artifacts/zolder-survey/` (TLX, working tree, Oct 2026).
+## Panel grids — by sector (day, dry)
 
-| # | File | Frac / cam | Notes |
-| --- | --- | --- | --- |
-| 1 | `01-pit-straight-orbit.png` | 0.0 orbit | Pit lane, garages, S/F gantry, outer-loop curve; terril mound visible infield. |
-| 2 | `02-sf-grandstand.png` | 0.012 trackside | Camera too tight on stand cladding — use orbit for tribune read. |
-| 3 | `03-villeneuve-poles.png` | 0.028 trackside | Five-pole memorial + paddock; plinth seating adjusted in this PR. |
-| 4 | `04-earste-chicane-park.png` | 0.035 park | T1 sand traps, tyres, spectator hill outside. |
-| 5 | `05-t1-orbit.png` | 0.0376 orbit | Earste chicane context in pine bowl. |
-| 6 | `06-sterrenwacht.png` | 0.18 trackside | Forest wall; clubhouse not in frame (frame-debt placement). |
-| 7 | `07-kanaalbocht-park.png` | 0.194 park | Kanaalbocht sand ridge + barriers. |
-| 8 | `08-bianchi-park.png` | 0.35 park | Lucien Bianchi infield corner. |
-| 9 | `09-villeneuve-chicane.png` | 0.433 trackside | Villeneuve chicane stand + pine; memorial set back. |
-| 10 | `10-kleine-chicane.png` | 0.567 park | T6 enclosed chicane. |
-| 11 | `11-hairpin-park.png` | 0.715 park | Bolderberg hairpin cockpit — stand + pine outside. |
-| 12 | `12-terlamen.png` | 0.863 trackside | Terlamen entry grandstand + hoarding. |
-| 13 | `13-back-sweeper-eye.png` | 0.55 eye | Mid-lap pine corridor. |
-| 14 | `14-pine-cinematic.png` | 0.75 cinematic | Fast section through plantation. |
-| 15 | `15-layout-orbit.png` | 0.5 orbit high | Lap geometry + sand patches; good layout QA frame. |
+*Sector splits: S1 0–0.36, S2 0.36–0.613, S3 0.613–1 (`sectors` in def).*
 
-## Findings
+### Sector 1 — pit straight, Earste chicane, outer loop entry
 
-### Geometry / road
+| | | |
+|:---:|:---:|:---:|
+| ![Pit orbit](../../../artifacts/shots/tracks/zolder/s1-01-pit-orbit.png) | ![S/F stand orbit](../../../artifacts/shots/tracks/zolder/s1-02-sf-stand.png) | ![Villeneuve poles](../../../artifacts/shots/tracks/zolder/s1-03-villeneuve-poles.png) |
+| `s1-01-pit-orbit` | `s1-02-sf-stand` | `s1-03-villeneuve-poles` |
+| ![Earste chicane](../../../artifacts/shots/tracks/zolder/s1-04-earste-chicane.png) | ![T1 orbit](../../../artifacts/shots/tracks/zolder/s1-05-t1-orbit.png) | ![Kanaalbocht](../../../artifacts/shots/tracks/zolder/s1-06-kanaalbocht.png) |
+| `s1-04-earste-chicane` | `s1-05-t1-orbit` | `s1-06-kanaalbocht` |
+| ![Forest edge](../../../artifacts/shots/tracks/zolder/s1-07-forest-edge.png) | ![S/F stand close](../../../artifacts/shots/tracks/zolder/s1-02b-sf-stand-close.png) | |
+| `s1-07-forest-edge` | `s1-02b-sf-stand-close` | |
 
-- **Centreline:** `verify-track` OK — min node radius 7.28 m @ node 23 (hw 7.5 m), **surface folds 0**.
-- **Layout caveat:** Game ships 4.01 km / 10-turn present layout; historic 15-turn F1 layout is documented only (`docs/tracks/zolder.md`).
+### Sector 2 — Bianchi, Villeneuve chicane, service, Kleine chicane
 
-### Scenery / landmarks
+| | | |
+|:---:|:---:|:---:|
+| ![Bianchi](../../../artifacts/shots/tracks/zolder/s2-01-bianchi.png) | ![Villeneuve chicane](../../../artifacts/shots/tracks/zolder/s2-02-villeneuve-chicane.png) | ![Memorial](../../../artifacts/shots/tracks/zolder/s2-03-memorial.png) |
+| `s2-01-bianchi` | `s2-02-villeneuve-chicane` | `s2-03-memorial` |
+| ![Service area](../../../artifacts/shots/tracks/zolder/s2-04-service-area.png) | ![Kleine chicane](../../../artifacts/shots/tracks/zolder/s2-05-kleine-chicane.png) | ![Villeneuve orbit](../../../artifacts/shots/tracks/zolder/s2-02b-villeneuve-orbit.png) |
+| `s2-04-service-area` | `s2-05-kleine-chicane` | `s2-02b-villeneuve-orbit` |
 
-- **S/F read:** Permanent tribune + museum + camera tower present; `ownPitStraight` suppresses generic 7-box stand clip.
-- **Villeneuve:** Paddock five-pole sculpture present; chicane memorial remains single low plaque building (correct restraint).
-- **Sterrenwacht:** Model builds, but **frame debt** hides it from corner trackside views — visible only from pit-fold probes, not from T2 driving line.
-- **Terril:** Soft mountain visible from pit orbit; not obvious on back-straight eye-level shots (acceptable skyline cue).
-- **Suppressed vegetation:** `verify-track` warns `suppressed pine=1 tree=3` (guard drops on tight fold) — within fleet norms.
+### Sector 3 — back sweepers, hairpin, Terlamen, Rindt
 
-### Audits (pre-fix baseline → post-fix)
+| | | |
+|:---:|:---:|:---:|
+| ![Back sweeper](../../../artifacts/shots/tracks/zolder/s3-01-back-sweeper.png) | ![Hairpin park](../../../artifacts/shots/tracks/zolder/s3-02-hairpin.png) | ![Fast pine](../../../artifacts/shots/tracks/zolder/s3-03-fast-pine.png) |
+| `s3-01-back-sweeper` | `s3-02-hairpin` | `s3-03-fast-pine` |
+| ![Terlamen](../../../artifacts/shots/tracks/zolder/s3-04-terlamen.png) | ![Rindt paddock](../../../artifacts/shots/tracks/zolder/s3-05-rindt-paddock.png) | ![Layout high](../../../artifacts/shots/tracks/zolder/s3-06-layout-high.png) |
+| `s3-04-terlamen` | `s3-05-rindt-paddock` | `s3-06-layout-high` |
+| ![Hairpin orbit](../../../artifacts/shots/tracks/zolder/s3-02b-hairpin-orbit.png) | | |
+| `s3-02b-hairpin-orbit` | | |
 
-| Check | Baseline (survey) | After PR fixes |
-| --- | --- | --- |
-| float | 0 | 0 |
-| clip severe | 0 | 0 |
-| buried (ground) | 7 (within baseline cap 7) | **5** (pit offices off audit; poles 0.27 m — trade vs floating plinth) |
-| flatCoplanar | 1 (tyre stack self-pair @ structures.js) | 1 |
-| props tris | 307418 | ~307k (unchanged band) |
+### Required landmarks (day, dry)
 
-### Visual / perf
+| | | |
+|:---:|:---:|:---:|
+| ![Museum](../../../artifacts/shots/tracks/zolder/lm-sf-museum.png) | ![Main grandstand](../../../artifacts/shots/tracks/zolder/lm-main-grandstand.png) | ![Sterrenwacht probe](../../../artifacts/shots/tracks/zolder/lm-sterrenwacht-probe.png) |
+| `lm-sf-museum` | `lm-main-grandstand` | `lm-sterrenwacht-probe` |
+| ![Terril](../../../artifacts/shots/tracks/zolder/lm-terril.png) | | |
+| `lm-terril` | | |
 
-- **Strengths:** Sand verges read distinctly; outer `forestEdge` + depth pines sell Limburg plantation; chicanes have graded sand + tyres.
-- **Issues noted:** Earste `spectatorHill` `crowdBank` still ~0.30 m buried (engine helper; within baseline). S/F `trackside` capture framing poor. Hairpin/Terlamen stands read as simple blocks at distance (acceptable for club scale).
-- **Perf:** ~252k total verts / ~206k props — typical classic circuit; no extra browser groups run this session.
+---
+
+## Panel grids — time of day (dry; six key views)
+
+| | | |
+|:---:|:---:|:---:|
+| ![S/F dawn](../../../artifacts/shots/tracks/zolder/tod-sf-dawn.png) | ![S/F dusk](../../../artifacts/shots/tracks/zolder/tod-sf-dusk.png) | ![S/F night](../../../artifacts/shots/tracks/zolder/tod-sf-night.png) |
+| S/F `dawn` | S/F `dusk` | S/F `night` |
+| ![Poles dusk](../../../artifacts/shots/tracks/zolder/tod-poles-dusk.png) | ![Hairpin dusk](../../../artifacts/shots/tracks/zolder/tod-hairpin-dusk.png) | ![Terlamen night](../../../artifacts/shots/tracks/zolder/tod-terlamen-night.png) |
+| Poles `dusk` | Hairpin `dusk` | Terlamen `night` |
+
+### Weather / lighting backlog (post–shared-shot-PR)
+
+| Issue | Notes |
+| --- | --- |
+| **Missing night lighting** | `furniture.lamp: "none"` — pits and stands are dark at `night`; no floodlight masts. Fix = circuit `lampPost` pass (evaluate lamp cap / lighting-tuner), not shared engine. |
+| **Wet road without lamps** | Wet sheen reads on tarmac; run-off sand stays matte — acceptable. Full rain/overcast/fog matrix not re-shot on current `shot.mjs` tip. |
+| **Night + fog combo** | Not captured; likely very flat without emissive windows on club buildings. |
+| **Sky/fog vs palette** | `pal.fogDensity` 0.003 — overcast/fog need batch weather to validate horizon match. |
+| **Z-fighting** | No new coplanar spots vs baseline; tyre self-pair at Villeneuve/hairpin unchanged (structures.js). |
+
+**Provisional wet frames** (re-capture after shared PR): `wx-sf-day-wet.png`, `wx-villeneuve-wet.png`.
+
+---
+
+## Findings (summary)
+
+| Area | Result |
+| --- | --- |
+| Road | `verify-track` OK; surface folds **0**; min radius 7.28 m @ hw 7.5 m |
+| Audits | float 0, clip 0, buried **5** (within baseline 7), flatCoplanar 1 |
+| Identity | Sand + pine reads well; four required models present |
+| Frame debt | Sterrenwacht model on pit fold — poor T2 sightline (`lm-sterrenwacht-probe` orbit only) |
+| Night | Functional sky/dusk grades; **no track lights** (by kit choice) |
 
 ## Ranked improvements
 
-1. **Frame / Sterrenwacht visibility** — Needs coordinated `startFrac` / `sceneryStartFrac` probe (`docs/tracks/START-LINES.md`), not scenery-only nudge. High player value, **high risk**.
-2. **Terril bearing** — Reposition or strengthen silhouette once a sourced bearing exists. Medium value, low risk.
-3. **Earste crowd bank seating** — Pass terrain lift into `spectatorHill` opts (likely shared `nature.js` knob). Low–medium value, medium risk (fleet API).
-4. **Suppressed pine/tree at fold** — Hand-place or widen `OWNED` near T1 outside trees. Low value, low risk.
-5. **Chicane memorial legibility** — Optional subtle sign texture; keep restraint. Low value.
+1. **Sterrenwacht / start line** — frame probe (`docs/tracks/START-LINES.md`). High value, high risk.  
+2. **Weather survey completion** — after shared shot PR: rain/overcast/fog on S/F, Villeneuve, hairpin.  
+3. **Optional pit lamps** — sparse `lampPost` on pit straight for night credibility. Medium value, low risk (circuit-only).  
+4. **Terril bearing** — reposition when sourced.  
+5. **Earste crowdBank burial** — shared `spectatorHill` terrain lift (~0.30 m, within baseline).
 
-## Fixes in this PR (zolder files only)
+## Fixes in this PR (zolder scenery only)
 
-- Terrain-seated **pit team offices** (`clubBuilding` modelGroups) — ground-audit removed ~0.51 m burial on `building()` calls.
-- **Villeneuve poles** plinth/pole base re-seated on terrain (survey floating plinth).
-- **S/F tribune** `emitOpenStand` plinth lift +0.03 m (0.03 m stand burial).
+- `clubBuilding` terrain-seated pit offices (buried 7→5 ground-audit).  
+- Villeneuve poles plinth seating; S/F `emitOpenStand` plinth +0.03 m.
 
 ## Verification
 
