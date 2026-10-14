@@ -188,7 +188,9 @@ const STRIP = {
   //   (deeper pole + brace arm on every post; roofs reseated, no new strip)
   // → bank zones on Massenet T3 / Mirabeau T7 (2026-10-10; were on Ste Devote
   //   T1 / T4): same emission, the 3° camber re-seats roadside prims, −46 survive
-  monaco: { before: 279837, after: 258617 },
+  // → extend the hairpin cliff city/foliage exclusion (Monaco eye at 0.4):
+  //   −3894 emitted / −3121 kept; hand-built Fairmont/Mirabeau remain.
+  monaco: { before: 275943, after: 255496 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)

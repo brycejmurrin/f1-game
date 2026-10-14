@@ -139,6 +139,35 @@ test("Miami declares explicit racing scenery and source-mapped Turnpike elevatio
     "full-lap dressing exclusions must stay gone (scenery-density regression)");
 });
 
+test("Monaco keeps generic city masses off the hairpin cliff in day and night builds", () => {
+  const env = buildContext();
+  const originalCity = env.sandbox.SceneryCity;
+  const calls = [];
+  env.sandbox.SceneryCity = { ...originalCity, create(ctx) {
+    const kit = originalCity.create(ctx);
+    const neonTower = kit.neonTower;
+    return { ...kit, neonTower(k, side, ...args) {
+      calls.push({ frac: k / ctx.n, side });
+      return neonTower(k, side, ...args);
+    } };
+  } };
+  const def = env.Tracks.LIST.find((entry) => entry.id === "monaco");
+  for (const night of [false, true]) {
+    calls.length = 0;
+    const from = env.mark();
+    const track = env.Tracks.build(def, { night });
+    assert.equal(calls.filter(({ frac, side }) =>
+      side === -1 && frac >= 0.368 && frac <= 0.430).length, 0,
+    "the downhill cliff must not receive a generic city block");
+    assert.ok(calls.length > 0, "city dressing remains on the rest of the lap");
+    for (const id of ["monaco-fairmont-main", "monaco-mirabeau-apartments"])
+      assert.ok(track.modelDiagnostics.emitted.some((entry) => entry.id === id),
+        `${id} must remain present`);
+    env.trim(from);
+    env.release(track);
+  }
+});
+
 test("TrackSurface creates monotonic rails and one terrain/grounding height contract", () => {
   const TrackSurface = loadGlobal(P.TRACK_SURFACE, "TrackSurface");
   const track = {
