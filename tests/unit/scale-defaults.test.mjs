@@ -64,21 +64,11 @@ function coarseDefaults() {
 
 test("css/tokens.css and js/ui/scale.js agree on the touch defaults", () => {
   const css = coarseDefaults();
-  // --hud-btn-scale is a RATIO of --hud-scale, deliberately, so an unset BUTTON
-  // SIZE keeps following the HUD SIZE slider. The multiplier is published
-  // SEPARATELY as --hud-btn-mult because calc() inside a custom property is not
-  // reduced at computed-value time: js/ui/hud.js has to resolve the unset dock
-  // scale from its factors rather than parse "calc(0.9 * 1.25)" out of a token.
-  assert.match(css["--hud-btn-scale"], /var\(--hud-scale\)\s*\*\s*var\(--hud-btn-mult\)/,
-    `--hud-btn-scale must stay --hud-scale times --hud-btn-mult, got: ${css["--hud-btn-scale"]}`);
+  assert.equal(css["--hud-btn-scale"], "var(--hud-btn-mult)", "touch buttons use their own default");
   const ratio = [null, css["--hud-btn-mult"]];
-  assert.ok(ratio[1] && Number.isFinite(Number(ratio[1])),
-    `--hud-btn-mult must be a plain number (js/ui/hud.js coerces it), got: ${ratio[1]}`);
-  const jsRatio = scaleJs.match(/const BTN_OVER_HUD = ([\d.]+);/);
-  assert.ok(jsRatio, "js/ui/scale.js must declare BTN_OVER_HUD");
-  assert.equal(Number(ratio[1]), Number(jsRatio[1]),
-    "css/tokens.css's --hud-btn-scale ratio and scale.js's BTN_OVER_HUD are the " +
-    "same number twice. A drift means the buttons resize on the first JS write.");
+  const jsRatio = scaleJs.match(/const BTN_DEFAULT = ([\d.]+);/);
+  assert.ok(jsRatio, "independent button default exists");
+  assert.equal(Number(ratio[1]), Number(jsRatio[1]));
 
   const jsDefaults = scaleJs.match(/scaleDefault = \(k\) => \(coarseUi\(\) \? \(k === "hudScale" \? (\d+) : (\d+)\) : 100\)/);
   assert.ok(jsDefaults, "js/ui/scale.js must declare the coarse scaleDefault pair");
@@ -227,4 +217,17 @@ test("UiScale.defaultResMode() answers from the primary pointer, without create(
   assert.equal(run(false), "auto");
   assert.equal(run(false, true), "auto", "a throwing matchMedia is a pointer device");
   assert.match(scaleJs, /store\.get\("resMode", defaultResMode\(\)\)/, "the live row reads the same helper SPEC consumes");
+});
+
+ test("button default and override survive HUD size changes", () => {
+  const { api, stored, el } = bootScale();
+  assert.equal(el("pm-btnscale").value, "100");
+  api.setScale("hudScale", "--hud-scale", 180);
+  api.applyBtnScale();
+  assert.equal(el("pm-btnscale").value, "100");
+  el("pm-btnscale").oninput({ target: { value: "145" } });
+  api.setScale("hudScale", "--hud-scale", 70);
+  api.applyBtnScale();
+  assert.equal(stored.hudBtnScale, 145);
+  assert.equal(el("pm-btnscale").value, "145");
 });
