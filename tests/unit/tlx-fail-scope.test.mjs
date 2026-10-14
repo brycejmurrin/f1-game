@@ -75,7 +75,7 @@ test("TLX post chain: re-callable factory, rebuilt at the next realloc, bound la
   assert.match(src, /function buildPost\(\) \{/, "the post chain is built by a function that can run again");
   assert.match(src, /post = buildPost\(\);/);
   const resize = src.slice(src.indexOf("function applyResize()"), src.indexOf("function resize()"));
-  assert.match(resize, /if \(_postRebuild && !post\) \{ _postRebuild = false; post = buildPost\(\); \}\s*if \(post\) post\.resize\(rw, rh\);/,
+  assert.match(resize, /if \(_postRebuild && !post\) \{\s*_postRebuild = false; post = buildPost\(\);\s*if \(!post\) postFailure\("Post-processing reconstruction failed"\);\s*\}\s*if \(post\) post\.resize\(rw, rh\);/,
     "a render-target realloc rebuilds a retired chain before resizing it");
   const death = src.slice(src.indexOf("// Post-only death:"), src.indexOf("if (!painted)", src.indexOf("// Post-only death:")));
   assert.match(death, /_postRebuild = \+\+_postStrikes <= 3;/, "a post-only death owes a rebuild, bounded at 3");

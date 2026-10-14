@@ -53,6 +53,47 @@ test("bitmap-decode-worker answers error without throwing", async () => {
   assert.match(posted[0].message, /bad png/);
 });
 
+test("bitmap-decode-worker closes only its own bitmap when transfer fails", async () => {
+  for (const crop of [null, [0, 0, 2, 2]]) {
+    for (const mode of ["success", "transfer-fails", "close-fails", "decode-fails"]) {
+      let closes = 0;
+      const posted = [];
+      const bmp = { width: 2, height: 2, close() {
+        closes++;
+        if (mode === "close-fails") throw new Error("close failed");
+      } };
+      const ctx = vm.createContext({
+        createImageBitmap: async (...args) => {
+          assert.equal(args.length, crop ? 6 : 2, "preserve cropped and full-image overloads");
+          if (mode === "decode-fails") throw new Error("bad png");
+          return bmp;
+        },
+        postMessage: (m, transfer) => {
+          if (m.type === "decoded") {
+            assert.equal(m.bmp, bmp);
+            assert.equal(transfer.length, 1);
+            assert.equal(transfer[0], bmp);
+            if (mode !== "success") {
+              const error = new Error("transfer failed");
+              error.name = "DataCloneError";
+              throw error;
+            }
+          }
+          posted.push(m);
+        },
+      });
+      ctx.self = ctx;
+      vm.runInContext(read("js/workers/bitmap-decode-worker.js"), ctx);
+      await ctx.onmessage({ data: { type: "decode", seq: 13, blob: { size: 4 }, crop } });
+      assert.equal(closes, mode === "transfer-fails" || mode === "close-fails" ? 1 : 0, mode);
+      assert.equal(posted.length, 1, mode);
+      assert.equal(posted[0].seq, 13);
+      assert.equal(posted[0].type, mode === "success" ? "decoded" : "error");
+      if (mode !== "success") assert.equal(posted[0].message, mode === "decode-fails" ? "bad png" : "transfer failed");
+    }
+  }
+});
+
 test("BitmapDecode client falls back to main-thread createImageBitmap without Worker", async () => {
   const calls = [];
   const bmp = { width: 1, height: 1, close() {} };

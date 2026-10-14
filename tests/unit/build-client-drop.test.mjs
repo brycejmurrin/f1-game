@@ -205,3 +205,24 @@ test("page diagnostic settings bypass worker requests and defaults remain eligib
   tracks.setCompactProps(true); unchunked = "1"; assert.equal(tracks.diagnosticBuild(), true);
   unchunked = null; assert.equal(tracks.diagnosticBuild(), false);
 });
+
+test("replay cancellation between upload slices frees uploads and returns null without uploading the rest", async () => {
+  let tick = 0, resume, live = true, uploads = 0;
+  const freed = [];
+  const { client } = page({ performance: { now: () => ++tick * 10 },
+    requestAnimationFrame: r => { resume = r; } });
+  const recs = [0, 1, 2].map(() => ({ op: "mesh", args: [{}] }));
+  const msg = { recs, track: { meshes: {}, buildProfile: [] }, ms: 0 };
+  const gfx = { createMesh() { return ++uploads; }, freeMesh(h) { freed.push(h); } };
+  const result = client.replay(msg, def, gfx, 1, () => live);
+  assert.equal(uploads, 1); live = false; resume();
+  assert.equal(await result, null); assert.equal(uploads, 1);
+  assert.deepEqual(freed, [1]);
+  assert.equal(await client.replay(msg, def, gfx, 1, () => true), null, "taken replay cannot upload twice");
+});
+
+test("replay upload failures still reject instead of masquerading as cancellation", async () => {
+  const { client } = page({ performance: { now: () => 0 } });
+  const msg = { recs: [{ op: "mesh", args: [{}] }], track: { meshes: {}, buildProfile: [] } };
+  await assert.rejects(client.replay(msg, def, { createMesh() { throw new Error("upload refused"); } }, 8, () => true), /upload refused/);
+});

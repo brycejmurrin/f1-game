@@ -14,11 +14,11 @@ self.onmessage = async (e) => {
   const m = e.data || {};
   if (m.type !== "decode") return;
   const seq = m.seq;
+  let bmp = null;
   try {
     const blob = m.blob;
     if (!blob) throw new Error("decode: missing blob");
     const opts = m.opts ? Object.assign({}, DEFAULT_OPTS, m.opts) : DEFAULT_OPTS;
-    let bmp;
     if (m.crop != null && (!Array.isArray(m.crop) || m.crop.length !== 4 ||
         !m.crop.every(Number.isFinite) || m.crop[2] <= 0 || m.crop[3] <= 0)) throw new Error("bitmap decode: invalid crop");
     if (m.crop != null) {
@@ -28,7 +28,9 @@ self.onmessage = async (e) => {
       bmp = await createImageBitmap(blob, opts);
     }
     self.postMessage({ type: "decoded", seq, bmp }, [bmp]);
+    bmp = null; // the page owns a successfully transferred bitmap
   } catch (err) {
+    try { if (bmp) bmp.close(); } catch (_) { /* disposal must not suppress the error reply */ }
     self.postMessage({ type: "error", seq, message: String(err && err.message || err) });
   }
 };

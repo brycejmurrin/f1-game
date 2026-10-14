@@ -153,6 +153,8 @@ const PlayerForces = (function () {
     // downforce for everyone, or the assist is a cheat in one direction.
     const aeroGrip = (1 + DOWNFORCE * aeroDf * Math.min(1, (vAbs / vTopNow) ** 2))
       * dirtyMul;
+    c._dirtyAirMul = dirtyMul;      // read-only coach evidence: actual applied wake multiplier
+    c._coachAssisted = Math.abs(assistDelta) + Math.abs(lineDelta) > 1e-6;
     c._aeroGrip = aeroGrip;          // see c._vmaxNow — the other half of the trade
     const surfMu = surfaceMu;
     // B3 (marbles-affect-grip, flag apex26.marbleGrip): an EXTERNAL grip scalar

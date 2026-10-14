@@ -234,7 +234,7 @@ const TrackBuildClient = (function () {
   // becomes its handle. A message is replayed once: the first caller takes it. A ribbon the backend did not chunk is re-seated exactly as
   // tracks.js buildRibbon does it (chunks:null = a small plain mesh; chunks:[]
   // = a failed upload, retried unchunked).
-  async function replay(msg, def, gfx, budgetMs) {
+  async function replay(msg, def, gfx, budgetMs, live) {
     if (msg.taken) return null;
     msg.taken = true;
     const { track, recs } = msg, real = new Array(recs.length), fallback = [], budget = budgetMs > 0 ? budgetMs : 8;
@@ -250,8 +250,12 @@ const TrackBuildClient = (function () {
       if (keepFull) geo._keepFullGeometry = true;
       return args;
     };
+    const canceled = {};
+    const checkLive = () => { if (live && !live()) throw canceled; };
     try {
+      checkLive();
       for (let i = 0; i < recs.length;) {
+        checkLive();
         const t0 = performance.now();
         do {
           const r = recs[i];
@@ -261,6 +265,7 @@ const TrackBuildClient = (function () {
         } while (i < recs.length && performance.now() - t0 < budget);
         if (i < recs.length) await new Promise((res) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(res) : setTimeout(res, 0)));
       }
+      checkLive();
       const swap = (v) => {
         if (Array.isArray(v)) return v.map(swap);
         if (!v || typeof v !== "object" || typeof v.__rec !== "number") return v;
@@ -298,6 +303,7 @@ const TrackBuildClient = (function () {
       if (typeof PitSigns !== "undefined") PitSigns.upload(gfx, track);
       track.buildProfile.push({ n: "worker", k: "off", ms: +msg.ms.toFixed(2) });
       Log.info("track", "build worker: replayed " + def.id + " (" + recs.length + " uploads; " + Math.round(msg.ms) + " ms off-thread)");
+      checkLive();
       return track;
     } catch (e) {
       // Own uploads until the entire replay succeeds, including fallback
@@ -316,6 +322,7 @@ const TrackBuildClient = (function () {
       }
       try { if (typeof PitSigns !== "undefined" && PitSigns.free) PitSigns.free(gfx, track); }
       catch (_) { /* preserve the replay error */ }
+      if (e === canceled) return null;
       throw e;
     }
   }

@@ -6,6 +6,8 @@ const IncidentSim = (function () {
   // fallback for a bare test VM that loads this file without PhysicsConsts.
   const FIXED_DT = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.FIXED_DT) || 1 / 60;
 
+  const _boundary = {}, _boundaryPost = {};
+
   let G = null;             // game.js ctx façade (live getters + trackFrom/worldFromTrack helpers)
 
   // flags (all DEFAULT ON, each its own disable flag)
@@ -318,10 +320,10 @@ const IncidentSim = (function () {
         try { tf = G.trackFrom(px, pz, c.s); } catch (e) { tf = null; }
         if (!tf || !fin(tf.s) || !fin(tf.x)) { handbackCar(inc, i, true); continue; }
         if (G.track && typeof Tracks !== "undefined" && Tracks.wallAt) {
-          const wr = Tracks.wallAt(G.track, tf.s, 1);
-          const wl = Tracks.wallAt(G.track, tf.s, -1);
-          if (fin(wr) && tf.x > wr) tf.x = wr;
-          if (fin(wl) && tf.x < -wl) tf.x = -wl;
+          const lim = ContactGeometry.wallLimits(G.track, tf.s, tf.x, _boundary, _boundaryPost, c);
+          if (fin(lim.r) && tf.x > lim.r) tf.x = lim.r;
+          if (fin(lim.l) && tf.x < -lim.l) tf.x = -lim.l;
+          if (fin(lim.laneMin) && lim.laneMin > 0 && tf.x * lim.side < lim.laneMin) tf.x = lim.laneMin * lim.side;
         }
         // INVERT the promote, do not approximate it. startIncident maps
         // (speed, vLat) into the world with `vWx = spd*fx - vLat*fz;

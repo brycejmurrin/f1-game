@@ -210,3 +210,23 @@ test("NaN driverDelta or non-finite dt must not poison car state", () => {
   assert.equal(cSkip.yawRateCur, before.yawRateCur);
   assert.equal(cSkip.head, before.head);
 });
+
+test('coach telemetry records the applied wake loss and assistance without changing forces', () => {
+  const { PlayerForces, TyreModel, PhysicsConsts: P } = load();
+  const api = PlayerForces.create({ PLAYER_GRIP: 1.15, FRONT_GRIP: .94, DRIFT: 0, YAW_INERTIA: .58, YAW_DAMP: 1 });
+  const tyres = TyreModel.create({ raceTyreWear: 'off', store: { get: () => 'off', set() {} } });
+  const ctx = { dt: DT, driverDelta: .05, assistDelta: .02, lineDelta: 0, onThrottle: true, throttleLvl: .5,
+    gearMult: 1, deploy: 0, braking: false, surfaceMu: 1, kerbGrip: 1, bankMu: 1, modsCornering: 1,
+    loadF: P.FRONT_WEIGHT, loadR: 1 - P.FRONT_WEIGHT, vertLoad: 0, af: (1 - P.FRONT_WEIGHT) * 3.2,
+    ar: P.FRONT_WEIGHT * 3.2, sp: 1, steer: .2, weatherGrip: 1, aeroDf: 1, dirtyMul: .9,
+    coastCut: 0, vTopNow: 72, tyres };
+  const car = { human: true, isPlayer: false, speed: 40, axEstSm: 0, aeroX: 0, wake: .8,
+    vLat: 0, yawRateCur: 0, head: 0, brakeStab: 1, rearUtil: 0, brakeBias: null, rollBalance: .5,
+    lateralAccel: 0, offroad: false, tread: 0, flatSpot: 0 };
+  api.step(car, ctx);
+  assert.equal(car._dirtyAirMul, .9); assert.equal(car._coachAssisted, true);
+  const grip = car._aeroGrip;
+  ctx.dirtyMul = 1; ctx.assistDelta = 0; api.step(car, ctx);
+  assert.equal(car._dirtyAirMul, 1); assert.equal(car._coachAssisted, false);
+  assert.ok(Math.abs(grip - (1 + P.DOWNFORCE * (40 / 72) ** 2) * .9) < 1e-12, 'telemetry is the multiplier actually used');
+});

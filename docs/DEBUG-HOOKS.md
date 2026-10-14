@@ -5266,3 +5266,8 @@ is invisible without this readout.
 
 Deeper: `__apex.gpuTimer(true)` for GPU-side milliseconds (Chrome/Android only),
 and the playwright-probe skill (`references/perf-profile.md`) for a CPU flame chart.
+
+The manual TLX material-array detail setting uses `apex26.tlxMaterialDetail`: set
+`localStorage.setItem("apex26.tlxMaterialDetail", "8")` and reload to opt in;
+`"4"` is the default. The renderer clamps anisotropy to device capability and applies
+it only to material arrays. Settings export/import and garage reset include this key.

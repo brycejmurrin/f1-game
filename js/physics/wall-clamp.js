@@ -14,6 +14,7 @@ const WallClamp = (function () {
   "use strict";
 
   const clamp = M4.clamp;
+  const _lim = { r: 0, l: 0, laneMin: 0, side: 0 };
 
   // Hard lateral clamp + incidence scrub + pit/gantry limits + human writeback.
   // Mutates `c` (x, speed, head, vLat, wallT, wasOnWall, wallHits, collideT,
@@ -36,48 +37,9 @@ const WallClamp = (function () {
     const incidentSim = ctx.incidentSim;
     const addShake = ctx.addShake;
 
-    // The driving boundary is per-side and derived from where solid barriers were
-    // actually placed (Tracks.wallAt), so the car always stops just before a model
-    // instead of clipping through it — consistent across street and open circuits.
-    let wallR = Tracks.wallAt(track, c.s, 1);
-    let wallL = Tracks.wallAt(track, c.s, -1);
-    // THE PIT WALL. TrackPit.openBoundary opens the boundary to the garages
-    // across the window so a car can reach the lane, which left the wall itself
-    // as scenery a car running wide drove straight through. Where the wall
-    // stands (v >= 0.98) a car on the ROAD side keeps to its track-side face,
-    // and a car on the LANE side to the lane's own barrier at the platform's
-    // edge (SceneryPits sweeps both from the same bands).
-    let laneMin = 0, pitSd = 0;
-    {
-      const p = track.pit;
-      if (p && !p.painted) {
-        const k = ((Math.round(c.s / track.total * track.n) % track.n) + track.n) % track.n;
-        if (p.v[k] >= 0.98) {
-          pitSd = p.side;
-          const face = track.hw[k] + p.bands.verge;
-          if (c.x * pitSd < face + 0.125) { if (pitSd > 0) wallR = Math.min(wallR, face - 1.1); else wallL = Math.min(wallL, face - 1.1); }
-          else laneMin = track.hw[k] + p.off.fastIn + 1.0;
-        } else if (p.w[k] >= TrackPit.EXIT_WALL_W && ((c.s - p.sOut) % track.total + track.total) % track.total < p.exitRoadM) {
-          // THE EXIT WALL (SceneryPits): from the platform's line at the exit
-          // line to the road edge as the wall fades (verge · v), then along
-          // the edge while the exit road keeps EXIT_WALL_W of its width — a
-          // serviced car rejoins where the wall ends, not through it.
-          pitSd = p.side;
-          const wallLat = track.hw[k] + p.bands.verge * p.v[k];
-          if (c.x * pitSd < wallLat + 0.125) { if (pitSd > 0) wallR = Math.min(wallR, wallLat - 1.15); else wallL = Math.min(wallL, wallLat - 1.15); }
-          else laneMin = wallLat + 0.30 + 1.0;
-        }
-      }
-    }
-    // GANTRY LEGS (Tracks.postLimits): a footprint on each side of the leg,
-    // never a wall line — a car on the run-off stays out there, one on the road
-    // stops at the leg's face. The outside case rides the pit wall's lane clamp.
-    if (track.posts && track.posts.length) {
-      Tracks.postLimits(track, c.s, c.x, postLim);
-      if (postLim.r < wallR) wallR = postLim.r;
-      if (postLim.l < wallL) wallL = postLim.l;
-      if (postLim.minOut > laneMin) { laneMin = postLim.minOut; pitSd = postLim.side; }
-    }
+    // Same candidate-position boundary as contact separation and incident takeover.
+    const lim = ContactGeometry.wallLimits(track, c.s, c.x, _lim, postLim);
+    const wallR = lim.r, wallL = lim.l, laneMin = lim.laneMin, pitSd = lim.side;
     let xPinned = false;   // did the barrier clamp c.x? (see the writeback below)
     if (c.x > wallR || c.x < -wallL) {
       const into = c.x > wallR ? 1 : -1;          // +1 = hit right wall, -1 = left

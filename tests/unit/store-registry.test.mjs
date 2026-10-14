@@ -87,9 +87,10 @@ const WRITERLESS = new Set(`analogSpeedSteer backgroundMotion breakBarriers c1Pi
   inputDebug instCellCache marbleGrip mirrorInstEvery modelInst moonShadowCadence motion multiDraw musicStream nostrRelays padCurve
   padDeadzone padSaturation propsUnchunked r2Airborne r3Contact spatialUpscaleGather tiltCurve tlxArrayNearest
   tlxChunkMerge tlxChunkRelease tlxForceBatches tlxForceHw tlxInstPad tlxLampStatic tlxMirLampCap tlxMirrorSweep tlxMobile tlxPack
-  tlxAoFold tlxBloom11 tlxMirFold tlxPostFixedMats tlxRoadNormalV2 tlxShadowOff tlxSharpenLimit tlxSharedUniforms tlxSkipBatches tlxSkyCache tlxTagLess tlxViz ssrDayGate tlxPartWrap tlxPoolRoot tlxSkyCache512 tlxCoalesce tlxSharedTex tlxAttrInst tlxDynUsage liveryAsync tlxCasterAttr tlxPad4 tlxMirMips tlxDepthDiscard tlxDrawWarm tlxWarmFx tlxWarmPlus glxChunkAlign touchCurve touchRange
+  tlxAoFold tlxBloom11 tlxMirFold tlxPostFixedMats tlxRoadNormalV2 tlxShadowOff tlxMaterialDetail tlxSharpenLimit tlxSharedUniforms tlxSkipBatches tlxSkyCache tlxTagLess tlxViz ssrDayGate tlxPartWrap tlxPoolRoot tlxSkyCache512 tlxCoalesce tlxSharedTex tlxAttrInst tlxDynUsage liveryAsync tlxCasterAttr tlxPad4 tlxMirMips tlxDepthDiscard tlxDrawWarm tlxWarmFx tlxWarmPlus glxChunkAlign touchCurve touchRange
   turn turnApi wgxInsetInPass wgxPackAsync wgxTransient`.split(/\s+/).filter(Boolean));
 // tlxSharpenLimit is a manual default-off TLX post-chain prototype; see docs/DEBUG-HOOKS.md.
+// tlxMaterialDetail is a manual reload-only material-array anisotropy setting (4 default, 8 opt-in).
 // Read with two defaults at 78cb4831b — mostly deliberate "is it set at all?"
 // probes (null) beside the real default, but the scan cannot tell a probe from
 // drift. Remove a name when its call sites agree.

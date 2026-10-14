@@ -3998,11 +3998,16 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // geometry.dispose() alone only nulls an attribute mirror. A pooled wrapper
   // dropped without the event pinned every chunk of every freed track (~17 MB
   // of JS heap per picker pick, measured). Both drop paths go through one helper.
-  assert.match(tlxSrc, /function dropWrapper\(m\) \{[\s\S]*?if \(_warmPending\) \{ _dropQueue\.push\(m\); return; \}\s*try \{ m\.dispatchEvent\(\{ type: "dispose" \}\); \}[\s\S]*?m\.geometry = null; m\.material = null;\s*\}/,
-    "dropWrapper dispatches three's dispose event before nulling the wrapper — and defers while a warm's compileAsync may still hold the mesh");
+  const drop = fnBody(tlxSrc, "dropWrapper");
+  assert.match(drop, /if \(_warmPending\)[^]*?_dropQueue\.push\(\{ mesh: m, ownedGeometry \}\)[^]*?return;/,
+    "warm retains both object and owned geometry in one retirement record");
+  assert.match(drop, /m\.dispatchEvent\(\{ type: "dispose" \}\);[^]*?m\.geometry = null; m\.material = null;[^]*?ownedGeometry\.dispose\(\)/,
+    "object disposal precedes reference clearing and owned geometry disposal");
   assert.match(tlxSrc, /function flushDropped\(\) \{\s*if \(_warmPending \|\| !_dropQueue\.length\) return;/, "the queue drains only once the warm settled");
   assert.match(tlxSrc, /prunePool\(_poolNow\);\s*flushDropped\(\);/, "and it drains every present, after the prune");
-  assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 3, "releaseGeometry, prunePool and the flush all drop through it");
+  assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 2, "releaseGeometry and prunePool drop shared wrappers through the helper");
+  assert.match(fnBody(tlxSrc, "flushDropped"), /dropWrapper\(entry\.mesh, entry\.ownedGeometry\)/, "flush retains ownership metadata");
+  assert.match(fnBody(tlxSrc, "_coDrop"), /dropWrapper\(b\.imesh, b\.imesh\.geometry\)/, "coalesced owned views use the same warm-aware lifecycle");
   assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, ""), /m\.geometry = null; m\.material = null;/,
     "no wrapper is nulled behind three's back");
   // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
@@ -5104,7 +5109,7 @@ test("TLX placeholder material arrays carry the pack's sampling state (WGSL acce
     "t.minFilter = THREE.LinearMipmapLinearFilter",
     "t.magFilter = THREE.LinearFilter",
     "t.generateMipmaps = true",
-    "t.anisotropy = 4",
+    "t.anisotropy = materialArrayAnisotropy()",
   ]) {
     assert.ok(pack.includes(line), "createTextureArray lost `" + line + "` — the pack sampling state changed; mirror it in the placeholder");
     assert.ok(placeholder.includes(line), "placeholder array lacks `" + line + "` — three compiles the lit program against the placeholder, and a Nearest/Nearest ClampToEdge placeholder bakes textureLoad+clamp into the WGSL for the life of the program");
@@ -5931,7 +5936,7 @@ function bootScenario({ install = true, init = true, pref = "webgl2", skip = fal
     Event: class { constructor(type) { this.type = type; } },
     location: { reload: () => events.push("reload") },
     BACKEND_FILES: { webgl2: ["glsl-chunks.js", "glx.js"] },
-    canvas: {}, _claimSkipped: skip, _createHung: false,   // start()'s closure state the sliced fallback reads
+    canvas: {}, _claimSkipped: skip, _createHung: false, _initOwner: null,   // start()'s closure state the sliced fallback reads
     backendPreference: () => pref,
     showGraphicsUnavailable: () => events.push("unavailable"),
     async loadBackendScripts(group) {

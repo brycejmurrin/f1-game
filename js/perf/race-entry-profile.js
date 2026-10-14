@@ -224,9 +224,9 @@ const RaceEntryProfile = (() => {
       if (owns()) end();
       onFail(e);
     });
-    request.then((result) => {
+    request.outcome.then((result) => {
       if (!owns()) return;
-      if (result === false || (result && result.kind === "canceled")) end();
+      if (result.kind !== "committed" || !sessionEntry.owns(result)) end();
       else { mark("session:committed"); presentationEnabled = true; }
     }, () => { if (owns()) end(); });
     return request;

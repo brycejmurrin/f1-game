@@ -173,11 +173,12 @@ function makeGpuHarness(opts = {}) {
     // hit its own "a check that cannot be RUN is skipped, never fatal" rule and
     // was inert in every test — the guard that matters most on Safari.
     createShaderModule: () => ({
-      getCompilationInfo: async () => ({
-        messages: opts.shaderError
+      getCompilationInfo: async () => {
+        if (opts.beforeCompilationInfo) await opts.beforeCompilationInfo();
+        return { messages: opts.shaderError
           ? [{ type: "error", message: "injected WGSL compile error", lineNum: 1, linePos: 1 }]
-          : [],
-      }),
+          : [] };
+      },
     }),
     // The DESCRIPTOR is kept, not just the count: a target format or a
     // multisample count that WebGPU rejects is invisible to a harness that
@@ -358,6 +359,7 @@ function makeGpuHarness(opts = {}) {
             // an adapter may advertise a feature and hand back a device without
             // it, and WGX has to re-derive from the device it actually holds.
             device.features = { has: (name) => deviceFeatures.includes(name) };
+            if (opts.beforeDevice) await opts.beforeDevice();
             return device;
           },
         }),
@@ -409,7 +411,7 @@ function makeGpuHarness(opts = {}) {
     WGX: context.window.WGX,
     pipelines,
     deviceRequests,
-    create: () => context.window.WGX.create(canvas),
+    create: (createOpts) => context.window.WGX.create(canvas, createOpts),
     // What the GLX fallback would find: null while the canvas is still free for
     // a webgl2 context, "webgpu" once WGX has claimed it.
     canvasClaimedBy: () => claimedBy,
@@ -3382,4 +3384,30 @@ test("spatial async completion cannot publish onto a replaced device", async () 
   h.post.ensureSpatial(); const retired = h.owned[0]; h.core.device = {};
   settle(null); for (let i = 0; i < 5; i++) await Promise.resolve();
   assert.equal(retired.destroys, 1); assert.equal(h.core.sgsrUBO, null); assert.equal(h.core.pSGSR, null);
+});
+
+
+test("cancelled WGX init destroys a late device and never claims the canvas", async () => {
+  let finish, destroys=0;
+  const h=makeGpuHarness({beforeDevice:()=>new Promise(resolve=>{finish=resolve;})});
+  h.device.destroy=()=>{destroys++;};
+  const owner={active:true};const pending=h.create({initOwner:owner});
+  for(let i=0;i<5;i++)await Promise.resolve();assert.ok(finish);
+  owner.active=false;finish();assert.equal(await pending,null);
+  assert.equal(destroys,1);assert.equal(h.canvasClaimedBy(),null);assert.equal(h.textureCount(),0);
+});
+
+
+test("revoked WGX late successful self-test preserves successor failure and bound markers", async () => {
+  let finish,destroys=0;
+  const barrier=new Promise(resolve=>{finish=resolve;});
+  const storage=new Map(),session=new Map();
+  const h=makeGpuHarness({storage,session,beforeCompilationInfo:()=>barrier});
+  h.device.destroy=()=>{destroys++;};
+  const owner={active:true};const pending=h.create({initOwner:owner});
+  for(let i=0;i<20;i++)await Promise.resolve();
+  owner.active=false;storage.set("apex26.gfxWgxFail","successor-failure");session.set("apex26.gfxBound","webgl2");
+  finish();assert.equal(await pending,null);
+  assert.equal(storage.get("apex26.gfxWgxFail"),"successor-failure");
+  assert.equal(session.get("apex26.gfxBound"),"webgl2");assert.equal(h.canvasClaimedBy(),null);assert.equal(destroys,1);
 });

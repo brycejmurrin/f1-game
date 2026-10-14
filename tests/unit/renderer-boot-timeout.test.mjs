@@ -15,7 +15,8 @@ import { readFileSync } from "node:fs";
 const src = readFileSync(new URL("../../js/render/renderer-boot.js", import.meta.url), "utf8");
 const settle = () => new Promise((r) => setImmediate(r));
 
-function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = false } = {}) {
+const gfxSeam = vm.runInNewContext(readFileSync(new URL("../../js/render/gfx.js", import.meta.url), "utf8") + ";Gfx");
+function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = false, ownerProtocol = false } = {}) {
   const ls = new Map(stored ? [["apex26.gfxBackend", stored]] : []), ss = new Map();
   const timers = [], warns = [], calls = [];
   const ctx = vm.createContext({
@@ -30,7 +31,7 @@ function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = fals
     Event: class { constructor(type) { this.type = type; } },
     GLX: noGLX ? {} : { init: () => { calls.push("GLX.init"); return true; } },
     RendererPicker: { showUnavailable() { calls.push("unavailable"); } },
-    Gfx: { create: gfxCreate || (async () => null) },
+    Gfx: { create: gfxCreate || (async () => null), ...(ownerProtocol ? { createInitOwner: gfxSeam.createInitOwner } : {}) },
     Log: { warn: (_ns, ...m) => warns.push(m.join(" ")), info() {} },
     // Manual clock: the 8 s caps are fired by the test.
     setTimeout: (fn, ms) => { timers.push({ fn, ms, live: true }); return timers.length; },
@@ -40,7 +41,7 @@ function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = fals
   ctx.dispatchEvent = () => true;
   vm.runInContext(src.replace(/^const\b/gm, "var"), ctx);
   const rb = vm.runInContext("RendererBoot", ctx).create({
-    $: () => null, els: {}, canvas: {}, ensureDataHub() {},
+    $: () => null, els: {}, canvas: { getContext: () => ({}) }, ensureDataHub() {},
     loadBackendScripts: loadBackend || (async (files) => { calls.push(...files); }),
   });
   const fire = (ms) => { for (const t of timers) if (t.live && t.ms === ms) { t.live = false; t.fn(); } };
@@ -107,4 +108,20 @@ test("missing GLX fallback script is bounded and failed fetch resolves unavailab
     assert.equal(await started, null);
     assert.equal(h.timers.filter((t) => t.live && t.ms >= 1000).length, 0);
   }
+});
+
+for (const claimed of [false, true]) test(`timed-out alternate relinquishes publication and prevents competing claim (alreadyClaimed=${claimed})`, async () => {
+  let owner, finish;
+  const h=boot({ownerProtocol:true,gfxCreate:async (_, opts)=>{
+    owner=opts.initOwner;
+    if(claimed) owner.canvas.getContext("webgpu");
+    await new Promise(r=>{finish=r;});
+    assert.equal(owner.canvas.getContext("webgpu"),null,"late continuation cannot claim canvas");
+    return {backend:"three"};
+  }});
+  const pending=h.rb.start(); await settle(); h.fire(8000); const result=await pending;
+  assert.equal(owner.active,false);
+  if(claimed) assert.equal(result,null,"claimed timeout refuses same-page binding"); else assert.equal(result.bound,false);
+  assert.equal(h.calls.includes("GLX.init"),!claimed,"claimed canvas takes existing safe reload/refusal path");
+  finish();await settle();assert.equal(result && result.bound,claimed ? null : false,"late backend never publishes");
 });
