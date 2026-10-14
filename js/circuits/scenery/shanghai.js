@@ -25,6 +25,8 @@
       const backdrop = (k, side, dist, sz, col) => {
         const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], sz[0] / 2 + 6)) return;
+        const gy = groundUnder(a.c[0], a.c[2]);
+        if (gy !== null && a.c[1] < gy - 0.5) return;
         api.backdrop(k, side, dist, sz, col);
       };
 
@@ -346,7 +348,7 @@
       building(K(0.042), -1, 70, 20, 28, 34, {
         kind: "cylinder", wall: CONC, window: WIN_TOWER, floor: 5, lit: true,
       });
-      building(K(0.072), -1, 76, 20, 20, 38, {
+      building(K(0.078), -1, 88, 18, 18, 34, {
         kind: "notch", wall: [0.82, 0.84, 0.86], window: WIN_LIT, floor: 4, lit: true,
       });
 
@@ -420,7 +422,7 @@
         // (sheet-03 overview showed floating red roofs near T1).
         for (const [s, sd, d, w, h, len] of [
           [sl(0.055), -1, 108, 11, 5.5, 9],
-          [sl(0.075), -1, 122,  9, 5.0, 8],
+          [sl(0.075), -1, 138,  9, 5.0, 8],
           [sl(0.095), -1, 105,  8, 4.2, 7],
           [sl(0.115), -1, 128, 10, 5.5, 8],
         ]) {
@@ -1006,11 +1008,12 @@
 
       (function crowds() {
         const spots = [
-          [sl(0.045), -1, 18], [sl(0.06),  1, 70], [0.46, 1, 16],
-          [0.80,   1, 22], [sl(0.10), -1, 30],
+          [sl(0.045), -1, 18],
         ];
-        // [0.905, -1, 20] retired 2026-10-05: it is racing ~-0.006, inside the
-        // footprint of the main grandstand (mainGrandstand above) — clip 2.56 m.
+        // fanTerraces() already carries coloured terrace blocks at the snail,
+        // mid-sector and back-straight runs — duplicate crowd boxes here clipped
+        // them (2.8 m at s≈0.12 / 0.55 / 0.76; audit 2026-10-14).
+        // [0.905, -1, 20] retired 2026-10-05: inside main grandstand — clip 2.56 m.
         for (const [s, sd, d] of spots) {
           const a = anchor(K(s), sd, d), b = [a.r, a.u, a.t];
           for (let i = 0; i < 5; i++) {
