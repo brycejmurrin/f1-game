@@ -708,7 +708,9 @@ function radioTopSlot(root, bcast) {
   const ann = document.getElementById("announce");
   hUnstyle(ann, "--hud-clear-x"); hUnstyle(ann, "--hud-clear-y");
   hUnstyle(ann, "--announce-lane-w");
-  const t = !bcast && _hudTop ? _hudTop.getBoundingClientRect() : null;
+  // Every profile, including BROADCAST, can use the tower's free radio slots.
+  const t = _hudTop ? _hudTop.getBoundingClientRect() : null;
+  void bcast;
   announceLane(root);
   if (radioPlaced()) { hToggle(document.body, "hud-radio-top", false); document.body.removeAttribute("data-radio-corner"); return; }
   let right = window.innerWidth - 10;

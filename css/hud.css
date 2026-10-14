@@ -411,7 +411,6 @@ body.hud-prof-broadcast .hud-gaps {
 }
 /* Cinematic/broadcast cam + broadcast HUD: clean frame — tower carries timing. */
 body.hud-prof-broadcast.hud-bcam .hud-bottom { display: none !important; }
-body.hud-prof-broadcast #announce { top: max(calc(14svh / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px)); }
 
 /* THE CHIP CROSSES TO THE LEFT COLUMN when the right one has no room below the
    sector box — see js/ui/hud.js. --hud-left-h is that column's measured
@@ -917,7 +916,7 @@ body.hud-prof-broadcast.hud-mirror-on :is(#announce, #hud-flag) { --mir-top: cal
    caution rules below step aside (:not(.hud-mirror-side)) — the flag stays
    under the mirror, the card beside it. Portrait / a big HUD SIZE: no room,
    no class, the --mir-bot stack above. */
-body.hud-mirror-on.hud-mirror-side:not(.hud-radio-top) #announce {
+body.hud-mirror-on.hud-mirror-side:not(.hud-radio-top):not([data-radio-corner]) #announce {
   top: var(--mir-top);
   left: calc(var(--mir-side-x) / var(--hud-z));
   transform: none;
@@ -930,7 +929,7 @@ body.hud-mirror-on.hud-mirror-side:not(.hud-radio-top) #announce {
    the view). js/ui/hud.js radioTopSlot() sets body.hud-radio-top and the
    --radio-top-* box in SCREEN px only when a shrunk card fits, so they divide
    by this element's zoom. Outweighs the density and broadcast tops; the
-   beside-the-mirror and caution rules step aside (:not(.hud-radio-top)),
+   beside-the-mirror and caution rules step aside (:not(.hud-radio-top):not([data-radio-corner])),
    since the flag chip under the tower no longer shares the card's column. The
    type floor is --fs-micro, so the shrink is the plate, the padding and the
    message dropping to the name line's size. */
@@ -1235,8 +1234,8 @@ body[data-density="compact"] #announce { --flag-slot-top: max(calc(72px + var(--
 body[data-density="compact"] #announce-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 :root[data-gap-drop] #announce { --flag-slot-top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px), calc(var(--hud-gaps-b, 0px) + 8px)); }
 :root[data-flag-low] #announce { --flag-slot-top: max(calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 8px), calc(var(--hud-gaps-b, 0px) + 8px)); }
-body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
-body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
+body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
+body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
 
 /* ---------- start lights ---------- */
 /* The gantry is driven purely by `els.lights.hidden = true/false` in
@@ -1368,7 +1367,7 @@ body:not(.desktop) #announce {
   overflow: hidden !important;
   visibility: hidden;
 }
-body:not(.desktop):not(.hud-radio-top):not(.hud-mirror-side) #announce {
+body:not(.desktop):not(.hud-radio-top):not([data-radio-corner]):not(.hud-mirror-side) #announce {
   left: calc(var(--announce-lane-x, 50% * var(--hud-z)) / var(--hud-z));
   transform: translateX(var(--announce-lane-shift, -50%));
 }

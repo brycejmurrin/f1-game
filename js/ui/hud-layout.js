@@ -192,6 +192,7 @@ const HudLayout = (function () {
   let foldEl = null;         // the MOVE & SIZE <details>, once built
   let selected = null;       // the element the fold has selected (outlined while peeking)
   let onModeChange = null;   // the fold's repaint, while it is built (style / camera changed)
+  let _pub = false;          // true after this IIFE finishes its first apply (HudLayout is then readable)
 
   function num(v, k) {
     const n = Math.round(Number(v));
@@ -331,6 +332,15 @@ const HudLayout = (function () {
     // A move changes what fitHud measured: let it re-lay the bands out now
     // (js/ui/hud.js; optional — absent at eval and in node harnesses).
     if (typeof GameHud !== "undefined" && GameHud && typeof GameHud.invalidateFit === "function") GameHud.invalidateFit();
+    // REL ships ON in BROADCAST only (js/ui/hud-elements.js). Re-apply the hide
+    // list when the painted style changes so data-hud-hide~=rel tracks it.
+    // Defer until after this IIFE returns: a sync call during init reads
+    // HudLayout while the const is still in TDZ and aborts the script.
+    if (_pub && typeof HudElements !== "undefined" && HudElements && typeof HudElements.apply === "function") {
+      const run = () => { if (body && body.hasAttribute("data-hud-arrange")) return; try { HudElements.apply(); } catch (_) { /* detached / tests */ } };
+      if (typeof queueMicrotask === "function") queueMicrotask(run);
+      else setTimeout(run, 0);
+    }
   }
 
   /* KEEP MOVED PIECES ON SCREEN. An offset chosen on one screen (or at one HUD
@@ -1279,6 +1289,7 @@ const HudLayout = (function () {
 
   function init() { apply(); build(); watchPackUnhide(); watchReadoutSizes(); }
   apply();
+  _pub = true;
   if (doc) {
     if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", init, { once: true });
     else init();

@@ -556,7 +556,7 @@ test("clearControls keeps fit()'s edge-clamp correction when it nudges off a tou
 // ---- per-style layouts, camera groups, hidden reasons, live origin ----------
 // A harness with a body (classes + data-hud-hide), #hud (hidden = not racing),
 // :root attributes and an optional GameHud.
-function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = {}, bodyAttrs = {}, gameHud = null, mirror = null } = {}) {
+function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = {}, bodyAttrs = {}, gameHud = null, mirror = null, hudElements = null, microtasks = null } = {}) {
   const written = Object.assign({}, stored);
   const els = {};
   const byId = {};
@@ -586,6 +586,8 @@ function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = 
   const ctx = { console, document: doc,
     GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } } };
   if (gameHud) ctx.GameHud = gameHud;
+  if (hudElements) ctx.HudElements = hudElements;
+  if (microtasks) ctx.queueMicrotask = (fn) => microtasks.push(fn);
   if (mirror) {
     // MirrorPass.instance() shape used by revealMirror / mirrorMode.
     let mode = mirror.mode || "auto";
@@ -607,6 +609,25 @@ function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = 
   vm.runInContext(SRC + "; this.HudLayout = HudLayout; this.CamGroups = CamGroups;", ctx);
   return { H: ctx.HudLayout, CG: ctx.CamGroups, written, els, cls, hud, rootAttrs, bodyAttrs, byId };
 }
+
+test("queued style visibility preserves arrange ghosts and resumes after exit", () => {
+  const microtasks = [], bodyAttrs = {};
+  let applies = 0;
+  const L = load3({ bodyAttrs, microtasks, hudElements: { apply() { applies++; } } });
+  const flush = () => { while (microtasks.length) microtasks.shift()(); };
+  flush(); const before = applies;
+  L.H.set("map", { x: 3 }, "other");
+  bodyAttrs["data-hud-arrange"] = "1";
+  flush();
+  assert.equal(applies, before, "entering arrange before the microtask keeps hidden ghosts visible");
+  L.H.set("map", { x: 4 }, "other"); flush();
+  assert.equal(applies, before, "dragging while arranging does not restore the hide list");
+  L.H.set("map", { x: 5 }, "other");
+  delete bodyAttrs["data-hud-arrange"]; flush();
+  assert.equal(applies, before + 1, "normal visibility is restored after leaving arrange");
+  L.H.apply(); flush();
+  assert.equal(applies, before + 2, "ordinary profile changes still reapply visibility");
+});
 
 test("migrate: v2 {cockpit, other} becomes STANDARD's; MINIMAL and BROADCAST start shipped", () => {
   const { H } = load3();
@@ -725,7 +746,7 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     "touch TYRES sits on top of the left dock");
   assert.match(css, /body:not\(\.desktop\) #hud-sectors \{[\s\S]*?right:\s*calc\(10px \+ var\(--sar\) \/ var\(--hud-z\) \+ var\(--dock-r-w, 0px\)\)/,
     "phone sectors (tilt/touch/buttons) take the same --dock-r-w clearance as limits/damage");
-  assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x, 50% \* var\(--hud-z\)\) \/ var\(--hud-z\)\)/,
+  assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x, 50% \* var\(--hud-z\)\) \/ var\(--hud-z\)\)/,
     "touch #announce sits in the published dock lane (centred when none is published), not at 10px+sal over TILT's left dock");
   assert.doesNotMatch(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-prof-broadcast\)[^{]*#announce \{[\s\S]*?left: calc\(10px \+ var\(--sal\)/,
     "the under-map announce park is gone — it sat on BRAKE / BOOST / SHIFT");
