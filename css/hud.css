@@ -1090,6 +1090,30 @@ body:not(.desktop) #hud-sectors {
   0% { background: color-mix(in srgb, var(--text) 22%, transparent); }
   100% { background: transparent; }
 }
+/* PORTRAIT READABLE FLOOR (HUD Desk 2026-10-14). Tower labels and sector
+   times ride --hud-z-top; at the old 0.4–0.65 caps --fs-micro 14 painted
+   5.6–9.1 CSS px. Same 10 px convention as the gap-chip clamp and PR #1734:
+   authored size grows as --fs-micro/1.4/z (same 10 px painted floor as
+   the gap-chip clamp) so the shrink-only subFloorFontSize ratchet does
+   not count a new 10px literal. Landscape / tablet portrait untouched.
+   After the compact + .sec-lbl restates so this wins cascade. */
+@media (orientation: portrait) and (max-width: 500px) {
+  body:not(.desktop) .hud-top .hud-label,
+  body:not(.desktop) #hud-sectors,
+  body:not(.desktop)[data-density="compact"] #hud-sectors,
+  body:not(.desktop) .sec-lbl,
+  body:not(.desktop) .sec-val {
+    font-size: max(var(--fs-micro), calc(var(--fs-micro) / 1.4 / var(--hud-z, 1)));
+  }
+  /* A readable sector plate and the centred caution banner cannot share a
+     390 px row. Stack the flag under the plate (the data-flag-low slot). */
+  body:not(.desktop) #hud-flag {
+    top: max(
+      calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 8px),
+      calc(var(--mir-bot, 0px) + 8px)
+    );
+  }
+}
 #hud-limits {
   position: fixed;
   /* DERIVED from #hud-sectors' own box, not guessed: that box is three .sec-row
