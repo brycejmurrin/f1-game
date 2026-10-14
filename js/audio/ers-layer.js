@@ -227,3 +227,4 @@ var ErsLayer = (function () {
     deployHz, harvestHz, deployGain, harvestGain, sustainGain, isLive,
   };
 })();
+Object.freeze(ErsLayer);
