@@ -179,10 +179,96 @@ const WeatherArc = (function () {
     // lighting / AI grip all follow, and frame.wetness ramps via the existing
     // per-frame ramp. Ticked from game.js update() on the fixed physics clock,
     // so it also runs under __apex.headless.
+    //
+    // WETNESS IS A LAGGED STATE, not the arc's linear ramp. The ramp is the
+    // TARGET (from w0 — the road's wetness when the arc was armed — to the
+    // destination's over `dur`); the road chases it as a first-order lag that
+    // wets quickly and dries ~4.5x slower, because standing water takes laps to
+    // clear once rain stops (the slick crossover comes laps after a shower:
+    // https://www.pirelli.com/global/en-ww/race/when-it-s-time-to-change-from-slick-to-wet-tyres-in-formula-1 ).
+    // The lag is solved in CLOSED FORM on the arc's elapsed time (wetAt), so it
+    // is a pure function of the clock — frame-rate independent, and identical
+    // on every peer sharing it. The stage (raceWeather: sky, announce, rain
+    // loop) is read OFF that wetness with the tyre model's own thresholds, so
+    // the road can no longer be inter-wet under a sky that still reads dry. An
+    // arc stays armed past `dur` until the road has settled on its target.
+    const TAU_WET = 8, TAU_DRY = 36;   // s: the lag wetting / drying (4.5x slower)
+    const SETTLE = 0.005;              // |wetness - target| that ends an arc
+    // What a weather means as wetness, and the tread ladder that splits it:
+    // TyreModel's own (wetValue via wetness(w, null); treadFor — 0.25 inter,
+    // 0.72 full wet), with the same numbers inline for a VM with no tyre model.
+    const hasTM = () => typeof TyreModel !== "undefined" && !!TyreModel && !!TyreModel.treadFor;
+    const wetOf = (w) => hasTM() ? TyreModel.wetness(w, null) : (w === "rain" ? 1 : w === "wet" ? 0.5 : 0);
+    const treadOf = (w) => hasTM() ? TyreModel.treadFor(null, w) : (w >= 0.72 ? 2 : w >= 0.25 ? 1 : 0);
+    // THE SHARED RACE CLOCK. game.js snaps raceT to the host's wall clock in a
+    // friend race; summed sim dt drops time to the 5-step cap and background
+    // tabs, so two peers summing dt walked different wetness → different grip.
+    // A stub G without raceT (unit VMs) runs on summed dt instead.
+    let ownT = 0;
+    const now = () => (typeof G.raceT === "number" && Number.isFinite(G.raceT)) ? G.raceT : ownT;
+
+    /** Road wetness `e` s into arc `a`: the exact solution of dw/dt = (target-w)/τ
+     *  for the linear ramp (w(0) = w0), then for the constant target past `dur`. */
+    function wetAt(a, e) {
+      if (!(e > 0)) return a.w0;
+      const w1 = wetOf(a.to), dur = a.dur, s = (w1 - a.w0) / dur, tau = s >= 0 ? TAU_WET : TAU_DRY;
+      const ramp = (u) => a.w0 + s * u - s * tau * (1 - Math.exp(-u / tau));
+      if (e <= dur) return ramp(e);
+      const wE = ramp(dur);
+      return w1 + (wE - w1) * Math.exp(-(e - dur) / (w1 >= wE ? TAU_WET : TAU_DRY));
+    }
+    /** Seconds into `a` at which the road turns inter-wet (0.25): 0 if it
+     *  already is, null if this arc never gets there — what the engineer's
+     *  "rain in N laps" counts to. Monotone within one arc, so bisection. */
+    function wetInOf(a) {
+      if (treadOf(a.w0) >= 1) return 0;
+      if (treadOf(wetOf(a.to)) < 1) return null;
+      let lo = 0, hi = a.dur + 20 * TAU_WET;
+      for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (treadOf(wetAt(a, m)) >= 1) hi = m; else lo = m; }
+      return hi;
+    }
+    /** game.js trackWetness(): the live road wetness. No arc → the weather's
+     *  own value. Cached per arc.t (gripMult reads it per car, per step). */
+    function wetness() {
+      const a = arc;
+      if (!a) return wetOf(G.raceWeather);
+      if (typeof a.w0 !== "number") adopt(a);
+      if (a._wt !== a.t) { a._wt = a.t; a._w = wetAt(a, a.t); }
+      return a._w;
+    }
+    // An arc assigned from outside (G.weatherArc = a restored tuner snapshot).
+    function adopt(a) {
+      a.w0 = wetOf(a.from); a.seq = a.seq || arcSeq(a.from, a.to); a.wetIn = wetInOf(a);
+    }
+    /** The stage the sky shows at road wetness `w`. Between two dry-side
+     *  conditions (overcast ↔ fog) wetness never moves, so that walk keeps
+     *  flipping its stage list by time. */
+    function stageFor(a, w, f) {
+      const w0 = wetOf(a.from), w1 = wetOf(a.to);
+      if (w0 === 0 && w1 === 0 && !(a.w0 > 0)) return a.seq[Math.min(a.seq.length - 1, Math.floor(f * a.seq.length))];
+      const tread = treadOf(w);
+      if (tread >= 2) return "rain";
+      if (tread >= 1) return "wet";
+      return w1 === 0 ? a.to : w0 === 0 ? a.from : "dry";
+    }
+
+    /** Arm an arc. A call while one is live RE-TARGETS it: the new ramp starts
+     *  from the road's wetness NOW, not `from`'s nominal value, so grip does
+     *  not jump; and `from === to` is then allowed — a dry→rain arc still
+     *  reading "dry" can be sent back to dry. An arc armed outside a race
+     *  starts at the green (raceT 0, the instant every peer zeroes). */
     function startArc(from, to, dur) {
-      if (VALID.indexOf(from) < 0 || VALID.indexOf(to) < 0 || from === to) return null;
-      arc = { from, to, t: 0, dur: Math.max(1, dur || 60), seq: arcSeq(from, to) };
-      if (G.raceWeather !== from) setWeatherLive(from);
+      if (VALID.indexOf(from) < 0 || VALID.indexOf(to) < 0) return null;
+      const live = !!arc;
+      const w0 = live ? wetness() : wetOf(from);
+      if (from === to && (!live || Math.abs(w0 - wetOf(to)) < SETTLE)) {
+        if (live) { arc = null; if (G.raceWeather !== to) setWeatherLive(to, true); }
+        return null;
+      }
+      const t0 = (typeof G.raceT === "number" && G.state !== "race") ? 0 : now();
+      arc = { from, to, t: 0, dur: Math.max(1, dur || 60), seq: arcSeq(from, to), w0, t0, _tt: 0 };
+      arc.wetIn = wetInOf(arc);
+      if (!live && G.raceWeather !== from) setWeatherLive(from);
       return arc;
     }
     function tick(dt) {
@@ -190,21 +276,23 @@ const WeatherArc = (function () {
       // the frame rate); the physics tick only stands in for it when no render
       // runs (headless look=drive), else the lag integrated twice per frame and
       // ramped at ~2x the 0.8/s that frame.rain uses.
+      if (dt > 0) ownT += dt;
       if (G.headlessMode) syncWetness(dt);
       if (!arc) return;
-      arc.t += dt;
+      if (typeof arc.w0 !== "number") adopt(arc);
+      // Progress is READ off the shared clock, never summed. A written arc.t
+      // (a test, the tuner, a seek) re-bases t0 so the poke sticks.
+      if (arc.t0 == null || arc.t !== arc._tt) arc.t0 = now() - (arc.t || 0);
+      arc.t = arc._tt = Math.max(0, now() - arc.t0);
       const f = Math.min(1, arc.t / arc.dur);
-      const seq = arc.seq;
-      const want = seq[Math.min(seq.length - 1, Math.floor(f * seq.length))];
+      const w = wetness();
+      const want = stageFor(arc, w, f);
       if (G.raceWeather !== want) { setWeatherLive(want, true); G.announce("WEATHER: " + want.toUpperCase(), 2, "info"); }
       // The rain follows WETNESS (isWetRoad ≥ 0.25 shows the field, isRaining
-      // ≥ 0.72 picks the storm tier and the rain loop), which an arc ramps
-      // continuously — and the stage flips above land off those lines: rain→dry
-      // flips "dry" at 0.333 (still wet, so it seeded and showed), dry→rain
-      // flips "rain" at 0.667 (still drizzle). Until 2026-10-04 only the audio
-      // was re-decided here, so a drying race left a frozen box of streaks
-      // hanging for the rest of it and a storm ran on drizzle-tier drops.
-      // Re-decide visibility, tier and loop on each crossing.
+      // ≥ 0.72 picks the storm tier and the rain loop). The stage now reads the
+      // same wetness, but an overcast/fog walk still flips by time, so show,
+      // tier and loop are re-decided on each crossing (until 2026-10-04 a
+      // drying race left a frozen box of streaks for the rest of it).
       const wet = G.isWetRoad(), raining = G.isRaining();
       if (arc.wet !== undefined && (wet !== arc.wet || (wet && raining !== arc.raining))) {
         if (wet) G.initRainDrops();   // reseed: drizzle below 0.72, storm above
@@ -214,9 +302,9 @@ const WeatherArc = (function () {
         if (arc.raining !== undefined && G.soundOn) { if (raining) GameAudio.startRain(); else GameAudio.stopRain(); }
       }
       arc.wet = wet; arc.raining = raining;
-      if (f >= 1) {
+      if (f >= 1 && Math.abs(w - wetOf(arc.to)) < SETTLE) {
         if (G.raceWeather !== arc.to) setWeatherLive(arc.to, true);
-        arc = null;   // arc complete — weather stays at `to`
+        arc = null;   // the road has settled — weather stays at `to`
       }
     }
 
@@ -240,7 +328,7 @@ const WeatherArc = (function () {
 
     return {
       setWeatherLive, setTimeOfDay, weather,
-      startArc, tick, syncWetness, planFor, startChangeable, endChangeable, restoreBase, endSession,
+      startArc, tick, syncWetness, wetness, planFor, startChangeable, endChangeable, restoreBase, endSession,
       get arc() { return arc; }, set arc(v) { arc = v; },
       get changeable() { return changeable; }, set changeable(v) { changeable = v; },
       get plan() { return plan; }, set plan(v) { plan = v; },
