@@ -228,11 +228,14 @@ export const RULES = [
   [/^js\/career\/custom-team\.js/, ["car"], "custom-team.spec.js"],
   [/^js\/car\/helmets\.js/, ["garage-unit"], "helmets.test.mjs"],
   [/^js\/car\/car-shade\.js/, ["garage-unit"], "car-shade.test.mjs"],
+  [/^js\/car\/car-materials\.js/, ["garage-unit"], "car-materials.test.mjs"],
+  [/^js\/car\/car-material-shade\.js/, ["garage-unit"], "car-materials.test.mjs"],
   [/^js\/garage\/setup-tune\.js/, ["garage-unit"], "setup-tune.test.mjs"],
   [/^js\/render\/shared\/driving-line\.js/, ["sweeps"], "driving-line.test.mjs"],
   [/^js\/ui\/driving-line-opts\.js/, ["sweeps"], "driving-line-opts.test.mjs"],
   [/^js\/ui\/debris-opts\.js/, ["state-unit"], "debris-opts.test.mjs"],
   [/^js\/ui\/appearance-opts\.js/, ["state-unit"], "appearance-opts.test.mjs"],
+  [/^js\/ui\/a11y-opts\.js/, ["state-unit"], "a11y-opts.test.mjs"],
   [/^js\/ui\/hud-elements\.js/, ["state-unit", "ui"], "hud-elements.test.mjs"],
   [/^js\/ui\/hud-(relative|strategy|inputs)\.js/, ["state-unit", "ui"], "hud-relative / hud-strategy / hud-inputs .test.mjs"],
   [/^js\/ui\/hud-tyres\.js/, ["state-unit", "ui"], "hud-tyres.test.mjs"],
@@ -281,7 +284,9 @@ export const RULES = [
   // either. Without baseline here a type-metric or art change ships unseen:
   // that is incident 2026-09-16, where an 8 -> 9 px garage tab label went red
   // on the deploy branch and blocked five consecutive Pages runs.
-  [/^css\/menus\.css/, ["ui", "baseline"], "the menu chrome: only the blessed PNGs in menu-baseline.spec.js see it"],
+  // carsetup/tokens/select.css paint the same blessed screens (the garage
+  // panel, the global type and colour tokens, the picker), so they ride along.
+  [/^css\/(menus|carsetup|tokens|select)\.css/, ["ui", "baseline"], "the menu chrome: only the blessed PNGs in menu-baseline.spec.js see it"],
   [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],
   // Two rules, because "script tags + DOM shell" is LOAD-BEARING: it is one of
   // select-specs' BOOT_FALLBACK_REASONS, the strings that let node-plan.mjs

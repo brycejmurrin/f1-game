@@ -240,6 +240,59 @@
     depthMat.lights = false;
     depthMat.customProgramCacheKey = () => "tlx-depth";
 
+    // A-H4 (perf hunt 4) — THE ATTRIBUTE-INSTANCED CASTER. The batch caster was a padded InstancedMesh (past the
+    // UBO limit: 1025 x 64 B a batch on WebGPU) with DynamicDrawUsage, because three relays an InstancedMesh's
+    // instanceMatrix into the buffer it draws ONCE PER FRAME per render object (Instance.js, the BEFORE_FRAME node
+    // update): a Stream caster rewritten between the sun and lamp passes of one frame drew the earlier rows
+    // (tlx-hunt4.test.mjs), and only Dynamic re-sent it per render() — the whole padded array, changed or not, on
+    // every draw after a pass's first of the frame (~2.1 MB on a WebGPU sun-rebuild frame, hunt 4 G4). It is now a
+    // plain Mesh drawing `count` instances from iM0..3 over its OWN instance-rate buffer (tlx.js _aiMesh, the prop
+    // batches' path since hunt 3 A2). A geometry attribute is version-checked at EVERY render() that draws it
+    // (Geometries.updateForRender), never relayed per frame, so a rewrite before the lamp pass reaches the lamp
+    // pass by construction; StreamDrawUsage uploads exactly the rows a cast wrote (the range below) and nothing on
+    // a render that wrote none. No UBO pad: the program text names no object (the attributes are read by NAME),
+    // so every caster of a vertex layout still shares one depth program, at the batch's real instance count.
+    // Depth is identical by construction: the same mat4 x positionLocal as three's instance step (_aiInstance is
+    // r186 NodeMaterial.setupPosition's, verbatim in shape — tlx.js's copy), the same identity matrixWorld,
+    // material state and colour node. Render objects: one per batch caster, as before. apex26.tlxCasterAttr=0
+    // restores the padded Dynamic InstancedMesh exactly (the A/B handle).
+    let casterAttr = true;
+    try { casterAttr = localStorage.getItem("apex26.tlxCasterAttr") !== "0"; } catch (_) { /* no storage: on */ }
+    const _aiInstance = TSL.Fn((_, builder) => {
+      const iM = TSL.mat4(TSL.attribute("iM0", "vec4"), TSL.attribute("iM1", "vec4"),
+        TSL.attribute("iM2", "vec4"), TSL.attribute("iM3", "vec4"));
+      TSL.positionLocal.assign(iM.mul(TSL.positionLocal).xyz);
+      if (builder.hasGeometryAttribute("normal")) TSL.normalLocal.assign(TSL.transformNormal(TSL.normalLocal, iM));
+    }, "void");
+    let depthMatAI = null;   // depthMat's twin on the instance step, made with the first attribute caster
+    function attrDepthMat() {
+      if (depthMatAI) return depthMatAI;
+      const m = new THREE.MeshBasicNodeMaterial();
+      m.colorNode = depthMat.colorNode;
+      m.colorWrite = depthMat.colorWrite;
+      m.side = depthMat.side;
+      m.fog = false;
+      m.lights = false;
+      m.customProgramCacheKey = () => "ai-tlx-depth";
+      const setup = m.setupPosition;
+      m.setupPosition = function (builder) { _aiInstance(); return setup.call(this, builder); };
+      return (depthMatAI = m);
+    }
+    // A plain Mesh whose `instanceMatrix` IS its instance-rate buffer (array, updateRanges, needsUpdate, count:
+    // the surface castInstanced and tlx.js's C5 in-place shadow pack already use).
+    function attrCaster(geo, n) {
+      const ib = new THREE.InstancedInterleavedBuffer(new Float32Array(Math.max(1, n) * 16), 16, 1);
+      ib.setUsage(THREE.StreamDrawUsage);
+      for (let c = 0; c < 4; c++) geo.setAttribute("iM" + c, new THREE.InterleavedBufferAttribute(ib, 4, c * 4));
+      const m = new THREE.Mesh(geo, attrDepthMat());
+      m.instanceMatrix = ib; m.count = n;
+      return m;
+    }
+    // A Mesh has no dispose(): its "dispose" event is what drops the render object (tlx.js dropWrapper).
+    function disposeCaster(m) {
+      try { if (m.isInstancedMesh) m.dispose(); else m.dispatchEvent({ type: "dispose" }); } catch (_) { /* */ }
+    }
+
     // caster scene + pooled mesh wrappers (the tlx.js draw-list pattern)
     const castScene = new THREE.Scene();
     castScene.matrixWorldAutoUpdate = false;
@@ -335,17 +388,22 @@
       const n = culled ? Math.min(count | 0, batch.instances | 0) : (batch.instances | 0);
       if (!(n > 0)) return;
       let m = iByBatch.get(batch);
-      if (!m || m.geometry.userData.casterOf !== batch.geo) {
-        if (m) { const ix = iCast.indexOf(m); if (ix >= 0) iCast.splice(ix, 1); castScene.remove(m); try { m.dispose(); } catch (_) { /* */ } freeCasterGeo(m); }
-        m = new THREE.InstancedMesh(casterGeo(batch.geo), depthMat, sharedInstCap(batch.instances | 0));
+      if (!m || m.geometry.userData.casterOf !== batch.geo || (!m.isInstancedMesh && m.instanceMatrix.count < (batch.instances | 0))) {
+        if (m) { const ix = iCast.indexOf(m); if (ix >= 0) iCast.splice(ix, 1); castScene.remove(m); disposeCaster(m); freeCasterGeo(m); }
+        if (casterAttr) {
+          // A-H4: a plain Mesh on Stream, sized at the batch, no pad (the note at attrCaster).
+          m = attrCaster(casterGeo(batch.geo), Math.max(1, batch.instances | 0));
+        } else {
+          m = new THREE.InstancedMesh(casterGeo(batch.geo), depthMat, sharedInstCap(batch.instances | 0));
+          // DYNAMIC, not Stream (tlx.js A-H1 moved the plain-Mesh batches to Stream): three relays an
+          // InstancedMesh's instanceMatrix into its draw buffer once per frame per render object, and a caster
+          // is rewritten per cast — a Stream caster redrawn by the same pass after a rewrite keeps the earlier
+          // rows (measured, tlx-hunt4.test.mjs). Only Dynamic re-sends it per render(); the price is the whole
+          // padded array on every draw after a pass's first of the frame (apex26.tlxCasterAttr=0 only, A-H4).
+          m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        }
         m.matrixAutoUpdate = false;
         m.frustumCulled = false;
-        // DYNAMIC, not Stream (tlx.js A-H1 moved the plain-Mesh batches to Stream): three relays an
-        // InstancedMesh's instanceMatrix into its draw buffer once per frame per render object, and a caster
-        // is rewritten per cast — a Stream caster redrawn by the same pass after a rewrite keeps the earlier
-        // rows (measured, tlx-hunt4.test.mjs). Only Dynamic re-sends it per render(); the price is the whole
-        // padded array on every draw after a pass's first of the frame (A-H4 moves the caster to Stream).
-        m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         // Do not set instanceColor. The lit batch already carries an
         // InstancedBufferAttribute `color` on the shared geometry; a second
         // instance-rate colour slot is what Dawn rejected at slot 5
@@ -374,7 +432,7 @@
         const psrc = batch.packMatrices;
         for (let i = 0; i < n; i++) {
           _castMat.fromArray(psrc, i * 16);
-          m.setMatrixAt(i, _castMat);
+          if (m.isInstancedMesh) m.setMatrixAt(i, _castMat); else _castMat.toArray(dst, i * 16);   // setMatrixAt's own write
         }
       }
       // Upload only the rows written: the padding above the UBO limit is never
@@ -437,7 +495,7 @@
       const ix = iCast.indexOf(m);
       if (ix >= 0) iCast.splice(ix, 1);
       castScene.remove(m);
-      try { m.dispose(); } catch (_) { /* */ }
+      disposeCaster(m);
       freeCasterGeo(m);
     }
 
@@ -673,6 +731,19 @@
       return true;
     }
 
+    // Every caster that holds real geometry, shown for a warm (compile or draw); hideCasters undoes it.
+    function showAllCasters() {
+      const shown = [];
+      for (const pl of pools.values()) {
+        for (const m of pl.pool) if (m.geometry !== parkedGeo && !m.visible) { m.visible = true; shown.push([m, -1]); }
+      }
+      for (const m of iByBatch.values()) {
+        if (!m.visible || !(m.count > 0)) { shown.push([m, m.count]); m.visible = true; if (!(m.count > 0)) m.count = 1; }
+      }
+      return shown;
+    }
+    function hideCasters(shown) { for (const [m, count] of shown) { m.visible = false; if (count >= 0) m.count = count; } }
+
     return {
       S,
       // WARM THE CASTER PROGRAMS DURING THE LIGHTS. castScene is its own Scene,
@@ -688,13 +759,7 @@
         // casters. Show every caster that holds real geometry for the compile,
         // then restore. Pipelines key on material + layout + target, so one
         // visible caster per layout is what each target needs.
-        const shown = [];
-        for (const pl of pools.values()) {
-          for (const m of pl.pool) if (m.geometry !== parkedGeo && !m.visible) { m.visible = true; shown.push([m, -1]); }
-        }
-        for (const m of iByBatch.values()) {
-          if (!m.visible || !(m.count > 0)) { shown.push([m, m.count]); m.visible = true; if (!(m.count > 0)) m.count = 1; }
-        }
+        const shown = showAllCasters();
         try {
           if (sunRT) { renderer.setRenderTarget(sunRT); await renderer.compileAsync(castScene, shadowCam); }
           // The lamp maps carry depth32float when L1 is on and the car map its own
@@ -706,9 +771,37 @@
           }
           if (blockerQuad && blockerRT) { renderer.setRenderTarget(blockerRT); await renderer.compileAsync(blockerQuad, blockerQuad.camera); }
         } finally {
-          for (const [m, count] of shown) { m.visible = false; if (count >= 0) m.count = count; }
+          hideCasters(shown);
           try { renderer.setRenderTarget(prev); } catch (_) { /* already unbound */ }
         }
+      },
+      // A-W1 DRAW WARM (tlx.js startProgramWarm's last stage): every caster
+      // DRAWN once per distinct depth-target configuration, into a 1x1 scratch
+      // target built by makeDepthTarget with the live target's formats — the
+      // pipeline keys and three's render context (count:format:type:samples:
+      // depth:stencil) are the live ones', so the driver's first-draw work
+      // lands here. Never the live maps: the sun map is snap-cached across
+      // frames, so even one texel drawn into it would show. Returns the number
+      // of configurations drawn.
+      drawWarm() {
+        const prev = renderer.getRenderTarget(), shown = showAllCasters(), seen = new Set();
+        let n = 0;
+        try {
+          for (const rt of [sunRT, carRT, lampRT, lampStaticRT]) {
+            if (!rt) continue;
+            const hdr = rt.texture.type === THREE.FloatType, fd = !!(rt.depthTexture && rt.depthTexture.type === THREE.FloatType);
+            const key = hdr + "|" + fd;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const tmp = makeDepthTarget(1, "TLXWarmCast", hdr, fd);
+            try { renderer.setRenderTarget(tmp); renderer.render(castScene, shadowCam); n++; }
+            finally { tmp.dispose(); }
+          }
+        } finally {
+          hideCasters(shown);
+          try { renderer.setRenderTarget(prev); } catch (_) { /* already unbound */ }
+        }
+        return n;
       },
       carShadowKeep, lampShadowKeep,
       sunSize: SUN_SIZE,

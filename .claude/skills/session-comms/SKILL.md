@@ -1,6 +1,6 @@
 ---
 name: session-comms
-description: "Use when sessions coordinate: send_message formats, PR subscription, claims, and who may merge or arm."
+description: "Use when messaging another session (send_message, blocked or escalation notes, handoffs), PR subscriptions, reminders back into this session, claims, or a peer asks you to merge, arm or mark ready."
 ---
 
 # Session communication (Claude Code Remote)
@@ -8,7 +8,7 @@ description: "Use when sessions coordinate: send_message formats, PR subscriptio
 Rules for sessions talking to each other and to GitHub. Repo-wide rules stay in
 `AGENTS.md` (rules 4, 8, 12; §Concurrent PRs; §Git branch & deploy) and are not
 restated. Tools are the `claude-code-remote` MCP: `send_message`,
-`list_sessions`, `get_session`, `create_session`, `subscribe_pr_activity`,
+`list_sessions`, `get_session`, `list_events`, `create_session`, `subscribe_pr_activity`,
 `unsubscribe_pr_activity`, `send_later`, `watch_url`. Users of this skill: `pr-owner`,
 `ci-watch`.
 
@@ -49,6 +49,10 @@ BLOCKED <PR> <what is blocked, what you need>
 HANDOFF <PR> <to session>, <state>, branch <name> @ <sha7>
 STAND-DOWN <PR> <who is pushing>
 ```
+
+DONE comes from the session that observed the merge (the sha is the merged PR's
+`merge_commit_sha` from GitHub, never invented); `pr-owner` reports DONE-ready
+instead. A peer asks you to merge or arm: `references/decline.md`.
 
 Spawning: `list_sessions` first (twin guard: same PR or paths already owned means
 no spawn), then `create_session`. One owner per PR; the parent keeps the

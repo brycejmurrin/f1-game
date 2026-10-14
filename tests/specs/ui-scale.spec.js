@@ -232,6 +232,24 @@ test.describe("UI scale", () => {
         expect(Math.abs(after[i][2] - before[i][2]), after[i][0] + " height at HUD " + scale).toBeLessThan(.5);
       }
     }
+    const positions = await page.evaluate(async () => {
+      const snap = () => ["btn-brake", "btn-throttle", "btn-boost", "btn-ot", "btn-aero"].map(id => {
+        const r = document.getElementById(id).getBoundingClientRect();
+        return [r.x, r.y, r.width, r.height];
+      });
+      await new Promise(resolve => setTimeout(resolve, 180));
+      const samples = [snap()];
+      for (let i = 0; i < 3; i++) {
+        HudLayout.fit(); GameHud.invalidateFit();
+        await new Promise(resolve => setTimeout(resolve, 180));
+        samples.push(snap());
+      }
+      return samples;
+    });
+    for (const sample of positions.slice(1)) for (let i = 0; i < sample.length; i++) {
+      for (let axis = 0; axis < 4; axis++) expect(Math.abs(sample[i][axis] - positions[0][i][axis]),
+        "repeated placement keeps button positions and dimensions stable").toBeLessThan(.5);
+    }
     await page.evaluate(() => __apex.btnScale(80));
     const smaller = await sizes();
     expect(smaller[0][1]).toBeLessThan(before[0][1]);

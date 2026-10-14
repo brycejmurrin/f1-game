@@ -12,7 +12,8 @@ const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
 test("title 2-up rows share equal flex cells and fill them", () => {
   const menus = readCssSource("css/menus.css");
   assert.match(menus, /#menu-primary, #menu-explore\s*\{[^}]*--balance-min:\s*calc\(50%/);
-  assert.match(menus, /#menu-secondary\s*\{[^}]*--balance-basis:\s*5\.5rem/);
+  assert.match(menus, /#menu-secondary\s*\{[^}]*--balance-basis:\s*calc\(50%/);
+  assert.match(menus, /#menu-secondary\s*\{[^}]*--balance-min:\s*calc\(50%/);
   assert.match(menus, /#menu-primary, #menu-explore, #menu-secondary\s*\{[^}]*gap:\s*calc\(var\(--gap\) \* 0\.7\)/);
   assert.match(
     menus,
@@ -185,6 +186,8 @@ test("CONTINUE + Daily stack the save line under the label, not beside it", () =
   // "2026 · ROU…" / "MONTREA…". Compact-wide already stacked. An
   // unscoped column flex also moved 1440 title-desktop.png (6%,
   // CI 37371854254) — keep the stack under 1366px only.
+  // Label-over-sub lives on `> span` (column). The button stays row so the
+  // leading .btn-ico sits beside that stack instead of above it.
   const menus = readCssSource("css/menus.css");
   assert.match(
     menus,
@@ -193,8 +196,8 @@ test("CONTINUE + Daily stack the save line under the label, not beside it", () =
   );
   assert.match(
     menus,
-    /#menu-retention \.bigbtn \{[^}]*flex-direction:\s*column/,
-    "retention chips stack label over sub under that cap",
+    /#menu-retention \.bigbtn > span \{[^}]*flex-direction:\s*column|#menu-retention \.bigbtn > span,\s*\n?#menu-primary \.bigbtn > span,\s*\n?#menu-explore \.bigbtn > span \{[^}]*flex-direction:\s*column/,
+    "retention chips stack label over sub via the inner span column",
   );
   assert.match(
     menus,
@@ -235,8 +238,13 @@ test("mid-wide title rooms keep one-line labels and air under the utility row", 
   );
   assert.match(
     menus,
-    /@media \(max-width:\s*899px\) \{[\s\S]*?#menu-buttons :is\(#menu-explore, #menu-secondary\) \.bigbtn \{ white-space: nowrap/,
-    "WATCH / TRACK DESIGNER / HOW TO PLAY stay one line under 899px",
+    /@media \(max-width:\s*899px\) \{[\s\S]*?#menu-buttons :is\(#menu-explore, #menu-secondary\) \.bigbtn \{[\s\S]*?white-space:\s*normal/,
+    "#1537: WATCH / TRACK DESIGNER / HOW TO PLAY wrap (not nowrap-clip) under 899px",
+  );
+  assert.match(
+    menus,
+    /text-wrap:\s*balance/,
+    "#1537: phone title doors use balanced wrap before any ellipsis",
   );
   assert.match(
     menus,
@@ -340,6 +348,32 @@ test("title explore: #mb-watch is WATCH with BROADCAST / REAL RACES in .mb-sub",
   );
   assert.doesNotMatch(html, /id="mb-watch"[^>]*>[\s\S]*?WATCH REAL RACES/,
     "must not keep the long one-line WATCH REAL RACES label");
+});
+
+test("title explore doors carry leading .btn-ico like the play-now row", () => {
+  // WATCH / PRACTICE / PHOTO / GARAGE shipped without icons while RACE /
+  // TIME TRIAL / etc. had Lucide strokes — desktop title looked uneven.
+  const html = read("index.html");
+  for (const id of ["mb-watch", "mb-practice", "mb-photo", "mb-garage"]) {
+    assert.match(
+      html,
+      new RegExp(`<button id="${id}"[^>]*>\\s*<svg class="btn-ico"`),
+      `#${id} opens with a leading .btn-ico`,
+    );
+  }
+});
+
+test("title retention doors carry leading .btn-ico like the play-now row", () => {
+  // CONTINUE / DAILY TIME TRIAL were the last title tiles without Lucide
+  // strokes while CAREER / RACE / explore / rooms all had them.
+  const html = read("index.html");
+  for (const id of ["mb-continue", "mb-daily"]) {
+    assert.match(
+      html,
+      new RegExp(`<button id="${id}"[^>]*>\\s*<svg class="btn-ico"`),
+      `#${id} opens with a leading .btn-ico`,
+    );
+  }
 });
 
 test("title menu: the doors the script re-names start with their visible label", () => {

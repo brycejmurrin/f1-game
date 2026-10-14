@@ -678,16 +678,49 @@ function radioTopSlot(root, bcast) {
     const sec = els.hudSectors;
     bound(sec && !sec.hidden ? sec.getBoundingClientRect() : null, true, wrapBot);
   }
-  const fits = !!(t && t.width && t.height) && right - RADIO_TOP_GAP - x >= RADIO_TOP_MIN;
-  hToggle(document.body, "hud-radio-top", fits);
-  if (!fits) return;
+  const lit = !!(t && t.width && t.height);
+  let slot = lit && right - RADIO_TOP_GAP - x >= RADIO_TOP_MIN
+    ? { x, y: t.top, w: right - RADIO_TOP_GAP - x, h: t.height } : null;
+  if (!slot && lit) slot = radioUnderRight(t);
+  // The corner is an ATTRIBUTE, not hud-radio-top: body.className keys the fit/lane/root-var
+  // memos, and a class flipping between passes broke hud-fit-idempotent (--dock-r-w).
+  const corner = !!(slot && slot.corner), b = document.body;
+  hToggle(b, "hud-radio-top", !!slot && !corner);
+  if (b.toggleAttribute && b.hasAttribute("data-radio-corner") !== corner) b.toggleAttribute("data-radio-corner", corner);
+  if (!slot) return;
+  if (slot.corner) hStyle(root, "--radio-top-r", (vpW() - slot.x - slot.w).toFixed(1) + "px");
   // MOVE & SIZE then scales the card itself (#announce, origin top left), so
   // the slot is published at 1/SIZE: the PAINTED card fills it, not s times it.
   const a = els.announce, as = a && a.style && a.hasAttribute && a.hasAttribute("data-hl") ? +a.style.getPropertyValue("--hl-s") || 1 : 1;
-  hStyle(root, "--radio-top-x", x.toFixed(1) + "px");
-  hStyle(root, "--radio-top-y", t.top.toFixed(1) + "px");
-  hStyle(root, "--radio-top-w", ((right - RADIO_TOP_GAP - x) / as).toFixed(1) + "px");
-  hStyle(root, "--radio-top-h", (t.height / as).toFixed(1) + "px");
+  hStyle(root, "--radio-top-x", slot.x.toFixed(1) + "px");
+  hStyle(root, "--radio-top-y", slot.y.toFixed(1) + "px");
+  hStyle(root, "--radio-top-w", (slot.w / as).toFixed(1) + "px");
+  hStyle(root, "--radio-top-h", (slot.h / as).toFixed(1) + "px");
+}
+// THE TOP-RIGHT CORNER, SECOND CHOICE ("top right by the camera selector", 2026-10-14): on 844x390 the
+// strip right of the tower is ~70px. Hangs from the tower's bottom, right of centre (clears the centred
+// flag chip), right-aligned against CAM / PAUSE / the sector plate; anything lit in those rows (HUD mirror
+// or chip, gaps chip, dock groups, the flag) bounds it from its side. Anchored by its RIGHT edge
+// (--radio-top-r) so a short message sits beside CAM; null under RADIO_TOP_MIN.
+const RADIO_UNDER_H = 36, RADIO_UNDER_MAXW = 260, RADIO_UNDER_GAP = 4, RADIO_UNDER_MIN = 96;
+function radioUnderRight(t) {
+  let R = vpW() - 10, L = Math.max(t.left, vpW() / 2 + RADIO_TOP_GAP);
+  for (const el of [els.btnCam, els.pausebtn, els.hudSectors]) { if (!el || el.hidden) continue;
+    const r = el.getBoundingClientRect(); if (r.width && r.left > t.left + t.width / 2) R = Math.min(R, r.left); }
+  R -= RADIO_TOP_GAP;
+  const y = t.bottom + RADIO_UNDER_GAP, bot = y + RADIO_UNDER_H;
+  const obst = [document.getElementById("hud-mirror"), document.getElementById("hud-mirror-chip"),
+    els.gapA ? els.gapA.parentNode : null, els.flag];
+  for (const d of [_dockL, _dockR]) if (d) for (const g of d.children) obst.push(g);
+  for (const el of obst) {
+    if (!el || el.hidden || !el.getBoundingClientRect) continue;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height || r.top >= bot || r.bottom <= y) continue;
+    if ((r.left + r.right) / 2 >= R) R = Math.min(R, r.left - RADIO_TOP_GAP);
+    else L = Math.max(L, r.right + RADIO_TOP_GAP);
+  }
+  const w = Math.min(R - L, RADIO_UNDER_MAXW);
+  return w >= RADIO_UNDER_MIN ? { x: R - w, y, w, h: RADIO_UNDER_H, corner: true } : null;
 }
 // THE PAINTED GUARANTEE, one function for every caller: fitHud runs it last, invalidateFit right
 // after its own radioTopSlot (which alone could relight hud-radio-top over the tower until the next
@@ -712,6 +745,7 @@ function radioPaintedCollapse(root) {
     const tower = _hudTop || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
     if (hit(els.hudSectors) || hit(tower)) {
       hToggle(document.body, "hud-radio-top", false);
+      if (document.body.removeAttribute) document.body.removeAttribute("data-radio-corner");
       const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();
       hStyle(root, "--announce-lane-x", (salPx + RADIO_TOP_GAP).toFixed(1) + "px");
       hStyle(root, "--announce-lane-shift", "0%");
@@ -2110,7 +2144,8 @@ function updateHud(force, dtMs) {
       }
     }
     if (_blue !== !!blueCar) { _blue = !!blueCar; hData(els.flag, "flag", _blue ? "blue" : null); }
-    if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; }
+    // A flag chip appearing or going re-picks the radio slot (radioUnderRight steps right of it).
+    if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; if (_invalidateFit) _invalidateFit(); }
   }
   // Stamp only after REL, sector rows and announce lane for this tick — fitHud
   // runs at tick start and must not publish early (CI: stamp green, S3×BOOST).

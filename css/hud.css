@@ -912,7 +912,27 @@ body.hud-radio-top #announce:not([hidden]) {
   line-height: 1.15;
   --radio-num: 18px;
 }
-body.hud-radio-top #announce-body {
+/* THE TOP-RIGHT CORNER, SECOND CHOICE (js/ui/hud.js radioUnderRight): under
+   the tower's right end, beside CAM, anchored by its RIGHT edge so a short
+   message still sits by the camera selector. body[data-radio-corner], not
+   hud-radio-top (see radioTopSlot). It must outrank the caution rules'
+   :has(#hud-flag:not([hidden])) step-down, up to (2,5,1) under compact density
+   and later in the file: the same :has() term plus a quadrupled attribute make
+   this (2,6,1). The slot already clears the
+   flag chip, so stepping down under it would land the card on INPUTS. */
+body[data-radio-corner][data-radio-corner][data-radio-corner][data-radio-corner]:has(#hud-flag) #announce:not([hidden]):not([data-lane-collapsed]) {
+  top: calc(var(--radio-top-y) / var(--hud-z));
+  left: auto;
+  right: calc(var(--radio-top-r) / var(--hud-z));
+  transform: none;
+  min-width: 0;
+  max-width: calc(var(--radio-top-w) / var(--hud-z));
+  min-height: calc(var(--radio-top-h) / var(--hud-z));
+  font-size: var(--fs-micro);
+  line-height: 1.15;
+  --radio-num: 18px;
+}
+body:is(.hud-radio-top, [data-radio-corner]) #announce-body {
   justify-content: center; gap: 0;
   padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.6);
 }
@@ -1564,6 +1584,7 @@ body:has(.dock .touchbtn:not([hidden])) :is(#hud-ot, #hud-aero)[data-hl] {
 body[data-hud-arrange] [data-hl-arr] { pointer-events: auto; cursor: move; touch-action: none; outline: 2px dashed var(--dim); outline-offset: 3px; }
 body[data-hud-arrange] [data-hl-arr][data-hl-clash] { outline: 2px solid var(--slower); }
 body[data-hud-arrange] #hud-dock .touchbtn { opacity: 0.35; }
+body[data-hud-arrange] [data-hl-arr][data-hl-off] { opacity: 0.35; outline-style: dotted; }   /* hidden in the race: a ghost while arranging */
 #photo-controls > * { pointer-events: auto; }
 /* UI SIZE APPLIES TO THE FLY-CAM CONTROLS TOO. They sit beside the LIGHTING
    TUNER, which is a `.sheet` and therefore carries `zoom: var(--ui-scale)`
@@ -2076,7 +2097,7 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 /* Optional panels retain their text size when space only holds one row. */
 #hud-rel[data-col-compact] > div:not([data-col-row]),
 #hud-strat[data-col-compact] > div:not([data-k="next"]) { display: none; }
-:is(#hud-rel, #hud-strat)[data-col-drop] { display: none !important; }
+:is(#hud-rel, #hud-strat, #hud-inputs)[data-col-drop] { display: none !important; }
 #hud-rel [data-k="gap"] { text-align: right; }
 #hud-rel [data-k="code"] { font-weight: 800; letter-spacing: 0.04em; }
 #hud-rel [data-k="lap"] { font-weight: 800; }

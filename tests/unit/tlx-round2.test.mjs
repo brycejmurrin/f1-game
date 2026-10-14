@@ -16,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 const TLX = read("js/render/three/tlx.js");
-const CORE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.0/three.core.min.js")).href);
+const CORE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.core.min.js")).href);
 
 const mk = () => new Proxy(function () {}, {
   get: (t, k) => (k === Symbol.toPrimitive ? () => 0 : k === "then" ? undefined : mk()),
@@ -44,7 +44,8 @@ function batchOf(n = 4) {
   const srcMatrices = new Float32Array(n * 16);
   return { geo, instances: n, srcMatrices };
 }
-const casters = (rendered) => rendered[rendered.length - 1].children.filter((o) => o.isInstancedMesh);
+// A caster: the attribute-instanced Mesh (A-H4, default) or the tlxCasterAttr=0 InstancedMesh — both draw a clone.
+const casters = (rendered) => rendered[rendered.length - 1].children.filter((o) => o.isInstancedMesh || !!(o.geometry && o.geometry.userData.casterOf));
 function castOnce(h, batch) {
   h.rendered.length = 0;
   h.sys.shadowBegin(new Float32Array(16));
@@ -53,7 +54,7 @@ function castOnce(h, batch) {
   return casters(h.rendered);
 }
 
-test("TLX-06: the instanced caster draws its own shallow geometry, one InstancedMesh per geometry", () => {
+test("TLX-06: the instanced caster draws its own shallow geometry, one caster mesh per geometry", () => {
   const h = bootShadow();
   const b = batchOf();
   const [m] = castOnce(h, b);

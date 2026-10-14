@@ -96,12 +96,16 @@ const VP = (() => {
   return ctx.__P;
 })();
 
-function loadChunked(gl) {
+function loadChunked(gl, align) {
   const code = fs.readFileSync(SRC, "utf8");
   const ctx = { console };
   vm.createContext(ctx);
   seedLog(ctx);
   seedFrustum(ctx);
+  // Stub localStorage so the C-P7 knob can be forced on or off.
+  ctx.localStorage = {
+    getItem: (k) => (k === "apex26.glxChunkAlign" ? (align ? "1" : "0") : null),
+  };
   // The REAL vertex packer, not a stand-in: these tests assert the bytes that
   // reach the GPU, so a reimplementation here would only prove itself.
   vm.runInContext(fs.readFileSync(PACK_SRC, "utf8") +
@@ -446,4 +450,42 @@ test("the per-chunk merge only extends a run under all four guards", () => {
   // silently stop merging (a perf regression nothing goes red for).
   const sl = src.slice(src.indexOf("function _sameList("));
   assert.match(sl, /a\[i\] !== b\[i\]/, "_sameList must compare elements, not only object identity");
+});
+
+// C-P7: Uint16 chunk ranges must start on a 4-byte boundary so ANGLE-Metal
+// does not convert the whole index buffer on first draw. Pads are degenerate
+// (0,0,0) triangles appended to the previous range (so neighbours stay
+// contiguous for drawElements merge / multi-draw); the real indices are
+// unchanged.
+test("C-P7: Uint16 chunk ranges start on 4-byte boundaries when aligned", () => {
+  const gl = makeGL();
+  const C = loadChunked(gl, true);   // apex26.glxChunkAlign=1
+  const mesh = C.createChunkedMesh(makeGrid(6, 6, 30), 72);
+  assert.ok(mesh.chunks && mesh.chunks.length > 1);
+  if (mesh.indexType === gl.UNSIGNED_INT) return;   // Uint32 is already aligned
+  const bpi = 2;
+  let expect = 0;
+  for (const ch of mesh.chunks) {
+    assert.equal(ch.byteOffset % 4, 0, "Uint16 chunk byteOffset must be a multiple of 4");
+    assert.equal(ch.count % 3, 0);
+    assert.equal(ch.byteOffset, expect * bpi, "aligned ranges must stay contiguous — a gap breaks drawElements merge");
+    expect += ch.count;
+  }
+  assert.equal(expect, mesh.count, "aligned ranges must still tile the whole buffer");
+  // Pads live at the end of a range whose unpadded count was odd. Strip those
+  // trailing (0,0,0) triples and the remaining sequence is the source.
+  const all = readIndices(gl, mesh);
+  const src = makeGrid(6, 6, 30);
+  const srcIdx = Array.from(src.idx);
+  const got = [];
+  for (const ch of mesh.chunks) {
+    const from = ch.byteOffset / bpi;
+    let n = ch.count;
+    if (n >= 3 && n % 2 === 0 &&
+        all[from + n - 1] === 0 && all[from + n - 2] === 0 && all[from + n - 3] === 0) {
+      n -= 3;
+    }
+    for (let i = from; i < from + n; i++) got.push(all[i]);
+  }
+  assert.deepEqual(got, srcIdx, "alignment pads must not alter the real index sequence");
 });

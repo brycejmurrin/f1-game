@@ -1047,3 +1047,31 @@ test("a collapsed radio lane reopens for measured placement without changing set
   const r=radio.getBoundingClientRect();assert.ok(r.left>=154||r.top>=104);
   ctx.HudLayout.clearReadouts();assert.deepEqual(radio.getBoundingClientRect(),r,"local width survives repeated clearance until producer recomputes lane");
 });
+
+
+test("optional input trace yields to occupied space and restores without saving", () => {
+  const attrs = {}, props = {}, viewport = { innerWidth: 300, innerHeight: 170 };
+  const inputs = {
+    style: { setProperty(k,v) { props[k]=v; }, removeProperty(k) { delete props[k]; } },
+    setAttribute(k,v) { attrs[k]=v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
+    getBoundingClientRect() {
+      const height = "data-col-drop" in attrs ? 0 : 40;
+      const left = 10 + parseFloat(props["--hud-clear-x"] || 0), top = 60 + parseFloat(props["--hud-clear-y"] || 0);
+      return {left,top,right:left+120,bottom:top+height,width:120,height};
+    },
+  };
+  const control = { getBoundingClientRect: () => ({left:4,top:4,right:296,bottom:150,width:292,height:146}) };
+  const ctx = { console, window: viewport, document: {
+    readyState: "loading", addEventListener() {}, getElementById: id => id === "hud" ? {hidden:false} : null,
+    body: {classList: {contains: () => false},setAttribute(){}}, querySelector: sel => sel === "#hud-inputs" ? inputs : null,
+    querySelectorAll: sel => sel.includes("#pausebtn") ? [control] : [] },
+    GameStore: {store: {get: (k,d) => d,set(){throw new Error("fit must not save");}}} };
+  vm.createContext(ctx);vm.runInContext(SRC + "; this.HudLayout = HudLayout;",ctx);
+  ctx.HudLayout.clearReadouts();
+  assert.ok(inputs.hasAttribute("data-col-drop"));
+  assert.equal(ctx.HudLayout.hiddenReason("inputs").reason,"not enough room");
+  viewport.innerHeight = 400;ctx.HudLayout.clearReadouts();
+  assert.ok(!inputs.hasAttribute("data-col-drop"));
+  assert.equal(inputs.getBoundingClientRect().height,40);
+  assert.ok(inputs.getBoundingClientRect().top >= 154);
+});

@@ -25,7 +25,7 @@ const SHADOW = read("js/render/three/tlx-shadow.js");
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
 if (!globalThis.localStorage) globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
-const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.0/three.webgpu.min.js")).href);
+const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/three/tsl-chunks.js",
   "js/render/three/tsl-lit.js", "js/render/three/tlx-shadow.js"])
@@ -223,8 +223,10 @@ test("A-H1: the InstancedMesh families keep Dynamic — the real caster, redrawn
   // the lamp pass again after a rewrite. three relays an InstancedMesh's matrices into the buffer it draws ONCE PER
   // FRAME PER RENDER OBJECT (the BEFORE_FRAME node update), so each pass's first draw of a frame gets its rows
   // either way; a second draw by the same pass gets them only from Dynamic's per-render() re-send.
+  // A-H4 (tlx-hunt4c.test.mjs) made the caster attribute-instanced by default; apex26.tlxCasterAttr=0 is the
+  // InstancedMesh caster this test pins.
   const shipped = await casterBytes(t, null);
-  t.diagnostic(`caster, Dynamic (as shipped): sun ${shipped.sun} B, lamp ${shipped.lamp} B, lamp again ${shipped.again} B`);
+  t.diagnostic(`caster, Dynamic (tlxCasterAttr=0): sun ${shipped.sun} B, lamp ${shipped.lamp} B, lamp again ${shipped.again} B`);
   assert.equal(shipped.sun, 40 * 64, "the sun pass uploads its 40 rows");
   assert.equal(shipped.lamp, 9 * 64, "the lamp pass, same frame, uploads its own 9 rows");
   assert.ok(shipped.again >= 9 * 64, "the lamp pass redrawn after a rewrite: re-sent (the whole padded array)");
@@ -239,8 +241,12 @@ async function casterBytes(t, usage) {
   const IBA = THREE.InstancedBufferAttribute.prototype, own = Object.prototype.hasOwnProperty.call(IBA, "setUsage");
   const base = IBA.setUsage;
   if (usage !== null) IBA.setUsage = function () { return base.call(this, usage); };
+  const ls0 = globalThis.localStorage;
+  globalThis.localStorage = { getItem: (k) => (k === "apex26.tlxCasterAttr" ? "0" : null), setItem() {}, removeItem() {} };
   try {
-    const sys = globalThis.TLXShaders.shadowSys(THREE, TSL, { renderer: h.renderer, isMobile: false, softwareGL: false, isWarming: () => false });
+    let sys;
+    try { sys = globalThis.TLXShaders.shadowSys(THREE, TSL, { renderer: h.renderer, isMobile: false, softwareGL: false, isWarming: () => false }); }
+    finally { globalThis.localStorage = ls0; }
     assert.ok(sys.S.enabled && sys.S.lampEnabled, "sun and lamp maps on (desktop)");
     const n = 40;
     const batch = { geo: buildTri(), instances: n, srcMatrices: mats(n), packMatrices: null, visible: n };

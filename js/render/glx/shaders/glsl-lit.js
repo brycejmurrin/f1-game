@@ -1003,18 +1003,16 @@ void main() {
   bool visorSurface = surfaceId == 32;
   bool paintLike = paintSurface || mirrorSurface || iriSurface || satinMetalSurface;
   // CARBON WEAVE — the bare finish (31) and the real carbon parts (21: floor,
-  // wings, halo). A 3.3 cm cross-hatch, faded to its mean over 8-16 m so it
-  // cannot moire at range (it had no fade: a sin*sin at 190/m crawled on every
-  // wing at 30 m). The parts get a subtler twill and a roughness ripple so
-  // they read as carbon in cockpit and close-up instead of flat dark paint.
-  // wvT is the twill's ANALYTIC slope (d/du, d/dv of the sin*sin, same fade):
-  // it tilts the shading normal below with no derivative, so the weave catches
-  // the light thread by thread instead of being a printed pattern.
+  // wings, halo). A 3.3 cm cross-hatch, faded to its mean over 10-20 m so it
+  // cannot moire at range while garage + near-track keep the twill readable
+  // (CarMaterialShade.CARBON). wvT is the twill's ANALYTIC slope (d/du, d/dv of
+  // the sin*sin, same fade): it tilts the shading normal below with no
+  // derivative, so the weave catches the light thread by thread.
   float weave = 0.5;
   vec2 wvT = vec2(0.0);
   if (carbonFinish || carbonSurface) {
     vec2 wv = vObjPos.xz * 190.0 + vObjPos.y * 190.0;
-    float wvFade = clamp(1.0 - (vDist - 8.0) / 8.0, 0.0, 1.0);
+    float wvFade = clamp(1.0 - (vDist - 10.0) / 10.0, 0.0, 1.0);
     weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y) * wvFade;
     wvT = vec2(cos(wv.x) * sin(wv.y), sin(wv.x) * cos(wv.y)) * wvFade;
   }
@@ -1027,7 +1025,7 @@ void main() {
       : (iriSurface ? max(uClearcoat, 0.70)
       : (satinMetalSurface ? min(uClearcoat, 0.25)
       : (matteSurface ? 0.0
-      : ((carbonSurface || carbonFinish) ? min(uClearcoat, 0.30)
+      : ((carbonSurface || carbonFinish) ? min(uClearcoat, 0.42)
       : ((glassSurface || visorSurface) ? uClearcoat * 0.45 : 0.0)))))))
     : uClearcoat;
   // PAINT gets uMetalness — the only surface through which CAR METALLIC can act:
@@ -1041,7 +1039,7 @@ void main() {
   // (1.0 - metalness) factors on diffuse and on envAdd). Scoped to paintSurface:
   // rubber, glass, emissive and panel stay dielectric at 0.0.
   float metalness = classifiedCar
-    ? (metalSurface ? max(uMetalness, 0.78)
+    ? (metalSurface ? max(uMetalness, 0.82)
       : (mirrorSurface ? max(uMetalness, 0.55)
       : (satinMetalSurface ? max(uMetalness, 0.60)
       : (matteSurface ? 0.0
@@ -1050,7 +1048,7 @@ void main() {
     : uMetalness;
   float specular = classifiedCar
     ? (rubberSurface ? 0.18 : sidewallSurface ? 0.35 : ((metalSurface || mirrorSurface) ? 1.0
-      : (satinMetalSurface ? 0.82 : (matteSurface ? 0.16
+      : (satinMetalSurface ? 0.82 : (matteSurface ? 0.11
       : ((carbonSurface || carbonFinish) ? 0.48 : (panelSurface ? 0.35 : uSpecular))))))
     : uSpecular;
   float emissive = classifiedCar
@@ -1072,10 +1070,9 @@ void main() {
       float pby = (vnoise(puv + vec2(0.0, pe)) * 0.6 + vnoise(fuv + vec2(0.0, pe * 3.8)) * 0.4) - pb0;
       vec3 pT = normalize(cross(N, vec3(0.0, 1.0, 0.001)) + vec3(1e-4));
       vec3 pB = cross(N, pT);
-      // 0.22 (was 0.7): at 0.7 the perturbation broke the base-coat specular into
-      // per-pixel noise and the paint read sandy/matte — keep a whisper of live
-      // shimmer, let the clearcoat lobe + env mirror carry the gloss.
-      N = normalize(N + (pT * pbx + pB * pby) * (0.22 * carPaint * pFade));
+      // 0.28 (was 0.22 / once 0.7): garage gloss shimmer under the clearcoat;
+      // clearcoat lobe + env mirror still carry the shine (CarMaterialShade.GLOSS).
+      N = normalize(N + (pT * pbx + pB * pby) * (0.28 * carPaint * pFade));
     }
   }
   // SAA source: geometric N + peel, BEFORE wall/MAT bump. WGX cannot take
@@ -1091,7 +1088,7 @@ void main() {
   if (carbonFinish || carbonSurface) {
     vec3 wT = normalize(cross(N, vec3(0.0, 1.0, 0.001)) + vec3(1e-4));
     vec3 wB = cross(N, wT);
-    N = normalize(N + (wT * wvT.x + wB * wvT.y) * 0.18);
+    N = normalize(N + (wT * wvT.x + wB * wvT.y) * 0.26);
   }
   // Per-material procedural bump: MUST run before V/L/H/NoL below so brick
   // mortar/plank seams/corrugation ridges etc. actually affect the lighting
@@ -1168,9 +1165,9 @@ void main() {
   // weave itself is computed with the surface classification above.
   if (carbonFinish) {
     albedo = mix(albedo * 0.16 + vec3(0.030, 0.031, 0.035), albedo * 0.28, 0.25);
-    albedo *= 0.86 + 0.28 * weave;
+    albedo *= 0.84 + 0.32 * weave;
   } else if (carbonSurface) {
-    albedo *= 0.93 + 0.14 * weave;
+    albedo *= 0.88 + 0.24 * weave;
   }
   if (iriSurface) {
     float fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
@@ -1182,15 +1179,15 @@ void main() {
     albedo *= mix(vec3(1.0), 0.60 + 0.80 * shift, smoothstep(0.30, 0.92, fres) * 0.40);
   }
   float rough = clamp(uRoughness, 0.04, 1.0);
-  if (carbonSurface || carbonFinish) rough = max(rough, 0.56) + (weave - 0.5) * 0.10;   // the twill's roughness ripple
+  if (carbonSurface || carbonFinish) rough = max(rough, 0.52) + (weave - 0.5) * 0.12;   // the twill's roughness ripple
   if (rubberSurface) rough = max(rough, 0.90);
   if (sidewallSurface) rough = clamp(rough, 0.55, 0.65);   // satin wall vs the matte tread
-  if (metalSurface) rough = min(rough, 0.16);
+  if (metalSurface) rough = min(rough, 0.18);
   if (glassSurface || visorSurface) rough = min(rough, 0.13);
   if (emissiveSurface) rough = max(rough, 0.32);
   if (panelSurface) rough = max(rough, 0.72);
   if (mirrorSurface) rough = min(rough, 0.09);
-  if (matteSurface) rough = max(rough, 0.88);
+  if (matteSurface) rough = max(rough, 0.92);
   if (satinMetalSurface) rough = clamp(rough, 0.24, 0.40);
   if (iriSurface) rough = min(rough, 0.22);
   // Repair patches read glossier: fold the patch mask into roughness (max
@@ -1825,6 +1822,12 @@ void main() {
     vec3 envMet = mix(uAmbGround * 0.6, skyM, smoothstep(-0.12, 0.30, Rm.y));
     if (uEnvStr > 0.001) envMet = mix(envMet, textureLod(uEnvCube, Rm, rough * 2.5).rgb, clamp(uEnvStr, 0.0, 1.0));
     vec3 metAdd = envMet * F_Schlick(NoV, albedo, 1.0 - rough * 0.5) * (metalness * (1.0 - rough * 0.7) * ccTrans);
+    // Dark metals (halo titanium, exhaust) need more env punch at garage range;
+    // bright hubs stay near 1× (CarMaterialShade.METAL.darkEnvBoost).
+    if (metalSurface) {
+      float metLum = dot(albedo, vec3(0.299, 0.587, 0.114));
+      metAdd *= 1.0 + (1.0 - clamp(metLum * 4.0, 0.0, 1.0)) * 0.32;
+    }
     color += metAdd / (1.0 + max(max(metAdd.r, metAdd.g), metAdd.b));
   }
 

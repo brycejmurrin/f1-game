@@ -640,6 +640,70 @@
     "js/career/career-ui.js"
   ],
     LAZY_CAREER_UI_EDGES: [],
+    LAZY_TRACK_BUILD: [
+    "js/track/scenery/models.js",
+    "js/track/scenery/themes.js",
+    "js/track/scenery/landmark-kit.js",
+    "js/track/scenery/circuit-kit.js",
+    "js/track/core/hidden-faces.js",
+    "js/track/scenery/nature.js",
+    "js/track/scenery/structures.js",
+    "js/track/scenery/city.js",
+    "js/track/scenery/identity.js",
+    "js/track/scenery/pits.js",
+    "js/track/scenery/venue.js",
+    "js/track/scenery/build-props.js"
+  ],
+    LAZY_TRACK_BUILD_EDGES: [
+    [
+      "js/track/scenery/models.js",
+      "js/track/scenery/circuit-kit.js"
+    ],
+    [
+      "js/track/scenery/nature.js",
+      "js/track/scenery/build-props.js"
+    ],
+    [
+      "js/track/scenery/structures.js",
+      "js/track/scenery/build-props.js"
+    ],
+    [
+      "js/track/scenery/city.js",
+      "js/track/scenery/build-props.js"
+    ],
+    [
+      "js/track/scenery/identity.js",
+      "js/track/scenery/build-props.js"
+    ],
+    [
+      "js/track/scenery/pits.js",
+      "js/track/scenery/build-props.js"
+    ],
+    [
+      "js/track/scenery/venue.js",
+      "js/track/scenery/build-props.js"
+    ],
+    [
+      "js/track/scenery/themes.js",
+      "js/track/scenery/build-props.js"
+    ],
+    [
+      "js/track/scenery/landmark-kit.js",
+      "js/track/scenery/build-props.js"
+    ],
+    [
+      "js/track/scenery/circuit-kit.js",
+      "js/track/scenery/build-props.js"
+    ],
+    [
+      "js/track/core/hidden-faces.js",
+      "js/track/scenery/build-props.js"
+    ],
+    [
+      "js/track/scenery/models.js",
+      "js/track/scenery/build-props.js"
+    ]
+  ],
     TRACK_VM: [
     "js/core/log.js",
     "js/core/mat4.js",

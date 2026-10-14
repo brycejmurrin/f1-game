@@ -11,7 +11,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseClaims, claimCommit, claimSlug, sessionId, parseBoard, nextBoard, readBoard, pushBoard, CLAIMS_BOARD, BOARD_MAX_MIN, CLAIMS_PREFIX, RELEASED, STALE_MIN, EMPTY_TREE } from "../../tools/ci/who-is-on-it.mjs";
+import { parseClaims, claimCommit, claimSlug, sessionId, parseBoard, nextBoard, readBoard, pushBoard, parseCatFileBatch, parseRefs, fetchRefCache, CLAIMS_BOARD, BOARD_MAX_MIN, CLAIMS_PREFIX, RELEASED, STALE_MIN, EMPTY_TREE } from "../../tools/ci/who-is-on-it.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const NOW = 1_800_000_000;
@@ -163,6 +163,56 @@ test("against real git: two sessions claim on one board, one releases, and a sta
     assert.equal(bad.ok, false, "a failed hash-object/mktree/commit-tree is not a successful claim");
     assert.match(bad.err, /failed/);
     assert.match(g(B, "ls-remote", "origin"), new RegExp(`refs/heads/${CLAIMS_BOARD}`), "the board survives a failed write");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("cat-file --batch output splits into blobs by size, tabs and newlines inside intact", () => {
+  const blob = (c) => { const b = Buffer.from(c); return Buffer.concat([Buffer.from(`${"a".repeat(40)} blob ${b.length}\n`), b, Buffer.from("\n")]); };
+  const buf = Buffer.concat([blob("1\tA\tclaim é\n"), Buffer.from(`${"b".repeat(40)} missing\n`), blob("2\tB\ttwo\n")]);
+  assert.deepEqual(parseCatFileBatch(buf), ["1\tA\tclaim é\n", "", "2\tB\ttwo\n"]);
+  assert.deepEqual(parseCatFileBatch(Buffer.alloc(0)), []);
+});
+
+test("one for-each-ref listing -> branch rows; HEAD, the board and legacy claims branches dropped", () => {
+  const rows = parseRefs([
+    `${NOW}\torigin/${DEPLOY_LIKE}\tB\tabc1234\tship\tit`,
+    `${NOW}\torigin/HEAD\tB\tabc1234\tx`,
+    `${NOW}\torigin\tB\tabc1234\tx`,
+    `${NOW}\torigin/${CLAIMS_BOARD}\tB\tabc1234\tclaim`,
+    `${NOW}\torigin/${CLAIMS_PREFIX}old-s1\tB\tabc1234\tlegacy`,
+  ].join("\n"));
+  assert.deepEqual(rows, [{ t: NOW, ref: DEPLOY_LIKE, author: "B", sha: "abc1234", subject: "ship\tit" }]);
+});
+
+test("the listing hides STALE claims behind a count line; --all shows them; the fetch is commits-only", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/who-is-on-it.mjs"), "utf8");
+  assert.match(src, /stale claims? hidden|stale claim\$\{/, "a hidden stale claim is counted, never silently dropped");
+  assert.match(src, /--all to show/);
+  assert.match(src, /--filter=tree:0/, "the branch list must not pull every branch's history (40 s cold)");
+  assert.doesNotMatch(src, /run\("cat-file", "blob"/, "board blobs are read in one cat-file --batch, not one spawn each");
+  const out = execFileSync(process.execPath, ["tools/ci/who-is-on-it.mjs", "--no-fetch", "--hours", "1"], { cwd: ROOT, encoding: "utf8" });
+  assert.doesNotMatch(out, /ago {2}STALE /, "no stale row without --all");
+  const all = execFileSync(process.execPath, ["tools/ci/who-is-on-it.mjs", "--no-fetch", "--hours", "1", "--all"], { cwd: ROOT, encoding: "utf8" });
+  assert.doesNotMatch(all, /hidden — older than/, "--all hides nothing");
+});
+
+test("against real git: the commits-only mirror lists every branch of the origin", () => {
+  const dir = path.join(ROOT, "artifacts", `ref-cache-test-${process.pid}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+  const g = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    g(dir, "init", "-q", "--bare", "origin.git");
+    g(path.join(dir, "origin.git"), "config", "uploadpack.allowFilter", "true");
+    const c = claimCommit("mirror probe", "claude/unit");
+    g(ROOT, "push", "-q", path.join(dir, "origin.git"), `${c}:refs/heads/cursor/probe-1234`);
+    const cache = path.join(dir, "cache.git");
+    assert.equal(fetchRefCache(path.join(dir, "origin.git"), cache), true);
+    const rows = parseRefs(g(dir, "--git-dir", cache, "for-each-ref", "--format=%(committerdate:unix)%09%(refname:short)%09%(authorname)%09%(objectname:short)%09%(subject)", "refs/remotes/origin"));
+    assert.deepEqual(rows.map((r) => [r.ref, r.subject]), [["cursor/probe-1234", "mirror probe  [claude/unit]"]]);
+    assert.equal(fetchRefCache("", cache), false, "no origin url -> the caller falls back to a full fetch");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

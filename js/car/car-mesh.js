@@ -1470,13 +1470,21 @@ function getLedStrip(lit, style) {
 // MIRROR GLASS FALLBACK: the cockpit housings' glass is near-black because the
 // HUD mirror pass is the reflection. While that pass is not drawing (MIRROR
 // AUTO on a software GPU, OFF, collapsed) car-draw.js lays this over each
-// glass: a smoked sky gradient, pale at the top to grey-blue at the bottom.
-// `quads` is Car3D.cockpitMirrorGlass(scale); cached on that (frozen) array.
+// glass: a smoked sky gradient. Day bands are a pale grey-blue; night bands
+// track a dim night sky/road (≈0.01–0.04) so the lens does not read as a day
+// env card. Cached per (quads, night).
 const _mirrorFbMeshes = new Map();
-function getMirrorFallback(quads) {
-  let m = _mirrorFbMeshes.get(quads);
-  if (m) return m;
-  const out = { pos: [], nrm: [], col: [], idx: [] }, TOP = [0.62, 0.72, 0.84], MID = [0.40, 0.48, 0.58], BOT = [0.20, 0.23, 0.27];
+// Day sky tint (legacy) and night env tint — night TOP stays under ~1.5× a
+// typical night road luma (~0.05) once the matte emissive opts are applied.
+const _FB_DAY = { TOP: [0.62, 0.72, 0.84], MID: [0.40, 0.48, 0.58], BOT: [0.20, 0.23, 0.27] };
+const _FB_NIGHT = { TOP: [0.045, 0.050, 0.070], MID: [0.028, 0.032, 0.042], BOT: [0.014, 0.016, 0.022] };
+function getMirrorFallback(quads, night) {
+  const key = night ? 1 : 0;
+  let slot = _mirrorFbMeshes.get(quads);
+  if (slot && slot[key]) return slot[key];
+  if (!slot) { slot = [null, null]; _mirrorFbMeshes.set(quads, slot); }
+  const band = night ? _FB_NIGHT : _FB_DAY;
+  const out = { pos: [], nrm: [], col: [], idx: [] }, TOP = band.TOP, MID = band.MID, BOT = band.BOT;
   const mixV = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);   // per-axis mix of two corners
   for (const [a, b, c, d] of quads) {
     for (const [t0, t1, c0, c1] of [[0, 0.55, BOT, MID], [0.55, 1, MID, TOP]]) {
@@ -1488,8 +1496,8 @@ function getMirrorFallback(quads) {
       out.idx.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3);
     }
   }
-  m = _gfx.createMesh(out);
-  _mirrorFbMeshes.set(quads, m);
+  const m = _gfx.createMesh(out);
+  slot[key] = m;
   return m;
 }
 // LIVE MIRROR GLASS (gfx.drawMirrorGlass): the same lens quads as a TEXTURED
@@ -1600,7 +1608,8 @@ const _AX_FX = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true 
 const _RETRO_FX={emissive:1,roughness:.9,specular:0,noAlphaWrite:true,alpha:1};
 const _retroDigits={}, _retroT=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]), _retroM=new Float32Array(16);
 function drawRetroTelemetry(mat,c,kph,t) {
-  const speed=Math.max(0,Math.min(999,typeof AppearanceOpts!=='undefined'?AppearanceOpts.speed(kph):Math.round(kph)));
+  // Same integer as #hud-speed-n / modern LCD (HudReadouts.spdDigits).
+  const speed=(typeof HudReadouts!=='undefined'&&HudReadouts.spdDigits)?HudReadouts.spdDigits(kph):Math.max(0,Math.min(999,typeof AppearanceOpts!=='undefined'?AppearanceOpts.speed(kph):Math.round(kph)));
   const values=[...String(speed).padStart(3,'0'),String(Math.max(0,Math.min(9,c.gear||1)))];
   for(let i=0;i<4;i++) {
     const n=+values[i];

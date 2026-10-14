@@ -24,6 +24,10 @@
  * listed: they are not in the frame loop's steady state and adding them would only
  * widen every car for nothing. Add one here when a probe shows it in a plain race.
  *
+ * One map is not the whole story: the map's FIELD REPRESENTATIONS still widen mid-race (an integer field takes a
+ * fraction, an undefined one a number), and each widening deopts every hot function that checks a car. warmShape()
+ * (below, run once per car by game.js gridUp) widens the probe-derived WARM list at the grid instead, values untouched.
+ *
  * Re-derive the table with scratch/b13/disc.cjs-style probe: run a race for ~1500
  * frames and list Object.keys(car) minus the spawn keys, in first-seen order.
  * tests/unit/car-fields-vm.test.mjs fails when a plain race adds a key not listed.
@@ -58,10 +62,10 @@ const CarFields = (function () {
       ["passPlan", "passSide", "passBest"]],
     ["player under-/over-slip dwell timer (player-forces.js)",
       ["uslipDwell"]],
-    ["lap-line bookkeeping (race-control.js crossing, invalid-lap marker)",
-      ["_recross", "_lapTimeAtLine", "incidentInvalidLap"]],
-    ["player feedback timers: kerb sparks, understeer haptics, kerb sound + haptic",
-      ["fxSparkI", "oslipHapT", "kerbSndT", "kerbHapT"]],
+    ["lap-line bookkeeping (race-control.js crossing, invalid-lap marker, the last lap's time — game.js, first line crossing)",
+      ["_recross", "_lapTimeAtLine", "incidentInvalidLap", "lastLap"]],
+    ["player feedback timers: kerb sparks, understeer haptics, kerb sound + haptic, slide + lock-up haptics (player-forces.js)",
+      ["fxSparkI", "oslipHapT", "kerbSndT", "kerbHapT", "uslipHapT", "lockHapT"]],
     ["pit work time accrued in the box (pit-lane.js) and the player's brake-bias setup (startRace)",
       ["pitWorked", "brakeBias"]],
     ["AI brake look-ahead cache (game.js updateCar, PERF-HUNT-2 S6): one object per AI car, keyed on its node window",
@@ -71,6 +75,36 @@ const CarFields = (function () {
   const KEYS = [];
   for (const g of GROUPS) for (const k of g[1]) KEYS.push(k);
   Object.freeze(KEYS);
+
+  // WARM: the fields whose V8 REPRESENTATION a race widens after the grid (PERF-HUNT-4 B-F1). The 22 cars share one
+  // hidden class, so the FIRST car to store a fraction into a field that held an integer (Smi -> Double), or a
+  // number into one that held undefined/null (HeapObject -> Tagged), changes that shared class, and every optimized
+  // function that checks a car deopts ("wrong map") and recompiles, in bursts at the first lap line and the first
+  // pit window. warmShape() makes those widenings happen once, at the grid, before anything is optimized. Node 22
+  // game-vm, monza 12 laps, --trace-deopt: 1,414 -> 425 deopts ("wrong map" 1,209 -> 182), 2,119 -> 1,134 TurboFan
+  // compiles, digest unchanged. PROBE-DERIVED, not guessed: a race in game-vm (monza 12 laps AI, montreal 10 and
+  // spa 6 wet with a scripted player, 19-21 pit stops each) listing every field whose value kind at the grid
+  // generalizes later (docs/notes/PERF-HUNT-4-2026-10-14.md §B F1). car-fields-vm.test.mjs fails when a lap plus a
+  // pit stop widens a field this list does not name — add it here, in its group.
+  const WARM_GROUPS = [
+    ["spawned or re-gridded as an integer (0, 1, a grid slot) and later fractional: Smi -> Double",
+      ["tyreWear", "x", "speed", "prog", "rpm", "energy", "aeroX", "lapTime", "totalT", "finishT", "offT", "yawVis",
+      "steerVis", "collideT", "xVis", "rPrevX", "accSm", "corridorAccel", "hitSev", "rPrevYawVis", "aiHead", "aiFam",
+      "contactT", "kerbGripSm", "kerbCueT", "towing", "wake", "passT", "passCool", "passFailT", "errT", "pressT",
+      "queueT", "calm", "sbsT", "runT", "tyreWearF", "tyreWearR", "tyreTs", "tyreTb", "otT", "otE", "rescueT",
+      "stuckT", "pitT", "pitOutT", "vLat", "yawRateCur", "hYieldT", "flatSpot", "axEstSm", "paceF", "tyreGrain"]],
+    ["pre-declared undefined (or makeCars null) and later a number: HeapObject -> Tagged",
+      ["rank", "_snapProg", "_snapX", "_snapSpeed", "kCur", "_tyreLoad", "_bandNow", "_alPrevDp", "_vmaxNow", "kTurn",
+      "wheelLock", "steerSm", "brakeDemand", "throttleDemand", "steerCommand", "brakeHeat", "exhaustPop", "_pushD",
+      "_secIdx", "_secT0", "_prevS", "_preColS", "_preColX", "_preColSpd", "skidIntensity", "passSide", "passBest",
+      "_lapTimeAtLine", "fxSparkI", "kerbSndT", "kerbHapT", "pitWorked", "_otS", "_otLap", "aiBias", "holdOff",
+      "_planLap", "_recutLap", "_stuckFrom", "vertLoad", "axFrac", "axFracF", "axFracR", "_aeroGrip", "slipFactor",
+      "lateralAccel", "slipFront", "slipRear", "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
+      "frontUtil", "rearUtil", "uslipDwell", "brakeStab", "oslipHapT", "lastLap", "uslipHapT", "lockHapT"]],
+  ];
+  const WARM = [];
+  for (const g of WARM_GROUPS) for (const k of g[1]) WARM.push(k);
+  Object.freeze(WARM);
 
   /** Give car `c` every late-added field as `undefined` (a no-op for one it already has). Returns `c`.
    *
@@ -145,15 +179,34 @@ const CarFields = (function () {
     if (!("_recross" in c)) c._recross = undefined;
     if (!("_lapTimeAtLine" in c)) c._lapTimeAtLine = undefined;
     if (!("incidentInvalidLap" in c)) c.incidentInvalidLap = undefined;
+    if (!("lastLap" in c)) c.lastLap = undefined;
     if (!("fxSparkI" in c)) c.fxSparkI = undefined;
     if (!("oslipHapT" in c)) c.oslipHapT = undefined;
     if (!("kerbSndT" in c)) c.kerbSndT = undefined;
     if (!("kerbHapT" in c)) c.kerbHapT = undefined;
+    if (!("uslipHapT" in c)) c.uslipHapT = undefined;
+    if (!("lockHapT" in c)) c.lockHapT = undefined;
     if (!("pitWorked" in c)) c.pitWorked = undefined;
     if (!("brakeBias" in c)) c.brakeBias = undefined;
     if (!("_lk" in c)) c._lk = undefined;
     return c;
   }
 
-  return { predeclare, KEYS, GROUPS };
+  /** Settle car `c`'s field representations at the grid: for each WARM field it HAS, store a double and put the
+   * original value straight back. Values, sentinels (undefined, null, -0, NaN) and key order are unchanged — only
+   * V8's field representation widens, once, where the race would widen it mid-lap. Never adds a key (a keyed ADD
+   * is what normalized the cars in PERF-HUNT-2 S2; a keyed store to an existing field is a plain map update).
+   * game.js gridUp() calls it for every car after the grid is laid out. Returns `c`. */
+  function warmShape(c) {
+    for (let i = 0; i < WARM.length; i++) {
+      const k = WARM[i];
+      if (!(k in c)) continue;
+      const v = c[k];
+      c[k] = 0.5;
+      c[k] = v;
+    }
+    return c;
+  }
+
+  return { predeclare, warmShape, KEYS, GROUPS, WARM, WARM_GROUPS };
 })();

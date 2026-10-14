@@ -28,7 +28,7 @@ import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
-import { stale as genShellStale } from "../../tools/gen/gen-shell.mjs";
+import { stale as genShellStale, inlineScripts } from "../../tools/gen/gen-shell.mjs";
 
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../../tools/manifest.cjs");
@@ -79,7 +79,37 @@ const cspOf = (html) => {
   return { at: m.index, text: m[1], dir: Object.fromEntries(m[1].split(/;\s*/).map((d) => { const [k, ...v] = d.split(/\s+/); return [k, v]; })) };
 };
 const sha = (t) => `'sha256-${createHash("sha256").update(t.replace(/\r\n?/g, "\n"), "utf8").digest("base64")}'`;
-const inlineBodies = (html) => [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)].filter((m) => !/\bsrc\s*=/i.test(m[1])).map((m) => m[2]);
+const inlineBodies = inlineScripts;
+
+test("CSP hashing ignores HTML prose but preserves script text exactly", () => {
+  const body = '\nconst prose = "<!-- keep this -->";\nconst label = "<script>";\n';
+  assert.deepEqual(inlineScripts(`<!-- an external <script> races first paint -->
+    <!-- <script>not executable</script> -->
+    <div title="<script>also not executable</script>"></div>
+    <script data-src="inline" title="src='fake' >">${body}</script>
+    <SCRIPT SRC="external.js">ignored</SCRIPT>
+    <script src>also external</script>
+    <script>\r\nsecond();\r</script >`), [body, "\nsecond();\n"]);
+});
+
+test("CSP hashing skips script-shaped text in raw text and RCDATA elements", () => {
+  const containers = ["style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript"];
+  const html = containers.map((tag) => `<${tag}><script>fake();</script></${tag}>`).join("");
+  assert.deepEqual(inlineScripts(`${html}<script>real();</script><plaintext><script>fake();</script>`), ["real();"]);
+});
+
+test("the real prepaint preferences script has its own allowed hash", () => {
+  // Extract this exact standalone script independently of the generator's
+  // tokenizer: the preceding prose contains the literal <script> that broke it.
+  const marker = indexHtml.indexOf("<!-- BODY DENSITY, BEFORE");
+  assert.ok(marker >= 0);
+  const afterComment = indexHtml.indexOf("-->", marker) + 3;
+  const start = indexHtml.indexOf("<script>", afterComment) + "<script>".length;
+  const body = indexHtml.slice(start, indexHtml.indexOf("</script>", start));
+  assert.ok(body.includes('localStorage.getItem("apex26.motion")'));
+  assert.ok(cspOf(indexHtml).dir["script-src"].includes(sha(body)),
+    "prepaint preferences must run under the shipped CSP, without Playwright bypass");
+});
 
 test("the shell's Content-Security-Policy is generated, first, and strict where it can be", async () => {
   const { cspFor } = await import("../../tools/gen/gen-shell.mjs");
@@ -255,6 +285,7 @@ function lazyFiles() {
   // being catchable.
   return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_RACE_SESSION || []),
+    ...(MANIFEST.LAZY_TRACK_BUILD || []),
     ...(MANIFEST.LAZY_CIRCUIT || []), ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
@@ -303,6 +334,7 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   // notice. LAZY_AGENT is deliberately NOT here (dev/test surface; a player who
   // never opens it should not pay for it in the install).
   for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_RACE_SESSION || []),
+                   ...(MANIFEST.LAZY_TRACK_BUILD || []),
                    ...(MANIFEST.LAZY_CIRCUIT || []),
                    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
                    ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || []),
@@ -327,6 +359,7 @@ test("sw.js stamps every injected asset it seeds", () => {
   const stamps = new RegExp(m[1].slice(1, -1));
   const injected = [...deferredFiles(), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_RACE_SESSION || []),
+    ...(MANIFEST.LAZY_TRACK_BUILD || []),
     ...(MANIFEST.LAZY_CIRCUIT || []), ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
@@ -413,6 +446,27 @@ test("LAZY_RACE_SESSION is tagless; FULL keeps the session stub", () => {
   for (const f of (MANIFEST.LAZY_RACE_SESSION || [])) {
     assert.ok(!tagged.has(f), `${f} is LAZY_RACE_SESSION but still has a <script> tag`);
     assert.ok(!MANIFEST.FULL.includes(f), `${f} must leave FULL when it joins LAZY_RACE_SESSION`);
+  }
+});
+
+test("LAZY_TRACK_BUILD is tagless; TRACK_VM keeps the twelve build files", () => {
+  const tagged = new Set(scriptSrcs.map(stripV));
+  const want = [
+    "js/track/scenery/build-props.js", "js/track/scenery/nature.js", "js/track/scenery/city.js",
+    "js/track/scenery/structures.js", "js/track/scenery/identity.js", "js/track/scenery/pits.js",
+    "js/track/scenery/venue.js", "js/track/scenery/circuit-kit.js", "js/track/scenery/landmark-kit.js",
+    "js/track/scenery/models.js", "js/track/core/hidden-faces.js", "js/track/scenery/themes.js",
+  ];
+  assert.equal((MANIFEST.LAZY_TRACK_BUILD || []).length, 12);
+  for (const f of want) {
+    assert.ok((MANIFEST.LAZY_TRACK_BUILD || []).includes(f), `${f} must be in LAZY_TRACK_BUILD`);
+    assert.ok((MANIFEST.TRACK_VM || []).includes(f), `${f} must stay on TRACK_VM for harnesses`);
+    assert.ok(!tagged.has(f), `${f} must not have a title <script> tag`);
+    assert.ok(!MANIFEST.FULL.includes(f), `${f} must leave FULL`);
+  }
+  // Race-only scripts that hunt-2 flagged as stay-eager (not LAZY_TRACK_BUILD).
+  for (const f of ["js/race/driving-coach.js", "js/race/race-insights.js", "js/race/real-replay.js", "js/camera/flyby-seq.js"]) {
+    assert.ok(MANIFEST.FULL.includes(f), `${f} must stay FULL (not moved with track-build)`);
   }
 });
 
@@ -548,10 +602,13 @@ test("LAZY_CAREER_UI is tagless; FULL keeps CareerUI stub only", () => {
   }
 });
 
-test("TRACK_VM entries exist in FULL", () => {
-  const full = new Set(MANIFEST.FULL);
+test("TRACK_VM entries exist in FULL or LAZY_TRACK_BUILD", () => {
+  // TRACK_VM is the Node/worker build roster. Most files are also FULL (title
+  // tags); the build toolkit is LAZY_TRACK_BUILD on the page and stays on
+  // TRACK_VM for verify-track / the build worker (hunt-2 T5).
+  const known = new Set([...MANIFEST.FULL, ...(MANIFEST.LAZY_TRACK_BUILD || [])]);
   for (const entry of MANIFEST.TRACK_VM) {
     if (entry === "@circuits") continue;
-    assert.ok(full.has(entry), `TRACK_VM entry ${entry} missing from FULL`);
+    assert.ok(known.has(entry), `TRACK_VM entry ${entry} missing from FULL ∪ LAZY_TRACK_BUILD`);
   }
 });

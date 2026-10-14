@@ -180,7 +180,7 @@ const GLTF = (function () {
 
   // Read an accessor into a flat JS array of numbers (length = count*numComponents).
   function readAccessor(json, bin, accessorIndex) {
-    const acc = json.accessors[accessorIndex];
+    const acc = json.accessors && json.accessors[accessorIndex];
     if (!acc) throw new Error("GLTF: missing accessor " + accessorIndex);
     if (acc.sparse) throw new Error("GLTF: sparse accessors not supported");
     const comp = COMP[acc.componentType];
@@ -189,7 +189,7 @@ const GLTF = (function () {
     if (!nc) throw new Error("GLTF: unknown accessor type " + acc.type);
     const [TA, bytes] = comp;
 
-    const view = json.bufferViews[acc.bufferView];
+    const view = json.bufferViews && json.bufferViews[acc.bufferView];
     if (!view) throw new Error("GLTF: accessor without bufferView not supported");
     const bufBytes = resolveBuffer(json, bin, view.buffer);
     const baseByte = (view.byteOffset || 0) + (acc.byteOffset || 0);
@@ -291,6 +291,7 @@ const GLTF = (function () {
     if (!json.meshes || json.meshes.length === 0) throw new Error("GLTF: file has no meshes");
 
     const instances = collectMeshInstances(json);
+    const quantized = (json.extensionsUsed || []).includes("KHR_mesh_quantization");
 
     const posOut = [];
     const nrmOut = [];
@@ -324,22 +325,41 @@ const GLTF = (function () {
         if (attr.POSITION === undefined) continue;
 
         const posA = readAccessor(json, bin, attr.POSITION);
+        const posAcc = json.accessors[attr.POSITION];
+        if (posA.numComponents !== 3 || !(posAcc.componentType === 5126 ||
+            (quantized && [5120, 5121, 5122, 5123].includes(posAcc.componentType))) ||
+            posA.data.some((v) => !Number.isFinite(v))) throw new Error("GLTF: invalid POSITION accessor");
         const vCount = posA.count;
         const positions = posA.data;
 
         // indices: explicit, or sequential
         let indices;
         if (prim.indices !== undefined) {
+          const acc = json.accessors && json.accessors[prim.indices];
+          if (!acc || acc.type !== "SCALAR" || ![5121, 5123, 5125].includes(acc.componentType) || acc.normalized) {
+            throw new Error("GLTF: invalid triangle index accessor");
+          }
           indices = readAccessor(json, bin, prim.indices).data;
         } else {
           indices = new Array(vCount);
           for (let i = 0; i < vCount; i++) indices[i] = i;
         }
 
+        if (indices.length % 3 || indices.some((v) => !Number.isInteger(v) || v < 0 || v >= vCount)) {
+          throw new Error("GLTF: invalid triangle indices");
+        }
+
         // normals: read, or compute flat face normals below
         let normals = null;
         if (attr.NORMAL !== undefined) {
-          normals = readAccessor(json, bin, attr.NORMAL).data;
+          const normalA = readAccessor(json, bin, attr.NORMAL);
+          if (normalA.numComponents !== 3 || normalA.count !== vCount ||
+              !(json.accessors[attr.NORMAL].componentType === 5126 ||
+                (quantized && [5120, 5122].includes(json.accessors[attr.NORMAL].componentType) && json.accessors[attr.NORMAL].normalized)) ||
+              normalA.data.some((v) => !Number.isFinite(v))) {
+            throw new Error("GLTF: invalid NORMAL accessor");
+          }
+          normals = normalA.data;
         }
 
         // material baseColorFactor (default white)
@@ -355,7 +375,13 @@ const GLTF = (function () {
 
         // optional per-vertex COLOR_0 (VEC3 or VEC4); multiply into base colour
         let vcolA = null;
-        if (attr.COLOR_0 !== undefined) vcolA = readAccessor(json, bin, attr.COLOR_0);
+        if (attr.COLOR_0 !== undefined) {
+          const acc = json.accessors && json.accessors[attr.COLOR_0];
+          vcolA = readAccessor(json, bin, attr.COLOR_0);
+          if (![3, 4].includes(vcolA.numComponents) || vcolA.count !== vCount ||
+              !(acc.componentType === 5126 || ([5121, 5123].includes(acc.componentType) && acc.normalized)) ||
+              vcolA.data.some((v) => !Number.isFinite(v))) throw new Error("GLTF: invalid COLOR_0 accessor");
+        }
 
         // transform + emit vertices
         for (let i = 0; i < vCount; i++) {

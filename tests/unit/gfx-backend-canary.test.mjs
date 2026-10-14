@@ -1389,6 +1389,77 @@ test("the Verdict prints the rAF gap view the spike rows cannot see (hunt 4 §A 
   assert.match(r.out, /gaps:  no rAF gap >= 500 ms/, "a clean leg says so rather than printing nothing");
 });
 
+test("the Verdict names the race-entry span each long task fell in, from the saved marks (hunt 4 B-F3.3)", async () => {
+  // Hunter B inferred warmCarAssets' 1.1-2.1 s single tasks from timing: the
+  // census saved raceProfile() legs as durations and never the marks. The
+  // fixture is the analyser's OWN output, so the row and the JSON cannot drift.
+  const { analyseRaceEntrySpans } = await import("../../tools/gfx/frame-hitch.mjs");
+  const ggc = read("tools/gfx/gpu-game-check.mjs");
+  assert.match(ggc, /out\.raceEntryProfile = await bounded\(/, "the tool must save the raceEntryProfile snapshot");
+  assert.match(ggc, /winT0: s\.windowMs > 0 \? \+\(\(a \+ b\) \/ 2 - s\.windowMs\)/, "marks are relative: the window origin must be joined to the page clock");
+  assert.match(ggc, /out\.raceEntrySpans = d \? analyseRaceEntrySpans\(/);
+  const raceEntrySpans = analyseRaceEntrySpans({
+    rep: { winT0: 100, legs: [{ n: "resets", ms: 500 }], marks: [{ n: "warmCarAssets:start", t: 600 }, { n: "warmCarAssets:end", t: 2700 }, { n: "end", t: 2800 }] },
+    censusMarks: { raceCall: 100 }, longTasks: [[705, 2090], [3000, 80]], gaps: [] });
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: { ...tlxLegJson(), raceEntrySpans }, webgl2: tlxLegJson(),
+    glx: { ...glxLegJson(), raceEntrySpans: { note: "no raceEntryProfile snapshot — no __apex.raceEntryProfile — this build predates it" } }, wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /marks: 1 long task\(s\) \(2090 ms\) \+ 0 rAF gap\(s\) in 2800 ms of race entry; warmCarAssets 2090 ms\/1/);
+  assert.match(r.out, /2090 ms longtask at \+605 ms -> warmCarAssets \(100%\) \| after warmCarAssets:start \(\+5 ms\), before warmCarAssets:end/);
+  assert.match(r.out, /marks: no raceEntryProfile snapshot — no __apex\.raceEntryProfile/, "an unmeasured leg says why");
+});
+
+test("the Verdict prints TLX's depth-discard row and names its absence on a TLX leg (hunt 4 A-P1)", async () => {
+  const { analyseDepthDiscard } = await import("../../tools/gfx/frame-hitch.mjs");
+  const ggc = read("tools/gfx/gpu-game-check.mjs");
+  assert.match(ggc, /const _depth0 = await readDepth\(\);\s*\n\s*try \{ await page\.evaluate\(\(\) => window\.__gcHitch && window\.__gcHitch\.arm\(\)\)/,
+    "the first depth read sits at arm(), so the count is the window's own");
+  assert.match(ggc, /out\.depth = analyseDepthDiscard\(_depth0, _depth1, /);
+  const depth = analyseDepthDiscard({ on: true, discard: true, kept: false, discards: 10 }, { on: true, discard: true, kept: false, discards: 410 }, 400);
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: tlxLegJson(), webgl2: { ...tlxLegJson(), depth },
+    glx: { ...glxLegJson(), depth: analyseDepthDiscard(null, null, 400) }, wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /depth: 400 of 400 window frames discarded depth \(100%\); last frame dropped it/);
+  assert.match(r.out, /webgpu[^\n]*\n(?:[^\n]*\n)*?\s+depth: NOT MEASURED — the leg wrote no depth row/, "a TLX leg with no row says so");
+  assert.doesNotMatch(r.out, /glx[^\n]*\n(?:\s{8}[^\n]*\n)*?\s+depth:/, "GLX has no TLX post: no depth row at all");
+});
+
+test("the Verdict prints the camera each leg drove and its mirror chain, and flags one not as asked (hunt 4 H5)", () => {
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const chase = { ...tlxLegJson(), cam: { asked: "chase", set: "chase", atWindowEnd: "chase" },
+    mirror: { mode: "auto", shown: false, cam: "chase", backend: { mips: 3, mipCap: 3, mipFull: false } } };
+  const lost = { ...tlxLegJson(), cam: { asked: "chase", set: "helmet", atWindowEnd: "helmet", error: "not a CamModes id: chase" } };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: chase, webgl2: lost, glx: { ...glxLegJson(), cam: { asked: null, set: "helmet", atWindowEnd: "helmet" } }, wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /cam: {3}chase \(asked chase, at window end chase\) {2}mirror=auto shown=false mips=3 cap=3 full=false\n/);
+  assert.match(r.out, /cam: {3}helmet \(asked chase, at window end helmet\)\s+<- CAMERA NOT AS ASKED: not a CamModes id: chase/);
+  assert.match(r.out, /cam: {3}helmet \(asked game default, at window end helmet\)\n/);
+});
+
+test("the census labels which work each backend's GPU timer spans (hunt 4 I5)", () => {
+  // WGX times the lit pass only, GLX main + post, TLX three's summed render
+  // passes: three different numbers under one name. The per-pass timer is not
+  // built (MEASURING-GPU-PERF §7); the label keeps the three from being compared.
+  const ggc = read("tools/gfx/gpu-game-check.mjs");
+  assert.match(ggc, /out\.gpuFrame\.span = be \? \{ tlx: "three-render-passes", wgx: "lit-pass", glx: "main\+post" \}\[be\] : null;/);
+  for (const [site, file, re] of [["WGX litPass timestampWrites", "js/render/webgpu/wgx.js", /rp\.timestampWrites = \{ querySet: _gpuQuerySet/],
+    ["GLX timer opens in begin()", "js/render/glx/glx.js", /function begin\(frame\) \{\s*if \(ctxGone\(\)\) return false;\s*_gpuTimerBegin\(\);/],
+    ["TLX resolves three's render timestamps", "js/render/three/tlx.js", /renderer\.resolveTimestampsAsync\("render"\)/]]) {
+    assert.match(read(file), re, `${site}: the span label no longer matches the backend — re-measure and relabel`);
+  }
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: tlxLegJson(), webgl2: tlxLegJson(),
+    glx: { ...glxLegJson(), gpuFrame: { medianMs: 9.1, samples: 20, scale: 1, span: "main+post" } }, wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /gpu: {3}median=9\.1ms over 20 samples {2}scale=1 {2}span=main\+post \(compare within a backend only\)/);
+});
+
 test("the GPU gate fails a hardware TLX leg that stopped reporting an env count", () => {
   // `(env.fail || 0) > 0` was the SAME banned shape as the gpuErrors fix twelve
   // lines above it in the same file, on the same object: a build that stops
@@ -2467,9 +2538,9 @@ test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () =>
 const TLX = read("js/render/three/tlx.js");
 const GLX = read("js/render/glx/glx.js");
 const TSL_LIT = read("js/render/three/tsl-lit.js");
-const THREE_BUNDLE = read("vendor/three-0.186.0/three.webgpu.min.js");
+const THREE_BUNDLE = read("vendor/three-0.186.1/three.webgpu.min.js");
 
-// ── The LOCAL PATCHES carried on the vendored bundle (vendor/three-0.186.0/
+// ── The LOCAL PATCHES carried on the vendored bundle (vendor/three-0.186.1/
 // PATCHES.md, applied to the readable build by tools/gen/vendor-three.mjs and
 // minified with the pinned terser). A vendor re-drop that silently reverts one
 // must fail HERE, not in production. The needles below are property names and
@@ -2526,7 +2597,7 @@ test("the vendored three carries the swizzle patch — Chromium 141 rejects r185
   // first race frame, TLX refuses the tab and reloads. The patch omits the
   // member (identity swizzle carries no information). Re-apply per PATCHES.md.
   assert.doesNotMatch(THREE_BUNDLE, /this\.swizzle="rgba"/,
-    "pristine swizzle default is back — the vendor bundle was re-dropped without the patch (see vendor/three-0.186.0/PATCHES.md §1)");
+    "pristine swizzle default is back — the vendor bundle was re-dropped without the patch (see vendor/three-0.186.1/PATCHES.md §1)");
   assert.equal(THREE_BUNDLE.split('this.swizzle=void 0').length - 1, 2,
     "the swizzle patch must cover BOTH sites (constructor + reset())");
 });
@@ -2545,7 +2616,7 @@ test("getDynamicCacheKey fills a scratch array instead of minting one per draw (
   // would make this test fail on a re-vendor that changed nothing.
   assert.match(THREE_BUNDLE,
     /getDynamicCacheKey\(\)\{[^}]*?(\w+)\[0\]=\w+,\1\[1\]=this\.camera\.isArrayCamera\?this\.camera\.cameras\.length:0,\1\[2\]=this\.object\.receiveShadow\?1:0,\1\[3\]=this\.renderer\.contextNode\.id,\1\[4\]=this\.renderer\.contextNode\.version,\w+\(\1\)/,
-    "getDynamicCacheKey no longer fills a scratch array (vendor/three-0.186.0/PATCHES.md §6)");
+    "getDynamicCacheKey no longer fills a scratch array (vendor/three-0.186.1/PATCHES.md §6)");
   // And the form it replaced must be GONE, or a half-applied patch would pass
   // the check above while still allocating on the shadow-receiving path.
   assert.doesNotMatch(THREE_BUNDLE, /getDynamicCacheKey\(\)\{[^}]*?this\.object\.receiveShadow&&/,
@@ -2558,7 +2629,7 @@ test("TextureNode clones share the BASE node's flipY / uv-matrix uniforms (PATCH
   // were 20 per-object updates per draw. The uniforms now live on getBase() and
   // update themselves; the node no longer needs an OBJECT update.
   assert.match(THREE_BUNDLE, /(\w+)=this\.getBase\(\);null===\1\._flipYUniform&&\(\1\._flipYUniform=\w+\(!1\)\.onObjectUpdate\(/,
-    "the flipY uniform is per-clone again (vendor/three-0.186.0/PATCHES.md §10)");
+    "the flipY uniform is per-clone again (vendor/three-0.186.1/PATCHES.md §10)");
   assert.match(THREE_BUNDLE, /(\w+)=this\.getBase\(\);return null===\1\._matrixUniform&&\(\1\._matrixUniform=\w+\(\1\.value\.matrix\)\.onObjectUpdate\(/,
     "the uv-matrix uniform is per-clone again (PATCHES.md §10)");
   assert.doesNotMatch(THREE_BUNDLE, /this\.updateType=null!==this\._matrixUniform\|\|null!==this\._flipYUniform/,
@@ -2582,8 +2653,9 @@ test("shadow-bug batch: lamp/car targets warmed, caster key from the cast matrix
   assert.match(lamp, /let _carKey = _playerIn \? _lampCasterKey\(1, _pm\) : 0;/, "the player is keyed from the matrix it is cast with");
   assert.match(code("js/render/shared/shadow-pass.js"), /Math\.round\(m\[8\] \* 8\)[\s\S]{0,80}Math\.round\(m\[9\] \* 8\)[\s\S]{0,80}Math\.round\(m\[10\] \* 8\)/,
     "orientation (the forward axis: heading AND pitch) is part of the lamp caster key");
-  // warm() must show the hidden casters, or compileAsync skips them.
-  assert.match(warm, /m\.visible = true; shown\.push/, "warm() compiles hidden casters too");
+  // warm() must show the hidden casters, or compileAsync skips them (showAllCasters, shared with the A-W1 drawWarm).
+  assert.match(warm, /const shown = showAllCasters\(\);/, "warm() shows the hidden casters before it compiles");
+  assert.match(sh, /function showAllCasters\(\) \{[\s\S]{0,300}m\.visible = true; shown\.push/, "warm() compiles hidden casters too");
   // Each End renders only the pass its own Begin opened.
   assert.match(sh, /function endPass\(rt\) \{[\s\S]{0,600}\(rt !== undefined && rt !== target\)\) return;/);
   assert.match(sh, /shadowEnd: \(\) => endPass\(sunRT\),/);
@@ -2611,7 +2683,7 @@ test("TextureNode.update rebuilds the UV matrix only for a node that samples thr
   // uniform, so every shadow compare / material / bake sample paid it per draw
   // (census 289: 293 ms of setUvTransform in a 21.9 s WebGL2 leg).
   assert.match(THREE_BUNDLE, /update\(\)\{const (\w+)=this\.value,(\w+)=this\._matrixUniform;null!==\2&&\(\2\.value=\1\.matrix\),null!==\2&&!0===\1\.matrixAutoUpdate&&\1\.updateMatrix\(\)/,
-    "TextureNode.update rebuilds the uv matrix without a matrix uniform again (vendor/three-0.186.0/PATCHES.md §9)");
+    "TextureNode.update rebuilds the uv matrix without a matrix uniform again (vendor/three-0.186.1/PATCHES.md §9)");
 });
 
 test("the vendored three emits render-stage node variables at FUNCTION scope (WebKit 8 KB private cap, PATCHES.md §4)", () => {
@@ -2656,7 +2728,7 @@ test("the vendored three has upstream's #33954 bind-group fix (patch 2 retired i
   // this as a local backport; r186 ships it. A re-drop of an older release
   // fails here.
   assert.match(THREE_BUNDLE, /bindGroups\.delete\(/,
-    "the #33954 fix is missing from the vendor bundle — evicted-material dispose() now leaks (vendor/three-0.186.0/PATCHES.md §2)");
+    "the #33954 fix is missing from the vendor bundle — evicted-material dispose() now leaks (vendor/three-0.186.1/PATCHES.md §2)");
 });
 test("the vendored three keys WebGPU pipelines on polygonOffset (patch 3 retired in r186, PR #34406)", () => {
   // TLX's bias-only material variants (tsl-fx road decals −4/−8, tsl-lit
@@ -2664,7 +2736,7 @@ test("the vendored three keys WebGPU pipelines on polygonOffset (patch 3 retired
   // with the other's bias. Upstream carries the three fields in the cache key
   // and in needsRenderUpdate's compare chain since r186.
   assert.match(THREE_BUNDLE, /\.stencilWriteMask,(\w+)\.polygonOffset,\1\.polygonOffsetFactor,\1\.polygonOffsetUnits,\1\.side/,
-    "cache key lacks polygonOffset* (vendor/three-0.186.0/PATCHES.md §3)");
+    "cache key lacks polygonOffset* (vendor/three-0.186.1/PATCHES.md §3)");
   assert.match(THREE_BUNDLE, /\.polygonOffset===(\w+)\.polygonOffset&&\w+\.polygonOffsetFactor===\1\.polygonOffsetFactor&&\w+\.polygonOffsetUnits===\1\.polygonOffsetUnits/,
     "needsRenderUpdate does not compare polygonOffset* (PATCHES.md §3)");
 });
@@ -2673,9 +2745,9 @@ test("the vendored three matches its MANIFEST.json — generated by tools/gen/ve
   // edit or a re-drop that skipped the generator changes a hash. The pinned
   // terser in package.json is the one the manifest names, so a regeneration on
   // another box reproduces the same bytes.
-  const dir = "vendor/three-0.186.0";
+  const dir = "vendor/three-0.186.1";
   const m = JSON.parse(read(`${dir}/MANIFEST.json`));
-  assert.equal(m.three, "0.186.0");
+  assert.equal(m.three, "0.186.1");
   assert.deepEqual(m.patches, [1, 4, 5, 6, 9, 10, 11, 12, 13], "patch ids applied (2 and 3 retired in r186; 7 and 8 were #228's reverted skip-draw pair; 11 and 12 are the TLX-PERF-HUNT D3 / A2 pair; 13 is PERF-HUNT-3 B14)");
   // §13: a shared group's cache key names texture bindings (node id + binding name), and texture clones keep their group.
   assert.match(THREE_BUNDLE, /\?"s":"t"\)\+\(\w+\.textureNode\?\w+\.textureNode\.id:""\)\+":"\+\w+\.name\+","/, "shared-group key for texture / sampler bindings (PATCHES.md §13)");
@@ -2689,7 +2761,7 @@ test("the vendored three matches its MANIFEST.json — generated by tools/gen/ve
   assert.equal(pkg.devDependencies.terser, m.terser, "package.json must pin the terser the manifest was generated with");
   for (const [file, rec] of Object.entries(m.files)) {
     const h = createHash("sha256").update(fs.readFileSync(path.join(ROOT, dir, file))).digest("hex");
-    assert.equal(h, rec.sha256, `${dir}/${file} differs from MANIFEST.json — regenerate with node tools/gen/vendor-three.mjs 0.186.0`);
+    assert.equal(h, rec.sha256, `${dir}/${file} differs from MANIFEST.json — regenerate with node tools/gen/vendor-three.mjs 0.186.1`);
   }
   for (const name of [
     "three.webgpu.min.js", "three.core.min.js", "three.tsl.min.js", "LICENSE.txt",
@@ -3896,8 +3968,10 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // mid-race); freeing the batch must release its caster and geometry.
   assert.match(sh, /const iByBatch = new Map\(\)/, "instanced casters are keyed per batch, not a slot pool");
   assert.doesNotMatch(sh, /iPool/, "no instanced slot pool");
-  assert.match(sh, /function freeInstanced\(batch\) \{[\s\S]*?iByBatch\.delete\(batch\);[\s\S]*?castScene\.remove\(m\);[\s\S]*?m\.dispose\(\)/,
+  assert.match(sh, /function freeInstanced\(batch\) \{[\s\S]*?iByBatch\.delete\(batch\);[\s\S]*?castScene\.remove\(m\);[\s\S]*?disposeCaster\(m\)/,
     "freeInstanced drops the batch's caster from the cast scene and disposes it");
+  // A-H4: an InstancedMesh caster (tlxCasterAttr=0) disposes; the attribute Mesh has no dispose(), so its event.
+  assert.match(sh, /function disposeCaster\(m\) \{\s*try \{ if \(m\.isInstancedMesh\) m\.dispose\(\); else m\.dispatchEvent\(\{ type: "dispose" \}\); \}/);
   const tlxSrc = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(tlxSrc, /function freeInstancedBatch\(batch\) \{\s*if \(!batch\) return;\s*if \(shadowSys && shadowSys\.freeInstanced\) shadowSys\.freeInstanced\(batch\);/,
     "and TLX frees it with the batch");
@@ -4782,7 +4856,7 @@ test("TLX binds on a phone by default, declines only on apex26.tlxMobile=0 with 
 // work — asserted against the VENDORED bundle so a version bump re-checks them
 // rather than letting the comment go stale.
 test("three still re-reads attribute.array after upload (why the release fix is impossible)", () => {
-  const three = read("vendor/three-0.186.0/three.webgpu.min.js");
+  const three = read("vendor/three-0.186.1/three.webgpu.min.js");
 
   // draw(): firstVertex *= index.array.BYTES_PER_ELEMENT, every indexed draw.
   assert.match(three, /\*=\s*\w+\.array\.BYTES_PER_ELEMENT/,
@@ -5114,7 +5188,7 @@ test("spatial upscale persists once through GameStore at the UI boundary", () =>
 
 // Execute the bundled API: mocks alone cannot catch a renamed/wrong owner API.
 test("TLX timing enables the bundled backend, not a shadow renderer property", async () => {
-  const THREE = await import("../../vendor/three-0.186.0/three.webgpu.min.js");
+  const THREE = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
   let _gpuTimerOn = false, _gpuMs = 12, _gpuTimerEpoch = 0;
   const _gpuSupported = () => true;
@@ -5128,7 +5202,7 @@ test("TLX timing enables the bundled backend, not a shadow renderer property", a
 });
 
 test("TLX cube readback selects all six faces of attachment zero", async () => {
-  const THREE = await import("../../vendor/three-0.186.0/three.webgpu.min.js");
+  const THREE = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
   const envRT = new THREE.CubeRenderTarget(1), ENV_SIZE = 1;
   let _envCubeRead = false, _envCube = null;
@@ -5187,6 +5261,7 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   const mintLateLit = () => { assert.equal(tag, false, "late lit variants are minted BEFORE setSsrMrt stamps the MRT"); minted = true; };
   const warmLateLit = async () => { assert.ok(minted); assert.equal(mrt, "tag", "late lit variants compile under the scene MRT"); };
   const warmPlusOn = () => true;   // apex26.tlxWarmPlus=1 or three's WebGL2 backend: the full warm
+  const drawWarmOn = () => false;   // the A-W1 draw stage (after the mirror stage) has its own rig: tlx-hunt4b.test.mjs
   // The stage timeline memState().warm reports (census 207 spent its window
   // inside the warm with no row saying so): the sandbox owns the record.
   const _warmStages = { at: 0, scene: null, post: null, shadow: null, total: null, attempts: 0, failed: 0 };
@@ -5368,7 +5443,7 @@ test("all track loaders release selector ownership before building, even on fail
 });
 
 test("three warm-up fallback yields tasks without waiting for display frames", async () => {
-  const core = read("vendor/three-0.186.0/three.core.min.js");
+  const core = read("vendor/three-0.186.1/three.core.min.js");
   const alias = core.match(/\b(\w+) as yieldToMain\b/);
   assert.ok(alias, "three.core.min.js must export yieldToMain under a minified alias");
   const body = fnBody(core, alias[1]);
@@ -5622,8 +5697,9 @@ test("selector retains a different circuit during compilation, then releases it 
   };
   const _loadTrackBody = (idx, def, built) => { track = built; builtTrackId = def.id; };
   const dropTrackWorld = eval("(function(){" + fnBody(src, "dropTrackWorld") + "})");
-  // LAZY_CIRCUIT: stepped loader awaits ensureCircuit before Tracks.buildPaced.
+  // LAZY_CIRCUIT + LAZY_TRACK_BUILD: stepped loader awaits both before buildPaced.
   const ensureCircuit = async () => {};
+  const ensureTrackBuild = async () => true;
   const loadTrackStepped = eval("(async function(idx, live){" + fnBody(src, "loadTrackStepped") + "})");
   const ensureScenery = async () => {}, menuSlice = async () => {}, menuFinish = async () => {}, garagePrewarm = async () => {};
   const menuIdle = () => { throw new Error("the stepped build must not wait for menu idle"); };
@@ -5794,7 +5870,8 @@ const game = source("js/render/renderer-boot.js");
 const begin = game.indexOf("\nif (!gfx) {");
 const end = game.indexOf("\nreturn { gfx, bound:", begin);
 assert.ok(begin > 0 && end > begin, "boot's GLX fallback must remain identifiable");
-const fallback = `(async function () { let gfx = null; ${game.slice(begin, end).replace(/return null;/g, "return;")} return gfx; })()`;
+const timeoutHelpers = span(game, "const BOOT_STEP_MS", "function showGraphicsUnavailable", "boot timeout helpers");
+const fallback = `(async function () { ${timeoutHelpers} let gfx = null; ${game.slice(begin, end).replace(/return null;/g, "return;")} return gfx; })()`;
 
 test("the eager GLX handle preserves eval-time mobile tier and live backend getters", () => {
   const storage = new Map([["apex26.forceMobileTier", "1"]]);
@@ -5835,6 +5912,7 @@ test("GLX implementation is deferred and ordered, while the facade precedes its 
 function bootScenario({ install = true, init = true, pref = "webgl2", skip = false, blocked = false } = {}) {
   const events = [], storage = new Map();
   const context = vm.createContext({
+    setTimeout, clearTimeout,
     navigator: { userAgent: "", maxTouchPoints: 0 },
     localStorage: { getItem: () => null, removeItem: (k) => events.push(`remove:${k}`) },
     sessionStorage: {

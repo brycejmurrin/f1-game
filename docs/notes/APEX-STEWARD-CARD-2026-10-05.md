@@ -16,13 +16,14 @@ APEX STEWARD CARD (do not re-read steward / check-changes / PR template unless H
 - Pre-push → check-changes (spawns verify-agent). Red ci/pages → ci-red-triage
   then steward overrides only (draft/ready dedupe; sync-pr.mjs not hand merge;
   who-is-on-it before shared red; live = Pages + version.json).
+- Review / hunt findings on a PR → finding-verifier before any fix.
 - After every push: subscribe on the PR (Claude Code subscribe_pr_activity;
   Cursor subscribe_github_ci + subscribe_github_pr) plus one timer
   (send_later / subscribe_timer) and ci-watch --once on each wake (no
   shell-poll loops while subscribed).
 - Sync only CONFLICTING/DIRTY or required tip red. Claim via who-is-on-it --claim.
 - Branch: cursor/<topic>-<hash> → ship claude/f1-game-project-26h3ng.
-HASHES: steward=1a3d9131 check-changes=42aa1fd6 pr-template=9e87c9d4
+HASHES: steward=ef3a8cd2 check-changes=42aa1fd6 pr-template=a0e3134a
 ```
 
 MCP: call `get_mcp_tools` / schema discovery once per session (or once per

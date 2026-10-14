@@ -13,7 +13,7 @@ cache-first for immutable `?v=<sha256>` assets.
 `<link rel="stylesheet">` into the **essential** set (plus `./`,
 `index.html`, `version.json`). Cross-origin skipped. Other `<link>` tags →
 **optional**. Files the parser cannot see live in `sw.js`'s `optional` Set:
-**DEFERRED** backends, `vendor/three-0.186.0`, other vendors, self-hosted fonts.
+**DEFERRED** backends, `vendor/three-0.186.1`, other vendors, self-hosted fonts.
 The GLX files in it are promoted to REQUIRED at install (the fallback renderer:
 offline without it is "graphics unavailable"); TLX and its vendor dependency are the critical optional pool,
 WGX/scenery/fonts the background pool after it, then SETTLED, then skipWaiting (the flag is read only once install settles). Required failures abort

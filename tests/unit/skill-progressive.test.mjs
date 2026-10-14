@@ -304,14 +304,20 @@ test("every custom subagent declares name, description, and model", () => {
   // does not silently pick a different model; readonly / is_background optional.
   const files = fs.readdirSync(AGENTS).filter((f) => f.endsWith(".md") && f !== "README.md");
   assert.deepEqual(files.sort(), [
-    "bloat-auditor.md", "ci-red-triage.md", "ci-watcher.md", "deploy-research.md", "physics-contract-auditor.md",
-    "track-surveyor.md", "verify-agent.md",
-  ], "seven agents since 2026-10-10 (ci-watcher added; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
+    "agent-surface-reviewer.md", "bloat-auditor.md", "ci-red-triage.md", "ci-watcher.md", "code-hunter.md", "deploy-research.md", "finding-verifier.md",
+    "physics-contract-auditor.md", "prior-art-scout.md", "track-surveyor.md", "verify-agent.md",
+  ], "eleven agents since 2026-10-14 (agent-surface-reviewer, code-hunter, finding-verifier, prior-art-scout added; ci-watcher 2026-10-10; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
   // Model tiering (2026-09-22): a scan-and-report agent runs on a cheaper
   // tier; judgement stays on the session's model. Anything else is a typo.
   const TIER = {
-    "bloat-auditor.md": "haiku", "deploy-research.md": "haiku", "verify-agent.md": "haiku",
-    "ci-red-triage.md": "sonnet", "ci-watcher.md": "haiku", "physics-contract-auditor.md": "inherit", "track-surveyor.md": "inherit",
+    "bloat-auditor.md": "sonnet", "deploy-research.md": "haiku", "verify-agent.md": "haiku",
+    "ci-red-triage.md": "sonnet", "ci-watcher.md": "haiku", "physics-contract-auditor.md": "sonnet", "track-surveyor.md": "inherit",
+    // 2026-10-14: hunt agents. code-hunter is the ONE opus pin (depth is the
+    // product, 4 of 11 hunt campaigns asked for opus); verify on sonnet, recall on haiku.
+    "code-hunter.md": "opus", "finding-verifier.md": "sonnet", "prior-art-scout.md": "haiku",
+    // Writes only its scratch/**.md report (protect-files.py rule 5), so it is
+    // not in the readonly list below — like track-surveyor.
+    "agent-surface-reviewer.md": "sonnet",
   };
   const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.";
   for (const f of files) {
@@ -403,7 +409,8 @@ test("coverage skills exist for input, season, data-hub, and AI", () => {
 });
 
 test("readonly review agents stay --fast and never start Playwright", () => {
-  for (const id of ["physics-contract-auditor", "bloat-auditor", "verify-agent", "deploy-research", "ci-red-triage", "ci-watcher"]) {
+  for (const id of ["physics-contract-auditor", "bloat-auditor", "verify-agent", "deploy-research", "ci-red-triage", "ci-watcher",
+    "code-hunter", "finding-verifier", "prior-art-scout"]) {
     const file = path.join(AGENTS, `${id}.md`);
     assert.ok(fs.existsSync(file), `missing .claude/agents/${id}.md`);
     const text = fs.readFileSync(file, "utf8");
@@ -412,7 +419,8 @@ test("readonly review agents stay --fast and never start Playwright", () => {
     assert.equal(fm.readonly, true, `${id} must be readonly`);
     assert.doesNotMatch(fm.tools || "", /\b(Write|Edit|MultiEdit|NotebookEdit)\b/,
       `${id}: readonly is Cursor's field; Claude Code enforces it through tools:`);
-    assert.match(fm.model, /^(inherit|haiku|sonnet)$/);
+    // opus only where the TIER map pins it (code-hunter); every other readonly agent stays cheaper.
+    assert.match(fm.model, id === "code-hunter" ? /^opus$/ : /^(inherit|haiku|sonnet)$/);
     assert.doesNotMatch(text, /verify-change\.mjs --wait/);
     assert.doesNotMatch(text, /test-solo\.mjs/);
     assert.doesNotMatch(text, /npx playwright test/);
@@ -440,6 +448,22 @@ test("readonly review agents stay --fast and never start Playwright", () => {
     "deploy-research must not run the in-repo tinyfish wrapper");
   assert.doesNotMatch(deploy, /probe-mcp\.py call tinyfish_/);
   assert.match(frontmatter(deploy).tools, /WebFetch/);
+});
+
+// A `tools:` allowlist hides every tool it omits, so a body that tells the agent
+// to call an MCP tool its list lacks sends it to a fallback (ci-red-triage fell
+// back to unauthenticated curl; survey 2026-10-14). Calls written for the PARENT
+// sit in a block opened by "calls for the PARENT" and are exempt.
+test("every mcp__ tool an agent body names is in its tools: list", () => {
+  for (const f of fs.readdirSync(AGENTS).filter((x) => x.endsWith(".md") && x !== "README.md")) {
+    const text = fs.readFileSync(path.join(AGENTS, f), "utf8");
+    const fm = frontmatter(text);
+    const tools = new Set(String(fm.tools || "").split(/[,\s]+/).filter(Boolean));
+    const body = text.replace(/^---\n[\s\S]*?\n---\n/, "").split(/\n\s*\n/)
+      .filter((para) => !/calls for the PARENT/i.test(para)).join("\n\n");
+    const named = new Set(body.match(/\bmcp__[A-Za-z0-9_-]+__[A-Za-z0-9_]+/g) || []);
+    for (const t of named) assert.ok(!fm.tools || tools.has(t), `${f}: the body names ${t}, but tools: omits it`);
+  }
 });
 
 test("do not grow a parallel Cursor skills or agents tree", () => {

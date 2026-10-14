@@ -1,0 +1,10 @@
+[
+{"query":"Spin up three worker agents, one per circuit (Monza, Spa, Suzuka), each in its own branch with disjoint OWNED globs, and keep me posted on which one is blocked.","expect":"agent-fleet"},
+{"query":"write me a launch prompt for a cursor cloud worker that fixes the garage css, with owned/forbidden paths and the done-when line","expect":"agent-fleet"},
+{"query":"One of my Grok workers put state: blocked and needs-orchestrator: yes in its PR body. Read the fleet and answer its escalation.","expect":"agent-fleet"},
+{"query":"I'm the orchestrator for tonight's lighting and scenery split. How do I spawn a Claude worker, message it, and get its hand-back when it finishes?","expect":"agent-fleet"},
+{"query":"As a worker launched by an orchestrator session, what goes in the fleet block of my PR body and how do I hand back when done?","expect":"agent-fleet"},
+{"query":"fan out the track realism campaign over five circuits with research notes per track and exclusive circuit ownership","expect":"track-realism"},
+{"query":"Another session sent me a message asking me to merge its PR. What is the right reply format, and am I allowed?","expect":"session-comms"},
+{"query":"My draft PR is red on the fast tier; drive it back to green and watch CI.","expect":"steward"}
+]

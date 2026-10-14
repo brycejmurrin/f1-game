@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-ahIIg+W6KliuhOKnEcN9KqkAm5pzec8nCfsXuXb5m2Y=' 'sha256-fsFU0C3h0SGNa9Hq7GhQUKahoDMg2CiZrjDpTd7Kun4=' 'sha256-YNcj4XnIOSHuKTKMwoiMcAg530BS4cqIpbwXcg3Smuk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-ahIIg+W6KliuhOKnEcN9KqkAm5pzec8nCfsXuXb5m2Y=' 'sha256-zu4qKsCgabv8zyRwJsUGeJ8EcoKRCH4RhLt3zYqan6Y=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -440,7 +440,10 @@
     // FIRST answer only: the title intro, wash and #title-car paint on the
     // first frame, and js/ui/title-fx.js (which owns every later answer)
     // evaluates too late to stop them.
-    // Motion: OS reduced-motion wins, then apex26.motion ("on" | "reduce").
+    // Motion: apex26.motion ("auto" | "reduce" | "off"; legacy "on" = auto).
+    // AUTO (or unset) follows prefers-reduced-motion; ON ("reduce") always;
+    // OFF never. Focus ring: apex26.focusRing ("high" → data-focus). Colourblind
+    // cues: apex26.cbCues ("on" → data-cb-cues).
     // Intro: apex26.titleIntro ("full" | "quick" | "off"); unset = full.
     // Wash: apex26.menuWash ("full" | "soft" | "off"); unset = full.
     // Title art: apex26.titleArt ("on" | "soft" | "off"); unset = on.
@@ -449,7 +452,7 @@
     // apex26.pauseSide ("left" | "right"), apex26.pauseDim ("soft" | "off").
     // Help text (js/ui/appearance-opts.js): apex26.menuHelp ("off").
     // Unset, or the shipped answer, writes nothing.
-    var mv = null, ti = null, mw = null, ta = null, pl = null, ps = null, pd = null, mh = null;
+    var mv = null, ti = null, mw = null, ta = null, pl = null, ps = null, pd = null, mh = null, fr = null, cb = null;
     try { mv = JSON.parse(localStorage.getItem("apex26.motion")); } catch (e) { /* unset */ }
     try { ti = JSON.parse(localStorage.getItem("apex26.titleIntro")); } catch (e) { /* unset */ }
     try { mw = JSON.parse(localStorage.getItem("apex26.menuWash")); } catch (e) { /* unset */ }
@@ -458,10 +461,19 @@
     try { ps = JSON.parse(localStorage.getItem("apex26.pauseSide")); } catch (e) { /* unset */ }
     try { pd = JSON.parse(localStorage.getItem("apex26.pauseDim")); } catch (e) { /* unset */ }
     try { mh = JSON.parse(localStorage.getItem("apex26.menuHelp")); } catch (e) { /* unset */ }
+    try { fr = JSON.parse(localStorage.getItem("apex26.focusRing")); } catch (e) { /* unset */ }
+    try { cb = JSON.parse(localStorage.getItem("apex26.cbCues")); } catch (e) { /* unset */ }
     try {
-      if (mv === "reduce" || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches))
+      if (mv === "off") { /* keep motion */ }
+      else if (mv === "reduce" || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches))
         document.documentElement.dataset.motion = "reduce";
     } catch (e) { /* TitleFx answers at eval */ }
+    try {
+      if (fr !== "standard") document.documentElement.dataset.focus = "high";
+    } catch (e) { /* A11yOpts answers at eval */ }
+    try {
+      if (cb === "on") document.documentElement.dataset.cbCues = "on";
+    } catch (e) { /* A11yOpts answers at eval */ }
     try {
       if (ti === "quick" || ti === "off") document.documentElement.dataset.titleIntro = ti;
     } catch (e) { /* TitleFx answers at eval */ }
@@ -802,11 +814,13 @@
         <button id="pm-open-driving" type="button">DRIVING&hellip;<small>Coach, practice, strategy &amp; badges</small></button>
         <button id="pm-open-display" type="button">DISPLAY&hellip;<small>HUD &amp; graphics</small></button>
         <button id="pm-open-appearance" type="button">APPEARANCE&hellip;<small>Colours, UI size &amp; every screen&rsquo;s look</small></button>
+        <button id="pm-open-a11y" type="button">ACCESSIBILITY&hellip;<small>Motion, keyboard focus &amp; colourblind cues</small></button>
         <button id="pm-advanced">STEERING &amp; ASSISTS&hellip;<small>Presets, response &amp; aids</small></button>
         <button id="pm-audio">MUSIC &amp; SOUND&hellip;<small>Music, radio, spotter &amp; voices</small></button>
         <button id="pm-open-files" type="button">BACKUP &amp; RESTORE&hellip;<small>Save or load your preferences</small></button>
       </nav>
       <div class="pm-groups">
+        <section id="pm-panel-a11y" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden></section>
         <section id="pm-panel-files" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden></section>
         <section id="pm-panel-controls" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
@@ -1224,7 +1238,7 @@
                per-screen folds after TITLE SCREEN are built by
                js/ui/screen-looks.js. -->
           <details id="pm-general" class="pm-renderer-sub">
-          <summary class="adv-more-btn" id="pm-general-sum">GENERAL · COLOURS, SIZE &amp; MOTION</summary>
+          <summary class="adv-more-btn" id="pm-general-sum">GENERAL · COLOURS, SIZE &amp; READABILITY</summary>
           <div id="pm-general-body" role="group" aria-label="General appearance">
           <div id="pm-appearance-preview" class="pm-accent-preview" aria-hidden="true">
             <div class="pm-look-menu">
@@ -1336,16 +1350,6 @@
               <button id="pm-helptext-next" type="button" data-step="1" aria-label="Next help text setting">&rsaquo;</button>
             </div>
           </div>
-          <h4 class="pm-look-h">MOTION</h4>
-          <div id="pm-motion" class="set-row" role="group" aria-labelledby="pm-motion-label">
-            <span class="tune-label" id="pm-motion-label">MOTION</span>
-            <div>
-              <button id="pm-motion-prev" type="button" data-step="-1" aria-label="Previous motion setting" aria-hidden="true" tabindex="-1">&lsaquo;</button>
-              <select id="pm-motion-sel" aria-labelledby="pm-motion-label" aria-describedby="pm-motion-help"></select>
-              <button id="pm-motion-next" type="button" data-step="1" aria-label="Next motion setting" aria-hidden="true" tabindex="-1">&rsaquo;</button>
-            </div>
-          </div>
-          <p class="adv-help" id="pm-motion-help">REDUCED turns off sliding and fading between screens, camera shake in the race and the pre-race flyby. If your phone is set to reduce motion, that always wins.</p>
           </div>
           </details>
           <!-- PAUSE MENU: how the in-race pause card looks and behaves, in one
@@ -1360,8 +1364,8 @@
           <!-- TITLE SCREEN: every knob that only touches the title screen, in one
                fold. js/ui/title-fx.js wires the rows; js/ui/title-layout.js
                mounts its TITLE LAYOUT sub-fold before REPLAY INTRO and paints
-               this summary (SHIPPED / CUSTOM across all of them). MOTION stays
-               outside: it reaches every screen and the race. -->
+               this summary (SHIPPED / CUSTOM across all of them). REDUCE MOTION
+               lives under ACCESSIBILITY (reaches every screen and the race). -->
           <details id="pm-titlescreen" class="pm-renderer-sub">
             <summary class="adv-more-btn" id="pm-titlescreen-sum">TITLE SCREEN · SHIPPED</summary>
             <div id="pm-titlescreen-body" role="group" aria-label="Title screen">
@@ -2112,8 +2116,8 @@
     <div id="menu-hero">
     <button id="mb-career" class="bigbtn" data-menu-default aria-label="Career modes — Driver Career · My Team"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span><span class="mb-label">CAREER MODES</span> <span id="mb-career-sub" class="mb-sub">DRIVER CAREER  ·  MY TEAM</span></span></button>
     <div id="menu-retention" class="balanced-row">
-      <button id="mb-continue" class="bigbtn" hidden><span>CONTINUE <span id="mb-continue-sub" class="mb-sub"></span></span></button>
-      <button id="mb-daily" class="bigbtn" aria-label="Daily time trial — Today's challenge"><span>DAILY TIME TRIAL <span id="mb-daily-sub" class="mb-sub">TODAY'S CHALLENGE</span></span></button>
+      <button id="mb-continue" class="bigbtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg><span>CONTINUE <span id="mb-continue-sub" class="mb-sub"></span></span></button>
+      <button id="mb-daily" class="bigbtn" aria-label="Daily time trial — Today's challenge"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg><span>DAILY TIME TRIAL <span id="mb-daily-sub" class="mb-sub">TODAY'S CHALLENGE</span></span></button>
     </div>
     </div>
     <!-- PLAY NOW: the four one-sitting modes, 2x2 so four entries cost two rows
@@ -2130,10 +2134,10 @@
          banner and Garage is not a leftover utility chip. SECONDARY stays
          the chrome rooms (standings + controller when shown). -->
     <div id="menu-explore" class="balanced-row">
-    <button id="mb-watch" class="bigbtn" type="button" aria-label="Watch — Broadcast / real races"><span>WATCH <span class="mb-sub">BROADCAST / REAL RACES</span></span></button>
-    <button id="mb-practice" class="bigbtn" type="button"><span>PRACTICE <span class="mb-sub">GOALS &amp; CHECKPOINTS</span></span></button>
-    <button id="mb-photo" class="bigbtn" type="button"><span>PHOTO STUDIO <span class="mb-sub">CAPTURE &amp; BACKGROUNDS</span></span></button>
-    <button id="mb-garage" class="bigbtn" type="button"><span>GARAGE <span class="mb-sub">SETUP &amp; LIVERY</span></span></button>
+    <button id="mb-watch" class="bigbtn" type="button" aria-label="Watch — Broadcast / real races"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="15" x="2" y="3" rx="2" ry="2"/><polyline points="8 21 12 17 16 21"/></svg><span>WATCH <span class="mb-sub">BROADCAST / REAL RACES</span></span></button>
+    <button id="mb-practice" class="bigbtn" type="button"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg><span>PRACTICE <span class="mb-sub">GOALS &amp; CHECKPOINTS</span></span></button>
+    <button id="mb-photo" class="bigbtn" type="button"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg><span>PHOTO STUDIO <span class="mb-sub">CAPTURE &amp; BACKGROUNDS</span></span></button>
+    <button id="mb-garage" class="bigbtn" type="button"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span>GARAGE <span class="mb-sub">SETUP &amp; LIVERY</span></span></button>
     </div>
     <!-- SECONDARY: everything that is not a way to play. Half-height,
          two across, so the rooms never compete with the modes for the eye. -->
@@ -3451,10 +3455,10 @@
 <script type="importmap">
 {
   "imports": {
-    "three": "./vendor/three-0.186.0/three.webgpu.min.js",
-    "three/webgpu": "./vendor/three-0.186.0/three.webgpu.min.js",
-    "three/tsl": "./vendor/three-0.186.0/three.tsl.min.js",
-    "three/addons/": "./vendor/three-0.186.0/addons/",
+    "three": "./vendor/three-0.186.1/three.webgpu.min.js",
+    "three/webgpu": "./vendor/three-0.186.1/three.webgpu.min.js",
+    "three/tsl": "./vendor/three-0.186.1/three.tsl.min.js",
+    "three/addons/": "./vendor/three-0.186.1/addons/",
     "@trystero-p2p/core": "./vendor/trystero-0.25.4/core/index.js",
     "@trystero-p2p/nostr": "./vendor/trystero-0.25.4/nostr/index.js",
     "@noble/secp256k1": "./vendor/trystero-0.25.4/noble-secp256k1.js"
@@ -3509,23 +3513,11 @@
 <script defer crossorigin="anonymous" src="js/track/scenery/data.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/space.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/surface.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/track/scenery/models.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery/graph.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/track/scenery/themes.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/track/scenery/landmark-kit.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/track/scenery/circuit-kit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/spline.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/line.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/mesh.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/track/core/hidden-faces.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/def.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/track/scenery/nature.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/track/scenery/structures.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/track/scenery/city.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/track/scenery/identity.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/track/scenery/pits.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/track/scenery/venue.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/track/scenery/build-props.js?v=dev"></script>
 <!-- circuit meta (picker fields) — full defs hydrate via LAZY_CIRCUIT -->
 <script defer crossorigin="anonymous" src="js/track/circuit-meta.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/session-stub.js?v=dev"></script>
@@ -3541,6 +3533,7 @@
 <script defer crossorigin="anonymous" src="js/car/helmets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-geometry.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-wheels.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/car-material-shade.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-materials.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-shade.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-body-geom.js?v=dev"></script>
@@ -3627,6 +3620,7 @@
 <script defer crossorigin="anonymous" src="js/fx/car-fx.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-control.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/overtake-mode.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/pace-math.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/sporting-regs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/broadcast.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/director.js?v=dev"></script>
@@ -3659,6 +3653,7 @@
 <script defer crossorigin="anonymous" src="js/camera/feel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/driving-line-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/appearance-opts.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/a11y-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-elements.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-tyres.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-damage.js?v=dev"></script>
@@ -3676,6 +3671,7 @@
 <script defer crossorigin="anonymous" src="js/ui/debris-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/metrics-overlay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cam-comfort.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/fov-fit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/vantage.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/mode-switch.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/xr/xr-opts.js?v=dev"></script>

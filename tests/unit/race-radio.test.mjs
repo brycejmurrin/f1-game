@@ -937,6 +937,74 @@ test("a WATCH that starts mid-race (or rewinds) never calls LIGHTS OUT, and says
   assert.equal(r.said.filter((s) => s.kind !== "comm").length, 0, JSON.stringify(r.said));
 });
 
+test("rewinding a WATCH releases future cooldowns and allows the replayed pass to be heard", () => {
+  const r = watch();
+  r.G.raceT = 100;
+  r.step(0.05);
+  const pass = () => r.radio.replayEvent({ kind: "pass", pos: 3 }, r.cars[1], r.cars[0]);
+  pass(); r.step(0.05);
+  assert.equal(comm(r).length, 1);
+  r.G.raceT = 1;
+  r.step(0.05);
+  pass(); r.step(0.05);
+  assert.equal(comm(r).length, 2, "the earlier timeline must not wait for race time 100 to catch up");
+  assert.ok(comm(r)[1].t < 2);
+  pass(); r.step(0.05);
+  assert.equal(comm(r).length, 2, "ordinary repeated events still obey their cooldown after the cut");
+});
+
+test("an explicit WATCH timeline cut drops pending copy and can accept its new event before the next update", () => {
+  const r = watch();
+  r.step(0.05, 20);
+  r.hooks.busy = true;
+  r.radio.replayEvent({ kind: "pass", pos: 1 }, r.cars[1], r.cars[0]);
+  r.step(0.05);
+  assert.ok(r.radio.debug().pending.tv.includes("lead"));
+  r.G.raceT += 1;   // a short forward seek still falls inside the old line's TTL
+  r.radio.resetTimeline();
+  assert.equal(r.radio.debug().pending.tv.length, 0);
+  r.hooks.busy = false;
+  assert.equal(r.radio.replayEvent({ kind: "out" }, r.cars[0]), true);
+  r.step(0.05);
+  assert.equal(comm(r).length, 1);
+  assert.equal(r.radio.debug().log.at(-1).id, "retire", "only the destination event reaches the commentator");
+});
+
+test("a WATCH timeline cut halts the active voice and invalidates already accepted announcement cards", () => {
+  const r = watch(), accepted = [];
+  let halted = 0;
+  r.G.radio = { halt() { halted++; } };
+  r.G.announce = (msg, dur, kind, still) => { accepted.push({ msg, still }); return true; };
+  r.step(0.05, 20);
+  r.radio.replayEvent({ kind: "sc", level: 3 });
+  r.step(0.05);
+  assert.equal(accepted.length, 1);
+  assert.equal(accepted[0].still(), true);
+  r.G.raceT += 1;
+  r.radio.resetTimeline();
+  assert.equal(halted, 1, "playing and pending voice are stopped at the timeline boundary");
+  assert.equal(accepted[0].still(), false, "the game card queue cannot start a stale transmission later");
+  r.radio.replayEvent({ kind: "green" });
+  r.step(0.05);
+  assert.equal(accepted.length, 2);
+  assert.equal(accepted[1].still(), true, "the destination timeline owns its new card");
+  r.radio.setWatching(null);
+  assert.equal(accepted[1].still(), false, "ending WATCH also invalidates delayed commentary");
+});
+
+test("RADIO CHECK stays silent during WATCH, including a real team radio clip", () => {
+  const r = watch();
+  r.step(0.05, 20);
+  for (const busy of [false, true]) {
+    r.hooks.busy = busy;
+    assert.equal(r.radio.request(), "", "a replay has no driver asking an engineer for status");
+  }
+  assert.equal(r.said.length, 0);
+  const live = race();
+  live.step(0.05, 20);
+  assert.ok(live.radio.request(), "the same explicit request still answers a driver");
+});
+
 test("a WATCH holds its commentary while a real team radio clip plays, and says it after", () => {
   const r = watch();
   r.step(0.05, 20);
@@ -1092,4 +1160,14 @@ test("observe ranks the field at 10 Hz, not every physics step", () => {
     assert.equal(f.t, G.raceT, "f is returned every step, its clock current");
   }
   assert.ok(sorts.n > 0 && sorts.n <= Math.ceil(60 / 6), `ranked ${sorts.n} times in 60 steps`);
+});
+
+ test("WATCH rewind rebases cooldowns so later distinct commentary can speak", () => {
+  const r = watch(); r.G.raceT = 600; r.step(.05);
+  r.radio.replayEvent({ kind: "fastest", dur: 92 }, r.cars[0]); r.step(.05, 100);
+  const before = comm(r).length;
+  assert.ok(before > 0);
+  r.G.raceT = 60; r.step(.05); r.step(.05, 900);
+  r.radio.replayEvent({ kind: "fastest", dur: 91 }, r.cars[1]); r.step(.05, 200);
+  assert.ok(comm(r).slice(before).some(s => /1:31/.test(s.msg)), JSON.stringify(r.said));
 });

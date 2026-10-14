@@ -119,7 +119,15 @@ const PlayerForces = (function () {
     // only), 1 from 1.5× coast drag up. Continuous, so a brush of the brake
     // never steps the front's grip.
     const brakeMix = clamp((decel - cdNow) / (0.5 * cdNow), 0, 1);
-    const pedal = decel * brakeMix / longBudget, engine = (decel - decel * brakeMix) / longBudget, beta = (c.brakeStab = TyreModel.brakeBeta(c.brakeStab, c.rearUtil, dt));   // BRAKE STABILITY: the loaded rear eases its pedal share (PhysicsConsts.BRAKE_STAB)
+    // Kits with mods.braking > 1 pull harder than PhysicsConsts.BRAKE. Billing
+    // that absolute decel against fixed LONG_GRIP / BRAKE saturated the ellipse
+    // (shipped axFracF≈0.98) and brakeYawDamp at 2.4× (turn-in yaw −0.224).
+    // Scale the PEDAL bill and (when the pedal is in) the yaw-damp denominator
+    // by max(1, mods.braking) so full pedal still costs ~BRAKE/LONG_GRIP of
+    // the circle; engine/coast share and coast yaw damp stay on the base
+    // constants (lift-off / coast turn-in untouched).
+    const brakeScale = Math.max(1, (c.mods && c.mods.braking) || 1);
+    const pedal = decel * brakeMix / (longBudget * brakeScale), engine = (decel - decel * brakeMix) / longBudget, beta = (c.brakeStab = TyreModel.brakeBeta(c.brakeStab, c.rearUtil, dt));   // BRAKE STABILITY: the loaded rear eases its pedal share (PhysicsConsts.BRAKE_STAB)
     const axFracF = Math.min(1, pedal * TyreModel.brakeFront(beta, loadF, loadR)), axFracR = Math.min(1, Math.max(pedal * beta + engine, axThrDemand));
     const axFrac = Math.max(axFracF, axFracR);
     c.axFrac = axFrac;
@@ -310,22 +318,61 @@ const PlayerForces = (function () {
     const SPEED_YAW_LO = 50, SPEED_YAW_HI = 65, SPEED_YAW_EXTRA = 5;
     const _syT = clamp((vAbs - SPEED_YAW_LO) / (SPEED_YAW_HI - SPEED_YAW_LO), 0, 1);
     const speedYawDamp = 1 + SPEED_YAW_EXTRA * _syT * _syT * (3 - 2 * _syT);
-    const brakeYawDamp = 1 + 1.4 * clamp(-(c.axEstSm ?? 0) / BRAKE, 0, 1) + coastYaw;
-    const rdot = (af * Fyf * cosD - ar * Fyr) / kz2 - YAW_DAMP * brakeYawDamp * speedYawDamp * (c.yawRateCur || 0);
+    const yawBrakeCap = BRAKE * (1 + (brakeScale - 1) * brakeMix);
+    const brakeYawDamp = 1 + 1.4 * clamp(decel / yawBrakeCap, 0, 1) + coastYaw;
     // Capture body-frame state for the longitudinal couple BEFORE yaw/vLat
-    // integrate, so this PR does not change those equations (#1196 yaw damp
-    // stays bit-identical; low-speed yaw flip-flop is a separate follow-up).
+    // integrate — couple below still reads the pre-integrate (vLat0, r0).
     const vLat0 = c.vLat || 0;
     const r0 = c.yawRateCur || 0;
     const u0 = c.speed;
-    c.vLat = clamp(vLat0 + (ay - u0 * r0) * dt, -40, 40);
-    // ...and a SLIDING tyre still has friction where the slip model fades out (sp): with both
-    // forces scaled to zero near a standstill, a spun or shunted stopped car skated sideways at
-    // constant speed into the wall (2.000 -> 1.999 m/s over 4 s, measured). Coulomb bleed only.
-    if (sp < 1 && c.vLat) c.vLat = Math.sign(c.vLat) * Math.max(0, Math.abs(c.vLat) - muBase * (1 - sp) * dt);
-    c.yawRateCur = clamp(r0 + rdot * dt, -4, 4);
-    // Increasing head = CCW / left; +yaw rate = nose right, so SUBTRACT.
-    c.head -= c.yawRateCur * dt;
+    // Low-speed yaw/vLat explicit Euler chatters at full lock (period-2 Δr of
+    // ~0.21 rad/s pin / ~0.40 shipped at 3–4 m/s, 58/58 ticks). Substep the
+    // slip→force→integrate loop only below LOW_YAW_V with a smooth blend so
+    // the ≥LOW_YAW_V path is the original single step, bit-identical. rdot's
+    // multiplication order ((YAW_DAMP*brake)*speed)*r is unchanged on that
+    // fast path.
+    const LOW_YAW_V = 8;   // m/s — above this: one Euler step, identical to tip
+    const LOW_YAW_SUBS = 4;
+    if (vAbs >= LOW_YAW_V) {
+      const rdot = (af * Fyf * cosD - ar * Fyr) / kz2 - YAW_DAMP * brakeYawDamp * speedYawDamp * (c.yawRateCur || 0);
+      c.vLat = clamp(vLat0 + (ay - u0 * r0) * dt, -40, 40);
+      // ...and a SLIDING tyre still has friction where the slip model fades out (sp): with both
+      // forces scaled to zero near a standstill, a spun or shunted stopped car skated sideways at
+      // constant speed into the wall (2.000 -> 1.999 m/s over 4 s, measured). Coulomb bleed only.
+      if (sp < 1 && c.vLat) c.vLat = Math.sign(c.vLat) * Math.max(0, Math.abs(c.vLat) - muBase * (1 - sp) * dt);
+      c.yawRateCur = clamp(r0 + rdot * dt, -4, 4);
+      // Increasing head = CCW / left; +yaw rate = nose right, so SUBTRACT.
+      c.head -= c.yawRateCur * dt;
+    } else {
+      // Single-step reference (same formulae as the fast path) for the blend.
+      const rdot1 = (af * Fyf * cosD - ar * Fyr) / kz2 - YAW_DAMP * brakeYawDamp * speedYawDamp * r0;
+      let v1 = clamp(vLat0 + (ay - u0 * r0) * dt, -40, 40);
+      if (sp < 1 && v1) v1 = Math.sign(v1) * Math.max(0, Math.abs(v1) - muBase * (1 - sp) * dt);
+      const r1 = clamp(r0 + rdot1 * dt, -4, 4);
+      const head1 = c.head - r1 * dt;
+      // N substeps with refreshed slip/Fy each half-step — kills the period-2
+      // mode. Smoothstep weight → 0 as vAbs → LOW_YAW_V so the blend meets the
+      // fast path continuously (and is unused at/above it).
+      const h = dt / LOW_YAW_SUBS;
+      let vL = vLat0, r = r0, head = c.head;
+      for (let si = 0; si < LOW_YAW_SUBS; si++) {
+        const sF = Math.atan2(vL + af * r, vx) - dirS * delta;
+        const sR = Math.atan2(vL - ar * r, vx);
+        const FyfI = tyreSat(CS_FRONT, sF, muF) * sp;
+        const FyrI = tyreSat(csR, sR, muR, TyreModel.CURVE_FLOOR_R, TyreModel.CURVE_FALL_W_R, TyreModel.CURVE_HOLD_R) * sp;
+        const ayI = FyfI * cosD + FyrI;
+        const rdotI = (af * FyfI * cosD - ar * FyrI) / kz2 - YAW_DAMP * brakeYawDamp * speedYawDamp * r;
+        vL = clamp(vL + (ayI - u0 * r) * h, -40, 40);
+        if (sp < 1 && vL) vL = Math.sign(vL) * Math.max(0, Math.abs(vL) - muBase * (1 - sp) * h);
+        r = clamp(r + rdotI * h, -4, 4);
+        head -= r * h;
+      }
+      const _lyT = clamp((LOW_YAW_V - vAbs) / LOW_YAW_V, 0, 1);
+      const w = _lyT * _lyT * (3 - 2 * _lyT);
+      c.vLat = (1 - w) * v1 + w * vL;
+      c.yawRateCur = (1 - w) * r1 + w * r;
+      c.head = (1 - w) * head1 + w * head;
+    }
     // Lateral→longitudinal coupling (planar bicycle, per unit mass).
     // Body ˙u = Fx/m − Fyf·sin(δ) + v·r. Drive/brake/drag already landed in
     // game.js; add the missing front-tyre steer projection and Coriolis terms

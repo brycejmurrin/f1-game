@@ -1,0 +1,34 @@
+name: Task
+description: One unit of work an agent session can pick up cold and finish in one PR.
+labels: ["ready"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Agents pick these up with `is:open label:ready -label:claimed -label:blocked` (AGENTS.md §Backlog).
+        Write it so an agent with no chat history can start. Bigger than one PR? Make this the parent
+        and file each piece as a sub-issue.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should be true when this is done, in plain words.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: The observable check — a hook value, a test, a screenshot at phone-landscape-844x390, a verify command.
+    validations:
+      required: true
+  - type: input
+    id: area
+    attributes:
+      label: Area / skill
+      description: The subsystem or skill that owns it (e.g. tune-physics, ui-menu-a11y, js/circuits/spa.js).
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Links, files, repro steps, related issues. Write "Blocked by #n" here and add the blocked label if it must wait.

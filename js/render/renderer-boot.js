@@ -16,7 +16,7 @@ let _backendBound = false;
 function preloadThreeVendor() {
   const kick = () => {
     try {
-      for (const href of ["vendor/three-0.186.0/three.webgpu.min.js", "vendor/three-0.186.0/three.tsl.min.js"]) {
+      for (const href of ["vendor/three-0.186.1/three.webgpu.min.js", "vendor/three-0.186.1/three.tsl.min.js"]) {
         // querySelector is absent in some VM harnesses — skip the dedupe then.
         if (document.querySelector && document.querySelector('link[rel="modulepreload"][href="' + href + '"]')) continue;
         const el = document.createElement("link");
@@ -230,7 +230,12 @@ try {
 if (!gfx) {
   // Load GLX only when selected or needed after TLX/WGX refuses. A missing
   // script must not trigger the claim-failure reload loop while offline.
-  if (typeof GLX.init !== "function") await loadBackendScripts(BACKEND_FILES.webgl2);
+  if (typeof GLX.init !== "function") {
+    try {
+      const fetched = await withTimeout(loadBackendScripts(BACKEND_FILES.webgl2), BOOT_STEP_MS, "GLX script fetch");
+      if (fetched === TIMED_OUT) { showGraphicsUnavailable(); return null; }
+    } catch (_) { showGraphicsUnavailable(); return null; }
+  }
   if (typeof GLX.init !== "function") { showGraphicsUnavailable(); return null; }
   if (!GLX.init(canvas)) {
     // A failed backend opt-in (WGX or TLX) may have already claimed the

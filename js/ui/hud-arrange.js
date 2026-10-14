@@ -37,6 +37,19 @@ const HudArrange = (() => {
     if (!(d0 > 0) || !(d1 > 0)) return s0;
     return clamp(Math.round((s0 * d1 / d0) / 5) * 5, LIM.s[0], LIM.s[1]);
   }
+  /* SHOW / HIDE: which per-element visibility toggles (js/ui/hud-elements.js)
+     a MOVE & SIZE piece maps to. The tower is four toggles shown or hidden
+     together; MAP, GAPS and MIRROR keep their own AUTO / ON / OFF rows and the
+     flag / radio card are race messages, so those carry no toggle here. */
+  const VIS = Object.freeze({
+    tower: ["pos", "lap", "time", "best"], sectors: ["sectors"], limits: ["limits"], gearbox: ["gear"],
+    speed: ["speed"], energy: ["energy"], tyre: ["tyre"], ot: ["ot"], aero: ["aero"], bb: ["bb"],
+    damage: ["damage"], rel: ["rel"], strat: ["strat"], inputs: ["inputs"],
+  });
+  /** Pure: the visibility ids for layout piece `id` ([] = no toggle for it). */
+  const visIds = (id) => (VIS[id] ? VIS[id].slice() : []);
+  /** Pure: a piece reads as SHOWN while any of its toggles is on (`isOn(id)` per toggle). */
+  const visShown = (id, isOn) => { const ids = visIds(id); return !ids.length || ids.some((v) => isOn(v)); };
   /** Pure: s (%) stepped by `dir` (±1) on the toolbar's step. */
   const stepSize = (s, dir) => clamp(Math.round((s + dir * STEP) / 5) * 5, LIM.s[0], LIM.s[1]);
   /** Pure: every pair of rects [{id, l, t, r, b}] that overlap by more than `min` px on both axes.
@@ -69,7 +82,8 @@ const HudArrange = (() => {
     let raf = 0, pending = null, context = null, opener = null;
     let shown = null;      // dialogs WE hid: { settings, pause }
     let revealed = [];     // [{ el, hidden, text:[{el, text}] }] pieces we unhid with sample content
-    let bar = null, nameEl = null, hintEl = null, picker = null;
+    let bar = null, nameEl = null, hintEl = null, picker = null, visBtn = null;
+    const hasEls = () => typeof HudElements !== "undefined" && HudElements && typeof HudElements.isOn === "function";
 
     const elOf = (id) => { const row = ELEMENTS.find((e) => e[0] === id); return row ? document.querySelector(row[2]) : null; };
     const labelOf = (id) => { const row = ELEMENTS.find((e) => e[0] === id); return row ? row[1] : id; };
@@ -117,6 +131,8 @@ const HudArrange = (() => {
       bar.appendChild(mk("−", "Smaller", () => size(-1), "hud-arrange-smaller"));
       bar.appendChild(mk("+", "Larger", () => size(1), "hud-arrange-larger"));
       bar.appendChild(mk("RESET", "Reset this element to the shipped layout", () => { if (selected) { flush(); HudLayout.resetEl(selected, context.set, context.profile); after(); } }, "hud-arrange-reset"));
+      visBtn = mk("HIDE", "Hide or show this element in the race", toggleVis, "hud-arrange-vis");
+      bar.appendChild(visBtn);
       bar.appendChild(mk("DONE", "Done arranging the HUD", () => setEditing(false), "hud-arrange-done"));
       bar.hidden = true;
       document.body.appendChild(bar);
@@ -154,8 +170,17 @@ const HudArrange = (() => {
       const cur = selected ? current(selected) : null;
       if (picker && selected) picker.value = selected;
       nameEl.textContent = selected ? labelOf(selected) + (cur ? " " + cur.s + "%" : "") : "ARRANGE HUD";
+      const off = selected && hasEls() && !visShown(selected, HudElements.isOn);
       hintEl.textContent = clash && clash.length ? "OVERLAP: " + clash.slice(0, 2).map((p) => p.map(labelOf).join(" × ")).join(", ")
+        : off ? "hidden in the race \u00b7 SHOW brings it back"
         : selected ? "drag to move · pinch or − + to size" : "touch a readout to move it";
+      if (visBtn) {
+        const can = !!selected && hasEls() && visIds(selected).length > 0;
+        visBtn.disabled = !can;
+        visBtn.textContent = off ? "SHOW" : "HIDE";
+        visBtn.setAttribute("aria-pressed", off ? "true" : "false");
+        visBtn.title = selected && !visIds(selected).length ? labelOf(selected) + " has its own setting in DISPLAY \u203a HUD" : "";
+      }
     }
 
     /* ---- clash marks: HUD pieces against each other and against the touch controls ---- */
@@ -214,6 +239,30 @@ const HudArrange = (() => {
         flush();
         if (editing) after();
       });
+    }
+    /* HIDDEN PIECES STAY REACHABLE WHILE ARRANGING. body[data-hud-hide] hides a
+       piece with display:none, so a piece hidden here (or earlier in SETTINGS)
+       could never be touched to bring it back. While the editor is on, the
+       attribute comes off and each hidden piece is a dimmed ghost
+       ([data-hl-off]); HudElements.apply() puts the real list back on exit. */
+    function ghosts() {
+      if (!hasEls()) return;
+      if (document.body.dataset) delete document.body.dataset.hudHide;
+      for (const [id, , sel] of ELEMENTS) {
+        const el = document.querySelector(sel);
+        if (!el) continue;
+        if (visShown(id, HudElements.isOn)) { if (el.hasAttribute("data-hl-off")) el.removeAttribute("data-hl-off"); }
+        else el.setAttribute("data-hl-off", "");
+      }
+    }
+    function toggleVis() {
+      if (!selected || !hasEls()) return;
+      const ids = visIds(selected);
+      if (!ids.length) return;
+      const on = !visShown(selected, HudElements.isOn);
+      for (const v of ids) HudElements.set(v, on);   // persists and re-applies the list…
+      ghosts();                                       // …which the editor lifts again while it is on
+      after();
     }
     function size(dir) {
       if (!selected) return;
@@ -279,6 +328,7 @@ const HudArrange = (() => {
         reveal();
         for (const [, , sel] of ELEMENTS) { const el = document.querySelector(sel); if (el) el.setAttribute("data-hl-arr", ""); }
         document.body.setAttribute("data-hud-arrange", "1");
+        ghosts();
         selected = ELEMENTS.find(([id]) => visible(elOf(id)))?.[0] || null;
         picker.textContent = "";
         for (const [id, label] of ELEMENTS) {
@@ -296,7 +346,9 @@ const HudArrange = (() => {
           if (!el) continue;
           el.removeAttribute("data-hl-arr");
           if (el.hasAttribute("data-hl-clash")) el.removeAttribute("data-hl-clash");
+          if (el.hasAttribute("data-hl-off")) el.removeAttribute("data-hl-off");
         }
+        if (hasEls() && HudElements.apply) HudElements.apply();   // the real hide list back
         conceal();
         if (restore === false) shown = null; else restoreDialogs();
         drag = null; pinch = null; pointers.clear();
@@ -329,7 +381,7 @@ const HudArrange = (() => {
       const tip = document.createElement("p");
       tip.className = "adv-help";
       tip.id = "pm-hud-arrange-help";
-      tip.textContent = "Drag any readout to move it, pinch or use − / + to size it; a red outline means two things overlap. Saved per HUD STYLE and camera set, the same layout as MOVE & SIZE.";
+      tip.textContent = "Drag any readout to move it, pinch or use − / + to size it, HIDE / SHOW it; a red outline means two things overlap. Saved per HUD STYLE and camera set, the same layout as MOVE & SIZE.";
       btn.onclick = () => setEditing(!editing);
       host.insertBefore(btn, anchor.nextSibling);
       host.insertBefore(tip, btn.nextSibling);
@@ -430,6 +482,6 @@ const HudArrange = (() => {
     return Object.freeze({ setEditing, isEditing: () => editing, selected: () => selected });
   }
 
-  return Object.freeze({ LIM, STEP, MIN_CLASH, dragTo, pinchTo, stepSize, clashes, create });
+  return Object.freeze({ LIM, STEP, MIN_CLASH, VIS, visIds, visShown, dragTo, pinchTo, stepSize, clashes, create });
 })();
 Object.freeze(HudArrange);

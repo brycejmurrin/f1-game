@@ -137,7 +137,7 @@ async function bootPage(browser, plan, touch) {
 
 async function main() {
   const F = makeFlags(process.argv.slice(2), KNOWN);
-  if (F.has("--help")) { console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 21).map((l) => l.replace(/^\/\/ ?/, "")).join("\n")); return; }
+  if (F.has("--help") || process.argv.includes("-h")) { console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 21).map((l) => l.replace(/^\/\/ ?/, "")).join("\n")); return; }
   const cells = planCells(F);
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const out = path.resolve(ROOT, F.flag("--out", path.join("artifacts", "hud-mock", stamp)));

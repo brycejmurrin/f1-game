@@ -1258,7 +1258,47 @@ body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="comp
 body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
 #ga-head h2 { margin: 0 0 calc(var(--gap) * 0.5); }
 
+/* ---------- UI Fit r5: camera tuner compact tap floor (#camtune only) ----------
+   Survey (artifacts/ui-fit-r5): on short landscape docks the shared rail-off /
+   rail-on foot rules floor buttons at --tap-min (24) with padding:0, which
+   overrides the compact --tap-paint floor set earlier in this file. Measured
+   ios-iphone-landscape-safari: #ct-close 67×27, preview chips truncated under
+   house --tap (52), #ct-copy-from select 108×26. Lighting keeps the shared
+   rules; these selectors are camera-only so a lighting pass is untouched. */
+#camtune-inner[data-density="compact"][data-rail="off"] > .sheet-foot button,
+#camtune-inner[data-density="compact"][data-rail="on"] > .sheet-foot button {
+  min-height: var(--tap-paint);
+  padding: calc(var(--gap) / 2) calc(var(--gap) * 2 / 3);
+}
+#camtune-inner[data-density="compact"] #ct-previews > button {
+  min-height: var(--tap-paint);
+}
+#camtune-inner #ct-copyrow select,
+#camtune-inner #ct-copy-from {
+  min-height: var(--tap-paint);
+}
+#camtune-inner #ct-modes .lt-tab {
+  min-width: var(--tap-paint);
+}
+
 } /* @layer components */
+
+/* ---------- UI Fit r6: lighting tuner compact tap floor (#lighting only) ----------
+   Same root as r5/camera (#1530): shared rail-off / rail-on foot rules floor
+   buttons at --tap-min with padding:0, overriding the compact --tap-paint
+   floor. Survey r5 rank 2: 16 soft taps/cell = FX tab 42×52 + 12 --slider
+   ranges + RESET/COPY/DONE ~27–29 tall. Lighting-only so the r5 camera carve
+   stays untouched. */
+@layer components {
+#lighting-inner[data-density="compact"][data-rail="off"] > .sheet-foot button,
+#lighting-inner[data-density="compact"][data-rail="on"] > .sheet-foot button {
+  min-height: var(--tap-paint);
+  padding: calc(var(--gap) / 2) calc(var(--gap) * 2 / 3);
+}
+#lighting-inner #lt-tabs .lt-tab {
+  min-width: var(--tap-paint);
+}
+}
 
 /* #pc-toggle narrow/compact overrides, OUTSIDE @layer components on purpose:
    hud.css sets #pc-toggle unconditionally from inside @layer hud, and layer

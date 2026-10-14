@@ -243,12 +243,16 @@ test("the cockpit lens draws the live mirror glass XOR the sky-tint fallback", (
     assert.equal(r.calls[0][1], FB);
     assert.deepEqual(r.counts, [0, 1], JSON.stringify(o));
   }
-  // The fallback's look is unchanged: the day / night emissive.
+  // The fallback's look: day emissive 0.55; night shows the dim night-env mesh
+  // at emissive ~0.85 (was 0.08 × day-sky bands + glossy specular → 7–10× too bright).
   assert.equal(run({ mp: "off" }).calls[0][2], 0.55);
-  assert.equal(run({ mp: "off", nite: true }).calls[0][2], 0.08);
+  assert.equal(run({ mp: "off", nite: true }).calls[0][2], 0.85);
   // drawCockpitRig reaches it for every procedural cockpit, and it is the ONLY fallback draw.
   assert.match(fnSource(src, "function drawCockpitRig("), /if \(!carModelBuf\) drawMirrorLens\(c, base, nite\);/);
   assert.equal(src.split("getMirrorFallback(").length - 1, 1, "getMirrorFallback is drawn from drawMirrorLens only");
+  // Matte fallback — no day-env / lamp-specular blowout on the sky-tint card.
+  assert.match(src, /roughness:\s*0\.92/);
+  assert.match(fn, /getMirrorFallback\(quads,\s*!!nite\)/);
 });
 
 // THE HUD MIRROR AND THE BROADCAST PiP draw a rival the way the main pass does:
@@ -634,7 +638,7 @@ test("the first-person caster is the whole car minus the driver, with the player
   const cx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap };
   cx.globalThis = cx; vm.createContext(cx);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/liveries.js", "js/car/helmets.js",
-    "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-materials.js", "js/car/car-shade.js", "js/car/car-body-geom.js", "js/car/car3d.js"]) vm.runInContext(read(f), cx, { filename: f });
+    "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js", "js/car/car-shade.js", "js/car/car-body-geom.js", "js/car/car3d.js"]) vm.runInContext(read(f), cx, { filename: f });
   const Car3D = vm.runInContext("Car3D", cx);
   const C1 = [0.9, 0.1, 0.1], C2 = [0.1, 0.1, 0.9];
   for (const teamId of ["ferrari", "mclaren", "redbull"]) {
@@ -664,4 +668,51 @@ test("the first-person caster is the whole car minus the driver, with the player
       if (h) assert.ok(ownH > 0, `${teamId}/halo ${h}: a halo is cast`);
     }
   }
+});
+
+// ── A-H3 (perf hunt 4): the aero flaps take R1's coalescing seam, exactly as the wheel layers do ────
+// game.js drawAeroFlaps hands its opaque bag through CarDraw.coOpt: on TLX (gfx.coalesce === true) the
+// sibling carries `coalesce` and every flap mesh of the field draws as one instanced run per pass;
+// GLX / WGX (no gfx.coalesce) and an alpha < 1 bag get the bag itself, so their draws are unchanged.
+// VM census (tools/lib/game-vm.cjs, montreal, helmet, 10 s): 22 flap records over 13 meshes -> 13.
+test("A-H3: drawAeroFlaps draws through CarDraw.coOpt — coalesced on TLX, the bag itself elsewhere", () => {
+  const src = symbolSource("function drawAeroFlaps(");
+  assert.match(src, /const co = typeof CarDraw !== "undefined" \? CarDraw\.coOpt\(mat\) : mat;/, "one sibling per call, before either branch");
+  assert.match(src, /if \(set\) gfx\.draw\(set, modelMat, co\);/, "the still / at-rest set");
+  assert.match(src, /if \(mesh\) gfx\.draw\(mesh, W, co\);/, "each moving element");
+  assert.equal(src.split("gfx.draw(").length - 1, 2, "no other draw in drawAeroFlaps bypasses the seam");
+  const v = carDrawVm();
+  const draws = [];
+  const gfx = { draw: (mesh, m, o) => draws.push({ mesh, o }) };
+  const CarMesh = { getAeroFlapSet: () => ({ set: true }), getAeroFlap: () => ({ flap: true }) };
+  const Car3D = { aeroFlaps: () => [{ wing: "front", zAngle: 0, xAngle: 0.3, y: 0.2, z: 1 }, { wing: "rear", zAngle: 0, xAngle: 0.4, y: 0.8, z: -1.5 }] };
+  const run = (CarDraw) => new Function("wingColorOf", "clamp", "resolveLivery", "Car3D", "CarMesh", "gfx", "_flapWorld", "CarDraw",
+    src + "\nreturn drawAeroFlaps;")(() => [1, 0, 0], (x, a, b) => Math.min(b, Math.max(a, x)), () => ({}), Car3D, CarMesh, gfx, new Float32Array(16), CarDraw);
+  const paint = { roughness: 0.3, metalness: 0.1, specular: 0.5, clearcoat: 0.4, emissive: 0, carPaint: 1, sparkle: 1, doubleSided: true };
+  const I = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  // GLX / WGX: no gfx.coalesce — the bag itself, on both branches.
+  v.G.gfx.coalesce = undefined;
+  run(v.ctx.CarDraw)({ id: "t" }, 2, 0, I, paint, null);
+  run(v.ctx.CarDraw)({ id: "t" }, 2, 0.5, I, paint, null);
+  assert.equal(draws.length, 3);
+  assert.ok(draws.every((d) => d.o === paint), "GLX/WGX: every flap draw carries the caller's bag");
+  // TLX: the sibling, carrying coalesce and the bag's own values; alpha < 1 stays the bag.
+  draws.length = 0;
+  v.G.gfx.coalesce = true;
+  run(v.ctx.CarDraw)({ id: "t" }, 2, 1, I, paint, null);
+  run(v.ctx.CarDraw)({ id: "t" }, 2, 0.5, I, paint, null);
+  assert.equal(draws.length, 3);
+  for (const d of draws) {
+    assert.notEqual(d.o, paint, "TLX: a sibling, never the caller's bag");
+    assert.equal(d.o.coalesce, true);
+    for (const k in paint) assert.equal(d.o[k], paint[k], "TLX: the sibling copies " + k);
+  }
+  assert.equal(draws[0].o, draws[1].o, "one sibling per bag (refreshed per call), so the backend's run keys hold");
+  draws.length = 0;
+  const ghost = Object.assign({ alpha: 0.5 }, paint);
+  run(v.ctx.CarDraw)({ id: "t" }, 2, 0, I, ghost, null);
+  assert.equal(draws[0].o, ghost, "alpha < 1 (blended) never coalesces");
+  // Before create() (no instance) the module-level seam is the identity.
+  assert.equal(v.ctx.CarDraw.coOpt(paint), v.carDraw.coOpt(paint), "CarDraw.coOpt delegates to the live instance");
+  assert.match(read("js/car/car-draw.js"), /coOpt: \(o\) => \(_instance \? _instance\.coOpt\(o\) : o\)/, "…and is the identity before one exists");
 });

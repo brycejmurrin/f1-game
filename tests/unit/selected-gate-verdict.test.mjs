@@ -191,3 +191,18 @@ test("15-F2 CLI: cancelled + a started shard with an empty junit exits 1; a clas
   assert.match(q.out, /\(no spec\) spec failed to load/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("CI selection reporter annotates unreadable specs and counts them as dropped", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/ci-select-specs-step.sh"), "utf8");
+  const report = src.slice(src.lastIndexOf("node -e '") + "node -e '".length, src.lastIndexOf("'"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sel-report-"));
+  const brokenSpec = ["tests", "specs", "broken.spec.js"].join("/");
+  try {
+    fs.writeFileSync(path.join(dir, "sel.json"), JSON.stringify({ reason: "helper", selected: [], groups: [], tracked: [], overBudgetSpecs: [], coveredByFixedGates: [], skipped: [], unreadable: [{ file: brokenSpec, tests: null }] }));
+    const output = path.join(dir, "output");
+    const text = execFileSync(process.execPath, ["-e", report], { cwd: dir, env: { ...process.env, GITHUB_OUTPUT: output }, encoding: "utf8" });
+    assert.match(text, /::error::DROPPED .*unreadable.*tests\/specs\/broken.spec.js/);
+    assert.match(fs.readFileSync(output, "utf8"), /dropped=1/);
+    assert.equal(selectedGateVerdict({ ...base, dropped: "1" }).ok, false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

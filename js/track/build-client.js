@@ -188,13 +188,17 @@ const TrackBuildClient = (function () {
         if (_w === worker) drop("no answer for " + def.id + " in " + ANSWER_MS / 1000 + " s");
       }, ANSWER_MS);
       _pending.set(seq, { resolve: (m) => { if (timer != null) clearTimeout(timer); resolve(m); }, def });
-      worker.postMessage({
+      try { worker.postMessage({
         type: "build", seq, idx, id: def.id,
         opts: { night: opts.night, gridSlots: opts.gridSlots, chunkRibbons: !!opts.chunkRibbons, retainGraph: false },
         mobileTier: !!gfx.mobileTier, chunkedTrackCoords: gfx.chunkedTrackCoords,
         scenery: sceneryFile ? url(sceneryFile) : null,
         team: myTeam(),
-      });
+      }); } catch (e) {
+        // Includes structured-clone failures: settle through the pending
+        // wrapper so its timer is cleared and the caller can build in steps.
+        if (_w === worker) drop("build send " + ((e && e.message) || "failed"));
+      }
     });
   }
   // The MY TEAM entry of the PAGE's Teams.LIST (custom-team.js splices the

@@ -20,7 +20,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork } from "../../tools/gfx/frame-hitch.mjs";
+import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, raceEntrySpanList, analyseDepthDiscard } from "../../tools/gfx/frame-hitch.mjs";
 
 // A frame series: `spikeEvery` frames apart, `spikeMs` long, `baseMs` otherwise.
 function series(frames, baseMs, spikeEvery, spikeMs) {
@@ -217,10 +217,10 @@ test("analyseCpu ranks by exact self time and folds a function reached two ways"
     nodes: [
       cpuNode(1, "(root)", "", 0, [2, 4]),
       cpuNode(2, "render", "http://x/js/render/three/tlx.js?v=abc", 3400, [3]),
-      cpuNode(3, "getNodeBuilderState", "http://x/vendor/three-0.186.0/three.webgpu.min.js", 5, []),
+      cpuNode(3, "getNodeBuilderState", "http://x/vendor/three-0.186.1/three.webgpu.min.js", 5, []),
       cpuNode(4, "endPass", "http://x/js/render/three/tlx-shadow.js?v=abc", 260, [5, 6]),
-      cpuNode(5, "getNodeBuilderState", "http://x/vendor/three-0.186.0/three.webgpu.min.js", 5, []),
-      cpuNode(6, "createBindings", "http://x/vendor/three-0.186.0/three.webgpu.min.js", 5, []),
+      cpuNode(5, "getNodeBuilderState", "http://x/vendor/three-0.186.1/three.webgpu.min.js", 5, []),
+      cpuNode(6, "createBindings", "http://x/vendor/three-0.186.1/three.webgpu.min.js", 5, []),
     ],
     samples:    [3,      3,      5,       6,      1,     6],
     timeDeltas: [100000, 50000,  150000,  40000,  10000, 60000],
@@ -229,9 +229,9 @@ test("analyseCpu ranks by exact self time and folds a function reached two ways"
   assert.equal(a.totalMs, 410, "total is the sum of the deltas");
   assert.match(a.verdict, /TOP SELF TIME: getNodeBuilderState/);
   assert.equal(a.rows[0].ms, 300, "two parents fold into one 300 ms row");
-  assert.equal(a.rows[1].site, "createBindings @ vendor/three-0.186.0/three.webgpu.min.js:6");
+  assert.equal(a.rows[1].site, "createBindings @ vendor/three-0.186.1/three.webgpu.min.js:6");
   assert.equal(a.rows[1].ms, 100);
-  assert.equal(a.files[0].file, "vendor/three-0.186.0/three.webgpu.min.js");
+  assert.equal(a.files[0].file, "vendor/three-0.186.1/three.webgpu.min.js");
   assert.ok(a.files[0].share > 0.97, "the per-file fold attributes 400 of 410 ms to the bundle");
 });
 
@@ -361,6 +361,70 @@ test("analyseGapWork attributes a multi-second rAF gap to the step before it and
   assert.match(g.summary, /^3 rAF gap\(s\) >= 500 ms .*worst 4100 ms \[driven window\], 3900 ms of it in the step before, 3895 ms in long tasks/);
   assert.match(analyseGapWork([], {}).summary, /no rAF gap/);
   assert.match(analyseGapWork(null).note, /no gap series/);
+});
+
+test("analyseRaceEntrySpans names the race-entry span each long task and rAF gap fell in (hunt 4 B-F3.3)", () => {
+  // The shape hunter B could only infer: a 2.1 s single task that IS
+  // warmCarAssets, the lazy-bundle "resets" leg, a warm stage, and a task in
+  // no span at all. Page clock throughout; marks are ms from winT0.
+  const rep = { winT0: 1010,
+    legs: [{ n: "scenery", ms: 100 }, { n: "resets", ms: 600 }, { n: "loadTrack", ms: 1200 }, { n: "makeCars", ms: 50 },
+      { n: "settings", ms: 400 }, { n: "gridUp", ms: 40 }, { n: "finish", ms: 10 }],
+    marks: [{ n: "begin:startRace", t: 0 }, { n: "ensureScenery:start", t: 1 }, { n: "ensureScenery:end", t: 80 },
+      { n: "warm:request", t: 2400 }, { n: "warmCarAssets:start", t: 2410 }, { n: "warmCarAssets:end", t: 4510 },
+      { n: "debrisPrime:start", t: 4511 }, { n: "debrisPrime:end", t: 4530 }, { n: "present:warming", t: 4600 },
+      { n: "present:ready", t: 12000 }, { n: "end", t: 12030 }] };
+  const warm = { at: 5600, scene: 3000, fx: 1000, post: 500, shadow: 0, mirror: 2900, draw: null, total: 7400 };
+  const censusMarks = { raceCall: 1000, trackReady: 2950, parked: 13500 };
+  const longTasks = [[500, 100], [1020, 60], [1200, 550], [3425, 2090], [9000, 300], [13100, 200]];
+  const gaps = [{ at: 3415, gapMs: 2150, prevFrameMs: 4 }, { at: 20000, gapMs: 900, prevFrameMs: 3 }];
+  const r = analyseRaceEntrySpans({ rep, warm, censusMarks, gaps, longTasks, win: { t0: 14000, t1: 34000 } });
+  assert.equal(r.fromMark, "census:raceCall");
+  assert.equal(r.windowMs, 13000, "race() to the census arming its window");
+  assert.equal(r.eventCount, 6, "the task before race() and the gap after the window are out");
+  assert.deepEqual(r.events.slice(0, 2).map((e) => e.kind), ["gap", "longtask"], "ranked by length, gaps and tasks together");
+  const top = r.events[1];
+  assert.equal(top.ms, 2090); assert.equal(top.span, "warmCarAssets");
+  assert.equal(top.share, 1); assert.equal(top.atMs, 2425);
+  assert.match(top.after, /^warmCarAssets:start \(\+5 ms\)$/); assert.equal(top.before, "warmCarAssets:end");
+  const gap = r.events.find((e) => e.kind === "gap");
+  assert.equal(gap.span, "warmCarAssets"); assert.equal(gap.prevFrameMs, 4);
+  assert.equal(r.events.find((e) => e.ms === 550).span, "leg:resets (ensureRaceSession + ensureAudio lazy bundles)");
+  assert.equal(r.events.find((e) => e.ms === 300).span, "warm:fx");
+  assert.equal(r.events.find((e) => e.ms === 60).span, "ensureScenery", "a mark span nested in its leg wins the tie");
+  const lost = r.events.find((e) => e.ms === 200);
+  assert.equal(lost.span, null); assert.match(lost.after, /^end \(\+60 ms\)$/); assert.equal(lost.before, "census:parked");
+  assert.deepEqual(r.bySpan.warmCarAssets, { tasks: 1, ms: 2090, longestMs: 2090 });
+  assert.equal(r.unattributedMs, 200);
+  assert.match(r.summary, /^5 long task\(s\) \(3200 ms\) \+ 1 rAF gap\(s\) in 13000 ms of race entry; warmCarAssets 2090 ms\/1, leg:resets .* 510 ms\/1, warm:fx 300 ms\/1, ensureScenery 60 ms\/1; 200 ms in no span$/);
+  // Spans: legs cumulative from winT0, warm stages sequential from warm.at, an
+  // unclosed mark span flagged open rather than dropped.
+  const { spans } = raceEntrySpanList({ winT0: 0, legs: [{ n: "a", ms: 10 }, { n: "b", ms: 5 }],
+    marks: [{ n: "x:start", t: 2 }, { n: "y", t: 9 }] }, { at: 100, scene: 7, fx: null, mirror: 3, total: 12 });
+  assert.deepEqual(spans.map((s) => [s.n, s.t0, s.t1, !!s.open]), [["leg:a", 0, 10, false], ["leg:b", 10, 15, false],
+    ["x", 2, 9, true], ["warm:scene", 100, 107, false], ["warm:mirror", 107, 110, false], ["warm (other)", 100, 112, false]]);
+  // Absence is named, never an empty table.
+  assert.match(analyseRaceEntrySpans({ rep: { note: "no __apex.raceEntryProfile" } }).note, /no raceEntryProfile snapshot — no __apex/);
+  assert.match(analyseRaceEntrySpans({ rep: { winT0: null } }).note, /never armed/);
+  assert.match(analyseRaceEntrySpans().note, /not read/);
+});
+
+test("analyseDepthDiscard reads TLX's depth row over the window only, and is null-safe off TLX (hunt 4 A-P1)", () => {
+  // WebGL2 with nothing reading depth: 380 of 400 window frames invalidated it.
+  const d = analyseDepthDiscard({ on: true, discard: true, kept: false, discards: 120 }, { on: true, discard: true, kept: false, discards: 500 }, 400);
+  assert.deepEqual(d, { supported: true, discard: true, keptLastFrame: false, discards: 500, windowDiscards: 380, windowFrames: 400, discardShare: 0.95,
+    summary: "380 of 400 window frames discarded depth (95%); last frame dropped it" });
+  // WebGPU: depth unneeded, but r186 has no lever — zero invalidations is expected, and said.
+  assert.match(analyseDepthDiscard({ on: true, discard: true, kept: false, discards: 0 }, { on: true, discard: true, kept: false, discards: 0 }, 300).summary,
+    /^0 of 300 window frames discarded depth \(0%\); last frame dropped it — 0 invalidations with depth unneeded: the WebGPU path/);
+  assert.match(analyseDepthDiscard(null, { on: true, discard: false, kept: true, discards: 0 }, 300).summary, /knob OFF/);
+  const noStart = analyseDepthDiscard(null, { on: true, discard: true, kept: true, discards: 7 }, 300);
+  assert.equal(noStart.windowDiscards, undefined, "no arm-time read: no window count, never a cumulative one passed off as it");
+  // GLX/WGX (null), a failed read, post off, a pre-A-P1 build: named, never a zero.
+  assert.equal(analyseDepthDiscard(null, null, 300).supported, false);
+  assert.match(analyseDepthDiscard(null, { error: "depth-read timeout" }, 300).note, /read failed\): depth-read timeout/);
+  assert.match(analyseDepthDiscard(null, { on: false }, 300).note, /post chain is off/);
+  assert.match(analyseDepthDiscard(null, { on: true }, 300).note, /predates A-P1/);
 });
 
 test("the census sizes WebGL2 uploads from the call's own arguments (hunt 4 §A gap i)", () => {

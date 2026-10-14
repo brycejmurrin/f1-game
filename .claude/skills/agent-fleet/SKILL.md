@@ -1,6 +1,6 @@
 ---
 name: agent-fleet
-description: "Use when one session orchestrates sibling workers (Claude Code, Cursor, Grok), a worker is launched/blocked/escalating, or writing a launch prompt, fleet block or hand-back."
+description: "Use when one session orchestrates sibling workers, a worker is blocked/escalating, or writing a launch prompt, fleet block or hand-back; not messaging (session-comms)."
 ---
 
 # Agent fleet: one orchestrator, many workers
@@ -17,6 +17,7 @@ Read your role's reference before acting:
 - **Orchestrator** → [`references/orchestrator.md`](references/orchestrator.md):
   the launch template, the per-vendor spawn / message / wake table, how to read
   the fleet, answering an escalation, what never to do.
+- **Existing PR** (red PR, takeover) → [`references/existing-pr.md`](references/existing-pr.md).
 - **Worker** → [`references/worker.md`](references/worker.md): the loop with
   the command for each step, the escalation rule, the hand-back, the traps that
   cost real sessions.
@@ -62,3 +63,7 @@ reference §Escalate).
   (the Bash hook blocks it). A Cursor `Task` worker launched with
   `environment: "cloud"` has its own VM and counts as a session; if the guard
   still fires there, run the group with `node tools/ci/remote-group.mjs`.
+
+## Launch policy
+
+Binding on every cloud launch prompt: `references/launch-policy.md` (OWNED/FORBIDDEN, caps, lane mutex, twin guard, and the exact line `Do not enable auto-merge or merge.`).

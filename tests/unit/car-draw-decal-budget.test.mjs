@@ -132,3 +132,71 @@ test("the player's LEGENDS slot builds its helmet from the picked legend and key
   assert.equal(opts.length, 1);
   assert.equal(opts[0].helmetKey, undefined);
 });
+
+// ── C-P3 (perf hunt 4): the hi-res swap uploads an ImageBitmap, made off the upload path ──────────────
+// createImageBitmap() does the orientation / premultiply conversion; every backend's createTexture()
+// then uploads the bitmap without one. GLX gets the flip baked in (WebGL ignores UNPACK_FLIP_Y /
+// UNPACK_PREMULTIPLY_ALPHA for an ImageBitmap source), TLX and WGX flip in the copy and get it
+// unflipped; premultiply is baked for all three. The texel contract (byte parity with the canvas
+// upload) is proven in Chromium by tests/unit/livery-tier.test.mjs under APEX_LIVERY_PARITY=1.
+const tick = () => new Promise((r) => setImmediate(r));
+function bitmapRig(backend, { refuse = false } = {}) {
+  const r = rig();
+  const bitmaps = [];
+  r.ctx.createImageBitmap = (src, opts) => {
+    if (refuse) return Promise.reject(new Error("InvalidStateError"));
+    const b = { bitmap: true, src, opts, width: src.width, height: src.height, closed: false, close() { this.closed = true; } };
+    bitmaps.push(b);
+    return Promise.resolve(b);
+  };
+  if (backend) r.G.gfx.backend = backend;
+  return Object.assign(r, { bitmaps });
+}
+const uploads = (r) => r.built.map((c) => (c.bitmap ? "bitmap:" + c.src.id + ":" + JSON.stringify(c.opts) : c.id));
+
+test("C-P3: the hi-res atlas uploads as a premultiplied ImageBitmap — flipped for GLX, unflipped for TLX/WGX", async () => {
+  for (const [backend, opts, kept] of [[undefined, { imageOrientation: "flipY", premultiplyAlpha: "premultiply" }, false],
+    ["three", { premultiplyAlpha: "premultiply" }, true], ["webgpu", { premultiplyAlpha: "premultiply" }, false]]) {
+    const r = bitmapRig(backend), t = team("me"), m = new Float32Array(16);
+    r.carDraw.drawCarDecals(t, m, true, 1, false, true);   // preview now, hi-res kick queued
+    r.drain();                                              // the idle slot paints and asks for the bitmap
+    assert.equal(r.hiBuilds.length, 1, backend + ": one hi-res paint");
+    assert.equal(r.built.length, 1, backend + ": nothing uploaded until the bitmap lands");
+    r.carDraw.drawCarDecals(t, m, true, 1, false, true);   // a frame in between
+    assert.equal(r.idle.length, 0, backend + ": the pending kick keeps its key — no twin scheduled");
+    await tick(); await tick();
+    assert.deepEqual(uploads(r), ["me#1:prev", "bitmap:me#1:hi:" + JSON.stringify(opts)], backend + ": the bitmap is what createTexture gets");
+    assert.equal(r.carDraw.getCarDecalTexture(t, 1, true).canvas.bitmap, true, backend + ": …and what draws");
+    assert.equal(r.bitmaps[0].closed, !kept, backend + (kept ? ": three keeps texture.image, the bitmap stays open" : ": the backend copied it, the bitmap is closed"));
+    assert.equal(r.carDraw.liveryBitmapOpts(backend).imageOrientation, opts.imageOrientation);
+  }
+});
+
+test("C-P3: a bitmap that lands after the livery moved on is closed and never cached", async () => {
+  const r = bitmapRig(undefined), t = team("me"), m = new Float32Array(16);
+  r.carDraw.drawCarDecals(t, m, true, 1, false, true);
+  r.drain();
+  r.carDraw.invalidateDecalTextures("me");   // a livery edit mid-flight: the key is gone
+  await tick(); await tick();
+  assert.equal(r.bitmaps.length, 1);
+  assert.equal(r.bitmaps[0].closed, true, "the orphaned bitmap is closed");
+  assert.deepEqual(uploads(r), ["me#1:prev"], "nothing stale was uploaded");
+  r.carDraw.drawCarDecals(t, m, true, 1, false, true);   // the fresh key schedules its own hi-res pass
+  r.drain(); await tick(); await tick();
+  assert.equal(r.hiBuilds.length, 2, "no failure was counted: the fresh key paints and swaps");
+  assert.equal(r.carDraw.getCarDecalTexture(t, 1, true).canvas.bitmap, true);
+});
+
+test("C-P3: a refused bitmap uploads the canvas (the old path), counted as no failure; apex26.liveryAsync=0 never asks", async () => {
+  const r = bitmapRig(undefined, { refuse: true }), t = team("me"), m = new Float32Array(16);
+  r.carDraw.drawCarDecals(t, m, true, 1, false, true);
+  r.drain(); await tick(); await tick();
+  assert.deepEqual(uploads(r), ["me#1:prev", "me#1:hi"], "the painted canvas goes up as before");
+  assert.equal(r.hiBuilds.length, 1, "one paint, no retry");
+  const q = bitmapRig(undefined);
+  q.G.store.set("liveryAsync", 0);
+  q.carDraw.drawCarDecals(t, m, true, 1, false, true);
+  q.drain();
+  assert.deepEqual(uploads(q), ["me#1:prev", "me#1:hi"], "knob off: the synchronous canvas upload, inside the idle slot");
+  assert.equal(q.bitmaps.length, 0, "createImageBitmap is never called");
+});
