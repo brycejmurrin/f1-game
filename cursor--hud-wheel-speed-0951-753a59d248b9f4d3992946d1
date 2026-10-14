@@ -1,0 +1,1 @@
+1791954612	Cursor Agent	HUD vs wheel-LCD speed parity: repro + tests (js/ui/hud.js, js/car/car-draw.js read-only, tests/unit/hud-speed*.test.mjs, one case in tests/specs/hud-layout.spec.js)  [cursor/hud-wheel-speed-0951; session 753a59d248b9f4d3992946d1]
