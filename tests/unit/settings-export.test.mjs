@@ -496,14 +496,20 @@ test("settings backups preserve the announcer switch and radio effects in both m
 
 test("restoring default motion restores OS preference following", () => {
   const saved = boot().collect("all");
-  assert.equal(saved.settings.appearance.motion, null);
+  assert.equal(saved.settings.a11y.motion, null);
   const target = boot({ disk: { "apex26.motion": '"reduce"' } });
   target.loadSettings(saved);
   assert.equal(target.disk.get("apex26.motion"), "null");
   const bad = target.loadSettings({ format: "apex26-settings-v1", settings: {
-    appearance: { motion: "unknown" }, driving: { steerMode: null },
+    a11y: { motion: "unknown" }, driving: { steerMode: null },
   } });
   assert.equal(bad.skipped, 2, "only a nullable setting accepts null");
+  // Legacy files still carry motion under appearance — applySettings aliases it.
+  const legacy = boot({ disk: { "apex26.motion": '"auto"' } });
+  legacy.loadSettings({ format: "apex26-settings-v1", settings: {
+    appearance: { motion: "reduce" },
+  } });
+  assert.equal(legacy.disk.get("apex26.motion"), '"reduce"');
 });
 
 test("a refused raw reset is a storage failure, not an applied setting", () => {

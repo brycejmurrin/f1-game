@@ -642,6 +642,13 @@ async function createGame(opts) {
       const r = runFile(ctx, f, record);
       if (f === MANIFEST.PATHS.GAME) bootPromise = r;
     }
+    // LAZY_TRACK_BUILD: title boots without the scenery toolkit; VM tests (and
+    // race()) call Tracks.build synchronously, so evaluate the roster here the
+    // way ensureScenery() / ensureTrackBuild() does in the browser before a build.
+    for (const f of (MANIFEST.LAZY_TRACK_BUILD || [])) {
+      if (SKIP.has(f)) continue;
+      runFile(ctx, f, record);
+    }
     // LAZY_CIRCUIT: title boots meta-only TrackDefs; VM tests (and race()) build
     // centreline from Tracks.LIST synchronously, so hydrate every full def here
     // the way ensureCircuit() does in the browser after a pick.

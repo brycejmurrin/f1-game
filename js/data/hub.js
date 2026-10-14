@@ -9,13 +9,22 @@ const DataHub = (function () {
   const NO_RESULT_MSG = "No classification for this session yet — results are published " +
     "shortly after the chequered flag. Pick another session above.";
 
-  // THE OS flag OR SETTINGS › APPEARANCE › MOTION: REDUCED (html[data-motion],
+  // THE OS flag OR SETTINGS › ACCESSIBILITY › REDUCE MOTION (html[data-motion],
   // js/ui/title-fx.js), both read live — the same pair js/ui/hud.js reads.
   function motionReduced() {
     const mq = typeof window !== "undefined" && window.matchMedia
       ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
     return !!(mq && mq.matches) || (typeof document !== "undefined" && !!document.documentElement &&
       !!document.documentElement.dataset && document.documentElement.dataset.motion === "reduce");
+  }
+
+  /** Tyre compound chip text — S/M/H/I/W when COLOURBLIND CUES is on. */
+  function compoundChipLabel(compound) {
+    if (typeof A11yOpts !== "undefined" && A11yOpts.cuesOn && A11yOpts.cuesOn()) {
+      const L = A11yOpts.compoundLetter(compound);
+      if (L) return L;
+    }
+    return (compound || "—").slice(0, 4);
   }
 
   const MINUTE = 60 * 1000;
@@ -725,6 +734,6 @@ const DataHub = (function () {
   });
   // Implementation: js/data/export.js.
   const { loadExport } = DataExport.create({ el, clear, isOpen });
-  return { init, open, close, isOpen };
+  return { init, open, close, isOpen, compoundChipLabel, COMPOUND };
 })();
 Object.freeze(DataHub);

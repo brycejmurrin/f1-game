@@ -122,9 +122,9 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
   };
 }
 
-test("shell declares MOTION, TITLE INTRO, MENU WASH, TITLE ART and REPLAY INTRO", () => {
+test("shell declares TITLE INTRO, MENU WASH, TITLE ART and REPLAY INTRO (motion is a11y)", () => {
   assert.ok(SHELL.includes('id="pm-panel-appearance"'));
-  assert.ok(SHELL.includes('id="pm-motion"'));
+  assert.ok(!SHELL.includes('id="pm-motion"'), "REDUCE MOTION row is built by A11yOpts");
   assert.ok(SHELL.includes('id="pm-titleintro"'));
   assert.ok(SHELL.includes('id="pm-menuwash"'));
   assert.ok(SHELL.includes('id="pm-titleart"'));
@@ -134,8 +134,9 @@ test("shell declares MOTION, TITLE INTRO, MENU WASH, TITLE ART and REPLAY INTRO"
   assert.ok(SHELL.includes("apex26.titleArt"));
 });
 
-test("defaults: motion ON, intro FULL, wash FULL, title art ON (no data-*)", () => {
+test("defaults: motion AUTO (effective ON), intro FULL, wash FULL, title art ON (no data-*)", () => {
   const { html, M } = load({ readyState: "loading" });
+  assert.equal(M.choice(), "auto");
   assert.equal(M.mode(), "on");
   assert.equal(M.introMode(), "full");
   assert.equal(M.washMode(), "full");
@@ -146,15 +147,20 @@ test("defaults: motion ON, intro FULL, wash FULL, title art ON (no data-*)", () 
   assert.equal(html.dataset.titleArt, undefined);
 });
 
-test("OS reduced motion always wins over a stored ON", () => {
-  const { html, M } = load({ osReduce: true, stored: { motion: "on" } });
-  assert.equal(M.mode(), "reduce");
-  assert.equal(html.dataset.motion, "reduce");
+test("AUTO follows OS; OFF overrides OS; legacy ON reads as AUTO", () => {
+  const autoOs = load({ osReduce: true, stored: { motion: "on" } });
+  assert.equal(autoOs.M.choice(), "auto");
+  assert.equal(autoOs.M.mode(), "reduce");
+  assert.equal(autoOs.html.dataset.motion, "reduce");
+  const off = load({ osReduce: true, stored: { motion: "off" } });
+  assert.equal(off.M.mode(), "on");
+  assert.equal(off.html.dataset.motion, undefined);
 });
 
-test("a stored REDUCED lands on a normal OS, and garbage reads as unset (ON)", () => {
+test("a stored REDUCE (ON) lands on a normal OS, and garbage reads as AUTO", () => {
   assert.equal(load({ stored: { motion: "reduce" } }).html.dataset.motion, "reduce");
   assert.equal(load({ stored: { motion: 7 } }).M.mode(), "on");
+  assert.equal(load({ stored: { motion: 7 } }).M.choice(), "auto");
 });
 
 test("TITLE INTRO quick/off stamp data-title-intro; garbage falls to full", () => {
@@ -186,12 +192,12 @@ test("TITLE ART soft/off stamp data-title-art; garbage falls to on", () => {
   assert.equal(load({ stored: { titleArt: "neon" } }).M.artMode(), "on");
 });
 
-test("Appearance rows wire and round-trip motion + intro + wash + titleArt", () => {
+test("Appearance rows wire and round-trip intro + wash + titleArt (motion via setChoice)", () => {
   const { wired, written, html, ids, M } = load();
   assert.deepEqual(wired.map((w) => w.id).sort(), [
-    "pm-menuwash", "pm-motion", "pm-titleart", "pm-titleintro",
+    "pm-menuwash", "pm-titleart", "pm-titleintro",
   ]);
-  ids.get("pm-motion")._spec.write("reduce");
+  M.setChoice("reduce");
   assert.equal(written.motion, "reduce");
   assert.equal(html.dataset.motion, "reduce");
   ids.get("pm-titleintro")._spec.write("quick");
@@ -211,15 +217,17 @@ test("Appearance rows wire and round-trip motion + intro + wash + titleArt", () 
   assert.equal(html.dataset.titleIntro, undefined);
   M.setWash("full");
   assert.equal(html.dataset.menuWash, undefined);
-  M.set("on");
+  M.setChoice("auto");
   assert.equal(html.dataset.motion, undefined);
+  M.setChoice("off");
+  assert.equal(written.motion, "off");
 });
 
 test("wiring waits for DOMContentLoaded while deferred scripts still run", () => {
   const { wired, document } = load({ readyState: "interactive" });
   assert.equal(wired.length, 0, "SettingRow loads after this file — never wire at eval here");
   document._handlers.DOMContentLoaded();
-  assert.equal(wired.length, 4);
+  assert.equal(wired.length, 3, "TITLE INTRO / MENU WASH / TITLE ART — REDUCE MOTION is A11yOpts");
 });
 
 test("REPLAY INTRO button calls replay()", () => {
@@ -330,7 +338,7 @@ test("CSS keys off data-motion / data-title-intro / data-menu-wash / data-title-
   assert.match(MENUS, /data-title-intro="quick"/);
   assert.match(MENUS, /:not\(\[data-title-intro="off"\]\)/);
   assert.match(COMP, /:not\(\[data-title-intro="off"\]\)/);
-  assert.match(EXPORT, /k:\s*"motion"[\s\S]*?group:\s*"appearance"/);
+  assert.match(EXPORT, /k:\s*"motion"[\s\S]*?group:\s*"a11y"/);
   assert.match(EXPORT, /k:\s*"titleIntro"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"menuWash"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"titleArt"[\s\S]*?group:\s*"appearance"/);
