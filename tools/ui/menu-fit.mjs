@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // menu-fit — audit every menu screen for cramped / clipped layout at a given
-// @doc Audits every menu screen for cramped/clipped layout at a viewport; `--safe=` simulates arbitrary notch insets.
-// @skill ui-menu-a11y
+// @doc DEPRECATED except `--safe=` (arbitrary notch insets); use `ui/layout-audit.mjs` for menu fit at a viewport.
+// @skill survey-ui-matrix
 // @deprecated Prefer tools/ui/layout-audit.mjs for the matrix. This CLI remains
 //   ONLY for `--safe=` notch-inset simulation (layout-audit does not yet own that).
 //   survey-ui-matrix / css-play: use layout-audit; reach here when you need --safe=.
