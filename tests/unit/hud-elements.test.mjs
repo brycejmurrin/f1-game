@@ -147,6 +147,41 @@ test("broadcast REL default yields to an explicit store override and follows a s
   assert.match(live.__body.dataset.hudHide, /\brel\b/);
 });
 
+test("HudLayout eval survives HudElements.apply reading profile() (no TDZ abort)", () => {
+  const cam = fs.readFileSync(path.join(ROOT, "js/camera/cam-groups.js"), "utf8");
+  const layout = fs.readFileSync(path.join(ROOT, "js/ui/hud-layout.js"), "utf8");
+  const written = {};
+  const classes = new Set(["hud-prof-broadcast"]);
+  const ctx = {
+    console,
+    document: {
+      body: {
+        dataset: {},
+        classList: { contains: (c) => classes.has(c), toggle() {}, add() {}, remove() {} },
+        setAttribute() {},
+      },
+      readyState: "loading",
+      getElementById: () => null,
+      querySelector: () => null,
+      addEventListener() {},
+    },
+    GameStore: {
+      store: {
+        get(k, d) { return k === "hudProfile" ? "broadcast" : (k in written ? written[k] : d); },
+        set(k, v) { written[k] = v; },
+        subscribe() { return () => {}; },
+      },
+    },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(SRC + "; this.HudElements = HudElements;", ctx);
+  vm.runInContext(cam + "\n" + layout + "; this.HudLayout = HudLayout;", ctx);
+  assert.equal(typeof ctx.HudLayout, "object", "hud-layout.js finished; HudLayout is published");
+  assert.equal(typeof ctx.HudLayout.profile, "function");
+  assert.equal(typeof ctx.HudLayout.apply, "function");
+  assert.equal(ctx.HudElements.isOn("rel"), true, "broadcast class + store keep REL on after both evals");
+});
+
 test("SPEED hide covers the whole #hud-speed plate (number + unit), not a second chip", () => {
   const shell = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   const css = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");

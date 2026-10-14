@@ -46,12 +46,13 @@ const HudElements = (function () {
    *  (live body class while racing, else the store); falls back when layout
    *  has not loaded yet (this file is earlier in the roster). */
   function profileOf() {
-    if (typeof HudLayout !== "undefined" && HudLayout && typeof HudLayout.profile === "function") {
-      try {
+    try {
+      // typeof on a const still in TDZ throws (HudLayout.apply at eval).
+      if (typeof HudLayout !== "undefined" && HudLayout && typeof HudLayout.profile === "function") {
         const p = HudLayout.profile();
         if (PROFS[p]) return p;
-      } catch (_) { /* mini-dom / eval order */ }
-    }
+      }
+    } catch (_) { /* mini-dom / eval order / TDZ during hud-layout.js init */ }
     if (typeof document !== "undefined" && document.body && document.body.classList
         && typeof document.body.classList.contains === "function") {
       const c = document.body.classList;
