@@ -3968,8 +3968,10 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // mid-race); freeing the batch must release its caster and geometry.
   assert.match(sh, /const iByBatch = new Map\(\)/, "instanced casters are keyed per batch, not a slot pool");
   assert.doesNotMatch(sh, /iPool/, "no instanced slot pool");
-  assert.match(sh, /function freeInstanced\(batch\) \{[\s\S]*?iByBatch\.delete\(batch\);[\s\S]*?castScene\.remove\(m\);[\s\S]*?m\.dispose\(\)/,
+  assert.match(sh, /function freeInstanced\(batch\) \{[\s\S]*?iByBatch\.delete\(batch\);[\s\S]*?castScene\.remove\(m\);[\s\S]*?disposeCaster\(m\)/,
     "freeInstanced drops the batch's caster from the cast scene and disposes it");
+  // A-H4: an InstancedMesh caster (tlxCasterAttr=0) disposes; the attribute Mesh has no dispose(), so its event.
+  assert.match(sh, /function disposeCaster\(m\) \{\s*try \{ if \(m\.isInstancedMesh\) m\.dispose\(\); else m\.dispatchEvent\(\{ type: "dispose" \}\); \}/);
   const tlxSrc = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(tlxSrc, /function freeInstancedBatch\(batch\) \{\s*if \(!batch\) return;\s*if \(shadowSys && shadowSys\.freeInstanced\) shadowSys\.freeInstanced\(batch\);/,
     "and TLX frees it with the batch");

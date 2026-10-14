@@ -103,11 +103,14 @@ const Teams = (function () {
       // wherever they paint WITHOUT the sun disc (bigmark, flank logo). A sun-gold rim reads
       // on the blue and vanishes on the disc itself.
       // The RB22 left the matte navy for a GLOSS, brighter "racing blue" (redbull.com and
-      // formula1.com launch reports, 16 Jan 2026; "a richer blue than ever", Robb Report),
-      // keeps the yellow nose, and runs a pronounced, non-stepped fin on a slim cover.
+      // formula1.com launch reports, 16 Jan 2026; "a richer blue than ever", Robb Report;
+      // "new-look racing blue … glossy", Red Bull Content Pool 16 Jan 2026). The prior
+      // #0A2F94 still read as dark navy — lift toward published ORBR #3671C6. Cap at
+      // #2555B5 so the authored sun-gold logo3 rim still clears MARK_FLOOR 4.2:1 on
+      // the body (full #3671C6 drops that rim to ~3.14:1). Yellow nose stays.
       livery: { finShape: "standard", spineHeight: "standard", spineLogo: "wrap", spineSide: "duo",
-                logo3: [1.0, 0.788, 0.024], nose: [1.0, 0.788, 0.024], fin: [0.039, 0.184, 0.580] },
-      color: [0.039, 0.184, 0.580], color2: [1.0, 0.843, 0.0],     /* gloss racing blue #0A2F94 / yellow #FFD700 */
+                logo3: [1.0, 0.788, 0.024], nose: [1.0, 0.788, 0.024], fin: [0.145, 0.333, 0.710] },
+      color: [0.145, 0.333, 0.710], color2: [1.0, 0.843, 0.0],     /* gloss racing blue #2555B5 / yellow #FFD700 */
       engine: "Red Bull Ford", tier: 2,
       stats: { speed: 90, accel: 88, cornering: 91, braking: 87 },
       drivers: [
@@ -118,7 +121,13 @@ const Teams = (function () {
     {
       id: "alpine", name: "Alpine", short: "ALP",
       /* spineTint must clear the blue cover (≥2:1). Launch pink #FF87BC is only
-         ~1.56:1 on #0093CC and made every crown band invisible to cover-legibility.
+         ~1.56:1 on #0093CC and made every crown band invisible to cover-legibility,
+         so a prior pass shipped WHITE. That reads as a white stripe on a BWT car.
+         Restore a PINK crown with a lighter tint #FFB3D1 (~2.08:1 on #0093CC) so
+         the band stays visible and still reads as BWT pink (SI/OnSI 23 Jan 2026
+         names “a strip of the engine cover” among the pink zones). #FFD6E7 was
+         ≥2:1 but soft-render Δ vs white stayed under the garage pixelDiff
+         threshold (>24/channel) — use a deeper pink so the stripe is measurable.
          PINK WHERE THE A526 WEARS IT, not wherever c2 falls: a pink nose top
          ("pink surface on the nose", Motorsport.com), the halo, and the big pink
          sponsor lettering on otherwise blue sidepods ("the sidepods return to
@@ -129,7 +138,7 @@ const Teams = (function () {
         // The brand colour is exact (markPalette never substitutes it); the rim
         // is what keeps it legible, the same row a player uses for the same job.
         logo3: [0.06, 0.06, 0.08], finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "band",
-                spineTint: [1.0, 1.0, 1.0], pod: [1.0, 0.529, 0.737], noseStripe: [1.0, 0.529, 0.737],
+                spineTint: [1.0, 0.702, 0.820], pod: [1.0, 0.529, 0.737], noseStripe: [1.0, 0.529, 0.737],
                 halo: [1.0, 0.529, 0.737], wing: [0.0, 0.576, 0.8] },
       color: [0.0, 0.576, 0.8], color2: [1.0, 0.529, 0.737],       /* blue #0093CC / pink #FF87BC */
       engine: "Mercedes", tier: 3,
@@ -217,9 +226,15 @@ const Teams = (function () {
          not `stripe`: the band otherwise takes the LIME accent, and a dark
          `stripe` would darken the NOSE, which the photographs contradict.
          SATIN, not gloss ("the car sports a satin finish", Robb Report, 12 Feb
-         2026), on a compact cover "with vents" (Motorsport.com) — `gills`. */
+         2026; Wikipedia / formula1.com 9 Feb 2026), on a compact cover "with
+         vents" (Motorsport.com) — `gills`. Launch also settles a LIGHT BLUE
+         rear wing (Wikipedia citing formula1.com 9 Feb 2026) — `rearWing`.
+         A near-black airbox `cover` was tried and dropped: it made player
+         crown designs (cap/ridge/fade) read 0% on cover-legibility. The dark
+         spineTint stripe already carries the dark-spine story on body green. */
       livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "logo",
-                spineTint: [0.008, 0.086, 0.078], finish: "satin", coverVents: "gills" },
+                spineTint: [0.008, 0.086, 0.078], finish: "satin", coverVents: "gills",
+                rearWing: [0.55, 0.72, 0.88] },
       color: [0.0, 0.349, 0.31], color2: [0.718, 0.882, 0.106],    /* green #00594F / lime accents */
       engine: "Honda", tier: 4,
       stats: { speed: 74, accel: 72, cornering: 76, braking: 74 },
