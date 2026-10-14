@@ -22,6 +22,8 @@ const TALL_PREV = "#pmsettings-inner[data-shape=\"tall\"] #appearance-studio [da
 const TALL_LIST = "#pmsettings-inner[data-shape=\"tall\"] #appearance-studio [data-as=\"preset-list\"]";
 const TALL_TILE = "#pmsettings-inner[data-shape=\"tall\"] #appearance-studio [data-as=\"preset-list\"] button";
 const WIDE = "#pmsettings-inner[data-shape=\"wide\"] #appearance-studio";
+const WIDE_COMPACT_LIST = "#pmsettings-inner[data-shape=\"wide\"][data-density=\"compact\"] #appearance-studio [data-as=\"preset-list\"]";
+const WIDE_COMPACT_TILE = "#pmsettings-inner[data-shape=\"wide\"][data-density=\"compact\"] #appearance-studio [data-as=\"preset-list\"] button";
 
 test("APPEARANCE panel pads so the last studio tile can scroll above BACK", () => {
   assert.equal(decl(rules, PANEL, "padding-bottom"), PAD,
@@ -53,11 +55,21 @@ test("wide studio keeps two columns (scale 200 landscape still uses data-shape)"
   assert.equal(decl(rules, WIDE, "grid-template-columns"), "minmax(0, 1.15fr) minmax(0, 0.95fr)");
 });
 
+test("wide compact studio is one 5-tile preset row at --tap-paint", () => {
+  assert.equal(decl(rules, WIDE_COMPACT_LIST, "grid-template-columns"), "repeat(5, minmax(0, 1fr))",
+    "short landscape: one row of five, not a 3-row stack under BACK");
+  assert.equal(decl(rules, WIDE_COMPACT_TILE, "min-height"), "var(--tap-paint)");
+  assert.equal(decl(rules, WIDE_COMPACT_TILE, "min-width"), "var(--tap-paint)");
+});
+
 test("studio buttons keep the --tap / --tap-paint floors", () => {
   assert.equal(decl(rules, "#appearance-studio button", "min-height"), "var(--tap)");
   assert.equal(decl(rules, "#appearance-studio [data-as=\"preset-list\"] button", "min-height"),
     "max(var(--tap-paint), calc(var(--tap) * 2.35))",
     "preset tiles keep the taller art box and never drop below --tap-paint");
+  assert.equal(decl(rules, "#appearance-studio input, #appearance-studio select", "min-height"), "var(--tap-paint)");
+  assert.equal(decl(rules, "#appearance-studio [data-as=\"segment\"] > button", "min-width"), "var(--tap-paint)",
+    "HOME / HUD / device chips never shrink below --tap-paint");
 });
 
 test("layout-audit SCREENS opens #pm-panel-appearance", () => {
@@ -75,7 +87,7 @@ test("layout-audit SCREENS opens #pm-panel-appearance", () => {
 });
 
 test("r6 carve stays Settings APPEARANCE (no foreign selectors)", () => {
-  const m = css.match(/UI Fit r6: Settings APPEARANCE[\s\S]*?#pmsettings-inner\[data-shape="wide"\] #appearance-studio \[data-as="preview-side"\]\s*\{[^}]*\}/);
+  const m = css.match(/UI Fit r6: Settings APPEARANCE[\s\S]*?#appearance-studio \[data-as="preview-content"\]\s*\{[^}]*\}/);
   assert.ok(m, "r6 appearance block present with studio / pad / shape selectors");
   assert.doesNotMatch(m[0], /#hud|#lighting|#camtune|#ps-|title|#cs-|touch-controls|#pm-panel-a11y/,
     "must not retarget HUD / tuner / Photo Studio / garage / title / a11y selectors");

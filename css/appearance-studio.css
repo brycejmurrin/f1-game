@@ -21,7 +21,7 @@
 #appearance-studio [data-as="segment"] { display: flex; flex-wrap: wrap; flex: 1; gap: calc(var(--gap) * .25); min-width: 0; }
 #appearance-studio button, #appearance-studio input, #appearance-studio select { font-family: var(--font-ui); font-size: var(--fs-2); min-height: var(--tap-min); }
 #appearance-studio button { width: auto; height: auto; min-height: var(--tap); margin: 0; padding: calc(var(--gap) * .5) var(--gap); border: 1px solid var(--plate-line); border-radius: var(--r-sm); background: var(--plate); color: var(--text); justify-content: center; text-align: center; }
-#appearance-studio [data-as="segment"] > button { flex: 1 1 auto; min-width: 0; }
+#appearance-studio [data-as="segment"] > button { flex: 1 1 auto; min-width: var(--tap-paint); }
 #appearance-studio button[aria-pressed="true"] { background: var(--red); color: var(--menu-accent-ink, var(--text)); border-color: var(--red); box-shadow: var(--edge); }
 #appearance-studio button:focus-visible, #appearance-studio input:focus-visible, #appearance-studio select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 #appearance-studio button:disabled { opacity: .45; cursor: default; }
@@ -213,5 +213,31 @@
   order: 0;
   position: sticky;
   top: 0;
+}
+#pmsettings-inner[data-shape="wide"][data-density="compact"] #appearance-studio [data-as="preset-list"] {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+#pmsettings-inner[data-shape="wide"][data-density="compact"] #appearance-studio [data-as="preset-list"] button {
+  min-height: var(--tap-paint);
+  min-width: var(--tap-paint);
+}
+#appearance-studio input,
+#appearance-studio select {
+  min-height: var(--tap-paint);
+}
+#pmsettings-inner[data-shape="tall"] #appearance-studio [data-as="preview-brand"],
+#pmsettings-inner[data-density="compact"] #appearance-studio [data-as="preview-brand"] {
+  font-size: var(--fs-2);
+}
+#pmsettings-inner[data-shape="tall"] #appearance-studio [data-as="preview-door"],
+#pmsettings-inner[data-density="compact"] #appearance-studio [data-as="preview-door"] {
+  font-size: var(--fs-micro);
+  padding: calc(var(--gap) * .15) calc(var(--gap) * .5);
+  margin-block: calc(var(--gap) * .1);
+}
+#pmsettings-inner[data-shape="tall"] #appearance-studio [data-as="preview-content"],
+#pmsettings-inner[data-density="compact"] #appearance-studio [data-as="preview-content"] {
+  max-width: 100%;
+  padding: calc(var(--pad) * .2);
 }
 }
