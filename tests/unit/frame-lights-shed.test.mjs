@@ -25,7 +25,7 @@ function load() {
     performance: { now: () => clock.t },
   });
   const src = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8")
-    .replace("return { setFrameLights, appendCarTailLights, glowFade, viewLights };",
+    .replace(/return \{ setFrameLights, appendCarTailLights, glowFade, viewLights[^}]*\};/,
              "return { setFrameLights, appendCarTailLights, glowFade, viewLights, tierShed };");
   vm.runInContext(src, ctx);
   return { api: vm.runInContext("FrameLights", ctx), clock, gov };

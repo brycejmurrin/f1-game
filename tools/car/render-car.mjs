@@ -86,9 +86,10 @@ import vm from 'node:vm';
 import { resolve, dirname } from 'node:path';
 import { exitIfHelp } from '../lib/cli-args.mjs';
 
-exitIfHelp(process.argv.slice(2), `usage: node tools/car/render-car.mjs [--views=a,b,c] [--preset=<name>|list] [--team=<id>|all] [options]
+const RC_USAGE = `usage: node tools/car/render-car.mjs [--views=a,b,c] [--preset=<name>|list] [--team=<id>|all] [options]
   Headless batch renderer for tools/carview.html (needs a static server on :3456).
-  Views: hero front rear side frontquarter rearquarter nose tail top turntable all. Full option list: the header of this file.`);
+  Views: hero front rear side frontquarter rearquarter nose tail top turntable all. Full option list: the header of this file.`;
+exitIfHelp(process.argv.slice(2), RC_USAGE);
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { screenshotPresentedCanvas } from '../shot/probe-page.mjs';
@@ -395,6 +396,23 @@ const LIV_FIELDS = ['finShape', 'finStyle', 'finBadge', 'spineLogo', 'spineSide'
 for (const f of LIV_FIELDS) { const v = arg(f, null); if (v != null) qs.set(f, v); }
 // --carsmooth=0 renders the car without CarShade's rounded sections + smooth shading (js/car/car-shade.js; ON by default).
 { const v = arg('carsmooth', null); if (v != null) qs.set('carsmooth', v); }
+// UNKNOWN FLAGS EXIT 2, BEFORE CHROMIUM. arg() only answers the names it is
+// asked for, so `--dry-run`, `--bogus` or a typo (`--tema=redbull`) used to be
+// ignored and the tool booted a browser to render the default McLaren. Every
+// flag this file reads is listed here (tests/unit/tools-runnable.test.mjs pins
+// that each arg('…') literal is in it).
+const RC_FLAGS = new Set(['az', 'bg', 'carsmooth', 'dist', 'el', 'exp', 'flap', 'gpu', 'h',
+  'intensity', 'lightset', 'livery', 'look', 'lookx', 'looky', 'num', 'out', 'preset', 'refl',
+  'rig', 'studio', 'sweep', 'team', 'tod', 'url', 'views', 'w', 'wait', 'plight', 'shot',
+  ...PART_CATS, ...LIV_FIELDS]);
+{
+  const bad = process.argv.slice(2).filter((a) => a.startsWith('--')
+    && !RC_FLAGS.has(a.slice(2, a.includes('=') ? a.indexOf('=') : undefined)));
+  if (bad.length) {
+    console.error(`render-car: unknown flag ${bad.join(' ')}\n${RC_USAGE}`);
+    process.exit(2);
+  }
+}
 // `npx serve` 301s `carview.html?…` to `/tools/carview` and DROPS the query,
 // so every team/aero flag used to boot the default McLaren. The extensionless
 // path keeps the search string (200). CARVIEW.set after ready is the backup

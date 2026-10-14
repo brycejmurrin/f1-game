@@ -853,6 +853,11 @@ __apex.race("singapore"); __apex.lightState();
 // → { ambientSky:[0.13,0.14,0.20], sunColor:[0.16,0.18,0.26], numLights:28,
 //     meanLampRGB:[…], bakedLights:210, lampPosts:200, … }
 ```
+The figures are illustrative (read your own run). Singapore defaults to night
+(`def.night`), so this resolves `singapore|night|dry` in
+`js/lighting/presets.js` — and that row pins no `nightAmbLift`, `bloomMul` or
+`glowAmp`: those come from the shared `*|night|dry` stamp (`nightAmbLift` 1.45,
+`bloomMul` 1.1, `glowAmp` 1.85). `lightTune()` returns the resolved values.
 
 ### `lightTune(o?) → {id: value, …}`
 Get or set the live **lighting-tuner** values — the same registry (`TUNE_DEFS`)
@@ -1926,7 +1931,13 @@ always false. `null` before a player exists.
 ### `caution(arg?) → {level, label, sector, frac, total, sectors, sinceT, cause, enabled}`
 Race control's flags — the flag machine in `js/race/race-control.js` over
 `DebrisWorld.hazards()`. The machine itself moves no car; `js/game.js` reads
-`raceCtl.level` and applies the SC/VSC speed cap (`cautionV`, 0.6 × vTop).
+`raceCtl.level` and applies the caution speed cap (`cautionV`): VSC (level 2)
+caps every car at 0.6 × vTop; SAFETY CAR (level 3) uses
+`RaceControl.scQueueFrac` — the leader, and any car within `SC_QUEUE_GAP`
+(1 s) of the car ahead, runs `SC_PACE` (0.45 × vTop), rising linearly to
+`SC_CATCH` (0.6 × vTop) for a car 2 s or more back, so the field queues up; a
+red flag (level 4) holds 0.02 × vTop. Under VSC/SC an AI car is further capped
+by `RaceControl.holdCap` so it cannot pass the car ahead.
 
 | `level` | `label` |
 |---|---|
@@ -2111,8 +2122,16 @@ live hazards, body positions, or the player's marble-grip factor to the status.
 The side-world never moves a game car.
 
 ### `incident(arg?) → IncidentSim status`
-The windowed incident takeover (`js/physics/incident-sim.js`). No arg → status.
-`{reset:true}`, `{launch:true}` (force a launch), `{flags:{…}}` (feature flags).
+The windowed incident takeover (`js/physics/incident-sim.js`): a car in a
+violent wall or car contact is handed to a Rapier body for a few ticks, then
+handed back. No arg → `IncidentSim.status()`:
+`{r2Airborne, r3Contact, c1Pileup, active, owned, incidents:[{kind, cars,
+ticks, seq}], count, lastKind, promoted, handbacks, fallbacks, seq, stepped}`.
+- `{reset:true}` → hands every owned car back, clears the counters, returns status.
+- `{launch:true}` → arms a one-shot wall launch of the PLAYER on the next tick
+  (only while the layer is active); returns status.
+- `{flags:{r2Airborne?, r3Contact?, c1Pileup?}}` → switch the three takeover
+  kinds (turning one off hands its cars back); returns the flag object, not status.
 
 ### `bodyAttitude(arg?) → {enabled, offsets:{pitch, roll, heave, enabled}}`
 The visual-suspension springs (`js/physics/body-attitude.js`). `true|false` toggles

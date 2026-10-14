@@ -1540,8 +1540,10 @@ const Car3D = (function () {
       for (const s of [-1, 1])
         addBox(out, s*0.84, 0.55, 2.30, 0.035, 0.20, 0.48, wingCol, wingSurf);
     }
-    const aBeam = aeroStyle ? (aeroStyle.beam || 0) : (aeroT === 2 ? 1 : 0);
-    const aDrs  = aeroStyle ? (aeroStyle.drs  || 0) : 0;
+    // 2026: no beam by default (tier-2 used to imply beam:1). Active flaps
+    // (drs) come from aeroStyleOf / buildAeroParts when a recipe omits them.
+    const aBeam = aeroStyle ? (aeroStyle.beam || 0) : 0;
+    const aDrs  = aeroStyle ? (aeroStyle.drs  || 0) : 1;
     const frontSweep = Math.max(-0.08, Math.min(0.22, aeroStyle.frontSweep));
     const frontTaper = Math.max(0.72, Math.min(1.08, aeroStyle.frontTaper));
     const frontRise = Math.max(-0.03, Math.min(0.16, aeroStyle.frontRise));

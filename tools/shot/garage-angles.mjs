@@ -130,12 +130,26 @@ import { sweep as spineSweep, writePng as writeFlatPng } from "../car/spine-stat
 const LIVE_BASE = "https://brycejmurrin.github.io/f1-game/";
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const argv = process.argv.slice(2);
+// Everything the tool owns. Anything ELSE of the form --name=value is taken as
+// a livery field (or `--part.<category>` — a catalog part) and validated
+// in-page — so the flag surface grows with Liveries.FIELDS and Parts.CATALOG
+// instead of with this file.
+const OWN_FLAGS = new Set(["--team", "--livery", "--viewport", "--out", "--zoom", "--pan",
+  "--views", "--against", "--label", "--sheet", "--cell", "--spine-side", "--spine-logo",
+  "--preset", "--plan", "--fast", "--slow", "--settle", "--view-settle", "--live",
+  "--reset", "--resume", "--oracle", "--picker-team", "--rollup-only", "--full-views",
+  "--rollup-view", "--rollup-side", "--rollup-logo",
+  "--az", "--el", "--dist", "--az-nudge", "--el-nudge", "--cam", "--crop", "--name",
+  "--cols", "--json", "--base", "--design", "--zip", "--logos", "--site", "--cdn",
+  "--lamp", "--aero", "--target", "--dpr", "--budget", "--baseline",
+  "--station", "--pair", "--flat", "--eye", "--look", "--path", "--path-steps", "--clamp",
+  "--serve", "--watch", "--overlay"]);
+
 // Bare `--help` used to be silently ignored (OWN_FLAGS only catches `--k=v`
 // unknowns as livery axes) and launch a multi-minute Chromium shoot. Exit
 // before any import that needs a browser settles — this is the first argv a
 // new agent types.
-if (argv.includes("--help") || argv.includes("-h")) {
-  console.log(`garage-angles — garage shots, ONE Chromium (soft #game-soft CDP)
+const GA_USAGE = `garage-angles — garage shots, ONE Chromium (soft #game-soft CDP)
 
   node tools/shot/garage-angles.mjs [--team=redbull|all] [--views=spine] [--plan]
     [--livery=default] [--preset=wall|fin|flank|mark|quick|sweep|none]
@@ -145,8 +159,22 @@ if (argv.includes("--help") || argv.includes("-h")) {
   --preset=list   list named framing presets
   spine      expands to hero,top,rear,side
 
-Full flag surface: header of tools/shot/garage-angles.mjs.`);
+Full flag surface: header of tools/shot/garage-angles.mjs.`;
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log(GA_USAGE);
   process.exit(0);
+}
+// A BARE unknown flag (`--dry-run`, `--bogus`) used to be ignored and the run
+// went on to boot Chromium for a multi-minute shoot. `--k=v` stays open (a
+// livery field or `--part.<category>`, validated in-page); a bare flag must be
+// one this tool owns. Exit 2 before any browser.
+{
+  const bad = argv.filter((a) => a.startsWith("--") && !a.includes("=") && !OWN_FLAGS.has(a));
+  if (bad.length) {
+    console.error(`garage-angles: unknown flag ${bad.join(" ")} (a livery field takes --field=value)\n`);
+    console.error(GA_USAGE);
+    process.exit(2);
+  }
 }
 /** Accept `--name=value` and `--name value` (render-car style). */
 const flag = (name, dflt) => {
@@ -442,20 +470,6 @@ const watchList = argvHas("--watch") ? (listOf(flag("--watch", "")).length ? lis
 const doLive = argvHas("--live");
 const doJson = argvHas("--json");
 
-// Everything the tool owns. Anything ELSE of the form --name=value is taken as
-// a livery field (or `--part.<category>` — a catalog part) and validated
-// in-page — so the flag surface grows with Liveries.FIELDS and Parts.CATALOG
-// instead of with this file.
-const OWN_FLAGS = new Set(["--team", "--livery", "--viewport", "--out", "--zoom", "--pan",
-  "--views", "--against", "--label", "--sheet", "--cell", "--spine-side", "--spine-logo",
-  "--preset", "--plan", "--fast", "--slow", "--settle", "--view-settle", "--live",
-  "--reset", "--resume", "--oracle", "--picker-team", "--rollup-only", "--full-views",
-  "--rollup-view", "--rollup-side", "--rollup-logo",
-  "--az", "--el", "--dist", "--az-nudge", "--el-nudge", "--cam", "--crop", "--name",
-  "--cols", "--json", "--base", "--design", "--zip", "--logos", "--site", "--cdn",
-  "--lamp", "--aero", "--target", "--dpr", "--budget", "--baseline",
-  "--station", "--pair", "--flat", "--eye", "--look", "--path", "--path-steps", "--clamp",
-  "--serve", "--watch", "--overlay"]);
 const axes = [];
 const addAxis = (field, raw) => {
   const values = String(raw).split(",").map((s) => s.trim()).filter(Boolean);

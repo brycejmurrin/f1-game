@@ -1,6 +1,6 @@
 ---
 name: steward
-description: "Use when driving a PR to green: CI/Pages red, conflicts, check-in, fix-push validate. Apex overrides: draft/ready dedupe, sync-pr.mjs, who-is-on-it before a shared red. Loop is pr-owner; pre-push check-changes."
+description: "Use when a PR or the shared deploy branch is red, cancelled, conflicting, or its CI watch expired: name the failing test, check who-is-on-it, sync-pr, fix-push validate. Ownership loop is pr-owner; pre-push check-changes."
 ---
 
 # Driving a PR to green in Apex 26
@@ -12,6 +12,7 @@ which has cost a session before. Everything not listed here: `AGENTS.md`.
 Routes: a red `ci.yml` / `pages.yml` run → agent `ci-red-triage` (read-only, returns
 the status line). Pre-push validation → `check-changes`. Live `version.json` or
 anything on github.io → agent `deploy-research` (the only thing here that reaches it).
+Review, hunt or survey findings on the PR → agent `finding-verifier` before you fix any of them.
 
 ## 1. `cancelled` means three different things — read the jobs, not the conclusion
 
