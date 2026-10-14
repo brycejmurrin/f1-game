@@ -3,8 +3,8 @@
 Load this when reading a probe table, editing terrain `def` flags, or deciding
 whether a visual baseline should move.
 
-Combined parent/worker loop. Steps marked PARENT use a browser: the fork
-skips them (it reads the artifacts they produce). Fork steps: 1, 3, 4.
+Combined parent/worker loop. Steps marked PARENT use a browser: the track-surveyor
+skips them (it reads the artifacts they produce). Surveyor steps: 1, 3, 4.
 
 ## Contents
 - The loop
@@ -119,4 +119,4 @@ Montreal already ships `flatTerrain: true` + `terrainOuter: 70` in
 - Intentional visual change ≠ regression — regenerate parked goldens; don't
   chase the diff.
 - One circuit per worker, picture-driven; parent campaigns may delegate
-  disjoint pairs in parallel through **track-realism**.
+  disjoint pairs in parallel through [campaign.md](campaign.md).

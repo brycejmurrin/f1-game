@@ -1,0 +1,11 @@
+[
+{"query":"Write a new project skill for the race weekend code: SKILL.md frontmatter with a Use when description, a short body, a routing query file and the .agents/skills mirror link.","expect":"agent-config"},
+{"query":"agent-config.test.mjs fails: skill descriptions cost 1650 always-on words (budget 1600). Which descriptions can I tighten without losing their trigger words?","expect":"agent-config"},
+{"query":"the skill files r getting huge, agents burn like half their context just loading them. can u find the fat SKILL.md ones and move detail to references/?","expect":"agent-config"},
+{"query":"Add a PreToolUse hook in .claude/hooks that blocks a bare git push --force, wire it in .claude/settings.json and give it a unit test.","expect":"agent-config"},
+{"query":"Our ci-red-triage subagent body tells it to call an mcp__github tool that its tools: list omits. Fix the agent definition in .claude/agents.","expect":"agent-config"},
+{"query":"Run the skill-routing eval A/B for my description change to tune-physics: base worktree vs head, three runs, then compare and list the flipped queries.","expect":"agent-config"},
+{"query":"AGENTS.md is close to the Codex 32 KiB project-doc cap and the js/track nested AGENTS.md chain is truncating. Move a rule out of the root file.","expect":"agent-config"},
+{"query":"js/game.js has saturated its size ratchet; find a self-contained block to extract and lower the ratchet without changing behaviour.","expect":"slim-bloat"},
+{"query":"I edited a few files under js/physics and tools/ci. Before pushing, which tests do I need and did I break anything?","expect":"check-changes"}
+]

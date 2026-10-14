@@ -15,12 +15,53 @@
  * other and each note jumped by the slot detune delta (up to 46 cents) exactly
  * when they were side by side. Now a voice is reassigned only when a car
  * leaves the nearest SLOTS and another takes its place.
+ *
+ * PASS-BY POOL. engine.js owns the rival ENGINE note (forbidden here). This
+ * module owns the whoosh of a car going past: a fixed SLOTS loop of noise →
+ * lowpass → gain → stereo panner, built once in attach() and aimed every
+ * collect() with setTargetAtTime. No node is created on the hot path. Steal
+ * by distance — the same slot binding as the collector.
  */
 var RivalAudio = (() => {
   const SLOTS = 4;
   // Never TIGHTER than engine.js's RIVAL_RANGE, or a car winks off at the
   // collector's edge instead of fading out. Kept equal to it.
   const RANGE = 150;             // metres; past this a rival is inaudible anyway
+  const REF = 6;                 // metres inside which a pass-by is at full level
+  const SPEED_OF_SOUND = 343;
+  const PAN_MAX = 0.85;
+  const GAIN_PEAK = 0.22;
+  const BEHIND = 0.78;
+  const ROLLOFF = 1.15;
+
+  function passByGain(dist, arc) {
+    const d = +dist || 0;
+    if (!(d < RANGE) || d < 0) return 0;
+    const near = REF / (REF + ROLLOFF * Math.max(0, d - REF));
+    return GAIN_PEAK * near * (arc < 0 ? BEHIND : 1);
+  }
+  function passByDoppler(approach) {
+    const closing = Math.max(-90, Math.min(90, +approach || 0));
+    return Math.max(0.80, Math.min(1.25, SPEED_OF_SOUND / (SPEED_OF_SOUND - closing)));
+  }
+  function passByPan(lat, arc) {
+    return PAN_MAX * Math.max(-1, Math.min(1, (+lat || 0) / Math.max(3, Math.abs(+arc || 0) + 3)));
+  }
+  function aimParam(param, target, t, tau) {
+    if (!param || typeof param.setTargetAtTime !== "function") return;
+    const prev = param._apexPassTgt;
+    if (prev === target || (prev !== undefined && Math.abs(prev - target) < 1e-4)) return;
+    param.setTargetAtTime(target, t, tau);
+    param._apexPassTgt = target;
+  }
+  function noiseBuffer(ctx) {
+    const sr = ctx.sampleRate || 44100;
+    const n = Math.max(1, sr | 0);
+    const buf = ctx.createBuffer(1, n, sr);
+    const ch = buf.getChannelData(0);
+    for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+    return buf;
+  }
   const slots = Array.from({ length: SLOTS },
     () => ({ lat: 0, arc: 0, wx: null, wz: null, rev: 0, approach: 0, dist: 0, voice: "", slot: 0, car: null }));
   const _wScratch = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
@@ -39,6 +80,8 @@ var RivalAudio = (() => {
     // second create() (a new race) starts with every voice free.
     const bound = new Array(SLOTS).fill(null);
     const taken = new Array(SLOTS).fill(false);
+    const voiced = new Array(SLOTS).fill(false);
+    let actx = null, voices = null;
 
     /** The nearest rivals to `player`, nearest first. The returned array and the
      *  objects in it are REUSED between calls — read them before the next one.
@@ -46,7 +89,7 @@ var RivalAudio = (() => {
     function collect(player) {
       out.length = 0;
       const track = G.track, cars = G.cars;
-      if (!player || !track || !cars || player.s == null) return out;
+      if (!player || !track || !cars || player.s == null) { applyPassBy(out); return out; }
       const lapLen = track.total, half = lapLen * 0.5;
       let n = 0;
       for (const c of cars) {
@@ -109,10 +152,91 @@ var RivalAudio = (() => {
         row.car = null;   // the row is a frame-local view; the binding lives in `bound`
         out.push(row);
       }
+      applyPassBy(out);
       return out;
     }
 
-    return { collect };
+    function attach(ctx, bus) {
+      if (!ctx || voices) return;
+      actx = ctx;
+      const dest = bus || ctx.destination;
+      const noise = noiseBuffer(ctx);
+      voices = [];
+      for (let i = 0; i < SLOTS; i++) {
+        const src = ctx.createBufferSource();
+        src.buffer = noise;
+        src.loop = true;
+        const filt = ctx.createBiquadFilter();
+        filt.type = "lowpass";
+        if (filt.frequency) filt.frequency.value = 4000;
+        const g = ctx.createGain();
+        if (g.gain) g.gain.value = 0;
+        const p = ctx.createStereoPanner();
+        if (p.pan) p.pan.value = 0;
+        src.connect(filt);
+        filt.connect(g);
+        g.connect(p);
+        if (dest) p.connect(dest);
+        try { src.start(0); } catch (e) { /* already started */ }
+        voices.push({ src, filt, gain: g, pan: p, dist: 0, key: -1 });
+      }
+    }
+
+    function applyPassBy(rows) {
+      if (!voices || !actx) return;
+      const t = actx.currentTime || 0;
+      for (let i = 0; i < SLOTS; i++) voiced[i] = false;
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        const sl = Number.isInteger(r.slot) && r.slot >= 0 && r.slot < SLOTS ? r.slot : i;
+        if (voiced[sl] || sl >= voices.length) continue;
+        voiced[sl] = true;
+        const v = voices[sl];
+        const dist = r.dist != null ? +r.dist : Math.hypot(+r.lat || 0, +r.arc || 0);
+        aimParam(v.gain.gain, passByGain(dist, r.arc), t, 0.10);
+        aimParam(v.src.playbackRate, passByDoppler(r.approach), t, 0.08);
+        aimParam(v.pan.pan, passByPan(r.lat, r.arc), t, 0.06);
+        const cut = Math.max(700, Math.min(12000,
+          12000 * Math.pow(REF / Math.max(dist, REF), 0.35)));
+        aimParam(v.filt.frequency, cut, t, 0.12);
+        v.dist = dist;
+        v.key = r.key;
+      }
+      for (let i = 0; i < voices.length; i++) {
+        if (voiced[i]) continue;
+        aimParam(voices[i].gain.gain, 0, t, 0.12);
+        voices[i].dist = 0;
+        voices[i].key = -1;
+      }
+    }
+
+    function detach() {
+      if (!voices) return;
+      const t = actx ? actx.currentTime || 0 : 0;
+      for (let i = 0; i < voices.length; i++) {
+        const v = voices[i];
+        try { if (v.gain.gain) v.gain.gain.setTargetAtTime(0, t, 0.06); } catch (e) { /* gone */ }
+        try { v.src.stop(t + 0.3); } catch (e) { /* already stopped */ }
+      }
+      voices = null;
+      actx = null;
+    }
+
+    function passByState() {
+      if (!voices) return [];
+      return voices.map((v, i) => ({
+        slot: i,
+        gain: +(v.gain.gain && v.gain.gain.value) || 0,
+        rate: +(v.src.playbackRate && v.src.playbackRate.value) || 0,
+        pan: +(v.pan.pan && v.pan.pan.value) || 0,
+        dist: v.dist,
+        key: v.key,
+      }));
+    }
+
+    function passByVoices() { return voices || []; }
+
+    return { collect, attach, tick: collect, detach, passByState, passByVoices };
   }
 
   /** Wet-spray wake: nearest rival ahead within 40 m → 0..1 (1 = on your gearbox).
@@ -133,5 +257,5 @@ var RivalAudio = (() => {
     return best;
   }
 
-  return { create, sprayAhead };
+  return { create, sprayAhead, passByGain, passByDoppler, passByPan, SLOTS };
 })();
