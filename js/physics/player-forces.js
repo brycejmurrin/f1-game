@@ -119,7 +119,15 @@ const PlayerForces = (function () {
     // only), 1 from 1.5× coast drag up. Continuous, so a brush of the brake
     // never steps the front's grip.
     const brakeMix = clamp((decel - cdNow) / (0.5 * cdNow), 0, 1);
-    const pedal = decel * brakeMix / longBudget, engine = (decel - decel * brakeMix) / longBudget, beta = (c.brakeStab = TyreModel.brakeBeta(c.brakeStab, c.rearUtil, dt));   // BRAKE STABILITY: the loaded rear eases its pedal share (PhysicsConsts.BRAKE_STAB)
+    // Kits with mods.braking > 1 pull harder than PhysicsConsts.BRAKE. Billing
+    // that absolute decel against fixed LONG_GRIP / BRAKE saturated the ellipse
+    // (shipped axFracF≈0.98) and brakeYawDamp at 2.4× (turn-in yaw −0.224).
+    // Scale the PEDAL bill and (when the pedal is in) the yaw-damp denominator
+    // by max(1, mods.braking) so full pedal still costs ~BRAKE/LONG_GRIP of
+    // the circle; engine/coast share and coast yaw damp stay on the base
+    // constants (lift-off / coast turn-in untouched).
+    const brakeScale = Math.max(1, (c.mods && c.mods.braking) || 1);
+    const pedal = decel * brakeMix / (longBudget * brakeScale), engine = (decel - decel * brakeMix) / longBudget, beta = (c.brakeStab = TyreModel.brakeBeta(c.brakeStab, c.rearUtil, dt));   // BRAKE STABILITY: the loaded rear eases its pedal share (PhysicsConsts.BRAKE_STAB)
     const axFracF = Math.min(1, pedal * TyreModel.brakeFront(beta, loadF, loadR)), axFracR = Math.min(1, Math.max(pedal * beta + engine, axThrDemand));
     const axFrac = Math.max(axFracF, axFracR);
     c.axFrac = axFrac;
@@ -310,7 +318,8 @@ const PlayerForces = (function () {
     const SPEED_YAW_LO = 50, SPEED_YAW_HI = 65, SPEED_YAW_EXTRA = 5;
     const _syT = clamp((vAbs - SPEED_YAW_LO) / (SPEED_YAW_HI - SPEED_YAW_LO), 0, 1);
     const speedYawDamp = 1 + SPEED_YAW_EXTRA * _syT * _syT * (3 - 2 * _syT);
-    const brakeYawDamp = 1 + 1.4 * clamp(-(c.axEstSm ?? 0) / BRAKE, 0, 1) + coastYaw;
+    const yawBrakeCap = BRAKE * (1 + (brakeScale - 1) * brakeMix);
+    const brakeYawDamp = 1 + 1.4 * clamp(decel / yawBrakeCap, 0, 1) + coastYaw;
     // Capture body-frame state for the longitudinal couple BEFORE yaw/vLat
     // integrate — couple below still reads the pre-integrate (vLat0, r0).
     const vLat0 = c.vLat || 0;
