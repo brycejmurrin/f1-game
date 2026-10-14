@@ -818,7 +818,12 @@ const RealRace = (function () {
       const want = weatherAt(script, realLapFor(lap, active.laps, script.laps | 0));
       if (want === rainWant) return;
       rainWant = want;
-      if (G.raceWeather !== want && G.startWeatherArc) G.startWeatherArc(G.raceWeather, want, RAIN_ARC_S);
+      // Compare with where the sky is GOING, not the stage it shows: early in a
+      // dry→rain arc raceWeather still reads "dry", so a script turning back to
+      // dry was ignored and the storm arrived anyway. WeatherArc re-targets a
+      // live arc from the road's current wetness, so grip does not jump.
+      const dest = G.weatherArc ? G.weatherArc.to : G.raceWeather;
+      if (dest !== want && G.startWeatherArc) G.startWeatherArc(G.raceWeather, want, RAIN_ARC_S);
     }
 
     function update(dt) {
