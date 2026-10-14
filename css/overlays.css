@@ -1212,14 +1212,24 @@ body:has(dialog:modal) #update-chip { display: none; }
 .res-row.you:not(.p1):not(.p2):not(.p3) { border-left: 3px solid var(--you); }
 .res-pos { width: 26px; text-align: right; color: var(--dim); font-family: var(--font-hud); font-variant-numeric: tabular-nums; }
 .res-swatch { width: 4px; height: 20px; border-radius: var(--r-xs); flex-shrink: 0; }
-/* min-width: 0 + ellipsis: a 22-char single-token MY TEAM name (the maxlength
-   the customize form allows) cannot line-break, and a flex item's default
-   min-width: auto refuses to shrink below it — pushing the fixed 62px points
-   column past the sheet edge, where .sheet's overflow: hidden clipped it
-   silently. The compact quali/history rules already wrap; this is the base. */
-.res-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* min-width: 0 + two-line clamp: a 22-char single-token MY TEAM name (the
+   maxlength the customize form allows) cannot line-break, and a flex item's
+   default min-width: auto refuses to shrink below it — pushing the fixed 62px
+   points column past the sheet edge, where .sheet's overflow: hidden clipped
+   it silently. Prefer wrap/clamp over a single-line ellipsis; drop .res-pts
+   on narrow widths first (below) so the name keeps the column. */
+.res-name {
+  flex: 1; min-width: 0; overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  white-space: normal; overflow-wrap: anywhere;
+}
 .res-name > .q-time { display: block; font-size: var(--fs-micro); }
 .res-pts { width: 62px; text-align: right; white-space: nowrap; font-family: var(--font-hud); font-variant-numeric: tabular-nums; }
+/* Narrow phone portrait (390/360): the points cell stole ~62px and cut
+   `.res-name` to "RUS  George…" — hide classification pts before the name
+   needs an ellipsis. Sibling of `.res-pos` only, so TT best-lap `.res-pts`
+   (no position cell) keeps its clock. */
+body[data-width="narrow"] #results-table > .res-row > .res-pos ~ .res-pts { display: none; }
 /* TYRE STINT STRIP (js/physics/tyre-model.js stints(), drawn by results-sheet.js
    and only while TYRE WEAR is on). A PROPORTIONAL bar, not a row of chips: each
    segment's width is its share of the car's laps, so a glance down the column
