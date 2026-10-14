@@ -701,7 +701,10 @@ function announceLaneTick(root, force) {
   announceLane(root);
 }
 function radioTopSlot(root, bcast) {
-  const t = !bcast && _hudTop ? _hudTop.getBoundingClientRect() : null;
+  // Every profile, including BROADCAST: `!bcast` used to skip the tower and
+  // leave the leftover 14svh #announce home in place.
+  const t = _hudTop ? _hudTop.getBoundingClientRect() : null;
+  void bcast;
   announceLane(root);
   let right = window.innerWidth - 10;
   const x = t ? t.right + RADIO_TOP_GAP : 0;
