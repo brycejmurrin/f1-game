@@ -726,7 +726,9 @@ var RadioVoice = (function () {
       try { const u = new Utter(" "); u.volume = 0.01; synth.speak(u); primed = true; }
       catch (e) { /* a browser that refuses the priming utterance simply does not get primed */ }
       const ctx = audioCtx();
-      if (ctx && ctx.state === "suspended" && ctx.resume) { try { ctx.resume(); } catch (e) { /* gesture spent */ } }
+      if (ctx && ctx.state === "suspended" && ctx.resume) {
+        try { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* gesture spent */ }
+      }
     }
     if (api && !primed && typeof document !== "undefined" && document.addEventListener) {
       const EVTS = ["pointerdown", "pointerup", "touchend", "keydown", "click"];
