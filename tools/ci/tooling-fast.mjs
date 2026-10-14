@@ -244,6 +244,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // mapping reads as 0 %, not as an error, so its filters are pinned here. ~2 s.
   "tests/unit/coverage-merge.test.mjs",
   "tests/unit/cross-file-paths.test.mjs",
+  // cross-tool-guards: Cursor/Codex reach bash-guard through one adapter; .githooks
+  // pre-push refuses deploy-branch, delete and rewrite pushes. Real git, ~2 s.
+  "tests/unit/cross-tool-guards.test.mjs",
   "tests/unit/css-comments.test.mjs",
   "tests/unit/css-critical-path.test.mjs",
   "tests/unit/css-faces.test.mjs",
