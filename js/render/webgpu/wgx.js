@@ -5894,6 +5894,7 @@ const WGX = (function () {
       clearOutputTarget: undefined,
       outputTargetState: undefined,
       setRenderSizeOverride: undefined,
+      drainGpuErrors: undefined,   // GLX's explicit GL error drain (hunt 4 I2): WebGPU reports errors through uncapturederror, nothing to drain
       // Occlusion culling is a GLX feature (js/render/glx/chunked.js) and these
       // are declared, not implemented. They exist because game.js installs a
       // backend by DESCRIPTOR-COPY onto GLX: a name WGX omits keeps GLX's own

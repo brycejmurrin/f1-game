@@ -4442,6 +4442,7 @@ const TLX = (function () {
         clearOutputTarget: undefined,
         outputTargetState: undefined,
         setRenderSizeOverride: undefined,
+        drainGpuErrors: undefined,   // GLX's explicit GL error drain (hunt 4 I2); three surfaces GL errors through its own backend
         // Same name as WGX/GLX so descriptor-copy onto GLX does not keep a
         // dead GLX softPresentState closure (backend-surface-parity).
         softPresentState() {
