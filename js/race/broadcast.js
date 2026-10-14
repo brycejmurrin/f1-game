@@ -250,6 +250,10 @@ const Broadcast = (function () {
       const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
       return modes.findIndex((m) => m.id === id);
     }
+    function syncCamera() {
+      const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
+      setCam = G.camMode; onAirShot = modes[setCam] ? modes[setCam].id : null;
+    }
     function camTo(id) {
       const i = modeIdx(id);
       if (i < 0 || !G.setCamMode) return false;
@@ -263,7 +267,7 @@ const Broadcast = (function () {
       stop();
       on = true; auto = !!(o && o.auto); locked = false; wall = 0; lastCut = -1e9; eventUntil = -Infinity; manualUntil = 0; cuts = 0;
       shown = new Set(); towerT = 0; mode = "gap"; prevPos = new Map(); deltaAt = new Map();
-      onAirShot = null; setCam = G.camMode;
+      syncCamera();
       if (auto) { camTo(SHOTS[0]); lastCut = 0; }
       buildTower(o && o.tower !== false);
       Log.info("game", "Broadcast.start auto=" + auto + " tower=" + !!tower);
@@ -281,11 +285,11 @@ const Broadcast = (function () {
     }
 
     /** The viewer took the picture (a follow key, the camera button, a tower row): the director waits. */
-    function manual() { if (on) { manualUntil = wall + MANUAL_S; eventUntil = -Infinity; setCam = G.camMode; } }   // the shot on air is now the viewer's baseline
+    function manual() { if (on) { manualUntil = wall + MANUAL_S; eventUntil = -Infinity; syncCamera(); } }   // the shot on air is now the viewer's baseline
     // Back to the director: it cuts at once, and the shot on air now is its
     // baseline — not a "viewer change" that would hand the picture back for 20 s.
-    function setAuto(v) { auto = !!v; if (auto) { locked = false; manualUntil = 0; lastCut = -1e9; eventUntil = -Infinity; setCam = G.camMode; } return auto; }
-    function setLocked(v) { locked = !!v; if (locked) { manualUntil = 0; eventUntil = -Infinity; setCam = G.camMode; } return locked; }
+    function setAuto(v) { auto = !!v; if (auto) { locked = false; manualUntil = 0; lastCut = -1e9; eventUntil = -Infinity; syncCamera(); } return auto; }
+    function setLocked(v) { locked = !!v; if (locked) { manualUntil = 0; eventUntil = -Infinity; syncCamera(); } return locked; }
     function resetTiming() { shown.clear(); prevPos.clear(); deltaAt.clear(); towerT = 0; lastCut = -1e9; eventUntil = -Infinity; setPip(null); }
     /** The director has the picture: AUTO and not waiting out a viewer's choice. */
     function autoOn() { return on && auto && !locked && wall >= manualUntil; }
@@ -370,7 +374,7 @@ const Broadcast = (function () {
     function direct(st) {
       if (!auto || locked || wall < manualUntil) return;
       // The viewer cycled the camera (C / the CAM button): theirs for a while.
-      if (setCam != null && G.camMode !== setCam) { setCam = G.camMode; onAirShot = null; manual(); return; }
+      if (setCam != null && G.camMode !== setCam) { manual(); return; }
       if (st.reel) return;   // HIGHLIGHTS: the reel picks the car and calls onCut
       const age = wall - lastCut;
       if (age < SHOT_MIN_S) return;
@@ -394,7 +398,7 @@ const Broadcast = (function () {
     /** The reel cut to a new highlight (RealReplay.cutTo): a new shot for it, unless the viewer has the picture. */
     function onCut(kind) {
       if (!on || !auto || locked || wall < manualUntil) return;
-      if (setCam != null && G.camMode !== setCam) { setCam = G.camMode; onAirShot = null; manual(); return; }
+      if (setCam != null && G.camMode !== setCam) { manual(); return; }
       lastCut = wall; cuts++;
       camTo(shotFor(kind, onAirShot, cuts));
     }

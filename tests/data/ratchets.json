@@ -16,16 +16,16 @@
       "lines": 2198
     },
     "js/game.js": {
-      "codeLines": 5098,
+      "codeLines": 5099,
       "gMembers": 290,
-      "lines": 9375,
+      "lines": 9376,
       "topLets": 155
     },
     "js/lighting/presets.js": {
       "lines": 8341
     },
     "js/net/lobby.js": {
-      "lines": 2157
+      "lines": 2190
     },
     "js/render/glx/glx.js": {
       "lines": 2971
@@ -34,8 +34,8 @@
       "lines": 757
     },
     "js/ui/hud.js": {
-      "codeLines": 1508,
-      "lines": 2571
+      "codeLines": 1504,
+      "lines": 2565
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 2

@@ -21,7 +21,7 @@ const DIR = path.join(ROOT, "scratch/browser-http");
 const STATE = path.join(DIR, "state.json");
 const LOG = path.join(DIR, "cloudflared.log");
 const PORT = 3001;
-const CLOUDFLARED = "/tmp/cloudflared";
+const CLOUDFLARED = path.join(DIR, "cloudflared");   // regenerable download: scratch/, never /tmp (AGENTS.md)
 
 export function tunnelUrlFromLog(text) {
   const found = String(text).match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
@@ -59,6 +59,7 @@ function connectorUrl(host, token) {
 
 async function ensureCloudflared() {
   if (existsSync(CLOUDFLARED)) return CLOUDFLARED;
+  mkdirSync(DIR, { recursive: true });
   const res = await fetch("https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64");
   if (!res.ok) throw new Error("could not download cloudflared");
   writeFileSync(CLOUDFLARED, Buffer.from(await res.arrayBuffer()));

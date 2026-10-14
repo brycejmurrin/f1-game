@@ -99,14 +99,12 @@ const HudReadouts = (function () {
     return (units || spdUnits()) === "mph" ? "MPH" : "KPH";
   }
   /**
-   * One SPD readout from dash km/h: `{ n, unit }`.
-   * `n` follows AppearanceOpts.speed when available (same rounding as settings);
-   * `unit` is always the short plate form so the float cannot disagree with
-   * the LCD. Pass `units` ("mph"|"kmh") to pin without reading AppearanceOpts.
-   * ONE pooled object, rewritten by the next call (the HUD paints it every frame).
+   * One integer for the wheel LCD AND #hud-speed-n: dash km/h → units →
+   * round → clamp 0..999. BOTH call sites must use this (or spdPlate, which
+   * shares it) so a Handling-style split cannot return from duplicated
+   * Math.round / AppearanceOpts.speed / clamp formulas.
    */
-  const _plate = { n: 0, unit: "" };
-  function spdPlate(kph, units) {
+  function spdDigits(kph, units) {
     const u = units || spdUnits();
     const v = Number(kph);
     let n;
@@ -115,7 +113,21 @@ const HudReadouts = (function () {
     } else {
       n = Math.round((Number.isFinite(v) ? v : 0) / (u === "mph" ? KPH_PER_MPH : 1));
     }
-    _plate.n = Number.isFinite(n) ? n : 0; _plate.unit = spdUnit(u);
+    if (!Number.isFinite(n)) n = 0;
+    // Math.max clears JS's -0 (Math.round of (−0.5, 0) → -0; `-0 < 0` is false).
+    return Math.max(0, Math.min(999, n));
+  }
+  /**
+   * One SPD readout from dash km/h: `{ n, unit }`.
+   * `n` is spdDigits (same integer as the wheel LCD); `unit` is always the
+   * short plate form so the float cannot disagree with the LCD. Pass `units`
+   * ("mph"|"kmh") to pin without reading AppearanceOpts.
+   * ONE pooled object, rewritten by the next call (the HUD paints it every frame).
+   */
+  const _plate = { n: 0, unit: "" };
+  function spdPlate(kph, units) {
+    const u = units || spdUnits();
+    _plate.n = spdDigits(kph, units == null ? null : u); _plate.unit = spdUnit(u);
     return _plate;
   }
 
@@ -239,6 +251,6 @@ const HudReadouts = (function () {
 
   return { lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap, GAP_FINE_LT,
     ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S,
-    spdUnits, spdUnit, spdPlate, KPH_PER_MPH };
+    spdUnits, spdUnit, spdDigits, spdPlate, KPH_PER_MPH };
 })();
 Object.freeze(HudReadouts);
