@@ -1,1 +1,0 @@
-1791968046	Bryce Murrin	OWNED tools/shot/apex-capture.mjs tools/shot/probe-page.mjs tools/lib/browser-workers.mjs focused capture and worker unit tests; parallel screenshot profiling and bounded workers. FORBIDDEN js css workflows and other live PR paths.  [cursor/parallel-capture-6c4a; session 065cf5e7e29f073639ec310a]
