@@ -194,7 +194,10 @@ const HudRelative = (function () {
     }
     return k;
   }
-  const CLEAR_IDS = Object.freeze(["dock-left", "btn-brake", "btn-throttle", "btn-steer-left", "btn-steer-right"]);
+  // Also clear the bottom cluster / radio card: at HUD 150% REL sat on GEAR /
+  // OT / announce (phoneL broadcast survey) while only the pedals were cleared.
+  const CLEAR_IDS = Object.freeze(["dock-left", "btn-brake", "btn-throttle", "btn-steer-left", "btn-steer-right",
+    "hud-gearbox", "hud-ot", "hud-aero", "hud-speed", "announce"]);
   /** Cap the card above any overlapping left-column control, then hide the
    *  outermost occupied rows until it fits. CSS max-height can miss TILT
    *  (no steer-* class; BRAKE sits in the map column). */

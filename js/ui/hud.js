@@ -1224,6 +1224,28 @@ function fitHud() {
   let leftBot = bcast && _hudTop ? layoutRect(_hudTop).bottom : 0;
   if (mmR && mmR.width) leftBot = Math.max(leftBot, mmR.bottom);
   if (gapsR && gapsR.width) leftBot = Math.max(leftBot, gapsR.bottom);
+  // Gaps strip alone (centre flag clears it; TYRES must not lift the flag).
+  hStyle(root, "--hud-gaps-b", ((gapsR && gapsR.width ? gapsR.bottom : 0) / chromeZ).toFixed(1) + "px");
+  const dockL = _dockL ? _dockL.getBoundingClientRect() : null;
+  // Phone landscape: when the dock-top TYRES anchor would cover the map (HUD
+  // 150% broadcast survey), stack TYRES under the left column and extend
+  // --hud-left-h so REL / STRATEGY follow. MOVE & SIZE (data-hl-user) wins.
+  const phone = !document.body.classList.contains("desktop");
+  const tyreEl = els.tyre;
+  let tyreStack = false;
+  if (phone && tyreEl && !tyreEl.hidden && !(tyreEl.hasAttribute && tyreEl.hasAttribute("data-hl-user"))) {
+    const tBox = tyreEl.getBoundingClientRect();
+    const tH = Math.max(tBox.height / chromeZ, 36 / chromeZ);
+    const dockTopPx = dockL && dockL.height ? dockL.top : vpH();
+    const naturalTop = dockTopPx / chromeZ - tH - 8 / chromeZ;
+    const minTop = leftBot / chromeZ + 8;
+    if (naturalTop < minTop - 0.5) {
+      hStyle(root, "--hud-tyre-top", minTop.toFixed(1) + "px");
+      leftBot = Math.max(leftBot, (minTop + tH) * chromeZ);
+      tyreStack = true;
+    } else hUnstyle(root, "--hud-tyre-top");
+  } else hUnstyle(root, "--hud-tyre-top");
+  if (document.body.classList) document.body.classList.toggle("hud-tyre-stack", tyreStack);
   hStyle(root, "--hud-left-h", (leftBot / chromeZ).toFixed(1) + "px");
   // THE SAME EDGE IN SCREEN PIXELS. #hud-limits reads --hud-left-h from INSIDE
   // the chrome zoom, so it wants the divided value. #game-metrics is OUTSIDE it
@@ -1240,12 +1262,26 @@ function fitHud() {
   const gmR = gmEl && !gmEl.hidden ? gmEl.getBoundingClientRect() : null;
   const gmBot = gmR && gmR.width ? gmR.bottom : 0;
   hStyle(root, "--hud-metrics-b", (gmBot / chromeZ).toFixed(1) + "px");
-  const dockL = _dockL ? _dockL.getBoundingClientRect() : null;
   // The metrics panel is part of what fills this column now, so the room test
   // measures from whichever is lower — the map/strip edge or the panel's bottom.
   const leftFilled = Math.max(leftBot, gmBot);
   const leftRoom = !(dockL && dockL.width && leftFilled + (8 + CHIP_H) * chromeZ > dockL.top);
   const limLeft = hitsRight && leftRoom;
+  // LIMITS on the left lands under --hud-left-h; a dock-top TYRES still sits
+  // in that slot at HUD ≤125% (phoneL survey: limits×tyre). Stack TYRES under
+  // the map/gaps edge and re-publish so the chip hangs below it.
+  if (limLeft && phone && tyreEl && !tyreEl.hidden
+      && !(tyreEl.hasAttribute && tyreEl.hasAttribute("data-hl-user")) && !tyreStack) {
+    const tBox = tyreEl.getBoundingClientRect();
+    const tH = Math.max(tBox.height / chromeZ, 36 / chromeZ);
+    const minTop = leftBot / chromeZ + 8;
+    hStyle(root, "--hud-tyre-top", minTop.toFixed(1) + "px");
+    leftBot = Math.max(leftBot, (minTop + tH) * chromeZ);
+    tyreStack = true;
+    if (document.body.classList) document.body.classList.toggle("hud-tyre-stack", true);
+    hStyle(root, "--hud-left-h", (leftBot / chromeZ).toFixed(1) + "px");
+    hStyle(root, "--hud-left-px", leftBot.toFixed(1) + "px");
+  }
   if (limLeft !== ("limitsLeft" in root.dataset)) {
     if (limLeft) root.dataset.limitsLeft = "1";
     else delete root.dataset.limitsLeft;
@@ -1587,6 +1623,13 @@ function fitHud() {
   }
   radioTopSlot(root, bcast);
   announceLane(root);
+  // Bottom cluster top (SPEED / GEAR / ERS): the radio card height-caps above it
+  // so a tall transient card cannot cover the gearbox at HUD 150% (phoneL survey).
+  {
+    const bot = document.querySelector(".hud-bottom");
+    const br = bot && !bot.hidden ? bot.getBoundingClientRect() : null;
+    hStyle(root, "--hud-cluster-y", (br && br.height ? br.top : vpH()).toFixed(1) + "px");
+  }
   radioPaintedCollapse(root);   // terminal: nothing after it may re-run radioTopSlot (hud-metrics-layout.test)
   mirrorClear(root);
   if (els.minimap) void els.minimap.offsetHeight;

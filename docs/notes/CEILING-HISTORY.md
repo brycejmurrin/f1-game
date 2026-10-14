@@ -3526,3 +3526,12 @@ optimised), S4/S6 hoisted per-car-step invariants and the AI look-ahead cache, a
 F5/F6/F9 added the once-per-frame comfort read, the shared track sample and the env-probe latch
 (+17). Deliberate raise past the 40-line absorb; the measured gates are in
 `docs/notes/PERF-HUNT-2-2026-10-13.md` (§A, §B) and the PR body.
+
+## 2026-10-14 — HUD announce/status stack phoneL 150% (queue item 1)
+
+`css/hud.css` lines 2226 → **2247**, codeLines 2019 → **2037**; `js/ui/hud.js` lines 2489 → **2529**,
+codeLines 1445 → **1476**; tree `cssClasses` 642 → **643** (`body.hud-tyre-stack`). Publishes
+`--hud-gaps-b` / `--hud-tyre-top` / `--hud-cluster-y`, stacks TYRES under the left column when the
+dock-top anchor would cover the map or LIMITS-left, STRATEGY under REL, and height-caps the radio
+card above the bottom cluster. Within the 40-line absorb per file; intentional for the measured
+phoneL broadcast @150% overlaps (22 → target 0 on announce/flag/limits/tyre/rel).
