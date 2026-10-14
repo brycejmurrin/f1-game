@@ -579,6 +579,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // updateCar OT ahead-scan gate: skip the O(n) walk when gapAhead is unused.
   "tests/unit/ot-ahead-scan-gate.test.mjs",
   "tests/unit/overtake-mode.test.mjs",
+  // PaceMath (js/race/pace-math.js): vTop/vStd/aStd + X-mode/ERS/gearHi pins from pre-extract goldens. ~0.1 s.
+  "tests/unit/pace-math.test.mjs",
   "tests/unit/pad-haptics.test.mjs",
   // particles.js dirty latch: parked rain skips expand/upload until eye cell moves.
   "tests/unit/particles-dirty.test.mjs",
@@ -963,6 +965,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // overshoot ≤12% at 61.1 m/s / ≤14% at 83.3 m/s; ≤50 m/s and lift-off
   // unchanged. createGame once, ~2.5 s.
   "tests/unit/yaw-damp-speed.test.mjs",
+  // Low-speed yaw/vLat substep (LOW_YAW_V=8): kills period-2 Δr chatter at
+  // 3–4 m/s full lock on pin + shipped seats; ≥8 m/s bit-identical. ~5 s.
+  "tests/unit/yaw-low-speed-substep.test.mjs",
   // @gen-test-groups:end
 ]);
 

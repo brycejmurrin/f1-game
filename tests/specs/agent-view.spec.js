@@ -12,6 +12,7 @@
 // per worker instead of paying page.goto("/") + 155 script tags + WebGL init
 // 117 times over. See the sharedTest block in ./fixtures.js for the contract.
 import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { waitAgentViewReady } from "../helpers/agent-view-ready.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -46,6 +47,7 @@ async function load(page, trackId = "monza", frac = 0.05, speed = 60) {
     window.__apex.go();
     window.__apex.jump(f, v, 0);
   }, [frac, speed]);
+  await waitAgentViewReady(page);
 }
 
 // ── typed errors ────────────────────────────────────────────────────────────
@@ -338,11 +340,9 @@ test.describe("atmosphere()", () => {
 
   test("narrates a day scene and keeps the raw numbers", async ({ page }) => {
     await load(page);
-    const a = await page.evaluate(async () => {
-      window.__apex.setTimeOfDay("day");
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      return window.__apex.atmosphere();
-    });
+    await page.evaluate(() => { window.__apex.setTimeOfDay("day"); });
+    await waitAgentViewReady(page, { lights: true });
+    const a = await page.evaluate(() => window.__apex.atmosphere());
     expect(a.ok).not.toBe(false);
     expect(typeof a.brief).toBe("string");
     expect(a.dark).toBe(false);
@@ -355,11 +355,9 @@ test.describe("atmosphere()", () => {
 
   test("night is dark, floodlit, and names the moon — not a high sun", async ({ page }) => {
     await load(page);
-    const a = await page.evaluate(async () => {
-      window.__apex.setTimeOfDay("night");
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      return window.__apex.atmosphere();
-    });
+    await page.evaluate(() => { window.__apex.setTimeOfDay("night"); });
+    await waitAgentViewReady(page, { lights: true });
+    const a = await page.evaluate(() => window.__apex.atmosphere());
     expect(a.dark).toBe(true);
     // darkness must come from the session, not from sun elevation
     expect(a.sun.body).toBe("moon");
@@ -371,10 +369,12 @@ test.describe("atmosphere()", () => {
 
   test("wet weather is called out and matches the grip model", async ({ page }) => {
     await load(page);
-    const r = await page.evaluate(async () => {
+    await page.evaluate(() => {
       window.__apex.setTimeOfDay("day");
       window.__apex.weather("rain");
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    });
+    await waitAgentViewReady(page, { lights: true });
+    const r = await page.evaluate(() => {
       return { a: window.__apex.atmosphere(),
                grip: window.__apex.world({ detail: "drive" }).ego.grip };
     });
@@ -1869,6 +1869,9 @@ async function renderFrames(page, n = 10) {
     const tick = () => (++i > count ? res(0) : requestAnimationFrame(tick));
     requestAnimationFrame(tick);
   }), n);
+  // A rAF tick is not a render: the game skips render() while shaders warm
+  // after a race start, so the ticks above can all pass on a stale viewProj.
+  await waitAgentViewReady(page, { camera: true });
 }
 
 test.describe("visible()", () => {
