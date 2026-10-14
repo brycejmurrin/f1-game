@@ -46,8 +46,6 @@ const LONG = { pos: 20, passed: "VERSTAPPEN", by: "VERSTAPPEN", n: 12, gap: "10.
   behind: "VERSTAPPEN", rate: "0.8", laps: 12, gapA: "10.5", gapB: "10.5", time: "1:32.4", delta: "2.3",
   left: 10, grid: 20, name: "VERSTAPPEN", leader: "VERSTAPPEN", a: "VERSTAPPEN", b: "HULKENBERG",
   why: "MECHANICAL TROUBLE" };
-const RADIO_LEAD_S = 0.43;   // js/audio/engine.js RADIO_CH.radio: 0.03 + the four-note courtesy figure
-
 test("every phrasebook line can be spoken inside its own card", () => {
   const refused = [];
   let n = 0;
@@ -56,9 +54,10 @@ test("every phrasebook line can be spoken inside its own card", () => {
     for (const tpl of pool) {
       const msg = RL.fill(tpl, LONG);
       assert.ok(msg, `${key}: "${tpl}" has a slot this test does not fill`);
-      const dur = RR.durFor(msg);
-      const life = Math.max(3, dur + 0.5);   // js/game.js showAnnounce
-      const p = RV.plan({ msg, life, kind: tv ? "comm" : "info", lead: tv ? 0 : RADIO_LEAD_S,
+      const kind = tv ? "comm" : "info";
+      const dur = RR.durFor(msg, kind);
+      const life = Math.max(RV.ANN_CARD_MIN_S, dur + RV.ANN_CARD_PAD_S);   // js/game.js showAnnounce
+      const p = RV.plan({ msg, life, kind, lead: tv ? 0 : RV.RADIO_LEAD_S,
         enabled: true, soundOn: true, api: true, state: "race" });
       n++;
       if (!p.speak) refused.push(`${key}: "${msg}" (${p.reason})`);
