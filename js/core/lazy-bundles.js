@@ -571,6 +571,28 @@ function scheduleIdle(fn, timeoutMs) {
   if (typeof requestIdleCallback === "function") requestIdleCallback(fn, { timeout: ms });
   else setTimeout(fn, Math.min(ms, 800));
 }
+
+/** Yield until the material pack has settled (or timeout / stale). Used before
+ *  race-entry gfx.warm() so the first countdown present does not collide with
+ *  createTextureArray on the main thread (garage #1477 / race-entry warm frame).
+ *  Pure coordination — LoadingScreen.packSettled is the preferred settled fn. */
+async function awaitPackSettled(opts) {
+  const o = opts || {};
+  const yieldFn = typeof o.yieldFn === "function" ? o.yieldFn : () => Promise.resolve();
+  const stale = typeof o.stale === "function" ? o.stale : () => false;
+  const timeoutMs = o.timeoutMs != null ? +o.timeoutMs : 30000;
+  const getState = typeof o.getState === "function" ? o.getState
+    : () => (typeof Assets !== "undefined" && Assets.state ? Assets.state() : null);
+  const settled = typeof o.settled === "function" ? o.settled
+    : (s) => !s || s.supported === false || !!s.uploaded || !!s.error || s.tier === "off";
+  const now = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+  const t0 = now();
+  while (!settled(getState()) && !stale()) {
+    if (now() - t0 >= timeoutMs) break;
+    await yieldFn();
+  }
+  return settled(getState());
+}
 function raceAssets() {
   // Do NOT evaluate LAZY_AUDIO here — that put ~449 KB back on the title
   // networkidle wall (#1135). First pointerdown / SOUND click / Settings /
@@ -623,7 +645,7 @@ function bootDesktopAudio() {
   else scheduleIdle(bind, 400);
 }
 
-return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio };
+return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   return { create };
 })();
