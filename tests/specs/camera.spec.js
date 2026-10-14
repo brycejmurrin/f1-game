@@ -1,6 +1,7 @@
 // @ts-check
 // Player camera modes: cycling via the __apex.camera hook + the CAM button,
 // persistence, and that every mode renders a valid, distinct frame without crashing.
+// Hook/control checks use headless builds; the representative pixel check explicitly renders.
 // Modes: chase, far, drift, cockpit, hood, overhead, heli, reverse, side,
 //        cinematic, low, tcam, rear, visor, trackside, rival, pitwall, drone, helmet.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
@@ -9,7 +10,7 @@ import { screenshotPresentedCanvas } from "../helpers/presented-canvas.js";
 
 test.describe("Apex 26 — player camera modes", () => {
   test("camera() reports all modes and switches by id, index and label", async ({ page, loadTrack }) => {
-    await loadTrack();
+    await loadTrack("monza", "day", "dry", { headless: true });
     const r = await page.evaluate(() => {
       const init = window.__apex.camera();
       const byId = window.__apex.camera("cockpit");
@@ -24,7 +25,7 @@ test.describe("Apex 26 — player camera modes", () => {
   });
 
   test("the CAM button cycles through every mode and wraps", async ({ page, loadTrack }) => {
-    await loadTrack();
+    await loadTrack("monza", "day", "dry", { headless: true });
     const seq = await page.evaluate(() => {
       window.__apex.camera(0);            // start at chase
       const out = [];
@@ -40,9 +41,10 @@ test.describe("Apex 26 — player camera modes", () => {
   });
 
   test("camera choice persists across a reload", async ({ page, loadTrack }) => {
-    await loadTrack();
+    await loadTrack("monza", "day", "dry", { headless: true });
     await page.evaluate(() => window.__apex.camera("hood"));
-    await loadTrack();                  // reload + new race
+    // Reload and start a new race with the saved camera choice.
+    await loadTrack("monza", "day", "dry", { headless: true });
     const mode = await page.evaluate(() => window.__apex.camera().mode);
     expect(mode).toBe("hood");
   });
@@ -51,7 +53,7 @@ test.describe("Apex 26 — player camera modes", () => {
     test.slow();   // render-project test on CPU GL: needs more than the default budget
     const errors = [];
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
-    await loadTrack();
+    await loadTrack("monza", "day", "dry", { headless: true });
     await page.evaluate(() => { window.__apex.jump(0.0, 50, 0); window.__apex.snapCam(); });
     const MODES = ["chase", "far", "drift", "cockpit", "hood", "overhead", "heli",
                    "reverse", "side", "cinematic", "low", "tcam", "rear", "visor", "trackside",
@@ -91,8 +93,10 @@ test.describe("Apex 26 — player camera modes", () => {
     for (const mode of ["chase"]) {
       await page.evaluate((m) => window.__apex.camera(m), mode);
       await page.evaluate(() => { for (let i = 0; i < 30; i++) window.__apex.step(1 / 60, 1); });
+      await page.evaluate(() => window.__apex.snapCam(true));   // one real rendered frame after the headless state checks
       await page.waitForTimeout(250);
       shots[mode] = (await screenshotPresentedCanvas(page)).buf.toString("base64");
+      await page.evaluate(() => window.__apex.headless(true));
     }
     expect(errors).toEqual([]);
     // No two modes collapse to the same vantage...
@@ -111,6 +115,7 @@ test.describe("Apex 26 — player camera modes", () => {
     await page.goto("/");
     // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.headless(true));
     await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate(() => {
@@ -125,7 +130,7 @@ test.describe("Apex 26 — player camera modes", () => {
   });
 
   test("the C key cycles the camera during a race", async ({ page, loadTrack }) => {
-    await loadTrack();
+    await loadTrack("monza", "day", "dry", { headless: true });
     const r = await page.evaluate(async () => {
       window.__apex.camera(0);
       const before = window.__apex.camera().mode;

@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      { "command": "bash .cursor/hooks/shell-guard.sh", "timeout": 200 }
+    ]
+  }
+}

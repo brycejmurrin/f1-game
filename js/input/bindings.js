@@ -203,8 +203,14 @@ const InputBindings = (function () {
     const PAD_RESERVED = { 14: 1, 15: 1 };
     const padMap = {};
     const padIndexOk = (v) => Number.isInteger(v) && v >= 0 && v < 32;
+    // Same contract as rebuildKeyIndex → onKeysChanged: any change to the live
+    // pad table must drop held pedals whose button may have changed meaning.
+    // setPadBinding already did; clear / reset / setPadMap used to skip it, so
+    // Backspace on a CONTROLS chip or RESET left RT latched as gas.
+    function notifyPad() { onPadBindingChanged(); }
     function resetPad() { for (const a of PAD_ACTIONS) padMap[a.id] = a.def.slice(); }
-    resetPad();
+    resetPad();   // init only — no notify (nothing held yet)
+    function resetPadPublic() { resetPad(); notifyPad(); }
     function setPadMap(saved) {
       resetPad();
       if (saved && typeof saved === "object") {
@@ -221,6 +227,7 @@ const InputBindings = (function () {
         }
         for (const a of PAD_ACTIONS) if (!Array.isArray(saved[a.id])) padMap[a.id] = padMap[a.id].map((b) => (b != null && seen[b] ? null : b));
       }
+      notifyPad();
       return getPadMap();
     }
     function getPadMap() { return snapshot(PAD_ACTIONS, padMap); }
@@ -231,12 +238,12 @@ const InputBindings = (function () {
       if (!padMap[id] || !(slot === 0 || slot === 1) || !padIndexOk(index)) return { ok: false, reason: "invalid" };
       if (PAD_RESERVED[index]) return { ok: false, reason: "reserved" };
       const conflict = claim(PAD_ACTIONS, padMap, id, slot, index);
-      onPadBindingChanged();   // a held pedal whose button changed meaning
+      notifyPad();
       return { ok: true, conflict };
     }
     function clearPadBinding(id, slot) {
       if (!padMap[id] || !(slot === 0 || slot === 1)) return false;
-      padMap[id][slot] = null; return true;
+      padMap[id][slot] = null; notifyPad(); return true;
     }
     const PAD_NAMES_XBOX = ["A", "B", "X", "Y", "LB", "RB", "LT", "RT", "VIEW", "MENU", "LS", "RS", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "HOME"];
     const PAD_NAMES_PS = ["CROSS", "CIRCLE", "SQUARE", "TRIANGLE", "L1", "R1", "L2", "R2", "SHARE", "OPTIONS", "L3", "R3", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "PS"];
@@ -281,7 +288,7 @@ const InputBindings = (function () {
     return {
       keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel, loadLayoutMap,
       keyAction: (code) => codeToAction[normCode(code)] || null,
-      padBindings, setPadBinding, clearPadBinding, setPadMap, getPadMap, resetPad, padsAreDefault, padLabel,
+      padBindings, setPadBinding, clearPadBinding, setPadMap, getPadMap, resetPad: resetPadPublic, padsAreDefault, padLabel,
       setPadLabelMode, padLabelMode: padLabelModeOf, padBrand,
       padButtons: (id) => padMap[id],
     };
