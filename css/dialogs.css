@@ -269,8 +269,13 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    2-col (no holes) override lives in css/overlays.css so it outranks
    experience.css's 3-col base in the overlays layer. */
 @media (max-height: 400px) {
+  /* 100% is already the safe-padded dialog cell; subtract a local margin so
+     the card does not sit flush to the short edge. Prefer --svhz (zoom-
+     corrected) over raw 100dvh: inside zoom:var(--ui-scale) a bare dvh
+     cap paints taller than the viewport and never bites (844×390 still
+     measured sheet 353). */
   #pausemenu > .sheet {
-    max-height: min(100%, calc(100dvh - var(--safe-t) - var(--safe-b) - 24px));
+    max-height: min(100%, calc(100 * var(--svhz) - 24px));
   }
   #pausemenu .sheet-body {
     overflow-y: auto;

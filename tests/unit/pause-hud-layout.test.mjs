@@ -62,7 +62,7 @@ test("compact pause stack tightens without changing type tokens", () => {
 
 test("short phone pause (≤400px) caps the sheet and uses a 2-col tray with no holes", () => {
   const dialogs = readCssSource("css/dialogs.css");
-  assert.match(dialogs, /@media\s*\(max-height:\s*400px\)\s*\{[^}]*#pausemenu\s*>\s*\.sheet[^}]*max-height:\s*min\(100%,\s*calc\(100dvh/);
+  assert.match(dialogs, /@media\s*\(max-height:\s*400px\)[\s\S]*?#pausemenu\s*>\s*\.sheet\s*\{[^}]*max-height:\s*min\(100%,\s*calc\(100\s*\*\s*var\(--svhz\)/);
   assert.match(dialogs, /@media\s*\(max-height:\s*400px\)\s*\{[\s\S]*?#pausemenu\s+\.sheet-body\.stack\s*>\s*button:not\(\.as-tbtn\)\s*\{[^}]*min-height:\s*var\(--tap\)/);
   const overlays = fs.readFileSync(path.join(ROOT, "css/overlays.css"), "utf8");
   assert.match(overlays, /@media\s*\(max-height:\s*400px\)\s*\{[\s\S]*?#pausemenu\s+#pm-quick-doors\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/);
