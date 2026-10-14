@@ -168,7 +168,7 @@ function observeBuffers(ctx) {
   return { buffers, loops };
 }
 
-test("engine restarts reuse six independent noise buffers through fresh source nodes", async () => {
+test("engine restarts reuse eight independent noise buffers through fresh source nodes", async () => {
   for (const samples of [false, true]) {
     const { GameAudio: A, ctx, release } = boot();
     const { buffers, loops } = observeBuffers(ctx);
@@ -177,14 +177,14 @@ test("engine restarts reuse six independent noise buffers through fresh source n
     A.startEngine();
     assert.equal(A.debug().usingSamples, samples);
     const first = loops();
-    assert.equal(first.length, 6, "harvest, skid, scrub, surface, wind and brake each have a loop");
-    assert.equal(new Set(first.map((n) => n.buffer)).size, 6, "equal durations must not share waveforms");
-    assert.deepEqual(first.map((n) => n.buffer.length), [0.7, 0.5, 0.5, 0.5, 0.5, 0.6].map((s) => Math.ceil(SR * s)));
+    assert.equal(first.length, 8, "harvest, skid, scrub, surface, kerb, spray, wind and brake each have a loop");
+    assert.equal(new Set(first.map((n) => n.buffer)).size, 8, "equal durations must not share waveforms");
+    assert.deepEqual(first.map((n) => n.buffer.length), [0.7, 0.5, 0.5, 0.5, 0.45, 0.55, 0.5, 0.6].map((s) => Math.ceil(SR * s)));
     const before = buffers.length;
     A.stopEngine(); A.startEngine();
     const second = loops();
     assert.equal(buffers.length, before, "restart does not generate fresh PCM buffers");
-    assert.equal(second.length, 6);
+    assert.equal(second.length, 8);
     assert.ok(second.every((n, i) => n.buffer === first[i].buffer), "each layer retains its own buffer");
     assert.ok(second.every((n, i) => n !== first[i]), "single-use source nodes are recreated");
     assert.ok(first.every((n) => n.stopAt != null), "the previous sources were stopped");
@@ -2350,4 +2350,76 @@ test("an identical rival idles and revs on the player's own pitch curve, not 6-9
     const semitones = 12 * Math.log2(theirs / mine);
     assert.ok(Math.abs(semitones) < 0.05, `rev ${rev}: the rival is ${semitones.toFixed(2)} semitones off your own note`);
   }
+});
+
+// ── Radio r9: speed-keyed kerb rumble + wet tyre spray ─────────────────────
+
+test("kerb rumble gain and rate rise with speed, and are 0 off the kerb", async () => {
+  const A = await sampleEngine();
+  const ph = { slip: 1, ax: 0, onKerb: true, wet: false, tow: 0, deploy: 0, energy: 1 };
+  A.setEngine(0.5, 0, false, 0.2, 4, ph);
+  const slow = A.kerbSpray();
+  A.setEngine(0.5, 0, false, 0.85, 4, ph);
+  const fast = A.kerbSpray();
+  assert.ok(slow.kerb > 0, "on kerb at low speed is audible");
+  assert.ok(fast.kerb > slow.kerb, "kerb gain rises with speed");
+  assert.ok(fast.kerbRate > slow.kerbRate, "kerb playbackRate rises with speed");
+  assert.ok(fast.kerbHz > slow.kerbHz, "kerb brightness rises with speed");
+  assert.equal(slow.kerbLive, true);
+  A.setEngine(0.5, 0, false, 0.85, 4, { ...ph, onKerb: false });
+  const off = A.kerbSpray();
+  assert.equal(off.kerb, 0, "off the kerb the continuous layer is silent");
+  assert.equal(off.kerbLive, false);
+});
+
+test("wet spray is 0 dry, rises with speed when wet, and rivals-ahead only adds wake", async () => {
+  const { GameAudio: A, release, vctx } = boot();
+  // RivalAudio.sprayAhead lives in rivals.js; the tune harness only loads the
+  // engine stack, so install the real helper for the wake path.
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/rivals.js"), "utf8"), vctx, { filename: "rivals.js" });
+  A.init();
+  await release();
+  A.startEngine();
+  const dryPh = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0, deploy: 0, energy: 1 };
+  A.setEngine(0.6, 0, false, 0.9, 5, dryPh);
+  A.setRivals([{ lat: 0, arc: 10, dist: 10, rev: 0.5, approach: 0 }]);
+  A.setEngine(0.6, 0, false, 0.9, 5, dryPh);
+  assert.equal(A.kerbSpray().spray, 0, "dry road: no spray even with a rival ahead");
+  const wetPh = { ...dryPh, wet: true };
+  A.setRivals([]);
+  A.setEngine(0.6, 0, false, 0.3, 5, wetPh);
+  const slow = A.kerbSpray().spray;
+  A.setEngine(0.6, 0, false, 0.9, 5, wetPh);
+  const fast = A.kerbSpray().spray;
+  assert.ok(slow > 0, "wet at low speed still sprays a little");
+  assert.ok(fast > slow, "wet spray rises with speed squared");
+  const alone = fast;
+  A.setRivals([{ lat: 0, arc: 8, dist: 8, rev: 0.5, approach: 0 }]);
+  A.setEngine(0.6, 0, false, 0.9, 5, wetPh);
+  const withWake = A.kerbSpray();
+  assert.ok(withWake.sprayAhead > 0, "rival ahead within 40 m sets sprayAhead");
+  assert.ok(withWake.spray > alone, "rivals-ahead wake adds quieter spray only when wet");
+  A.setRivals([{ lat: 0, arc: -8, dist: 8, rev: 0.5, approach: 0 }]);
+  A.setEngine(0.6, 0, false, 0.9, 5, wetPh);
+  assert.equal(A.kerbSpray().sprayAhead, 0, "a rival behind is not a spray wake");
+  assert.equal(A.kerbSpray().spray, alone, "behind adds no wake");
+});
+
+test("SFX off silences kerb rumble and wet spray (and unmutes the one-shot gate)", async () => {
+  const A = await sampleEngine();
+  const ph = { slip: 1, ax: 0, onKerb: true, wet: true, tow: 0, deploy: 0, energy: 1 };
+  A.setEngine(0.7, 0, false, 0.8, 5, ph);
+  assert.ok(A.kerbSpray().kerb > 0);
+  assert.ok(A.kerbSpray().spray > 0);
+  assert.equal(A.kerbSpray().kerbLive, true);
+  A.setSfxEnabled(false);
+  A.setEngine(0.7, 0, false, 0.8, 5, ph);
+  assert.equal(A.kerbSpray().kerbLive, false, "SFX off clears kerbLive so rumble() is not stuck muted");
+  // Targets freeze at their last values while the bus gain is 0; a fresh start
+  // with SFX still off must leave the layers at their silent initial 0.
+  A.stopEngine();
+  A.startEngine();
+  A.setEngine(0.7, 0, false, 0.8, 5, ph);
+  assert.equal(A.kerbSpray().kerb, 0, "SFX off: setEngine does not open the kerb layer");
+  assert.equal(A.kerbSpray().spray, 0, "SFX off: setEngine does not open the spray layer");
 });
