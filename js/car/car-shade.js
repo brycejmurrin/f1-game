@@ -644,9 +644,9 @@ const CarShade = (function () {
       if (l > 0) { N[v * 3] = acc[k] / l; N[v * 3 + 1] = acc[k + 1] / l; N[v * 3 + 2] = acc[k + 2] / l; }
     }
   }
-  // ---- UPPER/LOWER TWO-TONE (livery `lower`, 2026-10-03) ----
-  // A second body colour below a line along the sidepods and on forward
-  // along the monocoque side:
+  // ---- UPPER/LOWER TWO-TONE (livery `lower` / `upper`, 2026-10-03 / 2026-10-14) ----
+  // A second body colour on one side of a line along the sidepods and on
+  // forward along the monocoque side:
   //   y(z) = podAt(z).bottom + 0.80 (top - bottom),  z -2.00 .. +1.05
   // straight between pod stations, held at the end stations beyond them (the
   // inlet height ahead of z +0.62, the tail's behind -1.48). It stops at z
@@ -654,29 +654,34 @@ const CarShade = (function () {
   // No height knob. 0.80 is the TOP edge of the opaque sponsor board (PANEL,
   // pod fractions 0.32-0.80, 16 mm proud of the flank, car3d addPodFlankSpan):
   // along the board the seam hides behind its top edge, and fore and aft of
-  // it the flank is dark to the same height. The c2 accent band (0.08-0.30)
-  // and the strip decal on it sit inside the dark zone and keep their own
+  // it the flank holds the same height. `lower` paints BELOW the line (the
+  // MCL40's anthracite); `upper` paints ABOVE it (the W17's silver upper
+  // chassis band over a black lower body). The c2 accent band (0.08-0.30)
+  // and the strip decal on it sit inside the lower zone and keep their own
   // colour; the accent flash (lower edge >= 0.8195) and the ERS strip
-  // (0.91-0.97) stay on primary. The first cut, 0.31, put the line under the
-  // board, which hid all but ~8 % of it from the side; this is ~20 % of the
-  // side-view body paint (body-split.test.mjs measures it).
+  // (0.91-0.97) stay on primary under `lower`, and take `upper` when that is
+  // set. The first cut, 0.31, put the line under the board, which hid all but
+  // ~8 % of it from the side; this is ~20 % of the side-view body paint
+  // (body-split.test.mjs measures it).
   // No vertex row lies on the line — the pod flank is ONE segment of podRing,
   // the cover flank one quad — so recolouring vertices alone would smear a
   // gradient down the flank: a triangle across the line is CUT along it.
+  // Absent either field, the build is byte-identical (neither zone runs).
   const LOWER = Object.freeze({ frac: 0.80, front: 1.05, rear: -2.00 });
-  /** Paint the body below the line in `lower`, in place, over triangles whose
-   *  vertices all lie in [from, to): only those whose three vertices are
+  /** Paint one side of the sidepod line in `tintCol`, in place, over triangles
+   *  whose vertices all lie in [from, to): only those whose three vertices are
    *  `paint` in the body colour (c1, clamped as car3d addTri clamps paint) and
    *  used by no other triangle, so the accent band, panel, stripes, nose cap,
-   *  pod/cover overrides and helmet keep theirs. Wholly below: recoloured.
+   *  pod/cover overrides and helmet keep theirs. `above` true → UPPER (above
+   *  the line); false → LOWER (below). Wholly on the tinted side: recoloured.
    *  Across: cut where the line crosses its edges — its own slot rewritten,
    *  the other pieces appended, normals interpolated — so the colour edge is
    *  crisp, and smooth() still welds the shading across it: call it before
    *  smooth() and the finish remap. Returns the number of vertices appended. */
-  function lowerZone(out, from, to, c1, lower, anchors, paint) {
-    if (!Array.isArray(lower) || lower.length < 3) return 0;   // a garage file keeps a string in a colour slot (settings-export cleanLivery)
+  function heightZone(out, from, to, c1, tintCol, anchors, paint, above) {
+    if (!Array.isArray(tintCol) || tintCol.length < 3) return 0;   // a garage file keeps a string in a colour slot (settings-export cleanLivery)
     const P = out.pos, N = out.nrm, C = out.col, M = out.mat, I = out.idx, nt = Math.floor(I.length / 3), EPS = 1e-7;
-    const body = [0, 1, 2].map((k) => Math.min(c1[k], 1)), low = [0, 1, 2].map((k) => Math.min(lower[k], 1));
+    const body = [0, 1, 2].map((k) => Math.min(c1[k], 1)), zone = [0, 1, 2].map((k) => Math.min(tintCol[k], 1));
     // The line at its KNOTS (the range ends and the pod stations between them):
     // podAt is linear between stations, so interpolating these is exact.
     const knots = [LOWER.front].concat(anchors.podStations.map((s) => s.z).filter((z) => z < LOWER.front && z > LOWER.rear), [LOWER.rear])
@@ -718,12 +723,17 @@ const CarShade = (function () {
       const tb = da / (da - db), tc = da / (da - dc), ab = vert(a, b, tb);
       return [[[a, vert(a, b, tb), vert(a, c, tc)], s[k]], [[ab, b, c], -s[k]], [[ab, c, vert(a, c, tc)], -s[k]]];
     }
-    const n0 = P.length / 3, yTop = Math.max(...knots.map(([, y]) => y));
+    const n0 = P.length / 3;
+    const yTop = Math.max(...knots.map(([, y]) => y)), yBot = Math.min(...knots.map(([, y]) => y));
     for (let t = 0; t < nt; t++) {
       const a = I[t * 3], b = I[t * 3 + 1], c = I[t * 3 + 2];
       if (!isBody(a) || !isBody(b) || !isBody(c)) continue;
       const z0 = Math.min(P[a * 3 + 2], P[b * 3 + 2], P[c * 3 + 2]), z1 = Math.max(P[a * 3 + 2], P[b * 3 + 2], P[c * 3 + 2]);
-      if (Math.min(P[a * 3 + 1], P[b * 3 + 1], P[c * 3 + 1]) > yTop + EPS || z1 < LOWER.rear || z0 > LOWER.front) continue;   // clear of the line: most of the body
+      // Clear of the line: lower skips wholly-above; upper skips wholly-below.
+      if (z1 < LOWER.rear || z0 > LOWER.front) continue;
+      if (above) {
+        if (Math.max(P[a * 3 + 1], P[b * 3 + 1], P[c * 3 + 1]) < yBot - EPS) continue;
+      } else if (Math.min(P[a * 3 + 1], P[b * 3 + 1], P[c * 3 + 1]) > yTop + EPS) continue;
       const q = [a, b, c];
       // The line BENDS at a knot (and stops at the range ends), so a long
       // triangle (the monocoque runs z 1.05 -> 0.05) can dip under it with all
@@ -736,18 +746,32 @@ const CarShade = (function () {
         const u = q[e], w = q[(e + 1) % 3], zu = P[u * 3 + 2], zw = P[w * 3 + 2];
         if ((zu - z) * (zw - z) < 0) probe.push(f(at(u, w, (z - zu) / (zw - zu), 1), z));
       }
-      if (probe.every((d) => d >= -EPS)) continue;                                // above (or on) the line
-      if (probe.every((d) => d <= EPS)) { for (const u of q) tint(u, low); continue; }   // below it
+      if (above) {
+        if (probe.every((d) => d <= EPS)) continue;                                         // below (or on) the line
+        if (probe.every((d) => d >= -EPS)) { for (const u of q) tint(u, zone); continue; }   // above it
+      } else {
+        if (probe.every((d) => d >= -EPS)) continue;                                         // above (or on) the line
+        if (probe.every((d) => d <= EPS)) { for (const u of q) tint(u, zone); continue; }    // below it
+      }
       let pieces = [q];
       for (const z of span) pieces = pieces.flatMap((p) => split(p, (x, y, zz) => zz - z).map(([p2]) => p2));
       const seen = new Set();   // the line may colour two plane pieces apart: none shares a corner
       pieces = pieces.map((p) => p.map((u) => (seen.has(u) ? vert(u, u, 0) : (seen.add(u), u))));
       pieces.flatMap((p) => (inZ((P[p[0] * 3 + 2] + P[p[1] * 3 + 2] + P[p[2] * 3 + 2]) / 3) ? split(p, gLine) : [[p, 1]])).forEach(([p, sd], i) => {
-        for (const u of p) tint(u, sd < 0 ? low : body);
+        const take = above ? sd > 0 : sd < 0;
+        for (const u of p) tint(u, take ? zone : body);
         if (i) I.push(p[0], p[1], p[2]); else { I[t * 3] = p[0]; I[t * 3 + 1] = p[1]; I[t * 3 + 2] = p[2]; }
       });
     }
     return P.length / 3 - n0;
+  }
+  function lowerZone(out, from, to, c1, lower, anchors, paint) {
+    return heightZone(out, from, to, c1, lower, anchors, paint, false);
+  }
+  /** Paint the body ABOVE the sidepod line in `upper` — the W17 silver band.
+   *  Same cut rules as lowerZone; absent = today's car. bodySplit lr wins. */
+  function upperZone(out, from, to, c1, upper, anchors, paint) {
+    return heightZone(out, from, to, c1, upper, anchors, paint, true);
   }
 
   /** Crease-angle normal smoothing over a Car3D mesh, in place, read through
@@ -827,7 +851,7 @@ const CarShade = (function () {
   }
 
   return { KEY, RING_N, EXP, EXP_TOP, LOWER, COVER_Z, COVER_Z_NEAR, RAMP, on, any, set, pref, ring, sink, loft, capLoft, podRing, loftRings, podLoft,
-           densifyCoverPts, downwash, cokeFoot, coverLoft, vertexNormals, lowerZone, smooth,
+           densifyCoverPts, downwash, cokeFoot, coverLoft, vertexNormals, lowerZone, upperZone, heightZone, smooth,
            skin, earcut, sect, pipe, strut, fine, rquad, block, box, boxFn, blockFn, housing, cTub, floor, endplate, tunnel, headrest,
            _norm: norm };
 })();
