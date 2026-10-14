@@ -44,7 +44,7 @@
       const { n, hash, every, anchor, onTrack, out, MAT, vadd, modelGroup, seat,
         pine, tree, bush, forestEdge, building, grandstandEx, spectatorHill,
         guardrail, fence, tyreWall, marshalPost, cameraTower, billboard,
-        motorhome, groundPatch, ridge, mountain, terrainYAt, addBox,
+        groundPatch, ridge, mountain, terrainYAt, addBox,
         indexSolid, waterBand } = api;
 
       // ---------------------------------------------------------------- 1.
@@ -649,10 +649,13 @@
           if (minEdge(a.c[0], a.c[2]) < dist * 0.85) continue;
           tree(k, -1, dist, 13 + h * 8, r ? HARD2 : HARD);
         }
-        if (h > 0.6) {
-          const d = 6.5 + h * 0.8;
+        // Past the rail: understory only when clear of CAM_NEAR hardwood trunks
+        // (clip-audit: bush cone × pine trunk ~1.2 m at frac ~0.473).
+        if (h > 0.72) {
+          const d = 9.8 + h * 1.4;
           const a = anchor(k, -1, d);
-          if (!onTrack(a.c[0], a.c[2], 1.0)) bush(k, -1, d, FERN);
+          if (!onTrack(a.c[0], a.c[2], 1.0) &&
+              minEdge(a.c[0], a.c[2]) >= d * 0.85) bush(k, -1, d, FERN);
         }
       });
 
@@ -907,8 +910,20 @@
         }
       }
       fence(0.884, 0.934, 1, 8, 2.4, [0.62, 0.64, 0.66]);
-      motorhome(K(0.906), 1, 32, 10, 4.2, 14, { wall: VAN_B, window: GLASS });
-      motorhome(K(0.918), 1, 32, 10, 4.2, 14, { wall: VAN_A, window: GLASS });
+      for (const [sf, gap, w, h, d, wall] of [
+        [0.906, 34, 10, 4.2, 14, VAN_B],
+        [0.918, 34, 10, 4.2, 14, VAN_A],
+      ]) {
+        const a0 = anchor(K(sf), 1, gap);
+        const gy = terrainYAt(a0.c[0], a0.c[2]);
+        if (gy == null || onTrack(a0.c[0], a0.c[2], 4)) continue;
+        const a = { c: [a0.c[0], gy, a0.c[2]], r: a0.r, u: a0.u, t: a0.t };
+        const b = [a.r, a.u, a.t];
+        addBox(out, vadd(a.c, a.u, h * 0.28), [w, h * 0.56, d], wall, b);
+        addBox(out, vadd(a.c, a.u, h * 0.78), [w * 0.86, h * 0.44, d * 0.90], wall, b);
+        addBox(out, vadd(vadd(a.c, a.r, -1 * (w / 2 + 0.02)), a.u, h * 0.35),
+               [0.05, h * 0.18, d * 0.82], GLASS, b);
+      }
       billboard(K(0.934), 1, 11, 9, 3, [0.82, 0.20, 0.14]);
       cameraTower(K(0.890), 1, 13, {});
       // ...and spruce closing behind the paddock enclosure again.
