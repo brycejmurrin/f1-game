@@ -1,15 +1,17 @@
-/* Apex 26 — TitleFx: title-screen motion, wash and the background drawing, as
-   player settings under SETTINGS › APPEARANCE.
+/* Apex 26 — TitleFx: title-screen motion, wash and the background drawing.
 
-   MOTION has its own heading (it reaches every screen and the race); TITLE
-   INTRO / MENU WASH / TITLE ART / REPLAY INTRO sit in the TITLE SCREEN fold,
-   whose summary js/ui/title-layout.js paints through onChange().
+   REDUCE MOTION lives under SETTINGS › ACCESSIBILITY (js/ui/a11y-opts.js
+   builds the row); TITLE INTRO / MENU WASH / TITLE ART / REPLAY INTRO sit in
+   APPEARANCE › TITLE SCREEN, whose summary js/ui/title-layout.js paints
+   through onChange().
 
-   MOTION: ON / REDUCED. An OS that asks for reduced motion always
-   wins, and is followed live; otherwise the stored choice answers, and unset
-   is ON. Lands on <html data-motion="reduce"> — absent when motion is on —
-   so CSS keys off ONE attribute, and so does the race: js/game.js drops the
-   camera shake and the pre-race cinematic, js/ui/loading-screen.js the flyby.
+   REDUCE MOTION: AUTO / ON / OFF (stored apex26.motion: "auto" | "reduce" |
+   "off"; legacy "on" reads as AUTO). AUTO follows prefers-reduced-motion
+   live; ON always reduces; OFF never reduces (overrides the OS). Effective
+   mode() is still "on" | "reduce" for every caller that keys off motion.
+   Lands on <html data-motion="reduce"> — absent when motion is on — so CSS
+   keys off ONE attribute, and so does the race: js/game.js drops the camera
+   shake and the pre-race cinematic, js/ui/loading-screen.js the flyby.
 
    TITLE INTRO: FULL / QUICK / OFF. How long (and whether) the first-show
    title reveal runs. Lands on <html data-title-intro>. Unset is FULL.
@@ -39,11 +41,12 @@
 const TitleFx = (function () {
   "use strict";
 
-  const KEY = "motion";              // apex26.motion — json: "on" | "reduce" | unset
+  const KEY = "motion";              // apex26.motion — json: "auto" | "reduce" | "off" (legacy "on" → auto)
   const KEY_INTRO = "titleIntro";    // apex26.titleIntro — json: "full" | "quick" | "off" | unset
   const KEY_WASH = "menuWash";       // apex26.menuWash — json: "full" | "soft" | "off" | unset
   const KEY_ART = "titleArt";        // apex26.titleArt — json: "on" | "soft" | "off" | unset
-  const MOTION = [["on", "ON"], ["reduce", "REDUCED"]];
+  // UI labels AUTO / ON / OFF; stored tokens auto / reduce / off (reduce = always reduce).
+  const MOTION = [["auto", "AUTO"], ["reduce", "ON"], ["off", "OFF"]];
   const INTROS = [["full", "FULL"], ["quick", "QUICK"], ["off", "OFF"]];
   const WASHES = [["full", "FULL"], ["soft", "SOFT"], ["off", "OFF"]];
   const ARTS = [["on", "ON"], ["soft", "SOFT"], ["off", "OFF"]];
@@ -70,12 +73,21 @@ const TitleFx = (function () {
   };
 
   const osReduce = () => !!(osQuery && osQuery.matches);
-  // The OS asking for reduced motion always wins — the setting can only ADD
-  // reduction — then the stored choice. A value the registry does not name
-  // (hand-edited storage) reads as unset, which is ON.
+  // Stored choice for REDUCE MOTION. Legacy "on" (old MOTION: ON) maps to AUTO
+  // so an OS that asks for reduced motion still wins for those saves; "reduce"
+  // stays ON (always reduce); "off" is the new override.
+  function choice() {
+    const v = store.get(KEY, null);
+    if (v === "reduce") return "reduce";
+    if (v === "off") return "off";
+    return "auto";   // null, "auto", legacy "on", garbage
+  }
+  // Effective motion for CSS / race callers: "reduce" | "on".
   function mode() {
-    if (osReduce()) return "reduce";
-    return store.get(KEY, null) === "reduce" ? "reduce" : "on";
+    const c = choice();
+    if (c === "reduce") return "reduce";
+    if (c === "off") return "on";
+    return osReduce() ? "reduce" : "on";
   }
   function introMode() {
     const v = store.get(KEY_INTRO, null);
@@ -134,11 +146,18 @@ const TitleFx = (function () {
     applyArt();
   }
 
-  function set(v) {
-    store.set(KEY, v === "reduce" ? "reduce" : "on");
+  function setChoice(v) {
+    const next = (v === "reduce" || v === "off") ? v : "auto";
+    store.set(KEY, next);
     applyMotion();
-    if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-motion", mode());
-    return mode();
+    if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-motion", choice());
+    return choice();
+  }
+  // Legacy alias: set("reduce") / set("on") — "on" now means AUTO (motion allowed).
+  function set(v) {
+    if (v === "reduce") return setChoice("reduce");
+    if (v === "off") return setChoice("off");
+    return setChoice("auto");
   }
   function setIntro(v) {
     const next = (v === "quick" || v === "off") ? v : "full";
@@ -225,17 +244,10 @@ const TitleFx = (function () {
     wireRows();
   }
 
-  // Static shell rows under SETTINGS › APPEARANCE: MOTION, then the TITLE
-  // SCREEN fold's TITLE INTRO / MENU WASH / TITLE ART and REPLAY INTRO.
+  // TITLE SCREEN fold rows under SETTINGS › APPEARANCE. REDUCE MOTION is
+  // wired by A11yOpts once the Accessibility panel has built #pm-motion.
   function wireRows() {
     if (typeof SettingRow === "undefined") return;
-    if (byId("pm-motion")) {
-      SettingRow.wire("pm-motion", {
-        values: MOTION,
-        read: mode,
-        write: (v) => set(v),
-      });
-    }
     if (byId("pm-titleintro")) {
       SettingRow.wire("pm-titleintro", {
         values: INTROS,
@@ -277,8 +289,8 @@ const TitleFx = (function () {
 
   return {
     KEY, KEY_INTRO, KEY_WASH, KEY_ART, MOTION, INTROS, WASHES, ARTS, INTRO_MS,
-    mode, introMode, washMode, artMode, introHoldMs,
-    set, setIntro, setWash, setArt, onChange,
+    choice, mode, introMode, washMode, artMode, introHoldMs,
+    set, setChoice, setIntro, setWash, setArt, onChange,
     apply, applyMotion, applyIntro, applyWash, applyArt, replay, initUI, wireRows,
   };
 })();
