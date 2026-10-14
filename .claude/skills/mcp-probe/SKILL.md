@@ -16,7 +16,7 @@ reachable from a container browser — that is the **deploy-research** subagent
 
 ```sh
 python3 tools/mcp/probe-mcp.py status                # no browser: clone/bin/Chrome path + daemon UP/DOWN. Run FIRST
-#   "Bin: missing" -> tools/mcp/chrome-devtools-mcp.sh clone  (needs egress; else use the attached chrome_* tools)
+#   "Bin: missing" -> tools/mcp/chrome-devtools-mcp.sh clone  (needs egress; no egress = use the attached chrome_* tools, no daemon)
 # Everything below launches Chromium (browser-only) except help/status/mcp-cli --dry-run:
 python3 tools/mcp/probe-mcp.py list-tools
 python3 tools/mcp/probe-mcp.py chrome-start          # REQUIRED for multi-call chrome
@@ -60,40 +60,21 @@ vs playwright-official).
 
 1. **Never render Chrome MCP while Playwright runs** — park to `about:blank`,
    then `chrome-stop`, then check CPU; see [`references/traps.md`](references/traps.md) (chrome / camera / scene slices).
-2. **github.io is unreachable from any container BROWSER** (egress proxy) —
-   route it to `deploy-research`. This said "or curl", and that half was FALSE:
-   measured 2026-09-18, `curl` gets HTTP 200 from github.io in 0.36 s, because
-   curl trusts the agent proxy's CA bundle and Chrome does not. So curl is the
-   RIGHT tool for the deployed shell's exact bytes — a `<meta name="apex-sha">`,
-   a `?v=` hash — which the host fetch tool cannot read at all: it renders to
-   markdown and drops every `<meta>` tag silently, answering "NO META TAGS
-   VISIBLE" about a page that has them. The fetch tool stays correct for plain
-   JSON (`version.json`) and prose.
-   Measured 2026-09-15: `chrome-devtools` navigating to ANY external HTTPS
-   (not just github.io — plain `https://example.com` too) fails
-   `net::ERR_CERT_AUTHORITY_INVALID`, since Chrome here does not trust the
-   proxy's CA. That error is the signature of "wrong tool for this URL," not a
-   flag or config bug — route to `deploy-research` instead of chasing it.
+2. **github.io is unreachable from any container BROWSER** (egress proxy; Chrome
+   rejects the proxy CA) — route it to `deploy-research`. `curl` does work for exact
+   shell bytes; evidence in [`references/web-egress.md`](references/web-egress.md).
 3. **`snapCam()` after `jump()`/`park()` only** — never after `orbit()`/`view()`.
-4. SwiftShader WebGPU **executes** — visible WGX pixels come from the soft-present
-   2D blit on `#game` (`gfx-probe.mjs` / `GLX.awaitSoftPresent()`, or from a live
-   `chrome_*` session `await __apex.awaitPresent()` — same wait, no need to know
-   `GLX` is a bare global), not from the hidden swapchain canvas. HeadlessChrome
-   GLX (and TLX-WebGPU) hide `#game` and blit onto `#game-soft` —
-   `awaitSoftPresent()`/`awaitPresent()` then capture that overlay, never
-   `locator("#game").screenshot()`. Primary probe:
-   `node tools/gfx/gfx-probe.mjs --backend webgpu <track>` (aliases
-   `wgx-capture.mjs` / `wgx-lavapipe-probe.mjs` forward here — prefer the parent).
-   Never call `getCurrentTexture()` on software adapters. TLX:
-   `gfx-probe.mjs --backend three` (WebGL2 pin). Cloud env packages:
-   `AGENTS.md` §Cursor Cloud; `../../../docs/notes/CI-RENDERING-PERFORMANCE.md`
-   §Cursor Cloud.
+4. SwiftShader WebGPU **executes**; pixels come from the soft-present blit, never the
+   hidden swapchain: `await __apex.awaitPresent()` in a live session, or
+   `node tools/gfx/gfx-probe.mjs --backend webgpu <track>` (TLX: `--backend three`).
+   Never call `getCurrentTexture()` on software adapters. Commands and traps:
+   `references/recipes.md` § Probing a specific renderer.
 5. Long fetch/search → `deploy-research` subagent, not the parent context.
 
 **Chrome-client pick one:** attached `chrome_*` / `probe-mcp.py chrome-start` for
 live canvas; `mcp-cli.mjs probe --backend …` for batched renderer recipes;
 `cdmcp-cli.py` for lighting/shot recipes. Do not start a second Chrome client
-beside an active Playwright run. UI matrix → `layout-audit.mjs` (not the archived
+beside an active Playwright run. UI matrix → `tools/ui/layout-audit.mjs` (not the archived
 `ui-readable-survey-mcp.py`).
 
 ## Load on demand
@@ -103,6 +84,7 @@ beside an active Playwright run. UI matrix → `layout-audit.mjs` (not the archi
   [traps-chrome.md](references/traps-chrome.md) (Playwright vs Chrome MCP),
   [traps-camera.md](references/traps-camera.md) (`snapCam` / free-cam),
   [traps-scene.md](references/traps-scene.md) (soft-present / lights / `scene()`).
+- HUD/DOM stops updating (pit stop, lap change) → [`references/hud-freeze.md`](references/hud-freeze.md).
 - Chrome setup, A/B ports, heap/perf, post-deploy recipes → read
   [`references/recipes.md`](references/recipes.md).
 - Renderer probe flags (`--backend`, secure context, `gfxBound`) →

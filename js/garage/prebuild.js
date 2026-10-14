@@ -37,9 +37,11 @@
    NEVER: during a race start (loading card or the drive-out studio), with the
    garage open, behind a hidden tab, during the title intro, before the menu
    world's own hidden frames have drawn, or — on the title, where it is
-   speculative — under Save-Data / prefers-reduced-data or before the material
-   pack has settled (the garage samples it; drawn before it lands, the programs
-   compile again). Race settings keeps its old gates: RACE! needs that garage.
+   speculative — under Save-Data / prefers-reduced-data. The material pack no
+   longer blocks the car/room CPU steps (those run while it downloads); only the
+   hidden program frames wait for packSettled, because a draw before the pack
+   lands compiles the programs again. Race settings keeps its old gates: RACE!
+   needs that garage.
 
    OFF SWITCH (the before/after on one tree): apex26.garagePrewarm = "off" at
    boot, or __apex.garagePrewarm(false); tools/shot/garage-tap.mjs runs both.
@@ -93,7 +95,8 @@ const GaragePrebuild = (function () {
       if (e.off) out.push("off");
       if (e.intro) out.push("title-intro");
       if (e.saveData) out.push("save-data");
-      if (!e.packSettled) out.push("pack");
+      // Pack is NOT a start blocker: car/room build while it downloads. Frames
+      // still wait on packSettled inside run() so programs compile once.
       if (e.kind === "track" && !e.worldReady) out.push("world-build");
       if (e.kind === "garage" && !e.homePainted) out.push("home-unpainted");
     }
@@ -184,6 +187,16 @@ const GaragePrebuild = (function () {
           if (!current()) return finish(rec, "superseded");
         }
         if (!p.frames) { prepped = { key: rec.key, room: p.room || !!(had && had.room) }; return finish(rec, "ready"); }
+        // Programs sample the material pack — wait for it before the hidden
+        // frames, or the first real garage present recompiles them.
+        const packUntil = now() + GIVE_UP_MS;
+        while (!packSettled(typeof Assets !== "undefined" && Assets.state ? Assets.state() : null)
+          && current() && now() < packUntil) await d.menuSlice();
+        if (!current()) return finish(rec, "superseded");
+        if (!packSettled(typeof Assets !== "undefined" && Assets.state ? Assets.state() : null)) {
+          prepped = { key: rec.key, room: true };
+          return finish(rec, "pending");
+        }
         // TLX compiles the next present's programs once warm() is asked; one
         // request per session — a repeat links nothing yet holds presents.
         if (!warmed && G.gfx.warm) { G.gfx.warm(); warmed = true; }

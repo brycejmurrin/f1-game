@@ -337,7 +337,9 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `helmets.js` | `Helmets` | tag | Helmets: one painted helmet design per driver. |
 | `car-geometry.js` | `CarGeometry` | tag | shared car mesh primitives and foil surfaces; create receives the owner’s surface and palette identities. |
 | `car-wheels.js` | `CarWheels` | tag | wheel geometry and rotating/fixed layers; create receives shared primitive builders and palette references. |
+| `car-materials.js` | `CarMaterials` | tag | car surface ids, finish remaps, palette colours, and paint helpers for Car3D. |
 | `car-shade.js` | `CarShade` | tag | CAR SHADE: rounded body sections and smooth shading for the procedural car (js/car/car3d.js). |
+| `car-body-geom.js` | `CarBodyGeom` | tag | car body geometry builders (wings, fins, chassis, pods, cover, part recipes). create() receives palette + mesh primitives + chassis datums from Car3D. |
 | `car3d.js` | `Car3D` | tag | procedural 2026 F1 car. |
 | `parts.js` | `Parts` | tag | Parts catalog and stat helpers. |
 | `liveries.js` | `Liveries` | tag | custom paint jobs (liveries). |

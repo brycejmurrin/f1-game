@@ -89,6 +89,40 @@ off.
 6. One runner is one runner: Apple Paravirtual is not a player's GPU, and the
    phone leg is unreachable from CI entirely.
 
+## 7. The census runs the player's path (hunt 4, 2026-10-14)
+
+The source is `docs/notes/PERF-HUNT-4-2026-10-14.md` §C (I1–I7) and §A (instrument gaps).
+
+**Every leg presents natively (I1, I3).** All four game checks in `gpu-census.yml` pin `apex26.wgxCapture=0`, ahead of the dispatcher's `ls`.
+- GLX now honours that pin: no `preserveDrawingBuffer` and no `#game-soft` overlay.
+- WGX stops its per-frame readback blit. Pinned by hand at spa dusk, WGX went from 20.8 to 36.7 fps in the driven window.
+- The HeadlessChrome UA still forces WGX MSAA 1 (`_softAdapter`).
+- Before each A/B capture and before the final shot, `gpu-game-check` takes a fresh frame:
+  - on a soft-presenting backend, it invalidates and then awaits a newer blit;
+  - on a native one, it waits two rAFs.
+- Each capture records `{mode, gen}`. The Verdict prints `frames:` and flags STALE when the soft gens did not advance. Census 450–455 had shot one gen-1 frame for every capture.
+
+**GL errors are drained once per beat (I2).** The census no longer sets `apex26.glErrDrain=1`.
+- It calls `GLX.drainGpuErrors()` at about 1 Hz and once more before the gate reads the counter.
+- GL error flags are sticky until read, so the `gpuErrors > 0` gate loses nothing.
+- At spa dusk, getError cost 4.92 ms/frame with the per-present drain and 1.37 ms with the pin off.
+- `--gl-err-drain` restores the per-present drain.
+
+**Read the window, not the governor (I4).** `out.window` counts LoopHealth's finished game frames between `arm()` and a `disarm()` at the last beat. It holds fps, ms/frame and the frame-interval p50/p95/p99/max.
+- The governor's end snapshot is a 2048-frame ring that also holds the frozen A/B phases.
+- On the WebGPU legs the rAF series counts about 2 callbacks per game frame.
+- A/Bs whose feature reports `supported: false` are skipped. Today that is WGX and both three.js legs.
+
+**Uploads and gaps (§A).** On WebGL2, `bufferData`, `bufferSubData`, `texImage2D/3D`, `texSubImage2D/3D` and `generateMipmap` are now counted, timed and sized (KB). This is the same treatment `writeBuffer` gets on WebGPU.
+- `out.gapWork` covers every rAF interval of 500 ms or more since page load.
+- For each gap it names the phase, the work of the rendering step before it, the work done between steps, and the long tasks that overlap it.
+- A 4 s first-draw stall is attributable this way. `spikeWork`, which keys on callbacks of 100 ms or more, cannot see it.
+
+**Follow-up, not built (I5).** WGX `gpuMs` times only the lit pass, while GLX's covers main plus post. A per-pass GLX timer would put sequential `TIME_ELAPSED` queries around the sun, lamp, car, env, mirror, main and post groups. Only one such query may be active at a time.
+- Those groups are sequenced from `js/game.js`, which this lane may not edit, so it is not a small change behind a flag.
+- It needs a query ring per group in `glx.js`, with begin/end hooks called from the pass sites.
+- WGX would need `timestampWrites` that begin on the first pass and end on the last.
+
 ## Sources
 
 - [EXT_disjoint_timer_query_webgl2 specification](https://registry.khronos.org/webgl/extensions/EXT_disjoint_timer_query_webgl2/)

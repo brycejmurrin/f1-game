@@ -14,8 +14,14 @@
  * player's copy-pasted answer are directly comparable.
  *
  * Run: node tools/gfx/gpu-game-check.mjs [track] [--json out.json] [--shot out.png]
- *      [--backend three|webgpu] [--path webgpu|webgl2] [--boot-timeout MS]
- *      [--ls apex26.key=value ...]
+ *      [--backend three|webgl2|webgpu] [--path webgpu|webgl2] [--boot-timeout MS]
+ *      [--ls apex26.key=value ...] [--gl-err-drain] [--help]
+ *
+ * GLX getError: drained ONCE PER BEAT (~1 Hz) through GLX.drainGpuErrors(),
+ * not on every present — GL error flags are sticky until read, so the
+ * gpuErrors > 0 gate loses nothing, and the per-present drain a player never
+ * pays (4.92 ms/frame at spa dusk, hunt 4 I2) is out of the measurement.
+ * --gl-err-drain restores the old apex26.glErrDrain=1 per-present drain.
  *
  * It checkpoints the --json file after every phase, so a step timeout leaves a
  * diagnosis on disk rather than nothing at all.
@@ -29,7 +35,7 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds } from "./frame-hitch.mjs";
+import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork } from "./frame-hitch.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
 // `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
@@ -48,6 +54,26 @@ const PINNED = ["/opt/pw-browsers/chromium", process.env.APEX_CHROMIUM].filter(B
   .find((p) => { try { return existsSync(p); } catch (_) { return false; } }) || null;
 
 const argv = process.argv.slice(2);
+// --help answers before anything launches: no server, no browser, exit 0.
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log(`gpu-game-check — boot the game on this machine's GPU and report the renderer's verdict.
+
+  node tools/gfx/gpu-game-check.mjs [track] [options]
+
+  --backend three|webgl2|webgpu   three = TLX (default), webgl2 = GLX, webgpu = WGX
+  --path webgpu|webgl2            three.js path for --backend three (default webgpu)
+  --tod day|night|dawn|dusk       time of day the track is BUILT with (bakes lamps)
+  --clock H                       hour the in-run A/B pins (default 12)
+  --beats N                       driven window, one beat a second (default 15)
+  --no-drive                      keep the car parked for the window
+  --ls apex26.k=v                 extra localStorage (repeatable; after the defaults)
+  --gl-err-drain                  GLX: drain getError() on EVERY present (apex26.glErrDrain=1);
+                                  default drains once per beat via GLX.drainGpuErrors()
+  --json out.json  --shot out.png   checkpointed JSON; screenshots (+ per-A/B captures)
+  --boot-timeout MS  --race-timeout MS
+`);
+  process.exit(0);
+}
 const flag = (n, d = null) => { const i = argv.indexOf(n); return i > -1 ? argv[i + 1] : d; };
 const track = argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--json"
   && argv[argv.indexOf(a) - 1] !== "--shot" && argv[argv.indexOf(a) - 1] !== "--backend"
@@ -69,6 +95,7 @@ const beats = Math.max(1, Math.round(Number(flag("--beats", 15))) || 15);
 // The default DRIVES: a parked car streams nothing, and the hitch this tool
 // exists to find is scenery reaching a moving car.
 const drive = !process.argv.includes("--no-drive");
+const glErrDrainEveryPresent = argv.includes("--gl-err-drain");
 
 function serve() {
   // A server rooted at the wrong directory answers 404 to everything, which is
@@ -112,7 +139,8 @@ function checkpoint(phase, extra) {
   console.log(`[game-check] ${phase} +${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }
 const log = (m) => console.log(`[game-check] ${m}`);
-const out = { platform: process.platform, arch: process.arch, track, backend, path: path3 };
+const out = { platform: process.platform, arch: process.arch, track, backend, path: path3,
+  glErrDrain: glErrDrainEveryPresent ? "present" : "beat" };
 const { server, port } = await serve();
 const browser = await chromium.launch({
   ...(PINNED ? { executablePath: PINNED } : { channel: "chromium" }),
@@ -141,7 +169,7 @@ try {
   page.on("crash", () => { out.crashed = true; checkpoint("renderer-crashed"); });
   page.on("close", () => { out.pageClosed = true; });
   browser.on("disconnected", () => { out.browserGone = true; });
-  await page.addInitScript(([be, p, ls]) => {
+  await page.addInitScript(([be, p, ls, drainEvery]) => {
     // THE SPIKE TRAIN, recorded on the machine that has a real GPU.
     //
     // Everything else this file measures is a SETTLED number: fps is an EMA,
@@ -201,8 +229,25 @@ try {
     // frames made them. One record per callback that made any call.
     let _hWorkCur = null;
     const _hWorkFrames = [];
+    // THE GAP VIEW (hunt 4 §A gap ii). analyseSpikeWork keys on a CALLBACK of
+    // >= 100 ms, so it never sees a 4 s rAF GAP — the opening first-draw stall
+    // is time in which no callback ran at all. Always on (armed or not, from
+    // page load): every rendering step (callbacks sharing one rAF timestamp)
+    // keeps its wrapped-call work and summed callback time, work done between
+    // steps is kept apart, and a step that starts >= 500 ms after the previous
+    // one records both, so the stall names the frame before it.
+    const GAP_MS = 500;
+    let _gFrameTs = null, _gFrameStart = -1, _gFrameDur = 0, _gFrameWork = null, _gBetween = null, _gInCb = false;
+    const _gGaps = [];
+    const _gapAdd = (k, n) => {
+      const o = _gInCb ? (_gFrameWork || (_gFrameWork = {})) : (_gBetween || (_gBetween = {}));
+      o[k] = (o[k] || 0) + n;
+    };
     const _bumpWorkN = (k, n) => {
+      _gapAdd(k, n);
       if (!_hArmed) return;
+      // Window totals carry the BYTES as well as the counts (upload KB).
+      if (k.endsWith("KB")) _hWork.set(k, (_hWork.get(k) || 0) + n);
       if (_hWorkCur === null) _hWorkCur = {};
       _hWorkCur[k] = (_hWorkCur[k] || 0) + n;
       // Every timed kind also feeds one per-frame total, so the analyser can
@@ -210,7 +255,7 @@ try {
       if (k.endsWith("Ms") && k !== "gpu.wrappedMs") _hWorkCur["gpu.wrappedMs"] = (_hWorkCur["gpu.wrappedMs"] || 0) + n;
     };
     const _bumpWork = (k) => {
-      if (!_hArmed) return;
+      if (!_hArmed) { _gapAdd(k, 1); return; }
       _hWork.set(k, (_hWork.get(k) || 0) + 1);
       _bumpWorkN(k, 1);
       if (!STACK_KINDS[k] || _hStackBudget <= 0) return;
@@ -301,6 +346,44 @@ try {
       wrapCall(G2, "linkProgram", "gl.linkProgram");
       wrapCall(G2, "compileShader", "gl.compileShader");
       wrapCall(G2, "getProgramParameter", "gl.getProgramParameter");
+      // THE WebGL2 UPLOAD SIDE (hunt 4 §A gap i). The three/WebGL2 and GLX legs
+      // reported "no resource calls observed" because only the compile calls
+      // were wrapped, while three's DynamicDraw rule re-uploads instance
+      // buffers every pass. Count, time and size the uploads the way
+      // GPUQueue.writeBuffer is: <kind>, <kind>Ms and <kind>KB per frame.
+      // Sizes are exact for typed arrays; an image source is counted at
+      // 4 B/texel and a PBO offset upload at w*h*4 (both marked estimates in
+      // the docs, never mistaken for zero).
+      const viewBytes = (v, srcOffset, length) => {
+        if (!v || typeof v.byteLength !== "number") return 0;
+        const per = v.BYTES_PER_ELEMENT || 1;
+        return length ? length * per : v.byteLength - (srcOffset || 0) * per;
+      };
+      const srcTexels = (s) => (s ? (s.naturalWidth || s.videoWidth || s.displayWidth || s.width || 0)
+        * (s.naturalHeight || s.videoHeight || s.displayHeight || s.height || 0) : 0);
+      // pixels: a typed array (exact), null (allocation only), a number (PBO
+      // offset) or an image source; w*h*d texels otherwise at 4 B each.
+      const texBytes = (p, srcOffset, texels) => (p == null ? 0
+        : (typeof p === "object" && typeof p.byteLength === "number") ? viewBytes(p, srcOffset) : texels * 4);
+      const GL_BYTES = {
+        bufferData: (a) => (typeof a[1] === "number" ? 0 : viewBytes(a[1], a[3], a[4])),   // a size alone uploads nothing
+        bufferSubData: (a) => viewBytes(a[2], a[3], a[4]),
+        texImage2D: (a) => (a.length === 6 ? srcTexels(a[5]) * 4 : texBytes(a[8], a[9], a[3] * a[4])),
+        texSubImage2D: (a) => (a.length === 7 ? srcTexels(a[6]) * 4 : texBytes(a[8], a[9], a[4] * a[5])),
+        texImage3D: (a) => texBytes(a[9], a[10], a[3] * a[4] * a[5]),
+        texSubImage3D: (a) => texBytes(a[10], a[11], a[5] * a[6] * a[7]),
+      };
+      for (const name of Object.keys(GL_BYTES)) {
+        if (!G2 || typeof G2[name] !== "function") continue;
+        const orig = G2[name], kind = "gl." + name, bytesOf = GL_BYTES[name];
+        G2[name] = function () {
+          _bumpWork(kind);
+          try { const b = bytesOf(arguments); if (b > 0) _bumpWorkN(kind + "KB", b / 1024); } catch (_) { /* the count stands */ }
+          const t = performance.now();
+          try { return orig.apply(this, arguments); } finally { _bumpWorkN(kind + "Ms", performance.now() - t); }
+        };
+      }
+      wrapCall(G2, "generateMipmap", "gl.generateMipmap");
     } catch (_) { /* a frozen prototype leaves this column absent, not zero */ }
     try {
       const TP = window.GPUTexture && window.GPUTexture.prototype;
@@ -415,26 +498,56 @@ try {
                         offRoadFrames: _dOff, error: _dErr }),
       };
     } catch (_) { /* no driver: the window measures a parked car, and the race: row says PARKED */ }
+    // THE DRIVEN WINDOW IN GAME FRAMES (hunt 4 I4). The governor's end
+    // snapshot is a 2048-frame ring that also holds the frozen-sim A/B
+    // phases, and the rAF series counts ~2 callbacks per game frame on the
+    // WebGPU legs. LoopHealth.state().frames moves once per FINISHED game
+    // frame, so its delta over arm()..disarm() is the window's frame count and
+    // the callbacks that move it time the frame intervals.
+    const _lhFrames = () => {
+      try { return typeof LoopHealth !== "undefined" && LoopHealth.state ? LoopHealth.state().frames : -1; } catch (_) { return -1; }
+    };
+    const _gfT = new Float64Array(_hCAP);
+    let _gfN = 0, _lhLast = -1;
+    const _win = { t0: null, t1: null, f0: null, f1: null };
     try {
       const _raf = window.requestAnimationFrame.bind(window);
       window.requestAnimationFrame = function (cb) {
         return _raf(function (ts) {
           const a = performance.now();
+          if (ts !== _gFrameTs) {
+            // A new rendering step: was the one before it followed by a gap?
+            if (_gFrameStart >= 0 && a - _gFrameStart >= GAP_MS && _gGaps.length < 64) {
+              _gGaps.push({ at: _gFrameStart, gapMs: a - _gFrameStart, prevFrameMs: _gFrameDur,
+                prevWork: _gFrameWork, between: _gBetween, armed: _hArmed });
+            }
+            _gFrameTs = ts; _gFrameStart = a; _gFrameDur = 0; _gFrameWork = null; _gBetween = null;
+          }
+          _gInCb = true;
           try { return cb(ts); } finally {
+            _gInCb = false; _gFrameDur += performance.now() - a;
             if (_hArmed && _hN < _hCAP) {
               _hT[_hN] = a; _hD[_hN] = performance.now() - a;
               _hP[_hN] = _hPass > 32767 ? 32767 : _hPass;
               if (_hN < 4000) _hSig.push(_hSigCur);
               if (_hWorkCur !== null && _hWorkFrames.length < 4000) _hWorkFrames.push([_hN, _hWorkCur]);
               _hN++;
+              const lf = _lhFrames();
+              if (lf >= 0 && lf !== _lhLast && _gfN < _hCAP) { _gfT[_gfN++] = performance.now(); _lhLast = lf; }
             }
             _hPass = 0; _hSigCur = []; _hWorkCur = null;
           }
         });
       };
       window.__gcHitch = {
-        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hWork.clear(); _hStacks.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null; },
-        dump: () => ({ t0: Array.from(_hT.subarray(0, _hN)), dur: Array.from(_hD.subarray(0, _hN)),
+        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hWork.clear(); _hStacks.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null;
+          _gfN = 0; _lhLast = _lhFrames(); _win.t0 = performance.now(); _win.f0 = _lhLast; _win.t1 = _win.f1 = null; },
+        // Close the window where the DRIVING stops, so the A/B phases that
+        // follow never enter the per-frame series or the spike analysis.
+        disarm() { if (!_hArmed) return; _hArmed = false; _win.t1 = performance.now(); _win.f1 = _lhFrames(); },
+        dump: () => ({ win: Object.assign({}, _win), gameFrameT: Array.from(_gfT.subarray(0, _gfN)),
+                       gaps: _gGaps, marks: window.__apexMarks || {}, longTasks: window.__apexLongTasks || [],
+                       t0: Array.from(_hT.subarray(0, _hN)), dur: Array.from(_hD.subarray(0, _hN)),
                        passes: Array.from(_hP.subarray(0, _hN)), passSig: _hSig,
                        work: [..._hWork.entries()].sort((a, b) => b[1] - a[1]),
                        workFrames: _hWorkFrames,
@@ -445,9 +558,12 @@ try {
       localStorage.setItem("apex26.gfxBackend", be);
       if (be === "three") localStorage.setItem("apex26.tlxForceGL", p === "webgl2" ? "1" : "0");
       localStorage.setItem("apex26.gfxWgxAllowSoftware", "1");
-      // GLX drains gl.getError() only for the first presents unless this is
-      // set: the census is the consumer of the per-present drain (2e).
-      localStorage.setItem("apex26.glErrDrain", "1");
+      // GLX drains gl.getError() for the first 30 presents, then only under
+      // apex26.glErrDrain=1 — a blocking IPC on EVERY present that cost
+      // 4.92 ms/frame at spa dusk (hunt 4 I2) and no player pays. The census
+      // drains once per beat instead (GLX.drainGpuErrors(), below); flags are
+      // sticky until read, so the gpuErrors > 0 gate keeps full coverage.
+      if (drainEvery) localStorage.setItem("apex26.glErrDrain", "1");
     } catch (_) { /* blocked storage: the defaults still boot */ }
     for (const kv of ls || []) {
       const i = kv.indexOf("=");
@@ -482,13 +598,42 @@ try {
       // item is dead when nothing had looked.
       window.__apexLongTaskObserver = false;
     }
-  }, [backend, path3, extraLs]);
+  }, [backend, path3, extraLs, glErrDrainEveryPresent]);
 
   // Bounded: a wedged renderer must not turn the diagnosis into another blank.
   const bounded = (fn, ms, label) => Promise.race([
     fn(),
     new Promise((_, rj) => setTimeout(() => rj(new Error(label + " timeout")), ms)),
   ]).catch((err) => ({ error: String((err && err.message) || err).slice(0, 120) }));
+  // A FRESH FRAME BEFORE EVERY CAPTURE (hunt 4 I1). Under a headless UA GLX
+  // keeps an opaque #game-soft over the live canvas and blits to it only when
+  // a capture is waiting, so every census screenshot after the first was the
+  // same gen-1 frame and the A/B pixel verdicts compared HUD text. Where the
+  // backend soft-presents: invalidate, then await a NEWER blit. Where it
+  // presents natively (the census pins apex26.wgxCapture=0): two rAFs. Either
+  // way the manifest carries the mode and the blit generation, so a stale
+  // capture is visible (gen equal across off/off2/on) rather than inferred.
+  const freshFrame = (label) => bounded(() => page.evaluate(async () => {
+    const g = typeof GLX !== "undefined" ? GLX : null;
+    const st = () => { try { const s = g && g.softPresentState ? g.softPresentState() : null;
+      return s ? (s.gen != null ? s.gen : (s.shownGen != null ? s.shownGen : s.seq)) : null; } catch (_) { return null; } };
+    let soft = false;
+    try { soft = !!(g && typeof g.softPresent === "function" && g.softPresent()); } catch (_) { /* no hook */ }
+    const t0 = performance.now();
+    if (!soft) {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return { mode: "native", waitMs: Math.round(performance.now() - t0) };
+    }
+    const genBefore = st();
+    try {
+      if (typeof g.invalidateSoftPresent === "function") g.invalidateSoftPresent();
+      await g.awaitSoftPresent(8000);
+      return { mode: "soft", genBefore, gen: st(), waitMs: Math.round(performance.now() - t0) };
+    } catch (e) {
+      return { mode: "soft", genBefore, gen: st(), waitMs: Math.round(performance.now() - t0),
+        error: String((e && e.message) || e).slice(0, 100) };
+    }
+  }), 15000, "fresh-" + label);
 
   await page.goto(`http://127.0.0.1:${port}/index.html?gfxdebug=1`,
     { waitUntil: "domcontentloaded", timeout: 120000 });
@@ -715,7 +860,13 @@ try {
         page.evaluate(() => {
           const A = window.__apex; let g = null;
           try { g = A && A.renderScale && A.renderScale(); } catch (_) { /* pre-boot */ }
+          // THE ~1 Hz GL ERROR DRAIN (hunt 4 I2): one getError() round per
+          // beat instead of one per present. Sticky flags make this lossless
+          // for the gate; null where the bound backend has no GL context.
+          let ge = null;
+          try { ge = (typeof GLX !== "undefined" && GLX && typeof GLX.drainGpuErrors === "function") ? GLX.drainGpuErrors() : null; } catch (_) { /* not GLX */ }
           return {
+            ge,
             t: (A && A.info && A.info().track) || null,
             f: g && g.fps != null ? Math.round(g.fps) : 0,
             ms: g && g.floorMs != null ? +(+g.floorMs).toFixed(1) : null,
@@ -759,6 +910,8 @@ try {
     }
     await new Promise((r) => setTimeout(r, 1000));
   }
+  // The driven window ends with the last beat (hunt 4 I4).
+  await bounded(() => page.evaluate(() => window.__gcHitch && window.__gcHitch.disarm()), 10000, "disarm");
   if (_cpu) {
     try { const { profile } = await _cpu.send("Profiler.stop"); _cpuProfile = profile; out.cpu = analyseCpu(profile, 24); }
     catch (e) { out.cpu = { note: "profile stop failed: " + String((e && e.message) || e).slice(0, 120) }; }
@@ -778,6 +931,13 @@ try {
   // crashed leaves every later evaluate hanging for ever.
   out.hitch = await bounded(async () => {
     const d = await page.evaluate(() => (window.__gcHitch ? window.__gcHitch.dump() : null));
+    // READ THE WINDOW, NOT THE GOVERNOR'S END STATE (hunt 4 I4): frames, fps
+    // and frame-interval percentiles over the driven window only.
+    out.window = d ? analyseWindow(d.win, d.gameFrameT || [], (d.dur || []).length) : { note: "no recorder on this leg" };
+    // THE GAPS: every rAF interval >= 500 ms since page load, keyed to the
+    // work of the step before it (hunt 4 §A gap ii), whether or not armed.
+    out.gapWork = d ? analyseGapWork(d.gaps || [], { marks: d.marks, win: d.win, longTasks: d.longTasks })
+      : { note: "no recorder on this leg" };
     if (!d || !d.dur || d.dur.length < 30) return { note: "no rAF series — the recorder never armed, or the leg drew too few frames" };
     const a = analyse(d.t0, d.dur);
     // The pass census rides the same series: same frames, same window, so
@@ -913,6 +1073,14 @@ try {
     const A = { feature, clock: abClock };
     const has = await page.evaluate((f) => !!(window.__apex && window.__apex[f] && window.__apex.gpuTimer), feature);
     if (!has) return { note: "no " + feature + "/gpuTimer hooks" };
+    // NOTHING TO A/B (hunt 4 I4). Both features are GLX-only: WGX and the two
+    // three.js legs report supported:false, yet each still spent three
+    // captures and 40 interleaved samples per feature with the sim frozen —
+    // frames that then sat in the governor ring the end snapshot reads.
+    const st0 = await page.evaluate((f) => { try { return window.__apex[f](); } catch (e) { return { error: String(e && e.message) }; } }, feature);
+    if (st0 && st0.supported === false) {
+      return { feature, skipped: true, stats: st0, note: feature + " reports supported:false on this backend — A/B skipped" };
+    }
     // Pin the clock FIRST: everything below depends on the two captures being
     // the same instant of weather.
     A.clockPinned = await page.evaluate((h) => {
@@ -997,6 +1165,7 @@ try {
       A[key].stats = await page.evaluate((f) => window.__apex[f](), feature);
       A[key].frames = await page.evaluate(() => window.__abFrames | 0);
       if (shotBase) {
+        A[key].present = await freshFrame("ab-" + key);
         A[key].shot = shotBase.replace(/\.png$/, "") + "." + feature + "-" + key + ".png";
         const r = await bounded(() => page.screenshot({ path: A[key].shot }), 30000, "ab-shot");
         if (r && r.error) A[key].shotError = r.error;
@@ -1023,6 +1192,13 @@ try {
       };
       A.noiseFloor = await diffOf(A.off.shot, A.off2.shot);   // same state twice
       A.pixels = await diffOf(A.off.shot, A.on.shot);
+      // STALE CAPTURES SAY SO. Three soft captures at one blit generation are
+      // one frame shot three times: the diff is then the HUD, not the flag.
+      const gens = ["off", "off2", "on"].map((k) => A[k].present || {});
+      if (gens.every((p) => p.mode === "soft")) {
+        A.freshFrames = gens.every((p) => p.gen != null && p.genBefore != null && p.gen > p.genBefore)
+          && new Set(gens.map((p) => p.gen)).size === 3;
+      } else if (gens.every((p) => p.mode === "native")) A.freshFrames = true;
       if (A.pixels.pctDiffering != null && A.noiseFloor.pctDiffering != null) {
         A.aboveFloor = A.pixels.pctDiffering > Math.max(0.01, A.noiseFloor.pctDiffering * 2);
       }
@@ -1064,12 +1240,23 @@ try {
   out.gfx = await bounded(() => page.evaluate(() => {
     const g = typeof GLX !== "undefined" ? GLX : null;
     if (!g) return { glx: false };
+    // The last drain: whatever the A/B phases left in GLX's sticky flags is
+    // counted before the gate reads the total (hunt 4 I2).
+    try { if (typeof g.drainGpuErrors === "function") g.drainGpuErrors(); } catch (_) { /* not GLX */ }
     const r = { glx: true, gpuErrors: g.gpuErrors ? g.gpuErrors() : null,
       gpuFirstError: g.gpuFirstError ? g.gpuFirstError() : null };
     // WGX only: softPresent() is exported by the native WebGPU backend, so its
     // presence says WGX bound (not a GLX fallback) and its value says whether
     // the frame reaches #game through the swapchain or the CPU blit.
     r.wgx = typeof g.softPresent === "function";
+    // ...but GLX exports softPresent too (the headless overlay), so on its own
+    // that read "WGX bound" on every GLX leg and on a WGX leg that FELL BACK to
+    // GLX. The bound backend's api settles it: GLX says "webgl2" and has no
+    // __tlx (hunt 4 I3). softPresent/softPresentState are kept for every leg.
+    try { const bs = g.backendState ? g.backendState() : null; r.api = bs && bs.api ? bs.api : null; } catch (_) { r.api = null; }
+    if (r.wgx && r.api === "webgl2" && !g.__tlx) r.wgx = false;
+    try { r.softPresent = typeof g.softPresent === "function" ? !!g.softPresent() : null; } catch (_) { r.softPresent = null; }
+    try { r.softPresentState = g.softPresentState ? g.softPresentState() : null; } catch (_) { r.softPresentState = null; }
     if (r.wgx) { try { r.wgxSoftPresent = !!g.softPresent(); } catch (e) { r.wgxSoftPresentError = String(e && e.message); } }
     // WGX classifies a HeadlessChrome UA as software on purpose (the swapchain
     // was measured never to composite there), so on a headless runner a
@@ -1113,6 +1300,7 @@ try {
     // non-zero pixel (the overlay's own test), bounded, and SAY whether it
     // came: a frame that is really black still reads black, a blank canvas
     // now reads as blank.
+    out.present = await freshFrame("shot");   // hunt 4 I1: mode + blit gen of the final capture
     const t0 = Date.now();
     out.softBlitAtShot = await page.waitForFunction(() => {
       const c = document.getElementById("game-soft");

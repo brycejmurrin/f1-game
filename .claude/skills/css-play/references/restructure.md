@@ -1,6 +1,6 @@
 # Restructuring screens, DOM and CSS in a no-build codebase
 
-Fifteen rules, each with the failure it prevents and the measurement that
+The 15 rules live in restructure-screens-css-rules.md; each with the failure it prevents and the measurement that
 justifies it. Sourced from shipped code (Pico, USWDS, Phaser, GOV.UK,
 typebot.io, medplum), the HTML/CSS specs, and this repo's own history —
 2026-08-08. **Every rule here is checkable; none is a matter of taste.**
@@ -36,15 +36,15 @@ node --test tests/unit/component-inventory.test.mjs   # docs/COMPONENTS.md must 
 ```
 
 The shell-node grep counts every tag; the ratchet's `shellNodes` excludes
-script/link, so the two differ (2,244 vs 1,984 on 2026-09-30) — quote one source.
+script/link, so the two differ — quote one source.
 
 ## The recommendation this procedure produces
 
 Write it in the PR body: the before-numbers above, the rule numbers that apply
 (9: methodology only if it lowers `cssClasses`; 11: lower the ratchet in the same
 commit; 13: node count needs a parse-time figure, not Lighthouse's), and a verdict
-of adopt / reject / partial. Default on the 2026-09-30 numbers (592 classes,
-188 custom properties): reject a named methodology, take rules 8 and 10 only.
+of adopt / reject / partial. Default unless `tree-counts` says otherwise:
+reject a named methodology, take rules 8 and 10 only.
 
 ---
 
@@ -52,6 +52,11 @@ of adopt / reject / partial. Default on the 2026-09-30 numbers (592 classes,
 
 - The 15 checkable rules (screens/layers, CSS variation, DOM size, anti-methodology) → [restructure-screens-css-rules.md](restructure-screens-css-rules.md).
 
----
+## Consolidating a component family (order)
 
-_Folded into `css-play` on 2026-09-03 (tree restructure Phase 5). Selection trigger it carried, now merged into `css-play`'s description: Use when restructuring or consolidating screens, menus, dialogs, the DOM, or the CSS class/token system in Apex 26 — collapsing duplicate component families, adding or removing a screen layer, deciding whether to split index.html, designing height-responsive layout, or being asked whether a CSS methodology (BEM/CUBE/ITCSS/utilities) is worth adopting. Not for one-off layout bugs (use ui-menu-a11y), one-screen CSS play (use css-play), or renderer/canvas work._
+1. Find it: `docs/COMPONENTS.md` "Defined in more than one file"; precedent `.cs-view-btn` -> `--vb-fs`/`--vb-pad` (same file, "shrink" example).
+2. Record before-numbers (above); `css-play --screen <id>` for the before shot.
+3. Edit, then the css-play hot-swap loop for the after shot.
+4. `node tools/check/tree-counts.mjs`, then `node tools/check/ratchets.mjs --update` (lowers).
+5. Remove or update the family entry in `docs/COMPONENTS.md` (`component-inventory.test.mjs`).
+6. Type metrics moved? SKILL.md hard don't 6: run `menu-baseline` yourself.

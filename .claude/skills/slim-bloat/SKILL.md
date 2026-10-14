@@ -17,7 +17,9 @@ node tools/check/ratchets.mjs --json                # per-metric lines/codeLines
 node tools/check/extract-module.mjs js/game.js <start> <end>   # free refs of ONE whole function: take its line range from grep -n first
 ```
 
-Slack 0 on every row = saturated: the scan names no block. Candidates come
+Slack 0 on every row = saturated: the scan names no block. First `node tools/check/ratchets.mjs --base origin/<ship>`
+(names raises: a blocked commit may be a raise, not saturation). Seed the auditor with
+`docs/ARCHITECTURE.md` §Deferred follow-ups / §Extraction lessons (sort by boundary crossings). Candidates come
 only from `bloat-auditor` (a cohesive block with few free names — `extract-module`
 prints them as `name×count`; `let`s are the `G` accessors the carve costs).
 Done = ratchet `--update` lowers the ceiling; `ratchets.mjs` ends `all at or under`.

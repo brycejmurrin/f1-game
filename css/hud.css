@@ -1264,11 +1264,10 @@ body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-
    element, so left divides here: a calc embedding var(--hud-z) on :root is
    invalid at computed-value time and left fell back to 50% while transform
    was none — the card's left edge sat at centre (hud-layout CI:
-   #announce+btn-boost at x426 on 852, broadcast+cockpit). Unpublished
-   --announce-lane-x invalidates that left, so the centred #announce
-   { left: 50% } wins; --announce-lane-shift falls back to -50%. The
-   beside-the-mirror and top-row slots outweigh this. Desktop (.desktop:
-   empty docks) is untouched. */
+   #announce+btn-boost at x426 on 852, broadcast+cockpit). No lit dock (portrait: 0px groups) publishes no
+   lane; a fallback-less var() then made left `auto`, not 50%, and the -50% shift put the card over #minimap
+   (x -72..72 on 390x844). The fallback centres it. The beside-the-mirror and top-row slots outweigh this.
+   Desktop (.desktop: empty docks) is untouched. */
 body:not(.desktop) #announce {
   /* min-width must not exceed the lane: a bare 200px floor outgrew a tight
      --announce-lane-w and painted over #hud-sectors (oversize CI workers=2). */
@@ -1289,7 +1288,7 @@ body:not(.desktop) #announce {
   visibility: hidden;
 }
 body:not(.desktop):not(.hud-radio-top):not(.hud-mirror-side) #announce {
-  left: calc(var(--announce-lane-x) / var(--hud-z));
+  left: calc(var(--announce-lane-x, 50% * var(--hud-z)) / var(--hud-z));
   transform: translateX(var(--announce-lane-shift, -50%));
 }
 /* The plate. Italic is the racing number's own convention, not emphasis. */

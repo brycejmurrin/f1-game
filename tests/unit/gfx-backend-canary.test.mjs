@@ -1125,6 +1125,48 @@ test("GLX exports a real gpuErrors counter and the workflow fails on a missing o
     "the || 0 form treats an absent counter as zero — that was the bug");
 });
 
+test("GLX drainGpuErrors() lets the census drain ~1 Hz instead of on every present (hunt 4 I2)", () => {
+  // The census used to seed apex26.glErrDrain=1, which drains getError() on
+  // EVERY present: 4.92 ms/frame of blocking IPC on macos-latest (spa dusk,
+  // run 38502534542) that no player pays. GL error flags are sticky until
+  // read, so one explicit drain per beat keeps the gpuErrors > 0 gate whole.
+  const h = bootGlx();
+  for (let i = 0; i < 40; i++) { h.GLX.begin(h.frame()); h.GLX.present({}); }   // past the boot drain window
+  let pending = [1282];
+  h.answers.getError = () => (pending.length ? pending.shift() : 0);
+  h.GLX.begin(h.frame()); h.GLX.present({});
+  assert.equal(h.GLX.gpuErrors(), 0, "steady-state presents must not drain without apex26.glErrDrain=1");
+  assert.equal(h.GLX.drainGpuErrors(), 1, "the explicit drain reads the sticky flag the presents left");
+  assert.match(String(h.GLX.gpuFirstError()), /INVALID_OPERATION @ drain/);
+  assert.equal(h.GLX.drainGpuErrors(), 1, "a clean drain adds nothing");
+  // The old per-present behaviour stays one pin away for the census's --gl-err-drain.
+  const h2 = bootGlx({ ls: { "apex26.glErrDrain": "1" } });
+  for (let i = 0; i < 40; i++) { h2.GLX.begin(h2.frame()); h2.GLX.present({}); }
+  pending = [1281];
+  h2.answers.getError = () => (pending.length ? pending.shift() : 0);
+  h2.GLX.begin(h2.frame()); h2.GLX.present({});
+  assert.equal(h2.GLX.gpuErrors(), 1, "apex26.glErrDrain=1 still drains on every present");
+});
+
+test("GLX honours SCREENSHOTS = NATIVE under automation: no preserveDrawingBuffer, no overlay (hunt 4 I1)", () => {
+  // Under a HeadlessChrome UA GLX keeps the drawing buffer and blits to an
+  // opaque #game-soft only when a capture waits, so every census shot after
+  // the first was the same stale gen-1 frame (census 450-455). The census pins
+  // apex26.wgxCapture=0 — the key WGX and TLX already honour — to run the
+  // player's present path; this holds the pin as behaviour on the mock.
+  const h = bootGlx({ userAgent: "Mozilla/5.0 HeadlessChrome/141.0", ls: { "apex26.wgxCapture": "0" } });
+  const ctx = h.contextAttrs.find((c) => c.type === "webgl2");
+  assert.equal(ctx.attrs.preserveDrawingBuffer, false, "the native pin must drop preserveDrawingBuffer");
+  assert.equal(h.GLX.softPresent(), false, "the native pin must not arm the soft overlay");
+  assert.equal(h.GLX.backendState().softPresent, false);
+  const src = code("js/render/glx/glx.js");
+  assert.match(src, /sessionStorage\.getItem\("apex26\.wgxCapture"\)\s*\|\|\s*localStorage\.getItem\("apex26\.wgxCapture"\)/,
+    "session wins over local, as in WGX and TLX (a SETTINGS tap for this tab beats a saved pref)");
+  assert.match(src, /_softPresent\s*=\s*headlessUa && !capNative;/, "a saved \"1\" or AUTO keeps the headless soft path");
+  assert.match(src, /getContext\("2d", \{ alpha: false, willReadFrequently: true \}\)/,
+    "#game-soft is read back by ?gfxdebug=1 every rebuild — the 2D context must say so (I7), as TLX's does");
+});
+
 // The Verdict step is a `node -e` script embedded in YAML, so nothing ever ran
 // it — every guard on it was a regex over its SOURCE. That is how three
 // vacuous clauses lived in it at once. Lift the real script out and execute it
@@ -1296,6 +1338,55 @@ test("the GPU gate holds the native WGX leg to bind + swapchain, but only a HEAD
   assert.equal(r.code, 0, `a software image that cannot bring WGX up is noise:\n${r.out}`);
   r = runVerdict(script, { census: hw, legs: { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson() } });
   assert.equal(r.code, 1, "a missing wgx artifact must fail like any other missing leg");
+});
+
+test("the Verdict names stale A/B captures and the GLX drain mode (hunt 4 I1/I2)", () => {
+  // Census 450-455 shot one gen-1 soft blit for every GLX A/B capture and
+  // reported a 0.03-0.52 % "difference" that was the HUD clock. The row must
+  // now say which frames were shot, and say STALE when the gens did not move.
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const ab = (present, freshFrames) => ({
+    feature: "occlusionCull", clock: 12, clockPinned: true, simFrozen: true, freshFrames,
+    off: { median: 10, present: present(1) }, off2: { median: 10, present: present(2) }, on: { median: 9, present: present(3) },
+    paired: { off: 10, on: 9, samples: 40 }, gpuDeltaPct: -10, gpuNoisePct: 0,
+    noiseFloor: { pctDiffering: 0.1 }, pixels: { differing: 5, ofTotal: 100, pctDiffering: 5, maxChannelDelta: 9, meanAbsDelta: 0.1 },
+  });
+  const glx = (a) => ({ ...glxLegJson(), glErrDrain: "beat", present: { mode: "native" }, occlusionAB: a });
+  const legs = (g) => ({ webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: g, wgx: wgxLegJson() });
+  let r = runVerdict(script, { census: hw, legs: legs(glx(ab(() => ({ mode: "soft", gen: 1, genBefore: 1 }), false))) });
+  assert.match(r.out, /frames: off=soft@1 off2=soft@1 on=soft@1\s+<- STALE/);
+  assert.match(r.out, /glErrDrain=beat shot=native/);
+  r = runVerdict(script, { census: hw, legs: legs(glx(ab(() => ({ mode: "native" }), true))) });
+  assert.match(r.out, /frames: off=native off2=native on=native/);
+  assert.doesNotMatch(r.out, /STALE/);
+});
+
+test("the Verdict prints the driven window and a skipped A/B, not the end-of-run ring alone (hunt 4 I4)", () => {
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const wgx = { ...wgxLegJson(), window: { ms: 20000, frames: 734, fps: 36.7, msPerFrame: 27.25, p50: 26.1, p95: 41.2, p99: 60.3, max: 140.2, callbacksPerFrame: 2, source: "LoopHealth.frames" },
+    occlusionAB: { feature: "occlusionCull", skipped: true, note: "occlusionCull reports supported:false on this backend — A/B skipped" } };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: { ...glxLegJson(), window: { note: "no window bounds — the recorder never armed, or never disarmed" } }, wgx } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /window: 734 frames in 20000 ms = 36\.7 fps \(27\.25 ms\/frame\)\s+interval p50=26\.1 p95=41\.2 p99=60\.3 max=140\.2 ms\s+rAF\/frame=2\s+\[LoopHealth\.frames\]/);
+  assert.match(r.out, /window: no window bounds/, "an unmeasured window is named, not left blank");
+  assert.match(r.out, /occl  A\/B: skipped — occlusionCull reports supported:false/);
+  assert.doesNotMatch(r.out, /occl  A\/B: NOT MEASURED/);
+});
+
+test("the Verdict prints the rAF gap view the spike rows cannot see (hunt 4 §A gap ii)", () => {
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const gapWork = { gaps: 1, thresholdMs: 500, byPhase: { "race start (pre-window)": 1 },
+    summary: "1 rAF gap(s) >= 500 ms (race start (pre-window): 1); worst 4100 ms [race start (pre-window)], 3900 ms of it in the step before, 3895 ms in long tasks",
+    rows: [{ phase: "race start (pre-window)", atMs: 5000, gapMs: 4100, prevFrameMs: 3900, outsideMs: 200, longTaskMs: 3895, armed: false,
+      prev: "linkProgram=14 texImage2D=8192KB wrapped=180ms", between: "-" }] };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: { ...tlxLegJson(), gapWork }, webgl2: tlxLegJson(), glx: { ...glxLegJson(), gapWork: { gaps: 0, rows: [], summary: "no rAF gap >= 500 ms" } }, wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /gaps:  1 rAF gap\(s\) >= 500 ms/);
+  assert.match(r.out, /4100 ms \[race start \(pre-window\)\] at \+5000 ms: step before 3900 ms, long tasks 3895 ms — prev: linkProgram=14 texImage2D=8192KB wrapped=180ms \| between: -/);
+  assert.match(r.out, /gaps:  no rAF gap >= 500 ms/, "a clean leg says so rather than printing nothing");
 });
 
 test("the GPU gate fails a hardware TLX leg that stopped reporting an env count", () => {
@@ -6102,7 +6193,10 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   assert.match(glass, /m\.transparent = false;/);
   assert.match(glass, /m\.depthWrite = true;/);
   assert.match(glass, /m\.side = THREE\.DoubleSide;/);
-  assert.match(glass, /m\.colorNode = texture\(tex\)\.rgb;/, "sampled at the mesh uv: three flips a render target itself on WebGPU");
+  // three puts a render target's uv.y = 0 at its TOP on both paths; the mesh's
+  // v = 0 is the image bottom (gfx.js drawMirrorGlass) — sampled as given, the
+  // glass showed the rear view upside down (2026-10-13).
+  assert.match(glass, /m\.colorNode = texture\(tex, vec2\(st\.x, st\.y\.oneMinus\(\)\)\)\.rgb;/, "sampled at (u, 1 - v): a render target's uv.y = 0 is its top in three");
   assert.match(glass, /m\.opacityNode = float\(1\.0\);/);
   assert.doesNotMatch(glass, /trackFx|fxMaterial\(/, "not an FX material: no blend, no keep-dst ssrTag — the scene MRT's tag 1");
 });

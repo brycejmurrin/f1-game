@@ -17,6 +17,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -66,6 +67,43 @@ test("gfx-debug reads only existing hooks and guards every one", () => {
   // (a top-left 64x64 sample of a dusk sky, read as maxLuma 0).
   assert.match(SRC, /nothing blitted yet \(not the same as black\)/,
     "an unpainted soft canvas must not be reported as a black frame");
+});
+
+// Run the real overlay's text() against a stub DOM: which present path it
+// names is behaviour, and a source regex cannot tell the branches apart.
+function overlayText({ softPresent, gameSoft, game2d }) {
+  const img = { data: new Uint8ClampedArray([40, 40, 40, 255, 80, 80, 80, 255]) };
+  const ctx2d = { getImageData: () => img };
+  const els = {
+    game: { id: "game", width: 2, height: 1, getAttribute: () => "wgx", getContext: (t) => (t === "2d" && game2d ? ctx2d : null) },
+    "game-soft": gameSoft ? { id: "game-soft", width: 2, height: 1, getContext: () => ctx2d } : null,
+  };
+  const store = { getItem: () => null };
+  const sandbox = {
+    document: { getElementById: (id) => els[id] || null, querySelector: () => null },
+    location: { search: "" }, localStorage: store, sessionStorage: store, performance,
+    GLX: { gpuErrors: () => 0, softPresent: softPresent == null ? undefined : () => softPresent },
+  };
+  sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(SRC.replace(/^const GfxDebug\b/m, "var GfxDebug"), ctx);
+  return vm.runInContext("GfxDebug.text()", ctx);
+}
+
+test("gfx-debug asks the backend whether it soft-presents before saying native (hunt 4 I6)", () => {
+  // WGX soft-presents onto #game itself — no #game-soft — so the DOM-only
+  // check printed "native swapchain" over a CPU readback every frame.
+  const wgxSoft = overlayText({ softPresent: true, gameSoft: false, game2d: true });
+  assert.doesNotMatch(wgxSoft, /native swapchain/, "a soft-presenting backend is not on the swapchain");
+  assert.match(wgxSoft, /soft-present onto #game/);
+  assert.match(wgxSoft, /frame\(soft\) mean=60\.0 max=80/, "and the luma comes from the blit it really paints");
+  const native = overlayText({ softPresent: false, gameSoft: false, game2d: false });
+  assert.match(native, /frame: native swapchain \(no 2D readback\)/);
+  const glxSoft = overlayText({ softPresent: true, gameSoft: true, game2d: false });
+  assert.match(glxSoft, /frame\(soft\) mean=60\.0/, "GLX/TLX keep reading their #game-soft overlay");
+  assert.doesNotMatch(glxSoft, /onto #game/);
+  const unreadable = overlayText({ softPresent: true, gameSoft: false, game2d: false });
+  assert.match(unreadable, /frame\(soft\) unreadable/, "never steal or invent: a non-2D #game reads as unreadable");
 });
 
 test("gfx-debug can hand the reporter the text", () => {

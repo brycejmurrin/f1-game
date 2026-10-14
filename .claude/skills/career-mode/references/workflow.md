@@ -97,14 +97,11 @@ Load from the SKILL.md index when the task needs this detail.
   depend on qualifying or `careerSim()`.
 - Reading `careerState().owned` as part ids — it is a count; use
   `__apex.career().owned` / `Career.isOwned()` for the list.
-- Trying to verify a driven race's `sponsorPay` off `__apex` directly — it is
-  not exposed there; use the results screen / `G.careerSettlement`, or
-  `careerSim()` for simulated rounds.
-- Reading `careerState().sponsor` right after a settlement as "what the sponsor
-  just paid" — the round counter has already advanced, so it describes the
-  NEXT window, not the one just settled.
+- Verifying `sponsorPay` or `careerState().sponsor` as "just paid": see Sponsor payout below.
 
 ## Sponsor payout / double-pay trace (node-only)
+
+`sponsorPay` is in `Career.settleRound()`'s return, stashed in `G.careerSettlement` (read by `js/ui/results-sheet.js`); no `__apex` hook exposes it, and `careerState().sponsor` is read after the round counter advanced, so it is the NEXT window.
 
 `settleRound()` -> `settleSponsor()` (`js/career/career.js`). Two guards make a second pay a bug to look for
 in THESE lines, not in the DNF path (a DNF changes only `pts`/`dnf`/`clean`, never the pay branch): (1) `settleRound`
