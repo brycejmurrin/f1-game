@@ -14,8 +14,14 @@
  * player's copy-pasted answer are directly comparable.
  *
  * Run: node tools/gfx/gpu-game-check.mjs [track] [--json out.json] [--shot out.png]
- *      [--backend three|webgpu] [--path webgpu|webgl2] [--boot-timeout MS]
- *      [--ls apex26.key=value ...]
+ *      [--backend three|webgl2|webgpu] [--path webgpu|webgl2] [--boot-timeout MS]
+ *      [--ls apex26.key=value ...] [--gl-err-drain] [--help]
+ *
+ * GLX getError: drained ONCE PER BEAT (~1 Hz) through GLX.drainGpuErrors(),
+ * not on every present — GL error flags are sticky until read, so the
+ * gpuErrors > 0 gate loses nothing, and the per-present drain a player never
+ * pays (4.92 ms/frame at spa dusk, hunt 4 I2) is out of the measurement.
+ * --gl-err-drain restores the old apex26.glErrDrain=1 per-present drain.
  *
  * It checkpoints the --json file after every phase, so a step timeout leaves a
  * diagnosis on disk rather than nothing at all.
@@ -48,6 +54,26 @@ const PINNED = ["/opt/pw-browsers/chromium", process.env.APEX_CHROMIUM].filter(B
   .find((p) => { try { return existsSync(p); } catch (_) { return false; } }) || null;
 
 const argv = process.argv.slice(2);
+// --help answers before anything launches: no server, no browser, exit 0.
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log(`gpu-game-check — boot the game on this machine's GPU and report the renderer's verdict.
+
+  node tools/gfx/gpu-game-check.mjs [track] [options]
+
+  --backend three|webgl2|webgpu   three = TLX (default), webgl2 = GLX, webgpu = WGX
+  --path webgpu|webgl2            three.js path for --backend three (default webgpu)
+  --tod day|night|dawn|dusk       time of day the track is BUILT with (bakes lamps)
+  --clock H                       hour the in-run A/B pins (default 12)
+  --beats N                       driven window, one beat a second (default 15)
+  --no-drive                      keep the car parked for the window
+  --ls apex26.k=v                 extra localStorage (repeatable; after the defaults)
+  --gl-err-drain                  GLX: drain getError() on EVERY present (apex26.glErrDrain=1);
+                                  default drains once per beat via GLX.drainGpuErrors()
+  --json out.json  --shot out.png   checkpointed JSON; screenshots (+ per-A/B captures)
+  --boot-timeout MS  --race-timeout MS
+`);
+  process.exit(0);
+}
 const flag = (n, d = null) => { const i = argv.indexOf(n); return i > -1 ? argv[i + 1] : d; };
 const track = argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--json"
   && argv[argv.indexOf(a) - 1] !== "--shot" && argv[argv.indexOf(a) - 1] !== "--backend"
@@ -69,6 +95,7 @@ const beats = Math.max(1, Math.round(Number(flag("--beats", 15))) || 15);
 // The default DRIVES: a parked car streams nothing, and the hitch this tool
 // exists to find is scenery reaching a moving car.
 const drive = !process.argv.includes("--no-drive");
+const glErrDrainEveryPresent = argv.includes("--gl-err-drain");
 
 function serve() {
   // A server rooted at the wrong directory answers 404 to everything, which is
@@ -112,7 +139,8 @@ function checkpoint(phase, extra) {
   console.log(`[game-check] ${phase} +${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }
 const log = (m) => console.log(`[game-check] ${m}`);
-const out = { platform: process.platform, arch: process.arch, track, backend, path: path3 };
+const out = { platform: process.platform, arch: process.arch, track, backend, path: path3,
+  glErrDrain: glErrDrainEveryPresent ? "present" : "beat" };
 const { server, port } = await serve();
 const browser = await chromium.launch({
   ...(PINNED ? { executablePath: PINNED } : { channel: "chromium" }),
@@ -141,7 +169,7 @@ try {
   page.on("crash", () => { out.crashed = true; checkpoint("renderer-crashed"); });
   page.on("close", () => { out.pageClosed = true; });
   browser.on("disconnected", () => { out.browserGone = true; });
-  await page.addInitScript(([be, p, ls]) => {
+  await page.addInitScript(([be, p, ls, drainEvery]) => {
     // THE SPIKE TRAIN, recorded on the machine that has a real GPU.
     //
     // Everything else this file measures is a SETTLED number: fps is an EMA,
@@ -445,9 +473,12 @@ try {
       localStorage.setItem("apex26.gfxBackend", be);
       if (be === "three") localStorage.setItem("apex26.tlxForceGL", p === "webgl2" ? "1" : "0");
       localStorage.setItem("apex26.gfxWgxAllowSoftware", "1");
-      // GLX drains gl.getError() only for the first presents unless this is
-      // set: the census is the consumer of the per-present drain (2e).
-      localStorage.setItem("apex26.glErrDrain", "1");
+      // GLX drains gl.getError() for the first 30 presents, then only under
+      // apex26.glErrDrain=1 — a blocking IPC on EVERY present that cost
+      // 4.92 ms/frame at spa dusk (hunt 4 I2) and no player pays. The census
+      // drains once per beat instead (GLX.drainGpuErrors(), below); flags are
+      // sticky until read, so the gpuErrors > 0 gate keeps full coverage.
+      if (drainEvery) localStorage.setItem("apex26.glErrDrain", "1");
     } catch (_) { /* blocked storage: the defaults still boot */ }
     for (const kv of ls || []) {
       const i = kv.indexOf("=");
@@ -482,7 +513,7 @@ try {
       // item is dead when nothing had looked.
       window.__apexLongTaskObserver = false;
     }
-  }, [backend, path3, extraLs]);
+  }, [backend, path3, extraLs, glErrDrainEveryPresent]);
 
   // Bounded: a wedged renderer must not turn the diagnosis into another blank.
   const bounded = (fn, ms, label) => Promise.race([
@@ -715,7 +746,13 @@ try {
         page.evaluate(() => {
           const A = window.__apex; let g = null;
           try { g = A && A.renderScale && A.renderScale(); } catch (_) { /* pre-boot */ }
+          // THE ~1 Hz GL ERROR DRAIN (hunt 4 I2): one getError() round per
+          // beat instead of one per present. Sticky flags make this lossless
+          // for the gate; null where the bound backend has no GL context.
+          let ge = null;
+          try { ge = (typeof GLX !== "undefined" && GLX && typeof GLX.drainGpuErrors === "function") ? GLX.drainGpuErrors() : null; } catch (_) { /* not GLX */ }
           return {
+            ge,
             t: (A && A.info && A.info().track) || null,
             f: g && g.fps != null ? Math.round(g.fps) : 0,
             ms: g && g.floorMs != null ? +(+g.floorMs).toFixed(1) : null,
@@ -1064,6 +1101,9 @@ try {
   out.gfx = await bounded(() => page.evaluate(() => {
     const g = typeof GLX !== "undefined" ? GLX : null;
     if (!g) return { glx: false };
+    // The last drain: whatever the A/B phases left in GLX's sticky flags is
+    // counted before the gate reads the total (hunt 4 I2).
+    try { if (typeof g.drainGpuErrors === "function") g.drainGpuErrors(); } catch (_) { /* not GLX */ }
     const r = { glx: true, gpuErrors: g.gpuErrors ? g.gpuErrors() : null,
       gpuFirstError: g.gpuFirstError ? g.gpuFirstError() : null };
     // WGX only: softPresent() is exported by the native WebGPU backend, so its

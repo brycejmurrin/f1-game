@@ -425,7 +425,10 @@ jobs:
                 `gpuErrors=${gfx.gpuErrors} envFail=${env.fail} envReady=${env.ready} ` +
                 `envBlank=${env.blank} gaveUp=${env.gaveUp} softAdapter=${be.softAdapter} ` +
                 `headless=${be.headless} meanLuma=${frame.meanLuma != null ? frame.meanLuma : "n/a"}` +
-                (g.softBlitAtShot ? ` blit=${g.softBlitAtShot}/${g.softBlitWaitMs}ms` : ""));
+                (g.softBlitAtShot ? ` blit=${g.softBlitAtShot}/${g.softBlitWaitMs}ms` : "") +
+                // HOW gpuErrors was drained on GLX: "beat" = ~1 Hz explicit drain
+                // (the default since hunt 4 I2), "present" = --gl-err-drain.
+                (path3 === "glx" && g.glErrDrain ? ` glErrDrain=${g.glErrDrain}` : ""));
             // The SECOND row is what makes an appearance number readable. A
             // meanLuma comparison between two legs is only a comparison if both
             // ran the same content: tier decides whether the env probe (rung 1)

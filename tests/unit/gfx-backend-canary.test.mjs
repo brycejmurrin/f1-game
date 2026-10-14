@@ -1125,6 +1125,29 @@ test("GLX exports a real gpuErrors counter and the workflow fails on a missing o
     "the || 0 form treats an absent counter as zero — that was the bug");
 });
 
+test("GLX drainGpuErrors() lets the census drain ~1 Hz instead of on every present (hunt 4 I2)", () => {
+  // The census used to seed apex26.glErrDrain=1, which drains getError() on
+  // EVERY present: 4.92 ms/frame of blocking IPC on macos-latest (spa dusk,
+  // run 38502534542) that no player pays. GL error flags are sticky until
+  // read, so one explicit drain per beat keeps the gpuErrors > 0 gate whole.
+  const h = bootGlx();
+  for (let i = 0; i < 40; i++) { h.GLX.begin(h.frame()); h.GLX.present({}); }   // past the boot drain window
+  let pending = [1282];
+  h.answers.getError = () => (pending.length ? pending.shift() : 0);
+  h.GLX.begin(h.frame()); h.GLX.present({});
+  assert.equal(h.GLX.gpuErrors(), 0, "steady-state presents must not drain without apex26.glErrDrain=1");
+  assert.equal(h.GLX.drainGpuErrors(), 1, "the explicit drain reads the sticky flag the presents left");
+  assert.match(String(h.GLX.gpuFirstError()), /INVALID_OPERATION @ drain/);
+  assert.equal(h.GLX.drainGpuErrors(), 1, "a clean drain adds nothing");
+  // The old per-present behaviour stays one pin away for the census's --gl-err-drain.
+  const h2 = bootGlx({ ls: { "apex26.glErrDrain": "1" } });
+  for (let i = 0; i < 40; i++) { h2.GLX.begin(h2.frame()); h2.GLX.present({}); }
+  pending = [1281];
+  h2.answers.getError = () => (pending.length ? pending.shift() : 0);
+  h2.GLX.begin(h2.frame()); h2.GLX.present({});
+  assert.equal(h2.GLX.gpuErrors(), 1, "apex26.glErrDrain=1 still drains on every present");
+});
+
 // The Verdict step is a `node -e` script embedded in YAML, so nothing ever ran
 // it — every guard on it was a regex over its SOURCE. That is how three
 // vacuous clauses lived in it at once. Lift the real script out and execute it

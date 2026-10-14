@@ -61,9 +61,9 @@ const GLXBackend = (function () {
   // drain on EVERY present serialised the JS thread behind the GPU process
   // every frame. Its consumers are the real-GPU gate (tools/gpu-game-check,
   // PERF-FINDINGS 2e) and gpuErrors(): drain for the first presents after
-  // boot (shader/pipeline errors surface there) and whenever the diagnostic
-  // flag is set (tools/gpu-game-check seeds it) — never on a steady-state
-  // frame. gpuErrors() stays a pure read: the counter is drained at present().
+  // boot (shader/pipeline errors surface there) and, per present, only under
+  // apex26.glErrDrain=1 — never on a steady-state frame. Flags are sticky until
+  // read, so the census drains ~1 Hz through drainGpuErrors() (hunt 4 I2).
   // 30 presents, not 120: shader/pipeline errors surface in the first handful,
   // and on Safari's out-of-process GPU each drain is a blocking IPC — 120 of
   // them after every track switch was three seconds of serialised frames.
@@ -2890,6 +2890,7 @@ const GLXBackend = (function () {
     awaitSoftPresent,
     invalidateSoftPresent,
     gpuErrors: () => _glErrors,
+    drainGpuErrors: () => { drainGlErrors("drain"); return _glErrors; },   // explicit (census ~1 Hz), never per present
     gpuFirstError: () => _glFirstError || null,
     // The bound backend's account of itself, one shape on all three (TLX
     // carries the three.js decision tree, WGX the rung). Read by the GOV
