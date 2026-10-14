@@ -1950,7 +1950,7 @@ function gridUp(preOrder) {
     c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.prog = -(14 + i * 8); c.lap = 0; c.fuelLap = 0; c.fuelRestartLaps = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
     OvertakeMode.reset(c); c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
-    c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; delete c._coastHeld;   // last race's classification: makeCars' values; a race re-arms via armReliability
+    c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; c._coastHeld = undefined;   // last race's classification: makeCars' values (CarFields declares _coastHeld; a delete would make the car a dictionary); a race re-arms via armReliability
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
