@@ -70,8 +70,8 @@ const ResultsCam = (function () {
       if (typeof document === "undefined") return;
       const results = document.getElementById("results"), button = document.getElementById("res-highlights");
       if (results) {
-        if (playing) results.dataset.highlights = "playing";
-        else delete results.dataset.highlights;
+        if (playing) results.dataset.resultsPlayback = "playing";
+        else delete results.dataset.resultsPlayback;
       }
       if (button) button.textContent = playing ? "BACK TO RESULTS" : "HIGHLIGHTS";
     }

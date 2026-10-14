@@ -500,13 +500,13 @@ test("results highlights expose the scene and restore the sheet on every exit", 
     assert.equal(button.textContent, "HIGHLIGHTS");
     button.onclick();
     assert.equal(camera.status().phase, "highlights");
-    assert.equal(sheet.dataset.highlights, "playing", "presentation hides the classification over the footage");
+    assert.equal(sheet.dataset.resultsPlayback, "playing", "presentation hides the classification over the footage");
     assert.equal(button.textContent, "BACK TO RESULTS");
     if (exit === "button") button.onclick();
     else if (exit === "complete") camera.tick(3);
     else if (exit === "reset") camera.reset();
     else { allowed = false; camera.tick(1); }
-    assert.equal(sheet.dataset.highlights, undefined, exit + " restores full results presentation");
+    assert.equal(sheet.dataset.resultsPlayback, undefined, exit + " restores full results presentation");
     assert.equal(button.textContent, "HIGHLIGHTS");
     assert.equal(ends, 1, "replay released exactly once");
     assert.equal(camera.status().phase, exit === "reset" || exit === "eligibility" ? "idle" : "orbit");
