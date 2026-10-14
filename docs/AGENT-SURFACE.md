@@ -229,7 +229,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Twenty-six tools (30 → 11 on 2026-09: the audits, startline,
+names the CLI. Thirty tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for

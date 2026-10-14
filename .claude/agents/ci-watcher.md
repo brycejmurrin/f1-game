@@ -40,7 +40,7 @@ BOARD <n> open · full-tier slots <count>/<cap> · <time>
 
 Exact calls for the PARENT to make (you have no GitHub tools; owner `brycejmurrin`, repo `f1-game`):
 - READY: `mcp__github__update_pull_request {pullNumber: <n>, draft: false}`
-- ARM: `mcp__github__enable_pr_auto_merge {pullNumber: <n>, mergeMethod: "SQUASH"}`
+- ARM: `mcp__github__enable_pr_auto_merge {pullNumber: <n>, mergeMethod: "MERGE"}`
 - FOREIGN-ARM: `mcp__github__disable_pr_auto_merge {pullNumber: <n>}`
 - SYNC: `node tools/ci/sync-pr.mjs <branch>` (or message the live owner)
 - FIX: hand to `ci-red-triage` with the head sha (or message the live owner)
