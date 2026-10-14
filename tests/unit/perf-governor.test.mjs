@@ -646,7 +646,7 @@ test("autoTier still honours the crash-sentinel floor and a measured shed", () =
   assert.equal(PerfGov.autoTier(), 4, "ULTRA must not defeat the crash floor via autoTier either");
 });
 
-test("tier 2 sheds car-paint SSR with the wet-road march, not via po.reflect", () => {
+test("tier 2 sheds car-paint SSR and the dry sheens, not via po.reflect; the wet-road march survives to tier 3", () => {
   // po.reflect = 0 is ALSO a dry session, so pairing uCarReflect to it would
   // kill car-paint SSR on every dry lap. The governor must pass a separate
   // opts.carReflect = 0 at tier ≥ 2, and both present() paths must honour it.
@@ -654,12 +654,19 @@ test("tier 2 sheds car-paint SSR with the wet-road march, not via po.reflect", (
   const post = fs.readFileSync(path.join(ROOT, "js/render/glx/post.js"), "utf8");
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-post.js"), "utf8");
   const wgx = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
-  assert.match(game, /po\.reflect = PerfGov\.tier\(\) >= 2 \? 0 : _ssr/);
+  assert.match(game, /const _ssrTier = \(frame\.wetness \|\| 0\) > 0\.01 \? 3 : 2;/);
+  assert.match(game, /po\.reflect = PerfGov\.tier\(\) >= _ssrTier \? 0 : _ssr/);
+  // Phone default GRAPHICS: MEDIUM is tier 2: a wet road keeps its mirror there, a dry one does not.
+  const tierExpr = game.match(/const _ssrTier = (.+);/)[1];
+  const shed = (tier, wetness) => tier >= new Function("frame", "return " + tierExpr)({ wetness });
+  assert.equal(shed(2, 0.9), false, "wet road at MEDIUM keeps SSR");
+  assert.equal(shed(2, 0), true, "dry sheen still sheds at tier 2");
+  assert.equal(shed(3, 0.9), true, "wet-road SSR sheds at tier 3");
   assert.match(game, /po\.carReflect = PerfGov\.tier\(\) >= 2 \? 0 : undefined/);
   assert.match(post, /opts && opts\.carReflect != null \? opts\.carReflect/);
   assert.match(tlx, /o\.carReflect != null \? o\.carReflect/);
   assert.match(wgx, /o\.carReflect != null \? o\.carReflect/);
-  assert.match(SRC, /SSR march off \(wet-road \+ car-paint\)/);
+  assert.match(SRC, /SSR march off \(dry sheens \+ car-paint; wet-road SSR survives\)/);
 });
 
 test("shadow box and shader fade share the same unset shadowRange fallback", () => {
