@@ -673,6 +673,19 @@
       return true;
     }
 
+    // Every caster that holds real geometry, shown for a warm (compile or draw); hideCasters undoes it.
+    function showAllCasters() {
+      const shown = [];
+      for (const pl of pools.values()) {
+        for (const m of pl.pool) if (m.geometry !== parkedGeo && !m.visible) { m.visible = true; shown.push([m, -1]); }
+      }
+      for (const m of iByBatch.values()) {
+        if (!m.visible || !(m.count > 0)) { shown.push([m, m.count]); m.visible = true; if (!(m.count > 0)) m.count = 1; }
+      }
+      return shown;
+    }
+    function hideCasters(shown) { for (const [m, count] of shown) { m.visible = false; if (count >= 0) m.count = count; } }
+
     return {
       S,
       // WARM THE CASTER PROGRAMS DURING THE LIGHTS. castScene is its own Scene,
@@ -688,13 +701,7 @@
         // casters. Show every caster that holds real geometry for the compile,
         // then restore. Pipelines key on material + layout + target, so one
         // visible caster per layout is what each target needs.
-        const shown = [];
-        for (const pl of pools.values()) {
-          for (const m of pl.pool) if (m.geometry !== parkedGeo && !m.visible) { m.visible = true; shown.push([m, -1]); }
-        }
-        for (const m of iByBatch.values()) {
-          if (!m.visible || !(m.count > 0)) { shown.push([m, m.count]); m.visible = true; if (!(m.count > 0)) m.count = 1; }
-        }
+        const shown = showAllCasters();
         try {
           if (sunRT) { renderer.setRenderTarget(sunRT); await renderer.compileAsync(castScene, shadowCam); }
           // The lamp maps carry depth32float when L1 is on and the car map its own
@@ -706,9 +713,37 @@
           }
           if (blockerQuad && blockerRT) { renderer.setRenderTarget(blockerRT); await renderer.compileAsync(blockerQuad, blockerQuad.camera); }
         } finally {
-          for (const [m, count] of shown) { m.visible = false; if (count >= 0) m.count = count; }
+          hideCasters(shown);
           try { renderer.setRenderTarget(prev); } catch (_) { /* already unbound */ }
         }
+      },
+      // A-W1 DRAW WARM (tlx.js startProgramWarm's last stage): every caster
+      // DRAWN once per distinct depth-target configuration, into a 1x1 scratch
+      // target built by makeDepthTarget with the live target's formats — the
+      // pipeline keys and three's render context (count:format:type:samples:
+      // depth:stencil) are the live ones', so the driver's first-draw work
+      // lands here. Never the live maps: the sun map is snap-cached across
+      // frames, so even one texel drawn into it would show. Returns the number
+      // of configurations drawn.
+      drawWarm() {
+        const prev = renderer.getRenderTarget(), shown = showAllCasters(), seen = new Set();
+        let n = 0;
+        try {
+          for (const rt of [sunRT, carRT, lampRT, lampStaticRT]) {
+            if (!rt) continue;
+            const hdr = rt.texture.type === THREE.FloatType, fd = !!(rt.depthTexture && rt.depthTexture.type === THREE.FloatType);
+            const key = hdr + "|" + fd;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const tmp = makeDepthTarget(1, "TLXWarmCast", hdr, fd);
+            try { renderer.setRenderTarget(tmp); renderer.render(castScene, shadowCam); n++; }
+            finally { tmp.dispose(); }
+          }
+        } finally {
+          hideCasters(shown);
+          try { renderer.setRenderTarget(prev); } catch (_) { /* already unbound */ }
+        }
+        return n;
       },
       carShadowKeep, lampShadowKeep,
       sunSize: SUN_SIZE,

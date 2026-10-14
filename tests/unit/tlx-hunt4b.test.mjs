@@ -7,7 +7,9 @@
  *   A-H5  the mirror target's mip chain capped (apex26.tlxMirMips, default 3 levels) at what the HUD inset's implicit
  *         LOD can reach; the cockpit glass latches the full chain.
  *   A-P1  the scene depth is discarded on frames whose post chain reads none of it (apex26.tlxDepthDiscard): the
- *         real tlx-post rule (GLX's needDepth) and the WebGL2 invalidateFramebuffer on the scene FBO. */
+ *         real tlx-post rule (GLX's needDepth) and the WebGL2 invalidateFramebuffer on the scene FBO.
+ *   A-W1  the program warm's last stage DRAWS what the first frame draws (apex26.tlxDrawWarm; off on software
+ *         adapters): the real startProgramWarm, every draw 1x1 and off the canvas, every touched state restored. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -26,7 +28,8 @@ if (!globalThis.localStorage) globalThis.localStorage = { getItem: () => null, s
 const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.0/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
-  "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
+  "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js",
+  "js/render/three/tlx-shadow.js"])
   vm.runInThisContext(read(f), { filename: f });
 
 // ── A-W2 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -320,4 +323,113 @@ test("A-P1: tlx.js brackets the scene pass with depthBegin / depthEnd, before po
   assert.ok(at > 0);
   assert.match(TLX.slice(at, at + 420),
     /if \(post\.depthBegin\) post\.depthBegin\(opts, _postF\);[^\n]*\n\s*_renderTimed\(scene, camera\);\s*if \(post\.depthEnd\) post\.depthEnd\(\);\s*_gpuLastOperation = "render-post";\s*post\.present\(opts, _postF\);/);
+});
+
+// ── A-W1 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+// The REAL startProgramWarm with its draw stage (tlx.js, verbatim: the mirror target + H5 rule, the mirror swap,
+// the ssrTag MRT node, the W1 block and the warm) over three r186 on the fake WebGL2, with the REAL lit material,
+// post chain (tagged scene target, MRT) and shadow subsystem (one caster). Stand-ins: the sky, the late-lit /
+// FX compiles, the instance registry, the soft-adapter verdicts. Every renderer.render() is recorded with the
+// state it ran under; the warm's compile stages render nothing (compileAsync), so every record is the draw stage.
+async function warmRig(t, { ls = {}, soft = false } = {}) {
+  const fg = makeFakeGL(320, 180);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  t.after(() => renderer.dispose());   // first: a throw below must not leave three's frame loop holding the process
+  const shadowSys = globalThis.TLXShaders.shadowSys(THREE, TSL, { renderer, isMobile: false, softwareGL: false, isWarming: () => false });
+  const lit = globalThis.TLXShaders.lit(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null,
+    ssrTag: true, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
+  const post = globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: false,
+    chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag: true, softDest: () => null,
+    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 });
+  post.resize(320, 180);
+  t.after(() => post.dispose());
+  const scene = new THREE.Scene(); scene.matrixWorldAutoUpdate = false;
+  const camera = new THREE.PerspectiveCamera(); camera.position.set(0, 0, 5); camera.updateMatrixWorld();
+  const g = new THREE.BufferGeometry();
+  for (const [n, k] of [["position", 3], ["normal", 3], ["color", 3], ["mat", 1], ["trk", 3]])
+    g.setAttribute(n, new THREE.BufferAttribute(new Float32Array(k * 3).fill(0.5), k));
+  const mesh = new THREE.Mesh(g, lit.makeMaterial({ roughness: 0.6 })); mesh.frustumCulled = false; mesh.updateMatrixWorld(); scene.add(mesh);
+  // One real caster in castScene (the grid's casters are there when the warm runs).
+  const VPm = new Float32Array(new THREE.Matrix4().elements);
+  shadowSys.shadowBegin(VPm); shadowSys.castShadow({ geo: g }, new Float32Array(new THREE.Matrix4().elements)); shadowSys.shadowEnd();
+  const mk = new Function("THREE", "TSL", "renderer", "scene", "camera", "lit", "post", "shadowSys", "localStorage", "Log", "SOFT", `"use strict";
+    let mirRT = null, mirCam = null, _mirRect = null, _mirUsed = false, _glassProbeGeo = null;
+    const W = 320, H = 180, presentW = 320, presentH = 180, wantSpatialUpscale = () => false;
+    const _instPerPass = true, skipBatches = () => false, _instRegistry = [], _mirOf = () => null;
+    const fx = null, vizMat = null, softGpu = () => SOFT, softwareGL = SOFT, softContent = () => false;
+    const pinSkyMaterial = () => {}, mintLateLit = () => {}, warmFxPrograms = async () => {}, warmLateLit = async () => {};
+    const warmPlusOn = () => true, wantMirrorWarm = () => true, softOutRT = () => null;
+    const I = new THREE.Matrix4().toArray();
+    const _postF = { proj: I, invProj: I, invVP: I, viewProj: I, upVS: [0, 1, 0], time: 0, sunVS: [0, 0, -1] };
+    const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0 };
+    let _warmAt = 0, _warmAttempts = 0, _warmPending = null, _warmRequested = false, _warmDone = false, _gpuLastOperation = "";
+    ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
+    ${tslice("      function _mirWarmSwap() {", "      function _showInstanced(rec, order) {")}
+    ${tslice("      let _ssrMrt = null;", "      let _poolNow = ")}
+    ${tslice("      // A-W1 (perf hunt 4): THE DRAW WARM.", "      const ENV_PROBE_TRIES")}
+    return { startProgramWarm, pending: () => _warmPending, stages: _warmStages, mrtNode: _ssrMrtNode, mirRT: () => mirRT };`);
+  const W1 = mk(THREE, TSL, renderer, scene, camera, lit, post, shadowSys, { getItem: (k) => (k in ls ? ls[k] : null) },
+    globalThis.Log, soft);
+  const calls = [];
+  const base = renderer.render.bind(renderer);
+  renderer.render = (sc, cam) => {
+    const tg = renderer.getRenderTarget();
+    calls.push({ tg, test: renderer.getScissorTest(), sc: tg ? tg.scissor.clone() : null, ac: renderer.autoClear,
+      mrt: renderer.getMRT(), name: tg && tg.texture ? tg.texture.name : null, size: tg ? [tg.width, tg.height] : null });
+    return base(sc, cam);
+  };
+  const warm = async () => { W1.startProgramWarm({ ssao: 0.5, bloom: 0.5, godray: 0, reflect: 0.2, exposure: 1 }); await W1.pending(); };
+  return { renderer, post, W1, calls, warm, fg };
+}
+
+test("A-W1: the warm's last stage DRAWS the scene, the post chain, the mirror and the casters — 1x1, never the canvas", async (t) => {
+  const h = await warmRig(t);
+  const target0 = h.renderer.getRenderTarget(), mrt0 = h.renderer.getMRT();
+  h.renderer.autoClear = true;
+  await h.warm();
+  const sceneRT = h.post.sceneTarget();
+  assert.equal(h.W1.stages.failed, 0, "the warm did not throw");
+  assert.ok(h.calls.length > 3, `draws were issued (${h.calls.length})`);
+  for (const c of h.calls) {
+    assert.ok(c.tg, "never the canvas: a draw there would present a black frame for the rest of the warm");
+    assert.equal(c.ac, false, "autoClear off: a clear ignores the scissor");
+  }
+  const sc = h.calls.filter((c) => c.tg === sceneRT);
+  assert.equal(sc.length, 1, "the scene, once, into the live scene target");
+  assert.equal(sc[0].test, true, "under the scissor test");
+  assert.deepEqual(sc[0].sc.toArray(), [0, 0, 1, 1], "a 1x1 scissor");
+  assert.equal(sc[0].mrt, h.W1.mrtNode(), "with the ssrTag MRT exactly as present() sets it");
+  const postDraws = h.calls.filter((c) => c.tg !== sceneRT && c.name !== "TLXWarmCast.color" && c.tg.width > 4);
+  assert.ok(postDraws.length >= 3, `the post chain's passes, each into its own target (${postDraws.length})`);
+  for (const c of postDraws) { assert.equal(c.test, true); assert.deepEqual(c.sc.toArray(), [0, 0, 1, 1]); }
+  assert.equal(h.calls.filter((c) => c.size[0] === 4 && c.size[1] === 4).length, 1, "the mirror's world into a 4x4 copy of mirRT's state");
+  assert.ok(h.calls.every((c) => c.tg !== h.W1.mirRT()), "never the live mirror target (a lite rung may composite it before it re-renders)");
+  const casts = h.calls.filter((c) => c.name === "TLXWarmCast.color");
+  assert.ok(casts.length >= 1 && casts.every((c) => c.size[0] === 1), "the casters into 1x1 scratch depth targets, never the live maps");
+  // Everything restored.
+  assert.equal(h.renderer.autoClear, true, "autoClear restored");
+  assert.equal(h.renderer.getScissorTest(), false, "scissor test restored");
+  assert.deepEqual(sceneRT.scissor.toArray(), [0, 0, 320, 180], "the scene target's scissor restored");
+  for (const c of postDraws) assert.deepEqual(c.tg.scissor.toArray(), [0, 0, c.tg.width, c.tg.height], "each post target's scissor restored");
+  assert.equal(h.renderer.getRenderTarget(), target0, "target restored");
+  assert.equal(h.renderer.getMRT(), mrt0, "MRT restored");
+  const d = h.W1.stages.drawn;
+  assert.equal(d.scene, 1); assert.equal(d.mirror, 1); assert.ok(d.post >= 3); assert.ok(d.casts >= 1);
+  assert.equal(typeof h.W1.stages.draw, "number", "memState().warm.draw: the stage's ms, GPU settle included");
+  assert.ok(h.fg.counts.fenceSync >= 1 && h.fg.counts.clientWaitSync >= 1, "WebGL2 waited on a fence for the GPU to settle");
+});
+
+test("A-W1: off on a software adapter (unset knob), forced on by apex26.tlxDrawWarm=1, off by =0", async (t) => {
+  const soft = await warmRig(t, { soft: true });
+  await soft.warm();
+  assert.equal(soft.calls.length, 0, "SwiftShader CI pays nothing");
+  assert.equal(soft.W1.stages.draw, null);
+  const forced = await warmRig(t, { soft: true, ls: { "apex26.tlxDrawWarm": "1" } });
+  await forced.warm();
+  assert.ok(forced.calls.length > 3, "=1 draws on any adapter (the A/B handle)");
+  const off = await warmRig(t, { ls: { "apex26.tlxDrawWarm": "0" } });
+  await off.warm();
+  assert.equal(off.calls.length, 0, "=0: no draw stage");
+  assert.equal(off.W1.stages.drawn, null);
 });

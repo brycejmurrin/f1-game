@@ -334,8 +334,23 @@
     // autoClear): a full-viewport NoBlending quad overwrites every pixel, so a
     // clear is byte-identical and spares a tile GPU the read of the old target.
     // Only the additive UP passes and the mirror inset (a viewport rect) load.
+    // A-W1 draw warm (drawWarm below): every pass DRAWS once into its own
+    // target under a 1x1 scissor, so the driver's first-draw work (ANGLE-Metal's
+    // pipeline state, vertex/format conversion) lands in the warm, not on the
+    // race's first frames. Never the canvas (target null): a draw there would
+    // present a fresh, black drawing buffer for the rest of the warm.
+    let _scissorWarm = false, _warmDraws = 0, _warmSc = null;   // the scissor scratch, made on the first warm draw
     function runPass(mat, target, load) {
       if (compileJobs) { compileJobs.push({ mat, target }); return; }
+      if (_scissorWarm) {
+        if (!target) return;
+        (_warmSc || (_warmSc = target.scissor.clone())).copy(target.scissor); target.scissor.set(0, 0, 1, 1);
+        quad.material = mat;
+        renderer.setRenderTarget(target);
+        renderer.autoClear = false;   // a clear (WebGPU loadOp) ignores the scissor
+        try { quad.render(renderer); _warmDraws++; } finally { target.scissor.copy(_warmSc); }
+        return;
+      }
       quad.material = mat;
       renderer.setRenderTarget(target);
       renderer.autoClear = !load;
@@ -895,6 +910,26 @@
       }
     }
 
+    // A-W1: present() itself, every pass drawn under the 1x1 scissor into its
+    // own target (runPass). Every target the chain draws is fully rewritten by
+    // the next real present() before anything reads it (no pass reads a
+    // previous frame), so the pixels the player sees are identical. Returns the
+    // number of passes drawn; the chain's last-frame state is restored.
+    function drawWarm(opts, frame) {
+      const last = { ..._last }, lastRT = _lastPresentRT, vizDest = _vizDest, mc = _mirComposites, n0 = _warmDraws;
+      const sc0 = renderer.getScissorTest();
+      try {
+        _scissorWarm = true;
+        renderer.setScissorTest(true);
+        present(opts, frame);
+      } finally {
+        _scissorWarm = false;
+        renderer.setScissorTest(sc0);
+        Object.assign(_last, last); _lastPresentRT = lastRT; _vizDest = vizDest; _mirComposites = mc;
+      }
+      return _warmDraws - n0;
+    }
+
     async function warmMirror(tex) {
       if (!P.mirror || viz) return;
       const target = renderer.getRenderTarget(), previousTex = P.mirror.tex.value;
@@ -926,6 +961,7 @@
       spatialOk: () => !!(P && P.sgsr && P.sgsr.mat),
       resize,
       warm,
+      drawWarm,   // A-W1
       warmMirror,
       needsDepth, depthBegin, depthEnd,   // A-P1
       present,
