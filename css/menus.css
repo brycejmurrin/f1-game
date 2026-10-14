@@ -72,11 +72,13 @@
   --balance-basis: calc(50% - 0.5em);
   --balance-min: calc(50% - 0.5em);
 }
-/* Rooms wrap from local space. Four visible doors (DATA / DESIGNER /
-   SETTINGS / HOW TO PLAY) sit on one row when the column holds them. */
+/* Rooms stay a forced 2×2 (same lattice as explore). 5.5rem once let
+   four doors squeeze onto one ~100px row in the live-home desktop
+   column and clipped TRACK DESIGNER / SETTINGS (1440×900). DESIGNER's
+   longest word + icon needs ~7.5rem; two-across gives it. */
 #menu-secondary {
-  --balance-basis: 5.5rem;
-  --balance-min: 5.5rem;
+  --balance-basis: calc(50% - 0.5em);
+  --balance-min: calc(50% - 0.5em);
 }
 /* The hero is the one button on the screen with two lines of text, so it centres
    its own stack rather than inheriting the single-line baseline the others use. */
