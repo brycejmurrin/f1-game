@@ -10,6 +10,7 @@ import {
   normalizeJob,
   parseShotArgv,
   groupJobsByTrack,
+  shotSessionKey,
   loadBatchFile,
   SHOT_USAGE,
 } from "../../tools/shot/shot-jobs.mjs";
@@ -71,4 +72,63 @@ test("loadBatchFile accepts JSONL", () => {
     '{"track":"spa","frac":0.2}',
   ].join("\n"));
   assert.equal(loadBatchFile(f).length, 2);
+});
+
+
+test("batch groups only compatible warm scenes, including an unpinned first team", () => {
+  const raws = [
+    { track: "monza", team: null },
+    { track: "spa", team: "ferrari" },
+    { track: "monza", team: "ferrari" },
+    { track: "monza", team: null, frac: 0.3 },
+    { track: "monza", team: null, tod: "night" },
+    { track: "monza", team: null, backend: "webgl2" },
+    { track: "monza", team: null, width: 640, height: 360 },
+    { track: "monza", team: null, dpr: 2 },
+  ];
+  const jobs = raws.map((raw) => normalizeJob(raw, { ROOT }));
+  const groups = groupJobsByTrack(jobs);
+  assert.equal(groups.length, 7);
+  assert.deepEqual(groups[0].jobs.map((j) => j.frac), [0.1, 0.3]);
+  assert.notEqual(shotSessionKey(jobs[0]), shotSessionKey(jobs[2]));
+  assert.equal(shotSessionKey(jobs[0]), shotSessionKey(jobs[4])); // lighting can change in-place
+  for (const index of [5, 6, 7]) assert.notEqual(shotSessionKey(jobs[0]), shotSessionKey(jobs[index]));
+});
+
+test("shared capture flags do not consume shot positionals and preview controls output", () => {
+  const plan = parseShotArgv(["--profile", "preview", "--trace", "--cache-assets", "monaco", "0.25", "eye", "--backend", "webgl2"], ROOT);
+  const job = plan.jobs[0];
+  assert.equal(job.trackId, "monaco");
+  assert.equal(job.cam, "eye");
+  assert.equal(job.backend, "webgl2");
+  assert.equal(job.type, "jpeg");
+  assert.equal(job.quality, 80);
+  assert.deepEqual(job.viewport, { width: 640, height: 360 });
+  assert.match(job.out, /monaco-25-eye\.jpg$/);
+  assert.equal(plan.capture.trace, true);
+  assert.equal(plan.capture.cacheAssets, true);
+  assert.throws(() => parseShotArgv(["--dpr", "8", "monza"], ROOT), /--dpr/);
+});
+
+test("isolated batches keep every job in its own group", () => {
+  const capture = parseShotArgv(["monza", "--isolated"], ROOT).capture;
+  const jobs = [0.1, 0.2].map((frac) => normalizeJob({ track: "monza", frac }, { ROOT, capture }));
+  assert.equal(groupJobsByTrack(jobs).length, 2);
+});
+
+test("job-specific comparison profile resets preview encoder and size", () => {
+  const capture = parseShotArgv(["monza", "--profile", "preview"], ROOT).capture;
+  const job = normalizeJob({ profile: "comparison" }, { ROOT, capture });
+  assert.equal(job.type, "png");
+  assert.deepEqual(job.viewport, { width: 1280, height: 720 });
+  assert.equal(job.quality, undefined);
+  assert.throws(() => normalizeJob({ tod: "bad" }, { ROOT }), /time of day/);
+  assert.throws(() => normalizeJob({ backend: "bad" }, { ROOT }), /backend/);
+});
+
+
+test("per-job isolation is retained even when the batch otherwise reuses warm scenes", () => {
+  const job = normalizeJob({ track: "monza", isolated: true }, { ROOT });
+  assert.equal(job.capture.isolated, true);
+  assert.equal(groupJobsByTrack([job, job]).length, 2);
 });

@@ -3,7 +3,7 @@
 // further — render-heavy specs timed out at --workers=4 on 4-vCPU llvmpipe
 // (docs/notes/TESTING-FIELD-NOTES.md 2026-09-30).
 import os from "node:os";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 
 /** Affinity and container quota, rather than the host's logical CPU count. */
 export function captureCpuBudget({ parallelism = os.availableParallelism(), read = readFileSync } = {}) {
@@ -19,10 +19,44 @@ export function captureCpuBudget({ parallelism = os.availableParallelism(), read
 
 /** Match the llvmpipe ANGLE selection used by playwright.config.js. */
 export function captureChromiumArgs(env = process.env) {
+  if (glStack(env) === "hardware") return ["--enable-gpu", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"];
   const common = ["--enable-unsafe-swiftshader", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"];
   return glStack(env) === "llvmpipe"
     ? ["--use-angle=gl", "--use-gl=angle", "--ignore-gpu-blocklist", ...common]
     : ["--use-angle=swiftshader", ...common];
+}
+
+/** Explicit rendering stack; no silent fallback for unavailable requested ICDs. */
+export function captureGpuOptions({ env = process.env, gpu = glStack(env),
+  cpus = captureCpuBudget(), workers = 1, lavapipeIcd = env.APEX_LAVAPIPE_ICD,
+  exists = existsSync } = {}) {
+  if (!["swiftshader", "llvmpipe", "hardware", "lavapipe"].includes(gpu)) {
+    throw new Error(`capture: unsupported GPU profile ${gpu}`);
+  }
+  const launchEnv = { ...env, APEX_GPU: gpu, APEX_GL: gpu };
+  if (gpu === "hardware") {
+    // Explicit hardware selection must not inherit a software-driver pin.
+    for (const key of ["LIBGL_ALWAYS_SOFTWARE", "GALLIUM_DRIVER", "VK_DRIVER_FILES", "VK_ICD_FILENAMES", "MESA_LOADER_DRIVER_OVERRIDE"]) delete launchEnv[key];
+    return { args: captureChromiumArgs(launchEnv), env: launchEnv };
+  }
+  if (gpu === "llvmpipe" || gpu === "lavapipe") {
+    const requested = env.LP_NUM_THREADS;
+    const threads = requested == null || requested === ""
+      ? Math.max(1, Math.floor(cpus / Math.max(1, workers))) : Number(requested);
+    if (!Number.isInteger(threads) || threads < 1 || threads > 256) throw new Error("capture: LP_NUM_THREADS must be an integer 1-256");
+    launchEnv.LP_NUM_THREADS = String(threads);
+    if (gpu === "llvmpipe") {
+      launchEnv.LIBGL_ALWAYS_SOFTWARE = "1";
+      launchEnv.GALLIUM_DRIVER = "llvmpipe";
+      return { args: captureChromiumArgs(launchEnv), env: launchEnv };
+    }
+    const icd = lavapipeIcd || ["/usr/share/vulkan/icd.d/lvp_icd.json", "/usr/share/vulkan/icd.d/lvp_icd.x86_64.json"].find(exists);
+    if (!icd || !exists(icd)) throw new Error("capture: lavapipe requires an installed Mesa Vulkan ICD; set APEX_LAVAPIPE_ICD to its manifest");
+    launchEnv.VK_DRIVER_FILES = icd;
+    delete launchEnv.VK_ICD_FILENAMES;
+    return { args: ["--use-angle=vulkan", "--enable-features=Vulkan,DefaultANGLEVulkan,VulkanFromANGLE", "--use-vulkan=native", "--disable-vulkan-surface", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"], env: launchEnv };
+  }
+  return { args: captureChromiumArgs(launchEnv), env: launchEnv };
 }
 
 /** Spec basenames in playwright.config.js RENDER_SPECS (no .spec.js). */
@@ -39,7 +73,8 @@ export const RENDER_HEAVY_SPEC_IDS = [
 
 /** Which software GL stack env asks for. */
 export function glStack(env = process.env) {
-  const g = String(env.APEX_GL || env.GL || "").toLowerCase();
+  if (["hardware", "lavapipe"].includes(env.APEX_GPU || env.APEX_GL)) return env.APEX_GPU || env.APEX_GL;
+  const g = String(env.APEX_GPU || env.APEX_GL || env.GL || "").toLowerCase();
   return g.includes("llvmpipe") ? "llvmpipe" : "swiftshader";
 }
 
@@ -60,7 +95,7 @@ export function defaultCaptureWorkers({
   if (Number.isFinite(requested) && requested > 0) {
     return Math.min(jobCap, 8, Math.max(1, requested));
   }
-  if (glStack(env) === "llvmpipe") {
+  if (["llvmpipe", "hardware"].includes(glStack(env))) {
     return Math.min(jobCap, 4, Math.max(1, Math.floor(cpus / 2)));
   }
   return Math.min(jobCap, 8, Math.max(1, Math.floor(cpus / 4)), Math.max(1, defSwift));

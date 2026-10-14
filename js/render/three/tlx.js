@@ -296,6 +296,7 @@ const TLX = (function () {
       // view so a held screenshot cannot be overwritten by the next read.
       let _unstridePool = null;
       let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
+      let _softSubmittedGen = 0, _softShownGen = 0;
       const _softPresentWaiters = [];
       // awaitSoftPresent(ms, "frame") on a headed canvas (GLX's M15 contract): no
       // preserveDrawingBuffer, so SAVE SCREENSHOT must read in the task that
@@ -3674,6 +3675,7 @@ const TLX = (function () {
             const maxPx = _unstrideIntoSoft(src, w, h, _softImg.data);
             if (maxPx >= 8) {
               _displayCtx.putImageData(_softImg, 0, 0);
+              _softShownGen = req.gen;
               _softBlitNotify();
             }
             _softReadLastMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - _softReadSince;
@@ -3715,6 +3717,7 @@ const TLX = (function () {
           w: (rt && rt.width) || W,
           h: (rt && rt.height) || H,
           epoch: _softReadEpoch,
+          gen: ++_softSubmittedGen,
         };
         if (_softReadPending) {
           const now = (typeof performance !== "undefined" ? performance.now() : Date.now());
@@ -4607,6 +4610,7 @@ const TLX = (function () {
           return {
             on: !!_softBlit,
             gen: _softBlitGen,
+            submittedGen: _softSubmittedGen, shownGen: _softShownGen,
             pending: !!_softReadPending,
             lastMs: _softReadLastMs,
             lastErr: _softReadLastErr || null,
