@@ -4447,6 +4447,17 @@ function quitToMenu() {
 // Reusable rank buffer — refilled and sorted each physics step (up to 5x per
 // rendered frame) so we don't allocate a fresh array via cars.slice() each time.
 const ranked = [], byProgDesc = (a, b) => b.prog - a.prog;   // hoisted: no comparator closure per step
+// AFTER THE FLAG a finished car keeps accruing prog in coast(), so a later but faster finisher out-progressed an
+// earlier one and took its c.rank (the HUD position, the relative board). The finishers' rank SLOTS are handed
+// back out in classification order (RaceControl.finishOrder: laps, then the clock); running cars keep theirs and
+// `ranked` stays in progress order (collisions and traffic scans read it). PERF-HUNT-4 B-F2.
+const _finRanked = [];
+function rankFinishers() {
+  _finRanked.length = 0;
+  for (let i = 0; i < ranked.length; i++) if (ranked[i].finished) _finRanked.push(ranked[i]);
+  _finRanked.sort(RaceControl.finishOrder);
+  for (let i = 0, k = 0; i < ranked.length; i++) if (ranked[i].finished) _finRanked[k++].rank = i + 1;
+}
 // Live weather (setWeatherLive/setTimeOfDay) and the dynamic weather arc live in
 // js/race/weather-arc.js — WeatherArc.create(G, deps), wired as `wxArc` above.
 
@@ -4590,9 +4601,12 @@ function update(dt) {
   ranked.length = 0;
   for (const c of cars) if (!c.retired) ranked.push(c);
   ranked.sort(byProgDesc);
+  let nFin = 0;
   for (let i = 0; i < ranked.length; i++) {
     ranked[i].rank = i + 1;
+    if (ranked[i].finished) nFin++;
   }
+  if (nFin > 1) rankFinishers();
   if (!isPractice() && !isQuali() && !realRace.owns(player)) scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
 
   // Leading human for AiBand catch-up (scripted mode ignores). Once per step.
