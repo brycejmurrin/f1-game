@@ -1,1 +1,0 @@
-1792008143	t	PR1742 HUD stable controls; blocking CI timeout only: tools/ci/select-specs.mjs FAT_UI cap18 kills all-green46 HUD tests at18m27; inspect and fix derived timeout, no weakened assertions  [cursor/hud-stable-controls-4d8f; session e8f4b41ca8eb654ed975aa3d]
