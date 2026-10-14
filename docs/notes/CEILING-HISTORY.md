@@ -1,5 +1,9 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-10-14 — sync #1501 onto ship tip `151cc6569`: absorb game.js +1
+
+`js/game.js` codeLines 5099 → **5100**, lines 9376 → **9377**. Sync of `cursor/hud-announce-stack-577d` onto ship after #1462/#1469/#1486/#1497; ship tip alone grew past both ceilings by 1. Deliberate sync absorb (`ratchets.mjs --update`) — not an OWNED extraction. Also took ship lower on `js/lighting/presets.js` lines 8341 → **8251**.
+
 ## 2026-10-14 — PR #1460 (cursor/hud-adapt-3f9a): the phone HUD sizing pass, two rounds
 
 `js/ui/hud.js` codeLines 1424 → **1445** (+21), lines 2426 → **2489** (+63); `css/hud.css` codeLines
