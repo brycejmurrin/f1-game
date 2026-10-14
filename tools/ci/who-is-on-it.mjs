@@ -25,8 +25,16 @@
 // out. Every run lists the live claims with their age, so "I am on the autopilot red" is
 // visible to the next session BEFORE it starts, with no commit on any working
 // branch (the objection the coordination note records against claim files).
-// A claim older than STALE_MIN prints as stale: it informs, nothing enforces
-// it, and a session that forgot to release blocks nobody.
+// A claim older than STALE_MIN is stale: it informs, nothing enforces it, and
+// a session that forgot to release blocks nobody. The listing hides stale
+// claims behind one count line (`--all` prints them; `--json` always carries them).
+//
+// FETCH COST (measured 2026-10-14): a plain `git fetch --prune origin` in a
+// fresh shallow container pulls the whole history of ~330 branches — 40 s of a
+// 47 s run. The branch list needs commit METADATA only, so it is read from a
+// commits-only cache (REF_CACHE: a bare repo fetched with --filter=tree:0, ~1 s
+// cold, ~0.5 s warm); the checkout fetches only the claims board and, when you
+// name paths, the live branches whose trees `git log -- <paths>` must read.
 //
 // Why a claude/* branch and a removal COMMIT, not a ref namespace and a
 // delete: measured 2026-09-22, the remote containers' git proxy accepts a push
@@ -39,6 +47,7 @@
 //   node tools/ci/who-is-on-it.mjs --claim "fixing the autopilot red on the deploy tip"
 //   node tools/ci/who-is-on-it.mjs --release
 //   node tools/ci/who-is-on-it.mjs --no-fetch --json
+//   node tools/ci/who-is-on-it.mjs --all                # also print the stale claims
 //
 // Read-only listing exits 0 (it informs); invalid claim/CLI arguments exit 1. A branch is "live" when
 // its tip is inside the window; the deploy branch is always listed; claims
@@ -56,6 +65,9 @@ export const STALE_MIN = 120;
 export const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 export const CLAIMS_BOARD = "claude/claims-board";
 export const BOARD_MAX_MIN = 24 * 60;
+/** Commits-only mirror of every remote branch (regenerable, under artifacts/). */
+export const REF_CACHE = path.join(ROOT, "artifacts", "who-is-on-it-refs.git");
+const REF_FORMAT = "%(committerdate:unix)%09%(refname:short)%09%(authorname)%09%(objectname:short)%09%(subject)";
 
 const git = (...args) => {
   const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8" });
@@ -148,14 +160,52 @@ export function nextBoard(files, slug, content, now = Math.floor(Date.now() / 10
   return keep.sort((a, b) => (a.slug < b.slug ? -1 : 1));
 }
 
-/** The board's files at `rev` ([] when the board does not exist yet). */
+/** `git cat-file --batch` output -> the blob contents, in order. Pure. */
+export function parseCatFileBatch(buf) {
+  const out = [];
+  let i = 0;
+  while (i < buf.length) {
+    const nl = buf.indexOf(10, i);
+    if (nl < 0) break;
+    const [, type, size] = buf.subarray(i, nl).toString("utf8").split(" ");
+    if (type === "missing" || size === undefined) { out.push(""); i = nl + 1; continue; }
+    const n = Number(size);
+    out.push(buf.subarray(nl + 1, nl + 1 + n).toString("utf8"));
+    i = nl + 1 + n + 1; // the content, then its trailing newline
+  }
+  return out;
+}
+
+/** The board's files at `rev` ([] when the board does not exist yet). Three
+ *  git calls however many claims (one cat-file per file cost a spawn each). */
 export function readBoard(rev, cwd = ROOT) {
   const run = (...a) => spawnSync("git", a, { cwd, encoding: "utf8" });
   if (run("rev-parse", "--verify", "--quiet", rev + "^{commit}").status !== 0) return [];
-  return run("ls-tree", rev).stdout.split("\n").filter(Boolean).map((l) => {
+  const rows = run("ls-tree", rev).stdout.split("\n").filter(Boolean).map((l) => {
     const [meta, slug] = l.split("\t");
-    return { slug, content: run("cat-file", "blob", meta.split(" ")[2]).stdout };
+    return { slug, oid: meta.split(" ")[2] };
   });
+  if (!rows.length) return [];
+  const r = spawnSync("git", ["cat-file", "--batch"], { cwd, input: rows.map((x) => x.oid).join("\n") + "\n" });
+  const blobs = r.status === 0 ? parseCatFileBatch(r.stdout) : [];
+  return rows.map((x, i) => ({ slug: x.slug, content: blobs[i] ?? "" }));
+}
+
+/** for-each-ref REF_FORMAT lines -> branch rows (claims refs and HEAD dropped). Pure. */
+export function parseRefs(text) {
+  return text.split("\n").filter(Boolean)
+    .map((l) => { const [t, ref, author, sha, ...s] = l.split("\t"); return { t: Number(t), ref: ref.replace(/^origin\//, ""), author, sha, subject: s.join("\t") }; })
+    .filter((r) => r.ref !== "HEAD" && r.ref !== "origin" && !r.ref.startsWith(CLAIMS_PREFIX) && r.ref !== CLAIMS_BOARD);
+}
+
+/** Refresh the commits-only mirror (REF_CACHE): every branch's commits, no
+ *  trees, no blobs. True on success; false sends the caller to a full fetch. */
+export function fetchRefCache(url, cache = REF_CACHE, timeout = 60_000) {
+  if (!url) return false;
+  const g = (...a) => spawnSync("git", a, { encoding: "utf8", timeout });
+  if (g("--git-dir", cache, "rev-parse", "--git-dir").status !== 0 && g("init", "--quiet", "--bare", cache).status !== 0) return false;
+  return g("--git-dir", cache, "fetch", "--quiet", "--prune", "--no-tags", "--filter=tree:0", url,
+    "+refs/heads/*:refs/remotes/origin/*").status === 0;
 }
 
 /** Commit the board with `slug` set to `content` (null = removed) and push it
@@ -208,6 +258,7 @@ function pushClaim(text, branch, session) {
 export function main(argv = process.argv.slice(2)) {
   if (argv.includes("--help") || argv.includes("-h")) {
     console.log('usage: node tools/ci/who-is-on-it.mjs [--hours N] [--session ID] [--no-fetch] [--json] [--all] [--claim "<text>" | --release] [path ...]');
+    console.log(`  --all   also print claims older than ${STALE_MIN} min (hidden by default behind a count line)`);
     return 0;
   }
   const opt = (name, dflt) => {
@@ -226,8 +277,8 @@ export function main(argv = process.argv.slice(2)) {
   if (!Number.isFinite(hours) || hours <= 0 || hours > 8760) { console.error("--hours must be in (0, 8760]"); return 1; }
   const session = argv.includes("--session") ? sessionId({ APEX_SESSION_ID: opt("--session") }) : sessionId();
   const json = argv.includes("--json");
-  const all = argv.includes("--all");
   const noFetch = argv.includes("--no-fetch");
+  const showAll = argv.includes("--all");
   const claim = opt("--claim", "");
   const release = argv.includes("--release");
   const paths = argv.filter((a, i) => !a.startsWith("--") && argv[i - 1] !== "--hours" && argv[i - 1] !== "--claim" && argv[i - 1] !== "--session");
@@ -243,36 +294,41 @@ export function main(argv = process.argv.slice(2)) {
     claimed = { action: release ? "release" : "claim", ...pushClaim(release ? RELEASED : claim, branch, session) };
   }
 
+  // Branch metadata from the commits-only mirror; the board into the checkout
+  // (its blobs are read). A mirror that cannot fetch (old git, a server with no
+  // partial-clone filter) falls back to the old full fetch of the checkout.
   let fetched = false;
+  let useCache = false;
+  const fetchIn = (...refspecs) => spawnSync("git", ["fetch", "--quiet", "--no-tags", "origin", ...refspecs],
+    { cwd: ROOT, encoding: "utf8", timeout: 60_000 }).status === 0;
   if (!noFetch) {
-    const r = spawnSync("git", ["fetch", "--prune", "--quiet", "origin"], { cwd: ROOT, encoding: "utf8", timeout: 60_000 });
-    fetched = r.status === 0;
+    useCache = fetchRefCache(git("remote", "get-url", "origin").trim());
+    fetched = useCache
+      ? fetchIn(`+refs/heads/${CLAIMS_BOARD}:refs/remotes/origin/${CLAIMS_BOARD}`)
+      : spawnSync("git", ["fetch", "--prune", "--quiet", "origin"], { cwd: ROOT, encoding: "utf8", timeout: 60_000 }).status === 0;
+  } else {
+    useCache = spawnSync("git", ["--git-dir", REF_CACHE, "rev-parse", "--git-dir"], { encoding: "utf8" }).status === 0;
   }
+  const refGit = (...a) => (useCache ? git("--git-dir", REF_CACHE, ...a) : git(...a));
   const since = Math.floor(Date.now() / 1000) - hours * 3600;
-  const refs = git("for-each-ref", "--sort=-committerdate",
-    "--format=%(committerdate:unix)%09%(refname:short)%09%(authorname)%09%(objectname:short)%09%(subject)",
-    "refs/remotes/origin")
-    .split("\n").filter(Boolean)
-    .map((l) => { const [t, ref, author, sha, ...s] = l.split("\t"); return { t: Number(t), ref: ref.replace(/^origin\//, ""), author, sha, subject: s.join("\t") }; })
-    .filter((r) => r.ref !== "HEAD" && !r.ref.startsWith(CLAIMS_PREFIX) && r.ref !== CLAIMS_BOARD);
+  const refs = parseRefs(refGit("for-each-ref", "--sort=-committerdate", `--format=${REF_FORMAT}`, "refs/remotes/origin"));
   const live = refs.filter((r) => r.t >= since || r.ref === DEPLOY);
   // The board, plus legacy claude/claims/* branches until they are pruned.
   const claims = [...parseBoard(readBoard(`refs/remotes/origin/${CLAIMS_BOARD}`)),
-    ...parseClaims(git("for-each-ref", "--format=%(committerdate:unix)%09%(refname)%09%(authorname)%09%(subject)",
+    ...parseClaims(refGit("for-each-ref", "--format=%(committerdate:unix)%09%(refname)%09%(authorname)%09%(subject)",
       `refs/remotes/origin/${CLAIMS_PREFIX}`))].sort((a, b) => b.at - a.at);
-  // A claim past BOARD_MAX_MIN is EXPIRED: the board drops it at the next
-  // write, but a quiet board and the legacy claude/claims/* branches kept 64 of
-  // them in every listing on 2026-10-14 (some 300 h old), burying the live
-  // ones. They stay in --json and under --all; the listing counts them.
-  const unreleased = claims.filter((c) => !c.released);
-  const active = all ? unreleased : unreleased.filter((c) => c.ageMin <= BOARD_MAX_MIN);
-  const expired = unreleased.length - active.length;
+  const active = claims.filter((c) => !c.released);
+  const shown = showAll ? active : active.filter((c) => !c.stale);
+  const staleHidden = active.length - shown.length;
 
   // One row per commit: a commit on the deploy branch is reachable from every
   // topic branch cut from it, so a per-branch log listed it once per branch.
   // `branch` prefers the deploy branch; `branches` names every one carrying it.
   const touchedBy = new Map();
   if (paths.length) {
+    // `git log -- <paths>` reads trees, which the mirror does not hold: bring
+    // just the live branches into the checkout, in one fetch.
+    if (useCache && !noFetch && live.length) fetchIn(...live.map((r) => `+refs/heads/${r.ref}:refs/remotes/origin/${r.ref}`));
     for (const r of [...live].sort((a, b) => (b.ref === DEPLOY) - (a.ref === DEPLOY))) {
       const log = git("log", `--since=${hours} hours ago`, "--format=%h%x09%an%x09%ar%x09%s", `origin/${r.ref}`, "--", ...paths);
       for (const line of log.split("\n").filter(Boolean)) {
@@ -309,9 +365,9 @@ export function main(argv = process.argv.slice(2)) {
       ? '(none — nobody has claimed anything; --claim "<text>" to say what you are on)'
       : "(no claims in stale local refs — re-run with the network up before trusting this)");
   }
-  if (expired) console.log(`  (${expired} expired claim(s) older than ${BOARD_MAX_MIN / 60} h hidden — --all lists them)`);
   const mine = session ? claimSlug(branch, session) : null;
-  for (const c of active) console.log(`${ago(c.ageMin).padStart(7)} ago  ${c.stale ? "STALE " : "      "}${c.slug}${c.slug === mine ? "  [you]" : ""}  — ${c.who}: ${c.text}`);
+  for (const c of shown) console.log(`${ago(c.ageMin).padStart(7)} ago  ${c.stale ? "STALE " : "      "}${c.slug}${c.slug === mine ? "  [you]" : ""}  — ${c.who}: ${c.text}`);
+  if (staleHidden) console.log(`  (${staleHidden} stale claim${staleHidden === 1 ? "" : "s"} hidden — older than ${STALE_MIN} min; --all to show)`);
   if (paths.length) {
     console.log(`\n# commits in the window that touched: ${paths.join(" ")}`);
     if (!touched.length) console.log("(none — nobody has pushed a change to these paths in the window)");
