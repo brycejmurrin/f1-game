@@ -1282,8 +1282,8 @@ body:not(.desktop) #announce {
   min-width: 0;
   max-width: min(440px, calc(72 * var(--vwzh)), calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
   width: min(100%, max-content, calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
-  /* Remaining room to SPEED/GEAR (fitHud --hud-announce-max-h); not cluster/z-5.5em. */
-  max-height: min(4.5em, var(--hud-announce-max-h, 4.5em));
+  /* flag-slot+40 budgets the lit-flag +38px step (phoneL broadcast @150%). */
+  max-height: min(4.5em, calc((var(--hud-cluster-y, 100svh) - 8px) / var(--hud-z) - var(--flag-slot-top, 5.5em) - 40px));
 }
 /* Collapsed dock lane (js/ui/hud.js announceLane): flex min-content from
    #announce-num kept a painted box at width:0; hide the card so it cannot
@@ -2212,20 +2212,12 @@ body.desktop #hud-inputs:not([data-hl-user]) {
       bottom: calc(anchor(top) + var(--gap));
       margin: 0;
     }
-    /* fitHud sets body.hud-tyre-stack + --hud-tyre-top when the dock-top
-       anchor would cover the map (phoneL broadcast @150%). data-hl-user keeps
-       MOVE & SIZE. */
+    /* hud-tyre-stack: screen-px top, zoom:1 escapes .hud-bottom --hud-z-bot. */
     body.hud-tyre-stack:not(.desktop) #hud-tyre:not([data-hl-user]) {
-      position: fixed;
-      position-anchor: none;
-      /* Screen-px top; zoom:1 escapes .hud-bottom's --hud-z-bot. */
-      zoom: 1;
-      top: var(--hud-tyre-top);
-      bottom: auto;
-      left: calc(10px + var(--sal));
-      right: auto;
-      max-height: var(--hud-tyre-max-h, none);
-      overflow: hidden;
+      position: fixed; position-anchor: none; zoom: 1;
+      top: var(--hud-tyre-top); bottom: auto;
+      left: calc(10px + var(--sal)); right: auto;
+      max-height: var(--hud-tyre-max-h, none); overflow: hidden;
     }
     /* HELMET ERS stays in the cluster grid. Anchoring it to the tyre failed:
        the tyre follows #hud-energy in the tree, anchor() does not resolve a

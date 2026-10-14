@@ -254,13 +254,18 @@ const HudRelative = (function () {
           if (!hitX || !hitY) continue;
           hit = true;
           // TILT parks BRAKE in the map column: slide past the pedal, else cap height.
-          // When REL's top already sits inside a control (OT/gear/throttle at HUD
-          // 150% — rr.top >= box.top), a height cap cannot clear it: slide right.
+          // Centre controls (OT/gear) that already contain REL's top: slide only
+          // while the card stays on-screen (unbounded slide put REL at x≈793).
           const doCap = rr.top < box.top - 4;
-          const doSlide = !doCap || box.left <= rr.left + 24 || box.right - rr.left < rr.width * 0.7;
-          if (doSlide)
-            slide = Math.max(slide, (box.right + 8) / z);
+          const leftish = box.left <= rr.left + 24 || box.right - rr.left < rr.width * 0.7;
           if (doCap) cap = Math.min(cap, (box.top - rr.top - 6) / z);
+          if (leftish) slide = Math.max(slide, (box.right + 8) / z);
+          else if (!doCap) {
+            const next = (box.right + 8) / z;
+            const w = (doc.defaultView || (typeof window !== "undefined" ? window : null));
+            const limit = w ? ((w.innerWidth || 0) - rr.width - 8) / z : next;
+            if (next <= limit) slide = Math.max(slide, next);
+          }
         }
         if (!hit) break;
         if (slide > 0) root.style.left = slide.toFixed(1) + "px";

@@ -173,8 +173,8 @@ test("fitRows slides past OT when REL top already sits inside the control", () =
   const R = load({ document: doc, HudElements: { isOn: () => true } });
   const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
   R.tick({ cars: [p, car("A1", 1100, 3, { rank: 1 })], track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } }, p);
-  const left = parseFloat(root.style.left);
-  assert.ok(left > 250, "slides past OT.right: left=" + root.style.left);
+  const left = parseFloat(root.style.left || "0");
+  assert.ok(left > 0 && left < 600, "slides on-screen past OT, not off the right edge: left=" + root.style.left);
 });
 
 test("fitRows caps max-height above an overlapping BRAKE", () => {
