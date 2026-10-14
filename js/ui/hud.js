@@ -2240,6 +2240,7 @@ function updateHud(force, dtMs) {
       // Timing-screen colours: purple session best, green personal best,
       // yellow slower than your own best; no split yet keeps the row's ink.
       hStyle(_secRows[i], "color", t == null ? "" : sb ? "var(--sec-best)" : pb ? "var(--faster)" : "var(--sec-slow)");
+      if (_ro && _ro.paintSectorRow) _ro.paintSectorRow(_secRows[i].parentElement, t, sb, pb);
       if (_secFlash[i] > 0) {
         _secFlash[i] = Math.max(0, _secFlash[i] - 0.1);
         hToggle(_secRows[i].parentElement, "sec-flash", _secFlash[i] > 0);
@@ -2312,6 +2313,7 @@ function updateHud(force, dtMs) {
       }
     }
     if (_blue !== !!blueCar) { _blue = !!blueCar; hData(els.flag, "flag", _blue ? "blue" : null); }
+    if (_ro && _ro.paintFlag) _ro.paintFlag(els.flag, show ? (caution ? { caution: cn } : blueCar ? { blue: true } : null) : null);
     // A flag chip appearing or going re-picks the radio slot (radioUnderRight steps right of it).
     if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; if (_invalidateFit) _invalidateFit(); }
   }
