@@ -2771,19 +2771,30 @@ async function startRaceBody() {
   PerfGov.sentinelArm(true);
   if (PerfGov.strikes() > 0 && PerfGov.autoRes() && gfx.setRenderScale && gfx.getRenderScale)
     gfx.setRenderScale(Math.min(gfx.getRenderScale(), PerfGov.strikes() >= 2 ? 0.7 : 0.85));
+  // Car meshes + debris BEFORE countdown warm presents (#1477 shape: first present
+  // must not collide with heavy sync work). Cover → warm → arm count immediately.
+  // Do NOT await pack settle here: a 30 s wait after setState("count") burned the
+  // FlyingStart run-up (#1493 quali), and awaiting BEFORE count inflated every
+  // race entry enough to kill 18 m selected shards (hud-layout / packed-1).
+  // Gate requestWarm synchronously — warm menu already has packSettled; cold
+  // Start Race skips program warm until the pack lands (first draws compile).
+  const handoff = (loadingScreen.active() || loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !!player;
+  clearMenuScreens(); garagePre.release();
+  if (handoff) RaceEntryProfile.raiseHandoff(loadingScreen);
+  RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
+  RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
-  // TLX links programs synchronously on first draw — warm them during the LIGHTS,
-  // unless the menu's warm already ran for this world (warmPrograms, _warmKey).
-  // Optimisation only; GLX/WGX have no warm and no-op.
-  try { RaceEntryProfile.requestWarm(gfx, _warmKey === menuKey(trackIdx)); } catch (_) { /* as above */ }
+  // TLX links programs on first draw — warm during LIGHTS only when the pack is
+  // already settled (or unsupported/off), else createTextureArray owns the thread.
+  {
+    const settled = loadingScreen.packSettled || LoadingScreen.packSettled;
+    const packState = (typeof Assets !== "undefined" && Assets.state) ? Assets.state() : null;
+    if (!settled || settled(packState)) {
+      try { RaceEntryProfile.requestWarm(gfx, _warmKey === menuKey(trackIdx)); } catch (_) { /* as above */ }
+    }
+  }
   skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
-  // THE PRE-RACE SCREEN OUTLIVES THE SWEEP when it was up: the warm above paints
-  // nothing until it is done, so it is raised again, disarmed, and render()
-  // lowers it with the first frame the backend presents (LoadingScreen.handoff).
-  const handoff = (loadingScreen.active() || loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !!player;   // "build"/"busy": startRaceCovered + Start Race cover
-  clearMenuScreens(); garagePre.release();  // garage GPU set is not the race's (js/garage/prebuild.js); next idle title rebuilds it
-  if (handoff) RaceEntryProfile.raiseHandoff(loadingScreen);
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
   setHudUserHidden(false);   // start every race with the HUD shown (+ resets the toggle label)
@@ -2808,10 +2819,8 @@ async function startRaceBody() {
   // restart after a changeable race had arced into rain kept playing it dry.
   if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
   holdRaceWake(); syncRotateBlocker(true);   // AFTER the audio: on a portrait phone this pauses (stops engine/rain, drops the wake), and setPaused(false) on rotate restarts them
-  if (!vmNoFramePump) await yieldMain(); if (stale()) return false;   // do not glue car-mesh warm onto the settings/grid sync stretch
+  if (!vmNoFramePump) await yieldMain(); if (stale()) return false;
   if (gfxContextLost()) { loadingScreen.stop(); quitToMenu(); return false; }
-  RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
-  RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
 
   // Warm the actual rear view at its HUD size while the grid is covered.
   // startRace's promise includes this so multiplayer cannot arm green early.
