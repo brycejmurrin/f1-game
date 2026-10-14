@@ -75,3 +75,83 @@ test("create: inert without a document or HudLayout; the pure API is frozen", ()
   assert.ok(Object.isFrozen(A));
   assert.deepEqual(plain(A.LIM), { x: [-50, 50], y: [-50, 50], s: [50, 200] }, "the same range HudLayout.LIM clamps to");
 });
+
+// Exercise the real editor listeners with a tiny DOM and a controllable frame queue.
+function editor() {
+  const ids = new Map(), listeners = {}, frames = new Map(), writes = [], observers = [];
+  let frame = 0, set = 'chase', profile = 'standard';
+  class El {
+    constructor(tag = 'div') { this.tagName = tag; this.children = []; this.attrs = {}; this.hidden = false; this.style = { removeProperty() {} }; this.isConnected = true; }
+    set id(v) { this._id = v; ids.set(v, this); } get id() { return this._id; }
+    setAttribute(k, v) { this.attrs[k] = v; } getAttribute(k) { return this.attrs[k] ?? null; }
+    hasAttribute(k) { return k in this.attrs; } removeAttribute(k) { delete this.attrs[k]; }
+    appendChild(e) { this.children.push(e); e.parentNode = this; return e; }
+    insertBefore(e) { return this.appendChild(e); }
+    contains(e) { return this === e || this.children.some(c => c.contains(e)); }
+    closest(sel) { return sel === '#piece' && this.id === 'piece' ? this : null; }
+    getBoundingClientRect() { return { left: 10, top: 10, right: 30, bottom: 30, width: 20, height: 20 }; }
+    focus() { doc.activeElement = this; }
+  }
+  const body = new El(), doc = { body, createElement: tag => new El(tag), activeElement: null,
+    getElementById: id => ids.get(id), querySelector: sel => ids.get(sel.slice(1)), querySelectorAll: () => [],
+    addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); } };
+  for (const id of ['piece', 'pmsettings', 'pausemenu', 'pm-hud-details', 'pm-hud-details-sum', 'rotate-device']) { const e = new El(); e.id = id; body.appendChild(e); }
+  ids.get('rotate-device').setAttribute('aria-hidden', 'true');
+  const values = new Map();
+  const key = (sn = set, pn = profile) => sn + ':' + pn;
+  const get = (id, sn, pn) => ({ x: 0, y: 0, s: 100, ...values.get(key(sn, pn)) });
+  const layout = { ELEMENTS: [['piece', 'Piece', '#piece']], shown: () => set, profile: () => profile, get,
+    set(id, v, sn, pn) { writes.push({ id, v: { ...v }, sn, pn }); values.set(key(sn, pn), { ...get(id, sn, pn), ...v }); }, resetEl() {} };
+  const ctx = { document: doc, window: { innerWidth: 1000, innerHeight: 500, addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); } },
+    HudLayout: layout, M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) }, Log: { info() {} },
+    requestAnimationFrame: fn => { frames.set(++frame, fn); return frame; }, cancelAnimationFrame: n => frames.delete(n),
+    MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} } };
+  vm.createContext(ctx); vm.runInContext(SRC.replace(/^const\b/gm, 'var'), ctx);
+  const api = ctx.HudArrange.create({ $: id => ids.get(id) });
+  const fire = (name, args = {}) => { const e = { target: ids.get('piece'), pointerId: 1, clientX: 100, clientY: 100, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, ...args }; for (const fn of listeners[name] || []) fn(e); };
+  const tick = () => { const todo = [...frames.values()]; frames.clear(); for (const fn of todo) fn(); };
+  return { api, fire, tick, writes, ids, frames, doc, get, observers, context(sn, pn = profile) { set = sn; profile = pn; for (const fn of observers) fn(); } };
+}
+
+test('editor: exit flushes the final drag once into its original camera/style and clears its frame', () => {
+  const e = editor(); e.api.setEditing(true);
+  e.fire('pointerdown'); e.fire('pointermove', { clientX: 200 });
+  e.context('cockpit', 'broadcast');
+  assert.equal(e.api.isEditing(), false);
+  assert.equal(e.writes.length, 1);
+  assert.equal(e.writes[0].sn, 'chase'); assert.equal(e.writes[0].pn, 'standard');
+  assert.equal(e.writes[0].v.x, 10); assert.equal(e.frames.size, 0);
+  e.tick(); assert.equal(e.writes.length, 1);
+});
+
+test('editor: lifting either pinch finger rebases the remaining drag without a position jump', () => {
+  for (const lifted of [1, 2]) {
+    const e = editor(); e.api.setEditing(true);
+    e.fire('pointerdown'); e.fire('pointerdown', { pointerId: 2, clientX: 200 });
+    e.fire('pointermove', { clientX: 130 });
+    e.fire('pointermove', { pointerId: 2, clientX: 260 });
+    e.fire('pointerup', { pointerId: lifted });
+    const remaining = lifted === 1 ? 2 : 1, x = remaining === 1 ? 130 : 260;
+    e.fire('pointermove', { pointerId: remaining, clientX: x + 10 }); e.tick();
+    assert.equal(e.writes.at(-1).v.x, 1);
+  }
+});
+
+test('editor: keyboard entry selects a readout, focuses the selector and moves with arrows', () => {
+  const e = editor(); e.api.setEditing(true);
+  assert.equal(e.api.selected(), 'piece'); assert.equal(e.doc.activeElement.id, 'hud-arrange-element');
+  e.fire('keydown', { key: 'ArrowRight', target: e.ids.get('hud-arrange-move') });
+  assert.equal(e.writes.at(-1).v.x, 1, "one press survives the layout store's integer snap");
+  e.fire('keydown', { key: 'ArrowDown', shiftKey: true, target: e.ids.get('hud-arrange-move') });
+  assert.equal(e.writes.at(-1).v.y, 5);
+  e.fire('keydown', { key: 'Escape' }); assert.equal(e.api.isEditing(), false);
+});
+
+test('editor: resize and rotation prompt end editing and preserve pending movement', () => {
+  for (const kind of ['resize', 'rotate']) {
+    const e = editor(); e.api.setEditing(true); e.fire('pointerdown'); e.fire('pointermove', { clientX: 150 });
+    if (kind === 'resize') e.fire('resize');
+    else { e.ids.get('rotate-device').setAttribute('aria-hidden', 'false'); for (const fn of e.observers) fn(); }
+    assert.equal(e.api.isEditing(), false); assert.equal(e.writes.at(-1).v.x, 5); assert.equal(e.frames.size, 0);
+  }
+});

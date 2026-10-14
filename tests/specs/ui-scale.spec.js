@@ -202,19 +202,43 @@ test.describe("UI scale", () => {
     });
   }
 
-  // OVERRIDDEN vs INHERITED, as the player sees it. The mechanism below proves
-  // the three axes are independent; this proves the screen SAYS SO. BUTTON SIZE
-  // is the one that needs it: unset it follows HUD SIZE, so "100%" and "100%,
-  // because it is tracking the slider above" render identically and a player
-  // cannot tell a value they chose from one they inherited. Unity's editor, VS
-  // Code and Google Workspace all answer this with a persistent override marker
-  // plus an in-context revert, and this is that pair.
-  //
-  // Driven through the actual button, not through __apex.btnScale(null): the
-  // store call is already covered below, and what could break here is the
-  // WIRING — a handler that never attached, or a click swallowed by the <label>
-  // the button sits inside (it calls preventDefault for exactly that reason).
-  test("BUTTON SIZE shows whether it is inherited, and hands itself back", async ({ page }) => {
+  test("race events and HUD changes keep touch buttons the same size", async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await boot(page);
+    await page.evaluate(() => { __apex.headless(true); __apex.race("monza"); });
+    await page.waitForFunction(() => __apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => { __apex.go(); __apex.jump(0.18, 60, 0); });
+    const sizes = () => page.evaluate(() => ["btn-brake", "btn-throttle", "btn-boost", "btn-ot", "btn-aero"].map(id => {
+      const r = document.getElementById(id).getBoundingClientRect();
+      return [id, r.width, r.height];
+    }));
+    await page.waitForFunction(() => document.getElementById("btn-brake").getBoundingClientRect().width > 0, null, { polling: 100 });
+    const before = await sizes();
+    for (const scale of [70, 150, 200, 100]) {
+      await page.evaluate(pct => {
+        __apex.hudScale(pct);
+        for (const id of ["rel", "strat", "inputs"]) HudElements.set(id, true);
+        if (__apex.damage) __apex.damage(null, { long: 1, lat: .6, sev: .9 });
+        __apex.camera(pct === 150 ? "helmet" : "chase");
+        for (let i = 0; i < 4; i++) { GameHud.invalidateFit(); __apex.jump(.18, 60, 0); }
+        for (const id of ["hud-flag", "hud-limits", "announce"]) document.getElementById(id).hidden = false;
+        GameHud.invalidateFit();
+      }, scale);
+      await page.waitForFunction(() => typeof HudLayout !== "undefined", null, { polling: 100 });
+      const after = await sizes();
+      for (let i = 0; i < after.length; i++) {
+        expect(before[i][1], "control was visible at baseline").toBeGreaterThan(0);
+        expect(Math.abs(after[i][1] - before[i][1]), after[i][0] + " width at HUD " + scale).toBeLessThan(.5);
+        expect(Math.abs(after[i][2] - before[i][2]), after[i][0] + " height at HUD " + scale).toBeLessThan(.5);
+      }
+    }
+    await page.evaluate(() => __apex.btnScale(80));
+    const smaller = await sizes();
+    expect(smaller[0][1]).toBeLessThan(before[0][1]);
+  });
+
+  // Reset restores the independent button default, even after HUD SIZE changes.
+  test("BUTTON SIZE uses its own default and can be reset", async ({ page }) => {
     await boot(page);
     const state = () => page.evaluate(() => {
       const rev = document.getElementById("pm-btnscale-r");
@@ -230,19 +254,12 @@ test.describe("UI scale", () => {
       };
     });
 
-    // THIS BLOCK IS hasTouch, so `(pointer: coarse)` applies and an UNSET dock is
-    // --hud-scale x 1.25, not x 1 (css/tokens.css: the buttons carry their own
-    // physical-size floor, the readouts do not get a blanket bump). 120 -> 150.
-    //
-    // Asserted FIELD BY FIELD rather than with toEqual on the object, because
-    // these messages are the only thing that survives the reporter — a deep
-    // -equality failure prints "Received + 1" and truncates the contents, which
-    // is the same lesson the clash dumps in hud-layout.spec.js carry.
+    // Touch defaults to 125%, independently of the readout scale.
     await page.evaluate(() => { window.__apex.hudScale(120); window.__apex.btnScale(null); });
     let st = await state();
     expect(st.over, "unset: no override marker").toBe(false);
     expect(st.revertShown, "unset: no revert button").toBe(false);
-    expect(st.btn, "unset: follows HUD SIZE x the coarse ratio").toBe(150);
+    expect(st.btn, "unset: independent touch default").toBe(125);
 
     await page.evaluate(() => window.__apex.btnScale(60));
     st = await state();
@@ -259,14 +276,13 @@ test.describe("UI scale", () => {
     // range input and move the very slider it was meant to reset.
     await page.evaluate(() => document.getElementById("pm-btnscale-r").click());
     st = await state();
-    expect(st.btn, "the revert hands the dock back to HUD SIZE").toBe(150);
+    expect(st.btn, "revert restores the independent touch default").toBe(125);
     expect(st.over, "and clears its own marker").toBe(false);
     expect(st.revertShown, "and hides itself").toBe(false);
 
-    // And it is a real revert to INHERITED, not a snap to a constant: moving the
-    // HUD must now carry the dock again.
+    // A later HUD change must leave the reset button size alone.
     await page.evaluate(() => window.__apex.hudScale(90));
-    expect((await state()).btn, "after reverting, the dock follows the HUD once more").toBe(112.5);
+    expect((await state()).btn, "HUD changes leave the button default unchanged").toBe(125);
   });
 
   // The mechanism itself. If these two ever start moving together the sliders
@@ -288,32 +304,19 @@ test.describe("UI scale", () => {
     await page.evaluate(() => window.__apex.hudScale(90));
     expect(await read(), "moving the HUD must not move the UI").toEqual({ ui: "1.5", hud: "0.9" });
 
-    // BUTTON SIZE is the third axis, and its default is not a number: unset, it
-    // FOLLOWS the HUD (css/tokens.css declares --hud-btn-scale: var(--hud-scale)),
-    // because the dock and the readouts used to share one knob and an untouched
-    // slider must be byte-identical to that. Once set it is independent — which
-    // is the whole point: shrinking the pedals is how a player buys the readouts
-    // room back on a phone.
-    // Resolved percentage, not the raw custom property: unset it is a calc()
-    // token that computed-value time does not reduce (see the sibling test).
+    // Buttons are a third independent axis, with a fixed 125% touch default.
     const btn = () => page.evaluate(() => window.__apex.btnScale().pct);
-    // FOLLOWS, not EQUALS. This block runs hasTouch, so `(pointer: coarse)`
-    // applies and an unset dock is --hud-scale x 1.25: the buttons carry their
-    // own physical-size floor (~15mm per XAG 107) while the readouts are left
-    // DPI-correct rather than bumped. Before 2026-09-14 the ratio was 1.4536 on
-    // top of a --hud-scale of 1.24, which put ~34mm pedals on the minimap; these
-    // numbers move with that ratio and are not a property of "following".
     await page.evaluate(() => window.__apex.btnScale(null));
-    expect(await btn(), "unset, the dock follows the HUD").toBe(112.5);
+    expect(await btn(), "unset, independent touch default").toBe(125);
     await page.evaluate(() => window.__apex.hudScale(120));
-    expect(await btn(), "and keeps following it").toBe(150);
+    expect(await btn(), "HUD changes leave default buttons unchanged").toBe(125);
     await page.evaluate(() => window.__apex.btnScale(60));
     expect(await btn(), "set, it is its own axis").toBe(60);
     expect(await read(), "and moving it must not move the HUD").toEqual({ ui: "1.5", hud: "1.2" });
     await page.evaluate(() => window.__apex.hudScale(90));
     expect(await btn(), "nor does the HUD move it back").toBe(60);
     await page.evaluate(() => window.__apex.btnScale(null));
-    expect(await btn(), "null hands the dock back to the HUD").toBe(112.5);
+    expect(await btn(), "null restores the button default").toBe(125);
 
     // Out of range clamps rather than throwing — a stored value from an older
     // build with a wider range must not be able to produce a 4x interface.

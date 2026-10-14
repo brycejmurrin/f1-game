@@ -118,7 +118,7 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
   assert.equal(decl(ov, "#hud-restore", "height"), "var(--tap)", "#hud-restore rides the --tap ladder");
   const hudCss = css("css/hud.css");
   assert.equal(decl(hudCss, ":root", "--tap-hud"), "calc(var(--tap) * var(--hud-btn-z))");
-  assert.match(decl(hudCss, ":root", "--hud-btn-z"), /^max\(1, /, "the HUD zoom can grow the buttons, never shrink them");
+  assert.equal(decl(hudCss, ":root", "--hud-btn-z"), "clamp(1, var(--hud-btn-scale, 1), 1.5)", "camera and pause use button size independently of HUD size");
 });
 
 test("buttons-mode modifier taps ride the hold rung like pedals and steer", () => {
@@ -193,14 +193,8 @@ test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, an
   // Against what the dock actually paints at: BUTTON SIZE floored at 1 (the tap
   // floor in css/touch-controls.css), or a cap between BUTTON SIZE and 1 is dropped.
   assert.match(hud, /set\("--hud-z-dock", capDock, Math\.max\(btnFloor, btnScale\)\)/, "the dock cap is judged against the floored BUTTON SIZE (--hud-btn-floor, the 44px rung)");
-  // FALLS BACK TO HUD SIZE TIMES THE COARSE RATIO, not to HUD SIZE. Unset, the
-  // dock is `calc(var(--hud-scale) * var(--hud-btn-mult))` — and calc() inside a
-  // custom property is never reduced, so the token reads back as a literal
-  // string and coerces to NaN. A bare `|| scale` therefore sized the cap 25%
-  // small on every touch device from the moment the ratio stopped being 1.
-  assert.match(hud, /getPropertyValue\("--hud-btn-scale"\) \|\| scale \* mult/,
-    "and falls back to HUD SIZE times the button ratio while unset");
-  assert.match(hud, /--hud-btn-mult/, "resolved from the ratio token, not by parsing calc()");
+  assert.match(hud, /getPropertyValue\("--hud-btn-scale"\) \|\| mult/,
+    "unset controls use a fixed default independent of HUD size");
   const capTilt = (H - 3 * air) / tallestTilt;
   assert.ok(capTilt >= 2, `tilt/manual cap (${capTilt.toFixed(2)}) only bites past 200 % on 390px — the raw slider fits every setting`);
   const capButtons = (H - 3 * air) / tallestButtons;

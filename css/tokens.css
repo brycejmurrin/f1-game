@@ -811,15 +811,8 @@ body:not(.desktop) {
    1.25 * 1.6 = 2x. Wide/tall screens continue to consume --ui-scale directly. */
 :root {
   --ui-scale: 1; --hud-scale: 1;
-  /* BUTTON SIZE is a THIRD knob on the same layer as HUD SIZE, and it defaults
-     to it: the touch dock and the readouts compete for the same edges, but a
-     thumb and an eye do not want the same answer — a player who needs big
-     pedals does not necessarily want a big lap counter, and shrinking the dock
-     is the cheapest way to buy the HUD room back. Declared as a REFERENCE
-     rather than a literal 1 so an untouched slider is byte-identical to the
-     old behaviour; js/ui/scale.js only writes an inline value once the player
-     moves it, exactly as the other two do. */
-  --hud-btn-scale: var(--hud-scale);
+  /* Independent control scale; touch has a fixed larger default below. */
+  --hud-btn-scale: 1;
   /* TOUCH BUTTON OPACITY (XAG 104 asks for an adjustable 0-100 % backing behind
      anything read over live gameplay). 1 = unchanged, so an untouched slider
      costs nothing; js/ui/scale.js only sets the property once the player moves
@@ -878,23 +871,16 @@ body:not(.desktop) {
    --ui-scale stays 1.09. It is menus only, nothing there overlaps at any scale
    this ships, and moving it would be a look change with no defect behind it.
 
-   BUTTON SIZE stays a RATIO of --hud-scale, not an absolute, so moving HUD SIZE
-   still carries the buttons with it the way an unset BUTTON SIZE always has.
+   BUTTON SIZE has its own fixed touch default; HUD SIZE never moves it.
    scaleDefault()/scaleDefaultFor() in js/ui/scale.js mirror these numbers under
    the same query, so first paint and the first JS write agree (the note above);
    tests/unit/scale-defaults.test.mjs holds the two in lockstep. */
 @media (pointer: coarse) {
-  /* --hud-btn-mult is the ratio as a PLAIN NUMBER, and it exists because
-     `calc()` inside a custom property is NOT reduced at computed-value time: a
-     custom property is an untyped token list, so getPropertyValue here returns
-     the literal string "calc(0.9 * 1.25)" and `+value` is NaN. js/ui/hud.js
-     coerces this token to size the dock cap, and while the ratio was a bare
-     `var(--hud-scale)` that happened to work. Publish the factor separately so
-     the unset case stays resolvable in JS as scale * mult. */
+  /* Fixed touch-control default; HUD SIZE does not move this axis. */
   :root {
     --ui-scale: 1.09; --hud-scale: 1;
     --hud-btn-mult: 1.25;
-    --hud-btn-scale: calc(var(--hud-scale) * var(--hud-btn-mult));
+    --hud-btn-scale: var(--hud-btn-mult);
   }
 }
 

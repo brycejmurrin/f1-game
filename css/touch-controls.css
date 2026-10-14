@@ -428,14 +428,9 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   body:not(.desktop) .dock,
   body.desktop .dock:has(.touchbtn:not([hidden])) {
     display: flex; gap: calc(var(--gap) * 2 / 3);
-    /* wrap-reverse so an overflowing dock grows UPWARD into empty sky rather
-       than pushing the bottom row off the screen. */
-    flex-wrap: wrap-reverse;
-    /* flex-START, and it means the BOTTOM. wrap-reverse inverts the cross axis,
-       so `flex-end` here resolves to visually top — which is what left the
-       three tap buttons hovering ~100px above the shift column instead of
-       sitting level with it. The two properties have to be read together. */
-    align-items: flex-start;
+    /* Control groups keep a stable row and thumb baseline; HUD content cannot wrap them. */
+    flex-wrap: nowrap; flex-shrink: 0;
+    align-items: flex-end;
     pointer-events: auto;
   }
   body:not(.desktop) #dock-right,
@@ -470,26 +465,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      The two sizes are VARIABLES because the alignment rule below has to do
      arithmetic on them; as literals repeated in two media queries they went
      stale the moment either one moved. */
-  /* --hud-btn-scale, the dock's OWN slider (BUTTON SIZE, css/tokens.css). The
-     dock is a control rather than a readout, and it competes with the HUD for
-     the same edges — which is precisely why the two stopped sharing one knob:
-     shrinking the buttons is how a player buys the readouts room back, and one
-     slider could only trade them for the whole screen at once. It DEFAULTS to
-     --hud-scale, so a player who never touches it sees no change at all. */
-  /* max() on the HUD axis: these local values SHADOW the global floored
-     --tap for the whole dock subtree, and the dock zooms by the RAW
-     --hud-scale (not the capped --hud-z) — so the bare 54px painted
-     BOOST/OT/AERO at 21.6px at HUD SIZE 40%, under the 24px WCAG floor for
-     every setting below ~44.5%. Dividing by --hud-scale (the dock's own
-     axis, NOT --ui-scale) keeps the painted floor at 24px; at >=100% the
-     literals win and nothing moves. The only tap targets inside any
-     HUD-zoom subtree (2026-08 axis audit). */
-  /* THE PLAYER'S SLIDER CANNOT SHRINK THE DOCK: BUTTON SIZE (and HUD SIZE,
-     which it follows while unset) only GROWS the buttons — max(1, …) is the
-     same floor css/hud.css puts on --hud-btn-z for CAM/PAUSE, so the 54/72px
-     literals below never paint under 44px (WCAG 2.5.5) from a setting. Only
-     fitHud's --hud-z-dock cap may still go under 1, because a dock that does
-     not fit the screen loses BRAKE off the edge, which is worse. */
+  /* BUTTON SIZE is independent of readout scale. Only viewport limits cap
+     the control groups; race messages and optional panels adapt around them. */
   body:not(.desktop) .dock,
   body.desktop .dock:has(.touchbtn:not([hidden])) {
     --tap: max(54px, calc(24px / max(1, var(--hud-btn-scale))));
@@ -579,7 +556,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
       --hold: max(64px, calc(24px / max(1, var(--hud-btn-scale))));
     }
     body:not(.desktop) .dock .touchbtn,
-    body.desktop .dock .touchbtn { font-size: var(--fs-micro); }
+    body.desktop .dock .touchbtn { font-size: min(var(--fs-micro), calc(var(--tap) * 0.28)); }
     body:not(.desktop) .dock .pedal,
     body:not(.desktop) .dock .steerbtn,
     body:not(.desktop) .dock .shiftbtn,
