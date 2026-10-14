@@ -1,1 +1,1 @@
-1791983603	Cursor Agent	Handling: trail-brake #1721 marked READY — watching full-tier CI; no arm/merge  [cursor/trail-brake-turnin-a8e9; session 473fdce82ca84dafc9f9af98]
+1791984557	Cursor Agent	Handling: trail-brake #1721 READY but CONFLICTING — wait full CI tip then sync-pr  [cursor/trail-brake-turnin-a8e9; session 473fdce82ca84dafc9f9af98]
