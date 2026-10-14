@@ -705,7 +705,10 @@ function announceLaneTick(root, force) {
   announceLane(root);
 }
 function radioTopSlot(root, bcast) {
-  const t = !bcast && _hudTop ? _hudTop.getBoundingClientRect() : null;
+  // Every profile, including BROADCAST: `!bcast` used to skip the tower and
+  // leave the leftover 14svh #announce home in place.
+  const t = _hudTop ? _hudTop.getBoundingClientRect() : null;
+  void bcast;
   announceLane(root);
   if (radioPlaced()) { hToggle(document.body, "hud-radio-top", false); document.body.removeAttribute("data-radio-corner"); return; }
   let right = window.innerWidth - 10;
