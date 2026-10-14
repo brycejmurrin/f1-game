@@ -487,16 +487,32 @@ const CareerBackup = (function () {
   }
 
   // A standalone season further along than the backup's (a later round, or
-  // more points at the same round) is newer progress: keep it.
+  // more points at the same round) is newer progress: keep it. Qualifying moves
+  // neither round nor points, so at a tie a completed local grid the backup
+  // lacks is newer progress too (#1788) — but only within the same championship
+  // (same seed, else same calendar): another season's grid says nothing about
+  // this one's.
   function seasonPts(sz) {
     let n = 0;
     if (isObj(sz.pts)) for (const k of Object.keys(sz.pts)) n += Number.isFinite(sz.pts[k]) ? sz.pts[k] : 0;
     return n;
   }
+  function hasQualifying(sz) {
+    if (!Array.isArray(sz.qualiOrder) || !sz.qualiOrder.length) return false;
+    try { cleanQualifying(sz, {}); return true; } catch (_) { return false; }
+  }
+  function sameChampionship(a, b) {
+    if (Number.isInteger(a.seed) && Number.isInteger(b.seed)) return a.seed === b.seed;
+    const cal = (sz) => JSON.stringify(isObj(sz.config) && Array.isArray(sz.config.trackIds) ? sz.config.trackIds : null);
+    return cal(a) === cal(b);
+  }
   function seasonAhead(local, incoming) {
     if (!isObj(local)) return false;
     const a = local.round | 0, b = incoming.round | 0;
-    return a !== b ? a > b : seasonPts(local) > seasonPts(incoming);
+    if (a !== b) return a > b;
+    const pa = seasonPts(local), pb = seasonPts(incoming);
+    if (pa !== pb) return pa > pb;
+    return sameChampionship(local, incoming) && hasQualifying(local) && !hasQualifying(incoming);
   }
 
   // Badges are earned once and never revoked: import is a UNION of the two

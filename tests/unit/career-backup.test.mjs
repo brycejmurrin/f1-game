@@ -1219,3 +1219,45 @@ test("C8: a restored standalone season re-arms SeasonCal, so its next save is no
   const res = h.SeasonCal.save(stale);
   assert.notEqual(res.reason, "conflict", "SeasonCal still holds the pre-import revision");
 });
+
+// #1788: qualifying moves neither round nor points, so a backup exported before
+// qualifying looked "level" with the local season and wiped the local grid.
+const QUALI = { qualiOrder: [{ id: "haas:0", t: 71.2, human: true }, { id: "haas:1", t: 72.4 }],
+  qualiTrack: "t0", qualiMode: "season", qualiSeat: "haas:0|haas" };
+const SEASON0 = (extra = {}) => ({ round: 0, pts: {}, teamPts: {}, driverCodes: {}, seed: 77,
+  config: { trackIds: ["t0", "t1"] }, ...extra });
+function restoreOver(local, backupSeason) {
+  const a = loadHarness();
+  a.store.set("season", backupSeason);
+  const text = a.CareerBackup.serialize(a.CareerBackup.build());
+  const b = loadHarness();
+  b.store.set("season", local);
+  const preview = JSON.stringify(b.CareerBackup.preview(JSON.parse(text)));
+  assert.equal(b.CareerBackup.apply(JSON.parse(text), { rawText: text }).ok, true);
+  return { season: b.SeasonCal.load(), preview };
+}
+
+test("restoring a pre-qualifying backup keeps qualifying completed locally since (#1788)", () => {
+  const { season, preview } = restoreOver(SEASON0(QUALI), SEASON0());
+  assert.deepEqual(JSON.parse(JSON.stringify(season.qualiOrder)), QUALI.qualiOrder, "local grid erased");
+  for (const k of ["qualiTrack", "qualiMode", "qualiSeat"]) assert.equal(season[k], QUALI[k], k);
+  assert.match(preview, /keep newer local progress/, "the preview says the local grid is kept");
+});
+
+test("a backup that carries qualifying itself still restores over a level local season", () => {
+  const theirs = { ...QUALI, qualiOrder: [{ id: "haas:1", t: 70.9 }, { id: "haas:0", t: 71.0, human: true }] };
+  const { season } = restoreOver(SEASON0(QUALI), SEASON0(theirs));
+  assert.equal(season.qualiOrder[0].id, "haas:1", "backup grid restored when both have one");
+});
+
+test("local qualifying from a DIFFERENT championship does not block the restore", () => {
+  const { season } = restoreOver(SEASON0({ ...QUALI, seed: 5 }), SEASON0({ seed: 9 }));
+  assert.equal(Object.hasOwn(season, "qualiOrder"), false, "another season's grid is not progress on this one");
+  assert.equal(season.seed, 9);
+});
+
+test("a backup further along still wins over local qualifying", () => {
+  const { season } = restoreOver(SEASON0(QUALI), SEASON0({ round: 1, pts: { "haas:0": 25 } }));
+  assert.equal(season.round, 1);
+  assert.equal(Object.hasOwn(season, "qualiOrder"), false);
+});
