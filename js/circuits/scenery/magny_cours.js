@@ -66,6 +66,9 @@
       hedge(0.64, 0.82, -1, 38, 3.4, [0.17, 0.35, 0.18]);
       // Right-side field edge as spaced bushes (avoids hedge self-coplanar).
       along(0.36, 0.50, 10, (k) => {
+        const s = k / n;
+        // Keep the ferme yard (s≈0.34) clear — silo cylinders were clipping bushes.
+        if (s > 0.31 && s < 0.39) return;
         bush(k, 1, 40 + hash(k) * 4, [0.15, 0.33, 0.16]);
       });
       // Field patches: keep worked-land colour, but shrink / push so neighbours
@@ -383,15 +386,22 @@
         along(s0, s1, opts.step || 8, (k, spacing) => {
           const a = anchor(k, side, gap);
           const b = [a.r, a.u, a.t], seg = spacing * 0.95;
+          const footAt = (back) => {
+            const foot = vadd(a.c, a.r, side * back);
+            const ty = terrainYAt(foot[0], foot[2]);
+            if (ty != null) foot[1] = Math.max(foot[1], ty);
+            return foot;
+          };
           out._mat = MAT.CONCRETE;
           for (let r = 0; r < rows; r++) {
             const back = r * depth, up = 0.6 + r * rise;
-            addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
+            const foot = footAt(back);
+            addBox(out, vadd(foot, a.u, up),
               [depth, rise + 0.2, seg], r & 1 ? [0.70, 0.70, 0.68] : [0.64, 0.64, 0.62], b);
             const h = hash(k * 29 + r * 7);
             if (h > 0.42) continue;
             out._mat = MAT.FABRIC;
-            addBox(out, vadd(vadd(vadd(a.c, a.r, side * back),
+            addBox(out, vadd(vadd(foot,
               a.t, (h - 0.21) * seg * 0.8), a.u, up + rise * 0.5 + 0.55),
               [0.55, 1.0, 0.6],
               h < 0.14 ? [0.24, 0.36, 0.66] : h < 0.28 ? [0.88, 0.88, 0.84] : [0.78, 0.30, 0.24], b);
@@ -399,25 +409,27 @@
           }
           out._mat = MAT.METAL;
           const backTop = rows * depth;
+          const roofFoot = footAt(backTop * 0.5);
           const roofY = 1.4 + rows * rise + 2.2;
           for (const f of [0.02, 0.98]) {
             const off = f * backTop;
-            addCyl(out, vadd(vadd(a.c, a.r, side * off), a.u, roofY * 0.5),
+            const leg = footAt(off);
+            addCyl(out, vadd(leg, a.u, roofY * 0.5),
               0.13, roofY, [0.60, 0.62, 0.66], 5, b);
           }
           // Tie beam across the legs — the "lattice truss" read.
-          addBox(out, vadd(vadd(a.c, a.r, side * backTop * 0.5), a.u, roofY - 0.5),
+          addBox(out, vadd(roofFoot, a.u, roofY - 0.5),
             [backTop * 1.05, 0.16, 0.16], [0.60, 0.62, 0.66], b);
           const bays = 6;
           for (let j = 0; j < bays; j++) {
             const f = (j + 0.5) / bays, cam = (1 - (f * 2 - 1) * (f * 2 - 1)) * R * 0.42;
-            addBox(out, vadd(vadd(a.c, a.r, side * (f * backTop * 1.06 - backTop * 0.03)),
-              a.u, roofY + cam),
+            const bayFoot = footAt(f * backTop * 1.06 - backTop * 0.03);
+            addBox(out, vadd(bayFoot, a.u, roofY + cam),
               [backTop * 1.06 / bays + 0.15, 0.28, seg],
               j & 1 ? [0.74, 0.76, 0.80] : [0.70, 0.72, 0.76], b);
           }
           // Blue eaves lip, the same trim as the pit vault and the sheds.
-          addBox(out, vadd(vadd(a.c, a.r, -side * backTop * 0.04), a.u, roofY - 0.2),
+          addBox(out, vadd(footAt(-side * backTop * 0.04), a.u, roofY - 0.2),
             [0.4, 0.5, seg], [0.24, 0.38, 0.62], b);
           out._mat = 0;
         });
@@ -486,11 +498,11 @@
           stage._mat = MAT.RUST;
           addPrism(stage, vadd(barn, a.u, 9), [14.4, 2.6, 14.4], [0.40, 0.34, 0.30], b);
           stage._mat = MAT.METAL;
-          const silo = vadd(vadd(a.c, a.r, -9), a.t, -14);
+          const silo = vadd(vadd(a.c, a.r, -12), a.t, -16);
           addCyl(stage, silo, 2.6, 13, [0.84, 0.84, 0.82], 10, b);
           addCone(stage, vadd(silo, a.u, 13), 2.9, 3, [0.56, 0.56, 0.58], 10, b);
           // A second, squatter silo and the open-sided implement shed beside it.
-          const silo2 = vadd(vadd(a.c, a.r, -9), a.t, -21);
+          const silo2 = vadd(vadd(a.c, a.r, -12), a.t, -23);
           addCyl(stage, silo2, 2.1, 9, [0.78, 0.78, 0.76], 10, b);
           addCone(stage, vadd(silo2, a.u, 9), 2.4, 2.2, [0.52, 0.52, 0.54], 10, b);
           addBox(stage, vadd(vadd(a.c, a.r, 10), a.u, 3.2), [10, 0.4, 20],
@@ -586,8 +598,9 @@
       // Split forestEdge so the ferme (s≈0.34 R) and Adelaide stands stay clear.
       forestEdge(0.10, 0.28, -1, 32, { density: 0.38, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
       forestEdge(0.10, 0.28, 1, 34, { density: 0.36, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
-      forestEdge(0.38, 0.50, -1, 32, { density: 0.36, hMin: 9, hMax: 15, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
-      forestEdge(0.38, 0.50, 1, 36, { density: 0.34, hMin: 9, hMax: 15, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
+      forestEdge(0.43, 0.50, -1, 32, { density: 0.36, hMin: 9, hMax: 15, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
+      // Start past the ferme (s≈0.34 R) so edge trees do not clip the silos.
+      forestEdge(0.42, 0.50, 1, 36, { density: 0.34, hMin: 9, hMax: 15, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
       forestEdge(0.62, 0.88, -1, 34, { density: 0.36, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
       forestEdge(0.62, 0.88, 1, 36, { density: 0.34, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
     };
