@@ -399,6 +399,40 @@ const CarDraw = (function () {
       }
       _hiResGrave.length = 0;
     }
+    // C-P3 (perf hunt 4): the idle slot only picked WHEN the 2048x2560 atlas uploaded — the upload itself
+    // (WGX copyExternalImageToTexture from a canvas, GLX/TLX texImage2D with UNPACK_FLIP_Y + PREMULTIPLY
+    // from a canvas) still blocked the main thread 45-100 ms once per race. Now the painted canvas goes
+    // through createImageBitmap(), which does the orientation / premultiply conversion as its own step
+    // and hands back a bitmap every backend's createTexture() uploads WITHOUT that conversion.
+    //   GLX   : WebGL ignores UNPACK_FLIP_Y_WEBGL / UNPACK_PREMULTIPLY_ALPHA_WEBGL for an ImageBitmap
+    //           source — the bitmap's own creation options apply instead (three's ImageBitmapLoader doc
+    //           says the same of Texture.flipY / premultiplyAlpha) — so GLX gets the flip BAKED IN.
+    //   TLX   : three flips in the copy (WebGPU: copyExternalImageToTexture flipY; WebGL: TextureNode's
+    //           uv flip for `image instanceof ImageBitmap && flipY`), so it gets an UNFLIPPED bitmap.
+    //   WGX   : copies with flipY:true itself, so it gets an UNFLIPPED bitmap too.
+    // Premultiply is baked for all three (a premultiplied source is copied as-is by WebGPU and ignored-
+    // flag by WebGL). GLX and WGX copy inside createTexture, so the bitmap is closed right after; three
+    // keeps texture.image (its flipY uniform tests the instance), so on TLX it stays until the texture
+    // is freed. Texel parity is the contract: tests/unit/livery-tier.test.mjs (APEX_LIVERY_PARITY=1) byte-diffs both paths in Chromium.
+    // apex26.liveryAsync=0 restores the synchronous canvas upload.
+    // Read per kick (one per race), so the knob needs no reboot and no boot-order dependency on the store.
+    function liveryAsyncOn() {
+      try { const v = G.store && G.store.get ? G.store.get("liveryAsync", 1) : 1; return !(v === 0 || v === "0" || v === false); } catch (_) { return true; }
+    }
+    function liveryBitmapOpts(backend) {
+      return backend === "three" || backend === "webgpu"
+        ? { premultiplyAlpha: "premultiply" }
+        : { imageOrientation: "flipY", premultiplyAlpha: "premultiply" };
+    }
+    // Promise<ImageBitmap> for the painted atlas, or null when the sync path must be taken.
+    function liveryBitmap(canvas) {
+      if (typeof createImageBitmap !== "function" || !liveryAsyncOn()) return null;
+      try {
+        const p = createImageBitmap(canvas, liveryBitmapOpts(G.gfx && G.gfx.backend));
+        return p && typeof p.then === "function" ? p : null;
+      } catch (_) { return null; }
+    }
+    function closeBitmap(b) { try { if (b && typeof b.close === "function") b.close(); } catch (_) { /* already closed */ } }
     function schedulePlayerHiRes(team, num, key) {
       if (typeof LiveryTex === "undefined" || !LiveryTex.playerHiResDeferred) return;
       if (!LiveryTex.playerHiResDeferred(!!LiveryTex.IS_MOBILE)) return;
@@ -407,15 +441,25 @@ const CarDraw = (function () {
       // slot can fire after the garage moved on, and building from the livery selected
       // THEN stored another livery's pixels under this key (A -> B -> A).
       const livery = deps.resolveLivery(team);
-      const kick = function () {
+      // Re-checked after every await: the idle slot and the bitmap can both land after the garage moved on.
+      const owns = () => _hiResPending.get(key) === kick   // dropped, maybe re-scheduled: the newer kick owns the key
+        && (key in _decalTexCache)                          // LRU / invalidate won the race
+        && decalKeyFor(team, num, true) === key;            // livery changed since: its next draw re-schedules
+      const done = () => { if (_hiResPending.get(key) === kick) _hiResPending.delete(key); };
+      const fail = (e) => {
+        _hiResFail.set(key, (_hiResFail.get(key) || 0) + 1);
+        Log.warn("gfx", "deferred hi-res decal atlas failed for " + key, e);
+        done();
+      };
+      // `src` is the bitmap (async path) or the canvas itself (sync path / a refused bitmap).
+      const finish = function (src, canvas) {
+        const bitmap = src !== canvas ? src : null;
+        let keep = false;
         try {
-          if (_hiResPending.get(key) !== kick) return;   // dropped, maybe re-scheduled: the newer kick owns the key
-          if (!(key in _decalTexCache)) return;   // LRU / invalidate won the race
-          if (decalKeyFor(team, num, true) !== key) return;   // livery changed since: its next draw re-schedules
-          if (!G.gfx || !G.gfx.createTexture) return;
-          const canvas = LiveryTex.buildAtlas(team.id, livery, num, true, true);
-          const next = crispPlayerDecal(G.gfx.createTexture(canvas));
+          if (!owns()) return;
+          const next = crispPlayerDecal(G.gfx.createTexture(src));
           if (!next) throw new Error("no texture");   // keep the preview rather than cache a null over it
+          keep = !!bitmap && G.gfx.backend === "three";   // three holds texture.image for the texture's life
           const prev = _decalTexCache[key];
           _decalTexCache[key] = next;
           _decalTexBytes[key] = atlasBytes(canvas);
@@ -424,10 +468,26 @@ const CarDraw = (function () {
           if (typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(next);
           trimDecalCache(key);   // the swap grew this key's bytes
         } catch (e) {
-          _hiResFail.set(key, (_hiResFail.get(key) || 0) + 1);
-          Log.warn("gfx", "deferred hi-res decal atlas failed for " + key, e);
+          fail(e);
         } finally {
-          if (_hiResPending.get(key) === kick) _hiResPending.delete(key);
+          if (bitmap && !keep) closeBitmap(bitmap);
+          done();
+        }
+      };
+      const kick = function () {
+        try {
+          if (!owns()) { done(); return; }
+          if (!G.gfx || !G.gfx.createTexture) { done(); return; }
+          const canvas = LiveryTex.buildAtlas(team.id, livery, num, true, true);
+          const bmp = liveryBitmap(canvas);
+          if (!bmp) { finish(canvas, canvas); return; }
+          // The kick keeps the key until finish(): a second draw must not schedule a twin.
+          bmp.then(function (b) { finish(b, canvas); }, function (e) {
+            Log.info("gfx", "livery bitmap refused, uploading the canvas: " + (e && e.message || e));
+            finish(canvas, canvas);
+          });
+        } catch (e) {
+          fail(e);
         }
       };
       _hiResPending.set(key, kick);
@@ -1139,21 +1199,24 @@ const CarDraw = (function () {
         camD2 = dx * dx + dy * dy + dz * dz;
       }
       // FIELD LOD: past FieldLod.T.WHEEL_EXTRAS_M (reference-lens metres: a
-      // long lens keeps them further out) a rival keeps its 4 rotating wheels
-      // only — no fixed layers, compound stripes or spin discs. The cut is the
-      // tier game.js kept on the car (c._lodTier, with FieldLod's hysteresis: the
-      // stateless test flipped these layers every frame at ~50 m); a car with no
-      // tier yet (FieldLod off, tests) takes the plain table.
+      // long lens keeps them further out) a rival drops spin discs but KEEPS
+      // the fixed disc/caliper layer and compound stripe so open rims do not
+      // read hollow (tier 1). Past NO_DECAL_M (tier 2) / bare (mirror) it is
+      // rotating wheels only. The cut is the tier game.js kept on the car
+      // (c._lodTier, with FieldLod's hysteresis); a car with no tier yet
+      // (FieldLod off, tests) takes the plain table.
       const lodT = c._lodTier, haveTier = FieldLod.on && (lodT === 0 || lodT === 1 || lodT === 2);
       const lite = bare || (!c.isPlayer && (haveTier ? lodT >= 1 : FieldLod.wheelsLite(camD2, G.lens && G.lens.fovY)));
-      const tyreCol = !lite && camD2 < 60 * 60 && c.tyre && c.tyre.colour ? c.tyre.colour : null;
+      // Drop fixed + compound only for bare (mirror) or far (tier 2). Lite
+      // (tier 1) keeps them — matches FieldLod.parts().fixedWheels / .compound.
+      const dropFixed = bare || (!c.isPlayer && haveTier && lodT >= 2);
+      const tyreCol = !dropFixed && c.tyre && c.tyre.colour
+        && (c.isPlayer || lite || camD2 < 60 * 60) ? c.tyre.colour : null;
       // SPIN BLUR (CarMesh.getSpinDisc): how far the rim turns THIS frame. Past
       // ~0.6 rad the spokes start to strobe, by 1.8 rad they alias outright, so
       // the disc fades in over that band. Per frame on purpose: a low frame
       // rate aliases sooner, and the blur has to cover what the display shows.
-      // Within 120 m of a rival; the player always. (At the 60-degree reference
-      // lens the 50 m wheel-extras cut already stops a rival's stripes and discs
-      // first; these 60 / 120 m gates only bite through a long lens.)
+      // Within 120 m of a rival; the player always. Lite (tier ≥ 1) drops it.
       const spinRate = (c.speed / PhysicsConsts.WHEEL_R) * dt;
       const blur = !lite && camD2 < 120 * 120 ? Math.min(1, Math.max(0, (Math.abs(spinRate) - 0.6) / 1.2)) : 0;
       // PAST THE RINGS (a rival beyond 40 m): one cheap additive flare per FRONT
@@ -1180,9 +1243,9 @@ const CarDraw = (function () {
         L[12] = wd.x + (wd.x < 0 ? -1 : 1) * ((ws - 1) * 0.16 + off); L[13] = wd.y + (wd.front ? flat : 0) + lift; L[14] = wd.z + (fwdOffset || 0); L[15] = 1;
         M4.mulTo(_wheelWorld, base, L);
         G.gfx.draw(wd.rear ? wm.R : wm.F, _wheelWorld, wo);
-        if (lite) {
-          // Past the LOD distance only the rotating wheel draws, but the far
-          // brake flare (40-240 m, Particles, outside the pool) is exactly this
+        if (dropFixed) {
+          // Bare (mirror) or far (tier 2): rotating wheel only. The far brake
+          // flare (40-240 m, Particles, outside the pool) is exactly this
           // range's cue, so it still fires here.
           if (flareA > 0 && wd.front) {
             const tx = (wd.x < 0 ? -1 : 1) * 0.19, W = _wheelWorld;
@@ -1420,13 +1483,15 @@ const CarDraw = (function () {
       drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, drawExhaustFx, glassState, drawMirrorCar,
       warmCarAssets, prepareMenuCarAssets, loadCarModel, buildCarData,
       setPlayerParts, invalidateCustomMeshCaches, invalidateFactoryMeshCaches,
-      WHEELS,
+      WHEELS, coOpt, liveryBitmapOpts,
       get modelBuf() { return carModelBuf; },
       get playerVisualKey() { return playerVisualKey; },
     });
   }
   // The live instance, for mirror-pass.js state().glass — game.js creates exactly one.
   let _instance = null;
-  return { create, carVisual, instance: () => _instance };
+  // A-H3 (perf hunt 4): game.js drawAeroFlaps routes the opaque flap bag through R1's seam exactly as the
+  // wheel layers do; before create() (or on a backend without gfx.coalesce) the bag comes back untouched.
+  return { create, carVisual, instance: () => _instance, coOpt: (o) => (_instance ? _instance.coOpt(o) : o) };
 })();
 Object.freeze(CarDraw);
