@@ -136,19 +136,45 @@
         }
       })();
 
+      // Musco-style luminaire head on top of a mast: a galvanised frame with a
+      // 2 x 3 grid of lamps facing the track. The shared mast's own lens is a
+      // 1.6 m box that vanishes at 40 m, so by day the poles read as dead trees.
+      // Every piece rests on the one below (ground-audit support chain).
+      const HEAD_FRAME = [0.58, 0.60, 0.63];
+      const lampHead = (k, side, gap, mastH) => {
+        const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
+        const toward = -side;
+        const top = vadd(a.c, a.u, mastH);
+        out._mat = MAT.METAL;
+        addCyl(out, vadd(top, a.u, 0.45), 0.28, 1.0, HEAD_FRAME, 6, b);
+        addBox(out, vadd(vadd(top, a.u, 1.65), a.r, toward * 0.2), [1.4, 0.4, 6.0], HEAD_FRAME, b);
+        addBox(out, vadd(top, a.u, 3.1), [0.4, 2.5, 5.6], HEAD_FRAME, b);
+        out._mat = 0;
+        for (const y of [2.375, 3.525]) {
+          for (const dz of [-1.85, 0, 1.85]) {
+            addBox(out, vadd(vadd(vadd(top, a.u, y), a.r, toward * 0.375), a.t, dz),
+              [0.35, 1.05, 1.6], FLOOD, b);
+          }
+        }
+      };
+
       // pool defaults OFF — a full-lap pool ring coplanared with crowdBank
       // (ground-audit). lightBank() opts.pool:true keeps the night-race washes.
+      // Returns true when a mast was emitted (the shared guard can drop it).
       const floodMast = (k, side, gap, h, opts) => {
         if (h && typeof h === "object") { opts = h; h = opts.h; }
         const mastH = (h != null ? h : 38 + hash(k * 13) * 6); // 38–44 m
         const wantPool = !!(opts && opts.pool);
         if (typeof apiFloodMast === "function") {
           // cool:true → flood_bank kind (floodmast-lamp-register).
+          const before = out.pos.length;
           apiFloodMast(k, side, gap, { h: mastH, cool: true, pool: wantPool, arms: 2 });
-          return;
+          if (out.pos.length === before) return false;
+          lampHead(k, side, gap, mastH);
+          return true;
         }
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
-        if (onTrack(a.c[0], a.c[2], 5)) return;
+        if (onTrack(a.c[0], a.c[2], 5)) return false;
         addCyl(out, a.c, 0.70, mastH, STEEL, 6, b);
         const top = vadd(a.c, a.u, mastH);
         for (const armOff of [-2.4, 2.4]) {
@@ -158,6 +184,7 @@
         }
         addBox(out, top, [1.6, 1.1, 5.2], [0.22, 0.22, 0.26], b);
         if (wantPool) addBox(out, vadd(a.c, a.u, 0.14), [10.0, 0.22, 10.0], POOL, b);
+        return true;
       };
 
       const duneWedge = (k, side, gap, w, h) => {
@@ -171,12 +198,11 @@
         });
       };
 
-      // ── Three-pole light bank (cluster of tall masts + night pools) ──────
+      // ── Light bank: one tall mast + its night pool. Three poles a few metres
+      // apart read as a dead copse by day (survey bc-cb8a7eff); the lamp head
+      // and the registered lens carry the bank on their own.
       const lightBank = (k, side, gap) => {
-        for (const off of [-6, 0, 6]) {
-          const kk = (k + off + n) % n;
-          floodMast(kk, side, gap, 36 + hash(kk * 3) * 6, { pool: true });
-        }
+        floodMast(k, side, gap, 36 + hash(k * 3) * 6, { pool: true });
       };
 
       const hospitality = (k, side, gap, w, h, d) => {
@@ -442,8 +468,6 @@
       }      // Inside of T1: access road + small pit buildings
       accessBox(K(0.03), -1, 36, 10, 6, 16);
       lightBank(K(0.06), 1, 36);
-      floodMast(K(0.05), 1, 32, 40);
-      floodMast(K(0.03), -1, 32, 38);
       billboard(K(0.07), -1, 10, 14, 4, [0.85, 0.12, 0.12]);
       billboard(K(0.08),  1, 10, 12, 3.5, [0.05, 0.45, 0.75]);
       billboard(K(0.10),  1, 11, 12, 4, [0.10, 0.30, 0.70]);
@@ -508,16 +532,8 @@
         }
       }
       billboard(K(0.15), 1, 11, 12, 4, [0.90, 0.55, 0.05]);
-      floodMast(K(0.16), 1, 34, 39);
-      // University / Turn-4 DRS straight: Musco forest is denser along this
-      // uphill than the 55 m ring alone reads (bahrain.gp University stand map).
+      // University / Turn-4 DRS straight (bahrain.gp University stand map).
       lightBank(K(0.185), 1, 28);
-
-      // Perimeter ring (below) owns lap density; keep a few corner heroes only.
-      // The left-hand hero sits at 0.195/18 m, not 0.20/30 m: the lap folds back
-      // on itself at 0.20-0.21, so 30 m inside that fold is on the tarmac of the
-      // next leg (rejBox dropped it every build).
-      floodMast(K(0.195), -1, 18, 40);
 
       // Per-wedge setbacks: the 0.11-0.14 and 0.37 legs run 80-140 m to the left
       // of this stretch, so a uniform 64 + 14 i put wedges 0, 1 and 4 on those
@@ -565,8 +581,6 @@
         { roof: "truss", suites: true, endWalls: true });
       grandstandEx(0.40,  1, 24, 48, null, null, { livery: "sandstone", roof: "flat" });
       grandstandEx(0.44,  1, 24, 56, null, null, { livery: "alu", roof: "cantilever", endWalls: true });
-      floodMast(K(0.42), 1, 34, 38);
-      floodMast(K(0.44), -1, 32, 37);
       tyreWall(0.405, 0.44, 1, 4, TYRE_CAP);
       fence(0.40, 0.46, -1, 7, 3.2, [0.70, 0.72, 0.76]);
       billboard(K(0.43), 1, 11, 12, 4, [0.05, 0.45, 0.75]);
@@ -646,8 +660,6 @@
       // Timing/control buildings: proper lit structures replacing bare `place()` cubes
       accessBox(K(0.62), -1, 36, 8, 5, 12);
       accessBox(K(0.65), -1, 32, 7, 4, 10);
-      floodMast(K(0.60),  1, 34, 39);
-      floodMast(K(0.66),  1, 32, 37);
 
       tyreWall(0.585, 0.62, 1, 4, TYRE_CAP);
       fence(0.58, 0.67, 1, 6, 3.2, [0.70, 0.72, 0.76]);
@@ -675,7 +687,6 @@
       fence(0.838, 0.88, 1, 8, 3.2, [0.70, 0.72, 0.76]);
       tyreWall(0.838, 0.88, 1, 8, TYRE_CAP);
       guardrail(0.73, 0.90, -1, 8, [0.80, 0.80, 0.82]);
-      floodMast(K(0.84),  1, 32, 39);
       floodMast(K(0.79), -1, 32, 38);
       lightBank(K(0.86), 1, 36);
       grandstandEx(0.86, 1, 32, 30, null, null, { livery: "steel", pylons: true });
@@ -721,73 +732,36 @@
       billboard(K(SF + 0.004), 1, 11, 13, 4, BILLBOARD_LITE);
       billboard(K(SF - 0.010), -1, 11, 12, 4, [0.10, 0.55, 0.30]);
 
+      // ── The lighting rig: one registered mast every 55 m ─────────────────
+      // These masts carry the night lamp budget (dressingExclusions drops the
+      // generic pass). The pit straight (final corner to T1) keeps both sides
+      // at 30 m, as before, with the 0.832 hairpin's inside mast moved to
+      // 0.822 / 20 m (no setback there clears the fold). Everywhere else one
+      // mast per pitch, alternating sides, 44 m out: a two-sided 30 m ring plus
+      // a 16 m silhouette infill ring (~370 bare poles) stood between every
+      // chase/orbit camera and the car (survey bc-cb8a7eff). A mast whose
+      // anchor lands on another leg's tarmac falls back to the other side.
       if (typeof every === "function") {
-        // The engine's floodMastRing(55, {dist: 30}) hand-rolled from the same
-        // every() pitch so three sites can move: at 0.114 R, 0.208 L and the
-        // 0.832 hairpin R the 30 m anchor is on the fold of the corner (2-5 m
-        // INTO the next leg) and rejBox dropped the mast every build. The first
-        // two pull in to 12/16 m (8-10 m clear); the hairpin inside has no room
-        // at any setback, so that mast stands at 0.822 / 20 m instead.
-        const RING = [[1, 0.110, 0.118, 12], [-1, 0.204, 0.212, 16], [1, 0.828, 0.836, 20, 0.822]];
+        const RING_GAP = 44, PIT0 = FC + 0.006;
+        let alt = 0;
         every(55, (k) => {
           const f = k / n;
-          for (const side of [-1, 1]) {
-            let dist = 30, kk = k;
-            for (const [rs, lo, hi, rd, rk] of RING) {
-              if (side === rs && f >= lo && f <= hi) { dist = rd; if (rk != null) kk = K(rk); }
+          if (f >= PIT0 && f <= T1F) {
+            for (const side of [-1, 1]) {
+              const hairpin = side === 1 && f >= 0.828;
+              floodMast(hairpin ? K(0.822) : k, side, hairpin ? 20 : 30, 39);
             }
-            floodMast(kk, side, dist, 39);
+            return;
+          }
+          const first = (alt++ % 2) ? 1 : -1;
+          for (const side of [first, -first]) {
+            const a = anchor(k, side, RING_GAP);
+            if (onTrack(a.c[0], a.c[2], 8)) continue;
+            if (floodMast(k, side, RING_GAP, 39)) break;
           }
         });
       } else if (typeof floodMastRing === "function") {
-        floodMastRing(55, { dist: 30, h: 39, cool: true, pool: false });
-      } else {
-        for (let k = 0; k < n; k += Math.max(1, Math.round(n / 18))) {
-          const side = hash(k * 9) < 0.5 ? -1 : 1;
-          const gap = 28 + hash(k * 11) * 18;
-          floodMast(k, side, gap, 36 + hash(k * 13) * 6);
-        }
-      }
-
-      // ── Infill pole ring: Sakhir's floodlighting is a FOREST, not a ring ──
-      // BIC's 2014 night-race installation (Musco Lighting) is ~495 poles
-      // carrying ~5,000 luminaires around the 5.4 km lap — roughly one pole per
-      // 22 m per side, standing close behind the catch fence. The 55 m ring
-      // above plus the banks were ~240 masts, under half that. This staggered
-      // second ring sits mid-pitch between them and closer in (16 m), shorter
-      // (30-33 m), with no ground pool and no registered light: the 55 m ring
-      // already carries the lamp budget and the pools, so this is silhouette
-      // only — the picket of poles a driver sees at night. Skipped where the
-      // pit complex / main stand own the verge, over the runoff paint, and
-      // wherever a single-point guard finds the next leg's tarmac.
-      if (typeof every === "function" && typeof apiFloodMast === "function") {
-        const half = Math.max(1, Math.round(27.5 / (ds || 4)));
-        // AUTHORED frame (`every` is the wrapped one: f = k/n is authored), so the
-        // pit/apron rows hang off SF/FC, never a racing fraction.
-        const SKIP = [
-          [-1, SF - 0.038, SF + 0.028],   // pit-side wall, main stands, tribuna (SF band)
-          [ 1, 0.975, 0.020],   // main grandstand at gap 18
-          [-1, 0.475, 0.560],   // blue runoff paint 9-17 m out
-          [ 1, FC - 0.044, FC + 0.006],   // pink final-corner apron paint (FC-0.038..FC+0.002)
-          [ 1, 0.105, 0.125],   // fold-side legs (ring exceptions above)
-          [-1, 0.195, 0.215],
-          [ 1, 0.815, 0.845],
-          [ 1, 0.680, 0.815],   // real pit straight: pit lane, garages, paddock
-          [-1, 0.690, 0.745],   // main + Victory-approach grandstands
-        ];
-        const skip = (f, side) => SKIP.some(([sd, lo, hi]) => sd === side &&
-          (lo <= hi ? (f >= lo && f <= hi) : (f >= lo || f <= hi)));
-        every(55, (k0) => {
-          const k = (k0 + half) % n, f = k / n;
-          for (const side of [-1, 1]) {
-            if (skip(f, side)) continue;
-            const a = anchor(k, side, 16);
-            if (onTrack(a.c[0], a.c[2], 7)) continue;
-            apiFloodMast(k, side, 16, {
-              h: 32 + hash(k * 17 + side) * 3, cool: true, pool: false, arms: 2, light: false,
-            });
-          }
-        });
+        floodMastRing(110, { dist: 44, h: 39, cool: true, pool: false });
       }
 
       fence(0.10, 0.16,  1, 7, 3.0, [0.70, 0.72, 0.76]);
@@ -832,76 +806,9 @@
         }
       }
 
-      // ── Sakhir identity runoff paint (aerial: blue triangles + final "Bahrain") ─
-      // Mid-sector: bright blue / light-blue geometric strips in the infield
-      // runoff (satellite signature). Final corner: red/pink apron bands.
-      {
-        const BLUE_A = [0.12, 0.42, 0.78];
-        const BLUE_B = [0.35, 0.68, 0.92];
-        const PINK_A = [0.82, 0.28, 0.42];
-        const PINK_B = [0.92, 0.55, 0.62];
-        // Paint slabs sit on the terrain, not on anchor(): that point is sunk
-        // 0.3 m (engine embed) and its basis follows the road's cross-slope,
-        // so the slabs' tops ended 0.07-0.10 m under the sand. Each slab is
-        // tilted to the plane through the terrain under its four corners and
-        // lifted by the worst residual, so its top clears the ground by `top`
-        // everywhere: base tops 2 x MIN_SEP (3 cm), the triangle overlay one
-        // MIN_SEP over its base. The slab deepens to reach the lowest point.
-        const SEP = 0.03;
-        const nrm = (v) => { const m = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / m, v[1] / m, v[2] / m]; };
-        const paint = (a, lat, top, sz, col) => {
-          const r0 = nrm([a.r[0], 0, a.r[2]]), t0 = nrm([a.t[0], 0, a.t[2]]);
-          const hx = sz[0] * 0.5, hz = sz[2] * 0.5;
-          const cx = a.c[0] + r0[0] * lat, cz = a.c[2] + r0[2] * lat;
-          const pts = [[0, 0], [-1, -1], [-1, 1], [1, -1], [1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]].map(([sx, st]) => {
-            const g = terrainYAt(cx + r0[0] * sx * hx + t0[0] * st * hz, cz + r0[2] * sx * hx + t0[2] * st * hz);
-            return [sx, st, g];
-          });
-          if (pts.some((q) => q[2] == null || !Number.isFinite(q[2]))) return;
-          const G = (sx, st) => pts.find((q) => q[0] === sx && q[1] === st)[2];
-          const gc = (G(-1, -1) + G(-1, 1) + G(1, -1) + G(1, 1)) / 4;
-          const dr = (G(1, -1) + G(1, 1) - G(-1, -1) - G(-1, 1)) / (4 * hx);
-          const dt = (G(-1, 1) + G(1, 1) - G(-1, -1) - G(1, -1)) / (4 * hz);
-          let rMax = -Infinity, rMin = Infinity;
-          for (const [sx, st, g] of pts) {
-            const res = g - (gc + dr * sx * hx + dt * st * hz);
-            rMax = Math.max(rMax, res); rMin = Math.min(rMin, res);
-          }
-          const r = nrm([r0[0], dr, r0[2]]), tf = nrm([t0[0], dt, t0[2]]);
-          let u = nrm([tf[1] * r[2] - tf[2] * r[1], tf[2] * r[0] - tf[0] * r[2], tf[0] * r[1] - tf[1] * r[0]]);
-          if (u[1] < 0) u = [-u[0], -u[1], -u[2]];
-          const t = nrm([r[1] * u[2] - r[2] * u[1], r[2] * u[0] - r[0] * u[2], r[0] * u[1] - r[1] * u[0]]);
-          const tt = (t[0] * t0[0] + t[2] * t0[2]) < 0 ? [-t[0], -t[1], -t[2]] : t;
-          const h = Math.max(sz[1], rMax - rMin + top + 0.1);
-          const yc = gc + rMax + top - h * 0.5 / u[1];
-          addBox(out, [cx, yc, cz], [sz[0], h, sz[2]], col, [r, u, tt]);
-          // The slab's top-centre frame, for an overlay that rides on it.
-          const y0 = yc + h * 0.5 * u[1];
-          return { c: [cx + u[0] * h * 0.5, y0, cz + u[2] * h * 0.5], r, u, t: tt };
-        };
-        // Overlay ON a paint slab: its own top one MIN_SEP above the slab's,
-        // flush in the slab's tilted plane (a separate terrain fit could cross it).
-        const overlay = (f, lat, sz, col) => {
-          const c = vadd(vadd(f.c, f.r, lat), f.u, SEP - sz[1] * 0.5);
-          addBox(out, c, sz, col, [f.r, f.u, f.t]);
-        };
-        for (let i = 0; i < 7; i++) {
-          const sf = 0.48 + i * 0.012;
-          const a = anchor(K(sf), -1, 14 + (i % 2) * 3);
-          if (onTrack(a.c[0], a.c[2], 8)) continue;
-          const f = paint(a, 0, 2 * SEP, [6.5, 0.18, 8.0], (i % 2) ? BLUE_A : BLUE_B);
-          // Triangular cue: tapered second slab offset laterally, kept inside
-          // the base slab's 3.25 m half-width so no edge overhangs the sand.
-          const w2 = 3.2 - i * 0.15;
-          if (f) overlay(f, Math.min(2.2, 3.25 - w2 * 0.5 - 0.05), [w2, 0.16, 5.5], (i % 2) ? BLUE_B : BLUE_A);
-        }
-        for (let i = 0; i < 6; i++) {
-          const sf = (FC - 0.038 + i * 0.008) % 1;
-          const a = anchor(K(sf), 1, 12 + (i % 2) * 2);
-          if (onTrack(a.c[0], a.c[2], 7)) continue;
-          paint(a, 0, 2 * SEP, [7.0, 0.18, 9.0], (i % 2) ? PINK_A : PINK_B);
-        }
-      }
+      // (The blue mid-sector runoff "triangles" and the pink final-corner apron
+      // bands lived here. As free-standing 7-9 m slabs on the sand they read as
+      // stray pink/cyan boxes (survey f75/f83), not painted runoff — removed.)
 
       for (const [s, side, dist, wBase, hBase] of [
         [0.20, -1, 120, 86, 10],   // T3 infield dune ridge
@@ -946,7 +853,7 @@
         }
         addBox(out, vadd(top, a.u, 3.1), [3.6, 0.5, 3.6], STAND_CREAM, b);  // cap slab
         out._mat = 0;
-        addBox(out, vadd(top, a.u, 1.5), [1.5, 1.3, 1.5], WIN_WARM, b);     // warm interior glow
+        addBox(out, vadd(top, a.u, 0.65), [1.5, 1.3, 1.5], WIN_WARM, b);    // warm interior glow, on the shaft top
       };
 
       const marquee = (k, side, gap, w, len) => {
@@ -1124,6 +1031,9 @@
             ];
             stage._mat = MAT.METAL;
             for (const lane of [-5.2, 5.2]) {
+              // Each lane's lamp column hangs on its own post, just behind it.
+              addBox(stage, vadd(vadd(vadd(st.c, st.r, lane), st.t, -0.45), st.u, 2.95),
+                [0.4, 5.9, 0.4], [0.20, 0.20, 0.22], stb);
               for (const [hgt, col] of LENS) {
                 addBox(stage, vadd(vadd(st.c, st.r, lane), st.u, hgt),
                   [0.62, 0.5, 0.5], col, stb);
@@ -1153,8 +1063,10 @@
           const p = pts[i], pb = [p.r, p.u, p.t];
           const fc = vadd(p.c, p.r, -18);
           if (onTrack(fc[0], fc[2], 24)) continue;
+          const gy = terrainYAt(fc[0], fc[2]);
+          if (gy != null && Number.isFinite(gy)) fc[1] = gy - 0.1;
           addCyl(out, fc, 0.55, 28, [0.72, 0.72, 0.74], 6, pb);
-          addBox(out, vadd(fc, p.u, 28.6), [4.4, 1.0, 1.6], FLOOD, pb);
+          addBox(out, vadd(fc, p.u, 28.5), [4.4, 1.0, 1.6], FLOOD, pb);
         }
       })();
 
@@ -1229,7 +1141,7 @@
           const foot = a.c.slice();
           if (gy != null && Number.isFinite(gy)) foot[1] = gy - 0.08;
           addBox(out, vadd(foot, a.u, h * 0.5), [w, h, d], TECH, b);
-          addBox(out, vadd(foot, a.u, h + 0.5), [w * 1.04, 0.3, d * 1.01], PIT_CREAM, b);
+          addBox(out, vadd(foot, a.u, h + 0.15), [w * 1.04, 0.3, d * 1.01], PIT_CREAM, b);
         }
         // No extra duneWedge here — existing berms already press the buried budget.
         for (let i = 0; i < 6; i++) {
