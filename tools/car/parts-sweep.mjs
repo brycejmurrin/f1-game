@@ -122,18 +122,19 @@ export function loadParts({ shade = false } = {}) {
 
 // The one way this whole sweep can lie in the direction that looks like a
 // catalog bug. Car3D memoises the flap solve on `aLvl + flapSig(style)`
-// (js/car/car3d.js), and flapSig hashes SIX named fields. This tool is the
-// first thing that ever builds ~430 aero styles in one process: a field the
-// solver reads but flapSig omits would let two different recipes share one
-// cached record, and the affected options would report as a FALSE INVISIBLE
-// that is indistinguishable from a real dead knob. So assert the two sets agree
-// before measuring anything. Source-scanned rather than probed because the
-// failure is a missing field, and only the text says which fields exist.
+// (js/car/car-body-geom.js; pure-moved from car3d), and flapSig hashes SIX
+// named fields. This tool is the first thing that ever builds ~430 aero
+// styles in one process: a field the solver reads but flapSig omits would let
+// two different recipes share one cached record, and the affected options
+// would report as a FALSE INVISIBLE that is indistinguishable from a real
+// dead knob. So assert the two sets agree before measuring anything.
+// Source-scanned rather than probed because the failure is a missing field,
+// and only the text says which fields exist.
 export function assertFlapSig(src) {
-  const s = src || fs.readFileSync(path.join(ROOT, "js/car/car3d.js"), "utf8");
+  const s = src || fs.readFileSync(path.join(ROOT, "js/car/car-body-geom.js"), "utf8");
   const cut = (from, to) => {
     const a = s.indexOf(from);
-    if (a < 0) throw new Error(`assertFlapSig: ${from} not found — car3d.js moved`);
+    if (a < 0) throw new Error(`assertFlapSig: ${from} not found — car-body-geom.js moved`);
     const b = s.indexOf(to, a);
     if (b < 0) throw new Error(`assertFlapSig: ${to} not found after ${from}`);
     return s.slice(a, b);
@@ -149,7 +150,7 @@ export function assertFlapSig(src) {
   if (missing.length)
     throw new Error("flapSig does not hash " + missing.join(",") +
       " — two aero recipes can share a cached flap solve, which this sweep " +
-      "would report as a false INVISIBLE. Add them to `flapSig` in js/car/car3d.js.");
+      "would report as a false INVISIBLE. Add them to `flapSig` in js/car/car-body-geom.js.");
   return { hashed: [...hashed].sort(), read: [...read].sort() };
 }
 
