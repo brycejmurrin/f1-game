@@ -101,7 +101,7 @@ const lazyBundles = LazyBundles.create({
     });
   },
 });
-const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
+const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
 // Stub AudioPanel (js/audio/stub.js) pulls the real LAZY_AUDIO bundle via this hook.
 if (typeof AudioPanel !== "undefined") AudioPanel._ensure = ensureAudio;
 const rendererBoot = RendererBoot.create({ $, els, canvas, ensureDataHub, loadBackendScripts });
@@ -2128,11 +2128,12 @@ function dropTrackWorld() {
 // Sentinel is race-start only (startRaceBody). Menu/flyby must not arm SENT_ACTIVE.
 function raceArmedSentinel() { return state === "race" || state === "count"; }
 async function loadTrackStepped(idx, live) {
-  // LAZY_CIRCUIT: path/pal/sectors land via ensureCircuit before any build.
-  // Callers (flyby / startRace / intro) already await ensureScenery (which
-  // chains ensureCircuit); this gate covers a direct stepped load and races
-  // the in-flight memo so a meta stub never reaches Tracks.buildPaced.
-  await ensureCircuit(idx);
+  // LAZY_CIRCUIT + LAZY_TRACK_BUILD: path/pal/sectors and the build toolkit land
+  // via ensureScenery before any build. Callers (flyby / startRace / intro)
+  // already await ensureScenery; these gates cover a direct stepped load and
+  // race the in-flight memos so a meta stub / missing TrackBuildProps never
+  // reaches Tracks.buildPaced.
+  await Promise.all([ensureCircuit(idx), ensureTrackBuild()]);
   if (!live()) return false;
   const def = Tracks.LIST[idx], sessionDark = sessionDarkFor(def), wantSlots = fieldSize();
   if (builtTrackId === def.id && builtTrackNight === sessionDark && builtGridSlots === wantSlots) { loadTrack(idx); return true; }

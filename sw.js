@@ -421,6 +421,19 @@ async function precacheAssetLists() {
     "js/race/start-lights.js",
     "js/race/marshal-panels.js",
     "js/race/flying-start.js",
+    // LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build
+    "js/track/scenery/models.js",
+    "js/track/scenery/themes.js",
+    "js/track/scenery/landmark-kit.js",
+    "js/track/scenery/circuit-kit.js",
+    "js/track/core/hidden-faces.js",
+    "js/track/scenery/nature.js",
+    "js/track/scenery/structures.js",
+    "js/track/scenery/city.js",
+    "js/track/scenery/identity.js",
+    "js/track/scenery/pits.js",
+    "js/track/scenery/venue.js",
+    "js/track/scenery/build-props.js",
     // LAZY_AUDIO — engine/panel/voice behind first sound gesture or race start
     "js/audio/signal.js",
     "js/audio/soundtrack.js",
@@ -664,7 +677,7 @@ self.addEventListener("install", (event) => {
     // The stamp is the deploy's CONTENT HASH where the shell's map names one
     // (stampKey above), so an unchanged file keeps its key across deploys.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-ui\.js$|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/build-worker\.js$|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-ui\.js$|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX went in `required` above; WGX is runtime-only (opt-in).

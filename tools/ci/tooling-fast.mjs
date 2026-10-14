@@ -343,6 +343,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // heights[]; sanitize pads missing heights to flat zeros. Pure VM, ~0.05 s.
   "tests/unit/elev-presets.test.mjs",
   "tests/unit/elevation-smoothness.test.mjs",
+  "tests/unit/engine-note-quality.test.mjs",
   // Engine rpm for net/replay puppets and finish coast (game.js updateCar early-outs). ~15 s.
   "tests/unit/engine-revs-replay-vm.test.mjs",
   // ...and the race engineer's ladder: it ADVISES and never arms a stop,
@@ -510,6 +511,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lap-format-rollover.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",
   "tests/unit/lazy-bundles-prefetch.test.mjs",
+  "tests/unit/lazy-track-build.test.mjs",
   // …and the PERIOD CAR reaching the garage SHEET, not just the team
   // record. Twelve legends share one `legends` id, so the write policy is
   // the behaviour: seed an empty sheet, reseed on a real switch, never on a
@@ -930,6 +932,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Wrap-aware arc buckets vs the O(n) updateCar traffic / slipstream / OT-ahead
   // walks (collide.js helper). Seeded 22-car old-vs-new characterization, no browser.
   "tests/unit/traffic-arc-buckets.test.mjs",
+  // Trail-brake turn-in: pedal + yaw damp scale by max(1, mods.braking) so
+  // shipped kits keep ≥0.6× coasting yaw (was −0.224). createGame×2 ~5 s.
+  "tests/unit/trail-brake-turnin.test.mjs",
   "tests/unit/tree-counts-catch.test.mjs",
   "tests/unit/trim-comments.test.mjs",
   // TUMFTM racetrack-database CSV → designer envelope (tools/track/tumftm-import.mjs).
