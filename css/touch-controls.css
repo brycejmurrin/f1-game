@@ -384,7 +384,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      motion, is the place they were smallest relative to the screen. Desktop
      keeps the base sizes; this is the touch notch they never had. */
   body:not(.desktop) .hud-box { padding: 5px 13px; }
-  body:not(.desktop) .hud-label { font-size: var(--fs-micro); }
+  /* max(): a painted floor of ~11px (the micro token over 1.27), so HUD SIZE 70% (9.8px labels) stays readable like the gap chip's 10px floor. */
+  body:not(.desktop) .hud-label { font-size: max(var(--fs-micro), calc(var(--fs-micro) / 1.27 / var(--hud-z, 1))); }
   body:not(.desktop) .hud-value { font-size: calc(22px * var(--hud-text-boost, 1)); }
   /* manual: keep everything on the right — shifts in the outer column, BOOST/OT
      in a second column just inboard (vertical space is too short to stack four).
@@ -620,15 +621,17 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   }
   /* Every margin here is a leftover from the old vertical stack, and in a grid
      each one is pure added height. */
-  #hud-ot { grid-area: ot; margin: 0; }
-  #hud-aero { grid-area: aero; margin: 0; }
+  /* stretch + centred text: centred max-content chips left ragged edges under GEAR
+     and the ERS bar (OT 309–391 under 296–403; visual review 2026-10-14). */
+  #hud-ot { grid-area: ot; margin: 0; justify-self: stretch; text-align: center; }
+  #hud-aero { grid-area: aero; margin: 0; justify-self: stretch; text-align: center; }
   #hud-gearbox { grid-area: gear; margin: 0; align-self: stretch; justify-content: center; min-width: max-content; }
   /* SPEED's line box was taller than the row the spanning gear left it, so the
      glyph painted through the whole ERS bar (852×393 chase: speed × energy
      65×15, the bar's full height). line-height 1 + an explicit min-height
      makes the row hold the digits; end/start pins each to its own edge of
      that row instead of centring one into the other. */
-  #hud-speed { grid-area: speed; line-height: 1; min-height: 1em; align-self: end; }
+  #hud-speed { grid-area: speed; line-height: 1; min-height: 1em; align-self: end; justify-self: start; }
   #hud-energy { grid-area: energy; margin: 0; align-self: start; min-width: max-content; }
   /* Helmet's shipped energy offset is a -6svh translate (393px tall → 24px).
      It stays on after the camera leaves the visor — chase has no data-hl and
@@ -663,7 +666,9 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
       grid-template-columns: max-content max-content minmax(80px, 190px) max-content max-content;
       grid-template-areas: "gear speed energy ot aero";
       gap: 0 20px;
+      align-items: center;   /* four different centres by eye (ERS 590, chips 602, GEAR 615, SPEED 628 at 1280) */
     }
+    body.desktop #hud-speed { align-self: center; }
     body.desktop #hud-gearbox {
       flex-direction: row; align-items: center; gap: var(--gap);
       padding: 7px 16px; align-self: center;
@@ -751,7 +756,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     body:not(.desktop) #hud-speed { font-size: calc(24px * var(--hud-text-boost, 1)); }
     body:not(.desktop) #hud-ot,
     body:not(.desktop) #hud-aero { font-size: var(--fs-micro); padding: calc(var(--gap) / 3) calc(var(--gap) * 2 / 3); }
-    body:not(.desktop) .hud-label { font-size: var(--fs-micro); }
+    body:not(.desktop) .hud-label { font-size: max(var(--fs-micro), calc(var(--fs-micro) / 1.27 / var(--hud-z, 1))); }
     body:not(.desktop) .hud-value { font-size: calc(20px * var(--hud-text-boost, 1)); }
   }
   /* touch: BRAKE left corner, BOOST/OT right corner */

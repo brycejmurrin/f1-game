@@ -234,10 +234,16 @@ function paintHudDelta(player, timeTrial) {
     : (typeof Ghost !== "undefined" && Ghost.hasGhost() ? Ghost : null);
   const ref = ghost || (_trace && _trace.has() && (player.lap | 0) >= 1 ? _trace : null);
   hData(box, "ref", ghost ? "ghost" : ref ? "best" : null);
-  // THE SLOT IS RESERVED, NOT REMOVED. A hidden DELTA that unhid after lap 1
-  // widened the centred tower by half a box mid-race, so every other readout
-  // jumped sideways. With no number yet the box keeps its place, invisible
-  // (data-pending -> visibility: hidden, css/hud.css).
+  // THE SLOT IS RESERVED ON DESKTOP, NOT REMOVED: a hidden DELTA that unhid
+  // after lap 1 widened the centred tower by half a box mid-race, so every
+  // other readout jumped sideways. With no number yet the plate keeps its
+  // place with only its value invisible (data-pending, css/hud.css), so the
+  // four live boxes read centred too. ON TOUCH the pending plate leaves the
+  // layout instead: its ~95px of top-band width capped the band at ~0.95 and
+  // dropped the gap chip under the tower on every phone (hud-mock
+  // 2026-10-14); the one re-centre at the first lap line costs less, and the
+  // paint below asks for a refit the moment the number lands (the fit key
+  // must not carry it: hud-fit-idempotent pins two fits as one).
   hHidden(box, false);
   // S4: before the first line crossing lapTime is the run-up clock (about 5.5 s
   // of it on a flying start), not the lap the ghost was recorded on.
@@ -246,10 +252,13 @@ function paintHudDelta(player, timeTrial) {
     hData(box, "pending", "");
     return;
   }
+  const wasPending = box.dataset ? box.dataset.pending != null : box.hasAttribute && box.hasAttribute("data-pending");
   hData(box, "pending", null);
+  if (wasPending && _invalidateFit && !document.body.classList.contains("desktop")) _invalidateFit();   // the touch tower just grew a box
   const delta = player.lapTime - ghostT;
-  hText(n, signedFixed(delta));
-  hData(box, "sign", delta <= 0 ? "fast" : "slow");
+  const deltaTxt = signedFixed(delta);
+  hText(n, deltaTxt);
+  hData(box, "sign", deltaTxt[0] === "-" || +deltaTxt === 0 ? "fast" : "slow");   // the ROUNDED sign, like the text
   // Practice / TT: the gaps strip already says GHOST — keep DELTA as the
   // glanceable centre-top number. Race: same chip, quieter label stays DELTA.
   void timeTrial;
@@ -404,7 +413,7 @@ const _gapFormShort = (arrow, code, t) => arrow + " " + t;
 // "+1.2s" in one box and "-1.2" in the other. Whole laps keep RELATIVE's own
 // spelling (slot 0 "+nL" = a lap up, slot 1 "-nL" = a lap down), so the two
 // never disagree.
-const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + "s";
+const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + (/\d/.test(t) ? "s" : "");   // "--" is not a number of seconds
 
 // THE HUD FITS ITSELF TO THE VIEWPORT.
 //
@@ -534,6 +543,9 @@ function layoutRect(el) {
 // card's rows and reaches past the slot's start ends the strip at its left
 // edge; one that already covers the start leaves no slot at all. Run after the
 // dock cap is written, so the groups are measured at the zoom they paint at.
+// KNOWN (2026-10-14): a 119px slot (iPad landscape) takes the card and wraps it
+// to four lines; hud-feel pins 134px as a slot and the fit's idempotence rides
+// on the slot decision, so the floor stays — a per-width minimum is the fix.
 const RADIO_TOP_MIN = 96, RADIO_TOP_GAP = 8;
 // THE DOCK LANE: where the top-row slot does not fit, the card hangs under the
 // tower. A long message at a centred max-width reached whichever dock sat
@@ -1563,6 +1575,19 @@ function fitHud() {
   // edge, then MOVE & SIZE grew/shifted .hud-top into the card (CI oversize:
   // .hud-top+#announce with hud-radio-top on notched-landscape buttons).
   if (els.hudSectors) void els.hudSectors.offsetHeight;
+  // THE CAUTION FLAG STEPS UNDER THE SECTOR PLATE ONLY WHEN THE PLATE REACHES ITS
+  // COLUMNS. The flag is centred and the plate right-anchored; a wide dock
+  // (BUTTON SIZE 200% on a 667px phone) pushes the plate past the flag's right
+  // edge. :root[data-flag-low] (css/hud.css) then takes the plate's bottom;
+  // otherwise the flag sits 44px under the tower, where a dropped gap strip
+  // ends — the old 74px literal paid for the plate on every phone (2026-10-14).
+  {
+    const sc = els.hudSectors && !els.hudSectors.hidden ? els.hudSectors.getBoundingClientRect() : null;
+    const fl = els.flag ? els.flag.getBoundingClientRect() : null;
+    const flagRight = fl && fl.width ? fl.right : vpW() / 2 + 80;
+    const low = !!(sc && sc.width && sc.left < flagRight + 8);
+    if (low !== ("flagLow" in root.dataset)) { if (low) root.dataset.flagLow = "1"; else delete root.dataset.flagLow; }
+  }
   radioTopSlot(root, bcast);
   announceLane(root);
   radioPaintedCollapse(root);   // terminal: nothing after it may re-run radioTopSlot (hud-metrics-layout.test)
@@ -1815,7 +1840,7 @@ function updateHud(force, dtMs) {
     const left = tyres.lapsLeft ? tyres.lapsLeft(player) : null;
     const bar = els.tyreFill && els.tyreFill.parentNode;
     if (bar && bar.dataset) {
-      const txt = left == null || spent >= 1 ? "" : "~" + Math.min(99, Math.round(left)) + "L";
+      const txt = left == null || spent >= 1 ? "" : left < 0.5 ? "<1L" : "~" + Math.min(99, Math.round(left)) + "L";
       if (bar.dataset.laps !== txt) bar.dataset.laps = txt;
     }
     // THE PIT CUE, and it replaces a button rather than decorating one. A stop
@@ -1842,8 +1867,13 @@ function updateHud(force, dtMs) {
         // The distance BAR under the words: a driver at 300 km/h reads a bar
         // faster than a number. `frac` is the cue's own fill, 0 → 1.
         hStyle(els.pitCue, "--pit-dist", clamp(c.frac || 0, 0, 1).toFixed(2));
-        // The arrow points to the PIT SIDE, which is the whole instruction.
-        hText(els.pitCueArrow, (pit.info(player) || {}).side === -1 ? "\u25C0" : "\u25B6");
+        // The arrow points where the car must GO: to the pit side on the way in,
+        // AWAY from the wall on the exit phases (merge / out / served pointed at
+        // the pit wall), nowhere for a missed box. The side is a property of the
+        // circuit, read once per track: pit.info() builds the whole cue object.
+        if (_pitSideTrack !== G.track) { _pitSideTrack = G.track; _pitSide = (pit.info(player) || {}).side === -1 ? -1 : 1; }
+        const exitPh = c.phase === "merge" || c.phase === "out" || c.phase === "served";
+        hText(els.pitCueArrow, c.phase === "missed" ? "" : (exitPh ? -_pitSide : _pitSide) === -1 ? "\u25C0" : "\u25B6");
       }
     }
     // WORK ON CAR: up for exactly as long as the car is stopped on the jacks
@@ -1884,11 +1914,14 @@ function updateHud(force, dtMs) {
   // that lap. The chip reads the allowance in MJ, the rule's own unit.
   const otMJ = typeof OvertakeMode !== "undefined" ? OvertakeMode.mj(player) : 0;
   const otHeld = otMJ > 0 && !player.otArmed && !(player.otT > 0);   // granted, paused (below OT_MIN_SPEED)
-  const ot = player.otT > 0 ? "ot-active" : player.otArmed || otHeld ? "ot-armed" : player.otEarned ? "ot-cool" : "ot-off";
-  hClass(els.ot, ot);
   const caution = G.cautionInfo ? G.cautionInfo() : null;
   const gateOpen = typeof G.otEnabled === "function" ? !!G.otEnabled() : true;
   const otOff = G.state === "race" && !gateOpen && !(player.otT > 0);
+  // The class follows the GATE like the text does: a held lap-0 grant (or one
+  // under a safety car) used to pulse the yellow "ready" plate while the text
+  // read OT · CAUTION and the button was disabled (bug hunt 2026-10-14 N2).
+  const ot = player.otT > 0 ? "ot-active" : otOff ? "ot-off" : player.otArmed || otHeld ? "ot-armed" : player.otEarned ? "ot-cool" : "ot-off";
+  hClass(els.ot, ot);
   const leader = G.ranked && G.ranked[0];
   let otReason = "";
   if (otOff) {
@@ -2044,7 +2077,9 @@ function updateHud(force, dtMs) {
       // split or delta under 10 s, so the row geometry does not move.
       const dHeld = _secDeltaT[i] > 0 && t != null;
       if (_secDeltaT[i] > 0) _secDeltaT[i] -= HUD_TICK_MS;
-      const num = dHeld ? (_secDelta[i] < 0 ? "" : "+") + _secDelta[i].toFixed(3) : t == null ? "" : t.toFixed(3);
+      // signedFixed: the sign from the ROUNDED delta (-0.0004 read "-0.000"); a split
+      // of a minute or more spells m:ss.mmm like the lap clock, not "75.123".
+      const num = dHeld ? signedFixed(_secDelta[i]) : t == null ? "" : t >= 60 && G.fmtTime ? G.fmtTime(t) : t.toFixed(3);
       hText(_secRows[i], t == null ? "--" : (sb ? "★" : pb ? "▼" : "▲") + num);
       _secPrevBest[i] = bests ? bests[i] : Infinity;   // the reference the NEXT crossing's delta is taken against
       // Timing-screen colours: purple session best, green personal best,
@@ -2387,6 +2422,7 @@ function invalidateMap() { minimapBg = null; }
 // Per-race HUD memory: the POS box compared its first ranked tick of a new race
 // against the LAST race's finishing position and flashed "down" at lights-out.
 // The race DELTA's best lap and the spoken HUD's baselines are per race too.
+let _pitSideTrack = null, _pitSide = 1;
 function resetRace() {
   _lastRank = 0; _posFlashT = 0; if (els.pos) delete els.pos.dataset.delta;
   _holdLap = 0; _holdPrev = 0; _holdOn = false; _secPrevBest = [Infinity, Infinity, Infinity]; _secDeltaT = [0, 0, 0];

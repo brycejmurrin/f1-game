@@ -294,6 +294,13 @@ test("fitRows is stable across frozen rechecks and releases its fit when control
   assert.equal(solved.left, "172.5px");
   assert.equal(solved.maxHeight, "74.0px");
   assert.equal(solved.hidden.filter(Boolean).length, 3, "outer occupied rows were dropped to clear the pedal");
+  // N1 (2026-10-14): the 10 Hz tick used to un-hide every occupied row while fitRows only ran on a key
+  // change or every 10th tick, so the dropped rows came back 9 ticks in 10 — a half-row over BRAKE
+  // flickering at 1 Hz. A tick between fits keeps the fit's drops.
+  for (let i = 0; i < 12; i++) {
+    R.tick(G, p);
+    assert.deepEqual(fit(), solved, "tick " + i + ": the rows fitRows dropped stay dropped between fits");
+  }
   for (let i = 0; i < 8; i++) {
     R.fitRows(); // syncPhoneFit's inner retries, with no intervening HUD tick
     assert.deepEqual(fit(), solved, "the same selected cars and controls produce the same solved fit");

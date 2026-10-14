@@ -209,7 +209,7 @@ test("PANEL OPACITY: the HUD plates read the effective token, and HIGH CONTRAST 
     const block = hud.slice(at, hud.indexOf("\n}", at + 1));
     assert.ok(block.includes(`rgb(8 8 14 / calc(${a} * var(--hud-panel-a-eff)))`), sel + " plate");
   }
-  assert.match(hud, /background: rgb\(8 8 14 \/ calc\(0\.55 \* var\(--hud-panel-a-eff\)\)\); padding: 1px 7px;/, ".hud-gaps plate");
+  assert.match(hud, /background: rgb\(8 8 14 \/ calc\(0\.55 \* var\(--hud-panel-a-eff\)\)\); padding: 3px 8px;/, ".hud-gaps plate");
   // Lights, flags and the OT/AERO fills are signals, not plates.
   const lights = hud.indexOf("\n#lights {");
   assert.ok(lights >= 0, "#lights block");
