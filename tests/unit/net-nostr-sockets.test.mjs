@@ -216,11 +216,55 @@ test("a guest that finds the offer late is not expired while it builds the answe
   const w = h.sockets[0];
   w.open();
   const sealed = await h.NetRendezvous.seal("ABCDEF", "OFFER", "offer");
-  w.onmessage({ data: JSON.stringify(["EVENT", "s1", { content: h.NetBytes.bytesToB64(sealed) }]) });
+  const now = Math.floor(Date.now() / 1000);
+  w.onmessage({ data: JSON.stringify(["EVENT", "s1", {
+    content: h.NetBytes.bytesToB64(sealed), created_at: now,
+  }]) });
   await new Promise((r) => setTimeout(r, 3300));      // past find window AND the reply
   assert.equal(replyDone, true, "precondition: the reply finished after the find window");
   assert.equal(res, null, "the exchange was not expired mid-reply");
   assert.ok(w.sent.some((f) => f.startsWith('["EVENT"')), "the answer reached the wire");
   token.cancelled = true;                              // tick() finishes it within a second
+  await p;
+});
+
+test("a replayed old offer is ignored; a fresh offer is still answered (created_at floor)", async () => {
+  // since is stripped (clock skew). Without a local floor a relay replaying an
+  // earlier host session's offer would be answered. hostStartedAt − ~30 s.
+  const h = boot();
+  let answered = 0;
+  const token = { cancelled: false };
+  const p = h.NetNostr.directExchange({
+    code: "ABCDEF", token,
+    reply: async () => { answered++; return "ANSWER"; },
+  });
+  await h.untilSockets(1);
+  const w = h.sockets[0];
+  w.open();
+  await h.tick();
+  const req = JSON.parse(w.sent[0]);
+  assert.equal(req[2].since, undefined, "since stays stripped");
+
+  const now = Math.floor(Date.now() / 1000);
+  const staleSealed = await h.NetRendezvous.seal("ABCDEF", "OLD-OFFER", "offer");
+  w.onmessage({ data: JSON.stringify(["EVENT", "s1", {
+    content: h.NetBytes.bytesToB64(staleSealed),
+    created_at: now - 3600,
+  }]) });
+  await h.tick();
+  await new Promise((r) => setTimeout(r, 80));
+  assert.equal(answered, 0, "stale offer must not be answered");
+  assert.ok(!w.sent.some((f) => f.startsWith('["EVENT"')), "no answer on the wire for stale");
+
+  const freshSealed = await h.NetRendezvous.seal("ABCDEF", "NEW-OFFER", "offer");
+  w.onmessage({ data: JSON.stringify(["EVENT", "s1", {
+    content: h.NetBytes.bytesToB64(freshSealed),
+    created_at: now,
+  }]) });
+  await h.tick();
+  await new Promise((r) => setTimeout(r, 80));
+  assert.equal(answered, 1, "fresh offer is answered");
+  assert.ok(w.sent.some((f) => f.startsWith('["EVENT"')), "answer published for fresh offer");
+  token.cancelled = true;
   await p;
 });

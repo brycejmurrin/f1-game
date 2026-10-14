@@ -565,7 +565,7 @@ function _applyRaceBody() {
   // tuner drag tick for the _APPLY_RACE_IDS knobs, and unconditionally
   // re-arming here kept pushing the strike 3-8 s away, so lightning never
   // fired while a sun/ambient slider was being dragged in the rain.
-  if (!(G._ltNextT > 0)) { G._ltFlash = 0; G._ltNextT = 3 + Math.random() * 5; }
+  if (!(G._ltNextT > 0)) { G._ltFlash = 0; G._ltNextT = 0; }   // a strike window opens at clock 0 — Storm.strikeIn is seeded, never Math.random (peers/replays agree)
   // Resolve the prop-emissive ramp NOW, not only on the next rendered frame:
   // stars/moon/ambient above land synchronously, and a read between a night→day
   // rebuild and the first day frame used to pair the day sky with the night's
