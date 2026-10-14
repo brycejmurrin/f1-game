@@ -213,7 +213,9 @@ const STRIP = {
   // → signature scenery + Parabolica camp/pines 336984/303329 (2026-10-06:
   //   tribuna/podium/canopy + Rank-C stonePine at Parabolica; camp grounded)
   // → marshalPost seat/pole brace (2026-10-07): +144 emitted / +118 survive
-  monza: { before: 337128, after: 303447 },
+  // → generic green-theme grey shed removed (2026-10-14): −480 emitted (40
+  //   sheds × 12); the guardrail/fence runs they enclosed survive, +716
+  monza: { before: 336648, after: 304163 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

@@ -72,11 +72,10 @@
   --balance-basis: calc(50% - 0.5em);
   --balance-min: calc(50% - 0.5em);
 }
-/* Rooms wrap from local space. Four visible doors (DATA / DESIGNER /
-   SETTINGS / HOW TO PLAY) sit on one row when the column holds them. */
+/* Rooms 2×2: 5.5rem squeezed DESIGNER/SETTINGS to ~100px (1440 live-home). */
 #menu-secondary {
-  --balance-basis: 5.5rem;
-  --balance-min: 5.5rem;
+  --balance-basis: calc(50% - 0.5em);
+  --balance-min: calc(50% - 0.5em);
 }
 /* The hero is the one button on the screen with two lines of text, so it centres
    its own stack rather than inheriting the single-line baseline the others use. */
@@ -370,6 +369,11 @@ html[data-home-live] :where(body[data-shape="wide"]) #overlay :is(#menu-hero, #m
 html[data-home-live] :where(body[data-shape="wide"]) #overlay :is(#menu-primary, #menu-explore) {
   --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap));
 }
+/* Desktop normal: icon beside label (block would stack and push rooms below fold). */
+html[data-home-live] :where(body[data-shape="wide"]:not([data-density="compact"])) #overlay :is(#menu-primary, #menu-explore) .bigbtn {
+  display: flex; align-items: center; justify-content: flex-start; gap: 0.45em;
+}
+html[data-home-live] :where(body[data-shape="wide"]:not([data-density="compact"])) #overlay :is(#menu-primary, #menu-explore) .bigbtn .btn-ico { flex: none; margin: 0; }
 html[data-home-live] :where(body[data-shape="tall"]) #overlay { grid-template-rows: auto minmax(0, 1fr); }
 html[data-home-live] :where(body[data-shape="tall"]) #overlay #menu-buttons {
   align-self: stretch; align-content: start; min-height: 0; max-height: 100%;

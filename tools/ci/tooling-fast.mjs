@@ -467,6 +467,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-portrait-cluster.test.mjs",
   "tests/unit/hud-readouts.test.mjs",
   "tests/unit/hud-relative.test.mjs",
+  "tests/unit/hud-speed-parity.test.mjs",
   "tests/unit/hud-strategy.test.mjs",
   "tests/unit/hud-survey.test.mjs",
   "tests/unit/hud-tyres.test.mjs",
@@ -912,6 +913,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tyre-model.test.mjs",
   // Front peak slip abscissa (CURVE_PEAK_X_F): 6–9° at CS_FRONT, rear path frozen.
   "tests/unit/tyre-peak-slip.test.mjs",
+  // Factory/sig tyre recipes after #1190 open rims: distinct geom + cover copy needs cover:1.
+  "tests/unit/tyre-recipes-open-rim.test.mjs",
   "tests/unit/ui-experience.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
@@ -960,6 +963,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // overshoot ≤12% at 61.1 m/s / ≤14% at 83.3 m/s; ≤50 m/s and lift-off
   // unchanged. createGame once, ~2.5 s.
   "tests/unit/yaw-damp-speed.test.mjs",
+  // Low-speed yaw/vLat substep (LOW_YAW_V=8): kills period-2 Δr chatter at
+  // 3–4 m/s full lock on pin + shipped seats; ≥8 m/s bit-identical. ~5 s.
+  "tests/unit/yaw-low-speed-substep.test.mjs",
   // @gen-test-groups:end
 ]);
 
