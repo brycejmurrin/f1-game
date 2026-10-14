@@ -1,1 +1,0 @@
-1791955516	Cursor Agent	perf(race-entry) warm frame: js/core/lazy-bundles.js js/ui/loading-screen.js (gate) startRaceBody warm order (~few lines js/game.js) tests/unit/{lazy-bundles*,loading-screen*,race-entry*} tests/data/ratchets.json if demanded  [cursor/race-entry-warm-frame-4f8b; session 9682c89908867a0a8a4b6410]
