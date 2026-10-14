@@ -371,6 +371,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The flaky policy behind APEX_FAIL_ON_FLAKY=1: quarantine rows are a ledger
   // (spec exists, owner, date, why) and the verdict is pure; < 1 s.
   "tests/unit/flaky-quarantine.test.mjs",
+  // fleet-board: the derived `claimed` label, the PR closing-keyword parse and the
+  // pinned board body, all pure; < 1 s. It guards the backlog's phone view.
+  "tests/unit/fleet-board.test.mjs",
   // The rendered flicker gate's metric (tools/lib/flicker-metric.mjs) on
   // synthetic frames, plus its site table: ~0.1 s, no browser. The gate itself
   // runs only in ci.yml's non-blocking flicker-gate job.
@@ -739,6 +742,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
   "tests/unit/results-cam.test.mjs",
   "tests/unit/rival-audio.test.mjs",
+  "tests/unit/rival-passby-pool.test.mjs",
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
   "tests/unit/road-lut-frame.test.mjs",

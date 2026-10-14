@@ -54,3 +54,7 @@ desktop/test-results/
 desktop/playwright-report/
 mobile/node_modules/
 mobile/www/
+
+# Obsidian vault settings (docs/ or the repo opened as a vault; docs/notes/SECOND-BRAIN-2026-10-14.md)
+.obsidian/
+.smart-env/
