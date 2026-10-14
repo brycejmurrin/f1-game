@@ -469,6 +469,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // insertAdjacentHTML writes a constant or is in the reasoned allowlist
   // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
   "tests/unit/html-sink-lint.test.mjs",
+  "tests/unit/hud-announce-lane-cache.test.mjs",
   "tests/unit/hud-control-clearance.test.mjs",
   "tests/unit/hud-dock-pack.test.mjs",
   "tests/unit/hud-elements.test.mjs",
@@ -488,6 +489,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-readouts.test.mjs",
   "tests/unit/hud-relative.test.mjs",
   "tests/unit/hud-speed-parity.test.mjs",
+  // phoneL broadcast @150%: announce/flag/LIMITS/TYRES/REL stack (queue item 1).
+  "tests/unit/hud-status-stack.test.mjs",
   "tests/unit/hud-strategy.test.mjs",
   "tests/unit/hud-survey.test.mjs",
   "tests/unit/hud-tyres.test.mjs",
