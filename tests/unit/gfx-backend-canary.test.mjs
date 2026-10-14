@@ -4078,7 +4078,8 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   // .test.mjs) around startRaceBody(), which still carries this whole flow.
   const sr = game.slice(game.indexOf("async function startRaceBody("), game.indexOf("function showTouchControls("));
   // Stepped since perf hunt 4 F3.3: awaited, then the stale check, then debris.
-  assert.match(sr, /await RaceEntryProfile\.spanAsync\("warmCarAssets", \(\) => warmCarAssetsAsync\([^\n]*\)\); if \(stale\(\)\) return false;\s*\n\s*RaceEntryProfile\.span\("debrisPrime"/,
+  // render() draws nothing while it runs (_carWarm.busy), so no frame builds the cars it has not reached.
+  assert.match(sr, /_carWarm\.busy = true;\s*\n\s*try \{ await RaceEntryProfile\.spanAsync\("warmCarAssets", \(\) => warmCarAssetsAsync\([^\n]*\)\); \} finally \{ _carWarm\.busy = false; \}\s*\n\s*if \(stale\(\)\) return false;\s*\n\s*RaceEntryProfile\.span\("debrisPrime"/,
     "startRace warms car assets right before DebrisWorld.prime()");
   // The warm-up and the decal atlas cache live in the car-draw seam (js/car/car-draw.js).
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
