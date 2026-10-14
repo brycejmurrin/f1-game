@@ -469,6 +469,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // insertAdjacentHTML writes a constant or is in the reasoned allowlist
   // (the 2026-09-24 stored XSS went through one). Pure source scan, ~1 s.
   "tests/unit/html-sink-lint.test.mjs",
+  "tests/unit/hud-announce-lane-cache.test.mjs",
   "tests/unit/hud-control-clearance.test.mjs",
   "tests/unit/hud-dock-pack.test.mjs",
   "tests/unit/hud-elements.test.mjs",
@@ -488,6 +489,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-readouts.test.mjs",
   "tests/unit/hud-relative.test.mjs",
   "tests/unit/hud-speed-parity.test.mjs",
+  // phoneL broadcast @150%: announce/flag/LIMITS/TYRES/REL stack (queue item 1).
+  "tests/unit/hud-status-stack.test.mjs",
   "tests/unit/hud-strategy.test.mjs",
   "tests/unit/hud-survey.test.mjs",
   "tests/unit/hud-tyres.test.mjs",
@@ -498,6 +501,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/import-models.test.mjs",
   "tests/unit/incident-gate.test.mjs",
   "tests/unit/incident-rpm.test.mjs",
+  // InputBindings factory alone (conflict claim, reset/isDefault, persistence,
+  // brand labels) — no input.js. Complements key-binds.test.mjs. ~0.1 s.
+  "tests/unit/input-bindings.test.mjs",
   "tests/unit/input-ghost.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
@@ -955,6 +961,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 5: camera tuner compact foot/preview/copy-from --tap-paint
   // floors (#camtune-inner only; lighting untouched).
   "tests/unit/ui-fit-camtune-tap-r5.test.mjs",
+  // ui-fit round 6: lighting tuner compact foot / short-tab --tap-paint
+  // floors (#lighting-inner / #lt-* only; camera untouched).
+  "tests/unit/ui-fit-lighttune-tap-r6.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",

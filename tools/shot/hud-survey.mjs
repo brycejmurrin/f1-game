@@ -273,6 +273,11 @@ export function probeWithTransients({ src, arg }) {
   // left of anything that reacts to the forced chips (INPUTS stepping below the limits chip). Finish
   // them so the probe sees the settled geometry a player sees a frame later.
   try { for (const a of document.getAnimations()) { try { a.finish(); } catch (_) { /* infinite or detached */ } } } catch (_) { /* old engine */ }
+  // Re-clip the radio lane / caution step against the forced chips (status-stack fix).
+  if (typeof GameHud !== "undefined") {
+    if (GameHud.invalidateFit) GameHud.invalidateFit();
+    if (GameHud.syncPhoneFit) GameHud.syncPhoneFit();
+  }
   try { return probe(arg); }
   finally { for (const [el, hidden, html] of saved.reverse()) { el.innerHTML = html; el.hidden = hidden; } }
 }
