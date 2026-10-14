@@ -363,6 +363,7 @@ const FULL = [
   "js/ui/debris-opts.js",
   "js/perf/metrics-overlay.js",
   "js/camera/cam-comfort.js", // touch/XR auto comfort preset (before mode-switch boots it)
+  "js/camera/fov-fit.js",     // CamFovFit.fitFovY: HFOV cap (wide) + floor (portrait); pure
   "js/camera/vantage.js",
   "js/camera/mode-switch.js",
   // WebXR boot half: SETTINGS › VR rows (call-time; hidden unless caps.vr) and
