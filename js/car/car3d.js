@@ -187,7 +187,8 @@ const Car3D = (function () {
     // today's look. Airbox mesh lips use airboxMeshColour (wrap sun > cover).
     // BODY SPLIT (liv.bodySplit === "lr"): Cadillac-style L/R body. Left (x<0)
     // keeps c1, right (x>=0) takes c2. Applied as a paint-only recolour over the
-    // chassis→livery sections so carbon / wings / glass stay untouched. It wins over `lower` (CarShade.lowerZone).
+    // chassis→livery sections so carbon / wings / glass stay untouched. It wins
+    // over `lower` / `upper` (CarShade.lowerZone / upperZone).
     const bodySplitLR = liv.bodySplit === "lr";
     const haloTint = _ckAcc(liv.halo) || null;
     const T = (opts && opts.parts) || {};
@@ -1004,7 +1005,13 @@ const Car3D = (function () {
     const camPod = anchors.noseAt(1.55);
     addBox(out, 0, camPod.top + 0.045, 1.55, 0.06, 0.08, 0.15, DARK);
 
-    if (bodySplitLR) CarMaterials.applyBodySplit(out, bodySplitFrom, out.pos.length / 3, c1, c2); else if (liv.lower && !ckpt && !(opts && opts.silhouette) && typeof CarShade !== "undefined") CarShade.lowerZone(out, bodySplitFrom, out.pos.length / 3, c1, liv.lower, anchors, SURFACES.paint);   // two-tone body (CarShade.lowerZone)
+    // Two-tone body (CarShade): `lower` below the sidepod board line, `upper`
+    // above it. bodySplit lr wins; cockpit / silhouette builds skip both.
+    if (bodySplitLR) CarMaterials.applyBodySplit(out, bodySplitFrom, out.pos.length / 3, c1, c2);
+    else if (!ckpt && !(opts && opts.silhouette) && typeof CarShade !== "undefined") {
+      if (liv.lower) CarShade.lowerZone(out, bodySplitFrom, out.pos.length / 3, c1, liv.lower, anchors, SURFACES.paint);
+      if (liv.upper) CarShade.upperZone(out, bodySplitFrom, out.pos.length / 3, c1, liv.upper, anchors, SURFACES.paint);
+    }
 
     part("cockpit");
     // Exterior head surround stays out of the dedicated driver-eye mesh.

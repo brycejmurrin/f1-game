@@ -1743,6 +1743,10 @@ const LiveryTex = (function () {
   // to SPINE_LOGO_IDS without a row here is a colour the player cannot spend,
   // and `fill-gating.test.mjs` proves every entry against the RASTERISED atlas
   // rather than against this comment — declare it, and the test checks it.
+  //
+  // HEIGHT ZONES (`lower` / `upper`) are NOT atlas fills: CarShade cuts the
+  // chassis mesh along the sidepod board line and recolours one side. They live
+  // in Liveries.FIELDS + the paint-sheet colour rows, never here.
   const FILL_SURFACES = Object.freeze([
     { key: "spineTint", label: "BAND",
       why: "Needs a SPINE TOP that paints a band (e.g. stripe, saddle, panel)",
