@@ -752,6 +752,10 @@ const stricken = (o) => incidentSim.owns(o) || (o.rescueT || 0) > 0.25 || (!!o.o
   || (!(o.pitState && o.pitState !== "none") && (o.speed || 0) < vTop() * 0.05);
 const cautionFair = (o) => SportingRegs.exempt(o) || stricken(o);   // a car it is legal to pass under a caution
 const scWatch = SportingRegs.createPassWatch(0, stricken);
+// BLUE FLAGS for the player (AI yields via AiDrive.letPassCase): sustained
+// hold-up while being lapped → warning, then +5 s (js/race/sporting-regs.js;
+// ISC App. H 2.5.5(e) / App. L Ch. IV 2(a); 2026 Penalty Guidelines).
+const blueWatch = SportingRegs.createBlueFlagWatch(stricken);
 function scPassCall(ev) {
   if (!ev || !player) return; Log.info("game", "Caution pass " + ev.type + " n=" + (ev.n || 0) + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap + " level=" + raceCtl.level); if (ev.type === "cleared") { announce("POSITION RETURNED — NO PENALTY", 1.5, "penalty-warn"); return; }
   if (ev.type === "warn") { announce("GIVE THE POSITION BACK" + (ev.n > 1 ? " — " + ev.n + " PLACES" : ""), 2.5, "penalty-warn", () => scWatch.info().owed > 0); return; }
@@ -760,6 +764,15 @@ function scPassCall(ev) {
   // re-read it so a time penalty that reorders the finish is served first.
   resultT = 0;
   announce("+" + ev.sec + "s PENALTY — OVERTAKING UNDER CAUTION", 3, "penalty-hit");
+  if (soundOn) GameAudio.penalty();
+}
+function blueFlagCall(ev) {
+  if (!ev || !player) return;
+  Log.info("game", "Blue flag " + ev.type + (ev.code ? " code=" + ev.code : "") + (ev.sec ? " pen=+" + ev.sec + "s" : "") + " lap=" + player.lap);
+  if (ev.type === "warn") { announce("BLUE FLAG WARNING", 2, "penalty-warn"); return; }
+  player.penalty += ev.sec;
+  resultT = 0;
+  announce("+" + ev.sec + "s IGNORING BLUE FLAGS", 3, "penalty-hit");
   if (soundOn) GameAudio.penalty();
 }
 // The cue phases that turn the pit ENTRANCE lamps green (SceneryPits): you are
@@ -1915,6 +1928,7 @@ function gridUp(preOrder) {
   // it is: the collision it exists to fix can only happen on the P12 branch.
   gridPreOrdered = !!(preOrder && preOrder.length === cars.length);
   scWatch.reset();
+  blueWatch.reset();
   const order = preOrder && preOrder.length === cars.length ? preOrder.slice() : (() => {
     // grid jitter: ONE simRnd() draw per car, BEFORE the sort — a random
     // comparator is inconsistent and its draw count engine-defined.
@@ -1950,7 +1964,7 @@ function gridUp(preOrder) {
     c.speed = 0; c.accSm = 0; c.corridorAccel = 0; c.prog = -(14 + i * 8); c.lap = 0; c.fuelLap = 0; c.fuelRestartLaps = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
     OvertakeMode.reset(c); c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
-    c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; delete c._coastHeld;   // last race's classification: makeCars' values; a race re-arms via armReliability
+    c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; c._coastHeld = undefined;   // last race's classification: makeCars' values (CarFields declares _coastHeld; a delete would make the car a dictionary); a race re-arms via armReliability
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
@@ -2771,19 +2785,30 @@ async function startRaceBody() {
   PerfGov.sentinelArm(true);
   if (PerfGov.strikes() > 0 && PerfGov.autoRes() && gfx.setRenderScale && gfx.getRenderScale)
     gfx.setRenderScale(Math.min(gfx.getRenderScale(), PerfGov.strikes() >= 2 ? 0.7 : 0.85));
+  // Car meshes + debris BEFORE countdown warm presents (#1477 shape: first present
+  // must not collide with heavy sync work). Cover → warm → arm count immediately.
+  // Do NOT await pack settle here: a 30 s wait after setState("count") burned the
+  // FlyingStart run-up (#1493 quali), and awaiting BEFORE count inflated every
+  // race entry enough to kill 18 m selected shards (hud-layout / packed-1).
+  // Gate requestWarm synchronously — warm menu already has packSettled; cold
+  // Start Race skips program warm until the pack lands (first draws compile).
+  const handoff = (loadingScreen.active() || loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !!player;
+  clearMenuScreens(); garagePre.release();
+  if (handoff) RaceEntryProfile.raiseHandoff(loadingScreen);
+  RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
+  RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
-  // TLX links programs synchronously on first draw — warm them during the LIGHTS,
-  // unless the menu's warm already ran for this world (warmPrograms, _warmKey).
-  // Optimisation only; GLX/WGX have no warm and no-op.
-  try { RaceEntryProfile.requestWarm(gfx, _warmKey === menuKey(trackIdx)); } catch (_) { /* as above */ }
+  // TLX links programs on first draw — warm during LIGHTS only when the pack is
+  // already settled (or unsupported/off), else createTextureArray owns the thread.
+  {
+    const settled = loadingScreen.packSettled || LoadingScreen.packSettled;
+    const packState = (typeof Assets !== "undefined" && Assets.state) ? Assets.state() : null;
+    if (!settled || settled(packState)) {
+      try { RaceEntryProfile.requestWarm(gfx, _warmKey === menuKey(trackIdx)); } catch (_) { /* as above */ }
+    }
+  }
   skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
-  // THE PRE-RACE SCREEN OUTLIVES THE SWEEP when it was up: the warm above paints
-  // nothing until it is done, so it is raised again, disarmed, and render()
-  // lowers it with the first frame the backend presents (LoadingScreen.handoff).
-  const handoff = (loadingScreen.active() || loadingScreen.phase() === "build" || loadingScreen.phase() === "busy") && !!player;   // "build"/"busy": startRaceCovered + Start Race cover
-  clearMenuScreens(); garagePre.release();  // garage GPU set is not the race's (js/garage/prebuild.js); next idle title rebuilds it
-  if (handoff) RaceEntryProfile.raiseHandoff(loadingScreen);
   els.hud.hidden = false; els.lights.hidden = false; els.pausebtn.hidden = false;
   if (els.btnCam) els.btnCam.hidden = false;
   setHudUserHidden(false);   // start every race with the HUD shown (+ resets the toggle label)
@@ -2808,10 +2833,8 @@ async function startRaceBody() {
   // restart after a changeable race had arced into rain kept playing it dry.
   if (soundOn) { if (isRaining()) GameAudio.startRain(); else GameAudio.stopRain(); }
   holdRaceWake(); syncRotateBlocker(true);   // AFTER the audio: on a portrait phone this pauses (stops engine/rain, drops the wake), and setPaused(false) on rotate restarts them
-  if (!vmNoFramePump) await yieldMain(); if (stale()) return false;   // do not glue car-mesh warm onto the settings/grid sync stretch
+  if (!vmNoFramePump) await yieldMain(); if (stale()) return false;
   if (gfxContextLost()) { loadingScreen.stop(); quitToMenu(); return false; }
-  RaceEntryProfile.span("warmCarAssets", () => warmCarAssets()); // meshes HERE, not first countdown frame
-  RaceEntryProfile.span("debrisPrime", () => { DebrisWorld.prime(); updateHud(true); });
 
   // Warm the actual rear view at its HUD size while the grid is covered.
   // startRace's promise includes this so multiplayer cannot arm green early.
@@ -4578,7 +4601,15 @@ function update(dt) {
     if (ranked[i].finished) nFin++;
   }
   if (nFin > 1) rankFinishers();
-  if (!isPractice() && !isQuali() && !realRace.owns(player)) scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
+  if (!isPractice() && !isQuali() && !realRace.owns(player)) {
+    scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
+    // Race only (TT/quali already gated): blue-flag compliance for the player.
+    if (session === "race" && track) {
+      blueFlagCall(blueWatch.tick(player, ranked, {
+        total: track.total, vRef: vTop(), caution: raceCtl.level, race: true,
+      }, dt));
+    }
+  }
 
   // Leading human for AiBand catch-up (scripted mode ignores). Once per step.
   _leadHuman = null;

@@ -15,7 +15,7 @@ still framing task call `snapCam()` after `park()`/`jump()`; never call it after
 `orbit()`, which owns its debug camera directly.
 
 Use `tests/unit/camera-ride.test.mjs` for rig math, existing Flyby/garage unit
-contracts (`tests/unit/garage-arrival.test.mjs`, `flyby-*.test.mjs`) for their specific owners, and **replay-camera** for the replay probe.
+contracts (`tests/unit/garage-arrival.test.mjs`, `flyby-*.test.mjs`) for their specific owners, and [replay.md](replay.md) for the replay probe.
 Unit math is independent of rendered blend/transition appearance. The parent
 runs one browser at a time, captures through `awaitPresent` and shared probe
 helpers, and records backend fallback, viewport and software/native hardware.

@@ -25,20 +25,25 @@
 import { fileURLToPath } from "node:url";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { dirname } from "node:path";
 import {
   launchChromium,
   shutdown,
-  sleep,
+  chromiumLaunchInfo,
   startStaticServer,
 } from "../lib/harness.mjs";
 import sharp from "sharp";
-import { awaitPresentedFrame, screenshotPresentedCanvas } from "./probe-page.mjs";
+import { pixelEvidence, rendererEvidence } from "./capture-contract.mjs";
+import { awaitCaptureReady, mutateCaptureScene, installProbeInit, screenshotPresentedCanvas } from "./probe-page.mjs";
 import {
   SHOT_USAGE,
   parseShotArgv,
   groupJobsByTrack,
 } from "./shot-jobs.mjs";
+
+import { captureContextOptions, captureLaunchOptions, applyCaptureProfile } from "./capture-options.mjs";
+import { captureBrowserDiagnostics, assertCaptureGpuCapability, startCaptureTrace } from "./capture-diagnostics.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
@@ -65,8 +70,7 @@ async function pinTeam(page, team) {
   const ids = teamIdsFromSource();
   const idx = ids.indexOf(team);
   if (idx < 0) {
-    console.error(`unknown team "${team}" — one of: ${ids.join(", ")}`);
-    process.exit(2);
+    throw new Error(`unknown team "${team}" — one of: ${ids.join(", ")}`);
   }
   await page.addInitScript((i) => {
     try {
@@ -77,22 +81,22 @@ async function pinTeam(page, team) {
 }
 
 async function raceTrack(page, trackId, waitMs) {
-  await page.evaluate((id) => window.__apex.race(id), trackId);
+  await page.evaluate((id) => { window.__apex.headless(false); return window.__apex.race(id); }, trackId);
   await page.waitForFunction(
-    () => window.__apex.info().track != null,
-    null, { timeout: waitMs, polling: 100 },
+    (id) => window.__apex.info().track === id,
+    trackId, { timeout: waitMs, polling: 100 },
   );
-  await sleep(1200);
 }
 
 async function frameCamera(page, job) {
-  return page.evaluate(
+  return mutateCaptureScene(page,
     ({ frac, cam, az, el, dist, side, tod, showHud }) => {
       const a = window.__apex;
+      a.headless(false);
       a.go();
       a.park(frac);
       a.freeze(true);
-      if (a.setTimeOfDay) a.setTimeOfDay(tod);
+      if (a.setTimeOfDay && a.setTimeOfDay() !== tod) a.setTimeOfDay(tod);
       if (a.hud) a.hud(!!showHud);
 
       if (cam === "eye") a.eyeAt(frac, 0, 2.5);
@@ -124,9 +128,8 @@ async function frameCamera(page, job) {
   );
 }
 
-async function captureJob(page, job, waitMs, modelInfo) {
+async function captureJob(page, job, waitMs, modelInfo, diagnostics) {
   const frame = await frameCamera(page, job);
-  await sleep(400);
 
   if (job.raster) {
     mkdirSync(dirname(job.out), { recursive: true });
@@ -146,47 +149,26 @@ async function captureJob(page, job, waitMs, modelInfo) {
 
   mkdirSync(dirname(job.out), { recursive: true });
   const presentMs = Math.min(waitMs, 90000);
-  // TWO presents, not one. TLX's soft present is an async GPU readback
-  // (readRenderTargetPixelsAsync): one already in flight when the camera moved
-  // resolves with the PREVIOUS framing, and a single wait saved it as this job
-  // — consecutive free-cam shots on one track came out identical (2026-10-14:
-  // monaco orbit = trackside, spa cinematic = dusk orbit, singapore orbit =
-  // cinematic, and the dusk light landing one shot late). The second present
-  // is a readback started after the move.
-  for (let i = 0; i < 2; i++) {
-    if (await awaitPresentedFrame(page, presentMs) === false) {
-      throw new Error(`no new frame presented within ${presentMs / 1000} s of the camera move — ` +
-        "refusing to save the previous blit as this frame (raise --wait on a loaded box)");
-    }
-  }
-  // --hud: the HUD is DOM over the canvas, so a canvas-clipped capture can
-  // never show it — take the page instead (the soft canvas is in the page).
-  if (job.showHud) {
-    const buf = await page.screenshot({
-      path: job.out, timeout: 60000, type: job.type === "jpeg" ? "jpeg" : "png",
-      ...(job.type === "jpeg" ? { quality: job.quality ?? 85 } : {}),
-    });
-    console.log(`wrote ${job.out} (${(buf.length / 1024).toFixed(1)} KB, ${job.type}, page with HUD)`);
-    return;
-  }
-  const shotOpts = {
-    path: job.out,
-    skipAwait: true,
-    timeout: 60000,
-    type: job.type,
-  };
-  if (job.type === "jpeg" && job.quality != null) shotOpts.quality = job.quality;
-  const shot = await screenshotPresentedCanvas(page, shotOpts).catch(async () => {
-    const buf = await page.screenshot({
-      path: job.out,
-      timeout: 60000,
-      type: job.type === "jpeg" ? "jpeg" : "png",
-      ...(job.type === "jpeg" ? { quality: job.quality ?? 85 } : {}),
-    });
-    return { buf, bytes: buf.length };
+  const readiness = await awaitCaptureReady(page, { timeoutMs: presentMs });
+  const pageScope = job.showHud || job.capture.scope === "page";
+  const shot = await screenshotPresentedCanvas(page, {
+    path: job.out, skipAwait: true, pauseRender: true, timeout: 60000, type: job.type,
+    ...(job.type === "jpeg" ? { quality: job.quality ?? 85 } : {}),
+    ...(pageScope ? { forceCdp: true, clip: { x: 0, y: 0, ...page.viewportSize() } } : {}),
   });
   const buf = shot.buf;
   const kb = (buf.length / 1024).toFixed(1);
+  const pixels = await pixelEvidence(buf);
+  if (!pixels.meaningful) throw new Error(`wrote ${job.out} but scene evidence is ${pixels.classification}`);
+  const state = await page.evaluate(() => {
+    const a = window.__apex, diag = a.diag({ download: false });
+    return { diag: { env: { backend: diag.env?.backend, backendState: diag.env?.backendState } },
+      seed: a.seed(), renderClock: a.renderClock(), render: a.renderScale(), camera: a.cameraState(), info: a.info() };
+  });
+  const renderer = rendererEvidence(state.diag, pixels, job.backend);
+  writeFileSync(`${job.out}.capture.json`, JSON.stringify({ job, browser: diagnostics, state, renderer, readiness, pixels,
+    image: { path: job.out, bytes: shot.bytes, via: shot.via, scope: pageScope ? "page" : "scene" } }, null, 2) + "\n");
+  if (!renderer.positive) throw new Error(`capture requested ${job.backend} but renderer evidence is not healthy: ${JSON.stringify(renderer)}`);
   const st = await sharp(buf).stats();
   const spread = Math.max(...st.channels.slice(0, 3).map((c) => c.stdev));
   const opaque = st.channels.length < 4 || st.channels[3].max > 0;
@@ -197,55 +179,70 @@ async function captureJob(page, job, waitMs, modelInfo) {
     ? "  ⚠ free-cam inactive (chase?)"
     : "";
   console.log(`wrote ${job.out} (${kb} KB, ${job.type}, pixel spread ${spread.toFixed(1)})${camWarn}`);
-  console.log(JSON.stringify({ modelsPrefetch: modelInfo, frame: { camera: frame.camera, dbgCamActive: frame.dbgCamActive, models: frame.models } }, null, 2));
+  console.log(JSON.stringify({ modelsPrefetch: modelInfo, readiness, pixels, renderer, scope: pageScope ? "page" : "scene", frame: { camera: frame.camera, dbgCamActive: frame.dbgCamActive, models: frame.models } }, null, 2));
 }
 
-const srv = await startStaticServer(ROOT);
+let trace = null;
+const srv = await startStaticServer(ROOT, plan.capture.cacheAssets
+  ? { immutableAssets: { namespace: randomUUID() } } : {});
 
 try {
-  const browser = await launchChromium({
-    args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu"],
-  });
-  const page = await browser.newPage({
-    viewport: { width: 1280, height: 720 },
-  });
-
-  // Pin the first job's team (batch jobs with mixed teams need separate boots).
-  const team = plan.jobs[0].team || plan.team;
-  await pinTeam(page, team);
-
-  await page.goto(srv.url);
-  await page.waitForFunction(() => window.__apex != null, null, {
-    timeout: plan.waitMs, polling: 100,
-  });
-
-  const modelInfo = await page.evaluate(async () => {
-    if (typeof Assets === "undefined" || !Assets.loadModels) return { n: 0 };
-    try {
-      const n = await Assets.loadModels();
-      return { n, ids: Assets.models() };
-    } catch (e) {
-      return { n: 0, err: String(e) };
+  // GPU/binary are browser-process choices: fail before launch for mixed requests.
+  for (const job of plan.jobs) {
+    if (job.capture.gpu !== plan.capture.gpu || job.capture.browser !== plan.capture.browser) {
+      throw new Error("batch GPU/browser profiles must match the command's --gpu/--browser flags");
     }
+    if (job.team && !teamIdsFromSource().includes(job.team)) throw new Error(`unknown team "${job.team}"`);
+  }
+  const browser = await launchChromium(captureLaunchOptions(plan.capture, { backend: plan.jobs.some((job) => job.backend === "webgpu") ? "webgpu" : "three" }));
+  const diagnostics = await captureBrowserDiagnostics(browser, {
+    requested: { gpu: plan.capture.gpu, flavor: plan.capture.browser }, executable: chromiumLaunchInfo(browser),
   });
-
+  assertCaptureGpuCapability(diagnostics, plan.capture);
+  console.error(`[shot] browser: ${JSON.stringify(diagnostics)}`);
+  if (plan.capture.trace) trace = await startCaptureTrace(browser, {
+    path: plan.capture.tracePath || `${plan.jobs[0].out}.trace.json`,
+  });
   const groups = groupJobsByTrack(plan.jobs);
   if (plan.mode === "batch") {
-    console.error(`[shot] batch: ${plan.jobs.length} job(s), ${groups.length} track boot(s), one Chromium`);
+    console.error(`[shot] batch: ${plan.jobs.length} job(s), ${groups.length} compatible scene group(s), one Chromium`);
   }
-
+  let context, page, sessionKey, modelInfo, currentTrack;
   for (const group of groups) {
-    await raceTrack(page, group.trackId, plan.waitMs);
+    const first = group.jobs[0];
+    if (!context || group.sessionKey !== sessionKey || first.capture.isolated) {
+      if (context) await context.close();
+      context = await browser.newContext(captureContextOptions(first.capture, { width: 1280, height: 720 }));
+      page = await context.newPage();
+      sessionKey = group.sessionKey; currentTrack = null;
+      await installProbeInit(page, { backend: first.backend, tlxForceGL: plan.capture.gpu === "llvmpipe" });
+      await pinTeam(page, first.team);
+      const url = new URL(srv.snapshotUrl || srv.url);
+      if (first.capture.seed != null) url.searchParams.set("seed", first.capture.seed);
+      await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: plan.waitMs });
+      await page.waitForFunction(() => window.__apex != null, null, { timeout: plan.waitMs, polling: 100 });
+      await applyCaptureProfile(page, first.capture);
+      modelInfo = await page.evaluate(async () => {
+        if (typeof Assets === "undefined" || !Assets.loadModels) return { n: 0 };
+        try { const n = await Assets.loadModels(); return { n, ids: Assets.models() }; }
+        catch (e) { return { n: 0, err: String(e) }; }
+      });
+    }
+    if (currentTrack !== group.trackId) {
+      await raceTrack(page, group.trackId, plan.waitMs);
+      currentTrack = group.trackId;
+    }
     for (const job of group.jobs) {
-      if (job.team && team && job.team !== team) {
-        throw new Error(`batch mixes --team values (${team} vs ${job.team}); run separate batches per team`);
-      }
-      await captureJob(page, job, plan.waitMs, modelInfo);
+      try { await captureJob(page, job, plan.waitMs, modelInfo, diagnostics); }
+      finally { await page.evaluate(() => window.__apex.headless(true)).catch(() => {}); }
     }
   }
+  if (context) await context.close();
 } catch (err) {
   console.error("shot failed:", err.message);
   process.exitCode = 1;
 } finally {
+  try { if (trace) console.error(`[shot] trace: ${JSON.stringify(await trace.stop())}`); }
+  catch (error) { console.error("shot trace failed:", error.message); process.exitCode = 1; }
   await shutdown();
 }

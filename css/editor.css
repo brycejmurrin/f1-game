@@ -520,4 +520,47 @@
   #trackdesigner[data-mode="scenery"] .td-body { grid-template-rows: auto minmax(0, 1.5fr) minmax(0, 1fr); }
 }
 
+/* UI Fit r6: Track Designer tool-strip labels clipped 36–57px on
+   phone portrait (390×844) and landscape (844×390) — survey r5 rank 4.
+   The phone carve used flex:1 1 0 + min-width:0 + equal padding-inline, so
+   FIT VIEW / LIVE SCENERY / HEIGHT squeezed under the shared -6deg skew and
+   the overflow:hidden stage. Wrap+balance the label, restore trailing pad,
+   and floor the tap at --tap (same wrap+balance recipe as #1537). */
+#trackdesigner .td-stage > .td-chips[data-role="toolbar"],
+#trackdesigner[data-mode="scenery"] .td-stage > .td-chips[data-role="toolbar"] {
+  flex-wrap: wrap;
+  align-items: stretch;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+#trackdesigner .td-stage > .td-chips[data-role="toolbar"] .sel-chip,
+#trackdesigner[data-mode="scenery"] .td-stage > .td-chips[data-role="toolbar"] .sel-chip {
+  white-space: normal;
+  text-wrap: balance;
+  overflow-wrap: break-word;
+  text-align: center;
+  line-height: 1.15;
+  overflow: visible;
+  text-overflow: clip;
+  box-sizing: border-box;
+  font-size: var(--fs-micro);
+  min-height: var(--tap);
+  min-width: var(--tap);
+  max-width: 100%;
+  flex: 1 1 4.5rem;
+  /* Leading-edge bias so the -6deg parallelogram does not slice the tail. */
+  padding-block: calc(var(--gap) / 3);
+  padding-inline: calc(var(--gap) * 0.7) calc(var(--gap) * 1.05);
+}
+@media (max-height: 500px) {
+  #trackdesigner .td-stage > .td-chips[data-role="toolbar"] .sel-chip,
+  #trackdesigner[data-mode="scenery"] .td-stage > .td-chips[data-role="toolbar"] .sel-chip {
+    flex-basis: 3.5rem;
+  }
+  #trackdesigner:not([data-mode="scenery"]) .td-stage > .td-chips[data-role="toolbar"] [data-map-view] {
+    display: none;
+  }
+}
+
 }

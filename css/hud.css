@@ -821,6 +821,38 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
      the column with flow; the translate fights both. A placed chip
      (data-hl-user) keeps its move. */
   body:not(.desktop) :is(#hud-energy, #hud-tyre):not([data-hl-user]) { translate: none; }
+  /* The centred four-tile row is wider than 390−sectors at HUD 150%
+     (hud-layout portrait cells: .hud-top right 326 vs #hud-sectors left 244).
+     Left-align and reserve the plate so a readable zoom cannot paint TIME/BEST
+     over S1. wrap is the overflow valve if four tiles still exceed the slot. */
+  body:not(.desktop) .hud-top {
+    left: calc(8px + var(--sal) / var(--hud-z));
+    transform: none;
+    flex-wrap: wrap;
+    max-width: calc(100vw / var(--hud-z) - 24px - (var(--sal) + var(--sar)) / var(--hud-z) - var(--dock-r-w, 0px) - 60px);
+  }
+  /* PORTRAIT READABLE FLOOR (HUD Desk 2026-10-14). Tower labels and sector
+     times ride --hud-z-top; at the old 0.4–0.65 caps --fs-micro 14 painted
+     5.6–9.1 CSS px. Same 10 px convention as the gap-chip clamp and PR #1734:
+     authored size grows as --fs-micro/1.4/z (no new 10px literal) so the
+     painted size cannot drop under 10. One query — hud-layout.test.mjs pins
+     a single portrait-and-narrow block. After the compact + .sec-lbl
+     restates so this wins cascade. */
+  body:not(.desktop) .hud-top .hud-label,
+  body:not(.desktop) #hud-sectors,
+  body:not(.desktop)[data-density="compact"] #hud-sectors,
+  body:not(.desktop) .sec-lbl,
+  body:not(.desktop) .sec-val {
+    font-size: max(var(--fs-micro), calc(var(--fs-micro) / 1.4 / var(--hud-z, 1)));
+  }
+  /* A readable sector plate and the centred caution banner cannot share a
+     390 px row. Stack the flag under the plate (the data-flag-low slot). */
+  body:not(.desktop) #hud-flag {
+    top: max(
+      calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 8px),
+      calc(var(--mir-bot, 0px) + 8px)
+    );
+  }
 }
 /* REAR-VIEW MIRROR. An empty frame: js/render/shared/mirror-pass.js measures
    this box every half second and the renderer paints the mirror camera into

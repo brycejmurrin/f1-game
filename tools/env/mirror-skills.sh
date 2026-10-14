@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # @doc Repair the tracked .agents/skills/ Codex mirror: one symlink per skill dir (--check drift, --copy fallback).
-# @skill check-changes
+# @skill agent-config
 #
 # .agents/skills/<name> -> ../../.claude/skills/<name> is TRACKED in git
 # (tests/unit/agent-surface.test.mjs locksteps it), so a fresh clone already

@@ -1,14 +1,10 @@
----
-name: pr-owner
-description: "Use when you own, pick up or are handed a PR, or your own PR or push went red: check out its branch, keep its body and Plan current, fix reds on the head, push once per green cycle. Per-red overrides: steward."
----
-
 # Owning PRs in Apex 26
 
+Folded from the retired `pr-owner` skill (2026-10-14) into **steward**.
 The loop for a session that owns PRs. Rules live in `AGENTS.md` (rules 2-5, 8,
-9, 11, 12; §Concurrent PRs; §Git branch & deploy); `steward` carries the
+9, 11, 12; §Concurrent PRs; §Git branch & deploy); `steward` (SKILL.md) carries the
 repo overrides; messaging, claims, subscriptions and authority are
-`session-comms`. This file orders them.
+`agent-fleet` `references/comms.md`. This file orders them.
 
 ## Loop
 
@@ -19,9 +15,11 @@ Already own the PR and a push went red: start at step 3, then 4
    then `--claim "<PR/topic>"` (`--release` at the end). Overlap with a live
    session: STAND-DOWN. Continue an existing PR by checking out its branch;
    new work is `cursor/<topic>-<hash>`.
-2. **Subscribe.** `subscribe_pr_activity` on each PR you own (`session-comms`:
-   one watcher per PR; if another agent holds it, poll `ci-watch.mjs --sha
-   <head> --once` at checkpoints instead).
+2. **Subscribe.** Subscribe with your host's own tool — Claude Code
+   `subscribe_pr_activity`; Cursor `subscribe_github_ci` + `subscribe_github_pr`
+   (`cursor-subscriptions`). Never call a name your host does not list
+   (`agent-fleet` comms). One watcher per PR; if another agent holds it, poll
+   `ci-watch.mjs --sha <head> --once` at checkpoints instead.
 3. **Read the CURRENT head.** Before any decision and before EVERY push, re-read
    the PR head sha (`git fetch`, then `git rev-parse origin/<branch>`, or
    `node tools/ci/pr-board.mjs --pr <n>`). Another session may have pushed. If
@@ -55,7 +53,7 @@ Already own the PR and a push went red: start at step 3, then 4
    (`ci-watch`; merge commit only). To hold the PR, add a body line starting
    `MERGE-HOLD:` and delete it when the hold ends; never write "do not merge"
    or "do not enable auto-merge" in the body — that wording is not a veto.
-8. **Report** with the `session-comms` formats: `DONE <PR> <merge sha>` once it
+8. **Report** with the `agent-fleet` comms formats: `DONE <PR> <merge sha>` once it
    merged, `BLOCKED`, `HANDOFF`, `STAND-DOWN`. One report per transition, no
    status chatter. After every push arm the rule 12 timer check-in (~1 h, re-armed).
 
@@ -70,8 +68,8 @@ starts pushing your paths (STAND-DOWN).
 
 ```
 You own PR(s) <#n[, #m]> on branch <cursor/topic-hash> in brycejmurrin/f1-game.
-Follow AGENTS.md and .claude/skills/pr-owner/SKILL.md (it points to session-comms
-and steward). Goal: <one sentence, user's terms>.
+Follow AGENTS.md and .claude/skills/steward/references/ownership.md (it points to
+agent-fleet references/comms.md and steward). Goal: <one sentence, user's terms>.
 OWNED: <path globs>. FORBIDDEN: <path globs; shared-contract files>.
 Done when: current head green, ready-gate and ready-full-cap exit 0, PR body
 refreshed, then DONE-ready reported to @parent.
