@@ -349,6 +349,7 @@ const FULL = [
   "js/camera/feel.js",
   "js/ui/driving-line-opts.js",
   "js/ui/appearance-opts.js",
+  "js/ui/a11y-opts.js",      // SETTINGS › ACCESSIBILITY (reduce motion row + focus + colourblind cues)
   "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])
   "js/ui/hud-tyres.js",      // cold/ok/hot tyre temperature state for GameHud
   "js/ui/hud-damage.js",     // the DAMAGE chip on #hud-damage (paints Damage; display only)
@@ -598,6 +599,9 @@ const HARD_EDGES = [
   ["js/core/store.js", "js/ui/driving-line-opts.js"],
   ["js/core/store.js", "js/ui/appearance-opts.js"],
   ["js/ui/setting-row.js", "js/ui/appearance-opts.js"],
+  ["js/core/store.js", "js/ui/a11y-opts.js"],
+  ["js/ui/setting-row.js", "js/ui/a11y-opts.js"],
+  ["js/ui/title-fx.js", "js/ui/a11y-opts.js"],   // wires REDUCE MOTION through TitleFx.choice/setChoice
   ["js/core/store.js", "js/ui/hud-elements.js"],
   ["js/core/store.js", "js/ui/hud-layout.js"],    // binds GameStore.store and applies the layout at eval
   ["js/camera/cam-groups.js", "js/ui/hud-layout.js"], // camSet reads CamGroups.COCKPIT_LAYOUT at eval
