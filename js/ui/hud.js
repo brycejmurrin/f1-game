@@ -235,10 +235,16 @@ function paintHudDelta(player, timeTrial) {
     : (typeof Ghost !== "undefined" && Ghost.hasGhost() ? Ghost : null);
   const ref = ghost || (_trace && _trace.has() && (player.lap | 0) >= 1 ? _trace : null);
   hData(box, "ref", ghost ? "ghost" : ref ? "best" : null);
-  // THE SLOT IS RESERVED, NOT REMOVED. A hidden DELTA that unhid after lap 1
-  // widened the centred tower by half a box mid-race, so every other readout
-  // jumped sideways. With no number yet the box keeps its place, invisible
-  // (data-pending -> visibility: hidden, css/hud.css).
+  // THE SLOT IS RESERVED ON DESKTOP, NOT REMOVED: a hidden DELTA that unhid
+  // after lap 1 widened the centred tower by half a box mid-race, so every
+  // other readout jumped sideways. With no number yet the plate keeps its
+  // place with only its value invisible (data-pending, css/hud.css), so the
+  // four live boxes read centred too. ON TOUCH the pending plate leaves the
+  // layout instead: its ~95px of top-band width capped the band at ~0.95 and
+  // dropped the gap chip under the tower on every phone (hud-mock
+  // 2026-10-14); the one re-centre at the first lap line costs less, and the
+  // paint below asks for a refit the moment the number lands (the fit key
+  // must not carry it: hud-fit-idempotent pins two fits as one).
   hHidden(box, false);
   // S4: before the first line crossing lapTime is the run-up clock (about 5.5 s
   // of it on a flying start), not the lap the ghost was recorded on.
@@ -247,10 +253,13 @@ function paintHudDelta(player, timeTrial) {
     hData(box, "pending", "");
     return;
   }
+  const wasPending = box.dataset ? box.dataset.pending != null : box.hasAttribute && box.hasAttribute("data-pending");
   hData(box, "pending", null);
+  if (wasPending && _invalidateFit && !document.body.classList.contains("desktop")) _invalidateFit();   // the touch tower just grew a box
   const delta = player.lapTime - ghostT;
-  hText(n, signedFixed(delta));
-  hData(box, "sign", delta <= 0 ? "fast" : "slow");
+  const deltaTxt = signedFixed(delta);
+  hText(n, deltaTxt);
+  hData(box, "sign", deltaTxt[0] === "-" || +deltaTxt === 0 ? "fast" : "slow");   // the ROUNDED sign, like the text
   // Practice / TT: the gaps strip already says GHOST — keep DELTA as the
   // glanceable centre-top number. Race: same chip, quieter label stays DELTA.
   void timeTrial;
@@ -405,7 +414,7 @@ const _gapFormShort = (arrow, code, t) => arrow + " " + t;
 // "+1.2s" in one box and "-1.2" in the other. Whole laps keep RELATIVE's own
 // spelling (slot 0 "+nL" = a lap up, slot 1 "-nL" = a lap down), so the two
 // never disagree.
-const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + "s";
+const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + (/\d/.test(t) ? "s" : "");   // "--" is not a number of seconds
 
 // THE HUD FITS ITSELF TO THE VIEWPORT.
 //
@@ -535,6 +544,9 @@ function layoutRect(el) {
 // card's rows and reaches past the slot's start ends the strip at its left
 // edge; one that already covers the start leaves no slot at all. Run after the
 // dock cap is written, so the groups are measured at the zoom they paint at.
+// KNOWN (2026-10-14): a 119px slot (iPad landscape) takes the card and wraps it
+// to four lines; hud-feel pins 134px as a slot and the fit's idempotence rides
+// on the slot decision, so the floor stays — a per-width minimum is the fix.
 const RADIO_TOP_MIN = 96, RADIO_TOP_GAP = 8;
 // THE DOCK LANE: where the top-row slot does not fit, the card hangs under the
 // tower. A long message at a centred max-width reached whichever dock sat
@@ -601,8 +613,10 @@ function announceLane(root) {
   clip(gaps && !gaps.hidden ? gaps.getBoundingClientRect() : null, false);
   // The opt-in readouts (MOVE & SIZE places them) and the track-limits chip: a
   // STRATEGY box in the left column and the INPUTS trace under the sector box
-  // share the card's rows on a phone.
-  for (const el of [document.getElementById("hud-rel"), document.getElementById("hud-strat"), document.getElementById("hud-inputs"), document.getElementById("hud-damage"), els.hudLimits]) {
+  // share the card's rows on a phone. TYRES too: it is anchored on the left
+  // dock, and a full-size dock at HUD 150% / BUTTON 200% lifts it into the
+  // card's rows (hud-mock 2026-10-14, announce x tyre on 740x360 and 844x390).
+  for (const el of [document.getElementById("hud-rel"), document.getElementById("hud-strat"), document.getElementById("hud-inputs"), document.getElementById("hud-damage"), els.hudLimits, els.tyre]) {
     if (el && !el.hidden && el.getBoundingClientRect) clip(el.getBoundingClientRect(), false);
   }
   const x = left + RADIO_TOP_GAP, w = right - RADIO_TOP_GAP - x;
@@ -933,6 +947,12 @@ function fitHud() {
   // tick ≈ 3 s between forced layout reads while nothing changed.
   if (key !== _fitKey) _fitClashRun = 0;
   _fitKey = key; _fitWait = 30;
+  // The dock paints at max(--hud-btn-floor, BUTTON SIZE) (css/touch-controls.css:
+  // 0.82, 0.92 on the narrow tier), so the base the cap is judged against and
+  // the divisor for its measured widths are that floor, not 1 — a flat 1 here
+  // would read a 0.82 dock as 18 % wider than it paints. Read AFTER the
+  // same-key return above: a steady tick must not pay a computed-style pass.
+  let btnFloor = 1;
   // SINGLE SOURCE: the published band zooms, not el.currentCSSZoom.
   // Under load currentCSSZoom lags --hud-z-top by a frame (Pages
   // 37714419183: rect 87.11 = 110×zTop 0.792 while #minimap zoom read 0.704;
@@ -943,7 +963,7 @@ function fitHud() {
   // divide by pub (hud-pins F-01). Only DOM-less mini-dom harnesses fall back to 1.
   const zTopPub = +root.style.getPropertyValue("--hud-z-top") || scale;
   const zBotPub = +root.style.getPropertyValue("--hud-z-bot") || scale;
-  const zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(1, btnScale);
+  let zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
   const zoomDiv = (el, pub) => (el && (el.currentCSSZoom > 0 || _noCssZoom) ? (pub || 1) : 1);
   const wide = (el, pub) => {
     if (!el) return 0;
@@ -951,10 +971,18 @@ function fitHud() {
     if (!r.width) return 0;
     return r.width / zoomDiv(el, pub);
   };
+  // A child positioned OUT of the flow is not part of the cluster: landscape
+  // touch anchors #hud-tyre on the LEFT DOCK (css/hud.css @supports anchor), so
+  // counting it made the "cluster" span from the steer arrows to AERO, the bar's
+  // width budget read ~480px for a 244px cluster, and the dock cap fell to 0.70
+  // at the SHIPPED settings on 844x390 chase: 50px pedals, 38px taps in tilt
+  // (hud-mock 2026-10-14). The tyre keeps its own clearance pass below.
+  const outOfFlow = (c) => { try { const p = getComputedStyle(c).position; return p === "absolute" || p === "fixed"; } catch (_) { return false; } };
   const span = (el, pub) => {
     if (!el) return 0;
     let lo = Infinity, hi = -Infinity;
     for (const c of el.children) {
+      if (c.id === "hud-tyre" && outOfFlow(c)) continue;
       const r = layoutRect(c);
       if (!r.width) continue;
       if (r.left < lo) lo = r.left;
@@ -977,6 +1005,10 @@ function fitHud() {
     if (++_fitRetry <= 30) _fitKey = "";
     return;
   }
+  // The dock's painted floor (declared above): read past the nothing-laid-out retry, which a
+  // harness without rects takes every tick, so the bail stays free of computed-style passes.
+  try { const v = parseFloat(getComputedStyle(root).getPropertyValue("--hud-btn-floor")); if (Number.isFinite(v) && v > 0 && v <= 1) btnFloor = v; } catch (_) { /* mini-dom */ }
+  zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
   const half = window.innerWidth / 2;
   const map = wide(els.minimap, zTopPub), gaps = wide(els.gapA && els.gapA.parentNode, zTopPub);
   // THE SAFE-AREA INSET IS PART OF THE BUDGET. `.hud-gaps` and `#minimap` are
@@ -1391,9 +1423,9 @@ function fitHud() {
   if (_hudTop) void _hudTop.offsetHeight;
   if (els.minimap) void els.minimap.offsetHeight;
   hStyle(root, "--hud-top-h", topHPub.toFixed(1) + "px");
-  // The dock paints at max(1, BUTTON SIZE) (css/overlays.css tap floor), so a
-  // cap between BUTTON SIZE and 1 still has to be written.
-  set("--hud-z-dock", capDock, Math.max(1, btnScale));
+  // The dock paints at max(--hud-btn-floor, BUTTON SIZE) (css/touch-controls.css),
+  // so a cap between BUTTON SIZE and that floor still has to be written.
+  set("--hud-z-dock", capDock, Math.max(btnFloor, btnScale));
   // Publish --dock-r-w in the FINAL chrome zoom, after dock/top caps land.
   // CSS: right = 10px + sar/--hud-z + --dock-r-w (dock-r-w is NOT re-divided).
   // Use the LEFTMOST painted right-dock control / BOOST — wrap-reverse
@@ -1540,6 +1572,19 @@ function fitHud() {
   // edge, then MOVE & SIZE grew/shifted .hud-top into the card (CI oversize:
   // .hud-top+#announce with hud-radio-top on notched-landscape buttons).
   if (els.hudSectors) void els.hudSectors.offsetHeight;
+  // THE CAUTION FLAG STEPS UNDER THE SECTOR PLATE ONLY WHEN THE PLATE REACHES ITS
+  // COLUMNS. The flag is centred and the plate right-anchored; a wide dock
+  // (BUTTON SIZE 200% on a 667px phone) pushes the plate past the flag's right
+  // edge. :root[data-flag-low] (css/hud.css) then takes the plate's bottom;
+  // otherwise the flag sits 44px under the tower, where a dropped gap strip
+  // ends — the old 74px literal paid for the plate on every phone (2026-10-14).
+  {
+    const sc = els.hudSectors && !els.hudSectors.hidden ? els.hudSectors.getBoundingClientRect() : null;
+    const fl = els.flag ? els.flag.getBoundingClientRect() : null;
+    const flagRight = fl && fl.width ? fl.right : vpW() / 2 + 80;
+    const low = !!(sc && sc.width && sc.left < flagRight + 8);
+    if (low !== ("flagLow" in root.dataset)) { if (low) root.dataset.flagLow = "1"; else delete root.dataset.flagLow; }
+  }
   radioTopSlot(root, bcast);
   announceLane(root);
   radioPaintedCollapse(root);   // terminal: nothing after it may re-run radioTopSlot (hud-metrics-layout.test)
@@ -1792,7 +1837,7 @@ function updateHud(force, dtMs) {
     const left = tyres.lapsLeft ? tyres.lapsLeft(player) : null;
     const bar = els.tyreFill && els.tyreFill.parentNode;
     if (bar && bar.dataset) {
-      const txt = left == null || spent >= 1 ? "" : "~" + Math.min(99, Math.round(left)) + "L";
+      const txt = left == null || spent >= 1 ? "" : left < 0.5 ? "<1L" : "~" + Math.min(99, Math.round(left)) + "L";
       if (bar.dataset.laps !== txt) bar.dataset.laps = txt;
     }
     // THE PIT CUE, and it replaces a button rather than decorating one. A stop
@@ -1819,8 +1864,13 @@ function updateHud(force, dtMs) {
         // The distance BAR under the words: a driver at 300 km/h reads a bar
         // faster than a number. `frac` is the cue's own fill, 0 → 1.
         hStyle(els.pitCue, "--pit-dist", clamp(c.frac || 0, 0, 1).toFixed(2));
-        // The arrow points to the PIT SIDE, which is the whole instruction.
-        hText(els.pitCueArrow, (pit.info(player) || {}).side === -1 ? "\u25C0" : "\u25B6");
+        // The arrow points where the car must GO: to the pit side on the way in,
+        // AWAY from the wall on the exit phases (merge / out / served pointed at
+        // the pit wall), nowhere for a missed box. The side is a property of the
+        // circuit, read once per track: pit.info() builds the whole cue object.
+        if (_pitSideTrack !== G.track) { _pitSideTrack = G.track; _pitSide = (pit.info(player) || {}).side === -1 ? -1 : 1; }
+        const exitPh = c.phase === "merge" || c.phase === "out" || c.phase === "served";
+        hText(els.pitCueArrow, c.phase === "missed" ? "" : (exitPh ? -_pitSide : _pitSide) === -1 ? "\u25C0" : "\u25B6");
       }
     }
     // WORK ON CAR: up for exactly as long as the car is stopped on the jacks
@@ -1861,11 +1911,14 @@ function updateHud(force, dtMs) {
   // that lap. The chip reads the allowance in MJ, the rule's own unit.
   const otMJ = typeof OvertakeMode !== "undefined" ? OvertakeMode.mj(player) : 0;
   const otHeld = otMJ > 0 && !player.otArmed && !(player.otT > 0);   // granted, paused (below OT_MIN_SPEED)
-  const ot = player.otT > 0 ? "ot-active" : player.otArmed || otHeld ? "ot-armed" : player.otEarned ? "ot-cool" : "ot-off";
-  hClass(els.ot, ot);
   const caution = G.cautionInfo ? G.cautionInfo() : null;
   const gateOpen = typeof G.otEnabled === "function" ? !!G.otEnabled() : true;
   const otOff = G.state === "race" && !gateOpen && !(player.otT > 0);
+  // The class follows the GATE like the text does: a held lap-0 grant (or one
+  // under a safety car) used to pulse the yellow "ready" plate while the text
+  // read OT · CAUTION and the button was disabled (bug hunt 2026-10-14 N2).
+  const ot = player.otT > 0 ? "ot-active" : otOff ? "ot-off" : player.otArmed || otHeld ? "ot-armed" : player.otEarned ? "ot-cool" : "ot-off";
+  hClass(els.ot, ot);
   const leader = G.ranked && G.ranked[0];
   let otReason = "";
   if (otOff) {
@@ -2021,7 +2074,9 @@ function updateHud(force, dtMs) {
       // split or delta under 10 s, so the row geometry does not move.
       const dHeld = _secDeltaT[i] > 0 && t != null;
       if (_secDeltaT[i] > 0) _secDeltaT[i] -= HUD_TICK_MS;
-      const num = dHeld ? (_secDelta[i] < 0 ? "" : "+") + _secDelta[i].toFixed(3) : t == null ? "" : t.toFixed(3);
+      // signedFixed: the sign from the ROUNDED delta (-0.0004 read "-0.000"); a split
+      // of a minute or more spells m:ss.mmm like the lap clock, not "75.123".
+      const num = dHeld ? signedFixed(_secDelta[i]) : t == null ? "" : t >= 60 && G.fmtTime ? G.fmtTime(t) : t.toFixed(3);
       hText(_secRows[i], t == null ? "--" : (sb ? "★" : pb ? "▼" : "▲") + num);
       _secPrevBest[i] = bests ? bests[i] : Infinity;   // the reference the NEXT crossing's delta is taken against
       // Timing-screen colours: purple session best, green personal best,
@@ -2364,6 +2419,7 @@ function invalidateMap() { minimapBg = null; }
 // Per-race HUD memory: the POS box compared its first ranked tick of a new race
 // against the LAST race's finishing position and flashed "down" at lights-out.
 // The race DELTA's best lap and the spoken HUD's baselines are per race too.
+let _pitSideTrack = null, _pitSide = 1;
 function resetRace() {
   _lastRank = 0; _posFlashT = 0; if (els.pos) delete els.pos.dataset.delta;
   _holdLap = 0; _holdPrev = 0; _holdOn = false; _secPrevBest = [Infinity, Infinity, Infinity]; _secDeltaT = [0, 0, 0];
@@ -2403,6 +2459,13 @@ function invalidateFit() {
   mirrorClear(root);
 }
 _invalidateFit = invalidateFit;
+// fonts-hud.css loads late (media="print" swap, index.html), so the first fit
+// measured the gap spellings in the fallback face and kept those widths: the
+// fit key carries no font signal, so the wrong rung held until the 3 s backoff
+// (F-16). Forget the measured widths and refit once the faces are in.
+if (typeof document !== "undefined" && document.fonts && document.fonts.ready && typeof document.fonts.ready.then === "function") {
+  document.fonts.ready.then(() => { _gapW[0] = _gapW[1] = 0; invalidateFit(); }, () => {});
+}
 function syncPhoneFit() {
   syncComputedRootVars();
   phoneFitStampSync(+document.documentElement.style.getPropertyValue("--hud-scale") || _cssScale, true);

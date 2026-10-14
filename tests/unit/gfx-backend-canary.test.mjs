@@ -2467,9 +2467,9 @@ test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () =>
 const TLX = read("js/render/three/tlx.js");
 const GLX = read("js/render/glx/glx.js");
 const TSL_LIT = read("js/render/three/tsl-lit.js");
-const THREE_BUNDLE = read("vendor/three-0.186.0/three.webgpu.min.js");
+const THREE_BUNDLE = read("vendor/three-0.186.1/three.webgpu.min.js");
 
-// ── The LOCAL PATCHES carried on the vendored bundle (vendor/three-0.186.0/
+// ── The LOCAL PATCHES carried on the vendored bundle (vendor/three-0.186.1/
 // PATCHES.md, applied to the readable build by tools/gen/vendor-three.mjs and
 // minified with the pinned terser). A vendor re-drop that silently reverts one
 // must fail HERE, not in production. The needles below are property names and
@@ -2526,7 +2526,7 @@ test("the vendored three carries the swizzle patch — Chromium 141 rejects r185
   // first race frame, TLX refuses the tab and reloads. The patch omits the
   // member (identity swizzle carries no information). Re-apply per PATCHES.md.
   assert.doesNotMatch(THREE_BUNDLE, /this\.swizzle="rgba"/,
-    "pristine swizzle default is back — the vendor bundle was re-dropped without the patch (see vendor/three-0.186.0/PATCHES.md §1)");
+    "pristine swizzle default is back — the vendor bundle was re-dropped without the patch (see vendor/three-0.186.1/PATCHES.md §1)");
   assert.equal(THREE_BUNDLE.split('this.swizzle=void 0').length - 1, 2,
     "the swizzle patch must cover BOTH sites (constructor + reset())");
 });
@@ -2545,7 +2545,7 @@ test("getDynamicCacheKey fills a scratch array instead of minting one per draw (
   // would make this test fail on a re-vendor that changed nothing.
   assert.match(THREE_BUNDLE,
     /getDynamicCacheKey\(\)\{[^}]*?(\w+)\[0\]=\w+,\1\[1\]=this\.camera\.isArrayCamera\?this\.camera\.cameras\.length:0,\1\[2\]=this\.object\.receiveShadow\?1:0,\1\[3\]=this\.renderer\.contextNode\.id,\1\[4\]=this\.renderer\.contextNode\.version,\w+\(\1\)/,
-    "getDynamicCacheKey no longer fills a scratch array (vendor/three-0.186.0/PATCHES.md §6)");
+    "getDynamicCacheKey no longer fills a scratch array (vendor/three-0.186.1/PATCHES.md §6)");
   // And the form it replaced must be GONE, or a half-applied patch would pass
   // the check above while still allocating on the shadow-receiving path.
   assert.doesNotMatch(THREE_BUNDLE, /getDynamicCacheKey\(\)\{[^}]*?this\.object\.receiveShadow&&/,
@@ -2558,7 +2558,7 @@ test("TextureNode clones share the BASE node's flipY / uv-matrix uniforms (PATCH
   // were 20 per-object updates per draw. The uniforms now live on getBase() and
   // update themselves; the node no longer needs an OBJECT update.
   assert.match(THREE_BUNDLE, /(\w+)=this\.getBase\(\);null===\1\._flipYUniform&&\(\1\._flipYUniform=\w+\(!1\)\.onObjectUpdate\(/,
-    "the flipY uniform is per-clone again (vendor/three-0.186.0/PATCHES.md §10)");
+    "the flipY uniform is per-clone again (vendor/three-0.186.1/PATCHES.md §10)");
   assert.match(THREE_BUNDLE, /(\w+)=this\.getBase\(\);return null===\1\._matrixUniform&&\(\1\._matrixUniform=\w+\(\1\.value\.matrix\)\.onObjectUpdate\(/,
     "the uv-matrix uniform is per-clone again (PATCHES.md §10)");
   assert.doesNotMatch(THREE_BUNDLE, /this\.updateType=null!==this\._matrixUniform\|\|null!==this\._flipYUniform/,
@@ -2611,7 +2611,7 @@ test("TextureNode.update rebuilds the UV matrix only for a node that samples thr
   // uniform, so every shadow compare / material / bake sample paid it per draw
   // (census 289: 293 ms of setUvTransform in a 21.9 s WebGL2 leg).
   assert.match(THREE_BUNDLE, /update\(\)\{const (\w+)=this\.value,(\w+)=this\._matrixUniform;null!==\2&&\(\2\.value=\1\.matrix\),null!==\2&&!0===\1\.matrixAutoUpdate&&\1\.updateMatrix\(\)/,
-    "TextureNode.update rebuilds the uv matrix without a matrix uniform again (vendor/three-0.186.0/PATCHES.md §9)");
+    "TextureNode.update rebuilds the uv matrix without a matrix uniform again (vendor/three-0.186.1/PATCHES.md §9)");
 });
 
 test("the vendored three emits render-stage node variables at FUNCTION scope (WebKit 8 KB private cap, PATCHES.md §4)", () => {
@@ -2656,7 +2656,7 @@ test("the vendored three has upstream's #33954 bind-group fix (patch 2 retired i
   // this as a local backport; r186 ships it. A re-drop of an older release
   // fails here.
   assert.match(THREE_BUNDLE, /bindGroups\.delete\(/,
-    "the #33954 fix is missing from the vendor bundle — evicted-material dispose() now leaks (vendor/three-0.186.0/PATCHES.md §2)");
+    "the #33954 fix is missing from the vendor bundle — evicted-material dispose() now leaks (vendor/three-0.186.1/PATCHES.md §2)");
 });
 test("the vendored three keys WebGPU pipelines on polygonOffset (patch 3 retired in r186, PR #34406)", () => {
   // TLX's bias-only material variants (tsl-fx road decals −4/−8, tsl-lit
@@ -2664,7 +2664,7 @@ test("the vendored three keys WebGPU pipelines on polygonOffset (patch 3 retired
   // with the other's bias. Upstream carries the three fields in the cache key
   // and in needsRenderUpdate's compare chain since r186.
   assert.match(THREE_BUNDLE, /\.stencilWriteMask,(\w+)\.polygonOffset,\1\.polygonOffsetFactor,\1\.polygonOffsetUnits,\1\.side/,
-    "cache key lacks polygonOffset* (vendor/three-0.186.0/PATCHES.md §3)");
+    "cache key lacks polygonOffset* (vendor/three-0.186.1/PATCHES.md §3)");
   assert.match(THREE_BUNDLE, /\.polygonOffset===(\w+)\.polygonOffset&&\w+\.polygonOffsetFactor===\1\.polygonOffsetFactor&&\w+\.polygonOffsetUnits===\1\.polygonOffsetUnits/,
     "needsRenderUpdate does not compare polygonOffset* (PATCHES.md §3)");
 });
@@ -2673,9 +2673,9 @@ test("the vendored three matches its MANIFEST.json — generated by tools/gen/ve
   // edit or a re-drop that skipped the generator changes a hash. The pinned
   // terser in package.json is the one the manifest names, so a regeneration on
   // another box reproduces the same bytes.
-  const dir = "vendor/three-0.186.0";
+  const dir = "vendor/three-0.186.1";
   const m = JSON.parse(read(`${dir}/MANIFEST.json`));
-  assert.equal(m.three, "0.186.0");
+  assert.equal(m.three, "0.186.1");
   assert.deepEqual(m.patches, [1, 4, 5, 6, 9, 10, 11, 12, 13], "patch ids applied (2 and 3 retired in r186; 7 and 8 were #228's reverted skip-draw pair; 11 and 12 are the TLX-PERF-HUNT D3 / A2 pair; 13 is PERF-HUNT-3 B14)");
   // §13: a shared group's cache key names texture bindings (node id + binding name), and texture clones keep their group.
   assert.match(THREE_BUNDLE, /\?"s":"t"\)\+\(\w+\.textureNode\?\w+\.textureNode\.id:""\)\+":"\+\w+\.name\+","/, "shared-group key for texture / sampler bindings (PATCHES.md §13)");
@@ -2689,7 +2689,7 @@ test("the vendored three matches its MANIFEST.json — generated by tools/gen/ve
   assert.equal(pkg.devDependencies.terser, m.terser, "package.json must pin the terser the manifest was generated with");
   for (const [file, rec] of Object.entries(m.files)) {
     const h = createHash("sha256").update(fs.readFileSync(path.join(ROOT, dir, file))).digest("hex");
-    assert.equal(h, rec.sha256, `${dir}/${file} differs from MANIFEST.json — regenerate with node tools/gen/vendor-three.mjs 0.186.0`);
+    assert.equal(h, rec.sha256, `${dir}/${file} differs from MANIFEST.json — regenerate with node tools/gen/vendor-three.mjs 0.186.1`);
   }
   for (const name of [
     "three.webgpu.min.js", "three.core.min.js", "three.tsl.min.js", "LICENSE.txt",
@@ -4782,7 +4782,7 @@ test("TLX binds on a phone by default, declines only on apex26.tlxMobile=0 with 
 // work — asserted against the VENDORED bundle so a version bump re-checks them
 // rather than letting the comment go stale.
 test("three still re-reads attribute.array after upload (why the release fix is impossible)", () => {
-  const three = read("vendor/three-0.186.0/three.webgpu.min.js");
+  const three = read("vendor/three-0.186.1/three.webgpu.min.js");
 
   // draw(): firstVertex *= index.array.BYTES_PER_ELEMENT, every indexed draw.
   assert.match(three, /\*=\s*\w+\.array\.BYTES_PER_ELEMENT/,
@@ -5114,7 +5114,7 @@ test("spatial upscale persists once through GameStore at the UI boundary", () =>
 
 // Execute the bundled API: mocks alone cannot catch a renamed/wrong owner API.
 test("TLX timing enables the bundled backend, not a shadow renderer property", async () => {
-  const THREE = await import("../../vendor/three-0.186.0/three.webgpu.min.js");
+  const THREE = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
   let _gpuTimerOn = false, _gpuMs = 12, _gpuTimerEpoch = 0;
   const _gpuSupported = () => true;
@@ -5128,7 +5128,7 @@ test("TLX timing enables the bundled backend, not a shadow renderer property", a
 });
 
 test("TLX cube readback selects all six faces of attachment zero", async () => {
-  const THREE = await import("../../vendor/three-0.186.0/three.webgpu.min.js");
+  const THREE = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
   const envRT = new THREE.CubeRenderTarget(1), ENV_SIZE = 1;
   let _envCubeRead = false, _envCube = null;
@@ -5368,7 +5368,7 @@ test("all track loaders release selector ownership before building, even on fail
 });
 
 test("three warm-up fallback yields tasks without waiting for display frames", async () => {
-  const core = read("vendor/three-0.186.0/three.core.min.js");
+  const core = read("vendor/three-0.186.1/three.core.min.js");
   const alias = core.match(/\b(\w+) as yieldToMain\b/);
   assert.ok(alias, "three.core.min.js must export yieldToMain under a minified alias");
   const body = fnBody(core, alias[1]);

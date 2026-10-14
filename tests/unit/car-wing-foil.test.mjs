@@ -17,12 +17,16 @@ import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/car/car3d.js"), "utf8");
+const BODY_SRC = readFileSync(join(ROOT, "js/car/car-body-geom.js"), "utf8");
 const GEOMETRY_SRC = readFileSync(join(ROOT, "js/car/car-geometry.js"), "utf8");
+// Geometry builders moved to car-body-geom.js (pure move); scan both.
+const CAR_SRC = SRC + "\n" + BODY_SRC;
 
 function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite });
   seedLog(ctx);
-  for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/helmets.js", "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car3d.js"]) {
+  // Deliberately omit car-shade.js: this suite pins the flat-loft car; car-shade.test covers rounding.
+  for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/helmets.js", "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-materials.js", "js/car/car-body-geom.js", "js/car/car3d.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   }
   return vm.runInContext("({ Car3D, Parts, Teams })", ctx);
@@ -37,14 +41,14 @@ test("foil samples a knife trailing edge and splits the outboard span", () => {
   assert.match(GEOMETRY_SRC, /mid = half \* 0\.67/);
   assert.match(GEOMETRY_SRC, /\[-half, -mid\], \[-mid, -inner\], \[-inner, inner\], \[inner, mid\], \[mid, half\]/);
   assert.match(GEOMETRY_SRC, /function addBeveledSpan\(/);
-  assert.match(SRC, /addBeveledSpan\(out,[\s\S]{0,180}\{ z: 2\.66/);
-  assert.match(SRC, /addBeveledSpan\(out,[\s\S]{0,180}\{ z: _ep\.front\.z/);
+  assert.match(CAR_SRC, /addBeveledSpan\(out,[\s\S]{0,180}\{ z: 2\.66/);
+  assert.match(CAR_SRC, /addBeveledSpan\(out,[\s\S]{0,180}\{ z: _ep\.front\.z/);
 });
 
 test("wing elements stay knife-thin (not 32 mm planks)", () => {
-  assert.match(SRC, /\[2\.72, 0\.048, 2\.40, 0\.086, 1\.00, 0\.024\]/);
-  assert.match(SRC, /elemRecord\(\[-2\.30, upperTrailY - 0\.270\], \[-2\.52, upperTrailY - 0\.225\], 0\.024, 0\)/);
-  assert.match(SRC, /0\.51, 0\.024, c1, 0\.8/);
+  assert.match(CAR_SRC, /\[2\.72, 0\.048, 2\.40, 0\.086, 1\.00, 0\.024\]/);
+  assert.match(CAR_SRC, /elemRecord\(\[-2\.30, upperTrailY - 0\.270\], \[-2\.52, upperTrailY - 0\.225\], 0\.024, 0\)/);
+  assert.match(CAR_SRC, /0\.51, 0\.024, c1, 0\.8/);
 });
 
 test("one flap is a closed foil, not a 48-triangle plank", () => {
@@ -269,7 +273,7 @@ test("a shadow silhouette keeps the helmet shape without paint-split cost", () =
   const splitBody = tris(Car3D.build(C1, C2, { noWheels: true, num: 1 }));
   assert.ok(field < splitBody, `field ${field} should drop paint-split vs ${splitBody}`);
   assert.ok(field > sil, `field ${field} still carries the in-tub torso :sh drops (${sil})`);
-  assert.match(SRC, /sil \|\| field/);
+  assert.match(CAR_SRC, /sil \|\| field/);
   const GAME = readFileSync(join(ROOT, "js/car/car-draw.js"), "utf8");   // teamMesh lives in the car-draw seam
   // Shadow casters share one ":sh" per team(+parts); a custom setup stamps its
   // own ":sh" so two shelves do not share a caster (see car-presentation-canary).
@@ -311,27 +315,28 @@ test("2026 duct/board/slot knobs are inert at 0 and each deforms the mesh", () =
 });
 
 test("2026 body keeps a scooped pod, floor teeth, under-fences and a round halo", () => {
-  assert.match(SRC, /z: 0\.50, inner: 0\.298/);
-  assert.match(SRC, /z: -0\.38, inner: 0\.28/);
-  assert.match(SRC, /z: -1\.05, inner: 0\.25/);
-  assert.match(SRC, /\[-0\.48, -0\.24, 0, 0\.24, 0\.48\]/);
-  assert.match(SRC, /fwHalf \* 0\.52/);
+  assert.match(CAR_SRC, /z: 0\.50, inner: 0\.298/);
+  assert.match(CAR_SRC, /z: -0\.38, inner: 0\.28/);
+  assert.match(CAR_SRC, /z: -1\.05, inner: 0\.25/);
+  assert.match(CAR_SRC, /\[-0\.48, -0\.24, 0, 0\.24, 0\.48\]/);
+  assert.match(CAR_SRC, /fwHalf \* 0\.52/);
   // The halo is a smooth swept TUBE whose top bar reads LEVEL with a shallow
   // arch — round in plan, never peaking or dipping toward the centre: pin the
   // primitive, the path builder (crownY + HALO_RISE arch), and the
   // collar/apex datums at the call site.
   assert.match(GEOMETRY_SRC, /function addTube\(/);
-  assert.match(SRC, /function haloHoopPath\(/);
-  assert.match(SRC, /crownY \+ HALO_RISE \* Math\.sin\(a\)/);
-  assert.match(SRC, /haloHoopPath\(0\.235, 0\.505, -0\.46, 0\.30, 0\.02, crownY, 0\.49\)/);
+  assert.match(CAR_SRC, /function haloHoopPath\(/);
+  assert.match(CAR_SRC, /crownY \+ HALO_RISE \* Math\.sin\(a\)/);
+  assert.match(CAR_SRC, /haloHoopPath\(0\.235, 0\.505, -0\.46, 0\.30, 0\.02, crownY, 0\.49\)/);
   // The tube is drawn along `hoopT`: the same 15-point hoop, or with CarShade
   // rounding on (js/car/car-shade.js) a Catmull-Rom spline through those points
   // at 12 sides, because 6 sides on 15 points kinked every ~30 degrees. This
   // file loads car3d WITHOUT CarShade, so everything it builds is the 6-sided
   // tube on the hoop itself; tests/unit/car-shade.test.mjs covers the spline.
-  assert.match(SRC, /hoopT = hoop && _round \? CarShade\.fine\(hoop, 3\) : hoop/);
-  assert.match(SRC, /addTube\(out, hoopT, hr, _round \? 12 : 6/);
-  assert.match(SRC, /inlet\.width \* 0\.48/);
+  // shadeFlags.round is the shared mutable (was _round) after the car3d split.
+  assert.match(CAR_SRC, /hoopT = hoop && shadeFlags\.round \? CarShade\.fine\(hoop, 3\) : hoop/);
+  assert.match(CAR_SRC, /addTube\(out, hoopT, hr, shadeFlags\.round \? 12 : 6/);
+  assert.match(CAR_SRC, /inlet\.width \* 0\.48/);
 });
 
 test("recipe-gated part knobs are inert at 0 and each deforms the mesh", () => {
