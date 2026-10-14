@@ -29,6 +29,4 @@ Offline smoke evidence covers only the reported fixture contract. A plan is
 phase must remain explicit in the receipt. A software WebGPU run cannot prove
 native Apple/Windows GPU behavior. Never contact OpenF1 to make a smoke fixture.
 
-Research: [Playwright Page](https://playwright.dev/docs/api/class-page), checked
-2026-10-01: wait options are the third `waitForFunction` argument. Use finite
-polling and the shared backend-aware presented-canvas capture helper.
+Use finite polling (`tools/check/wait-polling-lint.mjs`) and the shared backend-aware presented-canvas capture helper.

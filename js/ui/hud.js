@@ -70,12 +70,13 @@ let _redline = false;         // tach redline latch: on above 92% of MAX_RPM, of
 const TYRE_WARN = 0.70;
 
 const _hudTxt = new WeakMap();   // el -> last textContent
-const _hudSty = new WeakMap();   // el -> { prop: lastVal }
+const _hudSty = new WeakMap();   // el -> { prop: lastVal }; remove through hUnstyle, or an equal rewrite is skipped
 const _hudCls = new WeakMap();   // el -> last className
 const _hudTog = new WeakMap();   // el -> { cls: lastBool }
 function hText(el, v) { if (!el) return; if (_hudTxt.get(el) !== v) { _hudTxt.set(el, v); el.textContent = v; } }
 function hStyle(el, prop, v) { if (!el) return; let m = _hudSty.get(el); if (!m) { m = {}; _hudSty.set(el, m); }
   if (m[prop] !== v) { m[prop] = v; if (prop.charCodeAt(0) === 45) el.style.setProperty(prop, v); else el.style[prop] = v; } }
+function hUnstyle(el, prop) { if (!el) return; const m = _hudSty.get(el); if (m) delete m[prop]; if (el.style && el.style.removeProperty) el.style.removeProperty(prop); }
 function hClass(el, v) { if (!el) return; if (_hudCls.get(el) !== v) { _hudCls.set(el, v); el.className = v; } }
 function hToggle(el, cls, on) { if (!el) return; let m = _hudTog.get(el); if (!m) { m = {}; _hudTog.set(el, m); } if (m[cls] !== on) { m[cls] = on; el.classList.toggle(cls, on); } }
 function hAttr(el, name, value) { if (!el) return; const v = String(value); if (el.getAttribute(name) !== v) el.setAttribute(name, v); }
@@ -620,11 +621,7 @@ function announceLane(root) {
     hStyle(root, "--announce-lane-x", x.toFixed(1) + "px");
     hStyle(root, "--announce-lane-shift", "0%");
     hStyle(root, "--announce-lane-w", "0px");
-  } else if (root && root.style && root.style.removeProperty) {
-    root.style.removeProperty("--announce-lane-x");
-    root.style.removeProperty("--announce-lane-shift");
-    root.style.removeProperty("--announce-lane-w");
-  }
+  } else for (const k of ["--announce-lane-x", "--announce-lane-shift", "--announce-lane-w"]) hUnstyle(root, k);
   const annEl = typeof document !== "undefined" ? document.getElementById("announce") : null;
   if (annEl && annEl.toggleAttribute) annEl.toggleAttribute("data-lane-collapsed", !!collapsed);
 }
