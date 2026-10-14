@@ -262,12 +262,17 @@ const WGX = (function () {
   //     PIXEL_PACK_BUFFER + fenceSync readback, never a blocking readPixels (P4);
   //   wgxTransient   — the MSAA colour, mirror depth and env depth targets carry
   //     GPUTextureUsage.TRANSIENT_ATTACHMENT where the browser has it (P6).
-  let _insetInPass = true, _packAsync = true, _transientOn = true;
+  //   wgxMipBatch    — the mip blit (HUNT5-C) caches its bind-group layout, reuses
+  //     level L-1's attachment view as level L's source, and defers a decal
+  //     atlas's mips into one encoder + one submit shared by every atlas made
+  //     before the next submit (flushed ahead of it, or by a 0 ms timer).
+  let _insetInPass = true, _packAsync = true, _transientOn = true, _mipBatchOn = true;
   try {
     if (localStorage.getItem("apex26.wgxInsetInPass") === "0") _insetInPass = false;
     if (localStorage.getItem("apex26.wgxPackAsync") === "0") _packAsync = false;
     if (localStorage.getItem("apex26.wgxTransient") === "0") _transientOn = false;
-  } catch (_) { /* blocked storage: all three on */ }
+    if (localStorage.getItem("apex26.wgxMipBatch") === "0") _mipBatchOn = false;
+  } catch (_) { /* blocked storage: all four on */ }
   // A pass-local attachment's usage (WebGPU spec §6.1.2 / §6.1.3, Chrome 146):
   // with the TRANSIENT_ATTACHMENT bit the usage must be EXACTLY
   // RENDER_ATTACHMENT | TRANSIENT_ATTACHMENT, 2d, one mip, one layer, every
@@ -2801,49 +2806,124 @@ const WGX = (function () {
           .catch(() => { /* the sync path in _generateMips still builds it */ });
       } catch (_) { /* ditto */ }
     }
+    function _mipPipeFor(format) {
+      let pipe = _mipPipes.get(format);
+      if (!pipe) {
+        pipe = device.createRenderPipeline(_mipPipeDesc(format));
+        _mipPipes.set(format, pipe);
+      }
+      if (!_mipSamp) _mipSamp = device.createSampler({ magFilter: "linear", minFilter: "linear" });
+      return pipe;
+    }
+    // One { dstView, bg } per (layer, level >= 1): the pass renders level L from
+    // level L-1. Knob on (apex26.wgxMipBatch): level L-1's attachment view IS
+    // level L's source (the two descriptors were identical), so a 10-level atlas
+    // makes 10 views, not 18, and the auto layout is fetched once per pipeline
+    // (each getBindGroupLayout() is a new wire object) instead of once per level.
+    function _mipLadder(tex, nLay, levels, pipe) {
+      const ladder = [];
+      const viewAt = (layer, level) => tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
+        baseMipLevel: level, mipLevelCount: 1 });
+      if (!_mipBatchOn) {
+        for (let layer = 0; layer < nLay; layer++) {
+          for (let level = 1; level < levels; level++) {
+            const srcView = viewAt(layer, level - 1);
+            const dstView = viewAt(layer, level);
+            ladder.push({ dstView, bg: device.createBindGroup({
+              layout: pipe.getBindGroupLayout(0),
+              entries: [{ binding: 0, resource: srcView }, { binding: 1, resource: _mipSamp }],
+            }) });
+          }
+        }
+        return ladder;
+      }
+      const bgl = pipe.__wgxMipBgl || (pipe.__wgxMipBgl = pipe.getBindGroupLayout(0));
+      for (let layer = 0; layer < nLay; layer++) {
+        let srcView = viewAt(layer, 0);
+        for (let level = 1; level < levels; level++) {
+          const dstView = viewAt(layer, level);
+          ladder.push({ dstView, bg: device.createBindGroup({
+            layout: bgl,
+            entries: [{ binding: 0, resource: srcView }, { binding: 1, resource: _mipSamp }],
+          }) });
+          srcView = dstView;
+        }
+      }
+      return ladder;
+    }
+    function _recordMips(enc, ladder, pipe) {
+      for (let i = 0; i < ladder.length; i++) {
+        const st = ladder[i];
+        const p = enc.beginRenderPass({ colorAttachments: [{ view: st.dstView, loadOp: "clear",
+          clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
+        p.setPipeline(pipe); p.setBindGroup(0, st.bg); p.draw(3); p.end();
+      }
+    }
     function _generateMips(tex, layers) {
       if (!tex || !device) return;
-      const w0 = tex.width | 0, h0 = tex.height | 0;
+      const w0 = tex.width | 0;
       const levels = tex.mipLevelCount | 0;
       if (levels <= 1 || !w0) return;
       const nLay = layers || 1;
       try {
-        let pipe = _mipPipes.get(tex.format);
-        if (!pipe) {
-          pipe = device.createRenderPipeline(_mipPipeDesc(tex.format));
-          _mipPipes.set(tex.format, pipe);
-        }
-        if (!_mipSamp) _mipSamp = device.createSampler({ magFilter: "linear", minFilter: "linear" });
+        const pipe = _mipPipeFor(tex.format);
         // Views + bind groups on an immutable texture are stable. Rebuilding
         // the full ladder every call was 72 createView + 36 createBindGroup
         // per 6-face env cycle (~every 6 frames with CAR ENV REFLECTION on).
         // Cache the ladder on the texture — it dies with the texture.
         let ladder = tex.__wgxMipLadder;
         if (!ladder || ladder.length !== nLay * (levels - 1)) {
-          ladder = [];
-          for (let layer = 0; layer < nLay; layer++) {
-            for (let level = 1; level < levels; level++) {
-              const srcView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
-                baseMipLevel: level - 1, mipLevelCount: 1 });
-              const dstView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
-                baseMipLevel: level, mipLevelCount: 1 });
-              ladder.push({ dstView, bg: device.createBindGroup({
-                layout: pipe.getBindGroupLayout(0),
-                entries: [{ binding: 0, resource: srcView }, { binding: 1, resource: _mipSamp }],
-              }) });
-            }
-          }
+          ladder = _mipLadder(tex, nLay, levels, pipe);
           tex.__wgxMipLadder = ladder;
         }
         const enc = device.createCommandEncoder();
-        for (let i = 0; i < ladder.length; i++) {
-          const st = ladder[i];
-          const p = enc.beginRenderPass({ colorAttachments: [{ view: st.dstView, loadOp: "clear",
-            clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
-          p.setPipeline(pipe); p.setBindGroup(0, st.bg); p.draw(3); p.end();
-        }
+        _recordMips(enc, ladder, pipe);
         device.queue.submit([enc.finish()]);
       } catch (_) { /* mip blit is best-effort; caller still has mip 0 */ }
+    }
+    // DEFERRED ATLAS MIPS (HUNT5-C, apex26.wgxMipBatch). A decal atlas's mips
+    // are built once: the macOS census saw the race warm's 21 atlases make 21
+    // encoders + 21 submits beside their 189 passes. Knob on, createTexture
+    // queues the texture and every queued atlas records into ONE encoder and
+    // ONE submit. Level 0 is already on the queue timeline (copy / writeTexture
+    // are queue ops), so the passes read it whenever they run; _mipFlush runs
+    // BEFORE every submit that can sample an atlas (frame, env face, mirror)
+    // and on a 0 ms timer, so no draw ever sees an unbuilt level. A one-shot
+    // ladder is not cached on the texture. freeTexture drops a queued texture:
+    // a destroyed texture in the batch would void the whole command buffer.
+    const _mipQueue = [];
+    let _mipTimer = 0;
+    function _generateMipsDeferred(tex) {
+      if (!_mipBatchOn) { _generateMips(tex, 1); return; }
+      if (!tex || !device || (tex.mipLevelCount | 0) <= 1 || !(tex.width | 0)) return;
+      _mipQueue.push(tex);
+      if (!_mipTimer && typeof setTimeout === "function") _mipTimer = setTimeout(_mipFlush, 0) || 1;
+    }
+    function _mipUnqueue(tex) {
+      const i = tex ? _mipQueue.indexOf(tex) : -1;
+      if (i >= 0) _mipQueue.splice(i, 1);
+    }
+    function _mipFlush() {
+      if (_mipTimer) {
+        if (typeof clearTimeout === "function") { try { clearTimeout(_mipTimer); } catch (_) { /* fired already */ } }
+        _mipTimer = 0;
+      }
+      if (!_mipQueue.length) return;
+      const q = _mipQueue.splice(0);
+      if (!device) return;
+      try {
+        const enc = device.createCommandEncoder();
+        for (let i = 0; i < q.length; i++) {
+          const tex = q[i];
+          let pipe, ladder;
+          // A JS throw building one ladder (an injected view failure, a lost
+          // device) costs that atlas its mips, never the rest of the batch.
+          try { pipe = _mipPipeFor(tex.format); ladder = _mipLadder(tex, 1, tex.mipLevelCount | 0, pipe); }
+          catch (_) { continue; /* this atlas keeps mip 0 only */ }
+          _recordMips(enc, ladder, pipe);
+        }
+        device.queue.submit([enc.finish()]);
+      } catch (_) { /* mip blit is best-effort; every atlas still has mip 0 */ }
     }
 
     // Interleave [pos3, nrm3, col3] (stride 36) + a side array [mat, s, x, hw].
@@ -3180,9 +3260,10 @@ const WGX = (function () {
           device.queue.copyExternalImageToTexture({ source: src, flipY: true },
             { texture: tex, premultipliedAlpha: true }, [w, h]);
         }
-        _generateMips(tex, 1);
+        _generateMipsDeferred(tex);
         return { _wgx: "texture", texture: tex, view: tex.createView() };
       } catch (_) {
+        _mipUnqueue(tex);   // a destroyed texture must not ride the shared mip submit
         if (tex) try { tex.destroy(); } catch (__) { /* device lost */ }
         return { _wgx: "texture", _phase: 4 }; /* upload failed: caller treats as inert token */
       }
@@ -3220,7 +3301,7 @@ const WGX = (function () {
       if (!t) return;
       // Retire, never destroy in-frame: a draw recorded earlier this frame may
       // still reference the view (same list the VBO growth paths use).
-      if (t.texture) _retiredBufs.push(t.texture);
+      if (t.texture) { _retiredBufs.push(t.texture); _mipUnqueue(t.texture); }
       // drawDecal caches a bind group on the caller's token (tex._wgxDecalBG)
       // and guards on `!tex.view`. Leaving both in place after the texture is
       // destroyed lets a caller that frees then redraws slip past the guard and
@@ -4057,6 +4138,7 @@ const WGX = (function () {
       if (!envCubeTex || !litPass || !_envEncoder) return;
       _flushLitRings();
       litPass.end();
+      _mipFlush();
       device.queue.submit([_envEncoder.finish()]);
       litPass = null; encoder = null; _envEncoder = null;
       _activeFrameBG = frameBindGroup;
@@ -4144,6 +4226,7 @@ const WGX = (function () {
       if (!_mirEncoder) return;
       try {
         if (litPass) { _flushLitRings(); litPass.end(); }
+        _mipFlush();
         device.queue.submit([_mirEncoder.finish()]);
         _mirRenders++;
         _generateMips(mirTex, 1);   // its own submit, after the pass that wrote level 0
@@ -4459,6 +4542,7 @@ const WGX = (function () {
         _mirrorComposite(exposure, _TONE_STANDIN);
         const disp = _softDisplayEncode();
         const cap = _capEncode();
+        _mipFlush();   // queued atlas mips land before the frame that samples them
         try { device.queue.submit(SHD.frameSubmitList(encoder)); }
         catch (e) { _softDisplayAbort(disp); throw e; }
         _retireFlush();
@@ -4826,6 +4910,7 @@ const WGX = (function () {
       _mirrorComposite(exposure, _postReady ? o.tune : _TONE_STANDIN, _postReady ? o : null);   // !_postReady: the catch took the blit
       const disp = _softDisplayEncode();
       const _cap = _capEncode();
+      _mipFlush();   // queued atlas mips land before the frame that samples them
       try { device.queue.submit(SHD.frameSubmitList(encoder)); }
       catch (e) { _softDisplayAbort(disp); throw e; }
       _retireFlush();

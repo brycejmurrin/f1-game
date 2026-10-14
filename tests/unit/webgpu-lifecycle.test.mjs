@@ -117,7 +117,13 @@ function makeGpuHarness(opts = {}) {
   const passCalls = [];
   const pass = opts.recordPass ? new Proxy({}, { get: (_, k) => (...a) => { passCalls.push([k, a]); } })
     : new Proxy({}, { get: () => () => {} });
-  const pipeline = { getBindGroupLayout: () => ({}) };
+  // gpuLog (HUNT5-C): every encoder open, render pass and submit in order — ["encoder", id],
+  // ["pass", id, desc], ["submit", [encoder ids]] — so a test can count encoders / submits per
+  // texture and prove a submit lands before the one that samples it. bglCalls counts the
+  // auto-layout fetches (each a new wire object on a real device).
+  const gpuLog = [];
+  let encoderSeq = 0, bglCalls = 0;
+  const pipeline = { getBindGroupLayout: () => { bglCalls += 1; return {}; } };
   const pipelineDescs = [];
   // Optional persistent/session storage backing (Maps) so the loss-escalation
   // ladder (apex26.gfxWgxLevel) and the session GLX skip can be asserted.
@@ -163,7 +169,7 @@ function makeGpuHarness(opts = {}) {
       },
       writeTexture(dst, bytes) { textureWrites.push({ texture: dst && dst.texture, origin: dst && dst.origin, bytes }); },
       copyExternalImageToTexture(src, dst) { textureWrites.push({ texture: dst && dst.texture, origin: dst && dst.origin, bytes: null, source: src && src.source }); },
-      submit() {},
+      submit(list) { gpuLog.push(["submit", Array.from(list || [], (cb) => cb && cb.enc)]); },
     },
     createSampler: () => ({}),
     createBindGroupLayout: () => ({}),
@@ -198,13 +204,19 @@ function makeGpuHarness(opts = {}) {
     createQuerySet: () => ({ count: 2 }),
     createCommandEncoder: () => {
       if (failEncoder) throw new Error("injected encoder failure");
+      const id = ++encoderSeq;
+      gpuLog.push(["encoder", id]);
       return {
         // recordPass also logs each pass OPEN with its descriptor, so a test can
         // count the passes of a frame and read every attachment's load/store ops.
-        beginRenderPass: (desc) => { if (opts.recordPass) passCalls.push(["beginRenderPass", [desc]]); return pass; },
+        beginRenderPass: (desc) => {
+          gpuLog.push(["pass", id, desc]);
+          if (opts.recordPass) passCalls.push(["beginRenderPass", [desc]]);
+          return pass;
+        },
         resolveQuerySet() {},
         copyBufferToBuffer() {},
-        finish: () => ({}),
+        finish: () => ({ enc: id }),
       };
     },
     createTexture(desc) {
@@ -262,7 +274,7 @@ function makeGpuHarness(opts = {}) {
           throw new Error("Member GPUBufferBinding.buffer is required and must be an instance of GPUBuffer");
         }
       }
-      return {};
+      return { entries: desc.entries };
     },
   };
   const canvasTexture = { createView: () => ({ swapchain: true }) };
@@ -413,6 +425,10 @@ function makeGpuHarness(opts = {}) {
     // a webgl2 context, "webgpu" once WGX has claimed it.
     canvasClaimedBy: () => claimedBy,
     textureCount: () => textureCalls,
+    gpuLog,
+    bglCount: () => bglCalls,
+    viewCount: () => viewCalls,
+    bindGroupCount: () => bindGroupCalls,
     failNextTexture(offset = 1) { failTextureAt = textureCalls + offset; },
     failNextView(offset = 1) { failViewAt = viewCalls + offset; },
     failNextBindGroup(offset = 1) { failBindGroupAt = bindGroupCalls + offset; },
@@ -3296,4 +3312,128 @@ test("P4: WGX fills the material array as the async readback lands, and never bi
     assert.equal(gfx.materialMapState().albedo, true, `${label}: bound at once`);
   }
   assert.match(WGX_SOURCE, /_packAsync && typeof Assets !== "undefined" && Assets\.readLayerBytesAsync/, "the knob gates the seam");
+});
+
+// HUNT5-C, apex26.wgxMipBatch (default on, "0" = the old sequence). The macOS census saw the race
+// warm's 21 livery atlases each open an encoder, record 9 mip passes and submit inside
+// createTexture (21 encoders + 21 submits, 189 passes, 189 bind groups, 378 views, 189 layout
+// fetches). Knob on, every atlas made before the next submit shares ONE encoder + ONE submit,
+// level L-1's attachment view is level L's source, and the auto layout is fetched once. The pass
+// list itself — textures, levels, sources, sampler, load/store/clear, draw — must not change.
+const MIP_ATLAS = { width: 640, height: 512 };   // a canvas-like source: copyExternalImageToTexture, 10 levels
+const mipTick = () => new Promise((resolve) => setTimeout(resolve, 5));
+const mipCount = (log, kind) => log.filter((e) => e[0] === kind).length;
+// Every mip pass (attachment on one of `atlases`, level >= 1) as plain data, in record order.
+function mipTrace(h, from, atlases) {
+  const out = [];
+  let cur = null;
+  for (const [k, a] of h.passCalls.slice(from)) {
+    if (k === "beginRenderPass") {
+      const att = a[0].colorAttachments[0], v = att && att.view;
+      cur = v && atlases.includes(v.texture)
+        ? { tex: atlases.indexOf(v.texture), dst: v.viewDesc, load: att.loadOp, store: att.storeOp, clear: att.clearValue }
+        : null;
+    } else if (!cur) continue;
+    else if (k === "setPipeline") cur.pipe = !!a[0];
+    else if (k === "setBindGroup") {
+      const src = a[1].entries[0].resource;
+      cur.slot = a[0]; cur.srcTex = atlases.indexOf(src.texture); cur.src = src.viewDesc; cur.samp = a[1].entries[1].resource;
+    } else if (k === "draw") cur.draw = a;
+    else if (k === "end") { out.push(cur); cur = null; }
+  }
+  return JSON.parse(JSON.stringify(out));   // each harness is its own vm realm: compare plain data
+}
+async function mipRun(knobOff, n = 3) {
+  const storage = new Map([["apex26.gfxPreset", JSON.stringify("ultra")]]);
+  if (knobOff) storage.set("apex26.wgxMipBatch", "0");
+  const h = makeGpuHarness({ storage, reflectTextures: true, recordPass: true });
+  const gfx = await h.create();
+  await mipTick();
+  const log0 = h.gpuLog.length, pc0 = h.passCalls.length;
+  const v0 = h.viewCount(), bg0 = h.bindGroupCount(), bgl0 = h.bglCount();
+  const toks = Array.from({ length: n }, () => gfx.createTexture(MIP_ATLAS));
+  const syncLog = h.gpuLog.slice(log0);
+  await mipTick();
+  return { h, gfx, toks, syncLog, log: h.gpuLog.slice(log0), trace: mipTrace(h, pc0, toks.map((t) => t.texture)),
+    views: h.viewCount() - v0, bgs: h.bindGroupCount() - bg0, bgl: h.bglCount() - bgl0 };
+}
+
+test("HUNT5-C: atlas mips share one encoder + one submit; knob 0 keeps one per atlas; the passes are identical", async () => {
+  const on = await mipRun(false), off = await mipRun(true);
+  // Knob 0 is today's sequence: each createTexture opens, records and submits its own encoder.
+  assert.equal(mipCount(off.syncLog, "encoder"), 3, "knob 0: one encoder per atlas, inside createTexture");
+  assert.equal(mipCount(off.syncLog, "submit"), 3, "knob 0: one submit per atlas");
+  assert.equal(mipCount(off.syncLog, "pass"), 27);
+  assert.equal(off.bgl, 27, "knob 0: an auto-layout fetch per level");
+  assert.equal(off.views, 3 * (18 + 1), "knob 0: src + dst view per level, plus the token's view");
+  // Knob on: createTexture records nothing; the 0 ms timer flushes all three at once.
+  assert.equal(on.syncLog.length, 0, "no encoder, pass or submit inside createTexture");
+  assert.equal(mipCount(on.log, "encoder"), 1, "one encoder for every queued atlas");
+  assert.equal(mipCount(on.log, "submit"), 1, "one submit");
+  assert.equal(mipCount(on.log, "pass"), 27);
+  const enc = on.log.find((e) => e[0] === "encoder")[1];
+  assert.deepEqual(on.log.find((e) => e[0] === "submit")[1], [enc], "the submit carries that encoder");
+  assert.ok(on.log.filter((e) => e[0] === "pass").every((e) => e[1] === enc), "every mip pass is on it");
+  assert.ok(on.bgl <= 1, `auto layout fetched once per pipeline, not per level (${on.bgl})`);
+  assert.equal(on.views, 3 * (10 + 1), "one view per level (L-1's attachment is L's source), plus the token's view");
+  assert.equal(on.bgs, 27); assert.equal(off.bgs, 27, "one bind group per level either way");
+  // Identical mip contents: the same pass list, in the same order.
+  assert.equal(on.trace.length, 27);
+  assert.deepEqual(on.trace, off.trace, "knob on records exactly knob 0's passes");
+  on.trace.forEach((p, i) => {
+    assert.equal(p.tex, Math.floor(i / 9)); assert.equal(p.srcTex, p.tex, "samples its own texture");
+    assert.equal(p.dst.baseMipLevel, (i % 9) + 1); assert.equal(p.src.baseMipLevel, p.dst.baseMipLevel - 1, "from the parent level");
+    assert.equal(p.dst.mipLevelCount, 1); assert.equal(p.src.mipLevelCount, 1);
+    assert.equal(p.dst.baseArrayLayer, 0); assert.equal(p.src.baseArrayLayer, 0);
+    assert.equal(p.load, "clear"); assert.equal(p.store, "store"); assert.deepEqual(p.draw, [3]); assert.equal(p.slot, 0);
+  });
+  // The token is unchanged: the full-chain view drawDecal samples.
+  for (const t of on.toks) { assert.ok(t.view && t.texture); assert.equal(t.view.viewDesc, undefined, "the token view is the whole chain"); }
+});
+
+test("HUNT5-C: queued atlas mips are submitted before the frame that can sample them, exactly once", async () => {
+  const storage = new Map([["apex26.gfxPreset", JSON.stringify("ultra")]]);
+  const h = makeGpuHarness({ storage, reflectTextures: true, recordPass: true });
+  const gfx = await h.create();
+  await mipTick();
+  const log0 = h.gpuLog.length;
+  const tok = gfx.createTexture(MIP_ATLAS);
+  assert.equal(gfx.begin({}), true);
+  gfx.present({});   // synchronously, before the 0 ms timer
+  await mipTick();
+  const log = h.gpuLog.slice(log0);
+  const mipPasses = log.filter((e) => e[0] === "pass" && e[2].colorAttachments[0].view
+    && e[2].colorAttachments[0].view.texture === tok.texture);
+  assert.equal(mipPasses.length, 9, "built once — the timer finds the queue empty");
+  const mipEnc = mipPasses[0][1];
+  const submits = log.map((e, i) => [e, i]).filter(([e]) => e[0] === "submit");
+  const mipSub = submits.find(([e]) => e[1].includes(mipEnc));
+  assert.ok(mipSub, "the mip encoder was submitted");
+  const frameSub = submits[submits.length - 1];
+  assert.ok(!frameSub[0][1].includes(mipEnc) && mipSub[1] < frameSub[1], "mip submit precedes the frame's submit");
+});
+
+test("HUNT5-C: a freed or failing atlas drops out of the shared mip batch without voiding the rest", async () => {
+  const storage = new Map([["apex26.gfxPreset", JSON.stringify("ultra")]]);
+  const h = makeGpuHarness({ storage, reflectTextures: true, recordPass: true });
+  const gfx = await h.create();
+  await mipTick();
+  // Freed before the flush: a destroyed texture in the batch would invalidate the whole command buffer.
+  let pc0 = h.passCalls.length, log0 = h.gpuLog.length;
+  const a = gfx.createTexture(MIP_ATLAS), b = gfx.createTexture(MIP_ATLAS);
+  gfx.freeTexture(a);
+  await mipTick();
+  let tr = mipTrace(h, pc0, [a.texture, b.texture]);
+  assert.equal(tr.length, 9); assert.ok(tr.every((p) => p.tex === 1 && p.srcTex === 1), "only the live atlas is blitted");
+  assert.equal(mipCount(h.gpuLog.slice(log0), "submit"), 1);
+  // A ladder that throws (view allocation) costs that atlas its mips, not its batch-mates'.
+  pc0 = h.passCalls.length; log0 = h.gpuLog.length;
+  const c = gfx.createTexture(MIP_ATLAS), d = gfx.createTexture(MIP_ATLAS);
+  h.failNextView(1);   // the first view the flush makes: c's level 0
+  await mipTick();
+  h.clearFailures();
+  tr = mipTrace(h, pc0, [c.texture, d.texture]);
+  assert.equal(tr.length, 9); assert.ok(tr.every((p) => p.tex === 1), "d still gets its mips");
+  assert.equal(mipCount(h.gpuLog.slice(log0), "submit"), 1);
+  assert.match(WGX_SOURCE, /localStorage\.getItem\("apex26\.wgxMipBatch"\) === "0"/, "the knob reads apex26.wgxMipBatch");
 });
