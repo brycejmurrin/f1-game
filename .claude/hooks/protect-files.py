@@ -144,6 +144,10 @@ def live_playwright_in(root):
 def check(file, tool, ti, proposed=None, how=""):
     """The three rules for one target file. `proposed` is the file's content
     after the call when it is computable (a Write, a simulated sed, a cp)."""
+    # Resolve symlinks FIRST (red-team round 2, 2026-10-14): a link outside the
+    # repo pointing at version.json wrote through, because the repo root came
+    # from the LINK's directory. realpath also resolves a not-yet-existing tail.
+    file = os.path.realpath(file)
     d_ = os.path.dirname(file) or "."
     while d_ and d_ != "/" and not os.path.isdir(d_):   # a Bash write may create the directory
         d_ = os.path.dirname(d_)
@@ -155,7 +159,7 @@ def check(file, tool, ti, proposed=None, how=""):
     # Playwright run corrupts the run whoever assigned it, so that check runs
     # first, flag or no flag (2026-09-22; before, the flag skipped every rule).
     allow = os.path.exists(os.path.join(root, ".claude", "allow-protected"))
-    rel = os.path.relpath(os.path.realpath(file) if os.path.exists(file) else file, root)
+    rel = os.path.relpath(file, root)
     base = os.path.basename(file)
     via = f" (via Bash: {how})" if tool == "Bash" else ""
 
@@ -269,6 +273,15 @@ if tool == "Bash":
                 except Exception:
                     proposed = None
         check(t["path"], "Bash", {}, proposed, t["kind"])
+    if SURVEYOR:
+        # Removals and whole-tree git moves are writes too (round 2): `mv js/game.js
+        # scratch/`, `rm -rf js/track`, `git stash`, `git reset --hard`, `git switch`.
+        for t in shellparse.surveyor_targets(cmd, d.get("cwd") or os.getcwd()):
+            if t["path"] is None:
+                block(f"{t['kind']} (via Bash) rewrites the whole tree: track-surveyor writes only js/circuits/<id>.js, "
+                      "js/circuits/scenery/<id>.js, scratch/ and artifacts/ (.claude/agents/track-surveyor.md). "
+                      "Report it for the parent instead.", d.get("cwd") or os.getcwd(), hatch=False)
+            check(t["path"], "Bash", {}, None, t["kind"] + " — a removal")
     sys.exit(0)
 
 file = ti.get("file_path") or ti.get("notebook_path") or ""

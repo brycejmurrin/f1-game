@@ -374,12 +374,14 @@ test("protect-files scopes track-surveyor writes to circuit pairs, scratch/ and 
   } finally { repo.rm(); }
 });
 
-test("guards that fail open say so on stderr", () => {
-  for (const script of ["protect-files.sh", "mcp-browser-guard.sh"]) {
-    const r = hook(script, "not json");
-    assert.equal(r.status, 0, script);
-    assert.match(r.stderr, /WARNING .*did NOT run/, `${script} must warn when it cannot read the payload`);
-  }
+test("guards that fail open say so on stderr; the MCP browser guard fails CLOSED (round 2)", () => {
+  const r = hook("protect-files.sh", "not json");
+  assert.equal(r.status, 0);
+  assert.match(r.stderr, /WARNING .*did NOT run/, "protect-files must warn when it cannot read the payload");
+  // an unreadable payload cannot say whether a subagent sent it: refuse the browser tool
+  const m = hook("mcp-browser-guard.sh", "not json");
+  assert.equal(m.status, 2);
+  assert.match(m.stderr, /BLOCKED: mcp-browser-guard could not read the hook payload/);
   assert.match(fs.readFileSync(path.join(ROOT, ".claude/hooks/protect-files.py"), "utf8"),
     /except Exception as e:\s*\n(\s*#.*\n)*\s*sys\.stderr\.write\(f"protect-files: WARNING shellparse failed/,
     "a shellparse crash must warn before failing open");
@@ -415,4 +417,204 @@ test("github-mcp-guard: merge commits only, asks before merge/arm and the draft�
   for (const n of ["mcp__github__enable_pr_auto_merge", "mcp__github__update_pull_request", "mcp__github__merge_pull_request"]) assert.ok(re.test(n), n);
   for (const n of ["mcp__github__update_pull_request_branch", "mcp__github__disable_pr_auto_merge"])
     assert.ok(!re.test(n), `matcher must not catch ${n}`);
+});
+
+// ── RED-TEAM ROUND 2 (2026-10-14, docs/notes/AGENT-GUARDS-2026-10-14.md) ─────
+// Every shape below walked past a guard in scratch/retest/hooks-redteam.md; the
+// must-pass lists are the false-positive half of the same table.
+const DEPLOY = "claude/f1-game-project-26h3ng";
+const bashCall = (command, extra = {}) => ({ tool_name: "Bash", tool_input: { command }, ...extra });
+const decisionOf = (r) => { try { return JSON.parse(r.stdout.trim().split("\n").pop()).hookSpecificOutput.permissionDecision; } catch { return null; } };
+
+test("round 2 push: refspec DWIM, @, globs, --prune, config, abbreviations, aliases and wrappers all block", () => {
+  const repo = scratchRepo("hook-push2-");
+  const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir });
+  try {
+    repo.g("checkout", "-qb", "cursor/topic-1234");
+    for (const c of [
+      `git push origin HEAD:heads/${DEPLOY}`, `git push origin heads/${DEPLOY}`, "git push origin 'refs/heads/*:refs/heads/*'",
+      "git push --prune origin 'refs/heads/*:refs/heads/*'", "git push --prune origin cursor/x",
+      "git -c push.default=matching push origin", "git -c push.default=current push", "git -c remote.origin.push=refs/heads/*:refs/heads/* push",
+      "git -c remote.origin.mirror=true push origin", "git -c alias.p=push p -f origin x", "git -c 'alias.p=!git push -f' p origin x",
+      "git push --force-w origin x", "git push --forc origin x", "git push --mirr origin", "git push --dele origin cursor/old",
+      "git push --al origin", "git push --branches origin", "git push --bran origin",
+      "setsid git push -f origin x", "flock /tmp/l git push -f origin x", "flock -w 5 /tmp/l -c 'git push -f origin x'",
+      "bash -o pipefail -c 'git push -f origin x'", "bash -c -- 'git push -f origin x'", "sh -ec 'git push -f origin x'",
+      "bash <<< 'git push -f origin x'", "echo 'git push -f origin x' | bash", "printf 'git push -f origin x\\n' | sh",
+      "env -S 'git push -f origin x'", "ionice -c 3 git push -f origin x", "nice -n 5 timeout -s KILL 30 git push -f origin x",
+    ]) {
+      const r = run(c);
+      assert.equal(r.status, 2, `must block: ${c} (${r.stderr})`);
+      assert.match(r.stderr, /BLOCKED/, c);
+    }
+    for (const c of ["git push -u origin cursor/topic-1234", "git push", "git push origin HEAD", "git push origin @",
+      "git push origin cursor/x:cursor/x", "git push --follow-tags origin cursor/x", "git push --no-force-with-lease origin cursor/x",
+      "git push --set-upstream origin cursor/x", "git push --tags origin", "git commit --dry-run -F - <<'EOF'\nsubject\n\nnever git push -f\nEOF"])
+      assert.equal(run(c).status, 0, `must allow: ${c} (${run(c).stderr})`);
+    repo.g("checkout", "-qb", DEPLOY);
+    for (const c of ["git push origin @", "git push -u origin @"])
+      assert.equal(run(c).status, 2, `on the deploy branch, must block: ${c}`);
+    // a configured matching push from a bare `git push` widens it too
+    repo.g("checkout", "-qb", "cursor/cfg-1");
+    repo.g("config", "push.default", "matching");
+    assert.equal(run("git push").status, 2, "push.default=matching in git config");
+    assert.equal(run("git push origin cursor/cfg-1").status, 0, "an explicit refspec ignores push.default");
+  } finally { repo.rm(); }
+});
+
+test("round 2 commit detection: wrapped commits and aliases still run the guards", () => {
+  const repo = scratchRepo("hook-commit2-");
+  const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "1" } });
+  try {
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note 3\n");
+    repo.g("add", "docs/PHYSICS.md");
+    for (const c of ["git -c alias.ci=commit ci -m x", "bash <<< 'git commit -m x'", "echo 'git commit -m x' | sh",
+      "bash -o pipefail -c 'git commit -m x'", "setsid git commit -m x", "flock /tmp/l git commit -m x", "sh -ec 'git commit -m x'",
+      "bash -c -- 'git commit -m x'", "env -S 'git commit -m x'"]) {
+      const r = run(c);
+      assert.match(r.stderr, /bash-guard probe: commit/, `the guard must SEE this commit: ${c}`);
+    }
+    for (const c of ["echo 'git commit -m x'", "git commit --dry-run -m x", "echo 'git commit -m x' | cat", "git log -1"])
+      assert.doesNotMatch(run(c).stderr, /probe: commit/, `not a guarded commit: ${c}`);
+  } finally { repo.rm(); }
+});
+
+test("round 2 gh: squash/rebase denied, other merges / ready flips ask, Merge Desk skips the ask", () => {
+  const run = (command, env = { APEX_MERGE_DESK: "" }) => hook("bash-guard.sh", bashCall(command), { env });
+  const deny = ["gh pr merge 12 --squash", "gh pr merge 12 -s", "gh pr merge 12 --rebase", "gh pr merge 12 -r --auto",
+    "bash -c 'gh pr merge 1 --squash'", "gh api -X PUT repos/o/r/pulls/12/merge -f merge_method=squash",
+    "gh api graphql -f query='mutation { enablePullRequestAutoMerge(input:{pullRequestId:\"x\", mergeMethod: SQUASH}) { clientMutationId } }'"];
+  const ask = ["gh pr merge 12", "gh pr merge 12 --merge", "gh pr merge 12 --merge --auto", "gh pr merge 12 --squash=false --merge",
+    "gh pr ready 12", "gh api -X PUT repos/o/r/pulls/12/merge", "gh api --method=PUT repos/o/r/pulls/12/merge",
+    "gh api graphql -f query='mutation { markPullRequestReadyForReview(input:{pullRequestId:\"x\"}) { clientMutationId } }'",
+    "gh api -X POST repos/o/r/merges -f base=x -f head=y"];
+  const pass = ["gh pr view 12", "gh pr list", "gh pr ready 12 --undo", "gh pr edit 12 --body 'never gh pr merge --squash'",
+    "gh api repos/o/r/pulls/12/merge", "gh api repos/o/r/pulls/12", "gh pr create --draft --title t --body-file - <<'EOF'\ngh pr merge 1 --squash\nEOF",
+    "git commit --dry-run -m 'gh pr merge 12 --squash'", "echo gh pr merge 12 --squash"];
+  for (const c of deny) {
+    for (const env of [{ APEX_MERGE_DESK: "" }, { APEX_MERGE_DESK: "1" }]) {
+      const r = run(c, env);
+      assert.equal(decisionOf(r), "deny", `${c} ${JSON.stringify(env)}: ${r.stdout}`);
+      assert.match(r.stdout, /MERGE-COMMIT-ONLY/);
+    }
+  }
+  for (const c of ask) {
+    const r = run(c);
+    assert.equal(decisionOf(r), "ask", `${c}: ${r.stdout}`);
+    assert.equal(decisionOf(run(c, { APEX_MERGE_DESK: "1" })), null, `Merge Desk passes ${c}`);
+  }
+  assert.match(run("gh pr merge 12").stdout, /ready-gate\.mjs[\s\S]*ready-full-cap\.mjs/, "the reason is github-mcp-guard's");
+  for (const c of pass) assert.equal(decisionOf(run(c)), null, `silent pass: ${c}`);
+});
+
+test("round 2 subagent ban: decided on the parsed argv, every runner spelling, node-only checks stay open", () => {
+  const sub = (command, extra = { agent_id: "a1", agent_type: "general-purpose" }) => hook("bash-guard.sh", bashCall(command, extra));
+  const browser = ["node \"tools/ci/test-bg.mjs\" smoke", "npx playwright 'test'", "eval \"npm test\"", "sh -ec 'npm test'",
+    "bash -c -- 'npx playwright test'", "npm t", "npm tst", "npm run-script test:smoke", "npm --silent test", "npm exec playwright test",
+    "npm exec -- playwright test", "npx --yes playwright test", "npx -y playwright test", "./node_modules/.bin/playwright test",
+    "node node_modules/@playwright/test/cli.js test", "cd tools/shot && node shot.mjs monza", "cd tools && node ./ui/layout-audit.mjs",
+    "tools/mcp/apex-tools-mcp.sh call apex_shot '{\"track\":\"monza\"}'", "tools/mcp/apex-tools-mcp.sh call apex_hud_mock '{}'",
+    "node tools/mcp/apex-tools-mcp.mjs call apex_eval '{}'", "echo 'npm test' | bash", "bash <<< 'npx playwright test'",
+    "setsid npm test", "flock /tmp/l npm test", "xargs -I{} npm run test:smoke", "env CI=1 npx playwright test",
+    "node tools/ci/verify-change.mjs", "npm run test", "npx -c 'playwright test'"];
+  const open = ["npm run test:tooling-fast", "node --test tests/unit/docs-integrity.test.mjs", "node tools/shot/shot.mjs --help",
+    "node tools/ui/css-play.mjs --plan", "node tools/ci/test-bg.mjs --status", "node tools/ci/test-bg.mjs --tail smoke",
+    "node tools/ci/verify-change.mjs --fast", "node tools/shot/frame-report.mjs monza", "echo 'npm test'", "grep -rn 'playwright test' docs",
+    "tools/mcp/apex-tools-mcp.sh call apex_status '{}'", "npx playwright install chromium", "cat <<'EOF'\nnpm test\nEOF",
+    "node tools/ci/tooling-fast.mjs --jobs=3", "npm run test:guards"];
+  for (const c of browser) assert.equal(sub(c).status, 2, `a subagent must not run: ${c}`);
+  for (const c of open) assert.equal(sub(c).status, 0, `a subagent may run: ${c} (${sub(c).stderr})`);
+  assert.equal(sub("npm t", { agent_type: "verify-agent" }).status, 2, "agent_type alone marks a subagent");
+  for (const c of browser.slice(0, 6)) assert.equal(hook("bash-guard.sh", bashCall(c)).status, 0, `the main session may run: ${c}`);
+});
+
+test("round 2 mcp-browser-guard: agent_type counts, the apex browser list matches the MCP catalog and the matcher", () => {
+  const run = (payload) => hook("mcp-browser-guard.sh", payload);
+  assert.equal(run({ tool_name: "mcp__playwright-official__browser_navigate", agent_type: "general-purpose" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__apex-tools__apex_hud_mock", agent_id: "a1" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__apex-tools__apex_hud_mock" }).status, 0, "the main session keeps its browser");
+  // every catalog entry that boots Chromium (kind "browser", or week 2) is guarded in all three places
+  const src = fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs"), "utf8");
+  const cat = src.slice(src.indexOf("const CATALOG = ["));
+  const blocks = cat.split(/\n\s{4}name: "/).slice(1);
+  const browserTools = blocks.filter((b) => /^\s*(kind: "browser"|week: 2),?$/m.test(b.split(/\n\s{2}\},?\n/)[0])).map((b) => b.split('"')[0]);
+  assert.ok(browserTools.includes("apex_hud_mock") && browserTools.length >= 10, `catalog parse: ${browserTools}`);
+  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
+  const matcher = new RegExp(settings.hooks.PreToolUse.find((g) => g.hooks.some((h) => h.command.includes("mcp-browser-guard.sh"))).matcher);
+  const parse = fs.readFileSync(path.join(ROOT, ".claude/hooks/shellparse.py"), "utf8");
+  for (const t of [...browserTools, "apex_job_start"]) {
+    assert.ok(matcher.test(`mcp__apex-tools__${t}`), `settings matcher must select ${t}`);
+    assert.equal(run({ tool_name: `mcp__apex-tools__${t}`, agent_id: "a1" }).status, 2, `hook must block ${t}`);
+    assert.match(parse, new RegExp(`"${t}"`), `shellparse APEX_BROWSER must list ${t} (apex-tools-mcp.sh call)`);
+  }
+});
+
+test("round 2 protect-files: a symlink resolves before the rules; surveyor removals and whole-tree git verbs block", () => {
+  const repo = scratchRepo("hook-pf2-");
+  const out = fs.mkdtempSync(path.join(ROOT, "artifacts", "hook-pf2-link-"));
+  const run = (payload) => hook("protect-files.sh", { cwd: repo.dir, ...payload }, { cwd: repo.dir });
+  try {
+    fs.writeFileSync(path.join(repo.dir, "version.json"), "{}\n");
+    fs.symlinkSync(path.join(repo.dir, "version.json"), path.join(out, "v.json"));
+    const w = run({ tool_name: "Write", tool_input: { file_path: path.join(out, "v.json"), content: "x" } });
+    assert.equal(w.status, 2, w.stderr);
+    assert.match(w.stderr, /version\.json.*GENERATED/);
+    const surv = (command) => run({ tool_name: "Bash", tool_input: { command }, agent_id: "s1", agent_type: "track-surveyor" });
+    for (const c of ["mv js/game.js scratch/g.js", "rm -rf js/track", "rm docs/PHYSICS.md", "git stash", "git stash pop",
+      "git reset --hard", "git clean -fd", "git switch main", "git checkout -b x", "unlink js/game.js "])
+      assert.equal(surv(c).status, 2, `surveyor must not: ${c}`);
+    for (const c of ["rm scratch/x.txt", "mv scratch/a js/circuits/monza.js", "git stash list", "git clean -n", "rm -rf artifacts/old",
+      "git status", "cp scratch/x js/circuits/scenery/monza.js"])
+      assert.equal(surv(c).status, 0, `surveyor may: ${c} (${surv(c).stderr})`);
+    // a generated file removed or rewritten by the cheap channels is a hand edit too
+    for (const c of ["rm version.json", "awk -i inplace '{print}' version.json"])
+      assert.equal(run({ tool_name: "Bash", tool_input: { command: c } }).status, 2, c);
+    assert.equal(run({ tool_name: "Bash", tool_input: { command: "rm -rf scratch/x" } }).status, 0);
+  } finally { repo.rm(); fs.rmSync(out, { recursive: true, force: true }); }
+});
+
+test("round 2 github-mcp-guard: falsy draft spellings ask; Merge Desk must name MERGE to arm", () => {
+  const run = (tool_name, tool_input, env = { APEX_MERGE_DESK: "" }) => decisionOf(hook("github-mcp-guard.sh", { tool_name, tool_input }, { env }));
+  for (const draft of [false, 0, "0", "no", "NO", "False", "off"])
+    assert.equal(run("mcp__github__update_pull_request", { pullNumber: 1, draft }), "ask", `draft ${JSON.stringify(draft)}`);
+  for (const draft of [true, 1, "true", null]) assert.equal(run("mcp__github__update_pull_request", { pullNumber: 1, draft }), null);
+  const desk = { APEX_MERGE_DESK: "1" };
+  assert.equal(run("mcp__github__enable_pr_auto_merge", { pullNumber: 1 }, desk), "ask", "an omitted method is the repo default");
+  assert.equal(run("mcp__github__enable_pr_auto_merge", { pullNumber: 1, mergeMethod: "MERGE" }, desk), null);
+  for (const m of ["Squash-merge", ["squash"], "REBASE "]) assert.equal(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: m }), "deny", JSON.stringify(m));
+});
+
+test("a PASSING commit tells the model which guard path ran: additionalContext + systemMessage JSON, exit 0", () => {
+  // stderr is hidden on exit 0, so the docs-only vs full-guards path was invisible after a green commit.
+  const repo = scratchRepo("hook-ctx-");
+  try {
+    fs.mkdirSync(path.join(repo.dir, "tools/check"), { recursive: true });
+    fs.mkdirSync(path.join(repo.dir, "tests/unit"), { recursive: true });
+    fs.mkdirSync(path.join(repo.dir, "node_modules"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "tools/check/ratchets.mjs"), "process.exit(0);\n");
+    fs.writeFileSync(path.join(repo.dir, "package.json"), JSON.stringify({ scripts: { "test:guards": "true" } }));
+    fs.writeFileSync(path.join(repo.dir, "tests/unit/docs-integrity.test.mjs"), "import { test } from 'node:test'; test('ok', () => {});\n");
+    repo.g("add", "-A"); repo.g("commit", "-qm", "stubs");
+    const commit = (command = "git commit -m x") => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }),
+      { cwd: repo.dir, env: { APEX_GUARD_PROBE: "" } });
+    const out = (r) => { assert.equal(r.status, 0, r.stderr); return JSON.parse(r.stdout); };
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note ctx\n");
+    repo.g("add", "docs/PHYSICS.md");
+    let j = out(commit());
+    assert.equal(j.hookSpecificOutput.hookEventName, "PreToolUse");
+    assert.equal(j.hookSpecificOutput.permissionDecision, undefined, "context only: the allow is unchanged");
+    assert.match(j.hookSpecificOutput.additionalContext, /docs-only commit — ran tests\/unit\/docs-integrity\.test\.mjs only \(green, \d+ s\)/);
+    assert.equal(j.systemMessage, j.hookSpecificOutput.additionalContext);
+    repo.g("reset", "-q"); repo.g("checkout", "--", "docs/PHYSICS.md");
+    fs.writeFileSync(path.join(repo.dir, "a.js"), "1;\n");
+    repo.g("add", "a.js");
+    j = out(commit());
+    assert.match(j.hookSpecificOutput.additionalContext, /code commit — ratchets --auto-raise \(0 raised\/lowered\) then npm run test:guards \(green, \d+ s/);
+    // a commit plus a gh ask: still ONE object, carrying both
+    j = out(commit("git commit -m x && gh pr ready 12"));
+    assert.equal(j.hookSpecificOutput.permissionDecision, "ask");
+    assert.match(j.hookSpecificOutput.additionalContext, /code commit/);
+    // no commit, no gh: stdout stays empty
+    assert.equal(hook("bash-guard.sh", bashCall("git status", { cwd: repo.dir }), { cwd: repo.dir }).stdout, "");
+  } finally { repo.rm(); }
 });
