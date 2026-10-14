@@ -327,8 +327,10 @@ const CircuitKit = (function () {
         }
         if (!box(stage, place, [0, -place.size[1] * 0.08, 0],
           [place.size[0], place.size[1] * 0.84, place.size[2]], "shell")) return false;
+        // Seated on the shell (top 0.34 H), lapping it by 0.01 H so the two
+        // faces never share a plane; at 0.46 H it floated 0.08 H clear.
         return landmark("roof", stage, place, {
-          offset: [0, place.size[1] * 0.46, 0],
+          offset: [0, place.size[1] * 0.37, 0],
           size: [place.size[0] * 1.12, place.size[1] * 0.08, place.size[2] * 1.12],
           kind: spec.style || "flat",
           colorName: "roof",

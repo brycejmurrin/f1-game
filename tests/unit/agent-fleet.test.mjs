@@ -2,7 +2,7 @@
 // (.claude/skills/agent-fleet, docs/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md).
 // Each case is a mistake a real session made or was told to make on 2026-10-10:
 // AGENTS.md called Claude Code's only PR-watch tool "a fake name", a launch
-// prompt without the fields AGENTS.md §Concurrent PRs requires, and a fleet
+// prompt without the fields the launch policy requires, and a fleet
 // block whose keys drifted between the skill and the worker reference.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -78,15 +78,18 @@ test("the fleet block keys are the same in the skill and the worker reference", 
     "one escalation comment prefix, the same in both references");
 });
 
-test("the launch template carries every field AGENTS.md §Concurrent PRs requires", () => {
+test("the launch template carries every field the agent-fleet launch policy requires", () => {
   const tpl = ORCH.match(/## Launch template[\s\S]*?```text\n([\s\S]*?)```/);
   assert.ok(tpl, "orchestrator.md has the fenced launch template");
   for (const field of ["OWNED:", "FORBIDDEN:", "DONE WHEN:", "CAPS:", "ORCHESTRATOR:",
     "ready-gate.mjs", "ready-full-cap.mjs", "Do not enable auto-merge or merge."]) {
     assert.ok(tpl[1].includes(field), `launch template lost ${field}`);
   }
-  assert.match(read("AGENTS.md"), /the exact line `Do not enable auto-merge or merge\.`/,
-    "the template's last line is the one AGENTS.md mandates verbatim");
+  // The policy moved from AGENTS.md §Concurrent PRs to the skill (2026-10-14 trim); the pin moved with it.
+  const policy = SKILL.split("## Launch policy")[1] || "";
+  assert.match(policy, /the exact line `Do not enable auto-merge or merge\.`/,
+    "the template's last line is the one the skill's §Launch policy mandates verbatim");
+  assert.match(read("AGENTS.md"), /skill `agent-fleet` §Launch policy/, "AGENTS.md points launch policy at the skill");
 });
 
 test("the skill routes to both references and to its evidence note", () => {

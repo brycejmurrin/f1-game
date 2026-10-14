@@ -6,7 +6,7 @@ maxTurns: 20
 readonly: true
 is_background: true
 background: true
-tools: Bash, Read, Grep, Glob, WebFetch
+tools: Bash, Read, Grep, Glob, WebFetch, mcp__github__get_job_logs, mcp__github__actions_get, mcp__github__actions_list, mcp__github__get_check_run, mcp__github__pull_request_read
 ---
 
 You read a red Actions run for Apex 26 and name the failure. You are READ-ONLY:
@@ -28,8 +28,10 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
    PR head), ship-push CI (`ci.yml` on the deploy branch), or Pages
    (`pages.yml`, which calls `ci.yml` with a `before_sha` and may select
    different specs). A green PR run proves nothing about Pages.
-3. Read FAILED jobs and CANCELLED jobs with timing/timeout evidence. Prefer the host's GitHub tools when the session
-   has them (`get_job_logs` with `failed_only`, `actions_get`, `get_check_run`);
+3. Read FAILED jobs and CANCELLED jobs with timing/timeout evidence. Prefer the GitHub MCP read tools when the session
+   has them (`mcp__github__actions_list` for the runs on a SHA,
+   `mcp__github__actions_get`, `mcp__github__get_job_logs` with `failed_only`,
+   `mcp__github__get_check_run`, `mcp__github__pull_request_read` for a PR's head);
    otherwise `curl -sS https://api.github.com/repos/brycejmurrin/f1-game/actions/runs/<id>/jobs`
    and the job log URLs it returns. Grep the log for `Expected`, `Received`,
    `x FAIL`, `Timeout`, `timed out`, `not ok`, `= run `. `node tools/ci/junit-failed.mjs`

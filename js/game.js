@@ -1463,9 +1463,10 @@ function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still) {
   // finish remap never reached them — a chrome/satin car kept glossy top flaps.
   // Thread the livery finish through so getAeroFlap remaps the flap material too.
   const finish = resolveLivery(team).finish || null;
+  const co = typeof CarDraw !== "undefined" ? CarDraw.coOpt(mat) : mat;   // A-H3 (hunt 4): opaque flaps join R1's coalesced runs on TLX; GLX/WGX and alpha < 1 get `mat` itself
   if (still || b === 0 || b === 1) {
     const set = CarMesh.getAeroFlapSet(aLvl, col, style, finish, b >= 0.5, only);
-    if (set) gfx.draw(set, modelMat, mat);
+    if (set) gfx.draw(set, modelMat, co);
     if (b >= 0.5 && CarMesh.drawAeroEdge) CarMesh.drawAeroEdge(modelMat, aLvl, style, 1);
     return;
   }
@@ -1490,7 +1491,7 @@ function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still) {
       W[12 + k] += uu * fg.y + ff * fg.z;
     }
     const mesh = CarMesh.getAeroFlap(aLvl, col, i, style, fg, finish);
-    if (mesh) gfx.draw(mesh, W, mat);
+    if (mesh) gfx.draw(mesh, W, co);
   }
   if (CarMesh.drawAeroEdge) CarMesh.drawAeroEdge(modelMat, aLvl, style, b);
 }
