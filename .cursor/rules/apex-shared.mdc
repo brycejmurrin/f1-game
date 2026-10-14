@@ -29,7 +29,8 @@ alwaysApply: true
   `cursor` / `cursor-cloud` / `cursor-subscriptions`, plus `apex-tools` / `chrome-devtools` /
   `playwright-official` after Bootstrap §3; if only the three `cursor*` appear, use the CLI fallbacks
   above, invent no namespace, and re-Save when `environment-info` shows nameless bare-`bash` allowlist
-  rows. After every PR push: `subscribe_github_ci` + `subscribe_github_pr` + `subscribe_timer`. Serve
+  rows. After every PR push: `subscribe_github_ci` + `subscribe_github_pr`; one timer
+  check-in (~1 h) only if the host lists `subscribe_timer` / `send_later` (do not invent it). Serve
   locally for browser checks (the VM rarely reaches github.io). using-superpowers / brainstorming
   hard-gates are optional references; AGENTS.md and the skills win.
 - **Token hygiene:** one skill per task; prefer `__apex` / `verify-track` /
