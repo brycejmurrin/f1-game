@@ -155,7 +155,9 @@
             const a = anchor(k, side, dist0 + dd);
             for (let w = w0; w >= 40; w *= 0.8) {
               if (onTrack(a.c[0], a.c[2], w * 1.061 + 3.6)) continue;
-              peak(a.c[0], a.c[2], pyMin, w, h0 * Math.sqrt(w / w0), sand);
+              const g = terrainYAt(a.c[0], a.c[2]);
+              const footY = g != null ? Math.max(pyMin, g - 0.05) : pyMin;
+              peak(a.c[0], a.c[2], footY, w, h0 * Math.sqrt(w / w0), sand);
               placed = true;
               break;
             }
@@ -429,7 +431,10 @@
       }
 
       for (const [idx, s] of [0.31, 0.43, 0.56, 0.69].entries()) {
-        const a = anchor(K(s), 1, 258), b = [a.r, a.u, a.t];
+        const a0 = anchor(K(s), 1, 258), b = [a0.r, a0.u, a0.t];
+        const g = terrainYAt(a0.c[0], a0.c[2]);
+        const lift = g != null && g - a0.c[1] > 0.03 ? g - a0.c[1] + 0.02 : 0;
+        const a = Object.assign({}, a0, { c: vadd(a0.c, a0.u, lift) });
         modelGroup(`zandvoort-surf-${idx}`, {
           center: vadd(a.c, a.u, 0.25),
           size: [48, 1.0, 7],
@@ -511,10 +516,12 @@
         const k = K(0.048);
         const a0 = anchor(k, -1, 122);
         let hi = a0.c[1];
-        for (const alongT of [-4, 0, 4]) {
-          const q = vadd(a0.c, a0.t, alongT);
-          const g = terrainYAt(q[0], q[2]);
-          if (g != null) hi = Math.max(hi, g);
+        for (const alongT of [-8, -4, 0, 4, 8]) {
+          for (const alongR of [-3, 0, 3]) {
+            const q = vadd(vadd(a0.c, a0.t, alongT), a0.r, alongR);
+            const g = terrainYAt(q[0], q[2]);
+            if (g != null) hi = Math.max(hi, g);
+          }
         }
         const lift = hi - a0.c[1] > 0.03 ? hi - a0.c[1] + 0.02 : 0;
         const a = Object.assign({}, a0, { c: vadd(a0.c, a0.u, lift) });
