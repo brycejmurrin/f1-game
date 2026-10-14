@@ -49,6 +49,15 @@ test("fitHud: portrait path caps --hud-z-bot against the side button columns", (
     "portrait width budget reads dock discs without dynamic getElementById");
 });
 
+test("CSS: portrait phone left-aligns the tower so it cannot cover #hud-sectors", () => {
+  assert.match(CSS,
+    /@media\s*\(orientation:\s*portrait\)\s*and\s*\(max-width:\s*500px\)\s*\{[\s\S]*?\.hud-top\s*\{[\s\S]*?flex-wrap:\s*wrap/,
+    "portrait .hud-top wraps and leaves the right column for #hud-sectors");
+  assert.match(CSS,
+    /@media\s*\(orientation:\s*portrait\)\s*and\s*\(max-width:\s*500px\)\s*\{[\s\S]*?\.hud-top\s*\{[\s\S]*?max-width:\s*calc\(100vw/,
+    "portrait .hud-top max-width reserves the sector plate");
+});
+
 test("CSS: portrait phone floors tower labels and sector times at 10 CSS px", () => {
   assert.match(CSS,
     /@media\s*\(orientation:\s*portrait\)\s*and\s*\(max-width:\s*500px\)\s*\{[\s\S]*?#hud-sectors[\s\S]*?font-size:\s*max\(\s*var\(--fs-micro\),\s*calc\(var\(--fs-micro\)\s*\/\s*1\.4\s*\/\s*var\(--hud-z,\s*1\)\)\)/,
