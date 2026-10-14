@@ -244,6 +244,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // mapping reads as 0 %, not as an error, so its filters are pinned here. ~2 s.
   "tests/unit/coverage-merge.test.mjs",
   "tests/unit/cross-file-paths.test.mjs",
+  // cross-tool-guards: Cursor/Codex reach bash-guard through one adapter; .githooks
+  // pre-push refuses deploy-branch, delete and rewrite pushes. Real git, ~2 s.
+  "tests/unit/cross-tool-guards.test.mjs",
   "tests/unit/css-comments.test.mjs",
   "tests/unit/css-critical-path.test.mjs",
   "tests/unit/css-faces.test.mjs",
@@ -531,6 +534,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/legends.test.mjs",
   "tests/unit/lexical-window-guard.test.mjs",
   "tests/unit/light-grid.test.mjs",
+  "tests/unit/light-presets-extreme-knobs.test.mjs",
   "tests/unit/light-presets-knob-range.test.mjs",
   "tests/unit/light-presets.test.mjs",
   "tests/unit/light-store-cond-layer.test.mjs",
@@ -719,6 +723,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // tools/ci/remote-group.mjs + browser-group.yml: the group/shard validation
   // that stands between a dispatch input and a shell, and the run pick. Pure, instant.
   "tests/unit/remote-group.test.mjs",
+  // render() lighting-prep pure-move: renderLightingPrep owns sky/lightning/lamps; call-order pin. ~0.05 s.
+  "tests/unit/render-lighting-prep.test.mjs",
   "tests/unit/renderer-boot-timeout.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
   // Instant-replay ring (js/camera/replay-buf.js): budget, wrap, restore, solo/net scrub gates. ~0.05 s.
@@ -966,6 +972,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 6: lighting tuner compact foot / short-tab --tap-paint
   // floors (#lighting-inner / #lt-* only; camera untouched).
   "tests/unit/ui-fit-lighttune-tap-r6.test.mjs",
+  // ui-fit round 6: Photo Studio #ps-* setting-row selects floor at
+  // --tap-paint (portrait 114×43 soft taps; landscape already clean).
+  "tests/unit/ui-fit-photostudio-tap-r6.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
