@@ -348,8 +348,9 @@ jobs:
       # Until 2026-09-02 the "webgpu" leg above was three.js on WebGPU (TLX), so
       # a WGX shader or present-path change had NO real-GPU evidence at all: the
       # in-container Dawn validates but never executes (tools/gfx/wgx-validate.mjs).
-      # The Verdict holds this leg to: WGX actually bound (GLX.softPresent is
-      # exported by WGX only), the swapchain path on hardware (softPresent
+      # The Verdict holds this leg to: WGX actually bound (gfx.wgx — GLX exports
+      # softPresent too, so gpu-game-check also requires backendState().api
+      # "webgpu"), the swapchain path on hardware (softPresent
       # false — the CPU blit is the SwiftShader path and the "WebGPU is laggy"
       # class), and gpuErrors 0.
       - name: Game check — WGX / WebGPU (native, opt-in)
@@ -359,8 +360,15 @@ jobs:
         shell: bash
         run: |
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
+          # wgxCapture=0 (hunt 4 I3), as on the other three legs: without it WGX
+          # soft-presents every frame under the headless UA — copyTextureToBuffer,
+          # a fresh 2.4-3.7 MB MAP_READ buffer, mapAsync, a JS loop and
+          # putImageData — which no player pays. Pinned by hand on spa dusk:
+          # 20.8 -> 36.7 fps in the driven window, busy 11.7 -> 7.5 ms/frame.
+          # The HeadlessChrome UA still forces MSAA 1 via _softAdapter
+          # (wgx.js), which this pin does not undo.
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
-            --beats 20 --backend webgpu $LS \
+            --beats 20 --ls apex26.wgxCapture=0 --backend webgpu $LS \
             --json "game-wgx-${{ matrix.image }}.json" \
             --shot "game-wgx-${{ matrix.image }}.png"
 
@@ -881,7 +889,7 @@ jobs:
               // The WGX leg: gpu-game-check reports wgx (GLX.softPresent exists,
               // i.e. WGX bound rather than falling back to GLX) and wgxSoftPresent.
               if (path3 === "wgx") {
-                rows.push(`${" ".repeat(8)}wgx:   bound=${gfx.wgx} softPresent=${gfx.wgxSoftPresent} headlessUa=${gfx.headlessUa}${gfx.wgxSoftPresent === true && gfx.headlessUa === true ? " (expected: WGX blits under a headless UA by design)" : ""}`);
+                rows.push(`${" ".repeat(8)}wgx:   bound=${gfx.wgx} softPresent=${gfx.wgxSoftPresent} headlessUa=${gfx.headlessUa}${gfx.wgxSoftPresent === true && gfx.headlessUa === true ? " (expected: WGX blits under a headless UA by design — but this leg pins apex26.wgxCapture=0, so a blit here means the pin was overridden or no longer honoured)" : ""}`);
                 if (hardware && gfx.wgx !== true) bad.push(`wgx: WGX did not bind on a hardware adapter (fell back to GLX, or the surface stopped reporting) — this leg proved nothing about js/render/webgpu/`);
                 // Run 19 (2026-09-02) failed here on macos-latest: WGX sniffs a
                 // HeadlessChrome UA as software (wgx.js, measured black swapchain

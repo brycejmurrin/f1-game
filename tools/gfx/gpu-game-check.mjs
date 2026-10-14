@@ -1147,6 +1147,14 @@ try {
     // presence says WGX bound (not a GLX fallback) and its value says whether
     // the frame reaches #game through the swapchain or the CPU blit.
     r.wgx = typeof g.softPresent === "function";
+    // ...but GLX exports softPresent too (the headless overlay), so on its own
+    // that read "WGX bound" on every GLX leg and on a WGX leg that FELL BACK to
+    // GLX. The bound backend's api settles it: GLX says "webgl2" and has no
+    // __tlx (hunt 4 I3). softPresent/softPresentState are kept for every leg.
+    try { const bs = g.backendState ? g.backendState() : null; r.api = bs && bs.api ? bs.api : null; } catch (_) { r.api = null; }
+    if (r.wgx && r.api === "webgl2" && !g.__tlx) r.wgx = false;
+    try { r.softPresent = typeof g.softPresent === "function" ? !!g.softPresent() : null; } catch (_) { r.softPresent = null; }
+    try { r.softPresentState = g.softPresentState ? g.softPresentState() : null; } catch (_) { r.softPresentState = null; }
     if (r.wgx) { try { r.wgxSoftPresent = !!g.softPresent(); } catch (e) { r.wgxSoftPresentError = String(e && e.message); } }
     // WGX classifies a HeadlessChrome UA as software on purpose (the swapchain
     // was measured never to composite there), so on a headless runner a
