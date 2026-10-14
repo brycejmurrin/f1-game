@@ -8,10 +8,15 @@ import { readFileSync } from "node:fs";
 const SRC = readFileSync(new URL("../../js/ui/deep-link.js", import.meta.url), "utf8");
 const MANIFEST = JSON.parse(readFileSync(new URL("../../manifest.json", import.meta.url), "utf8"));
 
-function boot({ search = "", overlayHidden = false, inRace = false, top = null, missing = [] } = {}) {
+function boot({ search = "", overlayHidden = false, inRace = false, top = null, missing = [], unwired = false } = {}) {
   const clicks = [], replaced = [], logs = [];
   const timers = [];
-  const btn = (id) => ({ id, hidden: false, disabled: false, click() { clicks.push(id); } });
+  const buttons = new Map();
+  const btn = (id) => {
+    if (!buttons.has(id)) buttons.set(id, { id, hidden: false, disabled: false,
+      onclick: unwired ? null : () => clicks.push(id), click() { if (this.onclick) this.onclick(); } });
+    return buttons.get(id);
+  };
   const ctx = vm.createContext({
     location: { search, pathname: "/f1-game/", hash: "#x" },
     history: { replaceState: (_s, _t, url) => replaced.push(url) },
@@ -26,7 +31,7 @@ function boot({ search = "", overlayHidden = false, inRace = false, top = null, 
   const G = { els: { overlay: { hidden: overlayHidden } },
     $: (id) => (id === "dh-tab-schedule" ? (state.hubUp ? hub : null) : missing.includes(id) ? null : btn(id)) };
   const out = ctx.DeepLink.create(G);
-  return { out, clicks, replaced, logs, timers, state, DeepLink: ctx.DeepLink };
+  return { out, clicks, replaced, logs, timers, state, G, DeepLink: ctx.DeepLink };
 }
 
 test("the four doors map to title buttons; unknown, inherited and empty values parse to nothing", () => {
@@ -42,7 +47,10 @@ test("the four doors map to title buttons; unknown, inherited and empty values p
 
 test("on a live title the door button is clicked once and the param is stripped (other params and the hash survive)", () => {
   const r = boot({ search: "?go=race&seed=7" });
+  assert.deepEqual(r.clicks, [], "boot wiring gets to finish first");
+  r.timers.shift()();
   assert.deepEqual(r.clicks, ["mb-race"]);
+  assert.equal(r.timers.length, 0);
   assert.deepEqual(r.replaced, ["/f1-game/?seed=7#x"]);
 });
 
@@ -50,24 +58,42 @@ test("a link with no go param does nothing and leaves the URL alone", () => {
   const r = boot({ search: "?seed=7" });
   assert.deepEqual(r.clicks, []);
   assert.deepEqual(r.replaced, []);
+  assert.equal(r.timers.length, 0);
+});
+
+test("shortcuts wait for handlers bound later in the same boot stack", () => {
+  for (const [go, id] of [["race", "mb-race"], ["daily", "mb-daily"], ["nextgp", "mb-data"], ["garage", "mb-garage"]]) {
+    const r = boot({ search: "?go=" + go, unwired: true });
+    assert.equal(r.G.$(id).onclick, null, "the initial door has no handler yet");
+    assert.deepEqual(r.clicks, []);
+    assert.equal(r.timers.length, 1, "first dispatch waits for synchronous wiring");
+    r.G.$(id).onclick = () => r.clicks.push(id);
+    r.state.hubUp = true;
+    r.timers.shift()();
+    assert.deepEqual(r.clicks, go === "nextgp" ? [id, "dh-tab-schedule"] : [id]);
+    assert.equal(r.timers.length, 0, "each wired shortcut is handled once");
+  }
 });
 
 test("mid-race, or with a layer over the title, the door waits instead of firing", () => {
-  assert.deepEqual(boot({ search: "?go=garage", inRace: true }).clicks, []);
-  assert.deepEqual(boot({ search: "?go=garage", overlayHidden: true }).clicks, []);
-  const layered = boot({ search: "?go=garage", top: { id: "career-hub" } });
-  assert.deepEqual(layered.clicks, []);
-  assert.equal(layered.timers.length, 1, "one retry is queued");
+  for (const state of [{ inRace: true }, { overlayHidden: true }, { top: { id: "career-hub" } }]) {
+    const r = boot({ search: "?go=garage", ...state });
+    r.timers.shift()();
+    assert.deepEqual(r.clicks, []);
+    assert.equal(r.timers.length, 1, "one retry is queued after dispatch checks the title");
+  }
 });
 
 test("a missing door button is dropped with a log line, never a throw", () => {
   const r = boot({ search: "?go=daily", missing: ["mb-daily"] });
+  r.timers.shift()();
   assert.deepEqual(r.clicks, []);
   assert.ok(r.logs.some((m) => /door unavailable/.test(m)), r.logs.join("|"));
 });
 
 test("NEXT GP opens the hub, then selects the schedule tab once it exists", () => {
   const r = boot({ search: "?go=nextgp" });
+  r.timers.shift()();
   assert.deepEqual(r.clicks, ["mb-data"]);
   assert.equal(r.timers.length, 1, "waiting for the hub bundle");
   r.state.hubUp = true;

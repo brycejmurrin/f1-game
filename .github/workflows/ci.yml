@@ -27,24 +27,24 @@ name: CI
 #                                  blocking two deploys. Splitting it also puts
 #                                  it in PARALLEL with guards, so the gate got
 #                                  faster, not slower.
-#   sweeps   15 min, no browser  — the per-circuit geometry sweeps, and the one
-#                                  job that is CONDITIONAL: the fleet steps are
-#                                  skipped unless the diff touches what the
-#                                  fleet build executes (tools/ci/geometry-paths.mjs
-#                                  derives that from the manifest: js/track/,
-#                                  js/circuits/, tools/track|lib, the TRACK_VM
-#                                  modules) or a sweep suite; a lighting, car,
-#                                  debris-world or driving-line edit runs only
-#                                  the suite that reads it (the TARGETED tier,
-#                                  under a minute). The job itself always runs
-#                                  and always reports. Separate because each
-#                                  fleet suite rebuilds every circuit (52) and
-#                                  they run --test-concurrency=1 on
-#                                  purpose (four at once reached 5.4 GB and was
-#                                  OOM-killed, which presents as a SIGKILL with
-#                                  no assertion, i.e. NOT as a test failure).
-#                                  Serialising them was NOT enough on its own —
-#                                  see the NODE_OPTIONS note on the job.
+#   sweeps   ~4-7 min wall, no   — the per-circuit geometry sweeps as a FOUR-
+#             browser              shard matrix (1of4..4of4) over package.json's
+#                                  test:sweeps list, plus sweeps-roll-up which
+#                                  keeps the un-suffixed check name. CONDITIONAL
+#                                  steps: the fleet runs only when the diff
+#                                  touches what the fleet build executes
+#                                  (tools/ci/geometry-paths.mjs derives that
+#                                  from the manifest: js/track/, js/circuits/,
+#                                  tools/track|lib, the TRACK_VM modules) or a
+#                                  sweep suite; a lighting, car, debris-world
+#                                  or driving-line edit runs only the suite
+#                                  that reads it (the TARGETED tier, under a
+#                                  minute). Each matrix leg always runs and
+#                                  always reports. Suites stay
+#                                  --test-concurrency=1 per shard (four at once
+#                                  in one process reached 5.4 GB and was
+#                                  OOM-killed); parallelism is across VMs. See
+#                                  the NODE_OPTIONS note on the job.
 #   smoke    ~5 min, Chromium    — the page actually boots and __apex answers.
 #                                  If this is red nothing else is worth running.
 #                                  Nine specs, ONE WORKER PER MACHINE (two
@@ -895,27 +895,27 @@ jobs:
         run: echo "SKIPPED parts census — draft fast-tier already green on this head SHA"
 
   sweeps:
-    name: Per-circuit geometry sweeps
+    name: Per-circuit geometry sweeps (${{ matrix.shard }}of4)
     runs-on: ubuntu-latest
     # Not in the deploy branch's FAST tier (see `on: push`); the train runs it.
     if: ${{ inputs.smoke_only != true && !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
-    # 35, not 20. MEASURED, not estimated: `test:sweeps` takes 14m20s on a
-    # 4-core dev box with the heap ceiling below, and this job then runs
-    # verify-track --all on top of it (52 circuits, 42 s on a runner), so the
-    # local job is ~16 min. A shared runner is slower than that box, which puts
-    # the honest range at 20-30 min — i.e. the old cap was BELOW the work even
-    # after the OOM was fixed, and would have kept failing for a second reason
-    # once the first was gone. RE-MEASURED 2026-09-22 on Pages #2524: the fleet
-    # step took 8m29s on a runner.
+    # FOUR suite shards (2026-10-14). Pages train 38500310338 spent 1118 s in
+    # the single-runner Geometry sweeps step (1218 s job) while every browser
+    # spec shard was done by ~529 s — ~11 min of train idle on this job alone.
+    # Suites stay --test-concurrency=1 inside each shard (the 5.4 GB peak that
+    # forced serialisation is per process); the matrix is separate VMs, so the
+    # peak is not reintroduced. Contiguous slices of package.json's test:sweeps
+    # (same list the filter derives), fail-fast: false, like oversize-*-1of3.
+    # sweeps-roll-up below keeps the un-suffixed check name Pages reuse wants.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    # 35, not 20. MEASURED, not estimated: unsharded `test:sweeps` took 14m20s
+    # on a 4-core box with the heap ceiling below, plus verify-track --all
+    # (~42 s). A shard owns ~1/4 of the suites; 35 still covers a lumpy slice
+    # on a shared runner without reading a timeout as a silent cancel.
     #
-    # The suites are serial by construction (--test-concurrency=1) and ten of
-    # the fourteen rebuild every circuit, so this is ~10 full fleet rebuilds:
-    # coplanar-faces 94 s, pit-complex 83 s, scenery-grounding 76 s,
-    # prop-clipping 64 s, road-under-floor 57 s, the shared-foundation
-    # characterization 54 s, the three lamp sweeps ~45 s each (local, 705 s
-    # total). Nothing here is parallelisable without reintroducing the 5.4 GB
-    # peak that forced the serialisation.
-    timeout-minutes: 35
     # THE HEAP CEILING IS NOT THE SAME HERE AS ON A DEVELOPER'S BOX, and that is
     # why this job failed for days while the identical command passed locally.
     # V8 sizes its default old-space from the machine, so the runner allowed
@@ -934,6 +934,7 @@ jobs:
     # circuits in one process and peaking above 4 GB is its own defect (each
     # build's meshes stay reachable for the length of the loop), and the ceiling
     # is what makes that survivable rather than what fixes it.
+    timeout-minutes: 35
     env:
       NODE_OPTIONS: --max-old-space-size=6144
     steps:
@@ -1080,6 +1081,42 @@ jobs:
             if [ -n "$TARGETED" ]; then echo "RUNNING TARGETED SWEEPS: $TARGETED"
             else echo "no targeted sweep reads this diff either"; fi
           fi
+      # STATIC SUITE SLICE (no planner). Contiguous chunk i/N of the same
+      # test:sweeps list the filter just derived. Rewrites package.json's
+      # script ON THE RUNNER ONLY so the pinned `run: npm run test:sweeps`
+      # line (circuit-scope.test.mjs) still holds while each matrix leg owns
+      # a disjoint slice. Union of the four slices == the committed list.
+      - name: Suite shard assignment
+        id: shard
+        env:
+          SHARD: ${{ matrix.shard }}
+          SHARDS: "4"
+        run: |
+          set -u
+          node <<'NODE'
+          const fs = require("fs");
+          const shard = +process.env.SHARD;
+          const shards = +process.env.SHARDS;
+          const pkgPath = "package.json";
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+          const all = String(pkg.scripts["test:sweeps"] || "").match(/tests\/unit\/[^\s]+/g) || [];
+          if (!all.length) {
+            console.error("package.json test:sweeps names ZERO suites");
+            process.exit(1);
+          }
+          const start = Math.floor((shard - 1) * all.length / shards);
+          const end = Math.floor(shard * all.length / shards);
+          const slice = all.slice(start, end);
+          const temp = process.env.RUNNER_TEMP || ".";
+          fs.writeFileSync(`${temp}/sweep-shard-slice.txt`, slice.length ? `${slice.join("\n")}\n` : "");
+          const last = end > start ? end - 1 : start;
+          console.log(`--- suite shard ${shard}of${shards}: ${slice.length}/${all.length} suites (indices ${start}..${last}) ---`);
+          for (const s of slice) console.log(s);
+          console.log("--------------------");
+          pkg.scripts["test:sweeps"] = "node --test --test-concurrency=1" + (slice.length ? ` ${slice.join(" ")}` : "");
+          fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `count=${slice.length}\n`);
+          NODE
       - name: Geometry sweeps (rebuilds every circuit, per suite)
         if: steps.filter.outputs.geometry == 'true'
         env:
@@ -1088,15 +1125,44 @@ jobs:
         run: npm run test:sweeps
       # The cheap tier: only the suites that read this diff, from the same
       # table deploy.mjs uses locally. Never runs alongside the fleet (the
-      # fleet already includes them).
+      # fleet already includes them). Each shard runs the intersection of
+      # TARGETED with its suite slice so every suite still runs exactly once.
       - name: Targeted sweeps (the suites that read this diff, no fleet rebuild)
         if: steps.filter.outputs.geometry != 'true' && steps.filter.outputs.targeted != ''
         env:
           TARGETED: ${{ steps.filter.outputs.targeted }}
-        run: node --test --test-concurrency=1 $TARGETED
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -u
+          SLICE_FILE="${RUNNER_TEMP:-.}/sweep-shard-slice.txt"
+          MINE=""
+          for t in $TARGETED; do
+            if [ -f "$SLICE_FILE" ] && grep -qxF "$t" "$SLICE_FILE"; then
+              MINE="${MINE} ${t}"
+            fi
+          done
+          MINE="${MINE# }"
+          echo "targeted shard ${SHARD}of4: ${MINE:-"(none on this shard)"}"
+          [ -z "$MINE" ] && exit 0
+          node --test --test-concurrency=1 $MINE
+      # Once per matrix, not once per shard — shard 1 only (same work as the
+      # old single job's trailing step).
       - name: Every circuit still builds headlessly
-        if: steps.filter.outputs.geometry == 'true'
+        if: steps.filter.outputs.geometry == 'true' && matrix.shard == 1
         run: node tools/track/verify-track.cjs --all
+
+  # Un-suffixed check name for pages-reuse-verdict.sh (exact match on
+  # "Per-circuit geometry sweeps"). Needs the matrix so every suite shard
+  # must be green; ci-verdict needs this job too.
+  sweeps-roll-up:
+    name: Per-circuit geometry sweeps
+    needs: [sweeps]
+    if: ${{ always() && !cancelled() && needs.sweeps.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every sweep shard succeeded
+        run: test "${{ needs.sweeps.result }}" = "success"
 
   ship-filter:
     name: Does this diff change anything that ships?
@@ -2589,6 +2655,7 @@ jobs:
       - node-suites
       - sweeps-parts
       - sweeps
+      - sweeps-roll-up
       - ship-filter
       - smoke
       - driving-model
