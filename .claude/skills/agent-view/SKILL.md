@@ -29,7 +29,6 @@ under headless — stage first).
 
 - `docs/DEBUG-HOOKS.md` → "Agent world view" — the full per-tool reference (every
   field, every option, the typed errors).
-- `../../../docs/DEBUG-HOOKS.md` — the design and the research behind each choice.
 - `__apex.agentHelp()` — the live manifest, including the `fields` glossary and
   the `read`/`control` sections listing the raw hooks and the drive/stage verbs.
 - Tests: `node tools/ci/test-bg.mjs hooks` (`tests/specs/agent-view.spec.js`,
@@ -43,6 +42,5 @@ under headless — stage first).
 - Track geometry hooks + sweeps → [references/track-geometry.md](references/track-geometry.md),
   [references/debug-tracks-sweeps.md](references/debug-tracks-sweeps.md)
 
-Folded 2026-09-03: `debug-tracks`. `new-track` / `survey-track` stay separate acts: this skill only
-READS geometry (e.g. `groundY().overRoad > 0`, terrain-over-road). The edit that fixes a defect it
+This skill only READS geometry (e.g. `groundY().overRoad > 0`, terrain-over-road). The edit that fixes a defect it
 finds is **new-track** (circuit def) or **survey-track** (one-circuit grounding pass).

@@ -78,4 +78,4 @@ Coordinates are +Y up, arc position `s` in metres (0 → `track.total`), lateral
 
 ## Load on demand
 
-- Add/edit workflow and the measured gotchas → [references/workflow.md](references/workflow.md).
+- Add/edit workflow and the measured gotchas → [references/workflow.md](references/workflow.md). Start at its step 0: check the id is not already registered (madrid is).

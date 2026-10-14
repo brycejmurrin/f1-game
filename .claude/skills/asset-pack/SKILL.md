@@ -47,10 +47,7 @@ device/feature miss, not "WGX has no pack."
 | `__apex.assets()` (browser-only) | `{ supported, pack, uploaded, tier, layers, error, … }` |
 | `__apex.matTex(v?)` (browser-only) | Blend 0..1; same as `lightTune({ matTexMix })` |
 
-```sh
-npm run test:tooling-fast
-node tools/ci/test-bg.mjs hooks
-```
+Verify: AGENTS.md loop; the pack's own spec is `tests/specs/assets-api.spec.js` (workflow step 6).
 
 Related: [shell/cache](../check-changes/references/bump.md), **renderer-debug**, **lighting-tuner**.
 

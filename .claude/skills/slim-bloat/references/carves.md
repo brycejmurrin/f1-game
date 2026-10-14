@@ -24,17 +24,14 @@ before/after counts (`bloat-scan.mjs --json`).
 5. `grep` every removed symbol. Then `npm run test:tooling-fast`. Near
    `game.js`: `physics-characterization` is the master gate — parent names
    leftover browser groups as not-run.
-6. Last edit: nothing to bump — `bump-cache` is deploy-only; run `node tools/gen/gen-shell.mjs` if the manifest changed (check-changes/references/bump.md).
+6. No bump — `bump-cache` is deploy-only (AGENTS.md); `node tools/gen/gen-shell.mjs` only if the manifest changed.
 
 `extract-module.mjs` does **not** write the module, manifest, or tags.
 
 ## 2. Split a fat skill / always-on doc
 
 - `SKILL.md` stays when / entry / don'ts / dispatch. War stories go to
-  `references/*.md`. Official body cap is 500 lines; this repo's template
-  is thinner (`mcp-probe` ≤ 120). Confirm caps via Context7
-  `/websites/platform_claude_en_agents-and-tools_agent-skills` if they
-  may have moved.
+  `references/*.md`. Caps live in `tests/unit/skill-progressive.test.mjs`.
 - Do not paste `AGENTS.md` into a skill. Point at it.
 - The `total-audit` workflow (`docs-ref` / `docs-idx` lenses) first if the prose may be stale.
 - New skill: list it in `.claude/skills/README.md` (docs-integrity).
@@ -75,10 +72,3 @@ node tools/ci/verify-change.mjs --plan --json
 ```
 
 Do not start a browser group from this skill. `verify-agent` for `--fast`.
-
-## Selection validity
-
-Reject noninteger/negative/reversed/out-of-file start/end ranges before parsing;
-a zero-line selection cannot establish clean code. Tree reports retain requested,
-scanned and missing scope coverage. Missing explicit paths require partial/failed
-evidence, rather than presenting a smaller scan as the full requested audit.

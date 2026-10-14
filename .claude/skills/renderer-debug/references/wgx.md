@@ -32,7 +32,7 @@ full Dawn pass launches Chromium — parent session only. The container adapter 
 `rg11b10ufloat-renderable`; without `--no-rg11b10` the fallback is never
 exercised.
 
-**The ceiling, corrected 2026-08-17 (cache 1342+):** SwiftShader-Dawn EXECUTES
+**The ceiling, corrected 2026-08-17:** SwiftShader-Dawn EXECUTES
 shader work here. Two narrower limits remain: the **native swapchain** never
 composites (hidden WebGPU canvas stays black), and the FIRST
 `getCurrentTexture()` call permanently breaks `mapAsync` on that device — WGX
@@ -55,11 +55,11 @@ __apex.logs()                       // "gfx" ns
 `backend: "webgl2"` when you expected webgpu means WGX refused — read
 `WGX.lastFailure()` and `localStorage["apex26.gfxWgxFail"]`.
 
-Fallback path (read-only trace, no browser): `Gfx.create` (`js/render/gfx.js`
-~L224) awaits `WGX.create()` (~L257), which returns null on ANY failure after
+Fallback path (read-only trace, no browser): `Gfx.create` (`js/render/gfx.js`)
+awaits `WGX.create()`, which returns null on ANY failure after
 `wgx.js` records `_lastFailure` + `apex26.gfxWgxFail` and logs
 `WGX unavailable (...) — falling back to WebGL2`; `Gfx.create` logs
-`Gfx.bind fallback webgl2` and `js/game.js` binds GLX. No `navigator.gpu` or
+`Gfx.bind fallback webgl2` and `js/game.js` binds GLX (so after a WGX fallback `env.backend` reads `webgl2`: continue in the GLX section; a Mac report of see-through cars is instead TLX, see tlx-transparent-cars.md). No `navigator.gpu` or
 no `WGX` global returns null with NO log line. NaN-white road with
 NO fallback = warning-mode Dawn ran undefined derivatives (wgx-defects.md #2);
 with fallback = strict uniformity error. Static half of that check:
