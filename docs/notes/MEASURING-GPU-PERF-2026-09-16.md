@@ -118,10 +118,44 @@ The source is `docs/notes/PERF-HUNT-4-2026-10-14.md` §C (I1–I7) and §A (inst
 - For each gap it names the phase, the work of the rendering step before it, the work done between steps, and the long tasks that overlap it.
 - A 4 s first-draw stall is attributable this way. `spikeWork`, which keys on callbacks of 100 ms or more, cannot see it.
 
+**Race-entry marks (B-F3.3, lane TOOLS-J).** `out.raceEntryProfile` saves `__apex.raceEntryProfile()` right after the race gate: `legs` (`{n, ms}`), `marks` (`{n, t}`, ms from the window's begin), `blockMs`, `maxBlockMs`, `supported`, and `winT0`, the window origin on the page clock.
+- The snapshot carries no origin, so the census derives it: `windowMs` is `now() - winT0` at the read, so `winT0` is the read's midpoint minus `windowMs`, good to `clockErrMs` (microseconds).
+- `out.raceEntrySpans` joins every long task and every rAF gap from `race()` to the end of race entry to a named span: a leg (cumulative from `winT0`; `resets` = the `ensureRaceSession` / `ensureAudio` lazy bundles, `settings` = `applyRaceSettings`), a `:start`/`:end` mark pair (`warmCarAssets`, `debrisPrime`, `mirrorPrepare`, `ensureScenery`), or a TLX warm stage (`warm:scene/fx/post/shadow/mirror/draw`, sequential from `memState().warm.at`).
+- Each event names the span it overlaps most, its share, up to three other overlaps, and the marks either side. A tie goes to the shorter span, so a mark span nested in a leg wins.
+- `bySpan` sums long-task time per span; gaps are listed but not summed (they are the same blocked time seen from rAF). The Verdict prints a `marks:` row and the six longest events.
+- Example: `{ kind: "longtask", atMs: 2425, ms: 2090, span: "warmCarAssets", share: 1, after: "warmCarAssets:start (+5 ms)", before: "warmCarAssets:end" }`.
+- Not split: the `loadTrack` leg's build phases (`buildProfile` rows carry no timestamps) and the sky cache warm, which `tlx.js` folds into `warm:mirror` (its stage clock starts after the shadow stage) and leaves untimed when the mirror warm is off (then only the `warm (other)` envelope covers it).
+
+**Depth discard (A-P1, lane TOOLS-J).** `out.depth` reads TLX's `post.state().depth` (`{ discard, kept, discards }`, lane TLX-W) at `arm()` and again at the end of the driven window, so the count is the window's own.
+- Fields: `supported`, `discard` (the `apex26.tlxDepthDiscard` knob), `keptLastFrame`, `discards` (cumulative), `windowDiscards`, `windowFrames` (LoopHealth), `discardShare`, `summary`.
+- Example: `{ supported: true, discard: true, keptLastFrame: false, discards: 500, windowDiscards: 380, windowFrames: 400, discardShare: 0.95 }`.
+- `discards` counts WebGL2 invalidations only. On three's WebGPU path r186 has no lever, so 0 there is expected, and the summary says so.
+- GLX and WGX have no TLX post: `{ supported: false, note }`, and the Verdict prints no row. A TLX leg without the row prints `depth: NOT MEASURED — <why>`.
+
+**The camera is an input (H5, lane TOOLS-J).** `gpu-census.yml` has a `cam` dispatch input: a choice of `helmet` (the default, the game's own camera, so a default dispatch measures what it did before) or `chase`. A push request may carry `"cam"` too; the plan job re-checks it against the same list.
+- It reaches all four game checks as `gpu-game-check --cam <id>`, which calls `__apex.camera(id)` after boot and before `race()`, so no frame of race entry draws through another camera.
+- Helmet and cockpit glass latch TLX's full mirror mip chain for the session, so the mirror-mip cap (`apex26.tlxMirMips`, A-H5) shows only on a chase leg. In `passKinds`, expect about 8 → 2 mip passes per mirror frame.
+- `out.cam = { asked, set, atWindowEnd }`. Example: `{ asked: "chase", set: "chase", atWindowEnd: "chase" }`; `asked: null` means the game default. An unknown id comes back with `error`.
+- `out.mirror = { mode, shown, cam, drawn, backend: { ready, renders, glass, w, h, mips, mipCap, mipFull } }` is read at the window's end.
+- The Verdict prints a `cam:` row per leg and flags `CAMERA NOT AS ASKED` when the camera did not take or moved during the window.
+- In AUTO, the mirror is not drawn in chase at all (`ONBOARD` views only). To time the capped chain in chase, add `apex26.hudMirror="on"` to `ls` (a JSON-lane key: the quotes are part of the value, and a bare `on` is dropped as corrupt), and check that the `cam:` row reads `shown=true`.
+
 **Follow-up, not built (I5).** WGX `gpuMs` times only the lit pass, while GLX's covers main plus post. A per-pass GLX timer would put sequential `TIME_ELAPSED` queries around the sun, lamp, car, env, mirror, main and post groups. Only one such query may be active at a time.
 - Those groups are sequenced from `js/game.js`, which this lane may not edit, so it is not a small change behind a flag.
 - It needs a query ring per group in `glx.js`, with begin/end hooks called from the pass sites.
 - WGX would need `timestampWrites` that begin on the first pass and end on the last.
+
+**I5 re-checked by lane TOOLS-J: still not built, and only labelled.** The per-pass timer is renderer work, not census work, for three reasons:
+- The span edges are in renderer and engine files. The GLX query opens in `glx.js` `begin()` and closes at the end of post (`post.js`, `core.gpuTimerEnd()`). The shadow, env and mirror passes run before `begin()`, sequenced from `js/game.js` (claim required). WGX's query is the `timestampWrites` on `litPass` in `wgx.js`. A tools lane can read these spans, not move them.
+- GLX allows one active `TIME_ELAPSED` query at a time, so a per-group mode needs a query ring per group and begin/end hooks at each pass site. That is a new `gpuTimer` mode with its own disjoint handling, not a flag.
+- The real-GPU runner cannot time WGX's other passes anyway: hunt 4 G3 found no `timestamp-query` there, so a WGX per-pass mode would read null on the one machine that matters.
+
+What landed instead is a label. Every leg's `gpuFrame` carries `span` and `spanNote`, and the Verdict's `gpu:` row prints `span=… (compare within a backend only)`:
+- `main+post` on GLX: one query from `begin()` to the end of post.
+- `lit-pass` on WGX: the lit scene pass only.
+- `three-render-passes` on TLX: three's summed render-pass timestamps for the latest frame, via `resolveTimestampsAsync('render')`, which includes shadow, mirror and post.
+
+`gfx-backend-canary` pins the three source sites, so a backend that moves its timer fails the label test instead of silently mislabelling.
 
 ## Sources
 
