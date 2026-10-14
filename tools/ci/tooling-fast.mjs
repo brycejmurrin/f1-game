@@ -492,6 +492,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Portrait phone bottom cluster: TYRES stays in the column (landscape-only
   // dock anchor), fitHud caps --hud-z-bot vs AERO/OT, tip clash shapes.
   "tests/unit/hud-portrait-cluster.test.mjs",
+  // One radio home per HUD profile: BROADCAST lights hud-radio-top /
+  // data-radio-corner; leftover 14svh #announce home is gone.
+  "tests/unit/hud-radio-slot.test.mjs",
   "tests/unit/hud-readouts.test.mjs",
   "tests/unit/hud-relative.test.mjs",
   "tests/unit/hud-speed-parity.test.mjs",
