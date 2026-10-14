@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = readFileSync(path.join(ROOT, "js/ui/loading-screen.js"), "utf8");
@@ -54,10 +55,7 @@ test("startRaceBody settles the pack before setState(count) — FlyingStart must
   // Quali FLYING lap (CI #1493 tip-red): awaitPackSettled after count let
   // FlyingStart.arm → goRolling drive ~300 m of run-up while createTextureArray
   // ran; prog landed ≈ −24 instead of < −100.
-  const game = readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  const body = game.slice(
-    game.indexOf("async function startRaceBody()"),
-    game.indexOf("const sessionEntry = SessionEntry.create();"));
+  const body = symbolSource("async function startRaceBody()");
   const settle = body.indexOf("await awaitPackSettled");
   const count = body.indexOf('setState("count", "race-start")');
   assert.ok(settle > 0, "startRaceBody awaits pack settle");
