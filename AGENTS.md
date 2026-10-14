@@ -179,6 +179,12 @@ Shipping is a RELEASE TRAIN: a green fast tier pokes `pages.yml`, which gates th
 commit (dispatch = "deploy now"; ≤ ~25 min; one green tip → one train, never dual-dispatch Pages). "Live?" = ancestor
 of the live `apex-sha` (agent `deploy-research`; `docs/TESTING.md` §Release train).
 
+### Backlog
+Work no session has started is a GitHub issue (`.github/ISSUE_TEMPLATE/`; why: `docs/notes/AGENT-WORK-TRACKING-2026-10-14.md`); the PR body stays the in-flight log, memory stays for facts.
+With no task from the user, take one from the ready queue: `list_issues` with `labels: ["ready"]`, skipping any also labelled `claimed` or `blocked`.
+Claim it (`who-is-on-it.mjs --claim "#<n> <text>"`, then label it `claimed` and comment your branch); the draft PR body says `Closes #<n>`, which closes it on merge (the deploy branch is the default branch).
+Work found mid-task becomes a sub-issue (`parent_issue_number`), not scope on your PR; work that waits on another issue gets `blocked` plus "Blocked by #<n>".
+
 ### Concurrent PRs
 Three rules bind every session. Fleet launch policy (launch prompts, lanes, caps) is skill `agent-fleet` §Launch policy; Merge Desk procedure is skill `ci-watch`; detail in `docs/TESTING.md` §Merge train and `docs/notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md`.
 - Merge commits only, never squash or rebase-merge. Only the designated Merge Desk arms auto-merge (`MERGE` method) and Grok Bot may merge a green non-draft PR; every other agent, session or tool never arms or merges (`github-mcp-guard.sh` denies squash/rebase and asks before a merge, an arm or a draft→ready flip).

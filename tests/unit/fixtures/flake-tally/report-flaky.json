@@ -1,0 +1,33 @@
+{
+  "stats": { "total": 3, "expected": 0, "unexpected": 1, "flaky": 2, "skipped": 0, "ok": false },
+  "files": [
+    {
+      "fileName": "specs/agent-view.spec.js",
+      "tests": [
+        {
+          "title": "night is dark, floodlit, and names the moon — not a high sun",
+          "path": ["atmosphere()"],
+          "outcome": "flaky",
+          "results": [{}, {}]
+        },
+        {
+          "title": "driving on track, the road dominates the lower frame",
+          "path": ["frame()"],
+          "outcome": "flaky",
+          "results": [{}, {}]
+        }
+      ]
+    },
+    {
+      "fileName": "specs/parts-persistence.spec.js",
+      "tests": [
+        {
+          "title": "selecting a gearbox part saves it to localStorage",
+          "path": ["Parts persistence — localStorage writes"],
+          "outcome": "unexpected",
+          "results": [{}]
+        }
+      ]
+    }
+  ]
+}

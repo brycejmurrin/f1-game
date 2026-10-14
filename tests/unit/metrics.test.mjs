@@ -38,6 +38,7 @@ function load(opts) {
     window: opts.window,
     requestAnimationFrame: undefined,
     PerfGov: opts.PerfGov,
+    LoopHealth: opts.LoopHealth,
     __apex: opts.apex,
   };
   const ctx = vm.createContext(sandbox);
@@ -534,4 +535,16 @@ test("new PHYS rows stay inside the measured line budgets", () => {
     assert.ok(line.length <= 25, `narrow row "${line}" is ${line.length} ch, budget 25`);
   // The budgets themselves must still be the ones the CSS is sized for.
   assert.match(src, /const WIDE_CH = 53;/);
+});
+
+test("GOV reports explicit stopped loop and frame progress without inferring paused failure", () => {
+  let stopped = false, frames = 12;
+  const { M } = load({ LoopHealth: { state: () => ({ stopped, frames }) }, PerfGov: { fpsEMA: () => 20 } });
+  M.setPage("gov");
+  assert.equal(M.snapshot().loopStopped, false);
+  assert.equal(M.snapshot().loopFrames, 12);
+  stopped = true; frames = 13;
+  assert.equal(M.snapshot().loopStopped, true);
+  assert.equal(M.snapshot().loopFrames, 13);
+  assert.equal(load({}).M.snapshot().loopStopped, null);
 });

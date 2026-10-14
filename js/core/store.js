@@ -19,6 +19,7 @@ const GameStore = (function () {
   // for store.writeFailed(), and the value itself so retryFailed() can write it
   // again once storage has room (a name alone could only be reported, never healed).
   const _writeFails = new Map();
+  const _rawOverrides = new Map();   // failed raw sets, or null tombstones, usable this session
 
   // A shipped default is shared data: handing out the object itself let a
   // caller that edits what get() returned (the garage sheet mutates its parts
@@ -137,6 +138,7 @@ const GameStore = (function () {
         else setRoomy(key, json);
         _writeFails.delete(key);
       } catch (e) { durable = false; noteBroken(e, "write " + k); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "json", v }); }
+      _rawOverrides.delete(key);
       this._cache.set(key, v);
       this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
       this.rev++;
@@ -163,7 +165,7 @@ const GameStore = (function () {
       for (const f of [..._writeFails.values()]) {
         retried++;
         const r = f.lane === "raw"
-          ? { durable: this.rawSet(f.k, f.v), reason: this.broken || f.name }
+          ? { durable: f.op === "delete" ? this.rawDel(f.k) : this.rawSet(f.k, f.v), reason: this.broken || f.name }
           : this.write(f.k, f.v);
         if (!r.durable) { durable = false; reason = reason || r.reason; }
       }
@@ -190,6 +192,7 @@ const GameStore = (function () {
       const short = shortKey(k);
       const def = () => (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(short))
         ? SettingsDefaults.get(short) : null;
+      if (_rawOverrides.has(fullKey(k))) { const v = _rawOverrides.get(fullKey(k)); return v === null ? def() : v; }
       try { const v = localStorage.getItem(fullKey(k)); return v === null ? def() : v; }
       catch (e) { noteBroken(e, "read " + k); return def(); }
     },
@@ -197,15 +200,18 @@ const GameStore = (function () {
       const key = fullKey(k);
       this._cache.delete(key);   // a key lives in one lane; if one ever strays, the disk wins
       this.rawRev++;
-      try { setRoomy(key, v); _writeFails.delete(key); return true; }
-      catch (e) { noteBroken(e, "write " + k); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", v }); return false; }
+      v = String(v);
+      this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
+      try { setRoomy(key, v); _writeFails.delete(key); _rawOverrides.delete(key); return true; }
+      catch (e) { noteBroken(e, "write " + k); _rawOverrides.set(key, v); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "set", v }); return false; }
     },
     rawDel(k) {
       const key = fullKey(k);
       this._cache.delete(key);
       this.rawRev++;
-      try { localStorage.removeItem(key); _writeFails.delete(key); return true; }
-      catch (e) { noteBroken(e, "remove " + k); return false; }
+      this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
+      try { localStorage.removeItem(key); _writeFails.delete(key); _rawOverrides.delete(key); return true; }
+      catch (e) { noteBroken(e, "remove " + k); _rawOverrides.set(key, null); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "delete" }); return false; }
     },
     subscribe(fn) {
       if (typeof fn !== "function") return () => {};
@@ -242,11 +248,15 @@ const GameStore = (function () {
       // localStorage cache. Checked first so a session clear() cannot drop it.
       try { if (e.storageArea && e.storageArea !== localStorage) return false; } catch (_) { /* storage blocked: nothing to compare */ }
       if (e.key === null) {
+        for (const key of _rawOverrides.keys()) _writeFails.delete(key);
+        _rawOverrides.clear(); this.rawRev++;
         this._cache.clear(); this._clearRev++; this.rev++; this.foreign++;
         this._notify({ key: null, foreign: true, clear: true });
         return true;
       }
       if (typeof e.key !== "string" || e.key.indexOf("apex26.") !== 0) return false;
+      if (_rawOverrides.delete(e.key)) _writeFails.delete(e.key);
+      this.rawRev++;
       this._cache.delete(e.key);
       this._keyRev.set(e.key, (this._keyRev.get(e.key) || 0) + 1);
       this.rev++;
