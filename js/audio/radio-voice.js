@@ -338,6 +338,7 @@ var RadioVoice = (function () {
      * outside. The audio panel prints the verdict; see js/audio/panel.js. */
     let asked = 0, started = 0;
     let lastSquelch = null, squelchOpenT = null, squelchCloseT = null;
+    let squelchEpoch = 0;   // a mute invalidates even a line still waiting for its speech task
     let ownCtx = null, noiseBuf = null, poolCtx = null;
     const squelchPool = [];   // reused bandpass+gain; BufferSource is one-shot
     function stopSquelch(cut) {
@@ -387,6 +388,7 @@ var RadioVoice = (function () {
       }
     }
     function playBurst(band, durS) {
+      if (!(volume > 0)) return false;
       const ctx = audioCtx();
       if (!ctx || !band || !(durS > 0)) return false;
       if (ctx.state && ctx.state !== "running" && ctx.state !== "suspended") return false;
@@ -424,12 +426,13 @@ var RadioVoice = (function () {
       } catch (e) { return false; }
       return true;
     }
-    function fireSquelch(lane) {
-      if (!lastSquelch || lastSquelch.cut || !lastSquelch.play) return;
-      lastSquelch.fired.push(lane);
-      playBurst(lastSquelch.band, (lane === "open" ? lastSquelch.openMs : lastSquelch.closeMs) / 1000);
+    function fireSquelch(lane, q) {
+      if (!q || q !== lastSquelch || q.cut || !q.play || !(volume > 0)) return;
+      q.fired.push(lane);
+      playBurst(q.band, (lane === "open" ? q.openMs : q.closeMs) / 1000);
     }
     function armSquelch(p) {
+      if (p.squelchEpoch !== squelchEpoch || !(p.volume > 0)) return;
       stopSquelch(false);
       const q = squelchPlan({
         enabled, soundOn: !!G.soundOn, volume, speaker: p.speaker, kind: activeKind,
@@ -445,9 +448,15 @@ var RadioVoice = (function () {
       // Zero lead is the words starting NOW: fire the key-up in this task.
       // A nested setTimeout(0) after say()'s own deferral lost the race to a
       // 5 ms flush on a loaded CI box (Structural guards B / vm-b1 on #1739).
-      if (leadMs <= 0) fireSquelch("open");
-      else squelchOpenT = setTimeout(() => { squelchOpenT = null; fireSquelch("open"); }, leadMs);
-      squelchCloseT = setTimeout(() => { squelchCloseT = null; fireSquelch("close"); }, leadMs + q.atClose * 1000);
+      if (leadMs <= 0) fireSquelch("open", q);
+      else squelchOpenT = setTimeout(() => {
+        if (q !== lastSquelch) return;
+        squelchOpenT = null; fireSquelch("open", q);
+      }, leadMs);
+      squelchCloseT = setTimeout(() => {
+        if (q !== lastSquelch) return;
+        squelchCloseT = null; fireSquelch("close", q);
+      }, leadMs + q.atClose * 1000);
     }
     /* OFF THE FRAME. speechSynthesis calls are synchronous IPC to the platform
      * speech service, and on real desktops they can stall the main thread —
@@ -605,6 +614,7 @@ var RadioVoice = (function () {
       // hiss bed). Not the words' sting — that is already the new card's.
       if (!p.speak) { if (!preRace && (current || pending != null)) stopVoice(); return false; }
       p.preRace = !!preRace;   // speakPlanned re-checks the session at speak time
+      p.squelchEpoch = squelchEpoch;
       ensureVoices();
       stop();
       activeKind = kind || "race";
@@ -896,7 +906,11 @@ var RadioVoice = (function () {
         if (!["info", "coach", "comm"].includes(activeKind)) return false;
         stop(); return true;
       },
-      setVolume(v) { volume = Math.max(0, Math.min(1, +v || 0)); return volume; },
+      setVolume(v) {
+        volume = Math.max(0, Math.min(1, +v || 0));
+        if (!volume) { squelchEpoch++; stopSquelch(true); }
+        return volume;
+      },
       available: () => true,
       debug: () => ({ available: true, enabled, voices: voicesFor(false).length, voicesAny: voicesFor(true).length, last, asked, started,
         pack: pack ? Object.assign({ on: packOn }, pack.debug()) : null,
