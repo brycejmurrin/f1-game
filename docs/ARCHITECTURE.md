@@ -175,7 +175,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `dom.js` | `Dom` | tag | Dom: the three DOM/format helpers every DOM-built screen shares (el / paintFold / fmtLap / fmtRaceClock). |
-| `title-fx.js` | `TitleFx` | tag | TitleFx: title-screen motion, wash and the background drawing, as player settings under SETTINGS › APPEARANCE. |
+| `title-fx.js` | `TitleFx` | tag | TitleFx: title-screen motion, wash and the background drawing. |
 | `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
 | `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
 | `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the circuit picker as a flag strip over a hero (the in-game still of the chosen circuit with its lap outline drawn on top… |
@@ -197,6 +197,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `dock-layout.js` | `DockLayout` | tag | DockLayout: per-scheme touch-dock REPOSITION offsets. |
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
 | `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences, and READABILITY (TEXT SIZE / HIGH CONTRAST / SPEED UNITS / HELP TEXT). |
+| `a11y-opts.js` | `A11yOpts` | tag | A11yOpts: SETTINGS › ACCESSIBILITY. |
 | `hud-elements.js` | `HudElements` | tag | per-element HUD visibility toggles (SETTINGS › DISPLAY › HUD). |
 | `hud-tyres.js` | `HudTyres` | tag | HUD tyre temperature state. |
 | `hud-damage.js` | `HudDamage` | tag | HUD DAMAGE CHIP: paints Damage (js/race/damage.js) on #hud-damage, a small car-outline glyph whose parts are tinted by level, with a short text fallback ("FW… |

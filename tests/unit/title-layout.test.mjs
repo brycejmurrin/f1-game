@@ -399,7 +399,7 @@ test("shell: UI SIZE lives in APPEARANCE › READABILITY, before TEXT SIZE, and 
   assert.match(SHELL, /id="pm-open-appearance"[^>]*>APPEARANCE&hellip;<small>[^<]*UI size/, "the door names it");
 });
 
-test("shell: every title-screen knob sits in ONE TITLE SCREEN fold; MOTION stays outside", () => {
+test("shell: every title-screen knob sits in ONE TITLE SCREEN fold; REDUCE MOTION is Accessibility", () => {
   const look = section("pm-panel-appearance");
   assert.ok(!look.includes("TITLE SCREEN &amp; MOTION"), "the old mixed heading is gone");
   const a = look.indexOf('<details id="pm-titlescreen"');
@@ -409,9 +409,8 @@ test("shell: every title-screen knob sits in ONE TITLE SCREEN fold; MOTION stays
   const order = ["pm-titleintro", "pm-menuwash", "pm-titleart", "pm-replay-intro"].map((id) => fold.indexOf(`id="${id}"`));
   assert.ok(order.every((i) => i > 0), "TITLE INTRO, MENU WASH, TITLE ART and REPLAY INTRO inside");
   assert.deepEqual([...order].sort((x, y) => x - y), order, "in that order");
-  const motion = look.indexOf('id="pm-motion"');
-  assert.ok(motion > 0 && motion < a, "MOTION is global: outside the fold, above it");
-  assert.ok(look.lastIndexOf('<h4 class="pm-look-h">MOTION</h4>', motion) > look.indexOf("READABILITY"), "under its own MOTION heading");
+  assert.equal(look.indexOf('id="pm-motion"'), -1, "REDUCE MOTION moved to ACCESSIBILITY");
+  assert.ok(SHELL.includes('id="pm-open-a11y"'));
   assert.match(readCssSource("css/components.css"), /#pm-titlescreen-body,\s*#pm-titlelayout-body \{[^}]*flex-direction: column/, "the body is a column like the sub-fold's");
 });
 
