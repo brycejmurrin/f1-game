@@ -666,8 +666,8 @@ function pushWithRetry(oursProse = false) {
    URL and the session merging by hand (PR #178, 2026-09-22). Same steps as the
    gh path — find an open PR for the head, or create one from the branch's last
    real commit — over REST only. Never arm auto-merge: only Merge Desk arms
-   MERGE-commit auto-merge on ready PRs (squash retired 2026-10-13). The token travels as a curl config on
-   stdin, never on the argv.
+   MERGE-commit auto-merge on ready PRs (squash retired 2026-10-13). The token
+   travels as a curl config on stdin, never on the argv.
 
    NOT GraphQL (2026-09-22, measured): `api.github.com/graphql` is refused from
    Claude Code sessions. Historical auto-merge arming via CCR REST was removed
