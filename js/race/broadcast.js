@@ -6,6 +6,7 @@ const Broadcast = (function () {
   const SHOT_MIN_S = 5;      // wall seconds: no cut sooner than this after the last
   const SHOT_MAX_S = 14;     // wall seconds: a quiet shot is changed after this
   const EVENT_LEAD_S = 6;    // race seconds: cut to an event this long before it happens
+  const EVENT_HOLD_S = 2;    // race seconds: show the selected event's immediate aftermath
   const BATTLE_S = 1.0;      // two cars this close (seconds) are a battle
   const MANUAL_S = 20;       // wall seconds the viewer keeps the picture after taking it
   const TOWER_TICK_S = 0.25; // the tower repaints four times a second
@@ -240,7 +241,7 @@ const Broadcast = (function () {
   // ── The live module ───────────────────────────────────────────────────────
   function create(G, replay) {
     let on = false, auto = false, locked = false, tower = null, rowsEl = [], head = null, listEl = null;
-    let wall = 0, lastCut = -1e9, manualUntil = 0, cuts = 0, onAirShot = null, setCam = null;
+    let wall = 0, lastCut = -1e9, eventUntil = -Infinity, manualUntil = 0, cuts = 0, onAirShot = null, setCam = null;
     let shown = new Set(), towerT = 0, mode = "gap", prevPos = new Map(), deltaAt = new Map();
     let clickBound = null;
     let pip = null;   // {key, label, at (wall), seen (wall)} — the car in the inset
@@ -260,7 +261,7 @@ const Broadcast = (function () {
     /** start({auto, tower}) — replay has already posed the field and chosen whom to follow. */
     function start(o) {
       stop();
-      on = true; auto = !!(o && o.auto); locked = false; wall = 0; lastCut = -1e9; manualUntil = 0; cuts = 0;
+      on = true; auto = !!(o && o.auto); locked = false; wall = 0; lastCut = -1e9; eventUntil = -Infinity; manualUntil = 0; cuts = 0;
       shown = new Set(); towerT = 0; mode = "gap"; prevPos = new Map(); deltaAt = new Map();
       onAirShot = null; setCam = G.camMode;
       if (auto) { camTo(SHOTS[0]); lastCut = 0; }
@@ -280,12 +281,12 @@ const Broadcast = (function () {
     }
 
     /** The viewer took the picture (a follow key, the camera button, a tower row): the director waits. */
-    function manual() { if (on) { manualUntil = wall + MANUAL_S; setCam = G.camMode; } }   // the shot on air is now the viewer's baseline
+    function manual() { if (on) { manualUntil = wall + MANUAL_S; eventUntil = -Infinity; setCam = G.camMode; } }   // the shot on air is now the viewer's baseline
     // Back to the director: it cuts at once, and the shot on air now is its
     // baseline — not a "viewer change" that would hand the picture back for 20 s.
-    function setAuto(v) { auto = !!v; if (auto) { locked = false; manualUntil = 0; lastCut = -1e9; setCam = G.camMode; } return auto; }
-    function setLocked(v) { locked = !!v; if (locked) { manualUntil = 0; setCam = G.camMode; } return locked; }
-    function resetTiming() { shown.clear(); prevPos.clear(); deltaAt.clear(); towerT = 0; lastCut = -1e9; setPip(null); }
+    function setAuto(v) { auto = !!v; if (auto) { locked = false; manualUntil = 0; lastCut = -1e9; eventUntil = -Infinity; setCam = G.camMode; } return auto; }
+    function setLocked(v) { locked = !!v; if (locked) { manualUntil = 0; eventUntil = -Infinity; setCam = G.camMode; } return locked; }
+    function resetTiming() { shown.clear(); prevPos.clear(); deltaAt.clear(); towerT = 0; lastCut = -1e9; eventUntil = -Infinity; setPip(null); }
     /** The director has the picture: AUTO and not waiting out a viewer's choice. */
     function autoOn() { return on && auto && !locked && wall >= manualUntil; }
 
@@ -373,8 +374,9 @@ const Broadcast = (function () {
       if (st.reel) return;   // HIGHLIGHTS: the reel picks the car and calls onCut
       const age = wall - lastCut;
       if (age < SHOT_MIN_S) return;
+      if (st.T < eventUntil) return;   // do not leave a pass before it happens, including at slow replay rates
       const ev = nextEvent(st.list, st.T, shown, EVENT_LEAD_S * Math.max(1, st.speed), (num) => !st.isOut(num));
-      if (ev) { shown.add(ev.i); cut(st.carOf(ev.h.num), ev.h.kind, st.T); return; }
+      if (ev) { shown.add(ev.i); eventUntil = ev.h.t + EVENT_HOLD_S; cut(st.carOf(ev.h.num), ev.h.kind, st.T); return; }
       if (age < SHOT_MAX_S) return;
       const running = st.running();
       const fight = battles(running)[0];

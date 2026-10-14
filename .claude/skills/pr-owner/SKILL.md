@@ -37,14 +37,20 @@ repo overrides; messaging, claims, subscriptions and authority are
    per green cycle. Never a force-push or rebase; catch up only when GitHub says
    CONFLICTING or a required check is red, with `node tools/ci/sync-pr.mjs
    <branch>` (merge ship).
-6. **Refresh the PR body at every push** from `.github/pull_request_template.md`:
-   Goal, `node tools/ci/session-status.mjs` output, Verified / Not run (name
-   every unrun group and every flake), Next step. The body is the session log.
+6. **Keep the PR body live** from `.github/pull_request_template.md`: Goal,
+   Plan checklist (tick each item with its evidence the moment it lands, add
+   discovered work, one **now:** item — `update_pull_request`, no push needed),
+   `node tools/ci/session-status.mjs --pr` output at every push, Verified / Not
+   run (name every unrun group and every flake), Next step. The body is the
+   session log.
 7. **Ready flow** at tip-green: `node tools/ci/ready-gate.mjs --pr <n>` exit 0
    AND `node tools/ci/ready-full-cap.mjs` exit 0 (cap full: wait, never
    force). Then flip draft to ready only if your brief delegates it. Arming
    auto-merge and merging are NEVER yours unless the user designated this
-   session; otherwise report DONE-ready and leave it to CI Watch (`ci-watch`).
+   session; otherwise report DONE-ready and leave arming to Merge Desk
+   (`ci-watch`; merge commit only). To hold the PR, add a body line starting
+   `MERGE-HOLD:` and delete it when the hold ends; never write "do not merge"
+   or "do not enable auto-merge" in the body — that wording is not a veto.
 8. **Report** with the `session-comms` formats: `DONE <PR> <merge sha>` once it
    merged, `BLOCKED`, `HANDOFF`, `STAND-DOWN`. One report per transition, no
    status chatter. Arm a `send_later` safety net (~50 min, then ~4 h).
@@ -70,3 +76,6 @@ Extra constraints: <caps, groups not to run, deadlines>.
 Do not enable auto-merge or merge. Do not rebase or force-push.
 Report to @parent with DONE/BLOCKED/HANDOFF/STAND-DOWN first lines only.
 ```
+
+The "Do not enable auto-merge" line binds the child only; it never goes into a
+PR body or handoff (the body's only hold is a `MERGE-HOLD:` line).

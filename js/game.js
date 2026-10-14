@@ -2084,7 +2084,7 @@ const _bankScratchCam = { dy: 0, roll: 0 };
 // Pooled camVantage extras + damp anchors — vantage() reads synchronously, keeps no reference.
 const _vantCarPos = [0, 0];
 const _vantExtra = { bankDy: 0, deploy: false, slipLat: 0, att: null, carPos: null, carHead: 0, reduceMotion: false,
-  rival: null, playerProg: 0, snap: false };
+  rival: null, playerProg: 0, snap: false, frameSubject: false };
 const _camAP = [0, 0, 0], _camAN = [0, 0, 0];
 
 function cameraBankScale(mode) {
@@ -2553,7 +2553,7 @@ function snapGameCam(paint) {
     carHead: player.head || 0,
     rival: (typeof ExtraRigs !== "undefined") ? ExtraRigs.pickRival(cars, player) : null,
     playerProg: player.prog || 0,
-    snap: true, reduceMotion: camComfort(),
+    snap: true, reduceMotion: camComfort(), frameSubject: realRace.isWatch(),
   });
   camEye[0] = v.eye[0]; camEye[1] = v.eye[1]; camEye[2] = v.eye[2];
   camTgt[0] = v.tgt[0]; camTgt[1] = v.tgt[1]; camTgt[2] = v.tgt[2];
@@ -6992,7 +6992,7 @@ function render(dt) {
     _vantExtra.slipLat = player.vLat || 0; _vantExtra.att = player;
     // the car's real world pose, so the chase rig can follow the CAR
     _vantExtra.carPos = rpCam.world ? (_vantCarPos[0] = rpCam.x, _vantCarPos[1] = rpCam.z, _vantCarPos) : null;
-    _vantExtra.carHead = headInterp(player); _vantExtra.dt = dt;
+    _vantExtra.carHead = headInterp(player); _vantExtra.dt = dt; _vantExtra.frameSubject = realRace.isWatch();
     // CamFeel (free-look / look-back latch / speed vignette) ticks BEFORE the
     // vantage solve so this frame's offsets land in the same eye/tgt.
     if (typeof CamFeel !== "undefined") {
@@ -7709,7 +7709,7 @@ function render(dt) {
   // depth write). Drawn against the PLAYER's speed for the dynamic colour.
   // Never in a flyby frame (`cine`: the editor preview, flybyCam, free-cam's flyby lens).
   if (state !== "menu" && !cine && track && player) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
-  // cars — skip AI cars more than 550 m of track arc from the player (past fog)
+  // Driving fog culls by player arc; camera overrides use the view frustum below.
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
   // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
   // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
@@ -7756,7 +7756,7 @@ function render(dt) {
     // Still nothing after quitToMenu: that leaves the loading screen inactive,
     // which is the same break as before.
     if (state === "menu" && !loadingScreen.active()) break;
-    if (!c.isPlayer && player) {
+    if (!c.isPlayer && player && !dbgCam) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;
     }

@@ -16,6 +16,8 @@ const Director = (function () {
   const SHOT_MIN_S = (typeof Broadcast !== "undefined" && Broadcast.SHOT_MIN_S) || 5;
   const SHOT_MAX_S = (typeof Broadcast !== "undefined" && Broadcast.SHOT_MAX_S) || 14;
   const BATTLE_S = 1.0;
+  // Establish the followed car before widening out; no onboard shot that hides it.
+  const FINISH_SHOTS = ["chase", "side", "heli", "cinematic"];
 
   /** Progress-ordered running cars → Broadcast.battles shape. vScale: vTop()/VMAX — the director
    *  only cuts the SIM's race (eligible() keeps WATCH out), whose speeds are PACE-scaled. */
@@ -82,6 +84,7 @@ const Director = (function () {
     Log.info("game", "Director.create");
     let wall = 0, lastCut = -1e9, cuts = 0, onAirShot = null, subject = null;
     let ownCamera = null, autoSpectate = true, forcedTv = false, prevMode = -1;
+    let spectating = false;
     const scratchEye = [0, 0, 0], scratchTgt = [0, 0, 0];
 
     function camIdx(id) {
@@ -111,9 +114,12 @@ const Director = (function () {
       runOut.sort((a, b) => b.prog - a.prog);
       return runOut;
     }
-    function clearDbg() {
-      if (ownCamera && G.dbgCam === ownCamera) G.dbgCam = null;
+    function clearDbg(snap) {
+      const released = ownCamera && G.dbgCam === ownCamera;
+      if (released) G.dbgCam = null;
       ownCamera = null;
+      // A manual handoff returns to the player's car, possibly far from this shot.
+      if (released && snap && G.snapGameCam) G.snapGameCam();
     }
     /* A CUT SOLVES ONE-SHOT; HOLDING A SHOT SOLVES WITH THE FRAME'S dt.
        vantage.js eases the corner side of heli/side/cinematic through
@@ -130,7 +136,7 @@ const Director = (function () {
        would otherwise be damped toward two different cars on alternate calls. */
     function applyShot(car, shot, dt, cut) {
       if (!car || !G.track || !G.camVantage) return false;
-      const extra = { att: car, noLook: true, dt: cut ? 0 : (dt > 0 ? dt : 0), snap: !!cut };   // noLook: the PLAYER's look-back / glance never steers a TV shot
+      const extra = { att: car, noLook: true, frameSubject: true, dt: cut ? 0 : (dt > 0 ? dt : 0), snap: !!cut };   // noLook: the PLAYER's look-back / glance never steers a TV shot
       const pose = G.camPoseOf ? G.camPoseOf(car) : null;
       let s = car.s || 0, x = car.x || 0;
       if (pose) {
@@ -166,7 +172,7 @@ const Director = (function () {
       if (!eligible() || G.photoMode) { clearDbg(); return; }
       if (G.dbgCam && G.dbgCam !== ownCamera) { ownCamera = null; return; }
       if (G.paused) {
-        if (modeId() !== "tv") clearDbg();   // a paused camera selection still takes effect
+        if (modeId() !== "tv") clearDbg(true);   // a paused camera selection still takes effect
         return;   // hold the paused shot and dwell clock
       }
       const net = !!(G.netPlay && G.netPlay.active && G.netPlay.active());
@@ -175,11 +181,17 @@ const Director = (function () {
       const retired = !!(player && player.retired);
       if (!wantOn({ net, modeId: modeId(), autoSpectate, finished, retired })) {
         if (forcedTv && modeId() === "tv") { /* left on tv by us; still off if wantOn false only via net */ }
-        clearDbg();
+        clearDbg(!net && modeId() !== "tv");
         return;
       }
-      if (autoSpectate && (finished || retired) && !net) ensureTvMode();
-      if (modeId() !== "tv") { clearDbg(); return; }
+      if (autoSpectate && (finished || retired) && !net && !spectating) {
+        spectating = true; ensureTvMode();
+        subject = null; onAirShot = null; cuts = 0; lastCut = -1e9;
+      }
+      if (modeId() !== "tv") { clearDbg(true); return; }
+
+      // Resuming after a manual/photo camera is a cut, never a stale damping path.
+      if (!ownCamera) { subject = null; onAirShot = null; lastCut = -1e9; }
 
       wall += dt > 0 ? dt : 0;
       // Dwell: decideCut is null before SHOT_MIN_S, so a live subject on a held
@@ -201,6 +213,7 @@ const Director = (function () {
         running: running.length ? running : (player && !player.retired ? [{ key: player, prog: player.prog || 0, speed: player.speed || 0 }] : []),
       });
       if (decision) {
+        if (spectating) decision.shot = FINISH_SHOTS[cuts % FINISH_SHOTS.length];
         lastCut = wall; cuts++;
         applyShot(decision.subject, decision.shot, dt, true);
         Log.debug("game", "Director.cut kind=" + (decision.kind || "-") + " shot=" + decision.shot
@@ -216,7 +229,7 @@ const Director = (function () {
       wall = 0; lastCut = -1e9; cuts = 0; onAirShot = null; subject = null;
       // Auto-spectate forced "tv" non-persistently; the next race starts on the player's mode.
       if (forcedTv && prevMode >= 0 && modeId() === "tv" && G.setCamMode) G.setCamMode(prevMode, { persist: false });
-      forcedTv = false; prevMode = -1; clearDbg();
+      forcedTv = false; spectating = false; prevMode = -1; clearDbg();
     }
     function status() {
       return {

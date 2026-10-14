@@ -38,8 +38,9 @@ What changed underneath it, and why the old steps are gone:
    branch is protected (a PR with the twelve fast-tier checks green; admin
    tokens bypass, `enforcement_level: non_admins`), so the default mode's direct push fails with GH006. GitHub
    creates the merge commit, so the PR is a real record — a local
-   fast-forward auto-closes the PR instead (#67). Auto-merge is attempted;
-   if it does not arm, merge the PR yourself once CI is green.
+   fast-forward auto-closes the PR instead (#67). `deploy.mjs` never arms
+   auto-merge: Merge Desk arms it under its hard gate, merge commit only
+   (never squash or rebase-merge; AGENTS.md §Cursor Cloud specific instructions).
 
 `deploy.mjs` refuses a dirty tree, loadavg ≥ 3, a live Playwright run, and any
 conflict outside the generated files it can re-derive (`index.html`, `version.json`, ratchets, …). Everything below is the manual

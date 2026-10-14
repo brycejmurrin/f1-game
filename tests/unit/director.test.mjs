@@ -5,6 +5,7 @@
  * Run: node --test tests/unit/director.test.mjs
  */
 import { test } from "node:test";
+import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "path";
@@ -384,7 +385,8 @@ test("actual AI TV CHASE follows +X motion instead of the unchanged grid heading
   for (let i = 0; i < 12 && api.status().shot !== "chase"; i++) api.tick(15);
   assert.equal(api.status().shot, "chase");
   const { eye, target } = G.dbgCam;
-  assert.ok(eye[0] < 999 && target[0] > 999, "eye trails the interpolated subject along its real +X nose");
+  assert.ok(eye[0] < 999, "eye trails the interpolated subject along its real +X nose");
+  assert.equal(target[0], 999, "automatic chase centres the interpolated subject");
   const heading = Math.atan2(target[0] - eye[0], target[2] - eye[2]);
   assert.ok(Math.abs(heading - Math.PI / 2) < 0.2,
     "only the intentional shoulder offset remains, not the former ~44° shipped-heading error");
@@ -420,4 +422,136 @@ test("create().tick skips the running-car scan while holding a fresh shot (SHOT_
   for (const c of field) c.retired = true;      // the subject leaving must still re-cut at once
   api.tick(1 / 60);
   assert.ok(carReads >= 1, "a retired subject forces the scan again");
+});
+
+test("post-finish coverage opens on the car, rotates external shots, and respects a manual camera", () => {
+  const { G, car, api } = cameraScene();
+  const rival = { code: "NOR", prog: 800, s: 800, speed: 50 };
+  G.cars.push(rival); G.camMode = 0; car.finished = true;
+  const switches = [];
+  G.setCamMode = (i, opts) => { G.camMode = i; switches.push({ i, persist: opts.persist }); };
+  const shots = [];
+  for (let i = 0; i < 4; i++) { api.tick(15); shots.push(api.status().shot); assert.equal(api.status().subject, "NOR"); }
+  assert.deepEqual(shots, ["chase", "side", "heli", "cinematic"]);
+  assert.deepEqual(switches, [{ i: 1, persist: false }], "auto entry never overwrites the driving preference");
+  G.camMode = 0; api.tick(1);
+  assert.equal(G.dbgCam, null, "manual selection releases TV");
+  api.tick(20);
+  assert.equal(G.camMode, 0, "the next frame must not force TV back on");
+  G.camMode = 1; api.tick(1);
+  assert.equal(api.status().on, true, "the viewer can return to TV");
+  api.reset();
+  assert.equal(G.camMode, 0, "new races restore the pre-spectate camera");
+  api.tick(1);
+  assert.equal(api.status().shot, "chase", "re-entry establishes the subject again");
+});
+
+test("manual TV handoff snaps to the player's camera once, including paused and post-finish handoffs", () => {
+  for (const state of [{}, { paused: true }, { finished: true }]) {
+    const { G, car, api } = cameraScene();
+    car.finished = !!state.finished;
+    api.tick(1);
+    let snaps = 0;
+    G.snapGameCam = () => { assert.equal(G.dbgCam, null, "release the override before solving the player's rig"); snaps++; };
+    G.paused = !!state.paused; G.camMode = 0;
+    api.tick(1); api.tick(1);
+    assert.equal(snaps, 1, "only the actual TV release is a discontinuity");
+  }
+  for (const owner of ["photo", "foreign", "replay", "reset"]) {
+    const { G, api, eligibility } = cameraScene();
+    api.tick(1);
+    G.snapGameCam = () => assert.fail(`${owner} retains camera authority`);
+    G.camMode = 0;
+    if (owner === "photo") G.photoMode = true;
+    if (owner === "foreign") G.dbgCam = { eye: [100, 5, 0] };
+    if (owner === "replay") eligibility(false);
+    if (owner === "reset") api.reset(); else api.tick(1);
+  }
+});
+
+test("WATCH cuts and held frames use subject framing and clear it when normal driving resumes", () => {
+  const game = gameSource(), render = symbolSource("function render(dt)");
+  const start = render.indexOf("_vantExtra.bankDy = bankDy;");
+  const end = render.indexOf("const vant = camVantage", start);
+  assert.ok(start > 0 && end > start);
+  const pooled = game.slice(game.indexOf("const _vantExtra ="), game.indexOf("const _camAP ="));
+  let watching = false, extra;
+  const car = { s: 1000, x: 10, px: 10, pz: 1000, speed: 60, head: 0 };
+  const ctx = vm.createContext({
+    player: car, cars: [car], track: {}, camMode: 0, CAM_MODES: [{ id: "side" }],
+    Tracks: { banking: () => ({ dy: 2, roll: 0 }) }, _bankScratch: {},
+    realRace: { isWatch: () => watching }, camComfort: () => false, cameraBankScale: () => 0,
+    GameCams: { resetSmoothing() {} },
+    camVantage: (_mode, _s, _x, _speed, _now, e) => { extra = { ...e }; return { eye: [0, 5, 0], tgt: [10, 2, 1000], fov: 50 }; },
+    camEye: [0, 0, 0], camTgt: [0, 0, 0], gfx: null,
+    bankDy: 2, comfort: false, rpCam: { world: true, x: 10, z: 1000 },
+    _vantCarPos: [0, 0], headInterp: (c) => c.head, dt: 1 / 60,
+  });
+  vm.runInContext(pooled + "\n" + symbolSource("function snapGameCam("), ctx);
+  for (const watch of [false, true, false]) {
+    watching = watch;
+    vm.runInContext("snapGameCam()", ctx);
+    assert.equal(extra.frameSubject, watch, "a follow/seek cut selects the WATCH framing policy");
+    vm.runInContext(render.slice(start, end), ctx);
+    assert.equal(vm.runInContext("_vantExtra.frameSubject", ctx), watch, "held frames match the cut and release the pooled flag after WATCH");
+    assert.equal(extra.bankDy, 2, "WATCH still follows the banked road");
+  }
+});
+
+test("automatic chase, side, helicopter and cinematic framing keeps a laterally displaced car near the centre", () => {
+  const { G } = realCamScene();
+  for (const mode of ["chase", "side", "heli", "cinematic"]) for (const x of [-10, 0, 10]) {
+    const p = [x, 7.5 + 0.8, 1000];
+    const v = G.camVantage(mode, 1000, x, 60, 0, { carPos: [x, 1000], frameSubject: true, noLook: true, snap: true });
+    const aim = v.tgt.map((n, i) => n - v.eye[i]), car = p.map((n, i) => n - v.eye[i]);
+    const dot = aim.reduce((sum, n, i) => sum + n * car[i], 0) / (Math.hypot(...aim) * Math.hypot(...car));
+    const degrees = Math.acos(Math.min(1, dot)) * 180 / Math.PI;
+    assert.ok(degrees < v.fov * .25, `${mode} x=${x}: subject ${degrees} degrees off-axis, FOV ${v.fov}`);
+  }
+});
+
+test("subject framing preserves tuner pitch/yaw and the viewer's look-back", () => {
+  const { G, ctx } = realCamScene();
+  ctx.GameStore = { store: { get: () => null } };
+  vm.runInContext(src("js/camera/offsets.js"), ctx, { filename: "offsets.js" });
+  const tune = vm.runInContext("CamTune", ctx);
+  let held = false;
+  ctx.Input = { lookingBack: () => held };
+  const close = (actual, expected) => actual.forEach((n, i) => assert.ok(Math.abs(n - expected[i]) < 1e-8, `${n} != ${expected[i]}`));
+  for (const mode of ["chase", "side", "heli", "cinematic"]) {
+    const extra = { carPos: [10, 1000], att: G.player, frameSubject: true, snap: true };
+    const solve = () => { const v = G.camVantage(mode, 1000, 10, 60, 0, extra); return { eye: v.eye.slice(), tgt: v.tgt.slice(), fov: v.fov }; };
+    held = false;
+    const base = solve();
+    tune.set(mode, "pitch", 12); tune.set(mode, "yaw", 24);
+    const expected = { eye: base.eye.slice(), tgt: base.tgt.slice() };
+    tune.apply(mode, expected.eye, expected.tgt, base.fov);
+    const adjusted = solve();
+    close(adjusted.tgt, expected.tgt);
+    assert.ok(Math.hypot(...adjusted.tgt.map((n, i) => n - base.tgt[i])) > 2, "the visible aim responds to both tuner controls");
+    held = true;
+    const back = solve();
+    close(back.tgt, [2 * adjusted.eye[0] - adjusted.tgt[0], adjusted.tgt[1], 2 * adjusted.eye[2] - adjusted.tgt[2]]);
+    extra.noLook = true;
+    close(solve().tgt, adjusted.tgt);
+  }
+});
+
+test("the render loop keeps a remote TV/results subject even beyond the player's driving fog", () => {
+  const game = gameSource();
+  const start = game.indexOf("for (const c of cars) {", game.indexOf("// Driving fog culls"));
+  const end = game.indexOf("// Player: reuse frame-cached", start);
+  assert.ok(start > 0 && end > start);
+  // Run the actual early render culls; the later frustum/LOD still handles the active view.
+  const run = game.slice(start, end) + "seen.push(c.code); }";
+  const player = { code: "ME", isPlayer: true, s: 50 };
+  const ctx = vm.createContext({ state: "race", player, track: { total: 5000 }, dbgCam: null,
+    cars: [player, { code: "NEAR", s: 4900 }, { code: "FAR", s: 2500 }], seen: [] });
+  vm.runInContext(run, ctx);
+  assert.deepEqual(Array.from(ctx.seen), ["ME", "NEAR"], "ordinary driving keeps the wrap-safe fog cull");
+  for (const camera of [{ eye: [0, 5, 2500] }, { _resultsCam: true, eye: [0, 5, 2500] }]) {
+    ctx.dbgCam = camera; ctx.seen = [];
+    vm.runInContext(run, ctx);
+    assert.deepEqual(Array.from(ctx.seen), ["ME", "NEAR", "FAR"], "a camera override is independent of player location");
+  }
 });

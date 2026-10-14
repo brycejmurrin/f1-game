@@ -13,12 +13,13 @@ import { symbolSource } from "../helpers/game-source.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
 
-function boot() {
+function boot(globals = {}) {
   const sb = {
     Math, console, Object, Array, Number, String, JSON, Float32Array, Float64Array, Uint8Array,
     isFinite, parseFloat, parseInt,
     Log: { info() {}, debug() {}, warn() {}, enabled() { return false; } },
     PerfGov: { tier: () => 0 },
+    ...globals,
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
@@ -355,4 +356,22 @@ test("SOUND off: the montage never starts the engine", () => {
   const { frame, resultsCam, audio } = highlightsRig({ sound: false });
   resultsCam.onFlag(); frame(10); resultsCam.startHighlights(); frame(60);
   assert.equal(audio.real.debug().engineOn, false);
+});
+
+test("results orbit uses the rendered subject and road elevation instead of a missing car.py", () => {
+  const R = boot({ Tracks: {
+    sample: (_track, _s, out) => { out.p[1] = 80; },
+    banking: () => ({ dy: 2 }),
+  } });
+  const car = { finPos: 1, s: 100, x: 3, px: 200, pz: 300, speed: 0 };
+  let extra;
+  const G = { player: car, cars: [car], gfx: {}, track: {},
+    camPoseOf: () => ({ s: 99, x: 3, carPos: [198, 298], carHead: 1 }),
+    camVantage: (_mode, s, x, speed, now, e) => { extra = e; return { eye: [180, 85, 298], tgt: [198, 83, 298] }; } };
+  const api = R.create(G); api.onFlag();
+  assert.deepEqual(Array.from(extra.carPos), [198, 298], "opening shot uses the drawn body anchor");
+  assert.equal(extra.frameSubject, true);
+  api.startOrbit();
+  assert.deepEqual(Array.from(G.dbgCam.target), [198, 83.2, 298]);
+  assert.equal(G.dbgCam.eye[1], 88, "orbit is above the banked road, not below an elevated circuit");
 });
