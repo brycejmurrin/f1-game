@@ -18,7 +18,8 @@
 //   node tools/shot/apex-capture.mjs identity [outdir] [id ...]   # aerial+tour+eye
 //   node tools/shot/apex-capture.mjs lap-tour [track] [speed] [outdir] [weather=wet] [tod=dusk]
 //
-// Env: APEX_WORKERS=N  (default: 2 on SwiftShader, up to 4 on APEX_GL=llvmpipe — see browser-workers.mjs)
+// Env: APEX_WORKERS=N (default: 1 per 4 CPUs, cap 2 on SwiftShader;
+// up to 4 on APEX_GL=llvmpipe — see browser-workers.mjs). Pools cap at job count.
 // Logs/redirects: use artifacts/tmp/ (never /tmp) — e.g.
 //   node tools/shot/apex-capture.mjs identity scratch/captures/apex-capture/identity > artifacts/tmp/apex-identity.log 2>&1 &
 // Default output roots when [outdir] is omitted:
@@ -27,17 +28,14 @@
 //   identity -> scratch/captures/apex-capture/identity
 //   lap-tour -> scratch/captures/apex-capture/lap-tour
 //   modes    -> scratch/captures/apex-capture/modes
-// Soft-present blank gate: sample max-channel on #game-soft / 2D canvas when
-// present (byte-size is a poor blank proxy for JPEG and soft-blit PNGs).
+// Decode the saved bytes for blank / HUD-only evidence on either capture path.
 
-import { mkdirSync, createReadStream, statSync } from "node:fs";
-import { createServer as createNetServer } from "node:net";
-import { createServer as createHttpServer } from "node:http";
-import { join, normalize, extname, sep } from "node:path";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { launchChromium } from "../lib/harness.mjs";
-import { defaultCaptureWorkers } from "../lib/browser-workers.mjs";
-import { screenshotPresentedCanvas } from "./probe-page.mjs";
+import { launchChromium, startStaticServer as serve, shutdown } from "../lib/harness.mjs";
+import { defaultCaptureWorkers, captureChromiumArgs, glStack, captureCpuBudget } from "../lib/browser-workers.mjs";
+import { screenshotPresentedCanvas, installProbeInit, gotoGame, awaitPresentedFrame } from "./probe-page.mjs";
+import { invoked, pixelEvidence } from "./capture-contract.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
@@ -56,113 +54,57 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const LAND = { width: 844, height: 390 };
 const IDENTITY_VP = { width: 960, height: 540 };
 
-function freePort() {
-  return new Promise((res, rej) => {
-    const s = createNetServer();
-    s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); });
-    s.on("error", rej);
-  });
-}
-
-const MIME = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "application/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".json": "application/json",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".svg": "image/svg+xml",
-  ".wasm": "application/wasm",
-  ".ico": "image/x-icon",
-  ".map": "application/json",
-  ".txt": "text/plain",
-  ".webp": "image/webp",
-};
-
-/** One async Node static server — concurrent GETs (unlike python -m http.server). */
 async function startStaticServer() {
-  const port = await freePort();
-  const root = ROOT + sep;
-  const server = createHttpServer((req, res) => {
-    try {
-      const u = new URL(req.url || "/", `http://127.0.0.1:${port}`);
-      let rel = decodeURIComponent(u.pathname);
-      if (rel === "/") rel = "/index.html";
-      const file = normalize(join(ROOT, rel));
-      if (!file.startsWith(root) && file !== ROOT) {
-        res.writeHead(403); res.end("forbidden"); return;
-      }
-      let st;
-      try { st = statSync(file); } catch {
-        res.writeHead(404); res.end("not found"); return;
-      }
-      if (!st.isFile()) { res.writeHead(404); res.end("not found"); return; }
-      res.writeHead(200, {
-        "Content-Type": MIME[extname(file).toLowerCase()] || "application/octet-stream",
-        "Content-Length": st.size,
-        "Cache-Control": "no-store",
-      });
-      createReadStream(file).pipe(res);
-    } catch (e) {
-      res.writeHead(500); res.end(String(e && e.message || e));
-    }
-  });
-  await new Promise((res, rej) => {
-    server.once("error", rej);
-    server.listen(port, "127.0.0.1", res);
-  });
-  return {
-    port,
-    url: `http://127.0.0.1:${port}/`,
-    kill: () => new Promise((r) => server.close(() => r())),
-  };
+  const server = await serve(ROOT);
+  return { ...server, kill: () => server.close() };
 }
 
 async function launchBrowser() {
   return launchChromium({
-    args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"],
+    args: captureChromiumArgs(),
   });
 }
 
-async function openPage(browser, baseUrl, viewport = LAND) {
+export async function openPage(browser, baseUrl, viewport = LAND) {
   const page = await browser.newPage({ viewport });
-  await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 20000 });
+  // Keep Three's shipped backend selection and skip transitional flybys.
+  try {
+    await installProbeInit(page, { backend: "three", tlxForceGL: false });
+    await gotoGame(page, baseUrl, 60000);
+  } catch (err) { await page.context().close().catch(() => {}); throw err; }
   return page;
 }
 
 async function race(page, track, settleMs = 1600) {
   await page.evaluate((t) => window.__apex.race(t), track);
-  await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: 60000 });
+  await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: 60000, polling: 100 });
   await sleep(settleMs);
 }
 
-async function waitFrames(page, n = 2) {
-  await page.evaluate((count) => new Promise((resolve) => {
-    let i = 0;
-    const tick = () => { if (++i >= count) resolve(); else requestAnimationFrame(tick); };
-    requestAnimationFrame(tick);
-  }), n);
-}
-
-/** Blank = near-black max channel on a 2D soft canvas; never byte-size. */
-async function blankFromTarget(page, sel) {
-  return page.evaluate((s) => {
-    const g = document.querySelector(s) || document.getElementById("game-soft")
-      || document.getElementById("game");
-    if (!g) return true;
-    const ctx = g.getContext && g.getContext("2d");
-    if (!ctx || !(g.width > 0) || !(g.height > 0)) return false;
-    const w = Math.min(g.width | 0, 96), h = Math.min(g.height | 0, 96);
-    const id = ctx.getImageData(0, 0, w, h);
-    let max = 0;
-    for (let i = 0; i < id.data.length; i += 4) {
-      const c = id.data[i] + id.data[i + 1] + id.data[i + 2];
-      if (c > max) max = c;
+/** Two soft presents flush a readback that was already in flight at the move.
+ * A native canvas has no soft barrier, so wait two actual game render frames.
+ * Never snapCam here: it clears fixed orbit/view/eyeAt framing. */
+export async function waitCaptureFrame(page, timeout = 60000) {
+  const started = Date.now();
+  const soft = await page.evaluate(() => typeof GLX !== "undefined" &&
+    typeof GLX.softPresent === "function" && GLX.softPresent());
+  if (!soft) {
+    const before = await page.evaluate(() => window.__apex.cameraState().renderFrame);
+    await page.waitForFunction((frame) => window.__apex.cameraState().renderFrame >= frame + 2, before, { polling: 100, timeout });
+    return;
+  }
+  for (let i = 0; i < 2; i++) {
+    const remaining = timeout - (Date.now() - started);
+    const presented = remaining > 0 ? await awaitPresentedFrame(page, remaining) : false;
+    if (presented === null) {
+      const before = await page.evaluate(() => window.__apex.cameraState().renderFrame);
+      await page.waitForFunction((frame) => window.__apex.cameraState().renderFrame >= frame + 2, before, { polling: 100, timeout: remaining });
+      return;
     }
-    return max < 8;
-  }, sel).catch(() => false);
+    if (presented === false) {
+      throw new Error("capture: no fresh presented frame after camera change");
+    }
+  }
 }
 
 async function shotPng(page, dir, name, sel = "canvas#game") {
@@ -173,45 +115,55 @@ async function shotPng(page, dir, name, sel = "canvas#game") {
   // Do NOT use page.screenshot({animations:'disabled'}) — hangs under SwiftShader.
   if (sel !== "canvas#game") {
     const buf = await page.locator(sel).screenshot({ path: `${dir}/${name}.png`, timeout: 60000 });
-    return { name: `${name}.png`, bytes: buf.length, blank: buf.length < 5000 };
+    return { name: `${name}.png`, bytes: buf.length, blank: !(await pixelEvidence(buf)).meaningful };
   }
-  await waitFrames(page, 2);
-  const shot = await screenshotPresentedCanvas(page, { path: `${dir}/${name}.png`, timeout: 60000 });
-  const target = await page.evaluate(() =>
-    document.getElementById("game-soft") ? "#game-soft" : "canvas#game");
-  return { name: `${name}.png`, bytes: shot.bytes, blank: await blankFromTarget(page, target) };
+  const presentStart = Date.now();
+  await waitCaptureFrame(page);
+  const presentMs = Date.now() - presentStart;
+  const shot = await screenshotPresentedCanvas(page, { path: `${dir}/${name}.png`, skipAwait: true, pauseRender: true, timeout: 60000 });
+  return { name: `${name}.png`, bytes: shot.bytes, blank: !(await pixelEvidence(shot.buf)).meaningful, via: shot.via, timings: { ...shot.timings, presentMs } };
 }
 
 async function shotJpg(page, dir, name) {
-  await waitFrames(page, 2);
+  const presentStart = Date.now();
+  await waitCaptureFrame(page);
+  const presentMs = Date.now() - presentStart;
   const shot = await screenshotPresentedCanvas(page, {
+    skipAwait: true,
+    pauseRender: true,
     path: `${dir}/${name}.jpg`,
     type: "jpeg",
     quality: 72,
     timeout: 60000,
   });
-  const target = await page.evaluate(() =>
-    document.getElementById("game-soft") ? "#game-soft" : "canvas#game");
-  return { name: `${name}.jpg`, bytes: shot.bytes, blank: await blankFromTarget(page, target) };
+  return { name: `${name}.jpg`, bytes: shot.bytes, blank: !(await pixelEvidence(shot.buf)).meaningful, via: shot.via, timings: { ...shot.timings, presentMs } };
 }
 
 /**
  * N independent Chromium processes, each with one page on the shared server.
  * Returns { workers:[{id,browser,page,viewport}], kill, revive(w) }.
  */
-async function startWorkerPool(n, baseUrl, viewport = LAND) {
+export async function startWorkerPool(n, baseUrl, viewport = LAND, { launch = launchBrowser, open = openPage, pause = sleep } = {}) {
   const workers = [];
   async function boot(id) {
-    const browser = await launchBrowser();
-    const page = await openPage(browser, baseUrl, viewport);
+    const started = Date.now();
+    const browser = await launch();
+    let page;
+    try { page = await open(browser, baseUrl, viewport); }
+    catch (err) { await browser.close().catch(() => {}); throw err; }
     page.on("crash", () => console.error(`[pool] w${id} PAGE CRASH`));
     browser.on("disconnected", () => console.error(`[pool] w${id} BROWSER DISCONNECTED`));
-    return { id, browser, page, viewport, baseUrl };
+    return { id, browser, page, viewport, baseUrl, bootMs: Date.now() - started };
   }
-  for (let i = 0; i < n; i++) {
-    workers.push(await boot(i));
-    console.error(`[pool] worker ${i} ready`);
-    if (i < n - 1) await sleep(400); // stagger launches — parallel SwiftShader OOMs easily
+  try {
+    for (let i = 0; i < n; i++) {
+      workers.push(await boot(i));
+      console.error(`[pool] worker ${i} ready`);
+      if (i < n - 1) await pause(400); // bounded stagger avoids software GL OOM
+    }
+  } catch (err) {
+    await Promise.all(workers.map((w) => w.browser.close().catch(() => {})));
+    throw err;
   }
   return {
     workers,
@@ -230,7 +182,7 @@ async function startWorkerPool(n, baseUrl, viewport = LAND) {
 }
 
 /** Dynamic queue — idle workers pull the next job (better than static shards). */
-async function poolMap(workers, jobs, run, revive) {
+export async function poolMap(workers, jobs, run, revive) {
   const queue = jobs.slice();
   const results = new Array(jobs.length);
   let cursor = 0;
@@ -259,27 +211,15 @@ async function poolMap(workers, jobs, run, revive) {
             continue;
           }
         }
-        results[item.i] = { job: item.job, err: msg };
+        results[item.i] = { job: item.job?.name ?? item.job, err: msg };
       }
     }
   }));
   return results;
 }
 
-// Static shard fanout for same-track multi-shot (cameras) — one browser, N pages.
-async function fanoutPages(pages, jobs, run) {
-  const queues = pages.map(() => []);
-  jobs.forEach((j, i) => queues[i % pages.length].push(j));
-  const all = await Promise.all(pages.map((pg, i) => (async () => {
-    const r = [];
-    for (const j of queues[i]) r.push(await run(pg, j).catch((e) => ({ job: j, err: e.message })));
-    return r;
-  })()));
-  return all.flat();
-}
-
-function workersEnv(def = 2) {
-  return defaultCaptureWorkers({ defSwift: def });
+function workersEnv(def = 2, jobs = Infinity) {
+  return defaultCaptureWorkers({ defSwift: def, jobs });
 }
 
 async function prepCleanChrome(page) {
@@ -298,24 +238,29 @@ async function main() {
   const t0 = Date.now();
   let manifest;
   let cleanup = async () => {};
+  const workerTimings = [];
+  let outputDir;
 
   try {
     if (cmd === "cameras") {
-      // Same track loaded once per page — tabs in one browser are fine here.
+      // Each worker owns a Chromium process; shared tabs contend on software GL.
       const track = rest[0] && !rest[0].includes("/") && !rest[0].startsWith(".") ? rest[0] : "monza";
       const dir = (rest[1] || `${ROOT}/scratch/captures/apex-capture/cameras`); mkdirSync(dir, { recursive: true });
       const CAMS = ["chase","far","cockpit","hood","overhead","heli","reverse","side","cinematic","low","tcam","rear"];
       const staticSrv = await startStaticServer();
       cleanup = async () => { await staticSrv.kill(); };
-      const browser = await launchBrowser();
-      const pages = await Promise.all([0, 1, 2, 3].map(() => openPage(browser, staticSrv.url)));
-      await Promise.all(pages.map((pg) => race(pg, track).then(() => pg.evaluate(() => window.__apex.park(0.1)))));
-      manifest = await fanoutPages(pages, CAMS, async (pg, m) => {
+      outputDir = dir;
+      const pool = await startWorkerPool(workersEnv(2, CAMS.length), staticSrv.url);
+      cleanup = async () => { await pool.kill(); await staticSrv.kill(); };
+      workerTimings.push(...pool.workers.map((w) => ({ id: w.id, bootMs: w.bootMs })));
+      await Promise.all(pool.workers.map((w) => race(w.page, track).then(() => w.page.evaluate(() => window.__apex.park(0.1)))));
+      manifest = await poolMap(pool.workers, CAMS, async (w, m) => {
+        const pg = w.page;
         await pg.evaluate((mm) => { window.__apex.camera(mm); window.__apex.snapCam && window.__apex.snapCam(); }, m);
         await sleep(180);
         return shotPng(pg, dir, `cam-${m}`);
       });
-      await browser.close();
+      await pool.kill();
       await staticSrv.kill();
       cleanup = async () => {};
     } else if (cmd === "tracks" || cmd === "identity") {
@@ -323,14 +268,17 @@ async function main() {
       const dirArg = rest[0] && (rest[0].includes("/") || rest[0].startsWith(".")) ? rest.shift() : null;
       const dir = dirArg || `${ROOT}/scratch/captures/apex-capture/${isIdentity ? "identity" : "tracks"}`;
       mkdirSync(dir, { recursive: true });
-      const n = workersEnv(2);
+      outputDir = dir;
+      let ids = rest.filter((x) => !x.includes("/"));
+      const n = workersEnv(2, ids.length || Infinity);
       const staticSrv = await startStaticServer();
       console.error(`[${cmd}] static server :${staticSrv.port}, ${n} Chromium workers`);
+      cleanup = async () => { await staticSrv.kill(); };
       const pool = await startWorkerPool(n, staticSrv.url, isIdentity ? IDENTITY_VP : LAND);
+      workerTimings.push(...pool.workers.map((w) => ({ id: w.id, bootMs: w.bootMs })));
       const { workers, kill: killPool, revive } = pool;
       cleanup = async () => { await killPool(); await staticSrv.kill(); };
 
-      let ids = rest.filter((x) => !x.includes("/"));
       if (!ids.length) {
         ids = await workers[0].page.evaluate(() => window.__apex.tracks().map((t) => t.id || t));
       }
@@ -341,6 +289,7 @@ async function main() {
           const t1 = Date.now();
           console.error(`[identity] w${w.id} start ${id}`);
           await race(w.page, id, 1400); // same settle as survey-track.mjs
+          const raceMs = Date.now() - t1;
           await prepCleanChrome(w.page);
           const out = [];
           await w.page.evaluate(() => window.__apex.view());
@@ -358,7 +307,7 @@ async function main() {
           await sleep(50);
           out.push(await shotJpg(w.page, dir, `${id}-eye`));
           console.error(`[identity] w${w.id} done  ${id} (${Date.now() - t1}ms)`);
-          return out;
+          return out.map((shot) => ({ ...shot, workerId: w.id, raceMs, jobMs: Date.now() - t1 }));
         }, revive);
         manifest = manifest.flat();
       } else {
@@ -366,11 +315,12 @@ async function main() {
           const t1 = Date.now();
           console.error(`[tracks] w${w.id} start ${id}`);
           await race(w.page, id, 700);
+          const raceMs = Date.now() - t1;
           await w.page.evaluate(() => { window.__apex.park(0.1); window.__apex.orbit(0.1, 50, 22, 70); });
           await sleep(150);
           const s = await shotPng(w.page, dir, `track-${id}`);
           console.error(`[tracks] w${w.id} done  ${id} (${Date.now() - t1}ms)`);
-          return s;
+          return { ...s, workerId: w.id, raceMs, jobMs: Date.now() - t1 };
         }, revive);
       }
 
@@ -387,7 +337,9 @@ async function main() {
       const weather = weatherArg && weatherArg.split("=")[1];
       const tod = todArg && todArg.split("=")[1];
       mkdirSync(dir, { recursive: true });
+      outputDir = dir;
       const staticSrv = await startStaticServer();
+      cleanup = async () => { await staticSrv.kill(); };
       const browser = await launchBrowser();
       cleanup = async () => { try { await browser.close(); } catch {} await staticSrv.kill(); };
       const page = await openPage(browser, staticSrv.url);
@@ -420,7 +372,8 @@ async function main() {
       cleanup = async () => {};
     } else { // modes
       const dir = (rest[0] || `${ROOT}/scratch/captures/apex-capture/modes`); mkdirSync(dir, { recursive: true });
-      // Independent scenes — one Chromium per job (real parallelism).
+      outputDir = dir;
+      // Independent scenes — one Chromium per slot, fresh page/context per job.
       const staticSrv = await startStaticServer();
       const jobs = [
         { name: "menu", fn: async (pg) => {
@@ -457,12 +410,15 @@ async function main() {
         await Promise.all(browsers.map(async (b) => { try { await b.close(); } catch {} }));
         await staticSrv.kill();
       };
-      const out = await Promise.all(jobs.map(async (j) => {
-        const browser = await launchBrowser();
-        browsers.push(browser);
-        const pg = await openPage(browser, staticSrv.url, j.viewport || LAND);
-        return j.fn(pg).catch((e) => [{ err: e.message, job: j.name }]);
-      }));
+      const slots = Array.from({ length: workersEnv(2, jobs.length) }, (_, id) => ({ id }));
+      const out = await poolMap(slots, jobs, async (w, j) => {
+        if (!w.browser) { w.browser = await launchBrowser(); browsers.push(w.browser); }
+        const started = Date.now();
+        const pg = await openPage(w.browser, staticSrv.url, j.viewport || LAND);
+        workerTimings.push({ id: w.id, job: j.name, bootMs: Date.now() - started });
+        try { return await j.fn(pg); }
+        finally { await pg.context().close(); }
+      });
       manifest = out.flat();
       await Promise.all(browsers.map((b) => b.close().catch(() => {})));
       await staticSrv.kill();
@@ -474,7 +430,9 @@ async function main() {
   }
 
   const ms = Date.now() - t0;
-  console.log(JSON.stringify({ cmd, ms, shots: manifest }, null, 2));
+  const result = { cmd, ms, requestedGl: glStack(), cpuBudget: captureCpuBudget(), workerTimings, shots: manifest };
+  if (outputDir) writeFileSync(`${outputDir}/manifest.json`, JSON.stringify(result, null, 2) + "\n");
+  console.log(JSON.stringify(result, null, 2));
   console.error(`[${cmd}] finished in ${(ms / 1000).toFixed(1)}s — ${manifest.length} shot(s)`);
   const bad = (manifest || []).filter((m) => m && (m.blank || m.err));
   if (bad.length) {
@@ -483,4 +441,5 @@ async function main() {
   }
 }
 
-main().catch((e) => { console.error("FATAL", e); process.exit(1); });
+if (invoked(import.meta.url)) main().finally(shutdown)
+  .catch((e) => { console.error("FATAL", e); process.exitCode = 1; });
