@@ -1198,6 +1198,20 @@ body[data-density="compact"] #hud-flag {
   font-size: var(--fs-micro);
   padding: calc(var(--gap) * 0.35) var(--gap);
 }
+/* Broadcast phoneL @150%: #1501 dropped the centred flag under --hud-gaps-b
+   (chip top 110.7 local / y166) but LIMITS still hung from the sector plate
+   (y198). CI 96c3536 and the tip dump both measure flag+limits — the flag's
+   right edge sits on the chip. Stack LIMITS under the same slot the flag
+   uses (72px / gaps-b / mir-bot) plus a 40px chip+air budget. Left-column
+   LIMITS (:root[data-limits-left]) keeps the rule above; MOVE & SIZE wins.
+   `.hud-prof-broadcast` (not `body.…`) so source-integrity does not see
+   body as a descendant of :root — the class still lives only on body. */
+:root:not([data-limits-left]) .hud-prof-broadcast[data-density="compact"]:has(#hud-flag:not([hidden])) #hud-limits:not([data-hl-user]) {
+  top: max(
+    calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px),
+    calc(max(72px + var(--sat) / var(--hud-z), var(--hud-gaps-b, 0px) + 8px, var(--mir-bot, 0px) + 8px) + 40px)
+  );
+}
 /* Compact (every landscape phone): the SAME anchor — right under the timing
    row — with smaller type. It used to keep the billboard's 36svh, which put
    the card in the middle of the road on a phone (reported with screenshots). */
