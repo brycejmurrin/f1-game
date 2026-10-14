@@ -52,6 +52,29 @@ test("M5: VS FRIEND sets the gp/race flow and opens the lobby once the bundle la
   assert.equal(h.log.announce.length, 0);
 });
 
+test("VS FRIEND loading cannot open the lobby over a newer title sheet or race picker", async () => {
+  for (const hidden of [false, true]) {
+    for (const ok of [true, false]) {
+      let ready, top = null;
+      const h = boot({ ensureNet: () => new Promise((resolve) => { ready = resolve; }), top: () => top });
+      h.btns["mb-vs"].onclick();
+      if (hidden) h.btns["mb-race"].onclick();
+      else top = { id: "pmsettings" };   // Settings leaves the title visible beneath it.
+      const before = { flow: h.G.flow, session: h.G.session, restore: h.log.restore };
+      ready(ok);
+      await tick();
+      assert.equal(h.log.opened, 0, "a stale bundle completion cannot take navigation");
+      assert.deepEqual({ flow: h.G.flow, session: h.G.session, restore: h.log.restore }, before);
+      assert.equal(h.log.announce.length, 0, "a superseded request stays silent on refusal too");
+      top = null; h.G.els.overlay.hidden = false;
+      h.btns["mb-vs"].onclick();
+      ready(true);
+      await tick();
+      assert.equal(h.log.opened, 1, "a fresh VS request works after returning to the title");
+    }
+  }
+});
+
 // DAILY used to skip scheduleFlybyTrack; START then cold-compiled Shanghai FOG under
 // the sheet and burned awaitIntroWarm on CI (garage-out-before-card DAILY, 2026-10-11).
 test("DAILY and TIME TRIAL both warm the selected circuit under the picker", () => {

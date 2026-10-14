@@ -10,11 +10,17 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
-import { gameSource, symbolSource } from "../helpers/game-source.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";   // title-flow.js is not a game.js carve-out
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const fixture = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/ghost-monza-short.json"), "utf8"));
+
+const titleSource = fs.readFileSync(path.join(ROOT, "js/ui/title-flow.js"), "utf8");
+function titleConsume(ctx) {
+  return vm.runInContext(fnSource(titleSource, "function titleIsLive(") + "\n(" +
+    fnSource(titleSource, "async function consumeGhostHash()") + ")", ctx);
+}
 
 function harness(opts = {}) {
   const tracks = opts.tracks || ["monza", "spa"];
@@ -256,7 +262,7 @@ test("starting a race during ghost decoding preserves the link until returning t
     trackIdx: 0, buildSelect() { opens++; }, vt() {}, scheduleFlybyTrack() {},
   });
   ctx.G = { announce: h.notify, session: "race", daily: { stop() {} }, trackIdx: 0, buildSelect() { opens++; }, scheduleFlybyTrack() {} };
-  const consume = vm.runInContext("(" + symbolSource("async function consumeGhostHash()") + ")", ctx);
+  const consume = titleConsume(ctx);
   const pending = consume();
   racing = true;
   assert.equal(await pending, null);
@@ -291,8 +297,7 @@ test("a ghost link landing over a non-title layer waits, fragment intact, for th
     DailyChallenge: { dayKey: () => "2026-09-29" }, restoreFreePlaySelection() {},
     Tracks: { LIST: [{ id: "monza" }] }, vt() {},
   });
-  const source = fs.readFileSync(path.join(ROOT, "js/ui/title-flow.js"), "utf8");
-  const consume = vm.runInContext("(" + fnSource(source, "async function consumeGhostHash()") + ")", ctx);
+  const consume = titleConsume(ctx);
   for (const [id, hidden] of [["results", true], ["quali", true], ["loading", false], ["career", true], [null, true]]) {
     topId = id; overlayHidden = hidden;
     assert.equal(await consume(), null, `deferred over ${id || "a hidden title"}`);
@@ -333,8 +338,7 @@ test("a link held over the picker or a title layer lands on BACK to the title", 
       els: { overlay }, DailyChallenge: { dayKey: () => "2026-09-29" }, restoreFreePlaySelection() {},
       Tracks: { LIST: [{ id: "monza" }] }, vt() {},
     });
-    const source = fs.readFileSync(path.join(ROOT, "js/ui/title-flow.js"), "utf8");
-    const consume = vm.runInContext("(" + fnSource(source, "async function consumeGhostHash()") + ")", ctx);
+    const consume = titleConsume(ctx);
     assert.equal(await consume(), null, `deferred over ${first}`);
     assert.equal(await consume(), null, "a second defer does not stack a second watch");
     assert.equal(observers.length, 1, `one watch armed over ${first}`);
@@ -348,6 +352,129 @@ test("a link held over the picker or a title layer lands on BACK to the title", 
     assert.equal(h.GhostShare.guest().track, "monza");
     assert.equal(h.location.hash, "");
   }
+});
+
+// Exercise the real decoders across TitleFlow's await, with a deterministic
+// observer/timer queue representing BACK. No direct re-call may be needed.
+function titleLinkHarness() {
+  const h = harness({ plain: true });
+  const overlay = { id: "overlay", hidden: false };
+  let top = overlay, opens = 0;
+  const observers = [], timers = [], bag = new Map();
+  class MutationObserver {
+    constructor(cb) { this.cb = cb; this.targets = []; observers.push(this); }
+    observe(el) { this.targets.push(el); }
+    disconnect() { this.targets = []; }
+  }
+  const G = {
+    announce: h.notify, flow: "season", session: "race", trackIdx: 0,
+    daily: { stop() {} }, buildSelect() { opens++; }, scheduleFlybyTrack() {},
+    store: { get: (key, fallback) => bag.has(key) ? bag.get(key) : fallback,
+      set: (key, value) => bag.set(key, value) },
+    openGarage() { opens++; top = { id: "carsetup" }; },
+  };
+  const ctx = vm.createContext({
+    G, GhostShare: h.GhostShare, els: { overlay, select: { hidden: true } },
+    TextEncoder, TextDecoder, Uint8Array, btoa, atob, URL,
+    location: h.location, history: h.history, Log: { info() {}, warn() {} },
+    MutationObserver, setTimeout: (cb) => timers.push(cb),
+    UiLayers: { inRace: () => false, top: () => top },
+    DailyChallenge: { dayKey: () => "2026-10-14" }, restoreFreePlaySelection() {},
+    Tracks: { LIST: [{ id: "monza" }, { id: "spa" }] },
+    Teams: { LIST: [{ id: "ferrari" }] },
+    vt(fn) { fn(); top = { id: "select" }; },
+  });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/share-code.js"), "utf8"), ctx);
+  const ShareCode = vm.runInContext("ShareCode", ctx);
+  const consume = titleConsume(ctx);
+  return {
+    ...h, G, bag, overlay, observers, ShareCode, consume,
+    opens: () => opens,
+    cover(id) { top = { id }; return top; },
+    setHash(hash) { h.location.hash = hash; h.location.href = h.location.origin + h.location.pathname + hash; },
+    async back() {
+      top = overlay; overlay.hidden = false;
+      const watch = overlay._apexLinkWatch;
+      assert.ok(watch, "the deferred completion armed BACK's retry");
+      watch.cb([]);
+      assert.equal(timers.length, 1, "one retry queued");
+      await timers.shift()();
+    },
+  };
+}
+
+test("Settings opened during ghost decoding defers both valid and corrupt links until BACK", async () => {
+  for (const corrupt of [false, true]) {
+    const h = titleLinkHarness();
+    const encoded = await h.GhostShare.encode(fixture, { track: "monza" });
+    const hash = "#ghost=" + (corrupt ? "APXG1.p.broken" : encoded.code);
+    h.setHash(hash);
+    const pending = h.consume();
+    const settings = h.cover("pmsettings");
+    assert.equal(await pending, null);
+    assert.equal(h.G.session, "race");
+    assert.equal(h.G.flow, "season");
+    assert.equal(h.opens(), 0);
+    assert.equal(h.GhostShare.guest(), null);
+    assert.equal(h.location.hash, hash);
+    assert.equal(h.writes.length, 0);
+    assert.equal(h.notices.length, 0, "no stale success or refusal toast over Settings");
+    assert.equal(h.observers.length, 1, "validation and staging share one retry watch");
+    assert.ok(h.observers[0].targets.includes(settings));
+    await h.back();
+    assert.equal(h.location.hash, "");
+    assert.equal(h.notices.length, 1);
+    assert.equal(h.opens(), corrupt ? 0 : 1);
+    assert.equal(h.G.session, corrupt ? "race" : "tt");
+    assert.equal(h.GhostShare.guest()?.track || null, corrupt ? null : "monza");
+  }
+});
+
+test("Settings opened while a share link is staged holds its setup and Garage until BACK", async () => {
+  for (const corrupt of [false, true]) {
+    const h = titleLinkHarness();
+    const tune = { arbF: 7, arbR: 6, rideF: 22, rideR: 62, brakeBias: 56 };
+    const encoded = h.ShareCode.encode("setup", { team: "ferrari", tune });
+    assert.equal(encoded.ok, true);
+    const hash = "#share=" + (corrupt ? "APXS1.p.broken" : encoded.code);
+    h.setHash(hash);
+    const pending = h.consume();
+    h.cover("pmsettings");
+    await pending;
+    assert.equal(h.opens(), 0);
+    assert.equal(h.bag.size, 0, "no setup or undo writes beneath Settings");
+    assert.equal(h.location.hash, hash);
+    assert.equal(h.notices.length, 0);
+    await h.back();
+    assert.equal(h.location.hash, "");
+    assert.equal(h.notices.length, 1);
+    assert.equal(h.opens(), corrupt ? 0 : 1);
+    assert.equal(h.bag.has("setup.ferrari"), !corrupt);
+    assert.equal(h.G.session, "race", "a setup link never starts a time trial");
+  }
+});
+
+test("BACK consumes the latest link once after overlapping decodes defer under Settings", async () => {
+  const h = titleLinkHarness();
+  const first = await h.GhostShare.encode(fixture, { track: "monza" });
+  const second = await h.GhostShare.encode(fixture, { track: "spa" });
+  h.setHash("#ghost=" + first.code);
+  const older = h.consume();
+  h.setHash("#ghost=" + second.code);
+  const newer = h.consume();
+  h.cover("pmsettings");
+  await Promise.all([older, newer]);
+  assert.equal(h.opens(), 0);
+  assert.equal(h.notices.length, 0);
+  assert.equal(h.writes.length, 0);
+  assert.equal(h.location.hash, "#ghost=" + second.code);
+  assert.equal(h.observers.length, 1);
+  await h.back();
+  assert.equal(h.GhostShare.guest().track, "spa");
+  assert.equal(h.G.trackIdx, 1);
+  assert.equal(h.opens(), 1);
+  assert.equal(h.notices.length, 1);
+  assert.equal(h.writes.length, 1);
 });
 
 function resultsHarness({ ghost = null, guest = false, recordedContext = null, sessionContext = null } = {}) {

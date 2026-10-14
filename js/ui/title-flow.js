@@ -5,6 +5,9 @@ const TitleFlow = (function () {
 function create(G, deps) {
 const { $, els } = G;
 const { vt, restoreFreePlaySelection, careerUi, refreshTitle, ensureNet } = deps;
+function titleIsLive(top = UiLayers.top()) {
+  return !UiLayers.inRace() && !els.overlay.hidden && (!top || top.id === "overlay");
+}
 $("mb-race").onclick = () => {
   G.flow = "gp"; G.session = "race";
   restoreFreePlaySelection();
@@ -22,6 +25,7 @@ if ($("mb-vs")) $("mb-vs").onclick = () => {
   // selection are written only once it has: a refused/offline load must leave
   // the title untouched and say so.
   Promise.resolve(ensureNet()).then((ok) => ok, () => false).then((ok) => {
+    if (!titleIsLive()) return;   // a newer sheet/race owns navigation now
     if (!ok) { G.announce("COULD NOT LOAD — CHECK YOUR CONNECTION OR RELOAD", 4, "warning"); return; }
     G.flow = "gp"; G.session = "race";
     restoreFreePlaySelection();
@@ -44,24 +48,25 @@ function openTimeTrial(selectDaily) {
 }
 $("mb-tt").onclick = () => openTimeTrial(false);
 async function consumeGhostHash() {
-  // A ghost link landing MID-RACE waits, fragment intact, for the menu (quitToMenu re-reads it) — as #353's invite link does.
-  if (UiLayers.inRace()) { Log.info("game", "ghost link deferred: racing"); return null; }
-  // …and so does one landing over any other layer (results / quali sheet, the RACE loading plate, the career hub, an open
-  // picker): it would flip flow/session to a time trial under that screen. Only the title itself takes the link.
-  const top = els.overlay.hidden ? null : UiLayers.top();
-  if (els.overlay.hidden || (top && top.id !== "overlay")) {
+  // Re-check the complete title state after decoding too: Settings leaves the
+  // title visible underneath it. A rejected async completion must also re-arm
+  // BACK's retry, otherwise its preserved fragment waits forever for a reload.
+  const titleLive = () => {
+    // MID-RACE links wait for quitToMenu, which re-reads the intact fragment.
+    if (UiLayers.inRace()) { Log.info("game", "ghost link deferred: racing"); return false; }
+    const top = els.overlay.hidden ? null : UiLayers.top();
+    if (titleIsLive(top)) return true;
     Log.info("game", "ghost link deferred: title not live");
-    // BACK to the title (the covering layer or #overlay toggles hidden/open) re-reads the held link, not only
-    // quitToMenu (6-F4). One-shot; a re-defer re-arms it on whatever layer is then on top.
+    // One-shot; a re-defer re-arms it on whatever layer is then on top.
     if (typeof MutationObserver === "function" && /(?:^#|&)(?:ghost|share)=/.test(location.hash) && !els.overlay._apexLinkWatch) {
       const watch = els.overlay._apexLinkWatch = new MutationObserver(() => {
         watch.disconnect(); els.overlay._apexLinkWatch = null; setTimeout(consumeGhostHash, 0);
       });
       for (const el of [els.overlay, top]) if (el) watch.observe(el, { attributes: true, attributeFilter: ["hidden", "open"] });
     }
-    return null;
-  }
-  const titleLive = () => !UiLayers.inRace() && !els.overlay.hidden;
+    return false;
+  };
+  if (!titleLive()) return null;
   const shared = await GhostShare.consumeHash({ valid: titleLive,
     notify: (message, result) => G.announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
   });
@@ -82,7 +87,6 @@ async function consumeGhostHash() {
     G.scheduleFlybyTrack(true);
   }
   // Setup / livery / daily envelopes on #share= — stage only, never startRace.
-  // Inlined (not a sibling fn) so ghost-share.test.mjs can extract this body alone.
   if (typeof ShareCode !== "undefined" && titleLive()) {
     const started = { n: 0 };
     await ShareCode.consumeHash({
