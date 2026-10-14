@@ -1,0 +1,1 @@
+1791954256	Cursor Agent	UI Fit Pause #pausemenu: short landscape 2-col grid + sheet max-height scroll. OWNED #pausemenu selectors (css/dialogs.css / overlays.css) + pause markup/specs. FORBIDDEN hud.js/fitHud, experience*, results-table, title-button, carsetup, race-setup. No merge.  [cursor/pause-menu-fit-5905; session a7e2771141e9395187a39737]
