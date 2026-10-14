@@ -43,7 +43,7 @@ const SettingsNav = (function () {
 
   function create(_store, onSelect) {
     Log.info("game", "SettingsNav.create");
-    let current = "home";
+    let current = "home", generation = 0;
     // The index door that opened a page. A dialog does not know about focus
     // changes inside its own sheet, so keep this explicitly and restore it on
     // the same page-stack BACK path that Escape presses.
@@ -86,6 +86,7 @@ const SettingsNav = (function () {
     // the stub resident, so re-gating would retry forever. (Ship #1320 used a
     // boolean `ensured` flag; keep the richer "failed" → offline note path.)
     function show(want, focus, after, audioTried) {
+      const request = ++generation;
       const id = TITLES[want] ? want : "home";
       // LAZY_AUDIO: same gate as the audio door — SettingRow must wire before
       // #audioset is revealed (programmatic show("audio") included). The door
@@ -94,7 +95,12 @@ const SettingsNav = (function () {
           && (typeof GameAudio === "undefined" || GameAudio._stub)) {
         let asked;
         try { asked = Promise.resolve(AudioPanel._ensure()); } catch (_) { asked = Promise.resolve(false); }
-        asked.then((ok) => ok, () => false).then((ok) => show(want, focus, after, ok === false ? "failed" : "ok"));
+        asked.then((ok) => ok, () => false).then((ok) => {
+          // Closing hides this sheet; reopening calls showCurrent and owns a
+          // new generation, even if the old audio request is still loading.
+          const settings = document.getElementById("pmsettings");
+          if (request === generation && !(settings && settings.hidden)) show(want, focus, after, ok === false ? "failed" : "ok");
+        });
         return;
       }
       const index = document.getElementById("pm-settings-index");
@@ -170,7 +176,7 @@ const SettingsNav = (function () {
     }
 
     function back() {
-      if (current === "home") return true;
+      if (current === "home") { generation++; return true; }
       show("home", false);
       const door = originDoor;
       originDoor = null;
@@ -204,7 +210,7 @@ const SettingsNav = (function () {
       // page transition. Clear the previous door so a later BACK cannot return
       // to a stale element from an earlier dialog instance.
       showCurrent: () => { originDoor = null; show("home", false); },
-      show, back,
+      show, back, invalidate: () => { generation++; },
     };
     return live;
   }
@@ -212,6 +218,7 @@ const SettingsNav = (function () {
   return {
     create,
     show: (id, focus) => { if (live) live.show(id, focus); },
+    invalidate: () => { if (live) live.invalidate(); },
     onLeave: (fn) => { if (typeof fn === "function") leaveFns.push(fn); },
   };
 })();

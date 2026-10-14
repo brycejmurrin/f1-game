@@ -75,7 +75,7 @@ store.subscribe((change) => {
 
 const retrySave = () => {
   const results = [];
-  if (typeof Career !== "undefined" && Career.data && Career.data()) results.push(Career.saveStatus());
+  if (typeof Career !== "undefined" && Career.data && Career.data()) { Career.save(); results.push(Career.saveStatus()); }
   if (G.season && !(typeof Career !== "undefined" && Career.inCareer && Career.inCareer()))
     results.push(SeasonCal.save(G.season));
   // Career/season above re-save their CURRENT state; whatever else the outage

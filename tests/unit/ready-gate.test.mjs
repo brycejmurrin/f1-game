@@ -323,3 +323,27 @@ test("resolveSha --pr returns the PR body alongside its head sha", () => {
   assert.equal(r.pr, 7);
   assert.equal(r.body, "## Plan\n- [x] a");
 });
+
+for (const state of ["in_progress", "completed"]) test(`newer ${state} attempt wins despite older late success`, () => {
+  const old = { ...run(GUARDS_JOB, "completed", "success", 1), started_at: "2026-10-06T10:00:00Z", completed_at: "2026-10-06T10:10:00Z" };
+  const recent = { ...run(GUARDS_JOB, state, state === "completed" ? "failure" : null, 2), started_at: "2026-10-06T10:05:00Z", completed_at: null };
+  for (const list of [[old, recent], [recent, old]]) assert.equal(guardsVerdict(list).state, state === "completed" ? "failed" : "pending");
+});
+
+test("evaluate paginates globally and fails closed on a later API error", () => {
+  const calls = [], sha = "a".repeat(40), localOpts = { exists: () => false };
+  const request = (url) => {
+    calls.push(url);
+    return { json: { total_count: 101, check_runs: url.includes("page=2") ? [run(GUARDS_JOB, "completed", "failure", 101)] : Array.from({ length: 100 }, (_, i) => run("other", "completed", "success", i)) } };
+  };
+  assert.equal(evaluate({ sha, request, localOpts }).state, "failed");
+  assert.equal(calls.length, 2);
+  assert.match(calls[1], /&page=2$/);
+  assert.equal(evaluate({ sha, localOpts, request: url => url.includes("page=2") ? { error: "page failed" } : request(url) }).code, 3);
+});
+
+test("a newer queued attempt without started_at cannot reuse an old pass", () => {
+  const old = run(GUARDS_JOB, "completed", "success", 1);
+  const queued = { ...run(GUARDS_JOB, "queued", null, 2), started_at: null };
+  for (const checks of [[old, queued], [queued, old]]) assert.equal(guardsVerdict(checks).state, "pending");
+});
