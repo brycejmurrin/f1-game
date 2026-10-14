@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 const src = readFileSync(new URL("../../js/render/renderer-boot.js", import.meta.url), "utf8");
 const settle = () => new Promise((r) => setImmediate(r));
 
-function boot({ stored = "three", gfxCreate, loadBackend, xrDetect } = {}) {
+function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = false } = {}) {
   const ls = new Map(stored ? [["apex26.gfxBackend", stored]] : []), ss = new Map();
   const timers = [], warns = [], calls = [];
   const ctx = vm.createContext({
@@ -28,7 +28,8 @@ function boot({ stored = "three", gfxCreate, loadBackend, xrDetect } = {}) {
     location: { reload() { throw new Error("no reload expected"); } },
     document: { createElement: () => ({}), head: { appendChild() {} } },
     Event: class { constructor(type) { this.type = type; } },
-    GLX: { init: () => { calls.push("GLX.init"); return true; } },
+    GLX: noGLX ? {} : { init: () => { calls.push("GLX.init"); return true; } },
+    RendererPicker: { showUnavailable() { calls.push("unavailable"); } },
     Gfx: { create: gfxCreate || (async () => null) },
     Log: { warn: (_ns, ...m) => warns.push(m.join(" ")), info() {} },
     // Manual clock: the 8 s caps are fired by the test.
@@ -93,4 +94,17 @@ test("steps that settle in time are untouched and leave no live timer", async ()
   const caps = h.timers.filter((t) => t.ms >= 1000);
   assert.ok(caps.length > 0, "premise: the caps were armed");
   assert.deepEqual(caps.filter((t) => t.live).map((t) => t.ms), [], "every cap was cleared on success");
+});
+
+
+test("missing GLX fallback script is bounded and failed fetch resolves unavailable", async () => {
+  for (const fail of [false, true]) {
+    const h = boot({ stored: "webgl2", noGLX: true,
+      loadBackend: () => fail ? Promise.reject(new Error("offline")) : new Promise(() => {}) });
+    const started = h.rb.start();
+    await settle();
+    if (!fail) h.fire(8000);
+    assert.equal(await started, null);
+    assert.equal(h.timers.filter((t) => t.live && t.ms >= 1000).length, 0);
+  }
 });

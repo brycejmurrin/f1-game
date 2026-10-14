@@ -9,7 +9,7 @@ const DataRealRace = (function () {
   // after ~115 sessions and starved every save. Keep the newest few (an LRU index, newest first).
   const CACHE_LRU = "apex26.realrace.lru";
   const CACHE_MAX = 8;
-  const SCRIPT_V = 4;   // 2: stint ages, rain by lap, the complete flag; 3: the passes; 4: real timestamps (t0, lap starts, pass/stop/flag times), where a car went out, the fastest lap, the team radio
+  const SCRIPT_V = 5;   // 2: stint ages, rain by lap, the complete flag; 3: the passes; 4: real timestamps (t0, lap starts, pass/stop/flag times), where a car went out, the fastest lap, the team radio; 5: per-driver timing coverage
   const DATA_CREDIT = "Timing data: OpenF1 (CC BY-NC-SA 4.0) · pace, stops, flags and the grid are the real ones; the racing is yours.";
   const NO_TRACK_MSG = "This circuit is not in Apex 26 yet — pick another Grand Prix.";
   const NO_RACE_MSG = "No race timing published for this weekend yet.";
@@ -20,7 +20,7 @@ const DataRealRace = (function () {
   const RAW_PATHS = ["/sessions?", "/drivers?", "/laps?", "/stints?", "/pit?", "/overtakes?", "/race_control?", "/weather?", "/session_result?", "/position?", "/team_radio?"];
   // The real positions (OpenF1 /location, ~3.7 Hz per car, 2-5 MB a car for a race) — fetched once
   // per car, kept at TRACE_HZ in IndexedDB (a 22-car race is ~1.5 MB there), never in localStorage.
-  const TRACE_V = 1;
+  const TRACE_V = 2;
   const TRACE_HZ = 2;
   const TRACE_DB = "apex26.replay", TRACE_STORE = "traces";
   const TRACE_MAX = 8;              // races kept (~1.5 MB each); the newest-first order lives in the store under TRACE_LRU
@@ -220,7 +220,20 @@ const DataRealRace = (function () {
     // COMPLETE means a classification with a winner and every driver's laps in:
     // a race still running (or one OpenF1 has not finished publishing) builds,
     // and can be played, but is never cached — the next open fetches it again.
-    const complete = totalLaps > 0 && arr(raw.result).some((r) => r && num(r.position) === 1) && drivers.some((d) => d.laps.filter((t) => t > 0).length === totalLaps);
+    const complete = totalLaps > 0 && drivers.some((d) => d.pos === 1 && d.lapsDone === totalLaps && d.laps.some((t) => t > 0)) && drivers.every((d) => {
+      const result = arr(raw.result).find((r) => r && num(r.driver_number) === d.num);
+      if (!result) return false;
+      if (d.dns) return d.lapsDone === 0;
+      // Only an explicitly published untimed opening lap is exempt, not a missing
+      // feed row. Retirees need only their classified distance, including zero.
+      const done = num(result.number_of_laps);
+      if (!Number.isInteger(done) || done < 0 || done > totalLaps) return false;
+      for (let n = 1; n <= done; n++) {
+        if (!laps.some((l) => l && num(l.driver_number) === d.num && lapNo(l.lap_number) === n &&
+          (num(l.lap_duration) > 0 || (n === 1 && l.lap_duration === null)))) return false;
+      }
+      return true;
+    });
     return {
       v: SCRIPT_V, source: "openf1",
       sessionKey: num(s.session_key), meetingKey: num(s.meeting_key), year: num(s.year),
@@ -452,9 +465,23 @@ const DataRealRace = (function () {
     return traceDb().then((db) => new Promise((res) => {
       if (!db) { res(null); return; }
       try {
-        const rq = db.transaction(TRACE_STORE, "readonly").objectStore(TRACE_STORE).get(String(sessionKey));
-        rq.onsuccess = () => { const v = rq.result; res(v && v.v === TRACE_V && v.cars && (!script || traceFits(v, script)) ? v : null); };
-        rq.onerror = () => res(null);
+        const key = String(sessionKey), tx = db.transaction(TRACE_STORE, "readwrite"), st = tx.objectStore(TRACE_STORE);
+        let hit = null;
+        const rq = st.get(key);
+        rq.onsuccess = () => {
+          const v = rq.result;
+          if (!(v && v.v === TRACE_V && v.complete && v.cars && (!script || traceFits(v, script)))) return;
+          hit = v;
+          let order;
+          try { order = st.get(TRACE_LRU); } catch (e) { res(null); return; }
+          order.onsuccess = () => {
+            try { const prev = Array.isArray(order.result) ? order.result.map(String) : [];
+              st.put([key].concat(prev.filter((k) => k !== key)).slice(0, TRACE_MAX), TRACE_LRU); }
+            catch (e) { try { tx.abort(); } catch (_) { /* already finished */ } res(null); }
+          };
+        };
+        tx.oncomplete = () => res(hit);
+        tx.onerror = tx.onabort = () => res(null);
       } catch (e) { res(null); }
     }));
   }
@@ -508,7 +535,7 @@ const DataRealRace = (function () {
   // entries without this stamp must be fetched again rather than trusted.
   function traceCoverage(script) {
     return JSON.stringify([script.t0, traceEnd(script), script.complete === true,
-      script.drivers.map((d) => d.num).sort((a, b) => a - b)]);
+      script.drivers.map((d) => [d.num, !!d.dns, d.lapsDone || 0]).sort((a, b) => a[0] - b[0])]);
   }
   function traceFits(traces, script) {
     return !!(traces && traces.v === TRACE_V && traces.sessionKey === script.sessionKey &&
@@ -525,20 +552,40 @@ const DataRealRace = (function () {
       const traces = { v: TRACE_V, sessionKey: script.sessionKey, t0, hz: TRACE_HZ,
         coverage: traceCoverage(script), complete: script.complete === true, cars: {}, failed: [] };
       if (traceFits(previous, script)) {
-        for (const k in previous.cars || {}) if (!(previous.failed || []).includes(+k)) traces.cars[k] = previous.cars[k];
+        for (const k in previous.cars || {}) if (!(previous.failed || []).includes(+k) && previous.cars[k].length >= 6) traces.cars[k] = previous.cars[k];
       }
-      let done = 0, failed = 0;
+      const minimumFloats = (d) => {
+        let seconds = 0;
+        arr(d.lapStart).forEach((start, i) => { if (start != null && d.laps[i] > 0) seconds = Math.max(seconds, start + d.laps[i]); });
+        // Require useful coverage per participating car while allowing an early
+        // retirement's shorter trace. A full-distance peer's two points are not
+        // a loaded race merely because the winner can supply the reference fit.
+        return Math.max(2, Math.min(102, Math.floor(seconds * TRACE_HZ / 2))) * 3;
+      };
+      for (const d of script.drivers) if (traces.cars[d.num] && traces.cars[d.num].length < minimumFloats(d)) delete traces.cars[d.num];
+      let done = 0;
       const total = script.drivers.length;
-      return Promise.all(script.drivers.map((d) => (Object.prototype.hasOwnProperty.call(traces.cars, d.num)
+      return Promise.all(script.drivers.map((d) => (d.dns
+        ? Promise.resolve().then(() => { traces.cars[d.num] = new Float32Array(0); })
+        : Object.prototype.hasOwnProperty.call(traces.cars, d.num)
         // This layer owns coverage-aware caching. A raw HTTP cache entry may
         // predate the completed timing even when its URL/window is identical.
         ? Promise.resolve() : F1API.locationData(script.sessionKey, d.num, startISO, endISO, { cache: false })
-          .then((rows) => { traces.cars[d.num] = packTrace(rows, t0); }, () => { failed++; traces.failed.push(d.num); traces.cars[d.num] = new Float32Array(0); }))
+          .then((rows) => { const car = packTrace(rows, t0); traces.cars[d.num] = car; if (car.length < minimumFloats(d)) { traces.failed.push(d.num); } }, () => { traces.failed.push(d.num); traces.cars[d.num] = new Float32Array(0); }))
         .then(() => { done++; if (onProgress) onProgress(done, total, traces); })))
         // A failed request is not "no positions": a hub closed mid-load (F1API.cancelAll) or a dropped
         // connection. Such a set is NEVER cached (it would read as loaded, and every WATCH replay nothing).
-        .then(() => failed === total ? Promise.reject(new Error("the positions did not load"))
-          : failed || !traces.complete ? traces : tracePut(traces).then(() => traces));
+        .then(() => {
+          const participating = script.drivers.filter((d) => !d.dns);
+          // RealReplay needs >100 samples to fit a reference car to the circuit.
+          // Sparse fulfilled responses must remain retryable just like errors.
+          if (!participating.some((d) => traces.cars[d.num] && traces.cars[d.num].length > 300)) {
+            for (const d of participating) if (!traces.failed.includes(d.num)) traces.failed.push(d.num);
+          }
+          traces.complete = traces.complete && traces.failed.length === 0;
+          if (!participating.length || participating.every((d) => traces.failed.includes(d.num))) throw new Error("the positions did not load");
+          return traces.complete ? tracePut(traces).then(() => traces) : traces;
+        });
     });
   }
 

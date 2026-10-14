@@ -221,7 +221,7 @@ function save(options) {
   }
   return career;
 }
-function saveStatus() { save(); return Object.assign({}, lastSave); }
+function saveStatus() { return Object.assign({}, lastSave); }
 // Wipes the LIVE slot only. The other five are untouched — deleting one career
 // must never be a way to lose the others.
 function clear() {
@@ -354,8 +354,8 @@ function start(opts) {
     v: GameStore.CAREER_V,
     flavour,
     year: 2026,
-    seed: (o.seed | 0) || (Hash32.fnv1a(`${teamId}:${flavour}:${Date.now()}`) % 1000000),
-    team: teamId,
+    seed: (o.seed | 0) || (Hash32.fnv1a(`${team.id}:${flavour}:${Date.now()}`) % 1000000),
+    team: team.id,
     // MY TEAM IS ALWAYS SEAT 0 (driverOverride maps seat 0 to you, seat 1 to the
     // hire). Forced HERE, not in the draft: freshDraft() starts at seat 1 and the
     // MY TEAM form never reset it, so every MY TEAM save raced under the hired
@@ -1171,6 +1171,7 @@ function settleRound(order, player, table = Teams.POINTS) {   // table: a shorte
                         craft: Math.round(craft * 100) / 100 });
   career.obj = null;          // the next round draws its own brief on demand
   const sponsorPay = settleSponsor();
+  save();
   const persisted = saveStatus();
   Log.info("game", `Career.settleRound pos=${pos}${dnf ? ` dnf=${dnf}` : ""}`);
   return { pos, pts, prize, matePos, matePrize, salary, bonus, wages, obj, dnf, sponsorPay, craft,
