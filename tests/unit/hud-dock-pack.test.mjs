@@ -151,3 +151,30 @@ test("packPhoneRects clears 932×430 and portrait 390×844 measured clash classe
   assert.deepEqual(porHits, [], "portrait packed: " + porHits.join(","));
   assert.ok(overlapArea == null || true);
 });
+
+test("packPhoneRects drops LIMITS under the CI 96c3536 broadcast phoneL @150% flag", () => {
+  const HL = loadHudLayout();
+  const W = 844, H = 390;
+  // Exact boxes from ship CI run 38604722503 (flag+limits).
+  const before = [
+    { id: "flag", x: 309.671875, y: 166.046875, w: 224.65625, h: 40.375 },
+    { id: "limits", x: 468.5625, y: 197.6875, w: 157.296875, h: 31.1875 },
+    { id: "map", x: 62, y: 98.25, w: 165, h: 165 },
+    { id: "tyre", x: 60.796875, y: 265.28125, w: 179.515625, h: 16.015625 },
+    { id: "rel", x: 205.9375, y: 291.296875, w: 201.671875, h: 17.84375 },
+  ];
+  assert.ok(overlapArea(
+    box("flag", "hud", before[0].x, before[0].y, before[0].w, before[0].h),
+    box("limits", "hud", before[1].x, before[1].y, before[1].w, before[1].h),
+  ) > 200, "CI shape is a real flag×limits overlap");
+  const corr = HL.packPhoneRects(before, W, H);
+  assert.equal(corr.flag, undefined, "flag stays put (status stack)");
+  assert.ok(corr.limits && corr.limits.dy > 4, "LIMITS is pushed below the flag: " + JSON.stringify(corr.limits));
+  const applied = before.map((b) => {
+    const c = corr[b.id] || { dx: 0, dy: 0 };
+    return box(b.id, "hud", b.x + c.dx, b.y + c.dy, b.w, b.h);
+  });
+  const after = analyzeOverlap(applied, W, H, { sal: 47, sar: 47, sat: 0, sab: 21 });
+  const hits = after.hudClash.filter((p) => p.includes("flag") && p.includes("limits"));
+  assert.deepEqual(hits, [], "packed CI boxes: " + after.hudClash.join(","));
+});
