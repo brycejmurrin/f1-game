@@ -16,6 +16,8 @@
 //   node tools/shot/hud-survey.mjs --self-test                    # the pure logic, no browser
 //
 // Flags: --matrix quick|full|exhaustive|leads|<file.json>  --track monza  --frac 0.18
+//   --portrait race|gate (portrait phones; default race = RACE IN PORTRAIT tapped, the HUD is measured;
+//   gate = behind the #rotate-device card, where every finding is info)
 //   --only <substr,…>  --shard i/n  --out artifacts/hud-survey/<stamp>
 //   --no-shots (measure only; skips the lit-frame wait)  --render-every-frame (keep the 3D loop drawing
 //   between captures; default paints ONE frame per cell, then __apex.headless)  --backend three|webgl2
@@ -30,7 +32,8 @@
 //
 // HOW A CELL IS MADE. Cells are grouped by BOOT KEY: device (viewport), track
 // (one race build per page) and the store keys js/game.js reads once at eval
-// (hudProfile, hudMetricsLayout). One page per group: those keys are written
+// (hudProfile, hudMetricsLayout, steerMode, portraitOk — set for a portrait
+// RACE cell, as the gate's RACE IN PORTRAIT does). One page per group: those keys are written
 // by an init script before any page script runs — the state hud-layout.spec.js
 // reaches with set-then-reload, for one boot instead of two. Every other knob
 // is LIVE: camera (__apex.camera), MAP / GAPS / MIRROR (their SETTINGS rows,
@@ -42,7 +45,9 @@
 // uiScale / btnScale), tyre wear (__apex.tyres), time of day
 // (__apex.setTimeOfDay), HUD visibility (__apex.hud). Each cell resets every
 // live knob, so order never leaks. Then jump(frac) → freeze → snapCam, and —
-// unless --no-shots — wait for a LIT frame (#game-soft ≥ 30 % non-dark).
+// unless --no-shots — wait for a LIT frame (#game-soft ≥ 30 % non-dark). No
+// #game-soft to read (llvmpipe presents #game directly: lit -1) forces a
+// repaint of several frames instead, or the cell keeps the previous cell's frame.
 //
 // WHAT IS MEASURED (tools/lib/hud-geometry.mjs probeHudElements): every
 // HudLayout element plus the tower plates, delta, BEST, gap chips, speed, pit,
@@ -71,7 +76,7 @@ import { CliArgError, makeFlags, runCli } from "../lib/cli-args.mjs";
 import { probeHudElements, analyzeOverlap } from "../lib/hud-geometry.mjs";
 import {
   DEVICES, DEFAULT_CELL, HUD_TARGETS, CellError, ENUMS, bootGroups, cellId, classifyFindings, countBy,
-  applyChecks, estimateMinutes, expandMatrix, filterOnly, mergeReports, normalizeCell, parseShard, rankFindings,
+  applyChecks, estimateMinutes, expandMatrix, filterOnly, mergeReports, normalizeCell, parseShard, portraitBlocked, rankFindings,
   renderFindingsMd, renderIndexHtml, selfTest, shardCells,
 } from "../lib/hud-survey-matrix.mjs";
 import { awaitPresentedFrame, chromiumArgsForBackend, installProbeInit } from "./probe-page.mjs";
@@ -83,7 +88,7 @@ const CELL_FLAGS = { "--device": "device", "--cam": "cam", "--profile": "profile
   "--gaps": "gaps", "--mirror": "mirror", "--preset": "preset", "--preset-set": "presetSet", "--preset-prof": "presetProf", "--theme": "theme",
   "--cvd": "cvd", "--contrast": "contrast", "--text-size": "textSize", "--hud-scale": "hudScale", "--ui-scale": "uiScale",
   "--btn-scale": "btnScale", "--tyres": "tyres", "--hud": "hud", "--tod": "tod", "--steer": "steer", "--profile-live": "profileLive", "--off": "off", "--name": "name" };
-export const KNOWN_FLAGS = ["--matrix", "--track", "--frac", "--only", "--shard", "--out", "--no-shots", "--render-every-frame", "--backend", "--gl",
+export const KNOWN_FLAGS = ["--matrix", "--track", "--portrait", "--frac", "--only", "--shard", "--out", "--no-shots", "--render-every-frame", "--backend", "--gl",
   "--min-font", "--wait", "--json", "--list", "--plan", "--self-test", "--merge", "--url", "--help", ...Object.keys(CELL_FLAGS)];
 
 const insideOutput = (p) => ["artifacts", "scratch"].some((d) => {
@@ -98,6 +103,8 @@ export function parseArgs(argv, { now = new Date(), readFile = (p) => fs.readFil
   if (F.has("--url")) throw new CliArgError("--url is not supported: hud-survey serves the LOCAL working tree only (deployed checks: deploy-research)");
   const track = F.flag("--track", "monza");
   if (!circuits().includes(track)) throw new CliArgError(`--track: unknown circuit ${track}`);
+  const portrait = F.flag("--portrait", "race");
+  if (!ENUMS.portrait.includes(portrait)) throw new CliArgError(`--portrait must be ${ENUMS.portrait.join(" or ")}`);
   const frac = Number(F.flag("--frac", "0.18"));
   if (!Number.isFinite(frac) || frac < 0 || frac > 1) throw new CliArgError("--frac must be 0..1");
   const backend = F.flag("--backend", "three");
@@ -134,11 +141,11 @@ export function parseArgs(argv, { now = new Date(), readFile = (p) => fs.readFil
   try {
     if (Object.keys(one).length) {
       if (F.has("--matrix")) throw new CliArgError("pass --matrix OR one-cell knobs, not both");
-      const c = normalizeCell(one, { track });
+      const c = normalizeCell(one, { track, portrait });
       expanded = { cells: [{ ...c, id: cellId(c) }], meta: { matrix: "cell" } };
     } else {
       const m = F.flag("--matrix", "quick");
-      if (["quick", "full", "exhaustive", "leads"].includes(m)) expanded = expandMatrix(m, { track });
+      if (["quick", "full", "exhaustive", "leads"].includes(m)) expanded = expandMatrix(m, { track, portrait });
       else {
         const file = path.resolve(ROOT, m);
         let text;
@@ -146,7 +153,7 @@ export function parseArgs(argv, { now = new Date(), readFile = (p) => fs.readFil
         if (text.length > 1024 * 1024) throw new CliArgError("--matrix file exceeds 1 MiB");
         let spec;
         try { spec = JSON.parse(text); } catch { throw new CliArgError(`--matrix: ${m} is not JSON`); }
-        expanded = expandMatrix(spec, { track });
+        expanded = expandMatrix(spec, { track, portrait });
         expanded.meta.file = path.relative(ROOT, file);
       }
     }
@@ -367,6 +374,23 @@ async function cdpShot(page, file) {
   } finally { try { await session.detach(); } catch { /* closed */ } }
 }
 
+/** The store keys a boot group's init script writes. json: JSON.stringify'd like the game's own
+ *  stores; raw: written verbatim (js/game.js reads apex26.portraitOk === "1"). */
+export function bootStore(c) {
+  const json = { hudProfile: c.profile, hudMetricsLayout: c.layout, ...(c.steer !== "default" ? { steerMode: c.steer } : {}) };
+  const raw = c.portrait === "race" && portraitBlocked(DEVICES[c.device]) ? { portraitOk: "1" } : {};
+  return { json, raw };
+}
+
+/** In-page: render `frames` frames with the 3D loop on, so the canvas shows THIS cell's camera.
+ *  GLX.awaitSoftPresent is a no-op without a soft canvas, so frames are counted by rAF. */
+export async function repaintFrames(frames) {
+  window.__apex.headless(false);
+  for (let i = 0; i < frames; i++) await new Promise((r) => requestAnimationFrame(() => r()));
+  try { if (window.GLX && GLX.awaitSoftPresent) await GLX.awaitSoftPresent(12000); } catch { /* no soft present */ }
+}
+export const REPAINT_FRAMES = 4;
+
 async function runGroup(browser, group, plan, log) {
   const c0 = group.cells[0];
   const dev = DEVICES[c0.device];
@@ -376,9 +400,12 @@ async function runGroup(browser, group, plan, log) {
   const errs = [];
   page.on("pageerror", (e) => errs.push({ cell: current, msg: String(e && e.message || e).slice(0, 300) }));
   await installProbeInit(page, { backend: plan.backend });
-  await page.addInitScript((keys) => {
-    try { for (const [k, v] of Object.entries(keys)) localStorage.setItem("apex26." + k, JSON.stringify(v)); } catch { /* storage off */ }
-  }, { hudProfile: c0.profile, hudMetricsLayout: c0.layout, ...(c0.steer !== "default" ? { steerMode: c0.steer } : {}) });
+  await page.addInitScript(({ json, raw }) => {
+    try {
+      for (const [k, v] of Object.entries(json)) localStorage.setItem("apex26." + k, JSON.stringify(v));
+      for (const [k, v] of Object.entries(raw)) localStorage.setItem("apex26." + k, v);
+    } catch { /* storage off */ }
+  }, bootStore(c0));
   const results = [];
   try {
     const t0 = Date.now();
@@ -401,7 +428,7 @@ async function runGroup(browser, group, plan, log) {
         const applied = await page.evaluate(applyCell, { ...cell, frac: plan.frac });
         await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
         await sleep(300);
-        let lit = null;
+        let lit = null, repainted = false;
         // Measure-only skips the lit-frame wait: the DOM boxes do not depend
         // on the canvas, and that wait is most of a cell's cost here.
         if (plan.shots) {
@@ -412,6 +439,10 @@ async function runGroup(browser, group, plan, log) {
             if (lit > 0.3 || lit < 0) break;
             await sleep(500);
           }
+          // -1: nothing to read, so nothing proved a frame of THIS cell was drawn (under llvmpipe
+          // awaitPresentedFrame returns at once, and headless(true) below froze the previous cell's frame:
+          // a chase cell showing cockpit). Paint several frames before going headless.
+          if (lit < 0) { await page.evaluate(repaintFrames, REPAINT_FRAMES); repainted = true; }
         }
         const targets = HUD_TARGETS.map((t) => ({ ...t }));
         // SHOT FIRST, MEASURE AFTER. Here (headless, frozen sim) a MOVE & SIZE
@@ -481,7 +512,9 @@ async function runGroup(browser, group, plan, log) {
         const fit = await page.evaluate(hudFitState);
         // Lead extras LAST: a `settle` check mutates the HUD (the next cell resets it).
         const extras = cell.checks && cell.checks.length ? await page.evaluate(runExtras, cell.checks) : undefined;
-        Object.assign(rec, { lit: lit == null ? null : +lit.toFixed(3), applyErrors: applied.errors, state: { ...applied.state, ...fit },
+        const viewport = await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }));
+        Object.assign(rec, { lit: lit == null ? null : +lit.toFixed(3), ...(repainted ? { repainted: REPAINT_FRAMES } : {}), viewport,
+          applyErrors: applied.errors, state: { ...applied.state, ...fit },
           ctx: applied.ctx, records: round(records), transientRecords: round(transientRecords), extras });
       } catch (e) {
         rec.cellError = String(e && e.message || e).slice(0, 400);
@@ -490,7 +523,7 @@ async function runGroup(browser, group, plan, log) {
       rec.findings = classifyFindings(cell, rec, { minFontPx: plan.minFont, analyze: analyzeOverlap });
       for (const msg of rec.applyErrors || []) rec.findings.push({ cell: cell.id, kind: "pageError", elements: [], detail: "knob failed: " + msg, severity: "medium" });
       rec.ms = Date.now() - t1;
-      log(`${cell.id}: ${rec.findings.length} findings${rec.lit != null ? `, lit ${rec.lit}` : ""}, ${(rec.ms / 1000).toFixed(0)} s${rec.cellError ? " ERROR " + rec.cellError : ""}`);
+      log(`${cell.id}: ${rec.findings.length} findings${rec.lit != null ? `, lit ${rec.lit}${rec.repainted ? ` (repainted ${rec.repainted} frames)` : ""}` : ""}, ${(rec.ms / 1000).toFixed(0)} s${rec.cellError ? " ERROR " + rec.cellError : ""}`);
       results.push(rec);
     }
   } catch (e) {
@@ -550,7 +583,7 @@ function writeReport(plan, report, log) {
       ok, out: path.relative(ROOT, plan.out), report: rel("report.json"), findingsMd: rel("findings.md"),
       indexHtml: rel("index.html"), sheets: sheets.sheets || [], counts: report.counts, meta: report.meta.matrix,
       measured, cellFailed, cells: report.cells.map((c) => ({
-        id: c.id, shot: c.shotRel ? path.relative(ROOT, path.join(plan.out, c.shotRel)) : null, lit: c.lit ?? null,
+        id: c.id, shot: c.shotRel ? path.relative(ROOT, path.join(plan.out, c.shotRel)) : null, lit: c.lit ?? null, viewport: c.viewport || null,
         error: c.cellError || null, state: c.state || null, findings: c.findings || [],
         measurements: (c.records || []).filter((r) => r.exists).map((r) => ({ key: r.key, visible: r.visible && !r.fadedByAncestor,
           hiddenBy: r.hiddenBy, rect: r.visible ? [r.x, r.y, r.w, r.h] : null, minFontPx: r.minFontPx ?? null })),
@@ -596,7 +629,7 @@ function runSelfTest() {
   const s = [1, 2, 3].map((i) => parseArgs(["--matrix", "full", "--shard", `${i}/3`]).cells.length);
   res.push({ name: "--shard 1..3/3 partitions full", ok: s.reduce((a, b) => a + b, 0) === parseArgs(["--matrix", "full"]).cells.length, detail: s.join("+") });
   res.push({ name: "--gl llvmpipe maps the ANGLE flags", ok: chromiumArgs({ backend: "three", gl: "llvmpipe" }).includes("--use-angle=gl") });
-  for (const bad of [["--url", "http://x"], ["--out", "/tmp/x"], ["--cam", "nope"], ["--frac", "2"], ["--shard", "5/4"], ["--off", "map"]]) {
+  for (const bad of [["--url", "http://x"], ["--out", "/tmp/x"], ["--cam", "nope"], ["--frac", "2"], ["--shard", "5/4"], ["--off", "map"], ["--portrait", "sideways"]]) {
     let ok = false;
     try { parseArgs(bad); } catch (e) { ok = e instanceof CliArgError; }
     res.push({ name: `refuses ${bad.join(" ")}`, ok });

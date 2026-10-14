@@ -5,6 +5,11 @@ Measured from the GitHub API over 1,000 workflow runs, 2026-09-27 22:35 →
 plus the job logs of the Imola scenery run `df0ad70` and the `bot/spec-timings`
 side branch at `8d55063`. The fixes are in the same change as this note.
 
+**Current capacity (2026-10-14):** GitHub Pro since 2026-09-30 — 40 concurrent
+standard jobs, 5 macOS (https://docs.github.com/en/actions/reference/limits,
+read 2026-10-14). The 20-slot figures below are the 2026-09-29 measurement; size
+new CI work against 40 / 5.
+
 ## What clogged
 
 - **The account runs at most 20 jobs at once** (GitHub Free; on 2026-09-30 the

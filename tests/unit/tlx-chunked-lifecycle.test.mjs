@@ -156,6 +156,8 @@ test("snorm16 normal pack clamps, never wraps, at the 1.0001 admission edge", ()
   }, 72);
   const a = mesh.geo.attributes.normal.array;
   assert.equal(a.constructor.name, "Int16Array", "normals packed to Int16");
+  // WebGL2 (isWebGPU false) widens to snorm16x4 (A-W2, apex26.tlxPad4): the same clamped xyz, w 0.
+  assert.equal(mesh.geo.attributes.normal.itemSize, 4);
   assert.deepEqual(Array.from(a),
-    [32767, -32767, 0, 0, 32767, -32767, Math.round(0.5 * 32767), Math.round(-0.5 * 32767), 32767]);
+    [32767, -32767, 0, 0, 0, 32767, -32767, 0, Math.round(0.5 * 32767), Math.round(-0.5 * 32767), 32767, 0]);
 });

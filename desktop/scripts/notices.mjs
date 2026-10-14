@@ -18,7 +18,7 @@ export const NOTICE_SOURCES = [
   "assets/voice/CREDITS.txt",
   "assets/pack/CREDITS.md",
   "assets/icons/lucide-LICENSE.txt",
-  "vendor/three-0.186.0/LICENSE.txt",
+  "vendor/three-0.186.1/LICENSE.txt",
   "vendor/rapier-0.19.3/LICENSE",
   "vendor/jsqr-1.4.0/LICENSE",
   "vendor/trystero-0.25.4/LICENSE-trystero",

@@ -1,4 +1,5 @@
-/* results-cam.test.mjs — chequered / orbit / highlights (js/camera/results-cam.js).
+/* results-cam.test.mjs — chequered / orbit / highlights (js/camera/results-cam.js),
+ * plus the HIGHLIGHTS montage audio feed from game.js tickBody.
  * Run: node --test tests/unit/results-cam.test.mjs
  */
 import { test } from "node:test";
@@ -7,6 +8,7 @@ import fs from "node:fs";
 import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
@@ -172,6 +174,189 @@ test("losing results eligibility during a montage restores the finish and releas
   assert.deepEqual(car, finish);
 });
 
+// RESULTS HIGHLIGHTS AUDIO. Survey bc-c28828df measured the montage at -87 dB
+// live: GameAudio.feedReplayScrub (#1262) only ran on tickBody's paused return,
+// and the results scrub (startHighlights -> ReplayBuf.beginScrub) starts after
+// endRace has stopped the engine, so nothing fed it. tickBody now hands every
+// non-race frame to the same feed, scrubbing only while a results scrub is live:
+// engine + field play over each clip, and the frame after the scrub ends (orbit,
+// NEXT, RACE AGAIN, MENU — each goes through resultsCam.reset/startOrbit ->
+// endScrub) the existing one-shot silences them. No HIGHLIGHTS, no audio (#1246).
+// Runs the REAL tickBody against the real ResultsCam, ReplayBuf and GameAudio
+// (engine.js on a recording AudioContext).
+const TICK = symbolSource("function tickBody(now) {");
+const FEED = "GameAudio.feedReplayScrub(soundOn && player, state === \"results\" && replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop);";
+
+function param(v) {
+  const p = { value: v, setTargetAtTime(x) { p.value = x; }, setValueAtTime(x) { p.value = x; },
+    linearRampToValueAtTime(x) { p.value = x; }, exponentialRampToValueAtTime(x) { p.value = x; }, cancelScheduledValues() {} };
+  return p;
+}
+function node(kind) {
+  return { kind, connect: (t) => t, disconnect() {}, start() {}, stop() {}, type: "", loop: false, loopStart: 0, loopEnd: 0,
+    buffer: null, onended: null, fftSize: 0, frequencyBinCount: 0, getFloatFrequencyData() {},
+    gain: param(1), frequency: param(440), detune: param(0), Q: param(1), playbackRate: param(1) };
+}
+
+function bootAudio() {
+  const ctx = {
+    currentTime: 0, state: "running", sampleRate: 44100, destination: node("dest"),
+    createGain: () => node("gain"), createBiquadFilter: () => node("biquad"),
+    createOscillator: () => node("osc"), createBufferSource: () => node("src"), createAnalyser: () => node("analyser"),
+    createWaveShaper: () => Object.assign(node("shaper"), { curve: null }),
+    createConvolver: () => Object.assign(node("convolver"), { buffer: null }),
+    createStereoPanner: () => Object.assign(node("panner"), { pan: param(0) }),
+    createDynamicsCompressor: () => Object.assign(node("comp"),
+      { threshold: param(-24), knee: param(30), ratio: param(12), attack: param(0.003), release: param(0.25) }),
+    createBuffer: (ch, len, sr) => ({ sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }),
+    decodeAudioData: () => new Promise(() => {}), createMediaElementSource: () => node("mediaSrc"),
+    resume: () => Promise.resolve(), close() {},
+  };
+  const sb = {
+    Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date, Error,
+    parseFloat, parseInt, isFinite, Float32Array,
+    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
+    document: { addEventListener() {}, hidden: false }, addEventListener() {}, removeEventListener() {},
+    setTimeout: () => 0, clearTimeout() {}, navigator: {}, localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    AudioContext: function () { return ctx; }, fetch: () => new Promise(() => {}),
+  };
+  sb.window = sb;
+  const vctx = vm.createContext(sb);
+  const SRC = ["js/core/mat4.js", "js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"]
+    .map(src).join("\n");
+  vm.runInContext(SRC, vctx, { filename: "js/audio/engine.js" });
+  const real = vm.runInContext("GameAudio", vctx);
+  real.init();
+  // Count the one-shot: feedReplayScrub's exit branch calls stopEngine through its
+  // own closure, so the observable is engineOn falling while a scrub was fed.
+  const log = { feeds: 0, scrubFeeds: 0 };
+  const GameAudio = {
+    feedReplayScrub(p, scrubbing, ...rest) { log.feeds++; if (scrubbing) log.scrubFeeds++; return real.feedReplayScrub(p, scrubbing, ...rest); },
+  };
+  return { real, GameAudio, log };
+}
+
+function highlightsRig({ sound = true } = {}) {
+  const sb = { Math, console, Object, Array, Number, String, JSON, Float32Array, Float64Array, Uint8Array, isFinite, parseFloat, parseInt,
+    Log: { info() {}, debug() {}, warn() {}, enabled() { return false; } }, PerfGov: { tier: () => 0 } };
+  sb.window = sb;
+  const camCtx = vm.createContext(sb);
+  vm.runInContext(src("js/camera/results-cam.js"), camCtx);
+  vm.runInContext(src("js/camera/replay-buf.js"), camCtx);
+  const ResultsCam = vm.runInContext("ResultsCam", camCtx), ReplayBuf = vm.runInContext("ReplayBuf", camCtx);
+
+  const player = { s: 0, x: 0, head: 0, speed: 60, px: 0, py: 0, pz: 0, steer: 0, yawVis: 0, rpm: 5000, energy: 1, offroad: false, finPos: 1 };
+  const rival = { s: 0, x: 3, head: 0, speed: 58, px: 3, py: 0, pz: 0, steer: 0, yawVis: 0, rpm: 5000, finPos: 2 };
+  const cars = [player, rival];
+  const G = { player, cars, raceT: 0, gfx: {}, dbgCam: null, netPlay: { active: () => false },
+    camVantage: () => ({ eye: [0, 4, -10], target: [0, 1, 0], fov: 58 }) };
+  const replayBuf = ReplayBuf.create(G);
+  for (let i = 0; i < 90; i++) {   // 3 s of race in the ring; untagged, so the reel is the window clip
+    const t = i / 30; G.raceT = t;
+    for (const c of cars) { c.s = c.speed * t; c.pz = c.s; }
+    replayBuf.sample(t, cars);
+  }
+  const resultsCam = ResultsCam.create(G); resultsCam.attachReplay(replayBuf);
+
+  const audio = bootAudio();
+  const field = { collects: 0 };
+  const rivalAudio = { collect(p) { field.collects++; return cars.filter((c) => c !== p).map((c, k) => ({ lat: 3, arc: 4 + k, rev: 0.7, approach: 0, slot: k })); } };
+  const noop = () => {};
+  const tickCtx = vm.createContext({
+    Math, performance: { now: () => 0 }, lastFrame: 0, paused: false, state: "results",
+    gfx: { warming: () => false }, Input: { poll: noop, clearEdges: noop, setTimeScale: noop }, BrakeCue: { tick: noop }, onboard: { tick: noop },
+    netPlay: { tick: noop, active: () => false }, PerfGov: { tick: noop, recordSimulation: noop }, UiExperience: { resumeHolding: () => false },
+    director: { tick: noop, reset: noop }, mirrorPass: { preparing: () => false }, replayBuf, resultsCam, raceT: 3,
+    GameAudio: audio.GameAudio, soundOn: sound, player, cars, rivalAudio,
+    naturalGear: (v) => (v < 30 ? 2 : 6), rpmFor: (g, v) => Math.min(15000, 5000 + v * 1000 / g), isWetRoad: () => false, vTop: () => 90,
+    _poseAt: null, photoMode: false, setupPreviewOn: false, announceT: 0, hitStop: 0, frozen: false, track: {}, physAcc: 0, PHYS_DT: 1 / 60,
+    renderAlpha: 0, clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)), updateHud: noop, render: noop, update: noop, updatePhotoCam: noop,
+  });
+  vm.runInContext(TICK, tickCtx, { filename: "js/game.js#tickBody" });
+  let now = 0;
+  const frame = (n = 1) => { for (let i = 0; i < n; i++) { now += 1000 / 60; tickCtx.tickBody(now); } };
+  return { tickCtx, frame, resultsCam, replayBuf, audio, field, player, rival };
+}
+
+test("game.js feeds feedReplayScrub from the results tick, off the race/count frames, unchanged #1262 call", () => {
+  const at = TICK.indexOf(FEED);
+  assert.ok(at > 0, "tickBody hands non-race frames to GameAudio.feedReplayScrub, scrubbing only for a results scrub");
+  const line = TICK.slice(TICK.lastIndexOf("\n", at) + 1, TICK.indexOf("\n", at));
+  assert.match(line, /^\s*if \(state !== "race" && state !== "count"\) GameAudio\.feedReplayScrub\(/,
+    "never on race/count frames: a RACE AGAIN that inherits the montage engine is not cut on the grid");
+  assert.ok(TICK.indexOf("resultsCam.tick(") < at && at < TICK.indexOf("render(Math.min(dt, 1 / 20));               // camera"),
+    "after resultsCam.tick (the clip's pose is applied), before render");
+  assert.ok(TICK.indexOf("replayBuf.onTick(raceT, cars, state);") < at, "outside the paused branch");
+  assert.match(TICK, /GameAudio\.feedReplayScrub\(soundOn && player, replayBuf\.isScrubbing\(\), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop\); return;/,
+    "the #1262 paused-branch feed is untouched");
+});
+
+test("results sheet without HIGHLIGHTS stays silent (chequered cut + orbit)", () => {
+  const { frame, resultsCam, audio, field } = highlightsRig();
+  assert.equal(resultsCam.onFlag(), true);
+  frame(240);   // chequered (2.2 s) into the orbit
+  assert.equal(resultsCam.status().phase, "orbit");
+  assert.ok(audio.log.feeds > 0, "the results frames do reach the feed");
+  assert.equal(audio.log.scrubFeeds, 0, "but never as a scrub");
+  assert.equal(audio.real.debug().engineOn, false, "no engine under the results sheet (#1246)");
+  assert.equal(field.collects, 0, "and no field");
+});
+
+test("HIGHLIGHTS: engine + field play over each clip, then silence exactly once on the return to the orbit", () => {
+  const { frame, resultsCam, replayBuf, audio, field, player, rival } = highlightsRig();
+  resultsCam.onFlag(); frame(10);
+  assert.equal(resultsCam.startHighlights(), true);
+  assert.equal(replayBuf.isScrubbing(), true);
+  frame(1);
+  assert.equal(audio.real.debug().engineOn, true, "the montage starts the engine voice (was -87 dB)");
+  assert.ok(audio.real.engineLevel() > 0, "and opens the note");
+  assert.ok(field.collects > 0, "the field is collected for the TV camera mix");
+  assert.ok(audio.real.rivalState().some((v) => v.gain > 0), "and fed to the rival voices");
+  assert.equal(player.rpm, Math.min(15000, 5000 + player.speed * 1000 / 6), "revs follow the replayed speed (rpmFor(naturalGear(v), v))");
+  assert.ok(rival.rpm > 5000, "every car re-revs");
+
+  let stops = 0, wasOn = true;
+  for (let i = 0; i < 60 * 60 && resultsCam.status().phase === "highlights"; i++) {
+    frame(1);
+    const on = audio.real.debug().engineOn;
+    if (wasOn && !on) stops++;
+    wasOn = on;
+    if (resultsCam.status().phase === "highlights") assert.equal(on, true, "engines stay up for the whole montage");
+  }
+  assert.equal(resultsCam.status().phase, "orbit", "the montage returns to the orbit");
+  assert.equal(replayBuf.isScrubbing(), false);
+  frame(1);
+  if (wasOn && !audio.real.debug().engineOn) stops++;
+  assert.equal(stops, 1, "the scrub-exit one-shot silences engine + field once");
+  assert.equal(audio.real.debug().engineOn, false);
+  audio.real.startEngine();   // anything else that legitimately owns the engine keeps it
+  frame(120);
+  assert.equal(audio.real.debug().engineOn, true, "one-shot: later orbit frames leave the engine alone");
+});
+
+test("leaving results mid-montage (NEXT / MENU / RACE AGAIN) silences on the next frame; a new race keeps its engine", () => {
+  for (const exit of ["menu", "results", "count"]) {
+    const { tickCtx, frame, resultsCam, audio } = highlightsRig();
+    resultsCam.onFlag(); frame(10); resultsCam.startHighlights(); frame(5);
+    assert.equal(audio.real.debug().engineOn, true);
+    resultsCam.reset();   // every exit path calls this first -> ReplayBuf.endScrub
+    tickCtx.state = exit;
+    frame(1);
+    if (exit === "count") {
+      // A synchronous RACE AGAIN with no frame in between inherits the running
+      // engine (startEngine is a no-op while on); race frames never feed, so it is not cut.
+      assert.equal(audio.real.debug().engineOn, true, "count: the race's engine is not cut by a stale one-shot");
+    } else {
+      assert.equal(audio.real.debug().engineOn, false, `${exit}: the montage audio stops`);
+    }
+  }
+});
+
+test("SOUND off: the montage never starts the engine", () => {
+  const { frame, resultsCam, audio } = highlightsRig({ sound: false });
+  resultsCam.onFlag(); frame(10); resultsCam.startHighlights(); frame(60);
+  assert.equal(audio.real.debug().engineOn, false);
+});
 
 test("results orbit uses the rendered subject and road elevation instead of a missing car.py", () => {
   const R = boot({ Tracks: {

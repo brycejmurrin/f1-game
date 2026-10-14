@@ -81,7 +81,7 @@ const TLX = (function () {
 
       // The vendored bundle carries TWO local patches (swizzle omission for
       // Chromium 141, the #33952 bind-group-leak backport) — recipe and
-      // rationale in vendor/three-0.186.0/PATCHES.md, guarded by
+      // rationale in vendor/three-0.186.1/PATCHES.md, guarded by
       // gfx-backend-canary. Re-apply both on any vendor bump.
 
       // WHICH three BACKEND: apex26.tlxForceGL "1" = pin WebGL2, "0" =
@@ -129,7 +129,7 @@ const TLX = (function () {
       // The warm's stage timeline, read by memState().warm: the lights hold for
       // exactly this long on a player's GPU, and the census beats sample it —
       // gpu-census 207 spent its whole window inside the warm and no row said so.
-      const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, total: null, attempts: 0, failed: 0 };
+      const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, total: null, attempts: 0, failed: 0 };
       const GPU_ERR_LOG_CAP = 8;
       // Heal-gate counters live HERE, not by the gate: the error hooks install
       // during bootRenderer's await, and on the WebGPU -> WebGL2 fallback an
@@ -1211,6 +1211,7 @@ const TLX = (function () {
       // warm's remaining compiles are single objects, never the scene.
       function prepareMirrorTarget(w, h, forWarm) {
         if (forWarm && _instPerPass && !skipBatches()) _mirWarmSwap();
+        const lv = _mirLevels(w, h);
         if (!mirRT) {
           mirRT = new THREE.RenderTarget(w, h, {
             type: post && post.hdrOk() ? THREE.HalfFloatType : THREE.UnsignedByteType,
@@ -1218,9 +1219,52 @@ const TLX = (function () {
             generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
           });
           mirRT.texture.colorSpace = THREE.NoColorSpace;
+          _mirSetLevels(lv, w, h);
           mirCam = new THREE.PerspectiveCamera();
           mirCam.matrixAutoUpdate = false; mirCam.matrixWorldAutoUpdate = false;
-        } else if (mirRT.width !== w || mirRT.height !== h) mirRT.setSize(w, h);
+        } else if (mirRT.width !== w || mirRT.height !== h) { _mirSetLevels(lv, w, h); mirRT.setSize(w, h); }   // setSize re-allocates
+        else if (lv > _mirLevelsNow(w, h)) { _mirSetLevels(lv, w, h); mirRT.dispose(); }   // grow only: the next render re-allocates
+      }
+      // A-H5 (perf hunt 4): THE MIRROR'S MIP CHAIN, CAPPED. three builds the
+      // full chain on a mipmapped target — 9 levels for a 461 px mirror — and
+      // regenerates it after every mirror render: one render pass per level on
+      // WebGPU (6.35-7.1 of ~27 passes a frame on the macos census), one
+      // generateMipmap on WebGL2. The HUD inset / PiP (tsl-post mirrorSample)
+      // samples with the IMPLICIT LOD of a screen-space rect, log2(target px /
+      // rect px) — ~1 at the SS=2 target — so it reads levels 0..ceil(that).
+      // Textures.getMipLevels takes the level count from texture.mipmaps.length
+      // when it is non-zero (storage and generation stop there), so the cap is
+      // that array's length: apex26.tlxMirMips levels (default 3), raised to
+      // ceil(log2 ratio + 0.25) + 1 (the highest level a trilinear tap at that
+      // LOD can touch, with a quarter level of LOD-rounding slop; the rect's
+      // derivatives are axis-aligned, so max-norm and length agree) when the
+      // rect asks for more. IDENTICAL for the inset by construction.
+      // THE COCKPIT GLASS (drawMirrorGlass) maps the target on a small,
+      // foreshortened 3-D quad whose LOD is not bounded, so the first glass draw
+      // latches the full chain for the session (unset knob); the glass frame
+      // that latches it still reads the capped chain once (a camera cut into a
+      // cockpit view). An explicit apex26.tlxMirMips=N caps under the glass too
+      // (the A/B lever for that look); "0" = the full chain always (the old way).
+      let _mirMipCap = 3, _mirMipPinned = false, _mirGlassSeen = false;
+      try {
+        const v = localStorage.getItem("apex26.tlxMirMips");
+        if (v !== null && v !== "" && +v >= 0) { _mirMipCap = Math.floor(+v); _mirMipPinned = true; }
+      } catch (_) { /* no storage: the default cap */ }
+      const _mirFull = (w, h) => Math.floor(Math.log2(Math.max(w, h, 1))) + 1;
+      function _mirLevels(w, h) {
+        const full = _mirFull(w, h);
+        if (_mirMipCap <= 0 || (_mirGlassSeen && !_mirMipPinned)) return full;
+        let need = _mirMipCap;
+        if (_mirRect) {
+          const up = wantSpatialUpscale(), cw = up ? presentW : W, ch = up ? presentH : H;
+          const r = Math.max(w / Math.max(1, Math.round(_mirRect[2] * cw)), h / Math.max(1, Math.round(_mirRect[3] * ch)));
+          need = Math.max(need, Math.ceil(Math.log2(r) + 0.25) + 1);   // the top level a trilinear tap can touch, +0.25 LOD of slop
+        }
+        return Math.min(full, need);
+      }
+      const _mirLevelsNow = (w, h) => (mirRT && mirRT.texture.mipmaps.length) || _mirFull(w, h);
+      function _mirSetLevels(lv, w, h) {
+        mirRT.texture.mipmaps = lv >= _mirFull(w, h) ? [] : Array.from({ length: lv }, () => ({}));
       }
       // TLX opts out of the live env probe by default (the reason is at the
       // envCubeCam block below). Hunt 3 R4: read the opt-out BEFORE allocating,
@@ -2070,6 +2114,7 @@ const TLX = (function () {
       // it compiled the shared ones, which the mirror context drew. Swaps each
       // visible main mesh for its view (made here if new).
       function _mirWarmSwap() {
+        _mirSwapped.length = 0;
         for (let i = 0, n = _instRegistry.length; i < n; i++) {
           const im = _instRegistry[i], b = im.userData.tlxBatch;
           if (!b || !im.visible || !b.geo) continue;
@@ -2077,7 +2122,14 @@ const TLX = (function () {
           v.material = im.material; v.count = im.count;
           v.userData.tlxEmissive = im.userData.tlxEmissive; v.userData.tlxAlpha = im.userData.tlxAlpha;
           v.visible = true; im.visible = false;
+          _mirSwapped.push(im, v);
         }
+      }
+      // The draw warm (A-W1) draws the main pass after the mirror's: put the main meshes back.
+      const _mirSwapped = [];
+      function _mirWarmUnswap() {
+        for (let i = 0; i < _mirSwapped.length; i += 2) { _mirSwapped[i].visible = true; _mirSwapped[i + 1].visible = false; }
+        _mirSwapped.length = 0;
       }
 
       function _showInstanced(rec, order) {
@@ -2733,6 +2785,96 @@ const TLX = (function () {
       let _warmPlus = null;
       try { const v = localStorage.getItem("apex26.tlxWarmPlus"); _warmPlus = v === "1" ? true : v === "0" ? false : null; } catch (_) { /* no storage: auto */ }
       const warmPlusOn = () => _warmPlus !== null ? _warmPlus : !!(renderer && renderer.backend && renderer.backend.isWebGLBackend);
+      // A-W1 (perf hunt 4): THE DRAW WARM. The race's opening frames were rAF
+      // gaps of 1.1-4.1 s with the main thread idle (census 452-454): the
+      // DRIVER's first-draw work, which compileAsync cannot reach — ANGLE-Metal
+      // builds the MTLRenderPipelineState (program x vertex layout x formats x
+      // blend x samples) and converts unaligned vertex buffers at the first
+      // draw; on WebGPU no module or pipeline was created in that window at
+      // all. So the warm's last stage DRAWS what the first frame will draw,
+      // where nobody can see it: the mirror's world into a 4x4 target of
+      // mirRT's exact attachment state (mirRT itself may be composited before
+      // it re-renders on the lite rungs), the scene into the live scene target
+      // under a 1x1 scissor (present() clears and redraws it all before any
+      // pass reads it), every post pass into its own target under the scissor
+      // (tlx-post drawWarm; never the canvas), and each caster configuration
+      // into a 1x1 scratch depth target (tlx-shadow drawWarm; the sun map is
+      // snap-cached, so never the live one). Then it waits for the GPU to
+      // settle, so warm.total absorbs the stall. Identical pixels. Every
+      // state it touches (autoClear, scissor test, the target's scissor,
+      // target, MRT, the mirror swap) is restored. apex26.tlxDrawWarm: unset =
+      // on except on software adapters (SwiftShader CI pays nothing), "1" on,
+      // "0" off.
+      let _drawWarmKnob = null;
+      try { const v = localStorage.getItem("apex26.tlxDrawWarm"); _drawWarmKnob = v === "1" ? true : v === "0" ? false : null; } catch (_) { /* no storage: auto */ }
+      const drawWarmOn = () => (_drawWarmKnob !== null ? _drawWarmKnob : !(softGpu() || softwareGL));
+      function drawWarmStage(usePost, useTag, opts, mirrorWarmed) {
+        const drawn = { mirror: 0, scene: 0, post: 0, casts: 0 };
+        if (!usePost || !post || !post.sceneTarget) { _mirWarmUnswap(); return drawn; }
+        const autoClear0 = renderer.autoClear, sc0 = renderer.getScissorTest();
+        const sRT = post.sceneTarget(), sSc = sRT.scissor.clone();
+        let tmp = null;
+        try {
+          renderer.autoClear = false;   // a clear ignores the scissor (WebGPU loadOp)
+          renderer.setScissorTest(true);
+          if (mirrorWarmed && mirRT) {
+            // The mirror stage left the mirror's own instanced meshes shown and the MRT off.
+            tmp = new THREE.RenderTarget(4, 4, { type: mirRT.texture.type, format: THREE.RGBAFormat, depthBuffer: true,
+              generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter });
+            tmp.texture.colorSpace = THREE.NoColorSpace;
+            renderer.setMRT(null);
+            renderer.setRenderTarget(tmp);
+            renderer.render(scene, camera); drawn.mirror++;
+          }
+          _mirWarmUnswap();
+          if (lit && lit.setSsrMrt) lit.setSsrMrt(useTag);
+          if (fx && fx.setSsrMrt) fx.setSsrMrt(useTag);
+          renderer.setMRT(useTag ? _ssrMrtNode() : null);   // exactly as present() sets it
+          sRT.scissor.set(0, 0, 1, 1);
+          renderer.setRenderTarget(sRT);
+          renderer.render(scene, camera); drawn.scene++;
+          sRT.scissor.copy(sSc);
+          if (post.drawWarm) drawn.post = post.drawWarm(opts, _postF);   // under the MRT, as present() runs the chain
+          renderer.setMRT(null);
+          if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
+          if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
+          if (shadowSys && shadowSys.drawWarm) drawn.casts = shadowSys.drawWarm();
+        } finally {
+          _mirWarmUnswap();
+          sRT.scissor.copy(sSc);
+          renderer.setScissorTest(sc0);
+          renderer.autoClear = autoClear0;
+          if (tmp) try { tmp.dispose(); } catch (_) { /* device dying */ }
+        }
+        return drawn;
+      }
+      // Resolves once the GPU has run what was submitted (capped): WebGPU onSubmittedWorkDone, WebGL2 a polled fence.
+      function _gpuSettled(capMs) {
+        const be = renderer.backend, t0 = performance.now();
+        try {
+          const q = be && be.device && be.device.queue;
+          if (q && typeof q.onSubmittedWorkDone === "function") {
+            let timer = 0;
+            const cap = new Promise((res) => { timer = setTimeout(res, capMs); });
+            return Promise.race([q.onSubmittedWorkDone(), cap]).finally(() => clearTimeout(timer));
+          }
+          const gl = be && be.gl;
+          if (gl && typeof gl.fenceSync === "function") {
+            const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+            gl.flush();
+            return new Promise((res) => {
+              (function poll() {
+                let st = gl.WAIT_FAILED;
+                try { st = gl.clientWaitSync(sync, 0, 0); } catch (_) { /* context lost: stop */ }
+                if (st === gl.TIMEOUT_EXPIRED && performance.now() - t0 < capMs) { setTimeout(poll, 4); return; }
+                try { gl.deleteSync(sync); } catch (_) { /* */ }
+                res();
+              })();
+            });
+          }
+        } catch (_) { /* no settle on this backend */ }
+        return Promise.resolve();
+      }
       function startProgramWarm(opts) {
         _warmRequested = false;
         if (typeof renderer.compileAsync !== "function") return;
@@ -2838,6 +2980,20 @@ const TLX = (function () {
               }
               if (post.warmMirror) await post.warmMirror(mirRT.texture);
               _warmStages.mirror = Math.round(performance.now() - _tStage);
+            }
+            _tStage = performance.now();
+            _warmStages.draw = null; _warmStages.drawn = null;
+            if (drawWarmOn()) {
+              // Its own guard: a draw that throws costs the draw warm, never a re-run of the compiles above.
+              try {
+                _gpuLastOperation = "warm-draw";
+                _warmStages.drawn = drawWarmStage(usePost, useTag, opts, _warmStages.mirror !== null);
+                await _gpuSettled(5000);   // the driver's first-draw work is GPU-process side: wait it out here
+              } catch (e) {
+                _warmStages.drawn = { error: String((e && e.message) || e) };
+                try { Log.warn("gfx", "TLX draw warm failed", String(e)); } catch (_) { /* logging is optional */ }
+              }
+              _warmStages.draw = Math.round(performance.now() - _tStage);
             }
           } catch (e) {
             _warmStages.failed++;
@@ -4313,7 +4469,8 @@ const TLX = (function () {
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
             hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
-            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr };
+            composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr,
+            mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned };   // A-H5
         },
         // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js mirror.glass): mirRT,
         // rendered in mirrorEnd before this pass records, on the glass mesh as
@@ -4326,6 +4483,7 @@ const TLX = (function () {
               || !mesh || !mesh.geo || !model) return false;
           pushRec(mesh.geo, poolModelMat(model), fx.mirrorGlassMaterial(mirRT.texture), undefined, undefined, 0, null, null);
           _mirGlass++;
+          _mirGlassSeen = true;   // A-H5: the next mirrorBegin grows the target to the full chain
           return true;
         },
         // _envGaveUp reads as READY on purpose: the caller polls this to stop
@@ -5054,7 +5212,9 @@ const TLX = (function () {
               try {
                 renderer.setRenderTarget(post.sceneTarget());
                 _gpuLastOperation = "render-scene";
+                if (post.depthBegin) post.depthBegin(opts, _postF);   // A-P1: does this frame's post read the depth?
                 _renderTimed(scene, camera);
+                if (post.depthEnd) post.depthEnd();
                 _gpuLastOperation = "render-post";
                 post.present(opts, _postF);
               } finally {
@@ -5468,6 +5628,7 @@ const TLX = (function () {
             // The warm timeline: how long the lights held on THIS GPU, by stage;
             // pending/done say whether a census beat is inside it (207 was, all 15).
             o.warm = { at: _warmStages.at, scene: _warmStages.scene, fx: _warmStages.fx, lateLayouts: _warmStages.lateLayouts, post: _warmStages.post, shadow: _warmStages.shadow, mirror: _warmStages.mirror,
+                       draw: _warmStages.draw, drawn: _warmStages.drawn,   // A-W1: ms (incl. the GPU settle), and { mirror, scene, post, casts }
                        total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
                        pending: !!_warmPending, done: _warmDone };
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count

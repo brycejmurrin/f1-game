@@ -20,6 +20,7 @@ BODY` recursively, and tracks `cd DIR` so relative targets resolve.
 
   python3 shellparse.py commit  < cmd   # JSON: [{"all":…, "paths":[…], "dry":…, "skip":…}]
   python3 shellparse.py writes CWD < cmd  # JSON: [{"path": abs, "kind": "redirect|sed|tee|cp|…", …}]
+  python3 shellparse.py push < cmd     # JSON: [{"cmd": …, "why": [reasons]}] for refused pushes; [] = none
 
 KNOWN GAPS (documented, not silently claimed): writes made by an interpreter
 (`python3 -c "open(...,'w')"`, `node -e "fs.writeFileSync(…)"`), by `git
@@ -302,6 +303,103 @@ def commit_info(text):
                         break
             j += 1
         found.append(info)
+    return found
+
+
+# ---- git push ------------------------------------------------------------------
+DEPLOY_BRANCH = "claude/f1-game-project-26h3ng"
+PUSH_WITH_ARG = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
+
+
+def _current_branch(cwd):
+    try:
+        import subprocess
+        r = subprocess.run(["git", "-C", cwd or ".", "rev-parse", "--abbrev-ref", "HEAD"],
+                           capture_output=True, text=True, timeout=5)
+        return r.stdout.strip()
+    except Exception:
+        return ""
+
+
+def push_issues(text, branch_of=_current_branch):
+    """Why each `git … push …` in the command is refused (2026-10-14): a force
+    (-f, --force, --force-with-lease, a +refspec), --mirror, --delete / -d / a
+    `:dst` refspec, --all, or any push whose destination is the deploy branch —
+    named in a refspec, or implied by a bare/HEAD push while on it. [] = fine.
+    Raises ParseError on untokenisable text."""
+    found = []
+    start = os.getcwd()
+    for _env, argv, _r, cwd in commands(text, start, strict=True):
+        if os.path.basename(argv[0]) != "git":
+            continue
+        i = 1
+        gitdir = None
+        while i < len(argv) and argv[i].startswith("-"):
+            if argv[i] in GIT_GLOBAL_WITH_ARG:
+                if argv[i] == "-C" and i + 1 < len(argv):
+                    gitdir = argv[i + 1]
+                i += 2
+                continue
+            i += 1
+        if i >= len(argv) or argv[i] != "push":
+            continue
+        where = _abs(gitdir, cwd) if gitdir else (cwd or start)
+        why, pos = [], []
+        j = i + 1
+        dashdash = False
+        while j < len(argv):
+            a = argv[j]
+            if dashdash or not a.startswith("-") or a == "-":
+                pos.append(a)
+            elif a == "--":
+                dashdash = True
+            elif a.startswith("--"):
+                key = a.split("=", 1)[0]
+                if key in ("--force", "--force-with-lease", "--force-if-includes"):
+                    why.append(f"force push ({a})")
+                elif key == "--mirror":
+                    why.append("--mirror rewrites every remote ref")
+                elif key == "--delete":
+                    why.append("--delete removes a remote branch")
+                elif key == "--all":
+                    why.append("--all pushes every local branch (the deploy branch included)")
+                elif key in PUSH_WITH_ARG and "=" not in a:
+                    j += 1
+            else:
+                for k, ch in enumerate(a[1:]):
+                    if ch == "f":
+                        why.append(f"force push ({a})")
+                    elif ch == "d":
+                        why.append(f"delete ({a})")
+                    elif ch == "o":
+                        if k == len(a) - 2:
+                            j += 1
+                        break
+            j += 1
+        refspecs = pos[1:]
+        cur = None
+        for r in refspecs:
+            if r.startswith("+"):
+                why.append(f"force push (+refspec {r})")
+                r = r[1:]
+            src, colon, dst = r.partition(":")
+            if colon and not src:
+                why.append(f"delete (refspec {r})")
+            if not colon:
+                dst = src
+            if dst == "HEAD" or (not colon and src == "HEAD"):
+                cur = cur if cur is not None else branch_of(where)
+                dst = cur
+            if dst.startswith("refs/heads/"):
+                dst = dst[len("refs/heads/"):]
+            if dst == DEPLOY_BRANCH:
+                why.append(f"the destination is the deploy branch {DEPLOY_BRANCH}")
+        if not refspecs:
+            cur = branch_of(where)
+            if cur == DEPLOY_BRANCH:
+                why.append(f"a bare push from the deploy branch {DEPLOY_BRANCH} pushes it")
+        if why:
+            found.append({"cmd": " ".join(argv), "why": sorted(set(why))})
     return found
 
 
@@ -598,8 +696,13 @@ if __name__ == "__main__":
             print(json.dumps(commit_info(text)))
         except ParseError:
             print("null")
+    elif mode == "push":
+        try:
+            print(json.dumps(push_issues(text)))
+        except ParseError:
+            print("null")
     elif mode == "writes":
         print(json.dumps(write_targets(text, sys.argv[2] if len(sys.argv) > 2 else os.getcwd())))
     else:
-        print("usage: shellparse.py commit|writes [cwd] < command", file=sys.stderr)
+        print("usage: shellparse.py commit|push|writes [cwd] < command", file=sys.stderr)
         sys.exit(2)
