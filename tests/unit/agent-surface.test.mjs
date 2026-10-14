@@ -248,6 +248,7 @@ const AGENT_KEYS = new Set([
   // Claude Code sub-agents
   "name", "description", "tools", "disallowedTools", "model", "permissionMode", "maxTurns",
   "skills", "mcpServers", "hooks", "memory", "background", "omitClaudeMd", "effort", "isolation", "color",
+  "initialPrompt",
   // Cursor subagents
   "readonly", "is_background",
 ]);
@@ -265,6 +266,10 @@ const frontmatterKeys = (text) => {
 };
 
 test("every agent and skill frontmatter key is one a host documents", () => {
+  // Negative control: the misspellings Claude Code would silently ignore
+  // (fails open — a dropped disallowedTools or permissionMode is a lost guard).
+  for (const typo of ["max_turns", "disallowed-tools", "permission_mode", "isBackground", "read_only"])
+    assert.ok(!AGENT_KEYS.has(typo) && frontmatterKeys(`---\n${typo}: x\n---\n`).includes(typo), `${typo} must be caught`);
   const bad = [];
   for (const f of fs.readdirSync(path.join(ROOT, ".claude/agents")).filter((n) => n.endsWith(".md") && n !== "README.md")) {
     for (const k of frontmatterKeys(fs.readFileSync(path.join(ROOT, ".claude/agents", f), "utf8")))

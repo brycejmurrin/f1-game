@@ -75,7 +75,7 @@ store.subscribe((change) => {
 
 const retrySave = () => {
   const results = [];
-  if (typeof Career !== "undefined" && Career.data && Career.data()) results.push(Career.saveStatus());
+  if (typeof Career !== "undefined" && Career.data && Career.data()) { Career.save(); results.push(Career.saveStatus()); }
   if (G.season && !(typeof Career !== "undefined" && Career.inCareer && Career.inCareer()))
     results.push(SeasonCal.save(G.season));
   // Career/season above re-save their CURRENT state; whatever else the outage
@@ -597,6 +597,16 @@ function trackTile(t, i, opts) {
   const fl = document.createElement("span");
   fl.className = "track-row-meta";
   fl.innerHTML = Flags.svg(t.country);
+  if (typeof A11yOpts !== "undefined" && A11yOpts.cuesOn && A11yOpts.cuesOn()
+      && typeof Flags !== "undefined" && Flags.code) {
+    const cc = Flags.code(t.country);
+    if (cc) {
+      const lab = document.createElement("span");
+      lab.className = "track-row-cc";
+      lab.textContent = String(cc).toUpperCase();
+      fl.appendChild(lab);
+    }
+  }
   row.appendChild(fl);
   const nm = document.createElement("span");
   nm.className = "track-row-name";
@@ -954,7 +964,19 @@ function updateTrackPreview() {
   const dz = TrackMaps.drsZones(t);
   // Caption ON the still: flag, name, grand prix.
   const flagEl = document.getElementById("sel-preview-flag");
-  if (flagEl) flagEl.innerHTML = Flags.svg(t.country);
+  if (flagEl) {
+    flagEl.innerHTML = Flags.svg(t.country);
+    if (typeof A11yOpts !== "undefined" && A11yOpts.cuesOn && A11yOpts.cuesOn()
+        && typeof Flags !== "undefined" && Flags.code) {
+      const cc = Flags.code(t.country);
+      if (cc) {
+        const lab = document.createElement("span");
+        lab.className = "track-row-cc";
+        lab.textContent = String(cc).toUpperCase();
+        flagEl.appendChild(lab);
+      }
+    }
+  }
   els.selPreviewName.textContent = t.name + (t.night ? " ☾" : "");
   els.selPreviewGp.textContent = t.gp || "";
   // The type badges under the name — the same .trb chips the tiles carry.

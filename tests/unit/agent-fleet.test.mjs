@@ -86,7 +86,7 @@ test("the launch template carries every field the agent-fleet launch policy requ
     assert.ok(tpl[1].includes(field), `launch template lost ${field}`);
   }
   // The policy moved from AGENTS.md §Concurrent PRs to the skill (2026-10-14 trim); the pin moved with it.
-  const policy = SKILL.split("## Launch policy")[1] || "";
+  const policy = read(".claude/skills/agent-fleet/references/launch-policy.md").split("## Launch policy")[1] || "";
   assert.match(policy, /the exact line `Do not enable auto-merge or merge\.`/,
     "the template's last line is the one the skill's §Launch policy mandates verbatim");
   assert.match(read("AGENTS.md"), /skill `agent-fleet` §Launch policy/, "AGENTS.md points launch policy at the skill");

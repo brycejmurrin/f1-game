@@ -409,18 +409,44 @@ export function megasForThisShard(args, mega, db) {
   return mega.filter((f) => plan.get(f) === s.index);
 }
 
-/** Flags to keep when launching a peeled mega solo (drop --shard so Playwright
- *  does not skip the only file). */
+// Value-taking options from Playwright 1.63.0 lib/program.js testOptions.
+// Boolean flags must not swallow the next positional spec. Optional choice
+// modes only consume a recognised mode; otherwise Playwright uses its preset.
+const MEGA_VALUE_FLAGS = new Set([
+  "--add-reporter", "--browser", "-c", "--config", "--global-timeout",
+  "-g", "--grep", "-G", "--grep-invert", "--last-failed-file",
+  "--max-failures", "--output", "--project", "--repeat-each", "--reporter",
+  "--retries", "--run-agents", "--test-list", "--test-list-invert",
+  "--timeout", "--trace", "--tsconfig", "--ui-host", "--ui-port",
+  "--update-source-method", "-j", "--workers",
+]);
+const MEGA_OPTIONAL_MODES = new Map([
+  ["--debug", new Set(["inspector", "cli"])],
+  ["-u", new Set(["all", "changed", "missing", "none"])],
+  ["--update-snapshots", new Set(["all", "changed", "missing", "none"])],
+]);
+
+/** Keep solo flags and their values, dropping --shard and positional specs.
+ * Optional arbitrary refs (--only-changed) and multi-project values should use
+ * equals/repeated flags to avoid ambiguity with positional test filters. */
 export function megaSoloFlags(args) {
   const out = [];
   const list = args || [];
   for (let i = 0; i < list.length; i++) {
-    const a = list[i];
+    const a = String(list[i]);
+    if (a === "--") break; // everything after the delimiter is positional
     if (a === "--shard" || /^--shard=/.test(a)) {
       if (a === "--shard") i++;
       continue;
     }
-    if (a.startsWith("-")) out.push(a);
+    if (!a.startsWith("-")) continue;
+    out.push(list[i]);
+    if (/=/.test(a) || i + 1 >= list.length) continue;
+    const next = String(list[i + 1]);
+    const modes = MEGA_OPTIONAL_MODES.get(a);
+    if ((MEGA_VALUE_FLAGS.has(a) && !next.startsWith("-")) || (modes && modes.has(next))) {
+      out.push(list[++i]);
+    }
   }
   return out;
 }
@@ -1141,19 +1167,34 @@ export function specsAffectedBySource(changed, root = ROOT) {
 export function specsImporting(changed, root = ROOT) {
   const narrow = changed.filter((f) => /^tests\/helpers\/.+\.js$/.test(f));
   if (!narrow.length) return [];
-  const dir = path.join(root, "tests", "specs");
-  const hit = [];
-  for (const name of fs.readdirSync(dir).filter((f) => f.endsWith(".spec.js"))) {
-    const rel = `tests/specs/${name}`;
-    let refs = [];
-    try { refs = referencesIn(fs.readFileSync(path.join(dir, name), "utf8"), rel).refs || []; }
-    catch { continue; }
-    for (const r of refs) {
-      const target = path.posix.normalize(path.posix.join("tests/specs", r.spec));
-      if (narrow.includes(target)) { hit.push(rel); break; }
+  const reverse = new Map(), specs = new Set();
+  function scan(rel) {
+    const dir = path.join(root, rel);
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const file = `${rel}/${entry.name}`;
+      if (entry.isDirectory()) { scan(file); continue; }
+      if (!entry.name.endsWith(".js")) continue;
+      if (file.endsWith(".spec.js")) specs.add(file);
+      let refs = [];
+      try { refs = referencesIn(fs.readFileSync(path.join(root, file), "utf8"), file).refs || []; }
+      catch { continue; }
+      for (const ref of refs) {
+        const target = path.posix.normalize(path.posix.join(path.posix.dirname(file), ref.spec));
+        if (!reverse.has(target)) reverse.set(target, new Set());
+        reverse.get(target).add(file);
+      }
     }
   }
-  return hit;
+  scan("tests/helpers"); scan("tests/specs");
+  const visited = new Set(narrow), queue = [...narrow], hit = new Set();
+  for (let i = 0; i < queue.length; i++) {
+    for (const consumer of reverse.get(queue[i]) || []) {
+      if (specs.has(consumer)) hit.add(consumer);
+      if (!visited.has(consumer)) { visited.add(consumer); queue.push(consumer); }
+    }
+  }
+  return [...hit].sort();
 }
 
 // ALWAYS-RUN, and FAIL-FAST ORDER. Both are standard TIA practice this

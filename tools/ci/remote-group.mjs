@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // remote-group.mjs — run one browser test group on GitHub's runners (sharded, llvmpipe) and stream its verdict here.
-// @doc One test:* browser group on 4 llvmpipe runners (browser-group.yml); a line per shard, then `= group`.
-// Full description: Dispatches .github/workflows/browser-group.yml for one test:* browser group on the current (pushed) branch, finds the run, prints one `[remote-group]` line per shard as it finishes (a red names its failing tests from the shard's log), then a terminal `= group <verdict>` line. `--plan` is the workflow's own step: it validates the group against package.json and prints the shard matrix. Built for a Monitor or a background task.
+// @doc One test:* browser group on 4 llvmpipe runners (browser-group.yml), shards packed by measured time; a line per shard, then `= group`.
+// Full description: Dispatches .github/workflows/browser-group.yml for one test:* browser group on the current (pushed) branch, finds the run, prints one `[remote-group]` line per shard as it finishes (a red names its failing tests from the shard's log), then a terminal `= group <verdict>` line. The shard plan is computed HERE (LPT over tests/data/spec-timings.json) and travels as the workflow's `plan` input, so there is no plan job; `--run-shard` is the workflow's shard step (validates the plan against package.json, then runs it). A live or green run of the same group on the same sha is reused, not re-dispatched (`--force`). Built for a Monitor or a background task.
 // @skill check-changes
 //
 // WHY. A browser group run in a cloud container is SwiftShader on 4 cores:
@@ -18,8 +18,23 @@
 //   node tools/ci/remote-group.mjs ui --gl swiftshader  # reproduce a local-only (SwiftShader) red on CI
 //   node tools/ci/remote-group.mjs ui --no-wait         # dispatch, print the run URL, exit
 //   node tools/ci/remote-group.mjs --watch <run-id>     # watch a run already dispatched
-//   GROUP=ui SHARDS=4 node tools/ci/remote-group.mjs --plan   # the workflow's plan step (prints matrix=[…])
+//   node tools/ci/remote-group.mjs ui --force           # dispatch even when this sha already has a live or green run
+//   GROUP=ui PLAN='{…}' SHARD=1 TOTAL=4 node tools/ci/remote-group.mjs --run-shard   # the workflow's shard step
 //
+// SHARDS ARE PACKED BY TIME, NOT COUNT (2026-10-14). `--shard=i/n` splits a
+// group by file count, so one shard drew the mega-sweep spec plus the 6-minute
+// visual spec: gfx ran 15.3 / 2.7 / 1.8 / 2.7 min across its four shards (run
+// 38478672714), ui 15.5 / 11.0 / 5.0 / 7.5, render 19.7 / 13.8 / 10.9 / 6.0 —
+// a 14-min median against ~5 min of actual test work per shard
+// (docs/notes/ACTIONS-AUDIT-2026-10-14.md). shardPlan() packs the group's spec
+// files longest-first onto the least-loaded shard (LPT, the same rule
+// select-specs' megaShardPlan uses) by expected seconds = declared tests × the
+// spec's measured per-test rate, and each shard runs its list through
+// run-playwright.mjs. The plan rides the dispatch as JSON (text from whoever
+// dispatched: --run-shard re-validates every path against package.json before
+// a byte reaches a shell). A group whose script is not a plain file list
+// (--project, an env prefix) keeps Playwright's count shard. The plan job is
+// gone with it: it was a second runner-queue wait (p90 15.8 min) in series.
 // It tests the branch AS PUSHED: the runner checks out origin/<branch>, so a
 // local commit not yet pushed is refused rather than silently not tested.
 // NOT A GATE: nothing requires this workflow; the PR's own ci.yml run decides
@@ -35,6 +50,9 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
 import { defaultRemoteWorkers } from "../lib/browser-workers.mjs";
+import { CI_BUCKETS, MIN_SAMPLES, declaredTests, specSecPerTest } from "./select-budget.mjs";
+import { specsOf } from "./select-specs.mjs";
+import { inBuckets, loadDb, median, TIMINGS_FILE } from "./spec-timings.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const REPO = "brycejmurrin/f1-game";
@@ -70,6 +88,144 @@ export function planMatrix(group, shards, scripts) {
   const n = shards == null || shards === "" ? 4 : Number(shards);
   if (!SHARD_CHOICES.includes(n)) return { error: `shards must be one of ${SHARD_CHOICES.join(", ")}, not ${shards}` };
   return { group: g, shards: n, matrix: Array.from({ length: n }, (_, i) => i + 1) };
+}
+
+/** A spec path as it may appear in a plan: tests/specs/<name>.spec.js, nothing else. */
+export const SPEC_RE = /^tests\/specs\/[A-Za-z0-9._-]+\.spec\.js$/;
+const SPEC_OR_GLOB_RE = /^tests\/specs\/[A-Za-z0-9._*-]+\.spec\.js$/;
+/** A piece of a fat spec: Playwright's native `--shard=j/k` over ONE file. */
+export const PIECE_RE = /^([1-9]\d?)\/([1-9]\d?)$/;
+/** No spec is split into more than this many pieces, and no piece is expected
+ *  under MIN_PIECE_SEC (a piece still boots a browser and a server, ~20 s;
+ *  hud-layout at ~1,480 s measured is 3-4 pieces of ~400-500 s). */
+export const MAX_PIECES = 8;
+export const MIN_PIECE_SEC = 120;
+
+/** The group's spec files when its script is a PLAIN file list (globs
+ *  expanded) — what a packed plan can split; null when it is not: `--project=…`,
+ *  an env prefix, no files, and the count shard (`--shard=i/n`) must stay. */
+export function groupFiles(group, scripts) {
+  const cmd = String((scripts || {})[`test:${group}`] || "");
+  const toks = cmd.split(/\s+/).filter(Boolean);
+  if (toks[0] !== "node" || toks[1] !== "tools/ci/run-playwright.mjs") return null;
+  const files = toks.slice(2);
+  if (!files.length || !files.every((f) => SPEC_OR_GLOB_RE.test(f))) return null;
+  const out = specsOf([`test:${group}`], scripts).filter((f) => SPEC_RE.test(f));
+  return out.length ? out : null;
+}
+
+/** Expected seconds of one spec on a CI runner: the median WHOLE-RUN wall from
+ *  the committed timings file when a CI bucket has MIN_SAMPLES of them (that is
+ *  what a shard pays, and declared counts over-read loop- or skip-heavy specs:
+ *  tlx-probes declares 17, runs 6); else declared tests × the per-test rate, as
+ *  megaShardPlan. The committed file only: every reader of the plan must agree. */
+export function expectedSec(file, db) {
+  const samples = inBuckets(db?.specs?.[file]?.s, CI_BUCKETS);
+  let best = null;
+  for (const b of CI_BUCKETS) {
+    const rows = samples.filter((x) => x[1] === b);
+    if (rows.length >= MIN_SAMPLES && (!best || rows.length > best.length)) best = rows;
+  }
+  if (best) return Math.round(median(best.map((x) => x[2])));
+  return Math.round((declaredTests(file) || 1) * specSecPerTest(file, db).sec);
+}
+
+/** The shard plan for a dispatch: `{ matrix: [{shard, total}…], shards?: [[unit…]…] }`
+ *  where a unit is a spec path or `{ file, shard: "j/k" }`, a piece of one fat
+ *  spec. Packed by time when the group is a plain file list: a spec expected
+ *  to outlast the even share is cut into ceil(expected / share) native-shard
+ *  pieces (at most MAX_PIECES, none under MIN_PIECE_SEC), then every unit goes longest-first onto the
+ *  least-loaded shard (LPT; a piece avoids a shard already holding a sibling
+ *  piece while it can). Ties on the path, so the plan is a pure function of
+ *  the group and the timings file. Count mode otherwise. Never more shards
+ *  than units. */
+export function shardPlan(group, shards, scripts, db = loadDb(path.join(ROOT, TIMINGS_FILE))) {
+  const p = planMatrix(group, shards, scripts);
+  if (p.error) return p;
+  const files = groupFiles(p.group, scripts);
+  if (!files) return { group: p.group, mode: "count", matrix: Array.from({ length: p.shards }, (_, i) => ({ shard: i + 1, total: p.shards })) };
+  const secs = new Map(files.map((f) => [f, expectedSec(f, db)]));
+  const share = [...secs.values()].reduce((a, b) => a + b, 0) / p.shards;
+  const units = [];
+  for (const f of files) {
+    const sec = secs.get(f);
+    const k = sec > share * 1.25 && p.shards > 1
+      ? Math.max(1, Math.min(MAX_PIECES, Math.ceil(sec / share), Math.floor(sec / MIN_PIECE_SEC))) : 1;
+    if (k === 1) units.push({ f, sec, unit: f });
+    else for (let j = 1; j <= k; j++) units.push({ f, sec: sec / k, unit: { file: f, shard: `${j}/${k}` } });
+  }
+  units.sort((a, b) => b.sec - a.sec || (a.f < b.f ? -1 : a.f > b.f ? 1 : 0)
+    || String(a.unit.shard || "").localeCompare(String(b.unit.shard || "")));
+  const total = Math.max(1, Math.min(p.shards, units.length));
+  const matrix = Array.from({ length: total }, (_, i) => ({ shard: i + 1, total }));
+  const load = new Array(total).fill(0);
+  const lists = Array.from({ length: total }, () => []);
+  const holds = Array.from({ length: total }, () => new Set());
+  for (const u of units) {
+    let k = -1;
+    for (let i = 0; i < total; i++) {
+      if (typeof u.unit !== "string" && holds[i].has(u.f)) continue;
+      if (k < 0 || load[i] < load[k]) k = i;
+    }
+    if (k < 0) { k = 0; for (let i = 1; i < total; i++) if (load[i] < load[k]) k = i; }
+    load[k] += u.sec;
+    lists[k].push(u.unit);
+    holds[k].add(u.f);
+  }
+  return { group: p.group, mode: "time", matrix, shards: lists, load: load.map((x) => Math.round(x)) };
+}
+
+/** What one shard runs, from the workflow's env: `{ runs: [{cmd, args}…], mode }`,
+ *  `{ empty: true }` for a packed shard with nothing to run, or `{ error }`. The
+ *  plan is text from whoever dispatched, so every unit is checked against the
+ *  group's own script before anything is spawned: the plain units run as one
+ *  run-playwright invocation, each piece as its own (`file --shard=j/k`). */
+export function runShardArgs({ group, plan, shard, total, workers, timeoutMs = 900000 }, scripts) {
+  const g = String(group || "").trim();
+  if (!browserGroups(scripts).includes(g)) return { error: `no browser group "test:${g}" in package.json` };
+  const i = Number(shard), n = Number(total);
+  if (!(Number.isInteger(i) && Number.isInteger(n) && i >= 1 && n >= 1 && i <= n)) return { error: `bad shard ${shard}/${total}` };
+  const w = parseWorkers(workers);
+  if (w.error) return w;
+  const flags = [`--timeout=${timeoutMs}`, ...(w.workers ? [`--workers=${w.workers}`] : [])];
+  let parsed = null;
+  if (plan != null && String(plan).trim() !== "") {
+    try { parsed = JSON.parse(String(plan)); } catch { return { error: "plan is not JSON" }; }
+  }
+  if (!parsed || !Array.isArray(parsed.shards)) {
+    return { runs: [{ cmd: "npm", args: ["run", `test:${g}`, "--", ...flags, `--shard=${i}/${n}`] }], mode: "count" };
+  }
+  const files = groupFiles(g, scripts);
+  if (!files) return { error: `test:${g} is not a plain file list; a packed plan cannot drive it` };
+  if (parsed.shards.length !== n) return { error: `plan has ${parsed.shards.length} shards, the matrix ${n}` };
+  const mine = parsed.shards[i - 1];
+  if (!Array.isArray(mine)) return { error: `shard ${i} has no list` };
+  const plain = [], pieces = [];
+  for (const u of mine) {
+    if (typeof u === "string" && SPEC_RE.test(u) && files.includes(u)) { plain.push(u); continue; }
+    const m = u && typeof u === "object" && typeof u.file === "string" && typeof u.shard === "string" ? PIECE_RE.exec(u.shard) : null;
+    if (m && SPEC_RE.test(u.file) && files.includes(u.file) && Number(m[1]) <= Number(m[2]) && Number(m[2]) <= MAX_PIECES) { pieces.push(u); continue; }
+    return { error: `shard ${i} lists a unit outside test:${g}: ${JSON.stringify(u).slice(0, 80)}` };
+  }
+  if (!plain.length && !pieces.length) return { empty: true, mode: "time" };
+  const runs = [];
+  if (plain.length) runs.push({ cmd: "node", args: ["tools/ci/run-playwright.mjs", ...plain, ...flags] });
+  for (const u of pieces) runs.push({ cmd: "node", args: ["tools/ci/run-playwright.mjs", u.file, ...flags, `--shard=${u.shard}`] });
+  return { runs, mode: "time" };
+}
+
+/** A run of THIS group on THIS branch for THIS sha that makes a new dispatch
+ *  pointless: live (queued / in progress) first, else the newest green one.
+ *  14 of 100 dispatches on 2026-10-10..14 repeated a branch+group within an
+ *  hour and the concurrency group cancelled the earlier run. Pure. */
+export function liveRun(runs, { branch, group, sha }) {
+  const mine = (runs || []).filter((r) => r.event === "workflow_dispatch" && r.head_branch === branch && r.head_sha === sha
+    && String(r.display_title || r.name || "").includes(`browser group ${group} `))
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id);
+  const live = mine.find((r) => r.status === "queued" || r.status === "in_progress" || r.status === "waiting");
+  if (live) return { run: live, kind: "live" };
+  const green = mine.find((r) => r.status === "completed" && r.conclusion === "success");
+  return green ? { run: green, kind: "green" } : null;
 }
 
 /** The run a dispatch created, when the API did not hand back its id: the
@@ -168,8 +324,9 @@ async function watch(runId, { interval, deadline }) {
 }
 
 /** Printed for `--help` / a missing group — never `not a group name: undefined`. */
-export const USAGE = `usage: node tools/ci/remote-group.mjs <group> [--shards N] [--gl llvmpipe|swiftshader] [--workers N] [--ref <branch>] [--no-wait] [--timeout <min>]
-       node tools/ci/remote-group.mjs --plan          # GROUP=/SHARDS= env (workflow step)
+export const USAGE = `usage: node tools/ci/remote-group.mjs <group> [--shards N] [--gl llvmpipe|swiftshader] [--workers N] [--ref <branch>] [--no-wait] [--force] [--timeout <min>]
+       node tools/ci/remote-group.mjs --plan          # GROUP=/SHARDS= env: print the shard plan JSON (what the dispatch sends)
+       node tools/ci/remote-group.mjs --run-shard     # GROUP=/PLAN=/SHARD=/TOTAL=/WORKERS= env (the workflow's shard step)
        node tools/ci/remote-group.mjs --watch <run-id>
        node tools/ci/remote-group.mjs --help`;
 
@@ -178,17 +335,28 @@ async function main() {
     console.log(USAGE);
     return 0;
   }
-  if (argv.includes("--plan")) {   // the workflow's plan step: validate, print matrix + workers
-    const allScripts = scripts();
-    const p = planMatrix(process.env.GROUP, process.env.SHARDS, allScripts);
+  if (argv.includes("--plan")) {   // the plan the dispatch would send, for a human or a test
+    const p = shardPlan(process.env.GROUP, process.env.SHARDS, scripts());
     if (p.error) { console.error("remote-group --plan: " + p.error); return 3; }
-    const gl = process.env.GL || process.env.APEX_GL || "llvmpipe";
-    const w = resolveWorkers(p.group, gl, process.env.WORKERS, allScripts);
-    if (w.error) { console.error("remote-group --plan: " + w.error); return 3; }
-    console.log(`matrix=${JSON.stringify(p.matrix)}`);
-    // browser-group.yml appends this to GITHUB_OUTPUT — shards use needs.plan.outputs.workers
-    console.log(`workers=${w.workers}`);
+    console.log(JSON.stringify({ matrix: p.matrix, ...(p.shards ? { shards: p.shards } : {}) }));
     return 0;
+  }
+  if (argv.includes("--run-shard")) {   // the workflow's shard step
+    const allScripts = scripts();
+    const gl = process.env.GL || process.env.APEX_GL || "llvmpipe";
+    const w = resolveWorkers(process.env.GROUP, gl, process.env.WORKERS, allScripts);
+    if (w.error) { console.error("remote-group --run-shard: " + w.error); return 3; }
+    const r = runShardArgs({ group: process.env.GROUP, plan: process.env.PLAN, shard: process.env.SHARD, total: process.env.TOTAL, workers: w.workers }, allScripts);
+    if (r.error) { console.error("remote-group --run-shard: " + r.error); return 3; }
+    if (r.empty) { say(`shard ${process.env.SHARD}/${process.env.TOTAL}: the plan gave it no specs (fewer specs than shards) — nothing to run`); return 0; }
+    let code = 0;
+    for (const u of r.runs) {   // every unit runs even after a red, so one shard reports all its failures
+      say(`shard ${process.env.SHARD}/${process.env.TOTAL} (${r.mode}): ${u.cmd} ${u.args.join(" ")}`);
+      const run = spawnSync(u.cmd, u.args, { cwd: ROOT, stdio: "inherit", env: process.env });
+      const st = run.status == null ? 1 : run.status;
+      if (st !== 0 && code === 0) code = st;
+    }
+    return code;
   }
   const interval = Math.max(10, +opt("--interval", 30)) * 1000;
   const tmin = +opt("--timeout", 0);
@@ -201,7 +369,7 @@ async function main() {
     console.error(USAGE);
     return 3;
   }
-  const p = planMatrix(group, opt("--shards", "4"), scripts());
+  const p = shardPlan(group, opt("--shards", "4"), scripts());
   if (p.error) { say("refused: " + p.error); return 3; }
   const gl = opt("--gl", "llvmpipe");
   if (!["llvmpipe", "swiftshader"].includes(gl)) { say(`refused: --gl is llvmpipe or swiftshader, not ${gl}`); return 3; }
@@ -222,11 +390,24 @@ async function main() {
     say(`refused: origin/${branch} predates ${WORKFLOW} — merge the deploy branch in (sync-pr.mjs), or dispatch ci.yml with group: ${p.group} (the whole CI workflow, slower to start)`);
     return 3;
   }
+  // A live or green run of this group on this exact sha answers the question already.
+  const sha = git("rev-parse", "--verify", "-q", `origin/${branch}`) || git("rev-parse", "HEAD");
+  if (!argv.includes("--force")) {
+    const r = api("GET", `actions/workflows/${WORKFLOW}/runs?event=workflow_dispatch&branch=${encodeURIComponent(branch)}&per_page=20`);
+    const have = liveRun(r.json?.workflow_runs, { branch, group: p.group, sha });
+    if (have?.kind === "live") {
+      say(`${p.group} on ${branch} @${sha.slice(0, 9)} is already ${have.run.status} — watching run ${have.run.id} instead of dispatching again (--force to re-run)`);
+      if (argv.includes("--no-wait")) { say(`watch: node tools/ci/remote-group.mjs --watch ${have.run.id}`); return 0; }
+      return watch(have.run.id, { interval, deadline });
+    }
+    if (have?.kind === "green") { say(`= group passed — ${p.group} on ${branch} @${sha.slice(0, 9)} is already green: ${have.run.html_url} (--force to re-run)`); return 0; }
+  }
   const since = Date.now();
+  const plan = JSON.stringify({ matrix: p.matrix, ...(p.shards ? { shards: p.shards } : {}) });
   const d = api("POST", `actions/workflows/${WORKFLOW}/dispatches`, {
     ref: branch,
     // Always pass resolved workers (GL + group aware) so empty UI input still gets the plan default.
-    inputs: { group: p.group, shards: String(p.shards), gl, workers: w.workers },
+    inputs: { group: p.group, plan, gl, workers: w.workers },
   });
   if (d.error) { say(`= group unknown — dispatch failed: ${d.error}`); return 3; }
   let runId = d.json?.workflow_run_id || null;
@@ -236,7 +417,7 @@ async function main() {
     runId = pickRun(r.json?.workflow_runs, { branch, group: p.group, sinceMs: since })?.id || null;
   }
   if (!runId) { say("= group unknown — dispatched, but no run appeared within 60 s; check the Actions tab"); return 3; }
-  say(`dispatched ${p.group} on ${branch} (${p.shards} shards, ${gl}, ${w.workers} workers) — run ${runId}`);
+  say(`dispatched ${p.group} on ${branch} (${p.matrix.length} shards by ${p.mode}${p.load ? `, expected s/shard ${p.load.join("/")}` : ""}, ${gl}, ${w.workers} workers) — run ${runId}`);
   if (argv.includes("--no-wait")) { say(`watch: node tools/ci/remote-group.mjs --watch ${runId}`); return 0; }
   return watch(runId, { interval, deadline });
 }

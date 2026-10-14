@@ -846,3 +846,39 @@ test("onversionchange drops the memoised IndexedDB handle, so the next flush reo
   assert.equal(idb.opens, 2, "the memo was dropped and the store was opened again");
   assert.equal(JSON.parse(idb.rows.get("apex26.career.driver.0")).money, 5);
 });
+
+
+test("failed raw deletion replaces an older set and retries the deletion", () => {
+  for (const priorSet of [false, true]) {
+    const { store, disk, fail, sandbox } = load("SecurityError");
+    disk.set("apex26.gfxHigh", "1");
+    sandbox.localStorage.removeItem = (k) => { if (disk.has("apex26.deletionBlocked")) throw Object.assign(new Error("blocked"), { name: "SecurityError" }); disk.delete(k); };
+    disk.set("apex26.deletionBlocked", "1");
+    if (priorSet) store.rawSet("gfxHigh", "0");
+    assert.equal(store.rawDel("gfxHigh"), false);
+    assert.equal(store.raw("gfxHigh"), null);
+    assert.equal(store.writeFailed(), "SecurityError");
+    disk.delete("apex26.deletionBlocked"); fail(null);
+    assert.equal(store.retryFailed().retried, 1);
+    assert.equal(disk.has("apex26.gfxHigh"), false);
+    assert.equal(store.writeFailed(), null);
+  }
+});
+
+test("raw failures retain touch comfort and foreign writes supersede pending session values", () => {
+  const { store, sandbox, disk, onStorage } = load("QuotaExceededError");
+  vm.runInContext(readFileSync(join(ROOT, "js/camera/cam-comfort.js"), "utf8"), sandbox);
+  const comfort = vm.runInContext("CamComfort", sandbox);
+  assert.equal(comfort.boot(store, { maxTouchPoints: 1 }, {}), "on");
+  assert.equal(comfort.active(store), true);
+  disk.set("apex26.camComfortPref", "off");
+  onStorage(evt("apex26.camComfortPref", "off"));
+  assert.equal(comfort.active(store), false);
+  assert.equal(store.retryFailed().retried, 0, "a foreign winner must not be overwritten by a stale retry");
+  sandbox.SettingsDefaults = { has: (k) => k === "gfxHigh", get: () => "0" };
+  sandbox.localStorage.removeItem = () => { throw Object.assign(new Error("blocked"), { name: "SecurityError" }); };
+  store.rawDel("gfxHigh");
+  assert.equal(store.raw("gfxHigh"), "0", "a tombstone uses the shipped raw default");
+  onStorage(evt(null, null));
+  assert.equal(store.retryFailed().retried, 0);
+});

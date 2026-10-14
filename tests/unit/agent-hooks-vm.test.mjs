@@ -280,3 +280,44 @@ test("a short jump() across the line is not banked twice and counts no lap", asy
   lt(Math.abs(dProg - dS), 1e-6, `prog follows s exactly (dProg ${dProg}, dS ${dS})`);
   assert.equal(p1.lap, p0.lap, "a teleport across the line is not a lap");
 });
+
+ test("world rejects invalid horizons before changing its delta sequence", async () => {
+  await load();
+  const a = g.apex.world({ detail: "full" });
+  for (const horizonS of [NaN, Infinity, "abc", null, 0, -1])
+    assert.equal(g.apex.world({ detail: "full", horizonS }).error, "BadArgumentError");
+  assert.equal(g.apex.world({ detail: "full" }).seq, a.seq + 1);
+});
+ test("rivals across the line keep nearby road gaps with differing standings", async () => {
+  await load();
+  const p = g.G.player, L = g.G.track.total, c = g.G.cars.find(c => !c.isPlayer);
+  const id = c.id != null ? c.id : g.G.cars.indexOf(c);
+  for (const ahead of [true, false]) {
+    p.lap = ahead ? 1 : 0; c.lap = ahead ? 0 : 1;
+    p.s = ahead ? L - 5 : 5; c.s = ahead ? 5 : L - 5;
+    p.prog = p.lap * L + p.s; c.prog = c.lap * L + c.s;
+    const r = g.apex.world({ detail: "full" }).rivals.find(r => r.id === id);
+    assert.equal(r.rel, ahead ? "ahead" : "behind"); assert.equal(r.gapM, 10);
+  }
+});
+ test("aiPlace short line teleport does not count a lap; physical crossing does", async () => {
+  await load("monza", .2, 0);
+  const idx = g.G.cars.findIndex(c => !c.isPlayer), c = g.G.cars[idx], L = g.G.track.total;
+  g.apex.aiPlace(idx, (L - 6) / L, 0, 0); g.apex.step(1 / 60);
+  const lap = c.lap;
+  g.apex.aiPlace(idx, 0, 0, 0); g.apex.step(1 / 60);
+  assert.equal(c.lap, lap);
+  g.apex.aiPlace(idx, (L - 1) / L, 60, 0); g.apex.step(.1);
+  assert.equal(c.lap, lap + 1);
+});
+ test("rollout restores input and world delta cache on sampling exceptions", async () => {
+  await load();
+  const input = { steer: .1, throttle: true }; g.G._testInput = input;
+  const a = g.apex.world({ detail: "brief" });
+  const sample = g.ctx.Tracks.sample;
+  g.ctx.Tracks.sample = () => { throw new Error("injected sample"); };
+  try { assert.throws(() => g.apex.rollout({ seconds: .1, input: { brake: true } }), /injected sample/); }
+  finally { g.ctx.Tracks.sample = sample; }
+  assert.equal(g.G._testInput, input);
+  assert.equal(g.apex.world({ detail: "brief" }).seq, a.seq + 1);
+});

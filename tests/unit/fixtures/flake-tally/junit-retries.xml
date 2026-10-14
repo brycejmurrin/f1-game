@@ -1,0 +1,8 @@
+<testsuites id="" name="" tests="4" failures="2" time="10">
+<testsuite name="specs/smoke.spec.js" timestamp="2026-10-13T11:00:00Z" tests="4" time="10">
+<testcase name="flaky one" classname="specs/smoke.spec.js" time="5.0"><failure message="boom">x</failure></testcase>
+<testcase name="flaky one" classname="specs/smoke.spec.js" time="1.2"/>
+<testcase name="hard fail" classname="specs/smoke.spec.js" time="3.0"><failure message="still">y</failure></testcase>
+<testcase name="ok" classname="specs/smoke.spec.js" time="0.5"/>
+</testsuite>
+</testsuites>

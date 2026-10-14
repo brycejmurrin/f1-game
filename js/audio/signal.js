@@ -142,11 +142,13 @@ var GameAudioSignal = (function () {
 
     /* ONE shared white-noise buffer for the one-shots, instead of a fresh
        allocation per hit. noiseBuf() fills every sample with Math.random() on the
-       MAIN THREAD, and the one-shots fire while driving: rumble() is
-       noise(0.09, 0.05, 320) throttled to every 0.07 s over a kerb, so a kerb
-       strike was ~14 allocations a second at ~4,800 floats each. thunder() was
-       worse — three calls totalling ~2.9 s, about 140k Math.random() calls in one
-       synchronous burst, mid-race, at an unpredictable moment.
+       MAIN THREAD, and the one-shots fire while driving: rumble() was
+       noise(0.09, 0.05, 320) throttled to every 0.07 s over a kerb (~14
+       allocations a second at ~4,800 floats each) until Radio r9 replaced that
+       path with a continuous speed-keyed loop (engine.js mutes the one-shot
+       while onKerb). thunder() was worse — three calls totalling ~2.9 s, about
+       140k Math.random() calls in one synchronous burst, mid-race, at an
+       unpredictable moment.
 
        White noise is stationary, so one buffer played from a RANDOM OFFSET is
        indistinguishable from a freshly-generated one — and two hits in a row

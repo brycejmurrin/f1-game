@@ -376,7 +376,7 @@ compound's tread class — `wetTread` in the Parts catalog, absent = 0 = slick:
 | condition | slick | intermediate (`wetTread: 1`) | full wet (`wetTread: 2`) |
 |---|---|---|---|
 | dry / overcast / fog | 1 | 1 | 1 |
-| `wet` | 0.82 | 0.94 | 0.99 |
+| `wet` | 0.82 | 0.94 | 0.88 |
 | `rain` | 0.72 | 0.86 | 0.97 |
 
 **The slick column is the old weather-only `gripMult()`, value for value.** Until
@@ -393,6 +393,22 @@ compounds gain, nothing else moves, and the characterization baselines stay
 honest instead of being re-cut. `headless-api.spec.js` asserting `gripMult ===
 0.82` in the wet is the canary — the default compound is `medium`, tread 0, so
 if that number ever has to change, the table is wrong.
+
+**The inter owns the damp (2026-10-14).** The wet row used to give the full
+wet 0.99 against the inter's 0.94, so the full wet out-gripped the inter at every
+wetness and `TyreModel.treadFor`'s inter band (0.25–0.72) sent cars to the
+slower tyre. Pirelli's rule is the reverse — inters are quicker on a damp or
+drizzly track, full wets only in standing water — so the full wet's wet-row
+cell is 0.88. Through `weatherGrip`'s lerp the inter/full crossover is wetness
+~0.68 on grip alone and ~0.79 with the catalog's dry cornering cost (0.94 vs
+0.90), bracketing treadFor's 0.72; slick/inter with that cost crosses at ~0.24.
+`tests/unit/wet-grip-ladder.test.mjs` pins the ordering. The table cannot say
+"a full wet is worse than an inter on a near-dry road" by itself — the dry knot
+is 1 for every tread inside `weatherGrip` — so that half lives in the catalog's
+stat cost. KNOWN GAP: `gripMult` maps `tread == null` (wear-off AI) to the
+full-wet column, which is no longer "the right tyre" below wetness ~0.68; it
+should read `TyreModel.treadFor(raceWeather, trackWetness())` instead (a
+`js/game.js` change).
 
 ### The three call shapes
 

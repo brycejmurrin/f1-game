@@ -200,38 +200,58 @@ const GLXChunked = (function () {
 
     function _occInit() {
       if (_occProg || _occFailed) return !!_occProg;
+      let prog = null, vao = null, vb = null, ib = null;
+      const shaders = [];
       try {
         const mk = (type, src) => {
-          const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh);
+          const sh = gl.createShader(type);
+          if (!sh) throw new Error("shader allocation");
+          shaders.push(sh);
+          gl.shaderSource(sh, src); gl.compileShader(sh);
           if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh) || "compile");
           return sh;
         };
-        const prog = gl.createProgram();
+        prog = gl.createProgram();
+        if (!prog) throw new Error("program allocation");
         gl.attachShader(prog, mk(gl.VERTEX_SHADER, OCC_VS));
         gl.attachShader(prog, mk(gl.FRAGMENT_SHADER, OCC_FS));
         gl.bindAttribLocation(prog, 0, "aCorner");
         gl.linkProgram(prog);
         if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) || "link");
-        _occProg = prog;
-        _occU = { vp: gl.getUniformLocation(prog, "uViewProj"),
+        for (const sh of shaders) gl.deleteShader(sh);
+        shaders.length = 0;
+        const uniforms = { vp: gl.getUniformLocation(prog, "uViewProj"),
                   mn: gl.getUniformLocation(prog, "uMin"), mx: gl.getUniformLocation(prog, "uMax") };
         // Unit cube: 8 corners as 0/1 selectors, 36 indices. The vertex shader
         // mixes them between the chunk bounds, so the geometry is static.
         const corners = new Float32Array([0,0,0, 1,0,0, 1,1,0, 0,1,0, 0,0,1, 1,0,1, 1,1,1, 0,1,1]);
         const cubeIdx = new Uint16Array([0,1,2, 0,2,3, 5,4,7, 5,7,6, 4,0,3, 4,3,7,
                                          1,5,6, 1,6,2, 3,2,6, 3,6,7, 4,5,1, 4,1,0]);
-        _occVao = gl.createVertexArray();
-        gl.bindVertexArray(_occVao);
-        const vb = gl.createBuffer();
+        vao = gl.createVertexArray();
+        if (!vao) throw new Error("vertex array allocation");
+        gl.bindVertexArray(vao);
+        vb = gl.createBuffer();
+        if (!vb) throw new Error("vertex buffer allocation");
         gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, corners, gl.STATIC_DRAW);
         gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-        const ib = gl.createBuffer();
+        ib = gl.createBuffer();
+        if (!ib) throw new Error("index buffer allocation");
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cubeIdx, gl.STATIC_DRAW);
         gl.bindVertexArray(null);
+        core.invalidateVAO();
+        // Publish only complete setup; the VAO retains its two buffer bindings.
+        _occProg = prog; _occU = uniforms; _occVao = vao;
         _occStats.supported = true;
         Log.info("gfx", "GLX occlusion queries ready");
         return true;
       } catch (e) {
+        gl.bindVertexArray(null);
+        core.invalidateVAO();
+        if (ib) gl.deleteBuffer(ib);
+        if (vb) gl.deleteBuffer(vb);
+        if (vao) gl.deleteVertexArray(vao);
+        if (prog) gl.deleteProgram(prog);
+        for (const sh of shaders) gl.deleteShader(sh);
         _occFailed = true; _occStats.supported = false;
         Log.warn("gfx", "GLX occlusion queries unavailable: " + ((e && e.message) || e));
         return false;
@@ -339,20 +359,44 @@ const GLXChunked = (function () {
       // than concatenating on the CPU first: that keeps the transient peak at
       // one bucket's index array, exactly as before. On a ~5 M-vert street
       // circuit the whole-mesh array would be tens of MB held at once.
+      // C-P7 (hunt 4): half of the Uint16 chunk ranges start at a byte offset
+      // that is not a multiple of 4. ANGLE-Metal's kIndexBufferOffsetAlignment
+      // is 4, so convertIndexBuffer copies the WHOLE buffer once per (buffer,
+      // modulo) and draws those chunks from the copy (+232/+235 KB on montreal,
+      // plus a first-draw GPU compute conversion while a pass is open). After
+      // any chunk that would leave the next start on an odd index, append one
+      // degenerate triangle (0,0,0) to THIS range so every byteOffset is
+      // 4-byte aligned AND neighbours stay contiguous. The plain drawElements
+      // merge sums counts from the first offset (no gap check); a pad sitting
+      // BETWEEN ranges made that path submit different indices than multi-draw.
+      // A zero-area triangle draws no pixels. Uint32 is already 4-byte.
+      // Default ON; apex26.glxChunkAlign="0" restores the old unaligned ranges.
+      let align = true;
+      try { if (localStorage.getItem("apex26.glxChunkAlign") === "0") align = false; } catch (_) { /* no storage: align */ }
+      const needAlign = !big && align;
       let total = 0;
-      buckets.forEach((bk) => { total += bk.idx.length; });
+      buckets.forEach((bk) => {
+        total += bk.idx.length;
+        if (needAlign && (total % 2 !== 0)) total += 3;   // pad after this chunk
+      });
       const ibo = gl.createBuffer();
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, total * BPI, gl.STATIC_DRAW);
       const chunks = [];
       let off = 0;                             // running offset, in INDICES
+      const pad = needAlign ? new Uint16Array([0, 0, 0]) : null;
       buckets.forEach((bk) => {
+        const start = off;
         const arr = new IndexArray(bk.idx);
         bk.idx = null;   // uploaded below — drop the growable JS array now so buckets
                          // don't all stay resident while the rest are converted
         gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, off * BPI, arr);
-        chunks.push({ byteOffset: off * BPI, count: arr.length, indexType, min: bk.mn, max: bk.mx });
         off += arr.length;
+        if (needAlign && (off % 2 !== 0)) {
+          gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, off * BPI, pad);
+          off += 3;
+        }
+        chunks.push({ byteOffset: start * BPI, count: off - start, indexType, min: bk.mn, max: bk.mx });
       });
       gl.bindVertexArray(null);
       core.invalidateVAO();   // keep glx.js's VAO bind cache in sync with the direct bind above
