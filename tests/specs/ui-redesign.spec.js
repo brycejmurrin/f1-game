@@ -378,7 +378,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // pages were consolidated — the unit list in ui-sheets-audit.test.mjs has it.
   expect(settings.doorIds).toEqual([
     "pm-open-controls", "pm-open-driving", "pm-open-display",
-    "pm-open-appearance", "pm-advanced", "pm-audio", "pm-open-files",
+    "pm-open-appearance", "pm-open-a11y", "pm-advanced", "pm-audio", "pm-open-files",
   ]);
   expect(settings.allPainted).toBe(true);
   expect(settings.overflowX).toBeLessThanOrEqual(1);
