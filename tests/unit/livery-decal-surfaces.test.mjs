@@ -72,7 +72,13 @@ function posedFlapTris(fg) {
 test("Car3D.wingBand places the band on the flap's POSED skin, not its design chord", () => {
   assert.equal(typeof Car3D.wingBand, "function", "Car3D.wingBand is gone — the band will float again");
   for (const lvl of [0, 1, 2, 3, 4]) {
-    const style = Car3D.aeroStyleOf({});
+    // Force the non-DRS path: 2026 defaults now stamp drs:1 on a bare recipe,
+    // and that path is covered by the next test ("with a DRS package…").
+    const style = Car3D.aeroStyleOf({
+      aero: 1,
+      _visual: { aero: { lvl, beam: 0, drs: 0, board: 0 } },
+    });
+    assert.equal(style.drs || 0, 0, `level ${lvl}: probe must stay off the DRS path`);
     const B = Car3D.wingBand(lvl, style);
     assert.ok(B && B.stations.length > 1, `level ${lvl}: no band`);
     // The TOPMOST rear element is the one the camera sees; at max downforce

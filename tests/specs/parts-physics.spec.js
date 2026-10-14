@@ -1334,7 +1334,7 @@ test.describe("Parts module — visual recipes", () => {
       // Neutral recipes = exactly what the build*Parts() merges produce for a
       // recipe-less tier-1 car, so "no knob set" must equal the untouched build.
       const NEUTRAL = {
-        aero: { lvl: 2, beam: 0, drs: 0, vane: 1,
+        aero: { lvl: 2, beam: 0, drs: 1, board: 1, vane: 1,
           frontSweep: 0.04, frontTaper: 0.98, frontRise: 0.04,
           rearSweep: 0.03, rearTaper: 0.98, floorEdge: 1, floorCut: 0.04, diffuserRise: 1 },
         engine: { in: 1, snork: 0, twin: 0, inlet: 1, outlet: 1, podWidth: 1,

@@ -1,6 +1,6 @@
 ---
 name: slim-bloat
-description: "Use when files, skills, docs, or the tree have grown too large for agents — fat SKILL.md, saturated size ratchet, dead or duplicate code, stale comments, extract/split candidates, or \"simplify this / too much context\". Claude-simplify analog. Not for physics tune, circuit accuracy, CSS restructure (css-play), or pre-push verify (check-changes)."
+description: "Use when files, docs or the tree have grown too large for agents — saturated size ratchet, dead or duplicate code, stale comments, extract/split candidates, or \"simplify this / too much context\". Not physics tune, circuit accuracy, CSS restructure (css-play), skill hygiene (agent-config) or pre-push verify (check-changes)."
 ---
 
 # Cut agent bloat (Claude-simplify for Apex 26)
@@ -34,7 +34,8 @@ range that opens mid-function exits 1 on a bare `SyntaxError` that reads like a
 broken file rather than a badly chosen range.
 
 Spawn `bloat-auditor` with a **named scope** (one file, one skill, or
-`HEAD` / last-touched). It returns `BLOAT` rows only. The parent edits and
+`HEAD` / last-touched). It returns `BLOAT` rows only. Seed its scope with `prior-art-scout`
+(rejected / already-fixed items) and run `finding-verifier` on dead-code rows before the carve. The parent edits and
 locksteps; if `tools/manifest.cjs` changed, run `node tools/gen/gen-shell.mjs`
 ([shell/cache](../check-changes/references/bump.md)).
 
@@ -52,6 +53,7 @@ locksteps; if `tools/manifest.cjs` changed, run `node tools/gen/gen-shell.mjs`
 5. **Never "simplify" physics, the timestep, or `updateCar`/`render()`.**
    See do-not.md.
 
+Editing a skill's description, routing queries, an agent, a hook or AGENTS.md (budgets, the routing A/B) → **agent-config**.
 CSS/DOM count work → **css-play** (`references/restructure.md`). Pre-push →
 **check-changes** / `verify-agent`.
 

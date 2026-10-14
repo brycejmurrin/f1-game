@@ -1006,3 +1006,122 @@ test('an audition owns its utterance: stop cancels it and an old callback cannot
   assert.equal(q.synth.calls.filter(c => c.m === 'cancel').length,cancels+1);
   assert.equal(annStops,2);
 });
+
+// ── Engineer key-up / key-down squelch + seeded band-pass ───────────────────
+
+test("squelchPlan puts a 40–80 ms burst at the start and end of an engineer line", () => {
+  const p = RV.squelchPlan({ enabled: true, soundOn: true, speaker: "radio", state: "race",
+    text: "box box box", secs: 1.2, seed: 7, volume: 0.8 });
+  assert.equal(p.play, true);
+  assert.ok(p.openMs >= RV.SQUELCH_MS_MIN && p.openMs <= RV.SQUELCH_MS_MAX, `open ${p.openMs}`);
+  assert.ok(p.closeMs >= RV.SQUELCH_MS_MIN && p.closeMs <= RV.SQUELCH_MS_MAX, `close ${p.closeMs}`);
+  assert.equal(p.atOpen, 0);
+  assert.equal(p.atClose, 1.2);
+  assert.deepEqual(RV.squelchPlan({ enabled: true, soundOn: true, speaker: "radio", state: "race",
+    text: "box box box", secs: 1.2, seed: 7, volume: 0.8 }), p, "same seed is the same plan");
+});
+
+test("squelchPlan is absent with TEAM RADIO off, vol 0, a pause, results, or a non-engineer channel", () => {
+  const base = { enabled: true, soundOn: true, speaker: "radio", state: "race", text: "box", secs: 1, seed: 1, volume: 0.8 };
+  assert.equal(RV.squelchPlan({ ...base, enabled: false }).reason, "off");
+  assert.equal(RV.squelchPlan({ ...base, soundOn: false }).reason, "master-off");
+  assert.equal(RV.squelchPlan({ ...base, volume: 0 }).reason, "silent");
+  assert.equal(RV.squelchPlan({ ...base, paused: true }).reason, "paused");
+  assert.equal(RV.squelchPlan({ ...base, state: "results" }).reason, "not-racing");
+  assert.equal(RV.squelchPlan({ ...base, kind: "coach", speaker: "" }).reason, "not-radio");
+  assert.equal(RV.squelchPlan({ ...base, kind: "warning", speaker: "" }).reason, "not-radio");
+  assert.equal(RV.squelchPlan({ ...base, kind: "comm", speaker: "" }).reason, "not-radio");
+  const lite = RV.squelchPlan({ ...base, mobile: true });
+  assert.equal(lite.play, true, "mobile still schedules — the card sting is not this layer");
+  assert.equal(lite.lite, true);
+});
+
+test("radioBand is a light 300–3400 Hz pair and is deterministic for a seed", () => {
+  const a = RV.radioBand(42), b = RV.radioBand(42), c = RV.radioBand(43);
+  assert.deepEqual(a, b);
+  assert.notDeepEqual(a.lo + "," + a.hi + "," + a.q, c.lo + "," + c.hi + "," + c.q);
+  assert.ok(a.lo >= RV.RADIO_LO - 20 && a.lo <= RV.RADIO_LO + 20, `lo ${a.lo}`);
+  assert.ok(a.hi >= RV.RADIO_HI - 40 && a.hi <= RV.RADIO_HI + 40, `hi ${a.hi}`);
+  assert.equal(a.freq, Math.round(Math.sqrt(a.lo * a.hi)));
+  assert.ok(a.q >= 0.32 && a.q <= 0.40, `q ${a.q}`);
+});
+
+test("an engineer say schedules open and close; a spotter cut kills the close", async () => {
+  const { RV: R, G } = load({ stored: { radioVoice: true } });
+  const v = R.create(G);
+  assert.equal(v.say("BOX BOX BOX", 3, "info"), true);
+  await flush();
+  const s = v.debug().squelch;
+  assert.ok(s && s.play, "engineer line arms the squelch");
+  assert.equal(s.events.join(","), "open,close");
+  assert.ok(s.fired.includes("open"), "key-up fires with the words (lead 0)");
+  assert.ok(!s.fired.includes("close"), "key-down is still waiting on the line");
+  assert.equal(s.cut, false);
+  assert.equal(v.yieldToSpotter(), true);
+  const after = v.debug().squelch;
+  assert.equal(after.cut, true, "spotter interrupt ends the squelch");
+  assert.ok(!after.fired.includes("close"), "the scheduled close must not land after the cut");
+});
+
+test("TEAM RADIO off does not schedule a squelch — ENGINEER NORMAL cards stay as they were", () => {
+  const { RV: R, G } = load();   // radioVoice ships OFF
+  const v = R.create(G);
+  assert.equal(v.say("BOX BOX BOX", 3, "info"), false);
+  assert.equal(v.debug().squelch, null);
+  assert.equal(R.squelchPlan({ enabled: false, soundOn: true, speaker: "radio", state: "race",
+    text: "box box", secs: 1, seed: 1 }).play, false);
+});
+
+test("a coach line is spoken but does not get a radio squelch", async () => {
+  const { RV: R, G } = load({ stored: { radioVoice: true } });
+  const v = R.create(G);
+  assert.equal(v.say("Brake a little earlier here", 3, "coach"), true);
+  await flush();
+  const s = v.debug().squelch;
+  assert.equal(s.play, false);
+  assert.equal(s.reason, "not-radio");
+});
+
+function fakeAudio() {
+  const created = { filt: 0, src: 0, gain: 0 };
+  const dest = {};
+  return {
+    created, destination: dest, currentTime: 0, sampleRate: 44100, state: "running",
+    createBiquadFilter() {
+      created.filt++;
+      return { type: "", frequency: { value: 0 }, Q: { value: 0 }, connect() { return this; }, disconnect() {} };
+    },
+    createGain() {
+      created.gain++;
+      return {
+        gain: { value: 0.0001, cancelScheduledValues() {}, setValueAtTime() {},
+          linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} },
+        connect() { return this; }, disconnect() {},
+      };
+    },
+    createBufferSource() {
+      created.src++;
+      return { buffer: null, connect() {}, disconnect() {}, start() {}, stop() {} };
+    },
+    createBuffer(_ch, len, sr) {
+      return { sampleRate: sr, getChannelData: () => new Float32Array(len) };
+    },
+  };
+}
+
+test("squelch reuses a two-voice band-pass pool; a second line does not allocate new filters", async () => {
+  const actx = fakeAudio();
+  const { RV: R, G, ctx } = load({ stored: { radioVoice: true } });
+  ctx.window.RadioSquelchCtx = actx;
+  const v = R.create(G);
+  assert.equal(v.say("BOX BOX BOX", 3, "info"), true);
+  await flush();
+  assert.equal(actx.created.filt, 2, "pool of two band-pass nodes");
+  assert.ok(actx.created.src >= 1, "open burst used a BufferSource");
+  const srcAfterFirst = actx.created.src;
+  assert.equal(v.say("TYRES AT 50%", 3, "info"), true);
+  await flush();
+  assert.equal(actx.created.filt, 2, "filters are reused, not rebuilt per line");
+  assert.ok(actx.created.src > srcAfterFirst, "BufferSource is one-shot: a new one per burst");
+  assert.equal(v.debug().squelch.pool, 2);
+});

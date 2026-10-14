@@ -23,14 +23,20 @@ const CarMaterials = (function () {
     satin: 26, chrome: 27, matte: 28, carbon: 31, brushed: 29, pearl: 30,
   });
   const DARK   = [0.05, 0.05, 0.05];
-  const CARBON = [0.07, 0.07, 0.08];
+  // Deeper resin base so the shader weave (CarMaterialShade.CARBON) reads at
+  // garage and near-track distance instead of flat charcoal paint.
+  const CARBON = [0.055, 0.056, 0.062];
   const VISOR  = [0.08, 0.08, 0.09];          // tinted visor
   const PANEL  = [0.82, 0.82, 0.86];          // matte sponsor / number plate
   const TYRE   = [0.06, 0.06, 0.07];
   const RIM    = [0.11, 0.11, 0.13];
   const HUB    = [0.28, 0.28, 0.31];
   const INTAKE = [0.03, 0.03, 0.04];          // radiator inlet void
-  const HALO   = [0.17, 0.17, 0.19];          // brushed-titanium cockpit-protection hoop
+  // Cooler / brighter titanium: the metal env lobe (CarMaterialShade.METAL) needs
+  // enough albedo for the halo and exhaust tips to read at garage distance.
+  const HALO   = [0.22, 0.225, 0.245];
+  // Exhaust tip / heat-shield metal (optional palette; car3d may still inline).
+  const EXHAUST = [0.14, 0.13, 0.12];
   const TYRE_BAND     = { 0: [0.92, 0.92, 0.90], 1: [0.85, 0.10, 0.08], 2: [0.95, 0.15, 0.05] };
   const BRAKE_CALIPER = { 0: null, 1: null, 2: [0.75, 0.08, 0.05] };
   const TCAM_IDS = Object.freeze(["team", "auto", "black", "yellow"]);
@@ -76,9 +82,13 @@ const CarMaterials = (function () {
     }
   }
 
+  // Shade contract (carbon / gloss / matte / metal) — see car-material-shade.js.
+  // Re-exported so Car3D and tests reach one table; shaders stay hand-ported.
+  const SHADE = (typeof CarMaterialShade !== "undefined") ? CarMaterialShade : null;
+
   return {
-    SURFACES, FINISH_SURFACE,
-    DARK, CARBON, VISOR, PANEL, TYRE, RIM, HUB, INTAKE, HALO,
+    SURFACES, FINISH_SURFACE, SHADE,
+    DARK, CARBON, VISOR, PANEL, TYRE, RIM, HUB, INTAKE, HALO, EXHAUST,
     TYRE_BAND, BRAKE_CALIPER,
     TCAM_IDS, tcamColour,
     smoothSkin, applyBodySplit, applyFinish,

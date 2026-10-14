@@ -79,9 +79,32 @@
       // groundPatch wants a vec3; these are flat slabs of bare earth, not grass.
       const slab = (w, d) => [w, 0.16, d];
 
-      // A single olive: short, wide, never in a rank.
-      const olive = (k, side, dist, h) =>
+      // Camera corridor: scenery survey orbit is dist 45 / az 45 (eye ~15–28 m
+      // past the road edge on +1). Chase sits closer. Hot fracs clear further
+      // so olives/palms never fill the car→orbit wedge (survey f17 / f83).
+      const CAM_NEAR = 52;
+      const ORBIT_HOT = 70;
+      const camHot = (k) => {
+        const f = ((k / n) % 1 + 1) % 1;
+        // f17 Michelin + T1 approach, f83 Peluqui / Angel Nieto, S/F orbit
+        return (f >= 0.05 && f <= 0.26) || (f >= 0.68 && f <= 0.92) ||
+               f <= 0.04 || f >= 0.96;
+      };
+      // Clear the full car→orbit wedge on hot fracs (both sides — olives on
+      // -1 still fill the f17 frame). Quiet fracs only need the +1 chase band.
+      const blocksOrbitView = (side, dist, k) => {
+        if (camHot(k)) return dist < (side === 1 ? ORBIT_HOT : 62);
+        return side === 1 && dist < 40;
+      };
+      // Tall palms need more lateral room than a short olive crown.
+      const blocksPalmView = (side, dist, k) =>
+        dist < (camHot(k) ? (side === 1 ? 78 : 64) : (side === 1 ? 56 : CAM_NEAR));
+
+      // A single olive: short, wide, never in a rank — and never in the orbit wedge.
+      const olive = (k, side, dist, h) => {
+        if (blocksOrbitView(side, dist, k)) return;
         tree(k, side, dist, h, hash(k * 7 + dist) < 0.5 ? OLIVE : OLIVE_D);
+      };
 
       // Scrub that never argues with the guard. Jerez's infield folds back on
       // itself, so a scatter written as a flat distance walks onto tarmac in
@@ -90,6 +113,7 @@
       const scrub = (k, side, dist, col) => {
         for (let j = 0; j < 4; j++) {
           const d = dist + j * 12;
+          if (blocksOrbitView(side, d, k)) continue;
           const s = ((k / n) % 1 + 1) % 1;
           if (side === -1 && s >= 0.286 - drySackEnd && s <= 0.326 + drySackEnd &&
               d >= drySackInner && d <= drySackOuter) continue;
@@ -239,8 +263,11 @@
         place(k, 1, 20, [2.6, 2.6, 6.0],
           hash(i * 7) < 0.5 ? [0.72, 0.70, 0.66] : [0.64, 0.62, 0.58]);
       }
-      palm(K(sl(0.0060)), 1, 22, 12, OLIVE_D);             // paddock gate
-      palm(K(sl(0.0180)), 1, 22, 11, OLIVE);
+      // Paddock palms past the chase/orbit wedge (was gap 22 — filled f00–f08).
+      if (!blocksPalmView(1, 54, K(sl(0.0060))))
+        palm(K(sl(0.0060)), 1, 54, 12, OLIVE_D);
+      if (!blocksPalmView(1, 56, K(sl(0.0180))))
+        palm(K(sl(0.0180)), 1, 56, 11, OLIVE);
       groundPatch(K(sl(0.0050)), 1, 28, slab(46, 190), DUST);
 
       // 4. EXPO '92 BRAKING ZONE  (0.045, -1, 32)
@@ -253,8 +280,9 @@
       groundPatch(K(0.0400), -1, 12, slab(22, 120), OCHRE);
       groundPatch(K(0.0520), -1, 36, slab(40, 110), DUST);
       runoffApron(K(0.0520), -1, 11, 34, OCHRE_PALE);
-      for (let i = 0; i < 7; i++)
-        scrub(K(0.0230 + i * 0.0055), -1, 86 + hash(i * 19) * 20, SCRUB);
+      // Past the Expo spectatorHill treads (was 86–106 — bush×tread at f07).
+      for (let i = 0; i < 5; i++)
+        scrub(K(0.0230 + i * 0.0060), -1, 110 + hash(i * 19) * 24, SCRUB);
       kiosks(0.0300, -1, 60, 7, 11);                        // behind the steps
       carPark(0.0300, -1, 82, 10, 2, 7);
       groundPatch(K(0.0420), -1, 84, slab(52, 150), DUST);
@@ -267,26 +295,29 @@
       marshalPost(K(0.0663), 1, 16);
       billboard(K(0.0600), 1, 17, 12, 4.5, [0.88, 0.82, 0.32]);
       groundPatch(K(0.0663), 1, 20, slab(40, 90), OCHRE);
-      for (let i = 0; i < 8; i++)
-        scrub(K(0.0600 + i * 0.0048), 1, 24 + hash(i * 23) * 22, SCRUB);
+      // T1 infield: no scrub/olive — brief §4 "nothing tall"; near scrub was
+      // filling the orbit eye at f17 and clipping the Expo terrace treads.
 
       // 6. OPEN COUNTRY, T1 -> MICHELIN  (0.110, -1, 45)
       //    Scattered bush and a LOOSE scatter of olive-grey tree, never a
       //    continuous rank, on flat ochre. Empty to the horizon behind it.
-      for (let i = 0; i < 20; i++) {
-        const s = 0.0840 + i * 0.0032;
+      //    Thinned + set back off the f17 camera corridor (was 40–74 m).
+      //    Stop short of the Michelin terrace (s≥0.125 canopy was clipping it).
+      for (let i = 0; i < 10; i++) {
+        const s = 0.0840 + i * 0.0038;
+        if (s > 0.118) continue;
         const h = hash(i * 17 + 3);
-        if (h < 0.40) continue;
-        const d = 40 + h * 34;
+        if (h < 0.55) continue;
+        const d = 72 + h * 40;
         const a = anchor(K(s), -1, d);
-        if (onTrack(a.c[0], a.c[2], 10)) continue;
+        if (onTrack(a.c[0], a.c[2], 12)) continue;
         olive(K(s), -1, d, 5.4 + h * 2.4);
-        if (h > 0.72) scrub(K(s), -1, d - 12, SCRUB);
+        if (h > 0.82) scrub(K(s), -1, d + 8, SCRUB);
       }
       groundPatch(K(0.1040), -1, 40, slab(70, 200), OCHRE);
       groundPatch(K(0.1240), -1, 112, slab(60, 160), OCHRE_PALE);
-      for (let i = 0; i < 10; i++)
-        scrub(K(0.0880 + i * 0.0058), -1, 26 + hash(i * 41) * 14, SCRUB);
+      for (let i = 0; i < 6; i++)
+        scrub(K(0.0880 + i * 0.0055), -1, 68 + hash(i * 41) * 20, SCRUB);
 
       // 7. CURVA MICHELIN -> SITO PONS STAND COMPLEX  (0.1447, -1, 24)
       //    The larger permanent stand complex, terrace filling between the
@@ -354,8 +385,8 @@
       tyreWall(0.3460, 0.3700, 1, 12, TYRE_CAP);
       marshalPost(K(0.3620), 1, 17);
       groundPatch(K(0.3520), 1, 30, slab(26, 70), DUST);
-      for (let i = 0; i < 5; i++)
-        scrub(K(0.3480 + i * 0.0055), 1, 44 + hash(i * 31) * 16, SCRUB);
+      for (let i = 0; i < 4; i++)
+        scrub(K(0.3480 + i * 0.0060), 1, 58 + hash(i * 31) * 18, SCRUB);
 
       // 10. CURVA DRY SACK  (0.3842, -1, 22) — the slow right at the top of
       //     the climb, HIGHEST POINT OF THE LAP and the best-attended corner
@@ -373,8 +404,11 @@
       cameraTower(K(0.3960), -1, 20);
       sponsorHoarding(0.3660, 0.4020, -1, 13);
       groundPatch(K(0.3842), -1, 76, slab(40, 170), OCHRE_PALE);
-      palm(K(0.4000), -1, 26, 11, OLIVE);
-      palm(K(0.3660), -1, 26, 10, OLIVE_D);
+      // Dry Sack palms past chase (was gap 26 — canopy filled the orbit eye).
+      if (!blocksPalmView(-1, 58, K(0.4000)))
+        palm(K(0.4000), -1, 58, 11, OLIVE);
+      if (!blocksPalmView(-1, 56, K(0.3660)))
+        palm(K(0.3660), -1, 56, 10, OLIVE_D);
       //   Best-attended corner outside the stadium: catering behind the steps,
       //   the overflow park on the flat above, masts on the skyline.
       kiosks(0.3680, -1, 68, 6, 23);
@@ -407,8 +441,9 @@
         ridge(a.c[0], a.c[2], terrainYAt(a.c[0], a.c[2]) - 1.2, ang,
           58, 24, 7 + hash(i * 13) * 5, DUST);
       }
-      for (let i = 0; i < 18; i++)
-        scrub(K(0.4180 + i * 0.0050), 1, 38 + hash(i * 29) * 30, SCRUB);
+      // Descent scrub past orbit (was 38–68 m on +1).
+      for (let i = 0; i < 10; i++)
+        scrub(K(0.4180 + i * 0.0065), 1, 56 + hash(i * 29) * 28, SCRUB);
       groundPatch(K(0.4600), 1, 50, slab(46, 140), OCHRE);
       guardrail(0.4180, 0.5020, 1, 12, ARMCO);
 
@@ -433,12 +468,13 @@
       // 13. FAR OUTFIELD, THE QUIETEST STRETCH  (0.6300, -1, 65)
       //     Widely spaced olive in FIELD ROWS and a single white farm set
       //     well back. Horizon unbroken above it: nothing here is tall.
-      for (let row = 0; row < 4; row++) {
-        const d = 66 + row * 19;
-        for (let i = 0; i < 9; i++) {
-          const s = 0.5960 + i * 0.0078;
+      //     First row past the orbit eye; thinned so crowns do not stack.
+      for (let row = 0; row < 3; row++) {
+        const d = 78 + row * 22;
+        for (let i = 0; i < 7; i++) {
+          const s = 0.5980 + i * 0.0090;
           const h = hash(i * 11 + row * 97);
-          if (h < 0.24) continue;
+          if (h < 0.36) continue;
           const a = anchor(K(s), -1, d);
           if (onTrack(a.c[0], a.c[2], 12)) continue;
           // Skip olives whose road-follow embed sinks into a real hill —
@@ -472,14 +508,17 @@
         const k = K(0.6460 + i * 16 * M);
         if (clear(k, -1, 112, 12)) place(k, -1, 112, [1.0, 2.2, 7.0], WHITEWASH);
       }
-      for (let i = 0; i < 8; i++) {
-        const k = K(0.6380 + i * 18 * M);
-        if (hash(i * 23) < 0.22) continue;
-        if (!clear(k, -1, 152, 12)) continue;
-        const a = anchor(k, -1, 152);
+      // Yard olives past the water tower (was gap 152 — crown×tower at f60).
+      for (let i = 0; i < 6; i++) {
+        const s = 0.6380 + i * 22 * M;
+        if (s > 0.652 && s < 0.668) continue; // keep clear of the water tower
+        const k = K(s);
+        if (hash(i * 23) < 0.28) continue;
+        if (!clear(k, -1, 168, 12)) continue;
+        const a = anchor(k, -1, 168);
         const gy = terrainYAt(a.c[0], a.c[2]);
         if (gy != null && Math.abs(gy - a.c[1]) > 0.55) continue;
-        olive(k, -1, 152, 4.4 + hash(i * 9) * 1.4);
+        olive(k, -1, 168, 4.4 + hash(i * 9) * 1.4);
       }
       for (let row = 0; row < 3; row++) {                   // vine rows (thinned for tris)
         const d = 96 + row * 7;
@@ -492,8 +531,13 @@
       groundPatch(K(0.6700), -1, 104, slab(46, 120), [0.88, 0.86, 0.80]);
       groundPatch(K(0.6560), -1, 124, slab(76, 190), OCHRE_PALE);
       groundPatch(K(0.6300), -1, 56, slab(80, 230), OCHRE_PALE);
-      for (let i = 0; i < 12; i++)
-        scrub(K(0.6020 + i * 0.0048), -1, 32 + hash(i * 31) * 20, SCRUB);
+      // Past Angel Nieto kiosk/tower band (was 32–52 — bush×mast at f71).
+      // Skip the amphitheatre window where kiosks sit at gap 58.
+      for (let i = 0; i < 8; i++) {
+        const s = 0.6020 + i * 0.0055;
+        if (s >= 0.690 && s <= 0.745) continue;
+        scrub(K(s), -1, 72 + hash(i * 31) * 24, SCRUB);
+      }
 
       // 14. CURVA ANGEL NIETO  (0.7123, -1, 26)
       //     Terrace returns as the stadium section opens up, with hoarding
@@ -578,33 +622,40 @@
       // 18. CIRCUIT-WIDE — continuous armco, marshal posts and a very sparse
       //     scrub scatter. Deliberately NO tree line anywhere (§6): the lone
       //     olives below are hash-gated hard so they never rank up, and the
-      //     outfield stays open with the horizon visible.
+      //     outfield stays open with the horizon visible. Scrub / olive set
+      //     back past the chase+orbit corridor (was 21–49 / 46–78 — clipped
+      //     the survey eye at f17 and tall palms at f83).
       for (const side of [-1, 1]) guardrail(0.0, 1.0, side, 13, ARMCO);
 
       for (let i = 0; i < 12; i++) marshalPost(Math.round((i / 12) * n) % n, 1, 17);
 
-      every(22, (k) => {
+      every(32, (k) => {
         const h = hash(k * 37 + 11);
-        if (h < 0.44) return;
-        const side = h < 0.74 ? -1 : 1;
-        const dist = 21 + h * 28;
+        if (h < 0.58) return;
+        const side = h < 0.82 ? -1 : 1;
+        // Always past kiosk/mast bands on hot fracs (Angel Nieto gap 58).
+        const dist = (camHot(k) ? ORBIT_HOT : CAM_NEAR) + h * 28;
+        if (blocksOrbitView(side, dist, k)) return;
         const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], 9)) return;
         scrub(k, side, dist, h < 0.60 ? SCRUB : OLIVE_D);
-        if (h > 0.86) scrub(k, side, dist + 9 + h * 6, SCRUB);
+        if (h > 0.92) scrub(k, side, dist + 12 + h * 6, SCRUB);
       });
 
       // Very occasional lone olive / palm — hash-gated so the spacing can
-      // never close up into a rank.
-      every(55, (k) => {
+      // never close up into a rank. Past the orbit wedge; palms rare.
+      every(80, (k) => {
         const h = hash(k * 53 + 7);
-        if (h < 0.62) return;
-        const side = h < 0.86 ? -1 : 1;
-        const dist = 46 + h * 32;
+        if (h < 0.74) return;
+        const side = h < 0.90 ? -1 : 1;
+        const dist = ORBIT_HOT + 8 + h * 36;
+        if (blocksOrbitView(side, dist, k)) return;
         const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], 12)) return;
-        if (h > 0.955) palm(k, side, dist, 10 + h * 3, OLIVE_D);
-        else olive(k, side, dist, 5.2 + h * 2.2);
+        if (h > 0.988) {
+          if (!blocksPalmView(side, dist, k))
+            palm(k, side, dist, 10 + h * 3, OLIVE_D);
+        } else olive(k, side, dist, 5.2 + h * 2.2);
       });
 
       // The start gantry stands over the REAL line through the sl() above; RS()

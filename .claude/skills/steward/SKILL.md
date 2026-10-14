@@ -1,6 +1,6 @@
 ---
 name: steward
-description: "Use when a PR or the shared deploy branch is red, cancelled, conflicting, or its CI watch expired: name the failing test, check who-is-on-it, sync-pr, fix-push validate. Ownership loop is pr-owner; pre-push check-changes."
+description: "Use when you own, pick up or are handed a PR, or a PR or the deploy branch is red, cancelled, conflicting or its CI watch expired: check out its branch, keep its body and Plan current, name the failing test, who-is-on-it, sync-pr, push once per green cycle. Pre-push → check-changes."
 ---
 
 # Driving a PR to green in Apex 26
@@ -9,9 +9,10 @@ description: "Use when a PR or the shared deploy branch is red, cancelled, confl
 are right about most things and wrong about the specifics below, each of
 which has cost a session before. Everything not listed here: `AGENTS.md`.
 
-Routes: a red `ci.yml` / `pages.yml` run → agent `ci-red-triage` (read-only, returns
+Routes: owning PRs (claim → ready → report, spawn prompt) → [`references/ownership.md`](references/ownership.md). A red `ci.yml` / `pages.yml` run → agent `ci-red-triage` (read-only, returns
 the status line). Pre-push validation → `check-changes`. Live `version.json` or
 anything on github.io → agent `deploy-research` (the only thing here that reaches it).
+Review, hunt or survey findings on the PR → agent `finding-verifier` before you fix any of them.
 
 ## 1. `cancelled` means three different things — read the jobs, not the conclusion
 
@@ -149,14 +150,13 @@ never picks. Fetch MCP tool schemas once per session and reuse them.
 
 ## Browser runs, if a fix needs one
 
-Via `node tools/ci/test-bg.mjs <group>` only; AGENTS.md rules 5, 6 and 10 (one run, `--stop`, never in a subagent —
-report it unverified).
+Via `node tools/ci/test-bg.mjs <group>` only; AGENTS.md rules 5, 6 and 10 (one run, `--stop`, never in a subagent).
 
 ## Host-neutral watch and claims
 
 Use `--session <unique-id>` with `who-is-on-it.mjs --claim/--release` on hosts without a Claude session variable.
 Subscribe with the host's own tool: Claude Code `subscribe_pr_activity`, Cursor `subscribe_github_ci` +
-`subscribe_github_pr`; never call a name the host does not list (skill `session-comms`). Keep one timer beside it
+`subscribe_github_pr`; never call a name the host does not list (`agent-fleet` `references/comms.md`). Keep one timer beside it
 (`send_later` / `subscribe_timer`) and read CI on every wake: the subscription can drop `check_run` completions. Without
 subscription or timers: `references/host-watch.md`. Record missing capabilities as unverified.
 
