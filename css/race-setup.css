@@ -287,16 +287,21 @@
   text-align: center;
 }
 /* Tall / narrow portrait: prefer an even 2×2 (two equal tracks) so the four
-   presets never squeeze into one colliding row when UI scale grows the type. */
+   presets never squeeze into one colliding row when UI scale grows the type.
+   Drop the <small> captions there — title + caption are both --fs-micro, so on
+   a ~150px tile the caption still reads as jammed against FULL WEEKEND /
+   ENDURANCE even with a 3px flex gap (measured 390×844 after the wrap fix). */
 body[data-shape="tall"] #rs-presets {
   --balance-basis: calc(50% - var(--gap) * 0.5);
   --balance-min: calc(50% - var(--gap) * 0.5);
 }
+body[data-shape="tall"] #rs-presets > .preset-btn small { display: none; }
 @media (max-width: 480px) and (orientation: portrait) {
   #rs-presets {
     --balance-basis: calc(50% - var(--gap) * 0.5);
     --balance-min: calc(50% - var(--gap) * 0.5);
   }
+  #rs-presets > .preset-btn small { display: none; }
 }
 /* CUSTOM is a display-only sentinel (no data-rs-preset): it lights when the
    live draft matches no named preset (default 3-lap open). Same selected

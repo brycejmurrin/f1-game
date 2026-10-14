@@ -176,10 +176,15 @@ test("race presets restore balanced wrap and a --tap floor (phone portrait 2×2)
   assert.equal(decl(rules, 'body[data-shape="tall"] #rs-presets', "--balance-basis"),
     "calc(50% - var(--gap) * 0.5)",
     "tall sheets pin an even 2×2 so FULL WEEKEND / ENDURANCE never share one ~70px column");
+  assert.equal(decl(rules, 'body[data-shape="tall"] #rs-presets > .preset-btn small', "display"), "none");
   assert.equal(
     decl(rules, "#rs-presets", "--balance-basis", { context: /max-width:\s*480px/ }),
     "calc(50% - var(--gap) * 0.5)",
     "portrait ≤480px also forces the 2×2 basis (css-play may lack data-shape)");
+  assert.equal(
+    decl(rules, "#rs-presets > .preset-btn small", "display", { context: /max-width:\s*480px/ }),
+    "none",
+    "portrait hides captions so title and small cannot collide inside a tile");
 });
 
 // ── Season SETUP chrome (tip #1082; pin so this sheet suite owns both) ───────
