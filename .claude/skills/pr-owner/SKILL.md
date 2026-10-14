@@ -1,6 +1,6 @@
 ---
 name: pr-owner
-description: "Use when your session owns PRs or its push went red: claim, subscribe, fix reds, push once per green cycle. Overrides: steward."
+description: "Use when you own, pick up or are handed a PR, or your own PR or push went red: check out its branch, keep its body and Plan current, fix reds on the head, push once per green cycle. Per-red overrides: steward."
 ---
 
 # Owning PRs in Apex 26

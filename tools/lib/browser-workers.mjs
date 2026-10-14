@@ -3,6 +3,27 @@
 // further — render-heavy specs timed out at --workers=4 on 4-vCPU llvmpipe
 // (docs/notes/TESTING-FIELD-NOTES.md 2026-09-30).
 import os from "node:os";
+import { readFileSync } from "node:fs";
+
+/** Affinity and container quota, rather than the host's logical CPU count. */
+export function captureCpuBudget({ parallelism = os.availableParallelism(), read = readFileSync } = {}) {
+  let cpus = Math.max(1, parallelism);
+  try {
+    const [quota, period] = read("/sys/fs/cgroup/cpu.max", "utf8").trim().split(/\s+/);
+    if (quota !== "max" && Number(quota) > 0 && Number(period) > 0) {
+      cpus = Math.min(cpus, Math.max(1, Math.floor(Number(quota) / Number(period))));
+    }
+  } catch { /* Non-cgroup hosts use availableParallelism. */ }
+  return cpus;
+}
+
+/** Match the llvmpipe ANGLE selection used by playwright.config.js. */
+export function captureChromiumArgs(env = process.env) {
+  const common = ["--enable-unsafe-swiftshader", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"];
+  return glStack(env) === "llvmpipe"
+    ? ["--use-angle=gl", "--use-gl=angle", "--ignore-gpu-blocklist", ...common]
+    : ["--use-angle=swiftshader", ...common];
+}
 
 /** Spec basenames in playwright.config.js RENDER_SPECS (no .spec.js). */
 export const RENDER_HEAVY_SPEC_IDS = [
@@ -24,21 +45,25 @@ export function glStack(env = process.env) {
 
 /**
  * Local / capture pool size. Explicit APEX_WORKERS wins.
- * llvmpipe: up to half the CPUs (cap 4). SwiftShader: defSwift (cap 8).
+ * llvmpipe: half the CPU budget (cap 4). SwiftShader: one per four CPUs,
+ * capped by defSwift. Cold shaders made two workers slower on four CPUs.
+ * Neither pool exceeds actual jobs; an explicit override may exceed CPU budget.
  */
 export function defaultCaptureWorkers({
   env = process.env,
-  cpus = os.cpus().length,
+  cpus = captureCpuBudget(),
   defSwift = 2,
+  jobs = Infinity,
 } = {}) {
+  const jobCap = Number.isFinite(jobs) ? Math.max(0, Math.floor(jobs)) : Infinity;
   const requested = Number.parseInt(env.APEX_WORKERS || "", 10);
   if (Number.isFinite(requested) && requested > 0) {
-    return Math.min(8, Math.max(1, requested));
+    return Math.min(jobCap, 8, Math.max(1, requested));
   }
   if (glStack(env) === "llvmpipe") {
-    return Math.min(4, Math.max(2, Math.floor(cpus / 2) || 2));
+    return Math.min(jobCap, 4, Math.max(1, Math.floor(cpus / 2)));
   }
-  return Math.min(8, Math.max(1, defSwift));
+  return Math.min(jobCap, 8, Math.max(1, Math.floor(cpus / 4)), Math.max(1, defSwift));
 }
 
 /** True when a package.json test:* script will run RENDER_SPECS work. */

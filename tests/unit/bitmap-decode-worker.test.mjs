@@ -63,7 +63,7 @@ test("BitmapDecode client falls back to main-thread createImageBitmap without Wo
     },
     location: { href: "http://x/" },
     window: { __APEX_BUILD: 1 },
-    URL,
+    URL, setTimeout, clearTimeout,
   });
   // No Worker on purpose.
   vm.runInContext(read("js/workers/bitmap-decode-client.js").replace(/^const\b/gm, "var"), main);
@@ -81,7 +81,7 @@ test("BitmapDecode client posts to a Worker and resolves the transferred bitmap"
     createImageBitmap: async () => { throw new Error("must use worker"); },
     location: { href: "http://x/" },
     window: { __APEX_BUILD: 1 },
-    URL,
+    URL, setTimeout, clearTimeout,
     Worker: class {
       constructor(src) {
         this.src = src;
@@ -100,4 +100,57 @@ test("BitmapDecode client posts to a Worker and resolves the transferred bitmap"
   const out = await main.BitmapDecode.decode({ size: 2 });
   assert.equal(out, bmp);
   assert.match(worker.src, /bitmap-decode-worker\.js/);
+});
+
+function controlledClient() {
+  let worker, timer, clears = 0, fallbacks = 0;
+  const bmp = { width: 2, height: 2, close() {} };
+  const ctx = vm.createContext({ URL, location: { href: "http://x/" }, window: {},
+    setTimeout: (fn) => { timer = fn; return 1; }, clearTimeout: () => clears++,
+    createImageBitmap: async () => { fallbacks++; return bmp; },
+    Worker: class { constructor() { worker = this; } postMessage(m) { this.request = m; } terminate() {} },
+  });
+  vm.runInContext(read("js/workers/bitmap-decode-client.js") + ";window.api = BitmapDecode", ctx);
+  return { api: ctx.window.api, get worker() { return worker; }, fire: () => timer(),
+    get clears() { return clears; }, get fallbacks() { return fallbacks; }, bmp };
+}
+
+test("bitmap deadline and messageerror fallback settle once and close late replies", async () => {
+  for (const mode of ["timeout", "messageerror", "drop"]) {
+    const h = controlledClient(), result = h.api.decode({ size: 1 });
+    const seq = h.worker.request.seq;
+    if (mode === "timeout") h.fire();
+    else if (mode === "drop") h.api.drop();
+    else h.worker.onmessageerror();
+    assert.equal(await result, h.bmp); assert.equal(h.fallbacks, 1); assert.equal(h.clears, 1);
+    let closed = 0;
+    h.worker.onmessage({ data: { type: "decoded", seq, bmp: { width: 1, height: 1, close() { closed++; } } } });
+    assert.equal(closed, 1); assert.equal(h.fallbacks, 1);
+  }
+});
+
+test("matched bitmap ownership is transferred and duplicate replies close", async () => {
+  const h = controlledClient(), result = h.api.decode({ size: 1 });
+  let closed = 0;
+  const bmp = { width: 1, height: 1, close() { closed++; } };
+  const reply = { data: { type: "decoded", seq: h.worker.request.seq, bmp } };
+  h.worker.onmessage(reply); assert.equal(await result, bmp); assert.equal(closed, 0);
+  h.worker.onmessage(reply); assert.equal(closed, 1); assert.equal(h.clears, 1);
+});
+
+test("malformed bitmap replies fallback and malformed crops reject before dispatch", async () => {
+  for (const type of ["decoded", "unknown"]) {
+    const h = controlledClient(), result = h.api.decode({ size: 1 });
+    h.worker.onmessage({ data: { type, seq: h.worker.request.seq } });
+    assert.equal(await result, h.bmp); assert.equal(h.fallbacks, 1);
+  }
+  for (const crop of [[], [0, 0, 2], [0, 0, 0, 2], [0, 0, 2, -1], [0, NaN, 2, 2]]) {
+    const h = controlledClient();
+    await assert.rejects(h.api.decode({ size: 1 }, null, crop), /invalid crop/);
+    assert.equal(h.worker, undefined); assert.equal(h.fallbacks, 0);
+    const posted = [], ctx = vm.createContext({ createImageBitmap: () => { throw new Error("must not decode"); }, postMessage: (m) => posted.push(m) });
+    ctx.self = ctx; vm.runInContext(read("js/workers/bitmap-decode-worker.js"), ctx);
+    await ctx.onmessage({ data: { type: "decode", seq: 2, blob: {}, crop } });
+    assert.match(posted[0].message, /invalid crop/);
+  }
 });

@@ -311,7 +311,7 @@ test("every custom subagent declares name, description, and model", () => {
   // tier; judgement stays on the session's model. Anything else is a typo.
   const TIER = {
     "bloat-auditor.md": "sonnet", "deploy-research.md": "haiku", "verify-agent.md": "haiku",
-    "ci-red-triage.md": "sonnet", "ci-watcher.md": "haiku", "physics-contract-auditor.md": "inherit", "track-surveyor.md": "inherit",
+    "ci-red-triage.md": "sonnet", "ci-watcher.md": "haiku", "physics-contract-auditor.md": "sonnet", "track-surveyor.md": "inherit",
   };
   const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.";
   for (const f of files) {
