@@ -25,6 +25,7 @@ const CustomTeam = (function () {
       isCarsetupVisible,
     } = hooks;
 
+    let logoGeneration = 0;
     let czFinish = "gloss";
     let czPreviewKey = "";
 
@@ -145,11 +146,13 @@ const CustomTeam = (function () {
       LiveryTex.setTeamLogo("custom", dataUrl || null);
     }
 
-    function readLogoFile(file, done) {
+    function readLogoFile(file, done, current) {
       const fr = new FileReader();
       fr.onload = () => {
+        if (!current()) return;
         const img = new Image();
         img.onload = () => {
+          if (!current()) return;
           const sc = Math.min(1, CUSTOM_LOGO_MAX / Math.max(img.width, img.height));
           const w = Math.max(1, Math.round(img.width * sc));
           const h = Math.max(1, Math.round(img.height * sc));
@@ -330,18 +333,21 @@ const CustomTeam = (function () {
       $("cz-logofile").addEventListener("change", (e) => {
         const f = e.target.files && e.target.files[0];
         if (!f) return;
+        const generation = ++logoGeneration;
+        const current = () => generation === logoGeneration;
         readLogoFile(f, (dataUrl) => {
-          if (!dataUrl) return;
+          if (!current() || !dataUrl) return;
           try { store.set(CUSTOM_LOGO_KEY, dataUrl); } catch (_) {}
           applyCustomLogo(dataUrl);
           refreshCustomLogoUi(dataUrl);
           invalidateDecalTextures("custom");
           spMeshBust();
           if (getSoundOn()) GameAudio.uiSelect();
-        });
+        }, current);
         e.target.value = "";
       });
       $("cz-logo-clear").onclick = () => {
+        ++logoGeneration;
         try { store.set(CUSTOM_LOGO_KEY, null); } catch (_) {}
         applyCustomLogo(null);
         refreshCustomLogoUi(null);
@@ -360,6 +366,7 @@ const CustomTeam = (function () {
           try { spMeshBust(); } catch (_) { /* garage scene may not be up yet */ }
         }
         if (change.clear || change.key === "customLogo") {
+          ++logoGeneration;
           const url = change.clear ? null : loadCustomLogo();
           applyCustomLogo(url);
           try { invalidateDecalTextures("custom"); } catch (_) { /* decal cache later */ }

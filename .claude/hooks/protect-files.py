@@ -18,11 +18,17 @@ except Exception:
 ti = d.get("tool_input") or {}
 tool = d.get("tool_name") or ""
 # Hook input names the subagent a call comes from (`agent_type`, documented at
-# https://code.claude.com/docs/en/hooks). track-surveyor is the one agent with
-# write tools; rule 4 below scopes it to circuit pairs (2026-10-14).
+# https://code.claude.com/docs/en/hooks). track-surveyor and agent-surface-reviewer
+# are the agents with write tools; rules 4 and 5 below scope them (2026-10-14).
 agent = str(d.get("agent_type") or "")
 SURVEYOR = agent == "track-surveyor" or agent.endswith(":track-surveyor")
 SURVEYOR_OK = re.compile(r"^(js/circuits/(scenery/)?[a-z0-9_-]+\.js|scratch/.+|artifacts/.+)$")
+# agent-surface-reviewer has Write for its own report only: Write/Edit to
+# scratch/**.md, and no Bash writes at all (rule 5 below, 2026-10-14).
+REPORTER = agent == "agent-surface-reviewer" or agent.endswith(":agent-surface-reviewer")
+REPORTER_OK = re.compile(r"^scratch/.+\.md$")
+REPORTER_MSG = ("agent-surface-reviewer writes only its report, scratch/**.md, through Write/Edit "
+                "(.claude/agents/agent-surface-reviewer.md). Put the finding in the report instead.")
 
 
 def git(*args, cwd):
@@ -144,10 +150,21 @@ def live_playwright_in(root):
 def check(file, tool, ti, proposed=None, how=""):
     """The three rules for one target file. `proposed` is the file's content
     after the call when it is computable (a Write, a simulated sed, a cp)."""
+    # Resolve symlinks FIRST (red-team round 2, 2026-10-14): a link outside the
+    # repo pointing at version.json wrote through, because the repo root came
+    # from the LINK's directory. realpath also resolves a not-yet-existing tail.
+    file = os.path.realpath(file)
     d_ = os.path.dirname(file) or "."
     while d_ and d_ != "/" and not os.path.isdir(d_):   # a Bash write may create the directory
         d_ = os.path.dirname(d_)
     root = git("rev-parse", "--show-toplevel", cwd=d_) if d_ and os.path.isdir(d_) else ""
+    # 5. agent-surface-reviewer: Write/Edit to scratch/**.md under the repo
+    # root only (a path outside any repo is refused too); no escape hatch.
+    if REPORTER:
+        rel_ = os.path.relpath(file, root).replace(os.sep, "/") if root else ".."
+        if tool == "Bash" or rel_.startswith("..") or not REPORTER_OK.match(rel_):
+            block(f"{rel_ if root else file}{f' (via Bash: {how})' if tool == 'Bash' else ''}: " + REPORTER_MSG,
+                  root or os.getcwd(), hatch=False)
     if not root:
         return
     # The escape hatch covers rules 1 and 3 (an ASSIGNED edit to a generated or
@@ -155,7 +172,7 @@ def check(file, tool, ti, proposed=None, how=""):
     # Playwright run corrupts the run whoever assigned it, so that check runs
     # first, flag or no flag (2026-09-22; before, the flag skipped every rule).
     allow = os.path.exists(os.path.join(root, ".claude", "allow-protected"))
-    rel = os.path.relpath(os.path.realpath(file) if os.path.exists(file) else file, root)
+    rel = os.path.relpath(file, root)
     base = os.path.basename(file)
     via = f" (via Bash: {how})" if tool == "Bash" else ""
 
@@ -269,6 +286,21 @@ if tool == "Bash":
                 except Exception:
                     proposed = None
         check(t["path"], "Bash", {}, proposed, t["kind"])
+    if REPORTER:
+        for t in shellparse.surveyor_targets(cmd, d.get("cwd") or os.getcwd()):
+            if t["path"] is None:
+                block(f"{t['kind']} (via Bash) rewrites the whole tree: " + REPORTER_MSG,
+                      d.get("cwd") or os.getcwd(), hatch=False)
+            check(t["path"], "Bash", {}, None, t["kind"] + " — a removal")
+    if SURVEYOR:
+        # Removals and whole-tree git moves are writes too (round 2): `mv js/game.js
+        # scratch/`, `rm -rf js/track`, `git stash`, `git reset --hard`, `git switch`.
+        for t in shellparse.surveyor_targets(cmd, d.get("cwd") or os.getcwd()):
+            if t["path"] is None:
+                block(f"{t['kind']} (via Bash) rewrites the whole tree: track-surveyor writes only js/circuits/<id>.js, "
+                      "js/circuits/scenery/<id>.js, scratch/ and artifacts/ (.claude/agents/track-surveyor.md). "
+                      "Report it for the parent instead.", d.get("cwd") or os.getcwd(), hatch=False)
+            check(t["path"], "Bash", {}, None, t["kind"] + " — a removal")
     sys.exit(0)
 
 file = ti.get("file_path") or ti.get("notebook_path") or ""

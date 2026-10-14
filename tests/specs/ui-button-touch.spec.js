@@ -714,6 +714,93 @@ test.describe("Race settings — landscape layout", () => {
 // clobbers the other scheme's offsets. Scheme switches are driven through
 // DockLayout.apply (same path store.subscribe uses) — opening pause after a
 // mid-race dock translate timed out on CI (pausebtn under the moved column).
+test.describe("HUD — ARRANGE HUD on-screen editor", () => {
+  // The on-screen editor for MOVE & SIZE (js/ui/hud-arrange.js). Landscape touch:
+  // the player this exists for, and the shape where pieces meet the docks.
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
+
+  test("drag moves a piece, − / + size it, RESET restores it, DONE gives the pause card back", async ({ page }) => {
+    await page.addInitScript(() => localStorage.removeItem("apex26.hudLayout"));
+    await page.goto("/");
+    await waitReady(page);
+    await openPauseControls(page);
+    const btn = page.locator("#pm-hud-arrange");
+    await expect(btn).toBeVisible();
+    await expect(btn).toHaveAttribute("aria-pressed", "false");
+
+    await btn.click();
+    await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
+    // Editing hides SETTINGS and PAUSED (showModal dialogs make the rest of the page inert).
+    await expect(page.locator("#pmsettings")).toBeHidden();
+    await expect(page.locator("#pausemenu")).toBeHidden();
+    await expect(page.locator("#hud-arrange-bar")).toBeVisible();
+    expect(await page.locator("[data-hl-arr]").count()).toBeGreaterThan(5);
+    // The pieces the race hides until something happens show sample content while arranging.
+    await expect(page.locator("#announce")).toBeVisible();
+
+    // DRAG the track map ~100 px right, 40 px down with the primary pointer.
+    const box = await page.locator("#minimap").boundingBox();
+    expect(box).not.toBeNull();
+    const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) await page.mouse.move(cx + 10 * i, cy + 4 * i);
+    await page.mouse.up();
+    await page.waitForFunction(() => HudLayout.get("map").x > 0, null, { polling: 100, timeout: BOOT_MS });
+    const moved = await page.evaluate(() => HudLayout.get("map"));
+    expect(moved.x).toBeGreaterThan(5);
+    expect(moved.y).toBeGreaterThan(3);
+    await expect(page.locator("#hud-arrange-name")).toContainText("TRACK MAP");
+
+    // − / + act on the piece last touched; RESET returns it to the shipped layout.
+    await page.locator("#hud-arrange-larger").click();
+    expect((await page.evaluate(() => HudLayout.get("map"))).s).toBe(110);
+    await page.locator("#hud-arrange-smaller").click();
+    await page.locator("#hud-arrange-smaller").click();
+    expect((await page.evaluate(() => HudLayout.get("map"))).s).toBe(90);
+    await page.locator("#hud-arrange-reset").click();
+    expect(await page.evaluate(() => HudLayout.get("map"))).toEqual({ x: 0, y: 0, s: 100 });
+
+    // The drag again, then DONE: the layout persists, every handle is released, the
+    // sample content goes, and the pause card comes back.
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + 60, cy);
+    await page.mouse.up();
+    await page.waitForFunction(() => HudLayout.get("map").x > 0, null, { polling: 100, timeout: BOOT_MS });
+    await page.locator("#hud-arrange-done").click();
+    await page.waitForFunction(() => !document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
+    expect(await page.locator("[data-hl-arr]").count()).toBe(0);
+    await expect(page.locator("#announce")).toBeHidden();
+    await expect(page.locator("#pmsettings")).toBeVisible();
+    await expect(btn).toHaveAttribute("aria-pressed", "false");
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.hudLayout")));
+    const prof = Object.values(stored).find((p) => p && typeof p === "object" && Object.values(p).some((set) => set && set.map));
+    expect(prof, "the drag is in apex26.hudLayout").toBeTruthy();
+  });
+
+  test("Escape ends arranging without driving the car", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openPauseControls(page);
+    await page.locator("#pm-hud-arrange").click();
+    await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
+    // A press on GAS while arranging is the editor's, never the pedal's (THROTTLE = LATCH would launch the car).
+    const gas = page.locator("#btn-throttle");
+    if (await gas.isVisible()) {
+      const g = await gas.boundingBox();
+      await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+      await page.mouse.down();
+      await page.mouse.up();
+    }
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => !document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
+    await expect(page.locator("#pmsettings")).toBeVisible();
+    // js/input/input.js paints a latched GAS as .on; the press went to the editor, so it never latched.
+    await expect(page.locator("#btn-throttle")).not.toHaveClass(/\bon\b/);
+  });
+});
+
 test.describe("Touch dock — REPOSITION per scheme", () => {
   // Landscape: portrait arms #rotate-device over the pause button (see
   // hud-layout.spec.js). Dock offsets are pad-fraction so orientation is

@@ -25,7 +25,8 @@
       { kinds: ["city", "foliage"], s0: 0.97, s1: 0.08, side: 1 },
       { kind: "lamps", s0: 0.855, s1: 0.895 },
     ],
-    pal: { horizon: [0.32, 0.16, 0.08], zenith: [0.10, 0.06, 0.24], sunColor: [0.90, 0.68, 0.38], ambientSky: [0.36, 0.28, 0.24], ambientGround: [0.32, 0.20, 0.12], fogColor: [0.22, 0.12, 0.06], fogDensity: 0.0020, sunDir: [0.55, 0.15, 0.32], runoff: [0.24, 0.23, 0.22], grass: [0.20, 0.18, 0.14] },
+    // Yas palette: pale sand + paved run-off (not muddy brown); marina water is scenery.
+    pal: { horizon: [0.62, 0.48, 0.34], zenith: [0.10, 0.06, 0.24], sunColor: [0.95, 0.78, 0.48], ambientSky: [0.42, 0.36, 0.32], ambientGround: [0.55, 0.46, 0.34], fogColor: [0.42, 0.34, 0.26], fogDensity: 0.0016, sunDir: [0.55, 0.15, 0.32], runoff: [0.58, 0.59, 0.60], grass: [0.82, 0.74, 0.58] },
     bankZones: [
       { frac: 0.0425, angleDeg: 3.0, widthM: 180 },   // T1 opening right
       { frac: 0.1509, angleDeg: 3.0, widthM: 120 },   // T2 left
