@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-ahIIg+W6KliuhOKnEcN9KqkAm5pzec8nCfsXuXb5m2Y=' 'sha256-9NXfhnQRVYFmk75M0p7z41L9Q7l3Ty7FIZHtPuq/R98=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-ahIIg+W6KliuhOKnEcN9KqkAm5pzec8nCfsXuXb5m2Y=' 'sha256-zu4qKsCgabv8zyRwJsUGeJ8EcoKRCH4RhLt3zYqan6Y=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -440,7 +440,10 @@
     // FIRST answer only: the title intro, wash and #title-car paint on the
     // first frame, and js/ui/title-fx.js (which owns every later answer)
     // evaluates too late to stop them.
-    // Motion: OS reduced-motion wins, then apex26.motion ("on" | "reduce").
+    // Motion: apex26.motion ("auto" | "reduce" | "off"; legacy "on" = auto).
+    // AUTO (or unset) follows prefers-reduced-motion; ON ("reduce") always;
+    // OFF never. Focus ring: apex26.focusRing ("high" → data-focus). Colourblind
+    // cues: apex26.cbCues ("on" → data-cb-cues).
     // Intro: apex26.titleIntro ("full" | "quick" | "off"); unset = full.
     // Wash: apex26.menuWash ("full" | "soft" | "off"); unset = full.
     // Title art: apex26.titleArt ("on" | "soft" | "off"); unset = on.
@@ -449,7 +452,7 @@
     // apex26.pauseSide ("left" | "right"), apex26.pauseDim ("soft" | "off").
     // Help text (js/ui/appearance-opts.js): apex26.menuHelp ("off").
     // Unset, or the shipped answer, writes nothing.
-    var mv = null, ti = null, mw = null, ta = null, pl = null, ps = null, pd = null, mh = null;
+    var mv = null, ti = null, mw = null, ta = null, pl = null, ps = null, pd = null, mh = null, fr = null, cb = null;
     try { mv = JSON.parse(localStorage.getItem("apex26.motion")); } catch (e) { /* unset */ }
     try { ti = JSON.parse(localStorage.getItem("apex26.titleIntro")); } catch (e) { /* unset */ }
     try { mw = JSON.parse(localStorage.getItem("apex26.menuWash")); } catch (e) { /* unset */ }
@@ -458,10 +461,19 @@
     try { ps = JSON.parse(localStorage.getItem("apex26.pauseSide")); } catch (e) { /* unset */ }
     try { pd = JSON.parse(localStorage.getItem("apex26.pauseDim")); } catch (e) { /* unset */ }
     try { mh = JSON.parse(localStorage.getItem("apex26.menuHelp")); } catch (e) { /* unset */ }
+    try { fr = JSON.parse(localStorage.getItem("apex26.focusRing")); } catch (e) { /* unset */ }
+    try { cb = JSON.parse(localStorage.getItem("apex26.cbCues")); } catch (e) { /* unset */ }
     try {
-      if (mv === "reduce" || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches))
+      if (mv === "off") { /* keep motion */ }
+      else if (mv === "reduce" || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches))
         document.documentElement.dataset.motion = "reduce";
     } catch (e) { /* TitleFx answers at eval */ }
+    try {
+      if (fr !== "standard") document.documentElement.dataset.focus = "high";
+    } catch (e) { /* A11yOpts answers at eval */ }
+    try {
+      if (cb === "on") document.documentElement.dataset.cbCues = "on";
+    } catch (e) { /* A11yOpts answers at eval */ }
     try {
       if (ti === "quick" || ti === "off") document.documentElement.dataset.titleIntro = ti;
     } catch (e) { /* TitleFx answers at eval */ }
@@ -802,11 +814,13 @@
         <button id="pm-open-driving" type="button">DRIVING&hellip;<small>Coach, practice, strategy &amp; badges</small></button>
         <button id="pm-open-display" type="button">DISPLAY&hellip;<small>HUD &amp; graphics</small></button>
         <button id="pm-open-appearance" type="button">APPEARANCE&hellip;<small>Colours, UI size &amp; every screen&rsquo;s look</small></button>
+        <button id="pm-open-a11y" type="button">ACCESSIBILITY&hellip;<small>Motion, keyboard focus &amp; colourblind cues</small></button>
         <button id="pm-advanced">STEERING &amp; ASSISTS&hellip;<small>Presets, response &amp; aids</small></button>
         <button id="pm-audio">MUSIC &amp; SOUND&hellip;<small>Music, radio, spotter &amp; voices</small></button>
         <button id="pm-open-files" type="button">BACKUP &amp; RESTORE&hellip;<small>Save or load your preferences</small></button>
       </nav>
       <div class="pm-groups">
+        <section id="pm-panel-a11y" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden></section>
         <section id="pm-panel-files" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden></section>
         <section id="pm-panel-controls" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
@@ -1229,7 +1243,7 @@
                per-screen folds after TITLE SCREEN are built by
                js/ui/screen-looks.js. -->
           <details id="pm-general" class="pm-renderer-sub">
-          <summary class="adv-more-btn" id="pm-general-sum">GENERAL · COLOURS, SIZE &amp; MOTION</summary>
+          <summary class="adv-more-btn" id="pm-general-sum">GENERAL · COLOURS, SIZE &amp; READABILITY</summary>
           <div id="pm-general-body" role="group" aria-label="General appearance">
           <div id="pm-appearance-preview" class="pm-accent-preview" aria-hidden="true">
             <div class="pm-look-menu">
@@ -1341,16 +1355,6 @@
               <button id="pm-helptext-next" type="button" data-step="1" aria-label="Next help text setting">&rsaquo;</button>
             </div>
           </div>
-          <h4 class="pm-look-h">MOTION</h4>
-          <div id="pm-motion" class="set-row" role="group" aria-labelledby="pm-motion-label">
-            <span class="tune-label" id="pm-motion-label">MOTION</span>
-            <div>
-              <button id="pm-motion-prev" type="button" data-step="-1" aria-label="Previous motion setting" aria-hidden="true" tabindex="-1">&lsaquo;</button>
-              <select id="pm-motion-sel" aria-labelledby="pm-motion-label" aria-describedby="pm-motion-help"></select>
-              <button id="pm-motion-next" type="button" data-step="1" aria-label="Next motion setting" aria-hidden="true" tabindex="-1">&rsaquo;</button>
-            </div>
-          </div>
-          <p class="adv-help" id="pm-motion-help">REDUCED turns off sliding and fading between screens, camera shake in the race and the pre-race flyby. If your phone is set to reduce motion, that always wins.</p>
           </div>
           </details>
           <!-- PAUSE MENU: how the in-race pause card looks and behaves, in one
@@ -1365,8 +1369,8 @@
           <!-- TITLE SCREEN: every knob that only touches the title screen, in one
                fold. js/ui/title-fx.js wires the rows; js/ui/title-layout.js
                mounts its TITLE LAYOUT sub-fold before REPLAY INTRO and paints
-               this summary (SHIPPED / CUSTOM across all of them). MOTION stays
-               outside: it reaches every screen and the race. -->
+               this summary (SHIPPED / CUSTOM across all of them). REDUCE MOTION
+               lives under ACCESSIBILITY (reaches every screen and the race). -->
           <details id="pm-titlescreen" class="pm-renderer-sub">
             <summary class="adv-more-btn" id="pm-titlescreen-sum">TITLE SCREEN · SHIPPED</summary>
             <div id="pm-titlescreen-body" role="group" aria-label="Title screen">
@@ -3664,6 +3668,7 @@
 <script defer crossorigin="anonymous" src="js/camera/feel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/driving-line-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/appearance-opts.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/a11y-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-elements.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-tyres.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-damage.js?v=dev"></script>
