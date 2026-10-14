@@ -276,6 +276,27 @@ var GameAudio = (function () {
     return M4.clamp(Number.isFinite(v) ? v : 0, 0, 1);
   }
 
+  // Job 4 — slip → tyre squeal, speed → wind. Pure so the VM tests pin the
+  // curve without a graph. Below SQUEAL_THRESH the tyre is still in the grip
+  // well (silent). Below WIND_GATE the car is crawling (pit-entry / grid).
+  const SQUEAL_THRESH = 0.10;
+  function squealFromSlip(lat01, long01, wet) {
+    const lat = clamp01(lat01), long = clamp01(long01);
+    const raw = Math.min(1, Math.sqrt(lat * lat + long * long));
+    const over = raw <= SQUEAL_THRESH ? 0 : (raw - SQUEAL_THRESH) / (1 - SQUEAL_THRESH);
+    return {
+      gain: over * (wet ? 0.10 : 0.16),
+      hz: (wet ? 480 : 760) + over * 320 + (over > 0 ? long * 120 : 0),
+      lfo: over > 0 ? 60 : 0
+    };
+  }
+  const WIND_GATE = 0.04;
+  function windFromSpeed(s01) {
+    const s = clamp01(s01);
+    const u = s <= WIND_GATE ? 0 : (s - WIND_GATE) / (1 - WIND_GATE);
+    return { gain: 0.036 * u * u, hz: 450 + u * 1450 };
+  }
+
   /* ---------------- iOS audio session ----------------
      "playback" plays through the ring/silent switch like a game should — but on
      iOS it is EXCLUSIVE: the first sound this game makes interrupts whatever
@@ -319,11 +340,37 @@ var GameAudio = (function () {
    * when a spotter clip ends while an engineer line is still on air.
    * THE RADIO HOLD IS PER SOURCE TOO: the engineer, every WATCH clip and the
    * real-replay fallback pass their own id (default "radio" = the engineer), so
-   * one of them letting go cannot lift the music under another still on air. */
+   * one of them letting go cannot lift the music under another still on air.
+   *
+   * MIX DUCK (Job 5). Radio already emits via setRadioDuck(on, src) — this
+   * block only SUBSCRIBES. Music still dips through soundtrack.setRadioDuck
+   * (0.35 ≈ −9 dB). The SFX bus dips here (−8 dB, 80 ms attack / 400 ms
+   * release via setTargetAtTime). Overlapping holds do not re-ramp (no pump).
+   * Engine stays on sfxBus at ~0.4 — audible, not muted. Zero new nodes. */
   const radioDuckHolds = new Set();
   let spotterDuckHold = false;
+  const MIX_DUCK_LIN = 10 ** (-8 / 20);   // ≈ 0.3981, mid of −6…−10 dB
+  const MIX_DUCK_ATTACK_TAU = 0.08;
+  const MIX_DUCK_RELEASE_TAU = 0.4;
+  let mixDuckOn = false;
+  function sfxBusTarget() {
+    if (!sfxEnabled) return 0;
+    return sfxVol * (mixDuckOn ? MIX_DUCK_LIN : 1);
+  }
+  function applySfxDuck(on) {
+    const want = !!on;
+    const changed = want !== mixDuckOn;
+    mixDuckOn = want;
+    if (!sfxBus || !ctx || !changed) return mixDuckOn;
+    const t = ctx.currentTime;
+    sfxBus.gain.cancelScheduledValues(t);
+    sfxBus.gain.setTargetAtTime(sfxBusTarget(), t, want ? MIX_DUCK_ATTACK_TAU : MIX_DUCK_RELEASE_TAU);
+    return mixDuckOn;
+  }
   function applyMusicDuck() {
-    return soundtrackRadioDuck(radioDuckHolds.size > 0 || spotterDuckHold);
+    const on = radioDuckHolds.size > 0 || spotterDuckHold;
+    applySfxDuck(on);
+    return soundtrackRadioDuck(on);
   }
   function setRadioDuck(on, src) {
     const id = src == null ? "radio" : String(src);
@@ -361,6 +408,11 @@ var GameAudio = (function () {
       // (support.apple.com/guide/iphone/answer-or-decline-incoming-calls-iph3c9947bf/ios).
       if (ctx.state === "closed") return;
       if (ctx.state === "interrupted" && _onInterrupted) { try { _onInterrupted(); } catch (_) { /* a listener must not stop the resume below */ } }
+      if (ctx.state === "interrupted") {
+        // Session taken: release the SFX dip so a recovered graph is not stuck
+        // under a ghost line. Holds stay; `running` re-latches via applyMusicDuck.
+        applySfxDuck(false);
+      }
       if (ctx.state === "running" && ctxSampleRate && ctx.sampleRate !== ctxSampleRate) {
         scheduleOutputDeviceRebuild("sampleRate");
       }
@@ -370,6 +422,7 @@ var GameAudio = (function () {
         // "suspended" event armed. Healthy, so nothing to rebuild.
         if (deviceRebuildTimer && staleStateRebuild(deviceRebuildTimerWhy)) { clearTimeout(deviceRebuildTimer); deviceRebuildTimer = null; }
         if (staleStateRebuild(deviceRebuildPending)) deviceRebuildPending = "";
+        applyMusicDuck();
       }
       if (!document.hidden && (ctx.state === "interrupted" || ctx.state === "suspended")) {
         scheduleOutputDeviceRebuild("state-" + ctx.state);
@@ -388,7 +441,8 @@ var GameAudio = (function () {
     limiter.attack.value = 0.003; limiter.release.value = 0.15;
     master.connect(limiter).connect(ctx.destination);
     sfxBus = ctx.createGain();
-    sfxBus.gain.value = sfxEnabled ? sfxVol : 0;
+    mixDuckOn = radioDuckHolds.size > 0 || spotterDuckHold;
+    sfxBus.gain.value = sfxBusTarget();
     sfxBus.connect(master);
     attachRivalPassBy();
 
@@ -659,6 +713,7 @@ var GameAudio = (function () {
     // holds so a mid-clip rebuild cannot leave the music stuck under a ghost.
     radioDuckHolds.clear();
     spotterDuckHold = false;
+    mixDuckOn = false;
     // Timestamps from the closed context's clock: revFlare's decay would read a
     // dt against the new (near-0) clock, and limSince would hold the cut open.
     revFlare = 0; revFlareT = 0; limSince = null;
@@ -1736,22 +1791,20 @@ var GameAudio = (function () {
       cylCutGain._apexCylTgt = cylDepth;
     }
 
-    // AIRFLOW. Quadratic in speed (drag goes with v^2, and it keeps the layer
-    // out of the way at pit-lane pace while it swells down a straight), gated
-    // like the turbo whine so a stationary car is silent. Kerbs and grass add
-    // buffeting, rain adds spray hiss, and a hard lift/brake gusts briefly as
-    // the air unloads — that decel term IS harvLevel, the smoothed derivative
-    // the harvest layer just computed (lastSpeed is overwritten above, so
-    // recomputing it here would read a difference of exactly zero). Peak stays ~0.04, an order under the
-    // engine core, per the level budget the other bus layers keep to.
-    const windOpen = s > 0.04 ? 1 : 0;
-    const gust = harvLevel;   // already the smoothed decel signal, computed above
+    // AIRFLOW. Quadratic in *opened* speed (windFromSpeed): silent at the
+    // crawl gate, quiet at pit-lane, full rush near vTop. Kerbs/grass buffet,
+    // rain hisses, a hard lift gusts (harvLevel). Peak ~0.036, an order under
+    // the engine core. lastSpeed is overwritten above, so the gust is the
+    // harvest smoother, not a re-diff of speed.
+    const wf = windFromSpeed(s);
+    const windOpen = s > WIND_GATE ? 1 : 0;
+    const gust = harvLevel;
     const rough = (offroad ? 0.5 : 0) + (onKerb ? 0.35 : 0);
-    const tow = clamp01(ph.tow || 0);   // in a slipstream the air is already moving: less wind
+    const tow = clamp01(ph.tow || 0);
     aimGain(windGain,
-      layers.wind ? (0.006 + 0.030 * s * s) * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * windOpen * tune.wind * camMix.wind : 0,
+      layers.wind ? wf.gain * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * windOpen * tune.wind * camMix.wind : 0,
       t, 0.10);
-    aimParam(windFilter.frequency, 450 + s * 1450 + rough * 260, t, 0.12, 1e-4);
+    aimParam(windFilter.frequency, wf.hz + rough * 260, t, 0.12, 1e-4);
 
     // BRAKES (see startEngine). Level follows how hard the car is stopping
     // (brakeFrac: PhysicsConsts.BRAKE is the full pedal) and how fast it is going — the
@@ -1964,33 +2017,35 @@ var GameAudio = (function () {
     } catch (e) { rainStopping = false; rainPending = null; }
   }
 
-  // x 0..1; looped bandpass noise follows it.
-  // wet=true shifts the centre frequency down — water spray has a lower
-  // spectral character than hot dry-rubber screech.
-  function setSkid(x, wet) {
+  // Tyre squeal from LATERAL (cornering past grip) and LONGITUDINAL
+  // (wheelspin / lock-up) slip. `x` is the combined 0..1 intensity the
+  // live caller already mixes (skidIntensity); pass `{ lat, long, wet }`
+  // or a third `extra` bag when the axes are separate. Silent at or
+  // below SQUEAL_THRESH. Glide, not a `.value =` step — this runs once
+  // per rendered frame and the slide input is unsmoothed.
+  function setSkid(x, wet, extra) {
     if (!engineOn || !skidGain) return;
-    const v = clamp01(x || 0);
-    // A GLIDE, not a `.value =` step. This runs once per rendered frame and the
-    // slide input is unsmoothed (offroad is a 0 -> 0.5 step), so direct writes
-    // stair-stepped the gain of broadband noise at the frame rate: crackle.
-    // tau 0.02 s (glideLevel) is fast enough that a slide still bites and the
-    // hard 0 still lands within ~60 ms. Scheduled only on a change: a timeline
-    // insertion every frame, 0 onto 0 on every frame not sliding, is what the
-    // guard was for. An exact value (the hard 0) always lands; a sub-1e-4
-    // wobble (~-80 dBFS) does not.
-    const sv = layers.screech ? v * (wet ? 0.10 : 0.16) * tune.screech : 0;   // wetter = quieter, sibilant
+    let lat, long;
+    if (x && typeof x === "object") {
+      wet = x.wet; extra = x;
+      lat = x.lat != null ? x.lat : (x.slip || 0);
+      long = x.long || 0;
+    } else {
+      lat = extra && extra.lat != null ? extra.lat : (x || 0);
+      long = extra && extra.long != null ? extra.long : 0;
+    }
+    const q = squealFromSlip(lat, long, wet);
+    const sv = layers.screech ? q.gain * tune.screech : 0;
     const sp = skidGain._apexSkidV;
     if (sp !== sv && (sv === 0 || sp === undefined || Math.abs(sp - sv) >= 1e-4)) { glideLevel(skidGain.gain, sv); skidGain._apexSkidV = sv; }
-    if (v > 0) {
-      const base = wet ? 480 : 760;                    // wet: lower splash vs dry: screech
-      const centre = base + v * 320;
-      if (Math.abs((skidFilter.frequency._apexSkidBase ?? -1) - centre) >= 1) {
-        skidFilter.frequency.setTargetAtTime(centre, now(), LEVEL_TAU);
-        skidFilter.frequency._apexSkidBase = centre;
+    if (q.lfo > 0) {
+      if (Math.abs((skidFilter.frequency._apexSkidBase ?? -1) - q.hz) >= 1) {
+        skidFilter.frequency.setTargetAtTime(q.hz, now(), LEVEL_TAU);
+        skidFilter.frequency._apexSkidBase = q.hz;
       }
-      if (skidLfoGain && (skidLfoGain._apexDepth ?? 0) !== 60) {
-        skidLfoGain.gain.setTargetAtTime(60, now(), LEVEL_TAU);
-        skidLfoGain._apexDepth = 60;
+      if (skidLfoGain && (skidLfoGain._apexDepth ?? 0) !== q.lfo) {
+        skidLfoGain.gain.setTargetAtTime(q.lfo, now(), LEVEL_TAU);
+        skidLfoGain._apexDepth = q.lfo;
       }
     } else if (skidLfoGain && (skidLfoGain._apexDepth ?? 0) !== 0) {
       skidLfoGain.gain.setTargetAtTime(0, now(), LEVEL_TAU);
@@ -2576,12 +2631,12 @@ var GameAudio = (function () {
      glide, glideLevel), so a slider moves the level while it is being dragged. */
   function setSfxVolume(v) {
     sfxVol = clamp01(typeof v === "number" ? v : 1);
-    if (sfxBus) glideLevel(sfxBus.gain, sfxEnabled ? sfxVol : 0);
+    if (sfxBus) glideLevel(sfxBus.gain, sfxBusTarget());
     return sfxVol;
   }
   function setSfxEnabled(b) {
     sfxEnabled = !!b;
-    if (sfxBus) glideLevel(sfxBus.gain, sfxEnabled ? sfxVol : 0);
+    if (sfxBus) glideLevel(sfxBus.gain, sfxBusTarget());
     // A race that started with SFX off wanted rain but built no nodes
     // (startRain returns on !sfxOk()); turning SFX on must start it.
     if (sfxEnabled && rainWanted && !rainSrc) startRain();
@@ -2629,6 +2684,10 @@ var GameAudio = (function () {
     syncReplayRpms,
     resetReplayScrub,
     setSkid,
+    squealFromSlip,
+    windFromSpeed,
+    skidPitch() { return skidFilter ? +(skidFilter.frequency._apexSkidBase ?? skidFilter.frequency.value) : 0; },
+    windCutoff() { return windFilter ? +(windFilter.frequency._apexAimTgt ?? windFilter.frequency.value) : 0; },
     setCarSfx,
     pitGun,
     setCameraMix,
@@ -2717,6 +2776,18 @@ var GameAudio = (function () {
     sourceCounts,
     setSfxVolume,
     setSfxEnabled,
+    // Test hook: mix-duck latch under announcer/radio (Job 5). sfx is the
+    // composed bus target; lin / attackTau / releaseTau are the ramp contract.
+    mixDuck() {
+      return {
+        on: mixDuckOn,
+        holds: radioDuckHolds.size + (spotterDuckHold ? 1 : 0),
+        lin: MIX_DUCK_LIN,
+        attackTau: MIX_DUCK_ATTACK_TAU,
+        releaseTau: MIX_DUCK_RELEASE_TAU,
+        sfx: sfxBus ? +sfxBus.gain.value : 0,
+      };
+    },
     setMusicVolume,
     volumes,
     // Test hook: the airflow layer's live gain. It sits on sfxBus, so
