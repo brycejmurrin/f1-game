@@ -270,7 +270,8 @@ test("parts() hands back a copy, so a caller cannot edit the table", () => {
 });
 
 test("every legend livery spineHeight is a registered Car3D id (not \"low\")", () => {
-  const src = fs.readFileSync(new URL("../../js/car/car3d.js", import.meta.url), "utf8");
+  // SPINE_HEIGHT_IDS lives in car-body-geom.js (pure-moved from car3d); Car3D re-exports it.
+  const src = fs.readFileSync(new URL("../../js/car/car-body-geom.js", import.meta.url), "utf8");
   const ids = JSON.parse(src.match(/SPINE_HEIGHT_IDS = Object\.freeze\((\[[^\]]*\])\)/)[1]);
   for (const l of Legends.LIST) {
     assert.ok(ids.includes(l.livery.spineHeight), `${l.id}: spineHeight "${l.livery.spineHeight}" is not one of ${ids}`);
