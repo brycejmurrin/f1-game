@@ -233,7 +233,9 @@
       ]) {
         const a = anchor(K(s), 1, gap);
         const gy = typeof terrainYAt === "function" ? terrainYAt(a.c[0], a.c[2]) : null;
-        if (gy != null && Math.abs(gy - a.c[1]) > 0.8) continue;
+        // Paddock verge slopes: skip pads that sit below terrain or disagree with it
+        // (ground-audit buried up to 0.91 m at the old 0.8 m slope gate).
+        if (gy != null && (a.c[1] < gy - 0.15 || Math.abs(gy - a.c[1]) > 0.45)) continue;
         motorhome(K(s), 1, gap, 9, 3.6, 5.5,
           { wall: [0.66 + hash(K(s) * 71) * 0.24, 0.66, 0.68] });
       }
@@ -296,11 +298,11 @@
         addBox(stage, vadd(vadd(a.c, a.r, -1.5), a.u, h * 0.45 - 0.2),
           [depth * 0.6, h * 0.9, len], SHELL, b);
         for (let t = 0; t < 4; t++) {
-          const lat = depth * 0.36 - t * 1.5;
+          const lat = depth * 0.36 - t * 1.55;
           // Stagger riser heights so consecutive tops are never coplanar.
           const yh = 1.55 + t * 2.25;
-          addBox(stage, vadd(vadd(a.c, a.r, lat), a.u, yh * 0.5 - 0.15),
-            [1.7, yh + 0.3, len - t * 2.4], t & 1 ? [0.78, 0.79, 0.80] : SHELL, b);
+          addBox(stage, vadd(vadd(a.c, a.r, lat), a.u, yh * 0.5 - 0.15 + t * 0.11),
+            [1.7, yh + 0.28, len - t * 2.4], t & 1 ? [0.78, 0.79, 0.80] : SHELL, b);
           stage._mat = MAT.FABRIC;
           addBox(stage, vadd(vadd(a.c, a.r, lat - 0.15), a.u, yh + 0.35 + t * 0.12),
             [1.15, 0.65, len - t * 2.4 - 2], SEAT_COLS[t % 3], b);
