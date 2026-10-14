@@ -21,7 +21,7 @@ const RaceEntryProfile = (() => {
   let marks = [];
   let longTasks = [];
   let lapT0 = 0;
-  let winT0 = 0;
+  let winT0 = 0, winT1 = 0;
   let observer = null;
   let supported = false;
   let armed = false;
@@ -89,7 +89,7 @@ const RaceEntryProfile = (() => {
     sawWarming = false;
     sawReady = false;
     endAfterReady = 0;
-    winT0 = now();
+    winT0 = now(); winT1 = winT0;
     lapT0 = winT0;
     armed = true;
     armObserver();
@@ -133,6 +133,7 @@ const RaceEntryProfile = (() => {
 
   function end() {
     if (!armed) return;
+    winT1 = now();
     pushMark("end");
     armed = false;
     disarmObserver();
@@ -252,7 +253,7 @@ const RaceEntryProfile = (() => {
       maxBlockMs: maxBlockMs(),
       supported,
       armed,
-      windowMs: armed || marks.length ? +(now() - winT0).toFixed(2) : 0,
+      windowMs: armed || marks.length ? +((armed ? now() : winT1) - winT0).toFixed(2) : 0,
     };
   }
 
