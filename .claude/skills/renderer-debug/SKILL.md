@@ -49,8 +49,8 @@ or `three`. Three picks its own WebGL2 or WebGPU path:
 - Probe: `node tools/gfx/gfx-probe.mjs --backend three [--tlx-webgpu --lavapipe]
   <track>` — `gpuErrors` must be 0 (parent session only: it launches Chromium).
   `--tod night` for a lighting-dependent defect.
-- Opaque canvas alpha is required for compositing (the transparent-cars class
-  of defect). Never compare the census's two TLX legs on frames or luma
+- Transparent / see-through cars: opaque canvas alpha is required —
+  [references/tlx-transparent-cars.md](references/tlx-transparent-cars.md). Never compare the census's two TLX legs on frames or luma
   without reading the `path:` row (soft-blit differs per leg).
 - A look that differs from GLX/WGX: `docs/ARCHITECTURE.md` §Cross-backend
   parity and `node --test tests/unit/backend-surface-parity.test.mjs`
@@ -82,12 +82,6 @@ parent session only. Gate every WGSL/pipeline edit with it plus
 `WGX.lastFailure()` explains a refusal. Steps, the fallback trace, SwiftShader
 limits and live pokes: [references/wgx.md](references/wgx.md); late-sky /
 derivative_uniformity (NaN-white road) / MSAA+HDR defects and the device-loss
-ladder: [references/wgx-defects.md](references/wgx-defects.md). A
+ladder: [references/wgx-defects.md](references/wgx-defects.md). WebKit/Safari/iOS:
+`IS_WEBKIT` forces `WGX_LITE`; its WGSL rules: `.claude/rules/render-wgx.md`. A
 textured-vs-procedural material look on WGX is **asset-pack**.
-
-## Load on demand
-
-- GLX probes (HDR, light state, GL errors, light upload) → [references/glx.md](references/glx.md)
-- GLX shadow acne, bloom blow-out, probe pattern, one-liners → [references/glx-failures.md](references/glx-failures.md)
-- WGX static/Dawn validation, error state, unit gates → [references/wgx.md](references/wgx.md)
-- WGX defect classes, device-loss ladder → [references/wgx-defects.md](references/wgx-defects.md)
