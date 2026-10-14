@@ -306,3 +306,19 @@ test("M2: Studio edits never pin motion:'on' and write only the keys that change
   studio.reset(); assert.equal(values.motion, undefined);
   studio.undo(); assert.equal(values.motion, "reduce");
 });
+
+
+test("mounted Studio exposes percentage units and explains system reduced motion", () => {
+  const dom = makeDom(), panel = dom.byId("pm-panel-appearance"); panel.prepend = node => panel.insertBefore(node, panel.firstChild);
+  const { studio, values } = load({}, true, true, dom.document);
+  const descendants = el => [el, ...el.children.flatMap(descendants)];
+  const all = descendants(dom.byId("pm-panel-appearance"));
+  const ranges = all.filter(el => el.type === "range");
+  assert.equal(ranges.length, 2);
+  for (const input of ranges) assert.equal(input.getAttribute("aria-valuetext"), input.value + "%");
+  const note = all.find(el => /Menu motion is reduced by your system/.test(el.textContent));
+  assert.ok(note); assert.equal(note.hidden, false); assert.equal(studio.snapshot().motion, null);
+  studio.applySnapshot({ ...studio.snapshot(), uiScale: 125, hudScale: 90, motion: "reduce" });
+  assert.equal(note.hidden, true); assert.equal(values.motion, "reduce");
+  for (const input of ranges) assert.equal(input.getAttribute("aria-valuetext"), input.value + "%");
+});

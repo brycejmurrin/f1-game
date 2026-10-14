@@ -140,5 +140,24 @@ var RivalAudio = (() => {
 
     return { collect, emitFieldSfx };
   }
-  return { create };
+
+  /** Wet-spray wake: nearest rival ahead within 40 m → 0..1 (1 = on your gearbox).
+   *  Pure geometry over collect() rows; engine.js multiplies this into the spray
+   *  bed only when the road is wet. Behind / alongside / past 40 m → 0. */
+  function sprayAhead(rows) {
+    if (!rows || !rows.length) return 0;
+    let best = 0;
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const arc = +r.arc || 0;
+      if (!(arc > 0)) continue;
+      const dist = r.dist != null ? +r.dist : Math.hypot(+r.lat || 0, arc);
+      if (!(dist > 0) || dist > 40) continue;
+      const a = 1 - dist / 40;
+      if (a > best) best = a;
+    }
+    return best;
+  }
+
+  return { create, sprayAhead };
 })();

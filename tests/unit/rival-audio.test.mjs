@@ -215,6 +215,18 @@ test("net-owned rivals are flagged for heavier engine pitch smoothing", () => {
   assert.equal(byArc[10].key, 1);
 });
 
+test("sprayAhead is rivals-ahead within 40 m only (Radio r9 wet wake)", () => {
+  const RA = load();
+  assert.equal(RA.sprayAhead(null), 0);
+  assert.equal(RA.sprayAhead([]), 0);
+  assert.equal(RA.sprayAhead([{ arc: -5, dist: 5 }]), 0, "behind is not a wake");
+  assert.equal(RA.sprayAhead([{ arc: 0, dist: 3 }]), 0, "alongside is not a wake");
+  assert.equal(RA.sprayAhead([{ arc: 50, dist: 50 }]), 0, "past 40 m is silent");
+  assert.equal(RA.sprayAhead([{ arc: 20, dist: 20 }]), 0.5, "20 m ahead is half wake");
+  assert.equal(RA.sprayAhead([{ arc: 0, dist: 0 }, { arc: 8, dist: 8 }, { arc: 30, dist: 30 }]),
+    0.8, "nearest ahead wins (8 m → 0.8)");
+});
+
 // ── camera-relative pan (Radio r6 f3) ─────────────────────────────────────
 
 const CHASE_PAN_FIXTURES = [

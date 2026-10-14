@@ -802,7 +802,7 @@ window.SpotifyMusic = (function () {
       api("/me/player/previous" + remoteQuery(), { method: "POST" }).then(() => afterCommand(gen));
       return;
     }
-    if (player) { try { player.previousTrack(); } catch (e) { /* a broken SDK call must not take the transport down */ } }
+    if (player) { try { const p = player.previousTrack(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* a broken SDK call must not take the transport down */ } }
   }
   function toggle() {
     if (!BACKEND.active()) return;
@@ -921,7 +921,7 @@ window.SpotifyMusic = (function () {
           .then(() => afterCommand(gen));   // Spotify needs a beat to settle
         return track;
       }
-      try { player.nextTrack(); } catch (e) { /* a broken SDK call must not take the transport down */ }
+      try { const p = player.nextTrack(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* a broken SDK call must not take the transport down */ }
       return track;
     },
     setVolume(v01) {
@@ -930,7 +930,7 @@ window.SpotifyMusic = (function () {
         if (BACKEND.active()) putDeviceVolume(vol * 100);   // coalesced — see putDeviceVolume
         return vol;
       }
-      if (player) { try { player.setVolume(vol); } catch (e) { /* a broken SDK call must not take the transport down */ } }
+      if (player) { try { const p = player.setVolume(vol); if (p && p.catch) p.catch(() => {}); } catch (e) { /* a broken SDK call must not take the transport down */ } }
       return vol;
     },
     name() { return track; },
