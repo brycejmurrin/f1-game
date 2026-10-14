@@ -681,8 +681,11 @@ function radioTopSlot(root, bcast) {
   let slot = lit && right - RADIO_TOP_GAP - x >= RADIO_TOP_MIN
     ? { x, y: t.top, w: right - RADIO_TOP_GAP - x, h: t.height } : null;
   if (!slot && lit) slot = radioUnderRight(t);
-  hToggle(document.body, "hud-radio-top", !!slot);
-  const corner = !!(slot && slot.corner), b = document.body;   // an attribute, not a class: compare before write
+  // The corner is an ATTRIBUTE, not hud-radio-top: body.className keys the fit,
+  // lane and root-var memos, and a class flipping with the slot between passes
+  // broke the same-input fit's idempotence (hud-fit-idempotent: --dock-r-w).
+  const corner = !!(slot && slot.corner), b = document.body;
+  hToggle(b, "hud-radio-top", !!slot && !corner);
   if (b.toggleAttribute && b.hasAttribute("data-radio-corner") !== corner) b.toggleAttribute("data-radio-corner", corner);
   if (!slot) return;
   if (slot.corner) hStyle(root, "--radio-top-r", (vpW() - slot.x - slot.w).toFixed(1) + "px");
@@ -751,6 +754,7 @@ function radioPaintedCollapse(root) {
     const tower = _hudTop || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
     if (hit(els.hudSectors) || hit(tower)) {
       hToggle(document.body, "hud-radio-top", false);
+      if (document.body.removeAttribute) document.body.removeAttribute("data-radio-corner");
       const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();
       hStyle(root, "--announce-lane-x", (salPx + RADIO_TOP_GAP).toFixed(1) + "px");
       hStyle(root, "--announce-lane-shift", "0%");
@@ -2194,7 +2198,9 @@ function updateHud(force, dtMs) {
       }
     }
     if (_blue !== !!blueCar) { _blue = !!blueCar; hData(els.flag, "flag", _blue ? "blue" : null); }
-    if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; }
+    // A flag chip appearing or going re-picks the radio slot: the top-right
+    // corner card (radioUnderRight) steps right of the centred chip, not under it.
+    if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; if (_invalidateFit) _invalidateFit(); }
   }
   // Stamp only after REL, sector rows and announce lane for this tick — fitHud
   // runs at tick start and must not publish early (CI: stamp green, S3×BOOST).

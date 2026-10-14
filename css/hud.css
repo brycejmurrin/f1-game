@@ -917,14 +917,24 @@ body.hud-radio-top #announce:not([hidden]) {
   line-height: 1.15;
   --radio-num: 18px;
 }
-/* THE TOP-RIGHT CORNER (js/ui/hud.js radioUnderRight): the slot under the
-   tower's right end, right-aligned beside CAM, so the card anchors by its right
-   edge and a short message still sits by the camera selector. */
-body.hud-radio-top[data-radio-corner] #announce:not([hidden]) {
+/* THE TOP-RIGHT CORNER, SECOND CHOICE (js/ui/hud.js radioUnderRight): under
+   the tower's right end, beside CAM, anchored by its RIGHT edge so a short
+   message still sits by the camera selector. body[data-radio-corner], not
+   hud-radio-top (see radioTopSlot); the doubled attribute outranks the caution
+   rules' :has(#hud-flag) step-down — the slot already clears the flag chip. */
+body[data-radio-corner][data-radio-corner] #announce:not([hidden]):not([data-lane-collapsed]) {
+  top: calc(var(--radio-top-y) / var(--hud-z));
   left: auto;
   right: calc(var(--radio-top-r) / var(--hud-z));
+  transform: none;
+  min-width: 0;
+  max-width: calc(var(--radio-top-w) / var(--hud-z));
+  min-height: calc(var(--radio-top-h) / var(--hud-z));
+  font-size: var(--fs-micro);
+  line-height: 1.15;
+  --radio-num: 18px;
 }
-body.hud-radio-top #announce-body {
+body:is(.hud-radio-top, [data-radio-corner]) #announce-body {
   justify-content: center; gap: 0;
   padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.6);
 }
