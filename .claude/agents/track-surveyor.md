@@ -37,19 +37,13 @@ floating tree and not reach the line that places it.
    terrain-over-road or water defect. No `survey-track.mjs`, `agent.mjs`,
    `apex-eval.mjs`, `ground-profile.mjs`, Chromium or cloudBrowser in this fork.
 3. Edit the assigned pair only — `js/circuits/<id>.js` (geometry, metadata, palette) and
-   `js/circuits/scenery/<id>.js` (the `scenery(api)` dressing). Frac-keyed
-   tables MUST respect `def._sceneryShift` — consume via the compensated idiom
-   (`bankingProfile`, `buildCenterline`); a raw `frac` read places things 2/3
-   of a lap away. In the closure, `K(s)` is authored-frame and passes straight
-   through — never pre-shift it. `along()` hands the callback authored-frame `k`,
-   and `bakedModel(id, k, side, …)` remaps correctly on shifted circuits (both
-   fixed 2026-09; `scenery-dress/references/rules.md` §Frames), so wrapped helpers
-   are safe inside `along()`. Keep `if (!bakedModel(…))` fallbacks anyway.
-   `startFrac` and width zones use control-index fractions; built `s/total`
-   uses arc fractions. Curated turns/sectors and `{ turn: N }` anchors already
-   use racing space. Measure the built centreline rather than multiplying every
-   authored fraction by `path.len`. Missing copied fields belong to the parent
-   (`TrackDef.fromRaw` in `js/track/core/def.js`).
+   `js/circuits/scenery/<id>.js` (the `scenery(api)` dressing). Which `k` or
+   `frac` each emitter expects (`def._sceneryShift`, `K(s)`, `along()`,
+   `bakedModel`) is `.claude/skills/scenery-dress/references/rules.md` §Frames —
+   read it before the first frac-keyed edit; a raw `frac` read lands 2/3 of a
+   lap away. Also: `startFrac` and width zones use control-index fractions,
+   built `s/total` arc fractions — measure the built centreline. Missing copied fields belong to the parent (`TrackDef.fromRaw` in
+   `js/track/core/def.js`).
 4. After completing all assigned pair edits, verify once:
    ```sh
    node tools/track/verify-track.cjs <id>
@@ -73,7 +67,10 @@ floating tree and not reach the line that places it.
   never share a checkout. Your edits land on that worktree's branch, not in the
   parent's tree: verify a session-known file first (a stale base is the wrong
   circuit), commit your pair when `verify-track` is clean, and put the branch
-  name and worktree path at the top of the hand-back — the parent merges it.
+  name and worktree path at the top of the hand-back. Do NOT push: the parent
+  merges your branch into its own before it verifies (AGENTS.md rule 10,
+  `survey-track` §Hand-back). The edit hook enforces the write scope: only
+  `js/circuits/<id>.js`, `js/circuits/scenery/<id>.js`, `scratch/`, `artifacts/`.
 
 Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
 report with its gaps named beats silence. Hitting `maxTurns` mid-tool-call

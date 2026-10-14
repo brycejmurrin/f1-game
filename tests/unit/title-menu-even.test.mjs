@@ -12,7 +12,8 @@ const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
 test("title 2-up rows share equal flex cells and fill them", () => {
   const menus = readCssSource("css/menus.css");
   assert.match(menus, /#menu-primary, #menu-explore\s*\{[^}]*--balance-min:\s*calc\(50%/);
-  assert.match(menus, /#menu-secondary\s*\{[^}]*--balance-basis:\s*5\.5rem/);
+  assert.match(menus, /#menu-secondary\s*\{[^}]*--balance-basis:\s*calc\(50%/);
+  assert.match(menus, /#menu-secondary\s*\{[^}]*--balance-min:\s*calc\(50%/);
   assert.match(menus, /#menu-primary, #menu-explore, #menu-secondary\s*\{[^}]*gap:\s*calc\(var\(--gap\) \* 0\.7\)/);
   assert.match(
     menus,
@@ -340,6 +341,19 @@ test("title explore: #mb-watch is WATCH with BROADCAST / REAL RACES in .mb-sub",
   );
   assert.doesNotMatch(html, /id="mb-watch"[^>]*>[\s\S]*?WATCH REAL RACES/,
     "must not keep the long one-line WATCH REAL RACES label");
+});
+
+test("title explore doors carry leading .btn-ico like the play-now row", () => {
+  // WATCH / PRACTICE / PHOTO / GARAGE shipped without icons while RACE /
+  // TIME TRIAL / etc. had Lucide strokes — desktop title looked uneven.
+  const html = read("index.html");
+  for (const id of ["mb-watch", "mb-practice", "mb-photo", "mb-garage"]) {
+    assert.match(
+      html,
+      new RegExp(`<button id="${id}"[^>]*>\\s*<svg class="btn-ico"`),
+      `#${id} opens with a leading .btn-ico`,
+    );
+  }
 });
 
 test("title menu: the doors the script re-names start with their visible label", () => {
