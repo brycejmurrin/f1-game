@@ -2,7 +2,7 @@
 
 Markdown agents with YAML frontmatter under `.claude/agents/`. Claude Code and
 Cursor both load this path (Cursor also accepts `.cursor/agents/`; we keep the
-single Claude tree to avoid drift). Ten agents. Two older ones were folded
+single Claude tree to avoid drift). Eleven agents. Two older ones were folded
 away: `worktree-regression-check` into **verify-agent** `--base`, and
 `doc-drift-auditor` into the `total-audit` workflow's `docs-ref` / `docs-idx`
 lenses (`.claude/workflows/README.md`).
@@ -18,6 +18,7 @@ lenses (`.claude/workflows/README.md`).
 | **ci-watcher** | The PR board for CI Watch: runs `tools/ci/pr-board.mjs --json` + `ready-full-cap.mjs` and returns every open PR's ARM / READY / SYNC / FIX / FOREIGN-ARM / WAIT / NONE with the exact GitHub MCP call per action. Read-only (Bash, Read, Grep, Glob); never mutates or merges. Protocol: skill `ci-watch`. |
 | **prior-art-scout** | Step 0 of a hunt or audit: greps `docs/notes/DEFECT-LEDGER.md`, `docs/BUGS.md`, hunt/survey notes and `git log` for one slice or topic and returns ≤ 30 `KNOWN` rows — the do-not-re-report list. Haiku, 12 turns; never judges whether an item is still true. |
 | **code-hunter** | Bug / perf / dead-code hunt over ONE slice, one agent per slice in parallel; takes the scout's list as `known:` and prints ≤ 12 `FINDING` rows as found, then `covered:` / `not covered:` / `measured:`. Node-only checks (`node --test` one file, VM runs under `timeout 180`); the whole run stays well under 10 min. The one opus pin. |
+| **agent-surface-reviewer** | Reviews ONE skill, agent, hook, rule file or AGENTS.md section (trigger, paths, commands, walkthrough, structure, enforcement) and writes a ≤ 60-line report to the `scratch/` path it is given; `retest <old report>` adds BEFORE/AFTER. Its one write is that report (hook-enforced: Write/Edit to `scratch/**.md` only, no Bash writes). Returns VERDICT + top 2 gaps. |
 | **finding-verifier** | Re-reads up to 15 `file:line — claim` rows on the current tree and returns `CONFIRMED / STALE / REFUTED / NEEDS-BROWSER` with evidence, then `refuted: k/N stale: k/N`. Run it before acting on any hunt, survey, review or audit finding; never fixes. |
 
 **Token routing:** prefer these over attaching fat skills. Deploy/version →
@@ -26,7 +27,7 @@ same-red on tip → `verify-agent --base <ref>`. One circuit →
 `track-surveyor`. Stale prose → the `total-audit` workflow (`docs-ref` /
 `docs-idx` lenses), not a bespoke agent. Curvature / PACE semantics →
 `physics-contract-auditor`. Fat skill / extract / dead code → `bloat-auditor`
-(parent applies via **slim-bloat**). A red Actions run → `ci-red-triage`. The open-PR board → `ci-watcher` (acted on per skill `ci-watch`). A hunt → `prior-art-scout`, then one `code-hunter` per slice, then `finding-verifier` on the rows before anyone fixes. Parent keeps edits, cache bump, and deploy FF.
+(parent applies via **slim-bloat**). A red Actions run → `ci-red-triage`. The open-PR board → `ci-watcher` (acted on per skill `ci-watch`). A hunt → `prior-art-scout`, then one `code-hunter` per slice, then `finding-verifier` on the rows before anyone fixes. A skill / agent / hook / AGENTS.md edit → `agent-surface-reviewer`. Parent keeps edits, cache bump, and deploy FF.
 
 **One prohibition line, not five blocks.** Every agent body ends with:
 "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no
@@ -41,13 +42,13 @@ New agents must be listed here and remain trackable
 
 Frontmatter is read by two hosts, and each ignores the other's fields:
 `name` (matches the filename) and `description` (what + when) for both;
-`tools:` is the Claude Code allowlist (read-only agents list no Write/Edit)
+`tools:` is the Claude Code allowlist (read-only agents list no Write/Edit; track-surveyor and agent-surface-reviewer write, scoped by `protect-files.py`)
 and `background: true` keeps a Claude Code agent off the foreground;
 `readonly: true` and `is_background: true` are the Cursor equivalents
 (`https://cursor.com/docs/subagents`). `model:` is a TIER, pinned by
 `tests/unit/skill-progressive.test.mjs`: `haiku` for scan-and-report agents
 (verify-agent, deploy-research, ci-watcher, prior-art-scout), `sonnet` for log triage,
-refactor and reachability judgement (ci-red-triage, bloat-auditor, physics-contract-auditor, finding-verifier),
+refactor and reachability judgement (ci-red-triage, bloat-auditor, physics-contract-auditor, finding-verifier, agent-surface-reviewer),
 `opus` for the one agent whose product is depth (code-hunter), `inherit` for track-surveyor. Every agent carries `maxTurns`; the two that run repeatedly
 carry `memory: project` (`.claude/agent-memory/<name>/MEMORY.md`, tracked, one
 line per remembered fact with a SHA). The test asserts all of it.

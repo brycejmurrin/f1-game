@@ -194,6 +194,7 @@ apex-tools HTTP `3713` (`127.0.0.1` only). Design / refuses:
 | One-screen CSS try-on | skill **css-play** → `css-play.mjs` / `playwright-mcp.sh play\|dom` | `layout-audit` matrix / `--gallery` |
 | Start Playwright **groups** | `tools/ci/test-bg.mjs` (CLI only) | any `apex_*` wrap; host `browser_*` |
 | Agent bloat / extract / dead code | skill **slim-bloat** → `bloat-auditor` + `bloat-scan.mjs` | a browser group; raising a ratchet to hide growth |
+| Review one skill / agent / hook / AGENTS.md section after an edit | `agent-surface-reviewer` (report in `scratch/`; `retest <old report>` = before/after) | the main session hand-reading every unit |
 | Bug / perf hunt over a slice | `prior-art-scout` (known list) → one `code-hunter` per slice → `finding-verifier` before any fix | a browser run in a hunter; acting on an unverified finding |
 
 Call `apex_status` before any `apex_*` browser tool. Occupancy treats a

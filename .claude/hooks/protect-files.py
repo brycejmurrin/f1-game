@@ -18,11 +18,17 @@ except Exception:
 ti = d.get("tool_input") or {}
 tool = d.get("tool_name") or ""
 # Hook input names the subagent a call comes from (`agent_type`, documented at
-# https://code.claude.com/docs/en/hooks). track-surveyor is the one agent with
-# write tools; rule 4 below scopes it to circuit pairs (2026-10-14).
+# https://code.claude.com/docs/en/hooks). track-surveyor and agent-surface-reviewer
+# are the agents with write tools; rules 4 and 5 below scope them (2026-10-14).
 agent = str(d.get("agent_type") or "")
 SURVEYOR = agent == "track-surveyor" or agent.endswith(":track-surveyor")
 SURVEYOR_OK = re.compile(r"^(js/circuits/(scenery/)?[a-z0-9_-]+\.js|scratch/.+|artifacts/.+)$")
+# agent-surface-reviewer has Write for its own report only: Write/Edit to
+# scratch/**.md, and no Bash writes at all (rule 5 below, 2026-10-14).
+REPORTER = agent == "agent-surface-reviewer" or agent.endswith(":agent-surface-reviewer")
+REPORTER_OK = re.compile(r"^scratch/.+\.md$")
+REPORTER_MSG = ("agent-surface-reviewer writes only its report, scratch/**.md, through Write/Edit "
+                "(.claude/agents/agent-surface-reviewer.md). Put the finding in the report instead.")
 
 
 def git(*args, cwd):
@@ -152,6 +158,13 @@ def check(file, tool, ti, proposed=None, how=""):
     while d_ and d_ != "/" and not os.path.isdir(d_):   # a Bash write may create the directory
         d_ = os.path.dirname(d_)
     root = git("rev-parse", "--show-toplevel", cwd=d_) if d_ and os.path.isdir(d_) else ""
+    # 5. agent-surface-reviewer: Write/Edit to scratch/**.md under the repo
+    # root only (a path outside any repo is refused too); no escape hatch.
+    if REPORTER:
+        rel_ = os.path.relpath(file, root).replace(os.sep, "/") if root else ".."
+        if tool == "Bash" or rel_.startswith("..") or not REPORTER_OK.match(rel_):
+            block(f"{rel_ if root else file}{f' (via Bash: {how})' if tool == 'Bash' else ''}: " + REPORTER_MSG,
+                  root or os.getcwd(), hatch=False)
     if not root:
         return
     # The escape hatch covers rules 1 and 3 (an ASSIGNED edit to a generated or
@@ -273,6 +286,12 @@ if tool == "Bash":
                 except Exception:
                     proposed = None
         check(t["path"], "Bash", {}, proposed, t["kind"])
+    if REPORTER:
+        for t in shellparse.surveyor_targets(cmd, d.get("cwd") or os.getcwd()):
+            if t["path"] is None:
+                block(f"{t['kind']} (via Bash) rewrites the whole tree: " + REPORTER_MSG,
+                      d.get("cwd") or os.getcwd(), hatch=False)
+            check(t["path"], "Bash", {}, None, t["kind"] + " — a removal")
     if SURVEYOR:
         # Removals and whole-tree git moves are writes too (round 2): `mv js/game.js
         # scratch/`, `rm -rf js/track`, `git stash`, `git reset --hard`, `git switch`.

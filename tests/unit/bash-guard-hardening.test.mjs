@@ -374,6 +374,26 @@ test("protect-files scopes track-surveyor writes to circuit pairs, scratch/ and 
   } finally { repo.rm(); }
 });
 
+test("protect-files scopes agent-surface-reviewer to its scratch/**.md report and refuses its Bash writes", () => {
+  const repo = scratchRepo("hook-reporter-");
+  const who = { agent_id: "r1", agent_type: "agent-surface-reviewer" };
+  const run = (payload) => hook("protect-files.sh", { cwd: repo.dir, ...payload, ...who }, { cwd: repo.dir });
+  const write = (rel) => run({ tool_name: "Write", tool_input: { file_path: path.join(repo.dir, rel), content: "x" } });
+  try {
+    assert.equal(write("scratch/survey/x.md").status, 0, "the reviewer may write its report");
+    for (const rel of [".claude/skills/x/SKILL.md", "scratch/survey/x.json", "AGENTS.md", "artifacts/x.md"]) {
+      const r = write(rel);
+      assert.equal(r.status, 2, `reviewer must not write ${rel}`);
+      assert.match(r.stderr, /agent-surface-reviewer writes only/);
+    }
+    const bash = (command) => run({ tool_name: "Bash", tool_input: { command } });
+    const game = ["js", "game"].join("/") + ".js";
+    for (const c of [`sed -i s/a/b/ ${game}`, "echo x > scratch/survey/x.md", "rm scratch/old.md", "git stash"])
+      assert.equal(bash(c).status, 2, `reviewer Bash must not write: ${c}`);
+    for (const c of ["git log -n 5", "wc -l AGENTS.md"]) assert.equal(bash(c).status, 0, `reviewer may read: ${c}`);
+  } finally { repo.rm(); }
+});
+
 test("guards that fail open say so on stderr; the MCP browser guard fails CLOSED (round 2)", () => {
   const r = hook("protect-files.sh", "not json");
   assert.equal(r.status, 0);

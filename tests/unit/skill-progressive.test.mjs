@@ -304,9 +304,9 @@ test("every custom subagent declares name, description, and model", () => {
   // does not silently pick a different model; readonly / is_background optional.
   const files = fs.readdirSync(AGENTS).filter((f) => f.endsWith(".md") && f !== "README.md");
   assert.deepEqual(files.sort(), [
-    "bloat-auditor.md", "ci-red-triage.md", "ci-watcher.md", "code-hunter.md", "deploy-research.md", "finding-verifier.md",
+    "agent-surface-reviewer.md", "bloat-auditor.md", "ci-red-triage.md", "ci-watcher.md", "code-hunter.md", "deploy-research.md", "finding-verifier.md",
     "physics-contract-auditor.md", "prior-art-scout.md", "track-surveyor.md", "verify-agent.md",
-  ], "ten agents since 2026-10-14 (code-hunter, finding-verifier, prior-art-scout added; ci-watcher 2026-10-10; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
+  ], "eleven agents since 2026-10-14 (agent-surface-reviewer, code-hunter, finding-verifier, prior-art-scout added; ci-watcher 2026-10-10; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
   // Model tiering (2026-09-22): a scan-and-report agent runs on a cheaper
   // tier; judgement stays on the session's model. Anything else is a typo.
   const TIER = {
@@ -315,6 +315,9 @@ test("every custom subagent declares name, description, and model", () => {
     // 2026-10-14: hunt agents. code-hunter is the ONE opus pin (depth is the
     // product, 4 of 11 hunt campaigns asked for opus); verify on sonnet, recall on haiku.
     "code-hunter.md": "opus", "finding-verifier.md": "sonnet", "prior-art-scout.md": "haiku",
+    // Writes only its scratch/**.md report (protect-files.py rule 5), so it is
+    // not in the readonly list below — like track-surveyor.
+    "agent-surface-reviewer.md": "sonnet",
   };
   const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.";
   for (const f of files) {

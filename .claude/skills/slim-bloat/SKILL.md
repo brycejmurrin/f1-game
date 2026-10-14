@@ -53,6 +53,7 @@ locksteps; if `tools/manifest.cjs` changed, run `node tools/gen/gen-shell.mjs`
 5. **Never "simplify" physics, the timestep, or `updateCar`/`render()`.**
    See do-not.md.
 
+After a skill / agent / AGENTS.md edit, review the unit with the `agent-surface-reviewer` subagent.
 CSS/DOM count work → **css-play** (`references/restructure.md`). Pre-push →
 **check-changes** / `verify-agent`.
 
