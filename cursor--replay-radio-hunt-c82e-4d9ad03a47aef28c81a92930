@@ -1,0 +1,1 @@
+1792020039	Bryce Murrin	Spotter decode-abort lifecycle: OWNED js/race/spotter.js and new tests/unit/spotter-lifecycle.test.mjs only; parent integrates metadata/tests and publishes. No radio-voice/voice-pack/race-radio edits.  [cursor/replay-radio-hunt-c82e; session 4d9ad03a47aef28c81a92930]
