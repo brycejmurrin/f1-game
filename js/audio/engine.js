@@ -1763,11 +1763,12 @@ var GameAudio = (function () {
     // the engine core. lastSpeed is overwritten above, so the gust is the
     // harvest smoother, not a re-diff of speed.
     const wf = windFromSpeed(s);
+    const windOpen = s > WIND_GATE ? 1 : 0;
     const gust = harvLevel;
     const rough = (offroad ? 0.5 : 0) + (onKerb ? 0.35 : 0);
     const tow = clamp01(ph.tow || 0);
     aimGain(windGain,
-      layers.wind ? wf.gain * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * tune.wind * camMix.wind : 0,
+      layers.wind ? wf.gain * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * windOpen * tune.wind * camMix.wind : 0,
       t, 0.10);
     aimParam(windFilter.frequency, wf.hz + rough * 260, t, 0.12, 1e-4);
 
