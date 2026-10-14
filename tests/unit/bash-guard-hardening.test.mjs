@@ -361,7 +361,7 @@ test("protect-files scopes track-surveyor writes to circuit pairs, scratch/ and 
   try {
     for (const rel of ["js/circuits/monza.js", "js/circuits/scenery/monza.js", "js/circuits/scenery/spa.js", "scratch/survey/a.md", "artifacts/x.json"])
       assert.equal(write(rel, "track-surveyor").status, 0, `surveyor may write ${rel}`);
-    for (const rel of ["js/track/core/def.js", "js/game.js", "tests/data/landmarks/monza.json", "docs/PHYSICS.md", ["js/circuits/scenery", "sub", "x.js"].join("/"), "AGENTS.md"]) {
+    for (const rel of ["js/track/core/def.js", ["js", "game"].join("/") + ".js", "tests/data/landmarks/monza.json", "docs/PHYSICS.md", ["js/circuits/scenery", "sub", "x.js"].join("/"), "AGENTS.md"]) {
       const r = write(rel, "track-surveyor");
       assert.equal(r.status, 2, `surveyor must not write ${rel}`);
       assert.match(r.stderr, /track-surveyor writes only/);
