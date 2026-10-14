@@ -408,22 +408,42 @@ export function megasForThisShard(args, mega, db) {
   return mega.filter((f) => plan.get(f) === s.index);
 }
 
-/** Flags to keep when launching a peeled mega solo (drop --shard so Playwright
- *  does not skip the only file). Separate flag/value pairs (--grep-invert x)
- *  stay paired; equals-form (--workers=1) is unchanged. */
+// Value-taking options from Playwright 1.63.0 lib/program.js testOptions.
+// Boolean flags must not swallow the next positional spec. Optional choice
+// modes only consume a recognised mode; otherwise Playwright uses its preset.
+const MEGA_VALUE_FLAGS = new Set([
+  "--add-reporter", "--browser", "-c", "--config", "--global-timeout",
+  "-g", "--grep", "-G", "--grep-invert", "--last-failed-file",
+  "--max-failures", "--output", "--project", "--repeat-each", "--reporter",
+  "--retries", "--run-agents", "--test-list", "--test-list-invert",
+  "--timeout", "--trace", "--tsconfig", "--ui-host", "--ui-port",
+  "--update-source-method", "-j", "--workers",
+]);
+const MEGA_OPTIONAL_MODES = new Map([
+  ["--debug", new Set(["inspector", "cli"])],
+  ["-u", new Set(["all", "changed", "missing", "none"])],
+  ["--update-snapshots", new Set(["all", "changed", "missing", "none"])],
+]);
+
+/** Keep solo flags and their values, dropping --shard and positional specs.
+ * Optional arbitrary refs (--only-changed) and multi-project values should use
+ * equals/repeated flags to avoid ambiguity with positional test filters. */
 export function megaSoloFlags(args) {
   const out = [];
   const list = args || [];
   for (let i = 0; i < list.length; i++) {
-    const a = list[i];
+    const a = String(list[i]);
+    if (a === "--") break; // everything after the delimiter is positional
     if (a === "--shard" || /^--shard=/.test(a)) {
       if (a === "--shard") i++;
       continue;
     }
-    if (!String(a).startsWith("-")) continue;
-    out.push(a);
-    // Non-equals long/short flags take the next bare token as their value.
-    if (!/=/.test(a) && i + 1 < list.length && !String(list[i + 1]).startsWith("-")) {
+    if (!a.startsWith("-")) continue;
+    out.push(list[i]);
+    if (/=/.test(a) || i + 1 >= list.length) continue;
+    const next = String(list[i + 1]);
+    const modes = MEGA_OPTIONAL_MODES.get(a);
+    if ((MEGA_VALUE_FLAGS.has(a) && !next.startsWith("-")) || (modes && modes.has(next))) {
       out.push(list[++i]);
     }
   }

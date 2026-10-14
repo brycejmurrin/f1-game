@@ -1079,6 +1079,28 @@ test("megaSoloFlags keeps separate flag/value pairs after dropping --shard", () 
   );
 });
 
+test("megaSoloFlags does not consume specs after boolean or bare optional flags", () => {
+  const spec = "tests/specs/aero-zones.spec.js";
+  for (const flag of ["--headed", "--debug", "--list", "-x", "--fully-parallel"]) {
+    assert.deepEqual(megaSoloFlags([flag, spec, "--shard=1/2"]), [flag]);
+  }
+  assert.deepEqual(megaSoloFlags(["--debug", "cli", spec]), ["--debug", "cli"]);
+  assert.deepEqual(megaSoloFlags(["-u", "changed", spec]), ["-u", "changed"]);
+});
+
+test("megaSoloFlags retains declared option values and drops positionals", () => {
+  const spec = "tests/specs/aero-zones.spec.js";
+  assert.deepEqual(
+    megaSoloFlags([spec, "-c", "playwright.config.js", "-g", "race", "-G", "skip", "-j", "2", spec]),
+    ["-c", "playwright.config.js", "-g", "race", "-G", "skip", "-j", "2"],
+  );
+  assert.deepEqual(
+    megaSoloFlags(["--grep-invert", "x", "--workers=1", "--shard", "1/3", spec, "--timeout=180000"]),
+    ["--grep-invert", "x", "--workers=1", "--timeout=180000"],
+  );
+  assert.deepEqual(megaSoloFlags(["--headed", "--", spec, "--list"]), ["--headed"]);
+});
+
 test("solo oversize mega keeps --shard (selected gate does not peel itself)", () => {
   // PR #1113 / #1109: select-specs already shards tlx-probes 1/3. Peeling the
   // lone file dropped --shard (megaSoloFlags) and ran all 17 tests on shard 1
