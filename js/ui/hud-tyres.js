@@ -41,7 +41,7 @@ const HudTyres = (function () {
     if (spent >= 1) out += ", worn out";
     else if (lapsLeft != null && isFinite(lapsLeft)) {
       const n = Math.max(0, Math.min(99, Math.round(lapsLeft)));
-      out += ", about " + n + (n === 1 ? " lap" : " laps") + " left";
+      out += lapsLeft < 0.5 ? ", under a lap left" : ", about " + n + (n === 1 ? " lap" : " laps") + " left";
     }
     return out;
   }

@@ -90,7 +90,7 @@ queueing and the serial `defer` execute order, but circuit parse is not the
 2.3 s LCP bucket.
 
 **Plus after the wall:** default TLX modulepreloads
-`vendor/three-0.186.0/three.webgpu.min.js` **710 KB** + `three.tsl.min.js`
+`vendor/three-0.186.1/three.webgpu.min.js` **710 KB** + `three.tsl.min.js`
 **25 KB** (`js/render/renderer-boot.js` `preloadThreeVendor`). GLX/TLX/WGX
 implementations have no shell tags (injected from `ApexRoster.DEFERRED`).
 
