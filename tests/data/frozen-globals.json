@@ -99,6 +99,7 @@
   "NetSession",
   "NetSnapshot",
   "Onboard",
+  "PaceMath",
   "Particles",
   "Parts",
   "PerfGov",
