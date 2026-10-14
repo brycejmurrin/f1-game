@@ -313,6 +313,7 @@ const FULL = [
   "js/fx/car-fx.js",           // CarFx.create(G, { skids }): plank sparks + AI lock-up marks (after skidmarks + particles)
   "js/race/race-control.js",
   "js/race/overtake-mode.js",
+  "js/race/pace-math.js",      // PaceMath.create(deps): vTop/vStd/aStd + X-mode/ERS/gearHi/rpmFor (game.js wires)
   "js/race/sporting-regs.js",  // pure 2026 SR rules (two compounds, SC passes, champ grid); game.js creates its pass watch at eval
   "js/race/broadcast.js",      // Broadcast.create(G, replay): the WATCH timing tower + AUTO director (RealReplay.create makes one)
   "js/camera/director.js",     // Director.create(G): live TV director (CAM_MODES "tv"); reuses Broadcast pure cut policy
@@ -691,6 +692,9 @@ const HARD_EDGES = [
   ["js/garage/prebuild.js", "js/game.js"],           // game.js calls GaragePrebuild.create(G) at eval time
   ["js/data/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
+  ["js/physics/consts.js", "js/race/pace-math.js"], // PaceMath reads X_*/DRAIN_*/REGEN_*/OT_TIME_*/GEAR_* at create
+  ["js/core/mat4.js", "js/race/pace-math.js"],      // PaceMath aliases M4.clamp / M4.lerp at eval
+  ["js/race/pace-math.js", "js/game.js"],           // game.js calls PaceMath.create(deps) at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
   ["js/data/teams.js", "js/career/save-migrate.js"], // remapPoints reads Teams (call time; keep ordered)
   ["js/car/parts.js", "js/career/regulations.js"],   // bannedIds() derives the ban from Parts.CATALOG (call time; keep ordered)
