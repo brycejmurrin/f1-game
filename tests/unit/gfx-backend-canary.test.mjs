@@ -5697,8 +5697,9 @@ test("selector retains a different circuit during compilation, then releases it 
   };
   const _loadTrackBody = (idx, def, built) => { track = built; builtTrackId = def.id; };
   const dropTrackWorld = eval("(function(){" + fnBody(src, "dropTrackWorld") + "})");
-  // LAZY_CIRCUIT: stepped loader awaits ensureCircuit before Tracks.buildPaced.
+  // LAZY_CIRCUIT + LAZY_TRACK_BUILD: stepped loader awaits both before buildPaced.
   const ensureCircuit = async () => {};
+  const ensureTrackBuild = async () => true;
   const loadTrackStepped = eval("(async function(idx, live){" + fnBody(src, "loadTrackStepped") + "})");
   const ensureScenery = async () => {}, menuSlice = async () => {}, menuFinish = async () => {}, garagePrewarm = async () => {};
   const menuIdle = () => { throw new Error("the stepped build must not wait for menu idle"); };
