@@ -9,9 +9,19 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-elements.js"), "utf8");
 
-function load(stored = {}) {
+function load(stored = {}, opts = {}) {
   const written = {};
-  const body = { dataset: {}, classList: { toggle() {} } };
+  const classes = new Set(opts.classes || []);
+  const listeners = [];
+  const body = {
+    dataset: {},
+    classList: {
+      toggle(c, on) { if (on === false) classes.delete(c); else classes.add(c); },
+      contains(c) { return classes.has(c); },
+      add(c) { classes.add(c); },
+      remove(c) { classes.delete(c); },
+    },
+  };
   const doc = {
     body,
     readyState: "complete",
@@ -24,7 +34,11 @@ function load(stored = {}) {
     GameStore: {
       store: {
         get(k, d) { return k in stored ? stored[k] : (k in written ? written[k] : d); },
-        set(k, v) { written[k] = v; },
+        set(k, v) {
+          written[k] = v;
+          for (let i = 0; i < listeners.length; i++) listeners[i]({ key: k, local: true });
+        },
+        subscribe(fn) { listeners.push(fn); return () => {}; },
       },
     },
   };
@@ -32,6 +46,7 @@ function load(stored = {}) {
   vm.runInContext(SRC + "; this.HudElements = HudElements;", ctx);
   ctx.__written = written;
   ctx.__body = body;
+  ctx.__setProfile = (p) => { ctx.GameStore.store.set("hudProfile", p); };
   return ctx;
 }
 
@@ -79,6 +94,92 @@ test("CSS contracts: hide selectors and no new class sprawl for the checklist", 
   assert.match(css, /body\[data-hud-hide~="speed"\] #hud-speed/);
   assert.match(css, /body\[data-hud-hide~="tyre"\] #hud-tyre/);
   assert.match(css, /#pm-hud-elements-list/);
+});
+
+test("REL ships ON for the broadcast profile only; STRATEGY and INPUTS stay off", () => {
+  const std = load();
+  assert.equal(std.HudElements.profileOf(), "standard");
+  assert.equal(std.HudElements.shippedOf("rel"), "off");
+  assert.equal(std.HudElements.isOn("rel"), false);
+  assert.match(std.__body.dataset.hudHide, /\brel\b/);
+
+  const min = load({ hudProfile: "minimal" });
+  assert.equal(min.HudElements.isOn("rel"), false, "MINIMAL keeps REL off");
+  assert.equal(min.HudElements.isOn("strat"), false);
+  assert.equal(min.HudElements.isOn("inputs"), false);
+
+  const bcast = load({ hudProfile: "broadcast" });
+  assert.equal(bcast.HudElements.profileOf(), "broadcast");
+  assert.equal(bcast.HudElements.shippedOf("rel"), "on");
+  assert.equal(bcast.HudElements.isOn("rel"), true, "BROADCAST ships REL on");
+  assert.equal(bcast.HudElements.isOn("strat"), false, "STRATEGY stays opt-in");
+  assert.equal(bcast.HudElements.isOn("inputs"), false, "INPUTS stays opt-in");
+  assert.doesNotMatch(bcast.__body.dataset.hudHide, /\brel\b/);
+  assert.match(bcast.__body.dataset.hudHide, /\bstrat\b/);
+  assert.match(bcast.__body.dataset.hudHide, /\binputs\b/);
+
+  const viaClass = load({}, { classes: ["hud-prof-broadcast"] });
+  assert.equal(viaClass.HudElements.isOn("rel"), true, "live hud-prof-broadcast class is enough");
+});
+
+test("broadcast REL default yields to an explicit store override and follows a style switch", () => {
+  const keptOff = load({ hudProfile: "broadcast", hudElements: { rel: "off" } });
+  assert.equal(keptOff.HudElements.isOn("rel"), false, "stored off wins on broadcast");
+  assert.match(keptOff.__body.dataset.hudHide, /\brel\b/);
+
+  const keptOn = load({ hudProfile: "standard", hudElements: { rel: "on" } });
+  assert.equal(keptOn.HudElements.isOn("rel"), true, "stored on wins on standard");
+  assert.doesNotMatch(keptOn.__body.dataset.hudHide, /\brel\b/);
+
+  const bcast = load({ hudProfile: "broadcast" });
+  bcast.HudElements.set("rel", false);
+  assert.equal(bcast.__written.hudElements.rel, "off", "turning REL off on broadcast is stored");
+  bcast.HudElements.set("rel", true);
+  assert.deepEqual({ ...bcast.__written.hudElements }, {}, "back to the broadcast default: nothing stored");
+
+  const live = load();
+  assert.equal(live.HudElements.isOn("rel"), false);
+  live.__setProfile("broadcast");
+  assert.equal(live.HudElements.isOn("rel"), true, "switching STYLE to broadcast lights REL");
+  assert.doesNotMatch(live.__body.dataset.hudHide, /\brel\b/);
+  live.__setProfile("standard");
+  assert.equal(live.HudElements.isOn("rel"), false, "switching back to standard hides REL again");
+  assert.match(live.__body.dataset.hudHide, /\brel\b/);
+});
+
+test("HudLayout eval survives HudElements.apply reading profile() (no TDZ abort)", () => {
+  const cam = fs.readFileSync(path.join(ROOT, "js/camera/cam-groups.js"), "utf8");
+  const layout = fs.readFileSync(path.join(ROOT, "js/ui/hud-layout.js"), "utf8");
+  const written = {};
+  const classes = new Set(["hud-prof-broadcast"]);
+  const ctx = {
+    console,
+    document: {
+      body: {
+        dataset: {},
+        classList: { contains: (c) => classes.has(c), toggle() {}, add() {}, remove() {} },
+        setAttribute() {},
+      },
+      readyState: "loading",
+      getElementById: () => null,
+      querySelector: () => null,
+      addEventListener() {},
+    },
+    GameStore: {
+      store: {
+        get(k, d) { return k === "hudProfile" ? "broadcast" : (k in written ? written[k] : d); },
+        set(k, v) { written[k] = v; },
+        subscribe() { return () => {}; },
+      },
+    },
+  };
+  vm.createContext(ctx);
+  vm.runInContext(SRC + "; this.HudElements = HudElements;", ctx);
+  vm.runInContext(cam + "\n" + layout + "; this.HudLayout = HudLayout;", ctx);
+  assert.equal(typeof ctx.HudLayout, "object", "hud-layout.js finished; HudLayout is published");
+  assert.equal(typeof ctx.HudLayout.profile, "function");
+  assert.equal(typeof ctx.HudLayout.apply, "function");
+  assert.equal(ctx.HudElements.isOn("rel"), true, "broadcast class + store keep REL on after both evals");
 });
 
 test("SPEED hide covers the whole #hud-speed plate (number + unit), not a second chip", () => {
