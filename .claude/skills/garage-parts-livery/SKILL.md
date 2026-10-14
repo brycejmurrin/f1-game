@@ -81,8 +81,9 @@ timestamp). If the exact SHA has no pack, the script takes the nearest
 ancestor and prints compare-API staleness (commits + js/car|garage|render
 files). Capture only AFTER shots for the angles you changed, then
 `--baseline=` / `--against=` against the fetched pack. Workflow:
-`.github/workflows/garage-before.yml` — macos, 4 team shards, not a
-required check. Not Car shot (`carview.html` has no garage room).
+`.github/workflows/garage-before.yml` — macos, 4 team shards, daily
+(10:23 UTC, only when watched paths moved) or on dispatch, not a
+required check; a car change merged today has no pack until then. Not Car shot (`carview.html` has no garage room).
 
 ## Design loop — spine top / side, fin, any paint row
 

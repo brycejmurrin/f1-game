@@ -72,6 +72,14 @@ jobs:
         if: runner.os == 'Linux'
         run: npx playwright install-deps chromium
 
+      # The ubuntu control on Mesa llvmpipe, not SwiftShader: SwiftShader ran it
+      # into the 20-min cap twice (runs 37094281675, 37087026592). Same composite
+      # and env as browser-group.yml; render-car.mjs reads APEX_GL. Still
+      # software and still no GPU, so it stays the control it was meant to be.
+      - name: Mesa llvmpipe + Xvfb (Linux only)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/mesa-xvfb
+
       - name: What does the OS think it has
         continue-on-error: true
         shell: bash
@@ -103,6 +111,9 @@ jobs:
         # verbatim before bash sees it, so a value with a quote or `;` is a
         # command (import-models.yml has always done it this way).
         env:
+          # Linux only; macOS passes --gpu=1, which ignores APEX_GL.
+          APEX_GL: ${{ runner.os == 'Linux' && 'llvmpipe' || '' }}
+          LIBGL_ALWAYS_SOFTWARE: ${{ runner.os == 'Linux' && '1' || '' }}
           SHOT_TEAM: ${{ inputs.team || 'mclaren' }}
           SHOT_TOD: ${{ inputs.tod || 'day' }}
           SHOT_LIVERY: ${{ inputs.livery }}
@@ -112,7 +123,8 @@ jobs:
           ARGS="--team=$SHOT_TEAM --tod=$SHOT_TOD"
           ARGS="$ARGS --out=scratch/renders/cars/ci --w=1100 --h=800"
           # The GPU is the whole reason this job exists — but keep the Linux
-          # control on swiftshader, which is what it is a control FOR.
+          # control on software GL (llvmpipe via APEX_GL), which is what it is
+          # a control FOR.
           if [ "$RUNNER_OS" != "Linux" ]; then ARGS="$ARGS --gpu=1"; fi
           if [ -n "$SHOT_LIVERY" ]; then ARGS="$ARGS --livery=$SHOT_LIVERY"; fi
           if [ -n "$SHOT_VIEWS" ]; then
