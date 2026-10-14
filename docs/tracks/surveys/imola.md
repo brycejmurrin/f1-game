@@ -2,10 +2,29 @@
 
 Autodromo Enzo e Dino Ferrari — parkland ribbon along the Santerno, anticlockwise,
 `classic: true`, DAY / green theme. This note maps the implementation, records
-visual findings from local TLX headless captures, and ranks follow-ups.
+visual findings, and ranks follow-ups.
 
-**Reference brief:** `docs/tracks/imola.md` (FIA 2025 corner table, palette, landmarks).  
-**Evidence captures:** `/opt/cursor/artifacts/imola-*.png` (14 frames, ≤15 budget).
+**Reference brief:** `docs/tracks/imola.md` (FIA 2025 corner table, palette, landmarks).
+
+### Capture status (course correction 2026-10-14)
+
+Shared batch weather/time-of-day support is landing in a separate PR (**tools: shared
+shot tooling for circuit surveys**, from `claude/f1-game-project-26h3ng`). Until that
+merges, this branch does **not** change `tools/shot/*`, `apex-eval`, `.gitignore`, or
+guard baselines.
+
+- **Committed to git:** survey prose + `js/circuits/scenery/imola.js` fixes only.
+- **Shot plan:** 32 frames (sector landmarks × dry midday) + **6 hero views** ×
+  (dusk, night, overcast, rain, fog, wet) after rebase — cap **30–36** total with
+  weather/lighting on **4–6** anchors only.
+- **Local only (not committed; `artifacts/` gitignored until shared PR):**
+  `artifacts/shots/tracks/imola/`. A partial batch was stopped at 38 files; filenames
+  include weather tags but **`shot.mjs` did not apply `__apex.weather()`** on this
+  branch — treat every frame as **dry / day** until re-captured after the tooling PR.
+
+Game weather API (for the follow-up pass): `__apex.weather("dry"|"wet"|"rain"|"overcast"|"fog")`;
+time of day: `setTimeOfDay("day"|"dawn"|"dusk"|"night")` (`docs/DEBUG-HOOKS.md`). Imola def
+has `night: false` but night lighting still exercises bespoke `lampPost` rows in scenery.
 
 ---
 
@@ -31,40 +50,101 @@ visual findings from local TLX headless captures, and ranks follow-ups.
 
 ---
 
-## 2. Theme, models, and corner read
+## 2. Sector landmark map (dry midday — intended panels)
 
-| Lap fraction (racing) | Corner / zone | Screenshot | Read |
-|----------------------|---------------|------------|------|
-| 0.00 | Start / pit / Partenza | `imola-00-start-orbit.png`, `imola-00-start-chase.png`, `imola-09-pit-tower.png` | Tilke garages L, Partenza stands R, Racetrack Tower, crimson wordmark; river ribbon R; dense conifers on S/F straight. |
-| 0.075 | Tamburello | `imola-01-tamburello-senna.png` | Senna memorial + tribute wall; forest line; some bare / mis-stacked tree trunks in foreground. |
-| 0.10 | Santerno bridge | `imola-10-santerno-bridge.png` | `santerno-footbridge` model over river strips. |
-| 0.12 | Villeneuve | `imola-02-villeneuve.png` | Chicane kerbs, gravel, outside stand. |
-| 0.28 | Tosa | `imola-03-tosa.png`, `imola-03-tosa-after.png` | `tieredBowl` + `grandstandEx`; forestEdge blocks trackside sightlines. |
-| 0.35 | Piratella | `imola-04-piratella.png`, `imola-04-piratella-after.png` | Hillside casali + `imola-hill-villas`; colorful bowl stand visible from uphill orbit. |
-| 0.48 | Acque Minerali | `imola-05-acque-minerali.png` | Mist patches, dark hollow, stone-pine punctuation, gantry. |
-| 0.50 | Park hollow | `imola-11-hollow-cinematic.png` | Emilia town boxes, vineyards, platani avenue. |
-| 0.65 | Variante Alta | `imola-06-variante-alta-chase.png` | Sausage kerbs, tight tree walls (cockpit view). |
-| 0.80 | Rivazza | `imola-07-rivazza.png` | Terrace + spectator hills; trackside cam can sit inside stand shell (z-fight on fascia). |
-| 0.92 | Variante Bassa | `imola-08-variante-bassa.png` | Return to river straight. |
+Paths below are **relative to repo root**; files land after rebase + `artifacts/shots/tracks/**`
+gitignore exception. Early agent captures also exist under `/opt/cursor/artifacts/imola-*.png`
+(14-frame pilot set).
+
+| Sector | Fraction | Landmark | Local path (dry midday) |
+|--------|----------|----------|-------------------------|
+| S1 | 0.00 | Start / pit / Partenza | `artifacts/shots/tracks/imola/s1-start_day-dry.png` |
+| S1 | 0.075 | Tamburello / Senna | `artifacts/shots/tracks/imola/s1-tamburello_day-dry.png` |
+| S1 | 0.10 | Santerno footbridge | `artifacts/shots/tracks/imola/s1-bridge_day-dry.png` |
+| S1 | 0.12 | Villeneuve | `artifacts/shots/tracks/imola/s1-villeneuve_day-dry.png` |
+| S1 | 0.28 | Tosa | `artifacts/shots/tracks/imola/s1-tosa_day-dry.png` |
+| S2 | 0.35 | Piratella | `artifacts/shots/tracks/imola/s2-piratella_day-dry.png` |
+| S2 | 0.48 | Acque Minerali | `artifacts/shots/tracks/imola/s2-acque_day-dry.png` |
+| S2 | 0.50 | Park hollow / vineyards | `artifacts/shots/tracks/imola/s2-hollow_day-dry.png` |
+| S2 | 0.65 | Variante Alta | *(pending rebase batch)* |
+| S3 | 0.80 | Rivazza | *(pending rebase batch)* |
+| S3 | 0.92 | Variante Bassa | *(pending rebase batch)* |
+| S3 | 0.99 | Pit tower | *(pending rebase batch)* |
 
 Built lap length: **4871.25 m** (verify-track); FIA reference 4909 m — timing uses built metric (`docs/tracks/imola.md` §7).
 
+### S1 — Sector 1 (dry midday panels)
+
+Filenames only until `artifacts/shots/tracks/imola/` is committed (shared tooling PR).
+
+| | | |
+|:---:|:---:|:---:|
+| `s1-start_day-dry.png` | `s1-tamburello_day-dry.png` | `s1-bridge_day-dry.png` |
+| Start / pit straight | Tamburello / Senna | Santerno footbridge |
+| `s1-villeneuve_day-dry.png` | `s1-tosa_day-dry.png` | |
+| Villeneuve chicane | Tosa hairpin | |
+
+### S2 — Sector 2 (dry midday panels)
+
+| | | |
+|:---:|:---:|:---:|
+| `s2-piratella_day-dry.png` | `s2-acque_day-dry.png` | `s2-hollow_day-dry.png` |
+| Piratella climb | Acque Minerali | Park hollow |
+
+### S3 — Sector 3
+
+*Rivazza, Variante Bassa, and pit-tower frames scheduled in the post-rebase 32-frame batch
+(pilot set: `/opt/cursor/artifacts/imola-07-rivazza.png`, `imola-08-variante-bassa.png`,
+`imola-09-pit-tower.png`).*
+
 ---
 
-## 3. Node-VM audit baseline (pre-fix)
+## 3. Weather / lighting matrix (blocked — follow-up after shared tooling PR)
+
+**Hero anchors** (4–6 views only): start, Tamburello, Tosa, Acque Minerali, Piratella,
+Rivazza.
+
+| Condition | `tod` | `weather` | What to check on re-capture |
+|-----------|-------|-----------|------------------------------|
+| Dry midday | `day` | `dry` | Baseline palette / green theme |
+| Golden hour | `dusk` | `dry` | Sun azimuth vs `pal.sunDir`; stand glass |
+| Dawn | `dawn` | `dry` | Fog height vs Acque mist planes |
+| Night | `night` | `dry` | Bespoke `lampPost` halogens on pit straight, Tosa belt, Rivazza; tower windows |
+| Overcast | `day` | `overcast` | Flat ambient; crowd/readability |
+| Rain | `day` | `rain` | Wet road, spray, no rain-streak artifacts |
+| Wet road | `day` | `wet` | Grip visual vs dry |
+| Fog | `day` | `fog` | Engine fog vs authored `acque-mist-*` patches (double-fog risk) |
+
+Planned grid row example (after rebase, 3 per row under `artifacts/shots/tracks/imola/`):
+
+| | | |
+|:---:|:---:|:---:|
+| Acque dry midday | Acque dusk | Acque night |
+| Acque rain | Acque fog | Acque overcast |
+
+### Weather / lighting backlog (findings to confirm on re-capture)
+
+| ID | Severity | Topic | Hypothesis |
+|----|----------|-------|------------|
+| W1 | Medium | Night + `night: false` | Floodlight gate may dim bespoke lamps — verify `lightState()` / lamp cap on pit and Rivazza `along()` rows. |
+| W2 | Medium | Fog + Acque mist | Authored mist `terrainPatch` at 0.45–0.54 may stack with `weather("fog")` — watch grey wash and z-fight on horizontal planes. |
+| W3 | Low | Rain on river | Overlapping `riverSurface` slabs may shimmer when wet — coplanar baseline already allows ribbon overlap. |
+| W4 | Low | Dusk sky | `pal.zenith` / `horizon` green theme vs warm sunset — acceptable stylization unless HUD clips. |
+
+---
+
+## 4. Node-VM audit (current tip)
 
 ```
 audit-circuit imola: verify OK, float 0, clip 3 severe (at baseline), coplanar 3,
-props 257968 tris, ground buried 13 / unsupported 2 (within baseline).
+props ~258k tris, ground buried 12 / unsupported 2 (within baseline).
 ```
-
-Notable ground-audit sources: hospitality `motorhome` row (~0.7 m bury, by design ≤ baseline), overlapping `riverSurface` slabs (flatCoplanar, intentional ribbon), generic `billboard@city.js` unsupported (2, shared).
 
 Centreline: **0 surface folds**; min radius 6.19 m @ node 852.
 
 ---
 
-## 4. Visual findings (from captures)
+## 5. Visual findings (dry captures + audits)
 
 ### Strengths
 
@@ -78,48 +158,46 @@ Centreline: **0 surface folds**; min radius 6.19 m @ node 852.
 
 | ID | Severity | Location | Notes |
 |----|----------|----------|-------|
-| I1 | Medium | Tosa `tieredBowl` | Thin metal `roof: true` slabs fought crowd geometry — read as a broken brown slab on orbit (`imola-04-piratella.png` before fix). |
-| I2 | Medium | S/F – Tamburello trees | `forestEdge` + `tree()` ranks: floating trunks / bare poles in `imola-01-tamburello-senna.png`. |
-| I3 | Low | Tosa trackside | `imola-03-tosa.png`: forest wall blocks the hairpin; stand hard to frame from `trackside`. |
-| I4 | Low | Rivazza | `imola-07-rivazza.png`: camera inside stand fascia → z-fight (trackside placement, not road). |
-| I5 | Low | Paddock | Tan **placeholder pads** on main straight orbit (`imola-00-start-orbit.png`) — likely terrain patch / unfinished verge. |
-| I6 | Info | Piratella clip | `clip-audit` severe pairs @ ~0.35: `emiliaCasale` / hillside church `addPrism` overlap (within fleet baseline cap 3). |
-| I7 | Info | Perf | ~258k props tris, 77 baked models prefetched on boot; acceptable for a dressed classic circuit. |
-
-No folded road, missing required landmarks, or float-audit failures on this tip.
+| I1 | Medium | Tosa `tieredBowl` | Thin metal `roof: true` slabs fought crowd geometry — **fixed** (`roof: false`). |
+| I2 | Medium | S/F – Tamburello trees | `forestEdge` + `tree()` ranks: floating trunks / bare poles. |
+| I3 | Low | Tosa trackside | Forest wall blocks the hairpin from `trackside` cameras. |
+| I4 | Low | Rivazza | Trackside cam can sit inside stand fascia → z-fight. |
+| I5 | Low | Paddock | Tan placeholder pads on main straight orbit — terrain patch / verge. |
+| I6 | Info | Piratella clip | Severe pairs @ ~0.35 within baseline cap 3. |
+| I7 | Info | Perf | ~258k props tris; acceptable for a dressed classic circuit. |
 
 ---
 
-## 5. Fixes applied this survey (branch `cursor/imola-survey-f9bd`)
+## 6. Fixes applied (`cursor/imola-survey-f9bd`)
 
 | Change | File | Rationale |
 |--------|------|-----------|
-| `tieredBowl` **roof: false** at Tosa | `scenery/imola.js` | Removes fighting metal roof slabs; grandstandEx + bowl tiers retain seating read (`imola-04-piratella-after.png`). |
-| Hospitality **motorhome** gaps 34→38, 37→41, 40→44 | same | Slightly shallower bury (ground-audit 13→12 buried) while staying within baseline. |
-| **`imola-hill-villas`** base lifted +0.35 m | same | Reduces hillside bury (~0.71 m → ~0.44 m worst) without new coplanar pairs. |
+| `tieredBowl` **roof: false** at Tosa | `scenery/imola.js` | Removes fighting metal roof slabs. |
+| Hospitality **motorhome** gaps +4 m | same | Buried 13→12 within baseline. |
+| **`imola-hill-villas`** base +0.35 m | same | Shallower hillside bury. |
 
 ---
 
-## 6. Ranked improvements (not done here)
+## 7. Ranked improvements (not done here)
 
-1. **Tosa camera / forest** — Thin `forestEdge` density on `0.30–0.32` or add a dedicated `trackside` anchor with cleared gap so the hairpin stand reads in replays (I3).
-2. **Tamburello tree line** — Audit `tree()` vs `forestEdge` overlap near `0.04–0.08`; align trunk bases to `terrainYAt` (I2).
-3. **Rivazza trackside** — Nudge default trackside offset at `0.80` in shot recipes only, or add scenery `rejBox` clearance on fascia (I4) — prefer engine camera table if fleet-wide.
-4. **Piratella prop clip** — Separate `emiliaCasale` footprints or stagger church `put()` grid to drop one severe clip pair below baseline (I6).
-5. **S/F tan pads** — Identify suppressing `terrainPatch` / pit apron mesh and replace with grass or gravel continuity (I5).
-6. **DRS / aero window** — `docs/tracks/imola.md` notes gameplay aero is not the FIA 2025 main-straight DRS zone; separate physics/UI task.
+1. **Tosa camera / forest** — Thin `forestEdge` on `0.30–0.32` (I3).
+2. **Tamburello tree line** — Trunk footing vs `terrainYAt` (I2).
+3. **Rivazza trackside** — Camera offset or fascia clearance (I4).
+4. **Piratella prop clip** — Stagger casali / church grid (I6).
+5. **S/F tan pads** — Verge continuity (I5).
+6. **Post-rebase capture** — 32-frame sector sweep + 6-hero weather matrix (§3).
 
 ---
 
-## 7. Verification
+## 8. Verification
 
 | Check | Result |
 |-------|--------|
 | `node tools/track/verify-track.cjs imola` | OK, 0 folds |
-| `node tools/track/audit-circuit.cjs imola` | OK (post-fix) |
-| `npm test -- tests/specs/imola-foundation.spec.js` | `= run passed` (2/2) |
-| Headless shots | 14 PNGs under `/opt/cursor/artifacts/` |
+| `node tools/track/audit-circuit.cjs imola` | OK |
+| `npm test -- tests/specs/imola-foundation.spec.js` | passed (2/2) on scenery tip |
+| Committed PNG panels | **Pending** shared shot tooling + gitignore exception |
 
 ---
 
-*Survey author: Cursor cloud agent, 2026-10-14. Re-run `shot.mjs` batch in `scratch/imola-survey-jobs.json` after scenery edits.*
+*Survey author: Cursor cloud agent, 2026-10-14. Re-capture via `artifacts/shots/tracks/imola/batch.json` after rebasing onto shared shot tooling PR.*
