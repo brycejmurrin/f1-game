@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apex 26 — circuit survey gallery</title>
+<style>
+  :root { color-scheme: dark; --bg:#0b0b10; --panel:#14141c; --line:#2a2a36; --text:#e8e8ee; --muted:#9a9aaa; --accent:#7fd89a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 ui-sans-serif, system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 20px 24px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: rgba(11,11,16,.92); backdrop-filter: blur(8px); z-index: 2; }
+  h1 { margin: 0 0 6px; font-size: 18px; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 12px; }
+  .layout { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 88px); }
+  nav { border-right: 1px solid var(--line); padding: 12px; overflow: auto; }
+  nav button { display: block; width: 100%; text-align: left; background: transparent; border: 0; color: var(--text); padding: 8px 10px; border-radius: 6px; cursor: pointer; font: inherit; }
+  nav button:hover, nav button.active { background: var(--panel); color: var(--accent); }
+  main { padding: 16px 20px 40px; overflow: auto; }
+  .filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center; }
+  label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; cursor: zoom-in; }
+  .card img { width: 100%; aspect-ratio: 16/10; object-fit: cover; display: block; background: #000; }
+  .card .meta { padding: 8px 10px; font-size: 12px; }
+  .card .meta strong { display: block; font-size: 13px; }
+  .card .meta span { color: var(--muted); }
+  .doc-link { margin-left: auto; font-size: 12px; }
+  .doc-link a { color: var(--accent); text-decoration: none; }
+  .doc-link a:hover { text-decoration: underline; }
+  #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.88); display: none; align-items: center; justify-content: center; z-index: 9; padding: 24px; }
+  #lightbox.open { display: flex; }
+  #lightbox img { max-width: min(1200px, 96vw); max-height: 90vh; border-radius: 8px; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+  #lightbox .cap { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); color: #ddd; font-size: 13px; text-align: center; }
+  #lightbox button.close { position: absolute; top: 16px; right: 20px; background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } nav { border-right: 0; border-bottom: 1px solid var(--line); max-height: 140px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Apex 26 — circuit survey gallery</h1>
+  <p class="sub">Sectors × weather/lighting stills from track survey agents. Rebuild: <code>npm run gallery:tracks</code> — see <code>docs/tracks/GALLERY.md</code>.</p>
+</header>
+<div class="layout">
+  <nav id="circuit-nav" aria-label="Circuits"></nav>
+  <main>
+    <div class="filters">
+      <div><label for="sector-filter">Sector</label><br><select id="sector-filter"><option value="">All sectors</option></select></div>
+      <div><label for="weather-filter">Weather / lighting</label><br><select id="weather-filter"><option value="">All conditions</option></select></div>
+      <p class="doc-link" id="survey-doc"></p>
+    </div>
+    <div class="grid" id="shot-grid"></div>
+  </main>
+</div>
+<div id="lightbox" role="dialog" aria-modal="true" aria-label="Enlarged shot">
+  <button type="button" class="close" id="lb-close">Close</button>
+  <img id="lb-img" alt="">
+  <div class="cap" id="lb-cap"></div>
+</div>
+<script type="application/json" id="manifest">{"builtAt":"2026-10-14T23:47:56.083Z","convention":"\u003ccircuit>-\u003cnn>-\u003csector>-\u003cweather>.png","docBranch":"claude/f1-game-project-26h3ng","circuits":["abudhabi","albert_park","bahrain","baku","buenos_aires","catalunya","cota","estoril","hockenheim","imola","indianapolis","interlagos","istanbul","jacarepagua","jeddah","kyalami","monaco","monaco-eye","montreal","montreal-eye","monza","qatar","silverstone","singapore","spa","suzuka","tracks-ui","vegas","zandvoort"],"sectors":["designer-edit-randomise","designer-howto","designer-library","designer-main","detail-card","overview","phone-designer-main","phone-select-list","picker-preview","race-settings-monza","select-filter-classics","select-filter-season","select-list-default","select-list-scrolled","still"],"weathers":["grid","ui","unknown"],"circuitDocs":{"abudhabi":{"path":"docs/tracks/abudhabi.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/abudhabi.md"},"albert_park":{"path":"docs/tracks/albert_park.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/albert_park.md"},"bahrain":{"path":"docs/tracks/bahrain.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/bahrain.md"},"baku":{"path":"docs/tracks/baku.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/baku.md"},"buenos_aires":{"path":"docs/tracks/buenos_aires.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/buenos_aires.md"},"catalunya":{"path":"docs/tracks/catalunya.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/catalunya.md"},"cota":{"path":"docs/tracks/cota.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/cota.md"},"estoril":{"path":"docs/tracks/estoril.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/estoril.md"},"hockenheim":{"path":"docs/tracks/hockenheim.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/hockenheim.md"},"imola":{"path":"docs/tracks/imola.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/imola.md"},"indianapolis":{"path":"docs/tracks/indianapolis.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/indianapolis.md"},"interlagos":{"path":"docs/tracks/interlagos.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/interlagos.md"},"istanbul":{"path":"docs/tracks/istanbul.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/istanbul.md"},"jacarepagua":{"path":"docs/tracks/jacarepagua.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/jacarepagua.md"},"jeddah":{"path":"docs/tracks/jeddah.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/jeddah.md"},"kyalami":{"path":"docs/tracks/kyalami.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/kyalami.md"},"monaco":{"path":"docs/tracks/monaco.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/monaco.md"},"monaco-eye":null,"montreal":{"path":"docs/tracks/montreal.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/montreal.md"},"montreal-eye":null,"monza":{"path":"docs/tracks/surveys/monza.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/surveys/monza.md"},"qatar":{"path":"docs/tracks/qatar.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/qatar.md"},"silverstone":{"path":"docs/tracks/silverstone.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/silverstone.md"},"singapore":{"path":"docs/tracks/singapore.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/singapore.md"},"spa":{"path":"docs/tracks/spa.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/spa.md"},"suzuka":{"path":"docs/tracks/suzuka.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/suzuka.md"},"tracks-ui":null,"vegas":{"path":"docs/tracks/vegas.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/vegas.md"},"zandvoort":{"path":"docs/tracks/zandvoort.md","url":"https://github.com/brycejmurrin/f1-game/blob/claude/f1-game-project-26h3ng/docs/tracks/zandvoort.md"}},"shots":[{"circuit":"abudhabi","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/abudhabi/abudhabi-00-overview-grid-thumb.webp","web":"media/abudhabi/abudhabi-00-overview-grid-web.webp","input":"docs/look-survey/abudhabi_grid.png"},{"circuit":"albert_park","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/albert_park/albert_park-00-overview-grid-thumb.webp","web":"media/albert_park/albert_park-00-overview-grid-web.webp","input":"docs/look-survey/albert_park_grid.png"},{"circuit":"bahrain","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/bahrain/bahrain-00-overview-grid-thumb.webp","web":"media/bahrain/bahrain-00-overview-grid-web.webp","input":"docs/look-survey/bahrain_grid.png"},{"circuit":"bahrain","seq":"00","sector":"still","weather":"unknown","source":"wgx-gallery","thumb":"media/bahrain/bahrain-00-still-unknown-thumb.webp","web":"media/bahrain/bahrain-00-still-unknown-web.webp","input":"docs/research/wgx-gallery/bahrain.png"},{"circuit":"bahrain","seq":"91","sector":"detail-card","weather":"ui","source":"tracks-ui","thumb":"media/bahrain/bahrain-91-detail-card-ui-thumb.webp","web":"media/bahrain/bahrain-91-detail-card-ui-web.webp","input":"artifacts/shots/tracks-ui/13-track-detail-bahrain.png"},{"circuit":"baku","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/baku/baku-00-overview-grid-thumb.webp","web":"media/baku/baku-00-overview-grid-web.webp","input":"docs/look-survey/baku_grid.png"},{"circuit":"buenos_aires","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/buenos_aires/buenos_aires-00-overview-grid-thumb.webp","web":"media/buenos_aires/buenos_aires-00-overview-grid-web.webp","input":"docs/look-survey/buenos_aires_grid.png"},{"circuit":"catalunya","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/catalunya/catalunya-00-overview-grid-thumb.webp","web":"media/catalunya/catalunya-00-overview-grid-web.webp","input":"docs/look-survey/catalunya_grid.png"},{"circuit":"cota","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/cota/cota-00-overview-grid-thumb.webp","web":"media/cota/cota-00-overview-grid-web.webp","input":"docs/look-survey/cota_grid.png"},{"circuit":"estoril","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/estoril/estoril-00-overview-grid-thumb.webp","web":"media/estoril/estoril-00-overview-grid-web.webp","input":"docs/look-survey/estoril_grid.png"},{"circuit":"hockenheim","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/hockenheim/hockenheim-00-overview-grid-thumb.webp","web":"media/hockenheim/hockenheim-00-overview-grid-web.webp","input":"docs/look-survey/hockenheim_grid.png"},{"circuit":"imola","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/imola/imola-00-overview-grid-thumb.webp","web":"media/imola/imola-00-overview-grid-web.webp","input":"docs/look-survey/imola_grid.png"},{"circuit":"indianapolis","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/indianapolis/indianapolis-00-overview-grid-thumb.webp","web":"media/indianapolis/indianapolis-00-overview-grid-web.webp","input":"docs/look-survey/indianapolis_grid.png"},{"circuit":"interlagos","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/interlagos/interlagos-00-overview-grid-thumb.webp","web":"media/interlagos/interlagos-00-overview-grid-web.webp","input":"docs/look-survey/interlagos_grid.png"},{"circuit":"istanbul","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/istanbul/istanbul-00-overview-grid-thumb.webp","web":"media/istanbul/istanbul-00-overview-grid-web.webp","input":"docs/look-survey/istanbul_grid.png"},{"circuit":"jacarepagua","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/jacarepagua/jacarepagua-00-overview-grid-thumb.webp","web":"media/jacarepagua/jacarepagua-00-overview-grid-web.webp","input":"docs/look-survey/jacarepagua_grid.png"},{"circuit":"jeddah","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/jeddah/jeddah-00-overview-grid-thumb.webp","web":"media/jeddah/jeddah-00-overview-grid-web.webp","input":"docs/look-survey/jeddah_grid.png"},{"circuit":"jeddah","seq":"91","sector":"detail-card","weather":"ui","source":"tracks-ui","thumb":"media/jeddah/jeddah-91-detail-card-ui-thumb.webp","web":"media/jeddah/jeddah-91-detail-card-ui-web.webp","input":"artifacts/shots/tracks-ui/11-track-detail-jeddah.png"},{"circuit":"kyalami","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/kyalami/kyalami-00-overview-grid-thumb.webp","web":"media/kyalami/kyalami-00-overview-grid-web.webp","input":"docs/look-survey/kyalami_grid.png"},{"circuit":"monaco","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/monaco/monaco-00-overview-grid-thumb.webp","web":"media/monaco/monaco-00-overview-grid-web.webp","input":"docs/look-survey/monaco_grid.png"},{"circuit":"monaco","seq":"90","sector":"picker-preview","weather":"ui","source":"tracks-ui","thumb":"media/monaco/monaco-90-picker-preview-ui-thumb.webp","web":"media/monaco/monaco-90-picker-preview-ui-web.webp","input":"artifacts/shots/tracks-ui/06-select-preview-monaco.png"},{"circuit":"monaco","seq":"91","sector":"detail-card","weather":"ui","source":"tracks-ui","thumb":"media/monaco/monaco-91-detail-card-ui-thumb.webp","web":"media/monaco/monaco-91-detail-card-ui-web.webp","input":"artifacts/shots/tracks-ui/10-track-detail-monaco.png"},{"circuit":"monaco-eye","seq":"00","sector":"still","weather":"unknown","source":"wgx-gallery","thumb":"media/monaco-eye/monaco-eye-00-still-unknown-thumb.webp","web":"media/monaco-eye/monaco-eye-00-still-unknown-web.webp","input":"docs/research/wgx-gallery/monaco-eye.png"},{"circuit":"montreal","seq":"00","sector":"still","weather":"unknown","source":"wgx-gallery","thumb":"media/montreal/montreal-00-still-unknown-thumb.webp","web":"media/montreal/montreal-00-still-unknown-web.webp","input":"docs/research/wgx-gallery/montreal.png"},{"circuit":"montreal-eye","seq":"00","sector":"still","weather":"unknown","source":"wgx-gallery","thumb":"media/montreal-eye/montreal-eye-00-still-unknown-thumb.webp","web":"media/montreal-eye/montreal-eye-00-still-unknown-web.webp","input":"docs/research/wgx-gallery/montreal-eye.png"},{"circuit":"monza","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/monza/monza-00-overview-grid-thumb.webp","web":"media/monza/monza-00-overview-grid-web.webp","input":"docs/look-survey/monza_grid.png"},{"circuit":"monza","seq":"90","sector":"picker-preview","weather":"ui","source":"tracks-ui","thumb":"media/monza/monza-90-picker-preview-ui-thumb.webp","web":"media/monza/monza-90-picker-preview-ui-web.webp","input":"artifacts/shots/tracks-ui/04-select-preview-monza.png"},{"circuit":"monza","seq":"91","sector":"detail-card","weather":"ui","source":"tracks-ui","thumb":"media/monza/monza-91-detail-card-ui-thumb.webp","web":"media/monza/monza-91-detail-card-ui-web.webp","input":"artifacts/shots/tracks-ui/08-track-detail-monza.png"},{"circuit":"qatar","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/qatar/qatar-00-overview-grid-thumb.webp","web":"media/qatar/qatar-00-overview-grid-web.webp","input":"docs/look-survey/qatar_grid.png"},{"circuit":"silverstone","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/silverstone/silverstone-00-overview-grid-thumb.webp","web":"media/silverstone/silverstone-00-overview-grid-web.webp","input":"docs/look-survey/silverstone_grid.png"},{"circuit":"singapore","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/singapore/singapore-00-overview-grid-thumb.webp","web":"media/singapore/singapore-00-overview-grid-web.webp","input":"docs/look-survey/singapore_grid.png"},{"circuit":"singapore","seq":"00","sector":"still","weather":"unknown","source":"wgx-gallery","thumb":"media/singapore/singapore-00-still-unknown-thumb.webp","web":"media/singapore/singapore-00-still-unknown-web.webp","input":"docs/research/wgx-gallery/singapore.png"},{"circuit":"singapore","seq":"91","sector":"detail-card","weather":"ui","source":"tracks-ui","thumb":"media/singapore/singapore-91-detail-card-ui-thumb.webp","web":"media/singapore/singapore-91-detail-card-ui-web.webp","input":"artifacts/shots/tracks-ui/12-track-detail-singapore.png"},{"circuit":"spa","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/spa/spa-00-overview-grid-thumb.webp","web":"media/spa/spa-00-overview-grid-web.webp","input":"docs/look-survey/spa_grid.png"},{"circuit":"spa","seq":"00","sector":"still","weather":"unknown","source":"wgx-gallery","thumb":"media/spa/spa-00-still-unknown-thumb.webp","web":"media/spa/spa-00-still-unknown-web.webp","input":"docs/research/wgx-gallery/spa.png"},{"circuit":"spa","seq":"90","sector":"picker-preview","weather":"ui","source":"tracks-ui","thumb":"media/spa/spa-90-picker-preview-ui-thumb.webp","web":"media/spa/spa-90-picker-preview-ui-web.webp","input":"artifacts/shots/tracks-ui/05-select-preview-spa.png"},{"circuit":"spa","seq":"91","sector":"detail-card","weather":"ui","source":"tracks-ui","thumb":"media/spa/spa-91-detail-card-ui-thumb.webp","web":"media/spa/spa-91-detail-card-ui-web.webp","input":"artifacts/shots/tracks-ui/09-track-detail-spa.png"},{"circuit":"suzuka","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/suzuka/suzuka-00-overview-grid-thumb.webp","web":"media/suzuka/suzuka-00-overview-grid-web.webp","input":"docs/look-survey/suzuka_grid.png"},{"circuit":"tracks-ui","seq":"01","sector":"select-list-default","weather":"ui","source":"tracks-ui","thumb":"media/tracks-ui/tracks-ui-01-select-list-default-thumb.webp","web":"media/tracks-ui/tracks-ui-01-select-list-default-web.webp","input":"artifacts/shots/tracks-ui/01-select-list-default.png"},{"circuit":"tracks-ui","seq":"02","sector":"select-filter-season","weather":"ui","source":"tracks-ui","thumb":"media/tracks-ui/tracks-ui-02-select-filter-season-thumb.webp","web":"media/tracks-ui/tracks-ui-02-select-filter-season-web.webp","input":"artifacts/shots/tracks-ui/02-select-filter-season.png"},{"circuit":"tracks-ui","seq":"03","sector":"select-filter-classics","weather":"ui","source":"tracks-ui","thumb":"media/tracks-ui/tracks-ui-03-select-filter-classics-thumb.webp","web":"media/tracks-ui/tracks-ui-03-select-filter-classics-web.webp","input":"artifacts/shots/tracks-ui/03-select-filter-classics.png"},{"circuit":"tracks-ui","seq":"07","sector":"select-list-scrolled","weather":"ui","source":"tracks-ui","thumb":"media/tracks-ui/tracks-ui-07-select-list-scrolled-thumb.webp","web":"media/tracks-ui/tracks-ui-07-select-list-scrolled-web.webp","input":"artifacts/shots/tracks-ui/07-select-list-scrolled.png"},{"circuit":"tracks-ui","seq":"14","sector":"designer-main","weather":"ui","source":"tracks-ui","thumb":"media/tracks-ui/tracks-ui-14-designer-main-thumb.webp","web":"media/tracks-ui/tracks-ui-14-designer-main-web.webp","input":"artifacts/shots/tracks-ui/14-designer-main.png"},{"circuit":"tracks-ui","seq":"15","sector":"designer-howto","weather":"ui","source":"tracks-ui","thumb":"media/tracks-ui/tracks-ui-15-designer-howto-thumb.webp","web":"media/tracks-ui/tracks-ui-15-designer-howto-web.webp","input":"artifacts/shots/tracks-ui/15-designer-howto.png"},{"circuit":"tracks-ui","seq":"16","sector":"designer-edit-randomise","weather":"ui","source":"tracks-ui","thumb":"media/tracks-ui/tracks-ui-16-designer-edit-randomise-thumb.webp","web":"media/tracks-ui/tracks-ui-16-designer-edit-randomise-web.webp","input":"artifacts/shots/tracks-ui/16-designer-edit-randomise.png"},{"circuit":"tracks-ui","seq":"17","sector":"designer-library","weather":"ui","source":"tracks-ui","thumb":"media/tracks-ui/tracks-ui-17-designer-library-thumb.webp","web":"media/tracks-ui/tracks-ui-17-designer-library-web.webp","input":"artifacts/shots/tracks-ui/17-designer-library.png"},{"circuit":"tracks-ui","seq":"18","sector":"race-settings-monza","weather":"ui","source":"tracks-ui","thumb":"media/tracks-ui/tracks-ui-18-race-settings-monza-thumb.webp","web":"media/tracks-ui/tracks-ui-18-race-settings-monza-web.webp","input":"artifacts/shots/tracks-ui/18-race-settings-monza.png"},{"circuit":"tracks-ui","seq":"19","sector":"phone-select-list","weather":"ui","source":"tracks-ui","thumb":"media/tracks-ui/tracks-ui-19-phone-select-list-thumb.webp","web":"media/tracks-ui/tracks-ui-19-phone-select-list-web.webp","input":"artifacts/shots/tracks-ui/19-phone-select-list.png"},{"circuit":"tracks-ui","seq":"21","sector":"phone-designer-main","weather":"ui","source":"tracks-ui","thumb":"media/tracks-ui/tracks-ui-21-phone-designer-main-thumb.webp","web":"media/tracks-ui/tracks-ui-21-phone-designer-main-web.webp","input":"artifacts/shots/tracks-ui/21-phone-designer-main.png"},{"circuit":"vegas","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/vegas/vegas-00-overview-grid-thumb.webp","web":"media/vegas/vegas-00-overview-grid-web.webp","input":"docs/look-survey/vegas_grid.png"},{"circuit":"vegas","seq":"00","sector":"still","weather":"unknown","source":"wgx-gallery","thumb":"media/vegas/vegas-00-still-unknown-thumb.webp","web":"media/vegas/vegas-00-still-unknown-web.webp","input":"docs/research/wgx-gallery/vegas.png"},{"circuit":"zandvoort","seq":"00","sector":"overview","weather":"grid","source":"look-survey","thumb":"media/zandvoort/zandvoort-00-overview-grid-thumb.webp","web":"media/zandvoort/zandvoort-00-overview-grid-web.webp","input":"docs/look-survey/zandvoort_grid.png"}]}</script>
+<script>
+(function () {
+  const manifest = JSON.parse(document.getElementById("manifest").textContent);
+  const shots = manifest.shots;
+  const circuits = manifest.circuits;
+  const nav = document.getElementById("circuit-nav");
+  const grid = document.getElementById("shot-grid");
+  const sectorSel = document.getElementById("sector-filter");
+  const weatherSel = document.getElementById("weather-filter");
+  const docEl = document.getElementById("survey-doc");
+  const lb = document.getElementById("lightbox");
+  const lbImg = document.getElementById("lb-img");
+  const lbCap = document.getElementById("lb-cap");
+  let activeCircuit = circuits[0] || "";
+
+  function fillSelect(sel, values, label) {
+    sel.innerHTML = '<option value="">All ' + label + "</option>" +
+      values.map((v) => '<option value="' + v + '">' + v + "</option>").join("");
+  }
+
+  function circuitShots(id) { return shots.filter((s) => s.circuit === id); }
+
+  function refreshFilters() {
+    const pool = activeCircuit ? circuitShots(activeCircuit) : shots;
+    fillSelect(sectorSel, [...new Set(pool.map((s) => s.sector))].sort(), "sectors");
+    fillSelect(weatherSel, [...new Set(pool.map((s) => s.weather))].sort(), "conditions");
+  }
+
+  function renderNav() {
+    nav.innerHTML = circuits.map((c) =>
+      '<button type="button" data-circuit="' + c + '"' + (c === activeCircuit ? ' class="active"' : "") + ">" + c + "</button>"
+    ).join("");
+    nav.querySelectorAll("button").forEach((btn) => btn.addEventListener("click", () => {
+      activeCircuit = btn.dataset.circuit;
+      renderNav();
+      refreshFilters();
+      renderGrid();
+    }));
+  }
+
+  function renderDoc() {
+    const row = manifest.circuitDocs[activeCircuit];
+    docEl.innerHTML = row && row.url
+      ? '<a href="' + row.url + '" target="_blank" rel="noopener">Survey doc (' + row.path + ")</a>"
+      : "";
+  }
+
+  function renderGrid() {
+    const sec = sectorSel.value;
+    const wx = weatherSel.value;
+    const list = shots.filter((s) => {
+      if (activeCircuit && s.circuit !== activeCircuit) return false;
+      if (sec && s.sector !== sec) return false;
+      if (wx && s.weather !== wx) return false;
+      return true;
+    });
+    grid.innerHTML = list.map((s) =>
+      '<article class="card" tabindex="0" data-web="' + s.web + '" data-cap="' +
+      s.circuit + " · " + s.sector + " · " + s.weather + '">' +
+      '<img src="' + s.thumb + '" alt="" loading="lazy">' +
+      '<div class="meta"><strong>' + s.circuit + "</strong><span>" + s.sector + " · " + s.weather +
+      (s.source !== "tracks" ? " · " + s.source : "") + "</span></div></article>"
+    ).join("");
+    grid.querySelectorAll(".card").forEach((card) => {
+      const open = () => {
+        lbImg.src = card.dataset.web;
+        lbCap.textContent = card.dataset.cap;
+        lb.classList.add("open");
+      };
+      card.addEventListener("click", open);
+      card.addEventListener("keydown", (e) => { if (e.key === "Enter") open(); });
+    });
+    renderDoc();
+  }
+
+  sectorSel.addEventListener("change", renderGrid);
+  weatherSel.addEventListener("change", renderGrid);
+  document.getElementById("lb-close").addEventListener("click", () => lb.classList.remove("open"));
+  lb.addEventListener("click", (e) => { if (e.target === lb) lb.classList.remove("open"); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") lb.classList.remove("open"); });
+
+  renderNav();
+  refreshFilters();
+  renderGrid();
+})();
+</script>
+</body>
+</html>
