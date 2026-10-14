@@ -403,6 +403,7 @@ function aeroWetK() { return raceCtl && raceCtl.lowGrip() ? 0.5 : 1; }
 function xVmaxGain(c) { return aeroWetK() * lerp(X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, aeroLoadOf(c)); }
 // A car's PACE as the AI judges it: vmax less its X-mode gain, and for a HUMAN x its paceF (AiDrive.paceSample). A net-owned human never reaches updateCar's stamp, so it reads vTop().
 function paceVmax(o) { return (o._vmaxNow || (o.human ? vTop() : 0)) / (1 + xVmaxGain(o) * (o.aeroX || 0)) * (o.human ? (o.paceF || 1) : 1); }
+function scriptPace(o) { return (o && o.tierV > 0 && o.skill > 0) ? o.tierV * o.skill : 0; }
 // The per-node AI speed/vmax profile paceSample learns, one per field (kept on the function: no new top-level state).
 function paceRef() { let r = paceRef.r; if (!r || r.cars !== cars) { r = paceRef.r = new Float32Array(track.n); r.cars = cars; } return r; }
 function xDfLoss(c) { return aeroWetK() * lerp(X_DF_LOSS_LO, X_DF_LOSS_HI, aeroLoadOf(c)); }
@@ -4972,7 +4973,8 @@ function updateCar(c, dt, ranked) {
     // even when the queue cap levels live speeds. Streets leave catchEdge off.
     _aiBoost.street = !!track.street;
     _aiBoost.towVmax = towCar ? paceVmax(towCar) : 0;
-    _aiBoost.ourVmax = paceVmax(c);
+    _aiBoost.ourVmax = paceVmax(c); _aiBoost.ourPace = scriptPace(c);
+    _aiBoost.towPace = towCar ? scriptPace(towCar) : 0;
     aiWantsBoost = AiDrive.wantBoost(_aiBoost);
   }
   const wantBoost = ((c.human ? c.boostOn : aiWantsBoost) && !ersHeld)
@@ -5031,7 +5033,8 @@ function updateCar(c, dt, ranked) {
                           // Pass hunger (permanent): queue time + pace edge over the car ahead.
                           _aiOtFire.queueT = c.queueT || 0,
                           _aiOtFire.blockerVmax = blocker ? paceVmax(blocker) : (ahead ? paceVmax(ahead) : 0),
-                          _aiOtFire.ourVmax = paceVmax(c),
+                          _aiOtFire.ourVmax = paceVmax(c), _aiOtFire.ourPace = scriptPace(c),
+                          _aiOtFire.blockerPace = blocker ? scriptPace(blocker) : (ahead ? scriptPace(ahead) : 0),
                           AiDrive.otShouldFire(simRnd(), dt, _aiOtFire)));
   if (OvertakeMode.spend(c, dt, fire, otGate, otFast, otTimeFor(c)) && c.isPlayer && soundOn) GameAudio.deployBoost();
   if (c.isPlayer && c.otArmed && !c.wasArmed && soundOn) GameAudio.overtakeReady();
@@ -5338,7 +5341,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
       // car ahead (AiDrive.towGain); streets and the player path stay base gain.
       const towH = AiDrive.passHunger({
         street: !!track.street, traits: aiT, vTop: vT, queueT: c.queueT || 0,
-        blockerVmax: paceVmax(towCar), ourVmax: paceVmax(c),
+        blockerVmax: paceVmax(towCar), ourVmax: paceVmax(c), blockerPace: scriptPace(towCar), ourPace: scriptPace(c),
       });
       vmax *= 1 + AiDrive.towGain(!!track.street, towH) * c.towing;
     }
@@ -5652,7 +5655,7 @@ function updateCarLateral(c, dt, ranked, S) {
     // THE NEXT CORNER (AI-only reads): its curvature just past the turn-in owns the pass side and the level side-by-side; its zone's quality says whether to get a run.
     c.kTurn = _atk.toTurnIn < 400 ? AiDrive.cornerK(Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 10)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 30)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 55))) : 0;
     c.runT = blocker && blockerGap < 40 ? AiDrive.runExtra(k, track.attackQ ? track.attackQ[Math.floor(wrapS(c.s + _atk.toTurnIn - 2) / track.total * track.n) % track.n] : 0, c.atkWant, !!track.street,
-      AiDrive.passHunger({ street: !!track.street, traits: aiT, vTop: vT, queueT: c.queueT || 0, blockerVmax: paceVmax(blocker), ourVmax: paceVmax(c), freeSpeed: aiFreeSpeed })) : 0;
+      AiDrive.passHunger({ street: !!track.street, traits: aiT, vTop: vT, queueT: c.queueT || 0, blockerVmax: paceVmax(blocker), ourVmax: paceVmax(c), blockerPace: scriptPace(blocker), ourPace: scriptPace(c), freeSpeed: aiFreeSpeed })) : 0;
     // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
     // Slice 4: easy/normal visibility lift lives in AiDrive.mistakeChance (DIFF.err frozen).
     // seconds with a car within 0.6 s behind; the roll is once per braking
@@ -5737,7 +5740,7 @@ function updateCarLateral(c, dt, ranked, S) {
       _aiOtPull.kAhead = kA; _aiOtPull.lane = c.lane; _aiOtPull.freeSpeed = aiFreeSpeed;
       // ...and with the blocker's X-mode gain taken back out: freeSpeed is read before our own flap opens, so a raw _vmaxNow hid up to 15 % of pace
       _aiOtPull.blockerVmax = paceVmax(blocker); _aiOtPull.vTop = vT; _aiOtPull.queueT = c.queueT || 0;
-      _aiOtPull.ourVmax = paceVmax(c);
+      _aiOtPull.ourVmax = paceVmax(c); _aiOtPull.ourPace = scriptPace(c); _aiOtPull.blockerPace = scriptPace(blocker);
       _aiOtPull.blockerAccel = blocker.human ? (blocker.axEstSm || 0) : (blocker.accSm || 0);
       // Engage only with a reachable lane and no cooldown on this stretch.
       // ...and only where the move is ON (AiDrive.attackOK: a straight, or an
@@ -5781,6 +5784,7 @@ function updateCarLateral(c, dt, ranked, S) {
       _aiDefend.blocker = blocker; _aiDefend.blockerGap = blockerGap; _aiDefend.kTurn = c.kTurn; _aiDefend.toTurnIn = _atk.toTurnIn; _aiDefend.roadL = roadL; _aiDefend.roadR = roadR;
       // Cover concede (permanent): chaser pace edge → defender yields the cover.
       _aiDefend.chaserVmax = paceVmax(chaser); _aiDefend.ourVmax = paceVmax(c);
+      _aiDefend.chaserPace = scriptPace(chaser); _aiDefend.ourPace = scriptPace(c);
       defend = AiDrive.defendPull(_aiDefend);
     }
     // One defensive move per straight (AiDrive.defendOnce); the side resets in

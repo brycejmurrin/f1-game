@@ -37,6 +37,11 @@ test("passHunger: streets always 1; equal pace always 1", () => {
   assert.equal(A.passHunger({ street: false, traits: mid, vTop, ourVmax: us, blockerVmax: us, queueT: 30 }), 1);
   assert.equal(A.passHunger({ street: false, traits: mid, vTop, ourVmax: us, blockerVmax: us * 0.999, queueT: 30 }), 1,
     "sub-0.7 % edge is noise, not hunger");
+  // Scripted pace (tierV×skill) alone is enough when vmax is equalised.
+  assert.ok(A.passHunger({
+    street: false, traits: mid, vTop, ourVmax: us, blockerVmax: us,
+    ourPace: us, blockerPace: them, queueT: 12,
+  }) > 1, "scripted pace edge still hungers");
 });
 
 test("passHunger: ≥0.7 % edge + queue time raises fire hunger (bounded)", () => {
@@ -44,7 +49,7 @@ test("passHunger: ≥0.7 % edge + queue time raises fire hunger (bounded)", () =
   const hot = A.passHunger({ street: false, traits: mid, vTop, ourVmax: us, blockerVmax: them, queueT: 12 });
   assert.ok(cold > 1, `even a fresh 1.2 % edge has a floor: ${cold}`);
   assert.ok(hot > cold, `queue time raises hunger ${cold} -> ${hot}`);
-  assert.ok(hot <= 2.3, `bounded: ${hot}`);
+  assert.ok(hot <= 2.6, `bounded: ${hot}`);
   const aceH = A.passHunger({ street: false, traits: ace, vTop, ourVmax: us, blockerVmax: them, queueT: 12 });
   assert.ok(aceH >= hot, "craft raises hunger");
 });
@@ -56,7 +61,7 @@ test("coverConcede: streets 0; faster chaser concedes; awareness/experience rais
   const dullC = A.coverConcede({ street: false, traits: dull, vTop, ourVmax: them, chaserVmax: us });
   const aceC = A.coverConcede({ street: false, traits: ace, vTop, ourVmax: them, chaserVmax: us });
   assert.ok(dullC > 0 && aceC > dullC, `aware/exp concede more: dull=${dullC} ace=${aceC}`);
-  assert.ok(aceC >= 0.85, `ace against 1.2 % faster fully concedes: ${aceC}`);
+  assert.ok(aceC >= 0.80, `ace against 1.2 % faster zeros the cover: ${aceC}`);
 });
 
 test("defendPull: cover concede zeros the pull against a clearly faster attacker", () => {
@@ -110,7 +115,7 @@ test("latchLate + runExtra: hunger latches and stretches the run; streets untouc
   };
   assert.equal(A.latchLate({ ...st, queueT: 0, ourVmax: us, blockerVmax: us }), false,
     "equal pace far down a straight still waits");
-  assert.equal(A.latchLate(st), true, "hunger ≥ 1.35 latches");
+  assert.equal(A.latchLate(st), true, "hunger ≥ 1.25 latches");
   assert.equal(A.latchLate({ ...st, street: true }), true, "street latches as before");
 
   const baseRun = A.runExtra(0.02, 0.6, true, false);

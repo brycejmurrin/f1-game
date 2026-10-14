@@ -156,13 +156,19 @@ const AiDrive = (function () {
     if (edge < PASS_EDGE) return 0;
     return clamp((edge - PASS_EDGE) / (PASS_EDGE_FULL - PASS_EDGE), 0, 1);
   }
+  // Pace edge from vmax and/or scripted pace (tierV×skill — same ratio
+  // ai-tactics uses for stuck-longest). Take the larger so a compressed
+  // vmax still sees a real field-pace gap.
+  function pairEdgeN(fasterV, slowerV, fasterP, slowerP, vTop) {
+    const a = (fasterV > 0 && slowerV > 0) ? paceEdgeN(fasterV, slowerV, vTop) : 0;
+    const b = (fasterP > 0 && slowerP > 0) ? paceEdgeN(fasterP, slowerP, vTop) : 0;
+    return Math.max(a, b);
+  }
   // 1..~2.2: stuck time behind a slower car → fire / latch / run / tow boost.
-  // Needs ourVmax + blockerVmax (pace, not live speed): a 1 m/s live delta is
-  // common in the tow and must not look like a 1.4 % pace edge.
+  // Needs pace fields (vmax and/or scripted pace), never live speed.
   function passHunger(ctx) {
     if (!ctx || ctx.street) return 1;
-    if (!(ctx.ourVmax > 0) || !(ctx.blockerVmax > 0)) return 1;
-    const edgeN = paceEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.vTop);
+    const edgeN = pairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ctx.vTop);
     if (!edgeN) return 1;
     const stuckN = clamp((ctx.queueT || 0) / 12, 0, 1);
     const craft = lerp(0.75, 1.15, ctx.traits ? ctx.traits.craft : 0.75);
@@ -170,11 +176,9 @@ const AiDrive = (function () {
   }
   // 0..1: defender yields the cover against a clearly faster attacker.
   // Awareness / experience decide how soon they recognise they are beaten.
-  // Pace vmax only — live chaserSpeed > speed is ordinary closing, not concede.
   function coverConcede(ctx) {
     if (!ctx || ctx.street) return 0;
-    if (!(ctx.chaserVmax > 0) || !(ctx.ourVmax > 0)) return 0;
-    const edgeN = paceEdgeN(ctx.chaserVmax, ctx.ourVmax, ctx.vTop);
+    const edgeN = pairEdgeN(ctx.chaserVmax, ctx.ourVmax, ctx.chaserPace, ctx.ourPace, ctx.vTop);
     if (!edgeN) return 0;
     const t = ctx.traits || {};
     return edgeN * lerp(0.55, 1.0, t.awareness != null ? t.awareness : 0.75)
@@ -398,8 +402,8 @@ const AiDrive = (function () {
     // cap levels live speeds, so a faster car stuck in the tow still wants ERS.
     const vs = ctx.vTop > 0 ? ctx.vTop / 72 : 1;
     const ref = ctx.vTop > 0 ? ctx.vTop : 72;
-    const catchEdge = !ctx.street && ctx.towVmax > 0 && ctx.ourVmax > 0
-      && paceEdgeN(ctx.ourVmax, ctx.towVmax, ref) > 0;
+    const catchEdge = !ctx.street
+      && pairEdgeN(ctx.ourVmax, ctx.towVmax, ctx.ourPace, ctx.towPace, ref) > 0;
     const catching = !!(ctx.towCar && ctx.towGap < 28 && (
       (ctx.speed || 0) >= (ctx.towSpeed || 0) - 1 * vs || catchEdge));
     const defending = !!(ctx.chaser && ctx.chaserGap < 14 && (ctx.chaserSpeed || 0) > (ctx.speed || 0) - 2 * vs);
@@ -618,10 +622,10 @@ const AiDrive = (function () {
     // the field's own spread can never produce (pass-completion, 2026-10-14).
     const aggr = clamp(ctx.traits && ctx.traits.aggression != null ? ctx.traits.aggression : 0, -1, 1);
     const bv = ctx.blockerVmax > 0 ? ctx.blockerVmax : (ctx.blockerSpeed || 0);
-    // Pace-edge cut needs explicit ourVmax (game.js wires paceVmax); freeSpeed
-    // alone must not look like an edge or the 7 %-of-vTop margin pin breaks.
-    const edgeN = (!street && ctx.ourVmax > 0 && ctx.blockerVmax > 0)
-      ? paceEdgeN(ctx.ourVmax, ctx.blockerVmax, ref) : 0;
+    // Pace-edge cut needs explicit pace fields (game.js wires paceVmax and/or
+    // tierV×skill); freeSpeed alone must not look like an edge.
+    const edgeN = street ? 0
+      : pairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ref);
     let margin = (street ? 0.055 : 0.07) * ref * lerp(1, 0.3, queuePress(ctx))
       * lerp(1.10, 0.88, (aggr + 1) * 0.5);
     if (edgeN) margin *= lerp(1, 0.42, edgeN);
@@ -1674,7 +1678,7 @@ const AiDrive = (function () {
     lateralScale, yawScale, cornerSpeed, traits, houseStyle, isMate, ordersMul, stuckThreshold, followTime, followGap, followBase, towGain, queueBrake, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
-    passHunger, coverConcede, paceEdgeN, PASS_EDGE, PASS_EDGE_FULL,
+    passHunger, coverConcede, paceEdgeN, pairEdgeN, PASS_EDGE, PASS_EDGE_FULL,
     defendPull, mirrorReach, defendWindowT, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
