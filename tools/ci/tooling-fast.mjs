@@ -381,6 +381,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // poolModelMat, GLX shadow colour skip + uf4 pit/uTime cache, countdown
   // setGridIdle opts pool. Source pins, no browser, ~0.1 s.
   "tests/unit/frame-hotpath-alloc.test.mjs",
+  // Ranked-set cache distance/time budget: at 60 m/s the heap is not rebuilt
+  // every frame, the mirror viewLights shares that budget, standstill does not
+  // churn on the clock, and the rear window stays flash-free. ~0.2 s.
+  "tests/unit/frame-lights-rank-cache.test.mjs",
   "tests/unit/frame-lights-shed.test.mjs",
   // The FRAMING REPORT's math (tools/lib/frame-math.mjs): projection handedness,
   // ray-vs-box, occlusion, horizon, motion and the flags an agent acts on without
@@ -557,6 +561,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/menu-sentinel-resize.test.mjs",
   "tests/unit/merge-hygiene.test.mjs",
   "tests/unit/metrics.test.mjs",
+  // Night sky-tint fallback on the cockpit mirror glass: dim env bands + matte
+  // material so Monaco night glass no longer reads 7–10× the road. ~0.1 s.
+  "tests/unit/mirror-glass-night.test.mjs",
   "tests/unit/mirror-lights.test.mjs",
   // The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:
   // when it shows, the pass order, and the main camera handed back. ~0.1 s.
