@@ -30,7 +30,7 @@ the results camera. Keep qualifying off for this first journey.
 | 5 | Lights out → drive | Race HUD and player control; menu/loading input gates released. |
 | 6 | Pause (`#pausemenu`) → **RESTART RACE** (`#pm-restart`) | With Confirm Quit on, press again to confirm. New grid/countdown for the same session; no garage/flyby replay. |
 | 7 | Select **TV**, then drive to the flag | Hold/right-click CAM to open its picker, or cycle with CAM / C. Choose **TV**, not the separate **TV SIDE** rig. Camera choice does not drive the car for you. |
-| 8 | Finish → let the rest of the field finish | Automatic TV spectating follows the finished/retired player in eligible solo sessions. During the wait, Enter or Pause → **SKIP TO RESULTS** can advance. |
+| 8 | Finish → let the rest of the field finish | Automatic TV spectating follows the remaining runners in eligible solo sessions, with the player as fallback when no runners remain. During the wait, Enter or Pause → **SKIP TO RESULTS** can advance. |
 | 9 | Results (`#results`) | Eligible GP results use the chequered cut, then orbit; **HIGHLIGHTS** is a separate optional action. Classification appears once. |
 | 10 | **MENU** (`#res-menu`) | Main menu, with the race, replay, pause and loading surfaces torn down. Start a second race to check that no stale state survives. |
 
@@ -128,7 +128,7 @@ Sources: [`select-screen.js`](../js/ui/select-screen.js),
 | C01 | Race settings with qualifying → qualifying sheet (`#quali`) → DRIVE → out-lap/flying lap → completed qualifying sheet → TO THE GRID → race | Completion returns to qualifying, not GP results. Grid uses the qualifying classification. |
 | C02 | Same setup → SIMULATE → completed sheet → TO THE GRID | No driven qualifying session; still a classified grid. |
 | C03 | Unrun qualifying → BACK → race settings → BACK | Restore `session = race`; return to the originating picker/career hub. |
-| C04 | Completed solo qualifying → MENU / Escape → menu → resume the matching weekend | Persisted classification is available for continuation; quitting a completed sheet is not the same as cancelling an unrun one. |
+| C04 | Completed solo qualifying → MENU / Escape → menu → resume the matching weekend | Standalone season/career classification remains available for continuation. Quitting a one-off GP discards its qualifying order; it has no matching weekend to resume. Quitting a completed sheet differs from cancelling an unrun one. |
 | C05 | Season → customise calendar/format → BACK or APPLY | BACK discards draft; APPLY changes the season, with a restart confirmation if it already has progress. |
 | C06 | Season, qualifying off → GP → results → NEXT ROUND → next start | Correct next circuit and distance. Race settings is not an obligatory stop between every round. |
 | C07 | Season, qualifying on and sprint enabled → sprint qualifying → sprint → TO THE GRAND PRIX → GP qualifying → GP → NEXT ROUND | Sprint keeps the circuit/round; the GP advances it. Each racing session gets its own qualifying branch. |
