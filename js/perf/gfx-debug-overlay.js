@@ -97,12 +97,21 @@ const GfxDebug = (() => {
   // getImageData is impossible, so read the soft blit when there is one and say
   // so plainly when there is not — a missing number beats a made-up one
   function pushFrameState(lines, glx) {
-    const soft = document.getElementById("game-soft");
+    // The BACKEND says whether it soft-presents, not the DOM: WGX blits onto
+    // #game itself (its GPU canvas is offscreen), so "no #game-soft" read as
+    // "native swapchain" on a WGX leg paying a readback every frame (hunt 4 I6).
+    let blit = false;
+    try { blit = typeof glx.softPresent === "function" && !!glx.softPresent(); } catch (_) { /* no hook */ }
+    const soft = document.getElementById("game-soft") || (blit ? document.getElementById("game") : null);
     if (!soft) {
       lines.push("frame: native swapchain (no 2D readback)");
     } else {
       try {
+        // Only a canvas the backend already made 2D: getContext("2d") on a
+        // WebGL/WebGPU canvas returns null rather than stealing it.
         const ctx = soft.getContext("2d");
+        if (!ctx) throw new Error("no 2D context");
+        if (soft.id === "game") lines.push("frame: soft-present onto #game (CPU readback + putImageData every frame)");
         const img = ctx.getImageData(0, 0, soft.width, soft.height);
         let sum = 0, max = 0, n = 0;
         for (let i = 0; i < img.data.length; i += 4) {
