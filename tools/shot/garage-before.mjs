@@ -182,16 +182,29 @@ export function writeManifest(dir, { sha, timestamp } = {}) {
 /** Bounded retries for GitHub REST hiccups (5xx / 429 / network). Injectable under test. */
 export const GITHUB_API_MAX_ATTEMPTS = 4;
 export const GITHUB_API_BASE_DELAY_MS = 1000;
+/** Exact-name pack lookups walk this many ancestors — never page the repo-wide artifact list. */
+export const ANCESTOR_PACK_LIMIT = 20;
 
 let _githubFetch = (...args) => globalThis.fetch(...args);
 let _githubDelay = (ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
 let _githubRandom = Math.random;
+let _revList = defaultRevList;
+
+function defaultRevList(sha, limit) {
+  const g = spawnSync("git", ["rev-list", `-n${limit}`, String(sha)], {
+    cwd: ROOT, encoding: "utf8",
+  });
+  if (g.status !== 0) {
+    return { error: (g.stderr || g.stdout || "git rev-list failed").trim() || "git rev-list failed" };
+  }
+  return { shas: (g.stdout || "").trim().split(/\n+/).filter(Boolean) };
+}
 
 /**
- * Test hooks: zero delay, mock fetch, deterministic jitter.
+ * Test hooks: zero delay, mock fetch, deterministic jitter, injectable rev-list.
  * Pass `delay: 0` or `delay: async () => {}` for instant retries; omit / null to restore defaults.
  */
-export function setGithubApiTestHooks({ fetch, delay, random } = {}) {
+export function setGithubApiTestHooks({ fetch, delay, random, revList } = {}) {
   _githubFetch = fetch == null ? (...args) => globalThis.fetch(...args) : fetch;
   if (delay == null) {
     _githubDelay = (ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
@@ -202,6 +215,13 @@ export function setGithubApiTestHooks({ fetch, delay, random } = {}) {
     _githubDelay = () => (fixed > 0 ? new Promise((r) => setTimeout(r, fixed)) : Promise.resolve());
   }
   _githubRandom = random == null ? Math.random : random;
+  _revList = revList == null ? defaultRevList : revList;
+}
+
+/** True when a githubApi / listPackArtifacts result is an exhausted 5xx. */
+export function isGithub5xx(result) {
+  const code = Number(result?.code);
+  return Number.isFinite(code) && code >= 500 && code <= 599;
 }
 
 function isRetryableStatus(code) {
@@ -249,7 +269,7 @@ export async function githubApi(method, pathQs, { token, raw = false } = {}) {
         return { error: String(err.message || err).trim() || "fetch failed" };
       }
       const wait = retryDelayMs(attempt, null);
-      console.error(`garage-before githubApi: retry ${attempt}/${GITHUB_API_MAX_ATTEMPTS} after network ${err.code || err.message} in ${wait}ms`);
+      console.error(`garage-before githubApi: retry ${attempt}/${GITHUB_API_MAX_ATTEMPTS} after network ${err.code || err.message} on ${pathQs} in ${wait}ms`);
       await _githubDelay(wait);
       continue;
     }
@@ -261,23 +281,53 @@ export async function githubApi(method, pathQs, { token, raw = false } = {}) {
     }
     if (isRetryableStatus(code) && attempt < GITHUB_API_MAX_ATTEMPTS) {
       const wait = retryDelayMs(attempt, res.headers.get("retry-after"));
-      console.error(`garage-before githubApi: retry ${attempt}/${GITHUB_API_MAX_ATTEMPTS} after HTTP ${code} in ${wait}ms`);
+      console.error(`garage-before githubApi: retry ${attempt}/${GITHUB_API_MAX_ATTEMPTS} after HTTP ${code} on ${pathQs} in ${wait}ms`);
       await _githubDelay(wait);
-      lastErr = { code, text };
+      lastErr = { code, text, pathQs };
       continue;
     }
-    return { error: `HTTP ${code} ${text.slice(0, 240)}`, code };
+    return { error: `HTTP ${code} ${pathQs} ${text.slice(0, 240)}`.trimEnd(), code };
   }
-  if (lastErr?.code) return { error: `HTTP ${lastErr.code} ${(lastErr.text || "").slice(0, 240)}`, code: lastErr.code };
+  if (lastErr?.code) {
+    const p = lastErr.pathQs || pathQs;
+    return { error: `HTTP ${lastErr.code} ${p} ${(lastErr.text || "").slice(0, 240)}`.trimEnd(), code: lastErr.code };
+  }
   return { error: String(lastErr?.message || lastErr || "githubApi failed").trim() };
+}
+
+/**
+ * Ancestor SHAs for exact-name pack lookups: `git rev-list -n N`, then the
+ * commits API if the local clone is too shallow (Actions default depth 1).
+ */
+export async function listAncestorShas(sha, { token, limit = ANCESTOR_PACK_LIMIT } = {}) {
+  const tip = String(sha || "").trim();
+  if (!tip) return { error: "listAncestorShas: need a sha" };
+  const local = _revList(tip, limit);
+  // A depth-1 Actions checkout only yields the tip — prefer the commits API then.
+  if (!local.error && local.shas?.length >= Math.min(limit, 2)) {
+    return { shas: local.shas };
+  }
+  if (token) {
+    const qs = `commits?sha=${encodeURIComponent(tip)}&per_page=${limit}`;
+    const r = await githubApi("GET", qs, { token });
+    if (r.error) {
+      if (!local.error && local.shas?.length) return { shas: local.shas };
+      return { error: r.error, code: r.code };
+    }
+    const shas = (Array.isArray(r.json) ? r.json : []).map((c) => c.sha).filter(Boolean);
+    if (shas.length) return { shas };
+  }
+  if (!local.error && local.shas?.length) return { shas: local.shas };
+  return local.error ? local : { shas: [] };
 }
 
 /**
  * List garage-before-* pack artifacts.
  * When `name` is set, uses the API's exact `?name=` filter (pack names are
- * `garage-before-<sha>`, exact). Otherwise pages (≤10×100) for nearest-ancestor.
+ * `garage-before-<sha>`, exact). Otherwise exact-name lookups for the last
+ * ~ANCESTOR_PACK_LIMIT ancestors of `fromSha` (never pages the repo-wide list).
  */
-export async function listPackArtifacts({ token, artifacts, name } = {}) {
+export async function listPackArtifacts({ token, artifacts, name, fromSha } = {}) {
   if (artifacts) {
     return (artifacts || []).map(normalizePack).filter(Boolean);
   }
@@ -287,13 +337,21 @@ export async function listPackArtifacts({ token, artifacts, name } = {}) {
     if (r.error) return { error: r.error, code: r.code };
     return (r.json?.artifacts || []).map(normalizePack).filter(Boolean);
   }
+  const tip = fromSha || "HEAD";
+  const anc = await listAncestorShas(tip, { token });
+  if (anc.error) return { error: anc.error, code: anc.code };
   const out = [];
-  for (let page = 1; page <= 10; page++) {
-    const r = await githubApi("GET", `actions/artifacts?per_page=100&page=${page}`, { token });
-    if (r.error) return { error: r.error, code: r.code };
-    const raw = r.json?.artifacts || [];
-    out.push(...raw.map(normalizePack).filter(Boolean));
-    if (raw.length < 100) break;
+  const seen = new Set();
+  for (const s of anc.shas || []) {
+    let exact;
+    try { exact = artifactName(s); } catch { continue; }
+    const named = await listPackArtifacts({ token, name: exact });
+    if (named.error) return { error: named.error, code: named.code };
+    for (const p of named) {
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      out.push(p);
+    }
   }
   return out;
 }
@@ -331,12 +389,32 @@ function writeGithubOutput(plan) {
   if (!dest) return;
   const lines = [
     `capture=${plan.capture}`,
-    `sha=${plan.sha}`,
+    `sha=${plan.sha || ""}`,
     `reason=${plan.reason}`,
-    `matrix=${JSON.stringify(plan.matrix)}`,
-    `views=${VIEWS.join(",")}`,
+    `matrix=${JSON.stringify(plan.matrix || [])}`,
+    `views=${(plan.views || VIEWS).join(",")}`,
   ];
   fs.appendFileSync(dest, lines.join("\n") + "\n");
+}
+
+/** Non-gating: a persistent GitHub 5xx must not fail the Plan pack step. */
+export function skipPlanApi5xx(detail, { sha = "" } = {}) {
+  const line = "plan: skipped (API 5xx)";
+  console.error(line + (detail ? `: ${detail}` : ""));
+  const summary = process.env.GITHUB_STEP_SUMMARY;
+  if (summary) {
+    try {
+      fs.appendFileSync(summary, `### Garage before — Plan pack\n\n\`${line}\`\n\n${detail || ""}\n`);
+    } catch { /* summary path unwritable in some test envs */ }
+  }
+  writeGithubOutput({
+    capture: false,
+    sha,
+    reason: "api-5xx",
+    matrix: [],
+    views: [...VIEWS],
+  });
+  return 0;
 }
 
 function loadArtifactsFlag(argv) {
@@ -355,7 +433,7 @@ function flag(argv, name, dflt) {
   return dflt;
 }
 
-async function planMain(argv) {
+export async function planMain(argv = []) {
   const event = process.env.EVENT_NAME || "workflow_dispatch";
   const inputRef = process.env.PLAN_REF || SHIP_BRANCH;
   const headSha = process.env.PLAN_SHA || "";
@@ -365,6 +443,7 @@ async function planMain(argv) {
   if (event !== "workflow_run" || !sha) {
     if (token) {
       const r = await resolveCommitSha(inputRef, { token });
+      if (isGithub5xx(r)) return skipPlanApi5xx(r.error, { sha });
       if (r.error) { console.error("garage-before --plan: " + r.error); return 3; }
       sha = r.sha;
     } else {
@@ -378,16 +457,18 @@ async function planMain(argv) {
   if (override) {
     packs = await listPackArtifacts({ artifacts: override });
   } else {
-    // Pack names are exact (`garage-before-<sha>`); prefer ?name= over paging all artifacts.
+    // Pack names are exact (`garage-before-<sha>`); then ancestors via ?name=, never a repo-wide page.
     let exactName = null;
-    try { exactName = artifactName(sha); } catch { /* short/odd sha — fall through to paging */ }
+    try { exactName = artifactName(sha); } catch { /* short/odd sha — fall through to ancestors */ }
     if (exactName) {
       const named = await listPackArtifacts({ token, name: exactName });
+      if (isGithub5xx(named)) return skipPlanApi5xx(named.error, { sha });
       if (named.error) { console.error("garage-before --plan: " + named.error); return 3; }
       if (named.length) packs = named;
     }
     if (!packs) {
-      packs = await listPackArtifacts({ token });
+      packs = await listPackArtifacts({ token, fromSha: sha });
+      if (isGithub5xx(packs)) return skipPlanApi5xx(packs.error, { sha });
       if (packs.error) { console.error("garage-before --plan: " + packs.error); return 3; }
     }
   }
@@ -398,6 +479,7 @@ async function planMain(argv) {
     const compares = {};
     for (const p of packs) {
       const c = await compareCommits(p.sha, sha, { token });
+      if (isGithub5xx(c)) return skipPlanApi5xx(c.error, { sha });
       if (!c.error) compares[p.sha] = c;
     }
     const picked = pickNearestPack(sha, packs, compares);
