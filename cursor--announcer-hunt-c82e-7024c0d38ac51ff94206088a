@@ -1,1 +1,0 @@
-1792020039	Bryce Murrin	Announcer lifecycle hunt: OWNED js/audio/announcer.js and tests/unit/announcer.test.mjs only; utterance callback ownership in system speech chain. Parent integrates; no recorded/radio/UI/audio-focus paths.  [cursor/announcer-hunt-c82e; session 7024c0d38ac51ff94206088a]
