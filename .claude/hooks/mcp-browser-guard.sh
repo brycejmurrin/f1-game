@@ -19,6 +19,7 @@ import json, re, sys
 try:
     d = json.load(sys.stdin)
 except Exception:
+    sys.stderr.write("mcp-browser-guard: WARNING could not read the hook payload; the subagent browser ban did NOT run.\n")
     sys.exit(0)
 name = d.get("tool_name") or ""
 BROWSER = re.compile(r"^mcp__(playwright-official__.+|chrome-devtools__.+|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|track|ui_fit|ui_shot|job_start))$")

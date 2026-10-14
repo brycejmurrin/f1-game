@@ -1298,13 +1298,36 @@ const SceneryNature = (function () {
             if (along > 0) treadSpan = Math.min(treadSpan, available / along);
           }
           if (!(treadSpan > 0) || rejBox(tc, [depth, rise + 0.5, treadSpan], b)) { previousRow = false; continue; }
+          // The anchor reads the road-extrapolated ground, not the drawn
+          // terrain: where the grade falls away under the bank (kyalami's
+          // Barbecue bank, 0.4-1.5 m) the whole tread hangs. Carry the FRONT
+          // row's underside down to the lowest drawn ground beneath it, top
+          // unchanged; the rows behind rest on it, and an upper row extended
+          // too grows the face it shares with the row in front into a
+          // coplanar wall.
+          let treadC = tc, treadH = rise + 0.5;
+          if (r === 0 && a.u[1] > 0.1 && typeof Tracks !== "undefined" && typeof Tracks.terrainY === "function") {
+            const bot = vadd(tc, a.u, -treadH / 2);
+            let drop = 0;
+            for (const [x, z] of [[-0.5, -0.5], [-0.5, 0.5], [0.5, -0.5], [0.5, 0.5]]) {
+              const q = vadd(vadd(bot, a.r, x * depth), a.t, z * treadSpan);
+              const y = Tracks.terrainY(track, q[0], q[2]);
+              if (!Number.isFinite(y)) { drop = NaN; break; }
+              drop = Math.max(drop, q[1] - y);
+            }
+            if (drop > 0.05) {
+              const ext = (drop + 0.05) / a.u[1];
+              const c2 = vadd(tc, a.u, -ext / 2);
+              if (!rejBox(c2, [depth, treadH + ext, treadSpan], b)) { treadC = c2; treadH += ext; }
+            }
+          }
           out._mat = MAT.CONCRETE;
-          addBox(out, tc, [depth, rise + 0.5, treadSpan], r % 2 ? riser : grass, b);
+          addBox(out, treadC, [depth, treadH, treadSpan], r % 2 ? riser : grass, b);
           // A tight bend can reject the lower rows but retain a narrow upper
           // tread. Give that island its own small pier instead of relying on
           // the old overlapping neighbour boxes to hold it above the ground.
           if (r > 0 && !previousRow) {
-            const bottom = vadd(tc, a.u, -(rise + 0.5) / 2);
+            const bottom = vadd(treadC, a.u, -treadH / 2);
             const pr = norm([a.r[0], 0, a.r[2]]), pt = norm([a.t[0], 0, a.t[2]]);
             const pb = [pr, [0, 1, 0], pt];
             const w = Math.min(0.4, depth * 0.5);

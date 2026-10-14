@@ -1795,17 +1795,24 @@ const TrackBuildProps = (function () {
     }
 
     yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
+    // No generic filler on green / desert circuits. A bare [4, 6, 22] grey
+    // "shed" every 140 m (35 green circuits) and [2-5, 1.5, 2] sand blocks
+    // every 34 m (4 desert ones) stood here: MAT.FLAT boxes 8-14 m off the
+    // road edge, i.e. untextured slabs in the run-off on every survey frame.
+    // placeSeq still advances once per former place() call, so every later
+    // prop keeps its SEP_SLOTS phase and does not move. The shed's footprint
+    // stays in the solid index: freed, the roadside tree pass fills it (+54k
+    // props tris fleet-wide), so the ground stays open grass.
     if (theme === "green") {
       every(140, (k) => {
         const side = hash(HK(k)) < 0.5 ? -1 : 1;
-        // The generic pit-straight grandstand below owns k 0-28 on -1 at gap
-        // 14; a -1 shed there landed in it (the 4.00 m box pair at frac 0.000
-        // on 29 circuits' clip audits). ownPitStraight circuits have no stand.
         if (side < 0 && !def.ownPitStraight && k <= 7 * 4 + 4) return;
-        place(k, side, 14, [4, 6, 22], [0.5, 0.5, 0.55]);
+        placeSeq++;
+        const o = side * (hw[k] + 14);
+        if (!onTrack(px[k] + track.rx[k] * o, pz[k] + track.rz[k] * o, 3.5)) indexSolidAt(k, side, 14, 2, 11);
       });
     } else if (theme === "desert") {
-      every(34, (k) => { for (const side of [-1, 1]) if (hash(HK(k) + side) > 0.6) place(k, side, 8 + hash(HK(k)) * 10, [2 + hash(HK(k)) * 3, 1.5, 2], [0.62, 0.5, 0.34]); });
+      every(34, (k) => { for (const side of [-1, 1]) if (hash(HK(k) + side) > 0.6) placeSeq++; });
     } else if (theme === "street_day" || theme === "street_night" || theme === "modern") {
       const style = resolveCityStyle(def.cityStyle, theme) || THEME_DEF[theme] || THEME_DEF.modern;
       const cn = (k, s) => style.neon[Math.floor(hash(k * 3 + s) * style.neon.length) % style.neon.length];

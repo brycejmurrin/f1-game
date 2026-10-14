@@ -86,7 +86,7 @@
     },
     {
       "id": "m-wing-band-floats",
-      "file": "js/car/car3d.js",
+      "file": "js/car/car-body-geom.js",
       "find": "proud: 0.005, seg: 5",
       "replace": "proud: 0.05, seg: 5",
       "why": "Lifts the rear-wing sponsor band 50 mm off the flap skin, the ~90 mm float the band shipped with when it was authored off the design chord instead of the hung flap pose.",

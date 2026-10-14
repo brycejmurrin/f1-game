@@ -47,6 +47,13 @@ const require = createRequire(import.meta.url);
 // along-the-road dress follows the new chord samples; the per-emitter split of buddh's
 // +5395 was not broken down. Compaction stays identical (props-tris.cjs identity()
 // true for both). Re-measured on the merged tree, not widened.
+// 2026-10-14: the generic green-theme grey "shed" (build-props.js) is gone, and
+// pre-strip tris fall on all 39 circuits it touched. Post-strip, six rise:
+// korea +2.85 %, mosport +1.52 %, buddh +1.48 %, donington +1.04 %, fuji +0.89 %,
+// brands_hatch +0.56 %. Each 22 m slab stood across the circuit's own guardrail /
+// fence line and the hidden-face strip deleted the enclosed run, so the growth
+// is authored barrier coming back into view (korea: +4830 of +7154 from
+// structures.js guardrail/fence instances), not new geometry.
 const BASELINE = JSON.parse(readFileSync(path.join(ROOT, "tools", "track", "props-tris-baseline.json"), "utf8"));
 const GROW = 1.005, STALE = 0.99;
 
