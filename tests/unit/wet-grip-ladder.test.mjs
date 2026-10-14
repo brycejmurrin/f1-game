@@ -22,6 +22,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite });
@@ -87,8 +88,7 @@ test("away from the crossovers, treadFor's tread is the effective-grip winner", 
 test("a car with no fitted set (wear off) grips on the tread the conditions call for, not a hard-coded full wet", () => {
   // game.js gripMult defaulted `tread == null` to 2 (full wet). With the damp row now
   // favouring inters that cost the wear-off AI field ~6% grip on a wet road.
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const m = src.match(/^function gripMult\(c\) \{ return (.+?); \}/m);
+  const m = symbolSource("function gripMult(").match(/^function gripMult\(c\) \{ return (.+?); \}/m);
   assert.ok(m, "gripMult moved — re-point this test");
   const gripMult = new Function("TyreModel", "raceWeather", "trackWetness", "c", `return ${m[1]};`);
   for (const [wx, w] of [["wet", 0.5], ["rain", 1], ["dry", 0]]) {
