@@ -179,24 +179,14 @@ const FULL = [
   "js/track/scenery/data.js",
   "js/track/core/space.js",
   "js/track/core/surface.js",
-  "js/track/scenery/models.js",
+  // models / themes / kits / nature / structures / city / identity / pits /
+  // venue / hidden-faces / build-props → LAZY_TRACK_BUILD (ensureScenery before
+  // the first Tracks.build). TRACK_VM still loads them for verify-track.
   "js/track/scenery/graph.js",
-  "js/track/scenery/themes.js",
-  "js/track/scenery/landmark-kit.js",
-  "js/track/scenery/circuit-kit.js",
   "js/track/core/spline.js",
   "js/track/core/line.js",
   "js/track/core/mesh.js",
-  "js/track/core/hidden-faces.js",
   "js/track/core/def.js",   // TrackDef: raw def → LIST entry (palettes, realPoints, fromRaw); tracks.js destructures it at eval
-  "js/track/scenery/nature.js",
-  "js/track/scenery/structures.js",
-  "js/track/scenery/city.js",
-  "js/track/scenery/identity.js",
-  "js/track/scenery/pits.js",
-  "js/track/scenery/venue.js",
-  // buildProps orchestration (guards nested for a later peel). Tracks.build calls it.
-  "js/track/scenery/build-props.js",
   CIRCUIT_META, // GENERATED meta — full defs are LAZY_CIRCUIT
   // RACE SESSION STUB — pit / radio / coach / reliability (~320 KB) is
   // LAZY_RACE_SESSION (loaded before startRace / idle prefetch). The stub keeps
@@ -627,7 +617,9 @@ const HARD_EDGES = [
   ["js/roster.js", "js/game.js"],                          // game.js reads ApexRoster's rosters at eval
   ["js/core/mat4.js", "js/track/core/spline.js"],
   ["js/core/mat4.js", "js/track/core/line.js"],                    // TrackLine aliases M4.clamp/lerp at eval
-  ["js/core/mat4.js", "js/track/scenery/structures.js"],
+  // ["js/core/mat4.js", "js/track/scenery/structures.js"] was here. structures.js
+  // is LAZY_TRACK_BUILD now (ensureScenery); mat4.js is already FULL before any
+  // inject, same construction-time guarantee as the LAZY_DATA telemetry note.
   // ["js/core/mat4.js", "js/data/telemetry.js"] was here. telemetry.js is LAZY_DATA
   // now, so the pair crosses rosters and HARD_EDGES cannot order it. The
   // dependency is real and satisfied by CONSTRUCTION rather than by position:
@@ -671,21 +663,10 @@ const HARD_EDGES = [
   ["js/track/core/mesh.js", "js/track/tracks.js"],               // tracks destructures TrackMesh at eval
   ["js/track/core/geom.js", "js/track/core/def.js"],             // def destructures TrackGeom.norm at eval (palettes)
   ["js/track/core/def.js", "js/track/tracks.js"],                // tracks destructures TrackDef at eval (LIST = DEFS.map(fromRaw))
-  // build-props.js owns Tracks.buildProps orchestration (Phase 1 peel).
-  ["js/core/mat4.js", "js/track/scenery/build-props.js"],        // destructures M4.lerp at eval
-  ["js/track/core/geom.js", "js/track/scenery/build-props.js"],  // destructures TrackGeom at eval
-  ["js/track/core/spline.js", "js/track/scenery/build-props.js"],
-  ["js/track/core/mesh.js", "js/track/scenery/build-props.js"],
-  ["js/track/scenery/graph.js", "js/track/scenery/build-props.js"],   // TrackGraph.create at build
-  ["js/track/scenery/nature.js", "js/track/scenery/build-props.js"],  // Scenery*.create at build
-  ["js/track/scenery/structures.js", "js/track/scenery/build-props.js"],
-  ["js/track/scenery/city.js", "js/track/scenery/build-props.js"],
-  ["js/track/scenery/identity.js", "js/track/scenery/build-props.js"],
-  ["js/track/scenery/pits.js", "js/track/scenery/build-props.js"],    // SceneryPits.build last
-  ["js/track/scenery/venue.js", "js/track/scenery/build-props.js"],
-  ["js/track/scenery/build-props.js", "js/track/tracks.js"],          // Tracks.build → TrackBuildProps.build
+  // build-props / kits / nature band → LAZY_TRACK_BUILD_EDGES (left FULL).
+  // Tracks.build reads TrackBuildProps / TrackHiddenFaces / TrackModels at
+  // CALL time after ensureScenery; no eval-time HARD_EDGE to tracks.js.
   ["js/track/core/space.js", "js/track/core/surface.js"],
-  ["js/track/scenery/models.js", "js/track/scenery/circuit-kit.js"],
   ["js/track/tracks.js", "js/ui/track-maps.js"],               // maps calls Tracks.buildCenterline
   // js/data's own eval-time edges moved to LAZY_DATA_EDGES when the hub left
   // FULL — HARD_EDGES pairs must both be IN FULL to be orderable.
@@ -1068,6 +1049,41 @@ const LAZY_CAREER_UI = [
   "js/career/career-ui.js",   // CareerScreen
 ];
 const LAZY_CAREER_UI_EDGES = [];
+
+// TRACK BUILD toolkit (~535 KB raw / ~170 KB gzip). Title never runs a byte of
+// these — only Tracks.build / buildPaced (after ensureScenery) does. Order IS
+// the eval order. TRACK_VM keeps the same files for verify-track / the build
+// worker (unaffected). No boot stub: nothing outside js/track/ reads these at
+// eval (hunt-2 T5). Race-only scripts (driving-coach, race-insights,
+// real-replay, flyby-seq) stay FULL.
+const LAZY_TRACK_BUILD = [
+  "js/track/scenery/models.js",
+  "js/track/scenery/themes.js",
+  "js/track/scenery/landmark-kit.js",
+  "js/track/scenery/circuit-kit.js",
+  "js/track/core/hidden-faces.js",
+  "js/track/scenery/nature.js",
+  "js/track/scenery/structures.js",
+  "js/track/scenery/city.js",
+  "js/track/scenery/identity.js",
+  "js/track/scenery/pits.js",
+  "js/track/scenery/venue.js",
+  "js/track/scenery/build-props.js",
+];
+const LAZY_TRACK_BUILD_EDGES = [
+  ["js/track/scenery/models.js", "js/track/scenery/circuit-kit.js"],
+  ["js/track/scenery/nature.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/structures.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/city.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/identity.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/pits.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/venue.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/themes.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/landmark-kit.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/circuit-kit.js", "js/track/scenery/build-props.js"],
+  ["js/track/core/hidden-faces.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/models.js", "js/track/scenery/build-props.js"],
+];
 
 // MULTIPLAYER (js/net/*). 241 KB of WebRTC — nostr/rendezvous signalling, SDP,
 // QR, the transport, handshake, snapshot codec, session, netplay and the VS
@@ -1475,6 +1491,7 @@ module.exports = {
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES, LAZY_WORKER, TRACK_WORKER_EXTRA, LAZY_EDITOR, LAZY_EDITOR_EDGES,
   LAZY_XR, LAZY_XR_EDGES, LAZY_CAM_EDITOR, LAZY_CAM_EDITOR_EDGES,
   LAZY_CAREER_UI, LAZY_CAREER_UI_EDGES,
+  LAZY_TRACK_BUILD, LAZY_TRACK_BUILD_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath, isCircuitDefFile,
 };

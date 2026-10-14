@@ -164,6 +164,50 @@ function fetchScenery(id) {
   }
   return p;
 }
+// LAZY_TRACK_BUILD (tools/manifest.cjs): the ~535 KB build toolkit (models,
+// themes, kits, nature/city/structures/identity/pits/venue, hidden-faces,
+// build-props). Title boots without them; every path that reaches Tracks.build
+// awaits ensureScenery first (UI Start Race, __apex.race, quick race,
+// multiplayer, track switch, garage/home world, replay, idle prefetch).
+const TRACK_BUILD_FILES = ApexRoster.LAZY_TRACK_BUILD || [];
+const TRACK_BUILD_EDGES = ApexRoster.LAZY_TRACK_BUILD_EDGES || [];
+const trackBuildLoaded = new Set();
+let trackBuildLoad = null;
+function trackBuildResident() {
+  return typeof TrackBuildProps !== "undefined" && !!TrackBuildProps &&
+    typeof TrackModels !== "undefined" && !!TrackModels &&
+    typeof TrackHiddenFaces !== "undefined" && !!TrackHiddenFaces;
+}
+function ensureTrackBuild() {
+  if (trackBuildResident() && (!TRACK_BUILD_FILES.length || TRACK_BUILD_FILES.every((f) => trackBuildLoaded.has(f)))) {
+    return Promise.resolve(true);
+  }
+  if (trackBuildLoad) return trackBuildLoad;
+  if (!TRACK_BUILD_FILES.length) return Promise.resolve(trackBuildResident());
+  // Eager shell / TRACK_VM / a game-vm that already evaluated the group: nothing
+  // to fetch. Mark every file loaded so a later reinject skip stays honest.
+  if (trackBuildResident() && !trackBuildLoaded.size) {
+    for (const f of TRACK_BUILD_FILES) trackBuildLoaded.add(f);
+    return Promise.resolve(true);
+  }
+  trackBuildLoad = loadBackendScripts(TRACK_BUILD_FILES, TRACK_BUILD_EDGES, {
+    strict: true, loaded: trackBuildLoaded,
+    ready: (src) => {
+      if (src === "js/track/scenery/build-props.js") return typeof TrackBuildProps !== "undefined" && !!TrackBuildProps;
+      if (src === "js/track/scenery/models.js") return typeof TrackModels !== "undefined" && !!TrackModels;
+      if (src === "js/track/core/hidden-faces.js") return typeof TrackHiddenFaces !== "undefined" && !!TrackHiddenFaces;
+      return true;
+    },
+  }).then((ok) => {
+    if (!ok || !trackBuildResident()) {
+      Log.warn("track", "the track-build bundle did not load");
+      trackBuildLoad = null;
+      return false;
+    }
+    return true;
+  });
+  return trackBuildLoad;
+}
 // Resolves true once the closure is resident, false when it is not: the caller
 // can tell, because Tracks.build() of a circuit whose closure never landed is a
 // bare world that the rebuild guard (id, night, grid) then keeps for the
@@ -173,6 +217,9 @@ function fetchScenery(id) {
 // session-entry-vm holds the request to prove a start survives it); the next
 // ask fetches again, so nothing is negatively cached.
 async function ensureScenery(idx) {
+  // Track-build toolkit BESIDE the path/scenery fetches: one critical-path
+  // round trip on a cold first build (perf hunt 2 T5).
+  const buildP = ensureTrackBuild();
   // The closure's fetch needs only def.id, so it goes out BESIDE the path
   // payload, not after it: one round trip, not two, on a circuit's first visit
   // (perf hunt 2 T8). Still ONE fetch per ask — the second read below awaits
@@ -186,8 +233,14 @@ async function ensureScenery(idx) {
     await (early && def === def0 ? early : fetchScenery(def.id));
     if (!sceneryResident(def.id)) {
       Log.warn("track", "scenery closure did not load: " + def.id + " — the world builds bare");
+      // Still await the build toolkit so a later retry is not half-loaded.
+      await buildP;
       return false;
     }
+  }
+  if (!(await buildP)) {
+    Log.warn("track", "track-build toolkit missing — Tracks.build cannot dress the world");
+    return false;
   }
   await sceneryModels(def);
   return true;
@@ -623,7 +676,7 @@ function bootDesktopAudio() {
   else scheduleIdle(bind, 400);
 }
 
-return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio };
+return { SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio };
 }
   return { create };
 })();

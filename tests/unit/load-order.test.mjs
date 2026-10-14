@@ -285,6 +285,7 @@ function lazyFiles() {
   // being catchable.
   return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_RACE_SESSION || []),
+    ...(MANIFEST.LAZY_TRACK_BUILD || []),
     ...(MANIFEST.LAZY_CIRCUIT || []), ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
@@ -333,6 +334,7 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   // notice. LAZY_AGENT is deliberately NOT here (dev/test surface; a player who
   // never opens it should not pay for it in the install).
   for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_RACE_SESSION || []),
+                   ...(MANIFEST.LAZY_TRACK_BUILD || []),
                    ...(MANIFEST.LAZY_CIRCUIT || []),
                    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
                    ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || []),
@@ -357,6 +359,7 @@ test("sw.js stamps every injected asset it seeds", () => {
   const stamps = new RegExp(m[1].slice(1, -1));
   const injected = [...deferredFiles(), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_RACE_SESSION || []),
+    ...(MANIFEST.LAZY_TRACK_BUILD || []),
     ...(MANIFEST.LAZY_CIRCUIT || []), ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
@@ -443,6 +446,27 @@ test("LAZY_RACE_SESSION is tagless; FULL keeps the session stub", () => {
   for (const f of (MANIFEST.LAZY_RACE_SESSION || [])) {
     assert.ok(!tagged.has(f), `${f} is LAZY_RACE_SESSION but still has a <script> tag`);
     assert.ok(!MANIFEST.FULL.includes(f), `${f} must leave FULL when it joins LAZY_RACE_SESSION`);
+  }
+});
+
+test("LAZY_TRACK_BUILD is tagless; TRACK_VM keeps the twelve build files", () => {
+  const tagged = new Set(scriptSrcs.map(stripV));
+  const want = [
+    "js/track/scenery/build-props.js", "js/track/scenery/nature.js", "js/track/scenery/city.js",
+    "js/track/scenery/structures.js", "js/track/scenery/identity.js", "js/track/scenery/pits.js",
+    "js/track/scenery/venue.js", "js/track/scenery/circuit-kit.js", "js/track/scenery/landmark-kit.js",
+    "js/track/scenery/models.js", "js/track/core/hidden-faces.js", "js/track/scenery/themes.js",
+  ];
+  assert.equal((MANIFEST.LAZY_TRACK_BUILD || []).length, 12);
+  for (const f of want) {
+    assert.ok((MANIFEST.LAZY_TRACK_BUILD || []).includes(f), `${f} must be in LAZY_TRACK_BUILD`);
+    assert.ok((MANIFEST.TRACK_VM || []).includes(f), `${f} must stay on TRACK_VM for harnesses`);
+    assert.ok(!tagged.has(f), `${f} must not have a title <script> tag`);
+    assert.ok(!MANIFEST.FULL.includes(f), `${f} must leave FULL`);
+  }
+  // Race-only scripts that hunt-2 flagged as stay-eager (not LAZY_TRACK_BUILD).
+  for (const f of ["js/race/driving-coach.js", "js/race/race-insights.js", "js/race/real-replay.js", "js/camera/flyby-seq.js"]) {
+    assert.ok(MANIFEST.FULL.includes(f), `${f} must stay FULL (not moved with track-build)`);
   }
 });
 
@@ -578,10 +602,13 @@ test("LAZY_CAREER_UI is tagless; FULL keeps CareerUI stub only", () => {
   }
 });
 
-test("TRACK_VM entries exist in FULL", () => {
-  const full = new Set(MANIFEST.FULL);
+test("TRACK_VM entries exist in FULL or LAZY_TRACK_BUILD", () => {
+  // TRACK_VM is the Node/worker build roster. Most files are also FULL (title
+  // tags); the build toolkit is LAZY_TRACK_BUILD on the page and stays on
+  // TRACK_VM for verify-track / the build worker (hunt-2 T5).
+  const known = new Set([...MANIFEST.FULL, ...(MANIFEST.LAZY_TRACK_BUILD || [])]);
   for (const entry of MANIFEST.TRACK_VM) {
     if (entry === "@circuits") continue;
-    assert.ok(full.has(entry), `TRACK_VM entry ${entry} missing from FULL`);
+    assert.ok(known.has(entry), `TRACK_VM entry ${entry} missing from FULL ∪ LAZY_TRACK_BUILD`);
   }
 });

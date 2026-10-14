@@ -346,6 +346,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // heights[]; sanitize pads missing heights to flat zeros. Pure VM, ~0.05 s.
   "tests/unit/elev-presets.test.mjs",
   "tests/unit/elevation-smoothness.test.mjs",
+  "tests/unit/engine-note-quality.test.mjs",
   // Engine rpm for net/replay puppets and finish coast (game.js updateCar early-outs). ~15 s.
   "tests/unit/engine-revs-replay-vm.test.mjs",
   // ...and the race engineer's ladder: it ADVISES and never arms a stop,
@@ -513,6 +514,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lap-format-rollover.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",
   "tests/unit/lazy-bundles-prefetch.test.mjs",
+  "tests/unit/lazy-track-build.test.mjs",
   // …and the PERIOD CAR reaching the garage SHEET, not just the team
   // record. Twelve legends share one `legends` id, so the write policy is
   // the behaviour: seed an empty sheet, reseed on a real switch, never on a
@@ -557,6 +559,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // LoopHealth fault policy: RUN_CAP / TOTAL_CAP / quiet expiry / clean recovery.
   // VM-executed js/perf/loop-health.js (seedLog), controllable clock, ~0.1 s.
   "tests/unit/loop-health.test.mjs",
+  // Low-speed lock plateau pin (1.06× → ≈0.371 rad at notch 7) + high-speed
+  // Object.is vs pre-boost raw; companion to steer-lock-taper. Source + VM, ~3 s.
+  "tests/unit/low-speed-lock.test.mjs",
   // The marshal posts' light panels show race control: a waved yellow in the
   // sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.
   "tests/unit/marshal-panels.test.mjs",
@@ -805,7 +810,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // must still rise >1.05× (player-dynamics shape) but stay ≤1.25× in 0.75 s
   // at 45 m/s / lock 0.8. createGame once, ~2.5 s.
   "tests/unit/steer-feel-lift-off.test.mjs",
-  // Hairpin lock hold: lockTaper = 1 for vs≤15, blend 15–30, raw ≥30 so
+  // Hairpin lock hold: lockTaper = 1.06× for vs≤15, blend 15–30, raw ≥30 so
   // ≥60 m/s stays bit-identical to the old hyperbolic taper. Source + VM, ~3 s.
   "tests/unit/steer-lock-taper.test.mjs",
   // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
@@ -929,6 +934,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Wrap-aware arc buckets vs the O(n) updateCar traffic / slipstream / OT-ahead
   // walks (collide.js helper). Seeded 22-car old-vs-new characterization, no browser.
   "tests/unit/traffic-arc-buckets.test.mjs",
+  // Trail-brake turn-in: pedal + yaw damp scale by max(1, mods.braking) so
+  // shipped kits keep ≥0.6× coasting yaw (was −0.224). createGame×2 ~5 s.
+  "tests/unit/trail-brake-turnin.test.mjs",
   "tests/unit/tree-counts-catch.test.mjs",
   "tests/unit/trim-comments.test.mjs",
   // TUMFTM racetrack-database CSV → designer envelope (tools/track/tumftm-import.mjs).
