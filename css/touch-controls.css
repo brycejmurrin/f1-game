@@ -812,7 +812,10 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
 body.hud-hidden.desktop #hud,
 body.hud-hidden #hud > :not(#hud-dock),
 /* …but WORK ON CAR stays: it lives in the cluster (index.html), and a stop
-   with the HUD off left the pit crew waiting for a button nobody could see. */
+   with the HUD off left the pit crew waiting for a button nobody could see.
+   The cluster box itself goes unless that button is showing (menu-survey 42
+   measures it hidden), so the only box left under HIDE HUD is a live button. */
+body.hud-hidden #hud-dock > .hud-bottom:not(:has(> #hud-work:not([hidden]))) { display: none !important; }
 body.hud-hidden #hud-dock > .hud-bottom > :not(#hud-work) { display: none !important; }
 body.hud-hidden #lights,
 body.hud-hidden #announce,
