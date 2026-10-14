@@ -4,6 +4,7 @@ description: "The brycejmurrin account is on GitHub Pro since 2026-09-30, so Act
 metadata:
   node_type: memory
   type: project
+  source: user, docs/notes/CI-CAPACITY-2026-09-29.md
   originSessionId: 6badff43-e599-56e5-9f28-9dce5331b039
   modified: 2026-09-30T00:16:15.228Z
 ---

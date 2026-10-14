@@ -24,6 +24,11 @@
    and portrait racing is blocked outright (#rotate-device), so it is rarely on
    screen during a race at all. */
 :root {
+  /* Painted floor for GAS/BRAKE/BOOST/OT/AERO/PAUSE/CAM labels. Dock `zoom`
+     (--hud-z-dock) shrinks authored --fs-micro with the buttons; 14×0.69
+     painted 9.7px on a short landscape phone at HUD 150% (hud-mock 2026-10-14).
+     Font rules divide this by --touch-label-z. Width/height stay on --tap/--hold. */
+  --touch-label-floor: 10px;
   --btn: 76px;                                        /* action button diameter */
   /* 12px (was 8): AERO / OT / BOOST translucent fills at 8px read as one
      merged column on the fixed portrait ladder and on desktop survey stubs
@@ -69,7 +74,7 @@
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 50%;
   width: var(--btn); height: var(--btn);
-  font-size: var(--fs-micro);
+  font-size: max(var(--fs-micro), var(--touch-label-floor));
   display: flex; align-items: center; justify-content: center;
   text-align: center; line-height: 1;
   padding: 0;
@@ -177,7 +182,7 @@
    one-hue-per-control.
    It sits one slot further along whichever column OT is in — every layout below
    moves the pair together, so the rule is "AERO is above OT". */
-#btn-aero  { right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); font-size: var(--fs-micro);
+#btn-aero  { right: calc(16px + var(--sar)); bottom: calc(16px + 2 * var(--btn-pitch) + var(--sab)); font-size: max(var(--fs-micro), var(--touch-label-floor));
              background: rgba(200, 230, 252, 0.82); border-color: rgba(233, 245, 255, 0.75); color: #0d2b3d; }
 #btn-aero.armed { background: rgba(38, 165, 245, 1); color: #04202e; border-color: #b3e2ff;
                   box-shadow: 0 0 20px rgba(40, 165, 245, 0.8); opacity: 1; }
@@ -283,8 +288,8 @@ body[data-dock-edit] .dock {
 body[data-dock-edit] .dock:active { cursor: grabbing; }
 
 /* gear shift buttons: right column, stacked (DN bottom, UP above) with 8 px gaps */
-.shiftbtn { flex-direction: column; font-size: 15px; line-height: 1.05; }
-.shiftbtn small { font-size: var(--fs-micro); letter-spacing: var(--ls-4); color: var(--dim); }
+.shiftbtn { flex-direction: column; font-size: max(15px, var(--touch-label-floor)); line-height: 1.05; }
+.shiftbtn small { font-size: max(var(--fs-micro), var(--touch-label-floor)); letter-spacing: var(--ls-4); color: var(--dim); }
 #shift-down { right: calc(16px + var(--sar)); bottom: calc(16px + var(--sab)); }
 #shift-up   { right: calc(16px + var(--sar)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); }
 
@@ -471,6 +476,10 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   body.desktop .dock:has(.touchbtn:not([hidden])) {
     --tap: max(54px, calc(24px / max(1, var(--hud-btn-scale))));
     --hold: max(72px, calc(24px / max(1, var(--hud-btn-scale))));
+    /* Same expression as zoom: when fitHud writes --hud-z-dock the labels
+       divide the 10px floor by it so GAS/BRAKE stay readable. Hit boxes
+       stay --tap/--hold. */
+    --touch-label-z: var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
     /* --hud-z-dock: fitHud's height cap for the pedal/shift columns — the
        raw slider let the 2-high pedal stack outgrow a 390px landscape
        viewport from 150% and put BRAKE off the top edge. Same mechanism as
@@ -491,21 +500,21 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      (narrow tier: 48px) tap with no padding. 0.28 of the tap is --fs-micro at
      the default and shrinks only when the token outgrows the button. */
   body:not(.desktop) .dock .touchbtn,
-  body.desktop .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: min(var(--fs-micro), calc(var(--tap) * 0.28)); }
+  body.desktop .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: max(min(var(--fs-micro), calc(var(--tap) * 0.28)), calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
   body:not(.desktop) .dock .pedal,
   body:not(.desktop) .dock .steerbtn,
   body:not(.desktop) .dock .shiftbtn,
   body.desktop .dock .pedal,
   body.desktop .dock .steerbtn,
-  body.desktop .dock .shiftbtn { width: var(--hold); height: var(--hold); font-size: var(--fs-micro); }
+  body.desktop .dock .shiftbtn { width: var(--hold); height: var(--hold); font-size: max(var(--fs-micro), calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
   body:not(.desktop) .dock .shiftbtn,
-  body.desktop .dock .shiftbtn { font-size: 15px; }
+  body.desktop .dock .shiftbtn { font-size: max(15px, calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
   /* The steer arrows are the largest buttons and carried the smallest glyph:
      the dock rule above put ◀ ▶ at --fs-micro (14px) in a 72px hold, under the
      22px the fixed-ladder .steerbtn ships. 0.3 of the hold is 21.6px at the
      base size and grows with BUTTON SIZE. */
   body:not(.desktop) .dock .steerbtn,
-  body.desktop .dock .steerbtn { font-size: calc(var(--hold) * 0.3); }
+  body.desktop .dock .steerbtn { font-size: max(calc(var(--hold) * 0.3), calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
   /* HELD CONTROLS RIDE HIGHER THAN TAPPED ONES. The pedals, the shift column
      and the steering arrows are what a thumb rests on for a whole lap, so they
      sit a little up from the screen edge where the thumb actually lands; the
@@ -556,15 +565,15 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
       --hold: max(64px, calc(24px / max(1, var(--hud-btn-scale))));
     }
     body:not(.desktop) .dock .touchbtn,
-    body.desktop .dock .touchbtn { font-size: min(var(--fs-micro), calc(var(--tap) * 0.28)); }
+    body.desktop .dock .touchbtn { font-size: max(min(var(--fs-micro), calc(var(--tap) * 0.28)), calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
     body:not(.desktop) .dock .pedal,
     body:not(.desktop) .dock .steerbtn,
     body:not(.desktop) .dock .shiftbtn,
     body.desktop .dock .pedal,
     body.desktop .dock .steerbtn,
-    body.desktop .dock .shiftbtn { font-size: var(--fs-micro); }
+    body.desktop .dock .shiftbtn { font-size: max(var(--fs-micro), calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
     body:not(.desktop) .dock .steerbtn,
-    body.desktop .dock .steerbtn { font-size: calc(var(--hold) * 0.3); }
+    body.desktop .dock .steerbtn { font-size: max(calc(var(--hold) * 0.3), calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
   }
 
   /* ---- THE INSTRUMENT CLUSTER ----
@@ -752,7 +761,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      --tap-hud (css/hud.css): it follows HUD SIZE with the timing tower beside
      it, and never shrinks below --tap. */
   width: var(--tap-hud); height: var(--tap-hud);
-  font-size: calc(100% * var(--hud-btn-z));
+  font-size: max(var(--touch-label-floor), calc(100% * var(--hud-btn-z)));
   border-radius: var(--r-md);
   padding: 0;
   /* Race chrome, dark in every theme — same reason as .touchbtn. LIGHT's
@@ -775,7 +784,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   min-width: calc(76px * var(--hud-btn-z));
   padding: 0 calc(var(--gap) * var(--hud-btn-z));
   border-radius: var(--r-md);
-  font-size: calc(var(--fs-micro) * var(--hud-btn-z));
+  font-size: max(var(--touch-label-floor), calc(var(--fs-micro) * var(--hud-btn-z)));
   font-weight: 700;
   letter-spacing: var(--ls-3);
   background: var(--look-hud-bg);

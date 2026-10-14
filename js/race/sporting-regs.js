@@ -1,6 +1,6 @@
 /* Apex 26 — SPORTING REGULATIONS the player is held to, as pure rules.
  *
- * Three 2026 articles the AI already obeyed by construction and the player
+ * Four 2026 articles the AI already obeyed by construction and the player
  * could ignore for free. Each is a small rule over car state, so it lives here
  * rather than in game.js (ratcheted) and is unit-tested without a browser:
  *
@@ -23,11 +23,26 @@
  *  3. GRID IN CHAMPIONSHIP ORDER when no qualifying is held (B2.5.4(a),
  *     B2.3.4(a)). Before anyone has scored there is no order to use, and the
  *     caller keeps its own default; drivers still on zero keep the pace order.
+ *  4. BLUE FLAGS for a car being lapped (ISC App. H 2.5.5(e), App. L Ch. IV
+ *     2(a); 2026 Driving Standards §K; Penalty Guidelines Flag Signals). The
+ *     caught driver must let the lapping car through at the first opportunity;
+ *     §K treats failing to do so by the next straight as a likely breach, and
+ *     eight consecutive light panels as almost certain. The 2026 Penalty
+ *     Guidelines price a race breach at 5 s / 10 s / drive-through (0 pts) —
+ *     the game has no served penalties, so the first sustained hold-up is +5 s
+ *     at the flag after a warning, one penalty per blue-flag episode.
+ *
+ * OVERALL SPEED: any speed or gap threshold here is a fraction of the caller's
+ * envelope (`vRef` = vTop()) or a TIME gap (metres / max(speed, floor·vRef)).
+ * Never a literal m/s — PACE is a ground-speed scale, so a raw 9 m/s gate would
+ * fire at every OVERALL SPEED setting differently.
  *
  * Sources: FIA 2026 F1 Sporting Regulations, Section B, Issue 07 (2026-06-25),
  *   https://api.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_b_sporting_-_iss_07_-_2026-06-25.pdf
- * and the 2026 Penalty Guidelines,
+ * the 2026 Penalty Guidelines,
  *   https://www.fia.com/sites/default/files/2026_f1_penalty_guidelines.pdf
+ * and the 2026 Driving Standards Guidelines §K (Blue Flags),
+ *   https://api.fia.com/sites/default/files/2026_f1_driving_standards_guidelines.pdf
  *
  * Deterministic: no clock, no RNG. Writes nothing but what a caller hands it.
  */
@@ -177,9 +192,77 @@ const SportingRegs = (function () {
     return scored.concat(rest);
   }
 
+  // ── 4. BLUE FLAGS (being lapped) ───────────────────────────────────────
+  // Time gap that shows the flag (same window as HudReadouts.BLUE_S). Floor is
+  // a fraction of vRef so the gate rides OVERALL SPEED with the HUD.
+  const BLUE_GAP_S = 1.2;
+  const BLUE_VFLOOR = 0.26;          // · vRef — matches hud.js's G.vTop() * 0.26
+  // §K: breach almost certain after 8 consecutive light panels. Without a
+  // marshalling board we count sustained hold-up TIME at that scale: warn at
+  // half (4 s), then +5 s (Penalty Guidelines race tariff, first step) at 8 s.
+  const BLUE_WARN_S = 4;
+  const BLUE_HOLD_S = 8;
+  const BLUE_PEN_S = 5;
+
+  /** The lapping car the blue flag is shown for, or null. `o.total` is lap
+   *  length, `o.vRef` the envelope (vTop). Time gap, never a literal m/s. */
+  function blueFlagCar(p, field, o) {
+    if (!p || !o || !(o.total > 0) || !(o.vRef > 0)) return null;
+    if (p.finished || p.retired || inPit(p)) return null;
+    const L = o.total, floor = o.vRef * BLUE_VFLOOR;
+    let best = null, bestD = Infinity;
+    for (const c of field || []) {
+      if (!c || c === p || c.retired || c.finished || inPit(c)) continue;
+      const up = (c.prog || 0) - (p.prog || 0);
+      if (!(up > L * 0.5)) continue;
+      const back = (((p.prog || 0) - (c.prog || 0)) % L + L) % L;
+      if (!(back > 0) || back >= bestD) continue;
+      if (back / Math.max(c.speed || 0, floor) <= BLUE_GAP_S) { best = c; bestD = back; }
+    }
+    return best;
+  }
+
+  /** One watcher per race, for the local player. tick() returns an event or
+   *  null: {type:"warn", code} once the blue has been held past BLUE_WARN_S,
+   *  {type:"penalty", sec, code} once past BLUE_HOLD_S (one per episode).
+   *  `ctx`: {total, vRef, caution, race}. Exemptions: caution (SC/VSC/red),
+   *  pit lane / finished / retired (on either car), quali/TT (`race` false),
+   *  and a player the caller's `troubled` predicate names (stuck / stricken). */
+  function createBlueFlagWatch(troubled) {
+    const bad = typeof troubled === "function" ? troubled : () => false;
+    let hold = 0, warned = false, pen = false, code = null;
+    function reset() { hold = 0; warned = false; pen = false; code = null; }
+    function tick(p, field, ctx, dt) {
+      if (!p || !ctx || !ctx.race || p.finished || p.retired || inPit(p)
+          || (ctx.caution | 0) >= CAUTION_MIN || bad(p)) {
+        reset();
+        return null;
+      }
+      const lapper = blueFlagCar(p, field, ctx);
+      if (!lapper) { reset(); return null; }
+      code = lapper.code || null;
+      hold += dt > 0 ? dt : 0;
+      if (!warned && hold >= BLUE_WARN_S) {
+        warned = true;
+        return { type: "warn", code };
+      }
+      if (!pen && hold >= BLUE_HOLD_S) {
+        pen = true;
+        return { type: "penalty", sec: BLUE_PEN_S, code };
+      }
+      return null;
+    }
+    function info() {
+      return { hold: +Math.max(0, hold).toFixed(2), warned, pen, code };
+    }
+    return { tick, reset, info };
+  }
+
   return Object.freeze({
     compoundsRun, compoundShort, compoundVerdict, applyCompoundRule,
     passPenaltyS, exempt, createPassWatch, champOrder,
+    blueFlagCar, createBlueFlagWatch,
     DRY, WET, SUSPENDED_PEN_S, DSQ_WHY, GIVE_BACK_S, CAUTION_MIN,
+    BLUE_GAP_S, BLUE_VFLOOR, BLUE_WARN_S, BLUE_HOLD_S, BLUE_PEN_S,
   });
 })();

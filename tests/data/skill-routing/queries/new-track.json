@@ -6,5 +6,7 @@
 {"query":"We need a fictional street circuit for a bonus round: design a 3.5 km loop with a long back straight and a hairpin, write it as a data-only circuit file and hook it into Tracks.LIST after the last entry.","expect":"new-track"},
 {"query":"On Monza's second chicane the road seems to clip into the terrain and I want to know the grade at turn 4 and whether the kerb sinks below groundY. Just inspect it via the hooks, no edits.","expect":"agent-view"},
 {"query":"Do a picture-driven accuracy pass on Hungaroring: compare it to real-world reference imagery, find where the layout and terrain differ, and then fix the circuit geometry to match.","expect":"survey-track"},
-{"query":"Some pillars under the Baku overpass are floating and the trees near Spa's first corner are sunken into the ground; fix the scenery(api) callback props so they sit on the terrain.","expect":"scenery-dress"}
+{"query":"Some pillars under the Baku overpass are floating and the trees near Spa's first corner are sunken into the ground; fix the scenery(api) callback props so they sit on the terrain.","expect":"scenery-dress"},
+{"query":"In the in-game TRACK DESIGNER the share code APXT1 from a friend decodes as corrupt, and RANDOMISE sometimes makes a loop the validator marks RED for crossing. Look at js/editor/codec.js and validate.js.","expect":"new-track"},
+{"query":"My custom circuit saved from the track designer disappears from MY CIRCUITS after a reload; check how CustomTracks stores and sanitises designs under apex26.customTracks.","expect":"new-track"}
 ]

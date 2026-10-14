@@ -973,3 +973,36 @@ test("the data hub does not hardcode a season year", () => {
   assert.deepEqual(bad, [],
     "a season year is hardcoded again — derive it from the clock, or the data hub silently ages out");
 });
+
+// A dated note is true when written; the risk is a newer note and the one it
+// replaced both being found and read as current — similar-but-wrong passages
+// are what degrades a model most (Chroma "Context Rot", 2025; docs/notes/
+// SECOND-BRAIN-2026-10-14.md). So a replacement says so in a form a test can
+// hold: a line `Supersedes: [title](OLD.md)` in the new note, a line
+// `Superseded by: [title](NEW.md)` in the old one, and the old note's row in
+// docs/README.md says "superseded". Prose mentions ("supersedes §2af") are not
+// the convention and are not checked.
+test("Supersedes: / Superseded by: pairs in docs/notes are two-way and indexed", () => {
+  const dir = path.join(ROOT, "docs/notes");
+  const index = read("docs/README.md");
+  const links = (line) => [...line.matchAll(/\]\(([^)#]+\.md)\)/g)].map((m) => m[1]);
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".md"))) {
+    const text = read(`docs/notes/${f}`);
+    for (const line of text.split("\n").filter((l) => /^Supersedes:/.test(l))) {
+      const olds = links(line);
+      assert.ok(olds.length, `docs/notes/${f}: "Supersedes:" needs a markdown link to the note it replaces`);
+      for (const old of olds) {
+        const oldRel = path.posix.join("docs/notes", old);
+        assert.ok(fs.existsSync(path.join(ROOT, oldRel)), `docs/notes/${f} supersedes ${old}, which does not exist`);
+        const back = read(oldRel).split("\n").filter((l) => /^Superseded by:/.test(l)).flatMap(links);
+        assert.ok(back.includes(f), `${oldRel} needs a line "Superseded by: [..](${f})" — the old note must point at its replacement`);
+        const row = index.split("\n").find((l) => l.includes(`(notes/${path.posix.basename(old)})`));
+        if (row) assert.match(row, /superseded/i, `docs/README.md's row for notes/${old} must say it is superseded (by ${f})`);
+      }
+    }
+    for (const line of text.split("\n").filter((l) => /^Superseded by:/.test(l)))
+      for (const nu of links(line))
+        assert.ok(fs.existsSync(path.join(dir, nu)) && /^Supersedes:/m.test(read(`docs/notes/${nu}`)),
+          `docs/notes/${f} says it is superseded by ${nu}, which must exist and carry the matching "Supersedes:" line`);
+  }
+});
