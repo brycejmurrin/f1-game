@@ -1,6 +1,6 @@
 ---
 name: ci-watch
-description: "Use when designated Merge Desk: sweep PRs with pr-board.mjs; ready green drafts, arm MERGE-commit auto-merge, never squash."
+description: "Use when you are the designated Merge Desk / CI Watch: sweep open PRs with pr-board.mjs, ready green drafts when ready-full-cap has room, disable foreign SQUASH/REBASE arms, arm MERGE-method auto-merge."
 ---
 
 # Merge Desk (Claude-run; this skill kept its old `ci-watch` name)

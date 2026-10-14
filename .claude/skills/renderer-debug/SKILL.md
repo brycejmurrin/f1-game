@@ -1,6 +1,6 @@
 ---
 name: renderer-debug
-description: "Use when any renderer looks wrong on TLX (three.js, the default), GLX (WebGL2) or WGX (WebGPU): blank/dark/black canvas or screen, missing road/world, NaN-white surfaces, lights wrong, shadow acne, bloom too strong/blown-out/missing, HDR/hdrMode or MSAA/HDR format issues, WebGL/GLX errors, GL_INVALID_OPERATION, shader compile or WGSL failures, GPU validation errors, uniform-array light bugs, instancing problems, GLX artifacts, device lost or frozen frame, silent fallback to WebGL2, transparent cars, or validating WGSL with real Dawn via wgx-validate. Washed-out night → lighting-tuner; garbled or wrong-colour PBR material on any backend → asset-pack; shimmer while driving → playwright-probe."
+description: "Use when any renderer looks wrong on TLX (three.js), GLX (WebGL2) or WGX (WebGPU): blank/dark/black canvas or screen, missing road/world, NaN-white surfaces, lights wrong, shadow acne, bloom wrong, HDR/hdrMode or MSAA/HDR format issues, GL_INVALID_OPERATION, shader/WGSL compile or GPU validation errors, device lost or frozen frame, silent fallback to WebGL2, transparent cars, wgx-validate. Washed-out night → lighting-tuner; garbled or wrong-colour PBR material on any backend → asset-pack; shimmer while driving → playwright-probe."
 ---
 
 # Debug the renderer — TLX, GLX or WGX
