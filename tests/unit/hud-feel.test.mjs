@@ -1427,3 +1427,14 @@ test("dock size does not follow race readouts or HUD SIZE", () => {
     assert.equal(h.root.style.getPropertyValue("--hud-z-dock"), before, "only controls and viewport set their fit");
   }
 });
+
+
+test("broadcast height fitting reserves control space without changing button zoom", () => {
+  const h = fitHarness(), base = h.snap();
+  h.dom.body.classList.add("hud-prof-broadcast");
+  const got = h.refit();
+  assert.equal(got["--hud-z-dock"], base["--hud-z-dock"], "the readout column never changes control size");
+  assert.ok(+got["--hud-z-top"] <= 1, "the tall broadcast column is capped into the viewport");
+  assert.ok(+got["--hud-z-top"] >= 1 / 1.4 - .001, "14px text retains an approximately 10px painted floor");
+  assert.equal(h.refit()["--hud-z-dock"], base["--hud-z-dock"], "repeated fits keep the controls independent");
+});

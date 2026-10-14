@@ -1208,7 +1208,7 @@ function fitHud() {
     // tower's row and is the right-half budget's business (a vertical limit there only drives the band to the floor).
     if (hInt > 0 && y0 + hInt > 0 && scR.top > tR.top + ROW_AIR) capRow = (scR.top - ROW_AIR - satPx) / (y0 + hInt);
   }
-  const capTop = Math.min(capChrome, capRow, Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo)));
+  let capTop = Math.min(capChrome, capRow, Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo)));
   // THE BOTTOM BAND IS MEASURED BY ITS CHILDREN, not by its own box. `.hud-bottom`
   // is a flex ITEM inside #hud-dock carrying `min-width: 0` ("may shrink before it
   // pushes a dock", css/overlays.css), so its rect is the COMPRESSED width and its
@@ -1479,6 +1479,18 @@ function fitHud() {
     // Readouts adapt to the stable controls, never the reverse.
     const roomW = barW - controlsW * dockZ - 2 * barGap - 2 * FIT_AIR;
     if (bottom && roomW > 0) capBot = Math.min(capBot, roomW / bottom);
+    // Broadcast stacks its tower/map/messages above the left controls. Fit
+    // that readout column to the remaining height without resizing controls.
+    if (bcast && phone && window.innerWidth > window.innerHeight) {
+      const stack = [_hudTop, els.minimap, gapsEl, els.flag, els.announce, els.tyre];
+      const height = stack.reduce((sum, el) => {
+        if (!el || el.hidden) return sum;
+        const r = layoutRect(el);
+        return sum + r.height / zoomDiv(el, el === els.tyre ? zBotPub : zTopPub);
+      }, 6 * FIT_AIR);
+      const cap = Math.max(1 / 1.4, (roomL - gL.h * dockZ) / Math.max(1, height));
+      capTop = Math.min(capTop, cap); capBot = Math.min(capBot, cap);
+    }
 
   }
   // An empty dock on a TOUCH body is "not populated yet", not "no dock" —
