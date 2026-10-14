@@ -305,3 +305,43 @@ test("the live loop charges a caution pass first gained on the finish step", asy
     assert.equal(p.penalty, 10, "the offence is charged once");
   } finally { game.close(); }
 });
+
+test("after the flag a finished car's rank follows the classification, not its coast progress (PERF-HUNT-4 B-F2)", async () => {
+  // A finished car keeps accruing prog in coast(), so an earlier, slower finisher was overtaken in c.rank (the HUD
+  // position, the relative board) by a later, faster one. game.js rankFinishers hands the finishers' rank slots back
+  // out in RaceControl.finishOrder; a running car keeps its progress slot and G.ranked stays in progress order.
+  const game = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = game.apex, G = game.G, RC = game.sandbox.RaceControl;
+    a.headless(true);
+    await game.race("monza", "day", "dry", { laps: 3 });
+    const p = G.player, L = G.track.total;
+    const [early, late] = G.cars.filter((c) => !c.human);
+    for (const c of G.cars) if (c !== p && c !== early && c !== late) a.retire(G.cars.indexOf(c));
+    game.step(2);
+    const place = (c, s, lap, v, x) => Object.assign(c, { lap, s, _prevS: s, prog: lap * L - (L - s), speed: v, x });
+    place(early, L - 20, 3, 40, -4);   // takes the flag first, coasting slowly
+    place(late, L - 60, 3, 85, 4);     // takes it second, much faster: it out-progresses `early` after the line
+    a.jump((L - 900) / L, 60, 0); p.lap = 3; p._prevS = p.s; p.prog = 3 * L - 900;   // the human finishes last: the race runs on
+    a.setInput({ throttle: true, steer: 0 });
+    let both = 0, overtaken = 0;
+    for (let i = 0; i < 60 * 8 && G.state === "race" && !p.finished; i++) {
+      game.step(1);
+      if (!(early.finished && late.finished)) continue;
+      both++;
+      if (late.prog > early.prog) overtaken++;
+      const fin = G.cars.filter((c) => c.finished && !c.retired);
+      const byClass = fin.slice().sort(RC.finishOrder).map((c) => c.code);
+      const byRank = fin.slice().sort((x, y) => x.rank - y.rank).map((c) => c.code);
+      assert.deepEqual(byRank, byClass, `step ${i}: finished cars' rank order must equal the classification`);
+      const ranked = G.ranked;
+      // _snapProg is each car's prog when the step sorted `ranked` (updateCar has moved prog since).
+      for (let j = 1; j < ranked.length; j++) assert.ok(ranked[j - 1]._snapProg >= ranked[j]._snapProg, "G.ranked stays in progress order");
+      assert.equal(p.rank, ranked.indexOf(p) + 1, "a running car keeps its progress slot");
+      assert.equal(new Set(ranked.map((c) => c.rank)).size, ranked.length, "ranks stay a permutation");
+    }
+    assert.ok(both > 30, `both AI cars took the flag with the race still running (${both} steps)`);
+    assert.ok(overtaken > 0, "the faster finisher must out-progress the earlier one, or this test proves nothing");
+    assert.ok(early.finishT < late.finishT && early.rank < late.rank, "the earlier finisher holds the better rank");
+  } finally { game.close(); }
+});

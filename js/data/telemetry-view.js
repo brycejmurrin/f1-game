@@ -406,7 +406,11 @@ const DataTelemetryView = (function () {
         myStints.sort(function (a, c) { return (a.stint || 0) - (c.stint || 0); });
         myStints.forEach(function (s) {
           const row = el("div", "dh-row");
-          const chip = el("span", "dh-codechip", (s.compound || "—").slice(0, 4));
+          const label = (typeof DataHub !== "undefined" && DataHub.compoundChipLabel)
+            ? DataHub.compoundChipLabel(s.compound)
+            : (s.compound || "—").slice(0, 4);
+          const chip = el("span", "dh-codechip", label);
+          if (s.compound) chip.setAttribute("data-compound", String(s.compound));
           chip.style.background = COMPOUND[s.compound] || "#888";
           chip.style.color = (s.compound === "HARD") ? "#111" : "#fff";
           row.appendChild(chip);
