@@ -90,12 +90,13 @@ async function raceTrack(page, trackId, waitMs) {
 
 async function frameCamera(page, job) {
   return mutateCaptureScene(page,
-    ({ frac, cam, az, el, dist, side, tod, showHud }) => {
+    ({ frac, cam, az, el, dist, side, tod, weather, showHud }) => {
       const a = window.__apex;
       a.headless(false);
       a.go();
       a.park(frac);
       a.freeze(true);
+      if (weather && a.weather) a.weather(weather);
       if (a.setTimeOfDay && a.setTimeOfDay() !== tod) a.setTimeOfDay(tod);
       if (a.hud) a.hud(!!showHud);
 
