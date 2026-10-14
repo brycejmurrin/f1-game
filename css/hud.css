@@ -1282,8 +1282,8 @@ body:not(.desktop) #announce {
   min-width: 0;
   max-width: min(440px, calc(72 * var(--vwzh)), calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
   width: min(100%, max-content, calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
-  /* flag-slot+40 budgets the lit-flag +38px step (phoneL broadcast @150%). */
-  max-height: min(4.5em, calc((var(--hud-cluster-y, 100svh) - 8px) / var(--hud-z) - var(--flag-slot-top, 5.5em) - 40px));
+  /* flag-slot+40 budgets the lit-flag +38px step; 1.8em keeps a type floor. */
+  max-height: min(4.5em, max(1.8em, calc((var(--hud-cluster-y, 100svh) - 8px) / var(--hud-z) - var(--flag-slot-top, 5.5em) - 40px)));
 }
 /* Collapsed dock lane (js/ui/hud.js announceLane): flex min-content from
    #announce-num kept a painted box at width:0; hide the card so it cannot
@@ -2219,6 +2219,7 @@ body.desktop #hud-inputs:not([data-hl-user]) {
       left: calc(10px + var(--sal)); right: auto;
       max-height: var(--hud-tyre-max-h, none); overflow: hidden;
     }
+    body.hud-tyre-stack #hud-tyre[data-tyre-compact] #hud-plan { display: none; }
     /* HELMET ERS stays in the cluster grid. Anchoring it to the tyre failed:
        the tyre follows #hud-energy in the tree, anchor() does not resolve a
        later sibling, and the bar fell back onto the gear plate (852×393

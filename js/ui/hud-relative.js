@@ -261,9 +261,18 @@ const HudRelative = (function () {
           if (doCap) cap = Math.min(cap, (box.top - rr.top - 6) / z);
           if (leftish) slide = Math.max(slide, (box.right + 8) / z);
           else if (!doCap) {
+            // Slide past gearbox/OT but stop left of the right-dock tap targets
+            // (unbounded slide landed REL on BRAKE/THROTTLE at phoneL 150%).
             const next = (box.right + 8) / z;
             const w = (doc.defaultView || (typeof window !== "undefined" ? window : null));
-            const limit = w ? ((w.innerWidth || 0) - rr.width - 8) / z : next;
+            let limit = w ? ((w.innerWidth || 0) - rr.width - 8) / z : next;
+            const dockIds = ["btn-throttle", "btn-brake", "btn-ot", "btn-aero", "btn-boost"];
+            for (let d = 0; d < dockIds.length; d++) {
+              const de = doc.getElementById(dockIds[d]);
+              if (!de || de.hidden || !de.getBoundingClientRect) continue;
+              const db = de.getBoundingClientRect();
+              if (db.width && db.height) limit = Math.min(limit, (db.left - rr.width - 8) / z);
+            }
             if (next <= limit) slide = Math.max(slide, next);
           }
         }

@@ -1232,8 +1232,7 @@ function fitHud() {
   // --hud-left-h so REL / STRATEGY follow. MOVE & SIZE (data-hl-user) wins.
   const phone = !document.body.classList.contains("desktop");
   const tyreEl = els.tyre;
-  // Stack from the map/gaps edge only — never from a leftBot that already
-  // includes a prior tyre pass (that latched TYRES down into the safe area).
+  // colBot: map/gaps edge only (leftBot+tyre latched into the safe area).
   const colBot = leftBot;
   let tyreStack = false;
   if (phone && tyreEl && !tyreEl.hidden && !(tyreEl.hasAttribute && tyreEl.hasAttribute("data-hl-user"))) {
@@ -1241,17 +1240,26 @@ function fitHud() {
     const tHpx = Math.max(tBox.height, 36);
     const dockTopPx = dockL && dockL.height ? dockL.top : vpH();
     const naturalTopPx = dockTopPx - tHpx - 8;
-    const minTopPx = colBot + 8;
-    const roomPx = Math.max(0, dockTopPx - minTopPx - 8);
-    // Need a readable band (≥28px); otherwise leave the dock-top anchor alone.
-    if (naturalTopPx < minTopPx - 0.5 && roomPx >= 28) {
+    const minTopPx = colBot + 4;
+    const roomPx = Math.max(0, dockTopPx - minTopPx - 4);
+    if (naturalTopPx < minTopPx - 0.5 && roomPx >= 14) {
       hStyle(root, "--hud-tyre-top", minTopPx.toFixed(1) + "px");
       if (roomPx < tHpx - 0.5) hStyle(root, "--hud-tyre-max-h", roomPx.toFixed(1) + "px");
       else hUnstyle(root, "--hud-tyre-max-h");
+      if (tyreEl.dataset) {
+        if (roomPx < 48) tyreEl.dataset.tyreCompact = "1";
+        else delete tyreEl.dataset.tyreCompact;
+      }
       leftBot = Math.max(leftBot, minTopPx + Math.min(tHpx, roomPx));
       tyreStack = true;
-    } else { hUnstyle(root, "--hud-tyre-top"); hUnstyle(root, "--hud-tyre-max-h"); }
-  } else { hUnstyle(root, "--hud-tyre-top"); hUnstyle(root, "--hud-tyre-max-h"); }
+    } else {
+      hUnstyle(root, "--hud-tyre-top"); hUnstyle(root, "--hud-tyre-max-h");
+      if (tyreEl.dataset) delete tyreEl.dataset.tyreCompact;
+    }
+  } else {
+    hUnstyle(root, "--hud-tyre-top"); hUnstyle(root, "--hud-tyre-max-h");
+    if (tyreEl && tyreEl.dataset) delete tyreEl.dataset.tyreCompact;
+  }
   if (document.body.classList) document.body.classList.toggle("hud-tyre-stack", tyreStack);
   hStyle(root, "--hud-left-h", (leftBot / chromeZ).toFixed(1) + "px");
   // THE SAME EDGE IN SCREEN PIXELS. #hud-limits reads --hud-left-h from INSIDE
@@ -1281,13 +1289,17 @@ function fitHud() {
       && !(tyreEl.hasAttribute && tyreEl.hasAttribute("data-hl-user")) && !tyreStack) {
     const tBox = tyreEl.getBoundingClientRect();
     const tHpx = Math.max(tBox.height, 36);
-    const minTopPx = colBot + 8;
+    const minTopPx = colBot + 4;
     const dockTopPx = dockL && dockL.height ? dockL.top : vpH();
-    const roomPx = Math.max(0, dockTopPx - minTopPx - 8);
-    if (roomPx >= 28) {
+    const roomPx = Math.max(0, dockTopPx - minTopPx - 4);
+    if (roomPx >= 14) {
       hStyle(root, "--hud-tyre-top", minTopPx.toFixed(1) + "px");
       if (roomPx < tHpx - 0.5) hStyle(root, "--hud-tyre-max-h", roomPx.toFixed(1) + "px");
       else hUnstyle(root, "--hud-tyre-max-h");
+      if (tyreEl.dataset) {
+        if (roomPx < 48) tyreEl.dataset.tyreCompact = "1";
+        else delete tyreEl.dataset.tyreCompact;
+      }
       leftBot = Math.max(leftBot, minTopPx + Math.min(tHpx, roomPx));
       tyreStack = true;
       if (document.body.classList) document.body.classList.toggle("hud-tyre-stack", true);
