@@ -248,6 +248,7 @@
     "js/audio/soundtrack.js",
     "js/audio/radio-fx.js",
     "js/audio/tone-model.js",
+    "js/audio/ers-layer.js",
     "js/audio/engine.js",
     "js/audio/music-lib.js",
     "js/audio/spotify.js",
@@ -275,6 +276,10 @@
     ],
     [
       "js/audio/tone-model.js",
+      "js/audio/engine.js"
+    ],
+    [
+      "js/audio/ers-layer.js",
       "js/audio/engine.js"
     ],
     [
