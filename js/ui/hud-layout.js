@@ -325,6 +325,8 @@ const HudLayout = (function () {
       if (selected === id && preview) el.setAttribute("data-hl-sel", "");
       else if (el.hasAttribute("data-hl-sel")) el.removeAttribute("data-hl-sel");
     }
+    // A MOVED radio card leaves auto-placement (js/ui/hud.js radioTopSlot): it stays where it was put.
+    if (body && body.toggleAttribute) { const r = a.announce; body.toggleAttribute("data-radio-placed", !!(r && (r.x || r.y))); }
     fit();
     // A move changes what fitHud measured: let it re-lay the bands out now
     // (js/ui/hud.js; optional — absent at eval and in node harnesses).
