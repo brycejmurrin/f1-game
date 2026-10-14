@@ -851,3 +851,33 @@ test("friend-race labels do not outlive the race: the next solo build restores M
   // buildTTResults needs the whole ghost stack to run here; pin its reset at the source.
   assert.match(read("js/ui/results-sheet.js"), /function buildTTResults\(\) \{[\s\S]{0,400}resMenu\.textContent = "MENU"/);
 });
+
+test("RESULTS scrolls .res-row.you into view when the sheet builds", () => {
+  const { season, cars } = tiedSeason();
+  const h = bootResults({ season, cars });
+  const scrolls = [];
+  const orig = h.dom.document.createElement.bind(h.dom.document);
+  h.dom.document.createElement = (tag) => {
+    const el = orig(tag);
+    el.scrollIntoView = (opts) => { scrolls.push({ className: el.className, opts }); };
+    return el;
+  };
+  h.api.buildResults(cars.slice());
+  assert.ok(scrolls.some((s) => /\byou\b/.test(s.className)),
+    "the player row must scrollIntoView on open (sticky alone leaves it below the fold)");
+});
+
+test("RESULTS name clamps to two lines and drops pts on narrow before ellipsis", () => {
+  const css = readCssSource("css/overlays.css");
+  assert.match(css, /\.res-name \{[^}]*-webkit-line-clamp:\s*2/s, ".res-name wraps/clamps to 2 lines");
+  assert.match(css, /body\[data-width="narrow"\] #results-table > \.res-row > \.res-pos ~ \.res-pts \{ display: none; \}/,
+    "narrow widths drop classification pts (sibling of .res-pos) before name ellipsis");
+});
+
+test("finishRace does not stamp the go() 0.5s floor as official winner elapsed", () => {
+  // go() floors raceT at 0.5; a harness finishRace that copied it printed
+  // OFFICIAL WINNER ELAPSED 0:00.500. Only stamp a clock when raceT has left that floor.
+  const apex = read("js/agent/apex.js");
+  assert.match(apex, /clock = ran > 0\.5 \? ran : 0/);
+  assert.match(apex, /c\.finishT = clock/);
+});

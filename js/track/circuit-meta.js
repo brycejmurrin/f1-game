@@ -3,7 +3,7 @@
 (function () {
   "use strict";
   var D = (window.TrackDefs = window.TrackDefs || []);
-  D.push({"id":"bahrain","name":"BAHRAIN","gp":"Bahrain GP","country":"Bahrain","night":true,"theme":"desert","sceneryTheme":"desert","lengthKm":5.4,"tyreSeverity":1.55,"reverse":false,"sunAzimBias":-0.36,"baseHW":7,"sceneryCoordinates":"racing","_metaOnly":true});
+  D.push({"id":"bahrain","name":"BAHRAIN","gp":"Bahrain GP","country":"Bahrain","night":true,"theme":"desert","sceneryTheme":"desert","lengthKm":5.4,"tyreSeverity":1.55,"reverse":false,"sunAzimBias":-0.36,"baseHW":7,"sceneryCoordinates":"racing","terrainMat":"SAND","_metaOnly":true});
   D.push({"id":"monaco","name":"MONACO","gp":"Monaco GP","country":"Monaco","night":false,"theme":"street_day","lengthKm":3.3,"gpLaps":78,"tyreSeverity":1.01,"street":true,"reverse":true,"baseHW":5,"sceneryCoordinates":"source","terrainOuter":28,"_metaOnly":true});
   D.push({"id":"silverstone","name":"SILVERSTONE","gp":"British GP","country":"UK","night":false,"theme":"green","sceneryTheme":"permanent","lengthKm":5.9,"tyreSeverity":0.89,"reverse":false,"sunAzimBias":0.28,"baseHW":8,"sceneryCoordinates":"racing","ownPitStraight":true,"flatTerrain":true,"terrainOuter":110,"_metaOnly":true});
   D.push({"id":"spa","name":"SPA","gp":"Belgian GP","country":"Belgium","night":false,"theme":"green","lengthKm":7,"reverse":false,"sunAzimBias":0.44,"baseHW":8,"sceneryCoordinates":"racing","terrainOuter":90,"terrainFalloffStart":54,"_metaOnly":true});

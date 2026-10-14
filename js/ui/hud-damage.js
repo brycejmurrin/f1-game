@@ -35,9 +35,11 @@ const HudDamage = (function () {
   }
 
   // Quantized signature of what is drawn; a repaint only when it changes.
+  // Every part's tenth, not only the worst one's: the label names each part's
+  // percent, so a non-worst part moving 10 % within its level left it stale.
   function sig(r) {
     return r ? level(r.fwL) + level(r.fwR) * 4 + level(r.rw) * 16 + level(r.floor) * 64 + (r.knock ? 256 : 0)
-      + Math.round(Math.max(r.fwL, r.fwR, r.rw, r.floor) * 10) * 512 : -1;
+      + (Math.round(r.fwL * 10) + Math.round(r.fwR * 10) * 11 + Math.round(r.rw * 10) * 121 + Math.round(r.floor * 10) * 1331) * 512 : -1;
   }
 
   /** el = #hud-damage; r = Damage.get(player) or null. Returns shown. */

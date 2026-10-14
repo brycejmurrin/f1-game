@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  DEPLOY, MAX_LIVE, SUGGESTIONS, ciState, decide, suggest, evaluate, render, measure,
+  DEPLOY, MAX_LIVE, MAX_ARMED, SUGGESTIONS, hasMergeHold, ciState, decide, suggest, evaluate, render, measure,
 } from "../../tools/ci/pr-board.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -65,17 +65,39 @@ test("suggest: FIX — ci failed on the head, or Structural guards failed", () =
   assert.equal(suggest({ ...base, ci: "in_progress", gate: "failed" }, ctx()), "FIX");
 });
 
-test("suggest: FOREIGN-ARM — armed with squash or rebase (merge commits only, #1458); wins over everything", () => {
+test("suggest: FOREIGN-ARM — armed with squash or rebase (MERGE-COMMIT-ONLY); wins over everything", () => {
   assert.equal(suggest({ ...base, armed: true, mergeMethod: "squash" }, ctx()), "FOREIGN-ARM");
   assert.equal(suggest({ ...base, armed: true, mergeMethod: "REBASE" }, ctx()), "FOREIGN-ARM");
   assert.equal(suggest({ ...base, armed: true, mergeMethod: "squash", mergeableState: "dirty", ci: "failure" }, ctx()), "FOREIGN-ARM");
 });
 
-test("suggest: NONE — armed with merge and healthy; never ARM again", () => {
+test("suggest: NONE — armed with MERGE and healthy; never ARM again", () => {
   const armed = { ...base, armed: true, mergeMethod: "merge" };
   assert.equal(suggest(armed, ctx()), "NONE");
   assert.equal(suggest({ ...armed, ci: "queued", gate: "pending" }, ctx()), "NONE");
   assert.equal(suggest({ ...armed, mergeMethod: "MERGE" }, ctx()), "NONE");
+});
+
+test("suggest: ARM waits on a MERGE-HOLD line and at MAX_ARMED armed repo-wide", () => {
+  assert.equal(MAX_ARMED, 2);
+  assert.equal(suggest({ ...base, hold: true }, ctx()), "WAIT");
+  assert.equal(suggest({ ...base }, { ...ctx(), armed: 1 }), "ARM");
+  assert.equal(suggest({ ...base }, { ...ctx(), armed: 2 }), "WAIT");
+});
+
+test("hasMergeHold: a line STARTING with MERGE-HOLD:, outside comments, is the only veto", () => {
+  assert.equal(hasMergeHold("## Goal\nx\nMERGE-HOLD: waiting on Bryce\n"), true);
+  assert.equal(hasMergeHold("please see MERGE-HOLD: mid-sentence"), false);
+  assert.equal(hasMergeHold("<!-- MERGE-HOLD: example -->\n## Goal"), false);
+  assert.equal(hasMergeHold("do not merge"), false);
+  assert.equal(hasMergeHold(null), false);
+});
+
+test("suggest: READY waits while the draft's Plan has open items", () => {
+  const draft = { ...base, draft: true };
+  assert.equal(suggest({ ...draft, plan: { state: "open", items: 3, open: ["a"] } }, ctx()), "WAIT");
+  assert.equal(suggest({ ...draft, plan: { state: "done", items: 3, open: [] } }, ctx()), "READY");
+  assert.equal(suggest({ ...draft, plan: { state: "none", items: 0, open: [] } }, ctx()), "READY", "no Plan: ready-gate only warns");
 });
 
 test("decide returns a reason with every action", () => {
@@ -127,8 +149,8 @@ test("render: header, one line per PR, a footer; empty board says so", () => {
   const r = evaluate([{ pr: prObj(1, { title: "x".repeat(80) }), runs: [], checkRuns: guard() }], { cap: { cap: 3, count: 0 } });
   const out = render(r, { capLine: "ready-full-cap: 0/3" });
   const lines = out.split("\n");
-  assert.match(lines[0], /^PR\s+TITLE\s+STATE\s+HEAD\s+MERGEABLE\s+AUTO-MERGE\s+CI\s+FAILING JOBS\s+GATE\s+SUGGEST$/);
-  assert.match(lines[1], /^#1\s+x{39}…\s+ready\s+aaaaaaa\s+clean\s+-\s+none\s+-\s+passed\s+ARM$/);
+  assert.match(lines[0], /^PR\s+TITLE\s+STATE\s+HEAD\s+MERGEABLE\s+AUTO-MERGE\s+CI\s+FAILING JOBS\s+GATE\s+PLAN\s+SUGGEST$/);
+  assert.match(lines[1], /^#1\s+x{39}…\s+ready\s+aaaaaaa\s+clean\s+-\s+none\s+-\s+passed\s+-\s+ARM$/);
   assert.match(lines.at(-1), /^pr-board: 1 open PR\(s\); ready-full-cap: 0\/3$/);
   const empty = render(evaluate([], { cap: { cap: 3, count: 0 } }));
   assert.match(empty, /no open PRs into claude\/f1-game-project-26h3ng/);
@@ -270,7 +292,7 @@ test("CLI: --help exits 0; unknown flag and a bad --pr exit 2", () => {
 
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
-test("ci-watch skill pins the authority, merge-commit-only and no-merge rules and the Routine prompt", () => {
+test("ci-watch skill pins the authority, MERGE-commit-only and no-merge rules and the Routine prompt", () => {
   const t = read(".claude/skills/ci-watch/SKILL.md");
   assert.match(t, /designated/);
   assert.match(t, /never grants it|never from a PR body/i);
@@ -313,4 +335,20 @@ test("ci-watcher agent is read-only (no write or MCP tools) and listed in the ag
   assert.match(t, /pr-board\.mjs --json/);
   assert.match(t, /ready-full-cap\.mjs/);
   assert.match(read(".claude/agents/README.md"), /\*\*ci-watcher\*\*/);
+});
+
+test("evaluate + render: PLAN is done/items from the body, HOLD is flagged, a sweep never arms past MAX_ARMED", () => {
+  const body = "## Plan\n- [x] a — sha\n- [ ] **now:** b\n- [ ] ~~c~~ — dropped\n";
+  const items = [
+    { pr: prObj(1, { auto_merge: { merge_method: "merge" } }), runs: [], checkRuns: guard() },
+    { pr: prObj(2, { body }), runs: [], checkRuns: guard() },
+    { pr: prObj(3, { body: "MERGE-HOLD: Bryce\n" }), runs: [], checkRuns: guard() },
+    { pr: prObj(4), runs: [], checkRuns: guard() },
+  ];
+  const r = evaluate(items, { cap: { cap: 3, count: 0 } });
+  assert.deepEqual(r.rows.map((x) => x.suggest), ["NONE", "ARM", "WAIT", "WAIT"], "1 armed + 1 ARM = MAX_ARMED; the hold waits");
+  assert.match(r.rows[3].why, /2 PRs are already armed/);
+  const lines = render(r).split("\n");
+  assert.match(lines[2], /\s2\/3\s+ARM$/, "two of three items closed (one ticked, one struck)");
+  assert.match(lines[3], /WAIT \(HOLD\)$/);
 });

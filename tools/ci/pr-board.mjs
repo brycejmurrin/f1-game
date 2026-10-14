@@ -12,16 +12,22 @@
  * the `ci-watch` skill turns each SUGGESTION into a GitHub MCP call. The tool
  * itself never writes: it has no way to issue anything but a GET.
  *
- * SUGGESTION, first match wins:
- *   FOREIGN-ARM  auto-merge armed with a method other than merge (merge commits only, #1458)
+ * SUGGESTION, first match wins (AGENTS.md MERGE-COMMIT-ONLY, 2026-10-13):
+ *   FOREIGN-ARM  auto-merge armed with a method other than MERGE (squash, rebase)
  *   SYNC         mergeable_state dirty (merge conflict with the deploy branch)
  *   FIX          ci.yml failed on the head, or the Structural guards check failed
- *   ARM          ready, not armed, Structural guards passed, ci not failed
- *   READY        draft, ci green, Structural guards passed, a full-tier slot is free
- *   NONE         armed (merge) and healthy
- *   WAIT         anything else: ci running, gate pending/absent, cap full
+ *   ARM          ready, not armed, Structural guards passed, ci not failed, no
+ *                MERGE-HOLD line, fewer than MAX_ARMED PRs armed
+ *   READY        draft, ci green, Structural guards passed, Plan closed, a
+ *                full-tier slot is free
+ *   NONE         armed (MERGE) and healthy
+ *   WAIT         anything else: ci running, gate pending/absent, cap full, a
+ *                MERGE-HOLD, MAX_ARMED already armed, Plan items open
  * The cap is ready-full-cap.mjs's own measure (MAX_LIVE = 3); each READY in one
- * sweep consumes a slot, so a board never suggests more flips than the cap has room.
+ * sweep consumes a slot, so a board never suggests more flips than the cap has
+ * room. Each ARM likewise counts toward MAX_ARMED (2 repo-wide, any method). The
+ * PLAN column is ready-gate.mjs's planVerdict of the PR body: done/items, or "-"
+ * for a body with no ## Plan checklist (AGENTS.md rule 12).
  *
  *   node tools/ci/pr-board.mjs              # the table
  *   node tools/ci/pr-board.mjs --json       # rows + cap, for the skill
@@ -32,10 +38,20 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { api, measure as capMeasure, reportLine as capLine, DEPLOY, MAX_LIVE } from "./ready-full-cap.mjs";
-import { guardsVerdict } from "./ready-gate.mjs";
+import { guardsVerdict, planVerdict } from "./ready-gate.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
 export { DEPLOY, MAX_LIVE };
+/** At most this many PRs armed repo-wide (AGENTS.md §Concurrent PRs, Merge Desk's hard gate). */
+export const MAX_ARMED = 2;
+/** The one merge method allowed (AGENTS.md MERGE-COMMIT-ONLY). */
+export const MERGE_METHOD = "merge";
+
+/** A PR-body line that STARTS with `MERGE-HOLD:`, outside an HTML comment, is
+ *  the one veto on arming or merging (AGENTS.md); a mid-sentence mention is not. */
+export function hasMergeHold(body) {
+  return /^MERGE-HOLD:/m.test(String(body || "").replace(/<!--[\s\S]*?-->/g, ""));
+}
 export const SUGGESTIONS = ["ARM", "READY", "SYNC", "FIX", "FOREIGN-ARM", "WAIT", "NONE"];
 const LIVE = new Set(["queued", "in_progress", "waiting", "requested", "pending"]);
 const BAD_JOB = new Set(["failure", "timed_out", "startup_failure"]);
@@ -68,27 +84,33 @@ export function ciState(runs) {
  * The decision for one row. Pure. `ctx.room` is how many more full-tier slots a
  * READY may take (default: ctx.cap.cap - ctx.cap.count).
  * @param {{ draft:boolean, armed:boolean, mergeMethod?:string|null, mergeableState?:string|null, ci:string, gate:string }} row
- * @param {{ room?: number, cap?: { cap:number, count:number } }} [ctx]
+ * @param {{ room?: number, armed?: number, cap?: { cap:number, count:number } }} [ctx]
+ *   ctx.armed: PRs armed repo-wide so far (ARM waits at MAX_ARMED).
  * @returns {{ action: string, why: string }}
  */
 export function decide(row, ctx = {}) {
   const room = ctx.room ?? (ctx.cap ? Math.max(0, ctx.cap.cap - ctx.cap.count) : 0);
   const method = String(row.mergeMethod || "").toLowerCase();
-  if (row.armed && method !== "merge") {
-    return { action: "FOREIGN-ARM", why: `auto-merge armed with ${method || "an unknown method"}; only the merge method is allowed (merge commits only)` };
+  if (row.armed && method !== MERGE_METHOD) {
+    return { action: "FOREIGN-ARM", why: `auto-merge armed with ${method || "an unknown method"}; only MERGE is allowed` };
   }
   if (row.mergeableState === "dirty") return { action: "SYNC", why: "merge conflict with the deploy branch" };
   if (row.ci === "failure") return { action: "FIX", why: "ci.yml failed on the head" };
   if (row.gate === "failed") return { action: "FIX", why: "Structural guards failed on the head" };
   const gateOk = row.gate === "passed";
   if (!row.draft) {
-    if (row.armed) return { action: "NONE", why: "armed (merge) and healthy" };
+    if (row.armed) return { action: "NONE", why: "armed (MERGE) and healthy" };
+    if (gateOk && row.hold) return { action: "WAIT", why: "ready and green, but the body carries MERGE-HOLD:" };
+    if (gateOk && (ctx.armed ?? 0) >= MAX_ARMED) return { action: "WAIT", why: `ready and green, but ${MAX_ARMED} PRs are already armed` };
     if (gateOk) return { action: "ARM", why: "ready, Structural guards passed, ci not failed" };
     return { action: "WAIT", why: `ready, Structural guards ${row.gate}` };
   }
   if (row.ci === "queued" || row.ci === "in_progress") return { action: "WAIT", why: `draft, ci ${row.ci}` };
   if (!gateOk) return { action: "WAIT", why: `draft, Structural guards ${row.gate}` };
   if (row.ci !== "success") return { action: "WAIT", why: `draft, ci ${row.ci}: the fast tier is not green on the head` };
+  if (row.plan && row.plan.state === "open") {
+    return { action: "WAIT", why: `draft is green but ${row.plan.open.length} Plan item(s) are open (ready-gate refuses)` };
+  }
   if (room < 1) return { action: "WAIT", why: "draft is green but the full-tier cap is full" };
   return { action: "READY", why: "draft, ci green, Structural guards passed, a full-tier slot is free" };
 }
@@ -104,7 +126,8 @@ export const suggest = (row, ctx) => decide(row, ctx).action;
  */
 export function evaluate(items, opts = {}) {
   const cap = opts.cap || { cap: MAX_LIVE, count: 0, ok: true };
-  const ctx = { cap, room: Math.max(0, cap.cap - cap.count) };
+  const ctx = { cap, room: Math.max(0, cap.cap - cap.count),
+    armed: (items || []).filter((it) => it.pr && it.pr.auto_merge).length };
   const rows = [];
   for (const it of [...(items || [])].sort((a, b) => a.pr.number - b.pr.number)) {
     const pr = it.pr;
@@ -125,10 +148,13 @@ export function evaluate(items, opts = {}) {
       failing,
       gate: gate.state,
       gateEvidence: gate.evidence,
+      plan: planVerdict(pr.body),
+      hold: hasMergeHold(pr.body),
       url: pr.html_url || "",
     };
     const d = decide(row, ctx);
     if (d.action === "READY") ctx.room -= 1;
+    if (d.action === "ARM") ctx.armed += 1;
     rows.push({ ...row, suggest: d.action, why: d.why });
   }
   const room = Math.max(0, cap.cap - cap.count);
@@ -140,11 +166,12 @@ const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 /** The table plus a one-line footer. */
 export function render(result, { capLine: line } = {}) {
   const { rows, cap } = result;
-  const head = ["PR", "TITLE", "STATE", "HEAD", "MERGEABLE", "AUTO-MERGE", "CI", "FAILING JOBS", "GATE", "SUGGEST"];
+  const head = ["PR", "TITLE", "STATE", "HEAD", "MERGEABLE", "AUTO-MERGE", "CI", "FAILING JOBS", "GATE", "PLAN", "SUGGEST"];
+  const plan = (p) => (!p || p.state === "none" ? "-" : `${p.items - p.open.length}/${p.items}`);
   const body = rows.map((r) => [
     `#${r.number}`, clip(r.title, 40), r.draft ? "draft" : "ready", r.sha.slice(0, 7) || "-",
     r.mergeableState || "-", r.armed ? (r.mergeMethod || "armed") : "-", r.ci,
-    clip(r.failing.join(", "), 36) || "-", r.gate, r.suggest,
+    clip(r.failing.join(", "), 36) || "-", r.gate, plan(r.plan), r.hold ? `${r.suggest} (HOLD)` : r.suggest,
   ]);
   const all = [head, ...body];
   const w = head.map((_, i) => Math.max(...all.map((row) => row[i].length)));
