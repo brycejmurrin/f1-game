@@ -124,6 +124,8 @@ function create(G) {
       flavours: [otherConfirmed ? (focusFlavour === "driver" ? "myteam" : "driver") : focusFlavour],
       includeProgressExtras: !otherConfirmed,
       rawText,
+      recovery: !!pending.recovery,
+      expectedSeasonRevision: pending.seasonRevision,
     });
     if (result.ok) {
       G.refreshCareerButton();
@@ -246,9 +248,11 @@ function create(G) {
         pickBackupFile((obj, err, text) => {
           if (err === "too-large") { announce("IMPORT FAILED — TOO LARGE"); return; }
           if (!obj) { announce("IMPORT FAILED — BAD FILE"); return; }
-          const v = CareerBackup.validate(obj, text);
+          const recovery = obj.format === "apex26-recovery-v1";
+          const v = recovery ? CareerBackup.recoveryEnvelope(obj, { flavour: s.flavour, i: s.i }, text) : CareerBackup.validate(obj, text);
           if (!v.ok) { announce("IMPORT FAILED — " + String(v.reason || "error").toUpperCase()); return; }
-          pendingImport = { envelope: obj, focusFlavour: s.flavour, rawText: text, revisions: expectedRevisions() };
+          pendingImport = { envelope: v.envelope || obj, focusFlavour: s.flavour, rawText: text, revisions: expectedRevisions(),
+            recovery, seasonRevision: recovery && GameStore.store.keyRevision ? GameStore.store.keyRevision("season") : null };
           armedImport = id;
           build();
         });
@@ -276,6 +280,17 @@ function create(G) {
         }
         for (const text of preview.extras || []) card.appendChild(el("div", "cr-note", text));
         card.appendChild(el("div", "cr-note", "Empty backup slots leave existing saves unchanged."));
+        if (pendingImport.recovery) {
+          if (pendingImport.envelope.season) {
+            const current = GameStore.store.get("season", null), incoming = pendingImport.envelope.season;
+            card.appendChild(el("div", "cr-note", `Standalone season: current ${current ? current.round | 0 : 0} rounds completed; recovery ${incoming.round | 0} rounds completed. Newer local progress is kept.`));
+          }
+          card.appendChild(el("div", "cr-note", `Recovery file targets this ${mode} slot only. Keep the original file until saving is confirmed.`));
+          const cancel = el("button", "", "CANCEL IMPORT");
+          cancel.type = "button"; cancel.setAttribute("data-cr-act", "import-cancel");
+          cancel.onclick = (ev) => { ev.stopPropagation(); armedImport = ""; pendingImport = null; build(); };
+          card.appendChild(cancel);
+        }
       }
     }
     if (s.used) {
@@ -896,7 +911,7 @@ function create(G) {
       const warn = el("div", "cr-card");
       warn.appendChild(el("div", "cr-obj-line", "SAVE CONFLICT"));
       warn.appendChild(el("p", "cr-note",
-        "Another tab wrote this career. Garage and R&D will not save here until you reload."));
+        "This save is protected. Compare and download its JSON before reloading or adopting a calendar."));
       left.appendChild(warn);
     }
 
@@ -911,6 +926,7 @@ function create(G) {
     // UPCOMING list has to stay on the right or GO RACING clips it — but the
     // one card you act on this visit belongs with the brief, not under the
     // championship table. Hire / offers / season-done have no next round.
+    let planningObjective = null, planningFactory = null;
     const midSeason = !st.hire && !st.offers && !Career.seasonDone();
     if (midSeason) {
       left.appendChild(head("NEXT RACE"));
@@ -930,6 +946,7 @@ function create(G) {
       const obj = Career.objective();
       left.appendChild(head("THIS ROUND"));
       const objCard = el("div", "cr-card cr-objective");
+      planningObjective = objCard;
       // THE BRIEF IS A CHOICE. Three, drawn from the seed, one of them the kind
       // a single dealt brief would be — so this is a decision (take the points brief in a
       // bad car, gamble the finish brief when it is quick) rather than an
@@ -1070,6 +1087,7 @@ function create(G) {
     if (st.facilityCost != null) {
       const fac = el("button", "cr-card cr-record");
       fac.id = "cr-facility";
+      planningFactory = fac;
       const fShort = shortBy(st.facilityCost);
       fac.disabled = fShort > 0;
       if (fShort > 0) fac.title = "Needs " + fShort.toLocaleString() + " cr more than you have";
@@ -1162,6 +1180,7 @@ function create(G) {
         keep.append(
           el("span", "cr-record-line", "Keep " + h.name + " · " + h.ask.toLocaleString() + " cr / round"),
           el("span", "cr-record-cta", "RE-SIGN"));
+        if (typeof CareerPlanningUI !== "undefined") CareerPlanningUI.cashNote(keep, 0, h.ask);
         keep.onclick = () => {
           Career.renewHire(1);
           if (G.soundOn) GameAudio.uiSelect();
@@ -1177,6 +1196,7 @@ function create(G) {
         const b2 = el("button", "cr-seat");
         b2.append(el("span", "cr-seat-role", a2.name),
           el("span", "cr-seat-who", a2.ask.toLocaleString() + " cr / round"));
+        if (typeof CareerPlanningUI !== "undefined") CareerPlanningUI.cashNote(b2, 0, a2.ask);
         b2.onclick = () => {
           Career.hireDriver(a2.code, 1);
           if (G.soundOn) GameAudio.uiSelect();
@@ -1269,6 +1289,7 @@ function create(G) {
     // button after the picker hides it, this rule would be overwritten on the
     // very next line and the seat would never block anything. Set the reset
     // first and let the rule have the last word.
+    if (typeof CareerPlanningUI !== "undefined") CareerPlanningUI.append({ left, objective: planningObjective, factory: planningFactory, rebuild: build, el, row });
     $("cr-go").disabled = !!st.hire || Career.conflicted();
     $("cr-garage").hidden = false;
     if (typeof CareerExperience !== "undefined") CareerExperience.mount(G, c, st, team);

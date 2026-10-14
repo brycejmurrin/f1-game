@@ -124,6 +124,22 @@ const SetupTune = (function () {
     return Math.max(-1, Math.min(1, ((t.rideR - t.rideF) - (d.rideR - d.rideF)) / half));
   }
   function aero(teamId) { return { rake: rake(teamId) }; }
+  // One bounded experiment. Paired softening preserves the axle balance;
+  // a rear-only reduction would reduce the aggregate acceleration channel.
+  function experiment(symptom, tune) {
+    const changes = symptom === "wide" ? { arbF: -1 }
+      : symptom === "traction" ? { arbF: -1, arbR: -1 }
+      : symptom === "entry" ? { brakeBias: 0.5 } : null;
+    if (!changes) return null;
+    const patch = {};
+    for (const k of Object.keys(changes)) {
+      const value = tune[k] + changes[k];
+      if (!Number.isFinite(value) || value < RANGE[k].min || value > RANGE[k].max) return null;
+      patch[k] = clampField(k, value);
+    }
+    return patch;
+  }
+
   // BRAKE BIAS → the friction ellipse's per-axle split (game.js muF/muR).
   function brakeBias(teamId) { return get(teamId).brakeBias / 100; }
   function bbScales(bb) {
@@ -132,6 +148,6 @@ const SetupTune = (function () {
     return { f: cl(b / BB_REF), r: cl((1 - b) / (1 - BB_REF)) };
   }
 
-  return { RANGE, FIELDS, BASE, DEFAULTS, BB_REF, defaults, get, set, reset, isDefault, mods, rake, aero, brakeBias, bbScales, clampField, balance, axleGrip };
+  return { RANGE, FIELDS, BASE, DEFAULTS, BB_REF, defaults, get, set, reset, isDefault, mods, rake, aero, brakeBias, bbScales, clampField, balance, axleGrip, experiment };
 })();
 Object.freeze(SetupTune);

@@ -13,7 +13,7 @@ import vm from "node:vm";
 import { bootEditor, read, plain, ellipse, design } from "../helpers/editor-vm.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
-const SCREEN_FILES = ["js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/designer.js"];
+const SCREEN_FILES = ["js/editor/followup-tools.js", "js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/designer.js"];
 
 function bootScreen(stored = {}) {
   const vmx = bootEditor(stored);
@@ -696,6 +696,8 @@ test("FIX chips: only on rows TrackFixes can repair; FIX commits one UNDO entry 
   b.dom.dispatch(chipsIn(fixable[0], "FIX")[0], ev);
   assert.equal(ev.propagationStopped, true, "the chip's click stops at the chip (the row would refocus the canvas)");
   assert.deepEqual(plain(seen), [{ code: "length", built: true }], "apply(design, issue, the current verdict)");
+  assert.equal(b.D.state().undo, u0, "preview does not commit");
+  chipsIn(b.root, "APPLY REPAIR")[0].click();
   assert.equal(b.D.state().undo, u0 + 1, "one UNDO entry");
   assert.deepEqual(plain(b.D.state().design.pts), plain(green.pts));
   assert.equal(msgText(b), "Fixed: lap stretched to 3.2 km — UNDO to revert");
@@ -729,6 +731,8 @@ test("FIX ALL runs fixAll(design, TrackValidate.check) and commits once, naming 
   const u0 = b.D.state().undo, f0 = fits;
   chipsIn(b.root, "FIX ALL")[0].click();
   assert.deepEqual(calls, [true], "handed the validator's own check");
+  assert.equal(b.D.state().undo, u0, "preview does not commit");
+  chipsIn(b.root, "APPLY REPAIR")[0].click();
   assert.equal(b.D.state().undo, u0 + 1, "one UNDO entry for the whole batch");
   assert.equal(b.D.state().sel, 0, "a start remedy selects the new point 0, as START HERE does");
   assert.equal(fits, f0 + 1, "a length remedy rescales the loop, so the view refits");
@@ -2439,4 +2443,70 @@ test("newer imports and manual edits supersede pending decodes", async () => {
   const edited = b.D.loadFrom("edited"); b.D.setName("MANUAL");
   completions.get("edited")({ ok: true, design: design({ name: "STALE" }) }); assert.equal(await edited, false);
   assert.equal(b.D.state().design.name, "MANUAL"); b.D.close();
+});
+
+
+const followupText = (node) => [node, ...walk(node)].map(e => e.textContent || "").join(" ");
+
+test("designer tabs link panels and use one tab stop with wrapping arrows, Home and End", () => {
+  const b = bootScreen(); openGreen(b);
+  const tabs = walk(b.root).filter(e => e.classList.contains("td-tab"));
+  for(const t of tabs) {
+    const panel = walk(b.root).find(e => e.id === t.getAttribute("aria-controls"));
+    assert.ok(panel); assert.equal(panel.getAttribute("aria-labelledby"), t.id);
+  }
+  assert.deepEqual(tabs.map(t => t.tabIndex), [0,-1,-1]);
+  const key = (t,k) => b.dom.dispatch(t,{type:"keydown",key:k,preventDefault(){}});
+  key(tabs[0],"ArrowLeft"); assert.equal(b.dom.document.activeElement,tabs[2]);
+  assert.deepEqual(tabs.map(t => t.tabIndex), [-1,-1,0]);
+  key(tabs[2],"Home"); assert.equal(b.dom.document.activeElement,tabs[0]);
+  key(tabs[0],"End"); assert.equal(b.dom.document.activeElement,tabs[2]);
+  key(tabs[2],"ArrowRight"); assert.equal(b.dom.document.activeElement,tabs[0]);
+  tabs[1].click(); assert.deepEqual(tabs.map(t => t.tabIndex), [-1,0,-1]);
+  b.D.close();
+});
+
+test("imported clearance and copy/move destination labels match effective placement", () => {
+  const b = bootScreen(), d = openGreen(b); d.props = [{kind:"stand",s:0.2,side:1,gap:0}]; b.D.load(d); b.D.setMode("scenery");
+  const list = walk(b.root).find(e=>e.dataset.role==="object-list"); assert.match(followupText(list),/14 m \(stored 0 m\)/);
+  b.root.querySelector('[aria-label="Edit placed stand 1"]').click();
+  const move = chipsIn(b.root,"MOVE · SELECT DESTINATION")[0], copy = chipsIn(b.root,"COPY · SELECT DESTINATION")[0];
+  assert.equal(move.disabled,true); assert.equal(copy.disabled,true); const u=b.D.state().undo;
+  assert.equal(b.D.copyPropAt(0),false); assert.equal(b.D.state().undo,u);
+  b.D.selectRange(3); assert.equal(move.textContent,"MOVE TO POINT 4"); assert.equal(copy.getAttribute("aria-label"),"COPY TO POINT 4");
+  assert.equal(move.disabled,false); assert.equal(copy.disabled,false); b.D.close();
+});
+
+test("recipe preview/cancel preserve history; whole mixed recipe applies and undoes once", () => {
+  const b = bootScreen(); const d = openGreen(b); b.D.setMode("scenery"); b.D.selectRange(3,8);
+  const u = b.D.state().undo; chipsIn(b.root,"PREVIEW MARSHAL + CAMERA")[0].click();
+  assert.equal(b.D.state().undo,u); assert.deepEqual(plain(b.D.state().design),d);
+  assert.match(followupText(walk(b.root).find(e=>e.dataset.role==="scenery-recipes")),/2 objects/);
+  chipsIn(b.root,"CANCEL RECIPE")[0].click(); assert.equal(b.D.state().undo,u);
+  chipsIn(b.root,"PREVIEW MARSHAL + CAMERA")[0].click(); chipsIn(b.root,"APPLY RECIPE")[0].click();
+  assert.deepEqual(plain(b.D.state().design.props.map(p=>p.kind)),["marshal","camera"]); assert.equal(b.D.state().undo,u+1);
+  b.D.undo(); assert.deepEqual(plain(b.D.state().design),d);
+  b.D.selectRange(3,8); chipsIn(b.root,"PREVIEW HEDGE SECTION")[0].click(); chipsIn(b.root,"APPLY RECIPE")[0].click();
+  assert.equal(b.D.state().design.props.length,3); assert.equal(b.D.state().undo,u+1); b.D.undo(); b.D.close();
+});
+
+test("repair comparison cancels without edits and refuses a changed base before apply", () => {
+  const b=bootScreen(); let green;
+  b.ctx.TrackFixes={canFix:it=>it.code==="length",apply:d=>({design:{...d,pts:green.pts},msg:"length"}),fixAll:()=>null};
+  green=shortLoop(b); const d=plain(b.D.state().design),u=b.D.state().undo;
+  const preview=()=>chipsIn(b.root.querySelector('[aria-label="Design checks"]'),"FIX")[0].click();
+  preview(); const panel=walk(b.root).find(e=>e.dataset.role==="repair-preview");
+  assert.equal(panel.hidden,false); assert.match(followupText(panel),/CURRENT · BLOCKED/); assert.match(followupText(panel),/PROPOSED · PASS/);
+  chipsIn(b.root,"CANCEL REPAIR")[0].click(); assert.deepEqual(plain(b.D.state().design),d); assert.equal(b.D.state().undo,u);
+  preview(); b.D.setName("Changed"); chipsIn(b.root,"APPLY REPAIR")[0].click();
+  assert.equal(b.D.state().undo,u); assert.equal(b.D.state().design.name,"CHANGED"); assert.match(followupText(panel),/Design changed/); b.D.close();
+});
+
+test("Spa corner memory cards highlight three apexes and reveal labels without authoring edits", () => {
+  const b=bootScreen(); const d=openGreen(b),u=b.D.state().undo,sel=b.D.state().sel;
+  chipsIn(b.root,"SPA CORNER MEMORY")[0].click(); const panel=walk(b.root).find(e=>e.dataset.role==="corner-memory");
+  assert.equal(walk(panel).filter(e=>e.tagName==="CANVAS").length,3);
+  assert.match(followupText(panel),/T1/); chipsIn(panel,"HIDE LABEL")[0].click();
+  assert.match(followupText(panel),/Recall this turn/); chipsIn(panel,"REVEAL LABEL")[0].click(); assert.match(followupText(panel),/T1/);
+  assert.deepEqual(plain(b.D.state().design),d); assert.equal(b.D.state().undo,u); assert.equal(b.D.state().sel,sel); b.D.close();
 });

@@ -79,3 +79,16 @@ test("free-cam.js wires GRID / SAVE MARK / DoF controls", () => {
   assert.match(fc, /fc-dof-blur/);
   assert.match(fc, /PhotoKit/);
 });
+
+test("named bookmarks remain independently reachable after deleting a selected older mark", () => {
+  const PK = load(), store = memStore();
+  for (let i = 0; i < 12; i++) PK.saveMark(store, "spa", { name: "Angle " + i, eye: [i, 2, 3], target: [4, 5, 6], fov: 35 + i, roll: i });
+  const before = PK.marksFor(store, "spa");
+  assert.equal(before[0].name, "Angle 0"); assert.equal(before[5].eye[0], 5);
+  PK.deleteMark(store, "spa", 5); const remaining = PK.marksFor(store, "spa");
+  assert.equal(remaining.length, 11); assert.equal(remaining[5].name, "Angle 6");
+  PK.saveMark(store, "spa", { name: "Replacement", eye: [90, 2, 3], target: [4, 5, 6] });
+  assert.equal(PK.marksFor(store, "spa")[0].name, "Angle 0");
+  PK.saveMark(store, "spa", { name: "Thirteenth", eye: [99, 2, 3], target: [4, 5, 6] });
+  assert.equal(PK.marksFor(store, "spa")[0].name, "Angle 1");
+});

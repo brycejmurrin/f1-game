@@ -325,6 +325,11 @@ const Input = (function () {
   // in steer() ahead of the on-screen arrows or a drag on the glass.
   function remoteSteers() { return remoteActive() && (remRoll || remStick); }
   // One sample from the phone: {roll (deg, may be null), thr, brk, held}.
+  // Remote driving follows the physical pad's ownership: title/navigation,
+  // settings and capture tools own the controls. Menu edges remain available.
+  function remoteDrivingBlocked() {
+    return !!axisCaptureCb || !!padCaptureCb || !!(window.UiLayers && window.UiLayers.navOpen());
+  }
   function remoteSample(s) {
     if (!s) return false;
     const n = nowMs();
@@ -356,6 +361,10 @@ const Input = (function () {
     remBrk = clamp(+s.brk || 0, 0, 1);
     remHeld = s.held | 0;
     remoteMs = n;
+    if (!remoteDrivingBlocked() && (remThr > REMOTE_PEDAL_ON || remBrk > REMOTE_PEDAL_ON || remHeld ||
+      (remStick ? Math.abs(remSteer) > 0.05 : remRoll && Math.abs(s.roll - tiltZero) > 2))) {
+      noteInputSource(remStick ? "controller" : "phone");
+    }
     return true;
   }
   // A button EDGE from the phone; the names are the pad's own action names.
@@ -385,6 +394,9 @@ const Input = (function () {
   function remoteEvent(kind) {
     const fn = REMOTE_EDGES[kind];
     if (!fn) return false;
+    const menuEdge = kind === "pause" || kind.startsWith("nav");
+    if (!menuEdge && remoteDrivingBlocked()) return false;
+    if (!menuEdge) noteInputSource(remStick ? "controller" : "phone");
     fn();
     return true;
   }
@@ -566,10 +578,10 @@ const Input = (function () {
   // The Help sheet and first-run coach need the source the player is actually
   // using, rather than whichever devices happen to be connected. This is a
   // report of input activity only; it never participates in control priority.
-  let inputSource = null; // "keyboard" | "controller" | "touch"
+  let inputSource = null; // "keyboard" | "controller" | "touch" | "phone"
   let defaultInputSource = null;
   function noteInputSource(source) {
-    if (source === "keyboard" || source === "controller" || source === "touch") inputSource = source;
+    if (source === "keyboard" || source === "controller" || source === "touch" || source === "phone") inputSource = source;
   }
   function activeInputSource() {
     if (inputSource) return inputSource;
@@ -668,9 +680,13 @@ const Input = (function () {
     if (padRestLegacy !== null) { if (!padRestMap.has(id)) padRestMap.set(id, padRestLegacy); padRestLegacy = null; }
     return padRestMap.get(id) || 0;
   }
-  function calibratePad() {
-    const pad = activePad();
-    if (!pad || !pad.axes) return false;
+  function padCalibrationOwner() {
+    const pads = readPads(), pad = pickPad(pads, null, wheelFirst());
+    return pad ? padKey(pad, Array.prototype.indexOf.call(pads, pad)) : null;
+  }
+  function calibratePad(expectedOwner) {
+    const pads = readPads(), pad = pickPad(pads, null, wheelFirst());
+    if (!pad || !pad.axes || (expectedOwner !== undefined && expectedOwner !== padKey(pad, Array.prototype.indexOf.call(pads, pad)))) return false;
     const v = readPadAxis(pad.axes, padAxisMap.steer) * padAxisMap.steerInvert;
     // A stick genuinely held over cannot be a rest position; refuse rather than
     // bake a permanent offset that steers the car on its own.
@@ -746,13 +762,13 @@ const Input = (function () {
      other side still reached 1. Dividing each half by the travel it actually
      has puts both full deflections at exactly ±1. |rest| <= 0.5
      (calibratePad / setPadRest refuse more), so neither divisor is below 0.5. */
-  function padAxisShape(raw) {
-    const d = raw - padRestOffset;
-    const v = clamp(d >= 0 ? d / (1 - padRestOffset) : d / (1 + padRestOffset), -1, 1);
+  function padAxisShape(raw, rest = padRestOffset, wheel = padIsWheel) {
+    const d = raw - rest;
+    const v = clamp(d >= 0 ? d / (1 - rest) : d / (1 + rest), -1, 1);
     const a = Math.abs(v);
     // A set-up wheel is a full-range axis, not a thumbstick: 5 % of 900 degrees
     // is ~22 of dead rotation. It defaults to none; a DEAD ZONE row change wins.
-    const dz = padIsWheel && padDeadzone === PAD_DZ_DEFAULT ? 0 : padDeadzone;
+    const dz = wheel && padDeadzone === PAD_DZ_DEFAULT ? 0 : padDeadzone;
     if (a <= dz) return 0;
     const span = Math.max(0.05, 1 - dz - padSaturation);
     return clamp(Math.sign(v) * (a - dz) / span, -1, 1);
@@ -763,12 +779,12 @@ const Input = (function () {
   // rest, so a pedal resting at -1 read 0 -> half throttle AND half brake on a
   // fresh page. Until a pedal reports anything but exactly 0, it is at rest.
   const padPedalSeen = { throttle: false, brake: false };
-  function padPedalAxis(axes, which) {
+  function padPedalAxis(axes, which, seen = padPedalSeen) {
     const i = padAxisMap[which];
     if (i == null) return 0;
     const raw = readPadAxis(axes, i);
-    if (raw !== 0) padPedalSeen[which] = true;
-    if (!padPedalSeen[which]) return 0;
+    if (raw !== 0) seen[which] = true;
+    if (!seen[which]) return 0;
     // The wizard's measured travel ends (a pedal that rests at 0, or a
     // combined-looking axis, is not the -1..+1 the fallback assumes).
     const rest = padAxisMap[which + "Rest"], far = padAxisMap[which + "Far"];
@@ -808,6 +824,22 @@ const Input = (function () {
     let v = 0;
     for (const b of bindings.padButtons(id)) if (b != null) v = Math.max(v, clamp(btnVal(pad, b), 0, 1));
     return v;
+  }
+  // Read-only Controls diagnostic: share shaping/travel math with the driving
+  // path, but never write latches, ramp clocks, captures or saved calibration.
+  function parkedPadPreview() {
+    const pad = activePad();
+    if (!pad) return null;
+    const axes = pad.axes || [];
+    const rest = padRestMap.get(padIdOf(pad)) || (padRestLegacy !== null ? padRestLegacy : 0);
+    const wheel = !padStd(pad) && !padAxesAreDefault();
+    const stick = padAxisShape(readPadAxis(axes, padAxisMap.steer) * padAxisMap.steerInvert, rest, wheel);
+    const seen = Object.assign({}, padPedalSeen);
+    return {
+      steer: analogShape(stick, wheel ? "wheel" : "pad"),
+      throttle: padPedalLevel(Math.max(padActVal(pad, "throttle"), padPedalAxis(axes, "throttle", seen))),
+      brake: padPedalLevel(Math.max(padActVal(pad, "brake"), padPedalAxis(axes, "brake", seen))),
+    };
   }
   function padActEdge(pad, id) {
     for (const b of bindings.padButtons(id)) if (b != null && btnEdge(pad, b)) return true;
@@ -1531,7 +1563,7 @@ const Input = (function () {
     if (padSteerActive()) return padSteerAnalog ? analogShape(padSteer, padIsWheel ? "wheel" : "pad") : padSteer;
     // A paired phone WITH a sensor: the tilt pipeline fed by remoteSample,
     // whatever the local mode. Pedals-only phones fall through to it.
-    if (remoteSteers()) return remStick ? analogShape(remSteer, "pad") : analogShape(tiltSteering(), "tilt");
+    if (remoteSteers()) return remoteDrivingBlocked() ? 0 : remStick ? analogShape(remSteer, "pad") : analogShape(tiltSteering(), "tilt");
     // On-screen buttons and the drag wheel. A friend race keeps simulating
     // under the pause menu; the pad already zeroes itself while a menu is open.
     // Gate on anyOpen(), NOT navOpen(): navOpen() is also true on the title
@@ -1546,8 +1578,8 @@ const Input = (function () {
   }
 
   const REMOTE_PEDAL_ON = 0.1;   // travel below this is a resting thumb, not a press
-  function remoteThrottle() { return remoteActive() && remThr > REMOTE_PEDAL_ON; }
-  function remoteBrake() { return remoteActive() && remBrk > REMOTE_PEDAL_ON; }
+  function remoteThrottle() { return !remoteDrivingBlocked() && remoteActive() && remThr > REMOTE_PEDAL_ON; }
+  function remoteBrake() { return !remoteDrivingBlocked() && remoteActive() && remBrk > REMOTE_PEDAL_ON; }
   // anyOpen() = pause/settings/sheets. navOpen() also covers title #overlay.
   // LATCHED ONCE PER FRAME, at the end of poll() (PERF-HUNT-2 S5): updateCar asks
   // throttle/braking/steer/…Level 3-6 times per physics step and each anyOpen() walks
@@ -1648,7 +1680,7 @@ const Input = (function () {
      it was removed on request — the dock had grown to five buttons in one thumb
      column once PIT landed beside it, and a glance over the shoulder is the
      control that least deserves a permanent seat there. */
-  function lookingBack() { return keyLookBack || padLookBack || (remoteActive() && !!(remHeld & REMOTE_HELD.lookBack)); }
+  function lookingBack() { return keyLookBack || padLookBack || (!remoteDrivingBlocked() && remoteActive() && !!(remHeld & REMOTE_HELD.lookBack)); }
 
   /* FREE-LOOK inputs for CamFeel. lookStick() is the latest right-stick sample
      (−1..1); consumeLookMouse() returns and clears RMB-drag pixel deltas. */
@@ -2250,7 +2282,7 @@ const Input = (function () {
     throttleLatched: () => throttleLatch && throttleLatched,
     primeHaptics,
     setPadLabelMode, padLabelMode: padLabelModeOf,
-    setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padRest, setPadRest, clearPadRest, padRestStore,
+    setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padCalibrationOwner, parkedPadPreview, padRest, setPadRest, clearPadRest, padRestStore,
     touchControlsNeeded,
     pickPad,
     onPointerKindChange,

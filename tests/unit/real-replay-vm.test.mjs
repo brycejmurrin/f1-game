@@ -198,7 +198,11 @@ test("WATCH official finishers and disqualifications survive the full game's res
     assert.equal(winner.finishT, publishedWinner.lapStart[lastLap] + publishedWinner.laps[lastLap]);
     assert.equal(!!dsq.dsq, true, "the published disqualification must survive simulator settlement");
     assert.equal(dsq.retired, false); assert.equal(dsq.finished, false);
-    const rows = G.els.resultsTable.children.filter((n) => String(n.className).split(" ").includes("res-row"));
+    const classification = G.els.resultsTable.children.find((n) => n.getAttribute("role") === "list"
+      && n.getAttribute("aria-label") === "Race classification");
+    assert.ok(classification, "published results expose the named race classification");
+    const rows = classification.children.filter((n) => String(n.className).split(" ").includes("res-row"));
+    assert.equal(rows.length, G.cars.length, "every official car retains one classification row");
     const text = (row) => row.children.map((n) => n.textContent).join(" ");
     assert.match(text(rows.find((row) => /LEC/.test(text(row)))), /DSQ/);
     assert.doesNotMatch(text(rows.find((row) => /RUS/.test(text(row)))), /DSQ|DNF/);

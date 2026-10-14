@@ -610,7 +610,7 @@ function endGarageRes() {
 // canvas, the sheet, the camera strip, or CSS zoom actually changes.
 const _covPr = { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 };
 const _covCr = { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 };
-let _covKey = "", _covX = 0, _covY = 0;
+let _covKey = "", _covX = 0, _covY = 0, _covPanel = null, _covCanvas = null, _covCam = null;
 function _stampRect(out, r) {
   out.left = r.left; out.top = r.top; out.width = r.width; out.height = r.height;
   out.right = r.right; out.bottom = r.bottom;
@@ -677,8 +677,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     const key = canvasEl.clientWidth + "x" + canvasEl.clientHeight
       + "|" + panelEl.clientWidth + "x" + panelEl.clientHeight
       + "|" + (camOn ? cam.clientWidth + "x" + cam.clientHeight : "0")
-      + "|" + zP + "|" + zC + "|" + (home.active ? 1 : 0);
-    if (key !== _covKey) {
+      + "|" + zP + "|" + zC + "|" + (home.active ? 1 : 0)
+      + "|" + document.documentElement.getAttribute("data-look-garage-side");
+    if (key !== _covKey || panelEl !== _covPanel || canvasEl !== _covCanvas || cam !== _covCam) {
+      _covPanel = panelEl; _covCanvas = canvasEl; _covCam = cam;
       const pr = _stampRect(_covPr, (window.CssZoom && CssZoom.viewportRect(panelEl)) || panelEl.getBoundingClientRect());
       const cr = _stampRect(_covCr, canvasEl.getBoundingClientRect());
       const camTop = () => camOn

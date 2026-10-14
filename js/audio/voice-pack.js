@@ -137,9 +137,17 @@ var VoicePack = (() => {
           .then((r) => { if (!r.ok) throw new Error(f + " " + r.status); return r[t](); }); }
         catch (e) { return Promise.reject(e); }
       };
-      v.loading = Promise.race([timeout, Promise.all([get(id + ".json", "json"), get(id + ".bin", "arrayBuffer")])])
-        .then(([man, bin]) => {
+      const verified = Promise.all([get(id + ".json", "json"), get(id + ".bin", "arrayBuffer")])
+        .then(async ([man, bin]) => {
           if (!man || !man.clips || !(bin && bin.byteLength)) throw new Error("empty pack");
+          if (!/^[a-f0-9]{64}$/.test(man.binarySha256 || "") || typeof crypto === "undefined" || !crypto.subtle) throw new Error("unverified pack");
+          const bytes = await crypto.subtle.digest("SHA-256", bin);
+          const digest = Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
+          if (digest !== man.binarySha256) throw new Error("pack generation mismatch");
+          return [man, bin];
+        });
+      v.loading = Promise.race([timeout, verified])
+        .then(([man, bin]) => {
           v.man = man; v.bin = bin; v.state = "ready";
           Log.info("audio", "VoicePack " + id + " ready: " + Object.keys(man.clips).length + " clips");
         })

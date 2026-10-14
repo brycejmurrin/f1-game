@@ -544,13 +544,13 @@ const NetPlay = (function () {
 
     function bindSession(id, s) {
       const qualiGate = rateGate(QUALI_RATE);
-      function sendersOwnDriver(d) {
+      function sendersOwnDriver(d, legacyLap = false) {
         if (role !== "host") return true;
         const wid = remoteFor(id);
         const r = wid != null ? remotes.get(wid) : null;
         return !!(r && r.car && (
           (d.driverId != null && d.driverId === r.car.driverId) ||
-          (d.code != null && d.code === r.car.code)
+          (legacyLap && d.driverId == null && d.code != null && d.code === r.car.code)
         ));
       }
       s.clearHandlers();
@@ -685,7 +685,7 @@ const NetPlay = (function () {
           // with the lobby phase. (QLIVE never reaches the classification, but
           // it is keyed by the same driverId — unbound, the same spoof paints a
           // lap-in-progress over another driver's name on the host's screen.)
-          if (name === EV.LAP && d && sendersOwnDriver(d)) {
+          if (name === EV.LAP && d && sendersOwnDriver(d, true)) {
             peerLaps.push(d);
             if (peerLaps.length > PEER_LAPS_CAP) peerLaps.splice(0, peerLaps.length - PEER_LAPS_CAP);
             // The finishing crossing carries the OWNER's finishT (`fin`, stamped

@@ -742,6 +742,11 @@ const Tracks = (function () {
     return best === null || y > best ? y : best;
   }
 
+  function diagnosticBuild() {
+    if (!compactProps) return true;
+    try { return localStorage.getItem("apex26.propsUnchunked") === "1"; } catch (_) { return false; }
+  }
+
   function setCompactProps(value) { compactProps = !!value; return compactProps; }
 
   function setKeepGeometry(value) {
@@ -752,5 +757,5 @@ const Tracks = (function () {
   // page's keepGeometry flag, so replay must stamp _keepPositions itself.
   function getKeepGeometry() { return keepGeometry; }
 
-  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, keepGeometry: getKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane, hydrate, circuitPayloadResident };
+  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, keepGeometry: getKeepGeometry, setCompactProps, diagnosticBuild, pitWindow, pitLaneAt, pitLaneSpan, inPitLane, hydrate, circuitPayloadResident };
 })();

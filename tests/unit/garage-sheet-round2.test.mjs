@@ -34,11 +34,14 @@ function harness({ career = false, era = null, unlimited = false, stored = {}, t
   sb.window = sb;
   vm.createContext(sb);
   const run = (f) => vm.runInContext(src(f), sb, { filename: f });
-  for (const f of ["js/core/mat4.js", "js/car/parts.js", "js/data/teams.js", "js/career/regulations.js"]) run(f);
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/car/parts.js", "js/data/teams.js", "js/career/regulations.js"]) run(f);
   run("js/garage/experience.js");
   if (era) sb.Parts.setLegality(sb.Regulations.legalityFor(era), era);
-  sb.PhysicsConsts = { WET_GRIP: { rain: [1, 1.2, 1.4] } };
-  sb.SetupTune = { FIELDS: [], RANGE: {}, get: () => ({ rideR: 60, rideF: 25, brakeBias: 56 }), set() {}, reset() {}, isDefault: () => true, mods: () => null, rake: () => 0 };
+  const tuneStore = new Map();
+  sb.GameStore = { store: { get: (key, fallback) => tuneStore.has(key) ? tuneStore.get(key) : fallback,
+    set: (key, value) => value === undefined ? tuneStore.delete(key) : tuneStore.set(key, value) } };
+  run("js/garage/setup-tune.js");
+  run("js/garage/setup-experiments.js");
   sb.LiveryTex = { NUM_FONT_IDS: ["default"], SPONSOR_PACK_IDS: ["default"] };
   sb.Car3D = { FINISH_SURFACE: {} };
   sb.GarageScene = { pulse() {} };

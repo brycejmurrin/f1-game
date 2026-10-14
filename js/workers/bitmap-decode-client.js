@@ -24,6 +24,7 @@ const BitmapDecode = (function () {
     if (!p) { closeBitmap(bmp); return; }
     _pending.delete(seq);
     if (p.timer != null) clearTimeout(p.timer);
+    if (p.signal) p.signal.removeEventListener("abort", p.abort);
     if (err) { closeBitmap(bmp); p.reject(err); } else p.resolve(bmp);
   }
 
@@ -67,16 +68,31 @@ const BitmapDecode = (function () {
   }
 
   // blob: Blob|File; opts: ImageBitmapOptions; crop: [sx,sy,sw,sh] optional.
-  async function decode(blob, opts, crop) {
+  function abortError() { const e = new Error("bitmap decode aborted"); e.name = "AbortError"; return e; }
+  // Optional fourth argument is an AbortSignal. drop() remains a worker reset:
+  // worker faults fall back, while explicit cancellation never starts fallback.
+  async function decode(blob, opts, crop, signal) {
     validCrop(crop);
+    if (signal && signal.aborted) throw abortError();
     const o = opts ? Object.assign({}, DEFAULT_OPTS, opts) : DEFAULT_OPTS;
     const w = spawn();
-    if (!w) return mainThread(blob, o, crop);
+    const fallback = async () => {
+      if (signal && signal.aborted) throw abortError();
+      const bmp = await mainThread(blob, o, crop);
+      if (signal && signal.aborted) { closeBitmap(bmp); throw abortError(); }
+      return bmp;
+    };
+    if (!w) return fallback();
     const seq = ++_seq;
     try {
       return await new Promise((resolve, reject) => {
         const p = { resolve, reject, timer: null };
         _pending.set(seq, p);
+        if (signal) {
+          p.signal = signal; p.abort = () => settle(seq, abortError());
+          signal.addEventListener("abort", p.abort, { once: true });
+          if (signal.aborted) { p.abort(); return; }
+        }
         p.timer = setTimeout(() => settle(seq, new Error("bitmap worker timed out")), REQUEST_MS);
         try {
           w.postMessage({ type: "decode", seq, blob, opts: o, crop: crop || null });
@@ -84,8 +100,9 @@ const BitmapDecode = (function () {
           settle(seq, err);
         }
       });
-    } catch (_) {
-      return mainThread(blob, o, crop);
+    } catch (err) {
+      if (signal && signal.aborted) throw abortError();
+      return fallback();
     }
   }
 

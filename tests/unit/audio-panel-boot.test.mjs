@@ -17,7 +17,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
 
-function boot({ soundOn, musicEnabled, raceRadio, data = {} }) {
+function boot({ soundOn, musicEnabled, raceRadio, data = {}, extra = {} }) {
   const dom = makeDom();
   const calls = [];
   const spied = { setMusicEnabled: (b) => calls.push("setMusicEnabled:" + b), startMusic: () => calls.push("startMusic"),
@@ -40,6 +40,7 @@ function boot({ soundOn, musicEnabled, raceRadio, data = {} }) {
   const G = { $, els: { soundbtn: dom.byId("soundbtn") }, store, soundOn, musicEnabled, state: "menu", raceRadio };
   const sb = { Math, JSON, Object, Array, String, Number, console, document: dom.document, window: null, GameAudio, SettingRow, G,
                ScrollFade: { refresh() {} } };
+  Object.assign(sb, extra);
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedLog(ctx); seedDom(ctx);
@@ -47,7 +48,7 @@ function boot({ soundOn, musicEnabled, raceRadio, data = {} }) {
   const panel = ctx.__audioPanel.create(G);
   calls.length = 0;
   panel.init();
-  return { calls, wired, data };
+  return { calls, wired, data, dom, G };
 }
 
 test("init sets the music switch before setSound can start the menu track", () => {
@@ -87,4 +88,39 @@ test("with the real RaceRadio the module owns the write", () => {
   wired.get("as-chat").write("key"); wired.get("as-comm").write("off"); wired.get("as-spot").write("on");
   assert.deepEqual(calls, ["chat:key", "comm:off", "spot:true"]);
   assert.equal(data.radioChat, undefined);
+});
+
+
+test("battle samples stop when leaving audio, hiding its panel or closing the settings dialog", () => {
+  const observers = [], leave = []; let active = false, plays = 0;
+  const b = { ready: () => true, prepare: () => Promise.resolve(true),
+    play: () => { active = true; plays++; return true; }, stop: () => { active = false; } };
+  const r = boot({ soundOn: true, musicEnabled: false, data: { battleEarcon: true }, extra: {
+    BattleEarcon: { create: () => b }, SettingsNav: { onLeave: (fn) => leave.push(fn) },
+    MutationObserver: class { constructor(fn) { this.fn = fn; } observe(el) { observers.push({ el, fn: this.fn }); } },
+  } });
+  const sample = r.dom.byId("as-battle-ahead-closing"), panel = r.dom.byId("audioset"), settings = r.dom.byId("pmsettings");
+  assert.equal(r.wired.get("as-battle").read(), "on", "stored opt-in reads correctly");
+  for (const mode of ["leave", "panel-hidden", "settings-hidden", "close", "cancel", "mute", "off"]) {
+    panel.hidden = false; settings.hidden = false; r.G.soundOn = true; r.data.battleEarcon = true;
+    sample.onclick(); assert.equal(active, true, mode);
+    if (mode === "leave") leave[0]("audio");
+    if (mode === "panel-hidden") { panel.hidden = true; observers.find((o) => o.el === panel).fn(); }
+    if (mode === "settings-hidden") { settings.hidden = true; observers.find((o) => o.el === settings).fn(); }
+    if (mode === "close" || mode === "cancel") settings.dispatchEvent({ type: mode });
+    if (mode === "mute") r.G.els.soundbtn.onclick();
+    if (mode === "off") r.wired.get("as-battle").write("off");
+    assert.equal(active, false, mode);
+  }
+  assert.equal(plays, 7);
+});
+test("default-off and system-announcer speech suppress battle sample playback", () => {
+  let plays = 0;
+  const b = { ready: () => true, prepare: () => Promise.resolve(true), play: () => { plays++; return true; }, stop() {} };
+  const r = boot({ soundOn: true, musicEnabled: false, extra: { BattleEarcon: { create: () => b } } });
+  const sample = r.dom.byId("as-battle-ahead-closing");
+  assert.equal(r.wired.get("as-battle").read(), "off"); sample.onclick(); assert.equal(plays, 0);
+  r.data.battleEarcon = true; r.G.announcer = { speaking: () => true };
+  sample.onclick(); assert.equal(plays, 0, "system TEST speech owns the audio moment too");
+  r.G.announcer.speaking = () => false; sample.onclick(); assert.equal(plays, 1);
 });

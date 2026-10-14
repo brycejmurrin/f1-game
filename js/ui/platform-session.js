@@ -88,6 +88,7 @@ if ($("pm-fullscreen")) {
 (function iosInstallNudge() {
   const el = $("ios-install");
   if (!el) return;
+  if (typeof Native !== "undefined" && Native.isNative()) { el.hidden = true; return; }
   const nav = navigator;
   const ios = /iPad|iPhone|iPod/.test(nav.userAgent) ||
     (nav.platform === "MacIntel" && nav.maxTouchPoints > 1);   // iPadOS reports as a Mac
@@ -115,6 +116,11 @@ if ($("pm-fullscreen")) {
 (function installChip() {
   const chip = $("install-chip"), row = $("pm-install");
   if (!chip && !row) return;
+  if (typeof Native !== "undefined" && Native.isNative()) {
+    if (chip) chip.hidden = true;
+    if (row) row.hidden = true;
+    return;
+  }
   let deferred = null;
   const hide = () => { if (chip) chip.hidden = true; };
   const paintRow = () => { if (row) row.hidden = !deferred; };
@@ -141,6 +147,56 @@ if ($("pm-fullscreen")) {
   window.addEventListener("appinstalled", () => { hide(); deferred = null; paintRow(); store.set("installChipSeen", true); });
   const ov = $("overlay");
   if (ov) ov.addEventListener("click", (e) => { if (e.target.closest && e.target.closest(".bigbtn")) hide(); });
+})();
+
+// A settled optional pool can still have misses: give installed web players a
+// concrete offline status and an explicit retry beside the install door.
+(function offlineReadiness() {
+  if (typeof Native !== "undefined" && Native.isNative()) return;
+  const anchor = $("pm-install");
+  if (!anchor || !anchor.parentNode || !navigator.serviceWorker || typeof MessageChannel === "undefined") return;
+  const note = document.createElement("p"), button = document.createElement("button");
+  note.className = "adv-help"; note.setAttribute("role", "status");
+  note.textContent = "Offline availability has not been checked.";
+  button.type = "button"; button.textContent = "CHECK OFFLINE AVAILABILITY";
+  anchor.parentNode.insertBefore(note, anchor.nextSibling);
+  anchor.parentNode.insertBefore(button, note.nextSibling);
+  let busy = false, retry = false, polls = 0;
+  async function refresh(download = false) {
+    if (busy) return;
+    const controller = navigator.serviceWorker.controller;
+    if (!controller) { note.textContent = "Offline availability is unknown until this page is controlled by its installer."; return; }
+    busy = true; button.disabled = true;
+    try {
+      const result = await new Promise((resolve) => {
+        const channel = new MessageChannel(); let ended = false;
+        const finish = (value) => {
+          if (ended) return;
+          ended = true; clearTimeout(timer); channel.port1.close(); channel.port2.close(); resolve(value);
+        };
+        const timer = setTimeout(() => finish(null), 5000);
+        channel.port1.onmessage = (event) => finish(event.data);
+        try { controller.postMessage({ type: download ? "apex-offline-retry" : "apex-offline-status" }, [channel.port2]); }
+        catch (_) { finish(null); }
+      });
+      if (navigator.serviceWorker.controller !== controller || !result || result.type !== "apex-offline-status" || !result.known) {
+        retry = false; note.textContent = "Offline availability is unknown. Try checking again.";
+      } else {
+        retry = !!(result.coreReady && result.optionalMissing > 0);
+        note.textContent = !result.coreReady ? "Core offline files are incomplete. Reconnect and reload to install them."
+          : result.optionalMissing > 0 ? "Core game ready offline. " + result.optionalMissing + " of " + result.optionalTotal + " optional files remain unavailable." + (result.retrying ? " Downloading…" : "")
+          : "Core game and install downloads ready offline. Optional content used later may still need a connection.";
+        if (result.retrying && polls++ < 12) setTimeout(() => refresh(), 5000);
+        else polls = 0;
+      }
+    } finally {
+      busy = false; button.disabled = false;
+      button.textContent = retry ? "RETRY OPTIONAL DOWNLOADS" : "CHECK OFFLINE AVAILABILITY";
+    }
+  }
+  button.addEventListener("click", () => { polls = 0; refresh(retry); });
+  navigator.serviceWorker.addEventListener("controllerchange", () => refresh());
+  refresh();
 })();
 }
 

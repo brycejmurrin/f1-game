@@ -651,6 +651,11 @@ const WGX = (function () {
     // menus are DOM layered over the canvas, and the RENDERER button is one tap
     // away. A frozen frame the player can navigate out of beats a reload loop.
     let _lost = false;
+    let _capReq = null;
+    function _rejectCapture(reason) {
+      const req = _capReq; _capReq = null;
+      if (req) req.reject(new Error(reason || "device lost"));
+    }
     // JS-error strikes for begin()/present(). The old catch latched
     // `_lost = true` for ANY exception — a healthy-device data bug froze the
     // canvas forever, silently, with the label still claiming WEBGPU. Now a
@@ -789,6 +794,7 @@ const WGX = (function () {
       }
       if (_lost) return;
       _lost = true;
+      _rejectCapture("renderer unavailable");
       _healReset();
       try { localStorage.setItem("apex26.gfxWgxFail", why); } catch (_) { /* blocked storage */ }
       try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
@@ -891,6 +897,7 @@ const WGX = (function () {
       _jsStrikes++;
       if (_jsStrikes < JS_STRIKE_CAP) return;
       _lost = true;
+      _rejectCapture("renderer unavailable");
       _healReset();
       try { localStorage.setItem("apex26.gfxWgxFail", where + " threw: " + ((e && e.message) || e)); } catch (_) { /* blocked storage */ }
       try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
@@ -935,6 +942,7 @@ const WGX = (function () {
       try { hidden = !!(typeof document !== "undefined" && document.hidden); } catch (_) { /* no document (harness) */ }
       if (!hidden && _nowMs() - _shownAt < 3000) {
         _lost = true;
+        _rejectCapture("renderer unavailable");
         setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 300);
         return;
       }
@@ -965,6 +973,7 @@ const WGX = (function () {
       // again — still a reload, because a lost device cannot be revived in
       // place, but with the pick and the ladder untouched.
       _lost = true;
+      _rejectCapture("renderer unavailable");
       try { Log.warn("gfx", "WGX device lost while hidden (" + ((info && info.reason) || "unknown") + ") — reload deferred to visibility, rung kept"); } catch (_) { /* harness */ }
       try {
         const onVisible = function () {
@@ -4286,7 +4295,6 @@ const WGX = (function () {
     // frame encoder; _capFinish maps after onSubmittedWorkDone. Optional
     // readback oracle — visible #game is the soft-present 2D blit; prefer
     // gfx-probe.mjs for the primary visible-canvas gate. One request in flight.
-    let _capReq = null;
     function capturePixels() {
       if (_lost) return Promise.reject(new Error("device lost"));
       if (_capReq) return Promise.reject(new Error("capture already pending"));

@@ -13,6 +13,10 @@
   color: var(--dim);
 }
 #appearance-studio { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
+#appearance-studio [data-as="photo-picker"] { margin-top: var(--gap); min-width: 0; }
+#appearance-studio [data-as="photo-picker"] select { flex: 1 1 12ch; width: 100%; min-width: 0; max-width: 100%; }
+#appearance-studio [data-as="photo-preview"] { display: block; max-width: 100%; width: min(100%, 320px); max-height: 180px; object-fit: contain; margin-block: var(--gap); border-radius: var(--r-sm); }
+#appearance-studio [data-as="photo-picker"][hidden], #appearance-studio [data-as="photo-preview"][hidden] { display: none; }
 #appearance-studio [data-as="controls"] { display: grid; gap: var(--gap); min-width: 0; }
 #appearance-studio [data-as="box"] { padding: var(--pad); border: 1px solid var(--plate-line); border-radius: var(--r-md); background: var(--surf-1); min-width: 0; }
 #appearance-studio [data-as="heading"] { margin: 0 0 var(--gap); font-size: var(--fs-2); color: var(--dim); letter-spacing: var(--ls-2); }

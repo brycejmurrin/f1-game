@@ -801,8 +801,9 @@ function vantage(track, mode, s, x, spd, now, extra) {
      Default is hold (mirror glance); SETTINGS › CAMERA FEEL can latch on press.
      After CamTune + free-look so trim and glance are part of what gets mirrored;
      before the ground clamp (eye unchanged). */
-  const _lbHeld = localLook && typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack();
-  const _lb = localLook && (typeof CamFeel !== "undefined" ? CamFeel.shouldLookBack(mode, _lbHeld) : _lbHeld);
+  const _xrComfort = typeof XrBoot !== "undefined" && XrBoot.comfort();
+  const _lbHeld = !_xrComfort && localLook && typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack();
+  const _lb = !_xrComfort && localLook && (typeof CamFeel !== "undefined" ? CamFeel.shouldLookBack(mode, _lbHeld) : _lbHeld);
   if (_lb) {
     const dx = tgt[0] - eye[0], dz = tgt[2] - eye[2];
     tgt[0] = eye[0] - dx; tgt[2] = eye[2] - dz;

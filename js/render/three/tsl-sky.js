@@ -356,6 +356,16 @@
      * the back target when a re-bake is due. A no-op with no cloud (the block
      * is skipped), with the cache off or after a failure. Leaves the
      * renderer's target, MRT and autoClear as it found them. */
+    let cacheWarmPending = 0, cacheRetireOwed = false, cacheRetired = false;
+    function retireCache() {
+      if (!C || cacheRetired) return;
+      C.dead = true; C.filling = false; D.cacheOn.value = 0;
+      if (cacheWarmPending) { cacheRetireOwed = true; return; }
+      cacheRetired = true; cacheRetireOwed = false;
+      for (const resource of [...C.rts, C.geo, C.mat]) {
+        try { resource.dispose(); } catch (_) { /* retire the remaining resources too */ }
+      }
+    }
     function cacheStep(renderer) {
       if (!C || C.dead || !renderer || !(U.cloud.value > 0.001)) return;
       if (!C.filling) {
@@ -376,9 +386,11 @@
         C.dead = true; C.filling = false; D.cacheOn.value = 0;
         throw e;
       } finally {
-        renderer.autoClear = ac;
-        renderer.setRenderTarget(t);
-        if (mrt) renderer.setMRT(mrt);
+        try {
+          renderer.autoClear = ac;
+          renderer.setRenderTarget(t);
+          if (mrt) renderer.setMRT(mrt);
+        } finally { if (C.dead) retireCache(); }
       }
       C.bands++;
       if (++C.band < N) return;
@@ -391,23 +403,37 @@
       C.foT[0] = F.oT.value.x; C.foT[1] = F.oT.value.y; C.fob[0] = F.ob.value.x; C.fob[1] = F.ob.value.y;
       cacheSync();
     }
-    /** The warm (tlx.js): compile the fill program against its own target.
-     * The caller owns and restores the render target and MRT (null here). */
+    /** The warm scopes its target/MRT too: optional-cache retirement must
+     * happen after these references are released, including compile rejection. */
     async function cacheWarm(renderer) {
-      if (!C || C.dead || !renderer || !renderer.compileAsync) return;
-      renderer.setRenderTarget(C.rts[1 - C.front]);
-      await renderer.compileAsync(C.scene, C.cam);
+      if (!C || C.dead || !renderer || !renderer.compileAsync || cacheWarmPending) return;
+      const target = C.rts[1 - C.front];
+      const previousTarget = renderer.getRenderTarget();
+      const previousMRT = renderer.getMRT ? renderer.getMRT() : null;
+      cacheWarmPending++;
+      try {
+        if (renderer.setMRT) renderer.setMRT(null);
+        renderer.setRenderTarget(target);
+        await renderer.compileAsync(C.scene, C.cam);
+      } finally {
+        try {
+          // A successor may have taken the renderer while compilation awaited.
+          // Restore only the target this task still owns, never its successor.
+          if (renderer.getRenderTarget() === target) {
+            renderer.setRenderTarget(previousTarget);
+            if (renderer.setMRT) renderer.setMRT(previousMRT);
+          }
+        } finally {
+          cacheWarmPending--;
+          if (cacheRetireOwed) retireCache();
+        }
+      }
     }
     function cacheState() {
       return C ? { size: C.S, u0: C.U0, on: D.cacheOn.value, valid: C.valid, filling: C.filling, band: C.band,
         fills: C.fills, bands: C.bands, maxOff: +C.maxOff.toFixed(4), dead: C.dead } : null;
     }
-    function dispose() {
-      if (!C) return;
-      C.dead = true; D.cacheOn.value = 0;
-      for (const rt of C.rts) { try { rt.dispose(); } catch (_) { /* already gone */ } }
-      try { C.geo.dispose(); C.mat.dispose(); } catch (_) { /* already gone */ }
-    }
+    function dispose() { retireCache(); }
     derive();
 
     /** drawSky(frameSky) -> uniform values. Field names + defaults mirror the

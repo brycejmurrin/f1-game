@@ -1218,6 +1218,10 @@ what it covers.
 
 | Spec | What it covers |
 |---|---|
+| `battle-earcon.test.mjs` | Finite battle-gap motif selection, readiness, context changes, cancellation and default-off request safety; audio-unit and tooling-fast. |
+| `followup-update-check.test.mjs` | Hung update fetch/body recovery, abort fallback and stale-result isolation; tooling-fast and lifecycle-unit. |
+| `followup-platform.test.mjs` | Native install guidance, desktop single-instance/crash recovery and bounded mobile file/share handling; tooling-fast, desktop-unit and mobile-unit. |
+| `garage-followups.test.mjs` | Reversible tune experiment controls, aero bench and garage followup behavior; tooling-fast and garage-unit. |
 | `session-contracts.test.mjs` | Hosted-result error propagation, conflicting plugin metadata, explicit Drive file transport, native document routing and truthful session capability diagnostics; pure local adapters, no service writes. |
 | `bootstrap-doctor.test.mjs` | Real YAML skill headers, helper references, mirror repair, protected shell interval checks, Chromium discovery and read-only environment diagnostics. |
 | `apex-career-delete.test.mjs` | Career slot deletion preserves storage durability and failure results through the agent API. |

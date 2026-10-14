@@ -552,3 +552,39 @@ test('BACKMARKERS refuses when nothing ahead is actually slower', () => {
   assert.equal(f.api.startDrill('backmarkers'), false);
   assert.match(f.announcements.at(-1)[0], /NO SLOWER TRAFFIC/);
 });
+
+test('material weather change restarts measured tyre life without changing the stint', () => {
+  const { api, c, G, tick } = fixture();
+  tick({ prog: 150, tyreWear: .1 }, 4);
+  assert.ok(api.forecast().remainingLaps > 0);
+  G.trackWetness = () => .04; tick({ prog: 170, tyreWear: .11 });
+  assert.ok(api.forecast().observedLaps > .5, 'small change keeps history');
+  G.trackWetness = () => .08; tick({ prog: 190, tyreWear: .12 });
+  assert.equal(api.forecast().observedLaps, 0);
+  assert.equal(api.forecast().reachesFinish, null);
+  assert.equal(c.tyreStints, 0); assert.equal(c.tyre.id, 'soft');
+  tick({ prog: 330, tyreWear: .15 }, 4);
+  assert.equal(api.forecast().remainingLaps, null);
+  tick({ prog: 340, tyreWear: .16 });
+  assert.ok(Math.abs(api.forecast().remainingLaps - 10.5) < 1e-10, 'only wet segment wear');
+});
+
+for (const transition of [{ tyreStints: 1 }, { tyre: { id: 'medium' } }, { tyreWear: 0 }, { pitState: 'lane' }])
+  test(`energy history restarts at interruption ${JSON.stringify(transition)}`, () => {
+    const { api, G, tick } = fixture();
+    G.sectorIdx = 1; tick({ prog: 60, energy: .9, tyreWear: .01 }, 2);
+    G.sectorIdx = 2; tick({ prog: 150, energy: .8 }, 3);
+    G.sectorIdx = 0; tick({ prog: 240, energy: .7 }, 3);
+    G.sectorIdx = 1; tick({ prog: 330, energy: .6 }, 3);
+    assert.ok(api.forecast().energyPerLap > 0);
+    G.sectorIdx = 2; tick({ prog: 350, ...transition });
+    assert.equal(api.forecast().energyPerLap, null);
+    assert.ok(api.forecast().sectors.every(s => s === null), 'crossing sector cannot add old-stint sample');
+    tick({ prog: 370, pitState: 'none' });
+    G.sectorIdx = 0; tick({ prog: 430, energy: .5 }, 2);
+    G.sectorIdx = 1; tick({ prog: 490, energy: .4 }, 2);
+    assert.equal(api.forecast().energyPerLap, null, 'two clean sectors cannot complete forecast');
+    G.sectorIdx = 2; tick({ prog: 550, energy: .3 }, 2);
+    G.sectorIdx = 0; tick({ prog: 610, energy: .2 }, 2);
+    assert.ok(Math.abs(api.forecast().energyPerLap - .3) < 1e-10);
+  });

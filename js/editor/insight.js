@@ -416,6 +416,14 @@ const TrackInsight = (function () {
     return { score: score(feats, style), feats };
   }
 
-  return { THRESH, speedProfile, bands, corners, passingZones, longestStraight, fia, totdSeed, dayKey, fromCircuit, verticalG, features, score, rate };
+  /** Curated racing-space apex indices, with direction from the built road. */
+  function memoryCards(tr, turns, limit = 3) {
+    if (!tr || !(tr.n > 2) || !(tr.total > 0) || !Array.isArray(turns)) return [];
+    return turns.slice(0, Math.max(0, limit)).map((frac, i) => {
+      const k = Math.round(frac * tr.n) % tr.n, curvature = tr.curv[k];
+      return { n: i + 1, sApex: frac * tr.total, dir: curvature < 0 ? -1 : curvature > 0 ? 1 : 0 };
+    });
+  }
+  return { memoryCards, THRESH, speedProfile, bands, corners, passingZones, longestStraight, fia, totdSeed, dayKey, fromCircuit, verticalG, features, score, rate };
 })();
 Object.freeze(TrackInsight);

@@ -456,7 +456,7 @@ const RaceInsights = (function () {
         observeDrill(c, current); return;
       }
       const wet = G.trackWetness ? G.trackWetness() : 0;
-      if (weather != null && Math.abs(wet - weather) > .05) { laps = []; energy = [[], [], []]; sector.valid = false; weather = wet; }
+      if (weather != null && Math.abs(wet - weather) > .05) { laps = []; energy = [[], [], []]; sector.valid = false; tyreStart = current; weather = wet; }
       if (weather == null) weather = wet;
       const dt = now - previous.time, ds = current.prog - previous.prog;
       if (dt <= 0) return;
@@ -468,9 +468,12 @@ const RaceInsights = (function () {
       if (current.contact && !previous.contact) event("contact", "Car contact");
       if (current.off && !previous.off) event("surface", "Left the track");
       if (current.retired && !previous.retired) event("retirement", "Car retired");
-      if (current.pit !== previous.pit) event("pit", "Pit phase: " + current.pit);
+      if (current.pit !== previous.pit) {
+        event("pit", "Pit phase: " + current.pit);
+        if (current.pit !== "track") { energy = [[], [], []]; sector.valid = false; }
+      }
       if (current.tyre !== previous.tyre || current.stint !== previous.stint || current.wear < previous.wear) {
-        tyreStart = current; laps = []; event("tyres", "New stint: " + (current.tyre || "unknown compound"));
+        tyreStart = current; laps = []; energy = [[], [], []]; sector = { ...current, valid: false }; event("tyres", "New stint: " + (current.tyre || "unknown compound"));
       }
       if (current.contact || current.off || current.invalid || current.pit !== "track" || (G.cautionLevel ? G.cautionLevel() : 0) > 0) { sector.valid = false; lapClean = false; }
       if (current.sector !== previous.sector) {

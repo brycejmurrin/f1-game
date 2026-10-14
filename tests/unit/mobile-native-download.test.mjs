@@ -21,7 +21,7 @@ function loadNative(opts = {}) {
   const sandbox = {
     console,
     Promise,
-    Date: opts.fixedClock ? { now: () => 1234 } : Date,
+    Date: opts.clock || (opts.fixedClock ? { now: () => 1234 } : Date),
     Math: opts.fixedClock ? { random: () => 0.5 } : Math,
     JSON,
     Object,
@@ -101,7 +101,7 @@ test("NativeDownload.saveBlob writes CACHE then Share.share", async () => {
   assert.equal(out.ok, true);
   assert.equal(writes.length, 1);
   assert.equal(writes[0].directory, "CACHE");
-  assert.match(writes[0].path, /^apex26-downloads\/[^/]+\/trace\.json$/);
+  assert.match(writes[0].path, /^apex26-downloads\/v2\/export-[^/]+\/trace\.json$/);
   assert.equal(writes[0].recursive, true);
   assert.ok(writes[0].data);
   assert.equal(shares.length, 1);
@@ -179,7 +179,7 @@ test("getUri is only a fallback for writeFile implementations without a URI", as
   let lookup;
   fs.getUri = async (args) => { lookup = args; return { uri: "file:///resolved/cache/trace.json" }; };
   const out = await sandbox.NativeDownload.saveBlob(bytesBlob([1]), "trace.json");
-  assert.match(lookup.path, /^apex26-downloads\/[^/]+\/trace\.json$/);
+  assert.match(lookup.path, /^apex26-downloads\/v2\/export-[^/]+\/trace\.json$/);
   assert.equal(lookup.directory, "CACHE");
   assert.equal(shares[0].url, out.uri);
   assert.equal(out.uri, "file:///resolved/cache/trace.json");
@@ -243,14 +243,14 @@ test("SettingsExport.download awaits the real native helper and surfaces write/s
   }
 });
 
-test("UUID cache directories keep screenshot names and base64 bytes intact", async () => {
+test("generated cache directories preserve screenshot basenames and base64 bytes intact", async () => {
   const { sandbox, writes, shares } = loadNative({ capacitor: true });
   sandbox.crypto = { randomUUID: () => "test-uuid" };
   for (const bytes of [[], [0, 127, 128, 255]]) {
     const out = await sandbox.NativeDownload.saveBlob(bytesBlob(bytes), "apex26-tlx.png");
     assert.equal(out.name, "apex26-tlx.png");
     assert.equal(writes.at(-1).data, Buffer.from(bytes).toString("base64"));
-    assert.match(writes.at(-1).path, /^apex26-downloads\/test-uuid-\d+\/apex26-tlx\.png$/);
+    assert.match(writes.at(-1).path, /^apex26-downloads\/v2\/export-[^/]+\/apex26-tlx\.png$/);
     assert.equal(shares.at(-1).url, out.uri);
   }
   assert.notEqual(writes[0].path, writes[1].path);
@@ -407,4 +407,72 @@ test("Spotify available() is false under Capacitor even with a client id", () =>
   const sp = loadSpotify();
   assert.equal(sp.available(), false);
   assert.equal(sp.status().state, "off");
+});
+
+
+test("retention prunes exact owned old leaves and empty folders, preserving basenames", async () => {
+  let now = 100000;
+  const disk = new Map();
+  const deleted = [], removed = [], cleanups = [];
+  const wire = (sandbox) => {
+    const fs = sandbox.Capacitor.Plugins.Filesystem;
+    fs.writeFile = async ({ path, data }) => {
+      const folder = path.slice(0, path.lastIndexOf("/"));
+      disk.set(folder, { name: folder.split("/").at(-1), type: "directory" });
+      disk.set(path, { name: path.split("/").at(-1), type: "file", data });
+      return { uri: "file://" + path };
+    };
+    fs.readdir = async ({ path, directory }) => {
+      assert.equal(directory, "CACHE");
+      const files = [...disk.entries()].filter(([p]) => p.slice(0, p.lastIndexOf("/")) === path).map(([, e]) => e);
+      cleanups.push(path); return { files };
+    };
+    fs.deleteFile = async ({ path, directory }) => { assert.equal(directory, "CACHE"); deleted.push(path); disk.delete(path); };
+    fs.rmdir = async ({ path, directory, recursive }) => {
+      assert.equal(directory, "CACHE"); assert.equal(recursive, false);
+      assert.equal([...disk.keys()].some((p) => p.startsWith(path + "/")), false);
+      removed.push(path); disk.delete(path);
+    };
+  };
+  const first = loadNative({ capacitor: true, clock: { now: () => now } }); wire(first.sandbox);
+  const old = await first.sandbox.NativeDownload.saveBlob(bytesBlob([1]), "backup.json");
+  const oldPath = old.uri.slice(7), oldFolder = oldPath.slice(0, oldPath.lastIndexOf("/"));
+  assert.equal(oldPath.split("/").at(-1), "backup.json");
+  const mixedFolder = "apex26-downloads/v2/export-100000-255s-i-99--mixed.json";
+  disk.set(mixedFolder, { name: mixedFolder.split("/").at(-1), type: "directory" });
+  disk.set(mixedFolder + "/mixed.json", { name: "mixed.json", type: "file" });
+  disk.set(mixedFolder + "/user.json", { name: "user.json", type: "file" });
+  disk.set("apex26-downloads/legacy/backup.json", { name: "backup.json", type: "file" });
+  for (const name of ["user", "export-100000-255s-i-2--..", "export-100000-255s-i-3--%2Fsecret", "../export-100000-255s-i-5--file.json"]) {
+    disk.set("apex26-downloads/v2/" + name, { name, type: "directory" });
+  }
+  now += 8 * 24 * 60 * 60 * 1000;
+  await first.sandbox.NativeDownload.saveBlob(bytesBlob([2]), "current.json");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(disk.has(oldPath), "current-session files remain protected past grace");
+  assert.ok(disk.has(mixedFolder + "/user.json"));
+  const second = loadNative({ capacitor: true, clock: { now: () => now } }); wire(second.sandbox);
+  await second.sandbox.NativeDownload.saveBlob(bytesBlob([3]), "new.json");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(new Set(deleted), new Set([oldPath, mixedFolder + "/mixed.json"]));
+  assert.deepEqual(removed, [oldFolder]);
+  assert.ok(disk.has(mixedFolder + "/user.json"));
+  assert.ok(disk.has("apex26-downloads/legacy/backup.json"));
+  assert.equal(cleanups.some((p) => p.includes("%2Fsecret") || p.includes("/legacy/")), false);
+});
+
+test("missing or failing retention operations cannot block sharing", async () => {
+  for (const stage of ["readdir", "deleteFile", "malformed"]) {
+    const { sandbox, shares } = loadNative({ capacitor: true });
+    const fs = sandbox.Capacitor.Plugins.Filesystem;
+    fs.readdir = async ({ path }) => {
+      if (path !== "apex26-downloads/v2") return { files: [{ name: "backup.json", type: "file" }] };
+      if (stage === "readdir") throw new Error("cache denied");
+      if (stage === "malformed") return { files: null };
+      return { files: [{ name: "export-100000-255s-i-1--backup.json", type: "directory" }] };
+    };
+    fs.deleteFile = async () => { throw new Error("delete denied"); };
+    assert.equal((await sandbox.NativeDownload.saveBlob(bytesBlob([1]), "backup.json")).ok, true);
+    assert.equal(shares.length, 1);
+  }
 });

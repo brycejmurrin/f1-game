@@ -2947,6 +2947,7 @@ const api = {
       for (const k of EPISODE_TRANSIENTS) delete c[k];
     }
     BodyAttitude.reset();   // settle the C2 visual-suspension springs (render-only, no transient)
+    agentView.beginEpisode();
     G._testInput = null;
     return this.obs();
   },

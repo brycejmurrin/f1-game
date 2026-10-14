@@ -15,7 +15,7 @@
  * Soft-GL / no-sandbox are OPT-IN via env (never implied by CI= alone, and
  * never required for a packaged release the user downloads).
  */
-const { app, BrowserWindow, globalShortcut, shell } = require("electron");
+const { app, BrowserWindow, globalShortcut, shell, dialog } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const {
@@ -28,6 +28,18 @@ const permissions = require("./lib/permissions.cjs");
 
 const ORIGIN = `${SCHEME}://${HOST}`;
 const SMOKE = process.argv.includes("--smoke");
+const ownsInstance = app.requestSingleInstanceLock();
+let primaryWindow = null;
+if (!ownsInstance) app.quit();
+else app.on("second-instance", () => {
+  if (!primaryWindow || primaryWindow.isDestroyed()) {
+    if (app.isReady()) createWindow();
+    return;
+  }
+  if (primaryWindow.isMinimized()) primaryWindow.restore();
+  primaryWindow.show();
+  primaryWindow.focus();
+});
 
 function envFlag(name) {
   const v = process.env[name];
@@ -98,6 +110,34 @@ function createWindow() {
       webSecurity: true,
     },
   });
+  primaryWindow = win;
+  win.on("closed", () => { if (primaryWindow === win) primaryWindow = null; });
+  if (!SMOKE) {
+    let asking = false;
+    const recover = async (reason) => {
+      if (asking || win.isDestroyed() || primaryWindow !== win) return;
+      asking = true;
+      try {
+        const result = await dialog.showMessageBox(win, {
+          type: "warning", title: "Apex 26 recovery",
+          message: "The game window stopped responding.",
+          detail: "Reason: " + reason + ". Reopen the bundled game without deleting saved progress. Unsaved race progress may be lost.",
+          buttons: ["Reopen game", "Quit"], defaultId: 0, cancelId: 1, noLink: true,
+        });
+        if (win.isDestroyed() || primaryWindow !== win) return;
+        if (result.response === 0) {
+          // One explicit player choice creates one replacement; never auto-retry.
+          createWindow();
+          win.destroy();
+        } else app.quit();
+      } catch (_) { /* closing the app can retire an outstanding dialog */ }
+      finally { asking = false; }
+    };
+    win.webContents.on("render-process-gone", (_event, details) => {
+      if (details.reason !== "clean-exit") recover(details.reason || "renderer failure");
+    });
+    win.webContents.on("unresponsive", () => recover("unresponsive"));
+  }
 
   win.setMenuBarVisibility(false);
   hardenWebContents(win.webContents);
@@ -149,7 +189,7 @@ function createWindow() {
   return win;
 }
 
-app.whenReady().then(() => {
+if (ownsInstance) app.whenReady().then(() => {
   const root = siteRoot();
   if (!fs.existsSync(path.join(root, "index.html"))) {
     console.error(`desktop: staged site missing at ${root} — run: npm run stage`);

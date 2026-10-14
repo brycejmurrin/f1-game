@@ -774,6 +774,11 @@ const DesignerCanvas = (function () {
       g.beginPath(); g.moveTo(sx - nx, sy - ny); g.lineTo(sx + nx, sy + ny);
       g.strokeStyle = COL.start; g.lineWidth = 3; g.stroke();
     }
+    if (Number.isFinite(opts.apex)) {
+      const k = ((Math.round(opts.apex / tr.total * n) % n) + n) % n;
+      g.beginPath(); g.arc(X(tr.px[k]), Y(tr.pz[k]), 6, 0, Math.PI * 2);
+      g.fillStyle = COL.info; g.fill(); g.strokeStyle = "#000"; g.lineWidth = 1; g.stroke();
+    }
     return true;
   }
 

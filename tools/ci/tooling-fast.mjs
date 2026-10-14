@@ -127,6 +127,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/barrier-runoff-jumps.test.mjs",
   "tests/unit/base-green.test.mjs",
   "tests/unit/bash-guard-hardening.test.mjs",
+  "tests/unit/battle-earcon.test.mjs",
   "tests/unit/behind-ship.test.mjs",
   // BitmapDecode worker (js/workers/*): Blob to ImageBitmap off the page thread.
   "tests/unit/bitmap-decode-worker.test.mjs",
@@ -383,6 +384,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/flyby-pose-inverse.test.mjs",
   "tests/unit/flyby-shots.test.mjs",
   "tests/unit/flying-start.test.mjs",
+  "tests/unit/followup-platform.test.mjs",
+  "tests/unit/followup-update-check.test.mjs",
   "tests/unit/font-digits.test.mjs",
   // Portrait HFOV floor + landscape HFOV cap (js/camera/fov-fit.js); pure VM, <0.1 s.
   "tests/unit/fov-fit.test.mjs",
@@ -433,6 +436,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // not Car shot. Pure + spawn, no network / Chromium.
   "tests/unit/garage-before.test.mjs",
   "tests/unit/garage-defaults.test.mjs",
+  "tests/unit/garage-followups.test.mjs",
   "tests/unit/garage-interior-gate.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
   "tests/unit/garage-panel-side.test.mjs",

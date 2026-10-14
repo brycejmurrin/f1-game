@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["bahrain"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, ds, px, pz, pyMin, hash, vadd,
+      const { def, K, lapBounds, out, MAT, n, ds, px, pz, pyMin, hash, vadd,
         place, anchor, addBox, addCyl, addCone, addFrustum, addPyramid,
         bush, palm, acacia, terrace, grandstand, grandstandEx, building, cityFront, tower, billboard, overheadSpan, marshalPost,
         mountain, backdrop, fence, wall, guardrail, tyreWall,
@@ -14,17 +14,15 @@
         modelGroup, groundPatch, bleacher, onTrack, every, terrainYAt,
         circuitKit } = api;
 
-      // FRAME: every frac in this file is authored against the def's
-      // sceneryStartFrac (0.2250), not the racing line. The real start/finish
-      // (startFrac 0, the trace's vertex 0) sits at SF in this frame and the
-      // real T1 apex (def.turns[0]) at T1F; the engine's _sceneryShift
-      // (0.27027) carries both to racing 0 / 0.1038. The pit complex, main
-      // grandstand, Sakhir Tower and T1 grandstand are keyed off these two so
-      // they dress the real pit straight; the paddock/pit lane is on its
-      // RIGHT (+1), the main grandstand on its LEFT (-1).
-      const SF = 0.7297, T1F = 0.8335;
-      // Final corner apex (def.turns[14] racing 0.8783) in this scenery frame.
-      const FC = 0.608;
+      // Fractions stay in the scenery frame rooted at sceneryStartFrac.
+      // Its arc-length shift changes when the source trace is refined, so
+      // derive the pit straight and corner anchors from the built definition.
+      // Wrapped API helpers apply this shift once on their way to the road.
+      const wrapFrac = (f) => ((f % 1) + 1) % 1;
+      const shift = def._sceneryShift || 0;
+      const SF = wrapFrac(-shift);
+      const T1F = wrapFrac(def.turns[0] - shift);
+      const FC = wrapFrac(def.turns[def.turns.length - 1] - shift);
 
       if (circuitKit) {
         circuitKit.hospitality({
@@ -735,8 +733,8 @@
       // ── The lighting rig: one registered mast every 55 m ─────────────────
       // These masts carry the night lamp budget (dressingExclusions drops the
       // generic pass). The pit straight (final corner to T1) keeps both sides
-      // at 30 m, as before, with the 0.832 hairpin's inside mast moved to
-      // 0.822 / 20 m (no setback there clears the fold). Everywhere else one
+      // at 30 m, as before, with the T1 hairpin's inside mast moved
+      // 0.0115 lap before its apex / 20 m (no setback there clears the fold). Everywhere else one
       // mast per pitch, alternating sides, 44 m out: a two-sided 30 m ring plus
       // a 16 m silhouette infill ring (~370 bare poles) stood between every
       // chase/orbit camera and the car (survey bc-cb8a7eff). A mast whose
@@ -748,8 +746,8 @@
           const f = k / n;
           if (f >= PIT0 && f <= T1F) {
             for (const side of [-1, 1]) {
-              const hairpin = side === 1 && f >= 0.828;
-              floodMast(hairpin ? K(0.822) : k, side, hairpin ? 20 : 30, 39);
+              const hairpin = side === 1 && f >= T1F - 0.0055;
+              floodMast(hairpin ? K(T1F - 0.0115) : k, side, hairpin ? 20 : 30, 39);
             }
             return;
           }
@@ -889,7 +887,9 @@
       windTower(K(0.80),   1, 58, 14);
       // F1 Village marquee — back straight hospitality terrace only (T4 outside
       // is open desert beyond the University stand; 0.26 marquee sat in runoff).
-      marquee(K(0.79),  1, 40, 12, 44);
+      // Keep the village terrace beyond the pit-side building footprint:
+      // gap 40 intersected its shell by 3.20 m after the S/F anchors moved.
+      marquee(K(0.79),  1, 64, 12, 44);
       // Removed marquee@0.50 — clipped the midfield hall (2.59 m severe @ frac 0.529).
       // Video walls facing the main, T1, and Beyon grandstands.
       videoWall(K(SF + 0.012),  1, 40, 12, 7);

@@ -29,6 +29,48 @@ const DataTelemetryModel = (function () {
   function distAtT(cum, t) { return interp(cum.t, cum.d, t); }
   function timeAtDist(cum, dist) { return interp(cum.d, cum.t, dist); }
 
+  // Bounded 128-step distance grid. Brake arms at <=10%, fires at >=20%;
+  // throttle arms at <=70%, recovers at >=90% after braking. Both require two
+  // consecutive distinct feed samples on that grid. Missing channels or a >1.5s feed gap invalidate
+  // the interval; absent threshold crossings remain unavailable markers.
+  function brakingDuel(primary, compare, from, to) {
+    const unavailable = (reason) => ({ available: false, reason });
+    if (!isFinite(from) || !isFinite(to) || from < 0 || to <= from || !primary || !compare) return unavailable("Choose two lanes and a valid distance interval.");
+    const lanes = [];
+    for (const lane of [primary, compare]) {
+      const car = lane.car || [], cum = lane.cum || cumDist(car);
+      if (car.length < 2 || cum.d[0] > from || cum.d[cum.d.length - 1] < to) return unavailable("Both lanes must cover the whole interval.");
+      const start = timeAtDist(cum, from), end = timeAtDist(cum, to);
+      for (let i = 0; i < car.length; i++) {
+        const c = car[i];
+        if (i && (!(car[i].t > car[i - 1].t) || !(cum.d[i] > cum.d[i - 1]))) return unavailable("Distance must increase through both lanes.");
+        if (c.t >= start && c.t <= end && [c.speed, c.brake, c.throttle].some((v) => typeof v !== "number" || !isFinite(v))) return unavailable("Unavailable: missing telemetry channels.");
+        if (i && car[i - 1].t <= end && c.t >= start && c.t - car[i - 1].t > 1.5) return unavailable("Unavailable: telemetry gap inside the interval.");
+      }
+      let brakeArmed = false, throttleArmed = false, brakeHits = 0, throttleHits = 0, previousSample = null;
+      let brakeCandidate = null, throttleCandidate = null;
+      let brake = null, throttle = null, minSpeed = null;
+      for (let i = 0; i <= 128; i++) {
+        const distance = from + (to - from) * i / 128, t = timeAtDist(cum, distance), c = sampleAt(car, t);
+        if ([c.speed, c.brake, c.throttle].some((v) => typeof v !== "number" || !isFinite(v))) return unavailable("Unavailable: missing telemetry channels.");
+        if (!minSpeed || c.speed < minSpeed.value) minSpeed = { distance, t, value: c.speed };
+        if (c === previousSample) continue;
+        previousSample = c;
+        if (c.brake <= 10) brakeArmed = true;
+        brakeHits = brakeArmed && c.brake >= 20 ? brakeHits + 1 : 0;
+        if (brakeHits === 1) brakeCandidate = { distance, t };
+        if (!brake && brakeHits >= 2) brake = brakeCandidate;
+        if (brake && c.throttle <= 70) throttleArmed = true;
+        throttleHits = throttleArmed && c.throttle >= 90 ? throttleHits + 1 : 0;
+        if (throttleHits === 1) throttleCandidate = { distance, t };
+        if (!throttle && throttleHits >= 2) throttle = throttleCandidate;
+      }
+      lanes.push({ brake, minSpeed, throttle, start, end });
+    }
+    return { available: true, lanes, deltaBefore: lanes[1].start - lanes[0].start,
+      deltaAfter: lanes[1].end - lanes[0].end, change: (lanes[1].end - lanes[0].end) - (lanes[1].start - lanes[0].start) };
+  }
+
   function lerpLoc(a, b, f) {
     if (!b) return a;
     return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
@@ -244,6 +286,6 @@ const DataTelemetryModel = (function () {
 
   return { create, clamp, laneRole, summaryTime, signed, summaryValue, dcode, sessionShort, drsOpen,
            CHANNELS, PADL, PADR, PADY, chartX, chanRaw, chanNorm, sampleAt, cumDist,
-           distAtT, timeAtDist, locAt, dropStrays, locBounds, gapLimitMs, isGap };
+           distAtT, timeAtDist, brakingDuel, locAt, dropStrays, locBounds, gapLimitMs, isGap };
 })();
 Object.freeze(DataTelemetryModel);

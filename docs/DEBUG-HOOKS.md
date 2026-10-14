@@ -5233,6 +5233,12 @@ TLX also has its own probes: `__tlx.shader(idx)` dumps the generated GLSL/WGSL,
 `__tlx.chunkState()`, `__tlx.postState()`, and `?viz=mat|normal|lamp` debug
 views.
 
+The manual TLX sharpening-limit prototype uses `apex26.tlxSharpenLimit`: set
+`localStorage.setItem("apex26.tlxSharpenLimit", "1")` and reload to enable it.
+Set it to `"0"` (or remove the key) and reload to restore the default off state.
+The post chain reads this 0/1 flag once at creation; it is included in SETTINGS
+backup/export/reset under DISPLAY.
+
 **On the default GLX backend** the equivalent of "visual helpers" is data rather
 than wireframes, and it is already there:
 

@@ -6,11 +6,11 @@
       "lines": 2276
     },
     "js/agent/agentview.js": {
-      "lines": 2584
+      "lines": 2588
     },
     "js/agent/apex.js": {
-      "codeLines": 2337,
-      "lines": 3331
+      "codeLines": 2338,
+      "lines": 3332
     },
     "js/car/car3d.js": {
       "lines": 2207
@@ -25,13 +25,13 @@
       "lines": 8251
     },
     "js/net/lobby.js": {
-      "lines": 2190
+      "lines": 2256
     },
     "js/render/glx/glx.js": {
       "lines": 2971
     },
     "js/track/tracks.js": {
-      "lines": 757
+      "lines": 762
     },
     "js/ui/hud.js": {
       "codeLines": 1572,

@@ -5,10 +5,12 @@
 
 const SaveMigrate = (function () {
 
-  const CAREER_V = 1;
+  const CAREER_V = 2;
   const CAREER_MIGRATIONS = [
     // v0 -> v1: the first shipped shape. A v0 save predates `v` entirely.
     (c) => { c.season = c.season || { round: 0, pts: {}, teamPts: {}, driverCodes: {} }; },
+    // v1 -> v2: legacy Standard brief and original sponsor. No economy changes.
+    (c) => { c.briefStake = null; c.sponsorPicks = {}; },
   ];
 
   // Guarded: the node VM harnesses load this file without js/core/log.js.
@@ -232,7 +234,7 @@ const SaveMigrate = (function () {
       if (career != null) log("warn", "Career save rejected: not an object type=" + (Array.isArray(career) ? "array" : typeof career));
       return null;
     }
-    let v = career.v | 0;
+    let v = Number.isSafeInteger(career.v) && career.v >= 0 ? career.v : 0;
     while (v < CAREER_V && CAREER_MIGRATIONS[v]) { CAREER_MIGRATIONS[v](career); log("info", "Career save migrated v" + v + "->v" + (v + 1)); v++; }
     if (v > CAREER_V) log("warn", "Career save newer than build: v" + v + " > v" + CAREER_V + ", kept as-is");
     // Never DOWNGRADE: a save from a newer build (a stale cached shell opening
@@ -298,6 +300,14 @@ const SaveMigrate = (function () {
       else d.pending = null;
       return d;
     }) : null;
+    const stake = career.briefStake;
+    career.briefStake = stake && Number.isInteger(stake.year) && Number.isInteger(stake.round) && stake.round >= 0
+      ? { year: stake.year, round: stake.round, committed: stake.committed === true, escrow: stake.escrow === 50 ? 50 : 0 } : null;
+    const picks = career.sponsorPicks;
+    career.sponsorPicks = {};
+    if (picks && typeof picks === "object" && !Array.isArray(picks))
+      for (const key of Object.keys(picks).slice(0, 1024))
+        if (/^\d{4,8}:\d{1,3}$/.test(key) && (picks[key] === 0 || picks[key] === 1)) career.sponsorPicks[key] = picks[key];
     career.paidSponsors = Array.isArray(career.paidSponsors) ? career.paidSponsors : [];
     return career;
   }

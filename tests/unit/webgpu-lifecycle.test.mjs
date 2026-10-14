@@ -304,6 +304,7 @@ function makeGpuHarness(opts = {}) {
     // cannot hold the test runner open.
     setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); if (t.unref) t.unref(); return t; },
     clearTimeout: (t) => clearTimeout(t),
+    ...(opts.document ? { document: opts.document } : {}),
     window: {
       devicePixelRatio: 1,
       ...(opts.watchCss ? {
@@ -3296,4 +3297,89 @@ test("P4: WGX fills the material array as the async readback lands, and never bi
     assert.equal(gfx.materialMapState().albedo, true, `${label}: bound at once`);
   }
   assert.match(WGX_SOURCE, /_packAsync && typeof Assets !== "undefined" && Assets\.readLayerBytesAsync/, "the knob gates the seam");
+});
+
+for (const info of [{ reason: "unknown" }, { reason: "out-of-memory" }]) {
+  test(`queued capture settles on device loss ${info.reason}`, async () => {
+    const h = makeGpuHarness(); const gfx = await h.create();
+    const capture = gfx.capturePixels();
+    const rejection = assert.rejects(capture, /renderer unavailable/);
+    h.loseDevice(info); await rejection;
+    await assert.rejects(gfx.capturePixels(), /device lost/);
+  });
+}
+
+test("queued capture settles at the JS-error strike cap", async () => {
+  const h = makeGpuHarness(); const gfx = await h.create();
+  const rejection = assert.rejects(gfx.capturePixels(), /renderer unavailable/);
+  h.setEncoderFail(true);
+  for (let i = 0; i < 3; i++) gfx.begin({});
+  await rejection;
+});
+
+function isolatedPost(options = {}) {
+  const owned = []; let allocations = 0;
+  const ctx = vm.createContext({ GPUShaderStage: { FRAGMENT: 2 }, localStorage: { getItem: () => null } });
+  seedLog(ctx); vm.runInContext(WGX_POST_SOURCE + "\n;globalThis.PostFactory = WGXPost;", ctx);
+  const core = {
+    Post: { BLOOM_DOWN: "down", BLOOM_UP: "up", SSAO: "ao", SSR: "ssr", GODRAY: "gr", BLUR: "blur", COMPOSITE: "comp", FXAA: "aa", SGSR: "tap", SGSR_GATHER: "gather", SGSR_UNIFORM_BYTES: 64 },
+    UCD: 3, fsPipe: () => ({}), presentFormat: "rgba8unorm", LDR_FORMAT: "rgba8unorm",
+    device: {
+      createSampler: () => ({}), createBindGroupLayout: () => ({}), createShaderModule: () => ({}),
+      createPipelineLayout: () => ({}), createRenderPipeline: () => ({}),
+      createBuffer() {
+        if (++allocations === options.throwAt) throw new Error("allocation " + allocations);
+        const buffer = { destroys: 0, destroy() { this.destroys++; } }; owned.push(buffer); return buffer;
+      },
+    },
+  };
+  return { core, owned, post: ctx.PostFactory.init(core) };
+}
+
+for (let throwAt = 1; throwAt <= 6; throwAt++) test(`optional post rolls back allocation ${throwAt}`, () => {
+  const h = isolatedPost({ throwAt }); h.post.buildPost();
+  assert.equal(h.core.pComposite, null);
+  assert.equal(h.owned.length, throwAt - 1);
+  assert.ok(h.owned.every((b) => b.destroys === 1));
+  for (const key of ["ssaoUBO", "blurUBO", "godrayUBO", "compositeUBO", "fxaaUBO", "ssrUBO"]) assert.equal(h.core[key], undefined);
+});
+
+test("optional post publishes the complete successful buffer set", () => {
+  const h = isolatedPost(); h.post.buildPost();
+  assert.equal(h.owned.length, 6); assert.ok(h.owned.every((b) => b.destroys === 0));
+  assert.ok(h.core.pComposite); assert.equal(h.core.ssrUBO, h.owned[5]);
+});
+
+for (const scoped of [false, true]) test(`exhausted spatial variants retire the UBO (scoped=${scoped})`, async () => {
+  const h = isolatedPost(); h.core.fsPipe = () => { throw new Error("invalid shader"); };
+  if (scoped) { h.core.device.pushErrorScope = () => {}; h.core.device.popErrorScope = async () => ({ message: "invalid" }); }
+  h.post.ensureSpatial();
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+  assert.equal(h.owned[0].destroys, 1); assert.equal(h.core.sgsrUBO, null); assert.equal(h.core.pSGSR, null);
+  h.post.ensureSpatial(); assert.equal(h.owned[0].destroys, 1);
+});
+
+test("spatial variant fallback retains its successful UBO", async () => {
+  const h = isolatedPost(); let pops = 0;
+  h.core.device.pushErrorScope = () => {}; h.core.device.popErrorScope = async () => ++pops === 1 ? { message: "gather unsupported" } : null;
+  h.post.ensureSpatial(); for (let i = 0; i < 8; i++) await Promise.resolve();
+  assert.equal(h.owned[0].destroys, 0); assert.equal(h.core.sgsrUBO, h.owned[0]); assert.ok(h.core.pSGSR); assert.equal(h.core._sgsrGather, false);
+});
+
+for (const hidden of [true, false]) test(`queued capture settles on ${hidden ? "hidden" : "recent-visible"} loss`, async () => {
+  const listeners = new Map();
+  const document = { hidden, addEventListener: (type, fn) => listeners.set(type, fn), removeEventListener: (type) => listeners.delete(type) };
+  const h = makeGpuHarness({ document }); const gfx = await h.create();
+  if (!hidden) listeners.get("visibilitychange")();
+  const rejection = assert.rejects(gfx.capturePixels(), /renderer unavailable/);
+  h.loseDevice({ reason: "unknown" }); await rejection;
+  await assert.rejects(gfx.capturePixels(), /device lost/);
+});
+
+test("spatial async completion cannot publish onto a replaced device", async () => {
+  const h = isolatedPost(); let settle;
+  h.core.device.pushErrorScope = () => {}; h.core.device.popErrorScope = () => new Promise((r) => { settle = r; });
+  h.post.ensureSpatial(); const retired = h.owned[0]; h.core.device = {};
+  settle(null); for (let i = 0; i < 5; i++) await Promise.resolve();
+  assert.equal(retired.destroys, 1); assert.equal(h.core.sgsrUBO, null); assert.equal(h.core.pSGSR, null);
 });

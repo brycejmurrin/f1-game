@@ -24,7 +24,8 @@ function fakeSession() {
     addEventListener(t, f) { (ls[t] || (ls[t] = [])).push(f); },
     removeEventListener(t, f) { ls[t] = (ls[t] || []).filter((g) => g !== f); },
     fire(t) { for (const f of (ls[t] || []).slice()) f({ target: this }); },
-    requestReferenceSpace: async () => ({}), requestAnimationFrame: () => 1, cancelAnimationFrame() {},
+    reference: { addEventListener(t, f) { this[t] = f; }, removeEventListener(t, f) { if (this[t] === f) delete this[t]; } },
+    async requestReferenceSpace() { return this.reference; }, requestAnimationFrame: () => 1, cancelAnimationFrame() {},
     end: async function () { this.fire("end"); },
   };
 }
@@ -71,4 +72,15 @@ test("a game that binds no pause path still drops the input and does not throw",
   const h = await boot({ withPause: false });
   h.session.visibilityState = "hidden"; h.session.fire("visibilitychange");
   assert.equal(h.lost.length, 1);
+});
+
+
+test('reference origin reset pauses and releases input once, with listener cleanup', async () => {
+  const h = await boot();
+  const base = h.session.reference;
+  base.reset({ target: base, transform: null });
+  assert.deepEqual(h.pauses, ['xr-reset']);
+  assert.equal(h.lost.length, 1);
+  h.session.fire('end');
+  assert.equal(base.reset, undefined);
 });

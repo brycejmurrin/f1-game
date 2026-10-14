@@ -154,3 +154,32 @@ test("malformed bitmap replies fallback and malformed crops reject before dispat
     assert.match(posted[0].message, /invalid crop/);
   }
 });
+
+test("explicit bitmap abort skips fallback and closes a late worker reply", async () => {
+  let worker, fallbacks = 0, closed = 0;
+  const ctx = vm.createContext({ URL, setTimeout, clearTimeout,
+    location: { href: "http://x/" }, window: {},
+    createImageBitmap: async () => { fallbacks++; return {}; },
+    Worker: class { constructor() { worker = this; } postMessage(m) { this.request = m; } terminate() {} },
+  });
+  vm.runInContext(read("js/workers/bitmap-decode-client.js").replace(/^const\b/gm, "var"), ctx);
+  const controller = new AbortController();
+  const pending = ctx.BitmapDecode.decode({}, null, null, controller.signal);
+  controller.abort();
+  await assert.rejects(pending, { name: "AbortError" });
+  worker.onmessage({ data: { type: "decoded", seq: worker.request.seq,
+    bmp: { width: 1, height: 1, close() { closed++; } } } });
+  assert.equal(fallbacks, 0); assert.equal(closed, 1);
+  await assert.rejects(ctx.BitmapDecode.decode({}, null, null, controller.signal), { name: "AbortError" });
+});
+
+test("aborted page decode disposes its completed bitmap", async () => {
+  let finish, closed = 0;
+  const ctx = vm.createContext({ URL, setTimeout, clearTimeout,
+    createImageBitmap: () => new Promise(r => { finish = r; }) });
+  vm.runInContext(read("js/workers/bitmap-decode-client.js").replace(/^const\b/gm, "var"), ctx);
+  const controller = new AbortController();
+  const pending = ctx.BitmapDecode.decode({}, null, null, controller.signal);
+  controller.abort(); finish({ close() { closed++; } });
+  await assert.rejects(pending, { name: "AbortError" }); assert.equal(closed, 1);
+});

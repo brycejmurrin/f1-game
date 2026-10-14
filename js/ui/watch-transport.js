@@ -40,6 +40,7 @@ const WatchTransport = (function () {
       stop();
       if (typeof document === "undefined" || !document.body) return;
       desc = replay.describe(); if (!desc) return;
+      desc = { ...desc, events: Array.isArray(desc.events) ? desc.events : [] };
       root = node("section"); root.className = "watch-transport";
       root.setAttribute("aria-label", "Race replay controls");
       const top = node("div", "controls");
@@ -86,6 +87,25 @@ const WatchTransport = (function () {
       seek.addEventListener("blur", () => { scrubbing = false; paint(); });
       track.appendChild(seek); timeline.appendChild(track); timeline.appendChild(node("span", "duration", clock(duration)));
       root.appendChild(timeline);
+      const chapters = node("details", "chapters");
+      chapters.appendChild(node("summary", null, "EVENT CHAPTERS"));
+      const events = desc.events.filter((e) => e && Number.isFinite(e.t));
+      chapters.hidden = events.length === 0;
+      function seekChapter(v) {
+        if (v === "") return;
+        const e = events[+v]; if (!e) return;
+        // A pending drag must not overwrite this deliberate chapter jump.
+        pendingSeek = null; scrubbing = false;
+        const lead = typeof RealReplay !== "undefined" ? RealReplay.LEAD_S : 8;
+        replay.seek(Math.max(0, e.t - lead));
+      }
+      select(chapters, "chapter", "RACE EVENT", [["", "Choose a race event"], ...events.map((e, i) =>
+        [String(i), "L" + e.lap + " · " + clock(e.t) + " · " + e.text])], (v) => {
+        refs["chapter-jump"].disabled = v === "" || !events[+v];
+        seekChapter(v);   // retain the choice so native ArrowDown advances to the next chapter
+      });
+      action(chapters, "chapter-jump", "Jump to selected race event", "JUMP TO EVENT", () => seekChapter(refs.chapter.value)).disabled = true;
+      root.appendChild(chapters);
       const caption = node("div", "caption");
       caption.appendChild(node("span", "name", desc.name));
       caption.appendChild(node("span", "event")); caption.appendChild(node("span", "director"));

@@ -56,3 +56,26 @@ test("no stash, nothing restored; a corrupt stash is dropped without touching th
   assert.equal(page(store).XrBoot.restorePinnedBackend(), true);
   assert.deepEqual(snap(store), { "apex26.gfxBackend": "webgl2" });
 });
+
+
+test('armed retained-capability ENTER uses the reversible pin instead of a reload dead end', async () => {
+  const store = new Map([['apex26.gfxBackend', 'webgl2'], ['apex26.xr', '1'], ['apex26.xrCaps', '1']]);
+  const h = page(store);
+  let starts = 0;
+  const ctx = vm.createContext({
+    XrBoot: h.XrBoot,
+    XrSession: { isPresenting: () => false, start: async () => { starts++; } },
+    ApexXR: { plan: () => ({ xrMode: 'armed', path: 'webgl2' }), rendererMatchesPlan: () => false },
+    document: { createElement: () => ({ setAttribute() {}, addEventListener() {} }) },
+    setTimeout: () => 1, clearTimeout() {},
+  });
+  vm.runInContext(read('js/xr/xr-ui.js').replace(/^const\b/gm, 'var'), ctx);
+  await ctx.XrUi.onClick();
+  assert.equal(h.reloads(), 1);
+  assert.equal(starts, 0);
+  assert.equal(store.get('apex26.gfxBackend'), 'three');
+  assert.equal(store.get('apex26.tlxForceGL'), '1');
+  h.XrBoot.restorePinnedBackend();
+  assert.equal(store.get('apex26.gfxBackend'), 'webgl2');
+  assert.equal(store.get('apex26.xr'), '1');
+});

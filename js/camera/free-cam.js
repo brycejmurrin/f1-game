@@ -170,7 +170,11 @@ if (root) {
       mk("div", { id: "fc-kit", className: "balanced-row", attrs: { role: "group", "aria-label": "Photo kit" } }, [
         btn("fc-grid", "GRID: OFF", "Cycle composition grid: off, rule of thirds, golden ratio"),
         btn("fc-mark-save", "SAVE MARK", "Bookmark this camera pose for this circuit"),
-        btn("fc-mark-load", "LOAD MARK", "Jump to the last saved bookmark on this circuit"),
+        btn("fc-mark-load", "LOAD MARK", "Load the selected bookmark; defaults to the latest"),
+        mk("input", { id: "fc-mark-name", maxLength: 40, placeholder: "Bookmark name", attrs: { "aria-label": "New bookmark name" } }),
+        mk("select", { id: "fc-mark-picker", attrs: { "aria-label": "Saved camera bookmarks" } }),
+        btn("fc-mark-delete", "DELETE MARK", "Delete the selected bookmark"),
+        mk("span", { id: "fc-mark-warning", attrs: { "aria-live": "polite" } }),
       ]),
       slider("fc-dof-focus", "DoF FOCUS", 0, 100, 1, "fc-dof-focus-val"),
       slider("fc-dof-blur", "DoF BLUR", 0, 100, 1, "fc-dof-blur-val"),
@@ -315,6 +319,7 @@ function setOverlaysVisible(on) {
 // ---- open / close ----
 function isOpen() { return st.open; }
 function open() {
+  paintMarks();
   if (st.open) return true;
   if (!G.track || !root) return false;
   Log.info("game", "FreeCam.open");
@@ -456,13 +461,28 @@ on(E["fc-grid"], "click", () => {
   PhotoKit.setGrid(kitOverlays.grid, st.grid);
   paint();
 });
+function paintMarks(selected) {
+  const picker = E["fc-mark-picker"]; if (!picker || typeof PhotoKit === "undefined") return;
+  const list = PhotoKit.marksFor(G.store, G.track && (G.track.id || G.track.name) || "track");
+  picker.replaceChildren();
+  list.forEach((m, i) => picker.appendChild(mk("option", { value: String(i), textContent: m.name })));
+  picker.value = String(selected == null ? list.length - 1 : Math.min(selected, list.length - 1));
+  picker.disabled = !list.length; E["fc-mark-load"].disabled = !list.length; E["fc-mark-delete"].disabled = !list.length;
+  E["fc-mark-warning"].textContent = list.length >= PhotoKit.MAX_MARKS ? "Next save replaces “" + list[0].name + "”." : "";
+}
+on(E["fc-mark-delete"], "click", () => {
+  if (typeof PhotoKit === "undefined" || !G.track || !G.store) return;
+  const index = +E["fc-mark-picker"].value;
+  PhotoKit.deleteMark(G.store, G.track.id || G.track.name || "track", index); paintMarks(index); say("Bookmark deleted.");
+});
 on(E["fc-mark-save"], "click", () => {
   tick();
   if (typeof PhotoKit === "undefined" || !G.track || !G.store) { say("No circuit to bookmark."); return; }
   const c = cam();
   const list = PhotoKit.saveMark(G.store, G.track.id || G.track.name || "track", {
-    eye: c.eye, target: c.target, fov: c.fov, roll: st.roll,
+    eye: c.eye, target: c.target, fov: c.fov, roll: st.roll, name: E["fc-mark-name"].value,
   });
+  paintMarks();
   say(list ? ("Saved mark " + list.length + " of " + PhotoKit.MAX_MARKS + ".") : "Could not save bookmark.");
 });
 on(E["fc-mark-load"], "click", () => {
@@ -470,7 +490,7 @@ on(E["fc-mark-load"], "click", () => {
   if (typeof PhotoKit === "undefined" || !G.track || !G.store) { say("No bookmarks."); return; }
   const list = PhotoKit.marksFor(G.store, G.track.id || G.track.name || "track");
   if (!list.length) { say("No bookmarks on this circuit."); return; }
-  const m = list[list.length - 1];
+  const m = list[+E["fc-mark-picker"].value] || list[list.length - 1];
   st.roll = clampRoll(m.roll || 0);
   place(m.eye, m.target, m.fov);
   say("Loaded “" + m.name + "”.");

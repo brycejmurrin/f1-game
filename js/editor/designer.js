@@ -77,7 +77,7 @@ const TrackDesigner = (function () {
   let spanArm = false, selectionMode = "point", selectionPanel = null, heightStep = 1;
   let params = { L: 200, R: 60, deg: 90, dir: 1 };
   // propKind: the scenery-mode props palette selection (TrackDesignerProps.KINDS).
-  let propKind = "stand", scenery = null, sceneryView = false;
+  let propKind = "stand", scenery = null, sceneryView = false, repair = null;
   const undo = [], redo = [];
   let replacementGeneration = 0, lifecycleWired = false;
   let previewT = 0, draftT = 0, confirmDel = null, msgT = 0;
@@ -651,8 +651,8 @@ const TrackDesigner = (function () {
     commit(Object.assign({}, design, { props }), "prop"); return true;
   }
   function copyPropAt(i) {
-    const p = design && design.props && design.props[i]; if (!p) return false;
-    const props = TrackDesignerProps.place(design.props, p.kind, Object.assign({}, p, { s: TrackDesignerProps.pointFrac(design.pts, Math.max(0, sel)) }));
+    const p = design && design.props && design.props[i]; if (!p || sel < 0 || sel >= design.pts.length) return false;
+    const props = TrackDesignerProps.place(design.props, p.kind, Object.assign({}, p, { s: TrackDesignerProps.pointFrac(design.pts, sel) }));
     if (!props) { message("Object limit reached", true); return false; }
     commit(Object.assign({}, design, { props }), "prop"); return true;
   }
@@ -916,7 +916,7 @@ const TrackDesigner = (function () {
   }
   function tabBtn(label, pane) {
     const b = btn(label, "sel-chip td-tab", () => showPane(pane));
-    b.setAttribute("role", "tab");
+    DesignerFollowup.tab(b, pane, () => [ui.tabDesign, ui.tabLib, ui.tabHow], showPane);
     return b;
   }
   function showPane(pane) {
@@ -924,7 +924,7 @@ const TrackDesigner = (function () {
     if (root) root.dataset.pane = pane;
     for (const [b, p, id] of [[ui.tabDesign, ui.paneDesign, "design"], [ui.tabLib, ui.paneLib, "library"], [ui.tabHow, ui.paneHow, "howto"]]) {
       const on = id === pane;
-      p.hidden = !on;
+      p.hidden = !on; p.id = "td-panel-" + id; p.setAttribute("aria-labelledby", b.id); b.tabIndex = on ? 0 : -1;
       b.classList.toggle("active", on); b.setAttribute("aria-selected", on ? "true" : "false");
     }
     if (pane === "library") renderLibrary();
@@ -1061,7 +1061,8 @@ const TrackDesigner = (function () {
     scenery = DesignerScenery.create({ el, btn, group, stepper,
       onTheme: setTheme, onLook: setLook, onPreset: setAtmosphere, onKind: setPropKind,
       onPlace: () => placeProp(), onRemove: () => removeProp(), onRemoveAt: removePropAt,
-      onSelect: selectRange, onEditAt: editPropAt, onCopyAt: copyPropAt });
+      onSelect: selectRange, onEditAt: editPropAt, onCopyAt: copyPropAt,
+      onRecipe: (props) => { commit(Object.assign({}, design, { props }), "prop"); return true; } });
     const theme = scenery.root; ui.themeGroup = theme;
     // circuit
     const circuit = group("4 DETAILS");
@@ -1152,7 +1153,8 @@ const TrackDesigner = (function () {
     head.append(el("div", "td-label", "5 CHECKS"), ui.fixAll);
     // Not a live region: it is rebuilt on every preview (announceChecks speaks the counts).
     ui.issues = el("ul", "td-issues"); ui.issues.setAttribute("aria-label", "Design checks");
-    issues.append(head, ui.issues);
+    repair = DesignerFollowup.repairPanel({ el, btn, getDesign: () => design, check: TrackValidate.check, onApply: (next, codes, msg) => { commitFix(next, codes); message(msg); } });
+    issues.append(head, ui.issues, repair.root);
     // share in: a pasted code or link (SHARE on the foot copies one out)
     const sharing = group("SHARE CODE");
     ui.code = el("input", "td-input"); ui.code.type = "text"; ui.code.autocomplete = "off"; ui.code.spellcheck = false;
@@ -1389,8 +1391,7 @@ const TrackDesigner = (function () {
     let r = null;
     try { r = F && F.apply ? F.apply(design, it, verdict) : null; } catch (e) { Log.warn("track", "designer fix " + (it && it.code) + " threw: " + (e && e.message)); r = null; }
     if (!r || !r.design || r.design === design) { message("No automatic fix for this one", true); return false; }
-    commitFix(r.design, [it.code]);
-    message("Fixed: " + (r.msg || it.code) + " — UNDO to revert");
+    repair.preview(r.design, [it.code], "Fixed: " + (r.msg || it.code) + " — UNDO to revert");
     return true;
   }
   /** One UNDO entry for a remedy, keyed off issue.code (never issue.fix: the
@@ -1408,8 +1409,7 @@ const TrackDesigner = (function () {
     const applied = r && Array.isArray(r.applied) ? r.applied : [];
     // Nothing applied → fixAll hands back the SAME design object: no commit.
     if (!r || !r.design || r.design === design || !applied.length) { message("Nothing here can be fixed automatically", true); return false; }
-    commitFix(r.design, applied);
-    message("Fixed " + applied.join(", ") + " — UNDO to revert");
+    repair.preview(r.design, applied, "Fixed " + applied.join(", ") + " — UNDO to revert");
     return true;
   }
   function renderIssues() {
@@ -1548,6 +1548,7 @@ const TrackDesigner = (function () {
   function close() {
     if (!root || !openFlag) return;
     saveDraft();
+    if (repair) repair.cancel();
     if (cv) cv.reset();
     hideCtx();
     // The card is a one-time note: seen for one visit is enough (GOT IT also stores it).
@@ -1612,6 +1613,7 @@ const TrackDesigner = (function () {
     const turns = group("TURNS");
     ui.turns = el("ul", "td-issues"); ui.turns.setAttribute("aria-label", "Corners, in driving order");
     turns.appendChild(ui.turns);
+    pane.appendChild(DesignerFollowup.learningPanel({ el, btn }).root);
     pane.insertBefore(turns, before);
   }
   const fmtTurn = (c) => "T" + c.n + " · " + (c.dir < 0 ? "RIGHT " : "LEFT ") + Math.round(Math.abs(c.angDeg)) + "° · R " + Math.round(c.R) + " m · " + Math.round(c.vApex * 3.6) + " km/h · " + Math.round(c.lenM) + " m" + turnTags(c);

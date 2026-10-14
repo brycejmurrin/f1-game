@@ -4,6 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -45,4 +46,44 @@ test("tlx-post present uses fixed mats by default and keeps a swap fallback", ()
   assert.match(bloom, /P\.downFixed\[i - 1\]/);
   assert.match(bloom, /P\.upFinalFixed/);
   assert.match(bloom, /P\.upAddFixed\[i - 2\]/);
+});
+
+// Evaluate the actual shader's arithmetic for fixtures; this is a numeric
+// contract check, not evidence of TSL compilation or GPU image quality.
+function sharpenFixture(center, neighbors, limited) {
+  class Node {
+    constructor(value) { this.value = Array.isArray(value) ? value.slice() : [value]; }
+    op(other, fn) { const b = other instanceof Node ? other.value : [other]; return new Node(this.value.map((v, i) => fn(v, b[b.length === 1 ? 0 : i]))); }
+    add(b) { return this.op(b, (a, x) => a + x); }
+    sub(b) { return this.op(b, (a, x) => a - x); }
+    mul(b) { return this.op(b, (a, x) => a * x); }
+    assign(b) { this.value = b.value.slice(); }
+    greaterThan(b) { return this.value[0] > b; }
+  }
+  const c = new Node(center), vUV = new Node([0, 0]);
+  const context = vm.createContext({ c, vUV,
+    C: { sharpen: new Node(1), sharpenLimit: new Node(limited ? 1 : 0), reflTexel: { x: 1, y: 1 } },
+    vec2: (x, y) => new Node([x, y]),
+    caScene: (uv) => new Node(neighbors[uv.value[0] < 0 ? 0 : uv.value[0] > 0 ? 1 : uv.value[1] < 0 ? 2 : 3]),
+    min: (a, b) => a.op(b, Math.min), max: (a, b) => a.op(b, Math.max),
+    clamp: (a, lo, hi) => a.op(lo, Math.max).op(hi, Math.min),
+    If: (condition, then) => { if (condition) then(); return { Else(otherwise) { if (!condition) otherwise(); } }; },
+  });
+  const source = read("js/render/three/tsl-post.js");
+  const start = source.indexOf("        If(C.sharpen.greaterThan");
+  const end = source.indexOf("        const aoV", start);
+  vm.runInContext(source.slice(start, end), context);
+  return c.value;
+}
+
+test("halo-limited sharpen is opt-in and bounds bright and dark edge extrema", () => {
+  const white = [1, 1, 1], black = [0, 0, 0];
+  assert.deepEqual(sharpenFixture(white, [black, black, black, black], true), white);
+  assert.deepEqual(sharpenFixture(black, [white, white, white, white], true), black);
+  assert.deepEqual(sharpenFixture(white, [black, black, black, black], false), [1.9, 1.9, 1.9]);
+  assert.deepEqual(sharpenFixture(black, [white, white, white, white], false), [-0.9, -0.9, -0.9]);
+  const mid = [0.5, 0.5, 0.5], ramp = [[0.4,0.4,0.4],[0.6,0.6,0.6],[0.5,0.5,0.5],[0.5,0.5,0.5]];
+  assert.deepEqual(sharpenFixture(mid, ramp, true), mid);
+  assert.match(read("js/render/three/tsl-post.js"), /sharpenLimit: uniform\(0\)/);
+  assert.match(read("js/render/three/tlx-post.js"), /apex26\.tlxSharpenLimit.*=== "1" \? 1 : 0/);
 });

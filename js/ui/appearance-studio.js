@@ -63,6 +63,7 @@ const AppearanceStudio = (function () {
   let hooks = {}, ui = null, previewPage = "home", previewShape = "desktop", scope = "global", selectedProfile = "", activePreset = "";
   let muted = false, pending = 0, last = snapshot(), previewSceneKey = "";
   const undoStack = [], sceneListeners = [];
+  let photoRows = [], photoGeneration = 0, photoPanelVisible = false;
   function say(message) { if (ui) ui.status.textContent = message; }
   function invoke(name, ...args) { try { if (typeof hooks[name] === "function") return hooks[name](...args); } catch (e) { Log.warn("ui", "Appearance " + name + ": " + e.message); say("Your appearance is saved; the scene preview could not refresh. Try another scene."); } }
   function scene() { const mode = store.get("homeScene", "photo"), motion = store.get("backgroundMotion", "ambient"); return { mode: ENUMS.homeScene.includes(mode) ? mode : "photo", motion: motion === "ambient" ? "ambient" : "still" }; }
@@ -209,6 +210,55 @@ const AppearanceStudio = (function () {
     ui.profileSelect.value = selectedProfile;
     ui.sceneNote.textContent = s.backgroundMotion === "ambient" && effectiveSceneMotion() === "still" ? "Background motion is paused by reduced motion. Your ambient preference is saved." : "Background motion is separate from menu transitions. Auto camera and mixed environments vary between Home visits. Static and photo backgrounds remain still.";
     previewContent(s);
+    ui.photoBox.hidden = s.homeScene !== "photo";
+    const visible = photoPickerOpen();
+    if (visible && !photoPanelVisible) refreshPhotos();
+    else if (!visible && photoPanelVisible) { photoGeneration++; ui.photoBox.removeAttribute("aria-busy"); }
+    photoPanelVisible = visible;
+  }
+  function photoPickerOpen() {
+    const panel = document.getElementById("pm-panel-appearance"), settings = document.getElementById("pmsettings");
+    return !!ui && !panel.hidden && (!settings || !settings.hidden) && scene().mode === "photo";
+  }
+  function photoSelection() {
+    const row = photoRows.find((p) => p.id === ui.photoSelect.value);
+    ui.photoChoose.disabled = !row; ui.photoPreview.hidden = !row;
+    if (row) { ui.photoPreview.src = row.thumb; ui.photoPreview.alt = "Preview: " + row.title; }
+    else { ui.photoPreview.removeAttribute("src"); ui.photoPreview.alt = "Saved photo preview"; }
+  }
+  async function refreshPhotos() {
+    if (!photoPickerOpen()) return;
+    const generation = ++photoGeneration, selected = ui.photoSelect.value;
+    ui.photoChoose.disabled = true; ui.photoSelect.disabled = true;
+    ui.photoNote.textContent = "Loading saved photos…"; ui.photoBox.setAttribute("aria-busy", "true");
+    try {
+      if (typeof PhotoStudio === "undefined" || typeof PhotoStudio.album !== "function") throw new Error("Photo library unavailable");
+      const rows = await PhotoStudio.album();
+      if (generation !== photoGeneration || !photoPickerOpen()) return;
+      const seen = new Set();
+      photoRows = (Array.isArray(rows) ? rows : []).filter((p) => p && typeof p.id === "string" && !seen.has(p.id)
+        && typeof p.thumb === "string" && /^data:image\/(jpeg|png);base64,/.test(p.thumb) && p.thumb.length < 240000 && seen.add(p.id))
+        .slice(0, 6).map((p) => ({ id: p.id, title: String(p.title || "Saved photo").slice(0, 80), thumb: p.thumb }));
+      ui.photoSelect.replaceChildren();
+      const placeholder = node("option", "", "Select a saved photo"); placeholder.value = ""; ui.photoSelect.appendChild(placeholder);
+      for (const row of photoRows) { const option = node("option", "", row.title); option.value = row.id; ui.photoSelect.appendChild(option); }
+      ui.photoSelect.value = photoRows.some((p) => p.id === selected) ? selected : "";
+      ui.photoSelect.disabled = !photoRows.length; photoSelection();
+      ui.photoNote.textContent = photoRows.length ? "Preview a saved photo, then choose it as your menu background." : "No saved photos yet. Open Photo Studio to import or capture a photo, then save it.";
+    } catch (_) {
+      if (generation !== photoGeneration || !photoPickerOpen()) return;
+      photoRows = []; ui.photoSelect.replaceChildren(); ui.photoSelect.value = ""; photoSelection();
+      ui.photoNote.textContent = "Saved photos could not load. Try Refresh, or open Photo Studio to import a photo.";
+    } finally { if (generation === photoGeneration) ui.photoBox.removeAttribute("aria-busy"); }
+  }
+  function choosePhoto() {
+    const row = photoRows.find((p) => p.id === ui.photoSelect.value);
+    if (!row || !photoPickerOpen() || ui.photoChoose.disabled) return;
+    let saved = false;
+    try { saved = typeof PhotoStudio !== "undefined" && PhotoStudio.setBackground(row.thumb); } catch (_) { /* Preserve the current scene on storage failure. */ }
+    if (!saved) { ui.photoNote.textContent = "Background could not be saved. Your current background stays in place; try again or import through Photo Studio."; return; }
+    setScene("photo"); sceneChanged(true);
+    ui.photoNote.textContent = row.title + " chosen as your menu background.";
   }
   function initUI() {
     if (ui || typeof document === "undefined") return;
@@ -226,6 +276,13 @@ const AppearanceStudio = (function () {
     const menu = group(controls, "MENU · GLOBAL"); choice(menu, "Theme", "uiTheme", [["dark", "Dark"], ["light", "Light"], ["system", "System"]]); colour(menu, "Accent colour", "menuAccent", "menuAccentHex"); choice(menu, "Text size", "textSize", [["normal", "Normal"], ["large", "Large"], ["larger", "Larger"]]); range(menu, "UI size", "uiScale", 40, 200); choice(menu, "Reduce motion", "motion", [["auto", "Auto"], ["reduce", "On"], ["off", "Off"]]); ui.motionNote = node("p", "as-note", "Menu motion is reduced by your system preference. Auto follows it; Off keeps motion on."); menu.appendChild(ui.motionNote); choice(menu, "High contrast", "uiContrast", [["off", "Off"], ["high", "On"]]);
     const hud = group(controls, "RACE HUD"); choice(hud, "Style", "hudProfile", [["minimal", "Minimal"], ["standard", "Standard"], ["broadcast", "Broadcast"]]); colour(hud, "Accent colour", "hudAccent", "hudAccentHex"); range(hud, "HUD size", "hudScale", 70, 200); choice(hud, "Layout", "hudMetricsLayout", [["auto", "Auto"], ["full", "Full"], ["timing", "Timing"], ["driver", "Driver"], ["compact", "Compact"]]); hud.appendChild(button("ALL HUD & DISPLAY OPTIONS", () => { if (hooks.openDisplay) hooks.openDisplay(); else say("Open Settings → Display for all HUD options."); }));
     const sceneBox = group(controls, "SCENE · HOME"); choice(sceneBox, "Scene", "homeScene", [["auto", "Mix environments"], ["garage", "Garage"], ["night", "Night garage"], ["studio", "Studio"], ["track", "Circuit"], ["pitlane", "Pit lane"], ["static", "Static"], ["photo", "My photo"]]); choice(sceneBox, "Home camera", "homeCamera", [["auto", "Auto"], ["hero", "Hero"], ["front", "Front"], ["side", "Side"], ["rear", "Rear"]]); choice(sceneBox, "Background motion", "backgroundMotion", [["still", "Off"], ["ambient", "On"]]); ui.sceneNote = node("p", "as-note"); sceneBox.append(ui.sceneNote, button("PHOTO STUDIO & MY BACKGROUND", () => { if (hooks.openPhoto) hooks.openPhoto(); else say("Photo Studio becomes available after the game finishes loading."); }));
+    ui.photoBox = node("section", "as-photo-picker"); ui.photoBox.setAttribute("aria-label", "Saved menu background photos");
+    ui.photoSelect = node("select"); ui.photoSelect.setAttribute("aria-label", "Saved photo"); ui.photoSelect.addEventListener("change", photoSelection);
+    ui.photoPreview = node("img", "as-photo-preview"); ui.photoPreview.alt = "Saved photo preview"; ui.photoPreview.hidden = true;
+    ui.photoChoose = button("CHOOSE PHOTO", choosePhoto); ui.photoChoose.disabled = true;
+    const photoActions = node("div", "as-profile-row"); photoActions.append(ui.photoSelect, ui.photoChoose, button("REFRESH PHOTOS", refreshPhotos));
+    ui.photoNote = node("p", "as-note"); ui.photoNote.setAttribute("role", "status"); ui.photoNote.setAttribute("aria-live", "polite");
+    ui.photoBox.append(node("h3", "as-heading", "SAVED PHOTOS"), photoActions, ui.photoPreview, ui.photoNote); sceneBox.appendChild(ui.photoBox);
     const tools = node("div", "as-preview-toolbar"), pages = node("div", "as-segment"); pages.setAttribute("role", "group"); pages.setAttribute("aria-label", "Preview screen");
     for (const [id, name] of [["home", "HOME"], ["career", "CAREER"], ["race", "RACE SETUP"], ["hud", "HUD"], ["popups", "POPUP"]]) { const b = button(name, () => { previewPage = id; render(); }); pages.appendChild(b); ui.pages.push({ id, b }); }
     const shapes = node("div", "as-segment"); shapes.setAttribute("role", "group"); shapes.setAttribute("aria-label", "Preview device"); for (const [id, name] of [["desktop", "Desktop"], ["phone", "Phone"]]) { const b = button(name, () => { previewShape = id; render(); }); shapes.appendChild(b); ui.shapes.push({ id, b }); }
@@ -245,7 +302,8 @@ const AppearanceStudio = (function () {
       const raf = typeof requestAnimationFrame === "function" ? requestAnimationFrame
         : (fn) => setTimeout(fn, 0);
       const visible = () => {
-        if (panel.hidden) {
+        if (panel.hidden || (settings && settings.hidden)) {
+          photoGeneration++; photoPanelVisible = false; ui.photoBox.removeAttribute("aria-busy");
           openGen++;
           panel.removeAttribute("aria-busy");
           if (typeof ScreenLooks !== "undefined") ScreenLooks.endPeek();

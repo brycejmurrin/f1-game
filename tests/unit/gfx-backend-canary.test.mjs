@@ -648,9 +648,18 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
     "optIn must require the group to exist and be non-empty — a pick for files that are gone is not an opt-in");
 
   const wgx = code("js/render/webgpu/wgx.js");
-  assert.match(wgx, /device\.lost[\s\S]{0,600}_wgxEscalate\(/, "device.lost climbs the ladder through _wgxEscalate");
+  const lossCallback = wgx.match(/device\.lost\.then\(function\s*\(info\)\s*\{\s*if\s*\(info && info\.reason === "destroyed"\) return;/);
+  assert.ok(lossCallback, "device.lost registers its recovery callback");
+  // Extract the callback itself: capture cleanup may grow the body without
+  // changing the visible-loss ladder, so a character budget is not its contract.
+  const lossBody = fnBody(wgx.slice(lossCallback.index).replace(
+    /^device\.lost\.then\(function\s*\(info\)/, "function deviceLoss(info)"), "deviceLoss");
+  assert.match(lossBody, /if\s*\(!hidden\)\s*\{[^]*?_wgxEscalate\("device lost \("[^;]*,\s*true\);\s*return;/,
+    "visible device.lost climbs the ladder through forced _wgxEscalate");
+  assert.match(fnBody(wgx, "_wgxEscalate"), /_lost\s*=\s*true;\s*_rejectCapture\([^;]*;\s*_healReset\(\)/,
+    "loss escalation rejects queued capture before recovery bookkeeping");
   assert.match(fnBody(wgx, "_wgxEscalate"), /apex26\.gfxClaimFail/, "the last rung surrenders the tab to GLX via the claim-fail latch");
-  assert.doesNotMatch(wgx, /device\.lost[\s\S]{0,2200}setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
+  assert.doesNotMatch(lossBody, /setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
   assert.match(wgx, /\bWGX_LITE\b/);
   assert.match(wgx, /\bIS_WEBKIT\b/);
   assert.match(wgx, /WGX_LITE\s*&&\s*format\s*===\s*"rgba16float"\s*\)\s*format\s*=\s*"bgra8unorm"/);

@@ -1,5 +1,18 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-10-14 — followup feature integration
+
+`js/agent/agentview.js` lines 2584 → **2588** (+4) records episode metadata;
+`js/agent/apex.js` codeLines 2337 → **2338** and lines 3331 → **3332** (+1)
+use the shared episode reset funnel. `js/track/tracks.js` lines 757 → **762**
+(+5) adds the explicit diagnostic bypass. `js/net/lobby.js` lines 2190 →
+**2256** (+66) adds reliable consent and profile coalescing with an owned lifetime.
+The lobby controller state stays in its existing owner so protocol integration
+and teardown share the same lifetime. These exact source-size increases support
+new player features; no tree-debt, shell-node, performance or test-tolerance
+ceiling rises. Re-measured only after the final source freeze and generated
+parity check, using `node tools/check/ratchets.mjs --update`.
+
 ## 2026-10-14 — sync #1501 onto ship tip `151cc6569`: absorb game.js +1
 
 `js/game.js` codeLines 5099 → **5100**, lines 9376 → **9377**. Sync of `cursor/hud-announce-stack-577d` onto ship after #1462/#1469/#1486/#1497; ship tip alone grew past both ceilings by 1. Deliberate sync absorb (`ratchets.mjs --update`) — not an OWNED extraction. Also took ship lower on `js/lighting/presets.js` lines 8341 → **8251**.

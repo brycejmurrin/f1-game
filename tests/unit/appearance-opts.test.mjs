@@ -591,7 +591,7 @@ test("HELP TEXT: CSS hides explanations in settings + race setup, never status l
   // JS-built ones.
   const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
   assert.match(read("js/ui/settings-export.js"), /note\.className = "adv-help";\s*note\.setAttribute\("data-help", "keep"\)/);
-  assert.match(read("js/garage/setup-sheet.js"), /rakeOut\.id = "cs-rake-readout";[^\n]*setAttribute\("data-help", "keep"\)/);
+  assert.match(read("js/garage/setup-experiments.js"), /rakeOut\.id = "cs-rake-readout";[^\n]*setAttribute\("data-help", "keep"\)/);
   assert.match(read("js/ui/title-layout.js"), /id: "pm-tl-shape"[^\n]*"data-help": "keep"/);
   assert.match(EXPORT, /k:\s*"menuHelp"[^\n]*group:\s*"appearance"[^\n]*oneOf: \["on", "off"\]/);
 });

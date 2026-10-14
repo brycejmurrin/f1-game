@@ -187,9 +187,12 @@ var RadioVoice = (function () {
   }
 
   /** A live instance's shape, with every method a no-op. */
+  function stopBattleEarcons() {
+    if (typeof BattleEarcon !== "undefined" && BattleEarcon.stopAll) BattleEarcon.stopAll();
+  }
   function inert() {
     return Object.freeze({
-      say: () => false, sayPreRace: () => false, stop: () => {}, halt: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
+      say: () => false, sayPreRace: () => false, stop: stopBattleEarcons, halt: stopBattleEarcons, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
       setPackOn: () => {}, packOn: () => false, prepare: () => {}, busy: () => false, yieldToSpotter: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       recordedVoice: (sp) => PACK_VOICE[sp], recordedPack: (sp) => PACK_VOICE[sp], recordedVoices: () => [], setRecordedVoice: () => false,
@@ -382,6 +385,7 @@ var RadioVoice = (function () {
      *  the garage, and the frozen card never ages out to stop them. It calls this. */
     function halt() { stop(); if (pack) pack.stop(); }
     function stop() {
+      stopBattleEarcons();
       stopVoice();
       // The hiss bed belongs to the line, so it goes when the line does —
       // the card-hidden and paused observers below are what stop a

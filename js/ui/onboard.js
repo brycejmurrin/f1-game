@@ -58,11 +58,18 @@ const Onboard = (function () {
       const b = padFor(action);
       if (b) return `${NOUN} — ${b}`;
     }
-    if (source === "touch" || (source !== "keyboard" && touch)) {
+    if (source === "phone" || source === "touch" || (source !== "keyboard" && touch)) {
       return key === "brake" ? "TAP AND HOLD BRAKE" : (key === "ot" ? "TAP OVERTAKE" : "TAP AERO");
     }
     const k = codeFor(action);
     return k ? `${NOUN} — ${k}` : NOUN;
+  }
+
+  let refresher = null;
+  function resetControlsRefresher() {
+    if (!refresher) return false;
+    refresher();
+    return true;
   }
 
   function create(G) {
@@ -153,9 +160,10 @@ const Onboard = (function () {
       load();
       return { shown, races, done: done() };
     }
+    refresher = reset;
     return { tick, reset, state, MARKS };
   }
 
-  return { create, MARKS, BIT, ALL };
+  return { create, resetControlsRefresher, MARKS, BIT, ALL };
 })();
 Object.freeze(Onboard);

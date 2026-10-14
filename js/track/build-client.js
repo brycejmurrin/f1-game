@@ -162,6 +162,9 @@ const TrackBuildClient = (function () {
     // A custom circuit is not in the worker's list (it would only answer
     // "worker track list differs" after a round-trip): build it in steps.
     if (!enabled() || (def && def.custom)) return null;
+    // Page-only diagnostic switches cannot be reproduced by the worker copy.
+    // Drop the memo so restoring defaults cannot reuse a diagnostic-era request.
+    if (typeof Tracks !== "undefined" && Tracks.diagnosticBuild && Tracks.diagnosticBuild()) { _last = null; return null; }
     const key = [def.id, opts.night, opts.gridSlots, !!opts.chunkRibbons, !!gfx.mobileTier].join("|");
     if (!_last || _last.key !== key) _last = { key, p: post(idx, def, opts, gfx, sceneryFile) };
     const mine = _last;

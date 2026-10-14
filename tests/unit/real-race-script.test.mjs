@@ -294,13 +294,13 @@ test("the script cache keeps only the newest CACHE_MAX sessions, LRU by use", ()
 function makeDom() {
   function el(tag, cls, text) {
     const node = {
-      tag, cls: cls || null, text: text == null ? null : String(text), children: [], type: null, listeners: {},
+      tag, cls: cls || null, text: text == null ? null : String(text), children: [], type: null, value: "", listeners: {},
       appendChild(c) { node.children.push(c); c.parent = node; return c; },
       insertBefore(c, ref) { const i = node.children.indexOf(ref); node.children.splice(i < 0 ? node.children.length : i, 0, c); c.parent = node; return c; },
       get nextSibling() { const p = node.parent; if (!p) return null; const i = p.children.indexOf(node); return i >= 0 ? p.children[i + 1] || null : null; },
       addEventListener(ev, fn) { (node.listeners[ev] = node.listeners[ev] || []).push(fn); },
       setAttribute(k, v) { node[k] = v; },
-      fire(ev) { (node.listeners[ev] || []).forEach((fn) => fn()); },
+      fire(ev, extra = {}) { const event = { target: node, currentTarget: node, preventDefault() {}, stopPropagation() {}, ...extra }; (node.listeners[ev] || []).forEach((fn) => fn(event)); },
     };
     return node;
   }
@@ -521,8 +521,9 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
   assert.ok(requested.some((r) => r.url.includes("/overtakes?")), "the passes are fetched");
   assert.ok(requested.every((r) => r.url.includes("session_key=11377")), "the RACE session, not the qualifying the picker held");
   const tables = find(tree, (n) => n.tag === "table");
-  // The ENTRY LIST (the last table): 22 rows, JUMP IN only on the seated drivers.
-  const entry = tables[tables.length - 1];
+  // Select by table meaning rather than its position among optional analysis cards.
+  const entry = tables.find((table) => find(table, (n) => n.tag === "th" && n.text === "GRID").length);
+  assert.ok(entry, "the entry-list table");
   const rows = find(entry, (n) => n.tag === "tr" && n.children.some((c) => c.tag === "td"));
   assert.equal(rows.length, 22);
   assert.equal(rows[0].children[0].text, "P1");
@@ -537,14 +538,15 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
   assert.equal(noSeat[0].text, "no seat in this roster");
   assert.equal(buttons[1]["aria-label"], "Race as Charles LECLERC");
   // DRIVE AS: the seated drivers, grid order.
-  const picker = find(tree, (n) => n.tag === "select")[0];
+  const picker = find(tree, (n) => n.tag === "select" && n["aria-label"] === "DRIVER")[0];
   assert.deepEqual(picker.children.map((o) => o.text), ["P1 · RUS · George RUSSELL", "P2 · LEC · Charles LECLERC"]);
   const camera = find(tree, (n) => n.tag === "select" && n["aria-label"] === "WATCH CAMERA")[0];
   assert.ok(camera, "WATCH camera has an accessible label");
   assert.deepEqual(camera.children.map((o) => o.value), ["auto", "side", "heli", "tcam", "chase"]);
   assert.equal(camera.children.find((o) => o.selected).value, "auto", "the TV director is the opening WATCH shot (js/race/broadcast.js)");
   // LAP BY LAP (the first table): 51 rows naming the leader, what happened, the fastest, with a JUMP IN (START on lap 1).
-  const lapTable = tables[0];
+  const lapTable = tables.find((table) => find(table, (n) => n.tag === "th" && n.text === "WHAT HAPPENED").length);
+  assert.ok(lapTable, "the lap-story table");
   const lapRows = find(lapTable, (n) => n.tag === "tr" && n.children.some((c) => c.tag === "td"));
   assert.equal(lapRows.length, 51);
   assert.equal(lapRows[0].children[0].text, "L1");
@@ -562,6 +564,13 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
   lapRows[30].fire("click");
   const board = nested()[0];
   assert.ok(board, "the lap-31 board");
+  assert.equal(lapRows[30]["aria-expanded"], "true");
+  lapRows[30].fire("keydown", { key: "Enter" });
+  assert.equal(lapRows[30]["aria-expanded"], "false");
+  lapRows[30].fire("keydown", { key: " " });
+  assert.equal(lapRows[30]["aria-expanded"], "true");
+  const watchButton = find(lapRows[30], (n) => n.tag === "button" && n.text === "WATCH")[0];
+  for (const key of ["Enter", " "]) lapRows[30].fire("keydown", { key, target: watchButton, preventDefault() { assert.fail("descendant keyboard defaults must remain available"); } });
   assert.equal(lapRows[30]["aria-expanded"], "true");
   const boardRows = find(board, (n) => n.tag === "tr" && n.children.some((c) => c.tag === "td"));
   assert.equal(boardRows.length, 22);
