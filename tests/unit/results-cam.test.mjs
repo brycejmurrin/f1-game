@@ -483,3 +483,32 @@ test("chequered framing tolerates absent track banking without a stale lift", ()
     camera.reset();
   }
 });
+
+
+test("results highlights expose the scene and restore the sheet on every exit", () => {
+  for (const exit of ["button", "complete", "reset", "eligibility"]) {
+    const nodes = new Map([["results", { dataset: {} }], ["res-menu", { parentNode: { insertBefore: (b) => nodes.set(b.id, b) } }]]);
+    const R = boot({ document: { getElementById: (id) => nodes.get(id) || null, createElement: () => ({}) } });
+    const car = { finPos: 1, s: 0, px: 0, pz: 0 };
+    const G = { player: car, cars: [car], gfx: {}, camVantage: () => ({ eye: [0, 5, -10], tgt: [0, 0, 0] }) };
+    let allowed = true, ends = 0;
+    const camera = R.create(G, () => allowed);
+    camera.attachReplay({ window: () => ({ t0: 0, t1: 2, frames: 60 }), tags: () => [],
+      beginScrub: () => true, apply() {}, endScrub: () => ends++ });
+    camera.onFlag();
+    const button = nodes.get("res-highlights"), sheet = nodes.get("results");
+    assert.equal(button.textContent, "HIGHLIGHTS");
+    button.onclick();
+    assert.equal(camera.status().phase, "highlights");
+    assert.equal(sheet.dataset.highlights, "playing", "presentation hides the classification over the footage");
+    assert.equal(button.textContent, "BACK TO RESULTS");
+    if (exit === "button") button.onclick();
+    else if (exit === "complete") camera.tick(3);
+    else if (exit === "reset") camera.reset();
+    else { allowed = false; camera.tick(1); }
+    assert.equal(sheet.dataset.highlights, undefined, exit + " restores full results presentation");
+    assert.equal(button.textContent, "HIGHLIGHTS");
+    assert.equal(ends, 1, "replay released exactly once");
+    assert.equal(camera.status().phase, exit === "reset" || exit === "eligibility" ? "idle" : "orbit");
+  }
+});

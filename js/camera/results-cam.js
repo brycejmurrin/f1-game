@@ -66,8 +66,18 @@ const ResultsCam = (function () {
     const bankScratch = { dy: 0, roll: 0 };
     const allowed = () => enabled(G) && (!eligible || eligible()) &&
       !(G.netPlay && G.netPlay.active && G.netPlay.active());
+    function highlightsPresentation(playing) {
+      if (typeof document === "undefined") return;
+      const results = document.getElementById("results"), button = document.getElementById("res-highlights");
+      if (results) {
+        if (playing) results.dataset.highlights = "playing";
+        else delete results.dataset.highlights;
+      }
+      if (button) button.textContent = playing ? "BACK TO RESULTS" : "HIGHLIGHTS";
+    }
     function endHighlights() {
       if (phase === "highlights" && replayApi) replayApi.endScrub();
+      highlightsPresentation(false);
     }
 
     function attachReplay(api) { replayApi = api || null; }
@@ -160,6 +170,7 @@ const ResultsCam = (function () {
       }
       if (!reel.length || !buf.beginScrub(false)) return false;
       phase = "highlights"; reelIdx = 0; clipAge = 0; age = 0;
+      highlightsPresentation(true);
       applyHighlightFrame();
       return true;
     }
@@ -221,6 +232,7 @@ const ResultsCam = (function () {
         existing.hidden = !show;
         existing.disabled = !show;
         existing.title = show ? "" : "No recorded footage for highlights";
+        highlightsPresentation(phase === "highlights");
         return;
       }
       const menu = document.getElementById("res-menu");
@@ -232,7 +244,7 @@ const ResultsCam = (function () {
       b.title = show ? "" : "No recorded footage for highlights";
       b.type = "button";
       b.textContent = "HIGHLIGHTS";
-      b.onclick = () => { startHighlights(); };
+      b.onclick = () => { if (phase === "highlights") startOrbit(); else startHighlights(); };
       menu.parentNode.insertBefore(b, menu);
     }
 
