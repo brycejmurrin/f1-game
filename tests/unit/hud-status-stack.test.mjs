@@ -28,15 +28,26 @@ test("fitHud publishes gaps-bottom and tyre-stack for the left/centre columns", 
     "a body marker opts the tyre into the left-column stack (keeps dock anchor otherwise)");
   assert.match(HUD_JS, /--hud-cluster-y/,
     "fitHud publishes the bottom-cluster top so the radio card can height-cap above it");
+  assert.match(HUD_JS, /--hud-announce-max-h/,
+    "fitHud publishes remaining room above the gearbox for the radio card");
+  assert.match(HUD_JS, /--hud-tyre-max-h/,
+    "fitHud caps stacked TYRES above the left dock when the map→pedal gap is short");
 });
 
 test("CSS: flag and announce clear the gaps strip; tyre stack; strat under REL", () => {
   assert.match(CSS, /--hud-gaps-b/,
     "flag/announce rules consume --hud-gaps-b");
+  // Compact density overrides #hud-flag top — must still max() gaps-b (72×1.5=108
+  // sat inside the gaps strip on phoneL broadcast @150%).
+  assert.match(CSS,
+    /body\[data-density="compact"\] #hud-flag\s*\{[^}]*--hud-gaps-b/,
+    "compact #hud-flag clears --hud-gaps-b (not only the 72px floor)");
   assert.match(CSS, /body\.hud-tyre-stack[^{]*#hud-tyre:not\(\[data-hl-user\]\)/,
     "hud-tyre-stack parks TYRES under the left column without fighting MOVE & SIZE");
   assert.match(CSS, /--hud-tyre-top/,
     "tyre stack reads --hud-tyre-top");
+  assert.match(CSS, /--hud-announce-max-h/,
+    "announce max-height uses fitHud's remaining-room var (not cluster/z - 5.5em)");
   // STRATEGY used to sidestep by a literal 168px and sat on REL at HUD 150%.
   assert.match(CSS,
     /body:not\(\.desktop\):has\(#hud-rel:not\(\[hidden\]\)\) #hud-strat:not\(\[data-hl-user\]\)[\s\S]{0,200}?--rc-rel-h/,

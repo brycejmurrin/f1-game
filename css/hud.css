@@ -1132,7 +1132,8 @@ body[data-density="compact"].hud-hide-map .hud-gaps {
 body[data-density="compact"] #hud-sectors { font-size: var(--fs-micro); padding: calc(var(--gap) * 0.375) calc(var(--gap) * 0.75); }
 body[data-density="compact"] .hud-bottom { gap: calc(var(--gap) * 0.25); }
 body[data-density="compact"] #hud-flag {
-  top: max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px));
+  /* gaps-b: compact 72px floor alone sat in the strip (phoneL 150%, 72×1.5=108). */
+  top: max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px), calc(var(--hud-gaps-b, 0px) + 8px));
   font-size: var(--fs-micro);
   padding: calc(var(--gap) * 0.35) var(--gap);
 }
@@ -1281,7 +1282,8 @@ body:not(.desktop) #announce {
   min-width: 0;
   max-width: min(440px, calc(72 * var(--vwzh)), calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
   width: min(100%, max-content, calc(var(--announce-lane-w, 9999px) / var(--hud-z)));
-  max-height: min(4.5em, calc((var(--hud-cluster-y, 100svh) - 8px) / var(--hud-z) - 5.5em));
+  /* Remaining room to SPEED/GEAR (fitHud --hud-announce-max-h); not cluster/z-5.5em. */
+  max-height: min(4.5em, var(--hud-announce-max-h, 4.5em));
 }
 /* Collapsed dock lane (js/ui/hud.js announceLane): flex min-content from
    #announce-num kept a painted box at width:0; hide the card so it cannot
@@ -2216,10 +2218,14 @@ body.desktop #hud-inputs:not([data-hl-user]) {
     body.hud-tyre-stack:not(.desktop) #hud-tyre:not([data-hl-user]) {
       position: fixed;
       position-anchor: none;
-      top: calc(var(--hud-tyre-top) );
+      /* Screen-px top; zoom:1 escapes .hud-bottom's --hud-z-bot. */
+      zoom: 1;
+      top: var(--hud-tyre-top);
       bottom: auto;
-      left: calc(10px + var(--sal) / var(--hud-z));
+      left: calc(10px + var(--sal));
       right: auto;
+      max-height: var(--hud-tyre-max-h, none);
+      overflow: hidden;
     }
     /* HELMET ERS stays in the cluster grid. Anchoring it to the tyre failed:
        the tyre follows #hud-energy in the tree, anchor() does not resolve a

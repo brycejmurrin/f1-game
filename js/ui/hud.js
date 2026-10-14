@@ -1226,25 +1226,31 @@ function fitHud() {
   if (gapsR && gapsR.width) leftBot = Math.max(leftBot, gapsR.bottom);
   // Gaps strip alone (centre flag clears it; TYRES must not lift the flag).
   hStyle(root, "--hud-gaps-b", ((gapsR && gapsR.width ? gapsR.bottom : 0) / chromeZ).toFixed(1) + "px");
-  const dockL = _dockL ? _dockL.getBoundingClientRect() : null;
+    const dockL = _dockL ? _dockL.getBoundingClientRect() : null;
   // Phone landscape: when the dock-top TYRES anchor would cover the map (HUD
   // 150% broadcast survey), stack TYRES under the left column and extend
   // --hud-left-h so REL / STRATEGY follow. MOVE & SIZE (data-hl-user) wins.
   const phone = !document.body.classList.contains("desktop");
   const tyreEl = els.tyre;
+  // TYRES stack: --hud-tyre-top is SCREEN px (zoom:1 in CSS; not chromeZ-local).
   let tyreStack = false;
   if (phone && tyreEl && !tyreEl.hidden && !(tyreEl.hasAttribute && tyreEl.hasAttribute("data-hl-user"))) {
     const tBox = tyreEl.getBoundingClientRect();
-    const tH = Math.max(tBox.height / chromeZ, 36 / chromeZ);
+    const tHpx = Math.max(tBox.height, 36);
     const dockTopPx = dockL && dockL.height ? dockL.top : vpH();
-    const naturalTop = dockTopPx / chromeZ - tH - 8 / chromeZ;
-    const minTop = leftBot / chromeZ + 8;
-    if (naturalTop < minTop - 0.5) {
-      hStyle(root, "--hud-tyre-top", minTop.toFixed(1) + "px");
-      leftBot = Math.max(leftBot, (minTop + tH) * chromeZ);
+    const naturalTopPx = dockTopPx - tHpx - 8;
+    const minTopPx = leftBot + 8;
+    if (naturalTopPx < minTopPx - 0.5) {
+      hStyle(root, "--hud-tyre-top", minTopPx.toFixed(1) + "px");
+      const roomPx = Math.max(0, dockTopPx - minTopPx - 8);
+      if (roomPx > 0 && roomPx < tHpx - 0.5) {
+        hStyle(root, "--hud-tyre-max-h", roomPx.toFixed(1) + "px");
+      } else hUnstyle(root, "--hud-tyre-max-h");
+      const usedH = roomPx > 0 ? Math.min(tHpx, roomPx) : tHpx;
+      leftBot = Math.max(leftBot, minTopPx + usedH);
       tyreStack = true;
-    } else hUnstyle(root, "--hud-tyre-top");
-  } else hUnstyle(root, "--hud-tyre-top");
+    } else { hUnstyle(root, "--hud-tyre-top"); hUnstyle(root, "--hud-tyre-max-h"); }
+  } else { hUnstyle(root, "--hud-tyre-top"); hUnstyle(root, "--hud-tyre-max-h"); }
   if (document.body.classList) document.body.classList.toggle("hud-tyre-stack", tyreStack);
   hStyle(root, "--hud-left-h", (leftBot / chromeZ).toFixed(1) + "px");
   // THE SAME EDGE IN SCREEN PIXELS. #hud-limits reads --hud-left-h from INSIDE
@@ -1273,10 +1279,16 @@ function fitHud() {
   if (limLeft && phone && tyreEl && !tyreEl.hidden
       && !(tyreEl.hasAttribute && tyreEl.hasAttribute("data-hl-user")) && !tyreStack) {
     const tBox = tyreEl.getBoundingClientRect();
-    const tH = Math.max(tBox.height / chromeZ, 36 / chromeZ);
-    const minTop = leftBot / chromeZ + 8;
-    hStyle(root, "--hud-tyre-top", minTop.toFixed(1) + "px");
-    leftBot = Math.max(leftBot, (minTop + tH) * chromeZ);
+    const tHpx = Math.max(tBox.height, 36);
+    const minTopPx = leftBot + 8;
+    const dockTopPx = dockL && dockL.height ? dockL.top : vpH();
+    hStyle(root, "--hud-tyre-top", minTopPx.toFixed(1) + "px");
+    const roomPx = Math.max(0, dockTopPx - minTopPx - 8);
+    if (roomPx > 0 && roomPx < tHpx - 0.5) {
+      hStyle(root, "--hud-tyre-max-h", roomPx.toFixed(1) + "px");
+    } else hUnstyle(root, "--hud-tyre-max-h");
+    const usedH = roomPx > 0 ? Math.min(tHpx, roomPx) : tHpx;
+    leftBot = Math.max(leftBot, minTopPx + usedH);
     tyreStack = true;
     if (document.body.classList) document.body.classList.toggle("hud-tyre-stack", true);
     hStyle(root, "--hud-left-h", (leftBot / chromeZ).toFixed(1) + "px");
@@ -1628,7 +1640,17 @@ function fitHud() {
   {
     const bot = document.querySelector(".hud-bottom");
     const br = bot && !bot.hidden ? bot.getBoundingClientRect() : null;
-    hStyle(root, "--hud-cluster-y", (br && br.height ? br.top : vpH()).toFixed(1) + "px");
+    const clusterY = br && br.height ? br.top : vpH();
+    hStyle(root, "--hud-cluster-y", clusterY.toFixed(1) + "px");
+    // Room above gearbox: measured announce top, else flag-slot+38 (caution step).
+    const z = chromeZ || scale || 1;
+    const ann = document.getElementById("announce");
+    const ar = ann && !ann.hidden ? ann.getBoundingClientRect() : null;
+    const gapsB = parseFloat(root.style.getPropertyValue("--hud-gaps-b")) || 0;
+    const flagSlotLocal = Math.max(72, gapsB + 8);
+    const estTop = ar && ar.height ? ar.top : (flagSlotLocal + 38) * z;
+    const roomLocal = Math.max(1.8 * 16, (clusterY - estTop - 8) / z);
+    hStyle(root, "--hud-announce-max-h", roomLocal.toFixed(1) + "px");
   }
   radioPaintedCollapse(root);   // terminal: nothing after it may re-run radioTopSlot (hud-metrics-layout.test)
   mirrorClear(root);

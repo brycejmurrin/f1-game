@@ -254,9 +254,13 @@ const HudRelative = (function () {
           if (!hitX || !hitY) continue;
           hit = true;
           // TILT parks BRAKE in the map column: slide past the pedal, else cap height.
-          if (box.left <= rr.left + 24 || box.right - rr.left < rr.width * 0.7)
+          // When REL's top already sits inside a control (OT/gear/throttle at HUD
+          // 150% — rr.top >= box.top), a height cap cannot clear it: slide right.
+          const doCap = rr.top < box.top - 4;
+          const doSlide = !doCap || box.left <= rr.left + 24 || box.right - rr.left < rr.width * 0.7;
+          if (doSlide)
             slide = Math.max(slide, (box.right + 8) / z);
-          if (rr.top < box.top - 4) cap = Math.min(cap, (box.top - rr.top - 6) / z);
+          if (doCap) cap = Math.min(cap, (box.top - rr.top - 6) / z);
         }
         if (!hit) break;
         if (slide > 0) root.style.left = slide.toFixed(1) + "px";

@@ -151,6 +151,32 @@ test("tick: off hides the box; on, it fills rows and never writes a car", () => 
   assert.equal(root.hidden, true, "no relative in a time trial");
 });
 
+test("fitRows slides past OT when REL top already sits inside the control", () => {
+  // phoneL broadcast @150%: REL top ≈357 inside OT (315..359). Height-cap needs
+  // rr.top < box.top - 4, which never fires — must slide right instead.
+  const mk = () => {
+    const el = { hidden: true, attrs: {}, children: [], textContent: "", className: "",
+      style: { setProperty(k, v) { el.style[k] = v; }, removeProperty(k) { delete el.style[k]; } },
+      setAttribute(k, v) { el.attrs[k] = String(v); }, removeAttribute(k) { delete el.attrs[k]; },
+      appendChild(c) { el.children.push(c); return c; } };
+    return el;
+  };
+  const root = mk();
+  root.clientHeight = 40; root.scrollHeight = 80; root.currentCSSZoom = 1.5;
+  root.getBoundingClientRect = () => ({ left: 194, right: 396, top: 350, bottom: 432, width: 202, height: 82 });
+  const ot = mk();
+  ot.hidden = false;
+  ot.getBoundingClientRect = () => ({ left: 250, right: 396, top: 315, bottom: 359, width: 146, height: 44 });
+  const els = { "hud-rel": root, "hud-ot": ot };
+  const documentElement = { style: { getPropertyValue: (k) => (k === "--hud-scale" ? "1.5" : "") } };
+  const doc = { documentElement, body: { classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
+  const R = load({ document: doc, HudElements: { isOn: () => true } });
+  const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
+  R.tick({ cars: [p, car("A1", 1100, 3, { rank: 1 })], track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } }, p);
+  const left = parseFloat(root.style.left);
+  assert.ok(left > 250, "slides past OT.right: left=" + root.style.left);
+});
+
 test("fitRows caps max-height above an overlapping BRAKE", () => {
   const mk = () => {
     const el = { hidden: true, attrs: {}, children: [], textContent: "",
