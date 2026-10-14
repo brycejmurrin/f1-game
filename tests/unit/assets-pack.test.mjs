@@ -511,6 +511,131 @@ test("readLayerBytes reads layers straight through a scratch WebGL2 context, nev
   assert.equal(data2[page], 11); assert.equal(data2[3 * page], 22);
 });
 
+// P4 (perf hunt 4, lane WGX): readLayerBytesAsync must hand back the SAME bytes readLayerBytes does, through a
+// PIXEL_PACK_BUFFER + fenceSync readback instead of a blocking readPixels per layer (MDN's readPixelsAsync).
+// One mock WebGL2 serves both paths from the same uploaded pixels — every pixel of every layer distinct, so a
+// wrong PBO slot offset, a swapped layer or a short copy shows as a byte difference, not a lucky match.
+function makeAsyncGl(opts = {}) {
+  const GL = { UNPACK_FLIP_Y_WEBGL: 1, UNPACK_PREMULTIPLY_ALPHA_WEBGL: 2, UNPACK_COLORSPACE_CONVERSION_WEBGL: 3,
+    NONE: 0, TEXTURE_2D: 10, FRAMEBUFFER: 11, COLOR_ATTACHMENT0: 12, FRAMEBUFFER_COMPLETE: 13, RGBA: 14, UNSIGNED_BYTE: 15,
+    PIXEL_PACK_BUFFER: 20, STREAM_READ: 21, SYNC_GPU_COMMANDS_COMPLETE: 22, ALREADY_SIGNALED: 23, TIMEOUT_EXPIRED: 24,
+    CONDITION_SATISFIED: 25, WAIT_FAILED: 26 };
+  const ops = [];
+  let current = null, pbo = null, polls = 0;
+  const gl = { ...GL,
+    pixelStorei() {}, createTexture() { return {}; }, createFramebuffer() { return {}; },
+    bindTexture() {}, bindFramebuffer() {}, framebufferTexture2D() {},
+    checkFramebufferStatus() { return current && current.refused ? 0 : GL.FRAMEBUFFER_COMPLETE; },
+    texImage2D(...a) { current = a[a.length - 1]; ops.push(["tex", current.id]); },
+    createBuffer() { return { data: null }; },
+    bindBuffer(t, b) { assert.equal(t, GL.PIXEL_PACK_BUFFER); pbo = b; ops.push(["bind", !!b]); },
+    bufferData(t, size, usage) { assert.equal(t, GL.PIXEL_PACK_BUFFER); assert.equal(usage, GL.STREAM_READ); pbo.data = new Uint8Array(size); ops.push(["alloc", size]); },
+    // The one readPixels: a client-memory destination copies at once (the sync path); a byte OFFSET with a
+    // PBO bound records the copy for the GPU (the async path) — nothing lands in client memory here.
+    readPixels(x, y, w, h, f, t, dst) {
+      const px = current.pixels(w, h);
+      if (typeof dst === "number") { assert.ok(pbo, "an offset needs a bound PIXEL_PACK_BUFFER"); pbo.data.set(px, dst); ops.push(["readPBO", current.id, dst]); }
+      else { dst.set(px); ops.push(["readSync", current.id]); }
+    },
+    fenceSync(cond, flags) { assert.equal(cond, GL.SYNC_GPU_COMMANDS_COMPLETE); assert.equal(flags, 0); ops.push(["fence"]); return opts.noSyncObject ? null : { signalled: 0 }; },
+    flush() { ops.push(["flush"]); },
+    // The GPU is "still busy" for opts.busyPolls polls, then signalled — the poll loop must come back on a timer.
+    clientWaitSync(sync, flags, timeout) { assert.equal(timeout, 0, "never a blocking wait"); polls++; if (opts.waitFails) return GL.WAIT_FAILED;
+      return polls <= (opts.busyPolls || 0) ? GL.TIMEOUT_EXPIRED : GL.CONDITION_SATISFIED; },
+    deleteSync() { ops.push(["deleteSync"]); },
+    getBufferSubData(t, srcOff, dst, dstOff, len) { assert.equal(t, GL.PIXEL_PACK_BUFFER); assert.ok(pbo, "bound for the copy");
+      dst.set(pbo.data.subarray(srcOff, srcOff + len), dstOff); ops.push(["sub", srcOff, dstOff, len]); },
+    deleteBuffer(b) { ops.push(["deleteBuffer"]); b.data = null; },
+    isContextLost() { return false; },
+    getExtension() { return null; },
+  };
+  return { gl, GL, ops, polls: () => polls };
+}
+const layerImage = (id, size, refused) => ({ id, refused,
+  // pixel (x, y, c) of layer id = a distinct byte: no two layers, pixels or channels alike.
+  pixels(w, h) { const p = new Uint8Array(w * h * 4); for (let i = 0; i < p.length; i++) p[i] = (id * 61 + i * 7 + 3) & 255; return p; } });
+
+test("P4: readLayerBytesAsync returns byte-identical layers to readLayerBytes through a PIXEL_PACK_BUFFER + fenceSync", async () => {
+  const size = 4, page = size * size * 4, n = 17;
+  const images = [];
+  images[1] = layerImage(1, size); images[2] = new Uint8Array(page).fill(77);   // bytes: copied, never uploaded (both paths)
+  images[5] = layerImage(5, size); images[9] = layerImage(9, size); images[16] = layerImage(16, size);
+  const run = async (mock, viaAsync) => {
+    const assets = assetLoader({ setTimeout, OffscreenCanvas: class { getContext(kind) { return kind === "webgl2" ? mock.gl : null; } } });
+    const data = new Uint8Array(page * n);
+    const landed = [];
+    const done = viaAsync
+      ? await assets.readLayerBytesAsync(size, images, n, data, (i, bytes) => landed.push([i, bytes ? bytes.length : null]))
+      : assets.readLayerBytes(size, images, n, data);
+    return { data, done: [...done], landed, ops: mock.ops };
+  };
+  const sync = await run(makeAsyncGl(), false);
+  const busy = makeAsyncGl({ busyPolls: 3 });
+  const async_ = await run(busy, true);
+  assert.deepEqual(async_.done, sync.done, "the same layer list");
+  assert.deepEqual(async_.done, [1, 2, 5, 9, 16]);
+  assert.ok(Buffer.from(async_.data).equals(Buffer.from(sync.data)), "every byte of every layer identical");
+  for (const i of [1, 5, 9, 16]) assert.equal(async_.data[i * page + 3], (i * 61 + 3 * 7 + 3) & 255, `layer ${i} holds ITS pixels at ITS page`);
+  assert.equal(async_.data[2 * page], 77, "the byte layer copied straight");
+  assert.equal(async_.data[0], 0, "an absent layer is left untouched");
+  assert.deepEqual(async_.landed, [[2, page], [1, page], [5, page], [9, page], [16, page]], "onLayer per layer: the byte layer at once, the rest as the copy lands");
+  // The mechanism: 4 uploads, 4 PBO reads at slot offsets, ONE fence + flush, a non-blocking poll per tick, then
+  // one getBufferSubData per slot into the layer's page — and no readPixels into client memory at all.
+  const kinds = async_.ops.map((o) => o[0]);
+  assert.equal(kinds.filter((k) => k === "readSync").length, 0, "the async path never blocks in readPixels");
+  assert.deepEqual(async_.ops.filter((o) => o[0] === "readPBO"), [["readPBO", 1, 0], ["readPBO", 5, page], ["readPBO", 9, 2 * page], ["readPBO", 16, 3 * page]], "slot k at byte k*page");
+  assert.equal(kinds.filter((k) => k === "fence").length, 1, "one fence for the whole pack"); assert.equal(kinds[kinds.indexOf("fence") + 1], "flush", "flushed right after the fence (MDN)");
+  assert.equal(busy.polls(), 4, "polled until the fence signalled (3 busy ticks, then satisfied)");
+  assert.deepEqual(async_.ops.filter((o) => o[0] === "sub"), [["sub", 0, page, page], ["sub", page, 5 * page, page], ["sub", 2 * page, 9 * page, page], ["sub", 3 * page, 16 * page, page]], "each slot lands at its layer's page");
+  assert.deepEqual(async_.ops.filter((o) => o[0] === "alloc"), [["alloc", 4 * page]], "the PBO holds the pending layers only");
+  assert.ok(kinds.includes("deleteSync") && kinds.includes("deleteBuffer"), "the fence and the PBO are released");
+  assert.deepEqual(sync.ops.filter((o) => o[0] === "readSync").map((o) => o[1]), [1, 5, 9, 16], "the sync path still reads each layer in place");
+});
+
+test("P4: readLayerBytesAsync degrades the way the sync path does — refused layers, a failed wait, no fence API", async () => {
+  const size = 2, page = size * size * 4, n = 4;
+  const ctx = (mock) => assetLoader({ setTimeout, OffscreenCanvas: class { getContext(kind) { return kind === "webgl2" ? mock.gl : null; } } });
+  // A layer the scratch FBO refuses: onLayer(i, null) fires SYNCHRONOUSLY (the image is still alive) and it is not in `done`.
+  // (busyPolls 1: a fence already signalled at the first poll lands the rest synchronously too, which is fine; the
+  // point here is the refused layer's report comes first either way.)
+  {
+    const mock = makeAsyncGl({ busyPolls: 1 });
+    const images = []; images[1] = layerImage(1, size); images[2] = layerImage(2, size, true); images[3] = layerImage(3, size);
+    const landed = []; const data = new Uint8Array(page * n);
+    const p = ctx(mock).readLayerBytesAsync(size, images, n, data, (i, b) => landed.push([i, b ? "bytes" : null]));
+    assert.deepEqual(landed, [[2, null]], "the refused layer is reported before the promise settles");
+    assert.deepEqual([...await p], [1, 3]);
+    assert.deepEqual(landed, [[2, null], [1, "bytes"], [3, "bytes"]]);
+  }
+  // clientWaitSync WAIT_FAILED: resolves with what landed (nothing from the PBO), the PBO and fence released, no throw.
+  {
+    const mock = makeAsyncGl({ waitFails: true });
+    const images = []; images[1] = layerImage(1, size); images[2] = new Uint8Array(page).fill(9);
+    const data = new Uint8Array(page * n);
+    assert.deepEqual([...await ctx(mock).readLayerBytesAsync(size, images, n, data)], [2], "only the byte layer landed");
+    assert.equal(data[page], 0, "the unread layer's page is untouched");
+    const kinds = mock.ops.map((o) => o[0]);
+    assert.ok(kinds.includes("deleteSync") && kinds.includes("deleteBuffer"));
+  }
+  // No sync object (a lost context) or no fence API at all: null, synchronously — the caller takes the sync path now.
+  {
+    const images = []; images[1] = layerImage(1, size);
+    assert.equal(ctx(makeAsyncGl({ noSyncObject: true })).readLayerBytesAsync(size, images, n, new Uint8Array(page * n)), null);
+    const old = makeAsyncGl(); delete old.gl.fenceSync;
+    assert.equal(ctx(old).readLayerBytesAsync(size, images, n, new Uint8Array(page * n)), null, "a WebGL2 without fences (none shipping, but the guard is cheap)");
+    const none = assetLoader({ OffscreenCanvas: class { getContext() { return null; } } });
+    assert.equal(none.readLayerBytesAsync(size, images, n, new Uint8Array(page * n)), null, "no WebGL2 at all");
+  }
+  // Bytes-only pack: resolves at once, no scratch GL work.
+  {
+    const mock = makeAsyncGl();
+    const images = []; images[3] = new Uint8Array(page).fill(5);
+    const data = new Uint8Array(page * n);
+    assert.deepEqual([...await ctx(mock).readLayerBytesAsync(size, images, n, data)], [3]);
+    assert.equal(data[3 * page], 5); assert.equal(mock.ops.length, 0, "no upload, no PBO, no fence");
+  }
+});
+
 test("WGX and TLX take pack bytes from Assets.readLayerBytes, not a 2D-canvas getImageData", () => {
   const wgx = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");

@@ -254,6 +254,33 @@ const WGX = (function () {
   } catch (_) { /* blocked storage: the cheaper of the two */ }
   let MSAA_COUNT = WGX_LITE ? 1 : (_wgxMsaa4 ? 4 : 1);
 
+  // PERF-HUNT-4 lane WGX (hunter C's P2 / P4 / P6), each ON by default; "0" is
+  // the A/B off switch (docs/notes/PERF-HUNT-4-2026-10-14.md §C, §Fix pass):
+  //   wgxInsetInPass — the mirror inset is drawn inside the frame's final pass
+  //     instead of a second pass that reloads the whole drawable (P2);
+  //   wgxPackAsync   — the material pack's layer bytes come back through a
+  //     PIXEL_PACK_BUFFER + fenceSync readback, never a blocking readPixels (P4);
+  //   wgxTransient   — the MSAA colour, mirror depth and env depth targets carry
+  //     GPUTextureUsage.TRANSIENT_ATTACHMENT where the browser has it (P6).
+  let _insetInPass = true, _packAsync = true, _transientOn = true;
+  try {
+    if (localStorage.getItem("apex26.wgxInsetInPass") === "0") _insetInPass = false;
+    if (localStorage.getItem("apex26.wgxPackAsync") === "0") _packAsync = false;
+    if (localStorage.getItem("apex26.wgxTransient") === "0") _transientOn = false;
+  } catch (_) { /* blocked storage: all three on */ }
+  // A pass-local attachment's usage (WebGPU spec §6.1.2 / §6.1.3, Chrome 146):
+  // with the TRANSIENT_ATTACHMENT bit the usage must be EXACTLY
+  // RENDER_ATTACHMENT | TRANSIENT_ATTACHMENT, 2d, one mip, one layer, every
+  // pass on it loadOp "clear" + storeOp "discard", and it is never a resolve
+  // target — so only the three targets nothing samples or stores qualify (the
+  // MSAA depth is sampled by the depth resolve and stays plain). Feature-
+  // detected per the Chrome sample: `'TRANSIENT_ATTACHMENT' in GPUTextureUsage`.
+  function _transientRenderUsage() {
+    const T = _transientOn && typeof GPUTextureUsage !== "undefined" && "TRANSIENT_ATTACHMENT" in GPUTextureUsage
+      ? GPUTextureUsage.TRANSIENT_ATTACHMENT : 0;
+    return GPUTextureUsage.RENDER_ATTACHMENT | T;
+  }
+
   // Every path that makes create() return null records WHY, both on the console
   // and on WGX.lastFailure, so "the RENDERER button says WEBGPU but the game is
   // running WebGL2" is a question with an answer instead of a mystery. (The
@@ -1171,6 +1198,7 @@ const WGX = (function () {
     // _matOwned* are destroyed on replace/unload (GLX deleteTexture parity).
     let matPlaceAlbedoView = null, matPlaceNormalView = null;
     let _matOwnedAlbedo = null, _matOwnedNormal = null;
+    let _matBindGen = 0, _matPendingFills = 0, _matPendingBinds = 0;   // P4: async pack fills / binds held back
     let matScaleUBO = null, matScaleData = new Float32Array(20);
     let _matAlbedoOn = false, _matNormalOn = false;
     const _matScales = new Float32Array(MAT_TEX_LAYERS);
@@ -2478,7 +2506,7 @@ const WGX = (function () {
         if (_msaaCount > 1) {
           next.sceneMSTex = device.createTexture({
             size: [width, height], format: SCENE_FORMAT, sampleCount: _msaaCount,
-            usage: GPUTextureUsage.RENDER_ATTACHMENT });
+            usage: _transientRenderUsage() });   // P6: clear + discard + resolve into sceneTex — memoryless on tilers
           next.depthMSTex = device.createTexture({
             size: [width, height], format: DEPTH_FORMAT, sampleCount: _msaaCount,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
@@ -3632,6 +3660,7 @@ const WGX = (function () {
         if (!sceneView) return false;
         _drawSlot = 0;
         _fxQuadSlot = 0; _fxDecalSlot = 0; _fxQuadOverflow = 0;
+        _mirDone = false;   // P2: this frame's inset is not drawn yet
         _activeFrameBG = frameBindGroup;   // main pass samples the real probe cube once live
         _writeFrame(frame || {});
         const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
@@ -3876,6 +3905,7 @@ const WGX = (function () {
       bp.setPipeline(blitPipeline);
       bp.setBindGroup(0, blitBindGroup);
       bp.draw(3, 1, 0, 0);
+      _mirrorComposite(exposure, _TONE_STANDIN, null, bp);   // P2: the inset rides the blit's pass
       bp.end();
     }
 
@@ -3935,7 +3965,7 @@ const WGX = (function () {
         for (let f = 0; f < 6; f++)
           envFaceViews.push(envCubeTex.createView({ dimension: "2d", baseArrayLayer: f, arrayLayerCount: 1, baseMipLevel: 0, mipLevelCount: 1 }));
         envDepthTex = device.createTexture({
-          size: [ENV_SIZE, ENV_SIZE], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT,
+          size: [ENV_SIZE, ENV_SIZE], format: DEPTH_FORMAT, usage: _transientRenderUsage(),   // P6: clear + discard only
         });
         envDepthView = envDepthTex.createView();
       } catch (e) {
@@ -4062,6 +4092,7 @@ const WGX = (function () {
     // chain after each mirror submit.
     let mirSampleView = null, _mirSamp = null;
     let _mirEncoder = null, _mirDead = false, _mirRect = null, _mirRenders = 0, _mirComposites = 0, _mirFlip = true;   // flip false: the broadcast PiP
+    let _mirInPass = 0, _mirDone = false;   // P2: insets drawn inside the final pass; this frame's inset is already drawn
     let _mirUBO = null, _mirBG = null;
     // The live glass's group (drawMirrorGlass): built lazily on mirSampleView,
     // dropped with it — a resize must never leave it naming a destroyed view.
@@ -4085,7 +4116,7 @@ const WGX = (function () {
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
           mirView = mirTex.createView({ baseMipLevel: 0, mipLevelCount: 1 });
           mirSampleView = mirTex.createView();
-          mirDepthTex = device.createTexture({ size: [w, h], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+          mirDepthTex = device.createTexture({ size: [w, h], format: DEPTH_FORMAT, usage: _transientRenderUsage() });   // P6: clear + discard only
           mirDepthView = mirDepthTex.createView();
           mirW = w; mirH = h;
         } catch (e) {
@@ -4127,7 +4158,17 @@ const WGX = (function () {
     // MIRROR_FS / TLX mirror — or _TONE_STANDIN when the frame took the blit.
     // `o` (the present opts) only when the post chain graded the frame: the
     // inset then takes the same colour grade + dither (BLIT params.w).
-    function _mirrorComposite(exposure, T, o) {
+    // `pass` (P2, hunt 4 — the WGX twin of hunt-2 G12): the frame's FINAL pass
+    // on currentView, still open. With apex26.wgxInsetInPass on, the inset's
+    // four calls (viewport, pipeline, bind group, draw) are recorded into it
+    // before its end() — same operations, same order, same target, same bytes —
+    // instead of a second pass that loads and stores the whole drawable again
+    // (7.4 MB per frame at 1280×720). The call after that pass then finds
+    // _mirDone and returns; with the knob off the in-pass call is a no-op and
+    // the after-pass call opens its own pass, exactly as before.
+    function _mirrorComposite(exposure, T, o, pass) {
+      if (pass && !_insetInPass) return;
+      if (_mirDone) return;
       if (!_mirRect || !mirSampleView || !_mirRenders || !blitPipeline || !currentView || !encoder) return;
       const cw = wantSpatialUpscale() ? presentW : width, ch = wantSpatialUpscale() ? presentH : height;
       const x = Math.round(_mirRect[0] * cw), y = Math.round(_mirRect[1] * ch);
@@ -4150,12 +4191,15 @@ const WGX = (function () {
         _mirData[20] = ghi[0]; _mirData[21] = ghi[1]; _mirData[22] = ghi[2]; _mirData[23] = PostCommon.knob(T, "blackLift");
       }
       device.queue.writeBuffer(_mirUBO, 0, _mirData);
-      const mp = encoder.beginRenderPass({ colorAttachments: [{ view: currentView, loadOp: "load", storeOp: "store" }] });
+      // The pass's own viewport was the full target; the inset is its last draw,
+      // so nothing after it sees the narrowed viewport.
+      const mp = pass || encoder.beginRenderPass({ colorAttachments: [{ view: currentView, loadOp: "load", storeOp: "store" }] });
       mp.setViewport(x, y, w, h, 0, 1);
       mp.setPipeline(blitPipeline);
       mp.setBindGroup(0, _mirBG);
       mp.draw(3, 1, 0, 0);
-      mp.end();
+      if (!pass) mp.end(); else _mirInPass++;
+      _mirDone = true;
       _mirComposites++;
     }
 
@@ -4746,7 +4790,9 @@ const WGX = (function () {
         const fxaaPipe = useUpscale ? (pFXAALdr || pFXAA) : pFXAA;
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: fxaaView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
-        p.setPipeline(fxaaPipe); p.setBindGroup(0, fxaaBG); p.draw(3, 1, 0, 0); p.end();
+        p.setPipeline(fxaaPipe); p.setBindGroup(0, fxaaBG); p.draw(3, 1, 0, 0);
+        if (!useUpscale) _mirrorComposite(exposure, o.tune, o, p);   // P2: FXAA wrote the drawable — the inset rides its pass
+        p.end();
 
         // SGSR1 spatial upscale — present-size reconstruct from render-size
         // FXAA output. uViewport is SOURCE (render) size.
@@ -4755,7 +4801,9 @@ const WGX = (function () {
           device.queue.writeBuffer(sgsrUBO, 0, s, 0, _Post.SGSR_UNIFORM_BYTES / 4);
           const p2 = encoder.beginRenderPass({ colorAttachments: [{ view: currentView, loadOp: "clear",
             clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
-          p2.setPipeline(pSGSR); p2.setBindGroup(0, sgsrBG); p2.draw(3, 1, 0, 0); p2.end();
+          p2.setPipeline(pSGSR); p2.setBindGroup(0, sgsrBG); p2.draw(3, 1, 0, 0);
+          _mirrorComposite(exposure, o.tune, o, p2);   // P2: SGSR wrote the drawable — the inset rides its pass
+          p2.end();
         }
       }
 
@@ -4764,6 +4812,7 @@ const WGX = (function () {
           try { Log.warn("gfx", "WGX post chain failed — tonemap blit fallback", postE); } catch (_) { /* harness */ }
           _postReady = false;
         }
+        _mirDone = false;   // the blit clears the drawable an in-pass inset may already be on
         _tonemapBlit(exposure);
       }
 
@@ -4837,6 +4886,16 @@ const WGX = (function () {
       for (const i of done) out[i] = data.subarray(i * page, (i + 1) * page);
       return out;
     }
+    // P4 (hunt 4): with apex26.wgxPackAsync on, the layer bytes come back through
+    // Assets.readLayerBytesAsync — the same bytes, read from a PIXEL_PACK_BUFFER
+    // behind a fence instead of 34 blocking readPixels (126 ms mid-race on the
+    // macOS census). The token returns at once with `pending: true` and a
+    // `ready` promise (true = every readable layer landed and the mips are
+    // built; false = nothing filled, the texture already retired); each layer's
+    // writeTexture runs as its bytes land. setMaterialMaps holds a pending token
+    // back until it is ready, and assets.js awaits `ready` before it binds, so no
+    // frame ever samples a half-filled array. freeTexture in flight (a
+    // superseded load) nulls the view and the remaining writes are dropped.
     function createTextureArray(size, images, layers) {
       if (!size || !images) return null;
       const n = layers || MAT_TEX_LAYERS;
@@ -4847,14 +4906,13 @@ const WGX = (function () {
           size: [size, size, n], format: "rgba8unorm", mipLevelCount: mips,
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
         });
+        const tok = { _wgx: "texarray", texture: tex, view: tex.createView({ dimension: "2d-array" }), layers: n };
         let filled = 0;
         const bpr = size * 4;
-        const layerBytes = _matLayerBytes(size, images, n);
-        for (let i = 0; i < n; i++) {
+        const writeLayer = (i, bytes) => {
           const img = images[i];
-          if (!img) continue;
+          if (!img || !tok.view) return;   // no layer, or freed while the readback was in flight
           try {
-            const bytes = layerBytes[i];
             if (bytes && bytes.length >= bpr * size) {
               device.queue.writeTexture({ texture: tex, origin: [0, 0, i] }, bytes,
                 { bytesPerRow: bpr, rowsPerImage: size }, [size, size, 1]);
@@ -4868,10 +4926,27 @@ const WGX = (function () {
             }
             filled++;
           } catch (_) { /* skip a missing/bad layer; pack still ships */ }
+        };
+        const job = _packAsync && typeof Assets !== "undefined" && Assets.readLayerBytesAsync
+          ? Assets.readLayerBytesAsync(size, images, n, new Uint8Array(size * size * 4 * n), writeLayer) : null;
+        if (job) {
+          tok.pending = true;
+          _matPendingFills++;
+          const settle = (ok) => {
+            tok.pending = false; _matPendingFills--;
+            if (!tok.view) return false;                       // freed in flight: nothing to bind
+            if (!ok || !filled) { freeTexture(tok); return false; }
+            _generateMips(tex, n);
+            return true;
+          };
+          tok.ready = job.then(() => settle(true), () => settle(false));
+          return tok;
         }
+        const layerBytes = _matLayerBytes(size, images, n);
+        for (let i = 0; i < n; i++) writeLayer(i, layerBytes[i]);
         if (!filled) { try { tex.destroy(); } catch (_) { /* already invalid */ } return null; }
         _generateMips(tex, n);
-        return { _wgx: "texarray", texture: tex, view: tex.createView({ dimension: "2d-array" }), layers: n };
+        return tok;
       } catch (_) {
         if (tex) try { tex.destroy(); } catch (__) { /* device lost */ }
         return null; /* alloc/copy failed: pack stays procedural */
@@ -4900,7 +4975,28 @@ const WGX = (function () {
     // Adopt (or clear) baked material arrays. Frees any previously-owned pack
     // textures and restores the 1×1×N placeholders so bind groups never point
     // at destroyed views — GLX deleteTexture parity for WebGPU.
+    // P4: a token still filling (pending) is held back — the procedural look
+    // stays bound, never a frame of black layers — and bound when every pending
+    // array is ready. A newer call (unload / re-adopt) supersedes the wait: the
+    // never-owned tokens it was holding are retired instead of bound.
     function setMaterialMaps(maps) {
+      const gen = ++_matBindGen;
+      const toks = maps ? [maps.albedo, maps.normal] : [];
+      const waits = toks.filter((t) => t && t.pending && t.ready).map((t) => t.ready);
+      if (!waits.length) { _setMaterialMapsNow(maps); return; }
+      _matPendingBinds++;
+      Promise.all(waits).then(() => {
+        _matPendingBinds--;
+        const live = (t) => !!(t && t.view && !t.pending);
+        const a = live(maps.albedo) ? maps.albedo : null, nn = live(maps.normal) ? maps.normal : null;
+        if (gen !== _matBindGen || !a) {   // superseded, or the albedo never filled: bind nothing, free what filled
+          for (const t of [a, nn]) if (t) freeTexture(t);
+          return;
+        }
+        _setMaterialMapsNow({ albedo: a, normal: nn, scales: maps.scales });
+      });
+    }
+    function _setMaterialMapsNow(maps) {
       _releaseOwnedMatMaps(maps);
       matAlbedoView = matPlaceAlbedoView;
       matNormalView = matPlaceNormalView;
@@ -4933,7 +5029,8 @@ const WGX = (function () {
     function materialMapState() {
       let layers = 0;
       for (let i = 0; i < MAT_TEX_LAYERS; i++) if (_matScales[i] > 0) layers++;
-      return { albedo: _matAlbedoOn, normal: _matNormalOn, layers, scales: Array.from(_matScales) };
+      return { albedo: _matAlbedoOn, normal: _matNormalOn, layers, scales: Array.from(_matScales),
+        pending: _matPendingFills + _matPendingBinds };   // P4: arrays still filling / binds held back
     }
 
     function gpuTimer(on) {
@@ -5791,7 +5888,7 @@ const WGX = (function () {
       mirrorEnd,
       mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; _mirFlip = flip !== false; },
       mirrorState: () => ({ ready: !!mirTex && _mirRenders > 0, dead: _mirDead, w: mirW, h: mirH, hdr: true,
-        renders: _mirRenders, composites: _mirComposites, glass: _mirGlass, rect: _mirRect, flip: _mirFlip }),
+        renders: _mirRenders, composites: _mirComposites, inPass: _mirInPass, glass: _mirGlass, rect: _mirRect, flip: _mirFlip }),
       drawMirrorGlass,
       envProbeReady() { return _envProbeLive; },
       envProbeReset,

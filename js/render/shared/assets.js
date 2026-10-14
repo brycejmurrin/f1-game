@@ -216,6 +216,119 @@ const Assets = (function () {
     return done.sort((a, b) => a - b);
   }
 
+  // P4 (perf hunt 4, lane WGX): the SAME bytes as readLayerBytes, read back
+  // without blocking the main thread. readPixels into client memory is
+  // "finish + round trip" (MDN WebGL best practices) — 34 of them cost 126 ms
+  // mid-race on the macOS census. Here every pending layer is uploaded and its
+  // readPixels issued into ONE PIXEL_PACK_BUFFER (slot k at byte k*page), then a
+  // fenceSync + gl.flush() marks the GPU work; clientWaitSync is polled off a
+  // timer (MDN's readPixelsAsync pattern) and, once the fence has signalled,
+  // getBufferSubData copies each slot into `data` — a copy that no longer waits
+  // on the GPU. The uploads happen synchronously INSIDE this call, so a caller
+  // may close its ImageBitmaps the moment it returns (assets.js does).
+  //   https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices#use_non-blocking_async_data_readback
+  //   https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext/getBufferSubData
+  // Byte / ImageData layers copy at once, as in the sync path. onLayer(i, bytes)
+  // fires per layer as its page of `data` fills; bytes = null (fired
+  // synchronously, the image still alive) for a layer the scratch context could
+  // not take, so the caller's own upload fallback can run — the sync path's
+  // "one bad layer must not sink the pack". Returns null SYNCHRONOUSLY, not a
+  // promise, when the async path cannot run at all (no WebGL2, no fence API):
+  // the caller then takes readLayerBytes while its images are still alive.
+  // Otherwise resolves to the sorted layer indices that landed — the list
+  // readLayerBytes returns — and never rejects.
+  function readLayerBytesAsync(size, images, n, data, onLayer) {
+    const scratch = _ensureScratchGl(size);
+    const gl = scratch && scratch.gl;
+    if (!gl || typeof gl.fenceSync !== "function" || typeof gl.clientWaitSync !== "function" ||
+        typeof gl.getBufferSubData !== "function") return null;
+    const page = size * size * 4;
+    const done = [];
+    const pending = [];
+    for (let i = 0; i < n; i++) {
+      const img = images[i];
+      if (!img) continue;
+      const raw = (ArrayBuffer.isView(img) && img.BYTES_PER_ELEMENT === 1) ? img
+        : (typeof ImageData !== "undefined" && img instanceof ImageData) ? img.data : null;
+      if (raw) {
+        if (raw.length >= page) {
+          data.set(raw.subarray(0, page), i * page); done.push(i);
+          if (onLayer) onLayer(i, data.subarray(i * page, (i + 1) * page));
+        }
+      } else pending.push(i);
+    }
+    if (!pending.length) return Promise.resolve(done);
+    const { tex, fbo } = scratch;
+    let view = scratch.view;
+    if (!view || view.buffer !== data.buffer || view.byteOffset !== data.byteOffset ||
+        scratch.page !== page) {
+      view = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+      scratch.view = view;
+      scratch.page = page;
+    }
+    const slots = [];   // slot k of the PBO holds layer slots[k]
+    let pbo = null, sync = null;
+    try {
+      pbo = gl.createBuffer();
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
+      gl.bufferData(gl.PIXEL_PACK_BUFFER, page * pending.length, gl.STREAM_READ);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      for (const i of pending) {
+        try {
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, images[i]);
+          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+          if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) { if (onLayer) onLayer(i, null); continue; }
+          // With a PIXEL_PACK_BUFFER bound the last argument is a byte offset into it.
+          gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, slots.length * page);
+          slots.push(i);
+        } catch (_) { if (onLayer) onLayer(i, null); }
+      }
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+      sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+      gl.flush();
+      if (!sync) throw new Error("fenceSync");
+    } catch (_) {
+      // The async plumbing itself failed (a lost context, a refused PBO): hand
+      // the caller the sync path while its images are still alive.
+      try { gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null); } catch (__) { /* lost */ }
+      if (pbo) { try { gl.deleteBuffer(pbo); } catch (__) { /* lost */ } }
+      if (sync) { try { gl.deleteSync(sync); } catch (__) { /* lost */ } }
+      return null;
+    }
+    return new Promise((resolve) => {
+      const ASYNC_WAIT_MS = 8000, POLL_MS = 10;
+      let waited = 0;
+      const finish = () => {
+        try { gl.deleteSync(sync); } catch (_) { /* lost */ }
+        try { gl.deleteBuffer(pbo); } catch (_) { /* lost */ }
+        resolve(done.sort((a, b) => a - b));
+      };
+      const poll = () => {
+        let r;
+        try { r = gl.clientWaitSync(sync, 0, 0); } catch (_) { r = gl.WAIT_FAILED; }
+        if (r === gl.TIMEOUT_EXPIRED && waited < ASYNC_WAIT_MS && !gl.isContextLost()) {
+          waited += POLL_MS; setTimeout(poll, POLL_MS); return;
+        }
+        if (r === gl.ALREADY_SIGNALED || r === gl.CONDITION_SATISFIED) {
+          try {
+            gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
+            for (let k = 0; k < slots.length; k++) {
+              const i = slots[k];
+              // dstOffset / length are ELEMENTS of the typed array — bytes for a Uint8Array.
+              gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, k * page, view, i * page, page);
+              done.push(i);
+              if (onLayer) onLayer(i, view.subarray(i * page, (i + 1) * page));
+            }
+          } catch (_) { /* a lost context mid-copy: the layers that landed still ship */ }
+          try { gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null); } catch (_) { /* lost */ }
+        }
+        finish();   // WAIT_FAILED / the 8 s cap / a lost context: the pack ships the layers that landed
+      };
+      poll();
+    });
+  }
+
   function _releaseStrip(imgs) {
     if (!imgs) return;
     for (const b of imgs) { if (b && b.close) { try { b.close(); } catch { /* already closed/detached: nothing left to free */ } } }
@@ -314,6 +427,16 @@ const Assets = (function () {
         }
         if (normal) normalTex = _gfx.createTextureArray(size, normal, MAT_LAYERS);
         // A missing normal array is survivable — albedo alone still helps.
+      }
+      // P4: a backend that fills its arrays asynchronously (WGX's readLayerBytesAsync
+      // path) hands back a token with `ready`; the pack is live — and load()
+      // resolves — only once every array is filled. A failed fill reads as the
+      // sync path's upload failure (no partial pack; a lost normal stays survivable).
+      if (albedoTex.ready && !(await albedoTex.ready)) throw new Error("albedo-upload");
+      if (normalTex && normalTex.ready && !(await normalTex.ready)) { _freeTexture(normalTex); normalTex = null; }
+      if (generation !== _loadGeneration) {
+        _discardLoad(albedo, normal, albedoTex, normalTex);
+        return false;
       }
     } catch (e) {
       _discardLoad(albedo, normal, albedoTex, normalTex);
@@ -585,7 +708,7 @@ const Assets = (function () {
     return (_manifest && _manifest.credits) ? _manifest.credits.slice() : [];
   }
 
-  return { init, supported, manifest, load, retry, unload, adopt, state, readLayerBytes,
+  return { init, supported, manifest, load, retry, unload, adopt, state, readLayerBytes, readLayerBytesAsync,
            model, modelSync, models, modelIds, loadModels, loadModelsFor, modelsReady, env, credits, MAT_LAYERS };
 })();
 
