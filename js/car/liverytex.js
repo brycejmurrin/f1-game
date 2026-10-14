@@ -1868,7 +1868,15 @@ const LiveryTex = (function () {
   function buildAtlas(teamId, colors = {}, numberOverride, isPlayer, hiRes) {
     Log.info("car", "livery " + (teamId || "?"));
     const div = atlasDiv(!!isPlayer, IS_MOBILE, !!hiRes);
-    const canvas = IS_MOBILE ? scratchAtlas() : document.createElement("canvas");
+    // The deferred hi-res paint (car-draw.js schedulePlayerHiRes) authors on an OffscreenCanvas: no DOM
+    // element for a 2048x2560 surface the page never shows, and the source createImageBitmap() then
+    // converts for the upload (C-P3). Everything else keeps the element — the garage draws previews
+    // from it and Safari < 16.4 has no OffscreenCanvas 2D context (then the element is the fallback).
+    let canvas = IS_MOBILE ? scratchAtlas() : null;
+    if (!canvas && hiRes && typeof OffscreenCanvas === "function") {
+      try { canvas = new OffscreenCanvas(SIZE / div, SIZE_H / div); if (!canvas.getContext("2d")) canvas = null; } catch (_) { canvas = null; }
+    }
+    if (!canvas) canvas = document.createElement("canvas");
     canvas.width = SIZE / div;
     canvas.height = SIZE_H / div;
     const ctx = canvas.getContext("2d");
