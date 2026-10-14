@@ -104,8 +104,8 @@ function yawDampFromSlider(v) {
 }
 function lockFromSlider(v)   { return 0.18 + (0.435 - 0.18) * (v - 1) / 9; } // rad, .18..0.435, v5≈0.293, v7=0.35
 // SPEED STEER -> STEER_SPEED_REF, the reference speed for the lock taper in
-// js/game.js. Low speed (vStd≤15) holds a 1.07× plateau on that lock (so notch 7
-// applies ≈0.375 rad at hairpins); 15→30 blends onto the hyperbolic
+// js/game.js. Low speed (vStd≤15) holds a 1.06× plateau on that lock (so notch 7
+// applies ≈0.371 rad at hairpins); 15→30 blends onto the hyperbolic
 // `1/(1+v/ref)`, and vs≥30 is raw so high-speed lock stays bit-identical. Ref
 // only needs to be in the same NEIGHBOURHOOD as real speeds. 15..75 m/s is the
 // hyperbolic-law range: every notch does something at every speed. See

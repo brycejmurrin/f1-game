@@ -1,7 +1,7 @@
-/* low-speed-lock.test.mjs — pin the 1.07× hairpin plateau and unchanged ≥30 taper.
+/* low-speed-lock.test.mjs — pin the 1.06× hairpin plateau and unchanged ≥30 taper.
  *
  * Companion to steer-lock-taper.test.mjs: asserts the Loews-facing numbers
- * (plateau → ≈0.375 rad at notch-7 lock 0.35) and that high-speed lock is
+ * (plateau → ≈0.371 rad at notch-7 lock 0.35) and that high-speed lock is
  * Object.is-identical to the pre-boost hyperbolic raw taper.
  *
  * Run: node --test tests/unit/low-speed-lock.test.mjs
@@ -12,11 +12,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
 
-const LOW_PLATEAU = 1.07;
+const LOW_PLATEAU = 1.06;
 const NOTCH7_LOCK = 0.35; // lockFromSlider(7) — steer-tuning-lock pins the map
 
 function rawTaper(vs, ref) {
@@ -27,19 +28,19 @@ function lockTaper(vs, ref) {
   return vs <= 15 ? LOW_PLATEAU : (vs >= 30 ? raw : LOW_PLATEAU + (raw - LOW_PLATEAU) * (vs - 15) / 15);
 }
 
-test("source: game.js plateau is 1.07 and steer-tuning documents the hairpin boost", () => {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+test("source: game.js plateau is 1.06 and steer-tuning documents the hairpin boost", () => {
+  const game = gameSource();
   const tuning = fs.readFileSync(path.join(ROOT, "js/input/steer-tuning.js"), "utf8");
-  assert.match(game, /lockTaper = vs <= 15 \? 1\.07 :/);
-  assert.match(tuning, /1\.07× plateau/);
+  assert.match(game, /lockTaper = vs <= 15 \? 1\.06 :/);
+  assert.match(tuning, /1\.06× plateau/);
   assert.match(tuning, /function lockFromSlider\(v\)\s*\{\s*return 0\.18 \+ \(0\.435 - 0\.18\) \* \(v - 1\) \/ 9; \}/);
 });
 
-test("notch-7 low-speed applied lock is ≈0.375 rad; ≥30 matches pre-boost product", () => {
+test("notch-7 low-speed applied lock is ≈0.371 rad; ≥30 matches pre-boost product", () => {
   const ref = 55;
   const low = NOTCH7_LOCK * lockTaper(10, ref);
-  assert.ok(Math.abs(low - 0.3745) < 1e-9, `10 m/s applied ${low}`);
-  assert.ok(Math.abs(low - 0.375) < 0.001, `≈0.375 rad, got ${low}`);
+  assert.ok(Math.abs(low - 0.371) < 1e-9, `10 m/s applied ${low}`);
+  assert.ok(Math.abs(low - 0.35 * 1.06) < 1e-12, `≈0.371 rad, got ${low}`);
   for (const vs of [30, 45, 60, 80, 100]) {
     const boost = NOTCH7_LOCK * lockTaper(vs, ref);
     const old = NOTCH7_LOCK * rawTaper(vs, ref);
@@ -47,7 +48,7 @@ test("notch-7 low-speed applied lock is ≈0.375 rad; ≥30 matches pre-boost pr
   }
 });
 
-test("VM: full-lock wheel angle rises ~7% at 10 m/s and is unchanged at 60 m/s", async () => {
+test("VM: full-lock wheel angle rises ~6% at 10 m/s and is unchanged at 60 m/s", async () => {
   const { createGame } = require("../../tools/lib/game-vm.cjs");
   const DT = 1 / 60;
   const g = await createGame({ track: "monaco", storage: { difficulty: "normal", autoThrottle: false } });
