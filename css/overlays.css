@@ -935,6 +935,23 @@ body:has(dialog:modal) #update-chip { display: none; }
    peek reveal below out-ranks these on purpose, for exactly as long as the
    peek lasts — js/ui/screen-looks.js flushes the box away when it ends. */
 #pausemenu:not([open]) { display: none; }
+/* Short phone (≤400px tall): RACE TOOLS as a 2-col grid with no empty cell.
+   experience.css's #pm-quick-doors is 3-col in this same overlays layer; the
+   #pausemenu id prefix wins on specificity. An odd leftover (REWIND & RETRY
+   alone, or RECOVER when REPLAY is absent) spans the row so the tray never
+   shows a hole. Floors stay at --tap (HUD survey bc-b3058e3a). */
+@media (max-height: 400px) {
+  #pausemenu #pm-quick-doors {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  #pausemenu #pm-quick-doors > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  #pausemenu #pm-quick-doors button,
+  #pausemenu #pm-checkpoint summary {
+    min-height: var(--tap);
+  }
+}
 #race-settings:not([open]) { display: none; }
 #standings:not([open]) { display: none; }
 #datahub:not([open]) { display: none; }
