@@ -16,13 +16,13 @@
       "lines": 2198
     },
     "js/game.js": {
-      "codeLines": 5082,
-      "gMembers": 290,
-      "lines": 9343,
-      "topLets": 155
+      "codeLines": 5091,
+      "gMembers": 291,
+      "lines": 9355,
+      "topLets": 156
     },
     "js/lighting/presets.js": {
-      "lines": 8341
+      "lines": 8251
     },
     "js/net/lobby.js": {
       "lines": 2190

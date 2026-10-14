@@ -3239,6 +3239,7 @@ const G = {
   get raceLineAssist() { return raceLineAssist; }, set raceLineAssist(v) { raceLineAssist = v; },
   get _lastFloodEmit() { return _lastFloodEmit; }, set _lastFloodEmit(v) { _lastFloodEmit = v; },
   get _studioRig() { return _studioRig; }, set _studioRig(v) { _studioRig = v; },
+  get _s8Stamp() { return _s8Stamp; }, set _s8Stamp(v) { _s8Stamp = v | 0; },   // PERF-HUNT-2 S8 once-per-frame
   get _testInput() { return _testInput; }, set _testInput(v) { _testInput = v; },
   get builtTrackNight() { return builtTrackNight; }, set builtTrackNight(v) { builtTrackNight = v; },
   get camEye() { return camEye; }, set camEye(v) { camEye = v; },
@@ -4422,6 +4423,8 @@ const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0,
                   deploy: 0, energy: 1, ersDeploy: 0.5, throttle: 1, brake: 0, regen: 0.5 };  // setEngine reads synchronously
 let _audioParamStep = true;   // tickBody clears it on all but a frame's last physics step
 const _engAcc = { dt: 0 };   // the local car's sim time since the engineer last listened (S8: once per frame)
+const _s8Pres = { dt: 0 };   // caution + coach + race-radio: summed sim dt since last frame flush (PERF-HUNT-2 S8)
+let _s8Stamp = 0;            // bumped each flush; modules no-op a second update under the same stamp
 function update(dt) {
   // No world: a stepped/worker race switch dropped it (dropTrackWorld) and is still building.
   // tickBody gates on it too; this covers __apex.step() (bug hunt 3 K1/X2).
@@ -4601,9 +4604,17 @@ function update(dt) {
   incidentSim.postStep(dt);
   RaceControl.endLineStep();
 
-  // B1 — debris caution: consume hazards() and drive the local-yellow / VSC / SC
-  // flag state (READ-ONLY; never slows or moves a car). Self-guarding + throttled.
-  updateCaution(dt); coach.update(dt); raceRadio.update(dt);
+  // B1 — debris caution + driving coach + race radio: presentation only
+  // (announce / audio). Once per FRAME on the last physics step with the
+  // frame's summed sim dt — same pattern as engineer / _audioParamStep
+  // (PERF-HUNT-2 S8). Modules also guard on G._s8Stamp so a second call in the
+  // same frame is a no-op. carSfx stays per-step (edge detectors).
+  _s8Pres.dt += dt;
+  if (_audioParamStep) {
+    _s8Stamp++;
+    updateCaution(_s8Pres.dt); coach.update(_s8Pres.dt); raceRadio.update(_s8Pres.dt);
+    _s8Pres.dt = 0;
+  }
 
   // Race-control owns the finish policy as well as neutralisation rules. In a
   // human race an AI/other player crossing first must NOT start a 3.5 s result
