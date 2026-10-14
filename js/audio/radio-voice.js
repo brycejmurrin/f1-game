@@ -147,6 +147,78 @@ var RadioVoice = (function () {
   /** Estimated seconds to speak `text` at `rate`. */
   const estimate = (text, rate) => (text ? text.split(" ").length : 0) / WORDS_PER_S / Math.max(0.1, rate);
 
+  /* SQUELCH + BAND — the frame around an ENGINEER line (speaker `radio`).
+   *
+   * speechSynthesis has no node (see the file header), so this cannot EQ the
+   * words. It is a short key-up / key-down static burst, band-limited like a
+   * handheld, scheduled with the utterance. The CARD's click-hiss-squelch
+   * (js/audio/radio-fx.js radioSting) is a different layer and stays there.
+   *
+   * TEAM RADIO off, volRadio 0, coach / control / announcer, the results
+   * sheet and a pause: no burst. A spotter cut cancels the scheduled close
+   * so it cannot fire over the call that replaced the line. */
+  const RADIO_LO = 300, RADIO_HI = 3400;
+  const SQUELCH_MS_MIN = 40, SQUELCH_MS_MAX = 80;
+  const SQUELCH_POOL = 2;
+
+  function hashSeed(s) {
+    if (typeof s === "number" && Number.isFinite(s)) return (s >>> 0) || 1;
+    const str = String(s == null ? "" : s);
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0 || 1;
+  }
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  /** Light 300–3400 Hz band with tiny seeded jitter. Same seed → same params. */
+  function radioBand(seed) {
+    const rnd = mulberry32(hashSeed(seed));
+    const lo = RADIO_LO + Math.round((rnd() - 0.5) * 40);
+    const hi = RADIO_HI + Math.round((rnd() - 0.5) * 80);
+    return { lo, hi, freq: Math.round(Math.sqrt(lo * hi)), q: +(0.32 + rnd() * 0.08).toFixed(3) };
+  }
+  function squelchMs(seed, lane) {
+    const rnd = mulberry32(hashSeed(seed) ^ (lane === "close" ? 0x51ed : 0x0b1e));
+    return SQUELCH_MS_MIN + Math.floor(rnd() * (SQUELCH_MS_MAX - SQUELCH_MS_MIN + 1));
+  }
+  function speakerOf(o) {
+    if (o.speaker && TONE[o.speaker]) return o.speaker;
+    return SPEAKERS[o.kind] || "radio";
+  }
+  /**
+   * Pure: whether a key-up and key-down sit around this line. `reason` on
+   * refusal, same shape as plan(). `seed` keeps the band and durations
+   * deterministic for tests.
+   */
+  function squelchPlan(o) {
+    const out = { play: false, reason: "", openMs: 0, closeMs: 0, atOpen: 0, atClose: 0, band: null, seed: 0, lite: !!o.mobile };
+    if (!o.enabled) { out.reason = "off"; return out; }
+    if (!o.soundOn) { out.reason = "master-off"; return out; }
+    if (o.volume != null && !(+o.volume > 0)) { out.reason = "silent"; return out; }
+    if (o.paused) { out.reason = "paused"; return out; }
+    if (o.state !== "race" && o.state !== "count" && !o.preRace) { out.reason = "not-racing"; return out; }
+    if (speakerOf(o) !== "radio") { out.reason = "not-radio"; return out; }
+    const seed = o.seed == null ? hashSeed(o.text || o.msg || 1) : hashSeed(o.seed);
+    const secs = Math.max(0, +o.secs || 0);
+    out.play = true; out.reason = ""; out.seed = seed;
+    out.band = radioBand(seed);
+    out.openMs = squelchMs(seed, "open");
+    out.closeMs = squelchMs(seed, "close");
+    out.atOpen = 0;
+    out.atClose = secs;
+    return out;
+  }
+  function isMobile() {
+    try { return !!(typeof GLX !== "undefined" && GLX && (GLX.isMobile || GLX.mobileTier)); }
+    catch (e) { return false; }
+  }
+
   /**
    * THE WHOLE POLICY, as a pure function: no DOM, no speechSynthesis, no clock.
    * Every refusal carries a `reason`, which is what the node tests assert on.
@@ -195,7 +267,7 @@ var RadioVoice = (function () {
       recordedVoice: (sp) => PACK_VOICE[sp], recordedPack: (sp) => PACK_VOICE[sp], recordedVoices: () => [], setRecordedVoice: () => false,
       announcerPackOn: () => false,
       setEnabled: () => {}, setVolume: (v) => v, available: () => false,
-      debug: () => ({ available: false, enabled: false, voices: 0, last: null, asked: 0, started: 0 }),
+      debug: () => ({ available: false, enabled: false, voices: 0, last: null, asked: 0, started: 0, squelch: null }),
     });
   }
 
@@ -262,6 +334,114 @@ var RadioVoice = (function () {
      * exactly how this defect survived three attempts to fix it from the
      * outside. The audio panel prints the verdict; see js/audio/panel.js. */
     let asked = 0, started = 0;
+    let lastSquelch = null, squelchOpenT = null, squelchCloseT = null;
+    let ownCtx = null, noiseBuf = null, poolCtx = null;
+    const squelchPool = [];   // reused bandpass+gain; BufferSource is one-shot
+    function stopSquelch(cut) {
+      if (squelchOpenT != null) { clearTimeout(squelchOpenT); squelchOpenT = null; }
+      if (squelchCloseT != null) { clearTimeout(squelchCloseT); squelchCloseT = null; }
+      if (lastSquelch && cut) lastSquelch.cut = true;
+      const ctx = poolCtx;
+      const t = ctx && ctx.currentTime != null ? ctx.currentTime : 0;
+      for (const v of squelchPool) {
+        try { v.g.gain.cancelScheduledValues(t); v.g.gain.setValueAtTime(0.0001, t); } catch (e) { /* torn down */ }
+        if (v.src) { try { v.src.stop(t); } catch (e) { /* already ended */ } v.src = null; }
+        v.busyUntil = t;
+      }
+    }
+    function audioCtx() {
+      const w = typeof window !== "undefined" ? window : null;
+      if (w && w.RadioSquelchCtx) return w.RadioSquelchCtx;
+      if (typeof GameAudio !== "undefined" && GameAudio && typeof GameAudio.context === "function") {
+        try { const c = GameAudio.context(); if (c) return c; } catch (e) { /* stub or mid-teardown */ }
+      }
+      if (isMobile()) return null;   // no second graph on a phone; the card sting stays
+      if (ownCtx) return ownCtx;
+      const AC = (typeof window !== "undefined" && (window.AudioContext || window.webkitAudioContext))
+        || (typeof AudioContext !== "undefined" ? AudioContext : null);
+      if (!AC) return null;
+      try { ownCtx = new AC(); } catch (e) { return null; }
+      return ownCtx;
+    }
+    function ensureSquelchPool(ctx) {
+      if (poolCtx === ctx && squelchPool.length) return;
+      for (const v of squelchPool) {
+        try { v.g.disconnect(); } catch (e) { /* gone */ }
+        try { v.filt.disconnect(); } catch (e) { /* gone */ }
+      }
+      squelchPool.length = 0;
+      poolCtx = ctx;
+      noiseBuf = null;
+      const n = isMobile() ? 1 : SQUELCH_POOL;
+      for (let i = 0; i < n; i++) {
+        const filt = ctx.createBiquadFilter();
+        filt.type = "bandpass";
+        const g = ctx.createGain();
+        g.gain.value = 0.0001;
+        filt.connect(g);
+        if (ctx.destination) g.connect(ctx.destination);
+        squelchPool.push({ filt, g, src: null, busyUntil: 0 });
+      }
+    }
+    function playBurst(band, durS) {
+      const ctx = audioCtx();
+      if (!ctx || !band || !(durS > 0)) return false;
+      if (ctx.state && ctx.state !== "running" && ctx.state !== "suspended") return false;
+      try { ensureSquelchPool(ctx); } catch (e) { return false; }
+      if (!squelchPool.length) return false;
+      const t = ctx.currentTime || 0;
+      let v = squelchPool[0];
+      for (let i = 1; i < squelchPool.length; i++) {
+        if (squelchPool[i].busyUntil <= t) { v = squelchPool[i]; break; }
+        if (squelchPool[i].busyUntil < v.busyUntil) v = squelchPool[i];
+      }
+      try {
+        if (!noiseBuf || noiseBuf.sampleRate !== (ctx.sampleRate || noiseBuf.sampleRate)) {
+          const sr = ctx.sampleRate || 44100;
+          const len = Math.max(1, Math.ceil(sr * 0.12));
+          noiseBuf = ctx.createBuffer(1, len, sr);
+          const d = noiseBuf.getChannelData(0);
+          for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+        }
+        v.filt.frequency.value = band.freq;
+        v.filt.Q.value = band.q;
+        if (v.src) { try { v.src.stop(); v.src.disconnect(); } catch (e) { /* reuse */ } }
+        const src = ctx.createBufferSource();
+        src.buffer = noiseBuf;
+        src.connect(v.filt);
+        const peak = 0.07 * Math.max(0.15, volume);
+        v.g.gain.cancelScheduledValues(t);
+        v.g.gain.setValueAtTime(0.0001, t);
+        v.g.gain.linearRampToValueAtTime(peak, t + 0.004);
+        v.g.gain.exponentialRampToValueAtTime(0.0001, t + durS);
+        src.start(t);
+        src.stop(t + durS + 0.02);
+        v.src = src;
+        v.busyUntil = t + durS + 0.05;
+      } catch (e) { return false; }
+      return true;
+    }
+    function fireSquelch(lane) {
+      if (!lastSquelch || lastSquelch.cut || !lastSquelch.play) return;
+      lastSquelch.fired.push(lane);
+      playBurst(lastSquelch.band, (lane === "open" ? lastSquelch.openMs : lastSquelch.closeMs) / 1000);
+    }
+    function armSquelch(p) {
+      stopSquelch(false);
+      const q = squelchPlan({
+        enabled, soundOn: !!G.soundOn, volume, speaker: p.speaker, kind: activeKind,
+        state: G.state, preRace: !!p.preRace, paused: !!G.paused, mobile: isMobile(),
+        text: p.text, secs: p.secs, seed: hashSeed(p.text),
+      });
+      q.events = q.play ? ["open", "close"] : [];
+      q.fired = [];
+      q.cut = false;
+      lastSquelch = q;
+      if (!q.play) return;
+      const leadMs = Math.max(0, +p.leadMs || 0);
+      squelchOpenT = setTimeout(() => { squelchOpenT = null; fireSquelch("open"); }, leadMs);
+      squelchCloseT = setTimeout(() => { squelchCloseT = null; fireSquelch("close"); }, leadMs + q.atClose * 1000);
+    }
     /* OFF THE FRAME. speechSynthesis calls are synchronous IPC to the platform
      * speech service, and on real desktops they can stall the main thread —
      * cancel() and getVoices() especially, a network ("Google") voice worse
@@ -393,6 +573,7 @@ var RadioVoice = (function () {
       previewGen++;
       clearPending();
       clearDeadline();
+      stopSquelch(true);   // a spotter cut must kill the close burst, not let it land later
       // Before cancel(): the callback it triggers must already see itself as
       // stale, whether the engine fires it synchronously or a turn later.
       current = null; activeKind = "";
@@ -459,6 +640,7 @@ var RadioVoice = (function () {
       if (!ok) return false;
       current = tok;
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
+      if (!audition) armSquelch(p);
       deadline = setTimeout(stop, p.leadMs + p.budgetMs + 400);
       return true;
     }
@@ -466,7 +648,11 @@ var RadioVoice = (function () {
       // Re-checked at speak time: a line that waited out its cue across the
       // flag must not be read over the results (and its deadline would then
       // cancel the announcer's wrap-up). A pre-race line carries its own pass.
-      if (!p.preRace && G.state !== "race" && G.state !== "count") { current = null; return false; }
+      if (!p.preRace && G.state !== "race" && G.state !== "count") {
+        current = null;
+        stopSquelch(true);   // results sheet stays silent — a lead that outlived the flag
+        return false;
+      }
       const u = new Utter(p.text);
       u.voice = voiceFor(p.speaker, true);   // speakPlanned only ever carries a card line (say())
       u.rate = p.rate; u.pitch = p.pitch; u.volume = p.volume;
@@ -510,7 +696,10 @@ var RadioVoice = (function () {
       // The hard stop, armed from the card's ACTUAL remaining life rather than a
       // second copy of showAnnounce's expression. A duplicated constant is how
       // "spoken after it left the screen" gets reintroduced by a later edit.
-      if (current === u) deadline = setTimeout(stop, p.budgetMs);
+      if (current === u) {
+        armSquelch(Object.assign({}, p, { leadMs: 0 }));   // already waited the cue
+        deadline = setTimeout(stop, p.budgetMs);
+      }
       return true;
     }
     /* THE ONE GESTURE iOS GIVES US — DO NOT THROW IT AWAY.
@@ -536,6 +725,8 @@ var RadioVoice = (function () {
       if (!api) return;
       try { const u = new Utter(" "); u.volume = 0.01; synth.speak(u); primed = true; }
       catch (e) { /* a browser that refuses the priming utterance simply does not get primed */ }
+      const ctx = audioCtx();
+      if (ctx && ctx.state === "suspended" && ctx.resume) { try { ctx.resume(); } catch (e) { /* gesture spent */ } }
     }
     if (api && !primed && typeof document !== "undefined" && document.addEventListener) {
       const EVTS = ["pointerdown", "pointerup", "touchend", "keydown", "click"];
@@ -699,11 +890,17 @@ var RadioVoice = (function () {
       available: () => true,
       debug: () => ({ available: true, enabled, voices: voicesFor(false).length, voicesAny: voicesFor(true).length, last, asked, started,
         pack: pack ? Object.assign({ on: packOn }, pack.debug()) : null,
-        synth: { calls: synthStat.calls, maxMs: +synthStat.maxMs.toFixed(1), slow: synthStat.slow } }),
+        synth: { calls: synthStat.calls, maxMs: +synthStat.maxMs.toFixed(1), slow: synthStat.slow },
+        squelch: lastSquelch && { play: lastSquelch.play, reason: lastSquelch.reason, openMs: lastSquelch.openMs,
+          closeMs: lastSquelch.closeMs, atOpen: lastSquelch.atOpen, atClose: lastSquelch.atClose,
+          band: lastSquelch.band, seed: lastSquelch.seed, lite: lastSquelch.lite,
+          events: lastSquelch.events, fired: lastSquelch.fired, cut: lastSquelch.cut,
+          pool: squelchPool.length } }),
     };
   }
 
   return { create, inert, plan, speakable, PACK_VOICE, estimate, toneFor, SPEAKERS, TONE, SAMPLE, REMOTE_OK,
-           PITCH_MIN, PITCH_MAX, RATE_MIN, RATE_MAX, LEAD_RESERVE_S, WORDS_PER_S };
+           PITCH_MIN, PITCH_MAX, RATE_MIN, RATE_MAX, LEAD_RESERVE_S, WORDS_PER_S,
+           radioBand, squelchPlan, hashSeed, RADIO_LO, RADIO_HI, SQUELCH_MS_MIN, SQUELCH_MS_MAX };
 })();
 Object.freeze(RadioVoice);
