@@ -14,7 +14,7 @@ const rules = cssRules(css);
 const COL = "#camtune-inner[data-density=\"compact\"][data-rail=\"off\"]";
 const PREV = "#camtune-inner[data-rail=\"off\"] #ct-previews";
 const PREV_BTN = "#camtune-inner[data-rail=\"off\"] #ct-previews > button";
-const FOOT_BTN = "#camtune-inner[data-density=\"compact\"][data-rail=\"off\"] > .sheet-foot button, #camtune-inner[data-rail=\"off\"] > .sheet-foot button";
+const FOOT_BTN = "#camtune-inner[data-rail=\"off\"] > .sheet-foot button";
 const CLOSE = "#camtune-inner[data-rail=\"off\"] > .sheet-foot #ct-close";
 
 test("compact rail-off camera sheet is one minmax column (no AUTO preview column)", () => {
@@ -35,6 +35,11 @@ test("rail-off preview chips and #ct-close keep the --tap-paint floor", () => {
   assert.equal(decl(rules, CLOSE, "min-height"), "var(--tap-paint)");
   assert.equal(decl(rules, CLOSE, "width"), "auto");
   assert.equal(decl(rules, CLOSE, "min-width"), "0");
+});
+
+test("camera preset chips and copy-all keep the --tap-paint floor", () => {
+  assert.equal(decl(rules, "#camtune-inner [id^=\"ct-preset-\"]", "min-width"), "var(--tap-paint)");
+  assert.equal(decl(rules, "#camtune-inner #ct-copy-all-btn", "min-height"), "var(--tap-paint)");
 });
 
 test("r7 overrides stay camera-only (no lighting-inner retarget in the block)", () => {

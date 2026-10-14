@@ -1311,12 +1311,17 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-#camtune-inner[data-density="compact"][data-rail="off"] > .sheet-foot button,
-#camtune-inner[data-rail="off"] > .sheet-foot button {
+#camtune-inner[data-density="compact"][data-rail="off"] > .sheet-foot button {
   min-width: 0;
   width: auto;
   max-width: 100%;
   flex: 1 1 0;
+  min-height: var(--tap-paint);
+}
+#camtune-inner[data-rail="off"] > .sheet-foot button {
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
   min-height: var(--tap-paint);
 }
 #camtune-inner[data-rail="off"] > .sheet-foot #ct-close {
@@ -1328,6 +1333,12 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
 #camtune-inner[data-rail="off"] #ct-modes,
 #camtune-inner[data-rail="off"] #ct-rows {
   min-width: 0;
+}
+#camtune-inner [id^="ct-preset-"] {
+  min-width: var(--tap-paint);
+}
+#camtune-inner #ct-copy-all-btn {
+  min-height: var(--tap-paint);
 }
 
 } /* @layer components */
