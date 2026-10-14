@@ -36,7 +36,20 @@ const PINNED = ["/opt/pw-browsers/chromium", process.env.APEX_CHROMIUM].filter(B
   try { return existsSync(p); } catch (_) { return false; }
 }) || null;
 
-const SOFTWARE_RE = /swiftshader|llvmpipe|lavapipe|softpipe|warp|basic render|gdi generic|software/i;
+// --help answers before any browser launches.
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log(`gpu-census — is there a real GPU behind navigator.gpu on this machine?
+
+  node tools/gfx/gpu-census.mjs [--json out.json]
+
+  Launches full Chromium once per flag set (${["stock", "unsafe", "vulkan", "noBlocklist"].join(", ")}) and
+  reports the adapter identity, a software-rasteriser verdict per set, and
+  anyHardware (true / false / null = nothing launched, exit 1).
+  The game itself is measured by tools/gfx/gpu-game-check.mjs (CI: gpu-census.yml).`);
+  process.exit(0);
+}
+
+const SOFTWARE_RE =/swiftshader|llvmpipe|lavapipe|softpipe|warp|basic render|gdi generic|software/i;
 
 // navigator.gpu is absent outside a secure context, and about:blank is NOT one
 // — http://127.0.0.1 is. A four-line server is cheaper than any fixture.

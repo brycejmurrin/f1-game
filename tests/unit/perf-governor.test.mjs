@@ -180,6 +180,19 @@ test("an exhausted feature probe rolls back the entire trial on a capped clock",
   assert.equal(gov.autoShed(), 0);
 });
 
+test("a futility verdict from the previous race does not carry into the next (sentinelArm)", () => {
+  // A dry race on a capped clock latches _tierFutile; the next race may be WET, where tier 2 now
+  // keeps the wet-road SSR march (game.js _ssrTier), so a carried latch would block that shed.
+  const gov = makeGovAtFloor();
+  gov.setAutoRes(false);
+  feed(gov, () => 1000 / 30, 600);
+  assert.equal(gov.tierFutile(), true, "precondition: the capped clock latched the ladder");
+  gov.sentinelArm(true);
+  assert.equal(gov.tierFutile(), false, "race start clears the tier verdict");
+  assert.equal(gov.scaleFutile(), false, "race start clears the scale verdict");
+  gov.sentinelArm(false);
+});
+
 test("the two futility latches are inspectable, and start clear", () => {
   // They can each park a lever for the rest of the session, and until
   // 2026-09-10 neither had an accessor — so answering "why did this device shed

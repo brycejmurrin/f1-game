@@ -1,6 +1,6 @@
 ---
 name: css-play
-description: "Use when iterating on one menu/HUD stylesheet or screen (a token or class change, before/after screenshots, no full layout audit), and when RESTRUCTURING screens, menus, dialogs, the DOM or the CSS class/token system: collapsing duplicate component families, adding or removing a screen layer, splitting index.html, height-responsive layout, or judging a CSS methodology (BEM/CUBE/ITCSS/utilities). A cramped or clipped screen is ui-menu-a11y; auditing every screen is survey-ui-matrix; dead selectors are slim-bloat."
+description: "Use when iterating on one menu/HUD stylesheet or screen (a token or class change, before/after screenshots, no full layout audit), and when RESTRUCTURING screens, menus, dialogs, the DOM or the CSS class/token system: collapsing duplicate component families, adding or removing a screen layer, splitting index.html, height-responsive layout, or judging a CSS methodology (BEM/CUBE/ITCSS/utilities). Cramped screen: ui-menu-a11y; every screen: survey-ui-matrix; dead selectors: slim-bloat."
 ---
 
 # Playing with menu / HUD CSS
@@ -71,10 +71,7 @@ included; `css/menus.css` is the title chrome, not the pause sheet.
    npm run test:baseline -- --update-snapshots              # re-bless all six; only the moved one changes
    ```
 
-   Incident 2026-09-16: an 8px -> 9px garage tab label shipped without the
-   re-bless. `menu-baseline` went red on the deploy branch, `needs: ci` never
-   passed, and FIVE consecutive Pages runs (#2351-#2355) published nothing
-   until another session blessed the golden.
+   Skipping the re-bless has left `menu-baseline` red on the deploy branch and blocked Pages.
 
 Live MCP session (already on localhost): `browser_resize` →
 `browser_evaluate` the `collectDomInfo` body from `css-play.mjs` →

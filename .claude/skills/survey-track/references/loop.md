@@ -3,9 +3,8 @@
 Load this when reading a probe table, editing terrain `def` flags, or deciding
 whether a visual baseline should move.
 
-This reference describes the combined parent/worker loop. All browser-backed
-commands below belong to the parent, never the fork. The track-surveyor reads
-the supplied artifacts, edits only its circuit pair and runs offline audits.
+Combined parent/worker loop. Steps marked PARENT use a browser: the fork
+skips them (it reads the artifacts they produce). Fork steps: 1, 3, 4.
 
 ## Contents
 - The loop
@@ -19,7 +18,7 @@ the supplied artifacts, edits only its circuit pair and runs offline audits.
 `docs/tracks/<id>.md`. List the 3–5 highest-leverage fixes from the landmark
 table and palette.
 
-### 2 · Parent survey — one command
+### 2 · PARENT survey — one command
 
 ```sh
 node tools/track/survey-track.mjs <id> before
@@ -39,11 +38,12 @@ probe, auto-flagged:
 - `terrainY` sliding steadily more negative with distance → the ribbon is
   **sagging** (right for a hill, wrong for a flat island level with water).
 
-**Artefacts (track-surveyor, 2026-09-22):** `⚠ STEP` rows and `agent.mjs survey` `groundCliffs` sample at
-lat 0, where the raycast falls through the ribbon (starts ~10 m out) to `floorY`, so a flat circuit
-flags a cliff at every frac (estoril: 4 STEPs + 17 cliffs, all false). A blank first capture is the
-pre-present frame. Real = a `--` sandwiched at lat 4-24 or a >1 m step in a lateral `apex-eval.mjs <id>
-"a.groundY(frac,lat)"` sweep. Record artefact-vs-real per flag in the hand-back.
+**Artefacts:** `⚠ STEP` rows and `agent.mjs survey` `groundCliffs` sample at
+lat 0, where the raycast falls through the ribbon (starts ~10 m out) to
+`floorY`, so a flat circuit flags a cliff at every frac (estoril: all false).
+A blank first capture is the pre-present frame. Real = a `--` sandwiched at
+lat 4-24 or a >1 m step in a lateral `apex-eval.mjs <id> "a.groundY(frac,lat)"`
+sweep. Record artefact-vs-real per flag in the hand-back.
 
 Add fractions or a label: `survey-track.mjs <id> after 0.1,0.55,0.78`.
 `--oblique` adds a bounds-fitted topdown plus N/E/S/W high obliques
@@ -72,9 +72,10 @@ terrain-over-road class.
 node tools/track/verify-track.cjs <id>
 ```
 
-A `THROW` here strands the game on the menu. Fleet: `verify-track.cjs --all`.
+A `THROW` here strands the game on the menu. One call for every offline check:
+`node tools/track/audit-circuit.cjs <id>`. Fleet: `verify-track.cjs --all`.
 
-### 5 · Parent re-survey
+### 5 · PARENT re-survey
 
 ```sh
 node tools/track/survey-track.mjs <id> after
@@ -83,7 +84,7 @@ node tools/track/survey-track.mjs <id> after
 Compare matching `before-*.png` vs `after-*.png`; attribute each flag to a
 confirmed defect, intended slope or probe artifact rather than forcing zero flags.
 
-### 6 · Parent test & ship
+### 6 · PARENT test & ship
 
 - Geometry: `node tools/track/verify-track.cjs <id>` (default). Optional fleet: `node tools/ci/test-bg.mjs circuits`.
 - Pixel-diff suite is PARKED under `tests/manual/tracks-visual.spec.js` (no

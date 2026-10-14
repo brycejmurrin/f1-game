@@ -140,10 +140,9 @@ document.body.classList.remove('in-race');
 ```
 
 **The screen-root inventory DRIFTS — enumerate it, don't trust this list.**
-The authoritative enumeration is `SCREENS` in `tools/ui/menu-screens.mjs` (49
-at 2026-10-05 — `node tools/ui/layout-audit.mjs --list` prints them and
+The authoritative enumeration is `SCREENS` in `tools/ui/menu-screens.mjs` (`node tools/ui/layout-audit.mjs --list` prints them and
 starts no browser; `OVERLAY_IDS` there is the reset list above); `index.html`
-currently holds 19 `<dialog>` roots (re-run `grep -c '^<dialog' index.html`). Sweeping
+holds the `<dialog>` roots (`grep -c '^<dialog' index.html`). Sweeping
 the seven or eight you can reach from the title in two clicks is the easy half
 and is NOT the survey — the defects this session found were on the shapes and
 screens nobody had opened.

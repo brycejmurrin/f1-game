@@ -473,7 +473,9 @@ function sentinelArm(on) {
             // equally invalid against the new race's reset averages.
             _govT = 0; _govCool = 0; _govCoolMs = 0; _pendingVerify = null;
             _sinceUp = -1; _scaleCap = Infinity; _capProbeMs = CLIMB_SURVIVE_MS;
-            _scaleMoves = 0; _degradeArm = 0; } else _live = false;
+            _scaleMoves = 0; _degradeArm = 0;
+            // A futile ladder measured in a DRY race must not block the next (wet) race's shed.
+            _tierFutile = false; _scaleFutile = false; } else _live = false;
   if (!_gfx || !_gfx.isMobile) return;
   if (on) {
     _raceTicked = false;
