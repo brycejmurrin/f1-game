@@ -3239,7 +3239,8 @@ const G = {
   get raceLineAssist() { return raceLineAssist; }, set raceLineAssist(v) { raceLineAssist = v; },
   get _lastFloodEmit() { return _lastFloodEmit; }, set _lastFloodEmit(v) { _lastFloodEmit = v; },
   get _studioRig() { return _studioRig; }, set _studioRig(v) { _studioRig = v; },
-  get _s8Stamp() { return _s8Stamp; }, set _s8Stamp(v) { _s8Stamp = v | 0; },   // PERF-HUNT-2 S8 once-per-frame
+  get _s8Stamp() { return _s8Stamp; },
+  set _s8Stamp(v) { _s8Stamp = v == null ? null : (v | 0); },   // PERF-HUNT-2 S8 once-per-frame
   get _testInput() { return _testInput; }, set _testInput(v) { _testInput = v; },
   get builtTrackNight() { return builtTrackNight; }, set builtTrackNight(v) { builtTrackNight = v; },
   get camEye() { return camEye; }, set camEye(v) { camEye = v; },
@@ -4424,7 +4425,9 @@ const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0,
 let _audioParamStep = true;   // tickBody clears it on all but a frame's last physics step
 const _engAcc = { dt: 0 };   // the local car's sim time since the engineer last listened (S8: once per frame)
 const _s8Pres = { dt: 0 };   // caution + coach + race-radio: summed sim dt since last frame flush (PERF-HUNT-2 S8)
-let _s8Stamp = 0;            // bumped each flush; modules no-op a second update under the same stamp
+// null until the first frame flush — 0 is a real stamp value, and `stamp != null`
+// would latch every direct coach.update() harness call (mechanics-integration-vm).
+let _s8Stamp = null;
 function update(dt) {
   // No world: a stepped/worker race switch dropped it (dropTrackWorld) and is still building.
   // tickBody gates on it too; this covers __apex.step() (bug hunt 3 K1/X2).
@@ -4611,7 +4614,7 @@ function update(dt) {
   // same frame is a no-op. carSfx stays per-step (edge detectors).
   _s8Pres.dt += dt;
   if (_audioParamStep) {
-    _s8Stamp++;
+    _s8Stamp = (_s8Stamp == null ? 0 : _s8Stamp) + 1;
     updateCaution(_s8Pres.dt); coach.update(_s8Pres.dt); raceRadio.update(_s8Pres.dt);
     _s8Pres.dt = 0;
   }

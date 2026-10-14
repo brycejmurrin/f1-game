@@ -27,8 +27,10 @@ test("game.js flushes caution/coach/radio once per frame on _audioParamStep (S8)
   assert.match(src, /_s8Pres\.dt \+= dt/,
     "every physics sub-step must accumulate presentation dt");
   assert.match(src,
-    /if \(_audioParamStep\) \{\s*\n\s*_s8Stamp\+\+;\s*\n\s*updateCaution\(_s8Pres\.dt\); coach\.update\(_s8Pres\.dt\); raceRadio\.update\(_s8Pres\.dt\);\s*\n\s*_s8Pres\.dt = 0;/,
+    /if \(_audioParamStep\) \{\s*\n\s*_s8Stamp = \(_s8Stamp == null \? 0 : _s8Stamp\) \+ 1;\s*\n\s*updateCaution\(_s8Pres\.dt\); coach\.update\(_s8Pres\.dt\); raceRadio\.update\(_s8Pres\.dt\);\s*\n\s*_s8Pres\.dt = 0;/,
     "flush caution+coach+radio only on the frame's last step with the summed dt");
+  assert.match(src, /let _s8Stamp = null/,
+    "stamp stays null until the first flush so harness coach.update loops are not latched at 0");
   assert.match(src, /get _s8Stamp\(\)/,
     "G._s8Stamp accessor publishes the stamp to the three modules");
   assert.match(src, /if \(soundOn && player\) carSfx\.update\(player\);/,
