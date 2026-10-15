@@ -3,11 +3,25 @@ const WeatherArc = (function () {
   "use strict";
 
   // The ladder an arc walks STAGE BY STAGE. Lateral conditions (overcast, fog)
-  // are not on it, so an arc into or out of one jumps direct.
-  const LADDER = ["dry", "wet", "rain"];
-  const VALID = ["dry", "wet", "rain", "overcast", "fog"];
+  // are not on it, so an arc into or out of one jumps direct. STORM (js/race/
+  // storm.js) sits above rain: as wet a road, but heavier rain and no visibility.
+  const LADDER = ["dry", "wet", "rain", "storm"];
+  const VALID = ["dry", "wet", "rain", "overcast", "fog", "storm"];
   // What a CHANGEABLE race may be walked TO — the ladder plus the lateral pair.
-  const TARGETS = ["dry", "overcast", "wet", "rain", "fog"];
+  // The seed draws from the first five (the pre-storm list, so every existing
+  // seed keeps its target); a drawn RAIN then escalates to STORM 1 in 4 —
+  // never in a friend room, whose lobby does not know the word.
+  const TARGETS = ["dry", "overcast", "wet", "rain", "fog", "storm"];
+  const DRAWN = TARGETS.slice(0, 5);
+  const STORM_ODDS = 0.25;
+  const asRain = (w) => (w === "storm" ? "rain" : w);   // grip/tread: a storm is full rain (Storm.asRain)
+  // ATMOSPHERIC INTENSITY, apart from road wetness: rain and storm are both a
+  // wetness of 1, so the stage between them is read off this linear ramp
+  // instead — STORM while the arc's intensity is past STORM_AT (and the road
+  // is full-wet). Not lagged: a cloudburst arrives with the cloud.
+  const INTENSITY = { wet: 0.5, rain: 1, storm: 1.5 };
+  const intOf = (w) => INTENSITY[w] || 0;
+  const STORM_AT = 1.25;
 
   function arcSeq(from, to) {
     const a = LADDER.indexOf(from), b = LADDER.indexOf(to);
@@ -46,7 +60,9 @@ const WeatherArc = (function () {
     // layer, audio, lighting, AI grip, wetness ramp target) follows no matter who
     // initiated the change.
     function setWeatherLive(w, blend) {   // blend: true = cross-fade the lighting (the arc); omitted = cut
-      G.raceWeather = (w === "wet" || w === "rain" || w === "overcast" || w === "fog") ? w : "dry";
+      G.raceWeather = (VALID.indexOf(w) >= 0) ? w : "dry";
+      // Storm rain is heavier: set the streak scale BEFORE the reseed below.
+      if (typeof Particles !== "undefined" && Particles.rainIntensity && typeof Storm !== "undefined") Particles.rainIntensity(Storm.rainK(G.raceWeather));
       if (G.isWetRoad()) {   // rain = storm, wet = drizzle tier (see applyRaceSettings)
         G.initRainDrops();
         Particles.rainShow(true);
@@ -125,11 +141,13 @@ const WeatherArc = (function () {
       // `base` is the weather the armed race STARTED on: raceWeather itself walks
       // away from it during the arc.
       const from = base != null ? base : G.raceWeather;
-      const key = [seed, round, from, capLaps(), G.track && G.track.total].join("|");
+      const room = !!(G.netRoom || (G.netPlay && G.netPlay.active && G.netPlay.active()));
+      const key = [seed, round, from, capLaps(), G.track && G.track.total, room].join("|");
       if (memo && memo.key === key) return { to: memo.plan.to, dur: memo.plan.dur };
       const r = (k) => Career.hash(seed, round, "wx", k);
-      const opts = TARGETS.filter((w) => w !== from);
-      const to = opts[Math.floor(r("to") * opts.length)] || "wet";
+      const opts = DRAWN.filter((w) => w !== from);
+      let to = opts[Math.floor(r("to") * opts.length)] || "wet";
+      if (to === "rain" && !room && from !== "storm" && r("storm") < STORM_ODDS) to = "storm";
       const dur = capPlanDur(120 + Math.floor(r("dur") * 300));
       memo = { key, plan: { to, dur } };
       return { to, dur };
@@ -198,7 +216,7 @@ const WeatherArc = (function () {
     // TyreModel's own (wetValue via wetness(w, null); treadFor — 0.25 inter,
     // 0.72 full wet), with the same numbers inline for a VM with no tyre model.
     const hasTM = () => typeof TyreModel !== "undefined" && !!TyreModel && !!TyreModel.treadFor;
-    const wetOf = (w) => hasTM() ? TyreModel.wetness(w, null) : (w === "rain" ? 1 : w === "wet" ? 0.5 : 0);
+    const wetOf = (w) => { w = asRain(w); return hasTM() ? TyreModel.wetness(w, null) : (w === "rain" ? 1 : w === "wet" ? 0.5 : 0); };
     const treadOf = (w) => hasTM() ? TyreModel.treadFor(null, w) : (w >= 0.72 ? 2 : w >= 0.25 ? 1 : 0);
     // THE SHARED RACE CLOCK. game.js snaps raceT to the host's wall clock in a
     // friend race; summed sim dt drops time to the 5-step cap and background
@@ -239,7 +257,10 @@ const WeatherArc = (function () {
     // An arc assigned from outside (G.weatherArc = a restored tuner snapshot).
     function adopt(a) {
       a.w0 = wetOf(a.from); a.seq = a.seq || arcSeq(a.from, a.to); a.wetIn = wetInOf(a);
+      if (typeof a.i0 !== "number") a.i0 = intOf(a.from);
     }
+    /** The arc's atmospheric intensity at progress f (0..1). */
+    const intAt = (a, f) => { const i0 = typeof a.i0 === "number" ? a.i0 : intOf(a.from); return i0 + (intOf(a.to) - i0) * f; };
     /** The stage the sky shows at road wetness `w`. Between two dry-side
      *  conditions (overcast ↔ fog) wetness never moves, so that walk keeps
      *  flipping its stage list by time. */
@@ -247,7 +268,7 @@ const WeatherArc = (function () {
       const w0 = wetOf(a.from), w1 = wetOf(a.to);
       if (w0 === 0 && w1 === 0 && !(a.w0 > 0)) return a.seq[Math.min(a.seq.length - 1, Math.floor(f * a.seq.length))];
       const tread = treadOf(w);
-      if (tread >= 2) return "rain";
+      if (tread >= 2) return intAt(a, f) >= STORM_AT ? "storm" : "rain";
       if (tread >= 1) return "wet";
       return w1 === 0 ? a.to : w0 === 0 ? a.from : "dry";
     }
@@ -261,12 +282,13 @@ const WeatherArc = (function () {
       if (VALID.indexOf(from) < 0 || VALID.indexOf(to) < 0) return null;
       const live = !!arc;
       const w0 = live ? wetness() : wetOf(from);
-      if (from === to && (!live || Math.abs(w0 - wetOf(to)) < SETTLE)) {
+      const i0 = live ? intAt(arc, Math.min(1, arc.t / arc.dur)) : intOf(from);
+      if (from === to && (!live || (Math.abs(w0 - wetOf(to)) < SETTLE && Math.abs(i0 - intOf(to)) < SETTLE))) {
         if (live) { arc = null; if (G.raceWeather !== to) setWeatherLive(to, true); }
         return null;
       }
       const t0 = (typeof G.raceT === "number" && G.state !== "race") ? 0 : now();
-      arc = { from, to, t: 0, dur: Math.max(1, dur || 60), seq: arcSeq(from, to), w0, t0, _tt: 0 };
+      arc = { from, to, t: 0, dur: Math.max(1, dur || 60), seq: arcSeq(from, to), w0, i0, t0, _tt: 0 };
       arc.wetIn = wetInOf(arc);
       if (!live && G.raceWeather !== from) setWeatherLive(from);
       return arc;
@@ -334,6 +356,6 @@ const WeatherArc = (function () {
       get plan() { return plan; }, set plan(v) { plan = v; },
     };
   }
-  return { create, arcSeq };
+  return { create, arcSeq, LADDER, VALID, TARGETS };
 })();
 Object.freeze(WeatherArc);

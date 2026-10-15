@@ -179,6 +179,26 @@ const WallClamp = (function () {
               Input.rumble(0.35 + incidence * 0.5, 100, "handles");
             }
           }
+        } else if (!c.isPlayer && soundOn && typeof GameAudio !== "undefined" && GameAudio.fieldContact) {
+          // Radio r9: AI / rival wall bump + scrape (positional). Player path
+          // above stays byte-identical. Cooldown lives in GameAudio — do not
+          // touch c.collideT (AI patience / contact give reads it).
+          // Grind gate uses incidence (not a second WALL_SCRAPE_SPEED speed
+          // literal — vstd pins unique approved sites).
+          const firstStrike = !c.wasOnWall && noseIn && incidence > 0.12;
+          const grindScrape = c.wasOnWall && noseIn && incidence > 0.08;
+          if (firstStrike || grindScrape) {
+            const fxInc = firstStrike ? incidence : Math.max(incidence, 0.2);
+            const kind = firstStrike && incidence >= 0.45 ? "bump" : "scrape";
+            let wx = c.px, wz = c.pz;
+            if ((wx == null || wz == null) && worldFromTrack) {
+              const w = worldFromTrack(c.s, c.x, smp);
+              if (w) { wx = w.x; wz = w.z; }
+            }
+            const key = c._wireId != null ? (c._wireId | 0) + 10000
+              : ((((c.team && c.team.id) || 0) * 4 + (c.seat || 0)) | 0) + 10000;
+            GameAudio.fieldContact(kind, fxInc, wx, wz, key);
+          }
         }
         // Steering held INTO the barrier while pinned = the wall denies that turn,
         // which scrubs speed — you can't ride the wall for free. `steer` is the
