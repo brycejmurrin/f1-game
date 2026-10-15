@@ -21,6 +21,12 @@
  * 1.7 % of Vegas, 5.1 % of Singapore and 15.6 % of Mexico's lap (track gallery
  * B/D, 2026-10-15; 44 of 51 circuits). The road corridor is still exempt.
  *
+ * FREE-CAM CLEAR (capture tooling, #2253). __apex.cinematic()/orbit() wrote
+ * the debug camera with no clearance: the galleries shot Vegas and Singapore
+ * from inside tower blocks, the sightline to the subject blocked on 17/50 and
+ * 29/50 lap samples. opts.clear swings the eye round until it is out of every
+ * solid and the sightline keeps T >= 0.5; without it the hooks are unchanged.
+ *
  * Run: node --test tests/unit/cam-avoid-vm.test.mjs
  */
 import { test, before, after } from "node:test";
@@ -103,5 +109,23 @@ for (const id of PITWALL_TRACKS) {
       if (hit && !sb.CamAvoid.roadClear(T, eye, 0)) bad.push(`s=${s} ${hit.kind}`);
     }
     assert.deepEqual(bad.slice(0, 5), [], `${id} pitwall eye inside ${bad.length} props`);
+  });
+}
+
+for (const id of ["vegas", "singapore"]) {
+  test(`${id} __apex.cinematic({clear}): every lap sample has a clear eye and sightline`, () => {
+    const g = games[id], T = g.G.track, sb = g.sandbox, a = g.apex;
+    const vis = (r) => (sb.FlybySeq.insideProp(T, r.eye, 1) ? 0 : sb.FlybySight.transmit(T, r.eye, r.target).T);
+    let before = 0;
+    const after = [];
+    for (let i = 0; i < 50; i++) {
+      const f = i / 50, r0 = a.cinematic(f);
+      assert.equal(r0.clear, undefined, "without opts.clear the hook is unchanged");
+      if (vis(r0) < 0.5) before++;
+      const r1 = a.cinematic(f, { clear: true });
+      if (r1.clear.blocked || vis(r1) < 0.5) after.push(f);
+    }
+    assert.ok(before >= 10, `${id}: the unclear cinematic is blocked on ${before}/50 (the defect this guards)`);
+    assert.deepEqual(after, [], `${id}: clear left ${after.length} blocked`);
   });
 }

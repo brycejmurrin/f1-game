@@ -128,6 +128,28 @@ const { TUNE_DEFS, LT } = LightTune;
 // are the layer an LLM agent reads. See docs/AGENT-WORLD-API.md.
 const agentView = AgentView.create(G);
 
+// opts.clear on the free-cam hooks (orbit / cinematic / roadside / view s+side):
+// CAPTURE TOOLING only (#2253). They wrote G.dbgCam with no clearance, so the
+// track galleries shot from inside towers and through hedges. Tries place(i)
+// until the eye is outside every solid prop (FlybySeq) and the sightline to the
+// target keeps T >= 0.5 (FlybySight.transmit; a canopy is 0.8 opaque), else
+// keeps the least-blocked try and says so. The flyby planner's world, reused.
+function clearShot(n, place) {
+  if (typeof FlybySeq === "undefined" || typeof FlybySight === "undefined") return place(0) ? { T: null, tries: 1 } : null;
+  let best = 0, bestT = -1;
+  for (let i = 0; i < n; i++) {
+    const r = place(i);
+    if (!r) return null;
+    const T = FlybySeq.insideProp(G.track, r.eye, 1) ? 0 : FlybySight.transmit(G.track, r.eye, r.target).T;
+    if (T >= 0.5) return { T: +T.toFixed(2), tries: i + 1 };
+    if (T > bestT) { bestT = T; best = i; }
+  }
+  place(best);
+  return { T: +bestT.toFixed(2), tries: n, blocked: true };
+}
+const CLEAR_AZ = [0, 20, -20, 40, -40, 60, -60, 90, -90];             // orbit: swing round the subject
+const CLEAR_SIDE = [[1, 1], [1, 0.7], [1, 0.45], [-1, 1], [-1, 0.7], [-1, 0.45]];   // roadside/view: step in, then the other side
+
 let _netPeer = null;
 let _lobbyPeerTimer = null;   // keeps the fake lobby peer pumping (see lobbyFake)
 // The far end of a faked lobby connection — see lobbyFake().
@@ -1019,6 +1041,13 @@ const api = {
       return G.dbgCam;
     }
     if (opts.s != null && opts.side != null) {
+      if (opts.clear) {
+        let res;
+        const c = clearShot(CLEAR_SIDE.length, (i) => (res = this.view(Object.assign({}, opts, { clear: false,
+          side: (opts.side === "L" ? -1 : opts.side === "R" ? 1 : (opts.side || 1)) * CLEAR_SIDE[i][0],
+          dist: (opts.dist != null ? opts.dist : 14) * CLEAR_SIDE[i][1] }))));
+        return res && Object.assign(res, { clear: c });
+      }
       Tracks.sample(G.track, opts.s * G.track.total, smp);
       const side = opts.side === "L" ? -1 : opts.side === "R" ? 1 : (opts.side || 1);
       const dist = opts.dist != null ? opts.dist : 14, height = opts.height != null ? opts.height : 9;
@@ -1073,6 +1102,11 @@ const api = {
   },
   orbit(f, az = 35, el = 18, dist = 30, h = 1.5, opts = {}) {
     if (!G.track) return false;
+    if (opts.clear) {
+      let res;
+      const c = clearShot(CLEAR_AZ.length, (i) => (res = this.orbit(f, az + CLEAR_AZ[i], el, dist, h, Object.assign({}, opts, { clear: false }))));
+      return res && Object.assign(res, { clear: c });
+    }
     Tracks.sample(G.track, ((f % 1) + 1) % 1 * G.track.total, smp);
     const cx = smp.p[0], cy = smp.p[1] + h, cz = smp.p[2];
     const a = az * Math.PI / 180, e = Math.min(85, Math.max(-30, el)) * Math.PI / 180;
@@ -1113,7 +1147,7 @@ const api = {
     const el   = opts.el   != null ? opts.el   : 18;
     const h    = opts.h    != null ? opts.h    : 1.5;
     const fov  = opts.fov  != null ? opts.fov  : 52;
-    const res  = this.orbit(fr, az, el, dist, h, { fov, far: opts.far, fog: opts.fog });
+    const res  = this.orbit(fr, az, el, dist, h, { fov, far: opts.far, fog: opts.fog, clear: opts.clear });
     return res ? Object.assign(res, { az: +az.toFixed(1), k: +k.toFixed(5) }) : false;
   },
 
@@ -1188,6 +1222,11 @@ const api = {
 
   roadside(f, side = 1, dist = 10, h = 2.5, opts = {}) {
     if (!G.track) return false;
+    if (opts.clear) {
+      let res;
+      const c = clearShot(CLEAR_SIDE.length, (i) => (res = this.roadside(f, side * CLEAR_SIDE[i][0], dist * CLEAR_SIDE[i][1], h, Object.assign({}, opts, { clear: false }))));
+      return res && Object.assign(res, { clear: c });
+    }
     const fr = ((f % 1) + 1) % 1;
     Tracks.sample(G.track, fr * G.track.total, smp);
     const p = smp.p, t = smp.t, r = smp.r;
