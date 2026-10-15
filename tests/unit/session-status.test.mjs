@@ -119,3 +119,9 @@ test("a detached HEAD is told to name a branch, never `git push -u origin HEAD`"
   assert.doesNotMatch(md, /git push -u origin HEAD/);
   assert.match(toMarkdown({ ...base, branch: "claude/x" }), /git push -u origin claude\/x/);
 });
+
+test("#2184: ciSummary ignores a label-noise run", () => {
+  const real = { id: 1, name: "CI", created_at: "2026-10-15T00:00:00Z", status: "completed", conclusion: "failure", display_title: "Fix" };
+  const noise = { id: 2, name: "CI", created_at: "2026-10-15T00:05:00Z", status: "completed", conclusion: "success", display_title: "CI ignored: label bug" };
+  assert.equal(ciSummary([real, noise]), "failure");
+});

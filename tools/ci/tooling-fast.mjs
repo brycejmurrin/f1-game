@@ -477,6 +477,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/gfx-debug-overlay.test.mjs",
   "tests/unit/ghost-share.test.mjs",
   "tests/unit/ghost.test.mjs",
+  // #1807: a git hook's GIT_DIR / GIT_INDEX_FILE must not reach fixture git (a decoy
+  // repo stays untouched; every fixture-repo test imports the scrub first). ~2.5 s.
+  "tests/unit/git-fixture-env.test.mjs",
   "tests/unit/global-registry.test.mjs",
   // Round-2: GLX createTexture resets UNPACK flags and frees the texture when texImage2D throws (mock).
   "tests/unit/glx-failure-paths.test.mjs",
@@ -670,6 +673,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pause-hud-layout.test.mjs",
   "tests/unit/pause-key-tools.test.mjs",
   "tests/unit/pause-opts.test.mjs",
+  "tests/unit/perf-frametime.test.mjs",
   "tests/unit/perf-governor.test.mjs",
   "tests/unit/perf-race-entry.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
