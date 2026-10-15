@@ -288,6 +288,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The STANDINGS tab: API row order, gap to P1, the head-to-head bar and the
   // empty state, on mini-dom with the real Dom.el. ~0.1 s.
   "tests/unit/data-standings.test.mjs",
+  "tests/unit/day-sky-palette-storm-deck.test.mjs",
   "tests/unit/debris-step-skip.test.mjs",
   "tests/unit/deep-link.test.mjs",
   // ...and a third of the same family: two widgets keyed on ONE sign convention
@@ -468,6 +469,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-sign-occlusion.test.mjs",
   "tests/unit/gen-arch-table.test.mjs",
   "tests/unit/generated-docs.test.mjs",
+  "tests/unit/geom-mountain-lowmat.test.mjs",
   "tests/unit/geometry-paths-baseline.test.mjs",
   "tests/unit/gfx-backend-canary.test.mjs",
   "tests/unit/gfx-debug-overlay.test.mjs",
@@ -579,6 +581,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a NaN is not an error but a silently dropped declaration.
   "tests/unit/loading-card.test.mjs",
   "tests/unit/loading-screen-pack-gate.test.mjs",
+  // The garage -> flyby hand-off sweep: fires once, after the garage only, in the team colour.
+  "tests/unit/loading-wipe.test.mjs",
   // answerInFlight serializes acceptAnswer so a second SDP does not start a parallel negotiation (and is not blacklisted — the guest retries).
   "tests/unit/lobby-answer-flight.test.mjs",
   // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
@@ -688,6 +692,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a driven pit entry from a car that ran wide there. ~0.2 s.
   "tests/unit/pit-lane.test.mjs",
   "tests/unit/platform-session-install.test.mjs",
+  // Player collision stereo side: default centred blip path; optional pan via contact pool.
+  "tests/unit/player-collision-side.test.mjs",
   // PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.
   "tests/unit/player-forces.test.mjs",
   // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
@@ -726,6 +732,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/race-step-snap.test.mjs",
   // Race-radio card life vs RadioVoice speech budget (phrasebook, longest slots).
   "tests/unit/radio-duration.test.mjs",
+  // radio-lines phrasebook: slot fill, recent-history pick, variant counts.
+  "tests/unit/radio-lines.test.mjs",
   "tests/unit/radio-voice.test.mjs",
   "tests/unit/ratchets.test.mjs",
   // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.

@@ -51,7 +51,7 @@
       const { n, hash, every, anchor, onTrack, terrainYAt,
         bush, guardrail, tyreWall, marshalPost, cameraTower, broadcastCompound,
         grandstandEx, sponsorHoarding, billboard, building, motorhome, tower,
-        groundPatch, runoffApron, cityFront, waterBand, fence,
+        groundPatch, runoffApron, waterBand, fence,
         place, prop, backdrop, modelGroup, overheadSpan, vadd, seat, MAT } = api;
 
       const { K } = api;            // the contract's frac -> node index (normalised for negatives)
@@ -337,7 +337,13 @@
       //    Planned hotels / restaurants / marina (RacingCircuits.info,
       //    Wikipedia, NYT 2015) were never finished — blank unglazed concrete
       //    shells. Do NOT invent named towers or yacht clubs (UNCERTAIN).
-      cityFront(0.630, 0.700, -1, 22);
+      // Plain concrete boxes, not cityFront(): building() glazes every block with
+      // window panes (20 % lit), the opposite of an unfinished, unlit shell.
+      for (let i = 0; i < 9; i++) {
+        const h = hash(i * 53 + 11);
+        prop(K(0.632 + i * 0.0078), -1, 22 + h * 8,
+          [13 + h * 5, 24 + h * 16, 28 + h * 8], i % 2 ? SHELL_D : SHELL);
+      }
       {
         // Gap 52 keeps the declared footprint clear of the ribbon (gap 22 with
         // size[0]=110 reached the road → required model rejected).
@@ -399,8 +405,12 @@
       //     close enough to read the empty window openings. A second rank
       //     stands behind them so the wall of shells has thickness.
       guardrail(0.735, 0.800, -1, 8, RAIL);
-      cityFront(0.736, 0.798, -1, 14);
-      tower(K(0.760), -1, 26, 13, 44);
+      for (let i = 0; i < 8; i++) {                     // blank frontage, no glazing
+        const h = hash(i * 41 + 7);
+        prop(K(0.738 + i * 0.0078), -1, 14 + h * 6,
+          [12 + h * 5, 22 + h * 14, 26 + h * 8], i % 2 ? SHELL : SHELL_D);
+      }
+      prop(K(0.760), -1, 20, [13, 44, 13], SHELL);      // tall bare core
       place(K(0.748), -1, 30, [16, 28, 16], SHELL);
       place(K(0.782), -1, 34, [14, 33, 15], SHELL_D);
       for (let i = 0; i < 4; i++) {                     // second rank behind
@@ -408,7 +418,7 @@
         place(K(0.740 + i * 0.017), -1, 56 + h * 26,
           [15 + h * 7, 26 + h * 16, 15], h < 0.5 ? SHELL_D : SHELL_F);
       }
-      tower(K(0.772), -1, 70, 4.0, 40);                 // second bare core
+      prop(K(0.772), -1, 66, [8, 40, 8], SHELL_D);      // second bare core
       backdrop(K(0.768), -1, 250, [200, 34, 26], SHELL_F);
 
       // 16. s=0.797 / +1 / 10 — TURN 15: tyres across the wall face with
