@@ -687,8 +687,7 @@ body:has(dialog[open]) #save-warning { display: none; }
 }
 #vsfriend .vs-roster .vs-who { width: 2.6em; }
 #vsfriend .vs-roster .vs-driver [data-verify] { letter-spacing: var(--ls-2); }
-#vsfriend .vs-roster .vs-driver [data-roster-remove],
-#vsfriend .vs-roster-remove {
+#vsfriend .vs-roster .vs-driver [data-roster-remove] {
   flex: 0 0 auto;
   margin-left: auto;
   white-space: nowrap;
