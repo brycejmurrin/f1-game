@@ -3186,9 +3186,8 @@ const TLX = (function () {
         m.visible = false;
         if (_warmPending) { _dropQueue.push(m); return; }
         try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
-        const g = m._ownGeo ? m.geometry : null;   // a mesh that owns its geometry (an R1 run's view) frees it after
+        if (m._ownGeo && m.geometry) m.geometry.dispose();   // a mesh that owns its geometry (an R1 run's view)
         m.geometry = null; m.material = null;
-        if (g) g.dispose();
       }
       function flushDropped() {
         if (_warmPending || !_dropQueue.length) return;
