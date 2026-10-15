@@ -590,9 +590,9 @@
       // Keep original hospitality gaps — pushing them out buried city detail
       // worse than the motorhomes themselves. Mild bury (~0.7 m) stays ≤ baseline.
       const HOSPITALITY_POS = [
-        [0.944, 34, [0.86, 0.16, 0.14]],
-        [0.951, 37, [0.20, 0.40, 0.72]],
-        [0.958, 40, [0.90, 0.80, 0.20]],
+        [0.944, 38, [0.86, 0.16, 0.14]],
+        [0.951, 41, [0.20, 0.40, 0.72]],
+        [0.958, 44, [0.90, 0.80, 0.20]],
       ];
       for (const [s, gap, accent] of HOSPITALITY_POS) {
         motorhome(K(s), -1, gap, 18, 6, 14, { wall: PITWALL, window: WIN_LIT, accent });
@@ -732,7 +732,7 @@
       tieredBowl(0.279, 0.291, -1, 16, {   // Tosa hairpin bank — a real built stand, keeps its shell
         tiers: 4, tierDepth: 5.4, base: 2.8, rise: 3.1, step: 12,
         shell: [IM_SHELL_A, IM_SHELL_B], crowd: IM_CROWD,
-        fascia: [0.92, 0.90, 0.82], roof: true, roofCol: [0.20, 0.20, 0.24],
+        fascia: [0.92, 0.90, 0.82], roof: false, roofCol: [0.20, 0.20, 0.24],
         density: 0.55,
       });
 
@@ -818,12 +818,12 @@
           a.c[1]
         );
         if (!Number.isFinite(y)) return;
-        const base = [a.c[0], y, a.c[2]];
+        const base = [a.c[0], y + 0.35, a.c[2]];
         modelGroup("imola-hill-villas", {
           center: vadd(base, a.u, h * 0.5), size: [w + 6, h + 8, d + 6], basis: b,
         }, (stage) => {
           stage._mat = MAT.STONE;
-          seat.box(stage, [base[0], y - 0.22, base[2]], [w + 1.3, 0.65, d + 1.3], STONE, b);
+          seat.box(stage, [base[0], y + 0.12, base[2]], [w + 1.3, 0.65, d + 1.3], STONE, b);
           addBox(stage, vadd(base, a.u, h / 2), [w, h, d], TERRA2, b);
           seat.prism(stage, vadd(base, a.u, h), [w + 0.8, 2.2, d + 0.4], TERRA, b);
           addBox(stage, vadd(vadd(base, a.r, -w / 2 - 0.04), a.u, h * 0.55),
