@@ -1,1 +1,1 @@
-1792048431	t	PR #1976 final publication/merge candidate5e0b39243; ownpendingfitcontract regression and requiredupstream integration;132layouts114focusedpassed; broadgatepending  [cursor/hud-import-fixes-8ac4; session c6ba85b34012e3f9cb869c81]
+1792052469	t	PR #1976 unblock inherited CI2092 steward-card checksum drift; ONLY docs/notes/APEX-STEWARD-CARD-2026-10-05.md metadata refresh after required base curation; no appcode/test/threshold edits; preserve completed validation and use CI union byteproof  [cursor/hud-import-fixes-8ac4; session c6ba85b34012e3f9cb869c81]
