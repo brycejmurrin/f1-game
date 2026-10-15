@@ -1,4 +1,5 @@
 import { readCssSource } from "../helpers/css-source.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -96,7 +97,7 @@ test("a queued INFO card older than ANN_STALE_MS is dropped at the drain; a warn
 });
 
 test("a full announce queue sheds comm and coach so a box call can queue", () => {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   const priorities = game.match(/const ANN_PRI = [^;]+;/)[0];
   const stale = game.match(/const ANN_STALE_MS = [^;]+;/)[0];
   const qmax = game.match(/const ANN_QUEUE_MAX = [^;]+;/)[0];
