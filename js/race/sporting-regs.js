@@ -23,7 +23,11 @@
  *  3. GRID IN CHAMPIONSHIP ORDER when no qualifying is held (B2.5.4(a),
  *     B2.3.4(a)). Before anyone has scored there is no order to use, and the
  *     caller keeps its own default; drivers still on zero keep the pace order.
- *  4. BLUE FLAGS for a car being lapped (ISC App. H 2.5.5(e), App. L Ch. IV
+ *  4. FALSE START at a standing start (FIA 2026 SR B5.11.1): the grid holds the
+ *     car until lights-out; a breach is throttle already engaged at the green
+ *     (clutch-style early release) or meaningful speed before the minimum human
+ *     reaction window (~0.2 s). Priced at +5 s (2026 Penalty Guidelines).
+ *  5. BLUE FLAGS for a car being lapped (ISC App. H 2.5.5(e), App. L Ch. IV
  *     2(a); 2026 Driving Standards §K; Penalty Guidelines Flag Signals). The
  *     caught driver must let the lapping car through at the first opportunity;
  *     §K treats failing to do so by the next straight as a likely breach, and
@@ -204,6 +208,29 @@ const SportingRegs = (function () {
   const BLUE_HOLD_S = 8;
   const BLUE_PEN_S = 5;
 
+  // ── 5. FALSE START (standing start, at lights-out) ───────────────────────
+  // The grid holds cars until green; detection is throttle-at-green or a launch
+  // faster than the minimum reaction window (fraction of vRef, not literal m/s).
+  const JUMP_START_PEN_S = 5;
+  const JUMP_START_WHY = "false start";
+  const JUMP_START_THROTTLE = 0.12;
+  const JUMP_START_REACT_S = 0.2;
+  const JUMP_START_SPEED_VREF = 0.04;
+
+  /** Throttle already engaged when the lights go out (auto-throttle exempt). */
+  function jumpStartEarlyThrottle(throttleLevel, autoThrottleOn) {
+    if (autoThrottleOn) return false;
+    const t = typeof throttleLevel === "number" && isFinite(throttleLevel) ? throttleLevel : 0;
+    return t > JUMP_START_THROTTLE;
+  }
+
+  /** Meaningful speed inside the minimum reaction window after green. */
+  function jumpStartFastLaunch(tSinceGreen, speed, vRef) {
+    if (!(vRef > 0) || !(tSinceGreen >= 0) || tSinceGreen >= JUMP_START_REACT_S) return false;
+    const v = typeof speed === "number" && isFinite(speed) ? speed : 0;
+    return v > vRef * JUMP_START_SPEED_VREF;
+  }
+
   /** The lapping car the blue flag is shown for, or null. `o.total` is lap
    *  length, `o.vRef` the envelope (vTop). Time gap, never a literal m/s. */
   function blueFlagCar(p, field, o) {
@@ -264,5 +291,8 @@ const SportingRegs = (function () {
     blueFlagCar, createBlueFlagWatch,
     DRY, WET, SUSPENDED_PEN_S, DSQ_WHY, GIVE_BACK_S, CAUTION_MIN,
     BLUE_GAP_S, BLUE_VFLOOR, BLUE_WARN_S, BLUE_HOLD_S, BLUE_PEN_S,
+    jumpStartEarlyThrottle, jumpStartFastLaunch,
+    JUMP_START_THROTTLE, JUMP_START_REACT_S, JUMP_START_SPEED_VREF,
+    JUMP_START_PEN_S, JUMP_START_WHY,
   });
 })();
