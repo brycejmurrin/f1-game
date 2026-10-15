@@ -632,6 +632,8 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   const src = srcSet || track._lights;
   // Empty set / not a lit session (caller usually gates, but count===0 is free).
   if (!src || !src.length) { frame.lights = frame.lampLum = null; release(); return; }
+  const prevTrack = _lampTrackRef && _lampTrackRef.deref();
+  if (track !== prevTrack) release();   // a new world: no cache keyed on the old one's lamps (before the set key below)
   // frame.lampLum[i]: record i's max-channel level WITHOUT flicker (time-of-day
   // scale, warm-up and the cull fade kept). The lamp-shadow pick scores on it:
   // scored on the flickered level, two floods near equal range swapped the
@@ -672,8 +674,6 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // were off, so this frame is a fresh switch-on. Per-frame copy only — the
   // baked track records are never touched.
   const rt = Number.isFinite(frame.time) ? frame.time : null;
-  const prevTrack = _lampTrackRef && _lampTrackRef.deref();
-  if (track !== prevTrack) release();   // a new world: no cache keyed on the old one's lamps
   if (tNow - _lampLastT > 1.0) {
     const lit = rt === null || track !== prevTrack || !(rt - _lampLastRT <= 1.0);   // a new world, or render ran dark
     if (!_lampHid && lit) _lampWarmT0 = tNow;
