@@ -8,7 +8,7 @@
  * skew — just the three behaviours the fixture promises. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { awaitTrackBuild, TRACK_STALL_MS, TRACK_HARD_MS } from "../helpers/await-track-build.js";
+import { awaitTrackBuild, awaitApexBoot, BOOT_STALL_MS, TRACK_STALL_MS, TRACK_HARD_MS } from "../helpers/await-track-build.js";
 
 /** A page whose evaluate() returns whatever the script asks for, on a script.
  *
@@ -151,4 +151,54 @@ test("no raceFlag: the old predicate, unchanged", { timeout: 5000 }, async () =>
   const page = livePage(reusedWin(undefined), () => {});
   await awaitTrackBuild(page, 1000, 4000);
   assert.equal(page.calls, 1);
+});
+
+// ── the boot wait (#1956) ─────────────────────────────────────────────────
+// awaitApexBoot is the same trade for `window.__apex != null`: Pages
+// 38660546141 timed the first goto out at 45 s while the boot was still
+// logging. Same three promises, and the stall window must equal the old
+// deadline, so a silent boot fails exactly as soon as it used to.
+const FAST = { delay: () => new Promise((r) => setTimeout(r, 1)) };
+const bootPage = (steps, max) => fakePage(steps.map((s) => ({ ready: s.ready, n: s.n })), max);
+
+test("awaitApexBoot: resolves once __apex binds", async () => {
+  const page = bootPage([{ ready: false, n: 1 }, { ready: true, n: 2 }]);
+  await awaitApexBoot(page, 50, undefined, FAST);
+  assert.equal(page.calls, 2);
+});
+
+test("awaitApexBoot: keeps waiting while the boot still makes progress", { timeout: 5000 }, async () => {
+  const steps = [];
+  for (let k = 0; k < 400; k++) steps.push({ ready: false, n: k });
+  steps.push({ ready: true, n: 400 });
+  const page = bootPage(steps);
+  await awaitApexBoot(page, 30, undefined, FAST);
+  assert.ok(page.calls > 200, "gave up on a boot that was visibly progressing");
+});
+
+test("awaitApexBoot: FAILS on a silent boot, and names the stall", { timeout: 5000 }, async () => {
+  await assert.rejects(() => awaitApexBoot(bootPage([{ ready: false, n: 3 }]), 30, 4000, FAST),
+    /boot STALLED.*progress 3/, "a dead boot did not fail");
+});
+
+test("awaitApexBoot: the hard cap ends a boot that never binds", { timeout: 5000 }, async () => {
+  const steps = [];
+  for (let k = 0; k < 4000; k++) steps.push({ ready: false, n: k });
+  await assert.rejects(() => awaitApexBoot(bootPage(steps, 400), 10_000, 60, FAST), /hard cap/);
+});
+
+test("awaitApexBoot: a destroyed execution context (navigation) counts as progress", { timeout: 5000 }, async () => {
+  let i = 0;
+  const page = {
+    async evaluate() { i++; if (i < 50) throw new Error("Execution context was destroyed"); return { ready: true, n: 1 }; },
+  };
+  await awaitApexBoot(page, 20, undefined, FAST);
+  assert.equal(i, 50);
+});
+
+test("awaitApexBoot: the stall window is the old BOOT_MS, never longer", async () => {
+  const fs = await import("node:fs");
+  const src = fs.readFileSync(new URL("../helpers/fixtures.js", import.meta.url), "utf8");
+  const boot = Number(/export const BOOT_MS = (\d+)/.exec(src)[1]);
+  assert.equal(BOOT_STALL_MS, boot, "a silent boot must fail exactly when the old fixed wait did");
 });

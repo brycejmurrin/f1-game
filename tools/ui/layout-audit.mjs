@@ -36,12 +36,11 @@
 // only when /proc/loadavg first field is under ~3.
 import { menuReady, previewMapSettled } from "./menu-readiness.mjs";
 import { fileURLToPath } from "node:url";
-import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { parseCircuits, circuitTag, pickCircuit } from "./circuit-axis.mjs";
-import { launchChromium } from "../lib/harness.mjs";
+import { launchChromium, startStaticServer } from "../lib/harness.mjs";
 import { collectDomInfo } from "./css-play.mjs";
 import { SCREENS, VIEWPORTS, OVERLAY_IDS, pickScreens, pickViewports } from "./menu-screens.mjs";
 import {
@@ -647,20 +646,8 @@ fs.mkdirSync(OUT, { recursive: true });
 if (wantShots) fs.mkdirSync(SHOT_DIR, { recursive: true });
 if (wantDom) fs.mkdirSync(DOM_DIR, { recursive: true });
 
-const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
-  ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml", ".woff2": "font/woff2" };
-const server = http.createServer((req, res) => {
-  let p = decodeURIComponent(req.url.split("?")[0]);
-  if (p === "/") p = "/index.html";
-  const f = path.join(ROOT, path.normalize(p).replace(/^(\.\.[/\\])+/, ""));
-  fs.readFile(f, (e, b) => {
-    if (e) { res.writeHead(404); res.end(); return; }
-    res.writeHead(200, { "content-type": MIME[path.extname(f)] || "application/octet-stream" });
-    res.end(b);
-  });
-});
-await new Promise((r) => server.listen(0, "127.0.0.1", r));
-const base = `http://127.0.0.1:${server.address().port}/`;
+const server = await startStaticServer(ROOT);
+const base = server.url;
 
 const browser = await launchChromium({
   args: ["--use-angle=swiftshader", "--hide-scrollbars"] });
@@ -881,7 +868,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
 }
 
 await browser.close();
-server.close();
+await server.close();
 
 // MERGE, don't clobber: a filtered run (--screens / --viewports) must top up the
 // grid rather than replace it with its own twelve cells, or re-running one

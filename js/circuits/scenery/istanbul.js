@@ -7,7 +7,7 @@
 (window.TrackScenery = window.TrackScenery || {})["istanbul"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
-        pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
+        pine, tree, bush, ridge, building, grandstandEx,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         sponsorHoarding, cameraTower, seat, groundedSegments,
@@ -20,7 +20,9 @@
       const STONE_L = [0.90, 0.86, 0.77], SHADOW = [0.55, 0.51, 0.44];
       const TURK_RED = [0.85, 0.11, 0.13];
 
-      const openArea = (s) => (s >= 0.93 || s <= 0.08) || (s >= 0.34 && s <= 0.46);
+      // Turn 8 amphitheatre span: the OUTSIDE (right) of the long left sweeper, 0.438-0.476.
+      const T8A = 0.395, T8B = 0.515;
+      const openArea = (s) => (s >= 0.93 || s <= 0.08) || (s >= T8A - 0.012 && s <= T8B + 0.004);
       every(28, (k) => {
         const s = k / n;
         if (openArea(s)) return;
@@ -48,7 +50,7 @@
         const EARTH = [0.52, 0.44, 0.30], EARTH_D = [0.44, 0.37, 0.25];
         const CROWD = [[0.88, 0.14, 0.14], [0.92, 0.90, 0.86], [0.34, 0.34, 0.38]];
         let i = 0;
-        along(0.340, 0.462, 8, (k, spacing) => {
+        along(T8A, T8B, 8, (k, spacing) => {
           const seg = spacing * 0.97;
           for (let t = 0; t < 8; t++) {
             const a = anchor(k, 1, 16 + t * 4.0);
@@ -69,16 +71,16 @@
         groundedSegments({
           id: "istanbul-turn8-revetment",
           points: [0, 1, 2, 3, 4, 5, 6].map((j) => ({
-            k: K(0.340 + j * 0.020), side: 1, dist: 12.2,
+            k: K(T8A + j * 0.020), side: 1, dist: 12.2,
           })),
           width: 2.0, height: 2.2, color: STONE_D,
         });
       }
-      groundPatch(K(0.400), 1, 8, [56, 0.18, 140], GRAVEL,
+      groundPatch(K(T8A + 0.060), 1, 8, [56, 0.18, 140], GRAVEL,
         { id: "istanbul-turn8-gravel", samples: 10 });
       {
         let f = 0;
-        along(0.345, 0.458, 16, (k) => {
+        along(T8A + 0.005, T8B - 0.004, 16, (k) => {
           const a = anchor(k, 1, 50);
           const b = [a.r, a.u, a.t];
           addCyl(out, a.c, 0.14, 13, [0.90, 0.90, 0.90], 5, b);
@@ -86,11 +88,10 @@
             (f++ & 1) ? TURK_RED : [0.92, 0.90, 0.88], b);
         });
       }
-      spectatorHill(0.352, 0.400, -1, 22, { rows: 3, rise: 1.1, depth: 1.9, density: 0.42, step: 9 });
-      marshalPost(K(0.380), -1, 10);
       marshalPost(K(0.425), -1, 10);
-      cameraTower(K(0.398), -1, 14, { h: 20 });   // the inside camera the corner is always shot from
-      for (const [i, s] of [[0, 0.360], [1, 0.400], [2, 0.440]]) {
+      marshalPost(K(0.480), -1, 10);
+      cameraTower(K(0.440), -1, 14, { h: 20 });   // the inside camera the corner is always shot from
+      for (const [i, s] of [[0, T8A + 0.020], [1, T8A + 0.060], [2, T8A + 0.100]]) {
         grandstandEx(s, 1, 54, 46, null, null, {
           livery: i === 1 ? "crimson" : "sandstone",
           tiers: 2, roof: "cantilever", suites: i === 1, endWalls: true, pylons: true,
@@ -103,7 +104,7 @@
       // (gap 54). Layout geometry stays the 2011 circuit (no renovated plan
       // is public yet); this is a low hospitality mass, not a VIP tower.
       {
-        const a = anchor(K(0.422), 1, 50);
+        const a = anchor(K(T8A + 0.082), 1, 50);
         const b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 8)) {
           modelGroup("istanbul-turn8-hospitality", {
@@ -265,7 +266,7 @@
       }
       guardrail(0.94, 0.06, 1, 4.0, [0.85, 0.85, 0.88]);
       fence(0.95, 0.05, -1, 9, 4, [0.74, 0.76, 0.80]);
-      fence(0.35, 0.45, 1, 12, 4, [0.74, 0.76, 0.80]);
+      fence(T8A + 0.010, T8B - 0.010, 1, 12, 4, [0.74, 0.76, 0.80]);
       for (const s of [0.14, 0.22, 0.30, 0.52, 0.68, 0.80]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
@@ -285,11 +286,12 @@
         }
       }
       // Faint apartment blocks on one horizon — the city creeping toward the park.
+      // Hazed toward the fog colour, windows close to the wall, pushed past 320 m.
       {
         const k = K(0.20);
         for (let i = 0; i < 8; i++) {
-          building(k, -1, 260 + i * 26, 18, 30 + (i % 3) * 10, 18,
-            { kind: "slab", wall: [0.66 + i * 0.012, 0.66 + i * 0.012, 0.70], window: [0.54, 0.56, 0.60] });
+          building(k, -1, 330 + i * 26, 18, 24 + (i % 3) * 7, 18,
+            { kind: "slab", wall: [0.70 + i * 0.008, 0.69 + i * 0.008, 0.64], window: [0.64, 0.64, 0.60] });
         }
       }
 
@@ -340,7 +342,7 @@
             })),
             // Two tiers, shorter chords — cuts tris and clears self-flatCoplanar.
             width: 8.0, height: 1.4 + t * 1.1,
-            color: t & 1 ? [0.66, 0.60, 0.46] : [0.74, 0.68, 0.52],
+            color: t & 1 ? [0.27, 0.33, 0.18] : [0.33, 0.38, 0.21],   // grass-toned: pale tan read as planks
           });
         }
       }
@@ -348,7 +350,7 @@
         h: 1.3, step: 10,
         palette: [TURK_RED, [0.94, 0.92, 0.88], [0.14, 0.30, 0.58], [0.94, 0.76, 0.10]],
       });
-      for (const [s0, s1] of [[0.1, 0.32], [0.48, 0.91]]) {
+      for (const [s0, s1] of [[0.1, 0.32], [T8B + 0.005, 0.91]]) {
         for (const side of [-1, 1])
           forestEdge(s0, s1, side, 20, { density: 0.42, hMin: 9, hMax: 17, pineFrac: 0.72, col: PINE, col2: PINE_D });
       }
