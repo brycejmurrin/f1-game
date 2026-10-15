@@ -514,7 +514,7 @@
 
       // Paddock hall — warmer brick/cream walls (was plain grey slab); Kenney
       // commercial blocks and Racing Kit pit offices dress the yard behind it.
-      building(k(0.97), 1, 6, 12, 8, 90, { kind: "hall", wall: [0.78, 0.72, 0.64], window: [0.18, 0.26, 0.34], floor: 4 });
+      building(k(0.97), 1, 36, 12, 8, 70, { kind: "hall", wall: [0.78, 0.72, 0.64], window: [0.18, 0.26, 0.34], floor: 4 });
       for (const [s, d, w, h, ln, col] of [
         [0.95, 40, 14, 7, 34, [0.76, 0.76, 0.72]],
         [0.99, 44, 16, 6, 30, [0.72, 0.74, 0.76]],
@@ -759,7 +759,8 @@
       }
 
       {
-        for (let i = 0; i < 10; i++) {
+        // The row starts at i = 4 (62 m): boxes at 6-48 m stood 9 m tall on the National straight verge and the paddock hall (36 m) now sits in front of them.
+        for (let i = 4; i < 10; i++) {
           const gapStep = 14;
           const dist = 6 + i * gapStep;
           const gb = anchor(k(0.97), 1, dist);
