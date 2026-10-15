@@ -1374,6 +1374,17 @@ body:not(.desktop):not(.hud-radio-top):not([data-radio-corner]):not(.hud-mirror-
   left: calc(var(--announce-lane-x, 50% * var(--hud-z)) / var(--hud-z));
   transform: translateX(var(--announce-lane-shift, -50%));
 }
+/* PORTRAIT FALLBACK — after the 50% / -50% centre so it wins the cascade
+   (css-prefers-cascade). That centre clears the map at HUD 100% on 390 and
+   overlaps it at HUD 150% (card 97.5–292.5 vs map 8.9–122.5, Pages
+   38622878195). Pin the left edge past the map column; a published lane
+   still wins. :not([data-radio-corner]) steps aside for radioUnderRight. */
+@media (orientation: portrait) and (max-width: 500px) {
+  body:not(.desktop):not(.hud-radio-top):not([data-radio-corner]):not(.hud-mirror-side) #announce {
+    left: calc(var(--announce-lane-x, 34% * var(--hud-z)) / var(--hud-z));
+    transform: translateX(var(--announce-lane-shift, 0%));
+  }
+}
 /* The plate. Italic is the racing number's own convention, not emphasis. */
 #announce-num {
   flex: 0 0 auto;
