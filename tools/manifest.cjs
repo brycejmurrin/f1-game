@@ -413,7 +413,7 @@ const CSS = [
   "css/settings-controls.css", "css/dialog-platform.css", "css/tuner.css",
   "css/title.css", "css/menus.css", "css/select.css", "css/race-setup.css",
   "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css", "css/overlays.css",
-  "css/loading.css", "css/responsive.css",
+  "css/loading.css", "css/a11y-loading.css", "css/responsive.css",
   "css/track-detail.css",   // link order == original style.css source order (cascade-preserving)
   "css/career.css",
   "css/data.css",
@@ -438,7 +438,7 @@ const CSS_PRELOAD = [
 // essential-set). fonts-hud.css is Barlow + unused Titillium @font-face.
 const CSS_DEFERRED = [
   "css/tuner.css", "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css",
-  "css/overlays.css", "css/loading.css",
+  "css/overlays.css", "css/loading.css", "css/a11y-loading.css",
   "css/track-detail.css", "css/career.css", "css/data.css", "css/editor.css",
   "css/appearance-studio.css", "css/watch-transport.css",
   "css/career-experience.css", "css/garage-experience.css",
@@ -913,6 +913,7 @@ const LAZY_AUDIO = [
   "js/audio/soundtrack.js",
   "js/audio/radio-fx.js",
   "js/audio/tone-model.js",
+  "js/audio/ers-layer.js",
   "js/audio/engine.js",
   "js/audio/music-lib.js",
   "js/audio/spotify.js",
@@ -930,6 +931,7 @@ const LAZY_AUDIO_EDGES = [
   ["js/audio/soundtrack.js", "js/audio/engine.js"],
   ["js/audio/radio-fx.js", "js/audio/engine.js"],
   ["js/audio/tone-model.js", "js/audio/engine.js"],
+  ["js/audio/ers-layer.js", "js/audio/engine.js"],
   ["js/audio/engine.js", "js/audio/music-lib.js"],
   ["js/audio/voice-pack.js", "js/audio/radio-voice.js"],
   ["js/audio/radio-voice.js", "js/audio/announcer.js"],

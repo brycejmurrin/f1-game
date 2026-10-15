@@ -191,6 +191,13 @@ def check(file, tool, ti, proposed=None, how=""):
                   "working tree (AGENTS.md §Verification 2). Wait for the reporter's "
                   "'= run …' line or `node tools/ci/test-bg.mjs --stop`, then retry.", root, hatch=False)
 
+    # A conflict-side or committed-source git restore (shellparse kind
+    # "git-resolve") writes content git already holds: rules 1 and 3 (no HAND
+    # edit of a generated or shared-contract file) do not apply. Rule 2 and the
+    # scoped-agent rules above already ran (2026-10-15).
+    if how == "git-resolve":
+        return
+
     if rel in GENERATED and not allow:
         block(f"{rel}{via} is GENERATED — {GENERATED[rel]}. Edit the source and run the generator.", root)
 

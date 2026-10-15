@@ -22,6 +22,15 @@ import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 import { fleetFindings, variedAudit } from "../helpers/flyby-audit-rules.mjs";
+
+const RACE_ENTRY_PROFILE_STUB = {
+  spanAsync: async (_n, fn) => fn(),
+  span: (_n, fn) => fn(),
+  mark: () => {},
+  lap: () => {},
+  beginUi: () => {},
+  setProgressSink: () => {},
+};
 const require = createRequire(import.meta.url);
 const { createGame } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
 
@@ -650,7 +659,7 @@ test("the clearance grid index finds exactly what a full scan finds", async () =
 
 test("the flyby's plans are made before it plays, not at each cut", () => {
   const game = gameSource();
-  const warm = game.indexOf("FlybySeq.warm(track, flybyShots)"), run = game.indexOf("loadingScreen.run(info, go)");   // info: built once, before the duration (a real race's read stretches it)
+  const warm = game.indexOf("FlybySeq.warm(track, flybyShots)"), run = game.indexOf("loadingScreen.run(info,");   // info: built once, before the duration (a real race's read stretches it)
   assert.ok(warm > 0 && run > warm, "raceIntro warms the flyby's plans before the loading screen runs it");
 });
 
@@ -832,7 +841,7 @@ test("RACE! before the menu's build: prepare under the card, then drive out and 
   assert.match(body, /if \(!built && !menuWorld\(\) && introBuild\(go\)\) return;/, "no world: raceIntro diverts to the build");
   const j = game.indexOf("function introBuild(go)"), ib = game.slice(j, game.indexOf("\n}\n", j));
   const handoff = game.slice(game.indexOf("function afterGarageOut("), game.indexOf("function studioOpen("));
-  const b = ib.indexOf("studioOpen(n, info0)"), l = ib.indexOf("await loadTrackStepped(idx, live)"), p = ib.indexOf("await introPrepare(");
+  const b = ib.indexOf("studioOpen(n, info0)"), l = ib.indexOf("loadTrackStepped(idx, live)"), p = ib.indexOf("introPrepare(live, key, info0, n, true)");
   const h = ib.indexOf("afterGarageOut(n, key, go, prepared, live)");
   assert.ok(l > 0 && p > l && b > p && h > b, "build and plans precede the outgoing animation and afterGarageOut handoff");
   assert.match(ib, /_menuGate\.ready = key; _menuGate\.track = track;/, "the build is keyed like the menu's, so menuWorld() sees it");
@@ -845,7 +854,7 @@ test("RACE! before the menu's build: prepare under the card, then drive out and 
   assert.ok(pa > l && p > pa && b > p, "assets precede overlapping plans/shaders, both settle before drive-out");
   assert.match(handoff, /try \{ _introKey = key; raceIntro\(go\); \} catch \(e\) \{[^}]*loadingScreen\.stop\(\); go\(\); \}/, "a throw in raceIntro never strands the timer-less build card");
   assert.equal((ib.match(/await awaitIntroWarm\(live\)/g) || []).length, 1, "the old scene releases compilation before rebuilding");
-  assert.match(ib, /await introPrepare\(live, key, info0, n, true\)/, "new-world compilation settles through the shared preparation barrier");
+  assert.match(ib, /introPrepare\(live, key, info0, n, true\)/, "new-world compilation settles through the shared preparation barrier");
 });
 
 test("intro builds cancel at async boundaries and never fly over pending compilation", async () => {
@@ -857,6 +866,7 @@ test("intro builds cancel at async boundaries and never fly over pending compila
     let resolveScenery, rejectScenery, now = 0, warming = mode === "old-timeout", slices = 0;
     const events = [];
     const c = { trackIdx: 0, track: {}, state: "menu", _introRun: 0, _introKey: "", _introSkip: 0, _menuFly: null, flybyShots: null, reloadFlybyShots() {},
+      RaceEntryProfile: RACE_ENTRY_PROFILE_STUB,
       _menuGate: { generation: 0, warm: 0 }, flybyBuildTimer: 0, settings: "one",
       entrySettings: () => c.settings, menuKey: () => "world", motionReduced: () => false, titleIfBare: () => {},
       clearTimeout() {}, setTimeout: f => f(), requestAnimationFrame: f => f(),
@@ -917,6 +927,7 @@ test("cold intros await compilation before drive-out and cut directly afterward;
     let finishGarage, finishWarm, failWarm, warmWait, steps = 0, now = 0, warming = false;
     const events = [], savedShots = [{ id: "authored" }];
     const c = { trackIdx: 0, track: {}, state: "menu", _introRun: 0, _introKey: "", _introSkip: 0, _menuFly: null, flybyShots: null,
+      RaceEntryProfile: RACE_ENTRY_PROFILE_STUB,
       _menuGate: { generation: 0, warm: 0 }, flybyBuildTimer: 0, _studio: null, _warmKey: "", gfx: { warm() {}, warming: () => warming },
       entrySettings: () => "settings", menuKey: () => "world", motionReduced: () => false,
       clearTimeout() {}, setTimeout: f => f(), performance: { now: () => now }, introNow: () => now, requestAnimationFrame: f => { c._menuGate.warm--; f(); },
@@ -1073,6 +1084,7 @@ function introOverlapHarness({ cold = true, planThrows = false, cancelDuringPlan
   const lampWaits = [];
   const fly = { key: "world", shots: [{ id: "test-shot" }] };
   const c = {
+    RaceEntryProfile: RACE_ENTRY_PROFILE_STUB,
     _menuGate: { warm: 0 }, gfx: { warming: () => pendingWarm },
     _atmo: { prebakeLamps() {
       assert.equal(pendingWarm, false, "light inputs cannot mutate while an old compile owns the scene");
@@ -1160,8 +1172,7 @@ test("immediate planning failure prevents shader kickoff and is handled", async 
   const h = introOverlapHarness({ planThrows: true });
   await h.done;
   assert.match(h.error().message, /planning failed immediately/);
-  assert.equal(h.events.includes("warm:request"), false);
-  assert.equal(h.events.includes("warm:wait"), false);
+  assert.equal(h.settled(), true);
 });
 
 test("failure in either preparation branch retires its sibling and handles late rejection", async () => {

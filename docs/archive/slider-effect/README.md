@@ -2,6 +2,9 @@
 
 Per-knob visual A/B sheets produced by `tools/lighting/slider-effect.mjs --live`.
 
+The sheets themselves moved off the deploy branch on 2026-10-15 (clone size): they live on
+`track-survey-assets` at [docs/archive/slider-effect/](https://github.com/brycejmurrin/f1-game/tree/cb0cb2c386dbda6f45d4984cfb4c297a520556b0/docs/archive/slider-effect) (commit `cb0cb2c3`).
+
 Each subfolder `<track>-<condition>-<knob>/` contains `sheet.png`:
 - **A** (left) — default value
 - **B** (right) — max value

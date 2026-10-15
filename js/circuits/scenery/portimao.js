@@ -7,15 +7,15 @@
 (window.TrackScenery = window.TrackScenery || {})["portimao"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
-        pine, tree, bush, ridge, grandstandEx, spectatorHill,
+        pine, tree, bush, mountain, grandstandEx, spectatorHill,
         billboard, gantry, marshalPost,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard, groundedSegments, bankedKerbStrip,
         addBox, addCyl, addCone, addPrism, addFrustum, forestEdge, terrainYAt, seat } = api;
 
       {
-        const CORK_LEAF  = [0.24, 0.34, 0.19];
-        const CORK_LEAF2 = [0.29, 0.39, 0.22];
+        const CORK_LEAF  = [0.34, 0.38, 0.16];
+        const CORK_LEAF2 = [0.40, 0.43, 0.20];
         const STRIPPED   = [0.55, 0.24, 0.14];   // freshly harvested trunk
         const BARK       = [0.44, 0.40, 0.33];   // corky grey above the strip
         const OLIVE_LEAF = [0.44, 0.48, 0.36];
@@ -38,16 +38,20 @@
                              side, gap + (j % 2) * 13 + (hv - 0.5) * 8);
             if (onTrack(a.c[0], a.c[2], 14)) continue;
             const b = [a.r, a.u, a.t];
-            const h = 7.5 + hv * 3;
-            const strip = h * 0.26;              // how far up the cork was cut
+            // Montado cork oak: LOW and WIDE (crown ~1.5x the height, flat-topped
+            // and lobed), a thick freshly-stripped red-brown trunk. Stone pines
+            // (furniture tree) stay tall and conical, so the two read apart.
+            const h = 5.2 + hv * 2.0;
+            const strip = h * 0.42;              // how far up the cork was cut
             out._mat = MAT.WOOD;
-            addCyl(out, a.c, 0.52 + hv * 0.14, strip, STRIPPED, 6, b);
-            addCyl(out, vadd(a.c, a.u, strip), 0.46 + hv * 0.12, h * 0.22, BARK, 6, b);
+            addCyl(out, a.c, 0.62 + hv * 0.14, strip, STRIPPED, 6, b);
+            addCyl(out, vadd(a.c, a.u, strip), 0.5 + hv * 0.12, h * 0.26, BARK, 6, b);
             out._mat = MAT.FOLIAGE;
-            const spread = h * 0.72;
-            addFrustum(out, vadd(a.c, a.u, h * 0.46), spread * 0.55, spread, h * 0.20,
+            const spread = h * 1.5;
+            const lobe = (hv - 0.5) * spread * 0.5;
+            addFrustum(out, vadd(a.c, a.u, h * 0.52), spread * 0.8, spread * 1.0, h * 0.30,
                        hv < 0.5 ? CORK_LEAF : CORK_LEAF2, 8, b);
-            addFrustum(out, vadd(a.c, a.u, h * 0.66), spread, spread * 0.42, h * 0.26,
+            addFrustum(out, vadd(vadd(a.c, a.r, lobe), a.u, h * 0.78), spread * 0.9, spread * 0.5, h * 0.24,
                        hv < 0.5 ? CORK_LEAF2 : CORK_LEAF, 8, b);
             out._mat = 0;
           }
@@ -580,17 +584,21 @@
       ]) marshalPost(K(s), side, dist);
 
       const { cx, cz, radius: rad } = lapBounds();
-      for (const [extra, count, len, w, hMin, hVar, col] of [
-        [125, 44, 130, 44, 18, 12, [0.28, 0.34, 0.20]],
-        [225, 34, 180, 60, 32, 20, [0.30, 0.33, 0.24]],
-        [370, 26, 240, 78, 54, 30, [0.40, 0.38, 0.32]],
+      // Monchique foothills: three rolling rings of rough, rounded hills (mountain()
+      // = seamed, low-poly dome) instead of straight-edged ridge() slabs. Width
+      // varies per hill so neighbours overlap into a soft, uneven skyline.
+      for (const [extra, count, wMin, wVar, hMin, hVar, col, rock] of [
+        [125, 24, 170, 110, 16, 14, [0.30, 0.36, 0.21], [0.36, 0.38, 0.24]],
+        [225, 18, 260, 150, 30, 22, [0.31, 0.34, 0.25], [0.36, 0.37, 0.28]],
+        [370, 11, 450, 200, 52, 34, [0.38, 0.38, 0.32], [0.42, 0.41, 0.35]],
       ]) {
         for (let i = 0; i < count; i++) {
-          const a = i / count * 6.2832, h = hash(i * 7 + extra);
+          const a = (i + hash(i * 3 + extra) * 0.6) / count * 6.2832, h = hash(i * 7 + extra);
+          const h2 = hash(i * 11 + extra * 3);
           const r = rad + extra + h * 34;
-          const tx = cx + Math.cos(a) * r, tz = cz + Math.sin(a) * r;
-          if (onTrack(tx, tz, 32)) continue;
-          ridge(tx, tz, pyMin, a + 1.5708, len, w, hMin + h * hVar, col);
+          mountain(cx + Math.cos(a) * r, cz + Math.sin(a) * r, pyMin + 1, wMin + h2 * wVar,
+                   hMin + h * hVar, { seg: 5, seed: i * 13 + extra, rough: 0.30 + h2 * 0.2,
+                                      forest: col, rock, snowline: 2 });
         }
       }
 
