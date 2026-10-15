@@ -930,6 +930,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 tooling: dup-keys scans js/render/three, stage/garage-angles refuse unsafe --out, wait-polling-lint parses scripts, generators reject unknown flags, Chromium cache key carries the runner image, pages.yml fast_tier_run expression.
   "tests/unit/tools-a12-guards.test.mjs",
   "tests/unit/tools-runnable.test.mjs",
+  "tests/unit/touch-drag-anchor.test.mjs",
   // Drag range widens with speed by the same fraction digitalRateIn sheds.
   // Low / mid / high, the OFF knob, and the same finger travel. VM, < 0.2 s.
   "tests/unit/touch-drag-speed.test.mjs",
