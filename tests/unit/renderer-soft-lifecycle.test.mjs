@@ -413,7 +413,7 @@ test("GLX and TLX clamp the present size to the driver limit before deriving the
   const resize = glx.slice(glx.indexOf("  function resize() {"), glx.indexOf("  function setRenderScale("));
   assert.ok(resize.length > 0, "found GLX resize()");
   const clampAt = resize.search(/if \(maxDim > 0 && \(presentW > maxDim \|\| presentH > maxDim\)\)/);
-  const rwAt = resize.indexOf("const rw = Math.max(1, Math.round(presentW * renderScale));");
+  const rwAt = resize.search(/(?:const|let) rw = Math\.max\(1, Math\.round\(presentW \* renderScale\)\);/);
   assert.ok(clampAt > 0 && rwAt > 0 && clampAt < rwAt, "the uniform clamp precedes the rw/rh derivation");
   assert.match(resize, /const k = Math\.min\(maxDim \/ presentW, maxDim \/ presentH\);/, "one factor for both axes keeps aspect");
 
