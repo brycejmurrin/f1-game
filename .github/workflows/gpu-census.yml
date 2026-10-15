@@ -20,31 +20,32 @@ name: GPU census
 #                "stock" (what a player runs) and "--enable-unsafe-webgpu" do
 #                not agree even in the agent container: stock returns NO adapter
 #                there at all.
-#   game-check — boot the ACTUAL GAME on the three.js/WebGPU path and report
+#   game-check — boot the ACTUAL GAME on four backend paths and report
 #                GLX.gpuErrors(), the env-probe state and the ?gfxdebug=1
 #                overlay. Same hooks the overlay prints for a player, so a CI
 #                answer and a pasted player answer compare directly.
 #
-# Dispatch, and NIGHTLY (2026-09-01) — never on push. It costs runner minutes on
-# images the normal gate never uses (macOS bills at a multiplier), so it runs
-# when someone asks a question and once a night STAGGERED from ci.yml's boot
-# group (ci.yml at 04:17 UTC, this at 05:47 — not the shared 03:17 that stacked
-# both on the same 20 slots; PROCESS-SPEEDUP-2026-09 §4.5). The two real-GPU
-# defects the Verdict step has caught were found only when someone happened to
-# dispatch this, and a gate that fires on request catches a regression exactly
-# once.
+# Three ways in, never an ordinary push:
+#   dispatch  — `gh workflow run gpu-census.yml --ref <branch> -f images=…`, or
+#               the GitHub MCP `actions_run_trigger`.
+#   request   — agent push-request (2026-09-09). Agents' GH App tokens cannot
+#               workflow_dispatch (403); they CAN push an edit of
+#               .github/gpu-census-request.json on a cursor/** or claude/**
+#               branch, which runs THAT branch's tree with the file's inputs.
+#               Still in daily use (runs 38603534048, 38610120171, 38611116514
+#               on 2026-10-14).
+#   nightly   — staggered from ci.yml's boot group (ci.yml 04:17 UTC, this
+#               05:47; PROCESS-SPEEDUP-2026-09 §4.5), and SKIPPED when nothing
+#               under the renderer paths changed since the last green nightly
+#               (the plan job's `gate` step; an unknown base runs).
 #
 # A scheduled run has NO inputs — every `inputs.*` reads as the empty string —
-# so each input used below carries its dispatch default inline (`|| 'x'`), and
-# `census_only` reads as false, which is the FULL check: the schedule gates on
-# exactly what a default dispatch gates on. The schedule runs on the default
-# branch only (GitHub's rule), like ci.yml's nightly.
-
-# Dispatch, nightly, and agent push-request (2026-09-09). Agents' GH App
-# tokens cannot workflow_dispatch (403); they CAN push a request file on a
-# cursor/* branch, which runs THIS branch's tree on the matrix images.
-# Cancel-in-progress stays for schedule/dispatch; push uses run_id so two
-# legs (baseline / upscale) can queue without killing each other.
+# so each input carries its dispatch default inline (`|| 'x'`) and the schedule
+# gates on exactly what a default dispatch gates on. The schedule runs on the
+# default branch only (GitHub's rule).
+#
+# The Verdict is tools/gfx/census-verdict.mjs (fixture tests in
+# tests/unit/census-verdict.test.mjs and gfx-backend-canary.test.mjs).
 
 on:
   schedule:
@@ -56,9 +57,9 @@ on:
         required: false
         default: "montreal"
       images:
-        description: "Runner images, comma-separated (ubuntu-latest, macos-latest, macos-13, windows-latest)"
+        description: "Runner images, comma-separated (macos-latest is the one real GPU; ubuntu-latest, macos-13, windows-latest are software and hit the 30-min cap on the game checks — add census_only for their adapter answer)"
         required: false
-        default: "ubuntu-latest,macos-latest,windows-latest"
+        default: "macos-latest"
       census_only:
         description: "Skip the game checks — just the adapter answer (seconds, not tens of minutes)"
         type: boolean
@@ -85,12 +86,27 @@ on:
       # TLX's full mirror mip chain, so the mirror-mip cap (apex26.tlxMirMips)
       # only shows on a chase leg. A choice input (GitHub caps a dispatch at
       # 25 inputs; this is the 8th) — the plan job re-checks it for push requests.
+      # chase>cockpit (hunt 5 E) starts on chase and switches onboard halfway
+      # through the driven window: where the opt-in lazy mirror warm
+      # (ls apex26.tlxMirWarmLazy=1) is paid, read back as warmEnd.mirrorLazy.
       cam:
-        description: "Player camera for ALL game checks: helmet (the game's default, as before) or chase (shows TLX's mirror-mip cap; helmet latches the full chain)"
+        description: "Player camera for ALL game checks: helmet (the game's default, as before), chase (shows TLX's mirror-mip cap; helmet latches the full chain), or chase>cockpit (switch onboard mid-window: the lazy mirror warm's pause)"
         type: choice
-        options: ["helmet", "chase"]
+        options: ["helmet", "chase", "chase>cockpit"]
         required: false
         default: "helmet"
+      # Appended LAST, the 9th of GitHub's 25 dispatch inputs (hunt 5 E): HOW the
+      # race starts. api = __apex.race(), every census before this; menu = the
+      # player's path (title > RACE > RACE SETUP > START RACE) after the menu's
+      # car prep and TLX program warm settle; menu-full = the same at player pace
+      # (garage drive-out + flyby). Re-checked by the plan job for push requests.
+      # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onworkflow_dispatchinputs
+      entry:
+        description: "How ALL game checks enter the race: api (__apex.race, as before), menu (the player's RACE! after the menu prep/warm), menu-full (the same at player pace: drive-out + flyby)"
+        type: choice
+        options: ["api", "menu", "menu-full"]
+        required: false
+        default: "api"
   push:
     branches: ["cursor/**", "claude/**"]
     paths: [".github/gpu-census-request.json"]
@@ -98,17 +114,30 @@ on:
 permissions:
   contents: read
 
+# DISPATCH: one census per ref at a time, and a second dispatch QUEUES instead
+# of cancelling the first (an A/B arm dispatched behind another used to cancel
+# it seconds in: runs 38530816497, 38518364574, 38464070445). GitHub keeps at
+# most ONE pending run per group (`queue: single`, the default), so a THIRD
+# dispatch replaces the queued second: dispatch A/B arms one at a time.
+# PUSH REQUESTS: one group per run_id, so two request legs (baseline /
+# variant) never cancel or queue behind each other.
+# NIGHTLY: its own group, the only one that cancels (a stuck previous nightly);
+# it never cancels a person's dispatch.
+# https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
 concurrency:
-  group: gpu-census-${{ github.event_name == 'push' && format('{0}-{1}', github.ref, github.run_id) || github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'push' }}
+  group: gpu-census-${{ (github.event_name == 'push' && format('{0}-{1}', github.ref, github.run_id)) || (github.event_name == 'schedule' && 'nightly') || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'schedule' }}
 
 jobs:
   # The input is a string; turn it into the matrix the next job fans out over,
-  # so a dispatcher can drop macOS (the expensive one) without editing the file.
+  # so a dispatcher can pick images without editing the file.
   # Push requests read .github/gpu-census-request.json from THIS commit.
   plan:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read   # the nightly gate lists this workflow's runs
     outputs:
       images: ${{ steps.split.outputs.images }}
       track: ${{ steps.split.outputs.track }}
@@ -118,43 +147,74 @@ jobs:
       force: ${{ steps.split.outputs.force }}
       census_only: ${{ steps.split.outputs.census_only }}
       cam: ${{ steps.split.outputs.cam }}
+      entry: ${{ steps.split.outputs.entry }}
       run: ${{ steps.gate.outputs.run }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
         with:
           persist-credentials: false
           fetch-depth: 0
-      # INHERITED REQUESTS DO NOT RUN (2026-09-24). `paths:` matches the pushed
-      # RANGE, so a session branch that merges the deploy tip re-fires the census
-      # for every request someone else already measured there: 40 of 74 push runs
-      # in 48 h (54%, ~10 runner-min each on macOS) were exactly that. A push
-      # runs the census only when a NON-MERGE commit on the branch's own
-      # first-parent line in this push edited the request. The deploy branch,
-      # dispatch and schedule are unchanged.
+          filter: blob:none
+      # ONE gate, by event; a dispatch always runs.
+      #
+      # PUSH — INHERITED REQUESTS DO NOT RUN (2026-09-24). `paths:` matches
+      # the pushed RANGE, so a session branch that merges the deploy tip
+      # re-fired the census for every request someone else already measured
+      # there: 40 of 74 push runs in 48 h. A push runs the census only when a
+      # NON-MERGE commit on the branch's own first-parent line in this push
+      # edited the request. The deploy branch always runs.
+      #
+      # SCHEDULE — A NIGHTLY THAT TESTS SOMETHING (audit G1). Skip only when
+      # the diff from the last GREEN nightly's commit is KNOWN and touches none
+      # of the renderer paths; anything unknown (no green nightly, an API
+      # error, a commit missing from this clone, a failed diff) runs. A red or
+      # cancelled nightly is not green, so the next night runs again.
+      # https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-workflow
       - id: gate
-        run: |
-          F=.github/gpu-census-request.json
-          if [ "$EVENT" != "push" ] || [ "$BRANCH" = "claude/f1-game-project-26h3ng" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          if [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -q '^0*$' && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            BASE="$BEFORE"
-          else
-            BASE=$(git merge-base origin/claude/f1-game-project-26h3ng "$GITHUB_SHA" 2>/dev/null || echo "")
-          fi
-          OWN=$( [ -n "$BASE" ] && git log --first-parent --no-merges --format=%h "$BASE..$GITHUB_SHA" -- "$F" || echo "unknown")
-          if [ -n "$OWN" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            echo "census: this push's own commit(s) edited the request: $OWN"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::gpu-census skipped: the request change arrived by merge (already measured where it was made). Edit the request on this branch, or dispatch, to measure this tree."
-          fi
         env:
           EVENT: ${{ github.event_name }}
           BRANCH: ${{ github.ref_name }}
           BEFORE: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$EVENT" = "push" ] && [ "$BRANCH" != "claude/f1-game-project-26h3ng" ]; then
+            F=.github/gpu-census-request.json
+            if [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -q '^0*$' && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              BASE="$BEFORE"
+            else
+              BASE=$(git merge-base origin/claude/f1-game-project-26h3ng "$GITHUB_SHA" 2>/dev/null || echo "")
+            fi
+            OWN=$( [ -n "$BASE" ] && git log --first-parent --no-merges --format=%h "$BASE..$GITHUB_SHA" -- "$F" || echo "unknown")
+            if [ -n "$OWN" ]; then
+              echo "run=true" >> "$GITHUB_OUTPUT"
+              echo "census: this push's own commit(s) edited the request: $OWN"
+            else
+              echo "run=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::gpu-census skipped: the request change arrived by merge (already measured where it was made). Edit the request on this branch, or dispatch, to measure this tree."
+            fi
+            exit 0
+          fi
+          if [ "$EVENT" != "schedule" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          PATHS="js/render js/lighting tools/gfx vendor .github/workflows/gpu-census.yml"
+          LAST=$(gh api "repos/$REPO/actions/workflows/gpu-census.yml/runs?event=schedule&status=success&branch=$BRANCH&per_page=1" \
+            --jq '.workflow_runs[0].head_sha // empty' 2>/dev/null || true)
+          if [ -z "$LAST" ] || ! git cat-file -e "$LAST^{commit}" 2>/dev/null; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "census: no usable last green nightly (${LAST:-none}) — running"; exit 0
+          fi
+          if ! CHANGED=$(git diff --name-only "$LAST" "$GITHUB_SHA" -- $PATHS); then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "census: diff from $LAST failed — running"; exit 0
+          fi
+          if [ -z "$CHANGED" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::gpu-census nightly skipped: nothing under $PATHS changed since the last green nightly ($LAST). Dispatch to measure anyway."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "census: $(echo "$CHANGED" | wc -l) renderer path(s) changed since $LAST:"; echo "$CHANGED" | head -20
+          fi
       - id: split
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
@@ -165,25 +225,20 @@ jobs:
               req = json.load(f)
           allow = {"ubuntu-latest", "ubuntu-24.04", "macos-latest", "macos-15", "macos-14",
                    "macos-13", "windows-latest", "windows-2022"}
-          raw = str(req.get("images") or os.environ.get("INPUT_IMAGES") or "ubuntu-latest,macos-latest,windows-latest")
+          raw = str(req.get("images") or os.environ.get("INPUT_IMAGES") or "macos-latest")
           # One line per key: a value carrying a newline (a pushed request file,
           # a dispatch input) would add its own `key=` lines to GITHUB_OUTPUT.
           one = lambda v: " ".join(str(v).splitlines()).strip()
           picked = [i.strip() for i in raw.split(",") if i.strip() in allow]
-          print("images=" + json.dumps(picked or ["ubuntu-latest"]))
+          print("images=" + json.dumps(picked or ["macos-latest"]))
           print("track=" + one(req.get("track") or os.environ.get("INPUT_TRACK") or "montreal"))
           print("ls=" + one(req.get("ls") or os.environ.get("INPUT_LS") or ""))
-          # The HOUR the in-run A/B pins. 12 is noon, which has no lamps and so
-          # measures the PLAIN draw branch; 2 is night, where the per-chunk lamp
-          # branch runs. Census 146 showed every earlier run took the former
-          # without anyone choosing it. Clamped to 0..23, default 12 so old runs
-          # stay comparable.
+          # The HOUR the in-run A/B pins: 12 (noon, no lamps) measures the
+          # PLAIN draw branch, 2 (night) the per-chunk lamp branch (census 146).
           try: ck = int(req.get("clock", os.environ.get("INPUT_CLOCK") or 12))
           except (TypeError, ValueError): ck = 12
           print("clock=" + str(ck if 0 <= ck <= 23 else 12))
-          # The time of day the track is BUILT with, which is what decides
-          # whether it carries baked lamps at all. Empty keeps race(t) as it
-          # was, so every earlier run stays comparable.
+          # The time of day the track is BUILT with — what bakes the lamps.
           td = str(req.get("tod") or os.environ.get("INPUT_TOD") or "")
           print("tod=" + (td if td in ("day", "night", "dawn", "dusk") else ""))
           print("force=" + one(req.get("force") or os.environ.get("INPUT_FORCE") or ""))
@@ -194,19 +249,21 @@ jobs:
           # The player camera (hunt 4 H5). A push request bypasses the
           # dispatch form's choice list, so the allowlist is enforced here too.
           cm = str(req.get("cam") or os.environ.get("INPUT_CAM") or "helmet").strip()
-          print("cam=" + (cm if cm in ("helmet", "chase") else "helmet"))
+          print("cam=" + (cm if cm in ("helmet", "chase", "chase>cockpit") else "helmet"))
+          # The race entry (hunt 5 E), allowlisted for the same reason.
+          en = str(req.get("entry") or os.environ.get("INPUT_ENTRY") or "api").strip()
+          print("entry=" + (en if en in ("api", "menu", "menu-full") else "api"))
           PY
         env:
           EVENT: ${{ github.event_name }}
-          # Dispatch/schedule defaults — schedule leaves inputs empty.
-          # THE NIGHTLY IS macOS ONLY (2026-09-29). ubuntu-latest and
-          # windows-latest have no hardware adapter, so their game checks run
-          # four 20-minute software boots inside this job's 30-minute cap: both
-          # lanes ended `cancelled` at 30.3 min on every night measured
-          # (2026-09-28/29), ~60 runner-minutes a night with no verdict, and a
-          # cancelled nightly hides a failed one. The adapter answer for those
-          # images is a dispatch away (default images, or census_only).
-          INPUT_IMAGES: ${{ inputs.images || (github.event_name == 'schedule' && 'macos-latest') || 'ubuntu-latest,macos-latest,windows-latest' }}
+          # Dispatch/schedule defaults — a schedule leaves inputs empty; a push
+          # request's own fields win over these.
+          # macos-latest is the DEFAULT for all three (2026-10-14; the nightly
+          # since 2026-09-29): ubuntu-latest and windows-latest have no hardware
+          # adapter, and their four software game checks ended `cancelled` at
+          # the 30-minute job cap on every run measured. Their adapter answer
+          # is a census_only dispatch away.
+          INPUT_IMAGES: ${{ inputs.images || 'macos-latest' }}
           INPUT_TRACK: ${{ inputs.track || 'montreal' }}
           INPUT_LS: ${{ inputs.ls || '' }}
           INPUT_CLOCK: ${{ inputs.clock || '' }}
@@ -214,10 +271,11 @@ jobs:
           INPUT_FORCE: ${{ inputs.force || '' }}
           INPUT_CENSUS_ONLY: ${{ inputs.census_only || false }}
           INPUT_CAM: ${{ inputs.cam || 'helmet' }}
+          INPUT_ENTRY: ${{ inputs.entry || 'api' }}
 
   census:
     needs: plan
-    if: ${{ needs.plan.outputs.run == 'true' }}
+    if: ${{ needs.plan.outputs.run != 'false' }}
     runs-on: ${{ matrix.image }}
     timeout-minutes: 30
     strategy:
@@ -232,6 +290,7 @@ jobs:
       CENSUS_FORCE: ${{ needs.plan.outputs.force }}
       CENSUS_ONLY: ${{ needs.plan.outputs.census_only }}
       CENSUS_CAM: ${{ needs.plan.outputs.cam }}
+      CENSUS_ENTRY: ${{ needs.plan.outputs.entry }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -270,7 +329,7 @@ jobs:
         run: node tools/gfx/gpu-census.mjs --json "census-${{ matrix.image }}.json"
 
       # Put the verdict in the job summary, not just the log. A job's log is a
-      # 404 until the whole job ends, so a 20-minute game check hides a census
+      # 404 until the whole job ends, so the game checks would hide a census
       # that finished in 15 seconds — which is exactly what happened on the
       # first run, on the one image whose answer was in doubt.
       - name: Census → job summary
@@ -294,12 +353,29 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Runs whatever the census said: a software answer here is still the
-      # cross-check that the portable path works, and if an image DOES have
-      # hardware this is the first real-GPU run this project has ever had.
+      # cross-check that the portable path works.
+      #
+      # FOUR legs, four steps — deliberately not a composite action, whose
+      # steps take no `timeout-minutes`, so one hung leg would eat the others'
+      # budget. Each leg is capped at 6 min (the longest measured leg is
+      # 3.2 min), so a hang ends THAT step red and the Verdict below names the
+      # missing or unfinished leg, inside the job's 30-min cap; at 20 min each
+      # a hang ran the job into its cap and the run read `cancelled`.
+      # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepstimeout-minutes
+      #
+      # EVERY leg pins apex26.wgxCapture=0 (SCREENSHOTS = NATIVE) BEFORE $LS,
+      # so the leg runs the present path a player has and a dispatcher's `ls`
+      # can still override it. Under automation the backends otherwise blit:
+      # tlx.js arms its readback when `!forceWebGL && _capPref !== "0" &&
+      # (_softAdapter || _headless || cap==="1")` and `_headless` is
+      # navigator.webdriver; WGX soft-presented every frame (spa dusk 20.8 vs
+      # 36.7 fps pinned, hunt 4 I3); GLX shot one stale gen-1 frame (I1). The
+      # Verdict gates TLX softBlit and WGX softPresent on hardware unless the
+      # dispatch overrode the pin.
       - name: Game check — three.js / WebGPU
         if: ${{ needs.plan.outputs.census_only != 'true' }}
         continue-on-error: true
-        timeout-minutes: 20
+        timeout-minutes: 6
         shell: bash
         run: |
           FORCE="${CENSUS_FORCE}"
@@ -315,16 +391,18 @@ jobs:
           # 46.9-vs-66.2 gap straight off it). "0" = NATIVE keeps three's
           # swapchain; the `path:` row below prints softBlit so a regression
           # here is visible rather than silently re-measured.
-          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" \
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
             --backend three --path webgpu --ls apex26.wgxCapture=0 --beats 20 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgpu-${{ matrix.image }}.json" \
             --shot "game-webgpu-${{ matrix.image }}.png"
 
+      # The control: the same pin (a no-op here — forceWebGL short-circuits
+      # the blit), so the two TLX legs differ in exactly ONE variable.
       - name: Game check — three.js / WebGL2 (control)
         if: ${{ needs.plan.outputs.census_only != 'true' }}
         continue-on-error: true
-        timeout-minutes: 20
+        timeout-minutes: 6
         shell: bash
         run: |
           FORCE="${CENSUS_FORCE}"
@@ -333,21 +411,19 @@ jobs:
           # short-circuits _softBlit. Written anyway so the two TLX legs differ
           # in exactly ONE variable — the three path — which is the only thing
           # that makes this a control.
-          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" \
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
             --backend three --path webgl2 --ls apex26.wgxCapture=0 --beats 20 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgl2-${{ matrix.image }}.json" \
             --shot "game-webgl2-${{ matrix.image }}.png"
 
-      # GLX — the DEFAULT backend, and until now the only one this workflow
-      # never looked at. Both checks above force three.js (TLX); a change to
-      # js/render/glx/glx.js could regress every player's renderer and this job
-      # would still go green. That is how a flagged GLX path came to be
-      # described as "gated on a real GPU" when nothing here could test it.
+      # GLX — the explicit WebGL2 backend and the fallback every backend
+      # failure lands on; without this leg a js/render/glx/ regression could
+      # go green here.
       - name: Game check — GLX / WebGL2 (the default backend)
         if: ${{ needs.plan.outputs.census_only != 'true' }}
         continue-on-error: true
-        timeout-minutes: 20
+        timeout-minutes: 6
         shell: bash
         run: |
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
@@ -357,24 +433,20 @@ jobs:
           # to that overlay only when a capture waits, so census 450-455 shot
           # one gen-1 frame for every A/B capture. A dispatcher's ls (after
           # this pin) can override it; the A/B rows print the mode and gens.
-          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" \
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
             --beats 20 --ls apex26.wgxCapture=0 --backend webgl2 $LS \
             --json "game-glx-${{ matrix.image }}.json" \
             --shot "game-glx-${{ matrix.image }}.png"
 
-      # WGX — the native WebGPU backend (js/render/webgpu/), opt-in for players.
-      # Until 2026-09-02 the "webgpu" leg above was three.js on WebGPU (TLX), so
-      # a WGX shader or present-path change had NO real-GPU evidence at all: the
-      # in-container Dawn validates but never executes (tools/gfx/wgx-validate.mjs).
-      # The Verdict holds this leg to: WGX actually bound (gfx.wgx — GLX exports
-      # softPresent too, so gpu-game-check also requires backendState().api
-      # "webgpu"), the swapchain path on hardware (softPresent
-      # false — the CPU blit is the SwiftShader path and the "WebGPU is laggy"
-      # class), and gpuErrors 0.
+      # WGX — the native WebGPU backend (js/render/webgpu/), opt-in for
+      # players; the in-container Dawn validates but never executes, so this
+      # is its only real-GPU evidence. The Verdict holds it to: bound
+      # (backendState().api "webgpu", not a GLX fallback), the swapchain
+      # (softPresent false), and gpuErrors 0.
       - name: Game check — WGX / WebGPU (native, opt-in)
         if: ${{ needs.plan.outputs.census_only != 'true' }}
         continue-on-error: true
-        timeout-minutes: 20
+        timeout-minutes: 6
         shell: bash
         run: |
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
@@ -385,606 +457,28 @@ jobs:
           # 20.8 -> 36.7 fps in the driven window, busy 11.7 -> 7.5 ms/frame.
           # The HeadlessChrome UA still forces MSAA 1 via _softAdapter
           # (wgx.js), which this pin does not undo.
-          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" \
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
             --beats 20 --ls apex26.wgxCapture=0 --backend webgpu $LS \
             --json "game-wgx-${{ matrix.image }}.json" \
             --shot "game-wgx-${{ matrix.image }}.png"
 
-      # THE GATE. Before this step the job was green whatever the game said:
-      # both checks above are continue-on-error and nothing read the JSON they
-      # write, so run 33228195259 concluded "success" while this same macOS job
-      # reported envFail 81 — an exception on every env-probe face, no
-      # environment reflections in the world at all. A surface that reports and
-      # does not gate catches a regression exactly once, by hand, and this one
-      # is dispatch-only so nothing else will notice.
-      #
-      # Errors gate; APPEARANCE is only reported. A brightness floor is the kind
-      # of threshold that goes flaky and then gets widened to pass, which
-      # AGENTS.md forbids outright — meanLuma goes in the summary for a human.
+      # THE GATE. The four legs above are continue-on-error, so before this
+      # step the job was green whatever the game said (run 33228195259 passed
+      # with envFail 81). tools/gfx/census-verdict.mjs reads the census and the
+      # four leg JSONs, writes the rows to the job summary, and exits 1 on a
+      # missing or unfinished leg, a GPU or shader error, failed env-probe
+      # faces, and — on an image the census called hardware — absent counts,
+      # softAdapter true, WGX not bound, or TLX/WGX off the native present path.
+      # It reads IMAGE, CENSUS_LS (job env) and GITHUB_STEP_SUMMARY.
       - name: Verdict — fail the job on what the game reported
         if: ${{ always() && needs.plan.outputs.census_only != 'true' }}
         shell: bash
         env:
           IMAGE: ${{ matrix.image }}
-        run: |
-          set -eu
-          node -e '
-            const fs = require("fs");
-            const image = process.env.IMAGE;
-            const read = (p) => { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) { return null; } };
-            const census = read(`census-${image}.json`);
-            // Only a machine the census called hardware can be held to the
-            // hardware expectations; a software image legitimately reports
-            // softAdapter true and a skipped (blank) env probe.
-            // TRI-STATE, deliberately not coerced. `!!` mapped BOTH "measured,
-            // no hardware" and "measured nothing" to false, and false is what
-            // switches off the three strongest clauses below (a missing
-            // gpuErrors count, softAdapter on hardware). A census that failed to
-            // launch therefore downgraded this gate to a software gate and let
-            // it report success — the same absence-reads-as-normal shape this
-            // gate was hardened against. docs/PERF-FINDINGS.md 2j.
-            const hardware = !!(census && census.anyHardware === true);
-            const censusUnknown = !census || census.anyHardware == null;
-            const bad = [];
-            if (censusUnknown) bad.push(
-              `census-${image}.json: the census measured NOTHING (anyHardware ` +
-              `null or file unreadable) — this run cannot tell hardware from ` +
-              `software, so the hardware-only checks below would pass vacuously`);
-            const rows = [`## ${image} — real-GPU verdict`, "", "```",
-              `census anyHardware: ${hardware}`];
-            // "glx" is the default backend. Its rows carry no backendState /
-            // envState: gpu-game-check reads those only when g.__tlx exists
-            // (tools/gfx/gpu-game-check.mjs 205-207), so for GLX the gate is
-            // ok/phase and gpuErrors, which is the right gate for it anyway.
-            // Every check below that touches an env/backend field is therefore
-            // either absent-safe or scoped to tlxLeg — an absence check aimed
-            // at all three legs would fail GLX on hardware for reporting
-            // exactly what it is built to report.
-            for (const path3 of ["webgpu", "webgl2", "glx", "wgx"]) {
-              const file = `game-${path3}-${image}.json`;
-              const g = read(file);
-              if (!g) { bad.push(`${path3}: ${file} missing — the check produced nothing`); continue; }
-              const gfx = g.gfx || {}, env = gfx.envState || {}, be = gfx.backendState || {};
-              // The two TLX legs are three.js BY CONSTRUCTION (--backend three,
-              // above), so they MUST bring an env probe with them. Scoping on
-              // the leg name rather than on "does this row have a __tlx" is the
-              // whole point: a TLX leg that fell back to GLX loses envState too,
-              // and that is a regression to fail on, not a reason to go quiet.
-              const tlxLeg = path3 === "webgpu" || path3 === "webgl2";
-              const frame = g.frame || {};
-              const gov = gfx.gov || {};
-              rows.push(`${path3.padEnd(7)} phase=${g.phase} ok=${g.ok} ` +
-                `gpuErrors=${gfx.gpuErrors} envFail=${env.fail} envReady=${env.ready} ` +
-                `envBlank=${env.blank} gaveUp=${env.gaveUp} softAdapter=${be.softAdapter} ` +
-                `headless=${be.headless} meanLuma=${frame.meanLuma != null ? frame.meanLuma : "n/a"}` +
-                (g.softBlitAtShot ? ` blit=${g.softBlitAtShot}/${g.softBlitWaitMs}ms` : "") +
-                // HOW gpuErrors was drained on GLX: "beat" = ~1 Hz explicit drain
-                // (the default since hunt 4 I2), "present" = --gl-err-drain.
-                (path3 === "glx" && g.glErrDrain ? ` glErrDrain=${g.glErrDrain}` : "") +
-                (g.present ? ` shot=${g.present.mode}${g.present.gen != null ? "@" + g.present.gen : ""}` : ""));
-            // The SECOND row is what makes an appearance number readable. A
-            // meanLuma comparison between two legs is only a comparison if both
-            // ran the same content: tier decides whether the env probe (rung 1)
-            // and the rest of the ladder are live, envFace says whether a cold
-            // probe was progressing or never asked, and scale says whether the
-            // governor shrank the buffer under a CPU-bound present. Run 25 read
-            // 46.9 vs 66.2 across the two three.js backends with none of this
-            // recorded, and the gap is still an open lead for exactly that
-            // reason (docs/PERF-FINDINGS.md 2t).
-              // THE TAIL, which fps cannot show. fps is an EMA and floorMs a
-              // derived budget: a frame costing 120 ms once every few seconds
-              // moves neither. p99 against p50 is the discriminator — a healthy
-              // p50 beside a p99 several times it IS a spike train, while both
-              // rising together is plain slowness. Printed here because the
-              // previous run put these numbers in the JSON artifact only, so
-              // reading the one line that answers the question meant
-              // downloading a 12 MB zip.
-              // TOP LEVEL, not under gfx: gpu-game-check writes out.frameTail
-              // beside out.gfx, and the first wiring read gfx.frameTail — so
-              // the row silently never printed on run 35748268014, the one run
-              // that finally had the real present path to measure.
-              // THE WINDOW ITSELF. Census 207 reported 0 spikes on the three.js /
-              // WebGPU leg and every one of its fifteen beats sat inside the
-              // program warm (presentMs 0, governor ring n=1): the pre-race phase
-              // takes 10-15 s on this runner and the old window opened at arm()
-              // with the car parked. The gate now waits for the race and the
-              // driver moves the car; this row says whether that happened, how
-              // long the lights held by warm stage, and how far the car went.
-              const _rc = g.race;
-              if (_rc && _rc.reached === false) {
-                rows.push(`${" ".repeat(8)}race:  NOT REACHED in ${_rc.gateMs} ms — every row below timed the LIGHTS, not the race` +
-                  (_rc.warm ? `  (warm: scene=${_rc.warm.scene} post=${_rc.warm.post} shadow=${_rc.warm.shadow} total=${_rc.warm.total} ms, pending=${_rc.warm.pending})` : ""));
-              } else if (_rc) {
-                const _w = _rc.warm, _d = _rc.driven;
-                rows.push(`${" ".repeat(8)}race:  gate=${_rc.gateMs}ms beats=${_rc.beats}` +
-                  (_w ? `  warm scene=${_w.scene} post=${_w.post} shadow=${_w.shadow} total=${_w.total} ms attempts=${_w.attempts} failed=${_w.failed}` : "  warm: none (no TLX warm on this leg)") +
-                  (_d ? `  | driven ${_d.frames}f ${_d.distM} m mean ${_d.meanSpeed} m/s offRoad=${_d.offRoadFrames}f${_d.error ? " driverError=" + _d.error : ""}` : _rc.drive ? `  | driver ${_rc.driver || "not started"}` : "  | PARKED (--no-drive)"));
-              } else {
-                rows.push(`${" ".repeat(8)}race:  no race gate in this build — the window opened at arm(), car parked`);
-              }
-              // Programs and materials over the window, first beat to last: a
-              // program count that climbs while driving is the lazy-program
-              // tally; a material miss or evict count that climbs is tlx.js
-              // minting materials on the road (MAT_CACHE_CAP).
-              const _mmB = (g.beats || []).filter((b) => b && b.mm);
-              if (_mmB.length >= 2) {
-                const a = _mmB[0].mm, z = _mmB[_mmB.length - 1].mm;
-                const d = (k) => (a[k] != null && z[k] != null) ? `${k} ${a[k]}→${z[k]} (+${z[k] - a[k]})` : `${k} ?`;
-                rows.push(`${" ".repeat(8)}mats:  ${["progs", "mats", "pool", "miss", "evict"].map(d).join("  ")}`);
-                // The keys minted during the window: the recent misses of the
-                // last beat that the first beat had not seen (emissive, alpha,
-                // roughness, metalness, specular, detail, clearcoat, carPaint,
-                // sparkle, then the flags).
-                const _k0 = new Set(a.keys || []), _kNew = (z.keys || []).filter((k) => !_k0.has(k));
-                if (_kNew.length) rows.push(`${" ".repeat(8)}       minted: ${_kNew.slice(-8).join(" | ")}`);
-              }
-              const _ft = g.frameTail;
-              if (_ft && _ft.p99 != null) {
-                rows.push(`${" ".repeat(8)}tail:  p50=${_ft.p50} p95=${_ft.p95} p99=${_ft.p99} max=${_ft.max} p99/p50=${_ft.p99OverP50}x` +
-                  `  (beats=${_ft.beats})`);
-              } else if (_ft && _ft.note) {
-                rows.push(`${" ".repeat(8)}tail:  ${_ft.note}`);
-              }
-              // THE PERIOD OF THE TAIL — the row that answers the actual
-              // report. Everything else here is a settled number: fps is an
-              // EMA, floorMs a derived budget, and the tail row above is built
-              // from per-beat percentiles, so its max-of-p95 collapses onto the
-              // single worst stall (run 195 printed p95 == p99 == max on all
-              // four legs). This one is analyse() over the wall cost of every
-              // rAF callback: how many frames cost far more than the typical
-              // frame OF THIS LEG, and whether they are EVENLY SPACED. A low
-              // CV over several spikes is a mechanism on a clock; a CV near 1
-              // is ordinary load.
-              const _h = g.hitch;
-              if (_h && _h.ok) {
-                rows.push(`${" ".repeat(8)}hitch: ${_h.spikes} spikes/${_h.frames}f over ${_h.spikeThresholdMs}ms` +
-                  `  every ~${_h.gapMedianS}s (CV ${_h.gapCV}) periodic=${_h.periodic}  max=${_h.max}ms`);
-              } else if (_h && _h.note) {
-                rows.push(`${" ".repeat(8)}hitch: ${_h.note}`);
-              }
-              // THE PASS CENSUS, which only this job can take at the size a
-              // player renders. tlx-shadow.js sizes its maps by softwareGL:
-              // SUN_SIZE is 512 on a software adapter against 2048 on a real
-              // desktop, CAR_SIZE 256 against 1024. macos-latest reports
-              // softAdapter=false, so the container measured a sun shadow
-              // rebuild at a sixteenth of its real pixel count and found it
-              // cost 1.3x a normal frame. Same statistic here, at full size.
-              const _p = g.passes, _pk = g.passKinds;
-              if (_p && _p.medianPasses != null) {
-                rows.push(`${" ".repeat(8)}pass:  median=${_p.medianPasses} max=${_p.maxPasses} wide=${_p.widerThanMedian}` +
-                  ` every ~${_p.gapMedianS}s (CV ${_p.gapCV})` +
-                  (_p.wideCostRatio != null ? `  cost ${_p.wideCostRatio}x normal (${_p.wideMeanMs} vs ${_p.normalMeanMs}ms) spikeEnrich ${_p.spikeEnrichmentOnWide}x` : ""));
-              }
-              if (_pk && _pk.verdict) rows.push(`${" ".repeat(8)}kinds: ${_pk.verdict}`);
-              // PIPELINE COMPILES, which decide what the race-start burst
-              // actually IS. Run 197 watched the uniform buffer count go
-              // 90 -> 558 in one second as the race started and fps halve,
-              // with 258/346/441/556 ms frames in that window. A new uniform
-              // buffer is a new RenderObject either way; only a compile count
-              // separates "allocate faster" from "warm the programs".
-              const _w = g.gpuWork;
-              if (_w && !_w.note) {
-                const keys = Object.keys(_w).sort((a, b) => _w[b] - _w[a]).slice(0, 6);
-                rows.push(`${" ".repeat(8)}work:  ${keys.map((k) => `${k}=${_w[k]}`).join(" ")}`);
-              } else if (_w && _w.note) {
-                rows.push(`${" ".repeat(8)}work:  ${_w.note}`);
-              }
-              // The compile stacks, one row per signature: which draw asked
-              // for a program the warm never built. The OURS half is the part
-              // that names a fix; the frames from three only say it compiled.
-              // WHERE THE CPU TIME GOES, by function, over the race window.
-              // Self time from timeDeltas, folded by (function, file:line)
-              // and by file. Property names survive minification, so the
-              // rows from three name themselves.
-              const _cpu = g.cpu;
-              if (_cpu && !_cpu.note) {
-                rows.push(`${" ".repeat(8)}cpu:   ${_cpu.totalMs} ms sampled — ${(_cpu.files || []).slice(0, 4).map((f) => `${f.file}=${(f.share * 100).toFixed(0)}%`).join(" ")}`);
-                for (const r of (_cpu.rows || []).slice(0, 14)) {
-                  rows.push(`${" ".repeat(8)}  ${String((r.share * 100).toFixed(1)).padStart(5)}%  ${String(r.ms).padStart(8)} ms  ${r.site}`);
-                }
-              } else if (_cpu && _cpu.note) {
-                rows.push(`${" ".repeat(8)}cpu:   ${_cpu.note}`);
-              }
-              const _cs = g.compileStacks || [];
-              for (const [sig, count] of _cs.slice(0, 12)) {
-                rows.push(`${" ".repeat(8)}stack: x${count}  ${String(sig).slice(0, 300)}`);
-              }
-              // INSIDE THE SPIKES: the profile joined to the frames at or over
-              // 100 ms, and the resource calls those frames made against the
-              // rest. Census 208 named build, the garbage collector and
-              // writeBuffer across the whole window; this says which of them sat
-              // inside the callbacks a player feels.
-              const _sc = g.spikeCpu, _sw = g.spikeWork;
-              if (_sc && _sc.spikes != null && _sc.spikes > 0) {
-                rows.push(`${" ".repeat(8)}spike: ${_sc.spikes} frames >= ${_sc.thresholdMs} ms, ${_sc.spikeMs} ms of callbacks, ${_sc.sampledMs} ms sampled inside (join ${_sc.coverage}x)`);
-                for (const r of (_sc.rows || []).slice(0, 8)) rows.push(`${" ".repeat(8)}  ${String((r.share * 100).toFixed(1)).padStart(5)}%  ${String(r.ms).padStart(8)} ms  ${r.site}${r.path ? "  <- " + String(r.path).slice(0, 160) : ""}`);
-                if (_sw && _sw.frames != null) rows.push(`${" ".repeat(8)}       work inside vs rest: ${_sw.summary}`);
-                if (_sw && _sw.timed) rows.push(`${" ".repeat(8)}       wall time inside vs rest: ${_sw.timed}`);
-                if (_sw && _sw.remainder) rows.push(`${" ".repeat(8)}       ${_sw.remainder}`);
-                const _sp = g.spikePasses;
-                if (_sp && _sp.summary) rows.push(`${" ".repeat(8)}       passes in spike frames vs rest: ${_sp.summary}`);
-              } else if (_sc && _sc.note) {
-                rows.push(`${" ".repeat(8)}spike: ${_sc.note}`);
-              }
-              // THE GAPS (hunt 4 §A gap ii): rAF intervals >= 500 ms since page
-              // load, which the spike rows (callbacks >= 100 ms) cannot see —
-              // the opening first-draw stall is time in which nothing ran.
-              const _gw = g.gapWork;
-              if (_gw && _gw.rows && _gw.rows.length) {
-                rows.push(`${" ".repeat(8)}gaps:  ${_gw.summary}`);
-                for (const x of _gw.rows.slice(0, 6)) {
-                  rows.push(`${" ".repeat(8)}  ${String(x.gapMs).padStart(6)} ms [${x.phase}] at +${x.atMs} ms: step before ${x.prevFrameMs} ms, long tasks ${x.longTaskMs} ms — prev: ${x.prev} | between: ${x.between}`);
-                }
-              } else if (_gw && (_gw.summary || _gw.note)) {
-                rows.push(`${" ".repeat(8)}gaps:  ${_gw.summary || _gw.note}`);
-              }
-              // RACE ENTRY BY NAMED SPAN (hunt 4 B-F3.3): each long task and rAF
-              // gap from race() to the end of race entry, placed in the
-              // RaceEntryProfile leg / mark span / TLX warm stage it overlaps
-              // most — measured, where hunter B had to infer it from timing.
-              const _rs = g.raceEntrySpans;
-              if (_rs && _rs.events) {
-                rows.push(`${" ".repeat(8)}marks: ${_rs.summary}`);
-                for (const x of _rs.events.slice(0, 6)) {
-                  rows.push(`${" ".repeat(8)}  ${String(x.ms).padStart(7)} ms ${x.kind.padEnd(8)} at +${x.atMs} ms -> ${x.span ? `${x.span} (${Math.round(100 * x.share)}%)` : "(no span)"}` +
-                    (x.also && x.also.length ? ` also ${x.also.join(", ")}` : "") + ` | after ${x.after || "-"}, before ${x.before || "-"}`);
-                }
-              } else if (_rs && _rs.note) {
-                rows.push(`${" ".repeat(8)}marks: ${_rs.note}`);
-              }
-              // THE DRIVEN WINDOW (hunt 4 I4), in game frames from LoopHealth:
-              // the number to compare across legs and runs. The gov row below
-              // is the END-of-run ring, which also holds the frozen A/B frames
-              // (three/WebGL2 read "42.4 fps, tier 0" there against 18.9 in
-              // the window on census454).
-              const _win = g.window;
-              if (_win && _win.frames != null) {
-                rows.push(`${" ".repeat(8)}window: ${_win.frames} frames in ${_win.ms} ms = ${_win.fps} fps` +
-                  (_win.msPerFrame != null ? ` (${_win.msPerFrame} ms/frame)` : "") +
-                  (_win.p50 != null ? `  interval p50=${_win.p50} p95=${_win.p95} p99=${_win.p99} max=${_win.max} ms` : "") +
-                  (_win.callbacksPerFrame != null ? `  rAF/frame=${_win.callbacksPerFrame}` : "") + `  [${_win.source}]`);
-              } else if (_win && _win.note) {
-                rows.push(`${" ".repeat(8)}window: ${_win.note}`);
-              }
-              // THE DEPTH-DISCARD ROW (hunt 4 A-P1): TLX post.state().depth over
-              // the driven window. GLX/WGX have no TLX post; a TLX leg that lost
-              // the row says why rather than printing nothing.
-              const _dd = g.depth;
-              if (_dd && _dd.supported) rows.push(`${" ".repeat(8)}depth: ${_dd.summary}`);
-              else if (tlxLeg) rows.push(`${" ".repeat(8)}depth: NOT MEASURED — ${(_dd && _dd.note) || "the leg wrote no depth row"}`);
-              // THE CAMERA THE WINDOW DROVE (hunt 4 H5) and the mirror chain it
-              // left: helmet/cockpit glass latches the full mip chain (mipFull),
-              // so only a chase leg shows the apex26.tlxMirMips cap.
-              const _cam = g.cam, _mir = g.mirror || {}, _mb = _mir.backend || {};
-              if (_cam) {
-                const off = _cam.error || (_cam.asked && _cam.set !== _cam.asked) || (_cam.atWindowEnd && _cam.set && _cam.atWindowEnd !== _cam.set);
-                rows.push(`${" ".repeat(8)}cam:   ${_cam.set || "?"} (asked ${_cam.asked || "game default"}, at window end ${_cam.atWindowEnd || "?"})` +
-                  (_mir.mode !== undefined ? `  mirror=${_mir.mode} shown=${_mir.shown}` : "") +
-                  (_mb.mips !== undefined ? ` mips=${_mb.mips} cap=${_mb.mipCap} full=${_mb.mipFull}` : "") +
-                  (off ? `   <- CAMERA NOT AS ASKED${_cam.error ? ": " + _cam.error : ""}` : ""));
-              }
-              rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
-                `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face} frames=${(gov.open && gov.open.frames) != null ? gov.open.frames : "?"}`
-                // ...and the OTHER way this column lies. floorMs 16.6 is 1/60 s,
-                // the value PerfGov is INITIALISED with, so a leg that never fed
-                // it reports a perfect fps=60 that is not a measurement at all.
-                // That one was read as real too (PERF-FINDINGS 2t, a 12x gap that
-                // was not a gap). The path row below says when a FED value is
-                // still incomparable; this says when there is no value.
-                + (Math.abs((gov.floorMs || 0) - 16.6) < 0.2 ? "   <- fps UNFED (floorMs is the init value); not a measurement" : ""));
-            // A LEG THAT RENDERED ALMOST NOTHING MEASURED NOTHING. Run 72s
-            // webgpu leg drew SIX frames at 4.9 fps, never completed a probe
-            // cycle, and reported meanLuma 43.2 where run 71 read 2.9 — which
-            // looks exactly like the black-world fix landing, and is not: it is
-            // the ordinary probe-never-latched number that runs 25, 54 and 70
-            // also read. Runs 54 and 72 both fell into this mode. Say so on the
-            // row instead of leaving the next reader to divide frames by fps
-            // and hope they notice. NOT a gate: a slow runner is not a defect
-            // in the build, it is a run that answered no question.
-              if (tlxLeg && (gov.open && gov.open.frames) != null && gov.open.frames < 60) {
-                rows.push(`${" ".repeat(8)}run:   ONLY ${gov.open.frames} frames rendered — INCONCLUSIVE: this leg measured the runner, not the build, and its appearance and env numbers are not comparable with any other run`);
-              }
-            // THE PRESENT PATH, and it is the difference between a comparison
-            // and a mistake. tlx.js soft-blits (GPU readback + putImageData
-            // EVERY FRAME) whenever `!forceWebGL && (_softAdapter || _headless
-            // || cap==="1")`, and Playwright is always headless — so the
-            // WebGPU leg (tlxForceGL="0") takes the readback path while the
-            // WebGL2 leg ("1") short-circuits it off. `headless=true` prints
-            // on BOTH legs and therefore discriminates nothing; forceWebGL is
-            // the field that does, and it was collected in the artifact and
-            // never shown. Run 61 read 600 frames on WebGL2 against 5 on
-            // WebGPU and the gap was read as a backend difference on this very
-            // page; it is a readback against a direct present. Compare frames
-            // or fps across these two legs ONLY when this line matches.
-            // docs/notes/PERF-FINDINGS.md says the same at "DIFFERENT PRESENT
-            // PATHS"; printing it here is what makes it unmissable.
-            // RACE ENTRY — the multithreading plan gate (its section 4), and the
-            // only reason that plan has a real-hardware answer at all: two of
-            // its three conditions need a real CPU and the third needs a real
-            // driver, and this is the one image the census calls hardware.
-            // REPORTED, NOT GATED, for the reason the header gives: a timing
-            // floor is exactly the kind of threshold that goes flaky and then
-            // gets widened to pass, which AGENTS.md forbids outright.
-            // longestBlockMs is CONTIGUOUS block, which is the condition as
-            // written — a sum would count a window that is already yielding,
-            // and a worker overlaps a freeze, not a yield.
-            // EVERY absence prints. The first cut covered supported:false and
-            // note, and nothing else — so when the ubuntu webgl2 leg timed out
-            // before the read, bounded() returned an {error} object that
-            // matched neither branch and the row vanished entirely. A silently
-            // missing row is the one shape this file keeps having to relearn:
-            // absence must never read as normal (PERF-FINDINGS 2j, 2l).
-              const re = g.raceEntry || {};
-              if (re.supported === false || re.note || re.error) {
-                rows.push(`${" ".repeat(8)}entry: NOT MEASURED — ${re.note || re.error || "no longtask observer"}`);
-              } else if (re.longestBlockMs == null) {
-                rows.push(`${" ".repeat(8)}entry: NOT MEASURED — the leg wrote no raceEntry at all (it died before the read)`);
-              } else if (re.longestBlockMs != null) {
-                const verdict = re.longestBlockMs > 400
-                  ? (re.otherBlockMs >= 300 ? "conditions 1 and 3 HOLD"
-                                            : "condition 1 holds, condition 3 FAILS: too little other work to overlap, so a worker buys a spinner")
-                  : "condition 1 FAILS: the block is under 400 ms, so the plan says record the item as DEAD";
-                rows.push(`${" ".repeat(8)}entry: window=${re.entryMs}ms longestBlock=${re.longestBlockMs}ms ` +
-                  `otherBlock=${re.otherBlockMs}ms tasks=${re.tasks}`);
-                rows.push(`${" ".repeat(8)}       ${verdict}`);
-              }
-            // WHICH HALF a worker would move. The entry row says the block is
-            // JavaScript; this says whether it is the track build, and which
-            // phase of it. Reported, not gated, for the same reason.
-              const bp = g.buildProfile || {};
-              if (bp.note || bp.error) {
-                rows.push(`${" ".repeat(8)}build: NOT MEASURED — ${bp.note || bp.error}`);
-              } else if (bp.totalMs != null) {
-                rows.push(`${" ".repeat(8)}build: total=${bp.totalMs}ms geo=${bp.geoMs}ms up=${bp.upMs}ms geoShare=${bp.geoShare}`);
-                rows.push(`${" ".repeat(8)}       hottest: ${(bp.top || []).join("  ")}`);
-            // CONDITION 2, COMPUTED. This step had both numbers in hand and
-            // printed "still unanswered" beside them because that string was
-            // written before the build row existed — a tool that can do the
-            // division and makes a reader do it instead is the same defect as
-            // a verdict line that reports a run which never happened.
-            //
-            // TWO ratios, because they answer different questions and the plan
-            // only names one. Against the longest single task it is the
-            // condition as written. Against ALL blocking in the window it is
-            // what actually decides whether a worker helps: work moved off the
-            // main thread only removes the freeze it was itself causing.
-                const lb = re.longestBlockMs, tb = (re.longestBlockMs || 0) + (re.otherBlockMs || 0);
-                if (lb) {
-                  const ofLongest = Math.round(100 * bp.totalMs / lb), ofAll = Math.round(100 * bp.totalMs / tb);
-                  rows.push(`${" ".repeat(8)}       cond2: build is ${ofLongest}% of the longest block, ${ofAll}% of ALL blocking in the window`);
-                  rows.push(`${" ".repeat(8)}       ${ofAll >= 50
-                    ? "condition 2 HOLDS on both ratios"
-                    : ofLongest >= 50
-                      ? `condition 2 holds as WRITTEN but fails on the ratio that decides: moving the whole build off-thread leaves ${100 - ofAll}% of the freeze in place`
-                      : "condition 2 FAILS on both ratios — the build is not the block"}`);
-                }
-              }
-            // startRace phase by phase. The build is one row of it.
-              const rp = g.raceProfile || {};
-              if (rp.note || rp.error) {
-                rows.push(`${" ".repeat(8)}enter: NOT MEASURED — ${rp.note || rp.error}`);
-              } else if (rp.totalMs != null) {
-                rows.push(`${" ".repeat(8)}enter: startRace total=${rp.totalMs}ms  hottest: ${(rp.top || []).join("  ")}`);
-              }
-            // GPU time against pixel count — the fragment-bound test. Two runs
-            // with apex26.resMode pinned differently make it an A/B; one run
-            // alone just records the number.
-              const gf = g.gpuFrame || {};
-              if (gf.note || gf.error) {
-                rows.push(`${" ".repeat(8)}gpu:   ${gf.note || gf.error}`);
-              } else if (gf.medianMs != null) {
-                const px = gf.canvas && gf.canvas.w ? gf.canvas.w * gf.canvas.h : null;
-                rows.push(`${" ".repeat(8)}gpu:   median=${gf.medianMs}ms over ${gf.samples} samples  scale=${gf.scale}`
-                  + (px ? `  canvas=${gf.canvas.w}x${gf.canvas.h} (${(px / 1e6).toFixed(2)} MP)` : "")
-                  // hunt 4 I5: the backends time different work; compare within one span only.
-                  + (gf.span ? `  span=${gf.span} (compare within a backend only)` : ""));
-              }
-            // Occlusion culling: counted, never timed.
-              const oc = g.occlusion || {};
-              if (oc.note || oc.error) {
-                rows.push(`${" ".repeat(8)}occl:  NOT MEASURED — ${oc.note || oc.error}`);
-              } else if (oc.supported === false) {
-                rows.push(`${" ".repeat(8)}occl:  not supported on this backend (GLX only)`);
-              } else if (oc.on === false) {
-                rows.push(`${" ".repeat(8)}occl:  off (apex26.occlusionCull unset) — supported=${oc.supported}`);
-              } else {
-                rows.push(`${" ".repeat(8)}occl:  ON  tested=${oc.tested} culled=${oc.culled} queries=${oc.queries} passes=${oc.passes}`
-                  + (oc.tested ? `  -> ${Math.round(100 * oc.culled / oc.tested)}% of candidate chunks skipped` : "  <- NOTHING TESTED: the pass never ran"));
-                rows.push(`${" ".repeat(8)}       query lag: max=${oc.lagMax} avg=${oc.lagAvg} passes`
-                  + (oc.lagMax > 4 ? "   <- SLOW: a flag this late pops when the camera moves" : ""));
-              }
-            // The same counters after DRIVING, because a parked camera hides
-            // every popping risk this feature has.
-              const om = g.occlusionMoving || {};
-              if (om.tested != null) {
-                rows.push(`${" ".repeat(8)}       moving: tested=${om.tested} culled=${om.culled} lagMax=${om.lagMax} lagAvg=${om.lagAvg}`
-                  + (om.tested ? `  -> ${Math.round(100 * om.culled / om.tested)}% skipped` : ""));
-              } else if (om.note || om.error) {
-                rows.push(`${" ".repeat(8)}       moving: NOT MEASURED — ${om.note || om.error}`);
-              }
-            // THE IN-RUN A/B. Same commit, same runner, clock pinned — the only
-            // comparison of two flag states this workflow can make honestly.
-              for (const ab of [g.occlusionAB, g.multiDrawAB]) {
-              if (!ab) continue;
-              const tag = (ab.feature === "multiDraw" ? "mdraw" : "occl ").padEnd(5);
-              if (ab.skipped) {
-                rows.push(`${" ".repeat(8)}${tag} A/B: skipped — ${ab.note}`);
-              } else if (ab.note || ab.error) {
-                rows.push(`${" ".repeat(8)}${tag} A/B: NOT MEASURED — ${ab.note || ab.error}`);
-              } else if (ab.off && ab.on) {
-                const pr = ab.paired || {};
-                rows.push(`${" ".repeat(8)}${tag} A/B: gpu off=${pr.off != null ? pr.off : ab.off.median}ms on=${pr.on != null ? pr.on : ab.on.median}ms  delta=${ab.gpuDeltaPct}% (interleaved, ${pr.samples || 0} samples)  `
-                  + `clock=${ab.clock != null ? ab.clock + ":00" : "?"} clockPinned=${ab.clockPinned} simFrozen=${ab.simFrozen}`
-                  + (ab.gpuDeltaPct != null && ab.gpuDeltaPct > 0 ? "   <- COSTS time here" : "   <- saves time here"));
-            // THE FLOOR FIRST. off against off2 is the same state twice, so it
-            // is what this run cannot hold still; the effect below only means
-            // anything if it clears it. Borrowing a floor from another leg or
-            // another run is what produced two withdrawn conclusions.
-                const nf = ab.noiseFloor || {}, px = ab.pixels || {};
-                if (nf.pctDiffering != null) {
-                  rows.push(`${" ".repeat(8)}       floor:  same state twice -> ${nf.pctDiffering}% of pixels, gpu ${ab.gpuNoisePct}%`);
-                }
-            // WHICH FRAMES WERE SHOT (hunt 4 I1). native = the live canvas two
-            // rAFs after the toggle; soft = a blit awaited after invalidate,
-            // with its generation. Equal gens are one frame shot three times.
-                const pv = ["off", "off2", "on"].map((k) => (ab[k] && ab[k].present) || null);
-                if (pv.some(Boolean)) {
-                  rows.push(`${" ".repeat(8)}       frames: ${pv.map((p, i) => `${["off", "off2", "on"][i]}=${p ? p.mode + (p.gen != null ? "@" + p.gen : "") + (p.error ? "(" + p.error + ")" : "") : "?"}`).join(" ")}`
-                    + (ab.freshFrames === false ? "   <- STALE: the captures are not fresh frames; the pixel rows below compare the HUD" : ""));
-                }
-                if (px.error) rows.push(`${" ".repeat(8)}       pixels: diff FAILED — ${px.error}`);
-                else if (px.differing != null) {
-                  rows.push(`${" ".repeat(8)}       pixels: ${px.differing} of ${px.ofTotal} differ (${px.pctDiffering}%) maxDelta=${px.maxChannelDelta} meanAbs=${px.meanAbsDelta}`
-                    + (ab.aboveFloor === true ? "   <- ABOVE the floor: the image CHANGED"
-                       : ab.aboveFloor === false ? "   (at the floor — no visible change)" : ""));
-                }
-                const st = (ab.on && ab.on.stats) || {};
-            // COUNTED, AND PER FRAME. A raw total says nothing without the
-            // frames it accumulated over — run 143 reported 4,709 calls for
-            // 4,853 ranges and the ratio could not be read, because a grouping
-            // defect and a scene with almost nothing visible produce the same
-            // 1.03. Both are printed: the total for the record, the per-frame
-            // figure for the judgement.
-                const fr = (ab.on && ab.on.frames) || 0;
-                const per = (n) => (fr > 0 && n != null ? (n / fr).toFixed(1) : "?");
-                if (st.drawElementsAvoided != null) {
-                  rows.push(`${" ".repeat(8)}       counted: ${st.multiCalls} multi-draw calls, ${st.rangesSubmitted} ranges, ${st.drawElementsAvoided} drawElements AVOIDED`
-                    + ` over ${fr} frames -> ${per(st.rangesSubmitted)} ranges/frame in ${per(st.multiCalls)} calls/frame`);
-                }
-            // THE GROUPING ORACLE. perChunkDraws -> consecutiveGroups ->
-            // setGroups is visible chunks, the groups a NEIGHBOUR comparison
-            // makes of them, and the groups their light SETS make. Locally at
-            // vegas night that reads 108.5 -> 24.5 -> 15.0 a frame; this is the
-            // same three numbers on real hardware.
-            // When the lamp branch did NOT run, say why rather than leaving a
-            // missing row to be inferred from. perChunkKnob and allLightsLen are
-            // the two halves of the `perChunk` gate in drawChunked.
-                if (st.plainFrames != null && !st.perChunkDraws) {
-                  rows.push(`${" ".repeat(8)}       grouping: LAMP BRANCH DID NOT RUN — ${st.lampFrames} lamp draws vs ${st.plainFrames} plain;`
-                    + ` perChunkLights=${st.perChunkKnob} allLights=${st.allLightsLen} (gate needs knob>0 AND a lights array)`);
-                }
-                if (st.perChunkDraws) {
-                  rows.push(`${" ".repeat(8)}       grouping: ${per(st.perChunkDraws)} visible chunks/frame -> ${per(st.consecutiveGroups)} groups by NEIGHBOUR -> ${per(st.setGroups)} by SET`
-                    + (st.setGroups > 0 ? `  (${(st.consecutiveGroups / st.setGroups).toFixed(2)}x fewer calls)` : ""));
-                }
-              }
-              }
-              if (tlxLeg) rows.push(`${" ".repeat(8)}path:  api=${be.api} forceWebGL=${be.forceWebGL} softBlit=${be.softBlit === true ? "YES (headless readback — NOT the path a player takes)" : be.softBlit === false ? "no (direct present)" : "?"} skipBatches=${be.skipBatches} gpuErrFrames=${be.gpuErrFrames}`);
-            // ...and the bookkeeping the probe keeps on itself, because run 54
-            // showed tier=0 with envFace=3 and envFail=0 — the producer WAS
-            // called, nothing threw, and the cube still never latched. begins
-            // vs ends says whether faces are lost between envFaceBegin and
-            // envFaceEnd in game.js; mask says whether something clears a full
-            // one. (No apostrophes anywhere in this step: it is one inline
-            // node -e script in single quotes, so one would end it — ci-coverage
-            // pins that.)
-              if (env.begins != null) {
-                rows.push(`${" ".repeat(8)}env:   mask=${env.mask} begins=${env.begins} ends=${env.ends} ` +
-                  `ready=${env.ready} badProbes=${env.badProbes}`);
-              }
-            // The cube-mip pass. PERF-FINDINGS 2t names it the prime suspect for
-            // the WebGPU leg rendering the world near-black (runs 69/70: env
-            // probe on 2.9, off 39.2, three controls unmoved). mipFn is typeof
-            // renderer.generateMipmaps, so "undefined" means the guard around
-            // that pass is a SILENT no-op and the cube latched with empty mips,
-            // which is the state its own code comment predicts reads black.
-            // REPORTED, NOT GATED: the structural gate goes in once a run says
-            // which, and a brightness floor never does (see the header).
-            // WHAT THE CUBE HOLDS, read back from envRT rather than asserted.
-            // envBlank above is a BRANCH MARKER (set only on the software clear
-            // path), so on hardware it says false after every latch and proves
-            // nothing. Run 75 cleared the mip chain and left the world at 2.9,
-            // so this row is the next question: a world, or a void.
-              if (env.cube && env.cube.faces) {
-                const f = env.cube.faces.map((c) => c.m).join("/");
-                rows.push(`${" ".repeat(8)}cube:  mean=${env.cube.mean} max=${env.cube.max} hdr=${env.cube.hdr} faces=${f}`
-                  + (env.cube.max <= 0.002 ? "   <- the cube is BLACK: the probe captured nothing" : ""));
-              } else if (env.cube && env.cube.error) {
-                rows.push(`${" ".repeat(8)}cube:  readback FAILED: ${String(env.cube.error).slice(0, 90)}`);
-              }
-              if (env.mipFn != null) {
-                rows.push(`${" ".repeat(8)}mip:   fn=${env.mipFn} via=${env.mipWhere} ran=${env.mipRan}`
-                  + (env.mipErr ? ` err=${String(env.mipErr).slice(0, 120)}` : "")
-                  + (env.ready === true && env.mipRan === 0
-                     ? "   <- cube LATCHED with no mip pass; empty mips read black" : ""));
-              }
-              if (gfx.govError) rows.push(`${" ".repeat(8)}gov:   read failed: ${gfx.govError}`);
-            // Print the REASON. gpu-game-check records out.error on every caught
-            // failure, and this row used to drop it — which is why a Windows
-            // outage read as contentless and got misfiled as "WARP is slow"
-            // for two sessions. docs/PERF-FINDINGS.md 2f.
-              if (g.error) rows.push(`${" ".repeat(8)}error: ${String(g.error).slice(0, 200)}`);
-              if (g.root) rows.push(`${" ".repeat(8)}root:  ${g.root}`);
-            // Why the ten fields above are empty. bounded() in gpu-game-check
-            // turns a failed read into a VALUE, so the run still says done/ok
-            // and every field derived from gfx comes out undefined — which
-            // reads exactly like a backend with nothing to report.
-              if (g.gfxReadFailed) rows.push(`${" ".repeat(8)}gfx:   ${g.gfxReadFailed}`);
-              if (g.overlayReadFailed) rows.push(`${" ".repeat(8)}ovl:   ${g.overlayReadFailed}`);
-            // Why meanLuma is empty. It read "n/a" on every leg of every run
-            // for months because gpu-game-check never wrote out.frame at all —
-            // an empty column is not the same as a dark frame, and the row said
-            // neither. Appearance still does not GATE (a brightness floor goes
-            // flaky and then gets widened, which AGENTS.md forbids); it now
-            // either carries a number or says why it does not.
-              if (g.frameReadFailed) rows.push(`${" ".repeat(8)}luma:  ${g.frameReadFailed}`);
-              const compileErrors = (g.console || []).filter((line) => /(?:Async render pipeline creation failed|Render pipeline creation failed|ShaderModule|fragment error|vertex error)/i.test(String(line)));
-              if (compileErrors.length) bad.push(`${path3}: ${compileErrors.length} shader/pipeline console errors — ${String(compileErrors[0]).slice(0, 200)}`);
-              if (g.ok !== true || g.phase !== "done") bad.push(`${path3}: did not finish (phase=${g.phase}, ok=${g.ok})${g.error ? " — " + String(g.error).slice(0, 200) : ""}`);
-            // An ABSENT count must not read as clean. gpuErrors was defined only
-            // on WGX, so this clause was vacuous on the GLX leg from the day that
-            // leg was added — it reported null and passed forever. GLX has a real
-            // counter now; a missing one means the backend stopped reporting.
-            // A read that FAILED is not the same as a backend that reports no
-            // count, though both leave gpuErrors undefined — the row above says
-            // which either way. Blocking only on hardware, for the same reason
-            // as the count below: on a software image a leg that cannot bring
-            // its backend up is information, not a regression signal, and the
-            // gate exists to protect the real-GPU answer.
-              if (hardware && g.gfxReadFailed) bad.push(`${path3}: the gfx read failed, so this leg proved NOTHING — ${g.gfxReadFailed}`);
-            // hardware-only, like softAdapter and the env checks below: this
-            // clause exists so an absent count cannot read as clean ON THE
-            // REAL-GPU RUN. A software image may legitimately not bring a
-            // backend up at all, and failing the job for that is noise, not
-            // rigour. macos-latest still fails loudly if it stops reporting.
-              else if (hardware && gfx.gpuErrors == null) bad.push(`${path3}: NO gpuErrors count reported — the error check would pass vacuously (see docs/PERF-FINDINGS.md 2e)`);
-              else if (gfx.gpuErrors > 0) bad.push(`${path3}: ${gfx.gpuErrors} uncaptured GPU errors — ${String(gfx.gpuFirstError || "").slice(0, 160)}`);
-              // `(env.fail || 0) > 0` was the SAME banned shape as the gpuErrors
-              // fix twelve lines up, on the same object: a build that stops
-              // exporting envState().fail reads as clean. Absence fails on
-              // hardware instead. envState().fail is `_envFailN`, initialised 0
-              // (js/render/three/tlx.js 1112) and always a number once the
-              // surface exists — so on a hardware TLX leg an ABSENT count means
-              // the surface is gone or envState() threw, never "no failures".
-              // docs/PERF-FINDINGS.md 2j.
-              if (hardware && tlxLeg && env.fail == null) bad.push(`${path3}: NO env-probe fail count reported — the env check would pass vacuously`);
-              else if (env.fail > 0) bad.push(`${path3}: ${env.fail} env-probe faces FAILED — ${String(env.failMsg || "").slice(0, 160)}`);
-              // gaveUp needs no absence clause of its own: it lives on the same
-              // envState object, so it is missing exactly when fail is missing
-              // and the clause above has already failed the run. A second push
-              // would name one root cause twice.
-              if (env.gaveUp) bad.push(`${path3}: the env probe stood down — it could not succeed`);
-              if (hardware && be.softAdapter === true) bad.push(`${path3}: softAdapter TRUE on an adapter the census called hardware — the classification regressed and the game is running the degraded content path`);
-              // The WGX leg: gpu-game-check reports wgx (GLX.softPresent exists,
-              // i.e. WGX bound rather than falling back to GLX) and wgxSoftPresent.
-              if (path3 === "wgx") {
-                rows.push(`${" ".repeat(8)}wgx:   bound=${gfx.wgx} softPresent=${gfx.wgxSoftPresent} headlessUa=${gfx.headlessUa}${gfx.wgxSoftPresent === true && gfx.headlessUa === true ? " (expected: WGX blits under a headless UA by design — but this leg pins apex26.wgxCapture=0, so a blit here means the pin was overridden or no longer honoured)" : ""}`);
-                if (hardware && gfx.wgx !== true) bad.push(`wgx: WGX did not bind on a hardware adapter (fell back to GLX, or the surface stopped reporting) — this leg proved nothing about js/render/webgpu/`);
-                // Run 19 (2026-09-02) failed here on macos-latest: WGX sniffs a
-                // HeadlessChrome UA as software (wgx.js, measured black swapchain
-                // there) so every headless run blits. Only a HEADED hardware run
-                // proves the swapchain path; a headless one proves bind + render.
-                else if (hardware && gfx.wgxSoftPresent === true && gfx.headlessUa !== true) bad.push(`wgx: WGX is soft-presenting (CPU blit) on a headed hardware adapter — the swapchain path is off, every frame pays a readback + putImageData`);
-              }
-            }
-            rows.push("```", "");
-            if (bad.length) rows.push("**FAILED**", "", ...bad.map((b) => `- ${b}`));
-            try { fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, rows.join("\n") + "\n"); } catch (_) { /* summary is best-effort */ }
-            console.log(rows.join("\n"));
-            for (const b of bad) console.error(`::error::REAL-GPU GATE: ${b}`);
-            process.exit(bad.length ? 1 : 0);
-          '
+        run: node tools/gfx/census-verdict.mjs
 
+      # https://github.com/actions/upload-artifact#retention-period — 7 days:
+      # a census is read the day it runs; older answers live in the docs.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -994,4 +488,4 @@ jobs:
             game-*.json
             game-*.png
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 7

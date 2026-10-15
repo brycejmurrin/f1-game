@@ -631,10 +631,25 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
   // Opening a lap builds its classification on demand: gaps, intervals, lap times, sets, the cars out.
   const nested = () => find(lapTable, (n) => n.tag === "table" && n !== lapTable);
   assert.equal(nested().length, 0);
+  const lapKeydown = lapRows[30].listeners.keydown[0];
+  for (const target of find(lapRows[30], (n) => n.tag === "button")) {
+    for (const key of ["Enter", " "]) {
+      let prevented = false;
+      lapKeydown({ key, target, preventDefault() { prevented = true; } });
+      assert.equal(prevented, false, "nested launch buttons retain native " + key + " activation");
+      assert.equal(lapRows[30]["aria-expanded"], "false", "button keys never toggle the lap classification");
+    }
+  }
   lapRows[30].fire("click");
   const board = nested()[0];
   assert.ok(board, "the lap-31 board");
   assert.equal(lapRows[30]["aria-expanded"], "true");
+  for (const [key, expanded] of [[" ", "false"], ["Enter", "true"]]) {
+    let prevented = false;
+    lapKeydown({ key, target: lapRows[30], preventDefault() { prevented = true; } });
+    assert.equal(prevented, true, "the lap row itself still owns its activation keys");
+    assert.equal(lapRows[30]["aria-expanded"], expanded);
+  }
   const boardRows = find(board, (n) => n.tag === "tr" && n.children.some((c) => c.tag === "td"));
   assert.equal(boardRows.length, 22);
   assert.equal(boardRows[0].children[0].text, "P1"); assert.equal(boardRows[0].children[1].text, "RUS"); assert.equal(boardRows[0].children[2].text, "");

@@ -44,13 +44,13 @@ function synthStub() {
 
 /** Both modules in one context: the announcer borrows RadioVoice.speakable()
  *  and RadioVoice.SAMPLE, so loading it alone would test a different file. */
-function load({ api = true, voices = [], stored = {}, soundOn = true, lore = true, clock = null } = {}) {
+function load({ api = true, voices = [], stored = {}, soundOn = true, lore = true, clock = null, document = null } = {}) {
   const saved = new Map(Object.entries(stored));
   // `clock` (fakeClock() below) swaps in fake timers AND a fake Date, so a test
   // can step through a 24 s budget without waiting for it.
   const timers = clock ? { setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, Date: clock.Date }
     : { setTimeout: unrefTimeout, clearTimeout };
-  const ctx = vm.createContext(Object.assign({ Math, JSON, Object, Array, Number, String, Set, console }, timers));
+  const ctx = vm.createContext(Object.assign({ Math, JSON, Object, Array, Number, String, Set, console }, timers, document ? { document } : {}));
   seedLog(ctx);
   const synth = api ? synthStub() : null;
   if (synth) synth._voices = voices;
@@ -327,6 +327,41 @@ test("VOICE VOLUME reaches it — one slider for everything the game speaks", ()
   assert.equal(synth.calls.find((c) => c.m === "speak").volume, 0.3);
 });
 
+test("synth reads the current voice volume for each new line", () => {
+  const { A: An, G, synth, saved } = load({ stored: { volRadio: 0.8 } });
+  const ann = An.create(G);
+  ann.preview(info());
+  const first = synth.calls.filter((c) => c.m === "speak").at(-1).u;
+  G.radio.setVolume(0.2); saved.set("volRadio", 0.2);
+  first.onend();
+  const second = synth.calls.filter((c) => c.m === "speak").at(-1).u;
+  assert.notEqual(first, second);
+  assert.equal(first.volume, 0.8, "already submitted speech is not rewritten");
+  assert.equal(second.volume, 0.2, "the next line follows the slider");
+  first.onend(); first.onerror({ error: "interrupted" });
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 2, "stale terminal callbacks cannot advance the next line");
+  assert.equal(ann.speaking(), true);
+  ann.stop(); second.onend();
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 2, "stop still retires the updated chain");
+});
+
+test("zero voice volume retires the synth read instead of submitting more speech", () => {
+  const { A: An, G, synth, saved } = load({ stored: { volRadio: 0.8 } });
+  const ann = An.create(G);
+  ann.preview(info());
+  const first = synth.calls.filter((c) => c.m === "speak").at(-1).u;
+  G.radio.setVolume(0); saved.set("volRadio", 0);
+  first.onend();
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 1, "no fresh utterance at zero volume");
+  assert.equal(ann.speaking(), false, "a muted read no longer holds the voice channel");
+  G.radio.setVolume(0.6); saved.set("volRadio", 0.6);
+  first.onend(); first.onerror({ error: "interrupted" });
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 1, "raising volume cannot revive retired copy");
+  ann.sample();
+  assert.equal(synth.calls.filter((c) => c.m === "speak").at(-1).volume, 0.6, "an explicit new read remains available");
+  ann.stop();
+});
+
 // ── 5. The channel this borrows has to exist ───────────────────────────────
 
 test("`announcer` is a real RadioVoice channel, with prosody and a preview line", () => {
@@ -423,6 +458,26 @@ test("a cancel from OUTSIDE the announcer ends its read instead of skipping to t
   finishLine(synth);
   assert.equal(spoken(synth).length, first, "an interrupted line ends the chain");
 });
+
+for (const firstEvent of ["end", "error"]) {
+  test(`a system utterance settled by ${firstEvent} cannot disturb its successor`, () => {
+    const { A, G, synth } = load();
+    const ann = A.create(G);
+    ann.preview(info());
+    const first = synth.calls.find((c) => c.m === "speak").u;
+    if (firstEvent === "end") first.onend();
+    else first.onerror({ error: "network" });
+    assert.equal(spoken(synth).length, 2, "a terminal event starts exactly the next line");
+    first.onend();
+    first.onerror({ error: "network" });
+    first.onerror({ error: "interrupted" });
+    assert.equal(spoken(synth).length, 2, "settled line events cannot skip or queue later lines");
+    assert.equal(ann.speaking(), true, "a settled line cannot retire the active line");
+    finishLine(synth);
+    assert.equal(spoken(synth).length, 3, "the active line still owns progression");
+    ann.stop();
+  });
+}
 
 test("the announcer may use a network voice; the race radio may not", () => {
   /* The rule that made the announcer worse. A remote voice's lead-in is
@@ -736,6 +791,48 @@ test("stale recorded callbacks cannot release a replacement preview", async (t) 
     });
   }
 });
+
+function pausedRecordedAudition() {
+  const clock = fakeClock(), spoken = [];
+  const document = { hidden: false, getElementById: () => null, addEventListener() {} };
+  const { A, G } = load({ clock, document });
+  G.paused = true;
+  G.radio = { announcerPackOn: () => true, recordedVoice: () => "bella", volume: () => 0.8,
+    stop() {}, pack: { stop() {}, load: () => Promise.resolve(true), plan: () => ({ secs: 1 }),
+      speak: (_id, text, options) => { spoken.push({ text, options }); return true; } } };
+  return { ann: A.create(G), G, clock, spoken, document };
+}
+
+for (const method of ["preview", "sample"]) {
+  test(`explicit recorded ${method} plays while the race is paused`, async () => {
+    const f = pausedRecordedAudition();
+    f.ann.setEnabled(false); // explicit auditions ignore the automatic-read toggle
+    assert.equal(f.ann[method](info()), true);
+    await Promise.resolve(); f.clock.tick(0);
+    assert.equal(f.spoken.length, 1, "an accepted audition must reach the recorded pack");
+    assert.equal(f.spoken[0].options.valid(), true, "decode validity also permits this paused audition");
+    f.ann.stop();
+    for (const gate of ["sound", "hidden"]) {
+      const g = pausedRecordedAudition();
+      g.ann[method](info()); await Promise.resolve(); g.clock.tick(0);
+      if (gate === "sound") g.G.soundOn = false; else g.document.hidden = true;
+      assert.equal(g.spoken[0].options.valid(), false, `${gate} still aborts an explicit audition`);
+      assert.equal(g.ann.speaking(), false);
+      assert.equal(g.ann[method](info()), false, `${gate} also refuses a new audition`);
+    }
+  });
+}
+
+for (const method of ["play", "wrapUp"]) {
+  test(`automatic recorded ${method} still aborts while paused`, async () => {
+    const f = pausedRecordedAudition();
+    if (method === "play") f.ann.play(info(), 10000);
+    else f.ann.wrapUp([{ name: "Lando Norris", finishT: 100 }], info());
+    await Promise.resolve(); f.clock.tick(0);
+    assert.equal(f.spoken.length, 0);
+    assert.equal(f.ann.speaking(), false);
+  });
+}
 
 test("recorded introductions reserve the closing cue before adding optional colour", async () => {
   const clock = fakeClock(), calls = [];
@@ -1215,4 +1312,13 @@ test("the read is fitted at the PLAYER'S announcer rate: a slow voice is trimmed
   const slow = count(0.6), dflt = count(0), fast = count(1.35);
   assert.ok(slow < dflt, `a slow voice keeps fewer lines (${slow} vs ${dflt}) — fitted at the default it was cut mid-read at 24 s`);
   assert.ok(fast > dflt, `a fast voice keeps more (${fast} vs ${dflt})`);
+});
+
+
+test("storm introductions warn of heavy rain and preserve the existing wet circuit read", () => {
+  const plain = info({ track: { name: "Test circuit", lengthKm: 5 }, weather: "storm" });
+  assert.match(said(plain), /heavy rain/i, "storm is wet weather, not an unmentioned dry default");
+  const spa = info({ track: { id: "spa", name: "Spa", lengthKm: 7.004 }, weather: "storm" });
+  assert.match(said(spa), /rain on one half of this circuit/i, "reuse the authored wet read and its recorded coverage");
+  assert.equal(said(spa), said({ ...spa, weather: "rain" }), "storm keeps the established heavy-rain narration");
 });

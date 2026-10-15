@@ -26,7 +26,7 @@
     // Central-French farmland: soft, cool, slightly overcast light over green
     // fields — Magny-Cours never looked exotic and shouldn't here.
     pal: {
-      zenith:        [0.32, 0.48, 0.70],
+      zenith:        [0.50, 0.60, 0.72],
       horizon:       [0.74, 0.76, 0.72],
       sun:           [0.98, 0.96, 0.86],
       sunColor:      [0.98, 0.96, 0.86],
@@ -34,7 +34,7 @@
       ambientGround: [0.27, 0.29, 0.22],
       fogColor:      [0.72, 0.74, 0.72],
       grass:         [0.22, 0.44, 0.20],
-      sunDir:        [0.42, 0.62, 0.36],
+      sunDir:        [0.50, 0.50, 0.43],
     },
     elevations: [
       { s: 0.24, halfM: 360, rise: 5.0 },
@@ -60,7 +60,7 @@
     // researched real turn count. No researched sectors — consumers fall back to thirds.
     sectors: [0.335, 0.693],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.0905, 0.1450, 0.1675, 0.1830, 0.1945, 0.4130, 0.5350, 0.5475, 0.6050, 0.6165, 0.6355, 0.7575, 0.7695, 0.8170, 0.9540, 0.9780, 0.9840],
-    furniture: { tree: "broad", fol: [0.22, 0.46, 0.22], lamp: "none", treeCrown: "weeping" },  // Nivernais poplar and hedgerow
+    furniture: { tree: "broad", fol: [0.22, 0.46, 0.22], lamp: "none" },  // Nivernais poplar and hedgerow
     kit: { marshal: "cabin",     rail: "wArmco",      fence: "mesh",      tyre: "stack",   board: "trivision", gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["navy", "alu", "concrete"],  // French blue on a plain 1990s facility
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
