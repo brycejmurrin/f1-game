@@ -1,1 +1,0 @@
-1792082936	Bryce Murrin	#2248 wrapped invite final tail: js/net/lobby-codes.js; lobby.js makeAnswer/acceptAnswer resolver call sites only (handoff #2237 comment 6197248901); lobby-codes unit and multiplayer-lobby browser tests; one CHANGELOG line. No lifecycle edits.  [cursor/invite-tail-7f3a; session 533271dfe2df9dbe5c272241]
