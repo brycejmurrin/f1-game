@@ -2,9 +2,9 @@
 
 End-to-end survey of **MONZA** (`js/circuits/monza.js` + `js/circuits/scenery/monza.js`) against
 `docs/tracks/monza.md`, node-VM audits, and headless TLX captures (`node tools/shot/shot.mjs --batch
-docs/tracks/surveys/monza-capture-jobs.json`). **Weather batch capture is deferred** until the shared
-tools PR (`tools: shared shot tooling for circuit surveys`) lands `weather` on batch jobs and the
-`artifacts/shots/tracks/**` gitignore exception; this pass uses **`--tod` only** (day / dawn / dusk / night, dry).
+docs/tracks/surveys/monza-capture-jobs.json`). Batch jobs use shared shot tooling (`cursor/shared-shot-tooling-5b45`)
+for `weather` (wet, rain, overcast, fog, storm) and `tod` (dusk, night); JPEGs are force-added under
+`artifacts/shots/tracks/monza/`.
 
 ## Capture plan (36 frames)
 
