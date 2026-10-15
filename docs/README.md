@@ -26,8 +26,8 @@ drives it.
 ## The area docs (load one on demand)
 
 | Doc | Covers |
-| [ui-experience-studio.md](ui-experience-studio.md) | Appearance profiles, real rendered Home scenes, WATCH controls, contextual pause, career/results and Photo Studio contracts with design research. |
 |---|---|
+| [ui-experience-studio.md](ui-experience-studio.md) | Appearance profiles, real rendered Home scenes, WATCH controls, contextual pause, career/results and Photo Studio contracts with design research. |
 | [FLOW.md](FLOW.md) | The session state machine, the routes into a start (which play the garage/flyby intro), and the finish presentation per mode. |
 | [USAGE-PATHS.md](USAGE-PATHS.md) | End-to-end player journeys: every title door, Garage forward/back, restart, qualifying, championship, TV finishes, WATCH, multiplayer, designer and recovery paths; a regression checklist with source evidence. |
 | [PHYSICS.md](PHYSICS.md) | The driving model and its tuning variables, combined slip, active aero / X-mode, the overtake gate, and the world-space rigid-body authority. **Two rules bind everywhere** — see `AGENTS.md` §Physics. |
@@ -43,7 +43,7 @@ drives it.
 | [PLATFORM.md](PLATFORM.md) | iOS/Safari quirks, controller support, and what a static GitHub Pages host does and does not give you. |
 | [PACKAGING.md](PACKAGING.md) | Desktop (Electron) packaging — frozen appId, version `1.0.<build>`, electron-builder — and Android (Capacitor) sideload APK loop / WebView unknowns. |
 | [BUGS.md](BUGS.md) | Current verified open/fixed shortlist from architecture/bug-hunt passes (not the full chronological ledger). |
-| [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | Contributor orientation: boot, layers, data flow, edit map (complements the full contract in ARCHITECTURE.md). |
+| [TESTING.md](TESTING.md) | Playwright groups, the `node --test` ladder, background runs, CI tiers, and the lookup tables — the full testing reference (reading order points at §1–2 only). |
 
 ## Agent surface and hooks
 
@@ -53,7 +53,7 @@ drives it.
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | Full `window.__apex` dev-API reference (generated), the agent-facing JSON world view (`world`/`field`/`scene`/`rollout`), and the DevTools console recipes. `AGENTS.md` has the short list. |
 | [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | All 185 tuner sliders: range, default, the GLSL uniform each drives, where it is consumed. Generated from `TUNE_DEFS`. |
 | [tracks/](tracks/) | Per-circuit reference material. |
-| [look-survey/README.md](look-survey/README.md) | 4×5 contact sheets from the mcp-probe look-survey (one PNG per finished circuit); written by `tools/lighting/look-survey-sheet.py`. |
+| [look-survey/README.md](look-survey/README.md) | 4×5 contact sheets from the mcp-probe look-survey (one PNG per finished circuit, committed on `track-survey-assets`, not here); written by `tools/lighting/look-survey-sheet.py`. |
 
 ## `notes/` — the dated ledgers
 
@@ -71,6 +71,7 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 | Note | What it records |
 |---|---|
 | [notes/AGENT-WORK-TRACKING-2026-10-14.md](notes/AGENT-WORK-TRACKING-2026-10-14.md) | Where the fleet's backlog lives and why: GitHub Issues + sub-issues vs Linear, Jira, Plane, Notion, Beads, Backlog.md, Taskmaster, Claude Tasks, Obsidian and the agent orchestrators, scored on free / headless / phone / PR tie-in / atomic claim; the four-layer setup behind AGENTS.md §Backlog. |
+| [notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md](notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md) | Which `permissions.allow` shapes pre-approve which MCP servers in cloud sessions, read off `permission_decision` in `list_events` (a repo cannot pre-approve its own `.mcp.json` servers, so auto mode's classifier does; auto siblings need an auto parent; MDN/BrowserStack are a claude.ai connector setting); spawning siblings needs `source_url` and a quoted user grant. |
 | [notes/APEX-STEWARD-CARD-2026-10-05.md](notes/APEX-STEWARD-CARD-2026-10-05.md) | Always-on steward card + hashes (skip re-read of steward / check-changes / PR template when they match); lane mutex; `cursor/<topic>-<hash>` → ship; resolve-swarm cap; tooling/docs merge-train exclusion |
 | [notes/SECOND-BRAIN-2026-10-14.md](notes/SECOND-BRAIN-2026-10-14.md) | Obsidian and agent-memory tools (Basic Memory, Mem0, Zep/Graphiti, Letta, MCP memory, Notion, Logseq) weighed for an agent fleet: keep knowledge in git, Obsidian as a human viewer only; the context-rot and memory-poisoning evidence behind the hidden-Unicode, memory `source:` and `Supersedes:` guards. |
 | [notes/BUG-HUNT-ROUND-2-REGISTER-2026-10-10.md](notes/BUG-HUNT-ROUND-2-REGISTER-2026-10-10.md) | Round-2 whole-tree hunt on the 2026-10-09 tip: 79 findings by area with where each went (merged PR, sibling #1289, handed, open), the method, and the lessons (auto-merge skips the non-required geometry sweeps; stale-baseline ratchets; test-group registration). |

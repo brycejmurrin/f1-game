@@ -392,6 +392,21 @@ test("the test-suite counts in the agent docs and README.md match the files on d
   assert.ok(sawSpecCount, "neither CLAUDE.md nor README.md states a Playwright spec count any more");
 });
 
+test("docs/TESTING.md quotes no hard spec ratio or twin count — the tools print them (#2168)", () => {
+  // Four such figures drifted at once (120 of 127 fixture adopters, 36 of 127
+  // VM-portable, "fourteen" twins listing thirteen, "11 browser specs" beside
+  // "12 specs, 129 tests"), because nothing read TESTING.md for them. The
+  // measuring tools — fixture-consumer-audit.mjs, vm-portable.mjs,
+  // twinned-specs.mjs — print the live figure; the doc names the tool.
+  const text = read("docs/TESTING.md");
+  const hits = [];
+  for (const re of [/\b\d+ of \d+ specs\b/gi,
+    /\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|twenty)\s+(?:of those browser specs|browser specs whose|`?\*-vm\.test\.mjs`? TWINS)/gi,
+    /\b\d+ specs, \d+ tests\b/gi])
+    for (const m of text.matchAll(re)) hits.push(`"${m[0]}" at line ${text.slice(0, m.index).split("\n").length}`);
+  assert.deepEqual(hits, [], "name the measuring tool (fixture-consumer-audit / vm-portable / twinned-specs) instead of a count");
+});
+
 test("the gate ladder is a ladder, and no doc commits its sizes", async () => {
   // The rung sizes ("N of M unit files", "the other N", the ladder table) were
   // committed into five docs until 2026-09-30. Every PR that added a test file
@@ -846,6 +861,25 @@ test("docs/README indexes every live engineering doc", () => {
   const missing = ls("docs", /\.md$/)
     .filter((f) => f !== "README.md" && !index.includes(f));
   assert.deepEqual(missing, [], "a doc under docs/ is not linked from docs/README.md");
+});
+
+test("every markdown table in docs/README.md has a header separator before body rows", () => {
+  const lines = read("docs/README.md").split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!/^\|.+\|/.test(line) || !/\|\s*$/.test(line)) continue;
+    const cells = line.split("|").slice(1, -1);
+    if (!cells.length) continue;
+    const isSeparator = cells.every((c) => /^[\s:|-]+$/.test(c));
+    if (isSeparator) continue;
+    const prev = i > 0 ? lines[i - 1] : "";
+    if (/^\|.+\|/.test(prev)) continue;
+    const next = lines[i + 1] ?? "";
+    const nextCells = next.split("|").slice(1, -1);
+    const nextIsSep = nextCells.length === cells.length
+      && nextCells.every((c) => /^[\s:|-]+$/.test(c));
+    assert.ok(nextIsSep, `docs/README.md table at line ${i + 1} must be followed by a |---| separator row`);
+  }
 });
 
 test("docs/README indexes every research doc too", () => {

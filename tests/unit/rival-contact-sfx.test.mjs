@@ -21,7 +21,6 @@ const ENGINE_SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/so
   "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
   fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
 const RIVALS_SRC = fs.readFileSync(path.join(ROOT, "js/audio/rivals.js"), "utf8");
-const WALL_SRC = fs.readFileSync(path.join(ROOT, "js/physics/wall-clamp.js"), "utf8");
 
 function param(v) {
   const p = {
@@ -209,14 +208,9 @@ test("RivalAudio.emitFieldSfx: lock-up triggers squeal for a rival, not the play
   assert.equal(GameAudio.fieldContactState().fired, mid, "player path stays quiet here");
 });
 
-test("wall-clamp source: AI wall path calls fieldContact, player path still GameAudio.collision", () => {
-  assert.match(WALL_SRC, /GameAudio\.fieldContact/);
-  assert.match(WALL_SRC, /!c\.isPlayer && soundOn/);
-  // Player block still uses collision() and collideT re-arm — byte-identical contract.
-  assert.match(WALL_SRC, /c\.isPlayer && c\.collideT <= 0 && soundOn/);
-  assert.match(WALL_SRC, /GameAudio\.collision\(fxInc/);
-});
-
+// The wall-clamp half (a regex over js/physics/wall-clamp.js) is gone: it
+// passed while every car shared one cooldown key (#2170). Behaviour is pinned
+// in tests/unit/wall-clamp.test.mjs, which runs WallClamp.apply for real.
 test("collideFx gate: rival–rival forwards fieldContact; player branch keeps collision()", () => {
   // Read through gameSource() so this suite does not raise the raw game.js pin.
   const src = gameSource();
@@ -225,5 +219,6 @@ test("collideFx gate: rival–rival forwards fieldContact; player branch keeps c
   const fx = src.slice(start, start + 2800);
   assert.match(fx, /GameAudio\.fieldContact\("bump"/);
   assert.match(fx, /!a\.isPlayer && !b\.isPlayer/);
-  assert.match(fx, /if \(soundOn\) GameAudio\.collision\(impact\)/);
+  assert.match(fx, /GameAudio\.collision\(impact, false, side\)/);
+  assert.match(fx, /const side = Math\.abs\(lat\) > 0\.08/);
 });

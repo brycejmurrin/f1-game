@@ -13,15 +13,9 @@ function create(G) {
 // sites are unchanged (`r.track` still reads synchronously); a caller needing
 // the track BUILT writes `await __apex.race(id)`. The resolved value drops
 // `then` so a second await cannot recurse.
-// RACE ORDER as the game classifies it: running cars by distance, then the
-// retired behind them. A plain prog sort ranked a parked DNF ahead of the cars
-// it stopped in front of, so obs/timing/fieldState disagreed with world().ego.pos
-// and gapAhead measured to a car that is out of the race.
-function raceOrder(cars) {
-  const byProg = (a, b) => b.prog - a.prog;
-  return cars.filter((c) => !c.retired).sort(byProg)
-    .concat(cars.filter((c) => c.retired).sort(byProg));
-}
+// RACE ORDER and the SLIP BUDGET live in agentview.js (loaded first, LAZY_AGENT)
+// so obs()/physState() and world() cannot drift apart (#2172).
+const raceOrder = (cars) => AgentView.raceOrder(cars);
 // The three UI scales take a PERCENT. A fraction (1.6) or junk used to be
 // snapped and SAVED: uiScale(1.6) stored 40 %, uiScale("abc") the default.
 // null still resets; undefined reads.
@@ -198,7 +192,7 @@ function simCareerRound() {
 function lazyTrackEnsure(o) {
   for (const k of Object.keys(o)) {
     const fn = o[k];
-    if (typeof fn !== "function") continue;   // tiltSim (namespace), f1api (module)
+    if (typeof fn !== "function") continue;   // tiltSim (namespace)
     // Never under the loading screen, nor over a stepped or worker build in flight:
     // RACE!'s intro owns the build and `track` is null by design until it lands; race()/tt() build their OWN circuit (a cold title-pick build here doubled race entry, CI 38604708051).
     // Title boots LAZY_CIRCUIT meta stubs (_metaOnly, no path): a sync loadTrack
@@ -565,24 +559,6 @@ const api = {
     }
     try { return localStorage.getItem(KEY) === "1"; } catch (e) { return false; }
   },
-  // The resolved (level, style) the garage hands drawAeroFlaps, plus the pose
-  // pair each element ends up with. An element whose closed and open angles are
-  // EQUAL has been parked by the clearance solver and will never appear to move,
-  // which is invisible from the outside unless something reports it.
-  garageFlaps() {
-    if (!G.setupPreviewOn) return null;
-    const a = G.setupFlapArgs();
-    const els = Car3D.aeroFlaps(a.aLvl, a.style);
-    const deg = (r) => +(r * 180 / Math.PI).toFixed(2);
-    return {
-      aLvl: a.aLvl, style: a.style ? Object.keys(a.style).length : 0,
-      elements: els.map((e) => ({
-        id: e.id, wing: e.wing, hinge: +e.hinge.toFixed(2),
-        closed: deg(e.zAngle), open: deg(e.xAngle), travel: deg(e.zAngle - e.xAngle),
-        parked: Math.abs(e.zAngle - e.xAngle) < 1e-6,
-      })),
-    };
-  },
   garageStep(dt, n) {
     if (!G.setupPreviewOn) return null;
     const step = dt == null ? 1 / 60 : dt;
@@ -667,16 +643,6 @@ const api = {
   },
   // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
   meshToggle(o) { G.hideMeshes = Object.assign({}, G.hideMeshes, o || {}); return G.hideMeshes; },
-  nodesNear(wx, wz, r) {
-    if (!G.track) return [];
-    const r2 = r * r, out = [];
-    for (let i = 0; i < G.track.n; i++) {
-      const dx = G.track.px[i] - wx, dz = G.track.pz[i] - wz;
-      if (dx * dx + dz * dz < r2)
-        out.push({ i, frac: +(i / G.track.n).toFixed(4), x: +G.track.px[i].toFixed(2), y: +G.track.py[i].toFixed(2), z: +G.track.pz[i].toFixed(2) });
-    }
-    return out;
-  },
   // World position and orientation of a track node by fraction (0-1).
   // `{ scenery: true }` asks the question a CIRCUIT FILE asks. A scenery frac
   // is not a racing frac: transformSceneryApi wraps every node-taking helper
@@ -715,6 +681,8 @@ const api = {
     if (G.player.head != null) {
       const tAng = Math.atan2(smp.t[0], smp.t[2]);
       angle = tAng - G.player.head;
+      // A loop, not M4.wrapDelta: player.head integrates yaw unwrapped
+      // (player-forces.js), so a lap or two in it is several turns from tAng.
       while (angle > Math.PI) angle -= 2 * Math.PI;
       while (angle < -Math.PI) angle += 2 * Math.PI;
     }
@@ -754,12 +722,6 @@ const api = {
     return { s, lat, world: [wx, wz], got: { s: p.s, lat: p.lat, dist: p.dist },
              err: { s: ds, lat: p.lat - lat } };
   },
-  wsInfo() {
-    if (!G.player || G.player.px == null) return "world-space not yet initialized";
-    return { pos: [+G.player.px.toFixed(1), +G.player.pz.toFixed(1)],
-             head: +(G.player.head * 180 / Math.PI).toFixed(1) + "°",
-             s: +G.player.s.toFixed(1), x: +G.player.x.toFixed(2) };
-  },
   tuning() {
     return {
       wheelbase: G.WHEELBASE,            // RESPONSE (shorter = snappier)
@@ -783,8 +745,7 @@ const api = {
     if (!G.player || G.player.px == null) return null;
     const slip = Math.atan2(G.player.vLat || 0, Math.max(1, G.player.speed));
     Tracks.sample(G.track, G.player.s, smp);
-    const axFrac = G.player.axFrac ?? Math.min(1, Math.abs(G.player.axEstSm ?? 0) / (LONG_GRIP * gripMult()));
-    const slipFactor = G.player.slipFactor ?? Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
+    const { axFrac, slipFactor } = AgentView.slipBudget(G.player, LONG_GRIP, gripMult());
     return {
       s: G.player.s, x: G.player.x, speed: G.player.speed, prog: G.player.prog,
       px: G.player.px, pz: G.player.pz,
@@ -795,6 +756,9 @@ const api = {
       axEstSm: +(G.player.axEstSm ?? 0).toFixed(2),
       axFrac: +axFrac.toFixed(3),
       slipFactor: +slipFactor.toFixed(3), driving: G.coach.status(),
+      // The DRIVEN axle's circle after the brake-bias re-split (player-forces
+      // c.slipFactor) — not the whole-car budget above. null before a tick.
+      drivenSlip: G.player.slipFactor != null ? +G.player.slipFactor.toFixed(3) : null,
       brakeBias: G.player.brakeBias != null ? +G.player.brakeBias.toFixed(3) : null,   // the SETUP sheet's split (null = BB_REF)
       aeroX: +(G.player.aeroX || 0).toFixed(3),
       xOn: !!G.player.xOn, xArmed: !!G.player.xArmed,
@@ -1377,6 +1341,18 @@ const api = {
   raceProfile: () => (G.raceProfile && G.raceProfile()) || null,
   // Legs + marks + longtask ring (real-device probe; soft-blit CI is not this freeze).
   raceEntryProfile: () => (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.snapshot()) || null,
+  // PerfGov frame history + longtask count for tests/specs/perf-frametime.spec.js.
+  frametimeBench(cmd) {
+    if (typeof GameMetrics === "undefined") return null;
+    if (cmd === "reset") { GameMetrics.frametimeBenchReset(); return true; }
+    if (cmd === "snapshot") return GameMetrics.frametimeBenchSnapshot();
+    return { cmds: ["reset", "snapshot"] };
+  },
+  raceEntryStages: () => (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.stageTable()) || null,
+  raceEntryStageDiff: (raceSnap, practiceSnap) => (
+    typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.diffStages
+      ? RaceEntryProfile.diffStages(raceSnap, practiceSnap)
+      : null),
   // WEBGL_multi_draw (GLX only, apex26.multiDraw). multiDraw(true|false)
   // toggles it live; no argument reports the COUNTED oracle — multi-draw calls
   // issued, ranges inside them, the drawElements calls thereby avoided, and the
@@ -2094,8 +2070,7 @@ const api = {
   obs() {
     if (!G.player || G.player.px == null || !G.track) return null;
     Tracks.sample(G.track, G.player.s, smp);
-    const axFrac = G.player.axFrac ?? Math.min(1, Math.abs(G.player.axEstSm ?? 0) / (LONG_GRIP * gripMult()));   // the stored value first, exactly as physState() reads it
-    const slipFactor = Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
+    const { axFrac, slipFactor } = AgentView.slipBudget(G.player, LONG_GRIP, gripMult());
     const slip = Math.atan2(G.player.vLat || 0, Math.max(1, G.player.speed));
     const kNow = Tracks.curvature(G.track, G.player.s);
     const hwNow = smp.hw, slopeNow = smp.t[1] || 0;
@@ -2434,8 +2409,6 @@ const api = {
   // spins indefinitely, so a test that builds one does not fail — it HANGS,
   // which is far worse. The far endpoint is kept here so the connection can be
   // completed on demand by lobbyWatch(), which drives it to onConnected().
-  // (There is no lobbyFakeConnect(); the nearest name, lobbyFakeConnected(), is
-  // a boolean reader.)
   lobbyFake(on) {
     if (!G.netLobby) return false;
     if (!on) {
@@ -2466,7 +2439,6 @@ const api = {
     });
     return true;
   },
-  lobbyFakeConnected() { return !!_lobbyPeer; },
 
   lobbyWatch() {
     if (!G.netLobby) return false;
@@ -3013,8 +2985,6 @@ const api = {
 
   terminal() { return agentView.terminal(); },
 
-  f1api: typeof F1API !== "undefined" ? F1API : null,
-
   openf1(path) { return apiHook("https://api.openf1.org/v1", path, 'await __apex.openf1("/sessions?circuit_short_name=Monaco&year=2024")'); },
 
   jolpica(path) { return apiHook("https://api.jolpi.ca/ergast/f1", path, 'await __apex.jolpica("/circuits/monaco.json")'); },
@@ -3296,32 +3266,6 @@ const api = {
       try { Log.info("apex", "downloaded apex-diag.json (" + bytes + " bytes)"); } catch (_) {}
     }
     return d;
-  },
-
-  async fetchTrackOutline(sessionKey, driverNumber) {
-    const drv = driverNumber || 1;
-    const res = await fetch(
-      "https://api.openf1.org/v1/location?session_key=" + sessionKey + "&driver_number=" + drv
-    );
-    if (!res.ok) return null;
-    const rows = await res.json();
-    if (!Array.isArray(rows) || !rows.length) return null;
-    // Loop, not Math.min(...spread): a full-session location dump is >65k rows
-    // and spread blows the argument limit (RangeError).
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    for (const r of rows) {
-      if (r.x < minX) minX = r.x; if (r.x > maxX) maxX = r.x;
-      if (r.y < minZ) minZ = r.y; if (r.y > maxZ) maxZ = r.y;
-    }
-    const scale = Math.max(maxX - minX, maxZ - minZ) || 1;
-    // Downsample to ≤400 points for readability
-    const step = Math.max(1, Math.floor(rows.length / 400));
-    return rows
-      .filter((_, i) => i % step === 0)
-      .map(r => ({
-        x: +((r.x - minX) / scale).toFixed(4),
-        z: +((r.y - minZ) / scale).toFixed(4),
-      }));
   },
 };
 lazyTrackEnsure(api);

@@ -195,6 +195,8 @@ test.describe("Car setup catalog — screenshots", () => {
 
   test("portrait setup screenshot", async ({ page }) => {
     await openSetup(page, "mclaren", { draw: true });
-    await page.screenshot({ path: galleryPath("parts-catalog", "catalog-portrait.png") });
+    await expect(page.locator("#carsetup")).toBeVisible();
+    const png = await page.screenshot({ path: galleryPath("parts-catalog", "catalog-portrait.png") });
+    expect(png.length, "a captured frame, not an empty buffer").toBeGreaterThan(1000);
   });
 });

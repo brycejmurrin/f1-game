@@ -35,9 +35,23 @@ function dump() {
   return out;
 }
 
-const diffIdx = process.argv.indexOf("--diff");
-if (diffIdx >= 0) {
-  const before = JSON.parse(fs.readFileSync(process.argv[diffIdx + 1], "utf8"));
+// --help and a typo'd flag answer before the 40-circuit build (#1708).
+// Node >= 22.12 loads the shared ESM parser through require().
+const { exitIfHelp, parseFlags } = require("../lib/cli-args.mjs");
+const argv = process.argv.slice(2);
+exitIfHelp(argv, `usage: node tools/track/track-verts.cjs [--diff before.json]
+  Dumps per-circuit props/road/terrain vertex counts and model diagnostics as JSON;
+  --diff compares against an earlier dump and exits 1 when any circuit changed.`);
+const F = parseFlags(argv, ["--diff"]);
+const stray = argv.filter((a) => !a.startsWith("-") && a !== F.flag("--diff"));
+if (stray.length || (F.has("--diff") && !F.flag("--diff"))) {
+  console.error(F.has("--diff") && !F.flag("--diff") ? "track-verts: --diff needs a file (--diff before.json)"
+    : `track-verts: takes no positional arguments (got ${stray.join(" ")})`);
+  process.exit(1);
+}
+const diffFile = F.flag("--diff");
+if (diffFile) {
+  const before = JSON.parse(fs.readFileSync(diffFile, "utf8"));
   const after = dump();
   const keys = ["props", "road", "terrain", "suppressed", "invalid", "unsafe", "total"];
   let moved = 0;

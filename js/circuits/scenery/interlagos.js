@@ -482,15 +482,6 @@
           }, { required: true });
         }
       }
-      for (const [s, side] of [
-        [0.04, -1], [0.05, 1], [0.055, -1], [0.065, 1], [0.075, -1], [0.085, 1], [0.095, -1],
-      ]) {
-        const k = K(s);
-        // (Three 0.24 m red/white "kerb teeth" place()s stood here at 1.7-3.3 m:
-        // place() sinks a box 0.8 m, so all 21 were whole-top buried and never
-        // rendered — ground-audit. The engine draws the real kerbs.)
-        place(k, side, 4.8, [3.6, 0.22, 10], [0.88, 0.88, 0.88]);
-      }
       // Tyre barriers at the Senna S chicane — blue/white for Turn 1, yellow for T2
       tyreWall(0.04, 0.07,  1, 5, [0.92, 0.92, 0.92]);
       tyreWall(0.06, 0.09, -1, 5, [0.30, 0.55, 0.85]);
@@ -729,7 +720,7 @@
         [0.50, 0.52, 0.58], [0.54, 0.56, 0.62], [0.46, 0.48, 0.54],
         [0.60, 0.58, 0.54], [0.52, 0.54, 0.60], [0.48, 0.50, 0.56],
       ];
-      cityFront(0.52, 0.69, 1, 180, {
+      cityFront(0.52, 0.69, 1, 260, {
         minH: 40, maxH: 78,
         depth: 28,
         palette: SP_PALETTE,
@@ -738,7 +729,7 @@
         step: 110,
         floor: 8,
       });
-      cityFront(0.49, 0.74, 1, 285, {
+      cityFront(0.49, 0.74, 1, 345, {
         minH: 58, maxH: 104,
         depth: 34,
         palette: [[0.42, 0.46, 0.54], [0.50, 0.52, 0.58], [0.56, 0.55, 0.52]],
