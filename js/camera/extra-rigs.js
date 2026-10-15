@@ -13,6 +13,9 @@ const ExtraRigs = (function () {
   const PIT_EYE_OUT = 5.5;       // m past the half-width onto the pit wall
   const PIT_EYE_UP = 3.4;
   const PIT_BACK = 8;            // m of arc behind the car
+  const PIT_EYE_IN = 1.0;        // m past the half-width: the innermost re-site (the wall's kerb face)
+  const PIT_CLEAR = 0.5;         // m of facade the re-sited eye keeps
+  const PIT_SCAN = 0.25;         // m per inward re-site step
 
   const _smpA = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
   const _smpB = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
@@ -138,9 +141,21 @@ const ExtraRigs = (function () {
       const outer = rib.outer != null ? rib.outer : rib.centre + side * 4;
       lat = outer + side * 2.5;
     }
-    eye[0] = _smpA.p[0] + _smpA.r[0] * lat;
     eye[1] = _smpA.p[1] + PIT_EYE_UP + (extra.bankDy || 0) + (rib ? 1.2 : 0);
-    eye[2] = _smpA.p[2] + _smpA.r[2] * lat;
+    // RE-SITE, NEVER LIFT. The pit side is where the stands and pit buildings
+    // are: at a fixed hw + 5.5 m the eye was inside one on 44 of 51 circuits
+    // (15.6 % of Mexico's lap, track gallery 2026-10-15). Walk it in toward the
+    // kerb until it is clear of every solid prop (FlybySeq's set); a lift, as
+    // CamAvoid does for the crane modes, threw it 25–250 m up a street
+    // circuit's towers. The clear edge moves with s, so the eye does too.
+    const inner = side * (hw + PIT_EYE_IN);
+    const n = (typeof FlybySeq !== "undefined" && FlybySeq.insideProp) ? Math.ceil(Math.abs(lat - inner) / PIT_SCAN) : 0;
+    for (let i = 0; ; i++) {
+      const l = n ? lat + (inner - lat) * i / n : lat;
+      eye[0] = _smpA.p[0] + _smpA.r[0] * l;
+      eye[2] = _smpA.p[2] + _smpA.r[2] * l;
+      if (i >= n || !FlybySeq.insideProp(track, eye, PIT_CLEAR)) break;
+    }
     Tracks.sample(track, wrapS(track, s), _smpB);
     const cx = _smpB.p[0] + _smpB.r[0] * x;
     const cz = _smpB.p[2] + _smpB.r[2] * x;

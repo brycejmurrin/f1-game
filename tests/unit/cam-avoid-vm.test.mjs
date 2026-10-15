@@ -15,6 +15,12 @@
  * two samples 1 m of arc apart; a step with 3 m or more of horizontal travel is
  * a shot CUT (cinematic swaps slots), not a lift, and is excluded.
  *
+ * PIT WALL. The pit-wall rig stands its eye a fixed lateral distance outside
+ * the kerb, and it was not in CamAvoid.MODES, so wherever a stand or building
+ * sits on the pit side the player's PIT WALL view was filmed from inside it:
+ * 1.7 % of Vegas, 5.1 % of Singapore and 15.6 % of Mexico's lap (track gallery
+ * B/D, 2026-10-15; 44 of 51 circuits). The road corridor is still exempt.
+ *
  * Run: node --test tests/unit/cam-avoid-vm.test.mjs
  */
 import { test, before, after } from "node:test";
@@ -25,9 +31,11 @@ const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const games = {};
+const PITWALL_TRACKS = ["vegas", "singapore", "mexico"];
 before(async () => {
   games.monza = await createGame({ track: "monza" });
   games.monaco = await createGame({ track: "monaco" });
+  for (const id of PITWALL_TRACKS) games[id] = await createGame({ track: id });
 });
 after(() => { for (const k of Object.keys(games)) games[k].close(); });
 
@@ -84,3 +92,16 @@ test("every mode steps <= 0.52 m (2 dp) per 0.5 m of arc across the s=0 seam and
     }
   }
 });
+
+for (const id of PITWALL_TRACKS) {
+  test(`${id} pitwall: the eye is never inside a solid prop off the road`, () => {
+    const g = games[id], T = g.G.track, L = T.total, sb = g.sandbox;
+    const bad = [];
+    for (let s = 0; s < L; s += 5) {
+      const eye = g.G.camVantage("pitwall", s, 1.5, 60, 0, OPTS).eye;
+      const hit = sb.FlybySeq.insideProp(T, eye, 0);
+      if (hit && !sb.CamAvoid.roadClear(T, eye, 0)) bad.push(`s=${s} ${hit.kind}`);
+    }
+    assert.deepEqual(bad.slice(0, 5), [], `${id} pitwall eye inside ${bad.length} props`);
+  });
+}
