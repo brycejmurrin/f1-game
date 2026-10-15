@@ -223,11 +223,37 @@ test("a board write pokes fleet.yml by REST workflow_dispatch on the deploy bran
   // push-triggered workflow from the pushed tree, which has no .github/), so
   // the claim tool dispatches it — measured live on #1518, 2026-10-14.
   const { pokeFleetBoard } = await import("../../tools/ci/who-is-on-it.mjs");
-  let seen;
-  assert.equal(pokeFleetBoard((cmd, args) => { seen = [cmd, ...args]; return { status: 0 }; }), "dispatched");
-  assert.deepEqual(seen.slice(0, 4), ["gh", "api", "-X", "POST"]);
-  assert.match(seen[4], /^repos\/[^/]+\/[^/]+\/actions\/workflows\/fleet\.yml\/dispatches$/);
-  assert.deepEqual(seen.slice(5), ["-f", "ref=claude/f1-game-project-26h3ng"]);
-  assert.match(pokeFleetBoard(() => ({ status: 1 })), /not dispatched/);
-  assert.match(pokeFleetBoard(() => ({ status: null, error: new Error("ENOENT") })), /not dispatched/);
+  const isQueuedQuery = (args) => args.some((a) => typeof a === "string" && a.includes("/runs?"));
+  const calls = [];
+  const fakeOk = (cmd, args) => {
+    calls.push([cmd, ...args]);
+    return { status: 0, stdout: isQueuedQuery(args) ? "0\n" : "" };
+  };
+  assert.equal(pokeFleetBoard(fakeOk), "dispatched");
+  const post = calls.find((c) => c.includes("POST"));
+  assert.deepEqual(post.slice(0, 4), ["gh", "api", "-X", "POST"]);
+  assert.match(post[4], /^repos\/[^/]+\/[^/]+\/actions\/workflows\/fleet\.yml\/dispatches$/);
+  assert.deepEqual(post.slice(5), ["-f", "ref=claude/f1-game-project-26h3ng"]);
+  assert.match(pokeFleetBoard((cmd, args) => (
+    { status: 0, stdout: isQueuedQuery(args) ? "1\n" : "" }
+  )), /already queued/);
+  assert.match(pokeFleetBoard((cmd, args) => {
+    if (isQueuedQuery(args)) return { status: 0, stdout: "0\n" };
+    return { status: 1 };
+  }), /not dispatched/);
+  assert.match(pokeFleetBoard((cmd, args) => {
+    if (isQueuedQuery(args)) return { status: 0, stdout: "0\n" };
+    return { status: null, error: new Error("ENOENT") };
+  }), /not dispatched/);
+});
+
+test("--json reaches a pipe whole: the CLI sets exitCode, never process.exit() over unflushed stdout", () => {
+  // A 232-claim board printed ~92 KB of JSON; process.exit() cut it at the
+  // 64 KiB pipe boundary, mid-string (found 2026-10-14).
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/who-is-on-it.mjs"), "utf8");
+  assert.doesNotMatch(src, /process\.exit\(main\(\)\)/);
+  assert.match(src, /process\.exitCode = main\(\)/);
+  const out = execFileSync(process.execPath, ["tools/ci/who-is-on-it.mjs", "--no-fetch", "--json", "--hours", "1"],
+    { cwd: ROOT, encoding: "utf8", maxBuffer: 64 << 20 });
+  assert.ok(Array.isArray(JSON.parse(out).claims), "the whole document parses, however large the board");
 });

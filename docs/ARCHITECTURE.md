@@ -92,6 +92,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `script-loader.js` | `ScriptLoader` | tag | ScriptLoader: extracted runtime orchestration. |
 | `lazy-bundles.js` | `LazyBundles` | tag | LazyBundles: extracted runtime orchestration. |
 | `wake-lock.js` | `RaceWakeLock` | tag | RaceWakeLock: asynchronous screen wake-lock ownership. |
+| `save-schema-registry.js` | `SaveSchemaRegistry` | tag | SaveSchemaRegistry: manifest of every apex26.* persistence key. |
 | `store.js` | `GameStore` | tag | persistence for js/game.js: the cached localStorage wrapper (`store`, all keys prefixed "apex26.", plus the uncached raw-string lane the settings panels… |
 
 **`js/`**
@@ -305,6 +306,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `start-lights.js` | `StartLights` | LAZY_RACE_SESSION | the start gantry's lights. |
 | `marshal-panels.js` | `MarshalPanels` | LAZY_RACE_SESSION | marshal light panels. |
 | `flying-start.js` | `FlyingStart` | LAZY_RACE_SESSION | FLYING START: qualifying and time trial begin at speed, the way a Data Hub JUMP IN does (js/race/real-race.js). |
+| `jump-start-penalty.js` | `JumpStartPenalty` | LAZY_RACE_SESSION | FALSE START (FIA 2026 SR B5.11.1; js/race/sporting-regs.js): throttle at green or a launch faster than the minimum reaction window. |
 
 **`js/workers/`**
 
@@ -435,6 +437,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `scene-prims.js` | `GaragePrims` | tag | GaragePrims: the garage bay's mesh primitives and shared constants. |
 | `scene-equipment.js` | `GarageEquipment` | tag | GarageEquipment: the pit equipment standing in the bay. |
 | `scene-live.js` | `GarageLive` | tag | GarageLive: the garage's LIVE atlas. |
+| `scene-crew.js` | `GarageCrew` | tag | GarageCrew: the pit crew in the garage on an arrival and the RACE! drive-out. |
 | `scene.js` | `GarageScene` | tag | GarageScene: the room the setup preview happens in. |
 | `arrival.js` | `GarageArrival` | tag | Pit-work arrival: a render-clock sequence, independent of race simulation. |
 | `setup-camera.js` | `SetupCamera` | tag | the GARAGE SETUP-PREVIEW CAMERA for js/game.js (#carsetup): the turntable/orbit rig, its presets, pan and zoom, the active-aero demo, the preview mesh cache… |

@@ -32,7 +32,8 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
   const status = element("vs-status");
   status.classList = { toggle() {} };
   for (const id of ["vs-close", "vs-invite-more", "vs-host", "vs-join", "vs-make-answer", "vs-accept",
-                    "vs-scan-invite", "vs-scan-answer", "vs-scan-cancel", "vs-code-host", "vs-code-join", "vs-code-in", "vs-code-head", "vs-code-hint", "vs-code-value"]) element(id);
+                    "vs-scan-invite", "vs-scan-answer", "vs-scan-cancel", "vs-code-host", "vs-code-join", "vs-code-in", "vs-code-head", "vs-code-hint", "vs-code-value",
+                    "vs-edit-car", "vs-ready"]) element(id);
   const scan = element("vs-scan");
   const video = element("vs-scan-video");
   const listeners = new Map();
@@ -315,6 +316,124 @@ test("MAKE ANSWER during a join still fetching relay credentials waits for the t
   } finally { h.lobby.cancel(); }
 });
 
+// An answer waiting for JOIN owns that attempt, not whichever transport a
+// later JOIN/HOST happens to create before the old relay promise settles.
+for (const route of ["close", "reopen", "join", "host"]) {
+  test(`MAKE ANSWER waiting on ICE cannot cross ${route}`, async () => {
+    const ice = deferred(), calls = [];
+    const h = harness({ prefetchIce: () => ice.promise,
+      handshake: { acceptInvite: async (transport, code) => {
+        calls.push({ transport, code }); return { ok: true, code: "answer" };
+      } },
+    });
+    try {
+      h.lobby.open();
+      const joining = h.lobby.join();
+      const answering = h.lobby.makeAnswer("obsolete-invite");
+      let replacement;
+      if (route === "close" || route === "reopen") h.lobby.cancel();
+      if (route === "reopen") { h.lobby.open(); replacement = h.lobby.join(); }
+      if (route === "join" || route === "host") replacement = h.lobby[route]();
+      ice.resolve();
+      await Promise.all([joining, replacement]);
+      const status = h.status.textContent;
+      assert.equal((await answering).error, "cancelled");
+      assert.equal(calls.length, 0, "the abandoned invite never reaches a transport");
+      assert.equal(h.status.textContent, status, "no obsolete prompt replaces the new route");
+      await h.lobby.join();
+      assert.equal((await h.lobby.makeAnswer("fresh-invite")).ok, true, "a fresh retry works");
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].code, "fresh-invite");
+    } finally { h.lobby.cancel(); }
+  });
+}
+
+for (const kind of ["invite", "answer"]) {
+  for (const outcome of ["code", "empty", "denied"]) {
+    test(`pending ${kind} clipboard ${outcome} cannot enter a replacement lobby attempt`, async () => {
+      const read = deferred(), calls = [];
+      const h = harness({ handshake: {
+        acceptInvite: async (_transport, code) => { calls.push(code); return { ok: true, code: "answer" }; },
+        acceptAnswer: async (_transport, code) => { calls.push(code); return { ok: true }; },
+      } });
+      const button = "vs-paste-" + kind;
+      const input = "vs-" + kind + "-in";
+      h.elements.set(button, {});
+      h.elements.set(input, { value: "", addEventListener() {} });
+      h.context.navigator.clipboard.readText = async () => {
+        await read.promise;
+        if (outcome === "denied") throw new Error("clipboard permission denied");
+        return outcome === "code" ? "obsolete-code" : "";
+      };
+      h.lobby.wire();
+      try {
+        h.lobby.open();
+        await h.lobby[kind === "invite" ? "join" : "host"]();
+        const pasting = h.click(button);
+        h.lobby.cancel();
+        h.lobby.open();
+        await h.lobby[kind === "invite" ? "join" : "host"]();
+        h.elements.get(input).value = "new input";
+        const status = h.status.textContent;
+        read.resolve();
+        assert.equal((await pasting).error, "cancelled");
+        assert.deepEqual(calls, []);
+        assert.equal(h.elements.get(input).value, "new input");
+        assert.equal(h.status.textContent, status, "late errors are silent too");
+        h.context.navigator.clipboard.readText = async () => "fresh-code";
+        assert.equal((await h.click(button)).ok, true);
+        assert.deepEqual(calls, ["fresh-code"]);
+      } finally { h.lobby.cancel(); }
+    });
+  }
+}
+
+for (const route of ["join", "host", "code-picker"]) {
+  test(`changing directly to ${route} invalidates an outstanding clipboard read`, async () => {
+    const read = deferred(), calls = [];
+    const h = harness({ handshake: { acceptInvite: async (_t, code) => {
+      calls.push(code); return { ok: true, code: "answer" };
+    } } });
+    h.elements.set("vs-paste-invite", {});
+    h.context.navigator.clipboard.readText = () => read.promise;
+    h.lobby.wire();
+    try {
+      h.lobby.open();
+      await h.lobby.join();
+      const pasting = h.click("vs-paste-invite");
+      if (route === "code-picker") h.click("vs-code-join");
+      else await h.lobby[route]();
+      const status = h.status.textContent;
+      read.resolve("obsolete-invite");
+      assert.equal((await pasting).error, "cancelled");
+      assert.deepEqual(calls, []);
+      assert.equal(h.status.textContent, status);
+    } finally { h.lobby.cancel(); }
+  });
+}
+
+test("a newer clipboard request wins when reads finish out of order", async () => {
+  const old = deferred(), calls = [];
+  const h = harness({ handshake: { acceptInvite: async (_t, code) => {
+    calls.push(code); return { ok: true, code: "answer" };
+  } } });
+  h.elements.set("vs-paste-invite", {});
+  h.context.navigator.clipboard.readText = () => old.promise;
+  h.lobby.wire();
+  try {
+    await h.lobby.join();
+    const pasting = h.click("vs-paste-invite");
+    // The second read is empty, so it does not start a handshake generation.
+    h.context.navigator.clipboard.readText = async () => "";
+    assert.equal((await h.click("vs-paste-invite")).error, "empty");
+    const status = h.status.textContent;
+    old.resolve("obsolete-invite");
+    assert.equal((await pasting).error, "cancelled");
+    assert.deepEqual(calls, []);
+    assert.equal(h.status.textContent, status);
+  } finally { h.lobby.cancel(); }
+});
+
 test("scanner completion is guarded by scanner identity and generation", async () => {
   const starts = [deferred(), deferred()];
   const scanners = starts.map((start) => ({
@@ -550,6 +669,47 @@ test("a LEGENDS car is moved off in the room like MY TEAM (legends: true, no cus
     assert.equal(h.G.teamIdx, 0, "…onto the first free REAL seat");
     assert.equal(hellos().at(-1).d.team, "alpha", "…and announced it");
     assert.match(h.status.textContent, /^LEGENDS cars only exist on your own screen/);
+  } finally { h.lobby.cancel(); }
+});
+
+test("CHANGE CAR withdraws READY before the garage opens; returning re-announces but does not re-ready (#1919)", async () => {
+  // A READY guest could open the Garage, switch driver and sit there while the
+  // host still saw the OLD profile as READY and started the race with it.
+  const { h, s, hellos } = await connectedGuest();
+  h.lobby.wire();
+  const readies = () => s.sent.filter((m) => m.t === "ready");
+  const opened = [];
+  h.G.openGarageFrom = (from) => {
+    opened.push({ from, selfReady: h.lobby.roomState().selfReady, wire: readies().at(-1) && readies().at(-1).d.ready });
+  };
+  try {
+    s.deliver("hello", { team: "beta", driver: 0, rank: 1 });   // the host, seated elsewhere
+    h.click("vs-ready");
+    assert.equal(h.lobby.roomState().selfReady, true, "READY before the garage");
+    h.click("vs-edit-car");
+    assert.equal(opened.length, 1, "the garage opened");
+    assert.equal(opened[0].selfReady, false, "READY is withdrawn BEFORE any edit can happen");
+    assert.equal(opened[0].wire, false, "…and the host was told, so its START gate closes");
+    h.G.driverIdx = 1;                                          // the edit
+    const before = hellos().length;
+    h.lobby.roomChanged("car");                                // Garage exit (game.js)
+    assert.equal(hellos().length, before + 1, "returning publishes the current profile");
+    assert.equal(hellos().at(-1).d.driver, 1, "…with the new driver");
+    assert.equal(h.lobby.roomState().selfReady, false, "…but does not silently re-ready");
+    h.click("vs-ready");
+    assert.equal(readies().at(-1).d.ready, true, "an explicit READY re-arms the start");
+  } finally { h.lobby.cancel(); }
+});
+
+test("CHANGE CAR when not READY sends no READY traffic", async () => {
+  const { h, s } = await connectedGuest();
+  h.lobby.wire();
+  h.G.openGarageFrom = () => {};
+  try {
+    const before = s.sent.length;
+    h.click("vs-edit-car");
+    assert.equal(s.sent.filter((m) => m.t === "ready").length, 0);
+    assert.equal(s.sent.length, before, "nothing on the wire");
   } finally { h.lobby.cancel(); }
 });
 

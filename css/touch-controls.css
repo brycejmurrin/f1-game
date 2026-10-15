@@ -760,8 +760,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* in-race chrome, but still a thumb target — on the ladder like the rest.
      --tap-hud (css/hud.css): it follows HUD SIZE with the timing tower beside
      it, and never shrinks below --tap. */
-  width: var(--tap-btn, var(--tap-hud)); height: var(--tap-btn, var(--tap-hud));
-  font-size: max(var(--touch-label-floor), calc(100% * var(--hud-btn-zt, var(--hud-btn-z))));
+  width: var(--tap-hud); height: var(--tap-btn, var(--tap-hud));
+  font-size: max(var(--touch-label-floor), calc(100% * var(--hud-btn-z)));
   border-radius: var(--r-md);
   padding: 0;
   /* Race chrome, dark in every theme — same reason as .touchbtn. LIGHT's
@@ -771,14 +771,14 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   color: var(--look-hud-ink);
   border: 1px solid var(--look-hud-dim);
 }
-/* ABOVE 150 % BUTTON SIZE, CAM / PAUSE keep growing with the docks (up to 200 %). LAYOUT keeps --tap-hud
-   (css/hud.css, capped at 150 %): the right column, flag and radio card hang from that band, so none of
-   them moves. PAUSE grows down over the right dock only — the min() arm stops it at the sector plate,
-   which stands off --dock-r-w (0 before the first fit: the arm goes negative and PAUSE keeps the band);
-   CAM keeps the band height because its span crosses the plate. Broadcast keeps the band (#bc-pip hangs
-   under PAUSE). At or under 150 % --tap-btn IS --tap-hud: nothing changes there. */
+/* ABOVE 150 % BUTTON SIZE, PAUSE keeps growing with the docks (up to 200 %) — DOWN only, into its own column:
+   its width and CAM stay on the --tap-hud band (css/hud.css, capped at 150 %), so the top row never gets wider
+   (round 3 grew both and CAM landed on the tower's BEST box at 640x360, hud-mock 2026-10-14). The right column,
+   flag and radio card hang from the band too, so none of them moves. The min() arm stops PAUSE at the sector
+   plate, which stands off --dock-r-w (0 before the first fit: the arm goes negative and PAUSE keeps the band).
+   Broadcast keeps the band (#bc-pip hangs under PAUSE). At or under 150 % --tap-btn IS --tap-hud. */
 body:not(.desktop):not(.bc-on) {
-  --hud-btn-zt: clamp(1, var(--hud-btn-scale, 1), 2);
+  --hud-btn-zt: clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 2);
   --tap-btn: max(var(--tap-hud), min(calc(var(--tap-hud) / var(--hud-btn-z) * var(--hud-btn-zt)), calc((10px + var(--dock-r-w, 0px)) * var(--hud-z-top, var(--hud-scale)) - 14px)));
 }
 /* CAM mode button sits just left of the pause button (top-right). */
@@ -788,13 +788,13 @@ body:not(.desktop):not(.bc-on) {
   /* DERIVED, not 58: this used to be 10 + --tap + 4 with --tap hard-coded at
      its 44px desktop value, so on touch (--tap: 52px) CHASE overlapped the
      pause button by 4px on every phone. */
-  right: calc(10px + var(--tap-btn, var(--tap-hud)) + 4px + var(--sar));
+  right: calc(10px + var(--tap-hud) + 4px + var(--sar));
   z-index: 14;
   height: var(--tap-hud);
-  min-width: calc(76px * var(--hud-btn-zt, var(--hud-btn-z)));
-  padding: 0 calc(var(--gap) * var(--hud-btn-zt, var(--hud-btn-z)));
+  min-width: calc(76px * var(--hud-btn-z));
+  padding: 0 calc(var(--gap) * var(--hud-btn-z));
   border-radius: var(--r-md);
-  font-size: max(var(--touch-label-floor), calc(var(--fs-micro) * var(--hud-btn-zt, var(--hud-btn-z))));
+  font-size: max(var(--touch-label-floor), calc(var(--fs-micro) * var(--hud-btn-z)));
   font-weight: 700;
   letter-spacing: var(--ls-3);
   background: var(--look-hud-bg);
