@@ -1051,7 +1051,8 @@
     },
     "test:agent-contract": {
       "files": [
-        "tests/unit/agentview-api-contract.test.mjs"
+        "tests/unit/agentview-api-contract.test.mjs",
+        "tests/unit/scenery-detectors-vm.test.mjs"
       ],
       "kind": "node"
     },

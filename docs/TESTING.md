@@ -454,7 +454,7 @@ tools directly.)
 | `steering-unit` | braking CUE math, assist-gated AUDIO DRIVING CUES, the DIGITAL steer ramp, per-scheme touch-dock REPOSITION (`dock-layout`), the PHONE AS CONTROLLER wire, key binds, onboard and settings export in Node (0.5 s) — slider 1 is OFF, urgency is 0..1 never a brake command; counter-steering unwinds as fast as letting go. Gated by CI's node step since 2026-09-10 |
 | `mobile-unit` | Capacitor Android sideload: frozen `appId`/`androidScheme`, config shape (no `server.url`, minWebView ≥ 100), manifest permissions, Gradle `APEX_VERSION_*` wiring, `sync-web` stamp gate, `Native`/`NativeDownload` against a fake `Capacitor.Plugins` proxy. In `tooling-fast`. **Not device evidence.** |
 | `audio-unit` | Spotify token refresh, announcer pause-silence, radio/voice-pack, rival audio, and sample/tune recovery in a Node VM |
-| `agent-contract` | freezes the shape of the agent-view API |
+| `agent-contract` | freezes the shape of the agent-view API; scenery detector VM regressions cover bounded survey gaps, banked reference heights, sampling limits and world-height-invariant scanning |
 | `net-unit` | the `js/net` wire as pure logic, no browser: loopback transport, invite codec, snapshot quantisation, clock sync. Under a second |
 | `lifecycle-unit` | deferred scanner, data fetch and IndexedDB ownership races in Node VMs |
 | `state-unit` | season, storage and career state machines, including cross-tab conflicts |
@@ -1256,6 +1256,7 @@ what it covers.
 | `agent-drive-bench.spec.js` | task-success benchmark — can a policy driven off the world view actually drive |
 | `agent-determinism.spec.js` | same seed + same inputs ⇒ same result |
 | `agentview-api-contract.test.mjs` | freezes the shape of the agent-view API |
+| `scenery-detectors-vm.test.mjs` | Actual survey and over-road scanner regressions: bounded holes beyond either scan edge, legitimate outer boundaries and road carving, explicit sparse-sampling limits, raised/lowered banked edges, and intrusion checks invariant under world-height translation; belongs to `agent-contract`, independently of the browser/VM twin census |
 | `assets-api.spec.js` | the baked asset pack's runtime path, and that every failure degrades to procedural |
 | `logging.spec.js` | `js/core/log.js` in a real page: `Log` live before any game module evaluates, retention never lagging the console level, single namespace prefix, records flattened rather than holding references, `logs()` filters, a bad spec ignored not thrown |
 | `persistence.spec.js` | localStorage failing is REPORTED (Log + `persistState()`) and the session still reads back what it wrote — the silent-data-loss case: iOS Private Browsing sets the quota to 0 |

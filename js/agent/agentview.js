@@ -1184,11 +1184,13 @@ const AgentView = (function () {
         for (let j = 0; j < nLat; j++) {
           const lat = -reach + (2 * reach) * (j / (nLat - 1));
           const ty = Tracks.terrainY(track, scr.p[0] + ex * lat, scr.p[2] + ez * lat);
-          row.push({ latM: r1(lat), terrainY: ty == null ? null : r2(ty) });
-          // terrain poking through the racing surface
-          if (ty != null && Math.abs(lat) <= scr.hw && ty - roadY > OVER_ROAD_M) {
+          const bank = Tracks.banking ? Tracks.banking(track, s, lat) : null;
+          const surfaceY = roadY + (bank ? bank.dy : 0);
+          row.push({ latM: r1(lat), terrainY: ty == null ? null : r2(ty), roadSurfaceY: r2(surfaceY) });
+          // Compare against the banked tarmac, not the raw centreline plane.
+          if (ty != null && Math.abs(lat) <= scr.hw && ty - surfaceY > OVER_ROAD_M) {
             overRoad.push({ frac: +frac.toFixed(3), latM: r1(lat),
-                            aboveRoadM: r2(ty - roadY) });
+                            aboveRoadM: r2(ty - surfaceY) });
           }
         }
         const ribbonFrom = scr.hw + 2.4;
@@ -1199,11 +1201,32 @@ const AgentView = (function () {
             holes.push({ frac: +frac.toFixed(3), latM: row[j].latM });
           }
         }
+        // A null run can end beyond the requested view. Look for its far
+        // solid witness within the authored ribbon; the natural outer edge is
+        // never sufficient evidence of a hole. This remains a sampled screen.
+        for (const side of [-1, 1]) {
+          const cells = row.filter((c) => side * c.latM >= 0)
+                           .sort((a, b) => Math.abs(a.latM) - Math.abs(b.latM));
+          let j = cells.length - 1;
+          if (j < 1 || cells[j].terrainY != null) continue;
+          while (j >= 0 && cells[j].terrainY == null) j--;
+          if (j < 0 || Math.abs(cells[j + 1].latM) < ribbonFrom) continue;
+          const edge = scr.hw + (track.surface ? track.surface.outerW : 0) - 0.5;
+          const step = 2 * reach / (nLat - 1);
+          for (let lat = reach; lat < edge;) {
+            lat = Math.min(lat + step, edge);
+            const ty = Tracks.terrainY(track, scr.p[0] + ex * side * lat, scr.p[2] + ez * side * lat);
+            if (ty == null) continue;
+            holes.push({ frac: +frac.toFixed(3), latM: cells[j + 1].latM,
+                         boundedAtLatM: r1(side * lat), scanBoundary: true });
+            break;
+          }
+        }
         // Under the ribbon the ground IS the road: the terrain there is carved
         // below it and never seen, so reading it found an 8 m "cliff" either
         // side of Zandvoort's crest at 0.583 (terrain -2.4 under a road at 6.1).
         // The holes pass above already skips the ribbon for the same reason.
-        const gY = (c) => (Math.abs(c.latM) < ribbonFrom ? r2(roadY) : c.terrainY);
+        const gY = (c) => (Math.abs(c.latM) < ribbonFrom ? c.roadSurfaceY : c.terrainY);
         for (let j = 1; j < row.length; j++) {
           const a = gY(row[j - 1]), b = gY(row[j]);
           const dLat = Math.abs(row[j].latM - row[j - 1].latM) || 1;
@@ -1280,6 +1303,8 @@ const AgentView = (function () {
         apiVersion: API_VERSION, conventions: CONVENTIONS,
         track: { id: track.def.id, name: track.def.name, lengthM: r1(total) },
         sampledAt: nAt, reachM: reach, latsPerStation: nLat,
+        sampling: { stationSpacingM: r1(total / nAt), lateralSpacingM: r2(2 * reach / (nLat - 1)),
+                    exhaustive: false, note: "gaps between samples can be missed; clean applies only to sampled probes" },
         thresholds: { floatingAboveM: FLOAT_M, buriedBelowM: BURIED_M,
                       cliffSlope: CLIFF_SLOPE, terrainAboveRoadM: OVER_ROAD_M,
                       note: "props are deliberately sunk below grade (place 0.8 m, "
@@ -1316,7 +1341,7 @@ const AgentView = (function () {
           terrainOverRoad: "tests/specs/terrain-over-road.spec.js",
         },
         note: "pass {profile:true} for the full lateral ground table. A terrain "
-              + "hole (null between solid readings) is the classic cause of "
+              + "hole (null bounded by solid readings, including beyond reachM) is the classic cause of "
               + "floating props — the closed-form ground estimate takes over there.",
       };
     }

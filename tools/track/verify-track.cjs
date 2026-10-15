@@ -367,11 +367,14 @@ function knownTarmacFolds() {   // a function, not a const: main() runs above th
 //     all kerb triangles). buildKerbs now lays each covered quad once.
 //  2. TARMAC FOLDS: a rail in columns 2..11 whose step P(k+1)-P(k) has a
 //     non-positive component along the tangent t_k runs backwards.
+//  3. COVERAGE: all oriented faces of the main ribbon and its two-sided edge
+//     skirts must exist exactly once. Vertex counts cannot reveal missing faces.
 function roadGeoChecks(id, track) {
   const KNOWN_TARMAC_FOLDS = knownTarmacFolds();
   const g = track.roadGeo;
-  if (!g || !g.pos || !g.idx) return "";
+  if (!g || !g.pos || !g.idx) throw new Error("roadGeo is missing");
   const P = g.pos._data || g.pos, I = g.idx._data || g.idx, n = track.n, V = 14;
+  roadCoverageChecks(track, P, I);
   const key = (v) => Math.round(P[v * 3] * 200) + "," + Math.round(P[v * 3 + 1] * 200) + "," + Math.round(P[v * 3 + 2] * 200);
   const seen = new Set();
   let dups = 0, firstDup = -1;
@@ -416,6 +419,48 @@ function roadGeoChecks(id, track) {
   const msg = `tarmac fold (centreline kink R < hw, rail in columns 2..11 runs backwards): ${desc}`;
   if (!KNOWN_TARMAC_FOLDS.has(id)) throw new Error(`${msg} — fix the circuit data (SCENERY-QA-PLAN §R3)`);
   return `  WARNING known ${msg}`;
+}
+
+// buildRoad's vertex layout is a closed 14-column ribbon (including a duplicate
+// seam ring), then two skirts of 2*n vertices each. Check indices, rather than
+// area or normal thresholds: some outer rails intentionally coincide at folds,
+// and skirts deliberately carry both windings. Reordering triangles or cyclically
+// rotating their indices preserves coverage; reversing a face does not.
+function roadCoverageChecks(track, P, I) {
+  const n = track.n, V = 14, ribbonEnd = (n + 1) * V;
+  if (!Number.isInteger(n) || n < 3 || P.length < ribbonEnd * 3 || I.length % 3)
+    throw new Error("roadGeo has invalid ribbon layout");
+  const faceKey = (a, b, c) => a < b && a < c ? `${a},${b},${c}` :
+    b < c ? `${b},${c},${a}` : `${c},${a},${b}`;
+  const faces = new Map();
+  for (let i = 0; i < I.length; i += 3) {
+    const key = faceKey(I[i], I[i + 1], I[i + 2]);
+    faces.set(key, (faces.get(key) || 0) + 1);
+  }
+  const requireFace = (a, b, c, part, k) => {
+    const count = faces.get(faceKey(a, b, c)) || 0;
+    if (count !== 1) throw new Error(`roadGeo ${part} coverage: expected one oriented face ` +
+      `(${a},${b},${c}) at node ${k}, found ${count} — missing, reversed or duplicated triangle`);
+  };
+  for (let k = 0; k < n; k++) {
+    const a = k * V, b = (k + 1) * V;
+    for (let v = 0; v < V - 1; v++) {
+      requireFace(a + v, a + v + 1, b + v, "ribbon", k);
+      requireFace(a + v + 1, b + v + 1, b + v, "ribbon", k);
+    }
+  }
+  if (!track.surface) throw new Error("roadGeo has no surface profile for skirt coverage");
+  if (P.length < (ribbonEnd + n * 4) * 3) throw new Error("roadGeo skirt vertices are missing");
+  for (let side = 0; side < 2; side++) {
+    const base = ribbonEnd + side * n * 2;
+    for (let k = 0; k < n; k++) {
+      const a = base + k * 2, b = base + ((k + 1) % n) * 2;
+      requireFace(a, a + 1, b, "skirt", k);
+      requireFace(a + 1, b + 1, b, "skirt", k);
+      requireFace(a, b, a + 1, "skirt", k);
+      requireFace(a + 1, b, b + 1, "skirt", k);
+    }
+  }
 }
 
 // The report behind the OK line. Informational only: a required-model failure

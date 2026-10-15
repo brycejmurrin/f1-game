@@ -295,11 +295,11 @@ test("TrackModels ground helpers sample terrain instead of one endpoint", () => 
 test("TrackModels validates complete finite mesh buffers", () => {
   const TrackModels = loadGlobal(P.TRACK_MODELS, "TrackModels");
   assert.equal(TrackModels.validateGeometry({
-    pos: [0, 0, 0], nrm: [0, 1, 0], col: [1, 1, 1], idx: [0],
+    pos: [0, 0, 0], nrm: [0, 1, 0], col: [1, 1, 1], idx: [0, 0, 0],
   }).ok, true);
   const acc = TrackModels.scratch(4);
   acc.pos.push(0, 0, 0); acc.nrm.push(0, 1, 0); acc.col.push(1, 1, 1);
-  acc.idx.push(0); acc.mat.push(0);
+  acc.idx.push(0, 0, 0); acc.mat.push(0);
   const sealed = TrackModels.sealGeometry(acc);
   assert.ok(sealed.pos instanceof Float64Array);
   assert.ok(sealed.idx instanceof Uint32Array);
@@ -309,6 +309,56 @@ test("TrackModels validates complete finite mesh buffers", () => {
   });
   assert.equal(bad.ok, false);
   assert.match(bad.reason, /non-finite|index/);
+  for (const idx of [[0], new Uint32Array([0, 0])]) {
+    const incomplete = TrackModels.validateGeometry({ pos: [0, 0, 0], idx });
+    assert.equal(incomplete.ok, false);
+    assert.equal(incomplete.reason, "incomplete triangle");
+  }
+  // Empty scenery buffers are legitimate; the road verifier separately requires
+  // coverage of its ribbon and skirts.
+  assert.equal(TrackModels.validateGeometry({ pos: [], idx: [] }).ok, true);
+});
+
+test("verify-track rejects missing or reversed road faces before they ship", { timeout: 120000 }, () => {
+  const { buildContext: verifierContext, verifyDef } = REQUIRE("../../tools/track/verify-track.cjs");
+  const cases = [
+    ["missing tarmac quad", (idx, main) => idx.splice(100 * 13 * 6 + 6 * 6, 6), /ribbon coverage/],
+    ["missing seam quad", (idx, main) => idx.splice(main - 6, 6), /ribbon coverage/],
+    ["missing all skirts", (idx, main, n) => idx.splice(main, n * 24), /skirt coverage/],
+    ["reversed tarmac", (idx, main) => {
+      for (let i = 0; i < main; i += 3) [idx[i + 1], idx[i + 2]] = [idx[i + 2], idx[i + 1]];
+    }, /ribbon coverage/],
+    ["empty indices", (idx) => { idx.length = 0; }, /ribbon coverage/],
+    ["incomplete triangle", (idx) => idx.push(0), /incomplete triangle/],
+    ["duplicated tarmac", (idx) => idx.push(...idx.slice(0, 3)), /ribbon coverage/],
+    // Coverage must not depend on the incidental ordering of the draw list.
+    ["reordered faces", (idx) => {
+      for (let a = 0, b = idx.length - 3; a < b; a += 3, b -= 3)
+        for (let j = 0; j < 3; j++) [idx[a + j], idx[b + j]] = [idx[b + j], idx[a + j]];
+      for (let i = 0; i < idx.length; i += 3)
+        [idx[i], idx[i + 1], idx[i + 2]] = [idx[i + 1], idx[i + 2], idx[i]];
+    }, null],
+  ];
+  for (const [name, mutate, failure] of cases) {
+    const original = verifierContext(null, { quiet: true });
+    const context = original._vmContext, buildRoad = context.TrackMesh.buildRoad;
+    let injected = false;
+    context.TrackMesh = { ...context.TrackMesh, buildRoad(track) {
+      const geo = buildRoad(track), idx = Array.from(geo.idx._data || geo.idx);
+      mutate(idx, track.n * 13 * 6, track.n);
+      geo.idx = idx;
+      injected = true;
+      return geo;
+    } };
+    // Tracks destructures buildRoad at evaluation time. Inject before its real
+    // safe()/validateGeometry()/renderer path, rather than mutating stale output.
+    runInto(context, "js/track/tracks.js");
+    const Tracks = context.Tracks;
+    const verify = () => verifyDef(Tracks, Tracks.LIST.find((d) => d.id === "monza"), { quiet: true });
+    if (failure) assert.throws(verify, failure, name);
+    else assert.doesNotThrow(verify, name);
+    assert.equal(injected, true, name);
+  }
 });
 
 test("envCull build owns one ribbon representation and retains collision geometry", () => {

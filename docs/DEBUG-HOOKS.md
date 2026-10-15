@@ -3642,6 +3642,13 @@ Lists: `floating` · `buried` · `overVoid` · `propsOverRoadCandidates` ·
 `terrainHoles` · `groundCliffs` · `terrainOverRoad` · `modelDiagnostics`.
 Pass `{profile:true}` for the full lateral ground table.
 
+The report's `sampling` records station and lateral spacing and declares
+`exhaustive:false`: gaps between probes can be missed. `summary.clean` describes
+the sampled checks, not complete mesh coverage. Road comparisons include banking.
+For a null run reaching `reachM`, the survey looks farther within the authored
+terrain ribbon for a solid endpoint; it reports a hole only with solid ground
+on both sides, preserving legitimate outer terrain boundaries.
+
 It found a shipped bug on its first run: Vegas reported two invalid
 primitives, `size:[0.18,true]` — `js/circuits/vegas.js` passed `mast: true` to
 `tower()`, which takes a height in metres, and both landmark towers lost their

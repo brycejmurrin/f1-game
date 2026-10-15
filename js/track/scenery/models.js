@@ -182,6 +182,7 @@ const TrackModels = (function () {
       return { ok: false, reason: "invalid or non-finite color" };
     const count = geo.pos.length / 3;
     if (!isNumList(geo.idx)) return { ok: false, reason: "invalid index" };
+    if (geo.idx.length % 3) return { ok: false, reason: "incomplete triangle" };
     for (let i = 0; i < geo.idx.length; i++) {
       const v = geo.idx[i];
       if (!__isInteger(v) || v < 0 || v >= count)
