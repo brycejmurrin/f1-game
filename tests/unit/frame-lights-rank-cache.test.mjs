@@ -109,3 +109,32 @@ test("mirror light stays flash-free under the new cache budget", () => {
   const jumps = s.slice(1).filter((v, i) => Math.abs(v - s[i]) / Math.max(0.05, (v + s[i]) / 2) > 0.10).length;
   assert.equal(jumps, 0, `no >10% mirror-window step (got ${jumps})`);
 });
+
+// #2180: a switch to an unlit track (setFrameLights with no lamps) — or to any
+// other world — must drop every strong reference to the old lamp array: _last,
+// the lamp-set and all-lights keys, and both viewpoints' rank/entry caches.
+test("a track switch releases the previous track's lamp array (#2180)", async () => {
+  const v8 = await import("node:v8");
+  v8.setFlagsFromString("--expose-gc");
+  const gc = vm.runInNewContext("gc");
+  const { FL, clock } = load();
+  const cars = new Array(10).fill({});
+  let ref;
+  (() => {
+    const lit = { _lights: street(12) };
+    ref = new WeakRef(lit._lights);
+    const frame = { perChunkLights: 1 };
+    for (let f = 0; f < 5; f++) {
+      clock.now = f * 16;
+      FL.setFrameLights(frame, lit, cars, [0, 1.2, 500 + f], 1, [0, 0, 1], 0);
+      FL.viewLights(frame, [0, 1.2, 500 + f], [0, 0, -1]);   // the mirror's own caches too
+    }
+  })();
+  const day = { _lights: null };
+  const frame = {};
+  FL.setFrameLights(frame, day, cars, [0, 1.2, 0], 1, [0, 0, 1], 0);
+  assert.equal(frame.lights, null);
+  await new Promise((r) => setImmediate(r));   // WeakRef targets stay alive for the job that made them
+  gc();
+  assert.equal(ref.deref(), undefined, "FrameLights still pins the old track._lights");
+});
