@@ -99,7 +99,7 @@ branch is kept, then close. Anything short of that proof goes to Bryce.
 
 ## Cadence
 
-One sweep every 15–30 min while PRs are open: `send_later` re-armed at the
+One sweep every 10–15 min while PRs are open (skill `ci-watch`): `send_later` re-armed at the
 end of each sweep, or the Merge Desk Routine. A sweep that changes nothing
 is one line. Stop re-arming when no PR is open.
 

@@ -41,8 +41,11 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
   waits on `= queue hold` pushes together when it flips: on 2026-10-15 ~30
   sessions pushed in the minute it read ok and the gauge went to 206 / 178 and
   270 / 259 Linux jobs in flight / queued (cap 40), until orchestrators handed
-  out slots by hand. Each brief therefore carries `PUSH SLOT: <n>` (0–9, launch
-  order): after `= queue ok`, wait `n` minutes, read the gauge again, and push
-  only if it still says ok; on hold, start over. A gauge-side mechanism, if one
-  lands, replaces this rule.
+  out slots by hand. Each brief therefore carries `PUSH SLOT: <n>` = launch
+  index mod 10 (a 30-lane fleet shares each slot three ways: three pushes a
+  minute instead of thirty). After `= queue ok`, wait `n` minutes, read the
+  gauge again, and push only if it still says ok; on hold, start over. A brief
+  without a slot: use the minute your session started, mod 10. A lane with
+  several PRs pushes at most 4 per slot. A gauge-side mechanism, if one lands,
+  replaces this rule.
 - Every worker hand-back reports its head SHA; on a token failure it stops and reports. Batch small tooling/doc fixes into ONE PR; tooling/docs/MCP/prompt-only PRs stay off merge-train auto-launch and per-PR resolve swarms.

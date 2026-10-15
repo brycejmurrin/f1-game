@@ -143,47 +143,6 @@ prompted, 0 rejected.
   refuses with "permission_mode 'auto' requires the parent session to be in
   auto mode".
 
-## Census 15:20–15:40Z: the default-mode desk and four auto fix lanes
-
-`list_events` (kinds `user`, `assistant`), verdicts mapped through
-`tool_result_meta[].id`. Desk: session_01WQY3pk88sN7o9MCxyAYoWr,
-`permission_mode: default`, `worker_epoch` 14. Lanes: UI-A, Perf garbage,
-CI-waste, Agent-hooks (all `auto`), ~130 calls.
-
-| session | tool | verdict |
-|---|---|---|
-| desk (default) | Bash, `update_pull_request`, `merge_pull_request`, `get_session` | rule / config |
-| desk (default) | `send_later`, `send_message` | accept / rule / **user_temporary**: a human answered a prompt with "don't ask again" |
-| lanes (auto) | Bash (23 of 24, including a bare `tail -3 <log>` that `Bash(tail *)` names) | classifier |
-| lanes (auto) | `send_later` (2), `send_message` (1), Monitor (2) | classifier |
-| lanes (auto) | `create_pull_request`, `issue_write`, `subscribe_pr_activity`, Write | rule / config |
-
-- `send_later` and `send_message` are platform confirmations in `default`
-  mode, the same as `create_session` above: `mcp__claude-code-remote__*` does
-  not reach them. A session-scoped approval is all that clears them, and the
-  desk's 14 container restarts are the likely way it kept losing that
-  approval (an inference; not measured directly). Coordinators therefore run in
-  auto (`agent-fleet` `references/orchestrator.md` §Authority).
-- In auto mode the narrow Bash rules did not skip the classifier either. The
-  permission-modes page says narrow rules "stay in effect", but also that in a
-  session with server-side classifier review "read-only and sandboxed shell
-  commands wait for that review". These sessions behave like the second case.
-
-### `/fewer-permission-prompts` on this repo: nothing to add
-
-The skill scans `~/.claude/projects/*/*.jsonl`; a cloud container holds only
-its own session, so the fleet transcripts above stood in. No candidate rule
-changes a measured verdict: `default` sessions already match every Bash call
-through the bare `Bash` entry and every repo-approvable MCP server through its
-name entry; `auto` sessions sent even rule-covered Bash to the classifier; and
-what still prompts (`send_message`, `send_later`, `create_session`, the
-`.mcp.json` servers, MDN, BrowserStack) is out of a repo rule's reach. So the
-run added no `permissions.allow` entries. Re-run it only on new evidence of a
-`rule`-reachable prompt.
-
-Source: <https://code.claude.com/docs/en/permission-modes> ("How the
-classifier evaluates actions", read 2026-10-15).
-
 ## Spawning siblings (same day)
 
 `create_session` without `source_url` makes an EMPTY session tagged
