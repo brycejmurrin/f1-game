@@ -35,7 +35,7 @@ test("jobs split by runner label; completed and environment-waiting jobs hold no
     job("in_progress"), job("queued"), job("pending"), job("requested"), job("completed"), job("waiting"),
     job("in_progress", "macos-latest"), job("queued", "macos-14"), null,
   ]);
-  assert.deepEqual(c, { linux: { running: 1, queued: 3 }, macos: { running: 1, queued: 1 } });
+  assert.deepEqual(c, { linux: { running: 1, queued: 3, oldestQueuedAt: null }, macos: { running: 1, queued: 1, oldestQueuedAt: null } });
 });
 
 test("ok under every threshold; the line names jobs in flight, queued and macOS", () => {
@@ -43,13 +43,13 @@ test("ok under every threshold; the line names jobs in flight, queued and macOS"
     { runsExamined: 7, runsLive: 7 });
   assert.equal(v.verdict, "ok");
   assert.equal(v.hold, false);
-  assert.equal(reportLine(v), "= queue ok (59 Linux jobs in flight / 40, 9 queued, 4 macOS / 5)");
+  assert.equal(reportLine(v), "= queue ok (59 Linux jobs in flight / 40, 9 queued, 4 macOS / 5; 50 Linux running)");
 });
 
 test("each threshold alone is a hold", () => {
   const linux = evaluate(countJobs(many(60, "in_progress")));
   assert.equal(linux.verdict, "hold");
-  assert.match(reportLine(linux), /^= queue hold \(60 Linux jobs in flight \/ 40, 0 queued, 0 macOS \/ 5\) — Linux jobs in flight 60 ≥ 60/);
+  assert.match(reportLine(linux), /^= queue hold \(60 Linux jobs in flight \/ 40, 0 queued, 0 macOS \/ 5; 60 Linux running\) — Linux jobs in flight 60 ≥ 60/);
   const queued = evaluate(countJobs([...many(5, "queued"), ...many(5, "queued", "macos-latest")]));
   assert.equal(queued.verdict, "hold", "macOS queued jobs count toward the queued threshold");
   assert.deepEqual(queued.reasons, ["queued jobs 10 ≥ 10", "macOS jobs in flight 5 ≥ 5"]);
@@ -185,4 +185,33 @@ test("the written status file is gitignored and the docs cite the tool and JOBS"
     assert.match(s, /queue-depth\.mjs/, f);
     assert.doesNotMatch(s, />15 runs/, f);
   }
+});
+
+// #2266: on 2026-10-15 ~17:30Z only 7–12 Linux jobs ran while 25–36 sat queued
+// with no runner — the 40-slot model said "room". Report what is observed:
+// running vs queued, and the oldest queued job's age; a stale queue holds.
+test("#2266: running, queued and the oldest-queued age are reported; a starved queue holds", async () => {
+  const { STARVED_AGE_MIN } = await import("../../tools/ci/queue-depth.mjs");
+  assert.equal(STARVED_AGE_MIN, 10);
+  const NOW = Date.parse("2026-10-15T17:45:00Z");
+  const at = (minAgo) => new Date(NOW - minAgo * 60e3).toISOString();
+  const q = (minAgo, os) => ({ ...job("queued", os), created_at: at(minAgo) });
+  // 10 running / 30 queued, oldest 15 min: hold, and the age names the starvation.
+  const starved = evaluate(countJobs([...many(10, "in_progress"), q(15), ...Array.from({ length: 29 }, () => q(2))]), { now: NOW });
+  assert.equal(starved.verdict, "hold");
+  assert.equal(starved.linux.oldestQueuedMin, 15);
+  assert.ok(starved.reasons.includes("oldest queued Linux job 15 min ≥ 10 (10 running: runners starved)"), starved.reasons.join("|"));
+  assert.match(reportLine(starved), /^= queue hold \(40 Linux jobs in flight \/ 40, 30 queued, 0 macOS \/ 5; 10 Linux running, oldest queued 15m\)/);
+  // 38 running / 2 queued, fresh: ok.
+  const busy = evaluate(countJobs([...many(38, "in_progress"), q(1), q(0)]), { now: NOW });
+  assert.equal(busy.verdict, "ok");
+  assert.equal(reportLine(busy), "= queue ok (40 Linux jobs in flight / 40, 2 queued, 0 macOS / 5; 38 Linux running, oldest queued 1m)");
+  // Starvation with few queued: 3 running, 4 queued, oldest 12 min — under every count threshold, still a hold.
+  const few = evaluate(countJobs([...many(3, "in_progress"), q(12), q(1), q(1), q(1)]), { now: NOW });
+  assert.equal(few.verdict, "hold");
+  // A macOS queue never drives the Linux age; no queued job, no age.
+  const mac = evaluate(countJobs([q(30, "macos-latest"), ...many(5, "in_progress")]), { now: NOW });
+  assert.equal(mac.linux.oldestQueuedMin, null);
+  assert.ok(!mac.reasons.some((r) => /oldest queued/.test(r)));
+  assert.match(reportLine(mac), /; 5 Linux running\)$/);
 });
