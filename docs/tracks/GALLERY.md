@@ -128,7 +128,9 @@ npx serve -l 3456 .
 
 On PRs that touch `artifacts/shots/tracks/**` or `docs/tracks/**`, CI runs
 `npm run gallery:tracks` and uploads the `circuit-survey-gallery` artifact.
-The job fails only on build errors, not on an empty shot set.
+The job fails only on build errors, not on an empty shot set. Local builds skip
+`survey-gallery-lib` branches that are not fetched yet (`git ls-tree` miss) instead
+of failing the whole gallery.
 
 ## Originals vs Git LFS (recommendation)
 
