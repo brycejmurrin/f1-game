@@ -1,0 +1,47 @@
+#!/bin/bash
+# SessionStart hook (cloud sessions only): a fresh cloud container ignores
+# plugins installed elsewhere (a sibling session measured PLUGINS_PERSISTED=no,
+# 2026-10-15), so install the chosen plugins here. Idempotent, quiet, never
+# fails the session, runs async. Plugins the CLI installs load on the NEXT
+# session start or /reload-plugins, not mid-session.
+#
+# Skips: not a cloud session (CLAUDE_CODE_REMOTE != true),
+# APEX_SKIP_PLUGIN_BOOTSTRAP=1, or no `claude` CLI on PATH.
+# Docs: https://code.claude.com/docs/en/discover-plugins ("Install from your shell")
+
+[ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || exit 0
+[ "${APEX_SKIP_PLUGIN_BOOTSTRAP:-}" = "1" ] && exit 0
+command -v claude >/dev/null 2>&1 || exit 0
+
+ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+LOG="$ROOT/artifacts/plugin-bootstrap.log"
+mkdir -p "$ROOT/artifacts"
+: >"$LOG"
+
+# name@marketplace. anthropic-plugin-directory is built in; the official one is added below.
+PLUGINS=(
+  design@anthropic-plugin-directory
+  axe-accessibility@anthropic-plugin-directory
+  responsive-check-mobile-layout-tester@anthropic-plugin-directory
+  ci-optimizer-faster-github-actions-and-gitlab-ci@anthropic-plugin-directory
+  parallax-threejs@anthropic-plugin-directory
+  audiorective@anthropic-plugin-directory
+  pr-review-toolkit@anthropic-plugin-directory
+  typescript-lsp@claude-plugins-official
+  modern-web-guidance@claude-plugins-official
+)
+
+claude plugin marketplace add anthropics/claude-plugins-official >>"$LOG" 2>&1 || true
+have=$(claude plugin list 2>/dev/null)
+ok=0; fail=0
+for p in "${PLUGINS[@]}"; do
+  if printf '%s' "$have" | grep -qF "$p"; then ok=$((ok + 1)); continue; fi
+  if claude plugin install "$p" --scope user >>"$LOG" 2>&1; then ok=$((ok + 1)); else fail=$((fail + 1)); fi
+done
+
+# typescript-lsp is a thin wrapper; it needs the server binary on PATH.
+command -v typescript-language-server >/dev/null 2>&1 \
+  || npm install -g typescript-language-server >>"$LOG" 2>&1 || true
+
+echo "apex26 plugin-bootstrap: $ok ok, $fail failed (artifacts/plugin-bootstrap.log)"
+exit 0
