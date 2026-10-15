@@ -1,1 +1,0 @@
-1791966143	Cursor Agent	Race Rules Job1: blue-flag compliance for player — OWNED js/race/sporting-regs.js + tests/unit/sporting-regs*.test.mjs + minimal game.js hook + ratchet/manifest if CI requires. FORBIDDEN hud/css/ai-drive/race-control internals/pit-lane + PRs #1501/#1503/#1490/#1507/#1505. No merge.  [claude/f1-game-project-26h3ng; session 32afa05dd05ac9ed73313c2e]

@@ -1,1 +1,0 @@
-1791966142	Cursor Agent	Cameras: portrait HFOV floor (fov-fit) — OWNED js/camera/fov-fit.js + tests/unit/fov-fit.test.mjs + js/game.js fovY/HFOV block only + manifest/loader + groups.json; FORBIDDEN vantage/feel/render/lighting/ui/css/circuits/workflows. No merge.  [claude/f1-game-project-26h3ng; session 230fe69314250ee50eaff53b]
