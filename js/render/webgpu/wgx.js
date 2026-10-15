@@ -731,6 +731,21 @@ const WGX = (function () {
     let _softBlitSeq = 0;
     let _softBlitShown = 0;
     let _softDisplayPending = false, _softDisplayEpoch = 0;
+    // SOFT-PRESENT BACK-PRESSURE (TLX present() parity, #2226). A software
+    // readback lands only after the GPU process drains every submission queued
+    // ahead of its map, so rendering every rAF while one waits grew the queue
+    // without bound: measured on SwiftShader (montreal), the first blit took
+    // 32 s behind ~500 frames and the next never landed inside a probe's 60 s.
+    // begin() refuses frames while a read waits. Past the bound it lets ONE
+    // frame through and re-arms (a map that never settles must not stall the
+    // loop for good), never a flood: frames drawn while the copy is refused
+    // reach no pixel, they only queue ahead of the read.
+    const SOFT_HOLD_MAX_MS = 20000;
+    let _softDisplaySince = 0;
+    const _softNow = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+    function _softFrameHeld() {
+      return _softGpu && _softDisplayPending && _softNow() - _softDisplaySince <= SOFT_HOLD_MAX_MS;
+    }
     let _softSceneGen = 0, _softShownGen = 0;
     let _softLastMaxPx = 0, _softLastSkip = "";
     // sessionStorage apex26.wgxHoldPresent=1 (set before reload) skips copy+map
@@ -1213,6 +1228,10 @@ const WGX = (function () {
     // submit; one shared buffer left both draws seeing sparks only.
     let particleUBO = [null, null], particleVBO = [null, null], _particleCap = [0, 0];
     let _particleBG = [null, null], _particleFlip = 0;
+    // Per-slot record of the batch last uploaded: { data, add, n }. A
+    // dirty=false draw that lands on a slot still holding the same batch skips
+    // the VBO upload (GLX _partLastAdd/_partLastN parity, keyed per ping-pong slot).
+    const _particleLast = [null, null];
     const _retiredBufs = [];   // buffers replaced MID-FRAME; destroyed after the frame's submit
     let skyPipelineMS = null;
 
@@ -2088,6 +2107,7 @@ const WGX = (function () {
         );
         _softBlitSeq++;
         _softDisplayPending = true;
+        _softDisplaySince = _softNow();
         return { buf, bpr, w, h, seq: _softBlitSeq, epoch: _softDisplayEpoch, sceneGen: _softSceneGen };
       } catch (_) {
         try { if (buf) buf.destroy(); } catch (_) { /* partial encode */ }
@@ -3219,8 +3239,9 @@ const WGX = (function () {
     function freeTexture(t) {
       if (!t) return;
       // Retire, never destroy in-frame: a draw recorded earlier this frame may
-      // still reference the view (same list the VBO growth paths use).
-      if (t.texture) _retiredBufs.push(t.texture);
+      // still reference the view. Outside a frame nothing can, so destroy now
+      // (_freeBuf's test) rather than wait on a submit that may not come.
+      _freeBuf(t.texture);
       // drawDecal caches a bind group on the caller's token (tex._wgxDecalBG)
       // and guards on `!tex.view`. Leaving both in place after the texture is
       // destroyed lets a caller that frees then redraws slip past the guard and
@@ -3643,6 +3664,10 @@ const WGX = (function () {
       _presentCount++;   // frame counter for the GPU-error cap (errors are attributed to the frame they arrive in)
       if (_gpuErrLastPresent >= 0 && _presentCount - _gpuErrLastPresent > GPU_ERR_QUIET_FRAMES) { _gpuErrFrames = 0; _gpuErrRun = 0; }
       if (_lost) return false;
+      if (_softGpu && _softDisplayPending) {
+        if (_softFrameHeld()) return false;
+        _softDisplaySince = _softNow();
+      }
       try {
         // Before ANY of this frame's work: a pending capture that needs a
         // copyable swapchain gets its reconfigure here, where nothing has been
@@ -4341,6 +4366,7 @@ const WGX = (function () {
       }
       _retiredBufs.length = 0;
     }
+    function _retireIdleFlush() { if (!(SHD && SHD.pendingEnc)) _retireFlush(); }
     function _capFinish(cap) {
       if (!cap) return;
       const req = _capReq; _capReq = null;
@@ -4398,9 +4424,12 @@ const WGX = (function () {
       // COPY_SRC rgba8 target on software (composited to #game via 2D blit).
       try {
         currentView = _acquirePresentView();
-        if (!currentView) { litPass = null; encoder = null; currentView = null; return; }
+        // Nothing submits on these bails, so the dropped encoder cannot reference
+        // the retired objects: flush them now — unless a pending shadow encoder,
+        // which rides a LATER submit, still might.
+        if (!currentView) { litPass = null; encoder = null; currentView = null; _retireIdleFlush(); return; }
       } catch (_) {
-        litPass = null; encoder = null; currentView = null; return;
+        litPass = null; encoder = null; currentView = null; _retireIdleFlush(); return;
       }
       _queueOutputProbe();
       const o = opts || {};
@@ -5231,7 +5260,7 @@ const WGX = (function () {
     // batch.visible — that is the MAIN-camera cull from the prior lit pass and
     // would drop casters behind the eye that still hit the light frustum.
 
-    function drawParticles(data, floatCount, additive) {
+    function drawParticles(data, floatCount, additive, dirty) {
       if (!litPass || !pParticle || !data || !(floatCount > 0)) return;
       const nVert = (floatCount / 10) | 0;
       if (nVert <= 0) return;
@@ -5246,8 +5275,15 @@ const WGX = (function () {
           size: _particleCap[i] * 4,
           usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
         });
+        _particleLast[i] = null;
       }
-      device.queue.writeBuffer(particleVBO[i], 0, data, 0, floatCount);
+      // Slots follow call order, so a clean frame that draws only one blend
+      // group lands it on slot 0 — the key holds the batch, not just a flag.
+      const last = _particleLast[i], add = additive ? 1 : 0;
+      if (dirty !== false || !last || last.data !== data || last.add !== add || last.n !== floatCount) {
+        device.queue.writeBuffer(particleVBO[i], 0, data, 0, floatCount);
+        _particleLast[i] = { data, add, n: floatCount };
+      }
       const s = fxScratch;
       s.set(frameVPGpu, 0);
       const eye = frameEye || [0, 0, 0];
@@ -5813,7 +5849,12 @@ const WGX = (function () {
     const castShadow = (...a) => SHD.castShadow(...a);
     const castShadowChunked = (...a) => SHD.castShadowChunked(...a);
     const shadowEnd = (...a) => SHD.shadowEnd(...a);
-    const carShadowBegin = (...a) => SHD.carShadowBegin(...a);
+    // The car map renders every frame on its own encoder: while a soft read
+    // waits it was the last per-frame submitter (#2226). KEEP the map instead.
+    const carShadowBegin = (...a) => {
+      if (_softGpu && _softDisplayPending) { SHD.carShadowKeep(); return; }
+      SHD.carShadowBegin(...a);
+    };
     const carShadowEnd = (...a) => SHD.carShadowEnd(...a);
     const lampShadowBegin = (...a) => SHD.lampShadowBegin(...a);
     const lampShadowEnd = (...a) => SHD.lampShadowEnd(...a);
